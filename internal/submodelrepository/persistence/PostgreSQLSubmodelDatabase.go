@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"os"
 
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 
@@ -23,6 +24,25 @@ func NewPostgreSQLSubmodelBackend(dsn string) (*PostgreSQLSubmodelDatabase, erro
 	if err := db.Ping(); err != nil {
 		return nil, err
 	}
+
+	dir, osErr := os.Getwd()
+
+	if osErr != nil {
+		return nil, osErr
+	}
+
+	queryString, fileError := os.ReadFile(dir + "/resources/sql/submodelrepositoryschema.sql")
+
+	if fileError != nil {
+		return nil, fileError
+	}
+
+	_, dbError := db.Exec(string(queryString))
+
+	if dbError != nil {
+		return nil, dbError
+	}
+
 	return &PostgreSQLSubmodelDatabase{db: db}, nil
 }
 
