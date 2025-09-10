@@ -520,7 +520,7 @@ func (s *SubmodelRepositoryAPIAPIService) PostSubmodelElementSubmodelRepo(ctx co
 	// TODO: Uncomment the next line to return response Response(0, Result{}) or use other options such as http.Ok ...
 	// return gen.Response(0, Result{}), nil
 
-	return gen.Response(http.StatusNotImplemented, nil), errors.New("PostSubmodelElementSubmodelRepo method not implemented " + submodelIdentifier)
+	return gen.Response(http.StatusNotImplemented, nil), errors.New("PostSubmodelElementSubmodelRepo method not implemented ")
 }
 
 // GetAllSubmodelElementsMetadataSubmodelRepo - Returns the metadata attributes of all submodel elements including their hierarchy
