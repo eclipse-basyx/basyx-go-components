@@ -26,11 +26,11 @@ import (
 // This service should implement the business logic for every endpoint for the SubmodelRepositoryAPIAPI API.
 // Include any external packages or services that will be required by this service.
 type SubmodelRepositoryAPIAPIService struct {
-	submodelBackend persistence.SubmodelDatabase
+	submodelBackend persistence.PostgreSQLSubmodelDatabase
 }
 
 // NewSubmodelRepositoryAPIAPIService creates a default api service
-func NewSubmodelRepositoryAPIAPIService(databaseBackend persistence.SubmodelDatabase) *SubmodelRepositoryAPIAPIService {
+func NewSubmodelRepositoryAPIAPIService(databaseBackend persistence.PostgreSQLSubmodelDatabase) *SubmodelRepositoryAPIAPIService {
 	return &SubmodelRepositoryAPIAPIService{
 		submodelBackend: databaseBackend,
 	}

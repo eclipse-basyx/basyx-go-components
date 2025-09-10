@@ -4,34 +4,81 @@
 CREATE EXTENSION IF NOT EXISTS ltree;
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
 
--- ------------------------------------------
--- Enums
--- ------------------------------------------
-CREATE TYPE modelling_kind AS ENUM ('Instance', 'Template');
-CREATE TYPE aas_submodel_elements AS ENUM (
-  'AnnotatedRelationshipElement','BasicEventElement','Blob','Capability',
-  'DataElement','Entity','EventElement','File','MultiLanguageProperty',
-  'Operation','Property','Range','ReferenceElement','RelationshipElement',
-  'SubmodelElement','SubmodelElementCollection','SubmodelElementList'
-);
-CREATE TYPE data_type_def_xsd AS ENUM (
-  'xs:anyURI','xs:base64Binary','xs:boolean','xs:byte','xs:date','xs:dateTime',
-  'xs:decimal','xs:double','xs:duration','xs:float','xs:gDay','xs:gMonth',
-  'xs:gMonthDay','xs:gYear','xs:gYearMonth','xs:hexBinary','xs:int','xs:integer',
-  'xs:long','xs:negativeInteger','xs:nonNegativeInteger','xs:nonPositiveInteger',
-  'xs:positiveInteger','xs:short','xs:string','xs:time','xs:unsignedByte',
-  'xs:unsignedInt','xs:unsignedLong','xs:unsignedShort'
-);
-CREATE TYPE reference_types AS ENUM ('ExternalReference', 'ModelReference');
-CREATE TYPE qualifier_kind AS ENUM ('ConceptQualifier','TemplateQualifier','ValueQualifier');
-CREATE TYPE entity_type AS ENUM ('CoManagedEntity','SelfManagedEntity');
-CREATE TYPE direction AS ENUM ('input','output');
-CREATE TYPE state_of_event AS ENUM ('off','on');
-CREATE TYPE operation_var_role AS ENUM ('in','out','inout');
-CREATE TYPE key_type AS ENUM ('AnnotatedRelationshipElement','AssetAdministrationShell','BasicEventElement','Blob',
-'Capability','ConceptDescription','DataElement','Entity','EventElement','File','FragmentReference','GlobalReference','Identifiable',
-'MultiLanguageProperty','Operation','Property','Range','Referable','ReferenceElement','RelationshipElement','Submodel','SubmodelElement',
-'SubmodelElementCollection','SubmodelElementList');
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'modelling_kind') THEN
+    CREATE TYPE modelling_kind AS ENUM ('Instance', 'Template');
+ END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'aas_submodel_elements') THEN
+    CREATE TYPE aas_submodel_elements AS ENUM (
+      'AnnotatedRelationshipElement','BasicEventElement','Blob','Capability',
+      'DataElement','Entity','EventElement','File','MultiLanguageProperty',
+      'Operation','Property','Range','ReferenceElement','RelationshipElement',
+      'SubmodelElement','SubmodelElementCollection','SubmodelElementList'
+    );
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'data_type_def_xsd') THEN
+    CREATE TYPE data_type_def_xsd AS ENUM (
+      'xs:anyURI','xs:base64Binary','xs:boolean','xs:byte','xs:date','xs:dateTime',
+      'xs:decimal','xs:double','xs:duration','xs:float','xs:gDay','xs:gMonth',
+      'xs:gMonthDay','xs:gYear','xs:gYearMonth','xs:hexBinary','xs:int','xs:integer',
+      'xs:long','xs:negativeInteger','xs:nonNegativeInteger','xs:nonPositiveInteger',
+      'xs:positiveInteger','xs:short','xs:string','xs:time','xs:unsignedByte',
+      'xs:unsignedInt','xs:unsignedLong','xs:unsignedShort'
+    );
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'reference_types') THEN
+    CREATE TYPE reference_types AS ENUM ('ExternalReference', 'ModelReference');
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'qualifier_kind') THEN
+    CREATE TYPE qualifier_kind AS ENUM ('ConceptQualifier','TemplateQualifier','ValueQualifier');
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'entity_type') THEN
+    CREATE TYPE entity_type AS ENUM ('CoManagedEntity','SelfManagedEntity');
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'direction') THEN
+    CREATE TYPE direction AS ENUM ('input','output');
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'state_of_event') THEN
+    CREATE TYPE state_of_event AS ENUM ('off','on');
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'operation_var_role') THEN
+    CREATE TYPE operation_var_role AS ENUM ('in','out','inout');
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'key_type') THEN
+    CREATE TYPE key_type AS ENUM ('AnnotatedRelationshipElement','AssetAdministrationShell','BasicEventElement','Blob',
+      'Capability','ConceptDescription','DataElement','Entity','EventElement','File','FragmentReference','GlobalReference','Identifiable',
+      'MultiLanguageProperty','Operation','Property','Range','Referable','ReferenceElement','RelationshipElement','Submodel','SubmodelElement',
+      'SubmodelElementCollection','SubmodelElementList');
+  END IF;
+END $$;
 
 -- Reference (for semanticId etc.)  --  keys[i] keeps track of order
 CREATE TABLE IF NOT EXISTS reference (
