@@ -1004,11 +1004,12 @@ func (c *SubmodelRepositoryAPIAPIController) PostSubmodelElementSubmodelRepo(w h
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
-	if err := AssertSubmodelElementRequired(submodelElementParam); err != nil {
+	// FIXED: Use custom validation that handles optional references correctly
+	if err := AssertSubmodelElementRequiredFixed(submodelElementParam); err != nil {
 		c.errorHandler(w, r, err, nil)
 		return
 	}
-	if err := AssertSubmodelElementConstraints(submodelElementParam); err != nil {
+	if err := AssertSubmodelElementConstraintsFixed(submodelElementParam); err != nil {
 		c.errorHandler(w, r, err, nil)
 		return
 	}
