@@ -7,9 +7,9 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/cors"
 
-	api "github.com/eclipse-basyx/basyx-go-sdk/internal/submodelrepository/api"
-	persistence_postgresql "github.com/eclipse-basyx/basyx-go-sdk/internal/submodelrepository/persistence/postgresql"
-	openapi "github.com/eclipse-basyx/basyx-go-sdk/pkg/submodelrepositoryapi/go"
+	api "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/api"
+	persistence_postgresql "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence"
+	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/submodelrepositoryapi/go"
 )
 
 func main() {
@@ -33,12 +33,12 @@ func main() {
 
 	// Instantiate generated services & controllers
 	// ==== Discovery Service ====
-	smDatabase, err := persistence_postgresql.NewPostgreSQLSubmodelBackend("postgres://postgres:postgres@localhost:5433/basyx?sslmode=disable")
+	smDatabase, err := persistence_postgresql.NewPostgreSQLSubmodelBackend("postgres://admin:admin123@localhost:5432/basyxTestDatabase?sslmode=disable")
 	if err != nil {
-		log.Fatalf("Failed to connect to database: %v", err)
+		log.Fatalf("Failed to initialize database connection: %v", err)
 		return
 	}
-	smSvc := api.NewSubmodelRepositoryAPIAPIService(smDatabase)
+	smSvc := api.NewSubmodelRepositoryAPIAPIService(*smDatabase)
 	smCtrl := openapi.NewSubmodelRepositoryAPIAPIController(smSvc)
 	for _, rt := range smCtrl.Routes() {
 		r.Method(rt.Method, rt.Pattern, rt.HandlerFunc)

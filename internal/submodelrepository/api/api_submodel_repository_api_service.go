@@ -18,19 +18,19 @@ import (
 	"net/http"
 	"os"
 
-	persistence "github.com/eclipse-basyx/basyx-go-sdk/internal/submodelrepository/persistence"
-	gen "github.com/eclipse-basyx/basyx-go-sdk/pkg/submodelrepositoryapi/go"
+	persistence "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence"
+	gen "github.com/eclipse-basyx/basyx-go-components/pkg/submodelrepositoryapi/go"
 )
 
 // SubmodelRepositoryAPIAPIService is a service that implements the logic for the SubmodelRepositoryAPIAPIServicer
 // This service should implement the business logic for every endpoint for the SubmodelRepositoryAPIAPI API.
 // Include any external packages or services that will be required by this service.
 type SubmodelRepositoryAPIAPIService struct {
-	submodelBackend persistence.SubmodelDatabase
+	submodelBackend persistence.PostgreSQLSubmodelDatabase
 }
 
 // NewSubmodelRepositoryAPIAPIService creates a default api service
-func NewSubmodelRepositoryAPIAPIService(databaseBackend persistence.SubmodelDatabase) *SubmodelRepositoryAPIAPIService {
+func NewSubmodelRepositoryAPIAPIService(databaseBackend persistence.PostgreSQLSubmodelDatabase) *SubmodelRepositoryAPIAPIService {
 	return &SubmodelRepositoryAPIAPIService{
 		submodelBackend: databaseBackend,
 	}
