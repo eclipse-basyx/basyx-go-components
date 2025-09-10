@@ -1,0 +1,32 @@
+# Git
+.git
+.gitignore
+
+# Build artifacts
+**/bin/
+**/obj/
+**/out/
+**/*.exe
+**/*.exe~
+**/*.dll
+**/*.so
+**/*.dylib
+*__debug_bin*
+
+# Go specific
+**/*.test
+**/*.out
+**/vendor/
+**/go.work
+**/go.work.sum
+
+# IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Other
+**/.DS_Store
+**/node_modules/
+**/npm-debug.log

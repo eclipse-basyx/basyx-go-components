@@ -1,0 +1,92 @@
+services:
+  discovery-service:
+    build:
+      context: .
+      dockerfile: ./cmd/discoveryservice/Dockerfile
+    ports:
+      - "7000:7000"
+    environment:
+      - LOG_LEVEL=info
+      # MongoDB configuration
+      - MONGODB_URI=mongodb://mongoAdmin:mongoPassword@mongodb:27017/?authSource=admin
+      - MONGODB_DATABASE=basyx-go
+      - MONGODB_COLLECTION=aas_discovery
+      # S3 configuration
+      # - S3_REGION=eu-central-1
+      # - S3_ENDPOINT=http://minio:9000
+      # - S3_BUCKET=basyx
+      # - S3_PREFIX=aas_discovery
+      # - S3_ACCESS_KEY=minioadmin
+      # - S3_SECRET_KEY=minioadmin
+      # - S3_CACHE_MINUTES=5
+      - SERVER_CONTEXTPATH=/discovery
+      - SERVER_PORT=7000
+      - BASYX_BACKEND=MongoDB # or InMemory or S3
+    restart: unless-stopped
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+  mongodb:
+    image: mongo:8.0
+    ports:
+      - "27017:27017"
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=mongoAdmin
+      - MONGO_INITDB_ROOT_PASSWORD=mongoPassword
+    restart: unless-stopped
+    healthcheck:
+      test: mongosh --eval 'db.runCommand("ping").ok' --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  minio:
+    image: minio/minio:latest
+    ports:
+      - "9000:9000"
+    environment:
+      - MINIO_ROOT_USER=minioadmin
+      - MINIO_ROOT_PASSWORD=minioadmin
+    command: server /data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # PostgreSQL Database
+  postgresql:
+    image: postgres:17
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=pgAdmin
+      - POSTGRES_PASSWORD=pgPassword
+      - POSTGRES_DB=basyx_go
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pgAdmin -d basyx_go"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # Adminer for PostgreSQL management
+  adminer:
+    image: adminer:5
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+    depends_on:
+      postgresql:
+        condition: service_healthy
+
+volumes:
+  pgdata:
