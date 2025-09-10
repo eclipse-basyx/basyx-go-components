@@ -1,0 +1,34 @@
+server:
+  host: 0.0.0.0
+  port: 5000
+  contextPath: ""
+
+basyx:
+  backend: MongoDB
+
+mongodb:
+  uri: mongodb://localhost:27017
+  database: basyx-go
+  collection: aas_discovery
+  timeout: 10  # seconds
+
+s3:
+  region: eu-central-1
+  endpoint: http://localhost:9000
+  bucket: basyx
+  prefix: aas_discovery
+  accessKey: minioadmin
+  secretKey: minioadmin
+  cacheMinutes: 5
+
+cors:
+  allowedOrigins:
+    - "*"  # Use specific domains in production
+  allowedMethods:
+    - GET
+    - POST
+    - DELETE
+    - OPTIONS
+  allowedHeaders:
+    - "*"
+  allowCredentials: true

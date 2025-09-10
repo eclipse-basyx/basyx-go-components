@@ -1,0 +1,64 @@
+{
+	"name": "Eclipse BaSyx Go SDK",
+	// Or use a Dockerfile or Docker Compose file. More info: https://containers.dev/guide/dockerfile
+	"image": "mcr.microsoft.com/devcontainers/go:1-1.23-bookworm",
+	// Features to add to the dev container. More info: https://containers.dev/features.
+	"features": {
+		"ghcr.io/devcontainers/features/node:1": {
+			"version": "lts"
+		},
+		"ghcr.io/devcontainers/features/java:1": {
+			"version": "17"
+		}
+	},
+	// Configure tool-specific properties.
+	"customizations": {
+		// Configure properties specific to VS Code.
+		"vscode": {
+			"settings": {
+				"go.useLanguageServer": true,
+				"go.lintTool": "golangci-lint",
+				"go.lintFlags": [
+					"--fast"
+				],
+				"go.formatTool": "goimports",
+				"editor.formatOnSave": true,
+				"go.testOnSave": false
+			},
+			"extensions": [
+				"golang.go", // Official Go extension
+				"golangci-lint.golangci-lint-vscode", // Better linting support
+				"premparihar.gotestexplorer", // Test explorer UI
+				"766b.go-outliner" // Go outliner for better code navigation
+			]
+		}
+	},
+	"forwardPorts": [
+		5000, // AAS Discovery Service
+		5001, // AAS Registry Service
+		5002, // Submodel Registry Service
+		5003 // AASX File Server Service
+	],
+	"portsAttributes": {
+		"5000": {
+			"label": "AAS Discovery Service",
+			"onAutoForward": "notify"
+		},
+		"5001": {
+			"label": "AAS Registry Service",
+			"onAutoForward": "notify"
+		},
+		"5002": {
+			"label": "Submodel Registry Service",
+			"onAutoForward": "notify"
+		},
+		"5003": {
+			"label": "AASX File Server Service",
+			"onAutoForward": "notify"
+		}
+	},
+	// Use 'postCreateCommand' to run commands after the container is created.
+	"postCreateCommand": "npm install -g @openapitools/openapi-generator-cli"
+	// Uncomment to connect as root instead. More info: https://aka.ms/dev-containers-non-root.
+	// "remoteUser": "root"
+}
