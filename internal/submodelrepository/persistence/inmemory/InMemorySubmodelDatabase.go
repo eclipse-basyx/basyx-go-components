@@ -3,7 +3,7 @@ package persistence_inmemory
 import (
 	"errors"
 
-	model "github.com/eclipse-basyx/basyx-go-sdk/pkg/submodelrepositoryapi/go"
+	model "github.com/eclipse-basyx/basyx-go-components/pkg/submodelrepositoryapi/go"
 )
 
 type InMemorySubmodelDatabase struct {

@@ -7,9 +7,9 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/cors"
 
-	api "github.com/eclipse-basyx/basyx-go-sdk/internal/submodelrepository/api"
-	persistence_postgresql "github.com/eclipse-basyx/basyx-go-sdk/internal/submodelrepository/persistence/postgresql"
-	openapi "github.com/eclipse-basyx/basyx-go-sdk/pkg/submodelrepositoryapi/go"
+	api "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/api"
+	persistence_postgresql "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/postgresql"
+	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/submodelrepositoryapi/go"
 )
 
 func main() {

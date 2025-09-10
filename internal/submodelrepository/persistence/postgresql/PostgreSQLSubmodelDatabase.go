@@ -7,7 +7,7 @@ import (
 
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 
-	gen "github.com/eclipse-basyx/basyx-go-sdk/pkg/submodelrepositoryapi/go"
+	gen "github.com/eclipse-basyx/basyx-go-components/pkg/submodelrepositoryapi/go"
 )
 
 type PostgreSQLSubmodelDatabase struct {

@@ -18,8 +18,8 @@ import (
 	"net/http"
 	"os"
 
-	persistence "github.com/eclipse-basyx/basyx-go-sdk/internal/submodelrepository/persistence"
-	gen "github.com/eclipse-basyx/basyx-go-sdk/pkg/submodelrepositoryapi/go"
+	persistence "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence"
+	gen "github.com/eclipse-basyx/basyx-go-components/pkg/submodelrepositoryapi/go"
 )
 
 // SubmodelRepositoryAPIAPIService is a service that implements the logic for the SubmodelRepositoryAPIAPIServicer

@@ -1,6 +1,6 @@
 package persistence
 
-import model "github.com/eclipse-basyx/basyx-go-sdk/pkg/submodelrepositoryapi/go"
+import model "github.com/eclipse-basyx/basyx-go-components/pkg/submodelrepositoryapi/go"
 
 type SubmodelDatabase interface {
 	GetAllSubmodels() ([]model.Submodel, error)
