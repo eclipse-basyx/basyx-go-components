@@ -1,6 +1,6 @@
 package openapi
 
-// AssertSubmodelElementRequiredFixed is a fixed version of AssertSubmodelElementRequired 
+// AssertSubmodelElementRequiredFixed is a fixed version of AssertSubmodelElementRequired
 // that doesn't validate empty optional references
 func AssertSubmodelElementRequiredFixed(obj SubmodelElement) error {
 	elements := map[string]interface{}{
@@ -56,7 +56,7 @@ func AssertSubmodelElementRequiredFixed(obj SubmodelElement) error {
 	return nil
 }
 
-// AssertSubmodelElementConstraintsFixed is a fixed version of AssertSubmodelElementConstraints 
+// AssertSubmodelElementConstraintsFixed is a fixed version of AssertSubmodelElementConstraints
 // that doesn't validate empty optional references
 func AssertSubmodelElementConstraintsFixed(obj SubmodelElement) error {
 	for _, el := range obj.Extensions {

@@ -8,6 +8,7 @@ import (
 
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 
+	submodelelements "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/SubmodelElements"
 	gen "github.com/eclipse-basyx/basyx-go-components/pkg/submodelrepositoryapi/go"
 )
 
@@ -103,4 +104,22 @@ func (p *PostgreSQLSubmodelDatabase) CreateSubmodel(m gen.Submodel) (string, err
 		m.Id, string(b),
 	)
 	return m.Id, err
+}
+
+func (p *PostgreSQLSubmodelDatabase) AddSubmodelElement(submodelId string, submodelElement gen.SubmodelElement) error {
+	var handler submodelelements.PostgreSQLSMECrudInterface
+	switch submodelElement.ModelType {
+	case "Property":
+		propHandler, err := submodelelements.NewPostgreSQLPropertyHandler(p.db)
+		if err != nil {
+			return err
+		}
+		handler = propHandler
+	default:
+		return errors.New("ModelType " + string(submodelElement.ModelType) + " unsupported.")
+	}
+	if err := handler.Create(submodelId, submodelElement); err != nil {
+		return err
+	}
+	return nil
 }

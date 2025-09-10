@@ -14,6 +14,7 @@ package api
 import (
 	"context"
 	"database/sql"
+	"encoding/base64"
 	"errors"
 	"net/http"
 	"os"
@@ -519,6 +520,24 @@ func (s *SubmodelRepositoryAPIAPIService) PostSubmodelElementSubmodelRepo(ctx co
 
 	// TODO: Uncomment the next line to return response Response(0, Result{}) or use other options such as http.Ok ...
 	// return gen.Response(0, Result{}), nil
+
+	switch submodelElement.ModelType {
+	case "Property":
+		decodedSubmodelIdentifier, decodeErr := base64.RawStdEncoding.DecodeString(submodelIdentifier)
+
+		if decodeErr != nil {
+			return gen.Response(http.StatusBadRequest, nil), decodeErr
+		}
+
+		println("Decoded Submodel Identifier: ", string(decodedSubmodelIdentifier))
+		err := s.submodelBackend.AddSubmodelElement(string(decodedSubmodelIdentifier), submodelElement)
+		if err != nil {
+			return gen.Response(http.StatusInternalServerError, nil), err
+		}
+		return gen.Response(http.StatusOK, nil), nil
+	default:
+		return gen.Response(http.StatusNotImplemented, nil), errors.New("PostSubmodelElementSubmodelRepo method not implemented for modelType: " + string(submodelElement.ModelType))
+	}
 
 	return gen.Response(http.StatusNotImplemented, nil), errors.New("PostSubmodelElementSubmodelRepo method not implemented ")
 }
