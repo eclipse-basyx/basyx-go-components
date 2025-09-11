@@ -28,7 +28,7 @@ func (p PostgreSQLSubmodelElementCollectionHandler) Create(tx *sql.Tx, submodelI
 	}
 
 	// First, perform base SubmodelElement operations within the transaction
-	id, err := p.decorated.CreateWithTx(tx, submodelId, submodelElement)
+	id, err := p.decorated.Create(tx, submodelId, submodelElement)
 	if err != nil {
 		return 0, err
 	}
@@ -48,7 +48,7 @@ func (p PostgreSQLSubmodelElementCollectionHandler) CreateNested(tx *sql.Tx, sub
 	}
 
 	// First, perform base SubmodelElement operations within the transaction
-	id, err := p.decorated.CreateWithTxAndPath(tx, submodelId, parentId, idShortPath, submodelElement)
+	id, err := p.decorated.CreateAndPath(tx, submodelId, parentId, idShortPath, submodelElement)
 	if err != nil {
 		return 0, err
 	}

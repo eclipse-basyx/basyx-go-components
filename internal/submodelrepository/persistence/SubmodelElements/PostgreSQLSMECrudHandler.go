@@ -22,35 +22,8 @@ func NewPostgreSQLSMECrudHandler(db *sql.DB) (*PostgreSQLSMECrudHandler, error) 
 	return &PostgreSQLSMECrudHandler{db: db}, nil
 }
 
-func (p *PostgreSQLSMECrudHandler) Create(tx *sql.Tx, submodelId string, submodelElement gen.SubmodelElement) (int, error) {
-	// Start a database transaction
-	tx, err := p.db.Begin()
-	if err != nil {
-		return 0, err
-	}
-
-	// Defer rollback in case of error
-	defer func() {
-		if err != nil {
-			tx.Rollback()
-		}
-	}()
-
-	id, err := p.CreateWithTx(tx, submodelId, submodelElement)
-	if err != nil {
-		return 0, err
-	}
-
-	err = tx.Commit()
-	if err != nil {
-		return 0, err
-	}
-
-	return id, nil
-}
-
-// CreateWithTx performs the base SubmodelElement operations within an existing transaction
-func (p *PostgreSQLSMECrudHandler) CreateWithTxAndPath(tx *sql.Tx, submodelId string, parentId int, idShortPath string, submodelElement gen.SubmodelElement) (int, error) {
+// Create performs the base SubmodelElement operations within an existing transaction
+func (p *PostgreSQLSMECrudHandler) CreateAndPath(tx *sql.Tx, submodelId string, parentId int, idShortPath string, submodelElement gen.SubmodelElement) (int, error) {
 	var referenceID sql.NullInt64
 
 	if !isEmptyReference(submodelElement.GetSemanticId()) {
@@ -107,7 +80,7 @@ func (p *PostgreSQLSMECrudHandler) CreateWithTxAndPath(tx *sql.Tx, submodelId st
 	return id, nil
 }
 
-func (p *PostgreSQLSMECrudHandler) CreateWithTx(tx *sql.Tx, submodelId string, submodelElement gen.SubmodelElement) (int, error) {
+func (p *PostgreSQLSMECrudHandler) Create(tx *sql.Tx, submodelId string, submodelElement gen.SubmodelElement) (int, error) {
 	var referenceID sql.NullInt64
 
 	if !isEmptyReference(submodelElement.GetSemanticId()) {

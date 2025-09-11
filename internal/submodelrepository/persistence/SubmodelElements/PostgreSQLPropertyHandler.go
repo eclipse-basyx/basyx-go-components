@@ -28,7 +28,7 @@ func (p PostgreSQLPropertyHandler) Create(tx *sql.Tx, submodelId string, submode
 	}
 
 	// First, perform base SubmodelElement operations within the transaction
-	id, err := p.decorated.CreateWithTx(tx, submodelId, submodelElement)
+	id, err := p.decorated.Create(tx, submodelId, submodelElement)
 	if err != nil {
 		return 0, err
 	}
@@ -50,7 +50,7 @@ func (p PostgreSQLPropertyHandler) CreateNested(tx *sql.Tx, submodelId string, p
 	}
 
 	// Create the nested property with the provided idShortPath using the decorated handler
-	id, err := p.decorated.CreateWithTxAndPath(tx, submodelId, parentId, idShortPath, submodelElement)
+	id, err := p.decorated.CreateAndPath(tx, submodelId, parentId, idShortPath, submodelElement)
 	if err != nil {
 		return 0, err
 	}

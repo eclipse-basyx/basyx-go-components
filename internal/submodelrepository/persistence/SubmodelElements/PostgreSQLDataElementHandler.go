@@ -28,7 +28,7 @@ func (p PostgreSQLDataElementHandler) Create(tx *sql.Tx, submodelId string, subm
 	}
 
 	// First, perform base SubmodelElement operations within the transaction
-	id, err := p.decorated.CreateWithTx(tx, submodelId, submodelElement)
+	id, err := p.decorated.Create(tx, submodelId, submodelElement)
 	if err != nil {
 		return 0, err
 	}
