@@ -197,11 +197,6 @@ func AssertSubmodelElementCollectionRequired(obj SubmodelElementCollection) erro
 			return err
 		}
 	}
-	// for _, el := range obj.Value {
-	// 	if err := AssertSubmodelElementChoiceRequired(el); err != nil {
-	// 		return err
-	// 	}
-	// } TODO: REDO IF NECESSARY
 	return nil
 }
 
