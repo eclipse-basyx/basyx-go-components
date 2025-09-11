@@ -45,11 +45,11 @@ func UnmarshalSubmodelElement(data []byte) (SubmodelElement, error) {
 	var raw struct {
 		ModelType string `json:"modelType"`
 	}
-	
+
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return nil, fmt.Errorf("failed to determine modelType: %w", err)
 	}
-	
+
 	// Create the appropriate concrete type based on modelType
 	switch raw.ModelType {
 	case "Property":
