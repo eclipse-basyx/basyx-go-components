@@ -11,11 +11,7 @@
 
 package openapi
 
-
-
-
 type ReferenceElement struct {
-
 	Extensions []Extension `json:"extensions,omitempty"`
 
 	Category string `json:"category,omitempty" validate:"regexp=^([\\\\x09\\\\x0a\\\\x0d\\\\x20-\\\\ud7ff\\\\ue000-\\\\ufffd]|\\\\ud800[\\\\udc00-\\\\udfff]|[\\\\ud801-\\\\udbfe][\\\\udc00-\\\\udfff]|\\\\udbff[\\\\udc00-\\\\udfff])*$"`
@@ -37,6 +33,85 @@ type ReferenceElement struct {
 	EmbeddedDataSpecifications []EmbeddedDataSpecification `json:"embeddedDataSpecifications,omitempty"`
 
 	Value Reference `json:"value,omitempty"`
+}
+
+// Getters
+func (a ReferenceElement) GetExtensions() []Extension {
+	return a.Extensions
+}
+
+func (a ReferenceElement) GetIdShort() string {
+	return a.IdShort
+}
+
+func (a ReferenceElement) GetCategory() string {
+	return a.Category
+}
+
+func (a ReferenceElement) GetDisplayName() []LangStringNameType {
+	return a.DisplayName
+}
+
+func (a ReferenceElement) GetDescription() []LangStringTextType {
+	return a.Description
+}
+
+func (a ReferenceElement) GetModelType() string {
+	return a.ModelType
+}
+
+func (a ReferenceElement) GetSemanticId() Reference {
+	return a.SemanticId
+}
+
+func (a ReferenceElement) GetSupplementalSemanticIds() []Reference {
+	return a.SupplementalSemanticIds
+}
+
+func (a ReferenceElement) GetQualifiers() []Qualifier {
+	return a.Qualifiers
+}
+
+func (a ReferenceElement) GetEmbeddedDataSpecifications() []EmbeddedDataSpecification {
+	return a.EmbeddedDataSpecifications
+}
+
+// Setters
+
+func (a *ReferenceElement) SetExtensions(v []Extension) {
+	a.Extensions = v
+}
+
+func (a *ReferenceElement) SetIdShort(v string) {
+	a.IdShort = v
+}
+
+func (a *ReferenceElement) SetCategory(v string) {
+	a.Category = v
+}
+
+func (a *ReferenceElement) SetDisplayName(v []LangStringNameType) {
+	a.DisplayName = v
+}
+
+func (a *ReferenceElement) SetDescription(v []LangStringTextType) {
+	a.Description = v
+}
+
+func (a *ReferenceElement) SetSemanticId(v Reference) {
+	a.SemanticId = v
+}
+
+func (a *ReferenceElement) SetSupplementalSemanticIds(v []Reference) {
+	a.SupplementalSemanticIds = v
+}
+
+func (a *ReferenceElement) SetQualifiers(v []Qualifier) {
+	a.Qualifiers = v
+}
+
+func (a *ReferenceElement) SetEmbeddedDataSpecifications(v []EmbeddedDataSpecification) {
+	a.EmbeddedDataSpecifications = v
 }
 
 // AssertReferenceElementRequired checks if the required fields are not zero-ed

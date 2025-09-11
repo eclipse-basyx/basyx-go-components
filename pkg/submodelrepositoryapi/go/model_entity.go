@@ -11,11 +11,7 @@
 
 package openapi
 
-
-
-
 type Entity struct {
-
 	Extensions []Extension `json:"extensions,omitempty"`
 
 	Category string `json:"category,omitempty" validate:"regexp=^([\\\\x09\\\\x0a\\\\x0d\\\\x20-\\\\ud7ff\\\\ue000-\\\\ufffd]|\\\\ud800[\\\\udc00-\\\\udfff]|[\\\\ud801-\\\\udbfe][\\\\udc00-\\\\udfff]|\\\\udbff[\\\\udc00-\\\\udfff])*$"`
@@ -45,10 +41,89 @@ type Entity struct {
 	SpecificAssetIds []SpecificAssetId `json:"specificAssetIds,omitempty"`
 }
 
+// Getters
+func (a Entity) GetExtensions() []Extension {
+	return a.Extensions
+}
+
+func (a Entity) GetIdShort() string {
+	return a.IdShort
+}
+
+func (a Entity) GetCategory() string {
+	return a.Category
+}
+
+func (a Entity) GetDisplayName() []LangStringNameType {
+	return a.DisplayName
+}
+
+func (a Entity) GetDescription() []LangStringTextType {
+	return a.Description
+}
+
+func (a Entity) GetModelType() string {
+	return a.ModelType
+}
+
+func (a Entity) GetSemanticId() Reference {
+	return a.SemanticId
+}
+
+func (a Entity) GetSupplementalSemanticIds() []Reference {
+	return a.SupplementalSemanticIds
+}
+
+func (a Entity) GetQualifiers() []Qualifier {
+	return a.Qualifiers
+}
+
+func (a Entity) GetEmbeddedDataSpecifications() []EmbeddedDataSpecification {
+	return a.EmbeddedDataSpecifications
+}
+
+// Setters
+
+func (a *Entity) SetExtensions(v []Extension) {
+	a.Extensions = v
+}
+
+func (a *Entity) SetIdShort(v string) {
+	a.IdShort = v
+}
+
+func (a *Entity) SetCategory(v string) {
+	a.Category = v
+}
+
+func (a *Entity) SetDisplayName(v []LangStringNameType) {
+	a.DisplayName = v
+}
+
+func (a *Entity) SetDescription(v []LangStringTextType) {
+	a.Description = v
+}
+
+func (a *Entity) SetSemanticId(v Reference) {
+	a.SemanticId = v
+}
+
+func (a *Entity) SetSupplementalSemanticIds(v []Reference) {
+	a.SupplementalSemanticIds = v
+}
+
+func (a *Entity) SetQualifiers(v []Qualifier) {
+	a.Qualifiers = v
+}
+
+func (a *Entity) SetEmbeddedDataSpecifications(v []EmbeddedDataSpecification) {
+	a.EmbeddedDataSpecifications = v
+}
+
 // AssertEntityRequired checks if the required fields are not zero-ed
 func AssertEntityRequired(obj Entity) error {
 	elements := map[string]interface{}{
-		"modelType": obj.ModelType,
+		"modelType":  obj.ModelType,
 		"entityType": obj.EntityType,
 	}
 	for name, el := range elements {

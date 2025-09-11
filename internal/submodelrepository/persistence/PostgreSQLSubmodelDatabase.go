@@ -108,12 +108,102 @@ func (p *PostgreSQLSubmodelDatabase) CreateSubmodel(m gen.Submodel) (string, err
 func (p *PostgreSQLSubmodelDatabase) AddSubmodelElement(submodelId string, submodelElement gen.SubmodelElement) error {
 	var handler submodelelements.PostgreSQLSMECrudInterface
 	switch string(submodelElement.GetModelType()) {
+	case "AnnotatedRelationshipElement":
+		areHandler, err := submodelelements.NewPostgreSQLAnnotatedRelationshipElementHandler(p.db)
+		if err != nil {
+			return err
+		}
+		handler = areHandler
+	case "BasicEventElement":
+		beeHandler, err := submodelelements.NewPostgreSQLBasicEventElementHandler(p.db)
+		if err != nil {
+			return err
+		}
+		handler = beeHandler
+	case "Blob":
+		blobHandler, err := submodelelements.NewPostgreSQLBlobHandler(p.db)
+		if err != nil {
+			return err
+		}
+		handler = blobHandler
+	case "Capability":
+		capHandler, err := submodelelements.NewPostgreSQLCapabilityHandler(p.db)
+		if err != nil {
+			return err
+		}
+		handler = capHandler
+	case "DataElement":
+		deHandler, err := submodelelements.NewPostgreSQLDataElementHandler(p.db)
+		if err != nil {
+			return err
+		}
+		handler = deHandler
+	case "Entity":
+		entityHandler, err := submodelelements.NewPostgreSQLEntityHandler(p.db)
+		if err != nil {
+			return err
+		}
+		handler = entityHandler
+	case "EventElement":
+		eventElemHandler, err := submodelelements.NewPostgreSQLEventElementHandler(p.db)
+		if err != nil {
+			return err
+		}
+		handler = eventElemHandler
+	case "File":
+		fileHandler, err := submodelelements.NewPostgreSQLFileHandler(p.db)
+		if err != nil {
+			return err
+		}
+		handler = fileHandler
+	case "MultiLanguageProperty":
+		mlpHandler, err := submodelelements.NewPostgreSQLMultiLanguagePropertyHandler(p.db)
+		if err != nil {
+			return err
+		}
+		handler = mlpHandler
+	case "Operation":
+		opHandler, err := submodelelements.NewPostgreSQLOperationHandler(p.db)
+		if err != nil {
+			return err
+		}
+		handler = opHandler
 	case "Property":
 		propHandler, err := submodelelements.NewPostgreSQLPropertyHandler(p.db)
 		if err != nil {
 			return err
 		}
 		handler = propHandler
+	case "Range":
+		rangeHandler, err := submodelelements.NewPostgreSQLRangeHandler(p.db)
+		if err != nil {
+			return err
+		}
+		handler = rangeHandler
+	case "ReferenceElement":
+		refElemHandler, err := submodelelements.NewPostgreSQLReferenceElementHandler(p.db)
+		if err != nil {
+			return err
+		}
+		handler = refElemHandler
+	case "RelationshipElement":
+		relElemHandler, err := submodelelements.NewPostgreSQLRelationshipElementHandler(p.db)
+		if err != nil {
+			return err
+		}
+		handler = relElemHandler
+	case "SubmodelElementCollection":
+		smeColHandler, err := submodelelements.NewPostgreSQLSubmodelElementCollectionHandler(p.db)
+		if err != nil {
+			return err
+		}
+		handler = smeColHandler
+	case "SubmodelElementList":
+		smeListHandler, err := submodelelements.NewPostgreSQLSubmodelElementListHandler(p.db)
+		if err != nil {
+			return err
+		}
+		handler = smeListHandler
 	default:
 		return errors.New("ModelType " + string(submodelElement.GetModelType()) + " unsupported.")
 	}

@@ -11,11 +11,7 @@
 
 package openapi
 
-
-
-
 type Operation struct {
-
 	Extensions []Extension `json:"extensions,omitempty"`
 
 	Category string `json:"category,omitempty" validate:"regexp=^([\\\\x09\\\\x0a\\\\x0d\\\\x20-\\\\ud7ff\\\\ue000-\\\\ufffd]|\\\\ud800[\\\\udc00-\\\\udfff]|[\\\\ud801-\\\\udbfe][\\\\udc00-\\\\udfff]|\\\\udbff[\\\\udc00-\\\\udfff])*$"`
@@ -41,6 +37,85 @@ type Operation struct {
 	OutputVariables []OperationVariable `json:"outputVariables,omitempty"`
 
 	InoutputVariables []OperationVariable `json:"inoutputVariables,omitempty"`
+}
+
+// Getters
+func (a Operation) GetExtensions() []Extension {
+	return a.Extensions
+}
+
+func (a Operation) GetIdShort() string {
+	return a.IdShort
+}
+
+func (a Operation) GetCategory() string {
+	return a.Category
+}
+
+func (a Operation) GetDisplayName() []LangStringNameType {
+	return a.DisplayName
+}
+
+func (a Operation) GetDescription() []LangStringTextType {
+	return a.Description
+}
+
+func (a Operation) GetModelType() string {
+	return a.ModelType
+}
+
+func (a Operation) GetSemanticId() Reference {
+	return a.SemanticId
+}
+
+func (a Operation) GetSupplementalSemanticIds() []Reference {
+	return a.SupplementalSemanticIds
+}
+
+func (a Operation) GetQualifiers() []Qualifier {
+	return a.Qualifiers
+}
+
+func (a Operation) GetEmbeddedDataSpecifications() []EmbeddedDataSpecification {
+	return a.EmbeddedDataSpecifications
+}
+
+// Setters
+
+func (a *Operation) SetExtensions(v []Extension) {
+	a.Extensions = v
+}
+
+func (a *Operation) SetIdShort(v string) {
+	a.IdShort = v
+}
+
+func (a *Operation) SetCategory(v string) {
+	a.Category = v
+}
+
+func (a *Operation) SetDisplayName(v []LangStringNameType) {
+	a.DisplayName = v
+}
+
+func (a *Operation) SetDescription(v []LangStringTextType) {
+	a.Description = v
+}
+
+func (a *Operation) SetSemanticId(v Reference) {
+	a.SemanticId = v
+}
+
+func (a *Operation) SetSupplementalSemanticIds(v []Reference) {
+	a.SupplementalSemanticIds = v
+}
+
+func (a *Operation) SetQualifiers(v []Qualifier) {
+	a.Qualifiers = v
+}
+
+func (a *Operation) SetEmbeddedDataSpecifications(v []EmbeddedDataSpecification) {
+	a.EmbeddedDataSpecifications = v
 }
 
 // AssertOperationRequired checks if the required fields are not zero-ed
