@@ -400,7 +400,6 @@ func (p *PostgreSQLSubmodelDatabase) AddNestedSubmodelElementRecursively(tx *sql
 		}
 		// Recursively add nested elements with dot notation
 		for _, nestedElement := range submodelElementCollection.Value {
-			//nestedIdShortPath := idShortPath + "." + nestedElement.GetIdShort()
 			if err := p.AddNestedSubmodelElementRecursively(tx, submodelId, parentId, idShortPath, nestedElement); err != nil {
 				return err
 			}
