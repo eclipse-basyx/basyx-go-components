@@ -11,11 +11,8 @@
 
 package openapi
 
-
-
-
+// Type of SubmodelElement
 type Property struct {
-
 	Extensions []Extension `json:"extensions,omitempty"`
 
 	Category string `json:"category,omitempty" validate:"regexp=^([\\\\x09\\\\x0a\\\\x0d\\\\x20-\\\\ud7ff\\\\ue000-\\\\ufffd]|\\\\ud800[\\\\udc00-\\\\udfff]|[\\\\ud801-\\\\udbfe][\\\\udc00-\\\\udfff]|\\\\udbff[\\\\udc00-\\\\udfff])*$"`
@@ -41,6 +38,102 @@ type Property struct {
 	Value string `json:"value,omitempty"`
 
 	ValueId Reference `json:"valueId,omitempty"`
+}
+
+// Constructor
+func NewProperty(valueType DataTypeDefXsd) *Property {
+	return &Property{
+		ValueType: valueType,
+		ModelType: "Property",
+	}
+}
+
+func (p Property) GetIdShort() string {
+	return p.IdShort
+}
+
+func (p Property) GetCategory() string {
+	return p.Category
+}
+
+func (p Property) GetDisplayName() []LangStringNameType {
+	return p.DisplayName
+}
+
+func (p Property) GetDescription() []LangStringTextType {
+	return p.Description
+}
+
+func (p Property) GetModelType() string {
+	return p.ModelType
+}
+
+func (p Property) GetSemanticId() Reference {
+	return p.SemanticId
+}
+
+func (p Property) GetSupplementalSemanticIds() []Reference {
+	return p.SupplementalSemanticIds
+}
+
+func (p Property) GetQualifiers() []Qualifier {
+	return p.Qualifiers
+}
+
+func (p Property) GetEmbeddedDataSpecifications() []EmbeddedDataSpecification {
+	return p.EmbeddedDataSpecifications
+}
+
+func (p Property) GetExtensions() []Extension {
+	return p.Extensions
+}
+
+func (p Property) GetValueType() DataTypeDefXsd {
+	return p.ValueType
+}
+
+func (p Property) GetValue() string {
+	return p.Value
+}
+
+func (p Property) GetValueId() Reference {
+	return p.ValueId
+}
+
+func (p *Property) SetIdShort(idShort string) {
+	p.IdShort = idShort
+}
+
+func (p *Property) SetCategory(category string) {
+	p.Category = category
+}
+
+func (p *Property) SetDisplayName(displayName []LangStringNameType) {
+	p.DisplayName = displayName
+}
+
+func (p *Property) SetDescription(description []LangStringTextType) {
+	p.Description = description
+}
+
+func (p *Property) SetSemanticId(semanticId Reference) {
+	p.SemanticId = semanticId
+}
+
+func (p *Property) SetSupplementalSemanticIds(supplementalSemanticIds []Reference) {
+	p.SupplementalSemanticIds = supplementalSemanticIds
+}
+
+func (p *Property) SetQualifiers(qualifiers []Qualifier) {
+	p.Qualifiers = qualifiers
+}
+
+func (p *Property) SetEmbeddedDataSpecifications(embeddedDataSpecifications []EmbeddedDataSpecification) {
+	p.EmbeddedDataSpecifications = embeddedDataSpecifications
+}
+
+func (p *Property) SetExtensions(extensions []Extension) {
+	p.Extensions = extensions
 }
 
 // AssertPropertyRequired checks if the required fields are not zero-ed

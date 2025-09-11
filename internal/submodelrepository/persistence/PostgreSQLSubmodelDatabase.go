@@ -108,7 +108,7 @@ func (p *PostgreSQLSubmodelDatabase) CreateSubmodel(m gen.Submodel) (string, err
 
 func (p *PostgreSQLSubmodelDatabase) AddSubmodelElement(submodelId string, submodelElement gen.SubmodelElement) error {
 	var handler submodelelements.PostgreSQLSMECrudInterface
-	switch submodelElement.ModelType {
+	switch string(submodelElement.(gen.SubmodelElement).GetModelType()) {
 	case "Property":
 		propHandler, err := submodelelements.NewPostgreSQLPropertyHandler(p.db)
 		if err != nil {
@@ -116,7 +116,7 @@ func (p *PostgreSQLSubmodelDatabase) AddSubmodelElement(submodelId string, submo
 		}
 		handler = propHandler
 	default:
-		return errors.New("ModelType " + string(submodelElement.ModelType) + " unsupported.")
+		return errors.New("ModelType " + string(submodelElement.(gen.SubmodelElement).GetModelType()) + " unsupported.")
 	}
 	if err := handler.Create(submodelId, submodelElement); err != nil {
 		return err

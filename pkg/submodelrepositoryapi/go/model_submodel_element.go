@@ -11,36 +11,33 @@
 
 package openapi
 
+type SubmodelElement interface {
+	GetModelType() string
+	GetIdShort() string
+	GetCategory() string
+	GetDisplayName() []LangStringNameType
+	GetDescription() []LangStringTextType
+	GetSemanticId() Reference
+	GetSupplementalSemanticIds() []Reference
+	GetQualifiers() []Qualifier
+	GetEmbeddedDataSpecifications() []EmbeddedDataSpecification
+	GetExtensions() []Extension
 
-
-
-type SubmodelElement struct {
-
-	Extensions []Extension `json:"extensions,omitempty"`
-
-	Category string `json:"category,omitempty" validate:"regexp=^([\\\\x09\\\\x0a\\\\x0d\\\\x20-\\\\ud7ff\\\\ue000-\\\\ufffd]|\\\\ud800[\\\\udc00-\\\\udfff]|[\\\\ud801-\\\\udbfe][\\\\udc00-\\\\udfff]|\\\\udbff[\\\\udc00-\\\\udfff])*$"`
-
-	IdShort string `json:"idShort,omitempty"`
-
-	DisplayName []LangStringNameType `json:"displayName,omitempty"`
-
-	Description []LangStringTextType `json:"description,omitempty"`
-
-	ModelType ModelType `json:"modelType"`
-
-	SemanticId Reference `json:"semanticId,omitempty"`
-
-	SupplementalSemanticIds []Reference `json:"supplementalSemanticIds,omitempty"`
-
-	Qualifiers []Qualifier `json:"qualifiers,omitempty"`
-
-	EmbeddedDataSpecifications []EmbeddedDataSpecification `json:"embeddedDataSpecifications,omitempty"`
+	SetIdShort(string)
+	SetCategory(string)
+	SetDisplayName([]LangStringNameType)
+	SetDescription([]LangStringTextType)
+	SetSemanticId(Reference)
+	SetSupplementalSemanticIds([]Reference)
+	SetQualifiers([]Qualifier)
+	SetEmbeddedDataSpecifications([]EmbeddedDataSpecification)
+	SetExtensions([]Extension)
 }
 
 // AssertSubmodelElementRequired checks if the required fields are not zero-ed
 func AssertSubmodelElementRequired(obj SubmodelElement) error {
 	elements := map[string]interface{}{
-		"modelType": obj.ModelType,
+		"modelType": obj.GetModelType(),
 	}
 	for name, el := range elements {
 		if isZero := IsZeroValue(el); isZero {
@@ -48,38 +45,38 @@ func AssertSubmodelElementRequired(obj SubmodelElement) error {
 		}
 	}
 
-	for _, el := range obj.Extensions {
+	for _, el := range obj.GetExtensions() {
 		if err := AssertExtensionRequired(el); err != nil {
 			return err
 		}
 	}
-	if err := AssertReferableAllOfIdShortRequired(obj.IdShort); err != nil {
+	if err := AssertReferableAllOfIdShortRequired(obj.GetIdShort()); err != nil {
 		return err
 	}
-	for _, el := range obj.DisplayName {
+	for _, el := range obj.GetDisplayName() {
 		if err := AssertLangStringNameTypeRequired(el); err != nil {
 			return err
 		}
 	}
-	for _, el := range obj.Description {
+	for _, el := range obj.GetDescription() {
 		if err := AssertLangStringTextTypeRequired(el); err != nil {
 			return err
 		}
 	}
-	if err := AssertReferenceRequired(obj.SemanticId); err != nil {
+	if err := AssertReferenceRequired(obj.GetSemanticId()); err != nil {
 		return err
 	}
-	for _, el := range obj.SupplementalSemanticIds {
+	for _, el := range obj.GetSupplementalSemanticIds() {
 		if err := AssertReferenceRequired(el); err != nil {
 			return err
 		}
 	}
-	for _, el := range obj.Qualifiers {
+	for _, el := range obj.GetQualifiers() {
 		if err := AssertQualifierRequired(el); err != nil {
 			return err
 		}
 	}
-	for _, el := range obj.EmbeddedDataSpecifications {
+	for _, el := range obj.GetEmbeddedDataSpecifications() {
 		if err := AssertEmbeddedDataSpecificationRequired(el); err != nil {
 			return err
 		}
@@ -89,38 +86,38 @@ func AssertSubmodelElementRequired(obj SubmodelElement) error {
 
 // AssertSubmodelElementConstraints checks if the values respects the defined constraints
 func AssertSubmodelElementConstraints(obj SubmodelElement) error {
-	for _, el := range obj.Extensions {
+	for _, el := range obj.GetExtensions() {
 		if err := AssertExtensionConstraints(el); err != nil {
 			return err
 		}
 	}
-	if err := AssertReferableAllOfIdShortConstraints(obj.IdShort); err != nil {
+	if err := AssertReferableAllOfIdShortConstraints(obj.GetIdShort()); err != nil {
 		return err
 	}
-	for _, el := range obj.DisplayName {
+	for _, el := range obj.GetDisplayName() {
 		if err := AssertLangStringNameTypeConstraints(el); err != nil {
 			return err
 		}
 	}
-	for _, el := range obj.Description {
+	for _, el := range obj.GetDescription() {
 		if err := AssertLangStringTextTypeConstraints(el); err != nil {
 			return err
 		}
 	}
-	if err := AssertReferenceConstraints(obj.SemanticId); err != nil {
+	if err := AssertReferenceConstraints(obj.GetSemanticId()); err != nil {
 		return err
 	}
-	for _, el := range obj.SupplementalSemanticIds {
+	for _, el := range obj.GetSupplementalSemanticIds() {
 		if err := AssertReferenceConstraints(el); err != nil {
 			return err
 		}
 	}
-	for _, el := range obj.Qualifiers {
+	for _, el := range obj.GetQualifiers() {
 		if err := AssertQualifierConstraints(el); err != nil {
 			return err
 		}
 	}
-	for _, el := range obj.EmbeddedDataSpecifications {
+	for _, el := range obj.GetEmbeddedDataSpecifications() {
 		if err := AssertEmbeddedDataSpecificationConstraints(el); err != nil {
 			return err
 		}

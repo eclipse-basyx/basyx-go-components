@@ -54,23 +54,23 @@ func (p *PostgreSQLSMECrudHandler) Create(submodelId string, submodelElement gen
 func (p *PostgreSQLSMECrudHandler) CreateWithTx(tx *sql.Tx, submodelId string, submodelElement gen.SubmodelElement) error {
 	var referenceID sql.NullInt64
 
-	if !isEmptyReference(submodelElement.SemanticId) {
+	if !isEmptyReference(submodelElement.GetSemanticId()) {
 		var id int
-		err := tx.QueryRow(`INSERT INTO reference (type) VALUES ($1) RETURNING id`, submodelElement.SemanticId.Type).Scan(&id)
+		err := tx.QueryRow(`INSERT INTO reference (type) VALUES ($1) RETURNING id`, submodelElement.GetSemanticId().Type).Scan(&id)
 		if err != nil {
 			return err
 		}
 		referenceID = sql.NullInt64{Int64: int64(id), Valid: true}
-		println("Inserted Reference for SubmodelElement with idShort: " + submodelElement.IdShort)
+		println("Inserted Reference for SubmodelElement with idShort: " + submodelElement.GetIdShort())
 
-		references := submodelElement.SemanticId.Keys
+		references := submodelElement.GetSemanticId().Keys
 		for i := range references {
 			_, err = tx.Exec(`INSERT INTO reference_key (reference_id, position, type, value) VALUES ($1, $2, $3, $4)`,
 				id, i, references[i].Type, references[i].Value)
 			if err != nil {
 				return err
 			}
-			println("Inserted Reference Key for SubmodelElement with idShort: " + submodelElement.IdShort)
+			println("Inserted Reference Key for SubmodelElement with idShort: " + submodelElement.GetIdShort())
 		}
 	}
 	// If no semantic ID is provided, referenceID remains sql.NullInt64{Valid: false} which represents NULL
@@ -78,14 +78,14 @@ func (p *PostgreSQLSMECrudHandler) CreateWithTx(tx *sql.Tx, submodelId string, s
 	// Check if a SubmodelElement with the same submodelId and idshort_path already exists
 	var exists bool
 	err := tx.QueryRow(`SELECT EXISTS(SELECT 1 FROM submodel_element WHERE submodel_id = $1 AND idshort_path = $2)`,
-		submodelId, submodelElement.IdShort).Scan(&exists)
+		submodelId, submodelElement.GetIdShort()).Scan(&exists)
 	if err != nil {
 		return err
 	}
 
 	if exists {
 		return fmt.Errorf("SubmodelElement with submodelId '%s' and idshort_path '%s' already exists",
-			submodelId, submodelElement.IdShort)
+			submodelId, submodelElement.GetIdShort())
 	}
 
 	_, err = tx.Exec(`	INSERT INTO
@@ -94,16 +94,16 @@ func (p *PostgreSQLSMECrudHandler) CreateWithTx(tx *sql.Tx, submodelId string, s
 		submodelId,
 		nil, //TODO
 		0,   //TODO
-		submodelElement.IdShort,
-		submodelElement.Category,
-		submodelElement.ModelType,
-		referenceID,             // This will be NULL if no semantic ID was provided
-		submodelElement.IdShort, //TODO
+		submodelElement.GetIdShort(),
+		submodelElement.GetCategory(),
+		submodelElement.GetModelType(),
+		referenceID,                  // This will be NULL if no semantic ID was provided
+		submodelElement.GetIdShort(), //TODO
 	)
 	if err != nil {
 		return err
 	}
-	println("Inserted SubmodelElement with idShort: " + submodelElement.IdShort)
+	println("Inserted SubmodelElement with idShort: " + submodelElement.GetIdShort())
 
 	return nil
 }

@@ -18,7 +18,7 @@ import (
 
 // SerializationAPIAPIController binds http requests to an api service and writes the service results to the http response
 type SerializationAPIAPIController struct {
-	service SerializationAPIAPIServicer
+	service      SerializationAPIAPIServicer
 	errorHandler ErrorHandler
 }
 
@@ -51,7 +51,7 @@ func (c *SerializationAPIAPIController) Routes() Routes {
 	return Routes{
 		"GenerateSerializationByIds": Route{
 			strings.ToUpper("Get"),
-			"/api/v3.0/serialization",
+			"/serialization",
 			c.GenerateSerializationByIds,
 		},
 	}
