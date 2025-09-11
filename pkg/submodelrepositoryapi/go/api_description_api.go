@@ -14,12 +14,11 @@ package openapi
 import (
 	"net/http"
 	"strings"
-	
 )
 
 // DescriptionAPIAPIController binds http requests to an api service and writes the service results to the http response
 type DescriptionAPIAPIController struct {
-	service DescriptionAPIAPIServicer
+	service      DescriptionAPIAPIServicer
 	errorHandler ErrorHandler
 }
 
@@ -52,7 +51,7 @@ func (c *DescriptionAPIAPIController) Routes() Routes {
 	return Routes{
 		"GetDescription": Route{
 			strings.ToUpper("Get"),
-			"/api/v3.0/description",
+			"/description",
 			c.GetDescription,
 		},
 	}

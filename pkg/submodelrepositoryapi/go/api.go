@@ -15,27 +15,26 @@ import (
 	"context"
 	"net/http"
 	"os"
-	
 )
-
-
 
 // DescriptionAPIAPIRouter defines the required methods for binding the api requests to a responses for the DescriptionAPIAPI
 // The DescriptionAPIAPIRouter implementation should parse necessary information from the http request,
 // pass the data to a DescriptionAPIAPIServicer to perform the required actions, then write the service results to the http response.
-type DescriptionAPIAPIRouter interface { 
+type DescriptionAPIAPIRouter interface {
 	GetDescription(http.ResponseWriter, *http.Request)
 }
+
 // SerializationAPIAPIRouter defines the required methods for binding the api requests to a responses for the SerializationAPIAPI
 // The SerializationAPIAPIRouter implementation should parse necessary information from the http request,
 // pass the data to a SerializationAPIAPIServicer to perform the required actions, then write the service results to the http response.
-type SerializationAPIAPIRouter interface { 
+type SerializationAPIAPIRouter interface {
 	GenerateSerializationByIds(http.ResponseWriter, *http.Request)
 }
+
 // SubmodelRepositoryAPIAPIRouter defines the required methods for binding the api requests to a responses for the SubmodelRepositoryAPIAPI
 // The SubmodelRepositoryAPIAPIRouter implementation should parse necessary information from the http request,
 // pass the data to a SubmodelRepositoryAPIAPIServicer to perform the required actions, then write the service results to the http response.
-type SubmodelRepositoryAPIAPIRouter interface { 
+type SubmodelRepositoryAPIAPIRouter interface {
 	GetAllSubmodels(http.ResponseWriter, *http.Request)
 	PostSubmodel(http.ResponseWriter, *http.Request)
 	GetAllSubmodelsMetadata(http.ResponseWriter, *http.Request)
@@ -81,30 +80,27 @@ type SubmodelRepositoryAPIAPIRouter interface {
 	GetOperationAsyncResultValueOnly(http.ResponseWriter, *http.Request)
 }
 
-
 // DescriptionAPIAPIServicer defines the api actions for the DescriptionAPIAPI service
 // This interface intended to stay up to date with the openapi yaml used to generate it,
 // while the service implementation can be ignored with the .openapi-generator-ignore file
 // and updated with the logic required for the API.
-type DescriptionAPIAPIServicer interface { 
+type DescriptionAPIAPIServicer interface {
 	GetDescription(context.Context) (ImplResponse, error)
 }
-
 
 // SerializationAPIAPIServicer defines the api actions for the SerializationAPIAPI service
 // This interface intended to stay up to date with the openapi yaml used to generate it,
 // while the service implementation can be ignored with the .openapi-generator-ignore file
 // and updated with the logic required for the API.
-type SerializationAPIAPIServicer interface { 
+type SerializationAPIAPIServicer interface {
 	GenerateSerializationByIds(context.Context, []string, []string, bool) (ImplResponse, error)
 }
-
 
 // SubmodelRepositoryAPIAPIServicer defines the api actions for the SubmodelRepositoryAPIAPI service
 // This interface intended to stay up to date with the openapi yaml used to generate it,
 // while the service implementation can be ignored with the .openapi-generator-ignore file
 // and updated with the logic required for the API.
-type SubmodelRepositoryAPIAPIServicer interface { 
+type SubmodelRepositoryAPIAPIServicer interface {
 	GetAllSubmodels(context.Context, string, string, int32, string, string, string) (ImplResponse, error)
 	PostSubmodel(context.Context, Submodel) (ImplResponse, error)
 	GetAllSubmodelsMetadata(context.Context, string, string, int32, string) (ImplResponse, error)

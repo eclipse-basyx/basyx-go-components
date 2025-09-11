@@ -13,17 +13,17 @@ package openapi
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
-	"strings"
 	"os"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
-	
 )
 
 // SubmodelRepositoryAPIAPIController binds http requests to an api service and writes the service results to the http response
 type SubmodelRepositoryAPIAPIController struct {
-	service SubmodelRepositoryAPIAPIServicer
+	service      SubmodelRepositoryAPIAPIServicer
 	errorHandler ErrorHandler
 }
 
@@ -56,217 +56,217 @@ func (c *SubmodelRepositoryAPIAPIController) Routes() Routes {
 	return Routes{
 		"GetAllSubmodels": Route{
 			strings.ToUpper("Get"),
-			"/api/v3.0/submodels",
+			"/submodels",
 			c.GetAllSubmodels,
 		},
 		"PostSubmodel": Route{
 			strings.ToUpper("Post"),
-			"/api/v3.0/submodels",
+			"/submodels",
 			c.PostSubmodel,
 		},
 		"GetAllSubmodelsMetadata": Route{
 			strings.ToUpper("Get"),
-			"/api/v3.0/submodels/$metadata",
+			"/submodels/$metadata",
 			c.GetAllSubmodelsMetadata,
 		},
 		"GetAllSubmodelsValueOnly": Route{
 			strings.ToUpper("Get"),
-			"/api/v3.0/submodels/$value",
+			"/submodels/$value",
 			c.GetAllSubmodelsValueOnly,
 		},
 		"GetAllSubmodelsReference": Route{
 			strings.ToUpper("Get"),
-			"/api/v3.0/submodels/$reference",
+			"/submodels/$reference",
 			c.GetAllSubmodelsReference,
 		},
 		"GetAllSubmodelsPath": Route{
 			strings.ToUpper("Get"),
-			"/api/v3.0/submodels/$path",
+			"/submodels/$path",
 			c.GetAllSubmodelsPath,
 		},
 		"GetSubmodelById": Route{
 			strings.ToUpper("Get"),
-			"/api/v3.0/submodels/{submodelIdentifier}",
+			"/submodels/{submodelIdentifier}",
 			c.GetSubmodelById,
 		},
 		"PutSubmodelById": Route{
 			strings.ToUpper("Put"),
-			"/api/v3.0/submodels/{submodelIdentifier}",
+			"/submodels/{submodelIdentifier}",
 			c.PutSubmodelById,
 		},
 		"DeleteSubmodelById": Route{
 			strings.ToUpper("Delete"),
-			"/api/v3.0/submodels/{submodelIdentifier}",
+			"/submodels/{submodelIdentifier}",
 			c.DeleteSubmodelById,
 		},
 		"PatchSubmodelById": Route{
 			strings.ToUpper("Patch"),
-			"/api/v3.0/submodels/{submodelIdentifier}",
+			"/submodels/{submodelIdentifier}",
 			c.PatchSubmodelById,
 		},
 		"GetSubmodelByIdMetadata": Route{
 			strings.ToUpper("Get"),
-			"/api/v3.0/submodels/{submodelIdentifier}/$metadata",
+			"/submodels/{submodelIdentifier}/$metadata",
 			c.GetSubmodelByIdMetadata,
 		},
 		"PatchSubmodelByIdMetadata": Route{
 			strings.ToUpper("Patch"),
-			"/api/v3.0/submodels/{submodelIdentifier}/$metadata",
+			"/submodels/{submodelIdentifier}/$metadata",
 			c.PatchSubmodelByIdMetadata,
 		},
 		"GetSubmodelByIdValueOnly": Route{
 			strings.ToUpper("Get"),
-			"/api/v3.0/submodels/{submodelIdentifier}/$value",
+			"/submodels/{submodelIdentifier}/$value",
 			c.GetSubmodelByIdValueOnly,
 		},
 		"PatchSubmodelByIdValueOnly": Route{
 			strings.ToUpper("Patch"),
-			"/api/v3.0/submodels/{submodelIdentifier}/$value",
+			"/submodels/{submodelIdentifier}/$value",
 			c.PatchSubmodelByIdValueOnly,
 		},
 		"GetSubmodelByIdReference": Route{
 			strings.ToUpper("Get"),
-			"/api/v3.0/submodels/{submodelIdentifier}/$reference",
+			"/submodels/{submodelIdentifier}/$reference",
 			c.GetSubmodelByIdReference,
 		},
 		"GetSubmodelByIdPath": Route{
 			strings.ToUpper("Get"),
-			"/api/v3.0/submodels/{submodelIdentifier}/$path",
+			"/submodels/{submodelIdentifier}/$path",
 			c.GetSubmodelByIdPath,
 		},
 		"GetAllSubmodelElements": Route{
 			strings.ToUpper("Get"),
-			"/api/v3.0/submodels/{submodelIdentifier}/submodel-elements",
+			"/submodels/{submodelIdentifier}/submodel-elements",
 			c.GetAllSubmodelElements,
 		},
 		"PostSubmodelElementSubmodelRepo": Route{
 			strings.ToUpper("Post"),
-			"/api/v3.0/submodels/{submodelIdentifier}/submodel-elements",
+			"/submodels/{submodelIdentifier}/submodel-elements",
 			c.PostSubmodelElementSubmodelRepo,
 		},
 		"GetAllSubmodelElementsMetadataSubmodelRepo": Route{
 			strings.ToUpper("Get"),
-			"/api/v3.0/submodels/{submodelIdentifier}/submodel-elements/$metadata",
+			"/submodels/{submodelIdentifier}/submodel-elements/$metadata",
 			c.GetAllSubmodelElementsMetadataSubmodelRepo,
 		},
 		"GetAllSubmodelElementsValueOnlySubmodelRepo": Route{
 			strings.ToUpper("Get"),
-			"/api/v3.0/submodels/{submodelIdentifier}/submodel-elements/$value",
+			"/submodels/{submodelIdentifier}/submodel-elements/$value",
 			c.GetAllSubmodelElementsValueOnlySubmodelRepo,
 		},
 		"GetAllSubmodelElementsReferenceSubmodelRepo": Route{
 			strings.ToUpper("Get"),
-			"/api/v3.0/submodels/{submodelIdentifier}/submodel-elements/$reference",
+			"/submodels/{submodelIdentifier}/submodel-elements/$reference",
 			c.GetAllSubmodelElementsReferenceSubmodelRepo,
 		},
 		"GetAllSubmodelElementsPathSubmodelRepo": Route{
 			strings.ToUpper("Get"),
-			"/api/v3.0/submodels/{submodelIdentifier}/submodel-elements/$path",
+			"/submodels/{submodelIdentifier}/submodel-elements/$path",
 			c.GetAllSubmodelElementsPathSubmodelRepo,
 		},
 		"GetSubmodelElementByPathSubmodelRepo": Route{
 			strings.ToUpper("Get"),
-			"/api/v3.0/submodels/{submodelIdentifier}/submodel-elements/{idShortPath}",
+			"/submodels/{submodelIdentifier}/submodel-elements/{idShortPath}",
 			c.GetSubmodelElementByPathSubmodelRepo,
 		},
 		"PutSubmodelElementByPathSubmodelRepo": Route{
 			strings.ToUpper("Put"),
-			"/api/v3.0/submodels/{submodelIdentifier}/submodel-elements/{idShortPath}",
+			"/submodels/{submodelIdentifier}/submodel-elements/{idShortPath}",
 			c.PutSubmodelElementByPathSubmodelRepo,
 		},
 		"PostSubmodelElementByPathSubmodelRepo": Route{
 			strings.ToUpper("Post"),
-			"/api/v3.0/submodels/{submodelIdentifier}/submodel-elements/{idShortPath}",
+			"/submodels/{submodelIdentifier}/submodel-elements/{idShortPath}",
 			c.PostSubmodelElementByPathSubmodelRepo,
 		},
 		"DeleteSubmodelElementByPathSubmodelRepo": Route{
 			strings.ToUpper("Delete"),
-			"/api/v3.0/submodels/{submodelIdentifier}/submodel-elements/{idShortPath}",
+			"/submodels/{submodelIdentifier}/submodel-elements/{idShortPath}",
 			c.DeleteSubmodelElementByPathSubmodelRepo,
 		},
 		"PatchSubmodelElementByPathSubmodelRepo": Route{
 			strings.ToUpper("Patch"),
-			"/api/v3.0/submodels/{submodelIdentifier}/submodel-elements/{idShortPath}",
+			"/submodels/{submodelIdentifier}/submodel-elements/{idShortPath}",
 			c.PatchSubmodelElementByPathSubmodelRepo,
 		},
 		"GetSubmodelElementByPathMetadataSubmodelRepo": Route{
 			strings.ToUpper("Get"),
-			"/api/v3.0/submodels/{submodelIdentifier}/submodel-elements/{idShortPath}/$metadata",
+			"/submodels/{submodelIdentifier}/submodel-elements/{idShortPath}/$metadata",
 			c.GetSubmodelElementByPathMetadataSubmodelRepo,
 		},
 		"PatchSubmodelElementByPathMetadataSubmodelRepo": Route{
 			strings.ToUpper("Patch"),
-			"/api/v3.0/submodels/{submodelIdentifier}/submodel-elements/{idShortPath}/$metadata",
+			"/submodels/{submodelIdentifier}/submodel-elements/{idShortPath}/$metadata",
 			c.PatchSubmodelElementByPathMetadataSubmodelRepo,
 		},
 		"GetSubmodelElementByPathValueOnlySubmodelRepo": Route{
 			strings.ToUpper("Get"),
-			"/api/v3.0/submodels/{submodelIdentifier}/submodel-elements/{idShortPath}/$value",
+			"/submodels/{submodelIdentifier}/submodel-elements/{idShortPath}/$value",
 			c.GetSubmodelElementByPathValueOnlySubmodelRepo,
 		},
 		"PatchSubmodelElementByPathValueOnlySubmodelRepo": Route{
 			strings.ToUpper("Patch"),
-			"/api/v3.0/submodels/{submodelIdentifier}/submodel-elements/{idShortPath}/$value",
+			"/submodels/{submodelIdentifier}/submodel-elements/{idShortPath}/$value",
 			c.PatchSubmodelElementByPathValueOnlySubmodelRepo,
 		},
 		"GetSubmodelElementByPathReferenceSubmodelRepo": Route{
 			strings.ToUpper("Get"),
-			"/api/v3.0/submodels/{submodelIdentifier}/submodel-elements/{idShortPath}/$reference",
+			"/submodels/{submodelIdentifier}/submodel-elements/{idShortPath}/$reference",
 			c.GetSubmodelElementByPathReferenceSubmodelRepo,
 		},
 		"GetSubmodelElementByPathPathSubmodelRepo": Route{
 			strings.ToUpper("Get"),
-			"/api/v3.0/submodels/{submodelIdentifier}/submodel-elements/{idShortPath}/$path",
+			"/submodels/{submodelIdentifier}/submodel-elements/{idShortPath}/$path",
 			c.GetSubmodelElementByPathPathSubmodelRepo,
 		},
 		"GetFileByPathSubmodelRepo": Route{
 			strings.ToUpper("Get"),
-			"/api/v3.0/submodels/{submodelIdentifier}/submodel-elements/{idShortPath}/attachment",
+			"/submodels/{submodelIdentifier}/submodel-elements/{idShortPath}/attachment",
 			c.GetFileByPathSubmodelRepo,
 		},
 		"PutFileByPathSubmodelRepo": Route{
 			strings.ToUpper("Put"),
-			"/api/v3.0/submodels/{submodelIdentifier}/submodel-elements/{idShortPath}/attachment",
+			"/submodels/{submodelIdentifier}/submodel-elements/{idShortPath}/attachment",
 			c.PutFileByPathSubmodelRepo,
 		},
 		"DeleteFileByPathSubmodelRepo": Route{
 			strings.ToUpper("Delete"),
-			"/api/v3.0/submodels/{submodelIdentifier}/submodel-elements/{idShortPath}/attachment",
+			"/submodels/{submodelIdentifier}/submodel-elements/{idShortPath}/attachment",
 			c.DeleteFileByPathSubmodelRepo,
 		},
 		"InvokeOperationSubmodelRepo": Route{
 			strings.ToUpper("Post"),
-			"/api/v3.0/submodels/{submodelIdentifier}/submodel-elements/{idShortPath}/invoke",
+			"/submodels/{submodelIdentifier}/submodel-elements/{idShortPath}/invoke",
 			c.InvokeOperationSubmodelRepo,
 		},
 		"InvokeOperationValueOnly": Route{
 			strings.ToUpper("Post"),
-			"/api/v3.0/submodels/{submodelIdentifier}/submodel-elements/{idShortPath}/invoke/$value",
+			"/submodels/{submodelIdentifier}/submodel-elements/{idShortPath}/invoke/$value",
 			c.InvokeOperationValueOnly,
 		},
 		"InvokeOperationAsync": Route{
 			strings.ToUpper("Post"),
-			"/api/v3.0/submodels/{submodelIdentifier}/submodel-elements/{idShortPath}/invoke-async",
+			"/submodels/{submodelIdentifier}/submodel-elements/{idShortPath}/invoke-async",
 			c.InvokeOperationAsync,
 		},
 		"InvokeOperationAsyncValueOnly": Route{
 			strings.ToUpper("Post"),
-			"/api/v3.0/submodels/{submodelIdentifier}/submodel-elements/{idShortPath}/invoke-async/$value",
+			"/submodels/{submodelIdentifier}/submodel-elements/{idShortPath}/invoke-async/$value",
 			c.InvokeOperationAsyncValueOnly,
 		},
 		"GetOperationAsyncStatus": Route{
 			strings.ToUpper("Get"),
-			"/api/v3.0/submodels/{submodelIdentifier}/submodel-elements/{idShortPath}/operation-status/{handleId}",
+			"/submodels/{submodelIdentifier}/submodel-elements/{idShortPath}/operation-status/{handleId}",
 			c.GetOperationAsyncStatus,
 		},
 		"GetOperationAsyncResult": Route{
 			strings.ToUpper("Get"),
-			"/api/v3.0/submodels/{submodelIdentifier}/submodel-elements/{idShortPath}/operation-results/{handleId}",
+			"/submodels/{submodelIdentifier}/submodel-elements/{idShortPath}/operation-results/{handleId}",
 			c.GetOperationAsyncResult,
 		},
 		"GetOperationAsyncResultValueOnly": Route{
 			strings.ToUpper("Get"),
-			"/api/v3.0/submodels/{submodelIdentifier}/submodel-elements/{idShortPath}/operation-results/{handleId}/$value",
+			"/submodels/{submodelIdentifier}/submodel-elements/{idShortPath}/operation-results/{handleId}/$value",
 			c.GetOperationAsyncResultValueOnly,
 		},
 	}
@@ -997,13 +997,21 @@ func (c *SubmodelRepositoryAPIAPIController) PostSubmodelElementSubmodelRepo(w h
 		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
 		return
 	}
-	var submodelElementParam SubmodelElement
-	d := json.NewDecoder(r.Body)
-	d.DisallowUnknownFields()
-	if err := d.Decode(&submodelElementParam); err != nil {
+
+	// Read the raw JSON data from the request body
+	bodyBytes, err := io.ReadAll(r.Body)
+	if err != nil {
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
+
+	// Use our custom factory function to create the appropriate concrete type
+	submodelElementParam, err := UnmarshalSubmodelElement(bodyBytes)
+	if err != nil {
+		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
+		return
+	}
+
 	// FIXED: Use custom validation that handles optional references correctly
 	if err := AssertSubmodelElementRequiredFixed(submodelElementParam); err != nil {
 		c.errorHandler(w, r, err, nil)
@@ -1297,10 +1305,17 @@ func (c *SubmodelRepositoryAPIAPIController) PutSubmodelElementByPathSubmodelRep
 		c.errorHandler(w, r, &RequiredError{"idShortPath"}, nil)
 		return
 	}
-	var submodelElementParam SubmodelElement
-	d := json.NewDecoder(r.Body)
-	d.DisallowUnknownFields()
-	if err := d.Decode(&submodelElementParam); err != nil {
+
+	// Read the raw JSON data from the request body
+	bodyBytes, err := io.ReadAll(r.Body)
+	if err != nil {
+		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
+		return
+	}
+
+	// Use our custom factory function to create the appropriate concrete type
+	submodelElementParam, err := UnmarshalSubmodelElement(bodyBytes)
+	if err != nil {
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
@@ -1343,10 +1358,17 @@ func (c *SubmodelRepositoryAPIAPIController) PostSubmodelElementByPathSubmodelRe
 		c.errorHandler(w, r, &RequiredError{"idShortPath"}, nil)
 		return
 	}
-	var submodelElementParam SubmodelElement
-	d := json.NewDecoder(r.Body)
-	d.DisallowUnknownFields()
-	if err := d.Decode(&submodelElementParam); err != nil {
+
+	// Read the raw JSON data from the request body
+	bodyBytes, err := io.ReadAll(r.Body)
+	if err != nil {
+		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
+		return
+	}
+
+	// Use our custom factory function to create the appropriate concrete type
+	submodelElementParam, err := UnmarshalSubmodelElement(bodyBytes)
+	if err != nil {
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
@@ -1407,10 +1429,17 @@ func (c *SubmodelRepositoryAPIAPIController) PatchSubmodelElementByPathSubmodelR
 		c.errorHandler(w, r, &RequiredError{"idShortPath"}, nil)
 		return
 	}
-	var submodelElementParam SubmodelElement
-	d := json.NewDecoder(r.Body)
-	d.DisallowUnknownFields()
-	if err := d.Decode(&submodelElementParam); err != nil {
+
+	// Read the raw JSON data from the request body
+	bodyBytes, err := io.ReadAll(r.Body)
+	if err != nil {
+		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
+		return
+	}
+
+	// Use our custom factory function to create the appropriate concrete type
+	submodelElementParam, err := UnmarshalSubmodelElement(bodyBytes)
+	if err != nil {
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
@@ -1692,8 +1721,7 @@ func (c *SubmodelRepositoryAPIAPIController) PutFileByPathSubmodelRepo(w http.Re
 		c.errorHandler(w, r, &RequiredError{"idShortPath"}, nil)
 		return
 	}
-	
-	
+
 	fileNameParam := r.FormValue("fileName")
 	var fileParam *os.File
 	{
@@ -1705,8 +1733,7 @@ func (c *SubmodelRepositoryAPIAPIController) PutFileByPathSubmodelRepo(w http.Re
 
 		fileParam = param
 	}
-	
-	
+
 	result, err := c.service.PutFileByPathSubmodelRepo(r.Context(), submodelIdentifierParam, idShortPathParam, fileNameParam, fileParam)
 	// If an error occurred, encode the error with the status code
 	if err != nil {

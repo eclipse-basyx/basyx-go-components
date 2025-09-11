@@ -126,7 +126,8 @@ openapi-generator-cli generate \
   - ... more to come
 - Postgres as a database with a scalable database schema -> https://github.com/eclipse-aaspe/server/tree/ChangesAndreas/examples/PerformanceSQL
 - The Database has to support the different types of SubmodelElements (SMEs) -> https://industrialdigitaltwin.io/aas-specifications/IDTA-01001/v3.1.1/spec-metamodel/submodel-elements.html
-- The API will be implemented in Go 1.24
+- The API will be implemented in Go 1.25
+- To configure the Components we rely on env variables instead of a dedicated configuration file (state-of-the-art)
 
 ## Project structure (example: https://github.com/aas-hub-org/basyx-go-sdk)
 - `cmd/` contains the main application entry points.
