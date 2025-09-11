@@ -118,7 +118,7 @@ func (p *PostgreSQLSubmodelDatabase) AddSubmodelElement(submodelId string, submo
 	default:
 		return errors.New("ModelType " + string(submodelElement.(gen.SubmodelElement).GetModelType()) + " unsupported.")
 	}
-	if err := handler.Create(submodelId, submodelElement); err != nil {
+	if _, err := handler.Create(submodelId, submodelElement); err != nil {
 		return err
 	}
 	return nil
