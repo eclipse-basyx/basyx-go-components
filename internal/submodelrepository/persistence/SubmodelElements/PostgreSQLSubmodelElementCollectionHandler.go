@@ -21,27 +21,14 @@ func NewPostgreSQLSubmodelElementCollectionHandler(db *sql.DB) (*PostgreSQLSubmo
 	return &PostgreSQLSubmodelElementCollectionHandler{db: db, decorated: decoratedHandler}, nil
 }
 
-func (p PostgreSQLSubmodelElementCollectionHandler) Create(submodelId string, submodelElement gen.SubmodelElement) (int, error) {
+func (p PostgreSQLSubmodelElementCollectionHandler) Create(tx *sql.Tx, submodelId string, submodelElement gen.SubmodelElement) (int, error) {
 	_, ok := submodelElement.(*gen.SubmodelElementCollection)
 	if !ok {
 		return 0, errors.New("submodelElement is not of type SubmodelElementCollection")
 	}
 
-	// Start a database transaction at the SubmodelElementCollection level
-	tx, err := p.db.Begin()
-	if err != nil {
-		return 0, err
-	}
-
-	// Defer rollback in case of error
-	defer func() {
-		if err != nil {
-			tx.Rollback()
-		}
-	}()
-
 	// First, perform base SubmodelElement operations within the transaction
-	id, err := p.decorated.CreateWithTx(tx, submodelId, submodelElement)
+	id, err := p.decorated.Create(tx, submodelId, submodelElement)
 	if err != nil {
 		return 0, err
 	}
@@ -51,11 +38,25 @@ func (p PostgreSQLSubmodelElementCollectionHandler) Create(submodelId string, su
 
 	// Then, perform SubmodelElementCollection-specific operations within the same transaction
 
-	// Commit the transaction only if everything succeeded
-	err = tx.Commit()
+	return id, nil
+}
+
+func (p PostgreSQLSubmodelElementCollectionHandler) CreateNested(tx *sql.Tx, submodelId string, parentId int, idShortPath string, submodelElement gen.SubmodelElement) (int, error) {
+	_, ok := submodelElement.(*gen.SubmodelElementCollection)
+	if !ok {
+		return 0, errors.New("submodelElement is not of type SubmodelElementCollection")
+	}
+
+	// First, perform base SubmodelElement operations within the transaction
+	id, err := p.decorated.CreateAndPath(tx, submodelId, parentId, idShortPath, submodelElement)
 	if err != nil {
 		return 0, err
 	}
+
+	// SubmodelElementCollection-specific database insertion
+	// Determine which column to use based on valueType
+
+	// Then, perform SubmodelElementCollection-specific operations within the same transaction
 
 	return id, nil
 }

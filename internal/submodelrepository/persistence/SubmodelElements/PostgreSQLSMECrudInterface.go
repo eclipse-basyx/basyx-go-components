@@ -1,11 +1,14 @@
 package submodelelements
 
 import (
+	"database/sql"
+
 	gen "github.com/eclipse-basyx/basyx-go-components/pkg/submodelrepositoryapi/go"
 )
 
 type PostgreSQLSMECrudInterface interface {
-	Create(string, gen.SubmodelElement) (int, error)
+	Create(*sql.Tx, string, gen.SubmodelElement) (int, error)
+	CreateNested(*sql.Tx, string, int, string, gen.SubmodelElement) (int, error)
 	Read(string) error
 	Update(string, gen.SubmodelElement) error
 	Delete(string) error

@@ -21,27 +21,14 @@ func NewPostgreSQLSubmodelElementListHandler(db *sql.DB) (*PostgreSQLSubmodelEle
 	return &PostgreSQLSubmodelElementListHandler{db: db, decorated: decoratedHandler}, nil
 }
 
-func (p PostgreSQLSubmodelElementListHandler) Create(submodelId string, submodelElement gen.SubmodelElement) (int, error) {
+func (p PostgreSQLSubmodelElementListHandler) Create(tx *sql.Tx, submodelId string, submodelElement gen.SubmodelElement) (int, error) {
 	_, ok := submodelElement.(*gen.SubmodelElementList)
 	if !ok {
 		return 0, errors.New("submodelElement is not of type SubmodelElementList")
 	}
 
-	// Start a database transaction at the SubmodelElementList level
-	tx, err := p.db.Begin()
-	if err != nil {
-		return 0, err
-	}
-
-	// Defer rollback in case of error
-	defer func() {
-		if err != nil {
-			tx.Rollback()
-		}
-	}()
-
 	// First, perform base SubmodelElement operations within the transaction
-	id, err := p.decorated.CreateWithTx(tx, submodelId, submodelElement)
+	id, err := p.decorated.Create(tx, submodelId, submodelElement)
 	if err != nil {
 		return 0, err
 	}
@@ -51,13 +38,11 @@ func (p PostgreSQLSubmodelElementListHandler) Create(submodelId string, submodel
 
 	// Then, perform SubmodelElementList-specific operations within the same transaction
 
-	// Commit the transaction only if everything succeeded
-	err = tx.Commit()
-	if err != nil {
-		return 0, err
-	}
-
 	return id, nil
+}
+
+func (p PostgreSQLSubmodelElementListHandler) CreateNested(tx *sql.Tx, submodelId string, parentId int, idShortPath string, submodelElement gen.SubmodelElement) (int, error) {
+	return 0, errors.New("not implemented")
 }
 
 func (p PostgreSQLSubmodelElementListHandler) Read(idShortOrPath string) error {

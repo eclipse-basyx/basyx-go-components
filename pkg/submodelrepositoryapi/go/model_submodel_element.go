@@ -58,8 +58,56 @@ func UnmarshalSubmodelElement(data []byte) (SubmodelElement, error) {
 			return nil, fmt.Errorf("failed to unmarshal Property: %w", err)
 		}
 		return &prop, nil
+	case "MultiLanguageProperty":
+		var mlp MultiLanguageProperty
+		if err := json.Unmarshal(data, &mlp); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal MultiLanguageProperty: %w", err)
+		}
+		return &mlp, nil
+	case "Range":
+		var r Range
+		if err := json.Unmarshal(data, &r); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal Range: %w", err)
+		}
+		return &r, nil
+	case "File":
+		var f File
+		if err := json.Unmarshal(data, &f); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal File: %w", err)
+		}
+		return &f, nil
+	case "Blob":
+		var b Blob
+		if err := json.Unmarshal(data, &b); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal Blob: %w", err)
+		}
+		return &b, nil
+	case "ReferenceElement":
+		var re ReferenceElement
+		if err := json.Unmarshal(data, &re); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal ReferenceElement: %w", err)
+		}
+		return &re, nil
+	case "RelationshipElement":
+		var re RelationshipElement
+		if err := json.Unmarshal(data, &re); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal RelationshipElement: %w", err)
+		}
+		return &re, nil
+	case "SubmodelElementCollection":
+		var sec SubmodelElementCollection
+		if err := json.Unmarshal(data, &sec); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal SubmodelElementCollection: %w", err)
+		}
+		return &sec, nil
+	case "SubmodelElementList":
+		var sel SubmodelElementList
+		if err := json.Unmarshal(data, &sel); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal SubmodelElementList: %w", err)
+		}
+		return &sel, nil
 	default:
-		return nil, fmt.Errorf("unsupported modelType: %s (only Property is currently supported)", raw.ModelType)
+		return nil, fmt.Errorf("unsupported modelType: %s (supported types: Property, MultiLanguageProperty, Range, File, Blob, ReferenceElement, RelationshipElement, SubmodelElementCollection, SubmodelElementList)", raw.ModelType)
 	}
 }
 

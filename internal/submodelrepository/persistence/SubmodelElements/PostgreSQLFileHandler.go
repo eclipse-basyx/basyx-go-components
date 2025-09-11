@@ -21,27 +21,13 @@ func NewPostgreSQLFileHandler(db *sql.DB) (*PostgreSQLFileHandler, error) {
 	return &PostgreSQLFileHandler{db: db, decorated: decoratedHandler}, nil
 }
 
-func (p PostgreSQLFileHandler) Create(submodelId string, submodelElement gen.SubmodelElement) (int, error) {
+func (p PostgreSQLFileHandler) Create(tx *sql.Tx, submodelId string, submodelElement gen.SubmodelElement) (int, error) {
 	_, ok := submodelElement.(*gen.File)
 	if !ok {
 		return 0, errors.New("submodelElement is not of type File")
 	}
-
-	// Start a database transaction at the File level
-	tx, err := p.db.Begin()
-	if err != nil {
-		return 0, err
-	}
-
-	// Defer rollback in case of error
-	defer func() {
-		if err != nil {
-			tx.Rollback()
-		}
-	}()
-
 	// First, perform base SubmodelElement operations within the transaction
-	id, err := p.decorated.CreateWithTx(tx, submodelId, submodelElement)
+	id, err := p.decorated.Create(tx, submodelId, submodelElement)
 	if err != nil {
 		return 0, err
 	}
@@ -51,13 +37,11 @@ func (p PostgreSQLFileHandler) Create(submodelId string, submodelElement gen.Sub
 
 	// Then, perform File-specific operations within the same transaction
 
-	// Commit the transaction only if everything succeeded
-	err = tx.Commit()
-	if err != nil {
-		return 0, err
-	}
-
 	return id, nil
+}
+
+func (p PostgreSQLFileHandler) CreateNested(tx *sql.Tx, submodelId string, parentId int, idShortPath string, submodelElement gen.SubmodelElement) (int, error) {
+	return 0, errors.New("not implemented")
 }
 
 func (p PostgreSQLFileHandler) Read(idShortOrPath string) error {

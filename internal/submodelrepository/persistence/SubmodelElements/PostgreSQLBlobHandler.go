@@ -21,27 +21,14 @@ func NewPostgreSQLBlobHandler(db *sql.DB) (*PostgreSQLBlobHandler, error) {
 	return &PostgreSQLBlobHandler{db: db, decorated: decoratedHandler}, nil
 }
 
-func (p PostgreSQLBlobHandler) Create(submodelId string, submodelElement gen.SubmodelElement) (int, error) {
+func (p PostgreSQLBlobHandler) Create(tx *sql.Tx, submodelId string, submodelElement gen.SubmodelElement) (int, error) {
 	_, ok := submodelElement.(*gen.Blob)
 	if !ok {
 		return 0, errors.New("submodelElement is not of type Blob")
 	}
 
-	// Start a database transaction at the Blob level
-	tx, err := p.db.Begin()
-	if err != nil {
-		return 0, err
-	}
-
-	// Defer rollback in case of error
-	defer func() {
-		if err != nil {
-			tx.Rollback()
-		}
-	}()
-
 	// First, perform base SubmodelElement operations within the transaction
-	id, err := p.decorated.CreateWithTx(tx, submodelId, submodelElement)
+	id, err := p.decorated.Create(tx, submodelId, submodelElement)
 	if err != nil {
 		return 0, err
 	}
@@ -51,13 +38,11 @@ func (p PostgreSQLBlobHandler) Create(submodelId string, submodelElement gen.Sub
 
 	// Then, perform Blob-specific operations within the same transaction
 
-	// Commit the transaction only if everything succeeded
-	err = tx.Commit()
-	if err != nil {
-		return 0, err
-	}
-
 	return id, nil
+}
+
+func (p PostgreSQLBlobHandler) CreateNested(tx *sql.Tx, submodelId string, parentId int, idShortPath string, submodelElement gen.SubmodelElement) (int, error) {
+	return 0, errors.New("not implemented")
 }
 
 func (p PostgreSQLBlobHandler) Read(idShortOrPath string) error {
