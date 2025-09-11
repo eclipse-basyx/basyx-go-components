@@ -107,7 +107,7 @@ func UnmarshalSubmodelElement(data []byte) (SubmodelElement, error) {
 		}
 		return &sel, nil
 	default:
-		return nil, fmt.Errorf("unsupported modelType: %s (only Property is currently supported)", raw.ModelType)
+		return nil, fmt.Errorf("unsupported modelType: %s (supported types: Property, MultiLanguageProperty, Range, File, Blob, ReferenceElement, RelationshipElement, SubmodelElementCollection, SubmodelElementList)", raw.ModelType)
 	}
 }
 
