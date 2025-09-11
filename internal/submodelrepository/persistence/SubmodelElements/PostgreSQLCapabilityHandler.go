@@ -21,24 +21,11 @@ func NewPostgreSQLCapabilityHandler(db *sql.DB) (*PostgreSQLCapabilityHandler, e
 	return &PostgreSQLCapabilityHandler{db: db, decorated: decoratedHandler}, nil
 }
 
-func (p PostgreSQLCapabilityHandler) Create(submodelId string, submodelElement gen.SubmodelElement) (int, error) {
+func (p PostgreSQLCapabilityHandler) Create(tx *sql.Tx, submodelId string, submodelElement gen.SubmodelElement) (int, error) {
 	_, ok := submodelElement.(*gen.Capability)
 	if !ok {
 		return 0, errors.New("submodelElement is not of type Capability")
 	}
-
-	// Start a database transaction at the Capability level
-	tx, err := p.db.Begin()
-	if err != nil {
-		return 0, err
-	}
-
-	// Defer rollback in case of error
-	defer func() {
-		if err != nil {
-			tx.Rollback()
-		}
-	}()
 
 	// First, perform base SubmodelElement operations within the transaction
 	id, err := p.decorated.CreateWithTx(tx, submodelId, submodelElement)
@@ -51,16 +38,10 @@ func (p PostgreSQLCapabilityHandler) Create(submodelId string, submodelElement g
 
 	// Then, perform Capability-specific operations within the same transaction
 
-	// Commit the transaction only if everything succeeded
-	err = tx.Commit()
-	if err != nil {
-		return 0, err
-	}
-
 	return id, nil
 }
 
-func (p PostgreSQLCapabilityHandler) CreateNested(submodelId string, idShortPath string, submodelElement gen.SubmodelElement) (int, error) {
+func (p PostgreSQLCapabilityHandler) CreateNested(tx *sql.Tx, submodelId string, idShortPath string, submodelElement gen.SubmodelElement) (int, error) {
 	return 0, errors.New("not implemented")
 }
 

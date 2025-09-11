@@ -11,6 +11,11 @@
 
 package openapi
 
+import (
+	"encoding/json"
+	"fmt"
+)
+
 type SubmodelElementList struct {
 	Extensions []Extension `json:"extensions,omitempty"`
 
@@ -40,7 +45,38 @@ type SubmodelElementList struct {
 
 	ValueTypeListElement DataTypeDefXsd `json:"valueTypeListElement,omitempty"`
 
-	Value []SubmodelElementChoice `json:"value,omitempty"`
+	Value []SubmodelElement `json:"value,omitempty"`
+}
+
+// UnmarshalJSON implements custom JSON unmarshaling for SubmodelElementList
+func (sel *SubmodelElementList) UnmarshalJSON(data []byte) error {
+	// Create a temporary struct with the same fields but Value as []json.RawMessage
+	type Alias SubmodelElementList
+	aux := &struct {
+		Value []json.RawMessage `json:"value,omitempty"`
+		*Alias
+	}{
+		Alias: (*Alias)(sel),
+	}
+
+	// Unmarshal into the temporary struct
+	if err := json.Unmarshal(data, aux); err != nil {
+		return err
+	}
+
+	// Now process the Value field manually
+	if aux.Value != nil {
+		sel.Value = make([]SubmodelElement, len(aux.Value))
+		for i, rawElement := range aux.Value {
+			element, err := UnmarshalSubmodelElement(rawElement)
+			if err != nil {
+				return fmt.Errorf("failed to unmarshal element at index %d: %w", i, err)
+			}
+			sel.Value[i] = element
+		}
+	}
+
+	return nil
 }
 
 // Getters
@@ -173,11 +209,6 @@ func AssertSubmodelElementListRequired(obj SubmodelElementList) error {
 	if err := AssertReferenceRequired(obj.SemanticIdListElement); err != nil {
 		return err
 	}
-	for _, el := range obj.Value {
-		if err := AssertSubmodelElementChoiceRequired(el); err != nil {
-			return err
-		}
-	}
 	return nil
 }
 
@@ -221,11 +252,6 @@ func AssertSubmodelElementListConstraints(obj SubmodelElementList) error {
 	}
 	if err := AssertReferenceConstraints(obj.SemanticIdListElement); err != nil {
 		return err
-	}
-	for _, el := range obj.Value {
-		if err := AssertSubmodelElementChoiceConstraints(el); err != nil {
-			return err
-		}
 	}
 	return nil
 }

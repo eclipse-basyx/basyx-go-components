@@ -11,6 +11,11 @@
 
 package openapi
 
+import (
+	"encoding/json"
+	"fmt"
+)
+
 type SubmodelElementCollection struct {
 	Extensions []Extension `json:"extensions,omitempty"`
 
@@ -32,7 +37,38 @@ type SubmodelElementCollection struct {
 
 	EmbeddedDataSpecifications []EmbeddedDataSpecification `json:"embeddedDataSpecifications,omitempty"`
 
-	Value []SubmodelElementChoice `json:"value,omitempty"`
+	Value []SubmodelElement `json:"value,omitempty"`
+}
+
+// UnmarshalJSON implements custom JSON unmarshaling for SubmodelElementCollection
+func (sec *SubmodelElementCollection) UnmarshalJSON(data []byte) error {
+	// Create a temporary struct with the same fields but Value as []json.RawMessage
+	type Alias SubmodelElementCollection
+	aux := &struct {
+		Value []json.RawMessage `json:"value,omitempty"`
+		*Alias
+	}{
+		Alias: (*Alias)(sec),
+	}
+
+	// Unmarshal into the temporary struct
+	if err := json.Unmarshal(data, aux); err != nil {
+		return err
+	}
+
+	// Now process the Value field manually
+	if aux.Value != nil {
+		sec.Value = make([]SubmodelElement, len(aux.Value))
+		for i, rawElement := range aux.Value {
+			element, err := UnmarshalSubmodelElement(rawElement)
+			if err != nil {
+				return fmt.Errorf("failed to unmarshal element at index %d: %w", i, err)
+			}
+			sec.Value[i] = element
+		}
+	}
+
+	return nil
 }
 
 // Getters
@@ -161,11 +197,11 @@ func AssertSubmodelElementCollectionRequired(obj SubmodelElementCollection) erro
 			return err
 		}
 	}
-	for _, el := range obj.Value {
-		if err := AssertSubmodelElementChoiceRequired(el); err != nil {
-			return err
-		}
-	}
+	// for _, el := range obj.Value {
+	// 	if err := AssertSubmodelElementChoiceRequired(el); err != nil {
+	// 		return err
+	// 	}
+	// } TODO: REDO IF NECESSARY
 	return nil
 }
 
@@ -207,10 +243,10 @@ func AssertSubmodelElementCollectionConstraints(obj SubmodelElementCollection) e
 			return err
 		}
 	}
-	for _, el := range obj.Value {
-		if err := AssertSubmodelElementChoiceConstraints(el); err != nil {
-			return err
-		}
-	}
+	// for _, el := range obj.Value {
+	// 	if err := AssertSubmodelElementChoiceConstraints(el); err != nil {
+	// 		return err
+	// 	}
+	// } TODO: REDO IF NECESSARY
 	return nil
 }
