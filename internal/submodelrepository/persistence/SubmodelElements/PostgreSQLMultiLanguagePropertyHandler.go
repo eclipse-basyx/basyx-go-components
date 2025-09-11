@@ -60,6 +60,10 @@ func (p PostgreSQLMultiLanguagePropertyHandler) Create(submodelId string, submod
 	return id, nil
 }
 
+func (p PostgreSQLMultiLanguagePropertyHandler) CreateNested(submodelId string, idShortPath string, submodelElement gen.SubmodelElement) (int, error) {
+	return 0, errors.New("not implemented")
+}
+
 func (p PostgreSQLMultiLanguagePropertyHandler) Read(idShortOrPath string) error {
 	if dErr := p.decorated.Read(idShortOrPath); dErr != nil {
 		return dErr

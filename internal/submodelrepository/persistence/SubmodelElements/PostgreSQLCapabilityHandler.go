@@ -60,6 +60,10 @@ func (p PostgreSQLCapabilityHandler) Create(submodelId string, submodelElement g
 	return id, nil
 }
 
+func (p PostgreSQLCapabilityHandler) CreateNested(submodelId string, idShortPath string, submodelElement gen.SubmodelElement) (int, error) {
+	return 0, errors.New("not implemented")
+}
+
 func (p PostgreSQLCapabilityHandler) Read(idShortOrPath string) error {
 	if dErr := p.decorated.Read(idShortOrPath); dErr != nil {
 		return dErr

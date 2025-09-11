@@ -60,6 +60,10 @@ func (p PostgreSQLRelationshipElementHandler) Create(submodelId string, submodel
 	return id, nil
 }
 
+func (p PostgreSQLRelationshipElementHandler) CreateNested(submodelId string, idShortPath string, submodelElement gen.SubmodelElement) (int, error) {
+	return 0, errors.New("not implemented")
+}
+
 func (p PostgreSQLRelationshipElementHandler) Read(idShortOrPath string) error {
 	if dErr := p.decorated.Read(idShortOrPath); dErr != nil {
 		return dErr
