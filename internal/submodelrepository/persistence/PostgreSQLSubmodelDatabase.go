@@ -224,7 +224,7 @@ func (p *PostgreSQLSubmodelDatabase) AddSubmodelElement(submodelId string, submo
 	}
 
 	// Create the top-level element
-	_, err = handler.Create(tx, submodelId, submodelElement)
+	parentId, err := handler.Create(tx, submodelId, submodelElement)
 	if err != nil {
 		return err
 	}
@@ -238,7 +238,7 @@ func (p *PostgreSQLSubmodelDatabase) AddSubmodelElement(submodelId string, submo
 		}
 		// Recursively add nested elements
 		for _, nestedElement := range submodelElementCollection.Value {
-			if err := p.AddNestedSubmodelElementRecursively(tx, submodelId, submodelElementCollection.IdShort, nestedElement); err != nil {
+			if err := p.AddNestedSubmodelElementRecursively(tx, submodelId, parentId, submodelElementCollection.IdShort, nestedElement); err != nil {
 				return err
 			}
 		}
@@ -250,7 +250,7 @@ func (p *PostgreSQLSubmodelDatabase) AddSubmodelElement(submodelId string, submo
 		// Recursively add nested elements with index-based paths
 		for index, nestedElement := range submodelElementList.Value {
 			idShortPath := submodelElementList.IdShort + "[" + strconv.Itoa(index) + "]"
-			if err := p.AddNestedSubmodelElementRecursively(tx, submodelId, idShortPath, nestedElement); err != nil {
+			if err := p.AddNestedSubmodelElementRecursively(tx, submodelId, parentId, idShortPath, nestedElement); err != nil {
 				return err
 			}
 		}
@@ -265,7 +265,7 @@ func (p *PostgreSQLSubmodelDatabase) AddSubmodelElement(submodelId string, submo
 	return nil
 }
 
-func (p *PostgreSQLSubmodelDatabase) AddNestedSubmodelElementRecursively(tx *sql.Tx, submodelId string, currentIdShortPath string, submodelElement gen.SubmodelElement) error {
+func (p *PostgreSQLSubmodelDatabase) AddNestedSubmodelElementRecursively(tx *sql.Tx, submodelId string, parentId int, currentIdShortPath string, submodelElement gen.SubmodelElement) error {
 	var handler submodelelements.PostgreSQLSMECrudInterface
 
 	switch string(submodelElement.GetModelType()) {
@@ -370,7 +370,7 @@ func (p *PostgreSQLSubmodelDatabase) AddNestedSubmodelElementRecursively(tx *sql
 	}
 
 	// Create the nested element with the proper idShortPath
-	// According to BaSyx grammar: <idShortPath> ::= <idShort> {[ "." <idShort> | "["<Index>"]" ]}*
+	// According to IDTA AAS grammar: <idShortPath> ::= <idShort> {[ "." <idShort> | "["<Index>"]" ]}*
 	var idShortPath string
 	if currentIdShortPath == "" {
 		idShortPath = submodelElement.GetIdShort()
@@ -386,7 +386,7 @@ func (p *PostgreSQLSubmodelDatabase) AddNestedSubmodelElementRecursively(tx *sql
 	}
 
 	// Create the nested element using CreateNested
-	_, err := handler.CreateNested(tx, submodelId, idShortPath, submodelElement)
+	parentId, err := handler.CreateNested(tx, submodelId, parentId, idShortPath, submodelElement)
 	if err != nil {
 		return err
 	}
@@ -400,8 +400,8 @@ func (p *PostgreSQLSubmodelDatabase) AddNestedSubmodelElementRecursively(tx *sql
 		}
 		// Recursively add nested elements with dot notation
 		for _, nestedElement := range submodelElementCollection.Value {
-			nestedIdShortPath := idShortPath + "." + nestedElement.GetIdShort()
-			if err := p.AddNestedSubmodelElementRecursively(tx, submodelId, nestedIdShortPath, nestedElement); err != nil {
+			//nestedIdShortPath := idShortPath + "." + nestedElement.GetIdShort()
+			if err := p.AddNestedSubmodelElementRecursively(tx, submodelId, parentId, idShortPath, nestedElement); err != nil {
 				return err
 			}
 		}
@@ -413,7 +413,7 @@ func (p *PostgreSQLSubmodelDatabase) AddNestedSubmodelElementRecursively(tx *sql
 		// Recursively add nested elements with index-based paths
 		for index, nestedElement := range submodelElementList.Value {
 			nestedIdShortPath := idShortPath + "[" + strconv.Itoa(index) + "]"
-			if err := p.AddNestedSubmodelElementRecursively(tx, submodelId, nestedIdShortPath, nestedElement); err != nil {
+			if err := p.AddNestedSubmodelElementRecursively(tx, submodelId, parentId, nestedIdShortPath, nestedElement); err != nil {
 				return err
 			}
 		}

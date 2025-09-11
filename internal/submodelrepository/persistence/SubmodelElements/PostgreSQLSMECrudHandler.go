@@ -50,7 +50,7 @@ func (p *PostgreSQLSMECrudHandler) Create(tx *sql.Tx, submodelId string, submode
 }
 
 // CreateWithTx performs the base SubmodelElement operations within an existing transaction
-func (p *PostgreSQLSMECrudHandler) CreateWithTxAndPath(tx *sql.Tx, submodelId string, idShortPath string, submodelElement gen.SubmodelElement) (int, error) {
+func (p *PostgreSQLSMECrudHandler) CreateWithTxAndPath(tx *sql.Tx, submodelId string, parentId int, idShortPath string, submodelElement gen.SubmodelElement) (int, error) {
 	var referenceID sql.NullInt64
 
 	if !isEmptyReference(submodelElement.GetSemanticId()) {
@@ -91,8 +91,8 @@ func (p *PostgreSQLSMECrudHandler) CreateWithTxAndPath(tx *sql.Tx, submodelId st
 	 					submodel_element(submodel_id, parent_sme_id, position, id_short, category, model_type, semantic_id, idshort_path)
 						VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
 		submodelId,
-		nil, //TODO
-		0,   //TODO
+		parentId,
+		0, //TODO
 		submodelElement.GetIdShort(),
 		submodelElement.GetCategory(),
 		submodelElement.GetModelType(),

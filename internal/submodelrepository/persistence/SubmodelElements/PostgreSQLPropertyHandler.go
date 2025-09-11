@@ -43,39 +43,20 @@ func (p PostgreSQLPropertyHandler) Create(tx *sql.Tx, submodelId string, submode
 	return id, nil
 }
 
-func (p PostgreSQLPropertyHandler) CreateNested(tx *sql.Tx, submodelId string, idShortPath string, submodelElement gen.SubmodelElement) (int, error) {
+func (p PostgreSQLPropertyHandler) CreateNested(tx *sql.Tx, submodelId string, parentId int, idShortPath string, submodelElement gen.SubmodelElement) (int, error) {
 	property, ok := submodelElement.(*gen.Property)
 	if !ok {
 		return 0, errors.New("submodelElement is not of type Property")
 	}
 
-	// Start a transaction for this nested element creation
-	tx, err := p.db.Begin()
-	if err != nil {
-		return 0, err
-	}
-	defer func() {
-		if err != nil {
-			tx.Rollback()
-		}
-	}()
-
 	// Create the nested property with the provided idShortPath using the decorated handler
-	id, err := p.decorated.CreateWithTxAndPath(tx, submodelId, idShortPath, submodelElement)
+	id, err := p.decorated.CreateWithTxAndPath(tx, submodelId, parentId, idShortPath, submodelElement)
 	if err != nil {
 		return 0, err
 	}
 
 	// Property-specific database insertion for nested element
-	// Determine which column to use based on valueType
 	err = insertProperty(property, err, tx, id)
-
-	if err != nil {
-		return 0, err
-	}
-
-	// Commit the transaction
-	err = tx.Commit()
 	if err != nil {
 		return 0, err
 	}

@@ -41,7 +41,7 @@ func (p PostgreSQLAnnotatedRelationshipElementHandler) Create(tx *sql.Tx, submod
 	return id, nil
 }
 
-func (p PostgreSQLAnnotatedRelationshipElementHandler) CreateNested(tx *sql.Tx, submodelId string, idShortPath string, submodelElement gen.SubmodelElement) (int, error) {
+func (p PostgreSQLAnnotatedRelationshipElementHandler) CreateNested(tx *sql.Tx, submodelId string, parentId int, idShortPath string, submodelElement gen.SubmodelElement) (int, error) {
 	return 0, errors.New("not implemented")
 }
 

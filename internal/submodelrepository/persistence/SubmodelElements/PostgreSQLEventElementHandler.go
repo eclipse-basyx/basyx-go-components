@@ -41,7 +41,7 @@ func (p PostgreSQLEventElementHandler) Create(tx *sql.Tx, submodelId string, sub
 	return id, nil
 }
 
-func (p PostgreSQLEventElementHandler) CreateNested(tx *sql.Tx, submodelId string, idShortPath string, submodelElement gen.SubmodelElement) (int, error) {
+func (p PostgreSQLEventElementHandler) CreateNested(tx *sql.Tx, submodelId string, parentId int, idShortPath string, submodelElement gen.SubmodelElement) (int, error) {
 	return 0, errors.New("not implemented")
 }
 
