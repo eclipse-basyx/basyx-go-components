@@ -496,6 +496,32 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelElements(ctx context.Con
 func (s *SubmodelRepositoryAPIAPIService) PostSubmodelElementSubmodelRepo(ctx context.Context, submodelIdentifier string, submodelElement gen.SubmodelElement) (gen.ImplResponse, error) {
 
 	decodedSubmodelIdentifier, decodeErr := base64.RawStdEncoding.DecodeString(submodelIdentifier)
+	// TODO - update PostSubmodelElementSubmodelRepo with the required logic for this service method.
+	// Add api_submodel_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
+
+	// TODO: Uncomment the next line to return response Response(201, SubmodelElement{}) or use other options such as http.Ok ...
+	// return gen.Response(201, SubmodelElement{}), nil
+
+	// TODO: Uncomment the next line to return response Response(400, Result{}) or use other options such as http.Ok ...
+	// return gen.Response(400, Result{}), nil
+
+	// TODO: Uncomment the next line to return response Response(401, Result{}) or use other options such as http.Ok ...
+	// return gen.Response(401, Result{}), nil
+
+	// TODO: Uncomment the next line to return response Response(403, Result{}) or use other options such as http.Ok ...
+	// return gen.Response(403, Result{}), nil
+
+	// TODO: Uncomment the next line to return response Response(404, Result{}) or use other options such as http.Ok ...
+	// return gen.Response(404, Result{}), nil
+
+	// TODO: Uncomment the next line to return response Response(409, Result{}) or use other options such as http.Ok ...
+	// return gen.Response(409, Result{}), nil
+
+	// TODO: Uncomment the next line to return response Response(500, Result{}) or use other options such as http.Ok ...
+	// return gen.Response(500, Result{}), nil
+
+	// TODO: Uncomment the next line to return response Response(0, Result{}) or use other options such as http.Ok ...
+	// return gen.Response(0, Result{}), nil
 
 	if decodeErr != nil {
 		return gen.Response(http.StatusBadRequest, nil), decodeErr

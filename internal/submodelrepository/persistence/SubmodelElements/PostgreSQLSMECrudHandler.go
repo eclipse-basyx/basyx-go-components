@@ -18,7 +18,6 @@ func isEmptyReference(ref gen.Reference) bool {
 	return reflect.DeepEqual(ref, gen.Reference{})
 }
 
-// Konstruktor
 func NewPostgreSQLSMECrudHandler(db *sql.DB) (*PostgreSQLSMECrudHandler, error) {
 	return &PostgreSQLSMECrudHandler{db: db}, nil
 }

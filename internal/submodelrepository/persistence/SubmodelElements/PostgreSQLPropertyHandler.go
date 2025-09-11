@@ -13,7 +13,6 @@ type PostgreSQLPropertyHandler struct {
 	decorated *PostgreSQLSMECrudHandler
 }
 
-// Konstruktor
 func NewPostgreSQLPropertyHandler(db *sql.DB) (*PostgreSQLPropertyHandler, error) {
 	decoratedHandler, err := NewPostgreSQLSMECrudHandler(db)
 	if err != nil {
