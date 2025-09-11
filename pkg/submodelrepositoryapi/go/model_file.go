@@ -11,11 +11,7 @@
 
 package openapi
 
-
-
-
 type File struct {
-
 	Extensions []Extension `json:"extensions,omitempty"`
 
 	Category string `json:"category,omitempty" validate:"regexp=^([\\\\x09\\\\x0a\\\\x0d\\\\x20-\\\\ud7ff\\\\ue000-\\\\ufffd]|\\\\ud800[\\\\udc00-\\\\udfff]|[\\\\ud801-\\\\udbfe][\\\\udc00-\\\\udfff]|\\\\udbff[\\\\udc00-\\\\udfff])*$"`
@@ -41,10 +37,89 @@ type File struct {
 	ContentType FileAllOfContentType `json:"contentType"`
 }
 
+// Getters
+func (a File) GetExtensions() []Extension {
+	return a.Extensions
+}
+
+func (a File) GetIdShort() string {
+	return a.IdShort
+}
+
+func (a File) GetCategory() string {
+	return a.Category
+}
+
+func (a File) GetDisplayName() []LangStringNameType {
+	return a.DisplayName
+}
+
+func (a File) GetDescription() []LangStringTextType {
+	return a.Description
+}
+
+func (a File) GetModelType() string {
+	return a.ModelType
+}
+
+func (a File) GetSemanticId() Reference {
+	return a.SemanticId
+}
+
+func (a File) GetSupplementalSemanticIds() []Reference {
+	return a.SupplementalSemanticIds
+}
+
+func (a File) GetQualifiers() []Qualifier {
+	return a.Qualifiers
+}
+
+func (a File) GetEmbeddedDataSpecifications() []EmbeddedDataSpecification {
+	return a.EmbeddedDataSpecifications
+}
+
+// Setters
+
+func (a *File) SetExtensions(v []Extension) {
+	a.Extensions = v
+}
+
+func (a *File) SetIdShort(v string) {
+	a.IdShort = v
+}
+
+func (a *File) SetCategory(v string) {
+	a.Category = v
+}
+
+func (a *File) SetDisplayName(v []LangStringNameType) {
+	a.DisplayName = v
+}
+
+func (a *File) SetDescription(v []LangStringTextType) {
+	a.Description = v
+}
+
+func (a *File) SetSemanticId(v Reference) {
+	a.SemanticId = v
+}
+
+func (a *File) SetSupplementalSemanticIds(v []Reference) {
+	a.SupplementalSemanticIds = v
+}
+
+func (a *File) SetQualifiers(v []Qualifier) {
+	a.Qualifiers = v
+}
+
+func (a *File) SetEmbeddedDataSpecifications(v []EmbeddedDataSpecification) {
+	a.EmbeddedDataSpecifications = v
+}
+
 // AssertFileRequired checks if the required fields are not zero-ed
 func AssertFileRequired(obj File) error {
 	elements := map[string]interface{}{
-		"modelType": obj.ModelType,
+		"modelType":   obj.ModelType,
 		"contentType": obj.ContentType,
 	}
 	for name, el := range elements {

@@ -11,11 +11,7 @@
 
 package openapi
 
-
-
-
 type RelationshipElement struct {
-
 	Extensions []Extension `json:"extensions,omitempty"`
 
 	Category string `json:"category,omitempty" validate:"regexp=^([\\\\x09\\\\x0a\\\\x0d\\\\x20-\\\\ud7ff\\\\ue000-\\\\ufffd]|\\\\ud800[\\\\udc00-\\\\udfff]|[\\\\ud801-\\\\udbfe][\\\\udc00-\\\\udfff]|\\\\udbff[\\\\udc00-\\\\udfff])*$"`
@@ -41,12 +37,91 @@ type RelationshipElement struct {
 	Second Reference `json:"second"`
 }
 
+// Getters
+func (a RelationshipElement) GetExtensions() []Extension {
+	return a.Extensions
+}
+
+func (a RelationshipElement) GetIdShort() string {
+	return a.IdShort
+}
+
+func (a RelationshipElement) GetCategory() string {
+	return a.Category
+}
+
+func (a RelationshipElement) GetDisplayName() []LangStringNameType {
+	return a.DisplayName
+}
+
+func (a RelationshipElement) GetDescription() []LangStringTextType {
+	return a.Description
+}
+
+func (a RelationshipElement) GetModelType() string {
+	return a.ModelType
+}
+
+func (a RelationshipElement) GetSemanticId() Reference {
+	return a.SemanticId
+}
+
+func (a RelationshipElement) GetSupplementalSemanticIds() []Reference {
+	return a.SupplementalSemanticIds
+}
+
+func (a RelationshipElement) GetQualifiers() []Qualifier {
+	return a.Qualifiers
+}
+
+func (a RelationshipElement) GetEmbeddedDataSpecifications() []EmbeddedDataSpecification {
+	return a.EmbeddedDataSpecifications
+}
+
+// Setters
+
+func (a *RelationshipElement) SetExtensions(v []Extension) {
+	a.Extensions = v
+}
+
+func (a *RelationshipElement) SetIdShort(v string) {
+	a.IdShort = v
+}
+
+func (a *RelationshipElement) SetCategory(v string) {
+	a.Category = v
+}
+
+func (a *RelationshipElement) SetDisplayName(v []LangStringNameType) {
+	a.DisplayName = v
+}
+
+func (a *RelationshipElement) SetDescription(v []LangStringTextType) {
+	a.Description = v
+}
+
+func (a *RelationshipElement) SetSemanticId(v Reference) {
+	a.SemanticId = v
+}
+
+func (a *RelationshipElement) SetSupplementalSemanticIds(v []Reference) {
+	a.SupplementalSemanticIds = v
+}
+
+func (a *RelationshipElement) SetQualifiers(v []Qualifier) {
+	a.Qualifiers = v
+}
+
+func (a *RelationshipElement) SetEmbeddedDataSpecifications(v []EmbeddedDataSpecification) {
+	a.EmbeddedDataSpecifications = v
+}
+
 // AssertRelationshipElementRequired checks if the required fields are not zero-ed
 func AssertRelationshipElementRequired(obj RelationshipElement) error {
 	elements := map[string]interface{}{
 		"modelType": obj.ModelType,
-		"first": obj.First,
-		"second": obj.Second,
+		"first":     obj.First,
+		"second":    obj.Second,
 	}
 	for name, el := range elements {
 		if isZero := IsZeroValue(el); isZero {

@@ -11,11 +11,7 @@
 
 package openapi
 
-
-
-
 type BasicEventElement struct {
-
 	Extensions []Extension `json:"extensions,omitempty"`
 
 	Category string `json:"category,omitempty" validate:"regexp=^([\\\\x09\\\\x0a\\\\x0d\\\\x20-\\\\ud7ff\\\\ue000-\\\\ufffd]|\\\\ud800[\\\\udc00-\\\\udfff]|[\\\\ud801-\\\\udbfe][\\\\udc00-\\\\udfff]|\\\\udbff[\\\\udc00-\\\\udfff])*$"`
@@ -53,13 +49,92 @@ type BasicEventElement struct {
 	MaxInterval string `json:"maxInterval,omitempty" validate:"regexp=^-?P((([0-9]+Y([0-9]+M)?([0-9]+D)?|([0-9]+M)([0-9]+D)?|([0-9]+D))(T(([0-9]+H)([0-9]+M)?([0-9]+(\\\\.[0-9]+)?S)?|([0-9]+M)([0-9]+(\\\\.[0-9]+)?S)?|([0-9]+(\\\\.[0-9]+)?S)))?)|(T(([0-9]+H)([0-9]+M)?([0-9]+(\\\\.[0-9]+)?S)?|([0-9]+M)([0-9]+(\\\\.[0-9]+)?S)?|([0-9]+(\\\\.[0-9]+)?S))))$"`
 }
 
+// Getters
+func (a BasicEventElement) GetExtensions() []Extension {
+	return a.Extensions
+}
+
+func (a BasicEventElement) GetIdShort() string {
+	return a.IdShort
+}
+
+func (a BasicEventElement) GetCategory() string {
+	return a.Category
+}
+
+func (a BasicEventElement) GetDisplayName() []LangStringNameType {
+	return a.DisplayName
+}
+
+func (a BasicEventElement) GetDescription() []LangStringTextType {
+	return a.Description
+}
+
+func (a BasicEventElement) GetModelType() string {
+	return a.ModelType
+}
+
+func (a BasicEventElement) GetSemanticId() Reference {
+	return a.SemanticId
+}
+
+func (a BasicEventElement) GetSupplementalSemanticIds() []Reference {
+	return a.SupplementalSemanticIds
+}
+
+func (a BasicEventElement) GetQualifiers() []Qualifier {
+	return a.Qualifiers
+}
+
+func (a BasicEventElement) GetEmbeddedDataSpecifications() []EmbeddedDataSpecification {
+	return a.EmbeddedDataSpecifications
+}
+
+// Setters
+
+func (a *BasicEventElement) SetExtensions(v []Extension) {
+	a.Extensions = v
+}
+
+func (a *BasicEventElement) SetIdShort(v string) {
+	a.IdShort = v
+}
+
+func (a *BasicEventElement) SetCategory(v string) {
+	a.Category = v
+}
+
+func (a *BasicEventElement) SetDisplayName(v []LangStringNameType) {
+	a.DisplayName = v
+}
+
+func (a *BasicEventElement) SetDescription(v []LangStringTextType) {
+	a.Description = v
+}
+
+func (a *BasicEventElement) SetSemanticId(v Reference) {
+	a.SemanticId = v
+}
+
+func (a *BasicEventElement) SetSupplementalSemanticIds(v []Reference) {
+	a.SupplementalSemanticIds = v
+}
+
+func (a *BasicEventElement) SetQualifiers(v []Qualifier) {
+	a.Qualifiers = v
+}
+
+func (a *BasicEventElement) SetEmbeddedDataSpecifications(v []EmbeddedDataSpecification) {
+	a.EmbeddedDataSpecifications = v
+}
+
 // AssertBasicEventElementRequired checks if the required fields are not zero-ed
 func AssertBasicEventElementRequired(obj BasicEventElement) error {
 	elements := map[string]interface{}{
 		"modelType": obj.ModelType,
-		"observed": obj.Observed,
+		"observed":  obj.Observed,
 		"direction": obj.Direction,
-		"state": obj.State,
+		"state":     obj.State,
 	}
 	for name, el := range elements {
 		if isZero := IsZeroValue(el); isZero {

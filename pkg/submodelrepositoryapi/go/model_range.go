@@ -11,11 +11,7 @@
 
 package openapi
 
-
-
-
 type Range struct {
-
 	Extensions []Extension `json:"extensions,omitempty"`
 
 	Category string `json:"category,omitempty" validate:"regexp=^([\\\\x09\\\\x0a\\\\x0d\\\\x20-\\\\ud7ff\\\\ue000-\\\\ufffd]|\\\\ud800[\\\\udc00-\\\\udfff]|[\\\\ud801-\\\\udbfe][\\\\udc00-\\\\udfff]|\\\\udbff[\\\\udc00-\\\\udfff])*$"`
@@ -41,6 +37,85 @@ type Range struct {
 	Min string `json:"min,omitempty"`
 
 	Max string `json:"max,omitempty"`
+}
+
+// Getters
+func (a Range) GetExtensions() []Extension {
+	return a.Extensions
+}
+
+func (a Range) GetIdShort() string {
+	return a.IdShort
+}
+
+func (a Range) GetCategory() string {
+	return a.Category
+}
+
+func (a Range) GetDisplayName() []LangStringNameType {
+	return a.DisplayName
+}
+
+func (a Range) GetDescription() []LangStringTextType {
+	return a.Description
+}
+
+func (a Range) GetModelType() string {
+	return a.ModelType
+}
+
+func (a Range) GetSemanticId() Reference {
+	return a.SemanticId
+}
+
+func (a Range) GetSupplementalSemanticIds() []Reference {
+	return a.SupplementalSemanticIds
+}
+
+func (a Range) GetQualifiers() []Qualifier {
+	return a.Qualifiers
+}
+
+func (a Range) GetEmbeddedDataSpecifications() []EmbeddedDataSpecification {
+	return a.EmbeddedDataSpecifications
+}
+
+// Setters
+
+func (a *Range) SetExtensions(v []Extension) {
+	a.Extensions = v
+}
+
+func (a *Range) SetIdShort(v string) {
+	a.IdShort = v
+}
+
+func (a *Range) SetCategory(v string) {
+	a.Category = v
+}
+
+func (a *Range) SetDisplayName(v []LangStringNameType) {
+	a.DisplayName = v
+}
+
+func (a *Range) SetDescription(v []LangStringTextType) {
+	a.Description = v
+}
+
+func (a *Range) SetSemanticId(v Reference) {
+	a.SemanticId = v
+}
+
+func (a *Range) SetSupplementalSemanticIds(v []Reference) {
+	a.SupplementalSemanticIds = v
+}
+
+func (a *Range) SetQualifiers(v []Qualifier) {
+	a.Qualifiers = v
+}
+
+func (a *Range) SetEmbeddedDataSpecifications(v []EmbeddedDataSpecification) {
+	a.EmbeddedDataSpecifications = v
 }
 
 // AssertRangeRequired checks if the required fields are not zero-ed

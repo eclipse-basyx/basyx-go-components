@@ -11,11 +11,7 @@
 
 package openapi
 
-
-
-
 type EventElement struct {
-
 	Extensions []Extension `json:"extensions,omitempty"`
 
 	Category string `json:"category,omitempty" validate:"regexp=^([\\\\x09\\\\x0a\\\\x0d\\\\x20-\\\\ud7ff\\\\ue000-\\\\ufffd]|\\\\ud800[\\\\udc00-\\\\udfff]|[\\\\ud801-\\\\udbfe][\\\\udc00-\\\\udfff]|\\\\udbff[\\\\udc00-\\\\udfff])*$"`
@@ -26,7 +22,7 @@ type EventElement struct {
 
 	Description []LangStringTextType `json:"description,omitempty"`
 
-	ModelType ModelType `json:"modelType"`
+	ModelType string `json:"modelType"`
 
 	SemanticId Reference `json:"semanticId,omitempty"`
 
@@ -35,6 +31,85 @@ type EventElement struct {
 	Qualifiers []Qualifier `json:"qualifiers,omitempty"`
 
 	EmbeddedDataSpecifications []EmbeddedDataSpecification `json:"embeddedDataSpecifications,omitempty"`
+}
+
+// Getters
+func (a EventElement) GetExtensions() []Extension {
+	return a.Extensions
+}
+
+func (a EventElement) GetIdShort() string {
+	return a.IdShort
+}
+
+func (a EventElement) GetCategory() string {
+	return a.Category
+}
+
+func (a EventElement) GetDisplayName() []LangStringNameType {
+	return a.DisplayName
+}
+
+func (a EventElement) GetDescription() []LangStringTextType {
+	return a.Description
+}
+
+func (a EventElement) GetModelType() string {
+	return a.ModelType
+}
+
+func (a EventElement) GetSemanticId() Reference {
+	return a.SemanticId
+}
+
+func (a EventElement) GetSupplementalSemanticIds() []Reference {
+	return a.SupplementalSemanticIds
+}
+
+func (a EventElement) GetQualifiers() []Qualifier {
+	return a.Qualifiers
+}
+
+func (a EventElement) GetEmbeddedDataSpecifications() []EmbeddedDataSpecification {
+	return a.EmbeddedDataSpecifications
+}
+
+// Setters
+
+func (a *EventElement) SetExtensions(v []Extension) {
+	a.Extensions = v
+}
+
+func (a *EventElement) SetIdShort(v string) {
+	a.IdShort = v
+}
+
+func (a *EventElement) SetCategory(v string) {
+	a.Category = v
+}
+
+func (a *EventElement) SetDisplayName(v []LangStringNameType) {
+	a.DisplayName = v
+}
+
+func (a *EventElement) SetDescription(v []LangStringTextType) {
+	a.Description = v
+}
+
+func (a *EventElement) SetSemanticId(v Reference) {
+	a.SemanticId = v
+}
+
+func (a *EventElement) SetSupplementalSemanticIds(v []Reference) {
+	a.SupplementalSemanticIds = v
+}
+
+func (a *EventElement) SetQualifiers(v []Qualifier) {
+	a.Qualifiers = v
+}
+
+func (a *EventElement) SetEmbeddedDataSpecifications(v []EmbeddedDataSpecification) {
+	a.EmbeddedDataSpecifications = v
 }
 
 // AssertEventElementRequired checks if the required fields are not zero-ed

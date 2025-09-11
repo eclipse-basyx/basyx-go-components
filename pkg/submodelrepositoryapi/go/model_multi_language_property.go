@@ -11,11 +11,7 @@
 
 package openapi
 
-
-
-
 type MultiLanguageProperty struct {
-
 	Extensions []Extension `json:"extensions,omitempty"`
 
 	Category string `json:"category,omitempty" validate:"regexp=^([\\\\x09\\\\x0a\\\\x0d\\\\x20-\\\\ud7ff\\\\ue000-\\\\ufffd]|\\\\ud800[\\\\udc00-\\\\udfff]|[\\\\ud801-\\\\udbfe][\\\\udc00-\\\\udfff]|\\\\udbff[\\\\udc00-\\\\udfff])*$"`
@@ -39,6 +35,85 @@ type MultiLanguageProperty struct {
 	Value []LangStringTextType `json:"value,omitempty"`
 
 	ValueId Reference `json:"valueId,omitempty"`
+}
+
+// Getters
+func (a MultiLanguageProperty) GetExtensions() []Extension {
+	return a.Extensions
+}
+
+func (a MultiLanguageProperty) GetIdShort() string {
+	return a.IdShort
+}
+
+func (a MultiLanguageProperty) GetCategory() string {
+	return a.Category
+}
+
+func (a MultiLanguageProperty) GetDisplayName() []LangStringNameType {
+	return a.DisplayName
+}
+
+func (a MultiLanguageProperty) GetDescription() []LangStringTextType {
+	return a.Description
+}
+
+func (a MultiLanguageProperty) GetModelType() string {
+	return a.ModelType
+}
+
+func (a MultiLanguageProperty) GetSemanticId() Reference {
+	return a.SemanticId
+}
+
+func (a MultiLanguageProperty) GetSupplementalSemanticIds() []Reference {
+	return a.SupplementalSemanticIds
+}
+
+func (a MultiLanguageProperty) GetQualifiers() []Qualifier {
+	return a.Qualifiers
+}
+
+func (a MultiLanguageProperty) GetEmbeddedDataSpecifications() []EmbeddedDataSpecification {
+	return a.EmbeddedDataSpecifications
+}
+
+// Setters
+
+func (a *MultiLanguageProperty) SetExtensions(v []Extension) {
+	a.Extensions = v
+}
+
+func (a *MultiLanguageProperty) SetIdShort(v string) {
+	a.IdShort = v
+}
+
+func (a *MultiLanguageProperty) SetCategory(v string) {
+	a.Category = v
+}
+
+func (a *MultiLanguageProperty) SetDisplayName(v []LangStringNameType) {
+	a.DisplayName = v
+}
+
+func (a *MultiLanguageProperty) SetDescription(v []LangStringTextType) {
+	a.Description = v
+}
+
+func (a *MultiLanguageProperty) SetSemanticId(v Reference) {
+	a.SemanticId = v
+}
+
+func (a *MultiLanguageProperty) SetSupplementalSemanticIds(v []Reference) {
+	a.SupplementalSemanticIds = v
+}
+
+func (a *MultiLanguageProperty) SetQualifiers(v []Qualifier) {
+	a.Qualifiers = v
+}
+
+func (a *MultiLanguageProperty) SetEmbeddedDataSpecifications(v []EmbeddedDataSpecification) {
+	a.EmbeddedDataSpecifications = v
 }
 
 // AssertMultiLanguagePropertyRequired checks if the required fields are not zero-ed

@@ -11,11 +11,7 @@
 
 package openapi
 
-
-
-
 type Blob struct {
-
 	Extensions []Extension `json:"extensions,omitempty"`
 
 	Category string `json:"category,omitempty" validate:"regexp=^([\\\\x09\\\\x0a\\\\x0d\\\\x20-\\\\ud7ff\\\\ue000-\\\\ufffd]|\\\\ud800[\\\\udc00-\\\\udfff]|[\\\\ud801-\\\\udbfe][\\\\udc00-\\\\udfff]|\\\\udbff[\\\\udc00-\\\\udfff])*$"`
@@ -41,10 +37,89 @@ type Blob struct {
 	ContentType BlobAllOfContentType `json:"contentType"`
 }
 
+// Getters
+func (a Blob) GetExtensions() []Extension {
+	return a.Extensions
+}
+
+func (a Blob) GetIdShort() string {
+	return a.IdShort
+}
+
+func (a Blob) GetCategory() string {
+	return a.Category
+}
+
+func (a Blob) GetDisplayName() []LangStringNameType {
+	return a.DisplayName
+}
+
+func (a Blob) GetDescription() []LangStringTextType {
+	return a.Description
+}
+
+func (a Blob) GetModelType() string {
+	return a.ModelType
+}
+
+func (a Blob) GetSemanticId() Reference {
+	return a.SemanticId
+}
+
+func (a Blob) GetSupplementalSemanticIds() []Reference {
+	return a.SupplementalSemanticIds
+}
+
+func (a Blob) GetQualifiers() []Qualifier {
+	return a.Qualifiers
+}
+
+func (a Blob) GetEmbeddedDataSpecifications() []EmbeddedDataSpecification {
+	return a.EmbeddedDataSpecifications
+}
+
+// Setters
+
+func (a *Blob) SetExtensions(v []Extension) {
+	a.Extensions = v
+}
+
+func (a *Blob) SetIdShort(v string) {
+	a.IdShort = v
+}
+
+func (a *Blob) SetCategory(v string) {
+	a.Category = v
+}
+
+func (a *Blob) SetDisplayName(v []LangStringNameType) {
+	a.DisplayName = v
+}
+
+func (a *Blob) SetDescription(v []LangStringTextType) {
+	a.Description = v
+}
+
+func (a *Blob) SetSemanticId(v Reference) {
+	a.SemanticId = v
+}
+
+func (a *Blob) SetSupplementalSemanticIds(v []Reference) {
+	a.SupplementalSemanticIds = v
+}
+
+func (a *Blob) SetQualifiers(v []Qualifier) {
+	a.Qualifiers = v
+}
+
+func (a *Blob) SetEmbeddedDataSpecifications(v []EmbeddedDataSpecification) {
+	a.EmbeddedDataSpecifications = v
+}
+
 // AssertBlobRequired checks if the required fields are not zero-ed
 func AssertBlobRequired(obj Blob) error {
 	elements := map[string]interface{}{
-		"modelType": obj.ModelType,
+		"modelType":   obj.ModelType,
 		"contentType": obj.ContentType,
 	}
 	for name, el := range elements {

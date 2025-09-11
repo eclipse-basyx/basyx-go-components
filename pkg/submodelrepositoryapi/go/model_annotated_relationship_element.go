@@ -11,11 +11,7 @@
 
 package openapi
 
-
-
-
 type AnnotatedRelationshipElement struct {
-
 	Extensions []Extension `json:"extensions,omitempty"`
 
 	Category string `json:"category,omitempty" validate:"regexp=^([\\\\x09\\\\x0a\\\\x0d\\\\x20-\\\\ud7ff\\\\ue000-\\\\ufffd]|\\\\ud800[\\\\udc00-\\\\udfff]|[\\\\ud801-\\\\udbfe][\\\\udc00-\\\\udfff]|\\\\udbff[\\\\udc00-\\\\udfff])*$"`
@@ -43,12 +39,110 @@ type AnnotatedRelationshipElement struct {
 	Annotations []DataElementChoice `json:"annotations,omitempty"`
 }
 
+// Getters
+func (a AnnotatedRelationshipElement) GetExtensions() []Extension {
+	return a.Extensions
+}
+
+func (a AnnotatedRelationshipElement) GetIdShort() string {
+	return a.IdShort
+}
+
+func (a AnnotatedRelationshipElement) GetCategory() string {
+	return a.Category
+}
+
+func (a AnnotatedRelationshipElement) GetDisplayName() []LangStringNameType {
+	return a.DisplayName
+}
+
+func (a AnnotatedRelationshipElement) GetDescription() []LangStringTextType {
+	return a.Description
+}
+
+func (a AnnotatedRelationshipElement) GetModelType() string {
+	return a.ModelType
+}
+
+func (a AnnotatedRelationshipElement) GetSemanticId() Reference {
+	return a.SemanticId
+}
+
+func (a AnnotatedRelationshipElement) GetSupplementalSemanticIds() []Reference {
+	return a.SupplementalSemanticIds
+}
+
+func (a AnnotatedRelationshipElement) GetQualifiers() []Qualifier {
+	return a.Qualifiers
+}
+
+func (a AnnotatedRelationshipElement) GetEmbeddedDataSpecifications() []EmbeddedDataSpecification {
+	return a.EmbeddedDataSpecifications
+}
+
+func (a AnnotatedRelationshipElement) GetFirst() Reference {
+	return a.First
+}
+func (a AnnotatedRelationshipElement) GetSecond() Reference {
+	return a.Second
+}
+func (a AnnotatedRelationshipElement) GetAnnotations() []DataElementChoice {
+	return a.Annotations
+}
+
+// Setters
+
+func (a *AnnotatedRelationshipElement) SetExtensions(v []Extension) {
+	a.Extensions = v
+}
+
+func (a *AnnotatedRelationshipElement) SetIdShort(v string) {
+	a.IdShort = v
+}
+
+func (a *AnnotatedRelationshipElement) SetCategory(v string) {
+	a.Category = v
+}
+
+func (a *AnnotatedRelationshipElement) SetDisplayName(v []LangStringNameType) {
+	a.DisplayName = v
+}
+
+func (a *AnnotatedRelationshipElement) SetDescription(v []LangStringTextType) {
+	a.Description = v
+}
+
+func (a *AnnotatedRelationshipElement) SetSemanticId(v Reference) {
+	a.SemanticId = v
+}
+
+func (a *AnnotatedRelationshipElement) SetSupplementalSemanticIds(v []Reference) {
+	a.SupplementalSemanticIds = v
+}
+
+func (a *AnnotatedRelationshipElement) SetQualifiers(v []Qualifier) {
+	a.Qualifiers = v
+}
+
+func (a *AnnotatedRelationshipElement) SetEmbeddedDataSpecifications(v []EmbeddedDataSpecification) {
+	a.EmbeddedDataSpecifications = v
+}
+func (a *AnnotatedRelationshipElement) SetFirst(v Reference) {
+	a.First = v
+}
+func (a *AnnotatedRelationshipElement) SetSecond(v Reference) {
+	a.Second = v
+}
+func (a *AnnotatedRelationshipElement) SetAnnotations(v []DataElementChoice) {
+	a.Annotations = v
+}
+
 // AssertAnnotatedRelationshipElementRequired checks if the required fields are not zero-ed
 func AssertAnnotatedRelationshipElementRequired(obj AnnotatedRelationshipElement) error {
 	elements := map[string]interface{}{
 		"modelType": obj.ModelType,
-		"first": obj.First,
-		"second": obj.Second,
+		"first":     obj.First,
+		"second":    obj.Second,
 	}
 	for name, el := range elements {
 		if isZero := IsZeroValue(el); isZero {
