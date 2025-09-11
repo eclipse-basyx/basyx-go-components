@@ -11,6 +11,11 @@
 
 package openapi
 
+import (
+	"encoding/json"
+	"fmt"
+)
+
 type SubmodelElement interface {
 	GetModelType() string
 	GetIdShort() string
@@ -32,6 +37,30 @@ type SubmodelElement interface {
 	SetQualifiers([]Qualifier)
 	SetEmbeddedDataSpecifications([]EmbeddedDataSpecification)
 	SetExtensions([]Extension)
+}
+
+// UnmarshalSubmodelElement creates the appropriate concrete SubmodelElement type from JSON
+func UnmarshalSubmodelElement(data []byte) (SubmodelElement, error) {
+	// First, determine the modelType
+	var raw struct {
+		ModelType string `json:"modelType"`
+	}
+	
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return nil, fmt.Errorf("failed to determine modelType: %w", err)
+	}
+	
+	// Create the appropriate concrete type based on modelType
+	switch raw.ModelType {
+	case "Property":
+		var prop Property
+		if err := json.Unmarshal(data, &prop); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal Property: %w", err)
+		}
+		return &prop, nil
+	default:
+		return nil, fmt.Errorf("unsupported modelType: %s (only Property is currently supported)", raw.ModelType)
+	}
 }
 
 // AssertSubmodelElementRequired checks if the required fields are not zero-ed

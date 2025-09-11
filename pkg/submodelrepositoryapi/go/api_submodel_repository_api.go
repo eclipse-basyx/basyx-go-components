@@ -13,6 +13,7 @@ package openapi
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 	"os"
 	"strings"
@@ -996,13 +997,21 @@ func (c *SubmodelRepositoryAPIAPIController) PostSubmodelElementSubmodelRepo(w h
 		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
 		return
 	}
-	var submodelElementParam SubmodelElement
-	d := json.NewDecoder(r.Body)
-	d.DisallowUnknownFields()
-	if err := d.Decode(&submodelElementParam); err != nil {
+	
+	// Read the raw JSON data from the request body
+	bodyBytes, err := io.ReadAll(r.Body)
+	if err != nil {
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
+	
+	// Use our custom factory function to create the appropriate concrete type
+	submodelElementParam, err := UnmarshalSubmodelElement(bodyBytes)
+	if err != nil {
+		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
+		return
+	}
+	
 	// FIXED: Use custom validation that handles optional references correctly
 	if err := AssertSubmodelElementRequiredFixed(submodelElementParam); err != nil {
 		c.errorHandler(w, r, err, nil)
@@ -1296,10 +1305,17 @@ func (c *SubmodelRepositoryAPIAPIController) PutSubmodelElementByPathSubmodelRep
 		c.errorHandler(w, r, &RequiredError{"idShortPath"}, nil)
 		return
 	}
-	var submodelElementParam SubmodelElement
-	d := json.NewDecoder(r.Body)
-	d.DisallowUnknownFields()
-	if err := d.Decode(&submodelElementParam); err != nil {
+	
+	// Read the raw JSON data from the request body
+	bodyBytes, err := io.ReadAll(r.Body)
+	if err != nil {
+		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
+		return
+	}
+	
+	// Use our custom factory function to create the appropriate concrete type
+	submodelElementParam, err := UnmarshalSubmodelElement(bodyBytes)
+	if err != nil {
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
@@ -1342,10 +1358,17 @@ func (c *SubmodelRepositoryAPIAPIController) PostSubmodelElementByPathSubmodelRe
 		c.errorHandler(w, r, &RequiredError{"idShortPath"}, nil)
 		return
 	}
-	var submodelElementParam SubmodelElement
-	d := json.NewDecoder(r.Body)
-	d.DisallowUnknownFields()
-	if err := d.Decode(&submodelElementParam); err != nil {
+	
+	// Read the raw JSON data from the request body
+	bodyBytes, err := io.ReadAll(r.Body)
+	if err != nil {
+		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
+		return
+	}
+	
+	// Use our custom factory function to create the appropriate concrete type
+	submodelElementParam, err := UnmarshalSubmodelElement(bodyBytes)
+	if err != nil {
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
@@ -1406,10 +1429,17 @@ func (c *SubmodelRepositoryAPIAPIController) PatchSubmodelElementByPathSubmodelR
 		c.errorHandler(w, r, &RequiredError{"idShortPath"}, nil)
 		return
 	}
-	var submodelElementParam SubmodelElement
-	d := json.NewDecoder(r.Body)
-	d.DisallowUnknownFields()
-	if err := d.Decode(&submodelElementParam); err != nil {
+	
+	// Read the raw JSON data from the request body
+	bodyBytes, err := io.ReadAll(r.Body)
+	if err != nil {
+		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
+		return
+	}
+	
+	// Use our custom factory function to create the appropriate concrete type
+	submodelElementParam, err := UnmarshalSubmodelElement(bodyBytes)
+	if err != nil {
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
