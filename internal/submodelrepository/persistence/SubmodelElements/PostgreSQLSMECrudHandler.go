@@ -23,7 +23,7 @@ func NewPostgreSQLSMECrudHandler(db *sql.DB) (*PostgreSQLSMECrudHandler, error) 
 }
 
 // Create performs the base SubmodelElement operations within an existing transaction
-func (p *PostgreSQLSMECrudHandler) CreateAndPath(tx *sql.Tx, submodelId string, parentId int, idShortPath string, submodelElement gen.SubmodelElement) (int, error) {
+func (p *PostgreSQLSMECrudHandler) CreateAndPath(tx *sql.Tx, submodelId string, parentId int, idShortPath string, submodelElement gen.SubmodelElement, position int) (int, error) {
 	var referenceID sql.NullInt64
 
 	if !isEmptyReference(submodelElement.GetSemanticId()) {
@@ -65,7 +65,7 @@ func (p *PostgreSQLSMECrudHandler) CreateAndPath(tx *sql.Tx, submodelId string, 
 						VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
 		submodelId,
 		parentId,
-		0, //TODO
+		position, //TODO
 		submodelElement.GetIdShort(),
 		submodelElement.GetCategory(),
 		submodelElement.GetModelType(),
@@ -147,4 +147,34 @@ func (p *PostgreSQLSMECrudHandler) Update(idShortOrPath string, submodelElement 
 
 func (p *PostgreSQLSMECrudHandler) Delete(idShortOrPath string) error {
 	return nil
+}
+
+func (p *PostgreSQLSMECrudHandler) GetDatabaseId(idShortPath string) (int, error) {
+	var id int
+	err := p.db.QueryRow(`SELECT id FROM submodel_element WHERE idshort_path = $1`, idShortPath).Scan(&id)
+	if err != nil {
+		return 0, err
+	}
+	return id, nil
+}
+
+func (p *PostgreSQLSMECrudHandler) GetNextPosition(parentId int) (int, error) {
+	var position sql.NullInt64
+	err := p.db.QueryRow(`SELECT MAX(position) FROM submodel_element WHERE parent_sme_id = $1`, parentId).Scan(&position)
+	if err != nil {
+		return 0, err
+	}
+	if position.Valid {
+		return int(position.Int64) + 1, nil
+	}
+	return 0, nil // If no children exist, start at position 0
+}
+
+func (p *PostgreSQLSMECrudHandler) GetSubmodelElementType(idShortPath string) (string, error) {
+	var modelType string
+	err := p.db.QueryRow(`SELECT model_type FROM submodel_element WHERE idshort_path = $1`, idShortPath).Scan(&modelType)
+	if err != nil {
+		return "", err
+	}
+	return modelType, nil
 }

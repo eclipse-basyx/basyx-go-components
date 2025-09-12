@@ -40,7 +40,7 @@ func (p PostgreSQLMultiLanguagePropertyHandler) Create(tx *sql.Tx, submodelId st
 	return id, nil
 }
 
-func (p PostgreSQLMultiLanguagePropertyHandler) CreateNested(tx *sql.Tx, submodelId string, parentId int, idShortPath string, submodelElement gen.SubmodelElement) (int, error) {
+func (p PostgreSQLMultiLanguagePropertyHandler) CreateNested(tx *sql.Tx, submodelId string, parentId int, idShortPath string, submodelElement gen.SubmodelElement, pos int) (int, error) {
 	return 0, errors.New("not implemented")
 }
 

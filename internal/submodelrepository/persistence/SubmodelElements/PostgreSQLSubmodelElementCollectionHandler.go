@@ -41,14 +41,14 @@ func (p PostgreSQLSubmodelElementCollectionHandler) Create(tx *sql.Tx, submodelI
 	return id, nil
 }
 
-func (p PostgreSQLSubmodelElementCollectionHandler) CreateNested(tx *sql.Tx, submodelId string, parentId int, idShortPath string, submodelElement gen.SubmodelElement) (int, error) {
+func (p PostgreSQLSubmodelElementCollectionHandler) CreateNested(tx *sql.Tx, submodelId string, parentId int, idShortPath string, submodelElement gen.SubmodelElement, pos int) (int, error) {
 	_, ok := submodelElement.(*gen.SubmodelElementCollection)
 	if !ok {
 		return 0, errors.New("submodelElement is not of type SubmodelElementCollection")
 	}
 
 	// First, perform base SubmodelElement operations within the transaction
-	id, err := p.decorated.CreateAndPath(tx, submodelId, parentId, idShortPath, submodelElement)
+	id, err := p.decorated.CreateAndPath(tx, submodelId, parentId, idShortPath, submodelElement, pos)
 	if err != nil {
 		return 0, err
 	}

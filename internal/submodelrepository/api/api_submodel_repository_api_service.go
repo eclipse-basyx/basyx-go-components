@@ -495,7 +495,6 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelElements(ctx context.Con
 // PostSubmodelElementSubmodelRepo - Creates a new submodel element
 func (s *SubmodelRepositoryAPIAPIService) PostSubmodelElementSubmodelRepo(ctx context.Context, submodelIdentifier string, submodelElement gen.SubmodelElement) (gen.ImplResponse, error) {
 
-	decodedSubmodelIdentifier, decodeErr := base64.RawStdEncoding.DecodeString(submodelIdentifier)
 	// TODO - update PostSubmodelElementSubmodelRepo with the required logic for this service method.
 	// Add api_submodel_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
 
@@ -523,6 +522,7 @@ func (s *SubmodelRepositoryAPIAPIService) PostSubmodelElementSubmodelRepo(ctx co
 	// TODO: Uncomment the next line to return response Response(0, Result{}) or use other options such as http.Ok ...
 	// return gen.Response(0, Result{}), nil
 
+	decodedSubmodelIdentifier, decodeErr := base64.RawStdEncoding.DecodeString(submodelIdentifier)
 	if decodeErr != nil {
 		return gen.Response(http.StatusBadRequest, nil), decodeErr
 	}
@@ -533,7 +533,7 @@ func (s *SubmodelRepositoryAPIAPIService) PostSubmodelElementSubmodelRepo(ctx co
 		return gen.Response(http.StatusInternalServerError, nil), err
 	}
 
-	return gen.Response(http.StatusOK, nil), nil
+	return gen.Response(http.StatusCreated, submodelElement), nil
 }
 
 // GetAllSubmodelElementsMetadataSubmodelRepo - Returns the metadata attributes of all submodel elements including their hierarchy
@@ -739,7 +739,18 @@ func (s *SubmodelRepositoryAPIAPIService) PostSubmodelElementByPathSubmodelRepo(
 	// TODO: Uncomment the next line to return response Response(0, Result{}) or use other options such as http.Ok ...
 	// return gen.Response(0, Result{}), nil
 
-	return gen.Response(http.StatusNotImplemented, nil), errors.New("PostSubmodelElementByPathSubmodelRepo method not implemented")
+	decodedSubmodelIdentifier, decodeErr := base64.RawStdEncoding.DecodeString(submodelIdentifier)
+	if decodeErr != nil {
+		return gen.Response(http.StatusBadRequest, nil), decodeErr
+	}
+
+	println("Decoded Submodel Identifier: ", string(decodedSubmodelIdentifier))
+
+	if err := s.submodelBackend.AddSubmodelElementWithPath(string(decodedSubmodelIdentifier), idShortPath, submodelElement); err != nil {
+		return gen.Response(http.StatusInternalServerError, nil), err
+	}
+
+	return gen.Response(http.StatusCreated, submodelElement), nil
 }
 
 // DeleteSubmodelElementByPathSubmodelRepo - Deletes a submodel element at a specified path within the submodel elements hierarchy

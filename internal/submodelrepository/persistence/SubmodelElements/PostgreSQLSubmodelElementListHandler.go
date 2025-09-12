@@ -41,8 +41,24 @@ func (p PostgreSQLSubmodelElementListHandler) Create(tx *sql.Tx, submodelId stri
 	return id, nil
 }
 
-func (p PostgreSQLSubmodelElementListHandler) CreateNested(tx *sql.Tx, submodelId string, parentId int, idShortPath string, submodelElement gen.SubmodelElement) (int, error) {
-	return 0, errors.New("not implemented")
+func (p PostgreSQLSubmodelElementListHandler) CreateNested(tx *sql.Tx, submodelId string, parentId int, idShortPath string, submodelElement gen.SubmodelElement, pos int) (int, error) {
+	_, ok := submodelElement.(*gen.SubmodelElementList)
+	if !ok {
+		return 0, errors.New("submodelElement is not of type SubmodelElementList")
+	}
+
+	// First, perform base SubmodelElement operations within the transaction
+	id, err := p.decorated.CreateAndPath(tx, submodelId, parentId, idShortPath, submodelElement, pos)
+	if err != nil {
+		return 0, err
+	}
+
+	// SubmodelElementList-specific database insertion
+	// Determine which column to use based on valueType
+
+	// Then, perform SubmodelElementList-specific operations within the same transaction
+
+	return id, nil
 }
 
 func (p PostgreSQLSubmodelElementListHandler) Read(idShortOrPath string) error {

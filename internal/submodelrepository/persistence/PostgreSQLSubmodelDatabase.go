@@ -106,59 +106,93 @@ func (p *PostgreSQLSubmodelDatabase) CreateSubmodel(m gen.Submodel) (string, err
 	return m.Id, err
 }
 
-func (p *PostgreSQLSubmodelDatabase) AddSubmodelElement(submodelId string, submodelElement gen.SubmodelElement) error {
+func (p *PostgreSQLSubmodelDatabase) AddSubmodelElementWithPath(submodelId string, idShortPath string, submodelElement gen.SubmodelElement) error {
 	handler, err := getSMEHandler(submodelElement, p)
 	if err != nil {
 		return err
 	}
 
-	// Start a database transaction
+	crud, err := submodelelements.NewPostgreSQLSMECrudHandler(p.db)
+	if err != nil {
+		return err
+	}
+
 	tx, err := p.db.Begin()
 	if err != nil {
 		return err
 	}
 
-	// Defer rollback in case of error
 	defer func() {
 		if err != nil {
 			tx.Rollback()
 		}
 	}()
 
-	// Create the top-level element
+	parentId, err := crud.GetDatabaseId(idShortPath)
+	if err != nil {
+		return err
+	}
+	nextPosition, err := crud.GetNextPosition(parentId)
+	if err != nil {
+		return err
+	}
+
+	modelType, err := crud.GetSubmodelElementType(idShortPath)
+	if err != nil {
+		return err
+	}
+	if modelType != "SubmodelElementCollection" && modelType != "SubmodelElementList" {
+		return errors.New("cannot add nested element to non-collection/list element")
+	}
+	var newIdShortPath string
+	if modelType == "SubmodelElementList" {
+		newIdShortPath = idShortPath + "[" + strconv.Itoa(nextPosition) + "]"
+	} else {
+		newIdShortPath = idShortPath + "." + submodelElement.GetIdShort()
+	}
+	id, err := handler.CreateNested(tx, submodelId, parentId, newIdShortPath, submodelElement, nextPosition)
+	if err != nil {
+		return err
+	}
+	err = p.AddNestedSubmodelElementsIteratively(tx, submodelId, id, submodelElement, idShortPath)
+	if err != nil {
+		return err
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+func (p *PostgreSQLSubmodelDatabase) AddSubmodelElement(submodelId string, submodelElement gen.SubmodelElement) error {
+	handler, err := getSMEHandler(submodelElement, p)
+	if err != nil {
+		return err
+	}
+
+	tx, err := p.db.Begin()
+	if err != nil {
+		return err
+	}
+
+	defer func() {
+		if err != nil {
+			tx.Rollback()
+		}
+	}()
+
 	parentId, err := handler.Create(tx, submodelId, submodelElement)
 	if err != nil {
 		return err
 	}
 
-	// Handle nested elements for collections and lists
-	switch string(submodelElement.GetModelType()) {
-	case "SubmodelElementCollection":
-		submodelElementCollection, ok := submodelElement.(*gen.SubmodelElementCollection)
-		if !ok {
-			return errors.New("submodelElement is not of type SubmodelElementCollection")
-		}
-		// Recursively add nested elements
-		for _, nestedElement := range submodelElementCollection.Value {
-			if err := p.AddNestedSubmodelElementRecursively(tx, submodelId, parentId, submodelElementCollection.IdShort, nestedElement); err != nil {
-				return err
-			}
-		}
-	case "SubmodelElementList":
-		submodelElementList, ok := submodelElement.(*gen.SubmodelElementList)
-		if !ok {
-			return errors.New("submodelElement is not of type SubmodelElementList")
-		}
-		// Recursively add nested elements with index-based paths
-		for index, nestedElement := range submodelElementList.Value {
-			idShortPath := submodelElementList.IdShort + "[" + strconv.Itoa(index) + "]"
-			if err := p.AddNestedSubmodelElementRecursively(tx, submodelId, parentId, idShortPath, nestedElement); err != nil {
-				return err
-			}
-		}
+	err = p.AddNestedSubmodelElementsIteratively(tx, submodelId, parentId, submodelElement, "")
+	if err != nil {
+		return err
 	}
 
-	// Commit the transaction only if everything succeeded
 	err = tx.Commit()
 	if err != nil {
 		return err
@@ -167,62 +201,132 @@ func (p *PostgreSQLSubmodelDatabase) AddSubmodelElement(submodelId string, submo
 	return nil
 }
 
-func (p *PostgreSQLSubmodelDatabase) AddNestedSubmodelElementRecursively(tx *sql.Tx, submodelId string, parentId int, currentIdShortPath string, submodelElement gen.SubmodelElement) error {
-	handler, err := getSMEHandler(submodelElement, p)
-	if err != nil {
-		return err
-	}
+type ElementToProcess struct {
+	element                   gen.SubmodelElement
+	parentId                  int
+	currentIdShortPath        string
+	isFromSubmodelElementList bool // Indicates if the current element is from a SubmodelElementList
+	position                  int  // Position/index within the parent collection or list
+}
 
-	// Create the nested element with the proper idShortPath
-	// According to IDTA AAS grammar: <idShortPath> ::= <idShort> {[ "." <idShort> | "["<Index>"]" ]}*
-	var idShortPath string
-	if currentIdShortPath == "" {
-		idShortPath = submodelElement.GetIdShort()
-	} else {
-		// For SubmodelElementList, currentIdShortPath already contains the [index] format
-		if string(submodelElement.GetModelType()) == "SubmodelElementList" ||
-			(len(currentIdShortPath) > 0 && currentIdShortPath[len(currentIdShortPath)-1] == ']') {
-			idShortPath = currentIdShortPath
-		} else {
-			// For SubmodelElementCollection, use dot notation
-			idShortPath = currentIdShortPath + "." + submodelElement.GetIdShort()
-		}
-	}
+func (p *PostgreSQLSubmodelDatabase) AddNestedSubmodelElementsIteratively(tx *sql.Tx, submodelId string, topLevelParentId int, topLevelElement gen.SubmodelElement, startPath string) error {
+	stack := []ElementToProcess{}
 
-	// Create the nested element using CreateNested
-	parentId, err = handler.CreateNested(tx, submodelId, parentId, idShortPath, submodelElement)
-	if err != nil {
-		return err
-	}
-
-	// Handle recursive nesting for collections and lists
-	switch string(submodelElement.GetModelType()) {
+	switch string(topLevelElement.GetModelType()) {
 	case "SubmodelElementCollection":
-		submodelElementCollection, ok := submodelElement.(*gen.SubmodelElementCollection)
+		submodelElementCollection, ok := topLevelElement.(*gen.SubmodelElementCollection)
 		if !ok {
 			return errors.New("submodelElement is not of type SubmodelElementCollection")
 		}
-		// Recursively add nested elements with dot notation
-		for _, nestedElement := range submodelElementCollection.Value {
-			if err := p.AddNestedSubmodelElementRecursively(tx, submodelId, parentId, idShortPath, nestedElement); err != nil {
-				return err
-			}
+		for index, nestedElement := range submodelElementCollection.Value {
+			stack = append(stack, ElementToProcess{
+				element:                   nestedElement,
+				parentId:                  topLevelParentId,
+				currentIdShortPath:        startPath + submodelElementCollection.IdShort,
+				isFromSubmodelElementList: false,
+				position:                  index,
+			})
 		}
 	case "SubmodelElementList":
-		submodelElementList, ok := submodelElement.(*gen.SubmodelElementList)
+		submodelElementList, ok := topLevelElement.(*gen.SubmodelElementList)
 		if !ok {
 			return errors.New("submodelElement is not of type SubmodelElementList")
 		}
-		// Recursively add nested elements with index-based paths
+		// Add nested elements to stack with index-based paths
 		for index, nestedElement := range submodelElementList.Value {
-			nestedIdShortPath := idShortPath + "[" + strconv.Itoa(index) + "]"
-			if err := p.AddNestedSubmodelElementRecursively(tx, submodelId, parentId, nestedIdShortPath, nestedElement); err != nil {
-				return err
+			idShortPath := startPath + submodelElementList.IdShort + "[" + strconv.Itoa(index) + "]"
+			stack = append(stack, ElementToProcess{
+				element:                   nestedElement,
+				parentId:                  topLevelParentId,
+				currentIdShortPath:        idShortPath,
+				isFromSubmodelElementList: true,
+				position:                  index,
+			})
+		}
+	}
+
+	for len(stack) > 0 {
+		// LIFO Stack
+		current := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+
+		handler, err := getSMEHandler(current.element, p)
+		if err != nil {
+			return err
+		}
+
+		// Build the idShortPath for current element
+		idShortPath := buildCurrentIdShortPath(current)
+
+		newParentId, err := handler.CreateNested(tx, submodelId, current.parentId, idShortPath, current.element, current.position)
+		if err != nil {
+			return err
+		}
+
+		switch string(current.element.GetModelType()) {
+		case "SubmodelElementCollection":
+			submodelElementCollection, ok := current.element.(*gen.SubmodelElementCollection)
+			if !ok {
+				return errors.New("submodelElement is not of type SubmodelElementCollection")
+			}
+			for i := len(submodelElementCollection.Value) - 1; i >= 0; i-- {
+				stack = addNestedElementToStackWithNormalPath(submodelElementCollection, i, stack, newParentId, idShortPath)
+			}
+		case "SubmodelElementList":
+			submodelElementList, ok := current.element.(*gen.SubmodelElementList)
+			if !ok {
+				return errors.New("submodelElement is not of type SubmodelElementList")
+			}
+			for index := len(submodelElementList.Value) - 1; index >= 0; index-- {
+				stack = addNestedElementToStackWithIndexPath(submodelElementList, index, idShortPath, stack, newParentId)
 			}
 		}
 	}
 
 	return nil
+}
+
+func buildCurrentIdShortPath(current ElementToProcess) string {
+	var idShortPath string
+	if current.currentIdShortPath == "" {
+		idShortPath = current.element.GetIdShort()
+	} else {
+		// If element comes from a SubmodelElementList, use the path as-is (includes [index])
+		if current.isFromSubmodelElementList {
+			idShortPath = current.currentIdShortPath
+		} else {
+			// For SubmodelElementCollection, append element's idShort with dot notation
+			idShortPath = current.currentIdShortPath + "." + current.element.GetIdShort()
+		}
+	}
+	return idShortPath
+}
+
+func addNestedElementToStackWithNormalPath(submodelElementCollection *gen.SubmodelElementCollection, i int, stack []ElementToProcess, newParentId int, idShortPath string) []ElementToProcess {
+	nestedElement := submodelElementCollection.Value[i]
+	// For collections, the position is the index in the collection (in reverse order due to LIFO stack)
+	position := len(submodelElementCollection.Value) - 1 - i
+	stack = append(stack, ElementToProcess{
+		element:                   nestedElement,
+		parentId:                  newParentId,
+		currentIdShortPath:        idShortPath,
+		isFromSubmodelElementList: false, // Children of collection are not from list
+		position:                  position,
+	})
+	return stack
+}
+
+func addNestedElementToStackWithIndexPath(submodelElementList *gen.SubmodelElementList, index int, idShortPath string, stack []ElementToProcess, newParentId int) []ElementToProcess {
+	nestedElement := submodelElementList.Value[index]
+	nestedIdShortPath := idShortPath + "[" + strconv.Itoa(index) + "]"
+	stack = append(stack, ElementToProcess{
+		element:                   nestedElement,
+		parentId:                  newParentId,
+		currentIdShortPath:        nestedIdShortPath,
+		isFromSubmodelElementList: true,  // Children of list are from list
+		position:                  index, // For lists, position is the actual index
+	})
+	return stack
 }
 
 func getSMEHandler(submodelElement gen.SubmodelElement, p *PostgreSQLSubmodelDatabase) (submodelelements.PostgreSQLSMECrudInterface, error) {
