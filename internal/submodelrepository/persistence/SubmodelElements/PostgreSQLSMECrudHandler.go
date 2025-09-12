@@ -65,7 +65,7 @@ func (p *PostgreSQLSMECrudHandler) CreateAndPath(tx *sql.Tx, submodelId string, 
 						VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
 		submodelId,
 		parentId,
-		position, //TODO
+		position,
 		submodelElement.GetIdShort(),
 		submodelElement.GetCategory(),
 		submodelElement.GetModelType(),
