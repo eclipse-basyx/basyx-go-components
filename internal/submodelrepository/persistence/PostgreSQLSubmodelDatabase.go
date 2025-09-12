@@ -154,7 +154,7 @@ func (p *PostgreSQLSubmodelDatabase) AddSubmodelElementWithPath(submodelId strin
 	if err != nil {
 		return err
 	}
-	err = p.AddNestedSubmodelElementsIteratively(tx, submodelId, id, submodelElement, idShortPath)
+	err = p.AddNestedSubmodelElementsIteratively(tx, submodelId, id, submodelElement, newIdShortPath)
 	if err != nil {
 		return err
 	}
@@ -219,10 +219,16 @@ func (p *PostgreSQLSubmodelDatabase) AddNestedSubmodelElementsIteratively(tx *sq
 			return errors.New("submodelElement is not of type SubmodelElementCollection")
 		}
 		for index, nestedElement := range submodelElementCollection.Value {
+			var currentPath string
+			if startPath == "" {
+				currentPath = submodelElementCollection.IdShort
+			} else {
+				currentPath = startPath
+			}
 			stack = append(stack, ElementToProcess{
 				element:                   nestedElement,
 				parentId:                  topLevelParentId,
-				currentIdShortPath:        startPath + submodelElementCollection.IdShort,
+				currentIdShortPath:        currentPath,
 				isFromSubmodelElementList: false,
 				position:                  index,
 			})
@@ -234,7 +240,12 @@ func (p *PostgreSQLSubmodelDatabase) AddNestedSubmodelElementsIteratively(tx *sq
 		}
 		// Add nested elements to stack with index-based paths
 		for index, nestedElement := range submodelElementList.Value {
-			idShortPath := startPath + submodelElementList.IdShort + "[" + strconv.Itoa(index) + "]"
+			var idShortPath string
+			if startPath == "" {
+				idShortPath = submodelElementList.IdShort + "[" + strconv.Itoa(index) + "]"
+			} else {
+				idShortPath = startPath
+			}
 			stack = append(stack, ElementToProcess{
 				element:                   nestedElement,
 				parentId:                  topLevelParentId,
