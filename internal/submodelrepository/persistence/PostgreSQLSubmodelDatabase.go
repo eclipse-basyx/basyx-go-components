@@ -315,14 +315,12 @@ func buildCurrentIdShortPath(current ElementToProcess) string {
 
 func addNestedElementToStackWithNormalPath(submodelElementCollection *gen.SubmodelElementCollection, i int, stack []ElementToProcess, newParentId int, idShortPath string) []ElementToProcess {
 	nestedElement := submodelElementCollection.Value[i]
-	// For collections, the position is the index in the collection (in reverse order due to LIFO stack)
-	position := len(submodelElementCollection.Value) - 1 - i
 	stack = append(stack, ElementToProcess{
 		element:                   nestedElement,
 		parentId:                  newParentId,
 		currentIdShortPath:        idShortPath,
 		isFromSubmodelElementList: false, // Children of collection are not from list
-		position:                  position,
+		position:                  i,
 	})
 	return stack
 }
