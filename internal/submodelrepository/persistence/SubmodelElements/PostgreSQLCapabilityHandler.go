@@ -41,7 +41,7 @@ func (p PostgreSQLCapabilityHandler) Create(tx *sql.Tx, submodelId string, submo
 	return id, nil
 }
 
-func (p PostgreSQLCapabilityHandler) CreateNested(tx *sql.Tx, submodelId string, parentId int, idShortPath string, submodelElement gen.SubmodelElement) (int, error) {
+func (p PostgreSQLCapabilityHandler) CreateNested(tx *sql.Tx, submodelId string, parentId int, idShortPath string, submodelElement gen.SubmodelElement, pos int) (int, error) {
 	return 0, errors.New("not implemented")
 }
 

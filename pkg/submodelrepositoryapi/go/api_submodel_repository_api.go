@@ -1372,11 +1372,11 @@ func (c *SubmodelRepositoryAPIAPIController) PostSubmodelElementByPathSubmodelRe
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
-	if err := AssertSubmodelElementRequired(submodelElementParam); err != nil {
+	if err := AssertSubmodelElementRequiredFixed(submodelElementParam); err != nil {
 		c.errorHandler(w, r, err, nil)
 		return
 	}
-	if err := AssertSubmodelElementConstraints(submodelElementParam); err != nil {
+	if err := AssertSubmodelElementConstraintsFixed(submodelElementParam); err != nil {
 		c.errorHandler(w, r, err, nil)
 		return
 	}

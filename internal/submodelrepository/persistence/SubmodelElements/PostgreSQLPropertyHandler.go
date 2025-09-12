@@ -43,14 +43,14 @@ func (p PostgreSQLPropertyHandler) Create(tx *sql.Tx, submodelId string, submode
 	return id, nil
 }
 
-func (p PostgreSQLPropertyHandler) CreateNested(tx *sql.Tx, submodelId string, parentId int, idShortPath string, submodelElement gen.SubmodelElement) (int, error) {
+func (p PostgreSQLPropertyHandler) CreateNested(tx *sql.Tx, submodelId string, parentId int, idShortPath string, submodelElement gen.SubmodelElement, pos int) (int, error) {
 	property, ok := submodelElement.(*gen.Property)
 	if !ok {
 		return 0, errors.New("submodelElement is not of type Property")
 	}
 
 	// Create the nested property with the provided idShortPath using the decorated handler
-	id, err := p.decorated.CreateAndPath(tx, submodelId, parentId, idShortPath, submodelElement)
+	id, err := p.decorated.CreateAndPath(tx, submodelId, parentId, idShortPath, submodelElement, pos)
 	if err != nil {
 		return 0, err
 	}

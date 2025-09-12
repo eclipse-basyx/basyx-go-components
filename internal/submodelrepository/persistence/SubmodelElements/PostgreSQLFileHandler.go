@@ -40,7 +40,7 @@ func (p PostgreSQLFileHandler) Create(tx *sql.Tx, submodelId string, submodelEle
 	return id, nil
 }
 
-func (p PostgreSQLFileHandler) CreateNested(tx *sql.Tx, submodelId string, parentId int, idShortPath string, submodelElement gen.SubmodelElement) (int, error) {
+func (p PostgreSQLFileHandler) CreateNested(tx *sql.Tx, submodelId string, parentId int, idShortPath string, submodelElement gen.SubmodelElement, pos int) (int, error) {
 	return 0, errors.New("not implemented")
 }
 
