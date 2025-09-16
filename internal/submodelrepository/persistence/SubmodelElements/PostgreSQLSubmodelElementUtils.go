@@ -226,12 +226,10 @@ func GetSubmodelElementsWithPath(tx *sql.Tx, submodelId string, idShortOrPath st
 
 	args := []any{submodelId}
 	if idShortOrPath != "" {
-		// Prefix match covers nested paths (collections: ".%", lists: "[%") plus the exact node
 		baseQuery += ` AND (sme.idshort_path = $2 OR sme.idshort_path LIKE $2 || '.%' OR sme.idshort_path LIKE $2 || '[%')`
 		args = append(args, idShortOrPath)
 	}
 
-	// Parent-first ordering gives us roots up front and keeps siblings together
 	baseQuery += ` ORDER BY sme.parent_sme_id NULLS FIRST, sme.idshort_path, sme.position`
 
 	rows, err := tx.Query(baseQuery, args...)
@@ -314,7 +312,6 @@ func GetSubmodelElementsWithPath(tx *sql.Tx, submodelId string, idShortOrPath st
 				// blob.ContentType = gen.BlobAllOfContentType(blobContentType.String)
 			}
 			if blobValue != nil {
-				// Keep as string if your OpenAPI expects base64-encoded string; adjust if []byte is preferred.
 				blob.Value = string(blobValue)
 			}
 			el = blob
