@@ -489,7 +489,18 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelElements(ctx context.Con
 	// TODO: Uncomment the next line to return response Response(0, Result{}) or use other options such as http.Ok ...
 	// return gen.Response(0, Result{}), nil
 
-	return gen.Response(http.StatusNotImplemented, nil), errors.New("GetAllSubmodelElements method not implemented")
+	decodedSubmodelIdentifier, decodeErr := base64.RawStdEncoding.DecodeString(submodelIdentifier)
+	if decodeErr != nil {
+		return gen.Response(http.StatusBadRequest, nil), decodeErr
+	}
+
+	println("Decoded Submodel Identifier: ", string(decodedSubmodelIdentifier))
+	sme, err := s.submodelBackend.GetSubmodelElements(string(decodedSubmodelIdentifier))
+	if err != nil {
+		return gen.Response(http.StatusInternalServerError, nil), err
+	}
+
+	return gen.Response(http.StatusOK, sme), nil
 }
 
 // PostSubmodelElementSubmodelRepo - Creates a new submodel element
@@ -678,7 +689,18 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelElementByPathSubmodelRepo(c
 	// TODO: Uncomment the next line to return response Response(0, Result{}) or use other options such as http.Ok ...
 	// return gen.Response(0, Result{}), nil
 
-	return gen.Response(http.StatusNotImplemented, nil), errors.New("GetSubmodelElementByPathSubmodelRepo method not implemented")
+	decodedSubmodelIdentifier, decodeErr := base64.RawStdEncoding.DecodeString(submodelIdentifier)
+	if decodeErr != nil {
+		return gen.Response(http.StatusBadRequest, nil), decodeErr
+	}
+
+	println("Decoded Submodel Identifier: ", string(decodedSubmodelIdentifier))
+	sme, err := s.submodelBackend.GetSubmodelElement(string(decodedSubmodelIdentifier), idShortPath)
+	if err != nil {
+		return gen.Response(http.StatusInternalServerError, nil), err
+	}
+
+	return gen.Response(http.StatusOK, sme), nil
 }
 
 // PutSubmodelElementByPathSubmodelRepo - Updates an existing submodel element at a specified path within submodel elements hierarchy

@@ -47,6 +47,10 @@ func NewPostgreSQLSubmodelBackend(dsn string) (*PostgreSQLSubmodelDatabase, erro
 	return &PostgreSQLSubmodelDatabase{db: db}, nil
 }
 
+func NewPostgreSQLSubmodelBackendWithDb(db *sql.DB) (*PostgreSQLSubmodelDatabase, error) {
+	return &PostgreSQLSubmodelDatabase{db: db}, nil
+}
+
 // GetAllSubmodels holt alle Submodelle aus der DB
 func (p *PostgreSQLSubmodelDatabase) GetAllSubmodels() ([]gen.Submodel, error) {
 	rows, err := p.db.Query(`SELECT payload FROM submodels ORDER BY id LIMIT 100`)
@@ -106,8 +110,58 @@ func (p *PostgreSQLSubmodelDatabase) CreateSubmodel(m gen.Submodel) (string, err
 	return m.Id, err
 }
 
+func (p *PostgreSQLSubmodelDatabase) GetSubmodelElement(submodelId string, idShortOrPath string) (gen.SubmodelElement, error) {
+	tx, err := p.db.Begin()
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if err != nil {
+			tx.Rollback()
+		}
+	}()
+
+	elements, err := submodelelements.GetSubmodelElementsWithPath(tx, submodelId, idShortOrPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(elements) == 0 {
+		return nil, sql.ErrNoRows
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+
+	return elements[0], nil
+}
+
+func (p *PostgreSQLSubmodelDatabase) GetSubmodelElements(submodelId string) ([]gen.SubmodelElement, error) {
+	tx, err := p.db.Begin()
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if err != nil {
+			tx.Rollback()
+		}
+	}()
+
+	elements, err := submodelelements.GetSubmodelElementsWithPath(tx, submodelId, "")
+	if err != nil {
+		return nil, err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+
+	return elements, nil
+}
+
 func (p *PostgreSQLSubmodelDatabase) AddSubmodelElementWithPath(submodelId string, idShortPath string, submodelElement gen.SubmodelElement) error {
-	handler, err := getSMEHandler(submodelElement, p)
+	handler, err := submodelelements.GetSMEHandler(submodelElement, p.db)
 	if err != nil {
 		return err
 	}
@@ -167,7 +221,7 @@ func (p *PostgreSQLSubmodelDatabase) AddSubmodelElementWithPath(submodelId strin
 	return nil
 }
 func (p *PostgreSQLSubmodelDatabase) AddSubmodelElement(submodelId string, submodelElement gen.SubmodelElement) error {
-	handler, err := getSMEHandler(submodelElement, p)
+	handler, err := submodelelements.GetSMEHandler(submodelElement, p.db)
 	if err != nil {
 		return err
 	}
@@ -261,7 +315,7 @@ func (p *PostgreSQLSubmodelDatabase) AddNestedSubmodelElementsIteratively(tx *sq
 		current := stack[len(stack)-1]
 		stack = stack[:len(stack)-1]
 
-		handler, err := getSMEHandler(current.element, p)
+		handler, err := submodelelements.GetSMEHandler(current.element, p.db)
 		if err != nil {
 			return err
 		}
@@ -336,110 +390,4 @@ func addNestedElementToStackWithIndexPath(submodelElementList *gen.SubmodelEleme
 		position:                  index, // For lists, position is the actual index
 	})
 	return stack
-}
-
-func getSMEHandler(submodelElement gen.SubmodelElement, p *PostgreSQLSubmodelDatabase) (submodelelements.PostgreSQLSMECrudInterface, error) {
-	var handler submodelelements.PostgreSQLSMECrudInterface
-
-	switch string(submodelElement.GetModelType()) {
-	case "AnnotatedRelationshipElement":
-		areHandler, err := submodelelements.NewPostgreSQLAnnotatedRelationshipElementHandler(p.db)
-		if err != nil {
-			return nil, err
-		}
-		handler = areHandler
-	case "BasicEventElement":
-		beeHandler, err := submodelelements.NewPostgreSQLBasicEventElementHandler(p.db)
-		if err != nil {
-			return nil, err
-		}
-		handler = beeHandler
-	case "Blob":
-		blobHandler, err := submodelelements.NewPostgreSQLBlobHandler(p.db)
-		if err != nil {
-			return nil, err
-		}
-		handler = blobHandler
-	case "Capability":
-		capHandler, err := submodelelements.NewPostgreSQLCapabilityHandler(p.db)
-		if err != nil {
-			return nil, err
-		}
-		handler = capHandler
-	case "DataElement":
-		deHandler, err := submodelelements.NewPostgreSQLDataElementHandler(p.db)
-		if err != nil {
-			return nil, err
-		}
-		handler = deHandler
-	case "Entity":
-		entityHandler, err := submodelelements.NewPostgreSQLEntityHandler(p.db)
-		if err != nil {
-			return nil, err
-		}
-		handler = entityHandler
-	case "EventElement":
-		eventElemHandler, err := submodelelements.NewPostgreSQLEventElementHandler(p.db)
-		if err != nil {
-			return nil, err
-		}
-		handler = eventElemHandler
-	case "File":
-		fileHandler, err := submodelelements.NewPostgreSQLFileHandler(p.db)
-		if err != nil {
-			return nil, err
-		}
-		handler = fileHandler
-	case "MultiLanguageProperty":
-		mlpHandler, err := submodelelements.NewPostgreSQLMultiLanguagePropertyHandler(p.db)
-		if err != nil {
-			return nil, err
-		}
-		handler = mlpHandler
-	case "Operation":
-		opHandler, err := submodelelements.NewPostgreSQLOperationHandler(p.db)
-		if err != nil {
-			return nil, err
-		}
-		handler = opHandler
-	case "Property":
-		propHandler, err := submodelelements.NewPostgreSQLPropertyHandler(p.db)
-		if err != nil {
-			return nil, err
-		}
-		handler = propHandler
-	case "Range":
-		rangeHandler, err := submodelelements.NewPostgreSQLRangeHandler(p.db)
-		if err != nil {
-			return nil, err
-		}
-		handler = rangeHandler
-	case "ReferenceElement":
-		refElemHandler, err := submodelelements.NewPostgreSQLReferenceElementHandler(p.db)
-		if err != nil {
-			return nil, err
-		}
-		handler = refElemHandler
-	case "RelationshipElement":
-		relElemHandler, err := submodelelements.NewPostgreSQLRelationshipElementHandler(p.db)
-		if err != nil {
-			return nil, err
-		}
-		handler = relElemHandler
-	case "SubmodelElementCollection":
-		smeColHandler, err := submodelelements.NewPostgreSQLSubmodelElementCollectionHandler(p.db)
-		if err != nil {
-			return nil, err
-		}
-		handler = smeColHandler
-	case "SubmodelElementList":
-		smeListHandler, err := submodelelements.NewPostgreSQLSubmodelElementListHandler(p.db)
-		if err != nil {
-			return nil, err
-		}
-		handler = smeListHandler
-	default:
-		return nil, errors.New("ModelType " + string(submodelElement.GetModelType()) + " unsupported.")
-	}
-	return handler, nil
 }

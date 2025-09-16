@@ -114,6 +114,10 @@ func (a SubmodelElementCollection) GetEmbeddedDataSpecifications() []EmbeddedDat
 
 // Setters
 
+func (a *SubmodelElementCollection) SetModelType(modelType string) {
+	a.ModelType = modelType
+}
+
 func (a *SubmodelElementCollection) SetExtensions(v []Extension) {
 	a.Extensions = v
 }

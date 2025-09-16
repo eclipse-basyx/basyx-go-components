@@ -76,6 +76,10 @@ func (a DataElement) GetEmbeddedDataSpecifications() []EmbeddedDataSpecification
 
 // Setters
 
+func (a *DataElement) SetModelType(v string) {
+	a.ModelType = v
+}
+
 func (a *DataElement) SetExtensions(v []Extension) {
 	a.Extensions = v
 }

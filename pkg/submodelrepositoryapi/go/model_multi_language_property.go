@@ -80,6 +80,10 @@ func (a MultiLanguageProperty) GetEmbeddedDataSpecifications() []EmbeddedDataSpe
 
 // Setters
 
+func (p *MultiLanguageProperty) SetModelType(modelType string) {
+	p.ModelType = modelType
+}
+
 func (a *MultiLanguageProperty) SetExtensions(v []Extension) {
 	a.Extensions = v
 }

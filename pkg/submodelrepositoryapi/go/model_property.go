@@ -100,6 +100,10 @@ func (p Property) GetValueId() Reference {
 	return p.ValueId
 }
 
+func (p *Property) SetModelType(modelType string) {
+	p.ModelType = modelType
+}
+
 func (p *Property) SetIdShort(idShort string) {
 	p.IdShort = idShort
 }

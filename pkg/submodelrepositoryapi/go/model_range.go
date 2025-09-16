@@ -82,6 +82,10 @@ func (a Range) GetEmbeddedDataSpecifications() []EmbeddedDataSpecification {
 
 // Setters
 
+func (p *Range) SetModelType(modelType string) {
+	p.ModelType = modelType
+}
+
 func (a *Range) SetExtensions(v []Extension) {
 	a.Extensions = v
 }

@@ -76,6 +76,10 @@ func (a Capability) GetEmbeddedDataSpecifications() []EmbeddedDataSpecification 
 
 // Setters
 
+func (a *Capability) SetModelType(v string) {
+	a.ModelType = v
+}
+
 func (a *Capability) SetExtensions(v []Extension) {
 	a.Extensions = v
 }

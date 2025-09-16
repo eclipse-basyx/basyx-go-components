@@ -84,6 +84,10 @@ func (a Entity) GetEmbeddedDataSpecifications() []EmbeddedDataSpecification {
 
 // Setters
 
+func (a *Entity) SetModelType(v string) {
+	a.ModelType = v
+}
+
 func (a *Entity) SetExtensions(v []Extension) {
 	a.Extensions = v
 }

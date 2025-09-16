@@ -121,13 +121,13 @@ func (p *PostgreSQLSMECrudHandler) Create(tx *sql.Tx, submodelId string, submode
 	 					submodel_element(submodel_id, parent_sme_id, position, id_short, category, model_type, semantic_id, idshort_path)
 						VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
 		submodelId,
-		nil, //TODO
-		0,   //TODO
+		nil,
+		0,
 		submodelElement.GetIdShort(),
 		submodelElement.GetCategory(),
 		submodelElement.GetModelType(),
-		referenceID,                  // This will be NULL if no semantic ID was provided
-		submodelElement.GetIdShort(), //TODO
+		referenceID, // This will be NULL if no semantic ID was provided
+		submodelElement.GetIdShort(),
 	).Scan(&id)
 	if err != nil {
 		return 0, err
@@ -137,8 +137,21 @@ func (p *PostgreSQLSMECrudHandler) Create(tx *sql.Tx, submodelId string, submode
 	return id, nil
 }
 
-func (p *PostgreSQLSMECrudHandler) Read(idShortOrPath string) error {
-	return nil
+func (p *PostgreSQLSMECrudHandler) Read(tx *sql.Tx, submodelId string, idShortOrPath string, submodelElement *gen.SubmodelElement) (int, error) {
+	var id int
+	var idShort, modelType string
+	err := tx.QueryRow(`
+		SELECT id, id_short, model_type
+		FROM submodel_element
+		WHERE submodel_id = $1 AND idshort_path = $2
+	`, submodelId, idShortOrPath).Scan(&id, &idShort, &modelType)
+	if err != nil {
+		return 0, err
+	}
+	elem := (*submodelElement)
+	elem.SetIdShort(idShort)
+	elem.SetModelType(modelType)
+	return id, nil
 }
 
 func (p *PostgreSQLSMECrudHandler) Update(idShortOrPath string, submodelElement gen.SubmodelElement) error {

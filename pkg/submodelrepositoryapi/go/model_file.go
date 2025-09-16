@@ -80,6 +80,10 @@ func (a File) GetEmbeddedDataSpecifications() []EmbeddedDataSpecification {
 
 // Setters
 
+func (p *File) SetModelType(modelType string) {
+	p.ModelType = modelType
+}
+
 func (a *File) SetExtensions(v []Extension) {
 	a.Extensions = v
 }

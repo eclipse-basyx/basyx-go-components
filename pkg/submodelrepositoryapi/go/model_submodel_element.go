@@ -28,6 +28,7 @@ type SubmodelElement interface {
 	GetEmbeddedDataSpecifications() []EmbeddedDataSpecification
 	GetExtensions() []Extension
 
+	SetModelType(string)
 	SetIdShort(string)
 	SetCategory(string)
 	SetDisplayName([]LangStringNameType)

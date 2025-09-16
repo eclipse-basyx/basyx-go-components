@@ -45,11 +45,13 @@ func (p PostgreSQLOperationHandler) CreateNested(tx *sql.Tx, submodelId string, 
 	return 0, errors.New("not implemented")
 }
 
-func (p PostgreSQLOperationHandler) Read(idShortOrPath string) error {
-	if dErr := p.decorated.Read(idShortOrPath); dErr != nil {
-		return dErr
+func (p PostgreSQLOperationHandler) Read(tx *sql.Tx, submodelId string, idShortOrPath string) (gen.SubmodelElement, error) {
+	var sme gen.SubmodelElement
+	_, err := p.decorated.Read(tx, submodelId, idShortOrPath, &sme)
+	if err != nil {
+		return nil, err
 	}
-	return nil
+	return sme, nil
 }
 func (p PostgreSQLOperationHandler) Update(idShortOrPath string, submodelElement gen.SubmodelElement) error {
 	if dErr := p.decorated.Update(idShortOrPath, submodelElement); dErr != nil {

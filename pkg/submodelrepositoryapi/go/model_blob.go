@@ -80,6 +80,10 @@ func (a Blob) GetEmbeddedDataSpecifications() []EmbeddedDataSpecification {
 
 // Setters
 
+func (a *Blob) SetModelType(v string) {
+	a.ModelType = v
+}
+
 func (a *Blob) SetExtensions(v []Extension) {
 	a.Extensions = v
 }

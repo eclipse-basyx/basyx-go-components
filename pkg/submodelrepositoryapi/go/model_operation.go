@@ -82,6 +82,10 @@ func (a Operation) GetEmbeddedDataSpecifications() []EmbeddedDataSpecification {
 
 // Setters
 
+func (a *Operation) SetModelType(modelType string) {
+	a.ModelType = modelType
+}
+
 func (a *Operation) SetExtensions(v []Extension) {
 	a.Extensions = v
 }

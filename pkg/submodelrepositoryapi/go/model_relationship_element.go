@@ -80,6 +80,10 @@ func (a RelationshipElement) GetEmbeddedDataSpecifications() []EmbeddedDataSpeci
 
 // Setters
 
+func (a *RelationshipElement) SetModelType(v string) {
+	a.ModelType = v
+}
+
 func (a *RelationshipElement) SetExtensions(v []Extension) {
 	a.Extensions = v
 }

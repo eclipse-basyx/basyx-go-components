@@ -76,6 +76,10 @@ func (a EventElement) GetEmbeddedDataSpecifications() []EmbeddedDataSpecificatio
 
 // Setters
 
+func (a *EventElement) SetModelType(modelType string) {
+	a.ModelType = modelType
+}
+
 func (a *EventElement) SetExtensions(v []Extension) {
 	a.Extensions = v
 }

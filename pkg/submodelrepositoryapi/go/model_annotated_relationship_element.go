@@ -92,6 +92,10 @@ func (a AnnotatedRelationshipElement) GetAnnotations() []DataElementChoice {
 
 // Setters
 
+func (a *AnnotatedRelationshipElement) SetModelType(v string) {
+	a.ModelType = v
+}
+
 func (a *AnnotatedRelationshipElement) SetExtensions(v []Extension) {
 	a.Extensions = v
 }
