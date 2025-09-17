@@ -47,27 +47,61 @@ func NewPostgreSQLSubmodelBackend(dsn string) (*PostgreSQLSubmodelDatabase, erro
 	return &PostgreSQLSubmodelDatabase{db: db}, nil
 }
 
-// GetAllSubmodels holt alle Submodelle aus der DB
-func (p *PostgreSQLSubmodelDatabase) GetAllSubmodels() ([]gen.Submodel, error) {
-	rows, err := p.db.Query(`SELECT payload FROM submodels ORDER BY id LIMIT 100`)
+// GetAllSubmodels returns a page of Submodels and a next cursor ("" if no more pages).
+func (p *PostgreSQLSubmodelDatabase) GetAllSubmodels(limit int32, cursor string, idShort string) ([]gen.Submodel, string, error) {
+	if limit <= 0 || limit > 1000 {
+		limit = 25
+	}
+
+	// Keyset pagination: start after the cursor (last seen id).
+	// Simple filter by idShort; leave semanticId/level/extent for later.
+	const q = `
+        SELECT id, id_short, category, kind, 'Submodel' AS model_type
+        FROM submodel
+        WHERE ($1 = '' OR id_short = $1)
+          AND ($2 = '' OR id > $2)
+        ORDER BY id
+        LIMIT $3
+    `
+	rows, err := p.db.Query(q, idShort, cursor, limit)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	defer rows.Close()
 
-	list := []gen.Submodel{}
+	list := make([]gen.Submodel, 0, limit)
+	var lastID string
+
 	for rows.Next() {
-		var js []byte
-		if err := rows.Scan(&js); err != nil {
-			return nil, err
+		var (
+			id, idShortDB, category, modelType string
+			kind                               sql.NullString
+		)
+		if err := rows.Scan(&id, &idShortDB, &category, &kind, &modelType); err != nil {
+			return nil, "", err
 		}
-		var m gen.Submodel
-		if err := json.Unmarshal(js, &m); err != nil {
-			return nil, err
+
+		sm := gen.Submodel{
+			Id:        id,
+			IdShort:   idShortDB,
+			Category:  category,
+			ModelType: modelType, // "Submodel"
 		}
-		list = append(list, m)
+		if kind.Valid {
+			sm.Kind = gen.ModellingKind(kind.String) // enum stored as text
+		}
+		list = append(list, sm)
+		lastID = id
 	}
-	return list, nil
+	if err := rows.Err(); err != nil {
+		return nil, "", err
+	}
+
+	nextCursor := ""
+	if int32(len(list)) == limit {
+		nextCursor = lastID
+	}
+	return list, nextCursor, nil
 }
 
 // GetSubmodel returns one Submodel by id
