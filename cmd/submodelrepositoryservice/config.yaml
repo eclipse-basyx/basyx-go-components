@@ -1,0 +1,11 @@
+server:
+  port: 5004
+  contextPath: ""
+  host: 0.0.0.0
+
+postgres:
+  host: localhost
+  port: 5432
+  user: admin
+  password: admin123
+  dbname: mydatabase

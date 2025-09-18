@@ -1,0 +1,7 @@
+[
+    {
+        "method": "GET",
+        "endpoint": "http://localhost:5004/health",
+        "data": "expected/expectedHealthEndpoint.json"
+    }
+]
