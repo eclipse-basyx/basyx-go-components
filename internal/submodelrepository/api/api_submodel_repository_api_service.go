@@ -498,6 +498,9 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelElements(ctx context.Con
 	println("Decoded Submodel Identifier: ", string(decodedSubmodelIdentifier))
 	sme, err := s.submodelBackend.GetSubmodelElements(string(decodedSubmodelIdentifier))
 	if err != nil {
+		if common.IsErrNotFound(err) {
+			return gen.Response(http.StatusNotFound, nil), err
+		}
 		return gen.Response(http.StatusInternalServerError, nil), err
 	}
 

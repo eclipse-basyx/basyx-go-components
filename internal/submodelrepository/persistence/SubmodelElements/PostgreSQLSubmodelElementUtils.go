@@ -10,79 +10,6 @@ import (
 	gen "github.com/eclipse-basyx/basyx-go-components/pkg/submodelrepositoryapi/go"
 )
 
-func GetSubmodelElement(db *sql.DB, submodelId string, idShortOrPath string) (gen.SubmodelElement, error) {
-	tx, err := db.Begin()
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
-		if err != nil {
-			tx.Rollback()
-		} else {
-			tx.Commit()
-		}
-	}()
-	var modelType string
-	var idShortPath string
-
-	err = tx.QueryRow(`SELECT model_type, idshort_path FROM submodel_element WHERE submodel_id = $1 AND idshort_path = $2`, submodelId, idShortOrPath).Scan(&modelType, &idShortPath)
-	if err != nil {
-		return nil, err
-	}
-
-	handler, err := GetSMEHandlerByModelType(modelType, db)
-	if err != nil {
-		return nil, err
-	}
-
-	sme, err := handler.Read(tx, submodelId, idShortPath)
-	if err != nil {
-		return nil, err
-	}
-	return sme, nil
-}
-
-func GetSubmodelElements(db *sql.DB, submodelId string) ([]gen.SubmodelElement, error) {
-	tx, err := db.Begin()
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
-		if err != nil {
-			tx.Rollback()
-		} else {
-			tx.Commit()
-		}
-	}()
-
-	rows, err := tx.Query(`SELECT model_type, idshort_path FROM submodel_element WHERE submodel_id = $1`, submodelId)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var submodelElements []gen.SubmodelElement
-	for rows.Next() {
-		var modelType string
-		var idShortPath string
-		if err := rows.Scan(&modelType, &idShortPath); err != nil {
-			return nil, err
-		}
-
-		handler, err := GetSMEHandlerByModelType(modelType, db)
-		if err != nil {
-			return nil, err
-		}
-
-		sme, err := handler.Read(tx, submodelId, idShortPath)
-		if err != nil {
-			return nil, err
-		}
-
-		submodelElements = append(submodelElements, sme)
-	}
-	return submodelElements, nil
-}
-
 func GetSMEHandler(submodelElement gen.SubmodelElement, db *sql.DB) (PostgreSQLSMECrudInterface, error) {
 	return GetSMEHandlerByModelType(string(submodelElement.GetModelType()), db)
 }
@@ -198,6 +125,17 @@ func GetSMEHandlerByModelType(modelType string, db *sql.DB) (PostgreSQLSMECrudIn
 // (O(n)), avoiding expensive string parsing of idshort_path. It also minimizes allocations
 // by using integer IDs and on-the-fly child bucketing.
 func GetSubmodelElementsWithPath(tx *sql.Tx, submodelId string, idShortOrPath string) ([]gen.SubmodelElement, error) {
+
+	//Check if Submodel exists
+	sRows, err := tx.Query(`SELECT id FROM submodel WHERE id = $1`, submodelId)
+	if err != nil {
+		return nil, err
+	}
+	if !sRows.Next() {
+		return nil, common.NewErrNotFound("Submodel not found")
+	}
+	sRows.Close()
+
 	// --- Build query ----------------------------------------------------------
 	// NOTE: we keep a single query, but order by parent first for better locality
 	// and easy root detection. We also drop joins we don't use (e.g. MultiLanguageProperty row id).
