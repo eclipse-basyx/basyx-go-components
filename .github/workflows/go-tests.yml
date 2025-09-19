@@ -46,7 +46,7 @@ jobs:
       - name: Setup Docker Compose
         run: |
           cd internal/submodelrepository/integration_tests
-          docker-compose -f docker_compose/docker_compose.yml up -d --build
+          docker compose -f docker_compose/docker_compose.yml up -d --build
           echo "Waiting for services to be ready..."
           sleep 30
       - name: Run integration tests
@@ -57,4 +57,4 @@ jobs:
         if: always()
         run: |
           cd internal/submodelrepository/integration_tests
-          docker-compose -f docker_compose/docker_compose.yml down
+          docker compose -f docker_compose/docker_compose.yml down
