@@ -24,7 +24,7 @@ type File struct {
 
 	ModelType string `json:"modelType" validate:"regexp=^File$"`
 
-	SemanticId Reference `json:"semanticId,omitempty"`
+	SemanticId *Reference `json:"semanticId,omitempty"`
 
 	SupplementalSemanticIds []Reference `json:"supplementalSemanticIds,omitempty"`
 
@@ -62,7 +62,7 @@ func (a File) GetModelType() string {
 	return a.ModelType
 }
 
-func (a File) GetSemanticId() Reference {
+func (a File) GetSemanticId() *Reference {
 	return a.SemanticId
 }
 
@@ -104,7 +104,7 @@ func (a *File) SetDescription(v []LangStringTextType) {
 	a.Description = v
 }
 
-func (a *File) SetSemanticId(v Reference) {
+func (a *File) SetSemanticId(v *Reference) {
 	a.SemanticId = v
 }
 
@@ -150,8 +150,10 @@ func AssertFileRequired(obj File) error {
 			return err
 		}
 	}
-	if err := AssertReferenceRequired(obj.SemanticId); err != nil {
-		return err
+	if obj.SemanticId != nil {
+		if err := AssertReferenceRequired(*obj.SemanticId); err != nil {
+			return err
+		}
 	}
 	for _, el := range obj.SupplementalSemanticIds {
 		if err := AssertReferenceRequired(el); err != nil {
@@ -194,8 +196,10 @@ func AssertFileConstraints(obj File) error {
 			return err
 		}
 	}
-	if err := AssertReferenceConstraints(obj.SemanticId); err != nil {
-		return err
+	if obj.SemanticId != nil {
+		if err := AssertReferenceConstraints(*obj.SemanticId); err != nil {
+			return err
+		}
 	}
 	for _, el := range obj.SupplementalSemanticIds {
 		if err := AssertReferenceConstraints(el); err != nil {

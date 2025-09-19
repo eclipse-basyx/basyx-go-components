@@ -24,7 +24,7 @@ type BasicEventElement struct {
 
 	ModelType string `json:"modelType" validate:"regexp=^BasicEventElement$"`
 
-	SemanticId Reference `json:"semanticId,omitempty"`
+	SemanticId *Reference `json:"semanticId,omitempty"`
 
 	SupplementalSemanticIds []Reference `json:"supplementalSemanticIds,omitempty"`
 
@@ -74,7 +74,7 @@ func (a BasicEventElement) GetModelType() string {
 	return a.ModelType
 }
 
-func (a BasicEventElement) GetSemanticId() Reference {
+func (a BasicEventElement) GetSemanticId() *Reference {
 	return a.SemanticId
 }
 
@@ -116,7 +116,7 @@ func (a *BasicEventElement) SetDescription(v []LangStringTextType) {
 	a.Description = v
 }
 
-func (a *BasicEventElement) SetSemanticId(v Reference) {
+func (a *BasicEventElement) SetSemanticId(v *Reference) {
 	a.SemanticId = v
 }
 
@@ -164,7 +164,7 @@ func AssertBasicEventElementRequired(obj BasicEventElement) error {
 			return err
 		}
 	}
-	if err := AssertReferenceRequired(obj.SemanticId); err != nil {
+	if err := AssertReferenceRequired(*obj.SemanticId); err != nil {
 		return err
 	}
 	for _, el := range obj.SupplementalSemanticIds {
@@ -211,7 +211,7 @@ func AssertBasicEventElementConstraints(obj BasicEventElement) error {
 			return err
 		}
 	}
-	if err := AssertReferenceConstraints(obj.SemanticId); err != nil {
+	if err := AssertReferenceConstraints(*obj.SemanticId); err != nil {
 		return err
 	}
 	for _, el := range obj.SupplementalSemanticIds {

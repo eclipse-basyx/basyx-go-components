@@ -26,7 +26,7 @@ func NewPostgreSQLSMECrudHandler(db *sql.DB) (*PostgreSQLSMECrudHandler, error) 
 func (p *PostgreSQLSMECrudHandler) CreateAndPath(tx *sql.Tx, submodelId string, parentId int, idShortPath string, submodelElement gen.SubmodelElement, position int) (int, error) {
 	var referenceID sql.NullInt64
 
-	if !isEmptyReference(submodelElement.GetSemanticId()) {
+	if submodelElement.GetSemanticId() != nil && !isEmptyReference(*submodelElement.GetSemanticId()) {
 		var id int
 		err := tx.QueryRow(`INSERT INTO reference (type) VALUES ($1) RETURNING id`, submodelElement.GetSemanticId().Type).Scan(&id)
 		if err != nil {
@@ -83,7 +83,7 @@ func (p *PostgreSQLSMECrudHandler) CreateAndPath(tx *sql.Tx, submodelId string, 
 func (p *PostgreSQLSMECrudHandler) Create(tx *sql.Tx, submodelId string, submodelElement gen.SubmodelElement) (int, error) {
 	var referenceID sql.NullInt64
 
-	if !isEmptyReference(submodelElement.GetSemanticId()) {
+	if submodelElement.GetSemanticId() != nil && !isEmptyReference(*submodelElement.GetSemanticId()) {
 		var id int
 		err := tx.QueryRow(`INSERT INTO reference (type) VALUES ($1) RETURNING id`, submodelElement.GetSemanticId().Type).Scan(&id)
 		if err != nil {

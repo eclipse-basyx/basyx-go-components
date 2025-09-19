@@ -24,7 +24,7 @@ type MultiLanguageProperty struct {
 
 	ModelType string `json:"modelType" validate:"regexp=^MultiLanguageProperty$"`
 
-	SemanticId Reference `json:"semanticId,omitempty"`
+	SemanticId *Reference `json:"semanticId,omitempty"`
 
 	SupplementalSemanticIds []Reference `json:"supplementalSemanticIds,omitempty"`
 
@@ -34,7 +34,7 @@ type MultiLanguageProperty struct {
 
 	Value []LangStringTextType `json:"value,omitempty"`
 
-	ValueId Reference `json:"valueId,omitempty"`
+	ValueId *Reference `json:"valueId,omitempty"`
 }
 
 // Getters
@@ -62,7 +62,7 @@ func (a MultiLanguageProperty) GetModelType() string {
 	return a.ModelType
 }
 
-func (a MultiLanguageProperty) GetSemanticId() Reference {
+func (a MultiLanguageProperty) GetSemanticId() *Reference {
 	return a.SemanticId
 }
 
@@ -104,7 +104,7 @@ func (a *MultiLanguageProperty) SetDescription(v []LangStringTextType) {
 	a.Description = v
 }
 
-func (a *MultiLanguageProperty) SetSemanticId(v Reference) {
+func (a *MultiLanguageProperty) SetSemanticId(v *Reference) {
 	a.SemanticId = v
 }
 
@@ -149,7 +149,7 @@ func AssertMultiLanguagePropertyRequired(obj MultiLanguageProperty) error {
 			return err
 		}
 	}
-	if err := AssertReferenceRequired(obj.SemanticId); err != nil {
+	if err := AssertReferenceRequired(*obj.SemanticId); err != nil {
 		return err
 	}
 	for _, el := range obj.SupplementalSemanticIds {
@@ -172,7 +172,7 @@ func AssertMultiLanguagePropertyRequired(obj MultiLanguageProperty) error {
 			return err
 		}
 	}
-	if err := AssertReferenceRequired(obj.ValueId); err != nil {
+	if err := AssertReferenceRequired(*obj.ValueId); err != nil {
 		return err
 	}
 	return nil
@@ -198,7 +198,7 @@ func AssertMultiLanguagePropertyConstraints(obj MultiLanguageProperty) error {
 			return err
 		}
 	}
-	if err := AssertReferenceConstraints(obj.SemanticId); err != nil {
+	if err := AssertReferenceConstraints(*obj.SemanticId); err != nil {
 		return err
 	}
 	for _, el := range obj.SupplementalSemanticIds {
@@ -221,7 +221,7 @@ func AssertMultiLanguagePropertyConstraints(obj MultiLanguageProperty) error {
 			return err
 		}
 	}
-	if err := AssertReferenceConstraints(obj.ValueId); err != nil {
+	if err := AssertReferenceConstraints(*obj.ValueId); err != nil {
 		return err
 	}
 	return nil

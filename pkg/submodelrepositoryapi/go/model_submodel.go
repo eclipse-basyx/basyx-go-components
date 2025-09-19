@@ -12,7 +12,6 @@
 package openapi
 
 type Submodel struct {
-
 	Extensions []Extension `json:"extensions,omitempty"`
 
 	Category string `json:"category,omitempty" validate:"regexp=^([\\\\x09\\\\x0a\\\\x0d\\\\x20-\\\\ud7ff\\\\ue000-\\\\ufffd]|\\\\ud800[\\\\udc00-\\\\udfff]|[\\\\ud801-\\\\udbfe][\\\\udc00-\\\\udfff]|\\\\udbff[\\\\udc00-\\\\udfff])*$"`
@@ -31,7 +30,7 @@ type Submodel struct {
 
 	Kind ModellingKind `json:"kind,omitempty"`
 
-	SemanticId Reference `json:"semanticId,omitempty"`
+	SemanticId *Reference `json:"semanticId,omitempty"`
 
 	SupplementalSemanticIds []Reference `json:"supplementalSemanticIds,omitempty"`
 
@@ -46,7 +45,7 @@ type Submodel struct {
 func AssertSubmodelRequired(obj Submodel) error {
 	elements := map[string]interface{}{
 		"modelType": obj.ModelType,
-		"id": obj.Id,
+		"id":        obj.Id,
 	}
 	for name, el := range elements {
 		if isZero := IsZeroValue(el); isZero {
@@ -75,7 +74,7 @@ func AssertSubmodelRequired(obj Submodel) error {
 	if err := AssertAdministrativeInformationRequired(obj.Administration); err != nil {
 		return err
 	}
-	if err := AssertReferenceRequired(obj.SemanticId); err != nil {
+	if err := AssertReferenceRequired(*obj.SemanticId); err != nil {
 		return err
 	}
 	for _, el := range obj.SupplementalSemanticIds {
@@ -124,7 +123,7 @@ func AssertSubmodelConstraints(obj Submodel) error {
 	if err := AssertAdministrativeInformationConstraints(obj.Administration); err != nil {
 		return err
 	}
-	if err := AssertReferenceConstraints(obj.SemanticId); err != nil {
+	if err := AssertReferenceConstraints(*obj.SemanticId); err != nil {
 		return err
 	}
 	for _, el := range obj.SupplementalSemanticIds {

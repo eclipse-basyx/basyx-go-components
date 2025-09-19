@@ -11,11 +11,7 @@
 
 package openapi
 
-
-
-
 type DataElementChoice struct {
-
 	Extensions []Extension `json:"extensions,omitempty"`
 
 	Category string `json:"category,omitempty"`
@@ -28,7 +24,7 @@ type DataElementChoice struct {
 
 	ModelType string `json:"modelType"`
 
-	SemanticId Reference `json:"semanticId,omitempty"`
+	SemanticId *Reference `json:"semanticId,omitempty"`
 
 	SupplementalSemanticIds []Reference `json:"supplementalSemanticIds,omitempty"`
 
@@ -40,7 +36,7 @@ type DataElementChoice struct {
 
 	ContentType FileAllOfContentType `json:"contentType"`
 
-	ValueId Reference `json:"valueId,omitempty"`
+	ValueId *Reference `json:"valueId,omitempty"`
 
 	ValueType DataTypeDefXsd `json:"valueType"`
 
@@ -52,9 +48,9 @@ type DataElementChoice struct {
 // AssertDataElementChoiceRequired checks if the required fields are not zero-ed
 func AssertDataElementChoiceRequired(obj DataElementChoice) error {
 	elements := map[string]interface{}{
-		"modelType": obj.ModelType,
+		"modelType":   obj.ModelType,
 		"contentType": obj.ContentType,
-		"valueType": obj.ValueType,
+		"valueType":   obj.ValueType,
 	}
 	for name, el := range elements {
 		if isZero := IsZeroValue(el); isZero {
@@ -80,7 +76,7 @@ func AssertDataElementChoiceRequired(obj DataElementChoice) error {
 			return err
 		}
 	}
-	if err := AssertReferenceRequired(obj.SemanticId); err != nil {
+	if err := AssertReferenceRequired(*obj.SemanticId); err != nil {
 		return err
 	}
 	for _, el := range obj.SupplementalSemanticIds {
@@ -104,7 +100,7 @@ func AssertDataElementChoiceRequired(obj DataElementChoice) error {
 	if err := AssertFileAllOfContentTypeRequired(obj.ContentType); err != nil {
 		return err
 	}
-	if err := AssertReferenceRequired(obj.ValueId); err != nil {
+	if err := AssertReferenceRequired(*obj.ValueId); err != nil {
 		return err
 	}
 	return nil
@@ -130,7 +126,7 @@ func AssertDataElementChoiceConstraints(obj DataElementChoice) error {
 			return err
 		}
 	}
-	if err := AssertReferenceConstraints(obj.SemanticId); err != nil {
+	if err := AssertReferenceConstraints(*obj.SemanticId); err != nil {
 		return err
 	}
 	for _, el := range obj.SupplementalSemanticIds {
@@ -154,7 +150,7 @@ func AssertDataElementChoiceConstraints(obj DataElementChoice) error {
 	if err := AssertFileAllOfContentTypeConstraints(obj.ContentType); err != nil {
 		return err
 	}
-	if err := AssertReferenceConstraints(obj.ValueId); err != nil {
+	if err := AssertReferenceConstraints(*obj.ValueId); err != nil {
 		return err
 	}
 	return nil

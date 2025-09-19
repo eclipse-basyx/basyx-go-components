@@ -11,11 +11,7 @@
 
 package openapi
 
-
-
-
 type SubmodelElementListMetadata struct {
-
 	OrderRelevant bool `json:"orderRelevant,omitempty"`
 
 	SemanticIdListElement Reference `json:"semanticIdListElement,omitempty"`
@@ -38,7 +34,7 @@ type SubmodelElementListMetadata struct {
 
 	EmbeddedDataSpecifications []EmbeddedDataSpecification `json:"embeddedDataSpecifications,omitempty"`
 
-	SemanticId Reference `json:"semanticId,omitempty"`
+	SemanticId *Reference `json:"semanticId,omitempty"`
 
 	SupplementalSemanticIds []Reference `json:"supplementalSemanticIds,omitempty"`
 
@@ -84,7 +80,7 @@ func AssertSubmodelElementListMetadataRequired(obj SubmodelElementListMetadata) 
 			return err
 		}
 	}
-	if err := AssertReferenceRequired(obj.SemanticId); err != nil {
+	if err := AssertReferenceRequired(*obj.SemanticId); err != nil {
 		return err
 	}
 	for _, el := range obj.SupplementalSemanticIds {
@@ -128,7 +124,7 @@ func AssertSubmodelElementListMetadataConstraints(obj SubmodelElementListMetadat
 			return err
 		}
 	}
-	if err := AssertReferenceConstraints(obj.SemanticId); err != nil {
+	if err := AssertReferenceConstraints(*obj.SemanticId); err != nil {
 		return err
 	}
 	for _, el := range obj.SupplementalSemanticIds {

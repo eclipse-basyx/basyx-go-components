@@ -24,7 +24,7 @@ type AnnotatedRelationshipElement struct {
 
 	ModelType string `json:"modelType" validate:"regexp=^AnnotatedRelationshipElement$"`
 
-	SemanticId Reference `json:"semanticId,omitempty"`
+	SemanticId *Reference `json:"semanticId,omitempty"`
 
 	SupplementalSemanticIds []Reference `json:"supplementalSemanticIds,omitempty"`
 
@@ -64,7 +64,7 @@ func (a AnnotatedRelationshipElement) GetModelType() string {
 	return a.ModelType
 }
 
-func (a AnnotatedRelationshipElement) GetSemanticId() Reference {
+func (a AnnotatedRelationshipElement) GetSemanticId() *Reference {
 	return a.SemanticId
 }
 
@@ -116,7 +116,7 @@ func (a *AnnotatedRelationshipElement) SetDescription(v []LangStringTextType) {
 	a.Description = v
 }
 
-func (a *AnnotatedRelationshipElement) SetSemanticId(v Reference) {
+func (a *AnnotatedRelationshipElement) SetSemanticId(v *Reference) {
 	a.SemanticId = v
 }
 
@@ -172,7 +172,7 @@ func AssertAnnotatedRelationshipElementRequired(obj AnnotatedRelationshipElement
 			return err
 		}
 	}
-	if err := AssertReferenceRequired(obj.SemanticId); err != nil {
+	if err := AssertReferenceRequired(*obj.SemanticId); err != nil {
 		return err
 	}
 	for _, el := range obj.SupplementalSemanticIds {
@@ -224,7 +224,7 @@ func AssertAnnotatedRelationshipElementConstraints(obj AnnotatedRelationshipElem
 			return err
 		}
 	}
-	if err := AssertReferenceConstraints(obj.SemanticId); err != nil {
+	if err := AssertReferenceConstraints(*obj.SemanticId); err != nil {
 		return err
 	}
 	for _, el := range obj.SupplementalSemanticIds {

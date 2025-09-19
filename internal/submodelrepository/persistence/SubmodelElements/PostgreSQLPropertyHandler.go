@@ -128,7 +128,7 @@ func insertProperty(property *gen.Property, err error, tx *sql.Tx, id int) error
 	}
 
 	// Handle valueId if present
-	if len(property.ValueId.Keys) > 0 && property.ValueId.Keys[0].Value != "" {
+	if property.ValueId != nil && len(property.ValueId.Keys) > 0 && property.ValueId.Keys[0].Value != "" {
 		// Assuming ValueId references another element by ID - you may need to adjust this logic
 		valueId = sql.NullInt64{Int64: 0, Valid: false} // Implement proper ID resolution here
 	}

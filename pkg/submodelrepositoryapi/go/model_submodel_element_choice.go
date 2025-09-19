@@ -11,11 +11,7 @@
 
 package openapi
 
-
-
-
 type SubmodelElementChoice struct {
-
 	Extensions []Extension `json:"extensions,omitempty"`
 
 	Category string `json:"category,omitempty"`
@@ -28,7 +24,7 @@ type SubmodelElementChoice struct {
 
 	ModelType string `json:"modelType"`
 
-	SemanticId Reference `json:"semanticId,omitempty"`
+	SemanticId *Reference `json:"semanticId,omitempty"`
 
 	SupplementalSemanticIds []Reference `json:"supplementalSemanticIds,omitempty"`
 
@@ -70,7 +66,7 @@ type SubmodelElementChoice struct {
 
 	SpecificAssetIds []SpecificAssetId `json:"specificAssetIds,omitempty"`
 
-	ValueId Reference `json:"valueId,omitempty"`
+	ValueId *Reference `json:"valueId,omitempty"`
 
 	InputVariables []OperationVariable `json:"inputVariables,omitempty"`
 
@@ -96,15 +92,15 @@ type SubmodelElementChoice struct {
 // AssertSubmodelElementChoiceRequired checks if the required fields are not zero-ed
 func AssertSubmodelElementChoiceRequired(obj SubmodelElementChoice) error {
 	elements := map[string]interface{}{
-		"modelType": obj.ModelType,
-		"first": obj.First,
-		"second": obj.Second,
-		"observed": obj.Observed,
-		"direction": obj.Direction,
-		"state": obj.State,
-		"contentType": obj.ContentType,
-		"entityType": obj.EntityType,
-		"valueType": obj.ValueType,
+		"modelType":            obj.ModelType,
+		"first":                obj.First,
+		"second":               obj.Second,
+		"observed":             obj.Observed,
+		"direction":            obj.Direction,
+		"state":                obj.State,
+		"contentType":          obj.ContentType,
+		"entityType":           obj.EntityType,
+		"valueType":            obj.ValueType,
 		"typeValueListElement": obj.TypeValueListElement,
 	}
 	for name, el := range elements {
@@ -131,7 +127,7 @@ func AssertSubmodelElementChoiceRequired(obj SubmodelElementChoice) error {
 			return err
 		}
 	}
-	if err := AssertReferenceRequired(obj.SemanticId); err != nil {
+	if err := AssertReferenceRequired(*obj.SemanticId); err != nil {
 		return err
 	}
 	for _, el := range obj.SupplementalSemanticIds {
@@ -184,7 +180,7 @@ func AssertSubmodelElementChoiceRequired(obj SubmodelElementChoice) error {
 			return err
 		}
 	}
-	if err := AssertReferenceRequired(obj.ValueId); err != nil {
+	if err := AssertReferenceRequired(*obj.ValueId); err != nil {
 		return err
 	}
 	for _, el := range obj.InputVariables {
@@ -228,7 +224,7 @@ func AssertSubmodelElementChoiceConstraints(obj SubmodelElementChoice) error {
 			return err
 		}
 	}
-	if err := AssertReferenceConstraints(obj.SemanticId); err != nil {
+	if err := AssertReferenceConstraints(*obj.SemanticId); err != nil {
 		return err
 	}
 	for _, el := range obj.SupplementalSemanticIds {
@@ -281,7 +277,7 @@ func AssertSubmodelElementChoiceConstraints(obj SubmodelElementChoice) error {
 			return err
 		}
 	}
-	if err := AssertReferenceConstraints(obj.ValueId); err != nil {
+	if err := AssertReferenceConstraints(*obj.ValueId); err != nil {
 		return err
 	}
 	for _, el := range obj.InputVariables {

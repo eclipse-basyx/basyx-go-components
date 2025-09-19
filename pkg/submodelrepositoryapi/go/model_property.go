@@ -25,7 +25,7 @@ type Property struct {
 
 	ModelType string `json:"modelType" validate:"regexp=^Property$"`
 
-	SemanticId Reference `json:"semanticId,omitempty"`
+	SemanticId *Reference `json:"semanticId,omitempty"`
 
 	SupplementalSemanticIds []Reference `json:"supplementalSemanticIds,omitempty"`
 
@@ -37,7 +37,7 @@ type Property struct {
 
 	Value string `json:"value,omitempty"`
 
-	ValueId Reference `json:"valueId,omitempty"`
+	ValueId *Reference `json:"valueId,omitempty"`
 }
 
 // Constructor
@@ -68,7 +68,7 @@ func (p Property) GetModelType() string {
 	return p.ModelType
 }
 
-func (p Property) GetSemanticId() Reference {
+func (p Property) GetSemanticId() *Reference {
 	return p.SemanticId
 }
 
@@ -96,7 +96,7 @@ func (p Property) GetValue() string {
 	return p.Value
 }
 
-func (p Property) GetValueId() Reference {
+func (p Property) GetValueId() *Reference {
 	return p.ValueId
 }
 
@@ -120,7 +120,7 @@ func (p *Property) SetDescription(description []LangStringTextType) {
 	p.Description = description
 }
 
-func (p *Property) SetSemanticId(semanticId Reference) {
+func (p *Property) SetSemanticId(semanticId *Reference) {
 	p.SemanticId = semanticId
 }
 
@@ -170,8 +170,10 @@ func AssertPropertyRequired(obj Property) error {
 			return err
 		}
 	}
-	if err := AssertReferenceRequired(obj.SemanticId); err != nil {
-		return err
+	if obj.SemanticId != nil {
+		if err := AssertReferenceRequired(*obj.SemanticId); err != nil {
+			return err
+		}
 	}
 	for _, el := range obj.SupplementalSemanticIds {
 		if err := AssertReferenceRequired(el); err != nil {
@@ -188,8 +190,10 @@ func AssertPropertyRequired(obj Property) error {
 			return err
 		}
 	}
-	if err := AssertReferenceRequired(obj.ValueId); err != nil {
-		return err
+	if obj.ValueId != nil {
+		if err := AssertReferenceRequired(*obj.ValueId); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -214,8 +218,10 @@ func AssertPropertyConstraints(obj Property) error {
 			return err
 		}
 	}
-	if err := AssertReferenceConstraints(obj.SemanticId); err != nil {
-		return err
+	if obj.SemanticId != nil {
+		if err := AssertReferenceConstraints(*obj.SemanticId); err != nil {
+			return err
+		}
 	}
 	for _, el := range obj.SupplementalSemanticIds {
 		if err := AssertReferenceConstraints(el); err != nil {
@@ -232,8 +238,10 @@ func AssertPropertyConstraints(obj Property) error {
 			return err
 		}
 	}
-	if err := AssertReferenceConstraints(obj.ValueId); err != nil {
-		return err
+	if obj.ValueId != nil {
+		if err := AssertReferenceConstraints(*obj.ValueId); err != nil {
+			return err
+		}
 	}
 	return nil
 }

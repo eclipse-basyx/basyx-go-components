@@ -12,7 +12,6 @@
 package openapi
 
 type SpecificAssetId struct {
-
 	SemanticId *Reference `json:"semanticId,omitempty"`
 
 	SupplementalSemanticIds []Reference `json:"supplementalSemanticIds,omitempty"`
@@ -27,7 +26,7 @@ type SpecificAssetId struct {
 // AssertSpecificAssetIdRequired checks if the required fields are not zero-ed
 func AssertSpecificAssetIdRequired(obj SpecificAssetId) error {
 	elements := map[string]interface{}{
-		"name": obj.Name,
+		"name":  obj.Name,
 		"value": obj.Value,
 	}
 	for name, el := range elements {
@@ -36,7 +35,7 @@ func AssertSpecificAssetIdRequired(obj SpecificAssetId) error {
 		}
 	}
 
-	// if err := AssertReferenceRequired(obj.SemanticId); err != nil {
+	// if err := AssertReferenceRequired(*obj.SemanticId); err != nil {
 	// 	return err
 	// }
 	// for _, el := range obj.SupplementalSemanticIds {

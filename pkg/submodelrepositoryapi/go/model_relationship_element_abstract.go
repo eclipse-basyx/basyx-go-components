@@ -11,11 +11,7 @@
 
 package openapi
 
-
-
-
 type RelationshipElementAbstract struct {
-
 	Extensions []Extension `json:"extensions,omitempty"`
 
 	Category string `json:"category,omitempty" validate:"regexp=^([\\\\x09\\\\x0a\\\\x0d\\\\x20-\\\\ud7ff\\\\ue000-\\\\ufffd]|\\\\ud800[\\\\udc00-\\\\udfff]|[\\\\ud801-\\\\udbfe][\\\\udc00-\\\\udfff]|\\\\udbff[\\\\udc00-\\\\udfff])*$"`
@@ -28,7 +24,7 @@ type RelationshipElementAbstract struct {
 
 	ModelType ModelType `json:"modelType"`
 
-	SemanticId Reference `json:"semanticId,omitempty"`
+	SemanticId *Reference `json:"semanticId,omitempty"`
 
 	SupplementalSemanticIds []Reference `json:"supplementalSemanticIds,omitempty"`
 
@@ -45,8 +41,8 @@ type RelationshipElementAbstract struct {
 func AssertRelationshipElementAbstractRequired(obj RelationshipElementAbstract) error {
 	elements := map[string]interface{}{
 		"modelType": obj.ModelType,
-		"first": obj.First,
-		"second": obj.Second,
+		"first":     obj.First,
+		"second":    obj.Second,
 	}
 	for name, el := range elements {
 		if isZero := IsZeroValue(el); isZero {
@@ -72,7 +68,7 @@ func AssertRelationshipElementAbstractRequired(obj RelationshipElementAbstract) 
 			return err
 		}
 	}
-	if err := AssertReferenceRequired(obj.SemanticId); err != nil {
+	if err := AssertReferenceRequired(*obj.SemanticId); err != nil {
 		return err
 	}
 	for _, el := range obj.SupplementalSemanticIds {
@@ -119,7 +115,7 @@ func AssertRelationshipElementAbstractConstraints(obj RelationshipElementAbstrac
 			return err
 		}
 	}
-	if err := AssertReferenceConstraints(obj.SemanticId); err != nil {
+	if err := AssertReferenceConstraints(*obj.SemanticId); err != nil {
 		return err
 	}
 	for _, el := range obj.SupplementalSemanticIds {

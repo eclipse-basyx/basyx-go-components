@@ -11,12 +11,8 @@
 
 package openapi
 
-
-
-
 type Extension struct {
-
-	SemanticId Reference `json:"semanticId,omitempty"`
+	SemanticId *Reference `json:"semanticId,omitempty"`
 
 	SupplementalSemanticIds []Reference `json:"supplementalSemanticIds,omitempty"`
 
@@ -40,7 +36,7 @@ func AssertExtensionRequired(obj Extension) error {
 		}
 	}
 
-	if err := AssertReferenceRequired(obj.SemanticId); err != nil {
+	if err := AssertReferenceRequired(*obj.SemanticId); err != nil {
 		return err
 	}
 	for _, el := range obj.SupplementalSemanticIds {
@@ -58,7 +54,7 @@ func AssertExtensionRequired(obj Extension) error {
 
 // AssertExtensionConstraints checks if the values respects the defined constraints
 func AssertExtensionConstraints(obj Extension) error {
-	if err := AssertReferenceConstraints(obj.SemanticId); err != nil {
+	if err := AssertReferenceConstraints(*obj.SemanticId); err != nil {
 		return err
 	}
 	for _, el := range obj.SupplementalSemanticIds {

@@ -11,11 +11,7 @@
 
 package openapi
 
-
-
-
 type RangeMetadata struct {
-
 	ValueType DataTypeDefXsd `json:"valueType,omitempty"`
 
 	Extensions []Extension `json:"extensions,omitempty"`
@@ -32,7 +28,7 @@ type RangeMetadata struct {
 
 	EmbeddedDataSpecifications []EmbeddedDataSpecification `json:"embeddedDataSpecifications,omitempty"`
 
-	SemanticId Reference `json:"semanticId,omitempty"`
+	SemanticId *Reference `json:"semanticId,omitempty"`
 
 	SupplementalSemanticIds []Reference `json:"supplementalSemanticIds,omitempty"`
 
@@ -75,7 +71,7 @@ func AssertRangeMetadataRequired(obj RangeMetadata) error {
 			return err
 		}
 	}
-	if err := AssertReferenceRequired(obj.SemanticId); err != nil {
+	if err := AssertReferenceRequired(*obj.SemanticId); err != nil {
 		return err
 	}
 	for _, el := range obj.SupplementalSemanticIds {
@@ -116,7 +112,7 @@ func AssertRangeMetadataConstraints(obj RangeMetadata) error {
 			return err
 		}
 	}
-	if err := AssertReferenceConstraints(obj.SemanticId); err != nil {
+	if err := AssertReferenceConstraints(*obj.SemanticId); err != nil {
 		return err
 	}
 	for _, el := range obj.SupplementalSemanticIds {

@@ -24,7 +24,7 @@ type Blob struct {
 
 	ModelType string `json:"modelType" validate:"regexp=^Blob$"`
 
-	SemanticId Reference `json:"semanticId,omitempty"`
+	SemanticId *Reference `json:"semanticId,omitempty"`
 
 	SupplementalSemanticIds []Reference `json:"supplementalSemanticIds,omitempty"`
 
@@ -62,7 +62,7 @@ func (a Blob) GetModelType() string {
 	return a.ModelType
 }
 
-func (a Blob) GetSemanticId() Reference {
+func (a Blob) GetSemanticId() *Reference {
 	return a.SemanticId
 }
 
@@ -104,7 +104,7 @@ func (a *Blob) SetDescription(v []LangStringTextType) {
 	a.Description = v
 }
 
-func (a *Blob) SetSemanticId(v Reference) {
+func (a *Blob) SetSemanticId(v *Reference) {
 	a.SemanticId = v
 }
 
@@ -150,8 +150,10 @@ func AssertBlobRequired(obj Blob) error {
 			return err
 		}
 	}
-	if err := AssertReferenceRequired(obj.SemanticId); err != nil {
-		return err
+	if obj.SemanticId != nil {
+		if err := AssertReferenceRequired(*obj.SemanticId); err != nil {
+			return err
+		}
 	}
 	for _, el := range obj.SupplementalSemanticIds {
 		if err := AssertReferenceRequired(el); err != nil {
@@ -194,8 +196,10 @@ func AssertBlobConstraints(obj Blob) error {
 			return err
 		}
 	}
-	if err := AssertReferenceConstraints(obj.SemanticId); err != nil {
-		return err
+	if obj.SemanticId != nil {
+		if err := AssertReferenceConstraints(*obj.SemanticId); err != nil {
+			return err
+		}
 	}
 	for _, el := range obj.SupplementalSemanticIds {
 		if err := AssertReferenceConstraints(el); err != nil {

@@ -22,7 +22,7 @@ type SubmodelElement interface {
 	GetCategory() string
 	GetDisplayName() []LangStringNameType
 	GetDescription() []LangStringTextType
-	GetSemanticId() Reference
+	GetSemanticId() *Reference
 	GetSupplementalSemanticIds() []Reference
 	GetQualifiers() []Qualifier
 	GetEmbeddedDataSpecifications() []EmbeddedDataSpecification
@@ -33,7 +33,7 @@ type SubmodelElement interface {
 	SetCategory(string)
 	SetDisplayName([]LangStringNameType)
 	SetDescription([]LangStringTextType)
-	SetSemanticId(Reference)
+	SetSemanticId(*Reference)
 	SetSupplementalSemanticIds([]Reference)
 	SetQualifiers([]Qualifier)
 	SetEmbeddedDataSpecifications([]EmbeddedDataSpecification)
@@ -141,7 +141,7 @@ func AssertSubmodelElementRequired(obj SubmodelElement) error {
 			return err
 		}
 	}
-	if err := AssertReferenceRequired(obj.GetSemanticId()); err != nil {
+	if err := AssertReferenceRequired(*obj.GetSemanticId()); err != nil {
 		return err
 	}
 	for _, el := range obj.GetSupplementalSemanticIds() {
@@ -182,7 +182,7 @@ func AssertSubmodelElementConstraints(obj SubmodelElement) error {
 			return err
 		}
 	}
-	if err := AssertReferenceConstraints(obj.GetSemanticId()); err != nil {
+	if err := AssertReferenceConstraints(*obj.GetSemanticId()); err != nil {
 		return err
 	}
 	for _, el := range obj.GetSupplementalSemanticIds() {

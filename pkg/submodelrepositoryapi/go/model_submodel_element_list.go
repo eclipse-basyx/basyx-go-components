@@ -29,7 +29,7 @@ type SubmodelElementList struct {
 
 	ModelType string `json:"modelType" validate:"regexp=^SubmodelElementList$"`
 
-	SemanticId Reference `json:"semanticId,omitempty"`
+	SemanticId *Reference `json:"semanticId,omitempty"`
 
 	SupplementalSemanticIds []Reference `json:"supplementalSemanticIds,omitempty"`
 
@@ -104,7 +104,7 @@ func (a SubmodelElementList) GetModelType() string {
 	return a.ModelType
 }
 
-func (a SubmodelElementList) GetSemanticId() Reference {
+func (a SubmodelElementList) GetSemanticId() *Reference {
 	return a.SemanticId
 }
 
@@ -146,7 +146,7 @@ func (a *SubmodelElementList) SetDescription(v []LangStringTextType) {
 	a.Description = v
 }
 
-func (a *SubmodelElementList) SetSemanticId(v Reference) {
+func (a *SubmodelElementList) SetSemanticId(v *Reference) {
 	a.SemanticId = v
 }
 
@@ -192,7 +192,7 @@ func AssertSubmodelElementListRequired(obj SubmodelElementList) error {
 			return err
 		}
 	}
-	if err := AssertReferenceRequired(obj.SemanticId); err != nil {
+	if err := AssertReferenceRequired(*obj.SemanticId); err != nil {
 		return err
 	}
 	for _, el := range obj.SupplementalSemanticIds {
@@ -236,7 +236,7 @@ func AssertSubmodelElementListConstraints(obj SubmodelElementList) error {
 			return err
 		}
 	}
-	if err := AssertReferenceConstraints(obj.SemanticId); err != nil {
+	if err := AssertReferenceConstraints(*obj.SemanticId); err != nil {
 		return err
 	}
 	for _, el := range obj.SupplementalSemanticIds {

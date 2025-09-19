@@ -24,7 +24,7 @@ type Range struct {
 
 	ModelType string `json:"modelType" validate:"regexp=^Range$"`
 
-	SemanticId Reference `json:"semanticId,omitempty"`
+	SemanticId *Reference `json:"semanticId,omitempty"`
 
 	SupplementalSemanticIds []Reference `json:"supplementalSemanticIds,omitempty"`
 
@@ -64,7 +64,7 @@ func (a Range) GetModelType() string {
 	return a.ModelType
 }
 
-func (a Range) GetSemanticId() Reference {
+func (a Range) GetSemanticId() *Reference {
 	return a.SemanticId
 }
 
@@ -106,7 +106,7 @@ func (a *Range) SetDescription(v []LangStringTextType) {
 	a.Description = v
 }
 
-func (a *Range) SetSemanticId(v Reference) {
+func (a *Range) SetSemanticId(v *Reference) {
 	a.SemanticId = v
 }
 
@@ -152,7 +152,7 @@ func AssertRangeRequired(obj Range) error {
 			return err
 		}
 	}
-	if err := AssertReferenceRequired(obj.SemanticId); err != nil {
+	if err := AssertReferenceRequired(*obj.SemanticId); err != nil {
 		return err
 	}
 	for _, el := range obj.SupplementalSemanticIds {
@@ -193,7 +193,7 @@ func AssertRangeConstraints(obj Range) error {
 			return err
 		}
 	}
-	if err := AssertReferenceConstraints(obj.SemanticId); err != nil {
+	if err := AssertReferenceConstraints(*obj.SemanticId); err != nil {
 		return err
 	}
 	for _, el := range obj.SupplementalSemanticIds {

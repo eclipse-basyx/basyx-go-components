@@ -11,19 +11,15 @@
 
 package openapi
 
-
-
-
 type HasSemantics1 struct {
-
-	SemanticId Reference `json:"semanticId,omitempty"`
+	SemanticId *Reference `json:"semanticId,omitempty"`
 
 	SupplementalSemanticIds []Reference `json:"supplementalSemanticIds,omitempty"`
 }
 
 // AssertHasSemantics1Required checks if the required fields are not zero-ed
 func AssertHasSemantics1Required(obj HasSemantics1) error {
-	if err := AssertReferenceRequired(obj.SemanticId); err != nil {
+	if err := AssertReferenceRequired(*obj.SemanticId); err != nil {
 		return err
 	}
 	for _, el := range obj.SupplementalSemanticIds {
@@ -36,7 +32,7 @@ func AssertHasSemantics1Required(obj HasSemantics1) error {
 
 // AssertHasSemantics1Constraints checks if the values respects the defined constraints
 func AssertHasSemantics1Constraints(obj HasSemantics1) error {
-	if err := AssertReferenceConstraints(obj.SemanticId); err != nil {
+	if err := AssertReferenceConstraints(*obj.SemanticId); err != nil {
 		return err
 	}
 	for _, el := range obj.SupplementalSemanticIds {

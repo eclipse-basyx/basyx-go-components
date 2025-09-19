@@ -1,7 +1,14 @@
 [
     {
+        "method": "POST",
+        "endpoint": "http://localhost:5004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements",
+        "data": "postBody/postTopLevelProperty.json",
+        "expectedStatus": 201
+    },
+    {
         "method": "GET",
-        "endpoint": "http://localhost:5004/health",
-        "data": "expected/expectedHealthEndpoint.json"
+        "endpoint": "http://localhost:5004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/myTopLevelProperty",
+        "shouldMatch": "expected/expectedGetTopLevelProperty.json",
+        "expectedStatus": 200
     }
 ]
