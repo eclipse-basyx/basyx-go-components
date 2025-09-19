@@ -698,6 +698,9 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelElementByPathSubmodelRepo(c
 	println("Decoded Submodel Identifier: ", string(decodedSubmodelIdentifier))
 	sme, err := s.submodelBackend.GetSubmodelElement(string(decodedSubmodelIdentifier), idShortPath)
 	if err != nil {
+		if common.IsErrNotFound(err) {
+			return gen.Response(http.StatusNotFound, nil), err
+		}
 		return gen.Response(http.StatusInternalServerError, nil), err
 	}
 

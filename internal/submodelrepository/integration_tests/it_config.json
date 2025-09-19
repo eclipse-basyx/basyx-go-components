@@ -54,5 +54,17 @@
         "endpoint": "http://localhost:5004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/1.2.3.4.5.6[0]",
         "shouldMatch": "expected/expectedItemInListAfterDelete.json",
         "expectedStatus": 200
+    },
+    {
+        "context": "Delete Top Level Property",
+        "method": "DELETE",
+        "endpoint": "http://localhost:5004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/myTopLevelProperty",
+        "expectedStatus": 204
+    },
+    {
+        "context": "Get Deleted Top Level Property",
+        "method": "GET",
+        "endpoint": "http://localhost:5004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/myTopLevelProperty",
+        "expectedStatus": 404
     }
 ]

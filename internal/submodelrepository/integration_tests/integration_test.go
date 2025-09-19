@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	"testing"
 	"time"
 
@@ -138,14 +139,14 @@ func TestIntegration(t *testing.T) {
 // TestMain handles setup and teardown
 func TestMain(m *testing.M) {
 	// Setup: Start Docker Compose
-	// fmt.Println("Starting Docker Compose...")
-	// cmd := exec.Command("docker-compose", "-f", "docker_compose/docker_compose.yml", "up", "-d", "--build")
-	// cmd.Stdout = os.Stdout
-	// cmd.Stderr = os.Stderr
-	// if err := cmd.Run(); err != nil {
-	// 	fmt.Printf("Failed to start Docker Compose: %v\n", err)
-	// 	os.Exit(1)
-	// }
+	fmt.Println("Starting Docker Compose...")
+	cmd := exec.Command("docker", "compose", "-f", "docker_compose/docker_compose.yml", "up", "-d", "--build")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		fmt.Printf("Failed to start Docker Compose: %v\n", err)
+		os.Exit(1)
+	}
 
 	// Create DB Connection here
 	sql, err := sql.Open("postgres", "postgres://admin:admin123@127.0.0.1:5432/basyxTestDB?sslmode=disable")
@@ -156,7 +157,7 @@ func TestMain(m *testing.M) {
 	}
 
 	//wait for 5sec to ensure that the DB is ready
-	// time.Sleep(5 * time.Second)
+	time.Sleep(5 * time.Second)
 
 	dir, osErr := os.Getwd()
 
@@ -185,13 +186,13 @@ func TestMain(m *testing.M) {
 	code := m.Run()
 
 	// Teardown: Stop Docker Compose
-	// fmt.Println("Stopping Docker Compose...")
-	// cmd = exec.Command("docker-compose", "-f", "docker_compose/docker_compose.yml", "down")
-	// cmd.Stdout = os.Stdout
-	// cmd.Stderr = os.Stderr
-	// if err := cmd.Run(); err != nil {
-	// 	fmt.Printf("Failed to stop Docker Compose: %v\n", err)
-	// }
+	fmt.Println("Stopping Docker Compose...")
+	cmd = exec.Command("docker", "compose", "-f", "docker_compose/docker_compose.yml", "down")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		fmt.Printf("Failed to stop Docker Compose: %v\n", err)
+	}
 
 	os.Exit(code)
 }

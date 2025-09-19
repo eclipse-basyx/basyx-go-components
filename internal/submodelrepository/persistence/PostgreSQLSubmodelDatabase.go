@@ -9,6 +9,7 @@ import (
 
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	submodelelements "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/SubmodelElements"
 	gen "github.com/eclipse-basyx/basyx-go-components/pkg/submodelrepositoryapi/go"
 )
@@ -127,7 +128,7 @@ func (p *PostgreSQLSubmodelDatabase) GetSubmodelElement(submodelId string, idSho
 	}
 
 	if len(elements) == 0 {
-		return nil, sql.ErrNoRows
+		return nil, common.NewErrNotFound("SubmodelElement with idShort or path '" + idShortOrPath + "' not found in submodel '" + submodelId + "'")
 	}
 
 	if err := tx.Commit(); err != nil {
