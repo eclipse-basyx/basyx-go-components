@@ -8,4 +8,4 @@ postgres:
   port: 5432
   user: admin
   password: admin123
-  dbname: mydatabase
+  dbname: basyxTestDatabase

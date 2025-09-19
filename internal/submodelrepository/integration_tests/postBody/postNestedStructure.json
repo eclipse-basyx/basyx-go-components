@@ -1,0 +1,60 @@
+{
+    "idShort": "1",
+    "modelType": "SubmodelElementCollection",
+    "value": [
+        {
+            "idShort": "2",
+            "modelType": "SubmodelElementCollection",
+            "value": [
+                {
+                    "idShort": "3",
+                    "modelType": "SubmodelElementCollection",
+                    "value": [
+                        {
+                            "idShort": "4",
+                            "modelType": "SubmodelElementCollection",
+                            "value": [
+                                {
+                                    "idShort": "5",
+                                    "modelType": "SubmodelElementCollection",
+                                    "value": [
+                                        {
+                                            "idShort": "6",
+                                            "modelType": "SubmodelElementList",
+                                            "value": [
+                                                {
+                                                    "idShort": "1",
+                                                    "modelType": "Property",
+                                                    "valueType": "xs:string",
+                                                    "value": "1"
+                                                },
+                                                {
+                                                    "idShort": "2",
+                                                    "modelType": "Property",
+                                                    "valueType": "xs:string",
+                                                    "value": "12"
+                                                },
+                                                {
+                                                    "idShort": "3",
+                                                    "modelType": "Property",
+                                                    "valueType": "xs:string",
+                                                    "value": "123"
+                                                },
+                                                {
+                                                    "idShort": "4",
+                                                    "modelType": "Property",
+                                                    "valueType": "xs:string",
+                                                    "value": "1234"
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}

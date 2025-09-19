@@ -351,6 +351,26 @@ func (p *PostgreSQLSubmodelDatabase) AddNestedSubmodelElementsIteratively(tx *sq
 	return nil
 }
 
+// This method removes a SubmodelElement by its idShort or path and all its nested elements
+// If the deleted Element is in a SubmodelElementList, the indices of the remaining elements are adjusted accordingly
+func (p *PostgreSQLSubmodelDatabase) DeleteSubmodelElementByPath(submodelId string, idShortOrPath string) error {
+	tx, err := p.db.Begin()
+	if err != nil {
+		return err
+	}
+
+	defer func() {
+		if err != nil {
+			tx.Rollback()
+		}
+	}()
+	err = submodelelements.DeleteSubmodelElementByPath(tx, submodelId, idShortOrPath)
+	if err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
 func buildCurrentIdShortPath(current ElementToProcess) string {
 	var idShortPath string
 	if current.currentIdShortPath == "" {

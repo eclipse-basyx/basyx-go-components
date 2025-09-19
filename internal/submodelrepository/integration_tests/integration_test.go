@@ -65,6 +65,11 @@ func makeRequest(config TestConfig) (string, error) {
 				return "", err
 			}
 		}
+	case "DELETE":
+		req, err = http.NewRequest("DELETE", config.Endpoint, nil)
+		if err != nil {
+			return "", err
+		}
 	default:
 		return "", fmt.Errorf("unsupported method: %s", config.Method)
 	}

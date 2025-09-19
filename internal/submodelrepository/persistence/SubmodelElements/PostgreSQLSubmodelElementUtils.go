@@ -4,7 +4,9 @@ import (
 	"database/sql"
 	"errors"
 	"sort"
+	"strconv"
 
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/pkg/submodelrepositoryapi/go"
 )
 
@@ -350,7 +352,7 @@ func GetSubmodelElementsWithPath(tx *sql.Tx, submodelId string, idShortOrPath st
 			lst := &gen.SubmodelElementList{IdShort: idShort, Category: category, ModelType: modelType, Value: make([]gen.SubmodelElement, 0, 4)}
 			if typeValueListElement.Valid {
 				if tv, err := gen.NewAasSubmodelElementsFromValue(typeValueListElement.String); err == nil {
-					lst.TypeValueListElement = tv
+					lst.TypeValueListElement = &tv
 				}
 			}
 			if valueTypeListElement.Valid {
@@ -440,4 +442,57 @@ func GetSubmodelElementsWithPath(tx *sql.Tx, submodelId string, idShortOrPath st
 		res = append(res, r.element)
 	}
 	return res, nil
+}
+
+// This method removes a SubmodelElement by its idShort or path and all its nested elements
+// If the deleted Element is in a SubmodelElementList, the indices of the remaining elements are adjusted accordingly
+func DeleteSubmodelElementByPath(tx *sql.Tx, submodelId string, idShortOrPath string) error {
+	query := `DELETE FROM submodel_element WHERE submodel_id = $1 AND (idshort_path = $2 OR idshort_path LIKE $2 || '.%' OR idshort_path LIKE $2 || '[%')`
+	result, err := tx.Exec(query, submodelId, idShortOrPath)
+	if err != nil {
+		return err
+	}
+	affectedRows, err := result.RowsAffected()
+	//if idShortPath ends with ] it is part of a SubmodelElementList and we need to update the indices of the remaining elements
+	if idShortOrPath[len(idShortOrPath)-1] == ']' {
+		//extract the parent path and the index of the deleted element
+		var parentPath string
+		var deletedIndex int
+		for i := len(idShortOrPath) - 1; i >= 0; i-- {
+			if idShortOrPath[i] == '[' {
+				parentPath = idShortOrPath[:i]
+				indexStr := idShortOrPath[i+1 : len(idShortOrPath)-1]
+				var err error
+				deletedIndex, err = strconv.Atoi(indexStr)
+				if err != nil {
+					return err
+				}
+				break
+			}
+		}
+
+		//get the id of the parent SubmodelElementList
+		var parentId int
+		err = tx.QueryRow(`SELECT id FROM submodel_element WHERE submodel_id = $1 AND idshort_path = $2`, submodelId, parentPath).Scan(&parentId)
+		if err != nil {
+			return err
+		}
+
+		//update the indices of the remaining elements in the SubmodelElementList
+		updateQuery := `UPDATE submodel_element SET position = position - 1 WHERE parent_sme_id = $1 AND position > $2`
+		_, err = tx.Exec(updateQuery, parentId, deletedIndex)
+		if err != nil {
+			return err
+		}
+		// update their idshort_path as well
+		updatePathQuery := `UPDATE submodel_element SET idshort_path = regexp_replace(idshort_path, '\[' || (position + 1) || '\]', '[' || position || ']') WHERE parent_sme_id = $1 AND position >= $2`
+		_, err = tx.Exec(updatePathQuery, parentId, deletedIndex)
+		if err != nil {
+			return err
+		}
+	}
+	if affectedRows == 0 {
+		return common.NewErrNotFound("Submodel-Element ID-Short: " + idShortOrPath)
+	}
+	return nil
 }

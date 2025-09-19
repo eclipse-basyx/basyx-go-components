@@ -19,7 +19,8 @@ import (
 )
 
 func runServer(ctx context.Context, configPath string) error {
-
+	log.Default().Println("Loading Submodel Repository Service...")
+	log.Default().Println("Config Path:", configPath)
 	// Load configuration
 	config, err := LoadConfig(configPath)
 	if err != nil {
@@ -100,7 +101,11 @@ func runServer(ctx context.Context, configPath string) error {
 
 func main() {
 	ctx := context.Background()
-	if err := runServer(ctx, ""); err != nil {
+	//load config path from flag
+	configPath := ""
+	flag.StringVar(&configPath, "config", "", "Path to config file")
+	flag.Parse()
+	if err := runServer(ctx, configPath); err != nil {
 		log.Fatalf("Server error: %v", err)
 	}
 }

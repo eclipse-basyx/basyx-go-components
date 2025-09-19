@@ -19,6 +19,7 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	persistence "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence"
 	gen "github.com/eclipse-basyx/basyx-go-components/pkg/submodelrepositoryapi/go"
 )
@@ -801,7 +802,21 @@ func (s *SubmodelRepositoryAPIAPIService) DeleteSubmodelElementByPathSubmodelRep
 	// TODO: Uncomment the next line to return response Response(0, Result{}) or use other options such as http.Ok ...
 	// return gen.Response(0, Result{}), nil
 
-	return gen.Response(http.StatusNotImplemented, nil), errors.New("DeleteSubmodelElementByPathSubmodelRepo method not implemented")
+	decodedSubmodelIdentifier, decodeErr := base64.RawStdEncoding.DecodeString(submodelIdentifier)
+	if decodeErr != nil {
+		return gen.Response(http.StatusBadRequest, nil), decodeErr
+	}
+
+	println("Decoded Submodel Identifier: ", string(decodedSubmodelIdentifier))
+
+	if err := s.submodelBackend.DeleteSubmodelElementByPath(string(decodedSubmodelIdentifier), idShortPath); err != nil {
+		if common.IsErrNotFound(err) {
+			return gen.Response(http.StatusNotFound, nil), err
+		}
+		return gen.Response(http.StatusInternalServerError, nil), err
+	}
+
+	return gen.Response(http.StatusNoContent, nil), nil
 }
 
 // PatchSubmodelElementByPathSubmodelRepo - Updates an existing SubmodelElement

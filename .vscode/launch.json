@@ -17,7 +17,11 @@
             "type": "go",
             "request": "launch",
             "mode": "debug",
-            "program": "${workspaceFolder}/cmd/submodelrepositoryservice/main.go"
+            "program": "${workspaceFolder}/cmd/submodelrepositoryservice/main.go",
+            "args": [
+                "-config",
+                "${workspaceFolder}/cmd/submodelrepositoryservice/config.yaml"
+            ]
         }
     ]
 }

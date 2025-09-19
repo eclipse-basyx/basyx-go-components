@@ -39,9 +39,9 @@ type SubmodelElementList struct {
 
 	OrderRelevant bool `json:"orderRelevant,omitempty"`
 
-	SemanticIdListElement Reference `json:"semanticIdListElement,omitempty"`
+	SemanticIdListElement *Reference `json:"semanticIdListElement,omitempty"`
 
-	TypeValueListElement AasSubmodelElements `json:"typeValueListElement"`
+	TypeValueListElement *AasSubmodelElements `json:"typeValueListElement,omitempty"`
 
 	ValueTypeListElement DataTypeDefXsd `json:"valueTypeListElement,omitempty"`
 
@@ -210,7 +210,7 @@ func AssertSubmodelElementListRequired(obj SubmodelElementList) error {
 			return err
 		}
 	}
-	if err := AssertReferenceRequired(obj.SemanticIdListElement); err != nil {
+	if err := AssertReferenceRequired(*obj.SemanticIdListElement); err != nil {
 		return err
 	}
 	return nil
@@ -254,7 +254,7 @@ func AssertSubmodelElementListConstraints(obj SubmodelElementList) error {
 			return err
 		}
 	}
-	if err := AssertReferenceConstraints(obj.SemanticIdListElement); err != nil {
+	if err := AssertReferenceConstraints(*obj.SemanticIdListElement); err != nil {
 		return err
 	}
 	return nil
