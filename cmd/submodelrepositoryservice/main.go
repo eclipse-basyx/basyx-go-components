@@ -44,7 +44,7 @@ func runServer(ctx context.Context, configPath string) error {
 	// Add health endpoint
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("OK"))
+		w.Write([]byte("{\"status\":\"UP\"}"))
 	})
 
 	// Instantiate generated services & controllers
