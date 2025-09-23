@@ -1,0 +1,1 @@
+SELECT sme.id_short FROM submodel_element sme WHERE sme.submodel_id = 'http://iese.fraunhofer.de/id/sm/DemoSubmodel' AND sme.parent_sme_id IS NULL ORDER BY sme.id_short LIMIT 2

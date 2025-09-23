@@ -18,6 +18,7 @@ import (
 	"errors"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	persistence "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence"
@@ -504,15 +505,26 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelElements(ctx context.Con
 	}
 
 	println("Decoded Submodel Identifier: ", string(decodedSubmodelIdentifier))
-	sme, err := s.submodelBackend.GetSubmodelElements(string(decodedSubmodelIdentifier))
+	sme, cursor, err := s.submodelBackend.GetSubmodelElements(string(decodedSubmodelIdentifier), int(limit), cursor)
 	if err != nil {
 		if common.IsErrNotFound(err) {
-			return gen.Response(http.StatusNotFound, nil), err
+			timestamp := time.Now().Format(time.RFC3339)
+			return gen.Response(http.StatusNotFound, []common.ErrorHandler{*common.NewErrorHandler("Error", err, "404", "SMREPO-GetAllSubmodelElements-404-NotFound", string(timestamp))}), nil
+		}
+		if common.IsErrBadRequest(err) {
+			timestamp := time.Now().Format(time.RFC3339)
+			return gen.Response(http.StatusBadRequest, []common.ErrorHandler{*common.NewErrorHandler("Error", err, "400", "SMREPO-GetAllSubmodelElements-400-BadRequest", string(timestamp))}), nil
 		}
 		return gen.Response(http.StatusInternalServerError, nil), err
 	}
+	res := gen.GetSubmodelElementsResult{
+		PagingMetadata: gen.PagedResultPagingMetadata{
+			Cursor: cursor,
+		},
+		Result: sme,
+	}
 
-	return gen.Response(http.StatusOK, sme), nil
+	return gen.Response(http.StatusOK, res), nil
 }
 
 // PostSubmodelElementSubmodelRepo - Creates a new submodel element
@@ -707,7 +719,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelElementByPathSubmodelRepo(c
 	}
 
 	println("Decoded Submodel Identifier: ", string(decodedSubmodelIdentifier))
-	sme, err := s.submodelBackend.GetSubmodelElement(string(decodedSubmodelIdentifier), idShortPath)
+	sme, err := s.submodelBackend.GetSubmodelElement(string(decodedSubmodelIdentifier), idShortPath, 1, "")
 	if err != nil {
 		if common.IsErrNotFound(err) {
 			return gen.Response(http.StatusNotFound, nil), err

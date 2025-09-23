@@ -3,6 +3,7 @@ package submodelelements
 import (
 	"database/sql"
 	"errors"
+	"fmt"
 	"sort"
 	"strconv"
 
@@ -124,21 +125,55 @@ func GetSMEHandlerByModelType(modelType string, db *sql.DB) (PostgreSQLSMECrudIn
 // identified by idShortOrPath) in one query and reconstructs the hierarchy using parent_sme_id
 // (O(n)), avoiding expensive string parsing of idshort_path. It also minimizes allocations
 // by using integer IDs and on-the-fly child bucketing.
-func GetSubmodelElementsWithPath(tx *sql.Tx, submodelId string, idShortOrPath string) ([]gen.SubmodelElement, error) {
-
+func GetSubmodelElementsWithPath(tx *sql.Tx, submodelId string, idShortOrPath string, limit int, cursor string) ([]gen.SubmodelElement, string, error) {
+	if limit < 1 {
+		limit = 100
+	}
 	//Check if Submodel exists
 	sRows, err := tx.Query(`SELECT id FROM submodel WHERE id = $1`, submodelId)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	if !sRows.Next() {
-		return nil, common.NewErrNotFound("Submodel not found")
+		return nil, "", common.NewErrNotFound("Submodel not found")
 	}
 	sRows.Close()
 
-	// --- Build query ----------------------------------------------------------
-	// NOTE: we keep a single query, but order by parent first for better locality
-	// and easy root detection. We also drop joins we don't use (e.g. MultiLanguageProperty row id).
+	// Get OFFSET based on Cursor
+	offset := 0
+	if cursor != "" {
+		query := `SELECT ROW_NUMBER() OVER (ORDER BY id_short) AS position, id_short
+    FROM submodel_element
+    WHERE submodel_id = $1 AND parent_sme_id IS NULL`
+		cRows, err := tx.Query(query, submodelId)
+		if err != nil {
+			return nil, "", err
+		}
+		defer cRows.Close()
+		found := false
+		for cRows.Next() {
+			var position int
+			var idShort string
+			if err := cRows.Scan(&position, &idShort); err != nil {
+				return nil, "", err
+			}
+			if idShort == cursor {
+				found = true
+				offset = position
+				// Continue consuming all rows to avoid leftovers
+			}
+		}
+		if err := cRows.Err(); err != nil {
+			return nil, "", err
+		}
+		if !found {
+			return nil, "", common.NewErrBadRequest("Invalid cursor " + cursor)
+		}
+	}
+
+	// --- Build queries ----------------------------------------------------------
+	// Query A: Fetch all parent Submodel Element Id Shorts that need to be returned
+	// Query B: Fetch all needed Submodel Elements, then rebuild the structure
 	baseQuery := `
 		SELECT 
 			-- SME base
@@ -165,16 +200,45 @@ func GetSubmodelElementsWithPath(tx *sql.Tx, submodelId string, idShortOrPath st
 		WHERE sme.submodel_id = $1`
 
 	args := []any{submodelId}
+	pattern := ""
 	if idShortOrPath != "" {
-		baseQuery += ` AND (sme.idshort_path = $2 OR sme.idshort_path LIKE $2 || '.%' OR sme.idshort_path LIKE $2 || '[%')`
+		// Here we need no pagination because we are fetching a subtree
+		pattern = ` AND (sme.idshort_path = $2 OR sme.idshort_path LIKE $2 || '.%' OR sme.idshort_path LIKE $2 || '[%') ORDER BY sme.id_short`
 		args = append(args, idShortOrPath)
+	} else {
+		// Here we apply pagination (limit and cursor) -- cursor not implemented yet
+		pattern = ` ORDER BY sme.id_short OFFSET $2 LIMIT $3`
+		args = append(args, offset)
+		args = append(args, limit)
 	}
 
-	baseQuery += ` ORDER BY sme.parent_sme_id NULLS FIRST, sme.idshort_path, sme.position`
-
-	rows, err := tx.Query(baseQuery, args...)
+	// Query A: Fetch parent Id Shorts
+	queryA := `SELECT sme.id_short FROM submodel_element sme WHERE sme.submodel_id = $1 AND sme.parent_sme_id IS NULL` + pattern
+	fmt.Println(queryA, args)
+	rowsA, err := tx.Query(queryA, args...)
 	if err != nil {
-		return nil, err
+		return nil, "", err
+	}
+	defer rowsA.Close()
+
+	rootIdShorts := make(map[string]bool)
+	for rowsA.Next() {
+		var idShort string
+		if err := rowsA.Scan(&idShort); err != nil {
+			return nil, "", err
+		}
+		rootIdShorts[idShort] = true
+	}
+	if err := rowsA.Err(); err != nil {
+		return nil, "", err
+	}
+
+	// Query B: Fetch all needed Submodel Elements
+	// queryB := baseQuery + pattern + ` ORDER BY sme.parent_sme_id NULLS FIRST, sme.idshort_path, sme.position`
+	queryB := baseQuery + ` ORDER BY sme.parent_sme_id NULLS FIRST, sme.idshort_path, sme.position`
+	rows, err := tx.Query(queryB, submodelId)
+	if err != nil {
+		return nil, "", err
 	}
 	defer rows.Close()
 
@@ -222,7 +286,7 @@ func GetSubmodelElementsWithPath(tx *sql.Tx, submodelId string, idShortOrPath st
 			&rangeValueType, &rangeMin, &rangeMax,
 			&typeValueListElement, &valueTypeListElement, &orderRelevant,
 		); err != nil {
-			return nil, err
+			return nil, "", err
 		}
 
 		// Materialize the concrete element based on modelType (no reflection)
@@ -321,7 +385,9 @@ func GetSubmodelElementsWithPath(tx *sql.Tx, submodelId string, idShortOrPath st
 			pid := parentSmeID.Int64
 			children[pid] = append(children[pid], n)
 		} else {
-			roots = append(roots, n)
+			if rootIdShorts[idShort] {
+				roots = append(roots, n)
+			}
 		}
 
 		if idShortOrPath != "" && idShortPath == idShortOrPath {
@@ -329,7 +395,7 @@ func GetSubmodelElementsWithPath(tx *sql.Tx, submodelId string, idShortOrPath st
 		}
 	}
 	if err := rows.Err(); err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
 	// --- Attach children (O(n)) ----------------------------------------------
@@ -372,14 +438,19 @@ func GetSubmodelElementsWithPath(tx *sql.Tx, submodelId string, idShortOrPath st
 
 	// --- Build result ---------------------------------------------------------
 	if idShortOrPath != "" && target != nil {
-		return []gen.SubmodelElement{target.element}, nil
+		return []gen.SubmodelElement{target.element}, "", nil
 	}
 
 	res := make([]gen.SubmodelElement, 0, len(roots))
 	for _, r := range roots {
 		res = append(res, r.element)
 	}
-	return res, nil
+
+	if len(res) == 0 {
+		return res, "", nil
+	}
+	// return idShort of last element in res as next cursor
+	return res, res[len(res)-1].GetIdShort(), nil
 }
 
 // This method removes a SubmodelElement by its idShort or path and all its nested elements

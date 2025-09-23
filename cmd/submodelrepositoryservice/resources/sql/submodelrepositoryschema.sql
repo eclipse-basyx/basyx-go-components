@@ -313,3 +313,16 @@ CREATE INDEX IF NOT EXISTS ix_qual_num       ON qualifier(value_num)
   WHERE value_type IN ('xs:decimal','xs:double','xs:float','xs:int','xs:integer','xs:long','xs:short');
 CREATE INDEX IF NOT EXISTS ix_qual_text_trgm ON qualifier USING GIN (value_text gin_trgm_ops)
   WHERE value_type = 'xs:string';
+
+ALTER TABLE submodel_element
+  ADD COLUMN IF NOT EXISTS depth INTEGER;
+
+CREATE INDEX IF NOT EXISTS ix_sme_sub_parent  ON submodel_element (submodel_id, parent_sme_id);
+CREATE INDEX IF NOT EXISTS ix_sme_sub_depth   ON submodel_element (submodel_id, depth);
+CREATE INDEX IF NOT EXISTS ix_sme_roots_order
+  ON submodel_element (submodel_id,
+                       (CASE WHEN position IS NULL THEN 1 ELSE 0 END),  -- NULLS LAST
+                       position,
+                       idshort_path,
+                       id)
+  WHERE parent_sme_id IS NULL;

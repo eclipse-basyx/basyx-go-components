@@ -50,12 +50,13 @@ func NewPostgreSQLSubmodelBackend(dsn string) (*PostgreSQLSubmodelDatabase, erro
 
 // GetAllSubmodels returns a page of Submodels and a next cursor ("" if no more pages).
 func (p *PostgreSQLSubmodelDatabase) GetAllSubmodels(limit int32, cursor string, idShort string) ([]gen.Submodel, string, error) {
-	if limit <= 0 || limit > 1000 {
-		limit = 25
+	if limit <= 0 {
+		limit = 100
 	}
 
 	// Keyset pagination: start after the cursor (last seen id).
 	// Simple filter by idShort; leave semanticId/level/extent for later.
+	// TODO: Base64 De-/En coding of Cursor
 	const q = `
         SELECT id, id_short, category, kind, 'Submodel' AS model_type
         FROM submodel
@@ -141,7 +142,7 @@ func (p *PostgreSQLSubmodelDatabase) CreateSubmodel(m gen.Submodel) (string, err
 	return m.Id, err
 }
 
-func (p *PostgreSQLSubmodelDatabase) GetSubmodelElement(submodelId string, idShortOrPath string) (gen.SubmodelElement, error) {
+func (p *PostgreSQLSubmodelDatabase) GetSubmodelElement(submodelId string, idShortOrPath string, limit int, cursor string) (gen.SubmodelElement, error) {
 	tx, err := p.db.Begin()
 	if err != nil {
 		return nil, err
@@ -152,7 +153,7 @@ func (p *PostgreSQLSubmodelDatabase) GetSubmodelElement(submodelId string, idSho
 		}
 	}()
 
-	elements, err := submodelelements.GetSubmodelElementsWithPath(tx, submodelId, idShortOrPath)
+	elements, _, err := submodelelements.GetSubmodelElementsWithPath(tx, submodelId, idShortOrPath, limit, cursor)
 	if err != nil {
 		return nil, err
 	}
@@ -168,10 +169,10 @@ func (p *PostgreSQLSubmodelDatabase) GetSubmodelElement(submodelId string, idSho
 	return elements[0], nil
 }
 
-func (p *PostgreSQLSubmodelDatabase) GetSubmodelElements(submodelId string) ([]gen.SubmodelElement, error) {
+func (p *PostgreSQLSubmodelDatabase) GetSubmodelElements(submodelId string, limit int, cursor string) ([]gen.SubmodelElement, string, error) {
 	tx, err := p.db.Begin()
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	defer func() {
 		if err != nil {
@@ -179,16 +180,16 @@ func (p *PostgreSQLSubmodelDatabase) GetSubmodelElements(submodelId string) ([]g
 		}
 	}()
 
-	elements, err := submodelelements.GetSubmodelElementsWithPath(tx, submodelId, "")
+	elements, cursor, err := submodelelements.GetSubmodelElementsWithPath(tx, submodelId, "", limit, cursor)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
 	if err := tx.Commit(); err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
-	return elements, nil
+	return elements, cursor, nil
 }
 
 func (p *PostgreSQLSubmodelDatabase) AddSubmodelElementWithPath(submodelId string, idShortPath string, submodelElement gen.SubmodelElement) error {

@@ -11,14 +11,10 @@
 
 package openapi
 
-
-
-
 type GetSubmodelElementsResult struct {
-
 	PagingMetadata PagedResultPagingMetadata `json:"paging_metadata,omitempty"`
 
-	Result []SubmodelElement `json:"result,omitempty"`
+	Result []SubmodelElement `json:"result"`
 }
 
 // AssertGetSubmodelElementsResultRequired checks if the required fields are not zero-ed
