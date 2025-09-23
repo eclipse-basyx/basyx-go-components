@@ -48,11 +48,19 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodels(
 	level string,
 	extent string,
 ) (gen.ImplResponse, error) {
-	sms, err := s.submodelBackend.GetAllSubmodels()
+	sms, nextCursor, err := s.submodelBackend.GetAllSubmodels(limit, cursor, idShort)
 	if err != nil {
 		return gen.Response(500, nil), err
 	}
-	return gen.Response(200, sms), nil
+
+	// OpenAPI-compliant envelope: { paging_metadata: {cursor}, result: [...] }
+	res := gen.GetSubmodelsResult{
+		PagingMetadata: gen.PagedResultPagingMetadata{
+			Cursor: nextCursor,
+		},
+		Result: sms,
+	}
+	return gen.Response(200, res), nil
 }
 
 // for getSubModel by id
