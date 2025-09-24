@@ -3,7 +3,6 @@ package submodelelements
 import (
 	"database/sql"
 	"errors"
-	"fmt"
 	"sort"
 	"strconv"
 
@@ -171,72 +170,68 @@ func GetSubmodelElementsWithPath(tx *sql.Tx, submodelId string, idShortOrPath st
 		}
 	}
 
-	// --- Build queries ----------------------------------------------------------
-	// Query A: Fetch all parent Submodel Element Id Shorts that need to be returned
-	// Query B: Fetch all needed Submodel Elements, then rebuild the structure
-	baseQuery := `
-		SELECT 
-			-- SME base
-			sme.id, sme.id_short, sme.category, sme.model_type, sme.idshort_path, sme.position, sme.parent_sme_id,
-			-- Property data
-			prop.value_type as prop_value_type,
-			COALESCE(prop.value_text, prop.value_num::text, prop.value_bool::text, prop.value_time::text, prop.value_datetime::text) as prop_value,
-			-- Blob data
-			blob.content_type as blob_content_type, blob.value as blob_value,
-			-- File data
-			file.content_type as file_content_type, file.value as file_value,
-			-- Range data
-			range_elem.value_type as range_value_type,
-			COALESCE(range_elem.min_text, range_elem.min_num::text, range_elem.min_time::text, range_elem.min_datetime::text) as range_min,
-			COALESCE(range_elem.max_text, range_elem.max_num::text, range_elem.max_time::text, range_elem.max_datetime::text) as range_max,
-			-- SubmodelElementList data
-			sme_list.type_value_list_element, sme_list.value_type_list_element, sme_list.order_relevant
-		FROM submodel_element sme
-		LEFT JOIN property_element prop ON sme.id = prop.id
-		LEFT JOIN blob_element blob ON sme.id = blob.id
-		LEFT JOIN file_element file ON sme.id = file.id
-		LEFT JOIN range_element range_elem ON sme.id = range_elem.id
-		LEFT JOIN submodel_element_list sme_list ON sme.id = sme_list.id
-		WHERE sme.submodel_id = $1`
-
+	// --- Build the unified query with CTE ----------------------------------------------------------
+	var cte string
 	args := []any{submodelId}
-	pattern := ""
 	if idShortOrPath != "" {
-		// Here we need no pagination because we are fetching a subtree
-		pattern = ` AND (sme.idshort_path = $2 OR sme.idshort_path LIKE $2 || '.%' OR sme.idshort_path LIKE $2 || '[%') ORDER BY sme.id_short`
+		// Subtree: Fetch all elements in the subtree
+		cte = `
+            WITH subtree AS (
+                SELECT * FROM submodel_element
+                WHERE submodel_id = $1 AND (idshort_path = $2 OR idshort_path LIKE $2 || '.%' OR idshort_path LIKE $2 || '[%')
+            )`
 		args = append(args, idShortOrPath)
 	} else {
-		// Here we apply pagination (limit and cursor) -- cursor not implemented yet
-		pattern = ` ORDER BY sme.id_short OFFSET $2 LIMIT $3`
-		args = append(args, offset)
-		args = append(args, limit)
+		// Pagination: Fetch paginated roots, then their subtrees
+		cte = `
+			WITH paginated_roots AS (
+				SELECT id_short FROM submodel_element
+				WHERE submodel_id = $1 AND parent_sme_id IS NULL
+				ORDER BY id_short OFFSET $2 LIMIT $3
+			),
+			subtree_elements AS (
+				SELECT sme.* FROM submodel_element sme
+				WHERE sme.submodel_id = $1 AND EXISTS (
+					SELECT 1 FROM paginated_roots pr
+					WHERE sme.idshort_path = pr.id_short
+					   OR sme.idshort_path LIKE pr.id_short || '.%'
+					   OR sme.idshort_path LIKE pr.id_short || '[%'
+				)
+			)`
+		args = append(args, offset, limit)
 	}
 
-	// Query A: Fetch parent Id Shorts
-	queryA := `SELECT sme.id_short FROM submodel_element sme WHERE sme.submodel_id = $1 AND sme.parent_sme_id IS NULL` + pattern
-	fmt.Println(queryA, args)
-	rowsA, err := tx.Query(queryA, args...)
-	if err != nil {
-		return nil, "", err
-	}
-	defer rowsA.Close()
-
-	rootIdShorts := make(map[string]bool)
-	for rowsA.Next() {
-		var idShort string
-		if err := rowsA.Scan(&idShort); err != nil {
-			return nil, "", err
+	baseQuery := cte + `
+        SELECT 
+            -- SME base
+            sme.id, sme.id_short, sme.category, sme.model_type, sme.idshort_path, sme.position, sme.parent_sme_id,
+            -- Property data
+            prop.value_type as prop_value_type,
+            COALESCE(prop.value_text, prop.value_num::text, prop.value_bool::text, prop.value_time::text, prop.value_datetime::text) as prop_value,
+            -- Blob data
+            blob.content_type as blob_content_type, blob.value as blob_value,
+            -- File data
+            file.content_type as file_content_type, file.value as file_value,
+            -- Range data
+            range_elem.value_type as range_value_type,
+            COALESCE(range_elem.min_text, range_elem.min_num::text, range_elem.min_time::text, range_elem.min_datetime::text) as range_min,
+            COALESCE(range_elem.max_text, range_elem.max_num::text, range_elem.max_time::text, range_elem.max_datetime::text) as range_max,
+            -- SubmodelElementList data
+            sme_list.type_value_list_element, sme_list.value_type_list_element, sme_list.order_relevant
+        FROM ` + (func() string {
+		if idShortOrPath != "" {
+			return "subtree sme"
 		}
-		rootIdShorts[idShort] = true
-	}
-	if err := rowsA.Err(); err != nil {
-		return nil, "", err
-	}
+		return "subtree_elements sme"
+	}()) + `
+        LEFT JOIN property_element prop ON sme.id = prop.id
+        LEFT JOIN blob_element blob ON sme.id = blob.id
+        LEFT JOIN file_element file ON sme.id = file.id
+        LEFT JOIN range_element range_elem ON sme.id = range_elem.id
+        LEFT JOIN submodel_element_list sme_list ON sme.id = sme_list.id
+        ORDER BY sme.parent_sme_id NULLS FIRST, sme.idshort_path, sme.position`
 
-	// Query B: Fetch all needed Submodel Elements
-	// queryB := baseQuery + pattern + ` ORDER BY sme.parent_sme_id NULLS FIRST, sme.idshort_path, sme.position`
-	queryB := baseQuery + ` ORDER BY sme.parent_sme_id NULLS FIRST, sme.idshort_path, sme.position`
-	rows, err := tx.Query(queryB, submodelId)
+	rows, err := tx.Query(baseQuery, args...)
 	if err != nil {
 		return nil, "", err
 	}
@@ -385,9 +380,8 @@ func GetSubmodelElementsWithPath(tx *sql.Tx, submodelId string, idShortOrPath st
 			pid := parentSmeID.Int64
 			children[pid] = append(children[pid], n)
 		} else {
-			if rootIdShorts[idShort] {
-				roots = append(roots, n)
-			}
+			// For both subtree and pagination, roots are elements with no parent in the fetched data
+			roots = append(roots, n)
 		}
 
 		if idShortOrPath != "" && idShortPath == idShortOrPath {
