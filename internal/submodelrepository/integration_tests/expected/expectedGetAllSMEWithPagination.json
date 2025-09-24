@@ -1,0 +1,13 @@
+{
+    "paging_metadata": {
+        "cursor": "myTopLevelProperty"
+    },
+    "result": [
+        {
+            "idShort": "myTopLevelProperty",
+            "modelType": "Property",
+            "value": "myTopLevelValue",
+            "valueType": "xs:string"
+        }
+    ]
+}
