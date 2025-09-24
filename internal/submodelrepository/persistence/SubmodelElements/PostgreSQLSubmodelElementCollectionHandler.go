@@ -34,9 +34,10 @@ func (p PostgreSQLSubmodelElementCollectionHandler) Create(tx *sql.Tx, submodelI
 	}
 
 	// SubmodelElementCollection-specific database insertion
-	// Determine which column to use based on valueType
-
-	// Then, perform SubmodelElementCollection-specific operations within the same transaction
+	_, err = tx.Exec(`INSERT INTO submodel_element_collection (id) VALUES ($1)`, id)
+	if err != nil {
+		return 0, err
+	}
 
 	return id, nil
 }
@@ -54,9 +55,10 @@ func (p PostgreSQLSubmodelElementCollectionHandler) CreateNested(tx *sql.Tx, sub
 	}
 
 	// SubmodelElementCollection-specific database insertion
-	// Determine which column to use based on valueType
-
-	// Then, perform SubmodelElementCollection-specific operations within the same transaction
+	_, err = tx.Exec(`INSERT INTO submodel_element_collection (id) VALUES ($1)`, id)
+	if err != nil {
+		return 0, err
+	}
 
 	return id, nil
 }

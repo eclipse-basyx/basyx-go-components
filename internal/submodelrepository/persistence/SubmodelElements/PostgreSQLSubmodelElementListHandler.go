@@ -22,7 +22,7 @@ func NewPostgreSQLSubmodelElementListHandler(db *sql.DB) (*PostgreSQLSubmodelEle
 }
 
 func (p PostgreSQLSubmodelElementListHandler) Create(tx *sql.Tx, submodelId string, submodelElement gen.SubmodelElement) (int, error) {
-	_, ok := submodelElement.(*gen.SubmodelElementList)
+	smeList, ok := submodelElement.(*gen.SubmodelElementList)
 	if !ok {
 		return 0, errors.New("submodelElement is not of type SubmodelElementList")
 	}
@@ -34,15 +34,16 @@ func (p PostgreSQLSubmodelElementListHandler) Create(tx *sql.Tx, submodelId stri
 	}
 
 	// SubmodelElementList-specific database insertion
-	// Determine which column to use based on valueType
-
-	// Then, perform SubmodelElementList-specific operations within the same transaction
+	err = insertSubmodelElementList(smeList, tx, id)
+	if err != nil {
+		return 0, err
+	}
 
 	return id, nil
 }
 
 func (p PostgreSQLSubmodelElementListHandler) CreateNested(tx *sql.Tx, submodelId string, parentId int, idShortPath string, submodelElement gen.SubmodelElement, pos int) (int, error) {
-	_, ok := submodelElement.(*gen.SubmodelElementList)
+	smeList, ok := submodelElement.(*gen.SubmodelElementList)
 	if !ok {
 		return 0, errors.New("submodelElement is not of type SubmodelElementList")
 	}
@@ -54,9 +55,10 @@ func (p PostgreSQLSubmodelElementListHandler) CreateNested(tx *sql.Tx, submodelI
 	}
 
 	// SubmodelElementList-specific database insertion
-	// Determine which column to use based on valueType
-
-	// Then, perform SubmodelElementList-specific operations within the same transaction
+	err = insertSubmodelElementList(smeList, tx, id)
+	if err != nil {
+		return 0, err
+	}
 
 	return id, nil
 }
@@ -106,4 +108,28 @@ func (p PostgreSQLSubmodelElementListHandler) Delete(idShortOrPath string) error
 		return dErr
 	}
 	return nil
+}
+
+func insertSubmodelElementList(smeList *gen.SubmodelElementList, tx *sql.Tx, id int) error {
+	var semanticId sql.NullInt64
+	if smeList.SemanticIdListElement != nil && !isEmptyReference(*smeList.SemanticIdListElement) {
+		refId, err := insertReference(tx, *smeList.SemanticIdListElement)
+		if err != nil {
+			return err
+		}
+		semanticId = sql.NullInt64{Int64: int64(refId), Valid: true}
+	}
+
+	var typeValue, valueType sql.NullString
+	if smeList.TypeValueListElement != nil {
+		typeValue = sql.NullString{String: string(*smeList.TypeValueListElement), Valid: true}
+	}
+	if smeList.ValueTypeListElement != "" {
+		valueType = sql.NullString{String: string(smeList.ValueTypeListElement), Valid: true}
+	}
+
+	_, err := tx.Exec(`INSERT INTO submodel_element_list (id, order_relevant, semantic_id_list_element, type_value_list_element, value_type_list_element)
+					 VALUES ($1, $2, $3, $4, $5)`,
+		id, smeList.OrderRelevant, semanticId, typeValue, valueType)
+	return err
 }

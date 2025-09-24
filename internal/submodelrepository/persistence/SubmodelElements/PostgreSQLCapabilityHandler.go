@@ -22,7 +22,7 @@ func NewPostgreSQLCapabilityHandler(db *sql.DB) (*PostgreSQLCapabilityHandler, e
 }
 
 func (p PostgreSQLCapabilityHandler) Create(tx *sql.Tx, submodelId string, submodelElement gen.SubmodelElement) (int, error) {
-	_, ok := submodelElement.(*gen.Capability)
+	capability, ok := submodelElement.(*gen.Capability)
 	if !ok {
 		return 0, errors.New("submodelElement is not of type Capability")
 	}
@@ -34,24 +34,51 @@ func (p PostgreSQLCapabilityHandler) Create(tx *sql.Tx, submodelId string, submo
 	}
 
 	// Capability-specific database insertion
-	// Determine which column to use based on valueType
-
-	// Then, perform Capability-specific operations within the same transaction
+	err = insertCapability(capability, tx, id)
+	if err != nil {
+		return 0, err
+	}
 
 	return id, nil
 }
 
 func (p PostgreSQLCapabilityHandler) CreateNested(tx *sql.Tx, submodelId string, parentId int, idShortPath string, submodelElement gen.SubmodelElement, pos int) (int, error) {
-	return 0, errors.New("not implemented")
+	capability, ok := submodelElement.(*gen.Capability)
+	if !ok {
+		return 0, errors.New("submodelElement is not of type Capability")
+	}
+
+	// Create the nested capability with the provided idShortPath using the decorated handler
+	id, err := p.decorated.CreateAndPath(tx, submodelId, parentId, idShortPath, submodelElement, pos)
+	if err != nil {
+		return 0, err
+	}
+
+	// Capability-specific database insertion for nested element
+	err = insertCapability(capability, tx, id)
+	if err != nil {
+		return 0, err
+	}
+
+	return id, nil
 }
 
 func (p PostgreSQLCapabilityHandler) Read(tx *sql.Tx, submodelId string, idShortOrPath string) (gen.SubmodelElement, error) {
-	var sme gen.SubmodelElement
-	_, err := p.decorated.Read(tx, submodelId, idShortOrPath, &sme)
+	// First, get the base submodel element
+	var baseSME gen.SubmodelElement
+	_, err := p.decorated.Read(tx, submodelId, idShortOrPath, &baseSME)
 	if err != nil {
 		return nil, err
 	}
-	return sme, nil
+
+	// Check if it's a capability
+	_, ok := baseSME.(*gen.Capability)
+	if !ok {
+		return nil, errors.New("submodelElement is not of type Capability")
+	}
+
+	// Capability has no additional data, just return the base
+	return baseSME, nil
 }
 func (p PostgreSQLCapabilityHandler) Update(idShortOrPath string, submodelElement gen.SubmodelElement) error {
 	if dErr := p.decorated.Update(idShortOrPath, submodelElement); dErr != nil {
@@ -64,4 +91,9 @@ func (p PostgreSQLCapabilityHandler) Delete(idShortOrPath string) error {
 		return dErr
 	}
 	return nil
+}
+
+func insertCapability(capability *gen.Capability, tx *sql.Tx, id int) error {
+	_, err := tx.Exec(`INSERT INTO capability_element (id) VALUES ($1)`, id)
+	return err
 }

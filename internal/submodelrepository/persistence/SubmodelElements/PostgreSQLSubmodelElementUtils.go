@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sort"
 	"strconv"
+	"time"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/pkg/submodelrepositoryapi/go"
@@ -234,7 +235,17 @@ func GetSubmodelElementsWithPath(tx *sql.Tx, submodelId string, idShortOrPath st
             COALESCE(range_elem.min_text, range_elem.min_num::text, range_elem.min_time::text, range_elem.min_datetime::text) as range_min,
             COALESCE(range_elem.max_text, range_elem.max_num::text, range_elem.max_time::text, range_elem.max_datetime::text) as range_max,
             -- SubmodelElementList data
-            sme_list.type_value_list_element, sme_list.value_type_list_element, sme_list.order_relevant
+            sme_list.type_value_list_element, sme_list.value_type_list_element, sme_list.order_relevant,
+            -- MultiLanguageProperty data
+            mlp.value_id as mlp_value_id,
+            -- ReferenceElement data
+            ref_elem.value_ref as ref_value_ref,
+            -- RelationshipElement data
+            rel_elem.first_ref as rel_first_ref, rel_elem.second_ref as rel_second_ref,
+            -- Entity data
+            entity.entity_type as entity_type, entity.global_asset_id as entity_global_asset_id,
+            -- BasicEventElement data
+            bee.observed_ref as bee_observed_ref, bee.direction as bee_direction, bee.state as bee_state, bee.message_topic as bee_message_topic, bee.message_broker_ref as bee_message_broker_ref, bee.last_update as bee_last_update, bee.min_interval as bee_min_interval, bee.max_interval as bee_max_interval
         FROM ` + (func() string {
 		if idShortOrPath != "" {
 			return "subtree sme"
@@ -246,6 +257,11 @@ func GetSubmodelElementsWithPath(tx *sql.Tx, submodelId string, idShortOrPath st
         LEFT JOIN file_element file ON sme.id = file.id
         LEFT JOIN range_element range_elem ON sme.id = range_elem.id
         LEFT JOIN submodel_element_list sme_list ON sme.id = sme_list.id
+        LEFT JOIN multilanguage_property mlp ON sme.id = mlp.id
+        LEFT JOIN reference_element ref_elem ON sme.id = ref_elem.id
+        LEFT JOIN relationship_element rel_elem ON sme.id = rel_elem.id
+        LEFT JOIN entity_element entity ON sme.id = entity.id
+        LEFT JOIN basic_event_element bee ON sme.id = bee.id
         ORDER BY sme.parent_sme_id NULLS FIRST, sme.idshort_path, sme.position`
 
 	rows, err := tx.Query(baseQuery, args...)
@@ -288,6 +304,24 @@ func GetSubmodelElementsWithPath(tx *sql.Tx, submodelId string, idShortOrPath st
 			// SubmodelElementList
 			typeValueListElement, valueTypeListElement sql.NullString
 			orderRelevant                              sql.NullBool
+			// MultiLanguageProperty
+			mlpValueId sql.NullInt64
+			// ReferenceElement
+			refValueRef sql.NullInt64
+			// RelationshipElement
+			relFirstRef, relSecondRef sql.NullInt64
+			// Entity
+			entityType          sql.NullString
+			entityGlobalAssetId sql.NullString
+			// BasicEventElement
+			beeObservedRef      sql.NullInt64
+			beeDirection        sql.NullString
+			beeState            sql.NullString
+			beeMessageTopic     sql.NullString
+			beeMessageBrokerRef sql.NullInt64
+			beeLastUpdate       sql.NullTime
+			beeMinInterval      sql.NullString
+			beeMaxInterval      sql.NullString
 		)
 
 		if err := rows.Scan(
@@ -297,6 +331,11 @@ func GetSubmodelElementsWithPath(tx *sql.Tx, submodelId string, idShortOrPath st
 			&fileContentType, &fileValue,
 			&rangeValueType, &rangeMin, &rangeMax,
 			&typeValueListElement, &valueTypeListElement, &orderRelevant,
+			&mlpValueId,
+			&refValueRef,
+			&relFirstRef, &relSecondRef,
+			&entityType, &entityGlobalAssetId,
+			&beeObservedRef, &beeDirection, &beeState, &beeMessageTopic, &beeMessageBrokerRef, &beeLastUpdate, &beeMinInterval, &beeMaxInterval,
 		); err != nil {
 			return nil, "", err
 		}
@@ -324,8 +363,7 @@ func GetSubmodelElementsWithPath(tx *sql.Tx, submodelId string, idShortOrPath st
 		case "Blob":
 			blob := &gen.Blob{IdShort: idShort, Category: category, ModelType: modelType}
 			if blobContentType.Valid {
-				//TODO: Ignore for now
-				// blob.ContentType = gen.BlobAllOfContentType(blobContentType.String)
+				blob.ContentType = blobContentType.String
 			}
 			if blobValue != nil {
 				blob.Value = string(blobValue)
@@ -335,8 +373,7 @@ func GetSubmodelElementsWithPath(tx *sql.Tx, submodelId string, idShortOrPath st
 		case "File":
 			file := &gen.File{IdShort: idShort, Category: category, ModelType: modelType}
 			if fileContentType.Valid {
-				//TODO: Ignore for now
-				// file.ContentType = gen.FileAllOfContentType(fileContentType.String)
+				file.ContentType = fileContentType.String
 			}
 			if fileValue.Valid {
 				file.Value = fileValue.String
@@ -378,6 +415,59 @@ func GetSubmodelElementsWithPath(tx *sql.Tx, submodelId string, idShortOrPath st
 				lst.OrderRelevant = orderRelevant.Bool
 			}
 			el = lst
+
+		case "ReferenceElement":
+			refElem := &gen.ReferenceElement{IdShort: idShort, Category: category, ModelType: modelType}
+			el = refElem
+
+		case "RelationshipElement":
+			relElem := &gen.RelationshipElement{IdShort: idShort, Category: category, ModelType: modelType}
+			el = relElem
+
+		case "AnnotatedRelationshipElement":
+			areElem := &gen.AnnotatedRelationshipElement{IdShort: idShort, Category: category, ModelType: modelType}
+			el = areElem
+
+		case "Entity":
+			entity := &gen.Entity{IdShort: idShort, Category: category, ModelType: modelType}
+			if entityType.Valid {
+				if et, err := gen.NewEntityTypeFromValue(entityType.String); err == nil {
+					entity.EntityType = et
+				}
+			}
+			if entityGlobalAssetId.Valid {
+				entity.GlobalAssetId = entityGlobalAssetId.String
+			}
+			el = entity
+
+		case "Operation":
+			op := &gen.Operation{IdShort: idShort, Category: category, ModelType: modelType}
+			el = op
+
+		case "BasicEventElement":
+			bee := &gen.BasicEventElement{IdShort: idShort, Category: category, ModelType: modelType}
+			if beeDirection.Valid {
+				if d, err := gen.NewDirectionFromValue(beeDirection.String); err == nil {
+					bee.Direction = d
+				}
+			}
+			if beeState.Valid {
+				if s, err := gen.NewStateOfEventFromValue(beeState.String); err == nil {
+					bee.State = s
+				}
+			}
+			if beeMessageTopic.Valid {
+				bee.MessageTopic = beeMessageTopic.String
+			}
+			if beeLastUpdate.Valid {
+				bee.LastUpdate = beeLastUpdate.Time.Format(time.RFC3339)
+			}
+			// Intervals not set for now
+			el = bee
+
+		case "Capability":
+			cap := &gen.Capability{IdShort: idShort, Category: category, ModelType: modelType}
+			el = cap
 
 		default:
 			// Unknown/unsupported type: skip eagerly.
