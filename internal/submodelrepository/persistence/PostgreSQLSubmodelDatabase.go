@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"strconv"
 
@@ -145,7 +146,8 @@ func (p *PostgreSQLSubmodelDatabase) CreateSubmodel(m gen.Submodel) (string, err
 func (p *PostgreSQLSubmodelDatabase) GetSubmodelElement(submodelId string, idShortOrPath string, limit int, cursor string) (gen.SubmodelElement, error) {
 	tx, err := p.db.Begin()
 	if err != nil {
-		return nil, err
+		fmt.Println(err)
+		return nil, common.NewInternalServerError("Failed to begin PostgreSQL transaction - no changes applied - see console for details")
 	}
 	defer func() {
 		if err != nil {
@@ -163,7 +165,8 @@ func (p *PostgreSQLSubmodelDatabase) GetSubmodelElement(submodelId string, idSho
 	}
 
 	if err := tx.Commit(); err != nil {
-		return nil, err
+		fmt.Println(err)
+		return nil, common.NewInternalServerError("Failed to commit PostgreSQL transaction - no changes applied - see console for details")
 	}
 
 	return elements[0], nil
@@ -172,7 +175,8 @@ func (p *PostgreSQLSubmodelDatabase) GetSubmodelElement(submodelId string, idSho
 func (p *PostgreSQLSubmodelDatabase) GetSubmodelElements(submodelId string, limit int, cursor string) ([]gen.SubmodelElement, string, error) {
 	tx, err := p.db.Begin()
 	if err != nil {
-		return nil, "", err
+		fmt.Println(err)
+		return nil, "", common.NewInternalServerError("Failed to begin PostgreSQL transaction - no changes applied - see console for details")
 	}
 	defer func() {
 		if err != nil {
@@ -186,7 +190,8 @@ func (p *PostgreSQLSubmodelDatabase) GetSubmodelElements(submodelId string, limi
 	}
 
 	if err := tx.Commit(); err != nil {
-		return nil, "", err
+		fmt.Println(err)
+		return nil, "", common.NewInternalServerError("Failed to commit PostgreSQL transaction - no changes applied - see console for details")
 	}
 
 	return elements, cursor, nil
@@ -205,7 +210,8 @@ func (p *PostgreSQLSubmodelDatabase) AddSubmodelElementWithPath(submodelId strin
 
 	tx, err := p.db.Begin()
 	if err != nil {
-		return err
+		fmt.Println(err)
+		return common.NewInternalServerError("Failed to begin PostgreSQL transaction - no changes applied - see console for details")
 	}
 
 	defer func() {
@@ -216,7 +222,8 @@ func (p *PostgreSQLSubmodelDatabase) AddSubmodelElementWithPath(submodelId strin
 
 	parentId, err := crud.GetDatabaseId(idShortPath)
 	if err != nil {
-		return err
+		fmt.Println(err)
+		return common.NewInternalServerError("Failed to execute PostgreSQL Query - no changes applied - see console for details.")
 	}
 	nextPosition, err := crud.GetNextPosition(parentId)
 	if err != nil {
@@ -245,9 +252,9 @@ func (p *PostgreSQLSubmodelDatabase) AddSubmodelElementWithPath(submodelId strin
 		return err
 	}
 
-	err = tx.Commit()
-	if err != nil {
-		return err
+	if err := tx.Commit(); err != nil {
+		fmt.Println(err)
+		return common.NewInternalServerError("Failed to commit PostgreSQL transaction - no changes applied - see console for details")
 	}
 
 	return nil
@@ -260,7 +267,8 @@ func (p *PostgreSQLSubmodelDatabase) AddSubmodelElement(submodelId string, submo
 
 	tx, err := p.db.Begin()
 	if err != nil {
-		return err
+		fmt.Println(err)
+		return common.NewInternalServerError("Failed to begin PostgreSQL transaction - no changes applied - see console for details")
 	}
 
 	defer func() {
@@ -279,9 +287,9 @@ func (p *PostgreSQLSubmodelDatabase) AddSubmodelElement(submodelId string, submo
 		return err
 	}
 
-	err = tx.Commit()
-	if err != nil {
-		return err
+	if err := tx.Commit(); err != nil {
+		fmt.Println(err)
+		return common.NewInternalServerError("Failed to commit PostgreSQL transaction - no changes applied - see console for details")
 	}
 
 	return nil
@@ -302,7 +310,7 @@ func (p *PostgreSQLSubmodelDatabase) AddNestedSubmodelElementsIteratively(tx *sq
 	case "SubmodelElementCollection":
 		submodelElementCollection, ok := topLevelElement.(*gen.SubmodelElementCollection)
 		if !ok {
-			return errors.New("submodelElement is not of type SubmodelElementCollection")
+			return common.NewInternalServerError("SubmodelElement with modelType 'SubmodelElementCollection' is not of type SubmodelElementCollection")
 		}
 		for index, nestedElement := range submodelElementCollection.Value {
 			var currentPath string
@@ -322,7 +330,7 @@ func (p *PostgreSQLSubmodelDatabase) AddNestedSubmodelElementsIteratively(tx *sq
 	case "SubmodelElementList":
 		submodelElementList, ok := topLevelElement.(*gen.SubmodelElementList)
 		if !ok {
-			return errors.New("submodelElement is not of type SubmodelElementList")
+			return common.NewInternalServerError("SubmodelElement with modelType 'SubmodelElementList' is not of type SubmodelElementList")
 		}
 		// Add nested elements to stack with index-based paths
 		for index, nestedElement := range submodelElementList.Value {
@@ -364,7 +372,7 @@ func (p *PostgreSQLSubmodelDatabase) AddNestedSubmodelElementsIteratively(tx *sq
 		case "SubmodelElementCollection":
 			submodelElementCollection, ok := current.element.(*gen.SubmodelElementCollection)
 			if !ok {
-				return errors.New("submodelElement is not of type SubmodelElementCollection")
+				return common.NewInternalServerError("SubmodelElement with modelType 'SubmodelElementCollection' is not of type SubmodelElementCollection")
 			}
 			for i := len(submodelElementCollection.Value) - 1; i >= 0; i-- {
 				stack = addNestedElementToStackWithNormalPath(submodelElementCollection, i, stack, newParentId, idShortPath)
@@ -372,7 +380,7 @@ func (p *PostgreSQLSubmodelDatabase) AddNestedSubmodelElementsIteratively(tx *sq
 		case "SubmodelElementList":
 			submodelElementList, ok := current.element.(*gen.SubmodelElementList)
 			if !ok {
-				return errors.New("submodelElement is not of type SubmodelElementList")
+				return common.NewInternalServerError("SubmodelElement with modelType 'SubmodelElementList' is not of type SubmodelElementList")
 			}
 			for index := len(submodelElementList.Value) - 1; index >= 0; index-- {
 				stack = addNestedElementToStackWithIndexPath(submodelElementList, index, idShortPath, stack, newParentId)
