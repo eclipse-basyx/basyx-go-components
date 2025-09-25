@@ -52,7 +52,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodels(
 		return gen.Response(500, nil), err
 	}
 
-	// OpenAPI-compliant envelope: { paging_metadata: {cursor}, result: [...] }
+	// using the openAPI provided response struct to include paging metadata
 	res := gen.GetSubmodelsResult{
 		PagingMetadata: gen.PagedResultPagingMetadata{
 			Cursor: nextCursor,
@@ -86,6 +86,9 @@ func (s *SubmodelRepositoryAPIAPIService) DeleteSubmodelById(
 ) (gen.ImplResponse, error) {
 	err := s.submodelBackend.DeleteSubmodel(id)
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return gen.Response(404, nil), nil
+		}
 		return gen.Response(500, nil), err
 	}
 	return gen.Response(204, nil), nil
@@ -96,10 +99,12 @@ func (s *SubmodelRepositoryAPIAPIService) PostSubmodel(
 	ctx context.Context,
 	submodel gen.Submodel,
 ) (gen.ImplResponse, error) {
-	_, err := s.submodelBackend.CreateSubmodel(submodel)
+	err := s.submodelBackend.CreateSubmodel(submodel)
 	if err != nil {
 		return gen.Response(500, nil), err
 	}
+
+	// According to REST convention, return 201 Created + the created resource
 	return gen.Response(201, submodel), nil
 }
 

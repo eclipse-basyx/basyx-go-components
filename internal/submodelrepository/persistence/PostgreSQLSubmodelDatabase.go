@@ -2,7 +2,6 @@ package persistence_postgresql
 
 import (
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"os"
 	"strconv"
@@ -47,14 +46,16 @@ func NewPostgreSQLSubmodelBackend(dsn string) (*PostgreSQLSubmodelDatabase, erro
 	return &PostgreSQLSubmodelDatabase{db: db}, nil
 }
 
-// GetAllSubmodels returns a page of Submodels and a next cursor ("" if no more pages).
+// GetAllSubmodels and a next cursor ("" if no more pages).
 func (p *PostgreSQLSubmodelDatabase) GetAllSubmodels(limit int32, cursor string, idShort string) ([]gen.Submodel, string, error) {
 	if limit <= 0 || limit > 1000 {
 		limit = 25
 	}
 
 	// Keyset pagination: start after the cursor (last seen id).
-	// Simple filter by idShort; leave semanticId/level/extent for later.
+	// Simple filter by idShort if provided.
+	// Note: This assumes 'id' is unique and can be used for pagination.
+	// Adjust the query as needed based on actual requirements and schema.
 	const q = `
         SELECT id, id_short, category, kind, 'Submodel' AS model_type
         FROM submodel
@@ -106,38 +107,73 @@ func (p *PostgreSQLSubmodelDatabase) GetAllSubmodels(limit int32, cursor string,
 
 // GetSubmodel returns one Submodel by id
 func (p *PostgreSQLSubmodelDatabase) GetSubmodel(id string) (gen.Submodel, error) {
-	var js []byte
-	err := p.db.QueryRow(`SELECT payload FROM submodels WHERE id=$1`, id).Scan(&js)
+	const q = `
+        SELECT id, id_short, category, kind, model_type
+        FROM submodel
+        WHERE id = $1
+    `
+
+	var (
+		smId, idShort, category, modelType string
+		kind                               sql.NullString
+	)
+	err := p.db.QueryRow(q, id).Scan(&smId, &idShort, &category, &kind, &modelType)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return gen.Submodel{}, sql.ErrNoRows
 		}
 		return gen.Submodel{}, err
 	}
-	var m gen.Submodel
-	if err := json.Unmarshal(js, &m); err != nil {
-		return gen.Submodel{}, err
+
+	sm := gen.Submodel{
+		Id:        smId,
+		IdShort:   idShort,
+		Category:  category,
+		ModelType: modelType,
 	}
-	return m, nil
+	if kind.Valid {
+		sm.Kind = gen.ModellingKind(kind.String)
+	}
+
+	return sm, nil
 }
 
 // DeleteSubmodel deletes a Submodel by id
 func (p *PostgreSQLSubmodelDatabase) DeleteSubmodel(id string) error {
-	_, err := p.db.Exec(`DELETE FROM submodels WHERE id=$1`, id)
-	return err
+	const q = `DELETE FROM submodel WHERE id=$1`
+
+	res, err := p.db.Exec(q, id)
+	if err != nil {
+		return err
+	}
+
+	// Check if a row was actually deleted
+	rowsAffected, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAffected == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
 }
 
 // CreateSubmodel inserts a new Submodel
-func (p *PostgreSQLSubmodelDatabase) CreateSubmodel(m gen.Submodel) (string, error) {
-	b, err := json.Marshal(m)
+// If a Submodel with the same id already exists, it does nothing and returns nil
+// we might want ON CONFLICT DO UPDATE for upserts, but spec-wise POST usually means create new
+// model_type is hardcoded to "Submodel"
+func (p *PostgreSQLSubmodelDatabase) CreateSubmodel(sm gen.Submodel) error {
+	const q = `
+        INSERT INTO submodel (id, id_short, category, kind, model_type)
+        VALUES ($1, $2, $3, $4, 'Submodel')
+        ON CONFLICT (id) DO NOTHING
+    `
+
+	_, err := p.db.Exec(q, sm.Id, sm.IdShort, sm.Category, sm.Kind)
 	if err != nil {
-		return "", err
+		return err
 	}
-	_, err = p.db.Exec(
-		`INSERT INTO submodels(id, payload) VALUES ($1, $2::jsonb) ON CONFLICT (id) DO UPDATE SET payload = EXCLUDED.payload`,
-		m.Id, string(b),
-	)
-	return m.Id, err
+	return nil
 }
 
 func (p *PostgreSQLSubmodelDatabase) AddSubmodelElement(submodelId string, submodelElement gen.SubmodelElement) error {
