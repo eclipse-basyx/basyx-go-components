@@ -548,7 +548,7 @@ func GetSubmodelWithSubmodelElements(db *sql.DB, tx *sql.Tx, submodelId string) 
 	}
 	modellingKind, err := gen.NewModellingKindFromValue(dbSubmodelKind)
 	if err != nil {
-		return nil, err
+		modellingKind = gen.MODELLINGKIND_INSTANCE
 	}
 	submodel := &gen.Submodel{
 		Id:               dbSmId,
