@@ -28,12 +28,12 @@ var stats BenchmarkStats
 var threads = 28
 
 // Total Number of elements = submodelElementCount*nestingLevel
-var submodelElementCount = 1_248
-var nestingLevel = 50
+var submodelElementCount = 20
+var nestingLevel = 20
 var shouldPost = true
 var shouldGet = true
-var shouldDelete = true
-var baseURL = "http://localhost:5004"
+var shouldDelete = !true
+var baseURL = "http://localhost:5005"
 
 // Shared HTTP client for reuse and performance
 var httpClient = &http.Client{

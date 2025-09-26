@@ -9,8 +9,17 @@ import (
 	"time"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	persistence_utils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
 	gen "github.com/eclipse-basyx/basyx-go-components/pkg/submodelrepositoryapi/go"
 )
+
+type node struct {
+	id       int64
+	parentID sql.NullInt64
+	path     string
+	position sql.NullInt32
+	element  gen.SubmodelElement
+}
 
 func GetSMEHandler(submodelElement gen.SubmodelElement, db *sql.DB) (PostgreSQLSMECrudInterface, error) {
 	return GetSMEHandlerByModelType(string(submodelElement.GetModelType()), db)
@@ -142,7 +151,7 @@ func GetSMEHandlerByModelType(modelType string, db *sql.DB) (PostgreSQLSMECrudIn
 // identified by idShortOrPath) in one query and reconstructs the hierarchy using parent_sme_id
 // (O(n)), avoiding expensive string parsing of idshort_path. It also minimizes allocations
 // by using integer IDs and on-the-fly child bucketing.
-func GetSubmodelElementsWithPath(tx *sql.Tx, submodelId string, idShortOrPath string, limit int, cursor string) ([]gen.SubmodelElement, string, error) {
+func GetSubmodelElementsWithPath(db *sql.DB, tx *sql.Tx, submodelId string, idShortOrPath string, limit int, cursor string) ([]gen.SubmodelElement, string, error) {
 	if limit < 1 {
 		limit = 100
 	}
@@ -222,62 +231,23 @@ func GetSubmodelElementsWithPath(tx *sql.Tx, submodelId string, idShortOrPath st
 	baseQuery := cte + `
         SELECT 
             -- SME base
-            sme.id, sme.id_short, sme.category, sme.model_type, sme.idshort_path, sme.position, sme.parent_sme_id,
-            -- Property data
-            prop.value_type as prop_value_type,
-            COALESCE(prop.value_text, prop.value_num::text, prop.value_bool::text, prop.value_time::text, prop.value_datetime::text) as prop_value,
-            -- Blob data
-            blob.content_type as blob_content_type, blob.value as blob_value,
-            -- File data
-            file.content_type as file_content_type, file.value as file_value,
-            -- Range data
-            range_elem.value_type as range_value_type,
-            COALESCE(range_elem.min_text, range_elem.min_num::text, range_elem.min_time::text, range_elem.min_datetime::text) as range_min,
-            COALESCE(range_elem.max_text, range_elem.max_num::text, range_elem.max_time::text, range_elem.max_datetime::text) as range_max,
-            -- SubmodelElementList data
-            sme_list.type_value_list_element, sme_list.value_type_list_element, sme_list.order_relevant,
-            -- MultiLanguageProperty data
-            mlp.value_id as mlp_value_id,
-            -- ReferenceElement data
-            ref_elem.value_ref as ref_value_ref,
-            -- RelationshipElement data
-            rel_elem.first_ref as rel_first_ref, rel_elem.second_ref as rel_second_ref,
-            -- Entity data
-            entity.entity_type as entity_type, entity.global_asset_id as entity_global_asset_id,
-            -- BasicEventElement data
-            bee.observed_ref as bee_observed_ref, bee.direction as bee_direction, bee.state as bee_state, bee.message_topic as bee_message_topic, bee.message_broker_ref as bee_message_broker_ref, bee.last_update as bee_last_update, bee.min_interval as bee_min_interval, bee.max_interval as bee_max_interval
+            sme.id, sme.id_short, sme.category, sme.model_type, sme.idshort_path, sme.position, sme.parent_sme_id, sme.semantic_id,
+			` + getSubmodelElementDataQueryPart() + `
         FROM ` + (func() string {
 		if idShortOrPath != "" {
 			return "subtree sme"
 		}
 		return "subtree_elements sme"
 	}()) + `
-        LEFT JOIN property_element prop ON sme.id = prop.id
-        LEFT JOIN blob_element blob ON sme.id = blob.id
-        LEFT JOIN file_element file ON sme.id = file.id
-        LEFT JOIN range_element range_elem ON sme.id = range_elem.id
-        LEFT JOIN submodel_element_list sme_list ON sme.id = sme_list.id
-        LEFT JOIN multilanguage_property mlp ON sme.id = mlp.id
-        LEFT JOIN reference_element ref_elem ON sme.id = ref_elem.id
-        LEFT JOIN relationship_element rel_elem ON sme.id = rel_elem.id
-        LEFT JOIN entity_element entity ON sme.id = entity.id
-        LEFT JOIN basic_event_element bee ON sme.id = bee.id
+		` + getSubmodelElementLeftJoins() + `
         ORDER BY sme.parent_sme_id NULLS FIRST, sme.idshort_path, sme.position`
 
 	rows, err := tx.Query(baseQuery, args...)
+
 	if err != nil {
 		return nil, "", err
 	}
 	defer rows.Close()
-
-	// --- Working structs ------------------------------------------------------
-	type node struct {
-		id       int64
-		parentID sql.NullInt64
-		path     string
-		position sql.NullInt32
-		element  gen.SubmodelElement
-	}
 
 	// Pre-size conservatively to reduce re-allocations
 	nodes := make(map[int64]*node, 256)
@@ -292,6 +262,7 @@ func GetSubmodelElementsWithPath(tx *sql.Tx, submodelId string, idShortOrPath st
 			idShort, category, modelType, idShortPath string
 			position                                  sql.NullInt32
 			parentSmeID                               sql.NullInt64
+			semanticId                                sql.NullInt64
 			// Property
 			propValueType, propValue sql.NullString
 			// Blob
@@ -325,7 +296,7 @@ func GetSubmodelElementsWithPath(tx *sql.Tx, submodelId string, idShortOrPath st
 		)
 
 		if err := rows.Scan(
-			&id, &idShort, &category, &modelType, &idShortPath, &position, &parentSmeID,
+			&id, &idShort, &category, &modelType, &idShortPath, &position, &parentSmeID, &semanticId,
 			&propValueType, &propValue,
 			&blobContentType, &blobValue,
 			&fileContentType, &fileValue,
@@ -341,10 +312,18 @@ func GetSubmodelElementsWithPath(tx *sql.Tx, submodelId string, idShortOrPath st
 		}
 
 		// Materialize the concrete element based on modelType (no reflection)
+		var semanticIdObj *gen.Reference
+		if semanticId.Valid {
+			semanticIdObj, err = persistence_utils.GetSemanticId(db, semanticId)
+			if err != nil {
+				return nil, "", err
+			}
+		}
+
 		var el gen.SubmodelElement
 		switch modelType {
 		case "Property":
-			prop := &gen.Property{IdShort: idShort, Category: category, ModelType: modelType}
+			prop := &gen.Property{IdShort: idShort, Category: category, ModelType: modelType, SemanticId: semanticIdObj}
 			if propValueType.Valid {
 				if vt, err := gen.NewDataTypeDefXsdFromValue(propValueType.String); err == nil {
 					prop.ValueType = vt
@@ -357,11 +336,11 @@ func GetSubmodelElementsWithPath(tx *sql.Tx, submodelId string, idShortOrPath st
 
 		case "MultiLanguageProperty":
 			// Values are in a separate table; we only hydrate the shell here.
-			mlp := &gen.MultiLanguageProperty{IdShort: idShort, Category: category, ModelType: modelType}
+			mlp := &gen.MultiLanguageProperty{IdShort: idShort, Category: category, ModelType: modelType, SemanticId: semanticIdObj}
 			el = mlp
 
 		case "Blob":
-			blob := &gen.Blob{IdShort: idShort, Category: category, ModelType: modelType}
+			blob := &gen.Blob{IdShort: idShort, Category: category, ModelType: modelType, SemanticId: semanticIdObj}
 			if blobContentType.Valid {
 				blob.ContentType = blobContentType.String
 			}
@@ -371,7 +350,7 @@ func GetSubmodelElementsWithPath(tx *sql.Tx, submodelId string, idShortOrPath st
 			el = blob
 
 		case "File":
-			file := &gen.File{IdShort: idShort, Category: category, ModelType: modelType}
+			file := &gen.File{IdShort: idShort, Category: category, ModelType: modelType, SemanticId: semanticIdObj}
 			if fileContentType.Valid {
 				file.ContentType = fileContentType.String
 			}
@@ -381,7 +360,7 @@ func GetSubmodelElementsWithPath(tx *sql.Tx, submodelId string, idShortOrPath st
 			el = file
 
 		case "Range":
-			rg := &gen.Range{IdShort: idShort, Category: category, ModelType: modelType}
+			rg := &gen.Range{IdShort: idShort, Category: category, ModelType: modelType, SemanticId: semanticIdObj}
 			if rangeValueType.Valid {
 				if vt, err := gen.NewDataTypeDefXsdFromValue(rangeValueType.String); err == nil {
 					rg.ValueType = vt
@@ -417,19 +396,19 @@ func GetSubmodelElementsWithPath(tx *sql.Tx, submodelId string, idShortOrPath st
 			el = lst
 
 		case "ReferenceElement":
-			refElem := &gen.ReferenceElement{IdShort: idShort, Category: category, ModelType: modelType}
+			refElem := &gen.ReferenceElement{IdShort: idShort, Category: category, ModelType: modelType, SemanticId: semanticIdObj}
 			el = refElem
 
 		case "RelationshipElement":
-			relElem := &gen.RelationshipElement{IdShort: idShort, Category: category, ModelType: modelType}
+			relElem := &gen.RelationshipElement{IdShort: idShort, Category: category, ModelType: modelType, SemanticId: semanticIdObj}
 			el = relElem
 
 		case "AnnotatedRelationshipElement":
-			areElem := &gen.AnnotatedRelationshipElement{IdShort: idShort, Category: category, ModelType: modelType}
+			areElem := &gen.AnnotatedRelationshipElement{IdShort: idShort, Category: category, ModelType: modelType, SemanticId: semanticIdObj}
 			el = areElem
 
 		case "Entity":
-			entity := &gen.Entity{IdShort: idShort, Category: category, ModelType: modelType}
+			entity := &gen.Entity{IdShort: idShort, Category: category, ModelType: modelType, SemanticId: semanticIdObj}
 			if entityType.Valid {
 				if et, err := gen.NewEntityTypeFromValue(entityType.String); err == nil {
 					entity.EntityType = et
@@ -441,11 +420,11 @@ func GetSubmodelElementsWithPath(tx *sql.Tx, submodelId string, idShortOrPath st
 			el = entity
 
 		case "Operation":
-			op := &gen.Operation{IdShort: idShort, Category: category, ModelType: modelType}
+			op := &gen.Operation{IdShort: idShort, Category: category, ModelType: modelType, SemanticId: semanticIdObj}
 			el = op
 
 		case "BasicEventElement":
-			bee := &gen.BasicEventElement{IdShort: idShort, Category: category, ModelType: modelType}
+			bee := &gen.BasicEventElement{IdShort: idShort, Category: category, ModelType: modelType, SemanticId: semanticIdObj}
 			if beeDirection.Valid {
 				if d, err := gen.NewDirectionFromValue(beeDirection.String); err == nil {
 					bee.Direction = d
@@ -466,7 +445,7 @@ func GetSubmodelElementsWithPath(tx *sql.Tx, submodelId string, idShortOrPath st
 			el = bee
 
 		case "Capability":
-			cap := &gen.Capability{IdShort: idShort, Category: category, ModelType: modelType}
+			cap := &gen.Capability{IdShort: idShort, Category: category, ModelType: modelType, SemanticId: semanticIdObj}
 			el = cap
 
 		default:
@@ -501,6 +480,89 @@ func GetSubmodelElementsWithPath(tx *sql.Tx, submodelId string, idShortOrPath st
 
 	// --- Attach children (O(n)) ----------------------------------------------
 	// We only attach to SMC/SML parents; other types cannot have children.
+	attachChildrenToSubmodelElements(nodes, children)
+
+	// --- Build result ---------------------------------------------------------
+	if idShortOrPath != "" && target != nil {
+		return []gen.SubmodelElement{target.element}, "", nil
+	}
+
+	res := make([]gen.SubmodelElement, 0, len(roots))
+	for _, r := range roots {
+		res = append(res, r.element)
+	}
+
+	if len(res) == 0 {
+		return res, "", nil
+	}
+	// return idShort of last element in res as next cursor
+	return res, res[len(res)-1].GetIdShort(), nil
+}
+
+func GetSubmodelWithSubmodelElements(db *sql.DB, tx *sql.Tx, submodelId string) (*gen.Submodel, error) {
+	// --- Build the unified query with CTE ----------------------------------------------------------
+	var cte string
+	args := []any{submodelId}
+
+	baseQuery := cte + `
+        SELECT 
+			-- Submodel
+			s.id as submodel_id, s.id_short as submodel_id_short, s.category as submodel_category, s.kind as submodel_kind,
+            -- SME base
+            sme.id, sme.id_short, sme.category, sme.model_type, sme.idshort_path, sme.position, sme.parent_sme_id, sme.semantic_id,
+		` + getSubmodelElementDataQueryPart() + `
+        FROM submodel s
+		LEFT JOIN submodel_element sme ON s.id = sme.submodel_id
+		` + getSubmodelElementLeftJoins() + `
+        WHERE s.id = $1
+        ORDER BY sme.parent_sme_id NULLS FIRST, sme.idshort_path, sme.position`
+	rows, err := tx.Query(baseQuery, args...)
+	// Print execution duration
+
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	// --- Working structs ------------------------------------------------------
+
+	// Pre-size conservatively to reduce re-allocations
+	nodes, children, roots, dbSmId, dbSubmodelIdShort, dbSubmodelCategory, dbSubmodelKind, result, err := loadSubmodelSubmodelElementsIntoMemory(rows, err, db)
+	if err != nil {
+		return result, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	// --- Attach children (O(n)) ----------------------------------------------
+	// We only attach to SMC/SML parents; other types cannot have children.
+	attachChildrenToSubmodelElements(nodes, children)
+
+	// --- Build result ---------------------------------------------------------
+
+	res := make([]gen.SubmodelElement, 0, len(roots))
+
+	for _, r := range roots {
+		res = append(res, r.element)
+	}
+	modellingKind, err := gen.NewModellingKindFromValue(dbSubmodelKind)
+	if err != nil {
+		return nil, err
+	}
+	submodel := &gen.Submodel{
+		Id:               dbSmId,
+		IdShort:          dbSubmodelIdShort,
+		Category:         dbSubmodelCategory,
+		Kind:             modellingKind,
+		ModelType:        "Submodel",
+		SubmodelElements: res,
+	}
+	// return idShort of last element in res as next cursor
+	return submodel, nil
+}
+
+func attachChildrenToSubmodelElements(nodes map[int64]*node, children map[int64][]*node) {
 	for id, parent := range nodes {
 		kids := children[id]
 		if len(kids) == 0 {
@@ -536,22 +598,285 @@ func GetSubmodelElementsWithPath(tx *sql.Tx, submodelId string, idShortOrPath st
 			}
 		}
 	}
+}
 
-	// --- Build result ---------------------------------------------------------
-	if idShortOrPath != "" && target != nil {
-		return []gen.SubmodelElement{target.element}, "", nil
-	}
+func loadSubmodelSubmodelElementsIntoMemory(rows *sql.Rows, err error, db *sql.DB) (map[int64]*node, map[int64][]*node, []*node, string, string, string, string, *gen.Submodel, error) {
+	nodes := make(map[int64]*node, 256)
+	children := make(map[int64][]*node, 256)
+	roots := make([]*node, 0, 16)
+	var dbSmId string = ""
+	var dbSubmodelIdShort, dbSubmodelCategory, dbSubmodelKind sql.NullString
+	for rows.Next() {
+		var (
+			// Submodel
+			submodelID                                      string
+			submodelIdShort, submodelCategory, submodelKind sql.NullString
+			// SME base
+			id                                        int64
+			idShort, category, modelType, idShortPath string
+			position                                  sql.NullInt32
+			parentSmeID                               sql.NullInt64
+			semanticId                                sql.NullInt64
+			// Property
+			propValueType, propValue sql.NullString
+			// Blob
+			blobContentType sql.NullString
+			blobValue       []byte
+			// File
+			fileContentType, fileValue sql.NullString
+			// Range
+			rangeValueType, rangeMin, rangeMax sql.NullString
+			// SubmodelElementList
+			typeValueListElement, valueTypeListElement sql.NullString
+			orderRelevant                              sql.NullBool
+			// MultiLanguageProperty
+			mlpValueId sql.NullInt64
+			// ReferenceElement
+			refValueRef sql.NullInt64
+			// RelationshipElement
+			relFirstRef, relSecondRef sql.NullInt64
+			// Entity
+			entityType          sql.NullString
+			entityGlobalAssetId sql.NullString
+			// BasicEventElement
+			beeObservedRef      sql.NullInt64
+			beeDirection        sql.NullString
+			beeState            sql.NullString
+			beeMessageTopic     sql.NullString
+			beeMessageBrokerRef sql.NullInt64
+			beeLastUpdate       sql.NullTime
+			beeMinInterval      sql.NullString
+			beeMaxInterval      sql.NullString
+		)
 
-	res := make([]gen.SubmodelElement, 0, len(roots))
-	for _, r := range roots {
-		res = append(res, r.element)
-	}
+		if err := rows.Scan(
+			&submodelID, &submodelIdShort, &submodelCategory, &submodelKind,
+			&id, &idShort, &category, &modelType, &idShortPath, &position, &parentSmeID, &semanticId,
+			&propValueType, &propValue,
+			&blobContentType, &blobValue,
+			&fileContentType, &fileValue,
+			&rangeValueType, &rangeMin, &rangeMax,
+			&typeValueListElement, &valueTypeListElement, &orderRelevant,
+			&mlpValueId,
+			&refValueRef,
+			&relFirstRef, &relSecondRef,
+			&entityType, &entityGlobalAssetId,
+			&beeObservedRef, &beeDirection, &beeState, &beeMessageTopic, &beeMessageBrokerRef, &beeLastUpdate, &beeMinInterval, &beeMaxInterval,
+		); err != nil {
+			return nil, nil, nil, "", "", "", "", nil, err
+		}
 
-	if len(res) == 0 {
-		return res, "", nil
+		if dbSmId == "" {
+			dbSmId = submodelID
+			dbSubmodelIdShort = submodelIdShort
+			dbSubmodelCategory = submodelCategory
+			dbSubmodelKind = submodelKind
+		}
+
+		// Materialize the concrete element based on modelType (no reflection)
+		var semanticIdObj *gen.Reference
+		if semanticId.Valid {
+			semanticIdObj, err = persistence_utils.GetSemanticId(db, semanticId)
+			if err != nil {
+				return nil, nil, nil, "", "", "", "", nil, err
+			}
+		}
+
+		var el gen.SubmodelElement
+		switch modelType {
+		case "Property":
+			prop := &gen.Property{IdShort: idShort, Category: category, ModelType: modelType, SemanticId: semanticIdObj}
+			if propValueType.Valid {
+				if vt, err := gen.NewDataTypeDefXsdFromValue(propValueType.String); err == nil {
+					prop.ValueType = vt
+				}
+			}
+			if propValue.Valid {
+				prop.Value = propValue.String
+			}
+			el = prop
+
+		case "MultiLanguageProperty":
+			// Values are in a separate table; we only hydrate the shell here.
+			mlp := &gen.MultiLanguageProperty{IdShort: idShort, Category: category, ModelType: modelType, SemanticId: semanticIdObj}
+			el = mlp
+
+		case "Blob":
+			blob := &gen.Blob{IdShort: idShort, Category: category, ModelType: modelType, SemanticId: semanticIdObj}
+			if blobContentType.Valid {
+				blob.ContentType = blobContentType.String
+			}
+			if blobValue != nil {
+				blob.Value = string(blobValue)
+			}
+			el = blob
+
+		case "File":
+			file := &gen.File{IdShort: idShort, Category: category, ModelType: modelType, SemanticId: semanticIdObj}
+			if fileContentType.Valid {
+				file.ContentType = fileContentType.String
+			}
+			if fileValue.Valid {
+				file.Value = fileValue.String
+			}
+			el = file
+
+		case "Range":
+			rg := &gen.Range{IdShort: idShort, Category: category, ModelType: modelType, SemanticId: semanticIdObj}
+			if rangeValueType.Valid {
+				if vt, err := gen.NewDataTypeDefXsdFromValue(rangeValueType.String); err == nil {
+					rg.ValueType = vt
+				}
+			}
+			if rangeMin.Valid {
+				rg.Min = rangeMin.String
+			}
+			if rangeMax.Valid {
+				rg.Max = rangeMax.String
+			}
+			el = rg
+
+		case "SubmodelElementCollection":
+			coll := &gen.SubmodelElementCollection{IdShort: idShort, Category: category, ModelType: modelType, Value: make([]gen.SubmodelElement, 0, 4)}
+			el = coll
+
+		case "SubmodelElementList":
+			lst := &gen.SubmodelElementList{IdShort: idShort, Category: category, ModelType: modelType, Value: make([]gen.SubmodelElement, 0, 4)}
+			if typeValueListElement.Valid {
+				if tv, err := gen.NewAasSubmodelElementsFromValue(typeValueListElement.String); err == nil {
+					lst.TypeValueListElement = &tv
+				}
+			}
+			if valueTypeListElement.Valid {
+				if vt, err := gen.NewDataTypeDefXsdFromValue(valueTypeListElement.String); err == nil {
+					lst.ValueTypeListElement = vt
+				}
+			}
+			if orderRelevant.Valid {
+				lst.OrderRelevant = orderRelevant.Bool
+			}
+			el = lst
+
+		case "ReferenceElement":
+			refElem := &gen.ReferenceElement{IdShort: idShort, Category: category, ModelType: modelType, SemanticId: semanticIdObj}
+			el = refElem
+
+		case "RelationshipElement":
+			relElem := &gen.RelationshipElement{IdShort: idShort, Category: category, ModelType: modelType, SemanticId: semanticIdObj}
+			el = relElem
+
+		case "AnnotatedRelationshipElement":
+			areElem := &gen.AnnotatedRelationshipElement{IdShort: idShort, Category: category, ModelType: modelType, SemanticId: semanticIdObj}
+			el = areElem
+
+		case "Entity":
+			entity := &gen.Entity{IdShort: idShort, Category: category, ModelType: modelType, SemanticId: semanticIdObj}
+			if entityType.Valid {
+				if et, err := gen.NewEntityTypeFromValue(entityType.String); err == nil {
+					entity.EntityType = et
+				}
+			}
+			if entityGlobalAssetId.Valid {
+				entity.GlobalAssetId = entityGlobalAssetId.String
+			}
+			el = entity
+
+		case "Operation":
+			op := &gen.Operation{IdShort: idShort, Category: category, ModelType: modelType, SemanticId: semanticIdObj}
+			el = op
+
+		case "BasicEventElement":
+			bee := &gen.BasicEventElement{IdShort: idShort, Category: category, ModelType: modelType, SemanticId: semanticIdObj}
+			if beeDirection.Valid {
+				if d, err := gen.NewDirectionFromValue(beeDirection.String); err == nil {
+					bee.Direction = d
+				}
+			}
+			if beeState.Valid {
+				if s, err := gen.NewStateOfEventFromValue(beeState.String); err == nil {
+					bee.State = s
+				}
+			}
+			if beeMessageTopic.Valid {
+				bee.MessageTopic = beeMessageTopic.String
+			}
+			if beeLastUpdate.Valid {
+				bee.LastUpdate = beeLastUpdate.Time.Format(time.RFC3339)
+			}
+			// Intervals not set for now
+			el = bee
+
+		case "Capability":
+			cap := &gen.Capability{IdShort: idShort, Category: category, ModelType: modelType, SemanticId: semanticIdObj}
+			el = cap
+
+		default:
+			// Unknown/unsupported type: skip eagerly.
+			continue
+		}
+
+		n := &node{
+			id:       id,
+			parentID: parentSmeID,
+			path:     idShortPath,
+			position: position,
+			element:  el,
+		}
+		nodes[id] = n
+
+		if parentSmeID.Valid {
+			pid := parentSmeID.Int64
+			children[pid] = append(children[pid], n)
+		} else {
+			// For both subtree and pagination, roots are elements with no parent in the fetched data
+			roots = append(roots, n)
+		}
+
 	}
-	// return idShort of last element in res as next cursor
-	return res, res[len(res)-1].GetIdShort(), nil
+	return nodes, children, roots, dbSmId, dbSubmodelIdShort.String, dbSubmodelCategory.String, dbSubmodelKind.String, nil, nil
+}
+
+func getSubmodelElementLeftJoins() string {
+	return `
+        LEFT JOIN property_element prop ON sme.id = prop.id
+        LEFT JOIN blob_element blob ON sme.id = blob.id
+        LEFT JOIN file_element file ON sme.id = file.id
+        LEFT JOIN range_element range_elem ON sme.id = range_elem.id
+        LEFT JOIN submodel_element_list sme_list ON sme.id = sme_list.id
+        LEFT JOIN multilanguage_property mlp ON sme.id = mlp.id
+        LEFT JOIN reference_element ref_elem ON sme.id = ref_elem.id
+        LEFT JOIN relationship_element rel_elem ON sme.id = rel_elem.id
+        LEFT JOIN entity_element entity ON sme.id = entity.id
+        LEFT JOIN basic_event_element bee ON sme.id = bee.id
+	`
+}
+
+func getSubmodelElementDataQueryPart() string {
+	return `
+	            -- Property data
+            prop.value_type as prop_value_type,
+            COALESCE(prop.value_text, prop.value_num::text, prop.value_bool::text, prop.value_time::text, prop.value_datetime::text) as prop_value,
+            -- Blob data
+            blob.content_type as blob_content_type, blob.value as blob_value,
+            -- File data
+            file.content_type as file_content_type, file.value as file_value,
+            -- Range data
+            range_elem.value_type as range_value_type,
+            COALESCE(range_elem.min_text, range_elem.min_num::text, range_elem.min_time::text, range_elem.min_datetime::text) as range_min,
+            COALESCE(range_elem.max_text, range_elem.max_num::text, range_elem.max_time::text, range_elem.max_datetime::text) as range_max,
+            -- SubmodelElementList data
+            sme_list.type_value_list_element, sme_list.value_type_list_element, sme_list.order_relevant,
+            -- MultiLanguageProperty data
+            mlp.value_id as mlp_value_id,
+            -- ReferenceElement data
+            ref_elem.value_ref as ref_value_ref,
+            -- RelationshipElement data
+            rel_elem.first_ref as rel_first_ref, rel_elem.second_ref as rel_second_ref,
+            -- Entity data
+            entity.entity_type as entity_type, entity.global_asset_id as entity_global_asset_id,
+            -- BasicEventElement data
+            bee.observed_ref as bee_observed_ref, bee.direction as bee_direction, bee.state as bee_state, bee.message_topic as bee_message_topic, bee.message_broker_ref as bee_message_broker_ref, bee.last_update as bee_last_update, bee.min_interval as bee_min_interval, bee.max_interval as bee_max_interval
+	`
 }
 
 // This method removes a SubmodelElement by its idShort or path and all its nested elements

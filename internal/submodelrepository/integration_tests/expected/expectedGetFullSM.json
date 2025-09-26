@@ -1,0 +1,21 @@
+{
+    "modelType": "Submodel",
+    "kind": "Instance",
+    "id": "http://acplt.org/Submodels/Assets/TestAsset/Identification",
+    "idShort": "Identification",
+    "submodelElements": [
+        {
+            "modelType": "Property",
+            "value": "http://acplt.org/ValueId/ACPLT",
+            "valueType": "xs:string",
+            "idShort": "ManufacturerName"
+        },
+        {
+            "modelType": "Property",
+            "category": "VARIABLE",
+            "value": "978-8234-234-342",
+            "valueType": "xs:string",
+            "idShort": "InstanceId"
+        }
+    ]
+}

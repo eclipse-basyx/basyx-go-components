@@ -16,6 +16,7 @@ import (
 	"database/sql"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"net/http"
 	"os"
 	"time"
@@ -28,6 +29,7 @@ import (
 // SubmodelRepositoryAPIAPIService is a service that implements the logic for the SubmodelRepositoryAPIAPIServicer
 // This service should implement the business logic for every endpoint for the SubmodelRepositoryAPIAPI API.
 // Include any external packages or services that will be required by this service.
+
 type SubmodelRepositoryAPIAPIService struct {
 	submodelBackend persistence.PostgreSQLSubmodelDatabase
 }
@@ -71,7 +73,11 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelById(
 	level string,
 	extent string,
 ) (gen.ImplResponse, error) {
-	sm, err := s.submodelBackend.GetSubmodel(id)
+	decodedSubmodelIdentifier, decodeErr := base64.RawStdEncoding.DecodeString(id)
+	if decodeErr != nil {
+		return gen.Response(http.StatusBadRequest, nil), decodeErr
+	}
+	sm, err := s.submodelBackend.GetSubmodel(string(decodedSubmodelIdentifier))
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return gen.Response(404, nil), nil
@@ -86,7 +92,11 @@ func (s *SubmodelRepositoryAPIAPIService) DeleteSubmodelById(
 	ctx context.Context,
 	id string,
 ) (gen.ImplResponse, error) {
-	err := s.submodelBackend.DeleteSubmodel(id)
+	decodedSubmodelIdentifier, decodeErr := base64.RawStdEncoding.DecodeString(id)
+	if decodeErr != nil {
+		return gen.Response(http.StatusBadRequest, nil), decodeErr
+	}
+	err := s.submodelBackend.DeleteSubmodel(string(decodedSubmodelIdentifier))
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return gen.Response(404, nil), nil
@@ -103,9 +113,9 @@ func (s *SubmodelRepositoryAPIAPIService) PostSubmodel(
 ) (gen.ImplResponse, error) {
 	err := s.submodelBackend.CreateSubmodel(submodel)
 	if err != nil {
+		fmt.Println("Error creating submodel: " + err.Error())
 		return gen.Response(500, nil), err
 	}
-
 	// According to REST convention, return 201 Created + the created resource
 	return gen.Response(201, submodel), nil
 }

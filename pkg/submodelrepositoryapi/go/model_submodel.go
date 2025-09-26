@@ -9,6 +9,10 @@
 
 package openapi
 
+import (
+	"encoding/json"
+)
+
 type Submodel struct {
 	Extensions []Extension `json:"extensions,omitempty"`
 
@@ -22,7 +26,7 @@ type Submodel struct {
 
 	ModelType string `json:"modelType" validate:"regexp=^Submodel$"`
 
-	Administration AdministrativeInformation `json:"administration,omitempty"`
+	Administration *AdministrativeInformation `json:"administration,omitempty"`
 
 	Id string `json:"id" validate:"regexp=^([\\\\x09\\\\x0a\\\\x0d\\\\x20-\\\\ud7ff\\\\ue000-\\\\ufffd]|\\\\ud800[\\\\udc00-\\\\udfff]|[\\\\ud801-\\\\udbfe][\\\\udc00-\\\\udfff]|\\\\udbff[\\\\udc00-\\\\udfff])*$"`
 
@@ -37,6 +41,29 @@ type Submodel struct {
 	EmbeddedDataSpecifications []EmbeddedDataSpecification `json:"embeddedDataSpecifications,omitempty"`
 
 	SubmodelElements []SubmodelElement `json:"submodelElements,omitempty"`
+}
+
+// UnmarshalJSON implements custom unmarshaling for Submodel to handle polymorphic SubmodelElements
+func (s *Submodel) UnmarshalJSON(data []byte) error {
+	type Alias Submodel
+	aux := &struct {
+		SubmodelElements []json.RawMessage `json:"submodelElements,omitempty"`
+		*Alias
+	}{
+		Alias: (*Alias)(s),
+	}
+	if err := json.Unmarshal(data, aux); err != nil {
+		return err
+	}
+	s.SubmodelElements = make([]SubmodelElement, len(aux.SubmodelElements))
+	for i, raw := range aux.SubmodelElements {
+		elem, err := UnmarshalSubmodelElement(raw)
+		if err != nil {
+			return err
+		}
+		s.SubmodelElements[i] = elem
+	}
+	return nil
 }
 
 // AssertSubmodelRequired checks if the required fields are not zero-ed
@@ -69,11 +96,15 @@ func AssertSubmodelRequired(obj Submodel) error {
 			return err
 		}
 	}
-	if err := AssertAdministrativeInformationRequired(obj.Administration); err != nil {
-		return err
+	if obj.Administration != nil {
+		if err := AssertAdministrativeInformationRequired(*obj.Administration); err != nil {
+			return err
+		}
 	}
-	if err := AssertReferenceRequired(*obj.SemanticId); err != nil {
-		return err
+	if obj.SemanticId != nil {
+		if err := AssertReferenceRequired(*obj.SemanticId); err != nil {
+			return err
+		}
 	}
 	for _, el := range obj.SupplementalSemanticIds {
 		if err := AssertReferenceRequired(el); err != nil {
@@ -113,11 +144,15 @@ func AssertSubmodelConstraints(obj Submodel) error {
 			return err
 		}
 	}
-	if err := AssertAdministrativeInformationConstraints(obj.Administration); err != nil {
-		return err
+	if obj.Administration != nil {
+		if err := AssertAdministrativeInformationConstraints(*obj.Administration); err != nil {
+			return err
+		}
 	}
-	if err := AssertReferenceConstraints(*obj.SemanticId); err != nil {
-		return err
+	if obj.SemanticId != nil {
+		if err := AssertReferenceConstraints(*obj.SemanticId); err != nil {
+			return err
+		}
 	}
 	for _, el := range obj.SupplementalSemanticIds {
 		if err := AssertReferenceConstraints(el); err != nil {

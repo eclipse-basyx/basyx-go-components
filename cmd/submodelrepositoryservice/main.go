@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"flag"
+	"fmt"
 	"log"
 	"net/http"
 	"strconv"
@@ -43,20 +44,20 @@ func runServer(ctx context.Context, configPath string) error {
 	r.Use(c.Handler)
 
 	// Add health endpoint
-	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
+	r.Get(config.Server.ContextPath+"/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("{\"status\":\"UP\"}"))
 	})
 
 	// Instantiate generated services & controllers
 	// ==== Discovery Service ====
-	smDatabase, err := persistence_postgresql.NewPostgreSQLSubmodelBackend("postgres://" + config.Postgres.User + ":" + config.Postgres.Password + "@" + config.Postgres.Host + ":" + strconv.Itoa(config.Postgres.Port) + "/" + config.Postgres.DBName + "?sslmode=disable")
+	smDatabase, err := persistence_postgresql.NewPostgreSQLSubmodelBackend("postgres://"+config.Postgres.User+":"+config.Postgres.Password+"@"+config.Postgres.Host+":"+strconv.Itoa(config.Postgres.Port)+"/"+config.Postgres.DBName+"?sslmode=disable", config.Postgres.MaxOpenConnections, config.Postgres.MaxIdleConnections, config.Postgres.ConnMaxLifetimeMinutes, config.Server.CacheEnabled)
 	if err != nil {
 		log.Fatalf("Failed to initialize database connection: %v", err)
 		return err
 	}
 	smSvc := api.NewSubmodelRepositoryAPIAPIService(*smDatabase)
-	smCtrl := openapi.NewSubmodelRepositoryAPIAPIController(smSvc)
+	smCtrl := openapi.NewSubmodelRepositoryAPIAPIController(smSvc, config.Server.ContextPath)
 	for _, rt := range smCtrl.Routes() {
 		r.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
 	}
@@ -85,7 +86,7 @@ func runServer(ctx context.Context, configPath string) error {
 	// })
 
 	// Start the server
-	addr := "0.0.0.0:5004"
+	addr := "0.0.0.0:" + fmt.Sprintf("%d", config.Server.Port)
 	log.Printf("▶️  Submodel Repository listening on %s\n", addr)
 	// Start server in a goroutine
 	go func() {
@@ -116,16 +117,20 @@ type Config struct {
 }
 
 type ServerConfig struct {
-	Port        int    `yaml:"port"`
-	ContextPath string `yaml:"contextPath"`
+	Port         int    `yaml:"port"`
+	ContextPath  string `yaml:"contextPath"`
+	CacheEnabled bool   `yaml:"cacheEnabled"`
 }
 
 type PostgresConfig struct {
-	Host     string `yaml:"host"`
-	Port     int    `yaml:"port"`
-	User     string `yaml:"user"`
-	Password string `yaml:"password"`
-	DBName   string `yaml:"dbname"`
+	Host                   string `yaml:"host"`
+	Port                   int    `yaml:"port"`
+	User                   string `yaml:"user"`
+	Password               string `yaml:"password"`
+	DBName                 string `yaml:"dbname"`
+	MaxOpenConnections     int    `yaml:"maxOpenConnections"`
+	MaxIdleConnections     int    `yaml:"maxIdleConnections"`
+	ConnMaxLifetimeMinutes int    `yaml:"connMaxLifetimeMinutes"`
 }
 
 type CorsConfig struct {
@@ -168,6 +173,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("server.host", "0.0.0.0")
 	v.SetDefault("server.port", "5004")
 	v.SetDefault("server.contextPath", "")
+	v.SetDefault("server.cacheEnabled", false)
 
 	// MongoDB defaults
 	v.SetDefault("postgres.host", "localhost")
@@ -175,6 +181,9 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("postgres.user", "admin")
 	v.SetDefault("postgres.password", "admin123")
 	v.SetDefault("postgres.dbname", "basyx")
+	v.SetDefault("postgres.maxOpenConnections", 50)
+	v.SetDefault("postgres.maxIdleConnections", 50)
+	v.SetDefault("postgres.connMaxLifetimeMinutes", 5)
 
 	// CORS defaults
 	v.SetDefault("cors.allowedOrigins", []string{"*"})

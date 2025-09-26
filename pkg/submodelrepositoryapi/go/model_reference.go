@@ -14,7 +14,7 @@ type Reference struct {
 
 	Keys []Key `json:"keys"`
 
-	ReferredSemanticId ReferenceParent `json:"referredSemanticId,omitempty"`
+	ReferredSemanticId *ReferenceParent `json:"referredSemanticId,omitempty"`
 }
 
 // AssertReferenceRequired checks if the required fields are not zero-ed
@@ -34,8 +34,11 @@ func AssertReferenceRequired(obj Reference) error {
 			return err
 		}
 	}
-	if err := AssertReferenceParentRequired(obj.ReferredSemanticId); err != nil {
-		return err
+
+	if obj.ReferredSemanticId != nil {
+		if err := AssertReferenceParentRequired(*obj.ReferredSemanticId); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -47,8 +50,10 @@ func AssertReferenceConstraints(obj Reference) error {
 			return err
 		}
 	}
-	if err := AssertReferenceParentConstraints(obj.ReferredSemanticId); err != nil {
-		return err
+	if obj.ReferredSemanticId != nil {
+		if err := AssertReferenceParentConstraints(*obj.ReferredSemanticId); err != nil {
+			return err
+		}
 	}
 	return nil
 }

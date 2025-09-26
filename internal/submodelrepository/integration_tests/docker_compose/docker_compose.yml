@@ -28,13 +28,17 @@ services:
       dockerfile: ./cmd/submodelrepositoryservice/Dockerfile
       
     environment:
+      - SERVER_PORT=5005
       - POSTGRES_HOST=db
       - POSTGRES_PORT=5432
       - POSTGRES_USER=admin
       - POSTGRES_PASSWORD=admin123
       - POSTGRES_DBNAME=basyxTestDB
+      - POSTGRES_MAXOPENCONNECTIONS=500
+      - POSTGRES_MAXIDLECONNECTIONS=500
+      - POSTGRES_CONNMAXLIFETIMEMINUTES=5
     ports:
-      - "5004:5004"
+      - "5005:5005"
     depends_on:
       db:
         condition: service_healthy

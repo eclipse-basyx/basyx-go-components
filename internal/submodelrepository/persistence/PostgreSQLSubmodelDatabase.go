@@ -6,20 +6,33 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"time"
 
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	submodelelements "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/SubmodelElements"
+	persistence_utils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
 	gen "github.com/eclipse-basyx/basyx-go-components/pkg/submodelrepositoryapi/go"
 )
 
 type PostgreSQLSubmodelDatabase struct {
-	db *sql.DB
+	db           *sql.DB
+	cacheEnabled bool
 }
 
-func NewPostgreSQLSubmodelBackend(dsn string) (*PostgreSQLSubmodelDatabase, error) {
+var maxCacheSize = 1000
+
+// InMemory Cache for submodels
+var submodelCache map[string]gen.Submodel = make(map[string]gen.Submodel)
+
+func NewPostgreSQLSubmodelBackend(dsn string, maxOpenConns, maxIdleConns int, connMaxLifetimeMinutes int, cacheEnabled bool) (*PostgreSQLSubmodelDatabase, error) {
 	db, err := sql.Open("postgres", dsn)
+	//Set Max Connection
+	db.SetMaxOpenConns(500)
+	db.SetMaxIdleConns(500)
+	db.SetConnMaxLifetime(time.Minute * 5)
+
 	if err != nil {
 		return nil, err
 	}
@@ -45,7 +58,7 @@ func NewPostgreSQLSubmodelBackend(dsn string) (*PostgreSQLSubmodelDatabase, erro
 		return nil, dbError
 	}
 
-	return &PostgreSQLSubmodelDatabase{db: db}, nil
+	return &PostgreSQLSubmodelDatabase{db: db, cacheEnabled: cacheEnabled}, nil
 }
 
 // GetAllSubmodels and a next cursor ("" if no more pages).
@@ -109,42 +122,67 @@ func (p *PostgreSQLSubmodelDatabase) GetAllSubmodels(limit int32, cursor string,
 
 // GetSubmodel returns one Submodel by id
 func (p *PostgreSQLSubmodelDatabase) GetSubmodel(id string) (gen.Submodel, error) {
-	const q = `
-        SELECT id, id_short, category, kind, model_type
-        FROM submodel
-        WHERE id = $1
-    `
-
-	var (
-		smId, idShort, category, modelType string
-		kind                               sql.NullString
-	)
-	err := p.db.QueryRow(q, id).Scan(&smId, &idShort, &category, &kind, &modelType)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return gen.Submodel{}, sql.ErrNoRows
+	// Check cache first
+	if p.cacheEnabled {
+		if sm, found := submodelCache[id]; found {
+			return sm, nil
 		}
+	}
+
+	// Not in cache, fetch from DB
+	tx, err := p.db.Begin()
+
+	if err != nil {
+		fmt.Println(err)
+		return gen.Submodel{}, common.NewInternalServerError("Failed to begin PostgreSQL transaction - no changes applied - see console for details")
+	}
+	defer func() {
+		if err != nil {
+			tx.Rollback()
+		}
+	}()
+
+	sm, err := submodelelements.GetSubmodelWithSubmodelElements(p.db, tx, id)
+	if err != nil {
 		return gen.Submodel{}, err
 	}
 
-	sm := gen.Submodel{
-		Id:        smId,
-		IdShort:   idShort,
-		Category:  category,
-		ModelType: modelType,
-	}
-	if kind.Valid {
-		sm.Kind = gen.ModellingKind(kind.String)
+	if err := tx.Commit(); err != nil {
+		fmt.Println(err)
+		return gen.Submodel{}, common.NewInternalServerError("Failed to commit PostgreSQL transaction - no changes applied - see console for details")
 	}
 
-	return sm, nil
+	// Store in cache
+	if p.cacheEnabled {
+		submodelCache[id] = *sm
+	}
+	return *sm, nil
 }
 
 // DeleteSubmodel deletes a Submodel by id
 func (p *PostgreSQLSubmodelDatabase) DeleteSubmodel(id string) error {
+	// Check cache first
+	if p.cacheEnabled {
+		if _, found := submodelCache[id]; found {
+			delete(submodelCache, id)
+		}
+	}
+
+	tx, err := p.db.Begin()
+
+	if err != nil {
+		fmt.Println(err)
+		return common.NewInternalServerError("Failed to begin PostgreSQL transaction - no changes applied - see console for details")
+	}
+	defer func() {
+		if err != nil {
+			tx.Rollback()
+		}
+	}()
+
 	const q = `DELETE FROM submodel WHERE id=$1`
 
-	res, err := p.db.Exec(q, id)
+	res, err := tx.Exec(q, id)
 	if err != nil {
 		return err
 	}
@@ -157,6 +195,11 @@ func (p *PostgreSQLSubmodelDatabase) DeleteSubmodel(id string) error {
 	if rowsAffected == 0 {
 		return sql.ErrNoRows
 	}
+
+	if err := tx.Commit(); err != nil {
+		fmt.Println(err)
+		return common.NewInternalServerError("Failed to commit PostgreSQL transaction - no changes applied - see console for details")
+	}
 	return nil
 }
 
@@ -165,15 +208,50 @@ func (p *PostgreSQLSubmodelDatabase) DeleteSubmodel(id string) error {
 // we might want ON CONFLICT DO UPDATE for upserts, but spec-wise POST usually means create new
 // model_type is hardcoded to "Submodel"
 func (p *PostgreSQLSubmodelDatabase) CreateSubmodel(sm gen.Submodel) error {
+	tx, err := p.db.Begin()
+
+	if err != nil {
+		fmt.Println(err)
+		return common.NewInternalServerError("Failed to begin PostgreSQL transaction - no changes applied - see console for details")
+	}
+
+	defer func() {
+		if err != nil {
+			tx.Rollback()
+		}
+	}()
+
+	referenceID, err := persistence_utils.CreateSemanticId(tx, sm.SemanticId)
+
 	const q = `
-        INSERT INTO submodel (id, id_short, category, kind, model_type)
-        VALUES ($1, $2, $3, $4, 'Submodel')
+        INSERT INTO submodel (id, id_short, category, kind, model_type, semantic_id)
+        VALUES ($1, $2, $3, $4, 'Submodel', $5)
         ON CONFLICT (id) DO NOTHING
     `
 
-	_, err := p.db.Exec(q, sm.Id, sm.IdShort, sm.Category, sm.Kind)
+	_, err = tx.Exec(q, sm.Id, sm.IdShort, sm.Category, sm.Kind, referenceID)
 	if err != nil {
 		return err
+	}
+
+	if len(sm.SubmodelElements) > 0 {
+		for _, element := range sm.SubmodelElements {
+			err = p.AddSubmodelElementWithTransaction(tx, sm.Id, element)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		fmt.Println(err)
+		return common.NewInternalServerError("Failed to commit PostgreSQL transaction - no changes applied - see console for details")
+	}
+	// Store in cache if enough space
+	if p.cacheEnabled {
+		if len(submodelCache) < maxCacheSize {
+			submodelCache[sm.Id] = sm
+		}
 	}
 	return nil
 }
@@ -190,7 +268,7 @@ func (p *PostgreSQLSubmodelDatabase) GetSubmodelElement(submodelId string, idSho
 		}
 	}()
 
-	elements, _, err := submodelelements.GetSubmodelElementsWithPath(tx, submodelId, idShortOrPath, limit, cursor)
+	elements, _, err := submodelelements.GetSubmodelElementsWithPath(p.db, tx, submodelId, idShortOrPath, limit, cursor)
 	if err != nil {
 		return nil, err
 	}
@@ -219,7 +297,7 @@ func (p *PostgreSQLSubmodelDatabase) GetSubmodelElements(submodelId string, limi
 		}
 	}()
 
-	elements, cursor, err := submodelelements.GetSubmodelElementsWithPath(tx, submodelId, "", limit, cursor)
+	elements, cursor, err := submodelelements.GetSubmodelElementsWithPath(p.db, tx, submodelId, "", limit, cursor)
 	if err != nil {
 		return nil, "", err
 	}
@@ -233,6 +311,12 @@ func (p *PostgreSQLSubmodelDatabase) GetSubmodelElements(submodelId string, limi
 }
 
 func (p *PostgreSQLSubmodelDatabase) AddSubmodelElementWithPath(submodelId string, idShortPath string, submodelElement gen.SubmodelElement) error {
+	// Invalidate Submodel cache if enabled
+	if p.cacheEnabled {
+		if _, found := submodelCache[submodelId]; found {
+			delete(submodelCache, submodelId)
+		}
+	}
 	handler, err := submodelelements.GetSMEHandler(submodelElement, p.db)
 	if err != nil {
 		return err
@@ -295,11 +379,12 @@ func (p *PostgreSQLSubmodelDatabase) AddSubmodelElementWithPath(submodelId strin
 	return nil
 }
 func (p *PostgreSQLSubmodelDatabase) AddSubmodelElement(submodelId string, submodelElement gen.SubmodelElement) error {
-	handler, err := submodelelements.GetSMEHandler(submodelElement, p.db)
-	if err != nil {
-		return err
+	// Invalidate Submodel cache if enabled
+	if p.cacheEnabled {
+		if _, found := submodelCache[submodelId]; found {
+			delete(submodelCache, submodelId)
+		}
 	}
-
 	tx, err := p.db.Begin()
 	if err != nil {
 		fmt.Println(err)
@@ -312,12 +397,7 @@ func (p *PostgreSQLSubmodelDatabase) AddSubmodelElement(submodelId string, submo
 		}
 	}()
 
-	parentId, err := handler.Create(tx, submodelId, submodelElement)
-	if err != nil {
-		return err
-	}
-
-	err = p.AddNestedSubmodelElementsIteratively(tx, submodelId, parentId, submodelElement, "")
+	err = p.AddSubmodelElementWithTransaction(tx, submodelId, submodelElement)
 	if err != nil {
 		return err
 	}
@@ -330,6 +410,29 @@ func (p *PostgreSQLSubmodelDatabase) AddSubmodelElement(submodelId string, submo
 	return nil
 }
 
+func (p *PostgreSQLSubmodelDatabase) AddSubmodelElementWithTransaction(tx *sql.Tx, submodelId string, submodelElement gen.SubmodelElement) error {
+	// Invalidate Submodel cache if enabled
+	if p.cacheEnabled {
+		if _, found := submodelCache[submodelId]; found {
+			delete(submodelCache, submodelId)
+		}
+	}
+	handler, err := submodelelements.GetSMEHandler(submodelElement, p.db)
+	if err != nil {
+		return err
+	}
+	parentId, err := handler.Create(tx, submodelId, submodelElement)
+	if err != nil {
+		return err
+	}
+
+	err = p.AddNestedSubmodelElementsIteratively(tx, submodelId, parentId, submodelElement, "")
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 type ElementToProcess struct {
 	element                   gen.SubmodelElement
 	parentId                  int
@@ -339,6 +442,12 @@ type ElementToProcess struct {
 }
 
 func (p *PostgreSQLSubmodelDatabase) AddNestedSubmodelElementsIteratively(tx *sql.Tx, submodelId string, topLevelParentId int, topLevelElement gen.SubmodelElement, startPath string) error {
+	// Invalidate Submodel cache if enabled
+	if p.cacheEnabled {
+		if _, found := submodelCache[submodelId]; found {
+			delete(submodelCache, submodelId)
+		}
+	}
 	stack := []ElementToProcess{}
 
 	switch string(topLevelElement.GetModelType()) {
@@ -429,6 +538,12 @@ func (p *PostgreSQLSubmodelDatabase) AddNestedSubmodelElementsIteratively(tx *sq
 // This method removes a SubmodelElement by its idShort or path and all its nested elements
 // If the deleted Element is in a SubmodelElementList, the indices of the remaining elements are adjusted accordingly
 func (p *PostgreSQLSubmodelDatabase) DeleteSubmodelElementByPath(submodelId string, idShortOrPath string) error {
+	// Invalidate Submodel cache if enabled
+	if p.cacheEnabled {
+		if _, found := submodelCache[submodelId]; found {
+			delete(submodelCache, submodelId)
+		}
+	}
 	tx, err := p.db.Begin()
 	if err != nil {
 		return err

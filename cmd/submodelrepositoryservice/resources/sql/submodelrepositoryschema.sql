@@ -98,12 +98,37 @@ CREATE TABLE IF NOT EXISTS reference_key (
 CREATE INDEX IF NOT EXISTS ix_refkey_type_val     ON reference_key(type, value);
 CREATE INDEX IF NOT EXISTS ix_refkey_val_trgm     ON reference_key USING GIN (value gin_trgm_ops);
 
+
+CREATE TABLE IF NOT EXISTS lang_string_text_type_reference(
+  id       BIGINT PRIMARY KEY
+);
+
+CREATE TABLE IF NOT EXISTS lang_string_text_type (
+  id     BIGSERIAL PRIMARY KEY,
+  lang_string_text_type_reference_id BIGINT NOT NULL REFERENCES lang_string_text_type_reference(id) ON DELETE CASCADE,
+  language TEXT NOT NULL,
+  text     varchar(1023) NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS lang_string_name_type_reference(
+  id       BIGINT PRIMARY KEY
+);
+
+CREATE TABLE IF NOT EXISTS lang_string_name_type (
+  id     BIGSERIAL PRIMARY KEY,
+  lang_string_name_type_reference_id BIGINT NOT NULL REFERENCES lang_string_name_type_reference(id) ON DELETE CASCADE,
+  language TEXT NOT NULL,
+  text     varchar(128) NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS submodel (
-  id          TEXT PRIMARY KEY,                 -- Identifiable.id
-  id_short    TEXT,
-  category    TEXT,
+  id          varchar(2048) PRIMARY KEY,                 -- Identifiable.id
+  id_short    varchar(128),
+  category    varchar(128),
   kind        modelling_kind,
-  semantic_id BIGINT REFERENCES reference(id),
+  semantic_id BIGINT REFERENCES reference(id) ON DELETE CASCADE,
+  description_id BIGINT REFERENCES lang_string_text_type_reference(id) ON DELETE CASCADE,
+  displayname_id  BIGINT REFERENCES lang_string_name_type_reference(id) ON DELETE CASCADE,
   model_type  TEXT NOT NULL DEFAULT 'Submodel'
 );
 CREATE INDEX IF NOT EXISTS ix_sm_idshort ON submodel(id_short);
@@ -123,10 +148,12 @@ CREATE TABLE IF NOT EXISTS submodel_element (
   submodel_id    TEXT NOT NULL REFERENCES submodel(id) ON DELETE CASCADE,
   parent_sme_id  BIGINT REFERENCES submodel_element(id) ON DELETE CASCADE,
   position       INTEGER,                                   -- for ordering in lists
-  id_short       TEXT NOT NULL,
-  category       TEXT,
+  id_short       varchar(128) NOT NULL,
+  category       varchar(128),
   model_type     aas_submodel_elements NOT NULL,
   semantic_id    BIGINT REFERENCES reference(id),
+  description_id BIGINT REFERENCES lang_string_text_type_reference(id) ON DELETE CASCADE,
+  displayname_id BIGINT REFERENCES lang_string_name_type_reference(id) ON DELETE CASCADE,
   idshort_path   TEXT NOT NULL,                            -- e.g. sm_abc.sensors[2].temperature
   CONSTRAINT uq_sibling_idshort UNIQUE (submodel_id, parent_sme_id, id_short),
   CONSTRAINT uq_sibling_pos     UNIQUE (submodel_id, parent_sme_id, position)
