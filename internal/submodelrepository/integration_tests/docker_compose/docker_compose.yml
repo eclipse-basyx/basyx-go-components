@@ -28,7 +28,7 @@ services:
       dockerfile: ./cmd/submodelrepositoryservice/Dockerfile
       
     environment:
-      - SERVER_PORT=5005
+      - SERVER_PORT=5004
       - POSTGRES_HOST=db
       - POSTGRES_PORT=5432
       - POSTGRES_USER=admin
@@ -38,7 +38,7 @@ services:
       - POSTGRES_MAXIDLECONNECTIONS=500
       - POSTGRES_CONNMAXLIFETIMEMINUTES=5
     ports:
-      - "5005:5005"
+      - "5004:5004"
     depends_on:
       db:
         condition: service_healthy
