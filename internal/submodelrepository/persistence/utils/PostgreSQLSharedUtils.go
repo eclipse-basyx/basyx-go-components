@@ -77,17 +77,17 @@ func GetSemanticId(db *sql.DB, referenceID sql.NullInt64) (*gen.Reference, error
 	}, nil
 }
 
-func CreateLangStringNameTypes(tx *sql.Tx, nameTypes []*gen.LangStringNameType) (sql.NullInt64, error) {
+func CreateLangStringNameTypes(tx *sql.Tx, nameTypes []gen.LangStringNameType) (sql.NullInt64, error) {
 	var id int
 	var nameTypeID sql.NullInt64
-	if nameTypes != nil {
-		err := tx.QueryRow(`INSERT INTO lang_string_name_type_reference RETURNING id`).Scan(&id)
+	if len(nameTypes) > 0 {
+		err := tx.QueryRow(`INSERT INTO lang_string_name_type_reference DEFAULT VALUES RETURNING id`).Scan(&id)
 		if err != nil {
 			return sql.NullInt64{}, err
 		}
 		nameTypeID = sql.NullInt64{Int64: int64(id), Valid: true}
-		for i := 1; i < len(nameTypes); i++ {
-			err := tx.QueryRow(`INSERT INTO lang_string_name_type (lang_string_name_type_reference_id, text, language) VALUES ($1, $2, $3) RETURNING id`, nameTypeID.Int64, nameTypes[i].Text, nameTypes[i].Language).Scan(&id)
+		for i := 0; i < len(nameTypes); i++ {
+			_, err := tx.Exec(`INSERT INTO lang_string_name_type (lang_string_name_type_reference_id, text, language) VALUES ($1, $2, $3)`, nameTypeID.Int64, nameTypes[i].Text, nameTypes[i].Language)
 			if err != nil {
 				return sql.NullInt64{}, err
 			}
@@ -96,11 +96,11 @@ func CreateLangStringNameTypes(tx *sql.Tx, nameTypes []*gen.LangStringNameType) 
 	return nameTypeID, nil
 }
 
-func GetLangStringNameTypes(db *sql.DB, nameTypeID sql.NullInt64) ([]*gen.LangStringNameType, error) {
+func GetLangStringNameTypes(db *sql.DB, nameTypeID sql.NullInt64) ([]gen.LangStringNameType, error) {
 	if !nameTypeID.Valid {
 		return nil, nil
 	}
-	var nameTypes []*gen.LangStringNameType
+	var nameTypes []gen.LangStringNameType
 	rows, err := db.Query(`SELECT text, language FROM lang_string_name_type WHERE lang_string_name_type_reference_id=$1`, nameTypeID.Int64)
 	if err != nil {
 		return nil, err
@@ -112,12 +112,55 @@ func GetLangStringNameTypes(db *sql.DB, nameTypeID sql.NullInt64) ([]*gen.LangSt
 		if err := rows.Scan(&text, &language); err != nil {
 			return nil, err
 		}
-		nameTypes = append(nameTypes, &gen.LangStringNameType{Text: text, Language: language})
+		nameTypes = append(nameTypes, gen.LangStringNameType{Text: text, Language: language})
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
 	return nameTypes, nil
+}
+
+func CreateLangStringTextTypes(tx *sql.Tx, textTypes []gen.LangStringTextType) (sql.NullInt64, error) {
+	var id int
+	var textTypeID sql.NullInt64
+	if len(textTypes) > 0 {
+		err := tx.QueryRow(`INSERT INTO lang_string_text_type_reference DEFAULT VALUES RETURNING id`).Scan(&id)
+		if err != nil {
+			return sql.NullInt64{}, err
+		}
+		textTypeID = sql.NullInt64{Int64: int64(id), Valid: true}
+		for i := 0; i < len(textTypes); i++ {
+			_, err := tx.Exec(`INSERT INTO lang_string_text_type (lang_string_text_type_reference_id, text, language) VALUES ($1, $2, $3)`, textTypeID.Int64, textTypes[i].Text, textTypes[i].Language)
+			if err != nil {
+				return sql.NullInt64{}, err
+			}
+		}
+	}
+	return textTypeID, nil
+}
+
+func GetLangStringTextTypes(db *sql.DB, textTypeID sql.NullInt64) ([]gen.LangStringTextType, error) {
+	if !textTypeID.Valid {
+		return nil, nil
+	}
+	var textTypes []gen.LangStringTextType
+	rows, err := db.Query(`SELECT text, language FROM lang_string_text_type WHERE lang_string_text_type_reference_id=$1`, textTypeID.Int64)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var text, language string
+		if err := rows.Scan(&text, &language); err != nil {
+			return nil, err
+		}
+		textTypes = append(textTypes, gen.LangStringTextType{Text: text, Language: language})
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return textTypes, nil
 }
 
 // isEmptyReference checks if a Reference is empty (zero value)

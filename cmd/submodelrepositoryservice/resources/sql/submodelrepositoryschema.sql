@@ -100,7 +100,7 @@ CREATE INDEX IF NOT EXISTS ix_refkey_val_trgm     ON reference_key USING GIN (va
 
 
 CREATE TABLE IF NOT EXISTS lang_string_text_type_reference(
-  id       BIGINT PRIMARY KEY
+  id       BIGINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY
 );
 
 CREATE TABLE IF NOT EXISTS lang_string_text_type (
@@ -111,7 +111,7 @@ CREATE TABLE IF NOT EXISTS lang_string_text_type (
 );
 
 CREATE TABLE IF NOT EXISTS lang_string_name_type_reference(
-  id       BIGINT PRIMARY KEY
+  id       BIGINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY
 );
 
 CREATE TABLE IF NOT EXISTS lang_string_name_type (

@@ -222,14 +222,30 @@ func (p *PostgreSQLSubmodelDatabase) CreateSubmodel(sm gen.Submodel) error {
 	}()
 
 	referenceID, err := persistence_utils.CreateSemanticId(tx, sm.SemanticId)
+	if err != nil {
+		fmt.Println(err)
+		return common.NewInternalServerError("Failed to create SemanticId - no changes applied - see console for details")
+	}
+
+	displayNameId, err := persistence_utils.CreateLangStringNameTypes(tx, sm.DisplayName)
+	if err != nil {
+		fmt.Println(err)
+		return common.NewInternalServerError("Failed to create DisplayName - no changes applied - see console for details")
+	}
+
+	descriptionId, err := persistence_utils.CreateLangStringTextTypes(tx, sm.Description)
+	if err != nil {
+		fmt.Println(err)
+		return common.NewInternalServerError("Failed to create Description - no changes applied - see console for details")
+	}
 
 	const q = `
-        INSERT INTO submodel (id, id_short, category, kind, model_type, semantic_id)
-        VALUES ($1, $2, $3, $4, 'Submodel', $5)
+        INSERT INTO submodel (id, id_short, category, kind, model_type, semantic_id, displayname_id, description_id)
+        VALUES ($1, $2, $3, $4, 'Submodel', $5, $6, $7)
         ON CONFLICT (id) DO NOTHING
     `
 
-	_, err = tx.Exec(q, sm.Id, sm.IdShort, sm.Category, sm.Kind, referenceID)
+	_, err = tx.Exec(q, sm.Id, sm.IdShort, sm.Category, sm.Kind, referenceID, displayNameId, descriptionId)
 	if err != nil {
 		return err
 	}

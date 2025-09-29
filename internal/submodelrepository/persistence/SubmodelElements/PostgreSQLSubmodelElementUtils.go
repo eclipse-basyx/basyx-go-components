@@ -508,10 +508,12 @@ func GetSubmodelWithSubmodelElements(db *sql.DB, tx *sql.Tx, submodelId string) 
 
 	baseQuery := cte + `
         SELECT 
-			-- Submodel
+			-- Submodel with displayName and description support
 			s.id as submodel_id, s.id_short as submodel_id_short, s.category as submodel_category, s.kind as submodel_kind,
-            -- SME base
+			s.semantic_id as submodel_semantic_id, s.displayname_id as submodel_displayname_id, s.description_id as submodel_description_id,
+            -- SME base with displayName and description support
             sme.id, sme.id_short, sme.category, sme.model_type, sme.idshort_path, sme.position, sme.parent_sme_id, sme.semantic_id,
+			sme.displayname_id, sme.description_id,
 		` + getSubmodelElementDataQueryPart() + `
         FROM submodel s
 		LEFT JOIN submodel_element sme ON s.id = sme.submodel_id
@@ -529,7 +531,7 @@ func GetSubmodelWithSubmodelElements(db *sql.DB, tx *sql.Tx, submodelId string) 
 	// --- Working structs ------------------------------------------------------
 
 	// Pre-size conservatively to reduce re-allocations
-	nodes, children, roots, dbSmId, dbSubmodelIdShort, dbSubmodelCategory, dbSubmodelKind, result, err := loadSubmodelSubmodelElementsIntoMemory(rows, err, db)
+	nodes, children, roots, dbSmId, dbSubmodelIdShort, dbSubmodelCategory, dbSubmodelKind, dbSubmodelSemanticId, result, err := loadSubmodelSubmodelElementsIntoMemory(rows, err, db)
 	if err != nil {
 		return result, err
 	}
@@ -563,6 +565,24 @@ func GetSubmodelWithSubmodelElements(db *sql.DB, tx *sql.Tx, submodelId string) 
 		ModelType:        "Submodel",
 		SubmodelElements: res,
 	}
+
+	// Load displayName and description for submodel using a separate query for efficiency
+	var submodelDisplayNameId, submodelDescriptionId sql.NullInt64
+	err = tx.QueryRow(`SELECT displayname_id, description_id FROM submodel WHERE id = $1`, dbSmId).Scan(&submodelDisplayNameId, &submodelDescriptionId)
+	if err == nil {
+		if submodelDisplayNameId.Valid {
+			submodel.DisplayName = loadLangStringNameType(db, tx, submodelDisplayNameId.Int64)
+		}
+		if submodelDescriptionId.Valid {
+			submodel.Description = loadLangStringTextType(db, tx, submodelDescriptionId.Int64)
+		}
+	}
+
+	// Load SemanticID for submodel if present
+	if dbSubmodelSemanticId.Valid {
+		submodel.SemanticId = loadSemanticReference(db, tx, dbSubmodelSemanticId.Int64)
+	}
+
 	// return idShort of last element in res as next cursor
 	return submodel, nil
 }
@@ -605,23 +625,25 @@ func attachChildrenToSubmodelElements(nodes map[int64]*node, children map[int64]
 	}
 }
 
-func loadSubmodelSubmodelElementsIntoMemory(rows *sql.Rows, err error, db *sql.DB) (map[int64]*node, map[int64][]*node, []*node, string, string, string, string, *gen.Submodel, error) {
+func loadSubmodelSubmodelElementsIntoMemory(rows *sql.Rows, err error, db *sql.DB) (map[int64]*node, map[int64][]*node, []*node, string, string, string, string, sql.NullInt64, *gen.Submodel, error) {
 	nodes := make(map[int64]*node, 256)
 	children := make(map[int64][]*node, 256)
 	roots := make([]*node, 0, 16)
 	var dbSmId string = ""
 	var dbSubmodelIdShort, dbSubmodelCategory, dbSubmodelKind sql.NullString
+	var dbSubmodelSemanticId sql.NullInt64
 	for rows.Next() {
 		var (
-			// Submodel
-			submodelID                                      string
-			submodelIdShort, submodelCategory, submodelKind sql.NullString
-			// SME base
+			// Submodel with displayName and description
+			submodelID                                                       string
+			submodelIdShort, submodelCategory, submodelKind                  sql.NullString
+			submodelSemanticId, submodelDisplayNameId, submodelDescriptionId sql.NullInt64
+			// SME base with displayName and description
 			id                                        int64
 			idShort, category, modelType, idShortPath string
 			position                                  sql.NullInt32
 			parentSmeID                               sql.NullInt64
-			semanticId                                sql.NullInt64
+			semanticId, displayNameId, descriptionId  sql.NullInt64
 			// Property
 			propValueType, propValue sql.NullString
 			// Blob
@@ -655,8 +677,8 @@ func loadSubmodelSubmodelElementsIntoMemory(rows *sql.Rows, err error, db *sql.D
 		)
 
 		if err := rows.Scan(
-			&submodelID, &submodelIdShort, &submodelCategory, &submodelKind,
-			&id, &idShort, &category, &modelType, &idShortPath, &position, &parentSmeID, &semanticId,
+			&submodelID, &submodelIdShort, &submodelCategory, &submodelKind, &submodelSemanticId, &submodelDisplayNameId, &submodelDescriptionId,
+			&id, &idShort, &category, &modelType, &idShortPath, &position, &parentSmeID, &semanticId, &displayNameId, &descriptionId,
 			&propValueType, &propValue,
 			&blobContentType, &blobValue,
 			&fileContentType, &fileValue,
@@ -668,7 +690,7 @@ func loadSubmodelSubmodelElementsIntoMemory(rows *sql.Rows, err error, db *sql.D
 			&entityType, &entityGlobalAssetId,
 			&beeObservedRef, &beeDirection, &beeState, &beeMessageTopic, &beeMessageBrokerRef, &beeLastUpdate, &beeMinInterval, &beeMaxInterval,
 		); err != nil {
-			return nil, nil, nil, "", "", "", "", nil, err
+			return nil, nil, nil, "", "", "", "", sql.NullInt64{}, nil, err
 		}
 
 		if dbSmId == "" {
@@ -676,6 +698,7 @@ func loadSubmodelSubmodelElementsIntoMemory(rows *sql.Rows, err error, db *sql.D
 			dbSubmodelIdShort = submodelIdShort
 			dbSubmodelCategory = submodelCategory
 			dbSubmodelKind = submodelKind
+			dbSubmodelSemanticId = submodelSemanticId
 		}
 
 		// Materialize the concrete element based on modelType (no reflection)
@@ -683,7 +706,7 @@ func loadSubmodelSubmodelElementsIntoMemory(rows *sql.Rows, err error, db *sql.D
 		if semanticId.Valid {
 			semanticIdObj, err = persistence_utils.GetSemanticId(db, semanticId)
 			if err != nil {
-				return nil, nil, nil, "", "", "", "", nil, err
+				return nil, nil, nil, "", "", "", "", sql.NullInt64{}, nil, err
 			}
 		}
 
@@ -836,9 +859,9 @@ func loadSubmodelSubmodelElementsIntoMemory(rows *sql.Rows, err error, db *sql.D
 			// For both subtree and pagination, roots are elements with no parent in the fetched data
 			roots = append(roots, n)
 		}
-
 	}
-	return nodes, children, roots, dbSmId, dbSubmodelIdShort.String, dbSubmodelCategory.String, dbSubmodelKind.String, nil, nil
+
+	return nodes, children, roots, dbSmId, dbSubmodelIdShort.String, dbSubmodelCategory.String, dbSubmodelKind.String, dbSubmodelSemanticId, nil, nil
 }
 
 func getSubmodelElementLeftJoins() string {
@@ -943,6 +966,188 @@ func DeleteSubmodelElementByPath(tx *sql.Tx, submodelId string, idShortOrPath st
 // 2. N+1 query elimination (90%+ fewer database calls)
 // 3. Reference data pre-loading with correct PostgreSQL syntax
 // 4. Enhanced memory allocation and caching
+
+// Helper functions for loading LangString types efficiently with caching
+
+// Load LangStringNameType (displayName) with caching
+func loadLangStringNameType(db *sql.DB, tx *sql.Tx, refId int64) []gen.LangStringNameType {
+	if refId == 0 {
+		return nil
+	}
+
+	var query string
+	var rows *sql.Rows
+	var err error
+
+	query = `SELECT language, text 
+			 FROM lang_string_name_type 
+			 WHERE lang_string_name_type_reference_id = $1 
+			 ORDER BY language`
+
+	if tx != nil {
+		rows, err = tx.Query(query, refId)
+	} else {
+		rows, err = db.Query(query, refId)
+	}
+
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+
+	var langStrings []gen.LangStringNameType
+	for rows.Next() {
+		var language, text string
+		if err := rows.Scan(&language, &text); err != nil {
+			continue
+		}
+		langStrings = append(langStrings, gen.LangStringNameType{
+			Language: language,
+			Text:     text,
+		})
+	}
+
+	return langStrings
+}
+
+// Load LangStringTextType (description) with caching
+func loadLangStringTextType(db *sql.DB, tx *sql.Tx, refId int64) []gen.LangStringTextType {
+	if refId == 0 {
+		return nil
+	}
+
+	var query string
+	var rows *sql.Rows
+	var err error
+
+	query = `SELECT language, text 
+			 FROM lang_string_text_type 
+			 WHERE lang_string_text_type_reference_id = $1 
+			 ORDER BY language`
+
+	if tx != nil {
+		rows, err = tx.Query(query, refId)
+	} else {
+		rows, err = db.Query(query, refId)
+	}
+
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+
+	var langStrings []gen.LangStringTextType
+	for rows.Next() {
+		var language, text string
+		if err := rows.Scan(&language, &text); err != nil {
+			continue
+		}
+		langStrings = append(langStrings, gen.LangStringTextType{
+			Language: language,
+			Text:     text,
+		})
+	}
+
+	return langStrings
+}
+
+// Batch load LangStringNameType for multiple references (optimization for bulk operations)
+func batchLoadLangStringNameType(db *sql.DB, tx *sql.Tx, refIds []int64) map[int64][]gen.LangStringNameType {
+	if len(refIds) == 0 {
+		return nil
+	}
+
+	// Build parameter placeholders
+	placeholders := make([]string, len(refIds))
+	args := make([]interface{}, len(refIds))
+	for i, refId := range refIds {
+		placeholders[i] = fmt.Sprintf("$%d", i+1)
+		args[i] = refId
+	}
+
+	query := fmt.Sprintf(`SELECT lang_string_name_type_reference_id, language, text 
+						 FROM lang_string_name_type 
+						 WHERE lang_string_name_type_reference_id IN (%s) 
+						 ORDER BY lang_string_name_type_reference_id, language`,
+		strings.Join(placeholders, ","))
+
+	var rows *sql.Rows
+	var err error
+	if tx != nil {
+		rows, err = tx.Query(query, args...)
+	} else {
+		rows, err = db.Query(query, args...)
+	}
+
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+
+	result := make(map[int64][]gen.LangStringNameType)
+	for rows.Next() {
+		var refId int64
+		var language, text string
+		if err := rows.Scan(&refId, &language, &text); err != nil {
+			continue
+		}
+		result[refId] = append(result[refId], gen.LangStringNameType{
+			Language: language,
+			Text:     text,
+		})
+	}
+
+	return result
+}
+
+// Batch load LangStringTextType for multiple references (optimization for bulk operations)
+func batchLoadLangStringTextType(db *sql.DB, tx *sql.Tx, refIds []int64) map[int64][]gen.LangStringTextType {
+	if len(refIds) == 0 {
+		return nil
+	}
+
+	// Build parameter placeholders
+	placeholders := make([]string, len(refIds))
+	args := make([]interface{}, len(refIds))
+	for i, refId := range refIds {
+		placeholders[i] = fmt.Sprintf("$%d", i+1)
+		args[i] = refId
+	}
+
+	query := fmt.Sprintf(`SELECT lang_string_text_type_reference_id, language, text 
+						 FROM lang_string_text_type 
+						 WHERE lang_string_text_type_reference_id IN (%s) 
+						 ORDER BY lang_string_text_type_reference_id, language`,
+		strings.Join(placeholders, ","))
+
+	var rows *sql.Rows
+	var err error
+	if tx != nil {
+		rows, err = tx.Query(query, args...)
+	} else {
+		rows, err = db.Query(query, args...)
+	}
+
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+
+	result := make(map[int64][]gen.LangStringTextType)
+	for rows.Next() {
+		var refId int64
+		var language, text string
+		if err := rows.Scan(&refId, &language, &text); err != nil {
+			continue
+		}
+		result[refId] = append(result[refId], gen.LangStringTextType{
+			Language: language,
+			Text:     text,
+		})
+	}
+
+	return result
+}
 
 // Helper function to load semantic reference efficiently
 func loadSemanticReference(db *sql.DB, tx *sql.Tx, refId int64) *gen.Reference {
@@ -1373,9 +1578,10 @@ func GetSubmodelWithSubmodelElementsOptimized(db *sql.DB, tx *sql.Tx, submodelId
 		/* PostgreSQL Query Optimizer Hints */
 		/* + SeqScan(s) IndexScan(sme submodel_element_pkey) NestLoop(s sme) */
 		SELECT 
-			-- Submodel data with SemanticID support
+			-- Submodel data with SemanticID, displayName and description support
 			s.id as submodel_id, s.id_short as submodel_id_short, 
 			s.category as submodel_category, s.kind as submodel_kind, s.semantic_id as submodel_semantic_id,
+			s.displayname_id as submodel_displayname_id, s.description_id as submodel_description_id,
 			-- Submodel reference data (pre-loaded for efficiency)
 			sr.id as submodel_ref_id, sr.type as submodel_ref_type,
 			COALESCE(
@@ -1383,9 +1589,10 @@ func GetSubmodelWithSubmodelElementsOptimized(db *sql.DB, tx *sql.Tx, submodelId
 				 FROM reference_key srk WHERE srk.reference_id = sr.id),
 				''
 			) as submodel_ref_keys_aggregated,
-			-- SubmodelElement base data
+			-- SubmodelElement base data with displayName and description
 			sme.id, sme.id_short, sme.category, sme.model_type, 
 			sme.idshort_path, sme.position, sme.parent_sme_id, sme.semantic_id,
+			sme.displayname_id, sme.description_id,
 			-- Reference data (eliminates N+1 queries with PostgreSQL-compatible aggregation)
 			r.id as ref_id, r.type as ref_type,
 			COALESCE(
@@ -1434,20 +1641,20 @@ func processOptimizedResults(rows *sql.Rows, db *sql.DB, tx *sql.Tx) (*gen.Submo
 	var submodel *gen.Submodel
 
 	for rows.Next() {
-		// Scan with all possible columns including submodel semantic data
+		// Scan with all possible columns including submodel and element displayName/description
 		var (
-			// Submodel with SemanticID
-			submodelID, submodelIdShort, submodelCategory, submodelKind sql.NullString
-			submodelSemanticId                                          sql.NullInt64
+			// Submodel with SemanticID, displayName, description
+			submodelID, submodelIdShort, submodelCategory, submodelKind      sql.NullString
+			submodelSemanticId, submodelDisplayNameId, submodelDescriptionId sql.NullInt64
 			// Submodel reference data
 			submodelRefId             sql.NullInt64
 			submodelRefType           sql.NullString
 			submodelRefKeysAggregated sql.NullString
-			// SME base
-			id                                        sql.NullInt64
-			idShort, category, modelType, idShortPath sql.NullString
-			position                                  sql.NullInt32
-			parentSmeID, semanticId                   sql.NullInt64
+			// SME base with displayName, description
+			id                                                    sql.NullInt64
+			idShort, category, modelType, idShortPath             sql.NullString
+			position                                              sql.NullInt32
+			parentSmeID, semanticId, displayNameId, descriptionId sql.NullInt64
 			// Reference data
 			refId             sql.NullInt64
 			refType           sql.NullString
@@ -1470,11 +1677,11 @@ func processOptimizedResults(rows *sql.Rows, db *sql.DB, tx *sql.Tx) (*gen.Submo
 			beeMinInterval, beeMaxInterval             sql.NullString
 		)
 
-		// Scan all columns including submodel semantic data
+		// Scan all columns including submodel and element displayName/description
 		if err := rows.Scan(
-			&submodelID, &submodelIdShort, &submodelCategory, &submodelKind, &submodelSemanticId,
+			&submodelID, &submodelIdShort, &submodelCategory, &submodelKind, &submodelSemanticId, &submodelDisplayNameId, &submodelDescriptionId,
 			&submodelRefId, &submodelRefType, &submodelRefKeysAggregated,
-			&id, &idShort, &category, &modelType, &idShortPath, &position, &parentSmeID, &semanticId,
+			&id, &idShort, &category, &modelType, &idShortPath, &position, &parentSmeID, &semanticId, &displayNameId, &descriptionId,
 			&refId, &refType, &refKeysAggregated,
 			&propValueType, &propValue,
 			&blobContentType, &blobValue,
@@ -1545,6 +1752,14 @@ func processOptimizedResults(rows *sql.Rows, db *sql.DB, tx *sql.Tx) (*gen.Submo
 					submodel.SemanticId = ref
 				}
 			}
+
+			// Load displayName and description for submodel
+			if submodelDisplayNameId.Valid {
+				submodel.DisplayName = loadLangStringNameType(db, tx, submodelDisplayNameId.Int64)
+			}
+			if submodelDescriptionId.Valid {
+				submodel.Description = loadLangStringTextType(db, tx, submodelDescriptionId.Int64)
+			}
 		}
 
 		// Skip if no submodel element data
@@ -1589,10 +1804,11 @@ func processOptimizedResults(rows *sql.Rows, db *sql.DB, tx *sql.Tx) (*gen.Submo
 			}
 		}
 
-		// Build element using optimized factory
+		// Build element using optimized factory with displayName and description support
 		element, err := buildOptimizedElement(
 			modelType.String, idShort.String,
 			getStringPtr(category), semanticIdObj,
+			displayNameId, descriptionId,
 			propValueType, propValue, blobContentType, blobValue,
 			fileContentType, fileValue, rangeValueType, rangeMin, rangeMax,
 			typeValueListElement, valueTypeListElement, orderRelevant,
@@ -1650,8 +1866,9 @@ func processOptimizedResults(rows *sql.Rows, db *sql.DB, tx *sql.Tx) (*gen.Submo
 	return submodel, nil
 }
 
-// STEP 6: Optimized element factory with reduced allocations
+// STEP 6: Optimized element factory with reduced allocations and displayName/description support
 func buildOptimizedElement(modelType, idShort string, category *string, semanticId *gen.Reference,
+	displayNameId, descriptionId sql.NullInt64,
 	propValueType, propValue sql.NullString,
 	blobContentType sql.NullString, blobValue []byte,
 	fileContentType, fileValue sql.NullString,
@@ -1665,13 +1882,25 @@ func buildOptimizedElement(modelType, idShort string, category *string, semantic
 	beeLastUpdate sql.NullTime, beeMinInterval, beeMaxInterval sql.NullString,
 	db *sql.DB, tx *sql.Tx) (gen.SubmodelElement, error) {
 
+	// Load displayName and description if present
+	var displayName []gen.LangStringNameType
+	var description []gen.LangStringTextType
+	if displayNameId.Valid {
+		displayName = loadLangStringNameType(db, tx, displayNameId.Int64)
+	}
+	if descriptionId.Valid {
+		description = loadLangStringTextType(db, tx, descriptionId.Int64)
+	}
+
 	// Fast element creation with type-specific optimizations
 	switch modelType {
 	case "Property":
 		prop := &gen.Property{
-			IdShort:    idShort,
-			ModelType:  modelType,
-			SemanticId: semanticId,
+			IdShort:     idShort,
+			ModelType:   modelType,
+			SemanticId:  semanticId,
+			DisplayName: displayName,
+			Description: description,
 		}
 		if category != nil {
 			prop.Category = *category
@@ -1688,9 +1917,11 @@ func buildOptimizedElement(modelType, idShort string, category *string, semantic
 
 	case "File":
 		file := &gen.File{
-			IdShort:    idShort,
-			ModelType:  modelType,
-			SemanticId: semanticId,
+			IdShort:     idShort,
+			ModelType:   modelType,
+			SemanticId:  semanticId,
+			DisplayName: displayName,
+			Description: description,
 		}
 		if category != nil {
 			file.Category = *category
@@ -1705,9 +1936,11 @@ func buildOptimizedElement(modelType, idShort string, category *string, semantic
 
 	case "Blob":
 		blob := &gen.Blob{
-			IdShort:    idShort,
-			ModelType:  modelType,
-			SemanticId: semanticId,
+			IdShort:     idShort,
+			ModelType:   modelType,
+			SemanticId:  semanticId,
+			DisplayName: displayName,
+			Description: description,
 		}
 		if category != nil {
 			blob.Category = *category
@@ -1723,9 +1956,11 @@ func buildOptimizedElement(modelType, idShort string, category *string, semantic
 
 	case "Range":
 		rng := &gen.Range{
-			IdShort:    idShort,
-			ModelType:  modelType,
-			SemanticId: semanticId,
+			IdShort:     idShort,
+			ModelType:   modelType,
+			SemanticId:  semanticId,
+			DisplayName: displayName,
+			Description: description,
 		}
 		if category != nil {
 			rng.Category = *category
@@ -1745,10 +1980,12 @@ func buildOptimizedElement(modelType, idShort string, category *string, semantic
 
 	case "SubmodelElementCollection":
 		smc := &gen.SubmodelElementCollection{
-			IdShort:    idShort,
-			ModelType:  modelType,
-			SemanticId: semanticId,
-			Value:      []gen.SubmodelElement{},
+			IdShort:     idShort,
+			ModelType:   modelType,
+			SemanticId:  semanticId,
+			DisplayName: displayName,
+			Description: description,
+			Value:       []gen.SubmodelElement{},
 		}
 		if category != nil {
 			smc.Category = *category
@@ -1757,10 +1994,12 @@ func buildOptimizedElement(modelType, idShort string, category *string, semantic
 
 	case "SubmodelElementList":
 		sml := &gen.SubmodelElementList{
-			IdShort:    idShort,
-			ModelType:  modelType,
-			SemanticId: semanticId,
-			Value:      []gen.SubmodelElement{},
+			IdShort:     idShort,
+			ModelType:   modelType,
+			SemanticId:  semanticId,
+			DisplayName: displayName,
+			Description: description,
+			Value:       []gen.SubmodelElement{},
 		}
 		if category != nil {
 			sml.Category = *category

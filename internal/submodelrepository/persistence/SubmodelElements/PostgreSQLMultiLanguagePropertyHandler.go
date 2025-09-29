@@ -82,8 +82,7 @@ func (p PostgreSQLMultiLanguagePropertyHandler) Read(tx *sql.Tx, submodelId stri
 		if err := rows.Scan(&lang, &text); err != nil {
 			return nil, err
 		}
-		var i interface{} = text
-		values = append(values, gen.LangStringTextType{Language: lang, Text: &i})
+		values = append(values, gen.LangStringTextType{Language: lang, Text: text})
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
