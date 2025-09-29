@@ -77,6 +77,49 @@ func GetSemanticId(db *sql.DB, referenceID sql.NullInt64) (*gen.Reference, error
 	}, nil
 }
 
+func CreateLangStringNameTypes(tx *sql.Tx, nameTypes []*gen.LangStringNameType) (sql.NullInt64, error) {
+	var id int
+	var nameTypeID sql.NullInt64
+	if nameTypes != nil {
+		err := tx.QueryRow(`INSERT INTO lang_string_name_type_reference RETURNING id`).Scan(&id)
+		if err != nil {
+			return sql.NullInt64{}, err
+		}
+		nameTypeID = sql.NullInt64{Int64: int64(id), Valid: true}
+		for i := 1; i < len(nameTypes); i++ {
+			err := tx.QueryRow(`INSERT INTO lang_string_name_type (lang_string_name_type_reference_id, text, language) VALUES ($1, $2, $3) RETURNING id`, nameTypeID.Int64, nameTypes[i].Text, nameTypes[i].Language).Scan(&id)
+			if err != nil {
+				return sql.NullInt64{}, err
+			}
+		}
+	}
+	return nameTypeID, nil
+}
+
+func GetLangStringNameTypes(db *sql.DB, nameTypeID sql.NullInt64) ([]*gen.LangStringNameType, error) {
+	if !nameTypeID.Valid {
+		return nil, nil
+	}
+	var nameTypes []*gen.LangStringNameType
+	rows, err := db.Query(`SELECT text, language FROM lang_string_name_type WHERE lang_string_name_type_reference_id=$1`, nameTypeID.Int64)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var text, language string
+		if err := rows.Scan(&text, &language); err != nil {
+			return nil, err
+		}
+		nameTypes = append(nameTypes, &gen.LangStringNameType{Text: text, Language: language})
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return nameTypes, nil
+}
+
 // isEmptyReference checks if a Reference is empty (zero value)
 
 func isEmptyReference(ref gen.Reference) bool {
