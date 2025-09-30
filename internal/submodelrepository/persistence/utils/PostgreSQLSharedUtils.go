@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"reflect"
 
+	qb "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/querybuilder"
 	gen "github.com/eclipse-basyx/basyx-go-components/pkg/submodelrepositoryapi/go"
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 )
@@ -36,8 +37,11 @@ func GetSemanticId(db *sql.DB, referenceID sql.NullInt64) (*gen.Reference, error
 	}
 	var refType string
 	// avoid driver-specific type casts in the query string which can confuse the pq parser
-	print(referenceID.Int64)
-	err := db.QueryRow(`SELECT type FROM reference WHERE id=$1`, referenceID.Int64).Scan(&refType)
+	qRef, argsRef := qb.NewSelect("type").
+		From("reference").
+		Where("id=$1", referenceID.Int64).
+		Build()
+	err := db.QueryRow(qRef, argsRef...).Scan(&refType)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
@@ -45,7 +49,12 @@ func GetSemanticId(db *sql.DB, referenceID sql.NullInt64) (*gen.Reference, error
 		return nil, err
 	}
 	// similarly, select the type column directly and let the driver handle conversion
-	rows, err := db.Query(`SELECT type, value FROM reference_key WHERE reference_id=$1 ORDER BY position`, referenceID.Int64)
+	qKeys, argsKeys := qb.NewSelect("type", "value").
+		From("reference_key").
+		Where("reference_id=$1", referenceID.Int64).
+		OrderBy("position").
+		Build()
+	rows, err := db.Query(qKeys, argsKeys...)
 	if err != nil {
 		return nil, err
 	}
@@ -101,7 +110,11 @@ func GetLangStringNameTypes(db *sql.DB, nameTypeID sql.NullInt64) ([]gen.LangStr
 		return nil, nil
 	}
 	var nameTypes []gen.LangStringNameType
-	rows, err := db.Query(`SELECT text, language FROM lang_string_name_type WHERE lang_string_name_type_reference_id=$1`, nameTypeID.Int64)
+	q, args := qb.NewSelect("text", "language").
+		From("lang_string_name_type").
+		Where("lang_string_name_type_reference_id=$1", nameTypeID.Int64).
+		Build()
+	rows, err := db.Query(q, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -144,7 +157,11 @@ func GetLangStringTextTypes(db *sql.DB, textTypeID sql.NullInt64) ([]gen.LangStr
 		return nil, nil
 	}
 	var textTypes []gen.LangStringTextType
-	rows, err := db.Query(`SELECT text, language FROM lang_string_text_type WHERE lang_string_text_type_reference_id=$1`, textTypeID.Int64)
+	q, args := qb.NewSelect("text", "language").
+		From("lang_string_text_type").
+		Where("lang_string_text_type_reference_id=$1", textTypeID.Int64).
+		Build()
+	rows, err := db.Query(q, args...)
 	if err != nil {
 		return nil, err
 	}

@@ -66,61 +66,29 @@ func NewPostgreSQLSubmodelBackend(dsn string, maxOpenConns, maxIdleConns int, co
 
 // GetAllSubmodels and a next cursor ("" if no more pages).
 func (p *PostgreSQLSubmodelDatabase) GetAllSubmodels(limit int32, cursor string, idShort string) ([]gen.Submodel, string, error) {
-	if limit <= 0 {
-		limit = 100
-	}
+	tx, err := p.db.Begin()
 
-	// Keyset pagination: start after the cursor (last seen id).
-	// Simple filter by idShort if provided.
-	// Note: This assumes 'id' is unique and can be used for pagination.
-	// Adjust the query as needed based on actual requirements and schema.
-	const q = `
-        SELECT id, id_short, category, kind, 'Submodel' AS model_type
-        FROM submodel
-        WHERE ($1 = '' OR id_short = $1)
-          AND ($2 = '' OR id > $2)
-        ORDER BY id
-        LIMIT $3
-    `
-	rows, err := p.db.Query(q, idShort, cursor, limit)
+	if err != nil {
+		fmt.Println(err)
+		return nil, "", beginTransactionErrorSubmodelRepo
+	}
+	defer func() {
+		if err != nil {
+			tx.Rollback()
+		}
+	}()
+
+	sm, err := submodelelements.GetSubmodelWithSubmodelElementsOrAll(p.db, tx)
 	if err != nil {
 		return nil, "", err
 	}
-	defer rows.Close()
 
-	list := make([]gen.Submodel, 0, limit)
-	var lastID string
-
-	for rows.Next() {
-		var (
-			id, idShortDB, category, modelType string
-			kind                               sql.NullString
-		)
-		if err := rows.Scan(&id, &idShortDB, &category, &kind, &modelType); err != nil {
-			return nil, "", err
-		}
-
-		sm := gen.Submodel{
-			Id:        id,
-			IdShort:   idShortDB,
-			Category:  category,
-			ModelType: modelType, // "Submodel"
-		}
-		if kind.Valid {
-			sm.Kind = gen.ModellingKind(kind.String) // enum stored as text
-		}
-		list = append(list, sm)
-		lastID = id
-	}
-	if err := rows.Err(); err != nil {
-		return nil, "", err
+	if err := tx.Commit(); err != nil {
+		fmt.Println(err)
+		return nil, "", failedPostgresTransactionSubmodelRepo
 	}
 
-	nextCursor := ""
-	if int32(len(list)) == limit {
-		nextCursor = lastID
-	}
-	return list, nextCursor, nil
+	return sm, "", nil
 }
 
 // GetSubmodel returns one Submodel by id
