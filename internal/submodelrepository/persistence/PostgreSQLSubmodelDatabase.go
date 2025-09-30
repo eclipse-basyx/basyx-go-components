@@ -67,6 +67,9 @@ func NewPostgreSQLSubmodelBackend(dsn string, maxOpenConns, maxIdleConns int, co
 // GetAllSubmodels and a next cursor ("" if no more pages).
 func (p *PostgreSQLSubmodelDatabase) GetAllSubmodels(limit int32, cursor string, idShort string) ([]gen.Submodel, string, error) {
 	tx, err := p.db.Begin()
+	if limit <= 0 {
+		limit = 100
+	}
 
 	if err != nil {
 		fmt.Println(err)
