@@ -21,6 +21,9 @@ type PostgreSQLSubmodelDatabase struct {
 	cacheEnabled bool
 }
 
+var failedPostgresTransactionSubmodelRepo = common.NewInternalServerError("Failed to commit PostgreSQL transaction - no changes applied - see console for details")
+var beginTransactionErrorSubmodelRepo = common.NewInternalServerError("Failed to begin PostgreSQL transaction - no changes applied - see console for details")
+
 var maxCacheSize = 1000
 
 // InMemory Cache for submodels
@@ -134,7 +137,7 @@ func (p *PostgreSQLSubmodelDatabase) GetSubmodel(id string) (gen.Submodel, error
 
 	if err != nil {
 		fmt.Println(err)
-		return gen.Submodel{}, common.NewInternalServerError("Failed to begin PostgreSQL transaction - no changes applied - see console for details")
+		return gen.Submodel{}, beginTransactionErrorSubmodelRepo
 	}
 	defer func() {
 		if err != nil {
@@ -149,7 +152,7 @@ func (p *PostgreSQLSubmodelDatabase) GetSubmodel(id string) (gen.Submodel, error
 
 	if err := tx.Commit(); err != nil {
 		fmt.Println(err)
-		return gen.Submodel{}, common.NewInternalServerError("Failed to commit PostgreSQL transaction - no changes applied - see console for details")
+		return gen.Submodel{}, failedPostgresTransactionSubmodelRepo
 	}
 
 	// Store in cache
@@ -172,7 +175,7 @@ func (p *PostgreSQLSubmodelDatabase) DeleteSubmodel(id string) error {
 
 	if err != nil {
 		fmt.Println(err)
-		return common.NewInternalServerError("Failed to begin PostgreSQL transaction - no changes applied - see console for details")
+		return beginTransactionErrorSubmodelRepo
 	}
 	defer func() {
 		if err != nil {
@@ -198,7 +201,7 @@ func (p *PostgreSQLSubmodelDatabase) DeleteSubmodel(id string) error {
 
 	if err := tx.Commit(); err != nil {
 		fmt.Println(err)
-		return common.NewInternalServerError("Failed to commit PostgreSQL transaction - no changes applied - see console for details")
+		return failedPostgresTransactionSubmodelRepo
 	}
 	return nil
 }
@@ -212,7 +215,7 @@ func (p *PostgreSQLSubmodelDatabase) CreateSubmodel(sm gen.Submodel) error {
 
 	if err != nil {
 		fmt.Println(err)
-		return common.NewInternalServerError("Failed to begin PostgreSQL transaction - no changes applied - see console for details")
+		return beginTransactionErrorSubmodelRepo
 	}
 
 	defer func() {
@@ -261,7 +264,7 @@ func (p *PostgreSQLSubmodelDatabase) CreateSubmodel(sm gen.Submodel) error {
 
 	if err := tx.Commit(); err != nil {
 		fmt.Println(err)
-		return common.NewInternalServerError("Failed to commit PostgreSQL transaction - no changes applied - see console for details")
+		return failedPostgresTransactionSubmodelRepo
 	}
 	// Store in cache if enough space
 	if p.cacheEnabled {
@@ -276,7 +279,7 @@ func (p *PostgreSQLSubmodelDatabase) GetSubmodelElement(submodelId string, idSho
 	tx, err := p.db.Begin()
 	if err != nil {
 		fmt.Println(err)
-		return nil, common.NewInternalServerError("Failed to begin PostgreSQL transaction - no changes applied - see console for details")
+		return nil, beginTransactionErrorSubmodelRepo
 	}
 	defer func() {
 		if err != nil {
@@ -295,7 +298,7 @@ func (p *PostgreSQLSubmodelDatabase) GetSubmodelElement(submodelId string, idSho
 
 	if err := tx.Commit(); err != nil {
 		fmt.Println(err)
-		return nil, common.NewInternalServerError("Failed to commit PostgreSQL transaction - no changes applied - see console for details")
+		return nil, failedPostgresTransactionSubmodelRepo
 	}
 
 	return elements[0], nil
@@ -305,7 +308,7 @@ func (p *PostgreSQLSubmodelDatabase) GetSubmodelElements(submodelId string, limi
 	tx, err := p.db.Begin()
 	if err != nil {
 		fmt.Println(err)
-		return nil, "", common.NewInternalServerError("Failed to begin PostgreSQL transaction - no changes applied - see console for details")
+		return nil, "", beginTransactionErrorSubmodelRepo
 	}
 	defer func() {
 		if err != nil {
@@ -320,7 +323,7 @@ func (p *PostgreSQLSubmodelDatabase) GetSubmodelElements(submodelId string, limi
 
 	if err := tx.Commit(); err != nil {
 		fmt.Println(err)
-		return nil, "", common.NewInternalServerError("Failed to commit PostgreSQL transaction - no changes applied - see console for details")
+		return nil, "", failedPostgresTransactionSubmodelRepo
 	}
 
 	return elements, cursor, nil
@@ -346,7 +349,7 @@ func (p *PostgreSQLSubmodelDatabase) AddSubmodelElementWithPath(submodelId strin
 	tx, err := p.db.Begin()
 	if err != nil {
 		fmt.Println(err)
-		return common.NewInternalServerError("Failed to begin PostgreSQL transaction - no changes applied - see console for details")
+		return beginTransactionErrorSubmodelRepo
 	}
 
 	defer func() {
@@ -389,7 +392,7 @@ func (p *PostgreSQLSubmodelDatabase) AddSubmodelElementWithPath(submodelId strin
 
 	if err := tx.Commit(); err != nil {
 		fmt.Println(err)
-		return common.NewInternalServerError("Failed to commit PostgreSQL transaction - no changes applied - see console for details")
+		return failedPostgresTransactionSubmodelRepo
 	}
 
 	return nil
@@ -404,7 +407,7 @@ func (p *PostgreSQLSubmodelDatabase) AddSubmodelElement(submodelId string, submo
 	tx, err := p.db.Begin()
 	if err != nil {
 		fmt.Println(err)
-		return common.NewInternalServerError("Failed to begin PostgreSQL transaction - no changes applied - see console for details")
+		return beginTransactionErrorSubmodelRepo
 	}
 
 	defer func() {
@@ -420,7 +423,7 @@ func (p *PostgreSQLSubmodelDatabase) AddSubmodelElement(submodelId string, submo
 
 	if err := tx.Commit(); err != nil {
 		fmt.Println(err)
-		return common.NewInternalServerError("Failed to commit PostgreSQL transaction - no changes applied - see console for details")
+		return failedPostgresTransactionSubmodelRepo
 	}
 
 	return nil

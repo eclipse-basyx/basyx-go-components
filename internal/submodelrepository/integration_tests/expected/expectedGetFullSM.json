@@ -1,21 +1,52 @@
 {
-    "modelType": "Submodel",
-    "kind": "Instance",
-    "id": "http://acplt.org/Submodels/Assets/TestAsset/Identification",
     "idShort": "Identification",
+    "modelType": "Submodel",
+    "id": "http://acplt.org/Submodels/Assets/TestAsset/Identification",
+    "kind": "Instance",
+    "semanticId": {
+        "type": "ExternalReference",
+        "keys": [
+            {
+                "type": "Submodel",
+                "value": "http://acplt.org/SubmodelTemplates/AssetIdentification"
+            },
+            {
+                "type": "Submodel",
+                "value": "http://acplt.org/SubmodelTemplates/AssetIdentification"
+            }
+        ]
+    },
     "submodelElements": [
         {
+            "category": "VARIABLE",
+            "idShort": "InstanceId",
             "modelType": "Property",
-            "value": "http://acplt.org/ValueId/ACPLT",
+            "semanticId": {
+                "type": "ExternalReference",
+                "keys": [
+                    {
+                        "type": "GlobalReference",
+                        "value": "http://opcfoundation.org/UA/DI/1.1/DeviceType/Serialnumber"
+                    }
+                ]
+            },
             "valueType": "xs:string",
-            "idShort": "ManufacturerName"
+            "value": "978-8234-234-342"
         },
         {
+            "idShort": "ManufacturerName",
             "modelType": "Property",
-            "category": "VARIABLE",
-            "value": "978-8234-234-342",
+            "semanticId": {
+                "type": "ExternalReference",
+                "keys": [
+                    {
+                        "type": "GlobalReference",
+                        "value": "0173-1#02-AAO677#002"
+                    }
+                ]
+            },
             "valueType": "xs:string",
-            "idShort": "InstanceId"
+            "value": "http://acplt.org/ValueId/ACPLT"
         }
     ]
 }
