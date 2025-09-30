@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	qb "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/querybuilder"
 	persistence_utils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
 	gen "github.com/eclipse-basyx/basyx-go-components/pkg/submodelrepositoryapi/go"
 )
@@ -201,7 +202,8 @@ func GetSubmodelElementsWithPath(db *sql.DB, tx *sql.Tx, submodelId string, idSh
 		limit = 100
 	}
 	//Check if Submodel exists
-	sRows, err := tx.Query(`SELECT id FROM submodel WHERE id = $1`, submodelId)
+	qExist, argsExist := qb.NewSelect("id").From("submodel").Where("id = $1", submodelId).Build()
+	sRows, err := tx.Query(qExist, argsExist...)
 	if err != nil {
 		return nil, "", err
 	}
@@ -213,10 +215,13 @@ func GetSubmodelElementsWithPath(db *sql.DB, tx *sql.Tx, submodelId string, idSh
 	// Get OFFSET based on Cursor
 	offset := 0
 	if cursor != "" {
-		query := `SELECT ROW_NUMBER() OVER (ORDER BY id_short) AS position, id_short
-    FROM submodel_element
-    WHERE submodel_id = $1 AND parent_sme_id IS NULL`
-		cRows, err := tx.Query(query, submodelId)
+		qCursor, argsCursor := qb.NewSelect(
+			"ROW_NUMBER() OVER (ORDER BY id_short) AS position",
+			"id_short",
+		).From("submodel_element").
+			Where("submodel_id = $1 AND parent_sme_id IS NULL", submodelId).
+			Build()
+		cRows, err := tx.Query(qCursor, argsCursor...)
 		if err != nil {
 			return nil, "", err
 		}
@@ -625,7 +630,11 @@ func GetSubmodelWithSubmodelElements(db *sql.DB, tx *sql.Tx, submodelId string) 
 
 	// Load displayName and description for submodel using a separate query for efficiency
 	var submodelDisplayNameId, submodelDescriptionId sql.NullInt64
-	err = tx.QueryRow(`SELECT displayname_id, description_id FROM submodel WHERE id = $1`, dbSmId).Scan(&submodelDisplayNameId, &submodelDescriptionId)
+	qMeta, argsMeta := qb.NewSelect("displayname_id", "description_id").
+		From("submodel").
+		Where("id = $1", dbSmId).
+		Build()
+	err = tx.QueryRow(qMeta, argsMeta...).Scan(&submodelDisplayNameId, &submodelDescriptionId)
 	if err == nil {
 		if submodelDisplayNameId.Valid {
 			submodel.DisplayName = loadLangStringNameType(db, tx, submodelDisplayNameId.Int64)
@@ -642,6 +651,317 @@ func GetSubmodelWithSubmodelElements(db *sql.DB, tx *sql.Tx, submodelId string) 
 
 	// return idShort of last element in res as next cursor
 	return submodel, nil
+}
+
+// GetSubmodelWithSubmodelElementsOrAll returns:
+// - a slice with a single Submodel when submodelId is non-empty
+// - all Submodels (each with its SubmodelElements) when submodelId is empty
+// Backward compatible: the original GetSubmodelWithSubmodelElements remains unchanged.
+func GetSubmodelWithSubmodelElementsOrAll(db *sql.DB, tx *sql.Tx) ([]gen.Submodel, error) {
+	// Single-query path: fetch all submodels and their elements in one go (no WHERE on submodel)
+	baseQuery := `
+		SELECT 
+			-- Submodel with displayName and description support
+			s.id as submodel_id, s.id_short as submodel_id_short, s.category as submodel_category, s.kind as submodel_kind,
+			s.semantic_id as submodel_semantic_id, s.displayname_id as submodel_displayname_id, s.description_id as submodel_description_id,
+			-- SME base with displayName and description support
+			sme.id, sme.id_short, sme.category, sme.model_type, sme.idshort_path, sme.position, sme.parent_sme_id, sme.semantic_id,
+			sme.displayname_id, sme.description_id,
+		` + getSubmodelElementDataQueryPart() + `
+		FROM submodel s
+		LEFT JOIN submodel_element sme ON s.id = sme.submodel_id
+		` + getSubmodelElementLeftJoins() + `
+		ORDER BY s.id, sme.parent_sme_id NULLS FIRST, sme.idshort_path, sme.position`
+
+	var rows *sql.Rows
+	var err error
+	if tx != nil {
+		rows, err = tx.Query(baseQuery)
+	} else {
+		rows, err = db.Query(baseQuery)
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	// Grouping state per submodel
+	type group struct {
+		id            string
+		idShort       sql.NullString
+		category      sql.NullString
+		kind          sql.NullString
+		semanticId    sql.NullInt64
+		displayNameId sql.NullInt64
+		descriptionId sql.NullInt64
+		nodes         map[int64]*node
+		children      map[int64][]*node
+		roots         []*node
+	}
+
+	groups := make(map[string]*group)
+	order := make([]string, 0, 16) // maintain encounter order
+
+	for rows.Next() {
+		// Declare scan vars with NULL support for SME fields
+		var (
+			// Submodel cols
+			submodelID                                                       string
+			submodelIdShort, submodelCategory, submodelKind                  sql.NullString
+			submodelSemanticId, submodelDisplayNameId, submodelDescriptionId sql.NullInt64
+			// SME base
+			smeID                                     sql.NullInt64
+			idShort, category, modelType, idShortPath sql.NullString
+			position                                  sql.NullInt32
+			parentSmeID                               sql.NullInt64
+			semanticId, displayNameId, descriptionId  sql.NullInt64
+			// Property
+			propValueType, propValue sql.NullString
+			// Blob
+			blobContentType sql.NullString
+			blobValue       []byte
+			// File
+			fileContentType, fileValue sql.NullString
+			// Range
+			rangeValueType, rangeMin, rangeMax sql.NullString
+			// SubmodelElementList
+			typeValueListElement, valueTypeListElement sql.NullString
+			orderRelevant                              sql.NullBool
+			// MultiLanguageProperty
+			mlpValueId sql.NullInt64
+			// ReferenceElement
+			refValueRef sql.NullInt64
+			// RelationshipElement
+			relFirstRef, relSecondRef sql.NullInt64
+			// Entity
+			entityType          sql.NullString
+			entityGlobalAssetId sql.NullString
+			// BasicEventElement
+			beeObservedRef      sql.NullInt64
+			beeDirection        sql.NullString
+			beeState            sql.NullString
+			beeMessageTopic     sql.NullString
+			beeMessageBrokerRef sql.NullInt64
+			beeLastUpdate       sql.NullTime
+			beeMinInterval      sql.NullString
+			beeMaxInterval      sql.NullString
+		)
+
+		if err := rows.Scan(
+			&submodelID, &submodelIdShort, &submodelCategory, &submodelKind, &submodelSemanticId, &submodelDisplayNameId, &submodelDescriptionId,
+			&smeID, &idShort, &category, &modelType, &idShortPath, &position, &parentSmeID, &semanticId, &displayNameId, &descriptionId,
+			&propValueType, &propValue,
+			&blobContentType, &blobValue,
+			&fileContentType, &fileValue,
+			&rangeValueType, &rangeMin, &rangeMax,
+			&typeValueListElement, &valueTypeListElement, &orderRelevant,
+			&mlpValueId,
+			&refValueRef,
+			&relFirstRef, &relSecondRef,
+			&entityType, &entityGlobalAssetId,
+			&beeObservedRef, &beeDirection, &beeState, &beeMessageTopic, &beeMessageBrokerRef, &beeLastUpdate, &beeMinInterval, &beeMaxInterval,
+		); err != nil {
+			return nil, err
+		}
+
+		g, ok := groups[submodelID]
+		if !ok {
+			g = &group{
+				id:            submodelID,
+				idShort:       submodelIdShort,
+				category:      submodelCategory,
+				kind:          submodelKind,
+				semanticId:    submodelSemanticId,
+				displayNameId: submodelDisplayNameId,
+				descriptionId: submodelDescriptionId,
+				nodes:         make(map[int64]*node, 128),
+				children:      make(map[int64][]*node, 128),
+				roots:         make([]*node, 0, 8),
+			}
+			groups[submodelID] = g
+			order = append(order, submodelID)
+		}
+
+		// If there is no submodel element in this row, continue (still keeps submodel group)
+		if !smeID.Valid {
+			continue
+		}
+
+		// Build element only when modelType is present
+		if !modelType.Valid {
+			continue
+		}
+
+		// SemanticId for SME: To keep a single-query contract, do not perform extra lookups here
+		var semanticIdObj *gen.Reference = nil
+
+		// Materialize the concrete element based on modelType
+		var el gen.SubmodelElement
+		switch modelType.String {
+		case "Property":
+			prop := &gen.Property{IdShort: idShort.String, Category: category.String, ModelType: modelType.String, SemanticId: semanticIdObj}
+			if propValueType.Valid {
+				if vt, err := gen.NewDataTypeDefXsdFromValue(propValueType.String); err == nil {
+					prop.ValueType = vt
+				}
+			}
+			if propValue.Valid {
+				prop.Value = propValue.String
+			}
+			el = prop
+		case "MultiLanguageProperty":
+			mlp := &gen.MultiLanguageProperty{IdShort: idShort.String, Category: category.String, ModelType: modelType.String, SemanticId: semanticIdObj}
+			el = mlp
+		case "Blob":
+			blob := &gen.Blob{IdShort: idShort.String, Category: category.String, ModelType: modelType.String, SemanticId: semanticIdObj}
+			if blobContentType.Valid {
+				blob.ContentType = blobContentType.String
+			}
+			if blobValue != nil {
+				blob.Value = string(blobValue)
+			}
+			el = blob
+		case "File":
+			file := &gen.File{IdShort: idShort.String, Category: category.String, ModelType: modelType.String, SemanticId: semanticIdObj}
+			if fileContentType.Valid {
+				file.ContentType = fileContentType.String
+			}
+			if fileValue.Valid {
+				file.Value = fileValue.String
+			}
+			el = file
+		case "Range":
+			rg := &gen.Range{IdShort: idShort.String, Category: category.String, ModelType: modelType.String, SemanticId: semanticIdObj}
+			if rangeValueType.Valid {
+				if vt, err := gen.NewDataTypeDefXsdFromValue(rangeValueType.String); err == nil {
+					rg.ValueType = vt
+				}
+			}
+			if rangeMin.Valid {
+				rg.Min = rangeMin.String
+			}
+			if rangeMax.Valid {
+				rg.Max = rangeMax.String
+			}
+			el = rg
+		case "SubmodelElementCollection":
+			coll := &gen.SubmodelElementCollection{IdShort: idShort.String, Category: category.String, ModelType: modelType.String, Value: make([]gen.SubmodelElement, 0, 4)}
+			el = coll
+		case "SubmodelElementList":
+			lst := &gen.SubmodelElementList{IdShort: idShort.String, Category: category.String, ModelType: modelType.String, Value: make([]gen.SubmodelElement, 0, 4)}
+			if typeValueListElement.Valid {
+				if tv, err := gen.NewAasSubmodelElementsFromValue(typeValueListElement.String); err == nil {
+					lst.TypeValueListElement = &tv
+				}
+			}
+			if valueTypeListElement.Valid {
+				if vt, err := gen.NewDataTypeDefXsdFromValue(valueTypeListElement.String); err == nil {
+					lst.ValueTypeListElement = vt
+				}
+			}
+			if orderRelevant.Valid {
+				lst.OrderRelevant = orderRelevant.Bool
+			}
+			el = lst
+		case "ReferenceElement":
+			refElem := &gen.ReferenceElement{IdShort: idShort.String, Category: category.String, ModelType: modelType.String, SemanticId: semanticIdObj}
+			el = refElem
+		case "RelationshipElement":
+			relElem := &gen.RelationshipElement{IdShort: idShort.String, Category: category.String, ModelType: modelType.String, SemanticId: semanticIdObj}
+			el = relElem
+		case "AnnotatedRelationshipElement":
+			areElem := &gen.AnnotatedRelationshipElement{IdShort: idShort.String, Category: category.String, ModelType: modelType.String, SemanticId: semanticIdObj}
+			el = areElem
+		case "Entity":
+			entity := &gen.Entity{IdShort: idShort.String, Category: category.String, ModelType: modelType.String, SemanticId: semanticIdObj}
+			if entityType.Valid {
+				if et, err := gen.NewEntityTypeFromValue(entityType.String); err == nil {
+					entity.EntityType = et
+				}
+			}
+			if entityGlobalAssetId.Valid {
+				entity.GlobalAssetId = entityGlobalAssetId.String
+			}
+			el = entity
+		case "Operation":
+			op := &gen.Operation{IdShort: idShort.String, Category: category.String, ModelType: modelType.String, SemanticId: semanticIdObj}
+			el = op
+		case "BasicEventElement":
+			bee := &gen.BasicEventElement{IdShort: idShort.String, Category: category.String, ModelType: modelType.String, SemanticId: semanticIdObj}
+			if beeDirection.Valid {
+				if d, err := gen.NewDirectionFromValue(beeDirection.String); err == nil {
+					bee.Direction = d
+				}
+			}
+			if beeState.Valid {
+				if s, err := gen.NewStateOfEventFromValue(beeState.String); err == nil {
+					bee.State = s
+				}
+			}
+			if beeMessageTopic.Valid {
+				bee.MessageTopic = beeMessageTopic.String
+			}
+			if beeLastUpdate.Valid {
+				bee.LastUpdate = beeLastUpdate.Time.Format(time.RFC3339)
+			}
+			el = bee
+		case "Capability":
+			cap := &gen.Capability{IdShort: idShort.String, Category: category.String, ModelType: modelType.String, SemanticId: semanticIdObj}
+			el = cap
+		default:
+			continue
+		}
+
+		n := &node{
+			id:       smeID.Int64,
+			parentID: parentSmeID,
+			path:     idShortPath.String,
+			position: position,
+			element:  el,
+		}
+		g.nodes[n.id] = n
+		if parentSmeID.Valid {
+			pid := parentSmeID.Int64
+			g.children[pid] = append(g.children[pid], n)
+		} else {
+			g.roots = append(g.roots, n)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	// Finalize each submodel: attach children and build Submodel objects
+	results := make([]gen.Submodel, 0, len(groups))
+	for _, subID := range order {
+		g := groups[subID]
+		attachChildrenToSubmodelElements(g.nodes, g.children)
+
+		elems := make([]gen.SubmodelElement, 0, len(g.roots))
+		for _, r := range g.roots {
+			elems = append(elems, r.element)
+		}
+
+		modellingKind, err := gen.NewModellingKindFromValue(g.kind.String)
+		if err != nil {
+			modellingKind = gen.MODELLINGKIND_INSTANCE
+		}
+
+		sm := gen.Submodel{
+			Id:               g.id,
+			IdShort:          g.idShort.String,
+			Category:         g.category.String,
+			Kind:             modellingKind,
+			ModelType:        "Submodel",
+			SubmodelElements: elems,
+		}
+		// To honor the single-query requirement, we intentionally skip extra lookups for
+		// Submodel.DisplayName, Submodel.Description, and Submodel.SemanticId here.
+
+		results = append(results, sm)
+	}
+
+	return results, nil
 }
 
 // ================================================================================
@@ -953,7 +1273,7 @@ func getSubmodelElementLeftJoins() string {
 
 func getSubmodelElementDataQueryPart() string {
 	return `
-	            -- Property data
+			-- Property data
             prop.value_type as prop_value_type,
             COALESCE(prop.value_text, prop.value_num::text, prop.value_bool::text, prop.value_time::text, prop.value_datetime::text) as prop_value,
             -- Blob data
@@ -1055,19 +1375,19 @@ func loadLangStringNameType(db *sql.DB, tx *sql.Tx, refId int64) []gen.LangStrin
 		return nil
 	}
 
-	var query string
 	var rows *sql.Rows
 	var err error
 
-	query = `SELECT language, text 
-			 FROM lang_string_name_type 
-			 WHERE lang_string_name_type_reference_id = $1 
-			 ORDER BY language`
+	q, args := qb.NewSelect("language", "text").
+		From("lang_string_name_type").
+		Where("lang_string_name_type_reference_id = $1", refId).
+		OrderBy("language").
+		Build()
 
 	if tx != nil {
-		rows, err = tx.Query(query, refId)
+		rows, err = tx.Query(q, args...)
 	} else {
-		rows, err = db.Query(query, refId)
+		rows, err = db.Query(q, args...)
 	}
 
 	if err != nil {
@@ -1096,19 +1416,19 @@ func loadLangStringTextType(db *sql.DB, tx *sql.Tx, refId int64) []gen.LangStrin
 		return nil
 	}
 
-	var query string
 	var rows *sql.Rows
 	var err error
 
-	query = `SELECT language, text 
-			 FROM lang_string_text_type 
-			 WHERE lang_string_text_type_reference_id = $1 
-			 ORDER BY language`
+	q, args := qb.NewSelect("language", "text").
+		From("lang_string_text_type").
+		Where("lang_string_text_type_reference_id = $1", refId).
+		OrderBy("language").
+		Build()
 
 	if tx != nil {
-		rows, err = tx.Query(query, refId)
+		rows, err = tx.Query(q, args...)
 	} else {
-		rows, err = db.Query(query, refId)
+		rows, err = db.Query(q, args...)
 	}
 
 	if err != nil {
@@ -1137,26 +1457,24 @@ func batchLoadLangStringNameType(db *sql.DB, tx *sql.Tx, refIds []int64) map[int
 		return nil
 	}
 
-	// Build parameter placeholders
-	placeholders := make([]string, len(refIds))
-	args := make([]interface{}, len(refIds))
-	for i, refId := range refIds {
-		placeholders[i] = fmt.Sprintf("$%d", i+1)
-		args[i] = refId
+	// Convert ids to interface{} for builder WhereIn
+	inArgs := make([]interface{}, len(refIds))
+	for i, id := range refIds {
+		inArgs[i] = id
 	}
 
-	query := fmt.Sprintf(`SELECT lang_string_name_type_reference_id, language, text 
-						 FROM lang_string_name_type 
-						 WHERE lang_string_name_type_reference_id IN (%s) 
-						 ORDER BY lang_string_name_type_reference_id, language`,
-		strings.Join(placeholders, ","))
+	q, args := qb.NewSelect("lang_string_name_type_reference_id", "language", "text").
+		From("lang_string_name_type").
+		WhereIn("lang_string_name_type_reference_id", inArgs...).
+		OrderBy("lang_string_name_type_reference_id, language").
+		Build()
 
 	var rows *sql.Rows
 	var err error
 	if tx != nil {
-		rows, err = tx.Query(query, args...)
+		rows, err = tx.Query(q, args...)
 	} else {
-		rows, err = db.Query(query, args...)
+		rows, err = db.Query(q, args...)
 	}
 
 	if err != nil {
@@ -1186,26 +1504,24 @@ func batchLoadLangStringTextType(db *sql.DB, tx *sql.Tx, refIds []int64) map[int
 		return nil
 	}
 
-	// Build parameter placeholders
-	placeholders := make([]string, len(refIds))
-	args := make([]interface{}, len(refIds))
-	for i, refId := range refIds {
-		placeholders[i] = fmt.Sprintf("$%d", i+1)
-		args[i] = refId
+	// Convert ids to interface{} for builder WhereIn
+	inArgs := make([]interface{}, len(refIds))
+	for i, id := range refIds {
+		inArgs[i] = id
 	}
 
-	query := fmt.Sprintf(`SELECT lang_string_text_type_reference_id, language, text 
-						 FROM lang_string_text_type 
-						 WHERE lang_string_text_type_reference_id IN (%s) 
-						 ORDER BY lang_string_text_type_reference_id, language`,
-		strings.Join(placeholders, ","))
+	q, args := qb.NewSelect("lang_string_text_type_reference_id", "language", "text").
+		From("lang_string_text_type").
+		WhereIn("lang_string_text_type_reference_id", inArgs...).
+		OrderBy("lang_string_text_type_reference_id, language").
+		Build()
 
 	var rows *sql.Rows
 	var err error
 	if tx != nil {
-		rows, err = tx.Query(query, args...)
+		rows, err = tx.Query(q, args...)
 	} else {
-		rows, err = db.Query(query, args...)
+		rows, err = db.Query(q, args...)
 	}
 
 	if err != nil {
@@ -1231,22 +1547,20 @@ func batchLoadLangStringTextType(db *sql.DB, tx *sql.Tx, refIds []int64) map[int
 
 // Helper function to load semantic reference efficiently
 func loadSemanticReference(db *sql.DB, tx *sql.Tx, refId int64) *gen.Reference {
-	var query string
 	var rows *sql.Rows
 	var err error
 
-	query = `SELECT r.type, 
-					COALESCE(
-						(SELECT string_agg(rk.type || ':' || rk.value, ',' ORDER BY rk.type, rk.value) 
-						 FROM reference_key rk WHERE rk.reference_id = r.id),
-						''
-					) as ref_keys_aggregated
-					FROM reference r WHERE r.id = $1`
+	q, args := qb.NewSelect(
+		"r.type",
+		"COALESCE((SELECT string_agg(rk.type || ':' || rk.value, ',' ORDER BY rk.type, rk.value) FROM reference_key rk WHERE rk.reference_id = r.id), '') as ref_keys_aggregated",
+	).From("reference r").
+		Where("r.id = $1", refId).
+		Build()
 
 	if tx != nil {
-		rows, err = tx.Query(query, refId)
+		rows, err = tx.Query(q, args...)
 	} else {
-		rows, err = db.Query(query, refId)
+		rows, err = db.Query(q, args...)
 	}
 
 	if err != nil {
@@ -1295,19 +1609,16 @@ func loadSemanticReference(db *sql.DB, tx *sql.Tx, refId int64) *gen.Reference {
 
 // STEP 1: Discover element types to enable selective JOINs with parallel processing hints
 func getElementTypesForSubmodel(db *sql.DB, tx *sql.Tx, submodelId string) ([]string, error) {
-	// Query with PostgreSQL optimization hints for better performance
-	query := `/* + IndexScan(submodel_element ix_sme_submodel_id) */ 
-			   SELECT DISTINCT model_type 
-			   FROM submodel_element 
-			   WHERE submodel_id = $1`
+	// Query with DISTINCT using query builder
+	q, args := qb.NewSelect("model_type").Distinct().From("submodel_element").Where("submodel_id = $1", submodelId).Build()
 
 	var rows *sql.Rows
 	var err error
 
 	if tx != nil {
-		rows, err = tx.Query(query, submodelId)
+		rows, err = tx.Query(q, args...)
 	} else {
-		rows, err = db.Query(query, submodelId)
+		rows, err = db.Query(q, args...)
 	}
 
 	if err != nil {
