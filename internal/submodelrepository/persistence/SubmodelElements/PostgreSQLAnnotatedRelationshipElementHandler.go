@@ -22,7 +22,7 @@ func NewPostgreSQLAnnotatedRelationshipElementHandler(db *sql.DB) (*PostgreSQLAn
 }
 
 func (p PostgreSQLAnnotatedRelationshipElementHandler) Create(tx *sql.Tx, submodelId string, submodelElement gen.SubmodelElement) (int, error) {
-	_, ok := submodelElement.(*gen.AnnotatedRelationshipElement)
+	areElem, ok := submodelElement.(*gen.AnnotatedRelationshipElement)
 	if !ok {
 		return 0, errors.New("submodelElement is not of type AnnotatedRelationshipElement")
 	}
@@ -34,22 +34,100 @@ func (p PostgreSQLAnnotatedRelationshipElementHandler) Create(tx *sql.Tx, submod
 	}
 
 	// AnnotatedRelationshipElement-specific database insertion
-	// Determine which column to use based on valueType
-
-	// Then, perform AnnotatedRelationshipElement-specific operations within the same transaction
+	err = insertAnnotatedRelationshipElement(areElem, tx, id, submodelId, p.db)
+	if err != nil {
+		return 0, err
+	}
 
 	return id, nil
 }
 
-func (p PostgreSQLAnnotatedRelationshipElementHandler) CreateNested(tx *sql.Tx, submodelId string, parentId int, idShortPath string, submodelElement gen.SubmodelElement) (int, error) {
-	return 0, errors.New("not implemented")
+func (p PostgreSQLAnnotatedRelationshipElementHandler) CreateNested(tx *sql.Tx, submodelId string, parentId int, idShortPath string, submodelElement gen.SubmodelElement, pos int) (int, error) {
+	areElem, ok := submodelElement.(*gen.AnnotatedRelationshipElement)
+	if !ok {
+		return 0, errors.New("submodelElement is not of type AnnotatedRelationshipElement")
+	}
+
+	// Create the nested areElem with the provided idShortPath using the decorated handler
+	id, err := p.decorated.CreateAndPath(tx, submodelId, parentId, idShortPath, submodelElement, pos)
+	if err != nil {
+		return 0, err
+	}
+
+	// AnnotatedRelationshipElement-specific database insertion for nested element
+	err = insertAnnotatedRelationshipElement(areElem, tx, id, submodelId, p.db)
+	if err != nil {
+		return 0, err
+	}
+
+	return id, nil
 }
 
-func (p PostgreSQLAnnotatedRelationshipElementHandler) Read(idShortOrPath string) error {
-	if dErr := p.decorated.Read(idShortOrPath); dErr != nil {
-		return dErr
+func (p PostgreSQLAnnotatedRelationshipElementHandler) Read(tx *sql.Tx, submodelId string, idShortOrPath string) (gen.SubmodelElement, error) {
+	var sme gen.SubmodelElement = &gen.AnnotatedRelationshipElement{}
+	var firstRef, secondRef sql.NullInt64
+	id, err := p.decorated.Read(tx, submodelId, idShortOrPath, &sme)
+	if err != nil {
+		return nil, err
 	}
-	return nil
+	err = tx.QueryRow(`SELECT first_ref, second_ref FROM relationship_element WHERE id = $1`, id).Scan(&firstRef, &secondRef)
+	if err != nil {
+		return sme, nil
+	}
+	areElem := sme.(*gen.AnnotatedRelationshipElement)
+	if firstRef.Valid {
+		ref, err := readReference(tx, firstRef.Int64)
+		if err != nil {
+			return nil, err
+		}
+		areElem.First = *ref
+	}
+	if secondRef.Valid {
+		ref, err := readReference(tx, secondRef.Int64)
+		if err != nil {
+			return nil, err
+		}
+		areElem.Second = *ref
+	}
+
+	// Read annotations
+	rows, err := tx.Query(`SELECT annotation_sme FROM annotated_rel_annotation WHERE rel_id = $1`, id)
+	if err != nil {
+		return sme, nil
+	}
+	defer rows.Close()
+	var annotations []gen.SubmodelElement
+	for rows.Next() {
+		var annId int
+		if err := rows.Scan(&annId); err != nil {
+			return nil, err
+		}
+		// Read the annotation element
+		// But need to know the type. Perhaps query the model_type from submodel_element
+		var modelType string
+		err = tx.QueryRow(`SELECT model_type FROM submodel_element WHERE id = $1`, annId).Scan(&modelType)
+		if err != nil {
+			return nil, err
+		}
+		annHandler, err := GetSMEHandlerByModelType(modelType, p.db)
+		if err != nil {
+			return nil, err
+		}
+		// But Read needs idShortOrPath, but we have id.
+		// Need to get idShortPath
+		var idShortPath string
+		err = tx.QueryRow(`SELECT idshort_path FROM submodel_element WHERE id = $1`, annId).Scan(&idShortPath)
+		if err != nil {
+			return nil, err
+		}
+		ann, err := annHandler.Read(tx, submodelId, idShortPath)
+		if err != nil {
+			return nil, err
+		}
+		annotations = append(annotations, ann)
+	}
+	areElem.Annotations = annotations
+	return sme, nil
 }
 func (p PostgreSQLAnnotatedRelationshipElementHandler) Update(idShortOrPath string, submodelElement gen.SubmodelElement) error {
 	if dErr := p.decorated.Update(idShortOrPath, submodelElement); dErr != nil {
@@ -61,5 +139,53 @@ func (p PostgreSQLAnnotatedRelationshipElementHandler) Delete(idShortOrPath stri
 	if dErr := p.decorated.Delete(idShortOrPath); dErr != nil {
 		return dErr
 	}
+	return nil
+}
+
+func insertAnnotatedRelationshipElement(areElem *gen.AnnotatedRelationshipElement, tx *sql.Tx, id int, submodelId string, db *sql.DB) error {
+	// Insert into relationship_element
+	var firstRefId, secondRefId sql.NullInt64
+
+	if !isEmptyReference(areElem.First) {
+		refId, err := insertReference(tx, areElem.First)
+		if err != nil {
+			return err
+		}
+		firstRefId = sql.NullInt64{Int64: int64(refId), Valid: true}
+	}
+
+	if !isEmptyReference(areElem.Second) {
+		refId, err := insertReference(tx, areElem.Second)
+		if err != nil {
+			return err
+		}
+		secondRefId = sql.NullInt64{Int64: int64(refId), Valid: true}
+	}
+
+	_, err := tx.Exec(`INSERT INTO relationship_element (id, first_ref, second_ref) VALUES ($1, $2, $3)`,
+		id, firstRefId, secondRefId)
+	if err != nil {
+		return err
+	}
+
+	// Create annotations as separate submodel elements
+	for _, annotation := range areElem.Annotations {
+		annHandler, err := GetSMEHandler(annotation, db)
+		if err != nil {
+			return err
+		}
+
+		annId, err := annHandler.Create(tx, submodelId, annotation)
+		if err != nil {
+			return err
+		}
+
+		// Insert link
+		_, err = tx.Exec(`INSERT INTO annotated_rel_annotation (rel_id, annotation_sme) VALUES ($1, $2)`, id, annId)
+		if err != nil {
+			return err
+		}
+	}
+
 	return nil
 }

@@ -3,21 +3,39 @@ package persistence_postgresql
 import (
 	"database/sql"
 	"errors"
+	"fmt"
 	"os"
 	"strconv"
+	"time"
 
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	submodelelements "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/SubmodelElements"
+	persistence_utils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
 	gen "github.com/eclipse-basyx/basyx-go-components/pkg/submodelrepositoryapi/go"
 )
 
 type PostgreSQLSubmodelDatabase struct {
-	db *sql.DB
+	db           *sql.DB
+	cacheEnabled bool
 }
 
-func NewPostgreSQLSubmodelBackend(dsn string) (*PostgreSQLSubmodelDatabase, error) {
+var failedPostgresTransactionSubmodelRepo = common.NewInternalServerError("Failed to commit PostgreSQL transaction - no changes applied - see console for details")
+var beginTransactionErrorSubmodelRepo = common.NewInternalServerError("Failed to begin PostgreSQL transaction - no changes applied - see console for details")
+
+var maxCacheSize = 1000
+
+// InMemory Cache for submodels
+var submodelCache map[string]gen.Submodel = make(map[string]gen.Submodel)
+
+func NewPostgreSQLSubmodelBackend(dsn string, maxOpenConns, maxIdleConns int, connMaxLifetimeMinutes int, cacheEnabled bool) (*PostgreSQLSubmodelDatabase, error) {
 	db, err := sql.Open("postgres", dsn)
+	//Set Max Connection
+	db.SetMaxOpenConns(500)
+	db.SetMaxIdleConns(500)
+	db.SetConnMaxLifetime(time.Minute * 5)
+
 	if err != nil {
 		return nil, err
 	}
@@ -43,13 +61,13 @@ func NewPostgreSQLSubmodelBackend(dsn string) (*PostgreSQLSubmodelDatabase, erro
 		return nil, dbError
 	}
 
-	return &PostgreSQLSubmodelDatabase{db: db}, nil
+	return &PostgreSQLSubmodelDatabase{db: db, cacheEnabled: cacheEnabled}, nil
 }
 
 // GetAllSubmodels and a next cursor ("" if no more pages).
 func (p *PostgreSQLSubmodelDatabase) GetAllSubmodels(limit int32, cursor string, idShort string) ([]gen.Submodel, string, error) {
-	if limit <= 0 || limit > 1000 {
-		limit = 25
+	if limit <= 0 {
+		limit = 100
 	}
 
 	// Keyset pagination: start after the cursor (last seen id).
@@ -107,42 +125,67 @@ func (p *PostgreSQLSubmodelDatabase) GetAllSubmodels(limit int32, cursor string,
 
 // GetSubmodel returns one Submodel by id
 func (p *PostgreSQLSubmodelDatabase) GetSubmodel(id string) (gen.Submodel, error) {
-	const q = `
-        SELECT id, id_short, category, kind, model_type
-        FROM submodel
-        WHERE id = $1
-    `
-
-	var (
-		smId, idShort, category, modelType string
-		kind                               sql.NullString
-	)
-	err := p.db.QueryRow(q, id).Scan(&smId, &idShort, &category, &kind, &modelType)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return gen.Submodel{}, sql.ErrNoRows
+	// Check cache first
+	if p.cacheEnabled {
+		if sm, found := submodelCache[id]; found {
+			return sm, nil
 		}
+	}
+
+	// Not in cache, fetch from DB
+	tx, err := p.db.Begin()
+
+	if err != nil {
+		fmt.Println(err)
+		return gen.Submodel{}, beginTransactionErrorSubmodelRepo
+	}
+	defer func() {
+		if err != nil {
+			tx.Rollback()
+		}
+	}()
+
+	sm, err := submodelelements.GetSubmodelWithSubmodelElements(p.db, tx, id)
+	if err != nil {
 		return gen.Submodel{}, err
 	}
 
-	sm := gen.Submodel{
-		Id:        smId,
-		IdShort:   idShort,
-		Category:  category,
-		ModelType: modelType,
-	}
-	if kind.Valid {
-		sm.Kind = gen.ModellingKind(kind.String)
+	if err := tx.Commit(); err != nil {
+		fmt.Println(err)
+		return gen.Submodel{}, failedPostgresTransactionSubmodelRepo
 	}
 
-	return sm, nil
+	// Store in cache
+	if p.cacheEnabled {
+		submodelCache[id] = *sm
+	}
+	return *sm, nil
 }
 
 // DeleteSubmodel deletes a Submodel by id
 func (p *PostgreSQLSubmodelDatabase) DeleteSubmodel(id string) error {
+	// Check cache first
+	if p.cacheEnabled {
+		if _, found := submodelCache[id]; found {
+			delete(submodelCache, id)
+		}
+	}
+
+	tx, err := p.db.Begin()
+
+	if err != nil {
+		fmt.Println(err)
+		return beginTransactionErrorSubmodelRepo
+	}
+	defer func() {
+		if err != nil {
+			tx.Rollback()
+		}
+	}()
+
 	const q = `DELETE FROM submodel WHERE id=$1`
 
-	res, err := p.db.Exec(q, id)
+	res, err := tx.Exec(q, id)
 	if err != nil {
 		return err
 	}
@@ -155,6 +198,11 @@ func (p *PostgreSQLSubmodelDatabase) DeleteSubmodel(id string) error {
 	if rowsAffected == 0 {
 		return sql.ErrNoRows
 	}
+
+	if err := tx.Commit(); err != nil {
+		fmt.Println(err)
+		return failedPostgresTransactionSubmodelRepo
+	}
 	return nil
 }
 
@@ -163,240 +211,412 @@ func (p *PostgreSQLSubmodelDatabase) DeleteSubmodel(id string) error {
 // we might want ON CONFLICT DO UPDATE for upserts, but spec-wise POST usually means create new
 // model_type is hardcoded to "Submodel"
 func (p *PostgreSQLSubmodelDatabase) CreateSubmodel(sm gen.Submodel) error {
-	const q = `
-        INSERT INTO submodel (id, id_short, category, kind, model_type)
-        VALUES ($1, $2, $3, $4, 'Submodel')
-        ON CONFLICT (id) DO NOTHING
-    `
-
-	_, err := p.db.Exec(q, sm.Id, sm.IdShort, sm.Category, sm.Kind)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func (p *PostgreSQLSubmodelDatabase) AddSubmodelElement(submodelId string, submodelElement gen.SubmodelElement) error {
-	handler, err := getSMEHandler(submodelElement, p)
-	if err != nil {
-		return err
-	}
-
-	// Start a database transaction
 	tx, err := p.db.Begin()
+
 	if err != nil {
-		return err
+		fmt.Println(err)
+		return beginTransactionErrorSubmodelRepo
 	}
 
-	// Defer rollback in case of error
 	defer func() {
 		if err != nil {
 			tx.Rollback()
 		}
 	}()
 
-	// Create the top-level element
+	referenceID, err := persistence_utils.CreateSemanticId(tx, sm.SemanticId)
+	if err != nil {
+		fmt.Println(err)
+		return common.NewInternalServerError("Failed to create SemanticId - no changes applied - see console for details")
+	}
+
+	displayNameId, err := persistence_utils.CreateLangStringNameTypes(tx, sm.DisplayName)
+	if err != nil {
+		fmt.Println(err)
+		return common.NewInternalServerError("Failed to create DisplayName - no changes applied - see console for details")
+	}
+
+	descriptionId, err := persistence_utils.CreateLangStringTextTypes(tx, sm.Description)
+	if err != nil {
+		fmt.Println(err)
+		return common.NewInternalServerError("Failed to create Description - no changes applied - see console for details")
+	}
+
+	const q = `
+        INSERT INTO submodel (id, id_short, category, kind, model_type, semantic_id, displayname_id, description_id)
+        VALUES ($1, $2, $3, $4, 'Submodel', $5, $6, $7)
+        ON CONFLICT (id) DO NOTHING
+    `
+
+	_, err = tx.Exec(q, sm.Id, sm.IdShort, sm.Category, sm.Kind, referenceID, displayNameId, descriptionId)
+	if err != nil {
+		return err
+	}
+
+	if len(sm.SubmodelElements) > 0 {
+		for _, element := range sm.SubmodelElements {
+			err = p.AddSubmodelElementWithTransaction(tx, sm.Id, element)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		fmt.Println(err)
+		return failedPostgresTransactionSubmodelRepo
+	}
+	// Store in cache if enough space
+	if p.cacheEnabled {
+		if len(submodelCache) < maxCacheSize {
+			submodelCache[sm.Id] = sm
+		}
+	}
+	return nil
+}
+
+func (p *PostgreSQLSubmodelDatabase) GetSubmodelElement(submodelId string, idShortOrPath string, limit int, cursor string) (gen.SubmodelElement, error) {
+	tx, err := p.db.Begin()
+	if err != nil {
+		fmt.Println(err)
+		return nil, beginTransactionErrorSubmodelRepo
+	}
+	defer func() {
+		if err != nil {
+			tx.Rollback()
+		}
+	}()
+
+	elements, _, err := submodelelements.GetSubmodelElementsWithPath(p.db, tx, submodelId, idShortOrPath, limit, cursor)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(elements) == 0 {
+		return nil, common.NewErrNotFound("SubmodelElement with idShort or path '" + idShortOrPath + "' not found in submodel '" + submodelId + "'")
+	}
+
+	if err := tx.Commit(); err != nil {
+		fmt.Println(err)
+		return nil, failedPostgresTransactionSubmodelRepo
+	}
+
+	return elements[0], nil
+}
+
+func (p *PostgreSQLSubmodelDatabase) GetSubmodelElements(submodelId string, limit int, cursor string) ([]gen.SubmodelElement, string, error) {
+	tx, err := p.db.Begin()
+	if err != nil {
+		fmt.Println(err)
+		return nil, "", beginTransactionErrorSubmodelRepo
+	}
+	defer func() {
+		if err != nil {
+			tx.Rollback()
+		}
+	}()
+
+	elements, cursor, err := submodelelements.GetSubmodelElementsWithPath(p.db, tx, submodelId, "", limit, cursor)
+	if err != nil {
+		return nil, "", err
+	}
+
+	if err := tx.Commit(); err != nil {
+		fmt.Println(err)
+		return nil, "", failedPostgresTransactionSubmodelRepo
+	}
+
+	return elements, cursor, nil
+}
+
+func (p *PostgreSQLSubmodelDatabase) AddSubmodelElementWithPath(submodelId string, idShortPath string, submodelElement gen.SubmodelElement) error {
+	// Invalidate Submodel cache if enabled
+	if p.cacheEnabled {
+		if _, found := submodelCache[submodelId]; found {
+			delete(submodelCache, submodelId)
+		}
+	}
+	handler, err := submodelelements.GetSMEHandler(submodelElement, p.db)
+	if err != nil {
+		return err
+	}
+
+	crud, err := submodelelements.NewPostgreSQLSMECrudHandler(p.db)
+	if err != nil {
+		return err
+	}
+
+	tx, err := p.db.Begin()
+	if err != nil {
+		fmt.Println(err)
+		return beginTransactionErrorSubmodelRepo
+	}
+
+	defer func() {
+		if err != nil {
+			tx.Rollback()
+		}
+	}()
+
+	parentId, err := crud.GetDatabaseId(idShortPath)
+	if err != nil {
+		fmt.Println(err)
+		return common.NewInternalServerError("Failed to execute PostgreSQL Query - no changes applied - see console for details.")
+	}
+	nextPosition, err := crud.GetNextPosition(parentId)
+	if err != nil {
+		return err
+	}
+
+	modelType, err := crud.GetSubmodelElementType(idShortPath)
+	if err != nil {
+		return err
+	}
+	if modelType != "SubmodelElementCollection" && modelType != "SubmodelElementList" {
+		return errors.New("cannot add nested element to non-collection/list element")
+	}
+	var newIdShortPath string
+	if modelType == "SubmodelElementList" {
+		newIdShortPath = idShortPath + "[" + strconv.Itoa(nextPosition) + "]"
+	} else {
+		newIdShortPath = idShortPath + "." + submodelElement.GetIdShort()
+	}
+	id, err := handler.CreateNested(tx, submodelId, parentId, newIdShortPath, submodelElement, nextPosition)
+	if err != nil {
+		return err
+	}
+	err = p.AddNestedSubmodelElementsIteratively(tx, submodelId, id, submodelElement, newIdShortPath)
+	if err != nil {
+		return err
+	}
+
+	if err := tx.Commit(); err != nil {
+		fmt.Println(err)
+		return failedPostgresTransactionSubmodelRepo
+	}
+
+	return nil
+}
+func (p *PostgreSQLSubmodelDatabase) AddSubmodelElement(submodelId string, submodelElement gen.SubmodelElement) error {
+	// Invalidate Submodel cache if enabled
+	if p.cacheEnabled {
+		if _, found := submodelCache[submodelId]; found {
+			delete(submodelCache, submodelId)
+		}
+	}
+	tx, err := p.db.Begin()
+	if err != nil {
+		fmt.Println(err)
+		return beginTransactionErrorSubmodelRepo
+	}
+
+	defer func() {
+		if err != nil {
+			tx.Rollback()
+		}
+	}()
+
+	err = p.AddSubmodelElementWithTransaction(tx, submodelId, submodelElement)
+	if err != nil {
+		return err
+	}
+
+	if err := tx.Commit(); err != nil {
+		fmt.Println(err)
+		return failedPostgresTransactionSubmodelRepo
+	}
+
+	return nil
+}
+
+func (p *PostgreSQLSubmodelDatabase) AddSubmodelElementWithTransaction(tx *sql.Tx, submodelId string, submodelElement gen.SubmodelElement) error {
+	// Invalidate Submodel cache if enabled
+	if p.cacheEnabled {
+		if _, found := submodelCache[submodelId]; found {
+			delete(submodelCache, submodelId)
+		}
+	}
+	handler, err := submodelelements.GetSMEHandler(submodelElement, p.db)
+	if err != nil {
+		return err
+	}
 	parentId, err := handler.Create(tx, submodelId, submodelElement)
 	if err != nil {
 		return err
 	}
 
-	// Handle nested elements for collections and lists
-	switch string(submodelElement.GetModelType()) {
-	case "SubmodelElementCollection":
-		submodelElementCollection, ok := submodelElement.(*gen.SubmodelElementCollection)
-		if !ok {
-			return errors.New("submodelElement is not of type SubmodelElementCollection")
+	err = p.AddNestedSubmodelElementsIteratively(tx, submodelId, parentId, submodelElement, "")
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+type ElementToProcess struct {
+	element                   gen.SubmodelElement
+	parentId                  int
+	currentIdShortPath        string
+	isFromSubmodelElementList bool // Indicates if the current element is from a SubmodelElementList
+	position                  int  // Position/index within the parent collection or list
+}
+
+func (p *PostgreSQLSubmodelDatabase) AddNestedSubmodelElementsIteratively(tx *sql.Tx, submodelId string, topLevelParentId int, topLevelElement gen.SubmodelElement, startPath string) error {
+	// Invalidate Submodel cache if enabled
+	if p.cacheEnabled {
+		if _, found := submodelCache[submodelId]; found {
+			delete(submodelCache, submodelId)
 		}
-		// Recursively add nested elements
-		for _, nestedElement := range submodelElementCollection.Value {
-			if err := p.AddNestedSubmodelElementRecursively(tx, submodelId, parentId, submodelElementCollection.IdShort, nestedElement); err != nil {
-				return err
+	}
+	stack := []ElementToProcess{}
+
+	switch string(topLevelElement.GetModelType()) {
+	case "SubmodelElementCollection":
+		submodelElementCollection, ok := topLevelElement.(*gen.SubmodelElementCollection)
+		if !ok {
+			return common.NewInternalServerError("SubmodelElement with modelType 'SubmodelElementCollection' is not of type SubmodelElementCollection")
+		}
+		for index, nestedElement := range submodelElementCollection.Value {
+			var currentPath string
+			if startPath == "" {
+				currentPath = submodelElementCollection.IdShort
+			} else {
+				currentPath = startPath
 			}
+			stack = append(stack, ElementToProcess{
+				element:                   nestedElement,
+				parentId:                  topLevelParentId,
+				currentIdShortPath:        currentPath,
+				isFromSubmodelElementList: false,
+				position:                  index,
+			})
 		}
 	case "SubmodelElementList":
-		submodelElementList, ok := submodelElement.(*gen.SubmodelElementList)
+		submodelElementList, ok := topLevelElement.(*gen.SubmodelElementList)
 		if !ok {
-			return errors.New("submodelElement is not of type SubmodelElementList")
+			return common.NewInternalServerError("SubmodelElement with modelType 'SubmodelElementList' is not of type SubmodelElementList")
 		}
-		// Recursively add nested elements with index-based paths
+		// Add nested elements to stack with index-based paths
 		for index, nestedElement := range submodelElementList.Value {
-			idShortPath := submodelElementList.IdShort + "[" + strconv.Itoa(index) + "]"
-			if err := p.AddNestedSubmodelElementRecursively(tx, submodelId, parentId, idShortPath, nestedElement); err != nil {
-				return err
+			var idShortPath string
+			if startPath == "" {
+				idShortPath = submodelElementList.IdShort + "[" + strconv.Itoa(index) + "]"
+			} else {
+				idShortPath = startPath
 			}
+			stack = append(stack, ElementToProcess{
+				element:                   nestedElement,
+				parentId:                  topLevelParentId,
+				currentIdShortPath:        idShortPath,
+				isFromSubmodelElementList: true,
+				position:                  index,
+			})
 		}
 	}
 
-	// Commit the transaction only if everything succeeded
-	err = tx.Commit()
-	if err != nil {
-		return err
+	for len(stack) > 0 {
+		// LIFO Stack
+		current := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+
+		handler, err := submodelelements.GetSMEHandler(current.element, p.db)
+		if err != nil {
+			return err
+		}
+
+		// Build the idShortPath for current element
+		idShortPath := buildCurrentIdShortPath(current)
+
+		newParentId, err := handler.CreateNested(tx, submodelId, current.parentId, idShortPath, current.element, current.position)
+		if err != nil {
+			return err
+		}
+
+		switch string(current.element.GetModelType()) {
+		case "SubmodelElementCollection":
+			submodelElementCollection, ok := current.element.(*gen.SubmodelElementCollection)
+			if !ok {
+				return common.NewInternalServerError("SubmodelElement with modelType 'SubmodelElementCollection' is not of type SubmodelElementCollection")
+			}
+			for i := len(submodelElementCollection.Value) - 1; i >= 0; i-- {
+				stack = addNestedElementToStackWithNormalPath(submodelElementCollection, i, stack, newParentId, idShortPath)
+			}
+		case "SubmodelElementList":
+			submodelElementList, ok := current.element.(*gen.SubmodelElementList)
+			if !ok {
+				return common.NewInternalServerError("SubmodelElement with modelType 'SubmodelElementList' is not of type SubmodelElementList")
+			}
+			for index := len(submodelElementList.Value) - 1; index >= 0; index-- {
+				stack = addNestedElementToStackWithIndexPath(submodelElementList, index, idShortPath, stack, newParentId)
+			}
+		}
 	}
 
 	return nil
 }
 
-func (p *PostgreSQLSubmodelDatabase) AddNestedSubmodelElementRecursively(tx *sql.Tx, submodelId string, parentId int, currentIdShortPath string, submodelElement gen.SubmodelElement) error {
-	handler, err := getSMEHandler(submodelElement, p)
+// This method removes a SubmodelElement by its idShort or path and all its nested elements
+// If the deleted Element is in a SubmodelElementList, the indices of the remaining elements are adjusted accordingly
+func (p *PostgreSQLSubmodelDatabase) DeleteSubmodelElementByPath(submodelId string, idShortOrPath string) error {
+	// Invalidate Submodel cache if enabled
+	if p.cacheEnabled {
+		if _, found := submodelCache[submodelId]; found {
+			delete(submodelCache, submodelId)
+		}
+	}
+	tx, err := p.db.Begin()
 	if err != nil {
 		return err
 	}
 
-	// Create the nested element with the proper idShortPath
-	// According to IDTA AAS grammar: <idShortPath> ::= <idShort> {[ "." <idShort> | "["<Index>"]" ]}*
+	defer func() {
+		if err != nil {
+			tx.Rollback()
+		}
+	}()
+	err = submodelelements.DeleteSubmodelElementByPath(tx, submodelId, idShortOrPath)
+	if err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+func buildCurrentIdShortPath(current ElementToProcess) string {
 	var idShortPath string
-	if currentIdShortPath == "" {
-		idShortPath = submodelElement.GetIdShort()
+	if current.currentIdShortPath == "" {
+		idShortPath = current.element.GetIdShort()
 	} else {
-		// For SubmodelElementList, currentIdShortPath already contains the [index] format
-		if string(submodelElement.GetModelType()) == "SubmodelElementList" ||
-			(len(currentIdShortPath) > 0 && currentIdShortPath[len(currentIdShortPath)-1] == ']') {
-			idShortPath = currentIdShortPath
+		// If element comes from a SubmodelElementList, use the path as-is (includes [index])
+		if current.isFromSubmodelElementList {
+			idShortPath = current.currentIdShortPath
 		} else {
-			// For SubmodelElementCollection, use dot notation
-			idShortPath = currentIdShortPath + "." + submodelElement.GetIdShort()
+			// For SubmodelElementCollection, append element's idShort with dot notation
+			idShortPath = current.currentIdShortPath + "." + current.element.GetIdShort()
 		}
 	}
-
-	// Create the nested element using CreateNested
-	parentId, err = handler.CreateNested(tx, submodelId, parentId, idShortPath, submodelElement)
-	if err != nil {
-		return err
-	}
-
-	// Handle recursive nesting for collections and lists
-	switch string(submodelElement.GetModelType()) {
-	case "SubmodelElementCollection":
-		submodelElementCollection, ok := submodelElement.(*gen.SubmodelElementCollection)
-		if !ok {
-			return errors.New("submodelElement is not of type SubmodelElementCollection")
-		}
-		// Recursively add nested elements with dot notation
-		for _, nestedElement := range submodelElementCollection.Value {
-			if err := p.AddNestedSubmodelElementRecursively(tx, submodelId, parentId, idShortPath, nestedElement); err != nil {
-				return err
-			}
-		}
-	case "SubmodelElementList":
-		submodelElementList, ok := submodelElement.(*gen.SubmodelElementList)
-		if !ok {
-			return errors.New("submodelElement is not of type SubmodelElementList")
-		}
-		// Recursively add nested elements with index-based paths
-		for index, nestedElement := range submodelElementList.Value {
-			nestedIdShortPath := idShortPath + "[" + strconv.Itoa(index) + "]"
-			if err := p.AddNestedSubmodelElementRecursively(tx, submodelId, parentId, nestedIdShortPath, nestedElement); err != nil {
-				return err
-			}
-		}
-	}
-
-	return nil
+	return idShortPath
 }
 
-func getSMEHandler(submodelElement gen.SubmodelElement, p *PostgreSQLSubmodelDatabase) (submodelelements.PostgreSQLSMECrudInterface, error) {
-	var handler submodelelements.PostgreSQLSMECrudInterface
+func addNestedElementToStackWithNormalPath(submodelElementCollection *gen.SubmodelElementCollection, i int, stack []ElementToProcess, newParentId int, idShortPath string) []ElementToProcess {
+	nestedElement := submodelElementCollection.Value[i]
+	stack = append(stack, ElementToProcess{
+		element:                   nestedElement,
+		parentId:                  newParentId,
+		currentIdShortPath:        idShortPath,
+		isFromSubmodelElementList: false, // Children of collection are not from list
+		position:                  i,
+	})
+	return stack
+}
 
-	switch string(submodelElement.GetModelType()) {
-	case "AnnotatedRelationshipElement":
-		areHandler, err := submodelelements.NewPostgreSQLAnnotatedRelationshipElementHandler(p.db)
-		if err != nil {
-			return nil, err
-		}
-		handler = areHandler
-	case "BasicEventElement":
-		beeHandler, err := submodelelements.NewPostgreSQLBasicEventElementHandler(p.db)
-		if err != nil {
-			return nil, err
-		}
-		handler = beeHandler
-	case "Blob":
-		blobHandler, err := submodelelements.NewPostgreSQLBlobHandler(p.db)
-		if err != nil {
-			return nil, err
-		}
-		handler = blobHandler
-	case "Capability":
-		capHandler, err := submodelelements.NewPostgreSQLCapabilityHandler(p.db)
-		if err != nil {
-			return nil, err
-		}
-		handler = capHandler
-	case "DataElement":
-		deHandler, err := submodelelements.NewPostgreSQLDataElementHandler(p.db)
-		if err != nil {
-			return nil, err
-		}
-		handler = deHandler
-	case "Entity":
-		entityHandler, err := submodelelements.NewPostgreSQLEntityHandler(p.db)
-		if err != nil {
-			return nil, err
-		}
-		handler = entityHandler
-	case "EventElement":
-		eventElemHandler, err := submodelelements.NewPostgreSQLEventElementHandler(p.db)
-		if err != nil {
-			return nil, err
-		}
-		handler = eventElemHandler
-	case "File":
-		fileHandler, err := submodelelements.NewPostgreSQLFileHandler(p.db)
-		if err != nil {
-			return nil, err
-		}
-		handler = fileHandler
-	case "MultiLanguageProperty":
-		mlpHandler, err := submodelelements.NewPostgreSQLMultiLanguagePropertyHandler(p.db)
-		if err != nil {
-			return nil, err
-		}
-		handler = mlpHandler
-	case "Operation":
-		opHandler, err := submodelelements.NewPostgreSQLOperationHandler(p.db)
-		if err != nil {
-			return nil, err
-		}
-		handler = opHandler
-	case "Property":
-		propHandler, err := submodelelements.NewPostgreSQLPropertyHandler(p.db)
-		if err != nil {
-			return nil, err
-		}
-		handler = propHandler
-	case "Range":
-		rangeHandler, err := submodelelements.NewPostgreSQLRangeHandler(p.db)
-		if err != nil {
-			return nil, err
-		}
-		handler = rangeHandler
-	case "ReferenceElement":
-		refElemHandler, err := submodelelements.NewPostgreSQLReferenceElementHandler(p.db)
-		if err != nil {
-			return nil, err
-		}
-		handler = refElemHandler
-	case "RelationshipElement":
-		relElemHandler, err := submodelelements.NewPostgreSQLRelationshipElementHandler(p.db)
-		if err != nil {
-			return nil, err
-		}
-		handler = relElemHandler
-	case "SubmodelElementCollection":
-		smeColHandler, err := submodelelements.NewPostgreSQLSubmodelElementCollectionHandler(p.db)
-		if err != nil {
-			return nil, err
-		}
-		handler = smeColHandler
-	case "SubmodelElementList":
-		smeListHandler, err := submodelelements.NewPostgreSQLSubmodelElementListHandler(p.db)
-		if err != nil {
-			return nil, err
-		}
-		handler = smeListHandler
-	default:
-		return nil, errors.New("ModelType " + string(submodelElement.GetModelType()) + " unsupported.")
-	}
-	return handler, nil
+func addNestedElementToStackWithIndexPath(submodelElementList *gen.SubmodelElementList, index int, idShortPath string, stack []ElementToProcess, newParentId int) []ElementToProcess {
+	nestedElement := submodelElementList.Value[index]
+	nestedIdShortPath := idShortPath + "[" + strconv.Itoa(index) + "]"
+	stack = append(stack, ElementToProcess{
+		element:                   nestedElement,
+		parentId:                  newParentId,
+		currentIdShortPath:        nestedIdShortPath,
+		isFromSubmodelElementList: true,  // Children of list are from list
+		position:                  index, // For lists, position is the actual index
+	})
+	return stack
 }

@@ -1,0 +1,52 @@
+{
+    "idShort": "Identification",
+    "modelType": "Submodel",
+    "id": "http://acplt.org/Submodels/Assets/TestAsset/Identification",
+    "kind": "Instance",
+    "semanticId": {
+        "type": "ExternalReference",
+        "keys": [
+            {
+                "type": "Submodel",
+                "value": "http://acplt.org/SubmodelTemplates/AssetIdentification"
+            },
+            {
+                "type": "Submodel",
+                "value": "http://acplt.org/SubmodelTemplates/AssetIdentification"
+            }
+        ]
+    },
+    "submodelElements": [
+        {
+            "category": "VARIABLE",
+            "idShort": "InstanceId",
+            "modelType": "Property",
+            "semanticId": {
+                "type": "ExternalReference",
+                "keys": [
+                    {
+                        "type": "GlobalReference",
+                        "value": "http://opcfoundation.org/UA/DI/1.1/DeviceType/Serialnumber"
+                    }
+                ]
+            },
+            "valueType": "xs:string",
+            "value": "978-8234-234-342"
+        },
+        {
+            "idShort": "ManufacturerName",
+            "modelType": "Property",
+            "semanticId": {
+                "type": "ExternalReference",
+                "keys": [
+                    {
+                        "type": "GlobalReference",
+                        "value": "0173-1#02-AAO677#002"
+                    }
+                ]
+            },
+            "valueType": "xs:string",
+            "value": "http://acplt.org/ValueId/ACPLT"
+        }
+    ]
+}

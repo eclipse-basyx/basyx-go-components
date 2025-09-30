@@ -22,7 +22,7 @@ func NewPostgreSQLFileHandler(db *sql.DB) (*PostgreSQLFileHandler, error) {
 }
 
 func (p PostgreSQLFileHandler) Create(tx *sql.Tx, submodelId string, submodelElement gen.SubmodelElement) (int, error) {
-	_, ok := submodelElement.(*gen.File)
+	file, ok := submodelElement.(*gen.File)
 	if !ok {
 		return 0, errors.New("submodelElement is not of type File")
 	}
@@ -33,22 +33,56 @@ func (p PostgreSQLFileHandler) Create(tx *sql.Tx, submodelId string, submodelEle
 	}
 
 	// File-specific database insertion
-	// Determine which column to use based on valueType
-
-	// Then, perform File-specific operations within the same transaction
+	_, err = tx.Exec(`INSERT INTO file_element (id, content_type, value) VALUES ($1, $2, $3)`,
+		id, file.ContentType, file.Value)
+	if err != nil {
+		return 0, err
+	}
 
 	return id, nil
 }
 
-func (p PostgreSQLFileHandler) CreateNested(tx *sql.Tx, submodelId string, parentId int, idShortPath string, submodelElement gen.SubmodelElement) (int, error) {
-	return 0, errors.New("not implemented")
+func (p PostgreSQLFileHandler) CreateNested(tx *sql.Tx, submodelId string, parentId int, idShortPath string, submodelElement gen.SubmodelElement, pos int) (int, error) {
+	file, ok := submodelElement.(*gen.File)
+	if !ok {
+		return 0, errors.New("submodelElement is not of type File")
+	}
+
+	// Create the nested file with the provided idShortPath using the decorated handler
+	id, err := p.decorated.CreateAndPath(tx, submodelId, parentId, idShortPath, submodelElement, pos)
+	if err != nil {
+		return 0, err
+	}
+
+	// File-specific database insertion for nested element
+	_, err = tx.Exec(`INSERT INTO file_element (id, content_type, value) VALUES ($1, $2, $3)`,
+		id, file.ContentType, file.Value)
+	if err != nil {
+		return 0, err
+	}
+
+	return id, nil
 }
 
-func (p PostgreSQLFileHandler) Read(idShortOrPath string) error {
-	if dErr := p.decorated.Read(idShortOrPath); dErr != nil {
-		return dErr
+func (p PostgreSQLFileHandler) Read(tx *sql.Tx, submodelId string, idShortOrPath string) (gen.SubmodelElement, error) {
+	var sme gen.SubmodelElement = &gen.File{}
+	var contentType, value string
+	id, err := p.decorated.Read(tx, submodelId, idShortOrPath, &sme)
+	if err != nil {
+		return nil, err
 	}
-	return nil
+	err = tx.QueryRow(`
+		SELECT content_type, value
+		FROM file_element
+		WHERE id = $1
+	`, id).Scan(&contentType, &value)
+	if err != nil {
+		return sme, nil // Return base if no specific data
+	}
+	file := sme.(*gen.File)
+	file.ContentType = contentType
+	file.Value = value
+	return sme, nil
 }
 func (p PostgreSQLFileHandler) Update(idShortOrPath string, submodelElement gen.SubmodelElement) error {
 	if dErr := p.decorated.Update(idShortOrPath, submodelElement); dErr != nil {

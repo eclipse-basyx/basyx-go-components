@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"reflect"
 
+	persistence_utils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
 	gen "github.com/eclipse-basyx/basyx-go-components/pkg/submodelrepositoryapi/go"
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 )
@@ -23,33 +24,14 @@ func NewPostgreSQLSMECrudHandler(db *sql.DB) (*PostgreSQLSMECrudHandler, error) 
 }
 
 // Create performs the base SubmodelElement operations within an existing transaction
-func (p *PostgreSQLSMECrudHandler) CreateAndPath(tx *sql.Tx, submodelId string, parentId int, idShortPath string, submodelElement gen.SubmodelElement) (int, error) {
-	var referenceID sql.NullInt64
-
-	if !isEmptyReference(submodelElement.GetSemanticId()) {
-		var id int
-		err := tx.QueryRow(`INSERT INTO reference (type) VALUES ($1) RETURNING id`, submodelElement.GetSemanticId().Type).Scan(&id)
-		if err != nil {
-			return 0, err
-		}
-		referenceID = sql.NullInt64{Int64: int64(id), Valid: true}
-		println("Inserted Reference for SubmodelElement with idShort: " + submodelElement.GetIdShort())
-
-		references := submodelElement.GetSemanticId().Keys
-		for i := range references {
-			_, err = tx.Exec(`INSERT INTO reference_key (reference_id, position, type, value) VALUES ($1, $2, $3, $4)`,
-				id, i, references[i].Type, references[i].Value)
-			if err != nil {
-				return 0, err
-			}
-			println("Inserted Reference Key for SubmodelElement with idShort: " + submodelElement.GetIdShort())
-		}
+func (p *PostgreSQLSMECrudHandler) CreateAndPath(tx *sql.Tx, submodelId string, parentId int, idShortPath string, submodelElement gen.SubmodelElement, position int) (int, error) {
+	referenceID, err := persistence_utils.CreateSemanticId(tx, submodelElement.GetSemanticId())
+	if err != nil {
+		return 0, err
 	}
-	// If no semantic ID is provided, referenceID remains sql.NullInt64{Valid: false} which represents NULL
-
 	// Check if a SubmodelElement with the same submodelId and idshort_path already exists
 	var exists bool
-	err := tx.QueryRow(`SELECT EXISTS(SELECT 1 FROM submodel_element WHERE submodel_id = $1 AND idshort_path = $2)`,
+	err = tx.QueryRow(`SELECT EXISTS(SELECT 1 FROM submodel_element WHERE submodel_id = $1 AND idshort_path = $2)`,
 		submodelId, idShortPath).Scan(&exists)
 	if err != nil {
 		return 0, err
@@ -65,7 +47,7 @@ func (p *PostgreSQLSMECrudHandler) CreateAndPath(tx *sql.Tx, submodelId string, 
 						VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
 		submodelId,
 		parentId,
-		0, //TODO
+		position,
 		submodelElement.GetIdShort(),
 		submodelElement.GetCategory(),
 		submodelElement.GetModelType(),
@@ -75,38 +57,19 @@ func (p *PostgreSQLSMECrudHandler) CreateAndPath(tx *sql.Tx, submodelId string, 
 	if err != nil {
 		return 0, err
 	}
-	println("Inserted SubmodelElement with idShort: " + submodelElement.GetIdShort())
+	//println("Inserted SubmodelElement with idShort: " + submodelElement.GetIdShort())
 
 	return id, nil
 }
 
 func (p *PostgreSQLSMECrudHandler) Create(tx *sql.Tx, submodelId string, submodelElement gen.SubmodelElement) (int, error) {
-	var referenceID sql.NullInt64
-
-	if !isEmptyReference(submodelElement.GetSemanticId()) {
-		var id int
-		err := tx.QueryRow(`INSERT INTO reference (type) VALUES ($1) RETURNING id`, submodelElement.GetSemanticId().Type).Scan(&id)
-		if err != nil {
-			return 0, err
-		}
-		referenceID = sql.NullInt64{Int64: int64(id), Valid: true}
-		println("Inserted Reference for SubmodelElement with idShort: " + submodelElement.GetIdShort())
-
-		references := submodelElement.GetSemanticId().Keys
-		for i := range references {
-			_, err = tx.Exec(`INSERT INTO reference_key (reference_id, position, type, value) VALUES ($1, $2, $3, $4)`,
-				id, i, references[i].Type, references[i].Value)
-			if err != nil {
-				return 0, err
-			}
-			println("Inserted Reference Key for SubmodelElement with idShort: " + submodelElement.GetIdShort())
-		}
+	referenceID, err := persistence_utils.CreateSemanticId(tx, submodelElement.GetSemanticId())
+	if err != nil {
+		return 0, err
 	}
-	// If no semantic ID is provided, referenceID remains sql.NullInt64{Valid: false} which represents NULL
-
 	// Check if a SubmodelElement with the same submodelId and idshort_path already exists
 	var exists bool
-	err := tx.QueryRow(`SELECT EXISTS(SELECT 1 FROM submodel_element WHERE submodel_id = $1 AND idshort_path = $2)`,
+	err = tx.QueryRow(`SELECT EXISTS(SELECT 1 FROM submodel_element WHERE submodel_id = $1 AND idshort_path = $2)`,
 		submodelId, submodelElement.GetIdShort()).Scan(&exists)
 	if err != nil {
 		return 0, err
@@ -121,24 +84,37 @@ func (p *PostgreSQLSMECrudHandler) Create(tx *sql.Tx, submodelId string, submode
 	 					submodel_element(submodel_id, parent_sme_id, position, id_short, category, model_type, semantic_id, idshort_path)
 						VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
 		submodelId,
-		nil, //TODO
-		0,   //TODO
+		nil,
+		0,
 		submodelElement.GetIdShort(),
 		submodelElement.GetCategory(),
 		submodelElement.GetModelType(),
-		referenceID,                  // This will be NULL if no semantic ID was provided
-		submodelElement.GetIdShort(), //TODO
+		referenceID, // This will be NULL if no semantic ID was provided
+		submodelElement.GetIdShort(),
 	).Scan(&id)
 	if err != nil {
 		return 0, err
 	}
-	println("Inserted SubmodelElement with idShort: " + submodelElement.GetIdShort())
+	//println("Inserted SubmodelElement with idShort: " + submodelElement.GetIdShort())
 
 	return id, nil
 }
 
-func (p *PostgreSQLSMECrudHandler) Read(idShortOrPath string) error {
-	return nil
+func (p *PostgreSQLSMECrudHandler) Read(tx *sql.Tx, submodelId string, idShortOrPath string, submodelElement *gen.SubmodelElement) (int, error) {
+	var id int
+	var idShort, modelType string
+	err := tx.QueryRow(`
+		SELECT id, id_short, model_type
+		FROM submodel_element
+		WHERE submodel_id = $1 AND idshort_path = $2
+	`, submodelId, idShortOrPath).Scan(&id, &idShort, &modelType)
+	if err != nil {
+		return 0, err
+	}
+	elem := (*submodelElement)
+	elem.SetIdShort(idShort)
+	elem.SetModelType(modelType)
+	return id, nil
 }
 
 func (p *PostgreSQLSMECrudHandler) Update(idShortOrPath string, submodelElement gen.SubmodelElement) error {
@@ -147,4 +123,34 @@ func (p *PostgreSQLSMECrudHandler) Update(idShortOrPath string, submodelElement 
 
 func (p *PostgreSQLSMECrudHandler) Delete(idShortOrPath string) error {
 	return nil
+}
+
+func (p *PostgreSQLSMECrudHandler) GetDatabaseId(idShortPath string) (int, error) {
+	var id int
+	err := p.db.QueryRow(`SELECT id FROM submodel_element WHERE idshort_path = $1`, idShortPath).Scan(&id)
+	if err != nil {
+		return 0, err
+	}
+	return id, nil
+}
+
+func (p *PostgreSQLSMECrudHandler) GetNextPosition(parentId int) (int, error) {
+	var position sql.NullInt64
+	err := p.db.QueryRow(`SELECT MAX(position) FROM submodel_element WHERE parent_sme_id = $1`, parentId).Scan(&position)
+	if err != nil {
+		return 0, err
+	}
+	if position.Valid {
+		return int(position.Int64) + 1, nil
+	}
+	return 0, nil // If no children exist, start at position 0
+}
+
+func (p *PostgreSQLSMECrudHandler) GetSubmodelElementType(idShortPath string) (string, error) {
+	var modelType string
+	err := p.db.QueryRow(`SELECT model_type FROM submodel_element WHERE idshort_path = $1`, idShortPath).Scan(&modelType)
+	if err != nil {
+		return "", err
+	}
+	return modelType, nil
 }

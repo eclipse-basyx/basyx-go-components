@@ -1,0 +1,6 @@
+{
+    "idShort": "myTopLevelProperty",
+    "modelType": "Property",
+    "value": "myTopLevelValue",
+    "valueType": "xs:string"
+}

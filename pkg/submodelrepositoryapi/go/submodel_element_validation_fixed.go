@@ -37,8 +37,8 @@ func AssertSubmodelElementRequiredFixed(obj SubmodelElement) error {
 		}
 	}
 	// Only validate non-empty references
-	if !isReferenceEmpty(obj.GetSemanticId()) {
-		if err := AssertReferenceRequired(obj.GetSemanticId()); err != nil {
+	if obj.GetSemanticId() != nil && !isReferenceEmpty(*obj.GetSemanticId()) {
+		if err := AssertReferenceRequired(*obj.GetSemanticId()); err != nil {
 			return err
 		}
 	}
@@ -84,8 +84,8 @@ func AssertSubmodelElementConstraintsFixed(obj SubmodelElement) error {
 		}
 	}
 	// Only validate constraints on non-empty references
-	if !isReferenceEmpty(obj.GetSemanticId()) {
-		if err := AssertReferenceConstraints(obj.GetSemanticId()); err != nil {
+	if obj.GetSemanticId() != nil && !isReferenceEmpty(*obj.GetSemanticId()) {
+		if err := AssertReferenceConstraints(*obj.GetSemanticId()); err != nil {
 			return err
 		}
 	}

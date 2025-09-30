@@ -22,7 +22,7 @@ func NewPostgreSQLOperationHandler(db *sql.DB) (*PostgreSQLOperationHandler, err
 }
 
 func (p PostgreSQLOperationHandler) Create(tx *sql.Tx, submodelId string, submodelElement gen.SubmodelElement) (int, error) {
-	_, ok := submodelElement.(*gen.Operation)
+	operation, ok := submodelElement.(*gen.Operation)
 	if !ok {
 		return 0, errors.New("submodelElement is not of type Operation")
 	}
@@ -34,22 +34,101 @@ func (p PostgreSQLOperationHandler) Create(tx *sql.Tx, submodelId string, submod
 	}
 
 	// Operation-specific database insertion
-	// Determine which column to use based on valueType
-
-	// Then, perform Operation-specific operations within the same transaction
+	err = insertOperation(operation, tx, id, submodelId, p.db)
+	if err != nil {
+		return 0, err
+	}
 
 	return id, nil
 }
 
-func (p PostgreSQLOperationHandler) CreateNested(tx *sql.Tx, submodelId string, parentId int, idShortPath string, submodelElement gen.SubmodelElement) (int, error) {
-	return 0, errors.New("not implemented")
+func (p PostgreSQLOperationHandler) CreateNested(tx *sql.Tx, submodelId string, parentId int, idShortPath string, submodelElement gen.SubmodelElement, pos int) (int, error) {
+	operation, ok := submodelElement.(*gen.Operation)
+	if !ok {
+		return 0, errors.New("submodelElement is not of type Operation")
+	}
+
+	// Create the nested operation with the provided idShortPath using the decorated handler
+	id, err := p.decorated.CreateAndPath(tx, submodelId, parentId, idShortPath, submodelElement, pos)
+	if err != nil {
+		return 0, err
+	}
+
+	// Operation-specific database insertion for nested element
+	err = insertOperation(operation, tx, id, submodelId, p.db)
+	if err != nil {
+		return 0, err
+	}
+
+	return id, nil
 }
 
-func (p PostgreSQLOperationHandler) Read(idShortOrPath string) error {
-	if dErr := p.decorated.Read(idShortOrPath); dErr != nil {
-		return dErr
+func (p PostgreSQLOperationHandler) Read(tx *sql.Tx, submodelId string, idShortOrPath string) (gen.SubmodelElement, error) {
+	// First, get the base submodel element
+	var baseSME gen.SubmodelElement
+	id, err := p.decorated.Read(tx, submodelId, idShortOrPath, &baseSME)
+	if err != nil {
+		return nil, err
 	}
-	return nil
+
+	// Check if it's an operation
+	operation, ok := baseSME.(*gen.Operation)
+	if !ok {
+		return nil, errors.New("submodelElement is not of type Operation")
+	}
+
+	// Query operation variables
+	rows, err := tx.Query(`SELECT role, position, value_sme FROM operation_variable WHERE operation_id = $1 ORDER BY position`, id)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var inputVars, outputVars, inoutputVars []gen.OperationVariable
+	for rows.Next() {
+		var role string
+		var position int
+		var valueSmeId int
+		err := rows.Scan(&role, &position, &valueSmeId)
+		if err != nil {
+			return nil, err
+		}
+
+		// Get the idshort_path and model_type for the value SME
+		var valueIdShortPath, valueModelType string
+		err = tx.QueryRow(`SELECT idshort_path, model_type FROM submodel_element WHERE id = $1`, valueSmeId).Scan(&valueIdShortPath, &valueModelType)
+		if err != nil {
+			return nil, err
+		}
+
+		// Get the handler for the value SME
+		handler, err := GetSMEHandlerByModelType(valueModelType, p.db)
+		if err != nil {
+			return nil, err
+		}
+
+		// Read the value submodel element
+		valueSme, err := handler.Read(tx, submodelId, valueIdShortPath)
+		if err != nil {
+			return nil, err
+		}
+
+		ov := gen.OperationVariable{Value: valueSme}
+		switch role {
+		case "in":
+			inputVars = append(inputVars, ov)
+		case "out":
+			outputVars = append(outputVars, ov)
+		case "inout":
+			inoutputVars = append(inoutputVars, ov)
+		}
+	}
+
+	operation.InputVariables = inputVars
+	operation.OutputVariables = outputVars
+	operation.InoutputVariables = inoutputVars
+
+	return operation, nil
 }
 func (p PostgreSQLOperationHandler) Update(idShortOrPath string, submodelElement gen.SubmodelElement) error {
 	if dErr := p.decorated.Update(idShortOrPath, submodelElement); dErr != nil {
@@ -60,6 +139,48 @@ func (p PostgreSQLOperationHandler) Update(idShortOrPath string, submodelElement
 func (p PostgreSQLOperationHandler) Delete(idShortOrPath string) error {
 	if dErr := p.decorated.Delete(idShortOrPath); dErr != nil {
 		return dErr
+	}
+	return nil
+}
+
+func insertOperation(operation *gen.Operation, tx *sql.Tx, id int, submodelId string, db *sql.DB) error {
+	_, err := tx.Exec(`INSERT INTO operation_element (id) VALUES ($1)`, id)
+	if err != nil {
+		return err
+	}
+
+	// Insert variables
+	err = insertOperationVariables(tx, operation.InputVariables, "in", id, submodelId, db)
+	if err != nil {
+		return err
+	}
+	err = insertOperationVariables(tx, operation.OutputVariables, "out", id, submodelId, db)
+	if err != nil {
+		return err
+	}
+	err = insertOperationVariables(tx, operation.InoutputVariables, "inout", id, submodelId, db)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func insertOperationVariables(tx *sql.Tx, variables []gen.OperationVariable, role string, operationId int, submodelId string, db *sql.DB) error {
+	for i, ov := range variables {
+		// Create the value submodel element
+		handler, err := GetSMEHandler(ov.Value, db)
+		if err != nil {
+			return err
+		}
+		valueId, err := handler.Create(tx, submodelId, ov.Value)
+		if err != nil {
+			return err
+		}
+		_, err = tx.Exec(`INSERT INTO operation_variable (operation_id, role, position, value_sme) VALUES ($1, $2, $3, $4)`,
+			operationId, role, i, valueId)
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
