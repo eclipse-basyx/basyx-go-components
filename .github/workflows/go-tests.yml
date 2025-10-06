@@ -53,6 +53,10 @@ jobs:
         run: |
           cd internal/submodelrepository/integration_tests
           go test -v .
+      - name: Run integration tests
+        run: |
+          cd internal/discoveryservice/integration_tests
+          go test -v .
       # - name: Cleanup Docker
       #   if: always()
       #   run: |

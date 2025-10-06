@@ -2,6 +2,7 @@ package common
 
 import (
 	"encoding/base64"
+	"strconv"
 	"strings"
 )
 
@@ -51,4 +52,13 @@ func DecodeString(encoded string) (string, error) {
 		return "", err
 	}
 	return string(bytes), nil
+}
+
+func ParseCursorToID(c string) (int64, error) {
+	c = strings.TrimSpace(c)
+	if c == "" {
+		return 0, nil
+	}
+
+	return strconv.ParseInt(string(c), 10, 64)
 }
