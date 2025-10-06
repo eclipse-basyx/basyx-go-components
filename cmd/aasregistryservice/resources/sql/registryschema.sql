@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS aas_descriptor (
     administration  BIGINT          REFERENCES administrativeInformation(id) ON DELETE CASCADE
 );
 
-CREATE TABLE IF NOT EXISTS 'aas_descriptor_endpoint' (
+CREATE TABLE IF NOT EXISTS aas_descriptor_endpoint (
     id                  BIGINT          PRIMARY KEY,
     aasDescriptor       BIGINT          NOT NULL REFERENCES aas_descriptor(id),
     interface           VARCHAR(128)    NOT NULL,
