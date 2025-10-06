@@ -53,7 +53,9 @@ jobs:
         run: |
           cd internal/submodelrepository/integration_tests
           go test -v .
-      - name: Run integration tests
+      - name: Run discovery service tests
+        env:
+            DISC_TEST_BUILD: "1" # force rebuild image
         run: |
           cd internal/discoveryservice/integration_tests
           go test -v .
