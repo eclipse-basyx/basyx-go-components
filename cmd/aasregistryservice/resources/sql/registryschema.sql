@@ -39,7 +39,7 @@ CREATE TABLE IF NOT EXISTS endpoint_protocol_version (
     id                      BIGINT          NOT NULL PRIMARY KEY,
     protocol_information    BIGINT          NOT NULL REFERENCES protocol_information(id),
     value                   VARCHAR(128)    NOT NULL
-)
+);
 
 CREATE TABLE IF NOT EXISTS security_attributes (
     id                      BIGINT          NOT NULL PRIMARY KEY,
