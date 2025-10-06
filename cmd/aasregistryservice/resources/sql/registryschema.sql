@@ -24,7 +24,7 @@ CREATE TABLE IF NOT EXISTS aas_descriptor_endpoint (
     aasDescriptor       BIGINT          NOT NULL REFERENCES aas_descriptor(id),
     interface           VARCHAR(128)    NOT NULL,
     protocolInformation BIGINT          NOT NULL REFERENCES protocol_information(id)
-)
+);
 
 CREATE TABLE IF NOT EXISTS protocol_information (
     id                      BIGINT          NOT NULL PRIMARY KEY,
