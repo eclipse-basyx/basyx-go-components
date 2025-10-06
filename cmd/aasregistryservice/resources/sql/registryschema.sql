@@ -60,4 +60,4 @@ CREATE TABLE IF NOT EXISTS submodel_descriptor_endpoint (
     submodelDescriptor  BIGINT          NOT NULL REFERENCES submodel_descriptor(id),
     interface           VARCHAR(128)    NOT NULL,
     protocolInformation BIGINT          NOT NULL REFERENCES protocol_information(id)
-)
+);
