@@ -94,7 +94,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("server.contextPath", "")
 	v.SetDefault("server.cacheEnabled", false)
 
-	// MongoDB defaults
+	// PostgreSQL defaults
 	v.SetDefault("postgres.host", "localhost")
 	v.SetDefault("postgres.port", 5432)
 	v.SetDefault("postgres.user", "admin")
