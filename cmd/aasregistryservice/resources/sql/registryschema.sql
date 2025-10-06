@@ -52,7 +52,7 @@ CREATE TABLE IF NOT EXISTS security_attributes (
 CREATE TABLE IF NOT EXISTS submodel_descriptor (
     id VARCHAR(2048) NOT NULL PRIMARY KEY,
     aasDescriptor VARCHAR(2048) REFERENCES aas_descriptor(id),
-    idShort VARCHAR(128),
+    idShort VARCHAR(128)
 )
 
 CREATE TABLE IF NOT EXISTS submodel_descriptor_endpoint (
