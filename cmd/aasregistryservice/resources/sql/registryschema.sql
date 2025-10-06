@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS aas_descriptor (
     administration  BIGINT          REFERENCES administrativeInformation(id) ON DELETE CASCADE
 );
 
-CREATE TABLE IF NOT EXISTS 'endpoint' (
+CREATE TABLE IF NOT EXISTS 'aas_descriptor_endpoint' (
     id                  BIGINT          PRIMARY KEY,
     aasDescriptor       BIGINT          NOT NULL REFERENCES aas_descriptor(id),
     interface           VARCHAR(128)    NOT NULL,
@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS 'endpoint' (
 
 CREATE TABLE IF NOT EXISTS protocol_information (
     id                      BIGINT          NOT NULL PRIMARY KEY,
-    href                    VARCHAR(2048)   NOT NULL,
+    href                    VARCHAR(2048)   NOT NULL,4
     schemeType              VARCHAR(128),
     subProtocol             VARCHAR(128),
     subProtocolBody         VARCHAR(2048),
@@ -45,4 +45,17 @@ CREATE TABLE IF NOT EXISTS security_attributes (
     securityType            security_type   NOT NULL,
     securityKey             TEXT            NOT NULL,
     securityValue           TEXT            NOT NULL
+)
+
+CREATE TABLE IF NOT EXISTS submodel_descriptor (
+    id VARCHAR(2048) NOT NULL PRIMARY KEY,
+    aasDescriptor VARCHAR(2048) REFERENCES aas_descriptor(id),
+    idShort VARCHAR(128),
+)
+
+CREATE TABLE IF NOT EXISTS submodel_descriptor_endpoint (
+    id                  BIGINT          PRIMARY KEY,
+    submodelDescriptor  BIGINT          NOT NULL REFERENCES submodel_descriptor(id),
+    interface           VARCHAR(128)    NOT NULL,
+    protocolInformation BIGINT          NOT NULL REFERENCES protocol_information(id)
 )

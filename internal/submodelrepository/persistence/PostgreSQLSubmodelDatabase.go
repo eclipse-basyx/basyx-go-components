@@ -4,9 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"os"
 	"strconv"
-	"time"
 
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 
@@ -30,37 +28,10 @@ var maxCacheSize = 1000
 var submodelCache map[string]gen.Submodel = make(map[string]gen.Submodel)
 
 func NewPostgreSQLSubmodelBackend(dsn string, maxOpenConns, maxIdleConns int, connMaxLifetimeMinutes int, cacheEnabled bool) (*PostgreSQLSubmodelDatabase, error) {
-	db, err := sql.Open("postgres", dsn)
-	//Set Max Connection
-	db.SetMaxOpenConns(500)
-	db.SetMaxIdleConns(500)
-	db.SetConnMaxLifetime(time.Minute * 5)
-
+	db, err := common.InitializeDatabase(dsn, "submodelrepositoryschema.sql")
 	if err != nil {
 		return nil, err
 	}
-	if err := db.Ping(); err != nil {
-		return nil, err
-	}
-
-	dir, osErr := os.Getwd()
-
-	if osErr != nil {
-		return nil, osErr
-	}
-
-	queryString, fileError := os.ReadFile(dir + "/resources/sql/submodelrepositoryschema.sql")
-
-	if fileError != nil {
-		return nil, fileError
-	}
-
-	_, dbError := db.Exec(string(queryString))
-
-	if dbError != nil {
-		return nil, dbError
-	}
-
 	return &PostgreSQLSubmodelDatabase{db: db, cacheEnabled: cacheEnabled}, nil
 }
 
