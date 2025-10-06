@@ -47,7 +47,7 @@ CREATE TABLE IF NOT EXISTS security_attributes (
     securityType            security_type   NOT NULL,
     securityKey             TEXT            NOT NULL,
     securityValue           TEXT            NOT NULL
-)
+);
 
 CREATE TABLE IF NOT EXISTS submodel_descriptor (
     id VARCHAR(2048) NOT NULL PRIMARY KEY,
