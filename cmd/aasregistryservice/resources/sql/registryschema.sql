@@ -28,7 +28,7 @@ CREATE TABLE IF NOT EXISTS aas_descriptor_endpoint (
 
 CREATE TABLE IF NOT EXISTS protocol_information (
     id                      BIGINT          NOT NULL PRIMARY KEY,
-    href                    VARCHAR(2048)   NOT NULL,4
+    href                    VARCHAR(2048)   NOT NULL,
     schemeType              VARCHAR(128),
     subProtocol             VARCHAR(128),
     subProtocolBody         VARCHAR(2048),
