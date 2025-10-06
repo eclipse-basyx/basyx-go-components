@@ -33,7 +33,7 @@ CREATE TABLE IF NOT EXISTS protocol_information (
     subProtocol             VARCHAR(128),
     subProtocolBody         VARCHAR(2048),
     subProtocolBodyEncoding VARCHAR(2048)
-)
+);
 
 CREATE TABLE IF NOT EXISTS endpoint_protocol_version (
     id                      BIGINT          NOT NULL PRIMARY KEY,
