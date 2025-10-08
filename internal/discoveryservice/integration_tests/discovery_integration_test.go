@@ -1,174 +1,64 @@
-package integration
+package bench
 
 import (
-	"bytes"
-	"context"
-	"crypto/rand"
 	"database/sql"
-	"encoding/base64"
-	"encoding/hex"
-	"encoding/json"
-	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
-	"os/exec"
 	"sort"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/testenv"
+	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/discoveryapi/go"
 	_ "github.com/lib/pq"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-const (
-	baseURL         = "http://127.0.0.1:5004"
-	composeFilePath = "docker_compose/docker_compose.yml"
-)
-
-type pagingMetadata struct {
-	Cursor string `json:"cursor"`
-}
-type searchResp struct {
-	PagingMetadata pagingMetadata `json:"paging_metadata"`
-	Result         []string       `json:"result"`
-}
-type specificAssetID struct {
-	Name              string `json:"name"`
-	Value             string `json:"value"`
-	ExternalSubjectId string `json:"externalSubjectId,omitempty"`
-}
-
-func b64Raw(s string) string { return base64.RawStdEncoding.EncodeToString([]byte(s)) }
-func randomHex(n int) string {
-	buf := make([]byte, n)
-	_, _ = rand.Read(buf)
-	return hex.EncodeToString(buf)
-}
-
-func httpClient() *http.Client { return &http.Client{Timeout: 20 * time.Second} }
-
-func postJSONExpect(t *testing.T, url string, body any, code int) []byte {
-	t.Helper()
-	var r io.Reader
-	if body != nil {
-		b, err := json.Marshal(body)
-		require.NoError(t, err)
-		r = bytes.NewReader(b)
+func ensureContainsAll(t *testing.T, got []openapi.SpecificAssetId, want map[string][]string) {
+	actual := testenv.BuildNameValuesMap(got)
+	for k, wantVals := range want {
+		gotVals := actual[k]
+		assert.Equalf(t, wantVals, gotVals, "mismatch for name=%s", k)
 	}
-	req, err := http.NewRequest("POST", url, r)
-	require.NoError(t, err)
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := httpClient().Do(req)
-	require.NoError(t, err)
-	defer resp.Body.Close()
-	data, err := io.ReadAll(resp.Body)
-	require.NoError(t, err)
-	require.Equalf(t, code, resp.StatusCode, "POST %s expected %d got %d: %s", url, code, resp.StatusCode, string(data))
-	return data
-}
-func getExpect(t *testing.T, url string, code int) []byte {
-	t.Helper()
-	resp, err := httpClient().Get(url)
-	require.NoError(t, err)
-	defer resp.Body.Close()
-	data, err := io.ReadAll(resp.Body)
-	require.NoError(t, err)
-	require.Equalf(t, code, resp.StatusCode, "GET %s expected %d got %d: %s", url, code, resp.StatusCode, string(data))
-	return data
-}
-func deleteExpect(t *testing.T, url string, code int) []byte {
-	t.Helper()
-	req, err := http.NewRequest("DELETE", url, nil)
-	require.NoError(t, err)
-	resp, err := httpClient().Do(req)
-	require.NoError(t, err)
-	defer resp.Body.Close()
-	data, err := io.ReadAll(resp.Body)
-	require.NoError(t, err)
-	require.Equalf(t, code, resp.StatusCode, "DELETE %s expected %d got %d: %s", url, code, resp.StatusCode, string(data))
-	return data
+	assert.Subset(t, keys(actual), keys(want), "response contained extra names not expected; got=%v want=%v", keys(actual), keys(want))
+	assert.Subset(t, keys(want), keys(actual), "response missing expected names; got=%v want=%v", keys(actual), keys(want))
 }
 
-func waitHealthy(t *testing.T, url string, maxWait time.Duration) {
-	t.Helper()
-	deadline := time.Now().Add(maxWait)
-	backoff := time.Second
-	for {
-		resp, err := httpClient().Get(url)
-		if err == nil {
-			if resp.StatusCode == http.StatusOK {
-				_ = resp.Body.Close()
-				return
-			}
-			_ = resp.Body.Close()
-		}
-		if time.Now().After(deadline) {
-			require.FailNowf(t, "health timeout", "service not healthy at %s within %s", url, maxWait)
-		}
-		time.Sleep(backoff)
-		if backoff < 5*time.Second {
-			backoff += 500 * time.Millisecond
-		}
+func keys(m map[string][]string) (ks []string) {
+	for k := range m {
+		ks = append(ks, k)
 	}
+	return
 }
 
-func findCompose() (bin string, args []string, err error) {
-	if _, e := exec.LookPath("docker"); e == nil {
-		return "docker", []string{"compose"}, nil
-	}
-	if _, e := exec.LookPath("podman"); e == nil {
-		return "podman", []string{"compose"}, nil
-	}
-	return "", nil, errors.New("neither docker nor podman found on PATH")
-}
-func runCompose(ctx context.Context, base string, args ...string) error {
-	cmd := exec.CommandContext(ctx, base, args...)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd.Run()
-}
+type DBVerifier struct{ DB *sql.DB }
 
-// optional DB verification -----------------------------------------------------
-
-type dbVerifier struct {
-	db *sql.DB
-}
-
-// tryConnectDB returns a verifier if DISC_TEST_DSN is present and connection succeeds.
-func tryConnectDB(t *testing.T) *dbVerifier {
+// TryConnectDB attempts to connect to the test database if DSN is provided.
+func TryConnectDB(t testing.TB) *DBVerifier {
+	t.Helper()
 	dsn := os.Getenv("DISC_TEST_DSN")
 	if strings.TrimSpace(dsn) == "" {
-		t.Log("DISC_TEST_DSN not set; skipping DB verification")
 		return nil
 	}
 	db, err := sql.Open("postgres", dsn)
 	if err != nil {
-		t.Logf("DB open failed (%v); skipping DB verification", err)
 		return nil
 	}
 	db.SetConnMaxLifetime(5 * time.Minute)
 	db.SetMaxIdleConns(1)
 	db.SetMaxOpenConns(3)
 	if err := db.Ping(); err != nil {
-		t.Logf("DB ping failed (%v); skipping DB verification", err)
+		_ = db.Close()
 		return nil
 	}
-	return &dbVerifier{db: db}
+	return &DBVerifier{DB: db}
 }
 
-// NOTE: This SQL assumes a generic table/view layout where rows are stored per AAS.
-// If your schema differs, set DISC_TEST_SQL_COUNT to a working query like:
-//
-//	SELECT COUNT(*) FROM discovery_specific_asset_ids WHERE aas_id = $1;
-//
-// and DISC_TEST_SQL_LIST like:
-//
-//	SELECT name, value FROM discovery_specific_asset_ids WHERE aas_id = $1;
-func (v *dbVerifier) countLinks(t *testing.T, aasID string) (int, bool) {
+func (v *DBVerifier) CountLinks(aasID string) (int, bool) {
 	if v == nil {
 		return 0, false
 	}
@@ -177,14 +67,13 @@ func (v *dbVerifier) countLinks(t *testing.T, aasID string) (int, bool) {
 		sqlCount = "SELECT COUNT(*) FROM discovery_specific_asset_ids WHERE aas_id = $1"
 	}
 	var c int
-	if err := v.db.QueryRow(sqlCount, aasID).Scan(&c); err != nil {
-		t.Logf("countLinks query failed (%v); skipping DB asserts", err)
+	if err := v.DB.QueryRow(sqlCount, aasID).Scan(&c); err != nil {
 		return 0, false
 	}
 	return c, true
 }
 
-func (v *dbVerifier) listNameValues(t *testing.T, aasID string) (map[string][]string, bool) {
+func (v *DBVerifier) ListNameValues(aasID string) (map[string][]string, bool) {
 	if v == nil {
 		return nil, false
 	}
@@ -192,9 +81,8 @@ func (v *dbVerifier) listNameValues(t *testing.T, aasID string) (map[string][]st
 	if sqlList == "" {
 		sqlList = "SELECT name, value FROM discovery_specific_asset_ids WHERE aas_id = $1"
 	}
-	rows, err := v.db.Query(sqlList, aasID)
+	rows, err := v.DB.Query(sqlList, aasID)
 	if err != nil {
-		t.Logf("listNameValues query failed (%v); skipping DB asserts", err)
 		return nil, false
 	}
 	defer rows.Close()
@@ -202,7 +90,6 @@ func (v *dbVerifier) listNameValues(t *testing.T, aasID string) (map[string][]st
 	for rows.Next() {
 		var n, v string
 		if err := rows.Scan(&n, &v); err != nil {
-			t.Logf("listNameValues scan failed (%v); skipping DB asserts", err)
 			return nil, false
 		}
 		m[n] = append(m[n], v)
@@ -213,146 +100,72 @@ func (v *dbVerifier) listNameValues(t *testing.T, aasID string) (map[string][]st
 	return m, true
 }
 
-// helpers for API paths --------------------------------------------------------
-
-func postLinks(t *testing.T, aasID string, links []specificAssetID) {
-	url := fmt.Sprintf("%s/lookup/shells/%s", baseURL, b64Raw(aasID))
-	_ = postJSONExpect(t, url, links, http.StatusCreated)
-}
-func getLinks(t *testing.T, aasID string, expect int) []specificAssetID {
-	url := fmt.Sprintf("%s/lookup/shells/%s", baseURL, b64Raw(aasID))
-	raw := getExpect(t, url, expect)
-	if expect != http.StatusOK {
-		return nil
-	}
-	var got []specificAssetID
-	require.NoError(t, json.Unmarshal(raw, &got))
-	return got
-}
-func deleteLinks(t *testing.T, aasID string) {
-	url := fmt.Sprintf("%s/lookup/shells/%s", baseURL, b64Raw(aasID))
-	_ = deleteExpect(t, url, http.StatusNoContent)
-}
-func searchBy(t *testing.T, pairs []specificAssetID, limit int, cursor string, expect int) searchResp {
-	url := fmt.Sprintf("%s/lookup/shellsByAssetLink?limit=%d", baseURL, limit)
-	if cursor != "" {
-		url += "&cursor=" + cursor
-	}
-	body := make([]map[string]string, 0, len(pairs))
-	for _, p := range pairs {
-		body = append(body, map[string]string{"name": p.Name, "value": p.Value})
-	}
-	raw := postJSONExpect(t, url, body, expect)
-	var out searchResp
-	if expect == http.StatusOK {
-		require.NoError(t, json.Unmarshal(raw, &out))
-	}
-	return out
-}
-
-func ensureContainsAll(t *testing.T, got []specificAssetID, want map[string][]string) {
-	// build actual map
-	actual := map[string][]string{}
-	for _, s := range got {
-		actual[s.Name] = append(actual[s.Name], s.Value)
-	}
-	for k := range actual {
-		sort.Strings(actual[k])
-	}
-	// compare keys + per-key values (ignoring order)
-	for k, wantVals := range want {
-		gotVals := actual[k]
-		sort.Strings(wantVals)
-		assert.Equalf(t, wantVals, gotVals, "mismatch for name=%s", k)
-	}
-	// also assert no extra keys
-	assert.Subset(t, keys(actual), keys(want)) // want ⊆ actual
-	assert.Subset(t, keys(want), keys(actual)) // actual ⊆ want
-}
-func keys(m map[string][]string) (ks []string) {
-	for k := range m {
-		ks = append(ks, k)
-	}
-	return
-}
-
 func TestDiscovery_Suite_Sophisticated(t *testing.T) {
-	engine, composeArgs, err := findCompose()
-	if err != nil {
-		t.Skip("compose engine not found:", err)
-	}
+	mustHaveCompose(t)
+	waitUntilHealthy(t)
 
-	build := os.Getenv("DISC_TEST_BUILD") == "1"
-	upArgs := append(composeArgs, "-f", composeFilePath, "up", "-d")
-	if build {
-		upArgs = append(upArgs, "--build")
-	}
-
-	ctxUp, cancelUp := context.WithTimeout(context.Background(), 10*time.Minute)
-	defer cancelUp()
-	require.NoError(t, runCompose(ctxUp, engine, upArgs...), "failed to start compose")
-
-	t.Cleanup(func() {
-		ctxDown, cancelDown := context.WithTimeout(context.Background(), 2*time.Minute)
-		defer cancelDown()
-		_ = runCompose(ctxDown, engine, append(composeArgs, "-f", composeFilePath, "down")...)
-	})
-
-	waitHealthy(t, baseURL+"/health", 2*time.Minute)
-
-	ver := tryConnectDB(t)
+	ver := TryConnectDB(t)
 	if ver != nil {
-		defer ver.db.Close()
+		defer ver.DB.Close()
 	}
 
-	// Prepare three AAS with distinct link profiles
-	aasA := "urn:aas:test:" + randomHex(6)
-	aasB := "urn:aas:test:" + randomHex(6)
-	aasC := "urn:aas:test:" + randomHex(6)
+	// Deterministic Factorio-flavored AAS and link data (no randomness).
+	aasA := "urn:aas:test:assembler-1"
+	aasB := "urn:aas:test:oil-refinery"
+	aasC := "urn:aas:test:rail-signal"
 
-	linksA1 := []specificAssetID{
-		{Name: "globalAssetId", Value: "urn:ga:" + randomHex(3)},
-		{Name: "serialNumber", Value: "SN-" + randomHex(2)},
-		{Name: "plant", Value: "BER"},
+	linksA1 := []openapi.SpecificAssetId{
+		{Name: "globalAssetId", Value: "urn:ga:green-circuit"},
+		{Name: "serialNumber", Value: "SN-iron-gear"},
+		{Name: "plant", Value: "NAUVIS"},
 	}
-	// replacement set for A: different serial + adds "line"
-	linksA2 := []specificAssetID{
-		{Name: "globalAssetId", Value: linksA1[0].Value},    // keep same GAID
-		{Name: "serialNumber", Value: "SN-" + randomHex(2)}, // REPLACED serial
+	linksA2 := []openapi.SpecificAssetId{
+		{Name: "globalAssetId", Value: linksA1[0].Value}, // keep same GAID
+		{Name: "serialNumber", Value: "SN-red-circuit"},
 		{Name: "line", Value: "L1"},
 	}
 
-	linksB := []specificAssetID{
-		{Name: "serialNumber", Value: "SN-B-" + randomHex(2)},
-		{Name: "plant", Value: "MUC"},
+	linksB := []openapi.SpecificAssetId{
+		{Name: "serialNumber", Value: "SN-engine-unit"},
+		{Name: "plant", Value: "SPIDERTRON-YARD"},
 	}
 
-	linksC := []specificAssetID{
-		{Name: "assetTag", Value: "AT-" + randomHex(2)},
+	linksC := []openapi.SpecificAssetId{
+		{Name: "assetTag", Value: "belt-yellow"},
 	}
 
-	// --- A: create, check, replace, check (and DB-check if possible)
+	t.Run("Pagination_empty_set_returns_empty_and_no_cursor", func(t *testing.T) {
+		// With no AAS inserted, searching (with or without filters) should return no results and no cursor.
+		res := SearchBy(t, []openapi.SpecificAssetId{}, 5, "", http.StatusOK)
+
+		assert.Empty(t, res.Result,
+			"empty dataset should yield no AAS IDs; got=%v", res.Result)
+
+		assert.Empty(t, res.PagingMetadata.Cursor,
+			"empty dataset should not produce a cursor; got=%q", res.PagingMetadata.Cursor)
+	})
+
 	t.Run("A_create_and_replace", func(t *testing.T) {
-		postLinks(t, aasA, linksA1)
-		got := getLinks(t, aasA, http.StatusOK)
+		PostLinks(t, aasA, linksA1)
+		got := GetLinks(t, aasA, http.StatusOK)
 
 		wantMap1 := map[string][]string{
 			"globalAssetId": {linksA1[0].Value},
 			"serialNumber":  {linksA1[1].Value},
-			"plant":         {"BER"},
+			"plant":         {"NAUVIS"},
 		}
 		ensureContainsAll(t, got, wantMap1)
 
 		if ver != nil {
-			if cnt, ok := ver.countLinks(t, aasA); ok {
-				assert.Equal(t, len(linksA1), cnt, "db should contain initial rows for A")
+			if cnt, ok := ver.CountLinks(aasA); ok {
+				assert.Equal(t, len(linksA1), cnt, "DB row count mismatch for %q after initial POST: want=%d got=%d", aasA, len(linksA1), cnt)
 			}
 		}
 
-		// replace
-		postLinks(t, aasA, linksA2)
-		got2 := getLinks(t, aasA, http.StatusOK)
-		// old "plant" must be gone, new "line" must be present, GAID preserved, serial changed
+		// Replace links for A
+		PostLinks(t, aasA, linksA2)
+		got2 := GetLinks(t, aasA, http.StatusOK)
+
 		wantMap2 := map[string][]string{
 			"globalAssetId": {linksA2[0].Value},
 			"serialNumber":  {linksA2[1].Value},
@@ -360,113 +173,218 @@ func TestDiscovery_Suite_Sophisticated(t *testing.T) {
 		}
 		ensureContainsAll(t, got2, wantMap2)
 
-		// assert plant is gone
 		for _, s := range got2 {
-			require.NotEqual(t, "plant", s.Name, "old 'plant' should have been replaced away")
+			require.NotEqual(t, "plant", s.Name, "stale key 'plant' still present after replace for %q; response=%v", aasA, got2)
 		}
 
 		if ver != nil {
-			if cnt, ok := ver.countLinks(t, aasA); ok {
-				assert.Equal(t, len(linksA2), cnt, "db should contain replaced row count for A")
+			if cnt, ok := ver.CountLinks(aasA); ok {
+				assert.Equal(t, len(linksA2), cnt, "DB row count mismatch for %q after replace: want=%d got=%d", aasA, len(linksA2), cnt)
 			}
-			if namevals, ok := ver.listNameValues(t, aasA); ok {
+			if namevals, ok := ver.ListNameValues(aasA); ok {
 				_, hadPlant := namevals["plant"]
-				assert.False(t, hadPlant, "DB: 'plant' row should be gone after replace")
+				assert.False(t, hadPlant, "DB still contains 'plant' for %q after replace; rows=%v", aasA, namevals)
 			}
 		}
 	})
 
-	// --- B & C: create others
 	t.Run("B_and_C_create", func(t *testing.T) {
-		postLinks(t, aasB, linksB)
-		postLinks(t, aasC, linksC)
+		PostLinks(t, aasB, linksB)
+		PostLinks(t, aasC, linksC)
 
-		gotB := getLinks(t, aasB, http.StatusOK)
+		gotB := GetLinks(t, aasB, http.StatusOK)
 		ensureContainsAll(t, gotB, map[string][]string{
 			"serialNumber": {linksB[0].Value},
-			"plant":        {"MUC"},
+			"plant":        {"SPIDERTRON-YARD"},
 		})
 
-		gotC := getLinks(t, aasC, http.StatusOK)
+		gotC := GetLinks(t, aasC, http.StatusOK)
 		ensureContainsAll(t, gotC, map[string][]string{
 			"assetTag": {linksC[0].Value},
 		})
 	})
 
-	// --- Search matrix
 	t.Run("Search_matrix", func(t *testing.T) {
-		// search by A's GAID should return A only
-		res := searchBy(t, []specificAssetID{{Name: "globalAssetId", Value: linksA2[0].Value}}, 10, "", http.StatusOK)
-		assert.Contains(t, res.Result, aasA)
-		assert.NotContains(t, res.Result, aasB)
-		assert.NotContains(t, res.Result, aasC)
+		// Single-criteria searches
+		res := SearchBy(t, []openapi.SpecificAssetId{{Name: "globalAssetId", Value: linksA2[0].Value}}, 10, "", http.StatusOK)
+		assert.Contains(t, res.Result, aasA, "search by globalAssetId should include %q; got=%v", aasA, res.Result)
+		assert.NotContains(t, res.Result, aasB, "search by globalAssetId should not include %q; got=%v", aasB, res.Result)
+		assert.NotContains(t, res.Result, aasC, "search by globalAssetId should not include %q; got=%v", aasC, res.Result)
 
-		// search by A's serial should return A only
-		res = searchBy(t, []specificAssetID{{Name: "serialNumber", Value: linksA2[1].Value}}, 10, "", http.StatusOK)
-		assert.Equal(t, []string{aasA}, res.Result)
+		res = SearchBy(t, []openapi.SpecificAssetId{{Name: "serialNumber", Value: linksA2[1].Value}}, 10, "", http.StatusOK)
+		assert.Equal(t, []string{aasA}, res.Result, "search by serialNumber=%q should return only %q; got=%v", linksA2[1].Value, aasA, res.Result)
 
-		// search by B's plant should return B only
-		res = searchBy(t, []specificAssetID{{Name: "plant", Value: "MUC"}}, 10, "", http.StatusOK)
-		assert.Equal(t, []string{aasB}, res.Result)
+		res = SearchBy(t, []openapi.SpecificAssetId{{Name: "plant", Value: "SPIDERTRON-YARD"}}, 10, "", http.StatusOK)
+		assert.Equal(t, []string{aasB}, res.Result, "search by plant=SPIDERTRON-YARD should return only %q; got=%v", aasB, res.Result)
 
-		// AND search (two pairs) -> only A matches both GAID & serial
-		res = searchBy(t, []specificAssetID{
+		// Multi-criteria (AND) search
+		res = SearchBy(t, []openapi.SpecificAssetId{
 			{Name: "globalAssetId", Value: linksA2[0].Value},
 			{Name: "serialNumber", Value: linksA2[1].Value},
 		}, 10, "", http.StatusOK)
-		assert.Equal(t, []string{aasA}, res.Result)
+		assert.Equal(t, []string{aasA}, res.Result, "AND search should match only %q; got=%v", aasA, res.Result)
 
-		// search for a value that no one has
-		res = searchBy(t, []specificAssetID{{Name: "serialNumber", Value: "DOES-NOT-EXIST"}}, 10, "", http.StatusOK)
-		assert.Len(t, res.Result, 0)
-
-		// search for name that exists in A and B with different values -> if filtering by name only isn’t supported, expect 400 if server requires both name+value
-		// We stick to precise (name,value) pairs here.
+		// Nonexistent value
+		res = SearchBy(t, []openapi.SpecificAssetId{{Name: "serialNumber", Value: "SN-does-not-exist"}}, 10, "", http.StatusOK)
+		assert.Len(t, res.Result, 0, "search for nonexistent serialNumber should be empty; got=%v", res.Result)
 	})
 
-	// --- Pagination with multiple matches: give both A & B the same (name,value) on purpose
-	t.Run("Pagination_stable", func(t *testing.T) {
-		commonTag := "COMMON-" + randomHex(2)
+	t.Run("Delete_and_search_absence", func(t *testing.T) {
+		_ = GetLinks(t, aasA, http.StatusOK)
 
-		// add a common link to A (replace to keep other A links intact + add a new one)
-		postLinks(t, aasA, append([]specificAssetID{
-			{Name: "globalAssetId", Value: linksA2[0].Value},
-			{Name: "serialNumber", Value: linksA2[1].Value},
-			{Name: "line", Value: "L1"},
-		}, specificAssetID{Name: "batch", Value: commonTag}))
+		DeleteLinks(t, aasA)
+		_ = GetLinks(t, aasA, http.StatusNotFound)
 
-		// add common link to B as well (replace)
-		postLinks(t, aasB, []specificAssetID{
-			{Name: "serialNumber", Value: linksB[0].Value},
-			{Name: "plant", Value: "MUC"},
-			{Name: "batch", Value: commonTag},
+		// A should no longer appear in search
+		res := SearchBy(t, []openapi.SpecificAssetId{{Name: "globalAssetId", Value: linksA2[0].Value}}, 10, "", http.StatusOK)
+		assert.NotContains(t, res.Result, aasA, "deleted AAS %q unexpectedly present in search results; got=%v", aasA, res.Result)
+	})
+
+	t.Run("Shared_and_unique_pairs_across_two_AAS", func(t *testing.T) {
+		// Two new AAS identifiers for isolation
+		aasD := "urn:aas:test:copper-plate"
+		aasE := "urn:aas:test:iron-gear"
+
+		// One shared pair (same for both AAS) + one unique pair each
+		shared := openapi.SpecificAssetId{Name: "sharedTag", Value: "train-signal"}
+		uniqD := openapi.SpecificAssetId{Name: "uniqueD", Value: "uranium-fuel-cell"}
+		uniqE := openapi.SpecificAssetId{Name: "uniqueE", Value: "rocket-control-unit"}
+
+		// Post exactly two pairs per AAS (shared + unique)
+		PostLinks(t, aasD, []openapi.SpecificAssetId{shared, uniqD})
+		PostLinks(t, aasE, []openapi.SpecificAssetId{shared, uniqE})
+
+		// 1) Search by the shared pair: should return both AAS
+		resShared := SearchBy(t, []openapi.SpecificAssetId{{Name: shared.Name, Value: shared.Value}}, 10, "", http.StatusOK)
+		assert.Contains(t, resShared.Result, aasD, "shared search (%s=%s) must include %q; got=%v", shared.Name, shared.Value, aasD, resShared.Result)
+		assert.Contains(t, resShared.Result, aasE, "shared search (%s=%s) must include %q; got=%v", shared.Name, shared.Value, aasE, resShared.Result)
+		assert.Len(t, resShared.Result, 2, "shared search (%s=%s) should return exactly 2 AAS; got=%v", shared.Name, shared.Value, resShared.Result)
+
+		// 2) Search by uniqD: should return only aasD
+		resUniqD := SearchBy(t, []openapi.SpecificAssetId{{Name: uniqD.Name, Value: uniqD.Value}}, 10, "", http.StatusOK)
+		assert.Equal(t, []string{aasD}, resUniqD.Result, "unique search (%s=%s) should return only %q; got=%v", uniqD.Name, uniqD.Value, aasD, resUniqD.Result)
+
+		// 3) Search by uniqE: should return only aasE
+		resUniqE := SearchBy(t, []openapi.SpecificAssetId{{Name: uniqE.Name, Value: uniqE.Value}}, 10, "", http.StatusOK)
+		assert.Equal(t, []string{aasE}, resUniqE.Result, "unique search (%s=%s) should return only %q; got=%v", uniqE.Name, uniqE.Value, aasE, resUniqE.Result)
+
+		// 4) Search by a pair that was never added: should return empty
+		resNone := SearchBy(t, []openapi.SpecificAssetId{{Name: "nonexistent", Value: "biters-don't-index"}}, 10, "", http.StatusOK)
+		assert.Empty(t, resNone.Result, "search for nonexistent pair should return empty; got=%v", resNone.Result)
+	})
+
+	t.Run("Replace_links_removes_old_pairs_and_delete_twice", func(t *testing.T) {
+		aasX := "urn:aas:test:blue-science"
+
+		// Initial pairs
+		pairs1 := []openapi.SpecificAssetId{
+			{Name: "alpha", Value: "steam-power"},
+			{Name: "beta", Value: "coal-burner"},
+		}
+		PostLinks(t, aasX, pairs1)
+
+		got1 := GetLinks(t, aasX, http.StatusOK)
+		ensureContainsAll(t, got1, map[string][]string{
+			"alpha": {"steam-power"},
+			"beta":  {"coal-burner"},
 		})
 
-		// Now search for (batch=commonTag) with limit=1 and step through
-		res1 := searchBy(t, []specificAssetID{{Name: "batch", Value: commonTag}}, 1, "", http.StatusOK)
-		require.Len(t, res1.Result, 1)
-		require.NotEmpty(t, res1.PagingMetadata.Cursor)
+		// Replace with entirely new pairs (same AAS identifier, new pairs)
+		pairs2 := []openapi.SpecificAssetId{
+			{Name: "gamma", Value: "solar-array"},
+			{Name: "delta", Value: "accumulator-bank"},
+		}
+		PostLinks(t, aasX, pairs2)
 
-		res2 := searchBy(t, []specificAssetID{{Name: "batch", Value: commonTag}}, 1, res1.PagingMetadata.Cursor, http.StatusOK)
-		require.Len(t, res2.Result, 1)
-		require.NotEqual(t, res1.Result[0], res2.Result[0], "page 2 should be a different AAS")
+		got2 := GetLinks(t, aasX, http.StatusOK)
+		ensureContainsAll(t, got2, map[string][]string{
+			"gamma": {"solar-array"},
+			"delta": {"accumulator-bank"},
+		})
+		// Ensure old names are gone after replacement
+		for _, s := range got2 {
+			require.NotEqual(t, "alpha", s.Name, "stale key 'alpha' still present after replace for %q; response=%v", aasX, got2)
+			require.NotEqual(t, "beta", s.Name, "stale key 'beta' still present after replace for %q; response=%v", aasX, got2)
+		}
 
-		// page 3 should be empty
-		res3 := searchBy(t, []specificAssetID{{Name: "batch", Value: commonTag}}, 1, res2.PagingMetadata.Cursor, http.StatusOK)
-		assert.Len(t, res3.Result, 0)
-		assert.Equal(t, "", res3.PagingMetadata.Cursor)
+		// Optional DB checks if DSN provided
+		if ver := TryConnectDB(t); ver != nil {
+			defer ver.DB.Close()
+
+			if cnt, ok := ver.CountLinks(aasX); ok {
+				assert.Equal(t, len(pairs2), cnt, "DB row count mismatch for %q after replace: want=%d got=%d", aasX, len(pairs2), cnt)
+			}
+			if namevals, ok := ver.ListNameValues(aasX); ok {
+				_, hadAlpha := namevals["alpha"]
+				_, hadBeta := namevals["beta"]
+				assert.False(t, hadAlpha, "DB still contains 'alpha' for %q after replace; rows=%v", aasX, namevals)
+				assert.False(t, hadBeta, "DB still contains 'beta' for %q after replace; rows=%v", aasX, namevals)
+				assert.Contains(t, namevals, "gamma", "DB missing expected 'gamma' for %q after replace; rows=%v", aasX, namevals)
+				assert.Contains(t, namevals, "delta", "DB missing expected 'delta' for %q after replace; rows=%v", aasX, namevals)
+			}
+		}
+
+		// Delete once -> subsequent GET should be 404
+		DeleteLinks(t, aasX)
+		_ = GetLinks(t, aasX, http.StatusNotFound)
+
+		// Delete again -> use new helper with explicit expectation
+		DeleteLinksExpect(t, aasX, http.StatusNotFound)
+
+		// Still absent
+		_ = GetLinks(t, aasX, http.StatusNotFound)
 	})
 
-	// --- Delete A and verify its disappearance from GET + Search
-	t.Run("Delete_and_search_absence", func(t *testing.T) {
-		// ensure present first
-		_ = getLinks(t, aasA, http.StatusOK)
+	t.Run("BadRequest_when_aas_not_base64_encoded", func(t *testing.T) {
+		// Construct a raw, NOT-base64-encoded AAS ID and bypass helper encoding.
+		rawAAS := "urn:aas:not-encoded:crude-oil"
 
-		deleteLinks(t, aasA)
-		_ = getLinks(t, aasA, http.StatusNotFound)
+		// GET should return 400 Bad Request
+		url := fmt.Sprintf("%s/lookup/shells/%s", testenv.BaseURL, rawAAS)
+		_ = testenv.GetExpect(t, url, http.StatusBadRequest)
 
-		// Search by A’s GAID should not return A anymore
-		res := searchBy(t, []specificAssetID{{Name: "globalAssetId", Value: linksA2[0].Value}}, 10, "", http.StatusOK)
-		assert.NotContains(t, res.Result, aasA)
+		// POST with raw path should also return 400
+		body := []openapi.SpecificAssetId{
+			{Name: "foo", Value: "barrel"},
+		}
+		_ = testenv.PostJSONExpect(t, url, body, http.StatusBadRequest)
+
+		// DELETE with raw path should also return 400
+		_ = testenv.DeleteExpect(t, url, http.StatusBadRequest)
 	})
+
+	t.Run("Pagination_two_items_limit1_cursor_points_to_next", func(t *testing.T) {
+		// Two AAS sharing a common tag → exactly 2 results.
+		aasP1 := "urn:aas:test:copper"
+		aasP2 := "urn:aas:test:iron"
+
+		pageTag := "science-pack-3"
+		sharedPair := openapi.SpecificAssetId{Name: "pageGroup", Value: pageTag}
+
+		PostLinks(t, aasP1, []openapi.SpecificAssetId{sharedPair})
+		PostLinks(t, aasP2, []openapi.SpecificAssetId{sharedPair})
+
+		// Determine expected order (API orders by aasId ASC).
+		expected := []string{aasP1, aasP2}
+		sort.Strings(expected)
+		firstID, secondID := expected[0], expected[1]
+
+		// Page 1 (limit=1): must return firstID, and the cursor must point to secondID (encoded).
+		res1 := SearchBy(t, []openapi.SpecificAssetId{{Name: sharedPair.Name, Value: sharedPair.Value}}, 1, "", http.StatusOK)
+		require.Len(t, res1.Result, 1, "first page should contain 1 result for %s=%s; got=%v", sharedPair.Name, sharedPair.Value, res1.Result)
+		assert.Equal(t, firstID, res1.Result[0], "first page should return first AAS lexicographically; want=%q got=%q", firstID, res1.Result[0])
+		require.NotEmpty(t, res1.PagingMetadata.Cursor, "first page should provide a next cursor for %s=%s", sharedPair.Name, sharedPair.Value)
+
+		// Cursor should equal the *next* AAS id (after decoding).
+		dec, err := common.DecodeString(res1.PagingMetadata.Cursor)
+		require.NoError(t, err, "cursor must be a valid encoded string; got=%q", res1.PagingMetadata.Cursor)
+		assert.Equal(t, secondID, dec, "cursor should point to the next AAS id; want=%q got=%q", secondID, dec)
+
+		// Page 2 (limit=1, using cursor from page 1): must return secondID and no further cursor.
+		res2 := SearchBy(t, []openapi.SpecificAssetId{{Name: sharedPair.Name, Value: sharedPair.Value}}, 1, res1.PagingMetadata.Cursor, http.StatusOK)
+		require.Len(t, res2.Result, 1, "second page should contain the remaining 1 result for %s=%s; got=%v", sharedPair.Name, sharedPair.Value, res2.Result)
+		assert.Equal(t, secondID, res2.Result[0], "second page should return the second AAS; want=%q got=%q", secondID, res2.Result[0])
+		assert.Empty(t, res2.PagingMetadata.Cursor, "second page should not provide a cursor (no more pages); got=%q", res2.PagingMetadata.Cursor)
+	})
+
 }

@@ -2,9 +2,9 @@ package persistence_postgresql
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
@@ -42,8 +42,6 @@ func NewPostgreSQLDiscoveryBackend(dsn string, maxConns int) (*PostgreSQLDiscove
 	return &PostgreSQLDiscoveryDatabase{pool: pool}, nil
 }
 
-// In persistence_postgresql/postgresql_discovery.go
-
 func (p *PostgreSQLDiscoveryDatabase) GetAllAssetLinks(aasID string) ([]openapi.SpecificAssetId, error) {
 	ctx := context.Background()
 	tx, err := p.pool.Begin(ctx)
@@ -54,17 +52,14 @@ func (p *PostgreSQLDiscoveryDatabase) GetAllAssetLinks(aasID string) ([]openapi.
 	defer tx.Rollback(ctx)
 
 	var referenceID int64
-	// 1) Find the AAS identifier row
 	if err := tx.QueryRow(ctx, `SELECT id FROM aas_identifier WHERE aasId = $1`, aasID).Scan(&referenceID); err != nil {
 		if err == pgx.ErrNoRows {
-			// AAS does not exist -> 404
 			return nil, common.NewErrNotFound("AAS identifier '" + aasID + "'")
 		}
 		fmt.Println(err)
 		return nil, common.NewInternalServerError("Failed to fetch aas identifier. See console for information.")
 	}
 
-	// 2) Load all asset links for this AAS (could be zero)
 	rows, err := tx.Query(ctx, `SELECT name, value FROM asset_link WHERE aasRef = $1 ORDER BY id`, referenceID)
 	if err != nil {
 		fmt.Println(err)
@@ -97,39 +92,17 @@ func (p *PostgreSQLDiscoveryDatabase) GetAllAssetLinks(aasID string) ([]openapi.
 	return result, nil
 }
 
-func (p *PostgreSQLDiscoveryDatabase) DeleteAllAssetLinks(aas_id string) error {
+func (p *PostgreSQLDiscoveryDatabase) DeleteAllAssetLinks(aasID string) error {
 	ctx := context.Background()
-	tx, err := p.pool.Begin(ctx)
+
+	tag, err := p.pool.Exec(ctx, `DELETE FROM aas_identifier WHERE aasId = $1`, aasID)
 	if err != nil {
 		fmt.Println(err)
-		return common.NewInternalServerError("Failed to start postgres transaction. See console for information.")
+		return common.NewInternalServerError("Failed to delete AAS identifier. See console for information.")
 	}
-	defer tx.Rollback(ctx)
-
-	var referenceID int64
-	// Find the existing aas_identifier row
-	err = tx.QueryRow(ctx, "SELECT id FROM aas_identifier WHERE aasId = $1", aas_id).Scan(&referenceID)
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			// No such AAS identifier exists — nothing to delete
-			return common.NewErrBadRequest(fmt.Sprintf("AAS identifier %s not found. See console for information.", aas_id))
-		}
-		fmt.Println(err)
-		return common.NewInternalServerError("Failed to fetch aas identifier. See console for information.")
+	if tag.RowsAffected() == 0 {
+		return common.NewErrNotFound(fmt.Sprintf("AAS identifier %s not found. See console for information.", aasID))
 	}
-
-	// Delete the aas_identifier itself
-	if _, err := tx.Exec(ctx, `DELETE FROM aas_identifier WHERE id = $1`, referenceID); err != nil {
-		fmt.Println(err)
-		return common.NewInternalServerError("Failed to remove aas identifier. See console for information.")
-	}
-
-	// Commit the transaction
-	if err := tx.Commit(ctx); err != nil {
-		fmt.Println(err)
-		return common.NewInternalServerError("Failed to commit postgres transaction. See console for information.")
-	}
-
 	return nil
 }
 
@@ -182,47 +155,41 @@ func (p *PostgreSQLDiscoveryDatabase) SearchAASIDsByAssetLinks(
 	limit int32,
 	cursor string,
 ) ([]string, string, error) {
+
 	if limit <= 0 {
 		limit = 100
 	}
 
+	peekLimit := int(limit) + 1
+
 	args := []any{}
 	argPos := 1
-
-	// Keyset filter by aasId (string). If cursor is empty, start from the beginning.
-	whereCursor := fmt.Sprintf("( $%d = '' OR ai.aasId > $%d )", argPos, argPos)
+	whereCursor := fmt.Sprintf("( $%d = '' OR ai.aasId >= $%d )", argPos, argPos)
 	args = append(args, cursor)
 	argPos++
 
-	var sql string
-
+	var sqlStr string
 	if len(links) == 0 {
-		// No name/value filters -> just paginate over all AAS IDs
-		// Note: ORDER BY aasId ensures stable, lexicographic keyset pagination.
-		sql = fmt.Sprintf(`
+		sqlStr = fmt.Sprintf(`
 			SELECT ai.aasId
 			FROM aas_identifier ai
 			WHERE %s
 			ORDER BY ai.aasId ASC
 			LIMIT $%d
 		`, whereCursor, argPos)
-		args = append(args, int(limit))
+		args = append(args, peekLimit)
 	} else {
-		// Build VALUES table for (name,value) pairs
-		valuesSQL := ""
+		var valuesSQL strings.Builder
 		for i, l := range links {
 			if i > 0 {
-				valuesSQL += ", "
+				valuesSQL.WriteString(", ")
 			}
-			// ($argPos, $argPos+1)
-			valuesSQL += fmt.Sprintf("($%d, $%d)", argPos, argPos+1)
+			valuesSQL.WriteString(fmt.Sprintf("($%d, $%d)", argPos, argPos+1))
 			args = append(args, l.Name, l.Value)
 			argPos += 2
 		}
 
-		// Compose query: match AAS that contain *all* provided (name,value) pairs.
-		// We count DISTINCT pairs to avoid duplicates in asset_link skewing the count.
-		sql = fmt.Sprintf(`
+		sqlStr = fmt.Sprintf(`
 			WITH v(name, value) AS (VALUES %s)
 			SELECT ai.aasId
 			FROM aas_identifier ai
@@ -233,37 +200,36 @@ func (p *PostgreSQLDiscoveryDatabase) SearchAASIDsByAssetLinks(
 			HAVING COUNT(DISTINCT (al.name, al.value)) = (SELECT COUNT(*) FROM v)
 			ORDER BY ai.aasId ASC
 			LIMIT $%d
-		`, valuesSQL, whereCursor, argPos)
-
-		args = append(args, int(limit))
+		`, valuesSQL.String(), whereCursor, argPos)
+		args = append(args, peekLimit)
 	}
 
-	rows, err := p.pool.Query(ctx, sql, args...)
+	rows, err := p.pool.Query(ctx, sqlStr, args...)
 	if err != nil {
-		fmt.Println(err)
-		return nil, "", common.NewInternalServerError("Failed to query AAS IDs. See console for information.")
+		fmt.Println("SearchAASIDsByAssetLinks: query error:", err)
+		return nil, "", common.NewInternalServerError("Failed to query AAS IDs. See server logs for details.")
 	}
 	defer rows.Close()
 
-	var aasIDs []string
+	buf := make([]string, 0, peekLimit)
 	for rows.Next() {
 		var id string
 		if err := rows.Scan(&id); err != nil {
-			fmt.Println(err)
-			return nil, "", common.NewInternalServerError("Failed to scan AAS ID. See console for information.")
+			fmt.Println("SearchAASIDsByAssetLinks: scan error:", err)
+			return nil, "", common.NewInternalServerError("Failed to scan AAS ID. See server logs for details.")
 		}
-		aasIDs = append(aasIDs, id)
+		buf = append(buf, id)
 	}
 	if rows.Err() != nil {
-		fmt.Println(rows.Err())
-		return nil, "", common.NewInternalServerError("Failed to iterate AAS IDs. See console for information.")
+		fmt.Println("SearchAASIDsByAssetLinks: rows error:", rows.Err())
+		return nil, "", common.NewInternalServerError("Failed to iterate AAS IDs. See server logs for details.")
 	}
 
-	// Next cursor is the last aasId on this page (or empty if no results).
-	var nextCursor string
-	if n := len(aasIDs); n > 0 {
-		nextCursor = aasIDs[n-1]
+	if len(buf) > int(limit) {
+		result := buf[:limit]
+		nextCursor := buf[limit]
+		return result, nextCursor, nil
 	}
 
-	return aasIDs, nextCursor, nil
+	return buf, "", nil
 }

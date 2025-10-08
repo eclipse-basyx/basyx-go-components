@@ -58,7 +58,7 @@ jobs:
             DISC_TEST_BUILD: "1" # force rebuild image
         run: |
           cd internal/discoveryservice/integration_tests
-          go test -v .
+          go test -v -run TestDiscovery_Suite_Sophisticated
       # - name: Cleanup Docker
       #   if: always()
       #   run: |

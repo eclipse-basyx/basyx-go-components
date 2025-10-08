@@ -22,7 +22,7 @@ services:
       - "8080:8080"
     depends_on:
       - db
-  submodel_repository:
+  discoveryservice:
     build:
       context: ../../../..
       dockerfile: ./cmd/discoveryservice/Dockerfile
