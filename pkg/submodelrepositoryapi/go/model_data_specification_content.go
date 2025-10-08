@@ -10,24 +10,16 @@
 package openapi
 
 type DataSpecificationContent struct {
-	ModelType ModelType `json:"modelType"`
-}
-
-// AssertDataSpecificationContentRequired checks if the required fields are not zero-ed
-func AssertDataSpecificationContentRequired(obj DataSpecificationContent) error {
-	elements := map[string]interface{}{
-		"modelType": obj.ModelType,
-	}
-	for name, el := range elements {
-		if isZero := IsZeroValue(el); isZero {
-			return &RequiredError{Field: name}
-		}
-	}
-
-	return nil
-}
-
-// AssertDataSpecificationContentConstraints checks if the values respects the defined constraints
-func AssertDataSpecificationContentConstraints(obj DataSpecificationContent) error {
-	return nil
+	PreferredName      []LangStringTextType `json:"preferredName"`
+	ShortName          []LangStringTextType `json:"shortName,omitempty"`
+	Unit               string               `json:"unit,omitempty"`
+	UnitId             string               `json:"unitId,omitempty"`
+	SourceOfDefinition string               `json:"sourceOfDefinition,omitempty"`
+	Symbol             string               `json:"symbol,omitempty"`
+	DataType           string               `json:"dataType,omitempty"`
+	Definition         string               `json:"definition,omitempty"`
+	ValueFormat        string               `json:"valueFormat,omitempty"`
+	ValueList          string               `json:"valueList,omitempty"`
+	Value              string               `json:"value,omitempty"`
+	LevelType          string               `json:"levelType,omitempty"`
 }

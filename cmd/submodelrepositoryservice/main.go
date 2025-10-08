@@ -13,6 +13,7 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	api "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/api"
 	persistence_postgresql "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence"
+	persistence_utils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
 	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/submodelrepositoryapi/go"
 )
 
@@ -38,12 +39,17 @@ func runServer(ctx context.Context, configPath string) error {
 	common.AddHealthEndpoint(r, config)
 
 	// Instantiate generated services & controllers
-	// ==== Discovery Service ====
+	// ==== Submodel Repository Service ====
 	smDatabase, err := persistence_postgresql.NewPostgreSQLSubmodelBackend("postgres://"+config.Postgres.User+":"+config.Postgres.Password+"@"+config.Postgres.Host+":"+strconv.Itoa(config.Postgres.Port)+"/"+config.Postgres.DBName+"?sslmode=disable", config.Postgres.MaxOpenConnections, config.Postgres.MaxIdleConnections, config.Postgres.ConnMaxLifetimeMinutes, config.Server.CacheEnabled)
 	if err != nil {
 		log.Fatalf("Failed to initialize database connection: %v", err)
 		return err
 	}
+
+	//TEST
+	persistence_utils.GetSubmodels(smDatabase.GetDB())
+	//TEST
+
 	smSvc := api.NewSubmodelRepositoryAPIAPIService(*smDatabase)
 	smCtrl := openapi.NewSubmodelRepositoryAPIAPIController(smSvc, config.Server.ContextPath)
 	for _, rt := range smCtrl.Routes() {

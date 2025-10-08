@@ -1,28 +1,3 @@
-/*******************************************************************************
-* Copyright (C) 2025 the Eclipse BaSyx Authors and Fraunhofer IESE
-*
-* Permission is hereby granted, free of charge, to any person obtaining
-* a copy of this software and associated documentation files (the
-* "Software"), to deal in the Software without restriction, including
-* without limitation the rights to use, copy, modify, merge, publish,
-* distribute, sublicense, and/or sell copies of the Software, and to
-* permit persons to whom the Software is furnished to do so, subject to
-* the following conditions:
-*
-* The above copyright notice and this permission notice shall be
-* included in all copies or substantial portions of the Software.
-*
-* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
-* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
-* NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
-* LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
-* OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
-* WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-*
-* SPDX-License-Identifier: MIT
-******************************************************************************/
-
 -- ------------------------------------------
 -- Extensions
 -- ------------------------------------------
@@ -146,20 +121,11 @@ CREATE TABLE IF NOT EXISTS lang_string_name_type (
   text     varchar(128) NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS administrative_information (
-  id                BIGSERIAL PRIMARY KEY,
-  version           VARCHAR(4),
-  revision          VARCHAR(4),
-  creator           BIGSERIAL REFERENCES reference(id),
-  templateId        VARCHAR(2048)
-);
-
 CREATE TABLE IF NOT EXISTS submodel (
   id          varchar(2048) PRIMARY KEY,                 -- Identifiable.id
   id_short    varchar(128),
   category    varchar(128),
   kind        modelling_kind,
-  administration_id BIGINT REFERENCES administrative_information(id) ON DELETE CASCADE,
   semantic_id BIGINT REFERENCES reference(id) ON DELETE CASCADE,
   description_id BIGINT REFERENCES lang_string_text_type_reference(id) ON DELETE CASCADE,
   displayname_id  BIGINT REFERENCES lang_string_name_type_reference(id) ON DELETE CASCADE,

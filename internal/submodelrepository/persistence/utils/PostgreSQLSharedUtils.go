@@ -9,6 +9,28 @@ import (
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 )
 
+func CreateAdministrativeInformation(tx *sql.Tx, adminInfo *gen.AdministrativeInformation) (sql.NullInt64, error) {
+	var id int
+	var adminInfoID sql.NullInt64
+	if adminInfo != nil && !reflect.DeepEqual(*adminInfo, gen.AdministrativeInformation{}) {
+		var creatorID sql.NullInt64
+		var err error
+		if adminInfo.Creator != nil {
+			creatorID, err = CreateSemanticId(tx, adminInfo.Creator)
+			if err != nil {
+				return sql.NullInt64{}, err
+			}
+		}
+		err = tx.QueryRow(`INSERT INTO administrative_information (version, revision, creator, templateId) VALUES ($1, $2, $3, $4) RETURNING id`,
+			adminInfo.Version, adminInfo.Revision, creatorID, adminInfo.TemplateId).Scan(&id)
+		if err != nil {
+			return sql.NullInt64{}, err
+		}
+		adminInfoID = sql.NullInt64{Int64: int64(id), Valid: true}
+	}
+	return adminInfoID, nil
+}
+
 func CreateSemanticId(tx *sql.Tx, semanticId *gen.Reference) (sql.NullInt64, error) {
 	var id int
 	var referenceID sql.NullInt64

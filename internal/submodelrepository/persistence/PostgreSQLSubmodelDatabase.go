@@ -35,6 +35,10 @@ func NewPostgreSQLSubmodelBackend(dsn string, maxOpenConns, maxIdleConns int, co
 	return &PostgreSQLSubmodelDatabase{db: db, cacheEnabled: cacheEnabled}, nil
 }
 
+func (p *PostgreSQLSubmodelDatabase) GetDB() *sql.DB {
+	return p.db
+}
+
 // GetAllSubmodels and a next cursor ("" if no more pages).
 func (p *PostgreSQLSubmodelDatabase) GetAllSubmodels(limit int32, cursor string, idShort string) ([]gen.Submodel, string, error) {
 	tx, err := p.db.Begin()
@@ -172,25 +176,31 @@ func (p *PostgreSQLSubmodelDatabase) CreateSubmodel(sm gen.Submodel) error {
 		return common.NewInternalServerError("Failed to create SemanticId - no changes applied - see console for details")
 	}
 
-	displayNameId, err := persistence_utils.CreateLangStringNameTypes(tx, sm.DisplayName)
+	displayNameId, err := persistence_utils.CreateLangStringNameTypes(tx, *sm.DisplayName)
 	if err != nil {
 		fmt.Println(err)
 		return common.NewInternalServerError("Failed to create DisplayName - no changes applied - see console for details")
 	}
 
-	descriptionId, err := persistence_utils.CreateLangStringTextTypes(tx, sm.Description)
+	descriptionId, err := persistence_utils.CreateLangStringTextTypes(tx, *sm.Description)
 	if err != nil {
 		fmt.Println(err)
 		return common.NewInternalServerError("Failed to create Description - no changes applied - see console for details")
 	}
 
+	administrationId, err := persistence_utils.CreateAdministrativeInformation(tx, sm.Administration)
+	if err != nil {
+		fmt.Println(err)
+		return common.NewInternalServerError("Failed to create Administration - no changes applied - see console for details")
+	}
+
 	const q = `
-        INSERT INTO submodel (id, id_short, category, kind, model_type, semantic_id, displayname_id, description_id)
-        VALUES ($1, $2, $3, $4, 'Submodel', $5, $6, $7)
+        INSERT INTO submodel (id, id_short, category, kind, model_type, semantic_id, displayname_id, description_id, administration_id)
+        VALUES ($1, $2, $3, $4, 'Submodel', $5, $6, $7, $8)
         ON CONFLICT (id) DO NOTHING
     `
 
-	_, err = tx.Exec(q, sm.Id, sm.IdShort, sm.Category, sm.Kind, referenceID, displayNameId, descriptionId)
+	_, err = tx.Exec(q, sm.Id, sm.IdShort, sm.Category, sm.Kind, referenceID, displayNameId, descriptionId, administrationId)
 	if err != nil {
 		return err
 	}

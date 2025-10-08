@@ -1370,7 +1370,7 @@ func DeleteSubmodelElementByPath(tx *sql.Tx, submodelId string, idShortOrPath st
 
 // loadLangStringNameType loads display name language strings for a reference ID
 // Used for loading displayName fields with proper internationalization support
-func loadLangStringNameType(db *sql.DB, tx *sql.Tx, refId int64) []gen.LangStringNameType {
+func loadLangStringNameType(db *sql.DB, tx *sql.Tx, refId int64) *[]gen.LangStringNameType {
 	if refId == 0 {
 		return nil
 	}
@@ -1395,13 +1395,13 @@ func loadLangStringNameType(db *sql.DB, tx *sql.Tx, refId int64) []gen.LangStrin
 	}
 	defer rows.Close()
 
-	var langStrings []gen.LangStringNameType
+	var langStrings *[]gen.LangStringNameType
 	for rows.Next() {
 		var language, text string
 		if err := rows.Scan(&language, &text); err != nil {
 			continue
 		}
-		langStrings = append(langStrings, gen.LangStringNameType{
+		*langStrings = append(*langStrings, gen.LangStringNameType{
 			Language: language,
 			Text:     text,
 		})
@@ -1411,7 +1411,7 @@ func loadLangStringNameType(db *sql.DB, tx *sql.Tx, refId int64) []gen.LangStrin
 }
 
 // Load LangStringTextType (description) with caching
-func loadLangStringTextType(db *sql.DB, tx *sql.Tx, refId int64) []gen.LangStringTextType {
+func loadLangStringTextType(db *sql.DB, tx *sql.Tx, refId int64) *[]gen.LangStringTextType {
 	if refId == 0 {
 		return nil
 	}
@@ -1436,13 +1436,13 @@ func loadLangStringTextType(db *sql.DB, tx *sql.Tx, refId int64) []gen.LangStrin
 	}
 	defer rows.Close()
 
-	var langStrings []gen.LangStringTextType
+	var langStrings *[]gen.LangStringTextType
 	for rows.Next() {
 		var language, text string
 		if err := rows.Scan(&language, &text); err != nil {
 			continue
 		}
-		langStrings = append(langStrings, gen.LangStringTextType{
+		*langStrings = append(*langStrings, gen.LangStringTextType{
 			Language: language,
 			Text:     text,
 		})
@@ -2277,10 +2277,10 @@ func buildOptimizedElement(modelType, idShort string, category *string, semantic
 	var displayName []gen.LangStringNameType
 	var description []gen.LangStringTextType
 	if displayNameId.Valid {
-		displayName = loadLangStringNameType(db, tx, displayNameId.Int64)
+		displayName = *loadLangStringNameType(db, tx, displayNameId.Int64)
 	}
 	if descriptionId.Valid {
-		description = loadLangStringTextType(db, tx, descriptionId.Int64)
+		description = *loadLangStringTextType(db, tx, descriptionId.Int64)
 	}
 
 	// Fast element creation with type-specific optimizations

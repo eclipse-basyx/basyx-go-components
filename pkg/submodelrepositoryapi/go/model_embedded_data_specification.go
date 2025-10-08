@@ -10,9 +10,9 @@
 package openapi
 
 type EmbeddedDataSpecification struct {
-	DataSpecificationContent DataSpecificationContentChoice `json:"dataSpecificationContent"`
+	DataSpecificationContent DataSpecificationContent `json:"dataSpecificationContent"`
 
-	DataSpecification Reference `json:"dataSpecification"`
+	DataSpecification *Reference `json:"dataSpecification"`
 }
 
 // AssertEmbeddedDataSpecificationRequired checks if the required fields are not zero-ed
@@ -26,23 +26,10 @@ func AssertEmbeddedDataSpecificationRequired(obj EmbeddedDataSpecification) erro
 			return &RequiredError{Field: name}
 		}
 	}
-
-	if err := AssertDataSpecificationContentChoiceRequired(obj.DataSpecificationContent); err != nil {
-		return err
-	}
-	if err := AssertReferenceRequired(obj.DataSpecification); err != nil {
-		return err
-	}
 	return nil
 }
 
 // AssertEmbeddedDataSpecificationConstraints checks if the values respects the defined constraints
 func AssertEmbeddedDataSpecificationConstraints(obj EmbeddedDataSpecification) error {
-	if err := AssertDataSpecificationContentChoiceConstraints(obj.DataSpecificationContent); err != nil {
-		return err
-	}
-	if err := AssertReferenceConstraints(obj.DataSpecification); err != nil {
-		return err
-	}
 	return nil
 }
