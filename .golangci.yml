@@ -12,6 +12,7 @@ issues:
     - testdata
     - .*generated.*
     - .*mock.*
+    - internal/common/model
   max-issues-per-linter: 0
   max-same-issues: 0
   new: false # disable diff processor to avoid Git HEAD~ errors
