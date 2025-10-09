@@ -32,9 +32,9 @@ linters:
   #   - gocritic
   #   - gofmt
   #   - goimports
-  disable:
+  #disable:
     # add any noisy linters here as you discover them
-    - depguard
+   # - depguard
 
 linters-settings:
   revive:
