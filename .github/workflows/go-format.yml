@@ -20,16 +20,26 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - name: Run GoFmt
-        id: gofmt-run
+      - name: Install goimports
+        run: go install golang.org/x/tools/cmd/goimports@latest
+
+      - name: Run goimports (formatting + imports)
+        id: goimports-run
         run: |
-          gofmt -d cmd/ internal/ pkg/ > gofmt_output.txt
-          if [ -s gofmt_output.txt ]; then
-            echo "Formatting issues found:"
-            cat gofmt_output.txt
+          goimports -d cmd/ internal/ pkg/ > format_output.txt
+          if [ -s format_output.txt ]; then
+            echo "❌ Formatting/import issues found:"
+            echo "Files that need formatting:"
+            cat format_output.txt
+            echo ""
+            echo "💡 To fix these issues locally, run:"
+            echo "  goimports -w cmd/ internal/ pkg/"
             exit 1
+          else
+            echo "✅ All Go files are properly formatted"
           fi
 
-      - name: GoFmt Output
+      - name: Format Check Output
         if: failure()
-        run: echo "Check formatting issues in the logs."
+        run: |
+          echo "::error::Go files are not properly formatted. Please run 'goimports -w cmd/ internal/ pkg/' locally and commit the changes."
