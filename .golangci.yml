@@ -14,7 +14,7 @@ issues:
     - .*mock.*
   max-issues-per-linter: 0
   max-same-issues: 0
-  new: true # only show issues introduced vs base in PRs if VCS info is present
+  new: false # disable diff processor to avoid Git HEAD~ errors
 
 linters:
   enable:
