@@ -113,7 +113,7 @@ func (p PostgreSQLReferenceElementHandler) Delete(idShortOrPath string) error {
 }
 
 func insertReferenceElement(refElem *gen.ReferenceElement, tx *sql.Tx, id int) error {
-	if isEmptyReference(*refElem.Value) {
+	if isEmptyReference(refElem.Value) {
 		// Insert with NULL
 		_, err := tx.Exec(`INSERT INTO reference_element (id, value_ref) VALUES ($1, $2)`, id, nil)
 		return err

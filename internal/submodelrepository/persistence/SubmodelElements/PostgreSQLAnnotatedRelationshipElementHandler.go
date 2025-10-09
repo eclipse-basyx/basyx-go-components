@@ -146,7 +146,7 @@ func insertAnnotatedRelationshipElement(areElem *gen.AnnotatedRelationshipElemen
 	// Insert into relationship_element
 	var firstRefId, secondRefId sql.NullInt64
 
-	if !isEmptyReference(*areElem.First) {
+	if !isEmptyReference(areElem.First) {
 		refId, err := insertReference(tx, *areElem.First)
 		if err != nil {
 			return err
@@ -154,7 +154,7 @@ func insertAnnotatedRelationshipElement(areElem *gen.AnnotatedRelationshipElemen
 		firstRefId = sql.NullInt64{Int64: int64(refId), Valid: true}
 	}
 
-	if !isEmptyReference(*areElem.Second) {
+	if !isEmptyReference(areElem.Second) {
 		refId, err := insertReference(tx, *areElem.Second)
 		if err != nil {
 			return err

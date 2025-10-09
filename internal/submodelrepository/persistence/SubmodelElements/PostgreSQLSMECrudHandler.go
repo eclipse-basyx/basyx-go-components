@@ -15,7 +15,10 @@ type PostgreSQLSMECrudHandler struct {
 }
 
 // isEmptyReference checks if a Reference is empty (zero value)
-func isEmptyReference(ref gen.Reference) bool {
+func isEmptyReference(ref *gen.Reference) bool {
+	if ref == nil {
+		return true
+	}
 	return reflect.DeepEqual(ref, gen.Reference{})
 }
 

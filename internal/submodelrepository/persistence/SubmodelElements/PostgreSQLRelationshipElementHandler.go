@@ -129,7 +129,7 @@ func (p PostgreSQLRelationshipElementHandler) Delete(idShortOrPath string) error
 func insertRelationshipElement(relElem *gen.RelationshipElement, tx *sql.Tx, id int) error {
 	var firstRefId, secondRefId sql.NullInt64
 
-	if !isEmptyReference(*relElem.First) {
+	if !isEmptyReference(relElem.First) {
 		refId, err := insertReference(tx, *relElem.First)
 		if err != nil {
 			return err
@@ -137,7 +137,7 @@ func insertRelationshipElement(relElem *gen.RelationshipElement, tx *sql.Tx, id 
 		firstRefId = sql.NullInt64{Int64: int64(refId), Valid: true}
 	}
 
-	if !isEmptyReference(*relElem.Second) {
+	if !isEmptyReference(relElem.Second) {
 		refId, err := insertReference(tx, *relElem.Second)
 		if err != nil {
 			return err

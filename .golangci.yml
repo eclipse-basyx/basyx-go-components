@@ -1,0 +1,49 @@
+run:
+  timeout: 5m
+  tests: true
+  issues-exit-code: 1
+  modules-download-mode: readonly
+
+# Ignore common generated/vendor paths
+issues:
+  exclude-use-default: false
+  exclude-dirs:
+    - vendor
+    - testdata
+    - .*generated.*
+    - .*mock.*
+  max-issues-per-linter: 0
+  max-same-issues: 0
+  new: true # only show issues introduced vs base in PRs if VCS info is present
+
+linters:
+  enable:
+    - errcheck
+    - gosimple
+    - govet
+    - ineffassign
+    - staticcheck
+    - typecheck
+    - revive
+    - unused
+    - gocritic
+    - gofmt
+    - goimports
+    - misspell
+  disable:
+    # add any noisy linters here as you discover them
+    - depguard
+
+linters-settings:
+  revive:
+    rules:
+      - name: indent-error-flow
+      - name: exported
+        severity: warning
+        arguments: [ "disableStutteringCheck" ]
+      - name: error-naming
+      - name: if-return
+  gocritic:
+    enabled-tags: [performance, style, experimental]
+  misspell:
+    locale: US
