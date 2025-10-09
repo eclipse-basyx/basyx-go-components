@@ -1,7 +1,9 @@
 package bench
 
 import (
+	"encoding/hex"
 	"encoding/json"
+	"flag"
 	"fmt"
 	mrand "math/rand"
 	"testing"
@@ -12,19 +14,31 @@ import (
 	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/discoveryapi/go"
 )
 
+var seedFlag = flag.Int64("seed", 1, "rng seed for discovery bench determinism")
+
 type discoveryState struct {
+	rng         *mrand.Rand
 	aasToLinks  map[string][]openapi.SpecificAssetId
 	aasList     []string
 	cursorByAAS map[string]string
 	reusePool   []openapi.SpecificAssetId // reused name/value pairs to simulate overlap
 }
 
-func newDiscoveryState() *discoveryState {
+func newDiscoveryState(seed int64) *discoveryState {
 	return &discoveryState{
+		rng:         mrand.New(mrand.NewSource(seed)),
 		aasToLinks:  make(map[string][]openapi.SpecificAssetId),
 		cursorByAAS: make(map[string]string),
 		reusePool:   make([]openapi.SpecificAssetId, 0, 512),
 	}
+}
+
+func (s *discoveryState) randHex(nBytes int) string {
+	b := make([]byte, nBytes)
+	for i := range b {
+		b[i] = byte(s.rng.Intn(256))
+	}
+	return hex.EncodeToString(b)
 }
 
 const (
@@ -43,17 +57,17 @@ const (
 	reusePoolCap = 1000000
 )
 
-func (s *discoveryState) pct(p int) bool { return mrand.Intn(100) < p }
+func (s *discoveryState) pct(p int) bool { return s.rng.Intn(100) < p }
 
 func (s *discoveryState) boundedRand(minIncl, maxIncl int) int {
 	if maxIncl <= minIncl {
 		return minIncl
 	}
-	return minIncl + mrand.Intn(maxIncl-minIncl+1)
+	return minIncl + s.rng.Intn(maxIncl-minIncl+1)
 }
 
 func (s *discoveryState) pickWeightedOp() string {
-	x := mrand.Intn(100)
+	x := s.rng.Intn(100)
 	if x < opPost {
 		return "post"
 	}
@@ -97,27 +111,32 @@ func (s *discoveryState) randomAAS() (string, bool) {
 	if len(s.aasList) == 0 {
 		return "", false
 	}
-	return s.aasList[mrand.Intn(len(s.aasList))], true
+	return s.aasList[s.rng.Intn(len(s.aasList))], true
 }
 
 func (s *discoveryState) randomLinks(n int) []openapi.SpecificAssetId {
 	out := make([]openapi.SpecificAssetId, n)
 	for i := 0; i < n; i++ {
 		if len(s.reusePool) > 0 && s.pct(reusePctPost) {
-			out[i] = s.reusePool[mrand.Intn(len(s.reusePool))]
+			out[i] = s.reusePool[s.rng.Intn(len(s.reusePool))]
 		} else {
 			out[i] = openapi.SpecificAssetId{
-				Name:  "n_" + testenv.RandomHex(6),
-				Value: "v_" + testenv.RandomHex(6),
+
+				Name:  "n_" + s.randHex(6),
+				Value: "v_" + s.randHex(6),
 			}
 		}
 	}
 	return out
 }
 
+// ----- bench driver -----
+
 type DiscoveryBench struct{ st *discoveryState }
 
-func NewDiscoveryBench() *DiscoveryBench { return &DiscoveryBench{st: newDiscoveryState()} }
+func NewDiscoveryBench(seed int64) *DiscoveryBench {
+	return &DiscoveryBench{st: newDiscoveryState(seed)}
+}
 
 func (d *DiscoveryBench) Name() string { return "discovery" }
 
@@ -126,7 +145,8 @@ func (d *DiscoveryBench) DoOne(iter int) testenv.ComponentResult {
 
 	switch st.pickWeightedOp() {
 	case "post":
-		aasID := "aas_" + testenv.RandomHex(8)
+		// Keep length behavior compatible with prior helper: 8 bytes -> 16 hex chars.
+		aasID := "aas_" + st.randHex(8)
 		links := st.randomLinks(st.boundedRand(minLinks, maxLinks))
 
 		url := fmt.Sprintf("%s/lookup/shells/%s", testenv.BaseURL, common.EncodeString(aasID))
@@ -164,7 +184,7 @@ func (d *DiscoveryBench) DoOne(iter int) testenv.ComponentResult {
 			}
 		}
 		if aasID == "" {
-			aasID = "aas_" + testenv.RandomHex(8)
+			aasID = "aas_" + st.randHex(8)
 		}
 		url := fmt.Sprintf("%s/lookup/shells/%s", testenv.BaseURL, common.EncodeString(aasID))
 
@@ -200,7 +220,7 @@ func (d *DiscoveryBench) DoOne(iter int) testenv.ComponentResult {
 			}
 		}
 		if aasID == "" {
-			aasID = "aas_" + testenv.RandomHex(8)
+			aasID = "aas_" + st.randHex(8)
 		}
 		url := fmt.Sprintf("%s/lookup/shells/%s", testenv.BaseURL, common.EncodeString(aasID))
 
@@ -250,12 +270,12 @@ func (d *DiscoveryBench) DoOne(iter int) testenv.ComponentResult {
 			if len(st.aasList) == 0 {
 				break
 			}
-			aas := st.aasList[mrand.Intn(len(st.aasList))]
+			aas := st.aasList[st.rng.Intn(len(st.aasList))]
 			links := st.aasToLinks[aas]
 			if len(links) == 0 {
 				continue
 			}
-			pairs[i] = links[mrand.Intn(len(links))]
+			pairs[i] = links[st.rng.Intn(len(links))]
 		}
 
 		url := fmt.Sprintf("%s/lookup/shellsByAssetLink?limit=%d", testenv.BaseURL, searchLimit)
@@ -302,6 +322,6 @@ func BenchmarkDiscovery(b *testing.B) {
 	mustHaveCompose(b)
 	waitUntilHealthy(b)
 
-	comp := NewDiscoveryBench()
+	comp := NewDiscoveryBench(*seedFlag)
 	testenv.BenchmarkComponent(b, comp)
 }

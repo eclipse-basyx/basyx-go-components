@@ -3,8 +3,6 @@ package testenv
 import (
 	"bytes"
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -123,12 +121,6 @@ func BenchmarkComponent(b *testing.B, comp ComponentBench) {
 	} else {
 		b.Logf("could not write JSON log: %v", err)
 	}
-}
-
-func RandomHex(n int) string {
-	buf := make([]byte, n)
-	_, _ = rand.Read(buf)
-	return hex.EncodeToString(buf)
 }
 
 func HTTPClient() *http.Client { return &http.Client{Timeout: 20 * time.Second} }
