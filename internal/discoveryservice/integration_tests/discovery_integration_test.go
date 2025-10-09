@@ -1,6 +1,7 @@
 package bench
 
 import (
+	"bytes"
 	"database/sql"
 	"fmt"
 	"net/http"
@@ -109,7 +110,6 @@ func TestDiscovery_Suite_Sophisticated(t *testing.T) {
 		defer ver.DB.Close()
 	}
 
-	// Deterministic Factorio-flavored AAS and link data (no randomness).
 	aasA := "urn:aas:test:assembler-1"
 	aasB := "urn:aas:test:oil-refinery"
 	aasC := "urn:aas:test:rail-signal"
@@ -120,7 +120,7 @@ func TestDiscovery_Suite_Sophisticated(t *testing.T) {
 		{Name: "plant", Value: "NAUVIS"},
 	}
 	linksA2 := []openapi.SpecificAssetId{
-		{Name: "globalAssetId", Value: linksA1[0].Value}, // keep same GAID
+		{Name: "globalAssetId", Value: linksA1[0].Value},
 		{Name: "serialNumber", Value: "SN-red-circuit"},
 		{Name: "line", Value: "L1"},
 	}
@@ -135,7 +135,7 @@ func TestDiscovery_Suite_Sophisticated(t *testing.T) {
 	}
 
 	t.Run("Pagination_empty_set_returns_empty_and_no_cursor", func(t *testing.T) {
-		// With no AAS inserted, searching (with or without filters) should return no results and no cursor.
+
 		res := SearchBy(t, []openapi.SpecificAssetId{}, 5, "", http.StatusOK)
 
 		assert.Empty(t, res.Result,
@@ -162,7 +162,6 @@ func TestDiscovery_Suite_Sophisticated(t *testing.T) {
 			}
 		}
 
-		// Replace links for A
 		PostLinks(t, aasA, linksA2)
 		got2 := GetLinks(t, aasA, http.StatusOK)
 
@@ -385,6 +384,89 @@ func TestDiscovery_Suite_Sophisticated(t *testing.T) {
 		require.Len(t, res2.Result, 1, "second page should contain the remaining 1 result for %s=%s; got=%v", sharedPair.Name, sharedPair.Value, res2.Result)
 		assert.Equal(t, secondID, res2.Result[0], "second page should return the second AAS; want=%q got=%q", secondID, res2.Result[0])
 		assert.Empty(t, res2.PagingMetadata.Cursor, "second page should not provide a cursor (no more pages); got=%q", res2.PagingMetadata.Cursor)
+	})
+
+	t.Run("BadRequest_POST_links_with_malformed_values", func(t *testing.T) {
+		aas := "urn:aas:test:bad-values-post"
+		url := fmt.Sprintf("%s/lookup/shells/%s", testenv.BaseURL, common.EncodeString(aas))
+
+		// missing required fields (wrong JSON inside array) – name empty + value empty should fail validation if enforced
+		body3 := []map[string]any{
+			{"name": ""},                 // missing value
+			{"value": ""},                // missing name
+			{"name": 123, "value": true}, // wrong types
+		}
+		_ = testenv.PostJSONExpect(t, url, body3, http.StatusBadRequest)
+	})
+
+	t.Run("BadRequest_POST_links_with_wrong_json_shape", func(t *testing.T) {
+		aas := "urn:aas:test:wrong-shape-post"
+		url := fmt.Sprintf("%s/lookup/shells/%s", testenv.BaseURL, common.EncodeString(aas))
+
+		// object instead of []SpecificAssetId
+		badObj := map[string]any{"name": "x", "value": "y"}
+		_ = testenv.PostJSONExpect(t, url, badObj, http.StatusBadRequest)
+
+		// string instead of array
+		_ = testenv.PostJSONExpect(t, url, "not-an-array", http.StatusBadRequest)
+
+		// null instead of array
+		_ = testenv.PostJSONExpect(t, url, nil, http.StatusBadRequest)
+	})
+
+	t.Run("BadRequest_SEARCH_with_wrong_json_shape", func(t *testing.T) {
+		// assetLinks is required to be an array → send wrong shapes
+
+		// 1) assetLinks as string
+		testenv.PostSearchRawExpect(t, map[string]any{
+			"assetLinks": "not-an-array",
+			"limit":      10,
+		}, http.StatusBadRequest)
+
+		// 2) assetLinks entries with wrong types
+		testenv.PostSearchRawExpect(t, map[string]any{
+			"assetLinks": []any{
+				map[string]any{"name": 123, "value": true}, // wrong types
+				map[string]any{"name": "ok"},               // missing value
+				map[string]any{"value": "ok"},              // missing name
+			},
+			"limit": 5,
+		}, http.StatusBadRequest)
+
+		// 3) whole body is a plain array instead of object
+		testenv.PostSearchRawExpect(t, []any{
+			map[string]any{"name": "foo", "value": "bar"},
+		}, http.StatusBadRequest)
+
+		// 4) null body
+		testenv.PostSearchRawExpect(t, nil, http.StatusBadRequest)
+	})
+
+	t.Run("BadRequest_when_body_is_plain_string_or_encoded_values", func(t *testing.T) {
+		aas := "urn:aas:test:encoded-and-string"
+		url := fmt.Sprintf("%s/lookup/shells/%s", testenv.BaseURL, common.EncodeString(aas))
+
+		// 1) Body is literally a plain string — not JSON at all.
+		rawBody := []byte(`"this-is-a-plain-string"`)
+		req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(rawBody))
+		require.NoError(t, err)
+		req.Header.Set("Content-Type", "application/json")
+
+		resp, err := http.DefaultClient.Do(req)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		assert.Equal(t, http.StatusBadRequest, resp.StatusCode,
+			"expected 400 Bad Request when sending plain string body; got=%d", resp.StatusCode)
+
+		// 2) Repeat for search endpoint with encoded names/values
+		testenv.PostSearchRawExpect(t, map[string]any{
+			"assetLinks": []any{
+				map[string]any{"name": "encoded%20name", "value": "ok"},
+				map[string]any{"name": "ok", "value": "YmFkLXZhbHVl"},
+			},
+			"limit": 10,
+		}, http.StatusBadRequest)
 	})
 
 }

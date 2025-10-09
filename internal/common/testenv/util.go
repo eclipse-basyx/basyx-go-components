@@ -17,6 +17,8 @@ import (
 	"time"
 
 	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/discoveryapi/go"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 type LogDetail int
@@ -176,6 +178,21 @@ func DeleteRaw(url string) (data []byte, status int, err error) {
 	defer resp.Body.Close()
 	data, e = io.ReadAll(resp.Body)
 	return data, resp.StatusCode, e
+}
+func PostSearchRawExpect(t *testing.T, body any, expect int) {
+	t.Helper()
+	url := fmt.Sprintf("%s/lookup/shells/search", BaseURL)
+	buf, err := json.Marshal(body)
+	require.NoError(t, err)
+
+	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(buf))
+	require.NoError(t, err)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	assert.Equalf(t, expect, resp.StatusCode, "search raw post got %d body=%s", resp.StatusCode, string(buf))
 }
 
 func PostJSONExpect(t testing.TB, url string, body any, expect int) []byte {
