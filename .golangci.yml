@@ -19,7 +19,8 @@ issues:
 
 linters:
   disable-all: true  # Temporarily disable all linters
-  # enable:
+  enable:
+     - misspell
   #   - errcheck
   #   - gosimple
   #   - govet
@@ -31,7 +32,6 @@ linters:
   #   - gocritic
   #   - gofmt
   #   - goimports
-  #   - misspell
   disable:
     # add any noisy linters here as you discover them
     - depguard
