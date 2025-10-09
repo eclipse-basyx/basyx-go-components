@@ -1626,7 +1626,7 @@ func (c *SubmodelRepositoryAPIAPIController) PatchSubmodelElementByPathValueOnly
 	_ = EncodeJSONResponse(result.Body, &result.Code, w)
 }
 
-// GetSubmodelElementByPathReferenceSubmodelRepo - Returns the Referene of a specific submodel element from the Submodel at a specified path
+// GetSubmodelElementByPathReferenceSubmodelRepo - Returns the Reference of a specific submodel element from the Submodel at a specified path
 func (c *SubmodelRepositoryAPIAPIController) GetSubmodelElementByPathReferenceSubmodelRepo(w http.ResponseWriter, r *http.Request) {
 	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
 	if submodelIdentifierParam == "" {
