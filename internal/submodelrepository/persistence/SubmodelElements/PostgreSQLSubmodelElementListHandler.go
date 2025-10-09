@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"errors"
 
-	gen "github.com/eclipse-basyx/basyx-go-components/pkg/submodelrepositoryapi/go"
+	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 )
 
@@ -112,7 +112,7 @@ func (p PostgreSQLSubmodelElementListHandler) Delete(idShortOrPath string) error
 
 func insertSubmodelElementList(smeList *gen.SubmodelElementList, tx *sql.Tx, id int) error {
 	var semanticId sql.NullInt64
-	if smeList.SemanticIdListElement != nil && !isEmptyReference(*smeList.SemanticIdListElement) {
+	if smeList.SemanticIdListElement != nil && !isEmptyReference(smeList.SemanticIdListElement) {
 		refId, err := insertReference(tx, *smeList.SemanticIdListElement)
 		if err != nil {
 			return err

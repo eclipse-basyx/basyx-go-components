@@ -10,7 +10,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	gen "github.com/eclipse-basyx/basyx-go-components/pkg/submodelrepositoryapi/go"
+	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
 
 type BenchmarkStats struct {

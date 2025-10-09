@@ -5,7 +5,7 @@ import (
 	"errors"
 	"time"
 
-	gen "github.com/eclipse-basyx/basyx-go-components/pkg/submodelrepositoryapi/go"
+	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 )
 
@@ -112,7 +112,7 @@ func (p PostgreSQLBasicEventElementHandler) Read(tx *sql.Tx, submodelId string, 
 		if err != nil {
 			return nil, err
 		}
-		basicEvent.Observed = *ref
+		basicEvent.Observed = ref
 	}
 
 	if messageBrokerRef.Valid {
@@ -120,7 +120,7 @@ func (p PostgreSQLBasicEventElementHandler) Read(tx *sql.Tx, submodelId string, 
 		if err != nil {
 			return nil, err
 		}
-		basicEvent.MessageBroker = *ref
+		basicEvent.MessageBroker = ref
 	}
 
 	return basicEvent, nil

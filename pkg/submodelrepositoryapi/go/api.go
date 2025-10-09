@@ -13,6 +13,8 @@ import (
 	"context"
 	"net/http"
 	"os"
+
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
 
 // DescriptionAPIAPIRouter defines the required methods for binding the api requests to a responses for the DescriptionAPIAPI
@@ -83,7 +85,7 @@ type SubmodelRepositoryAPIAPIRouter interface {
 // while the service implementation can be ignored with the .openapi-generator-ignore file
 // and updated with the logic required for the API.
 type DescriptionAPIAPIServicer interface {
-	GetDescription(context.Context) (ImplResponse, error)
+	GetDescription(context.Context) (model.ImplResponse, error)
 }
 
 // SerializationAPIAPIServicer defines the api actions for the SerializationAPIAPI service
@@ -91,7 +93,7 @@ type DescriptionAPIAPIServicer interface {
 // while the service implementation can be ignored with the .openapi-generator-ignore file
 // and updated with the logic required for the API.
 type SerializationAPIAPIServicer interface {
-	GenerateSerializationByIds(context.Context, []string, []string, bool) (ImplResponse, error)
+	GenerateSerializationByIds(context.Context, []string, []string, bool) (model.ImplResponse, error)
 }
 
 // SubmodelRepositoryAPIAPIServicer defines the api actions for the SubmodelRepositoryAPIAPI service
@@ -99,47 +101,47 @@ type SerializationAPIAPIServicer interface {
 // while the service implementation can be ignored with the .openapi-generator-ignore file
 // and updated with the logic required for the API.
 type SubmodelRepositoryAPIAPIServicer interface {
-	GetAllSubmodels(context.Context, string, string, int32, string, string, string) (ImplResponse, error)
-	PostSubmodel(context.Context, Submodel) (ImplResponse, error)
-	GetAllSubmodelsMetadata(context.Context, string, string, int32, string) (ImplResponse, error)
-	GetAllSubmodelsValueOnly(context.Context, string, string, int32, string, string, string) (ImplResponse, error)
-	GetAllSubmodelsReference(context.Context, string, string, int32, string, string) (ImplResponse, error)
-	GetAllSubmodelsPath(context.Context, string, string, int32, string, string) (ImplResponse, error)
-	GetSubmodelById(context.Context, string, string, string) (ImplResponse, error)
-	PutSubmodelById(context.Context, string, Submodel) (ImplResponse, error)
-	DeleteSubmodelById(context.Context, string) (ImplResponse, error)
-	PatchSubmodelById(context.Context, string, Submodel, string) (ImplResponse, error)
-	GetSubmodelByIdMetadata(context.Context, string) (ImplResponse, error)
-	PatchSubmodelByIdMetadata(context.Context, string, SubmodelMetadata) (ImplResponse, error)
-	GetSubmodelByIdValueOnly(context.Context, string, string, string) (ImplResponse, error)
-	PatchSubmodelByIdValueOnly(context.Context, string, map[string]interface{}, string) (ImplResponse, error)
-	GetSubmodelByIdReference(context.Context, string) (ImplResponse, error)
-	GetSubmodelByIdPath(context.Context, string, string) (ImplResponse, error)
-	GetAllSubmodelElements(context.Context, string, int32, string, string, string) (ImplResponse, error)
-	PostSubmodelElementSubmodelRepo(context.Context, string, SubmodelElement) (ImplResponse, error)
-	GetAllSubmodelElementsMetadataSubmodelRepo(context.Context, string, int32, string) (ImplResponse, error)
-	GetAllSubmodelElementsValueOnlySubmodelRepo(context.Context, string, int32, string, string, string) (ImplResponse, error)
-	GetAllSubmodelElementsReferenceSubmodelRepo(context.Context, string, int32, string, string) (ImplResponse, error)
-	GetAllSubmodelElementsPathSubmodelRepo(context.Context, string, int32, string, string) (ImplResponse, error)
-	GetSubmodelElementByPathSubmodelRepo(context.Context, string, string, string, string) (ImplResponse, error)
-	PutSubmodelElementByPathSubmodelRepo(context.Context, string, string, SubmodelElement, string) (ImplResponse, error)
-	PostSubmodelElementByPathSubmodelRepo(context.Context, string, string, SubmodelElement) (ImplResponse, error)
-	DeleteSubmodelElementByPathSubmodelRepo(context.Context, string, string) (ImplResponse, error)
-	PatchSubmodelElementByPathSubmodelRepo(context.Context, string, string, SubmodelElement, string) (ImplResponse, error)
-	GetSubmodelElementByPathMetadataSubmodelRepo(context.Context, string, string) (ImplResponse, error)
-	PatchSubmodelElementByPathMetadataSubmodelRepo(context.Context, string, string, SubmodelElementMetadata) (ImplResponse, error)
-	GetSubmodelElementByPathValueOnlySubmodelRepo(context.Context, string, string, string, string) (ImplResponse, error)
-	PatchSubmodelElementByPathValueOnlySubmodelRepo(context.Context, string, string, SubmodelElementValue, string) (ImplResponse, error)
-	GetSubmodelElementByPathReferenceSubmodelRepo(context.Context, string, string) (ImplResponse, error)
-	GetSubmodelElementByPathPathSubmodelRepo(context.Context, string, string, string) (ImplResponse, error)
-	GetFileByPathSubmodelRepo(context.Context, string, string) (ImplResponse, error)
-	PutFileByPathSubmodelRepo(context.Context, string, string, string, *os.File) (ImplResponse, error)
-	DeleteFileByPathSubmodelRepo(context.Context, string, string) (ImplResponse, error)
-	InvokeOperationSubmodelRepo(context.Context, string, string, OperationRequest, bool) (ImplResponse, error)
-	InvokeOperationValueOnly(context.Context, string, string, string, OperationRequestValueOnly, bool) (ImplResponse, error)
-	InvokeOperationAsync(context.Context, string, string, OperationRequest) (ImplResponse, error)
-	InvokeOperationAsyncValueOnly(context.Context, string, string, string, OperationRequestValueOnly) (ImplResponse, error)
-	GetOperationAsyncStatus(context.Context, string, string, string) (ImplResponse, error)
-	GetOperationAsyncResult(context.Context, string, string, string) (ImplResponse, error)
-	GetOperationAsyncResultValueOnly(context.Context, string, string, string) (ImplResponse, error)
+	GetAllSubmodels(context.Context, string, string, int32, string, string, string) (model.ImplResponse, error)
+	PostSubmodel(context.Context, model.Submodel) (model.ImplResponse, error)
+	GetAllSubmodelsMetadata(context.Context, string, string, int32, string) (model.ImplResponse, error)
+	GetAllSubmodelsValueOnly(context.Context, string, string, int32, string, string, string) (model.ImplResponse, error)
+	GetAllSubmodelsReference(context.Context, string, string, int32, string, string) (model.ImplResponse, error)
+	GetAllSubmodelsPath(context.Context, string, string, int32, string, string) (model.ImplResponse, error)
+	GetSubmodelById(context.Context, string, string, string) (model.ImplResponse, error)
+	PutSubmodelById(context.Context, string, model.Submodel) (model.ImplResponse, error)
+	DeleteSubmodelById(context.Context, string) (model.ImplResponse, error)
+	PatchSubmodelById(context.Context, string, model.Submodel, string) (model.ImplResponse, error)
+	GetSubmodelByIdMetadata(context.Context, string) (model.ImplResponse, error)
+	PatchSubmodelByIdMetadata(context.Context, string, model.SubmodelMetadata) (model.ImplResponse, error)
+	GetSubmodelByIdValueOnly(context.Context, string, string, string) (model.ImplResponse, error)
+	PatchSubmodelByIdValueOnly(context.Context, string, map[string]interface{}, string) (model.ImplResponse, error)
+	GetSubmodelByIdReference(context.Context, string) (model.ImplResponse, error)
+	GetSubmodelByIdPath(context.Context, string, string) (model.ImplResponse, error)
+	GetAllSubmodelElements(context.Context, string, int32, string, string, string) (model.ImplResponse, error)
+	PostSubmodelElementSubmodelRepo(context.Context, string, model.SubmodelElement) (model.ImplResponse, error)
+	GetAllSubmodelElementsMetadataSubmodelRepo(context.Context, string, int32, string) (model.ImplResponse, error)
+	GetAllSubmodelElementsValueOnlySubmodelRepo(context.Context, string, int32, string, string, string) (model.ImplResponse, error)
+	GetAllSubmodelElementsReferenceSubmodelRepo(context.Context, string, int32, string, string) (model.ImplResponse, error)
+	GetAllSubmodelElementsPathSubmodelRepo(context.Context, string, int32, string, string) (model.ImplResponse, error)
+	GetSubmodelElementByPathSubmodelRepo(context.Context, string, string, string, string) (model.ImplResponse, error)
+	PutSubmodelElementByPathSubmodelRepo(context.Context, string, string, model.SubmodelElement, string) (model.ImplResponse, error)
+	PostSubmodelElementByPathSubmodelRepo(context.Context, string, string, model.SubmodelElement) (model.ImplResponse, error)
+	DeleteSubmodelElementByPathSubmodelRepo(context.Context, string, string) (model.ImplResponse, error)
+	PatchSubmodelElementByPathSubmodelRepo(context.Context, string, string, model.SubmodelElement, string) (model.ImplResponse, error)
+	GetSubmodelElementByPathMetadataSubmodelRepo(context.Context, string, string) (model.ImplResponse, error)
+	PatchSubmodelElementByPathMetadataSubmodelRepo(context.Context, string, string, model.SubmodelElementMetadata) (model.ImplResponse, error)
+	GetSubmodelElementByPathValueOnlySubmodelRepo(context.Context, string, string, string, string) (model.ImplResponse, error)
+	PatchSubmodelElementByPathValueOnlySubmodelRepo(context.Context, string, string, model.SubmodelElementValue, string) (model.ImplResponse, error)
+	GetSubmodelElementByPathReferenceSubmodelRepo(context.Context, string, string) (model.ImplResponse, error)
+	GetSubmodelElementByPathPathSubmodelRepo(context.Context, string, string, string) (model.ImplResponse, error)
+	GetFileByPathSubmodelRepo(context.Context, string, string) (model.ImplResponse, error)
+	PutFileByPathSubmodelRepo(context.Context, string, string, string, *os.File) (model.ImplResponse, error)
+	DeleteFileByPathSubmodelRepo(context.Context, string, string) (model.ImplResponse, error)
+	InvokeOperationSubmodelRepo(context.Context, string, string, model.OperationRequest, bool) (model.ImplResponse, error)
+	InvokeOperationValueOnly(context.Context, string, string, string, model.OperationRequestValueOnly, bool) (model.ImplResponse, error)
+	InvokeOperationAsync(context.Context, string, string, model.OperationRequest) (model.ImplResponse, error)
+	InvokeOperationAsyncValueOnly(context.Context, string, string, string, model.OperationRequestValueOnly) (model.ImplResponse, error)
+	GetOperationAsyncStatus(context.Context, string, string, string) (model.ImplResponse, error)
+	GetOperationAsyncResult(context.Context, string, string, string) (model.ImplResponse, error)
+	GetOperationAsyncResultValueOnly(context.Context, string, string, string) (model.ImplResponse, error)
 }

@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"errors"
 
-	gen "github.com/eclipse-basyx/basyx-go-components/pkg/submodelrepositoryapi/go"
+	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 )
 
@@ -80,14 +80,14 @@ func (p PostgreSQLAnnotatedRelationshipElementHandler) Read(tx *sql.Tx, submodel
 		if err != nil {
 			return nil, err
 		}
-		areElem.First = *ref
+		areElem.First = ref
 	}
 	if secondRef.Valid {
 		ref, err := readReference(tx, secondRef.Int64)
 		if err != nil {
 			return nil, err
 		}
-		areElem.Second = *ref
+		areElem.Second = ref
 	}
 
 	// Read annotations
@@ -147,7 +147,7 @@ func insertAnnotatedRelationshipElement(areElem *gen.AnnotatedRelationshipElemen
 	var firstRefId, secondRefId sql.NullInt64
 
 	if !isEmptyReference(areElem.First) {
-		refId, err := insertReference(tx, areElem.First)
+		refId, err := insertReference(tx, *areElem.First)
 		if err != nil {
 			return err
 		}
@@ -155,7 +155,7 @@ func insertAnnotatedRelationshipElement(areElem *gen.AnnotatedRelationshipElemen
 	}
 
 	if !isEmptyReference(areElem.Second) {
-		refId, err := insertReference(tx, areElem.Second)
+		refId, err := insertReference(tx, *areElem.Second)
 		if err != nil {
 			return err
 		}
