@@ -1,0 +1,35 @@
+name: Go Formatting
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  gofmt:
+    name: GoFmt Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v5
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          # Use the version in go.mod if present; otherwise pin a version
+          go-version-file: go.mod
+          cache: true
+
+      - name: Run GoFmt
+        id: gofmt-run
+        run: |
+          gofmt -d cmd/ internal/ pkg/ > gofmt_output.txt
+          if [ -s gofmt_output.txt ]; then
+            echo "Formatting issues found:"
+            cat gofmt_output.txt
+            exit 1
+          fi
+
+      - name: GoFmt Output
+        if: failure()
+        run: echo "Check formatting issues in the logs."
