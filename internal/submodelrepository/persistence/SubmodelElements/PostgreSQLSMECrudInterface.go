@@ -3,7 +3,7 @@ package submodelelements
 import (
 	"database/sql"
 
-	gen "github.com/eclipse-basyx/basyx-go-components/pkg/submodelrepositoryapi/go"
+	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
 
 type PostgreSQLSMECrudInterface interface {

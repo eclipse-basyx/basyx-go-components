@@ -1,0 +1,245 @@
+/*
+ * DotAAS Part 2 | HTTP/REST | Submodel Repository Service Specification
+ *
+ * The entire Submodel Repository Service Specification as part of the [Specification of the Asset Administration Shell: Part 2](http://industrialdigitaltwin.org/en/content-hub).   Publisher: Industrial Digital Twin Association (IDTA) 2023
+ *
+ * API version: V3.0.3_SSP-001
+ * Contact: info@idtwin.org
+ */
+
+package model
+
+type BasicEventElement struct {
+	Extensions []Extension `json:"extensions,omitempty"`
+
+	Category string `json:"category,omitempty" validate:"regexp=^([\\\\x09\\\\x0a\\\\x0d\\\\x20-\\\\ud7ff\\\\ue000-\\\\ufffd]|\\\\ud800[\\\\udc00-\\\\udfff]|[\\\\ud801-\\\\udbfe][\\\\udc00-\\\\udfff]|\\\\udbff[\\\\udc00-\\\\udfff])*$"`
+
+	IdShort string `json:"idShort,omitempty"`
+
+	DisplayName []LangStringNameType `json:"displayName,omitempty"`
+
+	Description []LangStringTextType `json:"description,omitempty"`
+
+	ModelType string `json:"modelType" validate:"regexp=^BasicEventElement$"`
+
+	SemanticId *Reference `json:"semanticId,omitempty"`
+
+	SupplementalSemanticIds []Reference `json:"supplementalSemanticIds,omitempty"`
+
+	Qualifiers []Qualifier `json:"qualifiers,omitempty"`
+
+	EmbeddedDataSpecifications []EmbeddedDataSpecification `json:"embeddedDataSpecifications,omitempty"`
+
+	Observed *Reference `json:"observed"`
+
+	Direction Direction `json:"direction"`
+
+	State StateOfEvent `json:"state"`
+
+	MessageTopic string `json:"messageTopic,omitempty" validate:"regexp=^([\\\\x09\\\\x0a\\\\x0d\\\\x20-\\\\ud7ff\\\\ue000-\\\\ufffd]|\\\\ud800[\\\\udc00-\\\\udfff]|[\\\\ud801-\\\\udbfe][\\\\udc00-\\\\udfff]|\\\\udbff[\\\\udc00-\\\\udfff])*$"`
+
+	MessageBroker *Reference `json:"messageBroker,omitempty"`
+
+	LastUpdate string `json:"lastUpdate,omitempty" validate:"regexp=^-?(([1-9][0-9][0-9][0-9]+)|(0[0-9][0-9][0-9]))-((0[1-9])|(1[0-2]))-((0[1-9])|([12][0-9])|(3[01]))T(((([01][0-9])|(2[0-3])):[0-5][0-9]:([0-5][0-9])(\\\\.[0-9]+)?)|24:00:00(\\\\.0+)?)(Z|\\\\+00:00|-00:00)$"`
+
+	MinInterval string `json:"minInterval,omitempty" validate:"regexp=^-?P((([0-9]+Y([0-9]+M)?([0-9]+D)?|([0-9]+M)([0-9]+D)?|([0-9]+D))(T(([0-9]+H)([0-9]+M)?([0-9]+(\\\\.[0-9]+)?S)?|([0-9]+M)([0-9]+(\\\\.[0-9]+)?S)?|([0-9]+(\\\\.[0-9]+)?S)))?)|(T(([0-9]+H)([0-9]+M)?([0-9]+(\\\\.[0-9]+)?S)?|([0-9]+M)([0-9]+(\\\\.[0-9]+)?S)?|([0-9]+(\\\\.[0-9]+)?S))))$"`
+
+	MaxInterval string `json:"maxInterval,omitempty" validate:"regexp=^-?P((([0-9]+Y([0-9]+M)?([0-9]+D)?|([0-9]+M)([0-9]+D)?|([0-9]+D))(T(([0-9]+H)([0-9]+M)?([0-9]+(\\\\.[0-9]+)?S)?|([0-9]+M)([0-9]+(\\\\.[0-9]+)?S)?|([0-9]+(\\\\.[0-9]+)?S)))?)|(T(([0-9]+H)([0-9]+M)?([0-9]+(\\\\.[0-9]+)?S)?|([0-9]+M)([0-9]+(\\\\.[0-9]+)?S)?|([0-9]+(\\\\.[0-9]+)?S))))$"`
+}
+
+// Getters
+func (a BasicEventElement) GetExtensions() []Extension {
+	return a.Extensions
+}
+
+func (a BasicEventElement) GetIdShort() string {
+	return a.IdShort
+}
+
+func (a BasicEventElement) GetCategory() string {
+	return a.Category
+}
+
+func (a BasicEventElement) GetDisplayName() []LangStringNameType {
+	return a.DisplayName
+}
+
+func (a BasicEventElement) GetDescription() []LangStringTextType {
+	return a.Description
+}
+
+func (a BasicEventElement) GetModelType() string {
+	return a.ModelType
+}
+
+func (a BasicEventElement) GetSemanticId() *Reference {
+	return a.SemanticId
+}
+
+func (a BasicEventElement) GetSupplementalSemanticIds() []Reference {
+	return a.SupplementalSemanticIds
+}
+
+func (a BasicEventElement) GetQualifiers() []Qualifier {
+	return a.Qualifiers
+}
+
+func (a BasicEventElement) GetEmbeddedDataSpecifications() []EmbeddedDataSpecification {
+	return a.EmbeddedDataSpecifications
+}
+
+// Setters
+
+func (a *BasicEventElement) SetModelType(v string) {
+	a.ModelType = v
+}
+
+func (a *BasicEventElement) SetExtensions(v []Extension) {
+	a.Extensions = v
+}
+
+func (a *BasicEventElement) SetIdShort(v string) {
+	a.IdShort = v
+}
+
+func (a *BasicEventElement) SetCategory(v string) {
+	a.Category = v
+}
+
+func (a *BasicEventElement) SetDisplayName(v []LangStringNameType) {
+	a.DisplayName = v
+}
+
+func (a *BasicEventElement) SetDescription(v []LangStringTextType) {
+	a.Description = v
+}
+
+func (a *BasicEventElement) SetSemanticId(v *Reference) {
+	a.SemanticId = v
+}
+
+func (a *BasicEventElement) SetSupplementalSemanticIds(v []Reference) {
+	a.SupplementalSemanticIds = v
+}
+
+func (a *BasicEventElement) SetQualifiers(v []Qualifier) {
+	a.Qualifiers = v
+}
+
+func (a *BasicEventElement) SetEmbeddedDataSpecifications(v []EmbeddedDataSpecification) {
+	a.EmbeddedDataSpecifications = v
+}
+
+// AssertBasicEventElementRequired checks if the required fields are not zero-ed
+func AssertBasicEventElementRequired(obj BasicEventElement) error {
+	elements := map[string]interface{}{
+		"modelType": obj.ModelType,
+		"observed":  obj.Observed,
+		"direction": obj.Direction,
+		"state":     obj.State,
+	}
+	for name, el := range elements {
+		if isZero := IsZeroValue(el); isZero {
+			return &RequiredError{Field: name}
+		}
+	}
+
+	for _, el := range obj.Extensions {
+		if err := AssertExtensionRequired(el); err != nil {
+			return err
+		}
+	}
+	if err := AssertReferableAllOfIdShortRequired(obj.IdShort); err != nil {
+		return err
+	}
+	for _, el := range obj.DisplayName {
+		if err := AssertLangStringNameTypeRequired(el); err != nil {
+			return err
+		}
+	}
+	for _, el := range obj.Description {
+		if err := AssertLangStringTextTypeRequired(el); err != nil {
+			return err
+		}
+	}
+	if err := AssertReferenceRequired(*obj.SemanticId); err != nil {
+		return err
+	}
+	for _, el := range obj.SupplementalSemanticIds {
+		if err := AssertReferenceRequired(el); err != nil {
+			return err
+		}
+	}
+	for _, el := range obj.Qualifiers {
+		if err := AssertQualifierRequired(el); err != nil {
+			return err
+		}
+	}
+	for _, el := range obj.EmbeddedDataSpecifications {
+		if err := AssertEmbeddedDataSpecificationRequired(el); err != nil {
+			return err
+		}
+	}
+	if obj.Observed != nil {
+		if err := AssertReferenceRequired(*obj.Observed); err != nil {
+			return err
+		}
+	}
+	if obj.MessageBroker != nil {
+		if err := AssertReferenceRequired(*obj.MessageBroker); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// AssertBasicEventElementConstraints checks if the values respects the defined constraints
+func AssertBasicEventElementConstraints(obj BasicEventElement) error {
+	for _, el := range obj.Extensions {
+		if err := AssertExtensionConstraints(el); err != nil {
+			return err
+		}
+	}
+	if err := AssertReferableAllOfIdShortConstraints(obj.IdShort); err != nil {
+		return err
+	}
+	for _, el := range obj.DisplayName {
+		if err := AssertLangStringNameTypeConstraints(el); err != nil {
+			return err
+		}
+	}
+	for _, el := range obj.Description {
+		if err := AssertLangStringTextTypeConstraints(el); err != nil {
+			return err
+		}
+	}
+	if err := AssertReferenceConstraints(*obj.SemanticId); err != nil {
+		return err
+	}
+	for _, el := range obj.SupplementalSemanticIds {
+		if err := AssertReferenceConstraints(el); err != nil {
+			return err
+		}
+	}
+	for _, el := range obj.Qualifiers {
+		if err := AssertQualifierConstraints(el); err != nil {
+			return err
+		}
+	}
+	for _, el := range obj.EmbeddedDataSpecifications {
+		if err := AssertEmbeddedDataSpecificationConstraints(el); err != nil {
+			return err
+		}
+	}
+	if obj.Observed != nil {
+		if err := AssertReferenceConstraints(*obj.Observed); err != nil {
+			return err
+		}
+	}
+	if obj.MessageBroker != nil {
+		if err := AssertReferenceConstraints(*obj.MessageBroker); err != nil {
+			return err
+		}
+	}
+	return nil
+}

@@ -1,0 +1,206 @@
+/*
+ * DotAAS Part 2 | HTTP/REST | Submodel Repository Service Specification
+ *
+ * The entire Submodel Repository Service Specification as part of the [Specification of the Asset Administration Shell: Part 2](http://industrialdigitaltwin.org/en/content-hub).   Publisher: Industrial Digital Twin Association (IDTA) 2023
+ *
+ * API version: V3.0.3_SSP-001
+ * Contact: info@idtwin.org
+ */
+
+package model
+
+type Capability struct {
+	Extensions []Extension `json:"extensions,omitempty"`
+
+	Category string `json:"category,omitempty" validate:"regexp=^([\\\\x09\\\\x0a\\\\x0d\\\\x20-\\\\ud7ff\\\\ue000-\\\\ufffd]|\\\\ud800[\\\\udc00-\\\\udfff]|[\\\\ud801-\\\\udbfe][\\\\udc00-\\\\udfff]|\\\\udbff[\\\\udc00-\\\\udfff])*$"`
+
+	IdShort string `json:"idShort,omitempty"`
+
+	DisplayName []LangStringNameType `json:"displayName,omitempty"`
+
+	Description []LangStringTextType `json:"description,omitempty"`
+
+	ModelType string `json:"modelType" validate:"regexp=^Capability$"`
+
+	SemanticId *Reference `json:"semanticId,omitempty"`
+
+	SupplementalSemanticIds []Reference `json:"supplementalSemanticIds,omitempty"`
+
+	Qualifiers []Qualifier `json:"qualifiers,omitempty"`
+
+	EmbeddedDataSpecifications []EmbeddedDataSpecification `json:"embeddedDataSpecifications,omitempty"`
+}
+
+// Getters
+func (a Capability) GetExtensions() []Extension {
+	return a.Extensions
+}
+
+func (a Capability) GetIdShort() string {
+	return a.IdShort
+}
+
+func (a Capability) GetCategory() string {
+	return a.Category
+}
+
+func (a Capability) GetDisplayName() []LangStringNameType {
+	return a.DisplayName
+}
+
+func (a Capability) GetDescription() []LangStringTextType {
+	return a.Description
+}
+
+func (a Capability) GetModelType() string {
+	return a.ModelType
+}
+
+func (a Capability) GetSemanticId() *Reference {
+	return a.SemanticId
+}
+
+func (a Capability) GetSupplementalSemanticIds() []Reference {
+	return a.SupplementalSemanticIds
+}
+
+func (a Capability) GetQualifiers() []Qualifier {
+	return a.Qualifiers
+}
+
+func (a Capability) GetEmbeddedDataSpecifications() []EmbeddedDataSpecification {
+	return a.EmbeddedDataSpecifications
+}
+
+// Setters
+
+func (a *Capability) SetModelType(v string) {
+	a.ModelType = v
+}
+
+func (a *Capability) SetExtensions(v []Extension) {
+	a.Extensions = v
+}
+
+func (a *Capability) SetIdShort(v string) {
+	a.IdShort = v
+}
+
+func (a *Capability) SetCategory(v string) {
+	a.Category = v
+}
+
+func (a *Capability) SetDisplayName(v []LangStringNameType) {
+	a.DisplayName = v
+}
+
+func (a *Capability) SetDescription(v []LangStringTextType) {
+	a.Description = v
+}
+
+func (a *Capability) SetSemanticId(v *Reference) {
+	a.SemanticId = v
+}
+
+func (a *Capability) SetSupplementalSemanticIds(v []Reference) {
+	a.SupplementalSemanticIds = v
+}
+
+func (a *Capability) SetQualifiers(v []Qualifier) {
+	a.Qualifiers = v
+}
+
+func (a *Capability) SetEmbeddedDataSpecifications(v []EmbeddedDataSpecification) {
+	a.EmbeddedDataSpecifications = v
+}
+
+// AssertCapabilityRequired checks if the required fields are not zero-ed
+func AssertCapabilityRequired(obj Capability) error {
+	elements := map[string]interface{}{
+		"modelType": obj.ModelType,
+	}
+	for name, el := range elements {
+		if isZero := IsZeroValue(el); isZero {
+			return &RequiredError{Field: name}
+		}
+	}
+
+	for _, el := range obj.Extensions {
+		if err := AssertExtensionRequired(el); err != nil {
+			return err
+		}
+	}
+	if err := AssertReferableAllOfIdShortRequired(obj.IdShort); err != nil {
+		return err
+	}
+	for _, el := range obj.DisplayName {
+		if err := AssertLangStringNameTypeRequired(el); err != nil {
+			return err
+		}
+	}
+	for _, el := range obj.Description {
+		if err := AssertLangStringTextTypeRequired(el); err != nil {
+			return err
+		}
+	}
+	if err := AssertReferenceRequired(*obj.SemanticId); err != nil {
+		return err
+	}
+	for _, el := range obj.SupplementalSemanticIds {
+		if err := AssertReferenceRequired(el); err != nil {
+			return err
+		}
+	}
+	for _, el := range obj.Qualifiers {
+		if err := AssertQualifierRequired(el); err != nil {
+			return err
+		}
+	}
+	for _, el := range obj.EmbeddedDataSpecifications {
+		if err := AssertEmbeddedDataSpecificationRequired(el); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// AssertCapabilityConstraints checks if the values respects the defined constraints
+func AssertCapabilityConstraints(obj Capability) error {
+	for _, el := range obj.Extensions {
+		if err := AssertExtensionConstraints(el); err != nil {
+			return err
+		}
+	}
+	if err := AssertReferableAllOfIdShortConstraints(obj.IdShort); err != nil {
+		return err
+	}
+	for _, el := range obj.DisplayName {
+		if err := AssertLangStringNameTypeConstraints(el); err != nil {
+			return err
+		}
+	}
+	for _, el := range obj.Description {
+		if err := AssertLangStringTextTypeConstraints(el); err != nil {
+			return err
+		}
+	}
+	if err := AssertReferenceConstraints(*obj.SemanticId); err != nil {
+		return err
+	}
+	for _, el := range obj.SupplementalSemanticIds {
+		if err := AssertReferenceConstraints(el); err != nil {
+			return err
+		}
+	}
+	for _, el := range obj.Qualifiers {
+		if err := AssertQualifierConstraints(el); err != nil {
+			return err
+		}
+	}
+	for _, el := range obj.EmbeddedDataSpecifications {
+		if err := AssertEmbeddedDataSpecificationConstraints(el); err != nil {
+			return err
+		}
+	}
+	return nil
+}

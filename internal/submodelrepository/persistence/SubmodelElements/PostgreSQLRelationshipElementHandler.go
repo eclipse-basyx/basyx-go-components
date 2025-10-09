@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"errors"
 
-	gen "github.com/eclipse-basyx/basyx-go-components/pkg/submodelrepositoryapi/go"
+	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 )
 
@@ -80,14 +80,14 @@ func (p PostgreSQLRelationshipElementHandler) Read(tx *sql.Tx, submodelId string
 		if err != nil {
 			return nil, err
 		}
-		relElem.First = *ref
+		relElem.First = ref
 	}
 	if secondRef.Valid {
 		ref, err := readReference(tx, secondRef.Int64)
 		if err != nil {
 			return nil, err
 		}
-		relElem.Second = *ref
+		relElem.Second = ref
 	}
 	return sme, nil
 }
@@ -130,7 +130,7 @@ func insertRelationshipElement(relElem *gen.RelationshipElement, tx *sql.Tx, id 
 	var firstRefId, secondRefId sql.NullInt64
 
 	if !isEmptyReference(relElem.First) {
-		refId, err := insertReference(tx, relElem.First)
+		refId, err := insertReference(tx, *relElem.First)
 		if err != nil {
 			return err
 		}
@@ -138,7 +138,7 @@ func insertRelationshipElement(relElem *gen.RelationshipElement, tx *sql.Tx, id 
 	}
 
 	if !isEmptyReference(relElem.Second) {
-		refId, err := insertReference(tx, relElem.Second)
+		refId, err := insertReference(tx, *relElem.Second)
 		if err != nil {
 			return err
 		}

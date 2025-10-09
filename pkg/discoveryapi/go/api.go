@@ -14,6 +14,8 @@ package openapi
 import (
 	"context"
 	"net/http"
+
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
 
 // AssetAdministrationShellBasicDiscoveryAPIAPIRouter defines the required methods for binding the api requests to a responses for the AssetAdministrationShellBasicDiscoveryAPIAPI
@@ -38,11 +40,10 @@ type DescriptionAPIAPIRouter interface {
 // while the service implementation can be ignored with the .openapi-generator-ignore file
 // and updated with the logic required for the API.
 type AssetAdministrationShellBasicDiscoveryAPIAPIServicer interface {
-	GetAllAssetAdministrationShellIdsByAssetLink(context.Context, []string, int32, string) (ImplResponse, error)
-	SearchAllAssetAdministrationShellIdsByAssetLink(ctx context.Context, limit int32, cursor string, assetLink []AssetLink) (ImplResponse, error)
-	GetAllAssetLinksById(context.Context, string) (ImplResponse, error)
-	PostAllAssetLinksById(context.Context, string, []SpecificAssetId) (ImplResponse, error)
-	DeleteAllAssetLinksById(context.Context, string) (ImplResponse, error)
+	GetAllAssetAdministrationShellIdsByAssetLink(context.Context, []string, int32, string) (model.ImplResponse, error)
+	GetAllAssetLinksById(context.Context, string) (model.ImplResponse, error)
+	PostAllAssetLinksById(context.Context, string, []SpecificAssetId) (model.ImplResponse, error)
+	DeleteAllAssetLinksById(context.Context, string) (model.ImplResponse, error)
 }
 
 // DescriptionAPIAPIServicer defines the api actions for the DescriptionAPIAPI service
@@ -50,5 +51,5 @@ type AssetAdministrationShellBasicDiscoveryAPIAPIServicer interface {
 // while the service implementation can be ignored with the .openapi-generator-ignore file
 // and updated with the logic required for the API.
 type DescriptionAPIAPIServicer interface {
-	GetDescription(context.Context) (ImplResponse, error)
+	GetDescription(context.Context) (model.ImplResponse, error)
 }

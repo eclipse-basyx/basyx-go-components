@@ -15,6 +15,8 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
 
 var (
@@ -51,11 +53,11 @@ func (e *RequiredError) Error() string {
 
 // ErrorHandler defines the required method for handling error. You may implement it and inject this into a controller if
 // you would like errors to be handled differently from the DefaultErrorHandler
-type ErrorHandler func(w http.ResponseWriter, r *http.Request, err error, result *ImplResponse)
+type ErrorHandler func(w http.ResponseWriter, r *http.Request, err error, result *model.ImplResponse)
 
 // DefaultErrorHandler defines the default logic on how to handle errors from the controller. Any errors from parsing
 // request params will return a StatusBadRequest. Otherwise, the error code originating from the servicer will be used.
-func DefaultErrorHandler(w http.ResponseWriter, _ *http.Request, err error, result *ImplResponse) {
+func DefaultErrorHandler(w http.ResponseWriter, _ *http.Request, err error, result *model.ImplResponse) {
 	var parsingErr *ParsingError
 	if ok := errors.As(err, &parsingErr); ok {
 		// Handle parsing errors

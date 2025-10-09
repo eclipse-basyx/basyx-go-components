@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"errors"
 
-	gen "github.com/eclipse-basyx/basyx-go-components/pkg/submodelrepositoryapi/go"
+	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 )
 
@@ -95,7 +95,7 @@ func (p PostgreSQLReferenceElementHandler) Read(tx *sql.Tx, submodelId string, i
 			keys = append(keys, gen.Key{Type: gen.KeyTypes(kType), Value: kValue})
 		}
 		refElem := sme.(*gen.ReferenceElement)
-		refElem.Value = gen.Reference{Type: gen.ReferenceTypes(refType), Keys: keys}
+		refElem.Value = &gen.Reference{Type: gen.ReferenceTypes(refType), Keys: keys}
 	}
 	return sme, nil
 }
