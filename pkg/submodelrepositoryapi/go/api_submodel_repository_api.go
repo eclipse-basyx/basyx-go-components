@@ -16,6 +16,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -345,18 +346,18 @@ func (c *SubmodelRepositoryAPIAPIController) GetAllSubmodels(w http.ResponseWrit
 
 // PostSubmodel - Creates a new Submodel
 func (c *SubmodelRepositoryAPIAPIController) PostSubmodel(w http.ResponseWriter, r *http.Request) {
-	var submodelParam Submodel
+	var submodelParam model.Submodel
 	d := json.NewDecoder(r.Body)
 	d.DisallowUnknownFields()
 	if err := d.Decode(&submodelParam); err != nil {
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
-	if err := AssertSubmodelRequired(submodelParam); err != nil {
+	if err := model.AssertSubmodelRequired(submodelParam); err != nil {
 		c.errorHandler(w, r, err, nil)
 		return
 	}
-	if err := AssertSubmodelConstraints(submodelParam); err != nil {
+	if err := model.AssertSubmodelConstraints(submodelParam); err != nil {
 		c.errorHandler(w, r, err, nil)
 		return
 	}
@@ -665,18 +666,18 @@ func (c *SubmodelRepositoryAPIAPIController) PutSubmodelById(w http.ResponseWrit
 		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
 		return
 	}
-	var submodelParam Submodel
+	var submodelParam model.Submodel
 	d := json.NewDecoder(r.Body)
 	d.DisallowUnknownFields()
 	if err := d.Decode(&submodelParam); err != nil {
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
-	if err := AssertSubmodelRequired(submodelParam); err != nil {
+	if err := model.AssertSubmodelRequired(submodelParam); err != nil {
 		c.errorHandler(w, r, err, nil)
 		return
 	}
-	if err := AssertSubmodelConstraints(submodelParam); err != nil {
+	if err := model.AssertSubmodelConstraints(submodelParam); err != nil {
 		c.errorHandler(w, r, err, nil)
 		return
 	}
@@ -719,18 +720,18 @@ func (c *SubmodelRepositoryAPIAPIController) PatchSubmodelById(w http.ResponseWr
 		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
 		return
 	}
-	var submodelParam Submodel
+	var submodelParam model.Submodel
 	d := json.NewDecoder(r.Body)
 	d.DisallowUnknownFields()
 	if err := d.Decode(&submodelParam); err != nil {
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
-	if err := AssertSubmodelRequired(submodelParam); err != nil {
+	if err := model.AssertSubmodelRequired(submodelParam); err != nil {
 		c.errorHandler(w, r, err, nil)
 		return
 	}
-	if err := AssertSubmodelConstraints(submodelParam); err != nil {
+	if err := model.AssertSubmodelConstraints(submodelParam); err != nil {
 		c.errorHandler(w, r, err, nil)
 		return
 	}
@@ -777,18 +778,18 @@ func (c *SubmodelRepositoryAPIAPIController) PatchSubmodelByIdMetadata(w http.Re
 		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
 		return
 	}
-	var submodelMetadataParam SubmodelMetadata
+	var submodelMetadataParam model.SubmodelMetadata
 	d := json.NewDecoder(r.Body)
 	d.DisallowUnknownFields()
 	if err := d.Decode(&submodelMetadataParam); err != nil {
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
-	if err := AssertSubmodelMetadataRequired(submodelMetadataParam); err != nil {
+	if err := model.AssertSubmodelMetadataRequired(submodelMetadataParam); err != nil {
 		c.errorHandler(w, r, err, nil)
 		return
 	}
-	if err := AssertSubmodelMetadataConstraints(submodelMetadataParam); err != nil {
+	if err := model.AssertSubmodelMetadataConstraints(submodelMetadataParam); err != nil {
 		c.errorHandler(w, r, err, nil)
 		return
 	}
@@ -1006,18 +1007,18 @@ func (c *SubmodelRepositoryAPIAPIController) PostSubmodelElementSubmodelRepo(w h
 	}
 
 	// Use our custom factory function to create the appropriate concrete type
-	submodelElementParam, err := UnmarshalSubmodelElement(bodyBytes)
+	submodelElementParam, err := model.UnmarshalSubmodelElement(bodyBytes)
 	if err != nil {
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
 
 	// FIXED: Use custom validation that handles optional references correctly
-	if err := AssertSubmodelElementRequiredFixed(submodelElementParam); err != nil {
+	if err := model.AssertSubmodelElementRequiredFixed(submodelElementParam); err != nil {
 		c.errorHandler(w, r, err, nil)
 		return
 	}
-	if err := AssertSubmodelElementConstraintsFixed(submodelElementParam); err != nil {
+	if err := model.AssertSubmodelElementConstraintsFixed(submodelElementParam); err != nil {
 		c.errorHandler(w, r, err, nil)
 		return
 	}
@@ -1314,16 +1315,16 @@ func (c *SubmodelRepositoryAPIAPIController) PutSubmodelElementByPathSubmodelRep
 	}
 
 	// Use our custom factory function to create the appropriate concrete type
-	submodelElementParam, err := UnmarshalSubmodelElement(bodyBytes)
+	submodelElementParam, err := model.UnmarshalSubmodelElement(bodyBytes)
 	if err != nil {
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
-	if err := AssertSubmodelElementRequired(submodelElementParam); err != nil {
+	if err := model.AssertSubmodelElementRequired(submodelElementParam); err != nil {
 		c.errorHandler(w, r, err, nil)
 		return
 	}
-	if err := AssertSubmodelElementConstraints(submodelElementParam); err != nil {
+	if err := model.AssertSubmodelElementConstraints(submodelElementParam); err != nil {
 		c.errorHandler(w, r, err, nil)
 		return
 	}
@@ -1367,16 +1368,16 @@ func (c *SubmodelRepositoryAPIAPIController) PostSubmodelElementByPathSubmodelRe
 	}
 
 	// Use our custom factory function to create the appropriate concrete type
-	submodelElementParam, err := UnmarshalSubmodelElement(bodyBytes)
+	submodelElementParam, err := model.UnmarshalSubmodelElement(bodyBytes)
 	if err != nil {
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
-	if err := AssertSubmodelElementRequiredFixed(submodelElementParam); err != nil {
+	if err := model.AssertSubmodelElementRequired(submodelElementParam); err != nil {
 		c.errorHandler(w, r, err, nil)
 		return
 	}
-	if err := AssertSubmodelElementConstraintsFixed(submodelElementParam); err != nil {
+	if err := model.AssertSubmodelElementConstraints(submodelElementParam); err != nil {
 		c.errorHandler(w, r, err, nil)
 		return
 	}
@@ -1438,16 +1439,16 @@ func (c *SubmodelRepositoryAPIAPIController) PatchSubmodelElementByPathSubmodelR
 	}
 
 	// Use our custom factory function to create the appropriate concrete type
-	submodelElementParam, err := UnmarshalSubmodelElement(bodyBytes)
+	submodelElementParam, err := model.UnmarshalSubmodelElement(bodyBytes)
 	if err != nil {
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
-	if err := AssertSubmodelElementRequired(submodelElementParam); err != nil {
+	if err := model.AssertSubmodelElementRequired(submodelElementParam); err != nil {
 		c.errorHandler(w, r, err, nil)
 		return
 	}
-	if err := AssertSubmodelElementConstraints(submodelElementParam); err != nil {
+	if err := model.AssertSubmodelElementConstraints(submodelElementParam); err != nil {
 		c.errorHandler(w, r, err, nil)
 		return
 	}
@@ -1504,18 +1505,18 @@ func (c *SubmodelRepositoryAPIAPIController) PatchSubmodelElementByPathMetadataS
 		c.errorHandler(w, r, &RequiredError{"idShortPath"}, nil)
 		return
 	}
-	var submodelElementMetadataParam SubmodelElementMetadata
+	var submodelElementMetadataParam model.SubmodelElementMetadata
 	d := json.NewDecoder(r.Body)
 	d.DisallowUnknownFields()
 	if err := d.Decode(&submodelElementMetadataParam); err != nil {
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
-	if err := AssertSubmodelElementMetadataRequired(submodelElementMetadataParam); err != nil {
+	if err := model.AssertSubmodelElementMetadataRequired(submodelElementMetadataParam); err != nil {
 		c.errorHandler(w, r, err, nil)
 		return
 	}
-	if err := AssertSubmodelElementMetadataConstraints(submodelElementMetadataParam); err != nil {
+	if err := model.AssertSubmodelElementMetadataConstraints(submodelElementMetadataParam); err != nil {
 		c.errorHandler(w, r, err, nil)
 		return
 	}
@@ -1591,18 +1592,18 @@ func (c *SubmodelRepositoryAPIAPIController) PatchSubmodelElementByPathValueOnly
 		c.errorHandler(w, r, &RequiredError{"idShortPath"}, nil)
 		return
 	}
-	var submodelElementValueParam SubmodelElementValue
+	var submodelElementValueParam model.SubmodelElementValue
 	d := json.NewDecoder(r.Body)
 	d.DisallowUnknownFields()
 	if err := d.Decode(&submodelElementValueParam); err != nil {
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
-	if err := AssertSubmodelElementValueRequired(submodelElementValueParam); err != nil {
+	if err := model.AssertSubmodelElementValueRequired(submodelElementValueParam); err != nil {
 		c.errorHandler(w, r, err, nil)
 		return
 	}
-	if err := AssertSubmodelElementValueConstraints(submodelElementValueParam); err != nil {
+	if err := model.AssertSubmodelElementValueConstraints(submodelElementValueParam); err != nil {
 		c.errorHandler(w, r, err, nil)
 		return
 	}
@@ -1625,7 +1626,7 @@ func (c *SubmodelRepositoryAPIAPIController) PatchSubmodelElementByPathValueOnly
 	_ = EncodeJSONResponse(result.Body, &result.Code, w)
 }
 
-// GetSubmodelElementByPathReferenceSubmodelRepo - Returns the Referene of a specific submodel element from the Submodel at a specified path
+// GetSubmodelElementByPathReferenceSubmodelRepo - Returns the Reference of a specific submodel element from the Submodel at a specified path
 func (c *SubmodelRepositoryAPIAPIController) GetSubmodelElementByPathReferenceSubmodelRepo(w http.ResponseWriter, r *http.Request) {
 	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
 	if submodelIdentifierParam == "" {
@@ -1783,18 +1784,18 @@ func (c *SubmodelRepositoryAPIAPIController) InvokeOperationSubmodelRepo(w http.
 		c.errorHandler(w, r, &RequiredError{"idShortPath"}, nil)
 		return
 	}
-	var operationRequestParam OperationRequest
+	var operationRequestParam model.OperationRequest
 	d := json.NewDecoder(r.Body)
 	d.DisallowUnknownFields()
 	if err := d.Decode(&operationRequestParam); err != nil {
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
-	if err := AssertOperationRequestRequired(operationRequestParam); err != nil {
+	if err := model.AssertOperationRequestRequired(operationRequestParam); err != nil {
 		c.errorHandler(w, r, err, nil)
 		return
 	}
-	if err := AssertOperationRequestConstraints(operationRequestParam); err != nil {
+	if err := model.AssertOperationRequestConstraints(operationRequestParam); err != nil {
 		c.errorHandler(w, r, err, nil)
 		return
 	}
@@ -1846,18 +1847,18 @@ func (c *SubmodelRepositoryAPIAPIController) InvokeOperationValueOnly(w http.Res
 		c.errorHandler(w, r, &RequiredError{"idShortPath"}, nil)
 		return
 	}
-	var operationRequestValueOnlyParam OperationRequestValueOnly
+	var operationRequestValueOnlyParam model.OperationRequestValueOnly
 	d := json.NewDecoder(r.Body)
 	d.DisallowUnknownFields()
 	if err := d.Decode(&operationRequestValueOnlyParam); err != nil {
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
-	if err := AssertOperationRequestValueOnlyRequired(operationRequestValueOnlyParam); err != nil {
+	if err := model.AssertOperationRequestValueOnlyRequired(operationRequestValueOnlyParam); err != nil {
 		c.errorHandler(w, r, err, nil)
 		return
 	}
-	if err := AssertOperationRequestValueOnlyConstraints(operationRequestValueOnlyParam); err != nil {
+	if err := model.AssertOperationRequestValueOnlyConstraints(operationRequestValueOnlyParam); err != nil {
 		c.errorHandler(w, r, err, nil)
 		return
 	}
@@ -1899,18 +1900,18 @@ func (c *SubmodelRepositoryAPIAPIController) InvokeOperationAsync(w http.Respons
 		c.errorHandler(w, r, &RequiredError{"idShortPath"}, nil)
 		return
 	}
-	var operationRequestParam OperationRequest
+	var operationRequestParam model.OperationRequest
 	d := json.NewDecoder(r.Body)
 	d.DisallowUnknownFields()
 	if err := d.Decode(&operationRequestParam); err != nil {
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
-	if err := AssertOperationRequestRequired(operationRequestParam); err != nil {
+	if err := model.AssertOperationRequestRequired(operationRequestParam); err != nil {
 		c.errorHandler(w, r, err, nil)
 		return
 	}
-	if err := AssertOperationRequestConstraints(operationRequestParam); err != nil {
+	if err := model.AssertOperationRequestConstraints(operationRequestParam); err != nil {
 		c.errorHandler(w, r, err, nil)
 		return
 	}
@@ -1941,18 +1942,18 @@ func (c *SubmodelRepositoryAPIAPIController) InvokeOperationAsyncValueOnly(w htt
 		c.errorHandler(w, r, &RequiredError{"idShortPath"}, nil)
 		return
 	}
-	var operationRequestValueOnlyParam OperationRequestValueOnly
+	var operationRequestValueOnlyParam model.OperationRequestValueOnly
 	d := json.NewDecoder(r.Body)
 	d.DisallowUnknownFields()
 	if err := d.Decode(&operationRequestValueOnlyParam); err != nil {
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
-	if err := AssertOperationRequestValueOnlyRequired(operationRequestValueOnlyParam); err != nil {
+	if err := model.AssertOperationRequestValueOnlyRequired(operationRequestValueOnlyParam); err != nil {
 		c.errorHandler(w, r, err, nil)
 		return
 	}
-	if err := AssertOperationRequestValueOnlyConstraints(operationRequestValueOnlyParam); err != nil {
+	if err := model.AssertOperationRequestValueOnlyConstraints(operationRequestValueOnlyParam); err != nil {
 		c.errorHandler(w, r, err, nil)
 		return
 	}

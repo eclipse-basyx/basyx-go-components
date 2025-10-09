@@ -13,6 +13,8 @@ import (
 	"context"
 	"errors"
 	"net/http"
+
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
 
 // DescriptionAPIAPIService is a service that implements the logic for the DescriptionAPIAPIServicer
@@ -27,7 +29,7 @@ func NewDescriptionAPIAPIService() *DescriptionAPIAPIService {
 }
 
 // GetDescription - Returns the self-describing information of a network resource (ServiceDescription)
-func (s *DescriptionAPIAPIService) GetDescription(ctx context.Context) (ImplResponse, error) {
+func (s *DescriptionAPIAPIService) GetDescription(ctx context.Context) (model.ImplResponse, error) {
 	// TODO - update GetDescription with the required logic for this service method.
 	// Add api_description_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
 
@@ -40,5 +42,5 @@ func (s *DescriptionAPIAPIService) GetDescription(ctx context.Context) (ImplResp
 	// TODO: Uncomment the next line to return response Response(403, Result{}) or use other options such as http.Ok ...
 	// return Response(403, Result{}), nil
 
-	return Response(http.StatusNotImplemented, nil), errors.New("GetDescription method not implemented")
+	return model.Response(http.StatusNotImplemented, nil), errors.New("GetDescription method not implemented")
 }
