@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"errors"
 
-	gen "github.com/eclipse-basyx/basyx-go-components/pkg/submodelrepositoryapi/go"
+	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 )
 
@@ -95,7 +95,7 @@ func (p PostgreSQLReferenceElementHandler) Read(tx *sql.Tx, submodelId string, i
 			keys = append(keys, gen.Key{Type: gen.KeyTypes(kType), Value: kValue})
 		}
 		refElem := sme.(*gen.ReferenceElement)
-		refElem.Value = gen.Reference{Type: gen.ReferenceTypes(refType), Keys: keys}
+		refElem.Value = &gen.Reference{Type: gen.ReferenceTypes(refType), Keys: keys}
 	}
 	return sme, nil
 }
@@ -113,7 +113,7 @@ func (p PostgreSQLReferenceElementHandler) Delete(idShortOrPath string) error {
 }
 
 func insertReferenceElement(refElem *gen.ReferenceElement, tx *sql.Tx, id int) error {
-	if isEmptyReference(refElem.Value) {
+	if isEmptyReference(*refElem.Value) {
 		// Insert with NULL
 		_, err := tx.Exec(`INSERT INTO reference_element (id, value_ref) VALUES ($1, $2)`, id, nil)
 		return err

@@ -5,7 +5,7 @@ import (
 	"errors"
 	"time"
 
-	gen "github.com/eclipse-basyx/basyx-go-components/pkg/submodelrepositoryapi/go"
+	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 )
 
@@ -112,7 +112,7 @@ func (p PostgreSQLBasicEventElementHandler) Read(tx *sql.Tx, submodelId string, 
 		if err != nil {
 			return nil, err
 		}
-		basicEvent.Observed = *ref
+		basicEvent.Observed = ref
 	}
 
 	if messageBrokerRef.Valid {
@@ -120,7 +120,7 @@ func (p PostgreSQLBasicEventElementHandler) Read(tx *sql.Tx, submodelId string, 
 		if err != nil {
 			return nil, err
 		}
-		basicEvent.MessageBroker = *ref
+		basicEvent.MessageBroker = ref
 	}
 
 	return basicEvent, nil
@@ -140,7 +140,7 @@ func (p PostgreSQLBasicEventElementHandler) Delete(idShortOrPath string) error {
 
 func insertBasicEventElement(basicEvent *gen.BasicEventElement, tx *sql.Tx, id int) error {
 	var observedRefID sql.NullInt64
-	if !isEmptyReference(basicEvent.Observed) {
+	if !isEmptyReference(*basicEvent.Observed) {
 		var refID int
 		err := tx.QueryRow(`INSERT INTO reference (type) VALUES ($1) RETURNING id`, basicEvent.Observed.Type).Scan(&refID)
 		if err != nil {
@@ -159,7 +159,7 @@ func insertBasicEventElement(basicEvent *gen.BasicEventElement, tx *sql.Tx, id i
 	}
 
 	var messageBrokerRefID sql.NullInt64
-	if !isEmptyReference(basicEvent.MessageBroker) {
+	if !isEmptyReference(*basicEvent.MessageBroker) {
 		var refID int
 		err := tx.QueryRow(`INSERT INTO reference (type) VALUES ($1) RETURNING id`, basicEvent.MessageBroker.Type).Scan(&refID)
 		if err != nil {

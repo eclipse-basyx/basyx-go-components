@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"reflect"
 
+	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	persistence_utils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
-	gen "github.com/eclipse-basyx/basyx-go-components/pkg/submodelrepositoryapi/go"
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 )
 

@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"errors"
 
-	gen "github.com/eclipse-basyx/basyx-go-components/pkg/submodelrepositoryapi/go"
+	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 )
 
@@ -94,8 +94,8 @@ func insertEntity(entity *gen.Entity, tx *sql.Tx, id int) error {
 	// Insert specific asset ids
 	for _, sai := range entity.SpecificAssetIds {
 		var extRef sql.NullInt64
-		if !isEmptyReference(sai.ExternalSubjectId) {
-			refId, err := insertReference(tx, sai.ExternalSubjectId)
+		if !isEmptyReference(*sai.ExternalSubjectId) {
+			refId, err := insertReference(tx, *sai.ExternalSubjectId)
 			if err != nil {
 				return err
 			}

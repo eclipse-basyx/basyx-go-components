@@ -4,8 +4,8 @@ import (
 	"database/sql"
 	"reflect"
 
+	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	qb "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/querybuilder"
-	gen "github.com/eclipse-basyx/basyx-go-components/pkg/submodelrepositoryapi/go"
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 )
 

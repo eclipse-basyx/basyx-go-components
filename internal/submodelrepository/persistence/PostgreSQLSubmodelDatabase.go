@@ -11,9 +11,9 @@ import (
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	submodelelements "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/SubmodelElements"
 	persistence_utils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
-	gen "github.com/eclipse-basyx/basyx-go-components/pkg/submodelrepositoryapi/go"
 )
 
 type PostgreSQLSubmodelDatabase struct {

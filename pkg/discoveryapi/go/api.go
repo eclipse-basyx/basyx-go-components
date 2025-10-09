@@ -12,6 +12,8 @@ package openapi
 import (
 	"context"
 	"net/http"
+
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
 
 // AssetAdministrationShellBasicDiscoveryAPIAPIRouter defines the required methods for binding the api requests to a responses for the AssetAdministrationShellBasicDiscoveryAPIAPI
@@ -47,5 +49,5 @@ type AssetAdministrationShellBasicDiscoveryAPIAPIServicer interface {
 // while the service implementation can be ignored with the .openapi-generator-ignore file
 // and updated with the logic required for the API.
 type DescriptionAPIAPIServicer interface {
-	GetDescription(context.Context) (ImplResponse, error)
+	GetDescription(context.Context) (model.ImplResponse, error)
 }
