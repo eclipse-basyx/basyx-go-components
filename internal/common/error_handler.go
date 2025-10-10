@@ -62,7 +62,9 @@ func IsErrConflict(err error) bool {
 
 func NewErrorResponse(err error, errorCode int, component string, function string, info string) model.ImplResponse {
 	codeStr := strconv.Itoa(errorCode)
-	internalCode := fmt.Sprintf("%s-%s-%s-%s-%s", component, codeStr, function, http.StatusText(errorCode), info)
+	statusText := strings.ReplaceAll(http.StatusText(errorCode), " ", "")
+	internalCode := fmt.Sprintf("%s-%s-%s-%s-%s", component, codeStr, function, statusText, info)
+
 	return model.Response(
 		errorCode,
 		[]ErrorHandler{
