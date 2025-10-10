@@ -22,6 +22,17 @@
                 "-config",
                 "${workspaceFolder}/cmd/submodelrepositoryservice/config.yaml"
             ]
+        },
+        {
+            "name": "Launch AAS Registry Service",
+            "type": "go",
+            "request": "launch",
+            "mode": "debug",
+            "program": "${workspaceFolder}/cmd/aasregistryservice/main.go",
+            "args": [
+                "-config",
+                "${workspaceFolder}/cmd/aasregistryservice/config.yaml"
+            ]
         }
     ]
 }

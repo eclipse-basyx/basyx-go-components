@@ -24,6 +24,7 @@ import (
 type AssetAdministrationShellRegistryAPIAPIController struct {
 	service      AssetAdministrationShellRegistryAPIAPIServicer
 	errorHandler model.ErrorHandler
+	contextPath  string
 }
 
 // AssetAdministrationShellRegistryAPIAPIOption for how the controller is set up.
@@ -37,10 +38,11 @@ func WithAssetAdministrationShellRegistryAPIAPIErrorHandler(h model.ErrorHandler
 }
 
 // NewAssetAdministrationShellRegistryAPIAPIController creates a default api controller
-func NewAssetAdministrationShellRegistryAPIAPIController(s AssetAdministrationShellRegistryAPIAPIServicer, opts ...AssetAdministrationShellRegistryAPIAPIOption) *AssetAdministrationShellRegistryAPIAPIController {
+func NewAssetAdministrationShellRegistryAPIAPIController(s AssetAdministrationShellRegistryAPIAPIServicer, contextPath string, opts ...AssetAdministrationShellRegistryAPIAPIOption) *AssetAdministrationShellRegistryAPIAPIController {
 	controller := &AssetAdministrationShellRegistryAPIAPIController{
 		service:      s,
 		errorHandler: model.DefaultErrorHandler,
+		contextPath:  contextPath,
 	}
 
 	for _, opt := range opts {
@@ -267,7 +269,7 @@ func (c *AssetAdministrationShellRegistryAPIAPIController) GetAssetAdministratio
 	params := mux.Vars(r)
 	aasIdentifierParam := params["aasIdentifier"]
 	if aasIdentifierParam == "" {
-		c.errorHandler(w, r, &model.RequiredError{"aasIdentifier"}, nil)
+		c.errorHandler(w, r, &model.RequiredError{Field: "aasIdentifier"}, nil)
 		return
 	}
 	result, err := c.service.GetAssetAdministrationShellDescriptorById(r.Context(), aasIdentifierParam)

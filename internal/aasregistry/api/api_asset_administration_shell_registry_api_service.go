@@ -9,13 +9,14 @@
  * Contact: info@idtwin.org
  */
 
-package apis
+package ass_registry_api
 
 import (
 	"context"
 	"errors"
 	"net/http"
 
+	persistence_postgresql "github.com/eclipse-basyx/basyx-go-components/internal/aasregistry/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
 
@@ -23,11 +24,14 @@ import (
 // This service should implement the business logic for every endpoint for the AssetAdministrationShellRegistryAPIAPI API.
 // Include any external packages or services that will be required by this service.
 type AssetAdministrationShellRegistryAPIAPIService struct {
+	aasRegistryBackend persistence_postgresql.PostgreSQLAASRegistryDatabase
 }
 
 // NewAssetAdministrationShellRegistryAPIAPIService creates a default api service
-func NewAssetAdministrationShellRegistryAPIAPIService() *AssetAdministrationShellRegistryAPIAPIService {
-	return &AssetAdministrationShellRegistryAPIAPIService{}
+func NewAssetAdministrationShellRegistryAPIAPIService(databaseBackend persistence_postgresql.PostgreSQLAASRegistryDatabase) *AssetAdministrationShellRegistryAPIAPIService {
+	return &AssetAdministrationShellRegistryAPIAPIService{
+		aasRegistryBackend: databaseBackend,
+	}
 }
 
 // GetAllAssetAdministrationShellDescriptors - Returns all Asset Administration Shell Descriptors
