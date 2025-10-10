@@ -10,11 +10,12 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"sort"
 	"testing"
 	"time"
 
-	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/discoveryapi/go"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -100,6 +101,20 @@ type LogRecord struct {
 	Extra    map[string]any  `json:"extra,omitempty"`
 }
 
+func findProjectRoot() (string, error) {
+	dir, _ := os.Getwd()
+	for {
+		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
+			return dir, nil
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return "", fmt.Errorf("go.mod not found")
+		}
+		dir = parent
+	}
+}
+
 func BenchmarkComponent(b *testing.B, comp ComponentBench) {
 	logDetail := envLogDetail()
 	logs := make([]LogRecord, 0, b.N)
@@ -111,16 +126,28 @@ func BenchmarkComponent(b *testing.B, comp ComponentBench) {
 	}
 	b.StopTimer()
 
-	filename := fmt.Sprintf("%s_bench.json", comp.Name())
-	if f, err := os.Create(filename); err == nil {
-		enc := json.NewEncoder(f)
-		enc.SetIndent("", "  ")
-		_ = enc.Encode(logs)
-		_ = f.Close()
-		b.Logf("wrote %s with %d records (detail=%v)", filename, len(logs), logDetail)
-	} else {
-		b.Logf("could not write JSON log: %v", err)
+	root, err := findProjectRoot()
+	if err != nil {
+		b.Fatalf("could not locate project root: %v", err)
 	}
+
+	resultsDir := filepath.Join(root, "benchmark_results")
+	if err := os.MkdirAll(resultsDir, 0o755); err != nil {
+		b.Fatalf("failed to create results directory: %v", err)
+	}
+
+	filename := filepath.Join(resultsDir, fmt.Sprintf("%s_bench.json", comp.Name()))
+	f, err := os.Create(filename)
+	if err != nil {
+		b.Fatalf("could not create benchmark file: %v", err)
+	}
+	defer f.Close()
+
+	enc := json.NewEncoder(f)
+	enc.SetIndent("", "  ")
+	_ = enc.Encode(logs)
+
+	b.Logf("wrote %s with %d records (detail=%v)", filename, len(logs), logDetail)
 }
 
 func HTTPClient() *http.Client { return &http.Client{Timeout: 20 * time.Second} }
@@ -263,7 +290,7 @@ func WaitHealthy(t testing.TB, url string, maxWait time.Duration) {
 	}
 }
 
-func BuildNameValuesMap(in []openapi.SpecificAssetId) map[string][]string {
+func BuildNameValuesMap(in []model.SpecificAssetId) map[string][]string {
 	m := map[string][]string{}
 	for _, s := range in {
 		m[s.Name] = append(m[s.Name], s.Value)

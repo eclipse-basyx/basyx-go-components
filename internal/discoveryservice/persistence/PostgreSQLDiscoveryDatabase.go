@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
-	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/discoveryapi/go"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -42,7 +42,7 @@ func NewPostgreSQLDiscoveryBackend(dsn string, maxConns int) (*PostgreSQLDiscove
 	return &PostgreSQLDiscoveryDatabase{pool: pool}, nil
 }
 
-func (p *PostgreSQLDiscoveryDatabase) GetAllAssetLinks(aasID string) ([]openapi.SpecificAssetId, error) {
+func (p *PostgreSQLDiscoveryDatabase) GetAllAssetLinks(aasID string) ([]model.SpecificAssetId, error) {
 	ctx := context.Background()
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
@@ -67,14 +67,14 @@ func (p *PostgreSQLDiscoveryDatabase) GetAllAssetLinks(aasID string) ([]openapi.
 	}
 	defer rows.Close()
 
-	var result []openapi.SpecificAssetId
+	var result []model.SpecificAssetId
 	for rows.Next() {
 		var name, value string
 		if err := rows.Scan(&name, &value); err != nil {
 			fmt.Println(err)
 			return nil, common.NewInternalServerError("Failed to scan asset link. See console for information.")
 		}
-		result = append(result, openapi.SpecificAssetId{
+		result = append(result, model.SpecificAssetId{
 			Name:  name,
 			Value: value,
 		})
@@ -106,7 +106,7 @@ func (p *PostgreSQLDiscoveryDatabase) DeleteAllAssetLinks(aasID string) error {
 	return nil
 }
 
-func (p *PostgreSQLDiscoveryDatabase) CreateAllAssetLinks(aas_id string, specific_asset_ids []openapi.SpecificAssetId) error {
+func (p *PostgreSQLDiscoveryDatabase) CreateAllAssetLinks(aas_id string, specific_asset_ids []model.SpecificAssetId) error {
 	ctx := context.Background()
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
@@ -151,7 +151,7 @@ func (p *PostgreSQLDiscoveryDatabase) CreateAllAssetLinks(aas_id string, specifi
 
 func (p *PostgreSQLDiscoveryDatabase) SearchAASIDsByAssetLinks(
 	ctx context.Context,
-	links []openapi.AssetLink,
+	links []model.AssetLink,
 	limit int32,
 	cursor string,
 ) ([]string, string, error) {

@@ -18,8 +18,8 @@ import (
 	"strings"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	persistence_postgresql "github.com/eclipse-basyx/basyx-go-components/internal/discoveryservice/persistence"
-	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/discoveryapi/go"
 )
 
 // AssetAdministrationShellBasicDiscoveryAPIAPIService is a service that implements the logic for the AssetAdministrationShellBasicDiscoveryAPIAPIServicer
@@ -38,17 +38,17 @@ func NewAssetAdministrationShellBasicDiscoveryAPIAPIService(databaseBackend pers
 
 // GetAllAssetAdministrationShellIdsByAssetLink - Returns a list of Asset Administration Shell IDs linked to specific asset identifiers or the global asset ID
 // Deprecated
-func (s *AssetAdministrationShellBasicDiscoveryAPIAPIService) GetAllAssetAdministrationShellIdsByAssetLink(ctx context.Context, assetIds []string, limit int32, cursor string) (openapi.ImplResponse, error) {
+func (s *AssetAdministrationShellBasicDiscoveryAPIAPIService) GetAllAssetAdministrationShellIdsByAssetLink(ctx context.Context, assetIds []string, limit int32, cursor string) (model.ImplResponse, error) {
 	// TODO - update GetAllAssetAdministrationShellIdsByAssetLink with the required logic for this service method.
 	// Add api_asset_administration_shell_basic_discovery_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
 
-	// TODO: Uncomment the next line to return openapi.Response openapi.Response(200, GetAllAssetAdministrationShellIdsByAssetLink200Response{}) or use other options such as http.Ok ...
-	// return openapi.Response(200, GetAllAssetAdministrationShellIdsByAssetLink200Response{}), nil
+	// TODO: Uncomment the next line to return model.Respone model.Respone(200, GetAllAssetAdministrationShellIdsByAssetLink200Response{}) or use other options such as http.Ok ...
+	// return model.Respone(200, GetAllAssetAdministrationShellIdsByAssetLink200Response{}), nil
 
-	// TODO: Uncomment the next line to return openapi.Response openapi.Response(0, Result{}) or use other options such as http.Ok ...
-	// return openapi.Response(0, Result{}), nil
+	// TODO: Uncomment the next line to return model.Respone model.Respone(0, Result{}) or use other options such as http.Ok ...
+	// return model.Response(0, Result{}), nil
 
-	return openapi.Response(http.StatusNotImplemented, nil), errors.New("GetAllAssetAdministrationShellIdsByAssetLink method not implemented")
+	return model.Response(http.StatusNotImplemented, nil), errors.New("GetAllAssetAdministrationShellIdsByAssetLink method not implemented")
 }
 
 // SearchAllAssetAdministrationShellIdsByAssetLink - Returns a list of Asset Administration Shell IDs linked to specific asset identifiers or the global asset ID
@@ -56,8 +56,8 @@ func (s *AssetAdministrationShellBasicDiscoveryAPIAPIService) SearchAllAssetAdmi
 	ctx context.Context,
 	limit int32,
 	cursor string,
-	assetLink []openapi.AssetLink,
-) (openapi.ImplResponse, error) {
+	assetLink []model.AssetLink,
+) (model.ImplResponse, error) {
 
 	timestamp := common.GetCurrentTimestamp()
 
@@ -66,7 +66,7 @@ func (s *AssetAdministrationShellBasicDiscoveryAPIAPIService) SearchAllAssetAdmi
 	if strings.TrimSpace(cursor) != "" {
 		dec, decErr := common.DecodeString(cursor)
 		if decErr != nil {
-			return openapi.Response(http.StatusBadRequest,
+			return model.Response(http.StatusBadRequest,
 				[]common.ErrorHandler{*common.NewErrorHandler(
 					"Error",
 					decErr,
@@ -80,7 +80,7 @@ func (s *AssetAdministrationShellBasicDiscoveryAPIAPIService) SearchAllAssetAdmi
 
 	ids, nextCursor, err := s.disoveryBackend.SearchAASIDsByAssetLinks(ctx, assetLink, limit, internalCursor)
 	if err != nil {
-		return openapi.Response(http.StatusInternalServerError,
+		return model.Response(http.StatusInternalServerError,
 			[]common.ErrorHandler{*common.NewErrorHandler(
 				"Error",
 				err,
@@ -91,29 +91,29 @@ func (s *AssetAdministrationShellBasicDiscoveryAPIAPIService) SearchAllAssetAdmi
 	}
 
 	// Build paging metadata with omitempty behavior: only set cursor when there's a next page.
-	pm := openapi.PagedResultPagingMetadata{}
+	pm := model.PagedResultPagingMetadata{}
 	if nextCursor != "" {
 		pm.Cursor = common.EncodeString(nextCursor)
 	}
 
-	res := openapi.GetAllAssetAdministrationShellIdsByAssetLink200Response{
+	res := model.GetAllAssetAdministrationShellIdsByAssetLink200Response{
 		PagingMetadata: pm,
 		Result:         ids,
 	}
-	return openapi.Response(http.StatusOK, res), nil
+	return model.Response(http.StatusOK, res), nil
 }
 
 // GetAllAssetLinksById - Returns a list of specific asset identifiers based on an Asset Administration Shell ID to edit discoverable content. The global asset ID is returned as specific asset ID with \&quot;name\&quot; equal to \&quot;globalAssetId\&quot; (see Constraint AASd-116).
 func (s *AssetAdministrationShellBasicDiscoveryAPIAPIService) GetAllAssetLinksById(
 	ctx context.Context,
 	aasIdentifier string,
-) (openapi.ImplResponse, error) {
+) (model.ImplResponse, error) {
 
 	timestamp := common.GetCurrentTimestamp()
 
 	decoded, decodeErr := common.DecodeString(aasIdentifier)
 	if decodeErr != nil {
-		return openapi.Response(http.StatusBadRequest, []common.ErrorHandler{
+		return model.Response(http.StatusBadRequest, []common.ErrorHandler{
 			*common.NewErrorHandler("Error", decodeErr, "400", "DISC-GetAllAssetLinksById-400-BadRequest-Decode", string(timestamp)),
 		}), nil
 	}
@@ -123,46 +123,46 @@ func (s *AssetAdministrationShellBasicDiscoveryAPIAPIService) GetAllAssetLinksBy
 		switch {
 		case common.IsErrNotFound(err):
 
-			return openapi.Response(http.StatusNotFound, []common.ErrorHandler{
+			return model.Response(http.StatusNotFound, []common.ErrorHandler{
 				*common.NewErrorHandler("Error", err, "404", "DISC-GetAllAssetLinksById-404-NotFound", string(timestamp)),
 			}), nil
 
 		case common.IsErrBadRequest(err):
-			return openapi.Response(http.StatusBadRequest, []common.ErrorHandler{
+			return model.Response(http.StatusBadRequest, []common.ErrorHandler{
 				*common.NewErrorHandler("Error", err, "400", "DISC-GetAllAssetLinksById-400-BadRequest", string(timestamp)),
 			}), nil
 
 		case common.IsInternalServerError(err):
-			return openapi.Response(http.StatusInternalServerError, []common.ErrorHandler{
+			return model.Response(http.StatusInternalServerError, []common.ErrorHandler{
 				*common.NewErrorHandler("Error", err, "500", "DISC-GetAllAssetLinksById-500-InternalServerError", string(timestamp)),
 			}), nil
 
 		case common.IsErrConflict(err):
-			return openapi.Response(http.StatusConflict, []common.ErrorHandler{
+			return model.Response(http.StatusConflict, []common.ErrorHandler{
 				*common.NewErrorHandler("Error", err, "409", "DISC-GetAllAssetLinksById-409-Conflict", string(timestamp)),
 			}), nil
 
 		default:
-			return openapi.Response(http.StatusInternalServerError, []common.ErrorHandler{
+			return model.Response(http.StatusInternalServerError, []common.ErrorHandler{
 				*common.NewErrorHandler("Error", err, "500", "DISC-GetAllAssetLinksById-500-Unhandled", string(timestamp)),
 			}), err
 		}
 	}
 
-	return openapi.Response(http.StatusOK, links), nil
+	return model.Response(http.StatusOK, links), nil
 }
 
 // PostAllAssetLinksById - Creates or replaces all asset links associated to the Asset Administration Shell.
 func (s *AssetAdministrationShellBasicDiscoveryAPIAPIService) PostAllAssetLinksById(
 	ctx context.Context,
 	aasIdentifier string,
-	specificAssetId []openapi.SpecificAssetId,
-) (openapi.ImplResponse, error) {
+	specificAssetId []model.SpecificAssetId,
+) (model.ImplResponse, error) {
 
 	decodeDiscoveryIdentifier, decodeError := common.DecodeString(aasIdentifier)
 	timestamp := common.GetCurrentTimestamp()
 	if decodeError != nil {
-		return openapi.Response(
+		return model.Response(
 			http.StatusBadRequest,
 			[]common.ErrorHandler{
 				*common.NewErrorHandler("Error", decodeError, "400",
@@ -175,7 +175,7 @@ func (s *AssetAdministrationShellBasicDiscoveryAPIAPIService) PostAllAssetLinksB
 	if err != nil {
 		switch {
 		case common.IsErrBadRequest(err):
-			return openapi.Response(
+			return model.Response(
 				http.StatusBadRequest,
 				[]common.ErrorHandler{
 					*common.NewErrorHandler("Error", err, "400",
@@ -184,7 +184,7 @@ func (s *AssetAdministrationShellBasicDiscoveryAPIAPIService) PostAllAssetLinksB
 			), nil
 
 		case common.IsInternalServerError(err):
-			return openapi.Response(
+			return model.Response(
 				http.StatusInternalServerError,
 				[]common.ErrorHandler{
 					*common.NewErrorHandler("Error", err, "500",
@@ -193,24 +193,24 @@ func (s *AssetAdministrationShellBasicDiscoveryAPIAPIService) PostAllAssetLinksB
 			), nil
 
 		default:
-			return openapi.Response(http.StatusInternalServerError, nil), nil
+			return model.Response(http.StatusInternalServerError, nil), nil
 		}
 	}
 
-	return openapi.Response(http.StatusCreated, specificAssetId), nil
+	return model.Response(http.StatusCreated, specificAssetId), nil
 }
 
 // DeleteAllAssetLinksById - Deletes specified specific asset identifiers linked to an Asset Administration Shell: discovery via these specific asset IDs shall not be supported any longer
 func (s *AssetAdministrationShellBasicDiscoveryAPIAPIService) DeleteAllAssetLinksById(
 	ctx context.Context,
 	aasIdentifier string,
-) (openapi.ImplResponse, error) {
+) (model.ImplResponse, error) {
 
 	timestamp := common.GetCurrentTimestamp()
 
 	decoded, decodeErr := common.DecodeString(aasIdentifier)
 	if decodeErr != nil {
-		return openapi.Response(http.StatusBadRequest, []common.ErrorHandler{
+		return model.Response(http.StatusBadRequest, []common.ErrorHandler{
 			*common.NewErrorHandler("Error", decodeErr, "400", "DISC-DeleteAllAssetLinksById-400-BadRequest-Decode", string(timestamp)),
 		}), nil
 	}
@@ -219,16 +219,16 @@ func (s *AssetAdministrationShellBasicDiscoveryAPIAPIService) DeleteAllAssetLink
 	if err != nil {
 		switch {
 		case common.IsErrNotFound(err):
-			return openapi.Response(http.StatusNotFound, []common.ErrorHandler{
+			return model.Response(http.StatusNotFound, []common.ErrorHandler{
 				*common.NewErrorHandler("Error", err, "404", "DISC-DeleteAllAssetLinksById-404-NotFound", string(timestamp)),
 			}), nil
 
 		default:
-			return openapi.Response(http.StatusInternalServerError, []common.ErrorHandler{
+			return model.Response(http.StatusInternalServerError, []common.ErrorHandler{
 				*common.NewErrorHandler("Error", err, "500", "DISC-DeleteAllAssetLinksById-500-InternalServerError", string(timestamp)),
 			}), nil
 		}
 	}
 
-	return openapi.Response(http.StatusNoContent, nil), nil
+	return model.Response(http.StatusNoContent, nil), nil
 }

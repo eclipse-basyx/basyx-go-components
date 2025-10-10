@@ -7,32 +7,32 @@ import (
 	"testing"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/testenv"
-	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/discoveryapi/go"
 )
 
 // ---- endpoint helpers used by tests ----
 
-func PostLinksExpect(t testing.TB, aasID string, links []openapi.SpecificAssetId, expect int) {
+func PostLinksExpect(t testing.TB, aasID string, links []model.SpecificAssetId, expect int) {
 	t.Helper()
 	url := fmt.Sprintf("%s/lookup/shells/%s", testenv.BaseURL, common.EncodeString(aasID))
 	_ = testenv.PostJSONExpect(t, url, links, expect)
 }
 
 // Keeps the default as before (Created)
-func PostLinks(t testing.TB, aasID string, links []openapi.SpecificAssetId) {
+func PostLinks(t testing.TB, aasID string, links []model.SpecificAssetId) {
 	t.Helper()
 	PostLinksExpect(t, aasID, links, http.StatusCreated)
 }
 
-func GetLinksExpect(t testing.TB, aasID string, expect int) []openapi.SpecificAssetId {
+func GetLinksExpect(t testing.TB, aasID string, expect int) []model.SpecificAssetId {
 	t.Helper()
 	url := fmt.Sprintf("%s/lookup/shells/%s", testenv.BaseURL, common.EncodeString(aasID))
 	raw := testenv.GetExpect(t, url, expect)
 	if expect != http.StatusOK {
 		return nil
 	}
-	var got []openapi.SpecificAssetId
+	var got []model.SpecificAssetId
 	if err := json.Unmarshal(raw, &got); err != nil {
 		t.Fatalf("unmarshal GetLinks response: %v", err)
 	}
@@ -40,7 +40,7 @@ func GetLinksExpect(t testing.TB, aasID string, expect int) []openapi.SpecificAs
 }
 
 // Keeps old default
-func GetLinks(t testing.TB, aasID string, expect int) []openapi.SpecificAssetId {
+func GetLinks(t testing.TB, aasID string, expect int) []model.SpecificAssetId {
 	t.Helper()
 	return GetLinksExpect(t, aasID, expect)
 }
@@ -57,7 +57,7 @@ func DeleteLinks(t testing.TB, aasID string) {
 	DeleteLinksExpect(t, aasID, http.StatusNoContent)
 }
 
-func SearchBy(t testing.TB, pairs []openapi.SpecificAssetId, limit int, cursor string, expect int) openapi.GetAllAssetAdministrationShellIdsByAssetLink200Response {
+func SearchBy(t testing.TB, pairs []model.SpecificAssetId, limit int, cursor string, expect int) model.GetAllAssetAdministrationShellIdsByAssetLink200Response {
 	t.Helper()
 	url := fmt.Sprintf("%s/lookup/shellsByAssetLink?limit=%d", testenv.BaseURL, limit)
 	if cursor != "" {
@@ -68,7 +68,7 @@ func SearchBy(t testing.TB, pairs []openapi.SpecificAssetId, limit int, cursor s
 		body = append(body, map[string]string{"name": p.Name, "value": p.Value})
 	}
 	raw := testenv.PostJSONExpect(t, url, body, expect)
-	var out openapi.GetAllAssetAdministrationShellIdsByAssetLink200Response
+	var out model.GetAllAssetAdministrationShellIdsByAssetLink200Response
 	if expect == http.StatusOK {
 		if err := json.Unmarshal(raw, &out); err != nil {
 			t.Fatalf("unmarshal SearchBy response: %v", err)

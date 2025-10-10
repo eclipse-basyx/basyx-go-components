@@ -16,20 +16,21 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/go-chi/chi/v5"
 )
 
 // AssetAdministrationShellBasicDiscoveryAPIAPIController binds http requests to an api service and writes the service results to the http response
 type AssetAdministrationShellBasicDiscoveryAPIAPIController struct {
 	service      AssetAdministrationShellBasicDiscoveryAPIAPIServicer
-	errorHandler ErrorHandler
+	errorHandler model.ErrorHandler
 }
 
 // AssetAdministrationShellBasicDiscoveryAPIAPIOption for how the controller is set up.
 type AssetAdministrationShellBasicDiscoveryAPIAPIOption func(*AssetAdministrationShellBasicDiscoveryAPIAPIController)
 
 // WithAssetAdministrationShellBasicDiscoveryAPIAPIErrorHandler inject ErrorHandler into controller
-func WithAssetAdministrationShellBasicDiscoveryAPIAPIErrorHandler(h ErrorHandler) AssetAdministrationShellBasicDiscoveryAPIAPIOption {
+func WithAssetAdministrationShellBasicDiscoveryAPIAPIErrorHandler(h model.ErrorHandler) AssetAdministrationShellBasicDiscoveryAPIAPIOption {
 	return func(c *AssetAdministrationShellBasicDiscoveryAPIAPIController) {
 		c.errorHandler = h
 	}
@@ -39,7 +40,7 @@ func WithAssetAdministrationShellBasicDiscoveryAPIAPIErrorHandler(h ErrorHandler
 func NewAssetAdministrationShellBasicDiscoveryAPIAPIController(s AssetAdministrationShellBasicDiscoveryAPIAPIServicer, opts ...AssetAdministrationShellBasicDiscoveryAPIAPIOption) *AssetAdministrationShellBasicDiscoveryAPIAPIController {
 	controller := &AssetAdministrationShellBasicDiscoveryAPIAPIController{
 		service:      s,
-		errorHandler: DefaultErrorHandler,
+		errorHandler: model.DefaultErrorHandler,
 	}
 
 	for _, opt := range opts {
@@ -84,7 +85,7 @@ func (c *AssetAdministrationShellBasicDiscoveryAPIAPIController) Routes() Routes
 func (c *AssetAdministrationShellBasicDiscoveryAPIAPIController) GetAllAssetAdministrationShellIdsByAssetLink(w http.ResponseWriter, r *http.Request) {
 	query, err := parseQuery(r.URL.RawQuery)
 	if err != nil {
-		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
+		c.errorHandler(w, r, &model.ParsingError{Err: err}, nil)
 		return
 	}
 	var assetIdsParam []string
@@ -99,7 +100,7 @@ func (c *AssetAdministrationShellBasicDiscoveryAPIAPIController) GetAllAssetAdmi
 			WithMinimum[int32](1),
 		)
 		if err != nil {
-			c.errorHandler(w, r, &ParsingError{Param: "limit", Err: err}, nil)
+			c.errorHandler(w, r, &model.ParsingError{Param: "limit", Err: err}, nil)
 			return
 		}
 
@@ -128,7 +129,7 @@ func (c *AssetAdministrationShellBasicDiscoveryAPIAPIController) SearchAllAssetA
 	// Query-Parameter parsen (limit, cursor)
 	query, err := parseQuery(r.URL.RawQuery)
 	if err != nil {
-		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
+		c.errorHandler(w, r, &model.ParsingError{Err: err}, nil)
 		return
 	}
 
@@ -140,7 +141,7 @@ func (c *AssetAdministrationShellBasicDiscoveryAPIAPIController) SearchAllAssetA
 			WithMinimum[int32](1),
 		)
 		if err != nil {
-			c.errorHandler(w, r, &ParsingError{Param: "limit", Err: err}, nil)
+			c.errorHandler(w, r, &model.ParsingError{Param: "limit", Err: err}, nil)
 			return
 		}
 		limitParam = param
@@ -154,17 +155,17 @@ func (c *AssetAdministrationShellBasicDiscoveryAPIAPIController) SearchAllAssetA
 	}
 
 	// Body: []AssetLink
-	var assetLinksParam []AssetLink
+	var assetLinksParam []model.AssetLink
 	dec := json.NewDecoder(r.Body)
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&assetLinksParam); err != nil {
-		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
+		c.errorHandler(w, r, &model.ParsingError{Err: err}, nil)
 		return
 	}
 
 	// Validierung je Element (wie bei anderen Endpunkten)
 	for _, al := range assetLinksParam {
-		if err := AssertAssetLinkRequired(al); err != nil {
+		if err := model.AssertAssetLinkRequired(al); err != nil {
 			c.errorHandler(w, r, err, nil)
 			return
 		}
@@ -190,7 +191,7 @@ func (c *AssetAdministrationShellBasicDiscoveryAPIAPIController) SearchAllAssetA
 func (c *AssetAdministrationShellBasicDiscoveryAPIAPIController) GetAllAssetLinksById(w http.ResponseWriter, r *http.Request) {
 	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
 	if aasIdentifierParam == "" {
-		c.errorHandler(w, r, &RequiredError{"aasIdentifier"}, nil)
+		c.errorHandler(w, r, &model.RequiredError{Field: "aasIdentifier"}, nil)
 		return
 	}
 	result, err := c.service.GetAllAssetLinksById(r.Context(), aasIdentifierParam)
@@ -207,18 +208,18 @@ func (c *AssetAdministrationShellBasicDiscoveryAPIAPIController) GetAllAssetLink
 func (c *AssetAdministrationShellBasicDiscoveryAPIAPIController) PostAllAssetLinksById(w http.ResponseWriter, r *http.Request) {
 	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
 	if aasIdentifierParam == "" {
-		c.errorHandler(w, r, &RequiredError{"aasIdentifier"}, nil)
+		c.errorHandler(w, r, &model.RequiredError{Field: "aasIdentifier"}, nil)
 		return
 	}
-	var specificAssetIdParam []SpecificAssetId
+	var specificAssetIdParam []model.SpecificAssetId
 	d := json.NewDecoder(r.Body)
 	d.DisallowUnknownFields()
 	if err := d.Decode(&specificAssetIdParam); err != nil {
-		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
+		c.errorHandler(w, r, &model.ParsingError{Err: err}, nil)
 		return
 	}
 	for _, el := range specificAssetIdParam {
-		if err := AssertSpecificAssetIdRequired(el); err != nil {
+		if err := model.AssertSpecificAssetIdRequired(el); err != nil {
 			c.errorHandler(w, r, err, nil)
 			return
 		}
@@ -237,7 +238,7 @@ func (c *AssetAdministrationShellBasicDiscoveryAPIAPIController) PostAllAssetLin
 func (c *AssetAdministrationShellBasicDiscoveryAPIAPIController) DeleteAllAssetLinksById(w http.ResponseWriter, r *http.Request) {
 	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
 	if aasIdentifierParam == "" {
-		c.errorHandler(w, r, &RequiredError{"aasIdentifier"}, nil)
+		c.errorHandler(w, r, &model.RequiredError{Field: "aasIdentifier"}, nil)
 		return
 	}
 	result, err := c.service.DeleteAllAssetLinksById(r.Context(), aasIdentifierParam)

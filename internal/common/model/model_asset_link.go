@@ -9,13 +9,9 @@
  * Contact: info@idtwin.org
  */
 
-package openapi
-
-
-
+package model
 
 type AssetLink struct {
-
 	Name string `json:"name" validate:"regexp=^([\\\\x09\\\\x0a\\\\x0d\\\\x20-\\\\ud7ff\\\\ue000-\\\\ufffd]|\\\\ud800[\\\\udc00-\\\\udfff]|[\\\\ud801-\\\\udbfe][\\\\udc00-\\\\udfff]|\\\\udbff[\\\\udc00-\\\\udfff])*$"`
 
 	Value string `json:"value" validate:"regexp=^([\\\\x09\\\\x0a\\\\x0d\\\\x20-\\\\ud7ff\\\\ue000-\\\\ufffd]|\\\\ud800[\\\\udc00-\\\\udfff]|[\\\\ud801-\\\\udbfe][\\\\udc00-\\\\udfff]|\\\\udbff[\\\\udc00-\\\\udfff])*$"`
@@ -24,7 +20,7 @@ type AssetLink struct {
 // AssertAssetLinkRequired checks if the required fields are not zero-ed
 func AssertAssetLinkRequired(obj AssetLink) error {
 	elements := map[string]interface{}{
-		"name": obj.Name,
+		"name":  obj.Name,
 		"value": obj.Value,
 	}
 	for name, el := range elements {

@@ -16,7 +16,7 @@ import (
 
 	api "github.com/eclipse-basyx/basyx-go-components/internal/discoveryservice/api"
 	persistence_postgresql "github.com/eclipse-basyx/basyx-go-components/internal/discoveryservice/persistence"
-	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/discoveryapi/go"
+	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/discoveryapi"
 )
 
 func runServer(ctx context.Context, configPath string) error {

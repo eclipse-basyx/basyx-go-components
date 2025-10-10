@@ -47,7 +47,7 @@ func TestMain(m *testing.M) {
 
 	code := m.Run()
 
-	ctxDown, cancelDown := context.WithTimeout(context.Background(), 2*time.Minute)
+	ctxDown, cancelDown := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancelDown()
 	_ = testenv.RunCompose(ctxDown, composeEngine, append(composeArgsBase, "-f", ComposeFilePath, "down")...)
 

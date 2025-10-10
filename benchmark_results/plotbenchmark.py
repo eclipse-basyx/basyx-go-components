@@ -76,3 +76,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+# python plotbenchmark.py discovery_bench.json -o plot.png

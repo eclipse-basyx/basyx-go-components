@@ -14,19 +14,21 @@ package openapi
 import (
 	"net/http"
 	"strings"
+
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
 
 // DescriptionAPIAPIController binds http requests to an api service and writes the service results to the http response
 type DescriptionAPIAPIController struct {
-	service DescriptionAPIAPIServicer
-	errorHandler ErrorHandler
+	service      DescriptionAPIAPIServicer
+	errorHandler model.ErrorHandler
 }
 
 // DescriptionAPIAPIOption for how the controller is set up.
 type DescriptionAPIAPIOption func(*DescriptionAPIAPIController)
 
 // WithDescriptionAPIAPIErrorHandler inject ErrorHandler into controller
-func WithDescriptionAPIAPIErrorHandler(h ErrorHandler) DescriptionAPIAPIOption {
+func WithDescriptionAPIAPIErrorHandler(h model.ErrorHandler) DescriptionAPIAPIOption {
 	return func(c *DescriptionAPIAPIController) {
 		c.errorHandler = h
 	}
@@ -36,7 +38,7 @@ func WithDescriptionAPIAPIErrorHandler(h ErrorHandler) DescriptionAPIAPIOption {
 func NewDescriptionAPIAPIController(s DescriptionAPIAPIServicer, opts ...DescriptionAPIAPIOption) *DescriptionAPIAPIController {
 	controller := &DescriptionAPIAPIController{
 		service:      s,
-		errorHandler: DefaultErrorHandler,
+		errorHandler: model.DefaultErrorHandler,
 	}
 
 	for _, opt := range opts {

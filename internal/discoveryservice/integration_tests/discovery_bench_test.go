@@ -10,26 +10,26 @@ import (
 	"time"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	testenv "github.com/eclipse-basyx/basyx-go-components/internal/common/testenv"
-	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/discoveryapi/go"
 )
 
 var seedFlag = flag.Int64("seed", 1, "rng seed for discovery bench determinism")
 
 type discoveryState struct {
 	rng         *mrand.Rand
-	aasToLinks  map[string][]openapi.SpecificAssetId
+	aasToLinks  map[string][]model.SpecificAssetId
 	aasList     []string
 	cursorByAAS map[string]string
-	reusePool   []openapi.SpecificAssetId // reused name/value pairs to simulate overlap
+	reusePool   []model.SpecificAssetId // reused name/value pairs to simulate overlap
 }
 
 func newDiscoveryState(seed int64) *discoveryState {
 	return &discoveryState{
 		rng:         mrand.New(mrand.NewSource(seed)),
-		aasToLinks:  make(map[string][]openapi.SpecificAssetId),
+		aasToLinks:  make(map[string][]model.SpecificAssetId),
 		cursorByAAS: make(map[string]string),
-		reusePool:   make([]openapi.SpecificAssetId, 0, 512),
+		reusePool:   make([]model.SpecificAssetId, 0, 512),
 	}
 }
 
@@ -80,7 +80,7 @@ func (s *discoveryState) pickWeightedOp() string {
 	return "search"
 }
 
-func (s *discoveryState) add(aasID string, links []openapi.SpecificAssetId) {
+func (s *discoveryState) add(aasID string, links []model.SpecificAssetId) {
 	if _, ok := s.aasToLinks[aasID]; ok {
 		return
 	}
@@ -114,13 +114,13 @@ func (s *discoveryState) randomAAS() (string, bool) {
 	return s.aasList[s.rng.Intn(len(s.aasList))], true
 }
 
-func (s *discoveryState) randomLinks(n int) []openapi.SpecificAssetId {
-	out := make([]openapi.SpecificAssetId, n)
+func (s *discoveryState) randomLinks(n int) []model.SpecificAssetId {
+	out := make([]model.SpecificAssetId, n)
 	for i := 0; i < n; i++ {
 		if len(s.reusePool) > 0 && s.pct(reusePctPost) {
 			out[i] = s.reusePool[s.rng.Intn(len(s.reusePool))]
 		} else {
-			out[i] = openapi.SpecificAssetId{
+			out[i] = model.SpecificAssetId{
 
 				Name:  "n_" + s.randHex(6),
 				Value: "v_" + s.randHex(6),
@@ -265,7 +265,7 @@ func (d *DiscoveryBench) DoOne(iter int) testenv.ComponentResult {
 				},
 			}
 		}
-		pairs := make([]openapi.SpecificAssetId, k)
+		pairs := make([]model.SpecificAssetId, k)
 		for i := 0; i < k; i++ {
 			if len(st.aasList) == 0 {
 				break

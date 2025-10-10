@@ -9,13 +9,9 @@
  * Contact: info@idtwin.org
  */
 
-package openapi
-
-
-
+package model
 
 type GetAllAssetAdministrationShellIdsByAssetLink200Response struct {
-
 	PagingMetadata PagedResultPagingMetadata `json:"paging_metadata"`
 
 	Result []string `json:"result"`
