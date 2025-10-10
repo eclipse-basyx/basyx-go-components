@@ -1024,7 +1024,7 @@ func loadSubmodelSubmodelElementsIntoMemory(rows *sql.Rows, err error, db *sql.D
 			submodelIdShort, submodelCategory, submodelKind                  sql.NullString
 			submodelSemanticId, submodelDisplayNameId, submodelDescriptionId sql.NullInt64
 			// SME base with displayName and description
-			id                                        int64
+			id                                        sql.NullInt64
 			idShort, category, modelType, idShortPath string
 			position                                  sql.NullInt32
 			parentSmeID                               sql.NullInt64
@@ -1077,7 +1077,11 @@ func loadSubmodelSubmodelElementsIntoMemory(rows *sql.Rows, err error, db *sql.D
 		); err != nil {
 			return nil, nil, nil, "", "", "", "", sql.NullInt64{}, nil, err
 		}
-
+		if !id.Valid {
+			// This row only represents the submodel itself (no SME)
+			// Skip adding to nodes
+			continue
+		}
 		if dbSmId == "" {
 			dbSmId = submodelID
 			dbSubmodelIdShort = submodelIdShort
@@ -1229,13 +1233,13 @@ func loadSubmodelSubmodelElementsIntoMemory(rows *sql.Rows, err error, db *sql.D
 		}
 
 		n := &node{
-			id:       id,
+			id:       id.Int64,
 			parentID: parentSmeID,
 			path:     idShortPath,
 			position: position,
 			element:  el,
 		}
-		nodes[id] = n
+		nodes[id.Int64] = n
 
 		if parentSmeID.Valid {
 			pid := parentSmeID.Int64
