@@ -9,17 +9,28 @@
 
 package model
 
-type DataSpecificationContent struct {
-	PreferredName      []LangStringTextType `json:"preferredName"`
-	ShortName          []LangStringTextType `json:"shortName,omitempty"`
-	Unit               string               `json:"unit,omitempty"`
-	UnitId             string               `json:"unitId,omitempty"`
-	SourceOfDefinition string               `json:"sourceOfDefinition,omitempty"`
-	Symbol             string               `json:"symbol,omitempty"`
-	DataType           string               `json:"dataType,omitempty"`
-	Definition         string               `json:"definition,omitempty"`
-	ValueFormat        string               `json:"valueFormat,omitempty"`
-	ValueList          string               `json:"valueList,omitempty"`
-	Value              string               `json:"value,omitempty"`
-	LevelType          string               `json:"levelType,omitempty"`
+type DataSpecificationContent interface {
+	GetPrefferedName() []LangStringPreferredNameTypeIec61360
+	GetShortName() []LangStringShortNameTypeIec61360
+	GetUnit() string
+	GetUnitId() *Reference
+	GetSourceOfDefinition() string
+	GetSymbol() string
+	GetDataType() DataTypeIec61360
+	GetDefinition() []LangStringDefinitionTypeIec61360
+	GetValueFormat() string
+	GetValueList() *ValueList
+	GetLevelType() LevelType
+
+	SetPrefferedName([]LangStringPreferredNameTypeIec61360)
+	SetShortName([]LangStringShortNameTypeIec61360)
+	SetUnit(string)
+	SetUnitId(*Reference)
+	SetSourceOfDefinition(string)
+	SetSymbol(string)
+	SetDataType(DataTypeIec61360)
+	SetDefinition([]LangStringDefinitionTypeIec61360)
+	SetValueFormat(string)
+	SetValueList(*ValueList)
+	SetLevelType(LevelType)
 }

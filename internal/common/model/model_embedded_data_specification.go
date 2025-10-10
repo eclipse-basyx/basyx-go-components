@@ -26,10 +26,6 @@ func AssertEmbeddedDataSpecificationRequired(obj EmbeddedDataSpecification) erro
 			return &RequiredError{Field: name}
 		}
 	}
-
-	if err := AssertDataSpecificationContentChoiceRequired(obj.DataSpecificationContent); err != nil {
-		return err
-	}
 	if obj.DataSpecification != nil {
 		if err := AssertReferenceRequired(*obj.DataSpecification); err != nil {
 			return err
@@ -40,9 +36,6 @@ func AssertEmbeddedDataSpecificationRequired(obj EmbeddedDataSpecification) erro
 
 // AssertEmbeddedDataSpecificationConstraints checks if the values respects the defined constraints
 func AssertEmbeddedDataSpecificationConstraints(obj EmbeddedDataSpecification) error {
-	if err := AssertDataSpecificationContentChoiceConstraints(obj.DataSpecificationContent); err != nil {
-		return err
-	}
 	if obj.DataSpecification != nil {
 		if err := AssertReferenceConstraints(*obj.DataSpecification); err != nil {
 			return err

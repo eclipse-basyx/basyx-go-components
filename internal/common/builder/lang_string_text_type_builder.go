@@ -28,7 +28,7 @@ package builder
 import (
 	"slices"
 
-	gen "github.com/eclipse-basyx/basyx-go-components/pkg/submodelrepositoryapi/go"
+	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 )
 

@@ -37,6 +37,98 @@ type DataSpecificationIec61360 struct {
 	LevelType LevelType `json:"levelType,omitempty"`
 }
 
+func (d DataSpecificationIec61360) GetPrefferedName() []LangStringPreferredNameTypeIec61360 {
+	return d.PreferredName
+}
+
+func (d DataSpecificationIec61360) GetShortName() []LangStringShortNameTypeIec61360 {
+	return d.ShortName
+}
+
+func (d DataSpecificationIec61360) GetUnit() string {
+	return d.Unit
+}
+
+func (d DataSpecificationIec61360) GetUnitId() *Reference {
+	return d.UnitId
+}
+
+func (d DataSpecificationIec61360) GetSourceOfDefinition() string {
+	return d.SourceOfDefinition
+}
+
+func (d DataSpecificationIec61360) GetSymbol() string {
+	return d.Symbol
+}
+
+func (d DataSpecificationIec61360) GetDataType() DataTypeIec61360 {
+	return d.DataType
+}
+
+func (d DataSpecificationIec61360) GetDefinition() []LangStringDefinitionTypeIec61360 {
+	return d.Definition
+}
+
+func (d DataSpecificationIec61360) GetValueFormat() string {
+	return d.ValueFormat
+}
+
+func (d DataSpecificationIec61360) GetValueList() *ValueList {
+	return &d.ValueList
+}
+
+func (d DataSpecificationIec61360) GetLevelType() LevelType {
+	return d.LevelType
+}
+
+func (d *DataSpecificationIec61360) SetPrefferedName(preferredName []LangStringPreferredNameTypeIec61360) {
+	d.PreferredName = preferredName
+}
+
+func (d *DataSpecificationIec61360) SetShortName(shortName []LangStringShortNameTypeIec61360) {
+	d.ShortName = shortName
+}
+
+func (d *DataSpecificationIec61360) SetUnit(unit string) {
+	d.Unit = unit
+}
+
+func (d *DataSpecificationIec61360) SetUnitId(unitId *Reference) {
+	d.UnitId = unitId
+}
+
+func (d *DataSpecificationIec61360) SetSourceOfDefinition(sourceOfDefinition string) {
+	d.SourceOfDefinition = sourceOfDefinition
+}
+
+func (d *DataSpecificationIec61360) SetSymbol(symbol string) {
+	d.Symbol = symbol
+}
+
+func (d *DataSpecificationIec61360) SetDataType(dataType DataTypeIec61360) {
+	d.DataType = dataType
+}
+
+func (d *DataSpecificationIec61360) SetDefinition(definition []LangStringDefinitionTypeIec61360) {
+	d.Definition = definition
+}
+
+func (d *DataSpecificationIec61360) SetValueFormat(valueFormat string) {
+	d.ValueFormat = valueFormat
+}
+
+func (d *DataSpecificationIec61360) SetValueList(valueList *ValueList) {
+	if valueList != nil {
+		d.ValueList = *valueList
+	} else {
+		d.ValueList = ValueList{}
+	}
+}
+
+func (d *DataSpecificationIec61360) SetLevelType(levelType LevelType) {
+	d.LevelType = levelType
+}
+
 // AssertDataSpecificationIec61360Required checks if the required fields are not zero-ed
 func AssertDataSpecificationIec61360Required(obj DataSpecificationIec61360) error {
 	elements := map[string]interface{}{

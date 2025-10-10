@@ -53,12 +53,6 @@ func AssertAdministrativeInformationRequired(obj AdministrativeInformation) erro
 			return err
 		}
 	}
-	if err := AssertAdministrativeInformationAllOfVersionRequired(obj.Version); err != nil {
-		return err
-	}
-	if err := AssertAdministrativeInformationAllOfRevisionRequired(obj.Revision); err != nil {
-		return err
-	}
 	if obj.Creator != nil {
 		if err := AssertReferenceRequired(*obj.Creator); err != nil {
 			return err
@@ -73,12 +67,6 @@ func AssertAdministrativeInformationConstraints(obj AdministrativeInformation) e
 		if err := AssertEmbeddedDataSpecificationConstraints(el); err != nil {
 			return err
 		}
-	}
-	if err := AssertAdministrativeInformationAllOfVersionConstraints(obj.Version); err != nil {
-		return err
-	}
-	if err := AssertAdministrativeInformationAllOfRevisionConstraints(obj.Revision); err != nil {
-		return err
 	}
 	if obj.Creator != nil {
 		if err := AssertReferenceConstraints(*obj.Creator); err != nil {

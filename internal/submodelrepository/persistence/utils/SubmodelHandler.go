@@ -31,8 +31,8 @@ import (
 	"fmt"
 
 	builders "github.com/eclipse-basyx/basyx-go-components/internal/common/builder"
+	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	qb "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/querybuilder"
-	gen "github.com/eclipse-basyx/basyx-go-components/pkg/submodelrepositoryapi/go"
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 )
 
@@ -111,6 +111,46 @@ func GetSubmodel(db *sql.DB, submodelId string) {
 	}
 }
 
+func GetSubmodelWithJson(db *sql.DB, submodelId string) {
+	rows, err := getSubmodelDataFromDbJson(db, submodelId)
+	if err != nil {
+		fmt.Printf("Error getting submodel data from DB: %v\n", err)
+		return
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var (
+			id, idShort, category, kind                      string
+			semanticIdJSON, displayNameJSON, descriptionJSON []byte
+		)
+
+		err := rows.Scan(
+			&id, &idShort, &category, &kind,
+			&semanticIdJSON, &displayNameJSON, &descriptionJSON,
+		)
+		if err != nil {
+			fmt.Printf("Error scanning row: %v\n", err)
+			continue
+		}
+
+		var submodel gen.Submodel
+		submodel.Id = id
+		submodel.IdShort = idShort
+		submodel.Category = category
+		submodel.Kind = gen.ModellingKind(kind)
+
+		// Unmarshal JSON fields into proper structs
+		json.Unmarshal(semanticIdJSON, &submodel.SemanticId)
+		json.Unmarshal(displayNameJSON, &submodel.DisplayName)
+		json.Unmarshal(descriptionJSON, &submodel.Description)
+		submodel.ModelType = "Submodel"
+
+		jsonData, _ := json.MarshalIndent(submodel, "", "  ")
+		fmt.Println(string(jsonData))
+	}
+}
+
 func isSubmodelAlreadyCreated(submodels map[string]*gen.Submodel, id sql.NullString) bool {
 	_, ok := submodels[id.String]
 	return ok
@@ -151,4 +191,196 @@ func getSubmodelDataFromDb(db *sql.DB, id string) (*sql.Rows, error) {
 		return nil, err
 	}
 	return rows, nil
+}
+
+func getSubmodelDataFromDbJson(db *sql.DB, id string) (*sql.Rows, error) {
+	query := `
+SELECT
+	s.id,
+	s.id_short,
+	s.category,
+	s.kind,
+	-- SemanticId as JSON (nullable)
+	CASE WHEN r.id IS NOT NULL THEN
+		jsonb_build_object(
+			'type', r.type,
+			'keys', (
+				SELECT jsonb_agg(
+					jsonb_build_object(
+						'type', rk.type,
+						'value', rk.value
+					)
+					ORDER BY rk.position
+				)
+				FROM reference_key rk
+				WHERE rk.reference_id = r.id
+			)
+		)
+	END AS semantic_id,
+
+	-- DisplayName as JSON (nullable)
+	(
+		SELECT jsonb_agg(
+			jsonb_build_object(
+				'language', ln.language,
+				'text', ln.text
+			)
+			ORDER BY ln.id
+		)
+		FROM lang_string_name_type ln
+		WHERE ln.lang_string_name_type_reference_id = s.displayname_id
+	) AS display_name,
+
+	-- Description as JSON (nullable)
+	(
+		SELECT jsonb_agg(
+			jsonb_build_object(
+				'language', lt.language,
+				'text', lt.text
+			)
+			ORDER BY lt.id
+		)
+		FROM lang_string_text_type lt
+		WHERE lt.lang_string_text_type_reference_id = s.description_id
+	) AS description
+
+FROM submodel s
+LEFT JOIN reference r ON s.semantic_id = r.id
+WHERE ($1 = '' OR s.id = $1)
+ORDER BY s.id;
+`
+
+	rows, err := db.Query(query, id)
+	if err != nil {
+		return nil, fmt.Errorf("error querying database: %v", err)
+	}
+	return rows, nil
+}
+
+func GetSubmodelJson(db *sql.DB, submodelId string) (*gen.Submodel, error) {
+	row, err := getSubmodelJsonFromDb(db, submodelId)
+	if err != nil {
+		return nil, err
+	}
+
+	var jsonData []byte
+	if err := row.Scan(&jsonData); err != nil {
+		return nil, fmt.Errorf("error scanning json: %v", err)
+	}
+
+	var submodel gen.Submodel
+	if err := json.Unmarshal(jsonData, &submodel); err != nil {
+		return nil, fmt.Errorf("error unmarshalling submodel json: %v", err)
+	}
+
+	return &submodel, nil
+}
+
+func getSubmodelJsonFromDb(db *sql.DB, submodelId string) (*sql.Row, error) {
+	query := `
+	SELECT jsonb_build_object(
+		'id', s.id,
+		'idShort', s.id_short,
+		'category', s.category,
+		'kind', s.kind,
+		'semanticId', CASE WHEN r.id IS NOT NULL THEN
+			jsonb_build_object(
+				'type', r.type,
+				'keys', (
+					SELECT jsonb_agg(
+						jsonb_build_object(
+							'type', rk.type,
+							'value', rk.value
+						)
+						ORDER BY rk.position
+					)
+					FROM reference_key rk
+					WHERE rk.reference_id = r.id
+				)
+			)
+		END,
+		'displayName', (
+			SELECT jsonb_agg(
+				jsonb_build_object(
+					'language', ln.language,
+					'text', ln.text
+				)
+				ORDER BY ln.id
+			)
+			FROM lang_string_name_type ln
+			WHERE ln.lang_string_name_type_reference_id = s.displayname_id
+		),
+		'description', (
+			SELECT jsonb_agg(
+				jsonb_build_object(
+					'language', lt.language,
+					'text', lt.text
+				)
+				ORDER BY lt.id
+			)
+			FROM lang_string_text_type lt
+			WHERE lt.lang_string_text_type_reference_id = s.description_id
+		),
+		'elements', (
+			SELECT jsonb_agg(
+				jsonb_build_object(
+					'id', sme.id,
+					'parentId', sme.parent_sme_id,
+					'idShort', sme.id_short,
+					'category', sme.category,
+					'modelType', sme.model_type,
+					'idShortPath', sme.idshort_path,
+					'semanticId', CASE WHEN rsme.id IS NOT NULL THEN
+						jsonb_build_object(
+							'type', rsme.type,
+							'keys', (
+								SELECT jsonb_agg(
+									jsonb_build_object(
+										'type', rksme.type,
+										'value', rksme.value
+									)
+									ORDER BY rksme.position
+								)
+								FROM reference_key rksme
+								WHERE rksme.reference_id = rsme.id
+							)
+						)
+					END,
+					'displayName', (
+						SELECT jsonb_agg(
+							jsonb_build_object(
+								'language', ln.language,
+								'text', ln.text
+							)
+							ORDER BY ln.id
+						)
+						FROM lang_string_name_type ln
+						WHERE ln.lang_string_name_type_reference_id = sme.displayname_id
+					),
+					'description', (
+						SELECT jsonb_agg(
+							jsonb_build_object(
+								'language', lt.language,
+								'text', lt.text
+							)
+							ORDER BY lt.id
+						)
+						FROM lang_string_text_type lt
+						WHERE lt.lang_string_text_type_reference_id = sme.description_id
+					)
+				)
+				ORDER BY sme.id
+			)
+			FROM submodel_element sme
+			LEFT JOIN reference rsme ON sme.semantic_id = rsme.id
+			WHERE sme.submodel_id = s.id
+		)
+	) AS submodel_json
+	FROM submodel s
+	LEFT JOIN reference r ON s.semantic_id = r.id
+	WHERE s.id = $1;
+	`
+
+	row := db.QueryRow(query, submodelId)
+	return row, nil
 }

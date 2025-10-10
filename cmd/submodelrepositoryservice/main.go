@@ -47,7 +47,7 @@ func runServer(ctx context.Context, configPath string) error {
 	}
 
 	//TEST
-	persistence_utils.GetSubmodels(smDatabase.GetDB())
+	persistence_utils.GetSubmodelJson(smDatabase.GetDB(), "http://acplt.org/Submodels/Assets/TestAsset/Identification2")
 	//TEST
 
 	smSvc := api.NewSubmodelRepositoryAPIAPIService(*smDatabase)
