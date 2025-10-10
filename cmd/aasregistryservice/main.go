@@ -49,7 +49,7 @@ func runServer(ctx context.Context, configPath string) error {
 	})
 
 	// Instantiate generated services & controllers
-	// ==== Discovery Service ====
+	// ==== AAS Registry Service ====
 	smDatabase, err := persistence_postgresql.NewPostgreSQLAASRegistryDatabase("postgres://"+config.Postgres.User+":"+config.Postgres.Password+"@"+config.Postgres.Host+":"+strconv.Itoa(config.Postgres.Port)+"/"+config.Postgres.DBName+"?sslmode=disable", config.Postgres.MaxOpenConnections, config.Postgres.MaxIdleConnections, config.Postgres.ConnMaxLifetimeMinutes, config.Server.CacheEnabled)
 	if err != nil {
 		log.Fatalf("Failed to initialize database connection: %v", err)
