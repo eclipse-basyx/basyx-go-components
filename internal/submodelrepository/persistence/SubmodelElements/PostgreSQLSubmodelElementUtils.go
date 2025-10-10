@@ -364,7 +364,7 @@ func GetSubmodelElementsWithPath(db *sql.DB, tx *sql.Tx, submodelId string, idSh
 		// Materialize the concrete element based on modelType (no reflection)
 		var semanticIdObj *gen.Reference
 		if semanticId.Valid {
-			semanticIdObj, err = persistence_utils.GetSemanticId(db, semanticId)
+			semanticIdObj, err = persistence_utils.GetReferenceByReferenceDBID(db, semanticId)
 			if err != nil {
 				return nil, "", err
 			}
@@ -1089,7 +1089,7 @@ func loadSubmodelSubmodelElementsIntoMemory(rows *sql.Rows, err error, db *sql.D
 		// Materialize the concrete element based on modelType (no reflection)
 		var semanticIdObj *gen.Reference
 		if semanticId.Valid {
-			semanticIdObj, err = persistence_utils.GetSemanticId(db, semanticId)
+			semanticIdObj, err = persistence_utils.GetReferenceByReferenceDBID(db, semanticId)
 			if err != nil {
 				return nil, nil, nil, "", "", "", "", sql.NullInt64{}, nil, err
 			}

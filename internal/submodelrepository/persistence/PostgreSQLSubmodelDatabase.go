@@ -170,7 +170,7 @@ func (p *PostgreSQLSubmodelDatabase) CreateSubmodel(sm gen.Submodel) error {
 		}
 	}()
 
-	referenceID, err := persistence_utils.CreateSemanticId(tx, sm.SemanticId)
+	referenceID, err := persistence_utils.CreateReference(tx, sm.SemanticId)
 	if err != nil {
 		fmt.Println(err)
 		return common.NewInternalServerError("Failed to create SemanticId - no changes applied - see console for details")

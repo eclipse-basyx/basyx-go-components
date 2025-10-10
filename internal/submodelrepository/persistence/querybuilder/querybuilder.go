@@ -205,3 +205,84 @@ func dedupe(in []string) []string {
 	}
 	return out
 }
+
+type InsertBuilder struct {
+	table     string
+	cols      []string
+	args      []interface{}
+	returning string // Optional RETURNING clause
+}
+
+// NewInsert creates a new InsertBuilder for the given table.
+func NewInsert(table string) *InsertBuilder {
+	return &InsertBuilder{table: table}
+}
+
+// Columns sets the columns to insert into.
+func (b *InsertBuilder) Columns(cols ...string) *InsertBuilder {
+	b.cols = dedupe(cols)
+	return b
+}
+
+// Values appends a set of values for the insert; must match columns count.
+func (b *InsertBuilder) Values(vals ...interface{}) *InsertBuilder {
+	if len(vals) != len(b.cols) {
+		panic("querybuilder: Values count must match Columns count")
+	}
+	b.args = append(b.args, vals...)
+	return b
+}
+
+// Returning sets a RETURNING clause (PostgreSQL-specific).
+func (b *InsertBuilder) Returning(expr string) *InsertBuilder {
+	b.returning = expr
+	return b
+}
+
+// Args returns the accumulated argument values in placeholder order.
+func (b *InsertBuilder) Args() []interface{} { return b.args }
+
+// Build assembles the final SQL INSERT statement with placeholders.
+func (b *InsertBuilder) Build() (string, []interface{}) {
+	if b.table == "" {
+		panic("querybuilder: table must be specified before Build()")
+	}
+	if len(b.cols) == 0 {
+		panic("querybuilder: at least one column must be specified before Build()")
+	}
+	if len(b.args) == 0 || len(b.args)%len(b.cols) != 0 {
+		panic("querybuilder: values count must be a multiple of columns count before Build()")
+	}
+
+	var sb strings.Builder
+	sb.Grow(512)
+
+	sb.WriteString("INSERT INTO ")
+	sb.WriteString(b.table)
+	sb.WriteString(" (")
+	sb.WriteString(strings.Join(b.cols, ", "))
+	sb.WriteString(") VALUES ")
+
+	numRows := len(b.args) / len(b.cols)
+	phIdx := 1
+	for r := 0; r < numRows; r++ {
+		if r > 0 {
+			sb.WriteString(", ")
+		}
+		sb.WriteString("(")
+		for c := range b.cols {
+			if c > 0 {
+				sb.WriteString(", ")
+			}
+			sb.WriteString(fmt.Sprintf("$%d", phIdx))
+			phIdx++
+		}
+		sb.WriteString(")")
+	}
+
+	if b.returning != "" {
+		sb.WriteString(fmt.Sprintf(" RETURNING %s", b.returning))
+	}
+
+	return sb.String(), append([]interface{}(nil), b.args...)
+}
