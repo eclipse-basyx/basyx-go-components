@@ -2,7 +2,12 @@ package common
 
 import (
 	"errors"
+	"fmt"
+	"net/http"
+	"strconv"
 	"strings"
+
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
 
 type ErrorHandler struct {
@@ -53,4 +58,15 @@ func IsInternalServerError(err error) bool {
 
 func IsErrConflict(err error) bool {
 	return err != nil && strings.HasPrefix(err.Error(), "409 Conflict: ")
+}
+
+func NewErrorResponse(err error, errorCode int, component string, function string, info string) model.ImplResponse {
+	codeStr := strconv.Itoa(errorCode)
+	internalCode := fmt.Sprintf("%s-%s-%s-%s-%s", component, codeStr, function, http.StatusText(errorCode), info)
+	return model.Response(
+		errorCode,
+		[]ErrorHandler{
+			*NewErrorHandler("Error", err, codeStr, internalCode, string(GetCurrentTimestamp())),
+		},
+	)
 }
