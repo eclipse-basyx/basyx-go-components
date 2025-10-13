@@ -2,7 +2,9 @@ package common
 
 import (
 	"encoding/base64"
+	"fmt"
 	"strings"
+	"unicode/utf8"
 )
 
 // Encode takes a byte slice and returns a base64 URL-encoded string
@@ -48,7 +50,12 @@ func EncodeString(data string) string {
 func DecodeString(encoded string) (string, error) {
 	bytes, err := Decode(encoded)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("invalid cursor: not base64 (%w)", err)
+	}
+
+	// Validate UTF-8
+	if !utf8.Valid(bytes) {
+		return "", fmt.Errorf("invalid cursor: non-UTF8 bytes")
 	}
 	return string(bytes), nil
 }
