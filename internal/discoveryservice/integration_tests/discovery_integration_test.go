@@ -321,4 +321,18 @@ func TestDiscovery_Suite_Sophisticated(t *testing.T) {
 		PostLookupShellsSearchRawExpect(t, body, http.StatusBadRequest)
 	})
 
+	t.Run("LookupShellsByAssetLink/BadRequest_when_body_is_missing", func(t *testing.T) {
+		url := fmt.Sprintf("%s/lookup/shellsByAssetLink", testenv.BaseURL)
+
+		req, err := http.NewRequest(http.MethodPost, url, nil)
+		require.NoError(t, err)
+		req.Header.Set("Content-Type", "application/json")
+
+		resp, err := http.DefaultClient.Do(req)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		assert.Equal(t, http.StatusBadRequest, resp.StatusCode, "expected 400 when no body is sent")
+	})
+
 }

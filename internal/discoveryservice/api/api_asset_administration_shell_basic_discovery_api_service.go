@@ -45,11 +45,11 @@ func NewAssetAdministrationShellBasicDiscoveryAPIAPIService(databaseBackend pers
 func (s *AssetAdministrationShellBasicDiscoveryAPIAPIService) GetAllAssetAdministrationShellIdsByAssetLink(ctx context.Context, assetIds []string, limit int32, cursor string) (model.ImplResponse, error) {
 	// Not implemented in this service; keep a proper structured error.
 	return common.NewErrorResponse(
-		errors.New("GetAllAssetAdministrationShellIdsByAssetLink method not implemented"),
-		http.StatusNotImplemented,
+		errors.New("GetAllAssetAdministrationShellIdsByAssetLink is deprecated and therefore not implemented"),
+		http.StatusGone,
 		componentName,
 		"GetAllAssetAdministrationShellIdsByAssetLink",
-		"NotImplemented",
+		"Deprecated",
 	), nil
 }
 
