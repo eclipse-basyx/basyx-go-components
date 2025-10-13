@@ -55,10 +55,10 @@ jobs:
           go test -v .
       - name: Run discovery service tests
         env:
-            DISC_TEST_BUILD: "1" # force rebuild image
+            DISC_TEST_BUILD: "1"
         run: |
           cd internal/discoveryservice/integration_tests
-          go test -v -run TestDiscovery_Suite_Sophisticated
+          go test -v
       # - name: Cleanup Docker
       #   if: always()
       #   run: |

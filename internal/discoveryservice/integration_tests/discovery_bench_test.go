@@ -318,6 +318,10 @@ func (d *DiscoveryBench) DoOne(iter int) testenv.ComponentResult {
 	}
 }
 
+// example execution: (log levels: full, name, basic) Use full for testing purposes and basic for benchmarking
+// result is stored in benchmark_results in root directory
+// $env:LOG_DETAIL = "full" go test -bench BenchmarkDiscovery -run ^$ -benchtime=100x -benchmem
+
 func BenchmarkDiscovery(b *testing.B) {
 	mustHaveCompose(b)
 	waitUntilHealthy(b)
