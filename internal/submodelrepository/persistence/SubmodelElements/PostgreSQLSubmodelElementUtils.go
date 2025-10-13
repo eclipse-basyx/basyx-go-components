@@ -364,7 +364,7 @@ func GetSubmodelElementsWithPath(db *sql.DB, tx *sql.Tx, submodelId string, idSh
 		// Materialize the concrete element based on modelType (no reflection)
 		var semanticIdObj *gen.Reference
 		if semanticId.Valid {
-			semanticIdObj, err = persistence_utils.GetSemanticId(db, semanticId)
+			semanticIdObj, err = persistence_utils.GetReferenceByReferenceDBID(db, semanticId)
 			if err != nil {
 				return nil, "", err
 			}
@@ -637,10 +637,10 @@ func GetSubmodelWithSubmodelElements(db *sql.DB, tx *sql.Tx, submodelId string) 
 	err = tx.QueryRow(qMeta, argsMeta...).Scan(&submodelDisplayNameId, &submodelDescriptionId)
 	if err == nil {
 		if submodelDisplayNameId.Valid {
-			submodel.DisplayName = loadLangStringNameType(db, tx, submodelDisplayNameId.Int64)
+			submodel.DisplayName = *loadLangStringNameType(db, tx, submodelDisplayNameId.Int64)
 		}
 		if submodelDescriptionId.Valid {
-			submodel.Description = loadLangStringTextType(db, tx, submodelDescriptionId.Int64)
+			submodel.Description = *loadLangStringTextType(db, tx, submodelDescriptionId.Int64)
 		}
 	}
 
@@ -1093,7 +1093,7 @@ func loadSubmodelSubmodelElementsIntoMemory(rows *sql.Rows, err error, db *sql.D
 		// Materialize the concrete element based on modelType (no reflection)
 		var semanticIdObj *gen.Reference
 		if semanticId.Valid {
-			semanticIdObj, err = persistence_utils.GetSemanticId(db, semanticId)
+			semanticIdObj, err = persistence_utils.GetReferenceByReferenceDBID(db, semanticId)
 			if err != nil {
 				return nil, nil, nil, "", "", "", "", sql.NullInt64{}, nil, err
 			}
@@ -1374,7 +1374,7 @@ func DeleteSubmodelElementByPath(tx *sql.Tx, submodelId string, idShortOrPath st
 
 // loadLangStringNameType loads display name language strings for a reference ID
 // Used for loading displayName fields with proper internationalization support
-func loadLangStringNameType(db *sql.DB, tx *sql.Tx, refId int64) []gen.LangStringNameType {
+func loadLangStringNameType(db *sql.DB, tx *sql.Tx, refId int64) *[]gen.LangStringNameType {
 	if refId == 0 {
 		return nil
 	}
@@ -1399,13 +1399,13 @@ func loadLangStringNameType(db *sql.DB, tx *sql.Tx, refId int64) []gen.LangStrin
 	}
 	defer rows.Close()
 
-	var langStrings []gen.LangStringNameType
+	langStrings := &[]gen.LangStringNameType{}
 	for rows.Next() {
 		var language, text string
 		if err := rows.Scan(&language, &text); err != nil {
 			continue
 		}
-		langStrings = append(langStrings, gen.LangStringNameType{
+		*langStrings = append(*langStrings, gen.LangStringNameType{
 			Language: language,
 			Text:     text,
 		})
@@ -1415,7 +1415,7 @@ func loadLangStringNameType(db *sql.DB, tx *sql.Tx, refId int64) []gen.LangStrin
 }
 
 // Load LangStringTextType (description) with caching
-func loadLangStringTextType(db *sql.DB, tx *sql.Tx, refId int64) []gen.LangStringTextType {
+func loadLangStringTextType(db *sql.DB, tx *sql.Tx, refId int64) *[]gen.LangStringTextType {
 	if refId == 0 {
 		return nil
 	}
@@ -1440,13 +1440,13 @@ func loadLangStringTextType(db *sql.DB, tx *sql.Tx, refId int64) []gen.LangStrin
 	}
 	defer rows.Close()
 
-	var langStrings []gen.LangStringTextType
+	var langStrings *[]gen.LangStringTextType
 	for rows.Next() {
 		var language, text string
 		if err := rows.Scan(&language, &text); err != nil {
 			continue
 		}
-		langStrings = append(langStrings, gen.LangStringTextType{
+		*langStrings = append(*langStrings, gen.LangStringTextType{
 			Language: language,
 			Text:     text,
 		})
@@ -2150,10 +2150,10 @@ func processOptimizedResults(rows *sql.Rows, db *sql.DB, tx *sql.Tx) (*gen.Submo
 
 			// Load displayName and description for submodel
 			if submodelDisplayNameId.Valid {
-				submodel.DisplayName = loadLangStringNameType(db, tx, submodelDisplayNameId.Int64)
+				submodel.DisplayName = *loadLangStringNameType(db, tx, submodelDisplayNameId.Int64)
 			}
 			if submodelDescriptionId.Valid {
-				submodel.Description = loadLangStringTextType(db, tx, submodelDescriptionId.Int64)
+				submodel.Description = *loadLangStringTextType(db, tx, submodelDescriptionId.Int64)
 			}
 		}
 
@@ -2281,10 +2281,10 @@ func buildOptimizedElement(modelType, idShort string, category *string, semantic
 	var displayName []gen.LangStringNameType
 	var description []gen.LangStringTextType
 	if displayNameId.Valid {
-		displayName = loadLangStringNameType(db, tx, displayNameId.Int64)
+		displayName = *loadLangStringNameType(db, tx, displayNameId.Int64)
 	}
 	if descriptionId.Valid {
-		description = loadLangStringTextType(db, tx, descriptionId.Int64)
+		description = *loadLangStringTextType(db, tx, descriptionId.Int64)
 	}
 
 	// Fast element creation with type-specific optimizations

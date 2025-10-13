@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"time"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
@@ -505,19 +504,19 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelElements(ctx context.Con
 	sme, cursor, err := s.submodelBackend.GetSubmodelElements(string(decodedSubmodelIdentifier), int(limit), cursor)
 	if err != nil {
 		if common.IsErrNotFound(err) {
-			timestamp := getCurrentTimestamp()
+			timestamp := common.GetCurrentTimestamp()
 			return gen.Response(http.StatusNotFound, []common.ErrorHandler{*common.NewErrorHandler("Error", err, "404", "SMREPO-GetAllSubmodelElements-404-NotFound", string(timestamp))}), nil
 		}
 		if common.IsErrBadRequest(err) {
-			timestamp := getCurrentTimestamp()
+			timestamp := common.GetCurrentTimestamp()
 			return gen.Response(http.StatusBadRequest, []common.ErrorHandler{*common.NewErrorHandler("Error", err, "400", "SMREPO-GetAllSubmodelElements-400-BadRequest", string(timestamp))}), nil
 		}
 		if common.IsInternalServerError(err) {
-			timestamp := getCurrentTimestamp()
+			timestamp := common.GetCurrentTimestamp()
 			return gen.Response(http.StatusInternalServerError, []common.ErrorHandler{*common.NewErrorHandler("Error", err, "500", "SMREPO-GetAllSubmodelElements-500-InternalServerError", string(timestamp))}), nil
 		}
 		if common.IsErrBadRequest(err) {
-			timestamp := getCurrentTimestamp()
+			timestamp := common.GetCurrentTimestamp()
 			return gen.Response(http.StatusBadRequest, []common.ErrorHandler{*common.NewErrorHandler("Error", err, "400", "SMREPO-GetAllSubmodelElements-400-BadRequest", string(timestamp))}), nil
 		}
 		return gen.Response(http.StatusInternalServerError, nil), err
@@ -545,19 +544,19 @@ func (s *SubmodelRepositoryAPIAPIService) PostSubmodelElementSubmodelRepo(ctx co
 
 	if err := s.submodelBackend.AddSubmodelElement(string(decodedSubmodelIdentifier), submodelElement); err != nil {
 		if common.IsErrNotFound(err) {
-			timestamp := getCurrentTimestamp()
+			timestamp := common.GetCurrentTimestamp()
 			return gen.Response(http.StatusNotFound, []common.ErrorHandler{*common.NewErrorHandler("Error", err, "404", "SMREPO-PostSubmodelElementSubmodelRepo-404-NotFound", string(timestamp))}), nil
 		}
 		if common.IsErrConflict(err) {
-			timestamp := getCurrentTimestamp()
+			timestamp := common.GetCurrentTimestamp()
 			return gen.Response(http.StatusConflict, []common.ErrorHandler{*common.NewErrorHandler("Error", err, "409", "SMREPO-PostSubmodelElementSubmodelRepo-409-Conflict", string(timestamp))}), nil
 		}
 		if common.IsErrBadRequest(err) {
-			timestamp := getCurrentTimestamp()
+			timestamp := common.GetCurrentTimestamp()
 			return gen.Response(http.StatusBadRequest, []common.ErrorHandler{*common.NewErrorHandler("Error", err, "400", "SMREPO-PostSubmodelElementSubmodelRepo-400-BadRequest", string(timestamp))}), nil
 		}
 		if common.IsInternalServerError(err) {
-			timestamp := getCurrentTimestamp()
+			timestamp := common.GetCurrentTimestamp()
 			return gen.Response(http.StatusInternalServerError, []common.ErrorHandler{*common.NewErrorHandler("Error", err, "500", "SMREPO-PostSubmodelElementSubmodelRepo-500-InternalServerError", string(timestamp))}), nil
 		}
 		return gen.Response(http.StatusInternalServerError, nil), err
@@ -716,19 +715,19 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelElementByPathSubmodelRepo(c
 	sme, err := s.submodelBackend.GetSubmodelElement(string(decodedSubmodelIdentifier), idShortPath, 1, "")
 	if err != nil {
 		if common.IsErrNotFound(err) {
-			timestamp := getCurrentTimestamp()
+			timestamp := common.GetCurrentTimestamp()
 			return gen.Response(http.StatusNotFound, []common.ErrorHandler{*common.NewErrorHandler("Error", err, "404", "SMREPO-GetSubmodelElementByPathSubmodelRepo-404-NotFound", string(timestamp))}), nil
 		}
 		if common.IsErrBadRequest(err) {
-			timestamp := getCurrentTimestamp()
+			timestamp := common.GetCurrentTimestamp()
 			return gen.Response(http.StatusBadRequest, []common.ErrorHandler{*common.NewErrorHandler("Error", err, "400", "SMREPO-GetSubmodelElementByPathSubmodelRepo-400-BadRequest", string(timestamp))}), nil
 		}
 		if common.IsInternalServerError(err) {
-			timestamp := getCurrentTimestamp()
+			timestamp := common.GetCurrentTimestamp()
 			return gen.Response(http.StatusInternalServerError, []common.ErrorHandler{*common.NewErrorHandler("Error", err, "500", "SMREPO-GetSubmodelElementByPathSubmodelRepo-500-InternalServerError", string(timestamp))}), nil
 		}
 		if common.IsErrBadRequest(err) {
-			timestamp := getCurrentTimestamp()
+			timestamp := common.GetCurrentTimestamp()
 			return gen.Response(http.StatusBadRequest, []common.ErrorHandler{*common.NewErrorHandler("Error", err, "400", "SMREPO-GetSubmodelElementByPathSubmodelRepo-400-BadRequest", string(timestamp))}), nil
 		}
 		return gen.Response(http.StatusInternalServerError, nil), err
@@ -780,19 +779,19 @@ func (s *SubmodelRepositoryAPIAPIService) PostSubmodelElementByPathSubmodelRepo(
 
 	if err := s.submodelBackend.AddSubmodelElementWithPath(string(decodedSubmodelIdentifier), idShortPath, submodelElement); err != nil {
 		if common.IsErrNotFound(err) {
-			timestamp := getCurrentTimestamp()
+			timestamp := common.GetCurrentTimestamp()
 			return gen.Response(http.StatusNotFound, []common.ErrorHandler{*common.NewErrorHandler("Error", err, "404", "SMREPO-PostSubmodelElementByPathSubmodelRepo-404-NotFound", string(timestamp))}), nil
 		}
 		if common.IsErrConflict(err) {
-			timestamp := getCurrentTimestamp()
+			timestamp := common.GetCurrentTimestamp()
 			return gen.Response(http.StatusConflict, []common.ErrorHandler{*common.NewErrorHandler("Error", err, "409", "SMREPO-PostSubmodelElementByPathSubmodelRepo-409-Conflict", string(timestamp))}), nil
 		}
 		if common.IsErrBadRequest(err) {
-			timestamp := getCurrentTimestamp()
+			timestamp := common.GetCurrentTimestamp()
 			return gen.Response(http.StatusBadRequest, []common.ErrorHandler{*common.NewErrorHandler("Error", err, "400", "SMREPO-PostSubmodelElementByPathSubmodelRepo-400-BadRequest", string(timestamp))}), nil
 		}
 		if common.IsInternalServerError(err) {
-			timestamp := getCurrentTimestamp()
+			timestamp := common.GetCurrentTimestamp()
 			return gen.Response(http.StatusInternalServerError, []common.ErrorHandler{*common.NewErrorHandler("Error", err, "500", "SMREPO-PostSubmodelElementByPathSubmodelRepo-500-InternalServerError", string(timestamp))}), nil
 		}
 		return gen.Response(http.StatusInternalServerError, nil), err
@@ -816,19 +815,19 @@ func (s *SubmodelRepositoryAPIAPIService) DeleteSubmodelElementByPathSubmodelRep
 
 	if err := s.submodelBackend.DeleteSubmodelElementByPath(string(decodedSubmodelIdentifier), idShortPath); err != nil {
 		if common.IsErrNotFound(err) {
-			timestamp := getCurrentTimestamp()
+			timestamp := common.GetCurrentTimestamp()
 			return gen.Response(http.StatusNotFound, []common.ErrorHandler{*common.NewErrorHandler("Error", err, "404", "SMREPO-DeleteSubmodelElementByPathSubmodelRepo-404-NotFound", string(timestamp))}), nil
 		}
 		if common.IsErrBadRequest(err) {
-			timestamp := getCurrentTimestamp()
+			timestamp := common.GetCurrentTimestamp()
 			return gen.Response(http.StatusBadRequest, []common.ErrorHandler{*common.NewErrorHandler("Error", err, "400", "SMREPO-DeleteSubmodelElementByPathSubmodelRepo-400-BadRequest", string(timestamp))}), nil
 		}
 		if common.IsInternalServerError(err) {
-			timestamp := getCurrentTimestamp()
+			timestamp := common.GetCurrentTimestamp()
 			return gen.Response(http.StatusInternalServerError, []common.ErrorHandler{*common.NewErrorHandler("Error", err, "500", "SMREPO-DeleteSubmodelElementByPathSubmodelRepo-500-InternalServerError", string(timestamp))}), nil
 		}
 		if common.IsErrBadRequest(err) {
-			timestamp := getCurrentTimestamp()
+			timestamp := common.GetCurrentTimestamp()
 			return gen.Response(http.StatusBadRequest, []common.ErrorHandler{*common.NewErrorHandler("Error", err, "400", "SMREPO-DeleteSubmodelElementByPathSubmodelRepo-400-BadRequest", string(timestamp))}), nil
 		}
 		return gen.Response(http.StatusInternalServerError, nil), err
@@ -1343,9 +1342,4 @@ func (s *SubmodelRepositoryAPIAPIService) GetOperationAsyncResultValueOnly(ctx c
 	// return gen.Response(0, Result{}), nil
 
 	return gen.Response(http.StatusNotImplemented, nil), errors.New("GetOperationAsyncResultValueOnly method not implemented")
-}
-
-func getCurrentTimestamp() string {
-	timestamp := time.Now().Format(time.RFC3339)
-	return timestamp
 }

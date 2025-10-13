@@ -8,8 +8,6 @@ services:
       POSTGRES_DB: basyxTestDB
     ports:
       - "5432:5432"
-    volumes:
-      - postgres_data_new:/var/lib/postgresql/data
     command: ["postgres", "-c", "listen_addresses=*"]
 
   adminer:
@@ -19,6 +17,3 @@ services:
       - "8080:8080"
     depends_on:
       - db
-
-volumes:
-  postgres_data_new:

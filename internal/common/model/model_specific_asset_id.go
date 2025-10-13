@@ -33,36 +33,11 @@ func AssertSpecificAssetIdRequired(obj SpecificAssetId) error {
 		}
 	}
 
-	if err := AssertReferenceRequired(*obj.SemanticId); err != nil {
-		return err
-	}
-	for _, el := range obj.SupplementalSemanticIds {
-		if err := AssertReferenceRequired(el); err != nil {
-			return err
-		}
-	}
-	if obj.ExternalSubjectId != nil {
-		if err := AssertReferenceRequired(*obj.ExternalSubjectId); err != nil {
-			return err
-		}
-	}
 	return nil
 }
 
 // AssertSpecificAssetIdConstraints checks if the values respects the defined constraints
 func AssertSpecificAssetIdConstraints(obj SpecificAssetId) error {
-	if err := AssertReferenceConstraints(*obj.SemanticId); err != nil {
-		return err
-	}
-	for _, el := range obj.SupplementalSemanticIds {
-		if err := AssertReferenceConstraints(el); err != nil {
-			return err
-		}
-	}
-	if err := AssertstringConstraints(obj.Name); err != nil {
-		if err := AssertReferenceConstraints(*obj.ExternalSubjectId); err != nil {
-			return err
-		}
-	}
+
 	return nil
 }

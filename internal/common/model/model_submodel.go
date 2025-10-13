@@ -86,14 +86,18 @@ func AssertSubmodelRequired(obj Submodel) error {
 	if err := AssertReferableAllOfIdShortRequired(obj.IdShort); err != nil {
 		return err
 	}
-	for _, el := range obj.DisplayName {
-		if err := AssertLangStringNameTypeRequired(el); err != nil {
-			return err
+	if obj.DisplayName != nil {
+		for _, el := range obj.DisplayName {
+			if err := AssertLangStringNameTypeRequired(el); err != nil {
+				return err
+			}
 		}
 	}
-	for _, el := range obj.Description {
-		if err := AssertLangStringTextTypeRequired(el); err != nil {
-			return err
+	if obj.Description != nil {
+		for _, el := range obj.Description {
+			if err := AssertLangStringTextTypeRequired(el); err != nil {
+				return err
+			}
 		}
 	}
 	if obj.Administration != nil {
@@ -134,14 +138,18 @@ func AssertSubmodelConstraints(obj Submodel) error {
 	if err := AssertReferableAllOfIdShortConstraints(obj.IdShort); err != nil {
 		return err
 	}
-	for _, el := range obj.DisplayName {
-		if err := AssertLangStringNameTypeConstraints(el); err != nil {
-			return err
+	if obj.DisplayName != nil {
+		for _, el := range obj.DisplayName {
+			if err := AssertLangStringNameTypeConstraints(el); err != nil {
+				return err
+			}
 		}
 	}
-	for _, el := range obj.Description {
-		if err := AssertLangStringTextTypeConstraints(el); err != nil {
-			return err
+	if obj.Description != nil {
+		for _, el := range obj.Description {
+			if err := AssertLangStringTextTypeConstraints(el); err != nil {
+				return err
+			}
 		}
 	}
 	if obj.Administration != nil {
