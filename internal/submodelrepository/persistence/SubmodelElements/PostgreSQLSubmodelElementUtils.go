@@ -1395,7 +1395,7 @@ func loadLangStringNameType(db *sql.DB, tx *sql.Tx, refId int64) *[]gen.LangStri
 	}
 	defer rows.Close()
 
-	var langStrings *[]gen.LangStringNameType
+	langStrings := &[]gen.LangStringNameType{}
 	for rows.Next() {
 		var language, text string
 		if err := rows.Scan(&language, &text); err != nil {
