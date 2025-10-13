@@ -327,17 +327,19 @@ func fillValueBasedOnType(extension gen.Extension, valueText *sql.NullString, va
 
 func insertRefersToReferences(extension gen.Extension, semanticIdDbId sql.NullInt64, err error, tx *sql.Tx, extensionDbId sql.NullInt64) error {
 	if len(extension.RefersTo) > 0 {
-		semanticIdDbId, err = CreateReference(tx, extension.SemanticId)
-		if err != nil {
-			return err
-		}
-		q, args := qb.NewInsert("extension_refers_to").
-			Columns("extension_id", "reference_id").
-			Values(extensionDbId, semanticIdDbId).
-			Build()
-		_, err = tx.Exec(q, args...)
-		if err != nil {
-			return err
+		for _, ref := range extension.RefersTo {
+			refDbId, refErr := CreateReference(tx, ref)
+			if refErr != nil {
+				return refErr
+			}
+			q, args := qb.NewInsert("extension_refers_to").
+				Columns("extension_id", "reference_id").
+				Values(extensionDbId, refDbId).
+				Build()
+			_, execErr := tx.Exec(q, args...)
+			if execErr != nil {
+				return execErr
+			}
 		}
 	}
 	return nil
