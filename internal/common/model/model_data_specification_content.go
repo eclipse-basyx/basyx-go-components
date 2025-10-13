@@ -9,25 +9,28 @@
 
 package model
 
-type DataSpecificationContent struct {
-	ModelType ModelType `json:"modelType"`
-}
+type DataSpecificationContent interface {
+	GetPrefferedName() []LangStringPreferredNameTypeIec61360
+	GetShortName() []LangStringShortNameTypeIec61360
+	GetUnit() string
+	GetUnitId() *Reference
+	GetSourceOfDefinition() string
+	GetSymbol() string
+	GetDataType() DataTypeIec61360
+	GetDefinition() []LangStringDefinitionTypeIec61360
+	GetValueFormat() string
+	GetValueList() *ValueList
+	GetLevelType() LevelType
 
-// AssertDataSpecificationContentRequired checks if the required fields are not zero-ed
-func AssertDataSpecificationContentRequired(obj DataSpecificationContent) error {
-	elements := map[string]interface{}{
-		"modelType": obj.ModelType,
-	}
-	for name, el := range elements {
-		if isZero := IsZeroValue(el); isZero {
-			return &RequiredError{Field: name}
-		}
-	}
-
-	return nil
-}
-
-// AssertDataSpecificationContentConstraints checks if the values respects the defined constraints
-func AssertDataSpecificationContentConstraints(obj DataSpecificationContent) error {
-	return nil
+	SetPrefferedName([]LangStringPreferredNameTypeIec61360)
+	SetShortName([]LangStringShortNameTypeIec61360)
+	SetUnit(string)
+	SetUnitId(*Reference)
+	SetSourceOfDefinition(string)
+	SetSymbol(string)
+	SetDataType(DataTypeIec61360)
+	SetDefinition([]LangStringDefinitionTypeIec61360)
+	SetValueFormat(string)
+	SetValueList(*ValueList)
+	SetLevelType(LevelType)
 }

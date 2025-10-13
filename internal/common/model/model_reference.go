@@ -14,7 +14,7 @@ type Reference struct {
 
 	Keys []Key `json:"keys"`
 
-	ReferredSemanticId *ReferenceParent `json:"referredSemanticId,omitempty"`
+	ReferredSemanticId *Reference `json:"referredSemanticId,omitempty"`
 }
 
 // AssertReferenceRequired checks if the required fields are not zero-ed
@@ -35,11 +35,26 @@ func AssertReferenceRequired(obj Reference) error {
 		}
 	}
 
+	// Stack
+	stack := make([]*Reference, 0)
 	if obj.ReferredSemanticId != nil {
-		if err := AssertReferenceParentRequired(*obj.ReferredSemanticId); err != nil {
+		stack = append(stack, obj.ReferredSemanticId)
+	}
+	for len(stack) > 0 {
+		// Pop
+		n := len(stack) - 1
+		current := stack[n]
+		stack = stack[:n]
+
+		if err := AssertReferenceRequired(*current); err != nil {
 			return err
 		}
+
+		if current.ReferredSemanticId != nil {
+			stack = append(stack, current.ReferredSemanticId)
+		}
 	}
+
 	return nil
 }
 
@@ -50,10 +65,24 @@ func AssertReferenceConstraints(obj Reference) error {
 			return err
 		}
 	}
+
+	stack := make([]*Reference, 0)
 	if obj.ReferredSemanticId != nil {
-		if err := AssertReferenceParentConstraints(*obj.ReferredSemanticId); err != nil {
+		stack = append(stack, obj.ReferredSemanticId)
+	}
+	for len(stack) > 0 {
+		n := len(stack) - 1
+		current := stack[n]
+		stack = stack[:n]
+
+		if err := AssertReferenceConstraints(*current); err != nil {
 			return err
 		}
+
+		if current.ReferredSemanticId != nil {
+			stack = append(stack, current.ReferredSemanticId)
+		}
 	}
+
 	return nil
 }

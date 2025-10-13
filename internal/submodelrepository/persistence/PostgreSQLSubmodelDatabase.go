@@ -4,9 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"os"
 	"strconv"
-	"time"
 
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 
@@ -30,38 +28,15 @@ var maxCacheSize = 1000
 var submodelCache map[string]gen.Submodel = make(map[string]gen.Submodel)
 
 func NewPostgreSQLSubmodelBackend(dsn string, maxOpenConns, maxIdleConns int, connMaxLifetimeMinutes int, cacheEnabled bool) (*PostgreSQLSubmodelDatabase, error) {
-	db, err := sql.Open("postgres", dsn)
-	//Set Max Connection
-	db.SetMaxOpenConns(500)
-	db.SetMaxIdleConns(500)
-	db.SetConnMaxLifetime(time.Minute * 5)
-
+	db, err := common.InitializeDatabase(dsn, "submodelrepositoryschema.sql")
 	if err != nil {
 		return nil, err
 	}
-	if err := db.Ping(); err != nil {
-		return nil, err
-	}
-
-	dir, osErr := os.Getwd()
-
-	if osErr != nil {
-		return nil, osErr
-	}
-
-	queryString, fileError := os.ReadFile(dir + "/resources/sql/submodelrepositoryschema.sql")
-
-	if fileError != nil {
-		return nil, fileError
-	}
-
-	_, dbError := db.Exec(string(queryString))
-
-	if dbError != nil {
-		return nil, dbError
-	}
-
 	return &PostgreSQLSubmodelDatabase{db: db, cacheEnabled: cacheEnabled}, nil
+}
+
+func (p *PostgreSQLSubmodelDatabase) GetDB() *sql.DB {
+	return p.db
 }
 
 // GetAllSubmodels and a next cursor ("" if no more pages).
@@ -195,31 +170,40 @@ func (p *PostgreSQLSubmodelDatabase) CreateSubmodel(sm gen.Submodel) error {
 		}
 	}()
 
-	referenceID, err := persistence_utils.CreateSemanticId(tx, sm.SemanticId)
+	var referenceID, displayNameId, descriptionId, administrationId sql.NullInt64
+
+	referenceID, err = persistence_utils.CreateReference(tx, sm.SemanticId)
 	if err != nil {
 		fmt.Println(err)
 		return common.NewInternalServerError("Failed to create SemanticId - no changes applied - see console for details")
 	}
 
-	displayNameId, err := persistence_utils.CreateLangStringNameTypes(tx, sm.DisplayName)
+	displayNameId, err = persistence_utils.CreateLangStringNameTypes(tx, sm.DisplayName)
 	if err != nil {
 		fmt.Println(err)
 		return common.NewInternalServerError("Failed to create DisplayName - no changes applied - see console for details")
 	}
 
-	descriptionId, err := persistence_utils.CreateLangStringTextTypes(tx, sm.Description)
+	// Handle possibly nil Description
+	descriptionId, err = persistence_utils.CreateLangStringTextTypes(tx, sm.Description)
 	if err != nil {
 		fmt.Println(err)
 		return common.NewInternalServerError("Failed to create Description - no changes applied - see console for details")
 	}
 
+	administrationId, err = persistence_utils.CreateAdministrativeInformation(tx, sm.Administration)
+	if err != nil {
+		fmt.Println(err)
+		return common.NewInternalServerError("Failed to create Administration - no changes applied - see console for details")
+	}
+
 	const q = `
-        INSERT INTO submodel (id, id_short, category, kind, model_type, semantic_id, displayname_id, description_id)
-        VALUES ($1, $2, $3, $4, 'Submodel', $5, $6, $7)
+        INSERT INTO submodel (id, id_short, category, kind, model_type, semantic_id, displayname_id, description_id, administration_id)
+        VALUES ($1, $2, $3, $4, 'Submodel', $5, $6, $7, $8)
         ON CONFLICT (id) DO NOTHING
     `
 
-	_, err = tx.Exec(q, sm.Id, sm.IdShort, sm.Category, sm.Kind, referenceID, displayNameId, descriptionId)
+	_, err = tx.Exec(q, sm.Id, sm.IdShort, sm.Category, sm.Kind, referenceID, displayNameId, descriptionId, administrationId)
 	if err != nil {
 		return err
 	}

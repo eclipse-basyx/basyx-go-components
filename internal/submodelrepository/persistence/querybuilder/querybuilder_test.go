@@ -125,3 +125,25 @@ func TestSelectBuilderDistinctOn(t *testing.T) {
 		t.Fatalf("expected DISTINCT ON, got: %s", q)
 	}
 }
+
+func TestInsertBuilderBasic(t *testing.T) {
+	b := NewInsert("t").
+		Columns("id", "name").
+		Values(1, "foo").
+		Values(2, "bar")
+	q, args := b.Build()
+	if !strings.HasPrefix(q, "INSERT INTO t (id, name) VALUES ") {
+		t.Fatalf("unexpected query start: %s", q)
+	}
+	expectedValues := []string{"($1, $2)", "($3, $4)"}
+	for _, ev := range expectedValues {
+		if !strings.Contains(q, ev) {
+			t.Fatalf("missing values fragment %q in query: %s", ev, q)
+		}
+	}
+	if len(args) != 4 ||
+		args[0] != 1 || args[1] != "foo" ||
+		args[2] != 2 || args[3] != "bar" {
+		t.Fatalf("unexpected args: %#v", args)
+	}
+}
