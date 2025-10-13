@@ -129,7 +129,6 @@ func TestDiscovery_Suite_Sophisticated(t *testing.T) {
 		rc.PostLookupShells(t, aasD, []model.SpecificAssetId{shared, uniqD})
 		rc.PostLookupShells(t, aasE, []model.SpecificAssetId{shared, uniqE})
 
-		// Validate presence only through the API
 		resShared := rc.LookupShellsByAssetLink(t, []model.SpecificAssetId{{Name: shared.Name, Value: shared.Value}}, 10, "", http.StatusOK)
 		assert.Contains(t, resShared.Result, aasD)
 		assert.Contains(t, resShared.Result, aasE)
@@ -171,9 +170,8 @@ func TestDiscovery_Suite_Sophisticated(t *testing.T) {
 			"gamma": {"solar-array"},
 			"delta": {"accumulator-bank"},
 		})
-		assertNoNames(t, got2, "alpha", "beta") // ensure old keys removed
+		assertNoNames(t, got2, "alpha", "beta")
 
-		// DELETE and ensure absence via GET
 		rc.DeleteLookupShells(t, aasX)
 		_ = rc.GetLookupShells(t, aasX, http.StatusNotFound)
 
@@ -226,9 +224,9 @@ func TestDiscovery_Suite_Sophisticated(t *testing.T) {
 		url := fmt.Sprintf("%s/lookup/shells/%s", testenv.BaseURL, common.EncodeString(aas))
 
 		body3 := []map[string]any{
-			{"name": ""},                 // missing value
-			{"value": ""},                // missing name
-			{"name": 123, "value": true}, // wrong types
+			{"name": ""},
+			{"value": ""},
+			{"name": 123, "value": true},
 		}
 		_ = testenv.PostJSONExpect(t, url, body3, http.StatusBadRequest)
 	})
