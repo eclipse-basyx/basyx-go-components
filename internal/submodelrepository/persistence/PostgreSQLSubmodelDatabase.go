@@ -178,14 +178,10 @@ func (p *PostgreSQLSubmodelDatabase) CreateSubmodel(sm gen.Submodel) error {
 		return common.NewInternalServerError("Failed to create SemanticId - no changes applied - see console for details")
 	}
 
-	if sm.DisplayName == nil {
-		displayNameId = sql.NullInt64{}
-	} else {
-		displayNameId, err = persistence_utils.CreateLangStringNameTypes(tx, *sm.DisplayName)
-		if err != nil {
-			fmt.Println(err)
-			return common.NewInternalServerError("Failed to create DisplayName - no changes applied - see console for details")
-		}
+	displayNameId, err = persistence_utils.CreateLangStringNameTypes(tx, sm.DisplayName)
+	if err != nil {
+		fmt.Println(err)
+		return common.NewInternalServerError("Failed to create DisplayName - no changes applied - see console for details")
 	}
 
 	// Handle possibly nil Description
