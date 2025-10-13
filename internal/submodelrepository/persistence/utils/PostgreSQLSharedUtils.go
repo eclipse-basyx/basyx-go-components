@@ -77,7 +77,13 @@ func insertNestedRefferedSemanticIds(semanticId *gen.Reference, stack []*gen.Ref
 		stack = stack[:n]
 
 		var childRefID int
-		err := tx.QueryRow(`INSERT INTO reference (type, parentReference) VALUES ($1, $2) RETURNING id`, current.Type, referenceID.Int64).Scan(&childRefID)
+		var parentReference interface{}
+		if referenceID.Valid {
+			parentReference = referenceID.Int64
+		} else {
+			parentReference = nil
+		}
+		err := tx.QueryRow(`INSERT INTO reference (type, parentReference) VALUES ($1, $2) RETURNING id`, current.Type, parentReference).Scan(&childRefID)
 		if err != nil {
 			return sql.NullInt64{}, err
 		}
