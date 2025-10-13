@@ -328,7 +328,7 @@ func fillValueBasedOnType(extension gen.Extension, valueText *sql.NullString, va
 func insertRefersToReferences(extension gen.Extension, semanticIdDbId sql.NullInt64, err error, tx *sql.Tx, extensionDbId sql.NullInt64) error {
 	if len(extension.RefersTo) > 0 {
 		for _, ref := range extension.RefersTo {
-			refDbId, refErr := CreateReference(tx, ref)
+			refDbId, refErr := CreateReference(tx, &ref)
 			if refErr != nil {
 				return refErr
 			}
@@ -351,7 +351,7 @@ func insertSupplementalSemanticIds(extension gen.Extension, semanticIdDbId sql.N
 			return common.NewErrBadRequest("Supplemental Semantic IDs require a main Semantic ID to be present. (See AAS Constraint: AASd-118)")
 		}
 		for _, supplementalSemanticId := range extension.SupplementalSemanticIds {
-			supplementalSemanticIdDbId, err := CreateReference(tx, supplementalSemanticId)
+			supplementalSemanticIdDbId, err := CreateReference(tx, &supplementalSemanticId)
 			if err != nil {
 				return err
 			}

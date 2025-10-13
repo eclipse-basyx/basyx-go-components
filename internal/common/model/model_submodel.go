@@ -20,9 +20,9 @@ type Submodel struct {
 
 	IdShort string `json:"idShort,omitempty"`
 
-	DisplayName *[]LangStringNameType `json:"displayName,omitempty"`
+	DisplayName []LangStringNameType `json:"displayName,omitempty"`
 
-	Description *[]LangStringTextType `json:"description,omitempty"`
+	Description []LangStringTextType `json:"description,omitempty"`
 
 	ModelType string `json:"modelType" validate:"regexp=^Submodel$"`
 
@@ -87,14 +87,14 @@ func AssertSubmodelRequired(obj Submodel) error {
 		return err
 	}
 	if obj.DisplayName != nil {
-		for _, el := range *obj.DisplayName {
+		for _, el := range obj.DisplayName {
 			if err := AssertLangStringNameTypeRequired(el); err != nil {
 				return err
 			}
 		}
 	}
 	if obj.Description != nil {
-		for _, el := range *obj.Description {
+		for _, el := range obj.Description {
 			if err := AssertLangStringTextTypeRequired(el); err != nil {
 				return err
 			}
@@ -139,14 +139,14 @@ func AssertSubmodelConstraints(obj Submodel) error {
 		return err
 	}
 	if obj.DisplayName != nil {
-		for _, el := range *obj.DisplayName {
+		for _, el := range obj.DisplayName {
 			if err := AssertLangStringNameTypeConstraints(el); err != nil {
 				return err
 			}
 		}
 	}
 	if obj.Description != nil {
-		for _, el := range *obj.Description {
+		for _, el := range obj.Description {
 			if err := AssertLangStringTextTypeConstraints(el); err != nil {
 				return err
 			}

@@ -637,10 +637,10 @@ func GetSubmodelWithSubmodelElements(db *sql.DB, tx *sql.Tx, submodelId string) 
 	err = tx.QueryRow(qMeta, argsMeta...).Scan(&submodelDisplayNameId, &submodelDescriptionId)
 	if err == nil {
 		if submodelDisplayNameId.Valid {
-			submodel.DisplayName = loadLangStringNameType(db, tx, submodelDisplayNameId.Int64)
+			submodel.DisplayName = *loadLangStringNameType(db, tx, submodelDisplayNameId.Int64)
 		}
 		if submodelDescriptionId.Valid {
-			submodel.Description = loadLangStringTextType(db, tx, submodelDescriptionId.Int64)
+			submodel.Description = *loadLangStringTextType(db, tx, submodelDescriptionId.Int64)
 		}
 	}
 
@@ -2146,10 +2146,10 @@ func processOptimizedResults(rows *sql.Rows, db *sql.DB, tx *sql.Tx) (*gen.Submo
 
 			// Load displayName and description for submodel
 			if submodelDisplayNameId.Valid {
-				submodel.DisplayName = loadLangStringNameType(db, tx, submodelDisplayNameId.Int64)
+				submodel.DisplayName = *loadLangStringNameType(db, tx, submodelDisplayNameId.Int64)
 			}
 			if submodelDescriptionId.Valid {
-				submodel.Description = loadLangStringTextType(db, tx, submodelDescriptionId.Int64)
+				submodel.Description = *loadLangStringTextType(db, tx, submodelDescriptionId.Int64)
 			}
 		}
 

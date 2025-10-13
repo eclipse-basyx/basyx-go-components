@@ -83,8 +83,8 @@ func GetSubmodel(db *sql.DB, submodelId string) {
 				Category:    category.String,
 				Kind:        gen.ModellingKind(kind.String),
 				SemanticId:  ref,
-				DisplayName: displayName,
-				Description: description,
+				DisplayName: *displayName,
+				Description: *description,
 				ModelType:   "Submodel",
 			}
 		}
