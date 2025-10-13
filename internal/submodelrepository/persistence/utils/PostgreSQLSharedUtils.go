@@ -16,7 +16,7 @@ func CreateAdministrativeInformation(tx *sql.Tx, adminInfo *gen.AdministrativeIn
 	}
 	var id int
 	var adminInfoID sql.NullInt64
-	if adminInfo != nil && !reflect.DeepEqual(*adminInfo, gen.AdministrativeInformation{}) {
+	if !reflect.DeepEqual(*adminInfo, gen.AdministrativeInformation{}) {
 		var creatorID sql.NullInt64
 		var err error
 		if adminInfo.Creator != nil {
