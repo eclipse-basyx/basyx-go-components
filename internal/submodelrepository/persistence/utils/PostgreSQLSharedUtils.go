@@ -350,17 +350,19 @@ func insertSupplementalSemanticIds(extension gen.Extension, semanticIdDbId sql.N
 		if !semanticIdDbId.Valid {
 			return common.NewErrBadRequest("Supplemental Semantic IDs require a main Semantic ID to be present. (See AAS Constraint: AASd-118)")
 		}
-		semanticIdDbId, err = CreateReference(tx, extension.SemanticId)
-		if err != nil {
-			return err
-		}
-		q, args := qb.NewInsert("extension_supplemental_semantic_id").
-			Columns("extension_id", "reference_id").
-			Values(extensionDbId, semanticIdDbId).
-			Build()
-		_, err = tx.Exec(q, args...)
-		if err != nil {
-			return err
+		for _, supplementalSemanticId := range extension.SupplementalSemanticIds {
+			supplementalSemanticIdDbId, err := CreateReference(tx, supplementalSemanticId)
+			if err != nil {
+				return err
+			}
+			q, args := qb.NewInsert("extension_supplemental_semantic_id").
+				Columns("extension_id", "reference_id").
+				Values(extensionDbId, supplementalSemanticIdDbId).
+				Build()
+			_, err = tx.Exec(q, args...)
+			if err != nil {
+				return err
+			}
 		}
 	}
 	return nil
