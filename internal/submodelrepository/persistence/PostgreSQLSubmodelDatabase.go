@@ -185,14 +185,10 @@ func (p *PostgreSQLSubmodelDatabase) CreateSubmodel(sm gen.Submodel) error {
 	}
 
 	// Handle possibly nil Description
-	if sm.Description == nil {
-		descriptionId = sql.NullInt64{}
-	} else {
-		descriptionId, err = persistence_utils.CreateLangStringTextTypes(tx, *sm.Description)
-		if err != nil {
-			fmt.Println(err)
-			return common.NewInternalServerError("Failed to create Description - no changes applied - see console for details")
-		}
+	descriptionId, err = persistence_utils.CreateLangStringTextTypes(tx, sm.Description)
+	if err != nil {
+		fmt.Println(err)
+		return common.NewInternalServerError("Failed to create Description - no changes applied - see console for details")
 	}
 
 	administrationId, err = persistence_utils.CreateAdministrativeInformation(tx, sm.Administration)
