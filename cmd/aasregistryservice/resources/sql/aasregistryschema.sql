@@ -105,15 +105,9 @@ CREATE TABLE IF NOT EXISTS submodel (
 
 CREATE TABLE IF NOT EXISTS extension (
   id              BIGSERIAL         PRIMARY KEY,
-  submodel_id     VARCHAR(2048)     NOT NULL REFERENCES submodel(id) ON DELETE CASCADE,
   semantic_id     BIGINT            UNIQUE REFERENCES reference(id) ON DELETE CASCADE,
-  name            VARCHAR(128)      NOT NULL,
-  value_type      data_type_def_xsd NOT NULL,
-  value_text      TEXT,
-  value_num       NUMERIC,
-  value_bool      BOOLEAN,
-  value_time      TIME,
-  value_datetime  TIMESTAMPTZ
+  supplemental_semantic_id      BIGINT              REFERENCES reference(id),
+  name            VARCHAR(128)      NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS submodel_descriptor (
