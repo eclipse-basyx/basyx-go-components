@@ -11,6 +11,9 @@ import (
 )
 
 func CreateAdministrativeInformation(tx *sql.Tx, adminInfo *gen.AdministrativeInformation) (sql.NullInt64, error) {
+	if adminInfo == nil {
+		return sql.NullInt64{}, nil
+	}
 	var id int
 	var adminInfoID sql.NullInt64
 	if adminInfo != nil && !reflect.DeepEqual(*adminInfo, gen.AdministrativeInformation{}) {
@@ -153,6 +156,9 @@ func GetReferenceByReferenceDBID(db *sql.DB, referenceID sql.NullInt64) (*gen.Re
 }
 
 func CreateLangStringNameTypes(tx *sql.Tx, nameTypes []gen.LangStringNameType) (sql.NullInt64, error) {
+	if nameTypes == nil {
+		return sql.NullInt64{}, nil
+	}
 	var id int
 	var nameTypeID sql.NullInt64
 	if len(nameTypes) > 0 {
@@ -200,6 +206,9 @@ func GetLangStringNameTypes(db *sql.DB, nameTypeID sql.NullInt64) ([]gen.LangStr
 }
 
 func CreateLangStringTextTypes(tx *sql.Tx, textTypes []gen.LangStringTextType) (sql.NullInt64, error) {
+	if textTypes == nil {
+		return sql.NullInt64{}, nil
+	}
 	var id int
 	var textTypeID sql.NullInt64
 	if len(textTypes) > 0 {
