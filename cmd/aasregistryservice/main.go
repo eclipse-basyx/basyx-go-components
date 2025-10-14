@@ -10,8 +10,8 @@ import (
 	"strconv"
 	"strings"
 
-	ass_registry_api "github.com/eclipse-basyx/basyx-go-components/internal/aasregistry/api"
-	persistence_postgresql "github.com/eclipse-basyx/basyx-go-components/internal/aasregistry/persistence"
+	ass_registry_api "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/aasregistry/api"
+	persistence_postgresql "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/aasregistry/persistence"
 	apis "github.com/eclipse-basyx/basyx-go-components/pkg/aasregistryapi"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/cors"
