@@ -55,24 +55,35 @@ func NewPostgreSQLAASRegistryDatabase(dsn string, maxOpenConns, maxIdleConns int
 
 func (p *PostgreSQLAASRegistryDatabase) InsertAdministrationShellDescriptor(ctx context.Context, aasd model.AssetAdministrationShellDescriptor) error {
 
-	tx, err := p.db.Begin()
+	tx, err := p.db.BeginTx(ctx, nil)
 
 	if err != nil {
 		fmt.Println(err)
 		return common.NewInternalServerError("Failed to start postgres transaction. See console for information.")
 	}
 	defer func() {
-
-		if err != nil {
+		if p := recover(); p != nil {
+			tx.Rollback()
+			panic(p) // re-throw panic after rollback
+		} else if err != nil {
 			tx.Rollback()
 		}
 	}()
 
+	var descriptorId int64
+
+	err = tx.QueryRow(`
+		INSERT INTO descriptor DEFAULT VALUES returning id;
+	`,
+	).Scan(&descriptorId)
+	if err != nil {
+		return err
+	}
 	desc := aasd.Description
 
 	fmt.Println(desc)
 
-	var referenceID, displayNameId, descriptionId, administrationId sql.NullInt64
+	var displayNameId, descriptionId, administrationId sql.NullInt64
 	displayNameId, err = persistence_utils.CreateLangStringNameTypes(tx, aasd.DisplayName)
 	if err != nil {
 		fmt.Println(err)
@@ -92,14 +103,485 @@ func (p *PostgreSQLAASRegistryDatabase) InsertAdministrationShellDescriptor(ctx 
 		return common.NewInternalServerError("Failed to create Administration - no changes applied - see console for details")
 	}
 
-	fmt.Println(referenceID)
 	fmt.Println(displayNameId)
 	fmt.Println(descriptionId)
 	fmt.Println(administrationId)
+
+	_, err = tx.Exec(`
+		INSERT INTO aas_descriptor (
+		descriptor_id,
+		description_id,
+		displayname_id,
+		administrative_information_id,
+		asset_kind,
+		asset_type,
+		globalAssetId,
+		id_short,
+		id
+		) VALUES (
+		$1, $2, $3, $4, $5, $6, $7, $8, $9
+		)
+	`,
+		descriptorId,
+		descriptionId,
+		displayNameId,
+		administrationId,
+		aasd.AssetKind,
+		aasd.AssetType,
+		aasd.GlobalAssetId,
+		aasd.IdShort,
+		aasd.Id,
+	)
+
+	if err != nil {
+		return err
+	}
+
+	err = CreateEndpoints(tx, descriptorId, aasd.Endpoints)
+	if err != nil {
+		fmt.Println(err)
+		return common.NewInternalServerError("Failed to create Endpoints - no changes applied - see console for details")
+	}
+
+	err = CreateSpecificAssetId(tx, descriptorId, aasd.SpecificAssetIds)
+	if err != nil {
+		fmt.Println(err)
+		return common.NewInternalServerError("Failed to create Specific Asset Ids - no changes applied - see console for details")
+	}
+
+	err = CreateExtensions(tx, descriptorId, aasd.Extensions)
+	if err != nil {
+		return err
+	}
+
+	err = CreateSubModelDescriptors(tx, descriptorId, aasd.SubmodelDescriptors)
+	if err != nil {
+		return err
+	}
 
 	if err = tx.Commit(); err != nil {
 		return err
 	}
 
+	return nil
+}
+func CreateEndpointAttributes(tx *sql.Tx, endpointId int64, securityAttributes []model.ProtocolInformationSecurityAttributes) error {
+	if securityAttributes == nil {
+		return nil
+	}
+
+	if len(securityAttributes) > 0 {
+		var err error
+		for _, val := range securityAttributes {
+			_, err = tx.Exec(`
+				INSERT INTO security_attributes (
+				endpoint_id,
+				securityType,
+				securityKey,
+				securityValue
+				) VALUES (
+				$1, $2, $3, $4
+				)
+			`,
+				endpointId,
+				val.Type,
+				val.Key,
+				val.Value,
+			)
+
+			if err != nil {
+				return err
+			}
+		}
+
+	}
+
+	return nil
+
+}
+
+func CreateEndpointProtocolVersion(tx *sql.Tx, endpointId int64, endpointProtocolVersion []string) error {
+	if endpointProtocolVersion == nil {
+		return nil
+	}
+
+	if len(endpointProtocolVersion) > 0 {
+		var err error
+		for _, val := range endpointProtocolVersion {
+			_, err = tx.Exec(`
+				INSERT INTO endpoint_protocol_version (
+				endpoint_id,
+				endpoint_protocol_version
+				) VALUES (
+				$1, $2
+				)
+			`,
+				endpointId,
+				val,
+			)
+
+			if err != nil {
+				return err
+			}
+		}
+
+	}
+
+	return nil
+
+}
+
+func CreateEndpoints(tx *sql.Tx, descriptorId int64, endpoints []model.Endpoint) error {
+	if endpoints == nil {
+		return nil
+	}
+
+	if len(endpoints) > 0 {
+		var err error
+
+		for _, val := range endpoints {
+			var id int64
+			err = tx.QueryRow(`
+				INSERT INTO aas_descriptor_endpoint (
+					descriptor_id,
+					href,
+					endpoint_protocol,
+					sub_protocol,
+					sub_protocol_body,
+					sub_protocol_body_encoding,
+					interface
+				) VALUES (
+					$1, $2, $3, $4, $5, $6, $7
+				)
+				RETURNING id
+			`,
+				descriptorId,
+				val.ProtocolInformation.Href,
+				val.ProtocolInformation.EndpointProtocol,
+				val.ProtocolInformation.Subprotocol,
+				val.ProtocolInformation.SubprotocolBody,
+				val.ProtocolInformation.SubprotocolBodyEncoding,
+				val.Interface,
+			).Scan(&id)
+
+			if err != nil {
+				return err
+			}
+			err = CreateEndpointProtocolVersion(tx, id, val.ProtocolInformation.EndpointProtocolVersion)
+			if err != nil {
+				return err
+			}
+			err = CreateEndpointAttributes(tx, id, val.ProtocolInformation.SecurityAttributes)
+			if err != nil {
+				return err
+			}
+		}
+
+	}
+	return nil
+}
+
+func CreateSpecificAssetIdSupplementalSemantic(tx *sql.Tx, specificAssetId int64, references []model.Reference) error {
+	if references == nil {
+		return nil
+	}
+
+	if len(references) > 0 {
+		var err error
+		for _, val := range references {
+			var referenceID sql.NullInt64
+			referenceID, err = persistence_utils.CreateReference(tx, &val)
+
+			if err != nil {
+				return err
+			}
+			_, err = tx.Exec(`
+				INSERT INTO specific_asset_id_supplemental_semantic_id (
+				specific_asset_id_id,
+				reference_id
+				) VALUES (
+				$1, $2
+				)
+			`,
+				specificAssetId,
+				referenceID,
+			)
+
+			if err != nil {
+				return err
+			}
+		}
+
+	}
+
+	return nil
+
+}
+
+func CreateSpecificAssetId(tx *sql.Tx, descriptorId int64, specificAssetIds []model.SpecificAssetId) error {
+	if specificAssetIds == nil {
+		return nil
+	}
+
+	if len(specificAssetIds) > 0 {
+		var err error
+
+		for _, val := range specificAssetIds {
+			var id int64
+			err = tx.QueryRow(`
+				INSERT INTO specific_asset_id (
+					descriptor_id,
+					semantic_id,
+					name,
+					value,
+					external_subject_ref
+				) VALUES (
+					$1, $2, $3, $4, $5
+				)
+				RETURNING id
+			`,
+				descriptorId,
+				val.SemanticId,
+				val.Name,
+				val.Value,
+				val.ExternalSubjectId,
+			).Scan(&id)
+
+			if err != nil {
+				return err
+			}
+			err = CreateSpecificAssetIdSupplementalSemantic(tx, id, val.SupplementalSemanticIds)
+			if err != nil {
+				return err
+			}
+
+		}
+
+	}
+	return nil
+}
+
+func CreatesubModelDescriptorSupplementalSemantic(tx *sql.Tx, subModelDescriptorId int64, references []model.Reference) error {
+	if references == nil {
+		return nil
+	}
+
+	if len(references) > 0 {
+		var err error
+		for _, val := range references {
+			var referenceID sql.NullInt64
+			referenceID, err = persistence_utils.CreateReference(tx, &val)
+
+			if err != nil {
+				return err
+			}
+			_, err = tx.Exec(`
+				INSERT INTO submodel_descriptor_supplemental_semantic_id (
+				descriptor_id,
+				reference_id
+				) VALUES (
+				$1, $2
+				)
+			`,
+				subModelDescriptorId,
+				referenceID,
+			)
+
+			if err != nil {
+				return err
+			}
+		}
+
+	}
+
+	return nil
+
+}
+
+func CreateSubModelDescriptors(tx *sql.Tx, aasDescriptorId int64, submodelDescriptors []model.SubmodelDescriptor) error {
+	if submodelDescriptors == nil {
+		return nil
+	}
+
+	if len(submodelDescriptors) > 0 {
+		var err error
+
+		for _, val := range submodelDescriptors {
+
+			var semanticId, displayNameId, descriptionId, administrationId sql.NullInt64
+			displayNameId, err = persistence_utils.CreateLangStringNameTypes(tx, val.DisplayName)
+			if err != nil {
+				fmt.Println(err)
+				return common.NewInternalServerError("Failed to create DisplayName - no changes applied - see console for details")
+			}
+
+			// Handle possibly nil Description
+			descriptionId, err = persistence_utils.CreateLangStringTextTypes(tx, val.Description)
+			if err != nil {
+				fmt.Println(err)
+				return common.NewInternalServerError("Failed to create Description - no changes applied - see console for details")
+			}
+
+			administrationId, err = persistence_utils.CreateAdministrativeInformation(tx, &val.Administration)
+			if err != nil {
+				fmt.Println(err)
+				return common.NewInternalServerError("Failed to create Administration - no changes applied - see console for details")
+			}
+
+			semanticId, err = persistence_utils.CreateReference(tx, val.SemanticId)
+
+			if err != nil {
+				return err
+			}
+
+			var submodelDescriptorId int64
+
+			err = tx.QueryRow(`
+				INSERT INTO descriptor DEFAULT VALUES returning id;
+			`,
+			).Scan(&submodelDescriptorId)
+			if err != nil {
+				return err
+			}
+			_, err = tx.Exec(`
+				INSERT INTO submodel_descriptor (
+					descriptor_id,
+					aas_descriptor_id,
+					description_id,
+					displayname_id,
+					administrative_information_id,
+					id_short,
+					id,
+					semantic_id
+				) VALUES (
+					$1, $2, $3, $4, $5, $6, $7, $8
+				)
+				RETURNING id
+			`,
+
+				aasDescriptorId,
+				descriptionId,
+				descriptionId,
+				displayNameId,
+				administrationId,
+				val.IdShort,
+				val.Id,
+				semanticId,
+			)
+
+			if err != nil {
+				return err
+			}
+			err = CreatesubModelDescriptorSupplementalSemantic(tx, submodelDescriptorId, val.SupplementalSemanticId)
+			if err != nil {
+				return err
+			}
+
+			err = CreateExtensions(tx, submodelDescriptorId, val.Extensions)
+			if err != nil {
+				return err
+			}
+
+		}
+
+	}
+	return nil
+}
+
+func CreateExtensionReferences(tx *sql.Tx, extensionId int64, references []model.Reference) error {
+	if references == nil {
+		return nil
+	}
+
+	if len(references) > 0 {
+		var err error
+		for _, val := range references {
+
+			var referenceId sql.NullInt64
+			referenceId, err = persistence_utils.CreateReference(tx, &val)
+			if err != nil {
+				return err
+			}
+			_, err = tx.Exec(`
+				INSERT INTO extension_reference (
+				extensionId,
+				reference_id
+				) VALUES (
+				$1, $2
+				)
+			`,
+				extensionId,
+				referenceId,
+			)
+
+			if err != nil {
+				return err
+			}
+		}
+
+	}
+
+	return nil
+
+}
+
+func CreateExtensions(tx *sql.Tx, descriptorId int64, extensions []model.Extension) error {
+	if extensions == nil {
+		return nil
+	}
+
+	if len(extensions) > 0 {
+		var err error
+
+		for _, val := range extensions {
+
+			var semanticId sql.NullInt64
+			semanticId, err = persistence_utils.CreateReference(tx, val.SemanticId)
+
+			if err != nil {
+				return err
+			}
+			var id int64
+			err = tx.QueryRow(`
+				INSERT INTO extension (
+					semantic_id,
+					name,
+					value_type,
+					value_text,
+					value_num,
+					value_bool,
+					value_time,
+					value_datetime
+				) VALUES (
+					$1, $2, $3, $4, $5, $6, $7, $8
+				)
+				RETURNING id
+			`,
+				semanticId,
+				val.Name,
+				val.ValueType,
+				nil,
+				nil,
+				nil,
+				nil,
+				nil,
+			).Scan(&id)
+
+			if err != nil {
+				return err
+			}
+			err = CreateExtensionReferences(tx, id, val.SupplementalSemanticIds)
+			if err != nil {
+				return err
+			}
+
+			err = CreateExtensionReferences(tx, id, val.RefersTo)
+			if err != nil {
+				return err
+			}
+
+		}
+
+	}
 	return nil
 }
