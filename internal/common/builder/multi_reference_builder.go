@@ -32,6 +32,12 @@ type MultiReferenceBuilder struct {
 	references          []*gen.Reference
 }
 
+func NewMultiReferenceBuilder() ([]*gen.Reference, *MultiReferenceBuilder) {
+	referenceMap := make(map[int64]*ReferenceBuilder)
+	references := []*gen.Reference{}
+	return references, &MultiReferenceBuilder{referenceBuilderMap: referenceMap, references: references}
+}
+
 func (rb *MultiReferenceBuilder) CreateReference(dbId int64, referenceType string) {
 	// TODO: add referredSemanticId
 	// Use ReferenceBuilder to create a new reference for MultiReferenceBuilder
@@ -40,7 +46,7 @@ func (rb *MultiReferenceBuilder) CreateReference(dbId int64, referenceType strin
 		// Reference already exists, do not create a new one
 		return
 	}
-	reference, builder := NewReferenceBuilder(referenceType)
+	reference, builder := NewReferenceBuilder(referenceType, dbId)
 	rb.referenceBuilderMap[dbId] = builder
 	rb.references = append(rb.references, reference)
 }

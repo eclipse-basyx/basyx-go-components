@@ -33,24 +33,25 @@ import (
 )
 
 type ReferenceBuilder struct {
-	reference                 *gen.Reference
-	keyIds                    []int64
-	childKeyIds               []int64
-	referredSemanticIdBuilder *ReferenceBuilder // Builder for nested referredSemanticId
+	reference                  *gen.Reference
+	keyIds                     []int64
+	childKeyIds                []int64
+	referredSemanticIdMap      map[int64]*ReferenceMetadata
+	referredSemanticIdBuilders map[int64]*ReferenceBuilder
+	databaseId                 int64
 }
 
-func NewReferenceBuilder(referenceType string) (*gen.Reference, *ReferenceBuilder) {
+type ReferenceMetadata struct {
+	parent    int64
+	reference *gen.Reference
+}
+
+func NewReferenceBuilder(referenceType string, dbId int64) (*gen.Reference, *ReferenceBuilder) {
 	ref := &gen.Reference{
 		Type: gen.ReferenceTypes(referenceType),
 		Keys: []gen.Key{},
 	}
-	return ref, &ReferenceBuilder{keyIds: []int64{}, reference: ref, childKeyIds: []int64{}}
-}
-
-func NewMultiReferenceBuilder() ([]*gen.Reference, *MultiReferenceBuilder) {
-	referenceMap := make(map[int64]*ReferenceBuilder)
-	references := []*gen.Reference{}
-	return references, &MultiReferenceBuilder{referenceBuilderMap: referenceMap, references: references}
+	return ref, &ReferenceBuilder{keyIds: []int64{}, reference: ref, childKeyIds: []int64{}, databaseId: dbId, referredSemanticIdBuilders: make(map[int64]*ReferenceBuilder), referredSemanticIdMap: make(map[int64]*ReferenceMetadata)}
 }
 
 func (rb *ReferenceBuilder) CreateKey(key_id int64, key_type string, key_value string) {
@@ -66,4 +67,37 @@ func (rb *ReferenceBuilder) CreateKey(key_id int64, key_type string, key_value s
 
 func (rb *ReferenceBuilder) SetReferredSemanticId(referredSemanticId *gen.Reference) {
 	rb.reference.ReferredSemanticId = referredSemanticId
+}
+
+func (rb *ReferenceBuilder) CreateReferredSemanticId(referredSemanticIdDbId int64, parentId int64, referenceType string) *ReferenceBuilder {
+	_, exists := rb.referredSemanticIdMap[referredSemanticIdDbId]
+	if !exists {
+		referredSemanticId, newBuilder := NewReferenceBuilder(referenceType, referredSemanticIdDbId)
+		rb.referredSemanticIdBuilders[referredSemanticIdDbId] = newBuilder
+		rb.referredSemanticIdMap[referredSemanticIdDbId] = &ReferenceMetadata{
+			parent:    parentId,
+			reference: referredSemanticId,
+		}
+		if parentId == rb.databaseId {
+			rb.reference.ReferredSemanticId = referredSemanticId
+		}
+	}
+	return rb
+}
+
+func (rb *ReferenceBuilder) CreateReferredSemanticIdKey() {
+
+}
+
+func (rb *ReferenceBuilder) BuildNestedStructure() {
+	for _, refMetadata := range rb.referredSemanticIdMap {
+		if refMetadata.parent == rb.databaseId {
+			// Already assigned to root, skip
+			continue
+		}
+		parentId := refMetadata.parent
+		reference := refMetadata.reference
+		parentObj := rb.referredSemanticIdMap[parentId].reference
+		parentObj.ReferredSemanticId = reference
+	}
 }
