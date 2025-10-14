@@ -36,6 +36,11 @@ import (
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 )
 
+type ReferenceMetadata struct {
+	parent    int64
+	reference *gen.Reference
+}
+
 func GetSubmodels(db *sql.DB) {
 	GetSubmodel(db, "")
 }
@@ -60,8 +65,8 @@ func GetSubmodel(db *sql.DB, submodelId string) {
 	descriptionRefs := make(map[string]*[]gen.LangStringTextType)
 
 	// Children Store
-	//semanticIdReferredSemanticIds := []*gen.Reference{}
-	var lastReference *gen.Reference
+	semanticIdReferredSemanticIds := make(map[int64]*ReferenceMetadata)
+	var semanticIdRootDbId int64
 
 	for rows.Next() {
 		// Submodel Header
@@ -108,10 +113,11 @@ func GetSubmodel(db *sql.DB, submodelId string) {
 
 		if !isSubmodelAlreadyCreated(submodels, id) {
 			semanticId, semanticIdBuilder := builders.NewReferenceBuilder(semantic_id_type.String)
-			lastReference = semanticId
 			_, supplementalSemanticIdBuilders := builders.NewMultiReferenceBuilder()
 			displayName, nameTypeBuilder := builders.NewLangStringNameTypesBuilder()
 			description, textTypeBuilder := builders.NewLangStringTextTypesBuilder()
+
+			semanticIdRootDbId = semantic_id_db_id.Int64
 
 			semanticIdBuilderRefs[id.String] = semanticIdBuilder
 			supplementalSemanticIdBuilderRefs[id.String] = supplementalSemanticIdBuilders
@@ -144,9 +150,15 @@ func GetSubmodel(db *sql.DB, submodelId string) {
 				referredSemanticId, newBuilder := builders.NewReferenceBuilder(referred_semantic_id_type.String)
 				referredSemanticIdBuilder = newBuilder
 				semanticIdReferredSemanticIdBuilderRefs[referred_semantic_id_db_id.Int64] = referredSemanticIdBuilder
-
-				lastReference.ReferredSemanticId = referredSemanticId
-				lastReference = referredSemanticId
+				refMetadata := &ReferenceMetadata{
+					parent:    referred_parent_reference_id.Int64,
+					reference: referredSemanticId,
+				}
+				semanticIdReferredSemanticIds[referred_semantic_id_db_id.Int64] = refMetadata
+				// If is direct child of root -> assign to root
+				if referred_parent_reference_id.Valid && referred_parent_reference_id.Int64 == semantic_id_db_id.Int64 {
+					semanticIdBuilderRefs[id.String].SetReferredSemanticId(referredSemanticId)
+				}
 			}
 		}
 		if referred_key_id.Valid {
@@ -165,6 +177,18 @@ func GetSubmodel(db *sql.DB, submodelId string) {
 		if supplemental_semantic_id_key_id.Valid {
 			supplementalSemanticIdBuilderRefs[id.String].CreateKey(supplemental_semantic_id_dbid.Int64, supplemental_semantic_id_key_id.Int64, supplemental_semantic_id_key_type.String, supplemental_semantic_id_key_value.String)
 		}
+	}
+
+	// Assign the referredSemanticIds to their parents
+	for _, refMetadata := range semanticIdReferredSemanticIds {
+		if refMetadata.parent == semanticIdRootDbId {
+			// Already assigned to root, skip
+			continue
+		}
+		parentId := refMetadata.parent
+		reference := refMetadata.reference
+		parentObj := semanticIdReferredSemanticIds[parentId].reference
+		parentObj.ReferredSemanticId = reference
 	}
 
 	// After all rows are processed, assign the populated slices to the submodels
@@ -242,7 +266,10 @@ func getSubmodelDataFromDb(db *sql.DB, id string) (*sql.Rows, error) {
 		Join("LEFT JOIN submodel_supplemental_semantic_id sssi ON s.id = sssi.submodel_id").
 		Join("LEFT JOIN reference supl_ref ON sssi.reference_id = supl_ref.id").
 		Join("LEFT JOIN reference_key supl_rk ON supl_ref.id = supl_rk.reference_id").
-		OrderBy("submodel_semantic_id_referred_semantic_id_reference_id, submodel_semantic_id_referred_semantic_id_key_id").
+		// SupplementalSemanticIds -> ReferredSemanticIds (get all references in the tree, excluding root)
+		// Join("LEFT JOIN reference supl_referredReference ON supl_referredReference.rootReference = supl_ref.id").
+		// Join("LEFT JOIN reference_key supl_referredRK ON supl_referredReference.id = supl_referredRK.reference_id").
+		// OrderBy("submodel_semantic_id_referred_semantic_id_reference_id, submodel_semantic_id_referred_semantic_id_key_id").
 		Build()
 
 	fmt.Print("Executing query:", query, " with args ", args, "\n\n")
