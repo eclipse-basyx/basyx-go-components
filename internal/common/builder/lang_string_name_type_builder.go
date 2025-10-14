@@ -33,16 +33,16 @@ import (
 )
 
 type LangStringNameTypesBuilder struct {
-	nameTypeIds         []int
+	nameTypeIds         []int64
 	langStringNameTypes *[]gen.LangStringNameType
 }
 
 func NewLangStringNameTypesBuilder() (*[]gen.LangStringNameType, *LangStringNameTypesBuilder) {
 	langStringNameTypes := []gen.LangStringNameType{}
-	return &langStringNameTypes, &LangStringNameTypesBuilder{langStringNameTypes: &langStringNameTypes, nameTypeIds: []int{}}
+	return &langStringNameTypes, &LangStringNameTypesBuilder{langStringNameTypes: &langStringNameTypes, nameTypeIds: []int64{}}
 }
 
-func (lsntb *LangStringNameTypesBuilder) CreateLangStringNameType(nameTypeId int, language string, text string) {
+func (lsntb *LangStringNameTypesBuilder) CreateLangStringNameType(nameTypeId int64, language string, text string) {
 	skip := slices.Contains(lsntb.nameTypeIds, nameTypeId)
 	if !skip {
 		lsntb.nameTypeIds = append(lsntb.nameTypeIds, nameTypeId)

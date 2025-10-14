@@ -20,7 +20,7 @@ func CreateAdministrativeInformation(tx *sql.Tx, adminInfo *gen.AdministrativeIn
 		var creatorID sql.NullInt64
 		var err error
 		if adminInfo.Creator != nil {
-			creatorID, err = CreateReference(tx, adminInfo.Creator)
+			creatorID, err = CreateReference(tx, adminInfo.Creator, sql.NullInt64{}, sql.NullInt64{})
 			if err != nil {
 				return sql.NullInt64{}, err
 			}
@@ -35,14 +35,14 @@ func CreateAdministrativeInformation(tx *sql.Tx, adminInfo *gen.AdministrativeIn
 	return adminInfoID, nil
 }
 
-func CreateReference(tx *sql.Tx, semanticId *gen.Reference) (sql.NullInt64, error) {
+func CreateReference(tx *sql.Tx, semanticId *gen.Reference, parentId sql.NullInt64, rootId sql.NullInt64) (sql.NullInt64, error) {
 	var id int
 	var referenceID sql.NullInt64
 
 	insertKeyQuery := `INSERT INTO reference_key (reference_id, position, type, value) VALUES ($1, $2, $3, $4)`
 
 	if semanticId != nil && !isEmptyReference(*semanticId) {
-		err := tx.QueryRow(`INSERT INTO reference (type) VALUES ($1) RETURNING id`, semanticId.Type).Scan(&id)
+		err := tx.QueryRow(`INSERT INTO reference (type, parentReference, rootReference) VALUES ($1, $2, $3) RETURNING id`, semanticId.Type, parentId, rootId).Scan(&id)
 		if err != nil {
 			return sql.NullInt64{}, err
 		}
@@ -57,8 +57,7 @@ func CreateReference(tx *sql.Tx, semanticId *gen.Reference) (sql.NullInt64, erro
 			}
 		}
 
-		stack := make([]*gen.Reference, 0)
-		referenceID, err = insertNestedRefferedSemanticIds(semanticId, stack, tx, referenceID, insertKeyQuery)
+		_, err = insertNestedRefferedSemanticIds(semanticId, tx, referenceID, insertKeyQuery)
 		if err != nil {
 			return sql.NullInt64{}, err
 		}
@@ -66,7 +65,9 @@ func CreateReference(tx *sql.Tx, semanticId *gen.Reference) (sql.NullInt64, erro
 	return referenceID, nil
 }
 
-func insertNestedRefferedSemanticIds(semanticId *gen.Reference, stack []*gen.Reference, tx *sql.Tx, referenceID sql.NullInt64, insertKeyQuery string) (sql.NullInt64, error) {
+func insertNestedRefferedSemanticIds(semanticId *gen.Reference, tx *sql.Tx, referenceID sql.NullInt64, insertKeyQuery string) (sql.NullInt64, error) {
+	stack := make([]*gen.Reference, 0)
+	rootId := referenceID
 	if semanticId.ReferredSemanticId != nil && !isEmptyReference(*semanticId.ReferredSemanticId) {
 		stack = append(stack, semanticId.ReferredSemanticId)
 	}
@@ -83,7 +84,7 @@ func insertNestedRefferedSemanticIds(semanticId *gen.Reference, stack []*gen.Ref
 		} else {
 			parentReference = nil
 		}
-		err := tx.QueryRow(`INSERT INTO reference (type, parentReference) VALUES ($1, $2) RETURNING id`, current.Type, parentReference).Scan(&childRefID)
+		err := tx.QueryRow(`INSERT INTO reference (type, parentReference, rootReference) VALUES ($1, $2, $3) RETURNING id`, current.Type, parentReference, rootId).Scan(&childRefID)
 		if err != nil {
 			return sql.NullInt64{}, err
 		}
@@ -264,7 +265,7 @@ func GetLangStringTextTypes(db *sql.DB, textTypeID sql.NullInt64) ([]gen.LangStr
 func CreateExtension(tx *sql.Tx, submodel_id string, extension gen.Extension) (sql.NullInt64, error) {
 	var extensionDbId sql.NullInt64
 	// Create SemanticId
-	semanticIdDbId, err := CreateReference(tx, extension.SemanticId)
+	semanticIdDbId, err := CreateReference(tx, extension.SemanticId, sql.NullInt64{}, sql.NullInt64{})
 	if err != nil {
 		return sql.NullInt64{}, err
 	}
@@ -274,7 +275,7 @@ func CreateExtension(tx *sql.Tx, submodel_id string, extension gen.Extension) (s
 		return sql.NullInt64{}, err
 	}
 
-	err = insertSupplementalSemanticIds(extension, semanticIdDbId, err, tx, extensionDbId)
+	err = insertSupplementalSemanticIdsForExtensions(extension, semanticIdDbId, err, tx, extensionDbId)
 	if err != nil {
 		return sql.NullInt64{}, err
 	}
@@ -328,7 +329,7 @@ func fillValueBasedOnType(extension gen.Extension, valueText *sql.NullString, va
 func insertRefersToReferences(extension gen.Extension, semanticIdDbId sql.NullInt64, err error, tx *sql.Tx, extensionDbId sql.NullInt64) error {
 	if len(extension.RefersTo) > 0 {
 		for _, ref := range extension.RefersTo {
-			refDbId, refErr := CreateReference(tx, &ref)
+			refDbId, refErr := CreateReference(tx, &ref, sql.NullInt64{}, sql.NullInt64{})
 			if refErr != nil {
 				return refErr
 			}
@@ -345,13 +346,13 @@ func insertRefersToReferences(extension gen.Extension, semanticIdDbId sql.NullIn
 	return nil
 }
 
-func insertSupplementalSemanticIds(extension gen.Extension, semanticIdDbId sql.NullInt64, err error, tx *sql.Tx, extensionDbId sql.NullInt64) error {
+func insertSupplementalSemanticIdsForExtensions(extension gen.Extension, semanticIdDbId sql.NullInt64, err error, tx *sql.Tx, extensionDbId sql.NullInt64) error {
 	if len(extension.SupplementalSemanticIds) > 0 {
 		if !semanticIdDbId.Valid {
 			return common.NewErrBadRequest("Supplemental Semantic IDs require a main Semantic ID to be present. (See AAS Constraint: AASd-118)")
 		}
 		for _, supplementalSemanticId := range extension.SupplementalSemanticIds {
-			supplementalSemanticIdDbId, err := CreateReference(tx, &supplementalSemanticId)
+			supplementalSemanticIdDbId, err := CreateReference(tx, &supplementalSemanticId, sql.NullInt64{}, sql.NullInt64{})
 			if err != nil {
 				return err
 			}
@@ -360,6 +361,22 @@ func insertSupplementalSemanticIds(extension gen.Extension, semanticIdDbId sql.N
 				Values(extensionDbId, supplementalSemanticIdDbId).
 				Build()
 			_, err = tx.Exec(q, args...)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func InsertSupplementalSemanticIds(tx *sql.Tx, submodel_id string, supplementalSemanticIds []*gen.Reference) error {
+	if len(supplementalSemanticIds) > 0 {
+		for _, supplementalSemanticId := range supplementalSemanticIds {
+			supplementalSemanticIdDbId, err := CreateReference(tx, supplementalSemanticId, sql.NullInt64{}, sql.NullInt64{})
+			if err != nil {
+				return err
+			}
+			_, err = tx.Exec(`INSERT INTO submodel_supplemental_semantic_id (submodel_id, reference_id) VALUES ($1, $2)`, submodel_id, supplementalSemanticIdDbId)
 			if err != nil {
 				return err
 			}

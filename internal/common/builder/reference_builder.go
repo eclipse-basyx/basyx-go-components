@@ -26,6 +26,7 @@
 package builder
 
 import (
+	"database/sql"
 	"slices"
 
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
@@ -33,8 +34,10 @@ import (
 )
 
 type ReferenceBuilder struct {
-	reference *gen.Reference
-	keyIds    []int
+	reference                 *gen.Reference
+	keyIds                    []int64
+	childKeyIds               []int64
+	referredSemanticIdBuilder *ReferenceBuilder // Builder for nested referredSemanticId
 }
 
 func NewReferenceBuilder(referenceType string) (*gen.Reference, *ReferenceBuilder) {
@@ -42,10 +45,16 @@ func NewReferenceBuilder(referenceType string) (*gen.Reference, *ReferenceBuilde
 		Type: gen.ReferenceTypes(referenceType),
 		Keys: []gen.Key{},
 	}
-	return ref, &ReferenceBuilder{keyIds: []int{}, reference: ref}
+	return ref, &ReferenceBuilder{keyIds: []int64{}, reference: ref, childKeyIds: []int64{}}
 }
 
-func (rb *ReferenceBuilder) CreateKey(key_id int, key_type string, key_value string) {
+func NewMultiReferenceBuilder() ([]*gen.Reference, *MultiReferenceBuilder) {
+	referenceMap := make(map[int64]*ReferenceBuilder)
+	references := []*gen.Reference{}
+	return references, &MultiReferenceBuilder{referenceBuilderMap: referenceMap, references: references}
+}
+
+func (rb *ReferenceBuilder) CreateKey(key_id int64, key_type string, key_value string) {
 	skip := slices.Contains(rb.keyIds, key_id)
 	if !skip {
 		rb.keyIds = append(rb.keyIds, key_id)
@@ -54,4 +63,24 @@ func (rb *ReferenceBuilder) CreateKey(key_id int, key_type string, key_value str
 			Value: key_value,
 		})
 	}
+}
+
+// CreateReferredSemanticId creates the referredSemanticId for this reference
+func (rb *ReferenceBuilder) CreateReferredSemanticId(rootBuilder *ReferenceBuilder, referredSemanticIdDbId sql.NullInt64, referenceType string) *ReferenceBuilder {
+	skip := slices.Contains(rootBuilder.childKeyIds, referredSemanticIdDbId.Int64)
+	if !skip {
+		if rb.referredSemanticIdBuilder == nil {
+			referredSemanticId, builder := NewReferenceBuilder(referenceType)
+			rb.reference.ReferredSemanticId = referredSemanticId
+			rb.referredSemanticIdBuilder = builder
+			rootBuilder.childKeyIds = append(rootBuilder.childKeyIds, referredSemanticIdDbId.Int64)
+		}
+		return rb.referredSemanticIdBuilder
+	}
+	return nil
+}
+
+// GetReferredSemanticIdBuilder returns the builder for the referredSemanticId (if it exists)
+func (rb *ReferenceBuilder) GetReferredSemanticIdBuilder() *ReferenceBuilder {
+	return rb.referredSemanticIdBuilder
 }

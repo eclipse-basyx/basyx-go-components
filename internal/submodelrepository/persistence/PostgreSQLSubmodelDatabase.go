@@ -170,13 +170,37 @@ func (p *PostgreSQLSubmodelDatabase) CreateSubmodel(sm gen.Submodel) error {
 		}
 	}()
 
-	var referenceID, displayNameId, descriptionId, administrationId sql.NullInt64
+	var semanticIdDbId, displayNameId, descriptionId, administrationId sql.NullInt64
 
-	referenceID, err = persistence_utils.CreateReference(tx, sm.SemanticId)
+	semanticIdDbId, err = persistence_utils.CreateReference(tx, sm.SemanticId, sql.NullInt64{}, sql.NullInt64{})
 	if err != nil {
 		fmt.Println(err)
 		return common.NewInternalServerError("Failed to create SemanticId - no changes applied - see console for details")
 	}
+
+	// if sm.SemanticId.ReferredSemanticId != nil {
+	// 	lastParentId := semanticIdDbId
+	// 	stack := []*gen.Reference{sm.SemanticId.ReferredSemanticId}
+	// 	for len(stack) > 0 {
+	// 		currentElement := stack[len(stack)-1]
+	// 		if currentElement != nil {
+	// 			// Pop current from stack
+	// 			stack = stack[:len(stack)-1]
+	// 			// First push next element to stack if exists
+	// 			if currentElement.ReferredSemanticId != nil {
+	// 				stack = append(stack, currentElement.ReferredSemanticId)
+	// 			}
+
+	// 			// Save current element to DB using currentElement instead of sm.SemanticId
+	// 			insertedId, err := persistence_utils.CreateReference(tx, currentElement, lastParentId, semanticIdDbId)
+	// 			if err != nil {
+	// 				return err
+	// 			}
+	// 			lastParentId = insertedId
+
+	// 		}
+	// 	}
+	// }
 
 	displayNameId, err = persistence_utils.CreateLangStringNameTypes(tx, sm.DisplayName)
 	if err != nil {
@@ -203,9 +227,16 @@ func (p *PostgreSQLSubmodelDatabase) CreateSubmodel(sm gen.Submodel) error {
         ON CONFLICT (id) DO NOTHING
     `
 
-	_, err = tx.Exec(q, sm.Id, sm.IdShort, sm.Category, sm.Kind, referenceID, displayNameId, descriptionId, administrationId)
+	_, err = tx.Exec(q, sm.Id, sm.IdShort, sm.Category, sm.Kind, semanticIdDbId, displayNameId, descriptionId, administrationId)
 	if err != nil {
 		return err
+	}
+
+	if sm.SupplementalSemanticIds != nil {
+		err = persistence_utils.InsertSupplementalSemanticIds(tx, sm.Id, sm.SupplementalSemanticIds)
+		if err != nil {
+			return err
+		}
 	}
 
 	if len(sm.SubmodelElements) > 0 {

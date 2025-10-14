@@ -109,7 +109,8 @@ END $$;
 CREATE TABLE IF NOT EXISTS reference (
   id           BIGSERIAL PRIMARY KEY,
   type         reference_types NOT NULL,
-  parentReference BIGSERIAL REFERENCES reference(id)  -- Optional nesting
+  parentReference BIGINT REFERENCES reference(id),  -- Optional nesting
+  rootReference BIGINT REFERENCES reference(id)  -- The root of the nesting tree
 );
 
 CREATE INDEX IF NOT EXISTS ix_ref_id ON reference(id);
@@ -248,7 +249,6 @@ CREATE INDEX IF NOT EXISTS ix_eds_id ON submodel_embedded_data_specification(id)
 
 CREATE TABLE IF NOT EXISTS extension (
   id          BIGSERIAL PRIMARY KEY,
-  submodel_id VARCHAR(2048) NOT NULL REFERENCES submodel(id) ON DELETE CASCADE,
   semantic_id BIGINT REFERENCES reference(id) ON DELETE CASCADE,
   name       varchar(128) NOT NULL,
   value_type    data_type_def_xsd NOT NULL,
@@ -260,6 +260,14 @@ CREATE TABLE IF NOT EXISTS extension (
 );
 
 CREATE INDEX IF NOT EXISTS ix_ext_id ON extension(id);
+
+CREATE TABLE IF NOT EXISTS submodel_extension (
+  id BIGSERIAL PRIMARY KEY,
+  submodel_id VARCHAR(2048) NOT NULL REFERENCES submodel(id) ON DELETE CASCADE,
+  extension_id BIGINT NOT NULL REFERENCES extension(id) ON DELETE CASCADE 
+);
+
+CREATE INDEX IF NOT EXISTS ix_smext_id ON submodel_extension(id);
 
 CREATE TABLE IF NOT EXISTS extension_supplemental_semantic_id (
   id BIGSERIAL PRIMARY KEY,

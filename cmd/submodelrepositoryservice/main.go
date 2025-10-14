@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -47,7 +48,10 @@ func runServer(ctx context.Context, configPath string) error {
 	}
 
 	//TEST
-	persistence_utils.GetSubmodelJson(smDatabase.GetDB(), "http://acplt.org/Submodels/Assets/TestAsset/Identification2")
+	start := time.Now().Local().UnixMilli()
+	persistence_utils.GetSubmodel(smDatabase.GetDB(), "http://acplt.org/Submodels/Assets/TestAsset/Identification")
+	end := time.Now().Local().UnixMilli()
+	fmt.Printf("Total time: %d milliseconds\n", end-start)
 	//TEST
 
 	smSvc := api.NewSubmodelRepositoryAPIAPIService(*smDatabase)
