@@ -27,8 +27,8 @@ var maxCacheSize = 1000
 // InMemory Cache for submodels
 var submodelCache map[string]gen.Submodel = make(map[string]gen.Submodel)
 
-func NewPostgreSQLSubmodelBackend(dsn string, maxOpenConns, maxIdleConns int, connMaxLifetimeMinutes int, cacheEnabled bool) (*PostgreSQLSubmodelDatabase, error) {
-	db, err := common.InitializeDatabase(dsn, "submodelrepositoryschema.sql")
+func NewPostgreSQLSubmodelBackend(dsn string, maxOpenConns, maxIdleConns int, connMaxLifetimeMinutes int, cacheEnabled bool, databaseSchema string) (*PostgreSQLSubmodelDatabase, error) {
+	db, err := common.InitializeDatabase(dsn, databaseSchema)
 	if err != nil {
 		return nil, err
 	}

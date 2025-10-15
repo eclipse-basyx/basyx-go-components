@@ -290,7 +290,7 @@ func CreateExtension(tx *sql.Tx, submodel_id string, extension gen.Extension) (s
 func insertExtension(extension gen.Extension, submodel_id string, semanticIdDbId sql.NullInt64, err error, tx *sql.Tx, extensionDbId sql.NullInt64) (sql.NullInt64, error) {
 	var valueText, valueNum, valueBool, valueTime, valueDatetime sql.NullString
 	fillValueBasedOnType(extension, &valueText, &valueNum, &valueBool, &valueTime, &valueDatetime)
-
+	// INSERT INTO extension(..,..,..,..) VALUES($1,$2,$3) RETURNING id
 	q, args := qb.NewInsert("extension").
 		Columns("submodel_id", "semantic_id", "name", "value_type", "value_text", "value_num", "value_bool", "value_time", "value_datetime").
 		Values(submodel_id, semanticIdDbId, extension.Name, extension.ValueType, valueText, valueNum, valueBool, valueTime, valueDatetime).

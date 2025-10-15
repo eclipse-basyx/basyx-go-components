@@ -74,8 +74,11 @@ func GetSubmodel(db *sql.DB, submodelId string) {
 		var referred_parent_reference_id sql.NullInt64
 		// SupplementalSemanticIds
 		var supplementalSemanticIdType, supplemental_semantic_id_key_type, supplemental_semantic_id_key_value sql.NullString
+		// SupplementalSemanticIds -> referredSemanticIds
+		var supplemental_semantic_id_referred_semantic_id_type, supplemental_semantic_id_referred_key_type, supplemental_semantic_id_referred_key_value sql.NullString
+		var supplemental_semantic_id_referred_parent_reference_id sql.NullInt64
 		// Identifiers
-		var key_id, display_name_id, description_id, supplemental_semantic_id_key_id, supplemental_semantic_id_dbid, referred_key_id, referred_semantic_id_db_id sql.NullInt64
+		var key_id, display_name_id, description_id, supplemental_semantic_id_key_id, supplemental_semantic_id_dbid, referred_key_id, referred_semantic_id_db_id, supplemental_semantic_id_referred_semantic_id_db_id, supplemental_semantic_id_referred_key_id sql.NullInt64
 
 		err := rows.Scan(
 			// Submodel
@@ -91,11 +94,9 @@ func GetSubmodel(db *sql.DB, submodelId string) {
 			// SupplementalSemanticIds
 			&supplementalSemanticIdType, &supplemental_semantic_id_dbid,
 			&supplemental_semantic_id_key_type, &supplemental_semantic_id_key_value, &supplemental_semantic_id_key_id,
+			// SupplementalSemanticIds -> referredSemanticIds
+			&supplemental_semantic_id_referred_semantic_id_db_id, &supplemental_semantic_id_referred_semantic_id_type, &supplemental_semantic_id_referred_parent_reference_id, &supplemental_semantic_id_referred_key_type, &supplemental_semantic_id_referred_key_value, &supplemental_semantic_id_referred_key_id,
 		)
-
-		//print new semantic id info
-		fmt.Printf("DEBUG ROW: submodel=%s, semantic_db_id=%v, semantic_type=%s, key_id=%v, referred_id=%v, referred_type=%s, referred_parent=%v, referred_key_id=%v\n",
-			id.String, semantic_id_db_id, semantic_id_type.String, key_id, referred_semantic_id_db_id, referred_semantic_id_type.String, referred_parent_reference_id, referred_key_id)
 
 		if err != nil {
 			fmt.Printf("Error scanning row: %v\n", err)
@@ -136,8 +137,7 @@ func GetSubmodel(db *sql.DB, submodelId string) {
 			semanticIdBuilderRefs[id.String].CreateReferredSemanticId(referred_semantic_id_db_id.Int64, referred_parent_reference_id.Int64, referred_semantic_id_type.String)
 		}
 		if referred_key_id.Valid {
-			// semanticIdBuilderRefs[id.String].CreateReferredKey(referred_key_id.Int64, referred_key_type.String, referred_key_value.String)
-			//semanticIdReferredSemanticIdBuilderRefs[referred_semantic_id_db_id.Int64].CreateKey(referred_key_id.Int64, referred_key_type.String, referred_key_value.String)
+			semanticIdBuilderRefs[id.String].CreateReferredSemanticIdKey(referred_semantic_id_db_id.Int64, referred_key_id.Int64, referred_key_type.String, referred_key_value.String)
 		}
 		if display_name_id.Valid {
 			nameTypeBuilderRefs[id.String].CreateLangStringNameType(display_name_id.Int64, display_name_language.String, display_name_text.String)
@@ -152,10 +152,20 @@ func GetSubmodel(db *sql.DB, submodelId string) {
 		if supplemental_semantic_id_key_id.Valid {
 			supplementalSemanticIdBuilderRefs[id.String].CreateKey(supplemental_semantic_id_dbid.Int64, supplemental_semantic_id_key_id.Int64, supplemental_semantic_id_key_type.String, supplemental_semantic_id_key_value.String)
 		}
+		if supplemental_semantic_id_referred_semantic_id_db_id.Valid {
+			supplementalSemanticIdBuilderRefs[id.String].CreateReferredSemanticId(supplemental_semantic_id_dbid.Int64, supplemental_semantic_id_referred_semantic_id_db_id.Int64, supplemental_semantic_id_referred_parent_reference_id.Int64, supplemental_semantic_id_referred_semantic_id_type.String)
+		}
+		if supplemental_semantic_id_referred_key_id.Valid {
+			supplementalSemanticIdBuilderRefs[id.String].CreateReferredSemanticIdKey(supplemental_semantic_id_dbid.Int64, supplemental_semantic_id_referred_semantic_id_db_id.Int64, supplemental_semantic_id_referred_key_id.Int64, supplemental_semantic_id_referred_key_type.String, supplemental_semantic_id_referred_key_value.String)
+		}
 	}
 
 	for _, referenceBuilder := range semanticIdBuilderRefs {
 		referenceBuilder.BuildNestedStructure()
+	}
+
+	for _, multiReferenceBuilder := range supplementalSemanticIdBuilderRefs {
+		multiReferenceBuilder.BuildNestedStructures()
 	}
 
 	// After all rows are processed, assign the populated slices to the submodels
@@ -203,6 +213,9 @@ func getSubmodelDataFromDb(db *sql.DB, id string) (*sql.Rows, error) {
 	// SupplementalSemanticIds
 	supplementalSemanticIdSelects := []string{"supl_ref.type as submodel_supplemental_semantic_id_reference_type", "supl_ref.id as submodel_supplemental_semantic_id_dbid"}
 	supplementalSemanticIdKeySelects := []string{"supl_rk.type as submodel_supplemental_semantic_id_key_type", "supl_rk.value as submodel_supplemental_semantic_id_key_value", "supl_rk.id as submodel_supplemental_semantic_id_key_id"}
+	// SupplementalSemanticIds -> referredSemanticIds
+	supplementalSemanticIdReferredSemanticIdSelects := []string{"supl_referredReference.id as submodel_semantic_id_referred_semantic_id_reference_id", "supl_referredReference.type as submodel_semantic_id_referred_semantic_id_reference_type", "supl_referredReference.parentReference as submodel_semantic_id_referred_parent_reference_id"}
+	supplementalSemanticIdReferredSemanticIdKeySelects := []string{"supl_referredRK.type as submodel_semantic_id_referred_semantic_id_reference_key_type", "supl_referredRK.value as submodel_semantic_id_referred_semantic_id_reference_key_value", "supl_referredRK.id as submodel_semantic_id_referred_semantic_id_key_id"}
 
 	combined := []string{}
 	combined = append(combined, submodelSelects...)
@@ -214,13 +227,15 @@ func getSubmodelDataFromDb(db *sql.DB, id string) (*sql.Rows, error) {
 	combined = append(combined, semanticIdReferredSemanticIdKeySelects...)
 	combined = append(combined, supplementalSemanticIdSelects...)
 	combined = append(combined, supplementalSemanticIdKeySelects...)
+	combined = append(combined, supplementalSemanticIdReferredSemanticIdSelects...)
+	combined = append(combined, supplementalSemanticIdReferredSemanticIdKeySelects...)
 
 	query, args := qb.NewSelect(combined...).
 		From("submodel s").
-		// DisplayName
+		//----- DisplayName -----//
 		Join("LEFT JOIN lang_string_name_type_reference dn_ref ON s.displayname_id = dn_ref.id").
 		Join("LEFT JOIN lang_string_name_type dn ON dn.lang_string_name_type_reference_id = dn_ref.id").
-		// Description
+		//----- Description -----//
 		Join("LEFT JOIN lang_string_text_type_reference desc_ref ON s.description_id = desc_ref.id").
 		Join("LEFT JOIN lang_string_text_type description ON description.lang_string_text_type_reference_id = desc_ref.id").
 		//----- SemanticId -----//
@@ -229,17 +244,14 @@ func getSubmodelDataFromDb(db *sql.DB, id string) (*sql.Rows, error) {
 		// SemanticId -> referredSemanticIds (get all references in the tree, excluding root)
 		Join("LEFT JOIN reference referredReference ON referredReference.rootReference = r.id AND referredReference.id != r.id").
 		Join("LEFT JOIN reference_key referredRK ON referredReference.id = referredRK.reference_id").
-		// SupplementalSemanticIds
+		//----- SupplementalSemanticIds -----//
 		Join("LEFT JOIN submodel_supplemental_semantic_id sssi ON s.id = sssi.submodel_id").
 		Join("LEFT JOIN reference supl_ref ON sssi.reference_id = supl_ref.id").
 		Join("LEFT JOIN reference_key supl_rk ON supl_ref.id = supl_rk.reference_id").
 		// SupplementalSemanticIds -> ReferredSemanticIds (get all references in the tree, excluding root)
-		// Join("LEFT JOIN reference supl_referredReference ON supl_referredReference.rootReference = supl_ref.id").
-		// Join("LEFT JOIN reference_key supl_referredRK ON supl_referredReference.id = supl_referredRK.reference_id").
-		// OrderBy("submodel_semantic_id_referred_semantic_id_reference_id, submodel_semantic_id_referred_semantic_id_key_id").
+		Join("LEFT JOIN reference supl_referredReference ON supl_referredReference.rootReference = supl_ref.id").
+		Join("LEFT JOIN reference_key supl_referredRK ON supl_referredReference.id = supl_referredRK.reference_id").
 		Build()
-
-	fmt.Print("Executing query:", query, " with args ", args, "\n\n")
 
 	rows, err := db.Query(query, args...)
 	if err != nil {
