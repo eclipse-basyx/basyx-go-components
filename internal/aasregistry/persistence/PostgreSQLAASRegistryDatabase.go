@@ -52,7 +52,6 @@ func NewPostgreSQLAASRegistryDatabase(dsn string, maxOpenConns, maxIdleConns int
 
 	return &PostgreSQLAASRegistryDatabase{db: db, cacheEnabled: cacheEnabled}, nil
 }
-
 func (p *PostgreSQLAASRegistryDatabase) InsertAdministrationShellDescriptor(ctx context.Context, aasd model.AssetAdministrationShellDescriptor) error {
 	tx, err := p.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -70,9 +69,13 @@ func (p *PostgreSQLAASRegistryDatabase) InsertAdministrationShellDescriptor(ctx 
 
 	d := goqu.Dialect(dialect)
 
+	// Define datasets once (no alias needed here)
+	descTbl := goqu.T(tblDescriptor)
+
+	// Insert into descriptor and return ID
 	sqlStr, args, buildErr := d.
 		Insert(tblDescriptor).
-		Returning(tDescriptor.Col(colID)).
+		Returning(descTbl.Col(colID)).
 		ToSQL()
 	if buildErr != nil {
 		return buildErr
@@ -145,7 +148,7 @@ func (p *PostgreSQLAASRegistryDatabase) InsertAdministrationShellDescriptor(ctx 
 		return err
 	}
 
-	if err = CreateSubModelDescriptors(tx, descriptorId, aasd.SubmodelDescriptors); err != nil {
+	if err = createSubModelDescriptors(tx, descriptorId, aasd.SubmodelDescriptors); err != nil {
 		return err
 	}
 
@@ -161,24 +164,28 @@ func (p *PostgreSQLAASRegistryDatabase) GetAssetAdministrationShellDescriptorByI
 ) (model.AssetAdministrationShellDescriptor, error) {
 	d := goqu.Dialect(dialect)
 
+	// Define datasets with aliases once
+	aas := goqu.T(tblAASDescriptor).As("aas")
+	desc := goqu.T(tblDescriptor).As("desc")
+
 	sqlStr, args, buildErr := d.
-		From(goqu.T(tblAASDescriptor).As("a")).
+		From(aas).
 		InnerJoin(
-			goqu.T(tblDescriptor).As("d"),
-			goqu.On(goqu.I("a."+colDescriptorID).Eq(goqu.I("d."+colID))),
+			desc,
+			goqu.On(aas.Col(colDescriptorID).Eq(desc.Col(colID))),
 		).
 		Select(
-			goqu.I("a."+colDescriptorID),
-			goqu.I("a."+colAssetKind),
-			goqu.I("a."+colAssetType),
-			goqu.I("a."+colGlobalAssetID),
-			goqu.I("a."+colIdShort),
-			goqu.I("a."+colAASID),
-			goqu.I("a."+colAdminInfoID),
-			goqu.I("a."+colDisplayNameID),
-			goqu.I("a."+colDescriptionID),
+			aas.Col(colDescriptorID),
+			aas.Col(colAssetKind),
+			aas.Col(colAssetType),
+			aas.Col(colGlobalAssetID),
+			aas.Col(colIdShort),
+			aas.Col(colAASID),
+			aas.Col(colAdminInfoID),
+			aas.Col(colDisplayNameID),
+			aas.Col(colDescriptionID),
 		).
-		Where(goqu.I("a." + colAASID).Eq(aasIdentifier)).
+		Where(aas.Col(colAASID).Eq(aasIdentifier)).
 		Limit(1).
 		ToSQL()
 	if buildErr != nil {
@@ -269,4 +276,93 @@ func (p *PostgreSQLAASRegistryDatabase) GetAssetAdministrationShellDescriptorByI
 		Extensions:          extensions,
 		SubmodelDescriptors: smds,
 	}, nil
+}
+
+func (p *PostgreSQLAASRegistryDatabase) ListAssetAdministrationShellDescriptors(
+	ctx context.Context,
+	limit int32,
+	cursor string,
+	assetKind model.AssetKind,
+	assetType string,
+) ([]model.AssetAdministrationShellDescriptor, string, error) {
+
+	if limit <= 0 {
+		limit = 100
+	}
+	peekLimit := int(limit) + 1
+
+	d := goqu.Dialect(dialect)
+	aas := goqu.T(tblAASDescriptor).As("aas")
+
+	// Start building the dataset
+	ds := d.
+		From(aas).
+		Select(aas.Col(colAASID))
+
+	// Cursor (>= to keep same semantics as your original code)
+	if cursor != "" {
+		ds = ds.Where(aas.Col(colAASID).Gte(cursor))
+	}
+
+	// Optional filters
+	if assetType != "" {
+		ds = ds.Where(aas.Col(colAssetType).Eq(assetType))
+	}
+
+	akStr := fmt.Sprint(assetKind)
+	if akStr != "" && akStr != fmt.Sprint(model.ASSETKIND_NOT_APPLICABLE) {
+		ds = ds.Where(aas.Col(colAssetKind).Eq(akStr))
+	}
+
+	// Order + limit (peek one extra)
+	ds = ds.
+		Order(aas.Col(colAASID).Asc()).
+		Limit(uint(peekLimit))
+
+	sqlStr, args, buildErr := ds.ToSQL()
+	if buildErr != nil {
+		fmt.Println("ListAssetAdministrationShellDescriptors: build error:", buildErr)
+		return nil, "", common.NewInternalServerError("Failed to build AAS descriptor query. See server logs for details.")
+	}
+
+	rows, err := p.db.QueryContext(ctx, sqlStr, args...)
+	if err != nil {
+		fmt.Println("ListAssetAdministrationShellDescriptors: query error:", err)
+		return nil, "", common.NewInternalServerError("Failed to query AAS descriptors. See server logs for details.")
+	}
+	defer rows.Close()
+
+	ids := make([]string, 0, peekLimit)
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			fmt.Println("ListAssetAdministrationShellDescriptors: scan error:", err)
+			return nil, "", common.NewInternalServerError("Failed to scan AAS descriptor row. See server logs for details.")
+		}
+		ids = append(ids, id)
+	}
+	if rows.Err() != nil {
+		fmt.Println("ListAssetAdministrationShellDescriptors: rows error:", rows.Err())
+		return nil, "", common.NewInternalServerError("Failed to iterate AAS descriptors. See server logs for details.")
+	}
+
+	// Compute next cursor (we peeked one extra)
+	var nextCursor string
+	if len(ids) > int(limit) {
+		nextCursor = ids[limit]
+		ids = ids[:limit]
+	}
+
+	// Hydrate each ID (kept as-is; could be batched later if needed)
+	out := make([]model.AssetAdministrationShellDescriptor, 0, len(ids))
+	for _, id := range ids {
+		desc, err := p.GetAssetAdministrationShellDescriptorById(ctx, id)
+		if err != nil {
+			fmt.Println("ListAssetAdministrationShellDescriptors: hydrate error for id", id, ":", err)
+			return nil, "", common.NewInternalServerError("Failed to load AAS descriptor details. See server logs for details.")
+		}
+		out = append(out, desc)
+	}
+
+	return out, nextCursor, nil
 }

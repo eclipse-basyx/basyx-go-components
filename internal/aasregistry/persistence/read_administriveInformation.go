@@ -16,15 +16,17 @@ func readAdministrativeInformationByID(ctx context.Context, db *sql.DB, adminInf
 
 	d := goqu.Dialect(dialect)
 
+	ai := goqu.T(tblAdministrativeInformation).As("ai")
+
 	sqlStr, args, err := d.
-		From(goqu.T(tblAdministrativeInformation).As("ai")).
+		From(ai).
 		Select(
-			goqu.I("ai."+colVersion),
-			goqu.I("ai."+colRevision),
-			goqu.I("ai."+colTemplateId),
-			goqu.I("ai."+colCreator),
+			ai.Col(colVersion),
+			ai.Col(colRevision),
+			ai.Col(colTemplateId),
+			ai.Col(colCreator),
 		).
-		Where(goqu.I("ai." + colID).Eq(adminInfoID.Int64)).
+		Where(ai.Col(colID).Eq(adminInfoID.Int64)).
 		Limit(1).
 		ToSQL()
 	if err != nil {

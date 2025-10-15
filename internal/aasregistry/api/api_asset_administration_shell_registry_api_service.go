@@ -15,6 +15,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strings"
 
 	persistence_postgresql "github.com/eclipse-basyx/basyx-go-components/internal/aasregistry/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
@@ -59,7 +60,35 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) GetAllAssetAdministratio
 	// TODO: Uncomment the next line to return response Response(0, Result{}) or use other options such as http.Ok ...
 	// return Response(0, Result{}), nil
 
-	return model.Response(http.StatusNotImplemented, nil), errors.New("GetAllAssetAdministrationShellDescriptors method not implemented")
+	var internalCursor string
+	if strings.TrimSpace(cursor) != "" {
+		dec, decErr := common.DecodeString(cursor)
+		if decErr != nil {
+			return common.NewErrorResponse(
+				decErr, http.StatusBadRequest, componentName, "GetAllAssetAdministrationShellDescriptors", "BadCursor",
+			), nil
+		}
+		internalCursor = dec
+	}
+	aasds, nextCursor, err := s.aasRegistryBackend.ListAssetAdministrationShellDescriptors(ctx, limit, internalCursor, assetKind, assetType)
+	if err != nil {
+		return common.NewErrorResponse(
+			err, http.StatusInternalServerError, componentName, "GetAllAssetAdministrationShellDescriptors", "InternalServerError",
+		), err
+	}
+
+	pm := model.PagedResultPagingMetadata{}
+	if nextCursor != "" {
+		pm.Cursor = common.EncodeString(nextCursor)
+	}
+	res := interface{}(struct {
+		PagingMetadata interface{}
+		Result         interface{}
+	}{
+		PagingMetadata: pm,
+		Result:         aasds,
+	})
+	return model.Response(http.StatusOK, res), nil
 }
 
 // PostAssetAdministrationShellDescriptor - Creates a new Asset Administration Shell Descriptor, i.e. registers an AAS

@@ -10,7 +10,7 @@ import (
 	persistence_utils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
 )
 
-func CreateSubModelDescriptors(tx *sql.Tx, aasDescriptorId int64, submodelDescriptors []model.SubmodelDescriptor) error {
+func createSubModelDescriptors(tx *sql.Tx, aasDescriptorId int64, submodelDescriptors []model.SubmodelDescriptor) error {
 	if submodelDescriptors == nil {
 		return nil
 	}

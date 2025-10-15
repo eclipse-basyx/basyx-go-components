@@ -15,19 +15,21 @@ func readEndpointsByDescriptorID(
 ) ([]model.Endpoint, error) {
 	d := goqu.Dialect(dialect)
 
+	e := goqu.T(tblAASDescriptorEndpoint).As("e")
+
 	sqlStr, args, err := d.
-		From(goqu.T(tblAASDescriptorEndpoint).As("e")).
+		From(e).
 		Select(
-			goqu.I("e."+colID),
-			goqu.I("e."+colHref),
-			goqu.I("e."+colEndpointProtocol),
-			goqu.I("e."+colSubProtocol),
-			goqu.I("e."+colSubProtocolBody),
-			goqu.I("e."+colSubProtocolBodyEncoding),
-			goqu.I("e."+colInterface),
+			e.Col(colID),
+			e.Col(colHref),
+			e.Col(colEndpointProtocol),
+			e.Col(colSubProtocol),
+			e.Col(colSubProtocolBody),
+			e.Col(colSubProtocolBodyEncoding),
+			e.Col(colInterface),
 		).
-		Where(goqu.I("e." + colDescriptorID).Eq(descriptorID)).
-		Order(goqu.I("e." + colID).Asc()).
+		Where(e.Col(colDescriptorID).Eq(descriptorID)).
+		Order(e.Col(colID).Asc()).
 		ToSQL()
 	if err != nil {
 		return nil, err
@@ -97,11 +99,13 @@ func readEndpointProtocolVersions(
 ) ([]string, error) {
 	d := goqu.Dialect(dialect)
 
+	v := goqu.T(tblEndpointProtocolVersion).As("v")
+
 	sqlStr, args, err := d.
-		From(goqu.T(tblEndpointProtocolVersion).As("v")).
-		Select(goqu.I("v." + colEndpointProtocolVersion)).
-		Where(goqu.I("v." + colEndpointID).Eq(endpointID)).
-		Order(goqu.I("v." + colID).Asc()).
+		From(v).
+		Select(v.Col(colEndpointProtocolVersion)).
+		Where(v.Col(colEndpointID).Eq(endpointID)).
+		Order(v.Col(colID).Asc()).
 		ToSQL()
 	if err != nil {
 		return nil, err
@@ -115,12 +119,12 @@ func readEndpointProtocolVersions(
 
 	var out []string
 	for rows.Next() {
-		var v sql.NullString
-		if err := rows.Scan(&v); err != nil {
+		var s sql.NullString
+		if err := rows.Scan(&s); err != nil {
 			return nil, err
 		}
-		if v.Valid {
-			out = append(out, v.String)
+		if s.Valid {
+			out = append(out, s.String)
 		}
 	}
 	if err := rows.Err(); err != nil {
@@ -136,15 +140,17 @@ func readEndpointSecurityAttributes(
 ) ([]model.ProtocolInformationSecurityAttributes, error) {
 	d := goqu.Dialect(dialect)
 
+	s := goqu.T(tblSecurityAttributes).As("s")
+
 	sqlStr, args, err := d.
-		From(goqu.T(tblSecurityAttributes).As("s")).
+		From(s).
 		Select(
-			goqu.I("s."+colSecurityType),
-			goqu.I("s."+colSecurityKey),
-			goqu.I("s."+colSecurityValue),
+			s.Col(colSecurityType),
+			s.Col(colSecurityKey),
+			s.Col(colSecurityValue),
 		).
-		Where(goqu.I("s." + colEndpointID).Eq(endpointID)).
-		Order(goqu.I("s." + colID).Asc()).
+		Where(s.Col(colEndpointID).Eq(endpointID)).
+		Order(s.Col(colID).Asc()).
 		ToSQL()
 	if err != nil {
 		return nil, err

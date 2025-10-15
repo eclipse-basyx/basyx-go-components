@@ -16,17 +16,19 @@ func readSpecificAssetIdsByDescriptorID(
 ) ([]model.SpecificAssetId, error) {
 	d := goqu.Dialect(dialect)
 
+	sai := goqu.T(tblSpecificAssetID).As("sai")
+
 	sqlStr, args, err := d.
-		From(goqu.T(tblSpecificAssetID).As("sai")).
+		From(sai).
 		Select(
-			goqu.I("sai."+colID),
-			goqu.I("sai."+colName),
-			goqu.I("sai."+colValue),
-			goqu.I("sai."+colSemanticID),
-			goqu.I("sai."+colExternalSubjectRef),
+			sai.Col(colID),
+			sai.Col(colName),
+			sai.Col(colValue),
+			sai.Col(colSemanticID),
+			sai.Col(colExternalSubjectRef),
 		).
-		Where(goqu.I("sai." + colDescriptorID).Eq(descriptorID)).
-		Order(goqu.I("sai." + colID).Asc()).
+		Where(sai.Col(colDescriptorID).Eq(descriptorID)).
+		Order(sai.Col(colID).Asc()).
 		ToSQL()
 	if err != nil {
 		return nil, err
@@ -104,13 +106,13 @@ func readSpecificAssetIdSupplementalSemantic(
 ) ([]model.Reference, error) {
 	d := goqu.Dialect(dialect)
 
+	ss := goqu.T(tblSpecificAssetIDSuppSemantic).As("ss")
+
 	sqlStr, args, err := d.
-		From(goqu.T(tblSpecificAssetIDSuppSemantic).As("ss")).
-		Select(
-			goqu.I("ss." + colReferenceID),
-		).
-		Where(goqu.I("ss." + colSpecificAssetIDID).Eq(specificAssetID)).
-		Order(goqu.I("ss." + colID).Asc()).
+		From(ss).
+		Select(ss.Col(colReferenceID)).
+		Where(ss.Col(colSpecificAssetIDID).Eq(specificAssetID)).
+		Order(ss.Col(colID).Asc()).
 		ToSQL()
 	if err != nil {
 		return nil, err

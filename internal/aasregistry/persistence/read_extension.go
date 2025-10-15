@@ -16,25 +16,28 @@ func readExtensionsByDescriptorID(
 ) ([]model.Extension, error) {
 	d := goqu.Dialect(dialect)
 
+	de := goqu.T(tblDescriptorExtension).As("de")
+	e := goqu.T(tblExtension).As("e")
+
 	sqlStr, args, err := d.
-		From(goqu.T(tblDescriptorExtension).As("de")).
+		From(de).
 		InnerJoin(
-			goqu.T(tblExtension).As("e"),
-			goqu.On(goqu.I("de."+colExtensionID).Eq(goqu.I("e."+colID))),
+			e,
+			goqu.On(de.Col(colExtensionID).Eq(e.Col(colID))),
 		).
 		Select(
-			goqu.I("e."+colID),
-			goqu.I("e."+colSemanticID),
-			goqu.I("e."+colName),
-			goqu.I("e."+colValueType),
-			goqu.I("e."+colValueText),
-			goqu.I("e."+colValueNum),
-			goqu.I("e."+colValueBool),
-			goqu.I("e."+colValueTime),
-			goqu.I("e."+colValueDatetime),
+			e.Col(colID),
+			e.Col(colSemanticID),
+			e.Col(colName),
+			e.Col(colValueType),
+			e.Col(colValueText),
+			e.Col(colValueNum),
+			e.Col(colValueBool),
+			e.Col(colValueTime),
+			e.Col(colValueDatetime),
 		).
-		Where(goqu.I("de." + colDescriptorID).Eq(descriptorID)).
-		Order(goqu.I("e." + colID).Asc()).
+		Where(de.Col(colDescriptorID).Eq(descriptorID)).
+		Order(e.Col(colID).Asc()).
 		ToSQL()
 	if err != nil {
 		return nil, err
@@ -112,11 +115,11 @@ func readExtensionsByDescriptorID(
 			return nil, err
 		}
 
-		var valueType model.DataTypeDefXsd
-		valueType, err = model.NewDataTypeDefXsdFromValue(r.valueType.String)
+		valueType, err := model.NewDataTypeDefXsdFromValue(r.valueType.String)
 		if err != nil {
 			return nil, err
 		}
+
 		out = append(out, model.Extension{
 			SemanticId:              semanticRef,
 			Name:                    r.name.String,
@@ -136,11 +139,13 @@ func readExtensionsByDescriptorID(
 func readExtensionReferences(db *sql.DB, extensionID int64) ([]model.Reference, error) {
 	d := goqu.Dialect(dialect)
 
+	er := goqu.T(tblExtensionReference).As("er")
+
 	sqlStr, args, err := d.
-		From(goqu.T(tblExtensionReference).As("er")).
-		Select(goqu.I("er." + colReferenceID)).
-		Where(goqu.I("er." + colExtensionID).Eq(extensionID)).
-		Order(goqu.I("er." + colID).Asc()).
+		From(er).
+		Select(er.Col(colReferenceID)).
+		Where(er.Col(colExtensionID).Eq(extensionID)).
+		Order(er.Col(colID).Asc()).
 		ToSQL()
 	if err != nil {
 		return nil, err

@@ -16,19 +16,21 @@ func readSubmodelDescriptorsByAASDescriptorID(
 ) ([]model.SubmodelDescriptor, error) {
 	d := goqu.Dialect(dialect)
 
+	smd := goqu.T(tblSubmodelDescriptor).As("smd")
+
 	sqlStr, args, err := d.
-		From(goqu.T(tblSubmodelDescriptor).As("smd")).
+		From(smd).
 		Select(
-			goqu.I("smd."+colDescriptorID),
-			goqu.I("smd."+colIdShort),
-			goqu.I("smd."+colAASID),
-			goqu.I("smd."+colSemanticID),
-			goqu.I("smd."+colAdminInfoID),
-			goqu.I("smd."+colDescriptionID),
-			goqu.I("smd."+colDisplayNameID),
+			smd.Col(colDescriptorID),
+			smd.Col(colIdShort),
+			smd.Col(colAASID),
+			smd.Col(colSemanticID),
+			smd.Col(colAdminInfoID),
+			smd.Col(colDescriptionID),
+			smd.Col(colDisplayNameID),
 		).
-		Where(goqu.I("smd." + colAASDescriptorID).Eq(aasDescriptorID)).
-		Order(goqu.I("smd." + colDescriptorID).Asc()).
+		Where(smd.Col(colAASDescriptorID).Eq(aasDescriptorID)).
+		Order(smd.Col(colDescriptorID).Asc()).
 		ToSQL()
 	if err != nil {
 		return nil, err
