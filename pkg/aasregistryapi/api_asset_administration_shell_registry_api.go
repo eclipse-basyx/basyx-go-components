@@ -18,6 +18,7 @@ import (
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	"github.com/go-chi/chi/v5"
 	"github.com/gorilla/mux"
 )
 
@@ -292,8 +293,8 @@ func (c *AssetAdministrationShellRegistryAPIAPIController) PostAssetAdministrati
 
 // GetAssetAdministrationShellDescriptorById - Returns a specific Asset Administration Shell Descriptor
 func (c *AssetAdministrationShellRegistryAPIAPIController) GetAssetAdministrationShellDescriptorById(w http.ResponseWriter, r *http.Request) {
-	params := mux.Vars(r)
-	aasIdentifierParam := params["aasIdentifier"]
+
+	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
 	if aasIdentifierParam == "" {
 		result := common.NewErrorResponse(
 			common.NewErrBadRequest("Missing path parameter 'aasIdentifier'"),
@@ -315,8 +316,7 @@ func (c *AssetAdministrationShellRegistryAPIAPIController) GetAssetAdministratio
 
 // PutAssetAdministrationShellDescriptorById - Creates or updates an existing Asset Administration Shell Descriptor
 func (c *AssetAdministrationShellRegistryAPIAPIController) PutAssetAdministrationShellDescriptorById(w http.ResponseWriter, r *http.Request) {
-	params := mux.Vars(r)
-	aasIdentifierParam := params["aasIdentifier"]
+	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
 	if aasIdentifierParam == "" {
 		result := common.NewErrorResponse(
 			common.NewErrBadRequest("Missing path parameter 'aasIdentifier'"),
@@ -374,8 +374,7 @@ func (c *AssetAdministrationShellRegistryAPIAPIController) PutAssetAdministratio
 
 // DeleteAssetAdministrationShellDescriptorById - Deletes an Asset Administration Shell Descriptor, i.e. de-registers an AAS
 func (c *AssetAdministrationShellRegistryAPIAPIController) DeleteAssetAdministrationShellDescriptorById(w http.ResponseWriter, r *http.Request) {
-	params := mux.Vars(r)
-	aasIdentifierParam := params["aasIdentifier"]
+	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
 	if aasIdentifierParam == "" {
 		result := common.NewErrorResponse(
 			common.NewErrBadRequest("Missing path parameter 'aasIdentifier'"),
@@ -456,8 +455,7 @@ func (c *AssetAdministrationShellRegistryAPIAPIController) GetAllSubmodelDescrip
 
 // PostSubmodelDescriptorThroughSuperpath - Creates a new Submodel Descriptor, i.e. registers a submodel
 func (c *AssetAdministrationShellRegistryAPIAPIController) PostSubmodelDescriptorThroughSuperpath(w http.ResponseWriter, r *http.Request) {
-	params := mux.Vars(r)
-	aasIdentifierParam := params["aasIdentifier"]
+	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
 	if aasIdentifierParam == "" {
 		result := common.NewErrorResponse(
 			common.NewErrBadRequest("Missing path parameter 'aasIdentifier'"),
@@ -515,8 +513,7 @@ func (c *AssetAdministrationShellRegistryAPIAPIController) PostSubmodelDescripto
 
 // GetSubmodelDescriptorByIdThroughSuperpath - Returns a specific Submodel Descriptor
 func (c *AssetAdministrationShellRegistryAPIAPIController) GetSubmodelDescriptorByIdThroughSuperpath(w http.ResponseWriter, r *http.Request) {
-	params := mux.Vars(r)
-	aasIdentifierParam := params["aasIdentifier"]
+	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
 	if aasIdentifierParam == "" {
 		result := common.NewErrorResponse(
 			common.NewErrBadRequest("Missing path parameter 'aasIdentifier'"),
@@ -528,7 +525,7 @@ func (c *AssetAdministrationShellRegistryAPIAPIController) GetSubmodelDescriptor
 		EncodeJSONResponse(result.Body, &result.Code, w)
 		return
 	}
-	submodelIdentifierParam := params["submodelIdentifier"]
+	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
 	if submodelIdentifierParam == "" {
 		result := common.NewErrorResponse(
 			common.NewErrBadRequest("Missing path parameter 'submodelIdentifier'"),
@@ -550,8 +547,7 @@ func (c *AssetAdministrationShellRegistryAPIAPIController) GetSubmodelDescriptor
 
 // PutSubmodelDescriptorByIdThroughSuperpath - Creates or updates an existing Submodel Descriptor
 func (c *AssetAdministrationShellRegistryAPIAPIController) PutSubmodelDescriptorByIdThroughSuperpath(w http.ResponseWriter, r *http.Request) {
-	params := mux.Vars(r)
-	aasIdentifierParam := params["aasIdentifier"]
+	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
 	if aasIdentifierParam == "" {
 		result := common.NewErrorResponse(
 			common.NewErrBadRequest("Missing path parameter 'aasIdentifier'"),
@@ -563,7 +559,7 @@ func (c *AssetAdministrationShellRegistryAPIAPIController) PutSubmodelDescriptor
 		EncodeJSONResponse(result.Body, &result.Code, w)
 		return
 	}
-	submodelIdentifierParam := params["submodelIdentifier"]
+	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
 	if submodelIdentifierParam == "" {
 		result := common.NewErrorResponse(
 			common.NewErrBadRequest("Missing path parameter 'submodelIdentifier'"),
@@ -621,8 +617,7 @@ func (c *AssetAdministrationShellRegistryAPIAPIController) PutSubmodelDescriptor
 
 // DeleteSubmodelDescriptorByIdThroughSuperpath - Deletes a Submodel Descriptor, i.e. de-registers a submodel
 func (c *AssetAdministrationShellRegistryAPIAPIController) DeleteSubmodelDescriptorByIdThroughSuperpath(w http.ResponseWriter, r *http.Request) {
-	params := mux.Vars(r)
-	aasIdentifierParam := params["aasIdentifier"]
+	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
 	if aasIdentifierParam == "" {
 		result := common.NewErrorResponse(
 			common.NewErrBadRequest("Missing path parameter 'aasIdentifier'"),
@@ -634,7 +629,7 @@ func (c *AssetAdministrationShellRegistryAPIAPIController) DeleteSubmodelDescrip
 		EncodeJSONResponse(result.Body, &result.Code, w)
 		return
 	}
-	submodelIdentifierParam := params["submodelIdentifier"]
+	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
 	if submodelIdentifierParam == "" {
 		result := common.NewErrorResponse(
 			common.NewErrBadRequest("Missing path parameter 'submodelIdentifier'"),

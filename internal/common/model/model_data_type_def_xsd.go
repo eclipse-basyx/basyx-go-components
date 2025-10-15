@@ -10,6 +10,7 @@
 package model
 
 import (
+	"errors"
 	"fmt"
 )
 
@@ -141,5 +142,8 @@ func AssertDataTypeDefXsdRequired(obj DataTypeDefXsd) error {
 
 // AssertDataTypeDefXsdConstraints checks if the values respects the defined constraints
 func AssertDataTypeDefXsdConstraints(obj DataTypeDefXsd) error {
+	if !obj.IsValid() {
+		return errors.New("used data type is not supported")
+	}
 	return nil
 }

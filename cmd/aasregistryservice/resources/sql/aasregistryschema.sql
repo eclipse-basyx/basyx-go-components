@@ -139,9 +139,9 @@ CREATE TABLE IF NOT EXISTS aas_descriptor_endpoint (
 CREATE TABLE IF NOT EXISTS security_attributes (
     id                      BIGSERIAL       NOT NULL PRIMARY KEY,
     endpoint_id             BIGINT          NOT NULL REFERENCES aas_descriptor_endpoint(id) ON DELETE CASCADE,
-    securityType            security_type   NOT NULL,
-    securityKey             TEXT            NOT NULL,
-    securityValue           TEXT            NOT NULL
+    security_type            security_type   NOT NULL,
+    security_key             TEXT            NOT NULL,
+    security_value           TEXT            NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS endpoint_protocol_version (
@@ -156,7 +156,7 @@ CREATE TABLE IF NOT EXISTS administrative_information (
     version                 VARCHAR(4),
     revision                VARCHAR(4),
     creator                 BIGINT              REFERENCES reference(id) ON DELETE CASCADE, -- todo: add _id
-    templateId              VARCHAR(2048)
+    template_id             VARCHAR(2048)
 );
 
 CREATE TABLE IF NOT EXISTS aas_descriptor (
@@ -166,7 +166,7 @@ CREATE TABLE IF NOT EXISTS aas_descriptor (
     administrative_information_id BIGINT            REFERENCES administrative_information(id) ON DELETE CASCADE,
     asset_kind                    asset_kind,
     asset_type                    VARCHAR(2048),
-    globalAssetId                 VARCHAR(2048),
+    global_asset_id                 VARCHAR(2048),
     id_short                      VARCHAR(128),
     id                            VARCHAR(2048)     NOT NULL UNIQUE
 );

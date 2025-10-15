@@ -16,9 +16,9 @@ import (
 	"errors"
 	"net/http"
 
+	persistence_postgresql "github.com/eclipse-basyx/basyx-go-components/internal/aasregistry/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
-	persistence_postgresql "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/aasregistry/persistence"
 )
 
 const (
@@ -129,7 +129,24 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) GetAssetAdministrationSh
 	// TODO: Uncomment the next line to return response Response(0, Result{}) or use other options such as http.Ok ...
 	// return Response(0, Result{}), nil
 
-	return model.Response(http.StatusNotImplemented, nil), errors.New("GetAssetAdministrationShellDescriptorById method not implemented")
+	decoded, decodeErr := common.DecodeString(aasIdentifier)
+	if decodeErr != nil {
+		return common.NewErrorResponse(
+			decodeErr, http.StatusBadRequest, componentName, "GetAllAssetLinksById", "BadRequest-Decode",
+		), nil
+	}
+
+	result, err := s.aasRegistryBackend.GetAssetAdministrationShellDescriptorById(ctx, string(decoded))
+	if err != nil {
+		switch {
+		default:
+			return common.NewErrorResponse(
+				err, http.StatusInternalServerError, componentName, "GetAssetAdministrationShellDescriptorById", "Unhandled",
+			), err
+		}
+	}
+
+	return model.Response(http.StatusOK, result), nil
 }
 
 // PutAssetAdministrationShellDescriptorById - Creates or updates an existing Asset Administration Shell Descriptor
