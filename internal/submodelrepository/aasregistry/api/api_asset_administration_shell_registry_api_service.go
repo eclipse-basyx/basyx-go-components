@@ -88,10 +88,14 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) PostAssetAdministrationS
 	err := s.aasRegistryBackend.InsertAdministrationShellDescriptor(ctx, assetAdministrationShellDescriptor)
 	if err != nil {
 		switch {
+		case common.IsErrBadRequest(err):
+			return common.NewErrorResponse(
+				err, http.StatusBadRequest, componentName, "InsertAdministrationShellDescriptor", "BadRequest",
+			), nil
 		case common.IsErrConflict(err):
 			return common.NewErrorResponse(
 				err, http.StatusConflict, componentName, "InsertAdministrationShellDescriptor", "Conflict",
-			), err
+			), nil
 		default:
 			return common.NewErrorResponse(
 				err, http.StatusInternalServerError, componentName, "InsertAdministrationShellDescriptor", "Unhandled",

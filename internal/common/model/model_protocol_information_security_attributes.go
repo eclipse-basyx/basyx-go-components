@@ -11,6 +11,10 @@
 
 package model
 
+import (
+	"errors"
+)
+
 type ProtocolInformationSecurityAttributes struct {
 	Type string `json:"type"`
 
@@ -30,6 +34,21 @@ func AssertProtocolInformationSecurityAttributesRequired(obj ProtocolInformation
 		if isZero := IsZeroValue(el); isZero {
 			return &RequiredError{Field: name}
 		}
+	}
+
+	allowedTypes := map[string]bool{
+		"NONE":     true,
+		"RFC_TLSA": true,
+		"W3C_DID":  true,
+	}
+
+	t, ok := elements["type"].(string)
+	if !ok {
+		return errors.New("security Type must be a string")
+	}
+
+	if !allowedTypes[t] {
+		return errors.New("security Type is not supported")
 	}
 
 	return nil

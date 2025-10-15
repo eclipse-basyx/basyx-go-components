@@ -22,7 +22,7 @@ import (
 )
 
 const (
-	componentName = "REG_VAL"
+	componentName = "AASR_VAL"
 )
 
 // AssetAdministrationShellRegistryAPIAPIController binds http requests to an api service and writes the service results to the http response
@@ -194,7 +194,7 @@ func (c *AssetAdministrationShellRegistryAPIAPIController) GetAllAssetAdministra
 	query, err := parseQuery(r.URL.RawQuery)
 	if err != nil {
 		result := common.NewErrorResponse(
-			common.NewErrBadRequest("Invalid query parameters"),
+			err,
 			http.StatusBadRequest,
 			componentName,
 			"GetAllAssetAdministrationShellDescriptors",
@@ -212,7 +212,7 @@ func (c *AssetAdministrationShellRegistryAPIAPIController) GetAllAssetAdministra
 		)
 		if err != nil {
 			result := common.NewErrorResponse(
-				common.NewErrBadRequest("Invalid 'limit' parameter"),
+				err,
 				http.StatusBadRequest,
 				componentName,
 				"GetAllAssetAdministrationShellDescriptors",
@@ -251,7 +251,7 @@ func (c *AssetAdministrationShellRegistryAPIAPIController) PostAssetAdministrati
 	d.DisallowUnknownFields()
 	if err := d.Decode(&assetAdministrationShellDescriptorParam); err != nil {
 		result := common.NewErrorResponse(
-			common.NewErrBadRequest("Incorrect RequestBody"),
+			err,
 			http.StatusBadRequest,
 			componentName,
 			"PostAssetAdministrationShellDescriptor",
@@ -273,7 +273,7 @@ func (c *AssetAdministrationShellRegistryAPIAPIController) PostAssetAdministrati
 	}
 	if err := model.AssertAssetAdministrationShellDescriptorConstraints(assetAdministrationShellDescriptorParam); err != nil {
 		result := common.NewErrorResponse(
-			common.NewErrBadRequest("Invalid AssetAdministrationShellDescriptor (constraint violation)"),
+			err,
 			http.StatusBadRequest,
 			componentName,
 			"PostAssetAdministrationShellDescriptor",
@@ -333,7 +333,7 @@ func (c *AssetAdministrationShellRegistryAPIAPIController) PutAssetAdministratio
 	d.DisallowUnknownFields()
 	if err := d.Decode(&assetAdministrationShellDescriptorParam); err != nil {
 		result := common.NewErrorResponse(
-			common.NewErrBadRequest("Incorrect RequestBody"),
+			err,
 			http.StatusBadRequest,
 			componentName,
 			"PutAssetAdministrationShellDescriptorById",
@@ -344,7 +344,7 @@ func (c *AssetAdministrationShellRegistryAPIAPIController) PutAssetAdministratio
 	}
 	if err := model.AssertAssetAdministrationShellDescriptorRequired(assetAdministrationShellDescriptorParam); err != nil {
 		result := common.NewErrorResponse(
-			common.NewErrBadRequest("Invalid AssetAdministrationShellDescriptor (missing required fields)"),
+			err,
 			http.StatusBadRequest,
 			componentName,
 			"PutAssetAdministrationShellDescriptorById",
@@ -355,7 +355,7 @@ func (c *AssetAdministrationShellRegistryAPIAPIController) PutAssetAdministratio
 	}
 	if err := model.AssertAssetAdministrationShellDescriptorConstraints(assetAdministrationShellDescriptorParam); err != nil {
 		result := common.NewErrorResponse(
-			common.NewErrBadRequest("Invalid AssetAdministrationShellDescriptor (constraint violation)"),
+			err,
 			http.StatusBadRequest,
 			componentName,
 			"PutAssetAdministrationShellDescriptorById",
@@ -401,7 +401,7 @@ func (c *AssetAdministrationShellRegistryAPIAPIController) GetAllSubmodelDescrip
 	query, err := parseQuery(r.URL.RawQuery)
 	if err != nil {
 		result := common.NewErrorResponse(
-			common.NewErrBadRequest("Invalid query parameters"),
+			err,
 			http.StatusBadRequest,
 			componentName,
 			"GetAllSubmodelDescriptorsThroughSuperpath",
@@ -431,7 +431,7 @@ func (c *AssetAdministrationShellRegistryAPIAPIController) GetAllSubmodelDescrip
 		)
 		if err != nil {
 			result := common.NewErrorResponse(
-				common.NewErrBadRequest("Invalid 'limit' parameter"),
+				err,
 				http.StatusBadRequest,
 				componentName,
 				"GetAllSubmodelDescriptorsThroughSuperpath",
@@ -474,7 +474,7 @@ func (c *AssetAdministrationShellRegistryAPIAPIController) PostSubmodelDescripto
 	d.DisallowUnknownFields()
 	if err := d.Decode(&submodelDescriptorParam); err != nil {
 		result := common.NewErrorResponse(
-			common.NewErrBadRequest("Incorrect RequestBody"),
+			err,
 			http.StatusBadRequest,
 			componentName,
 			"PostSubmodelDescriptorThroughSuperpath",
@@ -485,7 +485,7 @@ func (c *AssetAdministrationShellRegistryAPIAPIController) PostSubmodelDescripto
 	}
 	if err := model.AssertSubmodelDescriptorRequired(submodelDescriptorParam); err != nil {
 		result := common.NewErrorResponse(
-			common.NewErrBadRequest("Invalid SubmodelDescriptor (missing required fields)"),
+			err,
 			http.StatusBadRequest,
 			componentName,
 			"PostSubmodelDescriptorThroughSuperpath",
@@ -496,7 +496,7 @@ func (c *AssetAdministrationShellRegistryAPIAPIController) PostSubmodelDescripto
 	}
 	if err := model.AssertSubmodelDescriptorConstraints(submodelDescriptorParam); err != nil {
 		result := common.NewErrorResponse(
-			common.NewErrBadRequest("Invalid SubmodelDescriptor (constraint violation)"),
+			err,
 			http.StatusBadRequest,
 			componentName,
 			"PostSubmodelDescriptorThroughSuperpath",
@@ -580,7 +580,7 @@ func (c *AssetAdministrationShellRegistryAPIAPIController) PutSubmodelDescriptor
 	d.DisallowUnknownFields()
 	if err := d.Decode(&submodelDescriptorParam); err != nil {
 		result := common.NewErrorResponse(
-			common.NewErrBadRequest("Incorrect RequestBody"),
+			err,
 			http.StatusBadRequest,
 			componentName,
 			"PutSubmodelDescriptorByIdThroughSuperpath",
@@ -591,7 +591,7 @@ func (c *AssetAdministrationShellRegistryAPIAPIController) PutSubmodelDescriptor
 	}
 	if err := model.AssertSubmodelDescriptorRequired(submodelDescriptorParam); err != nil {
 		result := common.NewErrorResponse(
-			common.NewErrBadRequest("Invalid SubmodelDescriptor (missing required fields)"),
+			err,
 			http.StatusBadRequest,
 			componentName,
 			"PutSubmodelDescriptorByIdThroughSuperpath",
@@ -602,7 +602,7 @@ func (c *AssetAdministrationShellRegistryAPIAPIController) PutSubmodelDescriptor
 	}
 	if err := model.AssertSubmodelDescriptorConstraints(submodelDescriptorParam); err != nil {
 		result := common.NewErrorResponse(
-			common.NewErrBadRequest("Invalid SubmodelDescriptor (constraint violation)"),
+			err,
 			http.StatusBadRequest,
 			componentName,
 			"PutSubmodelDescriptorByIdThroughSuperpath",

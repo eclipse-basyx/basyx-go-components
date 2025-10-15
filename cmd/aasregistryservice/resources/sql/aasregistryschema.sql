@@ -85,15 +85,15 @@ CREATE TABLE IF NOT EXISTS reference_key (
 
 
 CREATE TABLE IF NOT EXISTS extension (
-  id          BIGSERIAL PRIMARY KEY,
-  semantic_id BIGINT REFERENCES reference(id) ON DELETE CASCADE,
-  name       varchar(128) NOT NULL,
-  value_type    data_type_def_xsd NOT NULL,
-  value_text    TEXT,
-  value_num     NUMERIC,
-  value_bool    BOOLEAN,
-  value_time    TIME,
-  value_datetime TIMESTAMPTZ
+  id              BIGSERIAL         PRIMARY KEY,
+  semantic_id     BIGINT            REFERENCES reference(id) ON DELETE CASCADE,
+  name            varchar(128)      NOT NULL,
+  value_type      data_type_def_xsd,
+  value_text      TEXT,
+  value_num       NUMERIC,
+  value_bool      BOOLEAN,
+  value_time      TIME,
+  value_datetime  TIMESTAMPTZ
 );
 
 CREATE TABLE IF NOT EXISTS descriptor_extension (
@@ -113,8 +113,8 @@ CREATE TABLE IF NOT EXISTS specific_asset_id (
     id                            BIGSERIAL           PRIMARY KEY,
     descriptor_id                 BIGINT              NOT NULL REFERENCES descriptor(id) ON DELETE CASCADE,
     semantic_id                   BIGINT              REFERENCES reference(id),
-    name                          TEXT                NOT NULL,
-    value                         TEXT                NOT NULL,
+    name                          VARCHAR(64)         NOT NULL,
+    value                         VARCHAR(2048)       NOT NULL,
     external_subject_ref          BIGINT              REFERENCES reference(id)
 );
 

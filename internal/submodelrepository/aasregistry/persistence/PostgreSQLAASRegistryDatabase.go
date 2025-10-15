@@ -158,10 +158,11 @@ func (p *PostgreSQLAASRegistryDatabase) InsertAdministrationShellDescriptor(ctx 
 	if err != nil {
 		return err
 	}
-
-	if err = tx.Commit(); err != nil {
-		return err
-	}
+	/*
+		if err = tx.Commit(); err != nil {
+			return err
+		}
+	*/
 
 	return nil
 }
@@ -327,6 +328,20 @@ func CreateSpecificAssetId(tx *sql.Tx, descriptorId int64, specificAssetIds []mo
 		var err error
 
 		for _, val := range specificAssetIds {
+
+			var externalSubjectReferenceId sql.NullInt64
+			externalSubjectReferenceId, err = persistence_utils.CreateReference(tx, val.ExternalSubjectId)
+
+			if err != nil {
+				return err
+			}
+			// hasSemantics
+			var semanticId sql.NullInt64
+			semanticId, err = persistence_utils.CreateReference(tx, val.SemanticId)
+
+			if err != nil {
+				return err
+			}
 			var id int64
 			err = tx.QueryRow(`
 				INSERT INTO specific_asset_id (
@@ -341,10 +356,10 @@ func CreateSpecificAssetId(tx *sql.Tx, descriptorId int64, specificAssetIds []mo
 				RETURNING id
 			`,
 				descriptorId,
-				val.SemanticId,
+				semanticId,
 				val.Name,
 				val.Value,
-				val.ExternalSubjectId,
+				externalSubjectReferenceId,
 			).Scan(&id)
 
 			if err != nil {
@@ -482,6 +497,14 @@ func CreateSubModelDescriptors(tx *sql.Tx, aasDescriptorId int64, submodelDescri
 				return err
 			}
 
+			if len(val.Endpoints) <= 0 {
+				return common.NewErrBadRequest("Submodel Descriptor needs at least 1 Endpoint.")
+			}
+			err = CreateEndpoints(tx, submodelDescriptorId, val.Endpoints)
+			if err != nil {
+				return err
+			}
+
 		}
 
 	}
@@ -537,11 +560,19 @@ func CreateExtensions(tx *sql.Tx, descriptorId int64, extensions []model.Extensi
 
 			var semanticId sql.NullInt64
 			semanticId, err = persistence_utils.CreateReference(tx, val.SemanticId)
+			var valueText, valueNum, valueBool, valueTime, valueDatetime, valueType sql.NullString
+			valueType = sql.NullString{String: string(val.ValueType), Valid: val.ValueType != ""}
+			fillValueBasedOnType(val, &valueText, &valueNum, &valueBool, &valueTime, &valueDatetime)
 
 			if err != nil {
 				return err
 			}
 			var id int64
+			fmt.Println(valueText)
+			fmt.Println(valueNum)
+			fmt.Println(valueBool)
+			fmt.Println(valueTime)
+			fmt.Println(valueDatetime)
 			err = tx.QueryRow(`
 				INSERT INTO extension (
 					semantic_id,
@@ -559,12 +590,12 @@ func CreateExtensions(tx *sql.Tx, descriptorId int64, extensions []model.Extensi
 			`,
 				semanticId,
 				val.Name,
-				val.ValueType,
-				nil,
-				nil,
-				nil,
-				nil,
-				nil,
+				valueType,
+				valueText,
+				valueNum,
+				valueBool,
+				valueTime,
+				valueDatetime,
 			).Scan(&id)
 
 			if err != nil {
@@ -584,4 +615,25 @@ func CreateExtensions(tx *sql.Tx, descriptorId int64, extensions []model.Extensi
 
 	}
 	return nil
+}
+func fillValueBasedOnType(extension model.Extension, valueText *sql.NullString, valueNum *sql.NullString, valueBool *sql.NullString, valueTime *sql.NullString, valueDatetime *sql.NullString) {
+	switch extension.ValueType {
+	case "xs:string", "xs:anyURI", "xs:base64Binary", "xs:hexBinary":
+		*valueText = sql.NullString{String: extension.Value, Valid: extension.Value != ""}
+	case "xs:int", "xs:integer", "xs:long", "xs:short", "xs:byte",
+		"xs:unsignedInt", "xs:unsignedLong", "xs:unsignedShort", "xs:unsignedByte",
+		"xs:positiveInteger", "xs:negativeInteger", "xs:nonNegativeInteger", "xs:nonPositiveInteger",
+		"xs:decimal", "xs:double", "xs:float":
+		*valueNum = sql.NullString{String: extension.Value, Valid: extension.Value != ""}
+	case "xs:boolean":
+		*valueBool = sql.NullString{String: extension.Value, Valid: extension.Value != ""}
+	case "xs:time":
+		*valueTime = sql.NullString{String: extension.Value, Valid: extension.Value != ""}
+	case "xs:date", "xs:dateTime", "xs:duration", "xs:gDay", "xs:gMonth",
+		"xs:gMonthDay", "xs:gYear", "xs:gYearMonth":
+		*valueDatetime = sql.NullString{String: extension.Value, Valid: extension.Value != ""}
+	default:
+		// Fallback to text for unknown types
+		*valueText = sql.NullString{String: extension.Value, Valid: extension.Value != ""}
+	}
 }
