@@ -50,7 +50,7 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 
 	//TEST
 	start := time.Now().Local().UnixMilli()
-	persistence_utils.GetSubmodel(smDatabase.GetDB(), "http://acplt.org/Submodels/Assets/TestAsset/Identification")
+	persistence_utils.GetSubmodelJSON(smDatabase.GetDB())
 	end := time.Now().Local().UnixMilli()
 	fmt.Printf("Total time: %d milliseconds\n", end-start)
 	//TEST

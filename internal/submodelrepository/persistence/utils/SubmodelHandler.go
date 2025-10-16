@@ -1,27 +1,27 @@
 /*******************************************************************************
- * Copyright (C) 2025 the Eclipse BaSyx Authors and Fraunhofer IESE
- *
- * Permission is hereby granted, free of charge, to any person obtaining
- * a copy of this software and associated documentation files (the
- * "Software"), to deal in the Software without restriction, including
- * without limitation the rights to use, copy, modify, merge, publish,
- * distribute, sublicense, and/or sell copies of the Software, and to
- * permit persons to whom the Software is furnished to do so, subject to
- * the following conditions:
- *
- * The above copyright notice and this permission notice shall be
- * included in all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
- * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
- * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
- * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
- * LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
- * OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
- * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- *
- * SPDX-License-Identifier: MIT
- ******************************************************************************/
+* Copyright (C) 2025 the Eclipse BaSyx Authors and Fraunhofer IESE
+*
+* Permission is hereby granted, free of charge, to any person obtaining
+* a copy of this software and associated documentation files (the
+* "Software"), to deal in the Software without restriction, including
+* without limitation the rights to use, copy, modify, merge, publish,
+* distribute, sublicense, and/or sell copies of the Software, and to
+* permit persons to whom the Software is furnished to do so, subject to
+* the following conditions:
+*
+* The above copyright notice and this permission notice shall be
+* included in all copies or substantial portions of the Software.
+*
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+* NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+* LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+* OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+* WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*
+* SPDX-License-Identifier: MIT
+******************************************************************************/
 
 package persistence_utils
 
@@ -32,209 +32,232 @@ import (
 
 	builders "github.com/eclipse-basyx/basyx-go-components/internal/common/builder"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
-	qb "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/querybuilder"
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 )
 
-func GetSubmodels(db *sql.DB) {
-	GetSubmodel(db, "")
+type SubmodelRow struct {
+	Id                         string
+	IdShort                    string
+	Category                   string
+	Kind                       string
+	DisplayNames               json.RawMessage
+	Descriptions               json.RawMessage
+	SemanticId                 json.RawMessage
+	ReferredSemanticIds        json.RawMessage
+	SupplementalSemanticIds    json.RawMessage
+	SupplementalReferredSemIds json.RawMessage
+	EmbeddedDataSpecifications json.RawMessage
+	DataSpecReferenceReferred  json.RawMessage
+	DataSpecIEC61360           json.RawMessage
+	IECLevelTypes              json.RawMessage
 }
 
-func GetSubmodel(db *sql.DB, submodelId string) {
-	rows, err := getSubmodelDataFromDb(db, submodelId)
+type ReferenceRow struct {
+	ReferenceId   int64  `json:"reference_id"`
+	ReferenceType string `json:"reference_type"`
+	KeyID         int64  `json:"key_id"`
+	KeyType       string `json:"key_type"`
+	KeyValue      string `json:"key_value"`
+}
+
+type ReferredReferenceRow struct {
+	SupplementalRootReferenceId int64  `json:"supplemental_root_reference_id"`
+	ReferenceId                 int64  `json:"reference_id"`
+	ReferenceType               string `json:"reference_type"`
+	ParentReference             int64  `json:"parentReference"`
+	RootReference               int64  `json:"rootReference"`
+	KeyID                       int64  `json:"key_id"`
+	KeyType                     string `json:"key_type"`
+	KeyValue                    string `json:"key_value"`
+}
+
+func GetSubmodelJSON(db *sql.DB) ([]*gen.Submodel, error) {
+	submodels := make(map[string]*gen.Submodel)
+	result := []*gen.Submodel{}
+	referenceBuilderRefs := make(map[int64]*builders.ReferenceBuilder)
+	// //semanticIdReferredSemanticIdBuilderRefs := make(map[int64]*builders.ReferenceBuilder)
+	// supplementalSemanticIdBuilderRefs := make(map[string]*builders.MultiReferenceBuilder)
+	// nameTypeBuilderRefs := make(map[string]*builders.LangStringNameTypesBuilder)
+	// textTypeBuilderRefs := make(map[string]*builders.LangStringTextTypesBuilder)
+
+	// // Store pointers to the slices that will be populated
+	// displayNameRefs := make(map[string]*[]gen.LangStringNameType)
+	// descriptionRefs := make(map[string]*[]gen.LangStringTextType)
+	rows, err := getSubmodelDataFromDbWithJSONQuery(db)
 	if err != nil {
-		fmt.Printf("Error getting submodel data from DB: %v\n", err)
-		return
+		return nil, fmt.Errorf("error getting submodel data from DB: %w", err)
 	}
 	defer rows.Close()
 
-	submodels := make(map[string]*gen.Submodel)
-	semanticIdBuilderRefs := make(map[string]*builders.ReferenceBuilder)
-	//semanticIdReferredSemanticIdBuilderRefs := make(map[int64]*builders.ReferenceBuilder)
-	supplementalSemanticIdBuilderRefs := make(map[string]*builders.MultiReferenceBuilder)
-	nameTypeBuilderRefs := make(map[string]*builders.LangStringNameTypesBuilder)
-	textTypeBuilderRefs := make(map[string]*builders.LangStringTextTypesBuilder)
+	if rows.Next() {
+		var row SubmodelRow
+		if err := rows.Scan(
+			&row.Id, &row.IdShort, &row.Category, &row.Kind,
+			&row.DisplayNames, &row.Descriptions,
+			&row.SemanticId, &row.ReferredSemanticIds,
+			&row.SupplementalSemanticIds, &row.SupplementalReferredSemIds,
+			&row.EmbeddedDataSpecifications, &row.DataSpecReferenceReferred,
+			&row.DataSpecIEC61360, &row.IECLevelTypes,
+		); err != nil {
+			return nil, fmt.Errorf("error scanning row: %w", err)
+		}
 
-	// Store pointers to the slices that will be populated
-	displayNameRefs := make(map[string]*[]gen.LangStringNameType)
-	descriptionRefs := make(map[string]*[]gen.LangStringTextType)
+		submodel := &gen.Submodel{
+			Id:       row.Id,
+			IdShort:  row.IdShort,
+			Category: row.Category,
+			Kind:     gen.ModellingKind(row.Kind),
+		}
 
-	for rows.Next() {
-		// Submodel Header
-		var id, idShort, category, kind sql.NullString
-		// DisplayName
-		var display_name_language, display_name_text sql.NullString
-		// Description
-		var description_language, description_text sql.NullString
-		// SemanticId
-		var semantic_id_type, key_type, key_value sql.NullString
-		var semantic_id_db_id sql.NullInt64 // DB ID of the root semantic reference
-		// SemanticId -> referredSemanticIds
-		var referred_semantic_id_type, referred_key_type, referred_key_value sql.NullString
-		var referred_parent_reference_id sql.NullInt64
-		// SupplementalSemanticIds
-		var supplementalSemanticIdType, supplemental_semantic_id_key_type, supplemental_semantic_id_key_value sql.NullString
-		// SupplementalSemanticIds -> referredSemanticIds
-		var supplemental_semantic_id_referred_semantic_id_type, supplemental_semantic_id_referred_key_type, supplemental_semantic_id_referred_key_value sql.NullString
-		var supplemental_semantic_id_referred_parent_reference_id sql.NullInt64
-		// Identifiers
-		var key_id, display_name_id, description_id, supplemental_semantic_id_key_id, supplemental_semantic_id_dbid, referred_key_id, referred_semantic_id_db_id, supplemental_semantic_id_referred_semantic_id_db_id, supplemental_semantic_id_referred_key_id sql.NullInt64
-
-		err := rows.Scan(
-			// Submodel
-			&id, &idShort, &category, &kind,
-			// DisplayName
-			&display_name_language, &display_name_text, &display_name_id,
-			// Description
-			&description_language, &description_text, &description_id,
-			// SemanticId
-			&semantic_id_db_id, &semantic_id_type, &key_type, &key_value, &key_id,
-			// SemanticId -> referredSemanticIds
-			&referred_semantic_id_db_id, &referred_semantic_id_type, &referred_parent_reference_id, &referred_key_type, &referred_key_value, &referred_key_id,
-			// SupplementalSemanticIds
-			&supplementalSemanticIdType, &supplemental_semantic_id_dbid,
-			&supplemental_semantic_id_key_type, &supplemental_semantic_id_key_value, &supplemental_semantic_id_key_id,
-			// SupplementalSemanticIds -> referredSemanticIds
-			&supplemental_semantic_id_referred_semantic_id_db_id, &supplemental_semantic_id_referred_semantic_id_type, &supplemental_semantic_id_referred_parent_reference_id, &supplemental_semantic_id_referred_key_type, &supplemental_semantic_id_referred_key_value, &supplemental_semantic_id_referred_key_id,
-		)
-
+		semanticId, err := parseReferences(row.SemanticId, referenceBuilderRefs)
 		if err != nil {
-			fmt.Printf("Error scanning row: %v\n", err)
-			continue
+			return nil, err
 		}
 
-		if !isSubmodelAlreadyCreated(submodels, id) {
-			semanticId, semanticIdBuilder := builders.NewReferenceBuilder(semantic_id_type.String, semantic_id_db_id.Int64)
-			_, supplementalSemanticIdBuilders := builders.NewMultiReferenceBuilder()
-			displayName, nameTypeBuilder := builders.NewLangStringNameTypesBuilder()
-			description, textTypeBuilder := builders.NewLangStringTextTypesBuilder()
+		if len(semanticId) == 1 {
+			submodel.SemanticId = semanticId[0]
+			parseReferredReferences(row.ReferredSemanticIds, referenceBuilderRefs)
+		}
 
-			semanticIdBuilderRefs[id.String] = semanticIdBuilder
-			supplementalSemanticIdBuilderRefs[id.String] = supplementalSemanticIdBuilders
-			nameTypeBuilderRefs[id.String] = nameTypeBuilder
-			textTypeBuilderRefs[id.String] = textTypeBuilder
+		supplementalSemanticIds, err := parseReferences(row.SupplementalSemanticIds, referenceBuilderRefs)
+		if err != nil {
+			return nil, err
+		}
+		if len(supplementalSemanticIds) > 0 {
+			submodel.SupplementalSemanticIds = supplementalSemanticIds
+			parseReferredReferences(row.SupplementalReferredSemIds, referenceBuilderRefs)
+		}
 
-			// Store references to the slices
-			displayNameRefs[id.String] = displayName
-			descriptionRefs[id.String] = description
-			// Note: supplementalSemanticIds will be retrieved from builder after loop
-
-			submodels[id.String] = &gen.Submodel{
-				IdShort:    idShort.String,
-				Id:         id.String,
-				Category:   category.String,
-				Kind:       gen.ModellingKind(kind.String),
-				ModelType:  "Submodel",
-				SemanticId: semanticId,
-				// DisplayName, Description, and SupplementalSemanticIds will be set after the loop
+		// DisplayNames
+		if len(row.DisplayNames) > 0 {
+			displayNames, err := ParseLangStringNameType(row.DisplayNames)
+			if err != nil {
+				return nil, fmt.Errorf("error parsing display names: %w", err)
 			}
-			getEmbeddedDataSpecificationsForSubmodel(db, "")
+			submodel.DisplayName = displayNames
 		}
 
-		if key_id.Valid {
-			semanticIdBuilderRefs[id.String].CreateKey(key_id.Int64, key_type.String, key_value.String)
-		}
-		if referred_semantic_id_db_id.Valid {
-			semanticIdBuilderRefs[id.String].CreateReferredSemanticId(referred_semantic_id_db_id.Int64, referred_parent_reference_id.Int64, referred_semantic_id_type.String)
-		}
-		if referred_key_id.Valid {
-			semanticIdBuilderRefs[id.String].CreateReferredSemanticIdKey(referred_semantic_id_db_id.Int64, referred_key_id.Int64, referred_key_type.String, referred_key_value.String)
-		}
-		if display_name_id.Valid {
-			nameTypeBuilderRefs[id.String].CreateLangStringNameType(display_name_id.Int64, display_name_language.String, display_name_text.String)
-		}
-		if description_id.Valid {
-			textTypeBuilderRefs[id.String].CreateLangStringTextType(description_id.Int64, description_language.String, description_text.String)
+		// Descriptions
+		if len(row.Descriptions) > 0 {
+			descriptions, err := ParseLangStringTextType(row.Descriptions)
+			if err != nil {
+				return nil, fmt.Errorf("error parsing descriptions: %w", err)
+			}
+			submodel.Description = descriptions
 		}
 
-		if supplemental_semantic_id_dbid.Valid {
-			supplementalSemanticIdBuilderRefs[id.String].CreateReference(supplemental_semantic_id_dbid.Int64, supplementalSemanticIdType.String)
-		}
-		if supplemental_semantic_id_key_id.Valid {
-			supplementalSemanticIdBuilderRefs[id.String].CreateKey(supplemental_semantic_id_dbid.Int64, supplemental_semantic_id_key_id.Int64, supplemental_semantic_id_key_type.String, supplemental_semantic_id_key_value.String)
-		}
-		if supplemental_semantic_id_referred_semantic_id_db_id.Valid {
-			supplementalSemanticIdBuilderRefs[id.String].CreateReferredSemanticId(supplemental_semantic_id_dbid.Int64, supplemental_semantic_id_referred_semantic_id_db_id.Int64, supplemental_semantic_id_referred_parent_reference_id.Int64, supplemental_semantic_id_referred_semantic_id_type.String)
-		}
-		if supplemental_semantic_id_referred_key_id.Valid {
-			supplementalSemanticIdBuilderRefs[id.String].CreateReferredSemanticIdKey(supplemental_semantic_id_dbid.Int64, supplemental_semantic_id_referred_semantic_id_db_id.Int64, supplemental_semantic_id_referred_key_id.Int64, supplemental_semantic_id_referred_key_type.String, supplemental_semantic_id_referred_key_value.String)
-		}
+		submodels[submodel.Id] = submodel
+		result = append(result, submodel)
 	}
 
-	for _, referenceBuilder := range semanticIdBuilderRefs {
+	for _, referenceBuilder := range referenceBuilderRefs {
 		referenceBuilder.BuildNestedStructure()
 	}
-
-	for _, multiReferenceBuilder := range supplementalSemanticIdBuilderRefs {
-		multiReferenceBuilder.BuildNestedStructures()
-	}
-
-	// After all rows are processed, assign the populated slices to the submodels
-	for submodelId, submodel := range submodels {
-		if displayName, ok := displayNameRefs[submodelId]; ok {
-			submodel.DisplayName = *displayName
-		}
-		if description, ok := descriptionRefs[submodelId]; ok {
-			submodel.Description = *description
-		}
-		if supplementalSemanticIdBuilder, ok := supplementalSemanticIdBuilderRefs[submodelId]; ok {
-			submodel.SupplementalSemanticIds = supplementalSemanticIdBuilder.GetReferences()
-		}
-	}
-
-	for submodelId, submodel := range submodels {
-		// json stringify submodel
-		jsonData, err := json.Marshal(submodel)
-		if err != nil {
-			fmt.Printf("Error marshaling submodel to JSON: %v\n", err)
-			continue
-		}
-		fmt.Printf("Submodel %s: %+v\n", submodelId, string(jsonData))
-	}
+	// for _, submodel := range submodels {
+	// 	str, _ := json.Marshal(submodel)
+	// 	fmt.Println(string(str))
+	// }
+	return result, nil
 }
 
-func isSubmodelAlreadyCreated(submodels map[string]*gen.Submodel, id sql.NullString) bool {
-	_, ok := submodels[id.String]
-	return ok
+func parseReferredReferences(row json.RawMessage, referenceBuilderRefs map[int64]*builders.ReferenceBuilder) error {
+	if len(row) > 0 {
+		var semanticIdData []ReferredReferenceRow
+		if err := json.Unmarshal(row, &semanticIdData); err != nil {
+			return fmt.Errorf("error unmarshalling referred semantic ID data: %w", err)
+		}
+		for _, ref := range semanticIdData {
+			builder, semanticIdCreated := referenceBuilderRefs[ref.RootReference]
+			if !semanticIdCreated {
+				return fmt.Errorf("parent reference with id %d not found for referred reference with id %d", ref.ParentReference, ref.ReferenceId)
+			}
+			builder.CreateReferredSemanticId(ref.ReferenceId, ref.ParentReference, ref.ReferenceType)
+			builder.CreateReferredSemanticIdKey(ref.ReferenceId, ref.KeyID, ref.KeyType, ref.KeyValue)
+		}
+	}
+	return nil
 }
 
-func getSubmodelDataFromDb(db *sql.DB, id string) (*sql.Rows, error) {
-	// Submodel Header
-	submodelSelects := getSubmodelSelects()
-	// DisplayName
-	displayNameSelects := getDisplayNameSelects()
-	// Description
-	descriptionSelects := getDescriptionSelects()
-	// SemanticId
-	semanticIdSelects, semanticIdKeySelects, semanticIdReferredSemanticIdSelects, semanticIdReferredSemanticIdKeySelects := getSemanticIdSelects()
-	// SupplementalSemanticIds
-	supplementalSemanticIdSelects, supplementalSemanticIdKeySelects, supplementalSemanticIdReferredSemanticIdSelects, supplementalSemanticIdReferredSemanticIdKeySelects := getSupplementalSemanticIdSelects()
+func parseReferences(row json.RawMessage, referenceBuilderRefs map[int64]*builders.ReferenceBuilder) ([]*gen.Reference, error) {
+	var semanticId *gen.Reference
+	var semanticIdBuilder *builders.ReferenceBuilder
+	semanticId, semanticIdBuilder = nil, nil
+	resultArray := make([]*gen.Reference, 0)
+	if len(row) > 0 {
+		var semanticIdData []ReferenceRow
+		if err := json.Unmarshal(row, &semanticIdData); err != nil {
+			return nil, fmt.Errorf("error unmarshalling semantic ID data: %w", err)
+		}
+		for _, ref := range semanticIdData {
+			_, semanticIdCreated := referenceBuilderRefs[ref.ReferenceId]
 
-	combined := []string{}
-	combined = append(combined, submodelSelects...)
-	combined = append(combined, displayNameSelects...)
-	combined = append(combined, descriptionSelects...)
-	combined = append(combined, semanticIdSelects...)
-	combined = append(combined, semanticIdKeySelects...)
-	combined = append(combined, semanticIdReferredSemanticIdSelects...)
-	combined = append(combined, semanticIdReferredSemanticIdKeySelects...)
-	combined = append(combined, supplementalSemanticIdSelects...)
-	combined = append(combined, supplementalSemanticIdKeySelects...)
-	combined = append(combined, supplementalSemanticIdReferredSemanticIdSelects...)
-	combined = append(combined, supplementalSemanticIdReferredSemanticIdKeySelects...)
+			if !semanticIdCreated {
+				semanticId, semanticIdBuilder = builders.NewReferenceBuilder(ref.ReferenceType, ref.ReferenceId)
+				referenceBuilderRefs[ref.ReferenceId] = semanticIdBuilder
+				resultArray = append(resultArray, semanticId)
+			}
+			semanticIdBuilder.CreateKey(ref.KeyID, ref.KeyType, ref.KeyValue)
+		}
+	}
+	return resultArray, nil
+}
 
-	builder := qb.NewSelect(combined...).From("submodel s")
-	//----- DisplayName -----//
-	addDisplayNameJoins(builder)
-	//----- Description -----//
-	addDescriptionJoins(builder)
-	//----- SemanticId -----//
-	addSemanticIdJoins(builder)
-	//----- SupplementalSemanticIds -----//
-	addSupplementalSemanticIdJoins(builder)
+func ParseLangStringNameType(displayNames json.RawMessage) ([]gen.LangStringNameType, error) {
+	var names []gen.LangStringNameType
+	// remove id field from json
+	var temp []map[string]interface{}
+	if err := json.Unmarshal(displayNames, &temp); err != nil {
+		fmt.Printf("Error unmarshalling display names: %v\n", err)
+		return nil, err
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Printf("Error parsing display names: %v\n", r)
+		}
+	}()
 
-	query, args := builder.Build()
-	rows, err := db.Query(query, args...)
+	for _, item := range temp {
+		if _, ok := item["id"]; ok {
+			delete(item, "id")
+			names = append(names, gen.LangStringNameType{
+				Text:     item["text"].(string),
+				Language: item["language"].(string),
+			})
+		}
+	}
+
+	return names, nil
+}
+
+func ParseLangStringTextType(descriptions json.RawMessage) ([]gen.LangStringTextType, error) {
+	var texts []gen.LangStringTextType
+	// remove id field from json
+	var temp []map[string]interface{}
+	if err := json.Unmarshal(descriptions, &temp); err != nil {
+		fmt.Printf("Error unmarshalling descriptions: %v\n", err)
+		return nil, err
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Printf("Error parsing descriptions: %v\n", r)
+		}
+	}()
+
+	for _, item := range temp {
+		if _, ok := item["id"]; ok {
+			delete(item, "id")
+			texts = append(texts, gen.LangStringTextType{
+				Text:     item["text"].(string),
+				Language: item["language"].(string),
+			})
+		}
+	}
+
+	return texts, nil
+}
+
+func getSubmodelDataFromDbWithJSONQuery(db *sql.DB) (*sql.Rows, error) {
+	rows, err := db.Query(getQuery())
 	if err != nil {
 		fmt.Printf("Error querying database: %v\n", err)
 		return nil, err
@@ -242,143 +265,215 @@ func getSubmodelDataFromDb(db *sql.DB, id string) (*sql.Rows, error) {
 	return rows, nil
 }
 
-func getEmbeddedDataSpecificationsForSubmodel(db *sql.DB, id string) (*sql.Rows, error) {
-	builder := qb.NewSelect(getEmbeddedDataSpecificationSelects()...).From("submodel s")
-	addEmbeddedDataSpecificationJoins(builder)
-	query, args := builder.Build()
-	rows, err := db.Query(query, args...)
-	if err != nil {
-		fmt.Printf("Error querying database: %v\n", err)
-		return nil, err
-	}
-	return rows, nil
-}
+func getQuery() string {
+	return `SELECT
+  s.id                                                      AS submodel_id,
+  s.id_short                                                AS submodel_id_short,
+  s.category                                                AS submodel_category,
+  s.kind                                                    AS submodel_kind,
 
-func getSupplementalSemanticIdSelects() ([]string, []string, []string, []string) {
-	supplementalSemanticIdSelects := []string{"supl_ref.type as submodel_supplemental_semantic_id_reference_type", "supl_ref.id as submodel_supplemental_semantic_id_dbid"}
-	supplementalSemanticIdKeySelects := []string{"supl_rk.type as submodel_supplemental_semantic_id_key_type", "supl_rk.value as submodel_supplemental_semantic_id_key_value", "supl_rk.id as submodel_supplemental_semantic_id_key_id"}
-	// SupplementalSemanticIds -> referredSemanticIds
-	supplementalSemanticIdReferredSemanticIdSelects := []string{"supl_referredReference.id as submodel_semantic_id_referred_semantic_id_reference_id", "supl_referredReference.type as submodel_semantic_id_referred_semantic_id_reference_type", "supl_referredReference.parentReference as submodel_semantic_id_referred_parent_reference_id"}
-	supplementalSemanticIdReferredSemanticIdKeySelects := []string{"supl_referredRK.type as submodel_semantic_id_referred_semantic_id_reference_key_type", "supl_referredRK.value as submodel_semantic_id_referred_semantic_id_reference_key_value", "supl_referredRK.id as submodel_semantic_id_referred_semantic_id_key_id"}
-	return supplementalSemanticIdSelects, supplementalSemanticIdKeySelects, supplementalSemanticIdReferredSemanticIdSelects, supplementalSemanticIdReferredSemanticIdKeySelects
-}
+  -- display names (lang_string_name_type)
+  COALESCE((
+    SELECT jsonb_agg(DISTINCT jsonb_build_object(
+      'language', dn.language,
+      'text', dn.text,
+      'id', dn.id
+    ))
+    FROM lang_string_name_type_reference dn_ref
+    JOIN lang_string_name_type dn
+      ON dn.lang_string_name_type_reference_id = dn_ref.id
+    WHERE dn_ref.id = s.displayname_id
+  ), '[]'::jsonb)                                               AS submodel_display_names,
 
-func getSemanticIdSelects() ([]string, []string, []string, []string) {
-	semanticIdSelects := []string{"r.id as submodel_semantic_id_db_id", "r.type as submodel_semantic_id_reference_type"}
-	semanticIdKeySelects := []string{"rk.type as submodel_semantic_id_reference_key_type", "rk.value as submodel_semantic_id_reference_key_value", "rk.id as submodel_semantic_id_key_id"}
-	// SemanticId -> referredSemanticIds
-	semanticIdReferredSemanticIdSelects := []string{"referredReference.id as submodel_semantic_id_referred_semantic_id_reference_id", "referredReference.type as submodel_semantic_id_referred_semantic_id_reference_type", "referredReference.parentReference as submodel_semantic_id_referred_parent_reference_id"}
-	semanticIdReferredSemanticIdKeySelects := []string{"referredRK.type as submodel_semantic_id_referred_semantic_id_reference_key_type", "referredRK.value as submodel_semantic_id_referred_semantic_id_reference_key_value", "referredRK.id as submodel_semantic_id_referred_semantic_id_key_id"}
-	return semanticIdSelects, semanticIdKeySelects, semanticIdReferredSemanticIdSelects, semanticIdReferredSemanticIdKeySelects
-}
+  -- descriptions (lang_string_text_type)
+  COALESCE((
+    SELECT jsonb_agg(DISTINCT jsonb_build_object(
+      'language', d.language,
+      'text', d.text,
+      'id', d.id
+    ))
+    FROM lang_string_text_type_reference dr
+    JOIN lang_string_text_type d
+      ON d.lang_string_text_type_reference_id = dr.id
+    WHERE dr.id = s.description_id
+  ), '[]'::jsonb)                                               AS submodel_descriptions,
 
-func getDescriptionSelects() []string {
-	descriptionSelects := []string{"description.language as submodel_description_language", "description.text as submodel_description_text", "description.id as submodel_description_id"}
-	return descriptionSelects
-}
+  -- semantic_id root reference with its keys
+  COALESCE((
+    SELECT jsonb_agg(DISTINCT jsonb_build_object(
+      'reference_id', r.id,
+      'reference_type', r.type,
+      'key_id', rk.id,
+      'key_type', rk.type,
+      'key_value', rk.value
+    ))
+    FROM reference r
+    LEFT JOIN reference_key rk ON rk.reference_id = r.id
+    WHERE r.id = s.semantic_id
+  ), '[]'::jsonb)                                               AS submodel_semantic_id,
 
-func getDisplayNameSelects() []string {
-	displayNameSelects := []string{"dn.language as submodel_display_name_language", "dn.text as submodel_display_name_text", "dn.id as submodel_display_name_id"}
-	return displayNameSelects
-}
+  -- semantic_id -> referred references (children of rootReference)
+  COALESCE((
+    SELECT jsonb_agg(DISTINCT jsonb_build_object(
+      'reference_id', ref.id,
+      'reference_type', ref.type,
+      'parentReference', ref.parentReference,
+      'rootReference', ref.rootReference,
+      'key_id', rk.id,
+      'key_type', rk.type,
+      'key_value', rk.value
+    ))
+    FROM reference ref
+    LEFT JOIN reference_key rk ON rk.reference_id = ref.id
+    WHERE ref.rootReference = s.semantic_id
+      AND ref.id != s.semantic_id
+  ), '[]'::jsonb)                                               AS submodel_semantic_id_referred,
 
-func getSubmodelSelects() []string {
-	submodelSelects := []string{"s.id as submodel_id", "s.id_short as submodel_id_short", "s.category as submodel_category", "s.kind as submodel_kind"}
-	return submodelSelects
-}
+  -- supplemental semantic ids (submodel_supplemental_semantic_id -> reference & keys)
+  COALESCE((
+    SELECT jsonb_agg(DISTINCT jsonb_build_object(
+      'reference_id', ref.id,
+      'reference_type', ref.type,
+      'key_id', rk.id,
+      'key_type', rk.type,
+      'key_value', rk.value
+    ))
+    FROM submodel_supplemental_semantic_id sssi
+    LEFT JOIN reference ref ON ref.id = sssi.reference_id
+    LEFT JOIN reference_key rk ON rk.reference_id = ref.id
+    WHERE sssi.submodel_id = s.id
+  ), '[]'::jsonb)                                               AS submodel_supplemental_semantic_ids,
 
-func getEmbeddedDataSpecificationSelects() []string {
-	return []string{
-		// Embedded Data Specification Header
-		"data_spec_reference.id as data_spec_reference_id",
-		"data_spec_reference.type as data_spec_reference_type",
-		"data_spec_reference_key.type as data_spec_reference_key_type",
-		"data_spec_reference_key.value as data_spec_reference_key_value",
-		"data_spec_reference_key.id as data_spec_reference_key_id",
-		// iec61360 Content
-		"iec61360.unit as dsc_iec_unit",
-		"iec61360.source_of_definition as dsc_iec_sod",
-		"iec61360.symbol as dsc_iec_symbol",
-		"iec61360.data_type as dsc_iec_datatype",
-		"iec61360.value_format as dsc_iec_valueformat",
-		"iec61360.value as dsc_iec_value",
-		// iec61360 preferredName
-		"ds_pn.language as dsc_iec_preferred_name_language",
-		"ds_pn.text as dsc_iec_preferred_name_text",
-		"ds_pn.id as dsc_iec_preferred_name_id",
-		// iec61360 shortName
-		"ds_sn.language as dsc_iec_short_name_language",
-		"ds_sn.text as dsc_iec_short_name_text",
-		"ds_sn.id as dsc_iec_short_name_id",
-		// iec61360 definition
-		"ds_def.language as dsc_iec_definition_language",
-		"ds_def.text as dsc_iec_definition_text",
-		"ds_def.id as dsc_iec_definition_id",
-	}
-}
+  -- supplemental semantic ids -> referred references (children of supplemental rootReference)
+  COALESCE((
+    SELECT jsonb_agg(DISTINCT jsonb_build_object(
+      'supplemental_root_reference_id', sssi.reference_id,
+      'reference_id', ref.id,
+      'reference_type', ref.type,
+      'parentReference', ref.parentReference,
+      'rootReference', ref.rootReference,
+      'key_id', rk.id,
+      'key_type', rk.type,
+      'key_value', rk.value
+    ))
+    FROM submodel_supplemental_semantic_id sssi
+    LEFT JOIN reference ref ON ref.rootReference = sssi.reference_id
+    LEFT JOIN reference_key rk ON rk.reference_id = ref.id
+    WHERE sssi.submodel_id = s.id
+      AND ref.id IS NOT NULL
+  ), '[]'::jsonb)                                               AS submodel_supplemental_semantic_id_referred,
 
-func addDisplayNameJoins(queryBuilder *qb.SelectBuilder) {
-	queryBuilder.
-		Join("LEFT JOIN lang_string_name_type_reference dn_ref ON s.displayname_id = dn_ref.id").
-		Join("LEFT JOIN lang_string_name_type dn ON dn.lang_string_name_type_reference_id = dn_ref.id")
-}
-func addDescriptionJoins(queryBuilder *qb.SelectBuilder) {
-	queryBuilder.
-		Join("LEFT JOIN lang_string_text_type_reference desc_ref ON s.description_id = desc_ref.id").
-		Join("LEFT JOIN lang_string_text_type description ON description.lang_string_text_type_reference_id = desc_ref.id")
-}
+  -- data_specification references (submodel_embedded_data_specification -> data_specification -> reference + reference_key)
+  COALESCE((
+    SELECT jsonb_agg(DISTINCT jsonb_build_object(
+      'submodel_id', seds.submodel_id,
+      'data_specification_id', data_spec.id,
+      'data_spec_reference_id', data_spec_reference.id,
+      'data_spec_reference_type', data_spec_reference.type,
+      'data_spec_reference_key_id', data_spec_reference_key.id,
+      'data_spec_reference_key_type', data_spec_reference_key.type,
+      'data_spec_reference_key_value', data_spec_reference_key.value
+    ))
+    FROM submodel_embedded_data_specification seds
+    LEFT JOIN data_specification data_spec ON data_spec.id = seds.embedded_data_specification_id
+    LEFT JOIN reference data_spec_reference ON data_spec.data_specification = data_spec_reference.id
+    LEFT JOIN reference_key data_spec_reference_key ON data_spec.id = data_spec_reference_key.reference_id
+    WHERE seds.submodel_id = s.id
+  ), '[]'::jsonb)                                               AS submodel_embedded_data_specifications,
 
-func addSemanticIdJoins(queryBulder *qb.SelectBuilder) {
-	queryBulder.
-		Join("LEFT JOIN reference r ON s.semantic_id = r.id").
-		Join("LEFT JOIN reference_key rk ON r.id = rk.reference_id").
-		// SemanticId -> referredSemanticIds (get all references in the tree, excluding root)
-		Join("LEFT JOIN reference referredReference ON referredReference.rootReference = r.id AND referredReference.id != r.id").
-		Join("LEFT JOIN reference_key referredRK ON referredReference.id = referredRK.reference_id")
-}
+  -- data_specification -> referred references for the data_spec_reference (children)
+  COALESCE((
+    SELECT jsonb_agg(DISTINCT jsonb_build_object(
+      'data_spec_reference_id', dsr.rootReference,       -- the root reference id
+      'reference_id', ref.id,
+      'reference_type', ref.type,
+      'parentReference', ref.parentReference,
+      'rootReference', ref.rootReference,
+      'key_id', rk.id,
+      'key_type', rk.type,
+      'key_value', rk.value
+    ))
+    FROM submodel_embedded_data_specification seds
+    LEFT JOIN data_specification data_spec ON data_spec.id = seds.embedded_data_specification_id
+    LEFT JOIN reference data_spec_reference ON data_spec.data_specification = data_spec_reference.id
+    LEFT JOIN reference ref ON ref.rootReference = data_spec_reference.id
+    LEFT JOIN reference_key rk ON rk.reference_id = ref.id
+    LEFT JOIN reference dsr ON dsr.id = data_spec_reference.id
+    WHERE seds.submodel_id = s.id
+      AND ref.id IS NOT NULL
+  ), '[]'::jsonb)                                               AS submodel_data_spec_reference_referred,
 
-func addSupplementalSemanticIdJoins(queryBuilder *qb.SelectBuilder) {
-	queryBuilder.
-		Join("LEFT JOIN submodel_supplemental_semantic_id sssi ON s.id = sssi.submodel_id").
-		Join("LEFT JOIN reference supl_ref ON sssi.reference_id = supl_ref.id").
-		Join("LEFT JOIN reference_key supl_rk ON supl_ref.id = supl_rk.reference_id").
-		// SupplementalSemanticIds -> ReferredSemanticIds (get all references in the tree, excluding root)
-		Join("LEFT JOIN reference supl_referredReference ON supl_referredReference.rootReference = supl_ref.id").
-		Join("LEFT JOIN reference_key supl_referredRK ON supl_referredReference.id = supl_referredRK.reference_id")
-}
+  -- IEC61360 entries (aggregated per embedded data specification)
+  COALESCE((
+    SELECT jsonb_agg(DISTINCT jsonb_build_object(
+      'iec_id', iec.id,
+      'unit', iec.unit,
+      'source_of_definition', iec.source_of_definition,
+      'symbol', iec.symbol,
+      'data_type', iec.data_type,
+      'value_format', iec.value_format,
+      'value', iec.value,
+      'level_type_id', iec.level_type_id,
+      -- preferred / short / definition lang strings (flat objects)
+      'preferred_name', (SELECT jsonb_agg(DISTINCT jsonb_build_object('language', pn.language,'text', pn.text,'id', pn.id))
+                         FROM lang_string_text_type_reference pn_ref
+                         JOIN lang_string_text_type pn ON pn.lang_string_text_type_reference_id = pn_ref.id
+                         WHERE pn_ref.id = iec.preferred_name_id),
+      'short_name',   (SELECT jsonb_agg(DISTINCT jsonb_build_object('language', sn.language,'text', sn.text,'id', sn.id))
+                         FROM lang_string_text_type_reference sn_ref
+                         JOIN lang_string_text_type sn ON sn.lang_string_text_type_reference_id = sn_ref.id
+                         WHERE sn_ref.id = iec.short_name_id),
+      'definition',   (SELECT jsonb_agg(DISTINCT jsonb_build_object('language', df.language,'text', df.text,'id', df.id))
+                         FROM lang_string_text_type_reference df_ref
+                         JOIN lang_string_text_type df ON df.lang_string_text_type_reference_id = df_ref.id
+                         WHERE df_ref.id = iec.definition_id),
+      -- unit reference keys (if unit_id is a reference)
+      'unit_reference_keys', (SELECT jsonb_agg(DISTINCT jsonb_build_object(
+                                 'reference_id', dsu.id,
+                                 'key_id', dsk.id,
+                                 'key_type', dsk.type,
+                                 'key_value', dsk.value))
+                               FROM reference dsu
+                               LEFT JOIN reference_key dsk ON dsk.reference_id = dsu.id
+                               WHERE dsu.id = iec.unit_id),
+      -- unit reference -> referred children keys
+      'unit_reference_referred', (SELECT jsonb_agg(DISTINCT jsonb_build_object(
+                                 'rootReference', dsu2.rootReference,
+                                 'reference_id', dsu2.id,
+                                 'key_id', dsk2.id,
+                                 'key_type', dsk2.type,
+                                 'key_value', dsk2.value))
+                               FROM reference dsu2
+                               LEFT JOIN reference_key dsk2 ON dsk2.reference_id = dsu2.id
+                               WHERE dsu2.rootReference = iec.unit_id AND dsu2.id != iec.unit_id),
+      -- value list entries if present
+      'value_list_entries', (SELECT jsonb_agg(DISTINCT jsonb_build_object('value_reference_pair_id', vlvrp.id, 'reference_id', vlref.id))
+                              FROM value_list vl
+                              JOIN value_list_value_reference_pair vlvrp ON vl.id = vlvrp.value_list_id
+                              LEFT JOIN reference vlref ON vlvrp.value_id = vlref.id
+                              WHERE vl.id = iec.value_list_id)
+    ))
+    FROM submodel_embedded_data_specification seds
+    JOIN data_specification ds ON ds.id = seds.embedded_data_specification_id
+    JOIN data_specification_content dsc ON dsc.id = ds.data_specification_content
+    JOIN data_specification_iec61360 iec ON iec.id = dsc.id
+    WHERE seds.submodel_id = s.id
+  ), '[]'::jsonb)                                               AS submodel_data_spec_iec61360,
 
-func addEmbeddedDataSpecificationJoins(queryBuilder *qb.SelectBuilder) {
-	queryBuilder.
-		Join("LEFT JOIN submodel_embedded_data_specification seds ON s.id = seds.submodel_id").
-		Join("LEFT JOIN data_specification data_spec ON seds.embedded_data_specification_id = data_spec.id").
-		// Data Specification Reference in Data Specification
-		Join("LEFT JOIN reference data_spec_reference ON data_spec.data_specification = data_spec_reference.id").
-		Join("LEFT JOIN reference_key data_spec_reference_key ON data_spec.id = data_spec_reference_key.reference_id").
-		// Data Spec Ref ReferredSemanticId
-		Join("LEFT JOIN reference data_spec_reference_referred ON data_spec_reference_referred.rootReference = data_spec_reference.id").
-		Join("LEFT JOIN reference_key data_spec_reference_key_referred ON data_spec_reference_referred.id = data_spec_reference_key_referred.reference_id").
-		// Data Specification Content in Data Specification
-		Join("LEFT JOIN data_specification_content data_spec_content ON data_spec_content.id = data_spec.data_specification_content").
-		// Data Specification IEC61360 Content in Data Specification Content
-		Join("LEFT JOIN data_specification_iec61360 iec61360 ON data_spec_content.id = iec61360.id").
-		// Preferred Name
-		Join("LEFT JOIN lang_string_text_type_reference ds_pn_ref ON iec61360.preferred_name_id = ds_pn_ref.id").
-		Join("LEFT JOIN lang_string_text_type ds_pn ON ds_pn.lang_string_text_type_reference_id = ds_pn_ref.id").
-		// Short Name
-		Join("LEFT JOIN lang_string_text_type_reference ds_sn_ref ON iec61360.short_name_id = ds_sn_ref.id").
-		Join("LEFT JOIN lang_string_text_type ds_sn ON ds_sn.lang_string_text_type_reference_id = ds_sn_ref.id").
-		// Definition
-		Join("LEFT JOIN lang_string_text_type_reference ds_def_ref ON iec61360.short_name_id = ds_def_ref.id").
-		Join("LEFT JOIN lang_string_text_type ds_def ON ds_def.lang_string_text_type_reference_id = ds_def_ref.id").
-		// UnitId
-		Join("LEFT JOIN reference ds_unit_id_ref ON iec61360.unit_id = ds_unit_id_ref.id").
-		Join("LEFT JOIN reference_key ds_unit_key ON ds_unit_id_ref.id = ds_unit_key.reference_id").
-		// UnitId -> ReferredSemanticId
-		Join("LEFT JOIN reference ds_unit_ref_referred ON ds_unit_ref_referred.rootReference = ds_unit_id_ref.id").
-		Join("LEFT JOIN reference_key ds_unit_key_referred ON ds_unit_ref_referred.id = ds_unit_key_referred.reference_id").
-		// Value List
-		Join("LEFT JOIN value_list ds_value_list ON iec61360.value_list_id = ds_value_list.id").
-		Join("LEFT JOIN value_list_value_reference_pair ds_vlvrp ON ds_value_list.id = ds_vlvrp.value_list_id").
-		// Level Type
-		Join("LEFT JOIN level_type levelType ON levelType.id = iec61360.level_type_id")
+  -- level_type entries referenced by IEC61360 (flat)
+  COALESCE((
+    SELECT jsonb_agg(DISTINCT jsonb_build_object(
+      'iec_id', iec.id,
+      'level_type_id', lvl.id
+    ))
+    FROM submodel_embedded_data_specification seds
+    JOIN data_specification ds ON ds.id = seds.embedded_data_specification_id
+    JOIN data_specification_content dsc ON dsc.id = ds.data_specification_content
+    JOIN data_specification_iec61360 iec ON iec.id = dsc.id
+    LEFT JOIN level_type lvl ON lvl.id = iec.level_type_id
+    WHERE seds.submodel_id = s.id
+  ), '[]'::jsonb)                                               AS submodel_iec_level_types
+
+FROM submodel s;
+`
 }
