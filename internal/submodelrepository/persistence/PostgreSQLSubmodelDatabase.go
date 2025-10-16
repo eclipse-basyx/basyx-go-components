@@ -95,6 +95,66 @@ func (p *PostgreSQLSubmodelDatabase) GetAllSubmodels(limit int32, cursor string,
 	return sm, "", nil
 }
 
+// get submodel metadata
+func (p *PostgreSQLSubmodelDatabase) GetAllSubmodelsMetadata(
+	limit int32,
+	cursor string,
+	idShort string,
+	semanticId string,
+) ([]gen.Submodel, string, error) {
+
+	tx, err := p.db.Begin()
+	if limit <= 0 {
+		limit = 100
+	}
+
+	if err != nil {
+		fmt.Println(err)
+		return nil, "", beginTransactionErrorSubmodelRepo
+	}
+	defer func() {
+		if err != nil {
+			tx.Rollback()
+		}
+	}()
+
+	query := `
+		SELECT id, id_short, category, kind, model_type, semantic_id
+		FROM submodel
+		WHERE ($1 = '' OR id_short ILIKE '%' || $1 || '%')
+		  AND ($2 = '' OR semantic_id = $2)
+		ORDER BY id
+		LIMIT $3;
+	`
+
+	rows, err := p.db.Query(query, idShort, semanticId, limit)
+	if err != nil {
+		tx.Rollback()
+		fmt.Println("Error querying submodel metadata:", err)
+		return nil, "", err
+	}
+	defer rows.Close()
+
+	var submodels []gen.Submodel
+	for rows.Next() {
+		var sm gen.Submodel
+		err := rows.Scan(&sm.Id, &sm.IdShort, &sm.Category, &sm.Kind, &sm.ModelType, &sm.SemanticId)
+		if err != nil {
+			tx.Rollback()
+			fmt.Println("Error scanning metadata row:", err)
+			return nil, "", err
+		}
+		submodels = append(submodels, sm)
+	}
+
+	if err := tx.Commit(); err != nil {
+		fmt.Println(err)
+		return nil, "", failedPostgresTransactionSubmodelRepo
+	}
+
+	return submodels, "", nil
+}
+
 // GetSubmodel returns one Submodel by id
 func (p *PostgreSQLSubmodelDatabase) GetSubmodel(id string) (gen.Submodel, error) {
 	// Check cache first

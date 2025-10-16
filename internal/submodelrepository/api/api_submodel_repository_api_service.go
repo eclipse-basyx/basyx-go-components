@@ -77,12 +77,16 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelById(
 		return gen.Response(http.StatusBadRequest, nil), decodeErr
 	}
 	sm, err := s.submodelBackend.GetSubmodel(string(decodedSubmodelIdentifier))
+
 	if err != nil {
+
 		if errors.Is(err, sql.ErrNoRows) {
 			return gen.Response(404, nil), nil
 		}
 		if common.IsErrNotFound(err) {
-			return gen.Response(404, nil), nil
+
+			return gen.Response(404, nil), err
+
 		}
 		return gen.Response(500, nil), err
 	}
@@ -123,7 +127,26 @@ func (s *SubmodelRepositoryAPIAPIService) PostSubmodel(
 }
 
 // GetAllSubmodelsMetadata - Returns the metadata attributes of all Submodels
-func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsMetadata(ctx context.Context, semanticId string, idShort string, limit int32, cursor string) (gen.ImplResponse, error) {
+func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsMetadata(
+	ctx context.Context,
+	semanticId string,
+	idShort string,
+	limit int32,
+	cursor string) (gen.ImplResponse, error) {
+	sms, nextCursor, err := s.submodelBackend.GetAllSubmodelsMetadata(limit, cursor, idShort, semanticId)
+	if err != nil {
+		return gen.Response(500, nil), err
+	}
+
+	// using the openAPI provided response struct to include paging metadata
+	res := gen.GetSubmodelsResult{
+		PagingMetadata: gen.PagedResultPagingMetadata{
+			Cursor: nextCursor,
+		},
+		Result: sms,
+	}
+	return gen.Response(200, res), nil
+
 	// TODO - update GetAllSubmodelsMetadata with the required logic for this service method.
 	// Add api_submodel_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
 
