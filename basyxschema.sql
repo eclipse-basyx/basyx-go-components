@@ -105,6 +105,32 @@ DO $$ BEGIN
   END IF;
 END $$;
 
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'data_type_iec61360') THEN
+    CREATE TYPE data_type_iec61360 AS ENUM (
+      'Date',
+      'String',
+      'StringTranslatable',
+      'IntegerMeasure',
+      'IntegerCount',
+      'IntegerCurrency',
+      'RealMeasure',
+      'RealCount',
+      'RealCurrency',
+      'Boolean',
+      'Iri',
+      'Irdi',
+      'Rational',
+      'RationalMeasure',
+      'Time',
+      'Timestamp',
+      'Html',
+      'Blob',
+      'File'
+    );
+  END IF;
+END $$;
+
 -- Reference (for semanticId etc.)  --  keys[i] keeps track of order
 CREATE TABLE IF NOT EXISTS reference (
   id           BIGSERIAL PRIMARY KEY,
@@ -158,13 +184,20 @@ CREATE TABLE IF NOT EXISTS administrative_information (
   templateId        VARCHAR(2048)
 );
 
-CREATE INDEX IF NOT EXISTS ix_admin_id ON administrative_information(id);
-
-CREATE TABLE IF NOT EXISTS embedded_data_specification_content (
+CREATE TABLE IF NOT EXISTS data_specification_content (
   id BIGINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY
 );
 
-CREATE INDEX IF NOT EXISTS ix_edscontent_id ON embedded_data_specification_content(id);
+CREATE INDEX IF NOT EXISTS ix_edscontent_id ON data_specification_content(id);
+
+CREATE INDEX IF NOT EXISTS ix_admin_id ON administrative_information(id);
+
+CREATE TABLE IF NOT EXISTS data_specification (
+  id BIGINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
+  data_specification BIGINT REFERENCES reference(id) NOT NULL,
+  data_specification_content BIGINT REFERENCES data_specification_content(id) NOT NULL
+);
+
 
 CREATE TABLE IF NOT EXISTS value_list (
   id BIGINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY
@@ -174,6 +207,7 @@ CREATE INDEX IF NOT EXISTS ix_valuelist_id ON value_list(id);
 
 CREATE TABLE IF NOT EXISTS value_list_value_reference_pair (
   id BIGSERIAL PRIMARY KEY,
+  position INTEGER NOT NULL,  -- <- Array-Index valueReferencePairs[i]
   value_list_id BIGINT NOT NULL REFERENCES value_list(id) ON DELETE CASCADE,
   value TEXT NOT NULL,
   value_id BIGINT REFERENCES reference(id) ON DELETE CASCADE
@@ -181,26 +215,8 @@ CREATE TABLE IF NOT EXISTS value_list_value_reference_pair (
 
 CREATE INDEX IF NOT EXISTS ix_vlvrp_id ON value_list_value_reference_pair(id);
 
-CREATE TABLE IF NOT EXISTS data_specification_iec61360 (
-  id                BIGSERIAL PRIMARY KEY,
-  preferred_name_id BIGINT REFERENCES lang_string_text_type_reference(id) ON DELETE CASCADE NOT NULL,
-  short_name_id     BIGINT REFERENCES lang_string_text_type_reference(id) ON DELETE CASCADE,
-  unit              TEXT,
-  unit_id           BIGINT REFERENCES reference(id) ON DELETE CASCADE,
-  source_of_definition TEXT,
-  symbol           TEXT,
-  data_type        data_type_def_xsd,
-  definition_id    BIGINT REFERENCES lang_string_text_type_reference(id) ON DELETE CASCADE,
-  value_format     TEXT,
-  value_list_id    BIGINT REFERENCES value_list(id) ON DELETE CASCADE,
-  value VARCHAR(2048)
-);
-
-CREATE INDEX IF NOT EXISTS ix_dsiec_id ON data_specification_iec61360(id);
-
 CREATE TABLE IF NOT EXISTS level_type (
   id BIGSERIAL PRIMARY KEY,
-  data_specification_iec61360_id BIGINT REFERENCES data_specification_iec61360(id) ON DELETE CASCADE,
   min BOOLEAN NOT NULL,
   max BOOLEAN NOT NULL,
   nom BOOLEAN NOT NULL,
@@ -209,10 +225,26 @@ CREATE TABLE IF NOT EXISTS level_type (
 
 CREATE INDEX IF NOT EXISTS ix_lt_id ON level_type(id);
 
+CREATE TABLE IF NOT EXISTS data_specification_iec61360 (
+  id                BIGINT REFERENCES data_specification_content(id) ON DELETE CASCADE PRIMARY KEY,
+  preferred_name_id BIGINT REFERENCES lang_string_text_type_reference(id) ON DELETE CASCADE NOT NULL,
+  short_name_id     BIGINT REFERENCES lang_string_text_type_reference(id) ON DELETE CASCADE,
+  unit              TEXT,
+  unit_id           BIGINT REFERENCES reference(id) ON DELETE CASCADE,
+  source_of_definition TEXT,
+  symbol           TEXT,
+  data_type        data_type_iec61360,
+  definition_id    BIGINT REFERENCES lang_string_text_type_reference(id) ON DELETE CASCADE,
+  value_format     TEXT,
+  value_list_id    BIGINT REFERENCES value_list(id) ON DELETE CASCADE,
+  level_type_id BIGINT REFERENCES level_type(id) ON DELETE CASCADE,
+  value VARCHAR(2048)
+);
+
 CREATE TABLE IF NOT EXISTS administrative_information_embedded_data_specification (
   id                BIGSERIAL PRIMARY KEY,
   administrative_information_id BIGINT REFERENCES administrative_information(id) ON DELETE CASCADE,
-  data_specification_content_id BIGSERIAL REFERENCES embedded_data_specification_content(id) ON DELETE CASCADE
+  data_specification_content_id BIGSERIAL REFERENCES data_specification_content(id) ON DELETE CASCADE
 );
 
 CREATE INDEX IF NOT EXISTS ix_eds_id ON administrative_information_embedded_data_specification(id);
@@ -242,7 +274,7 @@ CREATE INDEX IF NOT EXISTS ix_smsup_id ON submodel_supplemental_semantic_id(id);
 CREATE TABLE IF NOT EXISTS submodel_embedded_data_specification (
   id                BIGSERIAL PRIMARY KEY,
   submodel_id       VARCHAR(2048) REFERENCES submodel(id) ON DELETE CASCADE,
-  data_specification_content_id BIGSERIAL REFERENCES embedded_data_specification_content(id) ON DELETE CASCADE
+  embedded_data_specification_id BIGSERIAL REFERENCES data_specification(id) ON DELETE CASCADE
 );
 
 CREATE INDEX IF NOT EXISTS ix_eds_id ON submodel_embedded_data_specification(id);
@@ -515,3 +547,20 @@ CREATE TABLE IF NOT EXISTS qualifier_supplemental_semantic_id (
 );
 
 CREATE INDEX IF NOT EXISTS ix_qualsup_id ON qualifier_supplemental_semantic_id(id);
+
+
+CREATE INDEX IF NOT EXISTS ix_seds_submodel ON submodel_embedded_data_specification (submodel_id);
+
+CREATE INDEX IF NOT EXISTS ix_dataspec_content ON data_specification (data_specification_content);
+
+CREATE INDEX IF NOT EXISTS ix_iec61360_preferred_name ON data_specification_iec61360 (preferred_name_id);
+
+CREATE INDEX IF NOT EXISTS ix_iec61360_short_name ON data_specification_iec61360 (short_name_id);
+
+CREATE INDEX IF NOT EXISTS ix_iec61360_definition ON data_specification_iec61360 (definition_id);
+
+CREATE INDEX IF NOT EXISTS ix_iec61360_unit_id ON data_specification_iec61360 (unit_id);
+
+CREATE INDEX IF NOT EXISTS ix_vlvrp_valuelist ON value_list_value_reference_pair (value_list_id);
+
+CREATE INDEX IF NOT EXISTS ix_dsiec_id ON data_specification_iec61360(id);

@@ -15,6 +15,15 @@ type LangStringNameType struct {
 	Text string `json:"text"`
 }
 
+func (l LangStringNameType) GetLanguage() string {
+	return l.Language
+}
+
+func (l LangStringNameType) GetText() *interface{} {
+	var text interface{} = l.Text
+	return &text
+}
+
 // AssertLangStringNameTypeRequired checks if the required fields are not zero-ed
 func AssertLangStringNameTypeRequired(obj LangStringNameType) error {
 	elements := map[string]interface{}{

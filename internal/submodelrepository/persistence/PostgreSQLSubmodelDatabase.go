@@ -178,30 +178,6 @@ func (p *PostgreSQLSubmodelDatabase) CreateSubmodel(sm gen.Submodel) error {
 		return common.NewInternalServerError("Failed to create SemanticId - no changes applied - see console for details")
 	}
 
-	// if sm.SemanticId.ReferredSemanticId != nil {
-	// 	lastParentId := semanticIdDbId
-	// 	stack := []*gen.Reference{sm.SemanticId.ReferredSemanticId}
-	// 	for len(stack) > 0 {
-	// 		currentElement := stack[len(stack)-1]
-	// 		if currentElement != nil {
-	// 			// Pop current from stack
-	// 			stack = stack[:len(stack)-1]
-	// 			// First push next element to stack if exists
-	// 			if currentElement.ReferredSemanticId != nil {
-	// 				stack = append(stack, currentElement.ReferredSemanticId)
-	// 			}
-
-	// 			// Save current element to DB using currentElement instead of sm.SemanticId
-	// 			insertedId, err := persistence_utils.CreateReference(tx, currentElement, lastParentId, semanticIdDbId)
-	// 			if err != nil {
-	// 				return err
-	// 			}
-	// 			lastParentId = insertedId
-
-	// 		}
-	// 	}
-	// }
-
 	displayNameId, err = persistence_utils.CreateLangStringNameTypes(tx, sm.DisplayName)
 	if err != nil {
 		fmt.Println(err)
@@ -209,7 +185,11 @@ func (p *PostgreSQLSubmodelDatabase) CreateSubmodel(sm gen.Submodel) error {
 	}
 
 	// Handle possibly nil Description
-	descriptionId, err = persistence_utils.CreateLangStringTextTypes(tx, sm.Description)
+	var convertedDescription []gen.LangStringText
+	for _, desc := range sm.Description {
+		convertedDescription = append(convertedDescription, desc)
+	}
+	descriptionId, err = persistence_utils.CreateLangStringTextTypes(tx, convertedDescription)
 	if err != nil {
 		fmt.Println(err)
 		return common.NewInternalServerError("Failed to create Description - no changes applied - see console for details")
@@ -236,6 +216,19 @@ func (p *PostgreSQLSubmodelDatabase) CreateSubmodel(sm gen.Submodel) error {
 		err = persistence_utils.InsertSupplementalSemanticIds(tx, sm.Id, sm.SupplementalSemanticIds)
 		if err != nil {
 			return err
+		}
+	}
+
+	if sm.EmbeddedDataSpecifications != nil {
+		for _, eds := range sm.EmbeddedDataSpecifications {
+			edsDbId, err := persistence_utils.CreateEmbeddedDataSpecification(tx, eds)
+			if err != nil {
+				return err
+			}
+			_, err = tx.Exec("INSERT INTO submodel_embedded_data_specification(submodel_id, embedded_data_specification_id) VALUES ($1, $2)", sm.Id, edsDbId)
+			if err != nil {
+				return err
+			}
 		}
 	}
 

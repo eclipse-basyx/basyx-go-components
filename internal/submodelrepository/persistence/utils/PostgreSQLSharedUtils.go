@@ -2,6 +2,7 @@ package persistence_utils
 
 import (
 	"database/sql"
+	"fmt"
 	"reflect"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
@@ -9,6 +10,136 @@ import (
 	qb "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/querybuilder"
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 )
+
+func CreateEmbeddedDataSpecification(tx *sql.Tx, embeddedDataSpecification gen.EmbeddedDataSpecification) (sql.NullInt64, error) {
+	var embeddedDataSpecificationContentDbId sql.NullInt64
+	var embeddedDataSpecificationDbId sql.NullInt64
+	err := tx.QueryRow(`INSERT INTO data_specification_content DEFAULT VALUES RETURNING id`).Scan(&embeddedDataSpecificationContentDbId)
+	if err != nil {
+		fmt.Println(err)
+		return sql.NullInt64{}, common.NewInternalServerError("Error inserting DataSpecificationContent. See console for details.")
+	}
+	dataSpecificationDbId, err := CreateReference(tx, embeddedDataSpecification.DataSpecification, sql.NullInt64{}, sql.NullInt64{})
+	if err != nil {
+		return sql.NullInt64{}, err
+	}
+	err = tx.QueryRow(`INSERT INTO data_specification (data_specification, data_specification_content) VALUES ($1, $2) RETURNING id`, dataSpecificationDbId, embeddedDataSpecificationContentDbId).Scan(&embeddedDataSpecificationDbId)
+	if err != nil {
+		return sql.NullInt64{}, err
+	}
+	// Check if embeddedDataSpecificationContent is of type DataSpecificationIec61360
+	if ds, ok := embeddedDataSpecification.DataSpecificationContent.(*gen.DataSpecificationIec61360); ok {
+		err = insertDataSpecificationIec61360(tx, ds, embeddedDataSpecificationContentDbId)
+		if err != nil {
+			return sql.NullInt64{}, err
+		}
+	} else {
+		return sql.NullInt64{}, common.NewErrBadRequest("Unsupported DataSpecificationContent type")
+	}
+
+	return embeddedDataSpecificationDbId, nil
+}
+
+func insertDataSpecificationIec61360(tx *sql.Tx, ds *gen.DataSpecificationIec61360, embeddedDataSpecificationContentDbId sql.NullInt64) error {
+	var preferredNameConverted []gen.LangStringText
+	var shortNameConverted []gen.LangStringText
+	var definitionConverted []gen.LangStringText
+
+	// Convert PreferredName to []LangStringText
+	for _, pn := range ds.PreferredName {
+		preferredNameConverted = append(preferredNameConverted, pn)
+	}
+	// Convert ShortName to []LangStringText
+	for _, sn := range ds.ShortName {
+		shortNameConverted = append(shortNameConverted, sn)
+	}
+
+	// Convert Definition to []LangStringText
+	for _, def := range ds.Definition {
+		definitionConverted = append(definitionConverted, def)
+	}
+
+	// Insert PreferredName
+	preferredNameID, err := CreateLangStringTextTypes(tx, preferredNameConverted)
+	if err != nil {
+		return err
+	}
+	// Insert ShortName
+	shortNameID, err := CreateLangStringTextTypes(tx, shortNameConverted)
+	if err != nil {
+		return err
+	}
+	// Insert UnitId
+	unitIdID, err := CreateReference(tx, ds.UnitId, sql.NullInt64{}, sql.NullInt64{})
+	if err != nil {
+		return err
+	}
+	// Insert Definition
+	definitionID, err := CreateLangStringTextTypes(tx, definitionConverted)
+	if err != nil {
+		return err
+	}
+
+	valueList, err := insertValueList(tx, ds.ValueList)
+	if err != nil {
+		return err
+	}
+
+	levelTypeId, err := insertLevelType(tx, ds.LevelType)
+	if err != nil {
+		return err
+	}
+
+	var iec61360contentDbId sql.NullInt64
+
+	// INSERT
+	err = tx.QueryRow("INSERT INTO data_specification_iec61360(id, preferred_name_id, short_name_id, unit, unit_id, source_of_definition, symbol, data_type, definition_id, value_format, value_list_id, level_type_id, value) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING id",
+		embeddedDataSpecificationContentDbId, preferredNameID, shortNameID, ds.Unit, unitIdID, ds.SourceOfDefinition, ds.Symbol, ds.DataType, definitionID, ds.ValueFormat, valueList, levelTypeId, ds.Value).Scan(&iec61360contentDbId)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func insertValueList(tx *sql.Tx, valueList *gen.ValueList) (sql.NullInt64, error) {
+	if valueList == nil {
+		return sql.NullInt64{}, nil
+	}
+	var valueListDbId sql.NullInt64
+	err := tx.QueryRow(`INSERT INTO value_list DEFAULT VALUES RETURNING id`).Scan(&valueListDbId)
+	if err != nil {
+		return sql.NullInt64{}, err
+	}
+
+	if len(valueList.ValueReferencePairs) > 0 {
+		for i, vrp := range valueList.ValueReferencePairs {
+			if vrp.ValueId != nil {
+				valueIdDbId, err := CreateReference(tx, vrp.ValueId, sql.NullInt64{}, sql.NullInt64{})
+				if err != nil {
+					return sql.NullInt64{}, err
+				}
+				_, err = tx.Exec(`INSERT INTO value_reference_pair (value_list_id, position, value, value_id) VALUES ($1, $2, $3, $4)`, valueListDbId, i, vrp.Value, valueIdDbId)
+				if err != nil {
+					return sql.NullInt64{}, err
+				}
+			}
+		}
+	}
+	return valueListDbId, nil
+}
+
+func insertLevelType(tx *sql.Tx, levelType *gen.LevelType) (sql.NullInt64, error) {
+	if levelType == nil {
+		return sql.NullInt64{}, nil
+	}
+	var levelTypeDbId sql.NullInt64
+	err := tx.QueryRow(`INSERT INTO level_type (min, max, nom, typ) VALUES ($1, $2, $3, $4) RETURNING id`, levelType.Min, levelType.Max, levelType.Nom, levelType.Typ).Scan(&levelTypeDbId)
+	if err != nil {
+		return sql.NullInt64{}, err
+	}
+	return levelTypeDbId, nil
+}
 
 func CreateAdministrativeInformation(tx *sql.Tx, adminInfo *gen.AdministrativeInformation) (sql.NullInt64, error) {
 	if adminInfo == nil {
@@ -212,7 +343,7 @@ func GetLangStringNameTypes(db *sql.DB, nameTypeID sql.NullInt64) ([]gen.LangStr
 	return nameTypes, nil
 }
 
-func CreateLangStringTextTypes(tx *sql.Tx, textTypes []gen.LangStringTextType) (sql.NullInt64, error) {
+func CreateLangStringTextTypes(tx *sql.Tx, textTypes []gen.LangStringText) (sql.NullInt64, error) {
 	if textTypes == nil {
 		return sql.NullInt64{}, nil
 	}
@@ -225,7 +356,7 @@ func CreateLangStringTextTypes(tx *sql.Tx, textTypes []gen.LangStringTextType) (
 		}
 		textTypeID = sql.NullInt64{Int64: int64(id), Valid: true}
 		for i := 0; i < len(textTypes); i++ {
-			_, err := tx.Exec(`INSERT INTO lang_string_text_type (lang_string_text_type_reference_id, text, language) VALUES ($1, $2, $3)`, textTypeID.Int64, textTypes[i].Text, textTypes[i].Language)
+			_, err := tx.Exec(`INSERT INTO lang_string_text_type (lang_string_text_type_reference_id, text, language) VALUES ($1, $2, $3)`, textTypeID.Int64, textTypes[i].GetText(), textTypes[i].GetLanguage())
 			if err != nil {
 				return sql.NullInt64{}, err
 			}
