@@ -39,7 +39,7 @@ import (
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 )
 
-func GetSubmodel(db *sql.DB, submodelIdFilter string) (*gen.Submodel, error) {
+func GetSubmodelById(db *sql.DB, submodelIdFilter string) (*gen.Submodel, error) {
 	submodels, err := getSubmodels(db, submodelIdFilter)
 	if err != nil || len(submodels) == 0 {
 		return nil, err
@@ -47,7 +47,7 @@ func GetSubmodel(db *sql.DB, submodelIdFilter string) (*gen.Submodel, error) {
 	return submodels[0], nil
 }
 
-func GetSubmodels(db *sql.DB) ([]*gen.Submodel, error) {
+func GetAllSubmodels(db *sql.DB) ([]*gen.Submodel, error) {
 	return getSubmodels(db, "")
 }
 
@@ -261,6 +261,7 @@ func hasSupplementalSemanticIds(supplementalSemanticIdsData []*gen.Reference) bo
 //   - error: An error if query building or execution fails
 func getSubmodelDataFromDbWithJSONQuery(db *sql.DB, submodelId string) (*sql.Rows, error) {
 	q, err := getQueryWithGoqu(submodelId)
+	fmt.Println(q)
 	if err != nil {
 		return nil, fmt.Errorf("error building query: %w", err)
 	}
