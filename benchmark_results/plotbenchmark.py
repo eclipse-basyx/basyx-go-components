@@ -3,6 +3,7 @@ import argparse
 import json
 from pathlib import Path
 import matplotlib.pyplot as plt
+import matplotlib.ticker as ticker
 
 def load_records(path: Path):
     with path.open("r", encoding="utf-8") as f:
@@ -18,8 +19,8 @@ def main():
     parser.add_argument("input", type=Path, help="Path to JSON log (array of records).")
     parser.add_argument("-o", "--output", type=Path, default=None,
                         help="Optional output image (e.g., plot.png). If omitted, shows a window.")
-    parser.add_argument("--unit", choices=["us", "ms"], default="us",
-                        help="Y-axis units. Default: microseconds (us).")
+    parser.add_argument("--unit", choices=["ns", "us", "ms"], default="ms",
+                        help="Y-axis units. Default: nanoseconds (ns).")
     args = parser.parse_args()
 
     records = load_records(args.input)
@@ -36,13 +37,27 @@ def main():
     for r in records:
         it = r.get("iter")
         op = r.get("op", "unknown")
-        dur = r.get("duration_ms")
-        if it is None or dur is None:
+
+        dur_ns = r.get("duration_ns")
+        dur_ms = r.get("duration_ms")
+
+        if it is None or (dur_ns is None and dur_ms is None):
             continue
 
-        val = float(dur)  # value in microseconds (true unit)
-        if args.unit == "ms":
-            val /= 1000.0
+        # Convert everything into the chosen unit
+        if dur_ns is not None:
+            val = float(dur_ns)  # ns
+            if args.unit == "us":
+                val /= 1_000.0
+            elif args.unit == "ms":
+                val /= 1_000_000.0
+        else:  # duration_ms is present
+            val = float(dur_ms) * 1_000_000.0  # convert ms -> ns first
+            if args.unit == "us":
+                val /= 1_000.0
+            elif args.unit == "ms":
+                val /= 1_000_000.0
+
         dur_map[(it, op)] = dur_map.get((it, op), 0.0) + val
 
     # Build cumulative per operation
@@ -53,7 +68,8 @@ def main():
             cumulative[op] += dur_map.get((it, op), 0.0)
             series[op].append(cumulative[op])
 
-    y_label = "Cumulative runtime (µs)" if args.unit == "us" else "Cumulative runtime (ms)"
+    unit_labels = {"ns": "ns", "us": "µs", "ms": "ms"}
+    y_label = f"Cumulative runtime ({unit_labels[args.unit]})"
 
     # Plot
     plt.figure(figsize=(10, 6))
@@ -65,6 +81,18 @@ def main():
     plt.title("Cumulative Discovery Benchmark Runtime by Operation")
     plt.grid(True, linestyle="--", linewidth=0.5, alpha=0.6)
     plt.legend(title="Operation")
+
+    # Optional: format large numbers nicely (e.g., 1.2B instead of 1200000000)
+    def smart_format(x, _):
+        if x >= 1e9:
+            return f"{x/1e9:.1f}B"
+        elif x >= 1e6:
+            return f"{x/1e6:.1f}M"
+        elif x >= 1e3:
+            return f"{x/1e3:.1f}K"
+        return f"{x:.0f}"
+
+    plt.gca().yaxis.set_major_formatter(ticker.FuncFormatter(smart_format))
     plt.tight_layout()
 
     if args.output:
@@ -77,4 +105,6 @@ def main():
 if __name__ == "__main__":
     main()
 
-# python plotbenchmark.py discovery_bench.json -o plot.png
+# Usage examples:
+#   python plotbenchmark.py discovery_bench.json --unit ns
+#   python plotbenchmark.py discovery_bench.json --unit us -o plot.png

@@ -1,0 +1,16 @@
+[
+    {
+        "context": "Health endpoint",
+        "method": "GET",
+        "endpoint": "http://localhost:5004/health",
+        "shouldMatch": "expected/expectedHealthEndpoint.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "Create Top Level Property",
+        "method": "POST",
+        "endpoint": "http://127.0.0.1:5004/shell-descriptors",
+        "data": "postBody/example_data.json",
+        "expectedStatus": 201
+    }
+]

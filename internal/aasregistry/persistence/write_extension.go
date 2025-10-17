@@ -53,6 +53,7 @@ func createExtensions(tx *sql.Tx, descriptorId int64, extensions []model.Extensi
 			if err = createExtensionReferences(tx, id, val.SupplementalSemanticIds); err != nil {
 				return err
 			}
+			// todo: create new table
 			if err = createExtensionReferences(tx, id, val.RefersTo); err != nil {
 				return err
 			}

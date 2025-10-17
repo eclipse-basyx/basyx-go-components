@@ -55,8 +55,9 @@ func makeLogRecord(iter int, componentName string, r ComponentResult, level LogD
 		if r.Error != nil {
 			lr.Error = r.Error.Error()
 		}
-		lr.Request = r.Request
-		lr.Response = r.Response
+		// ✅ sanitize before putting into LogRecord
+		lr.Request = safeRaw(r.Request)
+		lr.Response = safeRaw(r.Response)
 		lr.Extra = r.Extra
 	}
 	return lr
@@ -85,7 +86,7 @@ type ComponentResult struct {
 type LogRecord struct {
 	Iter       int    `json:"iter"`
 	Component  string `json:"component"`
-	DurationMs int64  `json:"duration_ms"`
+	DurationMs int64  `json:"duration_ns"`
 
 	Op   string `json:"op,omitempty"`
 	Code int    `json:"code,omitempty"`
@@ -111,6 +112,18 @@ func findProjectRoot() (string, error) {
 		}
 		dir = parent
 	}
+}
+
+// safeRaw ensures the bytes are valid JSON. If not, it wraps them as a JSON string.
+func safeRaw(b []byte) json.RawMessage {
+	if len(b) == 0 {
+		return nil
+	}
+	if json.Valid(b) {
+		return json.RawMessage(b)
+	}
+	qb, _ := json.Marshal(string(b)) // quote + escape as JSON string
+	return json.RawMessage(qb)
 }
 
 func BenchmarkComponent(b *testing.B, comp ComponentBench) {
@@ -143,7 +156,9 @@ func BenchmarkComponent(b *testing.B, comp ComponentBench) {
 
 	enc := json.NewEncoder(f)
 	enc.SetIndent("", "  ")
-	_ = enc.Encode(logs)
+	if err := enc.Encode(logs); err != nil {
+		b.Fatalf("failed to encode logs: %v", err)
+	}
 
 	b.Logf("wrote %s with %d records (detail=%v)", filename, len(logs), logDetail)
 }
