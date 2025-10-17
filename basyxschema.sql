@@ -283,7 +283,7 @@ CREATE TABLE IF NOT EXISTS extension (
   id          BIGSERIAL PRIMARY KEY,
   semantic_id BIGINT REFERENCES reference(id) ON DELETE CASCADE,
   name       varchar(128) NOT NULL,
-  value_type    data_type_def_xsd NOT NULL,
+  value_type    data_type_def_xsd,
   value_text    TEXT,
   value_num     NUMERIC,
   value_bool    BOOLEAN,
