@@ -20,7 +20,9 @@
             "program": "${workspaceFolder}/cmd/submodelrepositoryservice/main.go",
             "args": [
                 "-config",
-                "${workspaceFolder}/cmd/submodelrepositoryservice/config.yaml"
+                "${workspaceFolder}/cmd/submodelrepositoryservice/config.yaml",
+                "-databaseSchema",
+                "${workspaceFolder}/basyxschema.sql"
             ]
         }
     ]

@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"strconv"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -17,7 +19,7 @@ import (
 	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/submodelrepositoryapi/go"
 )
 
-func runServer(ctx context.Context, configPath string) error {
+func runServer(ctx context.Context, configPath string, databaseSchema string) error {
 	log.Default().Println("Loading Submodel Repository Service...")
 	log.Default().Println("Config Path:", configPath)
 	// Load configuration
@@ -40,14 +42,17 @@ func runServer(ctx context.Context, configPath string) error {
 
 	// Instantiate generated services & controllers
 	// ==== Submodel Repository Service ====
-	smDatabase, err := persistence_postgresql.NewPostgreSQLSubmodelBackend("postgres://"+config.Postgres.User+":"+config.Postgres.Password+"@"+config.Postgres.Host+":"+strconv.Itoa(config.Postgres.Port)+"/"+config.Postgres.DBName+"?sslmode=disable", config.Postgres.MaxOpenConnections, config.Postgres.MaxIdleConnections, config.Postgres.ConnMaxLifetimeMinutes, config.Server.CacheEnabled)
+	smDatabase, err := persistence_postgresql.NewPostgreSQLSubmodelBackend("postgres://"+config.Postgres.User+":"+config.Postgres.Password+"@"+config.Postgres.Host+":"+strconv.Itoa(config.Postgres.Port)+"/"+config.Postgres.DBName+"?sslmode=disable", config.Postgres.MaxOpenConnections, config.Postgres.MaxIdleConnections, config.Postgres.ConnMaxLifetimeMinutes, config.Server.CacheEnabled, databaseSchema)
 	if err != nil {
 		log.Fatalf("Failed to initialize database connection: %v", err)
 		return err
 	}
 
 	//TEST
-	persistence_utils.GetSubmodelJson(smDatabase.GetDB(), "http://acplt.org/Submodels/Assets/TestAsset/Identification2")
+	start := time.Now().Local().UnixMilli()
+	persistence_utils.GetSubmodelById(smDatabase.GetDB(), "1")
+	end := time.Now().Local().UnixMilli()
+	fmt.Printf("Total time: %d milliseconds\n", end-start)
 	//TEST
 
 	smSvc := api.NewSubmodelRepositoryAPIAPIService(*smDatabase)
@@ -82,9 +87,20 @@ func main() {
 	ctx := context.Background()
 	//load config path from flag
 	configPath := ""
+	databaseSchema := ""
 	flag.StringVar(&configPath, "config", "", "Path to config file")
+	flag.StringVar(&databaseSchema, "databaseSchema", "", "Path to Database Schema")
 	flag.Parse()
-	if err := runServer(ctx, configPath); err != nil {
+
+	if databaseSchema != "" {
+		_, fileError := os.ReadFile(databaseSchema)
+		if fileError != nil {
+			fmt.Println("The specified database schema path is invalid or the file was not found.")
+			os.Exit(1)
+		}
+	}
+
+	if err := runServer(ctx, configPath, databaseSchema); err != nil {
 		log.Fatalf("Server error: %v", err)
 	}
 }
