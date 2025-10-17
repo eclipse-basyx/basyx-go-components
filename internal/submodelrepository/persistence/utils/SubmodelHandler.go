@@ -24,10 +24,6 @@
 ******************************************************************************/
 
 // Author: Jannik Fried ( Fraunhofer IESE ), Aaron Zielstorff ( Fraunhofer IESE )
-
-// Package persistence_utils provides utility functions for handling submodel persistence operations.
-// It contains functions for retrieving submodels from the database, building complex SQL queries,
-// and transforming database results into BaSyx-compliant Go data structures.
 package persistence_utils
 
 import (
@@ -43,7 +39,19 @@ import (
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 )
 
-// GetSubmodels retrieves submodels from the database with full nested structures.
+func GetSubmodel(db *sql.DB, submodelIdFilter string) (*gen.Submodel, error) {
+	submodels, err := getSubmodels(db, submodelIdFilter)
+	if err != nil || len(submodels) == 0 {
+		return nil, err
+	}
+	return submodels[0], nil
+}
+
+func GetSubmodels(db *sql.DB) ([]*gen.Submodel, error) {
+	return getSubmodels(db, "")
+}
+
+// getSubmodels retrieves submodels from the database with full nested structures.
 //
 // This function performs a complex query to fetch submodels along with all their related
 // data including display names, descriptions, semantic IDs, supplemental semantic IDs,
@@ -68,7 +76,7 @@ import (
 // Note: The function builds nested reference structures in two phases:
 //  1. Initial parsing during row iteration
 //  2. Final structure building after all rows are processed
-func GetSubmodels(db *sql.DB, submodelIdFilter string) ([]*gen.Submodel, error) {
+func getSubmodels(db *sql.DB, submodelIdFilter string) ([]*gen.Submodel, error) {
 	var result []*gen.Submodel
 	referenceBuilderRefs := make(map[int64]*builders.ReferenceBuilder)
 	start := time.Now().Local().UnixMilli()
