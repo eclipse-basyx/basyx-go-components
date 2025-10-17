@@ -119,7 +119,7 @@ func insertValueList(tx *sql.Tx, valueList *gen.ValueList) (sql.NullInt64, error
 				if err != nil {
 					return sql.NullInt64{}, err
 				}
-				_, err = tx.Exec(`INSERT INTO value_reference_pair (value_list_id, position, value, value_id) VALUES ($1, $2, $3, $4)`, valueListDbId, i, vrp.Value, valueIdDbId)
+				_, err = tx.Exec(`INSERT INTO value_list_value_reference_pair (value_list_id, position, value, value_id) VALUES ($1, $2, $3, $4)`, valueListDbId, i, vrp.Value, valueIdDbId)
 				if err != nil {
 					return sql.NullInt64{}, err
 				}
@@ -393,42 +393,47 @@ func GetLangStringTextTypes(db *sql.DB, textTypeID sql.NullInt64) ([]gen.LangStr
 	return textTypes, nil
 }
 
-func CreateExtension(tx *sql.Tx, submodel_id string, extension gen.Extension) (sql.NullInt64, error) {
-	var extensionDbId sql.NullInt64
+func CreateExtensionForSubmodel(tx *sql.Tx, submodel_id string, extension gen.Extension) (sql.NullInt64, error) {
 	// Create SemanticId
 	semanticIdDbId, err := CreateReference(tx, extension.SemanticId, sql.NullInt64{}, sql.NullInt64{})
 	if err != nil {
 		return sql.NullInt64{}, err
 	}
 
-	extensionDbId, err = insertExtension(extension, submodel_id, semanticIdDbId, err, tx, extensionDbId)
+	extensionDbId, err := insertExtension(extension, semanticIdDbId, tx)
 	if err != nil {
 		return sql.NullInt64{}, err
 	}
 
-	err = insertSupplementalSemanticIdsForExtensions(extension, semanticIdDbId, err, tx, extensionDbId)
+	_, err = tx.Query("INSERT INTO submodel_extension (submodel_id, extension_id) VALUES ($1, $2)", submodel_id, extensionDbId)
 	if err != nil {
 		return sql.NullInt64{}, err
 	}
 
-	err = insertRefersToReferences(extension, semanticIdDbId, err, tx, extensionDbId)
+	err = insertSupplementalSemanticIdsForExtensions(extension, semanticIdDbId, tx, extensionDbId)
+	if err != nil {
+		return sql.NullInt64{}, err
+	}
+
+	err = insertRefersToReferences(extension, tx, extensionDbId)
 	if err != nil {
 		return sql.NullInt64{}, err
 	}
 	return extensionDbId, nil
 }
 
-func insertExtension(extension gen.Extension, submodel_id string, semanticIdDbId sql.NullInt64, err error, tx *sql.Tx, extensionDbId sql.NullInt64) (sql.NullInt64, error) {
+func insertExtension(extension gen.Extension, semanticIdDbId sql.NullInt64, tx *sql.Tx) (sql.NullInt64, error) {
+	var extensionDbId sql.NullInt64
 	var valueText, valueNum, valueBool, valueTime, valueDatetime sql.NullString
 	fillValueBasedOnType(extension, &valueText, &valueNum, &valueBool, &valueTime, &valueDatetime)
 	// INSERT INTO extension(..,..,..,..) VALUES($1,$2,$3) RETURNING id
 	q, args := qb.NewInsert("extension").
-		Columns("submodel_id", "semantic_id", "name", "value_type", "value_text", "value_num", "value_bool", "value_time", "value_datetime").
-		Values(submodel_id, semanticIdDbId, extension.Name, extension.ValueType, valueText, valueNum, valueBool, valueTime, valueDatetime).
+		Columns("semantic_id", "name", "value_type", "value_text", "value_num", "value_bool", "value_time", "value_datetime").
+		Values(semanticIdDbId, extension.Name, extension.ValueType, valueText, valueNum, valueBool, valueTime, valueDatetime).
 		Returning("id").
 		Build()
 
-	err = tx.QueryRow(q, args...).Scan(&extensionDbId)
+	err := tx.QueryRow(q, args...).Scan(&extensionDbId)
 	if err != nil {
 		return sql.NullInt64{}, err
 	}
@@ -457,7 +462,7 @@ func fillValueBasedOnType(extension gen.Extension, valueText *sql.NullString, va
 	}
 }
 
-func insertRefersToReferences(extension gen.Extension, semanticIdDbId sql.NullInt64, err error, tx *sql.Tx, extensionDbId sql.NullInt64) error {
+func insertRefersToReferences(extension gen.Extension, tx *sql.Tx, extensionDbId sql.NullInt64) error {
 	if len(extension.RefersTo) > 0 {
 		for _, ref := range extension.RefersTo {
 			refDbId, refErr := CreateReference(tx, &ref, sql.NullInt64{}, sql.NullInt64{})
@@ -477,7 +482,7 @@ func insertRefersToReferences(extension gen.Extension, semanticIdDbId sql.NullIn
 	return nil
 }
 
-func insertSupplementalSemanticIdsForExtensions(extension gen.Extension, semanticIdDbId sql.NullInt64, err error, tx *sql.Tx, extensionDbId sql.NullInt64) error {
+func insertSupplementalSemanticIdsForExtensions(extension gen.Extension, semanticIdDbId sql.NullInt64, tx *sql.Tx, extensionDbId sql.NullInt64) error {
 	if len(extension.SupplementalSemanticIds) > 0 {
 		if !semanticIdDbId.Valid {
 			return common.NewErrBadRequest("Supplemental Semantic IDs require a main Semantic ID to be present. (See AAS Constraint: AASd-118)")

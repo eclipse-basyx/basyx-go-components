@@ -29,6 +29,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/doug-martin/goqu/v9"
 	_ "github.com/doug-martin/goqu/v9/dialect/postgres"
@@ -37,71 +38,33 @@ import (
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 )
 
-type SubmodelRow struct {
-	Id                         string
-	IdShort                    string
-	Category                   string
-	Kind                       string
-	DisplayNames               json.RawMessage
-	Descriptions               json.RawMessage
-	SemanticId                 json.RawMessage
-	ReferredSemanticIds        json.RawMessage
-	SupplementalSemanticIds    json.RawMessage
-	SupplementalReferredSemIds json.RawMessage
-	EmbeddedDataSpecifications json.RawMessage
-	DataSpecReferenceReferred  json.RawMessage
-	DataSpecIEC61360           json.RawMessage
-	IECLevelTypes              json.RawMessage
-}
-
-type ReferenceRow struct {
-	ReferenceId   int64  `json:"reference_id"`
-	ReferenceType string `json:"reference_type"`
-	KeyID         int64  `json:"key_id"`
-	KeyType       string `json:"key_type"`
-	KeyValue      string `json:"key_value"`
-}
-
-type ReferredReferenceRow struct {
-	SupplementalRootReferenceId int64  `json:"supplemental_root_reference_id"`
-	ReferenceId                 int64  `json:"reference_id"`
-	ReferenceType               string `json:"reference_type"`
-	ParentReference             int64  `json:"parentReference"`
-	RootReference               int64  `json:"rootReference"`
-	KeyID                       int64  `json:"key_id"`
-	KeyType                     string `json:"key_type"`
-	KeyValue                    string `json:"key_value"`
-}
-
-func GetSubmodelJSON(db *sql.DB) ([]*gen.Submodel, error) {
-	submodels := make(map[string]*gen.Submodel)
-	result := []*gen.Submodel{}
+func GetSubmodelJSON(db *sql.DB, submodelId string) ([]*gen.Submodel, error) {
+	var result []*gen.Submodel
 	referenceBuilderRefs := make(map[int64]*builders.ReferenceBuilder)
-	// //semanticIdReferredSemanticIdBuilderRefs := make(map[int64]*builders.ReferenceBuilder)
-	// supplementalSemanticIdBuilderRefs := make(map[string]*builders.MultiReferenceBuilder)
-	// nameTypeBuilderRefs := make(map[string]*builders.LangStringNameTypesBuilder)
-	// textTypeBuilderRefs := make(map[string]*builders.LangStringTextTypesBuilder)
-
-	// // Store pointers to the slices that will be populated
-	// displayNameRefs := make(map[string]*[]gen.LangStringNameType)
-	// descriptionRefs := make(map[string]*[]gen.LangStringTextType)
-	rows, err := getSubmodelDataFromDbWithJSONQuery(db)
+	start := time.Now().Local().UnixMilli()
+	rows, err := getSubmodelDataFromDbWithJSONQuery(db, submodelId)
+	end := time.Now().Local().UnixMilli()
+	fmt.Printf("Total Qury Only time: %d milliseconds\n", end-start)
 	if err != nil {
 		return nil, fmt.Errorf("error getting submodel data from DB: %w", err)
 	}
 	defer rows.Close()
 
-	if rows.Next() {
-		var row SubmodelRow
+	for rows.Next() {
+		var row builders.SubmodelRow
 		if err := rows.Scan(
 			&row.Id, &row.IdShort, &row.Category, &row.Kind,
 			&row.DisplayNames, &row.Descriptions,
 			&row.SemanticId, &row.ReferredSemanticIds,
 			&row.SupplementalSemanticIds, &row.SupplementalReferredSemIds,
 			&row.EmbeddedDataSpecifications, &row.DataSpecReferenceReferred,
-			&row.DataSpecIEC61360, &row.IECLevelTypes,
+			&row.DataSpecIEC61360, &row.IECLevelTypes, &row.TotalSubmodels,
 		); err != nil {
 			return nil, fmt.Errorf("error scanning row: %w", err)
+		}
+
+		if result == nil {
+			result = make([]*gen.Submodel, 0, row.TotalSubmodels)
 		}
 
 		submodel := &gen.Submodel{
@@ -112,155 +75,86 @@ func GetSubmodelJSON(db *sql.DB) ([]*gen.Submodel, error) {
 			Kind:      gen.ModellingKind(row.Kind),
 		}
 
-		semanticId, err := parseReferences(row.SemanticId, referenceBuilderRefs)
-		if err != nil {
-			return nil, err
+		var semanticId []*gen.Reference
+		if isArrayNotEmpty(row.EmbeddedDataSpecifications) {
+			semanticId, err = builders.ParseReferences(row.SemanticId, referenceBuilderRefs)
+			if err != nil {
+				return nil, err
+			}
+			if hasSemanticId(semanticId) {
+				submodel.SemanticId = semanticId[0]
+				builders.ParseReferredReferences(row.ReferredSemanticIds, referenceBuilderRefs)
+			}
 		}
 
-		if len(semanticId) == 1 {
-			submodel.SemanticId = semanticId[0]
-			parseReferredReferences(row.ReferredSemanticIds, referenceBuilderRefs)
-		}
-
-		supplementalSemanticIds, err := parseReferences(row.SupplementalSemanticIds, referenceBuilderRefs)
-		if err != nil {
-			return nil, err
-		}
-		if len(supplementalSemanticIds) > 0 {
-			submodel.SupplementalSemanticIds = supplementalSemanticIds
-			parseReferredReferences(row.SupplementalReferredSemIds, referenceBuilderRefs)
+		if isArrayNotEmpty(row.SupplementalSemanticIds) {
+			supplementalSemanticIds, err := builders.ParseReferences(row.SupplementalSemanticIds, referenceBuilderRefs)
+			if err != nil {
+				return nil, err
+			}
+			if hasSupplementalSemanticIds(supplementalSemanticIds) {
+				submodel.SupplementalSemanticIds = supplementalSemanticIds
+				builders.ParseReferredReferences(row.SupplementalReferredSemIds, referenceBuilderRefs)
+			}
 		}
 
 		// DisplayNames
-		if len(row.DisplayNames) > 0 {
-			displayNames, err := parseLangStringNameType(row.DisplayNames)
-			if err != nil {
-				return nil, fmt.Errorf("error parsing display names: %w", err)
-			}
-			submodel.DisplayName = displayNames
+		err = addDisplayNames(row, submodel)
+		if err != nil {
+			return nil, err
 		}
 
 		// Descriptions
-		if len(row.Descriptions) > 0 {
-			descriptions, err := parseLangStringTextType(row.Descriptions)
-			if err != nil {
-				return nil, fmt.Errorf("error parsing descriptions: %w", err)
-			}
-			submodel.Description = descriptions
+		err = addDescriptions(row, submodel)
+		if err != nil {
+			return nil, err
 		}
 
-		submodels[submodel.Id] = submodel
 		result = append(result, submodel)
 	}
 
 	for _, referenceBuilder := range referenceBuilderRefs {
 		referenceBuilder.BuildNestedStructure()
 	}
-	for _, submodel := range submodels {
-		str, _ := json.Marshal(submodel)
-		fmt.Println(string(str))
-	}
 	return result, nil
 }
 
-func parseReferredReferences(row json.RawMessage, referenceBuilderRefs map[int64]*builders.ReferenceBuilder) error {
-	if len(row) > 0 {
-		var semanticIdData []ReferredReferenceRow
-		if err := json.Unmarshal(row, &semanticIdData); err != nil {
-			return fmt.Errorf("error unmarshalling referred semantic ID data: %w", err)
+func addDisplayNames(row builders.SubmodelRow, submodel *gen.Submodel) error {
+	if isArrayNotEmpty(row.DisplayNames) {
+		displayNames, err := builders.ParseLangStringNameType(row.DisplayNames)
+		if err != nil {
+			return fmt.Errorf("error parsing display names: %w", err)
 		}
-		for _, ref := range semanticIdData {
-			builder, semanticIdCreated := referenceBuilderRefs[ref.RootReference]
-			if !semanticIdCreated {
-				return fmt.Errorf("parent reference with id %d not found for referred reference with id %d", ref.ParentReference, ref.ReferenceId)
-			}
-			builder.CreateReferredSemanticId(ref.ReferenceId, ref.ParentReference, ref.ReferenceType)
-			builder.CreateReferredSemanticIdKey(ref.ReferenceId, ref.KeyID, ref.KeyType, ref.KeyValue)
-		}
+		submodel.DisplayName = displayNames
 	}
 	return nil
 }
 
-func parseReferences(row json.RawMessage, referenceBuilderRefs map[int64]*builders.ReferenceBuilder) ([]*gen.Reference, error) {
-	var semanticId *gen.Reference
-	var semanticIdBuilder *builders.ReferenceBuilder
-	semanticId, semanticIdBuilder = nil, nil
-	resultArray := make([]*gen.Reference, 0)
-	if len(row) > 0 {
-		var semanticIdData []ReferenceRow
-		if err := json.Unmarshal(row, &semanticIdData); err != nil {
-			return nil, fmt.Errorf("error unmarshalling semantic ID data: %w", err)
+func addDescriptions(row builders.SubmodelRow, submodel *gen.Submodel) error {
+	if isArrayNotEmpty(row.Descriptions) {
+		descriptions, err := builders.ParseLangStringTextType(row.Descriptions)
+		if err != nil {
+			return fmt.Errorf("error parsing descriptions: %w", err)
 		}
-		for _, ref := range semanticIdData {
-			_, semanticIdCreated := referenceBuilderRefs[ref.ReferenceId]
-
-			if !semanticIdCreated {
-				semanticId, semanticIdBuilder = builders.NewReferenceBuilder(ref.ReferenceType, ref.ReferenceId)
-				referenceBuilderRefs[ref.ReferenceId] = semanticIdBuilder
-				resultArray = append(resultArray, semanticId)
-			}
-			semanticIdBuilder.CreateKey(ref.KeyID, ref.KeyType, ref.KeyValue)
-		}
+		submodel.Description = descriptions
 	}
-	return resultArray, nil
+	return nil
 }
 
-func parseLangStringNameType(displayNames json.RawMessage) ([]gen.LangStringNameType, error) {
-	var names []gen.LangStringNameType
-	// remove id field from json
-	var temp []map[string]interface{}
-	if err := json.Unmarshal(displayNames, &temp); err != nil {
-		fmt.Printf("Error unmarshalling display names: %v\n", err)
-		return nil, err
-	}
-	defer func() {
-		if r := recover(); r != nil {
-			fmt.Printf("Error parsing display names: %v\n", r)
-		}
-	}()
-
-	for _, item := range temp {
-		if _, ok := item["id"]; ok {
-			delete(item, "id")
-			names = append(names, gen.LangStringNameType{
-				Text:     item["text"].(string),
-				Language: item["language"].(string),
-			})
-		}
-	}
-
-	return names, nil
+func isArrayNotEmpty(data json.RawMessage) bool {
+	return len(data) > 0 && string(data) != "null"
 }
 
-func parseLangStringTextType(descriptions json.RawMessage) ([]gen.LangStringTextType, error) {
-	var texts []gen.LangStringTextType
-	// remove id field from json
-	var temp []map[string]interface{}
-	if err := json.Unmarshal(descriptions, &temp); err != nil {
-		fmt.Printf("Error unmarshalling descriptions: %v\n", err)
-		return nil, err
-	}
-	defer func() {
-		if r := recover(); r != nil {
-			fmt.Printf("Error parsing descriptions: %v\n", r)
-		}
-	}()
-
-	for _, item := range temp {
-		if _, ok := item["id"]; ok {
-			delete(item, "id")
-			texts = append(texts, gen.LangStringTextType{
-				Text:     item["text"].(string),
-				Language: item["language"].(string),
-			})
-		}
-	}
-
-	return texts, nil
+func hasSemanticId(semanticIdData []*gen.Reference) bool {
+	return len(semanticIdData) == 1
 }
 
-func getSubmodelDataFromDbWithJSONQuery(db *sql.DB) (*sql.Rows, error) {
-	q, err := getQueryWithGoqu()
+func hasSupplementalSemanticIds(supplementalSemanticIdsData []*gen.Reference) bool {
+	return len(supplementalSemanticIdsData) > 0
+}
+
+func getSubmodelDataFromDbWithJSONQuery(db *sql.DB, submodelId string) (*sql.Rows, error) {
+	q, err := getQueryWithGoqu(submodelId)
 	if err != nil {
 		return nil, fmt.Errorf("error building query: %w", err)
 	}
@@ -273,7 +167,7 @@ func getSubmodelDataFromDbWithJSONQuery(db *sql.DB) (*sql.Rows, error) {
 	return rows, nil
 }
 
-func getQueryWithGoqu() (string, error) {
+func getQueryWithGoqu(submodelId string) (string, error) {
 	dialect := goqu.Dialect("postgres")
 
 	// Build display names subquery
@@ -477,6 +371,14 @@ func getQueryWithGoqu() (string, error) {
 			goqu.L("COALESCE((?), '[]'::jsonb)", iec61360Subquery).As("submodel_data_spec_iec61360"),
 			goqu.L("COALESCE((?), '[]'::jsonb)", levelTypesSubquery).As("submodel_iec_level_types"),
 		)
+
+	// Add optional WHERE clause for submodel ID filtering
+	if submodelId != "" {
+		query = query.Where(goqu.I("s.id").Eq(submodelId))
+	}
+
+	// add a field that counts number of submodels to presize slices in calling function
+	query = query.SelectAppend(goqu.L("COUNT(s.id) OVER() AS total_submodels"))
 
 	sql, _, err := query.ToSQL()
 	if err != nil {
