@@ -24,6 +24,10 @@
 ******************************************************************************/
 
 // Author: Jannik Fried ( Fraunhofer IESE ), Aaron Zielstorff ( Fraunhofer IESE )
+
+// Package persistence_utils provides utility functions for handling submodel persistence operations.
+// It contains functions for retrieving submodels from the database, building complex SQL queries,
+// and transforming database results into BaSyx-compliant Go data structures.
 package persistence_utils
 
 import (
@@ -39,11 +43,36 @@ import (
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 )
 
-func GetSubmodelJSON(db *sql.DB, submodelId string) ([]*gen.Submodel, error) {
+// GetSubmodels retrieves submodels from the database with full nested structures.
+//
+// This function performs a complex query to fetch submodels along with all their related
+// data including display names, descriptions, semantic IDs, supplemental semantic IDs,
+// and embedded data specifications. It handles the reconstruction of nested reference
+// structures and language strings from normalized database tables.
+//
+// Parameters:
+//   - db: Database connection to execute the query against
+//   - submodelIdFilter: Optional filter for a specific submodel ID. If empty, all submodels are retrieved.
+//
+// Returns:
+//   - []*gen.Submodel: Slice of fully populated Submodel objects with all nested structures
+//   - error: An error if database query fails, scanning fails, or data parsing fails
+//
+// The function:
+//   - Executes an optimized SQL query with JSON aggregation for nested data
+//   - Pre-sizes result slices based on total count for better performance
+//   - Builds reference hierarchies using ReferenceBuilder instances
+//   - Parses JSON-encoded language strings and references
+//   - Measures and logs query execution time for performance monitoring
+//
+// Note: The function builds nested reference structures in two phases:
+//  1. Initial parsing during row iteration
+//  2. Final structure building after all rows are processed
+func GetSubmodels(db *sql.DB, submodelIdFilter string) ([]*gen.Submodel, error) {
 	var result []*gen.Submodel
 	referenceBuilderRefs := make(map[int64]*builders.ReferenceBuilder)
 	start := time.Now().Local().UnixMilli()
-	rows, err := getSubmodelDataFromDbWithJSONQuery(db, submodelId)
+	rows, err := getSubmodelDataFromDbWithJSONQuery(db, submodelIdFilter)
 	end := time.Now().Local().UnixMilli()
 	fmt.Printf("Total Qury Only time: %d milliseconds\n", end-start)
 	if err != nil {
@@ -120,6 +149,18 @@ func GetSubmodelJSON(db *sql.DB, submodelId string) ([]*gen.Submodel, error) {
 	return result, nil
 }
 
+// addDisplayNames parses and adds display names to a submodel.
+//
+// This helper function extracts language-specific display names from the database
+// row and adds them to the submodel object. It only processes the data if the
+// display names array is not empty.
+//
+// Parameters:
+//   - row: SubmodelRow containing JSON-encoded display names data
+//   - submodel: Submodel object to add the display names to
+//
+// Returns:
+//   - error: An error if parsing the language strings fails, nil otherwise
 func addDisplayNames(row builders.SubmodelRow, submodel *gen.Submodel) error {
 	if isArrayNotEmpty(row.DisplayNames) {
 		displayNames, err := builders.ParseLangStringNameType(row.DisplayNames)
@@ -131,6 +172,18 @@ func addDisplayNames(row builders.SubmodelRow, submodel *gen.Submodel) error {
 	return nil
 }
 
+// addDescriptions parses and adds descriptions to a submodel.
+//
+// This helper function extracts language-specific descriptions from the database
+// row and adds them to the submodel object. It only processes the data if the
+// descriptions array is not empty.
+//
+// Parameters:
+//   - row: SubmodelRow containing JSON-encoded descriptions data
+//   - submodel: Submodel object to add the descriptions to
+//
+// Returns:
+//   - error: An error if parsing the language strings fails, nil otherwise
 func addDescriptions(row builders.SubmodelRow, submodel *gen.Submodel) error {
 	if isArrayNotEmpty(row.Descriptions) {
 		descriptions, err := builders.ParseLangStringTextType(row.Descriptions)
@@ -142,18 +195,62 @@ func addDescriptions(row builders.SubmodelRow, submodel *gen.Submodel) error {
 	return nil
 }
 
+// isArrayNotEmpty checks if a JSON array contains data.
+//
+// This utility function determines whether a JSON RawMessage contains an actual
+// array with data, as opposed to being empty or containing a null value.
+//
+// Parameters:
+//   - data: JSON RawMessage to check
+//
+// Returns:
+//   - bool: true if the data is not empty and not "null", false otherwise
 func isArrayNotEmpty(data json.RawMessage) bool {
 	return len(data) > 0 && string(data) != "null"
 }
 
+// hasSemanticId validates that exactly one semantic ID reference exists.
+//
+// According to the AAS specification, a submodel should have exactly one semantic ID.
+// This function checks that the parsed semantic ID data contains exactly one reference.
+//
+// Parameters:
+//   - semanticIdData: Slice of Reference objects parsed from semantic ID data
+//
+// Returns:
+//   - bool: true if exactly one semantic ID reference exists, false otherwise
 func hasSemanticId(semanticIdData []*gen.Reference) bool {
 	return len(semanticIdData) == 1
 }
 
+// hasSupplementalSemanticIds checks if supplemental semantic IDs exist.
+//
+// Supplemental semantic IDs provide additional semantic context beyond the primary
+// semantic ID. This function validates that at least one supplemental semantic ID
+// reference was successfully parsed.
+//
+// Parameters:
+//   - supplementalSemanticIdsData: Slice of Reference objects parsed from supplemental semantic IDs
+//
+// Returns:
+//   - bool: true if at least one supplemental semantic ID exists, false otherwise
 func hasSupplementalSemanticIds(supplementalSemanticIdsData []*gen.Reference) bool {
 	return len(supplementalSemanticIdsData) > 0
 }
 
+// getSubmodelDataFromDbWithJSONQuery executes the submodel query against the database.
+//
+// This function builds and executes a complex SQL query that retrieves submodel data
+// with all nested structures aggregated as JSON. It serves as a bridge between the
+// query building logic and the database execution.
+//
+// Parameters:
+//   - db: Database connection to execute the query against
+//   - submodelId: Optional filter for a specific submodel ID. Empty string retrieves all submodels.
+//
+// Returns:
+//   - *sql.Rows: Result set containing submodel data with JSON-aggregated nested structures
+//   - error: An error if query building or execution fails
 func getSubmodelDataFromDbWithJSONQuery(db *sql.DB, submodelId string) (*sql.Rows, error) {
 	q, err := getQueryWithGoqu(submodelId)
 	if err != nil {
@@ -168,6 +265,32 @@ func getSubmodelDataFromDbWithJSONQuery(db *sql.DB, submodelId string) (*sql.Row
 	return rows, nil
 }
 
+// getQueryWithGoqu constructs a comprehensive SQL query for retrieving submodel data.
+//
+// This function builds a complex PostgreSQL query using the goqu query builder that:
+//   - Aggregates nested data structures (display names, descriptions, references) as JSON
+//   - Handles hierarchical reference structures with parent-child relationships
+//   - Retrieves embedded data specifications including IEC 61360 content
+//   - Manages supplemental semantic IDs and their referred references
+//   - Optimally joins multiple tables while avoiding duplication
+//
+// The query structure includes multiple subqueries for:
+//   - Display names and descriptions (multi-language support)
+//   - Semantic IDs and their referred references
+//   - Supplemental semantic IDs and their hierarchies
+//   - Embedded data specifications with IEC 61360 content
+//   - Value lists and level types
+//
+// Parameters:
+//   - submodelId: Optional filter for a specific submodel ID. Empty string retrieves all submodels.
+//
+// Returns:
+//   - string: The complete SQL query string ready for execution
+//   - error: An error if query generation fails
+//
+// The function uses COALESCE to ensure empty arrays ('[]'::jsonb) instead of NULL values,
+// which simplifies downstream JSON parsing. It also includes a total count window function
+// for efficient result set pagination and slice pre-sizing.
 func getQueryWithGoqu(submodelId string) (string, error) {
 	dialect := goqu.Dialect("postgres")
 
