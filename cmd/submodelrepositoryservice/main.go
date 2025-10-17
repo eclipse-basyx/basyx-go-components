@@ -92,10 +92,12 @@ func main() {
 	flag.StringVar(&databaseSchema, "databaseSchema", "", "Path to Database Schema")
 	flag.Parse()
 
-	_, fileError := os.ReadFile(databaseSchema)
-	if fileError != nil {
-		fmt.Println("The specified database schema path is invalid or the file was not found.")
-		os.Exit(1)
+	if databaseSchema != "" {
+		_, fileError := os.ReadFile(databaseSchema)
+		if fileError != nil {
+			fmt.Println("The specified database schema path is invalid or the file was not found.")
+			os.Exit(1)
+		}
 	}
 
 	if err := runServer(ctx, configPath, databaseSchema); err != nil {
