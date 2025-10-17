@@ -1,3 +1,29 @@
+/*******************************************************************************
+* Copyright (C) 2025 the Eclipse BaSyx Authors and Fraunhofer IESE
+*
+* Permission is hereby granted, free of charge, to any person obtaining
+* a copy of this software and associated documentation files (the
+* "Software"), to deal in the Software without restriction, including
+* without limitation the rights to use, copy, modify, merge, publish,
+* distribute, sublicense, and/or sell copies of the Software, and to
+* permit persons to whom the Software is furnished to do so, subject to
+* the following conditions:
+*
+* The above copyright notice and this permission notice shall be
+* included in all copies or substantial portions of the Software.
+*
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+* NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+* LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+* OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+* WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*
+* SPDX-License-Identifier: MIT
+******************************************************************************/
+
+// Author: Prajwala Prabhakar Adiga ( Fraunhofer IESE ), Jannik Fried ( Fraunhofer IESE ), Aaron Zielstorff ( Fraunhofer IESE )
 package persistence_postgresql
 
 import (
@@ -112,9 +138,7 @@ func (p *PostgreSQLSubmodelDatabase) GetSubmodel(id string) (gen.Submodel, error
 func (p *PostgreSQLSubmodelDatabase) DeleteSubmodel(id string) error {
 	// Check cache first
 	if p.cacheEnabled {
-		if _, found := submodelCache[id]; found {
-			delete(submodelCache, id)
-		}
+		delete(submodelCache, id)
 	}
 
 	tx, err := p.db.Begin()
@@ -311,9 +335,7 @@ func (p *PostgreSQLSubmodelDatabase) GetSubmodelElements(submodelId string, limi
 func (p *PostgreSQLSubmodelDatabase) AddSubmodelElementWithPath(submodelId string, idShortPath string, submodelElement gen.SubmodelElement) error {
 	// Invalidate Submodel cache if enabled
 	if p.cacheEnabled {
-		if _, found := submodelCache[submodelId]; found {
-			delete(submodelCache, submodelId)
-		}
+		delete(submodelCache, submodelId)
 	}
 	handler, err := submodelelements.GetSMEHandler(submodelElement, p.db)
 	if err != nil {
@@ -379,9 +401,7 @@ func (p *PostgreSQLSubmodelDatabase) AddSubmodelElementWithPath(submodelId strin
 func (p *PostgreSQLSubmodelDatabase) AddSubmodelElement(submodelId string, submodelElement gen.SubmodelElement) error {
 	// Invalidate Submodel cache if enabled
 	if p.cacheEnabled {
-		if _, found := submodelCache[submodelId]; found {
-			delete(submodelCache, submodelId)
-		}
+		delete(submodelCache, submodelId)
 	}
 	tx, err := p.db.Begin()
 	if err != nil {
@@ -411,9 +431,7 @@ func (p *PostgreSQLSubmodelDatabase) AddSubmodelElement(submodelId string, submo
 func (p *PostgreSQLSubmodelDatabase) AddSubmodelElementWithTransaction(tx *sql.Tx, submodelId string, submodelElement gen.SubmodelElement) error {
 	// Invalidate Submodel cache if enabled
 	if p.cacheEnabled {
-		if _, found := submodelCache[submodelId]; found {
-			delete(submodelCache, submodelId)
-		}
+		delete(submodelCache, submodelId)
 	}
 	handler, err := submodelelements.GetSMEHandler(submodelElement, p.db)
 	if err != nil {
@@ -442,9 +460,7 @@ type ElementToProcess struct {
 func (p *PostgreSQLSubmodelDatabase) AddNestedSubmodelElementsIteratively(tx *sql.Tx, submodelId string, topLevelParentId int, topLevelElement gen.SubmodelElement, startPath string) error {
 	// Invalidate Submodel cache if enabled
 	if p.cacheEnabled {
-		if _, found := submodelCache[submodelId]; found {
-			delete(submodelCache, submodelId)
-		}
+		delete(submodelCache, submodelId)
 	}
 	stack := []ElementToProcess{}
 
@@ -538,9 +554,7 @@ func (p *PostgreSQLSubmodelDatabase) AddNestedSubmodelElementsIteratively(tx *sq
 func (p *PostgreSQLSubmodelDatabase) DeleteSubmodelElementByPath(submodelId string, idShortOrPath string) error {
 	// Invalidate Submodel cache if enabled
 	if p.cacheEnabled {
-		if _, found := submodelCache[submodelId]; found {
-			delete(submodelCache, submodelId)
-		}
+		delete(submodelCache, submodelId)
 	}
 	tx, err := p.db.Begin()
 	if err != nil {
