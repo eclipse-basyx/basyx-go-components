@@ -27,5 +27,5 @@ package model
 
 type LangStringText interface {
 	GetLanguage() string
-	GetText() *interface{}
+	GetText() string
 }

@@ -66,8 +66,8 @@ type SubmodelRow struct {
 	SupplementalSemanticIds json.RawMessage
 	// SupplementalReferredSemIds contains referred supplemental semantic identifiers as JSON data
 	SupplementalReferredSemIds json.RawMessage
-	// EmbeddedDataSpecifications contains embedded data specifications as JSON data
-	EmbeddedDataSpecifications json.RawMessage
+	// DataSpecReference contains embedded data specifications as JSON data
+	DataSpecReference json.RawMessage
 	// DataSpecReferenceReferred contains references to data specifications as JSON data
 	DataSpecReferenceReferred json.RawMessage
 	// DataSpecIEC61360 contains IEC 61360 data specification as JSON data
@@ -100,6 +100,21 @@ type ReferenceRow struct {
 	KeyValue *string `json:"key_value"`
 }
 
+type EdsReferenceRow struct {
+	// EdsID is the unique identifier of the embedded data specification in the database
+	EdsID int64 `json:"eds_id"`
+	// ReferenceId is the unique identifier of the reference in the database
+	ReferenceId int64 `json:"reference_id"`
+	// ReferenceType specifies the type of reference (nullable)
+	ReferenceType *string `json:"reference_type"`
+	// KeyID is the unique identifier of the key in the database (nullable)
+	KeyID *int64 `json:"key_id"`
+	// KeyType specifies the type of the key (nullable)
+	KeyType *string `json:"key_type"`
+	// KeyValue contains the actual value of the key (nullable)
+	KeyValue *string `json:"key_value"`
+}
+
 // ReferredReferenceRow represents a data row for a referred Reference entity in the database.
 // There will be multiple ReferredReferenceRow entries for each referred Reference, one for
 // each Key associated with that referred Reference.
@@ -127,6 +142,31 @@ type ReferredReferenceRow struct {
 	KeyType *string `json:"key_type"`
 	// KeyValue contains the actual value of the key (nullable)
 	KeyValue *string `json:"key_value"`
+}
+
+type EdsContentIec61360Row struct {
+	EdsID                 int64           `json:"eds_id"`
+	IecID                 int64           `json:"iec_id"`
+	Unit                  string          `json:"unit"`
+	SourceOfDefinition    string          `json:"source_of_definition"`
+	Symbol                string          `json:"symbol"`
+	DataType              string          `json:"data_type"`
+	ValueFormat           string          `json:"value_format"`
+	Value                 string          `json:"value"`
+	LevelType             json.RawMessage `json:"level_type"`
+	PreferredName         json.RawMessage `json:"preferred_name"`
+	ShortName             json.RawMessage `json:"short_name"`
+	Definition            json.RawMessage `json:"definition"`
+	UnitReferenceKeys     json.RawMessage `json:"unit_reference_keys"`
+	UnitReferenceReferred json.RawMessage `json:"unit_reference_referred"`
+	ValueListEntries      json.RawMessage `json:"value_list_entries"`
+}
+
+type ValueListRow struct {
+	Value                 string          `json:"value_pair_value"`
+	ValueRefPairId        int64           `json:"value_reference_pair_id"`
+	ReferenceRows         json.RawMessage `json:"reference_rows"`
+	ReferredReferenceRows json.RawMessage `json:"referred_reference_rows"`
 }
 
 // ParseReferredReferences parses referred reference data from JSON and populates the reference builder map.
@@ -182,11 +222,57 @@ func ParseReferredReferences(row json.RawMessage, referenceBuilderRefs map[int64
 	return nil
 }
 
+// ParseReferencesFromRows parses reference data from already unmarshalled ReferenceRow objects.
+//
+// This function processes an array of ReferenceRow objects and builds complete Reference
+// objects with their associated Keys. Multiple rows with the same ReferenceId are aggregated
+// into a single Reference object with multiple Keys.
+//
+// Parameters:
+//   - semanticIdData: Slice of already unmarshalled ReferenceRow objects
+//   - referenceBuilderRefs: Map that tracks reference IDs to their corresponding ReferenceBuilder instances.
+//     This map is populated by this function and can be used later for processing referred references.
+//
+// Returns:
+//   - []*gen.Reference: Slice of parsed Reference objects. Each Reference contains all its associated Keys.
+//
+// The function:
+//   - Groups multiple rows with the same ReferenceId into a single Reference
+//   - Creates new ReferenceBuilder instances for each unique ReferenceId
+//   - Validates key data completeness (KeyID, KeyType, KeyValue)
+//   - Returns only the unique references (one per ReferenceId)
+func ParseReferencesFromRows(semanticIdData []ReferenceRow, referenceBuilderRefs map[int64]*ReferenceBuilder) []*gen.Reference {
+	resultArray := make([]*gen.Reference, 0)
+
+	for _, ref := range semanticIdData {
+		var semanticId *gen.Reference
+		var semanticIdBuilder *ReferenceBuilder
+
+		_, semanticIdCreated := referenceBuilderRefs[ref.ReferenceId]
+
+		if !semanticIdCreated {
+			semanticId, semanticIdBuilder = NewReferenceBuilder(ref.ReferenceType, ref.ReferenceId)
+			referenceBuilderRefs[ref.ReferenceId] = semanticIdBuilder
+			resultArray = append(resultArray, semanticId)
+		} else {
+			semanticIdBuilder = referenceBuilderRefs[ref.ReferenceId]
+		}
+
+		if ref.KeyID == nil || ref.KeyType == nil || ref.KeyValue == nil {
+			fmt.Println("[WARNING - ParseReferencesFromRows] KeyID, KeyType or KeyValue was nil - skipping Key Creation for Reference with Reference ID", ref.ReferenceId)
+			continue
+		}
+		semanticIdBuilder.CreateKey(*ref.KeyID, *ref.KeyType, *ref.KeyValue)
+	}
+
+	return resultArray
+}
+
 // ParseReferences parses reference data from JSON and creates Reference objects.
 //
-// This function processes an array of ReferenceRow objects from database query results
-// and builds complete Reference objects with their associated Keys. Multiple rows with
-// the same ReferenceId are aggregated into a single Reference object with multiple Keys.
+// This function unmarshals JSON-encoded ReferenceRow data and delegates to ParseReferencesFromRows
+// for the actual parsing logic. Multiple rows with the same ReferenceId are aggregated into a
+// single Reference object with multiple Keys.
 //
 // Parameters:
 //   - row: JSON-encoded array of ReferenceRow objects from the database
@@ -196,40 +282,17 @@ func ParseReferredReferences(row json.RawMessage, referenceBuilderRefs map[int64
 // Returns:
 //   - []*gen.Reference: Slice of parsed Reference objects. Each Reference contains all its associated Keys.
 //   - error: An error if JSON unmarshalling fails. Nil key data is logged as warnings but does not cause failure.
-//
-// The function:
-//   - Groups multiple rows with the same ReferenceId into a single Reference
-//   - Creates new ReferenceBuilder instances for each unique ReferenceId
-//   - Validates key data completeness (KeyID, KeyType, KeyValue)
-//   - Returns only the unique references (one per ReferenceId)
 func ParseReferences(row json.RawMessage, referenceBuilderRefs map[int64]*ReferenceBuilder) ([]*gen.Reference, error) {
-	var semanticId *gen.Reference
-	var semanticIdBuilder *ReferenceBuilder
-	semanticId, semanticIdBuilder = nil, nil
-	resultArray := make([]*gen.Reference, 0)
-	if len(row) > 0 {
-		var semanticIdData []ReferenceRow
-		if err := json.Unmarshal(row, &semanticIdData); err != nil {
-			return nil, fmt.Errorf("error unmarshalling semantic ID data: %w", err)
-		}
-		for _, ref := range semanticIdData {
-			_, semanticIdCreated := referenceBuilderRefs[ref.ReferenceId]
-
-			if !semanticIdCreated {
-				semanticId, semanticIdBuilder = NewReferenceBuilder(ref.ReferenceType, ref.ReferenceId)
-				referenceBuilderRefs[ref.ReferenceId] = semanticIdBuilder
-				resultArray = append(resultArray, semanticId)
-			} else {
-				semanticIdBuilder = referenceBuilderRefs[ref.ReferenceId]
-			}
-			if ref.KeyID == nil || ref.KeyType == nil || ref.KeyValue == nil {
-				fmt.Println("[WARNING - ParseReferences] KeyID, KeyType or KeyValue was nil - skipping Key Creation for Reference with Reference ID", ref.ReferenceId)
-				continue
-			}
-			semanticIdBuilder.CreateKey(*ref.KeyID, *ref.KeyType, *ref.KeyValue)
-		}
+	if len(row) == 0 {
+		return make([]*gen.Reference, 0), nil
 	}
-	return resultArray, nil
+
+	var semanticIdData []ReferenceRow
+	if err := json.Unmarshal(row, &semanticIdData); err != nil {
+		return nil, fmt.Errorf("error unmarshalling semantic ID data: %w", err)
+	}
+
+	return ParseReferencesFromRows(semanticIdData, referenceBuilderRefs), nil
 }
 
 // ParseLangStringNameType parses localized name strings from JSON data.
@@ -319,6 +382,87 @@ func ParseLangStringTextType(descriptions json.RawMessage) ([]gen.LangStringText
 		if _, ok := item["id"]; ok {
 			delete(item, "id")
 			texts = append(texts, gen.LangStringTextType{
+				Text:     item["text"].(string),
+				Language: item["language"].(string),
+			})
+		}
+	}
+
+	return texts, nil
+}
+
+func ParseLangStringPreferredNameTypeIec61360(descriptions json.RawMessage) ([]gen.LangStringPreferredNameTypeIec61360, error) {
+	var texts []gen.LangStringPreferredNameTypeIec61360
+	// remove id field from json
+	var temp []map[string]interface{}
+	if err := json.Unmarshal(descriptions, &temp); err != nil {
+		fmt.Printf("Error unmarshalling descriptions: %v\n", err)
+		return nil, err
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Printf("Error parsing descriptions: %v\n", r)
+		}
+	}()
+
+	for _, item := range temp {
+		if _, ok := item["id"]; ok {
+			delete(item, "id")
+			texts = append(texts, gen.LangStringPreferredNameTypeIec61360{
+				Text:     item["text"].(string),
+				Language: item["language"].(string),
+			})
+		}
+	}
+
+	return texts, nil
+}
+
+func ParseLangStringShortNameTypeIec61360(descriptions json.RawMessage) ([]gen.LangStringShortNameTypeIec61360, error) {
+	var texts []gen.LangStringShortNameTypeIec61360
+	// remove id field from json
+	var temp []map[string]interface{}
+	if err := json.Unmarshal(descriptions, &temp); err != nil {
+		fmt.Printf("Error unmarshalling descriptions: %v\n", err)
+		return nil, err
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Printf("Error parsing descriptions: %v\n", r)
+		}
+	}()
+
+	for _, item := range temp {
+		if _, ok := item["id"]; ok {
+			delete(item, "id")
+			texts = append(texts, gen.LangStringShortNameTypeIec61360{
+				Text:     item["text"].(string),
+				Language: item["language"].(string),
+			})
+		}
+	}
+
+	return texts, nil
+}
+
+func ParseLangStringDefinitionTypeIec61360(descriptions json.RawMessage) ([]gen.LangStringDefinitionTypeIec61360, error) {
+	var texts []gen.LangStringDefinitionTypeIec61360
+	// remove id field from json
+	var temp []map[string]interface{}
+	if err := json.Unmarshal(descriptions, &temp); err != nil {
+		fmt.Printf("Error unmarshalling descriptions: %v\n", err)
+		return nil, err
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Printf("Error parsing descriptions: %v\n", r)
+		}
+	}()
+
+	for _, item := range temp {
+		if _, ok := item["id"]; ok {
+			delete(item, "id")
+			texts = append(texts, gen.LangStringDefinitionTypeIec61360{
 				Text:     item["text"].(string),
 				Language: item["language"].(string),
 			})
