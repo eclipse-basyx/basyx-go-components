@@ -34,7 +34,7 @@ type Submodel struct {
 
 	SemanticId *Reference `json:"semanticId,omitempty"`
 
-	SupplementalSemanticIds []Reference `json:"supplementalSemanticIds,omitempty"`
+	SupplementalSemanticIds []*Reference `json:"supplementalSemanticIds,omitempty"`
 
 	Qualifiers []Qualifier `json:"qualifiers,omitempty"`
 
@@ -111,8 +111,10 @@ func AssertSubmodelRequired(obj Submodel) error {
 		}
 	}
 	for _, el := range obj.SupplementalSemanticIds {
-		if err := AssertReferenceRequired(el); err != nil {
-			return err
+		if el != nil {
+			if err := AssertReferenceRequired(*el); err != nil {
+				return err
+			}
 		}
 	}
 	for _, el := range obj.Qualifiers {
@@ -163,8 +165,10 @@ func AssertSubmodelConstraints(obj Submodel) error {
 		}
 	}
 	for _, el := range obj.SupplementalSemanticIds {
-		if err := AssertReferenceConstraints(el); err != nil {
-			return err
+		if el != nil {
+			if err := AssertReferenceConstraints(*el); err != nil {
+				return err
+			}
 		}
 	}
 	for _, el := range obj.Qualifiers {

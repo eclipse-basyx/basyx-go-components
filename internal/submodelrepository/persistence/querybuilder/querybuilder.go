@@ -18,23 +18,29 @@ import (
 // SelectBuilder builds SELECT statements with a fluent API.
 // It is intentionally minimal and explicit.
 type SelectBuilder struct {
-	columns    []string
-	table      string
-	joins      []string
-	wheres     []string
-	havings    []string
-	orderBy    []string
-	limit      *int
-	offset     *int
-	distinct   bool
-	distinctOn []string
-	groupBy    []string
-	args       []interface{}
+	withRecursiveClause string
+	columns             []string
+	table               string
+	joins               []string
+	wheres              []string
+	havings             []string
+	orderBy             []string
+	limit               *int
+	offset              *int
+	distinct            bool
+	distinctOn          []string
+	groupBy             []string
+	args                []interface{}
 }
 
 // NewSelect creates a new SelectBuilder.
 func NewSelect(columns ...string) *SelectBuilder {
 	return &SelectBuilder{columns: dedupe(columns)}
+}
+
+func (b *SelectBuilder) WithRecursive(query string) *SelectBuilder {
+	b.withRecursiveClause = query
+	return b
 }
 
 // From sets the base table (optionally with alias) for the query.
@@ -129,7 +135,11 @@ func (b *SelectBuilder) Build() (string, []interface{}) {
 
 	var sb strings.Builder
 	sb.Grow(2048)
-
+	// WITH RECURSIVE
+	if b.withRecursiveClause != "" {
+		sb.WriteString(b.withRecursiveClause)
+		sb.WriteString("\n")
+	}
 	// SELECT
 	sb.WriteString("SELECT ")
 	if len(b.distinctOn) > 0 {

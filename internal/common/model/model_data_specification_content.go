@@ -20,7 +20,7 @@ type DataSpecificationContent interface {
 	GetDefinition() []LangStringDefinitionTypeIec61360
 	GetValueFormat() string
 	GetValueList() *ValueList
-	GetLevelType() LevelType
+	GetLevelType() *LevelType
 
 	SetPrefferedName([]LangStringPreferredNameTypeIec61360)
 	SetShortName([]LangStringShortNameTypeIec61360)
@@ -32,5 +32,5 @@ type DataSpecificationContent interface {
 	SetDefinition([]LangStringDefinitionTypeIec61360)
 	SetValueFormat(string)
 	SetValueList(*ValueList)
-	SetLevelType(LevelType)
+	SetLevelType(*LevelType)
 }

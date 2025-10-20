@@ -35,7 +35,7 @@ RUN mkdir -p /config
 
 # Copy default configuration
 COPY --from=builder /app/cmd/submodelrepositoryservice/config.yaml /config/config.yaml
-COPY --from=builder /app/cmd/submodelrepositoryservice/resources/sql/submodelrepositoryschema.sql /root/resources/sql/submodelrepositoryschema.sql
+COPY --from=builder /app/basyxschema.sql /root/basyxschema.sql
 
 # Default port (can be overridden by environment)
 ENV SERVER_PORT=5000
@@ -49,7 +49,7 @@ EXPOSE ${SERVER_PORT}
 
 # Command to run the application
 # Use environment variables or mount a custom config file to /config/config.yaml
-CMD ["./submodelrepositoryservice", "-config", "/config/config.yaml"]
+CMD ["./submodelrepositoryservice", "-config", "/config/config.yaml", "-databaseSchema", "basyxschema.sql"]
 
 # Health check using the script
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
