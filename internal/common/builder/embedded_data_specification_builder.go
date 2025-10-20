@@ -267,7 +267,10 @@ func buildUnitId(data EdsContentIec61360Row) (map[int64]*ReferenceBuilder, []*ge
 	if err != nil {
 		return nil, nil, fmt.Errorf("error converting UnitId reference for iec content %d: %w", data.IecID, err)
 	}
-	ParseReferredReferences(data.UnitReferenceReferred, referenceBuilderMap)
+	err = ParseReferredReferences(data.UnitReferenceReferred, referenceBuilderMap)
+	if err != nil {
+		return nil, nil, fmt.Errorf("error converting referred UnitId reference for iec content %d: %w", data.IecID, err)
+	}
 	return referenceBuilderMap, unitId, nil
 }
 
