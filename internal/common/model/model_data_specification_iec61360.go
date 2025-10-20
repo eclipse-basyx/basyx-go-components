@@ -107,8 +107,8 @@ func (d *DataSpecificationIec61360) SetSymbol(symbol string) {
 	d.Symbol = symbol
 }
 
-func (d *DataSpecificationIec61360) SetDataType(dataType DataTypeIec61360) {
-	d.DataType = dataType
+func (d *DataSpecificationIec61360) SetDataType(dataType *DataTypeIec61360) {
+	d.DataType = *dataType
 }
 
 func (d *DataSpecificationIec61360) SetDefinition(definition []LangStringDefinitionTypeIec61360) {

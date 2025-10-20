@@ -28,7 +28,7 @@ type DataSpecificationContent interface {
 	SetUnitId(*Reference)
 	SetSourceOfDefinition(string)
 	SetSymbol(string)
-	SetDataType(DataTypeIec61360)
+	SetDataType(*DataTypeIec61360)
 	SetDefinition([]LangStringDefinitionTypeIec61360)
 	SetValueFormat(string)
 	SetValueList(*ValueList)

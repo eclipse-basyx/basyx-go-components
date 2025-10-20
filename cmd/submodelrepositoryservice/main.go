@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
@@ -50,9 +51,11 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 
 	//TEST
 	start := time.Now().Local().UnixMilli()
-	persistence_utils.GetSubmodelById(smDatabase.GetDB(), "1")
+	sm, err := persistence_utils.GetSubmodelById(smDatabase.GetDB(), "1")
 	end := time.Now().Local().UnixMilli()
 	fmt.Printf("Total time: %d milliseconds\n", end-start)
+	jsonSubmodel, _ := json.Marshal(sm)
+	fmt.Println(string(jsonSubmodel))
 	//TEST
 
 	smSvc := api.NewSubmodelRepositoryAPIAPIService(*smDatabase)

@@ -19,9 +19,8 @@ func (l LangStringTextType) GetLanguage() string {
 	return l.Language
 }
 
-func (l LangStringTextType) GetText() *interface{} {
-	var text interface{} = l.Text
-	return &text
+func (l LangStringTextType) GetText() string {
+	return l.Text
 }
 
 // AssertLangStringTextTypeRequired checks if the required fields are not zero-ed

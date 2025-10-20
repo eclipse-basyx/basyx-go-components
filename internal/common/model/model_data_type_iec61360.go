@@ -17,71 +17,71 @@ type DataTypeIec61360 string
 
 // List of DataTypeIec61360
 const (
-	DATATYPEIEC61360_BLOB                DataTypeIec61360 = "BLOB"
-	DATATYPEIEC61360_BOOLEAN             DataTypeIec61360 = "BOOLEAN"
-	DATATYPEIEC61360_DATE                DataTypeIec61360 = "DATE"
-	DATATYPEIEC61360_FILE                DataTypeIec61360 = "FILE"
-	DATATYPEIEC61360_HTML                DataTypeIec61360 = "HTML"
-	DATATYPEIEC61360_INTEGER_COUNT       DataTypeIec61360 = "INTEGER_COUNT"
-	DATATYPEIEC61360_INTEGER_CURRENCY    DataTypeIec61360 = "INTEGER_CURRENCY"
-	DATATYPEIEC61360_INTEGER_MEASURE     DataTypeIec61360 = "INTEGER_MEASURE"
-	DATATYPEIEC61360_IRDI                DataTypeIec61360 = "IRDI"
-	DATATYPEIEC61360_IRI                 DataTypeIec61360 = "IRI"
-	DATATYPEIEC61360_RATIONAL            DataTypeIec61360 = "RATIONAL"
-	DATATYPEIEC61360_RATIONAL_MEASURE    DataTypeIec61360 = "RATIONAL_MEASURE"
-	DATATYPEIEC61360_REAL_COUNT          DataTypeIec61360 = "REAL_COUNT"
-	DATATYPEIEC61360_REAL_CURRENCY       DataTypeIec61360 = "REAL_CURRENCY"
-	DATATYPEIEC61360_REAL_MEASURE        DataTypeIec61360 = "REAL_MEASURE"
-	DATATYPEIEC61360_STRING              DataTypeIec61360 = "STRING"
-	DATATYPEIEC61360_STRING_TRANSLATABLE DataTypeIec61360 = "STRING_TRANSLATABLE"
-	DATATYPEIEC61360_TIME                DataTypeIec61360 = "TIME"
-	DATATYPEIEC61360_TIMESTAMP           DataTypeIec61360 = "TIMESTAMP"
+	DATATYPEIEC61360_BLOB                DataTypeIec61360 = "Blob"
+	DATATYPEIEC61360_BOOLEAN             DataTypeIec61360 = "Boolean"
+	DATATYPEIEC61360_DATE                DataTypeIec61360 = "Date"
+	DATATYPEIEC61360_FILE                DataTypeIec61360 = "File"
+	DATATYPEIEC61360_HTML                DataTypeIec61360 = "Html"
+	DATATYPEIEC61360_INTEGER_COUNT       DataTypeIec61360 = "IntegerCount"
+	DATATYPEIEC61360_INTEGER_CURRENCY    DataTypeIec61360 = "IntegerCurrency"
+	DATATYPEIEC61360_INTEGER_MEASURE     DataTypeIec61360 = "IntegerMeasure"
+	DATATYPEIEC61360_IRDI                DataTypeIec61360 = "Irdi"
+	DATATYPEIEC61360_IRI                 DataTypeIec61360 = "Iri"
+	DATATYPEIEC61360_RATIONAL            DataTypeIec61360 = "Rational"
+	DATATYPEIEC61360_RATIONAL_MEASURE    DataTypeIec61360 = "RationalMeasure"
+	DATATYPEIEC61360_REAL_COUNT          DataTypeIec61360 = "RealCount"
+	DATATYPEIEC61360_REAL_CURRENCY       DataTypeIec61360 = "RealCurrency"
+	DATATYPEIEC61360_REAL_MEASURE        DataTypeIec61360 = "RealMeasure"
+	DATATYPEIEC61360_STRING              DataTypeIec61360 = "String"
+	DATATYPEIEC61360_STRING_TRANSLATABLE DataTypeIec61360 = "StringTranslatable"
+	DATATYPEIEC61360_TIME                DataTypeIec61360 = "Time"
+	DATATYPEIEC61360_TIMESTAMP           DataTypeIec61360 = "Timestamp"
 )
 
 // AllowedDataTypeIec61360EnumValues is all the allowed values of DataTypeIec61360 enum
 var AllowedDataTypeIec61360EnumValues = []DataTypeIec61360{
-	"BLOB",
-	"BOOLEAN",
-	"DATE",
-	"FILE",
-	"HTML",
-	"INTEGER_COUNT",
-	"INTEGER_CURRENCY",
-	"INTEGER_MEASURE",
-	"IRDI",
-	"IRI",
-	"RATIONAL",
-	"RATIONAL_MEASURE",
-	"REAL_COUNT",
-	"REAL_CURRENCY",
-	"REAL_MEASURE",
-	"STRING",
-	"STRING_TRANSLATABLE",
-	"TIME",
-	"TIMESTAMP",
+	"Blob",
+	"Boolean",
+	"Date",
+	"File",
+	"Html",
+	"IntegerCount",
+	"IntegerCurrency",
+	"IntegerMeasure",
+	"Irdi",
+	"Iri",
+	"Rational",
+	"RationalMeasure",
+	"RealCount",
+	"RealCurrency",
+	"RealMeasure",
+	"String",
+	"StringTranslatable",
+	"Time",
+	"Timestamp",
 }
 
 // validDataTypeIec61360EnumValue provides a map of DataTypeIec61360s for fast verification of use input
 var validDataTypeIec61360EnumValues = map[DataTypeIec61360]struct{}{
-	"BLOB":                {},
-	"BOOLEAN":             {},
-	"DATE":                {},
-	"FILE":                {},
-	"HTML":                {},
-	"INTEGER_COUNT":       {},
-	"INTEGER_CURRENCY":    {},
-	"INTEGER_MEASURE":     {},
-	"IRDI":                {},
-	"IRI":                 {},
-	"RATIONAL":            {},
-	"RATIONAL_MEASURE":    {},
-	"REAL_COUNT":          {},
-	"REAL_CURRENCY":       {},
-	"REAL_MEASURE":        {},
-	"STRING":              {},
-	"STRING_TRANSLATABLE": {},
-	"TIME":                {},
-	"TIMESTAMP":           {},
+	"Blob":               {},
+	"Boolean":            {},
+	"Date":               {},
+	"File":               {},
+	"Html":               {},
+	"IntegerCount":       {},
+	"IntegerCurrency":    {},
+	"IntegerMeasure":     {},
+	"Irdi":               {},
+	"Iri":                {},
+	"Rational":           {},
+	"RationalMeasure":    {},
+	"RealCount":          {},
+	"RealCurrency":       {},
+	"RealMeasure":        {},
+	"String":             {},
+	"StringTranslatable": {},
+	"Time":               {},
+	"Timestamp":          {},
 }
 
 // IsValid return true if the value is valid for the enum, false otherwise

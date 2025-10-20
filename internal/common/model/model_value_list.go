@@ -10,13 +10,13 @@
 package model
 
 type ValueList struct {
-	ValueReferencePairs []ValueReferencePair `json:"valueReferencePairs"`
+	ValueReferencePairs []ValueReferencePair `json:"valueReferencePair"`
 }
 
 // AssertValueListRequired checks if the required fields are not zero-ed
 func AssertValueListRequired(obj ValueList) error {
 	elements := map[string]interface{}{
-		"valueReferencePairs": obj.ValueReferencePairs,
+		"valueReferencePair": obj.ValueReferencePairs,
 	}
 	for name, el := range elements {
 		if isZero := IsZeroValue(el); isZero {
