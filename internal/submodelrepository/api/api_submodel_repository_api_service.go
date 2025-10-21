@@ -76,8 +76,8 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelById(
 	if decodeErr != nil {
 		return gen.Response(http.StatusBadRequest, nil), decodeErr
 	}
-	sm, err := s.submodelBackend.GetSubmodel(string(decodedSubmodelIdentifier))
 
+	sm, err := s.submodelBackend.GetSubmodel(string(decodedSubmodelIdentifier))
 	if err != nil {
 
 		if errors.Is(err, sql.ErrNoRows) {
@@ -168,7 +168,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsMetadata(
 	// TODO: Uncomment the next line to return response Response(0, Result{}) or use other options such as http.Ok ...
 	// return gen.Response(0, Result{}), nil
 
-	return gen.Response(http.StatusNotImplemented, nil), errors.New("GetAllSubmodelsMetadata method not implemented")
+	//return gen.Response(http.StatusNotImplemented, nil), errors.New("GetAllSubmodelsMetadata method not implemented")
 }
 
 // GetAllSubmodelsValueOnly - Returns all Submodels in their ValueOnly representation

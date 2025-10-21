@@ -563,6 +563,7 @@ func GetSubmodelElementsWithPath(db *sql.DB, tx *sql.Tx, submodelId string, idSh
 
 // GetSubmodelWithSubmodelElements retrieves a submodel with all its elements (standard path)
 // Maintains backward compatibility while supporting new displayName/description features
+// getSubmodelbyID
 func GetSubmodelWithSubmodelElements(db *sql.DB, tx *sql.Tx, submodelId string) (*gen.Submodel, error) {
 	// --- Build the unified query with CTE ----------------------------------------------------------
 	var cte string
@@ -617,7 +618,7 @@ func GetSubmodelWithSubmodelElements(db *sql.DB, tx *sql.Tx, submodelId string) 
 		modellingKind = gen.MODELLINGKIND_INSTANCE
 	}
 	if dbSmId == "" {
-		return nil, common.NewErrNotFound("Submodel not found")
+		return nil, common.NewErrNotFound("Submodel not found really")
 	}
 	submodel := &gen.Submodel{
 		Id:               dbSmId,
@@ -1086,20 +1087,18 @@ func loadSubmodelSubmodelElementsIntoMemory(rows *sql.Rows, err error, db *sql.D
 		); err != nil {
 			return nil, nil, nil, "", "", "", "", sql.NullInt64{}, nil, err
 		}
-		if !id.Valid || !idShort.Valid {
-			fmt.Println("code reached here")
-			// This row only represents the submodel itself (no SME)
-			// Skip adding to nodes
-			continue
-		}
 
-		fmt.Println("DEBUG: Looking up Submodel ID =", id)
 		if dbSmId == "" {
 			dbSmId = submodelID
 			dbSubmodelIdShort = submodelIdShort
 			dbSubmodelCategory = submodelCategory
 			dbSubmodelKind = submodelKind
 			dbSubmodelSemanticId = submodelSemanticId
+		}
+		if !id.Valid || !idShort.Valid {
+			// This row only represents the submodel itself (no SME)
+			// Skip adding to nodes
+			continue
 		}
 
 		// Materialize the concrete element based on modelType (no reflection)

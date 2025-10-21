@@ -119,15 +119,24 @@ func (p *PostgreSQLSubmodelDatabase) GetAllSubmodelsMetadata(
 	}()
 
 	query := `
-		SELECT id, id_short, category, kind, model_type, semantic_id
-		FROM submodel
-		WHERE ($1 = '' OR id_short ILIKE '%' || $1 || '%')
-		  AND ($2 = '' OR semantic_id = $2)
-		ORDER BY id
-		LIMIT $3;
+		SELECT 
+			s.id, 
+			s.id_short, 
+			s.category, 
+			s.kind, 
+			s.model_type, 
+			r.type AS semantic_reference_type,
+			rk.type AS key_type,
+   			rk.value AS key_value
+		FROM submodel s
+		LEFT JOIN reference r ON s.semantic_id = r.id
+		LEFT JOIN reference_key rk ON r.id = rk.reference_id
+		WHERE ($1 = '' OR s.id_short ILIKE '%' || $1 || '%')
+		ORDER BY s.id
+		LIMIT $2;
 	`
 
-	rows, err := p.db.Query(query, idShort, semanticId, limit)
+	rows, err := p.db.Query(query, idShort, limit)
 	if err != nil {
 		tx.Rollback()
 		fmt.Println("Error querying submodel metadata:", err)
@@ -138,11 +147,34 @@ func (p *PostgreSQLSubmodelDatabase) GetAllSubmodelsMetadata(
 	var submodels []gen.Submodel
 	for rows.Next() {
 		var sm gen.Submodel
-		err := rows.Scan(&sm.Id, &sm.IdShort, &sm.Category, &sm.Kind, &sm.ModelType, &sm.SemanticId)
+		var refType, keyType, keyValue sql.NullString
+
+		err := rows.Scan(
+			&sm.Id,
+			&sm.IdShort,
+			&sm.Category,
+			&sm.Kind,
+			&sm.ModelType,
+			&refType,
+			&keyType,
+			&keyValue,
+		)
 		if err != nil {
-			tx.Rollback()
 			fmt.Println("Error scanning metadata row:", err)
 			return nil, "", err
+		}
+		if refType.Valid {
+			ref := gen.Reference{
+				Type: gen.ReferenceTypes(refType.String),
+			}
+			// Only add keys if both type and value are valid
+			if keyType.Valid && keyValue.Valid {
+				ref.Keys = []gen.Key{{
+					Type:  gen.KeyTypes(keyType.String),
+					Value: keyValue.String,
+				}}
+			}
+			sm.SemanticId = &ref
 		}
 		submodels = append(submodels, sm)
 	}
