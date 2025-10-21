@@ -1,12 +1,36 @@
+/*******************************************************************************
+* Copyright (C) 2025 the Eclipse BaSyx Authors and Fraunhofer IESE
+*
+* Permission is hereby granted, free of charge, to any person obtaining
+* a copy of this software and associated documentation files (the
+* "Software"), to deal in the Software without restriction, including
+* without limitation the rights to use, copy, modify, merge, publish,
+* distribute, sublicense, and/or sell copies of the Software, and to
+* permit persons to whom the Software is furnished to do so, subject to
+* the following conditions:
+*
+* The above copyright notice and this permission notice shall be
+* included in all copies or substantial portions of the Software.
+*
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+* NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+* LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+* OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+* WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*
+* SPDX-License-Identifier: MIT
+******************************************************************************/
+
+// Author: Prajwala Prabhakar Adiga ( Fraunhofer IESE ), Jannik Fried ( Fraunhofer IESE ), Aaron Zielstorff ( Fraunhofer IESE )
 package persistence_postgresql
 
 import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"os"
 	"strconv"
-	"time"
 
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 
@@ -29,39 +53,16 @@ var maxCacheSize = 1000
 // InMemory Cache for submodels
 var submodelCache map[string]gen.Submodel = make(map[string]gen.Submodel)
 
-func NewPostgreSQLSubmodelBackend(dsn string, maxOpenConns, maxIdleConns int, connMaxLifetimeMinutes int, cacheEnabled bool) (*PostgreSQLSubmodelDatabase, error) {
-	db, err := sql.Open("postgres", dsn)
-	//Set Max Connection
-	db.SetMaxOpenConns(500)
-	db.SetMaxIdleConns(500)
-	db.SetConnMaxLifetime(time.Minute * 5)
-
+func NewPostgreSQLSubmodelBackend(dsn string, maxOpenConns, maxIdleConns int, connMaxLifetimeMinutes int, cacheEnabled bool, databaseSchema string) (*PostgreSQLSubmodelDatabase, error) {
+	db, err := common.InitializeDatabase(dsn, databaseSchema)
 	if err != nil {
 		return nil, err
 	}
-	if err := db.Ping(); err != nil {
-		return nil, err
-	}
-
-	dir, osErr := os.Getwd()
-
-	if osErr != nil {
-		return nil, osErr
-	}
-
-	queryString, fileError := os.ReadFile(dir + "/resources/sql/submodelrepositoryschema.sql")
-
-	if fileError != nil {
-		return nil, fileError
-	}
-
-	_, dbError := db.Exec(string(queryString))
-
-	if dbError != nil {
-		return nil, dbError
-	}
-
 	return &PostgreSQLSubmodelDatabase{db: db, cacheEnabled: cacheEnabled}, nil
+}
+
+func (p *PostgreSQLSubmodelDatabase) GetDB() *sql.DB {
+	return p.db
 }
 
 // GetAllSubmodels and a next cursor ("" if no more pages).
@@ -137,9 +138,7 @@ func (p *PostgreSQLSubmodelDatabase) GetSubmodel(id string) (gen.Submodel, error
 func (p *PostgreSQLSubmodelDatabase) DeleteSubmodel(id string) error {
 	// Check cache first
 	if p.cacheEnabled {
-		if _, found := submodelCache[id]; found {
-			delete(submodelCache, id)
-		}
+		delete(submodelCache, id)
 	}
 
 	tx, err := p.db.Begin()
@@ -195,33 +194,66 @@ func (p *PostgreSQLSubmodelDatabase) CreateSubmodel(sm gen.Submodel) error {
 		}
 	}()
 
-	referenceID, err := persistence_utils.CreateSemanticId(tx, sm.SemanticId)
+	var semanticIdDbId, displayNameId, descriptionId, administrationId sql.NullInt64
+
+	semanticIdDbId, err = persistence_utils.CreateReference(tx, sm.SemanticId, sql.NullInt64{}, sql.NullInt64{})
 	if err != nil {
 		fmt.Println(err)
 		return common.NewInternalServerError("Failed to create SemanticId - no changes applied - see console for details")
 	}
 
-	displayNameId, err := persistence_utils.CreateLangStringNameTypes(tx, sm.DisplayName)
+	displayNameId, err = persistence_utils.CreateLangStringNameTypes(tx, sm.DisplayName)
 	if err != nil {
 		fmt.Println(err)
 		return common.NewInternalServerError("Failed to create DisplayName - no changes applied - see console for details")
 	}
 
-	descriptionId, err := persistence_utils.CreateLangStringTextTypes(tx, sm.Description)
+	// Handle possibly nil Description
+	var convertedDescription []gen.LangStringText
+	for _, desc := range sm.Description {
+		convertedDescription = append(convertedDescription, desc)
+	}
+	descriptionId, err = persistence_utils.CreateLangStringTextTypes(tx, convertedDescription)
 	if err != nil {
 		fmt.Println(err)
 		return common.NewInternalServerError("Failed to create Description - no changes applied - see console for details")
 	}
 
+	administrationId, err = persistence_utils.CreateAdministrativeInformation(tx, sm.Administration)
+	if err != nil {
+		fmt.Println(err)
+		return common.NewInternalServerError("Failed to create Administration - no changes applied - see console for details")
+	}
+
 	const q = `
-        INSERT INTO submodel (id, id_short, category, kind, model_type, semantic_id, displayname_id, description_id)
-        VALUES ($1, $2, $3, $4, 'Submodel', $5, $6, $7)
+        INSERT INTO submodel (id, id_short, category, kind, model_type, semantic_id, displayname_id, description_id, administration_id)
+        VALUES ($1, $2, $3, $4, 'Submodel', $5, $6, $7, $8)
         ON CONFLICT (id) DO NOTHING
     `
 
-	_, err = tx.Exec(q, sm.Id, sm.IdShort, sm.Category, sm.Kind, referenceID, displayNameId, descriptionId)
+	_, err = tx.Exec(q, sm.Id, sm.IdShort, sm.Category, sm.Kind, semanticIdDbId, displayNameId, descriptionId, administrationId)
 	if err != nil {
 		return err
+	}
+
+	if sm.SupplementalSemanticIds != nil {
+		err = persistence_utils.InsertSupplementalSemanticIds(tx, sm.Id, sm.SupplementalSemanticIds)
+		if err != nil {
+			return err
+		}
+	}
+
+	if sm.EmbeddedDataSpecifications != nil {
+		for _, eds := range sm.EmbeddedDataSpecifications {
+			edsDbId, err := persistence_utils.CreateEmbeddedDataSpecification(tx, eds)
+			if err != nil {
+				return err
+			}
+			_, err = tx.Exec("INSERT INTO submodel_embedded_data_specification(submodel_id, embedded_data_specification_id) VALUES ($1, $2)", sm.Id, edsDbId)
+			if err != nil {
+				return err
+			}
+		}
 	}
 
 	if len(sm.SubmodelElements) > 0 {
@@ -303,9 +335,7 @@ func (p *PostgreSQLSubmodelDatabase) GetSubmodelElements(submodelId string, limi
 func (p *PostgreSQLSubmodelDatabase) AddSubmodelElementWithPath(submodelId string, idShortPath string, submodelElement gen.SubmodelElement) error {
 	// Invalidate Submodel cache if enabled
 	if p.cacheEnabled {
-		if _, found := submodelCache[submodelId]; found {
-			delete(submodelCache, submodelId)
-		}
+		delete(submodelCache, submodelId)
 	}
 	handler, err := submodelelements.GetSMEHandler(submodelElement, p.db)
 	if err != nil {
@@ -371,9 +401,7 @@ func (p *PostgreSQLSubmodelDatabase) AddSubmodelElementWithPath(submodelId strin
 func (p *PostgreSQLSubmodelDatabase) AddSubmodelElement(submodelId string, submodelElement gen.SubmodelElement) error {
 	// Invalidate Submodel cache if enabled
 	if p.cacheEnabled {
-		if _, found := submodelCache[submodelId]; found {
-			delete(submodelCache, submodelId)
-		}
+		delete(submodelCache, submodelId)
 	}
 	tx, err := p.db.Begin()
 	if err != nil {
@@ -403,9 +431,7 @@ func (p *PostgreSQLSubmodelDatabase) AddSubmodelElement(submodelId string, submo
 func (p *PostgreSQLSubmodelDatabase) AddSubmodelElementWithTransaction(tx *sql.Tx, submodelId string, submodelElement gen.SubmodelElement) error {
 	// Invalidate Submodel cache if enabled
 	if p.cacheEnabled {
-		if _, found := submodelCache[submodelId]; found {
-			delete(submodelCache, submodelId)
-		}
+		delete(submodelCache, submodelId)
 	}
 	handler, err := submodelelements.GetSMEHandler(submodelElement, p.db)
 	if err != nil {
@@ -434,9 +460,7 @@ type ElementToProcess struct {
 func (p *PostgreSQLSubmodelDatabase) AddNestedSubmodelElementsIteratively(tx *sql.Tx, submodelId string, topLevelParentId int, topLevelElement gen.SubmodelElement, startPath string) error {
 	// Invalidate Submodel cache if enabled
 	if p.cacheEnabled {
-		if _, found := submodelCache[submodelId]; found {
-			delete(submodelCache, submodelId)
-		}
+		delete(submodelCache, submodelId)
 	}
 	stack := []ElementToProcess{}
 
@@ -530,9 +554,7 @@ func (p *PostgreSQLSubmodelDatabase) AddNestedSubmodelElementsIteratively(tx *sq
 func (p *PostgreSQLSubmodelDatabase) DeleteSubmodelElementByPath(submodelId string, idShortOrPath string) error {
 	// Invalidate Submodel cache if enabled
 	if p.cacheEnabled {
-		if _, found := submodelCache[submodelId]; found {
-			delete(submodelCache, submodelId)
-		}
+		delete(submodelCache, submodelId)
 	}
 	tx, err := p.db.Begin()
 	if err != nil {

@@ -28,7 +28,7 @@ func NewPostgreSQLSMECrudHandler(db *sql.DB) (*PostgreSQLSMECrudHandler, error) 
 
 // Create performs the base SubmodelElement operations within an existing transaction
 func (p *PostgreSQLSMECrudHandler) CreateAndPath(tx *sql.Tx, submodelId string, parentId int, idShortPath string, submodelElement gen.SubmodelElement, position int) (int, error) {
-	referenceID, err := persistence_utils.CreateSemanticId(tx, submodelElement.GetSemanticId())
+	referenceID, err := persistence_utils.CreateReference(tx, submodelElement.GetSemanticId(), sql.NullInt64{}, sql.NullInt64{})
 	if err != nil {
 		return 0, err
 	}
@@ -66,7 +66,7 @@ func (p *PostgreSQLSMECrudHandler) CreateAndPath(tx *sql.Tx, submodelId string, 
 }
 
 func (p *PostgreSQLSMECrudHandler) Create(tx *sql.Tx, submodelId string, submodelElement gen.SubmodelElement) (int, error) {
-	referenceID, err := persistence_utils.CreateSemanticId(tx, submodelElement.GetSemanticId())
+	referenceID, err := persistence_utils.CreateReference(tx, submodelElement.GetSemanticId(), sql.NullInt64{}, sql.NullInt64{})
 	if err != nil {
 		return 0, err
 	}
