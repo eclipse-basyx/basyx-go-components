@@ -28,14 +28,39 @@
             },
             "supplementalSemanticIds": [
                 {
-                    "type": "ModelReference"
+                    "type": "ModelReference",
+                    "keys": [
+                        {
+                            "type": "AnnotatedRelationshipElement",
+                            "value": "ddsfkjn"
+                        }
+                    ]
                 }
             ]
         }
     ],
     "administration": {
         "version": "1",
-        "revision": "1"
+        "revision": "1",
+        "creator": {
+            "type": "ModelReference",
+            "keys": [
+                {
+                    "type": "AnnotatedRelationshipElement",
+                    "value": "dfok"
+                }
+            ],
+            "referredSemanticId":
+            {
+                "type": "ExternalReference",
+                "keys": [
+                    {
+                        "type": "AnnotatedRelationshipElement",
+                        "value": "fkvkfk"
+                    }
+                ]
+            }
+        }
 
     },
     "assetKind": "Instance",
@@ -61,10 +86,57 @@
     ],
     "globalAssetId": "https://iese.fraunhofer.de/ids/asset/5079_8944_8914_9414",
     "idShort": "machine",
-    "id": "https://iese.fraunhofer.de/ids/aas/2333",
+    "id": "https://iese.fraunhofer.de/ids/aas/sdfgbfdb",
+        "extensions": [
+            {
+                "name": "help",
+                "valueType": "xs:string",
+                "value": "test",
+                "semanticId": {
+                    "type": "ExternalReference",
+                    "keys": [
+                        {
+                            "type": "AnnotatedRelationshipElement",
+                            "value": "ddsfkjn"
+                        }
+                    ],
+                    "referredSemanticId":
+                    {
+                        "type": "ExternalReference",
+                        "keys": [
+                            {
+                                "type": "AnnotatedRelationshipElement",
+                                "value": "ddsfkjn"
+                            }
+                        ]
+                    }
+                },
+                "supplementalSemanticIds" : [
+                    {
+                    "type": "ExternalReference",
+                    "keys": [
+                        {
+                            "type": "AnnotatedRelationshipElement",
+                            "value": "ddsfkjn"
+                        }
+                    ],
+                    "referredSemanticId":
+                    {
+                        "type": "ExternalReference",
+                        "keys": [
+                            {
+                                "type": "AnnotatedRelationshipElement",
+                                "value": "ddsfkjn"
+                            }
+                        ]
+                    }
+                }
+                ]
+            }
+        ],
     "submodelDescriptors": [
         {
-            "id": "https://iese.fraunhofer.de/ids/aas/22335",
+            "id": "https://iese.fraunhofer.de/ids/aas/yxcyxc",
             "endpoints": [
                 {
                     "interface": "AAS-3.0",
@@ -74,6 +146,46 @@
                     }
                 }
             ],
+            "semanticId": {
+                    "type": "ExternalReference",
+                    "keys": [
+                        {
+                            "type": "AnnotatedRelationshipElement",
+                            "value": "ddsfkjn"
+                        }
+                    ],
+                    "referredSemanticId":
+                    {
+                        "type": "ExternalReference",
+                        "keys": [
+                            {
+                                "type": "AnnotatedRelationshipElement",
+                                "value": "ddsfkjn"
+                            }
+                        ]
+                    }
+                },
+                "supplementalSemanticIds" : [
+                    {
+                    "type": "ExternalReference",
+                    "keys": [
+                        {
+                            "type": "AnnotatedRelationshipElement",
+                            "value": "ddsfkjn"
+                        }
+                    ],
+                    "referredSemanticId":
+                    {
+                        "type": "ExternalReference",
+                        "keys": [
+                            {
+                                "type": "AnnotatedRelationshipElement",
+                                "value": "ddsfkjn"
+                            }
+                        ]
+                    }
+                }
+                ],
             "extensions": [
                 {
                     "name": "help",

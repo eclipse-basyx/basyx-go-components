@@ -22,7 +22,7 @@ type SubmodelDescriptor struct {
 
 	SemanticId *Reference `json:"semanticId,omitempty"`
 
-	SupplementalSemanticId []Reference `json:"supplementalSemanticId,omitempty"`
+	SupplementalSemanticId []Reference `json:"supplementalSemanticIds,omitempty"`
 
 	Description []LangStringTextType `json:"description,omitempty"`
 

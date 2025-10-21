@@ -315,6 +315,28 @@ func CreateLangStringNameTypes(tx *sql.Tx, nameTypes []gen.LangStringNameType) (
 	return nameTypeID, nil
 }
 
+func CreateLangStringTextTypesN(tx *sql.Tx, nameTypes []gen.LangStringTextType) (sql.NullInt64, error) {
+	if nameTypes == nil {
+		return sql.NullInt64{}, nil
+	}
+	var id int
+	var nameTypeID sql.NullInt64
+	if len(nameTypes) > 0 {
+		err := tx.QueryRow(`INSERT INTO lang_string_text_type_reference DEFAULT VALUES RETURNING id`).Scan(&id)
+		if err != nil {
+			return sql.NullInt64{}, err
+		}
+		nameTypeID = sql.NullInt64{Int64: int64(id), Valid: true}
+		for i := 0; i < len(nameTypes); i++ {
+			_, err := tx.Exec(`INSERT INTO lang_string_text_type (lang_string_text_type_reference_id, text, language) VALUES ($1, $2, $3)`, nameTypeID.Int64, nameTypes[i].Text, nameTypes[i].Language)
+			if err != nil {
+				return sql.NullInt64{}, err
+			}
+		}
+	}
+	return nameTypeID, nil
+}
+
 func GetLangStringNameTypes(db *sql.DB, nameTypeID sql.NullInt64) ([]gen.LangStringNameType, error) {
 	if !nameTypeID.Valid {
 		return nil, nil

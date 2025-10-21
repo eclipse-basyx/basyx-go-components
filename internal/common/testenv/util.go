@@ -48,6 +48,7 @@ func makeLogRecord(iter int, componentName string, r ComponentResult, level LogD
 		lr.Op = r.Op
 		lr.Code = r.Code
 		lr.OK = r.OK
+		lr.Extra = r.Extra
 	}
 	if level >= LogFull {
 		lr.Method = r.Method
@@ -58,7 +59,6 @@ func makeLogRecord(iter int, componentName string, r ComponentResult, level LogD
 		// ✅ sanitize before putting into LogRecord
 		lr.Request = safeRaw(r.Request)
 		lr.Response = safeRaw(r.Response)
-		lr.Extra = r.Extra
 	}
 	return lr
 }

@@ -20,6 +20,21 @@ import (
 
 var seedFlag = flag.Int64("seed", 1, "rng seed for discovery bench determinism")
 
+// must returns the value or panics if err != nil.
+func must[T any](v T, err error) T {
+	if err != nil {
+		panic(err)
+	}
+	return v
+}
+
+// must0 panics if err != nil (useful for funcs that only return error).
+func must0(err error) {
+	if err != nil {
+		panic(err)
+	}
+}
+
 type discoveryState struct {
 	rng         *mrand.Rand
 	aasToLinks  map[string][]model.SpecificAssetId
@@ -81,8 +96,8 @@ type DiscoveryBench struct {
 }
 
 func NewDiscoveryBench(seed int64) *DiscoveryBench {
-	// Read template once up-front; keep going even if it fails (DoOne will report the error).
-	tpl, _ := os.ReadFile("example_data.json")
+	// Read template once up-front; fail fast if it is missing/invalid.
+	tpl := must(os.ReadFile("example_data.json"))
 
 	return &DiscoveryBench{
 		st:       newDiscoveryState(seed),
@@ -142,15 +157,13 @@ func (d *DiscoveryBench) pickExistingAssetKind() (string, bool) {
 }
 
 // makeUniqueDescriptor clones the template JSON, randomizes IDs, and overrides assetType/assetKind.
-// Returns: body, rootID, assetType, assetKind, error
-func (d *DiscoveryBench) makeUniqueDescriptor() (json.RawMessage, string, string, string, error) {
+// Fail-fast on any error.
+func (d *DiscoveryBench) makeUniqueDescriptor() (json.RawMessage, string, string, string) {
 	if len(d.template) == 0 {
-		return nil, "", "", "", os.ErrNotExist
+		panic("template not loaded")
 	}
 	var raw map[string]any
-	if err := json.Unmarshal(d.template, &raw); err != nil {
-		return nil, "", "", "", err
-	}
+	must0(json.Unmarshal(d.template, &raw))
 
 	// unique root id
 	rootID := d.st.randHex(16)
@@ -174,8 +187,8 @@ func (d *DiscoveryBench) makeUniqueDescriptor() (json.RawMessage, string, string
 		}
 	}
 
-	buf, err := json.Marshal(raw)
-	return json.RawMessage(buf), rootID, assetType, assetKind, err
+	buf := must(json.Marshal(raw))
+	return json.RawMessage(buf), rootID, assetType, assetKind
 }
 
 // tryCountResults inspects a JSON response and returns a best-effort count.
@@ -216,68 +229,17 @@ func (d *DiscoveryBench) DoOne(iter int) testenv.ComponentResult {
 
 	switch op {
 	case "post":
-		reqBody, rootID, assetType, assetKind, err := d.makeUniqueDescriptor()
-		if err != nil {
-			return testenv.ComponentResult{
-				DurationMs: 0,
-				Code:       0,
-				OK:         false,
-				Error:      err,
-				Op:         "post",
-				Method:     "POST",
-				URL:        d.baseURL,
-				Request:    nil,
-				Response:   nil,
-				Extra: map[string]any{
-					"iter":        iter,
-					"resultCount": 0,
-				},
-			}
-		}
+		reqBody, rootID, assetType, assetKind := d.makeUniqueDescriptor()
 
-		req, err := http.NewRequest("POST", d.baseURL, bytes.NewReader(reqBody))
-		if err != nil {
-			return testenv.ComponentResult{
-				DurationMs: 0,
-				Code:       0,
-				OK:         false,
-				Error:      err,
-				Op:         "post",
-				Method:     "POST",
-				URL:        d.baseURL,
-				Request:    reqBody,
-				Response:   nil,
-				Extra: map[string]any{
-					"iter":        iter,
-					"resultCount": 0,
-				},
-			}
-		}
+		req := must(http.NewRequest("POST", d.baseURL, bytes.NewReader(reqBody)))
 		req.Header.Set("Content-Type", "application/json")
 
 		start := time.Now()
-		resp, err := d.client.Do(req)
+		resp := must(d.client.Do(req))
 		dur := time.Since(start)
 
-		if err != nil {
-			return testenv.ComponentResult{
-				DurationMs: dur.Nanoseconds(),
-				Code:       0,
-				OK:         false,
-				Error:      err,
-				Op:         "post",
-				Method:     "POST",
-				URL:        d.baseURL,
-				Request:    reqBody,
-				Response:   nil,
-				Extra: map[string]any{
-					"iter":        iter,
-					"resultCount": 0,
-				},
-			}
-		}
 		defer resp.Body.Close()
-		respBody, _ := io.ReadAll(resp.Body)
+		respBody := must(io.ReadAll(resp.Body))
 
 		ok := resp.StatusCode >= 200 && resp.StatusCode < 300
 		if ok {
@@ -337,54 +299,21 @@ func (d *DiscoveryBench) DoOne(iter int) testenv.ComponentResult {
 			encoded := base64.StdEncoding.EncodeToString([]byte(id))
 			u := d.baseURL + "/" + url.PathEscape(encoded)
 
-			req, err := http.NewRequest("GET", u, nil)
-			if err != nil {
-				return testenv.ComponentResult{
-					DurationMs: 0,
-					Code:       0,
-					OK:         false,
-					Error:      err,
-					Op:         "getById",
-					Method:     "GET",
-					URL:        u,
-					Request:    nil,
-					Response:   nil,
-					Extra: map[string]any{
-						"iter": iter,
-						"id":   id,
-					},
-				}
-			}
+			req := must(http.NewRequest("GET", u, nil))
 
 			start := time.Now()
-			resp, err := d.client.Do(req)
+			resp := must(d.client.Do(req))
 			dur := time.Since(start)
-			if err != nil {
-				return testenv.ComponentResult{
-					DurationMs: dur.Nanoseconds(),
-					Code:       0,
-					OK:         false,
-					Error:      err,
-					Op:         "getById",
-					Method:     "GET",
-					URL:        u,
-					Request:    nil,
-					Response:   nil,
-					Extra: map[string]any{
-						"iter": iter,
-						"id":   id,
-					},
-				}
-			}
+
 			defer resp.Body.Close()
-			body, _ := io.ReadAll(resp.Body)
+			body := must(io.ReadAll(resp.Body))
 
 			ok := resp.StatusCode >= 200 && resp.StatusCode < 300
 			return testenv.ComponentResult{
 				DurationMs: dur.Nanoseconds(),
 				Code:       resp.StatusCode,
 				OK:         ok,
-				Error:      nil,
+				Error:      nil, // will never reach here if a request/read error occurred
 				Op:         "getById",
 				Method:     "GET",
 				URL:        u,
@@ -416,48 +345,14 @@ func (d *DiscoveryBench) DoOne(iter int) testenv.ComponentResult {
 			u = u + "?" + q.Encode()
 		}
 
-		req, err := http.NewRequest("GET", u, nil)
-		if err != nil {
-			return testenv.ComponentResult{
-				DurationMs: 0,
-				Code:       0,
-				OK:         false,
-				Error:      err,
-				Op:         "search",
-				Method:     "GET",
-				URL:        u,
-				Request:    nil,
-				Response:   nil,
-				Extra: map[string]any{
-					"iter":        iter,
-					"resultCount": 0,
-				},
-			}
-		}
+		req := must(http.NewRequest("GET", u, nil))
 
 		start := time.Now()
-		resp, err := d.client.Do(req)
+		resp := must(d.client.Do(req))
 		dur := time.Since(start)
 
-		if err != nil {
-			return testenv.ComponentResult{
-				DurationMs: dur.Nanoseconds(),
-				Code:       0,
-				OK:         false,
-				Error:      err,
-				Op:         "search",
-				Method:     "GET",
-				URL:        u,
-				Request:    nil,
-				Response:   nil,
-				Extra: map[string]any{
-					"iter":        iter,
-					"resultCount": 0,
-				},
-			}
-		}
 		defer resp.Body.Close()
-		body, _ := io.ReadAll(resp.Body)
+		body := must(io.ReadAll(resp.Body))
 
 		ok := resp.StatusCode >= 200 && resp.StatusCode < 300
 		rc := 0
@@ -469,7 +364,7 @@ func (d *DiscoveryBench) DoOne(iter int) testenv.ComponentResult {
 			DurationMs: dur.Nanoseconds(),
 			Code:       resp.StatusCode,
 			OK:         ok,
-			Error:      nil,
+			Error:      nil, // request/read failures would have panicked
 			Op:         "search",
 			Method:     "GET",
 			URL:        u,

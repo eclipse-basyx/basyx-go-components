@@ -42,6 +42,7 @@ func NewPostgreSQLAASRegistryDatabase(dsn string, maxOpenConns, maxIdleConns int
 	}
 
 	schemaPath := filepath.Join(dir, "resources", "sql", "aasregistryschema.sql")
+
 	queryBytes, fileError := os.ReadFile(schemaPath)
 	if fileError != nil {
 		return nil, fileError
@@ -70,10 +71,8 @@ func (p *PostgreSQLAASRegistryDatabase) InsertAdministrationShellDescriptor(ctx 
 
 	d := goqu.Dialect(dialect)
 
-	// Define datasets once (no alias needed here)
 	descTbl := goqu.T(tblDescriptor)
 
-	// Insert into descriptor and return ID
 	sqlStr, args, buildErr := d.
 		Insert(tblDescriptor).
 		Returning(descTbl.Col(colID)).
@@ -98,13 +97,13 @@ func (p *PostgreSQLAASRegistryDatabase) InsertAdministrationShellDescriptor(ctx 
 		return common.NewInternalServerError("Failed to create DisplayName - no changes applied - see console for details")
 	}
 
-	descriptionId, err = persistence_utils.CreateLangStringTextTypes(tx, aasd.Description)
+	descriptionId, err = persistence_utils.CreateLangStringTextTypesN(tx, aasd.Description)
 	if err != nil {
 		fmt.Println(err)
 		return common.NewInternalServerError("Failed to create Description - no changes applied - see console for details")
 	}
 
-	administrationId, err = CreateAdministrativeInformation(tx, &aasd.Administration)
+	administrationId, err = persistence_utils.CreateAdministrativeInformation(tx, &aasd.Administration)
 	if err != nil {
 		fmt.Println(err)
 		return common.NewInternalServerError("Failed to create Administration - no changes applied - see console for details")
@@ -165,7 +164,6 @@ func (p *PostgreSQLAASRegistryDatabase) GetAssetAdministrationShellDescriptorByI
 ) (model.AssetAdministrationShellDescriptor, error) {
 	d := goqu.Dialect(dialect)
 
-	// Define datasets with aliases once
 	aas := goqu.T(tblAASDescriptor).As("aas")
 	desc := goqu.T(tblDescriptor).As("desc")
 
@@ -198,7 +196,7 @@ func (p *PostgreSQLAASRegistryDatabase) GetAssetAdministrationShellDescriptorByI
 		assetKindStr                      sql.NullString
 		assetType, globalAssetID, idShort sql.NullString
 		idStr                             string
-		adminInfoID                       sql.NullInt64
+		adminInfoID                       int64
 		displayNameID                     sql.NullInt64
 		descriptionID                     sql.NullInt64
 	)
@@ -228,38 +226,82 @@ func (p *PostgreSQLAASRegistryDatabase) GetAssetAdministrationShellDescriptorByI
 		}
 		ak = v
 	}
+	g, ctx := errgroup.WithContext(ctx)
 
-	adminInfo, err := readAdministrativeInformationByID(ctx, p.db, adminInfoID)
-	if err != nil {
-		return model.AssetAdministrationShellDescriptor{}, err
-	}
+	var (
+		adminInfo        model.AdministrativeInformation
+		displayName      []model.LangStringNameType
+		description      []model.LangStringTextType
+		endpoints        []model.Endpoint
+		specificAssetIds []model.SpecificAssetId
+		extensions       []model.Extension
+		smds             []model.SubmodelDescriptor
+	)
 
-	displayName, err := persistence_utils.GetLangStringNameTypes(p.db, displayNameID)
-	if err != nil {
-		return model.AssetAdministrationShellDescriptor{}, err
-	}
-	description, err := persistence_utils.GetLangStringTextTypes(p.db, descriptionID)
-	if err != nil {
-		return model.AssetAdministrationShellDescriptor{}, err
-	}
+	g.Go(func() error {
+		ai, err := readAdministrativeInformationByID(ctx, p.db, adminInfoID)
+		if err != nil {
+			return err
+		}
+		adminInfo = ai
+		return nil
+	})
 
-	endpoints, err := readEndpointsByDescriptorID(ctx, p.db, descID)
-	if err != nil {
-		return model.AssetAdministrationShellDescriptor{}, err
-	}
+	g.Go(func() error {
+		dn, err := persistence_utils.GetLangStringNameTypes(p.db, displayNameID)
+		if err != nil {
+			return err
+		}
+		displayName = dn
+		return nil
+	})
 
-	specificAssetIds, err := readSpecificAssetIdsByDescriptorID(ctx, p.db, descID)
-	if err != nil {
-		return model.AssetAdministrationShellDescriptor{}, err
-	}
+	g.Go(func() error {
+		desc, err := persistence_utils.GetLangStringTextTypes(p.db, descriptionID)
+		if err != nil {
+			return err
+		}
+		description = desc
+		return nil
+	})
 
-	extensions, err := readExtensionsByDescriptorID(ctx, p.db, descID)
-	if err != nil {
-		return model.AssetAdministrationShellDescriptor{}, err
-	}
+	g.Go(func() error {
+		eps, err := readEndpointsByDescriptorID(ctx, p.db, descID)
+		if err != nil {
+			return err
+		}
+		endpoints = eps
+		return nil
+	})
 
-	smds, err := readSubmodelDescriptorsByAASDescriptorID(ctx, p.db, descID)
-	if err != nil {
+	g.Go(func() error {
+		ids, err := readSpecificAssetIdsByDescriptorID(ctx, p.db, descID)
+		if err != nil {
+			return err
+		}
+		specificAssetIds = ids
+		return nil
+	})
+
+	g.Go(func() error {
+		ext, err := readExtensionsByDescriptorID(ctx, p.db, descID)
+		if err != nil {
+			return err
+		}
+		extensions = ext
+		return nil
+	})
+
+	g.Go(func() error {
+		sm, err := readSubmodelDescriptorsByAASDescriptorID(ctx, p.db, descID)
+		if err != nil {
+			return err
+		}
+		smds = sm
+		return nil
+	})
+
+	if err := g.Wait(); err != nil {
 		return model.AssetAdministrationShellDescriptor{}, err
 	}
 
@@ -279,7 +321,6 @@ func (p *PostgreSQLAASRegistryDatabase) GetAssetAdministrationShellDescriptorByI
 	}, nil
 }
 
-// Batch: lang_string_text_type
 func GetLangStringTextTypesByIDs(
 	db *sql.DB,
 	textTypeIDs []int64,
@@ -289,26 +330,19 @@ func GetLangStringTextTypesByIDs(
 		return out, nil
 	}
 
-	// dedupe
-	seen := make(map[int64]struct{}, len(textTypeIDs))
-	uniq := make([]int64, 0, len(textTypeIDs))
-	for _, id := range textTypeIDs {
-		if _, ok := seen[id]; ok {
-			continue
-		}
-		seen[id] = struct{}{}
-		uniq = append(uniq, id)
+	dialect := goqu.Dialect("postgres")
+
+	ds := dialect.
+		From("lang_string_text_type").
+		Select("lang_string_text_type_reference_id", "text", "language").
+		Where(goqu.C("lang_string_text_type_reference_id").In(textTypeIDs))
+
+	sqlStr, args, err := ds.ToSQL()
+	if err != nil {
+		return nil, err
 	}
 
-	// build IN ($1,$2,...)
-	inClause, args := makeInClause(uniq)
-
-	q := `
-SELECT lang_string_text_type_reference_id, text, language
-FROM lang_string_text_type
-WHERE lang_string_text_type_reference_id IN (` + inClause + `)`
-
-	rows, err := db.Query(q, args...)
+	rows, err := db.Query(sqlStr, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -329,17 +363,9 @@ WHERE lang_string_text_type_reference_id IN (` + inClause + `)`
 		return nil, err
 	}
 
-	// ensure keys exist for requested IDs (optional, but handy)
-	for _, id := range uniq {
-		if _, ok := out[id]; !ok {
-			out[id] = nil
-		}
-	}
-
 	return out, nil
 }
 
-// Batch: lang_string_name_type
 func GetLangStringNameTypesByIDs(
 	db *sql.DB,
 	nameTypeIDs []int64,
@@ -349,26 +375,20 @@ func GetLangStringNameTypesByIDs(
 		return out, nil
 	}
 
-	// dedupe
-	seen := make(map[int64]struct{}, len(nameTypeIDs))
-	uniq := make([]int64, 0, len(nameTypeIDs))
-	for _, id := range nameTypeIDs {
-		if _, ok := seen[id]; ok {
-			continue
-		}
-		seen[id] = struct{}{}
-		uniq = append(uniq, id)
+	dialect := goqu.Dialect("postgres")
+
+	// Build query
+	ds := dialect.
+		From("lang_string_name_type").
+		Select("lang_string_name_type_reference_id", "text", "language").
+		Where(goqu.C("lang_string_name_type_reference_id").In(nameTypeIDs))
+
+	sqlStr, args, err := ds.ToSQL()
+	if err != nil {
+		return nil, err
 	}
 
-	// build IN ($1,$2,...)
-	inClause, args := makeInClause(uniq)
-
-	q := `
-SELECT lang_string_name_type_reference_id, text, language
-FROM lang_string_name_type
-WHERE lang_string_name_type_reference_id IN (` + inClause + `)`
-
-	rows, err := db.Query(q, args...)
+	rows, err := db.Query(sqlStr, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -389,53 +409,7 @@ WHERE lang_string_name_type_reference_id IN (` + inClause + `)`
 		return nil, err
 	}
 
-	// ensure keys exist for requested IDs (optional)
-	for _, id := range uniq {
-		if _, ok := out[id]; !ok {
-			out[id] = nil
-		}
-	}
-
 	return out, nil
-}
-
-// makeInClause builds "[$1,$2,...]" and args for sql.DB.
-// Example: ids=[10,20] -> " $1,$2 ", args=[int64(10), int64(20)]
-func makeInClause(ids []int64) (string, []any) {
-	args := make([]any, len(ids))
-	ph := make([]byte, 0, len(ids)*4) // rough cap
-	for i, id := range ids {
-		if i > 0 {
-			ph = append(ph, ',', ' ')
-		}
-		// $1, $2, ...
-		ph = append(ph, '$')
-		ph = append(ph, []byte(intToString(i+1))...)
-		args[i] = id
-	}
-	return string(ph), args
-}
-
-// tiny itoa without strconv to keep it self-contained (use strconv.Itoa if preferred)
-func intToString(n int) string {
-	if n == 0 {
-		return "0"
-	}
-	buf := [20]byte{}
-	i := len(buf)
-	for n > 0 {
-		i--
-		buf[i] = byte('0' + (n % 10))
-		n /= 10
-	}
-	return string(buf[i:])
-}
-
-func strOrEmpty(s sql.NullString) string {
-	if s.Valid {
-		return s.String
-	}
-	return ""
 }
 
 func (p *PostgreSQLAASRegistryDatabase) ListAssetAdministrationShellDescriptors(
@@ -447,7 +421,7 @@ func (p *PostgreSQLAASRegistryDatabase) ListAssetAdministrationShellDescriptors(
 ) ([]model.AssetAdministrationShellDescriptor, string, error) {
 
 	if limit <= 0 {
-		limit = 100
+		limit = 10000
 	}
 	peekLimit := int(limit) + 1
 
@@ -455,28 +429,24 @@ func (p *PostgreSQLAASRegistryDatabase) ListAssetAdministrationShellDescriptors(
 	aas := goqu.T(tblAASDescriptor).As("aas")
 	desc := goqu.T(tblDescriptor).As("desc")
 
-	// Build base dataset: include all columns we need to hydrate in one pass
 	ds := d.
 		From(aas).
 		InnerJoin(desc, goqu.On(aas.Col(colDescriptorID).Eq(desc.Col(colID)))).
 		Select(
-			aas.Col(colDescriptorID),  // 0
-			aas.Col(colAssetKind),     // 1
-			aas.Col(colAssetType),     // 2
-			aas.Col(colGlobalAssetID), // 3
-			aas.Col(colIdShort),       // 4
-			aas.Col(colAASID),         // 5
-			aas.Col(colAdminInfoID),   // 6
-			aas.Col(colDisplayNameID), // 7
-			aas.Col(colDescriptionID), // 8
+			aas.Col(colDescriptorID),
+			aas.Col(colAssetKind),
+			aas.Col(colAssetType),
+			aas.Col(colGlobalAssetID),
+			aas.Col(colIdShort),
+			aas.Col(colAASID),
+			aas.Col(colAdminInfoID),
+			aas.Col(colDisplayNameID),
+			aas.Col(colDescriptionID),
 		)
-
-	// Cursor semantics: >= to behave like previous version
 	if cursor != "" {
 		ds = ds.Where(aas.Col(colAASID).Gte(cursor))
 	}
 
-	// Optional filters
 	if assetType != "" {
 		ds = ds.Where(aas.Col(colAssetType).Eq(assetType))
 	}
@@ -484,7 +454,6 @@ func (p *PostgreSQLAASRegistryDatabase) ListAssetAdministrationShellDescriptors(
 		ds = ds.Where(aas.Col(colAssetKind).Eq(akStr))
 	}
 
-	// Order + limit (peek one extra)
 	ds = ds.
 		Order(aas.Col(colAASID).Asc()).
 		Limit(uint(peekLimit))
@@ -538,7 +507,6 @@ func (p *PostgreSQLAASRegistryDatabase) ListAssetAdministrationShellDescriptors(
 		return nil, "", common.NewInternalServerError("Failed to iterate AAS descriptors. See server logs for details.")
 	}
 
-	// Handle next cursor by peeking one extra
 	var nextCursor string
 	if len(all) > int(limit) {
 		nextCursor = all[limit].idStr
@@ -549,7 +517,6 @@ func (p *PostgreSQLAASRegistryDatabase) ListAssetAdministrationShellDescriptors(
 		return []model.AssetAdministrationShellDescriptor{}, nextCursor, nil
 	}
 
-	// Collect unique IDs for batch hydration
 	descIDs := make([]int64, 0, len(all))
 	adminInfoIDs := make([]int64, 0, len(all))
 	displayNameIDs := make([]int64, 0, len(all))
@@ -561,12 +528,12 @@ func (p *PostgreSQLAASRegistryDatabase) ListAssetAdministrationShellDescriptors(
 	seenDE := map[int64]struct{}{}
 
 	for _, r := range all {
-		// descriptor ids (always present)
+
 		if _, ok := seenDesc[r.descID]; !ok {
 			seenDesc[r.descID] = struct{}{}
 			descIDs = append(descIDs, r.descID)
 		}
-		// adminInfo (nullable)
+
 		if r.adminInfoID.Valid {
 			id := r.adminInfoID.Int64
 			if _, ok := seenAI[id]; !ok {
@@ -574,7 +541,7 @@ func (p *PostgreSQLAASRegistryDatabase) ListAssetAdministrationShellDescriptors(
 				adminInfoIDs = append(adminInfoIDs, id)
 			}
 		}
-		// displayName (nullable)
+
 		if r.displayNameID.Valid {
 			id := r.displayNameID.Int64
 			if _, ok := seenDN[id]; !ok {
@@ -582,7 +549,7 @@ func (p *PostgreSQLAASRegistryDatabase) ListAssetAdministrationShellDescriptors(
 				displayNameIDs = append(displayNameIDs, id)
 			}
 		}
-		// description (nullable)
+
 		if r.descriptionID.Valid {
 			id := r.descriptionID.Int64
 			if _, ok := seenDE[id]; !ok {
@@ -592,7 +559,6 @@ func (p *PostgreSQLAASRegistryDatabase) ListAssetAdministrationShellDescriptors(
 		}
 	}
 
-	// ---- Bulk hydration (parallel) ----
 	admByID := map[int64]model.AdministrativeInformation{}
 	dnByID := map[int64][]model.LangStringNameType{}
 	descByID := map[int64][]model.LangStringTextType{}
@@ -603,9 +569,8 @@ func (p *PostgreSQLAASRegistryDatabase) ListAssetAdministrationShellDescriptors(
 
 	g, gctx := errgroup.WithContext(ctx)
 
-	// AdministrativeInformation
 	if len(adminInfoIDs) > 0 {
-		ids := append([]int64(nil), adminInfoIDs...) // copy to avoid accidental capture issues
+		ids := append([]int64(nil), adminInfoIDs...)
 		g.Go(func() error {
 			m, err := readAdministrativeInformationByIDs(gctx, p.db, ids)
 			if err != nil {
@@ -616,7 +581,6 @@ func (p *PostgreSQLAASRegistryDatabase) ListAssetAdministrationShellDescriptors(
 		})
 	}
 
-	// DisplayName
 	if len(displayNameIDs) > 0 {
 		ids := append([]int64(nil), displayNameIDs...)
 		g.Go(func() error {
@@ -629,7 +593,6 @@ func (p *PostgreSQLAASRegistryDatabase) ListAssetAdministrationShellDescriptors(
 		})
 	}
 
-	// Description
 	if len(descriptionIDs) > 0 {
 		ids := append([]int64(nil), descriptionIDs...)
 		g.Go(func() error {
@@ -642,7 +605,6 @@ func (p *PostgreSQLAASRegistryDatabase) ListAssetAdministrationShellDescriptors(
 		})
 	}
 
-	// Hydrations keyed by descriptor IDs
 	if len(descIDs) > 0 {
 		ids := append([]int64(nil), descIDs...)
 		g.Go(func() error {
@@ -679,15 +641,12 @@ func (p *PostgreSQLAASRegistryDatabase) ListAssetAdministrationShellDescriptors(
 		})
 	}
 
-	// Wait for all hydrations (fail fast if any returns error)
 	if err := g.Wait(); err != nil {
 		return nil, "", err
 	}
 
-	// ---- Assemble output in the same order as 'all' ----
 	out := make([]model.AssetAdministrationShellDescriptor, 0, len(all))
 	for _, r := range all {
-		// AssetKind (nullable string -> enum, fallback to NOT_APPLICABLE)
 		ak := model.ASSETKIND_NOT_APPLICABLE
 		if r.assetKindStr.Valid && r.assetKindStr.String != "" {
 			v, convErr := model.NewAssetKindFromValue(r.assetKindStr.String)
@@ -699,7 +658,7 @@ func (p *PostgreSQLAASRegistryDatabase) ListAssetAdministrationShellDescriptors(
 
 		var adminInfo model.AdministrativeInformation
 		if r.adminInfoID.Valid {
-			adminInfo = admByID[r.adminInfoID.Int64] // zero-value if missing
+			adminInfo = admByID[r.adminInfoID.Int64]
 		}
 
 		var displayName []model.LangStringNameType

@@ -51,6 +51,32 @@ DO $$ BEGIN
   END IF;
 END $$;
 
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'data_type_iec61360') THEN
+    CREATE TYPE data_type_iec61360 AS ENUM (
+      'Date',
+      'String',
+      'StringTranslatable',
+      'IntegerMeasure',
+      'IntegerCount',
+      'IntegerCurrency',
+      'RealMeasure',
+      'RealCount',
+      'RealCurrency',
+      'Boolean',
+      'Iri',
+      'Irdi',
+      'Rational',
+      'RationalMeasure',
+      'Time',
+      'Timestamp',
+      'Html',
+      'Blob',
+      'File'
+    );
+  END IF;
+END $$;
+
 -- ---------- Core tables ----------
 CREATE TABLE IF NOT EXISTS descriptor (
   id BIGSERIAL PRIMARY KEY
@@ -79,17 +105,22 @@ CREATE TABLE IF NOT EXISTS lang_string_name_type (
 );
 
 CREATE TABLE IF NOT EXISTS reference (
-  id BIGSERIAL PRIMARY KEY,
-  type reference_types NOT NULL,
-  parent_reference BIGINT REFERENCES reference(id)
+  id           BIGSERIAL PRIMARY KEY,
+  type         reference_types NOT NULL,
+  parentReference BIGINT REFERENCES reference(id),  -- Optional nesting
+  rootReference BIGINT REFERENCES reference(id)  -- The root of the nesting tree
 );
 
+CREATE INDEX IF NOT EXISTS idx_reference_rootreference ON reference(rootreference);
+-- if you often filter by BOTH columns, this can help even more:
+CREATE INDEX IF NOT EXISTS idx_reference_rootreference_id ON reference(rootreference, id);
+
 CREATE TABLE IF NOT EXISTS reference_key (
-  id BIGSERIAL PRIMARY KEY,
+  id           BIGSERIAL PRIMARY KEY,
   reference_id BIGINT NOT NULL REFERENCES reference(id) ON DELETE CASCADE,
-  position INTEGER NOT NULL,
-  type key_type NOT NULL,
-  value TEXT NOT NULL,
+  position     INTEGER NOT NULL,                -- <- Array-Index keys[i]
+  type         key_type     NOT NULL,
+  value        TEXT     NOT NULL,
   UNIQUE(reference_id, position)
 );
 
@@ -111,7 +142,13 @@ CREATE TABLE IF NOT EXISTS descriptor_extension (
   extension_id BIGINT NOT NULL REFERENCES extension(id) ON DELETE CASCADE
 );
 
-CREATE TABLE IF NOT EXISTS extension_reference (
+CREATE TABLE IF NOT EXISTS extension_reference_refer_to (
+  id BIGSERIAL PRIMARY KEY,
+  extension_id BIGINT NOT NULL REFERENCES extension(id) ON DELETE CASCADE,
+  reference_id BIGINT NOT NULL REFERENCES reference(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS extension_reference_supplemental (
   id BIGSERIAL PRIMARY KEY,
   extension_id BIGINT NOT NULL REFERENCES extension(id) ON DELETE CASCADE,
   reference_id BIGINT NOT NULL REFERENCES reference(id) ON DELETE CASCADE
@@ -162,8 +199,72 @@ CREATE TABLE IF NOT EXISTS administrative_information (
   version VARCHAR(4),
   revision VARCHAR(4),
   creator BIGINT REFERENCES reference(id) ON DELETE CASCADE,
-  template_id VARCHAR(2048)
+  templateid VARCHAR(2048)
 );
+
+
+CREATE TABLE IF NOT EXISTS data_specification_content (
+  id BIGINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY
+);
+
+CREATE TABLE IF NOT EXISTS data_specification (
+  id BIGINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
+  data_specification BIGINT REFERENCES reference(id) NOT NULL,
+  data_specification_content BIGINT REFERENCES data_specification_content(id) NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS value_list (
+  id BIGINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY
+);
+
+CREATE INDEX IF NOT EXISTS ix_valuelist_id ON value_list(id);
+
+CREATE TABLE IF NOT EXISTS value_list_value_reference_pair (
+  id BIGSERIAL PRIMARY KEY,
+  position INTEGER NOT NULL,  -- <- Array-Index valueReferencePairs[i]
+  value_list_id BIGINT NOT NULL REFERENCES value_list(id) ON DELETE CASCADE,
+  value TEXT NOT NULL,
+  value_id BIGINT REFERENCES reference(id) ON DELETE CASCADE
+);
+
+
+CREATE INDEX IF NOT EXISTS ix_vlvrp_id ON value_list_value_reference_pair(id);
+
+CREATE TABLE IF NOT EXISTS level_type (
+  id BIGSERIAL PRIMARY KEY,
+  min BOOLEAN NOT NULL,
+  max BOOLEAN NOT NULL,
+  nom BOOLEAN NOT NULL,
+  typ BOOLEAN NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS ix_lt_id ON level_type(id);
+
+
+CREATE TABLE IF NOT EXISTS data_specification_iec61360 (
+  id                BIGINT REFERENCES data_specification_content(id) ON DELETE CASCADE PRIMARY KEY,
+  preferred_name_id BIGINT REFERENCES lang_string_text_type_reference(id) ON DELETE CASCADE NOT NULL,
+  short_name_id     BIGINT REFERENCES lang_string_text_type_reference(id) ON DELETE CASCADE,
+  unit              TEXT,
+  unit_id           BIGINT REFERENCES reference(id) ON DELETE CASCADE,
+  source_of_definition TEXT,
+  symbol           TEXT,
+  data_type        data_type_iec61360,
+  definition_id    BIGINT REFERENCES lang_string_text_type_reference(id) ON DELETE CASCADE,
+  value_format     TEXT,
+  value_list_id    BIGINT REFERENCES value_list(id) ON DELETE CASCADE,
+  level_type_id BIGINT REFERENCES level_type(id) ON DELETE CASCADE,
+  value VARCHAR(2048)
+);
+
+CREATE TABLE IF NOT EXISTS administrative_information_embedded_data_specification (
+  id                BIGSERIAL PRIMARY KEY,
+  administrative_information_id BIGINT REFERENCES administrative_information(id) ON DELETE CASCADE,
+  data_specification_content_id BIGSERIAL REFERENCES data_specification(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS ix_eds_id ON administrative_information_embedded_data_specification(id);
+
 
 CREATE TABLE IF NOT EXISTS aas_descriptor (
   descriptor_id BIGINT PRIMARY KEY REFERENCES descriptor(id) ON DELETE CASCADE,
@@ -195,26 +296,37 @@ CREATE TABLE IF NOT EXISTS submodel_descriptor_supplemental_semantic_id (
   reference_id BIGINT NOT NULL REFERENCES reference(id) ON DELETE CASCADE
 );
 
--- ---------- Existing helper indexes ----------
--- parent/child references
-CREATE INDEX IF NOT EXISTS idx_reference_parent_reference ON reference(parent_reference);
+-- Reference tree
+CREATE INDEX IF NOT EXISTS idx_reference_rootreference ON reference(rootreference);
+CREATE INDEX IF NOT EXISTS idx_reference_rootreference_id ON reference(rootreference, id);
+CREATE INDEX IF NOT EXISTS idx_reference_parentReference ON reference(parentReference);
 CREATE INDEX IF NOT EXISTS idx_reference_type ON reference(type);
 
--- Keys
+-- Reference keys
 CREATE INDEX IF NOT EXISTS idx_reference_key_reference ON reference_key(reference_id);
+CREATE INDEX IF NOT EXISTS idx_reference_key_refid_id ON reference_key(reference_id, id);
 CREATE INDEX IF NOT EXISTS idx_reference_key_type_value ON reference_key(type, value);
 
 -- Lang string references
 CREATE INDEX IF NOT EXISTS idx_lang_string_text_type_ref ON lang_string_text_type(lang_string_text_type_reference_id);
 CREATE INDEX IF NOT EXISTS idx_lang_string_name_type_ref ON lang_string_name_type(lang_string_name_type_reference_id);
+CREATE INDEX IF NOT EXISTS idx_lang_text_ref_lang ON lang_string_text_type(lang_string_text_type_reference_id, language, id);
+CREATE INDEX IF NOT EXISTS idx_lang_name_ref_lang ON lang_string_name_type(lang_string_name_type_reference_id, language, id);
 
 -- Extension & links
 CREATE INDEX IF NOT EXISTS idx_extension_semantic_id ON extension(semantic_id);
 CREATE INDEX IF NOT EXISTS idx_extension_value_type ON extension(value_type);
 CREATE INDEX IF NOT EXISTS idx_descriptor_extension_descriptor ON descriptor_extension(descriptor_id);
 CREATE INDEX IF NOT EXISTS idx_descriptor_extension_extension ON descriptor_extension(extension_id);
-CREATE INDEX IF NOT EXISTS idx_extension_reference_extension ON extension_reference(extension_id);
-CREATE INDEX IF NOT EXISTS idx_extension_reference_reference ON extension_reference(reference_id);
+CREATE INDEX IF NOT EXISTS idx_descriptor_extension_descriptor_extension ON descriptor_extension(descriptor_id, extension_id);
+
+CREATE INDEX IF NOT EXISTS idx_ext_ref_refer_extension ON extension_reference_refer_to(extension_id);
+CREATE INDEX IF NOT EXISTS idx_ext_ref_refer_reference ON extension_reference_refer_to(reference_id);
+CREATE INDEX IF NOT EXISTS idx_ext_ref_refer_ext_id ON extension_reference_refer_to(extension_id, id);
+
+CREATE INDEX IF NOT EXISTS idx_ext_ref_supp_extension ON extension_reference_supplemental(extension_id);
+CREATE INDEX IF NOT EXISTS idx_ext_ref_supp_reference ON extension_reference_supplemental(reference_id);
+CREATE INDEX IF NOT EXISTS idx_ext_ref_supp_ext_id ON extension_reference_supplemental(extension_id, id);
 
 -- Specific Asset IDs
 CREATE INDEX IF NOT EXISTS idx_specific_asset_id_descriptor ON specific_asset_id(descriptor_id);
@@ -222,16 +334,19 @@ CREATE INDEX IF NOT EXISTS idx_specific_asset_id_semantic ON specific_asset_id(s
 CREATE INDEX IF NOT EXISTS idx_specific_asset_id_external_subject_ref ON specific_asset_id(external_subject_ref);
 CREATE INDEX IF NOT EXISTS idx_specific_asset_id_name ON specific_asset_id(name);
 CREATE INDEX IF NOT EXISTS idx_specific_asset_id_value ON specific_asset_id(value);
-CREATE INDEX IF NOT EXISTS idx_specific_asset_id_sup_semantic_specific ON specific_asset_id_supplemental_semantic_id(specific_asset_id_id);
+CREATE INDEX IF NOT EXISTS idx_sai_supp_semantic_sai_id ON specific_asset_id_supplemental_semantic_id(specific_asset_id_id, id);
 CREATE INDEX IF NOT EXISTS idx_specific_asset_id_sup_semantic_ref ON specific_asset_id_supplemental_semantic_id(reference_id);
 
 -- Endpoints & security
 CREATE INDEX IF NOT EXISTS idx_aas_descriptor_endpoint_descriptor ON aas_descriptor_endpoint(descriptor_id);
+CREATE INDEX IF NOT EXISTS idx_aas_descriptor_endpoint_descriptor_id ON aas_descriptor_endpoint(descriptor_id, id);
 CREATE INDEX IF NOT EXISTS idx_aas_descriptor_endpoint_interface ON aas_descriptor_endpoint(interface);
 CREATE INDEX IF NOT EXISTS idx_aas_descriptor_endpoint_protocols ON aas_descriptor_endpoint(endpoint_protocol, sub_protocol);
 CREATE INDEX IF NOT EXISTS idx_security_attributes_endpoint ON security_attributes(endpoint_id);
+CREATE INDEX IF NOT EXISTS idx_security_attributes_endpoint_id ON security_attributes(endpoint_id, id);
 CREATE INDEX IF NOT EXISTS idx_security_attributes_type ON security_attributes(security_type);
 CREATE INDEX IF NOT EXISTS idx_endpoint_protocol_version_endpoint ON endpoint_protocol_version(endpoint_id);
+CREATE INDEX IF NOT EXISTS idx_ep_version_endpoint_id ON endpoint_protocol_version(endpoint_id, id);
 
 -- Administrative info
 CREATE INDEX IF NOT EXISTS idx_administrative_information_creator ON administrative_information(creator);
@@ -244,61 +359,18 @@ CREATE INDEX IF NOT EXISTS idx_aas_descriptor_global_asset_id ON aas_descriptor(
 CREATE INDEX IF NOT EXISTS idx_aas_descriptor_id_short ON aas_descriptor(id_short);
 CREATE INDEX IF NOT EXISTS idx_aas_descriptor_asset_kind ON aas_descriptor(asset_kind);
 CREATE INDEX IF NOT EXISTS idx_aas_descriptor_asset_type ON aas_descriptor(asset_type);
+CREATE INDEX IF NOT EXISTS idx_aas_descriptor_assettype_id ON aas_descriptor(asset_type, id)
+  INCLUDE (asset_kind, descriptor_id, global_asset_id, id_short, displayname_id, description_id, administrative_information_id);
+CREATE INDEX IF NOT EXISTS idx_aas_descriptor_assetkind_id ON aas_descriptor(asset_kind, id)
+  INCLUDE (asset_type, descriptor_id, global_asset_id, id_short, displayname_id, description_id, administrative_information_id);
 
 -- Submodel descriptor lookups
 CREATE INDEX IF NOT EXISTS idx_submodel_descriptor_aas ON submodel_descriptor(aas_descriptor_id);
+CREATE INDEX IF NOT EXISTS idx_submodel_descriptor_aas_id ON submodel_descriptor(aas_descriptor_id, id);
 CREATE INDEX IF NOT EXISTS idx_submodel_descriptor_admin_info ON submodel_descriptor(administrative_information_id);
 CREATE INDEX IF NOT EXISTS idx_submodel_descriptor_description ON submodel_descriptor(description_id);
 CREATE INDEX IF NOT EXISTS idx_submodel_descriptor_displayname ON submodel_descriptor(displayname_id);
 CREATE INDEX IF NOT EXISTS idx_submodel_descriptor_semantic ON submodel_descriptor(semantic_id);
 CREATE INDEX IF NOT EXISTS idx_submodel_descriptor_id_short ON submodel_descriptor(id_short);
-CREATE INDEX IF NOT EXISTS idx_submodel_descriptor_sup_semantic_descriptor ON submodel_descriptor_supplemental_semantic_id(descriptor_id);
+CREATE INDEX IF NOT EXISTS idx_sm_supp_semantic_desc_id ON submodel_descriptor_supplemental_semantic_id(descriptor_id, id);
 CREATE INDEX IF NOT EXISTS idx_submodel_descriptor_sup_semantic_ref ON submodel_descriptor_supplemental_semantic_id(reference_id);
-
--- ---------- New/Improved Indexes for Query Path ----------
--- 1) Page CTE fast paths: WHERE asset_type|asset_kind [AND id >= ?] ORDER BY id ASC
---    INCLUDE helps index-only scans for the CTE projection.
-CREATE INDEX IF NOT EXISTS idx_aas_descriptor_assettype_id
-  ON aas_descriptor(asset_type, id)
-  INCLUDE (asset_kind, descriptor_id, global_asset_id, id_short, displayname_id, description_id, administrative_information_id);
-
-CREATE INDEX IF NOT EXISTS idx_aas_descriptor_assetkind_id
-  ON aas_descriptor(asset_kind, id)
-  INCLUDE (asset_type, descriptor_id, global_asset_id, id_short, displayname_id, description_id, administrative_information_id);
-
--- Optional if you frequently filter by BOTH asset_type AND asset_kind:
--- CREATE INDEX IF NOT EXISTS idx_aas_descriptor_assettype_kind_id
---   ON aas_descriptor(asset_type, asset_kind, id);
-
--- 2) Avoid sorts inside LATERAL JSON aggregates by providing order-friendly indexes
--- Endpoints aggregated ORDER BY e.id (filter on descriptor_id)
-CREATE INDEX IF NOT EXISTS idx_aas_descriptor_endpoint_descriptor_id
-  ON aas_descriptor_endpoint(descriptor_id, id);
-
--- Submodel descriptors aggregated ORDER BY smd.id (filter on aas_descriptor_id)
-CREATE INDEX IF NOT EXISTS idx_submodel_descriptor_aas_id
-  ON submodel_descriptor(aas_descriptor_id, id);
-
--- DisplayName / Description aggregated ORDER BY language (and stable by id)
-CREATE INDEX IF NOT EXISTS idx_lang_name_ref_lang
-  ON lang_string_name_type(lang_string_name_type_reference_id, language, id);
-
-CREATE INDEX IF NOT EXISTS idx_lang_text_ref_lang
-  ON lang_string_text_type(lang_string_text_type_reference_id, language, id);
-
--- Extensions: join via descriptor_extension(descriptor_id) then order by extension.id
-CREATE INDEX IF NOT EXISTS idx_descriptor_extension_descriptor_extension
-  ON descriptor_extension(descriptor_id, extension_id);
-
--- ---------- (Optional) Planner statistics tweaks ----------
--- Uncomment if you have many distinct values or skewed distributions:
--- ALTER TABLE aas_descriptor ALTER COLUMN asset_type SET STATISTICS 2000;
--- ALTER TABLE aas_descriptor ALTER COLUMN asset_kind SET STATISTICS 2000;
-
--- ---------- (Optional) Physical layout ----------
--- If most scans are id-ascending pages, clustering can reduce heap I/O over time.
--- Replace the index name below with your actual unique index name on aas_descriptor(id).
--- CLUSTER VERBOSE aas_descriptor USING aas_descriptor_id_key;
--- ALTER TABLE aas_descriptor SET (fillfactor = 90);
-
--- Final maintenance suggestion (non-blocking if you prefer): ANALYZE;

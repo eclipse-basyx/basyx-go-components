@@ -15,7 +15,8 @@ func createExtensions(tx *sql.Tx, descriptorId int64, extensions []model.Extensi
 	if len(extensions) > 0 {
 		d := goqu.Dialect(dialect)
 		for _, val := range extensions {
-			semanticId, err := persistence_utils.CreateReference(tx, val.SemanticId)
+			var a sql.NullInt64
+			semanticId, err := persistence_utils.CreateReference(tx, val.SemanticId, a, a)
 			if err != nil {
 				return err
 			}
@@ -50,11 +51,11 @@ func createExtensions(tx *sql.Tx, descriptorId int64, extensions []model.Extensi
 				return err
 			}
 
-			if err = createExtensionReferences(tx, id, val.SupplementalSemanticIds); err != nil {
+			if err = createExtensionReferences(tx, id, val.SupplementalSemanticIds, "extension_reference_supplemental"); err != nil {
 				return err
 			}
-			// todo: create new table
-			if err = createExtensionReferences(tx, id, val.RefersTo); err != nil {
+
+			if err = createExtensionReferences(tx, id, val.RefersTo, "extension_reference_refer_to"); err != nil {
 				return err
 			}
 		}
@@ -62,14 +63,15 @@ func createExtensions(tx *sql.Tx, descriptorId int64, extensions []model.Extensi
 	return nil
 }
 
-func createExtensionReferences(tx *sql.Tx, extensionId int64, references []model.Reference) error {
+func createExtensionReferences(tx *sql.Tx, extensionId int64, references []model.Reference, tablename string) error {
 	if len(references) == 0 {
 		return nil
 	}
 	d := goqu.Dialect(dialect)
 	rows := make([]goqu.Record, 0, len(references))
 	for i := range references {
-		referenceId, err := persistence_utils.CreateReference(tx, &references[i])
+		var a sql.NullInt64
+		referenceId, err := persistence_utils.CreateReference(tx, &references[i], a, a)
 		if err != nil {
 			return err
 		}
@@ -78,7 +80,7 @@ func createExtensionReferences(tx *sql.Tx, extensionId int64, references []model
 			colReferenceID: referenceId,
 		})
 	}
-	sqlStr, args, err := d.Insert(tblExtensionReference).Rows(rows).ToSQL()
+	sqlStr, args, err := d.Insert(tablename).Rows(rows).ToSQL()
 	if err != nil {
 		return err
 	}

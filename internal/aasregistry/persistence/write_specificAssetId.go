@@ -15,11 +15,13 @@ func createSpecificAssetId(tx *sql.Tx, descriptorId int64, specificAssetIds []mo
 	if len(specificAssetIds) > 0 {
 		d := goqu.Dialect(dialect)
 		for _, val := range specificAssetIds {
-			externalSubjectReferenceId, err := persistence_utils.CreateReference(tx, val.ExternalSubjectId)
+			var a sql.NullInt64
+
+			externalSubjectReferenceId, err := persistence_utils.CreateReference(tx, val.ExternalSubjectId, a, a)
 			if err != nil {
 				return err
 			}
-			semanticId, err := persistence_utils.CreateReference(tx, val.SemanticId)
+			semanticId, err := persistence_utils.CreateReference(tx, val.SemanticId, a, a)
 			if err != nil {
 				return err
 			}
@@ -58,7 +60,8 @@ func createSpecificAssetIdSupplementalSemantic(tx *sql.Tx, specificAssetId int64
 	d := goqu.Dialect(dialect)
 	rows := make([]goqu.Record, 0, len(references))
 	for i := range references {
-		referenceID, err := persistence_utils.CreateReference(tx, &references[i])
+		var a sql.NullInt64
+		referenceID, err := persistence_utils.CreateReference(tx, &references[i], a, a)
 		if err != nil {
 			return err
 		}

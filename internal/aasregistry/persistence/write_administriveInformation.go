@@ -16,7 +16,8 @@ func CreateAdministrativeInformation(tx *sql.Tx, admin *model.AdministrativeInfo
 
 	var creatorRefID sql.NullInt64
 	if admin.Creator != nil {
-		id, err := persistence_utils.CreateReference(tx, admin.Creator)
+		var a sql.NullInt64
+		id, err := persistence_utils.CreateReference(tx, admin.Creator, a, a)
 		if err != nil {
 			return sql.NullInt64{}, err
 		}

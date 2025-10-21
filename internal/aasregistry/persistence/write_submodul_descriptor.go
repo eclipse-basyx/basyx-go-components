@@ -31,19 +31,20 @@ func createSubModelDescriptors(tx *sql.Tx, aasDescriptorId int64, submodelDescri
 				return common.NewInternalServerError("Failed to create DisplayName - no changes applied - see console for details")
 			}
 
-			descriptionId, err = persistence_utils.CreateLangStringTextTypes(tx, val.Description)
+			descriptionId, err = persistence_utils.CreateLangStringTextTypesN(tx, val.Description)
 			if err != nil {
 				fmt.Println(err)
 				return common.NewInternalServerError("Failed to create Description - no changes applied - see console for details")
 			}
 
-			administrationId, err = CreateAdministrativeInformation(tx, &val.Administration)
+			administrationId, err = persistence_utils.CreateAdministrativeInformation(tx, &val.Administration)
 			if err != nil {
 				fmt.Println(err)
 				return common.NewInternalServerError("Failed to create Administration - no changes applied - see console for details")
 			}
 
-			semanticId, err = persistence_utils.CreateReference(tx, val.SemanticId)
+			var a sql.NullInt64
+			semanticId, err = persistence_utils.CreateReference(tx, val.SemanticId, a, a)
 			if err != nil {
 				return err
 			}
@@ -106,7 +107,8 @@ func createsubModelDescriptorSupplementalSemantic(tx *sql.Tx, subModelDescriptor
 	d := goqu.Dialect(dialect)
 	rows := make([]goqu.Record, 0, len(references))
 	for i := range references {
-		referenceID, err := persistence_utils.CreateReference(tx, &references[i])
+		var a sql.NullInt64
+		referenceID, err := persistence_utils.CreateReference(tx, &references[i], a, a)
 		if err != nil {
 			return err
 		}

@@ -45,7 +45,7 @@ const (
 
 	colVersion    = "version"
 	colRevision   = "revision"
-	colTemplateId = "template_id"
+	colTemplateId = "templateid"
 	colCreator    = "creator"
 
 	colEndpointID              = "endpoint_id"
