@@ -507,8 +507,6 @@ CREATE TABLE IF NOT EXISTS capability_element (
 -- Qualifier (on any SME)
 CREATE TABLE IF NOT EXISTS qualifier (
   id                BIGSERIAL PRIMARY KEY,
-  submodel_element_id BIGINT REFERENCES submodel_element(id) ON DELETE CASCADE,
-  submodel_id VARCHAR(2048) REFERENCES submodel(id) ON DELETE CASCADE,
   kind              qualifier_kind NOT NULL,
   type              TEXT NOT NULL,
   value_type        data_type_def_xsd NOT NULL,
@@ -518,9 +516,25 @@ CREATE TABLE IF NOT EXISTS qualifier (
   value_time        TIME,
   value_datetime    TIMESTAMPTZ,
   value_id          BIGINT REFERENCES reference(id),
-  semantic_id      BIGINT REFERENCES reference(id)
+  semantic_id       BIGINT REFERENCES reference(id)
 );
-CREATE INDEX IF NOT EXISTS ix_qual_sme       ON qualifier(submodel_element_id);
+
+CREATE TABLE IF NOT EXISTS submodel_element_qualifier (
+  sme_id      BIGINT NOT NULL REFERENCES submodel_element(id) ON DELETE CASCADE,
+  qualifier_id BIGINT NOT NULL REFERENCES qualifier(id) ON DELETE CASCADE,
+  PRIMARY KEY (sme_id, qualifier_id)
+);
+
+CREATE TABLE IF NOT EXISTS submodel_qualifier (
+  submodel_id  VARCHAR(2048) NOT NULL REFERENCES submodel(id) ON DELETE CASCADE,
+  qualifier_id BIGINT NOT NULL REFERENCES qualifier(id) ON DELETE CASCADE,
+  PRIMARY KEY (submodel_id, qualifier_id)
+);
+
+CREATE INDEX IF NOT EXISTS ix_subm_qual      ON submodel_qualifier(submodel_id);
+
+CREATE INDEX IF NOT EXISTS ix_qual_sme       ON submodel_element_qualifier(sme_id);
+
 CREATE INDEX IF NOT EXISTS ix_qual_type      ON qualifier(type);
 CREATE INDEX IF NOT EXISTS ix_qual_num       ON qualifier(value_num)
   WHERE value_type IN ('xs:decimal','xs:double','xs:float','xs:int','xs:integer','xs:long','xs:short');

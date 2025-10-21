@@ -36,7 +36,7 @@ type Submodel struct {
 
 	SupplementalSemanticIds []*Reference `json:"supplementalSemanticIds,omitempty"`
 
-	Qualifiers []Qualifier `json:"qualifiers,omitempty"`
+	Qualifier []Qualifier `json:"qualifier,omitempty"`
 
 	EmbeddedDataSpecifications []EmbeddedDataSpecification `json:"embeddedDataSpecifications,omitempty"`
 
@@ -47,7 +47,8 @@ type Submodel struct {
 func (s *Submodel) UnmarshalJSON(data []byte) error {
 	type Alias Submodel
 	aux := &struct {
-		SubmodelElements []json.RawMessage `json:"submodelElements,omitempty"`
+		SubmodelElements           []json.RawMessage `json:"submodelElements,omitempty"`
+		EmbeddedDataSpecifications []json.RawMessage `json:"embeddedDataSpecifications,omitempty"`
 		*Alias
 	}{
 		Alias: (*Alias)(s),
@@ -63,6 +64,16 @@ func (s *Submodel) UnmarshalJSON(data []byte) error {
 		}
 		s.SubmodelElements[i] = elem
 	}
+
+	s.EmbeddedDataSpecifications = make([]EmbeddedDataSpecification, len(aux.EmbeddedDataSpecifications))
+	for i, raw := range aux.EmbeddedDataSpecifications {
+		var eds EmbeddedDataSpecification
+		if err := json.Unmarshal(raw, &eds); err != nil {
+			return err
+		}
+		s.EmbeddedDataSpecifications[i] = eds
+	}
+
 	return nil
 }
 
@@ -117,7 +128,7 @@ func AssertSubmodelRequired(obj Submodel) error {
 			}
 		}
 	}
-	for _, el := range obj.Qualifiers {
+	for _, el := range obj.Qualifier {
 		if err := AssertQualifierRequired(el); err != nil {
 			return err
 		}
@@ -171,7 +182,7 @@ func AssertSubmodelConstraints(obj Submodel) error {
 			}
 		}
 	}
-	for _, el := range obj.Qualifiers {
+	for _, el := range obj.Qualifier {
 		if err := AssertQualifierConstraints(el); err != nil {
 			return err
 		}

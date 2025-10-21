@@ -74,6 +74,8 @@ type SubmodelRow struct {
 	DataSpecIEC61360 json.RawMessage
 	// IECLevelTypes contains IEC level type information as JSON data
 	IECLevelTypes json.RawMessage
+	// Qualifiers contains qualifier information as JSON data
+	Qualifiers json.RawMessage
 	// TotalSubmodels is the total count of submodels in the result set
 	TotalSubmodels int64
 }
@@ -169,11 +171,71 @@ type ValueListRow struct {
 	ReferredReferenceRows json.RawMessage `json:"referred_reference_rows"`
 }
 
-// ParseReferredReferences parses referred reference data from JSON and populates the reference builder map.
+type QualifierRow struct {
+	DbId                                      int64           `json:"dbId"`
+	Kind                                      string          `json:"kind"`
+	Type                                      string          `json:"type"`
+	ValueType                                 string          `json:"value_type"`
+	Value                                     string          `json:"value"`
+	SemanticId                                json.RawMessage `json:"semanticIdReferenceRows"`
+	SemanticIdReferredReferences              json.RawMessage `json:"semanticIdReferredReferencesRows"`
+	ValueId                                   json.RawMessage `json:"valueIdReferenceRows"`
+	ValueIdReferredReferences                 json.RawMessage `json:"valueIdReferredReferencesRows"`
+	SupplementalSemanticIds                   json.RawMessage `json:"supplementalSemanticIdReferenceRows"`
+	SupplementalSemanticIdsReferredReferences json.RawMessage `json:"supplementalSemanticIdReferredReferenceRows"`
+}
+
+// ParseReferredReferencesFromRows parses referred reference data from already unmarshalled ReferredReferenceRow objects.
 //
 // This function handles the complex case where references point to other references (referred references).
 // It validates that parent references exist in the builder map before creating child references,
 // ensuring referential integrity in the hierarchical structure.
+//
+// Parameters:
+//   - semanticIdData: Slice of already unmarshalled ReferredReferenceRow objects
+//   - referenceBuilderRefs: Map of reference IDs to their corresponding ReferenceBuilder instances.
+//     This map is used to look up parent references and must be pre-populated with root references.
+//
+// Returns:
+//   - error: An error if a parent reference is not found in the map.
+//     Nil references or keys are logged as warnings but do not cause the function to fail.
+//
+// The function performs the following validations:
+//   - Skips entries with nil RootReference, ReferenceId, ParentReference, or ReferenceType
+//   - Verifies parent references exist in the builder map
+//   - Ensures key data (KeyID, KeyType, KeyValue) is complete
+func ParseReferredReferencesFromRows(semanticIdData []ReferredReferenceRow, referenceBuilderRefs map[int64]*ReferenceBuilder) error {
+	for _, ref := range semanticIdData {
+		if ref.RootReference == nil {
+			fmt.Println("[WARNING - ParseReferredReferencesFromRows] RootReference was nil - skipping Reference Creation.")
+			continue
+		}
+		builder, semanticIdCreated := referenceBuilderRefs[*ref.RootReference]
+		if !semanticIdCreated {
+			return fmt.Errorf("parent reference with id %d not found for referred reference with id %d", ref.ParentReference, ref.ReferenceId)
+		}
+		if ref.ReferenceId == nil || ref.ParentReference == nil {
+			fmt.Println("[WARNING - ParseReferredReferencesFromRows] ReferenceId or ParentReference was nil - skipping Reference Creation.")
+			continue
+		}
+		if ref.ReferenceType == nil {
+			fmt.Println("[WARNING - ParseReferredReferencesFromRows] ReferenceType was nil - skipping Reference Creation for Reference with Reference ID", *ref.ReferenceId)
+			continue
+		}
+		if ref.KeyID == nil || ref.KeyType == nil || ref.KeyValue == nil {
+			fmt.Println("[WARNING - ParseReferredReferencesFromRows] KeyID, KeyType or KeyValue was nil - skipping Reference Creation for Reference with Reference ID", *ref.ReferenceId)
+			continue
+		}
+		builder.CreateReferredSemanticId(*ref.ReferenceId, *ref.ParentReference, *ref.ReferenceType)
+		builder.CreateReferredSemanticIdKey(*ref.ReferenceId, *ref.KeyID, *ref.KeyType, *ref.KeyValue)
+	}
+	return nil
+}
+
+// ParseReferredReferences parses referred reference data from JSON and populates the reference builder map.
+//
+// This function unmarshals JSON-encoded ReferredReferenceRow data and delegates to ParseReferredReferencesFromRows
+// for the actual parsing logic.
 //
 // Parameters:
 //   - row: JSON-encoded array of ReferredReferenceRow objects from the database
@@ -183,43 +245,17 @@ type ValueListRow struct {
 // Returns:
 //   - error: An error if JSON unmarshalling fails or if a parent reference is not found in the map.
 //     Nil references or keys are logged as warnings but do not cause the function to fail.
-//
-// The function performs the following validations:
-//   - Skips entries with nil RootReference, ReferenceId, ParentReference, or ReferenceType
-//   - Verifies parent references exist in the builder map
-//   - Ensures key data (KeyID, KeyType, KeyValue) is complete
 func ParseReferredReferences(row json.RawMessage, referenceBuilderRefs map[int64]*ReferenceBuilder) error {
-	if len(row) > 0 {
-		var semanticIdData []ReferredReferenceRow
-		if err := json.Unmarshal(row, &semanticIdData); err != nil {
-			return fmt.Errorf("error unmarshalling referred semantic ID data: %w", err)
-		}
-		for _, ref := range semanticIdData {
-			if ref.RootReference == nil {
-				fmt.Println("[WARNING - ParseReferredReferences] RootReference was nil - skipping Reference Creation.")
-				continue
-			}
-			builder, semanticIdCreated := referenceBuilderRefs[*ref.RootReference]
-			if !semanticIdCreated {
-				return fmt.Errorf("parent reference with id %d not found for referred reference with id %d", ref.ParentReference, ref.ReferenceId)
-			}
-			if ref.ReferenceId == nil || ref.ParentReference == nil {
-				fmt.Println("[WARNING - ParseReferredReferences] ReferenceId or ParentReference was nil - skipping Reference Creation.")
-				continue
-			}
-			if ref.ReferenceType == nil {
-				fmt.Println("[WARNING - ParseReferredReferences] ReferenceType was nil - skipping Reference Creation for Reference with Reference ID", *ref.ReferenceId)
-				continue
-			}
-			if ref.KeyID == nil || ref.KeyType == nil || ref.KeyValue == nil {
-				fmt.Println("[WARNING - ParseReferredReferences] KeyID, KeyType or KeyValue was nil - skipping Reference Creation for Reference with Reference ID", *ref.ReferenceId)
-				continue
-			}
-			builder.CreateReferredSemanticId(*ref.ReferenceId, *ref.ParentReference, *ref.ReferenceType)
-			builder.CreateReferredSemanticIdKey(*ref.ReferenceId, *ref.KeyID, *ref.KeyType, *ref.KeyValue)
-		}
+	if len(row) == 0 {
+		return nil
 	}
-	return nil
+
+	var semanticIdData []ReferredReferenceRow
+	if err := json.Unmarshal(row, &semanticIdData); err != nil {
+		return fmt.Errorf("error unmarshalling referred semantic ID data: %w", err)
+	}
+
+	return ParseReferredReferencesFromRows(semanticIdData, referenceBuilderRefs)
 }
 
 // ParseReferencesFromRows parses reference data from already unmarshalled ReferenceRow objects.
@@ -469,5 +505,13 @@ func ParseLangStringDefinitionTypeIec61360(descriptions json.RawMessage) ([]gen.
 		}
 	}
 
+	return texts, nil
+}
+
+func ParseQualifiersRow(row json.RawMessage) ([]QualifierRow, error) {
+	var texts []QualifierRow
+	if err := json.Unmarshal(row, &texts); err != nil {
+		return nil, fmt.Errorf("error unmarshalling qualifier data: %w", err)
+	}
 	return texts, nil
 }
