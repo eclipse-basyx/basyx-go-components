@@ -552,3 +552,14 @@ func ParseExtensionRows(row json.RawMessage) ([]ExtensionRow, error) {
 	}
 	return texts, nil
 }
+
+func ParseAdministrationRow(row json.RawMessage) (*AdministrationRow, error) {
+	var texts []AdministrationRow
+	if err := json.Unmarshal(row, &texts); err != nil {
+		return nil, fmt.Errorf("error unmarshalling AdministrationRow data: %w", err)
+	}
+	if len(texts) == 0 {
+		return nil, fmt.Errorf("no AdministrationRow found")
+	}
+	return &texts[0], nil
+}

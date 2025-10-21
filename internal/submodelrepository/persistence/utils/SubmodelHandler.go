@@ -202,6 +202,26 @@ func getSubmodels(db *sql.DB, submodelIdFilter string) ([]*gen.Submodel, error) 
 			submodel.Extension = builder.Build()
 		}
 
+		// Administration
+		if isArrayNotEmpty(row.Administration) {
+			adminRow, err := builders.ParseAdministrationRow(row.Administration)
+			if err != nil {
+				fmt.Println(err)
+				return nil, err
+			}
+			if adminRow != nil {
+
+				admin, err := builders.BuildAdministration(*adminRow)
+				if err != nil {
+					fmt.Println(err)
+					return nil, err
+				}
+				submodel.Administration = admin
+			} else {
+				fmt.Println("Administration row is nil")
+			}
+		}
+
 		result = append(result, submodel)
 	}
 
