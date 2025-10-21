@@ -170,7 +170,7 @@ func getSubmodels(db *sql.DB, submodelIdFilter string) ([]*gen.Submodel, error) 
 
 				builder.AddValueId(qualifierRow.DbId, qualifierRow.ValueId, qualifierRow.ValueIdReferredReferences)
 
-				builder.AddSupplementalSemanticIds(qualifierRow.DbId, qualifierRow.SupplementalSemanticIds, qualifierRow.SemanticIdReferredReferences)
+				builder.AddSupplementalSemanticIds(qualifierRow.DbId, qualifierRow.SupplementalSemanticIds, qualifierRow.SupplementalSemanticIdsReferredReferences)
 			}
 			submodel.Qualifier = builder.Build()
 		}
