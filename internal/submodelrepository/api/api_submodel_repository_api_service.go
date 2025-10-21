@@ -79,6 +79,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelById(
 
 	sm, err := s.submodelBackend.GetSubmodel(string(decodedSubmodelIdentifier))
 
+	sm, err := s.submodelBackend.GetSubmodel(string(decodedSubmodelIdentifier))
 	if err != nil {
 
 		if errors.Is(err, sql.ErrNoRows) {
