@@ -11,6 +11,7 @@ package model
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 )
 
@@ -71,6 +72,12 @@ func (eds *EmbeddedDataSpecification) UnmarshalJSON(data []byte) error {
 
 // AssertEmbeddedDataSpecificationRequired checks if the required fields are not zero-ed
 func AssertEmbeddedDataSpecificationRequired(obj EmbeddedDataSpecification) error {
+	if obj.DataSpecificationContent == nil {
+		return errors.New("400 Bad Request: Field 'dataSpecificationContent' is required")
+	}
+	if obj.DataSpecification == nil {
+		return errors.New("400 Bad Request: Field 'dataSpecification' is required")
+	}
 	elements := map[string]interface{}{
 		"dataSpecificationContent": obj.DataSpecificationContent,
 		"dataSpecification":        obj.DataSpecification,

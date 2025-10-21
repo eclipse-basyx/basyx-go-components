@@ -88,21 +88,24 @@ func NewQualifiersBuilder() *QualifiersBuilder {
 func (b *QualifiersBuilder) AddQualifier(qualifierDbId int64, kind string, qType string, valueType string, value string) (*QualifiersBuilder, error) {
 	_, exists := b.qualifiers[qualifierDbId]
 	if !exists {
-		Kind, err := gen.NewQualifierKindFromValue(kind)
-		if err != nil {
-			fmt.Println(err)
-			return nil, fmt.Errorf("error parsing Qualifier Kind to Go Struct for Qualifier '%d'. See console for details", qualifierDbId)
-		}
 		ValueType, err := gen.NewDataTypeDefXsdFromValue(valueType)
 		if err != nil {
 			fmt.Println(err)
 			return nil, fmt.Errorf("error parsing ValueType for Qualifier '%d' to Go Struct. See console for details", qualifierDbId)
 		}
 		b.qualifiers[qualifierDbId] = &gen.Qualifier{
-			Kind:      Kind,
 			Type:      qType,
 			ValueType: ValueType,
 			Value:     value,
+		}
+
+		if kind != "" {
+			Kind, err := gen.NewQualifierKindFromValue(kind)
+			if err != nil {
+				fmt.Println(err)
+				return nil, fmt.Errorf("error parsing Qualifier Kind to Go Struct for Qualifier '%d'. See console for details", qualifierDbId)
+			}
+			b.qualifiers[qualifierDbId].Kind = Kind
 		}
 	} else {
 		fmt.Printf("[Warning] qualifier with id '%d' already exists - skipping.", qualifierDbId)

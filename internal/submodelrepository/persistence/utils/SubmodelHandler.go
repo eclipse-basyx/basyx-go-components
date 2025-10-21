@@ -96,7 +96,7 @@ func getSubmodels(db *sql.DB, submodelIdFilter string) ([]*gen.Submodel, error) 
 			&row.SemanticId, &row.ReferredSemanticIds,
 			&row.SupplementalSemanticIds, &row.SupplementalReferredSemIds,
 			&row.DataSpecReference, &row.DataSpecReferenceReferred,
-			&row.DataSpecIEC61360, &row.Qualifiers, &row.TotalSubmodels,
+			&row.DataSpecIEC61360, &row.Qualifiers, &row.Extensions, &row.TotalSubmodels,
 		); err != nil {
 			return nil, fmt.Errorf("error scanning row: %w", err)
 		}
@@ -151,8 +151,16 @@ func getSubmodels(db *sql.DB, submodelIdFilter string) ([]*gen.Submodel, error) 
 		// Embedded Data Specifications
 		if isArrayNotEmpty(row.DataSpecReference) {
 			builder := builders.NewEmbeddedDataSpecificationsBuilder()
-			builder.BuildReferences(row.DataSpecReference, row.DataSpecReferenceReferred)
-			builder.BuildContentsIec61360(row.DataSpecIEC61360)
+			err := builder.BuildReferences(row.DataSpecReference, row.DataSpecReferenceReferred)
+			if err != nil {
+				fmt.Println(err)
+				return nil, err
+			}
+			err = builder.BuildContentsIec61360(row.DataSpecIEC61360)
+			if err != nil {
+				fmt.Println(err)
+				return nil, err
+			}
 			submodel.EmbeddedDataSpecifications = builder.Build()
 		}
 
@@ -173,6 +181,25 @@ func getSubmodels(db *sql.DB, submodelIdFilter string) ([]*gen.Submodel, error) 
 				builder.AddSupplementalSemanticIds(qualifierRow.DbId, qualifierRow.SupplementalSemanticIds, qualifierRow.SupplementalSemanticIdsReferredReferences)
 			}
 			submodel.Qualifier = builder.Build()
+		}
+
+		// Extensions
+		if isArrayNotEmpty(row.Extensions) {
+			builder := builders.NewExtensionsBuilder()
+			extensionRows, err := builders.ParseExtensionRows(row.Extensions)
+			if err != nil {
+				return nil, err
+			}
+			for _, extensionRow := range extensionRows {
+				builder.AddExtension(extensionRow.DbId, extensionRow.Name, extensionRow.ValueType, extensionRow.Value)
+
+				builder.AddSemanticId(extensionRow.DbId, extensionRow.SemanticId, extensionRow.SemanticIdReferredReferences)
+
+				builder.AddRefersTo(extensionRow.DbId, extensionRow.RefersTo, extensionRow.RefersToReferredReferences)
+
+				builder.AddSupplementalSemanticIds(extensionRow.DbId, extensionRow.SupplementalSemanticIds, extensionRow.SupplementalSemanticIdsReferredReferences)
+			}
+			submodel.Extension = builder.Build()
 		}
 
 		result = append(result, submodel)

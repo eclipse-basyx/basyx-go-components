@@ -507,7 +507,7 @@ CREATE TABLE IF NOT EXISTS capability_element (
 -- Qualifier (on any SME)
 CREATE TABLE IF NOT EXISTS qualifier (
   id                BIGSERIAL PRIMARY KEY,
-  kind              qualifier_kind NOT NULL,
+  kind              qualifier_kind,
   type              TEXT NOT NULL,
   value_type        data_type_def_xsd NOT NULL,
   value_text        TEXT,

@@ -14,7 +14,7 @@ import (
 )
 
 type Submodel struct {
-	Extensions []Extension `json:"extensions,omitempty"`
+	Extension []Extension `json:"extension,omitempty"`
 
 	Category string `json:"category,omitempty" validate:"regexp=^([\\\\x09\\\\x0a\\\\x0d\\\\x20-\\\\ud7ff\\\\ue000-\\\\ufffd]|\\\\ud800[\\\\udc00-\\\\udfff]|[\\\\ud801-\\\\udbfe][\\\\udc00-\\\\udfff]|\\\\udbff[\\\\udc00-\\\\udfff])*$"`
 
@@ -89,7 +89,7 @@ func AssertSubmodelRequired(obj Submodel) error {
 		}
 	}
 
-	for _, el := range obj.Extensions {
+	for _, el := range obj.Extension {
 		if err := AssertExtensionRequired(el); err != nil {
 			return err
 		}
@@ -143,7 +143,7 @@ func AssertSubmodelRequired(obj Submodel) error {
 
 // AssertSubmodelConstraints checks if the values respects the defined constraints
 func AssertSubmodelConstraints(obj Submodel) error {
-	for _, el := range obj.Extensions {
+	for _, el := range obj.Extension {
 		if err := AssertExtensionConstraints(el); err != nil {
 			return err
 		}
