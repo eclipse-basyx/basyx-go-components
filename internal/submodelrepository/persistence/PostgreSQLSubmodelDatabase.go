@@ -265,6 +265,20 @@ func (p *PostgreSQLSubmodelDatabase) CreateSubmodel(sm gen.Submodel) error {
 		}
 	}
 
+	if len(sm.Qualifier) > 0 {
+		for _, qualifier := range sm.Qualifier {
+			qualifierId, err := persistence_utils.CreateQualifier(tx, qualifier)
+			if err != nil {
+				return err
+			}
+			_, err = tx.Exec(`INSERT INTO submodel_qualifier(submodel_id, qualifier_id) VALUES($1, $2)`, sm.Id, qualifierId)
+			if err != nil {
+				fmt.Println(err)
+				return common.NewInternalServerError("Failed to Create Qualifier for Submodel with ID '" + sm.Id + "'. See console for details.")
+			}
+		}
+	}
+
 	if err := tx.Commit(); err != nil {
 		fmt.Println(err)
 		return failedPostgresTransactionSubmodelRepo

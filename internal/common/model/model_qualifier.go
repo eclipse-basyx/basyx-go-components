@@ -37,32 +37,40 @@ func AssertQualifierRequired(obj Qualifier) error {
 		}
 	}
 
-	if err := AssertReferenceRequired(*obj.SemanticId); err != nil {
-		return err
+	if obj.SemanticId != nil {
+		if err := AssertReferenceRequired(*obj.SemanticId); err != nil {
+			return err
+		}
 	}
 	for _, el := range obj.SupplementalSemanticIds {
 		if err := AssertReferenceRequired(el); err != nil {
 			return err
 		}
 	}
-	if err := AssertReferenceRequired(*obj.ValueId); err != nil {
-		return err
+	if obj.ValueId != nil {
+		if err := AssertReferenceRequired(*obj.ValueId); err != nil {
+			return err
+		}
 	}
 	return nil
 }
 
 // AssertQualifierConstraints checks if the values respects the defined constraints
 func AssertQualifierConstraints(obj Qualifier) error {
-	if err := AssertReferenceConstraints(*obj.SemanticId); err != nil {
-		return err
+	if obj.SemanticId != nil {
+		if err := AssertReferenceConstraints(*obj.SemanticId); err != nil {
+			return err
+		}
 	}
 	for _, el := range obj.SupplementalSemanticIds {
 		if err := AssertReferenceConstraints(el); err != nil {
 			return err
 		}
 	}
-	if err := AssertReferenceConstraints(*obj.ValueId); err != nil {
-		return err
+	if obj.ValueId != nil {
+		if err := AssertReferenceConstraints(*obj.ValueId); err != nil {
+			return err
+		}
 	}
 	return nil
 }

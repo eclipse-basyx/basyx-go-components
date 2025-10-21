@@ -1,3 +1,28 @@
+/*******************************************************************************
+* Copyright (C) 2025 the Eclipse BaSyx Authors and Fraunhofer IESE
+*
+* Permission is hereby granted, free of charge, to any person obtaining
+* a copy of this software and associated documentation files (the
+* "Software"), to deal in the Software without restriction, including
+* without limitation the rights to use, copy, modify, merge, publish,
+* distribute, sublicense, and/or sell copies of the Software, and to
+* permit persons to whom the Software is furnished to do so, subject to
+* the following conditions:
+*
+* The above copyright notice and this permission notice shall be
+* included in all copies or substantial portions of the Software.
+*
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+* NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+* LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+* OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+* WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*
+* SPDX-License-Identifier: MIT
+******************************************************************************/
+
 package persistence_utils
 
 import (
@@ -10,6 +35,83 @@ import (
 	qb "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/querybuilder"
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 )
+
+func CreateQualifier(tx *sql.Tx, qualifier gen.Qualifier) (sql.NullInt64, error) {
+	var qualifierDbId sql.NullInt64
+	var valueIdRefDbId sql.NullInt64
+	var semanticIdRefDbId sql.NullInt64
+
+	if qualifier.ValueId != nil {
+		id, err := CreateReference(tx, qualifier.ValueId, sql.NullInt64{}, sql.NullInt64{})
+		if err != nil {
+			fmt.Println(err)
+			return sql.NullInt64{}, common.NewInternalServerError("Error inserting ValueID Reference for Qualifier.")
+		}
+		valueIdRefDbId = id
+	}
+
+	if qualifier.SemanticId != nil {
+		id, err := CreateReference(tx, qualifier.SemanticId, sql.NullInt64{}, sql.NullInt64{})
+		if err != nil {
+			fmt.Println(err)
+			return sql.NullInt64{}, common.NewInternalServerError("Error inserting SemanticId Reference for Qualifier.")
+		}
+		semanticIdRefDbId = id
+	}
+
+	var valueText, valueNum, valueBool, valueTime, valueDatetime sql.NullString
+
+	switch qualifier.ValueType {
+	case "xs:string", "xs:anyURI", "xs:base64Binary", "xs:hexBinary":
+		valueText = sql.NullString{String: qualifier.Value, Valid: qualifier.Value != ""}
+	case "xs:int", "xs:integer", "xs:long", "xs:short", "xs:byte",
+		"xs:unsignedInt", "xs:unsignedLong", "xs:unsignedShort", "xs:unsignedByte",
+		"xs:positiveInteger", "xs:negativeInteger", "xs:nonNegativeInteger", "xs:nonPositiveInteger",
+		"xs:decimal", "xs:double", "xs:float":
+		valueNum = sql.NullString{String: qualifier.Value, Valid: qualifier.Value != ""}
+	case "xs:boolean":
+		valueBool = sql.NullString{String: qualifier.Value, Valid: qualifier.Value != ""}
+	case "xs:time":
+		valueTime = sql.NullString{String: qualifier.Value, Valid: qualifier.Value != ""}
+	case "xs:date", "xs:dateTime", "xs:duration", "xs:gDay", "xs:gMonth",
+		"xs:gMonthDay", "xs:gYear", "xs:gYearMonth":
+		valueDatetime = sql.NullString{String: qualifier.Value, Valid: qualifier.Value != ""}
+	default:
+		// Fallback to text for unknown types
+		valueText = sql.NullString{String: qualifier.Value, Valid: qualifier.Value != ""}
+	}
+
+	err := tx.QueryRow(`
+	INSERT INTO
+	qualifier (kind, type, value_type, value_text, value_num, value_bool, value_time, value_datetime, value_id, semantic_id)
+	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+	RETURNING id`, qualifier.Kind, qualifier.Type, qualifier.ValueType, valueText, valueNum, valueBool, valueTime, valueDatetime, valueIdRefDbId, semanticIdRefDbId).Scan(&qualifierDbId)
+
+	if err != nil {
+		fmt.Println(err)
+		return sql.NullInt64{}, common.NewInternalServerError("Error inserting Qualifier. See console for details.")
+	}
+
+	for _, supplemental := range qualifier.SupplementalSemanticIds {
+		id, err := CreateReference(tx, &supplemental, sql.NullInt64{}, sql.NullInt64{})
+		if err != nil {
+			fmt.Println(err)
+			return sql.NullInt64{}, common.NewInternalServerError("Error inserting Supplemental Semantic IDs for Qualifier. See console for details.")
+		}
+		_, err = tx.Exec(`
+		INSERT INTO
+		qualifier_supplemental_semantic_id(qualifier_id, reference_id)
+		VALUES($1, $2)
+		`, qualifierDbId, id)
+
+		if err != nil {
+			fmt.Println(err)
+			return sql.NullInt64{}, common.NewInternalServerError("Error linking Supplemental Semantic IDs with Qualifier. See console for details.")
+		}
+	}
+
+	return qualifierDbId, nil
+}
 
 func CreateEmbeddedDataSpecification(tx *sql.Tx, embeddedDataSpecification gen.EmbeddedDataSpecification) (sql.NullInt64, error) {
 	var embeddedDataSpecificationContentDbId sql.NullInt64
