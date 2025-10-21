@@ -244,7 +244,7 @@ CREATE TABLE IF NOT EXISTS data_specification_iec61360 (
 CREATE TABLE IF NOT EXISTS administrative_information_embedded_data_specification (
   id                BIGSERIAL PRIMARY KEY,
   administrative_information_id BIGINT REFERENCES administrative_information(id) ON DELETE CASCADE,
-  data_specification_id BIGSERIAL REFERENCES data_specification(id) ON DELETE CASCADE
+  embedded_data_specification_id BIGSERIAL REFERENCES data_specification(id) ON DELETE CASCADE
 );
 
 CREATE INDEX IF NOT EXISTS ix_eds_id ON administrative_information_embedded_data_specification(id);

@@ -78,6 +78,8 @@ type SubmodelRow struct {
 	Qualifiers json.RawMessage
 	// Extensions contains extension as JSON data
 	Extensions json.RawMessage
+	// Administration contains administrative information as JSON data
+	Administration json.RawMessage
 	// TotalSubmodels is the total count of submodels in the result set
 	TotalSubmodels int64
 }
@@ -198,6 +200,18 @@ type ExtensionRow struct {
 	SupplementalSemanticIdsReferredReferences json.RawMessage `json:"supplementalSemanticIdReferredReferenceRows"`
 	RefersTo                                  json.RawMessage `json:"refersToReferenceRows"`
 	RefersToReferredReferences                json.RawMessage `json:"refersToReferredReferencesRows"`
+}
+
+type AdministrationRow struct {
+	DbId                          int64           `json:"dbId"`
+	Version                       string          `json:"version"`
+	Revision                      string          `json:"revision"`
+	TemplateId                    string          `json:"templateId"`
+	Creator                       json.RawMessage `json:"creator"`
+	CreatorReferred               json.RawMessage `json:"creatorReferred"`
+	EdsDataSpecifications         json.RawMessage `json:"edsDataSpecifications"`
+	EdsDataSpecificationsReferred json.RawMessage `json:"edsDataSpecificationsReferred"`
+	EdsDataSpecificationIEC61360  json.RawMessage `json:"edsDataSpecificationIEC61360"` //iecRows
 }
 
 // ParseReferredReferencesFromRows parses referred reference data from already unmarshalled ReferredReferenceRow objects.

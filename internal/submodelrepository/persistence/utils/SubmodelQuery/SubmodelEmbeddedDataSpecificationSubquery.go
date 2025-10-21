@@ -28,12 +28,12 @@ package submodel_query
 
 import "github.com/doug-martin/goqu/v9"
 
-func GetEmbeddedDataSpecificationSubqueries(dialect goqu.DialectWrapper) (*goqu.SelectDataset, *goqu.SelectDataset, *goqu.SelectDataset) {
-	embeddedDataSpecificationReferenceSubquery := dialect.From(goqu.T("submodel_embedded_data_specification").As("seds")).
-		Select(goqu.L("jsonb_agg(DISTINCT jsonb_build_object('eds_id', seds.embedded_data_specification_id, 'reference_id', data_spec_reference.id, 'reference_type', data_spec_reference.type, 'key_id', data_spec_reference_key.id, 'key_type', data_spec_reference_key.type, 'key_value', data_spec_reference_key.value))")).
+func GetEmbeddedDataSpecificationSubqueries(dialect goqu.DialectWrapper, joinTable string, joinTableIdField string, compareField string) (*goqu.SelectDataset, *goqu.SelectDataset, *goqu.SelectDataset) {
+	embeddedDataSpecificationReferenceSubquery := dialect.From(goqu.T(joinTable).As("jt")).
+		Select(goqu.L("jsonb_agg(DISTINCT jsonb_build_object('eds_id', jt.embedded_data_specification_id, 'reference_id', data_spec_reference.id, 'reference_type', data_spec_reference.type, 'key_id', data_spec_reference_key.id, 'key_type', data_spec_reference_key.type, 'key_value', data_spec_reference_key.value))")).
 		LeftJoin(
 			goqu.T("data_specification").As("data_spec"),
-			goqu.On(goqu.I("data_spec.id").Eq(goqu.I("seds.embedded_data_specification_id"))),
+			goqu.On(goqu.I("data_spec.id").Eq(goqu.I("jt.embedded_data_specification_id"))),
 		).
 		LeftJoin(
 			goqu.T("reference").As("data_spec_reference"),
@@ -43,14 +43,14 @@ func GetEmbeddedDataSpecificationSubqueries(dialect goqu.DialectWrapper) (*goqu.
 			goqu.T("reference_key").As("data_spec_reference_key"),
 			goqu.On(goqu.I("data_spec_reference.id").Eq(goqu.I("data_spec_reference_key.reference_id"))),
 		).
-		Where(goqu.I("seds.submodel_id").Eq(goqu.I("s.id")))
+		Where(goqu.I("jt." + joinTableIdField).Eq(goqu.I(compareField)))
 
 	// Build semantic_id referred references subquery
-	embeddedDataSpecificationReferenceReferredSubquery := dialect.From(goqu.T("submodel_embedded_data_specification").As("seds")).
+	embeddedDataSpecificationReferenceReferredSubquery := dialect.From(goqu.T(joinTable).As("jt")).
 		Select(goqu.L("jsonb_agg(DISTINCT jsonb_build_object('reference_id', ref.id, 'reference_type', ref.type, 'parentReference', ref.parentreference, 'rootReference', ref.rootreference, 'key_id', rk.id, 'key_type', rk.type, 'key_value', rk.value))")).
 		LeftJoin(
 			goqu.T("data_specification").As("data_spec"),
-			goqu.On(goqu.I("data_spec.id").Eq(goqu.I("seds.embedded_data_specification_id"))),
+			goqu.On(goqu.I("data_spec.id").Eq(goqu.I("jt.embedded_data_specification_id"))),
 		).
 		LeftJoin(
 			goqu.T("reference").As("data_spec_reference"),
@@ -69,7 +69,7 @@ func GetEmbeddedDataSpecificationSubqueries(dialect goqu.DialectWrapper) (*goqu.
 			goqu.On(goqu.I("dsr.id").Eq(goqu.I("data_spec_reference.id"))),
 		).
 		Where(
-			goqu.I("seds.submodel_id").Eq(goqu.I("s.id")),
+			goqu.I("jt."+joinTableIdField).Eq(goqu.I(compareField)),
 			goqu.I("ref.id").IsNotNull(),
 		)
 
@@ -151,12 +151,12 @@ func GetEmbeddedDataSpecificationSubqueries(dialect goqu.DialectWrapper) (*goqu.
 		Select(goqu.L("jsonb_build_object('min',leveltype.min, 'max', leveltype.max, 'nom', leveltype.nom,'typ', leveltype.typ)")).
 		Where(goqu.I("leveltype.id").Eq(goqu.I("iec.level_type_id")))
 
-	iec61360Subquery := dialect.From(goqu.T("submodel_embedded_data_specification").As("seds")).
+	iec61360Subquery := dialect.From(goqu.T(joinTable).As("jt")).
 		Select(
 			goqu.L(
 				`jsonb_agg(
 					DISTINCT jsonb_build_object(
-						'eds_id', seds.embedded_data_specification_id,
+						'eds_id', jt.embedded_data_specification_id,
 						'iec_id', iec.id,
 						'unit', iec.unit,
 						'source_of_definition', iec.source_of_definition, 
@@ -177,7 +177,7 @@ func GetEmbeddedDataSpecificationSubqueries(dialect goqu.DialectWrapper) (*goqu.
 				preferredNameSubquery, shortNameSubquery, definitionSubquery, unitReferenceKeysSubquery, unitReferenceReferredSubquery, valueListEntriesSubquery, levelTypeSubquery)).
 		Join(
 			goqu.T("data_specification").As("ds"),
-			goqu.On(goqu.I("ds.id").Eq(goqu.I("seds.embedded_data_specification_id"))),
+			goqu.On(goqu.I("ds.id").Eq(goqu.I("jt.embedded_data_specification_id"))),
 		).
 		Join(
 			goqu.T("data_specification_content").As("dsc"),
@@ -187,6 +187,6 @@ func GetEmbeddedDataSpecificationSubqueries(dialect goqu.DialectWrapper) (*goqu.
 			goqu.T("data_specification_iec61360").As("iec"),
 			goqu.On(goqu.I("iec.id").Eq(goqu.I("dsc.id"))),
 		).
-		Where(goqu.I("seds.submodel_id").Eq(goqu.I("s.id")))
+		Where(goqu.I("jt." + joinTableIdField).Eq(goqu.I(compareField)))
 	return embeddedDataSpecificationReferenceSubquery, embeddedDataSpecificationReferenceReferredSubquery, iec61360Subquery
 }
