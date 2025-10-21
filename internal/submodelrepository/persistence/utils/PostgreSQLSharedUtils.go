@@ -36,6 +36,98 @@ import (
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 )
 
+func CreateExtension(tx *sql.Tx, extension gen.Extension) (sql.NullInt64, error) {
+	var extensionDbId sql.NullInt64
+	var semanticIdRefDbId sql.NullInt64
+
+	if extension.SemanticId != nil {
+		id, err := CreateReference(tx, extension.SemanticId, sql.NullInt64{}, sql.NullInt64{})
+		if err != nil {
+			fmt.Println(err)
+			return sql.NullInt64{}, common.NewInternalServerError("Error inserting SemanticId Reference for Extension.")
+		}
+		semanticIdRefDbId = id
+	}
+
+	var valueText, valueNum, valueBool, valueTime, valueDatetime sql.NullString
+
+	switch extension.ValueType {
+	case "xs:string", "xs:anyURI", "xs:base64Binary", "xs:hexBinary":
+		valueText = sql.NullString{String: extension.Value, Valid: extension.Value != ""}
+	case "xs:int", "xs:integer", "xs:long", "xs:short", "xs:byte",
+		"xs:unsignedInt", "xs:unsignedLong", "xs:unsignedShort", "xs:unsignedByte",
+		"xs:positiveInteger", "xs:negativeInteger", "xs:nonNegativeInteger", "xs:nonPositiveInteger",
+		"xs:decimal", "xs:double", "xs:float":
+		valueNum = sql.NullString{String: extension.Value, Valid: extension.Value != ""}
+	case "xs:boolean":
+		valueBool = sql.NullString{String: extension.Value, Valid: extension.Value != ""}
+	case "xs:time":
+		valueTime = sql.NullString{String: extension.Value, Valid: extension.Value != ""}
+	case "xs:date", "xs:dateTime", "xs:duration", "xs:gDay", "xs:gMonth",
+		"xs:gMonthDay", "xs:gYear", "xs:gYearMonth":
+		valueDatetime = sql.NullString{String: extension.Value, Valid: extension.Value != ""}
+	default:
+		// Fallback to text for unknown types
+		valueText = sql.NullString{String: extension.Value, Valid: extension.Value != ""}
+	}
+
+	var valueType any
+	if extension.ValueType != "" && !reflect.ValueOf(extension.ValueType).IsZero() {
+		valueType = extension.ValueType
+	} else {
+		valueType = sql.NullString{String: "", Valid: false}
+	}
+
+	err := tx.QueryRow(`
+	INSERT INTO
+	extension (name, value_type, value_text, value_num, value_bool, value_time, value_datetime, semantic_id)
+	VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+	RETURNING id`, extension.Name, valueType, valueText, valueNum, valueBool, valueTime, valueDatetime, semanticIdRefDbId).Scan(&extensionDbId)
+
+	if err != nil {
+		fmt.Println(err)
+		return sql.NullInt64{}, common.NewInternalServerError("Error inserting Extension. See console for details.")
+	}
+
+	for _, supplemental := range extension.SupplementalSemanticIds {
+		id, err := CreateReference(tx, &supplemental, sql.NullInt64{}, sql.NullInt64{})
+		if err != nil {
+			fmt.Println(err)
+			return sql.NullInt64{}, common.NewInternalServerError("Error inserting Supplemental Semantic IDs for Extension. See console for details.")
+		}
+		_, err = tx.Exec(`
+		INSERT INTO
+		extension_supplemental_semantic_id(extension_id, reference_id)
+		VALUES($1, $2)
+		`, extensionDbId, id)
+
+		if err != nil {
+			fmt.Println(err)
+			return sql.NullInt64{}, common.NewInternalServerError("Error linking Supplemental Semantic IDs with Extension. See console for details.")
+		}
+	}
+
+	for _, referred := range extension.RefersTo {
+		id, err := CreateReference(tx, &referred, sql.NullInt64{}, sql.NullInt64{})
+		if err != nil {
+			fmt.Println(err)
+			return sql.NullInt64{}, common.NewInternalServerError("Error inserting RefersTo for Extension. See console for details.")
+		}
+		_, err = tx.Exec(`
+		INSERT INTO
+		extension_refers_to(extension_id, reference_id)
+		VALUES($1, $2)
+		`, extensionDbId, id)
+
+		if err != nil {
+			fmt.Println(err)
+			return sql.NullInt64{}, common.NewInternalServerError("Error linking RefersTo Reference with Extension. See console for details.")
+		}
+	}
+
+	return extensionDbId, nil
+}
+
 func CreateQualifier(tx *sql.Tx, qualifier gen.Qualifier) (sql.NullInt64, error) {
 	var qualifierDbId sql.NullInt64
 	var valueIdRefDbId sql.NullInt64
@@ -81,11 +173,18 @@ func CreateQualifier(tx *sql.Tx, qualifier gen.Qualifier) (sql.NullInt64, error)
 		valueText = sql.NullString{String: qualifier.Value, Valid: qualifier.Value != ""}
 	}
 
+	var kind any
+	if qualifier.Kind != "" && !reflect.ValueOf(qualifier.Kind).IsZero() {
+		kind = qualifier.Kind
+	} else {
+		kind = sql.NullString{String: "", Valid: false}
+	}
+
 	err := tx.QueryRow(`
 	INSERT INTO
 	qualifier (kind, type, value_type, value_text, value_num, value_bool, value_time, value_datetime, value_id, semantic_id)
 	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-	RETURNING id`, qualifier.Kind, qualifier.Type, qualifier.ValueType, valueText, valueNum, valueBool, valueTime, valueDatetime, valueIdRefDbId, semanticIdRefDbId).Scan(&qualifierDbId)
+	RETURNING id`, kind, qualifier.Type, qualifier.ValueType, valueText, valueNum, valueBool, valueTime, valueDatetime, valueIdRefDbId, semanticIdRefDbId).Scan(&qualifierDbId)
 
 	if err != nil {
 		fmt.Println(err)
@@ -147,46 +246,57 @@ func insertDataSpecificationIec61360(tx *sql.Tx, ds *gen.DataSpecificationIec613
 	var shortNameConverted []gen.LangStringText
 	var definitionConverted []gen.LangStringText
 
-	// Convert PreferredName to []LangStringText
+	// Convert PreferredName to []LangStringText (required field)
 	for _, pn := range ds.PreferredName {
 		preferredNameConverted = append(preferredNameConverted, pn)
 	}
-	// Convert ShortName to []LangStringText
+	// Convert ShortName to []LangStringText (optional)
 	for _, sn := range ds.ShortName {
 		shortNameConverted = append(shortNameConverted, sn)
 	}
 
-	// Convert Definition to []LangStringText
+	// Convert Definition to []LangStringText (optional)
 	for _, def := range ds.Definition {
 		definitionConverted = append(definitionConverted, def)
 	}
 
-	// Insert PreferredName
+	// Insert PreferredName (required)
 	preferredNameID, err := CreateLangStringTextTypes(tx, preferredNameConverted)
 	if err != nil {
 		return err
 	}
-	// Insert ShortName
-	shortNameID, err := CreateLangStringTextTypes(tx, shortNameConverted)
-	if err != nil {
-		return err
+
+	// Insert ShortName (optional)
+	var shortNameID sql.NullInt64
+	if len(shortNameConverted) > 0 {
+		shortNameID, err = CreateLangStringTextTypes(tx, shortNameConverted)
+		if err != nil {
+			return err
+		}
 	}
-	// Insert UnitId
+
+	// Insert UnitId (optional)
 	unitIdID, err := CreateReference(tx, ds.UnitId, sql.NullInt64{}, sql.NullInt64{})
 	if err != nil {
 		return err
 	}
-	// Insert Definition
-	definitionID, err := CreateLangStringTextTypes(tx, definitionConverted)
-	if err != nil {
-		return err
+
+	// Insert Definition (optional)
+	var definitionID sql.NullInt64
+	if len(definitionConverted) > 0 {
+		definitionID, err = CreateLangStringTextTypes(tx, definitionConverted)
+		if err != nil {
+			return err
+		}
 	}
 
+	// Insert ValueList (optional)
 	valueList, err := insertValueList(tx, ds.ValueList)
 	if err != nil {
 		return err
 	}
 
+	// Insert LevelType (optional)
 	levelTypeId, err := insertLevelType(tx, ds.LevelType)
 	if err != nil {
 		return err
@@ -194,9 +304,24 @@ func insertDataSpecificationIec61360(tx *sql.Tx, ds *gen.DataSpecificationIec613
 
 	var iec61360contentDbId sql.NullInt64
 
+	// Prepare optional string fields
+	unit := sql.NullString{String: ds.Unit, Valid: ds.Unit != ""}
+	sourceOfDefinition := sql.NullString{String: ds.SourceOfDefinition, Valid: ds.SourceOfDefinition != ""}
+	symbol := sql.NullString{String: ds.Symbol, Valid: ds.Symbol != ""}
+	valueFormat := sql.NullString{String: ds.ValueFormat, Valid: ds.ValueFormat != ""}
+	value := sql.NullString{String: ds.Value, Valid: ds.Value != ""}
+
+	// Handle DataType (optional)
+	var dataType interface{}
+	if ds.DataType != "" && !reflect.ValueOf(ds.DataType).IsZero() {
+		dataType = ds.DataType
+	} else {
+		dataType = sql.NullString{String: "", Valid: false}
+	}
+
 	// INSERT
 	err = tx.QueryRow("INSERT INTO data_specification_iec61360(id, preferred_name_id, short_name_id, unit, unit_id, source_of_definition, symbol, data_type, definition_id, value_format, value_list_id, level_type_id, value) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING id",
-		embeddedDataSpecificationContentDbId, preferredNameID, shortNameID, ds.Unit, unitIdID, ds.SourceOfDefinition, ds.Symbol, ds.DataType, definitionID, ds.ValueFormat, valueList, levelTypeId, ds.Value).Scan(&iec61360contentDbId)
+		embeddedDataSpecificationContentDbId, preferredNameID, shortNameID, unit, unitIdID, sourceOfDefinition, symbol, dataType, definitionID, valueFormat, valueList, levelTypeId, value).Scan(&iec61360contentDbId)
 	if err != nil {
 		return err
 	}

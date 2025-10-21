@@ -76,6 +76,8 @@ type SubmodelRow struct {
 	IECLevelTypes json.RawMessage
 	// Qualifiers contains qualifier information as JSON data
 	Qualifiers json.RawMessage
+	// Extensions contains extension as JSON data
+	Extensions json.RawMessage
 	// TotalSubmodels is the total count of submodels in the result set
 	TotalSubmodels int64
 }
@@ -183,6 +185,19 @@ type QualifierRow struct {
 	ValueIdReferredReferences                 json.RawMessage `json:"valueIdReferredReferencesRows"`
 	SupplementalSemanticIds                   json.RawMessage `json:"supplementalSemanticIdReferenceRows"`
 	SupplementalSemanticIdsReferredReferences json.RawMessage `json:"supplementalSemanticIdReferredReferenceRows"`
+}
+
+type ExtensionRow struct {
+	DbId                                      int64           `json:"dbId"`
+	Name                                      string          `json:"name"`
+	ValueType                                 string          `json:"value_type"`
+	Value                                     string          `json:"value"`
+	SemanticId                                json.RawMessage `json:"semanticIdReferenceRows"`
+	SemanticIdReferredReferences              json.RawMessage `json:"semanticIdReferredReferencesRows"`
+	SupplementalSemanticIds                   json.RawMessage `json:"supplementalSemanticIdReferenceRows"`
+	SupplementalSemanticIdsReferredReferences json.RawMessage `json:"supplementalSemanticIdReferredReferenceRows"`
+	RefersTo                                  json.RawMessage `json:"refersToReferenceRows"`
+	RefersToReferredReferences                json.RawMessage `json:"refersToReferredReferencesRows"`
 }
 
 // ParseReferredReferencesFromRows parses referred reference data from already unmarshalled ReferredReferenceRow objects.
@@ -512,6 +527,14 @@ func ParseQualifiersRow(row json.RawMessage) ([]QualifierRow, error) {
 	var texts []QualifierRow
 	if err := json.Unmarshal(row, &texts); err != nil {
 		return nil, fmt.Errorf("error unmarshalling qualifier data: %w", err)
+	}
+	return texts, nil
+}
+
+func ParseExtensionRows(row json.RawMessage) ([]ExtensionRow, error) {
+	var texts []ExtensionRow
+	if err := json.Unmarshal(row, &texts); err != nil {
+		return nil, fmt.Errorf("error unmarshalling extension data: %w", err)
 	}
 	return texts, nil
 }
