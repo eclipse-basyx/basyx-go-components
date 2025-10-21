@@ -84,9 +84,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelById(
 			return gen.Response(404, nil), nil
 		}
 		if common.IsErrNotFound(err) {
-
 			return gen.Response(404, nil), err
-
 		}
 		return gen.Response(500, nil), err
 	}

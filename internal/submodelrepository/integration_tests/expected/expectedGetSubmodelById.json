@@ -1,0 +1,21 @@
+{
+    "pagingMetadata": {},
+    "result": [
+        {
+            "id": "http://iese.fraunhofer.de/id/sm/DemoSubmodel",
+            "idShort": "DemoSubmodel",
+            "category": "DemoCategory",
+            "kind": "Instance",
+            "modelType": "Submodel",
+            "semanticId": {
+                "type": "ModelReference",
+                "keys": [
+                    {
+                        "type": "GlobalReference",
+                        "value": "http://example.org/semantic/demo"
+                    }
+                ]
+            }
+        }
+    ]
+}

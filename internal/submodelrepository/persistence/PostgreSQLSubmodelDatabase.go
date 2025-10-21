@@ -73,7 +73,6 @@ func (p *PostgreSQLSubmodelDatabase) GetAllSubmodels(limit int32, cursor string,
 	}
 
 	if err != nil {
-		fmt.Println(err)
 		return nil, "", beginTransactionErrorSubmodelRepo
 	}
 	defer func() {
@@ -88,7 +87,6 @@ func (p *PostgreSQLSubmodelDatabase) GetAllSubmodels(limit int32, cursor string,
 	}
 
 	if err := tx.Commit(); err != nil {
-		fmt.Println(err)
 		return nil, "", failedPostgresTransactionSubmodelRepo
 	}
 
@@ -109,7 +107,6 @@ func (p *PostgreSQLSubmodelDatabase) GetAllSubmodelsMetadata(
 	}
 
 	if err != nil {
-		fmt.Println(err)
 		return nil, "", beginTransactionErrorSubmodelRepo
 	}
 	defer func() {

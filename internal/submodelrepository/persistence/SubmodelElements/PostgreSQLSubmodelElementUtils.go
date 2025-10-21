@@ -1194,7 +1194,8 @@ func loadSubmodelSubmodelElementsIntoMemory(rows *sql.Rows, err error, db *sql.D
 			coll := &gen.SubmodelElementCollection{IdShort: nullToString(idShort),
 				Category:   nullToString(category),
 				ModelType:  nullToString(modelType),
-				SemanticId: semanticIdObj}
+				SemanticId: semanticIdObj,
+				Value:      make([]gen.SubmodelElement, 0, 4)}
 			el = coll
 
 		case "SubmodelElementList":
