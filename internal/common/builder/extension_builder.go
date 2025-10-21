@@ -107,7 +107,7 @@ func (b *ExtensionsBuilder) AddRefersTo(extensionDbId int64, refersToRows json.R
 	extension, exists := b.extensions[extensionDbId]
 
 	if !exists {
-		return nil, fmt.Errorf("tried to add SupplementalSemanticIds to Extension '%d' before creating the Extension itself", extensionDbId)
+		return nil, fmt.Errorf("tried to add RefersTo to Extension '%d' before creating the Extension itself", extensionDbId)
 	}
 
 	refs, err := ParseReferences(refersToRows, b.refBuilderMap)
@@ -126,7 +126,7 @@ func (b *ExtensionsBuilder) AddRefersTo(extensionDbId int64, refersToRows json.R
 		suppl = append(suppl, *el)
 	}
 
-	extension.SupplementalSemanticIds = suppl
+	extension.RefersTo = suppl
 
 	return b, nil
 }
