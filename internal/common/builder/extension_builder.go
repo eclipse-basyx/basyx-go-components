@@ -126,7 +126,7 @@ func (b *ExtensionsBuilder) AddRefersTo(extensionDbId int64, refersToRows json.R
 		suppl = append(suppl, *el)
 	}
 
-	extension.SupplementalSemanticIds = suppl
+	extension.RefersTo = suppl
 
 	return b, nil
 }
