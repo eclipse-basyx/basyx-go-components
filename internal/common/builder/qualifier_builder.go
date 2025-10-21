@@ -231,27 +231,6 @@ func (b *QualifiersBuilder) AddSupplementalSemanticIds(qualifierDbId int64, supp
 	return b, nil
 }
 
-// createExactlyOneReference is an internal helper method that creates exactly one reference
-// from JSON-encoded database rows. It's used by AddSemanticId and AddValueId to ensure
-// that these single-reference fields have exactly one reference assigned.
-//
-// Parameters:
-//   - qualifierDbId: The database ID of the qualifier being modified
-//   - refRows: JSON-encoded array of ReferenceRow objects
-//   - referredRefRows: JSON-encoded array of ReferredReferenceRow objects for nested references
-//   - Type: A string describing the type of reference being created (e.g., "SemanticID", "ValueId")
-//     used for error messages
-//
-// Returns:
-//   - *gen.Reference: The created reference if exactly one reference is found
-//   - error: Returns an error if:
-//   - The qualifier with qualifierDbId doesn't exist
-//   - JSON parsing fails
-//   - Zero or more than one reference is found in the data
-//
-// The method validates that exactly one reference is created because SemanticId and ValueId
-// are single-reference fields in the AAS metamodel. It also processes any ReferredSemanticIds
-// to build the complete reference hierarchy.
 func (b *QualifiersBuilder) createExactlyOneReference(qualifierDbId int64, refRows json.RawMessage, referredRefRows json.RawMessage, Type string) (*gen.Reference, error) {
 	_, exists := b.qualifiers[qualifierDbId]
 
