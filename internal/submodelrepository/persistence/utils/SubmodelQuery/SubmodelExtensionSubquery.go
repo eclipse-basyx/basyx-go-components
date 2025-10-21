@@ -137,14 +137,14 @@ func GetExtensionSubqueryForSubmodel(dialect goqu.DialectWrapper) *goqu.SelectDa
 			)
 		)`)).
 		Join(
-			goqu.T("extension_refers_to").As("ert"),
-			goqu.On(goqu.I("ert.extension_id").Eq(goqu.I("sm_ext.extension_id"))),
+			goqu.T("extension_supplemental_semantic_id").As("essi"),
+			goqu.On(goqu.I("essi.extension_id").Eq(goqu.I("sm_ext.extension_id"))),
 		).
 		Join(
 			goqu.T("reference_key").As("rk"),
 			goqu.On(goqu.I("r.id").Eq(goqu.I("rk.reference_id"))),
 		).
-		Where(goqu.I("ert.reference_id").Eq(goqu.I("r.id")))
+		Where(goqu.I("essi.reference_id").Eq(goqu.I("r.id")))
 
 	extensionSupplementalSemanticIdReferredSubquery := dialect.From(goqu.T("reference").As("ref")).
 		Select(goqu.L(`jsonb_agg(
