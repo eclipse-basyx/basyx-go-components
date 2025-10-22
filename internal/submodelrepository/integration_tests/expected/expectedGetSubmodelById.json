@@ -126,7 +126,213 @@
     },
     {
       "idShort": "ExampleSubmodelElementCollection",
-      "modelType": "SubmodelElementCollection"
+      "modelType": "SubmodelElementCollection",
+      "value": [
+        {
+          "category": "PARAMETER",
+          "idShort": "ExampleRelationshipElement",
+          "modelType": "RelationshipElement",
+          "semanticId": {
+            "type": "ExternalReference",
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "http://acplt.org/RelationshipElements/ExampleRelationshipElement"
+              }
+            ]
+          },
+          "first": null,
+          "second": null
+        },
+        {
+          "category": "PARAMETER",
+          "idShort": "ExampleAnnotatedRelationshipElement",
+          "modelType": "AnnotatedRelationshipElement",
+          "semanticId": {
+            "type": "ExternalReference",
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "http://acplt.org/RelationshipElements/ExampleAnnotatedRelationshipElement"
+              }
+            ]
+          },
+          "first": null,
+          "second": null
+        },
+        {
+          "category": "PARAMETER",
+          "idShort": "ExampleOperation",
+          "modelType": "Operation",
+          "semanticId": {
+            "type": "ExternalReference",
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "http://acplt.org/Operations/ExampleOperation"
+              }
+            ]
+          }
+        },
+        {
+          "category": "PARAMETER",
+          "idShort": "ExampleCapability",
+          "modelType": "Capability",
+          "semanticId": {
+            "type": "ExternalReference",
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "http://acplt.org/Capabilities/ExampleCapability"
+              }
+            ]
+          }
+        },
+        {
+          "category": "PARAMETER",
+          "idShort": "ExampleBasicEvent",
+          "modelType": "BasicEventElement",
+          "semanticId": {
+            "type": "ExternalReference",
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "http://acplt.org/Events/ExampleBasicEvent"
+              }
+            ]
+          },
+          "observed": null,
+          "direction": "input",
+          "state": "on"
+        },
+        {
+          "category": "PARAMETER",
+          "idShort": "ExampleSubmodelElementListOrdered",
+          "modelType": "SubmodelElementList",
+          "semanticId": {
+            "type": "ExternalReference",
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "http://acplt.org/SubmodelElementLists/ExampleSubmodelElementListOrdered"
+              }
+            ]
+          },
+          "orderRelevant": true,
+          "typeValueListElement": "SubmodelElement",
+          "value": [
+            {
+              "category": "CONSTANT",
+              "idShort": "ExampleProperty",
+              "modelType": "Property",
+              "semanticId": {
+                "type": "ExternalReference",
+                "keys": [
+                  {
+                    "type": "GlobalReference",
+                    "value": "http://acplt.org/Properties/ExampleProperty"
+                  }
+                ]
+              },
+              "valueType": "xs:string",
+              "value": "exampleValue"
+            },
+            {
+              "category": "CONSTANT",
+              "idShort": "ExampleMultiLanguageProperty",
+              "modelType": "MultiLanguageProperty",
+              "semanticId": {
+                "type": "ExternalReference",
+                "keys": [
+                  {
+                    "type": "GlobalReference",
+                    "value": "http://acplt.org/MultiLanguageProperties/ExampleMultiLanguageProperty"
+                  }
+                ]
+              }
+            },
+            {
+              "category": "PARAMETER",
+              "idShort": "ExampleRange",
+              "modelType": "Range",
+              "semanticId": {
+                "type": "ExternalReference",
+                "keys": [
+                  {
+                    "type": "GlobalReference",
+                    "value": "http://acplt.org/Ranges/ExampleRange"
+                  }
+                ]
+              },
+              "valueType": "xs:int",
+              "min": "0",
+              "max": "100"
+            }
+          ]
+        },
+        {
+          "category": "PARAMETER",
+          "idShort": "ExampleSubmodelElementCollection",
+          "modelType": "SubmodelElementCollection",
+          "semanticId": {
+            "type": "ExternalReference",
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "http://acplt.org/SubmodelElementCollections/ExampleSubmodelElementCollection"
+              }
+            ]
+          },
+          "value": [
+            {
+              "category": "PARAMETER",
+              "idShort": "ExampleBlob",
+              "modelType": "Blob",
+              "semanticId": {
+                "type": "ExternalReference",
+                "keys": [
+                  {
+                    "type": "GlobalReference",
+                    "value": "http://acplt.org/Blobs/ExampleBlob"
+                  }
+                ]
+              },
+              "value": "AQIDBAU=",
+              "contentType": "application/pdf"
+            },
+            {
+              "category": "PARAMETER",
+              "idShort": "ExampleFile",
+              "modelType": "File",
+              "semanticId": {
+                "type": "ExternalReference",
+                "keys": [
+                  {
+                    "type": "GlobalReference",
+                    "value": "http://acplt.org/Files/ExampleFile"
+                  }
+                ]
+              },
+              "value": "file:///TestFile.pdf",
+              "contentType": "application/pdf"
+            },
+            {
+              "category": "PARAMETER",
+              "idShort": "ExampleReferenceElement",
+              "modelType": "ReferenceElement",
+              "semanticId": {
+                "type": "ExternalReference",
+                "keys": [
+                  {
+                    "type": "GlobalReference",
+                    "value": "http://acplt.org/ReferenceElements/ExampleReferenceElement"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ]
     }
   ]
 }
