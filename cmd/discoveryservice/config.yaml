@@ -1,6 +1,6 @@
 server:
   port: 5004
-  contextPath: ""
+  contextPath: "/"
   host: 0.0.0.0
 
 postgres:
@@ -13,3 +13,15 @@ postgres:
   maxOpenConnections: 500
   maxIdleConnections: 500
   connMaxLifetimeMinutes: 5
+
+oidc:
+  issuer: "http://localhost:8081/realms/basyx"
+  audience: "discovery-service"
+  jwksURL: ""  # optional, leave empty for auto-discovery
+
+abac:
+  enabled: true
+  tenantClaim: "tenant"
+  editorRole: "aas_editor"
+  clientRolesAudience: "discovery-service"
+  realmAdminRole: "admin"

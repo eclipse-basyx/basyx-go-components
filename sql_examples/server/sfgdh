@@ -1,0 +1,24 @@
+# --- Server ---
+SERVER_PORT=5004
+SERVER_CONTEXTPATH=
+
+# --- Postgres (matches your docker-compose) ---
+POSTGRES_HOST=localhost
+POSTGRES_PORT=5432
+POSTGRES_USER=admin
+POSTGRES_PASSWORD=admin123
+POSTGRES_DBNAME=basyxTestDB
+POSTGRES_MAXOPENCONNECTIONS=50
+POSTGRES_MAXIDLECONNECTIONS=50
+POSTGRES_CONNMAXLIFETIMEMINUTES=5
+
+# --- OIDC / Keycloak (JWT validation) ---
+OIDC_ISSUER=http://localhost:8081/realms/basyx
+OIDC_AUDIENCE=discovery-service
+
+# --- ABAC (starter knobs) ---
+ABAC_ENABLED=true
+ABAC_TENANT_CLAIM=tenant                 # claim key holding subject's tenant
+ABAC_EDITOR_ROLE=aas_editor              # required role for UPDATE/DELETE
+ABAC_CLIENT_ROLES_AUDIENCE=discovery-service  # where client roles live in token
+ABAC_REALM_ADMIN_ROLE=admin              # realm role that bypasses checks

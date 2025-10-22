@@ -9,6 +9,12 @@ services:
     ports:
       - "5432:5432"
     command: ["postgres", "-c", "listen_addresses=*"]
+    
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d basyxTestDB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   adminer:
     image: adminer:5
@@ -17,3 +23,19 @@ services:
       - "8080:8080"
     depends_on:
       - db
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0.6
+    container_name: keycloak
+    command: ["start-dev"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://db:5432/basyxTestDB
+      KC_DB_USERNAME: admin
+      KC_DB_PASSWORD: admin123
+    ports:
+      - "8081:8080" 
+    depends_on:
+      db:
+        condition: service_healthy

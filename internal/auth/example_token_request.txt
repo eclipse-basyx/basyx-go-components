@@ -1,0 +1,6 @@
+curl -X POST http://localhost:8081/realms/basyx/protocol/openid-connect/token \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "grant_type=password" \
+  -d "client_id=basyx-ui" \
+  -d "username=martin" \
+  -d "password=admin"

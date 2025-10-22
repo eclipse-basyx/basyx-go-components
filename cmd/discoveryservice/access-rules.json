@@ -1,0 +1,36 @@
+{
+  "AllAccessPermissionRules": {
+    "rules": [
+      {
+        "ACL": {
+          "RIGHTS": ["CREATE"],
+          "ACCESS": "ALLOW"
+        },
+        "OBJECTS": [ { "ROUTE": "/lookup/shellsByAssetLink" } ],
+        "FORMULA": { "$boolean": true },
+        "FILTER": {
+          "CONDITION": {
+            "$ge": [ { "$numCast": { "$attribute": { "CLAIM": "clear" } } }, { "$numVal": 10 } ]
+          }
+        }
+      },
+      {
+        "ACL": {
+          "ATTRIBUTES": [
+            { "CLAIM": "role" },
+            { "CLAIM": "clear" }
+          ],
+          "RIGHTS": [ "CREATE" ],
+          "ACCESS": "ALLOW"
+        },
+        "OBJECTS": [ { "ROUTE": "*" } ],
+        "FORMULA": {
+          "$and": [
+            { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "editor" } ] },
+            { "$ge": [ {"$numCast": { "$attribute": { "CLAIM": "clear" } } }, { "$numVal": 5 } ] }
+          ]
+        }
+      }
+    ]
+  }
+}
