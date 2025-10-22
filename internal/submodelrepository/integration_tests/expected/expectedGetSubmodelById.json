@@ -13,5 +13,120 @@
       }
     ]
   },
-  "submodelElements": []
+  "submodelElements": [
+    {
+      "idShort": "1",
+      "modelType": "SubmodelElementCollection",
+      "value": [
+        {
+          "idShort": "2",
+          "modelType": "SubmodelElementCollection",
+          "value": [
+            {
+              "idShort": "3",
+              "modelType": "SubmodelElementCollection",
+              "value": [
+                {
+                  "idShort": "4",
+                  "modelType": "SubmodelElementCollection",
+                  "value": [
+                    {
+                      "idShort": "5",
+                      "modelType": "SubmodelElementCollection",
+                      "value": [
+                        {
+                          "idShort": "6",
+                          "modelType": "SubmodelElementList",
+                          "typeValueListElement": "Property",
+                          "value": [
+                            {
+                              "idShort": "2",
+                              "modelType": "Property",
+                              "valueType": "xs:string",
+                              "value": "12"
+                            },
+                            {
+                              "idShort": "3",
+                              "modelType": "Property",
+                              "valueType": "xs:string",
+                              "value": "123"
+                            },
+                            {
+                              "idShort": "4",
+                              "modelType": "Property",
+                              "valueType": "xs:string",
+                              "value": "1234"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "category": "PARAMETER",
+      "idShort": "ExampleProperty",
+      "modelType": "Property",
+      "valueType": "xs:string",
+      "value": "some example annotation"
+    },
+    {
+      "category": "CONSTANT",
+      "idShort": "ExampleProperty1",
+      "modelType": "Property",
+      "semanticId": {
+        "type": "ExternalReference",
+        "keys": [
+          {
+            "type": "GlobalReference",
+            "value": "http://acplt.org/Properties/ExampleProperty"
+          }
+        ]
+      },
+      "valueType": "xs:string",
+      "value": "exampleValue"
+    },
+    {
+      "category": "CONSTANT",
+      "idShort": "ExampleProperty2",
+      "modelType": "Property",
+      "semanticId": {
+        "type": "ExternalReference",
+        "keys": [
+          {
+            "type": "GlobalReference",
+            "value": "http://acplt.org/Properties/ExampleProperty"
+          }
+        ]
+      },
+      "valueType": "xs:string",
+      "value": "exampleValue"
+    },
+    {
+      "category": "CONSTANT",
+      "idShort": "ExampleProperty3",
+      "modelType": "Property",
+      "semanticId": {
+        "type": "ExternalReference",
+        "keys": [
+          {
+            "type": "GlobalReference",
+            "value": "http://acplt.org/Properties/ExampleProperty"
+          }
+        ]
+      },
+      "valueType": "xs:string",
+      "value": "exampleValue"
+    },
+    {
+      "idShort": "ExampleSubmodelElementCollection",
+      "modelType": "SubmodelElementCollection"
+    }
+  ]
 }
