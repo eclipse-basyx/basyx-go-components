@@ -116,13 +116,13 @@
     {
     "method": "GET",
     "endpoint": "http://localhost:5004/submodels/$metadata?limit=5",
-    "shouldMatch": "integration_tests/expected/expectedGetSubmodelsMetadata.json",
+    "shouldMatch": "expected/expectedGetSubmodelsMetadata.json",
     "expectedStatus": 200
     },
     {
     "method": "GET",
     "endpoint": "http://localhost:5004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw",
-    "shouldMatch": "integration_tests/expected/expectedGetSubmodelById.json",
+    "shouldMatch": "expected/expectedGetSubmodelById.json",
     "expectedStatus": 200
     },
     {
