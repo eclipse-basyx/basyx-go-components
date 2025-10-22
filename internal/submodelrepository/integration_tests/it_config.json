@@ -115,19 +115,19 @@
     },
     {
     "method": "GET",
-    "endpoint": "http://localhost:8081/submodels/$metadata?limit=5",
+    "endpoint": "http://localhost:5004/submodels/$metadata?limit=5",
     "shouldMatch": "integration_tests/expected/expectedGetSubmodelsMetadata.json",
     "expectedStatus": 200
     },
     {
     "method": "GET",
-    "endpoint": "http://localhost:8081/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw",
+    "endpoint": "http://localhost:5004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw",
     "shouldMatch": "integration_tests/expected/expectedGetSubmodelById.json",
     "expectedStatus": 200
     },
     {
     "method": "GET",
-    "endpoint": "http://localhost:8081/submodels/aHR0cDovL2V4YW1wbGUuY29tL2lkL25vbnRoaW5n",
+    "endpoint": "http://localhost:5004/submodels/aHR0cDovL2V4YW1wbGUuY29tL2lkL25vbnRoaW5n",
     "expectedStatus": 404
     }
 
