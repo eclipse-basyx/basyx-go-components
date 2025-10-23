@@ -41,7 +41,7 @@ const (
 type ResolveResource func(r *http.Request) (Resource, error)
 
 func ABACMiddleware(settings ABACSettings, resolver ResolveResource) func(http.Handler) http.Handler {
-	// (remove the "created for action" log to avoid confusion)
+
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if !settings.Enabled {
@@ -57,17 +57,17 @@ func ABACMiddleware(settings ABACSettings, resolver ResolveResource) func(http.H
 
 			if settings.Model != nil {
 				ok, reason, qf := settings.Model.AuthorizeWithFilter(EvalInput{
-					Method: r.Method, // ← use r.Method here
-					Path:   r.URL.Path,
-					Claims: claims,
-					NowUTC: time.Now().UTC(),
+					Method:    r.Method,
+					Path:      r.URL.Path,
+					Claims:    claims,
+					IssuedUTC: time.Now().UTC(),
 				})
 				if !ok {
 					log.Printf("❌ ABAC(model): %s", reason)
 					http.Error(w, "forbidden", http.StatusForbidden)
 					return
 				}
-				// attach qf to context if present (as in the earlier plan)
+
 				ctx := r.Context()
 				if qf != nil {
 					ctx = context.WithValue(ctx, filterKey, qf)

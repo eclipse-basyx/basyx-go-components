@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/coreos/go-oidc"
 )
@@ -37,7 +38,10 @@ type Claims map[string]any
 
 type ctxKey string
 
-const claimsKey ctxKey = "jwtClaims"
+const (
+	claimsKey   ctxKey = "jwtClaims"
+	issuedAtKey ctxKey = "tokenIssuedAt"
+)
 
 func FromContext(r *http.Request) Claims {
 	if v := r.Context().Value(claimsKey); v != nil {
@@ -46,6 +50,15 @@ func FromContext(r *http.Request) Claims {
 		}
 	}
 	return nil
+}
+
+func IssuedAtFromContext(r *http.Request) (time.Time, bool) {
+	if v := r.Context().Value(issuedAtKey); v != nil {
+		if t, ok := v.(time.Time); ok {
+			return t, true
+		}
+	}
+	return time.Time{}, false
 }
 
 func (o *OIDC) Middleware(next http.Handler) http.Handler {
@@ -64,7 +77,7 @@ func (o *OIDC) Middleware(next http.Handler) http.Handler {
 			return
 		}
 		var rm json.RawMessage
-		if err := idToken.Claims(&rm); err != nil { /* handle */
+		if err := idToken.Claims(&rm); err != nil {
 		}
 
 		dec := json.NewDecoder(bytes.NewReader(rm))
@@ -77,15 +90,22 @@ func (o *OIDC) Middleware(next http.Handler) http.Handler {
 			return
 		}
 
-		// 1) Ensure it’s a Bearer access token (optional but good hygiene)
+		var issuedAt time.Time
+		if n, ok := c["iat"].(json.Number); ok {
+			sec, _ := n.Int64()
+			issuedAt = time.Unix(sec, 0)
+			log.Printf("🕓 Token issued at %v", issuedAt)
+		} else {
+			log.Printf("⚠️ Token missing 'iat' claim")
+		}
+
 		if typ, _ := c.GetString("typ"); typ != "" && !strings.EqualFold(typ, "Bearer") {
 			log.Printf("❌ unexpected token typ: %q", typ)
 			http.Error(w, "invalid token type", http.StatusUnauthorized)
 			return
 		}
 
-		// 3) Require scopes for endpoint (example)
-		required := []string{"profile"} // tailor per route
+		required := []string{"profile"}
 		if !hasAllScopes(c, required) {
 			log.Printf("❌ missing required scopes: %v", required)
 			http.Error(w, "insufficient scope", http.StatusForbidden)
@@ -94,6 +114,7 @@ func (o *OIDC) Middleware(next http.Handler) http.Handler {
 
 		log.Printf("✅ Token verified successfully for subject: %v", c["sub"])
 		ctx := context.WithValue(r.Context(), claimsKey, c)
+		ctx = context.WithValue(ctx, issuedAtKey, issuedAt)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
@@ -112,7 +133,7 @@ func (c Claims) MarshalJSON() ([]byte, error) {
 }
 
 func hasAllScopes(c Claims, need []string) bool {
-	s, _ := c.GetString("scope") // e.g. "profile email"
+	s, _ := c.GetString("scope")
 	have := map[string]struct{}{}
 	for _, sc := range strings.Fields(s) {
 		have[sc] = struct{}{}

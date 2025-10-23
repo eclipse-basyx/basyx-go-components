@@ -1,3 +1,4 @@
+// eval.go
 package auth
 
 import (
@@ -7,19 +8,29 @@ import (
 	"strings"
 	"time"
 
-	"github.com/eclipse-basyx/basyx-go-components/pkg/schemagen"
+	schemagen "github.com/eclipse-basyx/basyx-go-components/internal/common/access_controll_model"
 )
 
-// evalLE evaluates a schemagen.LogicalExpression against claims & now.
-func evalLE(le schemagen.LogicalExpression, claims Claims, now time.Time) bool {
-	// literal boolean
+func resolveGlobalToken(name string, now time.Time) (string, bool) {
+	switch strings.ToUpper(name) {
+	case "UTCNOW":
+		return now.UTC().Format(time.RFC3339), true
+	case "LOCALNOW":
+		return now.In(time.Local).Format(time.RFC3339), true
+	case "CLIENTNOW":
+		return now.Format(time.RFC3339), true
+	case "ANONYMOUS":
+		return "ANONYMOUS", true
+	default:
+		return "", false
+	}
+}
 
-	fmt.Println("sdknf")
+func evalLE(le schemagen.LogicalExpression, claims Claims, now time.Time) bool {
 	if le.Boolean != nil {
 		return *le.Boolean
 	}
 
-	// numeric comparisons
 	if len(le.Gt) == 2 {
 		return numCmp(resolveValue(le.Gt[0], claims, now), resolveValue(le.Gt[1], claims, now), "gt")
 	}
@@ -33,7 +44,6 @@ func evalLE(le schemagen.LogicalExpression, claims Claims, now time.Time) bool {
 		return numCmp(resolveValue(le.Le[0], claims, now), resolveValue(le.Le[1], claims, now), "le")
 	}
 
-	// equality
 	if len(le.Eq) == 2 {
 		return fmt.Sprint(resolveValue(le.Eq[0], claims, now)) == fmt.Sprint(resolveValue(le.Eq[1], claims, now))
 	}
@@ -41,7 +51,6 @@ func evalLE(le schemagen.LogicalExpression, claims Claims, now time.Time) bool {
 		return fmt.Sprint(resolveValue(le.Ne[0], claims, now)) != fmt.Sprint(resolveValue(le.Ne[1], claims, now))
 	}
 
-	// string ops
 	if len(le.Regex) == 2 {
 		hay := asString(resolveStringItem(le.Regex[0], claims, now))
 		pat := asString(resolveStringItem(le.Regex[1], claims, now))
@@ -67,7 +76,6 @@ func evalLE(le schemagen.LogicalExpression, claims Claims, now time.Time) bool {
 		return strings.HasSuffix(hay, suffix)
 	}
 
-	// logical ops
 	if len(le.And) >= 2 {
 		for _, sub := range le.And {
 			if !evalLE(sub, claims, now) {
@@ -88,7 +96,6 @@ func evalLE(le schemagen.LogicalExpression, claims Claims, now time.Time) bool {
 		return !evalLE(*le.Not, claims, now)
 	}
 
-	// $match: array of expressions treated as AND
 	if len(le.Match) > 0 {
 		for _, m := range le.Match {
 			if !evalMatch(m, claims, now) {
@@ -97,12 +104,9 @@ func evalLE(le schemagen.LogicalExpression, claims Claims, now time.Time) bool {
 		}
 		return true
 	}
-
-	// Unknown/empty expression -> false (defensive)
 	return false
 }
 
-// evalMatch mirrors evalLE but for MatchExpression (no $not/$and/$or nesting except via its own $match).
 func evalMatch(me schemagen.MatchExpression, claims Claims, now time.Time) bool {
 	if me.Boolean != nil {
 		return *me.Boolean
@@ -160,23 +164,21 @@ func evalMatch(me schemagen.MatchExpression, claims Claims, now time.Time) bool 
 	return false
 }
 
-// ---------- Value & StringValue resolution ----------
-
-// resolveValue evaluates a schemagen.Value into a Go value (string/bool/float64/…).
 func resolveValue(v schemagen.Value, claims Claims, now time.Time) any {
-	// $attribute (claims/global like UTCNOW)
+
 	if v.Attribute != nil {
 		if m, ok := asStringMap(v.Attribute); ok {
 			if c := m["CLAIM"]; c != "" {
 				return claims[c]
 			}
-			if strings.EqualFold(m["GLOBAL"], "UTCNOW") {
-				return now.Format(time.RFC3339)
+			if g := m["GLOBAL"]; g != "" {
+				if val, ok := resolveGlobalToken(g, now); ok {
+					return val
+				}
 			}
 		}
 	}
 
-	// direct literals
 	if v.StrVal != nil {
 		return string(*v.StrVal)
 	}
@@ -187,20 +189,16 @@ func resolveValue(v schemagen.Value, claims Claims, now time.Time) any {
 		return *v.Boolean
 	}
 	if v.DateTimeVal != nil || v.TimeVal != nil || v.Year != nil || v.Month != nil || v.DayOfMonth != nil || v.DayOfWeek != nil {
-		// If you need date parts, add proper handling; otherwise stringify defensively:
 		return stringValueFromDate(v)
 	}
 	if v.HexVal != nil {
 		return string(*v.HexVal)
 	}
 
-	// field lookups ($field) — if you support model-field access, implement it here.
-	// For now we return "" to keep comparisons safe.
 	if v.Field != nil {
-		return "" // or lookupModelField(string(*v.Field))
+		return ""
 	}
 
-	// casts
 	if v.StrCast != nil {
 		return fmt.Sprint(resolveValue(*v.StrCast, claims, now))
 	}
@@ -215,11 +213,21 @@ func resolveValue(v schemagen.Value, claims Claims, now time.Time) any {
 		return castToBool(resolveValue(*v.BoolCast, claims, now))
 	}
 
-	// other casts ($timeCast, $dateTimeCast, $hexCast) → implement as needed
 	if v.TimeCast != nil {
-		return fmt.Sprint(resolveValue(*v.TimeCast, claims, now))
+		inner := resolveValue(*v.TimeCast, claims, now)
+
+		if t, ok := toDateTime(inner); ok {
+			return t.Format("15:04:05")
+		}
+
+		if _, ok := toTimeOfDaySeconds(inner); ok {
+			return fmt.Sprint(inner)
+		}
+
+		return fmt.Sprint(inner)
 	}
 	if v.DateTimeCast != nil {
+
 		return fmt.Sprint(resolveValue(*v.DateTimeCast, claims, now))
 	}
 	if v.HexCast != nil {
@@ -229,35 +237,33 @@ func resolveValue(v schemagen.Value, claims Claims, now time.Time) any {
 	return nil
 }
 
-// resolveStringItem evaluates StringValue to string (for regex/contains/...).
 func resolveStringItem(s schemagen.StringValue, claims Claims, now time.Time) string {
-	// $attribute
 	if s.Attribute != nil {
 		if m, ok := asStringMap(s.Attribute); ok {
 			if c := m["CLAIM"]; c != "" {
 				return asString(claims[c])
 			}
-			if strings.EqualFold(m["GLOBAL"], "UTCNOW") {
-				return now.Format(time.RFC3339)
+			if g := m["GLOBAL"]; g != "" {
+				if val, ok := resolveGlobalToken(g, now); ok {
+					return val
+				}
 			}
 		}
 	}
-	// $strVal
+
 	if s.StrVal != nil {
 		return string(*s.StrVal)
 	}
-	// $strCast
+
 	if s.StrCast != nil {
 		return fmt.Sprint(resolveValue(*s.StrCast, claims, now))
 	}
-	// $field
+
 	if s.Field != nil {
-		return "" // or lookupModelField(string(*s.Field))
+		return ""
 	}
 	return ""
 }
-
-// ---------- helpers (coercions & comparisons) ----------
 
 func asString(v any) string {
 	return fmt.Sprint(v)
@@ -274,7 +280,6 @@ func castToBool(v any) bool {
 	}
 }
 
-// toFloat coerces many encodings to float64.
 func toFloat(v any) (float64, bool) {
 	switch x := v.(type) {
 	case int:
@@ -295,31 +300,97 @@ func toFloat(v any) (float64, bool) {
 	}
 }
 
-func numCmp(a, b any, op string) bool {
-	af, aok := toFloat(a)
-	bf, bok := toFloat(b)
-
-	fmt.Println(af)
-	fmt.Println(bf)
-	if !aok || !bok {
-		return false
+func toTimeOfDaySeconds(v any) (int, bool) {
+	s := strings.TrimSpace(fmt.Sprint(v))
+	if s == "" {
+		return 0, false
 	}
-	switch op {
-	case "gt":
-		return af > bf
-	case "ge":
-		return af >= bf
-	case "lt":
-		return af < bf
-	case "le":
-		return af <= bf
-	default:
-		return false
+	parts := strings.Split(s, ":")
+	if len(parts) < 2 || len(parts) > 3 {
+		return 0, false
 	}
+	h, errH := strconv.Atoi(parts[0])
+	m, errM := strconv.Atoi(parts[1])
+	sec := 0
+	var errS error
+	if len(parts) == 3 {
+		sec, errS = strconv.Atoi(parts[2])
+	}
+	if errH != nil || errM != nil || (len(parts) == 3 && errS != nil) {
+		return 0, false
+	}
+	if h < 0 || h > 23 || m < 0 || m > 59 || sec < 0 || sec > 59 {
+		return 0, false
+	}
+	return h*3600 + m*60 + sec, true
 }
 
-// Best-effort stringify for date parts in the schema.
-// Expand if you start using these fields semantically.
+func toDateTime(v any) (time.Time, bool) {
+	s := strings.TrimSpace(fmt.Sprint(v))
+	if s == "" {
+		return time.Time{}, false
+	}
+	t, err := time.Parse(time.RFC3339, s)
+	if err != nil {
+		return time.Time{}, false
+	}
+	return t, true
+}
+
+func numCmp(a, b any, op string) bool {
+	if af, aok := toFloat(a); aok {
+		if bf, bok := toFloat(b); bok {
+			switch op {
+			case "gt":
+				return af > bf
+			case "ge":
+				return af >= bf
+			case "lt":
+				return af < bf
+			case "le":
+				return af <= bf
+			default:
+				return false
+			}
+		}
+	}
+	if as, aok := toTimeOfDaySeconds(a); aok {
+		if bs, bok := toTimeOfDaySeconds(b); bok {
+			switch op {
+			case "gt":
+				return as > bs
+			case "ge":
+				return as >= bs
+			case "lt":
+				return as < bs
+			case "le":
+				return as <= bs
+			default:
+				return false
+			}
+		}
+	}
+
+	if at, aok := toDateTime(a); aok {
+		if bt, bok := toDateTime(b); bok {
+			switch op {
+			case "gt":
+				return at.After(bt)
+			case "ge":
+				return at.After(bt) || at.Equal(bt)
+			case "lt":
+				return at.Before(bt)
+			case "le":
+				return at.Before(bt) || at.Equal(bt)
+			default:
+				return false
+			}
+		}
+	}
+
+	return false
+}
+
 func stringValueFromDate(v schemagen.Value) string {
 	switch {
 	case v.DateTimeVal != nil:

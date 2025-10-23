@@ -9,15 +9,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/eclipse-basyx/basyx-go-components/pkg/schemagen"
+	schemagen "github.com/eclipse-basyx/basyx-go-components/internal/common/access_controll_model"
 )
 
-// Keep your public types unchanged elsewhere.
 type AccessModel struct {
 	gen schemagen.AccessRuleModelSchemaJson
 }
 
-// Your existing callsites expect this signature.
 func ParseAccessModel(b []byte) (*AccessModel, error) {
 	var m schemagen.AccessRuleModelSchemaJson
 	if err := json.Unmarshal(b, &m); err != nil {
@@ -26,17 +24,16 @@ func ParseAccessModel(b []byte) (*AccessModel, error) {
 	return &AccessModel{gen: m}, nil
 }
 
-// Your existing callsites expect this signature.
 type EvalInput struct {
-	Method string
-	Path   string
-	Claims Claims
-	NowUTC time.Time
+	Method    string
+	Path      string
+	Claims    Claims
+	IssuedUTC time.Time
 }
 
 type QueryFilter struct {
-	Where  string         // e.g. "identifier NOT IN (:ban1,:ban2)"
-	Params map[string]any // e.g. {"ban1":"AAS-001","ban2":"AAS-002","tenant":"acme"}
+	Where  string
+	Params map[string]any
 }
 
 var paramRe = regexp.MustCompile(`:([A-Za-z_][A-Za-z0-9_]*)`)
@@ -49,7 +46,7 @@ func renderFragment(tpl string, claims Claims, now time.Time) (string, map[strin
 		case "UTCNOW":
 			params[key] = now.Format(time.RFC3339)
 		default:
-			params[key] = claims[key] // may be string/json.Number/etc. (your toFloat handles numerics)
+			params[key] = claims[key]
 		}
 		return ":" + key
 	})
@@ -72,14 +69,13 @@ func (m *AccessModel) AuthorizeWithFilter(in EvalInput) (ok bool, reason string,
 		if !attributesSatisfiedAttrs(attrs, in.Claims) {
 			continue
 		}
-		if lexpr != nil && !evalLE(*lexpr, in.Claims, in.NowUTC) {
+		if lexpr != nil && !evalLE(*lexpr, in.Claims, in.IssuedUTC) {
 			continue
 		}
 
-		// ---- NEW: handle FILTER ----
 		var out *QueryFilter
 		if r.FILTER != nil {
-			// pick condition: inline CONDITION or USEFORMULA
+
 			var cond *schemagen.LogicalExpression
 			switch {
 			case r.FILTER.CONDITION != nil:
@@ -94,10 +90,10 @@ func (m *AccessModel) AuthorizeWithFilter(in EvalInput) (ok bool, reason string,
 					}
 				}
 			}
-			// apply fragment only if no condition or condition true
-			if cond == nil || evalLE(*cond, in.Claims, in.NowUTC) {
+
+			if cond == nil || evalLE(*cond, in.Claims, in.IssuedUTC) {
 				if r.FILTER.FRAGMENT != nil && *r.FILTER.FRAGMENT != "" {
-					where, params := renderFragment(*r.FILTER.FRAGMENT, in.Claims, in.NowUTC)
+					where, params := renderFragment(*r.FILTER.FRAGMENT, in.Claims, in.IssuedUTC)
 					out = &QueryFilter{Where: where, Params: params}
 				}
 			}
@@ -122,23 +118,20 @@ func (m *AccessModel) Authorize(in EvalInput) (bool, string) {
 	for _, r := range all.Rules {
 		acl, attrs, objs, lexpr := materialize(all, r)
 
-		// rights (support "ALL")
 		if !rightsContains(acl.RIGHTS, right) {
 			continue
 		}
 
-		// objects (match {"ROUTE":"..."}; "*" wildcard supported)
+		// todo: currently rejects access if no route is defined
 		if !matchRouteObjectsObjItem(objs, in.Path) {
 			continue
 		}
 
-		// attributes (inline + USEATTRIBUTES + DEFATTRIBUTES)
 		if !attributesSatisfiedAttrs(attrs, in.Claims) {
 			continue
 		}
 
-		// formula
-		if lexpr != nil && !evalLE(*lexpr, in.Claims, in.NowUTC) {
+		if lexpr != nil && !evalLE(*lexpr, in.Claims, in.IssuedUTC) {
 			continue
 		}
 
@@ -155,8 +148,6 @@ func (m *AccessModel) Authorize(in EvalInput) (bool, string) {
 	return false, "no matching rule"
 }
 
-// ---------- internals (adapter helpers) ----------
-
 func materialize(all schemagen.AccessRuleModelSchemaJsonAllAccessPermissionRules, r schemagen.AccessPermissionRule) (schemagen.ACL, []schemagen.AttributeItem, []schemagen.ObjectItem, *schemagen.LogicalExpression) {
 	// ACL / USEACL
 	acl := schemagen.ACL{}
@@ -172,7 +163,6 @@ func materialize(all schemagen.AccessRuleModelSchemaJsonAllAccessPermissionRules
 		}
 	}
 
-	// ATTRIBUTES + USEATTRIBUTES (append)
 	var attrs []schemagen.AttributeItem
 	if acl.ATTRIBUTES != nil {
 		attrs = append(attrs, acl.ATTRIBUTES...)
@@ -187,7 +177,6 @@ func materialize(all schemagen.AccessRuleModelSchemaJsonAllAccessPermissionRules
 		}
 	}
 
-	// OBJECTS + USEOBJECTS (resolve groups; handle one level of nesting)
 	var objs []schemagen.ObjectItem
 	if len(r.OBJECTS) > 0 {
 		objs = append(objs, r.OBJECTS...)
@@ -196,7 +185,6 @@ func materialize(all schemagen.AccessRuleModelSchemaJsonAllAccessPermissionRules
 		objs = append(objs, resolveObjects(all, r.USEOBJECTS)...)
 	}
 
-	// FORMULA / USEFORMULA
 	var f *schemagen.LogicalExpression
 	if r.FORMULA != nil {
 		f = r.FORMULA
@@ -222,7 +210,6 @@ func resolveObjects(all schemagen.AccessRuleModelSchemaJsonAllAccessPermissionRu
 				if len(d.Objects) > 0 {
 					out = append(out, d.Objects...)
 				}
-				// one level nested indirection
 				if len(d.USEOBJECTS) > 0 {
 					out = append(out, resolveObjects(all, d.USEOBJECTS)...)
 				}
@@ -258,74 +245,68 @@ func rightsContains(hay []schemagen.RightsEnum, needle schemagen.RightsEnum) boo
 	}
 	return false
 }
-
-// Reuse your existing attributesSatisfied logic by converting items to map[string]string.
 func attributesSatisfiedAttrs(items []schemagen.AttributeItem, claims Claims) bool {
-	if len(items) == 0 {
-		return true
-	}
-	okAny := false
-	for _, it := range items {
-		m, ok := asStringMap(it)
-		if !ok {
-			continue
-		}
-		if g, ok := m["GLOBAL"]; ok {
-			switch strings.ToUpper(g) {
-			case "ANONYMOUS":
-				okAny = true
-			case "AUTHENTICATED":
-				if claims != nil {
-					okAny = true
-				}
-			}
-		}
-		if c, ok := m["CLAIM"]; ok {
-			if v, exists := claims[c]; exists && fmt.Sprint(v) != "" {
-				okAny = true
-			}
-		}
-	}
-	return okAny
-}
 
-func matchRouteObjectsObjItem(objs []schemagen.ObjectItem, reqPath string) bool {
-	if len(objs) == 0 {
-		return true
-	}
-	for _, oi := range objs {
-		m, ok := asStringMap(oi)
-		if !ok {
-			continue
-		}
-		if pat, ok := m["ROUTE"]; ok {
-			if pat == "*" {
+	for _, it := range items {
+
+		switch it.Kind {
+		case schemagen.ATTRGLOBAL:
+			if it.Value == "ANONYMOUS" {
 				return true
 			}
-			if ok, _ := path.Match(pat, reqPath); ok {
-				return true
+		case schemagen.ATTRCLAIM:
+			for key, _ := range claims {
+				if it.Value == key {
+					return true
+				}
 			}
 		}
 	}
 	return false
 }
 
-// Turn typed LogicalExpression into the generic Cond your evalExpr understands.
-type Cond map[string]any
+func normalize(p string) string {
+	if p == "" {
+		return "/"
+	}
+	if p != "*" && !strings.HasPrefix(p, "/") {
+		p = "/" + p
+	}
 
-func logicalToCond(le schemagen.LogicalExpression) (Cond, error) {
-	b, err := json.Marshal(le)
-	if err != nil {
-		return nil, err
-	}
-	var m map[string]any
-	if err := json.Unmarshal(b, &m); err != nil {
-		return nil, err
-	}
-	return Cond(m), nil
+	p = path.Clean(p)
+	return p
 }
 
-// Generic converter that tolerates interface{} coming from schemagen types.
+func matchRouteObjectsObjItem(objs []schemagen.ObjectItem, reqPath string) bool {
+	req := normalize(reqPath)
+
+	for _, oi := range objs {
+		if oi.Kind != schemagen.Route {
+			continue
+		}
+		pat := normalize(oi.Value)
+
+		if pat == "*" || pat == "/*" {
+			return true
+		}
+
+		if strings.HasSuffix(pat, "/*") {
+			base := strings.TrimSuffix(pat, "/*")
+			if base != "" && strings.HasPrefix(req, base+"/") {
+				return true
+			}
+			continue
+		}
+
+		if pat == req {
+			return true
+		}
+	}
+	return false
+}
+
+type Cond map[string]any
+
 func asStringMap(v any) (map[string]string, bool) {
 	switch vv := v.(type) {
 	case map[string]string:

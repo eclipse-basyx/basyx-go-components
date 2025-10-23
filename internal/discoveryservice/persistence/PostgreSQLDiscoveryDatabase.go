@@ -4,11 +4,9 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"regexp"
 	"strings"
 	"time"
 
-	"github.com/eclipse-basyx/basyx-go-components/internal/auth"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/jackc/pgx/v5"
@@ -151,29 +149,6 @@ func (p *PostgreSQLDiscoveryDatabase) CreateAllAssetLinks(aas_id string, specifi
 	return nil
 }
 
-var notInRe = regexp.MustCompile(`(?i)\bnot\s+in\s*\(\s*('([^']*)'\s*(,\s*'[^']*'\s*)*)\)`)
-
-func extractNotInIDs(fragment string) []string {
-	// finds the (...) part of NOT IN ('a','b','c') and returns the strings inside
-	m := notInRe.FindStringSubmatch(fragment)
-	if m == nil {
-		return nil
-	}
-	list := m[1] // the whole "'A','B','C'"
-	// split on commas at top level; values are quoted single-strings
-	raw := strings.Split(list, ",")
-	out := make([]string, 0, len(raw))
-	for _, part := range raw {
-		s := strings.TrimSpace(part)
-		s = strings.TrimPrefix(s, "'")
-		s = strings.TrimSuffix(s, "'")
-		if s != "" {
-			out = append(out, s)
-		}
-	}
-	return out
-}
-
 func (p *PostgreSQLDiscoveryDatabase) SearchAASIDsByAssetLinks(
 	ctx context.Context,
 	links []model.AssetLink,
@@ -184,46 +159,26 @@ func (p *PostgreSQLDiscoveryDatabase) SearchAASIDsByAssetLinks(
 	if limit <= 0 {
 		limit = 100
 	}
+
 	peekLimit := int(limit) + 1
 
 	args := []any{}
 	argPos := 1
-
-	// base cursor predicate
 	whereCursor := fmt.Sprintf("( $%d = '' OR ai.aasId >= $%d )", argPos, argPos)
 	args = append(args, cursor)
 	argPos++
 
-	// --- ABAC fragment (NOT IN) mapped to ai.aasId ---
-	whereBanned := "" // empty unless we have a NOT IN
-	if qf := auth.FromFilterCtx(ctx); qf != nil && qf.Where != "" {
-		banned := extractNotInIDs(qf.Where)
-		if len(banned) > 0 {
-			// build parameter list
-			ph := make([]string, len(banned))
-			for i, id := range banned {
-				ph[i] = fmt.Sprintf("$%d", argPos+i)
-				args = append(args, id)
-			}
-			argPos += len(banned)
-			whereBanned = " AND ai.aasId NOT IN (" + strings.Join(ph, ", ") + ")"
-		}
-	}
-
 	var sqlStr string
 	if len(links) == 0 {
-		// simple path
 		sqlStr = fmt.Sprintf(`
-            SELECT ai.aasId
-            FROM aas_identifier ai
-            WHERE %s%s
-            ORDER BY ai.aasId ASC
-            LIMIT $%d
-        `, whereCursor, whereBanned, argPos)
+			SELECT ai.aasId
+			FROM aas_identifier ai
+			WHERE %s
+			ORDER BY ai.aasId ASC
+			LIMIT $%d
+		`, whereCursor, argPos)
 		args = append(args, peekLimit)
-
 	} else {
-		// link-matching path
 		var valuesSQL strings.Builder
 		for i, l := range links {
 			if i > 0 {
@@ -235,17 +190,17 @@ func (p *PostgreSQLDiscoveryDatabase) SearchAASIDsByAssetLinks(
 		}
 
 		sqlStr = fmt.Sprintf(`
-            WITH v(name, value) AS (VALUES %s)
-            SELECT ai.aasId
-            FROM aas_identifier ai
-            JOIN asset_link al ON al.aasRef = ai.id
-            JOIN v ON v.name = al.name AND v.value = al.value
-            WHERE %s%s
-            GROUP BY ai.aasId
-            HAVING COUNT(DISTINCT (al.name, al.value)) = (SELECT COUNT(*) FROM v)
-            ORDER BY ai.aasId ASC
-            LIMIT $%d
-        `, valuesSQL.String(), whereCursor, whereBanned, argPos)
+			WITH v(name, value) AS (VALUES %s)
+			SELECT ai.aasId
+			FROM aas_identifier ai
+			JOIN asset_link al ON al.aasRef = ai.id
+			JOIN v ON v.name = al.name AND v.value = al.value
+			WHERE %s
+			GROUP BY ai.aasId
+			HAVING COUNT(DISTINCT (al.name, al.value)) = (SELECT COUNT(*) FROM v)
+			ORDER BY ai.aasId ASC
+			LIMIT $%d
+		`, valuesSQL.String(), whereCursor, argPos)
 		args = append(args, peekLimit)
 	}
 
@@ -275,5 +230,6 @@ func (p *PostgreSQLDiscoveryDatabase) SearchAASIDsByAssetLinks(
 		nextCursor := buf[limit]
 		return result, nextCursor, nil
 	}
+
 	return buf, "", nil
 }
