@@ -6,6 +6,9 @@ import (
 	"log"
 	"net/http"
 	"time"
+
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/discoveryapi"
 )
 
 type ABACSettings struct {
@@ -64,7 +67,9 @@ func ABACMiddleware(settings ABACSettings, resolver ResolveResource) func(http.H
 				})
 				if !ok {
 					log.Printf("❌ ABAC(model): %s", reason)
-					http.Error(w, "forbidden", http.StatusForbidden)
+
+					resp := common.NewErrorResponse(errors.New("access denied"), http.StatusForbidden, "Middleware", "Rules", "Denied")
+					openapi.EncodeJSONResponse(resp.Body, &resp.Code, w)
 					return
 				}
 

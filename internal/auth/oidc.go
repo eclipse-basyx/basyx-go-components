@@ -4,12 +4,15 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"log"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/coreos/go-oidc"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/discoveryapi"
 )
 
 type OIDC struct {
@@ -73,7 +76,8 @@ func (o *OIDC) Middleware(next http.Handler) http.Handler {
 		idToken, err := o.verifier.Verify(r.Context(), raw)
 		if err != nil {
 			log.Printf("❌ Token verification failed: %v", err)
-			http.Error(w, "invalid token", http.StatusUnauthorized)
+			resp := common.NewErrorResponse(errors.New("invalid token"), http.StatusForbidden, "Middleware", "Rules", "Denied")
+			openapi.EncodeJSONResponse(resp.Body, &resp.Code, w)
 			return
 		}
 		var rm json.RawMessage
@@ -86,7 +90,9 @@ func (o *OIDC) Middleware(next http.Handler) http.Handler {
 		var c Claims
 		if err := dec.Decode(&c); err != nil {
 			log.Printf("❌ Failed to parse claims: %v", err)
-			http.Error(w, "invalid claims", http.StatusUnauthorized)
+
+			resp := common.NewErrorResponse(errors.New("invalid claims"), http.StatusForbidden, "Middleware", "Rules", "Denied")
+			openapi.EncodeJSONResponse(resp.Body, &resp.Code, w)
 			return
 		}
 
@@ -101,14 +107,18 @@ func (o *OIDC) Middleware(next http.Handler) http.Handler {
 
 		if typ, _ := c.GetString("typ"); typ != "" && !strings.EqualFold(typ, "Bearer") {
 			log.Printf("❌ unexpected token typ: %q", typ)
-			http.Error(w, "invalid token type", http.StatusUnauthorized)
+
+			resp := common.NewErrorResponse(errors.New("invalid token type"), http.StatusForbidden, "Middleware", "Rules", "Denied")
+			openapi.EncodeJSONResponse(resp.Body, &resp.Code, w)
 			return
 		}
 
 		required := []string{"profile"}
 		if !hasAllScopes(c, required) {
 			log.Printf("❌ missing required scopes: %v", required)
-			http.Error(w, "insufficient scope", http.StatusForbidden)
+
+			resp := common.NewErrorResponse(errors.New("insufficient scope"), http.StatusForbidden, "Middleware", "Rules", "Denied")
+			openapi.EncodeJSONResponse(resp.Body, &resp.Code, w)
 			return
 		}
 
