@@ -3,6 +3,7 @@ package common
 import (
 	"encoding/json"
 	"flag"
+	"fmt"
 	"log"
 	"strings"
 
@@ -33,6 +34,9 @@ type Config struct {
 	Server     ServerConfig   `yaml:"server"`
 	Postgres   PostgresConfig `yaml:"postgres"`
 	CorsConfig CorsConfig     `yaml:"cors"`
+
+	OIDC OIDCConfig `mapstructure:"oidc" json:"oidc"`
+	ABAC ABACConfig `mapstructure:"abac" json:"abac"`
 }
 
 type ServerConfig struct {
@@ -59,6 +63,21 @@ type CorsConfig struct {
 	AllowCredentials bool     `yaml:"allowCredentials"`
 }
 
+type OIDCConfig struct {
+	Issuer   string `mapstructure:"issuer" json:"issuer"`
+	Audience string `mapstructure:"audience" json:"audience"`
+	JWKSURL  string `mapstructure:"jwksURL" json:"jwksURL"`
+}
+
+type ABACConfig struct {
+	Enabled             bool   `mapstructure:"enabled" json:"enabled"`
+	TenantClaim         string `mapstructure:"tenantClaim" json:"tenantClaim"`
+	EditorRole          string `mapstructure:"editorRole" json:"editorRole"`
+	ClientRolesAudience string `mapstructure:"clientRolesAudience" json:"clientRolesAudience"`
+	RealmAdminRole      string `mapstructure:"realmAdminRole" json:"realmAdminRole"`
+	ModelPath           string `mapstructure:"modelPath" json:"modelPath"`
+}
+
 // LoadConfig loads the configuration from files and environment variables
 func LoadConfig(configPath string) (*Config, error) {
 	v := viper.New()
@@ -66,40 +85,44 @@ func LoadConfig(configPath string) (*Config, error) {
 	// Set default values
 	setDefaults(v)
 
-	// Read config file if provided
 	if configPath != "" {
+		log.Printf("📁 Loading config from file: %s", configPath)
 		v.SetConfigFile(configPath)
 		if err := v.ReadInConfig(); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("read config: %w", err)
 		}
+	} else {
+		log.Println("📁 No config file provided — loading from environment variables only")
 	}
 
 	// Override config with environment variables
 	v.AutomaticEnv()
 	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 
-	var config Config
-	if err := v.Unmarshal(&config); err != nil {
-		return nil, err
+	cfg := new(Config)
+	if err := v.Unmarshal(cfg); err != nil {
+		return nil, fmt.Errorf("unmarshal config: %w", err)
 	}
 
-	return &config, nil
+	log.Println("✅ Configuration loaded successfully")
+	PrintConfiguration(cfg)
+	return cfg, nil
 }
 
 // setDefaults sets sensible defaults for configuration
 func setDefaults(v *viper.Viper) {
 	// Server defaults
 	v.SetDefault("server.host", "0.0.0.0")
-	v.SetDefault("server.port", "5004")
+	v.SetDefault("server.port", 5004)
 	v.SetDefault("server.contextPath", "")
 	v.SetDefault("server.cacheEnabled", false)
 
 	// PostgreSQL defaults
-	v.SetDefault("postgres.host", "localhost")
+	v.SetDefault("postgres.host", "db")
 	v.SetDefault("postgres.port", 5432)
 	v.SetDefault("postgres.user", "admin")
 	v.SetDefault("postgres.password", "admin123")
-	v.SetDefault("postgres.dbname", "basyx")
+	v.SetDefault("postgres.dbname", "basyxTestDB")
 	v.SetDefault("postgres.maxOpenConnections", 50)
 	v.SetDefault("postgres.maxIdleConnections", 50)
 	v.SetDefault("postgres.connMaxLifetimeMinutes", 5)
@@ -109,6 +132,17 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("cors.allowedMethods", []string{"GET", "POST", "DELETE", "OPTIONS"})
 	v.SetDefault("cors.allowedHeaders", []string{"*"})
 	v.SetDefault("cors.allowCredentials", true)
+
+	v.SetDefault("oidc.issuer", "http://keycloak:8081/realms/basyx")
+	v.SetDefault("oidc.audience", "discovery-service")
+	v.SetDefault("oidc.jwksURL", "")
+
+	v.SetDefault("abac.enabled", true)
+	v.SetDefault("abac.tenantClaim", "tenant")
+	v.SetDefault("abac.editorRole", "aas_editor")
+	v.SetDefault("abac.clientRolesAudience", "discovery-service")
+	v.SetDefault("abac.realmAdminRole", "admin")
+	v.SetDefault("abac.modelPath", "access-rules.json")
 
 }
 
@@ -132,7 +166,7 @@ func PrintConfiguration(cfg *Config) {
 		return
 	}
 
-	log.Printf("Configuration:\n%s", string(configJSON))
+	log.Printf("📜 Loaded configuration:\n%s", string(configJSON))
 }
 
 func ConfigureServer(configPath string) (*Config, *chi.Mux) {

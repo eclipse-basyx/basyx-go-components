@@ -13,6 +13,7 @@ import (
 	"github.com/go-chi/cors"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/auth"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	api "github.com/eclipse-basyx/basyx-go-components/internal/discoveryservice/api"
 	persistence_postgresql "github.com/eclipse-basyx/basyx-go-components/internal/discoveryservice/persistence"
 	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/discoveryapi"
@@ -22,12 +23,12 @@ func runServer(ctx context.Context, configPath string) error {
 	log.Default().Println("Loading Discovery Service...")
 	log.Default().Println("Config Path:", configPath)
 
-	cfg, err := auth.LoadConfig(configPath)
+	cfg, err := common.LoadConfig(configPath)
 	if err != nil {
 		log.Fatalf("Failed to load config: %v", err)
 		return err
 	}
-	auth.PrintConfiguration(cfg)
+	common.PrintConfiguration(cfg)
 
 	// === Load Access Model ===
 	var model *auth.AccessModel
