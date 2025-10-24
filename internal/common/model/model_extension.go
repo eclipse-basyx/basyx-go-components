@@ -33,9 +33,10 @@ func AssertExtensionRequired(obj Extension) error {
 			return &RequiredError{Field: name}
 		}
 	}
-
-	if err := AssertReferenceRequired(*obj.SemanticId); err != nil {
-		return err
+	if obj.SemanticId != nil {
+		if err := AssertReferenceRequired(*obj.SemanticId); err != nil {
+			return err
+		}
 	}
 	for _, el := range obj.SupplementalSemanticIds {
 		if err := AssertReferenceRequired(el); err != nil {
@@ -52,8 +53,10 @@ func AssertExtensionRequired(obj Extension) error {
 
 // AssertExtensionConstraints checks if the values respects the defined constraints
 func AssertExtensionConstraints(obj Extension) error {
-	if err := AssertReferenceConstraints(*obj.SemanticId); err != nil {
-		return err
+	if obj.SemanticId != nil {
+		if err := AssertReferenceConstraints(*obj.SemanticId); err != nil {
+			return err
+		}
 	}
 	for _, el := range obj.SupplementalSemanticIds {
 		if err := AssertReferenceConstraints(el); err != nil {

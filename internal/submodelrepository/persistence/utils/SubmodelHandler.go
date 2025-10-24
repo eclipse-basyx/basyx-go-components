@@ -32,10 +32,10 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/doug-martin/goqu/v9"
 	_ "github.com/doug-martin/goqu/v9/dialect/postgres"
 	builders "github.com/eclipse-basyx/basyx-go-components/internal/common/builder"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	submodel_query "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils/SubmodelQuery"
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 )
 
@@ -96,7 +96,7 @@ func getSubmodels(db *sql.DB, submodelIdFilter string) ([]*gen.Submodel, error) 
 			&row.SemanticId, &row.ReferredSemanticIds,
 			&row.SupplementalSemanticIds, &row.SupplementalReferredSemIds,
 			&row.DataSpecReference, &row.DataSpecReferenceReferred,
-			&row.DataSpecIEC61360, &row.TotalSubmodels,
+			&row.DataSpecIEC61360, &row.Qualifiers, &row.Extensions, &row.TotalSubmodels,
 		); err != nil {
 			return nil, fmt.Errorf("error scanning row: %w", err)
 		}
@@ -151,9 +151,55 @@ func getSubmodels(db *sql.DB, submodelIdFilter string) ([]*gen.Submodel, error) 
 		// Embedded Data Specifications
 		if isArrayNotEmpty(row.DataSpecReference) {
 			builder := builders.NewEmbeddedDataSpecificationsBuilder()
-			builder.BuildReferences(row.DataSpecReference, row.DataSpecReferenceReferred)
-			builder.BuildContentsIec61360(row.DataSpecIEC61360)
+			err := builder.BuildReferences(row.DataSpecReference, row.DataSpecReferenceReferred)
+			if err != nil {
+				fmt.Println(err)
+				return nil, err
+			}
+			err = builder.BuildContentsIec61360(row.DataSpecIEC61360)
+			if err != nil {
+				fmt.Println(err)
+				return nil, err
+			}
 			submodel.EmbeddedDataSpecifications = builder.Build()
+		}
+
+		// Qualifiers
+		if isArrayNotEmpty(row.Qualifiers) {
+			builder := builders.NewQualifiersBuilder()
+			qualifierRows, err := builders.ParseQualifiersRow(row.Qualifiers)
+			if err != nil {
+				return nil, err
+			}
+			for _, qualifierRow := range qualifierRows {
+				builder.AddQualifier(qualifierRow.DbId, qualifierRow.Kind, qualifierRow.Type, qualifierRow.ValueType, qualifierRow.Value)
+
+				builder.AddSemanticId(qualifierRow.DbId, qualifierRow.SemanticId, qualifierRow.SemanticIdReferredReferences)
+
+				builder.AddValueId(qualifierRow.DbId, qualifierRow.ValueId, qualifierRow.ValueIdReferredReferences)
+
+				builder.AddSupplementalSemanticIds(qualifierRow.DbId, qualifierRow.SupplementalSemanticIds, qualifierRow.SupplementalSemanticIdsReferredReferences)
+			}
+			submodel.Qualifier = builder.Build()
+		}
+
+		// Extensions
+		if isArrayNotEmpty(row.Extensions) {
+			builder := builders.NewExtensionsBuilder()
+			extensionRows, err := builders.ParseExtensionRows(row.Extensions)
+			if err != nil {
+				return nil, err
+			}
+			for _, extensionRow := range extensionRows {
+				builder.AddExtension(extensionRow.DbId, extensionRow.Name, extensionRow.ValueType, extensionRow.Value)
+
+				builder.AddSemanticId(extensionRow.DbId, extensionRow.SemanticId, extensionRow.SemanticIdReferredReferences)
+
+				builder.AddRefersTo(extensionRow.DbId, extensionRow.RefersTo, extensionRow.RefersToReferredReferences)
+
+				builder.AddSupplementalSemanticIds(extensionRow.DbId, extensionRow.SupplementalSemanticIds, extensionRow.SupplementalSemanticIdsReferredReferences)
+			}
+			submodel.Extension = builder.Build()
 		}
 
 		result = append(result, submodel)
@@ -264,7 +310,7 @@ func moreThanZeroReferences(referenceArray []*gen.Reference) bool {
 //   - *sql.Rows: Result set containing submodel data with JSON-aggregated nested structures
 //   - error: An error if query building or execution fails
 func getSubmodelDataFromDbWithJSONQuery(db *sql.DB, submodelId string) (*sql.Rows, error) {
-	q, err := getQueryWithGoqu(submodelId)
+	q, err := submodel_query.GetQueryWithGoqu(submodelId)
 	fmt.Println(q)
 	if err != nil {
 		return nil, fmt.Errorf("error building query: %w", err)
@@ -276,295 +322,4 @@ func getSubmodelDataFromDbWithJSONQuery(db *sql.DB, submodelId string) (*sql.Row
 		return nil, err
 	}
 	return rows, nil
-}
-
-// getQueryWithGoqu constructs a comprehensive SQL query for retrieving submodel data.
-//
-// This function builds a complex PostgreSQL query using the goqu query builder that:
-//   - Aggregates nested data structures (display names, descriptions, references) as JSON
-//   - Handles hierarchical reference structures with parent-child relationships
-//   - Retrieves embedded data specifications including IEC 61360 content
-//   - Manages supplemental semantic IDs and their referred references
-//   - Optimally joins multiple tables while avoiding duplication
-//
-// The query structure includes multiple subqueries for:
-//   - Display names and descriptions (multi-language support)
-//   - Semantic IDs and their referred references
-//   - Supplemental semantic IDs and their hierarchies
-//   - Embedded data specifications with IEC 61360 content
-//   - Value lists and level types
-//
-// Parameters:
-//   - submodelId: Optional filter for a specific submodel ID. Empty string retrieves all submodels.
-//
-// Returns:
-//   - string: The complete SQL query string ready for execution
-//   - error: An error if query generation fails
-//
-// The function uses COALESCE to ensure empty arrays ('[]'::jsonb) instead of NULL values,
-// which simplifies downstream JSON parsing. It also includes a total count window function
-// for efficient result set pagination and slice pre-sizing.
-func getQueryWithGoqu(submodelId string) (string, error) {
-	dialect := goqu.Dialect("postgres")
-
-	// Build display names subquery
-	displayNamesSubquery := dialect.From(goqu.T("lang_string_name_type_reference").As("dn_ref")).
-		Select(goqu.L("jsonb_agg(DISTINCT jsonb_build_object('language', dn.language, 'text', dn.text, 'id', dn.id))")).
-		Join(
-			goqu.T("lang_string_name_type").As("dn"),
-			goqu.On(goqu.I("dn.lang_string_name_type_reference_id").Eq(goqu.I("dn_ref.id"))),
-		).
-		Where(goqu.I("dn_ref.id").Eq(goqu.I("s.displayname_id")))
-
-	// Build descriptions subquery
-	descriptionsSubquery := dialect.From(goqu.T("lang_string_text_type_reference").As("dr")).
-		Select(goqu.L("jsonb_agg(DISTINCT jsonb_build_object('language', d.language, 'text', d.text, 'id', d.id))")).
-		Join(
-			goqu.T("lang_string_text_type").As("d"),
-			goqu.On(goqu.I("d.lang_string_text_type_reference_id").Eq(goqu.I("dr.id"))),
-		).
-		Where(goqu.I("dr.id").Eq(goqu.I("s.description_id")))
-
-	// Build semantic_id subquery
-	semanticIdSubquery := dialect.From(goqu.T("reference").As("r")).
-		Select(goqu.L("jsonb_agg(DISTINCT jsonb_build_object('reference_id', r.id, 'reference_type', r.type, 'key_id', rk.id, 'key_type', rk.type, 'key_value', rk.value))")).
-		LeftJoin(
-			goqu.T("reference_key").As("rk"),
-			goqu.On(goqu.I("rk.reference_id").Eq(goqu.I("r.id"))),
-		).
-		Where(goqu.I("r.id").Eq(goqu.I("s.semantic_id")))
-
-	// Build semantic_id referred references subquery
-	semanticIdReferredSubquery := dialect.From(goqu.T("reference").As("ref")).
-		Select(goqu.L("jsonb_agg(DISTINCT jsonb_build_object('reference_id', ref.id, 'reference_type', ref.type, 'parentReference', ref.parentreference, 'rootReference', ref.rootreference, 'key_id', rk.id, 'key_type', rk.type, 'key_value', rk.value))")).
-		LeftJoin(
-			goqu.T("reference_key").As("rk"),
-			goqu.On(goqu.I("rk.reference_id").Eq(goqu.I("ref.id"))),
-		).
-		Where(
-			goqu.I("ref.rootreference").Eq(goqu.I("s.semantic_id")),
-			goqu.I("ref.id").Neq(goqu.I("s.semantic_id")),
-		)
-
-	// Build supplemental semantic ids subquery
-	supplementalSemanticIdsSubquery := dialect.From(goqu.T("submodel_supplemental_semantic_id").As("sssi")).
-		Select(goqu.L("jsonb_agg(DISTINCT jsonb_build_object('reference_id', ref.id, 'reference_type', ref.type, 'key_id', rk.id, 'key_type', rk.type, 'key_value', rk.value))")).
-		LeftJoin(
-			goqu.T("reference").As("ref"),
-			goqu.On(goqu.I("ref.id").Eq(goqu.I("sssi.reference_id"))),
-		).
-		LeftJoin(
-			goqu.T("reference_key").As("rk"),
-			goqu.On(goqu.I("rk.reference_id").Eq(goqu.I("ref.id"))),
-		).
-		Where(goqu.I("sssi.submodel_id").Eq(goqu.I("s.id")))
-
-	// Build supplemental semantic ids referred subquery
-	supplementalSemanticIdsReferredSubquery := dialect.From(goqu.T("submodel_supplemental_semantic_id").As("sssi")).
-		Select(goqu.L("jsonb_agg(DISTINCT jsonb_build_object('supplemental_root_reference_id', sssi.reference_id, 'reference_id', ref.id, 'reference_type', ref.type, 'parentReference', ref.parentreference, 'rootReference', ref.rootreference, 'key_id', rk.id, 'key_type', rk.type, 'key_value', rk.value))")).
-		LeftJoin(
-			goqu.T("reference").As("ref"),
-			goqu.On(goqu.I("ref.rootreference").Eq(goqu.I("sssi.reference_id"))),
-		).
-		LeftJoin(
-			goqu.T("reference_key").As("rk"),
-			goqu.On(goqu.I("rk.reference_id").Eq(goqu.I("ref.id"))),
-		).
-		Where(
-			goqu.I("sssi.submodel_id").Eq(goqu.I("s.id")),
-			goqu.I("ref.id").IsNotNull(),
-		)
-	// Build embedded data specifications subquery
-	embeddedDataSpecificationReferenceSubquery := dialect.From(goqu.T("submodel_embedded_data_specification").As("seds")).
-		Select(goqu.L("jsonb_agg(DISTINCT jsonb_build_object('eds_id', seds.embedded_data_specification_id, 'reference_id', data_spec_reference.id, 'reference_type', data_spec_reference.type, 'key_id', data_spec_reference_key.id, 'key_type', data_spec_reference_key.type, 'key_value', data_spec_reference_key.value))")).
-		LeftJoin(
-			goqu.T("data_specification").As("data_spec"),
-			goqu.On(goqu.I("data_spec.id").Eq(goqu.I("seds.embedded_data_specification_id"))),
-		).
-		LeftJoin(
-			goqu.T("reference").As("data_spec_reference"),
-			goqu.On(goqu.I("data_spec.data_specification").Eq(goqu.I("data_spec_reference.id"))),
-		).
-		LeftJoin(
-			goqu.T("reference_key").As("data_spec_reference_key"),
-			goqu.On(goqu.I("data_spec_reference.id").Eq(goqu.I("data_spec_reference_key.reference_id"))),
-		).
-		Where(goqu.I("seds.submodel_id").Eq(goqu.I("s.id")))
-
-	// Build semantic_id referred references subquery
-	embeddedDataSpecificationReferenceReferredSubquery := dialect.From(goqu.T("submodel_embedded_data_specification").As("seds")).
-		Select(goqu.L("jsonb_agg(DISTINCT jsonb_build_object('reference_id', ref.id, 'reference_type', ref.type, 'parentReference', ref.parentreference, 'rootReference', ref.rootreference, 'key_id', rk.id, 'key_type', rk.type, 'key_value', rk.value))")).
-		LeftJoin(
-			goqu.T("data_specification").As("data_spec"),
-			goqu.On(goqu.I("data_spec.id").Eq(goqu.I("seds.embedded_data_specification_id"))),
-		).
-		LeftJoin(
-			goqu.T("reference").As("data_spec_reference"),
-			goqu.On(goqu.I("data_spec.data_specification").Eq(goqu.I("data_spec_reference.id"))),
-		).
-		LeftJoin(
-			goqu.T("reference").As("ref"),
-			goqu.On(goqu.I("ref.rootreference").Eq(goqu.I("data_spec_reference.id"))),
-		).
-		LeftJoin(
-			goqu.T("reference_key").As("rk"),
-			goqu.On(goqu.I("rk.reference_id").Eq(goqu.I("ref.id"))),
-		).
-		LeftJoin(
-			goqu.T("reference").As("dsr"),
-			goqu.On(goqu.I("dsr.id").Eq(goqu.I("data_spec_reference.id"))),
-		).
-		Where(
-			goqu.I("seds.submodel_id").Eq(goqu.I("s.id")),
-			goqu.I("ref.id").IsNotNull(),
-		)
-
-	preferredNameSubquery := dialect.From(goqu.T("lang_string_text_type_reference").As("pn_ref")).
-		Select(goqu.L("jsonb_agg(DISTINCT jsonb_build_object('language', pn.language, 'text', pn.text, 'id', pn.id))")).
-		Join(
-			goqu.T("lang_string_text_type").As("pn"),
-			goqu.On(goqu.I("pn.lang_string_text_type_reference_id").Eq(goqu.I("pn_ref.id"))),
-		).
-		Where(goqu.I("pn_ref.id").Eq(goqu.I("iec.preferred_name_id")))
-
-	shortNameSubquery := dialect.From(goqu.T("lang_string_text_type_reference").As("sn_ref")).
-		Select(goqu.L("jsonb_agg(DISTINCT jsonb_build_object('language', sn.language, 'text', sn.text, 'id', sn.id))")).
-		Join(
-			goqu.T("lang_string_text_type").As("sn"),
-			goqu.On(goqu.I("sn.lang_string_text_type_reference_id").Eq(goqu.I("sn_ref.id"))),
-		).
-		Where(goqu.I("sn_ref.id").Eq(goqu.I("iec.short_name_id")))
-
-	definitionSubquery := dialect.From(goqu.T("lang_string_text_type_reference").As("df_ref")).
-		Select(goqu.L("jsonb_agg(DISTINCT jsonb_build_object('language', df.language, 'text', df.text, 'id', df.id))")).
-		Join(
-			goqu.T("lang_string_text_type").As("df"),
-			goqu.On(goqu.I("df.lang_string_text_type_reference_id").Eq(goqu.I("df_ref.id"))),
-		).
-		Where(goqu.I("df_ref.id").Eq(goqu.I("iec.definition_id")))
-
-	unitReferenceKeysSubquery := dialect.From(goqu.T("reference").As("dsu")).
-		Select(goqu.L("jsonb_agg(DISTINCT jsonb_build_object('reference_id', dsu.id,'reference_type', dsu.type, 'key_id', dsk.id, 'key_type', dsk.type, 'key_value', dsk.value))")).
-		LeftJoin(
-			goqu.T("reference_key").As("dsk"),
-			goqu.On(goqu.I("dsk.reference_id").Eq(goqu.I("dsu.id"))),
-		).
-		Where(goqu.I("dsu.id").Eq(goqu.I("iec.unit_id")))
-
-	unitReferenceReferredSubquery := dialect.From(goqu.T("reference").As("dsu2")).
-		Select(goqu.L("jsonb_agg(DISTINCT jsonb_build_object('rootReference', dsu2.rootreference,'parentReference', dsu2.parentreference,'reference_type', dsu2.type, 'reference_id', dsu2.id, 'key_id', dsk2.id, 'key_type', dsk2.type, 'key_value', dsk2.value))")).
-		LeftJoin(
-			goqu.T("reference_key").As("dsk2"),
-			goqu.On(goqu.I("dsk2.reference_id").Eq(goqu.I("dsu2.id"))),
-		).
-		Where(
-			goqu.I("dsu2.rootreference").Eq(goqu.I("iec.unit_id")),
-			goqu.I("dsu2.id").Neq(goqu.I("iec.unit_id")),
-		)
-
-	vlvrpReferenceSubquery := dialect.From(goqu.T("reference").As("vlvrp_ref")).
-		Select(goqu.L("jsonb_agg(DISTINCT jsonb_build_object('reference_id', vlvrp_ref.id,'reference_type', vlvrp_ref.type, 'key_id', vlvrp_ref_rk.id, 'key_type', vlvrp_ref_rk.type, 'key_value', vlvrp_ref_rk.value))")).
-		LeftJoin(
-			goqu.T("reference_key").As("vlvrp_ref_rk"),
-			goqu.On(goqu.I("vlvrp_ref_rk.reference_id").Eq(goqu.I("vlvrp_ref.id"))),
-		).
-		Where(goqu.I("vlvrp_ref.id").Eq(goqu.I("vlvrp.value_id")))
-
-	vlvrpReferenceReferredSubquery := dialect.From(goqu.T("reference").As("vlvrp_referred_ref")).
-		Select(goqu.L("jsonb_agg(DISTINCT jsonb_build_object('rootReference', vlvrp_referred_ref.rootreference,'parentReference', vlvrp_referred_ref.parentreference,'reference_type', vlvrp_referred_ref.type, 'reference_id', vlvrp_referred_ref.id, 'key_id', vlvrp_ref_rk.id, 'key_type', vlvrp_ref_rk.type, 'key_value', vlvrp_ref_rk.value))")).
-		LeftJoin(
-			goqu.T("reference_key").As("vlvrp_ref_rk"),
-			goqu.On(goqu.I("vlvrp_ref_rk.reference_id").Eq(goqu.I("vlvrp_referred_ref.id"))),
-		).
-		Where(
-			goqu.I("vlvrp_referred_ref.rootreference").Eq(goqu.I("vlvrp.value_id")),
-			goqu.I("vlvrp_referred_ref.id").Neq(goqu.I("vlvrp.value_id")),
-		)
-
-	valueListEntriesSubquery := dialect.From(goqu.T("value_list").As("vl")).
-		Select(goqu.L("jsonb_agg(DISTINCT jsonb_build_object('value_reference_pair_id', vlvrp.id,'value_pair_value', vlvrp.value, 'reference_rows', ?, 'referred_reference_rows', ?))", vlvrpReferenceSubquery, vlvrpReferenceReferredSubquery)).
-		Join(
-			goqu.T("value_list_value_reference_pair").As("vlvrp"),
-			goqu.On(goqu.I("vl.id").Eq(goqu.I("vlvrp.value_list_id"))),
-		).
-		LeftJoin(
-			goqu.T("reference").As("vlref"),
-			goqu.On(goqu.I("vlvrp.value_id").Eq(goqu.I("vlref.id"))),
-		).
-		Where(goqu.I("vl.id").Eq(goqu.I("iec.value_list_id")))
-
-	levelTypeSubquery := dialect.From(goqu.T("level_type").As("leveltype")).
-		Select(goqu.L("jsonb_build_object('min',leveltype.min, 'max', leveltype.max, 'nom', leveltype.nom,'typ', leveltype.typ)")).
-		Where(goqu.I("leveltype.id").Eq(goqu.I("iec.level_type_id")))
-
-	iec61360Subquery := dialect.From(goqu.T("submodel_embedded_data_specification").As("seds")).
-		Select(
-			goqu.L(
-				`jsonb_agg(
-					DISTINCT jsonb_build_object(
-						'eds_id', seds.embedded_data_specification_id,
-						'iec_id', iec.id,
-						'unit', iec.unit,
-						'source_of_definition', iec.source_of_definition, 
-						'symbol', iec.symbol, 
-						'data_type', iec.data_type, 
-						'value_format', iec.value_format, 
-						'value', iec.value, 
-						'level_type_id', iec.level_type_id, 
-						'preferred_name', ?, 
-						'short_name', ?, 
-						'definition', ?, 
-						'unit_reference_keys', ?, 
-						'unit_reference_referred', ?, 
-						'value_list_entries', ?,
-						'level_type', ?
-					)
-				)`,
-				preferredNameSubquery, shortNameSubquery, definitionSubquery, unitReferenceKeysSubquery, unitReferenceReferredSubquery, valueListEntriesSubquery, levelTypeSubquery)).
-		Join(
-			goqu.T("data_specification").As("ds"),
-			goqu.On(goqu.I("ds.id").Eq(goqu.I("seds.embedded_data_specification_id"))),
-		).
-		Join(
-			goqu.T("data_specification_content").As("dsc"),
-			goqu.On(goqu.I("dsc.id").Eq(goqu.I("ds.data_specification_content"))),
-		).
-		Join(
-			goqu.T("data_specification_iec61360").As("iec"),
-			goqu.On(goqu.I("iec.id").Eq(goqu.I("dsc.id"))),
-		).
-		Where(goqu.I("seds.submodel_id").Eq(goqu.I("s.id")))
-
-	// Main query
-	query := dialect.From(goqu.T("submodel").As("s")).
-		Select(
-			goqu.I("s.id").As("submodel_id"),
-			goqu.I("s.id_short").As("submodel_id_short"),
-			goqu.I("s.category").As("submodel_category"),
-			goqu.I("s.kind").As("submodel_kind"),
-			goqu.L("COALESCE((?), '[]'::jsonb)", displayNamesSubquery).As("submodel_display_names"),
-			goqu.L("COALESCE((?), '[]'::jsonb)", descriptionsSubquery).As("submodel_descriptions"),
-			goqu.L("COALESCE((?), '[]'::jsonb)", semanticIdSubquery).As("submodel_semantic_id"),
-			goqu.L("COALESCE((?), '[]'::jsonb)", semanticIdReferredSubquery).As("submodel_semantic_id_referred"),
-			goqu.L("COALESCE((?), '[]'::jsonb)", supplementalSemanticIdsSubquery).As("submodel_supplemental_semantic_ids"),
-			goqu.L("COALESCE((?), '[]'::jsonb)", supplementalSemanticIdsReferredSubquery).As("submodel_supplemental_semantic_id_referred"),
-			goqu.L("COALESCE((?), '[]'::jsonb)", embeddedDataSpecificationReferenceSubquery).As("submodel_eds_data_specification"),
-			goqu.L("COALESCE((?), '[]'::jsonb)", embeddedDataSpecificationReferenceReferredSubquery).As("submodel_eds_data_specification_referred"),
-			goqu.L("COALESCE((?), '[]'::jsonb)", iec61360Subquery).As("submodel_data_spec_iec61360"),
-		)
-
-	// Add optional WHERE clause for submodel ID filtering
-	if submodelId != "" {
-		query = query.Where(goqu.I("s.id").Eq(submodelId))
-	}
-
-	// add a field that counts number of submodels to presize slices in calling function
-	query = query.SelectAppend(goqu.L("COUNT(s.id) OVER() AS total_submodels"))
-
-	sql, _, err := query.ToSQL()
-	if err != nil {
-		return "", fmt.Errorf("error generating SQL: %w", err)
-	}
-
-	return sql, nil
 }

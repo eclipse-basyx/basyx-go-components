@@ -190,10 +190,6 @@ func (edsb *EmbeddedDataSpecificationsBuilder) BuildContentsIec61360(iecRows jso
 
 	for _, data := range iecContents {
 		eds := edsb.dataSpecifications[data.EdsID]
-		dataType, err := gen.NewDataTypeIec61360FromValue(data.DataType)
-		if err != nil {
-			return fmt.Errorf("error converting DataType for iec content %d", data.IecID)
-		}
 
 		preferredName, err := ParseLangStringPreferredNameTypeIec61360(data.PreferredName)
 		if err != nil {
@@ -213,10 +209,6 @@ func (edsb *EmbeddedDataSpecificationsBuilder) BuildContentsIec61360(iecRows jso
 		referenceBuilderMap, unitId, err := buildUnitId(data)
 		if err != nil {
 			return err
-		}
-
-		if len(unitId) != 1 {
-			return fmt.Errorf("expected exactly one UnitId reference for iec content %d, got %d", data.IecID, len(unitId))
 		}
 
 		var valueList *gen.ValueList
@@ -239,13 +231,25 @@ func (edsb *EmbeddedDataSpecificationsBuilder) BuildContentsIec61360(iecRows jso
 			Unit:               data.Unit,
 			SourceOfDefinition: data.SourceOfDefinition,
 			Symbol:             data.Symbol,
-			DataType:           dataType,
 			ValueFormat:        data.ValueFormat,
 			Value:              data.Value,
 			PreferredName:      preferredName,
 			ShortName:          shortName,
 			Definition:         definition,
-			UnitId:             unitId[0],
+		}
+
+		if data.DataType != "" {
+			dataType, err := gen.NewDataTypeIec61360FromValue(data.DataType)
+			if err != nil {
+				return fmt.Errorf("error converting DataType for iec content %d", data.IecID)
+			}
+			eds.DataSpecificationContent.(*gen.DataSpecificationIec61360).DataType = dataType
+		}
+
+		if len(unitId) > 1 {
+			return fmt.Errorf("expected exactly one or no UnitId reference for iec content %d, got %d", data.IecID, len(unitId))
+		} else if len(unitId) == 1 {
+			eds.DataSpecificationContent.(*gen.DataSpecificationIec61360).UnitId = unitId[0]
 		}
 
 		edsb.dataSpecifications[data.EdsID] = eds
@@ -281,7 +285,7 @@ func (*EmbeddedDataSpecificationsBuilder) addValueListIfSet(data EdsContentIec61
 			return nil, fmt.Errorf("failed to unmarshal ValueListEntries for iec content %d: %w", data.IecID, err)
 		}
 		valueList := &gen.ValueList{
-			ValueReferencePairs: []gen.ValueReferencePair{},
+			ValueReferencePairs: []*gen.ValueReferencePair{},
 		}
 		for _, entry := range valueListRows {
 			reference, err := ParseReferences(entry.ReferenceRows, referenceBuilderMap)
@@ -296,7 +300,11 @@ func (*EmbeddedDataSpecificationsBuilder) addValueListIfSet(data EdsContentIec61
 				Value:   entry.Value,
 				ValueId: reference[0],
 			}
-			valueList.ValueReferencePairs = append(valueList.ValueReferencePairs, pair)
+			valueList.ValueReferencePairs = append(valueList.ValueReferencePairs, &pair)
+		}
+		// Check if at least one entry was added
+		if len(valueList.ValueReferencePairs) == 0 {
+			return nil, nil
 		}
 		return valueList, nil
 	}
