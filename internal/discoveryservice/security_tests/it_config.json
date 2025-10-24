@@ -15,7 +15,7 @@
         },
         "data": "postBody/simple_specificAssetIds.json",
         "method": "POST",
-        "endpoint": "http://localhost:5004/health",
+        "endpoint": "http://localhost:5004/lookup/shells/health",
         "expectedStatus": 403
     },
     {
@@ -25,8 +25,7 @@
             "password": "admin"
         },
         "method": "GET",
-        "shouldMatch": "expected/simple_specificAssetIds.json",
-        "endpoint": "http://localhost:5004/health",
-        "expectedStatus": 200
+        "endpoint": "http://localhost:5004/lookup/shells/MT",
+        "expectedStatus": 404
     }
 ]

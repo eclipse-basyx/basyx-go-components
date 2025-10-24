@@ -54,10 +54,12 @@ jobs:
           cd internal/submodelrepository/integration_tests
           go test -v .
       - name: Run discovery service tests
-        env:
-            DISC_TEST_BUILD: "1"
         run: |
           cd internal/discoveryservice/integration_tests
+          go test -v
+      - name: Run discovery service security tests
+        run: |
+          cd internal/discoveryservice/security_tests
           go test -v
       # - name: Cleanup Docker
       #   if: always()
