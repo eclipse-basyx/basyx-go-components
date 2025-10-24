@@ -1,0 +1,54 @@
+{
+  "AllAccessPermissionRules": {
+    "rules": [
+      {
+        "ACL": {
+          "ATTRIBUTES": [
+            { "CLAIM": "role" },
+            { "CLAIM": "clear" }
+          ],
+          "RIGHTS": [ "READ" ],
+          "ACCESS": "ALLOW"
+        },
+        "OBJECTS": [
+          { "ROUTE": "/lookup/shells/*" }
+        ],
+        "FORMULA": {
+          "$or":[
+            {
+              "$and": [
+              { "$ge": [ { "$numCast": { "$attribute": { "CLAIM": "clear" } } }, { "$numVal": 8 } ] },
+
+              { "$ge": [
+                { "$timeCast": { "$attribute": { "GLOBAL": "LOCALNOW" } } },
+                { "$timeVal": "08:00" }
+              ]},
+              { "$le": [
+                { "$timeCast": { "$attribute": { "GLOBAL": "LOCALNOW" } } },
+                { "$timeVal": "16:00" }
+              ]}
+            ]
+            },
+            { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "viewer" } ] }
+          ]
+        }
+      },
+      
+      {
+        "ACL": {
+          "ATTRIBUTES": [
+            { "CLAIM": "role" },
+            { "CLAIM": "clear" }
+          ],
+          "RIGHTS": [ "CREATE" ],
+          "ACCESS": "ALLOW"
+        },
+        "OBJECTS": [
+          { "ROUTE": "/lookup/shells/*" }
+        ],
+        "FORMULA": 
+          { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "editor" } ] }
+      }
+    ]
+  }
+}

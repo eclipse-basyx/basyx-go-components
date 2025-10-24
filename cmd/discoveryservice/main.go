@@ -28,7 +28,6 @@ func runServer(ctx context.Context, configPath string) error {
 		log.Fatalf("Failed to load config: %v", err)
 		return err
 	}
-	common.PrintConfiguration(cfg)
 
 	// === Main Router ===
 	r := chi.NewRouter()

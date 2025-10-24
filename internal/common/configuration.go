@@ -2,7 +2,6 @@ package common
 
 import (
 	"encoding/json"
-	"flag"
 	"fmt"
 	"log"
 	"strings"
@@ -71,10 +70,7 @@ type OIDCConfig struct {
 
 type ABACConfig struct {
 	Enabled             bool   `mapstructure:"enabled" json:"enabled"`
-	TenantClaim         string `mapstructure:"tenantClaim" json:"tenantClaim"`
-	EditorRole          string `mapstructure:"editorRole" json:"editorRole"`
 	ClientRolesAudience string `mapstructure:"clientRolesAudience" json:"clientRolesAudience"`
-	RealmAdminRole      string `mapstructure:"realmAdminRole" json:"realmAdminRole"`
 	ModelPath           string `mapstructure:"modelPath" json:"modelPath"`
 }
 
@@ -138,10 +134,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("oidc.jwksURL", "")
 
 	v.SetDefault("abac.enabled", false)
-	v.SetDefault("abac.tenantClaim", "tenant")
-	v.SetDefault("abac.editorRole", "aas_editor")
 	v.SetDefault("abac.clientRolesAudience", "discovery-service")
-	v.SetDefault("abac.realmAdminRole", "admin")
 	v.SetDefault("abac.modelPath", "access-rules.json")
 
 }
@@ -167,29 +160,6 @@ func PrintConfiguration(cfg *Config) {
 	}
 
 	log.Printf("📜 Loaded configuration:\n%s", string(configJSON))
-}
-
-func ConfigureServer(configPath string) (*Config, *chi.Mux) {
-	PrintSplash()
-
-	if configPath == "" {
-		cfgPathFlag := flag.String("config", "", "Path to config file")
-		flag.Parse()
-		configPath = *cfgPathFlag
-	}
-
-	// Load configuration
-	cfg, err := LoadConfig(configPath)
-	if err != nil {
-		log.Fatalf("failed to load configuration: %v", err)
-		return nil, nil
-	}
-
-	PrintConfiguration(cfg)
-
-	// Create Chi router
-	r := chi.NewRouter()
-	return cfg, r
 }
 
 func AddCors(r *chi.Mux, config *Config) {
