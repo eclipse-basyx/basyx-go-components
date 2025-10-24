@@ -45,8 +45,6 @@ type ABACConfig struct {
 	ClientRolesAudience string `mapstructure:"clientRolesAudience" json:"clientRolesAudience"`
 	RealmAdminRole      string `mapstructure:"realmAdminRole" json:"realmAdminRole"`
 	ModelPath           string `mapstructure:"modelPath" json:"modelPath"`
-	SchemaPath          string `mapstructure:"schemaPath" json:"schemaPath"`
-	Validate            bool   `mapstructure:"validate" json:"validate"`
 }
 
 func LoadConfig(configPath string) (*Config, error) {
@@ -79,7 +77,7 @@ func LoadConfig(configPath string) (*Config, error) {
 func setDefaults(v *viper.Viper) {
 	v.SetDefault("server.port", 5004)
 	v.SetDefault("server.contextPath", "")
-	v.SetDefault("postgres.host", "localhost")
+	v.SetDefault("postgres.host", "db")
 	v.SetDefault("postgres.port", 5432)
 	v.SetDefault("postgres.user", "admin")
 	v.SetDefault("postgres.password", "admin123")
@@ -87,7 +85,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("postgres.maxOpenConnections", 50)
 	v.SetDefault("postgres.maxIdleConnections", 50)
 	v.SetDefault("postgres.connMaxLifetimeMinutes", 5)
-	v.SetDefault("oidc.issuer", "http://localhost:8081/realms/basyx")
+	v.SetDefault("oidc.issuer", "http://keycloak:8081/realms/basyx")
 	v.SetDefault("oidc.audience", "discovery-service")
 	v.SetDefault("oidc.jwksURL", "")
 	v.SetDefault("abac.enabled", true)
@@ -96,8 +94,6 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("abac.clientRolesAudience", "discovery-service")
 	v.SetDefault("abac.realmAdminRole", "admin")
 	v.SetDefault("abac.modelPath", "access-rules.json")
-	v.SetDefault("abac.schemaPath", "AccessRuleModel.schema.json")
-	v.SetDefault("abac.validate", false)
 }
 
 func PrintConfiguration(cfg *Config) {

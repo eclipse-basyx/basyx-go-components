@@ -32,6 +32,22 @@
             { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "viewer" } ] }
           ]
         }
+      },
+      
+      {
+        "ACL": {
+          "ATTRIBUTES": [
+            { "CLAIM": "role" },
+            { "CLAIM": "clear" }
+          ],
+          "RIGHTS": [ "CREATE" ],
+          "ACCESS": "ALLOW"
+        },
+        "OBJECTS": [
+          { "ROUTE": "/lookup/shells/*" }
+        ],
+        "FORMULA": 
+          { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "editor" } ] }
       }
     ]
   }

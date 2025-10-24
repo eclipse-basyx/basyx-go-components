@@ -4,20 +4,19 @@ server:
   host: 0.0.0.0
 
 postgres:
-  host: localhost
+  host: db
   port: 5432
   user: admin
   password: admin123
-  # dbname: basyxGoBenchmarkTest
   dbname: basyxTestDB
   maxOpenConnections: 500
   maxIdleConnections: 500
   connMaxLifetimeMinutes: 5
 
 oidc:
-  issuer: "http://localhost:8081/realms/basyx"
+  issuer: "http://keycloak.basyx.localhost:8080/realms/basyx"
   audience: "discovery-service"
-  jwksURL: ""  # optional, leave empty for auto-discovery
+  jwksURL: "" 
 
 abac:
   enabled: true
@@ -25,3 +24,4 @@ abac:
   editorRole: "aas_editor"
   clientRolesAudience: "discovery-service"
   realmAdminRole: "admin"
+  modelPath: "/config/access-rules.json"

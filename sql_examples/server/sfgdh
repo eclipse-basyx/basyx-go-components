@@ -1,7 +1,3 @@
-# --- Server ---
-SERVER_PORT=5004
-SERVER_CONTEXTPATH=
-
 # --- Postgres (matches your docker-compose) ---
 POSTGRES_HOST=localhost
 POSTGRES_PORT=5432
