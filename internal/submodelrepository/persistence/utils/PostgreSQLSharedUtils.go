@@ -211,7 +211,6 @@ func CreateQualifier(tx *sql.Tx, qualifier gen.Qualifier) (sql.NullInt64, error)
 
 	return qualifierDbId, nil
 }
-
 func CreateEmbeddedDataSpecification(tx *sql.Tx, embeddedDataSpecification gen.EmbeddedDataSpecification) (sql.NullInt64, error) {
 	var embeddedDataSpecificationContentDbId sql.NullInt64
 	var embeddedDataSpecificationDbId sql.NullInt64
@@ -383,12 +382,23 @@ func CreateAdministrativeInformation(tx *sql.Tx, adminInfo *gen.AdministrativeIn
 				return sql.NullInt64{}, err
 			}
 		}
+
 		err = tx.QueryRow(`INSERT INTO administrative_information (version, revision, creator, templateId) VALUES ($1, $2, $3, $4) RETURNING id`,
 			adminInfo.Version, adminInfo.Revision, creatorID, adminInfo.TemplateId).Scan(&id)
 		if err != nil {
 			return sql.NullInt64{}, err
 		}
 		adminInfoID = sql.NullInt64{Int64: int64(id), Valid: true}
+
+		if len(adminInfo.EmbeddedDataSpecifications) > 0 {
+			for _, eds := range adminInfo.EmbeddedDataSpecifications {
+				edsId, err := CreateEmbeddedDataSpecification(tx, eds)
+				tx.Exec(`INSERT INTO administrative_information_embedded_data_specification (administrative_information_id, embedded_data_specification_id) VALUES ($1, $2)`, adminInfoID, edsId)
+				if err != nil {
+					return sql.NullInt64{}, err
+				}
+			}
+		}
 	}
 	return adminInfoID, nil
 }

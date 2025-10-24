@@ -129,13 +129,16 @@ func GetQueryWithGoqu(submodelId string) (string, error) {
 			goqu.I("ref.id").IsNotNull(),
 		)
 	// Build embedded data specifications subquery
-	embeddedDataSpecificationReferenceSubquery, embeddedDataSpecificationReferenceReferredSubquery, iec61360Subquery := GetEmbeddedDataSpecificationSubqueries(dialect)
+	embeddedDataSpecificationReferenceSubquery, embeddedDataSpecificationReferenceReferredSubquery, iec61360Subquery := GetEmbeddedDataSpecificationSubqueries(dialect, "submodel_embedded_data_specification", "submodel_id", "s.id")
 
 	// Build qualifier subquery
 	qualifierSubquery := GetQualifierSubqueryForSubmodel(dialect)
 
 	// Build extension subquery
 	extensionSubquery := GetExtensionSubqueryForSubmodel(dialect)
+
+	// Build AdministrativeInformation subquery
+	administrationSubquery := GetAdministrationSubqueryForSubmodel(dialect)
 
 	// Main query
 	query := dialect.From(goqu.T("submodel").As("s")).
@@ -155,6 +158,7 @@ func GetQueryWithGoqu(submodelId string) (string, error) {
 			goqu.L("COALESCE((?), '[]'::jsonb)", iec61360Subquery).As("submodel_data_spec_iec61360"),
 			goqu.L("COALESCE((?), '[]'::jsonb)", qualifierSubquery).As("submodel_qualifiers"),
 			goqu.L("COALESCE((?), '[]'::jsonb)", extensionSubquery).As("submodel_extensions"),
+			goqu.L("COALESCE((?), '[]'::jsonb)", administrationSubquery).As("submodel_administrative_information"),
 		)
 
 	// Add optional WHERE clause for submodel ID filtering

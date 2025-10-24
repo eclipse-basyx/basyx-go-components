@@ -96,7 +96,7 @@ func getSubmodels(db *sql.DB, submodelIdFilter string) ([]*gen.Submodel, error) 
 			&row.SemanticId, &row.ReferredSemanticIds,
 			&row.SupplementalSemanticIds, &row.SupplementalReferredSemIds,
 			&row.DataSpecReference, &row.DataSpecReferenceReferred,
-			&row.DataSpecIEC61360, &row.Qualifiers, &row.Extensions, &row.TotalSubmodels,
+			&row.DataSpecIEC61360, &row.Qualifiers, &row.Extensions, &row.Administration, &row.TotalSubmodels,
 		); err != nil {
 			return nil, fmt.Errorf("error scanning row: %w", err)
 		}
@@ -200,6 +200,26 @@ func getSubmodels(db *sql.DB, submodelIdFilter string) ([]*gen.Submodel, error) 
 				builder.AddSupplementalSemanticIds(extensionRow.DbId, extensionRow.SupplementalSemanticIds, extensionRow.SupplementalSemanticIdsReferredReferences)
 			}
 			submodel.Extension = builder.Build()
+		}
+
+		// Administration
+		if isArrayNotEmpty(row.Administration) {
+			adminRow, err := builders.ParseAdministrationRow(row.Administration)
+			if err != nil {
+				fmt.Println(err)
+				return nil, err
+			}
+			if adminRow != nil {
+
+				admin, err := builders.BuildAdministration(*adminRow)
+				if err != nil {
+					fmt.Println(err)
+					return nil, err
+				}
+				submodel.Administration = admin
+			} else {
+				fmt.Println("Administration row is nil")
+			}
 		}
 
 		result = append(result, submodel)
