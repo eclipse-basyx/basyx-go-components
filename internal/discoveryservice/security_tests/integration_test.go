@@ -15,22 +15,17 @@ import (
 	"time"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/testenv"
-	_ "github.com/lib/pq" // PostgreSQL driver
+	_ "github.com/lib/pq"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-// -----------------------------
-// Config models
-// -----------------------------
 
 type TokenCredentials struct {
 	User     string `json:"user"`
 	Password string `json:"password"`
 }
 
-// TestConfig represents the structure of your test configuration
 type TestConfig struct {
 	Context        string            `json:"context,omitempty"`
 	Method         string            `json:"method"`
@@ -41,11 +36,6 @@ type TestConfig struct {
 	Token          *TokenCredentials `json:"token,omitempty"`
 }
 
-// -----------------------------
-// Helpers: config loading
-// -----------------------------
-
-// loadTestConfig loads the test configuration from a JSON file
 func loadTestConfig(filename string) ([]TestConfig, error) {
 	file, err := os.Open(filename)
 	if err != nil {
@@ -59,17 +49,11 @@ func loadTestConfig(filename string) ([]TestConfig, error) {
 	return configs, err
 }
 
-// -----------------------------
-// Helpers: token retrieval & cache
-// -----------------------------
-
 var (
-	tokenCache   = map[string]string{} // key: "user|password"
+	tokenCache   = map[string]string{}
 	tokenCacheMu sync.Mutex
 )
 
-// getAccessToken retrieves an access token from Keycloak using ROPC flow.
-// It caches tokens per (user,password) for the duration of the test run.
 func getAccessToken(creds *TokenCredentials) (string, error) {
 	if creds == nil {
 		return "", nil
@@ -127,22 +111,15 @@ func getAccessToken(creds *TokenCredentials) (string, error) {
 	return tokenResp.AccessToken, nil
 }
 
-// -----------------------------
-// HTTP request executor
-// -----------------------------
-
-// makeRequest performs an HTTP request based on the test config
 func makeRequest(config TestConfig) (string, error) {
 	var req *http.Request
 	var err error
 
-	// If ExpectedStatus not set, default to 200
 	expectedStatus := config.ExpectedStatus
 	if expectedStatus == 0 {
 		expectedStatus = http.StatusOK
 	}
 
-	// Handle token if present
 	var accessToken string
 	if config.Token != nil {
 		accessToken, err = getAccessToken(config.Token)
@@ -184,7 +161,6 @@ func makeRequest(config TestConfig) (string, error) {
 		return "", err
 	}
 
-	// Attach bearer token if available
 	if accessToken != "" {
 		req.Header.Set("Authorization", "Bearer "+accessToken)
 	}
@@ -211,18 +187,11 @@ func makeRequest(config TestConfig) (string, error) {
 	return string(body), nil
 }
 
-// -----------------------------
-// Tests
-// -----------------------------
-
-// IntegrationTest runs the integration tests based on the config file
 func TestIntegration(t *testing.T) {
-	// Load test configuration
 	configs, err := loadTestConfig("it_config.json")
 	require.NoError(t, err, "Failed to load test config")
 
-	// Wait for services to be ready (adjust as needed)
-	time.Sleep(15 * time.Second) // Wait for Docker Compose services
+	time.Sleep(15 * time.Second)
 
 	for i, config := range configs {
 		name := fmt.Sprintf("Step_%d_%s_%s", i+1, strings.ToUpper(config.Method), config.Endpoint)
@@ -238,7 +207,6 @@ func TestIntegration(t *testing.T) {
 				expected, err := os.ReadFile(config.ShouldMatch)
 				require.NoError(t, err, "Failed to read expected response file")
 
-				// Parse and compare JSON
 				var expectedJSON, responseJSON interface{}
 				err = json.Unmarshal(expected, &expectedJSON)
 				require.NoError(t, err, "Failed to parse expected JSON")
@@ -254,7 +222,6 @@ func TestIntegration(t *testing.T) {
 	}
 }
 
-// TestMain handles setup and teardown
 func TestMain(m *testing.M) {
 	executable, _, err := testenv.FindCompose()
 	if err != nil {
@@ -262,7 +229,6 @@ func TestMain(m *testing.M) {
 		os.Exit(m.Run())
 	}
 
-	// Setup: Start Docker Compose
 	fmt.Println("Starting Docker Compose...")
 	cmd := exec.Command(executable, "compose", "-f", "docker_compose/docker_compose.yml", "up", "-d", "--build")
 	cmd.Stdout = os.Stdout
@@ -272,10 +238,8 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 
-	// Run tests
 	code := m.Run()
 
-	// Teardown: Stop Docker Compose
 	fmt.Println("Stopping Docker Compose...")
 	cmd = exec.Command(executable, "compose", "-f", "docker_compose/docker_compose.yml", "down")
 	cmd.Stdout = os.Stdout
