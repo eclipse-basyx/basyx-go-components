@@ -14,14 +14,14 @@ postgres:
   connMaxLifetimeMinutes: 5
 
 oidc:
-  issuer: "http://keycloak.basyx.localhost:8080/realms/basyx"
+  issuer: "http://localhost:8080/realms/basyx"
   audience: "discovery-service"
   jwksURL: "" 
 
 abac:
-  enabled: true
+  enabled: false
   tenantClaim: "tenant"
   editorRole: "aas_editor"
   clientRolesAudience: "discovery-service"
   realmAdminRole: "admin"
-  modelPath: "/config/access-rules.json"
+  modelPath: "/config/access_rules/access-rules.json"

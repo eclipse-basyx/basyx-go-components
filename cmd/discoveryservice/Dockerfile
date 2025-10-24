@@ -31,7 +31,6 @@ RUN mkdir -p /config /root/resources/sql
 
 # Copy default config and SQL schema for discovery service
 COPY --from=builder /app/cmd/discoveryservice/config.yaml /config/config.yaml
-COPY --from=builder /app/cmd/discoveryservice/access-rules.json /config/access-rules.json
 COPY --from=builder /app/cmd/discoveryservice/resources/sql/discoveryschema.sql /root/resources/sql/discoveryschema.sql
 
 # Optional healthcheck script for /health

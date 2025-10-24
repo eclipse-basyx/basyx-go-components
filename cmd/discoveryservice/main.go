@@ -30,21 +30,6 @@ func runServer(ctx context.Context, configPath string) error {
 	}
 	common.PrintConfiguration(cfg)
 
-	// === Load Access Model ===
-	var model *auth.AccessModel
-	if cfg.ABAC.ModelPath != "" {
-		if data, err := os.ReadFile(cfg.ABAC.ModelPath); err == nil {
-			if m, err := auth.ParseAccessModel(data); err == nil {
-				model = m
-				log.Printf("✅ Access Rule Model loaded: %s", cfg.ABAC.ModelPath)
-			} else {
-				log.Printf("⚠️  Could not parse Access Rule Model: %v", err)
-			}
-		} else {
-			log.Printf("⚠️  Could not read Access Rule Model: %v", err)
-		}
-	}
-
 	// === Main Router ===
 	r := chi.NewRouter()
 
@@ -101,25 +86,39 @@ func runServer(ctx context.Context, configPath string) error {
 		log.Fatalf("OIDC init failed: %v", err)
 	}
 
-	abacSettings := auth.ABACSettings{
-		Enabled:             cfg.ABAC.Enabled,
-		TenantClaim:         cfg.ABAC.TenantClaim,
-		EditorRole:          cfg.ABAC.EditorRole,
-		ClientRolesAudience: cfg.ABAC.ClientRolesAudience,
-		RealmAdminRole:      cfg.ABAC.RealmAdminRole,
-		Model:               model,
-	}
-
 	base := normalizeBasePath(cfg.Server.ContextPath)
 
 	// === Protected API Subrouter ===
 	apiRouter := chi.NewRouter()
 
 	// Apply OIDC + ABAC once for all discovery endpoints
-	apiRouter.Use(
-		oidc.Middleware,
-		auth.ABACMiddleware(abacSettings, nil), // resolver removed
-	)
+	if cfg.ABAC.Enabled {
+		// === Load Access Model ===
+		var model *auth.AccessModel
+		if cfg.ABAC.ModelPath != "" {
+			if data, err := os.ReadFile(cfg.ABAC.ModelPath); err == nil {
+				if m, err := auth.ParseAccessModel(data); err == nil {
+					model = m
+					log.Printf("✅ Access Rule Model loaded: %s", cfg.ABAC.ModelPath)
+				} else {
+					log.Printf("⚠️  Could not parse Access Rule Model: %v", err)
+				}
+			} else {
+				log.Printf("⚠️  Could not read Access Rule Model: %v", err)
+			}
+		}
+
+		abacSettings := auth.ABACSettings{
+			Enabled:             cfg.ABAC.Enabled,
+			ClientRolesAudience: cfg.ABAC.ClientRolesAudience,
+			Model:               model,
+		}
+
+		apiRouter.Use(
+			oidc.Middleware,
+			auth.ABACMiddleware(abacSettings, nil), // resolver removed
+		)
+	}
 
 	// Register all discovery routes (protected)
 	for _, rt := range smCtrl.Routes() {

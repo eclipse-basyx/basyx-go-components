@@ -133,11 +133,11 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("cors.allowedHeaders", []string{"*"})
 	v.SetDefault("cors.allowCredentials", true)
 
-	v.SetDefault("oidc.issuer", "http://keycloak:8081/realms/basyx")
+	v.SetDefault("oidc.issuer", "http://localhost:8080/realms/basyx")
 	v.SetDefault("oidc.audience", "discovery-service")
 	v.SetDefault("oidc.jwksURL", "")
 
-	v.SetDefault("abac.enabled", true)
+	v.SetDefault("abac.enabled", false)
 	v.SetDefault("abac.tenantClaim", "tenant")
 	v.SetDefault("abac.editorRole", "aas_editor")
 	v.SetDefault("abac.clientRolesAudience", "discovery-service")

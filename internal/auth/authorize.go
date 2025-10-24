@@ -13,10 +13,7 @@ import (
 
 type ABACSettings struct {
 	Enabled             bool
-	TenantClaim         string
-	EditorRole          string
 	ClientRolesAudience string
-	RealmAdminRole      string
 	Model               *AccessModel
 }
 

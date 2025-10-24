@@ -14,14 +14,12 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-    networks:
-      - basyx-java-server-sdk
 
   discoveryservice:
+    container_name: discovery-service
     build:
       context: ../../../..
       dockerfile: ./cmd/discoveryservice/Dockerfile
-      
     environment:
       - SERVER_PORT=5004
       - POSTGRES_HOST=db
@@ -32,6 +30,9 @@ services:
       - POSTGRES_MAXOPENCONNECTIONS=500
       - POSTGRES_MAXIDLECONNECTIONS=500
       - POSTGRES_CONNMAXLIFETIMEMINUTES=5
+      - OIDC_ISSUER=http://localhost:8080/realms/basyx
+      - OIDC_AUDIENCE=discovery-service
+      - ABAC_ENABLED=true
     ports:
       - "5004:5004"
     depends_on:
@@ -39,26 +40,29 @@ services:
         condition: service_healthy
       keycloak-healthcheck:
         condition: service_completed_successfully
-    networks:
-      - basyx-java-server-sdk
+    volumes:
+      - ./access_rules:/config/access_rules
+    extra_hosts:
+      - "localhost:host-gateway"
 
-  keycloak-abac:
+  keycloak:
     image: keycloak/keycloak:26.0.6
-    container_name: keycloak-abac
+    container_name: keycloak
     environment:
-      VIRTUAL_HOST: keycloak.basyx.localhost
-      VIRTUAL_PORT: "8080"
       KC_DB: postgres
       KC_DB_URL: jdbc:postgresql://db:5432/basyxTestDB
       KC_DB_USERNAME: admin
       KC_DB_PASSWORD: admin123
-      KC_HOSTNAME: keycloak.basyx.localhost
+      KC_HOSTNAME: localhost
+      KC_HOSTNAME_PORT: "8080"
+      KC_HOSTNAME_URL: "http://localhost:8080"
       KEYCLOAK_ADMIN: admin
       KEYCLOAK_ADMIN_PASSWORD: admin
       KC_HTTP_ENABLED: "true"
       KC_HTTPS_ENABLED: "false"
       KC_HEALTH_ENABLED: "true"
       KC_HOSTNAME_STRICT: "false"
+      KC_HOSTNAME_STRICT_BACKCHANNEL: "false"
       KC_IMPORT: /opt/keycloak/data/import/
       KC_HTTP_MANAGEMENT_ENABLED: "true"
     command: ["start-dev", "--import-realm", "--health-enabled=true"]
@@ -66,10 +70,6 @@ services:
       - 8080:8080
     volumes:
       - ./keycloak/realm:/opt/keycloak/data/import
-    networks:
-      basyx-java-server-sdk: 
-        aliases:
-          - keycloak.basyx.localhost
 
   keycloak-healthcheck:
     image: curlimages/curl:latest
@@ -77,19 +77,11 @@ services:
     command: >
       sh -c "
         echo 'Waiting for Keycloak to become ready...';
-        until curl -sf http://keycloak-abac:9000/health/ready; do
+        until curl -sf http://keycloak:9000/health/ready; do
           sleep 5;
         done;
         echo 'Keycloak is ready!'"
     depends_on:
-      - keycloak-abac
-    networks:
-      - basyx-java-server-sdk
-  
-  
-networks:
-  basyx-java-server-sdk:
-    name: basyx-java-server-sdk
-    driver: bridge
+      - keycloak
 
 
