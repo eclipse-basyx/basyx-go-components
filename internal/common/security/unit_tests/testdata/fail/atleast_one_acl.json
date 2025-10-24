@@ -1,0 +1,14 @@
+{
+  "AllAccessPermissionRules": {
+    "rules": [
+      {
+        "FORMULA": {
+          "$and": [
+            {"$boolean": true},
+            {"$eq": [{"$numVal": 1}, {"$numVal": 1}]}
+          ]
+        }
+      }
+    ]
+  }
+}
