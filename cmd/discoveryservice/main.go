@@ -76,15 +76,6 @@ func runServer(ctx context.Context, configPath string) error {
 	descSvc := openapi.NewDescriptionAPIAPIService()
 	descCtrl := openapi.NewDescriptionAPIAPIController(descSvc)
 
-	// === OIDC & ABAC Setup ===
-	oidc, err := auth.NewOIDC(ctx, auth.OIDCSettings{
-		Issuer:   cfg.OIDC.Issuer,
-		Audience: cfg.OIDC.Audience,
-	})
-	if err != nil {
-		log.Fatalf("OIDC init failed: %v", err)
-	}
-
 	base := normalizeBasePath(cfg.Server.ContextPath)
 
 	// === Protected API Subrouter ===
@@ -92,6 +83,15 @@ func runServer(ctx context.Context, configPath string) error {
 
 	// Apply OIDC + ABAC once for all discovery endpoints
 	if cfg.ABAC.Enabled {
+
+		// === OIDC & ABAC Setup ===
+		oidc, err := auth.NewOIDC(ctx, auth.OIDCSettings{
+			Issuer:   cfg.OIDC.Issuer,
+			Audience: cfg.OIDC.Audience,
+		})
+		if err != nil {
+			log.Fatalf("OIDC init failed: %v", err)
+		}
 		// === Load Access Model (required) ===
 		var model *auth.AccessModel
 		if cfg.ABAC.ModelPath != "" {
@@ -128,9 +128,9 @@ func runServer(ctx context.Context, configPath string) error {
 		apiRouter.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
 	}
 
-	// Register all description routes (public)
+	// Register all description routes (protected)
 	for _, rt := range descCtrl.Routes() {
-		r.Method(rt.Method, join(base, rt.Pattern), rt.HandlerFunc)
+		apiRouter.Method(rt.Method, join(base, rt.Pattern), rt.HandlerFunc)
 	}
 
 	// Health (public, duplicate for base path)

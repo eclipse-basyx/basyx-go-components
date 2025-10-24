@@ -1,0 +1,32 @@
+[
+    {
+        "context": "Health endpoint",
+        "token": null,
+        "method": "GET",
+        "endpoint": "http://localhost:5004/health",
+        "shouldMatch": "expected/expectedHealthEndpoint.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "Post Specific Asset Id denied",
+        "token": {
+            "user": "martin",
+            "password": "admin"
+        },
+        "data": "postBody/simple_specificAssetIds.json",
+        "method": "POST",
+        "endpoint": "http://localhost:5004/health",
+        "expectedStatus": 403
+    },
+    {
+        "context": "Get Specific Asset Id allowed",
+        "token": {
+            "user": "martin",
+            "password": "admin"
+        },
+        "method": "GET",
+        "shouldMatch": "expected/simple_specificAssetIds.json",
+        "endpoint": "http://localhost:5004/health",
+        "expectedStatus": 200
+    }
+]
