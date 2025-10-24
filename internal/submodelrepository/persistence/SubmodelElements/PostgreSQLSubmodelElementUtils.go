@@ -563,6 +563,7 @@ func GetSubmodelElementsWithPath(db *sql.DB, tx *sql.Tx, submodelId string, idSh
 
 // GetSubmodelWithSubmodelElements retrieves a submodel with all its elements (standard path)
 // Maintains backward compatibility while supporting new displayName/description features
+// getSubmodelbyID
 func GetSubmodelWithSubmodelElements(db *sql.DB, tx *sql.Tx, submodelId string) (*gen.Submodel, error) {
 	// --- Build the unified query with CTE ----------------------------------------------------------
 	var cte string
@@ -617,7 +618,7 @@ func GetSubmodelWithSubmodelElements(db *sql.DB, tx *sql.Tx, submodelId string) 
 		modellingKind = gen.MODELLINGKIND_INSTANCE
 	}
 	if dbSmId == "" {
-		return nil, common.NewErrNotFound("Submodel not found")
+		return nil, common.NewErrNotFound("Submodel not found really")
 	}
 	submodel := &gen.Submodel{
 		Id:               dbSmId,
@@ -1010,7 +1011,16 @@ func attachChildrenToSubmodelElements(nodes map[int64]*node, children map[int64]
 	}
 }
 
+// nullToString safely converts sql.NullString to a normal string
+func nullToString(ns sql.NullString) string {
+	if ns.Valid {
+		return ns.String
+	}
+	return ""
+}
+
 func loadSubmodelSubmodelElementsIntoMemory(rows *sql.Rows, err error, db *sql.DB) (map[int64]*node, map[int64][]*node, []*node, string, string, string, string, sql.NullInt64, *gen.Submodel, error) {
+
 	nodes := make(map[int64]*node, 256)
 	children := make(map[int64][]*node, 256)
 	roots := make([]*node, 0, 16)
@@ -1025,7 +1035,7 @@ func loadSubmodelSubmodelElementsIntoMemory(rows *sql.Rows, err error, db *sql.D
 			submodelSemanticId, submodelDisplayNameId, submodelDescriptionId sql.NullInt64
 			// SME base with displayName and description
 			id                                        sql.NullInt64
-			idShort, category, modelType, idShortPath string
+			idShort, category, modelType, idShortPath sql.NullString
 			position                                  sql.NullInt32
 			parentSmeID                               sql.NullInt64
 			semanticId, displayNameId, descriptionId  sql.NullInt64
@@ -1077,17 +1087,18 @@ func loadSubmodelSubmodelElementsIntoMemory(rows *sql.Rows, err error, db *sql.D
 		); err != nil {
 			return nil, nil, nil, "", "", "", "", sql.NullInt64{}, nil, err
 		}
-		if !id.Valid {
-			// This row only represents the submodel itself (no SME)
-			// Skip adding to nodes
-			continue
-		}
+
 		if dbSmId == "" {
 			dbSmId = submodelID
 			dbSubmodelIdShort = submodelIdShort
 			dbSubmodelCategory = submodelCategory
 			dbSubmodelKind = submodelKind
 			dbSubmodelSemanticId = submodelSemanticId
+		}
+		if !id.Valid || !idShort.Valid {
+			// This row only represents the submodel itself (no SME)
+			// Skip adding to nodes
+			continue
 		}
 
 		// Materialize the concrete element based on modelType (no reflection)
@@ -1100,9 +1111,15 @@ func loadSubmodelSubmodelElementsIntoMemory(rows *sql.Rows, err error, db *sql.D
 		}
 
 		var el gen.SubmodelElement
-		switch modelType {
+
+		switch modelType.String {
 		case "Property":
-			prop := &gen.Property{IdShort: idShort, Category: category, ModelType: modelType, SemanticId: semanticIdObj}
+			prop := &gen.Property{
+				IdShort:    nullToString(idShort),
+				Category:   nullToString(category),
+				ModelType:  nullToString(modelType),
+				SemanticId: semanticIdObj,
+			}
 			if propValueType.Valid {
 				if vt, err := gen.NewDataTypeDefXsdFromValue(propValueType.String); err == nil {
 					prop.ValueType = vt
@@ -1115,11 +1132,21 @@ func loadSubmodelSubmodelElementsIntoMemory(rows *sql.Rows, err error, db *sql.D
 
 		case "MultiLanguageProperty":
 			// Values are in a separate table; we only hydrate the shell here.
-			mlp := &gen.MultiLanguageProperty{IdShort: idShort, Category: category, ModelType: modelType, SemanticId: semanticIdObj}
+			mlp := &gen.MultiLanguageProperty{
+				IdShort:    nullToString(idShort),
+				Category:   nullToString(category),
+				ModelType:  nullToString(modelType),
+				SemanticId: semanticIdObj,
+			}
 			el = mlp
 
 		case "Blob":
-			blob := &gen.Blob{IdShort: idShort, Category: category, ModelType: modelType, SemanticId: semanticIdObj}
+			blob := &gen.Blob{
+				IdShort:    nullToString(idShort),
+				Category:   nullToString(category),
+				ModelType:  nullToString(modelType),
+				SemanticId: semanticIdObj,
+			}
 			if blobContentType.Valid {
 				blob.ContentType = blobContentType.String
 			}
@@ -1129,7 +1156,12 @@ func loadSubmodelSubmodelElementsIntoMemory(rows *sql.Rows, err error, db *sql.D
 			el = blob
 
 		case "File":
-			file := &gen.File{IdShort: idShort, Category: category, ModelType: modelType, SemanticId: semanticIdObj}
+			file := &gen.File{
+				IdShort:    nullToString(idShort),
+				Category:   nullToString(category),
+				ModelType:  nullToString(modelType),
+				SemanticId: semanticIdObj,
+			}
 			if fileContentType.Valid {
 				file.ContentType = fileContentType.String
 			}
@@ -1139,7 +1171,12 @@ func loadSubmodelSubmodelElementsIntoMemory(rows *sql.Rows, err error, db *sql.D
 			el = file
 
 		case "Range":
-			rg := &gen.Range{IdShort: idShort, Category: category, ModelType: modelType, SemanticId: semanticIdObj}
+			rg := &gen.Range{
+				IdShort:    nullToString(idShort),
+				Category:   nullToString(category),
+				ModelType:  nullToString(modelType),
+				SemanticId: semanticIdObj,
+			}
 			if rangeValueType.Valid {
 				if vt, err := gen.NewDataTypeDefXsdFromValue(rangeValueType.String); err == nil {
 					rg.ValueType = vt
@@ -1154,11 +1191,20 @@ func loadSubmodelSubmodelElementsIntoMemory(rows *sql.Rows, err error, db *sql.D
 			el = rg
 
 		case "SubmodelElementCollection":
-			coll := &gen.SubmodelElementCollection{IdShort: idShort, Category: category, ModelType: modelType, Value: make([]gen.SubmodelElement, 0, 4)}
+			coll := &gen.SubmodelElementCollection{IdShort: nullToString(idShort),
+				Category:   nullToString(category),
+				ModelType:  nullToString(modelType),
+				SemanticId: semanticIdObj,
+				Value:      make([]gen.SubmodelElement, 0, 4)}
 			el = coll
 
 		case "SubmodelElementList":
-			lst := &gen.SubmodelElementList{IdShort: idShort, Category: category, ModelType: modelType, Value: make([]gen.SubmodelElement, 0, 4)}
+			lst := &gen.SubmodelElementList{
+				IdShort:    nullToString(idShort),
+				Category:   nullToString(category),
+				ModelType:  nullToString(modelType),
+				SemanticId: semanticIdObj,
+				Value:      make([]gen.SubmodelElement, 0, 4)}
 			if typeValueListElement.Valid {
 				if tv, err := gen.NewAasSubmodelElementsFromValue(typeValueListElement.String); err == nil {
 					lst.TypeValueListElement = &tv
@@ -1175,19 +1221,39 @@ func loadSubmodelSubmodelElementsIntoMemory(rows *sql.Rows, err error, db *sql.D
 			el = lst
 
 		case "ReferenceElement":
-			refElem := &gen.ReferenceElement{IdShort: idShort, Category: category, ModelType: modelType, SemanticId: semanticIdObj}
+			refElem := &gen.ReferenceElement{
+				IdShort:    nullToString(idShort),
+				Category:   nullToString(category),
+				ModelType:  nullToString(modelType),
+				SemanticId: semanticIdObj,
+			}
 			el = refElem
 
 		case "RelationshipElement":
-			relElem := &gen.RelationshipElement{IdShort: idShort, Category: category, ModelType: modelType, SemanticId: semanticIdObj}
+			relElem := &gen.RelationshipElement{
+				IdShort:    nullToString(idShort),
+				Category:   nullToString(category),
+				ModelType:  nullToString(modelType),
+				SemanticId: semanticIdObj,
+			}
 			el = relElem
 
 		case "AnnotatedRelationshipElement":
-			areElem := &gen.AnnotatedRelationshipElement{IdShort: idShort, Category: category, ModelType: modelType, SemanticId: semanticIdObj}
+			areElem := &gen.AnnotatedRelationshipElement{
+				IdShort:    nullToString(idShort),
+				Category:   nullToString(category),
+				ModelType:  nullToString(modelType),
+				SemanticId: semanticIdObj,
+			}
 			el = areElem
 
 		case "Entity":
-			entity := &gen.Entity{IdShort: idShort, Category: category, ModelType: modelType, SemanticId: semanticIdObj}
+			entity := &gen.Entity{
+				IdShort:    nullToString(idShort),
+				Category:   nullToString(category),
+				ModelType:  nullToString(modelType),
+				SemanticId: semanticIdObj,
+			}
 			if entityType.Valid {
 				if et, err := gen.NewEntityTypeFromValue(entityType.String); err == nil {
 					entity.EntityType = et
@@ -1199,11 +1265,21 @@ func loadSubmodelSubmodelElementsIntoMemory(rows *sql.Rows, err error, db *sql.D
 			el = entity
 
 		case "Operation":
-			op := &gen.Operation{IdShort: idShort, Category: category, ModelType: modelType, SemanticId: semanticIdObj}
+			op := &gen.Operation{
+				IdShort:    nullToString(idShort),
+				Category:   nullToString(category),
+				ModelType:  nullToString(modelType),
+				SemanticId: semanticIdObj,
+			}
 			el = op
 
 		case "BasicEventElement":
-			bee := &gen.BasicEventElement{IdShort: idShort, Category: category, ModelType: modelType, SemanticId: semanticIdObj}
+			bee := &gen.BasicEventElement{
+				IdShort:    nullToString(idShort),
+				Category:   nullToString(category),
+				ModelType:  nullToString(modelType),
+				SemanticId: semanticIdObj,
+			}
 			if beeDirection.Valid {
 				if d, err := gen.NewDirectionFromValue(beeDirection.String); err == nil {
 					bee.Direction = d
@@ -1224,7 +1300,12 @@ func loadSubmodelSubmodelElementsIntoMemory(rows *sql.Rows, err error, db *sql.D
 			el = bee
 
 		case "Capability":
-			cap := &gen.Capability{IdShort: idShort, Category: category, ModelType: modelType, SemanticId: semanticIdObj}
+			cap := &gen.Capability{
+				IdShort:    nullToString(idShort),
+				Category:   nullToString(category),
+				ModelType:  nullToString(modelType),
+				SemanticId: semanticIdObj,
+			}
 			el = cap
 
 		default:
@@ -1235,7 +1316,7 @@ func loadSubmodelSubmodelElementsIntoMemory(rows *sql.Rows, err error, db *sql.D
 		n := &node{
 			id:       id.Int64,
 			parentID: parentSmeID,
-			path:     idShortPath,
+			path:     idShortPath.String,
 			position: position,
 			element:  el,
 		}
