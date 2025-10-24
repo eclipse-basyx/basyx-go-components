@@ -92,19 +92,23 @@ func runServer(ctx context.Context, configPath string) error {
 
 	// Apply OIDC + ABAC once for all discovery endpoints
 	if cfg.ABAC.Enabled {
-		// === Load Access Model ===
+		// === Load Access Model (required) ===
 		var model *auth.AccessModel
 		if cfg.ABAC.ModelPath != "" {
-			if data, err := os.ReadFile(cfg.ABAC.ModelPath); err == nil {
-				if m, err := auth.ParseAccessModel(data); err == nil {
-					model = m
-					log.Printf("✅ Access Rule Model loaded: %s", cfg.ABAC.ModelPath)
-				} else {
-					log.Printf("⚠️  Could not parse Access Rule Model: %v", err)
-				}
-			} else {
-				log.Printf("⚠️  Could not read Access Rule Model: %v", err)
+			data, err := os.ReadFile(cfg.ABAC.ModelPath)
+			if err != nil {
+				log.Fatalf("❌ Could not read Access Rule Model file %q: %v", cfg.ABAC.ModelPath, err)
 			}
+
+			m, err := auth.ParseAccessModel(data)
+			if err != nil {
+				log.Fatalf("❌ Failed to parse Access Rule Model %q: %v", cfg.ABAC.ModelPath, err)
+			}
+
+			model = m
+			log.Printf("✅ Access Rule Model loaded: %s", cfg.ABAC.ModelPath)
+		} else {
+			log.Fatalf("❌ ABAC is enabled but no ModelPath was provided in config")
 		}
 
 		abacSettings := auth.ABACSettings{
@@ -115,7 +119,7 @@ func runServer(ctx context.Context, configPath string) error {
 
 		apiRouter.Use(
 			oidc.Middleware,
-			auth.ABACMiddleware(abacSettings, nil), // resolver removed
+			auth.ABACMiddleware(abacSettings, nil),
 		)
 	}
 

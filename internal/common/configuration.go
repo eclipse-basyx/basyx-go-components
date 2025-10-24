@@ -135,7 +135,7 @@ func setDefaults(v *viper.Viper) {
 
 	v.SetDefault("abac.enabled", false)
 	v.SetDefault("abac.clientRolesAudience", "discovery-service")
-	v.SetDefault("abac.modelPath", "access-rules.json")
+	v.SetDefault("abac.modelPath", "config/access_rules/access-rules.json")
 
 }
 
