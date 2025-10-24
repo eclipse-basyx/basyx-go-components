@@ -1,4 +1,4 @@
-package access_controll_model_test
+package access_control_model_test
 
 import (
 	"bytes"
