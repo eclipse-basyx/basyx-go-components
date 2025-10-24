@@ -12,7 +12,7 @@ import (
 	"strings"
 	"testing"
 
-	acm "github.com/eclipse-basyx/basyx-go-components/internal/common/access_controll_model"
+	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 )
 
 // ----- test config & helpers -----
@@ -31,40 +31,40 @@ type testCase struct {
 func typeFactory(typeName string) (any, error) {
 	switch typeName {
 	case "ACL":
-		var v acm.ACL
+		var v auth.ACL
 		return &v, nil
 	case "AccessPermissionRule":
-		var v acm.AccessPermissionRule
+		var v auth.AccessPermissionRule
 		return &v, nil
 	case "AccessRuleModelSchemaJson":
-		var v acm.AccessRuleModelSchemaJson
+		var v auth.AccessRuleModelSchemaJson
 		return &v, nil
 	case "AccessRuleModelSchemaJsonAllAccessPermissionRules":
-		var v acm.AccessRuleModelSchemaJsonAllAccessPermissionRules
+		var v auth.AccessRuleModelSchemaJsonAllAccessPermissionRules
 		return &v, nil
 	case "AccessRuleModelSchemaJsonAllAccessPermissionRulesDEFACLSElem":
-		var v acm.AccessRuleModelSchemaJsonAllAccessPermissionRulesDEFACLSElem
+		var v auth.AccessRuleModelSchemaJsonAllAccessPermissionRulesDEFACLSElem
 		return &v, nil
 	case "AccessRuleModelSchemaJsonAllAccessPermissionRulesDEFATTRIBUTESElem":
-		var v acm.AccessRuleModelSchemaJsonAllAccessPermissionRulesDEFATTRIBUTESElem
+		var v auth.AccessRuleModelSchemaJsonAllAccessPermissionRulesDEFATTRIBUTESElem
 		return &v, nil
 	case "AccessRuleModelSchemaJsonAllAccessPermissionRulesDEFFORMULASElem":
-		var v acm.AccessRuleModelSchemaJsonAllAccessPermissionRulesDEFFORMULASElem
+		var v auth.AccessRuleModelSchemaJsonAllAccessPermissionRulesDEFFORMULASElem
 		return &v, nil
 	case "AccessRuleModelSchemaJsonAllAccessPermissionRulesDEFOBJECTSElem":
-		var v acm.AccessRuleModelSchemaJsonAllAccessPermissionRulesDEFOBJECTSElem
+		var v auth.AccessRuleModelSchemaJsonAllAccessPermissionRulesDEFOBJECTSElem
 		return &v, nil
 	case "LogicalExpression":
-		var v acm.LogicalExpression
+		var v auth.LogicalExpression
 		return &v, nil
 	case "MatchExpression":
-		var v acm.MatchExpression
+		var v auth.MatchExpression
 		return &v, nil
 	case "Value":
-		var v acm.Value
+		var v auth.Value
 		return &v, nil
 	case "StringValue":
-		var v acm.StringValue
+		var v auth.StringValue
 		return &v, nil
 	// add other leaf types here as needed
 	default:

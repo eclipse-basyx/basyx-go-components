@@ -7,8 +7,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	schemagen "github.com/eclipse-basyx/basyx-go-components/internal/common/access_controll_model"
 )
 
 func resolveGlobalToken(name string, now time.Time) (string, bool) {
@@ -26,7 +24,7 @@ func resolveGlobalToken(name string, now time.Time) (string, bool) {
 	}
 }
 
-func evalLE(le schemagen.LogicalExpression, claims Claims, now time.Time) bool {
+func evalLE(le LogicalExpression, claims Claims, now time.Time) bool {
 	if le.Boolean != nil {
 		return *le.Boolean
 	}
@@ -107,7 +105,7 @@ func evalLE(le schemagen.LogicalExpression, claims Claims, now time.Time) bool {
 	return false
 }
 
-func evalMatch(me schemagen.MatchExpression, claims Claims, now time.Time) bool {
+func evalMatch(me MatchExpression, claims Claims, now time.Time) bool {
 	if me.Boolean != nil {
 		return *me.Boolean
 	}
@@ -164,7 +162,7 @@ func evalMatch(me schemagen.MatchExpression, claims Claims, now time.Time) bool 
 	return false
 }
 
-func resolveValue(v schemagen.Value, claims Claims, now time.Time) any {
+func resolveValue(v Value, claims Claims, now time.Time) any {
 
 	if v.Attribute != nil {
 		if m, ok := asStringMap(v.Attribute); ok {
@@ -237,7 +235,7 @@ func resolveValue(v schemagen.Value, claims Claims, now time.Time) any {
 	return nil
 }
 
-func resolveStringItem(s schemagen.StringValue, claims Claims, now time.Time) string {
+func resolveStringItem(s StringValue, claims Claims, now time.Time) string {
 	if s.Attribute != nil {
 		if m, ok := asStringMap(s.Attribute); ok {
 			if c := m["CLAIM"]; c != "" {
@@ -391,7 +389,7 @@ func numCmp(a, b any, op string) bool {
 	return false
 }
 
-func stringValueFromDate(v schemagen.Value) string {
+func stringValueFromDate(v Value) string {
 	switch {
 	case v.DateTimeVal != nil:
 		return time.Time(*v.DateTimeVal).Format(time.RFC3339)

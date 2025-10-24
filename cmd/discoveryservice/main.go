@@ -9,14 +9,13 @@ import (
 	"os"
 	"strings"
 
-	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/cors"
-
-	"github.com/eclipse-basyx/basyx-go-components/internal/auth"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	api "github.com/eclipse-basyx/basyx-go-components/internal/discoveryservice/api"
 	persistence_postgresql "github.com/eclipse-basyx/basyx-go-components/internal/discoveryservice/persistence"
 	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/discoveryapi"
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/cors"
 )
 
 func runServer(ctx context.Context, configPath string) error {

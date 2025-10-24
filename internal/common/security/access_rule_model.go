@@ -1,4 +1,4 @@
-package access_controll_model
+package auth
 
 import (
 	"encoding/json"

@@ -8,16 +8,14 @@ import (
 	"regexp"
 	"strings"
 	"time"
-
-	schemagen "github.com/eclipse-basyx/basyx-go-components/internal/common/access_controll_model"
 )
 
 type AccessModel struct {
-	gen schemagen.AccessRuleModelSchemaJson
+	gen AccessRuleModelSchemaJson
 }
 
 func ParseAccessModel(b []byte) (*AccessModel, error) {
-	var m schemagen.AccessRuleModelSchemaJson
+	var m AccessRuleModelSchemaJson
 	if err := json.Unmarshal(b, &m); err != nil {
 		return nil, fmt.Errorf("parse access model: %w", err)
 	}
@@ -76,7 +74,7 @@ func (m *AccessModel) AuthorizeWithFilter(in EvalInput) (ok bool, reason string,
 		var out *QueryFilter
 		if r.FILTER != nil {
 
-			var cond *schemagen.LogicalExpression
+			var cond *LogicalExpression
 			switch {
 			case r.FILTER.CONDITION != nil:
 				cond = r.FILTER.CONDITION
@@ -100,9 +98,9 @@ func (m *AccessModel) AuthorizeWithFilter(in EvalInput) (ok bool, reason string,
 		}
 
 		switch acl.ACCESS {
-		case schemagen.ACLACCESSALLOW:
+		case ACLACCESSALLOW:
 			return true, "ALLOW by rule", out
-		case schemagen.ACLACCESSDISABLED:
+		case ACLACCESSDISABLED:
 			return false, "DENY (disabled) by rule", nil
 		default:
 			return false, "DENY (unknown access) by rule", nil
@@ -136,9 +134,9 @@ func (m *AccessModel) Authorize(in EvalInput) (bool, string) {
 		}
 
 		switch acl.ACCESS {
-		case schemagen.ACLACCESSALLOW:
+		case ACLACCESSALLOW:
 			return true, "ALLOW by rule"
-		case schemagen.ACLACCESSDISABLED:
+		case ACLACCESSDISABLED:
 			return false, "DENY (disabled) by rule"
 		default:
 			return false, "DENY (unknown access) by rule"
@@ -148,9 +146,9 @@ func (m *AccessModel) Authorize(in EvalInput) (bool, string) {
 	return false, "no matching rule"
 }
 
-func materialize(all schemagen.AccessRuleModelSchemaJsonAllAccessPermissionRules, r schemagen.AccessPermissionRule) (schemagen.ACL, []schemagen.AttributeItem, []schemagen.ObjectItem, *schemagen.LogicalExpression) {
+func materialize(all AccessRuleModelSchemaJsonAllAccessPermissionRules, r AccessPermissionRule) (ACL, []AttributeItem, []ObjectItem, *LogicalExpression) {
 	// ACL / USEACL
-	acl := schemagen.ACL{}
+	acl := ACL{}
 	if r.ACL != nil {
 		acl = *r.ACL
 	} else if r.USEACL != nil {
@@ -163,7 +161,7 @@ func materialize(all schemagen.AccessRuleModelSchemaJsonAllAccessPermissionRules
 		}
 	}
 
-	var attrs []schemagen.AttributeItem
+	var attrs []AttributeItem
 	if acl.ATTRIBUTES != nil {
 		attrs = append(attrs, acl.ATTRIBUTES...)
 	}
@@ -177,7 +175,7 @@ func materialize(all schemagen.AccessRuleModelSchemaJsonAllAccessPermissionRules
 		}
 	}
 
-	var objs []schemagen.ObjectItem
+	var objs []ObjectItem
 	if len(r.OBJECTS) > 0 {
 		objs = append(objs, r.OBJECTS...)
 	}
@@ -185,7 +183,7 @@ func materialize(all schemagen.AccessRuleModelSchemaJsonAllAccessPermissionRules
 		objs = append(objs, resolveObjects(all, r.USEOBJECTS)...)
 	}
 
-	var f *schemagen.LogicalExpression
+	var f *LogicalExpression
 	if r.FORMULA != nil {
 		f = r.FORMULA
 	} else if r.USEFORMULA != nil {
@@ -202,8 +200,8 @@ func materialize(all schemagen.AccessRuleModelSchemaJsonAllAccessPermissionRules
 	return acl, attrs, objs, f
 }
 
-func resolveObjects(all schemagen.AccessRuleModelSchemaJsonAllAccessPermissionRules, names []string) []schemagen.ObjectItem {
-	var out []schemagen.ObjectItem
+func resolveObjects(all AccessRuleModelSchemaJsonAllAccessPermissionRules, names []string) []ObjectItem {
+	var out []ObjectItem
 	for _, name := range names {
 		for _, d := range all.DEFOBJECTS {
 			if d.Name == name {
@@ -219,22 +217,22 @@ func resolveObjects(all schemagen.AccessRuleModelSchemaJsonAllAccessPermissionRu
 	return out
 }
 
-func mapMethodToRight(meth string) schemagen.RightsEnum {
+func mapMethodToRight(meth string) RightsEnum {
 	switch strings.ToUpper(meth) {
 	case http.MethodGet, http.MethodHead:
-		return schemagen.RightsEnumREAD
+		return RightsEnumREAD
 	case http.MethodPost:
-		return schemagen.RightsEnumCREATE
+		return RightsEnumCREATE
 	case http.MethodPut, http.MethodPatch:
-		return schemagen.RightsEnumUPDATE
+		return RightsEnumUPDATE
 	case http.MethodDelete:
-		return schemagen.RightsEnumDELETE
+		return RightsEnumDELETE
 	default:
-		return schemagen.RightsEnumREAD
+		return RightsEnumREAD
 	}
 }
 
-func rightsContains(hay []schemagen.RightsEnum, needle schemagen.RightsEnum) bool {
+func rightsContains(hay []RightsEnum, needle RightsEnum) bool {
 	for _, r := range hay {
 		if strings.EqualFold(string(r), "ALL") {
 			return true
@@ -245,16 +243,16 @@ func rightsContains(hay []schemagen.RightsEnum, needle schemagen.RightsEnum) boo
 	}
 	return false
 }
-func attributesSatisfiedAttrs(items []schemagen.AttributeItem, claims Claims) bool {
+func attributesSatisfiedAttrs(items []AttributeItem, claims Claims) bool {
 
 	for _, it := range items {
 
 		switch it.Kind {
-		case schemagen.ATTRGLOBAL:
+		case ATTRGLOBAL:
 			if it.Value == "ANONYMOUS" {
 				return true
 			}
-		case schemagen.ATTRCLAIM:
+		case ATTRCLAIM:
 			for key, _ := range claims {
 				if it.Value == key {
 					return true
@@ -277,11 +275,11 @@ func normalize(p string) string {
 	return p
 }
 
-func matchRouteObjectsObjItem(objs []schemagen.ObjectItem, reqPath string) bool {
+func matchRouteObjectsObjItem(objs []ObjectItem, reqPath string) bool {
 	req := normalize(reqPath)
 
 	for _, oi := range objs {
-		if oi.Kind != schemagen.Route {
+		if oi.Kind != Route {
 			continue
 		}
 		pat := normalize(oi.Value)

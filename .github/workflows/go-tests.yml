@@ -49,6 +49,10 @@ jobs:
       #     docker compose -f docker_compose/docker_compose.yml up -d --build
       #     echo "Waiting for services to be ready..."
       #     sleep 30
+      - name: Run discovery service security tests
+        run: |
+          cd internal/discoveryservice/security_tests
+          go test -v
       - name: Run integration tests
         run: |
           cd internal/submodelrepository/integration_tests
@@ -57,9 +61,9 @@ jobs:
         run: |
           cd internal/discoveryservice/integration_tests
           go test -v
-      - name: Run discovery service security tests
+      - name: Run access controll validation tests
         run: |
-          cd internal/discoveryservice/security_tests
+          cd internal\common\security\unit_tests
           go test -v
       # - name: Cleanup Docker
       #   if: always()
