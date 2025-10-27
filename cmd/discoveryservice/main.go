@@ -118,7 +118,7 @@ func runServer(ctx context.Context, configPath string) error {
 
 		apiRouter.Use(
 			oidc.Middleware,
-			auth.ABACMiddleware(abacSettings, nil),
+			auth.ABACMiddleware(abacSettings),
 		)
 	}
 

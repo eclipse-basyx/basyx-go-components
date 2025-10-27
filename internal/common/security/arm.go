@@ -31,7 +31,6 @@ import (
 	"fmt"
 	"net/http"
 	"path"
-	"regexp"
 	"strings"
 	"time"
 )
@@ -56,25 +55,7 @@ type EvalInput struct {
 }
 
 type QueryFilter struct {
-	Where  string
-	Params map[string]any
-}
-
-var paramRe = regexp.MustCompile(`:([A-Za-z_][A-Za-z0-9_]*)`)
-
-func renderFragment(tpl string, claims Claims, now time.Time) (string, map[string]any) {
-	params := map[string]any{}
-	where := paramRe.ReplaceAllStringFunc(tpl, func(ph string) string {
-		key := ph[1:]
-		switch key {
-		case "UTCNOW":
-			params[key] = now.Format(time.RFC3339)
-		default:
-			params[key] = claims[key]
-		}
-		return ":" + key
-	})
-	return where, params
+	// todo: not implemented because DiscoveryService does not need a Query Filter
 }
 
 func (m *AccessModel) AuthorizeWithFilter(in EvalInput) (ok bool, reason string, qf *QueryFilter) {
@@ -97,35 +78,12 @@ func (m *AccessModel) AuthorizeWithFilter(in EvalInput) (ok bool, reason string,
 			continue
 		}
 
-		var out *QueryFilter
-		if r.FILTER != nil {
-
-			var cond *LogicalExpression
-			switch {
-			case r.FILTER.CONDITION != nil:
-				cond = r.FILTER.CONDITION
-			case r.FILTER.USEFORMULA != nil:
-				use := *r.FILTER.USEFORMULA
-				for _, d := range all.DEFFORMULAS {
-					if d.Name == use {
-						tmp := d.Formula
-						cond = &tmp
-						break
-					}
-				}
-			}
-
-			if cond == nil || evalLE(*cond, in.Claims, in.IssuedUTC) {
-				if r.FILTER.FRAGMENT != nil && *r.FILTER.FRAGMENT != "" {
-					where, params := renderFragment(*r.FILTER.FRAGMENT, in.Claims, in.IssuedUTC)
-					out = &QueryFilter{Where: where, Params: params}
-				}
-			}
-		}
+		// todo
+		qf = &QueryFilter{}
 
 		switch acl.ACCESS {
 		case ACLACCESSALLOW:
-			return true, "ALLOW by rule", out
+			return true, "ALLOW by rule", qf
 		case ACLACCESSDISABLED:
 			return false, "DENY (disabled) by rule", nil
 		default:

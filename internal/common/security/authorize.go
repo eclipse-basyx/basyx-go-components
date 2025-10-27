@@ -66,7 +66,7 @@ const (
 
 type ResolveResource func(r *http.Request) (Resource, error)
 
-func ABACMiddleware(settings ABACSettings, resolver ResolveResource) func(http.Handler) http.Handler {
+func ABACMiddleware(settings ABACSettings) func(http.Handler) http.Handler {
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

@@ -54,5 +54,10 @@
     "file": "fail/incorrect_attribute.json",
     "type": "AccessRuleModelSchemaJson",
     "should_fail": true
+  },
+  {
+    "file": "pass/attribute_definition.json",
+    "type": "AccessRuleModelSchemaJson",
+    "should_fail": false
   }
 ]
