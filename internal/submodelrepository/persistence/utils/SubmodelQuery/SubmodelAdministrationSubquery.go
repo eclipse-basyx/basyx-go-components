@@ -88,6 +88,7 @@ func GetAdministrationSubqueryForSubmodel(dialect goqu.DialectWrapper) *goqu.Sel
 		).
 		Where(
 			goqu.I("r.id").IsNotNull(),
+			goqu.I("admi.id").Eq(goqu.I("s.administration_id")),
 		)
 
 	administrativeInformationSubquery := dialect.From(goqu.T("administrative_information").As("ai")).

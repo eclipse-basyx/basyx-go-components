@@ -82,7 +82,7 @@ func getSubmodels(db *sql.DB, submodelIdFilter string) ([]*gen.Submodel, error) 
 	start := time.Now().Local().UnixMilli()
 	rows, err := getSubmodelDataFromDbWithJSONQuery(db, submodelIdFilter)
 	end := time.Now().Local().UnixMilli()
-	fmt.Printf("Total Qury Only time: %d milliseconds\n", end-start)
+	fmt.Printf("Total Query Only time: %d milliseconds\n", end-start)
 	if err != nil {
 		return nil, fmt.Errorf("error getting submodel data from DB: %w", err)
 	}
@@ -331,7 +331,7 @@ func moreThanZeroReferences(referenceArray []*gen.Reference) bool {
 //   - error: An error if query building or execution fails
 func getSubmodelDataFromDbWithJSONQuery(db *sql.DB, submodelId string) (*sql.Rows, error) {
 	q, err := submodel_query.GetQueryWithGoqu(submodelId)
-	fmt.Println(q)
+	// fmt.Println(q)
 	if err != nil {
 		return nil, fmt.Errorf("error building query: %w", err)
 	}
