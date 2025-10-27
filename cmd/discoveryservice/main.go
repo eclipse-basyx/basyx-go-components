@@ -85,8 +85,9 @@ func runServer(ctx context.Context, configPath string) error {
 
 		// === OIDC & ABAC Setup ===
 		oidc, err := auth.NewOIDC(ctx, auth.OIDCSettings{
-			Issuer:   cfg.OIDC.Issuer,
-			Audience: cfg.OIDC.Audience,
+			Issuer:         cfg.OIDC.Issuer,
+			Audience:       cfg.OIDC.Audience,
+			AllowAnonymous: true,
 		})
 		if err != nil {
 			log.Fatalf("OIDC init failed: %v", err)

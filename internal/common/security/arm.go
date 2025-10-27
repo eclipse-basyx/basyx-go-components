@@ -62,19 +62,26 @@ func (m *AccessModel) AuthorizeWithFilter(in EvalInput) (ok bool, reason string,
 	right := mapMethodToRight(in.Method)
 	all := m.gen.AllAccessPermissionRules
 
+	fmt.Println(in.Claims)
+
 	for _, r := range all.Rules {
 		acl, attrs, objs, lexpr := materialize(all, r)
 
+		fmt.Println("rule: ", r.USEOBJECTS)
 		if !rightsContains(acl.RIGHTS, right) {
+			fmt.Println("missing rights")
 			continue
 		}
 		if !matchRouteObjectsObjItem(objs, in.Path) {
+			fmt.Println("missing object")
 			continue
 		}
 		if !attributesSatisfiedAttrs(attrs, in.Claims) {
+			fmt.Println("missing attributes")
 			continue
 		}
 		if lexpr != nil && !evalLE(*lexpr, in.Claims, in.IssuedUTC) {
+			fmt.Println("formula fails")
 			continue
 		}
 

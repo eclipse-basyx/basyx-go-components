@@ -1,31 +1,107 @@
 [
-    {
-        "context": "Health endpoint",
-        "token": null,
-        "method": "GET",
-        "endpoint": "http://localhost:5004/health",
-        "shouldMatch": "expected/expectedHealthEndpoint.json",
-        "expectedStatus": 200
-    },
-    {
-        "context": "Post Specific Asset Id denied",
-        "token": {
-            "user": "martin",
-            "password": "admin"
-        },
-        "data": "postBody/simple_specificAssetIds.json",
-        "method": "POST",
-        "endpoint": "http://localhost:5004/lookup/shells/health",
-        "expectedStatus": 403
-    },
-    {
-        "context": "Get Specific Asset Id allowed",
-        "token": {
-            "user": "martin",
-            "password": "admin"
-        },
-        "method": "GET",
-        "endpoint": "http://localhost:5004/lookup/shells/MT",
-        "expectedStatus": 404
-    }
+  {
+    "context": "Health endpoint - anonymous allowed",
+    "token": null,
+    "method": "GET",
+    "endpoint": "http://localhost:5004/health",
+    "shouldMatch": "expected/expectedHealthEndpoint.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Description endpoint - anonymous allowed",
+    "token": null,
+    "method": "GET",
+    "endpoint": "http://localhost:5004/description",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Description endpoint - viewer allowed",
+    "token": { "user": "vieweruser", "password": "admin" },
+    "method": "GET",
+    "endpoint": "http://localhost:5004/description",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Shells GET - viewer with clear=3 allowed",
+    "token": { "user": "vieweruser", "password": "admin" },
+    "method": "GET",
+    "endpoint": "http://localhost:5004/lookup/shells/MT",
+    "expectedStatus": 404
+  },
+  {
+    "context": "Shells GET - editor with clear=6 allowed",
+    "token": { "user": "editoruser", "password": "admin" },
+    "method": "GET",
+    "endpoint": "http://localhost:5004/lookup/shells/MT",
+    "expectedStatus": 404
+  },
+  {
+    "context": "Shells GET - anonymous denied",
+    "token": null,
+    "method": "GET",
+    "endpoint": "http://localhost:5004/lookup/shells/MT",
+    "expectedStatus": 403
+  },
+  {
+    "context": "Shells POST - viewer denied",
+    "token": { "user": "vieweruser", "password": "admin" },
+    "method": "POST",
+    "endpoint": "http://localhost:5004/lookup/shells/MT",
+    "data": "postBody/simple_specificAssetIds.json",
+    "expectedStatus": 403
+  },
+  {
+    "context": "Shells POST - editor with clear=6 allowed",
+    "token": { "user": "editoruser", "password": "admin" },
+    "method": "POST",
+    "endpoint": "http://localhost:5004/lookup/shells/MT",
+    "data": "postBody/simple_specificAssetIds.json",
+    "expectedStatus": 201
+  },
+  {
+    "context": "Shells POST - admin allowed",
+    "token": { "user": "adminuser", "password": "admin" },
+    "method": "POST",
+    "endpoint": "http://localhost:5004/lookup/shells/MT",
+    "data": "postBody/simple_specificAssetIds.json",
+    "expectedStatus": 201
+  },
+  {
+    "context": "Shells DELETE - editor denied",
+    "token": { "user": "editoruser", "password": "admin" },
+    "method": "DELETE",
+    "endpoint": "http://localhost:5004/lookup/shells/MT",
+    "expectedStatus": 403
+  },
+  {
+    "context": "Shells DELETE - admin allowed (clear=10)",
+    "token": { "user": "adminuser", "password": "admin" },
+    "method": "DELETE",
+    "endpoint": "http://localhost:5004/lookup/shells/MT",
+    "expectedStatus": 204
+  },
+  {
+    "context": "ShellsByAssetLink POST - viewer denied",
+    "token": { "user": "vieweruser", "password": "admin" },
+    "data": "postBody/simple_specificAssetIds.json",
+    "method": "POST",
+    "endpoint": "http://localhost:5004/lookup/shellsByAssetLink",
+    "expectedStatus": 403
+  },
+  {
+    "context": "ShellsByAssetLink POST - editor allowed (clear=6)",
+    "token": { "user": "editoruser", "password": "admin" },
+    "data": "postBody/simple_specificAssetIds.json",
+    "method": "POST",
+    "endpoint": "http://localhost:5004/lookup/shellsByAssetLink",
+    "expectedStatus": 200
+  },
+  {
+    "context": "ShellsByAssetLink POST - admin allowed",
+    "token": { "user": "adminuser", "password": "admin" },
+    "data": "postBody/simple_specificAssetIds.json",
+    "method": "POST",
+    "endpoint": "http://localhost:5004/lookup/shellsByAssetLink",
+    "expectedStatus": 200
+  }
 ]

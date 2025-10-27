@@ -59,5 +59,10 @@
     "file": "pass/attribute_definition.json",
     "type": "AccessRuleModelSchemaJson",
     "should_fail": false
+  },
+  {
+    "file": "pass/complex_rules.json",
+    "type": "AccessRuleModelSchemaJson",
+    "should_fail": false
   }
 ]

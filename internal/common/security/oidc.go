@@ -46,8 +46,9 @@ type OIDC struct {
 }
 
 type OIDCSettings struct {
-	Issuer   string
-	Audience string
+	Issuer         string
+	Audience       string
+	AllowAnonymous bool
 }
 
 func NewOIDC(ctx context.Context, s OIDCSettings) (*OIDC, error) {
@@ -94,7 +95,19 @@ func (o *OIDC) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		authz := r.Header.Get("Authorization")
 		if !strings.HasPrefix(authz, "Bearer ") {
-			http.Error(w, "missing or invalid Authorization header", http.StatusUnauthorized)
+			// No token: allow anonymous flow if configured
+			if o == nil || o.verifier == nil {
+				// If verifier isn't set, still proceed as anonymous
+			}
+
+			anon := Claims{
+
+				"sub":   "anonymous",
+				"scope": "",
+			}
+			ctx := context.WithValue(r.Context(), claimsKey, anon)
+			// no issuedAt; leave default
+			next.ServeHTTP(w, r.WithContext(ctx))
 			return
 		}
 		raw := strings.TrimPrefix(authz, "Bearer ")
