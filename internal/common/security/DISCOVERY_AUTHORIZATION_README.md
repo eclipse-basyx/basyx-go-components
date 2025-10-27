@@ -97,36 +97,34 @@ The **ABAC (Attribute-Based Access Control)** engine evaluates requests in order
 
 ## 5. Example Access Rule
 
-The JSON example below shows two access rules — one for read-only access on `/aas/*` routes, and one for full access on `/admin/*` routes.
+The JSON example below shows two access rules — one for read-only access on `/description` routes, and one for full access on `/*` routes.
 
 ```json
 {
   "AllAccessPermissionRules": {
-    "DEFACLS": [
+    "rules": [
       {
-        "name": "read-allow",
-        "acl": {
+        "ACL": {
           "ACCESS": "ALLOW",
           "RIGHTS": ["READ"],
-          "ATTRIBUTES": [{ "CLAIM": "realm_access" }]
+          "ATTRIBUTES": [{ "CLAIM": "clearance" }]
+        },
+        "OBJECTS": [{"ROUTE" : "/descpription"}],
+        "FORMULA": { 
+          "$ge": [ { "$numCast": { "$attribute": { "CLAIM": "clearance" } } }, 
+          { "$numVal": 5 } ] 
         }
       },
+      
       {
-        "name": "admin-allow",
-        "acl": {
+        "ACL": {
           "ACCESS": "ALLOW",
-          "RIGHTS": ["ALL"],
-          "ATTRIBUTES": [{ "CLAIM": "realm_access" }]
-        }
+          "RIGHTS": ["READ"],
+          "ATTRIBUTES": [{ "CLAIM": "clearance" }]
+        },
+        "OBJECTS": [{"ROUTE" : "/*"}],
+        "FORMULA": {"$boolean": true}
       }
-    ],
-    "DEFOBJECTS": [
-      { "name": "aas-routes", "objects": [{ "ROUTE": "/aas/*" }] },
-      { "name": "admin-routes", "objects": [{ "ROUTE": "/admin/*" }] }
-    ],
-    "rules": [
-      { "USEACL": "read-allow", "USEOBJECTS": ["aas-routes"] },
-      { "USEACL": "admin-allow", "USEOBJECTS": ["admin-routes"] }
     ]
   }
 }
@@ -134,8 +132,8 @@ The JSON example below shows two access rules — one for read-only access on `/
 
 ### Explanation
 
-- **Rule 1:** Allows READ access to `/aas/*` routes if the token contains the claim `realm_access`.  
-- **Rule 2:** Allows full access (ALL rights) to `/admin/*` routes if the same claim exists.  
+- **Rule 1:** Allows READ access to `/descpription` routes if the token contains the claim `clearance` and is greater or equal 5.  
+- **Rule 2:** Allows READ access to all routes `/*` if the same claim exists.  
 - The engine evaluates the rules in order — the first rule that matches and passes all checks grants access.  
 
 ---
@@ -149,18 +147,18 @@ The JSON example below shows two access rules — one for read-only access on `/
 **Request:**  
 ```
 Method: GET
-Path: /admin/stats
-Claims: { "sub": "user1", "realm_access": { "roles": ["viewer"] } }
+Path: /lookup/shells/MT
+Claims: { "clearance": 5 }
 ```
 
 ### Step-by-Step Evaluation
 
 1. The ABAC engine maps `GET` → `READ`.  
-2. **Rule 1:** Fails the route check (`/aas/*` vs `/admin/stats`).  
-3. **Rule 2:** Matches route `/admin/*`.  
+2. **Rule 1:** Fails the route check (`/description` vs `/lookup/shells/MT`).  
+3. **Rule 2:** Matches route `/*`.  
 4. Rights include READ → pass.  
-5. Attribute `realm_access` is present → pass.  
-6. No formula defined → skip.  
+5. Attribute `clearance` is present → pass.  
+6. Formula is true.  
 7. No QueryFilter → skip.  
 8. `ACCESS = ALLOW` → **Access Granted.**
 
