@@ -1,0 +1,28 @@
+{
+    "Query": {
+        "$condition": {
+            "$and": [
+                {
+                    "$eq": [
+                        {
+                            "$field": "$sm#semanticId"
+                        },
+                        {
+                            "$strVal": "RootLevel_QL"
+                        }
+                    ]
+                },
+                {
+                    "$eq": [
+                        {
+                            "$field": "$sm#idShort"
+                        },
+                        {
+                            "$strVal": "2"
+                        }
+                    ]
+                }
+            ]
+        }
+    }
+}

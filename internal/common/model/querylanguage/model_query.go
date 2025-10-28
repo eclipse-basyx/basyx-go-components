@@ -58,13 +58,47 @@ func (q *Query) UnmarshalJSON(data []byte) error {
 
 	q.Select = temp.Select
 
-	// If there's a condition, unmarshal it as a Comparison
+	// If there's a condition, determine its type and unmarshal accordingly
 	if len(temp.Condition) > 0 {
-		var comparison Comparison
-		if err := json.Unmarshal(temp.Condition, &comparison); err != nil {
-			return fmt.Errorf("error unmarshalling condition: %w", err)
+		// Try to determine if it's a comparison or logical expression
+		var rawCondition map[string]interface{}
+		if err := json.Unmarshal(temp.Condition, &rawCondition); err != nil {
+			return fmt.Errorf("error unmarshalling condition structure: %w", err)
 		}
-		q.Condition = &comparison
+
+		// Check if it's a comparison operation ($eq, $ne, etc.)
+		isComparison := false
+		for key := range rawCondition {
+			if key == "$eq" || key == "$ne" || key == "$gt" || key == "$ge" || key == "$lt" || key == "$le" {
+				isComparison = true
+				break
+			}
+		}
+
+		// Check if it's a logical expression ($and, $or, $not)
+		isLogical := false
+		for key := range rawCondition {
+			if key == "$and" || key == "$or" || key == "$not" {
+				isLogical = true
+				break
+			}
+		}
+
+		if isComparison {
+			var comparison Comparison
+			if err := json.Unmarshal(temp.Condition, &comparison); err != nil {
+				return fmt.Errorf("error unmarshalling condition as comparison: %w", err)
+			}
+			q.Condition = &comparison
+		} else if isLogical {
+			var logicalExpr LogicalExpression
+			if err := json.Unmarshal(temp.Condition, &logicalExpr); err != nil {
+				return fmt.Errorf("error unmarshalling condition as logical expression: %w", err)
+			}
+			q.Condition = &logicalExpr
+		} else {
+			return fmt.Errorf("unknown condition type")
+		}
 	}
 
 	return nil
@@ -77,9 +111,9 @@ func HandleFieldToValueComparison(leftOperand, rightOperand Operand, operation s
 		return nil, fmt.Errorf("left operand is not a string field")
 	}
 	if len(fieldName) > 4 && fieldName[:4] == "$sm#" {
-		fieldName = ParseAASQLFieldToSQLColumn(fieldName[4:])
+		fieldName = ParseAASQLFieldToSQLColumn(fieldName)
 	}
-	leftCol := goqu.I("s." + fieldName)
+	leftCol := goqu.I(fieldName)
 	rightVal := goqu.V(rightOperand.GetValue())
 
 	switch operation {
@@ -108,9 +142,9 @@ func HandleValueToFieldComparison(leftOperand, rightOperand Operand, operation s
 		return nil, fmt.Errorf("right operand is not a string field")
 	}
 	if len(fieldName) > 4 && fieldName[:4] == "$sm#" {
-		fieldName = ParseAASQLFieldToSQLColumn(fieldName[4:])
+		fieldName = ParseAASQLFieldToSQLColumn(fieldName)
 	}
-	rightCol := goqu.I("s." + fieldName)
+	rightCol := goqu.I(fieldName)
 	leftVal := goqu.V(leftOperand.GetValue())
 
 	switch operation {
@@ -139,17 +173,17 @@ func HandleFieldToFieldComparison(leftOperand, rightOperand Operand, operation s
 		return nil, fmt.Errorf("left operand is not a string field")
 	}
 	if len(leftFieldName) > 4 && leftFieldName[:4] == "$sm#" {
-		leftFieldName = ParseAASQLFieldToSQLColumn(leftFieldName[4:])
+		leftFieldName = ParseAASQLFieldToSQLColumn(leftFieldName)
 	}
 	rightFieldName, ok := rightOperand.GetValue().(string)
 	if !ok {
 		return nil, fmt.Errorf("right operand is not a string field")
 	}
 	if len(rightFieldName) > 4 && rightFieldName[:4] == "$sm#" {
-		rightFieldName = ParseAASQLFieldToSQLColumn(rightFieldName[4:])
+		rightFieldName = ParseAASQLFieldToSQLColumn(rightFieldName)
 	}
-	leftCol := goqu.I("s." + leftFieldName)
-	rightCol := goqu.I("s." + rightFieldName)
+	leftCol := goqu.I(leftFieldName)
+	rightCol := goqu.I(rightFieldName)
 
 	switch operation {
 	case "$eq":
@@ -201,8 +235,12 @@ func HandleValueToValueComparison(leftOperand, rightOperand Operand, operation s
 
 func ParseAASQLFieldToSQLColumn(field string) string {
 	switch field {
-	case "idShort":
-		return "id_short"
+	case "$sm#idShort":
+		return "s.id_short"
+	case "$sm#id":
+		return "s.id"
+	case "$sm#semanticId":
+		return "semantic_id_reference_key.value"
 	}
 	return field
 }

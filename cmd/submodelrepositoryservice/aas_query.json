@@ -1,9 +1,9 @@
 {
     "Query": {
         "$condition": {
-            "$gt": [
-                { "$field": "$sm#idShort" },
-                { "$numVal": 42 } 
+            "$eq": [
+                { "$field": "$sm#id" },
+                { "$strVal": "1" } 
             ]
         }
     }

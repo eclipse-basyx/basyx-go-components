@@ -218,6 +218,8 @@ func GetQueryWithGoqu(submodelId string, aasQuery *querylanguage.QueryObj) (stri
 	if submodelId != "" {
 		query = query.Where(goqu.I("s.id").Eq(submodelId))
 	}
+	query = query.Join(goqu.T("reference").As("semantic_id_reference"), goqu.On(goqu.I("s.semantic_id").Eq(goqu.I("semantic_id_reference.id"))))
+	query = query.Join(goqu.T("reference_key").As("semantic_id_reference_key"), goqu.On(goqu.I("semantic_id_reference.id").Eq(goqu.I("semantic_id_reference_key.reference_id"))))
 
 	// Add optional AAS QueryLanguage filtering
 	if aasQuery != nil {
@@ -233,6 +235,10 @@ func GetQueryWithGoqu(submodelId string, aasQuery *querylanguage.QueryObj) (stri
 
 			leftOperand := operands[0]
 			rightOperand := operands[1]
+
+			// if (leftOperand.GetOperandType() == "$field" && leftOperand.GetValue().(string)[4:] == "semanticId") ||
+			// 	(rightOperand.GetOperandType() == "$field" && rightOperand.GetValue().(string)[4:] == "semanticId") {
+			// }
 
 			// Handle the case where left is field and right is value
 			if leftOperand.GetOperandType() == "$field" && rightOperand.GetOperandType() != "$field" {
@@ -264,8 +270,13 @@ func GetQueryWithGoqu(submodelId string, aasQuery *querylanguage.QueryObj) (stri
 					leftOperand.GetOperandType(), rightOperand.GetOperandType())
 			}
 
-		case "Logical":
-			return "", fmt.Errorf("unsupported query condition type: %s", ql.Query.Condition.GetConditionType())
+		case "LogicalExpression":
+			logicalExpr := ql.Query.Condition.(*querylanguage.LogicalExpression)
+			exp, err := logicalExpr.EvaluateToExpression()
+			if err != nil {
+				return "", fmt.Errorf("error evaluating logical expression: %w", err)
+			}
+			query = query.Where(exp)
 		case "Match":
 			return "", fmt.Errorf("unsupported query condition type: %s", ql.Query.Condition.GetConditionType())
 		default:
@@ -275,17 +286,16 @@ func GetQueryWithGoqu(submodelId string, aasQuery *querylanguage.QueryObj) (stri
 
 	// add a field that counts number of submodels to presize slices in calling function
 	query = query.SelectAppend(goqu.L("COUNT(s.id) OVER() AS total_submodels"))
+	query = query.GroupBy(goqu.I("s.id"))
 
 	sql, _, err := query.ToSQL()
-
-	// save query to query.txt
-	err = os.WriteFile("query.txt", []byte(sql), 0644)
-	if err != nil {
-		return "", fmt.Errorf("error saving SQL query to file: %w", err)
-	}
-
 	if err != nil {
 		return "", fmt.Errorf("error generating SQL: %w", err)
+	}
+
+	// save query to query.txt
+	if writeErr := os.WriteFile("query.txt", []byte(sql), 0644); writeErr != nil {
+		return "", fmt.Errorf("error saving SQL query to file: %w", writeErr)
 	}
 
 	return sql, nil

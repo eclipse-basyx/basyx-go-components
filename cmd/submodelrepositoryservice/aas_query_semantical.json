@@ -1,0 +1,14 @@
+{
+    "Query": {
+        "$condition": {
+            "$eq": [
+                {
+                    "$field": "$sm#semanticId"
+                },
+                {
+                    "$strVal": "RootLevel_QL2"
+                }
+            ]
+        }
+    }
+}

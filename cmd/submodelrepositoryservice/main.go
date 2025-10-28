@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
@@ -12,8 +13,10 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/querylanguage"
 	api "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/api"
 	persistence_postgresql "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence"
+	persistence_utils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
 	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/submodelrepositoryapi/go"
 )
 
@@ -98,26 +101,26 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	// // jsonSubmodel, _ := json.Marshal(sm)
 	// // fmt.Println(string(jsonSubmodel))
 
-	// osData, err := os.ReadFile("aas_query.json")
-	// if err != nil {
-	// 	log.Fatalf("Failed to read file: %v", err)
-	// }
-	// queryString := string(osData)
+	osData, err := os.ReadFile("aas_query_logical_semantical.json")
+	if err != nil {
+		log.Fatalf("Failed to read file: %v", err)
+	}
+	queryString := string(osData)
 
-	// var query querylanguage.QueryObj
-	// err = json.Unmarshal([]byte(queryString), &query)
-	// if err != nil {
-	// 	log.Fatalf("Failed to parse JSON: %v", err)
-	// }
-	// sms, err := persistence_utils.GetAllSubmodels(smDatabase.GetDB(), &query)
-	// if err != nil {
-	// 	log.Fatalf("Failed to execute query: %v", err)
-	// }
-	// fmt.Println(len(sms))
-	// if len(sms) > 0 {
-	// 	jsonSubmodel, _ := json.Marshal(sms[0])
-	// 	fmt.Println(string(jsonSubmodel))
-	// }
+	var query querylanguage.QueryObj
+	err = json.Unmarshal([]byte(queryString), &query)
+	if err != nil {
+		log.Fatalf("Failed to parse JSON: %v", err)
+	}
+	sms, err := persistence_utils.GetAllSubmodels(smDatabase.GetDB(), &query)
+	if err != nil {
+		log.Fatalf("Failed to execute query: %v", err)
+	}
+	fmt.Println(len(sms))
+	if len(sms) > 0 {
+		jsonSubmodel, _ := json.Marshal(sms[0])
+		fmt.Println(string(jsonSubmodel))
+	}
 	//TEST
 
 	smSvc := api.NewSubmodelRepositoryAPIAPIService(*smDatabase)
