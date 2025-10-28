@@ -22,8 +22,10 @@
 *
 * SPDX-License-Identifier: MIT
 ******************************************************************************/
+// Package auth contains OIDC verification and request authentication middleware
+// used by BaSyx components. It validates incoming Bearer tokens, extracts
+// claims into the request context, and optionally allows anonymous access.
 // Author: Martin Stemmer ( Fraunhofer IESE )
-
 package auth
 
 import (
@@ -31,6 +33,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"strings"
@@ -41,29 +44,51 @@ import (
 	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/discoveryapi"
 )
 
+// OIDC wraps an ID token verifier and related settings.
 type OIDC struct {
 	verifier *oidc.IDTokenVerifier
+	settings OIDCSettings
 }
 
+// OIDCSettings configures OIDC token verification.
+//
+// Issuer:   URL of the OpenID Provider ("iss").
+// Audience: expected audience / client ID for this service.
+// AllowAnonymous: if true, requests without a Bearer token are treated as
+//
+//	anonymous instead of being rejected.
 type OIDCSettings struct {
 	Issuer         string
 	Audience       string
 	AllowAnonymous bool
 }
 
+// NewOIDC initializes an OIDC verifier from the given settings.
 func NewOIDC(ctx context.Context, s OIDCSettings) (*OIDC, error) {
-	log.Printf("🔐 Initializing OIDC verifier...")
+	log.Printf("🔐 Initializing OIDC verifier…")
+
+	if strings.TrimSpace(s.Issuer) == "" {
+		return nil, fmt.Errorf("issuer must not be empty")
+	}
+	if strings.TrimSpace(s.Audience) == "" {
+		return nil, fmt.Errorf("audience must not be empty")
+	}
+
 	provider, err := oidc.NewProvider(ctx, s.Issuer)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("create OIDC provider: %w", err)
 	}
-	v := provider.Verifier(&oidc.Config{
-		ClientID: s.Audience,
-	})
+
+	v := provider.Verifier(&oidc.Config{ClientID: s.Audience})
+	if v == nil {
+		return nil, fmt.Errorf("failed to construct OIDC verifier")
+	}
+
 	log.Printf("✅ OIDC verifier created. Issuer=%s Audience=%s", s.Issuer, s.Audience)
-	return &OIDC{verifier: v}, nil
+	return &OIDC{verifier: v, settings: s}, nil
 }
 
+// Claims represents token claims extracted from a verified ID token.
 type Claims map[string]any
 
 type ctxKey string
@@ -73,6 +98,7 @@ const (
 	issuedAtKey ctxKey = "tokenIssuedAt"
 )
 
+// FromContext retrieves Claims previously stored by the middleware.
 func FromContext(r *http.Request) Claims {
 	if v := r.Context().Value(claimsKey); v != nil {
 		if c, ok := v.(Claims); ok {
@@ -82,6 +108,7 @@ func FromContext(r *http.Request) Claims {
 	return nil
 }
 
+// IssuedAtFromContext retrieves the token issue time stored in context.
 func IssuedAtFromContext(r *http.Request) (time.Time, bool) {
 	if v := r.Context().Value(issuedAtKey); v != nil {
 		if t, ok := v.(time.Time); ok {
@@ -91,36 +118,47 @@ func IssuedAtFromContext(r *http.Request) (time.Time, bool) {
 	return time.Time{}, false
 }
 
+// Middleware validates a Bearer token (if present) and injects claims.
+//
+// Behavior:
+//   - If Authorization header is missing or not Bearer:
+//   - If AllowAnonymous is true → inject anonymous claims and continue.
+//   - Otherwise → 401 Unauthorized.
+//   - If Bearer is present → verify the token, parse claims, check scopes,
+//     and store claims and iat in the request context.
 func (o *OIDC) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+
 		authz := r.Header.Get("Authorization")
 		if !strings.HasPrefix(authz, "Bearer ") {
-			// No token: allow anonymous flow if configured
-			if o == nil || o.verifier == nil {
-				// If verifier isn't set, still proceed as anonymous
+			if o.settings.AllowAnonymous {
+				anon := Claims{"sub": "anonymous", "scope": ""}
+				ctx := context.WithValue(r.Context(), claimsKey, anon)
+				next.ServeHTTP(w, r.WithContext(ctx))
+				return
 			}
-
-			anon := Claims{
-
-				"sub":   "anonymous",
-				"scope": "",
-			}
-			ctx := context.WithValue(r.Context(), claimsKey, anon)
-			// no issuedAt; leave default
-			next.ServeHTTP(w, r.WithContext(ctx))
+			respondOIDCError(w, http.StatusUnauthorized, "access denied")
 			return
 		}
-		raw := strings.TrimPrefix(authz, "Bearer ")
+
+		raw := strings.TrimSpace(strings.TrimPrefix(authz, "Bearer "))
+		if raw == "" {
+			respondOIDCError(w, http.StatusUnauthorized, "access denied")
+			return
+		}
 
 		idToken, err := o.verifier.Verify(r.Context(), raw)
 		if err != nil {
 			log.Printf("❌ Token verification failed: %v", err)
-			resp := common.NewErrorResponse(errors.New("invalid token"), http.StatusForbidden, "Middleware", "Rules", "Denied")
-			openapi.EncodeJSONResponse(resp.Body, &resp.Code, w)
+			respondOIDCError(w, http.StatusForbidden, "access denied")
 			return
 		}
+
 		var rm json.RawMessage
 		if err := idToken.Claims(&rm); err != nil {
+			log.Printf("❌ Failed to fetch raw claims: %v", err)
+			respondOIDCError(w, http.StatusForbidden, "access denied")
+			return
 		}
 
 		dec := json.NewDecoder(bytes.NewReader(rm))
@@ -128,46 +166,49 @@ func (o *OIDC) Middleware(next http.Handler) http.Handler {
 
 		var c Claims
 		if err := dec.Decode(&c); err != nil {
-			log.Printf("❌ Failed to parse claims: %v", err)
-
-			resp := common.NewErrorResponse(errors.New("invalid claims"), http.StatusForbidden, "Middleware", "Rules", "Denied")
-			openapi.EncodeJSONResponse(resp.Body, &resp.Code, w)
+			log.Printf("❌ Failed to decode claims: %v", err)
+			respondOIDCError(w, http.StatusForbidden, "access denied")
 			return
 		}
 
-		var issuedAt time.Time
+		// Parse iat if present; do not fail the request if missing or malformed.
 		if n, ok := c["iat"].(json.Number); ok {
-			sec, _ := n.Int64()
-			issuedAt = time.Unix(sec, 0)
-			log.Printf("🕓 Token issued at %v", issuedAt)
+			if sec, err := n.Int64(); err == nil {
+				issuedAt := time.Unix(sec, 0)
+				log.Printf("🕓 Token issued at %v", issuedAt)
+				r = r.WithContext(context.WithValue(r.Context(), issuedAtKey, issuedAt))
+			} else {
+				log.Printf("❌ Invalid 'iat' value: %v", err)
+				respondOIDCError(w, http.StatusForbidden, "access denied")
+			}
 		} else {
 			log.Printf("⚠️ Token missing 'iat' claim")
+			log.Printf("❌  Token missing 'iat' claim")
+			respondOIDCError(w, http.StatusForbidden, "access denied")
+			return
 		}
 
 		if typ, _ := c.GetString("typ"); typ != "" && !strings.EqualFold(typ, "Bearer") {
 			log.Printf("❌ unexpected token typ: %q", typ)
-
-			resp := common.NewErrorResponse(errors.New("invalid token type"), http.StatusForbidden, "Middleware", "Rules", "Denied")
-			openapi.EncodeJSONResponse(resp.Body, &resp.Code, w)
+			respondOIDCError(w, http.StatusForbidden, "access denied")
 			return
 		}
 
+		// Enforce minimal scopes (kept as-is; extend if needed).
 		required := []string{"profile"}
 		if !hasAllScopes(c, required) {
 			log.Printf("❌ missing required scopes: %v", required)
-
-			resp := common.NewErrorResponse(errors.New("insufficient scope"), http.StatusForbidden, "Middleware", "Rules", "Denied")
-			openapi.EncodeJSONResponse(resp.Body, &resp.Code, w)
+			respondOIDCError(w, http.StatusForbidden, "access denied")
 			return
 		}
 
 		log.Printf("✅ Token verified successfully for subject: %v", c["sub"])
-		ctx := context.WithValue(r.Context(), claimsKey, c)
-		ctx = context.WithValue(ctx, issuedAtKey, issuedAt)
-		next.ServeHTTP(w, r.WithContext(ctx))
+		r = r.WithContext(context.WithValue(r.Context(), claimsKey, c))
+		next.ServeHTTP(w, r)
 	})
 }
 
+// GetString returns a string claim value and a boolean indicating presence.
 func (c Claims) GetString(key string) (string, bool) {
 	v, ok := c[key]
 	if !ok {
@@ -177,10 +218,13 @@ func (c Claims) GetString(key string) (string, bool) {
 	return s, ok
 }
 
+// MarshalJSON allows Claims to be serialized as a JSON object.
 func (c Claims) MarshalJSON() ([]byte, error) {
 	return json.Marshal(map[string]any(c))
 }
 
+// hasAllScopes reports whether all required scopes are present in the
+// space-delimited "scope" claim.
 func hasAllScopes(c Claims, need []string) bool {
 	s, _ := c.GetString("scope")
 	have := map[string]struct{}{}
@@ -193,4 +237,11 @@ func hasAllScopes(c Claims, need []string) bool {
 		}
 	}
 	return true
+}
+
+// respondOIDCError writes a structured error response with the provided code
+// and message using the common BaSyx error format.
+func respondOIDCError(w http.ResponseWriter, code int, msg string) {
+	resp := common.NewErrorResponse(errors.New(msg), code, "Middleware", "Rules", "Denied")
+	openapi.EncodeJSONResponse(resp.Body, &resp.Code, w)
 }

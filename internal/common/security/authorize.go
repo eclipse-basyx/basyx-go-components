@@ -22,8 +22,10 @@
 *
 * SPDX-License-Identifier: MIT
 ******************************************************************************/
+// Package auth provides ABAC (Attribute-Based Access Control) middleware and
+// helper utilities to enforce fine-grained authorization rules in BaSyx
+// services.
 // Author: Martin Stemmer ( Fraunhofer IESE )
-
 package auth
 
 import (
@@ -37,18 +39,30 @@ import (
 	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/discoveryapi"
 )
 
+// ABACSettings defines the configuration used to enable and control
+// Attribute-Based Access Control.
+//
+// Enabled: toggles ABAC enforcement.
+// ClientRolesAudience: defines the expected client audience for role validation.
+// Model: provides the AccessModel that evaluates authorization rules.
 type ABACSettings struct {
 	Enabled             bool
 	ClientRolesAudience string
 	Model               *AccessModel
 }
 
+// Resource represents the target object of an authorization request.
+//
+// Type: describes the kind of resource (e.g., "AAS").
+// Tenant: identifies the organization or owner of the resource.
+// Attrs: contains arbitrary key-value pairs used during policy evaluation.
 type Resource struct {
 	Type   string
 	Tenant string
 	Attrs  map[string]any
 }
 
+// Input bundles subject claims, action, and resource for ABAC evaluation.
 type Input struct {
 	Subject  Claims
 	Action   string
@@ -56,16 +70,25 @@ type Input struct {
 	Env      Env
 }
 
+// Env represents environmental authorization context (e.g., current UTC).
 type Env struct {
 	UTCNow time.Time
 }
 
 const (
+	// filterKey stores query filter restrictions inside the request context.
 	filterKey ctxKey = "queryFilter"
 )
 
+// ResolveResource extracts a Resource from an HTTP request.
 type ResolveResource func(r *http.Request) (Resource, error)
 
+// ABACMiddleware returns an HTTP middleware handler that enforces attribute-based
+// authorization based on the provided ABACSettings.
+//
+// If ABAC is disabled, the next handler is executed without checks.
+// If enabled, Claims must be present in context or the request is rejected.
+// If the model denies access, a 403 Forbidden is returned.
 func ABACMiddleware(settings ABACSettings) func(http.Handler) http.Handler {
 
 	return func(next http.Handler) http.Handler {
@@ -109,6 +132,9 @@ func ABACMiddleware(settings ABACSettings) func(http.Handler) http.Handler {
 	}
 }
 
+// FromFilter returns a QueryFilter previously stored in the request context.
+// It is used to enforce policy-induced restrictions on downstream queries.
+// TODO: use this helper in backend if you need further restriction
 func FromFilter(r *http.Request) *QueryFilter {
 	if v := r.Context().Value(filterKey); v != nil {
 		if f, ok := v.(*QueryFilter); ok {
@@ -118,6 +144,8 @@ func FromFilter(r *http.Request) *QueryFilter {
 	return nil
 }
 
+// FromFilterCtx extracts a QueryFilter directly from a context instance.
+// TODO: use this helper in backend if you need further restriction
 func FromFilterCtx(ctx context.Context) *QueryFilter {
 	if v := ctx.Value(filterKey); v != nil {
 		if f, ok := v.(*QueryFilter); ok {
@@ -125,59 +153,4 @@ func FromFilterCtx(ctx context.Context) *QueryFilter {
 		}
 	}
 	return nil
-}
-
-func HasRealmRole(claims Claims, role string) bool {
-	ra, ok := claims["realm_access"].(map[string]any)
-	if !ok {
-		return false
-	}
-	roles, ok := ra["roles"].([]any)
-	if !ok {
-		return false
-	}
-	for _, r := range roles {
-		if s, ok := r.(string); ok && s == role {
-			return true
-		}
-	}
-	return false
-}
-
-func HasClientRole(claims Claims, clientID, role string) bool {
-	resAcc, ok := claims["resource_access"].(map[string]any)
-	if !ok {
-		return false
-	}
-	client, ok := resAcc[clientID].(map[string]any)
-	if !ok {
-		return false
-	}
-	roles, ok := client["roles"].([]any)
-	if !ok {
-		return false
-	}
-	for _, r := range roles {
-		if s, ok := r.(string); ok && s == role {
-			return true
-		}
-	}
-	return false
-}
-
-func SimpleResolver(tenantHeaderOrQuery string) ResolveResource {
-	return func(r *http.Request) (Resource, error) {
-		t := r.URL.Query().Get(tenantHeaderOrQuery)
-		if t == "" {
-			t = r.Header.Get(tenantHeaderOrQuery)
-		}
-		if t == "" {
-			return Resource{}, errors.New("tenant not found in request")
-		}
-		return Resource{
-			Type:   "AAS",
-			Tenant: t,
-			Attrs:  map[string]any{},
-		}, nil
-	}
 }

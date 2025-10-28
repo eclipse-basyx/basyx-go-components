@@ -24,8 +24,59 @@ These components work together to ensure that only authenticated and authorized 
 
 The architecture diagram shows how different layers of the Discovery Service interact — from incoming HTTP requests through the router, security middleware, controllers, and database.
 
-![Architecture Diagram](./diagrams/architecture.svg)
+```mermaid
+flowchart LR
+  subgraph Client
+    C[Browser or Service]
+  end
 
+  subgraph DiscoveryService
+    direction LR
+
+    subgraph Edge
+      R[chi Router]
+      X[CORS Middleware]
+      H[Public /contextPath/health]
+    end
+
+    subgraph Security
+      O[OIDC Middleware]
+      A[ABAC Middleware]
+    end
+
+    subgraph App
+      D1[Discovery Controller]
+      D2[Description Controller]
+    end
+
+    subgraph Data
+      DB[PostgreSQL Backend]
+    end
+  end
+
+  subgraph IdentityProvider
+    IDP[OIDC Provider]
+  end
+
+  subgraph Config
+    CFG1[config file]
+    CFG2[access model file]
+  end
+
+  C --> R
+  R --> H
+  R --> X
+  X --> O
+  O --> A
+  A --> D1
+  A --> D2
+  D1 --> DB
+  D2 --> DB
+  O -. jwks .-> IDP
+  CFG1 -. loads .-> DiscoveryService
+  CFG2 -. parsed .-> A
+
+  ```
 ### Explanation
 
 1. **Client Layer:** A user, service, or browser sends HTTP requests to the Discovery Service.  
@@ -51,7 +102,36 @@ The architecture diagram shows how different layers of the Discovery Service int
 
 ## 3. Request Flow
 
-![Request Flow Diagram](./diagrams/request_flow.svg)
+```mermaid
+sequenceDiagram
+  autonumber
+  participant C as Client
+  participant R as Router
+  participant O as OIDC
+  participant B as ABAC
+  participant F as QueryFilter
+  participant S as Controllers
+  participant P as Postgres
+
+  C->>R: HTTP request
+  alt Health path
+    R-->>C: 200 ok
+  else Protected path
+    R->>O: Verify token
+    O-->>R: Claims in context
+    R->>B: Authorize
+    B-->>F: Optional QueryFilter
+    alt Allowed
+      R-->>S: Forward request
+      S->>S: Apply QueryFilter to reads writes redactions
+      S->>P: SQL with QueryFilter constraints
+      P-->>S: Filtered rows or constrained ack
+      S-->>C: 2xx json with redactions if any
+    else Denied
+      B-->>C: 403 json
+    end
+  end
+```
 
 ### Detailed Explanation
 
@@ -71,8 +151,26 @@ Even after successful authorization, a user may see only partial data or be limi
 ---
 
 ## 4. ABAC Decision Flow
+```mermaid
+flowchart LR
+  classDef step stroke-width:1.5px,rx:8,ry:8
+  classDef note fill:#eee,stroke:#bbb,color:#333
 
-![ABAC Decision Flow Diagram](./diagrams/abac_flow.svg)
+  S([Request enters ABAC]) --> M[Map method to right]
+  M --> L[Load rules in order]
+  L --> CUR[Select current rule]:::step
+  CUR --> RCHK[Route matches path]:::step --> RGT[Rights contain requested right]:::step --> ATTR[Attributes satisfied]:::step --> FORM[Formula valid or none]:::step --> BUILD[Build QueryFilter if defined]:::step --> ACC[ACL access is ALLOW]:::step
+  ACC -->|yes| OK[[Allow and attach QueryFilter]]
+  ACC -->|no| NEXT[Advance to next rule]:::note
+  BUILD -->|filter denies| DENYF[[403 deny by filter]]
+  FORM -->|no| NEXT
+  ATTR -->|no| NEXT
+  RGT -->|no| NEXT
+  RCHK -->|no| NEXT
+  NEXT --> HAS{More rules}
+  HAS -->|yes| CUR
+  HAS -->|no| DENY[[403 deny no matching rule]]
+```
 
 ### Explanation
 
@@ -140,8 +238,18 @@ The JSON example below shows two access rules — one for read-only access on `/
 
 ## 6. Example Evaluation
 
-![Example Evaluation Diagram](./diagrams/example_rule_flow.svg)
+```mermaid
+flowchart LR
+  I[GET /description with clearance] --> R1[Check rule 1]
+  R1 --> F1[Route mismatch]
+  F1 --> R2[Check rule 2 route /*]
+  R2 --> RGT[Read Access is allowed]
+  RGT --> ATT[claim clearance exists]
+  ATT --> ACC[Access ALLOW]
+  ACC --> asd[Form]
+  asd --> OK[Allow]
 
+```
 ### Scenario
 
 **Request:**  
@@ -207,4 +315,4 @@ json.NewEncoder(w).Encode(filtered)
 
 ---
 
-© 2025 Discovery Service Documentation
+© 2025 Fraunhofer IESE - Discovery Service Documentation

@@ -38,7 +38,7 @@ import (
 	"strings"
 	"testing"
 
-	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
+	acm "github.com/eclipse-basyx/basyx-go-components/internal/common/security/model"
 )
 
 // ----- test config & helpers -----
@@ -57,40 +57,40 @@ type testCase struct {
 func typeFactory(typeName string) (any, error) {
 	switch typeName {
 	case "ACL":
-		var v auth.ACL
+		var v acm.ACL
 		return &v, nil
 	case "AccessPermissionRule":
-		var v auth.AccessPermissionRule
+		var v acm.AccessPermissionRule
 		return &v, nil
 	case "AccessRuleModelSchemaJson":
-		var v auth.AccessRuleModelSchemaJson
+		var v acm.AccessRuleModelSchemaJson
 		return &v, nil
 	case "AccessRuleModelSchemaJsonAllAccessPermissionRules":
-		var v auth.AccessRuleModelSchemaJsonAllAccessPermissionRules
+		var v acm.AccessRuleModelSchemaJsonAllAccessPermissionRules
 		return &v, nil
 	case "AccessRuleModelSchemaJsonAllAccessPermissionRulesDEFACLSElem":
-		var v auth.AccessRuleModelSchemaJsonAllAccessPermissionRulesDEFACLSElem
+		var v acm.AccessRuleModelSchemaJsonAllAccessPermissionRulesDEFACLSElem
 		return &v, nil
 	case "AccessRuleModelSchemaJsonAllAccessPermissionRulesDEFATTRIBUTESElem":
-		var v auth.AccessRuleModelSchemaJsonAllAccessPermissionRulesDEFATTRIBUTESElem
+		var v acm.AccessRuleModelSchemaJsonAllAccessPermissionRulesDEFATTRIBUTESElem
 		return &v, nil
 	case "AccessRuleModelSchemaJsonAllAccessPermissionRulesDEFFORMULASElem":
-		var v auth.AccessRuleModelSchemaJsonAllAccessPermissionRulesDEFFORMULASElem
+		var v acm.AccessRuleModelSchemaJsonAllAccessPermissionRulesDEFFORMULASElem
 		return &v, nil
 	case "AccessRuleModelSchemaJsonAllAccessPermissionRulesDEFOBJECTSElem":
-		var v auth.AccessRuleModelSchemaJsonAllAccessPermissionRulesDEFOBJECTSElem
+		var v acm.AccessRuleModelSchemaJsonAllAccessPermissionRulesDEFOBJECTSElem
 		return &v, nil
 	case "LogicalExpression":
-		var v auth.LogicalExpression
+		var v acm.LogicalExpression
 		return &v, nil
 	case "MatchExpression":
-		var v auth.MatchExpression
+		var v acm.MatchExpression
 		return &v, nil
 	case "Value":
-		var v auth.Value
+		var v acm.Value
 		return &v, nil
 	case "StringValue":
-		var v auth.StringValue
+		var v acm.StringValue
 		return &v, nil
 	// add other leaf types here as needed
 	default:
@@ -119,8 +119,6 @@ func normalizeJSON(t *testing.T, v any) []byte {
 	return bytes.TrimSpace(buf.Bytes())
 }
 
-// discoverFallback builds cases from testdata/pass and testdata/fail if no manifest exists.
-// It defaults the type to AccessRuleModelSchemaJson (adjust if desired).
 func discoverFallback(t *testing.T, base string) []testCase {
 	t.Helper()
 	var out []testCase

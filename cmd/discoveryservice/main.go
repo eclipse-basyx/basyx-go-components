@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"os"
-	"strings"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
@@ -41,10 +39,7 @@ func runServer(ctx context.Context, configPath string) error {
 	r.Use(c.Handler)
 
 	// --- Health Endpoint (public) ---
-	r.Get(cfg.Server.ContextPath+"/health", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"status":"UP"}`))
-	})
+	common.AddHealthEndpoint(r, cfg)
 
 	// === Database ===
 	dsn := fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=disable",
@@ -75,52 +70,14 @@ func runServer(ctx context.Context, configPath string) error {
 	descSvc := openapi.NewDescriptionAPIAPIService()
 	descCtrl := openapi.NewDescriptionAPIAPIController(descSvc)
 
-	base := normalizeBasePath(cfg.Server.ContextPath)
+	base := common.NormalizeBasePath(cfg.Server.ContextPath)
 
 	// === Protected API Subrouter ===
 	apiRouter := chi.NewRouter()
 
 	// Apply OIDC + ABAC once for all discovery endpoints
-	if cfg.ABAC.Enabled {
-
-		// === OIDC & ABAC Setup ===
-		oidc, err := auth.NewOIDC(ctx, auth.OIDCSettings{
-			Issuer:         cfg.OIDC.Issuer,
-			Audience:       cfg.OIDC.Audience,
-			AllowAnonymous: true,
-		})
-		if err != nil {
-			log.Fatalf("OIDC init failed: %v", err)
-		}
-		// === Load Access Model (required) ===
-		var model *auth.AccessModel
-		if cfg.ABAC.ModelPath != "" {
-			data, err := os.ReadFile(cfg.ABAC.ModelPath)
-			if err != nil {
-				log.Fatalf("❌ Could not read Access Rule Model file %q: %v", cfg.ABAC.ModelPath, err)
-			}
-
-			m, err := auth.ParseAccessModel(data)
-			if err != nil {
-				log.Fatalf("❌ Failed to parse Access Rule Model %q: %v", cfg.ABAC.ModelPath, err)
-			}
-
-			model = m
-			log.Printf("✅ Access Rule Model loaded: %s", cfg.ABAC.ModelPath)
-		} else {
-			log.Fatalf("❌ ABAC is enabled but no ModelPath was provided in config")
-		}
-
-		abacSettings := auth.ABACSettings{
-			Enabled:             cfg.ABAC.Enabled,
-			ClientRolesAudience: cfg.ABAC.ClientRolesAudience,
-			Model:               model,
-		}
-
-		apiRouter.Use(
-			oidc.Middleware,
-			auth.ABACMiddleware(abacSettings),
-		)
+	if err := auth.SetupSecurity(ctx, cfg, apiRouter); err != nil {
+		return err
 	}
 
 	// Register all discovery routes (protected)
@@ -130,14 +87,8 @@ func runServer(ctx context.Context, configPath string) error {
 
 	// Register all description routes (protected)
 	for _, rt := range descCtrl.Routes() {
-		apiRouter.Method(rt.Method, join(base, rt.Pattern), rt.HandlerFunc)
+		apiRouter.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
 	}
-
-	// Health (public, duplicate for base path)
-	r.Get(join(base, "/health"), func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"status":"UP"}`))
-	})
 
 	// Mount protected API under base path
 	r.Mount(base, apiRouter)
@@ -165,21 +116,4 @@ func main() {
 	if err := runServer(ctx, configPath); err != nil {
 		log.Fatalf("Server error: %v", err)
 	}
-}
-
-func normalizeBasePath(p string) string {
-	if p == "" || p == "/" {
-		return "/"
-	}
-	if !strings.HasPrefix(p, "/") {
-		p = "/" + p
-	}
-	return strings.TrimRight(p, "/")
-}
-
-func join(base, suffix string) string {
-	if base == "/" {
-		return suffix
-	}
-	return base + suffix
 }

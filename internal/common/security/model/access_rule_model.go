@@ -24,7 +24,7 @@
 ******************************************************************************/
 // Author: Martin Stemmer ( Fraunhofer IESE )
 
-package auth
+package acm
 
 import (
 	"encoding/json"
