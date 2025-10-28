@@ -19,7 +19,7 @@ def main():
     parser.add_argument("input", type=Path, help="Path to JSON log (array of records).")
     parser.add_argument("-o", "--output", type=Path, default=None,
                         help="Optional output image (e.g., plot.png). If omitted, shows a window.")
-    parser.add_argument("--unit", choices=["ns", "us", "ms"], default="ms",
+    parser.add_argument("--unit", choices=["ns", "us", "ms", "s"], default="ms",
                         help="Y-axis units. Default: nanoseconds (ns).")
     args = parser.parse_args()
 
@@ -51,12 +51,16 @@ def main():
                 val /= 1_000.0
             elif args.unit == "ms":
                 val /= 1_000_000.0
+            elif args.unit == "s":
+                val /= 1_000_000_000.0
         else:  # duration_ms is present
             val = float(dur_ms) * 1_000_000.0  # convert ms -> ns first
             if args.unit == "us":
                 val /= 1_000.0
             elif args.unit == "ms":
                 val /= 1_000_000.0
+            elif args.unit == "s":
+                val /= 1_000_000_000.0
 
         dur_map[(it, op)] = dur_map.get((it, op), 0.0) + val
 
@@ -68,7 +72,7 @@ def main():
             cumulative[op] += dur_map.get((it, op), 0.0)
             series[op].append(cumulative[op])
 
-    unit_labels = {"ns": "ns", "us": "µs", "ms": "ms"}
+    unit_labels = {"ns": "ns", "us": "µs", "ms": "ms", "s": "s"}
     y_label = f"Cumulative runtime ({unit_labels[args.unit]})"
 
     # Plot
