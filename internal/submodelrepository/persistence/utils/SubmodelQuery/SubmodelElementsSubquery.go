@@ -32,20 +32,17 @@ import (
 )
 
 func GetSubmodelElementsSubquery(dialect goqu.DialectWrapper, rootSubmodelElements bool) *goqu.SelectDataset {
-	// Ja Aaron, ich hab die Queries ausgelagert (8
 	semanticIdSubuqery, semanticIdReferredSubquery := queries.GetReferenceQueries(dialect, goqu.I("tlsme.semantic_id"))
 	supplSemanticIdSubquery, supplSemanticIdReferredSubquery := queries.GetSupplementalSemanticIdQueries(dialect, goqu.T("sme_supplemental_semantic"), "sme_id", "reference_id", goqu.I("tlsme.id"))
 
-	// Wir können tatsächlich switch cases IN SQL haben, wtf
 	valueByType := goqu.Case().
 		When(
 			goqu.I("tlsme.model_type").Eq("Property"),
 			getPropertySubquery(dialect),
 		).
-		// Wir müssen hier nur den "switch-case" erweitern für alle values! Nice! ist ja erst 22:30 Uhr...
 		Else(goqu.V(nil))
 
-	obj := goqu.Func("jsonb_build_object", // Ja wir können jsonb_build auch komplett in goqu machen... doofe KI.
+	obj := goqu.Func("jsonb_build_object",
 		goqu.V("db_id"), goqu.I("tlsme.id"),
 		goqu.V("parent_id"), goqu.I("tlsme.parent_sme_id"),
 		goqu.V("id_short"), goqu.I("tlsme.id_short"),
@@ -80,7 +77,7 @@ func getPropertySubquery(dialect goqu.DialectWrapper) *goqu.SelectDataset {
 	return dialect.From(goqu.T("property_element").As("pr")).
 		Select(
 			goqu.Func("jsonb_build_object",
-				goqu.V("value"), goqu.COALESCE( // NULL values werden ignoeriert -> deswegen COALESCE, wenn jemand doch in mehreren spalten values hat... PECH!
+				goqu.V("value"), goqu.COALESCE(
 					goqu.I("pr.value_text"),
 					goqu.L("?::text", goqu.I("pr.value_num")),
 					goqu.L("?::text", goqu.I("pr.value_bool")),
@@ -91,5 +88,5 @@ func getPropertySubquery(dialect goqu.DialectWrapper) *goqu.SelectDataset {
 			),
 		).
 		Where(goqu.I("pr.id").Eq(goqu.I("tlsme.id"))).
-		Limit(1) // sollte nur eine value geben -> limit 1 sollte den plan executor einen vorteil beim ausführen geben, ob das stimmt, kein plan
+		Limit(1)
 }
