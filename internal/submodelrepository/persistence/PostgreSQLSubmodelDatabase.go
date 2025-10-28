@@ -73,7 +73,6 @@ func (p *PostgreSQLSubmodelDatabase) GetAllSubmodels(limit int32, cursor string,
 	}
 
 	if err != nil {
-		fmt.Println(err)
 		return nil, "", beginTransactionErrorSubmodelRepo
 	}
 	defer func() {
@@ -88,11 +87,101 @@ func (p *PostgreSQLSubmodelDatabase) GetAllSubmodels(limit int32, cursor string,
 	}
 
 	if err := tx.Commit(); err != nil {
-		fmt.Println(err)
 		return nil, "", failedPostgresTransactionSubmodelRepo
 	}
 
 	return sm, "", nil
+}
+
+// get submodel metadata
+func (p *PostgreSQLSubmodelDatabase) GetAllSubmodelsMetadata(
+	limit int32,
+	cursor string,
+	idShort string,
+	semanticId string,
+) ([]gen.Submodel, string, error) {
+
+	tx, err := p.db.Begin()
+	if limit <= 0 {
+		limit = 100
+	}
+
+	if err != nil {
+		return nil, "", beginTransactionErrorSubmodelRepo
+	}
+	defer func() {
+		if err != nil {
+			tx.Rollback()
+		}
+	}()
+
+	query := `
+		SELECT 
+			s.id, 
+			s.id_short, 
+			s.category, 
+			s.kind, 
+			s.model_type, 
+			r.type AS semantic_reference_type,
+			rk.type AS key_type,
+   			rk.value AS key_value
+		FROM submodel s
+		LEFT JOIN reference r ON s.semantic_id = r.id
+		LEFT JOIN reference_key rk ON r.id = rk.reference_id
+		WHERE ($1 = '' OR s.id_short ILIKE '%' || $1 || '%')
+		ORDER BY s.id
+		LIMIT $2;
+	`
+
+	rows, err := p.db.Query(query, idShort, limit)
+	if err != nil {
+		tx.Rollback()
+		fmt.Println("Error querying submodel metadata:", err)
+		return nil, "", err
+	}
+	defer rows.Close()
+
+	var submodels []gen.Submodel
+	for rows.Next() {
+		var sm gen.Submodel
+		var refType, keyType, keyValue sql.NullString
+
+		err := rows.Scan(
+			&sm.Id,
+			&sm.IdShort,
+			&sm.Category,
+			&sm.Kind,
+			&sm.ModelType,
+			&refType,
+			&keyType,
+			&keyValue,
+		)
+		if err != nil {
+			fmt.Println("Error scanning metadata row:", err)
+			return nil, "", err
+		}
+		if refType.Valid {
+			ref := gen.Reference{
+				Type: gen.ReferenceTypes(refType.String),
+			}
+			// Only add keys if both type and value are valid
+			if keyType.Valid && keyValue.Valid {
+				ref.Keys = []gen.Key{{
+					Type:  gen.KeyTypes(keyType.String),
+					Value: keyValue.String,
+				}}
+			}
+			sm.SemanticId = &ref
+		}
+		submodels = append(submodels, sm)
+	}
+
+	if err := tx.Commit(); err != nil {
+		fmt.Println(err)
+		return nil, "", failedPostgresTransactionSubmodelRepo
+	}
+
+	return submodels, "", nil
 }
 
 // GetSubmodel returns one Submodel by id

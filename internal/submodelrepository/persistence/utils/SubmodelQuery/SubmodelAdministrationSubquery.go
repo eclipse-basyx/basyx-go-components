@@ -45,17 +45,17 @@ type AdministrationRow struct {
 func GetAdministrationSubqueryForSubmodel(dialect goqu.DialectWrapper) *goqu.SelectDataset {
 	administrativeInformationEmbeddedDataSpecificationReferenceSubquery, administrativeInformationEmbeddedDataSpecificationReferenceReferredSubquery, administrativeInformationIEC61360Subquery := GetEmbeddedDataSpecificationSubqueries(dialect, "administrative_information_embedded_data_specification", "administrative_information_id", "s.administration_id")
 
+	// Build the jsonb object for administration creator references
+	creatorObj := goqu.Func("jsonb_build_object",
+		goqu.V("reference_id"), goqu.I("r.id"),
+		goqu.V("reference_type"), goqu.I("r.type"),
+		goqu.V("key_id"), goqu.I("rk.id"),
+		goqu.V("key_type"), goqu.I("rk.type"),
+		goqu.V("key_value"), goqu.I("rk.value"),
+	)
+
 	administrationCreatorSubquery := dialect.From(goqu.T("administrative_information").As("admi")).
-		Select(goqu.L(`
-		jsonb_agg(
-			DISTINCT jsonb_build_object(
-				'reference_id', r.id, 
-				'reference_type', r.type, 
-				'key_id', rk.id, 
-				'key_type', rk.type, 
-				'key_value', rk.value
-			)
-		)`)).
+		Select(goqu.Func("jsonb_agg", goqu.L("?", creatorObj))).
 		Join(
 			goqu.T("reference").As("r"),
 			goqu.On(goqu.I("r.id").Eq(goqu.I("admi.creator"))),
@@ -66,18 +66,19 @@ func GetAdministrationSubqueryForSubmodel(dialect goqu.DialectWrapper) *goqu.Sel
 		).
 		Where(goqu.I("admi.id").Eq(goqu.I("s.administration_id")))
 
+	// Build the jsonb object for administration creator referred references
+	creatorReferredObj := goqu.Func("jsonb_build_object",
+		goqu.V("reference_id"), goqu.I("r.id"),
+		goqu.V("reference_type"), goqu.I("r.type"),
+		goqu.V("parentReference"), goqu.I("r.parentreference"),
+		goqu.V("rootReference"), goqu.I("r.rootreference"),
+		goqu.V("key_id"), goqu.I("rk.id"),
+		goqu.V("key_type"), goqu.I("rk.type"),
+		goqu.V("key_value"), goqu.I("rk.value"),
+	)
+
 	administrationCreatorReferredSubquery := dialect.From(goqu.T("administrative_information").As("admi")).
-		Select(goqu.L(`jsonb_agg(
-			DISTINCT jsonb_build_object(
-				'reference_id', r.id, 
-				'reference_type', r.type, 
-				'parentReference', r.parentreference, 
-				'rootReference', r.rootreference, 
-				'key_id', rk.id, 
-				'key_type', rk.type, 
-				'key_value', rk.value
-			)
-		)`)).
+		Select(goqu.Func("jsonb_agg", goqu.L("?", creatorReferredObj))).
 		Join(
 			goqu.T("reference").As("r"),
 			goqu.On(goqu.I("r.rootreference").Eq(goqu.I("admi.creator"))),
@@ -91,22 +92,20 @@ func GetAdministrationSubqueryForSubmodel(dialect goqu.DialectWrapper) *goqu.Sel
 			goqu.I("admi.id").Eq(goqu.I("s.administration_id")),
 		)
 
+	administrativeInformationObj := goqu.Func("jsonb_build_object",
+		goqu.V("dbId"), goqu.C("id").Table("ai"),
+		goqu.V("version"), goqu.C("version").Table("ai"),
+		goqu.V("revision"), goqu.C("revision").Table("ai"),
+		goqu.V("templateId"), goqu.C("templateid").Table("ai"),
+		goqu.V("creator"), goqu.L("?", administrationCreatorSubquery),
+		goqu.V("creatorReferred"), goqu.L("?", administrationCreatorReferredSubquery),
+		goqu.V("edsDataSpecifications"), goqu.L("?", administrativeInformationEmbeddedDataSpecificationReferenceSubquery),
+		goqu.V("edsDataSpecificationsReferred"), goqu.L("?", administrativeInformationEmbeddedDataSpecificationReferenceReferredSubquery),
+		goqu.V("edsDataSpecificationIEC61360"), goqu.L("?", administrativeInformationIEC61360Subquery),
+	)
+
 	administrativeInformationSubquery := dialect.From(goqu.T("administrative_information").As("ai")).
-		Select(goqu.L(`
-			jsonb_agg(
-					DISTINCT jsonb_build_object(
-						'dbId', ai.id,
-						'version', ai.version,
-						'revision', ai.revision,
-						'templateId', ai.templateId,
-						'creator', ?,
-						'creatorReferred', ?,
-						'edsDataSpecifications', ?,
-						'edsDataSpecificationsReferred', ?,
-						'edsDataSpecificationIEC61360', ?
-					)
-			)
-		`, administrationCreatorSubquery, administrationCreatorReferredSubquery, administrativeInformationEmbeddedDataSpecificationReferenceSubquery, administrativeInformationEmbeddedDataSpecificationReferenceReferredSubquery, administrativeInformationIEC61360Subquery)).
+		Select(goqu.Func("jsonb_agg", administrativeInformationObj)).
 		Where(goqu.I("ai.id").Eq(goqu.I("s.administration_id")))
 	return administrativeInformationSubquery
 }
