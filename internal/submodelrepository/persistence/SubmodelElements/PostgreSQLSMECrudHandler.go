@@ -103,7 +103,10 @@ func (p *PostgreSQLSMECrudHandler) Create(tx *sql.Tx, submodelId string, submode
 
 	supplSId := submodelElement.GetSupplementalSemanticIds()
 	if len(supplSId) > 0 {
-		persistence_utils.InsertSupplementalSemanticIdsSME(tx, int64(id), supplSId)
+		err := persistence_utils.InsertSupplementalSemanticIdsSME(tx, int64(id), supplSId)
+		if err != nil {
+			return 0, err
+		}
 	}
 	return id, nil
 }
