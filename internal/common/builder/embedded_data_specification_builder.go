@@ -222,8 +222,12 @@ func (edsb *EmbeddedDataSpecificationsBuilder) BuildContentsIec61360(iecRows jso
 		}
 
 		var levelType *gen.LevelType
-		if err := json.Unmarshal(data.LevelType, &levelType); err != nil {
-			return fmt.Errorf("error converting LevelType for Embedded Data Specification Content Id %d: %w", data.IecID, err)
+		if len(data.LevelType) == 0 {
+			levelType = nil
+		} else {
+			if err := json.Unmarshal(data.LevelType, &levelType); err != nil {
+				return fmt.Errorf("error converting LevelType for Embedded Data Specification Content Id %d: %w", data.IecID, err)
+			}
 		}
 
 		eds.DataSpecificationContent = &gen.DataSpecificationIec61360{

@@ -35,20 +35,21 @@ import (
 	_ "github.com/doug-martin/goqu/v9/dialect/postgres"
 	builders "github.com/eclipse-basyx/basyx-go-components/internal/common/builder"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/querylanguage"
 	submodel_query "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils/SubmodelQuery"
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 )
 
 func GetSubmodelById(db *sql.DB, submodelIdFilter string) (*gen.Submodel, error) {
-	submodels, err := getSubmodels(db, submodelIdFilter)
+	submodels, err := getSubmodels(db, submodelIdFilter, nil)
 	if err != nil || len(submodels) == 0 {
 		return nil, err
 	}
 	return submodels[0], nil
 }
 
-func GetAllSubmodels(db *sql.DB) ([]*gen.Submodel, error) {
-	return getSubmodels(db, "")
+func GetAllSubmodels(db *sql.DB, query *querylanguage.QueryObj) ([]*gen.Submodel, error) {
+	return getSubmodels(db, "", query)
 }
 
 // getSubmodels retrieves submodels from the database with full nested structures.
@@ -76,11 +77,11 @@ func GetAllSubmodels(db *sql.DB) ([]*gen.Submodel, error) {
 // Note: The function builds nested reference structures in two phases:
 //  1. Initial parsing during row iteration
 //  2. Final structure building after all rows are processed
-func getSubmodels(db *sql.DB, submodelIdFilter string) ([]*gen.Submodel, error) {
+func getSubmodels(db *sql.DB, submodelIdFilter string, query *querylanguage.QueryObj) ([]*gen.Submodel, error) {
 	var result []*gen.Submodel
 	referenceBuilderRefs := make(map[int64]*builders.ReferenceBuilder)
 	start := time.Now().Local().UnixMilli()
-	rows, err := getSubmodelDataFromDbWithJSONQuery(db, submodelIdFilter)
+	rows, err := getSubmodelDataFromDbWithJSONQuery(db, submodelIdFilter, query)
 	end := time.Now().Local().UnixMilli()
 	fmt.Printf("Total Query Only time: %d milliseconds\n", end-start)
 	if err != nil {
@@ -329,8 +330,8 @@ func moreThanZeroReferences(referenceArray []*gen.Reference) bool {
 // Returns:
 //   - *sql.Rows: Result set containing submodel data with JSON-aggregated nested structures
 //   - error: An error if query building or execution fails
-func getSubmodelDataFromDbWithJSONQuery(db *sql.DB, submodelId string) (*sql.Rows, error) {
-	q, err := submodel_query.GetQueryWithGoqu(submodelId)
+func getSubmodelDataFromDbWithJSONQuery(db *sql.DB, submodelId string, query *querylanguage.QueryObj) (*sql.Rows, error) {
+	q, err := submodel_query.GetQueryWithGoqu(submodelId, query)
 	// fmt.Println(q)
 	// save query in query.txt
 	// err = os.WriteFile("query.txt", []byte(q), 0644)

@@ -28,8 +28,10 @@ package submodel_query
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/doug-martin/goqu/v9"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/querylanguage"
 )
 
 // getQueryWithGoqu constructs a comprehensive SQL query for retrieving submodel data.
@@ -58,7 +60,7 @@ import (
 // The function uses COALESCE to ensure empty arrays ('[]'::jsonb) instead of NULL values,
 // which simplifies downstream JSON parsing. It also includes a total count window function
 // for efficient result set pagination and slice pre-sizing.
-func GetQueryWithGoqu(submodelId string) (string, error) {
+func GetQueryWithGoqu(submodelId string, aasQuery *querylanguage.QueryObj) (string, error) {
 	dialect := goqu.Dialect("postgres")
 
 	// Build display names subquery
@@ -217,10 +219,71 @@ func GetQueryWithGoqu(submodelId string) (string, error) {
 		query = query.Where(goqu.I("s.id").Eq(submodelId))
 	}
 
+	// Add optional AAS QueryLanguage filtering
+	if aasQuery != nil {
+		ql := *aasQuery
+		switch ql.Query.Condition.GetConditionType() {
+		case "Comparison":
+			comp := ql.Query.Condition.(*querylanguage.Comparison)
+			operation := comp.GetOperationType()
+			operands := comp.GetOperation().GetOperands()
+			if len(operands) != 2 {
+				return "", fmt.Errorf("comparison operation requires exactly 2 operands, got %d", len(operands))
+			}
+
+			leftOperand := operands[0]
+			rightOperand := operands[1]
+
+			// Handle the case where left is field and right is value
+			if leftOperand.GetOperandType() == "$field" && rightOperand.GetOperandType() != "$field" {
+				exp, err := querylanguage.HandleFieldToValueComparison(leftOperand, rightOperand, operation)
+				if err != nil {
+					return "", fmt.Errorf("error handling field-to-value comparison: %w", err)
+				}
+				query = query.Where(exp)
+			} else if leftOperand.GetOperandType() != "$field" && rightOperand.GetOperandType() == "$field" {
+				exp, err := querylanguage.HandleValueToFieldComparison(leftOperand, rightOperand, operation)
+				if err != nil {
+					return "", fmt.Errorf("error handling value-to-field comparison: %w", err)
+				}
+				query = query.Where(exp)
+			} else if leftOperand.GetOperandType() == "$field" && rightOperand.GetOperandType() == "$field" {
+				exp, err := querylanguage.HandleFieldToFieldComparison(leftOperand, rightOperand, operation)
+				if err != nil {
+					return "", fmt.Errorf("error handling value-to-field comparison: %w", err)
+				}
+				query = query.Where(exp)
+			} else if leftOperand.GetOperandType() != "$field" && rightOperand.GetOperandType() != "$field" {
+				exp, err := querylanguage.HandleValueToValueComparison(leftOperand, rightOperand, operation)
+				if err != nil {
+					return "", fmt.Errorf("error handling value-to-value comparison: %w", err)
+				}
+				query = query.Where(exp)
+			} else {
+				return "", fmt.Errorf("unsupported operand combination: left=%s, right=%s",
+					leftOperand.GetOperandType(), rightOperand.GetOperandType())
+			}
+
+		case "Logical":
+			return "", fmt.Errorf("unsupported query condition type: %s", ql.Query.Condition.GetConditionType())
+		case "Match":
+			return "", fmt.Errorf("unsupported query condition type: %s", ql.Query.Condition.GetConditionType())
+		default:
+			return "", fmt.Errorf("unsupported query condition type: %s", ql.Query.Condition.GetConditionType())
+		}
+	}
+
 	// add a field that counts number of submodels to presize slices in calling function
 	query = query.SelectAppend(goqu.L("COUNT(s.id) OVER() AS total_submodels"))
 
 	sql, _, err := query.ToSQL()
+
+	// save query to query.txt
+	err = os.WriteFile("query.txt", []byte(sql), 0644)
+	if err != nil {
+		return "", fmt.Errorf("error saving SQL query to file: %w", err)
+	}
+
 	if err != nil {
 		return "", fmt.Errorf("error generating SQL: %w", err)
 	}
