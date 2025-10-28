@@ -170,10 +170,51 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsMetadata(
 	//return gen.Response(http.StatusNotImplemented, nil), errors.New("GetAllSubmodelsMetadata method not implemented")
 }
 
-//get submodelvalue
+// get submodelvalue
+// GetAllSubmodelsValue - Returns all Submodels in their ValueOnly representation
+func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsValue(
+	ctx context.Context,
+	limit int32,
+	cursor string,
+) (gen.ImplResponse, error) {
+	sms, nextCursor, err := s.submodelBackend.GetAllSubmodelsValue(limit, cursor)
+	if err != nil {
+		fmt.Println("Error getting ValueOnly submodels:", err)
+		return gen.Response(500, nil), err
+	}
+
+	res := gen.GetSubmodelsValueResult{
+		PagingMetadata: gen.PagedResultPagingMetadata{
+			Cursor: nextCursor,
+		},
+		Result: sms,
+	}
+	return gen.Response(200, res), nil
+}
 
 // GetAllSubmodelsValueOnly - Returns all Submodels in their ValueOnly representation
-func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsValueOnly(ctx context.Context, semanticId string, idShort string, limit int32, cursor string, level string, extent string) (gen.ImplResponse, error) {
+func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsValueOnly(
+	ctx context.Context,
+	semanticId string,
+	idShort string,
+	limit int32,
+	cursor string,
+	level string,
+	extent string) (gen.ImplResponse, error) {
+	sms, nextCursor, err := s.submodelBackend.GetAllSubmodelsValue(limit, cursor)
+	if err != nil {
+		fmt.Println("Error getting ValueOnly submodels:", err)
+		return gen.Response(500, nil), err
+	}
+
+	res := gen.GetSubmodelsValueResult{
+		PagingMetadata: gen.PagedResultPagingMetadata{
+			Cursor: nextCursor,
+		},
+		Result: sms,
+	}
+	return gen.Response(200, res), nil
+
 	// TODO - update GetAllSubmodelsValueOnly with the required logic for this service method.
 	// Add api_submodel_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
 
@@ -198,7 +239,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsValueOnly(ctx context.C
 	// TODO: Uncomment the next line to return response Response(0, Result{}) or use other options such as http.Ok ...
 	// return gen.Response(0, Result{}), nil
 
-	return gen.Response(http.StatusNotImplemented, nil), errors.New("GetAllSubmodelsValueOnly method not implemented")
+	//return gen.Response(http.StatusNotImplemented, nil), errors.New("GetAllSubmodelsValueOnly method not implemented")
 }
 
 // GetAllSubmodelsReference - Returns the References for all Submodels
