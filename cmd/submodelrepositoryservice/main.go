@@ -51,7 +51,6 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 
 	//TEST
 	var acc int64
-	acc = 0
 	for i := 0; i < 1000; i++ {
 		start := time.Now().Local().UnixMilli()
 		persistence_utils.GetSubmodelById(smDatabase.GetDB(), fmt.Sprintf("5_%d", i))
