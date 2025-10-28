@@ -30,6 +30,7 @@ import (
 	"fmt"
 
 	"github.com/doug-martin/goqu/v9"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/queries"
 )
 
 // getQueryWithGoqu constructs a comprehensive SQL query for retrieving submodel data.
@@ -79,55 +80,10 @@ func GetQueryWithGoqu(submodelId string) (string, error) {
 		).
 		Where(goqu.I("dr.id").Eq(goqu.I("s.description_id")))
 
-	// Build semantic_id subquery
-	semanticIdSubquery := dialect.From(goqu.T("reference").As("r")).
-		Select(goqu.L("jsonb_agg(DISTINCT jsonb_build_object('reference_id', r.id, 'reference_type', r.type, 'key_id', rk.id, 'key_type', rk.type, 'key_value', rk.value))")).
-		LeftJoin(
-			goqu.T("reference_key").As("rk"),
-			goqu.On(goqu.I("rk.reference_id").Eq(goqu.I("r.id"))),
-		).
-		Where(goqu.I("r.id").Eq(goqu.I("s.semantic_id")))
-
-	// Build semantic_id referred references subquery
-	semanticIdReferredSubquery := dialect.From(goqu.T("reference").As("ref")).
-		Select(goqu.L("jsonb_agg(DISTINCT jsonb_build_object('reference_id', ref.id, 'reference_type', ref.type, 'parentReference', ref.parentreference, 'rootReference', ref.rootreference, 'key_id', rk.id, 'key_type', rk.type, 'key_value', rk.value))")).
-		LeftJoin(
-			goqu.T("reference_key").As("rk"),
-			goqu.On(goqu.I("rk.reference_id").Eq(goqu.I("ref.id"))),
-		).
-		Where(
-			goqu.I("ref.rootreference").Eq(goqu.I("s.semantic_id")),
-			goqu.I("ref.id").Neq(goqu.I("s.semantic_id")),
-		)
+	semanticIdSubquery, semanticIdReferredSubquery := queries.GetReferenceQueries(dialect, goqu.I("s.semantic_id"))
 
 	// Build supplemental semantic ids subquery
-	supplementalSemanticIdsSubquery := dialect.From(goqu.T("submodel_supplemental_semantic_id").As("sssi")).
-		Select(goqu.L("jsonb_agg(DISTINCT jsonb_build_object('reference_id', ref.id, 'reference_type', ref.type, 'key_id', rk.id, 'key_type', rk.type, 'key_value', rk.value))")).
-		LeftJoin(
-			goqu.T("reference").As("ref"),
-			goqu.On(goqu.I("ref.id").Eq(goqu.I("sssi.reference_id"))),
-		).
-		LeftJoin(
-			goqu.T("reference_key").As("rk"),
-			goqu.On(goqu.I("rk.reference_id").Eq(goqu.I("ref.id"))),
-		).
-		Where(goqu.I("sssi.submodel_id").Eq(goqu.I("s.id")))
-
-	// Build supplemental semantic ids referred subquery
-	supplementalSemanticIdsReferredSubquery := dialect.From(goqu.T("submodel_supplemental_semantic_id").As("sssi")).
-		Select(goqu.L("jsonb_agg(DISTINCT jsonb_build_object('supplemental_root_reference_id', sssi.reference_id, 'reference_id', ref.id, 'reference_type', ref.type, 'parentReference', ref.parentreference, 'rootReference', ref.rootreference, 'key_id', rk.id, 'key_type', rk.type, 'key_value', rk.value))")).
-		LeftJoin(
-			goqu.T("reference").As("ref"),
-			goqu.On(goqu.I("ref.rootreference").Eq(goqu.I("sssi.reference_id"))),
-		).
-		LeftJoin(
-			goqu.T("reference_key").As("rk"),
-			goqu.On(goqu.I("rk.reference_id").Eq(goqu.I("ref.id"))),
-		).
-		Where(
-			goqu.I("sssi.submodel_id").Eq(goqu.I("s.id")),
-			goqu.I("ref.id").IsNotNull(),
-		)
+	supplementalSemanticIdsSubquery, supplementalSemanticIdsReferredSubquery := queries.GetSupplementalSemanticIdQueries(dialect, goqu.T("submodel_supplemental_semantic_id"), "submodel_id", "reference_id", goqu.I("s.id"))
 	// Build embedded data specifications subquery
 	embeddedDataSpecificationReferenceSubquery, embeddedDataSpecificationReferenceReferredSubquery, iec61360Subquery := GetEmbeddedDataSpecificationSubqueries(dialect, "submodel_embedded_data_specification", "submodel_id", "s.id")
 
@@ -159,6 +115,8 @@ func GetQueryWithGoqu(submodelId string) (string, error) {
 			goqu.L("COALESCE((?), '[]'::jsonb)", qualifierSubquery).As("submodel_qualifiers"),
 			goqu.L("COALESCE((?), '[]'::jsonb)", extensionSubquery).As("submodel_extensions"),
 			goqu.L("COALESCE((?), '[]'::jsonb)", administrationSubquery).As("submodel_administrative_information"),
+			goqu.L("COALESCE((?), '[]'::jsonb)", GetSubmodelElementsSubquery(dialect, true)).As("submodel_root_submodel_elements"),
+			goqu.L("COALESCE((?), '[]'::jsonb)", GetSubmodelElementsSubquery(dialect, false)).As("submodel_child_submodel_elements"),
 		)
 
 	// Add optional WHERE clause for submodel ID filtering
