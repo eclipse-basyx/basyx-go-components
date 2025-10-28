@@ -30,7 +30,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"os"
 	"time"
 
 	_ "github.com/doug-martin/goqu/v9/dialect/postgres"
@@ -97,11 +96,7 @@ func getSubmodels(db *sql.DB, submodelIdFilter string) ([]*gen.Submodel, error) 
 			&row.SemanticId, &row.ReferredSemanticIds,
 			&row.SupplementalSemanticIds, &row.SupplementalReferredSemIds,
 			&row.DataSpecReference, &row.DataSpecReferenceReferred,
-<<<<<<< HEAD
 			&row.DataSpecIEC61360, &row.Qualifiers, &row.Extensions, &row.Administration, &row.RootSubmodelElements, &row.ChildSubmodelElements, &row.TotalSubmodels,
-=======
-			&row.DataSpecIEC61360, &row.Qualifiers, &row.Extensions, &row.Administration, &row.TotalSubmodels,
->>>>>>> basyx/main
 		); err != nil {
 			return nil, fmt.Errorf("error scanning row: %w", err)
 		}
