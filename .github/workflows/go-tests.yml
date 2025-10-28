@@ -63,7 +63,7 @@ jobs:
           go test -v
       - name: Run access controll validation tests
         run: |
-          cd internal/common/security/unit_tests
+          cd internal/common/security/model/unit_tests
           go test -v
       # - name: Cleanup Docker
       #   if: always()
