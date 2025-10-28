@@ -51,8 +51,8 @@ func GetSubmodelElementsSubquery(dialect goqu.DialectWrapper, rootSubmodelElemen
 		goqu.V("value"), valueByType,
 		goqu.V("semanticId"), semanticIdSubquery,
 		goqu.V("semanticIdReferred"), semanticIdReferredSubquery,
-		goqu.V("suplSemanticId"), supplSemanticIdSubquery,
-		goqu.V("suplSemanticIdReferred"), supplSemanticIdReferredSubquery,
+		goqu.V("supplSemanticId"), supplSemanticIdSubquery,
+		goqu.V("supplSemanticIdReferred"), supplSemanticIdReferredSubquery,
 	)
 
 	smeSubquery := dialect.From(goqu.T("submodel_element").As("tlsme")).
