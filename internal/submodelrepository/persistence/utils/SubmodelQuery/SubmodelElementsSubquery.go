@@ -32,7 +32,7 @@ import (
 )
 
 func GetSubmodelElementsSubquery(dialect goqu.DialectWrapper, rootSubmodelElements bool) *goqu.SelectDataset {
-	semanticIdSubuqery, semanticIdReferredSubquery := queries.GetReferenceQueries(dialect, goqu.I("tlsme.semantic_id"))
+	semanticIdSubquery, semanticIdReferredSubquery := queries.GetReferenceQueries(dialect, goqu.I("tlsme.semantic_id"))
 	supplSemanticIdSubquery, supplSemanticIdReferredSubquery := queries.GetSupplementalSemanticIdQueries(dialect, goqu.T("sme_supplemental_semantic"), "sme_id", "reference_id", goqu.I("tlsme.id"))
 
 	valueByType := goqu.Case().
@@ -49,7 +49,7 @@ func GetSubmodelElementsSubquery(dialect goqu.DialectWrapper, rootSubmodelElemen
 		goqu.V("category"), goqu.I("tlsme.category"),
 		goqu.V("model_type"), goqu.I("tlsme.model_type"),
 		goqu.V("value"), valueByType,
-		goqu.V("semanticId"), semanticIdSubuqery,
+		goqu.V("semanticId"), semanticIdSubquery,
 		goqu.V("semanticIdReferred"), semanticIdReferredSubquery,
 		goqu.V("suplSemanticId"), supplSemanticIdSubquery,
 		goqu.V("suplSemanticIdReferred"), supplSemanticIdReferredSubquery,
