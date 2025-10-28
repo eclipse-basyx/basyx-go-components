@@ -304,7 +304,6 @@ CREATE INDEX IF NOT EXISTS ix_smssi_reference_id ON submodel_supplemental_semant
 
 
 
-CREATE INDEX IF NOT EXISTS ix_smssi_smid ON submodel_supplemental_semantic_id(submodel_id);
 
 CREATE INDEX IF NOT EXISTS ix_smsup_id ON submodel_supplemental_semantic_id(id);
 
