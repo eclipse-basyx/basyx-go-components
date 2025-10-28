@@ -80,6 +80,10 @@ type SubmodelRow struct {
 	Extensions json.RawMessage
 	// Administration contains administrative information as JSON data
 	Administration json.RawMessage
+	// RootSubmodelElements contains root submodel elements as JSON data
+	RootSubmodelElements json.RawMessage
+	// ChildSubmodelElements contains child submodel elements as JSON data
+	ChildSubmodelElements json.RawMessage
 	// TotalSubmodels is the total count of submodels in the result set
 	TotalSubmodels int64
 }

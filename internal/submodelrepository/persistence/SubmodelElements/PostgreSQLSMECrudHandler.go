@@ -70,6 +70,7 @@ func (p *PostgreSQLSMECrudHandler) Create(tx *sql.Tx, submodelId string, submode
 	if err != nil {
 		return 0, err
 	}
+
 	// Check if a SubmodelElement with the same submodelId and idshort_path already exists
 	var exists bool
 	err = tx.QueryRow(`SELECT EXISTS(SELECT 1 FROM submodel_element WHERE submodel_id = $1 AND idshort_path = $2)`,
@@ -100,6 +101,13 @@ func (p *PostgreSQLSMECrudHandler) Create(tx *sql.Tx, submodelId string, submode
 	}
 	//println("Inserted SubmodelElement with idShort: " + submodelElement.GetIdShort())
 
+	supplSId := submodelElement.GetSupplementalSemanticIds()
+	if len(supplSId) > 0 {
+		err := persistence_utils.InsertSupplementalSemanticIdsSME(tx, int64(id), supplSId)
+		if err != nil {
+			return 0, err
+		}
+	}
 	return id, nil
 }
 

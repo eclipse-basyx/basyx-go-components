@@ -326,7 +326,7 @@ func (p *PostgreSQLSubmodelDatabase) CreateSubmodel(sm gen.Submodel) error {
 	}
 
 	if sm.SupplementalSemanticIds != nil {
-		err = persistence_utils.InsertSupplementalSemanticIds(tx, sm.Id, sm.SupplementalSemanticIds)
+		err = persistence_utils.InsertSupplementalSemanticIdsSubmodel(tx, sm.Id, sm.SupplementalSemanticIds)
 		if err != nil {
 			return err
 		}
