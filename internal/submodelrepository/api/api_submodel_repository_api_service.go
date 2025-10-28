@@ -82,7 +82,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelById(
 	if err != nil {
 
 		if errors.Is(err, sql.ErrNoRows) {
-			return gen.Response(404, nil), nil
+			return gen.Response(404, nil), err
 		}
 		if common.IsErrNotFound(err) {
 			return gen.Response(404, nil), err
@@ -169,6 +169,8 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsMetadata(
 
 	//return gen.Response(http.StatusNotImplemented, nil), errors.New("GetAllSubmodelsMetadata method not implemented")
 }
+
+//get submodelvalue
 
 // GetAllSubmodelsValueOnly - Returns all Submodels in their ValueOnly representation
 func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsValueOnly(ctx context.Context, semanticId string, idShort string, limit int32, cursor string, level string, extent string) (gen.ImplResponse, error) {
