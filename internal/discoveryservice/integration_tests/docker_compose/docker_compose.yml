@@ -15,18 +15,11 @@ services:
       timeout: 5s
       retries: 5
 
-  adminer:
-    image: adminer:5
-    container_name: adminer
-    ports:
-      - "8080:8080"
-    depends_on:
-      - db
   discoveryservice:
+    container_name: discovery-service
     build:
       context: ../../../..
       dockerfile: ./cmd/discoveryservice/Dockerfile
-      
     environment:
       - SERVER_PORT=5004
       - POSTGRES_HOST=db
@@ -37,8 +30,11 @@ services:
       - POSTGRES_MAXOPENCONNECTIONS=500
       - POSTGRES_MAXIDLECONNECTIONS=500
       - POSTGRES_CONNMAXLIFETIMEMINUTES=5
+      - ABAC_ENABLED=false
     ports:
       - "5004:5004"
     depends_on:
       db:
         condition: service_healthy
+    extra_hosts:
+      - "localhost:host-gateway"
