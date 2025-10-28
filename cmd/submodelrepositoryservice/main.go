@@ -64,8 +64,8 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 
 	// Same as above but Parallel
 	var wg sync.WaitGroup
-	threadCount := 100
-	iterations := 1000
+	threadCount := 32
+	iterations := 1024
 	perThread := iterations / threadCount
 
 	wg.Add(threadCount)
@@ -82,7 +82,7 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 				persistence_utils.GetSubmodelById(smDatabase.GetDB(), fmt.Sprintf("5_%d", i))
 				end := time.Now().UnixMilli()
 				duration := end - start
-				fmt.Printf("[Thread %02d] Total time for 5_%d: %d ms\n", threadID, i, duration)
+				//fmt.Printf("[Thread %02d] Total time for 5_%d: %d ms\n", threadID, i, duration)
 				localAcc += duration
 			}
 

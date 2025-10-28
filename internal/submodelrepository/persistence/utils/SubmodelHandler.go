@@ -332,8 +332,10 @@ func moreThanZeroReferences(referenceArray []*gen.Reference) bool {
 func getSubmodelDataFromDbWithJSONQuery(db *sql.DB, submodelId string) (*sql.Rows, error) {
 	q, err := submodel_query.GetQueryWithGoqu(submodelId)
 	// fmt.Println(q)
+	// save query in query.txt
+	// err = os.WriteFile("query.txt", []byte(q), 0644)
 	if err != nil {
-		return nil, fmt.Errorf("error building query: %w", err)
+		return nil, fmt.Errorf("error saving query to file: %w", err)
 	}
 	//fmt.Print(q)
 	rows, err := db.Query(q)
