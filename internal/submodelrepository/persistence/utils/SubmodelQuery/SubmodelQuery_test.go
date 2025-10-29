@@ -30,12 +30,12 @@ import (
 	"testing"
 
 	"github.com/doug-martin/goqu/v9"
-	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/querylanguage"
+	acm "github.com/eclipse-basyx/basyx-go-components/internal/common/security/model"
 )
 
 func TestAddPaginationToQuery(t *testing.T) {
 	dialect := goqu.Dialect("postgres")
-	
+
 	tests := []struct {
 		name     string
 		limit    int64
@@ -73,16 +73,16 @@ func TestAddPaginationToQuery(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create a simple query
 			query := dialect.From(goqu.T("submodel").As("s")).Select(goqu.I("s.id"))
-			
+
 			// Apply pagination
 			result := addPaginationToQuery(query, tt.limit, tt.cursor)
-			
+
 			// Generate SQL
 			sql, _, err := result.ToSQL()
 			if err != nil {
 				t.Fatalf("Failed to generate SQL: %v", err)
 			}
-			
+
 			if sql != tt.wantSQL {
 				t.Errorf("Expected SQL: %s\nGot SQL: %s", tt.wantSQL, sql)
 			}
@@ -96,7 +96,7 @@ func TestGetQueryWithGoquPagination(t *testing.T) {
 		submodelId  string
 		limit       int64
 		cursor      string
-		aasQuery    *querylanguage.QueryObj
+		aasQuery    *acm.QueryWrapper
 		shouldError bool
 		sqlContains []string
 	}{
@@ -126,11 +126,11 @@ func TestGetQueryWithGoquPagination(t *testing.T) {
 			},
 		},
 		{
-			name:       "no pagination",
-			submodelId: "",
-			limit:      0,
-			cursor:     "",
-			aasQuery:   nil,
+			name:        "no pagination",
+			submodelId:  "",
+			limit:       0,
+			cursor:      "",
+			aasQuery:    nil,
 			sqlContains: []string{
 				// Should NOT contain ORDER BY when no pagination is requested
 			},
@@ -140,25 +140,25 @@ func TestGetQueryWithGoquPagination(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			sql, err := GetQueryWithGoqu(tt.submodelId, tt.limit, tt.cursor, tt.aasQuery)
-			
+
 			if tt.shouldError {
 				if err == nil {
 					t.Error("Expected error but got none")
 				}
 				return
 			}
-			
+
 			if err != nil {
 				t.Fatalf("Unexpected error: %v", err)
 			}
-			
+
 			// Check that the SQL contains expected elements
 			for _, contains := range tt.sqlContains {
 				if contains != "" && !containsIgnoreCase(sql, contains) {
 					t.Errorf("Expected SQL to contain '%s', but it didn't.\nSQL: %s", contains, sql)
 				}
 			}
-			
+
 			// For no pagination test, ensure no ORDER BY is present
 			if tt.name == "no pagination" {
 				if containsIgnoreCase(sql, "ORDER BY") {

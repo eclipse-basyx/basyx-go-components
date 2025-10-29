@@ -12,6 +12,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository"
 	api "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/api"
 	persistence_postgresql "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence"
 	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/submodelrepositoryapi/go"
@@ -69,7 +70,7 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 		}
 	}()
 
-	testNewSubmodelHandler(smDatabase)
+	submodelrepository.TestNewSubmodelHandler(smDatabase)
 
 	<-ctx.Done()
 	log.Println("Shutting down server...")

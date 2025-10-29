@@ -35,7 +35,7 @@ import (
 	_ "github.com/doug-martin/goqu/v9/dialect/postgres"
 	builders "github.com/eclipse-basyx/basyx-go-components/internal/common/builder"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
-	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/querylanguage"
+	acm "github.com/eclipse-basyx/basyx-go-components/internal/common/security/model"
 	submodel_query "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils/SubmodelQuery"
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 )
@@ -51,7 +51,7 @@ func GetSubmodelById(db *sql.DB, submodelIdFilter string) (*gen.Submodel, error)
 	return submodels[0], nil
 }
 
-func GetAllSubmodels(db *sql.DB, limit int64, cursor string, query *querylanguage.QueryObj) ([]*gen.Submodel, string, error) {
+func GetAllSubmodels(db *sql.DB, limit int64, cursor string, query *acm.QueryWrapper) ([]*gen.Submodel, string, error) {
 	return getSubmodels(db, "", limit, cursor, query)
 }
 
@@ -85,7 +85,7 @@ func GetAllSubmodels(db *sql.DB, limit int64, cursor string, query *querylanguag
 // Note: The function builds nested reference structures in two phases:
 //  1. Initial parsing during row iteration
 //  2. Final structure building after all rows are processed
-func getSubmodels(db *sql.DB, submodelIdFilter string, limit int64, cursor string, query *querylanguage.QueryObj) ([]*gen.Submodel, string, error) {
+func getSubmodels(db *sql.DB, submodelIdFilter string, limit int64, cursor string, query *acm.QueryWrapper) ([]*gen.Submodel, string, error) {
 	var result []*gen.Submodel
 	referenceBuilderRefs := make(map[int64]*builders.ReferenceBuilder)
 	start := time.Now().Local().UnixMilli()
@@ -96,8 +96,9 @@ func getSubmodels(db *sql.DB, submodelIdFilter string, limit int64, cursor strin
 		return nil, "", fmt.Errorf("error getting submodel data from DB: %w", err)
 	}
 	defer rows.Close()
-
+	var count int64
 	for rows.Next() {
+		count++
 		var row builders.SubmodelRow
 		if err := rows.Scan(
 			&row.Id, &row.IdShort, &row.Category, &row.Kind,
@@ -121,7 +122,10 @@ func getSubmodels(db *sql.DB, submodelIdFilter string, limit int64, cursor strin
 			Category:  row.Category,
 			Kind:      gen.ModellingKind(row.Kind),
 		}
-
+		if count > limit {
+			result = append(result, submodel)
+			break
+		}
 		var semanticId []*gen.Reference
 		if isArrayNotEmpty(row.SemanticId) {
 			semanticId, err = builders.ParseReferences(row.SemanticId, referenceBuilderRefs)
@@ -349,7 +353,7 @@ func moreThanZeroReferences(referenceArray []*gen.Reference) bool {
 // Returns:
 //   - *sql.Rows: Result set containing submodel data with JSON-aggregated nested structures
 //   - error: An error if query building or execution fails
-func getSubmodelDataFromDbWithJSONQuery(db *sql.DB, submodelId string, limit int64, cursor string, query *querylanguage.QueryObj) (*sql.Rows, error) {
+func getSubmodelDataFromDbWithJSONQuery(db *sql.DB, submodelId string, limit int64, cursor string, query *acm.QueryWrapper) (*sql.Rows, error) {
 	q, err := submodel_query.GetQueryWithGoqu(submodelId, limit, cursor, query)
 	if err != nil {
 		fmt.Printf("Error building query: %v\n", err)
