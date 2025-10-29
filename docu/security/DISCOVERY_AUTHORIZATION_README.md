@@ -1,13 +1,13 @@
-# Authorization & Request Flow based on Discovery Service
+# Authorization & Request Flow based on AAS Discovery Service
 
-This document provides a detailed technical explanation of how the Discovery Service processes incoming HTTP requests, authenticates and authorizes users, and applies fine-grained access control.  
+This document provides a detailed technical explanation of how the AAS Discovery Service processes incoming HTTP requests, authenticates and authorizes users, and applies fine-grained access control.  
 It introduces the complete architecture, the internal flow of requests, and how **QueryFilters** can further restrict access after successful authorization.
 
 ---
 
 ## 1. Overview
 
-The Discovery Service exposes BaSyx discovery and description APIs behind a layered security system that ensures robust protection and fine-grained access control.  
+The AAS Discovery Service exposes BaSyx discovery and description APIs behind a layered security system that ensures robust protection and fine-grained access control.  
 This system combines **OIDC authentication**, **ABAC authorization**, and optional **QueryFilter** logic.
 
 ### Core Components
@@ -22,7 +22,7 @@ These components work together to ensure that only authenticated and authorized 
 
 ## 2. System Architecture
 
-The architecture diagram shows how different layers of the Discovery Service interact — from incoming HTTP requests through the router, security middleware, controllers, and database.
+The architecture diagram shows how different layers of the AAS Discovery Service interact — from incoming HTTP requests through the router, security middleware, controllers, and database.
 
 ```mermaid
 flowchart LR
@@ -30,7 +30,7 @@ flowchart LR
     C[Browser or Service]
   end
 
-  subgraph DiscoveryService
+  subgraph AASDiscoveryService
     direction LR
 
     subgraph Edge
@@ -73,13 +73,13 @@ flowchart LR
   D1 --> DB
   D2 --> DB
   O -. jwks .-> IDP
-  CFG1 -. loads .-> DiscoveryService
+  CFG1 -. loads .-> AASDiscoveryService
   CFG2 -. parsed .-> A
 
   ```
 ### Explanation
 
-1. **Client Layer:** A user, service, or browser sends HTTP requests to the Discovery Service.  
+1. **Client Layer:** A user, service, or browser sends HTTP requests to the AAS Discovery Service.  
 2. **Router & Middleware:**  
    - The **Chi Router** dispatches requests to the correct handler based on the configured `contextPath`.
    - The **CORS Middleware** ensures cross-origin requests are properly validated.  
@@ -135,7 +135,7 @@ sequenceDiagram
 
 ### Detailed Explanation
 
-The **Request Flow Diagram** visualizes how data moves through the Discovery Service:
+The **Request Flow Diagram** visualizes how data moves through the AAS Discovery Service:
 
 1. **Client → Router:** The client sends a request. The router checks for `/health` first; if matched, a 200 response is returned directly.  
 2. **Router → OIDC Middleware:** If not `/health`, the router forwards the request to OIDC. The token is verified against the configured issuer and audience.  
@@ -315,4 +315,4 @@ json.NewEncoder(w).Encode(filtered)
 
 ---
 
-© 2025 Fraunhofer IESE - Discovery Service Documentation
+© 2025 Fraunhofer IESE - AAS Discovery Service Documentation
