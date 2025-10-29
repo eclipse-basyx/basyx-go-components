@@ -2,8 +2,8 @@
     "Query": {
         "$condition": {
             "$eq": [
-                { "$field": "$sm#id" },
-                { "$strVal": "1" } 
+                { "$field": "$sm#semanticId.keys[1].type" },
+                { "$strVal": "Property" } 
             ]
         }
     }

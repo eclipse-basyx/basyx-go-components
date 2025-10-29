@@ -29,6 +29,8 @@ package grammar
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
+	"strings"
 
 	"github.com/doug-martin/goqu/v9"
 	"github.com/doug-martin/goqu/v9/exp"
@@ -196,7 +198,21 @@ func ParseAASQLFieldToSQLColumn(field string) string {
 		return "s.id"
 	case "$sm#semanticId":
 		return "semantic_id_reference_key.value"
+	case "$sm#semanticId.type":
+		return "semantic_id_reference.type"
+	case "$sm#semanticId.keys[].value":
+		return "semantic_id_reference_key.value"
+	case "$sm#semanticId.keys[].type":
+		return "semantic_id_reference_key.type"
 	}
+
+	if strings.HasPrefix(field, "$sm#semanticId.keys[") && strings.HasSuffix(field, "].value") {
+		return "semantic_id_reference_key.value"
+	}
+	if strings.HasPrefix(field, "$sm#semanticId.keys[") && strings.HasSuffix(field, "].type") {
+		return "semantic_id_reference_key.type"
+	}
+
 	return field
 }
 
@@ -223,7 +239,77 @@ func HandleComparison(leftOperand, rightOperand *Value, operation string) (exp.E
 		}
 	}
 
-	return buildComparisonExpression(leftSQL, rightSQL, operation)
+	// Check if either operand is $sm#semanticId field
+	isLeftShorthandSemanticId := isSemanticIdShorthandField(leftOperand)
+	isRightShorthandSemanticId := isSemanticIdShorthandField(rightOperand)
+
+	isLeftSpecificKeyValueSemanticId := isSemanticIdSpecificKeyValueField(leftOperand, false)
+	isRightSpecificKeyValueSemanticId := isSemanticIdSpecificKeyValueField(rightOperand, false)
+
+	isLeftSpecificKeyTypeSemanticId := isSemanticIdSpecificKeyValueField(leftOperand, true)
+	isRightSpecificKeyTypeSemanticId := isSemanticIdSpecificKeyValueField(rightOperand, true)
+
+	// Build the comparison expression
+	comparisonExpr, err := buildComparisonExpression(leftSQL, rightSQL, operation)
+	if err != nil {
+		return nil, err
+	}
+
+	// If semantic_id is involved, add position = 0 constraint
+	if isLeftShorthandSemanticId || isRightShorthandSemanticId {
+		positionConstraint := goqu.I("semantic_id_reference_key.position").Eq(0)
+		return goqu.And(comparisonExpr, positionConstraint), nil
+	} else if (isLeftSpecificKeyValueSemanticId || isRightSpecificKeyValueSemanticId) || (isLeftSpecificKeyTypeSemanticId || isRightSpecificKeyTypeSemanticId) {
+
+		operandToUse := leftOperand
+		if isRightSpecificKeyValueSemanticId || isRightSpecificKeyTypeSemanticId {
+			operandToUse = rightOperand
+		}
+
+		start, end := getStartAndEndIndicesOfBrackets(operandToUse)
+		if isNotWildcardAndValidIndices(start, end) {
+			positionStrOnError, position, err := getPositionAsInteger(operandToUse, start, end)
+			if err == nil {
+				positionConstraint := goqu.I("semantic_id_reference_key.position").Eq(position)
+				return goqu.And(comparisonExpr, positionConstraint), nil
+			} else {
+				return nil, fmt.Errorf("invalid position in semanticId key field: %s", positionStrOnError)
+			}
+		}
+	}
+	return comparisonExpr, nil
+}
+
+func getPositionAsInteger(operandToUse *Value, start int, end int) (string, int, error) {
+	positionStr := string(*operandToUse.Field)[start+1 : end]
+	position, err := strconv.Atoi(positionStr)
+	return positionStr, position, err
+}
+
+func isNotWildcardAndValidIndices(start, end int) bool {
+	return start != -1 && end != -1 && start < end && (end-start > 1)
+}
+
+func getStartAndEndIndicesOfBrackets(operandToUse *Value) (int, int) {
+	start := strings.Index(string(*operandToUse.Field), "[")
+	end := strings.Index(string(*operandToUse.Field), "]")
+	return start, end
+}
+
+func isSemanticIdShorthandField(operand *Value) bool {
+	return operand.IsField() && operand.Field != nil && string(*operand.Field) == "$sm#semanticId"
+}
+
+func isSemanticIdSpecificKeyValueField(operand *Value, isTypeCheck bool) bool {
+	suffix := "value"
+	if isTypeCheck {
+		suffix = "type"
+	}
+	if !operand.IsField() || operand.Field == nil {
+		return false
+	}
+	field := string(*operand.Field)
+	return strings.HasPrefix(field, "$sm#semanticId.keys[") && strings.HasSuffix(field, "]."+suffix)
 }
 
 func toSQLComponent(operand *Value, position string) (interface{}, error) {
