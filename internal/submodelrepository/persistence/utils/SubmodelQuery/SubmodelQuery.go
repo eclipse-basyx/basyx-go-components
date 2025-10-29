@@ -197,9 +197,7 @@ func GetQueryWithGoqu(submodelId string, limit int64, cursor string, aasQuery *q
 	query = addGroupBySubmodelId(query)
 
 	// Add pagination if limit or cursor is specified
-	if limit > 0 || cursor != "" {
-		query = addPaginationToQuery(query, limit, cursor)
-	}
+	query = addPaginationToQuery(query, limit, cursor)
 
 	sql, _, err := query.ToSQL()
 	if err != nil {
