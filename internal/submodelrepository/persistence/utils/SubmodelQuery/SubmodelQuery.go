@@ -62,8 +62,14 @@ func GetQueryWithGoqu(submodelId string) (string, error) {
 	dialect := goqu.Dialect("postgres")
 
 	// Build display names subquery
+	displayNameObj := goqu.Func("jsonb_build_object",
+		goqu.V("language"), goqu.I("dn.language"),
+		goqu.V("text"), goqu.I("dn.text"),
+		goqu.V("id"), goqu.I("dn.id"),
+	)
+
 	displayNamesSubquery := dialect.From(goqu.T("lang_string_name_type_reference").As("dn_ref")).
-		Select(goqu.L("jsonb_agg(DISTINCT jsonb_build_object('language', dn.language, 'text', dn.text, 'id', dn.id))")).
+		Select(goqu.Func("jsonb_agg", goqu.L("?", displayNameObj))).
 		Join(
 			goqu.T("lang_string_name_type").As("dn"),
 			goqu.On(goqu.I("dn.lang_string_name_type_reference_id").Eq(goqu.I("dn_ref.id"))),
@@ -71,8 +77,14 @@ func GetQueryWithGoqu(submodelId string) (string, error) {
 		Where(goqu.I("dn_ref.id").Eq(goqu.I("s.displayname_id")))
 
 	// Build descriptions subquery
+	descriptionObj := goqu.Func("jsonb_build_object",
+		goqu.V("language"), goqu.I("d.language"),
+		goqu.V("text"), goqu.I("d.text"),
+		goqu.V("id"), goqu.I("d.id"),
+	)
+
 	descriptionsSubquery := dialect.From(goqu.T("lang_string_text_type_reference").As("dr")).
-		Select(goqu.L("jsonb_agg(DISTINCT jsonb_build_object('language', d.language, 'text', d.text, 'id', d.id))")).
+		Select(goqu.Func("jsonb_agg", goqu.L("?", descriptionObj))).
 		Join(
 			goqu.T("lang_string_text_type").As("d"),
 			goqu.On(goqu.I("d.lang_string_text_type_reference_id").Eq(goqu.I("dr.id"))),
@@ -80,8 +92,16 @@ func GetQueryWithGoqu(submodelId string) (string, error) {
 		Where(goqu.I("dr.id").Eq(goqu.I("s.description_id")))
 
 	// Build semantic_id subquery
+	semanticIdObj := goqu.Func("jsonb_build_object",
+		goqu.V("reference_id"), goqu.I("r.id"),
+		goqu.V("reference_type"), goqu.I("r.type"),
+		goqu.V("key_id"), goqu.I("rk.id"),
+		goqu.V("key_type"), goqu.I("rk.type"),
+		goqu.V("key_value"), goqu.I("rk.value"),
+	)
+
 	semanticIdSubquery := dialect.From(goqu.T("reference").As("r")).
-		Select(goqu.L("jsonb_agg(DISTINCT jsonb_build_object('reference_id', r.id, 'reference_type', r.type, 'key_id', rk.id, 'key_type', rk.type, 'key_value', rk.value))")).
+		Select(goqu.Func("jsonb_agg", goqu.L("?", semanticIdObj))).
 		LeftJoin(
 			goqu.T("reference_key").As("rk"),
 			goqu.On(goqu.I("rk.reference_id").Eq(goqu.I("r.id"))),
@@ -89,8 +109,18 @@ func GetQueryWithGoqu(submodelId string) (string, error) {
 		Where(goqu.I("r.id").Eq(goqu.I("s.semantic_id")))
 
 	// Build semantic_id referred references subquery
+	semanticIdReferredObj := goqu.Func("jsonb_build_object",
+		goqu.V("reference_id"), goqu.I("ref.id"),
+		goqu.V("reference_type"), goqu.I("ref.type"),
+		goqu.V("parentReference"), goqu.I("ref.parentreference"),
+		goqu.V("rootReference"), goqu.I("ref.rootreference"),
+		goqu.V("key_id"), goqu.I("rk.id"),
+		goqu.V("key_type"), goqu.I("rk.type"),
+		goqu.V("key_value"), goqu.I("rk.value"),
+	)
+
 	semanticIdReferredSubquery := dialect.From(goqu.T("reference").As("ref")).
-		Select(goqu.L("jsonb_agg(DISTINCT jsonb_build_object('reference_id', ref.id, 'reference_type', ref.type, 'parentReference', ref.parentreference, 'rootReference', ref.rootreference, 'key_id', rk.id, 'key_type', rk.type, 'key_value', rk.value))")).
+		Select(goqu.Func("jsonb_agg", goqu.L("?", semanticIdReferredObj))).
 		LeftJoin(
 			goqu.T("reference_key").As("rk"),
 			goqu.On(goqu.I("rk.reference_id").Eq(goqu.I("ref.id"))),
@@ -101,8 +131,16 @@ func GetQueryWithGoqu(submodelId string) (string, error) {
 		)
 
 	// Build supplemental semantic ids subquery
+	supplementalSemanticIdObj := goqu.Func("jsonb_build_object",
+		goqu.V("reference_id"), goqu.I("ref.id"),
+		goqu.V("reference_type"), goqu.I("ref.type"),
+		goqu.V("key_id"), goqu.I("rk.id"),
+		goqu.V("key_type"), goqu.I("rk.type"),
+		goqu.V("key_value"), goqu.I("rk.value"),
+	)
+
 	supplementalSemanticIdsSubquery := dialect.From(goqu.T("submodel_supplemental_semantic_id").As("sssi")).
-		Select(goqu.L("jsonb_agg(DISTINCT jsonb_build_object('reference_id', ref.id, 'reference_type', ref.type, 'key_id', rk.id, 'key_type', rk.type, 'key_value', rk.value))")).
+		Select(goqu.Func("jsonb_agg", goqu.L("?", supplementalSemanticIdObj))).
 		LeftJoin(
 			goqu.T("reference").As("ref"),
 			goqu.On(goqu.I("ref.id").Eq(goqu.I("sssi.reference_id"))),
@@ -114,8 +152,19 @@ func GetQueryWithGoqu(submodelId string) (string, error) {
 		Where(goqu.I("sssi.submodel_id").Eq(goqu.I("s.id")))
 
 	// Build supplemental semantic ids referred subquery
+	supplementalSemanticIdReferredObj := goqu.Func("jsonb_build_object",
+		goqu.V("supplemental_root_reference_id"), goqu.I("sssi.reference_id"),
+		goqu.V("reference_id"), goqu.I("ref.id"),
+		goqu.V("reference_type"), goqu.I("ref.type"),
+		goqu.V("parentReference"), goqu.I("ref.parentreference"),
+		goqu.V("rootReference"), goqu.I("ref.rootreference"),
+		goqu.V("key_id"), goqu.I("rk.id"),
+		goqu.V("key_type"), goqu.I("rk.type"),
+		goqu.V("key_value"), goqu.I("rk.value"),
+	)
+
 	supplementalSemanticIdsReferredSubquery := dialect.From(goqu.T("submodel_supplemental_semantic_id").As("sssi")).
-		Select(goqu.L("jsonb_agg(DISTINCT jsonb_build_object('supplemental_root_reference_id', sssi.reference_id, 'reference_id', ref.id, 'reference_type', ref.type, 'parentReference', ref.parentreference, 'rootReference', ref.rootreference, 'key_id', rk.id, 'key_type', rk.type, 'key_value', rk.value))")).
+		Select(goqu.Func("jsonb_agg", goqu.L("?", supplementalSemanticIdReferredObj))).
 		LeftJoin(
 			goqu.T("reference").As("ref"),
 			goqu.On(goqu.I("ref.rootreference").Eq(goqu.I("sssi.reference_id"))),
@@ -129,13 +178,16 @@ func GetQueryWithGoqu(submodelId string) (string, error) {
 			goqu.I("ref.id").IsNotNull(),
 		)
 	// Build embedded data specifications subquery
-	embeddedDataSpecificationReferenceSubquery, embeddedDataSpecificationReferenceReferredSubquery, iec61360Subquery := GetEmbeddedDataSpecificationSubqueries(dialect)
+	embeddedDataSpecificationReferenceSubquery, embeddedDataSpecificationReferenceReferredSubquery, iec61360Subquery := GetEmbeddedDataSpecificationSubqueries(dialect, "submodel_embedded_data_specification", "submodel_id", "s.id")
 
 	// Build qualifier subquery
 	qualifierSubquery := GetQualifierSubqueryForSubmodel(dialect)
 
 	// Build extension subquery
 	extensionSubquery := GetExtensionSubqueryForSubmodel(dialect)
+
+	// Build AdministrativeInformation subquery
+	administrationSubquery := GetAdministrationSubqueryForSubmodel(dialect)
 
 	// Main query
 	query := dialect.From(goqu.T("submodel").As("s")).
@@ -155,6 +207,9 @@ func GetQueryWithGoqu(submodelId string) (string, error) {
 			goqu.L("COALESCE((?), '[]'::jsonb)", iec61360Subquery).As("submodel_data_spec_iec61360"),
 			goqu.L("COALESCE((?), '[]'::jsonb)", qualifierSubquery).As("submodel_qualifiers"),
 			goqu.L("COALESCE((?), '[]'::jsonb)", extensionSubquery).As("submodel_extensions"),
+			goqu.L("COALESCE((?), '[]'::jsonb)", administrationSubquery).As("submodel_administrative_information"),
+			goqu.L("COALESCE((?), '[]'::jsonb)", GetSubmodelElementsSubquery(dialect, true)).As("submodel_root_submodel_elements"),
+			goqu.L("COALESCE((?), '[]'::jsonb)", GetSubmodelElementsSubquery(dialect, false)).As("submodel_child_submodel_elements"),
 		)
 
 	// Add optional WHERE clause for submodel ID filtering

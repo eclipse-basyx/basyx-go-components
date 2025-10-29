@@ -211,7 +211,6 @@ func CreateQualifier(tx *sql.Tx, qualifier gen.Qualifier) (sql.NullInt64, error)
 
 	return qualifierDbId, nil
 }
-
 func CreateEmbeddedDataSpecification(tx *sql.Tx, embeddedDataSpecification gen.EmbeddedDataSpecification) (sql.NullInt64, error) {
 	var embeddedDataSpecificationContentDbId sql.NullInt64
 	var embeddedDataSpecificationDbId sql.NullInt64
@@ -383,12 +382,23 @@ func CreateAdministrativeInformation(tx *sql.Tx, adminInfo *gen.AdministrativeIn
 				return sql.NullInt64{}, err
 			}
 		}
+
 		err = tx.QueryRow(`INSERT INTO administrative_information (version, revision, creator, templateId) VALUES ($1, $2, $3, $4) RETURNING id`,
 			adminInfo.Version, adminInfo.Revision, creatorID, adminInfo.TemplateId).Scan(&id)
 		if err != nil {
 			return sql.NullInt64{}, err
 		}
 		adminInfoID = sql.NullInt64{Int64: int64(id), Valid: true}
+
+		if len(adminInfo.EmbeddedDataSpecifications) > 0 {
+			for _, eds := range adminInfo.EmbeddedDataSpecifications {
+				edsId, err := CreateEmbeddedDataSpecification(tx, eds)
+				tx.Exec(`INSERT INTO administrative_information_embedded_data_specification (administrative_information_id, embedded_data_specification_id) VALUES ($1, $2)`, adminInfoID, edsId)
+				if err != nil {
+					return sql.NullInt64{}, err
+				}
+			}
+		}
 	}
 	return adminInfoID, nil
 }
@@ -732,7 +742,7 @@ func insertSupplementalSemanticIdsForExtensions(extension gen.Extension, semanti
 	return nil
 }
 
-func InsertSupplementalSemanticIds(tx *sql.Tx, submodel_id string, supplementalSemanticIds []*gen.Reference) error {
+func InsertSupplementalSemanticIdsSubmodel(tx *sql.Tx, submodel_id string, supplementalSemanticIds []*gen.Reference) error {
 	if len(supplementalSemanticIds) > 0 {
 		for _, supplementalSemanticId := range supplementalSemanticIds {
 			supplementalSemanticIdDbId, err := CreateReference(tx, supplementalSemanticId, sql.NullInt64{}, sql.NullInt64{})
@@ -740,6 +750,21 @@ func InsertSupplementalSemanticIds(tx *sql.Tx, submodel_id string, supplementalS
 				return err
 			}
 			_, err = tx.Exec(`INSERT INTO submodel_supplemental_semantic_id (submodel_id, reference_id) VALUES ($1, $2)`, submodel_id, supplementalSemanticIdDbId)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+func InsertSupplementalSemanticIdsSME(tx *sql.Tx, sme_id int64, supplementalSemanticIds []gen.Reference) error {
+	if len(supplementalSemanticIds) > 0 {
+		for _, supplementalSemanticId := range supplementalSemanticIds {
+			supplementalSemanticIdDbId, err := CreateReference(tx, &supplementalSemanticId, sql.NullInt64{}, sql.NullInt64{})
+			if err != nil {
+				return err
+			}
+			_, err = tx.Exec(`INSERT INTO sme_supplemental_semantic (sme_id, reference_id) VALUES ($1, $2)`, sme_id, supplementalSemanticIdDbId)
 			if err != nil {
 				return err
 			}

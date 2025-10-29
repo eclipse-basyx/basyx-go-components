@@ -82,7 +82,7 @@ func getSubmodels(db *sql.DB, submodelIdFilter string) ([]*gen.Submodel, error) 
 	start := time.Now().Local().UnixMilli()
 	rows, err := getSubmodelDataFromDbWithJSONQuery(db, submodelIdFilter)
 	end := time.Now().Local().UnixMilli()
-	fmt.Printf("Total Qury Only time: %d milliseconds\n", end-start)
+	fmt.Printf("Total Query Only time: %d milliseconds\n", end-start)
 	if err != nil {
 		return nil, fmt.Errorf("error getting submodel data from DB: %w", err)
 	}
@@ -96,7 +96,7 @@ func getSubmodels(db *sql.DB, submodelIdFilter string) ([]*gen.Submodel, error) 
 			&row.SemanticId, &row.ReferredSemanticIds,
 			&row.SupplementalSemanticIds, &row.SupplementalReferredSemIds,
 			&row.DataSpecReference, &row.DataSpecReferenceReferred,
-			&row.DataSpecIEC61360, &row.Qualifiers, &row.Extensions, &row.TotalSubmodels,
+			&row.DataSpecIEC61360, &row.Qualifiers, &row.Extensions, &row.Administration, &row.RootSubmodelElements, &row.ChildSubmodelElements, &row.TotalSubmodels,
 		); err != nil {
 			return nil, fmt.Errorf("error scanning row: %w", err)
 		}
@@ -200,6 +200,26 @@ func getSubmodels(db *sql.DB, submodelIdFilter string) ([]*gen.Submodel, error) 
 				builder.AddSupplementalSemanticIds(extensionRow.DbId, extensionRow.SupplementalSemanticIds, extensionRow.SupplementalSemanticIdsReferredReferences)
 			}
 			submodel.Extension = builder.Build()
+		}
+
+		// Administration
+		if isArrayNotEmpty(row.Administration) {
+			adminRow, err := builders.ParseAdministrationRow(row.Administration)
+			if err != nil {
+				fmt.Println(err)
+				return nil, err
+			}
+			if adminRow != nil {
+
+				admin, err := builders.BuildAdministration(*adminRow)
+				if err != nil {
+					fmt.Println(err)
+					return nil, err
+				}
+				submodel.Administration = admin
+			} else {
+				fmt.Println("Administration row is nil")
+			}
 		}
 
 		result = append(result, submodel)
@@ -311,9 +331,11 @@ func moreThanZeroReferences(referenceArray []*gen.Reference) bool {
 //   - error: An error if query building or execution fails
 func getSubmodelDataFromDbWithJSONQuery(db *sql.DB, submodelId string) (*sql.Rows, error) {
 	q, err := submodel_query.GetQueryWithGoqu(submodelId)
-	fmt.Println(q)
+	// fmt.Println(q)
+	// save query in query.txt
+	// err = os.WriteFile("query.txt", []byte(q), 0644)
 	if err != nil {
-		return nil, fmt.Errorf("error building query: %w", err)
+		return nil, fmt.Errorf("error saving query to file: %w", err)
 	}
 	//fmt.Print(q)
 	rows, err := db.Query(q)
