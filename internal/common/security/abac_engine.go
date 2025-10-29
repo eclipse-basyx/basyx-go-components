@@ -42,20 +42,20 @@ import (
 	"strings"
 	"time"
 
-	acm "github.com/eclipse-basyx/basyx-go-components/internal/common/security/model"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 )
 
 // AccessModel is an evaluated, in-memory representation of the Access Rule Model
 // (ARM) used by the ABAC engine. It holds the generated schema and provides
 // evaluation helpers.
 type AccessModel struct {
-	gen acm.AccessRuleModelSchemaJson
+	gen grammar.AccessRuleModelSchemaJson
 }
 
 // ParseAccessModel parses a JSON (or YAML converted to JSON) payload that
 // conforms to the Access Rule Model schema and returns a compiled AccessModel.
 func ParseAccessModel(b []byte) (*AccessModel, error) {
-	var m acm.AccessRuleModelSchemaJson
+	var m grammar.AccessRuleModelSchemaJson
 	if err := json.Unmarshal(b, &m); err != nil {
 		return nil, fmt.Errorf("parse access model: %w", err)
 	}
@@ -111,9 +111,9 @@ func (m *AccessModel) AuthorizeWithFilter(in EvalInput) (ok bool, reason string,
 		qf = &QueryFilter{}
 
 		switch acl.ACCESS {
-		case acm.ACLACCESSALLOW:
+		case grammar.ACLACCESSALLOW:
 			return true, "ALLOW by rule", qf
-		case acm.ACLACCESSDISABLED:
+		case grammar.ACLACCESSDISABLED:
 			return false, "DENY (disabled) by rule", nil
 		default:
 			return false, "DENY (unknown access) by rule", nil
@@ -146,9 +146,9 @@ func (m *AccessModel) Authorize(in EvalInput) (bool, string) {
 		}
 
 		switch acl.ACCESS {
-		case acm.ACLACCESSALLOW:
+		case grammar.ACLACCESSALLOW:
 			return true, "ALLOW by rule"
-		case acm.ACLACCESSDISABLED:
+		case grammar.ACLACCESSDISABLED:
 			return false, "DENY (disabled) by rule"
 		default:
 			return false, "DENY (unknown access) by rule"
@@ -160,9 +160,9 @@ func (m *AccessModel) Authorize(in EvalInput) (bool, string) {
 
 // materialize resolves a rule's references (USEACL, USEOBJECTS, USEFORMULA) into
 // concrete ACL, attributes, objects, and an optional logical expression.
-func materialize(all acm.AccessRuleModelSchemaJsonAllAccessPermissionRules, r acm.AccessPermissionRule) (acm.ACL, []acm.AttributeItem, []acm.ObjectItem, *acm.LogicalExpression) {
+func materialize(all grammar.AccessRuleModelSchemaJsonAllAccessPermissionRules, r grammar.AccessPermissionRule) (grammar.ACL, []grammar.AttributeItem, []grammar.ObjectItem, *grammar.LogicalExpression) {
 	// ACL / USEACL
-	acl := acm.ACL{}
+	acl := grammar.ACL{}
 	if r.ACL != nil {
 		acl = *r.ACL
 	} else if r.USEACL != nil {
@@ -176,7 +176,7 @@ func materialize(all acm.AccessRuleModelSchemaJsonAllAccessPermissionRules, r ac
 	}
 
 	// Attributes: inline + referenced
-	var attrs []acm.AttributeItem
+	var attrs []grammar.AttributeItem
 	if acl.ATTRIBUTES != nil {
 		attrs = append(attrs, acl.ATTRIBUTES...)
 	}
@@ -191,7 +191,7 @@ func materialize(all acm.AccessRuleModelSchemaJsonAllAccessPermissionRules, r ac
 	}
 
 	// Objects: inline + referenced (with recursive resolution)
-	var objs []acm.ObjectItem
+	var objs []grammar.ObjectItem
 	if len(r.OBJECTS) > 0 {
 		objs = append(objs, r.OBJECTS...)
 	}
@@ -200,7 +200,7 @@ func materialize(all acm.AccessRuleModelSchemaJsonAllAccessPermissionRules, r ac
 	}
 
 	// Formula: inline or referenced
-	var f *acm.LogicalExpression
+	var f *grammar.LogicalExpression
 	if r.FORMULA != nil {
 		f = r.FORMULA
 	} else if r.USEFORMULA != nil {
@@ -219,8 +219,8 @@ func materialize(all acm.AccessRuleModelSchemaJsonAllAccessPermissionRules, r ac
 
 // resolveObjects expands DEFOBJECTS references (including nested USEOBJECTS)
 // into a concrete object list.
-func resolveObjects(all acm.AccessRuleModelSchemaJsonAllAccessPermissionRules, names []string) []acm.ObjectItem {
-	var out []acm.ObjectItem
+func resolveObjects(all grammar.AccessRuleModelSchemaJsonAllAccessPermissionRules, names []string) []grammar.ObjectItem {
+	var out []grammar.ObjectItem
 	for _, name := range names {
 		for _, d := range all.DEFOBJECTS {
 			if d.Name == name {
@@ -238,24 +238,24 @@ func resolveObjects(all acm.AccessRuleModelSchemaJsonAllAccessPermissionRules, n
 
 // mapMethodToRight maps an HTTP method into an abstract right used by the
 // Access Rule Model (CREATE, READ, UPDATE, DELETE). Unknown methods default to READ.
-func mapMethodToRight(meth string) acm.RightsEnum {
+func mapMethodToRight(meth string) grammar.RightsEnum {
 	switch strings.ToUpper(meth) {
 	case http.MethodGet, http.MethodHead:
-		return acm.RightsEnumREAD
+		return grammar.RightsEnumREAD
 	case http.MethodPost:
-		return acm.RightsEnumCREATE
+		return grammar.RightsEnumCREATE
 	case http.MethodPut, http.MethodPatch:
-		return acm.RightsEnumUPDATE
+		return grammar.RightsEnumUPDATE
 	case http.MethodDelete:
-		return acm.RightsEnumDELETE
+		return grammar.RightsEnumDELETE
 	default:
-		return acm.RightsEnumREAD
+		return grammar.RightsEnumREAD
 	}
 }
 
 // rightsContains returns true if the required right is included in the rule's
 // rights, or if the rule grants ALL rights.
-func rightsContains(hay []acm.RightsEnum, needle acm.RightsEnum) bool {
+func rightsContains(hay []grammar.RightsEnum, needle grammar.RightsEnum) bool {
 	for _, r := range hay {
 		if strings.EqualFold(string(r), "ALL") {
 			return true
@@ -270,14 +270,14 @@ func rightsContains(hay []acm.RightsEnum, needle acm.RightsEnum) bool {
 // attributesSatisfiedAttrs returns true if the provided claims satisfy at least
 // one of the required attributes. Currently supports GLOBAL=ANONYMOUS and
 // CLAIM=<claimKey> checks.
-func attributesSatisfiedAttrs(items []acm.AttributeItem, claims Claims) bool {
+func attributesSatisfiedAttrs(items []grammar.AttributeItem, claims Claims) bool {
 	for _, it := range items {
 		switch it.Kind {
-		case acm.ATTRGLOBAL:
+		case grammar.ATTRGLOBAL:
 			if it.Value == "ANONYMOUS" {
 				return true
 			}
-		case acm.ATTRCLAIM:
+		case grammar.ATTRCLAIM:
 			for key := range claims {
 				if it.Value == key {
 					return true
@@ -303,11 +303,11 @@ func normalize(p string) string {
 
 // matchRouteObjectsObjItem returns true if any ROUTE object matches the request
 // path. Supports exact match, prefix match using "/*", and global wildcards.
-func matchRouteObjectsObjItem(objs []acm.ObjectItem, reqPath string) bool {
+func matchRouteObjectsObjItem(objs []grammar.ObjectItem, reqPath string) bool {
 	req := normalize(reqPath)
 
 	for _, oi := range objs {
-		if oi.Kind != acm.Route {
+		if oi.Kind != grammar.Route {
 			continue
 		}
 		pat := normalize(oi.Value)

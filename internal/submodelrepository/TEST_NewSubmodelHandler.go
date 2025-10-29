@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	acm "github.com/eclipse-basyx/basyx-go-components/internal/common/security/model"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	persistence_postgresql "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence"
 	persistence_utils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
 )
@@ -77,7 +77,7 @@ func TestNewSubmodelHandler(smDatabase *persistence_postgresql.PostgreSQLSubmode
 	}
 	queryString := string(osData)
 
-	var query acm.QueryWrapper
+	var query grammar.QueryWrapper
 	err = json.Unmarshal([]byte(queryString), &query)
 	if err != nil {
 		log.Fatalf("Failed to parse JSON: %v", err)

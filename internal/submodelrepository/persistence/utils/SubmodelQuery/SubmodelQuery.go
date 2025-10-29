@@ -30,8 +30,8 @@ import (
 	"fmt"
 
 	"github.com/doug-martin/goqu/v9"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/queries"
-	acm "github.com/eclipse-basyx/basyx-go-components/internal/common/security/model"
 )
 
 // getQueryWithGoqu constructs a comprehensive SQL query for retrieving submodel data.
@@ -60,7 +60,7 @@ import (
 // The function uses COALESCE to ensure empty arrays ('[]'::jsonb) instead of NULL values,
 // which simplifies downstream JSON parsing. It also includes a total count window function
 // for efficient result set pagination and slice pre-sizing.
-func GetQueryWithGoqu(submodelId string, limit int64, cursor string, aasQuery *acm.QueryWrapper) (string, error) {
+func GetQueryWithGoqu(submodelId string, limit int64, cursor string, aasQuery *grammar.QueryWrapper) (string, error) {
 	dialect := goqu.Dialect("postgres")
 
 	// Build display names subquery
@@ -228,7 +228,7 @@ func addJoinsToQueryForAASQL(query *goqu.SelectDataset) *goqu.SelectDataset {
 	return query
 }
 
-func applyAASQuery(aasQuery *acm.QueryWrapper, query *goqu.SelectDataset) (*goqu.SelectDataset, error) {
+func applyAASQuery(aasQuery *grammar.QueryWrapper, query *goqu.SelectDataset) (*goqu.SelectDataset, error) {
 	if aasQuery == nil || aasQuery.Query.Condition == nil {
 		return query, nil
 	}

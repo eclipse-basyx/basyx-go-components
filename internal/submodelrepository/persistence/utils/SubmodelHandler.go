@@ -35,7 +35,7 @@ import (
 	_ "github.com/doug-martin/goqu/v9/dialect/postgres"
 	builders "github.com/eclipse-basyx/basyx-go-components/internal/common/builder"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
-	acm "github.com/eclipse-basyx/basyx-go-components/internal/common/security/model"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	submodel_query "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils/SubmodelQuery"
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 )
@@ -51,7 +51,7 @@ func GetSubmodelById(db *sql.DB, submodelIdFilter string) (*gen.Submodel, error)
 	return submodels[0], nil
 }
 
-func GetAllSubmodels(db *sql.DB, limit int64, cursor string, query *acm.QueryWrapper) ([]*gen.Submodel, string, error) {
+func GetAllSubmodels(db *sql.DB, limit int64, cursor string, query *grammar.QueryWrapper) ([]*gen.Submodel, string, error) {
 	return getSubmodels(db, "", limit, cursor, query)
 }
 
@@ -85,7 +85,7 @@ func GetAllSubmodels(db *sql.DB, limit int64, cursor string, query *acm.QueryWra
 // Note: The function builds nested reference structures in two phases:
 //  1. Initial parsing during row iteration
 //  2. Final structure building after all rows are processed
-func getSubmodels(db *sql.DB, submodelIdFilter string, limit int64, cursor string, query *acm.QueryWrapper) ([]*gen.Submodel, string, error) {
+func getSubmodels(db *sql.DB, submodelIdFilter string, limit int64, cursor string, query *grammar.QueryWrapper) ([]*gen.Submodel, string, error) {
 	var result []*gen.Submodel
 	referenceBuilderRefs := make(map[int64]*builders.ReferenceBuilder)
 	start := time.Now().Local().UnixMilli()
@@ -353,7 +353,7 @@ func moreThanZeroReferences(referenceArray []*gen.Reference) bool {
 // Returns:
 //   - *sql.Rows: Result set containing submodel data with JSON-aggregated nested structures
 //   - error: An error if query building or execution fails
-func getSubmodelDataFromDbWithJSONQuery(db *sql.DB, submodelId string, limit int64, cursor string, query *acm.QueryWrapper) (*sql.Rows, error) {
+func getSubmodelDataFromDbWithJSONQuery(db *sql.DB, submodelId string, limit int64, cursor string, query *grammar.QueryWrapper) (*sql.Rows, error) {
 	q, err := submodel_query.GetQueryWithGoqu(submodelId, limit, cursor, query)
 	if err != nil {
 		fmt.Printf("Error building query: %v\n", err)

@@ -30,7 +30,7 @@ import (
 	"testing"
 
 	"github.com/doug-martin/goqu/v9"
-	acm "github.com/eclipse-basyx/basyx-go-components/internal/common/security/model"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 )
 
 func TestAddPaginationToQuery(t *testing.T) {
@@ -96,7 +96,7 @@ func TestGetQueryWithGoquPagination(t *testing.T) {
 		submodelId  string
 		limit       int64
 		cursor      string
-		aasQuery    *acm.QueryWrapper
+		aasQuery    *grammar.QueryWrapper
 		shouldError bool
 		sqlContains []string
 	}{
