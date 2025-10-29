@@ -12,7 +12,7 @@ import (
 
 const (
 	BaseURL         = "http://127.0.0.1:5004"
-	ComposeFilePath = "docker_compose/docker_compose.yml"
+	ComposeFilePath = "./docker_compose/docker_compose.yml"
 )
 
 var (
@@ -33,7 +33,7 @@ func TestMain(m *testing.M) {
 	composeEngine = eng
 	composeArgsBase = baseArgs
 
-	upArgs := append(composeArgsBase, "-f", ComposeFilePath, "up", "-d")
+	upArgs := append(composeArgsBase, "-f", ComposeFilePath, "up", "-d", "--build")
 	if v := getenv("DISC_TEST_BUILD"); v == "1" {
 		upArgs = append(upArgs, "--build")
 	}

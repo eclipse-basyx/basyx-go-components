@@ -1,0 +1,143 @@
+{
+  "AllAccessPermissionRules": {
+    "DEFATTRIBUTES": [
+      { "name": "has_role",       "attributes": [ { "CLAIM": "role" } ] },
+      { "name": "has_clearance",  "attributes": [ { "CLAIM": "clear" } ] },
+      { "name": "is_anonymous",   "attributes": [ { "GLOBAL": "ANONYMOUS" } ] },
+      { "name": "local_time",     "attributes": [ { "GLOBAL": "LOCALNOW" } ] },
+      { "name": "is_member",      "attributes": [ { "CLAIM": "role" }, { "CLAIM": "clear" } ] }
+    ],
+
+    "DEFOBJECTS": [
+      { "name": "health",              "objects": [ { "ROUTE": "/health" } ] },
+      { "name": "description",         "objects": [ { "ROUTE": "/description" } ] },
+      { "name": "shellsAny",           "objects": [ { "ROUTE": "/lookup/shells/*" } ] },
+      { "name": "shellsByAssetLink",   "objects": [ { "ROUTE": "/lookup/shellsByAssetLink" } ] }
+    ],
+
+    "DEFFORMULAS": [
+      { "name": "always_true", "formula": { "$boolean": true } },
+
+      { "name": "role_at_least_viewer",
+        "formula": {
+          "$or": [
+            { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "viewer" } ] },
+            { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "editor" } ] },
+            { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "admin" } ] }
+          ]
+        }
+      },
+      { "name": "role_at_least_editor",
+        "formula": {
+          "$or": [
+            { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "editor" } ] },
+            { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "admin" } ] }
+          ]
+        }
+      },
+      { "name": "is_admin",
+        "formula": { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "admin" } ] }
+      },
+      { "name": "is_authenticated",
+        "formula": { "$eq": [ { "$attribute": { "GLOBAL": "ANONYMOUS" } }, { "$strVal": "false" } ] }
+      },
+      { "name": "clear_ge_3",
+        "formula": { "$ge": [ { "$numCast": { "$attribute": { "CLAIM": "clear" } } }, { "$numVal": 3 } ] }
+      },
+      { "name": "clear_ge_5",
+        "formula": { "$ge": [ { "$numCast": { "$attribute": { "CLAIM": "clear" } } }, { "$numVal": 5 } ] }
+      },
+      { "name": "clear_ge_6",
+        "formula": { "$ge": [ { "$numCast": { "$attribute": { "CLAIM": "clear" } } }, { "$numVal": 6 } ] }
+      },
+      { "name": "clear_ge_8",
+        "formula": { "$ge": [ { "$numCast": { "$attribute": { "CLAIM": "clear" } } }, { "$numVal": 8 } ] }
+      },
+
+      { "name": "auth_and_role_ge_viewer",
+        "formula": {
+          "$and": [
+            { "$eq": [ { "$attribute": { "GLOBAL": "ANONYMOUS" } }, { "$strVal": "false" } ] },
+            {
+              "$or": [
+                { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "viewer" } ] },
+                { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "editor" } ] },
+                { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "admin" } ] }
+              ]
+            }
+          ]
+        }
+      },
+
+      { "name": "role_ge_viewer_and_clear_ge_3",
+        "formula": {
+          "$and": [
+            {
+              "$or": [
+                { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "viewer" } ] },
+                { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "editor" } ] },
+                { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "admin" } ] }
+              ]
+            },
+            { "$ge": [ { "$numCast": { "$attribute": { "CLAIM": "clear" } } }, { "$numVal": 3 } ] }
+          ]
+        }
+      },
+
+      { "name": "role_ge_editor_and_clear_ge_5",
+        "formula": {
+          "$and": [
+            {
+              "$or": [
+                { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "editor" } ] },
+                { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "admin" } ] }
+              ]
+            },
+            { "$ge": [ { "$numCast": { "$attribute": { "CLAIM": "clear" } } }, { "$numVal": 5 } ] }
+          ]
+        }
+      },
+
+      { "name": "admin_and_clear_ge_8",
+        "formula": {
+          "$and": [
+            { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "admin" } ] },
+            { "$ge": [ { "$numCast": { "$attribute": { "CLAIM": "clear" } } }, { "$numVal": 8 } ] }
+          ]
+        }
+      },
+
+      { "name": "role_ge_editor_and_clear_ge_6",
+        "formula": {
+          "$and": [
+            {
+              "$or": [
+                { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "editor" } ] },
+                { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "admin" } ] }
+              ]
+            },
+            { "$ge": [ { "$numCast": { "$attribute": { "CLAIM": "clear" } } }, { "$numVal": 6 } ] }
+          ]
+        }
+      }
+    ],
+
+    "DEFACLS": [
+      { "name": "read_only_public",   "acl": { "USEATTRIBUTES": "is_anonymous", "RIGHTS": ["READ"],   "ACCESS": "ALLOW" } },
+      { "name": "read_only_member",   "acl": { "USEATTRIBUTES": "is_member",    "RIGHTS": ["READ"],   "ACCESS": "ALLOW" } },
+      { "name": "create_only_member", "acl": { "USEATTRIBUTES": "is_member",    "RIGHTS": ["CREATE"], "ACCESS": "ALLOW" } },
+      { "name": "delete_only_member", "acl": { "USEATTRIBUTES": "is_member",    "RIGHTS": ["DELETE"], "ACCESS": "ALLOW" } }
+    ],
+
+    "rules": [
+      { "USEACL": "read_only_public", "USEOBJECTS": ["health"], "USEFORMULA": "always_true" },
+      { "USEACL": "read_only_member", "USEOBJECTS": ["health"], "USEFORMULA": "always_true" },
+
+      { "USEACL": "read_only_member",   "USEOBJECTS": ["description"],       "USEFORMULA": "auth_and_role_ge_viewer" },
+      { "USEACL": "read_only_member",   "USEOBJECTS": ["shellsAny"],         "USEFORMULA": "role_ge_viewer_and_clear_ge_3" },
+      { "USEACL": "create_only_member", "USEOBJECTS": ["shellsAny"],         "USEFORMULA": "role_ge_editor_and_clear_ge_5" },
+      { "USEACL": "delete_only_member", "USEOBJECTS": ["shellsAny"],         "USEFORMULA": "admin_and_clear_ge_8" },
+      { "USEACL": "create_only_member", "USEOBJECTS": ["shellsByAssetLink"], "USEFORMULA": "role_ge_editor_and_clear_ge_6" }
+    ]
+  }
+}

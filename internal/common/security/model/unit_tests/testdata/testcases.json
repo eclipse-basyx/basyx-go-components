@@ -1,0 +1,68 @@
+[
+  {
+    "file": "pass/acl_min.json",
+    "type": "ACL",
+    "golden": "golden/acl_min.json.golden"
+  },
+  {
+    "file": "pass/rule_full.json",
+    "type": "AccessRuleModelSchemaJson",
+    "golden": "golden/rule_full.json.golden"
+  },
+  {
+    "file": "fail/acl_missing_rights.json",
+    "type": "ACL",
+    "should_fail": true,
+    "error_contains": "RIGHTS"
+  },
+  {
+    "file": "fail/rights_typo.json",
+    "type": "ACL",
+    "should_fail": true
+  },
+  {
+    "file": "fail/only_one_acl.json",
+    "type": "AccessRuleModelSchemaJson",
+    "should_fail": true
+  },
+  {
+    "file": "fail/atleast_one_acl.json",
+    "type": "AccessRuleModelSchemaJson",
+    "should_fail": true
+  },
+  {
+    "file": "fail/wrong_object_identifier.json",
+    "type": "AccessRuleModelSchemaJson",
+    "should_fail": true
+  },
+  {
+    "file": "pass/correct_object_identifier.json",
+    "type": "AccessRuleModelSchemaJson",
+    "should_fail": false
+  },
+  {
+    "file": "pass/one_acl.json",
+    "type": "AccessRuleModelSchemaJson",
+    "should_fail": false
+  },
+  {
+    "file": "pass/correct_attribute.json",
+    "type": "AccessRuleModelSchemaJson",
+    "should_fail": false
+  },
+  {
+    "file": "fail/incorrect_attribute.json",
+    "type": "AccessRuleModelSchemaJson",
+    "should_fail": true
+  },
+  {
+    "file": "pass/attribute_definition.json",
+    "type": "AccessRuleModelSchemaJson",
+    "should_fail": false
+  },
+  {
+    "file": "pass/complex_rules.json",
+    "type": "AccessRuleModelSchemaJson",
+    "should_fail": false
+  }
+]
