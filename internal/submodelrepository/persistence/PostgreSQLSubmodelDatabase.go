@@ -265,6 +265,79 @@ func (p *PostgreSQLSubmodelDatabase) DeleteSubmodel(id string) error {
 	return nil
 }
 
+// get submodel value
+// GetAllSubmodelsValue - Returns all submodels in their ValueOnly representation
+func (p *PostgreSQLSubmodelDatabase) GetAllSubmodelsValue(limit int32, cursor string) ([]map[string]any, string, error) {
+	tx, err := p.db.Begin()
+	if limit <= 0 {
+		limit = 100
+	}
+
+	if err != nil {
+		fmt.Println(err)
+		return nil, "", beginTransactionErrorSubmodelRepo
+	}
+	defer func() {
+		if err != nil {
+			tx.Rollback()
+		}
+	}()
+
+	submodels, err := submodelelements.GetSubmodelWithSubmodelElementsOrAll(p.db, tx)
+	if err != nil {
+		return nil, "", err
+	}
+
+	if err := tx.Commit(); err != nil {
+		fmt.Println(err)
+		return nil, "", failedPostgresTransactionSubmodelRepo
+	}
+
+	valueOnlyList := make([]map[string]any, 0, len(submodels))
+	for _, sm := range submodels {
+		valueOnly := make(map[string]any)
+		for _, el := range sm.SubmodelElements {
+			addValueOnly(valueOnly, el)
+		}
+		valueOnlyList = append(valueOnlyList, map[string]any{
+			sm.IdShort: valueOnly,
+		})
+	}
+
+	return valueOnlyList, "", nil
+}
+
+// helper function to add value only representation of submodel element
+// addValueOnly converts submodel elements to ValueOnly JSON maps recursively
+func addValueOnly(target map[string]any, el gen.SubmodelElement) {
+	switch v := el.(type) {
+	case *gen.Property:
+		target[v.IdShort] = v.Value
+	case *gen.Range:
+		target[v.IdShort] = map[string]any{"min": v.Min, "max": v.Max}
+	case *gen.File:
+		target[v.IdShort] = map[string]any{"value": v.Value}
+	case *gen.Blob:
+		target[v.IdShort] = map[string]any{"value": v.Value}
+	case *gen.MultiLanguageProperty:
+		target[v.IdShort] = v.Value
+	case *gen.SubmodelElementCollection:
+		col := make(map[string]any)
+		for _, sub := range v.Value {
+			addValueOnly(col, sub)
+		}
+		target[v.IdShort] = col
+	case *gen.SubmodelElementList:
+		arr := make([]any, 0, len(v.Value))
+		for _, sub := range v.Value {
+			subObj := make(map[string]any)
+			addValueOnly(subObj, sub)
+			arr = append(arr, subObj)
+		}
+		target[v.IdShort] = arr
+	}
+}
+
 // CreateSubmodel inserts a new Submodel
 // If a Submodel with the same id already exists, it does nothing and returns nil
 // we might want ON CONFLICT DO UPDATE for upserts, but spec-wise POST usually means create new
