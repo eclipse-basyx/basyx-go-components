@@ -33,6 +33,9 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/doug-martin/goqu/v9"
+	"github.com/doug-martin/goqu/v9/exp"
 )
 
 type ACL struct {
@@ -168,6 +171,36 @@ type AccessPermissionRuleFILTER struct {
 
 	// USEFORMULA corresponds to the JSON schema field "USEFORMULA".
 	USEFORMULA *string `json:"USEFORMULA,omitempty" yaml:"USEFORMULA,omitempty" mapstructure:"USEFORMULA,omitempty"`
+}
+
+// Query represents a query structure with a condition field
+type Query struct {
+	// Condition corresponds to the JSON schema field "$condition".
+	Condition *LogicalExpression `json:"$condition,omitempty" yaml:"$condition,omitempty" mapstructure:"$condition,omitempty"`
+}
+
+// QueryWrapper wraps a Query object
+type QueryWrapper struct {
+	// Query corresponds to the JSON schema field "Query".
+	Query Query `json:"Query" yaml:"Query" mapstructure:"Query"`
+}
+
+// UnmarshalJSON implements json.Unmarshaler for QueryWrapper.
+func (j *QueryWrapper) UnmarshalJSON(value []byte) error {
+	var raw map[string]interface{}
+	if err := json.Unmarshal(value, &raw); err != nil {
+		return err
+	}
+	if _, ok := raw["Query"]; raw != nil && !ok {
+		return fmt.Errorf("field Query in QueryWrapper: required")
+	}
+	type Plain QueryWrapper
+	var plain Plain
+	if err := json.Unmarshal(value, &plain); err != nil {
+		return err
+	}
+	*j = QueryWrapper(plain)
+	return nil
 }
 
 // This schema contains the AAS Access Rule Language.
@@ -756,4 +789,293 @@ type Value struct {
 
 	// Year corresponds to the JSON schema field "$year".
 	Year *DateTimeLiteralPattern `json:"$year,omitempty" yaml:"$year,omitempty" mapstructure:"$year,omitempty"`
+}
+
+func ParseAASQLFieldToSQLColumn(field string) string {
+	switch field {
+	case "$sm#idShort":
+		return "s.id_short"
+	case "$sm#id":
+		return "s.id"
+	case "$sm#semanticId":
+		return "semantic_id_reference_key.value"
+	}
+	return field
+}
+
+// GetValueType returns the type of value stored in a Value struct
+func (v *Value) GetValueType() string {
+	if v.Field != nil {
+		return "$field"
+	}
+	if v.StrVal != nil {
+		return "$strVal"
+	}
+	if v.NumVal != nil {
+		return "$numVal"
+	}
+	if v.HexVal != nil {
+		return "$hexVal"
+	}
+	if v.DateTimeVal != nil {
+		return "$dateTimeVal"
+	}
+	if v.TimeVal != nil {
+		return "$timeVal"
+	}
+	if v.DayOfWeek != nil {
+		return "$dayOfWeek"
+	}
+	if v.DayOfMonth != nil {
+		return "$dayOfMonth"
+	}
+	if v.Month != nil {
+		return "$month"
+	}
+	if v.Year != nil {
+		return "$year"
+	}
+	if v.Boolean != nil {
+		return "$boolean"
+	}
+	if v.Attribute != nil {
+		return "$attribute"
+	}
+	return "unknown"
+}
+
+// GetValue returns the actual value stored in a Value struct
+func (v *Value) GetValue() interface{} {
+	switch v.GetValueType() {
+	case "$field":
+		return string(*v.Field)
+	case "$strVal":
+		return string(*v.StrVal)
+	case "$numVal":
+		return *v.NumVal
+	case "$hexVal":
+		return string(*v.HexVal)
+	case "$dateTimeVal":
+		return *v.DateTimeVal
+	case "$timeVal":
+		return string(*v.TimeVal)
+	case "$dayOfWeek":
+		return *v.DayOfWeek
+	case "$dayOfMonth":
+		return *v.DayOfMonth
+	case "$month":
+		return *v.Month
+	case "$year":
+		return *v.Year
+	case "$boolean":
+		return *v.Boolean
+	case "$attribute":
+		return v.Attribute
+	default:
+		return nil
+	}
+}
+
+// IsField returns true if the Value represents a field reference
+func (v *Value) IsField() bool {
+	return v.Field != nil
+}
+
+// IsValue returns true if the Value represents a literal value (not a field)
+func (v *Value) IsValue() bool {
+	return !v.IsField() && v.GetValueType() != "unknown"
+}
+
+// HandleComparison builds a SQL comparison expression from two Value operands
+func HandleComparison(leftOperand, rightOperand *Value, operation string) (exp.Expression, error) {
+	leftIsField := leftOperand.IsField()
+	rightIsField := rightOperand.IsField()
+
+	if leftIsField && rightIsField {
+		return HandleFieldToFieldComparisonValue(leftOperand, rightOperand, operation)
+	} else if leftIsField && !rightIsField {
+		return HandleFieldToValueComparisonValue(leftOperand, rightOperand, operation)
+	} else if !leftIsField && rightIsField {
+		return HandleValueToFieldComparisonValue(leftOperand, rightOperand, operation)
+	} else {
+		return HandleValueToValueComparisonValue(leftOperand, rightOperand, operation)
+	}
+}
+
+// HandleFieldToValueComparisonValue handles field-to-value comparisons using Value type
+func HandleFieldToValueComparisonValue(leftOperand, rightOperand *Value, operation string) (exp.Expression, error) {
+	if leftOperand.Field == nil {
+		return nil, fmt.Errorf("left operand is not a field")
+	}
+
+	fieldName := string(*leftOperand.Field)
+	if len(fieldName) > 4 && fieldName[:4] == "$sm#" {
+		fieldName = ParseAASQLFieldToSQLColumn(fieldName)
+	}
+
+	leftCol := goqu.I(fieldName)
+	rightVal := goqu.V(rightOperand.GetValue())
+
+	return buildComparisonExpression(leftCol, rightVal, operation)
+}
+
+// HandleValueToFieldComparisonValue handles value-to-field comparisons using Value type
+func HandleValueToFieldComparisonValue(leftOperand, rightOperand *Value, operation string) (exp.Expression, error) {
+	if rightOperand.Field == nil {
+		return nil, fmt.Errorf("right operand is not a field")
+	}
+
+	fieldName := string(*rightOperand.Field)
+	if len(fieldName) > 4 && fieldName[:4] == "$sm#" {
+		fieldName = ParseAASQLFieldToSQLColumn(fieldName)
+	}
+
+	rightCol := goqu.I(fieldName)
+	leftVal := goqu.V(leftOperand.GetValue())
+
+	return buildComparisonExpression(leftVal, rightCol, operation)
+}
+
+// HandleFieldToFieldComparisonValue handles field-to-field comparisons using Value type
+func HandleFieldToFieldComparisonValue(leftOperand, rightOperand *Value, operation string) (exp.Expression, error) {
+	if leftOperand.Field == nil {
+		return nil, fmt.Errorf("left operand is not a field")
+	}
+	if rightOperand.Field == nil {
+		return nil, fmt.Errorf("right operand is not a field")
+	}
+
+	leftFieldName := string(*leftOperand.Field)
+	if len(leftFieldName) > 4 && leftFieldName[:4] == "$sm#" {
+		leftFieldName = ParseAASQLFieldToSQLColumn(leftFieldName)
+	}
+
+	rightFieldName := string(*rightOperand.Field)
+	if len(rightFieldName) > 4 && rightFieldName[:4] == "$sm#" {
+		rightFieldName = ParseAASQLFieldToSQLColumn(rightFieldName)
+	}
+
+	leftCol := goqu.I(leftFieldName)
+	rightCol := goqu.I(rightFieldName)
+
+	return buildComparisonExpression(leftCol, rightCol, operation)
+}
+
+// HandleValueToValueComparisonValue handles value-to-value comparisons using Value type
+func HandleValueToValueComparisonValue(leftOperand, rightOperand *Value, operation string) (exp.Expression, error) {
+	if leftOperand.GetValueType() != rightOperand.GetValueType() {
+		return nil, fmt.Errorf("cannot compare different value types: %s and %s", leftOperand.GetValueType(), rightOperand.GetValueType())
+	}
+
+	leftVal := goqu.V(leftOperand.GetValue())
+	rightVal := goqu.V(rightOperand.GetValue())
+
+	return buildComparisonExpression(leftVal, rightVal, operation)
+}
+
+// buildComparisonExpression is a helper function to build comparison expressions
+func buildComparisonExpression(left interface{}, right interface{}, operation string) (exp.Expression, error) {
+	switch operation {
+	case "$eq":
+		return exp.NewLiteralExpression("? = ?", left, right), nil
+	case "$ne":
+		return exp.NewLiteralExpression("? != ?", left, right), nil
+	case "$gt":
+		return exp.NewLiteralExpression("? > ?", left, right), nil
+	case "$ge":
+		return exp.NewLiteralExpression("? >= ?", left, right), nil
+	case "$lt":
+		return exp.NewLiteralExpression("? < ?", left, right), nil
+	case "$le":
+		return exp.NewLiteralExpression("? <= ?", left, right), nil
+	default:
+		return nil, fmt.Errorf("unsupported comparison operation: %s", operation)
+	}
+}
+
+// EvaluateToExpression evaluates the logical expression tree and returns a goqu expression
+// that can be used in SQL WHERE clauses.
+//
+// The method handles:
+// - Comparison operations: $eq, $ne, $gt, $ge, $lt, $le
+// - AND operations: all conditions must be true (uses goqu.And)
+// - OR operations: at least one condition must be true (uses goqu.Or)
+// - NOT operations: negates the result
+// - Nested LogicalExpressions
+//
+// Returns:
+//   - exp.Expression: The evaluated goqu expression
+//   - error: An error if evaluation fails
+func (le *LogicalExpression) EvaluateToExpression() (exp.Expression, error) {
+	// Handle comparison operations
+	if len(le.Eq) > 0 {
+		return le.evaluateComparison(le.Eq, "$eq")
+	}
+	if len(le.Ne) > 0 {
+		return le.evaluateComparison(le.Ne, "$ne")
+	}
+	if len(le.Gt) > 0 {
+		return le.evaluateComparison(le.Gt, "$gt")
+	}
+	if len(le.Ge) > 0 {
+		return le.evaluateComparison(le.Ge, "$ge")
+	}
+	if len(le.Lt) > 0 {
+		return le.evaluateComparison(le.Lt, "$lt")
+	}
+	if len(le.Le) > 0 {
+		return le.evaluateComparison(le.Le, "$le")
+	}
+
+	// Handle logical operations
+	if len(le.And) > 0 {
+		var expressions []exp.Expression
+		for i, nestedExpr := range le.And {
+			expr, err := nestedExpr.EvaluateToExpression()
+			if err != nil {
+				return nil, fmt.Errorf("error evaluating AND condition at index %d: %w", i, err)
+			}
+			expressions = append(expressions, expr)
+		}
+		return goqu.And(expressions...), nil
+	}
+
+	if len(le.Or) > 0 {
+		var expressions []exp.Expression
+		for i, nestedExpr := range le.Or {
+			expr, err := nestedExpr.EvaluateToExpression()
+			if err != nil {
+				return nil, fmt.Errorf("error evaluating OR condition at index %d: %w", i, err)
+			}
+			expressions = append(expressions, expr)
+		}
+		return goqu.Or(expressions...), nil
+	}
+
+	if le.Not != nil {
+		expr, err := le.Not.EvaluateToExpression()
+		if err != nil {
+			return nil, fmt.Errorf("error evaluating NOT condition: %w", err)
+		}
+		return goqu.L("NOT (?)", expr), nil
+	}
+
+	// Handle boolean literal
+	if le.Boolean != nil {
+		return goqu.L("?", *le.Boolean), nil
+	}
+
+	return nil, fmt.Errorf("logical expression has no valid operation")
+}
+
+// evaluateComparison evaluates a comparison operation with the given operands
+func (le *LogicalExpression) evaluateComparison(operands []Value, operation string) (exp.Expression, error) {
+	if len(operands) != 2 {
+		return nil, fmt.Errorf("comparison operation %s requires exactly 2 operands, got %d", operation, len(operands))
+	}
+
+	leftOperand := &operands[0]
+	rightOperand := &operands[1]
+
+	return HandleComparison(leftOperand, rightOperand, operation)
 }
