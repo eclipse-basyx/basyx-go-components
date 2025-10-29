@@ -41,15 +41,18 @@ import (
 )
 
 func GetSubmodelById(db *sql.DB, submodelIdFilter string) (*gen.Submodel, error) {
-	submodels, err := getSubmodels(db, submodelIdFilter, nil)
-	if err != nil || len(submodels) == 0 {
+	submodels, _, err := getSubmodels(db, submodelIdFilter, 1, "", nil)
+	if err != nil {
 		return nil, err
+	}
+	if len(submodels) == 0 {
+		return nil, fmt.Errorf("submodel with ID %s not found", submodelIdFilter)
 	}
 	return submodels[0], nil
 }
 
-func GetAllSubmodels(db *sql.DB, query *querylanguage.QueryObj) ([]*gen.Submodel, error) {
-	return getSubmodels(db, "", query)
+func GetAllSubmodels(db *sql.DB, limit int64, cursor string, query *querylanguage.QueryObj) ([]*gen.Submodel, string, error) {
+	return getSubmodels(db, "", limit, cursor, query)
 }
 
 // getSubmodels retrieves submodels from the database with full nested structures.
@@ -62,9 +65,13 @@ func GetAllSubmodels(db *sql.DB, query *querylanguage.QueryObj) ([]*gen.Submodel
 // Parameters:
 //   - db: Database connection to execute the query against
 //   - submodelIdFilter: Optional filter for a specific submodel ID. If empty, all submodels are retrieved.
+//   - limit: Maximum number of results to return (0 means no limit)
+//   - cursor: The submodel ID to start pagination from (empty string means start from beginning)
+//   - query: Optional AAS QueryLanguage filtering
 //
 // Returns:
 //   - []*gen.Submodel: Slice of fully populated Submodel objects with all nested structures
+//   - string: Next cursor for pagination (empty string if no more pages)
 //   - error: An error if database query fails, scanning fails, or data parsing fails
 //
 // The function:
@@ -73,19 +80,20 @@ func GetAllSubmodels(db *sql.DB, query *querylanguage.QueryObj) ([]*gen.Submodel
 //   - Builds reference hierarchies using ReferenceBuilder instances
 //   - Parses JSON-encoded language strings and references
 //   - Measures and logs query execution time for performance monitoring
+//   - Implements cursor-based pagination with peek ahead pattern
 //
 // Note: The function builds nested reference structures in two phases:
 //  1. Initial parsing during row iteration
 //  2. Final structure building after all rows are processed
-func getSubmodels(db *sql.DB, submodelIdFilter string, query *querylanguage.QueryObj) ([]*gen.Submodel, error) {
+func getSubmodels(db *sql.DB, submodelIdFilter string, limit int64, cursor string, query *querylanguage.QueryObj) ([]*gen.Submodel, string, error) {
 	var result []*gen.Submodel
 	referenceBuilderRefs := make(map[int64]*builders.ReferenceBuilder)
 	start := time.Now().Local().UnixMilli()
-	rows, err := getSubmodelDataFromDbWithJSONQuery(db, submodelIdFilter, query)
+	rows, err := getSubmodelDataFromDbWithJSONQuery(db, submodelIdFilter, limit, cursor, query)
 	end := time.Now().Local().UnixMilli()
 	fmt.Printf("Total Query Only time: %d milliseconds\n", end-start)
 	if err != nil {
-		return nil, fmt.Errorf("error getting submodel data from DB: %w", err)
+		return nil, "", fmt.Errorf("error getting submodel data from DB: %w", err)
 	}
 	defer rows.Close()
 
@@ -99,7 +107,7 @@ func getSubmodels(db *sql.DB, submodelIdFilter string, query *querylanguage.Quer
 			&row.DataSpecReference, &row.DataSpecReferenceReferred,
 			&row.DataSpecIEC61360, &row.Qualifiers, &row.Extensions, &row.Administration, &row.RootSubmodelElements, &row.ChildSubmodelElements, &row.TotalSubmodels,
 		); err != nil {
-			return nil, fmt.Errorf("error scanning row: %w", err)
+			return nil, "", fmt.Errorf("error scanning row: %w", err)
 		}
 
 		if result == nil {
@@ -118,7 +126,7 @@ func getSubmodels(db *sql.DB, submodelIdFilter string, query *querylanguage.Quer
 		if isArrayNotEmpty(row.SemanticId) {
 			semanticId, err = builders.ParseReferences(row.SemanticId, referenceBuilderRefs)
 			if err != nil {
-				return nil, err
+				return nil, "", err
 			}
 			if hasSemanticId(semanticId) {
 				submodel.SemanticId = semanticId[0]
@@ -129,7 +137,7 @@ func getSubmodels(db *sql.DB, submodelIdFilter string, query *querylanguage.Quer
 		if isArrayNotEmpty(row.SupplementalSemanticIds) {
 			supplementalSemanticIds, err := builders.ParseReferences(row.SupplementalSemanticIds, referenceBuilderRefs)
 			if err != nil {
-				return nil, err
+				return nil, "", err
 			}
 			if moreThanZeroReferences(supplementalSemanticIds) {
 				submodel.SupplementalSemanticIds = supplementalSemanticIds
@@ -140,13 +148,13 @@ func getSubmodels(db *sql.DB, submodelIdFilter string, query *querylanguage.Quer
 		// DisplayNames
 		err = addDisplayNames(row, submodel)
 		if err != nil {
-			return nil, err
+			return nil, "", err
 		}
 
 		// Descriptions
 		err = addDescriptions(row, submodel)
 		if err != nil {
-			return nil, err
+			return nil, "", err
 		}
 
 		// Embedded Data Specifications
@@ -155,12 +163,12 @@ func getSubmodels(db *sql.DB, submodelIdFilter string, query *querylanguage.Quer
 			err := builder.BuildReferences(row.DataSpecReference, row.DataSpecReferenceReferred)
 			if err != nil {
 				fmt.Println(err)
-				return nil, err
+				return nil, "", err
 			}
 			err = builder.BuildContentsIec61360(row.DataSpecIEC61360)
 			if err != nil {
 				fmt.Println(err)
-				return nil, err
+				return nil, "", err
 			}
 			submodel.EmbeddedDataSpecifications = builder.Build()
 		}
@@ -170,7 +178,7 @@ func getSubmodels(db *sql.DB, submodelIdFilter string, query *querylanguage.Quer
 			builder := builders.NewQualifiersBuilder()
 			qualifierRows, err := builders.ParseQualifiersRow(row.Qualifiers)
 			if err != nil {
-				return nil, err
+				return nil, "", err
 			}
 			for _, qualifierRow := range qualifierRows {
 				builder.AddQualifier(qualifierRow.DbId, qualifierRow.Kind, qualifierRow.Type, qualifierRow.ValueType, qualifierRow.Value)
@@ -189,7 +197,7 @@ func getSubmodels(db *sql.DB, submodelIdFilter string, query *querylanguage.Quer
 			builder := builders.NewExtensionsBuilder()
 			extensionRows, err := builders.ParseExtensionRows(row.Extensions)
 			if err != nil {
-				return nil, err
+				return nil, "", err
 			}
 			for _, extensionRow := range extensionRows {
 				builder.AddExtension(extensionRow.DbId, extensionRow.Name, extensionRow.ValueType, extensionRow.Value)
@@ -208,14 +216,14 @@ func getSubmodels(db *sql.DB, submodelIdFilter string, query *querylanguage.Quer
 			adminRow, err := builders.ParseAdministrationRow(row.Administration)
 			if err != nil {
 				fmt.Println(err)
-				return nil, err
+				return nil, "", err
 			}
 			if adminRow != nil {
 
 				admin, err := builders.BuildAdministration(*adminRow)
 				if err != nil {
 					fmt.Println(err)
-					return nil, err
+					return nil, "", err
 				}
 				submodel.Administration = admin
 			} else {
@@ -229,7 +237,18 @@ func getSubmodels(db *sql.DB, submodelIdFilter string, query *querylanguage.Quer
 	for _, referenceBuilder := range referenceBuilderRefs {
 		referenceBuilder.BuildNestedStructure()
 	}
-	return result, nil
+
+	// Handle pagination with peek ahead pattern
+	var nextCursor string
+	if limit > 0 && len(result) > int(limit) {
+		// We have more results than requested, so there's a next page
+		actualResults := result[:limit]
+		nextCursor = result[limit].Id // Use the ID of the next result as cursor
+		return actualResults, nextCursor, nil
+	}
+
+	// No more pages
+	return result, "", nil
 }
 
 // addDisplayNames parses and adds display names to a submodel.
@@ -330,15 +349,12 @@ func moreThanZeroReferences(referenceArray []*gen.Reference) bool {
 // Returns:
 //   - *sql.Rows: Result set containing submodel data with JSON-aggregated nested structures
 //   - error: An error if query building or execution fails
-func getSubmodelDataFromDbWithJSONQuery(db *sql.DB, submodelId string, query *querylanguage.QueryObj) (*sql.Rows, error) {
-	q, err := submodel_query.GetQueryWithGoqu(submodelId, query)
-	// fmt.Println(q)
-	// save query in query.txt
-	// err = os.WriteFile("query.txt", []byte(q), 0644)
+func getSubmodelDataFromDbWithJSONQuery(db *sql.DB, submodelId string, limit int64, cursor string, query *querylanguage.QueryObj) (*sql.Rows, error) {
+	q, err := submodel_query.GetQueryWithGoqu(submodelId, limit, cursor, query)
 	if err != nil {
-		return nil, fmt.Errorf("error saving query to file: %w", err)
+		fmt.Printf("Error building query: %v\n", err)
+		return nil, err
 	}
-	//fmt.Print(q)
 	rows, err := db.Query(q)
 	if err != nil {
 		fmt.Printf("Error querying database: %v\n", err)

@@ -2,18 +2,21 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"strconv"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	api "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/api"
 	persistence_postgresql "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence"
+	persistence_utils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
 	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/submodelrepositoryapi/go"
 )
 
@@ -109,15 +112,25 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	// if err != nil {
 	// 	log.Fatalf("Failed to parse JSON: %v", err)
 	// }
-	// sms, err := persistence_utils.GetAllSubmodels(smDatabase.GetDB(), &query)
-	// if err != nil {
-	// 	log.Fatalf("Failed to execute query: %v", err)
-	// }
-	// fmt.Println(len(sms))
-	// if len(sms) > 0 {
-	// 	jsonSubmodel, _ := json.Marshal(sms[0])
-	// 	fmt.Println(string(jsonSubmodel))
-	// }
+	start := time.Now()
+	sms, cursor, err := persistence_utils.GetAllSubmodels(smDatabase.GetDB(), 8000, "", nil)
+	end := time.Now()
+	fmt.Printf("Query Execution Time: %d milliseconds\n", end.Sub(start).Milliseconds())
+	fmt.Println(cursor)
+	if err != nil {
+		log.Fatalf("Failed to execute query: %v", err)
+	}
+	// print size in MB of result
+
+	fmt.Println(len(sms))
+	if len(sms) > 0 {
+		jsonSubmodel, _ := json.Marshal(sms[0])
+		//print size in bytes
+		fmt.Println(string(jsonSubmodel))
+
+		allSmsJson, _ := json.Marshal(sms)
+		fmt.Printf("Total size of all submodels: %.2f MB\n", float64(len(allSmsJson))/(1024*1024))
+	}
 	//TEST
 
 	smSvc := api.NewSubmodelRepositoryAPIAPIService(*smDatabase)
