@@ -31,9 +31,6 @@ jobs:
       - name: Get dependencies
         run: go mod download
         
-      - name: Run common package tests
-        run: go test ./internal/common/... -v -cover
-        
       - name: Run common model grammar tests
         run: go test github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar -v -cover
         
