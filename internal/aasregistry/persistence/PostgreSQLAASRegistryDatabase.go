@@ -86,9 +86,6 @@ func (p *PostgreSQLAASRegistryDatabase) InsertAdministrationShellDescriptor(ctx 
 		return err
 	}
 
-	desc := aasd.Description
-	fmt.Println(desc)
-
 	var displayNameId, descriptionId, administrationId sql.NullInt64
 
 	displayNameId, err = persistence_utils.CreateLangStringNameTypes(tx, aasd.DisplayName)
@@ -108,10 +105,6 @@ func (p *PostgreSQLAASRegistryDatabase) InsertAdministrationShellDescriptor(ctx 
 		fmt.Println(err)
 		return common.NewInternalServerError("Failed to create Administration - no changes applied - see console for details")
 	}
-
-	fmt.Println(displayNameId)
-	fmt.Println(descriptionId)
-	fmt.Println(administrationId)
 
 	sqlStr, args, buildErr = d.
 		Insert(tblAASDescriptor).
@@ -306,7 +299,7 @@ func (p *PostgreSQLAASRegistryDatabase) GetAssetAdministrationShellDescriptorByI
 	}
 
 	return model.AssetAdministrationShellDescriptor{
-		AssetKind:           ak,
+		AssetKind:           &ak,
 		AssetType:           assetType.String,
 		GlobalAssetId:       globalAssetID.String,
 		IdShort:             idShort.String,
@@ -730,7 +723,7 @@ func (p *PostgreSQLAASRegistryDatabase) ListAssetAdministrationShellDescriptors(
 		}
 
 		out = append(out, model.AssetAdministrationShellDescriptor{
-			AssetKind:           ak,
+			AssetKind:           &ak,
 			AssetType:           r.assetType.String,
 			GlobalAssetId:       r.globalAssetID.String,
 			IdShort:             r.idShort.String,

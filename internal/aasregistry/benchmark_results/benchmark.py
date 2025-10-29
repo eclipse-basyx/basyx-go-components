@@ -18,7 +18,7 @@ COMPOSE_FILE = "docker_compose/docker_compose.yml"
 DB_CONTAINER = "postgres_db"  # optional: used if you have a healthcheck on DB
 DISCOVERY_URL = "http://localhost:5004/shell-descriptors"
 
-TOTAL_ITERS = 10000
+TOTAL_ITERS = 100000
 SEED = 42
 
 # How many iterations should be POST-only (prewarm). Set to 0 to disable.
@@ -86,7 +86,7 @@ def ts():
 # ──────────────────────────────────────────────
 # Benchmark payload (template)
 # ──────────────────────────────────────────────
-payload_template = {
+data_big = {
     "description": [
         {"language": "en", "text": "Machine consisting of multiple parts which are assets provided by different companies"},
         {"language": "de", "text": "Maschine bestehend aus mehreren Assets, welche von verschiedenen anderen Firmen bereitgestellt werden"}
@@ -204,6 +204,20 @@ payload_template = {
     ]
 }
 
+data = {
+    "idShort": "InduCoreIC5000",
+    "id": "https://id.idta-showcase.net/namespace/InduCoreIC5000/v1",
+    "endpoints": [
+        {
+            "protocolInformation": {
+                "href": "https://idta.basyx-enterprise.net/controller/datasource/unprotected-repository-aas/shells/aHR0cHM6Ly9pZC5pZHRhLXNob3djYXNlLm5ldC9uYW1lc3BhY2UvSW5kdUNvcmVJQzUwMDAvdjE",
+                "endpointProtocol": "http"
+            },
+            "interface": "AAS-3.0"
+        }
+    ]
+}
+payload_template = data
 # ──────────────────────────────────────────────
 # Cleanup handler
 # ──────────────────────────────────────────────
