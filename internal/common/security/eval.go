@@ -33,7 +33,7 @@ import (
 	"strings"
 	"time"
 
-	acm "github.com/eclipse-basyx/basyx-go-components/internal/common/security/model"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 )
 
 func resolveGlobalToken(name string, now time.Time) (string, bool) {
@@ -51,7 +51,7 @@ func resolveGlobalToken(name string, now time.Time) (string, bool) {
 	}
 }
 
-func evalLE(le acm.LogicalExpression, claims Claims, now time.Time) bool {
+func evalLE(le grammar.LogicalExpression, claims Claims, now time.Time) bool {
 	if le.Boolean != nil {
 		return *le.Boolean
 	}
@@ -132,7 +132,7 @@ func evalLE(le acm.LogicalExpression, claims Claims, now time.Time) bool {
 	return false
 }
 
-func evalMatch(me acm.MatchExpression, claims Claims, now time.Time) bool {
+func evalMatch(me grammar.MatchExpression, claims Claims, now time.Time) bool {
 	if me.Boolean != nil {
 		return *me.Boolean
 	}
@@ -189,7 +189,7 @@ func evalMatch(me acm.MatchExpression, claims Claims, now time.Time) bool {
 	return false
 }
 
-func resolveValue(v acm.Value, claims Claims, now time.Time) any {
+func resolveValue(v grammar.Value, claims Claims, now time.Time) any {
 
 	if v.Attribute != nil {
 		if m, ok := asStringMap(v.Attribute); ok {
@@ -262,7 +262,7 @@ func resolveValue(v acm.Value, claims Claims, now time.Time) any {
 	return nil
 }
 
-func resolveStringItem(s acm.StringValue, claims Claims, now time.Time) string {
+func resolveStringItem(s grammar.StringValue, claims Claims, now time.Time) string {
 	if s.Attribute != nil {
 		if m, ok := asStringMap(s.Attribute); ok {
 			if c := m["CLAIM"]; c != "" {
@@ -416,7 +416,7 @@ func numCmp(a, b any, op string) bool {
 	return false
 }
 
-func stringValueFromDate(v acm.Value) string {
+func stringValueFromDate(v grammar.Value) string {
 	switch {
 	case v.DateTimeVal != nil:
 		return time.Time(*v.DateTimeVal).Format(time.RFC3339)

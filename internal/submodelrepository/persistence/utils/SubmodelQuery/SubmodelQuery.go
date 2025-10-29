@@ -30,6 +30,8 @@ import (
 	"fmt"
 
 	"github.com/doug-martin/goqu/v9"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/queries"
 )
 
 // getQueryWithGoqu constructs a comprehensive SQL query for retrieving submodel data.
@@ -58,7 +60,7 @@ import (
 // The function uses COALESCE to ensure empty arrays ('[]'::jsonb) instead of NULL values,
 // which simplifies downstream JSON parsing. It also includes a total count window function
 // for efficient result set pagination and slice pre-sizing.
-func GetQueryWithGoqu(submodelId string) (string, error) {
+func GetQueryWithGoqu(submodelId string, limit int64, cursor string, aasQuery *grammar.QueryWrapper) (string, error) {
 	dialect := goqu.Dialect("postgres")
 
 	// Build display names subquery
@@ -91,44 +93,7 @@ func GetQueryWithGoqu(submodelId string) (string, error) {
 		).
 		Where(goqu.I("dr.id").Eq(goqu.I("s.description_id")))
 
-	// Build semantic_id subquery
-	semanticIdObj := goqu.Func("jsonb_build_object",
-		goqu.V("reference_id"), goqu.I("r.id"),
-		goqu.V("reference_type"), goqu.I("r.type"),
-		goqu.V("key_id"), goqu.I("rk.id"),
-		goqu.V("key_type"), goqu.I("rk.type"),
-		goqu.V("key_value"), goqu.I("rk.value"),
-	)
-
-	semanticIdSubquery := dialect.From(goqu.T("reference").As("r")).
-		Select(goqu.Func("jsonb_agg", goqu.L("?", semanticIdObj))).
-		LeftJoin(
-			goqu.T("reference_key").As("rk"),
-			goqu.On(goqu.I("rk.reference_id").Eq(goqu.I("r.id"))),
-		).
-		Where(goqu.I("r.id").Eq(goqu.I("s.semantic_id")))
-
-	// Build semantic_id referred references subquery
-	semanticIdReferredObj := goqu.Func("jsonb_build_object",
-		goqu.V("reference_id"), goqu.I("ref.id"),
-		goqu.V("reference_type"), goqu.I("ref.type"),
-		goqu.V("parentReference"), goqu.I("ref.parentreference"),
-		goqu.V("rootReference"), goqu.I("ref.rootreference"),
-		goqu.V("key_id"), goqu.I("rk.id"),
-		goqu.V("key_type"), goqu.I("rk.type"),
-		goqu.V("key_value"), goqu.I("rk.value"),
-	)
-
-	semanticIdReferredSubquery := dialect.From(goqu.T("reference").As("ref")).
-		Select(goqu.Func("jsonb_agg", goqu.L("?", semanticIdReferredObj))).
-		LeftJoin(
-			goqu.T("reference_key").As("rk"),
-			goqu.On(goqu.I("rk.reference_id").Eq(goqu.I("ref.id"))),
-		).
-		Where(
-			goqu.I("ref.rootreference").Eq(goqu.I("s.semantic_id")),
-			goqu.I("ref.id").Neq(goqu.I("s.semantic_id")),
-		)
+	semanticIdSubquery, semanticIdReferredSubquery := queries.GetReferenceQueries(dialect, goqu.I("s.semantic_id"))
 
 	// Build supplemental semantic ids subquery
 	supplementalSemanticIdObj := goqu.Func("jsonb_build_object",
@@ -214,11 +179,25 @@ func GetQueryWithGoqu(submodelId string) (string, error) {
 
 	// Add optional WHERE clause for submodel ID filtering
 	if submodelId != "" {
-		query = query.Where(goqu.I("s.id").Eq(submodelId))
+		query = addSubmodelIdFilterToQuery(query, submodelId)
 	}
 
-	// add a field that counts number of submodels to presize slices in calling function
-	query = query.SelectAppend(goqu.L("COUNT(s.id) OVER() AS total_submodels"))
+	// Add optional AAS QueryLanguage filtering
+	if aasQuery != nil {
+		query = addJoinsToQueryForAASQL(query)
+
+		var err error
+		query, err = applyAASQuery(aasQuery, query)
+		if err != nil {
+			return "", fmt.Errorf("error applying AAS QueryLanguage filtering: %w", err)
+		}
+	}
+
+	query = addSubmodelCountToQuery(query)
+	query = addGroupBySubmodelId(query)
+
+	// Add pagination if limit or cursor is specified
+	query = addPaginationToQuery(query, limit, cursor)
 
 	sql, _, err := query.ToSQL()
 	if err != nil {
@@ -226,4 +205,75 @@ func GetQueryWithGoqu(submodelId string) (string, error) {
 	}
 
 	return sql, nil
+}
+
+func addGroupBySubmodelId(query *goqu.SelectDataset) *goqu.SelectDataset {
+	query = query.GroupBy(goqu.I("s.id"))
+	return query
+}
+
+func addSubmodelCountToQuery(query *goqu.SelectDataset) *goqu.SelectDataset {
+	query = query.SelectAppend(goqu.L("COUNT(s.id) OVER() AS total_submodels"))
+	return query
+}
+
+func addSubmodelIdFilterToQuery(query *goqu.SelectDataset, submodelId string) *goqu.SelectDataset {
+	query = query.Where(goqu.I("s.id").Eq(submodelId))
+	return query
+}
+
+func addJoinsToQueryForAASQL(query *goqu.SelectDataset) *goqu.SelectDataset {
+	query = query.Join(goqu.T("reference").As("semantic_id_reference"), goqu.On(goqu.I("s.semantic_id").Eq(goqu.I("semantic_id_reference.id"))))
+	query = query.Join(goqu.T("reference_key").As("semantic_id_reference_key"), goqu.On(goqu.I("semantic_id_reference.id").Eq(goqu.I("semantic_id_reference_key.reference_id"))))
+	return query
+}
+
+func applyAASQuery(aasQuery *grammar.QueryWrapper, query *goqu.SelectDataset) (*goqu.SelectDataset, error) {
+	if aasQuery == nil || aasQuery.Query.Condition == nil {
+		return query, nil
+	}
+
+	// Evaluate the logical expression to a SQL expression
+	expr, err := aasQuery.Query.Condition.EvaluateToExpression()
+	if err != nil {
+		return nil, fmt.Errorf("error evaluating query condition: %w", err)
+	}
+
+	// Apply the expression as a WHERE clause
+	query = query.Where(expr)
+	return query, nil
+}
+
+// addPaginationToQuery adds cursor-based pagination to the query.
+//
+// Parameters:
+//   - query: The goqu query to add pagination to
+//   - limit: Maximum number of results to return (0 means no limit)
+//   - cursor: The submodel ID to start pagination from (empty string means start from beginning)
+//
+// Returns:
+//   - *goqu.SelectDataset: The query with pagination applied
+//
+// The function implements cursor-based pagination where:
+//   - cursor is the submodel ID to start from (exclusive - starts after the cursor)
+//   - limit controls the maximum number of results returned
+//   - Results are ALWAYS ordered by submodel ID for consistent pagination
+//   - Uses "peek ahead" pattern (limit + 1) to determine if there are more pages
+func addPaginationToQuery(query *goqu.SelectDataset, limit int64, cursor string) *goqu.SelectDataset {
+	// Add ordering by submodel ID for consistent pagination (ALWAYS when this function is called)
+	query = query.Order(goqu.I("s.id").Asc())
+
+	// Add cursor filtering if provided (start after the cursor)
+	if cursor != "" {
+		query = query.Where(goqu.I("s.id").Gt(cursor))
+	}
+
+	// Add limit if provided (use peek ahead pattern)
+	if limit > 0 {
+		// Add 1 to limit for peek ahead to determine if there are more results
+		peekLimit := limit + 1
+		query = query.Limit(uint(peekLimit))
+	}
+
+	return query
 }

@@ -437,6 +437,9 @@ func ParseLangStringTextType(descriptions json.RawMessage) ([]gen.LangStringText
 	var texts []gen.LangStringTextType
 	// remove id field from json
 	var temp []map[string]interface{}
+	if len(descriptions) == 0 {
+		return texts, nil
+	}
 	if err := json.Unmarshal(descriptions, &temp); err != nil {
 		fmt.Printf("Error unmarshalling descriptions: %v\n", err)
 		return nil, err
@@ -464,6 +467,9 @@ func ParseLangStringPreferredNameTypeIec61360(descriptions json.RawMessage) ([]g
 	var texts []gen.LangStringPreferredNameTypeIec61360
 	// remove id field from json
 	var temp []map[string]interface{}
+	if len(descriptions) == 0 {
+		return texts, nil
+	}
 	if err := json.Unmarshal(descriptions, &temp); err != nil {
 		fmt.Printf("Error unmarshalling descriptions: %v\n", err)
 		return nil, err
@@ -491,6 +497,9 @@ func ParseLangStringShortNameTypeIec61360(descriptions json.RawMessage) ([]gen.L
 	var texts []gen.LangStringShortNameTypeIec61360
 	// remove id field from json
 	var temp []map[string]interface{}
+	if len(descriptions) == 0 {
+		return texts, nil
+	}
 	if err := json.Unmarshal(descriptions, &temp); err != nil {
 		fmt.Printf("Error unmarshalling descriptions: %v\n", err)
 		return nil, err
@@ -518,6 +527,9 @@ func ParseLangStringDefinitionTypeIec61360(descriptions json.RawMessage) ([]gen.
 	var texts []gen.LangStringDefinitionTypeIec61360
 	// remove id field from json
 	var temp []map[string]interface{}
+	if len(descriptions) == 0 {
+		return texts, nil
+	}
 	if err := json.Unmarshal(descriptions, &temp); err != nil {
 		fmt.Printf("Error unmarshalling descriptions: %v\n", err)
 		return nil, err

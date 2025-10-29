@@ -635,3 +635,5 @@ CREATE INDEX IF NOT EXISTS ix_dsiec_id ON data_specification_iec61360(id);
 
 CREATE INDEX IF NOT EXISTS ix_ref_root_id ON reference(rootreference, id);
 CREATE INDEX IF NOT EXISTS ix_ref_type ON reference(type);
+
+CREATE INDEX IF NOT EXISTS ix_refkey_refid ON reference_key(value);
