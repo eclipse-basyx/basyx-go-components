@@ -321,6 +321,64 @@ func (p *PostgreSQLAASRegistryDatabase) GetAssetAdministrationShellDescriptorByI
 	}, nil
 }
 
+// DeleteAssetAdministrationShellDescriptorById deletes the main descriptor row for a given AAS id.
+// ON DELETE CASCADE in the schema will remove dependent rows.
+func (p *PostgreSQLAASRegistryDatabase) DeleteAssetAdministrationShellDescriptorById(ctx context.Context, aasIdentifier string) error {
+	tx, err := p.db.BeginTx(ctx, nil)
+	if err != nil {
+		return common.NewInternalServerError("Failed to start postgres transaction. See console for information.")
+	}
+	defer func() {
+		if p := recover(); p != nil {
+			_ = tx.Rollback()
+			panic(p)
+		} else if err != nil {
+			_ = tx.Rollback()
+		}
+	}()
+
+	d := goqu.Dialect(dialect)
+	aas := goqu.T(tblAASDescriptor).As("aas")
+
+	// Lookup the root descriptor id for this AAS
+	sqlStr, args, buildErr := d.
+		From(aas).
+		Select(aas.Col(colDescriptorID)).
+		Where(aas.Col(colAASID).Eq(aasIdentifier)).
+		Limit(1).
+		ToSQL()
+	if buildErr != nil {
+		return buildErr
+	}
+
+	var descID int64
+	if scanErr := tx.QueryRowContext(ctx, sqlStr, args...).Scan(&descID); scanErr != nil {
+		if scanErr == sql.ErrNoRows {
+			return common.NewErrNotFound("AAS Descriptor not found")
+		}
+		err = scanErr
+		return err
+	}
+
+	// Delete the main descriptor; cascades handle related rows
+	delStr, delArgs, buildDelErr := d.
+		Delete(tblDescriptor).
+		Where(goqu.C(colID).Eq(descID)).
+		ToSQL()
+	if buildDelErr != nil {
+		return buildDelErr
+	}
+	if _, execErr := tx.Exec(delStr, delArgs...); execErr != nil {
+		err = execErr
+		return err
+	}
+
+	if commitErr := tx.Commit(); commitErr != nil {
+		return commitErr
+	}
+	return nil
+}
+
 func GetLangStringTextTypesByIDs(
 	db *sql.DB,
 	textTypeIDs []int64,

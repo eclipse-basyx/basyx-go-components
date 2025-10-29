@@ -206,25 +206,31 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) PutAssetAdministrationSh
 
 // DeleteAssetAdministrationShellDescriptorById - Deletes an Asset Administration Shell Descriptor, i.e. de-registers an AAS
 func (s *AssetAdministrationShellRegistryAPIAPIService) DeleteAssetAdministrationShellDescriptorById(ctx context.Context, aasIdentifier string) (model.ImplResponse, error) {
-	// TODO - update DeleteAssetAdministrationShellDescriptorById with the required logic for this service method.
-	// Add api_asset_administration_shell_registry_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
+	decoded, decodeErr := common.DecodeString(aasIdentifier)
+	if decodeErr != nil {
+		return common.NewErrorResponse(
+			decodeErr, http.StatusBadRequest, componentName, "DeleteAssetAdministrationShellDescriptorById", "BadRequest-Decode",
+		), nil
+	}
 
-	// TODO: Uncomment the next line to return response Response(204, {}) or use other options such as http.Ok ...
-	// return Response(204, nil),nil
+	if err := s.aasRegistryBackend.DeleteAssetAdministrationShellDescriptorById(ctx, decoded); err != nil {
+		switch {
+		case common.IsErrNotFound(err):
+			return common.NewErrorResponse(
+				err, http.StatusNotFound, componentName, "DeleteAssetAdministrationShellDescriptorById", "NotFound",
+			), nil
+		case common.IsErrBadRequest(err):
+			return common.NewErrorResponse(
+				err, http.StatusBadRequest, componentName, "DeleteAssetAdministrationShellDescriptorById", "BadRequest",
+			), nil
+		default:
+			return common.NewErrorResponse(
+				err, http.StatusInternalServerError, componentName, "DeleteAssetAdministrationShellDescriptorById", "Unhandled",
+			), err
+		}
+	}
 
-	// TODO: Uncomment the next line to return response Response(400, Result{}) or use other options such as http.Ok ...
-	// return Response(400, Result{}), nil
-
-	// TODO: Uncomment the next line to return response Response(404, Result{}) or use other options such as http.Ok ...
-	// return Response(404, Result{}), nil
-
-	// TODO: Uncomment the next line to return response Response(500, Result{}) or use other options such as http.Ok ...
-	// return Response(500, Result{}), nil
-
-	// TODO: Uncomment the next line to return response Response(0, Result{}) or use other options such as http.Ok ...
-	// return Response(0, Result{}), nil
-
-	return model.Response(http.StatusNotImplemented, nil), errors.New("DeleteAssetAdministrationShellDescriptorById method not implemented")
+	return model.Response(http.StatusNoContent, nil), nil
 }
 
 // GetAllSubmodelDescriptorsThroughSuperpath - Returns all Submodel Descriptors

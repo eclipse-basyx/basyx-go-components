@@ -77,7 +77,7 @@ payload_template = {
 }
 
 # ---- POST loop ----
-for i in range(1000):  # Change number if you want more inserts
+for i in range(8000):  # Change number if you want more inserts
     payload = copy.deepcopy(payload_template)
 
     # Unique Descriptor ID
