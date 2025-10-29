@@ -71,7 +71,7 @@ func TestNewSubmodelHandler(smDatabase *persistence_postgresql.PostgreSQLSubmode
 		// jsonSubmodel, _ := json.Marshal(sm)
 		// fmt.Println(string(jsonSubmodel))
 	}
-	osData, err := os.ReadFile("aas_query_logical_semantical.json")
+	osData, err := os.ReadFile("aas_query.json")
 	if err != nil {
 		log.Fatalf("Failed to read file: %v", err)
 	}

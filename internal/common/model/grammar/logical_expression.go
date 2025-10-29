@@ -200,91 +200,42 @@ func ParseAASQLFieldToSQLColumn(field string) string {
 	return field
 }
 
-// HandleComparison builds a SQL comparison expression from two Value operands
+// HandleComparison builds a SQL comparison expression from two Value operands.
+// It handles all combinations: field-to-field, field-to-value, value-to-field, and value-to-value.
 func HandleComparison(leftOperand, rightOperand *Value, operation string) (exp.Expression, error) {
-	leftIsField := leftOperand.IsField()
-	rightIsField := rightOperand.IsField()
 
-	if leftIsField && rightIsField {
-		return HandleFieldToFieldComparisonValue(leftOperand, rightOperand, operation)
-	} else if leftIsField && !rightIsField {
-		return HandleFieldToValueComparisonValue(leftOperand, rightOperand, operation)
-	} else if !leftIsField && rightIsField {
-		return HandleValueToFieldComparisonValue(leftOperand, rightOperand, operation)
-	} else {
-		return HandleValueToValueComparisonValue(leftOperand, rightOperand, operation)
+	// Convert both operands
+	leftSQL, err := toSQLComponent(leftOperand, "left")
+	if err != nil {
+		return nil, err
 	}
+
+	rightSQL, err := toSQLComponent(rightOperand, "right")
+	if err != nil {
+		return nil, err
+	}
+
+	// Validate value-to-value comparisons have matching types
+	if !leftOperand.IsField() && !rightOperand.IsField() {
+		if leftOperand.GetValueType() != rightOperand.GetValueType() {
+			return nil, fmt.Errorf("cannot compare different value types: %s and %s",
+				leftOperand.GetValueType(), rightOperand.GetValueType())
+		}
+	}
+
+	return buildComparisonExpression(leftSQL, rightSQL, operation)
 }
 
-// HandleFieldToValueComparisonValue handles field-to-value comparisons using Value type
-func HandleFieldToValueComparisonValue(leftOperand, rightOperand *Value, operation string) (exp.Expression, error) {
-	if leftOperand.Field == nil {
-		return nil, fmt.Errorf("left operand is not a field")
-	}
-
-	fieldName := string(*leftOperand.Field)
-	if len(fieldName) > 4 && fieldName[:4] == "$sm#" {
+func toSQLComponent(operand *Value, position string) (interface{}, error) {
+	if operand.IsField() {
+		if operand.Field == nil {
+			return nil, fmt.Errorf("%s operand is not a valid field", position)
+		}
+		fieldName := string(*operand.Field)
 		fieldName = ParseAASQLFieldToSQLColumn(fieldName)
+		return goqu.I(fieldName), nil
 	}
-
-	leftCol := goqu.I(fieldName)
-	rightVal := goqu.V(rightOperand.GetValue())
-
-	return buildComparisonExpression(leftCol, rightVal, operation)
-}
-
-// HandleValueToFieldComparisonValue handles value-to-field comparisons using Value type
-func HandleValueToFieldComparisonValue(leftOperand, rightOperand *Value, operation string) (exp.Expression, error) {
-	if rightOperand.Field == nil {
-		return nil, fmt.Errorf("right operand is not a field")
-	}
-
-	fieldName := string(*rightOperand.Field)
-	if len(fieldName) > 4 && fieldName[:4] == "$sm#" {
-		fieldName = ParseAASQLFieldToSQLColumn(fieldName)
-	}
-
-	rightCol := goqu.I(fieldName)
-	leftVal := goqu.V(leftOperand.GetValue())
-
-	return buildComparisonExpression(leftVal, rightCol, operation)
-}
-
-// HandleFieldToFieldComparisonValue handles field-to-field comparisons using Value type
-func HandleFieldToFieldComparisonValue(leftOperand, rightOperand *Value, operation string) (exp.Expression, error) {
-	if leftOperand.Field == nil {
-		return nil, fmt.Errorf("left operand is not a field")
-	}
-	if rightOperand.Field == nil {
-		return nil, fmt.Errorf("right operand is not a field")
-	}
-
-	leftFieldName := string(*leftOperand.Field)
-	if len(leftFieldName) > 4 && leftFieldName[:4] == "$sm#" {
-		leftFieldName = ParseAASQLFieldToSQLColumn(leftFieldName)
-	}
-
-	rightFieldName := string(*rightOperand.Field)
-	if len(rightFieldName) > 4 && rightFieldName[:4] == "$sm#" {
-		rightFieldName = ParseAASQLFieldToSQLColumn(rightFieldName)
-	}
-
-	leftCol := goqu.I(leftFieldName)
-	rightCol := goqu.I(rightFieldName)
-
-	return buildComparisonExpression(leftCol, rightCol, operation)
-}
-
-// HandleValueToValueComparisonValue handles value-to-value comparisons using Value type
-func HandleValueToValueComparisonValue(leftOperand, rightOperand *Value, operation string) (exp.Expression, error) {
-	if leftOperand.GetValueType() != rightOperand.GetValueType() {
-		return nil, fmt.Errorf("cannot compare different value types: %s and %s", leftOperand.GetValueType(), rightOperand.GetValueType())
-	}
-
-	leftVal := goqu.V(leftOperand.GetValue())
-	rightVal := goqu.V(rightOperand.GetValue())
-
-	return buildComparisonExpression(leftVal, rightVal, operation)
+	return goqu.V(operand.GetValue()), nil
 }
 
 // buildComparisonExpression is a helper function to build comparison expressions
