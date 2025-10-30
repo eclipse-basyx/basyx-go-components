@@ -67,6 +67,9 @@ func (p *PostgreSQLSubmodelDatabase) GetDB() *sql.DB {
 
 // GetAllSubmodels and a next cursor ("" if no more pages).
 func (p *PostgreSQLSubmodelDatabase) GetAllSubmodels(limit int32, cursor string, idShort string) ([]gen.Submodel, string, error) {
+	if limit == 0 {
+		limit = 100
+	}
 	sm, cursor, err := persistence_utils.GetAllSubmodels(p.db, int64(limit), cursor, nil)
 	if err != nil {
 		return nil, "", err

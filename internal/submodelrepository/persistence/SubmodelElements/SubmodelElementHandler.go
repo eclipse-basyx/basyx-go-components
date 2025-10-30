@@ -34,9 +34,9 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
-	"github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/querybuilder"
 	persistence_utils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
 )
 
@@ -175,7 +175,15 @@ func GetSubmodelElementsWithPath(db *sql.DB, tx *sql.Tx, submodelId string, idSh
 		limit = 100
 	}
 	//Check if Submodel exists
-	qExist, argsExist := querybuilder.NewSelect("id").From("submodel").Where("id = $1", submodelId).Build()
+	ds := goqu.Dialect("postgres").
+		From("submodel").
+		Select("id").
+		Where(goqu.Ex{"id": submodelId})
+
+	qExist, argsExist, err := ds.ToSQL()
+	if err != nil {
+		return nil, "", err
+	}
 	sRows, err := tx.Query(qExist, argsExist...)
 	if err != nil {
 		return nil, "", err
@@ -188,12 +196,24 @@ func GetSubmodelElementsWithPath(db *sql.DB, tx *sql.Tx, submodelId string, idSh
 	// Get OFFSET based on Cursor
 	offset := 0
 	if cursor != "" {
-		qCursor, argsCursor := querybuilder.NewSelect(
-			"ROW_NUMBER() OVER (ORDER BY id_short) AS position",
-			"id_short",
-		).From("submodel_element").
-			Where("submodel_id = $1 AND parent_sme_id IS NULL", submodelId).
-			Build()
+		ds := goqu.Dialect("postgres").
+			From("submodel_element").
+			Select(
+				goqu.L("ROW_NUMBER() OVER (ORDER BY id_short) AS position"),
+				goqu.I("id_short"),
+			).
+			Where(
+				goqu.Ex{
+					"submodel_id":   submodelId,
+					"parent_sme_id": nil,
+				},
+			)
+
+		qCursor, argsCursor, err := ds.ToSQL()
+		if err != nil {
+			return nil, "", err
+		}
+
 		cRows, err := tx.Query(qCursor, argsCursor...)
 		if err != nil {
 			return nil, "", err
