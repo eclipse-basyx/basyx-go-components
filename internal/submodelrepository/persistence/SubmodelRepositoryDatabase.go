@@ -67,30 +67,19 @@ func (p *PostgreSQLSubmodelDatabase) GetDB() *sql.DB {
 
 // GetAllSubmodels and a next cursor ("" if no more pages).
 func (p *PostgreSQLSubmodelDatabase) GetAllSubmodels(limit int32, cursor string, idShort string) ([]gen.Submodel, string, error) {
-	tx, err := p.db.Begin()
-	if limit <= 0 {
-		limit = 100
-	}
-
-	if err != nil {
-		return nil, "", beginTransactionErrorSubmodelRepo
-	}
-	defer func() {
-		if err != nil {
-			tx.Rollback()
-		}
-	}()
-
-	sm, err := submodelelements.GetSubmodelWithSubmodelElementsOrAll(p.db, tx)
+	sm, cursor, err := persistence_utils.GetAllSubmodels(p.db, int64(limit), cursor, nil)
 	if err != nil {
 		return nil, "", err
 	}
+	result := []gen.Submodel{}
 
-	if err := tx.Commit(); err != nil {
-		return nil, "", failedPostgresTransactionSubmodelRepo
+	for _, s := range sm {
+		if s != nil {
+			result = append(result, *s)
+		}
 	}
 
-	return sm, "", nil
+	return result, cursor, nil
 }
 
 // get submodel metadata
@@ -186,40 +175,11 @@ func (p *PostgreSQLSubmodelDatabase) GetAllSubmodelsMetadata(
 
 // GetSubmodel returns one Submodel by id
 func (p *PostgreSQLSubmodelDatabase) GetSubmodel(id string) (gen.Submodel, error) {
-	// Check cache first
-	if p.cacheEnabled {
-		if sm, found := submodelCache[id]; found {
-			return sm, nil
-		}
-	}
-
-	// Not in cache, fetch from DB
-	tx, err := p.db.Begin()
-
-	if err != nil {
-		fmt.Println(err)
-		return gen.Submodel{}, beginTransactionErrorSubmodelRepo
-	}
-	defer func() {
-		if err != nil {
-			tx.Rollback()
-		}
-	}()
-
-	sm, err := submodelelements.GetSubmodelWithSubmodelElements(p.db, tx, id)
+	sm, err := persistence_utils.GetSubmodelById(p.db, id)
 	if err != nil {
 		return gen.Submodel{}, err
 	}
 
-	if err := tx.Commit(); err != nil {
-		fmt.Println(err)
-		return gen.Submodel{}, failedPostgresTransactionSubmodelRepo
-	}
-
-	// Store in cache
-	if p.cacheEnabled {
-		submodelCache[id] = *sm
-	}
 	return *sm, nil
 }
 
