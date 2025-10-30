@@ -24,7 +24,7 @@
 ******************************************************************************/
 
 // Author: Jannik Fried ( Fraunhofer IESE ), Aaron Zielstorff ( Fraunhofer IESE )
-package persistence_utils
+package submodel_persistence
 
 import (
 	"database/sql"
@@ -38,7 +38,7 @@ import (
 	builders "github.com/eclipse-basyx/basyx-go-components/internal/common/builder"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
-	submodel_query "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils/SubmodelQuery"
+	submodel_query "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/Submodel/SubmodelQuery"
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 )
 

@@ -36,6 +36,7 @@ import (
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	submodel_persistence "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/Submodel"
 	submodelelements "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/SubmodelElements"
 	persistence_utils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
 )
@@ -70,7 +71,7 @@ func (p *PostgreSQLSubmodelDatabase) GetAllSubmodels(limit int32, cursor string,
 	if limit == 0 {
 		limit = 100
 	}
-	sm, cursor, err := persistence_utils.GetAllSubmodels(p.db, int64(limit), cursor, nil)
+	sm, cursor, err := submodel_persistence.GetAllSubmodels(p.db, int64(limit), cursor, nil)
 	if err != nil {
 		return nil, "", err
 	}
@@ -178,7 +179,7 @@ func (p *PostgreSQLSubmodelDatabase) GetAllSubmodelsMetadata(
 
 // GetSubmodel returns one Submodel by id
 func (p *PostgreSQLSubmodelDatabase) GetSubmodel(id string) (gen.Submodel, error) {
-	sm, err := persistence_utils.GetSubmodelById(p.db, id)
+	sm, err := submodel_persistence.GetSubmodelById(p.db, id)
 	if err != nil {
 		return gen.Submodel{}, err
 	}
