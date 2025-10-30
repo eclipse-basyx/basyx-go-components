@@ -89,56 +89,6 @@ func (p PostgreSQLRelationshipElementHandler) CreateNested(tx *sql.Tx, submodelI
 	return id, nil
 }
 
-func (p PostgreSQLRelationshipElementHandler) Read(tx *sql.Tx, submodelId string, idShortOrPath string) (gen.SubmodelElement, error) {
-	var sme gen.SubmodelElement = &gen.RelationshipElement{}
-	var firstRef, secondRef sql.NullInt64
-	id, err := p.decorated.Read(tx, submodelId, idShortOrPath, &sme)
-	if err != nil {
-		return nil, err
-	}
-	err = tx.QueryRow(`SELECT first_ref, second_ref FROM relationship_element WHERE id = $1`, id).Scan(&firstRef, &secondRef)
-	if err != nil {
-		return sme, nil
-	}
-	relElem := sme.(*gen.RelationshipElement)
-	if firstRef.Valid {
-		ref, err := readReference(tx, firstRef.Int64)
-		if err != nil {
-			return nil, err
-		}
-		relElem.First = ref
-	}
-	if secondRef.Valid {
-		ref, err := readReference(tx, secondRef.Int64)
-		if err != nil {
-			return nil, err
-		}
-		relElem.Second = ref
-	}
-	return sme, nil
-}
-
-func readReference(tx *sql.Tx, refId int64) (*gen.Reference, error) {
-	var refType string
-	err := tx.QueryRow(`SELECT type FROM reference WHERE id = $1`, refId).Scan(&refType)
-	if err != nil {
-		return nil, err
-	}
-	rows, err := tx.Query(`SELECT type, value FROM reference_key WHERE reference_id = $1 ORDER BY position`, refId)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var keys []gen.Key
-	for rows.Next() {
-		var kType, kValue string
-		if err := rows.Scan(&kType, &kValue); err != nil {
-			return nil, err
-		}
-		keys = append(keys, gen.Key{Type: gen.KeyTypes(kType), Value: kValue})
-	}
-	return &gen.Reference{Type: gen.ReferenceTypes(refType), Keys: keys}, nil
-}
 func (p PostgreSQLRelationshipElementHandler) Update(idShortOrPath string, submodelElement gen.SubmodelElement) error {
 	if dErr := p.decorated.Update(idShortOrPath, submodelElement); dErr != nil {
 		return dErr

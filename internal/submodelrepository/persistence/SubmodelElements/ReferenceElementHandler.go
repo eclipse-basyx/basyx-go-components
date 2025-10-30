@@ -89,42 +89,6 @@ func (p PostgreSQLReferenceElementHandler) CreateNested(tx *sql.Tx, submodelId s
 	return id, nil
 }
 
-func (p PostgreSQLReferenceElementHandler) Read(tx *sql.Tx, submodelId string, idShortOrPath string) (gen.SubmodelElement, error) {
-	var sme gen.SubmodelElement = &gen.ReferenceElement{}
-	var valueRef sql.NullInt64
-	id, err := p.decorated.Read(tx, submodelId, idShortOrPath, &sme)
-	if err != nil {
-		return nil, err
-	}
-	err = tx.QueryRow(`SELECT value_ref FROM reference_element WHERE id = $1`, id).Scan(&valueRef)
-	if err != nil {
-		return sme, nil
-	}
-	if valueRef.Valid {
-		// Read the reference
-		var refType string
-		err = tx.QueryRow(`SELECT type FROM reference WHERE id = $1`, valueRef.Int64).Scan(&refType)
-		if err != nil {
-			return nil, err
-		}
-		rows, err := tx.Query(`SELECT type, value FROM reference_key WHERE reference_id = $1 ORDER BY position`, valueRef.Int64)
-		if err != nil {
-			return nil, err
-		}
-		defer rows.Close()
-		var keys []gen.Key
-		for rows.Next() {
-			var kType, kValue string
-			if err := rows.Scan(&kType, &kValue); err != nil {
-				return nil, err
-			}
-			keys = append(keys, gen.Key{Type: gen.KeyTypes(kType), Value: kValue})
-		}
-		refElem := sme.(*gen.ReferenceElement)
-		refElem.Value = &gen.Reference{Type: gen.ReferenceTypes(refType), Keys: keys}
-	}
-	return sme, nil
-}
 func (p PostgreSQLReferenceElementHandler) Update(idShortOrPath string, submodelElement gen.SubmodelElement) error {
 	if dErr := p.decorated.Update(idShortOrPath, submodelElement); dErr != nil {
 		return dErr

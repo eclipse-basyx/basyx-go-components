@@ -29,7 +29,6 @@ package submodelelements
 import (
 	"database/sql"
 	"errors"
-	"time"
 
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	_ "github.com/lib/pq" // PostgreSQL Treiber
@@ -90,67 +89,6 @@ func (p PostgreSQLBasicEventElementHandler) CreateNested(tx *sql.Tx, submodelId 
 	return id, nil
 }
 
-func (p PostgreSQLBasicEventElementHandler) Read(tx *sql.Tx, submodelId string, idShortOrPath string) (gen.SubmodelElement, error) {
-	// First, get the base submodel element
-	var baseSME gen.SubmodelElement
-	id, err := p.decorated.Read(tx, submodelId, idShortOrPath, &baseSME)
-	if err != nil {
-		return nil, err
-	}
-
-	// Check if it's a basic event element
-	basicEvent, ok := baseSME.(*gen.BasicEventElement)
-	if !ok {
-		return nil, errors.New("submodelElement is not of type BasicEventElement")
-	}
-
-	// Query basic_event_element
-	var observedRef, messageBrokerRef sql.NullInt64
-	var direction, state string
-	var messageTopic sql.NullString
-	var lastUpdate sql.NullTime
-	var minInterval, maxInterval sql.NullString
-
-	err = tx.QueryRow(`SELECT observed_ref, direction, state, message_topic, message_broker_ref, last_update, min_interval, max_interval FROM basic_event_element WHERE id = $1`, id).Scan(
-		&observedRef, &direction, &state, &messageTopic, &messageBrokerRef, &lastUpdate, &minInterval, &maxInterval)
-	if err != nil {
-		return nil, err
-	}
-
-	basicEvent.Direction = gen.Direction(direction)
-	basicEvent.State = gen.StateOfEvent(state)
-	if messageTopic.Valid {
-		basicEvent.MessageTopic = messageTopic.String
-	}
-	if lastUpdate.Valid {
-		basicEvent.LastUpdate = lastUpdate.Time.Format(time.RFC3339)
-	}
-	if minInterval.Valid {
-		// Assuming minInterval is a string representation of interval
-		basicEvent.MinInterval = minInterval.String
-	}
-	if maxInterval.Valid {
-		basicEvent.MaxInterval = maxInterval.String
-	}
-
-	if observedRef.Valid {
-		ref, err := readReference(tx, observedRef.Int64)
-		if err != nil {
-			return nil, err
-		}
-		basicEvent.Observed = ref
-	}
-
-	if messageBrokerRef.Valid {
-		ref, err := readReference(tx, messageBrokerRef.Int64)
-		if err != nil {
-			return nil, err
-		}
-		basicEvent.MessageBroker = ref
-	}
-
-	return basicEvent, nil
-}
 func (p PostgreSQLBasicEventElementHandler) Update(idShortOrPath string, submodelElement gen.SubmodelElement) error {
 	if dErr := p.decorated.Update(idShortOrPath, submodelElement); dErr != nil {
 		return dErr

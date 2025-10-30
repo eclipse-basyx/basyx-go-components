@@ -90,26 +90,6 @@ func (p PostgreSQLFileHandler) CreateNested(tx *sql.Tx, submodelId string, paren
 	return id, nil
 }
 
-func (p PostgreSQLFileHandler) Read(tx *sql.Tx, submodelId string, idShortOrPath string) (gen.SubmodelElement, error) {
-	var sme gen.SubmodelElement = &gen.File{}
-	var contentType, value string
-	id, err := p.decorated.Read(tx, submodelId, idShortOrPath, &sme)
-	if err != nil {
-		return nil, err
-	}
-	err = tx.QueryRow(`
-		SELECT content_type, value
-		FROM file_element
-		WHERE id = $1
-	`, id).Scan(&contentType, &value)
-	if err != nil {
-		return sme, nil // Return base if no specific data
-	}
-	file := sme.(*gen.File)
-	file.ContentType = contentType
-	file.Value = value
-	return sme, nil
-}
 func (p PostgreSQLFileHandler) Update(idShortOrPath string, submodelElement gen.SubmodelElement) error {
 	if dErr := p.decorated.Update(idShortOrPath, submodelElement); dErr != nil {
 		return dErr

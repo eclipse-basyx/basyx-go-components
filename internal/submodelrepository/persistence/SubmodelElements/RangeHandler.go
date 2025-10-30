@@ -89,32 +89,6 @@ func (p PostgreSQLRangeHandler) CreateNested(tx *sql.Tx, submodelId string, pare
 	return id, nil
 }
 
-func (p PostgreSQLRangeHandler) Read(tx *sql.Tx, submodelId string, idShortOrPath string) (gen.SubmodelElement, error) {
-	var sme gen.SubmodelElement = &gen.Range{}
-	var valueType, min, max string
-	id, err := p.decorated.Read(tx, submodelId, idShortOrPath, &sme)
-	if err != nil {
-		return nil, err
-	}
-	err = tx.QueryRow(`
-		SELECT value_type, COALESCE(min_text, min_num::text, min_time::text, min_datetime::text) as min_val,
-		COALESCE(max_text, max_num::text, max_time::text, max_datetime::text) as max_val
-		FROM range_element
-		WHERE id = $1
-	`, id).Scan(&valueType, &min, &max)
-	if err != nil {
-		return sme, nil // Return base if no specific data
-	}
-	rng := sme.(*gen.Range)
-	actualValueType, err := gen.NewDataTypeDefXsdFromValue(valueType)
-	if err != nil {
-		return nil, err
-	}
-	rng.ValueType = actualValueType
-	rng.Min = min
-	rng.Max = max
-	return sme, nil
-}
 func (p PostgreSQLRangeHandler) Update(idShortOrPath string, submodelElement gen.SubmodelElement) error {
 	if dErr := p.decorated.Update(idShortOrPath, submodelElement); dErr != nil {
 		return dErr

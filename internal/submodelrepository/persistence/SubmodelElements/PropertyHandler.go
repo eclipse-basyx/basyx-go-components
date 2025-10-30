@@ -61,7 +61,7 @@ func (p PostgreSQLPropertyHandler) Create(tx *sql.Tx, submodelId string, submode
 
 	// Property-specific database insertion
 	// Determine which column to use based on valueType
-	err = insertProperty(property, err, tx, id)
+	err = insertProperty(property, tx, id)
 	if err != nil {
 		return 0, err
 	}
@@ -82,7 +82,7 @@ func (p PostgreSQLPropertyHandler) CreateNested(tx *sql.Tx, submodelId string, p
 	}
 
 	// Property-specific database insertion for nested element
-	err = insertProperty(property, err, tx, id)
+	err = insertProperty(property, tx, id)
 	if err != nil {
 		return 0, err
 	}
@@ -90,32 +90,6 @@ func (p PostgreSQLPropertyHandler) CreateNested(tx *sql.Tx, submodelId string, p
 	return id, nil
 }
 
-func (p PostgreSQLPropertyHandler) Read(tx *sql.Tx, submodelId string, idShortOrPath string) (gen.SubmodelElement, error) {
-	var sme gen.SubmodelElement = &gen.Property{}
-	var valueType, value string
-	id, err := p.decorated.Read(tx, submodelId, idShortOrPath, &sme)
-	if err != nil {
-		return nil, err
-	}
-	err = tx.QueryRow(`
-		SELECT value_type, COALESCE(p.value_text, p.value_num::text, p.value_bool::text, p.value_time::text, p.value_datetime::text) AS value
-		FROM property_element p
-		WHERE id = $1
-	`, id).Scan(&valueType, &value)
-	if err != nil {
-		// If no property-specific data is found, return the base SubmodelElement without value details
-		// TODO: Discuss this approach with the team
-		return sme, nil
-	}
-	prop := sme.(*gen.Property)
-	actualValueType, err := gen.NewDataTypeDefXsdFromValue(valueType)
-	if err != nil {
-		return nil, err
-	}
-	prop.ValueType = actualValueType
-	prop.Value = value
-	return sme, nil
-}
 func (p PostgreSQLPropertyHandler) Update(idShortOrPath string, submodelElement gen.SubmodelElement) error {
 	if dErr := p.decorated.Update(idShortOrPath, submodelElement); dErr != nil {
 		return dErr
@@ -129,7 +103,7 @@ func (p PostgreSQLPropertyHandler) Delete(idShortOrPath string) error {
 	return nil
 }
 
-func insertProperty(property *gen.Property, err error, tx *sql.Tx, id int) error {
+func insertProperty(property *gen.Property, tx *sql.Tx, id int) error {
 	var valueText, valueNum, valueBool, valueTime, valueDatetime sql.NullString
 	var valueId sql.NullInt64
 
@@ -160,7 +134,7 @@ func insertProperty(property *gen.Property, err error, tx *sql.Tx, id int) error
 	}
 
 	// Insert Property-specific data
-	_, err = tx.Exec(`INSERT INTO property_element (id, value_type, value_text, value_num, value_bool, value_time, value_datetime, value_id)
+	_, err := tx.Exec(`INSERT INTO property_element (id, value_type, value_text, value_num, value_bool, value_time, value_datetime, value_id)
 					 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
 		id,
 		property.ValueType,

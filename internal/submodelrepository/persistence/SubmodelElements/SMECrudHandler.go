@@ -137,23 +137,6 @@ func (p *PostgreSQLSMECrudHandler) Create(tx *sql.Tx, submodelId string, submode
 	return id, nil
 }
 
-func (p *PostgreSQLSMECrudHandler) Read(tx *sql.Tx, submodelId string, idShortOrPath string, submodelElement *gen.SubmodelElement) (int, error) {
-	var id int
-	var idShort, modelType string
-	err := tx.QueryRow(`
-		SELECT id, id_short, model_type
-		FROM submodel_element
-		WHERE submodel_id = $1 AND idshort_path = $2
-	`, submodelId, idShortOrPath).Scan(&id, &idShort, &modelType)
-	if err != nil {
-		return 0, err
-	}
-	elem := (*submodelElement)
-	elem.SetIdShort(idShort)
-	elem.SetModelType(modelType)
-	return id, nil
-}
-
 func (p *PostgreSQLSMECrudHandler) Update(idShortOrPath string, submodelElement gen.SubmodelElement) error {
 	return nil
 }

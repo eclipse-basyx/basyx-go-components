@@ -89,23 +89,6 @@ func (p PostgreSQLCapabilityHandler) CreateNested(tx *sql.Tx, submodelId string,
 	return id, nil
 }
 
-func (p PostgreSQLCapabilityHandler) Read(tx *sql.Tx, submodelId string, idShortOrPath string) (gen.SubmodelElement, error) {
-	// First, get the base submodel element
-	var baseSME gen.SubmodelElement
-	_, err := p.decorated.Read(tx, submodelId, idShortOrPath, &baseSME)
-	if err != nil {
-		return nil, err
-	}
-
-	// Check if it's a capability
-	_, ok := baseSME.(*gen.Capability)
-	if !ok {
-		return nil, errors.New("submodelElement is not of type Capability")
-	}
-
-	// Capability has no additional data, just return the base
-	return baseSME, nil
-}
 func (p PostgreSQLCapabilityHandler) Update(idShortOrPath string, submodelElement gen.SubmodelElement) error {
 	if dErr := p.decorated.Update(idShortOrPath, submodelElement); dErr != nil {
 		return dErr

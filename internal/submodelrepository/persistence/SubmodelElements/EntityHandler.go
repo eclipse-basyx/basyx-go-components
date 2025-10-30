@@ -89,14 +89,6 @@ func (p PostgreSQLEntityHandler) CreateNested(tx *sql.Tx, submodelId string, par
 	return id, nil
 }
 
-func (p PostgreSQLEntityHandler) Read(tx *sql.Tx, submodelId string, idShortOrPath string) (gen.SubmodelElement, error) {
-	var sme gen.SubmodelElement
-	_, err := p.decorated.Read(tx, submodelId, idShortOrPath, &sme)
-	if err != nil {
-		return nil, err
-	}
-	return sme, nil
-}
 func (p PostgreSQLEntityHandler) Update(idShortOrPath string, submodelElement gen.SubmodelElement) error {
 	if dErr := p.decorated.Update(idShortOrPath, submodelElement); dErr != nil {
 		return dErr

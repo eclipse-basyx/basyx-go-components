@@ -35,7 +35,6 @@ import (
 type PostgreSQLSMECrudInterface interface {
 	Create(*sql.Tx, string, gen.SubmodelElement) (int, error)
 	CreateNested(*sql.Tx, string, int, string, gen.SubmodelElement, int) (int, error)
-	Read(*sql.Tx, string, string) (gen.SubmodelElement, error)
 	Update(string, gen.SubmodelElement) error
 	Delete(string) error
 }

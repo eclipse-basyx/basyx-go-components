@@ -91,27 +91,6 @@ func (p PostgreSQLBlobHandler) CreateNested(tx *sql.Tx, submodelId string, paren
 	return id, nil
 }
 
-func (p PostgreSQLBlobHandler) Read(tx *sql.Tx, submodelId string, idShortOrPath string) (gen.SubmodelElement, error) {
-	var sme gen.SubmodelElement = &gen.Blob{}
-	var contentType string
-	var value []byte
-	id, err := p.decorated.Read(tx, submodelId, idShortOrPath, &sme)
-	if err != nil {
-		return nil, err
-	}
-	err = tx.QueryRow(`
-		SELECT content_type, value
-		FROM blob_element
-		WHERE id = $1
-	`, id).Scan(&contentType, &value)
-	if err != nil {
-		return sme, nil // Return base if no specific data
-	}
-	blob := sme.(*gen.Blob)
-	blob.ContentType = contentType
-	blob.Value = string(value)
-	return sme, nil
-}
 func (p PostgreSQLBlobHandler) Update(idShortOrPath string, submodelElement gen.SubmodelElement) error {
 	if dErr := p.decorated.Update(idShortOrPath, submodelElement); dErr != nil {
 		return dErr

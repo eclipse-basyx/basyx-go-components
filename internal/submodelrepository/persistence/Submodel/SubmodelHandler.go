@@ -30,7 +30,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"os"
 	"time"
 
 	_ "github.com/doug-martin/goqu/v9/dialect/postgres"
@@ -357,14 +356,6 @@ func moreThanZeroReferences(referenceArray []*gen.Reference) bool {
 //   - error: An error if query building or execution fails
 func getSubmodelDataFromDbWithJSONQuery(db *sql.DB, submodelId string, limit int64, cursor string, query *grammar.QueryWrapper) (*sql.Rows, error) {
 	q, err := submodel_query.GetQueryWithGoqu(submodelId, limit, cursor, query)
-
-	// save query to file query.txt
-	err = os.WriteFile("query.txt", []byte(q), 0644)
-	if err != nil {
-		fmt.Printf("Error saving query to file: %v\n", err)
-		return nil, err
-	}
-
 	if err != nil {
 		fmt.Printf("Error building query: %v\n", err)
 		return nil, err
