@@ -34,6 +34,7 @@ import (
 	"time"
 
 	_ "github.com/doug-martin/goqu/v9/dialect/postgres"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	builders "github.com/eclipse-basyx/basyx-go-components/internal/common/builder"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
@@ -47,7 +48,7 @@ func GetSubmodelById(db *sql.DB, submodelIdFilter string) (*gen.Submodel, error)
 		return nil, err
 	}
 	if len(submodels) == 0 {
-		return nil, fmt.Errorf("submodel with ID %s not found", submodelIdFilter)
+		return nil, common.NewErrNotFound(submodelIdFilter)
 	}
 	return submodels[0], nil
 }
