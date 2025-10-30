@@ -139,6 +139,9 @@ CREATE TABLE IF NOT EXISTS reference (
   rootReference BIGINT REFERENCES reference(id)  -- The root of the nesting tree
 );
 
+CREATE INDEX IF NOT EXISTS ix_ref_parentref ON reference(parentReference);
+CREATE INDEX IF NOT EXISTS ix_ref_rootref ON reference(rootReference);
+
 CREATE INDEX IF NOT EXISTS ix_ref_id ON reference(id);
 
 CREATE TABLE IF NOT EXISTS reference_key (
@@ -165,9 +168,15 @@ CREATE TABLE IF NOT EXISTS lang_string_text_type (
   text     varchar(1023) NOT NULL
 );
 
+CREATE INDEX IF NOT EXISTS ix_lsttr_id ON lang_string_text_type_reference(id);
+CREATE INDEX IF NOT EXISTS ix_lstt_refid ON lang_string_text_type(lang_string_text_type_reference_id);
+
+
+
 CREATE TABLE IF NOT EXISTS lang_string_name_type_reference(
   id       BIGINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY
 );
+CREATE INDEX IF NOT EXISTS ix_lsntr_id ON lang_string_name_type_reference(id);
 
 CREATE TABLE IF NOT EXISTS lang_string_name_type (
   id     BIGSERIAL PRIMARY KEY,
@@ -175,12 +184,14 @@ CREATE TABLE IF NOT EXISTS lang_string_name_type (
   language TEXT NOT NULL,
   text     varchar(128) NOT NULL
 );
+CREATE INDEX IF NOT EXISTS ix_lsnt_refid ON lang_string_name_type(lang_string_name_type_reference_id);
 
 CREATE TABLE IF NOT EXISTS administrative_information (
   id                BIGSERIAL PRIMARY KEY,
   version           VARCHAR(4),
   revision          VARCHAR(4),
   creator           BIGSERIAL REFERENCES reference(id),
+  embedded_data_specification JSONB,
   templateId        VARCHAR(2048)
 );
 
@@ -214,6 +225,8 @@ CREATE TABLE IF NOT EXISTS value_list_value_reference_pair (
 );
 
 CREATE INDEX IF NOT EXISTS ix_vlvrp_id ON value_list_value_reference_pair(id);
+CREATE INDEX IF NOT EXISTS ix_vlvrp_value_id ON value_list_value_reference_pair(value_id);
+CREATE INDEX IF NOT EXISTS ix_vlvrp_valuelist_value_id ON value_list_value_reference_pair(value_list_id, value_id);
 
 CREATE TABLE IF NOT EXISTS level_type (
   id BIGSERIAL PRIMARY KEY,
@@ -241,11 +254,24 @@ CREATE TABLE IF NOT EXISTS data_specification_iec61360 (
   value VARCHAR(2048)
 );
 
+CREATE INDEX IF NOT EXISTS ix_ds_dataspec_content ON data_specification(data_specification_content);
+CREATE INDEX IF NOT EXISTS ix_ds_dataspec_reference ON data_specification(data_specification);
+
+CREATE INDEX IF NOT EXISTS ix_iec61360_value_list_id ON data_specification_iec61360(value_list_id);
+CREATE INDEX IF NOT EXISTS ix_iec61360_level_type_id ON data_specification_iec61360(level_type_id);
+CREATE INDEX IF NOT EXISTS ix_iec61360_data_type ON data_specification_iec61360(data_type);
+
+
 CREATE TABLE IF NOT EXISTS administrative_information_embedded_data_specification (
   id                BIGSERIAL PRIMARY KEY,
   administrative_information_id BIGINT REFERENCES administrative_information(id) ON DELETE CASCADE,
-  data_specification_content_id BIGSERIAL REFERENCES data_specification_content(id) ON DELETE CASCADE
+  embedded_data_specification_id BIGSERIAL REFERENCES data_specification(id) ON DELETE CASCADE
 );
+CREATE INDEX IF NOT EXISTS ix_ai_creator ON administrative_information(creator);
+CREATE INDEX IF NOT EXISTS ix_ai_templateid ON administrative_information(templateid);
+
+CREATE INDEX IF NOT EXISTS ix_aieds_aiid ON administrative_information_embedded_data_specification(administrative_information_id);
+CREATE INDEX IF NOT EXISTS ix_aieds_edsid ON administrative_information_embedded_data_specification(embedded_data_specification_id);
 
 CREATE INDEX IF NOT EXISTS ix_eds_id ON administrative_information_embedded_data_specification(id);
 
@@ -259,15 +285,25 @@ CREATE TABLE IF NOT EXISTS submodel (
   semantic_id BIGINT REFERENCES reference(id) ON DELETE CASCADE,
   description_id BIGINT REFERENCES lang_string_text_type_reference(id) ON DELETE CASCADE,
   displayname_id  BIGINT REFERENCES lang_string_name_type_reference(id) ON DELETE CASCADE,
+  embedded_data_specification JSONB,
   model_type  TEXT NOT NULL DEFAULT 'Submodel'
 );
 CREATE INDEX IF NOT EXISTS ix_sm_idshort ON submodel(id_short);
+CREATE INDEX IF NOT EXISTS ix_sm_admin_id ON submodel(administration_id);
+CREATE INDEX IF NOT EXISTS ix_sm_semantic_id ON submodel(semantic_id);
+CREATE INDEX IF NOT EXISTS ix_sm_desc_id ON submodel(description_id);
+CREATE INDEX IF NOT EXISTS ix_sm_displayname_id ON submodel(displayname_id);
 
 CREATE TABLE IF NOT EXISTS submodel_supplemental_semantic_id (
   id BIGSERIAL PRIMARY KEY,
   submodel_id VARCHAR(2048) NOT NULL REFERENCES submodel(id) ON DELETE CASCADE,
   reference_id BIGINT NOT NULL REFERENCES reference(id) ON DELETE CASCADE
 );
+CREATE INDEX IF NOT EXISTS ix_smssi_submodel_id ON submodel_supplemental_semantic_id(submodel_id);
+CREATE INDEX IF NOT EXISTS ix_smssi_reference_id ON submodel_supplemental_semantic_id(reference_id);
+
+
+
 
 CREATE INDEX IF NOT EXISTS ix_smsup_id ON submodel_supplemental_semantic_id(id);
 
@@ -298,6 +334,10 @@ CREATE TABLE IF NOT EXISTS submodel_extension (
   submodel_id VARCHAR(2048) NOT NULL REFERENCES submodel(id) ON DELETE CASCADE,
   extension_id BIGINT NOT NULL REFERENCES extension(id) ON DELETE CASCADE 
 );
+CREATE INDEX IF NOT EXISTS ix_smext_submodel_id ON submodel_extension(submodel_id);
+CREATE INDEX IF NOT EXISTS ix_smext_extension_id ON submodel_extension(extension_id);
+
+CREATE INDEX IF NOT EXISTS ix_ext_semantic_id ON extension(semantic_id);
 
 CREATE INDEX IF NOT EXISTS ix_smext_id ON submodel_extension(id);
 
@@ -307,7 +347,11 @@ CREATE TABLE IF NOT EXISTS extension_supplemental_semantic_id (
   reference_id BIGINT NOT NULL REFERENCES reference(id) ON DELETE CASCADE
 ); 
 
+
+CREATE INDEX IF NOT EXISTS ix_essi_extension_id ON extension_supplemental_semantic_id(extension_id);
+CREATE INDEX IF NOT EXISTS ix_essi_reference_id ON extension_supplemental_semantic_id(reference_id);
 CREATE INDEX IF NOT EXISTS ix_extsup_id ON extension_supplemental_semantic_id(id);
+CREATE INDEX IF NOT EXISTS ix_extsup_eid ON extension_supplemental_semantic_id(extension_id);
 
 CREATE TABLE IF NOT EXISTS extension_refers_to (
   id BIGSERIAL PRIMARY KEY,
@@ -316,6 +360,8 @@ CREATE TABLE IF NOT EXISTS extension_refers_to (
 );
 
 CREATE INDEX IF NOT EXISTS ix_extref_id ON extension_refers_to(id);
+CREATE INDEX IF NOT EXISTS ix_extref_eid ON extension_refers_to(extension_id);
+CREATE INDEX IF NOT EXISTS ix_extref_reference_id ON extension_refers_to(reference_id);
 
 CREATE TABLE IF NOT EXISTS submodel_semantic_key (
   submodel_id TEXT NOT NULL REFERENCES submodel(id) ON DELETE CASCADE,
@@ -507,9 +553,7 @@ CREATE TABLE IF NOT EXISTS capability_element (
 -- Qualifier (on any SME)
 CREATE TABLE IF NOT EXISTS qualifier (
   id                BIGSERIAL PRIMARY KEY,
-  submodel_element_id BIGINT REFERENCES submodel_element(id) ON DELETE CASCADE,
-  submodel_id VARCHAR(2048) REFERENCES submodel(id) ON DELETE CASCADE,
-  kind              qualifier_kind NOT NULL,
+  kind              qualifier_kind,
   type              TEXT NOT NULL,
   value_type        data_type_def_xsd NOT NULL,
   value_text        TEXT,
@@ -518,9 +562,30 @@ CREATE TABLE IF NOT EXISTS qualifier (
   value_time        TIME,
   value_datetime    TIMESTAMPTZ,
   value_id          BIGINT REFERENCES reference(id),
-  semantic_id      BIGINT REFERENCES reference(id)
+  semantic_id       BIGINT REFERENCES reference(id)
 );
-CREATE INDEX IF NOT EXISTS ix_qual_sme       ON qualifier(submodel_element_id);
+
+CREATE INDEX IF NOT EXISTS ix_qual_semantic_id ON qualifier(semantic_id);
+CREATE INDEX IF NOT EXISTS ix_qual_value_id ON qualifier(value_id);
+
+CREATE TABLE IF NOT EXISTS submodel_element_qualifier (
+  sme_id      BIGINT NOT NULL REFERENCES submodel_element(id) ON DELETE CASCADE,
+  qualifier_id BIGINT NOT NULL REFERENCES qualifier(id) ON DELETE CASCADE,
+  PRIMARY KEY (sme_id, qualifier_id)
+);
+
+CREATE TABLE IF NOT EXISTS submodel_qualifier (
+  submodel_id  VARCHAR(2048) NOT NULL REFERENCES submodel(id) ON DELETE CASCADE,
+  qualifier_id BIGINT NOT NULL REFERENCES qualifier(id) ON DELETE CASCADE,
+  PRIMARY KEY (submodel_id, qualifier_id)
+);
+
+CREATE INDEX IF NOT EXISTS ix_smq_submodel_id ON submodel_qualifier(submodel_id);
+CREATE INDEX IF NOT EXISTS ix_smq_qualifier_id ON submodel_qualifier(qualifier_id);
+CREATE INDEX IF NOT EXISTS ix_subm_qual      ON submodel_qualifier(submodel_id);
+
+CREATE INDEX IF NOT EXISTS ix_qual_sme       ON submodel_element_qualifier(sme_id);
+
 CREATE INDEX IF NOT EXISTS ix_qual_type      ON qualifier(type);
 CREATE INDEX IF NOT EXISTS ix_qual_num       ON qualifier(value_num)
   WHERE value_type IN ('xs:decimal','xs:double','xs:float','xs:int','xs:integer','xs:long','xs:short');
@@ -546,7 +611,10 @@ CREATE TABLE IF NOT EXISTS qualifier_supplemental_semantic_id (
   reference_id BIGINT NOT NULL REFERENCES reference(id) ON DELETE CASCADE
 );
 
+CREATE INDEX IF NOT EXISTS ix_qssi_qualifier_id ON qualifier_supplemental_semantic_id(qualifier_id);
+CREATE INDEX IF NOT EXISTS ix_qssi_reference_id ON qualifier_supplemental_semantic_id(reference_id);
 CREATE INDEX IF NOT EXISTS ix_qualsup_id ON qualifier_supplemental_semantic_id(id);
+CREATE INDEX IF NOT EXISTS ix_qualsup_qid ON qualifier_supplemental_semantic_id(qualifier_id);
 
 
 CREATE INDEX IF NOT EXISTS ix_seds_submodel ON submodel_embedded_data_specification (submodel_id);
@@ -564,3 +632,8 @@ CREATE INDEX IF NOT EXISTS ix_iec61360_unit_id ON data_specification_iec61360 (u
 CREATE INDEX IF NOT EXISTS ix_vlvrp_valuelist ON value_list_value_reference_pair (value_list_id);
 
 CREATE INDEX IF NOT EXISTS ix_dsiec_id ON data_specification_iec61360(id);
+
+CREATE INDEX IF NOT EXISTS ix_ref_root_id ON reference(rootreference, id);
+CREATE INDEX IF NOT EXISTS ix_ref_type ON reference(type);
+
+CREATE INDEX IF NOT EXISTS ix_refkey_refid ON reference_key(value);

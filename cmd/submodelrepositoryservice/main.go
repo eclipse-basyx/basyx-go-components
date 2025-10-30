@@ -8,14 +8,12 @@ import (
 	"net/http"
 	"os"
 	"strconv"
-	"time"
 
 	"github.com/go-chi/chi/v5"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	api "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/api"
 	persistence_postgresql "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence"
-	persistence_utils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
 	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/submodelrepositoryapi/go"
 )
 
@@ -48,13 +46,6 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 		return err
 	}
 
-	//TEST
-	start := time.Now().Local().UnixMilli()
-	persistence_utils.GetSubmodelById(smDatabase.GetDB(), "1")
-	end := time.Now().Local().UnixMilli()
-	fmt.Printf("Total time: %d milliseconds\n", end-start)
-	//TEST
-
 	smSvc := api.NewSubmodelRepositoryAPIAPIService(*smDatabase)
 	smCtrl := openapi.NewSubmodelRepositoryAPIAPIController(smSvc, config.Server.ContextPath)
 	for _, rt := range smCtrl.Routes() {
@@ -77,6 +68,8 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 			log.Printf("Server error: %v", err)
 		}
 	}()
+
+	// submodelrepository.TestNewSubmodelHandler(smDatabase)
 
 	<-ctx.Done()
 	log.Println("Shutting down server...")

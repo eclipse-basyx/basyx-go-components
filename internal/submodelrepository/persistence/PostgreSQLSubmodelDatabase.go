@@ -73,7 +73,6 @@ func (p *PostgreSQLSubmodelDatabase) GetAllSubmodels(limit int32, cursor string,
 	}
 
 	if err != nil {
-		fmt.Println(err)
 		return nil, "", beginTransactionErrorSubmodelRepo
 	}
 	defer func() {
@@ -88,11 +87,101 @@ func (p *PostgreSQLSubmodelDatabase) GetAllSubmodels(limit int32, cursor string,
 	}
 
 	if err := tx.Commit(); err != nil {
-		fmt.Println(err)
 		return nil, "", failedPostgresTransactionSubmodelRepo
 	}
 
 	return sm, "", nil
+}
+
+// get submodel metadata
+func (p *PostgreSQLSubmodelDatabase) GetAllSubmodelsMetadata(
+	limit int32,
+	cursor string,
+	idShort string,
+	semanticId string,
+) ([]gen.Submodel, string, error) {
+
+	tx, err := p.db.Begin()
+	if limit <= 0 {
+		limit = 100
+	}
+
+	if err != nil {
+		return nil, "", beginTransactionErrorSubmodelRepo
+	}
+	defer func() {
+		if err != nil {
+			tx.Rollback()
+		}
+	}()
+
+	query := `
+		SELECT 
+			s.id, 
+			s.id_short, 
+			s.category, 
+			s.kind, 
+			s.model_type, 
+			r.type AS semantic_reference_type,
+			rk.type AS key_type,
+   			rk.value AS key_value
+		FROM submodel s
+		LEFT JOIN reference r ON s.semantic_id = r.id
+		LEFT JOIN reference_key rk ON r.id = rk.reference_id
+		WHERE ($1 = '' OR s.id_short ILIKE '%' || $1 || '%')
+		ORDER BY s.id
+		LIMIT $2;
+	`
+
+	rows, err := p.db.Query(query, idShort, limit)
+	if err != nil {
+		tx.Rollback()
+		fmt.Println("Error querying submodel metadata:", err)
+		return nil, "", err
+	}
+	defer rows.Close()
+
+	var submodels []gen.Submodel
+	for rows.Next() {
+		var sm gen.Submodel
+		var refType, keyType, keyValue sql.NullString
+
+		err := rows.Scan(
+			&sm.Id,
+			&sm.IdShort,
+			&sm.Category,
+			&sm.Kind,
+			&sm.ModelType,
+			&refType,
+			&keyType,
+			&keyValue,
+		)
+		if err != nil {
+			fmt.Println("Error scanning metadata row:", err)
+			return nil, "", err
+		}
+		if refType.Valid {
+			ref := gen.Reference{
+				Type: gen.ReferenceTypes(refType.String),
+			}
+			// Only add keys if both type and value are valid
+			if keyType.Valid && keyValue.Valid {
+				ref.Keys = []gen.Key{{
+					Type:  gen.KeyTypes(keyType.String),
+					Value: keyValue.String,
+				}}
+			}
+			sm.SemanticId = &ref
+		}
+		submodels = append(submodels, sm)
+	}
+
+	if err := tx.Commit(); err != nil {
+		fmt.Println(err)
+		return nil, "", failedPostgresTransactionSubmodelRepo
+	}
+
+	return submodels, "", nil
 }
 
 // GetSubmodel returns one Submodel by id
@@ -237,7 +326,7 @@ func (p *PostgreSQLSubmodelDatabase) CreateSubmodel(sm gen.Submodel) error {
 	}
 
 	if sm.SupplementalSemanticIds != nil {
-		err = persistence_utils.InsertSupplementalSemanticIds(tx, sm.Id, sm.SupplementalSemanticIds)
+		err = persistence_utils.InsertSupplementalSemanticIdsSubmodel(tx, sm.Id, sm.SupplementalSemanticIds)
 		if err != nil {
 			return err
 		}
@@ -261,6 +350,34 @@ func (p *PostgreSQLSubmodelDatabase) CreateSubmodel(sm gen.Submodel) error {
 			err = p.AddSubmodelElementWithTransaction(tx, sm.Id, element)
 			if err != nil {
 				return err
+			}
+		}
+	}
+
+	if len(sm.Qualifier) > 0 {
+		for _, qualifier := range sm.Qualifier {
+			qualifierId, err := persistence_utils.CreateQualifier(tx, qualifier)
+			if err != nil {
+				return err
+			}
+			_, err = tx.Exec(`INSERT INTO submodel_qualifier(submodel_id, qualifier_id) VALUES($1, $2)`, sm.Id, qualifierId)
+			if err != nil {
+				fmt.Println(err)
+				return common.NewInternalServerError("Failed to Create Qualifier for Submodel with ID '" + sm.Id + "'. See console for details.")
+			}
+		}
+	}
+
+	if len(sm.Extension) > 0 {
+		for _, extension := range sm.Extension {
+			qualifierId, err := persistence_utils.CreateExtension(tx, extension)
+			if err != nil {
+				return err
+			}
+			_, err = tx.Exec(`INSERT INTO submodel_extension(submodel_id, extension_id) VALUES($1, $2)`, sm.Id, qualifierId)
+			if err != nil {
+				fmt.Println(err)
+				return common.NewInternalServerError("Failed to Create Extension for Submodel with ID '" + sm.Id + "'. See console for details.")
 			}
 		}
 	}

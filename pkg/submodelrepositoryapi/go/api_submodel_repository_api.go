@@ -354,11 +354,11 @@ func (c *SubmodelRepositoryAPIAPIController) PostSubmodel(w http.ResponseWriter,
 		return
 	}
 	if err := model.AssertSubmodelRequired(submodelParam); err != nil {
-		c.errorHandler(w, r, err, nil)
+		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
 	if err := model.AssertSubmodelConstraints(submodelParam); err != nil {
-		c.errorHandler(w, r, err, nil)
+		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
 	result, err := c.service.PostSubmodel(r.Context(), submodelParam)

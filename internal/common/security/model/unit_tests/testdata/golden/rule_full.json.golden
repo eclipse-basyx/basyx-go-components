@@ -1,0 +1,32 @@
+ {
+    "AllAccessPermissionRules": {
+    "rules": [
+        {
+        "ACL": {
+            "ACCESS": "ALLOW",
+            "RIGHTS": [
+            "READ",
+            "UPDATE"
+            ]
+        },
+        "FORMULA": {
+            "$and": [
+            {
+                "$boolean": true
+            },
+            {
+                "$eq": [
+                {
+                    "$numVal": 1
+                },
+                {
+                    "$numVal": 1
+                }
+                ]
+            }
+            ]
+        }
+        }
+    ]
+    }
+}

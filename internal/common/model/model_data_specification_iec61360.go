@@ -107,8 +107,8 @@ func (d *DataSpecificationIec61360) SetSymbol(symbol string) {
 	d.Symbol = symbol
 }
 
-func (d *DataSpecificationIec61360) SetDataType(dataType DataTypeIec61360) {
-	d.DataType = dataType
+func (d *DataSpecificationIec61360) SetDataType(dataType *DataTypeIec61360) {
+	d.DataType = *dataType
 }
 
 func (d *DataSpecificationIec61360) SetDefinition(definition []LangStringDefinitionTypeIec61360) {
@@ -143,14 +143,18 @@ func AssertDataSpecificationIec61360Required(obj DataSpecificationIec61360) erro
 		}
 	}
 
-	for _, el := range obj.PreferredName {
-		if err := AssertLangStringPreferredNameTypeIec61360Required(el); err != nil {
-			return err
+	if obj.PreferredName != nil {
+		for _, el := range obj.PreferredName {
+			if err := AssertLangStringPreferredNameTypeIec61360Required(el); err != nil {
+				return err
+			}
 		}
 	}
-	for _, el := range obj.ShortName {
-		if err := AssertLangStringShortNameTypeIec61360Required(el); err != nil {
-			return err
+	if obj.ShortName != nil {
+		for _, el := range obj.ShortName {
+			if err := AssertLangStringShortNameTypeIec61360Required(el); err != nil {
+				return err
+			}
 		}
 	}
 	if obj.UnitId != nil {
@@ -178,14 +182,18 @@ func AssertDataSpecificationIec61360Required(obj DataSpecificationIec61360) erro
 
 // AssertDataSpecificationIec61360Constraints checks if the values respects the defined constraints
 func AssertDataSpecificationIec61360Constraints(obj DataSpecificationIec61360) error {
-	for _, el := range obj.PreferredName {
-		if err := AssertLangStringPreferredNameTypeIec61360Constraints(el); err != nil {
-			return err
+	if obj.PreferredName != nil {
+		for _, el := range obj.PreferredName {
+			if err := AssertLangStringPreferredNameTypeIec61360Constraints(el); err != nil {
+				return err
+			}
 		}
 	}
-	for _, el := range obj.ShortName {
-		if err := AssertLangStringShortNameTypeIec61360Constraints(el); err != nil {
-			return err
+	if obj.ShortName != nil {
+		for _, el := range obj.ShortName {
+			if err := AssertLangStringShortNameTypeIec61360Constraints(el); err != nil {
+				return err
+			}
 		}
 	}
 	if obj.UnitId != nil {

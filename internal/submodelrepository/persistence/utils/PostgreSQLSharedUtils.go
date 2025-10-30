@@ -1,3 +1,28 @@
+/*******************************************************************************
+* Copyright (C) 2025 the Eclipse BaSyx Authors and Fraunhofer IESE
+*
+* Permission is hereby granted, free of charge, to any person obtaining
+* a copy of this software and associated documentation files (the
+* "Software"), to deal in the Software without restriction, including
+* without limitation the rights to use, copy, modify, merge, publish,
+* distribute, sublicense, and/or sell copies of the Software, and to
+* permit persons to whom the Software is furnished to do so, subject to
+* the following conditions:
+*
+* The above copyright notice and this permission notice shall be
+* included in all copies or substantial portions of the Software.
+*
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+* NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+* LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+* OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+* WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*
+* SPDX-License-Identifier: MIT
+******************************************************************************/
+
 package persistence_utils
 
 import (
@@ -11,6 +36,181 @@ import (
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 )
 
+func CreateExtension(tx *sql.Tx, extension gen.Extension) (sql.NullInt64, error) {
+	var extensionDbId sql.NullInt64
+	var semanticIdRefDbId sql.NullInt64
+
+	if extension.SemanticId != nil {
+		id, err := CreateReference(tx, extension.SemanticId, sql.NullInt64{}, sql.NullInt64{})
+		if err != nil {
+			fmt.Println(err)
+			return sql.NullInt64{}, common.NewInternalServerError("Error inserting SemanticId Reference for Extension.")
+		}
+		semanticIdRefDbId = id
+	}
+
+	var valueText, valueNum, valueBool, valueTime, valueDatetime sql.NullString
+
+	switch extension.ValueType {
+	case "xs:string", "xs:anyURI", "xs:base64Binary", "xs:hexBinary":
+		valueText = sql.NullString{String: extension.Value, Valid: extension.Value != ""}
+	case "xs:int", "xs:integer", "xs:long", "xs:short", "xs:byte",
+		"xs:unsignedInt", "xs:unsignedLong", "xs:unsignedShort", "xs:unsignedByte",
+		"xs:positiveInteger", "xs:negativeInteger", "xs:nonNegativeInteger", "xs:nonPositiveInteger",
+		"xs:decimal", "xs:double", "xs:float":
+		valueNum = sql.NullString{String: extension.Value, Valid: extension.Value != ""}
+	case "xs:boolean":
+		valueBool = sql.NullString{String: extension.Value, Valid: extension.Value != ""}
+	case "xs:time":
+		valueTime = sql.NullString{String: extension.Value, Valid: extension.Value != ""}
+	case "xs:date", "xs:dateTime", "xs:duration", "xs:gDay", "xs:gMonth",
+		"xs:gMonthDay", "xs:gYear", "xs:gYearMonth":
+		valueDatetime = sql.NullString{String: extension.Value, Valid: extension.Value != ""}
+	default:
+		// Fallback to text for unknown types
+		valueText = sql.NullString{String: extension.Value, Valid: extension.Value != ""}
+	}
+
+	var valueType any
+	if extension.ValueType != "" && !reflect.ValueOf(extension.ValueType).IsZero() {
+		valueType = extension.ValueType
+	} else {
+		valueType = sql.NullString{String: "", Valid: false}
+	}
+
+	err := tx.QueryRow(`
+	INSERT INTO
+	extension (name, value_type, value_text, value_num, value_bool, value_time, value_datetime, semantic_id)
+	VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+	RETURNING id`, extension.Name, valueType, valueText, valueNum, valueBool, valueTime, valueDatetime, semanticIdRefDbId).Scan(&extensionDbId)
+
+	if err != nil {
+		fmt.Println(err)
+		return sql.NullInt64{}, common.NewInternalServerError("Error inserting Extension. See console for details.")
+	}
+
+	for _, supplemental := range extension.SupplementalSemanticIds {
+		id, err := CreateReference(tx, &supplemental, sql.NullInt64{}, sql.NullInt64{})
+		if err != nil {
+			fmt.Println(err)
+			return sql.NullInt64{}, common.NewInternalServerError("Error inserting Supplemental Semantic IDs for Extension. See console for details.")
+		}
+		_, err = tx.Exec(`
+		INSERT INTO
+		extension_supplemental_semantic_id(extension_id, reference_id)
+		VALUES($1, $2)
+		`, extensionDbId, id)
+
+		if err != nil {
+			fmt.Println(err)
+			return sql.NullInt64{}, common.NewInternalServerError("Error linking Supplemental Semantic IDs with Extension. See console for details.")
+		}
+	}
+
+	for _, referred := range extension.RefersTo {
+		id, err := CreateReference(tx, &referred, sql.NullInt64{}, sql.NullInt64{})
+		if err != nil {
+			fmt.Println(err)
+			return sql.NullInt64{}, common.NewInternalServerError("Error inserting RefersTo for Extension. See console for details.")
+		}
+		_, err = tx.Exec(`
+		INSERT INTO
+		extension_refers_to(extension_id, reference_id)
+		VALUES($1, $2)
+		`, extensionDbId, id)
+
+		if err != nil {
+			fmt.Println(err)
+			return sql.NullInt64{}, common.NewInternalServerError("Error linking RefersTo Reference with Extension. See console for details.")
+		}
+	}
+
+	return extensionDbId, nil
+}
+
+func CreateQualifier(tx *sql.Tx, qualifier gen.Qualifier) (sql.NullInt64, error) {
+	var qualifierDbId sql.NullInt64
+	var valueIdRefDbId sql.NullInt64
+	var semanticIdRefDbId sql.NullInt64
+
+	if qualifier.ValueId != nil {
+		id, err := CreateReference(tx, qualifier.ValueId, sql.NullInt64{}, sql.NullInt64{})
+		if err != nil {
+			fmt.Println(err)
+			return sql.NullInt64{}, common.NewInternalServerError("Error inserting ValueID Reference for Qualifier.")
+		}
+		valueIdRefDbId = id
+	}
+
+	if qualifier.SemanticId != nil {
+		id, err := CreateReference(tx, qualifier.SemanticId, sql.NullInt64{}, sql.NullInt64{})
+		if err != nil {
+			fmt.Println(err)
+			return sql.NullInt64{}, common.NewInternalServerError("Error inserting SemanticId Reference for Qualifier.")
+		}
+		semanticIdRefDbId = id
+	}
+
+	var valueText, valueNum, valueBool, valueTime, valueDatetime sql.NullString
+
+	switch qualifier.ValueType {
+	case "xs:string", "xs:anyURI", "xs:base64Binary", "xs:hexBinary":
+		valueText = sql.NullString{String: qualifier.Value, Valid: qualifier.Value != ""}
+	case "xs:int", "xs:integer", "xs:long", "xs:short", "xs:byte",
+		"xs:unsignedInt", "xs:unsignedLong", "xs:unsignedShort", "xs:unsignedByte",
+		"xs:positiveInteger", "xs:negativeInteger", "xs:nonNegativeInteger", "xs:nonPositiveInteger",
+		"xs:decimal", "xs:double", "xs:float":
+		valueNum = sql.NullString{String: qualifier.Value, Valid: qualifier.Value != ""}
+	case "xs:boolean":
+		valueBool = sql.NullString{String: qualifier.Value, Valid: qualifier.Value != ""}
+	case "xs:time":
+		valueTime = sql.NullString{String: qualifier.Value, Valid: qualifier.Value != ""}
+	case "xs:date", "xs:dateTime", "xs:duration", "xs:gDay", "xs:gMonth",
+		"xs:gMonthDay", "xs:gYear", "xs:gYearMonth":
+		valueDatetime = sql.NullString{String: qualifier.Value, Valid: qualifier.Value != ""}
+	default:
+		// Fallback to text for unknown types
+		valueText = sql.NullString{String: qualifier.Value, Valid: qualifier.Value != ""}
+	}
+
+	var kind any
+	if qualifier.Kind != "" && !reflect.ValueOf(qualifier.Kind).IsZero() {
+		kind = qualifier.Kind
+	} else {
+		kind = sql.NullString{String: "", Valid: false}
+	}
+
+	err := tx.QueryRow(`
+	INSERT INTO
+	qualifier (kind, type, value_type, value_text, value_num, value_bool, value_time, value_datetime, value_id, semantic_id)
+	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+	RETURNING id`, kind, qualifier.Type, qualifier.ValueType, valueText, valueNum, valueBool, valueTime, valueDatetime, valueIdRefDbId, semanticIdRefDbId).Scan(&qualifierDbId)
+
+	if err != nil {
+		fmt.Println(err)
+		return sql.NullInt64{}, common.NewInternalServerError("Error inserting Qualifier. See console for details.")
+	}
+
+	for _, supplemental := range qualifier.SupplementalSemanticIds {
+		id, err := CreateReference(tx, &supplemental, sql.NullInt64{}, sql.NullInt64{})
+		if err != nil {
+			fmt.Println(err)
+			return sql.NullInt64{}, common.NewInternalServerError("Error inserting Supplemental Semantic IDs for Qualifier. See console for details.")
+		}
+		_, err = tx.Exec(`
+		INSERT INTO
+		qualifier_supplemental_semantic_id(qualifier_id, reference_id)
+		VALUES($1, $2)
+		`, qualifierDbId, id)
+
+		if err != nil {
+			fmt.Println(err)
+			return sql.NullInt64{}, common.NewInternalServerError("Error linking Supplemental Semantic IDs with Qualifier. See console for details.")
+		}
+	}
+
+	return qualifierDbId, nil
+}
 func CreateEmbeddedDataSpecification(tx *sql.Tx, embeddedDataSpecification gen.EmbeddedDataSpecification) (sql.NullInt64, error) {
 	var embeddedDataSpecificationContentDbId sql.NullInt64
 	var embeddedDataSpecificationDbId sql.NullInt64
@@ -45,46 +245,57 @@ func insertDataSpecificationIec61360(tx *sql.Tx, ds *gen.DataSpecificationIec613
 	var shortNameConverted []gen.LangStringText
 	var definitionConverted []gen.LangStringText
 
-	// Convert PreferredName to []LangStringText
+	// Convert PreferredName to []LangStringText (required field)
 	for _, pn := range ds.PreferredName {
 		preferredNameConverted = append(preferredNameConverted, pn)
 	}
-	// Convert ShortName to []LangStringText
+	// Convert ShortName to []LangStringText (optional)
 	for _, sn := range ds.ShortName {
 		shortNameConverted = append(shortNameConverted, sn)
 	}
 
-	// Convert Definition to []LangStringText
+	// Convert Definition to []LangStringText (optional)
 	for _, def := range ds.Definition {
 		definitionConverted = append(definitionConverted, def)
 	}
 
-	// Insert PreferredName
+	// Insert PreferredName (required)
 	preferredNameID, err := CreateLangStringTextTypes(tx, preferredNameConverted)
 	if err != nil {
 		return err
 	}
-	// Insert ShortName
-	shortNameID, err := CreateLangStringTextTypes(tx, shortNameConverted)
-	if err != nil {
-		return err
+
+	// Insert ShortName (optional)
+	var shortNameID sql.NullInt64
+	if len(shortNameConverted) > 0 {
+		shortNameID, err = CreateLangStringTextTypes(tx, shortNameConverted)
+		if err != nil {
+			return err
+		}
 	}
-	// Insert UnitId
+
+	// Insert UnitId (optional)
 	unitIdID, err := CreateReference(tx, ds.UnitId, sql.NullInt64{}, sql.NullInt64{})
 	if err != nil {
 		return err
 	}
-	// Insert Definition
-	definitionID, err := CreateLangStringTextTypes(tx, definitionConverted)
-	if err != nil {
-		return err
+
+	// Insert Definition (optional)
+	var definitionID sql.NullInt64
+	if len(definitionConverted) > 0 {
+		definitionID, err = CreateLangStringTextTypes(tx, definitionConverted)
+		if err != nil {
+			return err
+		}
 	}
 
+	// Insert ValueList (optional)
 	valueList, err := insertValueList(tx, ds.ValueList)
 	if err != nil {
 		return err
 	}
 
+	// Insert LevelType (optional)
 	levelTypeId, err := insertLevelType(tx, ds.LevelType)
 	if err != nil {
 		return err
@@ -92,9 +303,24 @@ func insertDataSpecificationIec61360(tx *sql.Tx, ds *gen.DataSpecificationIec613
 
 	var iec61360contentDbId sql.NullInt64
 
+	// Prepare optional string fields
+	unit := sql.NullString{String: ds.Unit, Valid: ds.Unit != ""}
+	sourceOfDefinition := sql.NullString{String: ds.SourceOfDefinition, Valid: ds.SourceOfDefinition != ""}
+	symbol := sql.NullString{String: ds.Symbol, Valid: ds.Symbol != ""}
+	valueFormat := sql.NullString{String: ds.ValueFormat, Valid: ds.ValueFormat != ""}
+	value := sql.NullString{String: ds.Value, Valid: ds.Value != ""}
+
+	// Handle DataType (optional)
+	var dataType interface{}
+	if ds.DataType != "" && !reflect.ValueOf(ds.DataType).IsZero() {
+		dataType = ds.DataType
+	} else {
+		dataType = sql.NullString{String: "", Valid: false}
+	}
+
 	// INSERT
 	err = tx.QueryRow("INSERT INTO data_specification_iec61360(id, preferred_name_id, short_name_id, unit, unit_id, source_of_definition, symbol, data_type, definition_id, value_format, value_list_id, level_type_id, value) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING id",
-		embeddedDataSpecificationContentDbId, preferredNameID, shortNameID, ds.Unit, unitIdID, ds.SourceOfDefinition, ds.Symbol, ds.DataType, definitionID, ds.ValueFormat, valueList, levelTypeId, ds.Value).Scan(&iec61360contentDbId)
+		embeddedDataSpecificationContentDbId, preferredNameID, shortNameID, unit, unitIdID, sourceOfDefinition, symbol, dataType, definitionID, valueFormat, valueList, levelTypeId, value).Scan(&iec61360contentDbId)
 	if err != nil {
 		return err
 	}
@@ -156,12 +382,23 @@ func CreateAdministrativeInformation(tx *sql.Tx, adminInfo *gen.AdministrativeIn
 				return sql.NullInt64{}, err
 			}
 		}
+
 		err = tx.QueryRow(`INSERT INTO administrative_information (version, revision, creator, templateId) VALUES ($1, $2, $3, $4) RETURNING id`,
 			adminInfo.Version, adminInfo.Revision, creatorID, adminInfo.TemplateId).Scan(&id)
 		if err != nil {
 			return sql.NullInt64{}, err
 		}
 		adminInfoID = sql.NullInt64{Int64: int64(id), Valid: true}
+
+		if len(adminInfo.EmbeddedDataSpecifications) > 0 {
+			for _, eds := range adminInfo.EmbeddedDataSpecifications {
+				edsId, err := CreateEmbeddedDataSpecification(tx, eds)
+				tx.Exec(`INSERT INTO administrative_information_embedded_data_specification (administrative_information_id, embedded_data_specification_id) VALUES ($1, $2)`, adminInfoID, edsId)
+				if err != nil {
+					return sql.NullInt64{}, err
+				}
+			}
+		}
 	}
 	return adminInfoID, nil
 }
@@ -527,7 +764,7 @@ func insertSupplementalSemanticIdsForExtensions(extension gen.Extension, semanti
 	return nil
 }
 
-func InsertSupplementalSemanticIds(tx *sql.Tx, submodel_id string, supplementalSemanticIds []*gen.Reference) error {
+func InsertSupplementalSemanticIdsSubmodel(tx *sql.Tx, submodel_id string, supplementalSemanticIds []*gen.Reference) error {
 	if len(supplementalSemanticIds) > 0 {
 		for _, supplementalSemanticId := range supplementalSemanticIds {
 			supplementalSemanticIdDbId, err := CreateReference(tx, supplementalSemanticId, sql.NullInt64{}, sql.NullInt64{})
@@ -535,6 +772,21 @@ func InsertSupplementalSemanticIds(tx *sql.Tx, submodel_id string, supplementalS
 				return err
 			}
 			_, err = tx.Exec(`INSERT INTO submodel_supplemental_semantic_id (submodel_id, reference_id) VALUES ($1, $2)`, submodel_id, supplementalSemanticIdDbId)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+func InsertSupplementalSemanticIdsSME(tx *sql.Tx, sme_id int64, supplementalSemanticIds []gen.Reference) error {
+	if len(supplementalSemanticIds) > 0 {
+		for _, supplementalSemanticId := range supplementalSemanticIds {
+			supplementalSemanticIdDbId, err := CreateReference(tx, &supplementalSemanticId, sql.NullInt64{}, sql.NullInt64{})
+			if err != nil {
+				return err
+			}
+			_, err = tx.Exec(`INSERT INTO sme_supplemental_semantic (sme_id, reference_id) VALUES ($1, $2)`, sme_id, supplementalSemanticIdDbId)
 			if err != nil {
 				return err
 			}

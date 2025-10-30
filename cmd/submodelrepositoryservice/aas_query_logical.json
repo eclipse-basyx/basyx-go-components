@@ -1,0 +1,28 @@
+{
+    "Query": {
+        "$condition": {
+            "$or": [
+                {
+                    "$eq": [
+                        {
+                            "$field": "$sm#id"
+                        },
+                        {
+                            "$strVal": "1"
+                        }
+                    ]
+                },
+                {
+                    "$eq": [
+                        {
+                            "$field": "$sm#idShort"
+                        },
+                        {
+                            "$strVal": "2"
+                        }
+                    ]
+                }
+            ]
+        }
+    }
+}
