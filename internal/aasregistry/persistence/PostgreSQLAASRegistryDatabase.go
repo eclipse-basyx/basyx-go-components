@@ -155,6 +155,7 @@ func (p *PostgreSQLAASRegistryDatabase) InsertAdministrationShellDescriptor(ctx 
 func (p *PostgreSQLAASRegistryDatabase) GetAssetAdministrationShellDescriptorById(
 	ctx context.Context, aasIdentifier string,
 ) (model.AssetAdministrationShellDescriptor, error) {
+	adda := time.Now()
 	d := goqu.Dialect(dialect)
 
 	aas := goqu.T(tblAASDescriptor).As("aas")
@@ -189,7 +190,7 @@ func (p *PostgreSQLAASRegistryDatabase) GetAssetAdministrationShellDescriptorByI
 		assetKindStr                      sql.NullString
 		assetType, globalAssetID, idShort sql.NullString
 		idStr                             string
-		adminInfoID                       int64
+		adminInfoID                       sql.NullInt64
 		displayNameID                     sql.NullInt64
 		descriptionID                     sql.NullInt64
 	)
@@ -232,14 +233,16 @@ func (p *PostgreSQLAASRegistryDatabase) GetAssetAdministrationShellDescriptorByI
 	)
 
 	g.Go(func() error {
-		ai, err := readAdministrativeInformationByID(ctx, p.db, adminInfoID)
-		if err != nil {
-			return err
+		if adminInfoID.Valid {
+			ai, err := readAdministrativeInformationByID(ctx, p.db, "aas_descriptor", adminInfoID)
+			if err != nil {
+				return err
+			}
+			adminInfo = ai
 		}
-		adminInfo = ai
 		return nil
 	})
-
+	start := time.Now()
 	g.Go(func() error {
 		dn, err := persistence_utils.GetLangStringNameTypes(p.db, displayNameID)
 		if err != nil {
@@ -258,6 +261,8 @@ func (p *PostgreSQLAASRegistryDatabase) GetAssetAdministrationShellDescriptorByI
 		return nil
 	})
 
+	duration := time.Since(start)
+	fmt.Printf("single langstring block took %v to complete\n", duration)
 	g.Go(func() error {
 		eps, err := readEndpointsByDescriptorID(ctx, p.db, descID)
 		if err != nil {
@@ -297,6 +302,8 @@ func (p *PostgreSQLAASRegistryDatabase) GetAssetAdministrationShellDescriptorByI
 	if err := g.Wait(); err != nil {
 		return model.AssetAdministrationShellDescriptor{}, err
 	}
+	ada := time.Since(adda)
+	fmt.Printf("total block took %v to complete\n", ada)
 
 	return model.AssetAdministrationShellDescriptor{
 		AssetKind:           &ak,
@@ -376,6 +383,7 @@ func GetLangStringTextTypesByIDs(
 	db *sql.DB,
 	textTypeIDs []int64,
 ) (map[int64][]model.LangStringTextType, error) {
+	start := time.Now()
 	out := make(map[int64][]model.LangStringTextType, len(textTypeIDs))
 	if len(textTypeIDs) == 0 {
 		return out, nil
@@ -414,6 +422,8 @@ func GetLangStringTextTypesByIDs(
 		return nil, err
 	}
 
+	duration := time.Since(start)
+	fmt.Printf("name types block took %v to complete\n", duration)
 	return out, nil
 }
 
@@ -421,6 +431,8 @@ func GetLangStringNameTypesByIDs(
 	db *sql.DB,
 	nameTypeIDs []int64,
 ) (map[int64][]model.LangStringNameType, error) {
+
+	start := time.Now()
 	out := make(map[int64][]model.LangStringNameType, len(nameTypeIDs))
 	if len(nameTypeIDs) == 0 {
 		return out, nil
@@ -460,6 +472,8 @@ func GetLangStringNameTypesByIDs(
 		return nil, err
 	}
 
+	duration := time.Since(start)
+	fmt.Printf("name types block took %v to complete\n", duration)
 	return out, nil
 }
 
@@ -471,8 +485,9 @@ func (p *PostgreSQLAASRegistryDatabase) ListAssetAdministrationShellDescriptors(
 	assetType string,
 ) ([]model.AssetAdministrationShellDescriptor, string, error) {
 
+	adda := time.Now()
 	if limit <= 0 {
-		limit = 10000
+		limit = 10000000
 	}
 	peekLimit := int(limit) + 1
 
@@ -623,7 +638,7 @@ func (p *PostgreSQLAASRegistryDatabase) ListAssetAdministrationShellDescriptors(
 	if len(adminInfoIDs) > 0 {
 		ids := append([]int64(nil), adminInfoIDs...)
 		g.Go(func() error {
-			m, err := readAdministrativeInformationByIDs(gctx, p.db, ids)
+			m, err := readAdministrativeInformationByIDs(gctx, p.db, "aas_descriptor", ids)
 			if err != nil {
 				return err
 			}
@@ -738,5 +753,7 @@ func (p *PostgreSQLAASRegistryDatabase) ListAssetAdministrationShellDescriptors(
 		})
 	}
 
+	ada := time.Since(adda)
+	fmt.Printf("total block took %v to complete\n", ada)
 	return out, nextCursor, nil
 }

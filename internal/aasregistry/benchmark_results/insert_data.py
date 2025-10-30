@@ -5,7 +5,7 @@ import copy
 URL = "http://localhost:5004/shell-descriptors"
 
 # ---- Your Full Template (unchanged except IDs updated later) ----
-payload_template = {
+big_data = {
     "description": [
         {"language": "en", "text": "Machine consisting of multiple parts which are assets provided by different companies"},
         {"language": "de", "text": "Maschine bestehend aus mehreren Assets, welche von verschiedenen anderen Firmen bereitgestellt werden"}
@@ -76,8 +76,23 @@ payload_template = {
     ]
 }
 
+data = {
+    "idShort": "InduCoreIC5000",
+    "id": "https://id.idta-showcase.net/namespace/InduCoreIC5000/v1",
+    "endpoints": [
+        {
+            "protocolInformation": {
+                "href": "https://idta.basyx-enterprise.net/controller/datasource/unprotected-repository-aas/shells/aHR0cHM6Ly9pZC5pZHRhLXNob3djYXNlLm5ldC9uYW1lc3BhY2UvSW5kdUNvcmVJQzUwMDAvdjE",
+                "endpointProtocol": "http"
+            },
+            "interface": "AAS-3.0"
+        }
+    ]
+}
+payload_template = data
+
 # ---- POST loop ----
-for i in range(8000):  # Change number if you want more inserts
+for i in range(800000):  # Change number if you want more inserts
     payload = copy.deepcopy(payload_template)
 
     # Unique Descriptor ID

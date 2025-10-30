@@ -3,6 +3,8 @@ package persistence_postgresql
 import (
 	"context"
 	"database/sql"
+	"fmt"
+	"time"
 
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
@@ -24,6 +26,7 @@ func readSpecificAssetIdsByDescriptorIDs(
 	db *sql.DB,
 	descriptorIDs []int64,
 ) (map[int64][]model.SpecificAssetId, error) {
+	start := time.Now()
 	out := make(map[int64][]model.SpecificAssetId, len(descriptorIDs))
 	if len(descriptorIDs) == 0 {
 		return out, nil
@@ -153,6 +156,9 @@ func readSpecificAssetIdsByDescriptorIDs(
 			out[id] = nil
 		}
 	}
+
+	duration := time.Since(start)
+	fmt.Printf("specific assetId block took %v to complete\n", duration)
 	return out, nil
 }
 

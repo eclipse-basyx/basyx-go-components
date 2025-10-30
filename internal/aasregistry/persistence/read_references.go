@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"time"
 
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/builder"
@@ -18,6 +19,7 @@ func GetReferencesByIdsBatch(db *sql.DB, ids []int64) (map[int64]*model.Referenc
 	if len(ids) == 0 {
 		return map[int64]*model.Reference{}, nil
 	}
+	start := time.Now()
 
 	d := goqu.Dialect(dialect)
 
@@ -196,6 +198,8 @@ func GetReferencesByIdsBatch(db *sql.DB, ids []int64) (map[int64]*model.Referenc
 		b.BuildNestedStructure()
 	}
 
+	duration := time.Since(start)
+	fmt.Printf("batch references took %v to complete\n", duration)
 	return refs, nil
 }
 

@@ -3,20 +3,29 @@ package persistence_postgresql
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
+	"fmt"
+	"time"
 
 	"github.com/doug-martin/goqu/v9"
+	builders "github.com/eclipse-basyx/basyx-go-components/internal/common/builder"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	submodel_query "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils/SubmodelQuery"
 )
 
-func readAdministrativeInformationByID(ctx context.Context, db *sql.DB, adminInfoID int64) (model.AdministrativeInformation, error) {
-	v, err := readAdministrativeInformationByIDs(ctx, db, []int64{adminInfoID})
-	return v[adminInfoID], err
+func readAdministrativeInformationByID(ctx context.Context, db *sql.DB, table_name string, adminInfoID sql.NullInt64) (model.AdministrativeInformation, error) {
+
+	v, err := readAdministrativeInformationByIDs(ctx, db, table_name, []int64{adminInfoID.Int64})
+	return v[adminInfoID.Int64], err
 }
 func readAdministrativeInformationByIDs(
 	ctx context.Context,
 	db *sql.DB,
+	table_name string,
 	adminInfoIDs []int64,
 ) (map[int64]model.AdministrativeInformation, error) {
+	start := time.Now()
+
 	out := make(map[int64]model.AdministrativeInformation, len(adminInfoIDs))
 	if len(adminInfoIDs) == 0 {
 		return out, nil
@@ -34,73 +43,66 @@ func readAdministrativeInformationByIDs(
 	}
 
 	d := goqu.Dialect(dialect)
-	ai := goqu.T(tblAdministrativeInformation).As("ai")
 
-	sqlStr, args, err := d.
-		From(ai).
+	adminJSON := submodel_query.GetAdministrationSubquery(d, "s.administrative_information_id")
+
+	q, args, err2 := d.From(goqu.T(table_name).As("s")).
 		Select(
-			ai.Col(colID),
-			ai.Col(colVersion),
-			ai.Col(colRevision),
-			ai.Col(colTemplateId),
-			ai.Col(colCreator),
-		).
-		Where(ai.Col(colID).In(uniq)).
-		ToSQL()
-	if err != nil {
-		return nil, err
+			goqu.I("s.administrative_information_id").As("id"),
+			goqu.L("COALESCE((?), '[]'::jsonb)", adminJSON), // correlated subquery
+		).ToSQL()
+
+	rows2, err2 := db.QueryContext(ctx, q, args...)
+	if err2 != nil {
+		return nil, err2
 	}
 
-	rows, err := db.QueryContext(ctx, sqlStr, args...)
-	if err != nil {
-		return nil, err
+	defer rows2.Close()
+
+	type Row struct {
+		Id             int64
+		Administration json.RawMessage
 	}
-	defer rows.Close()
-
-	// Gather creator reference IDs to resolve in one batch
-	creatorIDs := make([]int64, 0, len(uniq))
-	creatorByAdmin := make(map[int64]int64, len(uniq)) // adminInfoID -> creatorRefID
-	seenCreator := make(map[int64]struct{}, len(uniq))
-
-	for rows.Next() {
-		var (
-			id                            int64
-			version, revision, templateID sql.NullString
-			creatorRefID                  sql.NullInt64
-		)
-		if err := rows.Scan(&id, &version, &revision, &templateID, &creatorRefID); err != nil {
-			return nil, err
+	for rows2.Next() {
+		var row Row
+		if err := rows2.Scan(
+			&row.Id,
+			&row.Administration,
+		); err != nil {
+			return nil, fmt.Errorf("error scanning row: %w", err)
 		}
 
-		if creatorRefID.Valid {
-			creatorByAdmin[id] = creatorRefID.Int64
-			if _, ok := seenCreator[creatorRefID.Int64]; !ok {
-				seenCreator[creatorRefID.Int64] = struct{}{}
-				creatorIDs = append(creatorIDs, creatorRefID.Int64)
+		if isArrayNotEmpty(row.Administration) {
+			adminRow, err := builders.ParseAdministrationRow(row.Administration)
+			if err != nil {
+				fmt.Println(err)
+				return nil, err
 			}
-		}
+			if adminRow != nil {
 
-		out[id] = model.AdministrativeInformation{
-			Version:    version.String,
-			Revision:   revision.String,
-			TemplateId: templateID.String,
-			Creator:    nil, // fill after batch fetch
-		}
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
+				admin, err := builders.BuildAdministration(*adminRow)
+				if err != nil {
+					fmt.Println(err)
+					return nil, err
+				}
 
-	// Resolve all creators in one go
-	if len(creatorIDs) > 0 {
-		if refsByID, err := GetReferencesByIdsBatch(db, creatorIDs); err == nil {
-			for adminID, refID := range creatorByAdmin {
-				ai := out[adminID]
-				ai.Creator = refsByID[refID] // may be nil if missing, which is fine
-				out[adminID] = ai
+				out[row.Id] = model.AdministrativeInformation{
+					Version:                    admin.Version,
+					Revision:                   admin.Revision,
+					TemplateId:                 admin.TemplateId,
+					Creator:                    admin.Creator,
+					EmbeddedDataSpecifications: admin.EmbeddedDataSpecifications,
+				}
+			} else {
+				fmt.Println("Administration row is nil")
 			}
 		}
 	}
 
+	duration := time.Since(start)
+	fmt.Printf("admin info block took %v to complete\n", duration)
 	return out, nil
+}
+func isArrayNotEmpty(data json.RawMessage) bool {
+	return len(data) > 0 && string(data) != "null"
 }

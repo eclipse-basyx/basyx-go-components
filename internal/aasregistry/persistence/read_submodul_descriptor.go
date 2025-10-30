@@ -3,6 +3,8 @@ package persistence_postgresql
 import (
 	"context"
 	"database/sql"
+	"fmt"
+	"time"
 
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
@@ -24,6 +26,7 @@ func readSubmodelDescriptorsByAASDescriptorIDs(
 	db *sql.DB,
 	aasDescriptorIDs []int64,
 ) (map[int64][]model.SubmodelDescriptor, error) {
+	start := time.Now()
 	out := make(map[int64][]model.SubmodelDescriptor, len(aasDescriptorIDs))
 	if len(aasDescriptorIDs) == 0 {
 		return out, nil
@@ -152,7 +155,7 @@ func readSubmodelDescriptorsByAASDescriptorIDs(
 	if len(uniqAdminInfoIDs) > 0 {
 		ids := uniqAdminInfoIDs
 		g.Go(func() error {
-			m, err := readAdministrativeInformationByIDs(gctx, db, ids)
+			m, err := readAdministrativeInformationByIDs(gctx, db, "submodel_descriptor", ids)
 			if err != nil {
 				return err
 			}
@@ -268,5 +271,7 @@ func readSubmodelDescriptorsByAASDescriptorIDs(
 			out[id] = nil
 		}
 	}
+	duration := time.Since(start)
+	fmt.Printf("submodel block took %v to complete\n", duration)
 	return out, nil
 }
