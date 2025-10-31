@@ -1,0 +1,19 @@
+{
+    "id": "https://iese.fraunhofer.de/ids/aas/3245235",
+    "endpoints": [
+        {
+            "interface": "AAS-3.0",
+            "protocolInformation": {
+                "href": "https://demo3.digital-twin.host/aas-environment/shells/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy83NjA5XzQxMTZfMTYyMF8yNTk15",
+                "endpointProtocol": "https"
+            }
+        }
+    ],
+    "extensions": [
+        {
+            "name": "help",
+            "valueType": "omegalul",
+            "value": "test"
+        }
+    ]
+}

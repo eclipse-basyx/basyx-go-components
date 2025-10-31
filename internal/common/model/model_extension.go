@@ -68,5 +68,10 @@ func AssertExtensionConstraints(obj Extension) error {
 			return err
 		}
 	}
+	if obj.ValueType != "" {
+		if err := AssertDataTypeDefXsdConstraints(obj.ValueType); err != nil {
+			return err
+		}
+	}
 	return nil
 }

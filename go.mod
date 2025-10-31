@@ -8,6 +8,7 @@ require (
 	github.com/coreos/go-oidc v2.4.0+incompatible
 	github.com/doug-martin/goqu/v9 v9.19.0
 	github.com/go-chi/cors v1.2.2
+	github.com/gorilla/mux v1.8.1
 	github.com/jackc/pgx/v5 v5.7.6
 	github.com/lib/pq v1.10.9
 	github.com/spf13/viper v1.21.0
