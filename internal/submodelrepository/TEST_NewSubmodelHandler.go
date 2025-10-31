@@ -10,7 +10,7 @@ import (
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	persistence_postgresql "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence"
-	persistence_utils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
+	submodel_persistence "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/Submodel"
 )
 
 const (
@@ -23,7 +23,7 @@ func TestNewSubmodelHandler(smDatabase *persistence_postgresql.PostgreSQLSubmode
 		var acc int64
 		for i := 0; i < 1000; i++ {
 			start := time.Now().Local().UnixMilli()
-			persistence_utils.GetSubmodelById(smDatabase.GetDB(), fmt.Sprintf("5_%d", i))
+			submodel_persistence.GetSubmodelById(smDatabase.GetDB(), fmt.Sprintf("5_%d", i))
 			end := time.Now().Local().UnixMilli()
 			fmt.Printf("Total time: %d milliseconds\n", end-start)
 			acc += int64(end - start)
@@ -48,7 +48,7 @@ func TestNewSubmodelHandler(smDatabase *persistence_postgresql.PostgreSQLSubmode
 
 				for i := startIdx; i < endIdx; i++ {
 					start := time.Now().UnixMilli()
-					persistence_utils.GetSubmodelById(smDatabase.GetDB(), fmt.Sprintf("5_%d", i))
+					submodel_persistence.GetSubmodelById(smDatabase.GetDB(), fmt.Sprintf("5_%d", i))
 					end := time.Now().UnixMilli()
 					duration := end - start
 					//fmt.Printf("[Thread %02d] Total time for 5_%d: %d ms\n", threadID, i, duration)
@@ -83,7 +83,7 @@ func TestNewSubmodelHandler(smDatabase *persistence_postgresql.PostgreSQLSubmode
 		log.Fatalf("Failed to parse JSON: %v", err)
 	}
 	start := time.Now()
-	sms, cursor, err := persistence_utils.GetAllSubmodels(smDatabase.GetDB(), 5, "", &query)
+	sms, cursor, err := submodel_persistence.GetAllSubmodels(smDatabase.GetDB(), 5, "", &query)
 	end := time.Now()
 	fmt.Printf("Query Execution Time: %d milliseconds\n", end.Sub(start).Milliseconds())
 	fmt.Println(cursor)

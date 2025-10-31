@@ -1,3 +1,29 @@
+/*******************************************************************************
+* Copyright (C) 2025 the Eclipse BaSyx Authors and Fraunhofer IESE
+*
+* Permission is hereby granted, free of charge, to any person obtaining
+* a copy of this software and associated documentation files (the
+* "Software"), to deal in the Software without restriction, including
+* without limitation the rights to use, copy, modify, merge, publish,
+* distribute, sublicense, and/or sell copies of the Software, and to
+* permit persons to whom the Software is furnished to do so, subject to
+* the following conditions:
+*
+* The above copyright notice and this permission notice shall be
+* included in all copies or substantial portions of the Software.
+*
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+* NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+* LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+* OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+* WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*
+* SPDX-License-Identifier: MIT
+******************************************************************************/
+
+// Author: Jannik Fried ( Fraunhofer IESE )
 package submodelelements
 
 import (
@@ -63,32 +89,6 @@ func (p PostgreSQLRangeHandler) CreateNested(tx *sql.Tx, submodelId string, pare
 	return id, nil
 }
 
-func (p PostgreSQLRangeHandler) Read(tx *sql.Tx, submodelId string, idShortOrPath string) (gen.SubmodelElement, error) {
-	var sme gen.SubmodelElement = &gen.Range{}
-	var valueType, min, max string
-	id, err := p.decorated.Read(tx, submodelId, idShortOrPath, &sme)
-	if err != nil {
-		return nil, err
-	}
-	err = tx.QueryRow(`
-		SELECT value_type, COALESCE(min_text, min_num::text, min_time::text, min_datetime::text) as min_val,
-		COALESCE(max_text, max_num::text, max_time::text, max_datetime::text) as max_val
-		FROM range_element
-		WHERE id = $1
-	`, id).Scan(&valueType, &min, &max)
-	if err != nil {
-		return sme, nil // Return base if no specific data
-	}
-	rng := sme.(*gen.Range)
-	actualValueType, err := gen.NewDataTypeDefXsdFromValue(valueType)
-	if err != nil {
-		return nil, err
-	}
-	rng.ValueType = actualValueType
-	rng.Min = min
-	rng.Max = max
-	return sme, nil
-}
 func (p PostgreSQLRangeHandler) Update(idShortOrPath string, submodelElement gen.SubmodelElement) error {
 	if dErr := p.decorated.Update(idShortOrPath, submodelElement); dErr != nil {
 		return dErr

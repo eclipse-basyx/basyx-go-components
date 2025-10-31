@@ -1,3 +1,29 @@
+/*******************************************************************************
+* Copyright (C) 2025 the Eclipse BaSyx Authors and Fraunhofer IESE
+*
+* Permission is hereby granted, free of charge, to any person obtaining
+* a copy of this software and associated documentation files (the
+* "Software"), to deal in the Software without restriction, including
+* without limitation the rights to use, copy, modify, merge, publish,
+* distribute, sublicense, and/or sell copies of the Software, and to
+* permit persons to whom the Software is furnished to do so, subject to
+* the following conditions:
+*
+* The above copyright notice and this permission notice shall be
+* included in all copies or substantial portions of the Software.
+*
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+* NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+* LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+* OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+* WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*
+* SPDX-License-Identifier: MIT
+******************************************************************************/
+
+// Author: Jannik Fried ( Fraunhofer IESE )
 package submodelelements
 
 import (
@@ -63,72 +89,6 @@ func (p PostgreSQLAnnotatedRelationshipElementHandler) CreateNested(tx *sql.Tx, 
 	return id, nil
 }
 
-func (p PostgreSQLAnnotatedRelationshipElementHandler) Read(tx *sql.Tx, submodelId string, idShortOrPath string) (gen.SubmodelElement, error) {
-	var sme gen.SubmodelElement = &gen.AnnotatedRelationshipElement{}
-	var firstRef, secondRef sql.NullInt64
-	id, err := p.decorated.Read(tx, submodelId, idShortOrPath, &sme)
-	if err != nil {
-		return nil, err
-	}
-	err = tx.QueryRow(`SELECT first_ref, second_ref FROM relationship_element WHERE id = $1`, id).Scan(&firstRef, &secondRef)
-	if err != nil {
-		return sme, nil
-	}
-	areElem := sme.(*gen.AnnotatedRelationshipElement)
-	if firstRef.Valid {
-		ref, err := readReference(tx, firstRef.Int64)
-		if err != nil {
-			return nil, err
-		}
-		areElem.First = ref
-	}
-	if secondRef.Valid {
-		ref, err := readReference(tx, secondRef.Int64)
-		if err != nil {
-			return nil, err
-		}
-		areElem.Second = ref
-	}
-
-	// Read annotations
-	rows, err := tx.Query(`SELECT annotation_sme FROM annotated_rel_annotation WHERE rel_id = $1`, id)
-	if err != nil {
-		return sme, nil
-	}
-	defer rows.Close()
-	var annotations []gen.SubmodelElement
-	for rows.Next() {
-		var annId int
-		if err := rows.Scan(&annId); err != nil {
-			return nil, err
-		}
-		// Read the annotation element
-		// But need to know the type. Perhaps query the model_type from submodel_element
-		var modelType string
-		err = tx.QueryRow(`SELECT model_type FROM submodel_element WHERE id = $1`, annId).Scan(&modelType)
-		if err != nil {
-			return nil, err
-		}
-		annHandler, err := GetSMEHandlerByModelType(modelType, p.db)
-		if err != nil {
-			return nil, err
-		}
-		// But Read needs idShortOrPath, but we have id.
-		// Need to get idShortPath
-		var idShortPath string
-		err = tx.QueryRow(`SELECT idshort_path FROM submodel_element WHERE id = $1`, annId).Scan(&idShortPath)
-		if err != nil {
-			return nil, err
-		}
-		ann, err := annHandler.Read(tx, submodelId, idShortPath)
-		if err != nil {
-			return nil, err
-		}
-		annotations = append(annotations, ann)
-	}
-	areElem.Annotations = annotations
-	return sme, nil
-}
 func (p PostgreSQLAnnotatedRelationshipElementHandler) Update(idShortOrPath string, submodelElement gen.SubmodelElement) error {
 	if dErr := p.decorated.Update(idShortOrPath, submodelElement); dErr != nil {
 		return dErr

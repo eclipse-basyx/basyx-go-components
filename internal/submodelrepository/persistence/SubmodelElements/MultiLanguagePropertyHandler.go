@@ -1,3 +1,29 @@
+/*******************************************************************************
+* Copyright (C) 2025 the Eclipse BaSyx Authors and Fraunhofer IESE
+*
+* Permission is hereby granted, free of charge, to any person obtaining
+* a copy of this software and associated documentation files (the
+* "Software"), to deal in the Software without restriction, including
+* without limitation the rights to use, copy, modify, merge, publish,
+* distribute, sublicense, and/or sell copies of the Software, and to
+* permit persons to whom the Software is furnished to do so, subject to
+* the following conditions:
+*
+* The above copyright notice and this permission notice shall be
+* included in all copies or substantial portions of the Software.
+*
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+* NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+* LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+* OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+* WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*
+* SPDX-License-Identifier: MIT
+******************************************************************************/
+
+// Author: Jannik Fried ( Fraunhofer IESE )
 package submodelelements
 
 import (
@@ -62,36 +88,6 @@ func (p PostgreSQLMultiLanguagePropertyHandler) CreateNested(tx *sql.Tx, submode
 	return id, nil
 }
 
-func (p PostgreSQLMultiLanguagePropertyHandler) Read(tx *sql.Tx, submodelId string, idShortOrPath string) (gen.SubmodelElement, error) {
-	var sme gen.SubmodelElement = &gen.MultiLanguageProperty{}
-	id, err := p.decorated.Read(tx, submodelId, idShortOrPath, &sme)
-	if err != nil {
-		return nil, err
-	}
-
-	// Read values
-	rows, err := tx.Query(`SELECT language, text FROM multilanguage_property_value WHERE mlp_id = $1`, id)
-	if err != nil {
-		return sme, nil
-	}
-	defer rows.Close()
-
-	var values []gen.LangStringTextType
-	for rows.Next() {
-		var lang, text string
-		if err := rows.Scan(&lang, &text); err != nil {
-			return nil, err
-		}
-		values = append(values, gen.LangStringTextType{Language: lang, Text: text})
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-
-	mlp := sme.(*gen.MultiLanguageProperty)
-	mlp.Value = values
-	return sme, nil
-}
 func (p PostgreSQLMultiLanguagePropertyHandler) Update(idShortOrPath string, submodelElement gen.SubmodelElement) error {
 	if dErr := p.decorated.Update(idShortOrPath, submodelElement); dErr != nil {
 		return dErr

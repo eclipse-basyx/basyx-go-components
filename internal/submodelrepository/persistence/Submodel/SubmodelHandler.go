@@ -24,20 +24,20 @@
 ******************************************************************************/
 
 // Author: Jannik Fried ( Fraunhofer IESE ), Aaron Zielstorff ( Fraunhofer IESE )
-package persistence_utils
+package submodel_persistence
 
 import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"os"
 	"time"
 
 	_ "github.com/doug-martin/goqu/v9/dialect/postgres"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	builders "github.com/eclipse-basyx/basyx-go-components/internal/common/builder"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
-	submodel_query "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils/SubmodelQuery"
+	submodel_query "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/Submodel/SubmodelQuery"
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 )
 
@@ -47,7 +47,7 @@ func GetSubmodelById(db *sql.DB, submodelIdFilter string) (*gen.Submodel, error)
 		return nil, err
 	}
 	if len(submodels) == 0 {
-		return nil, fmt.Errorf("submodel with ID %s not found", submodelIdFilter)
+		return nil, common.NewErrNotFound(submodelIdFilter)
 	}
 	return submodels[0], nil
 }
@@ -356,14 +356,6 @@ func moreThanZeroReferences(referenceArray []*gen.Reference) bool {
 //   - error: An error if query building or execution fails
 func getSubmodelDataFromDbWithJSONQuery(db *sql.DB, submodelId string, limit int64, cursor string, query *grammar.QueryWrapper) (*sql.Rows, error) {
 	q, err := submodel_query.GetQueryWithGoqu(submodelId, limit, cursor, query)
-
-	// save query to file query.txt
-	err = os.WriteFile("query.txt", []byte(q), 0644)
-	if err != nil {
-		fmt.Printf("Error saving query to file: %v\n", err)
-		return nil, err
-	}
-
 	if err != nil {
 		fmt.Printf("Error building query: %v\n", err)
 		return nil, err
