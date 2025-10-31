@@ -230,6 +230,17 @@ func (c *AssetAdministrationShellRegistryAPIAPIController) GetAllAssetAdministra
 	var assetKindParam model.AssetKind
 	if query.Has("assetKind") {
 		assetKindParam = model.AssetKind(query.Get("assetKind"))
+		if err := model.AssertAssetKindConstraints(assetKindParam); err != nil {
+			result := common.NewErrorResponse(
+				err,
+				http.StatusBadRequest,
+				componentName,
+				"GetAllAssetAdministrationShellDescriptors",
+				"InvalidAssetKind",
+			)
+			EncodeJSONResponse(result.Body, &result.Code, w)
+			return
+		}
 	}
 	var assetTypeParam string
 	if query.Has("assetType") {
@@ -260,6 +271,7 @@ func (c *AssetAdministrationShellRegistryAPIAPIController) PostAssetAdministrati
 		EncodeJSONResponse(result.Body, &result.Code, w)
 		return
 	}
+
 	if err := model.AssertAssetAdministrationShellDescriptorRequired(assetAdministrationShellDescriptorParam); err != nil {
 		result := common.NewErrorResponse(
 			err,

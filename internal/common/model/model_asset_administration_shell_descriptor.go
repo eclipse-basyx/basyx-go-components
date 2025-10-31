@@ -18,7 +18,7 @@ type AssetAdministrationShellDescriptor struct {
 
 	Extensions []Extension `json:"extensions,omitempty"`
 
-	Administration AdministrativeInformation `json:"administration,omitempty"`
+	Administration *AdministrativeInformation `json:"administration,omitempty"`
 
 	AssetKind *AssetKind `json:"assetKind,omitempty"`
 
@@ -63,7 +63,8 @@ func AssertAssetAdministrationShellDescriptorRequired(obj AssetAdministrationShe
 			return err
 		}
 	}
-	if err := AssertAdministrativeInformationRequired(obj.Administration); err != nil {
+
+	if err := AssertAdministrativeInformationRequired(*obj.Administration); err != nil {
 		return err
 	}
 	for _, el := range obj.Endpoints {
@@ -101,7 +102,12 @@ func AssertAssetAdministrationShellDescriptorConstraints(obj AssetAdministration
 			return err
 		}
 	}
-	if err := AssertAdministrativeInformationConstraints(obj.Administration); err != nil {
+
+	if obj.AssetKind != nil {
+		return AssertAssetKindConstraints(*obj.AssetKind)
+	}
+
+	if err := AssertAdministrativeInformationConstraints(*obj.Administration); err != nil {
 		return err
 	}
 	for _, el := range obj.Endpoints {

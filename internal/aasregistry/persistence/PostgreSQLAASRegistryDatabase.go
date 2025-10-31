@@ -102,7 +102,7 @@ func (p *PostgreSQLAASRegistryDatabase) InsertAdministrationShellDescriptor(ctx 
 		return common.NewInternalServerError("Failed to create Description - no changes applied - see console for details")
 	}
 
-	administrationId, err = persistence_utils.CreateAdministrativeInformation(tx, &aasd.Administration)
+	administrationId, err = persistence_utils.CreateAdministrativeInformation(tx, aasd.Administration)
 	if err != nil {
 		fmt.Println(err)
 		return common.NewInternalServerError("Failed to create Administration - no changes applied - see console for details")
@@ -225,7 +225,7 @@ func (p *PostgreSQLAASRegistryDatabase) GetAssetAdministrationShellDescriptorByI
 	g, ctx := errgroup.WithContext(ctx)
 
 	var (
-		adminInfo        model.AdministrativeInformation
+		adminInfo        *model.AdministrativeInformation
 		displayName      []model.LangStringNameType
 		description      []model.LangStringTextType
 		endpoints        []model.Endpoint
@@ -240,7 +240,7 @@ func (p *PostgreSQLAASRegistryDatabase) GetAssetAdministrationShellDescriptorByI
 			if err != nil {
 				return err
 			}
-			adminInfo = ai
+			adminInfo = &ai
 		}
 		return nil
 	})
@@ -724,10 +724,13 @@ func (p *PostgreSQLAASRegistryDatabase) ListAssetAdministrationShellDescriptors(
 			ak = v
 		}
 
-		var adminInfo model.AdministrativeInformation
-		if r.adminInfoID.Valid {
-			adminInfo = admByID[r.adminInfoID.Int64]
-		}
+    var adminInfo *model.AdministrativeInformation
+    if r.adminInfoID.Valid {
+        if v, ok := admByID[r.adminInfoID.Int64]; ok {
+            tmp := v
+            adminInfo = &tmp
+        }
+    }
 
 		var displayName []model.LangStringNameType
 		if r.displayNameID.Valid {
@@ -739,20 +742,20 @@ func (p *PostgreSQLAASRegistryDatabase) ListAssetAdministrationShellDescriptors(
 			description = descByID[r.descriptionID.Int64]
 		}
 
-		out = append(out, model.AssetAdministrationShellDescriptor{
-			AssetKind:           &ak,
-			AssetType:           r.assetType.String,
-			GlobalAssetId:       r.globalAssetID.String,
-			IdShort:             r.idShort.String,
-			Id:                  r.idStr,
-			Administration:      adminInfo,
-			DisplayName:         displayName,
-			Description:         description,
-			Endpoints:           endpointsByDesc[r.descID],
-			SpecificAssetIds:    specificByDesc[r.descID],
-			Extensions:          extByDesc[r.descID],
-			SubmodelDescriptors: smdByDesc[r.descID],
-		})
+        out = append(out, model.AssetAdministrationShellDescriptor{
+            AssetKind:           &ak,
+            AssetType:           r.assetType.String,
+            GlobalAssetId:       r.globalAssetID.String,
+            IdShort:             r.idShort.String,
+            Id:                  r.idStr,
+            Administration:      adminInfo,
+            DisplayName:         displayName,
+            Description:         description,
+            Endpoints:           endpointsByDesc[r.descID],
+            SpecificAssetIds:    specificByDesc[r.descID],
+            Extensions:          extByDesc[r.descID],
+            SubmodelDescriptors: smdByDesc[r.descID],
+        })
 	}
 
 	ada := time.Since(adda)

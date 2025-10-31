@@ -1,6 +1,6 @@
 {
-    "id": "https://iese.fraunhofer.de/ids/aas/34hzeaw",
-    "assetKind": "Type",
+    "id": "https://iese.fraunhofer.de/ids/aas/3657le6d",
+    "assetKind": "Instance",
     "AssetType": "betachad",
     "endpoints": [
         {
@@ -13,9 +13,9 @@
     ],
     "extensions": [
         {
-            "name": "lol",
+            "name": "helpme",
             "valueType": "xs:string",
-            "value": "kopf"
+            "value": "LUL"
         }
     ]
 }

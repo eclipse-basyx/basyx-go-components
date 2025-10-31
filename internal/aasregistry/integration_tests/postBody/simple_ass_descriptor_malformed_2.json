@@ -1,7 +1,7 @@
 {
-    "id": "https://iese.fraunhofer.de/ids/aas/34hzeaw",
-    "assetKind": "Type",
-    "AssetType": "betachad",
+    "id": "https://iese.fraunhofer.de/ids/aas/3245235",
+    "assetKind": "Factorio",
+    "AssetType": "value",
     "endpoints": [
         {
             "interface": "AAS-3.0",
@@ -13,9 +13,9 @@
     ],
     "extensions": [
         {
-            "name": "lol",
+            "name": "help",
             "valueType": "xs:string",
-            "value": "kopf"
+            "value": "test"
         }
     ]
 }
