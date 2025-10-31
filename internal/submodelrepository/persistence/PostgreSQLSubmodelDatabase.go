@@ -461,20 +461,86 @@ func (p *PostgreSQLSubmodelDatabase) DeleteSubmodel(id string) error {
 
 	// Delete embedded data specifications and their references
 	for _, edsId := range edsIds {
-		// Get the reference ID from data_specification
-		var dsRefId sql.NullInt64
-		err = tx.QueryRow(`SELECT data_specification FROM data_specification WHERE id=$1`, edsId).Scan(&dsRefId)
+		// Get the reference ID and content ID from data_specification
+		var dsRefId, dsContentId sql.NullInt64
+		err = tx.QueryRow(`SELECT data_specification, data_specification_content FROM data_specification WHERE id=$1`, edsId).Scan(&dsRefId, &dsContentId)
 		if err != nil && err != sql.ErrNoRows {
 			return err
 		}
 		
-		// Delete the data_specification (this will cascade to data_specification_content if needed)
+		// Get references from data_specification_iec61360 (if it exists)
+		if dsContentId.Valid {
+			var preferredNameId, shortNameId, unitId, definitionId, valueListId, levelTypeId sql.NullInt64
+			err = tx.QueryRow(`
+				SELECT preferred_name_id, short_name_id, unit_id, definition_id, value_list_id, level_type_id 
+				FROM data_specification_iec61360 
+				WHERE id=$1
+			`, dsContentId.Int64).Scan(&preferredNameId, &shortNameId, &unitId, &definitionId, &valueListId, &levelTypeId)
+			// It's okay if no row exists (not all data_specification_content are iec61360)
+			if err == nil {
+				// Get value_id references from value_list_value_reference_pair if value_list exists
+				if valueListId.Valid {
+					vlRows, err := tx.Query(`SELECT value_id FROM value_list_value_reference_pair WHERE value_list_id=$1`, valueListId.Int64)
+					if err != nil {
+						return err
+					}
+					var vlRefIds []int64
+					for vlRows.Next() {
+						var refId sql.NullInt64
+						if err := vlRows.Scan(&refId); err != nil {
+							vlRows.Close()
+							return err
+						}
+						if refId.Valid {
+							vlRefIds = append(vlRefIds, refId.Int64)
+						}
+					}
+					vlRows.Close()
+					
+					// Delete value_id references
+					for _, refId := range vlRefIds {
+						if err := deleteReferenceRecursively(tx, refId); err != nil {
+							return err
+						}
+					}
+				}
+				
+				// Delete unit_id reference
+				if unitId.Valid {
+					if err := deleteReferenceRecursively(tx, unitId.Int64); err != nil {
+						return err
+					}
+				}
+				
+				// Delete lang strings (will cascade to lang_string_text_type)
+				if preferredNameId.Valid {
+					_, err = tx.Exec(`DELETE FROM lang_string_text_type_reference WHERE id=$1`, preferredNameId.Int64)
+					if err != nil {
+						return err
+					}
+				}
+				if shortNameId.Valid {
+					_, err = tx.Exec(`DELETE FROM lang_string_text_type_reference WHERE id=$1`, shortNameId.Int64)
+					if err != nil {
+						return err
+					}
+				}
+				if definitionId.Valid {
+					_, err = tx.Exec(`DELETE FROM lang_string_text_type_reference WHERE id=$1`, definitionId.Int64)
+					if err != nil {
+						return err
+					}
+				}
+			}
+		}
+		
+		// Delete the data_specification (this will cascade to data_specification_content)
 		_, err = tx.Exec(`DELETE FROM data_specification WHERE id=$1`, edsId)
 		if err != nil {
 			return err
 		}
 		
-		// Delete the reference
+		// Delete the data_specification reference
 		if dsRefId.Valid {
 			if err := deleteReferenceRecursively(tx, dsRefId.Int64); err != nil {
 				return err
