@@ -242,8 +242,94 @@ func (p *PostgreSQLSubmodelDatabase) DeleteSubmodel(id string) error {
 		}
 	}()
 
-	const q = `DELETE FROM submodel WHERE id=$1`
+	// First, get all the foreign key IDs that will be orphaned after deletion
+	var administrationId, semanticId, descriptionId, displaynameId sql.NullInt64
+	err = tx.QueryRow(`
+		SELECT administration_id, semantic_id, description_id, displayname_id 
+		FROM submodel 
+		WHERE id=$1
+	`, id).Scan(&administrationId, &semanticId, &descriptionId, &displaynameId)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return sql.ErrNoRows
+		}
+		return err
+	}
 
+	// Get qualifier IDs associated with this submodel
+	qualifierRows, err := tx.Query(`
+		SELECT qualifier_id FROM submodel_qualifier WHERE submodel_id=$1
+	`, id)
+	if err != nil {
+		return err
+	}
+	var qualifierIds []int64
+	for qualifierRows.Next() {
+		var qid int64
+		if err := qualifierRows.Scan(&qid); err != nil {
+			qualifierRows.Close()
+			return err
+		}
+		qualifierIds = append(qualifierIds, qid)
+	}
+	qualifierRows.Close()
+
+	// Get extension IDs associated with this submodel
+	extensionRows, err := tx.Query(`
+		SELECT extension_id FROM submodel_extension WHERE submodel_id=$1
+	`, id)
+	if err != nil {
+		return err
+	}
+	var extensionIds []int64
+	for extensionRows.Next() {
+		var eid int64
+		if err := extensionRows.Scan(&eid); err != nil {
+			extensionRows.Close()
+			return err
+		}
+		extensionIds = append(extensionIds, eid)
+	}
+	extensionRows.Close()
+
+	// Get embedded data specification IDs associated with this submodel
+	edsRows, err := tx.Query(`
+		SELECT embedded_data_specification_id FROM submodel_embedded_data_specification WHERE submodel_id=$1
+	`, id)
+	if err != nil {
+		return err
+	}
+	var edsIds []int64
+	for edsRows.Next() {
+		var edsId int64
+		if err := edsRows.Scan(&edsId); err != nil {
+			edsRows.Close()
+			return err
+		}
+		edsIds = append(edsIds, edsId)
+	}
+	edsRows.Close()
+
+	// Get supplemental semantic ID references
+	suppSemanticRows, err := tx.Query(`
+		SELECT reference_id FROM submodel_supplemental_semantic_id WHERE submodel_id=$1
+	`, id)
+	if err != nil {
+		return err
+	}
+	var suppSemanticIds []int64
+	for suppSemanticRows.Next() {
+		var refId int64
+		if err := suppSemanticRows.Scan(&refId); err != nil {
+			suppSemanticRows.Close()
+			return err
+		}
+		suppSemanticIds = append(suppSemanticIds, refId)
+	}
+	suppSemanticRows.Close()
+
+	// Delete the submodel row (this will cascade to join tables and submodel_element)
+	const q = `DELETE FROM submodel WHERE id=$1`
 	res, err := tx.Exec(q, id)
 	if err != nil {
 		return err
@@ -256,6 +342,71 @@ func (p *PostgreSQLSubmodelDatabase) DeleteSubmodel(id string) error {
 	}
 	if rowsAffected == 0 {
 		return sql.ErrNoRows
+	}
+
+	// Now delete the orphaned data
+	// Delete qualifiers
+	for _, qid := range qualifierIds {
+		_, err = tx.Exec(`DELETE FROM qualifier WHERE id=$1`, qid)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Delete extensions
+	for _, eid := range extensionIds {
+		_, err = tx.Exec(`DELETE FROM extension WHERE id=$1`, eid)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Delete embedded data specifications
+	for _, edsId := range edsIds {
+		_, err = tx.Exec(`DELETE FROM data_specification WHERE id=$1`, edsId)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Delete supplemental semantic ID references
+	for _, refId := range suppSemanticIds {
+		_, err = tx.Exec(`DELETE FROM reference WHERE id=$1`, refId)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Delete administrative information (this will cascade to its embedded data specs)
+	if administrationId.Valid {
+		_, err = tx.Exec(`DELETE FROM administrative_information WHERE id=$1`, administrationId.Int64)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Delete semantic_id reference (this will cascade to reference_key)
+	if semanticId.Valid {
+		_, err = tx.Exec(`DELETE FROM reference WHERE id=$1`, semanticId.Int64)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Delete description (this will cascade to lang_string_text_type)
+	if descriptionId.Valid {
+		_, err = tx.Exec(`DELETE FROM lang_string_text_type_reference WHERE id=$1`, descriptionId.Int64)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Delete displayname (this will cascade to lang_string_name_type)
+	if displaynameId.Valid {
+		_, err = tx.Exec(`DELETE FROM lang_string_name_type_reference WHERE id=$1`, displaynameId.Int64)
+		if err != nil {
+			return err
+		}
 	}
 
 	if err := tx.Commit(); err != nil {
