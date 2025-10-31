@@ -63,9 +63,10 @@ func AssertAssetAdministrationShellDescriptorRequired(obj AssetAdministrationShe
 			return err
 		}
 	}
-
-	if err := AssertAdministrativeInformationRequired(*obj.Administration); err != nil {
-		return err
+	if obj.Administration != nil {
+		if err := AssertAdministrativeInformationRequired(*obj.Administration); err != nil {
+			return err
+		}
 	}
 	for _, el := range obj.Endpoints {
 		if err := AssertEndpointRequired(el); err != nil {
