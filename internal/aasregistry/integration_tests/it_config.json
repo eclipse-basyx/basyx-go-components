@@ -6,7 +6,46 @@
     "shouldMatch": "expected/expectedHealthEndpoint.json",
     "expectedStatus": 200
   },
-
+  {
+    "context": "List AAS descriptors Empty",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:5004/shell-descriptors",
+    "shouldMatch": "expected/empty_paged_result.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Get AAS descriptor by id - does not exist",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:5004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8yMjMzNQ",
+    "expectedStatus": 404
+  },
+  {
+    "context": "List submodel descriptors - aas does not exist",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:5004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8yMjMzNQ/submodel-descriptors",
+    "expectedStatus": 404
+  },
+  {
+    "context": "Replace submodel descriptor via PUT - aas does not exist",
+    "method": "PUT",
+    "endpoint": "http://127.0.0.1:5004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8yMjMzNQ/submodel-descriptors/dXJuOmV4YW1wbGU6c206MDAx",
+    "data": "postBody/simple_submodel_descriptor_2.json",
+    "expectedStatus": 404
+  },
+  {
+    "context": "Delete submodel descriptor via DELTE - aas does not exist",
+    "method": "DELETE",
+    "endpoint": "http://127.0.0.1:5004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8yMjMzNQ/submodel-descriptors/dXJuOmV4YW1wbGU6c206MDAx",
+    "data": "postBody/simple_submodel_descriptor_2.json",
+    "expectedStatus": 404
+  },
+  {
+    "context": "Create submodel descriptor - aas does not exist",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:5004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8yMjMzNQ/submodel-descriptors",
+    "data": "postBody/simple_submodel_descriptor_1.json",
+    "expectedStatus": 404
+  },
   {
     "context": "Create AAS descriptor (simple)",
     "method": "POST",

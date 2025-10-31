@@ -296,6 +296,17 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) GetAllSubmodelDescriptor
         ), nil
     }
 
+    // Check AAS existence
+    if exists, chkErr := s.aasRegistryBackend.ExistsAASByID(ctx, decodedAAS); chkErr != nil {
+        return common.NewErrorResponse(
+            chkErr, http.StatusInternalServerError, componentName, "GetAllSubmodelDescriptorsThroughSuperpath", "Unhandled-ExistenceCheck",
+        ), chkErr
+    } else if !exists {
+        return common.NewErrorResponse(
+            common.NewErrNotFound("AAS not found"), http.StatusNotFound, componentName, "GetAllSubmodelDescriptorsThroughSuperpath", "NotFound",
+        ), nil
+    }
+
     // Decode cursor if provided
     var internalCursor string
     if strings.TrimSpace(cursor) != "" {
