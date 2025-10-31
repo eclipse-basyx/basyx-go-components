@@ -34,6 +34,7 @@ import (
 	"time"
 
 	_ "github.com/doug-martin/goqu/v9/dialect/postgres"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	builders "github.com/eclipse-basyx/basyx-go-components/internal/common/builder"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
@@ -302,18 +303,9 @@ func addDescriptions(row builders.SubmodelRow, submodel *gen.Submodel) error {
 	return nil
 }
 
-// isArrayNotEmpty checks if a JSON array contains data.
-//
-// This utility function determines whether a JSON RawMessage contains an actual
-// array with data, as opposed to being empty or containing a null value.
-//
-// Parameters:
-//   - data: JSON RawMessage to check
-//
-// Returns:
-//   - bool: true if the data is not empty and not "null", false otherwise
+// moved to common
 func isArrayNotEmpty(data json.RawMessage) bool {
-	return len(data) > 0 && string(data) != "null"
+	return common.IsArrayNotEmpty(data)
 }
 
 // hasSemanticId validates that exactly one semantic ID reference exists.
