@@ -95,7 +95,7 @@ func runServer(ctx context.Context, configPath string) error {
 
 	// === Start Server ===
 	addr := fmt.Sprintf("0.0.0.0:%d", cfg.Server.Port)
-	log.Printf("▶️  Discovery Service listening on %s (contextPath=%q)\n", addr, cfg.Server.ContextPath)
+	log.Printf("▶️ AAS Discovery listening on %s (contextPath=%q)\n", addr, cfg.Server.ContextPath)
 
 	go func() {
 		if err := http.ListenAndServe(addr, r); err != http.ErrServerClosed {

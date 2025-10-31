@@ -15,8 +15,8 @@ services:
       timeout: 5s
       retries: 5
 
-  discoveryservice:
-    container_name: discovery-service
+  aas-discovery:
+    container_name: aas-discovery
     build:
       context: ../../../..
       dockerfile: ./cmd/discoveryservice/Dockerfile
