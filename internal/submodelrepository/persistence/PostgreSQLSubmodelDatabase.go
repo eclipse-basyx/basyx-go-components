@@ -50,6 +50,9 @@ var beginTransactionErrorSubmodelRepo = common.NewInternalServerError("Failed to
 
 var maxCacheSize = 1000
 
+// maxReferenceRecursionDepth limits the depth of nested references to prevent stack overflow
+const maxReferenceRecursionDepth = 100
+
 // InMemory Cache for submodels
 var submodelCache map[string]gen.Submodel = make(map[string]gen.Submodel)
 
@@ -649,11 +652,10 @@ func (p *PostgreSQLSubmodelDatabase) DeleteSubmodel(id string) error {
 }
 
 // deleteReferenceRecursively deletes a reference and all its nested references
-// depth parameter prevents infinite recursion (max depth is 100)
+// depth parameter prevents infinite recursion
 func deleteReferenceRecursively(tx *sql.Tx, referenceId int64, depth int) error {
-	const maxDepth = 100
-	if depth > maxDepth {
-		return fmt.Errorf("reference hierarchy exceeds maximum depth of %d", maxDepth)
+	if depth > maxReferenceRecursionDepth {
+		return fmt.Errorf("reference hierarchy exceeds maximum depth of %d", maxReferenceRecursionDepth)
 	}
 	
 	// Get all child references that have this reference as their parent or root
