@@ -345,50 +345,216 @@ func (p *PostgreSQLSubmodelDatabase) DeleteSubmodel(id string) error {
 	}
 
 	// Now delete the orphaned data
-	// Delete qualifiers
+	// Delete qualifiers and their references
 	for _, qid := range qualifierIds {
+		// Get reference IDs from qualifier
+		var qualSemanticId, qualValueId sql.NullInt64
+		err = tx.QueryRow(`SELECT semantic_id, value_id FROM qualifier WHERE id=$1`, qid).Scan(&qualSemanticId, &qualValueId)
+		if err != nil && err != sql.ErrNoRows {
+			return err
+		}
+		
+		// Get supplemental semantic IDs for this qualifier
+		qualSuppRows, err := tx.Query(`SELECT reference_id FROM qualifier_supplemental_semantic_id WHERE qualifier_id=$1`, qid)
+		if err != nil {
+			return err
+		}
+		var qualSuppIds []int64
+		for qualSuppRows.Next() {
+			var refId int64
+			if err := qualSuppRows.Scan(&refId); err != nil {
+				qualSuppRows.Close()
+				return err
+			}
+			qualSuppIds = append(qualSuppIds, refId)
+		}
+		qualSuppRows.Close()
+		
+		// Delete the qualifier
 		_, err = tx.Exec(`DELETE FROM qualifier WHERE id=$1`, qid)
 		if err != nil {
 			return err
 		}
+		
+		// Delete qualifier's references
+		if qualSemanticId.Valid {
+			if err := deleteReferenceRecursively(tx, qualSemanticId.Int64); err != nil {
+				return err
+			}
+		}
+		if qualValueId.Valid {
+			if err := deleteReferenceRecursively(tx, qualValueId.Int64); err != nil {
+				return err
+			}
+		}
+		for _, refId := range qualSuppIds {
+			if err := deleteReferenceRecursively(tx, refId); err != nil {
+				return err
+			}
+		}
 	}
 
-	// Delete extensions
+	// Delete extensions and their references
 	for _, eid := range extensionIds {
+		// Get reference IDs from extension
+		var extSemanticId sql.NullInt64
+		err = tx.QueryRow(`SELECT semantic_id FROM extension WHERE id=$1`, eid).Scan(&extSemanticId)
+		if err != nil && err != sql.ErrNoRows {
+			return err
+		}
+		
+		// Get supplemental semantic IDs for this extension
+		extSuppRows, err := tx.Query(`SELECT reference_id FROM extension_supplemental_semantic_id WHERE extension_id=$1`, eid)
+		if err != nil {
+			return err
+		}
+		var extSuppIds []int64
+		for extSuppRows.Next() {
+			var refId int64
+			if err := extSuppRows.Scan(&refId); err != nil {
+				extSuppRows.Close()
+				return err
+			}
+			extSuppIds = append(extSuppIds, refId)
+		}
+		extSuppRows.Close()
+		
+		// Get refers_to references for this extension
+		extRefersRows, err := tx.Query(`SELECT reference_id FROM extension_refers_to WHERE extension_id=$1`, eid)
+		if err != nil {
+			return err
+		}
+		var extRefersIds []int64
+		for extRefersRows.Next() {
+			var refId int64
+			if err := extRefersRows.Scan(&refId); err != nil {
+				extRefersRows.Close()
+				return err
+			}
+			extRefersIds = append(extRefersIds, refId)
+		}
+		extRefersRows.Close()
+		
+		// Delete the extension
 		_, err = tx.Exec(`DELETE FROM extension WHERE id=$1`, eid)
 		if err != nil {
 			return err
 		}
+		
+		// Delete extension's references
+		if extSemanticId.Valid {
+			if err := deleteReferenceRecursively(tx, extSemanticId.Int64); err != nil {
+				return err
+			}
+		}
+		for _, refId := range extSuppIds {
+			if err := deleteReferenceRecursively(tx, refId); err != nil {
+				return err
+			}
+		}
+		for _, refId := range extRefersIds {
+			if err := deleteReferenceRecursively(tx, refId); err != nil {
+				return err
+			}
+		}
 	}
 
-	// Delete embedded data specifications
+	// Delete embedded data specifications and their references
 	for _, edsId := range edsIds {
+		// Get the reference ID from data_specification
+		var dsRefId sql.NullInt64
+		err = tx.QueryRow(`SELECT data_specification FROM data_specification WHERE id=$1`, edsId).Scan(&dsRefId)
+		if err != nil && err != sql.ErrNoRows {
+			return err
+		}
+		
+		// Delete the data_specification (this will cascade to data_specification_content if needed)
 		_, err = tx.Exec(`DELETE FROM data_specification WHERE id=$1`, edsId)
 		if err != nil {
 			return err
+		}
+		
+		// Delete the reference
+		if dsRefId.Valid {
+			if err := deleteReferenceRecursively(tx, dsRefId.Int64); err != nil {
+				return err
+			}
 		}
 	}
 
 	// Delete supplemental semantic ID references
 	for _, refId := range suppSemanticIds {
-		_, err = tx.Exec(`DELETE FROM reference WHERE id=$1`, refId)
-		if err != nil {
+		if err := deleteReferenceRecursively(tx, refId); err != nil {
 			return err
 		}
 	}
 
-	// Delete administrative information (this will cascade to its embedded data specs)
+	// Delete administrative information and its references
 	if administrationId.Valid {
+		// Get the creator reference from administrative_information
+		var creatorRefId sql.NullInt64
+		err = tx.QueryRow(`SELECT creator FROM administrative_information WHERE id=$1`, administrationId.Int64).Scan(&creatorRefId)
+		if err != nil && err != sql.ErrNoRows {
+			return err
+		}
+		
+		// Get embedded data specifications for this administrative_information
+		adminEdsRows, err := tx.Query(`
+			SELECT embedded_data_specification_id 
+			FROM administrative_information_embedded_data_specification 
+			WHERE administrative_information_id=$1
+		`, administrationId.Int64)
+		if err != nil {
+			return err
+		}
+		var adminEdsIds []int64
+		for adminEdsRows.Next() {
+			var edsId int64
+			if err := adminEdsRows.Scan(&edsId); err != nil {
+				adminEdsRows.Close()
+				return err
+			}
+			adminEdsIds = append(adminEdsIds, edsId)
+		}
+		adminEdsRows.Close()
+		
+		// Delete the administrative_information (this will cascade to its join table)
 		_, err = tx.Exec(`DELETE FROM administrative_information WHERE id=$1`, administrationId.Int64)
 		if err != nil {
 			return err
+		}
+		
+		// Delete creator reference
+		if creatorRefId.Valid {
+			if err := deleteReferenceRecursively(tx, creatorRefId.Int64); err != nil {
+				return err
+			}
+		}
+		
+		// Delete embedded data specifications from administrative_information
+		for _, edsId := range adminEdsIds {
+			var dsRefId sql.NullInt64
+			err = tx.QueryRow(`SELECT data_specification FROM data_specification WHERE id=$1`, edsId).Scan(&dsRefId)
+			if err != nil && err != sql.ErrNoRows {
+				return err
+			}
+			
+			_, err = tx.Exec(`DELETE FROM data_specification WHERE id=$1`, edsId)
+			if err != nil {
+				return err
+			}
+			
+			if dsRefId.Valid {
+				if err := deleteReferenceRecursively(tx, dsRefId.Int64); err != nil {
+					return err
+				}
+			}
 		}
 	}
 
 	// Delete semantic_id reference (this will cascade to reference_key)
 	if semanticId.Valid {
-		_, err = tx.Exec(`DELETE FROM reference WHERE id=$1`, semanticId.Int64)
-		if err != nil {
+		if err := deleteReferenceRecursively(tx, semanticId.Int64); err != nil {
 			return err
 		}
 	}
@@ -414,6 +580,38 @@ func (p *PostgreSQLSubmodelDatabase) DeleteSubmodel(id string) error {
 		return failedPostgresTransactionSubmodelRepo
 	}
 	return nil
+}
+
+// deleteReferenceRecursively deletes a reference and all its nested references
+func deleteReferenceRecursively(tx *sql.Tx, referenceId int64) error {
+	// Get all child references that have this reference as their parent or root
+	rows, err := tx.Query(`
+		SELECT id FROM reference WHERE parentReference=$1 OR rootReference=$1
+	`, referenceId)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	
+	var childIds []int64
+	for rows.Next() {
+		var childId int64
+		if err := rows.Scan(&childId); err != nil {
+			return err
+		}
+		childIds = append(childIds, childId)
+	}
+	
+	// Recursively delete children first
+	for _, childId := range childIds {
+		if err := deleteReferenceRecursively(tx, childId); err != nil {
+			return err
+		}
+	}
+	
+	// Finally delete this reference (cascade will delete reference_key)
+	_, err = tx.Exec(`DELETE FROM reference WHERE id=$1`, referenceId)
+	return err
 }
 
 // CreateSubmodel inserts a new Submodel
