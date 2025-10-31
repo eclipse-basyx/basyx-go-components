@@ -724,13 +724,13 @@ func (p *PostgreSQLAASRegistryDatabase) ListAssetAdministrationShellDescriptors(
 			ak = v
 		}
 
-    var adminInfo *model.AdministrativeInformation
-    if r.adminInfoID.Valid {
-        if v, ok := admByID[r.adminInfoID.Int64]; ok {
-            tmp := v
-            adminInfo = &tmp
-        }
-    }
+		var adminInfo *model.AdministrativeInformation
+		if r.adminInfoID.Valid {
+			if v, ok := admByID[r.adminInfoID.Int64]; ok {
+				tmp := v
+				adminInfo = &tmp
+			}
+		}
 
 		var displayName []model.LangStringNameType
 		if r.displayNameID.Valid {
@@ -742,20 +742,20 @@ func (p *PostgreSQLAASRegistryDatabase) ListAssetAdministrationShellDescriptors(
 			description = descByID[r.descriptionID.Int64]
 		}
 
-        out = append(out, model.AssetAdministrationShellDescriptor{
-            AssetKind:           &ak,
-            AssetType:           r.assetType.String,
-            GlobalAssetId:       r.globalAssetID.String,
-            IdShort:             r.idShort.String,
-            Id:                  r.idStr,
-            Administration:      adminInfo,
-            DisplayName:         displayName,
-            Description:         description,
-            Endpoints:           endpointsByDesc[r.descID],
-            SpecificAssetIds:    specificByDesc[r.descID],
-            Extensions:          extByDesc[r.descID],
-            SubmodelDescriptors: smdByDesc[r.descID],
-        })
+		out = append(out, model.AssetAdministrationShellDescriptor{
+			AssetKind:           &ak,
+			AssetType:           r.assetType.String,
+			GlobalAssetId:       r.globalAssetID.String,
+			IdShort:             r.idShort.String,
+			Id:                  r.idStr,
+			Administration:      adminInfo,
+			DisplayName:         displayName,
+			Description:         description,
+			Endpoints:           endpointsByDesc[r.descID],
+			SpecificAssetIds:    specificByDesc[r.descID],
+			Extensions:          extByDesc[r.descID],
+			SubmodelDescriptors: smdByDesc[r.descID],
+		})
 	}
 
 	ada := time.Since(adda)
