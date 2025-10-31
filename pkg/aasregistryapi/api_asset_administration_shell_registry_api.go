@@ -19,7 +19,6 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/go-chi/chi/v5"
-	"github.com/gorilla/mux"
 )
 
 const (
@@ -396,7 +395,6 @@ func (c *AssetAdministrationShellRegistryAPIAPIController) DeleteAssetAdministra
 
 // GetAllSubmodelDescriptorsThroughSuperpath - Returns all Submodel Descriptors
 func (c *AssetAdministrationShellRegistryAPIAPIController) GetAllSubmodelDescriptorsThroughSuperpath(w http.ResponseWriter, r *http.Request) {
-	params := mux.Vars(r)
 	query, err := parseQuery(r.URL.RawQuery)
 	if err != nil {
 		result := common.NewErrorResponse(
@@ -409,7 +407,7 @@ func (c *AssetAdministrationShellRegistryAPIAPIController) GetAllSubmodelDescrip
 		EncodeJSONResponse(result.Body, &result.Code, w)
 		return
 	}
-	aasIdentifierParam := params["aasIdentifier"]
+	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
 	if aasIdentifierParam == "" {
 		result := common.NewErrorResponse(
 			common.NewErrBadRequest("Missing path parameter 'aasIdentifier'"),
