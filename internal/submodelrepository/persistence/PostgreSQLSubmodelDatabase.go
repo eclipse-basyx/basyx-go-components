@@ -378,17 +378,17 @@ func (p *PostgreSQLSubmodelDatabase) DeleteSubmodel(id string) error {
 		
 		// Delete qualifier's references
 		if qualSemanticId.Valid {
-			if err := deleteReferenceRecursively(tx, qualSemanticId.Int64); err != nil {
+			if err := deleteReferenceRecursively(tx, qualSemanticId.Int64, 0); err != nil {
 				return err
 			}
 		}
 		if qualValueId.Valid {
-			if err := deleteReferenceRecursively(tx, qualValueId.Int64); err != nil {
+			if err := deleteReferenceRecursively(tx, qualValueId.Int64, 0); err != nil {
 				return err
 			}
 		}
 		for _, refId := range qualSuppIds {
-			if err := deleteReferenceRecursively(tx, refId); err != nil {
+			if err := deleteReferenceRecursively(tx, refId, 0); err != nil {
 				return err
 			}
 		}
@@ -443,17 +443,17 @@ func (p *PostgreSQLSubmodelDatabase) DeleteSubmodel(id string) error {
 		
 		// Delete extension's references
 		if extSemanticId.Valid {
-			if err := deleteReferenceRecursively(tx, extSemanticId.Int64); err != nil {
+			if err := deleteReferenceRecursively(tx, extSemanticId.Int64, 0); err != nil {
 				return err
 			}
 		}
 		for _, refId := range extSuppIds {
-			if err := deleteReferenceRecursively(tx, refId); err != nil {
+			if err := deleteReferenceRecursively(tx, refId, 0); err != nil {
 				return err
 			}
 		}
 		for _, refId := range extRefersIds {
-			if err := deleteReferenceRecursively(tx, refId); err != nil {
+			if err := deleteReferenceRecursively(tx, refId, 0); err != nil {
 				return err
 			}
 		}
@@ -484,22 +484,22 @@ func (p *PostgreSQLSubmodelDatabase) DeleteSubmodel(id string) error {
 					if err != nil {
 						return err
 					}
+					defer vlRows.Close()
+					
 					var vlRefIds []int64
 					for vlRows.Next() {
 						var refId sql.NullInt64
 						if err := vlRows.Scan(&refId); err != nil {
-							vlRows.Close()
 							return err
 						}
 						if refId.Valid {
 							vlRefIds = append(vlRefIds, refId.Int64)
 						}
 					}
-					vlRows.Close()
 					
 					// Delete value_id references
 					for _, refId := range vlRefIds {
-						if err := deleteReferenceRecursively(tx, refId); err != nil {
+						if err := deleteReferenceRecursively(tx, refId, 0); err != nil {
 							return err
 						}
 					}
@@ -507,7 +507,7 @@ func (p *PostgreSQLSubmodelDatabase) DeleteSubmodel(id string) error {
 				
 				// Delete unit_id reference
 				if unitId.Valid {
-					if err := deleteReferenceRecursively(tx, unitId.Int64); err != nil {
+					if err := deleteReferenceRecursively(tx, unitId.Int64, 0); err != nil {
 						return err
 					}
 				}
@@ -542,7 +542,7 @@ func (p *PostgreSQLSubmodelDatabase) DeleteSubmodel(id string) error {
 		
 		// Delete the data_specification reference
 		if dsRefId.Valid {
-			if err := deleteReferenceRecursively(tx, dsRefId.Int64); err != nil {
+			if err := deleteReferenceRecursively(tx, dsRefId.Int64, 0); err != nil {
 				return err
 			}
 		}
@@ -550,7 +550,7 @@ func (p *PostgreSQLSubmodelDatabase) DeleteSubmodel(id string) error {
 
 	// Delete supplemental semantic ID references
 	for _, refId := range suppSemanticIds {
-		if err := deleteReferenceRecursively(tx, refId); err != nil {
+		if err := deleteReferenceRecursively(tx, refId, 0); err != nil {
 			return err
 		}
 	}
@@ -592,7 +592,7 @@ func (p *PostgreSQLSubmodelDatabase) DeleteSubmodel(id string) error {
 		
 		// Delete creator reference
 		if creatorRefId.Valid {
-			if err := deleteReferenceRecursively(tx, creatorRefId.Int64); err != nil {
+			if err := deleteReferenceRecursively(tx, creatorRefId.Int64, 0); err != nil {
 				return err
 			}
 		}
@@ -611,7 +611,7 @@ func (p *PostgreSQLSubmodelDatabase) DeleteSubmodel(id string) error {
 			}
 			
 			if dsRefId.Valid {
-				if err := deleteReferenceRecursively(tx, dsRefId.Int64); err != nil {
+				if err := deleteReferenceRecursively(tx, dsRefId.Int64, 0); err != nil {
 					return err
 				}
 			}
@@ -620,7 +620,7 @@ func (p *PostgreSQLSubmodelDatabase) DeleteSubmodel(id string) error {
 
 	// Delete semantic_id reference (this will cascade to reference_key)
 	if semanticId.Valid {
-		if err := deleteReferenceRecursively(tx, semanticId.Int64); err != nil {
+		if err := deleteReferenceRecursively(tx, semanticId.Int64, 0); err != nil {
 			return err
 		}
 	}
@@ -649,7 +649,13 @@ func (p *PostgreSQLSubmodelDatabase) DeleteSubmodel(id string) error {
 }
 
 // deleteReferenceRecursively deletes a reference and all its nested references
-func deleteReferenceRecursively(tx *sql.Tx, referenceId int64) error {
+// depth parameter prevents infinite recursion (max depth is 100)
+func deleteReferenceRecursively(tx *sql.Tx, referenceId int64, depth int) error {
+	const maxDepth = 100
+	if depth > maxDepth {
+		return fmt.Errorf("reference hierarchy exceeds maximum depth of %d", maxDepth)
+	}
+	
 	// Get all child references that have this reference as their parent or root
 	rows, err := tx.Query(`
 		SELECT id FROM reference WHERE parentReference=$1 OR rootReference=$1
@@ -670,7 +676,7 @@ func deleteReferenceRecursively(tx *sql.Tx, referenceId int64) error {
 	
 	// Recursively delete children first
 	for _, childId := range childIds {
-		if err := deleteReferenceRecursively(tx, childId); err != nil {
+		if err := deleteReferenceRecursively(tx, childId, depth+1); err != nil {
 			return err
 		}
 	}
