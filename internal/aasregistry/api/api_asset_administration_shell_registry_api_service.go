@@ -171,22 +171,26 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) GetAssetAdministrationSh
 	// TODO: Uncomment the next line to return response Response(0, Result{}) or use other options such as http.Ok ...
 	// return Response(0, Result{}), nil
 
-	decoded, decodeErr := common.DecodeString(aasIdentifier)
-	if decodeErr != nil {
-		return common.NewErrorResponse(
-			decodeErr, http.StatusBadRequest, componentName, "GetAllAssetLinksById", "BadRequest-Decode",
-		), nil
-	}
+    decoded, decodeErr := common.DecodeString(aasIdentifier)
+    if decodeErr != nil {
+        return common.NewErrorResponse(
+            decodeErr, http.StatusBadRequest, componentName, "GetAssetAdministrationShellDescriptorById", "BadRequest-Decode",
+        ), nil
+    }
 
-	result, err := s.aasRegistryBackend.GetAssetAdministrationShellDescriptorById(ctx, string(decoded))
-	if err != nil {
-		switch {
-		default:
-			return common.NewErrorResponse(
-				err, http.StatusInternalServerError, componentName, "GetAssetAdministrationShellDescriptorById", "Unhandled",
-			), err
-		}
-	}
+    result, err := s.aasRegistryBackend.GetAssetAdministrationShellDescriptorById(ctx, string(decoded))
+    if err != nil {
+        switch {
+        case common.IsErrNotFound(err):
+            return common.NewErrorResponse(
+                err, http.StatusNotFound, componentName, "GetAssetAdministrationShellDescriptorById", "NotFound",
+            ), nil
+        default:
+            return common.NewErrorResponse(
+                err, http.StatusInternalServerError, componentName, "GetAssetAdministrationShellDescriptorById", "Unhandled",
+            ), err
+        }
+    }
 
 	return model.Response(http.StatusOK, result), nil
 }

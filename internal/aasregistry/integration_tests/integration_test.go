@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -12,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/testenv"
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 
 	"github.com/stretchr/testify/assert"
@@ -62,6 +62,23 @@ func makeRequest(config TestConfig) (string, error) {
 			req.Header.Set("Content-Type", "application/json")
 		} else {
 			req, err = http.NewRequest("POST", config.Endpoint, nil)
+			if err != nil {
+				return "", err
+			}
+		}
+	case "PUT":
+		if config.Data != "" {
+			data, err := os.ReadFile(config.Data)
+			if err != nil {
+				return "", fmt.Errorf("failed to read data file: %v", err)
+			}
+			req, err = http.NewRequest("PUT", config.Endpoint, bytes.NewBuffer(data))
+			if err != nil {
+				return "", err
+			}
+			req.Header.Set("Content-Type", "application/json")
+		} else {
+			req, err = http.NewRequest("PUT", config.Endpoint, nil)
 			if err != nil {
 				return "", err
 			}
@@ -138,45 +155,20 @@ func TestIntegration(t *testing.T) {
 
 // TestMain handles setup and teardown
 func TestMain(m *testing.M) {
+
+	executable, _, err := testenv.FindCompose()
+	if err != nil {
+		fmt.Println("compose engine not found:", err)
+		os.Exit(m.Run())
+	}
+
 	// Setup: Start Docker Compose
 	fmt.Println("Starting Docker Compose...")
-	cmd := exec.Command("docker", "compose", "-f", "docker_compose/docker_compose.yml", "up", "-d", "--build")
+	cmd := exec.Command(executable, "compose", "-f", "docker_compose/docker_compose.yml", "up", "-d", "--build")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
 		fmt.Printf("Failed to start Docker Compose: %v\n", err)
-		os.Exit(1)
-	}
-
-	// Create DB Connection here
-	sql, err := sql.Open("postgres", "postgres://admin:admin123@127.0.0.1:5432/basyxTestDB?sslmode=disable")
-
-	if err != nil {
-		fmt.Printf("Failed to connect to database: %v\n", err)
-		os.Exit(1)
-	}
-
-	//wait for 5sec to ensure that the DB is ready
-	time.Sleep(5 * time.Second)
-
-	dir, osErr := os.Getwd()
-
-	if osErr != nil {
-		fmt.Printf("Failed to get working directory: %v\n", osErr)
-		os.Exit(1)
-	}
-
-	queryString, fileError := os.ReadFile(dir + "/sql/demoSubmodel.sql")
-
-	if fileError != nil {
-		fmt.Printf("Failed to read SQL file: %v\n", fileError)
-		os.Exit(1)
-	}
-
-	_, err = sql.Exec(string(queryString))
-
-	if err != nil {
-		fmt.Printf("Failed to execute SQL script: %v\n", err)
 		os.Exit(1)
 	}
 
@@ -187,7 +179,7 @@ func TestMain(m *testing.M) {
 
 	// Teardown: Stop Docker Compose
 	fmt.Println("Stopping Docker Compose...")
-	cmd = exec.Command("docker", "compose", "-f", "docker_compose/docker_compose.yml", "down")
+	cmd = exec.Command(executable, "compose", "-f", "docker_compose/docker_compose.yml", "down")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {

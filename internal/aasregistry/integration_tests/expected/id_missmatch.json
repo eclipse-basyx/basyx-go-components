@@ -1,0 +1,9 @@
+[
+    {
+        "messageType": "Error",
+        "text": "body id does not match path id",
+        "code": "400",
+        "correlationId": "AASR-400-PutAssetAdministrationShellDescriptorById-BadRequest-BadRequest-IdMismatch",
+        "timestamp": "2025-10-31T11:34:46+01:00"
+    }
+]

@@ -1,16 +1,108 @@
 [
-    {
-        "context": "Health endpoint",
-        "method": "GET",
-        "endpoint": "http://localhost:5004/health",
-        "shouldMatch": "expected/expectedHealthEndpoint.json",
-        "expectedStatus": 200
-    },
-    {
-        "context": "Create Top Level Property",
-        "method": "POST",
-        "endpoint": "http://127.0.0.1:5004/shell-descriptors",
-        "data": "postBody/example_data.json",
-        "expectedStatus": 201
-    }
+  {
+    "context": "Health endpoint",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:5004/health",
+    "shouldMatch": "expected/expectedHealthEndpoint.json",
+    "expectedStatus": 200
+  },
+
+  {
+    "context": "Create AAS descriptor (simple)",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:5004/shell-descriptors",
+    "data": "postBody/simple_ass_descriptor_1.json",
+    "expectedStatus": 201
+  },
+  {
+    "context": "Create AAS descriptor duplicate -> 409",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:5004/shell-descriptors",
+    "data": "postBody/simple_ass_descriptor_1.json",
+    "expectedStatus": 409
+  },
+  {
+    "context": "List AAS descriptors",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:5004/shell-descriptors",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Get AAS descriptor by id",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:5004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8yMjMzNQ",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Replace AAS descriptor via PUT",
+    "method": "PUT",
+    "endpoint": "http://127.0.0.1:5004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8yMjMzNQ",
+    "data": "postBody/simple_submodel_descriptor_2.json",
+    "expectedStatus": 400
+  },
+  {
+    "context": "List submodel descriptors (initially empty)",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:5004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8yMjMzNQ/submodel-descriptors",
+    "shouldMatch": "expected/empty_paged_result.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Replace AAS descriptor via PUT",
+    "method": "PUT",
+    "endpoint": "http://127.0.0.1:5004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8yMjMzNQ",
+    "data": "postBody/complex_aas_descriptor_1.json",
+    "expectedStatus": 204
+  },
+  {
+    "context": "Create submodel descriptor",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:5004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8yMjMzNQ/submodel-descriptors",
+    "data": "postBody/simple_submodel_descriptor_1.json",
+    "expectedStatus": 201
+  },
+  {
+    "context": "Create submodel descriptor duplicate -> 409",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:5004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8yMjMzNQ/submodel-descriptors",
+    "data": "postBody/simple_submodel_descriptor_1.json",
+    "expectedStatus": 409
+  },
+  {
+    "context": "List submodel descriptors (after create)",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:5004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8yMjMzNQ/submodel-descriptors",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Get submodel descriptor by id",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:5004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8yMjMzNQ/submodel-descriptors/dXJuOmV4YW1wbGU6c206MDAx",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Replace submodel descriptor via PUT",
+    "method": "PUT",
+    "endpoint": "http://127.0.0.1:5004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8yMjMzNQ/submodel-descriptors/dXJuOmV4YW1wbGU6c206MDAx",
+    "data": "postBody/simple_submodel_descriptor_2.json",
+    "expectedStatus": 204
+  },
+  {
+    "context": "Delete submodel descriptor",
+    "method": "DELETE",
+    "endpoint": "http://127.0.0.1:5004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8yMjMzNQ/submodel-descriptors/dXJuOmV4YW1wbGU6c206MDAx",
+    "expectedStatus": 204
+  },
+  {
+    "context": "Delete AAS descriptor",
+    "method": "DELETE",
+    "endpoint": "http://127.0.0.1:5004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8yMjMzNQ",
+    "expectedStatus": 204
+  },
+  {
+    "context": "Get deleted AAS descriptor -> 404",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:5004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8yMjMzNQ",
+    "expectedStatus": 404
+  }
 ]
