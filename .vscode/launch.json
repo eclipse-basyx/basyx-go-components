@@ -35,7 +35,7 @@
                 "-config",
                 "${workspaceFolder}/cmd/aasregistryservice/config.yaml",
                 "-databaseSchema",
-                "${workspaceFolder}/cmd/aasregistryservice/resources/sql/aasregistryschema.sql"
+                "${workspaceFolder}/basyxschema.sql"
             ]
         }
     ]
