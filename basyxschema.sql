@@ -191,7 +191,6 @@ CREATE TABLE IF NOT EXISTS administrative_information (
   version           VARCHAR(4),
   revision          VARCHAR(4),
   creator           BIGSERIAL REFERENCES reference(id),
-  embedded_data_specification JSONB,
   templateId        VARCHAR(2048)
 );
 
@@ -285,7 +284,6 @@ CREATE TABLE IF NOT EXISTS submodel (
   semantic_id BIGINT REFERENCES reference(id) ON DELETE CASCADE,
   description_id BIGINT REFERENCES lang_string_text_type_reference(id) ON DELETE CASCADE,
   displayname_id  BIGINT REFERENCES lang_string_name_type_reference(id) ON DELETE CASCADE,
-  embedded_data_specification JSONB,
   model_type  TEXT NOT NULL DEFAULT 'Submodel'
 );
 CREATE INDEX IF NOT EXISTS ix_sm_idshort ON submodel(id_short);
