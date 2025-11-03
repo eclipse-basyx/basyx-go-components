@@ -54,7 +54,7 @@ func BuildAdministration(adminRow AdministrationRow) (*gen.AdministrativeInforma
 
 	builder := NewEmbeddedDataSpecificationsBuilder()
 
-	err = builder.BuildContentsIec61360(adminRow.EdsDataSpecifications)
+	err = builder.BuildContentsIec61360(adminRow.EdsDataSpecificationIEC61360)
 	if err != nil {
 		log.Printf("Failed to build contents: %v", err)
 	}
