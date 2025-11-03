@@ -221,7 +221,7 @@ CREATE TABLE IF NOT EXISTS value_list_value_reference_pair (
   position INTEGER NOT NULL,  -- <- Array-Index valueReferencePairs[i]
   value_list_id BIGINT NOT NULL REFERENCES value_list(id) ON DELETE CASCADE,
   value TEXT NOT NULL,
-  value_id BIGINT REFERENCES reference(id) ON DELETE CASCADE
+  value_id BIGINT REFERENCES reference(id)
 );
 
 CREATE INDEX IF NOT EXISTS ix_vlvrp_id ON value_list_value_reference_pair(id);
@@ -240,17 +240,17 @@ CREATE INDEX IF NOT EXISTS ix_lt_id ON level_type(id);
 
 CREATE TABLE IF NOT EXISTS data_specification_iec61360 (
   id                BIGINT REFERENCES data_specification_content(id) ON DELETE CASCADE PRIMARY KEY,
-  preferred_name_id BIGINT REFERENCES lang_string_text_type_reference(id) ON DELETE CASCADE NOT NULL,
-  short_name_id     BIGINT REFERENCES lang_string_text_type_reference(id) ON DELETE CASCADE,
+  preferred_name_id BIGINT REFERENCES lang_string_text_type_reference(id) NOT NULL,
+  short_name_id     BIGINT REFERENCES lang_string_text_type_reference(id),
   unit              TEXT,
-  unit_id           BIGINT REFERENCES reference(id) ON DELETE CASCADE,
+  unit_id           BIGINT REFERENCES reference(id),
   source_of_definition TEXT,
   symbol           TEXT,
   data_type        data_type_iec61360,
-  definition_id    BIGINT REFERENCES lang_string_text_type_reference(id) ON DELETE CASCADE,
+  definition_id    BIGINT REFERENCES lang_string_text_type_reference(id),
   value_format     TEXT,
-  value_list_id    BIGINT REFERENCES value_list(id) ON DELETE CASCADE,
-  level_type_id BIGINT REFERENCES level_type(id) ON DELETE CASCADE,
+  value_list_id    BIGINT REFERENCES value_list(id),
+  level_type_id BIGINT REFERENCES level_type(id),
   value VARCHAR(2048)
 );
 
@@ -281,10 +281,10 @@ CREATE TABLE IF NOT EXISTS submodel (
   id_short    varchar(128),
   category    varchar(128),
   kind        modelling_kind,
-  administration_id BIGINT REFERENCES administrative_information(id) ON DELETE CASCADE,
-  semantic_id BIGINT REFERENCES reference(id) ON DELETE CASCADE,
-  description_id BIGINT REFERENCES lang_string_text_type_reference(id) ON DELETE CASCADE,
-  displayname_id  BIGINT REFERENCES lang_string_name_type_reference(id) ON DELETE CASCADE,
+  administration_id BIGINT REFERENCES administrative_information(id),
+  semantic_id BIGINT REFERENCES reference(id),
+  description_id BIGINT REFERENCES lang_string_text_type_reference(id),
+  displayname_id  BIGINT REFERENCES lang_string_name_type_reference(id),
   embedded_data_specification JSONB,
   model_type  TEXT NOT NULL DEFAULT 'Submodel'
 );
@@ -317,7 +317,7 @@ CREATE INDEX IF NOT EXISTS ix_eds_id ON submodel_embedded_data_specification(id)
 
 CREATE TABLE IF NOT EXISTS extension (
   id          BIGSERIAL PRIMARY KEY,
-  semantic_id BIGINT REFERENCES reference(id) ON DELETE CASCADE,
+  semantic_id BIGINT REFERENCES reference(id),
   name       varchar(128) NOT NULL,
   value_type    data_type_def_xsd,
   value_text    TEXT,
@@ -382,8 +382,8 @@ CREATE TABLE IF NOT EXISTS submodel_element (
   category       varchar(128),
   model_type     aas_submodel_elements NOT NULL,
   semantic_id    BIGINT REFERENCES reference(id),
-  description_id BIGINT REFERENCES lang_string_text_type_reference(id) ON DELETE CASCADE,
-  displayname_id BIGINT REFERENCES lang_string_name_type_reference(id) ON DELETE CASCADE,
+  description_id BIGINT REFERENCES lang_string_text_type_reference(id),
+  displayname_id BIGINT REFERENCES lang_string_name_type_reference(id),
   idshort_path   TEXT NOT NULL,                            -- e.g. sm_abc.sensors[2].temperature
   CONSTRAINT uq_sibling_idshort UNIQUE (submodel_id, parent_sme_id, id_short),
   CONSTRAINT uq_sibling_pos     UNIQUE (submodel_id, parent_sme_id, position)
@@ -637,3 +637,274 @@ CREATE INDEX IF NOT EXISTS ix_ref_root_id ON reference(rootreference, id);
 CREATE INDEX IF NOT EXISTS ix_ref_type ON reference(type);
 
 CREATE INDEX IF NOT EXISTS ix_refkey_refid ON reference_key(value);
+
+-- Trigger function to clean up orphaned records when a submodel is deleted
+CREATE OR REPLACE FUNCTION cleanup_submodel_references()
+RETURNS TRIGGER AS $$
+BEGIN
+    -- Delete the administrative_information record if it exists
+    IF OLD.administration_id IS NOT NULL THEN
+        DELETE FROM administrative_information WHERE id = OLD.administration_id;
+    END IF;
+    
+    -- Delete the semantic_id reference if it exists
+    IF OLD.semantic_id IS NOT NULL THEN
+        DELETE FROM reference WHERE id = OLD.semantic_id;
+    END IF;
+    
+    -- Delete the description_id lang_string_text_type_reference if it exists
+    IF OLD.description_id IS NOT NULL THEN
+        DELETE FROM lang_string_text_type_reference WHERE id = OLD.description_id;
+    END IF;
+    
+    -- Delete the displayname_id lang_string_name_type_reference if it exists
+    IF OLD.displayname_id IS NOT NULL THEN
+        DELETE FROM lang_string_name_type_reference WHERE id = OLD.displayname_id;
+    END IF;
+    
+    RETURN OLD;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Create trigger to execute cleanup function after submodel deletion
+CREATE TRIGGER trigger_cleanup_submodel_references
+    AFTER DELETE ON submodel
+    FOR EACH ROW
+    EXECUTE FUNCTION cleanup_submodel_references();
+
+-- Trigger function to clean up orphaned records when a submodel_element is deleted
+CREATE OR REPLACE FUNCTION cleanup_submodel_element_references()
+RETURNS TRIGGER AS $$
+BEGIN
+    -- Delete the semantic_id reference if it exists
+    IF OLD.semantic_id IS NOT NULL THEN
+        DELETE FROM reference WHERE id = OLD.semantic_id;
+    END IF;
+    
+    -- Delete the description_id lang_string_text_type_reference if it exists
+    IF OLD.description_id IS NOT NULL THEN
+        DELETE FROM lang_string_text_type_reference WHERE id = OLD.description_id;
+    END IF;
+    
+    -- Delete the displayname_id lang_string_name_type_reference if it exists
+    IF OLD.displayname_id IS NOT NULL THEN
+        DELETE FROM lang_string_name_type_reference WHERE id = OLD.displayname_id;
+    END IF;
+    
+    RETURN OLD;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Create trigger to execute cleanup function after submodel_element deletion
+CREATE TRIGGER trigger_cleanup_submodel_element_references
+    AFTER DELETE ON submodel_element
+    FOR EACH ROW
+    EXECUTE FUNCTION cleanup_submodel_element_references();
+
+-- Trigger function to clean up orphaned records when an extension is deleted
+CREATE OR REPLACE FUNCTION cleanup_extension_references()
+RETURNS TRIGGER AS $$
+BEGIN
+    -- Delete the semantic_id reference if it exists
+    IF OLD.semantic_id IS NOT NULL THEN
+        DELETE FROM reference WHERE id = OLD.semantic_id;
+    END IF;
+    
+    RETURN OLD;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Create trigger to execute cleanup function after extension deletion
+CREATE TRIGGER trigger_cleanup_extension_references
+    AFTER DELETE ON extension
+    FOR EACH ROW
+    EXECUTE FUNCTION cleanup_extension_references();
+
+-- Trigger function to clean up extension records when junction table entry is deleted
+CREATE OR REPLACE FUNCTION cleanup_orphaned_extension()
+RETURNS TRIGGER AS $$
+BEGIN
+    -- Delete the extension if no other references exist
+    DELETE FROM extension 
+    WHERE id = OLD.extension_id 
+    AND NOT EXISTS (
+        SELECT 1 FROM submodel_extension WHERE extension_id = OLD.extension_id
+    );
+    
+    RETURN OLD;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Create trigger to delete orphaned extensions
+CREATE TRIGGER trigger_cleanup_orphaned_extension
+    AFTER DELETE ON submodel_extension
+    FOR EACH ROW
+    EXECUTE FUNCTION cleanup_orphaned_extension();
+
+-- Trigger function to clean up qualifier records when junction table entry is deleted
+CREATE OR REPLACE FUNCTION cleanup_orphaned_qualifier()
+RETURNS TRIGGER AS $$
+BEGIN
+    -- Delete the qualifier if no other references exist
+    DELETE FROM qualifier 
+    WHERE id = OLD.qualifier_id 
+    AND NOT EXISTS (
+        SELECT 1 FROM submodel_qualifier WHERE qualifier_id = OLD.qualifier_id
+        UNION
+        SELECT 1 FROM submodel_element_qualifier WHERE qualifier_id = OLD.qualifier_id
+    );
+    
+    RETURN OLD;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Create triggers to delete orphaned qualifiers
+CREATE TRIGGER trigger_cleanup_orphaned_qualifier_from_submodel
+    AFTER DELETE ON submodel_qualifier
+    FOR EACH ROW
+    EXECUTE FUNCTION cleanup_orphaned_qualifier();
+
+CREATE TRIGGER trigger_cleanup_orphaned_qualifier_from_sme
+    AFTER DELETE ON submodel_element_qualifier
+    FOR EACH ROW
+    EXECUTE FUNCTION cleanup_orphaned_qualifier();
+
+-- Trigger function to clean up orphaned records when a qualifier is deleted
+CREATE OR REPLACE FUNCTION cleanup_qualifier_references()
+RETURNS TRIGGER AS $$
+BEGIN
+    -- Delete the semantic_id reference if it exists
+    IF OLD.semantic_id IS NOT NULL THEN
+        DELETE FROM reference WHERE id = OLD.semantic_id;
+    END IF;
+    
+    -- Delete the value_id reference if it exists
+    IF OLD.value_id IS NOT NULL THEN
+        DELETE FROM reference WHERE id = OLD.value_id;
+    END IF;
+    
+    RETURN OLD;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Create trigger to execute cleanup function after qualifier deletion
+CREATE TRIGGER trigger_cleanup_qualifier_references
+    AFTER DELETE ON qualifier
+    FOR EACH ROW
+    EXECUTE FUNCTION cleanup_qualifier_references();
+-- Trigger function to clean up orphaned records when a value_list_value_reference_pair is deleted
+CREATE OR REPLACE FUNCTION cleanup_value_list_value_reference_pair_references()
+RETURNS TRIGGER AS $$
+BEGIN
+    -- Delete the value_id reference if it exists
+    IF OLD.value_id IS NOT NULL THEN
+        DELETE FROM reference WHERE id = OLD.value_id;
+    END IF;
+    
+    RETURN OLD;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Create trigger to execute cleanup function after value_list_value_reference_pair deletion
+CREATE TRIGGER trigger_cleanup_value_list_value_reference_pair_references
+    AFTER DELETE ON value_list_value_reference_pair
+    FOR EACH ROW
+    EXECUTE FUNCTION cleanup_value_list_value_reference_pair_references();
+
+-- Trigger function to clean up orphaned records when a data_specification_iec61360 is deleted
+CREATE OR REPLACE FUNCTION cleanup_data_specification_iec61360_references()
+RETURNS TRIGGER AS $$
+BEGIN
+    -- Delete the preferred_name_id lang_string_text_type_reference if it exists
+    IF OLD.preferred_name_id IS NOT NULL THEN
+        DELETE FROM lang_string_text_type_reference WHERE id = OLD.preferred_name_id;
+    END IF;
+    
+    -- Delete the short_name_id lang_string_text_type_reference if it exists
+    IF OLD.short_name_id IS NOT NULL THEN
+        DELETE FROM lang_string_text_type_reference WHERE id = OLD.short_name_id;
+    END IF;
+    
+    -- Delete the unit_id reference if it exists
+    IF OLD.unit_id IS NOT NULL THEN
+        DELETE FROM reference WHERE id = OLD.unit_id;
+    END IF;
+    
+    -- Delete the definition_id lang_string_text_type_reference if it exists
+    IF OLD.definition_id IS NOT NULL THEN
+        DELETE FROM lang_string_text_type_reference WHERE id = OLD.definition_id;
+    END IF;
+    
+    -- Delete the value_list_id if it exists
+    IF OLD.value_list_id IS NOT NULL THEN
+        DELETE FROM value_list WHERE id = OLD.value_list_id;
+    END IF;
+    
+    -- Delete the level_type_id if it exists
+    IF OLD.level_type_id IS NOT NULL THEN
+        DELETE FROM level_type WHERE id = OLD.level_type_id;
+    END IF;
+    
+    RETURN OLD;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Create trigger to execute cleanup function after data_specification_iec61360 deletion
+CREATE TRIGGER trigger_cleanup_data_specification_iec61360_references
+    AFTER DELETE ON data_specification_iec61360
+    FOR EACH ROW
+    EXECUTE FUNCTION cleanup_data_specification_iec61360_references();
+
+-- Trigger function to clean up orphaned data_specification when junction table entry is deleted
+CREATE OR REPLACE FUNCTION cleanup_orphaned_data_specification()
+RETURNS TRIGGER AS $$
+BEGIN
+    -- Delete the data_specification if no other references exist
+    DELETE FROM data_specification 
+    WHERE id = OLD.embedded_data_specification_id 
+    AND NOT EXISTS (
+        SELECT 1 FROM submodel_embedded_data_specification 
+        WHERE embedded_data_specification_id = OLD.embedded_data_specification_id
+        UNION
+        SELECT 1 FROM administrative_information_embedded_data_specification 
+        WHERE embedded_data_specification_id = OLD.embedded_data_specification_id
+    );
+    
+    RETURN OLD;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Create triggers to delete orphaned data_specification
+CREATE TRIGGER trigger_cleanup_orphaned_data_specification_from_submodel
+    AFTER DELETE ON submodel_embedded_data_specification
+    FOR EACH ROW
+    EXECUTE FUNCTION cleanup_orphaned_data_specification();
+
+CREATE TRIGGER trigger_cleanup_orphaned_data_specification_from_admin_info
+    AFTER DELETE ON administrative_information_embedded_data_specification
+    FOR EACH ROW
+    EXECUTE FUNCTION cleanup_orphaned_data_specification();
+
+-- Trigger function to clean up orphaned records when a data_specification is deleted
+CREATE OR REPLACE FUNCTION cleanup_data_specification_references()
+RETURNS TRIGGER AS $$
+BEGIN
+    -- Delete the data_specification reference if it exists
+    IF OLD.data_specification IS NOT NULL THEN
+        DELETE FROM reference WHERE id = OLD.data_specification;
+    END IF;
+    
+    -- Delete the data_specification_content if it exists
+    IF OLD.data_specification_content IS NOT NULL THEN
+        DELETE FROM data_specification_content WHERE id = OLD.data_specification_content;
+    END IF;
+    
+    RETURN OLD;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Create trigger to execute cleanup function after data_specification deletion
+CREATE TRIGGER trigger_cleanup_data_specification_references
+    AFTER DELETE ON data_specification
+    FOR EACH ROW
+    EXECUTE FUNCTION cleanup_data_specification_references();
