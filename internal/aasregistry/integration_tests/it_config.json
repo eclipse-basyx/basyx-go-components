@@ -75,6 +75,20 @@
     "expectedStatus": 400
   },
   {
+    "context": "Create AAS descriptor - wrong extension value type",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:5004/shell-descriptors",
+    "data": "postBody/simple_ass_descriptor_malformed_5.json",
+    "expectedStatus": 400
+  },
+  {
+    "context": "Create AAS descriptor - wrong extension value type",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:5004/shell-descriptors",
+    "data": "postBody/simple_ass_descriptor_malformed_6.json",
+    "expectedStatus": 400
+  },
+  {
     "context": "Create AAS descriptor 1 (simple)",
     "method": "POST",
     "endpoint": "http://127.0.0.1:5004/shell-descriptors",
@@ -196,6 +210,7 @@
     "context": "Get AAS descriptor by id - full complex descriptor",
     "method": "GET",
     "endpoint": "http://127.0.0.1:5004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8yMjMzNQ",
+    "shouldMatch": "postBody/complex_aas_descriptor_1.json",
     "expectedStatus": 200
   },
   {

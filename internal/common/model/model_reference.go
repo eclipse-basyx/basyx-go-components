@@ -29,6 +29,10 @@ func AssertReferenceRequired(obj Reference) error {
 		}
 	}
 
+	if len(obj.Keys) < 1 {
+		return &RequiredError{Field: "keys has no elements"}
+	}
+
 	for _, el := range obj.Keys {
 		if err := AssertKeyRequired(el); err != nil {
 			return err

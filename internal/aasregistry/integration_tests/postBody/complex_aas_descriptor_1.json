@@ -11,7 +11,7 @@
         {
             "name": "h1",
             "value": "value",
-            "semanticId": {"type": "ModelReference"},
+            "semanticId": {"type": "ModelReference", "keys": [{"type": "AnnotatedRelationshipElement", "value": "ddsfkjn"}]},
             "supplementalSemanticIds": [
                 {
                     "type": "ModelReference",
