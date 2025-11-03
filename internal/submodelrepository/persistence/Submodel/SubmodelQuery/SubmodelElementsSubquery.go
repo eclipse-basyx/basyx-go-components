@@ -37,8 +37,64 @@ func GetSubmodelElementsSubquery(dialect goqu.DialectWrapper, rootSubmodelElemen
 
 	valueByType := goqu.Case().
 		When(
+			goqu.I("tlsme.model_type").Eq("AnnotatedRelationshipElement"),
+			getAnnotatedRelationshipElementSubquery(dialect),
+		).
+		When(
+			goqu.I("tlsme.model_type").Eq("BasicEventElement"),
+			getBasicEventElementSubquery(dialect),
+		).
+		When(
+			goqu.I("tlsme.model_type").Eq("Blob"),
+			getBlobSubquery(dialect),
+		).
+		When(
+			goqu.I("tlsme.model_type").Eq("Capability"),
+			getCapabilitySubquery(dialect),
+		).
+		When(
+			goqu.I("tlsme.model_type").Eq("Entity"),
+			getEntitySubquery(dialect),
+		).
+		When(
+			goqu.I("tlsme.model_type").Eq("EventElement"),
+			getEventElementSubquery(dialect),
+		).
+		When(
+			goqu.I("tlsme.model_type").Eq("File"),
+			getFileSubquery(dialect),
+		).
+		When(
+			goqu.I("tlsme.model_type").Eq("SubmodelElementCollection"),
+			getSubmodelElementCollectionSubquery(dialect),
+		).
+		When(
+			goqu.I("tlsme.model_type").Eq("SubmodelElementList"),
+			getSubmodelElementListSubquery(dialect),
+		).
+		When(
+			goqu.I("tlsme.model_type").Eq("MultiLanguageProperty"),
+			getMultiLanguagePropertySubquery(dialect),
+		).
+		When(
+			goqu.I("tlsme.model_type").Eq("Operation"),
+			getOperationSubquery(dialect),
+		).
+		When(
 			goqu.I("tlsme.model_type").Eq("Property"),
 			getPropertySubquery(dialect),
+		).
+		When(
+			goqu.I("tlsme.model_type").Eq("Range"),
+			getRangeSubquery(dialect),
+		).
+		When(
+			goqu.I("tlsme.model_type").Eq("ReferenceElement"),
+			getReferenceElementSubquery(dialect),
+		).
+		When(
+			goqu.I("tlsme.model_type").Eq("RelationshipElement"),
+			getRelationshipElementSubquery(dialect),
 		).
 		Else(goqu.V(nil))
 
@@ -73,6 +129,50 @@ func GetSubmodelElementsSubquery(dialect goqu.DialectWrapper, rootSubmodelElemen
 	return smeSubquery
 }
 
+func getAnnotatedRelationshipElementSubquery(dialect goqu.DialectWrapper) *goqu.SelectDataset {
+	return nil
+}
+
+func getBasicEventElementSubquery(dialect goqu.DialectWrapper) *goqu.SelectDataset {
+	return nil
+}
+
+func getBlobSubquery(dialect goqu.DialectWrapper) *goqu.SelectDataset {
+	return nil
+}
+
+func getCapabilitySubquery(dialect goqu.DialectWrapper) *goqu.SelectDataset {
+	return nil
+}
+
+func getEntitySubquery(dialect goqu.DialectWrapper) *goqu.SelectDataset {
+	return nil
+}
+
+func getFileSubquery(dialect goqu.DialectWrapper) *goqu.SelectDataset {
+	return nil
+}
+
+func getEventElementSubquery(dialect goqu.DialectWrapper) *goqu.SelectDataset {
+	return nil
+}
+
+func getSubmodelElementListSubquery(dialect goqu.DialectWrapper) *goqu.SelectDataset {
+	return nil
+}
+
+func getSubmodelElementCollectionSubquery(dialect goqu.DialectWrapper) *goqu.SelectDataset {
+	return nil
+}
+
+func getMultiLanguagePropertySubquery(dialect goqu.DialectWrapper) *goqu.SelectDataset {
+	return nil
+}
+
+func getOperationSubquery(dialect goqu.DialectWrapper) *goqu.SelectDataset {
+	return nil
+}
+
 func getPropertySubquery(dialect goqu.DialectWrapper) *goqu.SelectDataset {
 	return dialect.From(goqu.T("property_element").As("pr")).
 		Select(
@@ -89,4 +189,16 @@ func getPropertySubquery(dialect goqu.DialectWrapper) *goqu.SelectDataset {
 		).
 		Where(goqu.I("pr.id").Eq(goqu.I("tlsme.id"))).
 		Limit(1)
+}
+
+func getRangeSubquery(dialect goqu.DialectWrapper) *goqu.SelectDataset {
+	return nil
+}
+
+func getReferenceElementSubquery(dialect goqu.DialectWrapper) *goqu.SelectDataset {
+	return nil
+}
+
+func getRelationshipElementSubquery(dialect goqu.DialectWrapper) *goqu.SelectDataset {
+	return nil
 }

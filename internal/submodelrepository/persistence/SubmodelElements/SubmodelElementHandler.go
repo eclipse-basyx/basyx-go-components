@@ -80,13 +80,6 @@ func GetSMEHandlerByModelType(modelType string, db *sql.DB) (PostgreSQLSMECrudIn
 			return nil, common.NewInternalServerError("Failed to create Capability handler. See console for details.")
 		}
 		handler = capHandler
-	case "DataElement":
-		deHandler, err := NewPostgreSQLDataElementHandler(db)
-		if err != nil {
-			fmt.Println("Error creating DataElement handler:", err)
-			return nil, common.NewInternalServerError("Failed to create DataElement handler. See console for details.")
-		}
-		handler = deHandler
 	case "Entity":
 		entityHandler, err := NewPostgreSQLEntityHandler(db)
 		if err != nil {
