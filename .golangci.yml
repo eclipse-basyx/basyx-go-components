@@ -1,22 +1,14 @@
+version: "2"
+
 run:
   timeout: 5m
   tests: true
   issues-exit-code: 1
   modules-download-mode: readonly
 
-# Ignore common generated/vendor paths
 issues:
-  exclude-use-default: false
-  exclude-dirs:
-    - vendor
-    - testdata
-    - .*generated.*
-    - .*mock.*
-    - internal/common/model
-    - pkg/
   max-issues-per-linter: 0
   max-same-issues: 0
-  new: false # disable diff processor to avoid Git HEAD~ errors
 
 linters:
   enable:
@@ -28,17 +20,3 @@ linters:
      - revive
      - unused
      - gocritic
-
-linters-settings:
-  revive:
-    rules:
-      - name: indent-error-flow
-      - name: exported
-        severity: warning
-        arguments: [ "disableStutteringCheck" ]
-      - name: error-naming
-      - name: if-return
-  gocritic:
-    enabled-tags: [performance, style, experimental]
-  misspell:
-    locale: US
