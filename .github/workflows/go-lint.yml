@@ -25,24 +25,8 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      # Optional: cache golangci-lint binary to speed up runs
-      - name: Cache golangci-lint
-        id: cache-gcl
-        uses: actions/cache@v4
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v6
         with:
-          path: |
-            ~/.cache/golangci-lint
-            ~/.local/bin/golangci-lint
-          key: gcl-${{ runner.os }}-${{ hashFiles('.golangci.yml') }}
-
-      - name: Install golangci-lint (if not cached)
-        if: steps.cache-gcl.outputs.cache-hit != 'true'
-        run: |
-          GOBIN=$HOME/.local/bin go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
-          echo "$HOME/.local/bin" >> $GITHUB_PATH
-
-      - name: Run golangci-lint
-        # You can also use the official action; direct CLI gives you full control
-        run: |
-          golangci-lint version || true
-          golangci-lint run ./...
+          # Optional: version of golangci-lint to use in form of v1.2 or v1.2.3 or `latest` to use the latest version
+          version: latest

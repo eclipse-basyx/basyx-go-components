@@ -39,4 +39,4 @@ debug.test.*
 .DS_Store
 
 # JetBrains IDEs
-.idea/
+.idea
