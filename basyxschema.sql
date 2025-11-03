@@ -660,19 +660,6 @@ CREATE TABLE IF NOT EXISTS descriptor_extension (
   extension_id BIGINT NOT NULL REFERENCES extension(id) ON DELETE CASCADE
 );
 
--- could be removed 
-CREATE TABLE IF NOT EXISTS extension_reference_refer_to (
-  id BIGSERIAL PRIMARY KEY,
-  extension_id BIGINT NOT NULL REFERENCES extension(id) ON DELETE CASCADE,
-  reference_id BIGINT NOT NULL REFERENCES reference(id) ON DELETE CASCADE
-);
--- could be removed 
-CREATE TABLE IF NOT EXISTS extension_reference_supplemental (
-  id BIGSERIAL PRIMARY KEY,
-  extension_id BIGINT NOT NULL REFERENCES extension(id) ON DELETE CASCADE,
-  reference_id BIGINT NOT NULL REFERENCES reference(id) ON DELETE CASCADE
-);
-
 CREATE TABLE IF NOT EXISTS specific_asset_id (
   id BIGSERIAL PRIMARY KEY,
   descriptor_id BIGINT NOT NULL REFERENCES descriptor(id) ON DELETE CASCADE,
@@ -749,16 +736,6 @@ CREATE TABLE IF NOT EXISTS submodel_descriptor_supplemental_semantic_id (
 CREATE INDEX IF NOT EXISTS ix_descriptor_extension_descriptor_id ON descriptor_extension(descriptor_id);
 CREATE INDEX IF NOT EXISTS ix_descriptor_extension_extension_id  ON descriptor_extension(extension_id);
 CREATE INDEX IF NOT EXISTS ix_descriptor_extension_pair          ON descriptor_extension(descriptor_id, extension_id);
-
--- extension_reference_refer_to
-CREATE INDEX IF NOT EXISTS ix_extrefref_extension_id ON extension_reference_refer_to(extension_id);
-CREATE INDEX IF NOT EXISTS ix_extrefref_reference_id ON extension_reference_refer_to(reference_id);
-CREATE INDEX IF NOT EXISTS ix_extrefref_pair         ON extension_reference_refer_to(extension_id, reference_id);
-
--- extension_reference_supplemental
-CREATE INDEX IF NOT EXISTS ix_extrefsupp_extension_id ON extension_reference_supplemental(extension_id);
-CREATE INDEX IF NOT EXISTS ix_extrefsupp_reference_id ON extension_reference_supplemental(reference_id);
-CREATE INDEX IF NOT EXISTS ix_extrefsupp_pair         ON extension_reference_supplemental(extension_id, reference_id);
 
 -- ==========================================
 -- Specific Asset IDs

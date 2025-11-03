@@ -51,11 +51,11 @@ func createExtensions(tx *sql.Tx, descriptorId int64, extensions []model.Extensi
 				return err
 			}
 
-			if err = createExtensionReferences(tx, id, val.SupplementalSemanticIds, "extension_reference_supplemental"); err != nil {
+			if err = createExtensionReferences(tx, id, val.SupplementalSemanticIds, "extension_supplemental_semantic_id"); err != nil {
 				return err
 			}
 
-			if err = createExtensionReferences(tx, id, val.RefersTo, "extension_reference_refer_to"); err != nil {
+			if err = createExtensionReferences(tx, id, val.RefersTo, "extension_refers_to"); err != nil {
 				return err
 			}
 		}

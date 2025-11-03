@@ -121,7 +121,7 @@ func readExtensionsByDescriptorIDs(
 
 	suppByExt, err := readEntityReferences1ToMany(
 		ctx, db, uniqExtIDs,
-		"extension_reference_supplemental", "extension_id", "reference_id",
+		"extension_supplemental_semantic_id", "extension_id", "reference_id",
 	)
 	if err != nil {
 		return nil, err
@@ -129,7 +129,7 @@ func readExtensionsByDescriptorIDs(
 
 	refersByExt, err := readEntityReferences1ToMany(
 		ctx, db, uniqExtIDs,
-		"extension_reference_refer_to", "extension_id", "reference_id",
+		"extension_refers_to", "extension_id", "reference_id",
 	)
 	if err != nil {
 		return nil, err
