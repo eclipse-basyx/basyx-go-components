@@ -24,51 +24,17 @@
 ******************************************************************************/
 
 // Author: Jannik Fried ( Fraunhofer IESE )
-package builder
+package submodelelements
 
 import (
-	"log"
+	"database/sql"
 
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
 
-func BuildAdministration(adminRow AdministrationRow) (*gen.AdministrativeInformation, error) {
-	administration := &gen.AdministrativeInformation{
-		Version:    adminRow.Version,
-		Revision:   adminRow.Revision,
-		TemplateId: adminRow.TemplateId,
-	}
-
-	refBuilderMap := make(map[int64]*ReferenceBuilder)
-
-	refs, err := ParseReferences(adminRow.Creator, refBuilderMap)
-	if err != nil {
-		return nil, err
-	}
-
-	ParseReferredReferences(adminRow.CreatorReferred, refBuilderMap)
-
-	if len(refs) > 0 {
-		administration.Creator = refs[0]
-	}
-
-	builder := NewEmbeddedDataSpecificationsBuilder()
-
-	err = builder.BuildContentsIec61360(adminRow.EdsDataSpecificationIEC61360)
-	if err != nil {
-		log.Printf("Failed to build contents: %v", err)
-	}
-
-	err = builder.BuildReferences(adminRow.EdsDataSpecifications, adminRow.EdsDataSpecificationsReferred)
-	if err != nil {
-		log.Printf("Failed to build references: %v", err)
-	}
-
-	eds := builder.Build()
-
-	if len(eds) > 0 {
-		administration.EmbeddedDataSpecifications = eds
-	}
-
-	return administration, nil
+type PostgreSQLSMECrudInterface interface {
+	Create(*sql.Tx, string, gen.SubmodelElement) (int, error)
+	CreateNested(*sql.Tx, string, int, string, gen.SubmodelElement, int) (int, error)
+	Update(string, gen.SubmodelElement) error
+	Delete(string) error
 }

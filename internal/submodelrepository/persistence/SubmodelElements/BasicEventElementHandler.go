@@ -1,9 +1,34 @@
+/*******************************************************************************
+* Copyright (C) 2025 the Eclipse BaSyx Authors and Fraunhofer IESE
+*
+* Permission is hereby granted, free of charge, to any person obtaining
+* a copy of this software and associated documentation files (the
+* "Software"), to deal in the Software without restriction, including
+* without limitation the rights to use, copy, modify, merge, publish,
+* distribute, sublicense, and/or sell copies of the Software, and to
+* permit persons to whom the Software is furnished to do so, subject to
+* the following conditions:
+*
+* The above copyright notice and this permission notice shall be
+* included in all copies or substantial portions of the Software.
+*
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+* NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+* LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+* OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+* WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*
+* SPDX-License-Identifier: MIT
+******************************************************************************/
+
+// Author: Jannik Fried ( Fraunhofer IESE )
 package submodelelements
 
 import (
 	"database/sql"
 	"errors"
-	"time"
 
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	_ "github.com/lib/pq" // PostgreSQL Treiber
@@ -64,67 +89,6 @@ func (p PostgreSQLBasicEventElementHandler) CreateNested(tx *sql.Tx, submodelId 
 	return id, nil
 }
 
-func (p PostgreSQLBasicEventElementHandler) Read(tx *sql.Tx, submodelId string, idShortOrPath string) (gen.SubmodelElement, error) {
-	// First, get the base submodel element
-	var baseSME gen.SubmodelElement
-	id, err := p.decorated.Read(tx, submodelId, idShortOrPath, &baseSME)
-	if err != nil {
-		return nil, err
-	}
-
-	// Check if it's a basic event element
-	basicEvent, ok := baseSME.(*gen.BasicEventElement)
-	if !ok {
-		return nil, errors.New("submodelElement is not of type BasicEventElement")
-	}
-
-	// Query basic_event_element
-	var observedRef, messageBrokerRef sql.NullInt64
-	var direction, state string
-	var messageTopic sql.NullString
-	var lastUpdate sql.NullTime
-	var minInterval, maxInterval sql.NullString
-
-	err = tx.QueryRow(`SELECT observed_ref, direction, state, message_topic, message_broker_ref, last_update, min_interval, max_interval FROM basic_event_element WHERE id = $1`, id).Scan(
-		&observedRef, &direction, &state, &messageTopic, &messageBrokerRef, &lastUpdate, &minInterval, &maxInterval)
-	if err != nil {
-		return nil, err
-	}
-
-	basicEvent.Direction = gen.Direction(direction)
-	basicEvent.State = gen.StateOfEvent(state)
-	if messageTopic.Valid {
-		basicEvent.MessageTopic = messageTopic.String
-	}
-	if lastUpdate.Valid {
-		basicEvent.LastUpdate = lastUpdate.Time.Format(time.RFC3339)
-	}
-	if minInterval.Valid {
-		// Assuming minInterval is a string representation of interval
-		basicEvent.MinInterval = minInterval.String
-	}
-	if maxInterval.Valid {
-		basicEvent.MaxInterval = maxInterval.String
-	}
-
-	if observedRef.Valid {
-		ref, err := readReference(tx, observedRef.Int64)
-		if err != nil {
-			return nil, err
-		}
-		basicEvent.Observed = ref
-	}
-
-	if messageBrokerRef.Valid {
-		ref, err := readReference(tx, messageBrokerRef.Int64)
-		if err != nil {
-			return nil, err
-		}
-		basicEvent.MessageBroker = ref
-	}
-
-	return basicEvent, nil
-}
 func (p PostgreSQLBasicEventElementHandler) Update(idShortOrPath string, submodelElement gen.SubmodelElement) error {
 	if dErr := p.decorated.Update(idShortOrPath, submodelElement); dErr != nil {
 		return dErr

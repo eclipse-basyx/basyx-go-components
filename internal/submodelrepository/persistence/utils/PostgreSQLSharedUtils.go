@@ -30,9 +30,9 @@ import (
 	"fmt"
 	"reflect"
 
+	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
-	qb "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/querybuilder"
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 )
 
@@ -481,11 +481,17 @@ func GetReferenceByReferenceDBID(db *sql.DB, referenceID sql.NullInt64) (*gen.Re
 	}
 	var refType string
 	// avoid driver-specific type casts in the query string which can confuse the pq parser
-	qRef, argsRef := qb.NewSelect("type").
+	ds := goqu.Dialect("postgres").
 		From("reference").
-		Where("id=$1", referenceID.Int64).
-		Build()
-	err := db.QueryRow(qRef, argsRef...).Scan(&refType)
+		Select("type").
+		Where(goqu.Ex{"id": referenceID.Int64})
+
+	qRef, argsRef, err := ds.ToSQL()
+	if err != nil {
+		return nil, err
+	}
+
+	err = db.QueryRow(qRef, argsRef...).Scan(&refType)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
@@ -493,12 +499,17 @@ func GetReferenceByReferenceDBID(db *sql.DB, referenceID sql.NullInt64) (*gen.Re
 		return nil, err
 	}
 	// similarly, select the type column directly and let the driver handle conversion
-	qKeys, argsKeys := qb.NewSelect("type", "value").
+	ds = goqu.Dialect("postgres").
 		From("reference_key").
-		Where("reference_id=$1", referenceID.Int64).
-		OrderBy("position").
-		Build()
-	rows, err := db.Query(qKeys, argsKeys...)
+		Select("type", "value").
+		Where(goqu.Ex{"reference_id": referenceID.Int64}).
+		Order(goqu.I("position").Asc())
+
+	sql, args, err := ds.ToSQL()
+	if err != nil {
+		return nil, err
+	}
+	rows, err := db.Query(sql, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -579,10 +590,16 @@ func GetLangStringNameTypes(db *sql.DB, nameTypeID sql.NullInt64) ([]gen.LangStr
 		return nil, nil
 	}
 	var nameTypes []gen.LangStringNameType
-	q, args := qb.NewSelect("text", "language").
+	ds := goqu.Dialect("postgres").
 		From("lang_string_name_type").
-		Where("lang_string_name_type_reference_id=$1", nameTypeID.Int64).
-		Build()
+		Select("text", "language").
+		Where(goqu.Ex{"lang_string_name_type_reference_id": nameTypeID.Int64})
+
+	q, args, err := ds.ToSQL()
+	if err != nil {
+		return nil, err
+	}
+
 	rows, err := db.Query(q, args...)
 	if err != nil {
 		return nil, err
@@ -629,10 +646,16 @@ func GetLangStringTextTypes(db *sql.DB, textTypeID sql.NullInt64) ([]gen.LangStr
 		return nil, nil
 	}
 	var textTypes []gen.LangStringTextType
-	q, args := qb.NewSelect("text", "language").
+	ds := goqu.Dialect("postgres").
 		From("lang_string_text_type").
-		Where("lang_string_text_type_reference_id=$1", textTypeID.Int64).
-		Build()
+		Select("text", "language").
+		Where(goqu.Ex{"lang_string_text_type_reference_id": textTypeID.Int64})
+
+	q, args, err := ds.ToSQL()
+	if err != nil {
+		return nil, err
+	}
+
 	rows, err := db.Query(q, args...)
 	if err != nil {
 		return nil, err
@@ -653,7 +676,6 @@ func GetLangStringTextTypes(db *sql.DB, textTypeID sql.NullInt64) ([]gen.LangStr
 }
 
 func CreateExtensionForSubmodel(tx *sql.Tx, submodel_id string, extension gen.Extension) (sql.NullInt64, error) {
-	// Create SemanticId
 	semanticIdDbId, err := CreateReference(tx, extension.SemanticId, sql.NullInt64{}, sql.NullInt64{})
 	if err != nil {
 		return sql.NullInt64{}, err
@@ -685,14 +707,36 @@ func insertExtension(extension gen.Extension, semanticIdDbId sql.NullInt64, tx *
 	var extensionDbId sql.NullInt64
 	var valueText, valueNum, valueBool, valueTime, valueDatetime sql.NullString
 	fillValueBasedOnType(extension, &valueText, &valueNum, &valueBool, &valueTime, &valueDatetime)
-	// INSERT INTO extension(..,..,..,..) VALUES($1,$2,$3) RETURNING id
-	q, args := qb.NewInsert("extension").
-		Columns("semantic_id", "name", "value_type", "value_text", "value_num", "value_bool", "value_time", "value_datetime").
-		Values(semanticIdDbId, extension.Name, extension.ValueType, valueText, valueNum, valueBool, valueTime, valueDatetime).
-		Returning("id").
-		Build()
+	ds := goqu.Dialect("postgres").
+		Insert("extension").
+		Cols(
+			"semantic_id",
+			"name",
+			"value_type",
+			"value_text",
+			"value_num",
+			"value_bool",
+			"value_time",
+			"value_datetime",
+		).
+		Vals(goqu.Vals{
+			semanticIdDbId,
+			extension.Name,
+			extension.ValueType,
+			valueText,
+			valueNum,
+			valueBool,
+			valueTime,
+			valueDatetime,
+		}).
+		Returning("id")
 
-	err := tx.QueryRow(q, args...).Scan(&extensionDbId)
+	q, args, err := ds.ToSQL()
+	if err != nil {
+		return sql.NullInt64{}, err
+	}
+
+	err = tx.QueryRow(q, args...).Scan(&extensionDbId)
 	if err != nil {
 		return sql.NullInt64{}, err
 	}
@@ -728,10 +772,16 @@ func insertRefersToReferences(extension gen.Extension, tx *sql.Tx, extensionDbId
 			if refErr != nil {
 				return refErr
 			}
-			q, args := qb.NewInsert("extension_refers_to").
-				Columns("extension_id", "reference_id").
-				Values(extensionDbId, refDbId).
-				Build()
+			ds := goqu.Dialect("postgres").
+				Insert("extension_refers_to").
+				Cols("extension_id", "reference_id").
+				Vals(goqu.Vals{extensionDbId, refDbId})
+
+			q, args, err := ds.ToSQL()
+			if err != nil {
+				return err
+			}
+
 			_, execErr := tx.Exec(q, args...)
 			if execErr != nil {
 				return execErr
@@ -751,14 +801,21 @@ func insertSupplementalSemanticIdsForExtensions(extension gen.Extension, semanti
 			if err != nil {
 				return err
 			}
-			q, args := qb.NewInsert("extension_supplemental_semantic_id").
-				Columns("extension_id", "reference_id").
-				Values(extensionDbId, supplementalSemanticIdDbId).
-				Build()
+			ds := goqu.Dialect("postgres").
+				Insert("extension_supplemental_semantic_id").
+				Cols("extension_id", "reference_id").
+				Vals(goqu.Vals{extensionDbId, supplementalSemanticIdDbId})
+
+			q, args, err := ds.ToSQL()
+			if err != nil {
+				return err
+			}
+
 			_, err = tx.Exec(q, args...)
 			if err != nil {
 				return err
 			}
+
 		}
 	}
 	return nil

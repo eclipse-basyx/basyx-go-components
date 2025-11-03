@@ -1,3 +1,29 @@
+/*******************************************************************************
+* Copyright (C) 2025 the Eclipse BaSyx Authors and Fraunhofer IESE
+*
+* Permission is hereby granted, free of charge, to any person obtaining
+* a copy of this software and associated documentation files (the
+* "Software"), to deal in the Software without restriction, including
+* without limitation the rights to use, copy, modify, merge, publish,
+* distribute, sublicense, and/or sell copies of the Software, and to
+* permit persons to whom the Software is furnished to do so, subject to
+* the following conditions:
+*
+* The above copyright notice and this permission notice shall be
+* included in all copies or substantial portions of the Software.
+*
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+* NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+* LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+* OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+* WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*
+* SPDX-License-Identifier: MIT
+******************************************************************************/
+
+// Author: Jannik Fried ( Fraunhofer IESE )
 package submodelelements
 
 import (
@@ -63,73 +89,6 @@ func (p PostgreSQLOperationHandler) CreateNested(tx *sql.Tx, submodelId string, 
 	return id, nil
 }
 
-func (p PostgreSQLOperationHandler) Read(tx *sql.Tx, submodelId string, idShortOrPath string) (gen.SubmodelElement, error) {
-	// First, get the base submodel element
-	var baseSME gen.SubmodelElement
-	id, err := p.decorated.Read(tx, submodelId, idShortOrPath, &baseSME)
-	if err != nil {
-		return nil, err
-	}
-
-	// Check if it's an operation
-	operation, ok := baseSME.(*gen.Operation)
-	if !ok {
-		return nil, errors.New("submodelElement is not of type Operation")
-	}
-
-	// Query operation variables
-	rows, err := tx.Query(`SELECT role, position, value_sme FROM operation_variable WHERE operation_id = $1 ORDER BY position`, id)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var inputVars, outputVars, inoutputVars []gen.OperationVariable
-	for rows.Next() {
-		var role string
-		var position int
-		var valueSmeId int
-		err := rows.Scan(&role, &position, &valueSmeId)
-		if err != nil {
-			return nil, err
-		}
-
-		// Get the idshort_path and model_type for the value SME
-		var valueIdShortPath, valueModelType string
-		err = tx.QueryRow(`SELECT idshort_path, model_type FROM submodel_element WHERE id = $1`, valueSmeId).Scan(&valueIdShortPath, &valueModelType)
-		if err != nil {
-			return nil, err
-		}
-
-		// Get the handler for the value SME
-		handler, err := GetSMEHandlerByModelType(valueModelType, p.db)
-		if err != nil {
-			return nil, err
-		}
-
-		// Read the value submodel element
-		valueSme, err := handler.Read(tx, submodelId, valueIdShortPath)
-		if err != nil {
-			return nil, err
-		}
-
-		ov := gen.OperationVariable{Value: valueSme}
-		switch role {
-		case "in":
-			inputVars = append(inputVars, ov)
-		case "out":
-			outputVars = append(outputVars, ov)
-		case "inout":
-			inoutputVars = append(inoutputVars, ov)
-		}
-	}
-
-	operation.InputVariables = inputVars
-	operation.OutputVariables = outputVars
-	operation.InoutputVariables = inoutputVars
-
-	return operation, nil
-}
 func (p PostgreSQLOperationHandler) Update(idShortOrPath string, submodelElement gen.SubmodelElement) error {
 	if dErr := p.decorated.Update(idShortOrPath, submodelElement); dErr != nil {
 		return dErr

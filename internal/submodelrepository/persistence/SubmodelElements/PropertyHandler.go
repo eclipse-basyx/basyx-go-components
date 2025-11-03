@@ -1,3 +1,29 @@
+/*******************************************************************************
+* Copyright (C) 2025 the Eclipse BaSyx Authors and Fraunhofer IESE
+*
+* Permission is hereby granted, free of charge, to any person obtaining
+* a copy of this software and associated documentation files (the
+* "Software"), to deal in the Software without restriction, including
+* without limitation the rights to use, copy, modify, merge, publish,
+* distribute, sublicense, and/or sell copies of the Software, and to
+* permit persons to whom the Software is furnished to do so, subject to
+* the following conditions:
+*
+* The above copyright notice and this permission notice shall be
+* included in all copies or substantial portions of the Software.
+*
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+* NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+* LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+* OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+* WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*
+* SPDX-License-Identifier: MIT
+******************************************************************************/
+
+// Author: Jannik Fried ( Fraunhofer IESE )
 package submodelelements
 
 import (
@@ -35,7 +61,7 @@ func (p PostgreSQLPropertyHandler) Create(tx *sql.Tx, submodelId string, submode
 
 	// Property-specific database insertion
 	// Determine which column to use based on valueType
-	err = insertProperty(property, err, tx, id)
+	err = insertProperty(property, tx, id)
 	if err != nil {
 		return 0, err
 	}
@@ -56,7 +82,7 @@ func (p PostgreSQLPropertyHandler) CreateNested(tx *sql.Tx, submodelId string, p
 	}
 
 	// Property-specific database insertion for nested element
-	err = insertProperty(property, err, tx, id)
+	err = insertProperty(property, tx, id)
 	if err != nil {
 		return 0, err
 	}
@@ -64,32 +90,6 @@ func (p PostgreSQLPropertyHandler) CreateNested(tx *sql.Tx, submodelId string, p
 	return id, nil
 }
 
-func (p PostgreSQLPropertyHandler) Read(tx *sql.Tx, submodelId string, idShortOrPath string) (gen.SubmodelElement, error) {
-	var sme gen.SubmodelElement = &gen.Property{}
-	var valueType, value string
-	id, err := p.decorated.Read(tx, submodelId, idShortOrPath, &sme)
-	if err != nil {
-		return nil, err
-	}
-	err = tx.QueryRow(`
-		SELECT value_type, COALESCE(p.value_text, p.value_num::text, p.value_bool::text, p.value_time::text, p.value_datetime::text) AS value
-		FROM property_element p
-		WHERE id = $1
-	`, id).Scan(&valueType, &value)
-	if err != nil {
-		// If no property-specific data is found, return the base SubmodelElement without value details
-		// TODO: Discuss this approach with the team
-		return sme, nil
-	}
-	prop := sme.(*gen.Property)
-	actualValueType, err := gen.NewDataTypeDefXsdFromValue(valueType)
-	if err != nil {
-		return nil, err
-	}
-	prop.ValueType = actualValueType
-	prop.Value = value
-	return sme, nil
-}
 func (p PostgreSQLPropertyHandler) Update(idShortOrPath string, submodelElement gen.SubmodelElement) error {
 	if dErr := p.decorated.Update(idShortOrPath, submodelElement); dErr != nil {
 		return dErr
@@ -103,7 +103,7 @@ func (p PostgreSQLPropertyHandler) Delete(idShortOrPath string) error {
 	return nil
 }
 
-func insertProperty(property *gen.Property, err error, tx *sql.Tx, id int) error {
+func insertProperty(property *gen.Property, tx *sql.Tx, id int) error {
 	var valueText, valueNum, valueBool, valueTime, valueDatetime sql.NullString
 	var valueId sql.NullInt64
 
@@ -134,7 +134,7 @@ func insertProperty(property *gen.Property, err error, tx *sql.Tx, id int) error
 	}
 
 	// Insert Property-specific data
-	_, err = tx.Exec(`INSERT INTO property_element (id, value_type, value_text, value_num, value_bool, value_time, value_datetime, value_id)
+	_, err := tx.Exec(`INSERT INTO property_element (id, value_type, value_text, value_num, value_bool, value_time, value_datetime, value_id)
 					 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
 		id,
 		property.ValueType,
