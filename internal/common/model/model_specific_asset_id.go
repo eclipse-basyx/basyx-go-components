@@ -11,7 +11,7 @@ package model
 
 // SpecificAssetID type of SpecificAssetID
 type SpecificAssetID struct {
-	SemanticID *Reference `json:"semanticID,omitempty"`
+	SemanticID *Reference `json:"semanticId,omitempty"`
 
 	//nolint:all
 	SupplementalSemanticIds []Reference `json:"supplementalSemanticIds,omitempty"`
@@ -20,7 +20,7 @@ type SpecificAssetID struct {
 
 	Value string `json:"value" validate:"regexp=^([\\\\x09\\\\x0a\\\\x0d\\\\x20-\\\\ud7ff\\\\ue000-\\\\ufffd]|\\\\ud800[\\\\udc00-\\\\udfff]|[\\\\ud801-\\\\udbfe][\\\\udc00-\\\\udfff]|\\\\udbff[\\\\udc00-\\\\udfff])*$"`
 
-	ExternalSubjectID *Reference `json:"externalSubjectID,omitempty"`
+	ExternalSubjectID *Reference `json:"externalSubjectId,omitempty"`
 }
 
 // AssertSpecificAssetIdRequired checks if the required fields are not zero-ed

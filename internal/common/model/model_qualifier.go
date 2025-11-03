@@ -11,7 +11,7 @@ package model
 
 // Qualifier  type of Qualifier
 type Qualifier struct {
-	SemanticID *Reference `json:"semanticID,omitempty"`
+	SemanticID *Reference `json:"semanticId,omitempty"`
 
 	//nolint:all
 	SupplementalSemanticIds []Reference `json:"supplementalSemanticIds,omitempty"`
@@ -24,7 +24,7 @@ type Qualifier struct {
 
 	Value string `json:"value,omitempty"`
 
-	ValueID *Reference `json:"valueID,omitempty"`
+	ValueID *Reference `json:"valueId,omitempty"`
 }
 
 // AssertQualifierRequired checks if the required fields are not zero-ed

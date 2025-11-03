@@ -14,7 +14,7 @@ type ErrorHandler struct {
 	MessageType   string `json:"messageType"`
 	Text          string `json:"text"`
 	Code          string `json:"code,omitempty"`
-	CorrelationID string `json:"correlationID,omitempty"`
+	CorrelationID string `json:"correlationId,omitempty"`
 	Timestamp     string `json:"timestamp,omitempty"`
 }
 

@@ -32,7 +32,7 @@ import (
 	"reflect"
 
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
-	persistence_utils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
+	persistenceUtils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 )
 
@@ -54,7 +54,7 @@ func NewPostgreSQLSMECrudHandler(db *sql.DB) (*PostgreSQLSMECrudHandler, error) 
 
 // Create performs the base SubmodelElement operations within an existing transaction
 func (p *PostgreSQLSMECrudHandler) CreateAndPath(tx *sql.Tx, submodelID string, parentID int, idShortPath string, submodelElement gen.SubmodelElement, position int) (int, error) {
-	referenceID, err := persistence_utils.CreateReference(tx, submodelElement.GetSemanticID(), sql.NullInt64{}, sql.NullInt64{})
+	referenceID, err := persistenceUtils.CreateReference(tx, submodelElement.GetSemanticID(), sql.NullInt64{}, sql.NullInt64{})
 	if err != nil {
 		return 0, err
 	}
@@ -92,7 +92,7 @@ func (p *PostgreSQLSMECrudHandler) CreateAndPath(tx *sql.Tx, submodelID string, 
 }
 
 func (p *PostgreSQLSMECrudHandler) Create(tx *sql.Tx, submodelID string, submodelElement gen.SubmodelElement) (int, error) {
-	referenceID, err := persistence_utils.CreateReference(tx, submodelElement.GetSemanticID(), sql.NullInt64{}, sql.NullInt64{})
+	referenceID, err := persistenceUtils.CreateReference(tx, submodelElement.GetSemanticID(), sql.NullInt64{}, sql.NullInt64{})
 	if err != nil {
 		return 0, err
 	}
@@ -129,7 +129,7 @@ func (p *PostgreSQLSMECrudHandler) Create(tx *sql.Tx, submodelID string, submode
 
 	supplSID := submodelElement.GetSupplementalSemanticIds()
 	if len(supplSID) > 0 {
-		err := persistence_utils.InsertSupplementalSemanticIDsSME(tx, int64(id), supplSID)
+		err := persistenceUtils.InsertSupplementalSemanticIDsSME(tx, int64(id), supplSID)
 		if err != nil {
 			return 0, err
 		}

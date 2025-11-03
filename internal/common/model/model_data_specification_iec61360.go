@@ -21,7 +21,7 @@ type DataSpecificationIec61360 struct {
 
 	Unit string `json:"unit,omitempty" validate:"regexp=^([\\\\x09\\\\x0a\\\\x0d\\\\x20-\\\\ud7ff\\\\ue000-\\\\ufffd]|\\\\ud800[\\\\udc00-\\\\udfff]|[\\\\ud801-\\\\udbfe][\\\\udc00-\\\\udfff]|\\\\udbff[\\\\udc00-\\\\udfff])*$"`
 
-	UnitID *Reference `json:"unitID,omitempty"`
+	UnitID *Reference `json:"unitId,omitempty"`
 
 	SourceOfDefinition string `json:"sourceOfDefinition,omitempty" validate:"regexp=^([\\\\x09\\\\x0a\\\\x0d\\\\x20-\\\\ud7ff\\\\ue000-\\\\ufffd]|\\\\ud800[\\\\udc00-\\\\udfff]|[\\\\ud801-\\\\udbfe][\\\\udc00-\\\\udfff]|\\\\udbff[\\\\udc00-\\\\udfff])*$"`
 
@@ -249,7 +249,7 @@ func (d *DataSpecificationIec61360) UnmarshalJSON(data []byte) error {
 		PreferredName      []LangStringPreferredNameTypeIec61360 `json:"preferredName"`
 		ShortName          []LangStringShortNameTypeIec61360     `json:"shortName,omitempty"`
 		Unit               string                                `json:"unit,omitempty"`
-		UnitID             *Reference                            `json:"unitID,omitempty"`
+		UnitID             *Reference                            `json:"unitId,omitempty"`
 		SourceOfDefinition string                                `json:"sourceOfDefinition,omitempty"`
 		Symbol             string                                `json:"symbol,omitempty"`
 		DataType           DataTypeIec61360                      `json:"dataType,omitempty"`

@@ -37,7 +37,7 @@ import (
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
-	persistence_utils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
+	persistenceUtils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
 )
 
 // GetSMEHandler creates the appropriate CRUD handler for a submodel element
@@ -350,7 +350,7 @@ func GetSubmodelElementsWithPath(db *sql.DB, tx *sql.Tx, submodelID string, idSh
 		// Materialize the concrete element based on modelType (no reflection)
 		var semanticIDObj *gen.Reference
 		if semanticID.Valid {
-			semanticIDObj, err = persistence_utils.GetReferenceByReferenceDBID(db, semanticID)
+			semanticIDObj, err = persistenceUtils.GetReferenceByReferenceDBID(db, semanticID)
 			if err != nil {
 				return nil, "", err
 			}

@@ -37,6 +37,31 @@ import (
 	"github.com/doug-martin/goqu/v9/exp"
 )
 
+// LogicalExpression represents a logical expression tree for AAS access control rules.
+//
+// This structure supports complex logical conditions that can be evaluated against AAS elements.
+// It combines comparison operations (eq, ne, gt, ge, lt, le), string operations (contains,
+// starts-with, ends-with, regex), and logical operators (AND, OR, NOT) to form sophisticated
+// access control rules. Expressions can be nested to create complex conditional logic.
+//
+// Only one operation field should be set per LogicalExpression instance. The structure can
+// be converted to SQL WHERE clauses using the EvaluateToExpression method.
+//
+// Logical operators:
+//   - $and: All conditions must be true (requires at least 2 expressions)
+//   - $or: At least one condition must be true (requires at least 2 expressions)
+//   - $not: Negates the nested expression
+//
+// Comparison operators: $eq, $ne, $gt, $ge, $lt, $le
+// String operators: $contains, $starts-with, $ends-with, $regex
+// Boolean: Direct boolean value evaluation
+//
+// Example JSON:
+//
+//	{"$and": [
+//	  {"$eq": ["$sm#idShort", "MySubmodel"]},
+//	  {"$gt": ["$sme.temperature#value", "100"]}
+//	]}
 type LogicalExpression struct {
 	// And corresponds to the JSON schema field "$and".
 	And []LogicalExpression `json:"$and,omitempty" yaml:"$and,omitempty" mapstructure:"$and,omitempty"`
@@ -84,7 +109,22 @@ type LogicalExpression struct {
 	StartsWith StringItems `json:"$starts-with,omitempty" yaml:"$starts-with,omitempty" mapstructure:"$starts-with,omitempty"`
 }
 
-// UnmarshalJSON implements json.Unmarshaler.
+// UnmarshalJSON implements the json.Unmarshaler interface for LogicalExpression.
+//
+// This custom unmarshaler validates that logical operator arrays contain the required
+// minimum number of elements:
+//   - $and requires at least 2 expressions
+//   - $or requires at least 2 expressions
+//   - $match requires at least 1 expression
+//
+// These constraints ensure that logical operations are meaningful and properly formed.
+//
+// Parameters:
+//   - value: JSON byte slice containing the logical expression to unmarshal
+//
+// Returns:
+//   - error: An error if the JSON is invalid or if array constraints are violated.
+//     Returns nil on successful unmarshaling and validation.
 func (j *LogicalExpression) UnmarshalJSON(value []byte) error {
 	type Plain LogicalExpression
 	var plain Plain
@@ -104,19 +144,24 @@ func (j *LogicalExpression) UnmarshalJSON(value []byte) error {
 	return nil
 }
 
-// EvaluateToExpression evaluates the logical expression tree and returns a goqu expression
-// that can be used in SQL WHERE clauses.
+// EvaluateToExpression converts the logical expression tree into a goqu SQL expression.
 //
-// The method handles:
-// - Comparison operations: $eq, $ne, $gt, $ge, $lt, $le
-// - AND operations: all conditions must be true (uses goqu.And)
-// - OR operations: at least one condition must be true (uses goqu.Or)
-// - NOT operations: negates the result
-// - Nested LogicalExpressions
+// This method traverses the logical expression tree and constructs a corresponding SQL
+// WHERE clause expression that can be used with the goqu query builder. It handles all
+// supported comparison operations, logical operators (AND, OR, NOT), and nested expressions.
+//
+// The method supports special handling for AAS-specific fields, particularly semantic IDs,
+// where additional constraints (like position = 0) may be added to the generated SQL.
+//
+// Supported operations:
+//   - Comparison: $eq, $ne, $gt, $ge, $lt, $le
+//   - Logical: $and (all true), $or (any true), $not (negation)
+//   - Boolean: Direct boolean literal evaluation
 //
 // Returns:
-//   - exp.Expression: The evaluated goqu expression
-//   - error: An error if evaluation fails
+//   - exp.Expression: A goqu expression that can be used in SQL WHERE clauses
+//   - error: An error if the expression is invalid, has no valid operation, or if
+//     evaluation of nested expressions fails
 func (le *LogicalExpression) EvaluateToExpression() (exp.Expression, error) {
 	// Handle comparison operations
 	if len(le.Eq) > 0 {
@@ -191,6 +236,27 @@ func (le *LogicalExpression) evaluateComparison(operands []Value, operation stri
 	return HandleComparison(leftOperand, rightOperand, operation)
 }
 
+// ParseAASQLFieldToSQLColumn translates AAS query language field names to SQL column names.
+//
+// This function maps AAS-specific field references (like $sm#idShort, $sm#semanticId) to their
+// corresponding database column names used in SQL queries. It handles both exact matches and
+// pattern-based field references (e.g., semanticId.keys[].value).
+//
+// Supported field mappings:
+//   - $sm#idShort -> s.id_short
+//   - $sm#id -> s.id
+//   - $sm#semanticId -> semantic_id_reference_key.value
+//   - $sm#semanticId.type -> semantic_id_reference.type
+//   - $sm#semanticId.keys[].value -> semantic_id_reference_key.value
+//   - $sm#semanticId.keys[].type -> semantic_id_reference_key.type
+//   - $sm#semanticId.keys[N].value -> semantic_id_reference_key.value (with position constraint)
+//   - $sm#semanticId.keys[N].type -> semantic_id_reference_key.type (with position constraint)
+//
+// Parameters:
+//   - field: AAS query language field reference string
+//
+// Returns:
+//   - string: The corresponding SQL column name, or the original field if no mapping exists
 func ParseAASQLFieldToSQLColumn(field string) string {
 	switch field {
 	case "$sm#idShort":
@@ -218,7 +284,25 @@ func ParseAASQLFieldToSQLColumn(field string) string {
 }
 
 // HandleComparison builds a SQL comparison expression from two Value operands.
-// It handles all combinations: field-to-field, field-to-value, value-to-field, and value-to-value.
+//
+// This function handles all combinations of operand types: field-to-field, field-to-value,
+// value-to-field, and value-to-value comparisons. It validates that value-to-value comparisons
+// have matching types and adds special constraints for AAS semantic ID fields, such as position
+// constraints for specific key indices.
+//
+// Special handling for semantic IDs:
+//   - Shorthand references ($sm#semanticId) add position = 0 constraint
+//   - Specific key references ($sm#semanticId.keys[N].value) add position = N constraint
+//   - Wildcard references ($sm#semanticId.keys[].value) match any position
+//
+// Parameters:
+//   - leftOperand: The left side of the comparison (field or value)
+//   - rightOperand: The right side of the comparison (field or value)
+//   - operation: The comparison operator ($eq, $ne, $gt, $ge, $lt, $le)
+//
+// Returns:
+//   - exp.Expression: A goqu expression representing the comparison with any necessary constraints
+//   - error: An error if the operands are invalid, types don't match, or the operation is unsupported
 func HandleComparison(leftOperand, rightOperand *Value, operation string) (exp.Expression, error) {
 
 	// Convert both operands

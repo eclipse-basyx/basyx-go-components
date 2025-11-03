@@ -33,8 +33,40 @@ import (
 	"regexp"
 )
 
+// HexLiteralPattern represents a hexadecimal literal in the AAS grammar.
+//
+// This type enforces a specific format for hexadecimal literals used in the Asset Administration
+// Shell grammar. The pattern must start with the prefix "16#" followed by one or more uppercase
+// hexadecimal digits (0-9, A-F).
+//
+// The format is based on the IEC 61131-3 standard for representing hexadecimal literals,
+// where the base (16) is specified as a prefix followed by a hash symbol.
+//
+// Valid examples:
+//   - "16#A"
+//   - "16#FF"
+//   - "16#1234ABCD"
+//   - "16#0"
+//
+// Invalid examples:
+//   - "16#" (no digits)
+//   - "16#abc" (lowercase not allowed)
+//   - "0xFF" (wrong prefix format)
+//   - "A1" (missing prefix)
 type HexLiteralPattern string
 
+// UnmarshalJSON implements the json.Unmarshaler interface for HexLiteralPattern.
+//
+// This custom unmarshaler validates that the JSON string value matches the required
+// hexadecimal literal pattern: ^16#[0-9A-F]+$. The validation ensures that only
+// properly formatted IEC 61131-3 style hexadecimal literals are accepted.
+//
+// Parameters:
+//   - value: JSON byte slice containing the string value to unmarshal
+//
+// Returns:
+//   - error: An error if the JSON is invalid or if the string doesn't match the required pattern.
+//     The error message includes the expected pattern format.
 func (j *HexLiteralPattern) UnmarshalJSON(value []byte) error {
 	type Plain HexLiteralPattern
 	var plain Plain

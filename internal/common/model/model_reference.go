@@ -15,7 +15,7 @@ type Reference struct {
 
 	Keys []Key `json:"keys"`
 
-	ReferredSemanticID *Reference `json:"referredSemanticID,omitempty"`
+	ReferredSemanticID *Reference `json:"referredSemanticId,omitempty"`
 }
 
 // AssertReferenceRequired checks if the required fields are not zero-ed

@@ -25,7 +25,7 @@ type Range struct {
 	ModelType string `json:"modelType" validate:"regexp=^Range$"`
 
 	//nolint:all
-	SemanticID *Reference `json:"semanticID,omitempty"`
+	SemanticID *Reference `json:"semanticId,omitempty"`
 
 	//nolint:all
 	SupplementalSemanticIds []Reference `json:"supplementalSemanticIds,omitempty"`

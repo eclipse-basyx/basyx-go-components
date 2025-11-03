@@ -13,7 +13,7 @@ package model
 type Message struct {
 	Code string `json:"code,omitempty"`
 
-	CorrelationID string `json:"correlationID,omitempty"`
+	CorrelationID string `json:"correlationId,omitempty"`
 
 	MessageType string `json:"messageType,omitempty"`
 

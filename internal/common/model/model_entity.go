@@ -24,7 +24,7 @@ type Entity struct {
 
 	ModelType string `json:"modelType" validate:"regexp=^Entity$"`
 
-	SemanticID *Reference `json:"semanticID,omitempty"`
+	SemanticID *Reference `json:"semanticId,omitempty"`
 
 	//nolint:all
 	SupplementalSemanticIds []Reference `json:"supplementalSemanticIds,omitempty"`
@@ -37,7 +37,7 @@ type Entity struct {
 
 	EntityType EntityType `json:"entityType"`
 
-	GlobalAssetID string `json:"globalAssetID,omitempty" validate:"regexp=^([\\\\x09\\\\x0a\\\\x0d\\\\x20-\\\\ud7ff\\\\ue000-\\\\ufffd]|\\\\ud800[\\\\udc00-\\\\udfff]|[\\\\ud801-\\\\udbfe][\\\\udc00-\\\\udfff]|\\\\udbff[\\\\udc00-\\\\udfff])*$"`
+	GlobalAssetID string `json:"globalAssetId,omitempty" validate:"regexp=^([\\\\x09\\\\x0a\\\\x0d\\\\x20-\\\\ud7ff\\\\ue000-\\\\ufffd]|\\\\ud800[\\\\udc00-\\\\udfff]|[\\\\ud801-\\\\udbfe][\\\\udc00-\\\\udfff]|\\\\udbff[\\\\udc00-\\\\udfff])*$"`
 
 	//nolint:all
 	SpecificAssetIds []SpecificAssetID `json:"specificAssetIds,omitempty"`

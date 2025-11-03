@@ -32,17 +32,53 @@ import (
 	"fmt"
 )
 
+// ObjectItem represents an item in the grammar model with a specific type and value.
+// It is used to encapsulate different kinds of objects in the AAS structure, where
+// the Kind field specifies the category of the object and Value contains its identifier.
 type ObjectItem struct {
-	Kind  OBJECTTYPE
+	// Kind specifies the type/category of the object (e.g., ROUTE, IDENTIFIABLE)
+	Kind OBJECTTYPE
+	// Value contains the string identifier or value associated with this object
 	Value string
 }
 
+// Route represents an OBJECTTYPE for route objects in the grammar model.
+// Route objects typically represent paths or endpoints in the AAS structure.
 const Route OBJECTTYPE = "ROUTE"
+
+// Identifiable represents an OBJECTTYPE for identifiable objects in the grammar model.
+// Identifiable objects have a unique identifier and can be referenced globally.
 const Identifiable OBJECTTYPE = "IDENTIFIABLE"
+
+// Refarable represents an OBJECTTYPE for referable objects in the grammar model.
+// Referable objects can be referenced within a namespace but may not be globally unique.
 const Refarable OBJECTTYPE = "REFERABLE"
+
+// Fragment represents an OBJECTTYPE for fragment objects in the grammar model.
+// Fragment objects represent parts or segments of a larger structure.
 const Fragment OBJECTTYPE = "FRAGMENT"
+
+// Descriptor represents an OBJECTTYPE for descriptor objects in the grammar model.
+// Descriptor objects provide metadata or descriptive information about other objects.
 const Descriptor OBJECTTYPE = "DESCRIPTOR"
 
+// UnmarshalJSON implements the json.Unmarshaler interface for ObjectItem.
+//
+// This custom unmarshaler expects JSON in the format: {"TYPE": "value"} where TYPE
+// is one of the allowed OBJECTTYPE constants (ROUTE, IDENTIFIABLE, REFERABLE, FRAGMENT,
+// DESCRIPTOR) and value is a string identifier.
+//
+// Example JSON:
+//
+//	{"ROUTE": "/api/submodels/123"}
+//	{"IDENTIFIABLE": "https://example.com/ids/sm001"}
+//
+// Parameters:
+//   - b: JSON byte slice to unmarshal
+//
+// Returns:
+//   - error: An error if the JSON format is invalid, if there isn't exactly one key,
+//     if the key is not an allowed OBJECTTYPE, or if the value is not a string
 func (o *ObjectItem) UnmarshalJSON(b []byte) error {
 	// Expect a single-key object with a string value.
 	var raw map[string]interface{}

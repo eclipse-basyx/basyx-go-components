@@ -11,7 +11,7 @@ package model
 
 // Extension type of Extension
 type Extension struct {
-	SemanticID *Reference `json:"semanticID,omitempty"`
+	SemanticID *Reference `json:"semanticId,omitempty"`
 
 	//nolint:all
 	SupplementalSemanticIds []Reference `json:"supplementalSemanticIds,omitempty"`

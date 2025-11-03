@@ -49,7 +49,7 @@ type DataElementChoice struct {
 
 	ModelType *interface{} `json:"modelType"`
 
-	SemanticID *Reference `json:"semanticID,omitempty"`
+	SemanticID *Reference `json:"semanticId,omitempty"`
 
 	//nolint:all
 	SupplementalSemanticIds []Reference `json:"supplementalSemanticIds,omitempty"`
@@ -62,7 +62,7 @@ type DataElementChoice struct {
 
 	ContentType FileAllOfContentType `json:"contentType,omitempty"`
 
-	ValueID *Reference `json:"valueID,omitempty"`
+	ValueID *Reference `json:"valueId,omitempty"`
 
 	ValueType DataTypeDefXsd `json:"valueType"`
 

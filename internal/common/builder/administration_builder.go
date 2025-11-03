@@ -96,5 +96,9 @@ func BuildAdministration(adminRow AdministrationRow) (*gen.AdministrativeInforma
 		administration.EmbeddedDataSpecifications = eds
 	}
 
+	for _, refBuilder := range refBuilderMap {
+		refBuilder.BuildNestedStructure()
+	}
+
 	return administration, nil
 }

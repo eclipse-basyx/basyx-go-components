@@ -24,7 +24,7 @@ type MultiLanguageProperty struct {
 
 	ModelType string `json:"modelType" validate:"regexp=^MultiLanguageProperty$"`
 
-	SemanticID *Reference `json:"semanticID,omitempty"`
+	SemanticID *Reference `json:"semanticId,omitempty"`
 
 	//nolint:all
 	SupplementalSemanticIds []Reference `json:"supplementalSemanticIds,omitempty"`
@@ -35,7 +35,7 @@ type MultiLanguageProperty struct {
 
 	Value []LangStringTextType `json:"value,omitempty"`
 
-	ValueID *Reference `json:"valueID,omitempty"`
+	ValueID *Reference `json:"valueId,omitempty"`
 }
 
 // Getters

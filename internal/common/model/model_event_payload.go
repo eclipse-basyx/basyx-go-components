@@ -38,15 +38,15 @@ package model
 type EventPayload struct {
 	Source *Reference `json:"source"`
 
-	SourceSemanticID *Reference `json:"sourceSemanticID,omitempty"`
+	SourceSemanticID *Reference `json:"sourceSemanticId,omitempty"`
 
 	ObservableReference *Reference `json:"observableReference"`
 
-	ObservableSemanticID *Reference `json:"observableSemanticID,omitempty"`
+	ObservableSemanticID *Reference `json:"observableSemanticId,omitempty"`
 
 	Topic string `json:"topic,omitempty" validate:"regexp=^([\\\\x09\\\\x0a\\\\x0d\\\\x20-\\\\ud7ff\\\\ue000-\\\\ufffd]|\\\\ud800[\\\\udc00-\\\\udfff]|[\\\\ud801-\\\\udbfe][\\\\udc00-\\\\udfff]|\\\\udbff[\\\\udc00-\\\\udfff])*$"`
 
-	SubjectID *Reference `json:"subjectID,omitempty"`
+	SubjectID *Reference `json:"subjectId,omitempty"`
 
 	TimeStamp string `json:"timeStamp" validate:"regexp=^-?(([1-9][0-9][0-9][0-9]+)|(0[0-9][0-9][0-9]))-((0[1-9])|(1[0-2]))-((0[1-9])|([12][0-9])|(3[01]))T(((([01][0-9])|(2[0-3])):[0-5][0-9]:([0-5][0-9])(\\\\.[0-9]+)?)|24:00:00(\\\\.0+)?)(Z|\\\\+00:00|-00:00)$"`
 

@@ -24,7 +24,7 @@ type File struct {
 
 	ModelType string `json:"modelType" validate:"regexp=^File$"`
 
-	SemanticID *Reference `json:"semanticID,omitempty"`
+	SemanticID *Reference `json:"semanticId,omitempty"`
 
 	//nolint:all
 	SupplementalSemanticIds []Reference `json:"supplementalSemanticIds,omitempty"`

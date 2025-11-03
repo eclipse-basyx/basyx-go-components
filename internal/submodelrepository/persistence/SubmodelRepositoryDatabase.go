@@ -38,7 +38,7 @@ import (
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	submodel_persistence "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/Submodel"
 	submodelelements "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/SubmodelElements"
-	persistence_utils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
+	persistenceUtils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
 )
 
 type PostgreSQLSubmodelDatabase struct {
@@ -249,13 +249,13 @@ func (p *PostgreSQLSubmodelDatabase) CreateSubmodel(sm gen.Submodel) error {
 
 	var semanticIdDbID, displayNameID, descriptionID, administrationID sql.NullInt64
 
-	semanticIdDbID, err = persistence_utils.CreateReference(tx, sm.SemanticID, sql.NullInt64{}, sql.NullInt64{})
+	semanticIdDbID, err = persistenceUtils.CreateReference(tx, sm.SemanticID, sql.NullInt64{}, sql.NullInt64{})
 	if err != nil {
 		fmt.Println(err)
 		return common.NewInternalServerError("Failed to create SemanticID - no changes applied - see console for details")
 	}
 
-	displayNameID, err = persistence_utils.CreateLangStringNameTypes(tx, sm.DisplayName)
+	displayNameID, err = persistenceUtils.CreateLangStringNameTypes(tx, sm.DisplayName)
 	if err != nil {
 		fmt.Println(err)
 		return common.NewInternalServerError("Failed to create DisplayName - no changes applied - see console for details")
@@ -266,13 +266,13 @@ func (p *PostgreSQLSubmodelDatabase) CreateSubmodel(sm gen.Submodel) error {
 	for _, desc := range sm.Description {
 		convertedDescription = append(convertedDescription, desc)
 	}
-	descriptionID, err = persistence_utils.CreateLangStringTextTypes(tx, convertedDescription)
+	descriptionID, err = persistenceUtils.CreateLangStringTextTypes(tx, convertedDescription)
 	if err != nil {
 		fmt.Println(err)
 		return common.NewInternalServerError("Failed to create Description - no changes applied - see console for details")
 	}
 
-	administrationID, err = persistence_utils.CreateAdministrativeInformation(tx, sm.Administration)
+	administrationID, err = persistenceUtils.CreateAdministrativeInformation(tx, sm.Administration)
 	if err != nil {
 		fmt.Println(err)
 		return common.NewInternalServerError("Failed to create Administration - no changes applied - see console for details")
@@ -290,7 +290,7 @@ func (p *PostgreSQLSubmodelDatabase) CreateSubmodel(sm gen.Submodel) error {
 	}
 
 	if sm.SupplementalSemanticIds != nil {
-		err = persistence_utils.InsertSupplementalSemanticIDsSubmodel(tx, sm.ID, sm.SupplementalSemanticIds)
+		err = persistenceUtils.InsertSupplementalSemanticIDsSubmodel(tx, sm.ID, sm.SupplementalSemanticIds)
 		if err != nil {
 			return err
 		}
@@ -298,7 +298,7 @@ func (p *PostgreSQLSubmodelDatabase) CreateSubmodel(sm gen.Submodel) error {
 
 	if sm.EmbeddedDataSpecifications != nil {
 		for _, eds := range sm.EmbeddedDataSpecifications {
-			edsDbID, err := persistence_utils.CreateEmbeddedDataSpecification(tx, eds)
+			edsDbID, err := persistenceUtils.CreateEmbeddedDataSpecification(tx, eds)
 			if err != nil {
 				return err
 			}
@@ -320,7 +320,7 @@ func (p *PostgreSQLSubmodelDatabase) CreateSubmodel(sm gen.Submodel) error {
 
 	if len(sm.Qualifier) > 0 {
 		for _, qualifier := range sm.Qualifier {
-			qualifierID, err := persistence_utils.CreateQualifier(tx, qualifier)
+			qualifierID, err := persistenceUtils.CreateQualifier(tx, qualifier)
 			if err != nil {
 				return err
 			}
@@ -334,7 +334,7 @@ func (p *PostgreSQLSubmodelDatabase) CreateSubmodel(sm gen.Submodel) error {
 
 	if len(sm.Extension) > 0 {
 		for _, extension := range sm.Extension {
-			qualifierID, err := persistence_utils.CreateExtension(tx, extension)
+			qualifierID, err := persistenceUtils.CreateExtension(tx, extension)
 			if err != nil {
 				return err
 			}

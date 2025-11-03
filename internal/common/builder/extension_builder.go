@@ -123,10 +123,10 @@ func (b *ExtensionsBuilder) AddExtension(extensionDbID int64, name string, value
 // Example:
 //
 //	builder.AddSemanticID(1, semanticIdJSON, referredSemanticIdJSON)
-func (b *ExtensionsBuilder) AddSemanticID(extensionDbID int64, semanticIdRows json.RawMessage, semanticIdReferredSemanticIdRows json.RawMessage) (*ExtensionsBuilder, error) {
+func (b *ExtensionsBuilder) AddSemanticID(extensionDbID int64, semanticIDRows json.RawMessage, semanticIDReferredSemanticIdRows json.RawMessage) (*ExtensionsBuilder, error) {
 	extension := b.extensions[extensionDbID]
 
-	semanticID, err := b.createExactlyOneReference(extensionDbID, semanticIdRows, semanticIdReferredSemanticIdRows, "SemanticID")
+	semanticID, err := b.createExactlyOneReference(extensionDbID, semanticIDRows, semanticIDReferredSemanticIdRows, "SemanticID")
 
 	if err != nil {
 		return nil, err

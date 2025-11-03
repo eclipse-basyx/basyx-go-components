@@ -24,7 +24,7 @@ type Property struct {
 
 	ModelType string `json:"modelType" validate:"regexp=^Property$"`
 
-	SemanticID *Reference `json:"semanticID,omitempty"`
+	SemanticID *Reference `json:"semanticId,omitempty"`
 
 	//nolint:all
 	SupplementalSemanticIds []Reference `json:"supplementalSemanticIds,omitempty"`
@@ -37,7 +37,7 @@ type Property struct {
 
 	Value string `json:"value,omitempty"`
 
-	ValueID *Reference `json:"valueID,omitempty"`
+	ValueID *Reference `json:"valueId,omitempty"`
 }
 
 // NewProperty creates a new Property instance

@@ -24,7 +24,7 @@ type Operation struct {
 
 	ModelType string `json:"modelType" validate:"regexp=^Operation$"`
 
-	SemanticID *Reference `json:"semanticID,omitempty"`
+	SemanticID *Reference `json:"semanticId,omitempty"`
 
 	//nolint:all
 	SupplementalSemanticIds []Reference `json:"supplementalSemanticIds,omitempty"`

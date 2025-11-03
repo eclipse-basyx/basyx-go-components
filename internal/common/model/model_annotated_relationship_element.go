@@ -29,7 +29,7 @@ type AnnotatedRelationshipElement struct {
 
 	ModelType string `json:"modelType" validate:"regexp=^AnnotatedRelationshipElement$"`
 
-	SemanticID *Reference `json:"semanticID,omitempty"`
+	SemanticID *Reference `json:"semanticId,omitempty"`
 
 	//nolint:all
 	SupplementalSemanticIds []Reference `json:"supplementalSemanticIds,omitempty"`

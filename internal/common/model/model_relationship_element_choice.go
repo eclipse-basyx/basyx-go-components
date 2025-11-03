@@ -50,7 +50,7 @@ type RelationshipElementChoice struct {
 	ModelType *interface{} `json:"modelType"`
 
 	//nolint:all
-	SemanticID *Reference `json:"semanticID,omitempty"`
+	SemanticID *Reference `json:"semanticId,omitempty"`
 
 	//nolint:all
 	SupplementalSemanticIds []Reference `json:"supplementalSemanticIds,omitempty"`

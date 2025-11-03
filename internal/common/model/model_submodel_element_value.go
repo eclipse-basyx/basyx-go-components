@@ -33,7 +33,7 @@ type SubmodelElementValue struct {
 
 	EntityType EntityType `json:"entityType"`
 
-	GlobalAssetID string `json:"globalAssetID,omitempty"`
+	GlobalAssetID string `json:"globalAssetId,omitempty"`
 
 	SpecificAssetIds []map[string]interface{} `json:"specificAssetIds,omitempty"`
 
