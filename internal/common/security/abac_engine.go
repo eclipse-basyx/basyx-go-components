@@ -22,6 +22,7 @@
 *
 * SPDX-License-Identifier: MIT
 ******************************************************************************/
+
 // Package auth contains authentication and authorization helpers, including
 // OIDC verification, ABAC evaluation, and shared types used by the HTTP
 // middleware and OpenAPI controllers.
@@ -31,7 +32,6 @@
 // decision and an optional QueryFilter.
 //
 // Author: Martin Stemmer ( Fraunhofer IESE )
-
 package auth
 
 import (

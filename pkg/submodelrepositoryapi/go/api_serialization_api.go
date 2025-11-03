@@ -47,28 +47,28 @@ func NewSerializationAPIAPIController(s SerializationAPIAPIServicer, opts ...Ser
 // Routes returns all the api routes for the SerializationAPIAPIController
 func (c *SerializationAPIAPIController) Routes() Routes {
 	return Routes{
-		"GenerateSerializationByIds": Route{
+		"GenerateSerializationByIDs": Route{
 			strings.ToUpper("Get"),
 			"/serialization",
-			c.GenerateSerializationByIds,
+			c.GenerateSerializationByIDs,
 		},
 	}
 }
 
-// GenerateSerializationByIds - Returns an appropriate serialization based on the specified format (see SerializationFormat)
-func (c *SerializationAPIAPIController) GenerateSerializationByIds(w http.ResponseWriter, r *http.Request) {
+// GenerateSerializationByIDs - Returns an appropriate serialization based on the specified format (see SerializationFormat)
+func (c *SerializationAPIAPIController) GenerateSerializationByIDs(w http.ResponseWriter, r *http.Request) {
 	query, err := parseQuery(r.URL.RawQuery)
 	if err != nil {
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
-	var aasIdsParam []string
+	var aasIDsParam []string
 	if query.Has("aasIds") {
-		aasIdsParam = strings.Split(query.Get("aasIds"), ",")
+		aasIDsParam = strings.Split(query.Get("aasIds"), ",")
 	}
-	var submodelIdsParam []string
+	var submodelIDsParam []string
 	if query.Has("submodelIds") {
-		submodelIdsParam = strings.Split(query.Get("submodelIds"), ",")
+		submodelIDsParam = strings.Split(query.Get("submodelIds"), ",")
 	}
 	var includeConceptDescriptionsParam bool
 	if query.Has("includeConceptDescriptions") {
@@ -86,7 +86,7 @@ func (c *SerializationAPIAPIController) GenerateSerializationByIds(w http.Respon
 		var param = true
 		includeConceptDescriptionsParam = param
 	}
-	result, err := c.service.GenerateSerializationByIds(r.Context(), aasIdsParam, submodelIdsParam, includeConceptDescriptionsParam)
+	result, err := c.service.GenerateSerializationByIDs(r.Context(), aasIDsParam, submodelIDsParam, includeConceptDescriptionsParam)
 	// If an error occurred, encode the error with the status code
 	if err != nil {
 		c.errorHandler(w, r, err, &result)

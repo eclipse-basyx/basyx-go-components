@@ -177,7 +177,7 @@ func loadManifest(base string) ([]testCase, error) {
 func TestJSONValidation(t *testing.T) {
 	t.Parallel()
 
-	base := filepath.Join("testdata")
+	base := "testdata"
 
 	var cases []testCase
 	if m, err := loadManifest(base); err == nil {

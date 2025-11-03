@@ -19,7 +19,7 @@ import (
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
-	persistence_postgresql "github.com/eclipse-basyx/basyx-go-components/internal/discoveryservice/persistence"
+	persistencepostgresql "github.com/eclipse-basyx/basyx-go-components/internal/discoveryservice/persistence"
 )
 
 const (
@@ -30,11 +30,11 @@ const (
 // This service should implement the business logic for every endpoint for the AssetAdministrationShellBasicDiscoveryAPIAPI API.
 // Include any external packages or services that will be required by this service.
 type AssetAdministrationShellBasicDiscoveryAPIAPIService struct {
-	disoveryBackend persistence_postgresql.PostgreSQLDiscoveryDatabase
+	disoveryBackend persistencepostgresql.PostgreSQLDiscoveryDatabase
 }
 
 // NewAssetAdministrationShellBasicDiscoveryAPIAPIService creates a default api service
-func NewAssetAdministrationShellBasicDiscoveryAPIAPIService(databaseBackend persistence_postgresql.PostgreSQLDiscoveryDatabase) *AssetAdministrationShellBasicDiscoveryAPIAPIService {
+func NewAssetAdministrationShellBasicDiscoveryAPIAPIService(databaseBackend persistencepostgresql.PostgreSQLDiscoveryDatabase) *AssetAdministrationShellBasicDiscoveryAPIAPIService {
 	return &AssetAdministrationShellBasicDiscoveryAPIAPIService{
 		disoveryBackend: databaseBackend,
 	}

@@ -105,35 +105,35 @@ func (c *SubmodelRepositoryAPIAPIController) Routes() Routes {
 			c.contextPath + "/submodels/{submodelIdentifier}",
 			c.PatchSubmodelByID,
 		},
-		"GetSubmodelByIdMetadata": Route{
+		"GetSubmodelByIDMetadata": Route{
 			strings.ToUpper("Get"),
 			c.contextPath + "/submodels/{submodelIdentifier}/$metadata",
-			c.GetSubmodelByIdMetadata,
+			c.GetSubmodelByIDMetadata,
 		},
-		"PatchSubmodelByIdMetadata": Route{
+		"PatchSubmodelByIDMetadata": Route{
 			strings.ToUpper("Patch"),
 			c.contextPath + "/submodels/{submodelIdentifier}/$metadata",
-			c.PatchSubmodelByIdMetadata,
+			c.PatchSubmodelByIDMetadata,
 		},
-		"GetSubmodelByIdValueOnly": Route{
+		"GetSubmodelByIDValueOnly": Route{
 			strings.ToUpper("Get"),
 			c.contextPath + "/submodels/{submodelIdentifier}/$value",
-			c.GetSubmodelByIdValueOnly,
+			c.GetSubmodelByIDValueOnly,
 		},
-		"PatchSubmodelByIdValueOnly": Route{
+		"PatchSubmodelByIDValueOnly": Route{
 			strings.ToUpper("Patch"),
 			c.contextPath + "/submodels/{submodelIdentifier}/$value",
-			c.PatchSubmodelByIdValueOnly,
+			c.PatchSubmodelByIDValueOnly,
 		},
-		"GetSubmodelByIdReference": Route{
+		"GetSubmodelByIDReference": Route{
 			strings.ToUpper("Get"),
 			c.contextPath + "/submodels/{submodelIdentifier}/$reference",
-			c.GetSubmodelByIdReference,
+			c.GetSubmodelByIDReference,
 		},
-		"GetSubmodelByIdPath": Route{
+		"GetSubmodelByIDPath": Route{
 			strings.ToUpper("Get"),
 			c.contextPath + "/submodels/{submodelIdentifier}/$path",
-			c.GetSubmodelByIdPath,
+			c.GetSubmodelByIDPath,
 		},
 		"GetAllSubmodelElements": Route{
 			strings.ToUpper("Get"),
@@ -280,20 +280,20 @@ func (c *SubmodelRepositoryAPIAPIController) GetAllSubmodels(w http.ResponseWrit
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
-	var semanticIdParam string
+	var semanticIDParam string
 	if query.Has("semanticId") {
 		param := query.Get("semanticId")
 
-		semanticIdParam = param
-	} else {
+		semanticIDParam = param
 	}
+
 	var idShortParam string
 	if query.Has("idShort") {
 		param := query.Get("idShort")
 
 		idShortParam = param
-	} else {
 	}
+
 	var limitParam int32
 	if query.Has("limit") {
 		param, err := parseNumericParameter[int32](
@@ -307,15 +307,15 @@ func (c *SubmodelRepositoryAPIAPIController) GetAllSubmodels(w http.ResponseWrit
 		}
 
 		limitParam = param
-	} else {
 	}
+
 	var cursorParam string
 	if query.Has("cursor") {
 		param := query.Get("cursor")
 
 		cursorParam = param
-	} else {
 	}
+
 	var levelParam string
 	if query.Has("level") {
 		param := query.Get("level")
@@ -334,7 +334,7 @@ func (c *SubmodelRepositoryAPIAPIController) GetAllSubmodels(w http.ResponseWrit
 		param := "withoutBlobValue"
 		extentParam = param
 	}
-	result, err := c.service.GetAllSubmodels(r.Context(), semanticIdParam, idShortParam, limitParam, cursorParam, levelParam, extentParam)
+	result, err := c.service.GetAllSubmodels(r.Context(), semanticIDParam, idShortParam, limitParam, cursorParam, levelParam, extentParam)
 	// If an error occurred, encode the error with the status code
 	if err != nil {
 		c.errorHandler(w, r, err, &result)
@@ -378,20 +378,20 @@ func (c *SubmodelRepositoryAPIAPIController) GetAllSubmodelsMetadata(w http.Resp
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
-	var semanticIdParam string
+	var semanticIDParam string
 	if query.Has("semanticId") {
 		param := query.Get("semanticId")
 
-		semanticIdParam = param
-	} else {
+		semanticIDParam = param
 	}
+
 	var idShortParam string
 	if query.Has("idShort") {
 		param := query.Get("idShort")
 
 		idShortParam = param
-	} else {
 	}
+
 	var limitParam int32
 	if query.Has("limit") {
 		param, err := parseNumericParameter[int32](
@@ -405,16 +405,16 @@ func (c *SubmodelRepositoryAPIAPIController) GetAllSubmodelsMetadata(w http.Resp
 		}
 
 		limitParam = param
-	} else {
 	}
+
 	var cursorParam string
 	if query.Has("cursor") {
 		param := query.Get("cursor")
 
 		cursorParam = param
-	} else {
 	}
-	result, err := c.service.GetAllSubmodelsMetadata(r.Context(), semanticIdParam, idShortParam, limitParam, cursorParam)
+
+	result, err := c.service.GetAllSubmodelsMetadata(r.Context(), semanticIDParam, idShortParam, limitParam, cursorParam)
 	// If an error occurred, encode the error with the status code
 	if err != nil {
 		c.errorHandler(w, r, err, &result)
@@ -431,20 +431,20 @@ func (c *SubmodelRepositoryAPIAPIController) GetAllSubmodelsValueOnly(w http.Res
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
-	var semanticIdParam string
+	var semanticIDParam string
 	if query.Has("semanticId") {
 		param := query.Get("semanticId")
 
-		semanticIdParam = param
-	} else {
+		semanticIDParam = param
 	}
+
 	var idShortParam string
 	if query.Has("idShort") {
 		param := query.Get("idShort")
 
 		idShortParam = param
-	} else {
 	}
+
 	var limitParam int32
 	if query.Has("limit") {
 		param, err := parseNumericParameter[int32](
@@ -458,15 +458,15 @@ func (c *SubmodelRepositoryAPIAPIController) GetAllSubmodelsValueOnly(w http.Res
 		}
 
 		limitParam = param
-	} else {
 	}
+
 	var cursorParam string
 	if query.Has("cursor") {
 		param := query.Get("cursor")
 
 		cursorParam = param
-	} else {
 	}
+
 	var levelParam string
 	if query.Has("level") {
 		param := query.Get("level")
@@ -485,7 +485,7 @@ func (c *SubmodelRepositoryAPIAPIController) GetAllSubmodelsValueOnly(w http.Res
 		param := "withoutBlobValue"
 		extentParam = param
 	}
-	result, err := c.service.GetAllSubmodelsValueOnly(r.Context(), semanticIdParam, idShortParam, limitParam, cursorParam, levelParam, extentParam)
+	result, err := c.service.GetAllSubmodelsValueOnly(r.Context(), semanticIDParam, idShortParam, limitParam, cursorParam, levelParam, extentParam)
 	// If an error occurred, encode the error with the status code
 	if err != nil {
 		c.errorHandler(w, r, err, &result)
@@ -502,20 +502,20 @@ func (c *SubmodelRepositoryAPIAPIController) GetAllSubmodelsReference(w http.Res
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
-	var semanticIdParam string
+	var semanticIDParam string
 	if query.Has("semanticId") {
 		param := query.Get("semanticId")
 
-		semanticIdParam = param
-	} else {
+		semanticIDParam = param
 	}
+
 	var idShortParam string
 	if query.Has("idShort") {
 		param := query.Get("idShort")
 
 		idShortParam = param
-	} else {
 	}
+
 	var limitParam int32
 	if query.Has("limit") {
 		param, err := parseNumericParameter[int32](
@@ -529,15 +529,15 @@ func (c *SubmodelRepositoryAPIAPIController) GetAllSubmodelsReference(w http.Res
 		}
 
 		limitParam = param
-	} else {
 	}
+
 	var cursorParam string
 	if query.Has("cursor") {
 		param := query.Get("cursor")
 
 		cursorParam = param
-	} else {
 	}
+
 	var levelParam string
 	if query.Has("level") {
 		param := query.Get("level")
@@ -547,7 +547,7 @@ func (c *SubmodelRepositoryAPIAPIController) GetAllSubmodelsReference(w http.Res
 		param := "core"
 		levelParam = param
 	}
-	result, err := c.service.GetAllSubmodelsReference(r.Context(), semanticIdParam, idShortParam, limitParam, cursorParam, levelParam)
+	result, err := c.service.GetAllSubmodelsReference(r.Context(), semanticIDParam, idShortParam, limitParam, cursorParam, levelParam)
 	// If an error occurred, encode the error with the status code
 	if err != nil {
 		c.errorHandler(w, r, err, &result)
@@ -564,20 +564,20 @@ func (c *SubmodelRepositoryAPIAPIController) GetAllSubmodelsPath(w http.Response
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
-	var semanticIdParam string
+	var semanticIDParam string
 	if query.Has("semanticId") {
 		param := query.Get("semanticId")
 
-		semanticIdParam = param
-	} else {
+		semanticIDParam = param
 	}
+
 	var idShortParam string
 	if query.Has("idShort") {
 		param := query.Get("idShort")
 
 		idShortParam = param
-	} else {
 	}
+
 	var limitParam int32
 	if query.Has("limit") {
 		param, err := parseNumericParameter[int32](
@@ -591,15 +591,15 @@ func (c *SubmodelRepositoryAPIAPIController) GetAllSubmodelsPath(w http.Response
 		}
 
 		limitParam = param
-	} else {
 	}
+
 	var cursorParam string
 	if query.Has("cursor") {
 		param := query.Get("cursor")
 
 		cursorParam = param
-	} else {
 	}
+
 	var levelParam string
 	if query.Has("level") {
 		param := query.Get("level")
@@ -609,7 +609,7 @@ func (c *SubmodelRepositoryAPIAPIController) GetAllSubmodelsPath(w http.Response
 		param := "deep"
 		levelParam = param
 	}
-	result, err := c.service.GetAllSubmodelsPath(r.Context(), semanticIdParam, idShortParam, limitParam, cursorParam, levelParam)
+	result, err := c.service.GetAllSubmodelsPath(r.Context(), semanticIDParam, idShortParam, limitParam, cursorParam, levelParam)
 	// If an error occurred, encode the error with the status code
 	if err != nil {
 		c.errorHandler(w, r, err, &result)
@@ -754,14 +754,14 @@ func (c *SubmodelRepositoryAPIAPIController) PatchSubmodelByID(w http.ResponseWr
 	_ = EncodeJSONResponse(result.Body, &result.Code, w)
 }
 
-// GetSubmodelByIdMetadata - Returns the metadata attributes of a specific Submodel
-func (c *SubmodelRepositoryAPIAPIController) GetSubmodelByIdMetadata(w http.ResponseWriter, r *http.Request) {
+// GetSubmodelByIDMetadata - Returns the metadata attributes of a specific Submodel
+func (c *SubmodelRepositoryAPIAPIController) GetSubmodelByIDMetadata(w http.ResponseWriter, r *http.Request) {
 	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
 	if submodelIdentifierParam == "" {
 		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
 		return
 	}
-	result, err := c.service.GetSubmodelByIdMetadata(r.Context(), submodelIdentifierParam)
+	result, err := c.service.GetSubmodelByIDMetadata(r.Context(), submodelIdentifierParam)
 	// If an error occurred, encode the error with the status code
 	if err != nil {
 		c.errorHandler(w, r, err, &result)
@@ -771,8 +771,8 @@ func (c *SubmodelRepositoryAPIAPIController) GetSubmodelByIdMetadata(w http.Resp
 	_ = EncodeJSONResponse(result.Body, &result.Code, w)
 }
 
-// PatchSubmodelByIdMetadata - Updates the metadata attributes of an existing Submodel
-func (c *SubmodelRepositoryAPIAPIController) PatchSubmodelByIdMetadata(w http.ResponseWriter, r *http.Request) {
+// PatchSubmodelByIDMetadata - Updates the metadata attributes of an existing Submodel
+func (c *SubmodelRepositoryAPIAPIController) PatchSubmodelByIDMetadata(w http.ResponseWriter, r *http.Request) {
 	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
 	if submodelIdentifierParam == "" {
 		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
@@ -793,7 +793,7 @@ func (c *SubmodelRepositoryAPIAPIController) PatchSubmodelByIdMetadata(w http.Re
 		c.errorHandler(w, r, err, nil)
 		return
 	}
-	result, err := c.service.PatchSubmodelByIdMetadata(r.Context(), submodelIdentifierParam, submodelMetadataParam)
+	result, err := c.service.PatchSubmodelByIDMetadata(r.Context(), submodelIdentifierParam, submodelMetadataParam)
 	// If an error occurred, encode the error with the status code
 	if err != nil {
 		c.errorHandler(w, r, err, &result)
@@ -803,8 +803,8 @@ func (c *SubmodelRepositoryAPIAPIController) PatchSubmodelByIdMetadata(w http.Re
 	_ = EncodeJSONResponse(result.Body, &result.Code, w)
 }
 
-// GetSubmodelByIdValueOnly - Returns a specific Submodel in the ValueOnly representation
-func (c *SubmodelRepositoryAPIAPIController) GetSubmodelByIdValueOnly(w http.ResponseWriter, r *http.Request) {
+// GetSubmodelByIDValueOnly - Returns a specific Submodel in the ValueOnly representation
+func (c *SubmodelRepositoryAPIAPIController) GetSubmodelByIDValueOnly(w http.ResponseWriter, r *http.Request) {
 	query, err := parseQuery(r.URL.RawQuery)
 	if err != nil {
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
@@ -833,7 +833,7 @@ func (c *SubmodelRepositoryAPIAPIController) GetSubmodelByIdValueOnly(w http.Res
 		param := "withoutBlobValue"
 		extentParam = param
 	}
-	result, err := c.service.GetSubmodelByIdValueOnly(r.Context(), submodelIdentifierParam, levelParam, extentParam)
+	result, err := c.service.GetSubmodelByIDValueOnly(r.Context(), submodelIdentifierParam, levelParam, extentParam)
 	// If an error occurred, encode the error with the status code
 	if err != nil {
 		c.errorHandler(w, r, err, &result)
@@ -843,8 +843,8 @@ func (c *SubmodelRepositoryAPIAPIController) GetSubmodelByIdValueOnly(w http.Res
 	_ = EncodeJSONResponse(result.Body, &result.Code, w)
 }
 
-// PatchSubmodelByIdValueOnly - Updates the values of an existing Submodel
-func (c *SubmodelRepositoryAPIAPIController) PatchSubmodelByIdValueOnly(w http.ResponseWriter, r *http.Request) {
+// PatchSubmodelByIDValueOnly - Updates the values of an existing Submodel
+func (c *SubmodelRepositoryAPIAPIController) PatchSubmodelByIDValueOnly(w http.ResponseWriter, r *http.Request) {
 	query, err := parseQuery(r.URL.RawQuery)
 	if err != nil {
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
@@ -871,7 +871,7 @@ func (c *SubmodelRepositoryAPIAPIController) PatchSubmodelByIdValueOnly(w http.R
 		param := "core"
 		levelParam = param
 	}
-	result, err := c.service.PatchSubmodelByIdValueOnly(r.Context(), submodelIdentifierParam, bodyParam, levelParam)
+	result, err := c.service.PatchSubmodelByIDValueOnly(r.Context(), submodelIdentifierParam, bodyParam, levelParam)
 	// If an error occurred, encode the error with the status code
 	if err != nil {
 		c.errorHandler(w, r, err, &result)
@@ -881,14 +881,14 @@ func (c *SubmodelRepositoryAPIAPIController) PatchSubmodelByIdValueOnly(w http.R
 	_ = EncodeJSONResponse(result.Body, &result.Code, w)
 }
 
-// GetSubmodelByIdReference - Returns the Reference of a specific Submodel
-func (c *SubmodelRepositoryAPIAPIController) GetSubmodelByIdReference(w http.ResponseWriter, r *http.Request) {
+// GetSubmodelByIDReference - Returns the Reference of a specific Submodel
+func (c *SubmodelRepositoryAPIAPIController) GetSubmodelByIDReference(w http.ResponseWriter, r *http.Request) {
 	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
 	if submodelIdentifierParam == "" {
 		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
 		return
 	}
-	result, err := c.service.GetSubmodelByIdReference(r.Context(), submodelIdentifierParam)
+	result, err := c.service.GetSubmodelByIDReference(r.Context(), submodelIdentifierParam)
 	// If an error occurred, encode the error with the status code
 	if err != nil {
 		c.errorHandler(w, r, err, &result)
@@ -898,8 +898,8 @@ func (c *SubmodelRepositoryAPIAPIController) GetSubmodelByIdReference(w http.Res
 	_ = EncodeJSONResponse(result.Body, &result.Code, w)
 }
 
-// GetSubmodelByIdPath - Returns a specific Submodel in the Path notation
-func (c *SubmodelRepositoryAPIAPIController) GetSubmodelByIdPath(w http.ResponseWriter, r *http.Request) {
+// GetSubmodelByIDPath - Returns a specific Submodel in the Path notation
+func (c *SubmodelRepositoryAPIAPIController) GetSubmodelByIDPath(w http.ResponseWriter, r *http.Request) {
 	query, err := parseQuery(r.URL.RawQuery)
 	if err != nil {
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
@@ -919,7 +919,7 @@ func (c *SubmodelRepositoryAPIAPIController) GetSubmodelByIdPath(w http.Response
 		param := "deep"
 		levelParam = param
 	}
-	result, err := c.service.GetSubmodelByIdPath(r.Context(), submodelIdentifierParam, levelParam)
+	result, err := c.service.GetSubmodelByIDPath(r.Context(), submodelIdentifierParam, levelParam)
 	// If an error occurred, encode the error with the status code
 	if err != nil {
 		c.errorHandler(w, r, err, &result)
@@ -954,15 +954,15 @@ func (c *SubmodelRepositoryAPIAPIController) GetAllSubmodelElements(w http.Respo
 		}
 
 		limitParam = param
-	} else {
 	}
+
 	var cursorParam string
 	if query.Has("cursor") {
 		param := query.Get("cursor")
 
 		cursorParam = param
-	} else {
 	}
+
 	var levelParam string
 	if query.Has("level") {
 		param := query.Get("level")
@@ -1057,15 +1057,15 @@ func (c *SubmodelRepositoryAPIAPIController) GetAllSubmodelElementsMetadataSubmo
 		}
 
 		limitParam = param
-	} else {
 	}
+
 	var cursorParam string
 	if query.Has("cursor") {
 		param := query.Get("cursor")
 
 		cursorParam = param
-	} else {
 	}
+
 	result, err := c.service.GetAllSubmodelElementsMetadataSubmodelRepo(r.Context(), submodelIdentifierParam, limitParam, cursorParam)
 	// If an error occurred, encode the error with the status code
 	if err != nil {
@@ -1101,15 +1101,15 @@ func (c *SubmodelRepositoryAPIAPIController) GetAllSubmodelElementsValueOnlySubm
 		}
 
 		limitParam = param
-	} else {
 	}
+
 	var cursorParam string
 	if query.Has("cursor") {
 		param := query.Get("cursor")
 
 		cursorParam = param
-	} else {
 	}
+
 	var levelParam string
 	if query.Has("level") {
 		param := query.Get("level")
@@ -1163,15 +1163,15 @@ func (c *SubmodelRepositoryAPIAPIController) GetAllSubmodelElementsReferenceSubm
 		}
 
 		limitParam = param
-	} else {
 	}
+
 	var cursorParam string
 	if query.Has("cursor") {
 		param := query.Get("cursor")
 
 		cursorParam = param
-	} else {
 	}
+
 	var levelParam string
 	if query.Has("level") {
 		param := query.Get("level")
@@ -1216,15 +1216,15 @@ func (c *SubmodelRepositoryAPIAPIController) GetAllSubmodelElementsPathSubmodelR
 		}
 
 		limitParam = param
-	} else {
 	}
+
 	var cursorParam string
 	if query.Has("cursor") {
 		param := query.Get("cursor")
 
 		cursorParam = param
-	} else {
 	}
+
 	var levelParam string
 	if query.Has("level") {
 		param := query.Get("level")
@@ -1979,12 +1979,12 @@ func (c *SubmodelRepositoryAPIAPIController) GetOperationAsyncStatus(w http.Resp
 		c.errorHandler(w, r, &RequiredError{"idShortPath"}, nil)
 		return
 	}
-	handleIdParam := chi.URLParam(r, "handleId")
-	if handleIdParam == "" {
+	handleIDParam := chi.URLParam(r, "handleId")
+	if handleIDParam == "" {
 		c.errorHandler(w, r, &RequiredError{"handleId"}, nil)
 		return
 	}
-	result, err := c.service.GetOperationAsyncStatus(r.Context(), submodelIdentifierParam, idShortPathParam, handleIdParam)
+	result, err := c.service.GetOperationAsyncStatus(r.Context(), submodelIdentifierParam, idShortPathParam, handleIDParam)
 	// If an error occurred, encode the error with the status code
 	if err != nil {
 		c.errorHandler(w, r, err, &result)
@@ -2006,12 +2006,12 @@ func (c *SubmodelRepositoryAPIAPIController) GetOperationAsyncResult(w http.Resp
 		c.errorHandler(w, r, &RequiredError{"idShortPath"}, nil)
 		return
 	}
-	handleIdParam := chi.URLParam(r, "handleId")
-	if handleIdParam == "" {
+	handleIDParam := chi.URLParam(r, "handleId")
+	if handleIDParam == "" {
 		c.errorHandler(w, r, &RequiredError{"handleId"}, nil)
 		return
 	}
-	result, err := c.service.GetOperationAsyncResult(r.Context(), submodelIdentifierParam, idShortPathParam, handleIdParam)
+	result, err := c.service.GetOperationAsyncResult(r.Context(), submodelIdentifierParam, idShortPathParam, handleIDParam)
 	// If an error occurred, encode the error with the status code
 	if err != nil {
 		c.errorHandler(w, r, err, &result)
@@ -2033,12 +2033,12 @@ func (c *SubmodelRepositoryAPIAPIController) GetOperationAsyncResultValueOnly(w 
 		c.errorHandler(w, r, &RequiredError{"idShortPath"}, nil)
 		return
 	}
-	handleIdParam := chi.URLParam(r, "handleId")
-	if handleIdParam == "" {
+	handleIDParam := chi.URLParam(r, "handleId")
+	if handleIDParam == "" {
 		c.errorHandler(w, r, &RequiredError{"handleId"}, nil)
 		return
 	}
-	result, err := c.service.GetOperationAsyncResultValueOnly(r.Context(), submodelIdentifierParam, idShortPathParam, handleIdParam)
+	result, err := c.service.GetOperationAsyncResultValueOnly(r.Context(), submodelIdentifierParam, idShortPathParam, handleIDParam)
 	// If an error occurred, encode the error with the status code
 	if err != nil {
 		c.errorHandler(w, r, err, &result)

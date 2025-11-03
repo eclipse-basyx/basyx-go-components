@@ -22,9 +22,11 @@
 *
 * SPDX-License-Identifier: MIT
 ******************************************************************************/
-
 // Author: Aaron Zielstorff ( Fraunhofer IESE ), Jannik Fried ( Fraunhofer IESE )
-package submodelQueries
+
+// Package submodelsubqueries provides database query construction utilities
+// for retrieving submodel-related data with complex joins and aggregations.
+package submodelsubqueries
 
 import "github.com/doug-martin/goqu/v9"
 
@@ -42,6 +44,27 @@ type AdministrationRow struct {
 }
 */
 
+// GetAdministrationSubqueryForSubmodel constructs a complex SQL subquery for retrieving
+// administrative information related to a submodel. This function builds a comprehensive
+// query that includes:
+//   - Administrative information (version, revision, templateId)
+//   - Creator references with their keys
+//   - Creator referred references (hierarchical references)
+//   - Embedded data specifications and their references
+//   - IEC 61360 data specifications
+//
+// The function creates multiple nested subqueries to aggregate related data into JSONB objects,
+// allowing for efficient retrieval of all administrative information in a single query.
+//
+// Parameters:
+//   - dialect: The goqu dialect wrapper for database-specific SQL generation
+//
+// Returns:
+//   - *goqu.SelectDataset: A configured select dataset that can be used as a subquery
+//     in larger queries to retrieve administrative information for submodels
+//
+// The returned subquery expects to be used in a context where 's.administration_id'
+// is available for joining with the administrative_information table.
 func GetAdministrationSubqueryForSubmodel(dialect goqu.DialectWrapper) *goqu.SelectDataset {
 	administrativeInformationEmbeddedDataSpecificationReferenceSubquery, administrativeInformationEmbeddedDataSpecificationReferenceReferredSubquery, administrativeInformationIEC61360Subquery := GetEmbeddedDataSpecificationSubqueries(dialect, "administrative_information_embedded_data_specification", "administrative_information_id", "s.administration_id")
 

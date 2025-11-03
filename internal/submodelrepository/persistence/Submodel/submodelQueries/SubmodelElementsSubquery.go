@@ -23,9 +23,9 @@
 * SPDX-License-Identifier: MIT
 ******************************************************************************/
 
-// Package submodel_query provides functions to build subqueries for retrieving submodel elements from the database.
+// Package submodelsubqueries provides functions to build subqueries for retrieving submodel elements from the database.
 // Author: Aaron Zielstorff ( Fraunhofer IESE ), Jannik Fried ( Fraunhofer IESE )
-package submodelQueries
+package submodelsubqueries
 
 import (
 	"github.com/doug-martin/goqu/v9"
@@ -35,7 +35,7 @@ import (
 // GetSubmodelElementsSubquery builds a subquery to retrieve submodel elements for a given submodel.
 func GetSubmodelElementsSubquery(dialect goqu.DialectWrapper, rootSubmodelElements bool) *goqu.SelectDataset {
 	semanticIDSubquery, semanticIDReferredSubquery := queries.GetReferenceQueries(dialect, goqu.I("tlsme.semantic_id"))
-	supplSemanticIDSubquery, supplSemanticIDReferredSubquery := queries.GetSupplementalSemanticIdQueries(dialect, goqu.T("submodel_element_supplemental_semantic_id"), "submodel_element_id", "reference_id", goqu.I("tlsme.id"))
+	supplSemanticIDSubquery, supplSemanticIDReferredSubquery := queries.GetSupplementalSemanticIDQueries(dialect, goqu.T("submodel_element_supplemental_semantic_id"), "submodel_element_id", "reference_id", goqu.I("tlsme.id"))
 
 	valueByType := goqu.Case().
 		// When(

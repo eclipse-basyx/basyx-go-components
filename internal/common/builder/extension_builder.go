@@ -123,10 +123,10 @@ func (b *ExtensionsBuilder) AddExtension(extensionDbID int64, name string, value
 // Example:
 //
 //	builder.AddSemanticID(1, semanticIdJSON, referredSemanticIdJSON)
-func (b *ExtensionsBuilder) AddSemanticID(extensionDbID int64, semanticIDRows json.RawMessage, semanticIDReferredSemanticIdRows json.RawMessage) (*ExtensionsBuilder, error) {
+func (b *ExtensionsBuilder) AddSemanticID(extensionDbID int64, semanticIDRows json.RawMessage, semanticIDReferredSemanticIDRows json.RawMessage) (*ExtensionsBuilder, error) {
 	extension := b.extensions[extensionDbID]
 
-	semanticID, err := b.createExactlyOneReference(extensionDbID, semanticIDRows, semanticIDReferredSemanticIdRows, "SemanticID")
+	semanticID, err := b.createExactlyOneReference(extensionDbID, semanticIDRows, semanticIDReferredSemanticIDRows, "SemanticID")
 
 	if err != nil {
 		return nil, err
@@ -137,7 +137,7 @@ func (b *ExtensionsBuilder) AddSemanticID(extensionDbID int64, semanticIDRows js
 	return b, nil
 }
 
-// AddSupplementalSemanticIds adds supplemental semantic IDs to an extension. Supplemental
+// AddSupplementalSemanticIDs adds supplemental semantic IDs to an extension. Supplemental
 // semantic IDs provide additional semantic context beyond the primary SemanticID, allowing
 // multiple semantic interpretations or classifications to be associated with an extension.
 //
@@ -157,22 +157,22 @@ func (b *ExtensionsBuilder) AddSemanticID(extensionDbID int64, semanticIDRows js
 //
 // Example:
 //
-//	builder.AddSupplementalSemanticIds(1, supplementalSemanticIdsJSON, referredSemanticIdsJSON)
-func (b *ExtensionsBuilder) AddSupplementalSemanticIds(extensionDbID int64, supplementalSemanticIdsRows json.RawMessage, supplementalSemanticIdsReferredSemanticIdRows json.RawMessage) (*ExtensionsBuilder, error) {
+//	builder.AddSupplementalSemanticIDs(1, supplementalSemanticIdsJSON, referredSemanticIdsJSON)
+func (b *ExtensionsBuilder) AddSupplementalSemanticIDs(extensionDbID int64, supplementalSemanticIDsRows json.RawMessage, supplementalSemanticIDsReferredSemanticIDRows json.RawMessage) (*ExtensionsBuilder, error) {
 	extension, exists := b.extensions[extensionDbID]
 
 	if !exists {
 		return nil, fmt.Errorf("tried to add SupplementalSemanticIds to Extension '%d' before creating the Extension itself", extensionDbID)
 	}
 
-	refs, err := ParseReferences(supplementalSemanticIdsRows, b.refBuilderMap)
+	refs, err := ParseReferences(supplementalSemanticIDsRows, b.refBuilderMap)
 
 	if err != nil {
 		return nil, err
 	}
 
-	if len(supplementalSemanticIdsReferredSemanticIdRows) > 0 {
-		if err = ParseReferredReferences(supplementalSemanticIdsReferredSemanticIdRows, b.refBuilderMap); err != nil {
+	if len(supplementalSemanticIDsReferredSemanticIDRows) > 0 {
+		if err = ParseReferredReferences(supplementalSemanticIDsReferredSemanticIDRows, b.refBuilderMap); err != nil {
 			return nil, err
 		}
 	}
@@ -238,11 +238,11 @@ func (b *ExtensionsBuilder) AddRefersTo(extensionDbID int64, refersToRows json.R
 	return b, nil
 }
 
-func (b *ExtensionsBuilder) createExactlyOneReference(extensionDbID int64, refRows json.RawMessage, referredRefRows json.RawMessage, Type string) (*gen.Reference, error) {
+func (b *ExtensionsBuilder) createExactlyOneReference(extensionDbID int64, refRows json.RawMessage, referredRefRows json.RawMessage, typeOfReference string) (*gen.Reference, error) {
 	_, exists := b.extensions[extensionDbID]
 
 	if !exists {
-		return nil, fmt.Errorf("tried to add %s to Extension '%d' before creating the Extension itself", Type, extensionDbID)
+		return nil, fmt.Errorf("tried to add %s to Extension '%d' before creating the Extension itself", typeOfReference, extensionDbID)
 	}
 
 	refs, err := ParseReferences(refRows, b.refBuilderMap)
@@ -258,7 +258,7 @@ func (b *ExtensionsBuilder) createExactlyOneReference(extensionDbID int64, refRo
 	}
 
 	if len(refs) != 1 {
-		return nil, fmt.Errorf("expected exactly one or no %s for Extension '%d' but got %d", Type, extensionDbID, len(refs))
+		return nil, fmt.Errorf("expected exactly one or no %s for Extension '%d' but got %d", typeOfReference, extensionDbID, len(refs))
 	}
 
 	return refs[0], nil

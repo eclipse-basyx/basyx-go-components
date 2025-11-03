@@ -22,6 +22,7 @@
 *
 * SPDX-License-Identifier: MIT
 ******************************************************************************/
+
 // Package auth contains OIDC verification and request authentication middleware
 // used by BaSyx components. It validates incoming Bearer tokens, extracts
 // claims into the request context, and optionally allows anonymous access.
@@ -243,5 +244,9 @@ func hasAllScopes(c Claims, need []string) bool {
 // and message using the common BaSyx error format.
 func respondOIDCError(w http.ResponseWriter, code int, msg string) {
 	resp := common.NewErrorResponse(errors.New(msg), code, "Middleware", "Rules", "Denied")
-	openapi.EncodeJSONResponse(resp.Body, &resp.Code, w)
+	err := openapi.EncodeJSONResponse(resp.Body, &resp.Code, w)
+	if err != nil {
+		log.Printf("❌ Failed to encode error response: %v", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+	}
 }

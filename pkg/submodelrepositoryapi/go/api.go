@@ -7,6 +7,7 @@
  * Contact: info@idtwin.org
  */
 
+// Package openapi Submodel Repository API
 package openapi
 
 import (
@@ -28,7 +29,7 @@ type DescriptionAPIAPIRouter interface {
 // The SerializationAPIAPIRouter implementation should parse necessary information from the http request,
 // pass the data to a SerializationAPIAPIServicer to perform the required actions, then write the service results to the http response.
 type SerializationAPIAPIRouter interface {
-	GenerateSerializationByIds(http.ResponseWriter, *http.Request)
+	GenerateSerializationByIDs(http.ResponseWriter, *http.Request)
 }
 
 // SubmodelRepositoryAPIAPIRouter defines the required methods for binding the api requests to a responses for the SubmodelRepositoryAPIAPI
@@ -45,12 +46,12 @@ type SubmodelRepositoryAPIAPIRouter interface {
 	PutSubmodelByID(http.ResponseWriter, *http.Request)
 	DeleteSubmodelByID(http.ResponseWriter, *http.Request)
 	PatchSubmodelByID(http.ResponseWriter, *http.Request)
-	GetSubmodelByIdMetadata(http.ResponseWriter, *http.Request)
-	PatchSubmodelByIdMetadata(http.ResponseWriter, *http.Request)
-	GetSubmodelByIdValueOnly(http.ResponseWriter, *http.Request)
-	PatchSubmodelByIdValueOnly(http.ResponseWriter, *http.Request)
-	GetSubmodelByIdReference(http.ResponseWriter, *http.Request)
-	GetSubmodelByIdPath(http.ResponseWriter, *http.Request)
+	GetSubmodelByIDMetadata(http.ResponseWriter, *http.Request)
+	PatchSubmodelByIDMetadata(http.ResponseWriter, *http.Request)
+	GetSubmodelByIDValueOnly(http.ResponseWriter, *http.Request)
+	PatchSubmodelByIDValueOnly(http.ResponseWriter, *http.Request)
+	GetSubmodelByIDReference(http.ResponseWriter, *http.Request)
+	GetSubmodelByIDPath(http.ResponseWriter, *http.Request)
 	GetAllSubmodelElements(http.ResponseWriter, *http.Request)
 	PostSubmodelElementSubmodelRepo(http.ResponseWriter, *http.Request)
 	GetAllSubmodelElementsMetadataSubmodelRepo(http.ResponseWriter, *http.Request)
@@ -93,7 +94,7 @@ type DescriptionAPIAPIServicer interface {
 // while the service implementation can be ignored with the .openapi-generator-ignore file
 // and updated with the logic required for the API.
 type SerializationAPIAPIServicer interface {
-	GenerateSerializationByIds(context.Context, []string, []string, bool) (model.ImplResponse, error)
+	GenerateSerializationByIDs(context.Context, []string, []string, bool) (model.ImplResponse, error)
 }
 
 // SubmodelRepositoryAPIAPIServicer defines the api actions for the SubmodelRepositoryAPIAPI service
@@ -111,12 +112,12 @@ type SubmodelRepositoryAPIAPIServicer interface {
 	PutSubmodelByID(context.Context, string, model.Submodel) (model.ImplResponse, error)
 	DeleteSubmodelByID(context.Context, string) (model.ImplResponse, error)
 	PatchSubmodelByID(context.Context, string, model.Submodel, string) (model.ImplResponse, error)
-	GetSubmodelByIdMetadata(context.Context, string) (model.ImplResponse, error)
-	PatchSubmodelByIdMetadata(context.Context, string, model.SubmodelMetadata) (model.ImplResponse, error)
-	GetSubmodelByIdValueOnly(context.Context, string, string, string) (model.ImplResponse, error)
-	PatchSubmodelByIdValueOnly(context.Context, string, map[string]interface{}, string) (model.ImplResponse, error)
-	GetSubmodelByIdReference(context.Context, string) (model.ImplResponse, error)
-	GetSubmodelByIdPath(context.Context, string, string) (model.ImplResponse, error)
+	GetSubmodelByIDMetadata(context.Context, string) (model.ImplResponse, error)
+	PatchSubmodelByIDMetadata(context.Context, string, model.SubmodelMetadata) (model.ImplResponse, error)
+	GetSubmodelByIDValueOnly(context.Context, string, string, string) (model.ImplResponse, error)
+	PatchSubmodelByIDValueOnly(context.Context, string, map[string]interface{}, string) (model.ImplResponse, error)
+	GetSubmodelByIDReference(context.Context, string) (model.ImplResponse, error)
+	GetSubmodelByIDPath(context.Context, string, string) (model.ImplResponse, error)
 	GetAllSubmodelElements(context.Context, string, int32, string, string, string) (model.ImplResponse, error)
 	PostSubmodelElementSubmodelRepo(context.Context, string, model.SubmodelElement) (model.ImplResponse, error)
 	GetAllSubmodelElementsMetadataSubmodelRepo(context.Context, string, int32, string) (model.ImplResponse, error)

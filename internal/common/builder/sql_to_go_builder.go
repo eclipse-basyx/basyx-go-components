@@ -345,7 +345,7 @@ func ParseReferredReferencesFromRows(semanticIDData []ReferredReferenceRow, refe
 			continue
 		}
 		builder.CreateReferredSemanticID(*ref.ReferenceID, *ref.ParentReference, *ref.ReferenceType)
-		err := builder.CreateReferredSemanticIdKey(*ref.ReferenceID, *ref.KeyID, *ref.KeyType, *ref.KeyValue)
+		err := builder.CreateReferredSemanticIDKey(*ref.ReferenceID, *ref.KeyID, *ref.KeyType, *ref.KeyValue)
 
 		if err != nil {
 			return fmt.Errorf("error creating key for referred reference with id %d: %w", *ref.ReferenceID, err)

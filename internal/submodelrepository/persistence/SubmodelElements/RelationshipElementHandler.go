@@ -22,8 +22,12 @@
 *
 * SPDX-License-Identifier: MIT
 ******************************************************************************/
-
 // Author: Jannik Fried ( Fraunhofer IESE )
+
+// Package submodelelements provides handlers for different types of submodel elements in the BaSyx framework.
+//
+// This package contains PostgreSQL-based persistence implementations for various submodel element types
+// including relationship elements that define directed relationships between other elements.
 package submodelelements
 
 import (
@@ -34,11 +38,35 @@ import (
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 )
 
+// PostgreSQLRelationshipElementHandler provides persistence operations for RelationshipElement types.
+//
+// This handler implements the decorator pattern, wrapping the base PostgreSQLSMECrudHandler
+// to add RelationshipElement-specific functionality. A RelationshipElement represents a
+// directed relationship between two elements in the AAS model, identified by "first" and
+// "second" references.
+//
+// The handler manages:
+//   - Base submodel element properties (via decorated handler)
+//   - First and second reference persistence
+//   - Reference keys and their positions
+//   - Both root-level and nested relationship elements
 type PostgreSQLRelationshipElementHandler struct {
 	db        *sql.DB
 	decorated *PostgreSQLSMECrudHandler
 }
 
+// NewPostgreSQLRelationshipElementHandler creates a new handler for RelationshipElement persistence.
+//
+// This constructor initializes a RelationshipElement handler with a decorated base handler
+// for common submodel element operations. The decorator pattern allows for separation of
+// concerns between generic element handling and type-specific logic.
+//
+// Parameters:
+//   - db: PostgreSQL database connection
+//
+// Returns:
+//   - *PostgreSQLRelationshipElementHandler: Initialized handler ready for CRUD operations
+//   - error: An error if the decorated handler creation fails
 func NewPostgreSQLRelationshipElementHandler(db *sql.DB) (*PostgreSQLRelationshipElementHandler, error) {
 	decoratedHandler, err := NewPostgreSQLSMECrudHandler(db)
 	if err != nil {
@@ -47,6 +75,37 @@ func NewPostgreSQLRelationshipElementHandler(db *sql.DB) (*PostgreSQLRelationshi
 	return &PostgreSQLRelationshipElementHandler{db: db, decorated: decoratedHandler}, nil
 }
 
+// Create persists a new root-level RelationshipElement to the database.
+//
+// This method creates a RelationshipElement at the root level of a submodel. It delegates
+// base element creation to the decorated handler, then persists the relationship-specific
+// data including the first and second references that define the relationship.
+//
+// The method performs the following operations in sequence:
+//  1. Type assertion to ensure the element is a RelationshipElement
+//  2. Base element creation (idShort, category, model type, semantic ID)
+//  3. Reference persistence (first and second references with their keys)
+//  4. Insertion into relationship_element table
+//
+// All operations are performed within the provided transaction for atomicity.
+//
+// Parameters:
+//   - tx: Active transaction context for atomic operations
+//   - submodelID: ID of the parent submodel
+//   - submodelElement: The RelationshipElement to create (must be *gen.RelationshipElement)
+//
+// Returns:
+//   - int: Database ID of the newly created element
+//   - error: An error if type assertion fails, base creation fails, or reference insertion fails
+//
+// Example:
+//
+//	relElem := &gen.RelationshipElement{
+//	    IdShort: "dependsOn",
+//	    First:   &gen.Reference{...},
+//	    Second:  &gen.Reference{...},
+//	}
+//	id, err := handler.Create(tx, "submodel123", relElem)
 func (p PostgreSQLRelationshipElementHandler) Create(tx *sql.Tx, submodelID string, submodelElement gen.SubmodelElement) (int, error) {
 	relElem, ok := submodelElement.(*gen.RelationshipElement)
 	if !ok {
@@ -68,6 +127,30 @@ func (p PostgreSQLRelationshipElementHandler) Create(tx *sql.Tx, submodelID stri
 	return id, nil
 }
 
+// CreateNested persists a nested RelationshipElement within a hierarchical structure.
+//
+// This method creates a RelationshipElement as a child of another element (typically within
+// a SubmodelElementCollection or SubmodelElementList). It manages parent-child relationships,
+// position ordering, and full path tracking in addition to relationship-specific data.
+//
+// The method is used when creating relationships within collections or lists where explicit
+// path and position management is required for proper hierarchy reconstruction.
+//
+// Parameters:
+//   - tx: Active transaction context for atomic operations
+//   - submodelID: ID of the parent submodel
+//   - parentID: Database ID of the parent element
+//   - idShortPath: Full path from root (e.g., "collection1.dependsOn" or "relationships[0]")
+//   - submodelElement: The RelationshipElement to create (must be *gen.RelationshipElement)
+//   - pos: Position index within parent for ordering
+//
+// Returns:
+//   - int: Database ID of the newly created nested element
+//   - error: An error if type assertion fails, creation fails, or reference insertion fails
+//
+// Example:
+//
+//	id, err := handler.CreateNested(tx, "submodel123", parentDbID, "relations.dependsOn", relElem, 0)
 func (p PostgreSQLRelationshipElementHandler) CreateNested(tx *sql.Tx, submodelID string, parentID int, idShortPath string, submodelElement gen.SubmodelElement, pos int) (int, error) {
 	relElem, ok := submodelElement.(*gen.RelationshipElement)
 	if !ok {
@@ -89,12 +172,34 @@ func (p PostgreSQLRelationshipElementHandler) CreateNested(tx *sql.Tx, submodelI
 	return id, nil
 }
 
+// Update updates an existing RelationshipElement identified by its idShort or path.
+//
+// This method delegates to the decorated handler for update operations. It's currently
+// a pass-through that will leverage base handler update logic when implemented.
+//
+// Parameters:
+//   - idShortOrPath: The idShort or full path of the element to update
+//   - submodelElement: The updated element data
+//
+// Returns:
+//   - error: An error if the decorated update operation fails
 func (p PostgreSQLRelationshipElementHandler) Update(idShortOrPath string, submodelElement gen.SubmodelElement) error {
 	if dErr := p.decorated.Update(idShortOrPath, submodelElement); dErr != nil {
 		return dErr
 	}
 	return nil
 }
+
+// Delete removes a RelationshipElement identified by its idShort or path.
+//
+// This method delegates to the decorated handler for delete operations. When implemented,
+// it will handle cascading deletion of relationship-specific data along with base element data.
+//
+// Parameters:
+//   - idShortOrPath: The idShort or full path of the element to delete
+//
+// Returns:
+//   - error: An error if the decorated delete operation fails
 func (p PostgreSQLRelationshipElementHandler) Delete(idShortOrPath string) error {
 	if dErr := p.decorated.Delete(idShortOrPath); dErr != nil {
 		return dErr
@@ -102,6 +207,26 @@ func (p PostgreSQLRelationshipElementHandler) Delete(idShortOrPath string) error
 	return nil
 }
 
+// insertRelationshipElement persists RelationshipElement-specific data to the database.
+//
+// This internal helper function handles the insertion of relationship-specific data into
+// the relationship_element table. It manages the first and second references that define
+// the directed relationship, creating full reference records with their keys if the
+// references are not empty.
+//
+// The function:
+//   - Checks if first and second references are non-empty
+//   - Inserts complete reference structures (type, keys with positions and values)
+//   - Links references to the relationship element via foreign keys
+//   - Handles NULL values for empty references
+//
+// Parameters:
+//   - relElem: The RelationshipElement containing the references to persist
+//   - tx: Active transaction context for atomic operations
+//   - id: Database ID of the parent submodel element
+//
+// Returns:
+//   - error: An error if reference insertion fails or the final relationship_element insert fails
 func insertRelationshipElement(relElem *gen.RelationshipElement, tx *sql.Tx, id int) error {
 	var firstRefID, secondRefID sql.NullInt64
 
@@ -126,6 +251,28 @@ func insertRelationshipElement(relElem *gen.RelationshipElement, tx *sql.Tx, id 
 	return err
 }
 
+// insertReference creates a complete reference record with its keys in the database.
+//
+// This utility function persists a reference structure to the database, including the
+// reference type and all associated keys with their positions, types, and values. The
+// function ensures proper ordering of keys through position tracking.
+//
+// The function performs:
+//   - Insertion of the reference record with its type
+//   - Iteration through all keys in the reference
+//   - Insertion of each key with its position (index), type, and value
+//   - Proper ordering preservation via position field
+//
+// Parameters:
+//   - tx: Active transaction context for atomic operations
+//   - ref: The Reference object containing type and keys to persist
+//
+// Returns:
+//   - int: Database ID of the newly created reference
+//   - error: An error if reference or key insertion fails
+//
+// Note: This function is used for both first and second references in relationship elements,
+// as well as any other reference structures that need full persistence with keys.
 func insertReference(tx *sql.Tx, ref gen.Reference) (int, error) {
 	var refID int
 	err := tx.QueryRow(`INSERT INTO reference (type) VALUES ($1) RETURNING id`, ref.Type).Scan(&refID)

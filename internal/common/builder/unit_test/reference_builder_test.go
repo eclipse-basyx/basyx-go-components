@@ -155,7 +155,7 @@ func TestCreateReferredSemanticIdKey(t *testing.T) {
 	rb.CreateReferredSemanticID(101, 100, "ModelReference")
 
 	// Add a key to the ReferredSemanticId
-	err := rb.CreateReferredSemanticIdKey(101, 1, "ConceptDescription", "0173-1#01-ABC123#001")
+	err := rb.CreateReferredSemanticIDKey(101, 1, "ConceptDescription", "0173-1#01-ABC123#001")
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
 	}
@@ -182,7 +182,7 @@ func TestCreateReferredSemanticIdKey_NotFound(t *testing.T) {
 	_, rb := builder.NewReferenceBuilder("ExternalReference", 100)
 
 	// Try to add a key to a non-existent ReferredSemanticId
-	err := rb.CreateReferredSemanticIdKey(999, 1, "ConceptDescription", "0173-1#01-ABC123#001")
+	err := rb.CreateReferredSemanticIDKey(999, 1, "ConceptDescription", "0173-1#01-ABC123#001")
 	if err == nil {
 		t.Error("Expected error when adding key to non-existent ReferredSemanticId")
 	}
@@ -196,14 +196,14 @@ func TestBuildNestedStructure_TwoLevels(t *testing.T) {
 
 	// Create first level ReferredSemanticId
 	rb.CreateReferredSemanticID(101, 100, "ModelReference")
-	err := rb.CreateReferredSemanticIdKey(101, 2, "ConceptDescription", "0173-1#01-ABC123#001")
+	err := rb.CreateReferredSemanticIDKey(101, 2, "ConceptDescription", "0173-1#01-ABC123#001")
 	if err != nil {
 		t.Error("Error creating first level ReferredSemanticId key:", err)
 	}
 
 	// Create second level ReferredSemanticId
 	rb.CreateReferredSemanticID(102, 101, "ExternalReference")
-	err = rb.CreateReferredSemanticIdKey(102, 3, "GlobalReference", "https://example.com/grandparent")
+	err = rb.CreateReferredSemanticIDKey(102, 3, "GlobalReference", "https://example.com/grandparent")
 	if err != nil {
 		t.Error("Error creating second level ReferredSemanticId key:", err)
 	}
@@ -241,7 +241,7 @@ func TestBuildNestedStructure_ThreeLevels(t *testing.T) {
 	// Create three levels of nesting
 	rb.CreateKey(1, "GlobalReference", "https://example.com/root")
 	rb.CreateReferredSemanticID(101, 100, "ModelReference")
-	err := rb.CreateReferredSemanticIdKey(101, 2, "ConceptDescription", "Level1")
+	err := rb.CreateReferredSemanticIDKey(101, 2, "ConceptDescription", "Level1")
 	if err != nil {
 		t.Error("Error creating first level ReferredSemanticId key:", err)
 	}
@@ -249,12 +249,12 @@ func TestBuildNestedStructure_ThreeLevels(t *testing.T) {
 	if err != nil {
 		t.Error("Error creating second level ReferredSemanticId:", err)
 	}
-	err = rb.CreateReferredSemanticIdKey(102, 3, "GlobalReference", "Level2")
+	err = rb.CreateReferredSemanticIDKey(102, 3, "GlobalReference", "Level2")
 	if err != nil {
 		t.Error("Error creating second level ReferredSemanticId key:", err)
 	}
 	rb.CreateReferredSemanticID(103, 102, "ModelReference")
-	err = rb.CreateReferredSemanticIdKey(103, 4, "ConceptDescription", "Level3")
+	err = rb.CreateReferredSemanticIDKey(103, 4, "ConceptDescription", "Level3")
 	if err != nil {
 		t.Error("Error creating third level ReferredSemanticId key:", err)
 	}
@@ -311,18 +311,18 @@ func TestCompleteReferenceHierarchy(t *testing.T) {
 
 	// First level ReferredSemanticId
 	rb.CreateReferredSemanticID(201, 100, "ModelReference")
-	err := rb.CreateReferredSemanticIdKey(201, 10, "ConceptDescription", "0173-1#01-ABC123#001")
+	err := rb.CreateReferredSemanticIDKey(201, 10, "ConceptDescription", "0173-1#01-ABC123#001")
 	if err != nil {
 		t.Error("Error creating first level ReferredSemanticId key:", err)
 	}
-	err = rb.CreateReferredSemanticIdKey(201, 11, "GlobalReference", "https://eclass.com/concept/123")
+	err = rb.CreateReferredSemanticIDKey(201, 11, "GlobalReference", "https://eclass.com/concept/123")
 	if err != nil {
 		t.Error("Error creating first level ReferredSemanticId key:", err)
 	}
 
 	// Second level ReferredSemanticId
 	rb.CreateReferredSemanticID(202, 201, "ExternalReference")
-	err = rb.CreateReferredSemanticIdKey(202, 20, "GlobalReference", "https://example.com/parent-concept")
+	err = rb.CreateReferredSemanticIDKey(202, 20, "GlobalReference", "https://example.com/parent-concept")
 	if err != nil {
 		t.Error("Error creating second level ReferredSemanticId key:", err)
 	}

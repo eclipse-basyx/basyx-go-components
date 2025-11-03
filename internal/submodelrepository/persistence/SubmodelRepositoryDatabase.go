@@ -23,8 +23,12 @@
 * SPDX-License-Identifier: MIT
 ******************************************************************************/
 
+// Package persistencepostgresql provides PostgreSQL-based persistence implementation for the submodel repository.
+// This package contains the database layer implementation for managing submodels and their elements
+// using PostgreSQL as the backend storage system.
+//
 // Author: Prajwala Prabhakar Adiga ( Fraunhofer IESE ), Jannik Fried ( Fraunhofer IESE ), Aaron Zielstorff ( Fraunhofer IESE )
-package persistence_postgresql
+package persistencepostgresql
 
 import (
 	"database/sql"
@@ -36,11 +40,13 @@ import (
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
-	submodel_persistence "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/Submodel"
+	submodelpersistence "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/Submodel"
 	submodelelements "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/SubmodelElements"
-	persistenceUtils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
+	persistenceutils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
 )
 
+// PostgreSQLSubmodelDatabase represents a PostgreSQL-based implementation of the submodel repository database.
+// It provides methods for CRUD operations on submodels and their elements with optional caching support.
 type PostgreSQLSubmodelDatabase struct {
 	db           *sql.DB
 	cacheEnabled bool
@@ -54,7 +60,21 @@ var maxCacheSize = 1000
 // InMemory Cache for submodels
 var submodelCache map[string]gen.Submodel = make(map[string]gen.Submodel)
 
-func NewPostgreSQLSubmodelBackend(dsn string, maxOpenConns, maxIdleConns int, connMaxLifetimeMinutes int, cacheEnabled bool, databaseSchema string) (*PostgreSQLSubmodelDatabase, error) {
+// NewPostgreSQLSubmodelBackend creates a new PostgreSQL submodel database backend.
+// It initializes a database connection with the provided DSN and schema configuration.
+//
+// Parameters:
+//   - dsn: Data Source Name for PostgreSQL connection
+//   - maxOpenConns: Maximum number of open connections to the database
+//   - maxIdleConns: Maximum number of idle connections in the pool
+//   - connMaxLifetimeMinutes: Maximum lifetime of a connection in minutes
+//   - cacheEnabled: Whether to enable in-memory caching for submodels
+//   - databaseSchema: Database schema to use
+//
+// Returns:
+//   - *PostgreSQLSubmodelDatabase: Configured database instance
+//   - error: Error if database initialization fails
+func NewPostgreSQLSubmodelBackend(dsn string, _ /* maxOpenConns */, _ /* maxIdleConns */ int, _ /* connMaxLifetimeMinutes */ int, cacheEnabled bool, databaseSchema string) (*PostgreSQLSubmodelDatabase, error) {
 	db, err := common.InitializeDatabase(dsn, databaseSchema)
 	if err != nil {
 		return nil, err
@@ -62,16 +82,32 @@ func NewPostgreSQLSubmodelBackend(dsn string, maxOpenConns, maxIdleConns int, co
 	return &PostgreSQLSubmodelDatabase{db: db, cacheEnabled: cacheEnabled}, nil
 }
 
+// GetDB returns the underlying SQL database connection.
+// This method provides access to the raw database connection for advanced operations.
+//
+// Returns:
+//   - *sql.DB: The PostgreSQL database connection
 func (p *PostgreSQLSubmodelDatabase) GetDB() *sql.DB {
 	return p.db
 }
 
-// GetAllSubmodels and a next cursor ("" if no more pages).
-func (p *PostgreSQLSubmodelDatabase) GetAllSubmodels(limit int32, cursor string, idShort string) ([]gen.Submodel, string, error) {
+// GetAllSubmodels retrieves a paginated list of all submodels from the database.
+// This method supports pagination through cursor-based navigation and optional filtering by idShort.
+//
+// Parameters:
+//   - limit: Maximum number of submodels to return (defaults to 100 if 0)
+//   - cursor: Pagination cursor for retrieving next page (empty string for first page)
+//   - idShort: Optional filter by submodel idShort (not currently implemented)
+//
+// Returns:
+//   - []gen.Submodel: List of submodels
+//   - string: Next cursor for pagination (empty if no more pages)
+//   - error: Error if retrieval fails
+func (p *PostgreSQLSubmodelDatabase) GetAllSubmodels(limit int32, cursor string, _ /* idShort */ string) ([]gen.Submodel, string, error) {
 	if limit == 0 {
 		limit = 100
 	}
-	sm, cursor, err := submodel_persistence.GetAllSubmodels(p.db, int64(limit), cursor, nil)
+	sm, cursor, err := submodelpersistence.GetAllSubmodels(p.db, int64(limit), cursor, nil)
 	if err != nil {
 		return nil, "", err
 	}
@@ -86,12 +122,25 @@ func (p *PostgreSQLSubmodelDatabase) GetAllSubmodels(limit int32, cursor string,
 	return result, cursor, nil
 }
 
-// get submodel metadata
+// GetAllSubmodelsMetadata retrieves metadata for all submodels without their full content.
+// This method is optimized for scenarios where only basic submodel information is needed,
+// excluding the full submodel elements tree.
+//
+// Parameters:
+//   - limit: Maximum number of submodels to return (defaults to 100 if <= 0)
+//   - cursor: Pagination cursor for retrieving next page (not currently implemented)
+//   - idShort: Optional filter by submodel idShort (supports partial matching with ILIKE)
+//   - semanticID: Optional filter by semantic ID (not currently implemented)
+//
+// Returns:
+//   - []gen.Submodel: List of submodels with metadata only
+//   - string: Next cursor for pagination (currently returns empty string)
+//   - error: Error if retrieval fails
 func (p *PostgreSQLSubmodelDatabase) GetAllSubmodelsMetadata(
 	limit int32,
-	cursor string,
+	_ /* cursor */ string,
 	idShort string,
-	semanticID string,
+	_ /* semanticID */ string,
 ) ([]gen.Submodel, string, error) {
 
 	tx, err := p.db.Begin()
@@ -104,7 +153,7 @@ func (p *PostgreSQLSubmodelDatabase) GetAllSubmodelsMetadata(
 	}
 	defer func() {
 		if err != nil {
-			tx.Rollback()
+			_ = tx.Rollback()
 		}
 	}()
 
@@ -128,11 +177,15 @@ func (p *PostgreSQLSubmodelDatabase) GetAllSubmodelsMetadata(
 
 	rows, err := p.db.Query(query, idShort, limit)
 	if err != nil {
-		tx.Rollback()
+		_ = tx.Rollback()
 		fmt.Println("Error querying submodel metadata:", err)
 		return nil, "", err
 	}
-	defer rows.Close()
+	defer func() {
+		if closeErr := rows.Close(); closeErr != nil {
+			fmt.Println("Error closing rows:", closeErr)
+		}
+	}()
 
 	var submodels []gen.Submodel
 	for rows.Next() {
@@ -177,9 +230,17 @@ func (p *PostgreSQLSubmodelDatabase) GetAllSubmodelsMetadata(
 	return submodels, "", nil
 }
 
-// GetSubmodel returns one Submodel by id
+// GetSubmodel retrieves a complete submodel by its ID.
+// This method returns the full submodel including all its submodel elements and metadata.
+//
+// Parameters:
+//   - id: Unique identifier of the submodel to retrieve
+//
+// Returns:
+//   - gen.Submodel: The complete submodel with all its elements
+//   - error: Error if submodel not found or retrieval fails
 func (p *PostgreSQLSubmodelDatabase) GetSubmodel(id string) (gen.Submodel, error) {
-	sm, err := submodel_persistence.GetSubmodelByID(p.db, id)
+	sm, err := submodelpersistence.GetSubmodelByID(p.db, id)
 	if err != nil {
 		return gen.Submodel{}, err
 	}
@@ -187,7 +248,15 @@ func (p *PostgreSQLSubmodelDatabase) GetSubmodel(id string) (gen.Submodel, error
 	return *sm, nil
 }
 
-// DeleteSubmodel deletes a Submodel by id
+// DeleteSubmodel removes a submodel and all its associated data from the database.
+// This operation also removes the submodel from the cache if caching is enabled.
+// The deletion cascades to remove all related submodel elements and references.
+//
+// Parameters:
+//   - id: Unique identifier of the submodel to delete
+//
+// Returns:
+//   - error: Error if deletion fails or submodel not found (sql.ErrNoRows)
 func (p *PostgreSQLSubmodelDatabase) DeleteSubmodel(id string) error {
 	// Check cache first
 	if p.cacheEnabled {
@@ -202,7 +271,7 @@ func (p *PostgreSQLSubmodelDatabase) DeleteSubmodel(id string) error {
 	}
 	defer func() {
 		if err != nil {
-			tx.Rollback()
+			_ = tx.Rollback()
 		}
 	}()
 
@@ -229,10 +298,16 @@ func (p *PostgreSQLSubmodelDatabase) DeleteSubmodel(id string) error {
 	return nil
 }
 
-// CreateSubmodel inserts a new Submodel
-// If a Submodel with the same id already exists, it does nothing and returns nil
-// we might want ON CONFLICT DO UPDATE for upserts, but spec-wise POST usually means create new
-// model_type is hardcoded to "Submodel"
+// CreateSubmodel inserts a new submodel into the database.
+// If a submodel with the same ID already exists, the operation is ignored (ON CONFLICT DO NOTHING).
+// This method creates all associated elements including submodel elements, qualifiers, extensions,
+// and embedded data specifications. The model_type is automatically set to "Submodel".
+//
+// Parameters:
+//   - sm: The submodel to create with all its properties and elements
+//
+// Returns:
+//   - error: Error if creation fails, nil if successful or if submodel already exists
 func (p *PostgreSQLSubmodelDatabase) CreateSubmodel(sm gen.Submodel) error {
 	tx, err := p.db.Begin()
 
@@ -243,19 +318,19 @@ func (p *PostgreSQLSubmodelDatabase) CreateSubmodel(sm gen.Submodel) error {
 
 	defer func() {
 		if err != nil {
-			tx.Rollback()
+			_ = tx.Rollback()
 		}
 	}()
 
-	var semanticIdDbID, displayNameID, descriptionID, administrationID sql.NullInt64
+	var semanticIDDbID, displayNameID, descriptionID, administrationID sql.NullInt64
 
-	semanticIdDbID, err = persistenceUtils.CreateReference(tx, sm.SemanticID, sql.NullInt64{}, sql.NullInt64{})
+	semanticIDDbID, err = persistenceutils.CreateReference(tx, sm.SemanticID, sql.NullInt64{}, sql.NullInt64{})
 	if err != nil {
 		fmt.Println(err)
 		return common.NewInternalServerError("Failed to create SemanticID - no changes applied - see console for details")
 	}
 
-	displayNameID, err = persistenceUtils.CreateLangStringNameTypes(tx, sm.DisplayName)
+	displayNameID, err = persistenceutils.CreateLangStringNameTypes(tx, sm.DisplayName)
 	if err != nil {
 		fmt.Println(err)
 		return common.NewInternalServerError("Failed to create DisplayName - no changes applied - see console for details")
@@ -266,13 +341,13 @@ func (p *PostgreSQLSubmodelDatabase) CreateSubmodel(sm gen.Submodel) error {
 	for _, desc := range sm.Description {
 		convertedDescription = append(convertedDescription, desc)
 	}
-	descriptionID, err = persistenceUtils.CreateLangStringTextTypes(tx, convertedDescription)
+	descriptionID, err = persistenceutils.CreateLangStringTextTypes(tx, convertedDescription)
 	if err != nil {
 		fmt.Println(err)
 		return common.NewInternalServerError("Failed to create Description - no changes applied - see console for details")
 	}
 
-	administrationID, err = persistenceUtils.CreateAdministrativeInformation(tx, sm.Administration)
+	administrationID, err = persistenceutils.CreateAdministrativeInformation(tx, sm.Administration)
 	if err != nil {
 		fmt.Println(err)
 		return common.NewInternalServerError("Failed to create Administration - no changes applied - see console for details")
@@ -284,13 +359,13 @@ func (p *PostgreSQLSubmodelDatabase) CreateSubmodel(sm gen.Submodel) error {
         ON CONFLICT (id) DO NOTHING
     `
 
-	_, err = tx.Exec(q, sm.ID, sm.IdShort, sm.Category, sm.Kind, semanticIdDbID, displayNameID, descriptionID, administrationID)
+	_, err = tx.Exec(q, sm.ID, sm.IdShort, sm.Category, sm.Kind, semanticIDDbID, displayNameID, descriptionID, administrationID)
 	if err != nil {
 		return err
 	}
 
 	if sm.SupplementalSemanticIds != nil {
-		err = persistenceUtils.InsertSupplementalSemanticIDsSubmodel(tx, sm.ID, sm.SupplementalSemanticIds)
+		err = persistenceutils.InsertSupplementalSemanticIDsSubmodel(tx, sm.ID, sm.SupplementalSemanticIds)
 		if err != nil {
 			return err
 		}
@@ -298,7 +373,7 @@ func (p *PostgreSQLSubmodelDatabase) CreateSubmodel(sm gen.Submodel) error {
 
 	if sm.EmbeddedDataSpecifications != nil {
 		for _, eds := range sm.EmbeddedDataSpecifications {
-			edsDbID, err := persistenceUtils.CreateEmbeddedDataSpecification(tx, eds)
+			edsDbID, err := persistenceutils.CreateEmbeddedDataSpecification(tx, eds)
 			if err != nil {
 				return err
 			}
@@ -320,7 +395,7 @@ func (p *PostgreSQLSubmodelDatabase) CreateSubmodel(sm gen.Submodel) error {
 
 	if len(sm.Qualifier) > 0 {
 		for _, qualifier := range sm.Qualifier {
-			qualifierID, err := persistenceUtils.CreateQualifier(tx, qualifier)
+			qualifierID, err := persistenceutils.CreateQualifier(tx, qualifier)
 			if err != nil {
 				return err
 			}
@@ -334,7 +409,7 @@ func (p *PostgreSQLSubmodelDatabase) CreateSubmodel(sm gen.Submodel) error {
 
 	if len(sm.Extension) > 0 {
 		for _, extension := range sm.Extension {
-			qualifierID, err := persistenceUtils.CreateExtension(tx, extension)
+			qualifierID, err := persistenceutils.CreateExtension(tx, extension)
 			if err != nil {
 				return err
 			}
@@ -359,6 +434,19 @@ func (p *PostgreSQLSubmodelDatabase) CreateSubmodel(sm gen.Submodel) error {
 	return nil
 }
 
+// GetSubmodelElement retrieves a single submodel element by its idShort or path.
+// The path can be a simple idShort for top-level elements or a hierarchical path
+// using dot notation for nested elements (e.g., "collection.property").
+//
+// Parameters:
+//   - submodelID: ID of the submodel containing the element
+//   - idShortOrPath: idShort or hierarchical path to the element
+//   - limit: Maximum number of elements to return (used for pagination in collections)
+//   - cursor: Pagination cursor (not currently implemented)
+//
+// Returns:
+//   - gen.SubmodelElement: The requested submodel element
+//   - error: Error if element not found or retrieval fails
 func (p *PostgreSQLSubmodelDatabase) GetSubmodelElement(submodelID string, idShortOrPath string, limit int, cursor string) (gen.SubmodelElement, error) {
 	tx, err := p.db.Begin()
 	if err != nil {
@@ -367,7 +455,7 @@ func (p *PostgreSQLSubmodelDatabase) GetSubmodelElement(submodelID string, idSho
 	}
 	defer func() {
 		if err != nil {
-			tx.Rollback()
+			_ = tx.Rollback()
 		}
 	}()
 
@@ -388,6 +476,18 @@ func (p *PostgreSQLSubmodelDatabase) GetSubmodelElement(submodelID string, idSho
 	return elements[0], nil
 }
 
+// GetSubmodelElements retrieves all top-level submodel elements for a given submodel.
+// This method supports pagination through cursor-based navigation.
+//
+// Parameters:
+//   - submodelID: ID of the submodel whose elements to retrieve
+//   - limit: Maximum number of elements to return
+//   - cursor: Pagination cursor for retrieving next page
+//
+// Returns:
+//   - []gen.SubmodelElement: List of submodel elements
+//   - string: Next cursor for pagination
+//   - error: Error if retrieval fails
 func (p *PostgreSQLSubmodelDatabase) GetSubmodelElements(submodelID string, limit int, cursor string) ([]gen.SubmodelElement, string, error) {
 	tx, err := p.db.Begin()
 	if err != nil {
@@ -396,7 +496,7 @@ func (p *PostgreSQLSubmodelDatabase) GetSubmodelElements(submodelID string, limi
 	}
 	defer func() {
 		if err != nil {
-			tx.Rollback()
+			_ = tx.Rollback()
 		}
 	}()
 
@@ -413,6 +513,18 @@ func (p *PostgreSQLSubmodelDatabase) GetSubmodelElements(submodelID string, limi
 	return elements, cursor, nil
 }
 
+// AddSubmodelElementWithPath adds a new submodel element at a specific path within the hierarchy.
+// This method allows adding elements to collections or lists at specific positions.
+// For SubmodelElementList, the path uses index notation (e.g., "list[0]").
+// For SubmodelElementCollection, the path uses dot notation (e.g., "collection.element").
+//
+// Parameters:
+//   - submodelID: ID of the submodel to add the element to
+//   - idShortPath: Hierarchical path where to add the element
+//   - submodelElement: The element to add
+//
+// Returns:
+//   - error: Error if addition fails or target path is invalid
 func (p *PostgreSQLSubmodelDatabase) AddSubmodelElementWithPath(submodelID string, idShortPath string, submodelElement gen.SubmodelElement) error {
 	// Invalidate Submodel cache if enabled
 	if p.cacheEnabled {
@@ -436,7 +548,7 @@ func (p *PostgreSQLSubmodelDatabase) AddSubmodelElementWithPath(submodelID strin
 
 	defer func() {
 		if err != nil {
-			tx.Rollback()
+			_ = tx.Rollback()
 		}
 	}()
 
@@ -457,17 +569,17 @@ func (p *PostgreSQLSubmodelDatabase) AddSubmodelElementWithPath(submodelID strin
 	if modelType != "SubmodelElementCollection" && modelType != "SubmodelElementList" {
 		return errors.New("cannot add nested element to non-collection/list element")
 	}
-	var newIdShortPath string
+	var newIDShortPath string
 	if modelType == "SubmodelElementList" {
-		newIdShortPath = idShortPath + "[" + strconv.Itoa(nextPosition) + "]"
+		newIDShortPath = idShortPath + "[" + strconv.Itoa(nextPosition) + "]"
 	} else {
-		newIdShortPath = idShortPath + "." + submodelElement.GetIdShort()
+		newIDShortPath = idShortPath + "." + submodelElement.GetIdShort()
 	}
-	id, err := handler.CreateNested(tx, submodelID, parentID, newIdShortPath, submodelElement, nextPosition)
+	id, err := handler.CreateNested(tx, submodelID, parentID, newIDShortPath, submodelElement, nextPosition)
 	if err != nil {
 		return err
 	}
-	err = p.AddNestedSubmodelElementsIteratively(tx, submodelID, id, submodelElement, newIdShortPath)
+	err = p.AddNestedSubmodelElementsIteratively(tx, submodelID, id, submodelElement, newIDShortPath)
 	if err != nil {
 		return err
 	}
@@ -479,6 +591,16 @@ func (p *PostgreSQLSubmodelDatabase) AddSubmodelElementWithPath(submodelID strin
 
 	return nil
 }
+
+// AddSubmodelElement adds a new submodel element as a top-level element to the specified submodel.
+// This method invalidates the submodel cache if caching is enabled and handles all nested elements recursively.
+//
+// Parameters:
+//   - submodelID: ID of the submodel to add the element to
+//   - submodelElement: The element to add at the top level
+//
+// Returns:
+//   - error: Error if addition fails
 func (p *PostgreSQLSubmodelDatabase) AddSubmodelElement(submodelID string, submodelElement gen.SubmodelElement) error {
 	// Invalidate Submodel cache if enabled
 	if p.cacheEnabled {
@@ -492,7 +614,7 @@ func (p *PostgreSQLSubmodelDatabase) AddSubmodelElement(submodelID string, submo
 
 	defer func() {
 		if err != nil {
-			tx.Rollback()
+			_ = tx.Rollback()
 		}
 	}()
 
@@ -509,6 +631,17 @@ func (p *PostgreSQLSubmodelDatabase) AddSubmodelElement(submodelID string, submo
 	return nil
 }
 
+// AddSubmodelElementWithTransaction adds a submodel element within an existing database transaction.
+// This method is used internally when creating submodels or when multiple operations need to be atomic.
+// It invalidates the submodel cache if caching is enabled.
+//
+// Parameters:
+//   - tx: Active database transaction
+//   - submodelID: ID of the submodel to add the element to
+//   - submodelElement: The element to add
+//
+// Returns:
+//   - error: Error if addition fails
 func (p *PostgreSQLSubmodelDatabase) AddSubmodelElementWithTransaction(tx *sql.Tx, submodelID string, submodelElement gen.SubmodelElement) error {
 	// Invalidate Submodel cache if enabled
 	if p.cacheEnabled {
@@ -530,14 +663,30 @@ func (p *PostgreSQLSubmodelDatabase) AddSubmodelElementWithTransaction(tx *sql.T
 	return nil
 }
 
+// ElementToProcess represents a submodel element to be processed during iterative creation.
+// This struct is used internally by the AddNestedSubmodelElementsIteratively method to manage
+// the stack-based processing of nested elements in collections and lists.
 type ElementToProcess struct {
 	element                   gen.SubmodelElement
 	parentID                  int
-	currentIdShortPath        string
+	currentIDShortPath        string
 	isFromSubmodelElementList bool // Indicates if the current element is from a SubmodelElementList
 	position                  int  // Position/index within the parent collection or list
 }
 
+// AddNestedSubmodelElementsIteratively processes and creates nested submodel elements using a stack-based approach.
+// This method handles both SubmodelElementCollection and SubmodelElementList types, ensuring proper
+// hierarchical path construction and position management. It invalidates the submodel cache if caching is enabled.
+//
+// Parameters:
+//   - tx: Active database transaction
+//   - submodelID: ID of the parent submodel
+//   - topLevelParentID: Database ID of the top-level parent element
+//   - topLevelElement: The top-level element containing nested elements
+//   - startPath: Starting path for nested element hierarchy (empty for top-level)
+//
+// Returns:
+//   - error: Error if processing fails
 func (p *PostgreSQLSubmodelDatabase) AddNestedSubmodelElementsIteratively(tx *sql.Tx, submodelID string, topLevelParentID int, topLevelElement gen.SubmodelElement, startPath string) error {
 	// Invalidate Submodel cache if enabled
 	if p.cacheEnabled {
@@ -561,7 +710,7 @@ func (p *PostgreSQLSubmodelDatabase) AddNestedSubmodelElementsIteratively(tx *sq
 			stack = append(stack, ElementToProcess{
 				element:                   nestedElement,
 				parentID:                  topLevelParentID,
-				currentIdShortPath:        currentPath,
+				currentIDShortPath:        currentPath,
 				isFromSubmodelElementList: false,
 				position:                  index,
 			})
@@ -582,7 +731,7 @@ func (p *PostgreSQLSubmodelDatabase) AddNestedSubmodelElementsIteratively(tx *sq
 			stack = append(stack, ElementToProcess{
 				element:                   nestedElement,
 				parentID:                  topLevelParentID,
-				currentIdShortPath:        idShortPath,
+				currentIDShortPath:        idShortPath,
 				isFromSubmodelElementList: true,
 				position:                  index,
 			})
@@ -600,7 +749,7 @@ func (p *PostgreSQLSubmodelDatabase) AddNestedSubmodelElementsIteratively(tx *sq
 		}
 
 		// Build the idShortPath for current element
-		idShortPath := buildCurrentIdShortPath(current)
+		idShortPath := buildCurrentIDShortPath(current)
 
 		newParentID, err := handler.CreateNested(tx, submodelID, current.parentID, idShortPath, current.element, current.position)
 		if err != nil {
@@ -630,8 +779,17 @@ func (p *PostgreSQLSubmodelDatabase) AddNestedSubmodelElementsIteratively(tx *sq
 	return nil
 }
 
-// This method removes a SubmodelElement by its idShort or path and all its nested elements
-// If the deleted Element is in a SubmodelElementList, the indices of the remaining elements are adjusted accordingly
+// DeleteSubmodelElementByPath removes a submodel element and all its nested elements by path.
+// This method supports hierarchical paths using dot notation for collections and index notation for lists.
+// For SubmodelElementList, the indices of remaining elements are automatically adjusted after deletion.
+// The submodel cache is invalidated if caching is enabled.
+//
+// Parameters:
+//   - submodelID: ID of the submodel containing the element
+//   - idShortOrPath: idShort or hierarchical path to the element to delete
+//
+// Returns:
+//   - error: Error if deletion fails or element not found
 func (p *PostgreSQLSubmodelDatabase) DeleteSubmodelElementByPath(submodelID string, idShortOrPath string) error {
 	// Invalidate Submodel cache if enabled
 	if p.cacheEnabled {
@@ -644,7 +802,7 @@ func (p *PostgreSQLSubmodelDatabase) DeleteSubmodelElementByPath(submodelID stri
 
 	defer func() {
 		if err != nil {
-			tx.Rollback()
+			_ = tx.Rollback()
 		}
 	}()
 	err = submodelelements.DeleteSubmodelElementByPath(tx, submodelID, idShortOrPath)
@@ -654,17 +812,17 @@ func (p *PostgreSQLSubmodelDatabase) DeleteSubmodelElementByPath(submodelID stri
 	return tx.Commit()
 }
 
-func buildCurrentIdShortPath(current ElementToProcess) string {
+func buildCurrentIDShortPath(current ElementToProcess) string {
 	var idShortPath string
-	if current.currentIdShortPath == "" {
+	if current.currentIDShortPath == "" {
 		idShortPath = current.element.GetIdShort()
 	} else {
 		// If element comes from a SubmodelElementList, use the path as-is (includes [index])
 		if current.isFromSubmodelElementList {
-			idShortPath = current.currentIdShortPath
+			idShortPath = current.currentIDShortPath
 		} else {
 			// For SubmodelElementCollection, append element's idShort with dot notation
-			idShortPath = current.currentIdShortPath + "." + current.element.GetIdShort()
+			idShortPath = current.currentIDShortPath + "." + current.element.GetIdShort()
 		}
 	}
 	return idShortPath
@@ -675,7 +833,7 @@ func addNestedElementToStackWithNormalPath(submodelElementCollection *gen.Submod
 	stack = append(stack, ElementToProcess{
 		element:                   nestedElement,
 		parentID:                  newParentID,
-		currentIdShortPath:        idShortPath,
+		currentIDShortPath:        idShortPath,
 		isFromSubmodelElementList: false, // Children of collection are not from list
 		position:                  i,
 	})
@@ -684,11 +842,11 @@ func addNestedElementToStackWithNormalPath(submodelElementCollection *gen.Submod
 
 func addNestedElementToStackWithIndexPath(submodelElementList *gen.SubmodelElementList, index int, idShortPath string, stack []ElementToProcess, newParentID int) []ElementToProcess {
 	nestedElement := submodelElementList.Value[index]
-	nestedIdShortPath := idShortPath + "[" + strconv.Itoa(index) + "]"
+	nestedIDShortPath := idShortPath + "[" + strconv.Itoa(index) + "]"
 	stack = append(stack, ElementToProcess{
 		element:                   nestedElement,
 		parentID:                  newParentID,
-		currentIdShortPath:        nestedIdShortPath,
+		currentIDShortPath:        nestedIDShortPath,
 		isFromSubmodelElementList: true,  // Children of list are from list
 		position:                  index, // For lists, position is the actual index
 	})

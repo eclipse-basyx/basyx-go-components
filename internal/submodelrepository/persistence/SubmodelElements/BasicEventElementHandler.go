@@ -22,8 +22,11 @@
 *
 * SPDX-License-Identifier: MIT
 ******************************************************************************/
-
 // Author: Jannik Fried ( Fraunhofer IESE )
+
+// Package submodelelements provides handlers for different types of submodel elements in the BaSyx framework.
+// This package contains PostgreSQL-based persistence implementations for various submodel element types
+// including basic event elements.
 package submodelelements
 
 import (
@@ -34,11 +37,24 @@ import (
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 )
 
+// PostgreSQLBasicEventElementHandler provides PostgreSQL-based persistence operations
+// for BasicEventElement submodel elements. It implements CRUD operations and handles
+// the event-specific properties such as observed references, message brokers, and timing intervals.
 type PostgreSQLBasicEventElementHandler struct {
 	db        *sql.DB
 	decorated *PostgreSQLSMECrudHandler
 }
 
+// NewPostgreSQLBasicEventElementHandler creates a new handler for BasicEventElement persistence.
+// It initializes the handler with a database connection and sets up the decorated CRUD handler
+// for common submodel element operations.
+//
+// Parameters:
+//   - db: PostgreSQL database connection
+//
+// Returns:
+//   - *PostgreSQLBasicEventElementHandler: Configured handler instance
+//   - error: Error if handler initialization fails
 func NewPostgreSQLBasicEventElementHandler(db *sql.DB) (*PostgreSQLBasicEventElementHandler, error) {
 	decoratedHandler, err := NewPostgreSQLSMECrudHandler(db)
 	if err != nil {
@@ -47,6 +63,18 @@ func NewPostgreSQLBasicEventElementHandler(db *sql.DB) (*PostgreSQLBasicEventEle
 	return &PostgreSQLBasicEventElementHandler{db: db, decorated: decoratedHandler}, nil
 }
 
+// Create inserts a new BasicEventElement into the database as a top-level submodel element.
+// This method handles both the common submodel element properties and the specific event
+// properties such as observed references, message brokers, and timing intervals.
+//
+// Parameters:
+//   - tx: Active database transaction
+//   - submodelID: ID of the parent submodel
+//   - submodelElement: The BasicEventElement to create
+//
+// Returns:
+//   - int: Database ID of the created element
+//   - error: Error if creation fails or element is not of correct type
 func (p PostgreSQLBasicEventElementHandler) Create(tx *sql.Tx, submodelID string, submodelElement gen.SubmodelElement) (int, error) {
 	basicEvent, ok := submodelElement.(*gen.BasicEventElement)
 	if !ok {
@@ -68,6 +96,21 @@ func (p PostgreSQLBasicEventElementHandler) Create(tx *sql.Tx, submodelID string
 	return id, nil
 }
 
+// CreateNested inserts a new BasicEventElement as a nested element within a collection or list.
+// This method creates the element at a specific hierarchical path and position within its parent container.
+// It handles both the parent-child relationship and the specific basic event element data.
+//
+// Parameters:
+//   - tx: Active database transaction
+//   - submodelID: ID of the parent submodel
+//   - parentID: Database ID of the parent element
+//   - idShortPath: Hierarchical path where the element should be created
+//   - submodelElement: The BasicEventElement to create
+//   - pos: Position within the parent container
+//
+// Returns:
+//   - int: Database ID of the created nested element
+//   - error: Error if creation fails or element is not of correct type
 func (p PostgreSQLBasicEventElementHandler) CreateNested(tx *sql.Tx, submodelID string, parentID int, idShortPath string, submodelElement gen.SubmodelElement, pos int) (int, error) {
 	basicEvent, ok := submodelElement.(*gen.BasicEventElement)
 	if !ok {
@@ -89,12 +132,32 @@ func (p PostgreSQLBasicEventElementHandler) CreateNested(tx *sql.Tx, submodelID 
 	return id, nil
 }
 
+// Update modifies an existing BasicEventElement identified by its idShort or path.
+// This method delegates the update operation to the decorated CRUD handler which handles
+// the common submodel element update logic.
+//
+// Parameters:
+//   - idShortOrPath: idShort or hierarchical path to the element to update
+//   - submodelElement: Updated element data
+//
+// Returns:
+//   - error: Error if update fails
 func (p PostgreSQLBasicEventElementHandler) Update(idShortOrPath string, submodelElement gen.SubmodelElement) error {
 	if dErr := p.decorated.Update(idShortOrPath, submodelElement); dErr != nil {
 		return dErr
 	}
 	return nil
 }
+
+// Delete removes a BasicEventElement identified by its idShort or path from the database.
+// This method delegates the deletion operation to the decorated CRUD handler which handles
+// the cascading deletion of all related data and child elements.
+//
+// Parameters:
+//   - idShortOrPath: idShort or hierarchical path to the element to delete
+//
+// Returns:
+//   - error: Error if deletion fails
 func (p PostgreSQLBasicEventElementHandler) Delete(idShortOrPath string) error {
 	if dErr := p.decorated.Delete(idShortOrPath); dErr != nil {
 		return dErr

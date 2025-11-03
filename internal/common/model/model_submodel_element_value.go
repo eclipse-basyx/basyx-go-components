@@ -35,6 +35,7 @@ type SubmodelElementValue struct {
 
 	GlobalAssetID string `json:"globalAssetId,omitempty"`
 
+	//nolint:revive
 	SpecificAssetIds []map[string]interface{} `json:"specificAssetIds,omitempty"`
 
 	Statements []map[string]interface{} `json:"statements,omitempty"`

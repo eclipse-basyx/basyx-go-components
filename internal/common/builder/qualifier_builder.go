@@ -23,6 +23,7 @@
 * SPDX-License-Identifier: MIT
 ******************************************************************************/
 
+// Package builder provides utilities for constructing complex AAS (Asset Administration Shell)
 // Author: Aaron Zielstorff ( Fraunhofer IESE ), Jannik Fried ( Fraunhofer IESE )
 package builder
 
@@ -134,10 +135,10 @@ func (b *QualifiersBuilder) AddQualifier(qualifierDbID int64, kind string, qType
 // Example:
 //
 //	builder.AddSemanticID(1, semanticIdJSON, referredSemanticIdJSON)
-func (b *QualifiersBuilder) AddSemanticID(qualifierDbID int64, semanticIdRows json.RawMessage, semanticIdReferredSemanticIdRows json.RawMessage) (*QualifiersBuilder, error) {
+func (b *QualifiersBuilder) AddSemanticID(qualifierDbID int64, semanticIDRows json.RawMessage, semanticIDReferredSemanticIDRows json.RawMessage) (*QualifiersBuilder, error) {
 	qualifier := b.qualifiers[qualifierDbID]
 
-	semanticID, err := b.createExactlyOneReference(qualifierDbID, semanticIdRows, semanticIdReferredSemanticIdRows, "SemanticID")
+	semanticID, err := b.createExactlyOneReference(qualifierDbID, semanticIDRows, semanticIDReferredSemanticIDRows, "SemanticID")
 
 	if err != nil {
 		return nil, err
@@ -171,10 +172,10 @@ func (b *QualifiersBuilder) AddSemanticID(qualifierDbID int64, semanticIdRows js
 // Example:
 //
 //	builder.AddValueID(1, valueIdJSON, referredSemanticIdJSON)
-func (b *QualifiersBuilder) AddValueID(qualifierDbID int64, valueIdRows json.RawMessage, valueIdReferredSemanticIdRows json.RawMessage) (*QualifiersBuilder, error) {
+func (b *QualifiersBuilder) AddValueID(qualifierDbID int64, valueIDRows json.RawMessage, valueIDReferredSemanticIDRows json.RawMessage) (*QualifiersBuilder, error) {
 	qualifier := b.qualifiers[qualifierDbID]
 
-	valueID, err := b.createExactlyOneReference(qualifierDbID, valueIdRows, valueIdReferredSemanticIdRows, "ValueId")
+	valueID, err := b.createExactlyOneReference(qualifierDbID, valueIDRows, valueIDReferredSemanticIDRows, "ValueId")
 
 	if err != nil {
 		return nil, err
@@ -184,7 +185,7 @@ func (b *QualifiersBuilder) AddValueID(qualifierDbID int64, valueIdRows json.Raw
 	return b, nil
 }
 
-// AddSupplementalSemanticIds adds supplemental semantic IDs to a qualifier. Supplemental
+// AddSupplementalSemanticIDs adds supplemental semantic IDs to a qualifier. Supplemental
 // semantic IDs provide additional semantic context beyond the primary SemanticID, allowing
 // multiple semantic interpretations or classifications to be associated with a qualifier.
 //
@@ -205,22 +206,25 @@ func (b *QualifiersBuilder) AddValueID(qualifierDbID int64, valueIdRows json.Raw
 //
 // Example:
 //
-//	builder.AddSupplementalSemanticIds(1, supplementalSemanticIdsJSON, referredSemanticIdsJSON)
-func (b *QualifiersBuilder) AddSupplementalSemanticIds(qualifierDbID int64, supplementalSemanticIdsRows json.RawMessage, supplementalSemanticIdsReferredSemanticIdRows json.RawMessage) (*QualifiersBuilder, error) {
+//	builder.AddSupplementalSemanticIDs(1, supplementalSemanticIdsJSON, referredSemanticIdsJSON)
+func (b *QualifiersBuilder) AddSupplementalSemanticIDs(qualifierDbID int64, supplementalSemanticIDsRows json.RawMessage, supplementalSemanticIDsReferredSemanticIDRows json.RawMessage) (*QualifiersBuilder, error) {
 	qualifier, exists := b.qualifiers[qualifierDbID]
 
 	if !exists {
 		return nil, fmt.Errorf("tried to add SupplementalSemanticIds to Qualifier '%d' before creating the Qualifier itself", qualifierDbID)
 	}
 
-	refs, err := ParseReferences(supplementalSemanticIdsRows, b.refBuilderMap)
+	refs, err := ParseReferences(supplementalSemanticIDsRows, b.refBuilderMap)
 
 	if err != nil {
 		return nil, err
 	}
 
-	if len(supplementalSemanticIdsReferredSemanticIdRows) > 0 {
-		ParseReferredReferences(supplementalSemanticIdsReferredSemanticIdRows, b.refBuilderMap)
+	if len(supplementalSemanticIDsReferredSemanticIDRows) > 0 {
+		err = ParseReferredReferences(supplementalSemanticIDsReferredSemanticIDRows, b.refBuilderMap)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	suppl := []gen.Reference{}
@@ -234,11 +238,11 @@ func (b *QualifiersBuilder) AddSupplementalSemanticIds(qualifierDbID int64, supp
 	return b, nil
 }
 
-func (b *QualifiersBuilder) createExactlyOneReference(qualifierDbID int64, refRows json.RawMessage, referredRefRows json.RawMessage, Type string) (*gen.Reference, error) {
+func (b *QualifiersBuilder) createExactlyOneReference(qualifierDbID int64, refRows json.RawMessage, referredRefRows json.RawMessage, typeOfReference string) (*gen.Reference, error) {
 	_, exists := b.qualifiers[qualifierDbID]
 
 	if !exists {
-		return nil, fmt.Errorf("tried to add %s to Qualifier '%d' before creating the Qualifier itself", Type, qualifierDbID)
+		return nil, fmt.Errorf("tried to add %s to Qualifier '%d' before creating the Qualifier itself", typeOfReference, qualifierDbID)
 	}
 
 	refs, err := ParseReferences(refRows, b.refBuilderMap)
@@ -248,11 +252,14 @@ func (b *QualifiersBuilder) createExactlyOneReference(qualifierDbID int64, refRo
 	}
 
 	if len(referredRefRows) > 0 {
-		ParseReferredReferences(referredRefRows, b.refBuilderMap)
+		err = ParseReferredReferences(referredRefRows, b.refBuilderMap)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	if len(refs) != 1 {
-		return nil, fmt.Errorf("expected exactly one or no %s for Qualifier '%d' but got %d", Type, qualifierDbID, len(refs))
+		return nil, fmt.Errorf("expected exactly one or no %s for Qualifier '%d' but got %d", typeOfReference, qualifierDbID, len(refs))
 	}
 
 	return refs[0], nil

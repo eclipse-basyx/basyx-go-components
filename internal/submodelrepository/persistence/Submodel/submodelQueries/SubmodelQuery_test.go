@@ -23,7 +23,7 @@
 * SPDX-License-Identifier: MIT
 ******************************************************************************/
 
-package submodelQueries
+package submodelsubqueries
 
 import (
 	"strings"

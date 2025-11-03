@@ -22,8 +22,15 @@
 *
 * SPDX-License-Identifier: MIT
 ******************************************************************************/
-
 // Author: Jannik Fried ( Fraunhofer IESE )
+
+// Package submodelelements provides persistence layer functionality for managing submodel elements
+// in the Eclipse BaSyx submodel repository. It implements CRUD operations for all types of
+// submodel elements defined in the AAS specification, including properties, collections,
+// relationships, events, and more.
+//
+// The package uses a factory pattern to create type-specific handlers and provides efficient
+// database queries with hierarchical data retrieval for nested element structures.
 package submodelelements
 
 import (
@@ -37,17 +44,57 @@ import (
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
-	persistenceUtils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
+	persistenceutils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
+	_ "github.com/lib/pq" // PostgreSQL Treiber
 )
 
-// GetSMEHandler creates the appropriate CRUD handler for a submodel element
-// Uses the Factory Pattern for clean, testable handler instantiation
+// GetSMEHandler creates the appropriate CRUD handler for a submodel element.
+//
+// This function uses the Factory Pattern to instantiate the correct handler based on
+// the model type of the provided submodel element. It provides a clean, type-safe way
+// to obtain handlers without requiring client code to know the concrete handler types.
+//
+// Parameters:
+//   - submodelElement: The submodel element for which to create a handler
+//   - db: Database connection to be used by the handler
+//
+// Returns:
+//   - PostgreSQLSMECrudInterface: Type-specific handler implementing CRUD operations
+//   - error: An error if the model type is unsupported or handler creation fails
 func GetSMEHandler(submodelElement gen.SubmodelElement, db *sql.DB) (PostgreSQLSMECrudInterface, error) {
 	return GetSMEHandlerByModelType(string(submodelElement.GetModelType()), db)
 }
 
-// GetSMEHandlerByModelType creates a handler by model type string
-// Single Responsibility: Only handles the logic for determining and creating handlers
+// GetSMEHandlerByModelType creates a handler by model type string.
+//
+// This function implements the Single Responsibility Principle by focusing solely on
+// the logic for determining and instantiating the correct handler based on a model
+// type string. It supports all AAS submodel element types defined in the specification.
+//
+// Supported model types:
+//   - AnnotatedRelationshipElement: Relationship with annotations
+//   - BasicEventElement: Event element for monitoring and notifications
+//   - Blob: Binary data element
+//   - Capability: Functional capability description
+//   - Entity: Logical or physical entity
+//   - EventElement: Base event element
+//   - File: File reference element
+//   - MultiLanguageProperty: Property with multi-language support
+//   - Operation: Invocable operation
+//   - Property: Single-valued property
+//   - Range: Value range element
+//   - ReferenceElement: Reference to another element
+//   - RelationshipElement: Relationship between elements
+//   - SubmodelElementCollection: Collection of submodel elements
+//   - SubmodelElementList: Ordered list of submodel elements
+//
+// Parameters:
+//   - modelType: String representation of the submodel element type
+//   - db: Database connection to be used by the handler
+//
+// Returns:
+//   - PostgreSQLSMECrudInterface: Type-specific handler implementing CRUD operations
+//   - error: An error if the model type is unsupported or handler creation fails
 func GetSMEHandlerByModelType(modelType string, db *sql.DB) (PostgreSQLSMECrudInterface, error) {
 	var handler PostgreSQLSMECrudInterface
 
@@ -163,6 +210,47 @@ func GetSMEHandlerByModelType(modelType string, db *sql.DB) (PostgreSQLSMECrudIn
 	return handler, nil
 }
 
+// GetSubmodelElementsWithPath retrieves submodel elements with support for hierarchical paths and pagination.
+//
+// This function performs complex queries to fetch submodel elements either by specific path
+// (subtree retrieval) or paginated root-level elements with their complete subtrees. It uses
+// Common Table Expressions (CTEs) for efficient hierarchical data retrieval and supports
+// cursor-based pagination for large result sets.
+//
+// The function handles two query modes:
+//  1. Path-based (idShortOrPath specified): Retrieves a specific element and its entire subtree
+//  2. Pagination (idShortOrPath empty): Retrieves paginated root elements with their subtrees
+//
+// Features:
+//   - Cursor-based pagination for stable paging through results
+//   - Single optimized query with JSON aggregation for all element data
+//   - In-memory hierarchy reconstruction for nested collections and lists
+//   - Type-safe element materialization without reflection
+//   - Proper ordering by position and path for consistent results
+//
+// Parameters:
+//   - db: Database connection for reference queries (e.g., semantic IDs)
+//   - tx: Transaction context for all queries
+//   - submodelID: ID of the parent submodel
+//   - idShortOrPath: Optional path to specific element (empty for root pagination)
+//   - limit: Maximum number of root elements to return (minimum 1, default 100)
+//   - cursor: Pagination cursor (idShort of last element from previous page)
+//
+// Returns:
+//   - []gen.SubmodelElement: Slice of fully populated submodel elements with nested structures
+//   - string: Next cursor for pagination (empty if no more pages)
+//   - error: An error if database query fails, submodel not found, or invalid cursor
+//
+// Example usage:
+//
+//	// Get first page of root elements
+//	elements, cursor, err := GetSubmodelElementsWithPath(db, tx, "submodel123", "", 10, "")
+//
+//	// Get next page
+//	nextElements, nextCursor, err := GetSubmodelElementsWithPath(db, tx, "submodel123", "", 10, cursor)
+//
+//	// Get specific element and its subtree
+//	subtree, _, err := GetSubmodelElementsWithPath(db, tx, "submodel123", "prop1.collection2", 0, "")
 func GetSubmodelElementsWithPath(db *sql.DB, tx *sql.Tx, submodelID string, idShortOrPath string, limit int, cursor string) ([]gen.SubmodelElement, string, error) {
 	if limit < 1 {
 		limit = 100
@@ -184,7 +272,7 @@ func GetSubmodelElementsWithPath(db *sql.DB, tx *sql.Tx, submodelID string, idSh
 	if !sRows.Next() {
 		return nil, "", common.NewErrNotFound("Submodel not found")
 	}
-	sRows.Close()
+	_ = sRows.Close()
 
 	// Get OFFSET based on Cursor
 	offset := 0
@@ -211,7 +299,7 @@ func GetSubmodelElementsWithPath(db *sql.DB, tx *sql.Tx, submodelID string, idSh
 		if err != nil {
 			return nil, "", err
 		}
-		defer cRows.Close()
+		defer func() { _ = cRows.Close() }()
 		found := false
 		for cRows.Next() {
 			var position int
@@ -283,7 +371,7 @@ func GetSubmodelElementsWithPath(db *sql.DB, tx *sql.Tx, submodelID string, idSh
 	if err != nil {
 		return nil, "", err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	// Pre-size conservatively to reduce re-allocations
 	nodes := make(map[int64]*node, 256)
@@ -350,7 +438,7 @@ func GetSubmodelElementsWithPath(db *sql.DB, tx *sql.Tx, submodelID string, idSh
 		// Materialize the concrete element based on modelType (no reflection)
 		var semanticIDObj *gen.Reference
 		if semanticID.Valid {
-			semanticIDObj, err = persistenceUtils.GetReferenceByReferenceDBID(db, semanticID)
+			semanticIDObj, err = persistenceutils.GetReferenceByReferenceDBID(db, semanticID)
 			if err != nil {
 				return nil, "", err
 			}
@@ -481,8 +569,8 @@ func GetSubmodelElementsWithPath(db *sql.DB, tx *sql.Tx, submodelID string, idSh
 			el = bee
 
 		case "Capability":
-			cap := &gen.Capability{IdShort: idShort, Category: category, ModelType: modelType, SemanticID: semanticIDObj}
-			el = cap
+			capability := &gen.Capability{IdShort: idShort, Category: category, ModelType: modelType, SemanticID: semanticIDObj}
+			el = capability
 
 		default:
 			// Unknown/unsupported type: skip eagerly.
@@ -535,6 +623,21 @@ func GetSubmodelElementsWithPath(db *sql.DB, tx *sql.Tx, submodelID string, idSh
 	return res, res[len(res)-1].GetIdShort(), nil
 }
 
+// attachChildrenToSubmodelElements reconstructs the hierarchical structure of submodel elements.
+//
+// This function attaches child elements to their parent containers (SubmodelElementCollection
+// or SubmodelElementList) in the proper order. It performs a stable sort based on position
+// (if set) with path as tie-breaker, ensuring consistent ordering of children.
+//
+// The function operates in O(n log n) time where n is the number of children, using an
+// efficient sorting algorithm and direct map lookups.
+//
+// Parameters:
+//   - nodes: Map of all nodes indexed by their database ID
+//   - children: Map of parent ID to slice of child nodes
+//
+// Note: Only SubmodelElementCollection and SubmodelElementList types support children.
+// Other element types are silently skipped even if they have entries in the children map.
 func attachChildrenToSubmodelElements(nodes map[int64]*node, children map[int64][]*node) {
 	for id, parent := range nodes {
 		kids := children[id]
@@ -573,6 +676,14 @@ func attachChildrenToSubmodelElements(nodes map[int64]*node, children map[int64]
 	}
 }
 
+// getSubmodelElementLeftJoins returns the SQL LEFT JOIN clauses for submodel element type tables.
+//
+// This function generates the JOIN statements needed to fetch type-specific data for all
+// submodel element types in a single query. Each element type has its own table with
+// specialized columns (e.g., property_element for Property values, blob_element for Blob data).
+//
+// Returns:
+//   - string: SQL fragment containing LEFT JOIN clauses for all element type tables
 func getSubmodelElementLeftJoins() string {
 	return `
         LEFT JOIN property_element prop ON sme.id = prop.id
@@ -588,6 +699,28 @@ func getSubmodelElementLeftJoins() string {
 	`
 }
 
+// getSubmodelElementDataQueryPart returns the SQL SELECT clause for submodel element type-specific data.
+//
+// This function generates the SELECT portion of the query that fetches all type-specific
+// columns from the joined element type tables. It uses COALESCE to handle different value
+// storage columns (text, numeric, boolean, time, datetime) and provides proper aliasing
+// for all fields.
+//
+// The returned fragment includes columns for:
+//   - Property: value_type and value (text/num/bool/time/datetime variants)
+//   - Blob: content_type and binary value
+//   - File: content_type and file path/URL
+//   - Range: value_type, min and max values (text/num/time/datetime variants)
+//   - SubmodelElementList: type_value_list_element, value_type_list_element, order_relevant
+//   - MultiLanguageProperty: value_id reference
+//   - ReferenceElement: value_ref reference
+//   - RelationshipElement: first_ref and second_ref references
+//   - Entity: entity_type and global_asset_id
+//   - BasicEventElement: observed_ref, direction, state, message_topic, message_broker_ref,
+//     last_update, min_interval, max_interval
+//
+// Returns:
+//   - string: SQL fragment containing SELECT columns for all element type data
 func getSubmodelElementDataQueryPart() string {
 	return `
 			-- Property data
@@ -616,8 +749,35 @@ func getSubmodelElementDataQueryPart() string {
 	`
 }
 
-// This method removes a SubmodelElement by its idShort or path and all its nested elements
-// If the deleted Element is in a SubmodelElementList, the indices of the remaining elements are adjusted accordingly
+// DeleteSubmodelElementByPath removes a submodel element by its idShort or path including all nested elements.
+//
+// This function performs cascading deletion of a submodel element and its entire subtree.
+// If the deleted element is part of a SubmodelElementList, it automatically adjusts the
+// position indices of remaining elements to maintain consistency.
+//
+// The function handles:
+//   - Direct deletion of the element and its subtree (using path pattern matching)
+//   - Index recalculation for SubmodelElementList elements after deletion
+//   - Path updates for remaining list elements to reflect new indices
+//
+// Parameters:
+//   - tx: Transaction context for atomic deletion operations
+//   - submodelID: ID of the parent submodel
+//   - idShortOrPath: Path to the element to delete (e.g., "prop1" or "collection.list[2]")
+//
+// Returns:
+//   - error: An error if the element is not found or database operations fail
+//
+// Example:
+//
+//	// Delete a simple property
+//	err := DeleteSubmodelElementByPath(tx, "submodel123", "temperature")
+//
+//	// Delete an element in a list (adjusts indices of elements after it)
+//	err := DeleteSubmodelElementByPath(tx, "submodel123", "sensors[1]")
+//
+//	// Delete a nested collection and all its children
+//	err := DeleteSubmodelElementByPath(tx, "submodel123", "properties.metadata")
 func DeleteSubmodelElementByPath(tx *sql.Tx, submodelID string, idShortOrPath string) error {
 	query := `DELETE FROM submodel_element WHERE submodel_id = $1 AND (idshort_path = $2 OR idshort_path LIKE $2 || '.%' OR idshort_path LIKE $2 || '[%')`
 	result, err := tx.Exec(query, submodelID, idShortOrPath)
@@ -672,6 +832,18 @@ func DeleteSubmodelElementByPath(tx *sql.Tx, submodelID string, idShortOrPath st
 	return nil
 }
 
+// node represents an internal tree node for reconstructing submodel element hierarchies.
+//
+// This type is used during the in-memory reconstruction of the element tree from flat
+// database rows. It stores both the database metadata (ID, parent relationship, path)
+// and the materialized submodel element object.
+//
+// Fields:
+//   - id: Database primary key of the submodel_element record
+//   - parentID: Foreign key to parent element (NULL for root elements)
+//   - path: Full idShort path from root (e.g., "collection1.list[0].property2")
+//   - position: Numeric position within parent (used for ordering, especially in lists)
+//   - element: The actual typed submodel element (Property, Collection, etc.)
 type node struct {
 	id       int64               // Database ID of the element
 	parentID sql.NullInt64       // Parent element ID for hierarchy

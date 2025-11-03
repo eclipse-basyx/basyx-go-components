@@ -22,8 +22,9 @@
 *
 * SPDX-License-Identifier: MIT
 ******************************************************************************/
-
 // Author: Jannik Fried ( Fraunhofer IESE )
+
+// Package submodelelements provides interfaces and implementations for CRUD operations on Submodel Elements in a PostgreSQL database.
 package submodelelements
 
 import (
@@ -32,6 +33,7 @@ import (
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
 
+// PostgreSQLSMECrudInterface defines the CRUD operations for Submodel Elements in a PostgreSQL database.
 type PostgreSQLSMECrudInterface interface {
 	Create(*sql.Tx, string, gen.SubmodelElement) (int, error)
 	CreateNested(*sql.Tx, string, int, string, gen.SubmodelElement, int) (int, error)

@@ -22,13 +22,42 @@
 *
 * SPDX-License-Identifier: MIT
 ******************************************************************************/
-
 // Author: Aaron Zielstorff ( Fraunhofer IESE ), Jannik Fried ( Fraunhofer IESE )
-package submodelQueries
+
+package submodelsubqueries
 
 import "github.com/doug-martin/goqu/v9"
 
-func GetEmbeddedDataSpecificationSubqueries(dialect goqu.DialectWrapper, joinTable string, joinTableIdField string, compareField string) (*goqu.SelectDataset, *goqu.SelectDataset, *goqu.SelectDataset) {
+// GetEmbeddedDataSpecificationSubqueries constructs three complex SQL subqueries for retrieving
+// embedded data specifications related to submodel elements. This function builds comprehensive
+// queries that handle:
+//   - Embedded data specification references with their keys
+//   - Hierarchical referred references (parent-child relationships)
+//   - IEC 61360 data specifications with all related metadata
+//
+// The function creates multiple nested subqueries to aggregate complex relational data into
+// JSONB objects, including:
+//   - Reference keys and their hierarchical relationships
+//   - Multilingual text entries (preferred names, short names, definitions)
+//   - Unit references and their hierarchical structures
+//   - Value lists with reference pairs
+//   - Level type specifications
+//   - IEC 61360 specific attributes (data type, value format, symbol, etc.)
+//
+// Parameters:
+//   - dialect: The goqu dialect wrapper for database-specific SQL generation
+//   - joinTable: Name of the table to join with (e.g., "administrative_information_embedded_data_specification")
+//   - joinTableIdField: Name of the ID field in the join table for matching
+//   - compareField: Field expression to compare against for filtering (e.g., "s.administration_id")
+//
+// Returns:
+//   - *goqu.SelectDataset: Subquery for embedded data specification references
+//   - *goqu.SelectDataset: Subquery for embedded data specification referred references
+//   - *goqu.SelectDataset: Subquery for IEC 61360 data specifications with all related data
+//
+// The returned subqueries are designed to be used as part of larger queries and expect
+// the specified compareField to be available in the query context for proper joining.
+func GetEmbeddedDataSpecificationSubqueries(dialect goqu.DialectWrapper, joinTable string, joinTableIDField string, compareField string) (*goqu.SelectDataset, *goqu.SelectDataset, *goqu.SelectDataset) {
 	// Build the jsonb object for embedded data specification references
 	edsReferenceObj := goqu.Func("jsonb_build_object",
 		goqu.V("eds_id"), goqu.I("jt.embedded_data_specification_id"),
@@ -53,7 +82,7 @@ func GetEmbeddedDataSpecificationSubqueries(dialect goqu.DialectWrapper, joinTab
 			goqu.T("reference_key").As("data_spec_reference_key"),
 			goqu.On(goqu.I("data_spec_reference.id").Eq(goqu.I("data_spec_reference_key.reference_id"))),
 		).
-		Where(goqu.I("jt." + joinTableIdField).Eq(goqu.I(compareField)))
+		Where(goqu.I("jt." + joinTableIDField).Eq(goqu.I(compareField)))
 
 	// Build semantic_id referred references subquery
 	edsReferenceReferredObj := goqu.Func("jsonb_build_object",
@@ -89,7 +118,7 @@ func GetEmbeddedDataSpecificationSubqueries(dialect goqu.DialectWrapper, joinTab
 			goqu.On(goqu.I("dsr.id").Eq(goqu.I("data_spec_reference.id"))),
 		).
 		Where(
-			goqu.I("jt."+joinTableIdField).Eq(goqu.I(compareField)),
+			goqu.I("jt."+joinTableIDField).Eq(goqu.I(compareField)),
 			goqu.I("ref.id").IsNotNull(),
 		)
 
@@ -280,6 +309,6 @@ func GetEmbeddedDataSpecificationSubqueries(dialect goqu.DialectWrapper, joinTab
 			goqu.T("data_specification_iec61360").As("iec"),
 			goqu.On(goqu.I("iec.id").Eq(goqu.I("dsc.id"))),
 		).
-		Where(goqu.I("jt." + joinTableIdField).Eq(goqu.I(compareField)))
+		Where(goqu.I("jt." + joinTableIDField).Eq(goqu.I(compareField)))
 	return embeddedDataSpecificationReferenceSubquery, embeddedDataSpecificationReferenceReferredSubquery, iec61360Subquery
 }

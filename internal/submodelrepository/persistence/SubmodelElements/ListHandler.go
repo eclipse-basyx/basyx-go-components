@@ -22,8 +22,8 @@
 *
 * SPDX-License-Identifier: MIT
 ******************************************************************************/
-
 // Author: Jannik Fried ( Fraunhofer IESE )
+
 package submodelelements
 
 import (
@@ -34,11 +34,24 @@ import (
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 )
 
+// PostgreSQLSubmodelElementListHandler handles the persistence operations for SubmodelElementList submodel elements.
+// It implements the SubmodelElementHandler interface and uses the decorator pattern
+// to extend the base CRUD operations with SubmodelElementList-specific functionality.
 type PostgreSQLSubmodelElementListHandler struct {
 	db        *sql.DB
 	decorated *PostgreSQLSMECrudHandler
 }
 
+// NewPostgreSQLSubmodelElementListHandler creates a new PostgreSQLSubmodelElementListHandler instance.
+// It initializes the handler with a database connection and creates the decorated
+// base CRUD handler for common SubmodelElement operations.
+//
+// Parameters:
+//   - db: Database connection to PostgreSQL
+//
+// Returns:
+//   - *PostgreSQLSubmodelElementListHandler: Configured SubmodelElementList handler instance
+//   - error: Error if the decorated handler creation fails
 func NewPostgreSQLSubmodelElementListHandler(db *sql.DB) (*PostgreSQLSubmodelElementListHandler, error) {
 	decoratedHandler, err := NewPostgreSQLSMECrudHandler(db)
 	if err != nil {
@@ -47,6 +60,19 @@ func NewPostgreSQLSubmodelElementListHandler(db *sql.DB) (*PostgreSQLSubmodelEle
 	return &PostgreSQLSubmodelElementListHandler{db: db, decorated: decoratedHandler}, nil
 }
 
+// Create persists a new SubmodelElementList submodel element to the database.
+// It first creates the base SubmodelElement data using the decorated handler,
+// then adds SubmodelElementList-specific data including order relevance, semantic ID,
+// type value, and value type for list elements.
+//
+// Parameters:
+//   - tx: Database transaction to use for the operation
+//   - submodelID: ID of the parent submodel
+//   - submodelElement: The SubmodelElementList to create (must be of type *gen.SubmodelElementList)
+//
+// Returns:
+//   - int: The database ID of the created list element
+//   - error: Error if the element is not a SubmodelElementList or if database operations fail
 func (p PostgreSQLSubmodelElementListHandler) Create(tx *sql.Tx, submodelID string, submodelElement gen.SubmodelElement) (int, error) {
 	smeList, ok := submodelElement.(*gen.SubmodelElementList)
 	if !ok {
@@ -68,6 +94,21 @@ func (p PostgreSQLSubmodelElementListHandler) Create(tx *sql.Tx, submodelID stri
 	return id, nil
 }
 
+// CreateNested persists a new nested SubmodelElementList submodel element to the database.
+// It creates the SubmodelElementList as a child element of another SubmodelElement with
+// a specific position and idShortPath for hierarchical organization.
+//
+// Parameters:
+//   - tx: Database transaction to use for the operation
+//   - submodelID: ID of the parent submodel
+//   - parentID: Database ID of the parent SubmodelElement
+//   - idShortPath: Path identifier for the nested element
+//   - submodelElement: The SubmodelElementList to create (must be of type *gen.SubmodelElementList)
+//   - pos: Position of the element within its parent
+//
+// Returns:
+//   - int: The database ID of the created nested list element
+//   - error: Error if the element is not a SubmodelElementList or if database operations fail
 func (p PostgreSQLSubmodelElementListHandler) CreateNested(tx *sql.Tx, submodelID string, parentID int, idShortPath string, submodelElement gen.SubmodelElement, pos int) (int, error) {
 	smeList, ok := submodelElement.(*gen.SubmodelElementList)
 	if !ok {
@@ -89,12 +130,31 @@ func (p PostgreSQLSubmodelElementListHandler) CreateNested(tx *sql.Tx, submodelI
 	return id, nil
 }
 
+// Update modifies an existing SubmodelElementList submodel element in the database.
+// Currently delegates to the decorated handler for base SubmodelElement updates.
+//
+// Parameters:
+//   - idShortOrPath: The idShort or path identifier of the element to update
+//   - submodelElement: The updated SubmodelElementList data
+//
+// Returns:
+//   - error: Error if the update operation fails
 func (p PostgreSQLSubmodelElementListHandler) Update(idShortOrPath string, submodelElement gen.SubmodelElement) error {
 	if dErr := p.decorated.Update(idShortOrPath, submodelElement); dErr != nil {
 		return dErr
 	}
 	return nil
 }
+
+// Delete removes a SubmodelElementList submodel element from the database.
+// Currently delegates to the decorated handler for base SubmodelElement deletion.
+// SubmodelElementList-specific data is automatically deleted due to foreign key constraints.
+//
+// Parameters:
+//   - idShortOrPath: The idShort or path identifier of the element to delete
+//
+// Returns:
+//   - error: Error if the delete operation fails
 func (p PostgreSQLSubmodelElementListHandler) Delete(idShortOrPath string) error {
 	if dErr := p.decorated.Delete(idShortOrPath); dErr != nil {
 		return dErr

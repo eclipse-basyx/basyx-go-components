@@ -23,7 +23,8 @@
 * SPDX-License-Identifier: MIT
 ******************************************************************************/
 
-package persistenceUtils
+// Package persistenceutils provides utility functions for persisting AAS entities
+package persistenceutils
 
 import (
 	"database/sql"

@@ -23,8 +23,9 @@
 * SPDX-License-Identifier: MIT
 ******************************************************************************/
 
+// Package submodelsubqueries provides functions to construct SQL queries for retrieving submodel data.
 // Author: Aaron Zielstorff ( Fraunhofer IESE ), Jannik Fried ( Fraunhofer IESE )
-package submodelQueries
+package submodelsubqueries
 
 import (
 	"fmt"
@@ -34,7 +35,7 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/queries"
 )
 
-// getQueryWithGoqu constructs a comprehensive SQL query for retrieving submodel data.
+// GetQueryWithGoqu constructs a comprehensive SQL query for retrieving submodel data.
 //
 // This function builds a complex PostgreSQL query using the goqu query builder that:
 //   - Aggregates nested data structures (display names, descriptions, references) as JSON
@@ -93,10 +94,10 @@ func GetQueryWithGoqu(submodelID string, limit int64, cursor string, aasQuery *g
 		).
 		Where(goqu.I("dr.id").Eq(goqu.I("s.description_id")))
 
-	semanticIdSubquery, semanticIdReferredSubquery := queries.GetReferenceQueries(dialect, goqu.I("s.semantic_id"))
+	semanticIDSubquery, semanticIDReferredSubquery := queries.GetReferenceQueries(dialect, goqu.I("s.semantic_id"))
 
 	// Build supplemental semantic ids subquery
-	supplementalSemanticIdObj := goqu.Func("jsonb_build_object",
+	supplementalSemanticIDObj := goqu.Func("jsonb_build_object",
 		goqu.V("reference_id"), goqu.I("ref.id"),
 		goqu.V("reference_type"), goqu.I("ref.type"),
 		goqu.V("key_id"), goqu.I("rk.id"),
@@ -104,8 +105,8 @@ func GetQueryWithGoqu(submodelID string, limit int64, cursor string, aasQuery *g
 		goqu.V("key_value"), goqu.I("rk.value"),
 	)
 
-	supplementalSemanticIdsSubquery := dialect.From(goqu.T("submodel_supplemental_semantic_id").As("sssi")).
-		Select(goqu.Func("jsonb_agg", goqu.L("?", supplementalSemanticIdObj))).
+	supplementalSemanticIDsSubquery := dialect.From(goqu.T("submodel_supplemental_semantic_id").As("sssi")).
+		Select(goqu.Func("jsonb_agg", goqu.L("?", supplementalSemanticIDObj))).
 		LeftJoin(
 			goqu.T("reference").As("ref"),
 			goqu.On(goqu.I("ref.id").Eq(goqu.I("sssi.reference_id"))),
@@ -117,7 +118,7 @@ func GetQueryWithGoqu(submodelID string, limit int64, cursor string, aasQuery *g
 		Where(goqu.I("sssi.submodel_id").Eq(goqu.I("s.id")))
 
 	// Build supplemental semantic ids referred subquery
-	supplementalSemanticIdReferredObj := goqu.Func("jsonb_build_object",
+	supplementalSemanticIDReferredObj := goqu.Func("jsonb_build_object",
 		goqu.V("supplemental_root_reference_id"), goqu.I("sssi.reference_id"),
 		goqu.V("reference_id"), goqu.I("ref.id"),
 		goqu.V("reference_type"), goqu.I("ref.type"),
@@ -128,8 +129,8 @@ func GetQueryWithGoqu(submodelID string, limit int64, cursor string, aasQuery *g
 		goqu.V("key_value"), goqu.I("rk.value"),
 	)
 
-	supplementalSemanticIdsReferredSubquery := dialect.From(goqu.T("submodel_supplemental_semantic_id").As("sssi")).
-		Select(goqu.Func("jsonb_agg", goqu.L("?", supplementalSemanticIdReferredObj))).
+	supplementalSemanticIDsReferredSubquery := dialect.From(goqu.T("submodel_supplemental_semantic_id").As("sssi")).
+		Select(goqu.Func("jsonb_agg", goqu.L("?", supplementalSemanticIDReferredObj))).
 		LeftJoin(
 			goqu.T("reference").As("ref"),
 			goqu.On(goqu.I("ref.rootreference").Eq(goqu.I("sssi.reference_id"))),
@@ -163,10 +164,10 @@ func GetQueryWithGoqu(submodelID string, limit int64, cursor string, aasQuery *g
 			goqu.I("s.kind").As("submodel_kind"),
 			goqu.L("COALESCE((?), '[]'::jsonb)", displayNamesSubquery).As("submodel_display_names"),
 			goqu.L("COALESCE((?), '[]'::jsonb)", descriptionsSubquery).As("submodel_descriptions"),
-			goqu.L("COALESCE((?), '[]'::jsonb)", semanticIdSubquery).As("submodel_semantic_id"),
-			goqu.L("COALESCE((?), '[]'::jsonb)", semanticIdReferredSubquery).As("submodel_semantic_id_referred"),
-			goqu.L("COALESCE((?), '[]'::jsonb)", supplementalSemanticIdsSubquery).As("submodel_supplemental_semantic_ids"),
-			goqu.L("COALESCE((?), '[]'::jsonb)", supplementalSemanticIdsReferredSubquery).As("submodel_supplemental_semantic_id_referred"),
+			goqu.L("COALESCE((?), '[]'::jsonb)", semanticIDSubquery).As("submodel_semantic_id"),
+			goqu.L("COALESCE((?), '[]'::jsonb)", semanticIDReferredSubquery).As("submodel_semantic_id_referred"),
+			goqu.L("COALESCE((?), '[]'::jsonb)", supplementalSemanticIDsSubquery).As("submodel_supplemental_semantic_ids"),
+			goqu.L("COALESCE((?), '[]'::jsonb)", supplementalSemanticIDsReferredSubquery).As("submodel_supplemental_semantic_id_referred"),
 			goqu.L("COALESCE((?), '[]'::jsonb)", embeddedDataSpecificationReferenceSubquery).As("submodel_eds_data_specification"),
 			goqu.L("COALESCE((?), '[]'::jsonb)", embeddedDataSpecificationReferenceReferredSubquery).As("submodel_eds_data_specification_referred"),
 			goqu.L("COALESCE((?), '[]'::jsonb)", iec61360Subquery).As("submodel_data_spec_iec61360"),
@@ -179,7 +180,7 @@ func GetQueryWithGoqu(submodelID string, limit int64, cursor string, aasQuery *g
 
 	// Add optional WHERE clause for submodel ID filtering
 	if submodelID != "" {
-		query = addSubmodelIdFilterToQuery(query, submodelID)
+		query = addSubmodelIDFilterToQuery(query, submodelID)
 	}
 
 	// Add optional AAS QueryLanguage filtering
@@ -217,7 +218,7 @@ func addSubmodelCountToQuery(query *goqu.SelectDataset) *goqu.SelectDataset {
 	return query
 }
 
-func addSubmodelIdFilterToQuery(query *goqu.SelectDataset, submodelID string) *goqu.SelectDataset {
+func addSubmodelIDFilterToQuery(query *goqu.SelectDataset, submodelID string) *goqu.SelectDataset {
 	query = query.Where(goqu.I("s.id").Eq(submodelID))
 	return query
 }
