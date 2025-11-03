@@ -1,5 +1,3 @@
-version: "2"
-
 run:
   timeout: 5m
   tests: true
@@ -21,13 +19,6 @@ issues:
   new: false # disable diff processor to avoid Git HEAD~ errors
 
 linters:
-  exclude-dirs:
-    - vendor
-    - testdata
-    - .*generated.*
-    - .*mock.*
-    - internal/common/model
-    - pkg/
   enable:
      - misspell
      - errcheck
