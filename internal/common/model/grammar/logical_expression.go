@@ -125,7 +125,7 @@ type LogicalExpression struct {
 // Returns:
 //   - error: An error if the JSON is invalid or if array constraints are violated.
 //     Returns nil on successful unmarshaling and validation.
-func (j *LogicalExpression) UnmarshalJSON(value []byte) error {
+func (le *LogicalExpression) UnmarshalJSON(value []byte) error {
 	type Plain LogicalExpression
 	var plain Plain
 	if err := json.Unmarshal(value, &plain); err != nil {
@@ -140,7 +140,7 @@ func (j *LogicalExpression) UnmarshalJSON(value []byte) error {
 	if plain.Or != nil && len(plain.Or) < 2 {
 		return fmt.Errorf("field %s length: must be >= %d", "$or", 2)
 	}
-	*j = LogicalExpression(plain)
+	*le = LogicalExpression(plain)
 	return nil
 }
 
@@ -325,14 +325,14 @@ func HandleComparison(leftOperand, rightOperand *Value, operation string) (exp.E
 	}
 
 	// Check if either operand is $sm#semanticID field
-	isLeftShorthandSemanticID := isSemanticIdShorthandField(leftOperand)
-	isRightShorthandSemanticID := isSemanticIdShorthandField(rightOperand)
+	isLeftShorthandSemanticID := isSemanticIDShorthandField(leftOperand)
+	isRightShorthandSemanticID := isSemanticIDShorthandField(rightOperand)
 
-	isLeftSpecificKeyValueSemanticID := isSemanticIdSpecificKeyValueField(leftOperand, false)
-	isRightSpecificKeyValueSemanticID := isSemanticIdSpecificKeyValueField(rightOperand, false)
+	isLeftSpecificKeyValueSemanticID := isSemanticIDSpecificKeyValueField(leftOperand, false)
+	isRightSpecificKeyValueSemanticID := isSemanticIDSpecificKeyValueField(rightOperand, false)
 
-	isLeftSpecificKeyTypeSemanticID := isSemanticIdSpecificKeyValueField(leftOperand, true)
-	isRightSpecificKeyTypeSemanticID := isSemanticIdSpecificKeyValueField(rightOperand, true)
+	isLeftSpecificKeyTypeSemanticID := isSemanticIDSpecificKeyValueField(leftOperand, true)
+	isRightSpecificKeyTypeSemanticID := isSemanticIDSpecificKeyValueField(rightOperand, true)
 
 	// Build the comparison expression
 	comparisonExpr, err := buildComparisonExpression(leftSQL, rightSQL, operation)
@@ -357,9 +357,8 @@ func HandleComparison(leftOperand, rightOperand *Value, operation string) (exp.E
 			if err == nil {
 				positionConstraint := goqu.I("semantic_id_reference_key.position").Eq(position)
 				return goqu.And(comparisonExpr, positionConstraint), nil
-			} else {
-				return nil, fmt.Errorf("invalid position in semanticID key field: %s", positionStrOnError)
 			}
+			return nil, fmt.Errorf("invalid position in semanticID key field: %s", positionStrOnError)
 		}
 	}
 	return comparisonExpr, nil
@@ -381,11 +380,11 @@ func getStartAndEndIndicesOfBrackets(operandToUse *Value) (int, int) {
 	return start, end
 }
 
-func isSemanticIdShorthandField(operand *Value) bool {
+func isSemanticIDShorthandField(operand *Value) bool {
 	return operand.IsField() && operand.Field != nil && string(*operand.Field) == "$sm#semanticId"
 }
 
-func isSemanticIdSpecificKeyValueField(operand *Value, isTypeCheck bool) bool {
+func isSemanticIDSpecificKeyValueField(operand *Value, isTypeCheck bool) bool {
 	suffix := "value"
 	if isTypeCheck {
 		suffix = "type"

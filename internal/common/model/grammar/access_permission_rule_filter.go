@@ -27,6 +27,44 @@
 // Author: Aaron Zielstorff ( Fraunhofer IESE ), Jannik Fried ( Fraunhofer IESE )
 package grammar
 
+// AccessPermissionRuleFILTER represents an optional filter component within an access permission rule.
+//
+// Filters provide fine-grained control over which AAS resources or resource fragments an access
+// permission rule applies to. They enable more precise access control by allowing rules to target
+// specific subsets of resources based on conditions or path fragments.
+//
+// A filter can specify:
+//
+//   - CONDITION: An inline logical expression that resources must satisfy to match the filter.
+//     This allows dynamic filtering based on resource properties, metadata, or context attributes.
+//
+//   - USEFORMULA: A reference to a previously defined logical formula (by name) that will be
+//     used as the filter condition. This promotes reusability of common filter conditions.
+//
+//   - FRAGMENT: A path or identifier fragment that narrows down which parts of a resource
+//     the rule applies to (e.g., specific submodel elements within a submodel).
+//
+// These fields are all optional and can be combined to create complex filtering logic.
+// For example, a rule might apply only to specific fragments of resources that also
+// satisfy certain conditions.
+//
+// Example JSON (with condition):
+//
+//	{
+//	  "CONDITION": {
+//	    "operator": "==",
+//	    "left": {"attribute": "idShort"},
+//	    "right": {"value": "Temperature"}
+//	  },
+//	  "FRAGMENT": "properties/currentValue"
+//	}
+//
+// Example JSON (with formula reference):
+//
+//	{
+//	  "USEFORMULA": "SensitiveDataCondition",
+//	  "FRAGMENT": "properties/*"
+//	}
 type AccessPermissionRuleFILTER struct {
 	// CONDITION corresponds to the JSON schema field "CONDITION".
 	CONDITION *LogicalExpression `json:"CONDITION,omitempty" yaml:"CONDITION,omitempty" mapstructure:"CONDITION,omitempty"`

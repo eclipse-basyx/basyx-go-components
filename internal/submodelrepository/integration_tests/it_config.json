@@ -129,6 +129,19 @@
     "method": "GET",
     "endpoint": "http://localhost:5004/submodels/aHR0cDovL2V4YW1wbGUuY29tL2lkL25vbnRoaW5n",
     "expectedStatus": 404
+    },
+    {
+    "context": "Post heavy Submodel",
+    "method": "POST",
+    "endpoint": "http://localhost:5004/submodels",
+    "data": "postBody/heavySubmodel.json",
+    "expectedStatus": 201
+    },
+    {
+    "context": "Get heavy Submodel",
+    "method": "GET",
+    "endpoint": "http://localhost:5004/submodels/TWFyY3VzVGhpc0lzQUhlYXZ5U3VibW9kZWw",
+    "shouldMatch": "expected/expectedGetHeavySubmodel.json",
+    "expectedStatus": 200
     }
-
 ]

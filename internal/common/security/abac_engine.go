@@ -49,13 +49,13 @@ import (
 // (ARM) used by the ABAC engine. It holds the generated schema and provides
 // evaluation helpers.
 type AccessModel struct {
-	gen grammar.AccessRuleModelSchemaJson
+	gen grammar.AccessRuleModelSchemaJSON
 }
 
 // ParseAccessModel parses a JSON (or YAML converted to JSON) payload that
 // conforms to the Access Rule Model schema and returns a compiled AccessModel.
 func ParseAccessModel(b []byte) (*AccessModel, error) {
-	var m grammar.AccessRuleModelSchemaJson
+	var m grammar.AccessRuleModelSchemaJSON
 	if err := json.Unmarshal(b, &m); err != nil {
 		return nil, fmt.Errorf("parse access model: %w", err)
 	}
@@ -160,7 +160,7 @@ func (m *AccessModel) Authorize(in EvalInput) (bool, string) {
 
 // materialize resolves a rule's references (USEACL, USEOBJECTS, USEFORMULA) into
 // concrete ACL, attributes, objects, and an optional logical expression.
-func materialize(all grammar.AccessRuleModelSchemaJsonAllAccessPermissionRules, r grammar.AccessPermissionRule) (grammar.ACL, []grammar.AttributeItem, []grammar.ObjectItem, *grammar.LogicalExpression) {
+func materialize(all grammar.AccessRuleModelSchemaJSONAllAccessPermissionRules, r grammar.AccessPermissionRule) (grammar.ACL, []grammar.AttributeItem, []grammar.ObjectItem, *grammar.LogicalExpression) {
 	// ACL / USEACL
 	acl := grammar.ACL{}
 	if r.ACL != nil {
@@ -169,7 +169,7 @@ func materialize(all grammar.AccessRuleModelSchemaJsonAllAccessPermissionRules, 
 		use := *r.USEACL
 		for _, d := range all.DEFACLS {
 			if d.Name == use {
-				acl = d.Acl
+				acl = d.ACL
 				break
 			}
 		}
@@ -219,7 +219,7 @@ func materialize(all grammar.AccessRuleModelSchemaJsonAllAccessPermissionRules, 
 
 // resolveObjects expands DEFOBJECTS references (including nested USEOBJECTS)
 // into a concrete object list.
-func resolveObjects(all grammar.AccessRuleModelSchemaJsonAllAccessPermissionRules, names []string) []grammar.ObjectItem {
+func resolveObjects(all grammar.AccessRuleModelSchemaJSONAllAccessPermissionRules, names []string) []grammar.ObjectItem {
 	var out []grammar.ObjectItem
 	for _, name := range names {
 		for _, d := range all.DEFOBJECTS {

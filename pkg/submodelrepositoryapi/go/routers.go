@@ -26,17 +26,26 @@ import (
 	"github.com/go-chi/cors"
 )
 
-// A Route defines the parameters for an api endpoint
+// Route defines the parameters for an API endpoint.
+//
+// It encapsulates the HTTP method, URL pattern, and handler function for a single
+// API route in the Submodel Repository Service.
 type Route struct {
 	Method      string
 	Pattern     string
 	HandlerFunc http.HandlerFunc
 }
 
-// Routes is a map of defined api endpoints
+// Routes is a map of defined API endpoints.
+//
+// The map key is a unique identifier for the route, and the value contains
+// the route's method, pattern, and handler function.
 type Routes map[string]Route
 
-// Router defines the required methods for retrieving api routes
+// Router defines the required methods for retrieving API routes.
+//
+// Implementations of this interface provide the route definitions for their
+// respective API controllers in the Submodel Repository Service.
 type Router interface {
 	Routes() Routes
 }
@@ -45,7 +54,16 @@ const errMsgRequiredMissing = "required parameter is missing"
 const errMsgMinValueConstraint = "provided parameter is not respecting minimum value constraint"
 const errMsgMaxValueConstraint = "provided parameter is not respecting maximum value constraint"
 
-// NewRouter creates a new router for any number of api routers
+// NewRouter creates a new chi router for any number of API routers.
+//
+// This function initializes a chi router with logging middleware and CORS support,
+// then registers all routes from the provided Router implementations.
+//
+// Parameters:
+//   - routers: One or more Router implementations to register
+//
+// Returns:
+//   - chi.Router: A configured chi router with all registered routes
 func NewRouter(routers ...Router) chi.Router {
 	router := chi.NewRouter()
 	router.Use(middleware.Logger)
@@ -60,7 +78,19 @@ func NewRouter(routers ...Router) chi.Router {
 	return router
 }
 
-// EncodeJSONResponse uses the json encoder to write an interface to the http response with an optional status code
+// EncodeJSONResponse encodes a response as JSON and writes it to the HTTP response writer.
+//
+// This function handles both file responses (detected by *os.File type) and JSON responses.
+// For files, it sets appropriate Content-Type and Content-Disposition headers. For other
+// types, it encodes the response as JSON with application/json content type.
+//
+// Parameters:
+//   - i: The interface to encode (can be *os.File for file downloads or any JSON-serializable type)
+//   - status: Optional HTTP status code (uses 200 OK if nil)
+//   - w: The HTTP response writer
+//
+// Returns:
+//   - error: An error if encoding or writing fails, nil on success
 func EncodeJSONResponse(i interface{}, status *int, w http.ResponseWriter) error {
 	wHeader := w.Header()
 
@@ -95,7 +125,17 @@ func EncodeJSONResponse(i interface{}, status *int, w http.ResponseWriter) error
 	return nil
 }
 
-// ReadFormFileToTempFile reads file data from a request form and writes it to a temporary file
+// ReadFormFileToTempFile reads a file from a multipart form request and writes it to a temporary file.
+//
+// The temporary file is created with the original filename as a prefix and a random suffix.
+//
+// Parameters:
+//   - r: The HTTP request containing the multipart form data
+//   - key: The form field name containing the file
+//
+// Returns:
+//   - *os.File: A pointer to the temporary file
+//   - error: An error if reading or writing fails
 func ReadFormFileToTempFile(r *http.Request, key string) (*os.File, error) {
 	_, fileHeader, err := r.FormFile(key)
 	if err != nil {
@@ -105,7 +145,15 @@ func ReadFormFileToTempFile(r *http.Request, key string) (*os.File, error) {
 	return readFileHeaderToTempFile(fileHeader)
 }
 
-// ReadFormFilesToTempFiles reads files array data from a request form and writes it to a temporary files
+// ReadFormFilesToTempFiles reads multiple files from a multipart form request and writes them to temporary files.
+//
+// Parameters:
+//   - r: The HTTP request containing the multipart form data
+//   - key: The form field name containing the files
+//
+// Returns:
+//   - []*os.File: A slice of pointers to the temporary files
+//   - error: An error if reading or writing fails
 func ReadFormFilesToTempFiles(r *http.Request, key string) ([]*os.File, error) {
 	if err := r.ParseMultipartForm(32 << 20); err != nil {
 		return nil, err
@@ -132,7 +180,9 @@ func readFileHeaderToTempFile(fileHeader *multipart.FileHeader) (*os.File, error
 		return nil, err
 	}
 
-	defer formFile.Close()
+	defer func() {
+		_ = formFile.Close()
+	}()
 
 	// Use .* as suffix, because the asterisk is a placeholder for the random value,
 	// and the period allows consumers of this file to remove the suffix to obtain the original file name
@@ -141,7 +191,9 @@ func readFileHeaderToTempFile(fileHeader *multipart.FileHeader) (*os.File, error
 		return nil, err
 	}
 
-	defer file.Close()
+	defer func() {
+		_ = file.Close()
+	}()
 
 	_, err = io.Copy(file, formFile)
 	if err != nil {
@@ -151,6 +203,7 @@ func readFileHeaderToTempFile(fileHeader *multipart.FileHeader) (*os.File, error
 	return file, nil
 }
 
+// nolint:unused
 func parseTimes(param string) ([]time.Time, error) {
 	splits := strings.Split(param, ",")
 	times := make([]time.Time, 0, len(splits))
@@ -165,6 +218,7 @@ func parseTimes(param string) ([]time.Time, error) {
 }
 
 // parseTime will parses a string parameter into a time.Time using the RFC3339 format
+// nolint:unused
 func parseTime(param string) (time.Time, error) {
 	if param == "" {
 		return time.Time{}, nil
@@ -172,13 +226,27 @@ func parseTime(param string) (time.Time, error) {
 	return time.Parse(time.RFC3339, param)
 }
 
+// Number is a constraint interface for numeric types.
+//
+// This interface restricts type parameters to numeric types (int32, int64, float32, float64)
+// for use in generic parsing and validation functions.
 type Number interface {
 	~int32 | ~int64 | ~float32 | ~float64
 }
 
+// ParseString is a generic function type for parsing string values to specific types.
+//
+// Parameters:
+//   - v: The string value to parse
+//
+// Returns:
+//   - T: The parsed value of type T (constrained to Number, string, or bool)
+//   - error: An error if parsing fails
 type ParseString[T Number | string | bool] func(v string) (T, error)
 
 // parseFloat64 parses a string parameter to an float64.
+//
+//nolint:unused
 func parseFloat64(param string) (float64, error) {
 	if param == "" {
 		return 0, nil
@@ -188,6 +256,8 @@ func parseFloat64(param string) (float64, error) {
 }
 
 // parseFloat32 parses a string parameter to an float32.
+//
+//nolint:unused
 func parseFloat32(param string) (float32, error) {
 	if param == "" {
 		return 0, nil
@@ -198,6 +268,8 @@ func parseFloat32(param string) (float32, error) {
 }
 
 // parseInt64 parses a string parameter to an int64.
+//
+//nolint:unused
 func parseInt64(param string) (int64, error) {
 	if param == "" {
 		return 0, nil
@@ -225,8 +297,31 @@ func parseBool(param string) (bool, error) {
 	return strconv.ParseBool(param)
 }
 
+// OpenAPIOperation is a generic function type for OpenAPI parameter operations.
+//
+// This function type encapsulates parsing, validation, and default value handling for
+// OpenAPI parameters.
+//
+// Parameters:
+//   - actual: The actual string value from the request
+//
+// Returns:
+//   - T: The parsed value of type T (constrained to Number, string, or bool)
+//   - bool: True if a default value was used, false otherwise
+//   - error: An error if parsing or validation fails
+//
+// nolint:all
 type OpenAPIOperation[T Number | string | bool] func(actual string) (T, bool, error)
 
+// WithRequire creates an OpenAPIOperation that requires a non-empty value.
+//
+// If the actual parameter is empty, an error is returned indicating the required parameter is missing.
+//
+// Parameters:
+//   - parse: The parsing function to apply to non-empty values
+//
+// Returns:
+//   - OpenAPIOperation[T]: A function that enforces the required constraint and parses the value
 func WithRequire[T Number | string | bool](parse ParseString[T]) OpenAPIOperation[T] {
 	var empty T
 	return func(actual string) (T, bool, error) {
@@ -239,6 +334,16 @@ func WithRequire[T Number | string | bool](parse ParseString[T]) OpenAPIOperatio
 	}
 }
 
+// WithDefaultOrParse creates an OpenAPIOperation that uses a default value if the parameter is empty.
+//
+// If the actual parameter is empty, the default value is returned. Otherwise, the value is parsed.
+//
+// Parameters:
+//   - def: The default value to use when the parameter is empty
+//   - parse: The parsing function to apply to non-empty values
+//
+// Returns:
+//   - OpenAPIOperation[T]: A function that provides default value handling and parses non-empty values
 func WithDefaultOrParse[T Number | string | bool](def T, parse ParseString[T]) OpenAPIOperation[T] {
 	return func(actual string) (T, bool, error) {
 		if actual == "" {
@@ -250,6 +355,13 @@ func WithDefaultOrParse[T Number | string | bool](def T, parse ParseString[T]) O
 	}
 }
 
+// WithParse creates an OpenAPIOperation that simply parses the value without defaults or requirements.
+//
+// Parameters:
+//   - parse: The parsing function to apply to the value
+//
+// Returns:
+//   - OpenAPIOperation[T]: A function that parses the value without additional constraints
 func WithParse[T Number | string | bool](parse ParseString[T]) OpenAPIOperation[T] {
 	return func(actual string) (T, bool, error) {
 		v, err := parse(actual)
@@ -257,8 +369,22 @@ func WithParse[T Number | string | bool](parse ParseString[T]) OpenAPIOperation[
 	}
 }
 
+// Constraint is a generic function type for validating parameter values.
+//
+// Parameters:
+//   - actual: The value to validate
+//
+// Returns:
+//   - error: An error if validation fails, nil if the constraint is satisfied
 type Constraint[T Number | string | bool] func(actual T) error
 
+// WithMinimum creates a Constraint that validates a minimum value.
+//
+// Parameters:
+//   - expected: The minimum allowed value
+//
+// Returns:
+//   - Constraint[T]: A function that validates the actual value is >= the minimum
 func WithMinimum[T Number](expected T) Constraint[T] {
 	return func(actual T) error {
 		if actual < expected {
@@ -269,6 +395,13 @@ func WithMinimum[T Number](expected T) Constraint[T] {
 	}
 }
 
+// WithMaximum creates a Constraint that validates a maximum value.
+//
+// Parameters:
+//   - expected: The maximum allowed value
+//
+// Returns:
+//   - Constraint[T]: A function that validates the actual value is <= the maximum
 func WithMaximum[T Number](expected T) Constraint[T] {
 	return func(actual T) error {
 		if actual > expected {
@@ -304,6 +437,8 @@ func parseBoolParameter(param string, fn OpenAPIOperation[bool]) (bool, error) {
 }
 
 // parseNumericArrayParameter parses a string parameter containing array of values to its respective type.
+//
+//nolint:unused
 func parseNumericArrayParameter[T Number](param, delim string, required bool, fn OpenAPIOperation[T], checks ...Constraint[T]) ([]T, error) {
 	if param == "" {
 		if required {

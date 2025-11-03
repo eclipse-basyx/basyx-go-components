@@ -81,7 +81,7 @@ func GetReferenceQueries(dialect goqu.DialectWrapper, referenceIdCondition any) 
 //
 // Parameters:
 //   - dialect: The goqu DialectWrapper for building SQL queries.
-//   - joinTable: The join table (e.g., goqu.T("sme_supplemental_semantic")) that links entities to references.
+//   - joinTable: The join table (e.g., goqu.T("submodel_element_supplemental_semantic_id")) that links entities to references.
 //   - entityIdColumn: The column name in the join table that references the entity (e.g., "sme_id").
 //   - referenceIdColumn: The column name in the join table that references the reference ID (e.g., "reference_id").
 //   - entityIdCondition: The condition to match the entity ID (e.g., goqu.I("tlsme.id")).

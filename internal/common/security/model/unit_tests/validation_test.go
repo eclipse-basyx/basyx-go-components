@@ -63,22 +63,22 @@ func typeFactory(typeName string) (any, error) {
 		var v grammar.AccessPermissionRule
 		return &v, nil
 	case "AccessRuleModelSchemaJson":
-		var v grammar.AccessRuleModelSchemaJson
+		var v grammar.AccessRuleModelSchemaJSON
 		return &v, nil
 	case "AccessRuleModelSchemaJsonAllAccessPermissionRules":
-		var v grammar.AccessRuleModelSchemaJsonAllAccessPermissionRules
+		var v grammar.AccessRuleModelSchemaJSONAllAccessPermissionRules
 		return &v, nil
 	case "AccessRuleModelSchemaJsonAllAccessPermissionRulesDEFACLSElem":
-		var v grammar.AccessRuleModelSchemaJsonAllAccessPermissionRulesDEFACLSElem
+		var v grammar.AccessRuleModelSchemaJSONAllAccessPermissionRulesDEFACLSElem
 		return &v, nil
 	case "AccessRuleModelSchemaJsonAllAccessPermissionRulesDEFATTRIBUTESElem":
-		var v grammar.AccessRuleModelSchemaJsonAllAccessPermissionRulesDEFATTRIBUTESElem
+		var v grammar.AccessRuleModelSchemaJSONAllAccessPermissionRulesDEFATTRIBUTESElem
 		return &v, nil
 	case "AccessRuleModelSchemaJsonAllAccessPermissionRulesDEFFORMULASElem":
-		var v grammar.AccessRuleModelSchemaJsonAllAccessPermissionRulesDEFFORMULASElem
+		var v grammar.AccessRuleModelSchemaJSONAllAccessPermissionRulesDEFFORMULASElem
 		return &v, nil
 	case "AccessRuleModelSchemaJsonAllAccessPermissionRulesDEFOBJECTSElem":
-		var v grammar.AccessRuleModelSchemaJsonAllAccessPermissionRulesDEFOBJECTSElem
+		var v grammar.AccessRuleModelSchemaJSONAllAccessPermissionRulesDEFOBJECTSElem
 		return &v, nil
 	case "LogicalExpression":
 		var v grammar.LogicalExpression

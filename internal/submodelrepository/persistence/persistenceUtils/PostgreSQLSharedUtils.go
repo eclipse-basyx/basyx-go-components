@@ -23,7 +23,6 @@
 * SPDX-License-Identifier: MIT
 ******************************************************************************/
 
-
 package persistenceUtils
 
 import (
@@ -1007,7 +1006,7 @@ func InsertSupplementalSemanticIDsSME(tx *sql.Tx, smeID int64, supplementalSeman
 			if err != nil {
 				return err
 			}
-			_, err = tx.Exec(`INSERT INTO sme_supplemental_semantic (sme_id, reference_id) VALUES ($1, $2)`, smeID, supplementalSemanticIDDbID)
+			_, err = tx.Exec(`INSERT INTO submodel_element_supplemental_semantic_id (sme_id, reference_id) VALUES ($1, $2)`, smeID, supplementalSemanticIDDbID)
 			if err != nil {
 				return err
 			}

@@ -27,4 +27,20 @@
 // Author: Aaron Zielstorff ( Fraunhofer IESE ), Jannik Fried ( Fraunhofer IESE )
 package grammar
 
+// AttributeValue represents a value associated with an attribute in the AAS access control grammar.
+//
+// This type is defined as 'any' to allow maximum flexibility in representing attribute values
+// of different types. Attributes in the access control system can have values of various types
+// including strings, numbers, booleans, arrays, or complex objects, depending on the attribute's
+// source and purpose.
+//
+// Common value types:
+//   - string: Text values from claims, model references, or configuration
+//   - int/float64: Numeric values for comparisons or measurements
+//   - bool: Boolean flags or conditions
+//   - []any: Arrays of values for multi-valued attributes
+//   - map[string]any: Structured data from complex attributes
+//
+// The actual type of the value depends on the context in which the attribute is used
+// and should be validated or type-checked when performing operations on the value.
 type AttributeValue any

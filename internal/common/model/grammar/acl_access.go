@@ -33,37 +33,75 @@ import (
 	"reflect"
 )
 
+// ACLACCESS defines the access mode for an Access Control List (ACL) entry.
+//
+// This type determines whether access is granted or denied for a particular ACL rule.
+// The access mode works in conjunction with RIGHTS to define what operations are permitted.
+//
+// Valid values:
+//   - ALLOW: Grants access according to the specified rights
+//   - DISABLED: Denies access regardless of rights (ACL is disabled)
 type ACLACCESS string
 
+// ACLACCESSALLOW represents the access mode that grants permissions.
+// When an ACL has ACCESS set to ALLOW, the specified RIGHTS determine what operations
+// are permitted for the matching resources.
 const ACLACCESSALLOW ACLACCESS = "ALLOW"
+
+// ACLACCESSDISABLED represents the access mode that denies all access.
+// When an ACL has ACCESS set to DISABLED, all access is denied regardless of the
+// specified RIGHTS. This effectively disables the ACL rule.
 const ACLACCESSDISABLED ACLACCESS = "DISABLED"
 
-var enumValues_ACLACCESS = []interface{}{
+var enumValuesACLACCESS = []interface{}{
 	"ALLOW",
 	"DISABLED",
 }
 
-// UnmarshalJSON implements json.Unmarshaler.
+// UnmarshalJSON implements the json.Unmarshaler interface for ACLACCESS.
+//
+// This custom unmarshaler validates that the JSON string value is one of the allowed
+// ACLACCESS enum values: "ALLOW" or "DISABLED". Any other value will result in an error.
+//
+// Parameters:
+//   - value: JSON byte slice containing the string value to unmarshal
+//
+// Returns:
+//   - error: An error if the JSON is invalid or if the value is not one of the allowed
+//     enum values. Returns nil on successful unmarshaling and validation.
 func (j *ACLACCESS) UnmarshalJSON(value []byte) error {
 	var v string
 	if err := json.Unmarshal(value, &v); err != nil {
 		return err
 	}
 	var ok bool
-	for _, expected := range enumValues_ACLACCESS {
+	for _, expected := range enumValuesACLACCESS {
 		if reflect.DeepEqual(v, expected) {
 			ok = true
 			break
 		}
 	}
 	if !ok {
-		return fmt.Errorf("invalid value (expected one of %#v): %#v", enumValues_ACLACCESS, v)
+		return fmt.Errorf("invalid value (expected one of %#v): %#v", enumValuesACLACCESS, v)
 	}
 	*j = ACLACCESS(v)
 	return nil
 }
 
-// UnmarshalJSON implements json.Unmarshaler.
+// UnmarshalJSON implements the json.Unmarshaler interface for ACL.
+//
+// This custom unmarshaler validates that the ACL JSON object contains the required fields:
+//   - ACCESS: The access mode (ALLOW or DISABLED)
+//   - RIGHTS: The rights/permissions being granted or denied
+//
+// Both fields are mandatory and their absence will result in an error.
+//
+// Parameters:
+//   - value: JSON byte slice containing the ACL object to unmarshal
+//
+// Returns:
+//   - error: An error if the JSON is invalid or if required fields (ACCESS or RIGHTS) are missing.
+//     Returns nil on successful unmarshaling and validation.
 func (j *ACL) UnmarshalJSON(value []byte) error {
 	var raw map[string]interface{}
 	if err := json.Unmarshal(value, &raw); err != nil {
