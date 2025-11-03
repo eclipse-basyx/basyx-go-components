@@ -83,7 +83,7 @@ func (c *SerializationAPIAPIController) GenerateSerializationByIds(w http.Respon
 
 		includeConceptDescriptionsParam = param
 	} else {
-		var param bool = true
+		var param = true
 		includeConceptDescriptionsParam = param
 	}
 	result, err := c.service.GenerateSerializationByIds(r.Context(), aasIdsParam, submodelIdsParam, includeConceptDescriptionsParam)

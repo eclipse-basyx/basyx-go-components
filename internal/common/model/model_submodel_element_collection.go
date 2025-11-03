@@ -14,11 +14,13 @@ import (
 	"fmt"
 )
 
+// SubmodelElementCollection struct representing a collection of submodel elements.
 type SubmodelElementCollection struct {
 	Extensions []Extension `json:"extensions,omitempty"`
 
 	Category string `json:"category,omitempty" validate:"regexp=^([\\\\x09\\\\x0a\\\\x0d\\\\x20-\\\\ud7ff\\\\ue000-\\\\ufffd]|\\\\ud800[\\\\udc00-\\\\udfff]|[\\\\ud801-\\\\udbfe][\\\\udc00-\\\\udfff]|\\\\udbff[\\\\udc00-\\\\udfff])*$"`
 
+	//nolint:all
 	IdShort string `json:"idShort,omitempty"`
 
 	DisplayName []LangStringNameType `json:"displayName,omitempty"`
@@ -27,8 +29,9 @@ type SubmodelElementCollection struct {
 
 	ModelType string `json:"modelType" validate:"regexp=^SubmodelElementCollection$"`
 
-	SemanticId *Reference `json:"semanticId,omitempty"`
+	SemanticID *Reference `json:"semanticID,omitempty"`
 
+	//nolint:all
 	SupplementalSemanticIds []Reference `json:"supplementalSemanticIds,omitempty"`
 
 	Qualifiers []Qualifier `json:"qualifiers,omitempty"`
@@ -70,84 +73,105 @@ func (sec *SubmodelElementCollection) UnmarshalJSON(data []byte) error {
 }
 
 // Getters
+//
+//nolint:all
 func (a SubmodelElementCollection) GetExtensions() []Extension {
 	return a.Extensions
 }
 
+//nolint:all
 func (a SubmodelElementCollection) GetIdShort() string {
 	return a.IdShort
 }
 
+//nolint:all
 func (a SubmodelElementCollection) GetCategory() string {
 	return a.Category
 }
 
+//nolint:all
 func (a SubmodelElementCollection) GetDisplayName() []LangStringNameType {
 	return a.DisplayName
 }
 
+//nolint:all
 func (a SubmodelElementCollection) GetDescription() []LangStringTextType {
 	return a.Description
 }
 
+//nolint:all
 func (a SubmodelElementCollection) GetModelType() string {
 	return a.ModelType
 }
 
-func (a SubmodelElementCollection) GetSemanticId() *Reference {
-	return a.SemanticId
+//nolint:all
+func (a SubmodelElementCollection) GetSemanticID() *Reference {
+	return a.SemanticID
 }
 
+//nolint:all
 func (a SubmodelElementCollection) GetSupplementalSemanticIds() []Reference {
 	return a.SupplementalSemanticIds
 }
 
+//nolint:all
 func (a SubmodelElementCollection) GetQualifiers() []Qualifier {
 	return a.Qualifiers
 }
 
+//nolint:all
 func (a SubmodelElementCollection) GetEmbeddedDataSpecifications() []EmbeddedDataSpecification {
 	return a.EmbeddedDataSpecifications
 }
 
 // Setters
-
+//
+//nolint:all
 func (a *SubmodelElementCollection) SetModelType(modelType string) {
 	a.ModelType = modelType
 }
 
+//nolint:all
 func (a *SubmodelElementCollection) SetExtensions(v []Extension) {
 	a.Extensions = v
 }
 
+//nolint:all
 func (a *SubmodelElementCollection) SetIdShort(v string) {
 	a.IdShort = v
 }
 
+//nolint:all
 func (a *SubmodelElementCollection) SetCategory(v string) {
 	a.Category = v
 }
 
+//nolint:all
 func (a *SubmodelElementCollection) SetDisplayName(v []LangStringNameType) {
 	a.DisplayName = v
 }
 
+//nolint:all
 func (a *SubmodelElementCollection) SetDescription(v []LangStringTextType) {
 	a.Description = v
 }
 
-func (a *SubmodelElementCollection) SetSemanticId(v *Reference) {
-	a.SemanticId = v
+//nolint:all
+func (a *SubmodelElementCollection) SetSemanticID(v *Reference) {
+	a.SemanticID = v
 }
 
+//nolint:all
 func (a *SubmodelElementCollection) SetSupplementalSemanticIds(v []Reference) {
 	a.SupplementalSemanticIds = v
 }
 
+//nolint:all
 func (a *SubmodelElementCollection) SetQualifiers(v []Qualifier) {
 	a.Qualifiers = v
 }
 
+//nolint:all
 func (a *SubmodelElementCollection) SetEmbeddedDataSpecifications(v []EmbeddedDataSpecification) {
 	a.EmbeddedDataSpecifications = v
 }
@@ -168,7 +192,7 @@ func AssertSubmodelElementCollectionRequired(obj SubmodelElementCollection) erro
 			return err
 		}
 	}
-	if err := AssertReferableAllOfIdShortRequired(obj.IdShort); err != nil {
+	if err := AssertIdShortRequired(obj.IdShort); err != nil {
 		return err
 	}
 	for _, el := range obj.DisplayName {
@@ -181,7 +205,7 @@ func AssertSubmodelElementCollectionRequired(obj SubmodelElementCollection) erro
 			return err
 		}
 	}
-	if err := AssertReferenceRequired(*obj.SemanticId); err != nil {
+	if err := AssertReferenceRequired(*obj.SemanticID); err != nil {
 		return err
 	}
 	for _, el := range obj.SupplementalSemanticIds {
@@ -209,7 +233,7 @@ func AssertSubmodelElementCollectionConstraints(obj SubmodelElementCollection) e
 			return err
 		}
 	}
-	if err := AssertReferableAllOfIdShortConstraints(obj.IdShort); err != nil {
+	if err := AssertstringConstraints(obj.IdShort); err != nil {
 		return err
 	}
 	for _, el := range obj.DisplayName {
@@ -222,7 +246,7 @@ func AssertSubmodelElementCollectionConstraints(obj SubmodelElementCollection) e
 			return err
 		}
 	}
-	if err := AssertReferenceConstraints(*obj.SemanticId); err != nil {
+	if err := AssertReferenceConstraints(*obj.SemanticID); err != nil {
 		return err
 	}
 	for _, el := range obj.SupplementalSemanticIds {

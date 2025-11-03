@@ -9,11 +9,13 @@
 
 package model
 
+// Blob type of SubmodelElement
 type Blob struct {
 	Extensions []Extension `json:"extensions,omitempty"`
 
 	Category string `json:"category,omitempty" validate:"regexp=^([\\\\x09\\\\x0a\\\\x0d\\\\x20-\\\\ud7ff\\\\ue000-\\\\ufffd]|\\\\ud800[\\\\udc00-\\\\udfff]|[\\\\ud801-\\\\udbfe][\\\\udc00-\\\\udfff]|\\\\udbff[\\\\udc00-\\\\udfff])*$"`
 
+	//nolint:all
 	IdShort string `json:"idShort,omitempty"`
 
 	DisplayName []LangStringNameType `json:"displayName,omitempty"`
@@ -22,8 +24,9 @@ type Blob struct {
 
 	ModelType string `json:"modelType" validate:"regexp=^Blob$"`
 
-	SemanticId *Reference `json:"semanticId,omitempty"`
+	SemanticID *Reference `json:"semanticID,omitempty"`
 
+	//nolint:all
 	SupplementalSemanticIds []Reference `json:"supplementalSemanticIds,omitempty"`
 
 	Qualifiers []Qualifier `json:"qualifiers,omitempty"`
@@ -36,84 +39,105 @@ type Blob struct {
 }
 
 // Getters
+//
+//nolint:all
 func (a Blob) GetExtensions() []Extension {
 	return a.Extensions
 }
 
+//nolint:all
 func (a Blob) GetIdShort() string {
 	return a.IdShort
 }
 
+//nolint:all
 func (a Blob) GetCategory() string {
 	return a.Category
 }
 
+//nolint:all
 func (a Blob) GetDisplayName() []LangStringNameType {
 	return a.DisplayName
 }
 
+//nolint:all
 func (a Blob) GetDescription() []LangStringTextType {
 	return a.Description
 }
 
+//nolint:all
 func (a Blob) GetModelType() string {
 	return a.ModelType
 }
 
-func (a Blob) GetSemanticId() *Reference {
-	return a.SemanticId
+//nolint:all
+func (a Blob) GetSemanticID() *Reference {
+	return a.SemanticID
 }
 
+//nolint:all
 func (a Blob) GetSupplementalSemanticIds() []Reference {
 	return a.SupplementalSemanticIds
 }
 
+//nolint:all
 func (a Blob) GetQualifiers() []Qualifier {
 	return a.Qualifiers
 }
 
+//nolint:all
 func (a Blob) GetEmbeddedDataSpecifications() []EmbeddedDataSpecification {
 	return a.EmbeddedDataSpecifications
 }
 
 // Setters
 
+//nolint:all
 func (a *Blob) SetModelType(v string) {
 	a.ModelType = v
 }
 
+//nolint:all
 func (a *Blob) SetExtensions(v []Extension) {
 	a.Extensions = v
 }
 
+//nolint:all
 func (a *Blob) SetIdShort(v string) {
 	a.IdShort = v
 }
 
+//nolint:all
 func (a *Blob) SetCategory(v string) {
 	a.Category = v
 }
 
+//nolint:all
 func (a *Blob) SetDisplayName(v []LangStringNameType) {
 	a.DisplayName = v
 }
 
+//nolint:all
 func (a *Blob) SetDescription(v []LangStringTextType) {
 	a.Description = v
 }
 
-func (a *Blob) SetSemanticId(v *Reference) {
-	a.SemanticId = v
+//nolint:all
+func (a *Blob) SetSemanticID(v *Reference) {
+	a.SemanticID = v
 }
 
+//nolint:all
 func (a *Blob) SetSupplementalSemanticIds(v []Reference) {
 	a.SupplementalSemanticIds = v
 }
 
+//nolint:all
 func (a *Blob) SetQualifiers(v []Qualifier) {
 	a.Qualifiers = v
 }
 
+//nolint:all
 func (a *Blob) SetEmbeddedDataSpecifications(v []EmbeddedDataSpecification) {
 	a.EmbeddedDataSpecifications = v
 }
@@ -135,7 +159,7 @@ func AssertBlobRequired(obj Blob) error {
 			return err
 		}
 	}
-	if err := AssertReferableAllOfIdShortRequired(obj.IdShort); err != nil {
+	if err := AssertIdShortRequired(obj.IdShort); err != nil {
 		return err
 	}
 	for _, el := range obj.DisplayName {
@@ -148,8 +172,8 @@ func AssertBlobRequired(obj Blob) error {
 			return err
 		}
 	}
-	if obj.SemanticId != nil {
-		if err := AssertReferenceRequired(*obj.SemanticId); err != nil {
+	if obj.SemanticID != nil {
+		if err := AssertReferenceRequired(*obj.SemanticID); err != nil {
 			return err
 		}
 	}
@@ -178,7 +202,7 @@ func AssertBlobConstraints(obj Blob) error {
 			return err
 		}
 	}
-	if err := AssertReferableAllOfIdShortConstraints(obj.IdShort); err != nil {
+	if err := AssertstringConstraints(obj.IdShort); err != nil {
 		return err
 	}
 	for _, el := range obj.DisplayName {
@@ -191,8 +215,8 @@ func AssertBlobConstraints(obj Blob) error {
 			return err
 		}
 	}
-	if obj.SemanticId != nil {
-		if err := AssertReferenceConstraints(*obj.SemanticId); err != nil {
+	if obj.SemanticID != nil {
+		if err := AssertReferenceConstraints(*obj.SemanticID); err != nil {
 			return err
 		}
 	}

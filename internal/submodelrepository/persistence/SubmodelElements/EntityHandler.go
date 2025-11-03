@@ -47,14 +47,14 @@ func NewPostgreSQLEntityHandler(db *sql.DB) (*PostgreSQLEntityHandler, error) {
 	return &PostgreSQLEntityHandler{db: db, decorated: decoratedHandler}, nil
 }
 
-func (p PostgreSQLEntityHandler) Create(tx *sql.Tx, submodelId string, submodelElement gen.SubmodelElement) (int, error) {
+func (p PostgreSQLEntityHandler) Create(tx *sql.Tx, submodelID string, submodelElement gen.SubmodelElement) (int, error) {
 	entity, ok := submodelElement.(*gen.Entity)
 	if !ok {
 		return 0, errors.New("submodelElement is not of type Entity")
 	}
 
 	// First, perform base SubmodelElement operations within the transaction
-	id, err := p.decorated.Create(tx, submodelId, submodelElement)
+	id, err := p.decorated.Create(tx, submodelID, submodelElement)
 	if err != nil {
 		return 0, err
 	}
@@ -68,14 +68,14 @@ func (p PostgreSQLEntityHandler) Create(tx *sql.Tx, submodelId string, submodelE
 	return id, nil
 }
 
-func (p PostgreSQLEntityHandler) CreateNested(tx *sql.Tx, submodelId string, parentId int, idShortPath string, submodelElement gen.SubmodelElement, pos int) (int, error) {
+func (p PostgreSQLEntityHandler) CreateNested(tx *sql.Tx, submodelID string, parentID int, idShortPath string, submodelElement gen.SubmodelElement, pos int) (int, error) {
 	entity, ok := submodelElement.(*gen.Entity)
 	if !ok {
 		return 0, errors.New("submodelElement is not of type Entity")
 	}
 
 	// Create the nested entity with the provided idShortPath using the decorated handler
-	id, err := p.decorated.CreateAndPath(tx, submodelId, parentId, idShortPath, submodelElement, pos)
+	id, err := p.decorated.CreateAndPath(tx, submodelID, parentID, idShortPath, submodelElement, pos)
 	if err != nil {
 		return 0, err
 	}
@@ -104,7 +104,7 @@ func (p PostgreSQLEntityHandler) Delete(idShortOrPath string) error {
 
 func insertEntity(entity *gen.Entity, tx *sql.Tx, id int) error {
 	_, err := tx.Exec(`INSERT INTO entity_element (id, entity_type, global_asset_id) VALUES ($1, $2, $3)`,
-		id, entity.EntityType, entity.GlobalAssetId)
+		id, entity.EntityType, entity.GlobalAssetID)
 	if err != nil {
 		return err
 	}
@@ -112,12 +112,12 @@ func insertEntity(entity *gen.Entity, tx *sql.Tx, id int) error {
 	// Insert specific asset ids
 	for _, sai := range entity.SpecificAssetIds {
 		var extRef sql.NullInt64
-		if !isEmptyReference(sai.ExternalSubjectId) {
-			refId, err := insertReference(tx, *sai.ExternalSubjectId)
+		if !isEmptyReference(sai.ExternalSubjectID) {
+			refID, err := insertReference(tx, *sai.ExternalSubjectID)
 			if err != nil {
 				return err
 			}
-			extRef = sql.NullInt64{Int64: int64(refId), Valid: true}
+			extRef = sql.NullInt64{Int64: int64(refID), Valid: true}
 		}
 		_, err = tx.Exec(`INSERT INTO entity_specific_asset_id (entity_id, name, value, external_subject_ref) VALUES ($1, $2, $3, $4)`,
 			id, sai.Name, sai.Value, extRef)

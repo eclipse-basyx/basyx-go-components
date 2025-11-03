@@ -9,12 +9,14 @@
 
 package model
 
+// MultiLanguagePropertyMetadata type of MultiLanguagePropertyMetadata
 type MultiLanguagePropertyMetadata struct {
 	Extensions []Extension `json:"extensions,omitempty"`
 
 	Category string `json:"category,omitempty" validate:"regexp=^([\\\\t\\\\n\\\\r -퟿-�]|\\\\ud800[\\\\udc00-\\\\udfff]|[\\\\ud801-\\\\udbfe][\\\\udc00-\\\\udfff]|\\\\udbff[\\\\udc00-\\\\udfff])*$"`
 
-	IdShort Referable1AllOfIdShort `json:"idShort,omitempty"`
+	//nolint:all
+	IdShort string `json:"idShort,omitempty"`
 
 	DisplayName []LangStringNameType `json:"displayName,omitempty"`
 
@@ -24,11 +26,12 @@ type MultiLanguagePropertyMetadata struct {
 
 	EmbeddedDataSpecifications []EmbeddedDataSpecification `json:"embeddedDataSpecifications,omitempty"`
 
-	SemanticId *Reference `json:"semanticId,omitempty"`
+	SemanticID *Reference `json:"semanticID,omitempty"`
 
+	//nolint:all
 	SupplementalSemanticIds []Reference `json:"supplementalSemanticIds,omitempty"`
 
-	Qualifiers []Qualifier1 `json:"qualifiers,omitempty"`
+	Qualifiers []Qualifier `json:"qualifiers,omitempty"`
 
 	Kind ModellingKind `json:"kind,omitempty"`
 }
@@ -49,7 +52,7 @@ func AssertMultiLanguagePropertyMetadataRequired(obj MultiLanguagePropertyMetada
 			return err
 		}
 	}
-	if err := AssertReferable1AllOfIdShortRequired(obj.IdShort); err != nil {
+	if err := AssertIdShortRequired(obj.IdShort); err != nil {
 		return err
 	}
 	for _, el := range obj.DisplayName {
@@ -67,7 +70,7 @@ func AssertMultiLanguagePropertyMetadataRequired(obj MultiLanguagePropertyMetada
 			return err
 		}
 	}
-	if err := AssertReferenceRequired(*obj.SemanticId); err != nil {
+	if err := AssertReferenceRequired(*obj.SemanticID); err != nil {
 		return err
 	}
 	for _, el := range obj.SupplementalSemanticIds {
@@ -76,7 +79,7 @@ func AssertMultiLanguagePropertyMetadataRequired(obj MultiLanguagePropertyMetada
 		}
 	}
 	for _, el := range obj.Qualifiers {
-		if err := AssertQualifier1Required(el); err != nil {
+		if err := AssertQualifierRequired(el); err != nil {
 			return err
 		}
 	}
@@ -90,7 +93,7 @@ func AssertMultiLanguagePropertyMetadataConstraints(obj MultiLanguagePropertyMet
 			return err
 		}
 	}
-	if err := AssertReferable1AllOfIdShortConstraints(obj.IdShort); err != nil {
+	if err := AssertstringConstraints(obj.IdShort); err != nil {
 		return err
 	}
 	for _, el := range obj.DisplayName {
@@ -108,7 +111,7 @@ func AssertMultiLanguagePropertyMetadataConstraints(obj MultiLanguagePropertyMet
 			return err
 		}
 	}
-	if err := AssertReferenceConstraints(*obj.SemanticId); err != nil {
+	if err := AssertReferenceConstraints(*obj.SemanticID); err != nil {
 		return err
 	}
 	for _, el := range obj.SupplementalSemanticIds {
@@ -117,7 +120,7 @@ func AssertMultiLanguagePropertyMetadataConstraints(obj MultiLanguagePropertyMet
 		}
 	}
 	for _, el := range obj.Qualifiers {
-		if err := AssertQualifier1Constraints(el); err != nil {
+		if err := AssertQualifierConstraints(el); err != nil {
 			return err
 		}
 	}

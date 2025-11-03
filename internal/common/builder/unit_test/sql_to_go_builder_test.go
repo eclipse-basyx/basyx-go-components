@@ -267,16 +267,16 @@ func TestParseReferredReferences_SingleLevel(t *testing.T) {
 
 	// Verify hierarchy
 	rootRef := refs[0]
-	if rootRef.ReferredSemanticId == nil {
-		t.Fatal("Expected ReferredSemanticId to be set")
+	if rootRef.ReferredSemanticID == nil {
+		t.Fatal("Expected ReferredSemanticID to be set")
 	}
 
-	if string(rootRef.ReferredSemanticId.Type) != "ModelReference" {
-		t.Errorf("Expected ReferredSemanticId type 'ModelReference', got '%s'", rootRef.ReferredSemanticId.Type)
+	if string(rootRef.ReferredSemanticID.Type) != "ModelReference" {
+		t.Errorf("Expected ReferredSemanticID type 'ModelReference', got '%s'", rootRef.ReferredSemanticID.Type)
 	}
 
-	if len(rootRef.ReferredSemanticId.Keys) != 1 {
-		t.Fatalf("Expected 1 key in ReferredSemanticId, got %d", len(rootRef.ReferredSemanticId.Keys))
+	if len(rootRef.ReferredSemanticID.Keys) != 1 {
+		t.Fatalf("Expected 1 key in ReferredSemanticID, got %d", len(rootRef.ReferredSemanticID.Keys))
 	}
 }
 
@@ -330,15 +330,15 @@ func TestParseReferredReferences_MultiLevel(t *testing.T) {
 
 	// Verify two-level hierarchy
 	rootRef := refs[0]
-	if rootRef.ReferredSemanticId == nil {
+	if rootRef.ReferredSemanticID == nil {
 		t.Fatal("Expected level 1 ReferredSemanticId")
 	}
 
-	if rootRef.ReferredSemanticId.ReferredSemanticId == nil {
+	if rootRef.ReferredSemanticID.ReferredSemanticID == nil {
 		t.Fatal("Expected level 2 ReferredSemanticId")
 	}
 
-	level2 := rootRef.ReferredSemanticId.ReferredSemanticId
+	level2 := rootRef.ReferredSemanticID.ReferredSemanticID
 	if level2.Keys[0].Value != "Level2" {
 		t.Errorf("Expected level 2 key value 'Level2', got '%s'", level2.Keys[0].Value)
 	}
@@ -575,18 +575,18 @@ func TestIntegration_CompleteReferenceHierarchy(t *testing.T) {
 	// Step 4: Verify the complete structure
 	// First root reference should have a two-level hierarchy
 	ref1 := rootRefs[0]
-	if ref1.ReferredSemanticId == nil {
-		t.Fatal("Expected ReferredSemanticId at level 1")
+	if ref1.ReferredSemanticID == nil {
+		t.Fatal("Expected ReferredSemanticID at level 1")
 	}
 
-	if ref1.ReferredSemanticId.ReferredSemanticId == nil {
-		t.Fatal("Expected ReferredSemanticId at level 2")
+	if ref1.ReferredSemanticID.ReferredSemanticID == nil {
+		t.Fatal("Expected ReferredSemanticID at level 2")
 	}
 
 	// Second root reference should have no referred semantic IDs
 	ref2 := rootRefs[1]
-	if ref2.ReferredSemanticId != nil {
-		t.Error("Expected no ReferredSemanticId for second root reference")
+	if ref2.ReferredSemanticID != nil {
+		t.Error("Expected no ReferredSemanticID for second root reference")
 	}
 
 	// Verify the complete hierarchy of first reference
@@ -594,11 +594,11 @@ func TestIntegration_CompleteReferenceHierarchy(t *testing.T) {
 		t.Errorf("Unexpected root key value: %s", ref1.Keys[0].Value)
 	}
 
-	if ref1.ReferredSemanticId.Keys[0].Value != "Child1" {
-		t.Errorf("Unexpected child key value: %s", ref1.ReferredSemanticId.Keys[0].Value)
+	if ref1.ReferredSemanticID.Keys[0].Value != "Child1" {
+		t.Errorf("Unexpected child key value: %s", ref1.ReferredSemanticID.Keys[0].Value)
 	}
 
-	if ref1.ReferredSemanticId.ReferredSemanticId.Keys[0].Value != "Grandchild1" {
-		t.Errorf("Unexpected grandchild key value: %s", ref1.ReferredSemanticId.ReferredSemanticId.Keys[0].Value)
+	if ref1.ReferredSemanticID.ReferredSemanticID.Keys[0].Value != "Grandchild1" {
+		t.Errorf("Unexpected grandchild key value: %s", ref1.ReferredSemanticID.ReferredSemanticID.Keys[0].Value)
 	}
 }

@@ -14,22 +14,22 @@ type ErrorHandler struct {
 	MessageType   string `json:"messageType"`
 	Text          string `json:"text"`
 	Code          string `json:"code,omitempty"`
-	CorrelationId string `json:"correlationId,omitempty"`
+	CorrelationID string `json:"correlationID,omitempty"`
 	Timestamp     string `json:"timestamp,omitempty"`
 }
 
-func NewErrorHandler(messageType string, text error, code string, correlationId string, timestamp string) *ErrorHandler {
+func NewErrorHandler(messageType string, text error, code string, correlationID string, timestamp string) *ErrorHandler {
 	return &ErrorHandler{
 		MessageType:   messageType,
 		Text:          text.Error(),
 		Code:          code,
-		CorrelationId: correlationId,
+		CorrelationID: correlationID,
 		Timestamp:     timestamp,
 	}
 }
 
-func NewErrNotFound(elementId string) error {
-	return errors.New("404 Not Found: " + elementId)
+func NewErrNotFound(elementID string) error {
+	return errors.New("404 Not Found: " + elementID)
 }
 
 func NewErrBadRequest(message string) error {

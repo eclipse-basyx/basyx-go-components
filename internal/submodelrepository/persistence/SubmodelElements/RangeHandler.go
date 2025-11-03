@@ -47,14 +47,14 @@ func NewPostgreSQLRangeHandler(db *sql.DB) (*PostgreSQLRangeHandler, error) {
 	return &PostgreSQLRangeHandler{db: db, decorated: decoratedHandler}, nil
 }
 
-func (p PostgreSQLRangeHandler) Create(tx *sql.Tx, submodelId string, submodelElement gen.SubmodelElement) (int, error) {
+func (p PostgreSQLRangeHandler) Create(tx *sql.Tx, submodelID string, submodelElement gen.SubmodelElement) (int, error) {
 	rangeElem, ok := submodelElement.(*gen.Range)
 	if !ok {
 		return 0, errors.New("submodelElement is not of type Range")
 	}
 
 	// First, perform base SubmodelElement operations within the transaction
-	id, err := p.decorated.Create(tx, submodelId, submodelElement)
+	id, err := p.decorated.Create(tx, submodelID, submodelElement)
 	if err != nil {
 		return 0, err
 	}
@@ -68,14 +68,14 @@ func (p PostgreSQLRangeHandler) Create(tx *sql.Tx, submodelId string, submodelEl
 	return id, nil
 }
 
-func (p PostgreSQLRangeHandler) CreateNested(tx *sql.Tx, submodelId string, parentId int, idShortPath string, submodelElement gen.SubmodelElement, pos int) (int, error) {
+func (p PostgreSQLRangeHandler) CreateNested(tx *sql.Tx, submodelID string, parentID int, idShortPath string, submodelElement gen.SubmodelElement, pos int) (int, error) {
 	rangeElem, ok := submodelElement.(*gen.Range)
 	if !ok {
 		return 0, errors.New("submodelElement is not of type Range")
 	}
 
 	// Create the nested range with the provided idShortPath using the decorated handler
-	id, err := p.decorated.CreateAndPath(tx, submodelId, parentId, idShortPath, submodelElement, pos)
+	id, err := p.decorated.CreateAndPath(tx, submodelID, parentID, idShortPath, submodelElement, pos)
 	if err != nil {
 		return 0, err
 	}

@@ -13,9 +13,12 @@ import (
 	"fmt"
 )
 
+// DataTypeIec61360 type of DataTypeIec61360
 type DataTypeIec61360 string
 
 // List of DataTypeIec61360
+//
+//nolint:all
 const (
 	DATATYPEIEC61360_BLOB                DataTypeIec61360 = "Blob"
 	DATATYPEIEC61360_BOOLEAN             DataTypeIec61360 = "Boolean"
@@ -102,11 +105,15 @@ func NewDataTypeIec61360FromValue(v string) (DataTypeIec61360, error) {
 }
 
 // AssertDataTypeIec61360Required checks if the required fields are not zero-ed
+//
+//nolint:all
 func AssertDataTypeIec61360Required(obj DataTypeIec61360) error {
 	return nil
 }
 
 // AssertDataTypeIec61360Constraints checks if the values respects the defined constraints
+//
+//nolint:all
 func AssertDataTypeIec61360Constraints(obj DataTypeIec61360) error {
 	return nil
 }

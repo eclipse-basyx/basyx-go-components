@@ -202,7 +202,7 @@ func TestJSONValidation(t *testing.T) {
 		}
 
 		t.Run(name, func(t *testing.T) {
-			//t.Parallel()
+			// t.Parallel()
 
 			fullPath := filepath.Join(base, tc.File)
 			raw := mustReadFile(t, fullPath)

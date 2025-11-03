@@ -163,15 +163,15 @@ func GetSMEHandlerByModelType(modelType string, db *sql.DB) (PostgreSQLSMECrudIn
 	return handler, nil
 }
 
-func GetSubmodelElementsWithPath(db *sql.DB, tx *sql.Tx, submodelId string, idShortOrPath string, limit int, cursor string) ([]gen.SubmodelElement, string, error) {
+func GetSubmodelElementsWithPath(db *sql.DB, tx *sql.Tx, submodelID string, idShortOrPath string, limit int, cursor string) ([]gen.SubmodelElement, string, error) {
 	if limit < 1 {
 		limit = 100
 	}
-	//Check if Submodel exists
+	// Check if Submodel exists
 	ds := goqu.Dialect("postgres").
 		From("submodel").
 		Select("id").
-		Where(goqu.Ex{"id": submodelId})
+		Where(goqu.Ex{"id": submodelID})
 
 	qExist, argsExist, err := ds.ToSQL()
 	if err != nil {
@@ -197,7 +197,7 @@ func GetSubmodelElementsWithPath(db *sql.DB, tx *sql.Tx, submodelId string, idSh
 			).
 			Where(
 				goqu.Ex{
-					"submodel_id":   submodelId,
+					"submodel_id":   submodelID,
 					"parent_sme_id": nil,
 				},
 			)
@@ -235,7 +235,7 @@ func GetSubmodelElementsWithPath(db *sql.DB, tx *sql.Tx, submodelId string, idSh
 
 	// --- Build the unified query with CTE ----------------------------------------------------------
 	var cte string
-	args := []any{submodelId}
+	args := []any{submodelID}
 	if idShortOrPath != "" {
 		// Subtree: Fetch all elements in the subtree
 		cte = `
@@ -298,7 +298,7 @@ func GetSubmodelElementsWithPath(db *sql.DB, tx *sql.Tx, submodelId string, idSh
 			idShort, category, modelType, idShortPath string
 			position                                  sql.NullInt32
 			parentSmeID                               sql.NullInt64
-			semanticId                                sql.NullInt64
+			semanticID                                sql.NullInt64
 			// Property
 			propValueType, propValue sql.NullString
 			// Blob
@@ -312,14 +312,14 @@ func GetSubmodelElementsWithPath(db *sql.DB, tx *sql.Tx, submodelId string, idSh
 			typeValueListElement, valueTypeListElement sql.NullString
 			orderRelevant                              sql.NullBool
 			// MultiLanguageProperty
-			mlpValueId sql.NullInt64
+			mlpValueID sql.NullInt64
 			// ReferenceElement
 			refValueRef sql.NullInt64
 			// RelationshipElement
 			relFirstRef, relSecondRef sql.NullInt64
 			// Entity
 			entityType          sql.NullString
-			entityGlobalAssetId sql.NullString
+			entityGlobalAssetID sql.NullString
 			// BasicEventElement
 			beeObservedRef      sql.NullInt64
 			beeDirection        sql.NullString
@@ -332,25 +332,25 @@ func GetSubmodelElementsWithPath(db *sql.DB, tx *sql.Tx, submodelId string, idSh
 		)
 
 		if err := rows.Scan(
-			&id, &idShort, &category, &modelType, &idShortPath, &position, &parentSmeID, &semanticId,
+			&id, &idShort, &category, &modelType, &idShortPath, &position, &parentSmeID, &semanticID,
 			&propValueType, &propValue,
 			&blobContentType, &blobValue,
 			&fileContentType, &fileValue,
 			&rangeValueType, &rangeMin, &rangeMax,
 			&typeValueListElement, &valueTypeListElement, &orderRelevant,
-			&mlpValueId,
+			&mlpValueID,
 			&refValueRef,
 			&relFirstRef, &relSecondRef,
-			&entityType, &entityGlobalAssetId,
+			&entityType, &entityGlobalAssetID,
 			&beeObservedRef, &beeDirection, &beeState, &beeMessageTopic, &beeMessageBrokerRef, &beeLastUpdate, &beeMinInterval, &beeMaxInterval,
 		); err != nil {
 			return nil, "", err
 		}
 
 		// Materialize the concrete element based on modelType (no reflection)
-		var semanticIdObj *gen.Reference
-		if semanticId.Valid {
-			semanticIdObj, err = persistence_utils.GetReferenceByReferenceDBID(db, semanticId)
+		var semanticIDObj *gen.Reference
+		if semanticID.Valid {
+			semanticIDObj, err = persistence_utils.GetReferenceByReferenceDBID(db, semanticID)
 			if err != nil {
 				return nil, "", err
 			}
@@ -359,7 +359,7 @@ func GetSubmodelElementsWithPath(db *sql.DB, tx *sql.Tx, submodelId string, idSh
 		var el gen.SubmodelElement
 		switch modelType {
 		case "Property":
-			prop := &gen.Property{IdShort: idShort, Category: category, ModelType: modelType, SemanticId: semanticIdObj}
+			prop := &gen.Property{IdShort: idShort, Category: category, ModelType: modelType, SemanticID: semanticIDObj}
 			if propValueType.Valid {
 				if vt, err := gen.NewDataTypeDefXsdFromValue(propValueType.String); err == nil {
 					prop.ValueType = vt
@@ -372,11 +372,11 @@ func GetSubmodelElementsWithPath(db *sql.DB, tx *sql.Tx, submodelId string, idSh
 
 		case "MultiLanguageProperty":
 			// Values are in a separate table; we only hydrate the shell here.
-			mlp := &gen.MultiLanguageProperty{IdShort: idShort, Category: category, ModelType: modelType, SemanticId: semanticIdObj}
+			mlp := &gen.MultiLanguageProperty{IdShort: idShort, Category: category, ModelType: modelType, SemanticID: semanticIDObj}
 			el = mlp
 
 		case "Blob":
-			blob := &gen.Blob{IdShort: idShort, Category: category, ModelType: modelType, SemanticId: semanticIdObj}
+			blob := &gen.Blob{IdShort: idShort, Category: category, ModelType: modelType, SemanticID: semanticIDObj}
 			if blobContentType.Valid {
 				blob.ContentType = blobContentType.String
 			}
@@ -386,7 +386,7 @@ func GetSubmodelElementsWithPath(db *sql.DB, tx *sql.Tx, submodelId string, idSh
 			el = blob
 
 		case "File":
-			file := &gen.File{IdShort: idShort, Category: category, ModelType: modelType, SemanticId: semanticIdObj}
+			file := &gen.File{IdShort: idShort, Category: category, ModelType: modelType, SemanticID: semanticIDObj}
 			if fileContentType.Valid {
 				file.ContentType = fileContentType.String
 			}
@@ -396,7 +396,7 @@ func GetSubmodelElementsWithPath(db *sql.DB, tx *sql.Tx, submodelId string, idSh
 			el = file
 
 		case "Range":
-			rg := &gen.Range{IdShort: idShort, Category: category, ModelType: modelType, SemanticId: semanticIdObj}
+			rg := &gen.Range{IdShort: idShort, Category: category, ModelType: modelType, SemanticID: semanticIDObj}
 			if rangeValueType.Valid {
 				if vt, err := gen.NewDataTypeDefXsdFromValue(rangeValueType.String); err == nil {
 					rg.ValueType = vt
@@ -432,35 +432,35 @@ func GetSubmodelElementsWithPath(db *sql.DB, tx *sql.Tx, submodelId string, idSh
 			el = lst
 
 		case "ReferenceElement":
-			refElem := &gen.ReferenceElement{IdShort: idShort, Category: category, ModelType: modelType, SemanticId: semanticIdObj}
+			refElem := &gen.ReferenceElement{IdShort: idShort, Category: category, ModelType: modelType, SemanticID: semanticIDObj}
 			el = refElem
 
 		case "RelationshipElement":
-			relElem := &gen.RelationshipElement{IdShort: idShort, Category: category, ModelType: modelType, SemanticId: semanticIdObj}
+			relElem := &gen.RelationshipElement{IdShort: idShort, Category: category, ModelType: modelType, SemanticID: semanticIDObj}
 			el = relElem
 
 		case "AnnotatedRelationshipElement":
-			areElem := &gen.AnnotatedRelationshipElement{IdShort: idShort, Category: category, ModelType: modelType, SemanticId: semanticIdObj}
+			areElem := &gen.AnnotatedRelationshipElement{IdShort: idShort, Category: category, ModelType: modelType, SemanticID: semanticIDObj}
 			el = areElem
 
 		case "Entity":
-			entity := &gen.Entity{IdShort: idShort, Category: category, ModelType: modelType, SemanticId: semanticIdObj}
+			entity := &gen.Entity{IdShort: idShort, Category: category, ModelType: modelType, SemanticID: semanticIDObj}
 			if entityType.Valid {
 				if et, err := gen.NewEntityTypeFromValue(entityType.String); err == nil {
 					entity.EntityType = et
 				}
 			}
-			if entityGlobalAssetId.Valid {
-				entity.GlobalAssetId = entityGlobalAssetId.String
+			if entityGlobalAssetID.Valid {
+				entity.GlobalAssetID = entityGlobalAssetID.String
 			}
 			el = entity
 
 		case "Operation":
-			op := &gen.Operation{IdShort: idShort, Category: category, ModelType: modelType, SemanticId: semanticIdObj}
+			op := &gen.Operation{IdShort: idShort, Category: category, ModelType: modelType, SemanticID: semanticIDObj}
 			el = op
 
 		case "BasicEventElement":
-			bee := &gen.BasicEventElement{IdShort: idShort, Category: category, ModelType: modelType, SemanticId: semanticIdObj}
+			bee := &gen.BasicEventElement{IdShort: idShort, Category: category, ModelType: modelType, SemanticID: semanticIDObj}
 			if beeDirection.Valid {
 				if d, err := gen.NewDirectionFromValue(beeDirection.String); err == nil {
 					bee.Direction = d
@@ -481,7 +481,7 @@ func GetSubmodelElementsWithPath(db *sql.DB, tx *sql.Tx, submodelId string, idSh
 			el = bee
 
 		case "Capability":
-			cap := &gen.Capability{IdShort: idShort, Category: category, ModelType: modelType, SemanticId: semanticIdObj}
+			cap := &gen.Capability{IdShort: idShort, Category: category, ModelType: modelType, SemanticID: semanticIDObj}
 			el = cap
 
 		default:
@@ -618,9 +618,9 @@ func getSubmodelElementDataQueryPart() string {
 
 // This method removes a SubmodelElement by its idShort or path and all its nested elements
 // If the deleted Element is in a SubmodelElementList, the indices of the remaining elements are adjusted accordingly
-func DeleteSubmodelElementByPath(tx *sql.Tx, submodelId string, idShortOrPath string) error {
+func DeleteSubmodelElementByPath(tx *sql.Tx, submodelID string, idShortOrPath string) error {
 	query := `DELETE FROM submodel_element WHERE submodel_id = $1 AND (idshort_path = $2 OR idshort_path LIKE $2 || '.%' OR idshort_path LIKE $2 || '[%')`
-	result, err := tx.Exec(query, submodelId, idShortOrPath)
+	result, err := tx.Exec(query, submodelID, idShortOrPath)
 	if err != nil {
 		return err
 	}
@@ -628,9 +628,9 @@ func DeleteSubmodelElementByPath(tx *sql.Tx, submodelId string, idShortOrPath st
 	if err != nil {
 		return err
 	}
-	//if idShortPath ends with ] it is part of a SubmodelElementList and we need to update the indices of the remaining elements
+	// if idShortPath ends with ] it is part of a SubmodelElementList and we need to update the indices of the remaining elements
 	if idShortOrPath[len(idShortOrPath)-1] == ']' {
-		//extract the parent path and the index of the deleted element
+		// extract the parent path and the index of the deleted element
 		var parentPath string
 		var deletedIndex int
 		for i := len(idShortOrPath) - 1; i >= 0; i-- {
@@ -646,22 +646,22 @@ func DeleteSubmodelElementByPath(tx *sql.Tx, submodelId string, idShortOrPath st
 			}
 		}
 
-		//get the id of the parent SubmodelElementList
-		var parentId int
-		err = tx.QueryRow(`SELECT id FROM submodel_element WHERE submodel_id = $1 AND idshort_path = $2`, submodelId, parentPath).Scan(&parentId)
+		// get the id of the parent SubmodelElementList
+		var parentID int
+		err = tx.QueryRow(`SELECT id FROM submodel_element WHERE submodel_id = $1 AND idshort_path = $2`, submodelID, parentPath).Scan(&parentID)
 		if err != nil {
 			return err
 		}
 
-		//update the indices of the remaining elements in the SubmodelElementList
+		// update the indices of the remaining elements in the SubmodelElementList
 		updateQuery := `UPDATE submodel_element SET position = position - 1 WHERE parent_sme_id = $1 AND position > $2`
-		_, err = tx.Exec(updateQuery, parentId, deletedIndex)
+		_, err = tx.Exec(updateQuery, parentID, deletedIndex)
 		if err != nil {
 			return err
 		}
 		// update their idshort_path as well
 		updatePathQuery := `UPDATE submodel_element SET idshort_path = regexp_replace(idshort_path, '\[' || (position + 1) || '\]', '[' || position || ']') WHERE parent_sme_id = $1 AND position >= $2`
-		_, err = tx.Exec(updatePathQuery, parentId, deletedIndex)
+		_, err = tx.Exec(updatePathQuery, parentID, deletedIndex)
 		if err != nil {
 			return err
 		}

@@ -9,11 +9,13 @@
 
 package model
 
+// RelationshipElementAbstract Relationship element abstract
 type RelationshipElementAbstract struct {
 	Extensions []Extension `json:"extensions,omitempty"`
 
 	Category string `json:"category,omitempty" validate:"regexp=^([\\\\x09\\\\x0a\\\\x0d\\\\x20-\\\\ud7ff\\\\ue000-\\\\ufffd]|\\\\ud800[\\\\udc00-\\\\udfff]|[\\\\ud801-\\\\udbfe][\\\\udc00-\\\\udfff]|\\\\udbff[\\\\udc00-\\\\udfff])*$"`
 
+	//nolint:all
 	IdShort string `json:"idShort,omitempty"`
 
 	DisplayName []LangStringNameType `json:"displayName,omitempty"`
@@ -22,8 +24,10 @@ type RelationshipElementAbstract struct {
 
 	ModelType ModelType `json:"modelType"`
 
-	SemanticId *Reference `json:"semanticId,omitempty"`
+	//nolint:all
+	SemanticID *Reference `json:"semanticID,omitempty"`
 
+	//nolint:all
 	SupplementalSemanticIds []Reference `json:"supplementalSemanticIds,omitempty"`
 
 	Qualifiers []Qualifier `json:"qualifiers,omitempty"`
@@ -53,7 +57,7 @@ func AssertRelationshipElementAbstractRequired(obj RelationshipElementAbstract) 
 			return err
 		}
 	}
-	if err := AssertReferableAllOfIdShortRequired(obj.IdShort); err != nil {
+	if err := AssertIdShortRequired(obj.IdShort); err != nil {
 		return err
 	}
 	for _, el := range obj.DisplayName {
@@ -66,7 +70,7 @@ func AssertRelationshipElementAbstractRequired(obj RelationshipElementAbstract) 
 			return err
 		}
 	}
-	if err := AssertReferenceRequired(*obj.SemanticId); err != nil {
+	if err := AssertReferenceRequired(*obj.SemanticID); err != nil {
 		return err
 	}
 	for _, el := range obj.SupplementalSemanticIds {
@@ -104,7 +108,7 @@ func AssertRelationshipElementAbstractConstraints(obj RelationshipElementAbstrac
 			return err
 		}
 	}
-	if err := AssertReferableAllOfIdShortConstraints(obj.IdShort); err != nil {
+	if err := AssertstringConstraints(obj.IdShort); err != nil {
 		return err
 	}
 	for _, el := range obj.DisplayName {
@@ -117,7 +121,7 @@ func AssertRelationshipElementAbstractConstraints(obj RelationshipElementAbstrac
 			return err
 		}
 	}
-	if err := AssertReferenceConstraints(*obj.SemanticId); err != nil {
+	if err := AssertReferenceConstraints(*obj.SemanticID); err != nil {
 		return err
 	}
 	for _, el := range obj.SupplementalSemanticIds {

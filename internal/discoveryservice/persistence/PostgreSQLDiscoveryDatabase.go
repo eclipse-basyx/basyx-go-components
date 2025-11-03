@@ -42,7 +42,7 @@ func NewPostgreSQLDiscoveryBackend(dsn string, maxConns int) (*PostgreSQLDiscove
 	return &PostgreSQLDiscoveryDatabase{pool: pool}, nil
 }
 
-func (p *PostgreSQLDiscoveryDatabase) GetAllAssetLinks(aasID string) ([]model.SpecificAssetId, error) {
+func (p *PostgreSQLDiscoveryDatabase) GetAllAssetLinks(aasID string) ([]model.SpecificAssetID, error) {
 	ctx := context.Background()
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
@@ -52,7 +52,7 @@ func (p *PostgreSQLDiscoveryDatabase) GetAllAssetLinks(aasID string) ([]model.Sp
 	defer tx.Rollback(ctx)
 
 	var referenceID int64
-	if err := tx.QueryRow(ctx, `SELECT id FROM aas_identifier WHERE aasId = $1`, aasID).Scan(&referenceID); err != nil {
+	if err := tx.QueryRow(ctx, `SELECT id FROM aas_identifier WHERE aasID = $1`, aasID).Scan(&referenceID); err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, common.NewErrNotFound("AAS identifier '" + aasID + "'")
 		}
@@ -67,14 +67,14 @@ func (p *PostgreSQLDiscoveryDatabase) GetAllAssetLinks(aasID string) ([]model.Sp
 	}
 	defer rows.Close()
 
-	var result []model.SpecificAssetId
+	var result []model.SpecificAssetID
 	for rows.Next() {
 		var name, value string
 		if err := rows.Scan(&name, &value); err != nil {
 			fmt.Println(err)
 			return nil, common.NewInternalServerError("Failed to scan asset link. See console for information.")
 		}
-		result = append(result, model.SpecificAssetId{
+		result = append(result, model.SpecificAssetID{
 			Name:  name,
 			Value: value,
 		})
@@ -95,7 +95,7 @@ func (p *PostgreSQLDiscoveryDatabase) GetAllAssetLinks(aasID string) ([]model.Sp
 func (p *PostgreSQLDiscoveryDatabase) DeleteAllAssetLinks(aasID string) error {
 	ctx := context.Background()
 
-	tag, err := p.pool.Exec(ctx, `DELETE FROM aas_identifier WHERE aasId = $1`, aasID)
+	tag, err := p.pool.Exec(ctx, `DELETE FROM aas_identifier WHERE aasID = $1`, aasID)
 	if err != nil {
 		fmt.Println(err)
 		return common.NewInternalServerError("Failed to delete AAS identifier. See console for information.")
@@ -106,7 +106,7 @@ func (p *PostgreSQLDiscoveryDatabase) DeleteAllAssetLinks(aasID string) error {
 	return nil
 }
 
-func (p *PostgreSQLDiscoveryDatabase) CreateAllAssetLinks(aas_id string, specific_asset_ids []model.SpecificAssetId) error {
+func (p *PostgreSQLDiscoveryDatabase) CreateAllAssetLinks(aas_id string, specific_asset_ids []model.SpecificAssetID) error {
 	ctx := context.Background()
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
@@ -116,7 +116,7 @@ func (p *PostgreSQLDiscoveryDatabase) CreateAllAssetLinks(aas_id string, specifi
 	defer tx.Rollback(ctx)
 
 	var referenceID int64
-	err = tx.QueryRow(ctx, "INSERT INTO aas_identifier (aasId) VALUES ($1) ON CONFLICT (aasId) DO UPDATE SET aasId = EXCLUDED.aasId RETURNING id", aas_id).Scan(&referenceID)
+	err = tx.QueryRow(ctx, "INSERT INTO aas_identifier (aasID) VALUES ($1) ON CONFLICT (aasID) DO UPDATE SET aasID = EXCLUDED.aasID RETURNING id", aas_id).Scan(&referenceID)
 	if err != nil {
 		fmt.Println(err)
 		return common.NewInternalServerError("Failed to insert aas identifier. See console for information.")
@@ -164,7 +164,7 @@ func (p *PostgreSQLDiscoveryDatabase) SearchAASIDsByAssetLinks(
 
 	args := []any{}
 	argPos := 1
-	whereCursor := fmt.Sprintf("( $%d = '' OR ai.aasId >= $%d )", argPos, argPos)
+	whereCursor := fmt.Sprintf("( $%d = '' OR ai.aasID >= $%d )", argPos, argPos)
 	args = append(args, cursor)
 	argPos++
 
@@ -174,7 +174,7 @@ func (p *PostgreSQLDiscoveryDatabase) SearchAASIDsByAssetLinks(
 			SELECT ai.aasId
 			FROM aas_identifier ai
 			WHERE %s
-			ORDER BY ai.aasId ASC
+			ORDER BY ai.aasID ASC
 			LIMIT $%d
 		`, whereCursor, argPos)
 		args = append(args, peekLimit)
@@ -198,7 +198,7 @@ func (p *PostgreSQLDiscoveryDatabase) SearchAASIDsByAssetLinks(
 			WHERE %s
 			GROUP BY ai.aasId
 			HAVING COUNT(DISTINCT (al.name, al.value)) = (SELECT COUNT(*) FROM v)
-			ORDER BY ai.aasId ASC
+			ORDER BY ai.aasID ASC
 			LIMIT $%d
 		`, valuesSQL.String(), whereCursor, argPos)
 		args = append(args, peekLimit)

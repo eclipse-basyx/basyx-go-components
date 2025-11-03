@@ -34,7 +34,7 @@ import (
 )
 
 // QualifiersBuilder constructs Qualifier objects with their associated references
-// (SemanticId, ValueId, SupplementalSemanticIds) from flattened database rows.
+// (SemanticID, ValueID, SupplementalSemanticIds) from flattened database rows.
 // It handles the complexity of building qualifiers with nested reference structures
 // where references can contain ReferredSemanticIds.
 //
@@ -66,7 +66,7 @@ func NewQualifiersBuilder() *QualifiersBuilder {
 // with a warning message.
 //
 // Parameters:
-//   - qualifierDbId: The database ID of the qualifier for tracking and duplicate detection
+//   - qualifierDbID: The database ID of the qualifier for tracking and duplicate detection
 //   - kind: The kind of qualifier (e.g., "ConceptQualifier", "ValueQualifier", "TemplateQualifier")
 //   - qType: The type that qualifies the qualifier itself (semantic identifier)
 //   - valueType: The data type of the qualifier value (e.g., "xs:string", "xs:boolean", "xs:int")
@@ -85,15 +85,15 @@ func NewQualifiersBuilder() *QualifiersBuilder {
 //	builder := NewQualifiersBuilder()
 //	builder.AddQualifier(1, "ConceptQualifier", "ExpressionSemantic", "xs:string", "example value")
 //	builder.AddQualifier(2, "ValueQualifier", "ExpressionLogic", "xs:boolean", "true")
-func (b *QualifiersBuilder) AddQualifier(qualifierDbId int64, kind string, qType string, valueType string, value string) (*QualifiersBuilder, error) {
-	_, exists := b.qualifiers[qualifierDbId]
+func (b *QualifiersBuilder) AddQualifier(qualifierDbID int64, kind string, qType string, valueType string, value string) (*QualifiersBuilder, error) {
+	_, exists := b.qualifiers[qualifierDbID]
 	if !exists {
 		ValueType, err := gen.NewDataTypeDefXsdFromValue(valueType)
 		if err != nil {
 			fmt.Println(err)
-			return nil, fmt.Errorf("error parsing ValueType for Qualifier '%d' to Go Struct. See console for details", qualifierDbId)
+			return nil, fmt.Errorf("error parsing ValueType for Qualifier '%d' to Go Struct. See console for details", qualifierDbID)
 		}
-		b.qualifiers[qualifierDbId] = &gen.Qualifier{
+		b.qualifiers[qualifierDbID] = &gen.Qualifier{
 			Type:      qType,
 			ValueType: ValueType,
 			Value:     value,
@@ -103,21 +103,21 @@ func (b *QualifiersBuilder) AddQualifier(qualifierDbId int64, kind string, qType
 			Kind, err := gen.NewQualifierKindFromValue(kind)
 			if err != nil {
 				fmt.Println(err)
-				return nil, fmt.Errorf("error parsing Qualifier Kind to Go Struct for Qualifier '%d'. See console for details", qualifierDbId)
+				return nil, fmt.Errorf("error parsing Qualifier Kind to Go Struct for Qualifier '%d'. See console for details", qualifierDbID)
 			}
-			b.qualifiers[qualifierDbId].Kind = Kind
+			b.qualifiers[qualifierDbID].Kind = Kind
 		}
 	} else {
-		fmt.Printf("[Warning] qualifier with id '%d' already exists - skipping.", qualifierDbId)
+		fmt.Printf("[Warning] qualifier with id '%d' already exists - skipping.", qualifierDbID)
 	}
 	return b, nil
 }
 
-// AddSemanticId adds a SemanticId reference to a qualifier. This method expects exactly one reference and will return an error if zero or
+// AddSemanticID adds a SemanticID reference to a qualifier. This method expects exactly one reference and will return an error if zero or
 // multiple references are provided.
 //
 // Parameters:
-//   - qualifierDbId: The database ID of the qualifier to add the SemanticId to
+//   - qualifierDbID: The database ID of the qualifier to add the SemanticID to
 //   - semanticIdRows: JSON-encoded array of ReferenceRow objects representing the SemanticId
 //   - semanticIdReferredSemanticIdRows: JSON-encoded array of ReferredReferenceRow objects
 //     representing nested ReferredSemanticIds within the SemanticId
@@ -133,28 +133,28 @@ func (b *QualifiersBuilder) AddQualifier(qualifierDbId int64, kind string, qType
 //
 // Example:
 //
-//	builder.AddSemanticId(1, semanticIdJSON, referredSemanticIdJSON)
-func (b *QualifiersBuilder) AddSemanticId(qualifierDbId int64, semanticIdRows json.RawMessage, semanticIdReferredSemanticIdRows json.RawMessage) (*QualifiersBuilder, error) {
-	qualifier := b.qualifiers[qualifierDbId]
+//	builder.AddSemanticID(1, semanticIdJSON, referredSemanticIdJSON)
+func (b *QualifiersBuilder) AddSemanticID(qualifierDbID int64, semanticIdRows json.RawMessage, semanticIdReferredSemanticIdRows json.RawMessage) (*QualifiersBuilder, error) {
+	qualifier := b.qualifiers[qualifierDbID]
 
-	semanticId, err := b.createExactlyOneReference(qualifierDbId, semanticIdRows, semanticIdReferredSemanticIdRows, "SemanticID")
+	semanticID, err := b.createExactlyOneReference(qualifierDbID, semanticIdRows, semanticIdReferredSemanticIdRows, "SemanticID")
 
 	if err != nil {
 		return nil, err
 	}
 
-	qualifier.SemanticId = semanticId
+	qualifier.SemanticID = semanticID
 
 	return b, nil
 }
 
-// AddValueId adds a ValueId reference to a qualifier. The ValueId references the value
+// AddValueID adds a ValueID reference to a qualifier. The ValueID references the value
 // of the qualifier in a global, unique way, allowing the qualifier's value to be
 // semantically interpreted across different contexts. This method expects exactly one
 // reference and will return an error if zero or multiple references are provided.
 //
 // Parameters:
-//   - qualifierDbId: The database ID of the qualifier to add the ValueId to
+//   - qualifierDbID: The database ID of the qualifier to add the ValueID to
 //   - valueIdRows: JSON-encoded array of ReferenceRow objects representing the ValueId
 //   - valueIdReferredSemanticIdRows: JSON-encoded array of ReferredReferenceRow objects
 //     representing nested ReferredSemanticIds within the ValueId
@@ -170,26 +170,26 @@ func (b *QualifiersBuilder) AddSemanticId(qualifierDbId int64, semanticIdRows js
 //
 // Example:
 //
-//	builder.AddValueId(1, valueIdJSON, referredSemanticIdJSON)
-func (b *QualifiersBuilder) AddValueId(qualifierDbId int64, valueIdRows json.RawMessage, valueIdReferredSemanticIdRows json.RawMessage) (*QualifiersBuilder, error) {
-	qualifier := b.qualifiers[qualifierDbId]
+//	builder.AddValueID(1, valueIdJSON, referredSemanticIdJSON)
+func (b *QualifiersBuilder) AddValueID(qualifierDbID int64, valueIdRows json.RawMessage, valueIdReferredSemanticIdRows json.RawMessage) (*QualifiersBuilder, error) {
+	qualifier := b.qualifiers[qualifierDbID]
 
-	valueId, err := b.createExactlyOneReference(qualifierDbId, valueIdRows, valueIdReferredSemanticIdRows, "ValueId")
+	valueID, err := b.createExactlyOneReference(qualifierDbID, valueIdRows, valueIdReferredSemanticIdRows, "ValueId")
 
 	if err != nil {
 		return nil, err
 	}
 
-	qualifier.ValueId = valueId
+	qualifier.ValueID = valueID
 	return b, nil
 }
 
 // AddSupplementalSemanticIds adds supplemental semantic IDs to a qualifier. Supplemental
-// semantic IDs provide additional semantic context beyond the primary SemanticId, allowing
+// semantic IDs provide additional semantic context beyond the primary SemanticID, allowing
 // multiple semantic interpretations or classifications to be associated with a qualifier.
 //
 // Parameters:
-//   - qualifierDbId: The database ID of the qualifier to add the supplemental semantic IDs to
+//   - qualifierDbID: The database ID of the qualifier to add the supplemental semantic IDs to
 //   - supplementalSemanticIdsRows: JSON-encoded array of ReferenceRow objects representing
 //     the supplemental semantic ID references
 //   - supplementalSemanticIdsReferredSemanticIdRows: JSON-encoded array of ReferredReferenceRow
@@ -199,18 +199,18 @@ func (b *QualifiersBuilder) AddValueId(qualifierDbId int64, valueIdRows json.Raw
 //   - *QualifiersBuilder: Returns the builder instance for method chaining
 //   - error: Returns an error if the qualifier doesn't exist or if parsing fails, nil otherwise
 //
-// Unlike AddSemanticId and AddValueId, this method accepts multiple references (zero or more)
+// Unlike AddSemanticID and AddValueID, this method accepts multiple references (zero or more)
 // as supplemental semantic IDs are inherently a collection. Each reference can have its own
-// nested ReferredSemanticId hierarchy.
+// nested ReferredSemanticID hierarchy.
 //
 // Example:
 //
 //	builder.AddSupplementalSemanticIds(1, supplementalSemanticIdsJSON, referredSemanticIdsJSON)
-func (b *QualifiersBuilder) AddSupplementalSemanticIds(qualifierDbId int64, supplementalSemanticIdsRows json.RawMessage, supplementalSemanticIdsReferredSemanticIdRows json.RawMessage) (*QualifiersBuilder, error) {
-	qualifier, exists := b.qualifiers[qualifierDbId]
+func (b *QualifiersBuilder) AddSupplementalSemanticIds(qualifierDbID int64, supplementalSemanticIdsRows json.RawMessage, supplementalSemanticIdsReferredSemanticIdRows json.RawMessage) (*QualifiersBuilder, error) {
+	qualifier, exists := b.qualifiers[qualifierDbID]
 
 	if !exists {
-		return nil, fmt.Errorf("tried to add SupplementalSemanticIds to Qualifier '%d' before creating the Qualifier itself", qualifierDbId)
+		return nil, fmt.Errorf("tried to add SupplementalSemanticIds to Qualifier '%d' before creating the Qualifier itself", qualifierDbID)
 	}
 
 	refs, err := ParseReferences(supplementalSemanticIdsRows, b.refBuilderMap)
@@ -234,11 +234,11 @@ func (b *QualifiersBuilder) AddSupplementalSemanticIds(qualifierDbId int64, supp
 	return b, nil
 }
 
-func (b *QualifiersBuilder) createExactlyOneReference(qualifierDbId int64, refRows json.RawMessage, referredRefRows json.RawMessage, Type string) (*gen.Reference, error) {
-	_, exists := b.qualifiers[qualifierDbId]
+func (b *QualifiersBuilder) createExactlyOneReference(qualifierDbID int64, refRows json.RawMessage, referredRefRows json.RawMessage, Type string) (*gen.Reference, error) {
+	_, exists := b.qualifiers[qualifierDbID]
 
 	if !exists {
-		return nil, fmt.Errorf("tried to add %s to Qualifier '%d' before creating the Qualifier itself", Type, qualifierDbId)
+		return nil, fmt.Errorf("tried to add %s to Qualifier '%d' before creating the Qualifier itself", Type, qualifierDbID)
 	}
 
 	refs, err := ParseReferences(refRows, b.refBuilderMap)
@@ -252,7 +252,7 @@ func (b *QualifiersBuilder) createExactlyOneReference(qualifierDbId int64, refRo
 	}
 
 	if len(refs) != 1 {
-		return nil, fmt.Errorf("expected exactly one or no %s for Qualifier '%d' but got %d", Type, qualifierDbId, len(refs))
+		return nil, fmt.Errorf("expected exactly one or no %s for Qualifier '%d' but got %d", Type, qualifierDbID, len(refs))
 	}
 
 	return refs[0], nil
@@ -263,7 +263,7 @@ func (b *QualifiersBuilder) createExactlyOneReference(qualifierDbId int64, refRo
 // through the Add* methods. It performs the following operations:
 //
 //  1. Calls BuildNestedStructure() on all ReferenceBuilders to construct the hierarchical
-//     ReferredSemanticId trees within each reference
+//     ReferredSemanticID trees within each reference
 //  2. Collects all qualifiers from the internal map into a slice for return
 //
 // Returns:
@@ -281,12 +281,12 @@ func (b *QualifiersBuilder) createExactlyOneReference(qualifierDbId int64, refRo
 //
 //	// 2. Add qualifiers and their references (typically in a loop over database rows)
 //	builder.AddQualifier(1, "ConceptQualifier", "ExpressionSemantic", "xs:string", "example")
-//	builder.AddSemanticId(1, semanticIdRows, referredSemanticIdRows)
-//	builder.AddValueId(1, valueIdRows, referredValueIdRows)
+//	builder.AddSemanticID(1, semanticIdRows, referredSemanticIdRows)
+//	builder.AddValueID(1, valueIdRows, referredValueIdRows)
 //	builder.AddSupplementalSemanticIds(1, supplSemanticIdsRows, supplReferredRows)
 //
 //	builder.AddQualifier(2, "ValueQualifier", "ExpressionLogic", "xs:boolean", "true")
-//	builder.AddValueId(2, valueIdRows2, referredValueIdRows2)
+//	builder.AddValueID(2, valueIdRows2, referredValueIdRows2)
 //
 //	// 3. Build and retrieve the final qualifiers
 //	qualifiers := builder.Build()

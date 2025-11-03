@@ -47,14 +47,14 @@ func NewPostgreSQLRelationshipElementHandler(db *sql.DB) (*PostgreSQLRelationshi
 	return &PostgreSQLRelationshipElementHandler{db: db, decorated: decoratedHandler}, nil
 }
 
-func (p PostgreSQLRelationshipElementHandler) Create(tx *sql.Tx, submodelId string, submodelElement gen.SubmodelElement) (int, error) {
+func (p PostgreSQLRelationshipElementHandler) Create(tx *sql.Tx, submodelID string, submodelElement gen.SubmodelElement) (int, error) {
 	relElem, ok := submodelElement.(*gen.RelationshipElement)
 	if !ok {
 		return 0, errors.New("submodelElement is not of type RelationshipElement")
 	}
 
 	// First, perform base SubmodelElement operations within the transaction
-	id, err := p.decorated.Create(tx, submodelId, submodelElement)
+	id, err := p.decorated.Create(tx, submodelID, submodelElement)
 	if err != nil {
 		return 0, err
 	}
@@ -68,14 +68,14 @@ func (p PostgreSQLRelationshipElementHandler) Create(tx *sql.Tx, submodelId stri
 	return id, nil
 }
 
-func (p PostgreSQLRelationshipElementHandler) CreateNested(tx *sql.Tx, submodelId string, parentId int, idShortPath string, submodelElement gen.SubmodelElement, pos int) (int, error) {
+func (p PostgreSQLRelationshipElementHandler) CreateNested(tx *sql.Tx, submodelID string, parentID int, idShortPath string, submodelElement gen.SubmodelElement, pos int) (int, error) {
 	relElem, ok := submodelElement.(*gen.RelationshipElement)
 	if !ok {
 		return 0, errors.New("submodelElement is not of type RelationshipElement")
 	}
 
 	// Create the nested relElem with the provided idShortPath using the decorated handler
-	id, err := p.decorated.CreateAndPath(tx, submodelId, parentId, idShortPath, submodelElement, pos)
+	id, err := p.decorated.CreateAndPath(tx, submodelID, parentID, idShortPath, submodelElement, pos)
 	if err != nil {
 		return 0, err
 	}
@@ -103,41 +103,41 @@ func (p PostgreSQLRelationshipElementHandler) Delete(idShortOrPath string) error
 }
 
 func insertRelationshipElement(relElem *gen.RelationshipElement, tx *sql.Tx, id int) error {
-	var firstRefId, secondRefId sql.NullInt64
+	var firstRefID, secondRefID sql.NullInt64
 
 	if !isEmptyReference(relElem.First) {
-		refId, err := insertReference(tx, *relElem.First)
+		refID, err := insertReference(tx, *relElem.First)
 		if err != nil {
 			return err
 		}
-		firstRefId = sql.NullInt64{Int64: int64(refId), Valid: true}
+		firstRefID = sql.NullInt64{Int64: int64(refID), Valid: true}
 	}
 
 	if !isEmptyReference(relElem.Second) {
-		refId, err := insertReference(tx, *relElem.Second)
+		refID, err := insertReference(tx, *relElem.Second)
 		if err != nil {
 			return err
 		}
-		secondRefId = sql.NullInt64{Int64: int64(refId), Valid: true}
+		secondRefID = sql.NullInt64{Int64: int64(refID), Valid: true}
 	}
 
 	_, err := tx.Exec(`INSERT INTO relationship_element (id, first_ref, second_ref) VALUES ($1, $2, $3)`,
-		id, firstRefId, secondRefId)
+		id, firstRefID, secondRefID)
 	return err
 }
 
 func insertReference(tx *sql.Tx, ref gen.Reference) (int, error) {
-	var refId int
-	err := tx.QueryRow(`INSERT INTO reference (type) VALUES ($1) RETURNING id`, ref.Type).Scan(&refId)
+	var refID int
+	err := tx.QueryRow(`INSERT INTO reference (type) VALUES ($1) RETURNING id`, ref.Type).Scan(&refID)
 	if err != nil {
 		return 0, err
 	}
 	for i, key := range ref.Keys {
 		_, err = tx.Exec(`INSERT INTO reference_key (reference_id, position, type, value) VALUES ($1, $2, $3, $4)`,
-			refId, i, key.Type, key.Value)
+			refID, i, key.Type, key.Value)
 		if err != nil {
 			return 0, err
 		}
 	}
-	return refId, nil
+	return refID, nil
 }

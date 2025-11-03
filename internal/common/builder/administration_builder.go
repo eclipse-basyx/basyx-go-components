@@ -23,7 +23,8 @@
 * SPDX-License-Identifier: MIT
 ******************************************************************************/
 
-// Author: Jannik Fried ( Fraunhofer IESE )
+// Package builder provides utilities for constructing complex AAS (Asset Administration Shell)
+// data structures from database query results.
 package builder
 
 import (
@@ -32,11 +33,34 @@ import (
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
 
+// BuildAdministration constructs an AdministrativeInformation object from database query results.
+// It processes administrative metadata including version, revision, template ID, creator references,
+// and embedded data specifications.
+//
+// The function handles the complexity of building nested reference structures for the creator
+// field and processes IEC 61360 data specifications with their hierarchical reference trees.
+//
+// Parameters:
+//   - adminRow: An AdministrationRow containing administrative data from the database, including
+//     version information, creator references, and embedded data specifications
+//
+// Returns:
+//   - *gen.AdministrativeInformation: A pointer to the constructed administrative information object
+//     with all nested references and data specifications properly built
+//   - error: An error if reference parsing fails, nil otherwise. Note that errors during embedded
+//     data specification building are logged but do not cause the function to fail
+//
+// Example:
+//
+//	admin, err := BuildAdministration(adminRow)
+//	if err != nil {
+//	    log.Printf("Failed to build administration: %v", err)
+//	}
 func BuildAdministration(adminRow AdministrationRow) (*gen.AdministrativeInformation, error) {
 	administration := &gen.AdministrativeInformation{
 		Version:    adminRow.Version,
 		Revision:   adminRow.Revision,
-		TemplateId: adminRow.TemplateId,
+		TemplateID: adminRow.TemplateID,
 	}
 
 	refBuilderMap := make(map[int64]*ReferenceBuilder)
@@ -46,7 +70,9 @@ func BuildAdministration(adminRow AdministrationRow) (*gen.AdministrativeInforma
 		return nil, err
 	}
 
-	ParseReferredReferences(adminRow.CreatorReferred, refBuilderMap)
+	if err = ParseReferredReferences(adminRow.CreatorReferred, refBuilderMap); err != nil {
+		return nil, err
+	}
 
 	if len(refs) > 0 {
 		administration.Creator = refs[0]

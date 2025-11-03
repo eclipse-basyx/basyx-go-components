@@ -47,14 +47,14 @@ func NewPostgreSQLCapabilityHandler(db *sql.DB) (*PostgreSQLCapabilityHandler, e
 	return &PostgreSQLCapabilityHandler{db: db, decorated: decoratedHandler}, nil
 }
 
-func (p PostgreSQLCapabilityHandler) Create(tx *sql.Tx, submodelId string, submodelElement gen.SubmodelElement) (int, error) {
+func (p PostgreSQLCapabilityHandler) Create(tx *sql.Tx, submodelID string, submodelElement gen.SubmodelElement) (int, error) {
 	capability, ok := submodelElement.(*gen.Capability)
 	if !ok {
 		return 0, errors.New("submodelElement is not of type Capability")
 	}
 
 	// First, perform base SubmodelElement operations within the transaction
-	id, err := p.decorated.Create(tx, submodelId, submodelElement)
+	id, err := p.decorated.Create(tx, submodelID, submodelElement)
 	if err != nil {
 		return 0, err
 	}
@@ -68,14 +68,14 @@ func (p PostgreSQLCapabilityHandler) Create(tx *sql.Tx, submodelId string, submo
 	return id, nil
 }
 
-func (p PostgreSQLCapabilityHandler) CreateNested(tx *sql.Tx, submodelId string, parentId int, idShortPath string, submodelElement gen.SubmodelElement, pos int) (int, error) {
+func (p PostgreSQLCapabilityHandler) CreateNested(tx *sql.Tx, submodelID string, parentID int, idShortPath string, submodelElement gen.SubmodelElement, pos int) (int, error) {
 	capability, ok := submodelElement.(*gen.Capability)
 	if !ok {
 		return 0, errors.New("submodelElement is not of type Capability")
 	}
 
 	// Create the nested capability with the provided idShortPath using the decorated handler
-	id, err := p.decorated.CreateAndPath(tx, submodelId, parentId, idShortPath, submodelElement, pos)
+	id, err := p.decorated.CreateAndPath(tx, submodelID, parentID, idShortPath, submodelElement, pos)
 	if err != nil {
 		return 0, err
 	}

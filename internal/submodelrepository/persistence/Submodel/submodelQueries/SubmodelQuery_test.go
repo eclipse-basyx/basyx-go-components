@@ -23,7 +23,7 @@
 * SPDX-License-Identifier: MIT
 ******************************************************************************/
 
-package submodel_query
+package submodelQueries
 
 import (
 	"strings"
@@ -93,7 +93,7 @@ func TestAddPaginationToQuery(t *testing.T) {
 func TestGetQueryWithGoquPagination(t *testing.T) {
 	tests := []struct {
 		name        string
-		submodelId  string
+		submodelID  string
 		limit       int64
 		cursor      string
 		aasQuery    *grammar.QueryWrapper
@@ -102,7 +102,7 @@ func TestGetQueryWithGoquPagination(t *testing.T) {
 	}{
 		{
 			name:       "basic pagination",
-			submodelId: "",
+			submodelID: "",
 			limit:      10,
 			cursor:     "",
 			aasQuery:   nil,
@@ -114,7 +114,7 @@ func TestGetQueryWithGoquPagination(t *testing.T) {
 		},
 		{
 			name:       "with cursor",
-			submodelId: "",
+			submodelID: "",
 			limit:      5,
 			cursor:     "test-submodel",
 			aasQuery:   nil,
@@ -127,7 +127,7 @@ func TestGetQueryWithGoquPagination(t *testing.T) {
 		},
 		{
 			name:        "no pagination",
-			submodelId:  "",
+			submodelID:  "",
 			limit:       0,
 			cursor:      "",
 			aasQuery:    nil,
@@ -139,7 +139,7 @@ func TestGetQueryWithGoquPagination(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			sql, err := GetQueryWithGoqu(tt.submodelId, tt.limit, tt.cursor, tt.aasQuery)
+			sql, err := GetQueryWithGoqu(tt.submodelID, tt.limit, tt.cursor, tt.aasQuery)
 
 			if tt.shouldError {
 				if err == nil {

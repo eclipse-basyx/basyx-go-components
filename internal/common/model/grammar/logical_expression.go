@@ -23,6 +23,7 @@
 * SPDX-License-Identifier: MIT
 ******************************************************************************/
 
+// Package grammar defines the data structures for representing logical expressions in the grammar model.
 // Author: Aaron Zielstorff ( Fraunhofer IESE ), Jannik Fried ( Fraunhofer IESE )
 package grammar
 
@@ -239,15 +240,15 @@ func HandleComparison(leftOperand, rightOperand *Value, operation string) (exp.E
 		}
 	}
 
-	// Check if either operand is $sm#semanticId field
-	isLeftShorthandSemanticId := isSemanticIdShorthandField(leftOperand)
-	isRightShorthandSemanticId := isSemanticIdShorthandField(rightOperand)
+	// Check if either operand is $sm#semanticID field
+	isLeftShorthandSemanticID := isSemanticIdShorthandField(leftOperand)
+	isRightShorthandSemanticID := isSemanticIdShorthandField(rightOperand)
 
-	isLeftSpecificKeyValueSemanticId := isSemanticIdSpecificKeyValueField(leftOperand, false)
-	isRightSpecificKeyValueSemanticId := isSemanticIdSpecificKeyValueField(rightOperand, false)
+	isLeftSpecificKeyValueSemanticID := isSemanticIdSpecificKeyValueField(leftOperand, false)
+	isRightSpecificKeyValueSemanticID := isSemanticIdSpecificKeyValueField(rightOperand, false)
 
-	isLeftSpecificKeyTypeSemanticId := isSemanticIdSpecificKeyValueField(leftOperand, true)
-	isRightSpecificKeyTypeSemanticId := isSemanticIdSpecificKeyValueField(rightOperand, true)
+	isLeftSpecificKeyTypeSemanticID := isSemanticIdSpecificKeyValueField(leftOperand, true)
+	isRightSpecificKeyTypeSemanticID := isSemanticIdSpecificKeyValueField(rightOperand, true)
 
 	// Build the comparison expression
 	comparisonExpr, err := buildComparisonExpression(leftSQL, rightSQL, operation)
@@ -256,13 +257,13 @@ func HandleComparison(leftOperand, rightOperand *Value, operation string) (exp.E
 	}
 
 	// If semantic_id is involved, add position = 0 constraint
-	if isLeftShorthandSemanticId || isRightShorthandSemanticId {
+	if isLeftShorthandSemanticID || isRightShorthandSemanticID {
 		positionConstraint := goqu.I("semantic_id_reference_key.position").Eq(0)
 		return goqu.And(comparisonExpr, positionConstraint), nil
-	} else if (isLeftSpecificKeyValueSemanticId || isRightSpecificKeyValueSemanticId) || (isLeftSpecificKeyTypeSemanticId || isRightSpecificKeyTypeSemanticId) {
+	} else if (isLeftSpecificKeyValueSemanticID || isRightSpecificKeyValueSemanticID) || (isLeftSpecificKeyTypeSemanticID || isRightSpecificKeyTypeSemanticID) {
 
 		operandToUse := leftOperand
-		if isRightSpecificKeyValueSemanticId || isRightSpecificKeyTypeSemanticId {
+		if isRightSpecificKeyValueSemanticID || isRightSpecificKeyTypeSemanticID {
 			operandToUse = rightOperand
 		}
 
@@ -273,7 +274,7 @@ func HandleComparison(leftOperand, rightOperand *Value, operation string) (exp.E
 				positionConstraint := goqu.I("semantic_id_reference_key.position").Eq(position)
 				return goqu.And(comparisonExpr, positionConstraint), nil
 			} else {
-				return nil, fmt.Errorf("invalid position in semanticId key field: %s", positionStrOnError)
+				return nil, fmt.Errorf("invalid position in semanticID key field: %s", positionStrOnError)
 			}
 		}
 	}

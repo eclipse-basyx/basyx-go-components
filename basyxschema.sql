@@ -156,7 +156,6 @@ CREATE TABLE IF NOT EXISTS reference_key (
 CREATE INDEX IF NOT EXISTS ix_refkey_type_val     ON reference_key(type, value);
 CREATE INDEX IF NOT EXISTS ix_refkey_val_trgm     ON reference_key USING GIN (value gin_trgm_ops);
 
-
 CREATE TABLE IF NOT EXISTS lang_string_text_type_reference(
   id       BIGINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY
 );
@@ -170,8 +169,6 @@ CREATE TABLE IF NOT EXISTS lang_string_text_type (
 
 CREATE INDEX IF NOT EXISTS ix_lsttr_id ON lang_string_text_type_reference(id);
 CREATE INDEX IF NOT EXISTS ix_lstt_refid ON lang_string_text_type(lang_string_text_type_reference_id);
-
-
 
 CREATE TABLE IF NOT EXISTS lang_string_name_type_reference(
   id       BIGINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY
@@ -207,7 +204,6 @@ CREATE TABLE IF NOT EXISTS data_specification (
   data_specification BIGINT REFERENCES reference(id) NOT NULL,
   data_specification_content BIGINT REFERENCES data_specification_content(id) NOT NULL
 );
-
 
 CREATE TABLE IF NOT EXISTS value_list (
   id BIGINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY
@@ -259,7 +255,6 @@ CREATE INDEX IF NOT EXISTS ix_ds_dataspec_reference ON data_specification(data_s
 CREATE INDEX IF NOT EXISTS ix_iec61360_value_list_id ON data_specification_iec61360(value_list_id);
 CREATE INDEX IF NOT EXISTS ix_iec61360_level_type_id ON data_specification_iec61360(level_type_id);
 CREATE INDEX IF NOT EXISTS ix_iec61360_data_type ON data_specification_iec61360(data_type);
-
 
 CREATE TABLE IF NOT EXISTS administrative_information_embedded_data_specification (
   id                BIGSERIAL PRIMARY KEY,
@@ -345,7 +340,6 @@ CREATE TABLE IF NOT EXISTS extension_supplemental_semantic_id (
   reference_id BIGINT NOT NULL REFERENCES reference(id) ON DELETE CASCADE
 ); 
 
-
 CREATE INDEX IF NOT EXISTS ix_essi_extension_id ON extension_supplemental_semantic_id(extension_id);
 CREATE INDEX IF NOT EXISTS ix_essi_reference_id ON extension_supplemental_semantic_id(reference_id);
 CREATE INDEX IF NOT EXISTS ix_extsup_id ON extension_supplemental_semantic_id(id);
@@ -392,21 +386,27 @@ CREATE INDEX IF NOT EXISTS ix_sme_sub_path       ON submodel_element(submodel_id
 CREATE INDEX IF NOT EXISTS ix_sme_parent_pos     ON submodel_element(parent_sme_id, position);
 CREATE INDEX IF NOT EXISTS ix_sme_sub_type       ON submodel_element(submodel_id, model_type);
 
-CREATE TABLE IF NOT EXISTS sme_supplemental_semantic (
-  sme_id       BIGINT NOT NULL REFERENCES submodel_element(id) ON DELETE CASCADE,
+CREATE TABLE IF NOT EXISTS submodel_element_supplemental_semantic_id (
+  submodel_element_id       BIGINT NOT NULL REFERENCES submodel_element(id) ON DELETE CASCADE,
   reference_id BIGINT NOT NULL REFERENCES reference(id) ON DELETE CASCADE,
-  PRIMARY KEY (sme_id, reference_id)
+  PRIMARY KEY (submodel_element_id, reference_id)
+);
+CREATE INDEX IF NOT EXISTS ix_smessi_smeid ON submodel_element_supplemental_semantic_id(submodel_element_id);
+
+CREATE TABLE IF NOT EXISTS submodel_element_extension (
+  submodel_element_id       BIGINT NOT NULL REFERENCES submodel_element(id) ON DELETE CASCADE,
+  extension_id BIGINT NOT NULL REFERENCES extension(id) ON DELETE CASCADE,
+  PRIMARY KEY (submodel_element_id, extension_id)
 );
 
-CREATE TABLE IF NOT EXISTS sme_semantic_key (
-  sme_id     BIGINT NOT NULL REFERENCES submodel_element(id) ON DELETE CASCADE,
-  position   INTEGER NOT NULL,
-  key_type   TEXT NOT NULL,
-  key_value  TEXT NOT NULL,
-  PRIMARY KEY (sme_id, position)
+CREATE INDEX IF NOT EXISTS ix_smeext_smeid ON submodel_element_extension(submodel_element_id);
+
+CREATE TABLE IF NOT EXISTS submodel_element_embedded_data_specification (
+  submodel_element_id BIGINT REFERENCES submodel_element(id) ON DELETE CASCADE,
+  embedded_data_specification_id BIGSERIAL REFERENCES data_specification(id) ON DELETE CASCADE,
+  PRIMARY KEY (submodel_element_id, embedded_data_specification_id)
 );
-CREATE INDEX IF NOT EXISTS ix_smesem_key       ON sme_semantic_key(key_type, key_value);
-CREATE INDEX IF NOT EXISTS ix_smesem_val_trgm  ON sme_semantic_key USING GIN (key_value gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS ix_smeeds_smeid ON submodel_element_embedded_data_specification(submodel_element_id);
 
 -- Property (typed for fast comparisons)
 CREATE TABLE IF NOT EXISTS property_element (

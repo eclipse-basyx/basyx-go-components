@@ -9,12 +9,13 @@
 
 package model
 
-// Type of SubmodelElement
+// Property Type of SubmodelElement
 type Property struct {
 	Extensions []Extension `json:"extensions,omitempty"`
 
 	Category string `json:"category,omitempty" validate:"regexp=^([\\\\x09\\\\x0a\\\\x0d\\\\x20-\\\\ud7ff\\\\ue000-\\\\ufffd]|\\\\ud800[\\\\udc00-\\\\udfff]|[\\\\ud801-\\\\udbfe][\\\\udc00-\\\\udfff]|\\\\udbff[\\\\udc00-\\\\udfff])*$"`
 
+	//nolint:all
 	IdShort string `json:"idShort,omitempty"`
 
 	DisplayName []LangStringNameType `json:"displayName,omitempty"`
@@ -23,8 +24,9 @@ type Property struct {
 
 	ModelType string `json:"modelType" validate:"regexp=^Property$"`
 
-	SemanticId *Reference `json:"semanticId,omitempty"`
+	SemanticID *Reference `json:"semanticID,omitempty"`
 
+	//nolint:all
 	SupplementalSemanticIds []Reference `json:"supplementalSemanticIds,omitempty"`
 
 	Qualifiers []Qualifier `json:"qualifiers,omitempty"`
@@ -35,10 +37,10 @@ type Property struct {
 
 	Value string `json:"value,omitempty"`
 
-	ValueId *Reference `json:"valueId,omitempty"`
+	ValueID *Reference `json:"valueID,omitempty"`
 }
 
-// Constructor
+// NewProperty creates a new Property instance
 func NewProperty(valueType DataTypeDefXsd) *Property {
 	return &Property{
 		ValueType: valueType,
@@ -46,94 +48,117 @@ func NewProperty(valueType DataTypeDefXsd) *Property {
 	}
 }
 
+//nolint:all
 func (p Property) GetIdShort() string {
 	return p.IdShort
 }
 
+//nolint:all
 func (p Property) GetCategory() string {
 	return p.Category
 }
 
+//nolint:all
 func (p Property) GetDisplayName() []LangStringNameType {
 	return p.DisplayName
 }
 
+//nolint:all
 func (p Property) GetDescription() []LangStringTextType {
 	return p.Description
 }
 
+//nolint:all
 func (p Property) GetModelType() string {
 	return p.ModelType
 }
 
-func (p Property) GetSemanticId() *Reference {
-	return p.SemanticId
+//nolint:all
+func (p Property) GetSemanticID() *Reference {
+	return p.SemanticID
 }
 
+//nolint:all
 func (p Property) GetSupplementalSemanticIds() []Reference {
 	return p.SupplementalSemanticIds
 }
 
+//nolint:all
 func (p Property) GetQualifiers() []Qualifier {
 	return p.Qualifiers
 }
 
+//nolint:all
 func (p Property) GetEmbeddedDataSpecifications() []EmbeddedDataSpecification {
 	return p.EmbeddedDataSpecifications
 }
 
+//nolint:all
 func (p Property) GetExtensions() []Extension {
 	return p.Extensions
 }
 
+//nolint:all
 func (p Property) GetValueType() DataTypeDefXsd {
 	return p.ValueType
 }
 
+//nolint:all
 func (p Property) GetValue() string {
 	return p.Value
 }
 
-func (p Property) GetValueId() *Reference {
-	return p.ValueId
+//nolint:all
+func (p Property) GetValueID() *Reference {
+	return p.ValueID
 }
 
+//nolint:all
 func (p *Property) SetModelType(modelType string) {
 	p.ModelType = modelType
 }
 
+//nolint:all
 func (p *Property) SetIdShort(idShort string) {
 	p.IdShort = idShort
 }
 
+//nolint:all
 func (p *Property) SetCategory(category string) {
 	p.Category = category
 }
 
+//nolint:all
 func (p *Property) SetDisplayName(displayName []LangStringNameType) {
 	p.DisplayName = displayName
 }
 
+//nolint:all
 func (p *Property) SetDescription(description []LangStringTextType) {
 	p.Description = description
 }
 
-func (p *Property) SetSemanticId(semanticId *Reference) {
-	p.SemanticId = semanticId
+//nolint:all
+func (p *Property) SetSemanticID(semanticID *Reference) {
+	p.SemanticID = semanticID
 }
 
+//nolint:all
 func (p *Property) SetSupplementalSemanticIds(supplementalSemanticIds []Reference) {
 	p.SupplementalSemanticIds = supplementalSemanticIds
 }
 
+//nolint:all
 func (p *Property) SetQualifiers(qualifiers []Qualifier) {
 	p.Qualifiers = qualifiers
 }
 
+//nolint:all
 func (p *Property) SetEmbeddedDataSpecifications(embeddedDataSpecifications []EmbeddedDataSpecification) {
 	p.EmbeddedDataSpecifications = embeddedDataSpecifications
 }
 
+//nolint:all
 func (p *Property) SetExtensions(extensions []Extension) {
 	p.Extensions = extensions
 }
@@ -155,7 +180,7 @@ func AssertPropertyRequired(obj Property) error {
 			return err
 		}
 	}
-	if err := AssertReferableAllOfIdShortRequired(obj.IdShort); err != nil {
+	if err := AssertIdShortRequired(obj.IdShort); err != nil {
 		return err
 	}
 	for _, el := range obj.DisplayName {
@@ -168,8 +193,8 @@ func AssertPropertyRequired(obj Property) error {
 			return err
 		}
 	}
-	if obj.SemanticId != nil {
-		if err := AssertReferenceRequired(*obj.SemanticId); err != nil {
+	if obj.SemanticID != nil {
+		if err := AssertReferenceRequired(*obj.SemanticID); err != nil {
 			return err
 		}
 	}
@@ -188,8 +213,8 @@ func AssertPropertyRequired(obj Property) error {
 			return err
 		}
 	}
-	if obj.ValueId != nil {
-		if err := AssertReferenceRequired(*obj.ValueId); err != nil {
+	if obj.ValueID != nil {
+		if err := AssertReferenceRequired(*obj.ValueID); err != nil {
 			return err
 		}
 	}
@@ -203,7 +228,7 @@ func AssertPropertyConstraints(obj Property) error {
 			return err
 		}
 	}
-	if err := AssertReferableAllOfIdShortConstraints(obj.IdShort); err != nil {
+	if err := AssertstringConstraints(obj.IdShort); err != nil {
 		return err
 	}
 	for _, el := range obj.DisplayName {
@@ -216,8 +241,8 @@ func AssertPropertyConstraints(obj Property) error {
 			return err
 		}
 	}
-	if obj.SemanticId != nil {
-		if err := AssertReferenceConstraints(*obj.SemanticId); err != nil {
+	if obj.SemanticID != nil {
+		if err := AssertReferenceConstraints(*obj.SemanticID); err != nil {
 			return err
 		}
 	}
@@ -236,8 +261,8 @@ func AssertPropertyConstraints(obj Property) error {
 			return err
 		}
 	}
-	if obj.ValueId != nil {
-		if err := AssertReferenceConstraints(*obj.ValueId); err != nil {
+	if obj.ValueID != nil {
+		if err := AssertReferenceConstraints(*obj.ValueID); err != nil {
 			return err
 		}
 	}

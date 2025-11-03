@@ -24,7 +24,7 @@
 ******************************************************************************/
 
 // Author: Aaron Zielstorff ( Fraunhofer IESE ), Jannik Fried ( Fraunhofer IESE )
-package submodel_query
+package submodelQueries
 
 import (
 	"fmt"
@@ -51,7 +51,7 @@ import (
 //   - Value lists and level types
 //
 // Parameters:
-//   - submodelId: Optional filter for a specific submodel ID. Empty string retrieves all submodels.
+//   - submodelID: Optional filter for a specific submodel ID. Empty string retrieves all submodels.
 //
 // Returns:
 //   - string: The complete SQL query string ready for execution
@@ -60,7 +60,7 @@ import (
 // The function uses COALESCE to ensure empty arrays ('[]'::jsonb) instead of NULL values,
 // which simplifies downstream JSON parsing. It also includes a total count window function
 // for efficient result set pagination and slice pre-sizing.
-func GetQueryWithGoqu(submodelId string, limit int64, cursor string, aasQuery *grammar.QueryWrapper) (string, error) {
+func GetQueryWithGoqu(submodelID string, limit int64, cursor string, aasQuery *grammar.QueryWrapper) (string, error) {
 	dialect := goqu.Dialect("postgres")
 
 	// Build display names subquery
@@ -149,7 +149,7 @@ func GetQueryWithGoqu(submodelId string, limit int64, cursor string, aasQuery *g
 	qualifierSubquery := GetQualifierSubqueryForSubmodel(dialect)
 
 	// Build extension subquery
-	extensionSubquery := GetExtensionSubqueryForSubmodel(dialect)
+	extensionSubquery := queries.GetExtensionSubquery(dialect, "extension_id", goqu.T("submodel_extension"), "submodel_id", goqu.I("s.id"))
 
 	// Build AdministrativeInformation subquery
 	administrationSubquery := GetAdministrationSubqueryForSubmodel(dialect)
@@ -178,8 +178,8 @@ func GetQueryWithGoqu(submodelId string, limit int64, cursor string, aasQuery *g
 		)
 
 	// Add optional WHERE clause for submodel ID filtering
-	if submodelId != "" {
-		query = addSubmodelIdFilterToQuery(query, submodelId)
+	if submodelID != "" {
+		query = addSubmodelIdFilterToQuery(query, submodelID)
 	}
 
 	// Add optional AAS QueryLanguage filtering
@@ -194,7 +194,7 @@ func GetQueryWithGoqu(submodelId string, limit int64, cursor string, aasQuery *g
 	}
 
 	query = addSubmodelCountToQuery(query)
-	query = addGroupBySubmodelId(query)
+	query = addGroupBySubmodelID(query)
 
 	// Add pagination if limit or cursor is specified
 	query = addPaginationToQuery(query, limit, cursor)
@@ -207,7 +207,7 @@ func GetQueryWithGoqu(submodelId string, limit int64, cursor string, aasQuery *g
 	return sql, nil
 }
 
-func addGroupBySubmodelId(query *goqu.SelectDataset) *goqu.SelectDataset {
+func addGroupBySubmodelID(query *goqu.SelectDataset) *goqu.SelectDataset {
 	query = query.GroupBy(goqu.I("s.id"))
 	return query
 }
@@ -217,8 +217,8 @@ func addSubmodelCountToQuery(query *goqu.SelectDataset) *goqu.SelectDataset {
 	return query
 }
 
-func addSubmodelIdFilterToQuery(query *goqu.SelectDataset, submodelId string) *goqu.SelectDataset {
-	query = query.Where(goqu.I("s.id").Eq(submodelId))
+func addSubmodelIdFilterToQuery(query *goqu.SelectDataset, submodelID string) *goqu.SelectDataset {
+	query = query.Where(goqu.I("s.id").Eq(submodelID))
 	return query
 }
 

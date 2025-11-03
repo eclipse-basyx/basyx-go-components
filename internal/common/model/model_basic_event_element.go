@@ -9,11 +9,13 @@
 
 package model
 
+// BasicEventElement type of SubmodelElement
 type BasicEventElement struct {
 	Extensions []Extension `json:"extensions,omitempty"`
 
 	Category string `json:"category,omitempty" validate:"regexp=^([\\\\x09\\\\x0a\\\\x0d\\\\x20-\\\\ud7ff\\\\ue000-\\\\ufffd]|\\\\ud800[\\\\udc00-\\\\udfff]|[\\\\ud801-\\\\udbfe][\\\\udc00-\\\\udfff]|\\\\udbff[\\\\udc00-\\\\udfff])*$"`
 
+	//nolint:all
 	IdShort string `json:"idShort,omitempty"`
 
 	DisplayName []LangStringNameType `json:"displayName,omitempty"`
@@ -22,8 +24,9 @@ type BasicEventElement struct {
 
 	ModelType string `json:"modelType" validate:"regexp=^BasicEventElement$"`
 
-	SemanticId *Reference `json:"semanticId,omitempty"`
+	SemanticID *Reference `json:"semanticID,omitempty"`
 
+	//nolint:all
 	SupplementalSemanticIds []Reference `json:"supplementalSemanticIds,omitempty"`
 
 	Qualifiers []Qualifier `json:"qualifiers,omitempty"`
@@ -48,84 +51,105 @@ type BasicEventElement struct {
 }
 
 // Getters
+//
+//nolint:all
 func (a BasicEventElement) GetExtensions() []Extension {
 	return a.Extensions
 }
 
+//nolint:all
 func (a BasicEventElement) GetIdShort() string {
 	return a.IdShort
 }
 
+//nolint:all
 func (a BasicEventElement) GetCategory() string {
 	return a.Category
 }
 
+//nolint:all
 func (a BasicEventElement) GetDisplayName() []LangStringNameType {
 	return a.DisplayName
 }
 
+//nolint:all
 func (a BasicEventElement) GetDescription() []LangStringTextType {
 	return a.Description
 }
 
+//nolint:all
 func (a BasicEventElement) GetModelType() string {
 	return a.ModelType
 }
 
-func (a BasicEventElement) GetSemanticId() *Reference {
-	return a.SemanticId
+//nolint:all
+func (a BasicEventElement) GetSemanticID() *Reference {
+	return a.SemanticID
 }
 
+//nolint:all
 func (a BasicEventElement) GetSupplementalSemanticIds() []Reference {
 	return a.SupplementalSemanticIds
 }
 
+//nolint:all
 func (a BasicEventElement) GetQualifiers() []Qualifier {
 	return a.Qualifiers
 }
 
+//nolint:all
 func (a BasicEventElement) GetEmbeddedDataSpecifications() []EmbeddedDataSpecification {
 	return a.EmbeddedDataSpecifications
 }
 
 // Setters
 
+//nolint:all
 func (a *BasicEventElement) SetModelType(v string) {
 	a.ModelType = v
 }
 
+//nolint:all
 func (a *BasicEventElement) SetExtensions(v []Extension) {
 	a.Extensions = v
 }
 
+//nolint:all
 func (a *BasicEventElement) SetIdShort(v string) {
 	a.IdShort = v
 }
 
+//nolint:all
 func (a *BasicEventElement) SetCategory(v string) {
 	a.Category = v
 }
 
+//nolint:all
 func (a *BasicEventElement) SetDisplayName(v []LangStringNameType) {
 	a.DisplayName = v
 }
 
+//nolint:all
 func (a *BasicEventElement) SetDescription(v []LangStringTextType) {
 	a.Description = v
 }
 
-func (a *BasicEventElement) SetSemanticId(v *Reference) {
-	a.SemanticId = v
+//nolint:all
+func (a *BasicEventElement) SetSemanticID(v *Reference) {
+	a.SemanticID = v
 }
 
+//nolint:all
 func (a *BasicEventElement) SetSupplementalSemanticIds(v []Reference) {
 	a.SupplementalSemanticIds = v
 }
 
+//nolint:all
 func (a *BasicEventElement) SetQualifiers(v []Qualifier) {
 	a.Qualifiers = v
 }
 
+//nolint:all
 func (a *BasicEventElement) SetEmbeddedDataSpecifications(v []EmbeddedDataSpecification) {
 	a.EmbeddedDataSpecifications = v
 }
@@ -149,7 +173,7 @@ func AssertBasicEventElementRequired(obj BasicEventElement) error {
 			return err
 		}
 	}
-	if err := AssertReferableAllOfIdShortRequired(obj.IdShort); err != nil {
+	if err := AssertIdShortRequired(obj.IdShort); err != nil {
 		return err
 	}
 	for _, el := range obj.DisplayName {
@@ -162,7 +186,7 @@ func AssertBasicEventElementRequired(obj BasicEventElement) error {
 			return err
 		}
 	}
-	if err := AssertReferenceRequired(*obj.SemanticId); err != nil {
+	if err := AssertReferenceRequired(*obj.SemanticID); err != nil {
 		return err
 	}
 	for _, el := range obj.SupplementalSemanticIds {
@@ -200,7 +224,7 @@ func AssertBasicEventElementConstraints(obj BasicEventElement) error {
 			return err
 		}
 	}
-	if err := AssertReferableAllOfIdShortConstraints(obj.IdShort); err != nil {
+	if err := AssertstringConstraints(obj.IdShort); err != nil {
 		return err
 	}
 	for _, el := range obj.DisplayName {
@@ -213,7 +237,7 @@ func AssertBasicEventElementConstraints(obj BasicEventElement) error {
 			return err
 		}
 	}
-	if err := AssertReferenceConstraints(*obj.SemanticId); err != nil {
+	if err := AssertReferenceConstraints(*obj.SemanticID); err != nil {
 		return err
 	}
 	for _, el := range obj.SupplementalSemanticIds {

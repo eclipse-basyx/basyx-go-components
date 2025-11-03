@@ -9,6 +9,7 @@
 
 package model
 
+// RangeValue  type of RangeValue
 type RangeValue struct {
 	Max RangeValueType `json:"max,omitempty"`
 

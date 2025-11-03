@@ -46,10 +46,10 @@ import (
 // where complex fields like DisplayNames, Descriptions, and References are
 // stored as JSON in the database and need to be parsed separately.
 type SubmodelRow struct {
-	// Id is the unique identifier of the submodel
-	Id string
-	// IdShort is the short identifier for the submodel
-	IdShort string
+	// ID is the unique identifier of the submodel
+	ID string
+	// IDShort is the short identifier for the submodel
+	IDShort string
 	// Category defines the category classification of the submodel
 	Category string
 	// Kind specifies whether the submodel is a Template or Instance
@@ -58,14 +58,14 @@ type SubmodelRow struct {
 	DisplayNames json.RawMessage
 	// Descriptions contains localized descriptions as JSON data
 	Descriptions json.RawMessage
-	// SemanticId is a reference to a semantic definition as JSON data
-	SemanticId json.RawMessage
-	// ReferredSemanticIds contains references to additional semantic definitions as JSON data
-	ReferredSemanticIds json.RawMessage
-	// SupplementalSemanticIds contains supplemental semantic identifiers as JSON data
-	SupplementalSemanticIds json.RawMessage
-	// SupplementalReferredSemIds contains referred supplemental semantic identifiers as JSON data
-	SupplementalReferredSemIds json.RawMessage
+	// SemanticID is a reference to a semantic definition as JSON data
+	SemanticID json.RawMessage
+	// ReferredSemanticIDs contains references to additional semantic definitions as JSON data
+	ReferredSemanticIDs json.RawMessage
+	// SupplementalSemanticIDs contains supplemental semantic identifiers as JSON data
+	SupplementalSemanticIDs json.RawMessage
+	// SupplementalReferredSemIDs contains referred supplemental semantic identifiers as JSON data
+	SupplementalReferredSemIDs json.RawMessage
 	// DataSpecReference contains embedded data specifications as JSON data
 	DataSpecReference json.RawMessage
 	// DataSpecReferenceReferred contains references to data specifications as JSON data
@@ -96,10 +96,10 @@ type SubmodelRow struct {
 // The database stores these as separate rows, which are then aggregated during parsing.
 //
 // Example: If you have 1 Reference with 3 Keys, there will be 3 ReferenceRow entries
-// with the same ReferenceId and ReferenceType but different Key details.
+// with the same ReferenceID and ReferenceType but different Key details.
 type ReferenceRow struct {
-	// ReferenceId is the unique identifier of the reference in the database
-	ReferenceId int64 `json:"reference_id"`
+	// ReferenceID is the unique identifier of the reference in the database
+	ReferenceID int64 `json:"reference_id"`
 	// ReferenceType specifies the type of reference (e.g., ExternalReference, ModelReference)
 	ReferenceType string `json:"reference_type"`
 	// KeyID is the unique identifier of the key in the database (nullable)
@@ -110,11 +110,17 @@ type ReferenceRow struct {
 	KeyValue *string `json:"key_value"`
 }
 
+// EdsReferenceRow represents a data row for an embedded data specification reference entity in the database.
+// This structure is used to store references associated with embedded data specifications (EDS).
+//
+// Each row contains information about a single key within a reference that is part of an
+// embedded data specification. Multiple rows with the same EdsID and ReferenceID are aggregated
+// to form complete reference objects.
 type EdsReferenceRow struct {
 	// EdsID is the unique identifier of the embedded data specification in the database
 	EdsID int64 `json:"eds_id"`
-	// ReferenceId is the unique identifier of the reference in the database
-	ReferenceId int64 `json:"reference_id"`
+	// ReferenceID is the unique identifier of the reference in the database
+	ReferenceID int64 `json:"reference_id"`
 	// ReferenceType specifies the type of reference (nullable)
 	ReferenceType *string `json:"reference_type"`
 	// KeyID is the unique identifier of the key in the database (nullable)
@@ -134,12 +140,12 @@ type EdsReferenceRow struct {
 // multiple references can be associated with a semantic concept.
 //
 // Example: If you have 1 referred Reference with 2 Keys, there will be 2 ReferredReferenceRow
-// entries with the same ReferenceId and ReferenceType but different Key details.
+// entries with the same ReferenceID and ReferenceType but different Key details.
 type ReferredReferenceRow struct {
-	// SupplementalRootReferenceId identifies the root supplemental reference (nullable)
-	SupplementalRootReferenceId *int64 `json:"supplemental_root_reference_id"`
-	// ReferenceId is the unique identifier of this reference in the database (nullable)
-	ReferenceId *int64 `json:"reference_id"`
+	// SupplementalRootReferenceID identifies the root supplemental reference (nullable)
+	SupplementalRootReferenceID *int64 `json:"supplemental_root_reference_id"`
+	// ReferenceID is the unique identifier of this reference in the database (nullable)
+	ReferenceID *int64 `json:"reference_id"`
 	// ReferenceType specifies the type of reference (nullable)
 	ReferenceType *string `json:"reference_type"`
 	// ParentReference identifies the parent reference in the hierarchy (nullable)
@@ -154,68 +160,147 @@ type ReferredReferenceRow struct {
 	KeyValue *string `json:"key_value"`
 }
 
+// EdsContentIec61360Row represents a data row for IEC 61360 data specification content.
+// IEC 61360 is an international standard for representing data element types with semantic descriptions.
+//
+// This structure contains all the information needed to represent a data element according to
+// IEC 61360, including preferred names, definitions, value formats, and unit references.
+// Many fields are stored as JSON to handle complex nested structures like language strings and references.
 type EdsContentIec61360Row struct {
-	EdsID                 int64           `json:"eds_id"`
-	IecID                 int64           `json:"iec_id"`
-	Unit                  string          `json:"unit"`
-	SourceOfDefinition    string          `json:"source_of_definition"`
-	Symbol                string          `json:"symbol"`
-	DataType              string          `json:"data_type"`
-	ValueFormat           string          `json:"value_format"`
-	Value                 string          `json:"value"`
-	LevelType             json.RawMessage `json:"level_type"`
-	PreferredName         json.RawMessage `json:"preferred_name"`
-	ShortName             json.RawMessage `json:"short_name"`
-	Definition            json.RawMessage `json:"definition"`
-	UnitReferenceKeys     json.RawMessage `json:"unit_reference_keys"`
+	// EdsID is the unique identifier of the embedded data specification
+	EdsID int64 `json:"eds_id"`
+	// IecID is the unique identifier of the IEC 61360 content in the database
+	IecID int64 `json:"iec_id"`
+	// Unit specifies the unit of measurement for the data element
+	Unit string `json:"unit"`
+	// SourceOfDefinition identifies where the definition comes from
+	SourceOfDefinition string `json:"source_of_definition"`
+	// Symbol is the symbolic representation of the data element
+	Symbol string `json:"symbol"`
+	// DataType specifies the data type of the value (e.g., STRING, INTEGER)
+	DataType string `json:"data_type"`
+	// ValueFormat describes the format of the value (e.g., date format, number format)
+	ValueFormat string `json:"value_format"`
+	// Value is the actual value of the data element
+	Value string `json:"value"`
+	// LevelType contains IEC level type information as JSON data
+	LevelType json.RawMessage `json:"level_type"`
+	// PreferredName contains localized preferred names as JSON data
+	PreferredName json.RawMessage `json:"preferred_name"`
+	// ShortName contains localized short names as JSON data
+	ShortName json.RawMessage `json:"short_name"`
+	// Definition contains localized definitions as JSON data
+	Definition json.RawMessage `json:"definition"`
+	// UnitReferenceKeys contains reference keys for the unit as JSON data
+	UnitReferenceKeys json.RawMessage `json:"unit_reference_keys"`
+	// UnitReferenceReferred contains referred unit references as JSON data
 	UnitReferenceReferred json.RawMessage `json:"unit_reference_referred"`
-	ValueListEntries      json.RawMessage `json:"value_list_entries"`
+	// ValueListEntries contains value list entries as JSON data
+	ValueListEntries json.RawMessage `json:"value_list_entries"`
 }
 
+// ValueListRow represents a data row for value list entries in IEC 61360 data specifications.
+// Value lists define enumerated values with their associated references and semantic meanings.
+//
+// This structure is used when a data element can only take on specific predefined values,
+// each potentially having its own semantic reference explaining its meaning.
 type ValueListRow struct {
-	Value                 string          `json:"value_pair_value"`
-	ValueRefPairId        int64           `json:"value_reference_pair_id"`
-	ReferenceRows         json.RawMessage `json:"reference_rows"`
+	// Value is the actual value in the value list entry
+	Value string `json:"value_pair_value"`
+	// ValueRefPairID is the unique identifier of the value reference pair in the database
+	ValueRefPairID int64 `json:"value_reference_pair_id"`
+	// ReferenceRows contains reference data associated with this value as JSON data
+	ReferenceRows json.RawMessage `json:"reference_rows"`
+	// ReferredReferenceRows contains referred reference data associated with this value as JSON data
 	ReferredReferenceRows json.RawMessage `json:"referred_reference_rows"`
 }
 
+// QualifierRow represents a data row for a Qualifier entity in the database.
+// Qualifiers are additional characteristics that affect the value or interpretation of an element.
+//
+// In the AAS metamodel, qualifiers provide a way to add metadata or constraints to elements,
+// such as value constraints, multiplicity, or semantic refinements. They include references
+// to semantic IDs that define the meaning of the qualifier and value IDs that provide
+// semantic information about the qualifier's value.
 type QualifierRow struct {
-	DbId                                      int64           `json:"dbId"`
-	Kind                                      string          `json:"kind"`
-	Type                                      string          `json:"type"`
-	ValueType                                 string          `json:"value_type"`
-	Value                                     string          `json:"value"`
-	SemanticId                                json.RawMessage `json:"semanticIdReferenceRows"`
-	SemanticIdReferredReferences              json.RawMessage `json:"semanticIdReferredReferencesRows"`
-	ValueId                                   json.RawMessage `json:"valueIdReferenceRows"`
-	ValueIdReferredReferences                 json.RawMessage `json:"valueIdReferredReferencesRows"`
-	SupplementalSemanticIds                   json.RawMessage `json:"supplementalSemanticIdReferenceRows"`
-	SupplementalSemanticIdsReferredReferences json.RawMessage `json:"supplementalSemanticIdReferredReferenceRows"`
+	// DbID is the unique identifier of the qualifier in the database
+	DbID int64 `json:"dbId"`
+	// Kind specifies the kind of qualifier (e.g., ConceptQualifier, ValueQualifier)
+	Kind string `json:"kind"`
+	// Type is the type/name of the qualifier
+	Type string `json:"type"`
+	// ValueType specifies the data type of the qualifier value
+	ValueType string `json:"value_type"`
+	// Value is the actual value of the qualifier
+	Value string `json:"value"`
+	// SemanticID contains semantic ID reference data as JSON data
+	SemanticID json.RawMessage `json:"semanticIdReferenceRows"`
+	// SemanticIDReferredReferences contains referred semantic ID references as JSON data
+	SemanticIDReferredReferences json.RawMessage `json:"semanticIdReferredReferencesRows"`
+	// ValueID contains value ID reference data as JSON data
+	ValueID json.RawMessage `json:"valueIdReferenceRows"`
+	// ValueIDReferredReferences contains referred value ID references as JSON data
+	ValueIDReferredReferences json.RawMessage `json:"valueIdReferredReferencesRows"`
+	// SupplementalSemanticIDs contains supplemental semantic ID references as JSON data
+	SupplementalSemanticIDs json.RawMessage `json:"supplementalSemanticIdReferenceRows"`
+	// SupplementalSemanticIDsReferredReferences contains referred supplemental semantic ID references as JSON data
+	SupplementalSemanticIDsReferredReferences json.RawMessage `json:"supplementalSemanticIdReferredReferenceRows"`
 }
 
+// ExtensionRow represents a data row for an Extension entity in the database.
+// Extensions provide a way to add custom information to AAS elements beyond the standard metamodel.
+//
+// Extensions allow users to attach additional metadata or properties to elements that are not
+// covered by the standard AAS specification. They include semantic references to define the
+// meaning of the extension and can refer to other elements in the AAS.
 type ExtensionRow struct {
-	DbId                                      int64           `json:"dbId"`
-	Name                                      string          `json:"name"`
-	ValueType                                 string          `json:"value_type"`
-	Value                                     string          `json:"value"`
-	SemanticId                                json.RawMessage `json:"semanticIdReferenceRows"`
-	SemanticIdReferredReferences              json.RawMessage `json:"semanticIdReferredReferencesRows"`
-	SupplementalSemanticIds                   json.RawMessage `json:"supplementalSemanticIdReferenceRows"`
-	SupplementalSemanticIdsReferredReferences json.RawMessage `json:"supplementalSemanticIdReferredReferenceRows"`
-	RefersTo                                  json.RawMessage `json:"refersToReferenceRows"`
-	RefersToReferredReferences                json.RawMessage `json:"refersToReferredReferencesRows"`
+	// DbID is the unique identifier of the extension in the database
+	DbID int64 `json:"dbId"`
+	// Name is the name of the extension
+	Name string `json:"name"`
+	// ValueType specifies the data type of the extension value
+	ValueType string `json:"value_type"`
+	// Value is the actual value of the extension
+	Value string `json:"value"`
+	// SemanticID contains semantic ID reference data as JSON data
+	SemanticID json.RawMessage `json:"semanticIdReferenceRows"`
+	// SemanticIDReferredReferences contains referred semantic ID references as JSON data
+	SemanticIDReferredReferences json.RawMessage `json:"semanticIdReferredReferencesRows"`
+	// SupplementalSemanticIDs contains supplemental semantic ID references as JSON data
+	SupplementalSemanticIDs json.RawMessage `json:"supplementalSemanticIdReferenceRows"`
+	// SupplementalSemanticIDsReferredReferences contains referred supplemental semantic ID references as JSON data
+	SupplementalSemanticIDsReferredReferences json.RawMessage `json:"supplementalSemanticIdReferredReferenceRows"`
+	// RefersTo contains references to other elements as JSON data
+	RefersTo json.RawMessage `json:"refersToReferenceRows"`
+	// RefersToReferredReferences contains referred references to other elements as JSON data
+	RefersToReferredReferences json.RawMessage `json:"refersToReferredReferencesRows"`
 }
 
+// AdministrationRow represents a data row for administrative information in the database.
+// Administrative information includes version control, revision tracking, and data specifications.
+//
+// This structure captures metadata about the lifecycle and provenance of AAS elements,
+// including version numbers, revision information, creator references, and associated
+// data specifications that define the element's structure and semantics.
 type AdministrationRow struct {
-	DbId                          int64           `json:"dbId"`
-	Version                       string          `json:"version"`
-	Revision                      string          `json:"revision"`
-	TemplateId                    string          `json:"templateId"`
-	Creator                       json.RawMessage `json:"creator"`
-	CreatorReferred               json.RawMessage `json:"creatorReferred"`
-	EdsDataSpecifications         json.RawMessage `json:"edsDataSpecifications"`
+	// DbID is the unique identifier of the administration record in the database
+	DbID int64 `json:"dbId"`
+	// Version is the version number of the element
+	Version string `json:"version"`
+	// Revision is the revision number of the element
+	Revision string `json:"revision"`
+	// TemplateID is the identifier of the template this element is based on
+	TemplateID string `json:"templateId"`
+	// Creator contains creator reference data as JSON data
+	Creator json.RawMessage `json:"creator"`
+	// CreatorReferred contains referred creator references as JSON data
+	CreatorReferred json.RawMessage `json:"creatorReferred"`
+	// EdsDataSpecifications contains embedded data specifications as JSON data
+	EdsDataSpecifications json.RawMessage `json:"edsDataSpecifications"`
+	// EdsDataSpecificationsReferred contains referred data specifications as JSON data
 	EdsDataSpecificationsReferred json.RawMessage `json:"edsDataSpecificationsReferred"`
-	EdsDataSpecificationIEC61360  json.RawMessage `json:"edsDataSpecificationIEC61360"` //iecRows
+	// EdsDataSpecificationIEC61360 contains IEC 61360 data specifications as JSON data
+	EdsDataSpecificationIEC61360 json.RawMessage `json:"edsDataSpecificationIEC61360"`
 }
 
 // ParseReferredReferencesFromRows parses referred reference data from already unmarshalled ReferredReferenceRow objects.
@@ -234,33 +319,37 @@ type AdministrationRow struct {
 //     Nil references or keys are logged as warnings but do not cause the function to fail.
 //
 // The function performs the following validations:
-//   - Skips entries with nil RootReference, ReferenceId, ParentReference, or ReferenceType
+//   - Skips entries with nil RootReference, ReferenceID, ParentReference, or ReferenceType
 //   - Verifies parent references exist in the builder map
 //   - Ensures key data (KeyID, KeyType, KeyValue) is complete
-func ParseReferredReferencesFromRows(semanticIdData []ReferredReferenceRow, referenceBuilderRefs map[int64]*ReferenceBuilder) error {
-	for _, ref := range semanticIdData {
+func ParseReferredReferencesFromRows(semanticIDData []ReferredReferenceRow, referenceBuilderRefs map[int64]*ReferenceBuilder) error {
+	for _, ref := range semanticIDData {
 		if ref.RootReference == nil {
 			fmt.Println("[WARNING - ParseReferredReferencesFromRows] RootReference was nil - skipping Reference Creation.")
 			continue
 		}
-		builder, semanticIdCreated := referenceBuilderRefs[*ref.RootReference]
-		if !semanticIdCreated {
-			return fmt.Errorf("parent reference with id %d not found for referred reference with id %d", ref.ParentReference, ref.ReferenceId)
+		builder, semanticIDCreated := referenceBuilderRefs[*ref.RootReference]
+		if !semanticIDCreated {
+			return fmt.Errorf("parent reference with id %d not found for referred reference with id %d", ref.ParentReference, ref.ReferenceID)
 		}
-		if ref.ReferenceId == nil || ref.ParentReference == nil {
-			fmt.Println("[WARNING - ParseReferredReferencesFromRows] ReferenceId or ParentReference was nil - skipping Reference Creation.")
+		if ref.ReferenceID == nil || ref.ParentReference == nil {
+			fmt.Println("[WARNING - ParseReferredReferencesFromRows] ReferenceID or ParentReference was nil - skipping Reference Creation.")
 			continue
 		}
 		if ref.ReferenceType == nil {
-			fmt.Println("[WARNING - ParseReferredReferencesFromRows] ReferenceType was nil - skipping Reference Creation for Reference with Reference ID", *ref.ReferenceId)
+			fmt.Println("[WARNING - ParseReferredReferencesFromRows] ReferenceType was nil - skipping Reference Creation for Reference with Reference ID", *ref.ReferenceID)
 			continue
 		}
 		if ref.KeyID == nil || ref.KeyType == nil || ref.KeyValue == nil {
-			fmt.Println("[WARNING - ParseReferredReferencesFromRows] KeyID, KeyType or KeyValue was nil - skipping Reference Creation for Reference with Reference ID", *ref.ReferenceId)
+			fmt.Println("[WARNING - ParseReferredReferencesFromRows] KeyID, KeyType or KeyValue was nil - skipping Reference Creation for Reference with Reference ID", *ref.ReferenceID)
 			continue
 		}
-		builder.CreateReferredSemanticId(*ref.ReferenceId, *ref.ParentReference, *ref.ReferenceType)
-		builder.CreateReferredSemanticIdKey(*ref.ReferenceId, *ref.KeyID, *ref.KeyType, *ref.KeyValue)
+		builder.CreateReferredSemanticID(*ref.ReferenceID, *ref.ParentReference, *ref.ReferenceType)
+		err := builder.CreateReferredSemanticIdKey(*ref.ReferenceID, *ref.KeyID, *ref.KeyType, *ref.KeyValue)
+
+		if err != nil {
+			return fmt.Errorf("error creating key for referred reference with id %d: %w", *ref.ReferenceID, err)
+		}
 	}
 	return nil
 }
@@ -283,18 +372,18 @@ func ParseReferredReferences(row json.RawMessage, referenceBuilderRefs map[int64
 		return nil
 	}
 
-	var semanticIdData []ReferredReferenceRow
-	if err := json.Unmarshal(row, &semanticIdData); err != nil {
+	var semanticIDData []ReferredReferenceRow
+	if err := json.Unmarshal(row, &semanticIDData); err != nil {
 		return fmt.Errorf("error unmarshalling referred semantic ID data: %w", err)
 	}
 
-	return ParseReferredReferencesFromRows(semanticIdData, referenceBuilderRefs)
+	return ParseReferredReferencesFromRows(semanticIDData, referenceBuilderRefs)
 }
 
 // ParseReferencesFromRows parses reference data from already unmarshalled ReferenceRow objects.
 //
 // This function processes an array of ReferenceRow objects and builds complete Reference
-// objects with their associated Keys. Multiple rows with the same ReferenceId are aggregated
+// objects with their associated Keys. Multiple rows with the same ReferenceID are aggregated
 // into a single Reference object with multiple Keys.
 //
 // Parameters:
@@ -306,32 +395,32 @@ func ParseReferredReferences(row json.RawMessage, referenceBuilderRefs map[int64
 //   - []*gen.Reference: Slice of parsed Reference objects. Each Reference contains all its associated Keys.
 //
 // The function:
-//   - Groups multiple rows with the same ReferenceId into a single Reference
+//   - Groups multiple rows with the same ReferenceID into a single Reference
 //   - Creates new ReferenceBuilder instances for each unique ReferenceId
 //   - Validates key data completeness (KeyID, KeyType, KeyValue)
-//   - Returns only the unique references (one per ReferenceId)
-func ParseReferencesFromRows(semanticIdData []ReferenceRow, referenceBuilderRefs map[int64]*ReferenceBuilder) []*gen.Reference {
+//   - Returns only the unique references (one per ReferenceID)
+func ParseReferencesFromRows(semanticIDData []ReferenceRow, referenceBuilderRefs map[int64]*ReferenceBuilder) []*gen.Reference {
 	resultArray := make([]*gen.Reference, 0)
 
-	for _, ref := range semanticIdData {
-		var semanticId *gen.Reference
-		var semanticIdBuilder *ReferenceBuilder
+	for _, ref := range semanticIDData {
+		var semanticID *gen.Reference
+		var semanticIDBuilder *ReferenceBuilder
 
-		_, semanticIdCreated := referenceBuilderRefs[ref.ReferenceId]
+		_, semanticIDCreated := referenceBuilderRefs[ref.ReferenceID]
 
-		if !semanticIdCreated {
-			semanticId, semanticIdBuilder = NewReferenceBuilder(ref.ReferenceType, ref.ReferenceId)
-			referenceBuilderRefs[ref.ReferenceId] = semanticIdBuilder
-			resultArray = append(resultArray, semanticId)
+		if !semanticIDCreated {
+			semanticID, semanticIDBuilder = NewReferenceBuilder(ref.ReferenceType, ref.ReferenceID)
+			referenceBuilderRefs[ref.ReferenceID] = semanticIDBuilder
+			resultArray = append(resultArray, semanticID)
 		} else {
-			semanticIdBuilder = referenceBuilderRefs[ref.ReferenceId]
+			semanticIDBuilder = referenceBuilderRefs[ref.ReferenceID]
 		}
 
 		if ref.KeyID == nil || ref.KeyType == nil || ref.KeyValue == nil {
-			fmt.Println("[WARNING - ParseReferencesFromRows] KeyID, KeyType or KeyValue was nil - skipping Key Creation for Reference with Reference ID", ref.ReferenceId)
+			fmt.Println("[WARNING - ParseReferencesFromRows] KeyID, KeyType or KeyValue was nil - skipping Key Creation for Reference with Reference ID", ref.ReferenceID)
 			continue
 		}
-		semanticIdBuilder.CreateKey(*ref.KeyID, *ref.KeyType, *ref.KeyValue)
+		semanticIDBuilder.CreateKey(*ref.KeyID, *ref.KeyType, *ref.KeyValue)
 	}
 
 	return resultArray
@@ -340,7 +429,7 @@ func ParseReferencesFromRows(semanticIdData []ReferenceRow, referenceBuilderRefs
 // ParseReferences parses reference data from JSON and creates Reference objects.
 //
 // This function unmarshals JSON-encoded ReferenceRow data and delegates to ParseReferencesFromRows
-// for the actual parsing logic. Multiple rows with the same ReferenceId are aggregated into a
+// for the actual parsing logic. Multiple rows with the same ReferenceID are aggregated into a
 // single Reference object with multiple Keys.
 //
 // Parameters:
@@ -356,12 +445,12 @@ func ParseReferences(row json.RawMessage, referenceBuilderRefs map[int64]*Refere
 		return make([]*gen.Reference, 0), nil
 	}
 
-	var semanticIdData []ReferenceRow
-	if err := json.Unmarshal(row, &semanticIdData); err != nil {
+	var semanticIDData []ReferenceRow
+	if err := json.Unmarshal(row, &semanticIDData); err != nil {
 		return nil, fmt.Errorf("error unmarshalling semantic ID data: %w", err)
 	}
 
-	return ParseReferencesFromRows(semanticIdData, referenceBuilderRefs), nil
+	return ParseReferencesFromRows(semanticIDData, referenceBuilderRefs), nil
 }
 
 // ParseLangStringNameType parses localized name strings from JSON data.
@@ -463,6 +552,22 @@ func ParseLangStringTextType(descriptions json.RawMessage) ([]gen.LangStringText
 	return texts, nil
 }
 
+// ParseLangStringPreferredNameTypeIec61360 parses localized preferred names for IEC 61360 data specifications from JSON data.
+//
+// This function converts JSON-encoded language-specific preferred name data from the database
+// into a slice of LangStringPreferredNameTypeIec61360 objects. It removes internal database IDs
+// from the data before creating the Go structures.
+//
+// Parameters:
+//   - descriptions: JSON-encoded array of objects containing id, text, and language fields
+//
+// Returns:
+//   - []gen.LangStringPreferredNameTypeIec61360: Slice of parsed language-specific preferred name objects
+//   - error: An error if JSON unmarshalling fails or if required fields are missing
+//
+// The function handles empty input by returning an empty slice. It uses panic recovery to
+// handle runtime errors during type assertions. Only objects with an 'id' field are processed
+// to ensure data integrity.
 func ParseLangStringPreferredNameTypeIec61360(descriptions json.RawMessage) ([]gen.LangStringPreferredNameTypeIec61360, error) {
 	var texts []gen.LangStringPreferredNameTypeIec61360
 	// remove id field from json
@@ -493,6 +598,22 @@ func ParseLangStringPreferredNameTypeIec61360(descriptions json.RawMessage) ([]g
 	return texts, nil
 }
 
+// ParseLangStringShortNameTypeIec61360 parses localized short names for IEC 61360 data specifications from JSON data.
+//
+// This function converts JSON-encoded language-specific short name data from the database
+// into a slice of LangStringShortNameTypeIec61360 objects. It removes internal database IDs
+// from the data before creating the Go structures.
+//
+// Parameters:
+//   - descriptions: JSON-encoded array of objects containing id, text, and language fields
+//
+// Returns:
+//   - []gen.LangStringShortNameTypeIec61360: Slice of parsed language-specific short name objects
+//   - error: An error if JSON unmarshalling fails or if required fields are missing
+//
+// The function handles empty input by returning an empty slice. It uses panic recovery to
+// handle runtime errors during type assertions. Only objects with an 'id' field are processed
+// to ensure data integrity.
 func ParseLangStringShortNameTypeIec61360(descriptions json.RawMessage) ([]gen.LangStringShortNameTypeIec61360, error) {
 	var texts []gen.LangStringShortNameTypeIec61360
 	// remove id field from json
@@ -523,6 +644,22 @@ func ParseLangStringShortNameTypeIec61360(descriptions json.RawMessage) ([]gen.L
 	return texts, nil
 }
 
+// ParseLangStringDefinitionTypeIec61360 parses localized definitions for IEC 61360 data specifications from JSON data.
+//
+// This function converts JSON-encoded language-specific definition data from the database
+// into a slice of LangStringDefinitionTypeIec61360 objects. It removes internal database IDs
+// from the data before creating the Go structures.
+//
+// Parameters:
+//   - descriptions: JSON-encoded array of objects containing id, text, and language fields
+//
+// Returns:
+//   - []gen.LangStringDefinitionTypeIec61360: Slice of parsed language-specific definition objects
+//   - error: An error if JSON unmarshalling fails or if required fields are missing
+//
+// The function handles empty input by returning an empty slice. It uses panic recovery to
+// handle runtime errors during type assertions. Only objects with an 'id' field are processed
+// to ensure data integrity.
 func ParseLangStringDefinitionTypeIec61360(descriptions json.RawMessage) ([]gen.LangStringDefinitionTypeIec61360, error) {
 	var texts []gen.LangStringDefinitionTypeIec61360
 	// remove id field from json
@@ -553,6 +690,18 @@ func ParseLangStringDefinitionTypeIec61360(descriptions json.RawMessage) ([]gen.
 	return texts, nil
 }
 
+// ParseQualifiersRow parses qualifier data from JSON into QualifierRow objects.
+//
+// This function unmarshals JSON-encoded qualifier data from the database into a slice
+// of QualifierRow objects. Each row represents a single qualifier with its associated
+// semantic IDs, value IDs, and supplemental semantic IDs stored as nested JSON.
+//
+// Parameters:
+//   - row: JSON-encoded array of QualifierRow objects from the database
+//
+// Returns:
+//   - []QualifierRow: Slice of parsed QualifierRow objects
+//   - error: An error if JSON unmarshalling fails
 func ParseQualifiersRow(row json.RawMessage) ([]QualifierRow, error) {
 	var texts []QualifierRow
 	if err := json.Unmarshal(row, &texts); err != nil {
@@ -561,6 +710,18 @@ func ParseQualifiersRow(row json.RawMessage) ([]QualifierRow, error) {
 	return texts, nil
 }
 
+// ParseExtensionRows parses extension data from JSON into ExtensionRow objects.
+//
+// This function unmarshals JSON-encoded extension data from the database into a slice
+// of ExtensionRow objects. Each row represents a single extension with its associated
+// semantic IDs, supplemental semantic IDs, and references stored as nested JSON.
+//
+// Parameters:
+//   - row: JSON-encoded array of ExtensionRow objects from the database
+//
+// Returns:
+//   - []ExtensionRow: Slice of parsed ExtensionRow objects
+//   - error: An error if JSON unmarshalling fails
 func ParseExtensionRows(row json.RawMessage) ([]ExtensionRow, error) {
 	var texts []ExtensionRow
 	if err := json.Unmarshal(row, &texts); err != nil {
@@ -569,6 +730,21 @@ func ParseExtensionRows(row json.RawMessage) ([]ExtensionRow, error) {
 	return texts, nil
 }
 
+// ParseAdministrationRow parses administrative information from JSON into an AdministrationRow object.
+//
+// This function unmarshals JSON-encoded administrative data from the database. Since
+// administrative information is typically singular for an element, it returns a pointer
+// to a single AdministrationRow object or nil if no data is present.
+//
+// Parameters:
+//   - row: JSON-encoded array of AdministrationRow objects from the database
+//
+// Returns:
+//   - *AdministrationRow: Pointer to the parsed AdministrationRow object, or nil if no data
+//   - error: An error if JSON unmarshalling fails
+//
+// Note: The function expects an array in JSON format but returns only the first element,
+// as administrative information is singular per element.
 func ParseAdministrationRow(row json.RawMessage) (*AdministrationRow, error) {
 	var texts []AdministrationRow
 	if err := json.Unmarshal(row, &texts); err != nil {

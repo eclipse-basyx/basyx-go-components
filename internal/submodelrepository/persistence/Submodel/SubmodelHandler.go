@@ -37,11 +37,11 @@ import (
 	builders "github.com/eclipse-basyx/basyx-go-components/internal/common/builder"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
-	submodel_query "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/Submodel/SubmodelQuery"
+	submodel_query "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/Submodel/submodelQueries"
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 )
 
-func GetSubmodelById(db *sql.DB, submodelIdFilter string) (*gen.Submodel, error) {
+func GetSubmodelByID(db *sql.DB, submodelIdFilter string) (*gen.Submodel, error) {
 	submodels, _, err := getSubmodels(db, submodelIdFilter, 1, "", nil)
 	if err != nil {
 		return nil, err
@@ -102,10 +102,10 @@ func getSubmodels(db *sql.DB, submodelIdFilter string, limit int64, cursor strin
 		count++
 		var row builders.SubmodelRow
 		if err := rows.Scan(
-			&row.Id, &row.IdShort, &row.Category, &row.Kind,
+			&row.ID, &row.IDShort, &row.Category, &row.Kind,
 			&row.DisplayNames, &row.Descriptions,
-			&row.SemanticId, &row.ReferredSemanticIds,
-			&row.SupplementalSemanticIds, &row.SupplementalReferredSemIds,
+			&row.SemanticID, &row.ReferredSemanticIDs,
+			&row.SupplementalSemanticIDs, &row.SupplementalReferredSemIDs,
 			&row.DataSpecReference, &row.DataSpecReferenceReferred,
 			&row.DataSpecIEC61360, &row.Qualifiers, &row.Extensions, &row.Administration, &row.RootSubmodelElements, &row.ChildSubmodelElements, &row.TotalSubmodels,
 		); err != nil {
@@ -118,8 +118,8 @@ func getSubmodels(db *sql.DB, submodelIdFilter string, limit int64, cursor strin
 
 		submodel := &gen.Submodel{
 			ModelType: "Submodel",
-			Id:        row.Id,
-			IdShort:   row.IdShort,
+			ID:        row.ID,
+			IdShort:   row.IDShort,
 			Category:  row.Category,
 			Kind:      gen.ModellingKind(row.Kind),
 		}
@@ -127,26 +127,26 @@ func getSubmodels(db *sql.DB, submodelIdFilter string, limit int64, cursor strin
 			result = append(result, submodel)
 			break
 		}
-		var semanticId []*gen.Reference
-		if isArrayNotEmpty(row.SemanticId) {
-			semanticId, err = builders.ParseReferences(row.SemanticId, referenceBuilderRefs)
+		var semanticID []*gen.Reference
+		if isArrayNotEmpty(row.SemanticID) {
+			semanticID, err = builders.ParseReferences(row.SemanticID, referenceBuilderRefs)
 			if err != nil {
 				return nil, "", err
 			}
-			if hasSemanticId(semanticId) {
-				submodel.SemanticId = semanticId[0]
-				builders.ParseReferredReferences(row.ReferredSemanticIds, referenceBuilderRefs)
+			if hasSemanticID(semanticID) {
+				submodel.SemanticID = semanticID[0]
+				builders.ParseReferredReferences(row.ReferredSemanticIDs, referenceBuilderRefs)
 			}
 		}
 
-		if isArrayNotEmpty(row.SupplementalSemanticIds) {
-			supplementalSemanticIds, err := builders.ParseReferences(row.SupplementalSemanticIds, referenceBuilderRefs)
+		if isArrayNotEmpty(row.SupplementalSemanticIDs) {
+			supplementalSemanticIds, err := builders.ParseReferences(row.SupplementalSemanticIDs, referenceBuilderRefs)
 			if err != nil {
 				return nil, "", err
 			}
 			if moreThanZeroReferences(supplementalSemanticIds) {
 				submodel.SupplementalSemanticIds = supplementalSemanticIds
-				builders.ParseReferredReferences(row.SupplementalReferredSemIds, referenceBuilderRefs)
+				builders.ParseReferredReferences(row.SupplementalReferredSemIDs, referenceBuilderRefs)
 			}
 		}
 
@@ -186,13 +186,13 @@ func getSubmodels(db *sql.DB, submodelIdFilter string, limit int64, cursor strin
 				return nil, "", err
 			}
 			for _, qualifierRow := range qualifierRows {
-				builder.AddQualifier(qualifierRow.DbId, qualifierRow.Kind, qualifierRow.Type, qualifierRow.ValueType, qualifierRow.Value)
+				builder.AddQualifier(qualifierRow.DbID, qualifierRow.Kind, qualifierRow.Type, qualifierRow.ValueType, qualifierRow.Value)
 
-				builder.AddSemanticId(qualifierRow.DbId, qualifierRow.SemanticId, qualifierRow.SemanticIdReferredReferences)
+				builder.AddSemanticID(qualifierRow.DbID, qualifierRow.SemanticID, qualifierRow.SemanticIDReferredReferences)
 
-				builder.AddValueId(qualifierRow.DbId, qualifierRow.ValueId, qualifierRow.ValueIdReferredReferences)
+				builder.AddValueID(qualifierRow.DbID, qualifierRow.ValueID, qualifierRow.ValueIDReferredReferences)
 
-				builder.AddSupplementalSemanticIds(qualifierRow.DbId, qualifierRow.SupplementalSemanticIds, qualifierRow.SupplementalSemanticIdsReferredReferences)
+				builder.AddSupplementalSemanticIds(qualifierRow.DbID, qualifierRow.SupplementalSemanticIDs, qualifierRow.SupplementalSemanticIDsReferredReferences)
 			}
 			submodel.Qualifier = builder.Build()
 		}
@@ -205,13 +205,13 @@ func getSubmodels(db *sql.DB, submodelIdFilter string, limit int64, cursor strin
 				return nil, "", err
 			}
 			for _, extensionRow := range extensionRows {
-				builder.AddExtension(extensionRow.DbId, extensionRow.Name, extensionRow.ValueType, extensionRow.Value)
+				builder.AddExtension(extensionRow.DbID, extensionRow.Name, extensionRow.ValueType, extensionRow.Value)
 
-				builder.AddSemanticId(extensionRow.DbId, extensionRow.SemanticId, extensionRow.SemanticIdReferredReferences)
+				builder.AddSemanticID(extensionRow.DbID, extensionRow.SemanticID, extensionRow.SemanticIDReferredReferences)
 
-				builder.AddRefersTo(extensionRow.DbId, extensionRow.RefersTo, extensionRow.RefersToReferredReferences)
+				builder.AddRefersTo(extensionRow.DbID, extensionRow.RefersTo, extensionRow.RefersToReferredReferences)
 
-				builder.AddSupplementalSemanticIds(extensionRow.DbId, extensionRow.SupplementalSemanticIds, extensionRow.SupplementalSemanticIdsReferredReferences)
+				builder.AddSupplementalSemanticIds(extensionRow.DbID, extensionRow.SupplementalSemanticIDs, extensionRow.SupplementalSemanticIDsReferredReferences)
 			}
 			submodel.Extension = builder.Build()
 		}
@@ -248,7 +248,7 @@ func getSubmodels(db *sql.DB, submodelIdFilter string, limit int64, cursor strin
 	if limit > 0 && len(result) > int(limit) {
 		// We have more results than requested, so there's a next page
 		actualResults := result[:limit]
-		nextCursor = result[limit].Id // Use the ID of the next result as cursor
+		nextCursor = result[limit].ID // Use the ID of the next result as cursor
 		return actualResults, nextCursor, nil
 	}
 
@@ -316,7 +316,7 @@ func isArrayNotEmpty(data json.RawMessage) bool {
 	return len(data) > 0 && string(data) != "null"
 }
 
-// hasSemanticId validates that exactly one semantic ID reference exists.
+// hasSemanticID validates that exactly one semantic ID reference exists.
 //
 // According to the AAS specification, a submodel should have exactly one semantic ID.
 // This function checks that the parsed semantic ID data contains exactly one reference.
@@ -326,7 +326,7 @@ func isArrayNotEmpty(data json.RawMessage) bool {
 //
 // Returns:
 //   - bool: true if exactly one semantic ID reference exists, false otherwise
-func hasSemanticId(semanticIdData []*gen.Reference) bool {
+func hasSemanticID(semanticIdData []*gen.Reference) bool {
 	return len(semanticIdData) == 1
 }
 
@@ -349,13 +349,13 @@ func moreThanZeroReferences(referenceArray []*gen.Reference) bool {
 //
 // Parameters:
 //   - db: Database connection to execute the query against
-//   - submodelId: Optional filter for a specific submodel ID. Empty string retrieves all submodels.
+//   - submodelID: Optional filter for a specific submodel ID. Empty string retrieves all submodels.
 //
 // Returns:
 //   - *sql.Rows: Result set containing submodel data with JSON-aggregated nested structures
 //   - error: An error if query building or execution fails
-func getSubmodelDataFromDbWithJSONQuery(db *sql.DB, submodelId string, limit int64, cursor string, query *grammar.QueryWrapper) (*sql.Rows, error) {
-	q, err := submodel_query.GetQueryWithGoqu(submodelId, limit, cursor, query)
+func getSubmodelDataFromDbWithJSONQuery(db *sql.DB, submodelID string, limit int64, cursor string, query *grammar.QueryWrapper) (*sql.Rows, error) {
+	q, err := submodel_query.GetQueryWithGoqu(submodelID, limit, cursor, query)
 	if err != nil {
 		fmt.Printf("Error building query: %v\n", err)
 		return nil, err

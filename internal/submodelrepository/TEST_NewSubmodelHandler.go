@@ -18,12 +18,12 @@ const (
 )
 
 func TestNewSubmodelHandler(smDatabase *persistence_postgresql.PostgreSQLSubmodelDatabase) {
-	//TEST
+	// TEST
 	if benchmarkEnabled {
 		var acc int64
 		for i := 0; i < 1000; i++ {
 			start := time.Now().Local().UnixMilli()
-			submodel_persistence.GetSubmodelById(smDatabase.GetDB(), fmt.Sprintf("5_%d", i))
+			submodel_persistence.GetSubmodelByID(smDatabase.GetDB(), fmt.Sprintf("5_%d", i))
 			end := time.Now().Local().UnixMilli()
 			fmt.Printf("Total time: %d milliseconds\n", end-start)
 			acc += int64(end - start)
@@ -48,10 +48,10 @@ func TestNewSubmodelHandler(smDatabase *persistence_postgresql.PostgreSQLSubmode
 
 				for i := startIdx; i < endIdx; i++ {
 					start := time.Now().UnixMilli()
-					submodel_persistence.GetSubmodelById(smDatabase.GetDB(), fmt.Sprintf("5_%d", i))
+					submodel_persistence.GetSubmodelByID(smDatabase.GetDB(), fmt.Sprintf("5_%d", i))
 					end := time.Now().UnixMilli()
 					duration := end - start
-					//fmt.Printf("[Thread %02d] Total time for 5_%d: %d ms\n", threadID, i, duration)
+					// fmt.Printf("[Thread %02d] Total time for 5_%d: %d ms\n", threadID, i, duration)
 					localAcc += duration
 				}
 
@@ -67,7 +67,7 @@ func TestNewSubmodelHandler(smDatabase *persistence_postgresql.PostgreSQLSubmode
 		requestsPerSecond := float64(iterations) / (float64(totalDuration) / 1000.0)
 		fmt.Printf("Requests per second: %.2f\n", requestsPerSecond)
 
-		// sm, err := smDatabase.GetSubmodelById("5_1")
+		// sm, err := smDatabase.GetSubmodelByID("5_1")
 		// jsonSubmodel, _ := json.Marshal(sm)
 		// fmt.Println(string(jsonSubmodel))
 	}
@@ -83,7 +83,7 @@ func TestNewSubmodelHandler(smDatabase *persistence_postgresql.PostgreSQLSubmode
 		log.Fatalf("Failed to parse JSON: %v", err)
 	}
 	start := time.Now()
-	sms, cursor, err := submodel_persistence.GetAllSubmodels(smDatabase.GetDB(), 5, "", &query)
+	sms, cursor, err := submodel_persistence.GetAllSubmodels(smDatabase.GetDB(), 5, "", nil)
 	end := time.Now()
 	fmt.Printf("Query Execution Time: %d milliseconds\n", end.Sub(start).Milliseconds())
 	fmt.Println(cursor)
@@ -95,11 +95,11 @@ func TestNewSubmodelHandler(smDatabase *persistence_postgresql.PostgreSQLSubmode
 	fmt.Println(len(sms))
 	if len(sms) > 0 {
 		jsonSubmodel, _ := json.Marshal(sms[0])
-		//print size in bytes
+		// print size in bytes
 		fmt.Println(string(jsonSubmodel))
 
 		allSmsJson, _ := json.Marshal(sms)
 		fmt.Printf("Total size of all submodels: %.2f MB\n", float64(len(allSmsJson))/(1024*1024))
 	}
-	//TEST
+	// TEST
 }

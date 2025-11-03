@@ -34,12 +34,14 @@
 
 package model
 
+// RelationshipElementChoice Relationship element choice
 type RelationshipElementChoice struct {
 	Extensions []Extension `json:"extensions,omitempty"`
 
 	Category string `json:"category,omitempty"`
 
-	IdShort ReferableAllOfIdShort `json:"idShort,omitempty"`
+	//nolint:all
+	IdShort string `json:"idShort,omitempty"`
 
 	DisplayName []LangStringNameType `json:"displayName,omitempty"`
 
@@ -47,8 +49,10 @@ type RelationshipElementChoice struct {
 
 	ModelType *interface{} `json:"modelType"`
 
-	SemanticId *Reference `json:"semanticId,omitempty"`
+	//nolint:all
+	SemanticID *Reference `json:"semanticID,omitempty"`
 
+	//nolint:all
 	SupplementalSemanticIds []Reference `json:"supplementalSemanticIds,omitempty"`
 
 	Qualifiers []Qualifier `json:"qualifiers,omitempty"`
@@ -88,8 +92,8 @@ func AssertRelationshipElementChoiceRequired(obj RelationshipElementChoice) erro
 			return err
 		}
 	}
-	if obj.SemanticId != nil {
-		if err := AssertReferenceRequired(*obj.SemanticId); err != nil {
+	if obj.SemanticID != nil {
+		if err := AssertReferenceRequired(*obj.SemanticID); err != nil {
 			return err
 		}
 	}
@@ -143,8 +147,8 @@ func AssertRelationshipElementChoiceConstraints(obj RelationshipElementChoice) e
 			return err
 		}
 	}
-	if obj.SemanticId != nil {
-		if err := AssertReferenceConstraints(*obj.SemanticId); err != nil {
+	if obj.SemanticID != nil {
+		if err := AssertReferenceConstraints(*obj.SemanticID); err != nil {
 			return err
 		}
 	}

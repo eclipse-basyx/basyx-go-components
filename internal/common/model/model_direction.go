@@ -13,9 +13,12 @@ import (
 	"fmt"
 )
 
+// Direction type of Direction
 type Direction string
 
 // List of Direction
+//
+//nolint:all
 const (
 	DIRECTION_INPUT  Direction = "input"
 	DIRECTION_OUTPUT Direction = "output"
@@ -51,11 +54,15 @@ func NewDirectionFromValue(v string) (Direction, error) {
 }
 
 // AssertDirectionRequired checks if the required fields are not zero-ed
+//
+//nolint:all
 func AssertDirectionRequired(obj Direction) error {
 	return nil
 }
 
 // AssertDirectionConstraints checks if the values respects the defined constraints
+//
+//nolint:all
 func AssertDirectionConstraints(obj Direction) error {
 	return nil
 }

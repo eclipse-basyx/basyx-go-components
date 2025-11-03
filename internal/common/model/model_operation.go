@@ -9,11 +9,13 @@
 
 package model
 
+// Operation  type of SubmodelElement
 type Operation struct {
 	Extensions []Extension `json:"extensions,omitempty"`
 
 	Category string `json:"category,omitempty" validate:"regexp=^([\\\\x09\\\\x0a\\\\x0d\\\\x20-\\\\ud7ff\\\\ue000-\\\\ufffd]|\\\\ud800[\\\\udc00-\\\\udfff]|[\\\\ud801-\\\\udbfe][\\\\udc00-\\\\udfff]|\\\\udbff[\\\\udc00-\\\\udfff])*$"`
 
+	//nolint:all
 	IdShort string `json:"idShort,omitempty"`
 
 	DisplayName []LangStringNameType `json:"displayName,omitempty"`
@@ -22,8 +24,9 @@ type Operation struct {
 
 	ModelType string `json:"modelType" validate:"regexp=^Operation$"`
 
-	SemanticId *Reference `json:"semanticId,omitempty"`
+	SemanticID *Reference `json:"semanticID,omitempty"`
 
+	//nolint:all
 	SupplementalSemanticIds []Reference `json:"supplementalSemanticIds,omitempty"`
 
 	Qualifiers []Qualifier `json:"qualifiers,omitempty"`
@@ -38,84 +41,105 @@ type Operation struct {
 }
 
 // Getters
+//
+//nolint:all
 func (a Operation) GetExtensions() []Extension {
 	return a.Extensions
 }
 
+//nolint:all
 func (a Operation) GetIdShort() string {
 	return a.IdShort
 }
 
+//nolint:all
 func (a Operation) GetCategory() string {
 	return a.Category
 }
 
+//nolint:all
 func (a Operation) GetDisplayName() []LangStringNameType {
 	return a.DisplayName
 }
 
+//nolint:all
 func (a Operation) GetDescription() []LangStringTextType {
 	return a.Description
 }
 
+//nolint:all
 func (a Operation) GetModelType() string {
 	return a.ModelType
 }
 
-func (a Operation) GetSemanticId() *Reference {
-	return a.SemanticId
+//nolint:all
+func (a Operation) GetSemanticID() *Reference {
+	return a.SemanticID
 }
 
+//nolint:all
 func (a Operation) GetSupplementalSemanticIds() []Reference {
 	return a.SupplementalSemanticIds
 }
 
+//nolint:all
 func (a Operation) GetQualifiers() []Qualifier {
 	return a.Qualifiers
 }
 
+//nolint:all
 func (a Operation) GetEmbeddedDataSpecifications() []EmbeddedDataSpecification {
 	return a.EmbeddedDataSpecifications
 }
 
 // Setters
 
+//nolint:all
 func (a *Operation) SetModelType(modelType string) {
 	a.ModelType = modelType
 }
 
+//nolint:all
 func (a *Operation) SetExtensions(v []Extension) {
 	a.Extensions = v
 }
 
+//nolint:all
 func (a *Operation) SetIdShort(v string) {
 	a.IdShort = v
 }
 
+//nolint:all
 func (a *Operation) SetCategory(v string) {
 	a.Category = v
 }
 
+//nolint:all
 func (a *Operation) SetDisplayName(v []LangStringNameType) {
 	a.DisplayName = v
 }
 
+//nolint:all
 func (a *Operation) SetDescription(v []LangStringTextType) {
 	a.Description = v
 }
 
-func (a *Operation) SetSemanticId(v *Reference) {
-	a.SemanticId = v
+//nolint:all
+func (a *Operation) SetSemanticID(v *Reference) {
+	a.SemanticID = v
 }
 
+//nolint:all
 func (a *Operation) SetSupplementalSemanticIds(v []Reference) {
 	a.SupplementalSemanticIds = v
 }
 
+//nolint:all
 func (a *Operation) SetQualifiers(v []Qualifier) {
 	a.Qualifiers = v
 }
 
+//nolint:all
 func (a *Operation) SetEmbeddedDataSpecifications(v []EmbeddedDataSpecification) {
 	a.EmbeddedDataSpecifications = v
 }
@@ -136,7 +160,7 @@ func AssertOperationRequired(obj Operation) error {
 			return err
 		}
 	}
-	if err := AssertReferableAllOfIdShortRequired(obj.IdShort); err != nil {
+	if err := AssertIdShortRequired(obj.IdShort); err != nil {
 		return err
 	}
 	for _, el := range obj.DisplayName {
@@ -149,7 +173,7 @@ func AssertOperationRequired(obj Operation) error {
 			return err
 		}
 	}
-	if err := AssertReferenceRequired(*obj.SemanticId); err != nil {
+	if err := AssertReferenceRequired(*obj.SemanticID); err != nil {
 		return err
 	}
 	for _, el := range obj.SupplementalSemanticIds {
@@ -192,7 +216,7 @@ func AssertOperationConstraints(obj Operation) error {
 			return err
 		}
 	}
-	if err := AssertReferableAllOfIdShortConstraints(obj.IdShort); err != nil {
+	if err := AssertstringConstraints(obj.IdShort); err != nil {
 		return err
 	}
 	for _, el := range obj.DisplayName {
@@ -205,7 +229,7 @@ func AssertOperationConstraints(obj Operation) error {
 			return err
 		}
 	}
-	if err := AssertReferenceConstraints(*obj.SemanticId); err != nil {
+	if err := AssertReferenceConstraints(*obj.SemanticID); err != nil {
 		return err
 	}
 	for _, el := range obj.SupplementalSemanticIds {

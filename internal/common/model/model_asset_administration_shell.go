@@ -9,11 +9,13 @@
 
 package model
 
+// AssetAdministrationShell struct represents an Asset Administration Shell (AAS) in the system.
 type AssetAdministrationShell struct {
 	Extensions []Extension `json:"extensions,omitempty"`
 
 	Category string `json:"category,omitempty" validate:"regexp=^([\\\\x09\\\\x0a\\\\x0d\\\\x20-\\\\ud7ff\\\\ue000-\\\\ufffd]|\\\\ud800[\\\\udc00-\\\\udfff]|[\\\\ud801-\\\\udbfe][\\\\udc00-\\\\udfff]|\\\\udbff[\\\\udc00-\\\\udfff])*$"`
 
+	//nolint:all
 	IdShort string `json:"idShort,omitempty"`
 
 	DisplayName []LangStringNameType `json:"displayName,omitempty"`
@@ -24,7 +26,7 @@ type AssetAdministrationShell struct {
 
 	Administration AdministrativeInformation `json:"administration,omitempty"`
 
-	Id string `json:"id" validate:"regexp=^([\\\\x09\\\\x0a\\\\x0d\\\\x20-\\\\ud7ff\\\\ue000-\\\\ufffd]|\\\\ud800[\\\\udc00-\\\\udfff]|[\\\\ud801-\\\\udbfe][\\\\udc00-\\\\udfff]|\\\\udbff[\\\\udc00-\\\\udfff])*$"`
+	ID string `json:"id" validate:"regexp=^([\\\\x09\\\\x0a\\\\x0d\\\\x20-\\\\ud7ff\\\\ue000-\\\\ufffd]|\\\\ud800[\\\\udc00-\\\\udfff]|[\\\\ud801-\\\\udbfe][\\\\udc00-\\\\udfff]|\\\\udbff[\\\\udc00-\\\\udfff])*$"`
 
 	EmbeddedDataSpecifications []EmbeddedDataSpecification `json:"embeddedDataSpecifications,omitempty"`
 
@@ -39,7 +41,7 @@ type AssetAdministrationShell struct {
 func AssertAssetAdministrationShellRequired(obj AssetAdministrationShell) error {
 	elements := map[string]interface{}{
 		"modelType":        obj.ModelType,
-		"id":               obj.Id,
+		"id":               obj.ID,
 		"assetInformation": obj.AssetInformation,
 	}
 	for name, el := range elements {
@@ -53,7 +55,7 @@ func AssertAssetAdministrationShellRequired(obj AssetAdministrationShell) error 
 			return err
 		}
 	}
-	if err := AssertReferableAllOfIdShortRequired(obj.IdShort); err != nil {
+	if err := AssertIdShortRequired(obj.IdShort); err != nil {
 		return err
 	}
 	for _, el := range obj.DisplayName {
@@ -99,7 +101,7 @@ func AssertAssetAdministrationShellConstraints(obj AssetAdministrationShell) err
 			return err
 		}
 	}
-	if err := AssertReferableAllOfIdShortConstraints(obj.IdShort); err != nil {
+	if err := AssertstringConstraints(obj.IdShort); err != nil {
 		return err
 	}
 	for _, el := range obj.DisplayName {

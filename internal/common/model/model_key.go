@@ -9,6 +9,7 @@
 
 package model
 
+// Key type of Key
 type Key struct {
 	Type KeyTypes `json:"type"`
 
@@ -31,6 +32,8 @@ func AssertKeyRequired(obj Key) error {
 }
 
 // AssertKeyConstraints checks if the values respects the defined constraints
+//
+//nolint:all
 func AssertKeyConstraints(obj Key) error {
 	return nil
 }

@@ -43,7 +43,7 @@ func NewSubmodelRepositoryAPIAPIService(databaseBackend persistence.PostgreSQLSu
 // GetAllSubmodels - Returns all Submodels
 func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodels(
 	ctx context.Context,
-	semanticId string,
+	semanticID string,
 	idShort string,
 	limit int32,
 	cursor string,
@@ -66,7 +66,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodels(
 }
 
 // for getSubModel by id
-func (s *SubmodelRepositoryAPIAPIService) GetSubmodelById(
+func (s *SubmodelRepositoryAPIAPIService) GetSubmodelByID(
 	ctx context.Context,
 	id string,
 	level string,
@@ -91,8 +91,8 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelById(
 	return gen.Response(200, sm), nil
 }
 
-// DeleteSubmodelById - Deletes a Submodel by Id
-func (s *SubmodelRepositoryAPIAPIService) DeleteSubmodelById(
+// DeleteSubmodelByID - Deletes a Submodel by Id
+func (s *SubmodelRepositoryAPIAPIService) DeleteSubmodelByID(
 	ctx context.Context,
 	id string,
 ) (gen.ImplResponse, error) {
@@ -127,11 +127,11 @@ func (s *SubmodelRepositoryAPIAPIService) PostSubmodel(
 // GetAllSubmodelsMetadata - Returns the metadata attributes of all Submodels
 func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsMetadata(
 	ctx context.Context,
-	semanticId string,
+	semanticID string,
 	idShort string,
 	limit int32,
 	cursor string) (gen.ImplResponse, error) {
-	sms, nextCursor, err := s.submodelBackend.GetAllSubmodelsMetadata(limit, cursor, idShort, semanticId)
+	sms, nextCursor, err := s.submodelBackend.GetAllSubmodelsMetadata(limit, cursor, idShort, semanticID)
 	if err != nil {
 		return gen.Response(500, nil), err
 	}
@@ -166,11 +166,11 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsMetadata(
 	// TODO: Uncomment the next line to return response Response(0, Result{}) or use other options such as http.Ok ...
 	// return gen.Response(0, Result{}), nil
 
-	//return gen.Response(http.StatusNotImplemented, nil), errors.New("GetAllSubmodelsMetadata method not implemented")
+	// return gen.Response(http.StatusNotImplemented, nil), errors.New("GetAllSubmodelsMetadata method not implemented")
 }
 
 // GetAllSubmodelsValueOnly - Returns all Submodels in their ValueOnly representation
-func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsValueOnly(ctx context.Context, semanticId string, idShort string, limit int32, cursor string, level string, extent string) (gen.ImplResponse, error) {
+func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsValueOnly(ctx context.Context, semanticID string, idShort string, limit int32, cursor string, level string, extent string) (gen.ImplResponse, error) {
 	// TODO - update GetAllSubmodelsValueOnly with the required logic for this service method.
 	// Add api_submodel_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
 
@@ -199,7 +199,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsValueOnly(ctx context.C
 }
 
 // GetAllSubmodelsReference - Returns the References for all Submodels
-func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsReference(ctx context.Context, semanticId string, idShort string, limit int32, cursor string, level string) (gen.ImplResponse, error) {
+func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsReference(ctx context.Context, semanticID string, idShort string, limit int32, cursor string, level string) (gen.ImplResponse, error) {
 	// TODO - update GetAllSubmodelsReference with the required logic for this service method.
 	// Add api_submodel_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
 
@@ -225,7 +225,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsReference(ctx context.C
 }
 
 // GetAllSubmodelsPath - Returns all Submodels in the Path notation
-func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsPath(ctx context.Context, semanticId string, idShort string, limit int32, cursor string, level string) (gen.ImplResponse, error) {
+func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsPath(ctx context.Context, semanticID string, idShort string, limit int32, cursor string, level string) (gen.ImplResponse, error) {
 	// TODO - update GetAllSubmodelsPath with the required logic for this service method.
 	// Add api_submodel_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
 
@@ -250,9 +250,9 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsPath(ctx context.Contex
 	return gen.Response(http.StatusNotImplemented, nil), errors.New("GetAllSubmodelsPath method not implemented")
 }
 
-// GetSubmodelById - Returns a specific Submodel
-// func (s *SubmodelRepositoryAPIAPIService) GetSubmodelById(ctx context.Context, submodelIdentifier string, level string, extent string) (gen.ImplResponse, error) {
-// TODO - update GetSubmodelById with the required logic for this service method.
+// GetSubmodelByID - Returns a specific Submodel
+// func (s *SubmodelRepositoryAPIAPIService) GetSubmodelByID(ctx context.Context, submodelIdentifier string, level string, extent string) (gen.ImplResponse, error) {
+// TODO - update GetSubmodelByID with the required logic for this service method.
 // Add api_submodel_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
 
 // TODO: Uncomment the next line to return response Response(200, Submodel{}) or use other options such as http.Ok ...
@@ -276,12 +276,12 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsPath(ctx context.Contex
 // TODO: Uncomment the next line to return response Response(0, Result{}) or use other options such as http.Ok ...
 // return gen.Response(0, Result{}), nil
 
-// return gen.Response(http.StatusNotImplemented, nil), errors.New("GetSubmodelById method not implemented")
+// return gen.Response(http.StatusNotImplemented, nil), errors.New("GetSubmodelByID method not implemented")
 // }
 
-// PutSubmodelById - Updates an existing Submodel
-func (s *SubmodelRepositoryAPIAPIService) PutSubmodelById(ctx context.Context, submodelIdentifier string, submodel gen.Submodel) (gen.ImplResponse, error) {
-	// TODO - update PutSubmodelById with the required logic for this service method.
+// PutSubmodelByID - Updates an existing Submodel
+func (s *SubmodelRepositoryAPIAPIService) PutSubmodelByID(ctx context.Context, submodelIdentifier string, submodel gen.Submodel) (gen.ImplResponse, error) {
+	// TODO - update PutSubmodelByID with the required logic for this service method.
 	// Add api_submodel_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
 
 	// TODO: Uncomment the next line to return response Response(204, {}) or use other options such as http.Ok ...
@@ -305,12 +305,12 @@ func (s *SubmodelRepositoryAPIAPIService) PutSubmodelById(ctx context.Context, s
 	// TODO: Uncomment the next line to return response Response(0, Result{}) or use other options such as http.Ok ...
 	// return gen.Response(0, Result{}), nil
 
-	return gen.Response(http.StatusNotImplemented, nil), errors.New("PutSubmodelById method not implemented")
+	return gen.Response(http.StatusNotImplemented, nil), errors.New("PutSubmodelByID method not implemented")
 }
 
-// PatchSubmodelById - Updates an existing Submodel
-func (s *SubmodelRepositoryAPIAPIService) PatchSubmodelById(ctx context.Context, submodelIdentifier string, submodel gen.Submodel, level string) (gen.ImplResponse, error) {
-	// TODO - update PatchSubmodelById with the required logic for this service method.
+// PatchSubmodelByID - Updates an existing Submodel
+func (s *SubmodelRepositoryAPIAPIService) PatchSubmodelByID(ctx context.Context, submodelIdentifier string, submodel gen.Submodel, level string) (gen.ImplResponse, error) {
+	// TODO - update PatchSubmodelByID with the required logic for this service method.
 	// Add api_submodel_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
 
 	// TODO: Uncomment the next line to return response Response(204, {}) or use other options such as http.Ok ...
@@ -334,7 +334,7 @@ func (s *SubmodelRepositoryAPIAPIService) PatchSubmodelById(ctx context.Context,
 	// TODO: Uncomment the next line to return response Response(0, Result{}) or use other options such as http.Ok ...
 	// return gen.Response(0, Result{}), nil
 
-	return gen.Response(http.StatusNotImplemented, nil), errors.New("PatchSubmodelById method not implemented")
+	return gen.Response(http.StatusNotImplemented, nil), errors.New("PatchSubmodelByID method not implemented")
 }
 
 // GetSubmodelByIdMetadata - Returns the metadata attributes of a specific Submodel
@@ -1002,7 +1002,7 @@ func (s *SubmodelRepositoryAPIAPIService) PatchSubmodelElementByPathValueOnlySub
 	return gen.Response(http.StatusNotImplemented, nil), errors.New("PatchSubmodelElementByPathValueOnlySubmodelRepo method not implemented")
 }
 
-// GetSubmodelElementByPathReferenceSubmodelRepo - Returns the Referene of a specific submodel element from the Submodel at a specified path
+// GetSubmodelElementByPathReferenceSubmodelRepo - Returns the Referee of a specific submodel element from the Submodel at a specified path
 func (s *SubmodelRepositoryAPIAPIService) GetSubmodelElementByPathReferenceSubmodelRepo(ctx context.Context, submodelIdentifier string, idShortPath string) (gen.ImplResponse, error) {
 	// TODO - update GetSubmodelElementByPathReferenceSubmodelRepo with the required logic for this service method.
 	// Add api_submodel_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
@@ -1276,7 +1276,7 @@ func (s *SubmodelRepositoryAPIAPIService) InvokeOperationAsyncValueOnly(ctx cont
 }
 
 // GetOperationAsyncStatus - Returns the status of an asynchronously invoked Operation
-func (s *SubmodelRepositoryAPIAPIService) GetOperationAsyncStatus(ctx context.Context, submodelIdentifier string, idShortPath string, handleId string) (gen.ImplResponse, error) {
+func (s *SubmodelRepositoryAPIAPIService) GetOperationAsyncStatus(ctx context.Context, submodelIdentifier string, idShortPath string, handleID string) (gen.ImplResponse, error) {
 	// TODO - update GetOperationAsyncStatus with the required logic for this service method.
 	// Add api_submodel_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
 
@@ -1308,7 +1308,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetOperationAsyncStatus(ctx context.Co
 }
 
 // GetOperationAsyncResult - Returns the Operation result of an asynchronously invoked Operation
-func (s *SubmodelRepositoryAPIAPIService) GetOperationAsyncResult(ctx context.Context, submodelIdentifier string, idShortPath string, handleId string) (gen.ImplResponse, error) {
+func (s *SubmodelRepositoryAPIAPIService) GetOperationAsyncResult(ctx context.Context, submodelIdentifier string, idShortPath string, handleID string) (gen.ImplResponse, error) {
 	// TODO - update GetOperationAsyncResult with the required logic for this service method.
 	// Add api_submodel_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
 
@@ -1337,7 +1337,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetOperationAsyncResult(ctx context.Co
 }
 
 // GetOperationAsyncResultValueOnly - Returns the Operation result of an asynchronously invoked Operation
-func (s *SubmodelRepositoryAPIAPIService) GetOperationAsyncResultValueOnly(ctx context.Context, submodelIdentifier string, idShortPath string, handleId string) (gen.ImplResponse, error) {
+func (s *SubmodelRepositoryAPIAPIService) GetOperationAsyncResultValueOnly(ctx context.Context, submodelIdentifier string, idShortPath string, handleID string) (gen.ImplResponse, error) {
 	// TODO - update GetOperationAsyncResultValueOnly with the required logic for this service method.
 	// Add api_submodel_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
 

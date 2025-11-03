@@ -9,15 +9,22 @@
 
 package model
 
+// RangeValueType  type of RangeValueType
+//
+//nolint:all
 type RangeValueType struct {
 }
 
 // AssertRangeValueTypeRequired checks if the required fields are not zero-ed
+//
+//nolint:all
 func AssertRangeValueTypeRequired(obj RangeValueType) error {
 	return nil
 }
 
 // AssertRangeValueTypeConstraints checks if the values respects the defined constraints
+//
+//nolint:all
 func AssertRangeValueTypeConstraints(obj RangeValueType) error {
 	return nil
 }

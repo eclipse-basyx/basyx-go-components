@@ -47,14 +47,14 @@ func NewPostgreSQLPropertyHandler(db *sql.DB) (*PostgreSQLPropertyHandler, error
 	return &PostgreSQLPropertyHandler{db: db, decorated: decoratedHandler}, nil
 }
 
-func (p PostgreSQLPropertyHandler) Create(tx *sql.Tx, submodelId string, submodelElement gen.SubmodelElement) (int, error) {
+func (p PostgreSQLPropertyHandler) Create(tx *sql.Tx, submodelID string, submodelElement gen.SubmodelElement) (int, error) {
 	property, ok := submodelElement.(*gen.Property)
 	if !ok {
 		return 0, errors.New("submodelElement is not of type Property")
 	}
 
 	// First, perform base SubmodelElement operations within the transaction
-	id, err := p.decorated.Create(tx, submodelId, submodelElement)
+	id, err := p.decorated.Create(tx, submodelID, submodelElement)
 	if err != nil {
 		return 0, err
 	}
@@ -69,14 +69,14 @@ func (p PostgreSQLPropertyHandler) Create(tx *sql.Tx, submodelId string, submode
 	return id, nil
 }
 
-func (p PostgreSQLPropertyHandler) CreateNested(tx *sql.Tx, submodelId string, parentId int, idShortPath string, submodelElement gen.SubmodelElement, pos int) (int, error) {
+func (p PostgreSQLPropertyHandler) CreateNested(tx *sql.Tx, submodelID string, parentID int, idShortPath string, submodelElement gen.SubmodelElement, pos int) (int, error) {
 	property, ok := submodelElement.(*gen.Property)
 	if !ok {
 		return 0, errors.New("submodelElement is not of type Property")
 	}
 
 	// Create the nested property with the provided idShortPath using the decorated handler
-	id, err := p.decorated.CreateAndPath(tx, submodelId, parentId, idShortPath, submodelElement, pos)
+	id, err := p.decorated.CreateAndPath(tx, submodelID, parentID, idShortPath, submodelElement, pos)
 	if err != nil {
 		return 0, err
 	}
@@ -105,7 +105,7 @@ func (p PostgreSQLPropertyHandler) Delete(idShortOrPath string) error {
 
 func insertProperty(property *gen.Property, tx *sql.Tx, id int) error {
 	var valueText, valueNum, valueBool, valueTime, valueDatetime sql.NullString
-	var valueId sql.NullInt64
+	var valueID sql.NullInt64
 
 	switch property.ValueType {
 	case "xs:string", "xs:anyURI", "xs:base64Binary", "xs:hexBinary":
@@ -127,10 +127,10 @@ func insertProperty(property *gen.Property, tx *sql.Tx, id int) error {
 		valueText = sql.NullString{String: property.Value, Valid: property.Value != ""}
 	}
 
-	// Handle valueId if present
-	if property.ValueId != nil && len(property.ValueId.Keys) > 0 && property.ValueId.Keys[0].Value != "" {
-		// Assuming ValueId references another element by ID - you may need to adjust this logic
-		valueId = sql.NullInt64{Int64: 0, Valid: false} // Implement proper ID resolution here
+	// Handle valueID if present
+	if property.ValueID != nil && len(property.ValueID.Keys) > 0 && property.ValueID.Keys[0].Value != "" {
+		// Assuming ValueID references another element by ID - you may need to adjust this logic
+		valueID = sql.NullInt64{Int64: 0, Valid: false} // Implement proper ID resolution here
 	}
 
 	// Insert Property-specific data
@@ -143,7 +143,7 @@ func insertProperty(property *gen.Property, tx *sql.Tx, id int) error {
 		valueBool,
 		valueTime,
 		valueDatetime,
-		valueId,
+		valueID,
 	)
 	return err
 }

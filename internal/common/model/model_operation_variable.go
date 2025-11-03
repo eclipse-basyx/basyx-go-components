@@ -14,6 +14,7 @@ import (
 	"fmt"
 )
 
+// OperationVariable type of OperationVariable
 type OperationVariable struct {
 	Value SubmodelElement `json:"value"`
 }
@@ -29,7 +30,7 @@ func AssertOperationVariableRequired(obj OperationVariable) error {
 		}
 	}
 
-	//TODO VALIDATION
+	// TODO VALIDATION
 	// if err := AssertSubmodelElementChoiceRequired(obj.Value); err != nil {
 	// 	return err
 	// }
@@ -37,14 +38,17 @@ func AssertOperationVariableRequired(obj OperationVariable) error {
 }
 
 // AssertOperationVariableConstraints checks if the values respects the defined constraints
+//
+//nolint:all
 func AssertOperationVariableConstraints(obj OperationVariable) error {
-	//TODO VALIDATION
+	// TODO VALIDATION
 	// if err := AssertSubmodelElementChoiceConstraints(obj.Value); err != nil {
 	// 	return err
 	// }
 	return nil
 }
 
+// UnmarshalJSON custom unmarshaler for OperationVariable to handle the Value field
 func (ov *OperationVariable) UnmarshalJSON(data []byte) error {
 	// Create a temporary struct with the same fields but Value as json.RawMessage
 	type Alias OperationVariable

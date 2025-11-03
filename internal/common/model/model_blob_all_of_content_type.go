@@ -9,15 +9,20 @@
 
 package model
 
+// BlobAllOfContentType type of Blob
 type BlobAllOfContentType struct {
 }
 
 // AssertBlobAllOfContentTypeRequired checks if the required fields are not zero-ed
+//
+//nolint:all
 func AssertBlobAllOfContentTypeRequired(obj string) error {
 	return nil
 }
 
 // AssertBlobAllOfContentTypeConstraints checks if the values respects the defined constraints
+//
+//nolint:all
 func AssertBlobAllOfContentTypeConstraints(obj string) error {
 	return nil
 }

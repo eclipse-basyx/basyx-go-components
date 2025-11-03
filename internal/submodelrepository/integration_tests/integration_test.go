@@ -156,7 +156,7 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 
-	//wait for 5sec to ensure that the DB is ready
+	// wait for 5sec to ensure that the DB is ready
 	time.Sleep(5 * time.Second)
 
 	dir, osErr := os.Getwd()

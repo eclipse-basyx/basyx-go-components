@@ -9,11 +9,13 @@
 
 package model
 
+// Range  type of Range
 type Range struct {
 	Extensions []Extension `json:"extensions,omitempty"`
 
 	Category string `json:"category,omitempty" validate:"regexp=^([\\\\x09\\\\x0a\\\\x0d\\\\x20-\\\\ud7ff\\\\ue000-\\\\ufffd]|\\\\ud800[\\\\udc00-\\\\udfff]|[\\\\ud801-\\\\udbfe][\\\\udc00-\\\\udfff]|\\\\udbff[\\\\udc00-\\\\udfff])*$"`
 
+	//nolint:all
 	IdShort string `json:"idShort,omitempty"`
 
 	DisplayName []LangStringNameType `json:"displayName,omitempty"`
@@ -22,8 +24,10 @@ type Range struct {
 
 	ModelType string `json:"modelType" validate:"regexp=^Range$"`
 
-	SemanticId *Reference `json:"semanticId,omitempty"`
+	//nolint:all
+	SemanticID *Reference `json:"semanticID,omitempty"`
 
+	//nolint:all
 	SupplementalSemanticIds []Reference `json:"supplementalSemanticIds,omitempty"`
 
 	Qualifiers []Qualifier `json:"qualifiers,omitempty"`
@@ -38,84 +42,105 @@ type Range struct {
 }
 
 // Getters
+//
+//nolint:all
 func (a Range) GetExtensions() []Extension {
 	return a.Extensions
 }
 
+//nolint:all
 func (a Range) GetIdShort() string {
 	return a.IdShort
 }
 
+//nolint:all
 func (a Range) GetCategory() string {
 	return a.Category
 }
 
+//nolint:all
 func (a Range) GetDisplayName() []LangStringNameType {
 	return a.DisplayName
 }
 
+//nolint:all
 func (a Range) GetDescription() []LangStringTextType {
 	return a.Description
 }
 
+//nolint:all
 func (a Range) GetModelType() string {
 	return a.ModelType
 }
 
-func (a Range) GetSemanticId() *Reference {
-	return a.SemanticId
+//nolint:all
+func (a Range) GetSemanticID() *Reference {
+	return a.SemanticID
 }
 
+//nolint:all
 func (a Range) GetSupplementalSemanticIds() []Reference {
 	return a.SupplementalSemanticIds
 }
 
+//nolint:all
 func (a Range) GetQualifiers() []Qualifier {
 	return a.Qualifiers
 }
 
+//nolint:all
 func (a Range) GetEmbeddedDataSpecifications() []EmbeddedDataSpecification {
 	return a.EmbeddedDataSpecifications
 }
 
 // Setters
-
+//
+//nolint:all
 func (p *Range) SetModelType(modelType string) {
 	p.ModelType = modelType
 }
 
+//nolint:all
 func (a *Range) SetExtensions(v []Extension) {
 	a.Extensions = v
 }
 
+//nolint:all
 func (a *Range) SetIdShort(v string) {
 	a.IdShort = v
 }
 
+//nolint:all
 func (a *Range) SetCategory(v string) {
 	a.Category = v
 }
 
+//nolint:all
 func (a *Range) SetDisplayName(v []LangStringNameType) {
 	a.DisplayName = v
 }
 
+//nolint:all
 func (a *Range) SetDescription(v []LangStringTextType) {
 	a.Description = v
 }
 
-func (a *Range) SetSemanticId(v *Reference) {
-	a.SemanticId = v
+//nolint:all
+func (a *Range) SetSemanticID(v *Reference) {
+	a.SemanticID = v
 }
 
+//nolint:all
 func (a *Range) SetSupplementalSemanticIds(v []Reference) {
 	a.SupplementalSemanticIds = v
 }
 
+//nolint:all
 func (a *Range) SetQualifiers(v []Qualifier) {
 	a.Qualifiers = v
 }
 
+//nolint:all
 func (a *Range) SetEmbeddedDataSpecifications(v []EmbeddedDataSpecification) {
 	a.EmbeddedDataSpecifications = v
 }
@@ -137,7 +162,7 @@ func AssertRangeRequired(obj Range) error {
 			return err
 		}
 	}
-	if err := AssertReferableAllOfIdShortRequired(obj.IdShort); err != nil {
+	if err := AssertIdShortRequired(obj.IdShort); err != nil {
 		return err
 	}
 	for _, el := range obj.DisplayName {
@@ -150,7 +175,7 @@ func AssertRangeRequired(obj Range) error {
 			return err
 		}
 	}
-	if err := AssertReferenceRequired(*obj.SemanticId); err != nil {
+	if err := AssertReferenceRequired(*obj.SemanticID); err != nil {
 		return err
 	}
 	for _, el := range obj.SupplementalSemanticIds {
@@ -178,7 +203,7 @@ func AssertRangeConstraints(obj Range) error {
 			return err
 		}
 	}
-	if err := AssertReferableAllOfIdShortConstraints(obj.IdShort); err != nil {
+	if err := AssertstringConstraints(obj.IdShort); err != nil {
 		return err
 	}
 	for _, el := range obj.DisplayName {
@@ -191,7 +216,7 @@ func AssertRangeConstraints(obj Range) error {
 			return err
 		}
 	}
-	if err := AssertReferenceConstraints(*obj.SemanticId); err != nil {
+	if err := AssertReferenceConstraints(*obj.SemanticID); err != nil {
 		return err
 	}
 	for _, el := range obj.SupplementalSemanticIds {

@@ -47,14 +47,14 @@ func NewPostgreSQLSubmodelElementCollectionHandler(db *sql.DB) (*PostgreSQLSubmo
 	return &PostgreSQLSubmodelElementCollectionHandler{db: db, decorated: decoratedHandler}, nil
 }
 
-func (p PostgreSQLSubmodelElementCollectionHandler) Create(tx *sql.Tx, submodelId string, submodelElement gen.SubmodelElement) (int, error) {
+func (p PostgreSQLSubmodelElementCollectionHandler) Create(tx *sql.Tx, submodelID string, submodelElement gen.SubmodelElement) (int, error) {
 	_, ok := submodelElement.(*gen.SubmodelElementCollection)
 	if !ok {
 		return 0, errors.New("submodelElement is not of type SubmodelElementCollection")
 	}
 
 	// First, perform base SubmodelElement operations within the transaction
-	id, err := p.decorated.Create(tx, submodelId, submodelElement)
+	id, err := p.decorated.Create(tx, submodelID, submodelElement)
 	if err != nil {
 		return 0, err
 	}
@@ -68,14 +68,14 @@ func (p PostgreSQLSubmodelElementCollectionHandler) Create(tx *sql.Tx, submodelI
 	return id, nil
 }
 
-func (p PostgreSQLSubmodelElementCollectionHandler) CreateNested(tx *sql.Tx, submodelId string, parentId int, idShortPath string, submodelElement gen.SubmodelElement, pos int) (int, error) {
+func (p PostgreSQLSubmodelElementCollectionHandler) CreateNested(tx *sql.Tx, submodelID string, parentID int, idShortPath string, submodelElement gen.SubmodelElement, pos int) (int, error) {
 	_, ok := submodelElement.(*gen.SubmodelElementCollection)
 	if !ok {
 		return 0, errors.New("submodelElement is not of type SubmodelElementCollection")
 	}
 
 	// First, perform base SubmodelElement operations within the transaction
-	id, err := p.decorated.CreateAndPath(tx, submodelId, parentId, idShortPath, submodelElement, pos)
+	id, err := p.decorated.CreateAndPath(tx, submodelID, parentID, idShortPath, submodelElement, pos)
 	if err != nil {
 		return 0, err
 	}

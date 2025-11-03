@@ -34,12 +34,14 @@
 
 package model
 
+// DataElementChoice type of DataElement
 type DataElementChoice struct {
 	Extensions []Extension `json:"extensions,omitempty"`
 
 	Category string `json:"category,omitempty"`
 
-	IdShort ReferableAllOfIdShort `json:"idShort,omitempty"`
+	//nolint:all
+	IdShort string `json:"idShort,omitempty"`
 
 	DisplayName []LangStringNameType `json:"displayName,omitempty"`
 
@@ -47,8 +49,9 @@ type DataElementChoice struct {
 
 	ModelType *interface{} `json:"modelType"`
 
-	SemanticId *Reference `json:"semanticId,omitempty"`
+	SemanticID *Reference `json:"semanticID,omitempty"`
 
+	//nolint:all
 	SupplementalSemanticIds []Reference `json:"supplementalSemanticIds,omitempty"`
 
 	Qualifiers []Qualifier `json:"qualifiers,omitempty"`
@@ -59,7 +62,7 @@ type DataElementChoice struct {
 
 	ContentType FileAllOfContentType `json:"contentType,omitempty"`
 
-	ValueId *Reference `json:"valueId,omitempty"`
+	ValueID *Reference `json:"valueID,omitempty"`
 
 	ValueType DataTypeDefXsd `json:"valueType"`
 
@@ -95,8 +98,8 @@ func AssertDataElementChoiceRequired(obj DataElementChoice) error {
 			return err
 		}
 	}
-	if obj.SemanticId != nil {
-		if err := AssertReferenceRequired(*obj.SemanticId); err != nil {
+	if obj.SemanticID != nil {
+		if err := AssertReferenceRequired(*obj.SemanticID); err != nil {
 			return err
 		}
 	}
@@ -123,8 +126,8 @@ func AssertDataElementChoiceRequired(obj DataElementChoice) error {
 	if err := AssertFileAllOfContentTypeRequired(obj.ContentType); err != nil {
 		return err
 	}
-	if obj.ValueId != nil {
-		if err := AssertReferenceRequired(*obj.ValueId); err != nil {
+	if obj.ValueID != nil {
+		if err := AssertReferenceRequired(*obj.ValueID); err != nil {
 			return err
 		}
 	}
@@ -148,8 +151,8 @@ func AssertDataElementChoiceConstraints(obj DataElementChoice) error {
 			return err
 		}
 	}
-	if obj.SemanticId != nil {
-		if err := AssertReferenceConstraints(*obj.SemanticId); err != nil {
+	if obj.SemanticID != nil {
+		if err := AssertReferenceConstraints(*obj.SemanticID); err != nil {
 			return err
 		}
 	}
@@ -176,8 +179,8 @@ func AssertDataElementChoiceConstraints(obj DataElementChoice) error {
 	if err := AssertFileAllOfContentTypeConstraints(obj.ContentType); err != nil {
 		return err
 	}
-	if obj.ValueId != nil {
-		if err := AssertReferenceConstraints(*obj.ValueId); err != nil {
+	if obj.ValueID != nil {
+		if err := AssertReferenceConstraints(*obj.ValueID); err != nil {
 			return err
 		}
 	}

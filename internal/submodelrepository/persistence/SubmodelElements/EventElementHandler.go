@@ -47,13 +47,13 @@ func NewPostgreSQLEventElementHandler(db *sql.DB) (*PostgreSQLEventElementHandle
 	return &PostgreSQLEventElementHandler{db: db, decorated: decoratedHandler}, nil
 }
 
-func (p PostgreSQLEventElementHandler) Create(tx *sql.Tx, submodelId string, submodelElement gen.SubmodelElement) (int, error) {
+func (p PostgreSQLEventElementHandler) Create(tx *sql.Tx, submodelID string, submodelElement gen.SubmodelElement) (int, error) {
 	_, ok := submodelElement.(*gen.EventElement)
 	if !ok {
 		return 0, errors.New("submodelElement is not of type EventElement")
 	}
 	// First, perform base SubmodelElement operations within the transaction
-	id, err := p.decorated.Create(tx, submodelId, submodelElement)
+	id, err := p.decorated.Create(tx, submodelID, submodelElement)
 	if err != nil {
 		return 0, err
 	}
@@ -67,7 +67,7 @@ func (p PostgreSQLEventElementHandler) Create(tx *sql.Tx, submodelId string, sub
 	return id, nil
 }
 
-func (p PostgreSQLEventElementHandler) CreateNested(tx *sql.Tx, submodelId string, parentId int, idShortPath string, submodelElement gen.SubmodelElement, pos int) (int, error) {
+func (p PostgreSQLEventElementHandler) CreateNested(tx *sql.Tx, submodelID string, parentID int, idShortPath string, submodelElement gen.SubmodelElement, pos int) (int, error) {
 	return 0, errors.New("not implemented")
 }
 

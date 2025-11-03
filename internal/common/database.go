@@ -9,7 +9,7 @@ import (
 
 func InitializeDatabase(dsn string, schemaFilePath string) (*sql.DB, error) {
 	db, err := sql.Open("postgres", dsn)
-	//Set Max Connection
+	// Set Max Connection
 	db.SetMaxOpenConns(500)
 	db.SetMaxIdleConns(500)
 	db.SetConnMaxLifetime(time.Minute * 5)

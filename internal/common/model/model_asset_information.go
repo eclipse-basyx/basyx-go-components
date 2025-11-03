@@ -9,12 +9,14 @@
 
 package model
 
+// AssetInformation type of AssetAdministrationShell
 type AssetInformation struct {
 	AssetKind AssetKind `json:"assetKind"`
 
-	GlobalAssetId string `json:"globalAssetId,omitempty" validate:"regexp=^([\\\\x09\\\\x0a\\\\x0d\\\\x20-\\\\ud7ff\\\\ue000-\\\\ufffd]|\\\\ud800[\\\\udc00-\\\\udfff]|[\\\\ud801-\\\\udbfe][\\\\udc00-\\\\udfff]|\\\\udbff[\\\\udc00-\\\\udfff])*$"`
+	GlobalAssetID string `json:"globalAssetID,omitempty" validate:"regexp=^([\\\\x09\\\\x0a\\\\x0d\\\\x20-\\\\ud7ff\\\\ue000-\\\\ufffd]|\\\\ud800[\\\\udc00-\\\\udfff]|[\\\\ud801-\\\\udbfe][\\\\udc00-\\\\udfff]|\\\\udbff[\\\\udc00-\\\\udfff])*$"`
 
-	SpecificAssetIds []SpecificAssetId `json:"specificAssetIds,omitempty"`
+	//nolint:all
+	SpecificAssetIds []SpecificAssetID `json:"specificAssetIds,omitempty"`
 
 	AssetType string `json:"assetType,omitempty" validate:"regexp=^([\\\\x09\\\\x0a\\\\x0d\\\\x20-\\\\ud7ff\\\\ue000-\\\\ufffd]|\\\\ud800[\\\\udc00-\\\\udfff]|[\\\\ud801-\\\\udbfe][\\\\udc00-\\\\udfff]|\\\\udbff[\\\\udc00-\\\\udfff])*$"`
 

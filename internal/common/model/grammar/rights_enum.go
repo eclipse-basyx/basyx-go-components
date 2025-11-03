@@ -23,6 +23,7 @@
 * SPDX-License-Identifier: MIT
 ******************************************************************************/
 
+// Package grammar defines the data structures for representing rights enumerations in the grammar model.
 // Author: Aaron Zielstorff ( Fraunhofer IESE ), Jannik Fried ( Fraunhofer IESE )
 package grammar
 

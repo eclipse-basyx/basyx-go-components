@@ -9,6 +9,7 @@
 
 package model
 
+// GetReferencesResult type of GetReferencesResult
 type GetReferencesResult struct {
 	PagingMetadata PagedResultPagingMetadata `json:"paging_metadata,omitempty"`
 

@@ -47,20 +47,20 @@ func NewPostgreSQLOperationHandler(db *sql.DB) (*PostgreSQLOperationHandler, err
 	return &PostgreSQLOperationHandler{db: db, decorated: decoratedHandler}, nil
 }
 
-func (p PostgreSQLOperationHandler) Create(tx *sql.Tx, submodelId string, submodelElement gen.SubmodelElement) (int, error) {
+func (p PostgreSQLOperationHandler) Create(tx *sql.Tx, submodelID string, submodelElement gen.SubmodelElement) (int, error) {
 	operation, ok := submodelElement.(*gen.Operation)
 	if !ok {
 		return 0, errors.New("submodelElement is not of type Operation")
 	}
 
 	// First, perform base SubmodelElement operations within the transaction
-	id, err := p.decorated.Create(tx, submodelId, submodelElement)
+	id, err := p.decorated.Create(tx, submodelID, submodelElement)
 	if err != nil {
 		return 0, err
 	}
 
 	// Operation-specific database insertion
-	err = insertOperation(operation, tx, id, submodelId, p.db)
+	err = insertOperation(operation, tx, id, submodelID, p.db)
 	if err != nil {
 		return 0, err
 	}
@@ -68,20 +68,20 @@ func (p PostgreSQLOperationHandler) Create(tx *sql.Tx, submodelId string, submod
 	return id, nil
 }
 
-func (p PostgreSQLOperationHandler) CreateNested(tx *sql.Tx, submodelId string, parentId int, idShortPath string, submodelElement gen.SubmodelElement, pos int) (int, error) {
+func (p PostgreSQLOperationHandler) CreateNested(tx *sql.Tx, submodelID string, parentID int, idShortPath string, submodelElement gen.SubmodelElement, pos int) (int, error) {
 	operation, ok := submodelElement.(*gen.Operation)
 	if !ok {
 		return 0, errors.New("submodelElement is not of type Operation")
 	}
 
 	// Create the nested operation with the provided idShortPath using the decorated handler
-	id, err := p.decorated.CreateAndPath(tx, submodelId, parentId, idShortPath, submodelElement, pos)
+	id, err := p.decorated.CreateAndPath(tx, submodelID, parentID, idShortPath, submodelElement, pos)
 	if err != nil {
 		return 0, err
 	}
 
 	// Operation-specific database insertion for nested element
-	err = insertOperation(operation, tx, id, submodelId, p.db)
+	err = insertOperation(operation, tx, id, submodelID, p.db)
 	if err != nil {
 		return 0, err
 	}
@@ -102,41 +102,41 @@ func (p PostgreSQLOperationHandler) Delete(idShortOrPath string) error {
 	return nil
 }
 
-func insertOperation(operation *gen.Operation, tx *sql.Tx, id int, submodelId string, db *sql.DB) error {
+func insertOperation(operation *gen.Operation, tx *sql.Tx, id int, submodelID string, db *sql.DB) error {
 	_, err := tx.Exec(`INSERT INTO operation_element (id) VALUES ($1)`, id)
 	if err != nil {
 		return err
 	}
 
 	// Insert variables
-	err = insertOperationVariables(tx, operation.InputVariables, "in", id, submodelId, db)
+	err = insertOperationVariables(tx, operation.InputVariables, "in", id, submodelID, db)
 	if err != nil {
 		return err
 	}
-	err = insertOperationVariables(tx, operation.OutputVariables, "out", id, submodelId, db)
+	err = insertOperationVariables(tx, operation.OutputVariables, "out", id, submodelID, db)
 	if err != nil {
 		return err
 	}
-	err = insertOperationVariables(tx, operation.InoutputVariables, "inout", id, submodelId, db)
+	err = insertOperationVariables(tx, operation.InoutputVariables, "inout", id, submodelID, db)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func insertOperationVariables(tx *sql.Tx, variables []gen.OperationVariable, role string, operationId int, submodelId string, db *sql.DB) error {
+func insertOperationVariables(tx *sql.Tx, variables []gen.OperationVariable, role string, operationID int, submodelID string, db *sql.DB) error {
 	for i, ov := range variables {
 		// Create the value submodel element
 		handler, err := GetSMEHandler(ov.Value, db)
 		if err != nil {
 			return err
 		}
-		valueId, err := handler.Create(tx, submodelId, ov.Value)
+		valueID, err := handler.Create(tx, submodelID, ov.Value)
 		if err != nil {
 			return err
 		}
 		_, err = tx.Exec(`INSERT INTO operation_variable (operation_id, role, position, value_sme) VALUES ($1, $2, $3, $4)`,
-			operationId, role, i, valueId)
+			operationID, role, i, valueID)
 		if err != nil {
 			return err
 		}

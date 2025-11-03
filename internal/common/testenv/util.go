@@ -273,7 +273,7 @@ func WaitHealthy(t testing.TB, url string, maxWait time.Duration) {
 	}
 }
 
-func BuildNameValuesMap(in []model.SpecificAssetId) map[string][]string {
+func BuildNameValuesMap(in []model.SpecificAssetID) map[string][]string {
 	m := map[string][]string{}
 	for _, s := range in {
 		m[s.Name] = append(m[s.Name], s.Value)

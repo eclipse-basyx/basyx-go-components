@@ -24,11 +24,14 @@
 ******************************************************************************/
 
 // Author: Aaron Zielstorff ( Fraunhofer IESE ), Jannik Fried ( Fraunhofer IESE )
-package submodel_query
+package queries
 
-import "github.com/doug-martin/goqu/v9"
+import (
+	"github.com/doug-martin/goqu/v9"
+	"github.com/doug-martin/goqu/v9/exp"
+)
 
-func GetExtensionSubqueryForSubmodel(dialect goqu.DialectWrapper) *goqu.SelectDataset {
+func GetExtensionSubquery(dialect goqu.DialectWrapper, joinTableExtensionColumnName string, joinTable exp.IdentifierExpression, entityIdColumn string, entityIdCondition exp.Expression) *goqu.SelectDataset {
 	// Build the jsonb object for semantic ID references
 	semanticIdObj := goqu.Func("jsonb_build_object",
 		goqu.V("reference_id"), goqu.I("r.id"),
@@ -48,7 +51,7 @@ func GetExtensionSubqueryForSubmodel(dialect goqu.DialectWrapper) *goqu.SelectDa
 			goqu.T("reference_key").As("rk"),
 			goqu.On(goqu.I("r.id").Eq(goqu.I("rk.reference_id"))),
 		).
-		Where(goqu.I("e.id").Eq(goqu.I("sm_ext.extension_id")))
+		Where(goqu.I("e.id").Eq(goqu.I("jt." + joinTableExtensionColumnName)))
 
 	// Build the jsonb object for semantic ID referred references
 	semanticIdReferredObj := goqu.Func("jsonb_build_object",
@@ -76,7 +79,7 @@ func GetExtensionSubqueryForSubmodel(dialect goqu.DialectWrapper) *goqu.SelectDa
 			goqu.On(goqu.I("rk.reference_id").Eq(goqu.I("r.id"))),
 		).
 		Where(
-			goqu.I("sm_ext.extension_id").Eq(goqu.I("e.id")),
+			goqu.I("jt."+joinTableExtensionColumnName).Eq(goqu.I("e.id")),
 			goqu.I("r.id").IsNotNull(),
 		)
 
@@ -93,7 +96,7 @@ func GetExtensionSubqueryForSubmodel(dialect goqu.DialectWrapper) *goqu.SelectDa
 		Select(goqu.Func("jsonb_agg", goqu.L("?", refersToObj))).
 		Join(
 			goqu.T("extension_refers_to").As("ert"),
-			goqu.On(goqu.I("ert.extension_id").Eq(goqu.I("sm_ext.extension_id"))),
+			goqu.On(goqu.I("ert.extension_id").Eq(goqu.I("jt."+joinTableExtensionColumnName))),
 		).
 		Join(
 			goqu.T("reference_key").As("rk"),
@@ -116,7 +119,7 @@ func GetExtensionSubqueryForSubmodel(dialect goqu.DialectWrapper) *goqu.SelectDa
 		Select(goqu.Func("jsonb_agg", goqu.L("?", refersToReferredObj))).
 		Join(
 			goqu.T("extension_refers_to").As("ert"),
-			goqu.On(goqu.I("ert.extension_id").Eq(goqu.I("sm_ext.extension_id"))),
+			goqu.On(goqu.I("ert.extension_id").Eq(goqu.I("jt."+joinTableExtensionColumnName))),
 		).
 		Join(
 			goqu.T("reference_key").As("rk"),
@@ -140,7 +143,7 @@ func GetExtensionSubqueryForSubmodel(dialect goqu.DialectWrapper) *goqu.SelectDa
 		Select(goqu.Func("jsonb_agg", goqu.L("?", supplementalSemanticIdObj))).
 		Join(
 			goqu.T("extension_supplemental_semantic_id").As("essi"),
-			goqu.On(goqu.I("essi.extension_id").Eq(goqu.I("sm_ext.extension_id"))),
+			goqu.On(goqu.I("essi.extension_id").Eq(goqu.I("jt."+joinTableExtensionColumnName))),
 		).
 		Join(
 			goqu.T("reference_key").As("rk"),
@@ -163,7 +166,7 @@ func GetExtensionSubqueryForSubmodel(dialect goqu.DialectWrapper) *goqu.SelectDa
 		Select(goqu.Func("jsonb_agg", goqu.L("?", supplementalSemanticIdReferredObj))).
 		Join(
 			goqu.T("extension_supplemental_semantic_id").As("essi"),
-			goqu.On(goqu.I("essi.extension_id").Eq(goqu.I("sm_ext.extension_id"))),
+			goqu.On(goqu.I("essi.extension_id").Eq(goqu.I("jt."+joinTableExtensionColumnName))),
 		).
 		Join(
 			goqu.T("reference_key").As("rk"),
@@ -176,7 +179,7 @@ func GetExtensionSubqueryForSubmodel(dialect goqu.DialectWrapper) *goqu.SelectDa
 
 	// Build the main extension jsonb object
 	extensionObj := goqu.Func("jsonb_build_object",
-		goqu.V("dbId"), goqu.I("sm_ext.extension_id"),
+		goqu.V("dbId"), goqu.I("jt."+joinTableExtensionColumnName),
 		goqu.V("name"), goqu.I("e.name"),
 		goqu.V("value_type"), goqu.I("e.value_type"),
 		goqu.V("value"), goqu.COALESCE(
@@ -194,12 +197,12 @@ func GetExtensionSubqueryForSubmodel(dialect goqu.DialectWrapper) *goqu.SelectDa
 		goqu.V("supplementalSemanticIdReferredReferenceRows"), extensionSupplementalSemanticIdReferredSubquery,
 	)
 
-	extensionSubquery := dialect.From(goqu.T("submodel_extension").As("sm_ext")).
+	extensionSubquery := dialect.From(joinTable.As("jt")).
 		Select(goqu.Func("jsonb_agg", goqu.L("?", extensionObj))).
 		Join(
 			goqu.T("extension").As("e"),
-			goqu.On(goqu.I("sm_ext.extension_id").Eq(goqu.I("e.id"))),
+			goqu.On(goqu.I("jt."+joinTableExtensionColumnName).Eq(goqu.I("e.id"))),
 		).
-		Where(goqu.I("sm_ext.submodel_id").Eq(goqu.I("s.id")))
+		Where(goqu.I("jt." + entityIdColumn).Eq(entityIdCondition))
 	return extensionSubquery
 }

@@ -23,26 +23,26 @@ func TestDiscovery_Suite_Sophisticated(t *testing.T) {
 	aasB := "urn:aas:test:oil-refinery"
 	aasC := "urn:aas:test:rail-signal"
 
-	linksA1 := []model.SpecificAssetId{
+	linksA1 := []model.SpecificAssetID{
 		{Name: "globalAssetId", Value: "urn:ga:green-circuit"},
 		{Name: "serialNumber", Value: "SN-iron-gear"},
 		{Name: "plant", Value: "NAUVIS"},
 	}
-	linksA2 := []model.SpecificAssetId{
+	linksA2 := []model.SpecificAssetID{
 		{Name: "globalAssetId", Value: linksA1[0].Value},
 		{Name: "serialNumber", Value: "SN-red-circuit"},
 		{Name: "line", Value: "L1"},
 	}
-	linksB := []model.SpecificAssetId{
+	linksB := []model.SpecificAssetID{
 		{Name: "serialNumber", Value: "SN-engine-unit"},
 		{Name: "plant", Value: "SPIDERTRON-YARD"},
 	}
-	linksC := []model.SpecificAssetId{
+	linksC := []model.SpecificAssetID{
 		{Name: "assetTag", Value: "belt-yellow"},
 	}
 
 	t.Run("LookupShellsByAssetLink/Pagination_empty_set_returns_empty_and_no_cursor", func(t *testing.T) {
-		res := rc.LookupShellsByAssetLink(t, []model.SpecificAssetId{}, 5, "", http.StatusOK)
+		res := rc.LookupShellsByAssetLink(t, []model.SpecificAssetID{}, 5, "", http.StatusOK)
 		assert.Empty(t, res.Result, "empty dataset should yield no AAS IDs; got=%v", res.Result)
 		assert.Empty(t, res.PagingMetadata.Cursor, "empty dataset should not produce a cursor; got=%q", res.PagingMetadata.Cursor)
 	})
@@ -87,24 +87,24 @@ func TestDiscovery_Suite_Sophisticated(t *testing.T) {
 	})
 
 	t.Run("LookupShellsByAssetLink/Search_matrix", func(t *testing.T) {
-		res := rc.LookupShellsByAssetLink(t, []model.SpecificAssetId{{Name: "globalAssetId", Value: linksA2[0].Value}}, 10, "", http.StatusOK)
+		res := rc.LookupShellsByAssetLink(t, []model.SpecificAssetID{{Name: "globalAssetId", Value: linksA2[0].Value}}, 10, "", http.StatusOK)
 		assert.Contains(t, res.Result, aasA)
 		assert.NotContains(t, res.Result, aasB)
 		assert.NotContains(t, res.Result, aasC)
 
-		res = rc.LookupShellsByAssetLink(t, []model.SpecificAssetId{{Name: "serialNumber", Value: linksA2[1].Value}}, 10, "", http.StatusOK)
+		res = rc.LookupShellsByAssetLink(t, []model.SpecificAssetID{{Name: "serialNumber", Value: linksA2[1].Value}}, 10, "", http.StatusOK)
 		assert.Equal(t, []string{aasA}, res.Result)
 
-		res = rc.LookupShellsByAssetLink(t, []model.SpecificAssetId{{Name: "plant", Value: "SPIDERTRON-YARD"}}, 10, "", http.StatusOK)
+		res = rc.LookupShellsByAssetLink(t, []model.SpecificAssetID{{Name: "plant", Value: "SPIDERTRON-YARD"}}, 10, "", http.StatusOK)
 		assert.Equal(t, []string{aasB}, res.Result)
 
-		res = rc.LookupShellsByAssetLink(t, []model.SpecificAssetId{
+		res = rc.LookupShellsByAssetLink(t, []model.SpecificAssetID{
 			{Name: "globalAssetId", Value: linksA2[0].Value},
 			{Name: "serialNumber", Value: linksA2[1].Value},
 		}, 10, "", http.StatusOK)
 		assert.Equal(t, []string{aasA}, res.Result)
 
-		res = rc.LookupShellsByAssetLink(t, []model.SpecificAssetId{{Name: "serialNumber", Value: "SN-does-not-exist"}}, 10, "", http.StatusOK)
+		res = rc.LookupShellsByAssetLink(t, []model.SpecificAssetID{{Name: "serialNumber", Value: "SN-does-not-exist"}}, 10, "", http.StatusOK)
 		assert.Len(t, res.Result, 0)
 	})
 
@@ -114,7 +114,7 @@ func TestDiscovery_Suite_Sophisticated(t *testing.T) {
 		rc.DeleteLookupShells(t, aasA)
 		_ = rc.GetLookupShells(t, aasA, http.StatusNotFound)
 
-		res := rc.LookupShellsByAssetLink(t, []model.SpecificAssetId{{Name: "globalAssetId", Value: linksA2[0].Value}}, 10, "", http.StatusOK)
+		res := rc.LookupShellsByAssetLink(t, []model.SpecificAssetID{{Name: "globalAssetId", Value: linksA2[0].Value}}, 10, "", http.StatusOK)
 		assert.NotContains(t, res.Result, aasA)
 	})
 
@@ -122,32 +122,32 @@ func TestDiscovery_Suite_Sophisticated(t *testing.T) {
 		aasD := "urn:aas:test:copper-plate"
 		aasE := "urn:aas:test:iron-gear"
 
-		shared := model.SpecificAssetId{Name: "sharedTag", Value: "train-signal"}
-		uniqD := model.SpecificAssetId{Name: "uniqueD", Value: "uranium-fuel-cell"}
-		uniqE := model.SpecificAssetId{Name: "uniqueE", Value: "rocket-control-unit"}
+		shared := model.SpecificAssetID{Name: "sharedTag", Value: "train-signal"}
+		uniqD := model.SpecificAssetID{Name: "uniqueD", Value: "uranium-fuel-cell"}
+		uniqE := model.SpecificAssetID{Name: "uniqueE", Value: "rocket-control-unit"}
 
-		rc.PostLookupShells(t, aasD, []model.SpecificAssetId{shared, uniqD})
-		rc.PostLookupShells(t, aasE, []model.SpecificAssetId{shared, uniqE})
+		rc.PostLookupShells(t, aasD, []model.SpecificAssetID{shared, uniqD})
+		rc.PostLookupShells(t, aasE, []model.SpecificAssetID{shared, uniqE})
 
-		resShared := rc.LookupShellsByAssetLink(t, []model.SpecificAssetId{{Name: shared.Name, Value: shared.Value}}, 10, "", http.StatusOK)
+		resShared := rc.LookupShellsByAssetLink(t, []model.SpecificAssetID{{Name: shared.Name, Value: shared.Value}}, 10, "", http.StatusOK)
 		assert.Contains(t, resShared.Result, aasD)
 		assert.Contains(t, resShared.Result, aasE)
 		assert.Len(t, resShared.Result, 2)
 
-		resUniqD := rc.LookupShellsByAssetLink(t, []model.SpecificAssetId{{Name: uniqD.Name, Value: uniqD.Value}}, 10, "", http.StatusOK)
+		resUniqD := rc.LookupShellsByAssetLink(t, []model.SpecificAssetID{{Name: uniqD.Name, Value: uniqD.Value}}, 10, "", http.StatusOK)
 		assert.Equal(t, []string{aasD}, resUniqD.Result)
 
-		resUniqE := rc.LookupShellsByAssetLink(t, []model.SpecificAssetId{{Name: uniqE.Name, Value: uniqE.Value}}, 10, "", http.StatusOK)
+		resUniqE := rc.LookupShellsByAssetLink(t, []model.SpecificAssetID{{Name: uniqE.Name, Value: uniqE.Value}}, 10, "", http.StatusOK)
 		assert.Equal(t, []string{aasE}, resUniqE.Result)
 
-		resNone := rc.LookupShellsByAssetLink(t, []model.SpecificAssetId{{Name: "nonexistent", Value: "biters-don't-index"}}, 10, "", http.StatusOK)
+		resNone := rc.LookupShellsByAssetLink(t, []model.SpecificAssetID{{Name: "nonexistent", Value: "biters-don't-index"}}, 10, "", http.StatusOK)
 		assert.Empty(t, resNone.Result)
 	})
 
 	t.Run("LookupShells/POST_replace_removes_old_pairs_and_double_delete", func(t *testing.T) {
 		aasX := "urn:aas:test:blue-science"
 
-		pairs1 := []model.SpecificAssetId{
+		pairs1 := []model.SpecificAssetID{
 			{Name: "alpha", Value: "steam-power"},
 			{Name: "beta", Value: "coal-burner"},
 		}
@@ -159,7 +159,7 @@ func TestDiscovery_Suite_Sophisticated(t *testing.T) {
 			"beta":  {"coal-burner"},
 		})
 
-		pairs2 := []model.SpecificAssetId{
+		pairs2 := []model.SpecificAssetID{
 			{Name: "gamma", Value: "solar-array"},
 			{Name: "delta", Value: "accumulator-bank"},
 		}
@@ -185,7 +185,7 @@ func TestDiscovery_Suite_Sophisticated(t *testing.T) {
 
 		_ = testenv.GetExpect(t, url, http.StatusBadRequest)
 
-		body := []model.SpecificAssetId{{Name: "foo", Value: "barrel"}}
+		body := []model.SpecificAssetID{{Name: "foo", Value: "barrel"}}
 		_ = testenv.PostJSONExpect(t, url, body, http.StatusBadRequest)
 
 		_ = testenv.DeleteExpect(t, url, http.StatusBadRequest)
@@ -196,15 +196,15 @@ func TestDiscovery_Suite_Sophisticated(t *testing.T) {
 		aasP2 := "urn:aas:test:iron"
 
 		pageTag := "science-pack-3"
-		sharedPair := model.SpecificAssetId{Name: "pageGroup", Value: pageTag}
+		sharedPair := model.SpecificAssetID{Name: "pageGroup", Value: pageTag}
 
-		rc.PostLookupShells(t, aasP1, []model.SpecificAssetId{sharedPair})
-		rc.PostLookupShells(t, aasP2, []model.SpecificAssetId{sharedPair})
+		rc.PostLookupShells(t, aasP1, []model.SpecificAssetID{sharedPair})
+		rc.PostLookupShells(t, aasP2, []model.SpecificAssetID{sharedPair})
 
 		expected := sortedStrings(aasP1, aasP2)
 		firstID, secondID := expected[0], expected[1]
 
-		res1 := rc.LookupShellsByAssetLink(t, []model.SpecificAssetId{{Name: sharedPair.Name, Value: sharedPair.Value}}, 1, "", http.StatusOK)
+		res1 := rc.LookupShellsByAssetLink(t, []model.SpecificAssetID{{Name: sharedPair.Name, Value: sharedPair.Value}}, 1, "", http.StatusOK)
 		require.Len(t, res1.Result, 1)
 		assert.Equal(t, firstID, res1.Result[0])
 		require.NotEmpty(t, res1.PagingMetadata.Cursor)
@@ -213,7 +213,7 @@ func TestDiscovery_Suite_Sophisticated(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, secondID, dec)
 
-		res2 := rc.LookupShellsByAssetLink(t, []model.SpecificAssetId{{Name: sharedPair.Name, Value: sharedPair.Value}}, 1, res1.PagingMetadata.Cursor, http.StatusOK)
+		res2 := rc.LookupShellsByAssetLink(t, []model.SpecificAssetID{{Name: sharedPair.Name, Value: sharedPair.Value}}, 1, res1.PagingMetadata.Cursor, http.StatusOK)
 		require.Len(t, res2.Result, 1)
 		assert.Equal(t, secondID, res2.Result[0])
 		assert.Empty(t, res2.PagingMetadata.Cursor)

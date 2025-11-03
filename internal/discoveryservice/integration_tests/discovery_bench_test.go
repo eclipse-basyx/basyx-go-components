@@ -18,18 +18,18 @@ var seedFlag = flag.Int64("seed", 1, "rng seed for discovery bench determinism")
 
 type discoveryState struct {
 	rng         *mrand.Rand
-	aasToLinks  map[string][]model.SpecificAssetId
+	aasToLinks  map[string][]model.SpecificAssetID
 	aasList     []string
 	cursorByAAS map[string]string
-	reusePool   []model.SpecificAssetId // reused name/value pairs to simulate overlap
+	reusePool   []model.SpecificAssetID // reused name/value pairs to simulate overlap
 }
 
 func newDiscoveryState(seed int64) *discoveryState {
 	return &discoveryState{
 		rng:         mrand.New(mrand.NewSource(seed)),
-		aasToLinks:  make(map[string][]model.SpecificAssetId),
+		aasToLinks:  make(map[string][]model.SpecificAssetID),
 		cursorByAAS: make(map[string]string),
-		reusePool:   make([]model.SpecificAssetId, 0, 512),
+		reusePool:   make([]model.SpecificAssetID, 0, 512),
 	}
 }
 
@@ -80,7 +80,7 @@ func (s *discoveryState) pickWeightedOp() string {
 	return "search"
 }
 
-func (s *discoveryState) add(aasID string, links []model.SpecificAssetId) {
+func (s *discoveryState) add(aasID string, links []model.SpecificAssetID) {
 	if _, ok := s.aasToLinks[aasID]; ok {
 		return
 	}
@@ -114,13 +114,13 @@ func (s *discoveryState) randomAAS() (string, bool) {
 	return s.aasList[s.rng.Intn(len(s.aasList))], true
 }
 
-func (s *discoveryState) randomLinks(n int) []model.SpecificAssetId {
-	out := make([]model.SpecificAssetId, n)
+func (s *discoveryState) randomLinks(n int) []model.SpecificAssetID {
+	out := make([]model.SpecificAssetID, n)
 	for i := 0; i < n; i++ {
 		if len(s.reusePool) > 0 && s.pct(reusePctPost) {
 			out[i] = s.reusePool[s.rng.Intn(len(s.reusePool))]
 		} else {
-			out[i] = model.SpecificAssetId{
+			out[i] = model.SpecificAssetID{
 
 				Name:  "n_" + s.randHex(6),
 				Value: "v_" + s.randHex(6),
@@ -265,7 +265,7 @@ func (d *DiscoveryBench) DoOne(iter int) testenv.ComponentResult {
 				},
 			}
 		}
-		pairs := make([]model.SpecificAssetId, k)
+		pairs := make([]model.SpecificAssetID, k)
 		for i := 0; i < k; i++ {
 			if len(st.aasList) == 0 {
 				break

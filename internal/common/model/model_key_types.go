@@ -13,9 +13,12 @@ import (
 	"fmt"
 )
 
+// KeyTypes type of KeyTypes
 type KeyTypes string
 
 // List of KeyTypes
+//
+//nolint:all
 const (
 	KEYTYPES_ANNOTATED_RELATIONSHIP_ELEMENT KeyTypes = "AnnotatedRelationshipElement"
 	KEYTYPES_ASSET_ADMINISTRATION_SHELL     KeyTypes = "AssetAdministrationShell"
@@ -117,11 +120,15 @@ func NewKeyTypesFromValue(v string) (KeyTypes, error) {
 }
 
 // AssertKeyTypesRequired checks if the required fields are not zero-ed
+//
+//nolint:all
 func AssertKeyTypesRequired(obj KeyTypes) error {
 	return nil
 }
 
 // AssertKeyTypesConstraints checks if the values respects the defined constraints
+//
+//nolint:all
 func AssertKeyTypesConstraints(obj KeyTypes) error {
 	return nil
 }

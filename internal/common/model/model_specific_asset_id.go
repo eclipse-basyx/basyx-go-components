@@ -9,20 +9,24 @@
 
 package model
 
-type SpecificAssetId struct {
-	SemanticId *Reference `json:"semanticId,omitempty"`
+// SpecificAssetID type of SpecificAssetID
+type SpecificAssetID struct {
+	SemanticID *Reference `json:"semanticID,omitempty"`
 
+	//nolint:all
 	SupplementalSemanticIds []Reference `json:"supplementalSemanticIds,omitempty"`
 
 	Name string `json:"name" validate:"regexp=^([\\\\x09\\\\x0a\\\\x0d\\\\x20-\\\\ud7ff\\\\ue000-\\\\ufffd]|\\\\ud800[\\\\udc00-\\\\udfff]|[\\\\ud801-\\\\udbfe][\\\\udc00-\\\\udfff]|\\\\udbff[\\\\udc00-\\\\udfff])*$"`
 
 	Value string `json:"value" validate:"regexp=^([\\\\x09\\\\x0a\\\\x0d\\\\x20-\\\\ud7ff\\\\ue000-\\\\ufffd]|\\\\ud800[\\\\udc00-\\\\udfff]|[\\\\ud801-\\\\udbfe][\\\\udc00-\\\\udfff]|\\\\udbff[\\\\udc00-\\\\udfff])*$"`
 
-	ExternalSubjectId *Reference `json:"externalSubjectId,omitempty"`
+	ExternalSubjectID *Reference `json:"externalSubjectID,omitempty"`
 }
 
 // AssertSpecificAssetIdRequired checks if the required fields are not zero-ed
-func AssertSpecificAssetIdRequired(obj SpecificAssetId) error {
+//
+//nolint:all
+func AssertSpecificAssetIdRequired(obj SpecificAssetID) error {
 	elements := map[string]interface{}{
 		"name":  obj.Name,
 		"value": obj.Value,
@@ -37,7 +41,9 @@ func AssertSpecificAssetIdRequired(obj SpecificAssetId) error {
 }
 
 // AssertSpecificAssetIdConstraints checks if the values respects the defined constraints
-func AssertSpecificAssetIdConstraints(obj SpecificAssetId) error {
+//
+//nolint:all
+func AssertSpecificAssetIdConstraints(obj SpecificAssetID) error {
 
 	return nil
 }

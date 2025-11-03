@@ -23,6 +23,7 @@
 * SPDX-License-Identifier: MIT
 ******************************************************************************/
 
+// Package grammar defines the data structures for representing the AAS Access Rule Language.
 // Author: Aaron Zielstorff ( Fraunhofer IESE ), Jannik Fried ( Fraunhofer IESE )
 package grammar
 

@@ -47,14 +47,14 @@ func NewPostgreSQLReferenceElementHandler(db *sql.DB) (*PostgreSQLReferenceEleme
 	return &PostgreSQLReferenceElementHandler{db: db, decorated: decoratedHandler}, nil
 }
 
-func (p PostgreSQLReferenceElementHandler) Create(tx *sql.Tx, submodelId string, submodelElement gen.SubmodelElement) (int, error) {
+func (p PostgreSQLReferenceElementHandler) Create(tx *sql.Tx, submodelID string, submodelElement gen.SubmodelElement) (int, error) {
 	refElem, ok := submodelElement.(*gen.ReferenceElement)
 	if !ok {
 		return 0, errors.New("submodelElement is not of type ReferenceElement")
 	}
 
 	// First, perform base SubmodelElement operations within the transaction
-	id, err := p.decorated.Create(tx, submodelId, submodelElement)
+	id, err := p.decorated.Create(tx, submodelID, submodelElement)
 	if err != nil {
 		return 0, err
 	}
@@ -68,14 +68,14 @@ func (p PostgreSQLReferenceElementHandler) Create(tx *sql.Tx, submodelId string,
 	return id, nil
 }
 
-func (p PostgreSQLReferenceElementHandler) CreateNested(tx *sql.Tx, submodelId string, parentId int, idShortPath string, submodelElement gen.SubmodelElement, pos int) (int, error) {
+func (p PostgreSQLReferenceElementHandler) CreateNested(tx *sql.Tx, submodelID string, parentID int, idShortPath string, submodelElement gen.SubmodelElement, pos int) (int, error) {
 	refElem, ok := submodelElement.(*gen.ReferenceElement)
 	if !ok {
 		return 0, errors.New("submodelElement is not of type ReferenceElement")
 	}
 
 	// Create the nested refElem with the provided idShortPath using the decorated handler
-	id, err := p.decorated.CreateAndPath(tx, submodelId, parentId, idShortPath, submodelElement, pos)
+	id, err := p.decorated.CreateAndPath(tx, submodelID, parentID, idShortPath, submodelElement, pos)
 	if err != nil {
 		return 0, err
 	}
@@ -110,8 +110,8 @@ func insertReferenceElement(refElem *gen.ReferenceElement, tx *sql.Tx, id int) e
 	}
 
 	// Insert the reference
-	var refId int
-	err := tx.QueryRow(`INSERT INTO reference (type) VALUES ($1) RETURNING id`, refElem.Value.Type).Scan(&refId)
+	var refID int
+	err := tx.QueryRow(`INSERT INTO reference (type) VALUES ($1) RETURNING id`, refElem.Value.Type).Scan(&refID)
 	if err != nil {
 		return err
 	}
@@ -119,13 +119,13 @@ func insertReferenceElement(refElem *gen.ReferenceElement, tx *sql.Tx, id int) e
 	// Insert reference keys
 	for i, key := range refElem.Value.Keys {
 		_, err = tx.Exec(`INSERT INTO reference_key (reference_id, position, type, value) VALUES ($1, $2, $3, $4)`,
-			refId, i, key.Type, key.Value)
+			refID, i, key.Type, key.Value)
 		if err != nil {
 			return err
 		}
 	}
 
 	// Insert reference_element
-	_, err = tx.Exec(`INSERT INTO reference_element (id, value_ref) VALUES ($1, $2)`, id, refId)
+	_, err = tx.Exec(`INSERT INTO reference_element (id, value_ref) VALUES ($1, $2)`, id, refID)
 	return err
 }

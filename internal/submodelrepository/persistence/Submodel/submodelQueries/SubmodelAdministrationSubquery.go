@@ -24,16 +24,16 @@
 ******************************************************************************/
 
 // Author: Aaron Zielstorff ( Fraunhofer IESE ), Jannik Fried ( Fraunhofer IESE )
-package submodel_query
+package submodelQueries
 
 import "github.com/doug-martin/goqu/v9"
 
 /*
 type AdministrationRow struct {
-	DbId                          int64           `json:"dbId"`
+	DbID                          int64           `json:"dbId"`
 	Version                       string          `json:"version"`
 	Revision                      string          `json:"revision"`
-	TemplateId                    string          `json:"templateId"`
+	TemplateID                    string          `json:"templateId"`
 	Creator                       json.RawMessage `json:"creator"`
 	CreatorReferred               json.RawMessage `json:"creatorReferred"`
 	EdsDataSpecifications         json.RawMessage `json:"edsDataSpecifications"`

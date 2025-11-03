@@ -34,15 +34,20 @@
 
 package model
 
+// FileAllOfValue type of File
 type FileAllOfValue struct {
 }
 
 // AssertFileAllOfValueRequired checks if the required fields are not zero-ed
+//
+//nolint:all
 func AssertFileAllOfValueRequired(obj FileAllOfValue) error {
 	return nil
 }
 
 // AssertFileAllOfValueConstraints checks if the values respects the defined constraints
+//
+//nolint:all
 func AssertFileAllOfValueConstraints(obj FileAllOfValue) error {
 	return nil
 }

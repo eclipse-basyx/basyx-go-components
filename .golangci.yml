@@ -1,3 +1,5 @@
+version: "2"
+
 run:
   timeout: 5m
   tests: true
@@ -13,28 +15,28 @@ issues:
     - .*generated.*
     - .*mock.*
     - internal/common/model
+    - pkg/
   max-issues-per-linter: 0
   max-same-issues: 0
   new: false # disable diff processor to avoid Git HEAD~ errors
 
 linters:
-  disable-all: true  # Temporarily disable all linters
+  exclude-dirs:
+    - vendor
+    - testdata
+    - .*generated.*
+    - .*mock.*
+    - internal/common/model
+    - pkg/
   enable:
      - misspell
-  #   - errcheck
-  #   - gosimple
-  #   - govet
-  #   - ineffassign
-  #   - staticcheck
-  #   - typecheck
-  #   - revive
-  #   - unused
-  #   - gocritic
-  #   - gofmt
-  #   - goimports
-  #disable:
-    # add any noisy linters here as you discover them
-   # - depguard
+     - errcheck
+     - govet
+     - ineffassign
+     - staticcheck
+     - revive
+     - unused
+     - gocritic
 
 linters-settings:
   revive:

@@ -88,22 +88,22 @@ func (c *SubmodelRepositoryAPIAPIController) Routes() Routes {
 		"GetSubmodelById": Route{
 			strings.ToUpper("Get"),
 			c.contextPath + "/submodels/{submodelIdentifier}",
-			c.GetSubmodelById,
+			c.GetSubmodelByID,
 		},
 		"PutSubmodelById": Route{
 			strings.ToUpper("Put"),
 			c.contextPath + "/submodels/{submodelIdentifier}",
-			c.PutSubmodelById,
+			c.PutSubmodelByID,
 		},
 		"DeleteSubmodelById": Route{
 			strings.ToUpper("Delete"),
 			c.contextPath + "/submodels/{submodelIdentifier}",
-			c.DeleteSubmodelById,
+			c.DeleteSubmodelByID,
 		},
 		"PatchSubmodelById": Route{
 			strings.ToUpper("Patch"),
 			c.contextPath + "/submodels/{submodelIdentifier}",
-			c.PatchSubmodelById,
+			c.PatchSubmodelByID,
 		},
 		"GetSubmodelByIdMetadata": Route{
 			strings.ToUpper("Get"),
@@ -619,8 +619,8 @@ func (c *SubmodelRepositoryAPIAPIController) GetAllSubmodelsPath(w http.Response
 	_ = EncodeJSONResponse(result.Body, &result.Code, w)
 }
 
-// GetSubmodelById - Returns a specific Submodel
-func (c *SubmodelRepositoryAPIAPIController) GetSubmodelById(w http.ResponseWriter, r *http.Request) {
+// GetSubmodelByID - Returns a specific Submodel
+func (c *SubmodelRepositoryAPIAPIController) GetSubmodelByID(w http.ResponseWriter, r *http.Request) {
 	query, err := parseQuery(r.URL.RawQuery)
 	if err != nil {
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
@@ -649,7 +649,7 @@ func (c *SubmodelRepositoryAPIAPIController) GetSubmodelById(w http.ResponseWrit
 		param := "withoutBlobValue"
 		extentParam = param
 	}
-	result, err := c.service.GetSubmodelById(r.Context(), submodelIdentifierParam, levelParam, extentParam)
+	result, err := c.service.GetSubmodelByID(r.Context(), submodelIdentifierParam, levelParam, extentParam)
 	// If an error occurred, encode the error with the status code
 	if err != nil {
 		c.errorHandler(w, r, err, &result)
@@ -659,8 +659,8 @@ func (c *SubmodelRepositoryAPIAPIController) GetSubmodelById(w http.ResponseWrit
 	_ = EncodeJSONResponse(result.Body, &result.Code, w)
 }
 
-// PutSubmodelById - Updates an existing Submodel
-func (c *SubmodelRepositoryAPIAPIController) PutSubmodelById(w http.ResponseWriter, r *http.Request) {
+// PutSubmodelByID - Updates an existing Submodel
+func (c *SubmodelRepositoryAPIAPIController) PutSubmodelByID(w http.ResponseWriter, r *http.Request) {
 	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
 	if submodelIdentifierParam == "" {
 		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
@@ -681,7 +681,7 @@ func (c *SubmodelRepositoryAPIAPIController) PutSubmodelById(w http.ResponseWrit
 		c.errorHandler(w, r, err, nil)
 		return
 	}
-	result, err := c.service.PutSubmodelById(r.Context(), submodelIdentifierParam, submodelParam)
+	result, err := c.service.PutSubmodelByID(r.Context(), submodelIdentifierParam, submodelParam)
 	// If an error occurred, encode the error with the status code
 	if err != nil {
 		c.errorHandler(w, r, err, &result)
@@ -691,14 +691,14 @@ func (c *SubmodelRepositoryAPIAPIController) PutSubmodelById(w http.ResponseWrit
 	_ = EncodeJSONResponse(result.Body, &result.Code, w)
 }
 
-// DeleteSubmodelById - Deletes a Submodel
-func (c *SubmodelRepositoryAPIAPIController) DeleteSubmodelById(w http.ResponseWriter, r *http.Request) {
+// DeleteSubmodelByID - Deletes a Submodel
+func (c *SubmodelRepositoryAPIAPIController) DeleteSubmodelByID(w http.ResponseWriter, r *http.Request) {
 	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
 	if submodelIdentifierParam == "" {
 		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
 		return
 	}
-	result, err := c.service.DeleteSubmodelById(r.Context(), submodelIdentifierParam)
+	result, err := c.service.DeleteSubmodelByID(r.Context(), submodelIdentifierParam)
 	// If an error occurred, encode the error with the status code
 	if err != nil {
 		c.errorHandler(w, r, err, &result)
@@ -708,8 +708,8 @@ func (c *SubmodelRepositoryAPIAPIController) DeleteSubmodelById(w http.ResponseW
 	_ = EncodeJSONResponse(result.Body, &result.Code, w)
 }
 
-// PatchSubmodelById - Updates an existing Submodel
-func (c *SubmodelRepositoryAPIAPIController) PatchSubmodelById(w http.ResponseWriter, r *http.Request) {
+// PatchSubmodelByID - Updates an existing Submodel
+func (c *SubmodelRepositoryAPIAPIController) PatchSubmodelByID(w http.ResponseWriter, r *http.Request) {
 	query, err := parseQuery(r.URL.RawQuery)
 	if err != nil {
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
@@ -744,7 +744,7 @@ func (c *SubmodelRepositoryAPIAPIController) PatchSubmodelById(w http.ResponseWr
 		param := "core"
 		levelParam = param
 	}
-	result, err := c.service.PatchSubmodelById(r.Context(), submodelIdentifierParam, submodelParam, levelParam)
+	result, err := c.service.PatchSubmodelByID(r.Context(), submodelIdentifierParam, submodelParam, levelParam)
 	// If an error occurred, encode the error with the status code
 	if err != nil {
 		c.errorHandler(w, r, err, &result)
@@ -1812,7 +1812,7 @@ func (c *SubmodelRepositoryAPIAPIController) InvokeOperationSubmodelRepo(w http.
 
 		asyncParam = param
 	} else {
-		var param bool = false
+		var param = false
 		asyncParam = param
 	}
 	result, err := c.service.InvokeOperationSubmodelRepo(r.Context(), submodelIdentifierParam, idShortPathParam, operationRequestParam, asyncParam)
@@ -1875,7 +1875,7 @@ func (c *SubmodelRepositoryAPIAPIController) InvokeOperationValueOnly(w http.Res
 
 		asyncParam = param
 	} else {
-		var param bool = false
+		var param = false
 		asyncParam = param
 	}
 	result, err := c.service.InvokeOperationValueOnly(r.Context(), aasIdentifierParam, submodelIdentifierParam, idShortPathParam, operationRequestValueOnlyParam, asyncParam)

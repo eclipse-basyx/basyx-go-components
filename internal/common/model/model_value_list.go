@@ -9,6 +9,7 @@
 
 package model
 
+// ValueList struct representing a list of ValueReferencePairs
 type ValueList struct {
 	ValueReferencePairs []*ValueReferencePair `json:"valueReferencePair"`
 }

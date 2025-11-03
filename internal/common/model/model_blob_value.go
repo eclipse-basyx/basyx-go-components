@@ -9,6 +9,7 @@
 
 package model
 
+// BlobValue type of Blob
 type BlobValue struct {
 	ContentType string `json:"contentType"`
 
@@ -30,6 +31,8 @@ func AssertBlobValueRequired(obj BlobValue) error {
 }
 
 // AssertBlobValueConstraints checks if the values respects the defined constraints
+//
+//nolint:all
 func AssertBlobValueConstraints(obj BlobValue) error {
 	return nil
 }

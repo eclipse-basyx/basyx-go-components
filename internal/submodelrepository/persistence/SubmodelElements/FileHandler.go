@@ -47,13 +47,13 @@ func NewPostgreSQLFileHandler(db *sql.DB) (*PostgreSQLFileHandler, error) {
 	return &PostgreSQLFileHandler{db: db, decorated: decoratedHandler}, nil
 }
 
-func (p PostgreSQLFileHandler) Create(tx *sql.Tx, submodelId string, submodelElement gen.SubmodelElement) (int, error) {
+func (p PostgreSQLFileHandler) Create(tx *sql.Tx, submodelID string, submodelElement gen.SubmodelElement) (int, error) {
 	file, ok := submodelElement.(*gen.File)
 	if !ok {
 		return 0, errors.New("submodelElement is not of type File")
 	}
 	// First, perform base SubmodelElement operations within the transaction
-	id, err := p.decorated.Create(tx, submodelId, submodelElement)
+	id, err := p.decorated.Create(tx, submodelID, submodelElement)
 	if err != nil {
 		return 0, err
 	}
@@ -68,14 +68,14 @@ func (p PostgreSQLFileHandler) Create(tx *sql.Tx, submodelId string, submodelEle
 	return id, nil
 }
 
-func (p PostgreSQLFileHandler) CreateNested(tx *sql.Tx, submodelId string, parentId int, idShortPath string, submodelElement gen.SubmodelElement, pos int) (int, error) {
+func (p PostgreSQLFileHandler) CreateNested(tx *sql.Tx, submodelID string, parentID int, idShortPath string, submodelElement gen.SubmodelElement, pos int) (int, error) {
 	file, ok := submodelElement.(*gen.File)
 	if !ok {
 		return 0, errors.New("submodelElement is not of type File")
 	}
 
 	// Create the nested file with the provided idShortPath using the decorated handler
-	id, err := p.decorated.CreateAndPath(tx, submodelId, parentId, idShortPath, submodelElement, pos)
+	id, err := p.decorated.CreateAndPath(tx, submodelID, parentID, idShortPath, submodelElement, pos)
 	if err != nil {
 		return 0, err
 	}

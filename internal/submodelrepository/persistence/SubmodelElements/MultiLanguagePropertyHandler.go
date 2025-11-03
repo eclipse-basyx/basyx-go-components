@@ -47,13 +47,13 @@ func NewPostgreSQLMultiLanguagePropertyHandler(db *sql.DB) (*PostgreSQLMultiLang
 	return &PostgreSQLMultiLanguagePropertyHandler{db: db, decorated: decoratedHandler}, nil
 }
 
-func (p PostgreSQLMultiLanguagePropertyHandler) Create(tx *sql.Tx, submodelId string, submodelElement gen.SubmodelElement) (int, error) {
+func (p PostgreSQLMultiLanguagePropertyHandler) Create(tx *sql.Tx, submodelID string, submodelElement gen.SubmodelElement) (int, error) {
 	mlp, ok := submodelElement.(*gen.MultiLanguageProperty)
 	if !ok {
 		return 0, errors.New("submodelElement is not of type MultiLanguageProperty")
 	}
 	// First, perform base SubmodelElement operations within the transaction
-	id, err := p.decorated.Create(tx, submodelId, submodelElement)
+	id, err := p.decorated.Create(tx, submodelID, submodelElement)
 	if err != nil {
 		return 0, err
 	}
@@ -67,14 +67,14 @@ func (p PostgreSQLMultiLanguagePropertyHandler) Create(tx *sql.Tx, submodelId st
 	return id, nil
 }
 
-func (p PostgreSQLMultiLanguagePropertyHandler) CreateNested(tx *sql.Tx, submodelId string, parentId int, idShortPath string, submodelElement gen.SubmodelElement, pos int) (int, error) {
+func (p PostgreSQLMultiLanguagePropertyHandler) CreateNested(tx *sql.Tx, submodelID string, parentID int, idShortPath string, submodelElement gen.SubmodelElement, pos int) (int, error) {
 	mlp, ok := submodelElement.(*gen.MultiLanguageProperty)
 	if !ok {
 		return 0, errors.New("submodelElement is not of type MultiLanguageProperty")
 	}
 
 	// Create the nested mlp with the provided idShortPath using the decorated handler
-	id, err := p.decorated.CreateAndPath(tx, submodelId, parentId, idShortPath, submodelElement, pos)
+	id, err := p.decorated.CreateAndPath(tx, submodelID, parentID, idShortPath, submodelElement, pos)
 	if err != nil {
 		return 0, err
 	}

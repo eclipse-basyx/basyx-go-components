@@ -24,7 +24,7 @@
 ******************************************************************************/
 
 // Author: Aaron Zielstorff ( Fraunhofer IESE ), Jannik Fried ( Fraunhofer IESE )
-package submodel_query
+package submodelQueries
 
 import "github.com/doug-martin/goqu/v9"
 

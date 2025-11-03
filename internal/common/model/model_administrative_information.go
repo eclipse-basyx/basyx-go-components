@@ -34,6 +34,7 @@
 
 package model
 
+// AdministrativeInformation struct represents administrative metadata for an Asset Administration Shell (AAS).
 type AdministrativeInformation struct {
 	EmbeddedDataSpecifications []EmbeddedDataSpecification `json:"embeddedDataSpecifications,omitempty"`
 
@@ -43,7 +44,7 @@ type AdministrativeInformation struct {
 
 	Creator *Reference `json:"creator,omitempty"`
 
-	TemplateId string `json:"templateId,omitempty" validate:"regexp=^([\\\\x09\\\\x0a\\\\x0d\\\\x20-\\\\ud7ff\\\\ue000-\\\\ufffd]|\\\\ud800[\\\\udc00-\\\\udfff]|[\\\\ud801-\\\\udbfe][\\\\udc00-\\\\udfff]|\\\\udbff[\\\\udc00-\\\\udfff])*$"`
+	TemplateID string `json:"templateID,omitempty" validate:"regexp=^([\\\\x09\\\\x0a\\\\x0d\\\\x20-\\\\ud7ff\\\\ue000-\\\\ufffd]|\\\\ud800[\\\\udc00-\\\\udfff]|[\\\\ud801-\\\\udbfe][\\\\udc00-\\\\udfff]|\\\\udbff[\\\\udc00-\\\\udfff])*$"`
 }
 
 // AssertAdministrativeInformationRequired checks if the required fields are not zero-ed

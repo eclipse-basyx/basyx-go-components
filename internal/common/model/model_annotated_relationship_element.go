@@ -14,11 +14,13 @@ import (
 	"fmt"
 )
 
+// AnnotatedRelationshipElement type of SubmodelElement
 type AnnotatedRelationshipElement struct {
 	Extensions []Extension `json:"extensions,omitempty"`
 
 	Category string `json:"category,omitempty" validate:"regexp=^([\\\\x09\\\\x0a\\\\x0d\\\\x20-\\\\ud7ff\\\\ue000-\\\\ufffd]|\\\\ud800[\\\\udc00-\\\\udfff]|[\\\\ud801-\\\\udbfe][\\\\udc00-\\\\udfff]|\\\\udbff[\\\\udc00-\\\\udfff])*$"`
 
+	//nolint:all
 	IdShort string `json:"idShort,omitempty"`
 
 	DisplayName []LangStringNameType `json:"displayName,omitempty"`
@@ -27,8 +29,9 @@ type AnnotatedRelationshipElement struct {
 
 	ModelType string `json:"modelType" validate:"regexp=^AnnotatedRelationshipElement$"`
 
-	SemanticId *Reference `json:"semanticId,omitempty"`
+	SemanticID *Reference `json:"semanticID,omitempty"`
 
+	//nolint:all
 	SupplementalSemanticIds []Reference `json:"supplementalSemanticIds,omitempty"`
 
 	Qualifiers []Qualifier `json:"qualifiers,omitempty"`
@@ -43,103 +46,135 @@ type AnnotatedRelationshipElement struct {
 }
 
 // Getters
+//
+//nolint:all
 func (a AnnotatedRelationshipElement) GetExtensions() []Extension {
 	return a.Extensions
 }
 
+//nolint:all
 func (a AnnotatedRelationshipElement) GetIdShort() string {
 	return a.IdShort
 }
 
+//nolint:all
 func (a AnnotatedRelationshipElement) GetCategory() string {
 	return a.Category
 }
 
+//nolint:all
 func (a AnnotatedRelationshipElement) GetDisplayName() []LangStringNameType {
 	return a.DisplayName
 }
 
+//nolint:all
 func (a AnnotatedRelationshipElement) GetDescription() []LangStringTextType {
 	return a.Description
 }
 
+//nolint:all
 func (a AnnotatedRelationshipElement) GetModelType() string {
 	return a.ModelType
 }
 
-func (a AnnotatedRelationshipElement) GetSemanticId() *Reference {
-	return a.SemanticId
+//nolint:all
+func (a AnnotatedRelationshipElement) GetSemanticID() *Reference {
+	return a.SemanticID
 }
 
+//nolint:all
 func (a AnnotatedRelationshipElement) GetSupplementalSemanticIds() []Reference {
 	return a.SupplementalSemanticIds
 }
 
+//nolint:all
 func (a AnnotatedRelationshipElement) GetQualifiers() []Qualifier {
 	return a.Qualifiers
 }
 
+//nolint:all
 func (a AnnotatedRelationshipElement) GetEmbeddedDataSpecifications() []EmbeddedDataSpecification {
 	return a.EmbeddedDataSpecifications
 }
 
+//nolint:all
 func (a AnnotatedRelationshipElement) GetFirst() *Reference {
 	return a.First
 }
+
+//nolint:all
 func (a AnnotatedRelationshipElement) GetSecond() *Reference {
 	return a.Second
 }
+
+//nolint:all
 func (a AnnotatedRelationshipElement) GetAnnotations() []SubmodelElement {
 	return a.Annotations
 }
 
 // Setters
 
+//nolint:all
 func (a *AnnotatedRelationshipElement) SetModelType(v string) {
 	a.ModelType = v
 }
 
+//nolint:all
 func (a *AnnotatedRelationshipElement) SetExtensions(v []Extension) {
 	a.Extensions = v
 }
 
+//nolint:all
 func (a *AnnotatedRelationshipElement) SetIdShort(v string) {
 	a.IdShort = v
 }
 
+//nolint:all
 func (a *AnnotatedRelationshipElement) SetCategory(v string) {
 	a.Category = v
 }
 
+//nolint:all
 func (a *AnnotatedRelationshipElement) SetDisplayName(v []LangStringNameType) {
 	a.DisplayName = v
 }
 
+//nolint:all
 func (a *AnnotatedRelationshipElement) SetDescription(v []LangStringTextType) {
 	a.Description = v
 }
 
-func (a *AnnotatedRelationshipElement) SetSemanticId(v *Reference) {
-	a.SemanticId = v
+//nolint:all
+func (a *AnnotatedRelationshipElement) SetSemanticID(v *Reference) {
+	a.SemanticID = v
 }
 
+//nolint:all
 func (a *AnnotatedRelationshipElement) SetSupplementalSemanticIds(v []Reference) {
 	a.SupplementalSemanticIds = v
 }
 
+//nolint:all
 func (a *AnnotatedRelationshipElement) SetQualifiers(v []Qualifier) {
 	a.Qualifiers = v
 }
 
+//nolint:all
 func (a *AnnotatedRelationshipElement) SetEmbeddedDataSpecifications(v []EmbeddedDataSpecification) {
 	a.EmbeddedDataSpecifications = v
 }
+
+//nolint:all
 func (a *AnnotatedRelationshipElement) SetFirst(v Reference) {
 	a.First = &v
 }
+
+//nolint:all
 func (a *AnnotatedRelationshipElement) SetSecond(v Reference) {
 	a.Second = &v
 }
+
+//nolint:all
 func (a *AnnotatedRelationshipElement) SetAnnotations(v []SubmodelElement) {
 	a.Annotations = v
 }
@@ -162,7 +197,7 @@ func AssertAnnotatedRelationshipElementRequired(obj AnnotatedRelationshipElement
 			return err
 		}
 	}
-	if err := AssertReferableAllOfIdShortRequired(obj.IdShort); err != nil {
+	if err := AssertIdShortRequired(obj.IdShort); err != nil {
 		return err
 	}
 	for _, el := range obj.DisplayName {
@@ -175,7 +210,7 @@ func AssertAnnotatedRelationshipElementRequired(obj AnnotatedRelationshipElement
 			return err
 		}
 	}
-	if err := AssertReferenceRequired(*obj.SemanticId); err != nil {
+	if err := AssertReferenceRequired(*obj.SemanticID); err != nil {
 		return err
 	}
 	for _, el := range obj.SupplementalSemanticIds {
@@ -214,7 +249,7 @@ func AssertAnnotatedRelationshipElementConstraints(obj AnnotatedRelationshipElem
 			return err
 		}
 	}
-	if err := AssertReferableAllOfIdShortConstraints(obj.IdShort); err != nil {
+	if err := AssertstringConstraints(obj.IdShort); err != nil {
 		return err
 	}
 	for _, el := range obj.DisplayName {
@@ -227,7 +262,7 @@ func AssertAnnotatedRelationshipElementConstraints(obj AnnotatedRelationshipElem
 			return err
 		}
 	}
-	if err := AssertReferenceConstraints(*obj.SemanticId); err != nil {
+	if err := AssertReferenceConstraints(*obj.SemanticID); err != nil {
 		return err
 	}
 	for _, el := range obj.SupplementalSemanticIds {
@@ -260,14 +295,14 @@ func AssertAnnotatedRelationshipElementConstraints(obj AnnotatedRelationshipElem
 }
 
 // UnmarshalJSON implements custom JSON unmarshaling for AnnotatedRelationshipElement
-func (are *AnnotatedRelationshipElement) UnmarshalJSON(data []byte) error {
+func (a *AnnotatedRelationshipElement) UnmarshalJSON(data []byte) error {
 	// Create a temporary struct with the same fields but Annotations as []json.RawMessage
 	type Alias AnnotatedRelationshipElement
 	aux := &struct {
 		Annotations []json.RawMessage `json:"annotations,omitempty"`
 		*Alias
 	}{
-		Alias: (*Alias)(are),
+		Alias: (*Alias)(a),
 	}
 
 	// Unmarshal into the temporary struct
@@ -277,13 +312,13 @@ func (are *AnnotatedRelationshipElement) UnmarshalJSON(data []byte) error {
 
 	// Now process the Annotations field manually
 	if aux.Annotations != nil {
-		are.Annotations = make([]SubmodelElement, len(aux.Annotations))
+		a.Annotations = make([]SubmodelElement, len(aux.Annotations))
 		for i, rawElement := range aux.Annotations {
 			element, err := UnmarshalSubmodelElement(rawElement)
 			if err != nil {
 				return fmt.Errorf("failed to unmarshal element at index %d: %w", i, err)
 			}
-			are.Annotations[i] = element
+			a.Annotations[i] = element
 		}
 	}
 
