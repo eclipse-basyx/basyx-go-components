@@ -575,7 +575,7 @@ func ParseAdministrationRow(row json.RawMessage) (*AdministrationRow, error) {
 		return nil, fmt.Errorf("error unmarshalling AdministrationRow data: %w", err)
 	}
 	if len(texts) == 0 {
-		return nil, fmt.Errorf("no AdministrationRow found")
+		return nil, nil
 	}
 	return &texts[0], nil
 }
