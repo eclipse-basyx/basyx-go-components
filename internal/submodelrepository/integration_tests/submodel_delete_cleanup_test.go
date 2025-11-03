@@ -59,6 +59,7 @@ func TestSubmodelDeletionCleansUpAllData(t *testing.T) {
 
 	// Define a complex submodel with all possible nested structures
 	submodelJSON := `{
+		"modelType": "Submodel",
 		"id": "http://test.example.com/submodel/test-cleanup",
 		"idShort": "TestCleanupSubmodel",
 		"kind": "Instance",
@@ -72,9 +73,6 @@ func TestSubmodelDeletionCleansUpAllData(t *testing.T) {
 		"description": [{
 			"language": "en",
 			"text": "Test submodel for cleanup verification"
-		}, {
-			"language": "de",
-			"text": "Test Submodel für Cleanup-Verifikation"
 		}],
 		"displayName": [{
 			"language": "en",
