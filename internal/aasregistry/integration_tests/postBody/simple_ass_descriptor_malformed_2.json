@@ -1,7 +1,7 @@
 {
     "id": "https://iese.fraunhofer.de/ids/aas/3245235",
     "assetKind": "Factorio",
-    "AssetType": "value",
+    "assetType": "value",
     "endpoints": [
         {
             "interface": "AAS-3.0",

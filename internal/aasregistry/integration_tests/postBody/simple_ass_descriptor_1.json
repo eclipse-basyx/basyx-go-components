@@ -1,7 +1,7 @@
 {
     "id": "https://iese.fraunhofer.de/ids/aas/22335",
     "assetKind": "Type",
-    "AssetType": "gigachad",
+    "assetType": "gigachad",
     "endpoints": [
         {
             "interface": "AAS-3.0",

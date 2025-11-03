@@ -12,10 +12,10 @@
 package ass_registry_api
 
 import (
-	"context"
-	"errors"
-	"net/http"
-	"strings"
+    "context"
+    "errors"
+    "net/http"
+    "strings"
 
 	persistence_postgresql "github.com/eclipse-basyx/basyx-go-components/internal/aasregistry/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
@@ -213,48 +213,28 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) PutAssetAdministrationSh
 	}
 	assetAdministrationShellDescriptor.Id = decodedAAS
 
-	// Detect existence to choose status code
-	_, getErr := s.aasRegistryBackend.GetAssetAdministrationShellDescriptorById(ctx, decodedAAS)
-	exists := getErr == nil
+    existed, err := s.aasRegistryBackend.ReplaceAdministrationShellDescriptor(ctx, assetAdministrationShellDescriptor)
+    if err != nil {
+        switch {
+        case common.IsErrBadRequest(err):
+            return common.NewErrorResponse(
+                err, http.StatusBadRequest, componentName, "PutAssetAdministrationShellDescriptorById", "BadRequest",
+            ), nil
+        case common.IsErrConflict(err):
+            return common.NewErrorResponse(
+                err, http.StatusConflict, componentName, "PutAssetAdministrationShellDescriptorById", "Conflict",
+            ), nil
+        default:
+            return common.NewErrorResponse(
+                err, http.StatusInternalServerError, componentName, "PutAssetAdministrationShellDescriptorById", "Unhandled-Insert",
+            ), err
+        }
+    }
 
-	if exists {
-		if err := s.aasRegistryBackend.DeleteAssetAdministrationShellDescriptorById(ctx, decodedAAS); err != nil {
-			switch {
-			case common.IsErrNotFound(err):
-				// fall through to insert as create
-			case common.IsErrBadRequest(err):
-				return common.NewErrorResponse(
-					err, http.StatusBadRequest, componentName, "PutAssetAdministrationShellDescriptorById", "BadRequest",
-				), nil
-			default:
-				return common.NewErrorResponse(
-					err, http.StatusInternalServerError, componentName, "PutAssetAdministrationShellDescriptorById", "Unhandled-Delete",
-				), err
-			}
-		}
-	}
-
-	if err := s.aasRegistryBackend.InsertAdministrationShellDescriptor(ctx, assetAdministrationShellDescriptor); err != nil {
-		switch {
-		case common.IsErrBadRequest(err):
-			return common.NewErrorResponse(
-				err, http.StatusBadRequest, componentName, "PutAssetAdministrationShellDescriptorById", "BadRequest",
-			), nil
-		case common.IsErrConflict(err):
-			return common.NewErrorResponse(
-				err, http.StatusConflict, componentName, "PutAssetAdministrationShellDescriptorById", "Conflict",
-			), nil
-		default:
-			return common.NewErrorResponse(
-				err, http.StatusInternalServerError, componentName, "PutAssetAdministrationShellDescriptorById", "Unhandled-Insert",
-			), err
-		}
-	}
-
-	if exists {
-		return model.Response(http.StatusNoContent, nil), nil
-	}
-	return model.Response(http.StatusCreated, assetAdministrationShellDescriptor), nil
+    if existed {
+        return model.Response(http.StatusNoContent, nil), nil
+    }
+    return model.Response(http.StatusCreated, assetAdministrationShellDescriptor), nil
 }
 
 // DeleteAssetAdministrationShellDescriptorById - Deletes an Asset Administration Shell Descriptor, i.e. de-registers an AAS

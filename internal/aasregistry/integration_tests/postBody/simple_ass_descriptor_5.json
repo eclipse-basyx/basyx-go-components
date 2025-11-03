@@ -1,7 +1,7 @@
 {
-    "id": "https://iese.fraunhofer.de/ids/aas/3657le6d",
-    "assetKind": "Instance",
-    "assetType": "betachad",
+    "id": "https://iese.fraunhofer.de/ids/aas/22335",
+    "assetKind": "Type",
+    "assetType": "omega",
     "endpoints": [
         {
             "interface": "AAS-3.0",
@@ -13,9 +13,9 @@
     ],
     "extensions": [
         {
-            "name": "helpme",
+            "name": "wuff",
             "valueType": "xs:string",
-            "value": "LUL"
+            "value": "miau"
         }
     ]
 }

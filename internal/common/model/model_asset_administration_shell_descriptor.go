@@ -108,8 +108,10 @@ func AssertAssetAdministrationShellDescriptorConstraints(obj AssetAdministration
 		return AssertAssetKindConstraints(*obj.AssetKind)
 	}
 
-	if err := AssertAdministrativeInformationConstraints(*obj.Administration); err != nil {
-		return err
+	if obj.Administration != nil {
+		if err := AssertAdministrativeInformationConstraints(*obj.Administration); err != nil {
+			return err
+		}
 	}
 	for _, el := range obj.Endpoints {
 		if err := AssertEndpointConstraints(el); err != nil {

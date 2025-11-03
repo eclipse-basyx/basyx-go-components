@@ -1,23 +1,23 @@
 package persistence_postgresql
 
 import (
-	"context"
-	"database/sql"
-	"errors"
-	"fmt"
-	"os"
-	"path/filepath"
-	"sort"
-	"time"
+    "context"
+    "database/sql"
+    "errors"
+    "fmt"
+    "os"
+    "path/filepath"
+    "sort"
+    "time"
 
-	"github.com/doug-martin/goqu/v9"
-	_ "github.com/doug-martin/goqu/v9/dialect/postgres"
-	"golang.org/x/sync/errgroup"
+    "github.com/doug-martin/goqu/v9"
+    _ "github.com/doug-martin/goqu/v9/dialect/postgres"
+    "golang.org/x/sync/errgroup"
 
-	"github.com/eclipse-basyx/basyx-go-components/internal/common"
-	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
-	persistence_utils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
-	_ "github.com/lib/pq"
+    "github.com/eclipse-basyx/basyx-go-components/internal/common"
+    "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+    persistence_utils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
+    _ "github.com/lib/pq"
 )
 
 type PostgreSQLAASRegistryDatabase struct {
@@ -54,104 +54,119 @@ func NewPostgreSQLAASRegistryDatabase(dsn string, maxOpenConns, maxIdleConns int
 		return nil, dbError
 	}
 
-	return &PostgreSQLAASRegistryDatabase{db: db, cacheEnabled: cacheEnabled}, nil
+    return &PostgreSQLAASRegistryDatabase{db: db, cacheEnabled: cacheEnabled}, nil
 }
+// WithTx runs the given function within a database transaction.
+// It commits on success and rolls back on error or panic.
+func (p *PostgreSQLAASRegistryDatabase) WithTx(ctx context.Context, fn func(tx *sql.Tx) error) (err error) {
+    tx, err := p.db.BeginTx(ctx, nil)
+    if err != nil {
+        return common.NewInternalServerError("Failed to start postgres transaction. See console for information.")
+    }
+    defer func() {
+        if rec := recover(); rec != nil {
+            _ = tx.Rollback()
+            panic(rec)
+        }
+    }()
+    if err := fn(tx); err != nil {
+        _ = tx.Rollback()
+        return err
+    }
+    if err := tx.Commit(); err != nil {
+        return err
+    }
+    return nil
+}
+
+// InsertAdministrationShellDescriptor performs the insert in its own transaction by default.
 func (p *PostgreSQLAASRegistryDatabase) InsertAdministrationShellDescriptor(ctx context.Context, aasd model.AssetAdministrationShellDescriptor) error {
-	tx, err := p.db.BeginTx(ctx, nil)
-	if err != nil {
-		fmt.Println(err)
-		return common.NewInternalServerError("Failed to start postgres transaction. See console for information.")
-	}
-	defer func() {
-		if p := recover(); p != nil {
-			_ = tx.Rollback()
-			panic(p)
-		} else if err != nil {
-			_ = tx.Rollback()
-		}
-	}()
+    return p.WithTx(ctx, func(tx *sql.Tx) error {
+        return p.InsertAdministrationShellDescriptorTx(ctx, tx, aasd)
+    })
+}
 
-	d := goqu.Dialect(dialect)
+// InsertAdministrationShellDescriptorTx performs the insert using the provided transaction.
+func (p *PostgreSQLAASRegistryDatabase) InsertAdministrationShellDescriptorTx(ctx context.Context, tx *sql.Tx, aasd model.AssetAdministrationShellDescriptor) error {
+    d := goqu.Dialect(dialect)
 
-	descTbl := goqu.T(tblDescriptor)
+    descTbl := goqu.T(tblDescriptor)
 
-	sqlStr, args, buildErr := d.
-		Insert(tblDescriptor).
-		Returning(descTbl.Col(colID)).
-		ToSQL()
-	if buildErr != nil {
-		return buildErr
-	}
-	var descriptorId int64
-	err = tx.QueryRow(sqlStr, args...).Scan(&descriptorId)
-	if err != nil {
-		return err
-	}
+    sqlStr, args, buildErr := d.
+        Insert(tblDescriptor).
+        Returning(descTbl.Col(colID)).
+        ToSQL()
+    if buildErr != nil {
+        return buildErr
+    }
+    var descriptorId int64
+    if err := tx.QueryRow(sqlStr, args...).Scan(&descriptorId); err != nil {
+        return err
+    }
 
-	var displayNameId, descriptionId, administrationId sql.NullInt64
+    var displayNameId, descriptionId, administrationId sql.NullInt64
 
-	displayNameId, err = persistence_utils.CreateLangStringNameTypes(tx, aasd.DisplayName)
-	if err != nil {
-		fmt.Println(err)
-		return common.NewInternalServerError("Failed to create DisplayName - no changes applied - see console for details")
-	}
+    dnID, err := persistence_utils.CreateLangStringNameTypes(tx, aasd.DisplayName)
+    if err != nil {
+        fmt.Println(err)
+        return common.NewInternalServerError("Failed to create DisplayName - no changes applied - see console for details")
+    }
+    displayNameId = dnID
 
-	descriptionId, err = persistence_utils.CreateLangStringTextTypesN(tx, aasd.Description)
-	if err != nil {
-		fmt.Println(err)
-		return common.NewInternalServerError("Failed to create Description - no changes applied - see console for details")
-	}
+    descID, err := persistence_utils.CreateLangStringTextTypesN(tx, aasd.Description)
+    if err != nil {
+        fmt.Println(err)
+        return common.NewInternalServerError("Failed to create Description - no changes applied - see console for details")
+    }
+    descriptionId = descID
 
-	administrationId, err = persistence_utils.CreateAdministrativeInformation(tx, aasd.Administration)
-	if err != nil {
-		fmt.Println(err)
-		return common.NewInternalServerError("Failed to create Administration - no changes applied - see console for details")
-	}
+    adminID, err := persistence_utils.CreateAdministrativeInformation(tx, aasd.Administration)
+    if err != nil {
+        fmt.Println(err)
+        return common.NewInternalServerError("Failed to create Administration - no changes applied - see console for details")
+    }
+    administrationId = adminID
 
-	sqlStr, args, buildErr = d.
-		Insert(tblAASDescriptor).
-		Rows(goqu.Record{
-			colDescriptorID:  descriptorId,
-			colDescriptionID: descriptionId,
-			colDisplayNameID: displayNameId,
-			colAdminInfoID:   administrationId,
-			colAssetKind:     aasd.AssetKind,
-			colAssetType:     aasd.AssetType,
-			colGlobalAssetID: aasd.GlobalAssetId,
-			colIdShort:       aasd.IdShort,
-			colAASID:         aasd.Id,
-		}).
-		ToSQL()
-	if buildErr != nil {
-		return buildErr
-	}
-	if _, err = tx.Exec(sqlStr, args...); err != nil {
-		return err
-	}
+    sqlStr, args, buildErr = d.
+        Insert(tblAASDescriptor).
+        Rows(goqu.Record{
+            colDescriptorID:  descriptorId,
+            colDescriptionID: descriptionId,
+            colDisplayNameID: displayNameId,
+            colAdminInfoID:   administrationId,
+            colAssetKind:     aasd.AssetKind,
+            colAssetType:     aasd.AssetType,
+            colGlobalAssetID: aasd.GlobalAssetId,
+            colIdShort:       aasd.IdShort,
+            colAASID:         aasd.Id,
+        }).
+        ToSQL()
+    if buildErr != nil {
+        return buildErr
+    }
+    if _, err = tx.Exec(sqlStr, args...); err != nil {
+        return err
+    }
 
-	if err = createEndpoints(tx, descriptorId, aasd.Endpoints); err != nil {
-		fmt.Println(err)
-		return common.NewInternalServerError("Failed to create Endpoints - no changes applied - see console for details")
-	}
+    if err = createEndpoints(tx, descriptorId, aasd.Endpoints); err != nil {
+        fmt.Println(err)
+        return common.NewInternalServerError("Failed to create Endpoints - no changes applied - see console for details")
+    }
 
-	if err = createSpecificAssetId(tx, descriptorId, aasd.SpecificAssetIds); err != nil {
-		fmt.Println(err)
-		return common.NewInternalServerError("Failed to create Specific Asset Ids - no changes applied - see console for details")
-	}
+    if err = createSpecificAssetId(tx, descriptorId, aasd.SpecificAssetIds); err != nil {
+        fmt.Println(err)
+        return common.NewInternalServerError("Failed to create Specific Asset Ids - no changes applied - see console for details")
+    }
 
-	if err = createExtensions(tx, descriptorId, aasd.Extensions); err != nil {
-		return err
-	}
+    if err = createExtensions(tx, descriptorId, aasd.Extensions); err != nil {
+        return err
+    }
 
-	if err = createSubModelDescriptors(tx, descriptorId, aasd.SubmodelDescriptors); err != nil {
-		return err
-	}
+    if err = createSubModelDescriptors(tx, descriptorId, aasd.SubmodelDescriptors); err != nil {
+        return err
+    }
 
-	if err = tx.Commit(); err != nil {
-		return err
-	}
-
-	return nil
+    return nil
 }
 
 func (p *PostgreSQLAASRegistryDatabase) GetAssetAdministrationShellDescriptorById(
@@ -325,60 +340,94 @@ func (p *PostgreSQLAASRegistryDatabase) GetAssetAdministrationShellDescriptorByI
 
 // DeleteAssetAdministrationShellDescriptorById deletes the main descriptor row for a given AAS id.
 // ON DELETE CASCADE in the schema will remove dependent rows.
+// DeleteAssetAdministrationShellDescriptorById performs the delete in its own transaction by default.
 func (p *PostgreSQLAASRegistryDatabase) DeleteAssetAdministrationShellDescriptorById(ctx context.Context, aasIdentifier string) error {
-	tx, err := p.db.BeginTx(ctx, nil)
-	if err != nil {
-		return common.NewInternalServerError("Failed to start postgres transaction. See console for information.")
-	}
-	defer func() {
-		if p := recover(); p != nil {
-			_ = tx.Rollback()
-			panic(p)
-		} else if err != nil {
-			_ = tx.Rollback()
-		}
-	}()
+    return p.WithTx(ctx, func(tx *sql.Tx) error {
+        return p.DeleteAssetAdministrationShellDescriptorByIdTx(ctx, tx, aasIdentifier)
+    })
+}
 
-	d := goqu.Dialect(dialect)
-	aas := goqu.T(tblAASDescriptor).As("aas")
+// DeleteAssetAdministrationShellDescriptorByIdTx deletes using the provided transaction.
+func (p *PostgreSQLAASRegistryDatabase) DeleteAssetAdministrationShellDescriptorByIdTx(ctx context.Context, tx *sql.Tx, aasIdentifier string) error {
+    d := goqu.Dialect(dialect)
+    aas := goqu.T(tblAASDescriptor).As("aas")
 
-	// Lookup the root descriptor id for this AAS
-	sqlStr, args, buildErr := d.
-		From(aas).
-		Select(aas.Col(colDescriptorID)).
-		Where(aas.Col(colAASID).Eq(aasIdentifier)).
-		Limit(1).
-		ToSQL()
-	if buildErr != nil {
-		return buildErr
-	}
+    // Lookup the root descriptor id for this AAS
+    sqlStr, args, buildErr := d.
+        From(aas).
+        Select(aas.Col(colDescriptorID)).
+        Where(aas.Col(colAASID).Eq(aasIdentifier)).
+        Limit(1).
+        ToSQL()
+    if buildErr != nil {
+        return buildErr
+    }
 
-	var descID int64
-	if scanErr := tx.QueryRowContext(ctx, sqlStr, args...).Scan(&descID); scanErr != nil {
-		if scanErr == sql.ErrNoRows {
-			return common.NewErrNotFound("AAS Descriptor not found")
-		}
-		err = scanErr
-		return err
-	}
+    var descID int64
+    if scanErr := tx.QueryRowContext(ctx, sqlStr, args...).Scan(&descID); scanErr != nil {
+        if scanErr == sql.ErrNoRows {
+            return common.NewErrNotFound("AAS Descriptor not found")
+        }
+        return scanErr
+    }
 
-	// Delete the main descriptor; cascades handle related rows
-	delStr, delArgs, buildDelErr := d.
-		Delete(tblDescriptor).
-		Where(goqu.C(colID).Eq(descID)).
-		ToSQL()
-	if buildDelErr != nil {
-		return buildDelErr
-	}
-	if _, execErr := tx.Exec(delStr, delArgs...); execErr != nil {
-		err = execErr
-		return err
-	}
+    // Delete the main descriptor; cascades handle related rows
+    delStr, delArgs, buildDelErr := d.
+        Delete(tblDescriptor).
+        Where(goqu.C(colID).Eq(descID)).
+        ToSQL()
+    if buildDelErr != nil {
+        return buildDelErr
+    }
+    if _, execErr := tx.Exec(delStr, delArgs...); execErr != nil {
+        return execErr
+    }
+    return nil
+}
 
-	if commitErr := tx.Commit(); commitErr != nil {
-		return commitErr
-	}
-	return nil
+// ReplaceAdministrationShellDescriptor deletes any existing descriptor with the same Id
+// and inserts the provided descriptor in a single transaction. The returned boolean
+// indicates whether a descriptor existed before the replace.
+func (p *PostgreSQLAASRegistryDatabase) ReplaceAdministrationShellDescriptor(ctx context.Context, aasd model.AssetAdministrationShellDescriptor) (bool, error) {
+    existed := false
+    err := p.WithTx(ctx, func(tx *sql.Tx) error {
+        d := goqu.Dialect(dialect)
+        aas := goqu.T(tblAASDescriptor).As("aas")
+
+        // Lookup existing descriptor id by AAS Id
+        sqlStr, args, buildErr := d.
+            From(aas).
+            Select(aas.Col(colDescriptorID)).
+            Where(aas.Col(colAASID).Eq(aasd.Id)).
+            Limit(1).
+            ToSQL()
+        if buildErr != nil {
+            return buildErr
+        }
+        var descID int64
+        scanErr := tx.QueryRowContext(ctx, sqlStr, args...).Scan(&descID)
+        if scanErr != nil && !errors.Is(scanErr, sql.ErrNoRows) {
+            return scanErr
+        }
+        if scanErr == nil {
+            existed = true
+            // delete existing row; cascades clear dependents
+            delStr, delArgs, buildDelErr := d.
+                Delete(tblDescriptor).
+                Where(goqu.C(colID).Eq(descID)).
+                ToSQL()
+            if buildDelErr != nil {
+                return buildDelErr
+            }
+            if _, execErr := tx.Exec(delStr, delArgs...); execErr != nil {
+                return execErr
+            }
+        }
+
+        // Insert replacement
+        return p.InsertAdministrationShellDescriptorTx(ctx, tx, aasd)
+    })
+    return existed, err
 }
 
 func GetLangStringTextTypesByIDs(
@@ -712,6 +761,8 @@ func (p *PostgreSQLAASRegistryDatabase) ListAssetAdministrationShellDescriptors(
 	if err := g.Wait(); err != nil {
 		return nil, "", err
 	}
+	lel := time.Since(adda)
+	fmt.Printf("total block took %v to complete all requests\n", lel)
 
 	out := make([]model.AssetAdministrationShellDescriptor, 0, len(all))
 	for _, r := range all {
