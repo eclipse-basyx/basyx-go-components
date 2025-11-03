@@ -99,6 +99,6 @@ func BuildAdministration(adminRow AdministrationRow) (*gen.AdministrativeInforma
 	for _, refBuilder := range refBuilderMap {
 		refBuilder.BuildNestedStructure()
 	}
-
+	
 	return administration, nil
 }
