@@ -33,7 +33,9 @@
             "program": "${workspaceFolder}/cmd/aasregistryservice/main.go",
             "args": [
                 "-config",
-                "${workspaceFolder}/cmd/aasregistryservice/config.yaml"
+                "${workspaceFolder}/cmd/aasregistryservice/config.yaml",
+                "-databaseSchema",
+                "${workspaceFolder}/cmd/aasregistryservice/resources/sql/aasregistryschema.sql"
             ]
         }
     ]

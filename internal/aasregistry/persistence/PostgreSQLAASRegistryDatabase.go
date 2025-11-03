@@ -25,34 +25,20 @@ type PostgreSQLAASRegistryDatabase struct {
 	cacheEnabled bool
 }
 
-func NewPostgreSQLAASRegistryDatabase(dsn string, maxOpenConns, maxIdleConns int, connMaxLifetimeMinutes int, cacheEnabled bool) (*PostgreSQLAASRegistryDatabase, error) {
-	db, err := sql.Open(dialect, dsn)
-	db.SetMaxOpenConns(500)
-	db.SetMaxIdleConns(500)
-	db.SetConnMaxLifetime(time.Minute * 5)
+func NewPostgreSQLAASRegistryDatabase(dsn string, maxOpenConns, maxIdleConns int, connMaxLifetimeMinutes int, cacheEnabled bool, databaseSchema string) (*PostgreSQLAASRegistryDatabase, error) {
+    // Determine which schema to load: prefer provided path, otherwise default bundled schema
+    schemaPath := databaseSchema
+    if schemaPath == "" {
+        // Fallback to default schema in resources
+        if dir, osErr := os.Getwd(); osErr == nil {
+            schemaPath = filepath.Join(dir, "resources", "sql", "aasregistryschema.sql")
+        }
+    }
 
-	if err != nil {
-		return nil, err
-	}
-	if err := db.Ping(); err != nil {
-		return nil, err
-	}
-
-	dir, osErr := os.Getwd()
-	if osErr != nil {
-		return nil, osErr
-	}
-
-	schemaPath := filepath.Join(dir, "resources", "sql", "aasregistryschema.sql")
-
-	queryBytes, fileError := os.ReadFile(schemaPath)
-	if fileError != nil {
-		return nil, fileError
-	}
-
-	if _, dbError := db.Exec(string(queryBytes)); dbError != nil {
-		return nil, dbError
-	}
+    db, err := common.InitializeDatabase(dsn, schemaPath)
+    if err != nil {
+        return nil, err
+    }
 
     return &PostgreSQLAASRegistryDatabase{db: db, cacheEnabled: cacheEnabled}, nil
 }
