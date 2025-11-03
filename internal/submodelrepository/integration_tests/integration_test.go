@@ -104,19 +104,19 @@ func makeRequest(config TestConfig) (string, error) {
 // assertSameJSONContent compares two JSON strings semantically, ignoring order
 func assertSameJSONContent(t *testing.T, expected, actual string) {
 	var expectedData, actualData interface{}
-	
+
 	err := json.Unmarshal([]byte(expected), &expectedData)
 	require.NoError(t, err, "Failed to parse expected JSON")
-	
+
 	err = json.Unmarshal([]byte(actual), &actualData)
 	require.NoError(t, err, "Failed to parse actual JSON")
-	
+
 	// Use custom comparison that handles array ordering
 	if !deepEqualIgnoreOrder(expectedData, actualData) {
 		// Pretty print for better debugging
 		expectedBytes, _ := json.MarshalIndent(expectedData, "", "  ")
 		actualBytes, _ := json.MarshalIndent(actualData, "", "  ")
-		
+
 		t.Errorf("JSON content does not match semantically")
 		t.Logf("Expected JSON:\n%s", string(expectedBytes))
 		t.Logf("Actual JSON:\n%s", string(actualBytes))
@@ -143,10 +143,10 @@ func deepEqualIgnoreOrder(expected, actual interface{}) bool {
 		if !ok || len(exp) != len(act) {
 			return false
 		}
-		
+
 		// Create a boolean array to track which actual items have been matched
 		matched := make([]bool, len(act))
-		
+
 		// For each expected item, find a matching actual item
 		for _, expItem := range exp {
 			found := false
@@ -161,14 +161,14 @@ func deepEqualIgnoreOrder(expected, actual interface{}) bool {
 				return false
 			}
 		}
-		
+
 		// Check if all actual items were matched
 		for _, wasMatched := range matched {
 			if !wasMatched {
 				return false
 			}
 		}
-		
+
 		return true
 	default:
 		// For primitive types, use direct comparison
