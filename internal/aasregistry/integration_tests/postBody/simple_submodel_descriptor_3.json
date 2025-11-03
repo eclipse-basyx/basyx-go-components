@@ -1,5 +1,5 @@
 {
-  "id": "urn:example:sm:002",
+  "id": "urn:example:sm:000",
   "endpoints": [
     {
       "interface": "AAS-3.0",
@@ -11,9 +11,9 @@
   ],
   "extensions": [
     {
-      "name": "tag",
+      "name": "sdfsd",
       "valueType": "xs:string",
-      "value": "v2"
+      "value": "v3"
     }
   ]
 }

@@ -28,7 +28,7 @@
   {
     "context": "Replace submodel descriptor via PUT - aas does not exist",
     "method": "PUT",
-    "endpoint": "http://127.0.0.1:5004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8yMjMzNQ/submodel-descriptors/dXJuOmV4YW1wbGU6c206MDAx",
+    "endpoint": "http://127.0.0.1:5004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8yMjMzNQ/submodel-descriptors/dXJuOmV4YW1wbGU6c206MDAy",
     "data": "postBody/simple_submodel_descriptor_2.json",
     "expectedStatus": 404
   },
@@ -238,20 +238,56 @@
     "context": "Get submodel descriptor by id",
     "method": "GET",
     "endpoint": "http://127.0.0.1:5004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8yMjMzNQ/submodel-descriptors/dXJuOmV4YW1wbGU6c206MDAx",
+    "data": "postBody/simple_submodel_descriptor_1.json",
     "expectedStatus": 200
   },
   {
-    "context": "Replace submodel descriptor via PUT",
+    "context": "Replace submodel descriptor via PUT - wrong id",
     "method": "PUT",
     "endpoint": "http://127.0.0.1:5004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8yMjMzNQ/submodel-descriptors/dXJuOmV4YW1wbGU6c206MDAx",
     "data": "postBody/simple_submodel_descriptor_2.json",
-    "expectedStatus": 204
+    "expectedStatus": 400
   },
+  {
+    "context": "Create submodel descriptor",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:5004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8yMjMzNQ/submodel-descriptors",
+    "data": "postBody/simple_submodel_descriptor_2.json",
+    "expectedStatus": 201
+  },  
+  {
+    "context": "List submodel descriptors - with limit",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:5004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8yMjMzNQ/submodel-descriptors?limit=2",
+    "shouldMatch": "expected/submodel_paged_with_limit.json",
+    "expectedStatus": 200
+  },  
+  {
+    "context": "List submodel descriptors - with cursor",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:5004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8yMjMzNQ/submodel-descriptors?cursor=dXJuOmV4YW1wbGU6c206MDAx",
+    "shouldMatch": "expected/submodel_paged_with_cursor.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Create submodel descriptor",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:5004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8yMjMzNQ/submodel-descriptors",
+    "data": "postBody/simple_submodel_descriptor_3.json",
+    "expectedStatus": 201
+  }, 
   {
     "context": "Delete submodel descriptor",
     "method": "DELETE",
     "endpoint": "http://127.0.0.1:5004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8yMjMzNQ/submodel-descriptors/dXJuOmV4YW1wbGU6c206MDAx",
     "expectedStatus": 204
+  },
+  {
+    "context": "Get AAS descriptor by id - full complex descriptor",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:5004/shell-descriptors",
+    "shouldMatch": "expected/final_complex_paged_result.json",
+    "expectedStatus": 200
   },
   {
     "context": "Delete AAS descriptor",
