@@ -14,7 +14,6 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/testenv"
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -39,6 +38,81 @@ func loadTestConfig(filename string) ([]TestConfig, error) {
 	decoder := json.NewDecoder(file)
 	err = decoder.Decode(&configs)
 	return configs, err
+}
+
+// assertSameJSONContent compares two JSON strings semantically, ignoring order
+func assertSameJSONContent(t *testing.T, expected, actual string) {
+	var expectedData, actualData interface{}
+
+	err := json.Unmarshal([]byte(expected), &expectedData)
+	require.NoError(t, err, "Failed to parse expected JSON")
+
+	err = json.Unmarshal([]byte(actual), &actualData)
+	require.NoError(t, err, "Failed to parse actual JSON")
+
+	// Use custom comparison that handles array ordering
+	if !deepEqualIgnoreOrder(expectedData, actualData) {
+		// Pretty print for better debugging
+		expectedBytes, _ := json.MarshalIndent(expectedData, "", "  ")
+		actualBytes, _ := json.MarshalIndent(actualData, "", "  ")
+
+		t.Errorf("JSON content does not match semantically")
+		t.Logf("Expected JSON:\n%s", string(expectedBytes))
+		t.Logf("Actual JSON:\n%s", string(actualBytes))
+	}
+}
+
+// deepEqualIgnoreOrder compares two interfaces recursively, ignoring array order
+func deepEqualIgnoreOrder(expected, actual interface{}) bool {
+	switch exp := expected.(type) {
+	case map[string]interface{}:
+		act, ok := actual.(map[string]interface{})
+		if !ok || len(exp) != len(act) {
+			return false
+		}
+		for key, expVal := range exp {
+			actVal, exists := act[key]
+			if !exists || !deepEqualIgnoreOrder(expVal, actVal) {
+				return false
+			}
+		}
+		return true
+	case []interface{}:
+		act, ok := actual.([]interface{})
+		if !ok || len(exp) != len(act) {
+			return false
+		}
+
+		// Create a boolean array to track which actual items have been matched
+		matched := make([]bool, len(act))
+
+		// For each expected item, find a matching actual item
+		for _, expItem := range exp {
+			found := false
+			for j, actItem := range act {
+				if !matched[j] && deepEqualIgnoreOrder(expItem, actItem) {
+					matched[j] = true
+					found = true
+					break
+				}
+			}
+			if !found {
+				return false
+			}
+		}
+
+		// Check if all actual items were matched
+		for _, wasMatched := range matched {
+			if !wasMatched {
+				return false
+			}
+		}
+
+		return true
+	default:
+		// For primitive types, use direct comparison
+		return expected == actual
+	}
 }
 
 // makeRequest performs an HTTP request based on the test config
@@ -137,15 +211,7 @@ func TestIntegration(t *testing.T) {
 				expected, err := os.ReadFile(config.ShouldMatch)
 				require.NoError(t, err, "Failed to read expected response file")
 
-				// Parse and compare JSON
-				var expectedJSON, responseJSON interface{}
-				err = json.Unmarshal(expected, &expectedJSON)
-				require.NoError(t, err, "Failed to parse expected JSON")
-
-				err = json.Unmarshal([]byte(response), &responseJSON)
-				require.NoError(t, err, "Failed to parse response JSON")
-
-				assert.Equal(t, expectedJSON, responseJSON, "Response does not match expected")
+				assertSameJSONContent(t, string(expected), response)
 			}
 
 			t.Logf("Response: %s", response)

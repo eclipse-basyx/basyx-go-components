@@ -75,14 +75,14 @@
     "expectedStatus": 400
   },
   {
-    "context": "Create AAS descriptor - wrong extension value type",
+    "context": "Create AAS descriptor - missing keys in reference",
     "method": "POST",
     "endpoint": "http://127.0.0.1:5004/shell-descriptors",
     "data": "postBody/simple_ass_descriptor_malformed_5.json",
     "expectedStatus": 400
   },
   {
-    "context": "Create AAS descriptor - wrong extension value type",
+    "context": "Create AAS descriptor - no items in keys in reference",
     "method": "POST",
     "endpoint": "http://127.0.0.1:5004/shell-descriptors",
     "data": "postBody/simple_ass_descriptor_malformed_6.json",
@@ -231,6 +231,7 @@
     "context": "List submodel descriptors (after create)",
     "method": "GET",
     "endpoint": "http://127.0.0.1:5004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8yMjMzNQ/submodel-descriptors",
+    "shouldMatch": "expected/submodel_paged.json",
     "expectedStatus": 200
   },
   {

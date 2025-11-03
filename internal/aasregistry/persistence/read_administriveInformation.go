@@ -21,18 +21,18 @@ func readAdministrativeInformationByID(
 	db *sql.DB,
 	tableName string,
 	adminInfoID sql.NullInt64,
-) (model.AdministrativeInformation, error) {
+) (*model.AdministrativeInformation, error) {
 	if !adminInfoID.Valid {
-		return model.AdministrativeInformation{}, errors.New("administrative information ID is NULL/invalid")
+		return &model.AdministrativeInformation{}, errors.New("administrative information ID is NULL/invalid")
 	}
 
 	m, err := readAdministrativeInformationByIDs(ctx, db, tableName, []int64{adminInfoID.Int64})
 	if err != nil {
-		return model.AdministrativeInformation{}, err
+		return &model.AdministrativeInformation{}, err
 	}
 	v, ok := m[adminInfoID.Int64]
 	if !ok {
-		return model.AdministrativeInformation{}, fmt.Errorf("administrative information with id %d not found", adminInfoID.Int64)
+		return &model.AdministrativeInformation{}, fmt.Errorf("administrative information with id %d not found", adminInfoID.Int64)
 	}
 	return v, nil
 }
@@ -43,9 +43,9 @@ func readAdministrativeInformationByIDs(
 	db *sql.DB,
 	tableName string,
 	adminInfoIDs []int64,
-) (map[int64]model.AdministrativeInformation, error) {
+) (map[int64]*model.AdministrativeInformation, error) {
 	start := time.Now()
-	out := make(map[int64]model.AdministrativeInformation, len(adminInfoIDs))
+	out := make(map[int64]*model.AdministrativeInformation, len(adminInfoIDs))
 	if len(adminInfoIDs) == 0 {
 		return out, nil
 	}
@@ -117,7 +117,7 @@ func readAdministrativeInformationByIDs(
 			return nil, fmt.Errorf("building administration (id %d) failed: %w", r.ID, err)
 		}
 
-		out[r.ID] = model.AdministrativeInformation{
+		out[r.ID] = &model.AdministrativeInformation{
 			Version:                    admin.Version,
 			Revision:                   admin.Revision,
 			TemplateId:                 admin.TemplateId,

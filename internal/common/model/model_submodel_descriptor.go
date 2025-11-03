@@ -12,7 +12,7 @@
 package model
 
 type SubmodelDescriptor struct {
-	Administration AdministrativeInformation `json:"administration,omitempty"`
+	Administration *AdministrativeInformation `json:"administration,omitempty"`
 
 	Endpoints []Endpoint `json:"endpoints"`
 
@@ -42,9 +42,10 @@ func AssertSubmodelDescriptorRequired(obj SubmodelDescriptor) error {
 			return &RequiredError{Field: name}
 		}
 	}
-
-	if err := AssertAdministrativeInformationRequired(obj.Administration); err != nil {
-		return err
+	if obj.Administration != nil {
+		if err := AssertAdministrativeInformationRequired(*obj.Administration); err != nil {
+			return err
+		}
 	}
 	for _, el := range obj.Endpoints {
 		if err := AssertEndpointRequired(el); err != nil {
@@ -81,8 +82,11 @@ func AssertSubmodelDescriptorRequired(obj SubmodelDescriptor) error {
 
 // AssertSubmodelDescriptorConstraints checks if the values respects the defined constraints
 func AssertSubmodelDescriptorConstraints(obj SubmodelDescriptor) error {
-	if err := AssertAdministrativeInformationConstraints(obj.Administration); err != nil {
-		return err
+
+	if obj.Administration != nil {
+		if err := AssertAdministrativeInformationConstraints(*obj.Administration); err != nil {
+			return err
+		}
 	}
 	for _, el := range obj.Endpoints {
 		if err := AssertEndpointConstraints(el); err != nil {

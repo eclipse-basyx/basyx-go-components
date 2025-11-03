@@ -37,7 +37,7 @@ func createSubModelDescriptors(tx *sql.Tx, aasDescriptorId int64, submodelDescri
 				return common.NewInternalServerError("Failed to create Description - no changes applied - see console for details")
 			}
 
-			administrationId, err = persistence_utils.CreateAdministrativeInformation(tx, &val.Administration)
+			administrationId, err = persistence_utils.CreateAdministrativeInformation(tx, val.Administration)
 			if err != nil {
 				fmt.Println(err)
 				return common.NewInternalServerError("Failed to create Administration - no changes applied - see console for details")

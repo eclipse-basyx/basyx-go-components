@@ -131,7 +131,7 @@ func readSubmodelDescriptorsByAASDescriptorIDs(
 	uniqDisplayNameIDs := displayNameIDs
 
 	semRefByID := map[int64]*model.Reference{}
-	admByID := map[int64]model.AdministrativeInformation{}
+	admByID := map[int64]*model.AdministrativeInformation{}
 	nameByID := map[int64][]model.LangStringNameType{}
 	descByID := map[int64][]model.LangStringTextType{}
 	suppBySmdDesc := map[int64][]model.Reference{}
@@ -238,7 +238,7 @@ func readSubmodelDescriptorsByAASDescriptorIDs(
 			if r.semanticRefID.Valid {
 				semanticRef = semRefByID[r.semanticRefID.Int64]
 			}
-			var adminInfo model.AdministrativeInformation
+			var adminInfo *model.AdministrativeInformation
 			if r.adminInfoID.Valid {
 				adminInfo = admByID[r.adminInfoID.Int64]
 			}
