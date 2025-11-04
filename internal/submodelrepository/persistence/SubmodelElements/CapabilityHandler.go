@@ -118,7 +118,7 @@ func (p PostgreSQLCapabilityHandler) CreateNested(tx *sql.Tx, submodelID string,
 	}
 
 	// Create the nested capability with the provided idShortPath using the decorated handler
-	id, err := p.decorated.CreateAndPath(tx, submodelID, parentID, idShortPath, submodelElement, pos)
+	id, err := p.decorated.CreateWithPath(tx, submodelID, parentID, idShortPath, submodelElement, pos)
 	if err != nil {
 		return 0, err
 	}

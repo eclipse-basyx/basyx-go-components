@@ -35,6 +35,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
 
@@ -344,15 +345,19 @@ type SubmodelElementRow struct {
 	// Qualifiers contains qualifier information as JSON data
 	Qualifiers json.RawMessage `json:"qualifiers"`
 	// DataSpecReference contains embedded data specifications as JSON data
-	DataSpecReference json.RawMessage
+	DataSpecReference json.RawMessage `json:"embeddedDataSpecifications"`
 	// DataSpecReferenceReferred contains references to data specifications as JSON data
-	DataSpecReferenceReferred json.RawMessage
+	DataSpecReferenceReferred json.RawMessage `json:"embeddedDataSpecificationsReferred"`
 	// DataSpecIEC61360 contains IEC 61360 data specification as JSON data
-	DataSpecIEC61360 json.RawMessage
-	// IECLevelTypes contains IEC level type information as JSON data
-	IECLevelTypes json.RawMessage
+	DataSpecIEC61360 json.RawMessage `json:"iec61360"`
 	// Position specifies the position/order of the submodel element among its siblings
 	Position int `json:"position"`
+}
+
+type PropertyValueRow struct {
+	Value     string               `json:"value"`
+	ValueType model.DataTypeDefXsd `json:"value_type"`
+	// TODO: VALUEID
 }
 
 // ParseReferredReferencesFromRows parses referred reference data from already unmarshalled ReferredReferenceRow objects.

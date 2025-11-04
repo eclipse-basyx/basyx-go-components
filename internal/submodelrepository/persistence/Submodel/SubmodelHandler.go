@@ -146,16 +146,19 @@ func getSubmodels(db *sql.DB, submodelIDFilter string, limit int64, cursor strin
 		}
 
 		submodel := &gen.Submodel{
-			ModelType: "Submodel",
-			ID:        row.ID,
-			IdShort:   row.IDShort,
-			Category:  row.Category,
-			Kind:      gen.ModellingKind(row.Kind),
+			ModelType:        "Submodel",
+			ID:               row.ID,
+			IdShort:          row.IDShort,
+			Category:         row.Category,
+			Kind:             gen.ModellingKind(row.Kind),
+			SubmodelElements: []gen.SubmodelElement{},
 		}
 		if count > limit {
 			result = append(result, submodel)
 			break
 		}
+
+		// SemanticID
 		var semanticID []*gen.Reference
 		if isArrayNotEmpty(row.SemanticID) {
 			semanticID, err = builders.ParseReferences(row.SemanticID, referenceBuilderRefs)
@@ -171,6 +174,7 @@ func getSubmodels(db *sql.DB, submodelIDFilter string, limit int64, cursor strin
 			}
 		}
 
+		// SupplementalSemanticIDs
 		if isArrayNotEmpty(row.SupplementalSemanticIDs) {
 			supplementalSemanticIDs, err := builders.ParseReferences(row.SupplementalSemanticIDs, referenceBuilderRefs)
 			if err != nil {
@@ -292,6 +296,28 @@ func getSubmodels(db *sql.DB, submodelIDFilter string, limit int64, cursor strin
 				submodel.Administration = admin
 			} else {
 				fmt.Println("Administration row is nil")
+			}
+		}
+
+		// RootSubmodelElements
+		if isArrayNotEmpty(row.RootSubmodelElements) {
+			smeBuilderMap := make(map[int64]*builders.SubmodelElementBuilder)
+			var RootSubmodelElements []builders.SubmodelElementRow
+			err := json.Unmarshal(row.RootSubmodelElements, &RootSubmodelElements)
+			if err != nil {
+				return nil, "", err
+			}
+			for _, smeRow := range RootSubmodelElements {
+				_, exists := smeBuilderMap[smeRow.DbID]
+				if !exists {
+					sme, builder, err := builders.NewSMEBuilder(smeRow)
+					if err != nil {
+						return nil, "", err
+					}
+					smeBuilderMap[smeRow.DbID] = builder
+
+					submodel.SubmodelElements = append(submodel.SubmodelElements, *sme)
+				}
 			}
 		}
 

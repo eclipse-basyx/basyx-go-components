@@ -116,7 +116,7 @@ func (p PostgreSQLSubmodelElementListHandler) CreateNested(tx *sql.Tx, submodelI
 	}
 
 	// First, perform base SubmodelElement operations within the transaction
-	id, err := p.decorated.CreateAndPath(tx, submodelID, parentID, idShortPath, submodelElement, pos)
+	id, err := p.decorated.CreateWithPath(tx, submodelID, parentID, idShortPath, submodelElement, pos)
 	if err != nil {
 		return 0, err
 	}

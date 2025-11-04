@@ -37,6 +37,8 @@ import (
 func GetSubmodelElementsSubquery(dialect goqu.DialectWrapper, rootSubmodelElements bool) *goqu.SelectDataset {
 	semanticIDSubquery, semanticIDReferredSubquery := queries.GetReferenceQueries(dialect, goqu.I("tlsme.semantic_id"))
 	supplSemanticIDSubquery, supplSemanticIDReferredSubquery := queries.GetSupplementalSemanticIDQueries(dialect, goqu.T("submodel_element_supplemental_semantic_id"), "submodel_element_id", "reference_id", goqu.I("tlsme.id"))
+	embeddedDataSpecificationReferenceSubquery, embeddedDataSpecificationReferenceReferredSubquery, iec61360Subquery := queries.GetEmbeddedDataSpecificationSubqueries(dialect, "submodel_element_embedded_data_specification", "submodel_element_id", "tlsme.id")
+	qualifierSubquery := queries.GetQualifierSubquery(dialect, goqu.T("submodel_element_qualifier"), "sme_id", "qualifier_id", goqu.I("tlsme.id"))
 
 	valueByType := getValueSubquery(dialect)
 
@@ -52,6 +54,10 @@ func GetSubmodelElementsSubquery(dialect goqu.DialectWrapper, rootSubmodelElemen
 		goqu.V("semanticIdReferred"), semanticIDReferredSubquery,
 		goqu.V("supplSemanticId"), supplSemanticIDSubquery,
 		goqu.V("supplSemanticIdReferred"), supplSemanticIDReferredSubquery,
+		goqu.V("embeddedDataSpecifications"), embeddedDataSpecificationReferenceSubquery,
+		goqu.V("embeddedDataSpecificationsReferred"), embeddedDataSpecificationReferenceReferredSubquery,
+		goqu.V("iec61360"), iec61360Subquery,
+		goqu.V("qualifiers"), qualifierSubquery,
 	)
 
 	smeSubquery := dialect.From(goqu.T("submodel_element").As("tlsme")).

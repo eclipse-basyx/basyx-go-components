@@ -35,6 +35,7 @@ import (
 	"fmt"
 	"reflect"
 
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	persistenceutils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
 	_ "github.com/lib/pq" // PostgreSQL Treiber
@@ -86,7 +87,7 @@ func NewPostgreSQLSMECrudHandler(db *sql.DB) (*PostgreSQLSMECrudHandler, error) 
 	return &PostgreSQLSMECrudHandler{db: db}, nil
 }
 
-// CreateAndPath performs base SubmodelElement creation with explicit path and position management.
+// CreateWithPath performs base SubmodelElement creation with explicit path and position management.
 //
 // This method creates a new submodel element within an existing transaction context,
 // handling parent-child relationships, position ordering, and full path tracking. It's
@@ -113,12 +114,33 @@ func NewPostgreSQLSMECrudHandler(db *sql.DB) (*PostgreSQLSMECrudHandler, error) 
 //
 // Example:
 //
-//	id, err := handler.CreateAndPath(tx, "submodel123", parentDbID, "sensors.temperature", tempProp, 0)
-func (p *PostgreSQLSMECrudHandler) CreateAndPath(tx *sql.Tx, submodelID string, parentID int, idShortPath string, submodelElement gen.SubmodelElement, position int) (int, error) {
-	referenceID, err := persistenceutils.CreateReference(tx, submodelElement.GetSemanticID(), sql.NullInt64{}, sql.NullInt64{})
-	if err != nil {
-		return 0, err
+//	id, err := handler.CreateWithPath(tx, "submodel123", parentDbID, "sensors.temperature", tempProp, 0)
+func (p *PostgreSQLSMECrudHandler) CreateWithPath(tx *sql.Tx, submodelID string, parentID int, idShortPath string, submodelElement gen.SubmodelElement, position int) (int, error) {
+	var referenceID sql.NullInt64
+	var err error
+	if submodelElement.GetSemanticID() != nil {
+		referenceID, err = persistenceutils.CreateReference(tx, submodelElement.GetSemanticID(), sql.NullInt64{}, sql.NullInt64{})
+		if err != nil {
+			return 0, err
+		}
 	}
+
+	var convertedDescription []gen.LangStringText
+	for _, desc := range submodelElement.GetDescription() {
+		convertedDescription = append(convertedDescription, desc)
+	}
+	descriptionID, err := persistenceutils.CreateLangStringTextTypes(tx, convertedDescription)
+	if err != nil {
+		fmt.Println(err)
+		return 0, common.NewInternalServerError("Failed to create Description - no changes applied - see console for details")
+	}
+
+	displayNameID, err := persistenceutils.CreateLangStringNameTypes(tx, submodelElement.GetDisplayName())
+	if err != nil {
+		fmt.Println(err)
+		return 0, common.NewInternalServerError("Failed to create DisplayName - no changes applied - see console for details")
+	}
+
 	// Check if a SubmodelElement with the same submodelID and idshort_path already exists
 	var exists bool
 	err = tx.QueryRow(`SELECT EXISTS(SELECT 1 FROM submodel_element WHERE submodel_id = $1 AND idshort_path = $2)`,
@@ -131,22 +153,60 @@ func (p *PostgreSQLSMECrudHandler) CreateAndPath(tx *sql.Tx, submodelID string, 
 		return 0, fmt.Errorf("SubmodelElement with submodelID '%s' and idshort_path '%s' already exists",
 			submodelID, idShortPath)
 	}
+
+	var parentDBId sql.NullInt64
+	if parentID == 0 {
+		parentDBId = sql.NullInt64{}
+	} else {
+		parentDBId = sql.NullInt64{Int64: int64(parentID), Valid: true}
+	}
+
 	var id int
 	err = tx.QueryRow(`	INSERT INTO
-	 					submodel_element(submodel_id, parent_sme_id, position, id_short, category, model_type, semantic_id, idshort_path)
-						VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
+	 					submodel_element(submodel_id, parent_sme_id, position, id_short, category, model_type, semantic_id, idshort_path, description_id, displayname_id)
+						VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id`,
 		submodelID,
-		parentID,
+		parentDBId,
 		position,
 		submodelElement.GetIdShort(),
 		submodelElement.GetCategory(),
 		submodelElement.GetModelType(),
 		referenceID, // This will be NULL if no semantic ID was provided
 		idShortPath, // Use the provided idShortPath instead of just GetIdShort()
+		descriptionID,
+		displayNameID,
 	).Scan(&id)
 	if err != nil {
 		return 0, err
 	}
+
+	embeddedDataSpecifications := submodelElement.GetEmbeddedDataSpecifications()
+	for i, eds := range embeddedDataSpecifications {
+		edsDbID, err := persistenceutils.CreateEmbeddedDataSpecification(tx, eds, i)
+		if err != nil {
+			return 0, err
+		}
+		_, err = tx.Exec("INSERT INTO submodel_element_embedded_data_specification(submodel_element_id, embedded_data_specification_id) VALUES ($1, $2)", id, edsDbID)
+		if err != nil {
+			return 0, err
+		}
+	}
+
+	qualifiers := submodelElement.GetQualifiers()
+	if len(qualifiers) > 0 {
+		for i, qualifier := range qualifiers {
+			qualifierID, err := persistenceutils.CreateQualifier(tx, qualifier, i)
+			if err != nil {
+				return 0, err
+			}
+			_, err = tx.Exec(`INSERT INTO submodel_element_qualifier(sme_id, qualifier_id) VALUES($1, $2)`, id, qualifierID)
+			if err != nil {
+				fmt.Println(err)
+				return 0, common.NewInternalServerError("Failed to Create Qualifier for Submodel Element with ID '" + fmt.Sprintf("%d", id) + "'. See console for details.")
+			}
+		}
+	}
+
 	// println("Inserted SubmodelElement with idShort: " + submodelElement.GetIdShort())
 
 	return id, nil
@@ -178,49 +238,7 @@ func (p *PostgreSQLSMECrudHandler) CreateAndPath(tx *sql.Tx, submodelID string, 
 //
 //	id, err := handler.Create(tx, "submodel123", propertyElement)
 func (p *PostgreSQLSMECrudHandler) Create(tx *sql.Tx, submodelID string, submodelElement gen.SubmodelElement) (int, error) {
-	referenceID, err := persistenceutils.CreateReference(tx, submodelElement.GetSemanticID(), sql.NullInt64{}, sql.NullInt64{})
-	if err != nil {
-		return 0, err
-	}
-
-	// Check if a SubmodelElement with the same submodelID and idshort_path already exists
-	var exists bool
-	err = tx.QueryRow(`SELECT EXISTS(SELECT 1 FROM submodel_element WHERE submodel_id = $1 AND idshort_path = $2)`,
-		submodelID, submodelElement.GetIdShort()).Scan(&exists)
-	if err != nil {
-		return 0, err
-	}
-
-	if exists {
-		return 0, fmt.Errorf("SubmodelElement with submodelID '%s' and idshort_path '%s' already exists",
-			submodelID, submodelElement.GetIdShort())
-	}
-	var id int
-	err = tx.QueryRow(`	INSERT INTO
-	 					submodel_element(submodel_id, parent_sme_id, position, id_short, category, model_type, semantic_id, idshort_path)
-						VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
-		submodelID,
-		nil,
-		0,
-		submodelElement.GetIdShort(),
-		submodelElement.GetCategory(),
-		submodelElement.GetModelType(),
-		referenceID, // This will be NULL if no semantic ID was provided
-		submodelElement.GetIdShort(),
-	).Scan(&id)
-	if err != nil {
-		return 0, err
-	}
-	// println("Inserted SubmodelElement with idShort: " + submodelElement.GetIdShort())
-
-	supplSID := submodelElement.GetSupplementalSemanticIds()
-	if len(supplSID) > 0 {
-		err := persistenceutils.InsertSupplementalSemanticIDsSME(tx, int64(id), supplSID)
-		if err != nil {
-			return 0, err
-		}
-	}
-	return id, nil
+	return p.CreateWithPath(tx, submodelID, 0, submodelElement.GetIdShort(), submodelElement, 0)
 }
 
 // Update updates an existing SubmodelElement identified by its idShort or path.

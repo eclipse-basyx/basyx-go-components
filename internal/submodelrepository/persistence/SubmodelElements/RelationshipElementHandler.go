@@ -158,7 +158,7 @@ func (p PostgreSQLRelationshipElementHandler) CreateNested(tx *sql.Tx, submodelI
 	}
 
 	// Create the nested relElem with the provided idShortPath using the decorated handler
-	id, err := p.decorated.CreateAndPath(tx, submodelID, parentID, idShortPath, submodelElement, pos)
+	id, err := p.decorated.CreateWithPath(tx, submodelID, parentID, idShortPath, submodelElement, pos)
 	if err != nil {
 		return 0, err
 	}
