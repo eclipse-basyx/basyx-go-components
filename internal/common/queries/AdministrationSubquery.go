@@ -24,9 +24,7 @@
 ******************************************************************************/
 // Author: Aaron Zielstorff ( Fraunhofer IESE ), Jannik Fried ( Fraunhofer IESE )
 
-// Package submodelsubqueries provides database query construction utilities
-// for retrieving submodel-related data with complex joins and aggregations.
-package submodelsubqueries
+package queries
 
 import "github.com/doug-martin/goqu/v9"
 
@@ -44,9 +42,9 @@ type AdministrationRow struct {
 }
 */
 
-// GetAdministrationSubqueryForSubmodel constructs a complex SQL subquery for retrieving
-// administrative information related to a submodel. This function builds a comprehensive
-// query that includes:
+// GetAdministrationSubquery constructs a complex SQL subquery for retrieving
+// administrative information related to a submodel or other AAS elements. This function
+// builds a comprehensive query that includes:
 //   - Administrative information (version, revision, templateId)
 //   - Creator references with their keys
 //   - Creator referred references (hierarchical references)
@@ -58,22 +56,22 @@ type AdministrationRow struct {
 //
 // Parameters:
 //   - dialect: The goqu dialect wrapper for database-specific SQL generation
+//   - joinConditionColumn: The column name to use for joining with the administrative_information
+//     table. This should be a fully qualified column name (e.g., "s.administration_id")
+//     that references the administrative information ID in the parent query context.
 //
 // Returns:
 //   - *goqu.SelectDataset: A configured select dataset that can be used as a subquery
-//     in larger queries to retrieve administrative information for submodels
+//     in larger queries to retrieve administrative information. Returns a JSONB aggregation
+//     of all matching administrative records.
 //
-// The returned subquery expects to be used in a context where 's.administration_id'
-// is available for joining with the administrative_information table.
-func GetAdministrationSubqueryForSubmodel(dialect goqu.DialectWrapper) *goqu.SelectDataset {
-	return GetAdministrationSubquery(dialect, "s.administration_id")
-}
-
-// GetAdministrationSubquery builds the same administrative-information JSONB
-// subquery as GetAdministrationSubqueryForSubmodel, but allows customizing the
-// link expression to the administrative_information table via adminTableLink.
-func GetAdministrationSubquery(dialect goqu.DialectWrapper, adminTableLink string) *goqu.SelectDataset {
-	administrativeInformationEmbeddedDataSpecificationReferenceSubquery, administrativeInformationEmbeddedDataSpecificationReferenceReferredSubquery, administrativeInformationIEC61360Subquery := GetEmbeddedDataSpecificationSubqueries(dialect, "administrative_information_embedded_data_specification", "administrative_information_id", adminTableLink)
+// Example usage:
+//
+//	adminSubquery := GetAdministrationSubquery(dialect, "s.administration_id")
+//	mainQuery := dialect.From("submodel").As("s").
+//	    Select(..., goqu.L("?", adminSubquery).As("administration"))
+func GetAdministrationSubquery(dialect goqu.DialectWrapper, joinConditionColumn string) *goqu.SelectDataset {
+	administrativeInformationEmbeddedDataSpecificationReferenceSubquery, administrativeInformationEmbeddedDataSpecificationReferenceReferredSubquery, administrativeInformationIEC61360Subquery := GetEmbeddedDataSpecificationSubqueries(dialect, "administrative_information_embedded_data_specification", "administrative_information_id", joinConditionColumn)
 
 	// Build the jsonb object for administration creator references
 	creatorObj := goqu.Func("jsonb_build_object",
@@ -94,7 +92,7 @@ func GetAdministrationSubquery(dialect goqu.DialectWrapper, adminTableLink strin
 			goqu.T("reference_key").As("rk"),
 			goqu.On(goqu.I("r.id").Eq(goqu.I("rk.reference_id"))),
 		).
-		Where(goqu.I("admi.id").Eq(goqu.I(adminTableLink)))
+		Where(goqu.I("admi.id").Eq(goqu.I(joinConditionColumn)))
 
 	// Build the jsonb object for administration creator referred references
 	creatorReferredObj := goqu.Func("jsonb_build_object",
@@ -119,7 +117,7 @@ func GetAdministrationSubquery(dialect goqu.DialectWrapper, adminTableLink strin
 		).
 		Where(
 			goqu.I("r.id").IsNotNull(),
-			goqu.I("admi.id").Eq(goqu.I(adminTableLink)),
+			goqu.I("admi.id").Eq(goqu.I(joinConditionColumn)),
 		)
 
 	administrativeInformationObj := goqu.Func("jsonb_build_object",
@@ -136,6 +134,6 @@ func GetAdministrationSubquery(dialect goqu.DialectWrapper, adminTableLink strin
 
 	administrativeInformationSubquery := dialect.From(goqu.T("administrative_information").As("ai")).
 		Select(goqu.Func("jsonb_agg", administrativeInformationObj)).
-		Where(goqu.I("ai.id").Eq(goqu.I(adminTableLink)))
+		Where(goqu.I("ai.id").Eq(goqu.I(joinConditionColumn)))
 	return administrativeInformationSubquery
 }

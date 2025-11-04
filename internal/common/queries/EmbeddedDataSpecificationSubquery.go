@@ -24,13 +24,13 @@
 ******************************************************************************/
 // Author: Aaron Zielstorff ( Fraunhofer IESE ), Jannik Fried ( Fraunhofer IESE )
 
-package submodelsubqueries
+package queries
 
 import "github.com/doug-martin/goqu/v9"
 
 // GetEmbeddedDataSpecificationSubqueries constructs three complex SQL subqueries for retrieving
-// embedded data specifications related to submodel elements. This function builds comprehensive
-// queries that handle:
+// embedded data specifications related to AAS elements (submodels, submodel elements, etc.).
+// This function builds comprehensive queries that handle:
 //   - Embedded data specification references with their keys
 //   - Hierarchical referred references (parent-child relationships)
 //   - IEC 61360 data specifications with all related metadata
@@ -42,21 +42,39 @@ import "github.com/doug-martin/goqu/v9"
 //   - Unit references and their hierarchical structures
 //   - Value lists with reference pairs
 //   - Level type specifications
-//   - IEC 61360 specific attributes (data type, value format, symbol, etc.)
+//   - IEC 61360 specific attributes (data type, value format, symbol, position, etc.)
 //
 // Parameters:
 //   - dialect: The goqu dialect wrapper for database-specific SQL generation
-//   - joinTable: Name of the table to join with (e.g., "administrative_information_embedded_data_specification")
-//   - joinTableIdField: Name of the ID field in the join table for matching
-//   - compareField: Field expression to compare against for filtering (e.g., "s.administration_id")
+//   - joinTable: Name of the table that links the parent entity to embedded data specifications
+//     (e.g., "administrative_information_embedded_data_specification",
+//     "submodel_embedded_data_specification")
+//   - joinTableIDField: Name of the ID field in the join table that references the parent entity
+//     (e.g., "administrative_information_id", "submodel_id")
+//   - compareField: Fully qualified field expression to compare against for filtering
+//     (e.g., "s.administration_id", "sme.id"). This should reference the parent entity's
+//     ID column in the outer query context.
 //
 // Returns:
-//   - *goqu.SelectDataset: Subquery for embedded data specification references
-//   - *goqu.SelectDataset: Subquery for embedded data specification referred references
-//   - *goqu.SelectDataset: Subquery for IEC 61360 data specifications with all related data
+//   - *goqu.SelectDataset: Subquery for embedded data specification references (first return value).
+//     Returns JSONB array containing reference information including reference IDs, types, and keys.
+//   - *goqu.SelectDataset: Subquery for embedded data specification referred references (second return value).
+//     Returns JSONB array containing hierarchical referred reference information with parent/root relationships.
+//   - *goqu.SelectDataset: Subquery for IEC 61360 data specifications (third return value).
+//     Returns JSONB array with complete IEC 61360 content including multilingual strings, units,
+//     value lists, and level types.
 //
 // The returned subqueries are designed to be used as part of larger queries and expect
 // the specified compareField to be available in the query context for proper joining.
+//
+// Example usage:
+//
+//	edsRefSubquery, edsRefReferredSubquery, iec61360Subquery := GetEmbeddedDataSpecificationSubqueries(
+//	    dialect,
+//	    "administrative_information_embedded_data_specification",
+//	    "administrative_information_id",
+//	    "ai.id",
+//	)
 func GetEmbeddedDataSpecificationSubqueries(dialect goqu.DialectWrapper, joinTable string, joinTableIDField string, compareField string) (*goqu.SelectDataset, *goqu.SelectDataset, *goqu.SelectDataset) {
 	// Build the jsonb object for embedded data specification references
 	edsReferenceObj := goqu.Func("jsonb_build_object",

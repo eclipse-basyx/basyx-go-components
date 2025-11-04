@@ -144,16 +144,16 @@ func GetQueryWithGoqu(submodelID string, limit int64, cursor string, aasQuery *g
 			goqu.I("ref.id").IsNotNull(),
 		)
 	// Build embedded data specifications subquery
-	embeddedDataSpecificationReferenceSubquery, embeddedDataSpecificationReferenceReferredSubquery, iec61360Subquery := GetEmbeddedDataSpecificationSubqueries(dialect, "submodel_embedded_data_specification", "submodel_id", "s.id")
+	embeddedDataSpecificationReferenceSubquery, embeddedDataSpecificationReferenceReferredSubquery, iec61360Subquery := queries.GetEmbeddedDataSpecificationSubqueries(dialect, "submodel_embedded_data_specification", "submodel_id", "s.id")
 
 	// Build qualifier subquery
-	qualifierSubquery := GetQualifierSubqueryForSubmodel(dialect)
+	qualifierSubquery := queries.GetQualifierSubquery(dialect, goqu.T("submodel_qualifier"), "submodel_id", "qualifier_id", goqu.I("s.id"))
 
 	// Build extension subquery
-	extensionSubquery := queries.GetExtensionSubquery(dialect, "extension_id", goqu.T("submodel_extension"), "submodel_id", goqu.I("s.id"))
+	extensionSubquery := queries.GetExtensionSubquery(dialect, goqu.T("submodel_extension"), "extension_id", "submodel_id", goqu.I("s.id"))
 
 	// Build AdministrativeInformation subquery
-	administrationSubquery := GetAdministrationSubqueryForSubmodel(dialect)
+	administrationSubquery := queries.GetAdministrationSubquery(dialect, "s.administration_id")
 
 	// Main query
 	query := dialect.From(goqu.T("submodel").As("s")).

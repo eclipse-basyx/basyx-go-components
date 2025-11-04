@@ -73,9 +73,9 @@ func readSubmodelDescriptorsByAASDescriptorIDs(
 	if err != nil {
 		return nil, err
 	}
-    defer func() {
-        _ = rows.Close()
-    }()
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	perAAS := make(map[int64][]rowData, len(uniqAASDesc))
 	allSmdDescIDs := make([]int64, 0, 10000)

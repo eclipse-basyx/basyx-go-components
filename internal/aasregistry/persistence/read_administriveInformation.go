@@ -12,7 +12,7 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	builders "github.com/eclipse-basyx/basyx-go-components/internal/common/builder"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
-	submodelsubqueries "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/Submodel/submodelQueries"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/queries"
 )
 
 // readAdministrativeInformationByID fetches a single AdministrativeInformation by a nullable ID.
@@ -68,7 +68,7 @@ func readAdministrativeInformationByIDs(
 	d := goqu.Dialect(dialect)
 
 	// Correlated subquery that returns JSON for the administration block.
-	adminJSON := submodelsubqueries.GetAdministrationSubquery(d, "s.administrative_information_id")
+	adminJSON := queries.GetAdministrationSubquery(d, "s.administrative_information_id")
 
 	// SELECT only the requested IDs.
 	ds := d.From(goqu.T(tableName).As("s")).
@@ -87,9 +87,9 @@ func readAdministrativeInformationByIDs(
 	if err != nil {
 		return nil, fmt.Errorf("querying administrative information failed: %w", err)
 	}
-    defer func() {
-        _ = rows.Close()
-    }()
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	type row struct {
 		ID             int64

@@ -309,6 +309,52 @@ type AdministrationRow struct {
 	EdsDataSpecificationIEC61360 json.RawMessage `json:"edsDataSpecificationIEC61360"`
 }
 
+// SubmodelElementRow represents a row from the SubmodelElement table in the database.
+// Submodel elements are the actual data carriers within a submodel, representing properties,
+// operations, collections, and other structural elements.
+//
+// This structure supports hierarchical submodel elements where elements can contain child elements.
+// The ParentID field establishes the parent-child relationship, while Position determines the
+// order of elements at the same level.
+type SubmodelElementRow struct {
+	// DbID is the unique identifier of the submodel element in the database
+	DbID int64 `json:"db_id"`
+	// ParentID is the database ID of the parent submodel element (nullable for root elements)
+	ParentID *int64 `json:"parent_id"`
+	// IDShort is the short identifier for the submodel element
+	IDShort string `json:"id_short"`
+	// DisplayNames contains localized names as JSON data
+	DisplayNames json.RawMessage `json:"displayNames"`
+	// Descriptions contains localized descriptions as JSON data
+	Descriptions json.RawMessage `json:"descriptions"`
+	// Category defines the category classification of the submodel element
+	Category string `json:"category"`
+	// ModelType specifies the concrete type of the submodel element (e.g., Property, Operation, SubmodelElementCollection)
+	ModelType string `json:"model_type"`
+	// Value contains the actual value data of the submodel element as JSON data
+	Value json.RawMessage `json:"value"`
+	// SemanticID is a reference to a semantic definition as JSON data
+	SemanticID json.RawMessage `json:"semanticId"`
+	// SemanticIDReferred contains referred semantic ID references as JSON data
+	SemanticIDReferred json.RawMessage `json:"semanticIdReferred"`
+	// SupplementalSemanticIDs contains supplemental semantic identifiers as JSON data
+	SupplementalSemanticIDs json.RawMessage `json:"supplementalSemanticIdReferenceRows"`
+	// SupplementalSemanticIDsReferred contains referred supplemental semantic ID references as JSON data
+	SupplementalSemanticIDsReferred json.RawMessage `json:"supplementalSemanticIdReferredReferenceRows"`
+	// Qualifiers contains qualifier information as JSON data
+	Qualifiers json.RawMessage `json:"qualifiers"`
+	// DataSpecReference contains embedded data specifications as JSON data
+	DataSpecReference json.RawMessage
+	// DataSpecReferenceReferred contains references to data specifications as JSON data
+	DataSpecReferenceReferred json.RawMessage
+	// DataSpecIEC61360 contains IEC 61360 data specification as JSON data
+	DataSpecIEC61360 json.RawMessage
+	// IECLevelTypes contains IEC level type information as JSON data
+	IECLevelTypes json.RawMessage
+	// Position specifies the position/order of the submodel element among its siblings
+	Position int `json:"position"`
+}
+
 // ParseReferredReferencesFromRows parses referred reference data from already unmarshalled ReferredReferenceRow objects.
 //
 // This function handles the complex case where references point to other references (referred references).

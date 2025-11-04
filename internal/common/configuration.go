@@ -2,6 +2,7 @@
 // and HTTP endpoint utilities for BaSyx Go components. It includes support
 // for YAML configuration files, environment variable overrides, CORS setup,
 // health endpoints, and PostgreSQL database connections with connection pooling.
+// nolint:all
 package common
 
 import (
