@@ -202,7 +202,7 @@ CREATE TABLE IF NOT EXISTS administrative_information (
   id                BIGSERIAL PRIMARY KEY,
   version           VARCHAR(4),
   revision          VARCHAR(4),
-  creator           BIGSERIAL REFERENCES reference(id),
+  creator           BIGINT REFERENCES reference(id),
   embedded_data_specification JSONB,
   templateId        VARCHAR(2048)
 );
@@ -721,9 +721,8 @@ CREATE TABLE IF NOT EXISTS submodel_descriptor (
   displayname_id BIGINT REFERENCES lang_string_name_type_reference(id) ON DELETE SET NULL,
   administrative_information_id BIGINT REFERENCES administrative_information(id) ON DELETE CASCADE,
   id_short VARCHAR(128),
-  id VARCHAR(2048) NOT NULL,
-  semantic_id BIGINT REFERENCES reference(id) ON DELETE CASCADE,
-  UNIQUE(id)
+  id VARCHAR(2048) NOT NULL, -- not unique because it can have duplicates over different aas descriptor.
+  semantic_id BIGINT REFERENCES reference(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS submodel_descriptor_supplemental_semantic_id (

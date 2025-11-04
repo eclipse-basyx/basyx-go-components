@@ -12,10 +12,11 @@
 package ass_registry_api
 
 import (
-    "context"
-    "errors"
-    "net/http"
-    "strings"
+	"context"
+	"errors"
+	"log"
+	"net/http"
+	"strings"
 
 	persistence_postgresql "github.com/eclipse-basyx/basyx-go-components/internal/aasregistry/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
@@ -42,28 +43,12 @@ func NewAssetAdministrationShellRegistryAPIAPIService(databaseBackend persistenc
 
 // GetAllAssetAdministrationShellDescriptors - Returns all Asset Administration Shell Descriptors
 func (s *AssetAdministrationShellRegistryAPIAPIService) GetAllAssetAdministrationShellDescriptors(ctx context.Context, limit int32, cursor string, assetKind model.AssetKind, assetType string) (model.ImplResponse, error) {
-	// TODO - update GetAllAssetAdministrationShellDescriptors with the required logic for this service method.
-	// Add api_asset_administration_shell_registry_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
-
-	// TODO: Uncomment the next line to return response Response(200, GetAssetAdministrationShellDescriptorsResult{}) or use other options such as http.Ok ...
-	// return Response(200, GetAssetAdministrationShellDescriptorsResult{}), nil
-
-	// TODO: Uncomment the next line to return response Response(400, Result{}) or use other options such as http.Ok ...
-	// return Response(400, Result{}), nil
-
-	// TODO: Uncomment the next line to return response Response(403, Result{}) or use other options such as http.Ok ...
-	// return Response(403, Result{}), nil
-
-	// TODO: Uncomment the next line to return response Response(500, Result{}) or use other options such as http.Ok ...
-	// return Response(500, Result{}), nil
-
-	// TODO: Uncomment the next line to return response Response(0, Result{}) or use other options such as http.Ok ...
-	// return Response(0, Result{}), nil
 
 	var internalCursor string
 	if strings.TrimSpace(cursor) != "" {
 		dec, decErr := common.DecodeString(cursor)
 		if decErr != nil {
+			log.Printf("🧩 [%s] Error in GetAllAssetAdministrationShellDescriptors: decode cursor=%q limit=%d assetKind=%q assetType=%q: %v", componentName, cursor, limit, string(assetKind), assetType, decErr)
 			return common.NewErrorResponse(
 				decErr, http.StatusBadRequest, componentName, "GetAllAssetAdministrationShellDescriptors", "BadCursor",
 			), nil
@@ -72,9 +57,17 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) GetAllAssetAdministratio
 	}
 	aasds, nextCursor, err := s.aasRegistryBackend.ListAssetAdministrationShellDescriptors(ctx, limit, internalCursor, assetKind, assetType)
 	if err != nil {
-		return common.NewErrorResponse(
-			err, http.StatusInternalServerError, componentName, "GetAllAssetAdministrationShellDescriptors", "InternalServerError",
-		), err
+		log.Printf("🧩 [%s] Error in GetAllAssetAdministrationShellDescriptors: list failed (limit=%d cursor=%q assetKind=%q assetType=%q): %v", componentName, limit, internalCursor, string(assetKind), assetType, err)
+		switch {
+		case common.IsErrBadRequest(err):
+			return common.NewErrorResponse(
+				err, http.StatusBadRequest, componentName, "GetAllAssetAdministrationShellDescriptors", "BadRequest",
+			), nil
+		default:
+			return common.NewErrorResponse(
+				err, http.StatusInternalServerError, componentName, "GetAllAssetAdministrationShellDescriptors", "InternalServerError",
+			), err
+		}
 	}
 
 	pm := model.PagedResultPagingMetadata{}
@@ -93,36 +86,19 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) GetAllAssetAdministratio
 
 // PostAssetAdministrationShellDescriptor - Creates a new Asset Administration Shell Descriptor, i.e. registers an AAS
 func (s *AssetAdministrationShellRegistryAPIAPIService) PostAssetAdministrationShellDescriptor(ctx context.Context, assetAdministrationShellDescriptor model.AssetAdministrationShellDescriptor) (model.ImplResponse, error) {
-	// TODO - update PostAssetAdministrationShellDescriptor with the required logic for this service method.
-	// Add api_asset_administration_shell_registry_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
-
-	// TODO: Uncomment the next line to return response Response(201, AssetAdministrationShellDescriptor{}) or use other options such as http.Ok ...
-	// return Response(201, AssetAdministrationShellDescriptor{}), nil
-
-	// TODO: Uncomment the next line to return response Response(400, Result{}) or use other options such as http.Ok ...
-	// return Response(400, Result{}), nil
-
-	// TODO: Uncomment the next line to return response Response(403, Result{}) or use other options such as http.Ok ...
-	// return Response(403, Result{}), nil
-
-	// TODO: Uncomment the next line to return response Response(409, Result{}) or use other options such as http.Ok ...
-	// return Response(409, Result{}), nil
-
-	// TODO: Uncomment the next line to return response Response(500, Result{}) or use other options such as http.Ok ...
-	// return Response(500, Result{}), nil
-
-	// TODO: Uncomment the next line to return response Response(0, Result{}) or use other options such as http.Ok ...
-	// return Response(0, Result{}), nil
 
 	// Existence check: AAS with same Id should not already exist (lightweight)
 	if strings.TrimSpace(assetAdministrationShellDescriptor.Id) != "" {
 		if exists, chkErr := s.aasRegistryBackend.ExistsAASByID(ctx, assetAdministrationShellDescriptor.Id); chkErr != nil {
+			log.Printf("🧩 [%s] Error in PostAssetAdministrationShellDescriptor: existence check failed (aasId=%q): %v", componentName, assetAdministrationShellDescriptor.Id, chkErr)
 			return common.NewErrorResponse(
 				chkErr, http.StatusInternalServerError, componentName, "PostAssetAdministrationShellDescriptor", "Unhandled-Precheck",
 			), chkErr
 		} else if exists {
+			e := common.NewErrConflict("AAS with given id already exists")
+			log.Printf("🧩 [%s] Error in PostAssetAdministrationShellDescriptor: conflict (aasId=%q): %v", componentName, assetAdministrationShellDescriptor.Id, e)
 			return common.NewErrorResponse(
-				common.NewErrConflict("AAS with given id already exists"), http.StatusConflict, componentName, "PostAssetAdministrationShellDescriptor", "Conflict-Exists",
+				e, http.StatusConflict, componentName, "PostAssetAdministrationShellDescriptor", "Conflict-Exists",
 			), nil
 		}
 	}
@@ -131,14 +107,17 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) PostAssetAdministrationS
 	if err != nil {
 		switch {
 		case common.IsErrBadRequest(err):
+			log.Printf("🧩 [%s] Error in InsertAdministrationShellDescriptor: bad request (aasId=%q): %v", componentName, assetAdministrationShellDescriptor.Id, err)
 			return common.NewErrorResponse(
 				err, http.StatusBadRequest, componentName, "InsertAdministrationShellDescriptor", "BadRequest",
 			), nil
 		case common.IsErrConflict(err):
+			log.Printf("🧩 [%s] Error in InsertAdministrationShellDescriptor: conflict (aasId=%q): %v", componentName, assetAdministrationShellDescriptor.Id, err)
 			return common.NewErrorResponse(
 				err, http.StatusConflict, componentName, "InsertAdministrationShellDescriptor", "Conflict",
 			), nil
 		default:
+			log.Printf("🧩 [%s] Error in InsertAdministrationShellDescriptor: internal (aasId=%q): %v", componentName, assetAdministrationShellDescriptor.Id, err)
 			return common.NewErrorResponse(
 				err, http.StatusInternalServerError, componentName, "InsertAdministrationShellDescriptor", "Unhandled",
 			), err
@@ -150,29 +129,10 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) PostAssetAdministrationS
 
 // GetAssetAdministrationShellDescriptorById - Returns a specific Asset Administration Shell Descriptor
 func (s *AssetAdministrationShellRegistryAPIAPIService) GetAssetAdministrationShellDescriptorById(ctx context.Context, aasIdentifier string) (model.ImplResponse, error) {
-	// TODO - update GetAssetAdministrationShellDescriptorById with the required logic for this service method.
-	// Add api_asset_administration_shell_registry_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
-
-	// TODO: Uncomment the next line to return response Response(200, AssetAdministrationShellDescriptor{}) or use other options such as http.Ok ...
-	// return Response(200, AssetAdministrationShellDescriptor{}), nil
-
-	// TODO: Uncomment the next line to return response Response(400, Result{}) or use other options such as http.Ok ...
-	// return Response(400, Result{}), nil
-
-	// TODO: Uncomment the next line to return response Response(403, Result{}) or use other options such as http.Ok ...
-	// return Response(403, Result{}), nil
-
-	// TODO: Uncomment the next line to return response Response(404, Result{}) or use other options such as http.Ok ...
-	// return Response(404, Result{}), nil
-
-	// TODO: Uncomment the next line to return response Response(500, Result{}) or use other options such as http.Ok ...
-	// return Response(500, Result{}), nil
-
-	// TODO: Uncomment the next line to return response Response(0, Result{}) or use other options such as http.Ok ...
-	// return Response(0, Result{}), nil
 
 	decoded, decodeErr := common.DecodeString(aasIdentifier)
 	if decodeErr != nil {
+		log.Printf("🧩 [%s] Error in GetAssetAdministrationShellDescriptorById: decode aasIdentifier=%q: %v", componentName, aasIdentifier, decodeErr)
 		return common.NewErrorResponse(
 			decodeErr, http.StatusBadRequest, componentName, "GetAssetAdministrationShellDescriptorById", "BadRequest-Decode",
 		), nil
@@ -181,11 +141,18 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) GetAssetAdministrationSh
 	result, err := s.aasRegistryBackend.GetAssetAdministrationShellDescriptorById(ctx, string(decoded))
 	if err != nil {
 		switch {
+		case common.IsErrBadRequest(err):
+			log.Printf("🧩 [%s] Error in GetAssetAdministrationShellDescriptorById: bad request (aasId=%q): %v", componentName, string(decoded), err)
+			return common.NewErrorResponse(
+				err, http.StatusBadRequest, componentName, "GetAssetAdministrationShellDescriptorById", "BadRequest",
+			), nil
 		case common.IsErrNotFound(err):
+			log.Printf("🧩 [%s] Error in GetAssetAdministrationShellDescriptorById: not found (aasId=%q): %v", componentName, string(decoded), err)
 			return common.NewErrorResponse(
 				err, http.StatusNotFound, componentName, "GetAssetAdministrationShellDescriptorById", "NotFound",
 			), nil
 		default:
+			log.Printf("🧩 [%s] Error in GetAssetAdministrationShellDescriptorById: internal (aasId=%q): %v", componentName, string(decoded), err)
 			return common.NewErrorResponse(
 				err, http.StatusInternalServerError, componentName, "GetAssetAdministrationShellDescriptorById", "Unhandled",
 			), err
@@ -200,6 +167,7 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) PutAssetAdministrationSh
 	// Decode path AAS id
 	decodedAAS, decErr := common.DecodeString(aasIdentifier)
 	if decErr != nil {
+		log.Printf("🧩 [%s] Error in PutAssetAdministrationShellDescriptorById: decode aasIdentifier=%q: %v", componentName, aasIdentifier, decErr)
 		return common.NewErrorResponse(
 			decErr, http.StatusBadRequest, componentName, "PutAssetAdministrationShellDescriptorById", "BadRequest-Decode",
 		), nil
@@ -207,40 +175,45 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) PutAssetAdministrationSh
 
 	// Enforce id consistency with path
 	if strings.TrimSpace(assetAdministrationShellDescriptor.Id) != "" && assetAdministrationShellDescriptor.Id != decodedAAS {
+		log.Printf("🧩 [%s] Error in PutAssetAdministrationShellDescriptorById: body id does not match path id (body=%q path=%q)", componentName, assetAdministrationShellDescriptor.Id, decodedAAS)
 		return common.NewErrorResponse(
 			errors.New("body id does not match path id"), http.StatusBadRequest, componentName, "PutAssetAdministrationShellDescriptorById", "BadRequest-IdMismatch",
 		), nil
 	}
 	assetAdministrationShellDescriptor.Id = decodedAAS
 
-    existed, err := s.aasRegistryBackend.ReplaceAdministrationShellDescriptor(ctx, assetAdministrationShellDescriptor)
-    if err != nil {
-        switch {
-        case common.IsErrBadRequest(err):
-            return common.NewErrorResponse(
-                err, http.StatusBadRequest, componentName, "PutAssetAdministrationShellDescriptorById", "BadRequest",
-            ), nil
-        case common.IsErrConflict(err):
-            return common.NewErrorResponse(
-                err, http.StatusConflict, componentName, "PutAssetAdministrationShellDescriptorById", "Conflict",
-            ), nil
-        default:
-            return common.NewErrorResponse(
-                err, http.StatusInternalServerError, componentName, "PutAssetAdministrationShellDescriptorById", "Unhandled-Insert",
-            ), err
-        }
-    }
+	existed, err := s.aasRegistryBackend.ReplaceAdministrationShellDescriptor(ctx, assetAdministrationShellDescriptor)
+	if err != nil {
+		switch {
+		case common.IsErrBadRequest(err):
+			log.Printf("🧩 [%s] Error in PutAssetAdministrationShellDescriptorById: bad request (aasId=%q): %v", componentName, decodedAAS, err)
+			return common.NewErrorResponse(
+				err, http.StatusBadRequest, componentName, "PutAssetAdministrationShellDescriptorById", "BadRequest",
+			), nil
+		case common.IsErrConflict(err):
+			log.Printf("🧩 [%s] Error in PutAssetAdministrationShellDescriptorById: conflict (aasId=%q): %v", componentName, decodedAAS, err)
+			return common.NewErrorResponse(
+				err, http.StatusConflict, componentName, "PutAssetAdministrationShellDescriptorById", "Conflict",
+			), nil
+		default:
+			log.Printf("🧩 [%s] Error in PutAssetAdministrationShellDescriptorById: internal (aasId=%q): %v", componentName, decodedAAS, err)
+			return common.NewErrorResponse(
+				err, http.StatusInternalServerError, componentName, "PutAssetAdministrationShellDescriptorById", "Unhandled-Insert",
+			), err
+		}
+	}
 
-    if existed {
-        return model.Response(http.StatusNoContent, nil), nil
-    }
-    return model.Response(http.StatusCreated, assetAdministrationShellDescriptor), nil
+	if existed {
+		return model.Response(http.StatusNoContent, nil), nil
+	}
+	return model.Response(http.StatusCreated, assetAdministrationShellDescriptor), nil
 }
 
 // DeleteAssetAdministrationShellDescriptorById - Deletes an Asset Administration Shell Descriptor, i.e. de-registers an AAS
 func (s *AssetAdministrationShellRegistryAPIAPIService) DeleteAssetAdministrationShellDescriptorById(ctx context.Context, aasIdentifier string) (model.ImplResponse, error) {
 	decoded, decodeErr := common.DecodeString(aasIdentifier)
 	if decodeErr != nil {
+		log.Printf("🧩 [%s] Error in DeleteAssetAdministrationShellDescriptorById: decode aasIdentifier=%q: %v", componentName, aasIdentifier, decodeErr)
 		return common.NewErrorResponse(
 			decodeErr, http.StatusBadRequest, componentName, "DeleteAssetAdministrationShellDescriptorById", "BadRequest-Decode",
 		), nil
@@ -249,14 +222,17 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) DeleteAssetAdministratio
 	if err := s.aasRegistryBackend.DeleteAssetAdministrationShellDescriptorById(ctx, decoded); err != nil {
 		switch {
 		case common.IsErrNotFound(err):
+			log.Printf("🧩 [%s] Error in DeleteAssetAdministrationShellDescriptorById: not found (aasId=%q): %v", componentName, decoded, err)
 			return common.NewErrorResponse(
 				err, http.StatusNotFound, componentName, "DeleteAssetAdministrationShellDescriptorById", "NotFound",
 			), nil
 		case common.IsErrBadRequest(err):
+			log.Printf("🧩 [%s] Error in DeleteAssetAdministrationShellDescriptorById: bad request (aasId=%q): %v", componentName, decoded, err)
 			return common.NewErrorResponse(
 				err, http.StatusBadRequest, componentName, "DeleteAssetAdministrationShellDescriptorById", "BadRequest",
 			), nil
 		default:
+			log.Printf("🧩 [%s] Error in DeleteAssetAdministrationShellDescriptorById: internal (aasId=%q): %v", componentName, decoded, err)
 			return common.NewErrorResponse(
 				err, http.StatusInternalServerError, componentName, "DeleteAssetAdministrationShellDescriptorById", "Unhandled",
 			), err
@@ -271,6 +247,7 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) GetAllSubmodelDescriptor
 	// Decode AAS identifier from path
 	decodedAAS, decodeErr := common.DecodeString(aasIdentifier)
 	if decodeErr != nil {
+		log.Printf("🧩 [%s] Error in GetAllSubmodelDescriptorsThroughSuperpath: decode aasIdentifier=%q: %v", componentName, aasIdentifier, decodeErr)
 		return common.NewErrorResponse(
 			decodeErr, http.StatusBadRequest, componentName, "GetAllSubmodelDescriptorsThroughSuperpath", "BadRequest-Decode",
 		), nil
@@ -278,12 +255,15 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) GetAllSubmodelDescriptor
 
 	// Check AAS existence
 	if exists, chkErr := s.aasRegistryBackend.ExistsAASByID(ctx, decodedAAS); chkErr != nil {
+		log.Printf("🧩 [%s] Error in GetAllSubmodelDescriptorsThroughSuperpath: existence check failed (aasId=%q): %v", componentName, decodedAAS, chkErr)
 		return common.NewErrorResponse(
 			chkErr, http.StatusInternalServerError, componentName, "GetAllSubmodelDescriptorsThroughSuperpath", "Unhandled-ExistenceCheck",
 		), chkErr
 	} else if !exists {
+		e := common.NewErrNotFound("AAS not found")
+		log.Printf("🧩 [%s] Error in GetAllSubmodelDescriptorsThroughSuperpath: not found (aasId=%q): %v", componentName, decodedAAS, e)
 		return common.NewErrorResponse(
-			common.NewErrNotFound("AAS not found"), http.StatusNotFound, componentName, "GetAllSubmodelDescriptorsThroughSuperpath", "NotFound",
+			e, http.StatusNotFound, componentName, "GetAllSubmodelDescriptorsThroughSuperpath", "NotFound",
 		), nil
 	}
 
@@ -292,6 +272,7 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) GetAllSubmodelDescriptor
 	if strings.TrimSpace(cursor) != "" {
 		dec, decErr := common.DecodeString(cursor)
 		if decErr != nil {
+			log.Printf("🧩 [%s] Error in GetAllSubmodelDescriptorsThroughSuperpath: decode cursor=%q for aasId=%q: %v", componentName, cursor, decodedAAS, decErr)
 			return common.NewErrorResponse(
 				decErr, http.StatusBadRequest, componentName, "GetAllSubmodelDescriptorsThroughSuperpath", "BadCursor",
 			), nil
@@ -302,6 +283,7 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) GetAllSubmodelDescriptor
 	// Read submodel descriptors via persistence layer
 	smds, nextCursor, err := s.aasRegistryBackend.ListSubmodelDescriptorsForAAS(ctx, decodedAAS, limit, internalCursor)
 	if err != nil {
+		log.Printf("🧩 [%s] Error in GetAllSubmodelDescriptorsThroughSuperpath: list failed (aasId=%q limit=%d cursor=%q): %v", componentName, decodedAAS, limit, internalCursor, err)
 		return common.NewErrorResponse(
 			err, http.StatusInternalServerError, componentName, "GetAllSubmodelDescriptorsThroughSuperpath", "InternalServerError",
 		), err
@@ -327,6 +309,7 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) PostSubmodelDescriptorTh
 	// Decode AAS identifier from path
 	decodedAAS, decodeErr := common.DecodeString(aasIdentifier)
 	if decodeErr != nil {
+		log.Printf("🧩 [%s] Error in PostSubmodelDescriptorThroughSuperpath: decode aasIdentifier=%q: %v", componentName, aasIdentifier, decodeErr)
 		return common.NewErrorResponse(
 			decodeErr, http.StatusBadRequest, componentName, "PostSubmodelDescriptorThroughSuperpath", "BadRequest-Decode",
 		), nil
@@ -335,12 +318,15 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) PostSubmodelDescriptorTh
 	// Conflict check: lightweight existence for submodel under this AAS
 	if strings.TrimSpace(submodelDescriptor.Id) != "" {
 		if exists, chkErr := s.aasRegistryBackend.ExistsSubmodelForAAS(ctx, decodedAAS, submodelDescriptor.Id); chkErr != nil {
+			log.Printf("🧩 [%s] Error in PostSubmodelDescriptorThroughSuperpath: existence check failed (aasId=%q submodelId=%q): %v", componentName, decodedAAS, submodelDescriptor.Id, chkErr)
 			return common.NewErrorResponse(
 				chkErr, http.StatusInternalServerError, componentName, "PostSubmodelDescriptorThroughSuperpath", "Unhandled-Precheck",
 			), chkErr
 		} else if exists {
+			e := common.NewErrConflict("Submodel with given id already exists for this AAS")
+			log.Printf("🧩 [%s] Error in PostSubmodelDescriptorThroughSuperpath: conflict (aasId=%q submodelId=%q): %v", componentName, decodedAAS, submodelDescriptor.Id, e)
 			return common.NewErrorResponse(
-				common.NewErrConflict("Submodel with given id already exists for this AAS"), http.StatusConflict, componentName, "PostSubmodelDescriptorThroughSuperpath", "Conflict-Exists",
+				e, http.StatusConflict, componentName, "PostSubmodelDescriptorThroughSuperpath", "Conflict-Exists",
 			), nil
 		}
 	}
@@ -349,18 +335,22 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) PostSubmodelDescriptorTh
 	if err := s.aasRegistryBackend.InsertSubmodelDescriptorForAAS(ctx, decodedAAS, submodelDescriptor); err != nil {
 		switch {
 		case common.IsErrNotFound(err):
+			log.Printf("🧩 [%s] Error in PostSubmodelDescriptorThroughSuperpath: not found (aasId=%q submodelId=%q): %v", componentName, decodedAAS, submodelDescriptor.Id, err)
 			return common.NewErrorResponse(
 				err, http.StatusNotFound, componentName, "PostSubmodelDescriptorThroughSuperpath", "NotFound",
 			), nil
 		case common.IsErrBadRequest(err):
+			log.Printf("🧩 [%s] Error in PostSubmodelDescriptorThroughSuperpath: bad request (aasId=%q submodelId=%q): %v", componentName, decodedAAS, submodelDescriptor.Id, err)
 			return common.NewErrorResponse(
 				err, http.StatusBadRequest, componentName, "PostSubmodelDescriptorThroughSuperpath", "BadRequest",
 			), nil
 		case common.IsErrConflict(err):
+			log.Printf("🧩 [%s] Error in PostSubmodelDescriptorThroughSuperpath: conflict (aasId=%q submodelId=%q): %v", componentName, decodedAAS, submodelDescriptor.Id, err)
 			return common.NewErrorResponse(
 				err, http.StatusConflict, componentName, "PostSubmodelDescriptorThroughSuperpath", "Conflict",
 			), nil
 		default:
+			log.Printf("🧩 [%s] Error in PostSubmodelDescriptorThroughSuperpath: internal (aasId=%q submodelId=%q): %v", componentName, decodedAAS, submodelDescriptor.Id, err)
 			return common.NewErrorResponse(
 				err, http.StatusInternalServerError, componentName, "PostSubmodelDescriptorThroughSuperpath", "Unhandled",
 			), err
@@ -375,12 +365,14 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) GetSubmodelDescriptorByI
 	// Decode path params
 	decodedAAS, decErr := common.DecodeString(aasIdentifier)
 	if decErr != nil {
+		log.Printf("🧩 [%s] Error in GetSubmodelDescriptorByIdThroughSuperpath: decode aasIdentifier=%q: %v", componentName, aasIdentifier, decErr)
 		return common.NewErrorResponse(
 			decErr, http.StatusBadRequest, componentName, "GetSubmodelDescriptorByIdThroughSuperpath", "BadRequest-Decode-AAS",
 		), nil
 	}
 	decodedSMD, decErr2 := common.DecodeString(submodelIdentifier)
 	if decErr2 != nil {
+		log.Printf("🧩 [%s] Error in GetSubmodelDescriptorByIdThroughSuperpath: decode submodelIdentifier=%q: %v", componentName, submodelIdentifier, decErr2)
 		return common.NewErrorResponse(
 			decErr2, http.StatusBadRequest, componentName, "GetSubmodelDescriptorByIdThroughSuperpath", "BadRequest-Decode-Submodel",
 		), nil
@@ -390,10 +382,12 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) GetSubmodelDescriptorByI
 	if err != nil {
 		switch {
 		case common.IsErrNotFound(err):
+			log.Printf("🧩 [%s] Error in GetSubmodelDescriptorByIdThroughSuperpath: not found (aasId=%q submodelId=%q): %v", componentName, decodedAAS, decodedSMD, err)
 			return common.NewErrorResponse(
 				err, http.StatusNotFound, componentName, "GetSubmodelDescriptorByIdThroughSuperpath", "NotFound",
 			), nil
 		default:
+			log.Printf("🧩 [%s] Error in GetSubmodelDescriptorByIdThroughSuperpath: internal (aasId=%q submodelId=%q): %v", componentName, decodedAAS, decodedSMD, err)
 			return common.NewErrorResponse(
 				err, http.StatusInternalServerError, componentName, "GetSubmodelDescriptorByIdThroughSuperpath", "Unhandled",
 			), err
@@ -408,12 +402,14 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) PutSubmodelDescriptorByI
 	// Decode path params
 	decodedAAS, decErr := common.DecodeString(aasIdentifier)
 	if decErr != nil {
+		log.Printf("🧩 [%s] Error in PutSubmodelDescriptorByIdThroughSuperpath: decode aasIdentifier=%q: %v", componentName, aasIdentifier, decErr)
 		return common.NewErrorResponse(
 			decErr, http.StatusBadRequest, componentName, "PutSubmodelDescriptorByIdThroughSuperpath", "BadRequest-Decode-AAS",
 		), nil
 	}
 	decodedSMD, decErr2 := common.DecodeString(submodelIdentifier)
 	if decErr2 != nil {
+		log.Printf("🧩 [%s] Error in PutSubmodelDescriptorByIdThroughSuperpath: decode submodelIdentifier=%q: %v", componentName, submodelIdentifier, decErr2)
 		return common.NewErrorResponse(
 			decErr2, http.StatusBadRequest, componentName, "PutSubmodelDescriptorByIdThroughSuperpath", "BadRequest-Decode-Submodel",
 		), nil
@@ -421,51 +417,58 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) PutSubmodelDescriptorByI
 
 	// Enforce id consistency
 	if strings.TrimSpace(submodelDescriptor.Id) != "" && submodelDescriptor.Id != decodedSMD {
+		log.Printf("🧩 [%s] Error in PutSubmodelDescriptorByIdThroughSuperpath: body id does not match path id (body=%q path=%q)", componentName, submodelDescriptor.Id, decodedSMD)
 		return common.NewErrorResponse(
 			errors.New("body id does not match path id"), http.StatusBadRequest, componentName, "PutSubmodelDescriptorByIdThroughSuperpath", "BadRequest-IdMismatch",
 		), nil
 	}
 	submodelDescriptor.Id = decodedSMD
 
-    // Replace in a single transaction (delete + insert)
-    existed, err := s.aasRegistryBackend.ReplaceSubmodelDescriptorForAAS(ctx, decodedAAS, submodelDescriptor)
-    if err != nil {
-        switch {
-        case common.IsErrNotFound(err):
-            return common.NewErrorResponse(
-                err, http.StatusNotFound, componentName, "PutSubmodelDescriptorByIdThroughSuperpath", "NotFound",
-            ), nil
-        case common.IsErrBadRequest(err):
-            return common.NewErrorResponse(
-                err, http.StatusBadRequest, componentName, "PutSubmodelDescriptorByIdThroughSuperpath", "BadRequest",
-            ), nil
-        case common.IsErrConflict(err):
-            return common.NewErrorResponse(
-                err, http.StatusConflict, componentName, "PutSubmodelDescriptorByIdThroughSuperpath", "Conflict",
-            ), nil
-        default:
-            return common.NewErrorResponse(
-                err, http.StatusInternalServerError, componentName, "PutSubmodelDescriptorByIdThroughSuperpath", "Unhandled-Replace",
-            ), err
-        }
-    }
+	// Replace in a single transaction (delete + insert)
+	existed, err := s.aasRegistryBackend.ReplaceSubmodelDescriptorForAAS(ctx, decodedAAS, submodelDescriptor)
+	if err != nil {
+		switch {
+		case common.IsErrNotFound(err):
+			log.Printf("🧩 [%s] Error in PutSubmodelDescriptorByIdThroughSuperpath: not found (aasId=%q submodelId=%q): %v", componentName, decodedAAS, submodelDescriptor.Id, err)
+			return common.NewErrorResponse(
+				err, http.StatusNotFound, componentName, "PutSubmodelDescriptorByIdThroughSuperpath", "NotFound",
+			), nil
+		case common.IsErrBadRequest(err):
+			log.Printf("🧩 [%s] Error in PutSubmodelDescriptorByIdThroughSuperpath: bad request (aasId=%q submodelId=%q): %v", componentName, decodedAAS, submodelDescriptor.Id, err)
+			return common.NewErrorResponse(
+				err, http.StatusBadRequest, componentName, "PutSubmodelDescriptorByIdThroughSuperpath", "BadRequest",
+			), nil
+		case common.IsErrConflict(err):
+			log.Printf("🧩 [%s] Error in PutSubmodelDescriptorByIdThroughSuperpath: conflict (aasId=%q submodelId=%q): %v", componentName, decodedAAS, submodelDescriptor.Id, err)
+			return common.NewErrorResponse(
+				err, http.StatusConflict, componentName, "PutSubmodelDescriptorByIdThroughSuperpath", "Conflict",
+			), nil
+		default:
+			log.Printf("🧩 [%s] Error in PutSubmodelDescriptorByIdThroughSuperpath: internal (aasId=%q submodelId=%q): %v", componentName, decodedAAS, submodelDescriptor.Id, err)
+			return common.NewErrorResponse(
+				err, http.StatusInternalServerError, componentName, "PutSubmodelDescriptorByIdThroughSuperpath", "Unhandled-Replace",
+			), err
+		}
+	}
 
-    if existed {
-        return model.Response(http.StatusNoContent, nil), nil
-    }
-    return model.Response(http.StatusCreated, submodelDescriptor), nil
+	if existed {
+		return model.Response(http.StatusNoContent, nil), nil
+	}
+	return model.Response(http.StatusCreated, submodelDescriptor), nil
 }
 
 // DeleteSubmodelDescriptorByIdThroughSuperpath - Deletes a Submodel Descriptor, i.e. de-registers a submodel
 func (s *AssetAdministrationShellRegistryAPIAPIService) DeleteSubmodelDescriptorByIdThroughSuperpath(ctx context.Context, aasIdentifier string, submodelIdentifier string) (model.ImplResponse, error) {
 	decodedAAS, decErr := common.DecodeString(aasIdentifier)
 	if decErr != nil {
+		log.Printf("🧩 [%s] Error in DeleteSubmodelDescriptorByIdThroughSuperpath: decode aasIdentifier=%q: %v", componentName, aasIdentifier, decErr)
 		return common.NewErrorResponse(
 			decErr, http.StatusBadRequest, componentName, "DeleteSubmodelDescriptorByIdThroughSuperpath", "BadRequest-Decode-AAS",
 		), nil
 	}
 	decodedSMD, decErr2 := common.DecodeString(submodelIdentifier)
 	if decErr2 != nil {
+		log.Printf("🧩 [%s] Error in DeleteSubmodelDescriptorByIdThroughSuperpath: decode submodelIdentifier=%q: %v", componentName, submodelIdentifier, decErr2)
 		return common.NewErrorResponse(
 			decErr2, http.StatusBadRequest, componentName, "DeleteSubmodelDescriptorByIdThroughSuperpath", "BadRequest-Decode-Submodel",
 		), nil
@@ -474,14 +477,17 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) DeleteSubmodelDescriptor
 	if err := s.aasRegistryBackend.DeleteSubmodelDescriptorForAASByID(ctx, decodedAAS, decodedSMD); err != nil {
 		switch {
 		case common.IsErrNotFound(err):
+			log.Printf("🧩 [%s] Error in DeleteSubmodelDescriptorByIdThroughSuperpath: not found (aasId=%q submodelId=%q): %v", componentName, decodedAAS, decodedSMD, err)
 			return common.NewErrorResponse(
 				err, http.StatusNotFound, componentName, "DeleteSubmodelDescriptorByIdThroughSuperpath", "NotFound",
 			), nil
 		case common.IsErrBadRequest(err):
+			log.Printf("🧩 [%s] Error in DeleteSubmodelDescriptorByIdThroughSuperpath: bad request (aasId=%q submodelId=%q): %v", componentName, decodedAAS, decodedSMD, err)
 			return common.NewErrorResponse(
 				err, http.StatusBadRequest, componentName, "DeleteSubmodelDescriptorByIdThroughSuperpath", "BadRequest",
 			), nil
 		default:
+			log.Printf("🧩 [%s] Error in DeleteSubmodelDescriptorByIdThroughSuperpath: internal (aasId=%q submodelId=%q): %v", componentName, decodedAAS, decodedSMD, err)
 			return common.NewErrorResponse(
 				err, http.StatusInternalServerError, componentName, "DeleteSubmodelDescriptorByIdThroughSuperpath", "Unhandled",
 			), err

@@ -336,5 +336,40 @@
     "endpoint": "http://127.0.0.1:5004/shell-descriptors",
     "shouldMatch": "expected/final_paged_result.json",
     "expectedStatus": 200
+  },
+  {
+    "context": "Put AAS descriptor simple full aas",
+    "method": "PUT",
+    "endpoint": "http://127.0.0.1:5004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy9tYXJ0aW4",
+    "data": "postBody/simple_ass_descriptor_7.json",
+    "shouldMatch": "expected/expected_ass_descriptor_7.json",
+    "expectedStatus": 201
+  },
+  {
+    "context": "Put AAS descriptor simple full aas - again but should have 204",
+    "method": "PUT",
+    "endpoint": "http://127.0.0.1:5004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy9tYXJ0aW4",
+    "data": "postBody/simple_ass_descriptor_7.json",
+    "expectedStatus": 204
+  },
+  {
+    "context": "GET AAS descriptor simple full aas",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:5004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy9tYXJ0aW4",
+    "shouldMatch": "expected/expected_ass_descriptor_7.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "PUT Submodel inside simple full aas - with wrong id",
+    "method": "PUT",
+    "endpoint": "http://127.0.0.1:5004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy9tYXJ0aW4/submodel-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy9zYXRpc2ZhY3Rvcnk",
+    "data": "postBody/simple_submodel_descriptor_4.json",
+    "expectedStatus": 400
+  },
+  {
+    "context": "GET Submodel - id does not exist",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:5004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy9tYXJ0aW4/submodel-descriptors/bWFydGluaXN0Y29vbA",
+    "expectedStatus": 404
   }
 ]
