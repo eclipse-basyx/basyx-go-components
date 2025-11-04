@@ -22,26 +22,22 @@
 *
 * SPDX-License-Identifier: MIT
 ******************************************************************************/
-
-// Package submodelsubqueries provides SQL query builders for constructing complex subqueries
-// used in retrieving submodel data from a PostgreSQL database.
-//
-// This package contains functions that generate subqueries for retrieving nested data structures
-// associated with submodels in the Eclipse BaSyx Asset Administration Shell (AAS) implementation.
-// The queries are built using the goqu query builder library and return JSONB-aggregated results
-// for efficient data retrieval and serialization.
-//
 // Author: Aaron Zielstorff ( Fraunhofer IESE ), Jannik Fried ( Fraunhofer IESE )
-package submodelsubqueries
 
-import "github.com/doug-martin/goqu/v9"
+package queries
 
-// GetQualifierSubqueryForSubmodel constructs a complex SQL subquery that retrieves all qualifiers
-// associated with a submodel, including their complete reference hierarchies.
+import (
+	"github.com/doug-martin/goqu/v9"
+	"github.com/doug-martin/goqu/v9/exp"
+)
+
+// GetQualifierSubquery constructs a complex SQL subquery that retrieves all qualifiers
+// associated with an AAS element (such as a submodel or submodel element), including their
+// complete reference hierarchies.
 //
 // This function builds a comprehensive query that aggregates qualifier data into JSONB format,
 // including:
-//   - Basic qualifier attributes (kind, type, value_type, value)
+//   - Basic qualifier attributes (kind, type, value_type, value, position)
 //   - Semantic ID references and their nested referred references
 //   - Value ID references and their nested referred references
 //   - Supplemental semantic ID references and their nested referred references
@@ -52,15 +48,22 @@ import "github.com/doug-martin/goqu/v9"
 //
 // Parameters:
 //   - dialect: A goqu.DialectWrapper that provides database-specific SQL generation capabilities
+//   - joinTable: The identifier expression for the join table that links entities to qualifiers
+//     (e.g., "submodel_qualifier", "submodel_element_qualifier")
+//   - entityIDColumn: The column name in the join table that references the parent entity
+//     (e.g., "submodel_id", "submodel_element_id")
+//   - qualifierIDColumn: The column name in the join table that references the qualifier
+//     (typically "qualifier_id")
+//   - entityIDCondition: The identifier expression for the entity ID to match against
+//     (e.g., goqu.I("s.id") for matching submodels)
 //
 // Returns:
 //   - *goqu.SelectDataset: A select query that returns a JSONB array of qualifier objects.
-//     The query expects to be used in a context where the submodel table is aliased as "s"
-//     and will match qualifiers based on the condition smq.submodel_id = s.id.
+//     Each qualifier object contains all its attributes and associated reference hierarchies.
 //
 // Query Structure:
 // The returned query aggregates data from the following tables:
-//   - submodel_qualifier (aliased as "smq"): Links submodels to qualifiers
+//   - Join table (aliased as "jt"): Links entities to qualifiers
 //   - qualifier (aliased as "q"): Contains qualifier metadata and values
 //   - reference (aliased as "r" or "ref"): Contains semantic references
 //   - reference_key (aliased as "rk"): Contains the keys within each reference
@@ -68,7 +71,17 @@ import "github.com/doug-martin/goqu/v9"
 //
 // The value field in the returned JSONB uses COALESCE to select the appropriate value column
 // based on the qualifier's value_type (text, numeric, boolean, time, or datetime).
-func GetQualifierSubqueryForSubmodel(dialect goqu.DialectWrapper) *goqu.SelectDataset {
+//
+// Example usage:
+//
+//	qualifierSubquery := GetQualifierSubquery(
+//	    dialect,
+//	    goqu.T("submodel_qualifier"),
+//	    "submodel_id",
+//	    "qualifier_id",
+//	    goqu.I("s.id"),
+//	)
+func GetQualifierSubquery(dialect goqu.DialectWrapper, joinTable exp.IdentifierExpression, entityIDColumn string, qualifierIDColumn string, entityIDCondition exp.IdentifierExpression) *goqu.SelectDataset {
 	// Build the jsonb object for semantic ID references
 	semanticIDObj := goqu.Func("jsonb_build_object",
 		goqu.V("reference_id"), goqu.I("r.id"),
@@ -88,7 +101,7 @@ func GetQualifierSubqueryForSubmodel(dialect goqu.DialectWrapper) *goqu.SelectDa
 			goqu.T("reference_key").As("rk"),
 			goqu.On(goqu.I("r.id").Eq(goqu.I("rk.reference_id"))),
 		).
-		Where(goqu.I("q.id").Eq(goqu.I("smq.qualifier_id")))
+		Where(goqu.I("q.id").Eq(goqu.I("jt." + qualifierIDColumn)))
 
 	// Build the jsonb object for semantic ID referred references
 	semanticIDReferredObj := goqu.Func("jsonb_build_object",
@@ -116,7 +129,7 @@ func GetQualifierSubqueryForSubmodel(dialect goqu.DialectWrapper) *goqu.SelectDa
 			goqu.On(goqu.I("rk.reference_id").Eq(goqu.I("r.id"))),
 		).
 		Where(
-			goqu.I("smq.qualifier_id").Eq(goqu.I("q.id")),
+			goqu.I("jt."+qualifierIDColumn).Eq(goqu.I("q.id")),
 			goqu.I("r.id").IsNotNull(),
 		)
 
@@ -139,7 +152,7 @@ func GetQualifierSubqueryForSubmodel(dialect goqu.DialectWrapper) *goqu.SelectDa
 			goqu.T("reference_key").As("rk"),
 			goqu.On(goqu.I("r.id").Eq(goqu.I("rk.reference_id"))),
 		).
-		Where(goqu.I("q.id").Eq(goqu.I("smq.qualifier_id")))
+		Where(goqu.I("q.id").Eq(goqu.I("jt." + qualifierIDColumn)))
 
 	// Build the jsonb object for value ID referred references
 	valueIDReferredObj := goqu.Func("jsonb_build_object",
@@ -167,7 +180,7 @@ func GetQualifierSubqueryForSubmodel(dialect goqu.DialectWrapper) *goqu.SelectDa
 			goqu.On(goqu.I("rk.reference_id").Eq(goqu.I("r.id"))),
 		).
 		Where(
-			goqu.I("smq.qualifier_id").Eq(goqu.I("q.id")),
+			goqu.I("jt."+qualifierIDColumn).Eq(goqu.I("q.id")),
 			goqu.I("r.id").IsNotNull(),
 		)
 
@@ -184,7 +197,7 @@ func GetQualifierSubqueryForSubmodel(dialect goqu.DialectWrapper) *goqu.SelectDa
 		Select(goqu.Func("jsonb_agg", goqu.L("?", supplementalSemanticIDObj))).
 		Join(
 			goqu.T("qualifier_supplemental_semantic_id").As("qssi"),
-			goqu.On(goqu.I("qssi.qualifier_id").Eq(goqu.I("smq.qualifier_id"))),
+			goqu.On(goqu.I("qssi.qualifier_id").Eq(goqu.I("jt."+qualifierIDColumn))),
 		).
 		Join(
 			goqu.T("reference_key").As("rk"),
@@ -207,7 +220,7 @@ func GetQualifierSubqueryForSubmodel(dialect goqu.DialectWrapper) *goqu.SelectDa
 		Select(goqu.Func("jsonb_agg", goqu.L("?", supplementalSemanticIDReferredObj))).
 		Join(
 			goqu.T("qualifier_supplemental_semantic_id").As("qssi"),
-			goqu.On(goqu.I("qssi.qualifier_id").Eq(goqu.I("smq.qualifier_id"))),
+			goqu.On(goqu.I("qssi.qualifier_id").Eq(goqu.I("jt."+qualifierIDColumn))),
 		).
 		Join(
 			goqu.T("reference_key").As("rk"),
@@ -220,7 +233,7 @@ func GetQualifierSubqueryForSubmodel(dialect goqu.DialectWrapper) *goqu.SelectDa
 
 	// Build the main qualifier jsonb object
 	qualifierObj := goqu.Func("jsonb_build_object",
-		goqu.V("dbId"), goqu.I("smq.qualifier_id"),
+		goqu.V("dbId"), goqu.I("jt."+qualifierIDColumn),
 		goqu.V("kind"), goqu.I("q.kind"),
 		goqu.V("type"), goqu.I("q.type"),
 		goqu.V("position"), goqu.I("q.position"),
@@ -240,12 +253,12 @@ func GetQualifierSubqueryForSubmodel(dialect goqu.DialectWrapper) *goqu.SelectDa
 		goqu.V("supplementalSemanticIdReferredReferenceRows"), qualifierSupplementalSemanticIDReferredSubquery,
 	)
 
-	qualifierSubquery := dialect.From(goqu.T("submodel_qualifier").As("smq")).
+	qualifierSubquery := dialect.From(joinTable.As("jt")).
 		Select(goqu.Func("jsonb_agg", goqu.L("?", qualifierObj))).
 		Join(
 			goqu.T("qualifier").As("q"),
-			goqu.On(goqu.I("smq.qualifier_id").Eq(goqu.I("q.id"))),
+			goqu.On(goqu.I("jt."+qualifierIDColumn).Eq(goqu.I("q.id"))),
 		).
-		Where(goqu.I("smq.submodel_id").Eq(goqu.I("s.id")))
+		Where(goqu.I("jt." + entityIDColumn).Eq(entityIDCondition))
 	return qualifierSubquery
 }

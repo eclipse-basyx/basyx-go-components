@@ -51,7 +51,7 @@ import (
 //
 // Returns:
 //   - A SelectDataset containing the aggregated JSONB extension data
-func GetExtensionSubquery(dialect goqu.DialectWrapper, joinTableExtensionColumnName string, joinTable exp.IdentifierExpression, entityIDColumn string, entityIDCondition exp.Expression) *goqu.SelectDataset {
+func GetExtensionSubquery(dialect goqu.DialectWrapper, joinTable exp.IdentifierExpression, joinTableExtensionColumnName string, entityIDColumn string, entityIDCondition exp.Expression) *goqu.SelectDataset {
 	// Build the jsonb object for semantic ID references
 	semanticIDObj := goqu.Func("jsonb_build_object",
 		goqu.V("reference_id"), goqu.I("r.id"),
