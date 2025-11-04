@@ -216,13 +216,13 @@ func (p *PostgreSQLAASRegistryDatabase) GetAssetAdministrationShellDescriptorByI
 		return model.AssetAdministrationShellDescriptor{}, err
 	}
 
-	ak := model.ASSETKIND_NOT_APPLICABLE
+	var ak *model.AssetKind
 	if assetKindStr.Valid && assetKindStr.String != "" {
 		v, err := model.NewAssetKindFromValue(assetKindStr.String)
 		if err != nil {
 			return model.AssetAdministrationShellDescriptor{}, fmt.Errorf("invalid AssetKind %q", assetKindStr.String)
 		}
-		ak = v
+		ak = &v
 	}
 	g, ctx := errgroup.WithContext(ctx)
 
@@ -310,7 +310,7 @@ func (p *PostgreSQLAASRegistryDatabase) GetAssetAdministrationShellDescriptorByI
 	fmt.Printf("total block took %v to complete\n", ada)
 
 	return model.AssetAdministrationShellDescriptor{
-		AssetKind:           &ak,
+		AssetKind:           ak,
 		AssetType:           assetType.String,
 		GlobalAssetId:       globalAssetID.String,
 		IdShort:             idShort.String,
@@ -753,13 +753,13 @@ func (p *PostgreSQLAASRegistryDatabase) ListAssetAdministrationShellDescriptors(
 
 	out := make([]model.AssetAdministrationShellDescriptor, 0, len(all))
 	for _, r := range all {
-		ak := model.ASSETKIND_NOT_APPLICABLE
+		var ak *model.AssetKind
 		if r.assetKindStr.Valid && r.assetKindStr.String != "" {
 			v, convErr := model.NewAssetKindFromValue(r.assetKindStr.String)
 			if convErr != nil {
 				return nil, "", fmt.Errorf("invalid AssetKind %q for AAS %s", r.assetKindStr.String, r.idStr)
 			}
-			ak = v
+			ak = &v
 		}
 
 		var adminInfo *model.AdministrativeInformation
@@ -781,7 +781,7 @@ func (p *PostgreSQLAASRegistryDatabase) ListAssetAdministrationShellDescriptors(
 		}
 
 		out = append(out, model.AssetAdministrationShellDescriptor{
-			AssetKind:           &ak,
+			AssetKind:           ak,
 			AssetType:           r.assetType.String,
 			GlobalAssetId:       r.globalAssetID.String,
 			IdShort:             r.idShort.String,
@@ -903,9 +903,9 @@ func (p *PostgreSQLAASRegistryDatabase) ListSubmodelDescriptorsForAAS(
 // InsertSubmodelDescriptorForAAS inserts a single SubmodelDescriptor under the AAS
 // identified by aasID (the AAS's Id string). Returns NotFound if the AAS does not exist.
 func (p *PostgreSQLAASRegistryDatabase) InsertSubmodelDescriptorForAAS(
-	ctx context.Context,
-	aasID string,
-	submodel model.SubmodelDescriptor,
+    ctx context.Context,
+    aasID string,
+    submodel model.SubmodelDescriptor,
 ) error {
 
 	// Lookup AAS descriptor id by AAS Id string
@@ -953,7 +953,73 @@ func (p *PostgreSQLAASRegistryDatabase) InsertSubmodelDescriptorForAAS(
 	if err = tx.Commit(); err != nil {
 		return err
 	}
-	return nil
+    return nil
+}
+
+// ReplaceSubmodelDescriptorForAAS deletes any existing submodel descriptor with the same Id
+// under the given AAS and inserts the provided descriptor in a single transaction.
+// The returned boolean indicates whether a descriptor existed before the replace.
+func (p *PostgreSQLAASRegistryDatabase) ReplaceSubmodelDescriptorForAAS(
+    ctx context.Context,
+    aasID string,
+    submodel model.SubmodelDescriptor,
+) (bool, error) {
+    existed := false
+    err := p.WithTx(ctx, func(tx *sql.Tx) error {
+        d := goqu.Dialect(dialect)
+        aas := goqu.T(tblAASDescriptor).As("aas")
+        smd := goqu.T(tblSubmodelDescriptor).As("smd")
+
+        // Resolve AAS descriptor id from AAS Id
+        sqlStr, args, buildErr := d.
+            From(aas).
+            Select(aas.Col(colDescriptorID)).
+            Where(aas.Col(colAASID).Eq(aasID)).
+            Limit(1).
+            ToSQL()
+        if buildErr != nil {
+            return buildErr
+        }
+        var aasDescID int64
+        if err := tx.QueryRowContext(ctx, sqlStr, args...).Scan(&aasDescID); err != nil {
+            if errors.Is(err, sql.ErrNoRows) {
+                return common.NewErrNotFound("AAS Descriptor not found")
+            }
+            return common.NewInternalServerError("Failed to query AAS descriptor id. See server logs for details.")
+        }
+
+        // Lookup existing submodel descriptor globally by submodel Id (may belong to any AAS)
+        sqlStr2, args2, buildErr2 := d.
+            From(smd).
+            Select(smd.Col(colDescriptorID)).
+            Where(smd.Col(colAASID).Eq(submodel.Id)).
+            Limit(1).
+            ToSQL()
+        if buildErr2 != nil {
+            return buildErr2
+        }
+        var subDescID int64
+        scanErr := tx.QueryRowContext(ctx, sqlStr2, args2...).Scan(&subDescID)
+        if scanErr == nil {
+            existed = true
+            delSQL, delArgs, delErr := d.Delete(tblDescriptor).Where(goqu.C(colID).Eq(subDescID)).ToSQL()
+            if delErr != nil {
+                return delErr
+            }
+            if _, execErr := tx.Exec(delSQL, delArgs...); execErr != nil {
+                return execErr
+            }
+        } else if !errors.Is(scanErr, sql.ErrNoRows) {
+            return scanErr
+        }
+
+        // Insert replacement submodel descriptor
+        if err := createSubModelDescriptors(tx, aasDescID, []model.SubmodelDescriptor{submodel}); err != nil {
+            return err
+        }
+        return nil
+    })
+    return existed, err
 }
 
 // ExistsAASByID performs a lightweight existence check for an AAS by its Id string.

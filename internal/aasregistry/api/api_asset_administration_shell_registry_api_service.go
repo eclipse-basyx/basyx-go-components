@@ -427,52 +427,33 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) PutSubmodelDescriptorByI
 	}
 	submodelDescriptor.Id = decodedSMD
 
-	// Determine existence
-	_, getErr := s.aasRegistryBackend.GetSubmodelDescriptorForAASByID(ctx, decodedAAS, decodedSMD)
-	exists := getErr == nil
+    // Replace in a single transaction (delete + insert)
+    existed, err := s.aasRegistryBackend.ReplaceSubmodelDescriptorForAAS(ctx, decodedAAS, submodelDescriptor)
+    if err != nil {
+        switch {
+        case common.IsErrNotFound(err):
+            return common.NewErrorResponse(
+                err, http.StatusNotFound, componentName, "PutSubmodelDescriptorByIdThroughSuperpath", "NotFound",
+            ), nil
+        case common.IsErrBadRequest(err):
+            return common.NewErrorResponse(
+                err, http.StatusBadRequest, componentName, "PutSubmodelDescriptorByIdThroughSuperpath", "BadRequest",
+            ), nil
+        case common.IsErrConflict(err):
+            return common.NewErrorResponse(
+                err, http.StatusConflict, componentName, "PutSubmodelDescriptorByIdThroughSuperpath", "Conflict",
+            ), nil
+        default:
+            return common.NewErrorResponse(
+                err, http.StatusInternalServerError, componentName, "PutSubmodelDescriptorByIdThroughSuperpath", "Unhandled-Replace",
+            ), err
+        }
+    }
 
-	if exists {
-		if err := s.aasRegistryBackend.DeleteSubmodelDescriptorForAASByID(ctx, decodedAAS, decodedSMD); err != nil {
-			switch {
-			case common.IsErrNotFound(err):
-				// fall through
-			case common.IsErrBadRequest(err):
-				return common.NewErrorResponse(
-					err, http.StatusBadRequest, componentName, "PutSubmodelDescriptorByIdThroughSuperpath", "BadRequest",
-				), nil
-			default:
-				return common.NewErrorResponse(
-					err, http.StatusInternalServerError, componentName, "PutSubmodelDescriptorByIdThroughSuperpath", "Unhandled-Delete",
-				), err
-			}
-		}
-	}
-
-	if err := s.aasRegistryBackend.InsertSubmodelDescriptorForAAS(ctx, decodedAAS, submodelDescriptor); err != nil {
-		switch {
-		case common.IsErrNotFound(err):
-			return common.NewErrorResponse(
-				err, http.StatusNotFound, componentName, "PutSubmodelDescriptorByIdThroughSuperpath", "NotFound",
-			), nil
-		case common.IsErrBadRequest(err):
-			return common.NewErrorResponse(
-				err, http.StatusBadRequest, componentName, "PutSubmodelDescriptorByIdThroughSuperpath", "BadRequest",
-			), nil
-		case common.IsErrConflict(err):
-			return common.NewErrorResponse(
-				err, http.StatusConflict, componentName, "PutSubmodelDescriptorByIdThroughSuperpath", "Conflict",
-			), nil
-		default:
-			return common.NewErrorResponse(
-				err, http.StatusInternalServerError, componentName, "PutSubmodelDescriptorByIdThroughSuperpath", "Unhandled-Insert",
-			), err
-		}
-	}
-
-	if exists {
-		return model.Response(http.StatusNoContent, nil), nil
-	}
-	return model.Response(http.StatusCreated, submodelDescriptor), nil
+    if existed {
+        return model.Response(http.StatusNoContent, nil), nil
+    }
+    return model.Response(http.StatusCreated, submodelDescriptor), nil
 }
 
 // DeleteSubmodelDescriptorByIdThroughSuperpath - Deletes a Submodel Descriptor, i.e. de-registers a submodel

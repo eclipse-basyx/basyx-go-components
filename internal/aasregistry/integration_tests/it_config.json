@@ -300,5 +300,41 @@
     "method": "GET",
     "endpoint": "http://127.0.0.1:5004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8yMjMzNQ",
     "expectedStatus": 404
+  },
+  {
+    "context": "Put AAS descriptor via PUT as Post on previous deleted id - missing Ennpoint in Submodel",
+    "method": "PUT",
+    "endpoint": "http://127.0.0.1:5004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy9mYWN0b3Jpbw",
+    "data": "postBody/simple_ass_descriptor_malformed_7.json",
+    "expectedStatus": 400
+  },
+  {
+    "context": "Put AAS descriptor via PUT as Post on previous deleted id - empty endpoint list",
+    "method": "PUT",
+    "endpoint": "http://127.0.0.1:5004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy9mYWN0b3Jpbw",
+    "data": "postBody/simple_ass_descriptor_malformed_9.json",
+    "expectedStatus": 400
+  },
+  {
+    "context": "Put AAS descriptor via PUT as Post on previous deleted id",
+    "method": "PUT",
+    "endpoint": "http://127.0.0.1:5004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy9mYWN0b3Jpbw",
+    "data": "postBody/simple_ass_descriptor_6.json",
+    "shouldMatch": "postBody/simple_ass_descriptor_6.json",
+    "expectedStatus": 201
+  },
+  {
+    "context": "GET really small AAS descriptor",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:5004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy9mYWN0b3Jpbw",
+    "shouldMatch": "postBody/simple_ass_descriptor_6.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Get AAS descriptor by id - final paged result",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:5004/shell-descriptors",
+    "shouldMatch": "expected/final_paged_result.json",
+    "expectedStatus": 200
   }
 ]
