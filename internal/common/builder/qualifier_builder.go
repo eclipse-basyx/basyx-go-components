@@ -30,6 +30,7 @@ package builder
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
 
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
@@ -43,8 +44,13 @@ import (
 // of ReferenceBuilders to construct the hierarchical reference trees associated
 // with each qualifier.
 type QualifiersBuilder struct {
-	qualifiers    map[int64]*gen.Qualifier    // Maps database IDs to qualifier objects
-	refBuilderMap map[int64]*ReferenceBuilder // Maps reference database IDs to their builders
+	qualifiers    map[int64]*qualifierWithPosition
+	refBuilderMap map[int64]*ReferenceBuilder
+}
+
+type qualifierWithPosition struct {
+	qualifier *gen.Qualifier
+	position  int
 }
 
 // NewQualifiersBuilder creates a new QualifiersBuilder instance with initialized maps
@@ -58,7 +64,7 @@ type QualifiersBuilder struct {
 //	builder := NewQualifiersBuilder()
 //	builder.AddQualifier(1, "ConceptQualifier", "ExpressionSemantic", "xs:string", "example value")
 func NewQualifiersBuilder() *QualifiersBuilder {
-	return &QualifiersBuilder{qualifiers: make(map[int64]*gen.Qualifier), refBuilderMap: make(map[int64]*ReferenceBuilder)}
+	return &QualifiersBuilder{qualifiers: make(map[int64]*qualifierWithPosition), refBuilderMap: make(map[int64]*ReferenceBuilder)}
 }
 
 // AddQualifier creates a new Qualifier with the specified properties and adds it to the builder.
@@ -86,7 +92,7 @@ func NewQualifiersBuilder() *QualifiersBuilder {
 //	builder := NewQualifiersBuilder()
 //	builder.AddQualifier(1, "ConceptQualifier", "ExpressionSemantic", "xs:string", "example value")
 //	builder.AddQualifier(2, "ValueQualifier", "ExpressionLogic", "xs:boolean", "true")
-func (b *QualifiersBuilder) AddQualifier(qualifierDbID int64, kind string, qType string, valueType string, value string) (*QualifiersBuilder, error) {
+func (b *QualifiersBuilder) AddQualifier(qualifierDbID int64, kind string, qType string, valueType string, value string, position int) (*QualifiersBuilder, error) {
 	_, exists := b.qualifiers[qualifierDbID]
 	if !exists {
 		ValueType, err := gen.NewDataTypeDefXsdFromValue(valueType)
@@ -94,10 +100,13 @@ func (b *QualifiersBuilder) AddQualifier(qualifierDbID int64, kind string, qType
 			fmt.Println(err)
 			return nil, fmt.Errorf("error parsing ValueType for Qualifier '%d' to Go Struct. See console for details", qualifierDbID)
 		}
-		b.qualifiers[qualifierDbID] = &gen.Qualifier{
-			Type:      qType,
-			ValueType: ValueType,
-			Value:     value,
+		b.qualifiers[qualifierDbID] = &qualifierWithPosition{
+			qualifier: &gen.Qualifier{
+				Type:      qType,
+				ValueType: ValueType,
+				Value:     value,
+			},
+			position: position,
 		}
 
 		if kind != "" {
@@ -106,11 +115,12 @@ func (b *QualifiersBuilder) AddQualifier(qualifierDbID int64, kind string, qType
 				fmt.Println(err)
 				return nil, fmt.Errorf("error parsing Qualifier Kind to Go Struct for Qualifier '%d'. See console for details", qualifierDbID)
 			}
-			b.qualifiers[qualifierDbID].Kind = Kind
+			b.qualifiers[qualifierDbID].qualifier.Kind = Kind
 		}
 	} else {
 		fmt.Printf("[Warning] qualifier with id '%d' already exists - skipping.", qualifierDbID)
 	}
+
 	return b, nil
 }
 
@@ -144,7 +154,7 @@ func (b *QualifiersBuilder) AddSemanticID(qualifierDbID int64, semanticIDRows js
 		return nil, err
 	}
 
-	qualifier.SemanticID = semanticID
+	qualifier.qualifier.SemanticID = semanticID
 
 	return b, nil
 }
@@ -181,7 +191,7 @@ func (b *QualifiersBuilder) AddValueID(qualifierDbID int64, valueIDRows json.Raw
 		return nil, err
 	}
 
-	qualifier.ValueID = valueID
+	qualifier.qualifier.ValueID = valueID
 	return b, nil
 }
 
@@ -233,7 +243,7 @@ func (b *QualifiersBuilder) AddSupplementalSemanticIDs(qualifierDbID int64, supp
 		suppl = append(suppl, *el)
 	}
 
-	qualifier.SupplementalSemanticIds = suppl
+	qualifier.qualifier.SupplementalSemanticIds = suppl
 
 	return b, nil
 }
@@ -258,8 +268,12 @@ func (b *QualifiersBuilder) createExactlyOneReference(qualifierDbID int64, refRo
 		}
 	}
 
-	if len(refs) != 1 {
+	if len(refs) > 1 {
 		return nil, fmt.Errorf("expected exactly one or no %s for Qualifier '%d' but got %d", typeOfReference, qualifierDbID, len(refs))
+	}
+
+	if len(refs) == 0 {
+		return nil, nil
 	}
 
 	return refs[0], nil
@@ -300,14 +314,23 @@ func (b *QualifiersBuilder) createExactlyOneReference(qualifierDbID int64, refRo
 //
 //	// Now 'qualifiers' contains all qualifiers with complete reference hierarchies
 func (b *QualifiersBuilder) Build() []gen.Qualifier {
-
 	for _, builder := range b.refBuilderMap {
 		builder.BuildNestedStructure()
 	}
 
-	qualifiers := make([]gen.Qualifier, 0, len(b.qualifiers))
-	for _, qualifier := range b.qualifiers {
-		qualifiers = append(qualifiers, *qualifier)
+	qualifierList := make([]*qualifierWithPosition, 0, len(b.qualifiers))
+	for _, qwp := range b.qualifiers {
+		qualifierList = append(qualifierList, qwp)
+	}
+
+	// Sort by position
+	sort.Slice(qualifierList, func(i, j int) bool {
+		return qualifierList[i].position < qualifierList[j].position
+	})
+
+	qualifiers := make([]gen.Qualifier, 0, len(qualifierList))
+	for _, item := range qualifierList {
+		qualifiers = append(qualifiers, *item.qualifier)
 	}
 
 	return qualifiers

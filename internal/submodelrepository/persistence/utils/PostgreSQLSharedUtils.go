@@ -50,7 +50,7 @@ import (
 // Returns:
 //   - sql.NullInt64: Database ID of the created extension
 //   - error: An error if the insertion fails or if semantic ID creation fails
-func CreateExtension(tx *sql.Tx, extension gen.Extension) (sql.NullInt64, error) {
+func CreateExtension(tx *sql.Tx, extension gen.Extension, position int) (sql.NullInt64, error) {
 	var extensionDbID sql.NullInt64
 	var semanticIDRefDbID sql.NullInt64
 
@@ -94,9 +94,9 @@ func CreateExtension(tx *sql.Tx, extension gen.Extension) (sql.NullInt64, error)
 
 	err := tx.QueryRow(`
 	INSERT INTO
-	extension (name, value_type, value_text, value_num, value_bool, value_time, value_datetime, semantic_id)
-	VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-	RETURNING id`, extension.Name, valueType, valueText, valueNum, valueBool, valueTime, valueDatetime, semanticIDRefDbID).Scan(&extensionDbID)
+	extension (name, position, value_type, value_text, value_num, value_bool, value_time, value_datetime, semantic_id)
+	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+	RETURNING id`, extension.Name, position, valueType, valueText, valueNum, valueBool, valueTime, valueDatetime, semanticIDRefDbID).Scan(&extensionDbID)
 
 	if err != nil {
 		fmt.Println(err)
@@ -156,7 +156,7 @@ func CreateExtension(tx *sql.Tx, extension gen.Extension) (sql.NullInt64, error)
 // Returns:
 //   - sql.NullInt64: Database ID of the created qualifier
 //   - error: An error if the insertion fails or if reference creation fails
-func CreateQualifier(tx *sql.Tx, qualifier gen.Qualifier) (sql.NullInt64, error) {
+func CreateQualifier(tx *sql.Tx, qualifier gen.Qualifier, position int) (sql.NullInt64, error) {
 	var qualifierDbID sql.NullInt64
 	var valueIDRefDbID sql.NullInt64
 	var semanticIDRefDbID sql.NullInt64
@@ -210,9 +210,9 @@ func CreateQualifier(tx *sql.Tx, qualifier gen.Qualifier) (sql.NullInt64, error)
 
 	err := tx.QueryRow(`
 	INSERT INTO
-	qualifier (kind, type, value_type, value_text, value_num, value_bool, value_time, value_datetime, value_id, semantic_id)
-	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-	RETURNING id`, kind, qualifier.Type, qualifier.ValueType, valueText, valueNum, valueBool, valueTime, valueDatetime, valueIDRefDbID, semanticIDRefDbID).Scan(&qualifierDbID)
+	qualifier (kind, position, type, value_type, value_text, value_num, value_bool, value_time, value_datetime, value_id, semantic_id)
+	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+	RETURNING id`, kind, position, qualifier.Type, qualifier.ValueType, valueText, valueNum, valueBool, valueTime, valueDatetime, valueIDRefDbID, semanticIDRefDbID).Scan(&qualifierDbID)
 
 	if err != nil {
 		fmt.Println(err)
@@ -253,7 +253,7 @@ func CreateQualifier(tx *sql.Tx, qualifier gen.Qualifier) (sql.NullInt64, error)
 // Returns:
 //   - sql.NullInt64: Database ID of the created embedded data specification
 //   - error: An error if the insertion fails, if the content type is unsupported, or if IEC 61360 insertion fails
-func CreateEmbeddedDataSpecification(tx *sql.Tx, embeddedDataSpecification gen.EmbeddedDataSpecification) (sql.NullInt64, error) {
+func CreateEmbeddedDataSpecification(tx *sql.Tx, embeddedDataSpecification gen.EmbeddedDataSpecification, position int) (sql.NullInt64, error) {
 	var embeddedDataSpecificationContentDbID sql.NullInt64
 	var embeddedDataSpecificationDbID sql.NullInt64
 	err := tx.QueryRow(`INSERT INTO data_specification_content DEFAULT VALUES RETURNING id`).Scan(&embeddedDataSpecificationContentDbID)
@@ -271,7 +271,7 @@ func CreateEmbeddedDataSpecification(tx *sql.Tx, embeddedDataSpecification gen.E
 	}
 	// Check if embeddedDataSpecificationContent is of type DataSpecificationIec61360
 	if ds, ok := embeddedDataSpecification.DataSpecificationContent.(*gen.DataSpecificationIec61360); ok {
-		err = insertDataSpecificationIec61360(tx, ds, embeddedDataSpecificationContentDbID)
+		err = insertDataSpecificationIec61360(tx, ds, embeddedDataSpecificationContentDbID, position)
 		if err != nil {
 			return sql.NullInt64{}, err
 		}
@@ -282,7 +282,7 @@ func CreateEmbeddedDataSpecification(tx *sql.Tx, embeddedDataSpecification gen.E
 	return embeddedDataSpecificationDbID, nil
 }
 
-func insertDataSpecificationIec61360(tx *sql.Tx, ds *gen.DataSpecificationIec61360, embeddedDataSpecificationContentDbID sql.NullInt64) error {
+func insertDataSpecificationIec61360(tx *sql.Tx, ds *gen.DataSpecificationIec61360, embeddedDataSpecificationContentDbID sql.NullInt64, position int) error {
 	var preferredNameConverted []gen.LangStringText
 	var shortNameConverted []gen.LangStringText
 	var definitionConverted []gen.LangStringText
@@ -361,8 +361,8 @@ func insertDataSpecificationIec61360(tx *sql.Tx, ds *gen.DataSpecificationIec613
 	}
 
 	// INSERT
-	err = tx.QueryRow("INSERT INTO data_specification_iec61360(id, preferred_name_id, short_name_id, unit, unit_id, source_of_definition, symbol, data_type, definition_id, value_format, value_list_id, level_type_id, value) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING id",
-		embeddedDataSpecificationContentDbID, preferredNameID, shortNameID, unit, unitIDDbID, sourceOfDefinition, symbol, dataType, definitionID, valueFormat, valueList, levelTypeID, value).Scan(&iec61360contentDbID)
+	err = tx.QueryRow("INSERT INTO data_specification_iec61360(id, position, preferred_name_id, short_name_id, unit, unit_id, source_of_definition, symbol, data_type, definition_id, value_format, value_list_id, level_type_id, value) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING id",
+		embeddedDataSpecificationContentDbID, position, preferredNameID, shortNameID, unit, unitIDDbID, sourceOfDefinition, symbol, dataType, definitionID, valueFormat, valueList, levelTypeID, value).Scan(&iec61360contentDbID)
 	if err != nil {
 		return err
 	}
@@ -446,8 +446,8 @@ func CreateAdministrativeInformation(tx *sql.Tx, adminInfo *gen.AdministrativeIn
 		adminInfoID = sql.NullInt64{Int64: int64(id), Valid: true}
 
 		if len(adminInfo.EmbeddedDataSpecifications) > 0 {
-			for _, eds := range adminInfo.EmbeddedDataSpecifications {
-				edsID, err := CreateEmbeddedDataSpecification(tx, eds)
+			for i, eds := range adminInfo.EmbeddedDataSpecifications {
+				edsID, err := CreateEmbeddedDataSpecification(tx, eds, i)
 				if err != nil {
 					return sql.NullInt64{}, err
 				}

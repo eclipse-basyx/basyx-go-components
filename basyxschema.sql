@@ -187,7 +187,7 @@ CREATE TABLE IF NOT EXISTS administrative_information (
   id                BIGSERIAL PRIMARY KEY,
   version           VARCHAR(4),
   revision          VARCHAR(4),
-  creator           BIGSERIAL REFERENCES reference(id),
+  creator           BIGINT REFERENCES reference(id),
   templateId        VARCHAR(2048)
 );
 
@@ -235,6 +235,7 @@ CREATE INDEX IF NOT EXISTS ix_lt_id ON level_type(id);
 
 CREATE TABLE IF NOT EXISTS data_specification_iec61360 (
   id                BIGINT REFERENCES data_specification_content(id) ON DELETE CASCADE PRIMARY KEY,
+  position          INTEGER,
   preferred_name_id BIGINT REFERENCES lang_string_text_type_reference(id) ON DELETE CASCADE NOT NULL,
   short_name_id     BIGINT REFERENCES lang_string_text_type_reference(id) ON DELETE CASCADE,
   unit              TEXT,
@@ -249,6 +250,7 @@ CREATE TABLE IF NOT EXISTS data_specification_iec61360 (
   value VARCHAR(2048)
 );
 
+CREATE INDEX IF NOT EXISTS ix_ds_dataspeciec61360_position ON data_specification_iec61360(position);
 CREATE INDEX IF NOT EXISTS ix_ds_dataspec_content ON data_specification(data_specification_content);
 CREATE INDEX IF NOT EXISTS ix_ds_dataspec_reference ON data_specification(data_specification);
 
@@ -312,6 +314,7 @@ CREATE TABLE IF NOT EXISTS extension (
   id          BIGSERIAL PRIMARY KEY,
   semantic_id BIGINT REFERENCES reference(id) ON DELETE CASCADE,
   name       varchar(128) NOT NULL,
+  position   INTEGER,
   value_type    data_type_def_xsd,
   value_text    TEXT,
   value_num     NUMERIC,
@@ -321,6 +324,7 @@ CREATE TABLE IF NOT EXISTS extension (
 );
 
 CREATE INDEX IF NOT EXISTS ix_ext_id ON extension(id);
+CREATE INDEX IF NOT EXISTS ix_ext_position ON extension(position);
 
 CREATE TABLE IF NOT EXISTS submodel_extension (
   id BIGSERIAL PRIMARY KEY,
@@ -354,16 +358,6 @@ CREATE TABLE IF NOT EXISTS extension_refers_to (
 CREATE INDEX IF NOT EXISTS ix_extref_id ON extension_refers_to(id);
 CREATE INDEX IF NOT EXISTS ix_extref_eid ON extension_refers_to(extension_id);
 CREATE INDEX IF NOT EXISTS ix_extref_reference_id ON extension_refers_to(reference_id);
-
-CREATE TABLE IF NOT EXISTS submodel_semantic_key (
-  submodel_id TEXT NOT NULL REFERENCES submodel(id) ON DELETE CASCADE,
-  position    INTEGER NOT NULL,
-  key_type    TEXT NOT NULL,
-  key_value   TEXT NOT NULL,
-  PRIMARY KEY (submodel_id, position)
-);
-CREATE INDEX IF NOT EXISTS ix_smsem_key     ON submodel_semantic_key(key_type, key_value);
-CREATE INDEX IF NOT EXISTS ix_smsem_val_trgm ON submodel_semantic_key USING GIN (key_value gin_trgm_ops);
 
 CREATE TABLE IF NOT EXISTS submodel_element (
   id             BIGSERIAL PRIMARY KEY,
@@ -551,6 +545,7 @@ CREATE TABLE IF NOT EXISTS capability_element (
 -- Qualifier (on any SME)
 CREATE TABLE IF NOT EXISTS qualifier (
   id                BIGSERIAL PRIMARY KEY,
+  position          INTEGER NOT NULL,
   kind              qualifier_kind,
   type              TEXT NOT NULL,
   value_type        data_type_def_xsd NOT NULL,
@@ -573,9 +568,9 @@ CREATE TABLE IF NOT EXISTS submodel_element_qualifier (
 );
 
 CREATE TABLE IF NOT EXISTS submodel_qualifier (
+  id BIGSERIAL PRIMARY KEY,
   submodel_id  VARCHAR(2048) NOT NULL REFERENCES submodel(id) ON DELETE CASCADE,
-  qualifier_id BIGINT NOT NULL REFERENCES qualifier(id) ON DELETE CASCADE,
-  PRIMARY KEY (submodel_id, qualifier_id)
+  qualifier_id BIGINT NOT NULL REFERENCES qualifier(id) ON DELETE CASCADE
 );
 
 CREATE INDEX IF NOT EXISTS ix_smq_submodel_id ON submodel_qualifier(submodel_id);

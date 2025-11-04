@@ -30,6 +30,7 @@ package builder
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
 
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
@@ -43,8 +44,13 @@ import (
 // of ReferenceBuilders to construct the hierarchical reference trees associated
 // with each extension.
 type ExtensionsBuilder struct {
-	extensions    map[int64]*gen.Extension    // Maps database IDs to extension objects
-	refBuilderMap map[int64]*ReferenceBuilder // Maps reference database IDs to their builders
+	extensions    map[int64]*extensionWithPosition // Maps database IDs to extension objects with position
+	refBuilderMap map[int64]*ReferenceBuilder      // Maps reference database IDs to their builders
+}
+
+type extensionWithPosition struct {
+	extension *gen.Extension
+	position  int
 }
 
 // NewExtensionsBuilder creates a new ExtensionsBuilder instance with initialized maps
@@ -58,7 +64,7 @@ type ExtensionsBuilder struct {
 //	builder := NewExtensionsBuilder()
 //	builder.AddExtension(1, "CustomProperty", "xs:string", "customValue")
 func NewExtensionsBuilder() *ExtensionsBuilder {
-	return &ExtensionsBuilder{extensions: make(map[int64]*gen.Extension), refBuilderMap: make(map[int64]*ReferenceBuilder)}
+	return &ExtensionsBuilder{extensions: make(map[int64]*extensionWithPosition), refBuilderMap: make(map[int64]*ReferenceBuilder)}
 }
 
 // AddExtension creates a new Extension with the specified properties and adds it to the builder.
@@ -84,12 +90,15 @@ func NewExtensionsBuilder() *ExtensionsBuilder {
 //	builder := NewExtensionsBuilder()
 //	builder.AddExtension(1, "CustomProperty", "xs:string", "customValue")
 //	builder.AddExtension(2, "IsActive", "xs:boolean", "true")
-func (b *ExtensionsBuilder) AddExtension(extensionDbID int64, name string, valueType string, value string) (*ExtensionsBuilder, error) {
+func (b *ExtensionsBuilder) AddExtension(extensionDbID int64, name string, valueType string, value string, position int) (*ExtensionsBuilder, error) {
 	_, exists := b.extensions[extensionDbID]
 	if !exists {
-		b.extensions[extensionDbID] = &gen.Extension{
-			Name:  name,
-			Value: value,
+		b.extensions[extensionDbID] = &extensionWithPosition{
+			extension: &gen.Extension{
+				Name:  name,
+				Value: value,
+			},
+			position: position,
 		}
 		if valueType != "" {
 			ValueType, err := gen.NewDataTypeDefXsdFromValue(valueType)
@@ -97,7 +106,7 @@ func (b *ExtensionsBuilder) AddExtension(extensionDbID int64, name string, value
 				fmt.Println(err)
 				return nil, fmt.Errorf("error parsing ValueType for Extension '%d' to Go Struct. See console for details", extensionDbID)
 			}
-			b.extensions[extensionDbID].ValueType = ValueType
+			b.extensions[extensionDbID].extension.ValueType = ValueType
 		}
 	} else {
 		fmt.Printf("[Warning] Extension with id '%d' already exists - skipping.", extensionDbID)
@@ -124,7 +133,7 @@ func (b *ExtensionsBuilder) AddExtension(extensionDbID int64, name string, value
 //
 //	builder.AddSemanticID(1, semanticIdJSON, referredSemanticIdJSON)
 func (b *ExtensionsBuilder) AddSemanticID(extensionDbID int64, semanticIDRows json.RawMessage, semanticIDReferredSemanticIDRows json.RawMessage) (*ExtensionsBuilder, error) {
-	extension := b.extensions[extensionDbID]
+	extensionWrapper := b.extensions[extensionDbID]
 
 	semanticID, err := b.createExactlyOneReference(extensionDbID, semanticIDRows, semanticIDReferredSemanticIDRows, "SemanticID")
 
@@ -132,7 +141,7 @@ func (b *ExtensionsBuilder) AddSemanticID(extensionDbID int64, semanticIDRows js
 		return nil, err
 	}
 
-	extension.SemanticID = semanticID
+	extensionWrapper.extension.SemanticID = semanticID
 
 	return b, nil
 }
@@ -159,7 +168,7 @@ func (b *ExtensionsBuilder) AddSemanticID(extensionDbID int64, semanticIDRows js
 //
 //	builder.AddSupplementalSemanticIDs(1, supplementalSemanticIdsJSON, referredSemanticIdsJSON)
 func (b *ExtensionsBuilder) AddSupplementalSemanticIDs(extensionDbID int64, supplementalSemanticIDsRows json.RawMessage, supplementalSemanticIDsReferredSemanticIDRows json.RawMessage) (*ExtensionsBuilder, error) {
-	extension, exists := b.extensions[extensionDbID]
+	extensionWrapper, exists := b.extensions[extensionDbID]
 
 	if !exists {
 		return nil, fmt.Errorf("tried to add SupplementalSemanticIds to Extension '%d' before creating the Extension itself", extensionDbID)
@@ -183,7 +192,7 @@ func (b *ExtensionsBuilder) AddSupplementalSemanticIDs(extensionDbID int64, supp
 		suppl = append(suppl, *el)
 	}
 
-	extension.SupplementalSemanticIds = suppl
+	extensionWrapper.extension.SupplementalSemanticIds = suppl
 
 	return b, nil
 }
@@ -209,7 +218,7 @@ func (b *ExtensionsBuilder) AddSupplementalSemanticIDs(extensionDbID int64, supp
 //
 //	builder.AddRefersTo(1, refersToJSON, referredReferencesJSON)
 func (b *ExtensionsBuilder) AddRefersTo(extensionDbID int64, refersToRows json.RawMessage, refersToReferredRows json.RawMessage) (*ExtensionsBuilder, error) {
-	extension, exists := b.extensions[extensionDbID]
+	extensionWrapper, exists := b.extensions[extensionDbID]
 
 	if !exists {
 		return nil, fmt.Errorf("tried to add RefersTo to Extension '%d' before creating the Extension itself", extensionDbID)
@@ -233,7 +242,7 @@ func (b *ExtensionsBuilder) AddRefersTo(extensionDbID int64, refersToRows json.R
 		suppl = append(suppl, *el)
 	}
 
-	extension.RefersTo = suppl
+	extensionWrapper.extension.RefersTo = suppl
 
 	return b, nil
 }
@@ -257,8 +266,12 @@ func (b *ExtensionsBuilder) createExactlyOneReference(extensionDbID int64, refRo
 		}
 	}
 
-	if len(refs) != 1 {
+	if len(refs) > 1 {
 		return nil, fmt.Errorf("expected exactly one or no %s for Extension '%d' but got %d", typeOfReference, extensionDbID, len(refs))
+	}
+
+	if len(refs) == 0 {
+		return nil, nil
 	}
 
 	return refs[0], nil
@@ -284,14 +297,23 @@ func (b *ExtensionsBuilder) createExactlyOneReference(extensionDbID int64, refRo
 //	builder.AddSemanticID(1, semanticIdJSON, referredJSON)
 //	extensions := builder.Build()
 func (b *ExtensionsBuilder) Build() []gen.Extension {
-
 	for _, builder := range b.refBuilderMap {
 		builder.BuildNestedStructure()
 	}
 
-	extensions := make([]gen.Extension, 0, len(b.extensions))
-	for _, extension := range b.extensions {
-		extensions = append(extensions, *extension)
+	extensionList := make([]*extensionWithPosition, 0, len(b.extensions))
+	for _, ewp := range b.extensions {
+		extensionList = append(extensionList, ewp)
+	}
+
+	// Sort by position
+	sort.Slice(extensionList, func(i, j int) bool {
+		return extensionList[i].position < extensionList[j].position
+	})
+
+	extensions := make([]gen.Extension, 0, len(extensionList))
+	for _, item := range extensionList {
+		extensions = append(extensions, *item.extension)
 	}
 
 	return extensions

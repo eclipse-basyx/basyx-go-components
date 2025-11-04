@@ -49,7 +49,7 @@ import (
 //   - Second dataset: Referred references subquery (nested references + keys).
 func GetReferenceQueries(dialect goqu.DialectWrapper, referenceIDCondition any) (*goqu.SelectDataset, *goqu.SelectDataset) {
 	refSubquery := dialect.From(goqu.T("reference").As("r")).
-		Select(goqu.L("jsonb_agg(DISTINCT jsonb_build_object('reference_id', r.id, 'reference_type', r.type, 'key_id', rk.id, 'key_type', rk.type, 'key_value', rk.value))")).
+		Select(goqu.L("jsonb_agg(jsonb_build_object('reference_id', r.id, 'reference_type', r.type, 'key_id', rk.id, 'key_type', rk.type, 'key_value', rk.value) ORDER BY rk.position)")).
 		LeftJoin(
 			goqu.T("reference_key").As("rk"),
 			goqu.On(goqu.I("rk.reference_id").Eq(goqu.I("r.id"))),
@@ -57,7 +57,7 @@ func GetReferenceQueries(dialect goqu.DialectWrapper, referenceIDCondition any) 
 		Where(goqu.I("r.id").Eq(referenceIDCondition))
 
 	refReferredSubquery := dialect.From(goqu.T("reference").As("ref")).
-		Select(goqu.L("jsonb_agg(DISTINCT jsonb_build_object('reference_id', ref.id, 'reference_type', ref.type, 'parentReference', ref.parentreference, 'rootReference', ref.rootreference, 'key_id', rk.id, 'key_type', rk.type, 'key_value', rk.value))")).
+		Select(goqu.L("jsonb_agg(jsonb_build_object('reference_id', ref.id, 'reference_type', ref.type, 'parentReference', ref.parentreference, 'rootReference', ref.rootreference, 'key_id', rk.id, 'key_type', rk.type, 'key_value', rk.value) ORDER BY rk.position)")).
 		LeftJoin(
 			goqu.T("reference_key").As("rk"),
 			goqu.On(goqu.I("rk.reference_id").Eq(goqu.I("ref.id"))),
@@ -91,7 +91,7 @@ func GetReferenceQueries(dialect goqu.DialectWrapper, referenceIDCondition any) 
 //   - Second dataset: Referred supplemental semantic IDs subquery (nested references + keys + root ID).
 func GetSupplementalSemanticIDQueries(dialect goqu.DialectWrapper, joinTable exp.IdentifierExpression, entityIDColumn string, referenceIDColumn string, entityIDCondition exp.IdentifierExpression) (*goqu.SelectDataset, *goqu.SelectDataset) {
 	supplementalSemanticIDsSubquery := dialect.From(joinTable.As("jt")).
-		Select(goqu.L("jsonb_agg(DISTINCT jsonb_build_object('reference_id', ref.id, 'reference_type', ref.type, 'key_id', rk.id, 'key_type', rk.type, 'key_value', rk.value))")).
+		Select(goqu.L("jsonb_agg(jsonb_build_object('reference_id', ref.id, 'reference_type', ref.type, 'key_id', rk.id, 'key_type', rk.type, 'key_value', rk.value) ORDER BY rk.position)")).
 		LeftJoin(
 			goqu.T("reference").As("ref"),
 			goqu.On(goqu.I("ref.id").Eq(goqu.I("jt."+referenceIDColumn))),
@@ -104,7 +104,7 @@ func GetSupplementalSemanticIDQueries(dialect goqu.DialectWrapper, joinTable exp
 
 	// Build supplemental semantic ids referred subquery
 	supplementalSemanticIDsReferredSubquery := dialect.From(joinTable.As("jt")).
-		Select(goqu.L("jsonb_agg(DISTINCT jsonb_build_object('supplemental_root_reference_id', jt."+referenceIDColumn+", 'reference_id', ref.id, 'reference_type', ref.type, 'parentReference', ref.parentreference, 'rootReference', ref.rootreference, 'key_id', rk.id, 'key_type', rk.type, 'key_value', rk.value))")).
+		Select(goqu.L("jsonb_agg(jsonb_build_object('supplemental_root_reference_id', jt."+referenceIDColumn+", 'reference_id', ref.id, 'reference_type', ref.type, 'parentReference', ref.parentreference, 'rootReference', ref.rootreference, 'key_id', rk.id, 'key_type', rk.type, 'key_value', rk.value) ORDER BY rk.position)")).
 		LeftJoin(
 			goqu.T("reference").As("ref"),
 			goqu.On(goqu.I("ref.rootreference").Eq(goqu.I("jt."+referenceIDColumn))),

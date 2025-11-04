@@ -372,8 +372,8 @@ func (p *PostgreSQLSubmodelDatabase) CreateSubmodel(sm gen.Submodel) error {
 	}
 
 	if sm.EmbeddedDataSpecifications != nil {
-		for _, eds := range sm.EmbeddedDataSpecifications {
-			edsDbID, err := persistenceutils.CreateEmbeddedDataSpecification(tx, eds)
+		for i, eds := range sm.EmbeddedDataSpecifications {
+			edsDbID, err := persistenceutils.CreateEmbeddedDataSpecification(tx, eds, i)
 			if err != nil {
 				return err
 			}
@@ -394,8 +394,8 @@ func (p *PostgreSQLSubmodelDatabase) CreateSubmodel(sm gen.Submodel) error {
 	}
 
 	if len(sm.Qualifier) > 0 {
-		for _, qualifier := range sm.Qualifier {
-			qualifierID, err := persistenceutils.CreateQualifier(tx, qualifier)
+		for i, qualifier := range sm.Qualifier {
+			qualifierID, err := persistenceutils.CreateQualifier(tx, qualifier, i)
 			if err != nil {
 				return err
 			}
@@ -408,8 +408,8 @@ func (p *PostgreSQLSubmodelDatabase) CreateSubmodel(sm gen.Submodel) error {
 	}
 
 	if len(sm.Extension) > 0 {
-		for _, extension := range sm.Extension {
-			qualifierID, err := persistenceutils.CreateExtension(tx, extension)
+		for i, extension := range sm.Extension {
+			qualifierID, err := persistenceutils.CreateExtension(tx, extension, i)
 			if err != nil {
 				return err
 			}

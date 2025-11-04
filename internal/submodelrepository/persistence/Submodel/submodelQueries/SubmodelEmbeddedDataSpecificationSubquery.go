@@ -280,6 +280,7 @@ func GetEmbeddedDataSpecificationSubqueries(dialect goqu.DialectWrapper, joinTab
 		goqu.V("eds_id"), goqu.I("jt.embedded_data_specification_id"),
 		goqu.V("iec_id"), goqu.I("iec.id"),
 		goqu.V("unit"), goqu.I("iec.unit"),
+		goqu.V("position"), goqu.I("iec.position"),
 		goqu.V("source_of_definition"), goqu.I("iec.source_of_definition"),
 		goqu.V("symbol"), goqu.I("iec.symbol"),
 		goqu.V("data_type"), goqu.I("iec.data_type"),

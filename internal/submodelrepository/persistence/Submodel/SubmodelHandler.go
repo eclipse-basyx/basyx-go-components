@@ -221,7 +221,7 @@ func getSubmodels(db *sql.DB, submodelIDFilter string, limit int64, cursor strin
 				return nil, "", err
 			}
 			for _, qualifierRow := range qualifierRows {
-				_, err = builder.AddQualifier(qualifierRow.DbID, qualifierRow.Kind, qualifierRow.Type, qualifierRow.ValueType, qualifierRow.Value)
+				_, err = builder.AddQualifier(qualifierRow.DbID, qualifierRow.Kind, qualifierRow.Type, qualifierRow.ValueType, qualifierRow.Value, qualifierRow.Position)
 				if err != nil {
 					return nil, "", err
 				}
@@ -252,7 +252,7 @@ func getSubmodels(db *sql.DB, submodelIDFilter string, limit int64, cursor strin
 				return nil, "", err
 			}
 			for _, extensionRow := range extensionRows {
-				_, err = builder.AddExtension(extensionRow.DbID, extensionRow.Name, extensionRow.ValueType, extensionRow.Value)
+				_, err = builder.AddExtension(extensionRow.DbID, extensionRow.Name, extensionRow.ValueType, extensionRow.Value, extensionRow.Position)
 				if err != nil {
 					return nil, "", err
 				}

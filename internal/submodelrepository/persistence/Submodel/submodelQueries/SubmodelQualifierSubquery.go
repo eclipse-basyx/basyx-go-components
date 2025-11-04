@@ -223,6 +223,7 @@ func GetQualifierSubqueryForSubmodel(dialect goqu.DialectWrapper) *goqu.SelectDa
 		goqu.V("dbId"), goqu.I("smq.qualifier_id"),
 		goqu.V("kind"), goqu.I("q.kind"),
 		goqu.V("type"), goqu.I("q.type"),
+		goqu.V("position"), goqu.I("q.position"),
 		goqu.V("value_type"), goqu.I("q.value_type"),
 		goqu.V("value"), goqu.COALESCE(
 			goqu.I("q.value_text"),

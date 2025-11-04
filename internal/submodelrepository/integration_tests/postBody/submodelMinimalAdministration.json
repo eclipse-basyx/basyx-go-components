@@ -1,0 +1,9 @@
+{
+    "id": "MarcusThisIsAMinimalAdministrationSubmodel",
+    "idShort": "Identification",
+    "modelType": "Submodel",
+    "kind": "Instance",
+    "administration": {
+        "version": "1"
+    }
+}

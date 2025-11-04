@@ -143,5 +143,19 @@
     "endpoint": "http://localhost:5004/submodels/TWFyY3VzVGhpc0lzQUhlYXZ5U3VibW9kZWw",
     "shouldMatch": "expected/expectedGetHeavySubmodel.json",
     "expectedStatus": 200
+    },
+    {
+    "context": "Post minimal Administration Submodel",
+    "method": "POST",
+    "endpoint": "http://localhost:5004/submodels",
+    "data": "postBody/submodelMinimalAdministration.json",
+    "expectedStatus": 201
+    },
+    {
+    "context": "Get minimal Administration Submodel",
+    "method": "GET",
+    "endpoint": "http://localhost:5004/submodels/TWFyY3VzVGhpc0lzQU1pbmltYWxBZG1pbmlzdHJhdGlvblN1Ym1vZGVs",
+    "shouldMatch": "postBody/submodelMinimalAdministration.json",
+    "expectedStatus": 200
     }
 ]

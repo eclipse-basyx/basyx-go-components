@@ -173,6 +173,8 @@ type EdsContentIec61360Row struct {
 	IecID int64 `json:"iec_id"`
 	// Unit specifies the unit of measurement for the data element
 	Unit string `json:"unit"`
+	// Position specifies the position of the IEC 61360 entry
+	Position int `json:"position"`
 	// SourceOfDefinition identifies where the definition comes from
 	SourceOfDefinition string `json:"source_of_definition"`
 	// Symbol is the symbolic representation of the data element
@@ -229,6 +231,8 @@ type QualifierRow struct {
 	Kind string `json:"kind"`
 	// Type is the type/name of the qualifier
 	Type string `json:"type"`
+	// Position specifies the position of the qualifier
+	Position int `json:"position"`
 	// ValueType specifies the data type of the qualifier value
 	ValueType string `json:"value_type"`
 	// Value is the actual value of the qualifier
@@ -256,6 +260,8 @@ type QualifierRow struct {
 type ExtensionRow struct {
 	// DbID is the unique identifier of the extension in the database
 	DbID int64 `json:"dbId"`
+	// Position specifies the position of the extension
+	Position int `json:"position"`
 	// Name is the name of the extension
 	Name string `json:"name"`
 	// ValueType specifies the data type of the extension value

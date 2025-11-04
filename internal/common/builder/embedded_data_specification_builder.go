@@ -30,6 +30,7 @@ package builder
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
 
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
@@ -49,7 +50,12 @@ import (
 //  3. Call BuildContentsIec61360() to process IEC 61360 content
 //  4. Call Build() to extract the final slice of specifications
 type EmbeddedDataSpecificationsBuilder struct {
-	dataSpecifications map[int64]gen.EmbeddedDataSpecification
+	dataSpecifications map[int64]*embeddedDataSpecificationWithPosition
+}
+
+type embeddedDataSpecificationWithPosition struct {
+	spec     gen.EmbeddedDataSpecification
+	position int
 }
 
 // NewEmbeddedDataSpecificationsBuilder creates a new instance of EmbeddedDataSpecificationsBuilder
@@ -73,7 +79,7 @@ type EmbeddedDataSpecificationsBuilder struct {
 //	specs := builder.Build()
 func NewEmbeddedDataSpecificationsBuilder() *EmbeddedDataSpecificationsBuilder {
 	return &EmbeddedDataSpecificationsBuilder{
-		dataSpecifications: make(map[int64]gen.EmbeddedDataSpecification),
+		dataSpecifications: make(map[int64]*embeddedDataSpecificationWithPosition),
 	}
 }
 
@@ -190,7 +196,7 @@ func (edsb *EmbeddedDataSpecificationsBuilder) BuildContentsIec61360(iecRows jso
 	createEdsForEachDbEntryContent(iecContents, edsb)
 
 	for _, data := range iecContents {
-		eds := edsb.dataSpecifications[data.EdsID]
+		edsWrapper := edsb.dataSpecifications[data.EdsID]
 
 		preferredName, err := ParseLangStringPreferredNameTypeIec61360(data.PreferredName)
 		if err != nil {
@@ -235,7 +241,7 @@ func (edsb *EmbeddedDataSpecificationsBuilder) BuildContentsIec61360(iecRows jso
 			}
 		}
 
-		eds.DataSpecificationContent = &gen.DataSpecificationIec61360{
+		edsWrapper.spec.DataSpecificationContent = &gen.DataSpecificationIec61360{
 			ModelType:          "DataSpecificationIec61360",
 			Unit:               data.Unit,
 			SourceOfDefinition: data.SourceOfDefinition,
@@ -252,21 +258,24 @@ func (edsb *EmbeddedDataSpecificationsBuilder) BuildContentsIec61360(iecRows jso
 			if err != nil {
 				return fmt.Errorf("error converting DataType for iec content %d", data.IecID)
 			}
-			eds.DataSpecificationContent.(*gen.DataSpecificationIec61360).DataType = dataType
+			edsWrapper.spec.DataSpecificationContent.(*gen.DataSpecificationIec61360).DataType = dataType
 		}
 
 		if len(unitID) > 1 {
 			return fmt.Errorf("expected exactly one or no UnitID reference for iec content %d, got %d", data.IecID, len(unitID))
 		} else if len(unitID) == 1 {
-			eds.DataSpecificationContent.(*gen.DataSpecificationIec61360).UnitID = unitID[0]
+			edsWrapper.spec.DataSpecificationContent.(*gen.DataSpecificationIec61360).UnitID = unitID[0]
 		}
 
-		edsb.dataSpecifications[data.EdsID] = eds
+		// Store the position from the data
+		edsWrapper.position = data.Position
+		edsb.dataSpecifications[data.EdsID] = edsWrapper
+
 		if valueList != nil {
-			edsb.dataSpecifications[data.EdsID].DataSpecificationContent.SetValueList(valueList)
+			edsb.dataSpecifications[data.EdsID].spec.DataSpecificationContent.SetValueList(valueList)
 		}
 		if levelType != nil {
-			edsb.dataSpecifications[data.EdsID].DataSpecificationContent.SetLevelType(levelType)
+			edsb.dataSpecifications[data.EdsID].spec.DataSpecificationContent.SetLevelType(levelType)
 		}
 	}
 
@@ -342,9 +351,19 @@ func (*EmbeddedDataSpecificationsBuilder) addValueListIfSet(data EdsContentIec61
 //	builder.BuildContentsIec61360(iecData)
 //	specs := builder.Build()
 func (edsb *EmbeddedDataSpecificationsBuilder) Build() []gen.EmbeddedDataSpecification {
-	result := make([]gen.EmbeddedDataSpecification, 0, len(edsb.dataSpecifications))
-	for _, spec := range edsb.dataSpecifications {
-		result = append(result, spec)
+	specList := make([]*embeddedDataSpecificationWithPosition, 0, len(edsb.dataSpecifications))
+	for _, specWrapper := range edsb.dataSpecifications {
+		specList = append(specList, specWrapper)
+	}
+
+	// Sort by position
+	sort.Slice(specList, func(i, j int) bool {
+		return specList[i].position < specList[j].position
+	})
+
+	result := make([]gen.EmbeddedDataSpecification, 0, len(specList))
+	for _, specWrapper := range specList {
+		result = append(result, specWrapper.spec)
 	}
 	return result
 }
@@ -352,7 +371,10 @@ func (edsb *EmbeddedDataSpecificationsBuilder) Build() []gen.EmbeddedDataSpecifi
 func createEdsForEachDbEntryContent(edsRefRow []EdsContentIec61360Row, edsb *EmbeddedDataSpecificationsBuilder) {
 	for _, edsRef := range edsRefRow {
 		if _, exists := edsb.dataSpecifications[edsRef.EdsID]; !exists {
-			edsb.dataSpecifications[edsRef.EdsID] = gen.EmbeddedDataSpecification{}
+			edsb.dataSpecifications[edsRef.EdsID] = &embeddedDataSpecificationWithPosition{
+				spec:     gen.EmbeddedDataSpecification{},
+				position: 0, // Will be set in BuildContentsIec61360
+			}
 		}
 	}
 }
@@ -360,7 +382,10 @@ func createEdsForEachDbEntryContent(edsRefRow []EdsContentIec61360Row, edsb *Emb
 func createEdsForEachDbEntryReferenceRow(edsRefRow []EdsReferenceRow, edsb *EmbeddedDataSpecificationsBuilder) {
 	for _, edsRef := range edsRefRow {
 		if _, exists := edsb.dataSpecifications[edsRef.EdsID]; !exists {
-			edsb.dataSpecifications[edsRef.EdsID] = gen.EmbeddedDataSpecification{}
+			edsb.dataSpecifications[edsRef.EdsID] = &embeddedDataSpecificationWithPosition{
+				spec:     gen.EmbeddedDataSpecification{},
+				position: 0, // Will be set when content is added
+			}
 		}
 	}
 }
@@ -387,9 +412,9 @@ func (edsb *EmbeddedDataSpecificationsBuilder) parseEdsReferencesForEachEds(edsI
 	for edsID, refs := range edsIDReferenceRowMapping {
 		refsParsed := ParseReferencesFromRows(refs, referenceBuilders)
 		if len(refsParsed) == 1 {
-			edsSpec := edsb.dataSpecifications[edsID]
-			edsSpec.DataSpecification = refsParsed[0]
-			edsb.dataSpecifications[edsID] = edsSpec
+			edsSpecWrapper := edsb.dataSpecifications[edsID]
+			edsSpecWrapper.spec.DataSpecification = refsParsed[0]
+			edsb.dataSpecifications[edsID] = edsSpecWrapper
 		} else {
 			return fmt.Errorf("expected exactly one reference for edsID %d, got %d", edsID, len(refsParsed))
 		}
