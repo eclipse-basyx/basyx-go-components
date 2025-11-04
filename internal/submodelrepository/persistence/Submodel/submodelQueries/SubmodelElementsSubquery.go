@@ -29,6 +29,7 @@ package submodelsubqueries
 
 import (
 	"github.com/doug-martin/goqu/v9"
+	"github.com/doug-martin/goqu/v9/exp"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/queries"
 )
 
@@ -37,6 +38,41 @@ func GetSubmodelElementsSubquery(dialect goqu.DialectWrapper, rootSubmodelElemen
 	semanticIDSubquery, semanticIDReferredSubquery := queries.GetReferenceQueries(dialect, goqu.I("tlsme.semantic_id"))
 	supplSemanticIDSubquery, supplSemanticIDReferredSubquery := queries.GetSupplementalSemanticIDQueries(dialect, goqu.T("submodel_element_supplemental_semantic_id"), "submodel_element_id", "reference_id", goqu.I("tlsme.id"))
 
+	valueByType := getValueSubquery(dialect)
+
+	obj := goqu.Func("jsonb_build_object",
+		goqu.V("db_id"), goqu.I("tlsme.id"),
+		goqu.V("parent_id"), goqu.I("tlsme.parent_sme_id"),
+		goqu.V("id_short"), goqu.I("tlsme.id_short"),
+		goqu.V("category"), goqu.I("tlsme.category"),
+		goqu.V("model_type"), goqu.I("tlsme.model_type"),
+		goqu.V("position"), goqu.I("tlsme.position"),
+		goqu.V("value"), valueByType,
+		goqu.V("semanticId"), semanticIDSubquery,
+		goqu.V("semanticIdReferred"), semanticIDReferredSubquery,
+		goqu.V("supplSemanticId"), supplSemanticIDSubquery,
+		goqu.V("supplSemanticIdReferred"), supplSemanticIDReferredSubquery,
+	)
+
+	smeSubquery := dialect.From(goqu.T("submodel_element").As("tlsme")).
+		Select(goqu.Func("jsonb_agg", obj))
+
+	if rootSubmodelElements {
+		smeSubquery = smeSubquery.Where(
+			goqu.I("tlsme.submodel_id").Eq(goqu.I("s.id")),
+			goqu.I("tlsme.parent_sme_id").IsNull(),
+		)
+	} else {
+		smeSubquery = smeSubquery.Where(
+			goqu.I("tlsme.submodel_id").Eq(goqu.I("s.id")),
+			goqu.I("tlsme.parent_sme_id").IsNotNull(),
+		)
+	}
+
+	return smeSubquery
+}
+
+func getValueSubquery(dialect goqu.DialectWrapper) exp.CaseExpression {
 	valueByType := goqu.Case().
 		// When(
 		// 	goqu.I("tlsme.model_type").Eq("AnnotatedRelationshipElement"),
@@ -95,36 +131,7 @@ func GetSubmodelElementsSubquery(dialect goqu.DialectWrapper, rootSubmodelElemen
 		// 	getRelationshipElementSubquery(dialect),
 		// ).
 		Else(goqu.V(nil))
-
-	obj := goqu.Func("jsonb_build_object",
-		goqu.V("db_id"), goqu.I("tlsme.id"),
-		goqu.V("parent_id"), goqu.I("tlsme.parent_sme_id"),
-		goqu.V("id_short"), goqu.I("tlsme.id_short"),
-		goqu.V("category"), goqu.I("tlsme.category"),
-		goqu.V("model_type"), goqu.I("tlsme.model_type"),
-		goqu.V("value"), valueByType,
-		goqu.V("semanticId"), semanticIDSubquery,
-		goqu.V("semanticIdReferred"), semanticIDReferredSubquery,
-		goqu.V("supplSemanticId"), supplSemanticIDSubquery,
-		goqu.V("supplSemanticIdReferred"), supplSemanticIDReferredSubquery,
-	)
-
-	smeSubquery := dialect.From(goqu.T("submodel_element").As("tlsme")).
-		Select(goqu.Func("jsonb_agg", obj))
-
-	if rootSubmodelElements {
-		smeSubquery = smeSubquery.Where(
-			goqu.I("tlsme.submodel_id").Eq(goqu.I("s.id")),
-			goqu.I("tlsme.parent_sme_id").IsNull(),
-		)
-	} else {
-		smeSubquery = smeSubquery.Where(
-			goqu.I("tlsme.submodel_id").Eq(goqu.I("s.id")),
-			goqu.I("tlsme.parent_sme_id").IsNotNull(),
-		)
-	}
-
-	return smeSubquery
+	return valueByType
 }
 
 // func getAnnotatedRelationshipElementSubquery(dialect goqu.DialectWrapper) *goqu.SelectDataset {
