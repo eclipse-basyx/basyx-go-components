@@ -1,3 +1,4 @@
+// Package main implements the Discovery Service server.
 package main
 
 import (
@@ -10,7 +11,7 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	api "github.com/eclipse-basyx/basyx-go-components/internal/discoveryservice/api"
-	persistence_postgresql "github.com/eclipse-basyx/basyx-go-components/internal/discoveryservice/persistence"
+	persistencepostgresql "github.com/eclipse-basyx/basyx-go-components/internal/discoveryservice/persistence"
 	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/discoveryapi"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/cors"
@@ -53,7 +54,7 @@ func runServer(ctx context.Context, configPath string) error {
 	log.Printf("🗄️  Connecting to Postgres with DSN: postgres://%s:****@%s:%d/%s?sslmode=disable",
 		cfg.Postgres.User, cfg.Postgres.Host, cfg.Postgres.Port, cfg.Postgres.DBName)
 
-	smDatabase, err := persistence_postgresql.NewPostgreSQLDiscoveryBackend(
+	smDatabase, err := persistencepostgresql.NewPostgreSQLDiscoveryBackend(
 		dsn,
 		cfg.Postgres.MaxOpenConnections,
 	)

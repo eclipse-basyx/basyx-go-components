@@ -9,16 +9,21 @@
 
 package model
 
+// HasKind type of HasKind
 type HasKind struct {
 	Kind ModellingKind `json:"kind,omitempty"`
 }
 
 // AssertHasKindRequired checks if the required fields are not zero-ed
+//
+//nolint:all
 func AssertHasKindRequired(obj HasKind) error {
 	return nil
 }
 
 // AssertHasKindConstraints checks if the values respects the defined constraints
+//
+//nolint:all
 func AssertHasKindConstraints(obj HasKind) error {
 	return nil
 }

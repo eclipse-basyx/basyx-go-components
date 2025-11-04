@@ -9,6 +9,7 @@
 
 package model
 
+// BasicEventElementValue type of EventElementValue
 type BasicEventElementValue struct {
 	Observed ReferenceValue `json:"observed"`
 }

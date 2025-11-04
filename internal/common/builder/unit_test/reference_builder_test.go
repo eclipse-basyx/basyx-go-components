@@ -34,9 +34,9 @@ import (
 
 func TestNewReferenceBuilder(t *testing.T) {
 	refType := "ExternalReference"
-	dbId := int64(123)
+	dbID := int64(123)
 
-	ref, rb := builder.NewReferenceBuilder(refType, dbId)
+	ref, rb := builder.NewReferenceBuilder(refType, dbID)
 
 	if ref == nil {
 		t.Fatal("Expected non-nil reference")
@@ -107,7 +107,7 @@ func TestCreateKey_DuplicatePrevention(t *testing.T) {
 	}
 }
 
-func TestSetReferredSemanticId(t *testing.T) {
+func TestSetReferredSemanticID(t *testing.T) {
 	ref, rb := builder.NewReferenceBuilder("ExternalReference", 100)
 
 	// Create a referred semantic ID
@@ -118,33 +118,33 @@ func TestSetReferredSemanticId(t *testing.T) {
 		},
 	}
 
-	rb.SetReferredSemanticId(referredRef)
+	rb.SetReferredSemanticID(referredRef)
 
-	if ref.ReferredSemanticId == nil {
-		t.Fatal("Expected ReferredSemanticId to be set")
+	if ref.ReferredSemanticID == nil {
+		t.Fatal("Expected ReferredSemanticID to be set")
 	}
 
-	if string(ref.ReferredSemanticId.Type) != "ModelReference" {
-		t.Errorf("Expected ReferredSemanticId type 'ModelReference', got '%s'", ref.ReferredSemanticId.Type)
+	if string(ref.ReferredSemanticID.Type) != "ModelReference" {
+		t.Errorf("Expected ReferredSemanticID type 'ModelReference', got '%s'", ref.ReferredSemanticID.Type)
 	}
 
-	if len(ref.ReferredSemanticId.Keys) != 1 {
-		t.Fatalf("Expected 1 key in ReferredSemanticId, got %d", len(ref.ReferredSemanticId.Keys))
+	if len(ref.ReferredSemanticID.Keys) != 1 {
+		t.Fatalf("Expected 1 key in ReferredSemanticID, got %d", len(ref.ReferredSemanticID.Keys))
 	}
 }
 
-func TestCreateReferredSemanticId(t *testing.T) {
+func TestCreateReferredSemanticID(t *testing.T) {
 	ref, rb := builder.NewReferenceBuilder("ExternalReference", 100)
 
-	// Create a ReferredSemanticId directly under the root
-	rb.CreateReferredSemanticId(101, 100, "ModelReference")
+	// Create a ReferredSemanticID directly under the root
+	rb.CreateReferredSemanticID(101, 100, "ModelReference")
 
-	if ref.ReferredSemanticId == nil {
-		t.Fatal("Expected ReferredSemanticId to be set")
+	if ref.ReferredSemanticID == nil {
+		t.Fatal("Expected ReferredSemanticID to be set")
 	}
 
-	if string(ref.ReferredSemanticId.Type) != "ModelReference" {
-		t.Errorf("Expected ReferredSemanticId type 'ModelReference', got '%s'", ref.ReferredSemanticId.Type)
+	if string(ref.ReferredSemanticID.Type) != "ModelReference" {
+		t.Errorf("Expected ReferredSemanticID type 'ModelReference', got '%s'", ref.ReferredSemanticID.Type)
 	}
 }
 
@@ -152,23 +152,23 @@ func TestCreateReferredSemanticIdKey(t *testing.T) {
 	ref, rb := builder.NewReferenceBuilder("ExternalReference", 100)
 
 	// Create a ReferredSemanticId
-	rb.CreateReferredSemanticId(101, 100, "ModelReference")
+	rb.CreateReferredSemanticID(101, 100, "ModelReference")
 
 	// Add a key to the ReferredSemanticId
-	err := rb.CreateReferredSemanticIdKey(101, 1, "ConceptDescription", "0173-1#01-ABC123#001")
+	err := rb.CreateReferredSemanticIDKey(101, 1, "ConceptDescription", "0173-1#01-ABC123#001")
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
 	}
 
-	if ref.ReferredSemanticId == nil {
-		t.Fatal("Expected ReferredSemanticId to be set")
+	if ref.ReferredSemanticID == nil {
+		t.Fatal("Expected ReferredSemanticID to be set")
 	}
 
-	if len(ref.ReferredSemanticId.Keys) != 1 {
-		t.Fatalf("Expected 1 key in ReferredSemanticId, got %d", len(ref.ReferredSemanticId.Keys))
+	if len(ref.ReferredSemanticID.Keys) != 1 {
+		t.Fatalf("Expected 1 key in ReferredSemanticID, got %d", len(ref.ReferredSemanticID.Keys))
 	}
 
-	key := ref.ReferredSemanticId.Keys[0]
+	key := ref.ReferredSemanticID.Keys[0]
 	if string(key.Type) != "ConceptDescription" {
 		t.Errorf("Expected key type 'ConceptDescription', got '%s'", key.Type)
 	}
@@ -182,7 +182,7 @@ func TestCreateReferredSemanticIdKey_NotFound(t *testing.T) {
 	_, rb := builder.NewReferenceBuilder("ExternalReference", 100)
 
 	// Try to add a key to a non-existent ReferredSemanticId
-	err := rb.CreateReferredSemanticIdKey(999, 1, "ConceptDescription", "0173-1#01-ABC123#001")
+	err := rb.CreateReferredSemanticIDKey(999, 1, "ConceptDescription", "0173-1#01-ABC123#001")
 	if err == nil {
 		t.Error("Expected error when adding key to non-existent ReferredSemanticId")
 	}
@@ -195,27 +195,33 @@ func TestBuildNestedStructure_TwoLevels(t *testing.T) {
 	rb.CreateKey(1, "GlobalReference", "https://example.com/root")
 
 	// Create first level ReferredSemanticId
-	rb.CreateReferredSemanticId(101, 100, "ModelReference")
-	rb.CreateReferredSemanticIdKey(101, 2, "ConceptDescription", "0173-1#01-ABC123#001")
+	rb.CreateReferredSemanticID(101, 100, "ModelReference")
+	err := rb.CreateReferredSemanticIDKey(101, 2, "ConceptDescription", "0173-1#01-ABC123#001")
+	if err != nil {
+		t.Error("Error creating first level ReferredSemanticId key:", err)
+	}
 
 	// Create second level ReferredSemanticId
-	rb.CreateReferredSemanticId(102, 101, "ExternalReference")
-	rb.CreateReferredSemanticIdKey(102, 3, "GlobalReference", "https://example.com/grandparent")
+	rb.CreateReferredSemanticID(102, 101, "ExternalReference")
+	err = rb.CreateReferredSemanticIDKey(102, 3, "GlobalReference", "https://example.com/grandparent")
+	if err != nil {
+		t.Error("Error creating second level ReferredSemanticId key:", err)
+	}
 
 	// Build the nested structure
 	rb.BuildNestedStructure()
 
 	// Verify structure
-	if ref.ReferredSemanticId == nil {
-		t.Fatal("Expected ReferredSemanticId to be set at root level")
+	if ref.ReferredSemanticID == nil {
+		t.Fatal("Expected ReferredSemanticID to be set at root level")
 	}
 
-	if ref.ReferredSemanticId.ReferredSemanticId == nil {
-		t.Fatal("Expected nested ReferredSemanticId at second level")
+	if ref.ReferredSemanticID.ReferredSemanticID == nil {
+		t.Fatal("Expected nested ReferredSemanticID at second level")
 	}
 
 	// Check second level
-	secondLevel := ref.ReferredSemanticId.ReferredSemanticId
+	secondLevel := ref.ReferredSemanticID.ReferredSemanticID
 	if string(secondLevel.Type) != "ExternalReference" {
 		t.Errorf("Expected second level type 'ExternalReference', got '%s'", secondLevel.Type)
 	}
@@ -234,27 +240,39 @@ func TestBuildNestedStructure_ThreeLevels(t *testing.T) {
 
 	// Create three levels of nesting
 	rb.CreateKey(1, "GlobalReference", "https://example.com/root")
-	rb.CreateReferredSemanticId(101, 100, "ModelReference")
-	rb.CreateReferredSemanticIdKey(101, 2, "ConceptDescription", "Level1")
-	rb.CreateReferredSemanticId(102, 101, "ExternalReference")
-	rb.CreateReferredSemanticIdKey(102, 3, "GlobalReference", "Level2")
-	rb.CreateReferredSemanticId(103, 102, "ModelReference")
-	rb.CreateReferredSemanticIdKey(103, 4, "ConceptDescription", "Level3")
+	rb.CreateReferredSemanticID(101, 100, "ModelReference")
+	err := rb.CreateReferredSemanticIDKey(101, 2, "ConceptDescription", "Level1")
+	if err != nil {
+		t.Error("Error creating first level ReferredSemanticId key:", err)
+	}
+	rb.CreateReferredSemanticID(102, 101, "ExternalReference")
+	if err != nil {
+		t.Error("Error creating second level ReferredSemanticId:", err)
+	}
+	err = rb.CreateReferredSemanticIDKey(102, 3, "GlobalReference", "Level2")
+	if err != nil {
+		t.Error("Error creating second level ReferredSemanticId key:", err)
+	}
+	rb.CreateReferredSemanticID(103, 102, "ModelReference")
+	err = rb.CreateReferredSemanticIDKey(103, 4, "ConceptDescription", "Level3")
+	if err != nil {
+		t.Error("Error creating third level ReferredSemanticId key:", err)
+	}
 
 	rb.BuildNestedStructure()
 
 	// Navigate through three levels
-	level1 := ref.ReferredSemanticId
+	level1 := ref.ReferredSemanticID
 	if level1 == nil {
 		t.Fatal("Expected level 1 ReferredSemanticId")
 	}
 
-	level2 := level1.ReferredSemanticId
+	level2 := level1.ReferredSemanticID
 	if level2 == nil {
 		t.Fatal("Expected level 2 ReferredSemanticId")
 	}
 
-	level3 := level2.ReferredSemanticId
+	level3 := level2.ReferredSemanticID
 	if level3 == nil {
 		t.Fatal("Expected level 3 ReferredSemanticId")
 	}
@@ -263,8 +281,8 @@ func TestBuildNestedStructure_ThreeLevels(t *testing.T) {
 		t.Errorf("Expected level 3 key value 'Level3', got '%s'", level3.Keys[0].Value)
 	}
 
-	if level3.ReferredSemanticId != nil {
-		t.Error("Expected no ReferredSemanticId at level 3")
+	if level3.ReferredSemanticID != nil {
+		t.Error("Expected no ReferredSemanticID at level 3")
 	}
 }
 
@@ -277,8 +295,8 @@ func TestBuildNestedStructure_EmptyBuilder(t *testing.T) {
 	// Should not panic
 	rb.BuildNestedStructure()
 
-	if ref.ReferredSemanticId != nil {
-		t.Error("Expected no ReferredSemanticId for simple reference")
+	if ref.ReferredSemanticID != nil {
+		t.Error("Expected no ReferredSemanticID for simple reference")
 	}
 }
 
@@ -292,13 +310,22 @@ func TestCompleteReferenceHierarchy(t *testing.T) {
 	rb.CreateKey(3, "Property", "Temperature")
 
 	// First level ReferredSemanticId
-	rb.CreateReferredSemanticId(201, 100, "ModelReference")
-	rb.CreateReferredSemanticIdKey(201, 10, "ConceptDescription", "0173-1#01-ABC123#001")
-	rb.CreateReferredSemanticIdKey(201, 11, "GlobalReference", "https://eclass.com/concept/123")
+	rb.CreateReferredSemanticID(201, 100, "ModelReference")
+	err := rb.CreateReferredSemanticIDKey(201, 10, "ConceptDescription", "0173-1#01-ABC123#001")
+	if err != nil {
+		t.Error("Error creating first level ReferredSemanticId key:", err)
+	}
+	err = rb.CreateReferredSemanticIDKey(201, 11, "GlobalReference", "https://eclass.com/concept/123")
+	if err != nil {
+		t.Error("Error creating first level ReferredSemanticId key:", err)
+	}
 
 	// Second level ReferredSemanticId
-	rb.CreateReferredSemanticId(202, 201, "ExternalReference")
-	rb.CreateReferredSemanticIdKey(202, 20, "GlobalReference", "https://example.com/parent-concept")
+	rb.CreateReferredSemanticID(202, 201, "ExternalReference")
+	err = rb.CreateReferredSemanticIDKey(202, 20, "GlobalReference", "https://example.com/parent-concept")
+	if err != nil {
+		t.Error("Error creating second level ReferredSemanticId key:", err)
+	}
 
 	rb.BuildNestedStructure()
 
@@ -308,7 +335,7 @@ func TestCompleteReferenceHierarchy(t *testing.T) {
 	}
 
 	// Verify first level
-	level1 := ref.ReferredSemanticId
+	level1 := ref.ReferredSemanticID
 	if level1 == nil {
 		t.Fatal("Expected level 1 ReferredSemanticId")
 	}
@@ -318,7 +345,7 @@ func TestCompleteReferenceHierarchy(t *testing.T) {
 	}
 
 	// Verify second level
-	level2 := level1.ReferredSemanticId
+	level2 := level1.ReferredSemanticID
 	if level2 == nil {
 		t.Fatal("Expected level 2 ReferredSemanticId")
 	}

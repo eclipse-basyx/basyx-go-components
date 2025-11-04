@@ -13,9 +13,12 @@ import (
 	"fmt"
 )
 
+//nolint:all
 type ModelType string
 
 // List of ModelType
+//
+//nolint:all
 const (
 	MODELTYPE_ANNOTATED_RELATIONSHIP_ELEMENT ModelType = "AnnotatedRelationshipElement"
 	MODELTYPE_ASSET_ADMINISTRATION_SHELL     ModelType = "AssetAdministrationShell"
@@ -99,11 +102,15 @@ func NewModelTypeFromValue(v string) (ModelType, error) {
 }
 
 // AssertModelTypeRequired checks if the required fields are not zero-ed
+//
+//nolint:all
 func AssertModelTypeRequired(obj ModelType) error {
 	return nil
 }
 
 // AssertModelTypeConstraints checks if the values respects the defined constraints
+//
+//nolint:all
 func AssertModelTypeConstraints(obj ModelType) error {
 	return nil
 }

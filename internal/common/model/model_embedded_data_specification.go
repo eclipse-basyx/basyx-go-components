@@ -16,6 +16,8 @@ import (
 )
 
 // ModelTypeError indicates an unsupported model type was encountered
+//
+//nolint:all
 type ModelTypeError struct {
 	Expected string
 	Got      string
@@ -25,6 +27,7 @@ func (e *ModelTypeError) Error() string {
 	return fmt.Sprintf("unsupported model type: expected %s, got %s", e.Expected, e.Got)
 }
 
+// EmbeddedDataSpecification type of EmbeddedDataSpecification
 type EmbeddedDataSpecification struct {
 	DataSpecificationContent DataSpecificationContent `json:"dataSpecificationContent"`
 
@@ -32,8 +35,7 @@ type EmbeddedDataSpecification struct {
 }
 
 // UnmarshalJSON implements custom unmarshaling for EmbeddedDataSpecification
-func (eds *EmbeddedDataSpecification) UnmarshalJSON(data []byte) error {
-	type Alias EmbeddedDataSpecification
+func (e *EmbeddedDataSpecification) UnmarshalJSON(data []byte) error {
 	aux := &struct {
 		DataSpecificationContent json.RawMessage `json:"dataSpecificationContent"`
 		DataSpecification        *Reference      `json:"dataSpecification"`
@@ -61,12 +63,12 @@ func (eds *EmbeddedDataSpecification) UnmarshalJSON(data []byte) error {
 		if err := json.Unmarshal(aux.DataSpecificationContent, &iec61360Content); err != nil {
 			return err // Return error instead of silently failing
 		}
-		eds.DataSpecificationContent = &iec61360Content
+		e.DataSpecificationContent = &iec61360Content
 	default:
 		return &ModelTypeError{Expected: "DataSpecificationIec61360", Got: modelType}
 	}
 
-	eds.DataSpecification = aux.DataSpecification
+	e.DataSpecification = aux.DataSpecification
 	return nil
 }
 

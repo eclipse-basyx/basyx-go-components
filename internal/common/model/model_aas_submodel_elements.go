@@ -13,9 +13,12 @@ import (
 	"fmt"
 )
 
+//nolint:all
 type AasSubmodelElements string
 
 // List of AasSubmodelElements
+//
+//nolint:all
 const (
 	AASSUBMODELELEMENTS_ANNOTATED_RELATIONSHIP_ELEMENT AasSubmodelElements = "AnnotatedRelationshipElement"
 	AASSUBMODELELEMENTS_BASIC_EVENT_ELEMENT            AasSubmodelElements = "BasicEventElement"
@@ -96,11 +99,15 @@ func NewAasSubmodelElementsFromValue(v string) (AasSubmodelElements, error) {
 }
 
 // AssertAasSubmodelElementsRequired checks if the required fields are not zero-ed
+//
+//nolint:all
 func AssertAasSubmodelElementsRequired(obj AasSubmodelElements) error {
 	return nil
 }
 
 // AssertAasSubmodelElementsConstraints checks if the values respects the defined constraints
+//
+//nolint:all
 func AssertAasSubmodelElementsConstraints(obj AasSubmodelElements) error {
 	return nil
 }

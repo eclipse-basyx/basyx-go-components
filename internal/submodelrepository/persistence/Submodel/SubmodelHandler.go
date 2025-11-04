@@ -23,8 +23,9 @@
 * SPDX-License-Identifier: MIT
 ******************************************************************************/
 
+// Package submodelpersistence provides functions to persist and retrieve Submodel entities from a PostgreSQL database.
 // Author: Jannik Fried ( Fraunhofer IESE ), Aaron Zielstorff ( Fraunhofer IESE )
-package submodel_persistence
+package submodelpersistence
 
 import (
 	"database/sql"
@@ -32,26 +33,54 @@ import (
 	"fmt"
 	"time"
 
+	// nolint:all
 	_ "github.com/doug-martin/goqu/v9/dialect/postgres"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	builders "github.com/eclipse-basyx/basyx-go-components/internal/common/builder"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
-	submodel_query "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/Submodel/SubmodelQuery"
+	submodel_query "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/Submodel/submodelQueries"
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 )
 
-func GetSubmodelById(db *sql.DB, submodelIdFilter string) (*gen.Submodel, error) {
-	submodels, _, err := getSubmodels(db, submodelIdFilter, 1, "", nil)
+// GetSubmodelByID retrieves a single submodel by its ID from the database with full nested structures.
+//
+// This function is a wrapper around getSubmodels that fetches a single submodel
+// based on the provided submodel ID. It returns an error if the submodel is not found.
+//
+// Parameters:
+//   - db: Database connection to execute the query against
+//   - submodelIdFilter: The ID of the submodel to retrieve
+//
+// Returns:
+//   - *gen.Submodel: Fully populated Submodel object with all nested structures
+//   - error: An error if database query fails, scanning fails, data parsing fails, or submodel is not found
+func GetSubmodelByID(db *sql.DB, submodelIDFilter string) (*gen.Submodel, error) {
+	submodels, _, err := getSubmodels(db, submodelIDFilter, 1, "", nil)
 	if err != nil {
 		return nil, err
 	}
 	if len(submodels) == 0 {
-		return nil, common.NewErrNotFound(submodelIdFilter)
+		return nil, common.NewErrNotFound(submodelIDFilter)
 	}
 	return submodels[0], nil
 }
 
+// GetAllSubmodels retrieves all submodels from the database with full nested structures.
+//
+// This function is a wrapper around getSubmodels that fetches all submodels without
+// any specific ID filter. It supports pagination and optional AAS QueryLanguage filtering.
+//
+// Parameters:
+//   - db: Database connection to execute the query against
+//   - limit: Maximum number of results to return (0 means no limit)
+//   - cursor: The submodel ID to start pagination from (empty string means start from beginning)
+//   - query: Optional AAS QueryLanguage filtering
+//
+// Returns:
+//   - []*gen.Submodel: Slice of fully populated Submodel objects with all nested structures
+//   - string: Next cursor for pagination (empty string if no more pages)
+//   - error: An error if database query fails, scanning fails, or data parsing fails
 func GetAllSubmodels(db *sql.DB, limit int64, cursor string, query *grammar.QueryWrapper) ([]*gen.Submodel, string, error) {
 	return getSubmodels(db, "", limit, cursor, query)
 }
@@ -86,26 +115,26 @@ func GetAllSubmodels(db *sql.DB, limit int64, cursor string, query *grammar.Quer
 // Note: The function builds nested reference structures in two phases:
 //  1. Initial parsing during row iteration
 //  2. Final structure building after all rows are processed
-func getSubmodels(db *sql.DB, submodelIdFilter string, limit int64, cursor string, query *grammar.QueryWrapper) ([]*gen.Submodel, string, error) {
+func getSubmodels(db *sql.DB, submodelIDFilter string, limit int64, cursor string, query *grammar.QueryWrapper) ([]*gen.Submodel, string, error) {
 	var result []*gen.Submodel
 	referenceBuilderRefs := make(map[int64]*builders.ReferenceBuilder)
 	start := time.Now().Local().UnixMilli()
-	rows, err := getSubmodelDataFromDbWithJSONQuery(db, submodelIdFilter, limit, cursor, query)
+	rows, err := getSubmodelDataFromDbWithJSONQuery(db, submodelIDFilter, limit, cursor, query)
 	end := time.Now().Local().UnixMilli()
 	fmt.Printf("Total Query Only time: %d milliseconds\n", end-start)
 	if err != nil {
 		return nil, "", fmt.Errorf("error getting submodel data from DB: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var count int64
 	for rows.Next() {
 		count++
 		var row builders.SubmodelRow
 		if err := rows.Scan(
-			&row.Id, &row.IdShort, &row.Category, &row.Kind,
+			&row.ID, &row.IDShort, &row.Category, &row.Kind,
 			&row.DisplayNames, &row.Descriptions,
-			&row.SemanticId, &row.ReferredSemanticIds,
-			&row.SupplementalSemanticIds, &row.SupplementalReferredSemIds,
+			&row.SemanticID, &row.ReferredSemanticIDs,
+			&row.SupplementalSemanticIDs, &row.SupplementalReferredSemIDs,
 			&row.DataSpecReference, &row.DataSpecReferenceReferred,
 			&row.DataSpecIEC61360, &row.Qualifiers, &row.Extensions, &row.Administration, &row.RootSubmodelElements, &row.ChildSubmodelElements, &row.TotalSubmodels,
 		); err != nil {
@@ -118,8 +147,8 @@ func getSubmodels(db *sql.DB, submodelIdFilter string, limit int64, cursor strin
 
 		submodel := &gen.Submodel{
 			ModelType: "Submodel",
-			Id:        row.Id,
-			IdShort:   row.IdShort,
+			ID:        row.ID,
+			IdShort:   row.IDShort,
 			Category:  row.Category,
 			Kind:      gen.ModellingKind(row.Kind),
 		}
@@ -127,26 +156,32 @@ func getSubmodels(db *sql.DB, submodelIdFilter string, limit int64, cursor strin
 			result = append(result, submodel)
 			break
 		}
-		var semanticId []*gen.Reference
-		if isArrayNotEmpty(row.SemanticId) {
-			semanticId, err = builders.ParseReferences(row.SemanticId, referenceBuilderRefs)
+		var semanticID []*gen.Reference
+		if isArrayNotEmpty(row.SemanticID) {
+			semanticID, err = builders.ParseReferences(row.SemanticID, referenceBuilderRefs)
 			if err != nil {
 				return nil, "", err
 			}
-			if hasSemanticId(semanticId) {
-				submodel.SemanticId = semanticId[0]
-				builders.ParseReferredReferences(row.ReferredSemanticIds, referenceBuilderRefs)
+			if hasSemanticID(semanticID) {
+				submodel.SemanticID = semanticID[0]
+				err = builders.ParseReferredReferences(row.ReferredSemanticIDs, referenceBuilderRefs)
+				if err != nil {
+					return nil, "", err
+				}
 			}
 		}
 
-		if isArrayNotEmpty(row.SupplementalSemanticIds) {
-			supplementalSemanticIds, err := builders.ParseReferences(row.SupplementalSemanticIds, referenceBuilderRefs)
+		if isArrayNotEmpty(row.SupplementalSemanticIDs) {
+			supplementalSemanticIDs, err := builders.ParseReferences(row.SupplementalSemanticIDs, referenceBuilderRefs)
 			if err != nil {
 				return nil, "", err
 			}
-			if moreThanZeroReferences(supplementalSemanticIds) {
-				submodel.SupplementalSemanticIds = supplementalSemanticIds
-				builders.ParseReferredReferences(row.SupplementalReferredSemIds, referenceBuilderRefs)
+			if moreThanZeroReferences(supplementalSemanticIDs) {
+				submodel.SupplementalSemanticIds = supplementalSemanticIDs
+				err = builders.ParseReferredReferences(row.SupplementalReferredSemIDs, referenceBuilderRefs)
+				if err != nil {
+					return nil, "", err
+				}
 			}
 		}
 
@@ -186,13 +221,25 @@ func getSubmodels(db *sql.DB, submodelIdFilter string, limit int64, cursor strin
 				return nil, "", err
 			}
 			for _, qualifierRow := range qualifierRows {
-				builder.AddQualifier(qualifierRow.DbId, qualifierRow.Kind, qualifierRow.Type, qualifierRow.ValueType, qualifierRow.Value)
+				_, err = builder.AddQualifier(qualifierRow.DbID, qualifierRow.Kind, qualifierRow.Type, qualifierRow.ValueType, qualifierRow.Value, qualifierRow.Position)
+				if err != nil {
+					return nil, "", err
+				}
 
-				builder.AddSemanticId(qualifierRow.DbId, qualifierRow.SemanticId, qualifierRow.SemanticIdReferredReferences)
+				_, err = builder.AddSemanticID(qualifierRow.DbID, qualifierRow.SemanticID, qualifierRow.SemanticIDReferredReferences)
+				if err != nil {
+					return nil, "", err
+				}
 
-				builder.AddValueId(qualifierRow.DbId, qualifierRow.ValueId, qualifierRow.ValueIdReferredReferences)
+				_, err = builder.AddValueID(qualifierRow.DbID, qualifierRow.ValueID, qualifierRow.ValueIDReferredReferences)
+				if err != nil {
+					return nil, "", err
+				}
 
-				builder.AddSupplementalSemanticIds(qualifierRow.DbId, qualifierRow.SupplementalSemanticIds, qualifierRow.SupplementalSemanticIdsReferredReferences)
+				_, err = builder.AddSupplementalSemanticIDs(qualifierRow.DbID, qualifierRow.SupplementalSemanticIDs, qualifierRow.SupplementalSemanticIDsReferredReferences)
+				if err != nil {
+					return nil, "", err
+				}
 			}
 			submodel.Qualifier = builder.Build()
 		}
@@ -205,13 +252,25 @@ func getSubmodels(db *sql.DB, submodelIdFilter string, limit int64, cursor strin
 				return nil, "", err
 			}
 			for _, extensionRow := range extensionRows {
-				builder.AddExtension(extensionRow.DbId, extensionRow.Name, extensionRow.ValueType, extensionRow.Value)
+				_, err = builder.AddExtension(extensionRow.DbID, extensionRow.Name, extensionRow.ValueType, extensionRow.Value, extensionRow.Position)
+				if err != nil {
+					return nil, "", err
+				}
 
-				builder.AddSemanticId(extensionRow.DbId, extensionRow.SemanticId, extensionRow.SemanticIdReferredReferences)
+				_, err = builder.AddSemanticID(extensionRow.DbID, extensionRow.SemanticID, extensionRow.SemanticIDReferredReferences)
+				if err != nil {
+					return nil, "", err
+				}
 
-				builder.AddRefersTo(extensionRow.DbId, extensionRow.RefersTo, extensionRow.RefersToReferredReferences)
+				_, err = builder.AddRefersTo(extensionRow.DbID, extensionRow.RefersTo, extensionRow.RefersToReferredReferences)
+				if err != nil {
+					return nil, "", err
+				}
 
-				builder.AddSupplementalSemanticIds(extensionRow.DbId, extensionRow.SupplementalSemanticIds, extensionRow.SupplementalSemanticIdsReferredReferences)
+				_, err = builder.AddSupplementalSemanticIDs(extensionRow.DbID, extensionRow.SupplementalSemanticIDs, extensionRow.SupplementalSemanticIDsReferredReferences)
+				if err != nil {
+					return nil, "", err
+				}
 			}
 			submodel.Extension = builder.Build()
 		}
@@ -248,7 +307,7 @@ func getSubmodels(db *sql.DB, submodelIdFilter string, limit int64, cursor strin
 	if limit > 0 && len(result) > int(limit) {
 		// We have more results than requested, so there's a next page
 		actualResults := result[:limit]
-		nextCursor = result[limit].Id // Use the ID of the next result as cursor
+		nextCursor = result[limit].ID // Use the ID of the next result as cursor
 		return actualResults, nextCursor, nil
 	}
 
@@ -316,7 +375,7 @@ func isArrayNotEmpty(data json.RawMessage) bool {
 	return len(data) > 0 && string(data) != "null"
 }
 
-// hasSemanticId validates that exactly one semantic ID reference exists.
+// hasSemanticID validates that exactly one semantic ID reference exists.
 //
 // According to the AAS specification, a submodel should have exactly one semantic ID.
 // This function checks that the parsed semantic ID data contains exactly one reference.
@@ -326,8 +385,8 @@ func isArrayNotEmpty(data json.RawMessage) bool {
 //
 // Returns:
 //   - bool: true if exactly one semantic ID reference exists, false otherwise
-func hasSemanticId(semanticIdData []*gen.Reference) bool {
-	return len(semanticIdData) == 1
+func hasSemanticID(semanticIDData []*gen.Reference) bool {
+	return len(semanticIDData) == 1
 }
 
 // moreThanZeroReferences checks if References exist.
@@ -349,13 +408,13 @@ func moreThanZeroReferences(referenceArray []*gen.Reference) bool {
 //
 // Parameters:
 //   - db: Database connection to execute the query against
-//   - submodelId: Optional filter for a specific submodel ID. Empty string retrieves all submodels.
+//   - submodelID: Optional filter for a specific submodel ID. Empty string retrieves all submodels.
 //
 // Returns:
 //   - *sql.Rows: Result set containing submodel data with JSON-aggregated nested structures
 //   - error: An error if query building or execution fails
-func getSubmodelDataFromDbWithJSONQuery(db *sql.DB, submodelId string, limit int64, cursor string, query *grammar.QueryWrapper) (*sql.Rows, error) {
-	q, err := submodel_query.GetQueryWithGoqu(submodelId, limit, cursor, query)
+func getSubmodelDataFromDbWithJSONQuery(db *sql.DB, submodelID string, limit int64, cursor string, query *grammar.QueryWrapper) (*sql.Rows, error) {
+	q, err := submodel_query.GetQueryWithGoqu(submodelID, limit, cursor, query)
 	if err != nil {
 		fmt.Printf("Error building query: %v\n", err)
 		return nil, err

@@ -23,9 +23,9 @@ import (
 // pass the data to a AssetAdministrationShellBasicDiscoveryAPIAPIServicer to perform the required actions, then write the service results to the http response.
 type AssetAdministrationShellBasicDiscoveryAPIAPIRouter interface {
 	GetAllAssetAdministrationShellIdsByAssetLink(http.ResponseWriter, *http.Request)
-	GetAllAssetLinksById(http.ResponseWriter, *http.Request)
-	PostAllAssetLinksById(http.ResponseWriter, *http.Request)
-	DeleteAllAssetLinksById(http.ResponseWriter, *http.Request)
+	GetAllAssetLinksByID(http.ResponseWriter, *http.Request)
+	PostAllAssetLinksByID(http.ResponseWriter, *http.Request)
+	DeleteAllAssetLinksByID(http.ResponseWriter, *http.Request)
 }
 
 // DescriptionAPIAPIRouter defines the required methods for binding the api requests to a responses for the DescriptionAPIAPI
@@ -42,9 +42,9 @@ type DescriptionAPIAPIRouter interface {
 type AssetAdministrationShellBasicDiscoveryAPIAPIServicer interface {
 	GetAllAssetAdministrationShellIdsByAssetLink(context.Context, []string, int32, string) (model.ImplResponse, error)
 	SearchAllAssetAdministrationShellIdsByAssetLink(ctx context.Context, limit int32, cursor string, assetLink []model.AssetLink) (model.ImplResponse, error)
-	GetAllAssetLinksById(context.Context, string) (model.ImplResponse, error)
-	PostAllAssetLinksById(context.Context, string, []model.SpecificAssetId) (model.ImplResponse, error)
-	DeleteAllAssetLinksById(context.Context, string) (model.ImplResponse, error)
+	GetAllAssetLinksByID(context.Context, string) (model.ImplResponse, error)
+	PostAllAssetLinksByID(context.Context, string, []model.SpecificAssetID) (model.ImplResponse, error)
+	DeleteAllAssetLinksByID(context.Context, string) (model.ImplResponse, error)
 }
 
 // DescriptionAPIAPIServicer defines the api actions for the DescriptionAPIAPI service

@@ -9,6 +9,7 @@
 
 package model
 
+// ReferenceParent type of ReferenceParent
 type ReferenceParent struct {
 	Type ReferenceTypes `json:"type"`
 

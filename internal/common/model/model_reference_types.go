@@ -13,9 +13,12 @@ import (
 	"fmt"
 )
 
+// ReferenceTypes Reference type of Reference
 type ReferenceTypes string
 
 // List of ReferenceTypes
+//
+//nolint:all
 const (
 	REFERENCETYPES_EXTERNAL_REFERENCE ReferenceTypes = "ExternalReference"
 	REFERENCETYPES_MODEL_REFERENCE    ReferenceTypes = "ModelReference"
@@ -51,11 +54,15 @@ func NewReferenceTypesFromValue(v string) (ReferenceTypes, error) {
 }
 
 // AssertReferenceTypesRequired checks if the required fields are not zero-ed
+//
+//nolint:all
 func AssertReferenceTypesRequired(obj ReferenceTypes) error {
 	return nil
 }
 
 // AssertReferenceTypesConstraints checks if the values respects the defined constraints
+//
+//nolint:all
 func AssertReferenceTypesConstraints(obj ReferenceTypes) error {
 	return nil
 }

@@ -9,6 +9,7 @@
 
 package model
 
+// OperationRequest type of OperationRequest
 type OperationRequest struct {
 	InoutputArguments []OperationVariable `json:"inoutputArguments,omitempty"`
 

@@ -9,11 +9,13 @@
 
 package model
 
+// File type of SubmodelElement
 type File struct {
 	Extensions []Extension `json:"extensions,omitempty"`
 
 	Category string `json:"category,omitempty" validate:"regexp=^([\\\\x09\\\\x0a\\\\x0d\\\\x20-\\\\ud7ff\\\\ue000-\\\\ufffd]|\\\\ud800[\\\\udc00-\\\\udfff]|[\\\\ud801-\\\\udbfe][\\\\udc00-\\\\udfff]|\\\\udbff[\\\\udc00-\\\\udfff])*$"`
 
+	//nolint:all
 	IdShort string `json:"idShort,omitempty"`
 
 	DisplayName []LangStringNameType `json:"displayName,omitempty"`
@@ -22,8 +24,9 @@ type File struct {
 
 	ModelType string `json:"modelType" validate:"regexp=^File$"`
 
-	SemanticId *Reference `json:"semanticId,omitempty"`
+	SemanticID *Reference `json:"semanticId,omitempty"`
 
+	//nolint:all
 	SupplementalSemanticIds []Reference `json:"supplementalSemanticIds,omitempty"`
 
 	Qualifiers []Qualifier `json:"qualifiers,omitempty"`
@@ -36,84 +39,105 @@ type File struct {
 }
 
 // Getters
+//
+//nolint:all
 func (a File) GetExtensions() []Extension {
 	return a.Extensions
 }
 
+//nolint:all
 func (a File) GetIdShort() string {
 	return a.IdShort
 }
 
+//nolint:all
 func (a File) GetCategory() string {
 	return a.Category
 }
 
+//nolint:all
 func (a File) GetDisplayName() []LangStringNameType {
 	return a.DisplayName
 }
 
+//nolint:all
 func (a File) GetDescription() []LangStringTextType {
 	return a.Description
 }
 
+//nolint:all
 func (a File) GetModelType() string {
 	return a.ModelType
 }
 
-func (a File) GetSemanticId() *Reference {
-	return a.SemanticId
+//nolint:all
+func (a File) GetSemanticID() *Reference {
+	return a.SemanticID
 }
 
+//nolint:all
 func (a File) GetSupplementalSemanticIds() []Reference {
 	return a.SupplementalSemanticIds
 }
 
+//nolint:all
 func (a File) GetQualifiers() []Qualifier {
 	return a.Qualifiers
 }
 
+//nolint:all
 func (a File) GetEmbeddedDataSpecifications() []EmbeddedDataSpecification {
 	return a.EmbeddedDataSpecifications
 }
 
 // Setters
 
+//nolint:all
 func (p *File) SetModelType(modelType string) {
 	p.ModelType = modelType
 }
 
+//nolint:all
 func (a *File) SetExtensions(v []Extension) {
 	a.Extensions = v
 }
 
+//nolint:all
 func (a *File) SetIdShort(v string) {
 	a.IdShort = v
 }
 
+//nolint:all
 func (a *File) SetCategory(v string) {
 	a.Category = v
 }
 
+//nolint:all
 func (a *File) SetDisplayName(v []LangStringNameType) {
 	a.DisplayName = v
 }
 
+//nolint:all
 func (a *File) SetDescription(v []LangStringTextType) {
 	a.Description = v
 }
 
-func (a *File) SetSemanticId(v *Reference) {
-	a.SemanticId = v
+//nolint:all
+func (a *File) SetSemanticID(v *Reference) {
+	a.SemanticID = v
 }
 
+//nolint:all
 func (a *File) SetSupplementalSemanticIds(v []Reference) {
 	a.SupplementalSemanticIds = v
 }
 
+//nolint:all
 func (a *File) SetQualifiers(v []Qualifier) {
 	a.Qualifiers = v
 }
 
+//nolint:all
 func (a *File) SetEmbeddedDataSpecifications(v []EmbeddedDataSpecification) {
 	a.EmbeddedDataSpecifications = v
 }
@@ -135,7 +159,7 @@ func AssertFileRequired(obj File) error {
 			return err
 		}
 	}
-	if err := AssertReferableAllOfIdShortRequired(obj.IdShort); err != nil {
+	if err := AssertIdShortRequired(obj.IdShort); err != nil {
 		return err
 	}
 	for _, el := range obj.DisplayName {
@@ -148,8 +172,8 @@ func AssertFileRequired(obj File) error {
 			return err
 		}
 	}
-	if obj.SemanticId != nil {
-		if err := AssertReferenceRequired(*obj.SemanticId); err != nil {
+	if obj.SemanticID != nil {
+		if err := AssertReferenceRequired(*obj.SemanticID); err != nil {
 			return err
 		}
 	}
@@ -178,7 +202,7 @@ func AssertFileConstraints(obj File) error {
 			return err
 		}
 	}
-	if err := AssertReferableAllOfIdShortConstraints(obj.IdShort); err != nil {
+	if err := AssertstringConstraints(obj.IdShort); err != nil {
 		return err
 	}
 	for _, el := range obj.DisplayName {
@@ -191,8 +215,8 @@ func AssertFileConstraints(obj File) error {
 			return err
 		}
 	}
-	if obj.SemanticId != nil {
-		if err := AssertReferenceConstraints(*obj.SemanticId); err != nil {
+	if obj.SemanticID != nil {
+		if err := AssertReferenceConstraints(*obj.SemanticID); err != nil {
 			return err
 		}
 	}

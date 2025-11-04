@@ -9,6 +9,7 @@
 
 package model
 
+// Qualifiable  type of Qualifiable
 type Qualifiable struct {
 	Qualifiers []Qualifier `json:"qualifiers,omitempty"`
 

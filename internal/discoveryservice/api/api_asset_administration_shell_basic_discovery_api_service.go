@@ -19,7 +19,7 @@ import (
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
-	persistence_postgresql "github.com/eclipse-basyx/basyx-go-components/internal/discoveryservice/persistence"
+	persistencepostgresql "github.com/eclipse-basyx/basyx-go-components/internal/discoveryservice/persistence"
 )
 
 const (
@@ -30,11 +30,11 @@ const (
 // This service should implement the business logic for every endpoint for the AssetAdministrationShellBasicDiscoveryAPIAPI API.
 // Include any external packages or services that will be required by this service.
 type AssetAdministrationShellBasicDiscoveryAPIAPIService struct {
-	disoveryBackend persistence_postgresql.PostgreSQLDiscoveryDatabase
+	disoveryBackend persistencepostgresql.PostgreSQLDiscoveryDatabase
 }
 
 // NewAssetAdministrationShellBasicDiscoveryAPIAPIService creates a default api service
-func NewAssetAdministrationShellBasicDiscoveryAPIAPIService(databaseBackend persistence_postgresql.PostgreSQLDiscoveryDatabase) *AssetAdministrationShellBasicDiscoveryAPIAPIService {
+func NewAssetAdministrationShellBasicDiscoveryAPIAPIService(databaseBackend persistencepostgresql.PostgreSQLDiscoveryDatabase) *AssetAdministrationShellBasicDiscoveryAPIAPIService {
 	return &AssetAdministrationShellBasicDiscoveryAPIAPIService{
 		disoveryBackend: databaseBackend,
 	}
@@ -93,9 +93,9 @@ func (s *AssetAdministrationShellBasicDiscoveryAPIAPIService) SearchAllAssetAdmi
 	return model.Response(http.StatusOK, res), nil
 }
 
-// GetAllAssetLinksById - Returns a list of specific asset identifiers based on an Asset Administration Shell ID to edit discoverable content.
+// GetAllAssetLinksByID - Returns a list of specific asset identifiers based on an Asset Administration Shell ID to edit discoverable content.
 // The global asset ID is returned as specific asset ID with "name" equal to "globalAssetId" (see Constraint AASd-116).
-func (s *AssetAdministrationShellBasicDiscoveryAPIAPIService) GetAllAssetLinksById(
+func (s *AssetAdministrationShellBasicDiscoveryAPIAPIService) GetAllAssetLinksByID(
 	ctx context.Context,
 	aasIdentifier string,
 ) (model.ImplResponse, error) {
@@ -128,11 +128,11 @@ func (s *AssetAdministrationShellBasicDiscoveryAPIAPIService) GetAllAssetLinksBy
 	return model.Response(http.StatusOK, links), nil
 }
 
-// PostAllAssetLinksById - Creates or replaces all asset links associated to the Asset Administration Shell.
-func (s *AssetAdministrationShellBasicDiscoveryAPIAPIService) PostAllAssetLinksById(
+// PostAllAssetLinksByID - Creates or replaces all asset links associated to the Asset Administration Shell.
+func (s *AssetAdministrationShellBasicDiscoveryAPIAPIService) PostAllAssetLinksByID(
 	ctx context.Context,
 	aasIdentifier string,
-	specificAssetId []model.SpecificAssetId,
+	specificAssetID []model.SpecificAssetID,
 ) (model.ImplResponse, error) {
 
 	decodeDiscoveryIdentifier, decodeError := common.DecodeString(aasIdentifier)
@@ -142,7 +142,7 @@ func (s *AssetAdministrationShellBasicDiscoveryAPIAPIService) PostAllAssetLinksB
 		), nil
 	}
 
-	err := s.disoveryBackend.CreateAllAssetLinks(string(decodeDiscoveryIdentifier), specificAssetId)
+	err := s.disoveryBackend.CreateAllAssetLinks(string(decodeDiscoveryIdentifier), specificAssetID)
 	if err != nil {
 		switch {
 		case common.IsErrBadRequest(err):
@@ -156,12 +156,12 @@ func (s *AssetAdministrationShellBasicDiscoveryAPIAPIService) PostAllAssetLinksB
 		}
 	}
 
-	return model.Response(http.StatusCreated, specificAssetId), nil
+	return model.Response(http.StatusCreated, specificAssetID), nil
 }
 
-// DeleteAllAssetLinksById - Deletes specified specific asset identifiers linked to an Asset Administration Shell:
+// DeleteAllAssetLinksByID - Deletes specified specific asset identifiers linked to an Asset Administration Shell:
 // discovery via these specific asset IDs shall not be supported any longer
-func (s *AssetAdministrationShellBasicDiscoveryAPIAPIService) DeleteAllAssetLinksById(
+func (s *AssetAdministrationShellBasicDiscoveryAPIAPIService) DeleteAllAssetLinksByID(
 	ctx context.Context,
 	aasIdentifier string,
 ) (model.ImplResponse, error) {

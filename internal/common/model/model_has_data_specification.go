@@ -9,6 +9,7 @@
 
 package model
 
+// HasDataSpecification type of HasDataSpecification
 type HasDataSpecification struct {
 	EmbeddedDataSpecifications []EmbeddedDataSpecification `json:"embeddedDataSpecifications,omitempty"`
 }

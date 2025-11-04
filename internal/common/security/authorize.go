@@ -22,6 +22,7 @@
 *
 * SPDX-License-Identifier: MIT
 ******************************************************************************/
+
 // Package auth provides ABAC (Attribute-Based Access Control) middleware and
 // helper utilities to enforce fine-grained authorization rules in BaSyx
 // services.
@@ -115,7 +116,11 @@ func ABACMiddleware(settings ABACSettings) func(http.Handler) http.Handler {
 					log.Printf("❌ ABAC(model): %s", reason)
 
 					resp := common.NewErrorResponse(errors.New("access denied"), http.StatusForbidden, "Middleware", "Rules", "Denied")
-					openapi.EncodeJSONResponse(resp.Body, &resp.Code, w)
+					err := openapi.EncodeJSONResponse(resp.Body, &resp.Code, w)
+					if err != nil {
+						log.Printf("❌ Failed to encode error response: %v", err)
+						http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+					}
 					return
 				}
 

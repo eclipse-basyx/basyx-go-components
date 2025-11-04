@@ -9,6 +9,7 @@
 
 package model
 
+// OperationResult type of OperationResult
 type OperationResult struct {
 	Messages []Message `json:"messages,omitempty"`
 

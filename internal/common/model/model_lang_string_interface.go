@@ -25,6 +25,7 @@
 
 package model
 
+// LangStringText interface for LangStringText
 type LangStringText interface {
 	GetLanguage() string
 	GetText() string

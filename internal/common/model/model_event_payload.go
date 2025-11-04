@@ -34,18 +34,19 @@
 
 package model
 
+// EventPayload type of EventPayload
 type EventPayload struct {
 	Source *Reference `json:"source"`
 
-	SourceSemanticId *Reference `json:"sourceSemanticId,omitempty"`
+	SourceSemanticID *Reference `json:"sourceSemanticId,omitempty"`
 
 	ObservableReference *Reference `json:"observableReference"`
 
-	ObservableSemanticId *Reference `json:"observableSemanticId,omitempty"`
+	ObservableSemanticID *Reference `json:"observableSemanticId,omitempty"`
 
 	Topic string `json:"topic,omitempty" validate:"regexp=^([\\\\x09\\\\x0a\\\\x0d\\\\x20-\\\\ud7ff\\\\ue000-\\\\ufffd]|\\\\ud800[\\\\udc00-\\\\udfff]|[\\\\ud801-\\\\udbfe][\\\\udc00-\\\\udfff]|\\\\udbff[\\\\udc00-\\\\udfff])*$"`
 
-	SubjectId *Reference `json:"subjectId,omitempty"`
+	SubjectID *Reference `json:"subjectId,omitempty"`
 
 	TimeStamp string `json:"timeStamp" validate:"regexp=^-?(([1-9][0-9][0-9][0-9]+)|(0[0-9][0-9][0-9]))-((0[1-9])|(1[0-2]))-((0[1-9])|([12][0-9])|(3[01]))T(((([01][0-9])|(2[0-3])):[0-5][0-9]:([0-5][0-9])(\\\\.[0-9]+)?)|24:00:00(\\\\.0+)?)(Z|\\\\+00:00|-00:00)$"`
 
@@ -80,13 +81,13 @@ func AssertEventPayloadRequired(obj EventPayload) error {
 			return err
 		}
 	}
-	if obj.ObservableSemanticId != nil {
-		if err := AssertReferenceRequired(*obj.ObservableSemanticId); err != nil {
+	if obj.ObservableSemanticID != nil {
+		if err := AssertReferenceRequired(*obj.ObservableSemanticID); err != nil {
 			return err
 		}
 	}
-	if obj.SubjectId != nil {
-		if err := AssertReferenceRequired(*obj.SubjectId); err != nil {
+	if obj.SubjectID != nil {
+		if err := AssertReferenceRequired(*obj.SubjectID); err != nil {
 			return err
 		}
 	}
@@ -100,8 +101,8 @@ func AssertEventPayloadConstraints(obj EventPayload) error {
 			return err
 		}
 	}
-	if obj.SourceSemanticId != nil {
-		if err := AssertReferenceConstraints(*obj.SourceSemanticId); err != nil {
+	if obj.SourceSemanticID != nil {
+		if err := AssertReferenceConstraints(*obj.SourceSemanticID); err != nil {
 			return err
 		}
 	}
@@ -110,13 +111,13 @@ func AssertEventPayloadConstraints(obj EventPayload) error {
 			return err
 		}
 	}
-	if obj.ObservableSemanticId != nil {
-		if err := AssertReferenceConstraints(*obj.ObservableSemanticId); err != nil {
+	if obj.ObservableSemanticID != nil {
+		if err := AssertReferenceConstraints(*obj.ObservableSemanticID); err != nil {
 			return err
 		}
 	}
 	if obj.Topic != "" {
-		if err := AssertReferenceConstraints(*obj.SubjectId); err != nil {
+		if err := AssertReferenceConstraints(*obj.SubjectID); err != nil {
 			return err
 		}
 	}

@@ -33,7 +33,9 @@ func loadTestConfig(filename string) ([]TestConfig, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer file.Close()
+	defer func() {
+		_ = file.Close()
+	}()
 
 	var configs []TestConfig
 	decoder := json.NewDecoder(file)
@@ -85,7 +87,7 @@ func makeRequest(config TestConfig) (string, error) {
 		return "", err
 	}
 
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != config.ExpectedStatus {
 		fmt.Printf("Response status code: %d\n", resp.StatusCode)
@@ -107,9 +109,6 @@ func TestIntegration(t *testing.T) {
 	// Load test configuration
 	configs, err := loadTestConfig("it_config.json")
 	require.NoError(t, err, "Failed to load test config")
-
-	// Wait for services to be ready (adjust as needed)
-	time.Sleep(15 * time.Second) // Wait for Docker Compose services
 
 	for i, config := range configs {
 		t.Run(fmt.Sprintf("Step_%d_%s_%s", i+1, config.Method, config.Endpoint), func(t *testing.T) {
@@ -156,7 +155,7 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 
-	//wait for 5sec to ensure that the DB is ready
+	// wait for 5sec to ensure that the DB is ready
 	time.Sleep(5 * time.Second)
 
 	dir, osErr := os.Getwd()

@@ -9,16 +9,19 @@
 
 package model
 
+// LangStringTextType type of LangStringTextType
 type LangStringTextType struct {
 	Language string `json:"language" validate:"regexp=^(([a-zA-Z]{2,3}(-[a-zA-Z]{3}(-[a-zA-Z]{3}){0,2})?|[a-zA-Z]{4}|[a-zA-Z]{5,8})(-[a-zA-Z]{4})?(-([a-zA-Z]{2}|[0-9]{3}))?(-(([a-zA-Z0-9]){5,8}|[0-9]([a-zA-Z0-9]){3}))*(-[0-9A-WY-Za-wy-z](-([a-zA-Z0-9]){2,8})+)*(-[xX](-([a-zA-Z0-9]){1,8})+)?|[xX](-([a-zA-Z0-9]){1,8})+|((en-GB-oed|i-ami|i-bnn|i-default|i-enochian|i-hak|i-klingon|i-lux|i-mingo|i-navajo|i-pwn|i-tao|i-tay|i-tsu|sgn-BE-FR|sgn-BE-NL|sgn-CH-DE)|(art-lojban|cel-gaulish|no-bok|no-nyn|zh-guoyu|zh-hakka|zh-min|zh-min-nan|zh-xiang)))$"`
 
 	Text string `json:"text"`
 }
 
+//nolint:all
 func (l LangStringTextType) GetLanguage() string {
 	return l.Language
 }
 
+//nolint:all
 func (l LangStringTextType) GetText() string {
 	return l.Text
 }
@@ -39,6 +42,8 @@ func AssertLangStringTextTypeRequired(obj LangStringTextType) error {
 }
 
 // AssertLangStringTextTypeConstraints checks if the values respects the defined constraints
+//
+//nolint:all
 func AssertLangStringTextTypeConstraints(obj LangStringTextType) error {
 	return nil
 }

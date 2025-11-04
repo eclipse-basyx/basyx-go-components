@@ -1,3 +1,4 @@
+// Package main implements the Submodel Repository Service server.
 package main
 
 import (
@@ -13,7 +14,7 @@ import (
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	api "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/api"
-	persistence_postgresql "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence"
+	persistencepostgresql "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence"
 	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/submodelrepositoryapi/go"
 )
 
@@ -40,7 +41,7 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 
 	// Instantiate generated services & controllers
 	// ==== Submodel Repository Service ====
-	smDatabase, err := persistence_postgresql.NewPostgreSQLSubmodelBackend("postgres://"+config.Postgres.User+":"+config.Postgres.Password+"@"+config.Postgres.Host+":"+strconv.Itoa(config.Postgres.Port)+"/"+config.Postgres.DBName+"?sslmode=disable", config.Postgres.MaxOpenConnections, config.Postgres.MaxIdleConnections, config.Postgres.ConnMaxLifetimeMinutes, config.Server.CacheEnabled, databaseSchema)
+	smDatabase, err := persistencepostgresql.NewPostgreSQLSubmodelBackend("postgres://"+config.Postgres.User+":"+config.Postgres.Password+"@"+config.Postgres.Host+":"+strconv.Itoa(config.Postgres.Port)+"/"+config.Postgres.DBName+"?sslmode=disable", config.Postgres.MaxOpenConnections, config.Postgres.MaxIdleConnections, config.Postgres.ConnMaxLifetimeMinutes, config.Server.CacheEnabled, databaseSchema)
 	if err != nil {
 		log.Fatalf("Failed to initialize database connection: %v", err)
 		return err
@@ -78,7 +79,7 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 
 func main() {
 	ctx := context.Background()
-	//load config path from flag
+	// load config path from flag
 	configPath := ""
 	databaseSchema := ""
 	flag.StringVar(&configPath, "config", "", "Path to config file")

@@ -9,6 +9,7 @@
 
 package model
 
+// RelationshipElementValue A relationship element value consisting of two reference values.
 type RelationshipElementValue struct {
 	First ReferenceValue `json:"first"`
 

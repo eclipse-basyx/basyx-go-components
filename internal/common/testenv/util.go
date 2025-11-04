@@ -1,3 +1,31 @@
+/*******************************************************************************
+* Copyright (C) 2025 the Eclipse BaSyx Authors and Fraunhofer IESE
+*
+* Permission is hereby granted, free of charge, to any person obtaining
+* a copy of this software and associated documentation files (the
+* "Software"), to deal in the Software without restriction, including
+* without limitation the rights to use, copy, modify, merge, publish,
+* distribute, sublicense, and/or sell copies of the Software, and to
+* permit persons to whom the Software is furnished to do so, subject to
+* the following conditions:
+*
+* The above copyright notice and this permission notice shall be
+* included in all copies or substantial portions of the Software.
+*
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+* NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+* LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+* OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+* WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*
+* SPDX-License-Identifier: MIT
+******************************************************************************/
+
+// Package testenv provides testing utilities for integration tests and benchmarks.
+// It includes helpers for HTTP requests, component benchmarking, Docker Compose management,
+// and health checking of services.
 package testenv
 
 import (
@@ -18,15 +46,23 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
 
+// LogDetail controls the verbosity level of benchmark logging.
 type LogDetail int
 
 const (
-	BaseURL                     = "http://127.0.0.1:5004"
-	LogNameAndRuntime LogDetail = iota // only component + runtime
-	LogBasic                           // + op, code, ok
-	LogFull                            // + method, url, err, request/response, extra
+	// BaseURL is the default base URL for test services.
+	BaseURL = "http://127.0.0.1:5004"
+
+	// LogNameAndRuntime logs only component name and runtime duration.
+	LogNameAndRuntime LogDetail = iota
+	// LogBasic logs component, runtime, operation, status code, and success flag.
+	LogBasic
+	// LogFull logs all details including method, URL, errors, request/response bodies, and extra metadata.
+	LogFull
 )
 
+// envLogDetail reads the LOG_DETAIL environment variable to determine the logging verbosity.
+// Valid values are "name" (LogNameAndRuntime), "basic" (LogBasic), or any other value for LogFull (default).
 func envLogDetail() LogDetail {
 	switch os.Getenv("LOG_DETAIL") {
 	case "name":
@@ -38,6 +74,8 @@ func envLogDetail() LogDetail {
 	}
 }
 
+// makeLogRecord creates a LogRecord from a ComponentResult based on the specified logging level.
+// Lower log levels include less detail to reduce output size.
 func makeLogRecord(iter int, componentName string, r ComponentResult, level LogDetail) LogRecord {
 	lr := LogRecord{
 		Iter:       iter,
@@ -62,11 +100,16 @@ func makeLogRecord(iter int, componentName string, r ComponentResult, level LogD
 	return lr
 }
 
+// ComponentBench is an interface for benchmarkable components.
+// Implementations should define a Name and perform one iteration of work in DoOne.
 type ComponentBench interface {
+	// Name returns the name of the component being benchmarked.
 	Name() string
+	// DoOne performs one benchmark iteration and returns the result.
 	DoOne(iter int) ComponentResult
 }
 
+// ComponentResult contains the results of a single benchmark iteration.
 type ComponentResult struct {
 	DurationMs int64
 	Code       int
@@ -82,6 +125,7 @@ type ComponentResult struct {
 	Extra    map[string]any
 }
 
+// LogRecord represents a single benchmark log entry to be written to JSON output.
 type LogRecord struct {
 	Iter       int    `json:"iter"`
 	Component  string `json:"component"`
@@ -99,6 +143,8 @@ type LogRecord struct {
 	Extra    map[string]any  `json:"extra,omitempty"`
 }
 
+// findProjectRoot locates the project root directory by searching upward for a go.mod file.
+// Returns an error if no go.mod file is found.
 func findProjectRoot() (string, error) {
 	dir, _ := os.Getwd()
 	for {
@@ -113,6 +159,9 @@ func findProjectRoot() (string, error) {
 	}
 }
 
+// BenchmarkComponent runs a benchmark for the given component and writes results to a JSON file.
+// Results are written to benchmark_results/<component_name>_bench.json in the project root.
+// The LOG_DETAIL environment variable controls the verbosity of logged data.
 func BenchmarkComponent(b *testing.B, comp ComponentBench) {
 	logDetail := envLogDetail()
 	logs := make([]LogRecord, 0, b.N)
@@ -139,7 +188,7 @@ func BenchmarkComponent(b *testing.B, comp ComponentBench) {
 	if err != nil {
 		b.Fatalf("could not create benchmark file: %v", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	enc := json.NewEncoder(f)
 	enc.SetIndent("", "  ")
@@ -148,8 +197,11 @@ func BenchmarkComponent(b *testing.B, comp ComponentBench) {
 	b.Logf("wrote %s with %d records (detail=%v)", filename, len(logs), logDetail)
 }
 
+// HTTPClient returns a configured HTTP client with a 20-second timeout.
 func HTTPClient() *http.Client { return &http.Client{Timeout: 20 * time.Second} }
 
+// PostJSONRaw sends a POST request with JSON body to the specified URL.
+// Returns the response body, status code, and any error encountered.
 func PostJSONRaw(url string, body any) (data []byte, status int, err error) {
 	var r io.Reader
 	if body != nil {
@@ -168,21 +220,25 @@ func PostJSONRaw(url string, body any) (data []byte, status int, err error) {
 	if e != nil {
 		return nil, 0, e
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	data, e = io.ReadAll(resp.Body)
 	return data, resp.StatusCode, e
 }
 
+// GetRaw sends a GET request to the specified URL.
+// Returns the response body, status code, and any error encountered.
 func GetRaw(url string) (data []byte, status int, err error) {
 	resp, e := HTTPClient().Get(url)
 	if e != nil {
 		return nil, 0, e
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	data, e = io.ReadAll(resp.Body)
 	return data, resp.StatusCode, e
 }
 
+// DeleteRaw sends a DELETE request to the specified URL.
+// Returns the response body, status code, and any error encountered.
 func DeleteRaw(url string) (data []byte, status int, err error) {
 	req, e := http.NewRequest("DELETE", url, nil)
 	if e != nil {
@@ -192,11 +248,13 @@ func DeleteRaw(url string) (data []byte, status int, err error) {
 	if e != nil {
 		return nil, 0, e
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	data, e = io.ReadAll(resp.Body)
 	return data, resp.StatusCode, e
 }
 
+// PostJSONExpect sends a POST request with JSON body and expects a specific status code.
+// Fails the test if the status code doesn't match or an error occurs.
 func PostJSONExpect(t testing.TB, url string, body any, expect int) []byte {
 	t.Helper()
 	data, st, err := PostJSONRaw(url, body)
@@ -209,6 +267,8 @@ func PostJSONExpect(t testing.TB, url string, body any, expect int) []byte {
 	return data
 }
 
+// GetExpect sends a GET request and expects a specific status code.
+// Fails the test if the status code doesn't match or an error occurs.
 func GetExpect(t testing.TB, url string, expect int) []byte {
 	t.Helper()
 	data, st, err := GetRaw(url)
@@ -221,6 +281,8 @@ func GetExpect(t testing.TB, url string, expect int) []byte {
 	return data
 }
 
+// DeleteExpect sends a DELETE request and expects a specific status code.
+// Fails the test if the status code doesn't match or an error occurs.
 func DeleteExpect(t testing.TB, url string, expect int) []byte {
 	t.Helper()
 	data, st, err := DeleteRaw(url)
@@ -233,6 +295,8 @@ func DeleteExpect(t testing.TB, url string, expect int) []byte {
 	return data
 }
 
+// FindCompose searches for docker or podman on the PATH and returns the binary name and compose subcommand.
+// Returns an error if neither docker nor podman is found.
 func FindCompose() (bin string, args []string, err error) {
 	if _, e := exec.LookPath("docker"); e == nil {
 		return "docker", []string{"compose"}, nil
@@ -243,6 +307,8 @@ func FindCompose() (bin string, args []string, err error) {
 	return "", nil, errors.New("neither docker nor podman found on PATH")
 }
 
+// RunCompose executes a Docker Compose command with the given base command and arguments.
+// Streams stdout and stderr to the current process's output streams.
 func RunCompose(ctx context.Context, base string, args ...string) error {
 	cmd := exec.CommandContext(ctx, base, args...)
 	cmd.Stdout = os.Stdout
@@ -250,6 +316,9 @@ func RunCompose(ctx context.Context, base string, args ...string) error {
 	return cmd.Run()
 }
 
+// WaitHealthy polls the given URL until it returns HTTP 200 or the timeout is reached.
+// Uses exponential backoff (starting at 1 second, max 5 seconds) between attempts.
+// Fails the test if the service is not healthy within maxWait duration.
 func WaitHealthy(t testing.TB, url string, maxWait time.Duration) {
 	t.Helper()
 	deadline := time.Now().Add(maxWait)
@@ -273,7 +342,9 @@ func WaitHealthy(t testing.TB, url string, maxWait time.Duration) {
 	}
 }
 
-func BuildNameValuesMap(in []model.SpecificAssetId) map[string][]string {
+// BuildNameValuesMap converts a slice of SpecificAssetID into a map of name to sorted values.
+// Values for each name are sorted alphabetically for consistent comparison.
+func BuildNameValuesMap(in []model.SpecificAssetID) map[string][]string {
 	m := map[string][]string{}
 	for _, s := range in {
 		m[s.Name] = append(m[s.Name], s.Value)

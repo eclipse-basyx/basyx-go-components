@@ -23,13 +23,34 @@
 * SPDX-License-Identifier: MIT
 ******************************************************************************/
 
+// Package grammar defines the data structures for representing attribute types in the grammar model.
 // Author: Aaron Zielstorff ( Fraunhofer IESE ), Jannik Fried ( Fraunhofer IESE )
 package grammar
 
+// ATTRTYPE defines the type classification for attributes in the AAS access control grammar.
+//
+// Attributes in the access control system can be categorized by their source and scope:
+//   - CLAIM: Attributes derived from authentication claims (e.g., JWT claims, user identity)
+//   - GLOBAL: Attributes that are globally accessible across the system
+//   - REFERENCE: Attributes that reference AAS model elements or their properties
+//
+// This type is used to distinguish between different kinds of attributes when evaluating
+// access control rules and policies.
 type ATTRTYPE string
 
 const (
-	ATTRCLAIM     ATTRTYPE = "CLAIM"
-	ATTRGLOBAL    ATTRTYPE = "GLOBAL"
+	// ATTRCLAIM represents attributes derived from authentication claims.
+	// These are typically extracted from authentication tokens (e.g., JWT) and include
+	// information about the authenticated user or client, such as user ID, roles, or permissions.
+	ATTRCLAIM ATTRTYPE = "CLAIM"
+
+	// ATTRGLOBAL represents globally accessible attributes.
+	// These attributes are available system-wide and not tied to specific AAS elements
+	// or authentication contexts.
+	ATTRGLOBAL ATTRTYPE = "GLOBAL"
+
+	// ATTRREFERENCE represents attributes that reference AAS model elements.
+	// These attributes point to specific elements within the Asset Administration Shell
+	// structure, such as submodels, properties, or other referable elements.
 	ATTRREFERENCE ATTRTYPE = "REFERENCE"
 )

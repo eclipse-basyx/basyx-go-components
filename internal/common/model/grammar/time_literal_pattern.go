@@ -23,6 +23,7 @@
 * SPDX-License-Identifier: MIT
 ******************************************************************************/
 
+// Package grammar defines the data structures for representing time literal patterns in the grammar model.
 // Author: Aaron Zielstorff ( Fraunhofer IESE ), Jannik Fried ( Fraunhofer IESE )
 package grammar
 
@@ -32,6 +33,7 @@ import (
 	"regexp"
 )
 
+// TimeLiteralPattern represents a time literal pattern in the format "HH:MM" or "HH:MM:SS".
 type TimeLiteralPattern string
 
 // UnmarshalJSON implements json.Unmarshaler.

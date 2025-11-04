@@ -32,6 +32,8 @@
  * Contact: info@idtwin.org
  */
 
+// Package model provides data structures and utilities for the Asset Administration Shell metamodel.
+// It implements the DotAAS Part 1 Metamodel Schemas according to the IDTA specification.
 package model
 
 import (
@@ -52,7 +54,7 @@ const errMsgRequiredMissing = "required parameter is missing"
 const errMsgMinValueConstraint = "provided parameter is not respecting minimum value constraint"
 const errMsgMaxValueConstraint = "provided parameter is not respecting maximum value constraint"
 
-// Response return a ImplResponse struct filled
+// Response creates an ImplResponse struct with the given status code and body.
 func Response(code int, body interface{}) ImplResponse {
 	return ImplResponse{
 		Code: code,
@@ -170,7 +172,9 @@ func readFileHeaderToTempFile(fileHeader *multipart.FileHeader) (*os.File, error
 		return nil, err
 	}
 
-	defer formFile.Close()
+	defer func() {
+		_ = formFile.Close()
+	}()
 
 	// Use .* as suffix, because the asterisk is a placeholder for the random value,
 	// and the period allows consumers of this file to remove the suffix to obtain the original file name
@@ -179,7 +183,9 @@ func readFileHeaderToTempFile(fileHeader *multipart.FileHeader) (*os.File, error
 		return nil, err
 	}
 
-	defer file.Close()
+	defer func() {
+		_ = file.Close()
+	}()
 
 	_, err = io.Copy(file, formFile)
 	if err != nil {
@@ -189,6 +195,7 @@ func readFileHeaderToTempFile(fileHeader *multipart.FileHeader) (*os.File, error
 	return file, nil
 }
 
+// nolint:unused
 func parseTimes(param string) ([]time.Time, error) {
 	splits := strings.Split(param, ",")
 	times := make([]time.Time, 0, len(splits))
@@ -202,7 +209,9 @@ func parseTimes(param string) ([]time.Time, error) {
 	return times, nil
 }
 
-// parseTime will parses a string parameter into a time.Time using the RFC3339 format
+// parseTime parses a string parameter into a time.Time using the RFC3339 format.
+// This function is currently unused but kept for potential future use.
+// nolint:unused
 func parseTime(param string) (time.Time, error) {
 	if param == "" {
 		return time.Time{}, nil
@@ -210,13 +219,18 @@ func parseTime(param string) (time.Time, error) {
 	return time.Parse(time.RFC3339, param)
 }
 
+// Number is a type constraint that allows numeric types (int32, int64, float32, float64).
+// It's used in generic functions for parsing and validating numeric parameters.
 type Number interface {
 	~int32 | ~int64 | ~float32 | ~float64
 }
 
+// ParseString is a function type for parsing string values into various types.
+// It takes a string value and returns the parsed value of type T and an error if parsing fails.
 type ParseString[T Number | string | bool] func(v string) (T, error)
 
 // parseFloat64 parses a string parameter to an float64.
+// nolint:unused
 func parseFloat64(param string) (float64, error) {
 	if param == "" {
 		return 0, nil
@@ -226,6 +240,7 @@ func parseFloat64(param string) (float64, error) {
 }
 
 // parseFloat32 parses a string parameter to an float32.
+// nolint:unused
 func parseFloat32(param string) (float32, error) {
 	if param == "" {
 		return 0, nil
@@ -236,6 +251,7 @@ func parseFloat32(param string) (float32, error) {
 }
 
 // parseInt64 parses a string parameter to an int64.
+// nolint:unused
 func parseInt64(param string) (int64, error) {
 	if param == "" {
 		return 0, nil
@@ -245,6 +261,7 @@ func parseInt64(param string) (int64, error) {
 }
 
 // parseInt32 parses a string parameter to an int32.
+// nolint:unused
 func parseInt32(param string) (int32, error) {
 	if param == "" {
 		return 0, nil
@@ -255,6 +272,7 @@ func parseInt32(param string) (int32, error) {
 }
 
 // parseBool parses a string parameter to an bool.
+// nolint:unused
 func parseBool(param string) (bool, error) {
 	if param == "" {
 		return false, nil
@@ -263,8 +281,12 @@ func parseBool(param string) (bool, error) {
 	return strconv.ParseBool(param)
 }
 
+// HOperation is a function type that handles parameter parsing with optional default values.
+// It returns the parsed value, a boolean indicating if a default was used, and any parsing error.
 type HOperation[T Number | string | bool] func(actual string) (T, bool, error)
 
+// WithRequire creates an HOperation that requires a non-empty parameter value.
+// It returns an error if the parameter is empty, otherwise parses the value using the provided parser.
 func WithRequire[T Number | string | bool](parse ParseString[T]) HOperation[T] {
 	var empty T
 	return func(actual string) (T, bool, error) {
@@ -277,6 +299,8 @@ func WithRequire[T Number | string | bool](parse ParseString[T]) HOperation[T] {
 	}
 }
 
+// WithDefaultOrParse creates an HOperation that uses a default value when the parameter is empty,
+// otherwise parses the parameter using the provided parser.
 func WithDefaultOrParse[T Number | string | bool](def T, parse ParseString[T]) HOperation[T] {
 	return func(actual string) (T, bool, error) {
 		if actual == "" {
@@ -288,6 +312,7 @@ func WithDefaultOrParse[T Number | string | bool](def T, parse ParseString[T]) H
 	}
 }
 
+// WithParse returns a HOperation that only parses the value without additional checks.
 func WithParse[T Number | string | bool](parse ParseString[T]) HOperation[T] {
 	return func(actual string) (T, bool, error) {
 		v, err := parse(actual)
@@ -295,8 +320,10 @@ func WithParse[T Number | string | bool](parse ParseString[T]) HOperation[T] {
 	}
 }
 
+// Constraint defines a function type for validating a value of type T.
 type Constraint[T Number | string | bool] func(actual T) error
 
+// WithMinimum returns a constraint that checks if the actual value is greater than or equal to the expected value.
 func WithMinimum[T Number](expected T) Constraint[T] {
 	return func(actual T) error {
 		if actual < expected {
@@ -307,6 +334,7 @@ func WithMinimum[T Number](expected T) Constraint[T] {
 	}
 }
 
+// WithMaximum returns a constraint that checks if the actual value is less than or equal to the expected value.
 func WithMaximum[T Number](expected T) Constraint[T] {
 	return func(actual T) error {
 		if actual > expected {
@@ -318,6 +346,7 @@ func WithMaximum[T Number](expected T) Constraint[T] {
 }
 
 // parseNumericParameter parses a numeric parameter to its respective type.
+// nolint:unused
 func parseNumericParameter[T Number](param string, fn HOperation[T], checks ...Constraint[T]) (T, error) {
 	v, ok, err := fn(param)
 	if err != nil {
@@ -336,12 +365,14 @@ func parseNumericParameter[T Number](param string, fn HOperation[T], checks ...C
 }
 
 // parseBoolParameter parses a string parameter to a bool
+// nolint:unused
 func parseBoolParameter(param string, fn HOperation[bool]) (bool, error) {
 	v, _, err := fn(param)
 	return v, err
 }
 
 // parseNumericArrayParameter parses a string parameter containing array of values to its respective type.
+// nolint:unused
 func parseNumericArrayParameter[T Number](param, delim string, required bool, fn HOperation[T], checks ...Constraint[T]) ([]T, error) {
 	if param == "" {
 		if required {
@@ -375,6 +406,7 @@ func parseNumericArrayParameter[T Number](param, delim string, required bool, fn
 }
 
 // parseQuery parses query parameters and returns an error if any malformed value pairs are encountered.
+// nolint:unused
 func parseQuery(rawQuery string) (url.Values, error) {
 	return url.ParseQuery(rawQuery)
 }

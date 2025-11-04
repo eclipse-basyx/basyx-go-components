@@ -13,9 +13,12 @@ import (
 	"fmt"
 )
 
+// QualifierKind  type of QualifierKind
 type QualifierKind string
 
 // List of QualifierKind
+//
+//nolint:all
 const (
 	QUALIFIERKIND_CONCEPT_QUALIFIER  QualifierKind = "ConceptQualifier"
 	QUALIFIERKIND_TEMPLATE_QUALIFIER QualifierKind = "TemplateQualifier"
@@ -54,11 +57,15 @@ func NewQualifierKindFromValue(v string) (QualifierKind, error) {
 }
 
 // AssertQualifierKindRequired checks if the required fields are not zero-ed
+//
+//nolint:all
 func AssertQualifierKindRequired(obj QualifierKind) error {
 	return nil
 }
 
 // AssertQualifierKindConstraints checks if the values respects the defined constraints
+//
+//nolint:all
 func AssertQualifierKindConstraints(obj QualifierKind) error {
 	return nil
 }

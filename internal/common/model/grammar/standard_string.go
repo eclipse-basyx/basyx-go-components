@@ -23,6 +23,7 @@
 * SPDX-License-Identifier: MIT
 ******************************************************************************/
 
+// Package grammar defines the data structures for representing standard strings in the grammar model.
 // Author: Aaron Zielstorff ( Fraunhofer IESE ), Jannik Fried ( Fraunhofer IESE )
 package grammar
 
@@ -32,6 +33,7 @@ import (
 	"regexp"
 )
 
+// StandardString represents a standard string that must not start with the '$' character.
 type StandardString string
 
 // UnmarshalJSON implements json.Unmarshaler.

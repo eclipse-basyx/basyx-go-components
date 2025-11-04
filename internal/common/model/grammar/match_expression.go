@@ -23,6 +23,7 @@
 * SPDX-License-Identifier: MIT
 ******************************************************************************/
 
+// Package grammar defines the data structures for representing match expressions in the grammar model.
 // Author: Aaron Zielstorff ( Fraunhofer IESE ), Jannik Fried ( Fraunhofer IESE )
 package grammar
 
@@ -31,6 +32,22 @@ import (
 	"fmt"
 )
 
+// MatchExpression represents a pattern matching expression in the AAS access control grammar.
+//
+// This structure defines various comparison and pattern matching operations that can be used
+// in access control rules to match against attribute values. It supports boolean comparisons,
+// string operations (contains, starts-with, ends-with, regex), numeric comparisons (eq, ne, gt, ge, lt, le),
+// and nested match expressions for complex conditions.
+//
+// Only one field should be set per MatchExpression instance, defining the type of match to perform.
+// Multiple conditions can be combined using the Match field for nested logical expressions.
+//
+// Examples:
+//   - Equality check: {"$eq": ["$aas#idShort", "MyAAS"]}
+//   - String contains: {"$contains": ["$sm#id", "sensor"]}
+//   - Greater than: {"$gt": ["$sme.temperature#value", "100"]}
+//   - Regex match: {"$regex": ["$aas#id", "^https://.*"]}
+//   - Nested match: {"$match": [{"$eq": [...]}, {"$gt": [...]}]}
 type MatchExpression struct {
 	// Boolean corresponds to the JSON schema field "$boolean".
 	Boolean *bool `json:"$boolean,omitempty" yaml:"$boolean,omitempty" mapstructure:"$boolean,omitempty"`
@@ -69,7 +86,18 @@ type MatchExpression struct {
 	StartsWith StringItems `json:"$starts-with,omitempty" yaml:"$starts-with,omitempty" mapstructure:"$starts-with,omitempty"`
 }
 
-// UnmarshalJSON implements json.Unmarshaler.
+// UnmarshalJSON implements the json.Unmarshaler interface for MatchExpression.
+//
+// This custom unmarshaler validates that nested match expressions (the Match field)
+// contain at least one element when present. This ensures that empty match arrays
+// are rejected during deserialization.
+//
+// Parameters:
+//   - value: JSON byte slice containing the match expression to unmarshal
+//
+// Returns:
+//   - error: An error if the JSON is invalid or if the Match array is present but empty.
+//     Returns nil on successful unmarshaling and validation.
 func (j *MatchExpression) UnmarshalJSON(value []byte) error {
 	type Plain MatchExpression
 	var plain Plain

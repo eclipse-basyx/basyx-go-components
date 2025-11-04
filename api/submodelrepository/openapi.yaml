@@ -1542,9 +1542,9 @@ paths:
       tags:
         - Serialization API
       summary: Returns an appropriate serialization based on the specified format (see SerializationFormat)
-      operationId: GenerateSerializationByIds
+      operationId: GenerateSerializationByIDs
       x-semanticIds:
-        - https://admin-shell.io/aas/API/GenerateSerializationByIds/3/0
+        - https://admin-shell.io/aas/API/GenerateSerializationByIDs/3/0
       parameters:
         - name: aasIds
           in: query
