@@ -1,4 +1,4 @@
-package persistence_postgresql
+package aasregistrydatabase
 
 import (
 	"database/sql"
@@ -7,7 +7,7 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
 
-func createEndpointAttributes(tx *sql.Tx, endpointId int64, securityAttributes []model.ProtocolInformationSecurityAttributes) error {
+func createEndpointAttributes(tx *sql.Tx, endpointID int64, securityAttributes []model.ProtocolInformationSecurityAttributes) error {
 	if len(securityAttributes) == 0 {
 		return nil
 	}
@@ -15,7 +15,7 @@ func createEndpointAttributes(tx *sql.Tx, endpointId int64, securityAttributes [
 	rows := make([]goqu.Record, 0, len(securityAttributes))
 	for _, val := range securityAttributes {
 		rows = append(rows, goqu.Record{
-			colEndpointID:    endpointId,
+			colEndpointID:    endpointID,
 			colSecurityType:  val.Type,
 			colSecurityKey:   val.Key,
 			colSecurityValue: val.Value,
@@ -29,7 +29,7 @@ func createEndpointAttributes(tx *sql.Tx, endpointId int64, securityAttributes [
 	return err
 }
 
-func createEndpointProtocolVersion(tx *sql.Tx, endpointId int64, endpointProtocolVersion []string) error {
+func createEndpointProtocolVersion(tx *sql.Tx, endpointID int64, endpointProtocolVersion []string) error {
 	if len(endpointProtocolVersion) == 0 {
 		return nil
 	}
@@ -37,7 +37,7 @@ func createEndpointProtocolVersion(tx *sql.Tx, endpointId int64, endpointProtoco
 	rows := make([]goqu.Record, 0, len(endpointProtocolVersion))
 	for _, val := range endpointProtocolVersion {
 		rows = append(rows, goqu.Record{
-			colEndpointID:              endpointId,
+			colEndpointID:              endpointID,
 			colEndpointProtocolVersion: val,
 		})
 	}
@@ -49,7 +49,7 @@ func createEndpointProtocolVersion(tx *sql.Tx, endpointId int64, endpointProtoco
 	return err
 }
 
-func createEndpoints(tx *sql.Tx, descriptorId int64, endpoints []model.Endpoint) error {
+func createEndpoints(tx *sql.Tx, descriptorID int64, endpoints []model.Endpoint) error {
 	if endpoints == nil {
 		return nil
 	}
@@ -59,7 +59,7 @@ func createEndpoints(tx *sql.Tx, descriptorId int64, endpoints []model.Endpoint)
 			sqlStr, args, err := d.
 				Insert(tblAASDescriptorEndpoint).
 				Rows(goqu.Record{
-					colDescriptorID:            descriptorId,
+					colDescriptorID:            descriptorID,
 					colHref:                    val.ProtocolInformation.Href,
 					colEndpointProtocol:        val.ProtocolInformation.EndpointProtocol,
 					colSubProtocol:             val.ProtocolInformation.Subprotocol,

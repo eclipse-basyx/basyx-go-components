@@ -1,4 +1,4 @@
-package persistence_postgresql
+package aasregistrydatabase
 
 import (
 	"database/sql"
@@ -8,7 +8,7 @@ import (
 	persistence_utils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
 )
 
-func createExtensions(tx *sql.Tx, descriptorId int64, extensions []model.Extension) error {
+func createExtensions(tx *sql.Tx, descriptorID int64, extensions []model.Extension) error {
 	if extensions == nil {
 		return nil
 	}
@@ -16,7 +16,7 @@ func createExtensions(tx *sql.Tx, descriptorId int64, extensions []model.Extensi
 		d := goqu.Dialect(dialect)
 		for _, val := range extensions {
 			var a sql.NullInt64
-			semanticId, err := persistence_utils.CreateReference(tx, val.SemanticID, a, a)
+			semanticID, err := persistence_utils.CreateReference(tx, val.SemanticID, a, a)
 			if err != nil {
 				return err
 			}
@@ -28,7 +28,7 @@ func createExtensions(tx *sql.Tx, descriptorId int64, extensions []model.Extensi
 			sqlStr, args, err := d.
 				Insert(tblExtension).
 				Rows(goqu.Record{
-					colSemanticID:    semanticId,
+					colSemanticID:    semanticID,
 					colName:          val.Name,
 					colValueType:     valueType,
 					colValueText:     valueText,
@@ -47,7 +47,7 @@ func createExtensions(tx *sql.Tx, descriptorId int64, extensions []model.Extensi
 				return err
 			}
 
-			if err = createDescriptorExtensionLink(tx, descriptorId, id); err != nil {
+			if err = createDescriptorExtensionLink(tx, descriptorID, id); err != nil {
 				return err
 			}
 
@@ -63,7 +63,7 @@ func createExtensions(tx *sql.Tx, descriptorId int64, extensions []model.Extensi
 	return nil
 }
 
-func createExtensionReferences(tx *sql.Tx, extensionId int64, references []model.Reference, tablename string) error {
+func createExtensionReferences(tx *sql.Tx, extensionID int64, references []model.Reference, tablename string) error {
 	if len(references) == 0 {
 		return nil
 	}
@@ -71,13 +71,13 @@ func createExtensionReferences(tx *sql.Tx, extensionId int64, references []model
 	rows := make([]goqu.Record, 0, len(references))
 	for i := range references {
 		var a sql.NullInt64
-		referenceId, err := persistence_utils.CreateReference(tx, &references[i], a, a)
+		referenceID, err := persistence_utils.CreateReference(tx, &references[i], a, a)
 		if err != nil {
 			return err
 		}
 		rows = append(rows, goqu.Record{
-			colExtensionID: extensionId,
-			colReferenceID: referenceId,
+			colExtensionID: extensionID,
+			colReferenceID: referenceID,
 		})
 	}
 	sqlStr, args, err := d.Insert(tablename).Rows(rows).ToSQL()
@@ -88,13 +88,13 @@ func createExtensionReferences(tx *sql.Tx, extensionId int64, references []model
 	return err
 }
 
-func createDescriptorExtensionLink(tx *sql.Tx, descriptorId int64, extensionId int64) error {
+func createDescriptorExtensionLink(tx *sql.Tx, descriptorID int64, extensionID int64) error {
 	d := goqu.Dialect(dialect)
 	sqlStr, args, err := d.
 		Insert(tblDescriptorExtension).
 		Rows(goqu.Record{
-			colDescriptorID: descriptorId,
-			colExtensionID:  extensionId,
+			colDescriptorID: descriptorID,
+			colExtensionID:  extensionID,
 		}).
 		ToSQL()
 	if err != nil {

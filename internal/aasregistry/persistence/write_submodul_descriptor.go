@@ -1,4 +1,4 @@
-package persistence_postgresql
+package aasregistrydatabase
 
 import (
 	"database/sql"
@@ -10,7 +10,7 @@ import (
 	persistence_utils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
 )
 
-func createSubModelDescriptors(tx *sql.Tx, aasDescriptorId int64, submodelDescriptors []model.SubmodelDescriptor) error {
+func createSubModelDescriptors(tx *sql.Tx, aasDescriptorID int64, submodelDescriptors []model.SubmodelDescriptor) error {
 	if submodelDescriptors == nil {
 		return nil
 	}
@@ -18,33 +18,33 @@ func createSubModelDescriptors(tx *sql.Tx, aasDescriptorId int64, submodelDescri
 		d := goqu.Dialect(dialect)
 		for _, val := range submodelDescriptors {
 			var (
-				semanticId       sql.NullInt64
-				displayNameId    sql.NullInt64
-				descriptionId    sql.NullInt64
-				administrationId sql.NullInt64
+				semanticID       sql.NullInt64
+				displayNameID    sql.NullInt64
+				descriptionID    sql.NullInt64
+				administrationID sql.NullInt64
 				err              error
 			)
 
-			displayNameId, err = persistence_utils.CreateLangStringNameTypes(tx, val.DisplayName)
+			displayNameID, err = persistence_utils.CreateLangStringNameTypes(tx, val.DisplayName)
 			if err != nil {
 				fmt.Println(err)
 				return common.NewInternalServerError("Failed to create DisplayName - no changes applied - see console for details")
 			}
 
-			descriptionId, err = persistence_utils.CreateLangStringTextTypesN(tx, val.Description)
+			descriptionID, err = persistence_utils.CreateLangStringTextTypesN(tx, val.Description)
 			if err != nil {
 				fmt.Println(err)
 				return common.NewInternalServerError("Failed to create Description - no changes applied - see console for details")
 			}
 
-			administrationId, err = persistence_utils.CreateAdministrativeInformation(tx, val.Administration)
+			administrationID, err = persistence_utils.CreateAdministrativeInformation(tx, val.Administration)
 			if err != nil {
 				fmt.Println(err)
 				return common.NewInternalServerError("Failed to create Administration - no changes applied - see console for details")
 			}
 
 			var a sql.NullInt64
-			semanticId, err = persistence_utils.CreateReference(tx, val.SemanticId, a, a)
+			semanticID, err = persistence_utils.CreateReference(tx, val.SemanticId, a, a)
 			if err != nil {
 				return err
 			}
@@ -56,22 +56,22 @@ func createSubModelDescriptors(tx *sql.Tx, aasDescriptorId int64, submodelDescri
 			if err != nil {
 				return err
 			}
-			var submodelDescriptorId int64
-			if err = tx.QueryRow(sqlStr, args...).Scan(&submodelDescriptorId); err != nil {
+			var submodelDescriptorID int64
+			if err = tx.QueryRow(sqlStr, args...).Scan(&submodelDescriptorID); err != nil {
 				return err
 			}
 
 			sqlStr, args, err = d.
 				Insert(tblSubmodelDescriptor).
 				Rows(goqu.Record{
-					colDescriptorID:    submodelDescriptorId,
-					colAASDescriptorID: aasDescriptorId,
-					colDescriptionID:   descriptionId,
-					colDisplayNameID:   displayNameId,
-					colAdminInfoID:     administrationId,
-					colIdShort:         val.IdShort,
+					colDescriptorID:    submodelDescriptorID,
+					colAASDescriptorID: aasDescriptorID,
+					colDescriptionID:   descriptionID,
+					colDisplayNameID:   displayNameID,
+					colAdminInfoID:     administrationID,
+					colIDShort:         val.IdShort,
 					colAASID:           val.Id,
-					colSemanticID:      semanticId,
+					colSemanticID:      semanticID,
 				}).
 				ToSQL()
 			if err != nil {
@@ -81,18 +81,18 @@ func createSubModelDescriptors(tx *sql.Tx, aasDescriptorId int64, submodelDescri
 				return err
 			}
 
-			if err = createsubModelDescriptorSupplementalSemantic(tx, submodelDescriptorId, val.SupplementalSemanticId); err != nil {
+			if err = createsubModelDescriptorSupplementalSemantic(tx, submodelDescriptorID, val.SupplementalSemanticId); err != nil {
 				return err
 			}
 
-			if err = createExtensions(tx, submodelDescriptorId, val.Extensions); err != nil {
+			if err = createExtensions(tx, submodelDescriptorID, val.Extensions); err != nil {
 				return err
 			}
 
-			if len(val.Endpoints) <= 0 {
+			if len(val.Endpoints) == 0 {
 				return common.NewErrBadRequest("Submodel Descriptor needs at least 1 Endpoint.")
 			}
-			if err = createEndpoints(tx, submodelDescriptorId, val.Endpoints); err != nil {
+			if err = createEndpoints(tx, submodelDescriptorID, val.Endpoints); err != nil {
 				return err
 			}
 		}
@@ -100,7 +100,7 @@ func createSubModelDescriptors(tx *sql.Tx, aasDescriptorId int64, submodelDescri
 	return nil
 }
 
-func createsubModelDescriptorSupplementalSemantic(tx *sql.Tx, subModelDescriptorId int64, references []model.Reference) error {
+func createsubModelDescriptorSupplementalSemantic(tx *sql.Tx, subModelDescriptorID int64, references []model.Reference) error {
 	if len(references) == 0 {
 		return nil
 	}
@@ -113,7 +113,7 @@ func createsubModelDescriptorSupplementalSemantic(tx *sql.Tx, subModelDescriptor
 			return err
 		}
 		rows = append(rows, goqu.Record{
-			colDescriptorID: subModelDescriptorId,
+			colDescriptorID: subModelDescriptorID,
 			colReferenceID:  referenceID,
 		})
 	}

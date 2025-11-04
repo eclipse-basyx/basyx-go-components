@@ -1,4 +1,4 @@
-package persistence_postgresql
+package aasregistrydatabase
 
 import (
 	"context"
@@ -87,7 +87,9 @@ func readAdministrativeInformationByIDs(
 	if err != nil {
 		return nil, fmt.Errorf("querying administrative information failed: %w", err)
 	}
-	defer rows.Close()
+    defer func() {
+        _ = rows.Close()
+    }()
 
 	type row struct {
 		ID             int64

@@ -1,4 +1,4 @@
-package persistence_postgresql
+package aasregistrydatabase
 
 import (
 	"context"
@@ -76,7 +76,9 @@ func readEndpointsByDescriptorIDs(
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+    defer func() {
+        _ = rows.Close()
+    }()
 
 	type secAttr struct {
 		Type  string `json:"type"`

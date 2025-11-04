@@ -1,4 +1,4 @@
-package persistence_postgresql
+package aasregistrydatabase
 
 import (
 	"context"
@@ -41,7 +41,7 @@ func readSubmodelDescriptorsByAASDescriptorIDs(
 		Select(
 			smd.Col(colAASDescriptorID),
 			smd.Col(colDescriptorID),
-			smd.Col(colIdShort),
+			smd.Col(colIDShort),
 			smd.Col(colAASID),
 			smd.Col(colSemanticID),
 			smd.Col(colAdminInfoID),
@@ -73,7 +73,9 @@ func readSubmodelDescriptorsByAASDescriptorIDs(
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+    defer func() {
+        _ = rows.Close()
+    }()
 
 	perAAS := make(map[int64][]rowData, len(uniqAASDesc))
 	allSmdDescIDs := make([]int64, 0, 10000)
@@ -143,7 +145,7 @@ func readSubmodelDescriptorsByAASDescriptorIDs(
 	if len(uniqSemRefIDs) > 0 {
 		ids := uniqSemRefIDs
 		g.Go(func() error {
-			m, err := GetReferencesByIdsBatch(db, ids)
+			m, err := GetReferencesByIDsBatch(db, ids)
 			if err != nil {
 				return err
 			}

@@ -1,4 +1,4 @@
-package persistence_postgresql
+package aasregistrydatabase
 
 import (
 	"context"
@@ -10,18 +10,18 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
 
-func readSpecificAssetIdsByDescriptorID(
+func readSpecificAssetIDsByDescriptorID(
 	ctx context.Context,
 	db *sql.DB,
 	descriptorID int64,
 ) ([]model.SpecificAssetID, error) {
 
-	v, err := readSpecificAssetIdsByDescriptorIDs(ctx, db, []int64{descriptorID})
+	v, err := readSpecificAssetIDsByDescriptorIDs(ctx, db, []int64{descriptorID})
 	return v[descriptorID], err
 }
 
 // Bulk: descriptorIDs -> []SpecificAssetId
-func readSpecificAssetIdsByDescriptorIDs(
+func readSpecificAssetIDsByDescriptorIDs(
 	ctx context.Context,
 	db *sql.DB,
 	descriptorIDs []int64,
@@ -65,7 +65,9 @@ func readSpecificAssetIdsByDescriptorIDs(
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+    defer func() {
+        _ = rows.Close()
+    }()
 
 	// Collect per-descriptor rowData and IDs for batch lookups
 	perDesc := make(map[int64][]rowData, len(uniqDesc))
@@ -112,7 +114,7 @@ func readSpecificAssetIdsByDescriptorIDs(
 	uniqExt := extRefIDs
 
 	// Batch supplemental semantics: specific_id -> []Reference
-	suppBySpecific, err := readSpecificAssetIdSupplementalSemanticBySpecificIDs(ctx, db, allSpecificIDs)
+	suppBySpecific, err := readSpecificAssetIDSupplementalSemanticBySpecificIDs(ctx, db, allSpecificIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -122,7 +124,7 @@ func readSpecificAssetIdsByDescriptorIDs(
 	refByID := make(map[int64]*model.Reference)
 	if len(allRefIDs) > 0 {
 		// If your helper has a different signature, adjust here.
-		refByID, err = GetReferencesByIdsBatch(db, allRefIDs)
+		refByID, err = GetReferencesByIDsBatch(db, allRefIDs)
 		if err != nil {
 			return nil, err
 		}
@@ -162,7 +164,7 @@ func readSpecificAssetIdsByDescriptorIDs(
 	return out, nil
 }
 
-func readSpecificAssetIdSupplementalSemanticBySpecificIDs(
+func readSpecificAssetIDSupplementalSemanticBySpecificIDs(
 	ctx context.Context,
 	db *sql.DB,
 	specificAssetIDs []int64,

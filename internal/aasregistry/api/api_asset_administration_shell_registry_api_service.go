@@ -138,7 +138,7 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) GetAssetAdministrationSh
 		), nil
 	}
 
-	result, err := s.aasRegistryBackend.GetAssetAdministrationShellDescriptorById(ctx, string(decoded))
+	result, err := s.aasRegistryBackend.GetAssetAdministrationShellDescriptorByID(ctx, string(decoded))
 	if err != nil {
 		switch {
 		case common.IsErrBadRequest(err):
@@ -219,7 +219,7 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) DeleteAssetAdministratio
 		), nil
 	}
 
-	if err := s.aasRegistryBackend.DeleteAssetAdministrationShellDescriptorById(ctx, decoded); err != nil {
+	if err := s.aasRegistryBackend.DeleteAssetAdministrationShellDescriptorByID(ctx, decoded); err != nil {
 		switch {
 		case common.IsErrNotFound(err):
 			log.Printf("🧩 [%s] Error in DeleteAssetAdministrationShellDescriptorById: not found (aasId=%q): %v", componentName, decoded, err)

@@ -1,4 +1,4 @@
-package persistence_postgresql
+package aasregistrydatabase
 
 import (
 	"context"
@@ -11,21 +11,33 @@ import (
 	"time"
 
 	"github.com/doug-martin/goqu/v9"
-	_ "github.com/doug-martin/goqu/v9/dialect/postgres"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	persistence_utils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
-	_ "github.com/lib/pq"
 )
 
+// PostgreSQLAASRegistryDatabase is a PostgreSQL-backed implementation of the AAS
+// registry database. It is safe for concurrent use by multiple goroutines.
 type PostgreSQLAASRegistryDatabase struct {
 	db           *sql.DB
 	cacheEnabled bool
 }
 
-func NewPostgreSQLAASRegistryDatabase(dsn string, maxOpenConns, maxIdleConns int, connMaxLifetimeMinutes int, cacheEnabled bool, databaseSchema string) (*PostgreSQLAASRegistryDatabase, error) {
+// NewPostgreSQLAASRegistryDatabase creates a new PostgreSQL-backed AAS registry
+// database handle. It initializes the database using the provided DSN and
+// schema path (or the default bundled schema when empty), and configures the
+// connection pool according to the supplied limits. The returned instance can
+// be used concurrently by multiple goroutines.
+func NewPostgreSQLAASRegistryDatabase(
+	dsn string,
+	maxOpenConns, maxIdleConns int,
+	connMaxLifetimeMinutes int,
+	cacheEnabled bool,
+	databaseSchema string,
+) (*PostgreSQLAASRegistryDatabase, error) {
+
 	// Determine which schema to load: prefer provided path, otherwise default bundled schema
 	schemaPath := databaseSchema
 	if schemaPath == "" {
@@ -35,12 +47,27 @@ func NewPostgreSQLAASRegistryDatabase(dsn string, maxOpenConns, maxIdleConns int
 		}
 	}
 
+	// Initialize database using common helper
 	db, err := common.InitializeDatabase(dsn, schemaPath)
 	if err != nil {
 		return nil, err
 	}
 
-	return &PostgreSQLAASRegistryDatabase{db: db, cacheEnabled: cacheEnabled}, nil
+	// Configure connection pool
+	if maxOpenConns > 0 {
+		db.SetMaxOpenConns(maxOpenConns)
+	}
+	if maxIdleConns > 0 {
+		db.SetMaxIdleConns(maxIdleConns)
+	}
+	if connMaxLifetimeMinutes > 0 {
+		db.SetConnMaxLifetime(time.Duration(connMaxLifetimeMinutes) * time.Minute)
+	}
+
+	return &PostgreSQLAASRegistryDatabase{
+		db:           db,
+		cacheEnabled: cacheEnabled,
+	}, nil
 }
 
 // WithTx runs the given function within a database transaction.
@@ -74,7 +101,7 @@ func (p *PostgreSQLAASRegistryDatabase) InsertAdministrationShellDescriptor(ctx 
 }
 
 // InsertAdministrationShellDescriptorTx performs the insert using the provided transaction.
-func (p *PostgreSQLAASRegistryDatabase) InsertAdministrationShellDescriptorTx(ctx context.Context, tx *sql.Tx, aasd model.AssetAdministrationShellDescriptor) error {
+func (p *PostgreSQLAASRegistryDatabase) InsertAdministrationShellDescriptorTx(_ context.Context, tx *sql.Tx, aasd model.AssetAdministrationShellDescriptor) error {
 	d := goqu.Dialect(dialect)
 
 	descTbl := goqu.T(tblDescriptor)
@@ -86,45 +113,45 @@ func (p *PostgreSQLAASRegistryDatabase) InsertAdministrationShellDescriptorTx(ct
 	if buildErr != nil {
 		return buildErr
 	}
-	var descriptorId int64
-	if err := tx.QueryRow(sqlStr, args...).Scan(&descriptorId); err != nil {
+	var descriptorID int64
+	if err := tx.QueryRow(sqlStr, args...).Scan(&descriptorID); err != nil {
 		return err
 	}
 
-	var displayNameId, descriptionId, administrationId sql.NullInt64
+	var displayNameID, descriptionID, administrationID sql.NullInt64
 
 	dnID, err := persistence_utils.CreateLangStringNameTypes(tx, aasd.DisplayName)
 	if err != nil {
 		fmt.Println(err)
 		return common.NewInternalServerError("Failed to create DisplayName - no changes applied - see console for details")
 	}
-	displayNameId = dnID
+	displayNameID = dnID
 
 	descID, err := persistence_utils.CreateLangStringTextTypesN(tx, aasd.Description)
 	if err != nil {
 		fmt.Println(err)
 		return common.NewInternalServerError("Failed to create Description - no changes applied - see console for details")
 	}
-	descriptionId = descID
+	descriptionID = descID
 
 	adminID, err := persistence_utils.CreateAdministrativeInformation(tx, aasd.Administration)
 	if err != nil {
 		fmt.Println(err)
 		return common.NewInternalServerError("Failed to create Administration - no changes applied - see console for details")
 	}
-	administrationId = adminID
+	administrationID = adminID
 
 	sqlStr, args, buildErr = d.
 		Insert(tblAASDescriptor).
 		Rows(goqu.Record{
-			colDescriptorID:  descriptorId,
-			colDescriptionID: descriptionId,
-			colDisplayNameID: displayNameId,
-			colAdminInfoID:   administrationId,
+			colDescriptorID:  descriptorID,
+			colDescriptionID: descriptionID,
+			colDisplayNameID: displayNameID,
+			colAdminInfoID:   administrationID,
 			colAssetKind:     aasd.AssetKind,
 			colAssetType:     aasd.AssetType,
 			colGlobalAssetID: aasd.GlobalAssetId,
-			colIdShort:       aasd.IdShort,
+			colIDShort:       aasd.IdShort,
 			colAASID:         aasd.Id,
 		}).
 		ToSQL()
@@ -135,28 +162,31 @@ func (p *PostgreSQLAASRegistryDatabase) InsertAdministrationShellDescriptorTx(ct
 		return err
 	}
 
-	if err = createEndpoints(tx, descriptorId, aasd.Endpoints); err != nil {
+	if err = createEndpoints(tx, descriptorID, aasd.Endpoints); err != nil {
 		fmt.Println(err)
 		return common.NewInternalServerError("Failed to create Endpoints - no changes applied - see console for details")
 	}
 
-	if err = createSpecificAssetId(tx, descriptorId, aasd.SpecificAssetIds); err != nil {
+	if err = createSpecificAssetID(tx, descriptorID, aasd.SpecificAssetIds); err != nil {
 		fmt.Println(err)
 		return common.NewInternalServerError("Failed to create Specific Asset Ids - no changes applied - see console for details")
 	}
 
-	if err = createExtensions(tx, descriptorId, aasd.Extensions); err != nil {
+	if err = createExtensions(tx, descriptorID, aasd.Extensions); err != nil {
 		return err
 	}
 
-	if err = createSubModelDescriptors(tx, descriptorId, aasd.SubmodelDescriptors); err != nil {
+	if err = createSubModelDescriptors(tx, descriptorID, aasd.SubmodelDescriptors); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func (p *PostgreSQLAASRegistryDatabase) GetAssetAdministrationShellDescriptorById(
+// GetAssetAdministrationShellDescriptorByID retrieves a single
+// AssetAdministrationShellDescriptor by its AAS identifier. It returns a
+// NotFound error when no descriptor exists for the provided identifier.
+func (p *PostgreSQLAASRegistryDatabase) GetAssetAdministrationShellDescriptorByID(
 	ctx context.Context, aasIdentifier string,
 ) (model.AssetAdministrationShellDescriptor, error) {
 	adda := time.Now()
@@ -176,7 +206,7 @@ func (p *PostgreSQLAASRegistryDatabase) GetAssetAdministrationShellDescriptorByI
 			aas.Col(colAssetKind),
 			aas.Col(colAssetType),
 			aas.Col(colGlobalAssetID),
-			aas.Col(colIdShort),
+			aas.Col(colIDShort),
 			aas.Col(colAASID),
 			aas.Col(colAdminInfoID),
 			aas.Col(colDisplayNameID),
@@ -231,7 +261,7 @@ func (p *PostgreSQLAASRegistryDatabase) GetAssetAdministrationShellDescriptorByI
 		displayName      []model.LangStringNameType
 		description      []model.LangStringTextType
 		endpoints        []model.Endpoint
-		specificAssetIds []model.SpecificAssetID
+		specificAssetIDs []model.SpecificAssetID
 		extensions       []model.Extension
 		smds             []model.SubmodelDescriptor
 	)
@@ -277,11 +307,11 @@ func (p *PostgreSQLAASRegistryDatabase) GetAssetAdministrationShellDescriptorByI
 	})
 
 	g.Go(func() error {
-		ids, err := readSpecificAssetIdsByDescriptorID(ctx, p.db, descID)
+		ids, err := readSpecificAssetIDsByDescriptorID(ctx, p.db, descID)
 		if err != nil {
 			return err
 		}
-		specificAssetIds = ids
+		specificAssetIDs = ids
 		return nil
 	})
 
@@ -319,23 +349,23 @@ func (p *PostgreSQLAASRegistryDatabase) GetAssetAdministrationShellDescriptorByI
 		DisplayName:         displayName,
 		Description:         description,
 		Endpoints:           endpoints,
-		SpecificAssetIds:    specificAssetIds,
+		SpecificAssetIds:    specificAssetIDs,
 		Extensions:          extensions,
 		SubmodelDescriptors: smds,
 	}, nil
 }
 
-// DeleteAssetAdministrationShellDescriptorById deletes the main descriptor row for a given AAS id.
+// DeleteAssetAdministrationShellDescriptorByID deletes the main descriptor row for a given AAS id.
 // ON DELETE CASCADE in the schema will remove dependent rows.
-// DeleteAssetAdministrationShellDescriptorById performs the delete in its own transaction by default.
-func (p *PostgreSQLAASRegistryDatabase) DeleteAssetAdministrationShellDescriptorById(ctx context.Context, aasIdentifier string) error {
+// DeleteAssetAdministrationShellDescriptorByID performs the delete in its own transaction by default.
+func (p *PostgreSQLAASRegistryDatabase) DeleteAssetAdministrationShellDescriptorByID(ctx context.Context, aasIdentifier string) error {
 	return p.WithTx(ctx, func(tx *sql.Tx) error {
-		return p.DeleteAssetAdministrationShellDescriptorByIdTx(ctx, tx, aasIdentifier)
+		return p.DeleteAssetAdministrationShellDescriptorByIDTx(ctx, tx, aasIdentifier)
 	})
 }
 
-// DeleteAssetAdministrationShellDescriptorByIdTx deletes using the provided transaction.
-func (p *PostgreSQLAASRegistryDatabase) DeleteAssetAdministrationShellDescriptorByIdTx(ctx context.Context, tx *sql.Tx, aasIdentifier string) error {
+// DeleteAssetAdministrationShellDescriptorByIDTx deletes using the provided transaction.
+func (p *PostgreSQLAASRegistryDatabase) DeleteAssetAdministrationShellDescriptorByIDTx(ctx context.Context, tx *sql.Tx, aasIdentifier string) error {
 	d := goqu.Dialect(dialect)
 	aas := goqu.T(tblAASDescriptor).As("aas")
 
@@ -417,6 +447,9 @@ func (p *PostgreSQLAASRegistryDatabase) ReplaceAdministrationShellDescriptor(ctx
 	return existed, err
 }
 
+// GetLangStringTextTypesByIDs fetches LangStringTextType rows for the given
+// reference IDs and groups them by their reference ID. An empty input returns
+// an empty map.
 func GetLangStringTextTypesByIDs(
 	db *sql.DB,
 	textTypeIDs []int64,
@@ -443,7 +476,9 @@ func GetLangStringTextTypesByIDs(
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+    defer func() {
+        _ = rows.Close()
+    }()
 
 	for rows.Next() {
 		var refID int64
@@ -465,6 +500,9 @@ func GetLangStringTextTypesByIDs(
 	return out, nil
 }
 
+// GetLangStringNameTypesByIDs fetches LangStringNameType rows for the given
+// reference IDs and groups them by their reference ID. An empty input returns
+// an empty map.
 func GetLangStringNameTypesByIDs(
 	db *sql.DB,
 	nameTypeIDs []int64,
@@ -493,7 +531,9 @@ func GetLangStringNameTypesByIDs(
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+    defer func() {
+        _ = rows.Close()
+    }()
 
 	for rows.Next() {
 		var refID int64
@@ -515,6 +555,10 @@ func GetLangStringNameTypesByIDs(
 	return out, nil
 }
 
+// ListAssetAdministrationShellDescriptors lists AAS descriptors optionally
+// filtered by asset kind and asset type, using cursor-based pagination on the
+// AAS Id. It returns the current page and a next cursor when more results are
+// available. When limit <= 0, a large default is used.
 func (p *PostgreSQLAASRegistryDatabase) ListAssetAdministrationShellDescriptors(
 	ctx context.Context,
 	limit int32,
@@ -541,7 +585,7 @@ func (p *PostgreSQLAASRegistryDatabase) ListAssetAdministrationShellDescriptors(
 			aas.Col(colAssetKind),
 			aas.Col(colAssetType),
 			aas.Col(colGlobalAssetID),
-			aas.Col(colIdShort),
+			aas.Col(colIDShort),
 			aas.Col(colAASID),
 			aas.Col(colAdminInfoID),
 			aas.Col(colDisplayNameID),
@@ -573,7 +617,9 @@ func (p *PostgreSQLAASRegistryDatabase) ListAssetAdministrationShellDescriptors(
 		fmt.Println("ListAssetAdministrationShellDescriptors: query error:", err)
 		return nil, "", common.NewInternalServerError("Failed to query AAS descriptors. See server logs for details.")
 	}
-	defer rows.Close()
+    defer func() {
+        _ = rows.Close()
+    }()
 
 	type rowData struct {
 		descID        int64
@@ -720,7 +766,7 @@ func (p *PostgreSQLAASRegistryDatabase) ListAssetAdministrationShellDescriptors(
 			return nil
 		})
 		g.Go(func() error {
-			m, err := readSpecificAssetIdsByDescriptorIDs(gctx, p.db, ids)
+			m, err := readSpecificAssetIDsByDescriptorIDs(gctx, p.db, ids)
 			if err != nil {
 				return err
 			}
@@ -885,13 +931,16 @@ func (p *PostgreSQLAASRegistryDatabase) ListSubmodelDescriptorsForAAS(
 
 	// 5) Peek & trim to page size, compute nextCursor.
 	var nextCursor string
-	if len(list) > peekLimit {
+	switch {
+	case len(list) > peekLimit:
 		nextCursor = list[peekLimit-1].Id
 		list = list[:peekLimit-1]
-	} else if len(list) == peekLimit {
+
+	case len(list) == peekLimit:
 		nextCursor = list[limit].Id
 		list = list[:limit]
-	} else if len(list) > int(limit) {
+
+	case len(list) > int(limit):
 		nextCursor = list[limit].Id
 		list = list[:limit]
 	}

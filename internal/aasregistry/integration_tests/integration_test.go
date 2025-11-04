@@ -32,7 +32,9 @@ func loadTestConfig(filename string) ([]TestConfig, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer file.Close()
+    defer func() {
+        _ = file.Close()
+    }()
 
 	var configs []TestConfig
 	decoder := json.NewDecoder(file)
@@ -176,7 +178,9 @@ func makeRequest(config TestConfig) (string, error) {
 		return "", err
 	}
 
-	defer resp.Body.Close()
+    defer func() {
+        _ = resp.Body.Close()
+    }()
 
 	if resp.StatusCode != config.ExpectedStatus {
 		fmt.Printf("Response status code: %d\n", resp.StatusCode)

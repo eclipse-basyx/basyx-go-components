@@ -1,4 +1,4 @@
-package persistence_postgresql
+package aasregistrydatabase
 
 import (
 	"context"
@@ -75,7 +75,9 @@ func readExtensionsByDescriptorIDs(
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+    defer func() {
+        _ = rows.Close()
+    }()
 
 	perDesc := make(map[int64][]row, len(uniqDesc))
 	allExtIDs := make([]int64, 0, 256)
@@ -138,7 +140,7 @@ func readExtensionsByDescriptorIDs(
 	semRefByID := make(map[int64]*model.Reference)
 	if len(uniqSemRefIDs) > 0 {
 		var err error
-		semRefByID, err = GetReferencesByIdsBatch(db, uniqSemRefIDs)
+		semRefByID, err = GetReferencesByIDsBatch(db, uniqSemRefIDs)
 		if err != nil {
 			return nil, fmt.Errorf("GetReferencesByIdsBatch (semantic refs): %w", err)
 		}

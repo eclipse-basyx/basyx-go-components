@@ -1,4 +1,4 @@
-package persistence_postgresql
+package aasregistrydatabase
 
 import (
 	"context"
@@ -11,11 +11,28 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
 
-// Assumes you have a package/global variable `dialect` like "postgres"
+// GetReferencesByIDsBatch loads full Reference trees for a set of root reference
+// IDs in one round of batched queries.
 //
-// var dialect = "postgres"
-
-func GetReferencesByIdsBatch(db *sql.DB, ids []int64) (map[int64]*model.Reference, error) {
+// It performs three steps:
+//  1. Load all requested root references and any keys attached to them.
+//  2. Load all descendant references for those roots (children, grandchildren,
+//     …) together with their keys.
+//  3. Link the flat rows into nested structures via builder.BuildNestedStructure.
+//
+// The function returns a map keyed by root reference ID to the fully hydrated
+// *model.Reference. Missing or unknown IDs are simply absent from the result
+// map. If ids is empty, an empty map is returned.
+//
+// The query uses LEFT JOINs so roots without keys are still returned. Within a
+// root, duplicates from the SQL result are de-duplicated when constructing the
+// tree; multiple keys for the same node are accumulated.
+//
+// Errors are returned for SQL statement construction failures, query/scan
+// errors, or if the builder returns an error while attaching keys.
+//
+// Note: the function prints the elapsed time to stdout for basic diagnostics.
+func GetReferencesByIDsBatch(db *sql.DB, ids []int64) (map[int64]*model.Reference, error) {
 	if len(ids) == 0 {
 		return map[int64]*model.Reference{}, nil
 	}
@@ -60,7 +77,9 @@ func GetReferencesByIdsBatch(db *sql.DB, ids []int64) (map[int64]*model.Referenc
 	if err != nil {
 		return nil, fmt.Errorf("load roots: %w", err)
 	}
-	defer rows.Close()
+    defer func() {
+        _ = rows.Close()
+    }()
 
 	refs := make(map[int64]*model.Reference)
 	builders := make(map[int64]*builder.ReferenceBuilder)
@@ -72,12 +91,13 @@ func GetReferencesByIdsBatch(db *sql.DB, ids []int64) (map[int64]*model.Referenc
 		}
 
 		// Ensure builder exists per root
-		rf, ok := refs[rr.rootID]
+		_, ok := refs[rr.rootID]
 		var b *builder.ReferenceBuilder
 		if !ok {
-			rf, b = builder.NewReferenceBuilder(rr.rootType, rr.rootID)
+			rf, nb := builder.NewReferenceBuilder(rr.rootType, rr.rootID)
 			refs[rr.rootID] = rf
-			builders[rr.rootID] = b
+			builders[rr.rootID] = nb
+			b = nb
 		} else {
 			b = builders[rr.rootID]
 		}
@@ -145,7 +165,9 @@ func GetReferencesByIdsBatch(db *sql.DB, ids []int64) (map[int64]*model.Referenc
 	if err != nil {
 		return nil, fmt.Errorf("load descendants: %w", err)
 	}
-	defer descRows.Close()
+    defer func() {
+        _ = descRows.Close()
+    }()
 
 	// Track "seen" per root to avoid duplicate CreateReferredSemanticId calls
 	seenPerRoot := make(map[int64]map[int64]bool)
@@ -239,7 +261,9 @@ func readEntityReferences1ToMany(
 	if err != nil {
 		return nil, fmt.Errorf("query links: %w", err)
 	}
-	defer rows.Close()
+    defer func() {
+        _ = rows.Close()
+    }()
 
 	perEntityRefIDs := make(map[int64][]int64, len(ids))
 	allRefIDs := make([]int64, 0, 256)
@@ -276,7 +300,7 @@ func readEntityReferences1ToMany(
 	// (Optional) de-duplicate if desired; keeping behavior identical to original:
 	uniqRefIDs := allRefIDs
 
-	refByID, err := GetReferencesByIdsBatch(db, uniqRefIDs)
+	refByID, err := GetReferencesByIDsBatch(db, uniqRefIDs)
 	if err != nil {
 		return nil, fmt.Errorf("GetReferencesByIdsBatch: %w", err)
 	}

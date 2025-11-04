@@ -748,6 +748,19 @@ func CreateLangStringTextTypes(tx *sql.Tx, textTypes []gen.LangStringText) (sql.
 	return textTypeID, nil
 }
 
+// CreateLangStringTextTypesN inserts language-specific text strings into the database.
+//
+// This function creates a reference record and then inserts all language-specific text strings
+// associated with it. Each text string contains text and language information. The text types
+// can be any implementation of the LangStringText interface.
+//
+// Parameters:
+//   - tx: Active database transaction
+//   - textTypes: Slice of LangStringTextType objects to be created
+//
+// Returns:
+//   - sql.NullInt64: Database ID of the created lang_string_text_type_reference, or an invalid NullInt64 if the slice is empty
+//   - error: An error if the insertion fails
 func CreateLangStringTextTypesN(tx *sql.Tx, textTypes []gen.LangStringTextType) (sql.NullInt64, error) {
 	if textTypes == nil {
 		return sql.NullInt64{}, nil

@@ -68,6 +68,10 @@ type AdministrationRow struct {
 func GetAdministrationSubqueryForSubmodel(dialect goqu.DialectWrapper) *goqu.SelectDataset {
 	return GetAdministrationSubquery(dialect, "s.administration_id")
 }
+
+// GetAdministrationSubquery builds the same administrative-information JSONB
+// subquery as GetAdministrationSubqueryForSubmodel, but allows customizing the
+// link expression to the administrative_information table via adminTableLink.
 func GetAdministrationSubquery(dialect goqu.DialectWrapper, adminTableLink string) *goqu.SelectDataset {
 	administrativeInformationEmbeddedDataSpecificationReferenceSubquery, administrativeInformationEmbeddedDataSpecificationReferenceReferredSubquery, administrativeInformationIEC61360Subquery := GetEmbeddedDataSpecificationSubqueries(dialect, "administrative_information_embedded_data_specification", "administrative_information_id", adminTableLink)
 
