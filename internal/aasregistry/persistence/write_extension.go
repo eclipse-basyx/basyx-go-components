@@ -16,7 +16,7 @@ func createExtensions(tx *sql.Tx, descriptorId int64, extensions []model.Extensi
 		d := goqu.Dialect(dialect)
 		for _, val := range extensions {
 			var a sql.NullInt64
-			semanticId, err := persistence_utils.CreateReference(tx, val.SemanticId, a, a)
+			semanticId, err := persistence_utils.CreateReference(tx, val.SemanticID, a, a)
 			if err != nil {
 				return err
 			}

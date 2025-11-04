@@ -748,6 +748,28 @@ func CreateLangStringTextTypes(tx *sql.Tx, textTypes []gen.LangStringText) (sql.
 	return textTypeID, nil
 }
 
+func CreateLangStringTextTypesN(tx *sql.Tx, textTypes []gen.LangStringTextType) (sql.NullInt64, error) {
+	if textTypes == nil {
+		return sql.NullInt64{}, nil
+	}
+	var id int
+	var textTypeID sql.NullInt64
+	if len(textTypes) > 0 {
+		err := tx.QueryRow(`INSERT INTO lang_string_text_type_reference DEFAULT VALUES RETURNING id`).Scan(&id)
+		if err != nil {
+			return sql.NullInt64{}, err
+		}
+		textTypeID = sql.NullInt64{Int64: int64(id), Valid: true}
+		for i := 0; i < len(textTypes); i++ {
+			_, err := tx.Exec(`INSERT INTO lang_string_text_type (lang_string_text_type_reference_id, text, language) VALUES ($1, $2, $3)`, textTypeID.Int64, textTypes[i].GetText(), textTypes[i].GetLanguage())
+			if err != nil {
+				return sql.NullInt64{}, err
+			}
+		}
+	}
+	return textTypeID, nil
+}
+
 // GetLangStringTextTypes retrieves language-specific text strings from the database.
 //
 // This function fetches all language-specific text strings associated with a given reference ID.

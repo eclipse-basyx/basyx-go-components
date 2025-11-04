@@ -14,7 +14,7 @@ func readSpecificAssetIdsByDescriptorID(
 	ctx context.Context,
 	db *sql.DB,
 	descriptorID int64,
-) ([]model.SpecificAssetId, error) {
+) ([]model.SpecificAssetID, error) {
 
 	v, err := readSpecificAssetIdsByDescriptorIDs(ctx, db, []int64{descriptorID})
 	return v[descriptorID], err
@@ -25,9 +25,9 @@ func readSpecificAssetIdsByDescriptorIDs(
 	ctx context.Context,
 	db *sql.DB,
 	descriptorIDs []int64,
-) (map[int64][]model.SpecificAssetId, error) {
+) (map[int64][]model.SpecificAssetID, error) {
 	start := time.Now()
-	out := make(map[int64][]model.SpecificAssetId, len(descriptorIDs))
+	out := make(map[int64][]model.SpecificAssetID, len(descriptorIDs))
 	if len(descriptorIDs) == 0 {
 		return out, nil
 	}
@@ -140,11 +140,11 @@ func readSpecificAssetIdsByDescriptorIDs(
 				extRef = refByID[r.externalSubjectRefID.Int64]
 			}
 
-			out[descID] = append(out[descID], model.SpecificAssetId{
+			out[descID] = append(out[descID], model.SpecificAssetID{
 				Name:                    nvl(r.name),
 				Value:                   nvl(r.value),
-				SemanticId:              semRef,
-				ExternalSubjectId:       extRef,
+				SemanticID:              semRef,
+				ExternalSubjectID:       extRef,
 				SupplementalSemanticIds: suppBySpecific[r.specificID],
 			})
 		}

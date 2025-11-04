@@ -181,7 +181,7 @@ func readExtensionsByDescriptorIDs(
 			suppRefs := suppByExt[r.extID]
 			referRefs := refersByExt[r.extID]
 			out[descID] = append(out[descID], model.Extension{
-				SemanticId:              semanticRef,
+				SemanticID:              semanticRef,
 				Name:                    r.name.String,
 				ValueType:               vType,
 				Value:                   val,

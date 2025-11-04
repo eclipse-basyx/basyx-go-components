@@ -94,9 +94,6 @@ func makeLogRecord(iter int, componentName string, r ComponentResult, level LogD
 		if r.Error != nil {
 			lr.Error = r.Error.Error()
 		}
-		// ✅ sanitize before putting into LogRecord
-		lr.Request = safeRaw(r.Request)
-		lr.Response = safeRaw(r.Response)
 	}
 	return lr
 }

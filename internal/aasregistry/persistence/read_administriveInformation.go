@@ -12,7 +12,7 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	builders "github.com/eclipse-basyx/basyx-go-components/internal/common/builder"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
-	submodel_query "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/Submodel/SubmodelQuery"
+	submodelsubqueries "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/Submodel/submodelQueries"
 )
 
 // readAdministrativeInformationByID fetches a single AdministrativeInformation by a nullable ID.
@@ -68,7 +68,7 @@ func readAdministrativeInformationByIDs(
 	d := goqu.Dialect(dialect)
 
 	// Correlated subquery that returns JSON for the administration block.
-	adminJSON := submodel_query.GetAdministrationSubquery(d, "s.administrative_information_id")
+	adminJSON := submodelsubqueries.GetAdministrationSubquery(d, "s.administrative_information_id")
 
 	// SELECT only the requested IDs.
 	ds := d.From(goqu.T(tableName).As("s")).
@@ -120,7 +120,7 @@ func readAdministrativeInformationByIDs(
 		out[r.ID] = &model.AdministrativeInformation{
 			Version:                    admin.Version,
 			Revision:                   admin.Revision,
-			TemplateId:                 admin.TemplateId,
+			TemplateID:                 admin.TemplateID,
 			Creator:                    admin.Creator,
 			EmbeddedDataSpecifications: admin.EmbeddedDataSpecifications,
 		}

@@ -178,13 +178,13 @@ func GetReferencesByIdsBatch(db *sql.DB, ids []int64) (map[int64]*model.Referenc
 
 		// Create node once
 		if !seenPerRoot[rootID][dr.id] {
-			b.CreateReferredSemanticId(dr.id, parentID, dr.typ)
+			b.CreateReferredSemanticID(dr.id, parentID, dr.typ)
 			seenPerRoot[rootID][dr.id] = true
 		}
 
 		// Add key if present
 		if dr.keyID.Valid && dr.keyType.Valid && dr.keyValue.Valid {
-			if err := b.CreateReferredSemanticIdKey(dr.id, dr.keyID.Int64, dr.keyType.String, dr.keyValue.String); err != nil {
+			if err := b.CreateReferredSemanticIDKey(dr.id, dr.keyID.Int64, dr.keyType.String, dr.keyValue.String); err != nil {
 				return nil, err
 			}
 		}

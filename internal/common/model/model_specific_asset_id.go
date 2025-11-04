@@ -37,14 +37,14 @@ func AssertSpecificAssetIdRequired(obj SpecificAssetID) error {
 		}
 	}
 
-	if obj.ExternalSubjectId != nil {
-		if err := AssertReferenceRequired(*obj.ExternalSubjectId); err != nil {
+	if obj.ExternalSubjectID != nil {
+		if err := AssertReferenceRequired(*obj.ExternalSubjectID); err != nil {
 			return err
 		}
 	}
 
-	if obj.SemanticId != nil {
-		if err := AssertReferenceRequired(*obj.SemanticId); err != nil {
+	if obj.SemanticID != nil {
+		if err := AssertReferenceRequired(*obj.SemanticID); err != nil {
 			return err
 		}
 	}
@@ -63,14 +63,14 @@ func AssertSpecificAssetIdRequired(obj SpecificAssetID) error {
 //nolint:all
 func AssertSpecificAssetIdConstraints(obj SpecificAssetID) error {
 
-	if obj.ExternalSubjectId != nil {
-		if err := AssertReferenceConstraints(*obj.ExternalSubjectId); err != nil {
+	if obj.ExternalSubjectID != nil {
+		if err := AssertReferenceConstraints(*obj.ExternalSubjectID); err != nil {
 			return err
 		}
 	}
 
-	if obj.SemanticId != nil {
-		if err := AssertReferenceConstraints(*obj.SemanticId); err != nil {
+	if obj.SemanticID != nil {
+		if err := AssertReferenceConstraints(*obj.SemanticID); err != nil {
 			return err
 		}
 	}

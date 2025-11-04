@@ -8,7 +8,7 @@ import (
 	persistence_utils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
 )
 
-func createSpecificAssetId(tx *sql.Tx, descriptorId int64, specificAssetIds []model.SpecificAssetId) error {
+func createSpecificAssetId(tx *sql.Tx, descriptorId int64, specificAssetIds []model.SpecificAssetID) error {
 	if specificAssetIds == nil {
 		return nil
 	}
@@ -17,11 +17,11 @@ func createSpecificAssetId(tx *sql.Tx, descriptorId int64, specificAssetIds []mo
 		for _, val := range specificAssetIds {
 			var a sql.NullInt64
 
-			externalSubjectReferenceId, err := persistence_utils.CreateReference(tx, val.ExternalSubjectId, a, a)
+			externalSubjectReferenceId, err := persistence_utils.CreateReference(tx, val.ExternalSubjectID, a, a)
 			if err != nil {
 				return err
 			}
-			semanticId, err := persistence_utils.CreateReference(tx, val.SemanticId, a, a)
+			semanticId, err := persistence_utils.CreateReference(tx, val.SemanticID, a, a)
 			if err != nil {
 				return err
 			}
