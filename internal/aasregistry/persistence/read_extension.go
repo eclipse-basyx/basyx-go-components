@@ -3,11 +3,15 @@ package aasregistrydatabase
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"time"
 
 	"github.com/doug-martin/goqu/v9"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	builders "github.com/eclipse-basyx/basyx-go-components/internal/common/builder"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/queries"
 )
 
 func readExtensionsByDescriptorID(
@@ -32,172 +36,74 @@ func readExtensionsByDescriptorIDs(
 	uniqDesc := descriptorIDs
 
 	d := goqu.Dialect(dialect)
-	de := goqu.T(tblDescriptorExtension).As("de")
-	e := goqu.T(tblExtension).As("e")
 
-	// Pull all extensions for all descriptors in one go
-	sqlStr, args, err := d.
-		From(de).
-		InnerJoin(e, goqu.On(de.Col(colExtensionID).Eq(e.Col(colID)))).
+	// Correlated subquery that returns JSON for the administration block.
+
+	extensionSubquery := queries.GetExtensionSubquery(d, goqu.T(tblDescriptorExtension), "extension_id", "descriptor_id", goqu.I("s.id"))
+	ds := d.From(goqu.T("descriptor").As("s")).
 		Select(
-			de.Col(colDescriptorID), // 0
-			e.Col(colID),            // 1
-			e.Col(colSemanticID),    // 2
-			e.Col(colName),          // 3
-			e.Col(colValueType),     // 4
-			e.Col(colValueText),     // 5
-			e.Col(colValueNum),      // 6
-			e.Col(colValueBool),     // 7
-			e.Col(colValueTime),     // 8
-			e.Col(colValueDatetime), // 9
+			goqu.I("s.id"),
+			goqu.L("COALESCE((?), '[]'::jsonb)", extensionSubquery),
 		).
-		Where(de.Col(colDescriptorID).In(uniqDesc)).
-		Order(de.Col(colDescriptorID).Asc(), e.Col(colID).Asc()).
-		ToSQL()
+		Where(goqu.I("s.id").In(uniqDesc))
+
+	query, args, err := ds.ToSQL()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("building SQL failed: %w", err)
 	}
+	rows, err := db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("querying administrative information failed: %w", err)
+	}
+
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	type row struct {
-		descID   int64
-		extID    int64
-		semRefID sql.NullInt64
-		name     sql.NullString
-		vType    sql.NullString
-		vText    sql.NullString
-		vNum     sql.NullString
-		vBool    sql.NullString
-		vTime    sql.NullString
-		vDT      sql.NullString
+		ID         int64
+		Extensions json.RawMessage
 	}
-
-	rows, err := db.QueryContext(ctx, sqlStr, args...)
-	if err != nil {
-		return nil, err
-	}
-    defer func() {
-        _ = rows.Close()
-    }()
-
-	perDesc := make(map[int64][]row, len(uniqDesc))
-	allExtIDs := make([]int64, 0, 256)
-	semRefIDs := make([]int64, 0, 128)
 
 	for rows.Next() {
+
 		var r row
-		if err := rows.Scan(
-			&r.descID,
-			&r.extID,
-			&r.semRefID,
-			&r.name,
-			&r.vType,
-			&r.vText,
-			&r.vNum,
-			&r.vBool,
-			&r.vTime,
-			&r.vDT,
-		); err != nil {
-			return nil, err
+		if err := rows.Scan(&r.ID, &r.Extensions); err != nil {
+			return nil, fmt.Errorf("scanning extension row failed: %w", err)
 		}
-		perDesc[r.descID] = append(perDesc[r.descID], r)
-		allExtIDs = append(allExtIDs, r.extID)
-		if r.semRefID.Valid {
-			semRefIDs = append(semRefIDs, r.semRefID.Int64)
-		}
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
 
-	if len(allExtIDs) == 0 {
-		for _, id := range uniqDesc {
-			if _, ok := out[id]; !ok {
-				out[id] = nil
-			}
-		}
-		return out, nil
-	}
-
-	uniqExtIDs := allExtIDs
-	uniqSemRefIDs := semRefIDs
-
-	suppByExt, err := readEntityReferences1ToMany(
-		ctx, db, uniqExtIDs,
-		"extension_supplemental_semantic_id", "extension_id", "reference_id",
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	refersByExt, err := readEntityReferences1ToMany(
-		ctx, db, uniqExtIDs,
-		"extension_refers_to", "extension_id", "reference_id",
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	semRefByID := make(map[int64]*model.Reference)
-	if len(uniqSemRefIDs) > 0 {
-		var err error
-		semRefByID, err = GetReferencesByIDsBatch(db, uniqSemRefIDs)
-		if err != nil {
-			return nil, fmt.Errorf("GetReferencesByIdsBatch (semantic refs): %w", err)
-		}
-	}
-
-	for descID, rowsForDesc := range perDesc {
-		for _, r := range rowsForDesc {
-			var semanticRef *model.Reference
-			if r.semRefID.Valid {
-				semanticRef = semRefByID[r.semRefID.Int64]
-			}
-
-			val := ""
-			switch r.vType.String {
-			case "xs:string", "xs:anyURI", "xs:base64Binary", "xs:hexBinary":
-				val = r.vText.String
-			case "xs:int", "xs:integer", "xs:long", "xs:short", "xs:byte",
-				"xs:unsignedInt", "xs:unsignedLong", "xs:unsignedShort", "xs:unsignedByte",
-				"xs:positiveInteger", "xs:negativeInteger", "xs:nonNegativeInteger", "xs:nonPositiveInteger",
-				"xs:decimal", "xs:double", "xs:float":
-				val = r.vNum.String
-			case "xs:boolean":
-				val = r.vBool.String
-			case "xs:time":
-				val = r.vTime.String
-			case "xs:date", "xs:dateTime", "xs:duration", "xs:gDay", "xs:gMonth",
-				"xs:gMonthDay", "xs:gYear", "xs:gYearMonth":
-				val = r.vDT.String
-			default:
-				if r.vText.Valid {
-					val = r.vText.String
-				}
-			}
-
-			vType, err := model.NewDataTypeDefXsdFromValue(r.vType.String)
+		// Extensions
+		if common.IsArrayNotEmpty(r.Extensions) {
+			builder := builders.NewExtensionsBuilder()
+			extensionRows, err := builders.ParseExtensionRows(r.Extensions)
 			if err != nil {
 				return nil, err
 			}
+			for _, extensionRow := range extensionRows {
+				_, err = builder.AddExtension(extensionRow.DbID, extensionRow.Name, extensionRow.ValueType, extensionRow.Value, extensionRow.Position)
+				if err != nil {
+					return nil, err
+				}
 
-			suppRefs := suppByExt[r.extID]
-			referRefs := refersByExt[r.extID]
-			out[descID] = append(out[descID], model.Extension{
-				SemanticID:              semanticRef,
-				Name:                    r.name.String,
-				ValueType:               vType,
-				Value:                   val,
-				SupplementalSemanticIds: suppRefs,
-				RefersTo:                referRefs,
-			})
+				_, err = builder.AddSemanticID(extensionRow.DbID, extensionRow.SemanticID, extensionRow.SemanticIDReferredReferences)
+				if err != nil {
+					return nil, err
+				}
+
+				_, err = builder.AddRefersTo(extensionRow.DbID, extensionRow.RefersTo, extensionRow.RefersToReferredReferences)
+				if err != nil {
+					return nil, err
+				}
+
+				_, err = builder.AddSupplementalSemanticIDs(extensionRow.DbID, extensionRow.SupplementalSemanticIDs, extensionRow.SupplementalSemanticIDsReferredReferences)
+				if err != nil {
+					return nil, err
+				}
+			}
+			out[r.ID] = builder.Build()
 		}
 	}
 
-	for _, id := range uniqDesc {
-		if _, ok := out[id]; !ok {
-			out[id] = nil
-		}
-	}
 	duration := time.Since(start)
 	fmt.Printf("extension block took %v to complete\n", duration)
 	return out, nil

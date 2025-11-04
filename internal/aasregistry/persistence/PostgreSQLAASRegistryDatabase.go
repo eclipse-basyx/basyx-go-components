@@ -476,9 +476,9 @@ func GetLangStringTextTypesByIDs(
 	if err != nil {
 		return nil, err
 	}
-    defer func() {
-        _ = rows.Close()
-    }()
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	for rows.Next() {
 		var refID int64
@@ -531,9 +531,9 @@ func GetLangStringNameTypesByIDs(
 	if err != nil {
 		return nil, err
 	}
-    defer func() {
-        _ = rows.Close()
-    }()
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	for rows.Next() {
 		var refID int64
@@ -617,9 +617,9 @@ func (p *PostgreSQLAASRegistryDatabase) ListAssetAdministrationShellDescriptors(
 		fmt.Println("ListAssetAdministrationShellDescriptors: query error:", err)
 		return nil, "", common.NewInternalServerError("Failed to query AAS descriptors. See server logs for details.")
 	}
-    defer func() {
-        _ = rows.Close()
-    }()
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	type rowData struct {
 		descID        int64
