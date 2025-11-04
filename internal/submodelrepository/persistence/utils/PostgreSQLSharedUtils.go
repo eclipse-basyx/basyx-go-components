@@ -23,7 +23,8 @@
 * SPDX-License-Identifier: MIT
 ******************************************************************************/
 
-package persistence_utils
+// Package persistenceutils provides utility functions for persisting AAS entities
+package persistenceutils
 
 import (
 	"database/sql"
@@ -36,17 +37,30 @@ import (
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 )
 
-func CreateExtension(tx *sql.Tx, extension gen.Extension) (sql.NullInt64, error) {
-	var extensionDbId sql.NullInt64
-	var semanticIdRefDbId sql.NullInt64
+// CreateExtension inserts an extension entity into the database.
+//
+// This function creates an extension record with its associated semantic IDs, supplemental semantic IDs,
+// and refersTo references. The extension value is stored in different columns based on its data type
+// (text, numeric, boolean, time, or datetime).
+//
+// Parameters:
+//   - tx: Active database transaction
+//   - extension: Extension object to be created
+//
+// Returns:
+//   - sql.NullInt64: Database ID of the created extension
+//   - error: An error if the insertion fails or if semantic ID creation fails
+func CreateExtension(tx *sql.Tx, extension gen.Extension, position int) (sql.NullInt64, error) {
+	var extensionDbID sql.NullInt64
+	var semanticIDRefDbID sql.NullInt64
 
-	if extension.SemanticId != nil {
-		id, err := CreateReference(tx, extension.SemanticId, sql.NullInt64{}, sql.NullInt64{})
+	if extension.SemanticID != nil {
+		id, err := CreateReference(tx, extension.SemanticID, sql.NullInt64{}, sql.NullInt64{})
 		if err != nil {
 			fmt.Println(err)
-			return sql.NullInt64{}, common.NewInternalServerError("Error inserting SemanticId Reference for Extension.")
+			return sql.NullInt64{}, common.NewInternalServerError("Error inserting SemanticID Reference for Extension.")
 		}
-		semanticIdRefDbId = id
+		semanticIDRefDbID = id
 	}
 
 	var valueText, valueNum, valueBool, valueTime, valueDatetime sql.NullString
@@ -80,9 +94,9 @@ func CreateExtension(tx *sql.Tx, extension gen.Extension) (sql.NullInt64, error)
 
 	err := tx.QueryRow(`
 	INSERT INTO
-	extension (name, value_type, value_text, value_num, value_bool, value_time, value_datetime, semantic_id)
-	VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-	RETURNING id`, extension.Name, valueType, valueText, valueNum, valueBool, valueTime, valueDatetime, semanticIdRefDbId).Scan(&extensionDbId)
+	extension (name, position, value_type, value_text, value_num, value_bool, value_time, value_datetime, semantic_id)
+	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+	RETURNING id`, extension.Name, position, valueType, valueText, valueNum, valueBool, valueTime, valueDatetime, semanticIDRefDbID).Scan(&extensionDbID)
 
 	if err != nil {
 		fmt.Println(err)
@@ -99,7 +113,7 @@ func CreateExtension(tx *sql.Tx, extension gen.Extension) (sql.NullInt64, error)
 		INSERT INTO
 		extension_supplemental_semantic_id(extension_id, reference_id)
 		VALUES($1, $2)
-		`, extensionDbId, id)
+		`, extensionDbID, id)
 
 		if err != nil {
 			fmt.Println(err)
@@ -117,7 +131,7 @@ func CreateExtension(tx *sql.Tx, extension gen.Extension) (sql.NullInt64, error)
 		INSERT INTO
 		extension_refers_to(extension_id, reference_id)
 		VALUES($1, $2)
-		`, extensionDbId, id)
+		`, extensionDbID, id)
 
 		if err != nil {
 			fmt.Println(err)
@@ -125,30 +139,44 @@ func CreateExtension(tx *sql.Tx, extension gen.Extension) (sql.NullInt64, error)
 		}
 	}
 
-	return extensionDbId, nil
+	return extensionDbID, nil
 }
 
-func CreateQualifier(tx *sql.Tx, qualifier gen.Qualifier) (sql.NullInt64, error) {
-	var qualifierDbId sql.NullInt64
-	var valueIdRefDbId sql.NullInt64
-	var semanticIdRefDbId sql.NullInt64
+// CreateQualifier inserts a qualifier entity into the database.
+//
+// A qualifier is a characteristic that affects the value or interpretation of an element.
+// This function creates a qualifier record with its associated semantic IDs, value IDs, and
+// supplemental semantic IDs. The qualifier value is stored in different columns based on
+// its data type (text, numeric, boolean, time, or datetime).
+//
+// Parameters:
+//   - tx: Active database transaction
+//   - qualifier: Qualifier object to be created
+//
+// Returns:
+//   - sql.NullInt64: Database ID of the created qualifier
+//   - error: An error if the insertion fails or if reference creation fails
+func CreateQualifier(tx *sql.Tx, qualifier gen.Qualifier, position int) (sql.NullInt64, error) {
+	var qualifierDbID sql.NullInt64
+	var valueIDRefDbID sql.NullInt64
+	var semanticIDRefDbID sql.NullInt64
 
-	if qualifier.ValueId != nil {
-		id, err := CreateReference(tx, qualifier.ValueId, sql.NullInt64{}, sql.NullInt64{})
+	if qualifier.ValueID != nil {
+		id, err := CreateReference(tx, qualifier.ValueID, sql.NullInt64{}, sql.NullInt64{})
 		if err != nil {
 			fmt.Println(err)
 			return sql.NullInt64{}, common.NewInternalServerError("Error inserting ValueID Reference for Qualifier.")
 		}
-		valueIdRefDbId = id
+		valueIDRefDbID = id
 	}
 
-	if qualifier.SemanticId != nil {
-		id, err := CreateReference(tx, qualifier.SemanticId, sql.NullInt64{}, sql.NullInt64{})
+	if qualifier.SemanticID != nil {
+		id, err := CreateReference(tx, qualifier.SemanticID, sql.NullInt64{}, sql.NullInt64{})
 		if err != nil {
 			fmt.Println(err)
-			return sql.NullInt64{}, common.NewInternalServerError("Error inserting SemanticId Reference for Qualifier.")
+			return sql.NullInt64{}, common.NewInternalServerError("Error inserting SemanticID Reference for Qualifier.")
 		}
-		semanticIdRefDbId = id
+		semanticIDRefDbID = id
 	}
 
 	var valueText, valueNum, valueBool, valueTime, valueDatetime sql.NullString
@@ -182,9 +210,9 @@ func CreateQualifier(tx *sql.Tx, qualifier gen.Qualifier) (sql.NullInt64, error)
 
 	err := tx.QueryRow(`
 	INSERT INTO
-	qualifier (kind, type, value_type, value_text, value_num, value_bool, value_time, value_datetime, value_id, semantic_id)
-	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-	RETURNING id`, kind, qualifier.Type, qualifier.ValueType, valueText, valueNum, valueBool, valueTime, valueDatetime, valueIdRefDbId, semanticIdRefDbId).Scan(&qualifierDbId)
+	qualifier (kind, position, type, value_type, value_text, value_num, value_bool, value_time, value_datetime, value_id, semantic_id)
+	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+	RETURNING id`, kind, position, qualifier.Type, qualifier.ValueType, valueText, valueNum, valueBool, valueTime, valueDatetime, valueIDRefDbID, semanticIDRefDbID).Scan(&qualifierDbID)
 
 	if err != nil {
 		fmt.Println(err)
@@ -201,7 +229,7 @@ func CreateQualifier(tx *sql.Tx, qualifier gen.Qualifier) (sql.NullInt64, error)
 		INSERT INTO
 		qualifier_supplemental_semantic_id(qualifier_id, reference_id)
 		VALUES($1, $2)
-		`, qualifierDbId, id)
+		`, qualifierDbID, id)
 
 		if err != nil {
 			fmt.Println(err)
@@ -209,27 +237,41 @@ func CreateQualifier(tx *sql.Tx, qualifier gen.Qualifier) (sql.NullInt64, error)
 		}
 	}
 
-	return qualifierDbId, nil
+	return qualifierDbID, nil
 }
-func CreateEmbeddedDataSpecification(tx *sql.Tx, embeddedDataSpecification gen.EmbeddedDataSpecification) (sql.NullInt64, error) {
-	var embeddedDataSpecificationContentDbId sql.NullInt64
-	var embeddedDataSpecificationDbId sql.NullInt64
-	err := tx.QueryRow(`INSERT INTO data_specification_content DEFAULT VALUES RETURNING id`).Scan(&embeddedDataSpecificationContentDbId)
+
+// CreateEmbeddedDataSpecification inserts an embedded data specification into the database.
+//
+// An embedded data specification provides structured metadata about an element according to
+// a specific data specification standard. This function currently supports DataSpecificationIec61360.
+//
+// Parameters:
+//   - tx: Active database transaction
+//   - embeddedDataSpecification: EmbeddedDataSpecification object containing the data specification reference
+//     and its content
+//
+// Returns:
+//   - sql.NullInt64: Database ID of the created embedded data specification
+//   - error: An error if the insertion fails, if the content type is unsupported, or if IEC 61360 insertion fails
+func CreateEmbeddedDataSpecification(tx *sql.Tx, embeddedDataSpecification gen.EmbeddedDataSpecification, position int) (sql.NullInt64, error) {
+	var embeddedDataSpecificationContentDbID sql.NullInt64
+	var embeddedDataSpecificationDbID sql.NullInt64
+	err := tx.QueryRow(`INSERT INTO data_specification_content DEFAULT VALUES RETURNING id`).Scan(&embeddedDataSpecificationContentDbID)
 	if err != nil {
 		fmt.Println(err)
 		return sql.NullInt64{}, common.NewInternalServerError("Error inserting DataSpecificationContent. See console for details.")
 	}
-	dataSpecificationDbId, err := CreateReference(tx, embeddedDataSpecification.DataSpecification, sql.NullInt64{}, sql.NullInt64{})
+	dataSpecificationDbID, err := CreateReference(tx, embeddedDataSpecification.DataSpecification, sql.NullInt64{}, sql.NullInt64{})
 	if err != nil {
 		return sql.NullInt64{}, err
 	}
-	err = tx.QueryRow(`INSERT INTO data_specification (data_specification, data_specification_content) VALUES ($1, $2) RETURNING id`, dataSpecificationDbId, embeddedDataSpecificationContentDbId).Scan(&embeddedDataSpecificationDbId)
+	err = tx.QueryRow(`INSERT INTO data_specification (data_specification, data_specification_content) VALUES ($1, $2) RETURNING id`, dataSpecificationDbID, embeddedDataSpecificationContentDbID).Scan(&embeddedDataSpecificationDbID)
 	if err != nil {
 		return sql.NullInt64{}, err
 	}
 	// Check if embeddedDataSpecificationContent is of type DataSpecificationIec61360
 	if ds, ok := embeddedDataSpecification.DataSpecificationContent.(*gen.DataSpecificationIec61360); ok {
-		err = insertDataSpecificationIec61360(tx, ds, embeddedDataSpecificationContentDbId)
+		err = insertDataSpecificationIec61360(tx, ds, embeddedDataSpecificationContentDbID, position)
 		if err != nil {
 			return sql.NullInt64{}, err
 		}
@@ -237,10 +279,10 @@ func CreateEmbeddedDataSpecification(tx *sql.Tx, embeddedDataSpecification gen.E
 		return sql.NullInt64{}, common.NewErrBadRequest("Unsupported DataSpecificationContent type")
 	}
 
-	return embeddedDataSpecificationDbId, nil
+	return embeddedDataSpecificationDbID, nil
 }
 
-func insertDataSpecificationIec61360(tx *sql.Tx, ds *gen.DataSpecificationIec61360, embeddedDataSpecificationContentDbId sql.NullInt64) error {
+func insertDataSpecificationIec61360(tx *sql.Tx, ds *gen.DataSpecificationIec61360, embeddedDataSpecificationContentDbID sql.NullInt64, position int) error {
 	var preferredNameConverted []gen.LangStringText
 	var shortNameConverted []gen.LangStringText
 	var definitionConverted []gen.LangStringText
@@ -274,8 +316,8 @@ func insertDataSpecificationIec61360(tx *sql.Tx, ds *gen.DataSpecificationIec613
 		}
 	}
 
-	// Insert UnitId (optional)
-	unitIdID, err := CreateReference(tx, ds.UnitId, sql.NullInt64{}, sql.NullInt64{})
+	// Insert UnitID (optional)
+	unitIDDbID, err := CreateReference(tx, ds.UnitID, sql.NullInt64{}, sql.NullInt64{})
 	if err != nil {
 		return err
 	}
@@ -296,12 +338,12 @@ func insertDataSpecificationIec61360(tx *sql.Tx, ds *gen.DataSpecificationIec613
 	}
 
 	// Insert LevelType (optional)
-	levelTypeId, err := insertLevelType(tx, ds.LevelType)
+	levelTypeID, err := insertLevelType(tx, ds.LevelType)
 	if err != nil {
 		return err
 	}
 
-	var iec61360contentDbId sql.NullInt64
+	var iec61360contentDbID sql.NullInt64
 
 	// Prepare optional string fields
 	unit := sql.NullString{String: ds.Unit, Valid: ds.Unit != ""}
@@ -319,8 +361,8 @@ func insertDataSpecificationIec61360(tx *sql.Tx, ds *gen.DataSpecificationIec613
 	}
 
 	// INSERT
-	err = tx.QueryRow("INSERT INTO data_specification_iec61360(id, preferred_name_id, short_name_id, unit, unit_id, source_of_definition, symbol, data_type, definition_id, value_format, value_list_id, level_type_id, value) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING id",
-		embeddedDataSpecificationContentDbId, preferredNameID, shortNameID, unit, unitIdID, sourceOfDefinition, symbol, dataType, definitionID, valueFormat, valueList, levelTypeId, value).Scan(&iec61360contentDbId)
+	err = tx.QueryRow("INSERT INTO data_specification_iec61360(id, position, preferred_name_id, short_name_id, unit, unit_id, source_of_definition, symbol, data_type, definition_id, value_format, value_list_id, level_type_id, value) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING id",
+		embeddedDataSpecificationContentDbID, position, preferredNameID, shortNameID, unit, unitIDDbID, sourceOfDefinition, symbol, dataType, definitionID, valueFormat, valueList, levelTypeID, value).Scan(&iec61360contentDbID)
 	if err != nil {
 		return err
 	}
@@ -332,41 +374,54 @@ func insertValueList(tx *sql.Tx, valueList *gen.ValueList) (sql.NullInt64, error
 	if valueList == nil {
 		return sql.NullInt64{}, nil
 	}
-	var valueListDbId sql.NullInt64
-	err := tx.QueryRow(`INSERT INTO value_list DEFAULT VALUES RETURNING id`).Scan(&valueListDbId)
+	var valueListDbID sql.NullInt64
+	err := tx.QueryRow(`INSERT INTO value_list DEFAULT VALUES RETURNING id`).Scan(&valueListDbID)
 	if err != nil {
 		return sql.NullInt64{}, err
 	}
 
 	if len(valueList.ValueReferencePairs) > 0 {
 		for i, vrp := range valueList.ValueReferencePairs {
-			if vrp.ValueId != nil {
-				valueIdDbId, err := CreateReference(tx, vrp.ValueId, sql.NullInt64{}, sql.NullInt64{})
+			if vrp.ValueID != nil {
+				valueIDDbID, err := CreateReference(tx, vrp.ValueID, sql.NullInt64{}, sql.NullInt64{})
 				if err != nil {
 					return sql.NullInt64{}, err
 				}
-				_, err = tx.Exec(`INSERT INTO value_list_value_reference_pair (value_list_id, position, value, value_id) VALUES ($1, $2, $3, $4)`, valueListDbId, i, vrp.Value, valueIdDbId)
+				_, err = tx.Exec(`INSERT INTO value_list_value_reference_pair (value_list_id, position, value, value_id) VALUES ($1, $2, $3, $4)`, valueListDbID, i, vrp.Value, valueIDDbID)
 				if err != nil {
 					return sql.NullInt64{}, err
 				}
 			}
 		}
 	}
-	return valueListDbId, nil
+	return valueListDbID, nil
 }
 
 func insertLevelType(tx *sql.Tx, levelType *gen.LevelType) (sql.NullInt64, error) {
 	if levelType == nil {
 		return sql.NullInt64{}, nil
 	}
-	var levelTypeDbId sql.NullInt64
-	err := tx.QueryRow(`INSERT INTO level_type (min, max, nom, typ) VALUES ($1, $2, $3, $4) RETURNING id`, levelType.Min, levelType.Max, levelType.Nom, levelType.Typ).Scan(&levelTypeDbId)
+	var levelTypeDbID sql.NullInt64
+	err := tx.QueryRow(`INSERT INTO level_type (min, max, nom, typ) VALUES ($1, $2, $3, $4) RETURNING id`, levelType.Min, levelType.Max, levelType.Nom, levelType.Typ).Scan(&levelTypeDbID)
 	if err != nil {
 		return sql.NullInt64{}, err
 	}
-	return levelTypeDbId, nil
+	return levelTypeDbID, nil
 }
 
+// CreateAdministrativeInformation inserts administrative information into the database.
+//
+// Administrative information includes version control, revision tracking, creator references,
+// and embedded data specifications. This function handles the complete insertion including
+// all nested structures.
+//
+// Parameters:
+//   - tx: Active database transaction
+//   - adminInfo: Pointer to AdministrativeInformation object to be created. Returns immediately if nil.
+//
+// Returns:
+//   - sql.NullInt64: Database ID of the created administrative information record, or an invalid NullInt64 if adminInfo is nil
+//   - error: An error if the insertion fails or if nested structure creation fails
 func CreateAdministrativeInformation(tx *sql.Tx, adminInfo *gen.AdministrativeInformation) (sql.NullInt64, error) {
 	if adminInfo == nil {
 		return sql.NullInt64{}, nil
@@ -383,17 +438,20 @@ func CreateAdministrativeInformation(tx *sql.Tx, adminInfo *gen.AdministrativeIn
 			}
 		}
 
-		err = tx.QueryRow(`INSERT INTO administrative_information (version, revision, creator, templateId) VALUES ($1, $2, $3, $4) RETURNING id`,
-			adminInfo.Version, adminInfo.Revision, creatorID, adminInfo.TemplateId).Scan(&id)
+		err = tx.QueryRow(`INSERT INTO administrative_information (version, revision, creator, templateID) VALUES ($1, $2, $3, $4) RETURNING id`,
+			adminInfo.Version, adminInfo.Revision, creatorID, adminInfo.TemplateID).Scan(&id)
 		if err != nil {
 			return sql.NullInt64{}, err
 		}
 		adminInfoID = sql.NullInt64{Int64: int64(id), Valid: true}
 
 		if len(adminInfo.EmbeddedDataSpecifications) > 0 {
-			for _, eds := range adminInfo.EmbeddedDataSpecifications {
-				edsId, err := CreateEmbeddedDataSpecification(tx, eds)
-				tx.Exec(`INSERT INTO administrative_information_embedded_data_specification (administrative_information_id, embedded_data_specification_id) VALUES ($1, $2)`, adminInfoID, edsId)
+			for i, eds := range adminInfo.EmbeddedDataSpecifications {
+				edsID, err := CreateEmbeddedDataSpecification(tx, eds, i)
+				if err != nil {
+					return sql.NullInt64{}, err
+				}
+				_, err = tx.Exec(`INSERT INTO administrative_information_embedded_data_specification (administrative_information_id, embedded_data_specification_id) VALUES ($1, $2)`, adminInfoID, edsID)
 				if err != nil {
 					return sql.NullInt64{}, err
 				}
@@ -403,20 +461,35 @@ func CreateAdministrativeInformation(tx *sql.Tx, adminInfo *gen.AdministrativeIn
 	return adminInfoID, nil
 }
 
-func CreateReference(tx *sql.Tx, semanticId *gen.Reference, parentId sql.NullInt64, rootId sql.NullInt64) (sql.NullInt64, error) {
+// CreateReference inserts a reference entity and its keys into the database.
+//
+// A reference consists of a type and a sequence of keys that form a path to an element.
+// This function handles nested referred semantic IDs recursively. If the reference is empty
+// or nil, it returns an invalid NullInt64 without inserting anything.
+//
+// Parameters:
+//   - tx: Active database transaction
+//   - semanticID: Pointer to the Reference object to be created
+//   - parentID: Database ID of the parent reference (for nested structures)
+//   - rootID: Database ID of the root reference (for nested structures)
+//
+// Returns:
+//   - sql.NullInt64: Database ID of the created reference, or an invalid NullInt64 if the reference is empty
+//   - error: An error if the insertion fails or if key insertion fails
+func CreateReference(tx *sql.Tx, semanticID *gen.Reference, parentID sql.NullInt64, rootID sql.NullInt64) (sql.NullInt64, error) {
 	var id int
 	var referenceID sql.NullInt64
 
 	insertKeyQuery := `INSERT INTO reference_key (reference_id, position, type, value) VALUES ($1, $2, $3, $4)`
 
-	if semanticId != nil && !isEmptyReference(*semanticId) {
-		err := tx.QueryRow(`INSERT INTO reference (type, parentReference, rootReference) VALUES ($1, $2, $3) RETURNING id`, semanticId.Type, parentId, rootId).Scan(&id)
+	if semanticID != nil && !isEmptyReference(*semanticID) {
+		err := tx.QueryRow(`INSERT INTO reference (type, parentReference, rootReference) VALUES ($1, $2, $3) RETURNING id`, semanticID.Type, parentID, rootID).Scan(&id)
 		if err != nil {
 			return sql.NullInt64{}, err
 		}
 		referenceID = sql.NullInt64{Int64: int64(id), Valid: true}
 
-		references := semanticId.Keys
+		references := semanticID.Keys
 		for i := range references {
 			_, err = tx.Exec(insertKeyQuery,
 				id, i, references[i].Type, references[i].Value)
@@ -425,7 +498,7 @@ func CreateReference(tx *sql.Tx, semanticId *gen.Reference, parentId sql.NullInt
 			}
 		}
 
-		_, err = insertNestedRefferedSemanticIds(semanticId, tx, referenceID, insertKeyQuery)
+		_, err = insertNestedRefferedSemanticIDs(semanticID, tx, referenceID, insertKeyQuery)
 		if err != nil {
 			return sql.NullInt64{}, err
 		}
@@ -433,11 +506,11 @@ func CreateReference(tx *sql.Tx, semanticId *gen.Reference, parentId sql.NullInt
 	return referenceID, nil
 }
 
-func insertNestedRefferedSemanticIds(semanticId *gen.Reference, tx *sql.Tx, referenceID sql.NullInt64, insertKeyQuery string) (sql.NullInt64, error) {
+func insertNestedRefferedSemanticIDs(semanticID *gen.Reference, tx *sql.Tx, referenceID sql.NullInt64, insertKeyQuery string) (sql.NullInt64, error) {
 	stack := make([]*gen.Reference, 0)
-	rootId := referenceID
-	if semanticId.ReferredSemanticId != nil && !isEmptyReference(*semanticId.ReferredSemanticId) {
-		stack = append(stack, semanticId.ReferredSemanticId)
+	rootID := referenceID
+	if semanticID.ReferredSemanticID != nil && !isEmptyReference(*semanticID.ReferredSemanticID) {
+		stack = append(stack, semanticID.ReferredSemanticID)
 	}
 	for len(stack) > 0 {
 		// Pop
@@ -452,7 +525,7 @@ func insertNestedRefferedSemanticIds(semanticId *gen.Reference, tx *sql.Tx, refe
 		} else {
 			parentReference = nil
 		}
-		err := tx.QueryRow(`INSERT INTO reference (type, parentReference, rootReference) VALUES ($1, $2, $3) RETURNING id`, current.Type, parentReference, rootId).Scan(&childRefID)
+		err := tx.QueryRow(`INSERT INTO reference (type, parentReference, rootReference) VALUES ($1, $2, $3) RETURNING id`, current.Type, parentReference, rootID).Scan(&childRefID)
 		if err != nil {
 			return sql.NullInt64{}, err
 		}
@@ -466,8 +539,8 @@ func insertNestedRefferedSemanticIds(semanticId *gen.Reference, tx *sql.Tx, refe
 			}
 		}
 
-		if current.ReferredSemanticId != nil && !isEmptyReference(*current.ReferredSemanticId) {
-			stack = append(stack, current.ReferredSemanticId)
+		if current.ReferredSemanticID != nil && !isEmptyReference(*current.ReferredSemanticID) {
+			stack = append(stack, current.ReferredSemanticID)
 		}
 
 		referenceID = childReferenceID
@@ -475,6 +548,18 @@ func insertNestedRefferedSemanticIds(semanticId *gen.Reference, tx *sql.Tx, refe
 	return referenceID, nil
 }
 
+// GetReferenceByReferenceDBID retrieves a reference and its keys from the database by its ID.
+//
+// This function reconstructs a Reference object from the database, including its type and all
+// associated keys in the correct order. It does not retrieve nested referred semantic IDs.
+//
+// Parameters:
+//   - db: Database connection
+//   - referenceID: Database ID of the reference to retrieve
+//
+// Returns:
+//   - *gen.Reference: The reconstructed Reference object, or nil if the reference ID is invalid or not found
+//   - error: An error if the query fails or if type conversion fails
 func GetReferenceByReferenceDBID(db *sql.DB, referenceID sql.NullInt64) (*gen.Reference, error) {
 	if !referenceID.Valid {
 		return nil, nil
@@ -513,7 +598,11 @@ func GetReferenceByReferenceDBID(db *sql.DB, referenceID sql.NullInt64) (*gen.Re
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() {
+		if closeErr := rows.Close(); closeErr != nil {
+			fmt.Printf("Error closing rows: %v\n", closeErr)
+		}
+	}()
 
 	var keys []gen.Key
 	for rows.Next() {
@@ -541,6 +630,18 @@ func GetReferenceByReferenceDBID(db *sql.DB, referenceID sql.NullInt64) (*gen.Re
 	}, nil
 }
 
+// CreateLangStringNameTypes inserts language-specific name strings into the database.
+//
+// This function creates a reference record and then inserts all language-specific name strings
+// associated with it. Each name string contains text and language information.
+//
+// Parameters:
+//   - tx: Active database transaction
+//   - nameTypes: Slice of LangStringNameType objects to be created
+//
+// Returns:
+//   - sql.NullInt64: Database ID of the created lang_string_name_type_reference, or an invalid NullInt64 if the slice is empty
+//   - error: An error if the insertion fails
 func CreateLangStringNameTypes(tx *sql.Tx, nameTypes []gen.LangStringNameType) (sql.NullInt64, error) {
 	if nameTypes == nil {
 		return sql.NullInt64{}, nil
@@ -563,28 +664,17 @@ func CreateLangStringNameTypes(tx *sql.Tx, nameTypes []gen.LangStringNameType) (
 	return nameTypeID, nil
 }
 
-func CreateLangStringTextTypesN(tx *sql.Tx, nameTypes []gen.LangStringTextType) (sql.NullInt64, error) {
-	if nameTypes == nil {
-		return sql.NullInt64{}, nil
-	}
-	var id int
-	var nameTypeID sql.NullInt64
-	if len(nameTypes) > 0 {
-		err := tx.QueryRow(`INSERT INTO lang_string_text_type_reference DEFAULT VALUES RETURNING id`).Scan(&id)
-		if err != nil {
-			return sql.NullInt64{}, err
-		}
-		nameTypeID = sql.NullInt64{Int64: int64(id), Valid: true}
-		for i := 0; i < len(nameTypes); i++ {
-			_, err := tx.Exec(`INSERT INTO lang_string_text_type (lang_string_text_type_reference_id, text, language) VALUES ($1, $2, $3)`, nameTypeID.Int64, nameTypes[i].Text, nameTypes[i].Language)
-			if err != nil {
-				return sql.NullInt64{}, err
-			}
-		}
-	}
-	return nameTypeID, nil
-}
-
+// GetLangStringNameTypes retrieves language-specific name strings from the database.
+//
+// This function fetches all language-specific name strings associated with a given reference ID.
+//
+// Parameters:
+//   - db: Database connection
+//   - nameTypeID: Database ID of the lang_string_name_type_reference
+//
+// Returns:
+//   - []gen.LangStringNameType: Slice of retrieved LangStringNameType objects, or nil if the ID is invalid
+//   - error: An error if the query fails
 func GetLangStringNameTypes(db *sql.DB, nameTypeID sql.NullInt64) ([]gen.LangStringNameType, error) {
 	if !nameTypeID.Valid {
 		return nil, nil
@@ -604,7 +694,11 @@ func GetLangStringNameTypes(db *sql.DB, nameTypeID sql.NullInt64) ([]gen.LangStr
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() {
+		if closeErr := rows.Close(); closeErr != nil {
+			fmt.Printf("Error closing rows: %v\n", closeErr)
+		}
+	}()
 
 	for rows.Next() {
 		var text, language string
@@ -619,6 +713,19 @@ func GetLangStringNameTypes(db *sql.DB, nameTypeID sql.NullInt64) ([]gen.LangStr
 	return nameTypes, nil
 }
 
+// CreateLangStringTextTypes inserts language-specific text strings into the database.
+//
+// This function creates a reference record and then inserts all language-specific text strings
+// associated with it. Each text string contains text and language information. The text types
+// can be any implementation of the LangStringText interface.
+//
+// Parameters:
+//   - tx: Active database transaction
+//   - textTypes: Slice of LangStringText objects to be created
+//
+// Returns:
+//   - sql.NullInt64: Database ID of the created lang_string_text_type_reference, or an invalid NullInt64 if the slice is empty
+//   - error: An error if the insertion fails
 func CreateLangStringTextTypes(tx *sql.Tx, textTypes []gen.LangStringText) (sql.NullInt64, error) {
 	if textTypes == nil {
 		return sql.NullInt64{}, nil
@@ -641,6 +748,17 @@ func CreateLangStringTextTypes(tx *sql.Tx, textTypes []gen.LangStringText) (sql.
 	return textTypeID, nil
 }
 
+// GetLangStringTextTypes retrieves language-specific text strings from the database.
+//
+// This function fetches all language-specific text strings associated with a given reference ID.
+//
+// Parameters:
+//   - db: Database connection
+//   - textTypeID: Database ID of the lang_string_text_type_reference
+//
+// Returns:
+//   - []gen.LangStringTextType: Slice of retrieved LangStringTextType objects, or nil if the ID is invalid
+//   - error: An error if the query fails
 func GetLangStringTextTypes(db *sql.DB, textTypeID sql.NullInt64) ([]gen.LangStringTextType, error) {
 	if !textTypeID.Valid {
 		return nil, nil
@@ -660,7 +778,11 @@ func GetLangStringTextTypes(db *sql.DB, textTypeID sql.NullInt64) ([]gen.LangStr
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() {
+		if closeErr := rows.Close(); closeErr != nil {
+			fmt.Printf("Error closing rows: %v\n", closeErr)
+		}
+	}()
 
 	for rows.Next() {
 		var text, language string
@@ -675,36 +797,50 @@ func GetLangStringTextTypes(db *sql.DB, textTypeID sql.NullInt64) ([]gen.LangStr
 	return textTypes, nil
 }
 
-func CreateExtensionForSubmodel(tx *sql.Tx, submodel_id string, extension gen.Extension) (sql.NullInt64, error) {
-	semanticIdDbId, err := CreateReference(tx, extension.SemanticId, sql.NullInt64{}, sql.NullInt64{})
+// CreateExtensionForSubmodel creates an extension and links it to a submodel.
+//
+// This function creates a complete extension with all its associated references (semantic IDs,
+// supplemental semantic IDs, and refersTo references) and then establishes the relationship
+// between the extension and the specified submodel.
+//
+// Parameters:
+//   - tx: Active database transaction
+//   - submodel_id: String identifier of the submodel to link the extension to
+//   - extension: Extension object to be created
+//
+// Returns:
+//   - sql.NullInt64: Database ID of the created extension
+//   - error: An error if the insertion fails or if any reference creation fails
+func CreateExtensionForSubmodel(tx *sql.Tx, submodelID string, extension gen.Extension) (sql.NullInt64, error) {
+	semanticIDDbID, err := CreateReference(tx, extension.SemanticID, sql.NullInt64{}, sql.NullInt64{})
 	if err != nil {
 		return sql.NullInt64{}, err
 	}
 
-	extensionDbId, err := insertExtension(extension, semanticIdDbId, tx)
+	extensionDbID, err := insertExtension(extension, semanticIDDbID, tx)
 	if err != nil {
 		return sql.NullInt64{}, err
 	}
 
-	_, err = tx.Query("INSERT INTO submodel_extension (submodel_id, extension_id) VALUES ($1, $2)", submodel_id, extensionDbId)
+	_, err = tx.Query("INSERT INTO submodel_extension (submodel_id, extension_id) VALUES ($1, $2)", submodelID, extensionDbID)
 	if err != nil {
 		return sql.NullInt64{}, err
 	}
 
-	err = insertSupplementalSemanticIdsForExtensions(extension, semanticIdDbId, tx, extensionDbId)
+	err = insertSupplementalSemanticIDsForExtensions(extension, semanticIDDbID, tx, extensionDbID)
 	if err != nil {
 		return sql.NullInt64{}, err
 	}
 
-	err = insertRefersToReferences(extension, tx, extensionDbId)
+	err = insertRefersToReferences(extension, tx, extensionDbID)
 	if err != nil {
 		return sql.NullInt64{}, err
 	}
-	return extensionDbId, nil
+	return extensionDbID, nil
 }
 
-func insertExtension(extension gen.Extension, semanticIdDbId sql.NullInt64, tx *sql.Tx) (sql.NullInt64, error) {
-	var extensionDbId sql.NullInt64
+func insertExtension(extension gen.Extension, semanticIDDbID sql.NullInt64, tx *sql.Tx) (sql.NullInt64, error) {
+	var extensionDbID sql.NullInt64
 	var valueText, valueNum, valueBool, valueTime, valueDatetime sql.NullString
 	fillValueBasedOnType(extension, &valueText, &valueNum, &valueBool, &valueTime, &valueDatetime)
 	ds := goqu.Dialect("postgres").
@@ -720,7 +856,7 @@ func insertExtension(extension gen.Extension, semanticIdDbId sql.NullInt64, tx *
 			"value_datetime",
 		).
 		Vals(goqu.Vals{
-			semanticIdDbId,
+			semanticIDDbID,
 			extension.Name,
 			extension.ValueType,
 			valueText,
@@ -736,11 +872,11 @@ func insertExtension(extension gen.Extension, semanticIdDbId sql.NullInt64, tx *
 		return sql.NullInt64{}, err
 	}
 
-	err = tx.QueryRow(q, args...).Scan(&extensionDbId)
+	err = tx.QueryRow(q, args...).Scan(&extensionDbID)
 	if err != nil {
 		return sql.NullInt64{}, err
 	}
-	return extensionDbId, nil
+	return extensionDbID, nil
 }
 
 func fillValueBasedOnType(extension gen.Extension, valueText *sql.NullString, valueNum *sql.NullString, valueBool *sql.NullString, valueTime *sql.NullString, valueDatetime *sql.NullString) {
@@ -765,17 +901,17 @@ func fillValueBasedOnType(extension gen.Extension, valueText *sql.NullString, va
 	}
 }
 
-func insertRefersToReferences(extension gen.Extension, tx *sql.Tx, extensionDbId sql.NullInt64) error {
+func insertRefersToReferences(extension gen.Extension, tx *sql.Tx, extensionDbID sql.NullInt64) error {
 	if len(extension.RefersTo) > 0 {
 		for _, ref := range extension.RefersTo {
-			refDbId, refErr := CreateReference(tx, &ref, sql.NullInt64{}, sql.NullInt64{})
+			refDbID, refErr := CreateReference(tx, &ref, sql.NullInt64{}, sql.NullInt64{})
 			if refErr != nil {
 				return refErr
 			}
 			ds := goqu.Dialect("postgres").
 				Insert("extension_refers_to").
 				Cols("extension_id", "reference_id").
-				Vals(goqu.Vals{extensionDbId, refDbId})
+				Vals(goqu.Vals{extensionDbID, refDbID})
 
 			q, args, err := ds.ToSQL()
 			if err != nil {
@@ -791,20 +927,20 @@ func insertRefersToReferences(extension gen.Extension, tx *sql.Tx, extensionDbId
 	return nil
 }
 
-func insertSupplementalSemanticIdsForExtensions(extension gen.Extension, semanticIdDbId sql.NullInt64, tx *sql.Tx, extensionDbId sql.NullInt64) error {
+func insertSupplementalSemanticIDsForExtensions(extension gen.Extension, semanticIDDbID sql.NullInt64, tx *sql.Tx, extensionDbID sql.NullInt64) error {
 	if len(extension.SupplementalSemanticIds) > 0 {
-		if !semanticIdDbId.Valid {
+		if !semanticIDDbID.Valid {
 			return common.NewErrBadRequest("Supplemental Semantic IDs require a main Semantic ID to be present. (See AAS Constraint: AASd-118)")
 		}
-		for _, supplementalSemanticId := range extension.SupplementalSemanticIds {
-			supplementalSemanticIdDbId, err := CreateReference(tx, &supplementalSemanticId, sql.NullInt64{}, sql.NullInt64{})
+		for _, supplementalSemanticID := range extension.SupplementalSemanticIds {
+			supplementalSemanticIDDbID, err := CreateReference(tx, &supplementalSemanticID, sql.NullInt64{}, sql.NullInt64{})
 			if err != nil {
 				return err
 			}
 			ds := goqu.Dialect("postgres").
 				Insert("extension_supplemental_semantic_id").
 				Cols("extension_id", "reference_id").
-				Vals(goqu.Vals{extensionDbId, supplementalSemanticIdDbId})
+				Vals(goqu.Vals{extensionDbID, supplementalSemanticIDDbID})
 
 			q, args, err := ds.ToSQL()
 			if err != nil {
@@ -821,14 +957,27 @@ func insertSupplementalSemanticIdsForExtensions(extension gen.Extension, semanti
 	return nil
 }
 
-func InsertSupplementalSemanticIdsSubmodel(tx *sql.Tx, submodel_id string, supplementalSemanticIds []*gen.Reference) error {
-	if len(supplementalSemanticIds) > 0 {
-		for _, supplementalSemanticId := range supplementalSemanticIds {
-			supplementalSemanticIdDbId, err := CreateReference(tx, supplementalSemanticId, sql.NullInt64{}, sql.NullInt64{})
+// InsertSupplementalSemanticIDsSubmodel inserts supplemental semantic IDs for a submodel.
+//
+// Supplemental semantic IDs provide additional semantic information beyond the main semantic ID.
+// This function creates all supplemental semantic ID references and links them to the specified submodel.
+// According to AAS constraint AASd-118, supplemental semantic IDs require a main semantic ID to be present.
+//
+// Parameters:
+//   - tx: Active database transaction
+//   - submodel_id: String identifier of the submodel
+//   - supplementalSemanticIds: Slice of pointers to Reference objects representing supplemental semantic IDs
+//
+// Returns:
+//   - error: An error if reference creation or linking fails
+func InsertSupplementalSemanticIDsSubmodel(tx *sql.Tx, submodelID string, supplementalSemanticIDs []*gen.Reference) error {
+	if len(supplementalSemanticIDs) > 0 {
+		for _, supplementalSemanticID := range supplementalSemanticIDs {
+			supplementalSemanticIDDbID, err := CreateReference(tx, supplementalSemanticID, sql.NullInt64{}, sql.NullInt64{})
 			if err != nil {
 				return err
 			}
-			_, err = tx.Exec(`INSERT INTO submodel_supplemental_semantic_id (submodel_id, reference_id) VALUES ($1, $2)`, submodel_id, supplementalSemanticIdDbId)
+			_, err = tx.Exec(`INSERT INTO submodel_supplemental_semantic_id (submodel_id, reference_id) VALUES ($1, $2)`, submodelID, supplementalSemanticIDDbID)
 			if err != nil {
 				return err
 			}
@@ -836,14 +985,29 @@ func InsertSupplementalSemanticIdsSubmodel(tx *sql.Tx, submodel_id string, suppl
 	}
 	return nil
 }
-func InsertSupplementalSemanticIdsSME(tx *sql.Tx, sme_id int64, supplementalSemanticIds []gen.Reference) error {
-	if len(supplementalSemanticIds) > 0 {
-		for _, supplementalSemanticId := range supplementalSemanticIds {
-			supplementalSemanticIdDbId, err := CreateReference(tx, &supplementalSemanticId, sql.NullInt64{}, sql.NullInt64{})
+
+// InsertSupplementalSemanticIDsSME inserts supplemental semantic IDs for a submodel element.
+//
+// Supplemental semantic IDs provide additional semantic information beyond the main semantic ID.
+// This function creates all supplemental semantic ID references and links them to the specified
+// submodel element (SME). According to AAS constraint AASd-118, supplemental semantic IDs require
+// a main semantic ID to be present.
+//
+// Parameters:
+//   - tx: Active database transaction
+//   - sme_id: Database ID of the submodel element
+//   - supplementalSemanticIds: Slice of Reference objects representing supplemental semantic IDs
+//
+// Returns:
+//   - error: An error if reference creation or linking fails
+func InsertSupplementalSemanticIDsSME(tx *sql.Tx, smeID int64, supplementalSemanticIDs []gen.Reference) error {
+	if len(supplementalSemanticIDs) > 0 {
+		for _, supplementalSemanticID := range supplementalSemanticIDs {
+			supplementalSemanticIDDbID, err := CreateReference(tx, &supplementalSemanticID, sql.NullInt64{}, sql.NullInt64{})
 			if err != nil {
 				return err
 			}
-			_, err = tx.Exec(`INSERT INTO sme_supplemental_semantic (sme_id, reference_id) VALUES ($1, $2)`, sme_id, supplementalSemanticIdDbId)
+			_, err = tx.Exec(`INSERT INTO submodel_element_supplemental_semantic_id (submodel_element_id, reference_id) VALUES ($1, $2)`, smeID, supplementalSemanticIDDbID)
 			if err != nil {
 				return err
 			}

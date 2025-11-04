@@ -22,8 +22,11 @@
 *
 * SPDX-License-Identifier: MIT
 ******************************************************************************/
-
 // Author: Jannik Fried ( Fraunhofer IESE )
+
+// Package submodelelements provides handlers for different types of submodel elements in the BaSyx framework.
+// This package contains PostgreSQL-based persistence implementations for various submodel element types
+// including blob elements for binary data storage.
 package submodelelements
 
 import (
@@ -34,11 +37,24 @@ import (
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 )
 
+// PostgreSQLBlobHandler provides PostgreSQL-based persistence operations for Blob submodel elements.
+// It implements CRUD operations and handles binary data storage with content type information.
+// Blob elements are used to store binary data such as images, documents, or other files within submodels.
 type PostgreSQLBlobHandler struct {
 	db        *sql.DB
 	decorated *PostgreSQLSMECrudHandler
 }
 
+// NewPostgreSQLBlobHandler creates a new handler for Blob element persistence.
+// It initializes the handler with a database connection and sets up the decorated CRUD handler
+// for common submodel element operations.
+//
+// Parameters:
+//   - db: PostgreSQL database connection
+//
+// Returns:
+//   - *PostgreSQLBlobHandler: Configured handler instance
+//   - error: Error if handler initialization fails
 func NewPostgreSQLBlobHandler(db *sql.DB) (*PostgreSQLBlobHandler, error) {
 	decoratedHandler, err := NewPostgreSQLSMECrudHandler(db)
 	if err != nil {
@@ -47,14 +63,26 @@ func NewPostgreSQLBlobHandler(db *sql.DB) (*PostgreSQLBlobHandler, error) {
 	return &PostgreSQLBlobHandler{db: db, decorated: decoratedHandler}, nil
 }
 
-func (p PostgreSQLBlobHandler) Create(tx *sql.Tx, submodelId string, submodelElement gen.SubmodelElement) (int, error) {
+// Create inserts a new Blob element into the database as a top-level submodel element.
+// This method handles both the common submodel element properties and the specific blob
+// data including content type and binary value storage.
+//
+// Parameters:
+//   - tx: Active database transaction
+//   - submodelID: ID of the parent submodel
+//   - submodelElement: The Blob element to create
+//
+// Returns:
+//   - int: Database ID of the created element
+//   - error: Error if creation fails or element is not of correct type
+func (p PostgreSQLBlobHandler) Create(tx *sql.Tx, submodelID string, submodelElement gen.SubmodelElement) (int, error) {
 	blob, ok := submodelElement.(*gen.Blob)
 	if !ok {
 		return 0, errors.New("submodelElement is not of type Blob")
 	}
 
 	// First, perform base SubmodelElement operations within the transaction
-	id, err := p.decorated.Create(tx, submodelId, submodelElement)
+	id, err := p.decorated.Create(tx, submodelID, submodelElement)
 	if err != nil {
 		return 0, err
 	}
@@ -69,14 +97,29 @@ func (p PostgreSQLBlobHandler) Create(tx *sql.Tx, submodelId string, submodelEle
 	return id, nil
 }
 
-func (p PostgreSQLBlobHandler) CreateNested(tx *sql.Tx, submodelId string, parentId int, idShortPath string, submodelElement gen.SubmodelElement, pos int) (int, error) {
+// CreateNested inserts a new Blob element as a nested element within a collection or list.
+// This method creates the element at a specific hierarchical path and position within its parent container.
+// It handles both the parent-child relationship and the specific blob data storage.
+//
+// Parameters:
+//   - tx: Active database transaction
+//   - submodelID: ID of the parent submodel
+//   - parentID: Database ID of the parent element
+//   - idShortPath: Hierarchical path where the element should be created
+//   - submodelElement: The Blob element to create
+//   - pos: Position within the parent container
+//
+// Returns:
+//   - int: Database ID of the created nested element
+//   - error: Error if creation fails or element is not of correct type
+func (p PostgreSQLBlobHandler) CreateNested(tx *sql.Tx, submodelID string, parentID int, idShortPath string, submodelElement gen.SubmodelElement, pos int) (int, error) {
 	blob, ok := submodelElement.(*gen.Blob)
 	if !ok {
 		return 0, errors.New("submodelElement is not of type Blob")
 	}
 
 	// Create the nested blob with the provided idShortPath using the decorated handler
-	id, err := p.decorated.CreateAndPath(tx, submodelId, parentId, idShortPath, submodelElement, pos)
+	id, err := p.decorated.CreateAndPath(tx, submodelID, parentID, idShortPath, submodelElement, pos)
 	if err != nil {
 		return 0, err
 	}
@@ -91,12 +134,32 @@ func (p PostgreSQLBlobHandler) CreateNested(tx *sql.Tx, submodelId string, paren
 	return id, nil
 }
 
+// Update modifies an existing Blob element identified by its idShort or path.
+// This method delegates the update operation to the decorated CRUD handler which handles
+// the common submodel element update logic.
+//
+// Parameters:
+//   - idShortOrPath: idShort or hierarchical path to the element to update
+//   - submodelElement: Updated element data
+//
+// Returns:
+//   - error: Error if update fails
 func (p PostgreSQLBlobHandler) Update(idShortOrPath string, submodelElement gen.SubmodelElement) error {
 	if dErr := p.decorated.Update(idShortOrPath, submodelElement); dErr != nil {
 		return dErr
 	}
 	return nil
 }
+
+// Delete removes a Blob element identified by its idShort or path from the database.
+// This method delegates the deletion operation to the decorated CRUD handler which handles
+// the cascading deletion of all related data and child elements.
+//
+// Parameters:
+//   - idShortOrPath: idShort or hierarchical path to the element to delete
+//
+// Returns:
+//   - error: Error if deletion fails
 func (p PostgreSQLBlobHandler) Delete(idShortOrPath string) error {
 	if dErr := p.decorated.Delete(idShortOrPath); dErr != nil {
 		return dErr

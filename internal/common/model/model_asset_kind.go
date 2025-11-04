@@ -13,9 +13,12 @@ import (
 	"fmt"
 )
 
+// AssetKind Enum  of AssetInformation
 type AssetKind string
 
 // List of AssetKind
+//
+//nolint:all
 const (
 	ASSETKIND_INSTANCE       AssetKind = "Instance"
 	ASSETKIND_NOT_APPLICABLE AssetKind = "NotApplicable"
@@ -54,11 +57,15 @@ func NewAssetKindFromValue(v string) (AssetKind, error) {
 }
 
 // AssertAssetKindRequired checks if the required fields are not zero-ed
+//
+//nolint:all
 func AssertAssetKindRequired(obj AssetKind) error {
 	return nil
 }
 
 // AssertAssetKindConstraints checks if the values respects the defined constraints
+//
+//nolint:all
 func AssertAssetKindConstraints(obj AssetKind) error {
 	if !obj.IsValid() {
 		return fmt.Errorf("invalid value %q for AssetKind: valid values are %v", obj, AllowedAssetKindEnumValues)

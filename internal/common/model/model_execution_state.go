@@ -13,9 +13,12 @@ import (
 	"fmt"
 )
 
+// ExecutionState  type of ExecutionState
 type ExecutionState string
 
 // List of ExecutionState
+//
+//nolint:all
 const (
 	EXECUTIONSTATE_INITIATED ExecutionState = "Initiated"
 	EXECUTIONSTATE_RUNNING   ExecutionState = "Running"
@@ -63,11 +66,15 @@ func NewExecutionStateFromValue(v string) (ExecutionState, error) {
 }
 
 // AssertExecutionStateRequired checks if the required fields are not zero-ed
+//
+//nolint:all
 func AssertExecutionStateRequired(obj ExecutionState) error {
 	return nil
 }
 
 // AssertExecutionStateConstraints checks if the values respects the defined constraints
+//
+//nolint:all
 func AssertExecutionStateConstraints(obj ExecutionState) error {
 	return nil
 }

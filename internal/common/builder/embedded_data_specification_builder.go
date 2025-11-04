@@ -23,12 +23,14 @@
 * SPDX-License-Identifier: MIT
 ******************************************************************************/
 
+// Package builder provides utilities for constructing complex AAS (Asset Administration Shell)
 // Author: Aaron Zielstorff ( Fraunhofer IESE ), Jannik Fried ( Fraunhofer IESE )
 package builder
 
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
 
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
@@ -48,7 +50,12 @@ import (
 //  3. Call BuildContentsIec61360() to process IEC 61360 content
 //  4. Call Build() to extract the final slice of specifications
 type EmbeddedDataSpecificationsBuilder struct {
-	dataSpecifications map[int64]gen.EmbeddedDataSpecification
+	dataSpecifications map[int64]*embeddedDataSpecificationWithPosition
+}
+
+type embeddedDataSpecificationWithPosition struct {
+	spec     gen.EmbeddedDataSpecification
+	position int
 }
 
 // NewEmbeddedDataSpecificationsBuilder creates a new instance of EmbeddedDataSpecificationsBuilder
@@ -72,12 +79,12 @@ type EmbeddedDataSpecificationsBuilder struct {
 //	specs := builder.Build()
 func NewEmbeddedDataSpecificationsBuilder() *EmbeddedDataSpecificationsBuilder {
 	return &EmbeddedDataSpecificationsBuilder{
-		dataSpecifications: make(map[int64]gen.EmbeddedDataSpecification),
+		dataSpecifications: make(map[int64]*embeddedDataSpecificationWithPosition),
 	}
 }
 
 // BuildReferences processes reference data for embedded data specifications and constructs
-// complete Reference objects with their hierarchical ReferredSemanticId structures.
+// complete Reference objects with their hierarchical ReferredSemanticID structures.
 //
 // This method handles the DataSpecification field of EmbeddedDataSpecification objects,
 // which points to the semantic definition of the data specification. It processes both
@@ -119,7 +126,7 @@ func (edsb *EmbeddedDataSpecificationsBuilder) BuildReferences(edsReferenceRows 
 
 	referenceBuilders := make(map[int64]*ReferenceBuilder)
 
-	converted, err := createEdsIdReferenceMap(edsRefRow)
+	converted, err := createEdsIDReferenceMap(edsRefRow)
 	if err != nil {
 		return err
 	}
@@ -189,11 +196,15 @@ func (edsb *EmbeddedDataSpecificationsBuilder) BuildContentsIec61360(iecRows jso
 	createEdsForEachDbEntryContent(iecContents, edsb)
 
 	for _, data := range iecContents {
-		eds := edsb.dataSpecifications[data.EdsID]
+		edsWrapper := edsb.dataSpecifications[data.EdsID]
 
 		preferredName, err := ParseLangStringPreferredNameTypeIec61360(data.PreferredName)
 		if err != nil {
 			return fmt.Errorf("error converting PreferredName for iec content %d", data.IecID)
+		}
+
+		if len(preferredName) == 0 {
+			fmt.Print("Empty")
 		}
 
 		shortName, err := ParseLangStringShortNameTypeIec61360(data.ShortName)
@@ -206,7 +217,7 @@ func (edsb *EmbeddedDataSpecificationsBuilder) BuildContentsIec61360(iecRows jso
 			return fmt.Errorf("error converting Definition for iec content %d", data.IecID)
 		}
 
-		referenceBuilderMap, unitId, err := buildUnitId(data)
+		referenceBuilderMap, unitID, err := buildUnitID(data)
 		if err != nil {
 			return err
 		}
@@ -226,11 +237,11 @@ func (edsb *EmbeddedDataSpecificationsBuilder) BuildContentsIec61360(iecRows jso
 			levelType = nil
 		} else {
 			if err := json.Unmarshal(data.LevelType, &levelType); err != nil {
-				return fmt.Errorf("error converting LevelType for Embedded Data Specification Content Id %d: %w", data.IecID, err)
+				return fmt.Errorf("error converting LevelType for Embedded Data Specification Content ID %d: %w", data.IecID, err)
 			}
 		}
 
-		eds.DataSpecificationContent = &gen.DataSpecificationIec61360{
+		edsWrapper.spec.DataSpecificationContent = &gen.DataSpecificationIec61360{
 			ModelType:          "DataSpecificationIec61360",
 			Unit:               data.Unit,
 			SourceOfDefinition: data.SourceOfDefinition,
@@ -247,39 +258,42 @@ func (edsb *EmbeddedDataSpecificationsBuilder) BuildContentsIec61360(iecRows jso
 			if err != nil {
 				return fmt.Errorf("error converting DataType for iec content %d", data.IecID)
 			}
-			eds.DataSpecificationContent.(*gen.DataSpecificationIec61360).DataType = dataType
+			edsWrapper.spec.DataSpecificationContent.(*gen.DataSpecificationIec61360).DataType = dataType
 		}
 
-		if len(unitId) > 1 {
-			return fmt.Errorf("expected exactly one or no UnitId reference for iec content %d, got %d", data.IecID, len(unitId))
-		} else if len(unitId) == 1 {
-			eds.DataSpecificationContent.(*gen.DataSpecificationIec61360).UnitId = unitId[0]
+		if len(unitID) > 1 {
+			return fmt.Errorf("expected exactly one or no UnitID reference for iec content %d, got %d", data.IecID, len(unitID))
+		} else if len(unitID) == 1 {
+			edsWrapper.spec.DataSpecificationContent.(*gen.DataSpecificationIec61360).UnitID = unitID[0]
 		}
 
-		edsb.dataSpecifications[data.EdsID] = eds
+		// Store the position from the data
+		edsWrapper.position = data.Position
+		edsb.dataSpecifications[data.EdsID] = edsWrapper
+
 		if valueList != nil {
-			edsb.dataSpecifications[data.EdsID].DataSpecificationContent.SetValueList(valueList)
+			edsb.dataSpecifications[data.EdsID].spec.DataSpecificationContent.SetValueList(valueList)
 		}
 		if levelType != nil {
-			edsb.dataSpecifications[data.EdsID].DataSpecificationContent.SetLevelType(levelType)
+			edsb.dataSpecifications[data.EdsID].spec.DataSpecificationContent.SetLevelType(levelType)
 		}
 	}
 
 	return nil
 }
 
-func buildUnitId(data EdsContentIec61360Row) (map[int64]*ReferenceBuilder, []*gen.Reference, error) {
+func buildUnitID(data EdsContentIec61360Row) (map[int64]*ReferenceBuilder, []*gen.Reference, error) {
 	referenceBuilderMap := make(map[int64]*ReferenceBuilder)
 
-	unitId, err := ParseReferences(data.UnitReferenceKeys, referenceBuilderMap)
+	unitID, err := ParseReferences(data.UnitReferenceKeys, referenceBuilderMap)
 	if err != nil {
-		return nil, nil, fmt.Errorf("error converting UnitId reference for iec content %d: %w", data.IecID, err)
+		return nil, nil, fmt.Errorf("error converting UnitID reference for iec content %d: %w", data.IecID, err)
 	}
 	err = ParseReferredReferences(data.UnitReferenceReferred, referenceBuilderMap)
 	if err != nil {
-		return nil, nil, fmt.Errorf("error converting referred UnitId reference for iec content %d: %w", data.IecID, err)
+		return nil, nil, fmt.Errorf("error converting referred UnitID reference for iec content %d: %w", data.IecID, err)
 	}
-	return referenceBuilderMap, unitId, nil
+	return referenceBuilderMap, unitID, nil
 }
 
 func (*EmbeddedDataSpecificationsBuilder) addValueListIfSet(data EdsContentIec61360Row, referenceBuilderMap map[int64]*ReferenceBuilder) (*gen.ValueList, error) {
@@ -293,16 +307,19 @@ func (*EmbeddedDataSpecificationsBuilder) addValueListIfSet(data EdsContentIec61
 		}
 		for _, entry := range valueListRows {
 			reference, err := ParseReferences(entry.ReferenceRows, referenceBuilderMap)
-			ParseReferredReferences(entry.ReferredReferenceRows, referenceBuilderMap)
 			if err != nil {
-				return nil, fmt.Errorf("error parsing Reference for ValueReferencePair with ID %d", entry.ValueRefPairId)
+				return nil, fmt.Errorf("error parsing Reference for ValueReferencePair with ID %d", entry.ValueRefPairID)
+			}
+			err = ParseReferredReferences(entry.ReferredReferenceRows, referenceBuilderMap)
+			if err != nil {
+				return nil, fmt.Errorf("error parsing ReferredReference for ValueReferencePair with ID %d: %w", entry.ValueRefPairID, err)
 			}
 			if len(reference) != 1 {
-				return nil, fmt.Errorf("expected exactly one reference for ValueReferencePair Id %d, got %d", entry.ValueRefPairId, len(reference))
+				return nil, fmt.Errorf("expected exactly one reference for ValueReferencePair ID %d, got %d", entry.ValueRefPairID, len(reference))
 			}
 			pair := gen.ValueReferencePair{
 				Value:   entry.Value,
-				ValueId: reference[0],
+				ValueID: reference[0],
 			}
 			valueList.ValueReferencePairs = append(valueList.ValueReferencePairs, &pair)
 		}
@@ -315,10 +332,38 @@ func (*EmbeddedDataSpecificationsBuilder) addValueListIfSet(data EdsContentIec61
 	return nil, nil
 }
 
+// Build finalizes the construction of all embedded data specifications and returns them as a slice.
+// This method should be called after all data specifications and their contents have been processed
+// through BuildReferences() and BuildContentsIec61360().
+//
+// The method extracts all embedded data specifications from the internal map and returns them
+// as a slice. Each specification contains complete reference hierarchies and IEC 61360 content
+// where applicable.
+//
+// Returns:
+//   - []gen.EmbeddedDataSpecification: A slice containing all constructed embedded data specifications
+//     with their complete reference hierarchies and content
+//
+// Example:
+//
+//	builder := NewEmbeddedDataSpecificationsBuilder()
+//	builder.BuildReferences(refData, referredRefData)
+//	builder.BuildContentsIec61360(iecData)
+//	specs := builder.Build()
 func (edsb *EmbeddedDataSpecificationsBuilder) Build() []gen.EmbeddedDataSpecification {
-	result := make([]gen.EmbeddedDataSpecification, 0, len(edsb.dataSpecifications))
-	for _, spec := range edsb.dataSpecifications {
-		result = append(result, spec)
+	specList := make([]*embeddedDataSpecificationWithPosition, 0, len(edsb.dataSpecifications))
+	for _, specWrapper := range edsb.dataSpecifications {
+		specList = append(specList, specWrapper)
+	}
+
+	// Sort by position
+	sort.Slice(specList, func(i, j int) bool {
+		return specList[i].position < specList[j].position
+	})
+
+	result := make([]gen.EmbeddedDataSpecification, 0, len(specList))
+	for _, specWrapper := range specList {
+		result = append(result, specWrapper.spec)
 	}
 	return result
 }
@@ -326,7 +371,10 @@ func (edsb *EmbeddedDataSpecificationsBuilder) Build() []gen.EmbeddedDataSpecifi
 func createEdsForEachDbEntryContent(edsRefRow []EdsContentIec61360Row, edsb *EmbeddedDataSpecificationsBuilder) {
 	for _, edsRef := range edsRefRow {
 		if _, exists := edsb.dataSpecifications[edsRef.EdsID]; !exists {
-			edsb.dataSpecifications[edsRef.EdsID] = gen.EmbeddedDataSpecification{}
+			edsb.dataSpecifications[edsRef.EdsID] = &embeddedDataSpecificationWithPosition{
+				spec:     gen.EmbeddedDataSpecification{},
+				position: 0, // Will be set in BuildContentsIec61360
+			}
 		}
 	}
 }
@@ -334,19 +382,22 @@ func createEdsForEachDbEntryContent(edsRefRow []EdsContentIec61360Row, edsb *Emb
 func createEdsForEachDbEntryReferenceRow(edsRefRow []EdsReferenceRow, edsb *EmbeddedDataSpecificationsBuilder) {
 	for _, edsRef := range edsRefRow {
 		if _, exists := edsb.dataSpecifications[edsRef.EdsID]; !exists {
-			edsb.dataSpecifications[edsRef.EdsID] = gen.EmbeddedDataSpecification{}
+			edsb.dataSpecifications[edsRef.EdsID] = &embeddedDataSpecificationWithPosition{
+				spec:     gen.EmbeddedDataSpecification{},
+				position: 0, // Will be set when content is added
+			}
 		}
 	}
 }
 
-func createEdsIdReferenceMap(edsRefRows []EdsReferenceRow) (map[int64][]ReferenceRow, error) {
+func createEdsIDReferenceMap(edsRefRows []EdsReferenceRow) (map[int64][]ReferenceRow, error) {
 	converted := make(map[int64][]ReferenceRow)
 	for _, ref := range edsRefRows {
 		if ref.ReferenceType == nil {
 			return nil, fmt.Errorf("reference type is nil for edsID %d", ref.EdsID)
 		}
 		refRow := ReferenceRow{
-			ReferenceId:   ref.ReferenceId,
+			ReferenceID:   ref.ReferenceID,
 			ReferenceType: *ref.ReferenceType,
 			KeyID:         ref.KeyID,
 			KeyType:       ref.KeyType,
@@ -357,13 +408,13 @@ func createEdsIdReferenceMap(edsRefRows []EdsReferenceRow) (map[int64][]Referenc
 	return converted, nil
 }
 
-func (edsb *EmbeddedDataSpecificationsBuilder) parseEdsReferencesForEachEds(edsIdReferenceRowMapping map[int64][]ReferenceRow, referenceBuilders map[int64]*ReferenceBuilder) error {
-	for edsID, refs := range edsIdReferenceRowMapping {
+func (edsb *EmbeddedDataSpecificationsBuilder) parseEdsReferencesForEachEds(edsIDReferenceRowMapping map[int64][]ReferenceRow, referenceBuilders map[int64]*ReferenceBuilder) error {
+	for edsID, refs := range edsIDReferenceRowMapping {
 		refsParsed := ParseReferencesFromRows(refs, referenceBuilders)
 		if len(refsParsed) == 1 {
-			edsSpec := edsb.dataSpecifications[edsID]
-			edsSpec.DataSpecification = refsParsed[0]
-			edsb.dataSpecifications[edsID] = edsSpec
+			edsSpecWrapper := edsb.dataSpecifications[edsID]
+			edsSpecWrapper.spec.DataSpecification = refsParsed[0]
+			edsb.dataSpecifications[edsID] = edsSpecWrapper
 		} else {
 			return fmt.Errorf("expected exactly one reference for edsID %d, got %d", edsID, len(refsParsed))
 		}

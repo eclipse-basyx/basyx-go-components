@@ -23,6 +23,11 @@
 * SPDX-License-Identifier: MIT
 ******************************************************************************/
 
+// Package submodelelements provides persistence handlers for various submodel element types
+// in the Eclipse BaSyx submodel repository. It implements CRUD operations for different
+// submodel element types such as Range, Property, Collection, and others, with PostgreSQL
+// as the underlying database.
+//
 // Author: Jannik Fried ( Fraunhofer IESE )
 package submodelelements
 
@@ -34,11 +39,24 @@ import (
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 )
 
+// PostgreSQLOperationHandler handles persistence operations for Operation submodel elements.
+// It uses the decorator pattern to extend the base PostgreSQLSMECrudHandler with
+// Operation-specific functionality. Operation elements represent callable functions with
+// input, output, and in-output variables, each containing submodel elements as values.
 type PostgreSQLOperationHandler struct {
 	db        *sql.DB
 	decorated *PostgreSQLSMECrudHandler
 }
 
+// NewPostgreSQLOperationHandler creates a new PostgreSQLOperationHandler instance.
+// It initializes the decorated PostgreSQLSMECrudHandler for base submodel element operations.
+//
+// Parameters:
+//   - db: A PostgreSQL database connection
+//
+// Returns:
+//   - *PostgreSQLOperationHandler: A new handler instance
+//   - error: An error if the decorated handler initialization fails
 func NewPostgreSQLOperationHandler(db *sql.DB) (*PostgreSQLOperationHandler, error) {
 	decoratedHandler, err := NewPostgreSQLSMECrudHandler(db)
 	if err != nil {
@@ -47,20 +65,33 @@ func NewPostgreSQLOperationHandler(db *sql.DB) (*PostgreSQLOperationHandler, err
 	return &PostgreSQLOperationHandler{db: db, decorated: decoratedHandler}, nil
 }
 
-func (p PostgreSQLOperationHandler) Create(tx *sql.Tx, submodelId string, submodelElement gen.SubmodelElement) (int, error) {
+// Create persists a new Operation submodel element to the database within a transaction.
+// It first creates the base submodel element using the decorated handler, then inserts
+// Operation-specific data including all input, output, and in-output variables. Each
+// variable's value (which is itself a submodel element) is recursively persisted.
+//
+// Parameters:
+//   - tx: The database transaction
+//   - submodelID: The ID of the parent submodel
+//   - submodelElement: The Operation element to create (must be of type *gen.Operation)
+//
+// Returns:
+//   - int: The database ID of the created element
+//   - error: An error if the element is not an Operation type or if database operations fail
+func (p PostgreSQLOperationHandler) Create(tx *sql.Tx, submodelID string, submodelElement gen.SubmodelElement) (int, error) {
 	operation, ok := submodelElement.(*gen.Operation)
 	if !ok {
 		return 0, errors.New("submodelElement is not of type Operation")
 	}
 
 	// First, perform base SubmodelElement operations within the transaction
-	id, err := p.decorated.Create(tx, submodelId, submodelElement)
+	id, err := p.decorated.Create(tx, submodelID, submodelElement)
 	if err != nil {
 		return 0, err
 	}
 
 	// Operation-specific database insertion
-	err = insertOperation(operation, tx, id, submodelId, p.db)
+	err = insertOperation(operation, tx, id, submodelID, p.db)
 	if err != nil {
 		return 0, err
 	}
@@ -68,20 +99,36 @@ func (p PostgreSQLOperationHandler) Create(tx *sql.Tx, submodelId string, submod
 	return id, nil
 }
 
-func (p PostgreSQLOperationHandler) CreateNested(tx *sql.Tx, submodelId string, parentId int, idShortPath string, submodelElement gen.SubmodelElement, pos int) (int, error) {
+// CreateNested persists a new nested Operation submodel element to the database within a transaction.
+// This method is used when creating Operation elements within collection-like structures (e.g., SubmodelElementCollection).
+// It creates the base nested element with the provided idShortPath and position, then inserts Operation-specific
+// data including all variables.
+//
+// Parameters:
+//   - tx: The database transaction
+//   - submodelID: The ID of the parent submodel
+//   - parentID: The database ID of the parent collection element
+//   - idShortPath: The path identifying the element's location within the hierarchy
+//   - submodelElement: The Operation element to create (must be of type *gen.Operation)
+//   - pos: The position of the element within the parent collection
+//
+// Returns:
+//   - int: The database ID of the created element
+//   - error: An error if the element is not an Operation type or if database operations fail
+func (p PostgreSQLOperationHandler) CreateNested(tx *sql.Tx, submodelID string, parentID int, idShortPath string, submodelElement gen.SubmodelElement, pos int) (int, error) {
 	operation, ok := submodelElement.(*gen.Operation)
 	if !ok {
 		return 0, errors.New("submodelElement is not of type Operation")
 	}
 
 	// Create the nested operation with the provided idShortPath using the decorated handler
-	id, err := p.decorated.CreateAndPath(tx, submodelId, parentId, idShortPath, submodelElement, pos)
+	id, err := p.decorated.CreateAndPath(tx, submodelID, parentID, idShortPath, submodelElement, pos)
 	if err != nil {
 		return 0, err
 	}
 
 	// Operation-specific database insertion for nested element
-	err = insertOperation(operation, tx, id, submodelId, p.db)
+	err = insertOperation(operation, tx, id, submodelID, p.db)
 	if err != nil {
 		return 0, err
 	}
@@ -89,12 +136,31 @@ func (p PostgreSQLOperationHandler) CreateNested(tx *sql.Tx, submodelId string, 
 	return id, nil
 }
 
+// Update modifies an existing Operation submodel element in the database.
+// Currently delegates all update operations to the decorated handler for base submodel element properties.
+//
+// Parameters:
+//   - idShortOrPath: The idShort or path identifying the element to update
+//   - submodelElement: The updated Operation element data
+//
+// Returns:
+//   - error: An error if the update operation fails
 func (p PostgreSQLOperationHandler) Update(idShortOrPath string, submodelElement gen.SubmodelElement) error {
 	if dErr := p.decorated.Update(idShortOrPath, submodelElement); dErr != nil {
 		return dErr
 	}
 	return nil
 }
+
+// Delete removes an Operation submodel element from the database.
+// Currently delegates all delete operations to the decorated handler. Operation-specific data
+// (including variables and their values) is typically removed via database cascade constraints.
+//
+// Parameters:
+//   - idShortOrPath: The idShort or path identifying the element to delete
+//
+// Returns:
+//   - error: An error if the delete operation fails
 func (p PostgreSQLOperationHandler) Delete(idShortOrPath string) error {
 	if dErr := p.decorated.Delete(idShortOrPath); dErr != nil {
 		return dErr
@@ -102,41 +168,68 @@ func (p PostgreSQLOperationHandler) Delete(idShortOrPath string) error {
 	return nil
 }
 
-func insertOperation(operation *gen.Operation, tx *sql.Tx, id int, submodelId string, db *sql.DB) error {
+// insertOperation is a helper function that inserts Operation-specific data into the operation_element table.
+// It creates the operation record and then inserts all associated variables (input, output, and in-output).
+// Each variable's value is persisted as a nested submodel element.
+//
+// Parameters:
+//   - operation: The Operation element containing the data to insert
+//   - tx: The database transaction
+//   - id: The database ID of the parent submodel element
+//   - submodelID: The ID of the parent submodel (needed for variable value persistence)
+//   - db: The database connection (needed to get appropriate handlers for variable values)
+//
+// Returns:
+//   - error: An error if the database insert operation fails
+func insertOperation(operation *gen.Operation, tx *sql.Tx, id int, submodelID string, db *sql.DB) error {
 	_, err := tx.Exec(`INSERT INTO operation_element (id) VALUES ($1)`, id)
 	if err != nil {
 		return err
 	}
 
 	// Insert variables
-	err = insertOperationVariables(tx, operation.InputVariables, "in", id, submodelId, db)
+	err = insertOperationVariables(tx, operation.InputVariables, "in", id, submodelID, db)
 	if err != nil {
 		return err
 	}
-	err = insertOperationVariables(tx, operation.OutputVariables, "out", id, submodelId, db)
+	err = insertOperationVariables(tx, operation.OutputVariables, "out", id, submodelID, db)
 	if err != nil {
 		return err
 	}
-	err = insertOperationVariables(tx, operation.InoutputVariables, "inout", id, submodelId, db)
+	err = insertOperationVariables(tx, operation.InoutputVariables, "inout", id, submodelID, db)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func insertOperationVariables(tx *sql.Tx, variables []gen.OperationVariable, role string, operationId int, submodelId string, db *sql.DB) error {
+// insertOperationVariables is a helper function that inserts operation variables into the operation_variable table.
+// Each variable contains a value that is itself a submodel element, which is recursively persisted using
+// the appropriate handler. Variables are stored with their role (in, out, or inout) and position.
+//
+// Parameters:
+//   - tx: The database transaction
+//   - variables: The list of operation variables to insert
+//   - role: The role of the variables ("in" for input, "out" for output, "inout" for in-output)
+//   - operationID: The database ID of the parent operation element
+//   - submodelID: The ID of the parent submodel (needed for variable value persistence)
+//   - db: The database connection (needed to get appropriate handlers for variable values)
+//
+// Returns:
+//   - error: An error if the database insert operation fails
+func insertOperationVariables(tx *sql.Tx, variables []gen.OperationVariable, role string, operationID int, submodelID string, db *sql.DB) error {
 	for i, ov := range variables {
 		// Create the value submodel element
 		handler, err := GetSMEHandler(ov.Value, db)
 		if err != nil {
 			return err
 		}
-		valueId, err := handler.Create(tx, submodelId, ov.Value)
+		valueID, err := handler.Create(tx, submodelID, ov.Value)
 		if err != nil {
 			return err
 		}
 		_, err = tx.Exec(`INSERT INTO operation_variable (operation_id, role, position, value_sme) VALUES ($1, $2, $3, $4)`,
-			operationId, role, i, valueId)
+			operationID, role, i, valueID)
 		if err != nil {
 			return err
 		}

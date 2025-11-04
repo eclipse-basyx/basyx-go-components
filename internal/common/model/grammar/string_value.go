@@ -23,9 +23,11 @@
 * SPDX-License-Identifier: MIT
 ******************************************************************************/
 
+// Package grammar defines the data structures for representing string values in the grammar model.
 // Author: Aaron Zielstorff ( Fraunhofer IESE ), Jannik Fried ( Fraunhofer IESE )
 package grammar
 
+// StringValue represents a string value in the grammar model, which can be a literal string, a field reference, or a string cast.
 type StringValue struct {
 	// Attribute corresponds to the JSON schema field "$attribute".
 	Attribute AttributeValue `json:"$attribute,omitempty" yaml:"$attribute,omitempty" mapstructure:"$attribute,omitempty"`

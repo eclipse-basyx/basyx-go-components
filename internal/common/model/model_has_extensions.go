@@ -9,6 +9,7 @@
 
 package model
 
+// HasExtensions type of HasExtensions
 type HasExtensions struct {
 	Extensions []Extension `json:"extensions,omitempty"`
 }

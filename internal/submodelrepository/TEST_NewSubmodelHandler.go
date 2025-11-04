@@ -1,3 +1,4 @@
+// Package submodelrepository provides functionality for managing submodels in a repository for Test purposes.
 package submodelrepository
 
 import (
@@ -9,21 +10,22 @@ import (
 	"time"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
-	persistence_postgresql "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence"
-	submodel_persistence "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/Submodel"
+	persistencepostgresql "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence"
+	submodelpersistence "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/Submodel"
 )
 
 const (
 	benchmarkEnabled = false
 )
 
-func TestNewSubmodelHandler(smDatabase *persistence_postgresql.PostgreSQLSubmodelDatabase) {
-	//TEST
+// TestNewSubmodelHandler is a test function to benchmark and test submodel retrieval performance.
+func TestNewSubmodelHandler(smDatabase *persistencepostgresql.PostgreSQLSubmodelDatabase) {
+	// TEST
 	if benchmarkEnabled {
 		var acc int64
 		for i := 0; i < 1000; i++ {
 			start := time.Now().Local().UnixMilli()
-			submodel_persistence.GetSubmodelById(smDatabase.GetDB(), fmt.Sprintf("5_%d", i))
+			_, _ = submodelpersistence.GetSubmodelByID(smDatabase.GetDB(), fmt.Sprintf("5_%d", i))
 			end := time.Now().Local().UnixMilli()
 			fmt.Printf("Total time: %d milliseconds\n", end-start)
 			acc += int64(end - start)
@@ -48,10 +50,10 @@ func TestNewSubmodelHandler(smDatabase *persistence_postgresql.PostgreSQLSubmode
 
 				for i := startIdx; i < endIdx; i++ {
 					start := time.Now().UnixMilli()
-					submodel_persistence.GetSubmodelById(smDatabase.GetDB(), fmt.Sprintf("5_%d", i))
+					_, _ = submodelpersistence.GetSubmodelByID(smDatabase.GetDB(), fmt.Sprintf("5_%d", i))
 					end := time.Now().UnixMilli()
 					duration := end - start
-					//fmt.Printf("[Thread %02d] Total time for 5_%d: %d ms\n", threadID, i, duration)
+					// fmt.Printf("[Thread %02d] Total time for 5_%d: %d ms\n", threadID, i, duration)
 					localAcc += duration
 				}
 
@@ -67,7 +69,7 @@ func TestNewSubmodelHandler(smDatabase *persistence_postgresql.PostgreSQLSubmode
 		requestsPerSecond := float64(iterations) / (float64(totalDuration) / 1000.0)
 		fmt.Printf("Requests per second: %.2f\n", requestsPerSecond)
 
-		// sm, err := smDatabase.GetSubmodelById("5_1")
+		// sm, err := smDatabase.GetSubmodelByID("5_1")
 		// jsonSubmodel, _ := json.Marshal(sm)
 		// fmt.Println(string(jsonSubmodel))
 	}
@@ -83,7 +85,7 @@ func TestNewSubmodelHandler(smDatabase *persistence_postgresql.PostgreSQLSubmode
 		log.Fatalf("Failed to parse JSON: %v", err)
 	}
 	start := time.Now()
-	sms, cursor, err := submodel_persistence.GetAllSubmodels(smDatabase.GetDB(), 5, "", &query)
+	sms, cursor, err := submodelpersistence.GetAllSubmodels(smDatabase.GetDB(), 5, "", nil)
 	end := time.Now()
 	fmt.Printf("Query Execution Time: %d milliseconds\n", end.Sub(start).Milliseconds())
 	fmt.Println(cursor)
@@ -95,11 +97,11 @@ func TestNewSubmodelHandler(smDatabase *persistence_postgresql.PostgreSQLSubmode
 	fmt.Println(len(sms))
 	if len(sms) > 0 {
 		jsonSubmodel, _ := json.Marshal(sms[0])
-		//print size in bytes
+		// print size in bytes
 		fmt.Println(string(jsonSubmodel))
 
-		allSmsJson, _ := json.Marshal(sms)
-		fmt.Printf("Total size of all submodels: %.2f MB\n", float64(len(allSmsJson))/(1024*1024))
+		allSmsJSON, _ := json.Marshal(sms)
+		fmt.Printf("Total size of all submodels: %.2f MB\n", float64(len(allSmsJSON))/(1024*1024))
 	}
-	//TEST
+	// TEST
 }

@@ -9,6 +9,7 @@
 
 package model
 
+// ReferenceValue type of ReferenceValue
 type ReferenceValue struct {
 	Type ReferenceTypes `json:"type,omitempty"`
 

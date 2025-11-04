@@ -9,6 +9,7 @@
 
 package model
 
+// AnnotatedRelationshipElementValue type of SubmodelElementValue
 type AnnotatedRelationshipElementValue struct {
 	First ReferenceValue `json:"first"`
 

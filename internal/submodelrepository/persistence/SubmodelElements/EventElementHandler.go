@@ -22,8 +22,8 @@
 *
 * SPDX-License-Identifier: MIT
 ******************************************************************************/
-
 // Author: Jannik Fried ( Fraunhofer IESE )
+
 package submodelelements
 
 import (
@@ -34,11 +34,24 @@ import (
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 )
 
+// PostgreSQLEventElementHandler handles the persistence operations for EventElement submodel elements.
+// It implements the SubmodelElementHandler interface and uses the decorator pattern
+// to extend the base CRUD operations with EventElement-specific functionality.
 type PostgreSQLEventElementHandler struct {
 	db        *sql.DB
 	decorated *PostgreSQLSMECrudHandler
 }
 
+// NewPostgreSQLEventElementHandler creates a new PostgreSQLEventElementHandler instance.
+// It initializes the handler with a database connection and creates the decorated
+// base CRUD handler for common SubmodelElement operations.
+//
+// Parameters:
+//   - db: Database connection to PostgreSQL
+//
+// Returns:
+//   - *PostgreSQLEventElementHandler: Configured EventElement handler instance
+//   - error: Error if the decorated handler creation fails
 func NewPostgreSQLEventElementHandler(db *sql.DB) (*PostgreSQLEventElementHandler, error) {
 	decoratedHandler, err := NewPostgreSQLSMECrudHandler(db)
 	if err != nil {
@@ -47,13 +60,25 @@ func NewPostgreSQLEventElementHandler(db *sql.DB) (*PostgreSQLEventElementHandle
 	return &PostgreSQLEventElementHandler{db: db, decorated: decoratedHandler}, nil
 }
 
-func (p PostgreSQLEventElementHandler) Create(tx *sql.Tx, submodelId string, submodelElement gen.SubmodelElement) (int, error) {
+// Create persists a new EventElement submodel element to the database.
+// Currently creates the base SubmodelElement data using the decorated handler.
+// EventElement-specific operations are not yet implemented but the structure is prepared.
+//
+// Parameters:
+//   - tx: Database transaction to use for the operation
+//   - submodelID: ID of the parent submodel
+//   - submodelElement: The EventElement to create (must be of type *gen.EventElement)
+//
+// Returns:
+//   - int: The database ID of the created event element
+//   - error: Error if the element is not an EventElement or if database operations fail
+func (p PostgreSQLEventElementHandler) Create(tx *sql.Tx, submodelID string, submodelElement gen.SubmodelElement) (int, error) {
 	_, ok := submodelElement.(*gen.EventElement)
 	if !ok {
 		return 0, errors.New("submodelElement is not of type EventElement")
 	}
 	// First, perform base SubmodelElement operations within the transaction
-	id, err := p.decorated.Create(tx, submodelId, submodelElement)
+	id, err := p.decorated.Create(tx, submodelID, submodelElement)
 	if err != nil {
 		return 0, err
 	}
@@ -67,16 +92,50 @@ func (p PostgreSQLEventElementHandler) Create(tx *sql.Tx, submodelId string, sub
 	return id, nil
 }
 
-func (p PostgreSQLEventElementHandler) CreateNested(tx *sql.Tx, submodelId string, parentId int, idShortPath string, submodelElement gen.SubmodelElement, pos int) (int, error) {
+// CreateNested creates a nested EventElement submodel element.
+// This operation is currently not implemented for EventElement types.
+//
+// Parameters:
+//   - tx: Database transaction to use for the operation
+//   - submodelID: ID of the parent submodel
+//   - parentID: Database ID of the parent SubmodelElement
+//   - idShortPath: Path identifier for the nested element
+//   - submodelElement: The EventElement to create
+//   - pos: Position of the element within its parent
+//
+// Returns:
+//   - int: Always returns 0 (not implemented)
+//   - error: Always returns "not implemented" error
+//
+//nolint:revive
+func (p PostgreSQLEventElementHandler) CreateNested(tx *sql.Tx, submodelID string, parentID int, idShortPath string, submodelElement gen.SubmodelElement, pos int) (int, error) {
 	return 0, errors.New("not implemented")
 }
 
+// Update modifies an existing EventElement submodel element in the database.
+// Currently delegates to the decorated handler for base SubmodelElement updates.
+//
+// Parameters:
+//   - idShortOrPath: The idShort or path identifier of the element to update
+//   - submodelElement: The updated EventElement data
+//
+// Returns:
+//   - error: Error if the update operation fails
 func (p PostgreSQLEventElementHandler) Update(idShortOrPath string, submodelElement gen.SubmodelElement) error {
 	if dErr := p.decorated.Update(idShortOrPath, submodelElement); dErr != nil {
 		return dErr
 	}
 	return nil
 }
+
+// Delete removes an EventElement submodel element from the database.
+// Currently delegates to the decorated handler for base SubmodelElement deletion.
+//
+// Parameters:
+//   - idShortOrPath: The idShort or path identifier of the element to delete
+//
+// Returns:
+//   - error: Error if the delete operation fails
 func (p PostgreSQLEventElementHandler) Delete(idShortOrPath string) error {
 	if dErr := p.decorated.Delete(idShortOrPath); dErr != nil {
 		return dErr

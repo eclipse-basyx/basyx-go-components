@@ -239,20 +239,20 @@ func TestEmbeddedDataSpecificationsBuilder_BuildReferences_WithReferredReference
 		t.Fatal("Expected DataSpecification to be set")
 	}
 
-	if eds.DataSpecification.ReferredSemanticId == nil {
-		t.Fatal("Expected ReferredSemanticId to be set")
+	if eds.DataSpecification.ReferredSemanticID == nil {
+		t.Fatal("Expected ReferredSemanticID to be set")
 	}
 
-	if string(eds.DataSpecification.ReferredSemanticId.Type) != "ModelReference" {
-		t.Errorf("Expected ReferredSemanticId type 'ModelReference', got '%s'", eds.DataSpecification.ReferredSemanticId.Type)
+	if string(eds.DataSpecification.ReferredSemanticID.Type) != "ModelReference" {
+		t.Errorf("Expected ReferredSemanticID type 'ModelReference', got '%s'", eds.DataSpecification.ReferredSemanticID.Type)
 	}
 
-	if len(eds.DataSpecification.ReferredSemanticId.Keys) != 1 {
-		t.Fatalf("Expected 1 key in ReferredSemanticId, got %d", len(eds.DataSpecification.ReferredSemanticId.Keys))
+	if len(eds.DataSpecification.ReferredSemanticID.Keys) != 1 {
+		t.Fatalf("Expected 1 key in ReferredSemanticID, got %d", len(eds.DataSpecification.ReferredSemanticID.Keys))
 	}
 
-	if eds.DataSpecification.ReferredSemanticId.Keys[0].Value != "0173-1#01-ABC123#001" {
-		t.Errorf("Expected ReferredSemanticId key value '0173-1#01-ABC123#001', got '%s'", eds.DataSpecification.ReferredSemanticId.Keys[0].Value)
+	if eds.DataSpecification.ReferredSemanticID.Keys[0].Value != "0173-1#01-ABC123#001" {
+		t.Errorf("Expected ReferredSemanticID key value '0173-1#01-ABC123#001', got '%s'", eds.DataSpecification.ReferredSemanticID.Keys[0].Value)
 	}
 }
 
@@ -398,8 +398,8 @@ func TestEmbeddedDataSpecificationsBuilder_Integration_CompleteHierarchy(t *test
 	foundMultiLevel := false
 	for _, eds := range result {
 		if eds.DataSpecification != nil &&
-			eds.DataSpecification.ReferredSemanticId != nil &&
-			eds.DataSpecification.ReferredSemanticId.ReferredSemanticId != nil {
+			eds.DataSpecification.ReferredSemanticID != nil &&
+			eds.DataSpecification.ReferredSemanticID.ReferredSemanticID != nil {
 			foundMultiLevel = true
 
 			// Verify the three-level hierarchy
@@ -407,12 +407,12 @@ func TestEmbeddedDataSpecificationsBuilder_Integration_CompleteHierarchy(t *test
 				t.Errorf("Unexpected root key: %s", eds.DataSpecification.Keys[0].Value)
 			}
 
-			if eds.DataSpecification.ReferredSemanticId.Keys[0].Value != "Child1" {
-				t.Errorf("Unexpected child key: %s", eds.DataSpecification.ReferredSemanticId.Keys[0].Value)
+			if eds.DataSpecification.ReferredSemanticID.Keys[0].Value != "Child1" {
+				t.Errorf("Unexpected child key: %s", eds.DataSpecification.ReferredSemanticID.Keys[0].Value)
 			}
 
-			if eds.DataSpecification.ReferredSemanticId.ReferredSemanticId.Keys[0].Value != "Grandchild1" {
-				t.Errorf("Unexpected grandchild key: %s", eds.DataSpecification.ReferredSemanticId.ReferredSemanticId.Keys[0].Value)
+			if eds.DataSpecification.ReferredSemanticID.ReferredSemanticID.Keys[0].Value != "Grandchild1" {
+				t.Errorf("Unexpected grandchild key: %s", eds.DataSpecification.ReferredSemanticID.ReferredSemanticID.Keys[0].Value)
 			}
 		}
 	}

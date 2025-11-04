@@ -9,11 +9,13 @@
 
 package model
 
+// EntityValue type of EntityValue
 type EntityValue struct {
 	EntityType EntityType `json:"entityType"`
 
-	GlobalAssetId string `json:"globalAssetId,omitempty" validate:"regexp=^([\\\\x09\\\\x0a\\\\x0d\\\\x20-\\\\ud7ff\\\\ue000-\\\\ufffd]|\\\\ud800[\\\\udc00-\\\\udfff]|[\\\\ud801-\\\\udbfe][\\\\udc00-\\\\udfff]|\\\\udbff[\\\\udc00-\\\\udfff])*$"`
+	GlobalAssetID string `json:"globalAssetId,omitempty" validate:"regexp=^([\\\\x09\\\\x0a\\\\x0d\\\\x20-\\\\ud7ff\\\\ue000-\\\\ufffd]|\\\\ud800[\\\\udc00-\\\\udfff]|[\\\\ud801-\\\\udbfe][\\\\udc00-\\\\udfff]|\\\\udbff[\\\\udc00-\\\\udfff])*$"`
 
+	//nolint:all
 	SpecificAssetIds []map[string]interface{} `json:"specificAssetIds,omitempty"`
 
 	Statements []map[string]interface{} `json:"statements,omitempty"`
@@ -34,6 +36,8 @@ func AssertEntityValueRequired(obj EntityValue) error {
 }
 
 // AssertEntityValueConstraints checks if the values respects the defined constraints
+//
+//nolint:all
 func AssertEntityValueConstraints(obj EntityValue) error {
 	return nil
 }

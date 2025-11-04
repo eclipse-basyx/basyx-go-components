@@ -26,9 +26,9 @@ func NewSerializationAPIAPIService() *SerializationAPIAPIService {
 	return &SerializationAPIAPIService{}
 }
 
-// GenerateSerializationByIds - Returns an appropriate serialization based on the specified format (see SerializationFormat)
-func (s *SerializationAPIAPIService) GenerateSerializationByIds(ctx context.Context, aasIds []string, submodelIds []string, includeConceptDescriptions bool) (ImplResponse, error) {
-	// TODO - update GenerateSerializationByIds with the required logic for this service method.
+// GenerateSerializationByIDs - Returns an appropriate serialization based on the specified format (see SerializationFormat)
+func (s *SerializationAPIAPIService) GenerateSerializationByIDs(_ /*ctx*/ context.Context, _ /*aasIDs*/ []string, _ /*submodelIDs*/ []string, _ /*includeConceptDescriptions*/ bool) (ImplResponse, error) {
+	// TODO - update GenerateSerializationByIDs with the required logic for this service method.
 	// Add api_serialization_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
 
 	// TODO: Uncomment the next line to return response Response(200, *os.File{}) or use other options such as http.Ok ...
@@ -49,5 +49,5 @@ func (s *SerializationAPIAPIService) GenerateSerializationByIds(ctx context.Cont
 	// TODO: Uncomment the next line to return response Response(0, Result{}) or use other options such as http.Ok ...
 	// return Response(0, Result{}), nil
 
-	return Response(http.StatusNotImplemented, nil), errors.New("GenerateSerializationByIds method not implemented")
+	return Response(http.StatusNotImplemented, nil), errors.New("GenerateSerializationByIDs method not implemented")
 }

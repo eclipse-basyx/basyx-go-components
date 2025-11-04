@@ -9,6 +9,7 @@
 
 package model
 
+// LevelType type of LevelType
 type LevelType struct {
 	Min bool `json:"min"`
 
@@ -37,6 +38,8 @@ func AssertLevelTypeRequired(obj LevelType) error {
 }
 
 // AssertLevelTypeConstraints checks if the values respects the defined constraints
+//
+//nolint:all
 func AssertLevelTypeConstraints(obj LevelType) error {
 	return nil
 }

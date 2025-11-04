@@ -9,25 +9,26 @@
 
 package model
 
+// ValueReferencePair struct representing a pair of a value and its reference ID
 type ValueReferencePair struct {
 	Value string `json:"value" validate:"regexp=^([\\\\x09\\\\x0a\\\\x0d\\\\x20-\\\\ud7ff\\\\ue000-\\\\ufffd]|\\\\ud800[\\\\udc00-\\\\udfff]|[\\\\ud801-\\\\udbfe][\\\\udc00-\\\\udfff]|\\\\udbff[\\\\udc00-\\\\udfff])*$"`
 
-	ValueId *Reference `json:"valueId"`
+	ValueID *Reference `json:"valueId"`
 }
 
 // AssertValueReferencePairRequired checks if the required fields are not zero-ed
 func AssertValueReferencePairRequired(obj ValueReferencePair) error {
 	elements := map[string]interface{}{
 		"value":   obj.Value,
-		"valueId": obj.ValueId,
+		"valueId": obj.ValueID,
 	}
 	for name, el := range elements {
 		if isZero := IsZeroValue(el); isZero {
 			return &RequiredError{Field: name}
 		}
 	}
-	if obj.ValueId != nil {
-		if err := AssertReferenceRequired(*obj.ValueId); err != nil {
+	if obj.ValueID != nil {
+		if err := AssertReferenceRequired(*obj.ValueID); err != nil {
 			return err
 		}
 	}
@@ -36,8 +37,8 @@ func AssertValueReferencePairRequired(obj ValueReferencePair) error {
 
 // AssertValueReferencePairConstraints checks if the values respects the defined constraints
 func AssertValueReferencePairConstraints(obj ValueReferencePair) error {
-	if obj.ValueId != nil {
-		if err := AssertReferenceConstraints(*obj.ValueId); err != nil {
+	if obj.ValueID != nil {
+		if err := AssertReferenceConstraints(*obj.ValueID); err != nil {
 			return err
 		}
 	}

@@ -9,6 +9,7 @@
 
 package model
 
+// PagedResult type of PagedResult
 type PagedResult struct {
 	PagingMetadata PagedResultPagingMetadata `json:"paging_metadata,omitempty"`
 }

@@ -9,6 +9,7 @@
 
 package model
 
+// SubmodelElementValue struct representing a SubmodelElementValue.
 type SubmodelElementValue struct {
 	Observed ReferenceValue `json:"observed"`
 
@@ -32,8 +33,9 @@ type SubmodelElementValue struct {
 
 	EntityType EntityType `json:"entityType"`
 
-	GlobalAssetId string `json:"globalAssetId,omitempty"`
+	GlobalAssetID string `json:"globalAssetId,omitempty"`
 
+	//nolint:revive
 	SpecificAssetIds []map[string]interface{} `json:"specificAssetIds,omitempty"`
 
 	Statements []map[string]interface{} `json:"statements,omitempty"`

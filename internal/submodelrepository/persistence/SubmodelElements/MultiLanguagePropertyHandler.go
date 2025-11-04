@@ -23,6 +23,11 @@
 * SPDX-License-Identifier: MIT
 ******************************************************************************/
 
+// Package submodelelements provides persistence handlers for various submodel element types
+// in the Eclipse BaSyx submodel repository. It implements CRUD operations for different
+// submodel element types such as Range, Property, Collection, and others, with PostgreSQL
+// as the underlying database.
+//
 // Author: Jannik Fried ( Fraunhofer IESE )
 package submodelelements
 
@@ -34,11 +39,24 @@ import (
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 )
 
+// PostgreSQLMultiLanguagePropertyHandler handles persistence operations for MultiLanguageProperty submodel elements.
+// It uses the decorator pattern to extend the base PostgreSQLSMECrudHandler with
+// MultiLanguageProperty-specific functionality. MultiLanguageProperty elements represent text values
+// that can be expressed in multiple languages, with each language variant stored as a separate value.
 type PostgreSQLMultiLanguagePropertyHandler struct {
 	db        *sql.DB
 	decorated *PostgreSQLSMECrudHandler
 }
 
+// NewPostgreSQLMultiLanguagePropertyHandler creates a new PostgreSQLMultiLanguagePropertyHandler instance.
+// It initializes the decorated PostgreSQLSMECrudHandler for base submodel element operations.
+//
+// Parameters:
+//   - db: A PostgreSQL database connection
+//
+// Returns:
+//   - *PostgreSQLMultiLanguagePropertyHandler: A new handler instance
+//   - error: An error if the decorated handler initialization fails
 func NewPostgreSQLMultiLanguagePropertyHandler(db *sql.DB) (*PostgreSQLMultiLanguagePropertyHandler, error) {
 	decoratedHandler, err := NewPostgreSQLSMECrudHandler(db)
 	if err != nil {
@@ -47,13 +65,25 @@ func NewPostgreSQLMultiLanguagePropertyHandler(db *sql.DB) (*PostgreSQLMultiLang
 	return &PostgreSQLMultiLanguagePropertyHandler{db: db, decorated: decoratedHandler}, nil
 }
 
-func (p PostgreSQLMultiLanguagePropertyHandler) Create(tx *sql.Tx, submodelId string, submodelElement gen.SubmodelElement) (int, error) {
+// Create persists a new MultiLanguageProperty submodel element to the database within a transaction.
+// It first creates the base submodel element using the decorated handler, then inserts
+// MultiLanguageProperty-specific data including all language-text pairs as separate value entries.
+//
+// Parameters:
+//   - tx: The database transaction
+//   - submodelID: The ID of the parent submodel
+//   - submodelElement: The MultiLanguageProperty element to create (must be of type *gen.MultiLanguageProperty)
+//
+// Returns:
+//   - int: The database ID of the created element
+//   - error: An error if the element is not a MultiLanguageProperty type or if database operations fail
+func (p PostgreSQLMultiLanguagePropertyHandler) Create(tx *sql.Tx, submodelID string, submodelElement gen.SubmodelElement) (int, error) {
 	mlp, ok := submodelElement.(*gen.MultiLanguageProperty)
 	if !ok {
 		return 0, errors.New("submodelElement is not of type MultiLanguageProperty")
 	}
 	// First, perform base SubmodelElement operations within the transaction
-	id, err := p.decorated.Create(tx, submodelId, submodelElement)
+	id, err := p.decorated.Create(tx, submodelID, submodelElement)
 	if err != nil {
 		return 0, err
 	}
@@ -67,14 +97,30 @@ func (p PostgreSQLMultiLanguagePropertyHandler) Create(tx *sql.Tx, submodelId st
 	return id, nil
 }
 
-func (p PostgreSQLMultiLanguagePropertyHandler) CreateNested(tx *sql.Tx, submodelId string, parentId int, idShortPath string, submodelElement gen.SubmodelElement, pos int) (int, error) {
+// CreateNested persists a new nested MultiLanguageProperty submodel element to the database within a transaction.
+// This method is used when creating MultiLanguageProperty elements within collection-like structures
+// (e.g., SubmodelElementCollection). It creates the base nested element with the provided idShortPath
+// and position, then inserts MultiLanguageProperty-specific data including all language values.
+//
+// Parameters:
+//   - tx: The database transaction
+//   - submodelID: The ID of the parent submodel
+//   - parentID: The database ID of the parent collection element
+//   - idShortPath: The path identifying the element's location within the hierarchy
+//   - submodelElement: The MultiLanguageProperty element to create (must be of type *gen.MultiLanguageProperty)
+//   - pos: The position of the element within the parent collection
+//
+// Returns:
+//   - int: The database ID of the created element
+//   - error: An error if the element is not a MultiLanguageProperty type or if database operations fail
+func (p PostgreSQLMultiLanguagePropertyHandler) CreateNested(tx *sql.Tx, submodelID string, parentID int, idShortPath string, submodelElement gen.SubmodelElement, pos int) (int, error) {
 	mlp, ok := submodelElement.(*gen.MultiLanguageProperty)
 	if !ok {
 		return 0, errors.New("submodelElement is not of type MultiLanguageProperty")
 	}
 
 	// Create the nested mlp with the provided idShortPath using the decorated handler
-	id, err := p.decorated.CreateAndPath(tx, submodelId, parentId, idShortPath, submodelElement, pos)
+	id, err := p.decorated.CreateAndPath(tx, submodelID, parentID, idShortPath, submodelElement, pos)
 	if err != nil {
 		return 0, err
 	}
@@ -88,12 +134,31 @@ func (p PostgreSQLMultiLanguagePropertyHandler) CreateNested(tx *sql.Tx, submode
 	return id, nil
 }
 
+// Update modifies an existing MultiLanguageProperty submodel element in the database.
+// Currently delegates all update operations to the decorated handler for base submodel element properties.
+//
+// Parameters:
+//   - idShortOrPath: The idShort or path identifying the element to update
+//   - submodelElement: The updated MultiLanguageProperty element data
+//
+// Returns:
+//   - error: An error if the update operation fails
 func (p PostgreSQLMultiLanguagePropertyHandler) Update(idShortOrPath string, submodelElement gen.SubmodelElement) error {
 	if dErr := p.decorated.Update(idShortOrPath, submodelElement); dErr != nil {
 		return dErr
 	}
 	return nil
 }
+
+// Delete removes a MultiLanguageProperty submodel element from the database.
+// Currently delegates all delete operations to the decorated handler. MultiLanguageProperty-specific data
+// (including all language values) is typically removed via database cascade constraints.
+//
+// Parameters:
+//   - idShortOrPath: The idShort or path identifying the element to delete
+//
+// Returns:
+//   - error: An error if the delete operation fails
 func (p PostgreSQLMultiLanguagePropertyHandler) Delete(idShortOrPath string) error {
 	if dErr := p.decorated.Delete(idShortOrPath); dErr != nil {
 		return dErr
@@ -101,6 +166,17 @@ func (p PostgreSQLMultiLanguagePropertyHandler) Delete(idShortOrPath string) err
 	return nil
 }
 
+// insertMultiLanguageProperty is a helper function that inserts MultiLanguageProperty-specific data
+// into the multilanguage_property and multilanguage_property_value tables. It creates the parent
+// multilanguage_property record, then inserts each language-text pair as a separate value record.
+//
+// Parameters:
+//   - mlp: The MultiLanguageProperty element containing the data to insert
+//   - tx: The database transaction
+//   - id: The database ID of the parent submodel element
+//
+// Returns:
+//   - error: An error if the database insert operation fails
 func insertMultiLanguageProperty(mlp *gen.MultiLanguageProperty, tx *sql.Tx, id int) error {
 	// Insert into multilanguage_property
 	_, err := tx.Exec(`INSERT INTO multilanguage_property (id) VALUES ($1)`, id)

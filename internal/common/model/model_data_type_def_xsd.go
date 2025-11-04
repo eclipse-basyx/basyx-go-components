@@ -14,9 +14,12 @@ import (
 	"fmt"
 )
 
+// DataTypeDefXsd type of DataTypeDefXsd
 type DataTypeDefXsd string
 
 // List of DataTypeDefXsd
+//
+//nolint:all
 const (
 	DATATYPEDEFXSD_XS_ANY_URI              DataTypeDefXsd = "xs:anyURI"
 	DATATYPEDEFXSD_XS_BASE64_BINARY        DataTypeDefXsd = "xs:base64Binary"
@@ -136,11 +139,15 @@ func NewDataTypeDefXsdFromValue(v string) (DataTypeDefXsd, error) {
 }
 
 // AssertDataTypeDefXsdRequired checks if the required fields are not zero-ed
+//
+//nolint:all
 func AssertDataTypeDefXsdRequired(obj DataTypeDefXsd) error {
 	return nil
 }
 
 // AssertDataTypeDefXsdConstraints checks if the values respects the defined constraints
+//
+//nolint:all
 func AssertDataTypeDefXsdConstraints(obj DataTypeDefXsd) error {
 	if !obj.IsValid() {
 		return errors.New("used data type is not supported")

@@ -23,6 +23,7 @@
 * SPDX-License-Identifier: MIT
 ******************************************************************************/
 
+// Package grammar defines the data structures for representing rights enumerations in the grammar model.
 // Author: Aaron Zielstorff ( Fraunhofer IESE ), Jannik Fried ( Fraunhofer IESE )
 package grammar
 
@@ -32,18 +33,34 @@ import (
 	"reflect"
 )
 
+// RightsEnum defines the enumeration for different rights in the grammar model.
 type RightsEnum string
 
+// RightsEnumALL right to have all rights
 const RightsEnumALL RightsEnum = "ALL"
+
+// RightsEnumCREATE right to create elements
 const RightsEnumCREATE RightsEnum = "CREATE"
+
+// RightsEnumDELETE right to delete elements
 const RightsEnumDELETE RightsEnum = "DELETE"
+
+// RightsEnumEXECUTE right to execute elements
 const RightsEnumEXECUTE RightsEnum = "EXECUTE"
+
+// RightsEnumREAD right to read elements
 const RightsEnumREAD RightsEnum = "READ"
+
+// RightsEnumTREE right to view the tree structure of elements
 const RightsEnumTREE RightsEnum = "TREE"
+
+// RightsEnumUPDATE right to update elements
 const RightsEnumUPDATE RightsEnum = "UPDATE"
+
+// RightsEnumVIEW right to view elements
 const RightsEnumVIEW RightsEnum = "VIEW"
 
-var enumValues_RightsEnum = []interface{}{
+var enumValuesRightsEnum = []interface{}{
 	"CREATE",
 	"READ",
 	"UPDATE",
@@ -61,14 +78,14 @@ func (j *RightsEnum) UnmarshalJSON(value []byte) error {
 		return err
 	}
 	var ok bool
-	for _, expected := range enumValues_RightsEnum {
+	for _, expected := range enumValuesRightsEnum {
 		if reflect.DeepEqual(v, expected) {
 			ok = true
 			break
 		}
 	}
 	if !ok {
-		return fmt.Errorf("invalid value (expected one of %#v): %#v", enumValues_RightsEnum, v)
+		return fmt.Errorf("invalid value (expected one of %#v): %#v", enumValuesRightsEnum, v)
 	}
 	*j = RightsEnum(v)
 	return nil

@@ -12,7 +12,7 @@
 * The above copyright notice and this permission notice shall be
 * included in all copies or substantial portions of the Software.
 *
-* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+* THE SOFTWARE IS PROVIdED "AS IS", WITHOUT WARRANTY OF ANY KIND,
 * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
 * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
 * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
@@ -23,6 +23,7 @@
 * SPDX-License-Identifier: MIT
 ******************************************************************************/
 
+// Package grammar defines the data structures for representing model string patterns in the grammar model.
 // Author: Aaron Zielstorff ( Fraunhofer IESE ), Jannik Fried ( Fraunhofer IESE )
 package grammar
 
@@ -32,9 +33,40 @@ import (
 	"regexp"
 )
 
+// ModelStringPattern represents a string pattern for model references in the AAS grammar.
+//
+// This type defines valid patterns for referencing elements within Asset Administration Shells,
+// Submodels, Submodel Elements, Concept Descriptions, and their descriptors. The pattern must
+// match one of the predefined formats starting with prefixes like $aas#, $sm#, $sme#, $cd#,
+// $aasdesc#, or $smdesc# followed by specific path expressions.
+//
+// Valid pattern prefixes:
+//   - $aas#      : Asset Administration Shell references
+//   - $sm#       : Submodel references
+//   - $sme#      : Submodel Element references
+//   - $cd#       : Concept Description references
+//   - $aasdesc#  : AAS Descriptor references
+//   - $smdesc#   : Submodel Descriptor references
+//
+// Examples:
+//   - "$aas#idShort"
+//   - "$sm#semanticId.keys[0].value"
+//   - "$sme.property1#value"
+//   - "$aasdesc#endpoints[0].interface"
 type ModelStringPattern string
 
-// UnmarshalJSON implements json.Unmarshaler.
+// UnmarshalJSON implements the json.Unmarshaler interface for ModelStringPattern.
+//
+// This custom unmarshaler validates that the JSON string value matches the required
+// pattern for model string references. The pattern ensures that only valid AAS element
+// references are accepted, preventing malformed or invalid path expressions.
+//
+// Parameters:
+//   - value: JSON byte slice containing the string value to unmarshal
+//
+// Returns:
+//   - error: An error if the JSON is invalid or if the string doesn't match the required pattern.
+//     The error message includes the pattern that must be matched.
 func (j *ModelStringPattern) UnmarshalJSON(value []byte) error {
 	type Plain ModelStringPattern
 	var plain Plain

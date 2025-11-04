@@ -3484,7 +3484,7 @@ paths:
       - https://admin-shell.io/aas/API/GetOperationAsyncResult/3/0
   /serialization:
     get:
-      operationId: GenerateSerializationByIds
+      operationId: GenerateSerializationByIDs
       parameters:
       - description: The Asset Administration Shells' unique ids (UTF8-BASE64-URL-encoded)
         explode: true
@@ -3566,7 +3566,7 @@ paths:
       tags:
       - Serialization API
       x-semanticIds:
-      - https://admin-shell.io/aas/API/GenerateSerializationByIds/3/0
+      - https://admin-shell.io/aas/API/GenerateSerializationByIDs/3/0
   /description:
     get:
       operationId: GetDescription

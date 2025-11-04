@@ -71,17 +71,17 @@ func (c *AssetAdministrationShellBasicDiscoveryAPIAPIController) Routes() Routes
 		"GetAllAssetLinksById": Route{
 			strings.ToUpper("Get"),
 			"/lookup/shells/{aasIdentifier}",
-			c.GetAllAssetLinksById,
+			c.GetAllAssetLinksByID,
 		},
 		"PostAllAssetLinksById": Route{
 			strings.ToUpper("Post"),
 			"/lookup/shells/{aasIdentifier}",
-			c.PostAllAssetLinksById,
+			c.PostAllAssetLinksByID,
 		},
 		"DeleteAllAssetLinksById": Route{
 			strings.ToUpper("Delete"),
 			"/lookup/shells/{aasIdentifier}",
-			c.DeleteAllAssetLinksById,
+			c.DeleteAllAssetLinksByID,
 		},
 	}
 }
@@ -230,8 +230,8 @@ func (c *AssetAdministrationShellBasicDiscoveryAPIAPIController) SearchAllAssetA
 	_ = EncodeJSONResponse(result.Body, &result.Code, w)
 }
 
-// GetAllAssetLinksById - Returns a list of specific Asset identifiers based on an Asset Administration Shell id to edit discoverable content
-func (c *AssetAdministrationShellBasicDiscoveryAPIAPIController) GetAllAssetLinksById(w http.ResponseWriter, r *http.Request) {
+// GetAllAssetLinksByID - Returns a list of specific Asset identifiers based on an Asset Administration Shell id to edit discoverable content
+func (c *AssetAdministrationShellBasicDiscoveryAPIAPIController) GetAllAssetLinksByID(w http.ResponseWriter, r *http.Request) {
 	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
 	if aasIdentifierParam == "" {
 		result := common.NewErrorResponse(
@@ -245,7 +245,7 @@ func (c *AssetAdministrationShellBasicDiscoveryAPIAPIController) GetAllAssetLink
 		return
 	}
 
-	result, err := c.service.GetAllAssetLinksById(r.Context(), aasIdentifierParam)
+	result, err := c.service.GetAllAssetLinksByID(r.Context(), aasIdentifierParam)
 	// If an error occurred, encode the error with the status code
 	if err != nil {
 		c.errorHandler(w, r, err, &result)
@@ -255,8 +255,8 @@ func (c *AssetAdministrationShellBasicDiscoveryAPIAPIController) GetAllAssetLink
 	_ = EncodeJSONResponse(result.Body, &result.Code, w)
 }
 
-// PostAllAssetLinksById - Creates specific Asset identifiers linked to an Asset Administration Shell to edit discoverable content
-func (c *AssetAdministrationShellBasicDiscoveryAPIAPIController) PostAllAssetLinksById(w http.ResponseWriter, r *http.Request) {
+// PostAllAssetLinksByID - Creates specific Asset identifiers linked to an Asset Administration Shell to edit discoverable content
+func (c *AssetAdministrationShellBasicDiscoveryAPIAPIController) PostAllAssetLinksByID(w http.ResponseWriter, r *http.Request) {
 	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
 	if aasIdentifierParam == "" {
 		result := common.NewErrorResponse(
@@ -270,7 +270,7 @@ func (c *AssetAdministrationShellBasicDiscoveryAPIAPIController) PostAllAssetLin
 		return
 	}
 
-	var specificAssetIdParam []model.SpecificAssetId
+	var specificAssetIdParam []model.SpecificAssetID
 	d := json.NewDecoder(r.Body)
 	d.DisallowUnknownFields()
 	if err := d.Decode(&specificAssetIdParam); err != nil {
@@ -288,7 +288,7 @@ func (c *AssetAdministrationShellBasicDiscoveryAPIAPIController) PostAllAssetLin
 	for _, el := range specificAssetIdParam {
 		if err := model.AssertSpecificAssetIdRequired(el); err != nil {
 			result := common.NewErrorResponse(
-				common.NewErrBadRequest("Invalid SpecificAssetId element"),
+				common.NewErrBadRequest("Invalid SpecificAssetID element"),
 				http.StatusBadRequest,
 				componentName,
 				"PostAllAssetLinksById",
@@ -299,7 +299,7 @@ func (c *AssetAdministrationShellBasicDiscoveryAPIAPIController) PostAllAssetLin
 		}
 	}
 
-	result, err := c.service.PostAllAssetLinksById(r.Context(), aasIdentifierParam, specificAssetIdParam)
+	result, err := c.service.PostAllAssetLinksByID(r.Context(), aasIdentifierParam, specificAssetIdParam)
 	// If an error occurred, encode the error with the status code
 	if err != nil {
 		c.errorHandler(w, r, err, &result)
@@ -309,8 +309,8 @@ func (c *AssetAdministrationShellBasicDiscoveryAPIAPIController) PostAllAssetLin
 	_ = EncodeJSONResponse(result.Body, &result.Code, w)
 }
 
-// DeleteAllAssetLinksById - Deletes all specific Asset identifiers linked to an Asset Administration Shell to edit discoverable content
-func (c *AssetAdministrationShellBasicDiscoveryAPIAPIController) DeleteAllAssetLinksById(w http.ResponseWriter, r *http.Request) {
+// DeleteAllAssetLinksByID - Deletes all specific Asset identifiers linked to an Asset Administration Shell to edit discoverable content
+func (c *AssetAdministrationShellBasicDiscoveryAPIAPIController) DeleteAllAssetLinksByID(w http.ResponseWriter, r *http.Request) {
 	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
 	if aasIdentifierParam == "" {
 		result := common.NewErrorResponse(
@@ -324,7 +324,7 @@ func (c *AssetAdministrationShellBasicDiscoveryAPIAPIController) DeleteAllAssetL
 		return
 	}
 
-	result, err := c.service.DeleteAllAssetLinksById(r.Context(), aasIdentifierParam)
+	result, err := c.service.DeleteAllAssetLinksByID(r.Context(), aasIdentifierParam)
 	// If an error occurred, encode the error with the status code
 	if err != nil {
 		c.errorHandler(w, r, err, &result)

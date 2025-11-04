@@ -11,6 +11,7 @@
 
 package model
 
+// GetAllAssetAdministrationShellIdsByAssetLink200Response type of GetAllAssetAdministrationShellIdsByAssetLink200Response
 type GetAllAssetAdministrationShellIdsByAssetLink200Response struct {
 	PagingMetadata PagedResultPagingMetadata `json:"paging_metadata"`
 

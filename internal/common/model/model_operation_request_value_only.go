@@ -9,6 +9,7 @@
 
 package model
 
+// OperationRequestValueOnly type of OperationRequestValueOnly
 type OperationRequestValueOnly struct {
 
 	// The ValueOnly serialization (patternProperties and propertyNames will be supported probably with OpenApi 3.1). For the full description of the generic JSON validation schema see the ValueOnly-Serialization as defined in the 'Specification of the Asset Administration Shell - Part 2'.
@@ -35,6 +36,8 @@ func AssertOperationRequestValueOnlyRequired(obj OperationRequestValueOnly) erro
 }
 
 // AssertOperationRequestValueOnlyConstraints checks if the values respects the defined constraints
+//
+//nolint:all
 func AssertOperationRequestValueOnlyConstraints(obj OperationRequestValueOnly) error {
 	return nil
 }

@@ -9,6 +9,7 @@
 
 package model
 
+// GetPathItemsResult type of GetPathItemsResult
 type GetPathItemsResult struct {
 	PagingMetadata PagedResultPagingMetadata `json:"paging_metadata,omitempty"`
 

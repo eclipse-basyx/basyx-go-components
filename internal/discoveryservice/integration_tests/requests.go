@@ -20,58 +20,62 @@ type RequestClient struct {
 	BaseURL string
 }
 
+// NewRequestClient creates a new RequestClient with the given base URL.
 func NewRequestClient() *RequestClient {
 	return &RequestClient{BaseURL: testenv.BaseURL}
 }
 
-// POST /lookup/shells/{aasId}
-func (c *RequestClient) PostLookupShellsExpect(t testing.TB, aasID string, links []model.SpecificAssetId, expect int) {
+// PostLookupShellsExpect sends a POST request to /lookup/shells/{aasId}
+func (c *RequestClient) PostLookupShellsExpect(t testing.TB, aasID string, links []model.SpecificAssetID, expect int) {
 	t.Helper()
 	url := fmt.Sprintf("%s/lookup/shells/%s", c.BaseURL, common.EncodeString(aasID))
 	_ = testenv.PostJSONExpect(t, url, links, expect)
 }
 
-func (c *RequestClient) PostLookupShells(t testing.TB, aasID string, links []model.SpecificAssetId) {
+// PostLookupShells sends a POST request to /lookup/shells/{aasId}
+func (c *RequestClient) PostLookupShells(t testing.TB, aasID string, links []model.SpecificAssetID) {
 	t.Helper()
 	c.PostLookupShellsExpect(t, aasID, links, http.StatusCreated)
 }
 
-// GET /lookup/shells/{aasId}
-func (c *RequestClient) GetLookupShellsExpect(t testing.TB, aasID string, expect int) []model.SpecificAssetId {
+// GetLookupShellsExpect sends a GET request to /lookup/shells/{aasId}
+func (c *RequestClient) GetLookupShellsExpect(t testing.TB, aasID string, expect int) []model.SpecificAssetID {
 	t.Helper()
 	url := fmt.Sprintf("%s/lookup/shells/%s", c.BaseURL, common.EncodeString(aasID))
 	raw := testenv.GetExpect(t, url, expect)
 	if expect != http.StatusOK {
 		return nil
 	}
-	var got []model.SpecificAssetId
+	var got []model.SpecificAssetID
 	if err := json.Unmarshal(raw, &got); err != nil {
 		t.Fatalf("unmarshal GetLookupShells response: %v", err)
 	}
 	return got
 }
 
-func (c *RequestClient) GetLookupShells(t testing.TB, aasID string, expect int) []model.SpecificAssetId {
+// GetLookupShells retrieves the lookup shell for the given AAS ID.
+func (c *RequestClient) GetLookupShells(t testing.TB, aasID string, expect int) []model.SpecificAssetID {
 	t.Helper()
 	return c.GetLookupShellsExpect(t, aasID, expect)
 }
 
-// DELETE /lookup/shells/{aasId}
+// DeleteLookupShellsExpect sends a DELETE request to /lookup/shells/{aasId}
 func (c *RequestClient) DeleteLookupShellsExpect(t testing.TB, aasID string, expect int) {
 	t.Helper()
 	url := fmt.Sprintf("%s/lookup/shells/%s", c.BaseURL, common.EncodeString(aasID))
 	_ = testenv.DeleteExpect(t, url, expect)
 }
 
+// DeleteLookupShells deletes the lookup shell for the given AAS ID.
 func (c *RequestClient) DeleteLookupShells(t testing.TB, aasID string) {
 	t.Helper()
 	c.DeleteLookupShellsExpect(t, aasID, http.StatusNoContent)
 }
 
-// POST /lookup/shellsByAssetLink?limit=&cursor= (renamed from SearchBy)
+// LookupShellsByAssetLink sends a POST request to /lookup/shellsByAssetLink?limit=&cursor= (renamed from SearchBy)
 func (c *RequestClient) LookupShellsByAssetLink(
 	t testing.TB,
-	pairs []model.SpecificAssetId,
+	pairs []model.SpecificAssetID,
 	limit int,
 	cursor string,
 	expect int,
@@ -95,6 +99,7 @@ func (c *RequestClient) LookupShellsByAssetLink(
 	return out
 }
 
+// PostLookupShellsSearchRawExpect sends a raw POST request to /lookup/shells/search
 func PostLookupShellsSearchRawExpect(t *testing.T, body any, expect int) {
 	t.Helper()
 	url := fmt.Sprintf("%s/lookup/shells/search", testenv.BaseURL)
@@ -107,11 +112,15 @@ func PostLookupShellsSearchRawExpect(t *testing.T, body any, expect int) {
 
 	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			t.Logf("failed to close response body: %v", err)
+		}
+	}()
 	assert.Equalf(t, expect, resp.StatusCode, "search raw post got %d body=%s", resp.StatusCode, string(buf))
 }
 
-func ensureContainsAll(t *testing.T, got []model.SpecificAssetId, want map[string][]string) {
+func ensureContainsAll(t *testing.T, got []model.SpecificAssetID, want map[string][]string) {
 	actual := testenv.BuildNameValuesMap(got)
 	for k, wantVals := range want {
 		gotVals := actual[k]
@@ -128,7 +137,7 @@ func keys(m map[string][]string) (ks []string) {
 	return
 }
 
-func assertNoNames(t *testing.T, got []model.SpecificAssetId, forbidden ...string) {
+func assertNoNames(t *testing.T, got []model.SpecificAssetID, forbidden ...string) {
 	t.Helper()
 	set := map[string]struct{}{}
 	for _, s := range got {
