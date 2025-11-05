@@ -28,9 +28,10 @@
 package grammar
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
+
+	jsoniter "github.com/json-iterator/go"
 )
 
 // AccessPermissionRule represents a complete access control rule for Asset Administration Shell (AAS) resources.
@@ -138,6 +139,7 @@ func (j *AccessPermissionRule) UnmarshalJSON(value []byte) error {
 	type Plain AccessPermissionRule
 	var plain Plain
 
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	if err := json.Unmarshal(value, &plain); err != nil {
 		return err
 	}

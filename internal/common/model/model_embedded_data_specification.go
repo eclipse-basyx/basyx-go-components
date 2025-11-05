@@ -13,6 +13,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+
+	jsoniter "github.com/json-iterator/go"
 )
 
 // ModelTypeError indicates an unsupported model type was encountered
@@ -41,6 +43,7 @@ func (e *EmbeddedDataSpecification) UnmarshalJSON(data []byte) error {
 		DataSpecification        *Reference      `json:"dataSpecification"`
 	}{}
 
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	if err := json.Unmarshal(data, aux); err != nil {
 		return err
 	}
@@ -60,6 +63,7 @@ func (e *EmbeddedDataSpecification) UnmarshalJSON(data []byte) error {
 	switch modelType {
 	case "DataSpecificationIec61360":
 		var iec61360Content DataSpecificationIec61360
+		var json = jsoniter.ConfigCompatibleWithStandardLibrary
 		if err := json.Unmarshal(aux.DataSpecificationContent, &iec61360Content); err != nil {
 			return err // Return error instead of silently failing
 		}

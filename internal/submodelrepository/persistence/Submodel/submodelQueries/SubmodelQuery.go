@@ -143,8 +143,6 @@ func GetQueryWithGoqu(submodelID string, limit int64, cursor string, aasQuery *g
 			goqu.I("sssi.submodel_id").Eq(goqu.I("s.id")),
 			goqu.I("ref.id").IsNotNull(),
 		)
-	// Build embedded data specifications subquery
-	embeddedDataSpecificationReferenceSubquery, embeddedDataSpecificationReferenceReferredSubquery, iec61360Subquery := queries.GetEmbeddedDataSpecificationSubqueries(dialect, "submodel_embedded_data_specification", "submodel_id", "s.id")
 
 	// Build qualifier subquery
 	qualifierSubquery := queries.GetQualifierSubquery(dialect, goqu.T("submodel_qualifier"), "submodel_id", "qualifier_id", goqu.I("s.id"))
@@ -162,15 +160,13 @@ func GetQueryWithGoqu(submodelID string, limit int64, cursor string, aasQuery *g
 			goqu.I("s.id_short").As("submodel_id_short"),
 			goqu.I("s.category").As("submodel_category"),
 			goqu.I("s.kind").As("submodel_kind"),
+			goqu.I("s.embedded_data_specification").As("embedded_data_specification"),
 			goqu.L("COALESCE((?), '[]'::jsonb)", displayNamesSubquery).As("submodel_display_names"),
 			goqu.L("COALESCE((?), '[]'::jsonb)", descriptionsSubquery).As("submodel_descriptions"),
 			goqu.L("COALESCE((?), '[]'::jsonb)", semanticIDSubquery).As("submodel_semantic_id"),
 			goqu.L("COALESCE((?), '[]'::jsonb)", semanticIDReferredSubquery).As("submodel_semantic_id_referred"),
 			goqu.L("COALESCE((?), '[]'::jsonb)", supplementalSemanticIDsSubquery).As("submodel_supplemental_semantic_ids"),
 			goqu.L("COALESCE((?), '[]'::jsonb)", supplementalSemanticIDsReferredSubquery).As("submodel_supplemental_semantic_id_referred"),
-			goqu.L("COALESCE((?), '[]'::jsonb)", embeddedDataSpecificationReferenceSubquery).As("submodel_eds_data_specification"),
-			goqu.L("COALESCE((?), '[]'::jsonb)", embeddedDataSpecificationReferenceReferredSubquery).As("submodel_eds_data_specification_referred"),
-			goqu.L("COALESCE((?), '[]'::jsonb)", iec61360Subquery).As("submodel_data_spec_iec61360"),
 			goqu.L("COALESCE((?), '[]'::jsonb)", qualifierSubquery).As("submodel_qualifiers"),
 			goqu.L("COALESCE((?), '[]'::jsonb)", extensionSubquery).As("submodel_extensions"),
 			goqu.L("COALESCE((?), '[]'::jsonb)", administrationSubquery).As("submodel_administrative_information"),
