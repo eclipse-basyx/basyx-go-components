@@ -30,6 +30,7 @@ package builder
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
 
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
@@ -306,9 +307,9 @@ func (b *ExtensionsBuilder) Build() []gen.Extension {
 	}
 
 	// Sort by position
-	// sort.Slice(extensionList, func(i, j int) bool {
-	// 	return extensionList[i].position < extensionList[j].position
-	// })
+	sort.Slice(extensionList, func(i, j int) bool {
+		return extensionList[i].position < extensionList[j].position
+	})
 
 	extensions := make([]gen.Extension, 0, len(extensionList))
 	for _, item := range extensionList {

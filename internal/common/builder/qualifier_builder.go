@@ -30,6 +30,7 @@ package builder
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
 
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
@@ -323,9 +324,9 @@ func (b *QualifiersBuilder) Build() []gen.Qualifier {
 	}
 
 	// Sort by position
-	// sort.Slice(qualifierList, func(i, j int) bool {
-	// 	return qualifierList[i].position < qualifierList[j].position
-	// })
+	sort.Slice(qualifierList, func(i, j int) bool {
+		return qualifierList[i].position < qualifierList[j].position
+	})
 
 	qualifiers := make([]gen.Qualifier, 0, len(qualifierList))
 	for _, item := range qualifierList {
