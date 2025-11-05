@@ -25,6 +25,7 @@ type TestConfig struct {
 	Data           string `json:"data,omitempty"`
 	ShouldMatch    string `json:"shouldMatch,omitempty"`
 	ExpectedStatus int    `json:"expectedStatus,omitempty"`
+	Context        string `json:"context,omitempty"`
 }
 
 // loadTestConfig loads the test configuration from a JSON file
@@ -111,7 +112,11 @@ func TestIntegration(t *testing.T) {
 	require.NoError(t, err, "Failed to load test config")
 
 	for i, config := range configs {
-		t.Run(fmt.Sprintf("Step_%d_%s_%s", i+1, config.Method, config.Endpoint), func(t *testing.T) {
+		context := "Not Provided"
+		if config.Context != "" {
+			context = config.Context
+		}
+		t.Run(fmt.Sprintf("Step_(%s)_%d_%s_%s", context, i+1, config.Method, config.Endpoint), func(t *testing.T) {
 			response, err := makeRequest(config)
 			require.NoError(t, err, "Request failed")
 
