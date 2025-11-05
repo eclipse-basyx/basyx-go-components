@@ -18,7 +18,7 @@ COMPOSE_FILE = "docker_compose/docker_compose.yml"
 DB_CONTAINER = "postgres_db"  # optional: used if you have a healthcheck on DB
 DISCOVERY_URL = "http://localhost:5004/shell-descriptors"
 
-TOTAL_ITERS = 100000
+TOTAL_ITERS = 10000
 SEED = 42
 
 # How many iterations should be POST-only (prewarm). Set to 0 to disable.
@@ -215,7 +215,19 @@ data = {
             },
             "interface": "AAS-3.0"
         }
-    ]
+    ],
+    "administration": {
+        "version": "1",
+        "revision": "1",
+        "creator": {
+            "type": "ModelReference",
+            "keys": [{"type": "AnnotatedRelationshipElement", "value": "dfok"}],
+            "referredSemanticId": {
+                "type": "ExternalReference",
+                "keys": [{"type": "AnnotatedRelationshipElement", "value": "fkvkfk"}]
+            }
+        }
+    },
 }
 payload_template = data
 # ──────────────────────────────────────────────

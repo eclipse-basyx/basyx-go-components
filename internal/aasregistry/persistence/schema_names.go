@@ -17,6 +17,7 @@ const (
 	tblSpecificAssetIDSuppSemantic    = "specific_asset_id_supplemental_semantic_id"
 	tblSubmodelDescriptor             = "submodel_descriptor"
 	tblSubmodelDescriptorSuppSemantic = "submodel_descriptor_supplemental_semantic_id"
+	tblExtension                      = "extension"
 	tblDescriptorExtension            = "descriptor_extension"
 )
 
@@ -54,6 +55,13 @@ const (
 	colSpecificAssetIDID = "specific_asset_id_id"
 	colReferenceID       = "reference_id"
 
+	colValueType     = "value_type"
+	colValueText     = "value_text"
+	colValueNum      = "value_num"
+	colValueBool     = "value_bool"
+	colValueTime     = "value_time"
+	colValueDatetime = "value_datetime"
+
 	colExtensionID = "extension_id"
 )
 
@@ -62,4 +70,5 @@ var (
 	tDescriptor            = goqu.T(tblDescriptor)
 	tAASDescriptorEndpoint = goqu.T(tblAASDescriptorEndpoint)
 	tSpecificAssetID       = goqu.T(tblSpecificAssetID)
+	tExtension             = goqu.T(tblExtension)
 )
