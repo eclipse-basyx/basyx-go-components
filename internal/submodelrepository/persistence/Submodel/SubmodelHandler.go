@@ -41,6 +41,7 @@ import (
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	submodel_query "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/Submodel/submodelQueries"
+	jsoniter "github.com/json-iterator/go"
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 )
 
@@ -122,6 +123,7 @@ type SubmodelElementSubmodelMetadata struct {
 //  1. Initial parsing during row iteration
 //  2. Final structure building after all rows are processed
 func getSubmodels(db *sql.DB, submodelIDFilter string, limit int64, cursor string, query *grammar.QueryWrapper) ([]*gen.Submodel, string, error) {
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	var result []*gen.Submodel
 	referenceBuilderRefs := make(map[int64]*builders.ReferenceBuilder)
 	start := time.Now().Local().UnixMilli()
@@ -133,16 +135,17 @@ func getSubmodels(db *sql.DB, submodelIDFilter string, limit int64, cursor strin
 	}
 	defer func() { _ = rows.Close() }()
 	var count int64
+	var row builders.SubmodelRow
+	var EmbeddedDataSpecifications []gen.EmbeddedDataSpecification
+	var semanticID []*gen.Reference
 	for rows.Next() {
 		count++
-		var row builders.SubmodelRow
 		if err := rows.Scan(
 			&row.ID, &row.IDShort, &row.Category, &row.Kind,
+			&row.EmbeddedDataSpecification,
 			&row.DisplayNames, &row.Descriptions,
 			&row.SemanticID, &row.ReferredSemanticIDs,
 			&row.SupplementalSemanticIDs, &row.SupplementalReferredSemIDs,
-			// &row.DataSpecReference, &row.DataSpecReferenceReferred,
-			// &row.DataSpecIEC61360,
 			&row.Qualifiers, &row.Extensions, &row.Administration, &row.RootSubmodelElements, &row.ChildSubmodelElements, &row.TotalSubmodels,
 		); err != nil {
 			return nil, "", fmt.Errorf("error scanning row: %w", err)
@@ -164,9 +167,6 @@ func getSubmodels(db *sql.DB, submodelIDFilter string, limit int64, cursor strin
 			result = append(result, submodel)
 			break
 		}
-
-		// SemanticID
-		var semanticID []*gen.Reference
 		if isArrayNotEmpty(row.SemanticID) {
 			semanticID, err = builders.ParseReferences(row.SemanticID, referenceBuilderRefs)
 			if err != nil {
@@ -195,7 +195,6 @@ func getSubmodels(db *sql.DB, submodelIDFilter string, limit int64, cursor strin
 				}
 			}
 		}
-
 		// DisplayNames
 		err = addDisplayNames(row, submodel)
 		if err != nil {
@@ -209,19 +208,14 @@ func getSubmodels(db *sql.DB, submodelIDFilter string, limit int64, cursor strin
 		}
 
 		// Embedded Data Specifications
-		if isArrayNotEmpty(row.DataSpecReference) {
-			builder := builders.NewEmbeddedDataSpecificationsBuilder()
-			err := builder.BuildReferences(row.DataSpecReference, row.DataSpecReferenceReferred)
+		if isArrayNotEmpty(row.EmbeddedDataSpecification) {
+			err = json.Unmarshal(row.EmbeddedDataSpecification, &EmbeddedDataSpecifications)
+			// Print size of EmbeddedDataSpecifications in bytes
 			if err != nil {
 				fmt.Println(err)
 				return nil, "", err
 			}
-			err = builder.BuildContentsIec61360(row.DataSpecIEC61360)
-			if err != nil {
-				fmt.Println(err)
-				return nil, "", err
-			}
-			submodel.EmbeddedDataSpecifications = builder.Build()
+			submodel.EmbeddedDataSpecifications = EmbeddedDataSpecifications
 		}
 
 		// Qualifiers

@@ -43,6 +43,7 @@ import (
 	"time"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
+	jsoniter "github.com/json-iterator/go"
 )
 
 // AccessModel is an evaluated, in-memory representation of the Access Rule Model
@@ -56,6 +57,7 @@ type AccessModel struct {
 // conforms to the Access Rule Model schema and returns a compiled AccessModel.
 func ParseAccessModel(b []byte) (*AccessModel, error) {
 	var m grammar.AccessRuleModelSchemaJSON
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	if err := json.Unmarshal(b, &m); err != nil {
 		return nil, fmt.Errorf("parse access model: %w", err)
 	}
@@ -353,6 +355,7 @@ func asStringMap(v any) (map[string]string, bool) {
 			return nil, false
 		}
 		var m map[string]any
+		var json = jsoniter.ConfigCompatibleWithStandardLibrary
 		if err := json.Unmarshal(b, &m); err != nil {
 			return nil, false
 		}

@@ -12,6 +12,8 @@ package model
 import (
 	"encoding/json"
 	"fmt"
+
+	jsoniter "github.com/json-iterator/go"
 )
 
 // OperationVariable type of OperationVariable
@@ -60,6 +62,7 @@ func (ov *OperationVariable) UnmarshalJSON(data []byte) error {
 	}
 
 	// Unmarshal into the temporary struct
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	if err := json.Unmarshal(data, aux); err != nil {
 		return err
 	}

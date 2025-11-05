@@ -30,6 +30,8 @@ package grammar
 import (
 	"encoding/json"
 	"testing"
+
+	jsoniter "github.com/json-iterator/go"
 )
 
 func TestQueryWrapperUnmarshal_SimpleEquality(t *testing.T) {
@@ -45,6 +47,7 @@ func TestQueryWrapperUnmarshal_SimpleEquality(t *testing.T) {
 	}`
 
 	var wrapper QueryWrapper
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	err := json.Unmarshal([]byte(jsonStr), &wrapper)
 	if err != nil {
 		t.Fatalf("Failed to unmarshal query: %v", err)

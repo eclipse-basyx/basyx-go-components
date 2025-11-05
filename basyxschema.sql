@@ -188,6 +188,7 @@ CREATE TABLE IF NOT EXISTS administrative_information (
   version           VARCHAR(4),
   revision          VARCHAR(4),
   creator           BIGINT REFERENCES reference(id),
+  embedded_data_specification JSONB,
   templateId        VARCHAR(2048)
 );
 
@@ -258,18 +259,18 @@ CREATE INDEX IF NOT EXISTS ix_iec61360_value_list_id ON data_specification_iec61
 CREATE INDEX IF NOT EXISTS ix_iec61360_level_type_id ON data_specification_iec61360(level_type_id);
 CREATE INDEX IF NOT EXISTS ix_iec61360_data_type ON data_specification_iec61360(data_type);
 
-CREATE TABLE IF NOT EXISTS administrative_information_embedded_data_specification (
-  id                BIGSERIAL PRIMARY KEY,
-  administrative_information_id BIGINT REFERENCES administrative_information(id) ON DELETE CASCADE,
-  embedded_data_specification_id BIGSERIAL REFERENCES data_specification(id) ON DELETE CASCADE
-);
+-- CREATE TABLE IF NOT EXISTS administrative_information_embedded_data_specification (
+--   id                BIGSERIAL PRIMARY KEY,
+--   administrative_information_id BIGINT REFERENCES administrative_information(id) ON DELETE CASCADE,
+--   embedded_data_specification_id BIGSERIAL REFERENCES data_specification(id) ON DELETE CASCADE
+-- );
 CREATE INDEX IF NOT EXISTS ix_ai_creator ON administrative_information(creator);
 CREATE INDEX IF NOT EXISTS ix_ai_templateid ON administrative_information(templateid);
 
-CREATE INDEX IF NOT EXISTS ix_aieds_aiid ON administrative_information_embedded_data_specification(administrative_information_id);
-CREATE INDEX IF NOT EXISTS ix_aieds_edsid ON administrative_information_embedded_data_specification(embedded_data_specification_id);
+-- CREATE INDEX IF NOT EXISTS ix_aieds_aiid ON administrative_information_embedded_data_specification(administrative_information_id);
+-- CREATE INDEX IF NOT EXISTS ix_aieds_edsid ON administrative_information_embedded_data_specification(embedded_data_specification_id);
 
-CREATE INDEX IF NOT EXISTS ix_eds_id ON administrative_information_embedded_data_specification(id);
+-- CREATE INDEX IF NOT EXISTS ix_eds_id ON administrative_information_embedded_data_specification(id);
 
 
 CREATE TABLE IF NOT EXISTS submodel (
@@ -277,6 +278,7 @@ CREATE TABLE IF NOT EXISTS submodel (
   id_short    varchar(128),
   category    varchar(128),
   kind        modelling_kind,
+  embedded_data_specification JSONB DEFAULT '[]',
   administration_id BIGINT REFERENCES administrative_information(id) ON DELETE CASCADE,
   semantic_id BIGINT REFERENCES reference(id) ON DELETE CASCADE,
   description_id BIGINT REFERENCES lang_string_text_type_reference(id) ON DELETE CASCADE,
@@ -302,13 +304,13 @@ CREATE INDEX IF NOT EXISTS ix_smssi_reference_id ON submodel_supplemental_semant
 
 CREATE INDEX IF NOT EXISTS ix_smsup_id ON submodel_supplemental_semantic_id(id);
 
-CREATE TABLE IF NOT EXISTS submodel_embedded_data_specification (
-  id                BIGSERIAL PRIMARY KEY,
-  submodel_id       VARCHAR(2048) REFERENCES submodel(id) ON DELETE CASCADE,
-  embedded_data_specification_id BIGSERIAL REFERENCES data_specification(id) ON DELETE CASCADE
-);
+-- CREATE TABLE IF NOT EXISTS submodel_embedded_data_specification (
+--   id                BIGSERIAL PRIMARY KEY,
+--   submodel_id       VARCHAR(2048) REFERENCES submodel(id) ON DELETE CASCADE,
+--   embedded_data_specification_id BIGSERIAL REFERENCES data_specification(id) ON DELETE CASCADE
+-- );
 
-CREATE INDEX IF NOT EXISTS ix_eds_id ON submodel_embedded_data_specification(id);
+-- CREATE INDEX IF NOT EXISTS ix_eds_id ON submodel_embedded_data_specification(id);
 
 CREATE TABLE IF NOT EXISTS extension (
   id          BIGSERIAL PRIMARY KEY,
@@ -368,6 +370,7 @@ CREATE TABLE IF NOT EXISTS submodel_element (
   id_short       varchar(128) NOT NULL,
   category       varchar(128),
   model_type     aas_submodel_elements NOT NULL,
+  embedded_data_specification JSONB DEFAULT '[]',
   semantic_id    BIGINT REFERENCES reference(id),
   description_id BIGINT REFERENCES lang_string_text_type_reference(id) ON DELETE CASCADE,
   displayname_id BIGINT REFERENCES lang_string_name_type_reference(id) ON DELETE CASCADE,
@@ -611,7 +614,7 @@ CREATE INDEX IF NOT EXISTS ix_qualsup_id ON qualifier_supplemental_semantic_id(i
 CREATE INDEX IF NOT EXISTS ix_qualsup_qid ON qualifier_supplemental_semantic_id(qualifier_id);
 
 
-CREATE INDEX IF NOT EXISTS ix_seds_submodel ON submodel_embedded_data_specification (submodel_id);
+-- CREATE INDEX IF NOT EXISTS ix_seds_submodel ON submodel_embedded_data_specification (submodel_id);
 
 CREATE INDEX IF NOT EXISTS ix_dataspec_content ON data_specification (data_specification_content);
 

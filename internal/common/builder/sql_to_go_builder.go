@@ -36,6 +36,7 @@ import (
 	"fmt"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	jsoniter "github.com/json-iterator/go"
 )
 
 // SubmodelRow represents a row from the Submodel table in the database.
@@ -54,6 +55,8 @@ type SubmodelRow struct {
 	Category string
 	// Kind specifies whether the submodel is a Template or Instance
 	Kind string
+	// EmbeddedDataSpecification contains embedded data specifications as JSON data
+	EmbeddedDataSpecification json.RawMessage
 	// DisplayNames contains localized names as JSON data
 	DisplayNames json.RawMessage
 	// Descriptions contains localized descriptions as JSON data
@@ -66,14 +69,6 @@ type SubmodelRow struct {
 	SupplementalSemanticIDs json.RawMessage
 	// SupplementalReferredSemIDs contains referred supplemental semantic identifiers as JSON data
 	SupplementalReferredSemIDs json.RawMessage
-	// DataSpecReference contains embedded data specifications as JSON data
-	DataSpecReference json.RawMessage
-	// DataSpecReferenceReferred contains references to data specifications as JSON data
-	DataSpecReferenceReferred json.RawMessage
-	// DataSpecIEC61360 contains IEC 61360 data specification as JSON data
-	DataSpecIEC61360 json.RawMessage
-	// IECLevelTypes contains IEC level type information as JSON data
-	IECLevelTypes json.RawMessage
 	// Qualifiers contains qualifier information as JSON data
 	Qualifiers json.RawMessage
 	// Extensions contains extension as JSON data
@@ -297,16 +292,12 @@ type AdministrationRow struct {
 	Revision string `json:"revision"`
 	// TemplateID is the identifier of the template this element is based on
 	TemplateID string `json:"templateId"`
+	// EmbeddedDataSpecification contains embedded data specifications as JSON data
+	EmbeddedDataSpecification json.RawMessage `json:"embedded_data_specification"`
 	// Creator contains creator reference data as JSON data
 	Creator json.RawMessage `json:"creator"`
 	// CreatorReferred contains referred creator references as JSON data
 	CreatorReferred json.RawMessage `json:"creatorReferred"`
-	// EdsDataSpecifications contains embedded data specifications as JSON data
-	EdsDataSpecifications json.RawMessage `json:"edsDataSpecifications"`
-	// EdsDataSpecificationsReferred contains referred data specifications as JSON data
-	EdsDataSpecificationsReferred json.RawMessage `json:"edsDataSpecificationsReferred"`
-	// EdsDataSpecificationIEC61360 contains IEC 61360 data specifications as JSON data
-	EdsDataSpecificationIEC61360 json.RawMessage `json:"edsDataSpecificationIEC61360"`
 }
 
 // SubmodelElementRow represents a row from the SubmodelElement table in the database.
@@ -447,6 +438,7 @@ func ParseReferredReferences(row json.RawMessage, referenceBuilderRefs map[int64
 	}
 
 	var semanticIDData []ReferredReferenceRow
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	if err := json.Unmarshal(row, &semanticIDData); err != nil {
 		return fmt.Errorf("error unmarshalling referred semantic ID data: %w", err)
 	}
@@ -520,6 +512,7 @@ func ParseReferences(row json.RawMessage, referenceBuilderRefs map[int64]*Refere
 	}
 
 	var semanticIDData []ReferenceRow
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	if err := json.Unmarshal(row, &semanticIDData); err != nil {
 		return nil, fmt.Errorf("error unmarshalling semantic ID data: %w", err)
 	}
@@ -551,6 +544,7 @@ func ParseLangStringNameType(displayNames json.RawMessage) ([]model.LangStringNa
 	var names []model.LangStringNameType
 	// remove id field from json
 	var temp []map[string]interface{}
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	if err := json.Unmarshal(displayNames, &temp); err != nil {
 		fmt.Printf("Error unmarshalling display names: %v\n", err)
 		return nil, err
@@ -603,6 +597,7 @@ func ParseLangStringTextType(descriptions json.RawMessage) ([]model.LangStringTe
 	if len(descriptions) == 0 {
 		return texts, nil
 	}
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	if err := json.Unmarshal(descriptions, &temp); err != nil {
 		fmt.Printf("Error unmarshalling descriptions: %v\n", err)
 		return nil, err
@@ -649,6 +644,7 @@ func ParseLangStringPreferredNameTypeIec61360(descriptions json.RawMessage) ([]m
 	if len(descriptions) == 0 {
 		return texts, nil
 	}
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	if err := json.Unmarshal(descriptions, &temp); err != nil {
 		fmt.Printf("Error unmarshalling descriptions: %v\n", err)
 		return nil, err
@@ -695,6 +691,7 @@ func ParseLangStringShortNameTypeIec61360(descriptions json.RawMessage) ([]model
 	if len(descriptions) == 0 {
 		return texts, nil
 	}
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	if err := json.Unmarshal(descriptions, &temp); err != nil {
 		fmt.Printf("Error unmarshalling descriptions: %v\n", err)
 		return nil, err
@@ -741,6 +738,7 @@ func ParseLangStringDefinitionTypeIec61360(descriptions json.RawMessage) ([]mode
 	if len(descriptions) == 0 {
 		return texts, nil
 	}
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	if err := json.Unmarshal(descriptions, &temp); err != nil {
 		fmt.Printf("Error unmarshalling descriptions: %v\n", err)
 		return nil, err
@@ -778,6 +776,7 @@ func ParseLangStringDefinitionTypeIec61360(descriptions json.RawMessage) ([]mode
 //   - error: An error if JSON unmarshalling fails
 func ParseQualifiersRow(row json.RawMessage) ([]QualifierRow, error) {
 	var texts []QualifierRow
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	if err := json.Unmarshal(row, &texts); err != nil {
 		return nil, fmt.Errorf("error unmarshalling qualifier data: %w", err)
 	}
@@ -798,6 +797,7 @@ func ParseQualifiersRow(row json.RawMessage) ([]QualifierRow, error) {
 //   - error: An error if JSON unmarshalling fails
 func ParseExtensionRows(row json.RawMessage) ([]ExtensionRow, error) {
 	var texts []ExtensionRow
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	if err := json.Unmarshal(row, &texts); err != nil {
 		return nil, fmt.Errorf("error unmarshalling extension data: %w", err)
 	}
@@ -821,6 +821,7 @@ func ParseExtensionRows(row json.RawMessage) ([]ExtensionRow, error) {
 // as administrative information is singular per element.
 func ParseAdministrationRow(row json.RawMessage) (*AdministrationRow, error) {
 	var texts []AdministrationRow
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	if err := json.Unmarshal(row, &texts); err != nil {
 		return nil, fmt.Errorf("error unmarshalling AdministrationRow data: %w", err)
 	}

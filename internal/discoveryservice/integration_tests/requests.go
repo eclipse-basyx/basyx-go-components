@@ -11,6 +11,7 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/testenv"
+	jsoniter "github.com/json-iterator/go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -47,6 +48,7 @@ func (c *RequestClient) GetLookupShellsExpect(t testing.TB, aasID string, expect
 		return nil
 	}
 	var got []model.SpecificAssetID
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	if err := json.Unmarshal(raw, &got); err != nil {
 		t.Fatalf("unmarshal GetLookupShells response: %v", err)
 	}
@@ -91,6 +93,7 @@ func (c *RequestClient) LookupShellsByAssetLink(
 	}
 	raw := testenv.PostJSONExpect(t, url, body, expect)
 	var out model.GetAllAssetAdministrationShellIdsByAssetLink200Response
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	if expect == http.StatusOK {
 		if err := json.Unmarshal(raw, &out); err != nil {
 			t.Fatalf("unmarshal LookupShellsByAssetLink response: %v", err)
