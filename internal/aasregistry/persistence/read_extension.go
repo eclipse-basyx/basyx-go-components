@@ -24,37 +24,36 @@ func readExtensionsByDescriptorID(
 }
 
 func readExtensionsByDescriptorIDs(
-	ctx context.Context,
-	db *sql.DB,
-	descriptorIDs []int64,
+    ctx context.Context,
+    db *sql.DB,
+    descriptorIDs []int64,
 ) (map[int64][]model.Extension, error) {
-	start := time.Now()
-	out := make(map[int64][]model.Extension, len(descriptorIDs))
-	if len(descriptorIDs) == 0 {
-		return out, nil
-	}
-	uniqDesc := descriptorIDs
+    start := time.Now()
+    out := make(map[int64][]model.Extension, len(descriptorIDs))
+    if len(descriptorIDs) == 0 {
+        return out, nil
+    }
+    uniqDesc := descriptorIDs
 
-	d := goqu.Dialect(dialect)
+    d := goqu.Dialect(dialect)
 
-	// Correlated subquery that returns JSON for the administration block.
-
-	extensionSubquery := queries.GetExtensionSubquery(d, goqu.T(tblDescriptorExtension), "extension_id", "descriptor_id", goqu.I("s.id"))
-	ds := d.From(goqu.T("descriptor").As("s")).
-		Select(
-			goqu.I("s.id"),
-			goqu.L("COALESCE((?), '[]'::jsonb)", extensionSubquery),
-		).
-		Where(goqu.I("s.id").In(uniqDesc))
+    // Build a single grouped query that aggregates extensions per descriptor_id
+    ds := queries.GetExtensionsGroupedByEntityIDs(
+        d,
+        goqu.T(tblDescriptorExtension),
+        "extension_id",
+        "descriptor_id",
+        uniqDesc,
+    )
 
 	query, args, err := ds.ToSQL()
 	if err != nil {
 		return nil, fmt.Errorf("building SQL failed: %w", err)
 	}
-	rows, err := db.QueryContext(ctx, query, args...)
-	if err != nil {
-		return nil, fmt.Errorf("querying administrative information failed: %w", err)
-	}
+    rows, err := db.QueryContext(ctx, query, args...)
+    if err != nil {
+        return nil, fmt.Errorf("querying extension information failed: %w", err)
+    }
 
 	defer func() {
 		_ = rows.Close()
@@ -72,39 +71,39 @@ func readExtensionsByDescriptorIDs(
 			return nil, fmt.Errorf("scanning extension row failed: %w", err)
 		}
 
-		// Extensions
-		if common.IsArrayNotEmpty(r.Extensions) {
-			builder := builders.NewExtensionsBuilder()
-			extensionRows, err := builders.ParseExtensionRows(r.Extensions)
-			if err != nil {
-				return nil, err
-			}
-			for _, extensionRow := range extensionRows {
-				_, err = builder.AddExtension(extensionRow.DbID, extensionRow.Name, extensionRow.ValueType, extensionRow.Value, extensionRow.Position)
-				if err != nil {
-					return nil, err
-				}
+        // Extensions
+        if common.IsArrayNotEmpty(r.Extensions) {
+            builder := builders.NewExtensionsBuilder()
+            extensionRows, err := builders.ParseExtensionRows(r.Extensions)
+            if err != nil {
+                return nil, err
+            }
+            for _, extensionRow := range extensionRows {
+                _, err = builder.AddExtension(extensionRow.DbID, extensionRow.Name, extensionRow.ValueType, extensionRow.Value, extensionRow.Position)
+                if err != nil {
+                    return nil, err
+                }
 
-				_, err = builder.AddSemanticID(extensionRow.DbID, extensionRow.SemanticID, extensionRow.SemanticIDReferredReferences)
-				if err != nil {
-					return nil, err
-				}
+                _, err = builder.AddSemanticID(extensionRow.DbID, extensionRow.SemanticID, extensionRow.SemanticIDReferredReferences)
+                if err != nil {
+                    return nil, err
+                }
 
-				_, err = builder.AddRefersTo(extensionRow.DbID, extensionRow.RefersTo, extensionRow.RefersToReferredReferences)
-				if err != nil {
-					return nil, err
-				}
+                _, err = builder.AddRefersTo(extensionRow.DbID, extensionRow.RefersTo, extensionRow.RefersToReferredReferences)
+                if err != nil {
+                    return nil, err
+                }
 
-				_, err = builder.AddSupplementalSemanticIDs(extensionRow.DbID, extensionRow.SupplementalSemanticIDs, extensionRow.SupplementalSemanticIDsReferredReferences)
-				if err != nil {
-					return nil, err
-				}
-			}
-			out[r.ID] = builder.Build()
-		}
-	}
+                _, err = builder.AddSupplementalSemanticIDs(extensionRow.DbID, extensionRow.SupplementalSemanticIDs, extensionRow.SupplementalSemanticIDsReferredReferences)
+                if err != nil {
+                    return nil, err
+                }
+            }
+            out[r.ID] = builder.Build()
+        }
+    }
 
-	duration := time.Since(start)
-	fmt.Printf("extension block took %v to complete\n", duration)
-	return out, nil
+    duration := time.Since(start)
+    fmt.Printf("extension block took %v to complete\n", duration)
+    return out, nil
 }

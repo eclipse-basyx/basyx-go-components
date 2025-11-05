@@ -28,8 +28,8 @@
 package queries
 
 import (
-	"github.com/doug-martin/goqu/v9"
-	"github.com/doug-martin/goqu/v9/exp"
+    "github.com/doug-martin/goqu/v9"
+    "github.com/doug-martin/goqu/v9/exp"
 )
 
 // GetExtensionSubquery builds a complex SQL subquery to retrieve extension data with all related references.
@@ -52,178 +52,220 @@ import (
 // Returns:
 //   - A SelectDataset containing the aggregated JSONB extension data
 func GetExtensionSubquery(dialect goqu.DialectWrapper, joinTable exp.IdentifierExpression, joinTableExtensionColumnName string, entityIDColumn string, entityIDCondition exp.Expression) *goqu.SelectDataset {
-	// Build the jsonb object for semantic ID references
-	semanticIDObj := goqu.Func("jsonb_build_object",
-		goqu.V("reference_id"), goqu.I("r.id"),
-		goqu.V("reference_type"), goqu.I("r.type"),
-		goqu.V("key_id"), goqu.I("rk.id"),
-		goqu.V("key_type"), goqu.I("rk.type"),
-		goqu.V("key_value"), goqu.I("rk.value"),
-	)
+    extensionObj := buildExtensionJSONObject(dialect, "jt", joinTableExtensionColumnName)
 
-	extensionSemanticIDSubquery := dialect.From(goqu.T("reference").As("r")).
-		Select(goqu.Func("jsonb_agg", goqu.L("? ORDER BY rk.position", semanticIDObj))).
-		Join(
-			goqu.T("extension").As("e"),
-			goqu.On(goqu.I("e.semantic_id").Eq(goqu.I("r.id"))),
-		).
-		Join(
-			goqu.T("reference_key").As("rk"),
-			goqu.On(goqu.I("r.id").Eq(goqu.I("rk.reference_id"))),
-		).
-		Where(goqu.I("e.id").Eq(goqu.I("jt." + joinTableExtensionColumnName)))
+    extensionSubquery := dialect.From(joinTable.As("jt")).
+        Select(goqu.Func("jsonb_agg", goqu.L("?", extensionObj))).
+        Join(
+            goqu.T("extension").As("e"),
+            goqu.On(goqu.I("jt."+joinTableExtensionColumnName).Eq(goqu.I("e.id"))),
+        ).
+        Where(goqu.I("jt." + entityIDColumn).Eq(entityIDCondition))
+    return extensionSubquery
+}
 
-	// Build the jsonb object for semantic ID referred references
-	semanticIDReferredObj := goqu.Func("jsonb_build_object",
-		goqu.V("reference_id"), goqu.I("r.id"),
-		goqu.V("reference_type"), goqu.I("r.type"),
-		goqu.V("parentReference"), goqu.I("r.parentreference"),
-		goqu.V("rootReference"), goqu.I("r.rootreference"),
-		goqu.V("key_id"), goqu.I("rk.id"),
-		goqu.V("key_type"), goqu.I("rk.type"),
-		goqu.V("key_value"), goqu.I("rk.value"),
-	)
+// buildExtensionJSONObject constructs the JSONB object for a single extension row,
+// including nested reference arrays. It is reused by both the per-entity subquery
+// and the grouped-by-IDs query to avoid code duplication.
+func buildExtensionJSONObject(dialect goqu.DialectWrapper, joinTableAlias string, joinTableExtensionColumnName string) exp.SQLFunctionExpression {
+    jtCol := func(col string) exp.IdentifierExpression { return goqu.I(joinTableAlias + "." + col) }
 
-	extensionSemanticIDReferredSubquery := dialect.From(goqu.T("reference").As("ref")).
-		Select(goqu.Func("jsonb_agg", goqu.L("? ORDER BY rk.position", semanticIDReferredObj))).
-		Join(
-			goqu.T("reference").As("r"),
-			goqu.On(goqu.I("ref.id").Eq(goqu.I("r.rootreference"))),
-		).
-		Join(
-			goqu.T("extension").As("e"),
-			goqu.On(goqu.I("e.semantic_id").Eq(goqu.I("ref.id"))),
-		).
-		LeftJoin(
-			goqu.T("reference_key").As("rk"),
-			goqu.On(goqu.I("rk.reference_id").Eq(goqu.I("r.id"))),
-		).
-		Where(
-			goqu.I("jt."+joinTableExtensionColumnName).Eq(goqu.I("e.id")),
-			goqu.I("r.id").IsNotNull(),
-		)
+    semanticIDObj := goqu.Func("jsonb_build_object",
+        goqu.V("reference_id"), goqu.I("r.id"),
+        goqu.V("reference_type"), goqu.I("r.type"),
+        goqu.V("key_id"), goqu.I("rk.id"),
+        goqu.V("key_type"), goqu.I("rk.type"),
+        goqu.V("key_value"), goqu.I("rk.value"),
+    )
 
-	// Build the jsonb object for refersTo references
-	refersToObj := goqu.Func("jsonb_build_object",
-		goqu.V("reference_id"), goqu.I("r.id"),
-		goqu.V("reference_type"), goqu.I("r.type"),
-		goqu.V("key_id"), goqu.I("rk.id"),
-		goqu.V("key_type"), goqu.I("rk.type"),
-		goqu.V("key_value"), goqu.I("rk.value"),
-	)
+    extensionSemanticIDSubquery := dialect.From(goqu.T("reference").As("r")).
+        Select(goqu.Func("jsonb_agg", goqu.L("? ORDER BY rk.position", semanticIDObj))).
+        Join(
+            goqu.T("extension").As("e"),
+            goqu.On(goqu.I("e.semantic_id").Eq(goqu.I("r.id"))),
+        ).
+        Join(
+            goqu.T("reference_key").As("rk"),
+            goqu.On(goqu.I("r.id").Eq(goqu.I("rk.reference_id"))),
+        ).
+        Where(goqu.I("e.id").Eq(jtCol(joinTableExtensionColumnName)))
 
-	extensionRefersToSubquery := dialect.From(goqu.T("reference").As("r")).
-		Select(goqu.Func("jsonb_agg", goqu.L("? ORDER BY rk.position", refersToObj))).
-		Join(
-			goqu.T("extension_refers_to").As("ert"),
-			goqu.On(goqu.I("ert.extension_id").Eq(goqu.I("jt."+joinTableExtensionColumnName))),
-		).
-		Join(
-			goqu.T("reference_key").As("rk"),
-			goqu.On(goqu.I("r.id").Eq(goqu.I("rk.reference_id"))),
-		).
-		Where(goqu.I("ert.reference_id").Eq(goqu.I("r.id")))
+    semanticIDReferredObj := goqu.Func("jsonb_build_object",
+        goqu.V("reference_id"), goqu.I("r.id"),
+        goqu.V("reference_type"), goqu.I("r.type"),
+        goqu.V("parentReference"), goqu.I("r.parentreference"),
+        goqu.V("rootReference"), goqu.I("r.rootreference"),
+        goqu.V("key_id"), goqu.I("rk.id"),
+        goqu.V("key_type"), goqu.I("rk.type"),
+        goqu.V("key_value"), goqu.I("rk.value"),
+    )
 
-	// Build the jsonb object for refersTo referred references
-	refersToReferredObj := goqu.Func("jsonb_build_object",
-		goqu.V("reference_id"), goqu.I("ref.id"),
-		goqu.V("reference_type"), goqu.I("ref.type"),
-		goqu.V("parentReference"), goqu.I("ref.parentreference"),
-		goqu.V("rootReference"), goqu.I("ref.rootreference"),
-		goqu.V("key_id"), goqu.I("rk.id"),
-		goqu.V("key_type"), goqu.I("rk.type"),
-		goqu.V("key_value"), goqu.I("rk.value"),
-	)
+    extensionSemanticIDReferredSubquery := dialect.From(goqu.T("reference").As("ref")).
+        Select(goqu.Func("jsonb_agg", goqu.L("? ORDER BY rk.position", semanticIDReferredObj))).
+        Join(
+            goqu.T("reference").As("r"),
+            goqu.On(goqu.I("ref.id").Eq(goqu.I("r.rootreference"))),
+        ).
+        Join(
+            goqu.T("extension").As("e"),
+            goqu.On(goqu.I("e.semantic_id").Eq(goqu.I("ref.id"))),
+        ).
+        LeftJoin(
+            goqu.T("reference_key").As("rk"),
+            goqu.On(goqu.I("rk.reference_id").Eq(goqu.I("r.id"))),
+        ).
+        Where(
+            jtCol(joinTableExtensionColumnName).Eq(goqu.I("e.id")),
+            goqu.I("r.id").IsNotNull(),
+        )
 
-	extensionRefersToReferredSubquery := dialect.From(goqu.T("reference").As("ref")).
-		Select(goqu.Func("jsonb_agg", goqu.L("? ORDER BY rk.position", refersToReferredObj))).
-		Join(
-			goqu.T("extension_refers_to").As("ert"),
-			goqu.On(goqu.I("ert.extension_id").Eq(goqu.I("jt."+joinTableExtensionColumnName))),
-		).
-		Join(
-			goqu.T("reference_key").As("rk"),
-			goqu.On(goqu.I("ref.id").Eq(goqu.I("rk.reference_id"))),
-		).
-		Where(
-			goqu.I("ref.rootreference").Eq(goqu.I("ert.reference_id")),
-			goqu.I("ref.id").IsNotNull(),
-		)
+    refersToObj := goqu.Func("jsonb_build_object",
+        goqu.V("reference_id"), goqu.I("r.id"),
+        goqu.V("reference_type"), goqu.I("r.type"),
+        goqu.V("key_id"), goqu.I("rk.id"),
+        goqu.V("key_type"), goqu.I("rk.type"),
+        goqu.V("key_value"), goqu.I("rk.value"),
+    )
 
-	// Build the jsonb object for supplemental semantic ID references
-	supplementalSemanticIDObj := goqu.Func("jsonb_build_object",
-		goqu.V("reference_id"), goqu.I("r.id"),
-		goqu.V("reference_type"), goqu.I("r.type"),
-		goqu.V("key_id"), goqu.I("rk.id"),
-		goqu.V("key_type"), goqu.I("rk.type"),
-		goqu.V("key_value"), goqu.I("rk.value"),
-	)
+    extensionRefersToSubquery := dialect.From(goqu.T("reference").As("r")).
+        Select(goqu.Func("jsonb_agg", goqu.L("? ORDER BY rk.position", refersToObj))).
+        Join(
+            goqu.T("extension_refers_to").As("ert"),
+            goqu.On(goqu.I("ert.extension_id").Eq(jtCol(joinTableExtensionColumnName))),
+        ).
+        Join(
+            goqu.T("reference_key").As("rk"),
+            goqu.On(goqu.I("r.id").Eq(goqu.I("rk.reference_id"))),
+        ).
+        Where(goqu.I("ert.reference_id").Eq(goqu.I("r.id")))
 
-	extensionSupplementalSemanticIDSubquery := dialect.From(goqu.T("reference").As("r")).
-		Select(goqu.Func("jsonb_agg", goqu.L("? ORDER BY rk.position", supplementalSemanticIDObj))).
-		Join(
-			goqu.T("extension_supplemental_semantic_id").As("essi"),
-			goqu.On(goqu.I("essi.extension_id").Eq(goqu.I("jt."+joinTableExtensionColumnName))),
-		).
-		Join(
-			goqu.T("reference_key").As("rk"),
-			goqu.On(goqu.I("r.id").Eq(goqu.I("rk.reference_id"))),
-		).
-		Where(goqu.I("essi.reference_id").Eq(goqu.I("r.id")))
+    refersToReferredObj := goqu.Func("jsonb_build_object",
+        goqu.V("reference_id"), goqu.I("ref.id"),
+        goqu.V("reference_type"), goqu.I("ref.type"),
+        goqu.V("parentReference"), goqu.I("ref.parentreference"),
+        goqu.V("rootReference"), goqu.I("ref.rootreference"),
+        goqu.V("key_id"), goqu.I("rk.id"),
+        goqu.V("key_type"), goqu.I("rk.type"),
+        goqu.V("key_value"), goqu.I("rk.value"),
+    )
 
-	// Build the jsonb object for supplemental semantic ID referred references
-	supplementalSemanticIDReferredObj := goqu.Func("jsonb_build_object",
-		goqu.V("reference_id"), goqu.I("ref.id"),
-		goqu.V("reference_type"), goqu.I("ref.type"),
-		goqu.V("parentReference"), goqu.I("ref.parentreference"),
-		goqu.V("rootReference"), goqu.I("ref.rootreference"),
-		goqu.V("key_id"), goqu.I("rk.id"),
-		goqu.V("key_type"), goqu.I("rk.type"),
-		goqu.V("key_value"), goqu.I("rk.value"),
-	)
+    extensionRefersToReferredSubquery := dialect.From(goqu.T("reference").As("ref")).
+        Select(goqu.Func("jsonb_agg", goqu.L("? ORDER BY rk.position", refersToReferredObj))).
+        Join(
+            goqu.T("extension_refers_to").As("ert"),
+            goqu.On(goqu.I("ert.extension_id").Eq(jtCol(joinTableExtensionColumnName))),
+        ).
+        Join(
+            goqu.T("reference_key").As("rk"),
+            goqu.On(goqu.I("ref.id").Eq(goqu.I("rk.reference_id"))),
+        ).
+        Where(
+            goqu.I("ref.rootreference").Eq(goqu.I("ert.reference_id")),
+            goqu.I("ref.id").IsNotNull(),
+        )
 
-	extensionSupplementalSemanticIDReferredSubquery := dialect.From(goqu.T("reference").As("ref")).
-		Select(goqu.Func("jsonb_agg", goqu.L("? ORDER BY rk.position", supplementalSemanticIDReferredObj))).
-		Join(
-			goqu.T("extension_supplemental_semantic_id").As("essi"),
-			goqu.On(goqu.I("essi.extension_id").Eq(goqu.I("jt."+joinTableExtensionColumnName))),
-		).
-		Join(
-			goqu.T("reference_key").As("rk"),
-			goqu.On(goqu.I("ref.id").Eq(goqu.I("rk.reference_id"))),
-		).
-		Where(
-			goqu.I("ref.rootreference").Eq(goqu.I("essi.reference_id")),
-			goqu.I("ref.id").IsNotNull(),
-		)
+    supplementalSemanticIDObj := goqu.Func("jsonb_build_object",
+        goqu.V("reference_id"), goqu.I("r.id"),
+        goqu.V("reference_type"), goqu.I("r.type"),
+        goqu.V("key_id"), goqu.I("rk.id"),
+        goqu.V("key_type"), goqu.I("rk.type"),
+        goqu.V("key_value"), goqu.I("rk.value"),
+    )
 
-	// Build the main extension jsonb object
-	extensionObj := goqu.Func("jsonb_build_object",
-		goqu.V("dbId"), goqu.I("jt."+joinTableExtensionColumnName),
-		goqu.V("name"), goqu.I("e.name"),
-		goqu.V("position"), goqu.I("e.position"),
-		goqu.V("value_type"), goqu.I("e.value_type"),
-		goqu.V("value"), goqu.COALESCE(
-			goqu.I("e.value_text"),
-			goqu.L("?::text", goqu.I("e.value_num")),
-			goqu.L("?::text", goqu.I("e.value_bool")),
-			goqu.L("?::text", goqu.I("e.value_time")),
-			goqu.L("?::text", goqu.I("e.value_datetime")),
-		),
-		goqu.V("semanticIdReferenceRows"), extensionSemanticIDSubquery,
-		goqu.V("semanticIdReferredReferencesRows"), extensionSemanticIDReferredSubquery,
-		goqu.V("refersToReferenceRows"), extensionRefersToSubquery,
-		goqu.V("refersToReferredReferencesRows"), extensionRefersToReferredSubquery,
-		goqu.V("supplementalSemanticIdReferenceRows"), extensionSupplementalSemanticIDSubquery,
-		goqu.V("supplementalSemanticIdReferredReferenceRows"), extensionSupplementalSemanticIDReferredSubquery,
-	)
+    extensionSupplementalSemanticIDSubquery := dialect.From(goqu.T("reference").As("r")).
+        Select(goqu.Func("jsonb_agg", goqu.L("? ORDER BY rk.position", supplementalSemanticIDObj))).
+        Join(
+            goqu.T("extension_supplemental_semantic_id").As("essi"),
+            goqu.On(goqu.I("essi.extension_id").Eq(jtCol(joinTableExtensionColumnName))),
+        ).
+        Join(
+            goqu.T("reference_key").As("rk"),
+            goqu.On(goqu.I("r.id").Eq(goqu.I("rk.reference_id"))),
+        ).
+        Where(goqu.I("essi.reference_id").Eq(goqu.I("r.id")))
 
-	extensionSubquery := dialect.From(joinTable.As("jt")).
-		Select(goqu.Func("jsonb_agg", goqu.L("?", extensionObj))).
-		Join(
-			goqu.T("extension").As("e"),
-			goqu.On(goqu.I("jt."+joinTableExtensionColumnName).Eq(goqu.I("e.id"))),
-		).
-		Where(goqu.I("jt." + entityIDColumn).Eq(entityIDCondition))
-	return extensionSubquery
+    supplementalSemanticIDReferredObj := goqu.Func("jsonb_build_object",
+        goqu.V("reference_id"), goqu.I("ref.id"),
+        goqu.V("reference_type"), goqu.I("ref.type"),
+        goqu.V("parentReference"), goqu.I("ref.parentreference"),
+        goqu.V("rootReference"), goqu.I("ref.rootreference"),
+        goqu.V("key_id"), goqu.I("rk.id"),
+        goqu.V("key_type"), goqu.I("rk.type"),
+        goqu.V("key_value"), goqu.I("rk.value"),
+    )
+
+    extensionSupplementalSemanticIDReferredSubquery := dialect.From(goqu.T("reference").As("ref")).
+        Select(goqu.Func("jsonb_agg", goqu.L("? ORDER BY rk.position", supplementalSemanticIDReferredObj))).
+        Join(
+            goqu.T("extension_supplemental_semantic_id").As("essi"),
+            goqu.On(goqu.I("essi.extension_id").Eq(jtCol(joinTableExtensionColumnName))),
+        ).
+        Join(
+            goqu.T("reference_key").As("rk"),
+            goqu.On(goqu.I("ref.id").Eq(goqu.I("rk.reference_id"))),
+        ).
+        Where(
+            goqu.I("ref.rootreference").Eq(goqu.I("essi.reference_id")),
+            goqu.I("ref.id").IsNotNull(),
+        )
+
+    extensionObj := goqu.Func("jsonb_build_object",
+        goqu.V("dbId"), jtCol(joinTableExtensionColumnName),
+        goqu.V("name"), goqu.I("e.name"),
+        goqu.V("position"), goqu.I("e.position"),
+        goqu.V("value_type"), goqu.I("e.value_type"),
+        goqu.V("value"), goqu.COALESCE(
+            goqu.I("e.value_text"),
+            goqu.L("?::text", goqu.I("e.value_num")),
+            goqu.L("?::text", goqu.I("e.value_bool")),
+            goqu.L("?::text", goqu.I("e.value_time")),
+            goqu.L("?::text", goqu.I("e.value_datetime")),
+        ),
+        goqu.V("semanticIdReferenceRows"), extensionSemanticIDSubquery,
+        goqu.V("semanticIdReferredReferencesRows"), extensionSemanticIDReferredSubquery,
+        goqu.V("refersToReferenceRows"), extensionRefersToSubquery,
+        goqu.V("refersToReferredReferencesRows"), extensionRefersToReferredSubquery,
+        goqu.V("supplementalSemanticIdReferenceRows"), extensionSupplementalSemanticIDSubquery,
+        goqu.V("supplementalSemanticIdReferredReferenceRows"), extensionSupplementalSemanticIDReferredSubquery,
+    )
+
+    return extensionObj
+}
+
+// GetExtensionsGroupedByEntityIDs builds a query that returns one row per entity ID
+// with all related extensions aggregated into a single JSONB array. This avoids
+// a per-row correlated subquery by aggregating across all requested IDs in a
+// single pass and grouping by the entity ID column.
+//
+// Parameters:
+//   - dialect: SQL dialect wrapper
+//   - joinTable: join table connecting entities to extensions (e.g., descriptor_extension)
+//   - joinTableExtensionColumnName: column name in joinTable that references extension(id)
+//   - entityIDColumn: column name in joinTable that references the owning entity (e.g., descriptor_id)
+//   - entityIDs: list of entity IDs to fetch
+//
+// Returns:
+//   - A SelectDataset that selects: entityIDColumn AS id, jsonb_agg(extensionObj) AS extensions
+func GetExtensionsGroupedByEntityIDs(
+    dialect goqu.DialectWrapper,
+    joinTable exp.IdentifierExpression,
+    joinTableExtensionColumnName string,
+    entityIDColumn string,
+    entityIDs []int64,
+) *goqu.SelectDataset {
+    extensionObj := buildExtensionJSONObject(dialect, "jt", joinTableExtensionColumnName)
+
+    ds := dialect.From(joinTable.As("jt")).
+        Join(
+            goqu.T("extension").As("e"),
+            goqu.On(goqu.I("jt."+joinTableExtensionColumnName).Eq(goqu.I("e.id"))),
+        ).
+        Where(goqu.I("jt." + entityIDColumn).In(entityIDs)).
+        Select(
+            goqu.I("jt."+entityIDColumn).As("id"),
+            goqu.Func("jsonb_agg", goqu.L("?", extensionObj)).As("extensions"),
+        ).
+        GroupBy(goqu.I("jt." + entityIDColumn))
+
+    return ds
 }

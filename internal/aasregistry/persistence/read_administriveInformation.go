@@ -47,6 +47,8 @@ func readAdministrativeInformationByIDs(
 	start := time.Now()
 	out := make(map[int64]*model.AdministrativeInformation, len(adminInfoIDs))
 	if len(adminInfoIDs) == 0 {
+		duration := time.Since(start)
+		fmt.Printf("1 admin info block took %v to complete\n", duration)
 		return out, nil
 	}
 
@@ -62,6 +64,9 @@ func readAdministrativeInformationByIDs(
 	}
 
 	if len(uniq) == 0 {
+
+		duration := time.Since(start)
+		fmt.Printf("2 admin info block took %v to complete\n", duration)
 		return out, nil
 	}
 
