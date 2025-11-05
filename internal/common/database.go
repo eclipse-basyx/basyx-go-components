@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"os"
 	"time"
+
+	_ "github.com/lib/pq"
 )
 
 // InitializeDatabase establishes a PostgreSQL database connection with optional schema initialization.
@@ -38,6 +40,7 @@ import (
 //	defer db.Close()
 func InitializeDatabase(dsn string, schemaFilePath string) (*sql.DB, error) {
 	db, err := sql.Open("postgres", dsn)
+	fmt.Println(db)
 	// Set Max Connection
 	db.SetMaxOpenConns(500)
 	db.SetMaxIdleConns(500)
