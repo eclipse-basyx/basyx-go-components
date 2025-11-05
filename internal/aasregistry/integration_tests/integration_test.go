@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -25,6 +26,7 @@ type TestConfig struct {
 	Data           string `json:"data,omitempty"`
 	ShouldMatch    string `json:"shouldMatch,omitempty"`
 	ExpectedStatus int    `json:"expectedStatus,omitempty"`
+	Action         string `json:"action,omitempty"`
 }
 
 // loadTestConfig loads the test configuration from a JSON file
@@ -33,7 +35,9 @@ func loadTestConfig(filename string) ([]TestConfig, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer file.Close()
+	defer func() {
+		_ = file.Close()
+	}()
 
 	var configs []TestConfig
 	decoder := json.NewDecoder(file)
@@ -102,7 +106,10 @@ func makeRequest(config TestConfig) (string, error) {
 		return "", err
 	}
 
-	defer resp.Body.Close()
+	// errcheck: handle close error
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	if resp.StatusCode != config.ExpectedStatus {
 		fmt.Printf("Response status code: %d\n", resp.StatusCode)
@@ -129,7 +136,34 @@ func TestIntegration(t *testing.T) {
 	time.Sleep(15 * time.Second) // Wait for Docker Compose services
 
 	for i, config := range configs {
-		t.Run(fmt.Sprintf("Step_%d_%s_%s", i+1, config.Method, config.Endpoint), func(t *testing.T) {
+		name := fmt.Sprintf("Step_%d_%s_%s", i+1, config.Method, config.Endpoint)
+		if config.Action != "" {
+			name = fmt.Sprintf("Step_%d_ACTION_%s", i+1, config.Action)
+		}
+		t.Run(name, func(t *testing.T) {
+			// Handle special actions from config
+			if config.Action == "DELETE_ALL_AAS_DESCRIPTORS" {
+				// Fetch current descriptors
+				body, err := makeRequest(TestConfig{Method: "GET", Endpoint: "http://127.0.0.1:5004/shell-descriptors", ExpectedStatus: 200})
+				require.NoError(t, err)
+
+				var list struct {
+					Result []struct {
+						ID string `json:"id"`
+					} `json:"Result"`
+				}
+				err = json.Unmarshal([]byte(body), &list)
+				require.NoError(t, err)
+
+				// Delete each descriptor by base64url-encoded id
+				for _, item := range list.Result {
+					enc := base64.RawURLEncoding.EncodeToString([]byte(item.ID))
+					_, err := makeRequest(TestConfig{Method: "DELETE", Endpoint: fmt.Sprintf("http://127.0.0.1:5004/shell-descriptors/%s", enc), ExpectedStatus: 204})
+					require.NoError(t, err)
+				}
+				return
+			}
+
 			response, err := makeRequest(config)
 			require.NoError(t, err, "Request failed")
 
@@ -151,6 +185,38 @@ func TestIntegration(t *testing.T) {
 			t.Logf("Response: %s", response)
 		})
 	}
+
+	// Only after config-driven cleanup and empty check, verify DB is empty
+	// wait for code to be merged
+	/*
+	   t.Run("Check_DB_Empty", func(t *testing.T) {
+	       db, err := sql.Open("postgres", "host=127.0.0.1 port=5432 user=admin password=admin123 dbname=basyxTestDB sslmode=disable")
+	       require.NoError(t, err)
+	       defer func() { _ = db.Close() }()
+	       require.NoError(t, db.Ping())
+
+	       rows, err := db.Query("SELECT tablename FROM pg_tables WHERE schemaname = 'public'")
+	       require.NoError(t, err)
+	       defer func() { _ = rows.Close() }()
+
+	       nonEmpty := []string{}
+	       for rows.Next() {
+	           var table string
+	           require.NoError(t, rows.Scan(&table))
+
+	           var cnt int
+	           q := fmt.Sprintf("SELECT COUNT(*) FROM \"%s\"", table)
+	           err = db.QueryRow(q).Scan(&cnt)
+	           require.NoError(t, err)
+	           if cnt != 0 {
+	               nonEmpty = append(nonEmpty, fmt.Sprintf("%s:%d", table, cnt))
+	           }
+	       }
+	       require.NoError(t, rows.Err())
+
+	       assert.Empty(t, nonEmpty, "Expected all tables empty, but found rows in: %v", nonEmpty)
+	   })
+	*/
 }
 
 // TestMain handles setup and teardown

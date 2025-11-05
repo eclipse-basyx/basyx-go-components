@@ -371,5 +371,16 @@
     "method": "GET",
     "endpoint": "http://127.0.0.1:5004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy9tYXJ0aW4/submodel-descriptors/bWFydGluaXN0Y29vbA",
     "expectedStatus": 404
+  },
+  {
+    "context": "Cleanup - delete all remaining AAS descriptors",
+    "action": "DELETE_ALL_AAS_DESCRIPTORS"
+  },
+  {
+    "context": "Verify AAS descriptors empty",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:5004/shell-descriptors",
+    "shouldMatch": "expected/empty_paged_result.json",
+    "expectedStatus": 200
   }
 ]
