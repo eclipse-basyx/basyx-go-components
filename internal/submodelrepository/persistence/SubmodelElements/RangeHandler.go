@@ -112,14 +112,14 @@ func (p PostgreSQLRangeHandler) Create(tx *sql.Tx, submodelID string, submodelEl
 // Returns:
 //   - int: The database ID of the created element
 //   - error: An error if the element is not a Range type or if database operations fail
-func (p PostgreSQLRangeHandler) CreateNested(tx *sql.Tx, submodelID string, parentID int, idShortPath string, submodelElement gen.SubmodelElement, pos int) (int, error) {
+func (p PostgreSQLRangeHandler) CreateNested(tx *sql.Tx, submodelID string, parentID int, idShortPath string, submodelElement gen.SubmodelElement, pos int, rootSubmodelElementID int) (int, error) {
 	rangeElem, ok := submodelElement.(*gen.Range)
 	if !ok {
 		return 0, errors.New("submodelElement is not of type Range")
 	}
 
 	// Create the nested range with the provided idShortPath using the decorated handler
-	id, err := p.decorated.CreateWithPath(tx, submodelID, parentID, idShortPath, submodelElement, pos)
+	id, err := p.decorated.CreateWithPath(tx, submodelID, parentID, idShortPath, submodelElement, pos, rootSubmodelElementID)
 	if err != nil {
 		return 0, err
 	}

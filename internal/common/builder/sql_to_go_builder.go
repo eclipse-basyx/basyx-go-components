@@ -321,6 +321,8 @@ type SubmodelElementRow struct {
 	DbID int64 `json:"db_id"`
 	// ParentID is the database ID of the parent submodel element (nullable for root elements)
 	ParentID *int64 `json:"parent_id"`
+	// RootID is the database ID of the root submodel element (nullable for root elements)
+	RootID *int64 `json:"root_id"`
 	// IDShort is the short identifier for the submodel element
 	IDShort string `json:"id_short"`
 	// DisplayNames contains localized names as JSON data

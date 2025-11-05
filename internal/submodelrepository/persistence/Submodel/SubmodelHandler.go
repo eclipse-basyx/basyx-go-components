@@ -31,6 +31,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"time"
 
 	// nolint:all
@@ -85,6 +86,11 @@ func GetAllSubmodels(db *sql.DB, limit int64, cursor string, query *grammar.Quer
 	return getSubmodels(db, "", limit, cursor, query)
 }
 
+type SubmodelElementSubmodelMetadata struct {
+	SubmodelElement gen.SubmodelElement
+	DatabaseID      int
+}
+
 // getSubmodels retrieves submodels from the database with full nested structures.
 //
 // This function performs a complex query to fetch submodels along with all their related
@@ -135,8 +141,9 @@ func getSubmodels(db *sql.DB, submodelIDFilter string, limit int64, cursor strin
 			&row.DisplayNames, &row.Descriptions,
 			&row.SemanticID, &row.ReferredSemanticIDs,
 			&row.SupplementalSemanticIDs, &row.SupplementalReferredSemIDs,
-			&row.DataSpecReference, &row.DataSpecReferenceReferred,
-			&row.DataSpecIEC61360, &row.Qualifiers, &row.Extensions, &row.Administration, &row.RootSubmodelElements, &row.ChildSubmodelElements, &row.TotalSubmodels,
+			// &row.DataSpecReference, &row.DataSpecReferenceReferred,
+			// &row.DataSpecIEC61360,
+			&row.Qualifiers, &row.Extensions, &row.Administration, &row.RootSubmodelElements, &row.ChildSubmodelElements, &row.TotalSubmodels,
 		); err != nil {
 			return nil, "", fmt.Errorf("error scanning row: %w", err)
 		}
@@ -300,8 +307,9 @@ func getSubmodels(db *sql.DB, submodelIDFilter string, limit int64, cursor strin
 		}
 
 		// RootSubmodelElements
+		smeBuilderMap := make(map[int64]*builders.SubmodelElementBuilder)
+		submodelElements := []SubmodelElementSubmodelMetadata{}
 		if isArrayNotEmpty(row.RootSubmodelElements) {
-			smeBuilderMap := make(map[int64]*builders.SubmodelElementBuilder)
 			var RootSubmodelElements []builders.SubmodelElementRow
 			err := json.Unmarshal(row.RootSubmodelElements, &RootSubmodelElements)
 			if err != nil {
@@ -310,15 +318,45 @@ func getSubmodels(db *sql.DB, submodelIDFilter string, limit int64, cursor strin
 			for _, smeRow := range RootSubmodelElements {
 				_, exists := smeBuilderMap[smeRow.DbID]
 				if !exists {
-					sme, builder, err := builders.NewSMEBuilder(smeRow)
+					sme, builder, err := builders.BuildSubmodelElement(smeRow)
 					if err != nil {
 						return nil, "", err
 					}
 					smeBuilderMap[smeRow.DbID] = builder
 
-					submodel.SubmodelElements = append(submodel.SubmodelElements, *sme)
+					submodelElements = append(submodelElements, SubmodelElementSubmodelMetadata{
+						SubmodelElement: *sme,
+						DatabaseID:      int(smeRow.DbID),
+					})
 				}
 			}
+		}
+		if isArrayNotEmpty(row.ChildSubmodelElements) {
+			var ChildSubmodelElements []builders.SubmodelElementRow
+			err := json.Unmarshal(row.ChildSubmodelElements, &ChildSubmodelElements)
+			if err != nil {
+				return nil, "", err
+			}
+			for _, smeRow := range ChildSubmodelElements {
+				builder, exists := smeBuilderMap[*smeRow.RootID]
+				if exists {
+					err := builder.AddChildSME(int(smeRow.DbID), int(*smeRow.ParentID), smeRow)
+					if err != nil {
+						return nil, "", err
+					}
+				}
+			}
+		}
+
+		for _, builder := range smeBuilderMap {
+			builder.BuildHierarchy()
+		}
+		// Sort submodel elements according to their database IDs to maintain consistent order
+		sort.SliceStable(submodelElements, func(i, j int) bool {
+			return submodelElements[i].DatabaseID < submodelElements[j].DatabaseID
+		})
+		for _, smeMeta := range submodelElements {
+			submodel.SubmodelElements = append(submodel.SubmodelElements, smeMeta.SubmodelElement)
 		}
 
 		result = append(result, submodel)

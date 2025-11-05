@@ -109,14 +109,14 @@ func (p PostgreSQLFileHandler) Create(tx *sql.Tx, submodelID string, submodelEle
 // Returns:
 //   - int: The database ID of the created nested file element
 //   - error: Error if the element is not a File or if database operations fail
-func (p PostgreSQLFileHandler) CreateNested(tx *sql.Tx, submodelID string, parentID int, idShortPath string, submodelElement gen.SubmodelElement, pos int) (int, error) {
+func (p PostgreSQLFileHandler) CreateNested(tx *sql.Tx, submodelID string, parentID int, idShortPath string, submodelElement gen.SubmodelElement, pos int, rootSubmodelElementID int) (int, error) {
 	file, ok := submodelElement.(*gen.File)
 	if !ok {
 		return 0, errors.New("submodelElement is not of type File")
 	}
 
 	// Create the nested file with the provided idShortPath using the decorated handler
-	id, err := p.decorated.CreateWithPath(tx, submodelID, parentID, idShortPath, submodelElement, pos)
+	id, err := p.decorated.CreateWithPath(tx, submodelID, parentID, idShortPath, submodelElement, pos, rootSubmodelElementID)
 	if err != nil {
 		return 0, err
 	}

@@ -115,14 +115,14 @@ func (p PostgreSQLOperationHandler) Create(tx *sql.Tx, submodelID string, submod
 // Returns:
 //   - int: The database ID of the created element
 //   - error: An error if the element is not an Operation type or if database operations fail
-func (p PostgreSQLOperationHandler) CreateNested(tx *sql.Tx, submodelID string, parentID int, idShortPath string, submodelElement gen.SubmodelElement, pos int) (int, error) {
+func (p PostgreSQLOperationHandler) CreateNested(tx *sql.Tx, submodelID string, parentID int, idShortPath string, submodelElement gen.SubmodelElement, pos int, rootSubmodelElementID int) (int, error) {
 	operation, ok := submodelElement.(*gen.Operation)
 	if !ok {
 		return 0, errors.New("submodelElement is not of type Operation")
 	}
 
 	// Create the nested operation with the provided idShortPath using the decorated handler
-	id, err := p.decorated.CreateWithPath(tx, submodelID, parentID, idShortPath, submodelElement, pos)
+	id, err := p.decorated.CreateWithPath(tx, submodelID, parentID, idShortPath, submodelElement, pos, rootSubmodelElementID)
 	if err != nil {
 		return 0, err
 	}

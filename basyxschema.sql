@@ -362,6 +362,7 @@ CREATE INDEX IF NOT EXISTS ix_extref_reference_id ON extension_refers_to(referen
 CREATE TABLE IF NOT EXISTS submodel_element (
   id             BIGSERIAL PRIMARY KEY,
   submodel_id    TEXT NOT NULL REFERENCES submodel(id) ON DELETE CASCADE,
+  root_sme_id  BIGINT REFERENCES submodel_element(id) ON DELETE CASCADE,
   parent_sme_id  BIGINT REFERENCES submodel_element(id) ON DELETE CASCADE,
   position       INTEGER,                                   -- for ordering in lists
   id_short       varchar(128) NOT NULL,

@@ -108,14 +108,14 @@ func (p PostgreSQLEntityHandler) Create(tx *sql.Tx, submodelID string, submodelE
 // Returns:
 //   - int: The database ID of the created nested entity
 //   - error: Error if the element is not an Entity or if database operations fail
-func (p PostgreSQLEntityHandler) CreateNested(tx *sql.Tx, submodelID string, parentID int, idShortPath string, submodelElement gen.SubmodelElement, pos int) (int, error) {
+func (p PostgreSQLEntityHandler) CreateNested(tx *sql.Tx, submodelID string, parentID int, idShortPath string, submodelElement gen.SubmodelElement, pos int, rootSubmodelElementID int) (int, error) {
 	entity, ok := submodelElement.(*gen.Entity)
 	if !ok {
 		return 0, errors.New("submodelElement is not of type Entity")
 	}
 
 	// Create the nested entity with the provided idShortPath using the decorated handler
-	id, err := p.decorated.CreateWithPath(tx, submodelID, parentID, idShortPath, submodelElement, pos)
+	id, err := p.decorated.CreateWithPath(tx, submodelID, parentID, idShortPath, submodelElement, pos, rootSubmodelElementID)
 	if err != nil {
 		return 0, err
 	}

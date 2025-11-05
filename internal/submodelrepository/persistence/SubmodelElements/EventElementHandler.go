@@ -108,7 +108,7 @@ func (p PostgreSQLEventElementHandler) Create(tx *sql.Tx, submodelID string, sub
 //   - error: Always returns "not implemented" error
 //
 //nolint:revive
-func (p PostgreSQLEventElementHandler) CreateNested(tx *sql.Tx, submodelID string, parentID int, idShortPath string, submodelElement gen.SubmodelElement, pos int) (int, error) {
+func (p PostgreSQLEventElementHandler) CreateNested(tx *sql.Tx, submodelID string, parentID int, idShortPath string, submodelElement gen.SubmodelElement, pos int, rootSubmodelElementID int) (int, error) {
 	return 0, errors.New("not implemented")
 }
 

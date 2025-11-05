@@ -575,11 +575,18 @@ func (p *PostgreSQLSubmodelDatabase) AddSubmodelElementWithPath(submodelID strin
 	} else {
 		newIDShortPath = idShortPath + "." + submodelElement.GetIdShort()
 	}
-	id, err := handler.CreateNested(tx, submodelID, parentID, newIDShortPath, submodelElement, nextPosition)
+
+	var rootSmeID int
+	err = p.db.QueryRow("SELECT root_sme_id FROM submodel_element WHERE id = $1", idShortPath).Scan(&rootSmeID)
 	if err != nil {
 		return err
 	}
-	err = p.AddNestedSubmodelElementsIteratively(tx, submodelID, id, submodelElement, newIDShortPath)
+
+	id, err := handler.CreateNested(tx, submodelID, parentID, newIDShortPath, submodelElement, nextPosition, rootSmeID)
+	if err != nil {
+		return err
+	}
+	err = p.AddNestedSubmodelElementsIteratively(tx, submodelID, id, submodelElement, newIDShortPath, rootSmeID)
 	if err != nil {
 		return err
 	}
@@ -651,12 +658,12 @@ func (p *PostgreSQLSubmodelDatabase) AddSubmodelElementWithTransaction(tx *sql.T
 	if err != nil {
 		return err
 	}
-	parentID, err := handler.Create(tx, submodelID, submodelElement)
+	rootID, err := handler.Create(tx, submodelID, submodelElement)
 	if err != nil {
 		return err
 	}
 
-	err = p.AddNestedSubmodelElementsIteratively(tx, submodelID, parentID, submodelElement, "")
+	err = p.AddNestedSubmodelElementsIteratively(tx, submodelID, rootID, submodelElement, "", rootID)
 	if err != nil {
 		return err
 	}
@@ -687,7 +694,7 @@ type ElementToProcess struct {
 //
 // Returns:
 //   - error: Error if processing fails
-func (p *PostgreSQLSubmodelDatabase) AddNestedSubmodelElementsIteratively(tx *sql.Tx, submodelID string, topLevelParentID int, topLevelElement gen.SubmodelElement, startPath string) error {
+func (p *PostgreSQLSubmodelDatabase) AddNestedSubmodelElementsIteratively(tx *sql.Tx, submodelID string, parentID int, topLevelElement gen.SubmodelElement, startPath string, rootSubmodelElementID int) error {
 	// Invalidate Submodel cache if enabled
 	if p.cacheEnabled {
 		delete(submodelCache, submodelID)
@@ -709,7 +716,7 @@ func (p *PostgreSQLSubmodelDatabase) AddNestedSubmodelElementsIteratively(tx *sq
 			}
 			stack = append(stack, ElementToProcess{
 				element:                   nestedElement,
-				parentID:                  topLevelParentID,
+				parentID:                  parentID,
 				currentIDShortPath:        currentPath,
 				isFromSubmodelElementList: false,
 				position:                  index,
@@ -730,7 +737,7 @@ func (p *PostgreSQLSubmodelDatabase) AddNestedSubmodelElementsIteratively(tx *sq
 			}
 			stack = append(stack, ElementToProcess{
 				element:                   nestedElement,
-				parentID:                  topLevelParentID,
+				parentID:                  parentID,
 				currentIDShortPath:        idShortPath,
 				isFromSubmodelElementList: true,
 				position:                  index,
@@ -751,7 +758,7 @@ func (p *PostgreSQLSubmodelDatabase) AddNestedSubmodelElementsIteratively(tx *sq
 		// Build the idShortPath for current element
 		idShortPath := buildCurrentIDShortPath(current)
 
-		newParentID, err := handler.CreateNested(tx, submodelID, current.parentID, idShortPath, current.element, current.position)
+		newParentID, err := handler.CreateNested(tx, submodelID, current.parentID, idShortPath, current.element, current.position, rootSubmodelElementID)
 		if err != nil {
 			return err
 		}

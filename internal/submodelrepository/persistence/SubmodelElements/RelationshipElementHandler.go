@@ -151,14 +151,14 @@ func (p PostgreSQLRelationshipElementHandler) Create(tx *sql.Tx, submodelID stri
 // Example:
 //
 //	id, err := handler.CreateNested(tx, "submodel123", parentDbID, "relations.dependsOn", relElem, 0)
-func (p PostgreSQLRelationshipElementHandler) CreateNested(tx *sql.Tx, submodelID string, parentID int, idShortPath string, submodelElement gen.SubmodelElement, pos int) (int, error) {
+func (p PostgreSQLRelationshipElementHandler) CreateNested(tx *sql.Tx, submodelID string, parentID int, idShortPath string, submodelElement gen.SubmodelElement, pos int, rootSubmodelElementID int) (int, error) {
 	relElem, ok := submodelElement.(*gen.RelationshipElement)
 	if !ok {
 		return 0, errors.New("submodelElement is not of type RelationshipElement")
 	}
 
 	// Create the nested relElem with the provided idShortPath using the decorated handler
-	id, err := p.decorated.CreateWithPath(tx, submodelID, parentID, idShortPath, submodelElement, pos)
+	id, err := p.decorated.CreateWithPath(tx, submodelID, parentID, idShortPath, submodelElement, pos, rootSubmodelElementID)
 	if err != nil {
 		return 0, err
 	}

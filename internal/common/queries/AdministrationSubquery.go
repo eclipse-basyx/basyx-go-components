@@ -71,7 +71,7 @@ type AdministrationRow struct {
 //	mainQuery := dialect.From("submodel").As("s").
 //	    Select(..., goqu.L("?", adminSubquery).As("administration"))
 func GetAdministrationSubquery(dialect goqu.DialectWrapper, joinConditionColumn string) *goqu.SelectDataset {
-	administrativeInformationEmbeddedDataSpecificationReferenceSubquery, administrativeInformationEmbeddedDataSpecificationReferenceReferredSubquery, administrativeInformationIEC61360Subquery := GetEmbeddedDataSpecificationSubqueries(dialect, "administrative_information_embedded_data_specification", "administrative_information_id", joinConditionColumn)
+	// administrativeInformationEmbeddedDataSpecificationReferenceSubquery, administrativeInformationEmbeddedDataSpecificationReferenceReferredSubquery, administrativeInformationIEC61360Subquery := GetEmbeddedDataSpecificationSubqueries(dialect, "administrative_information_embedded_data_specification", "administrative_information_id", joinConditionColumn)
 
 	// Build the jsonb object for administration creator references
 	creatorObj := goqu.Func("jsonb_build_object",
@@ -127,9 +127,9 @@ func GetAdministrationSubquery(dialect goqu.DialectWrapper, joinConditionColumn 
 		goqu.V("templateId"), goqu.C("templateid").Table("ai"),
 		goqu.V("creator"), goqu.L("?", administrationCreatorSubquery),
 		goqu.V("creatorReferred"), goqu.L("?", administrationCreatorReferredSubquery),
-		goqu.V("edsDataSpecifications"), goqu.L("?", administrativeInformationEmbeddedDataSpecificationReferenceSubquery),
-		goqu.V("edsDataSpecificationsReferred"), goqu.L("?", administrativeInformationEmbeddedDataSpecificationReferenceReferredSubquery),
-		goqu.V("edsDataSpecificationIEC61360"), goqu.L("?", administrativeInformationIEC61360Subquery),
+		// goqu.V("edsDataSpecifications"), goqu.L("?", administrativeInformationEmbeddedDataSpecificationReferenceSubquery),
+		// goqu.V("edsDataSpecificationsReferred"), goqu.L("?", administrativeInformationEmbeddedDataSpecificationReferenceReferredSubquery),
+		// goqu.V("edsDataSpecificationIEC61360"), goqu.L("?", administrativeInformationIEC61360Subquery),
 	)
 
 	administrativeInformationSubquery := dialect.From(goqu.T("administrative_information").As("ai")).

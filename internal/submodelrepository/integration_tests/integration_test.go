@@ -132,7 +132,10 @@ func TestIntegration(t *testing.T) {
 				err = json.Unmarshal([]byte(response), &responseJSON)
 				require.NoError(t, err, "Failed to parse response JSON")
 
-				assert.Equal(t, expectedJSON, responseJSON, "Response does not match expected")
+				// Re-marshal and compare as JSON strings for consistent comparison
+				expectedBytes, _ := json.Marshal(expectedJSON)
+				responseBytes, _ := json.Marshal(responseJSON)
+				assert.JSONEq(t, string(expectedBytes), string(responseBytes), "Response does not match expected")
 			}
 
 			t.Logf("Response: %s", response)

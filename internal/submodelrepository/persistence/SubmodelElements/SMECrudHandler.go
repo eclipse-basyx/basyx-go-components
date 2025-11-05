@@ -115,7 +115,7 @@ func NewPostgreSQLSMECrudHandler(db *sql.DB) (*PostgreSQLSMECrudHandler, error) 
 // Example:
 //
 //	id, err := handler.CreateWithPath(tx, "submodel123", parentDbID, "sensors.temperature", tempProp, 0)
-func (p *PostgreSQLSMECrudHandler) CreateWithPath(tx *sql.Tx, submodelID string, parentID int, idShortPath string, submodelElement gen.SubmodelElement, position int) (int, error) {
+func (p *PostgreSQLSMECrudHandler) CreateWithPath(tx *sql.Tx, submodelID string, parentID int, idShortPath string, submodelElement gen.SubmodelElement, position int, rootSubmodelElementID int) (int, error) {
 	var referenceID sql.NullInt64
 	var err error
 	if submodelElement.GetSemanticID() != nil {
@@ -161,10 +161,17 @@ func (p *PostgreSQLSMECrudHandler) CreateWithPath(tx *sql.Tx, submodelID string,
 		parentDBId = sql.NullInt64{Int64: int64(parentID), Valid: true}
 	}
 
+	var rootDbID sql.NullInt64
+	if rootSubmodelElementID == 0 {
+		rootDbID = sql.NullInt64{}
+	} else {
+		rootDbID = sql.NullInt64{Int64: int64(rootSubmodelElementID), Valid: true}
+	}
+
 	var id int
 	err = tx.QueryRow(`	INSERT INTO
-	 					submodel_element(submodel_id, parent_sme_id, position, id_short, category, model_type, semantic_id, idshort_path, description_id, displayname_id)
-						VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id`,
+	 					submodel_element(submodel_id, parent_sme_id, position, id_short, category, model_type, semantic_id, idshort_path, description_id, displayname_id, root_sme_id)
+						VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id`,
 		submodelID,
 		parentDBId,
 		position,
@@ -175,6 +182,7 @@ func (p *PostgreSQLSMECrudHandler) CreateWithPath(tx *sql.Tx, submodelID string,
 		idShortPath, // Use the provided idShortPath instead of just GetIdShort()
 		descriptionID,
 		displayNameID,
+		rootDbID,
 	).Scan(&id)
 	if err != nil {
 		return 0, err
@@ -203,6 +211,20 @@ func (p *PostgreSQLSMECrudHandler) CreateWithPath(tx *sql.Tx, submodelID string,
 			if err != nil {
 				fmt.Println(err)
 				return 0, common.NewInternalServerError("Failed to Create Qualifier for Submodel Element with ID '" + fmt.Sprintf("%d", id) + "'. See console for details.")
+			}
+		}
+	}
+
+	supplementalSemanticIDs := submodelElement.GetSupplementalSemanticIds()
+	if len(supplementalSemanticIDs) > 0 {
+		for _, supplementalSemanticID := range supplementalSemanticIDs {
+			supplementalSemanticIDDbID, err := persistenceutils.CreateReference(tx, &supplementalSemanticID, sql.NullInt64{}, sql.NullInt64{})
+			if err != nil {
+				return 0, err
+			}
+			_, err = tx.Exec(`INSERT INTO submodel_element_supplemental_semantic_id (submodel_element_id, reference_id) VALUES ($1, $2)`, id, supplementalSemanticIDDbID)
+			if err != nil {
+				return 0, err
 			}
 		}
 	}
@@ -238,7 +260,7 @@ func (p *PostgreSQLSMECrudHandler) CreateWithPath(tx *sql.Tx, submodelID string,
 //
 //	id, err := handler.Create(tx, "submodel123", propertyElement)
 func (p *PostgreSQLSMECrudHandler) Create(tx *sql.Tx, submodelID string, submodelElement gen.SubmodelElement) (int, error) {
-	return p.CreateWithPath(tx, submodelID, 0, submodelElement.GetIdShort(), submodelElement, 0)
+	return p.CreateWithPath(tx, submodelID, 0, submodelElement.GetIdShort(), submodelElement, 0, 0)
 }
 
 // Update updates an existing SubmodelElement identified by its idShort or path.

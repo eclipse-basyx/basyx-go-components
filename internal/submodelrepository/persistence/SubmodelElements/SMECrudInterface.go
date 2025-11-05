@@ -36,7 +36,7 @@ import (
 // PostgreSQLSMECrudInterface defines the CRUD operations for Submodel Elements in a PostgreSQL database.
 type PostgreSQLSMECrudInterface interface {
 	Create(*sql.Tx, string, gen.SubmodelElement) (int, error)
-	CreateNested(*sql.Tx, string, int, string, gen.SubmodelElement, int) (int, error)
+	CreateNested(*sql.Tx, string, int, string, gen.SubmodelElement, int, int) (int, error)
 	Update(string, gen.SubmodelElement) error
 	Delete(string) error
 }

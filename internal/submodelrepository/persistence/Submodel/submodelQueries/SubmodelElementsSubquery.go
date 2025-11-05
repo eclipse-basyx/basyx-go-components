@@ -80,7 +80,7 @@ func (s *SubmodelElementFilter) HasIDShortPathFilter() bool {
 func GetSubmodelElementsSubquery(dialect goqu.DialectWrapper, rootSubmodelElements bool, filter SubmodelElementFilter) (*goqu.SelectDataset, error) {
 	semanticIDSubquery, semanticIDReferredSubquery := queries.GetReferenceQueries(dialect, goqu.I("tlsme.semantic_id"))
 	supplSemanticIDSubquery, supplSemanticIDReferredSubquery := queries.GetSupplementalSemanticIDQueries(dialect, goqu.T("submodel_element_supplemental_semantic_id"), "submodel_element_id", "reference_id", goqu.I("tlsme.id"))
-	embeddedDataSpecificationReferenceSubquery, embeddedDataSpecificationReferenceReferredSubquery, iec61360Subquery := queries.GetEmbeddedDataSpecificationSubqueries(dialect, "submodel_element_embedded_data_specification", "submodel_element_id", "tlsme.id")
+	// embeddedDataSpecificationReferenceSubquery, embeddedDataSpecificationReferenceReferredSubquery, iec61360Subquery := queries.GetEmbeddedDataSpecificationSubqueries(dialect, "submodel_element_embedded_data_specification", "submodel_element_id", "tlsme.id")
 	qualifierSubquery := queries.GetQualifierSubquery(dialect, goqu.T("submodel_element_qualifier"), "sme_id", "qualifier_id", goqu.I("tlsme.id"))
 	displayNamesSubquery := queries.GetDisplayNamesQuery(dialect, "tlsme.displayname_id")
 	descriptionsSubquery := queries.GetDescriptionQuery(dialect, "tlsme.description_id")
@@ -90,6 +90,7 @@ func GetSubmodelElementsSubquery(dialect goqu.DialectWrapper, rootSubmodelElemen
 	obj := goqu.Func("jsonb_build_object",
 		goqu.V("db_id"), goqu.I("tlsme.id"),
 		goqu.V("parent_id"), goqu.I("tlsme.parent_sme_id"),
+		goqu.V("root_id"), goqu.I("tlsme.root_sme_id"),
 		goqu.V("id_short"), goqu.I("tlsme.id_short"),
 		goqu.V("category"), goqu.I("tlsme.category"),
 		goqu.V("model_type"), goqu.I("tlsme.model_type"),
@@ -99,11 +100,11 @@ func GetSubmodelElementsSubquery(dialect goqu.DialectWrapper, rootSubmodelElemen
 		goqu.V("value"), valueByType,
 		goqu.V("semanticId"), semanticIDSubquery,
 		goqu.V("semanticIdReferred"), semanticIDReferredSubquery,
-		goqu.V("supplSemanticId"), supplSemanticIDSubquery,
-		goqu.V("supplSemanticIdReferred"), supplSemanticIDReferredSubquery,
-		goqu.V("embeddedDataSpecifications"), embeddedDataSpecificationReferenceSubquery,
-		goqu.V("embeddedDataSpecificationsReferred"), embeddedDataSpecificationReferenceReferredSubquery,
-		goqu.V("iec61360"), iec61360Subquery,
+		goqu.V("supplementalSemanticIdReferenceRows"), supplSemanticIDSubquery,
+		goqu.V("supplementalSemanticIdReferredReferenceRows"), supplSemanticIDReferredSubquery,
+		// goqu.V("embeddedDataSpecifications"), embeddedDataSpecificationReferenceSubquery,
+		// goqu.V("embeddedDataSpecificationsReferred"), embeddedDataSpecificationReferenceReferredSubquery,
+		// goqu.V("iec61360"), iec61360Subquery,
 		goqu.V("qualifiers"), qualifierSubquery,
 	)
 

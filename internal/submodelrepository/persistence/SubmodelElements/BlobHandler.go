@@ -112,14 +112,14 @@ func (p PostgreSQLBlobHandler) Create(tx *sql.Tx, submodelID string, submodelEle
 // Returns:
 //   - int: Database ID of the created nested element
 //   - error: Error if creation fails or element is not of correct type
-func (p PostgreSQLBlobHandler) CreateNested(tx *sql.Tx, submodelID string, parentID int, idShortPath string, submodelElement gen.SubmodelElement, pos int) (int, error) {
+func (p PostgreSQLBlobHandler) CreateNested(tx *sql.Tx, submodelID string, parentID int, idShortPath string, submodelElement gen.SubmodelElement, pos int, rootSubmodelElementID int) (int, error) {
 	blob, ok := submodelElement.(*gen.Blob)
 	if !ok {
 		return 0, errors.New("submodelElement is not of type Blob")
 	}
 
 	// Create the nested blob with the provided idShortPath using the decorated handler
-	id, err := p.decorated.CreateWithPath(tx, submodelID, parentID, idShortPath, submodelElement, pos)
+	id, err := p.decorated.CreateWithPath(tx, submodelID, parentID, idShortPath, submodelElement, pos, rootSubmodelElementID)
 	if err != nil {
 		return 0, err
 	}

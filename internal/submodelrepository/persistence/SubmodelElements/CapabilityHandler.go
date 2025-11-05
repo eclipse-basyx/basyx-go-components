@@ -111,14 +111,14 @@ func (p PostgreSQLCapabilityHandler) Create(tx *sql.Tx, submodelID string, submo
 // Returns:
 //   - int: Database ID of the created nested element
 //   - error: Error if creation fails or element is not of correct type
-func (p PostgreSQLCapabilityHandler) CreateNested(tx *sql.Tx, submodelID string, parentID int, idShortPath string, submodelElement gen.SubmodelElement, pos int) (int, error) {
+func (p PostgreSQLCapabilityHandler) CreateNested(tx *sql.Tx, submodelID string, parentID int, idShortPath string, submodelElement gen.SubmodelElement, pos int, rootSubmodelElementID int) (int, error) {
 	capability, ok := submodelElement.(*gen.Capability)
 	if !ok {
 		return 0, errors.New("submodelElement is not of type Capability")
 	}
 
 	// Create the nested capability with the provided idShortPath using the decorated handler
-	id, err := p.decorated.CreateWithPath(tx, submodelID, parentID, idShortPath, submodelElement, pos)
+	id, err := p.decorated.CreateWithPath(tx, submodelID, parentID, idShortPath, submodelElement, pos, rootSubmodelElementID)
 	if err != nil {
 		return 0, err
 	}
