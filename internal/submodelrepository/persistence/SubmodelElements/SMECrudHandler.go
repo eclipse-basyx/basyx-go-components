@@ -38,6 +38,7 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	persistenceutils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
+	jsoniter "github.com/json-iterator/go"
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 )
 
@@ -168,10 +169,20 @@ func (p *PostgreSQLSMECrudHandler) CreateWithPath(tx *sql.Tx, submodelID string,
 		rootDbID = sql.NullInt64{Int64: int64(rootSubmodelElementID), Valid: true}
 	}
 
+	edsJSONString := "[]"
+	if len(submodelElement.GetEmbeddedDataSpecifications()) > 0 {
+		var json = jsoniter.ConfigCompatibleWithStandardLibrary
+		edsBytes, err := json.Marshal(submodelElement.GetEmbeddedDataSpecifications())
+		if err != nil {
+			return 0, err
+		}
+		edsJSONString = string(edsBytes)
+	}
+
 	var id int
 	err = tx.QueryRow(`	INSERT INTO
-	 					submodel_element(submodel_id, parent_sme_id, position, id_short, category, model_type, semantic_id, idshort_path, description_id, displayname_id, root_sme_id)
-						VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id`,
+	 					submodel_element(submodel_id, parent_sme_id, position, id_short, category, model_type, semantic_id, idshort_path, description_id, displayname_id, root_sme_id, embedded_data_specification)
+						VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING id`,
 		submodelID,
 		parentDBId,
 		position,
@@ -183,21 +194,10 @@ func (p *PostgreSQLSMECrudHandler) CreateWithPath(tx *sql.Tx, submodelID string,
 		descriptionID,
 		displayNameID,
 		rootDbID,
+		edsJSONString,
 	).Scan(&id)
 	if err != nil {
 		return 0, err
-	}
-
-	embeddedDataSpecifications := submodelElement.GetEmbeddedDataSpecifications()
-	for i, eds := range embeddedDataSpecifications {
-		edsDbID, err := persistenceutils.CreateEmbeddedDataSpecification(tx, eds, i)
-		if err != nil {
-			return 0, err
-		}
-		_, err = tx.Exec("INSERT INTO submodel_element_embedded_data_specification(submodel_element_id, embedded_data_specification_id) VALUES ($1, $2)", id, edsDbID)
-		if err != nil {
-			return 0, err
-		}
 	}
 
 	qualifiers := submodelElement.GetQualifiers()

@@ -336,14 +336,10 @@ type SubmodelElementRow struct {
 	SupplementalSemanticIDsReferred json.RawMessage `json:"supplementalSemanticIdReferredReferenceRows"`
 	// Qualifiers contains qualifier information as JSON data
 	Qualifiers json.RawMessage `json:"qualifiers"`
-	// DataSpecReference contains embedded data specifications as JSON data
-	DataSpecReference json.RawMessage `json:"embeddedDataSpecifications"`
-	// DataSpecReferenceReferred contains references to data specifications as JSON data
-	DataSpecReferenceReferred json.RawMessage `json:"embeddedDataSpecificationsReferred"`
-	// DataSpecIEC61360 contains IEC 61360 data specification as JSON data
-	DataSpecIEC61360 json.RawMessage `json:"iec61360"`
 	// Position specifies the position/order of the submodel element among its siblings
 	Position int `json:"position"`
+	// EmbeddedDataSpecifications contains embedded data specifications as JSON data
+	EmbeddedDataSpecifications json.RawMessage `json:"embeddedDataSpecifications"`
 }
 
 // PropertyValueRow represents a data row for a Property element's value in the database.

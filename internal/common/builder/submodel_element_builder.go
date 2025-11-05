@@ -32,6 +32,7 @@ import (
 	"sort"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	jsoniter "github.com/json-iterator/go"
 )
 
 // SubmodelElementBuilder represents one root level Submodel Element
@@ -87,21 +88,14 @@ func BuildSubmodelElement(smeRow SubmodelElementRow) (*model.SubmodelElement, *S
 		specificSME.SetDisplayName(displayNames)
 	}
 
-	builder := NewEmbeddedDataSpecificationsBuilder()
-
-	err = builder.BuildContentsIec61360(smeRow.DataSpecIEC61360)
-	if err != nil {
-		log.Printf("Failed to build contents: %v", err)
-	}
-
-	err = builder.BuildReferences(smeRow.DataSpecReference, smeRow.DataSpecReferenceReferred)
-	if err != nil {
-		log.Printf("Failed to build references: %v", err)
-	}
-
-	eds := builder.Build()
-
-	if len(eds) > 0 {
+	if len(smeRow.EmbeddedDataSpecifications) > 0 {
+		var eds []model.EmbeddedDataSpecification
+		var json = jsoniter.ConfigCompatibleWithStandardLibrary
+		err := json.Unmarshal(smeRow.EmbeddedDataSpecifications, &eds)
+		if err != nil {
+			log.Printf("error unmarshaling embedded data specifications: %v", err)
+			return nil, nil, err
+		}
 		specificSME.SetEmbeddedDataSpecifications(eds)
 	}
 
