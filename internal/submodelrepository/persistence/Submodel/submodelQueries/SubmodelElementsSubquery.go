@@ -28,17 +28,62 @@
 package submodelsubqueries
 
 import (
+	"fmt"
+
 	"github.com/doug-martin/goqu/v9"
 	"github.com/doug-martin/goqu/v9/exp"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/queries"
 )
 
+// SubmodelElementSubmodelFilter represents a filter for submodel elements based on submodel ID.
+// It is used to restrict submodel element queries to a specific submodel.
+type SubmodelElementSubmodelFilter struct {
+	// SubmodelIDFilter contains the submodel ID to filter by.
+	// This can be any type that represents a valid submodel identifier.
+	SubmodelIDFilter any
+}
+
+// SubmodelElementIDShortPathFilter represents a filter for submodel elements based on their idShort path.
+// It is used to query submodel elements at a specific path within the submodel hierarchy.
+type SubmodelElementIDShortPathFilter struct {
+	// SubmodelElementIDShortPath contains the idShort path to filter by.
+	// The path can represent a single element or a hierarchical path to nested elements.
+	SubmodelElementIDShortPath string
+}
+
+// SubmodelElementFilter combines multiple filter criteria for querying submodel elements.
+// It allows filtering by both submodel ID and idShort path.
+type SubmodelElementFilter struct {
+	// SubmodelFilter restricts the query to elements of a specific submodel.
+	// If nil, no submodel filtering is applied (though this may result in an error).
+	SubmodelFilter *SubmodelElementSubmodelFilter
+
+	// SubmodelElementIDShortPathFilter restricts the query to elements at a specific idShort path.
+	// If nil, no path filtering is applied.
+	SubmodelElementIDShortPathFilter *SubmodelElementIDShortPathFilter
+}
+
+// HasSubmodelFilter returns true if a submodel filter is configured.
+// This indicates whether the query should be restricted to a specific submodel.
+func (s *SubmodelElementFilter) HasSubmodelFilter() bool {
+	return s.SubmodelFilter != nil
+}
+
+// HasIDShortPathFilter returns true if an idShort path filter is configured.
+// This indicates whether the query should be restricted to a specific path.
+func (s *SubmodelElementFilter) HasIDShortPathFilter() bool {
+	return s.SubmodelElementIDShortPathFilter != nil
+}
+
 // GetSubmodelElementsSubquery builds a subquery to retrieve submodel elements for a given submodel.
-func GetSubmodelElementsSubquery(dialect goqu.DialectWrapper, rootSubmodelElements bool) *goqu.SelectDataset {
+func GetSubmodelElementsSubquery(dialect goqu.DialectWrapper, rootSubmodelElements bool, filter SubmodelElementFilter) (*goqu.SelectDataset, error) {
 	semanticIDSubquery, semanticIDReferredSubquery := queries.GetReferenceQueries(dialect, goqu.I("tlsme.semantic_id"))
 	supplSemanticIDSubquery, supplSemanticIDReferredSubquery := queries.GetSupplementalSemanticIDQueries(dialect, goqu.T("submodel_element_supplemental_semantic_id"), "submodel_element_id", "reference_id", goqu.I("tlsme.id"))
 	embeddedDataSpecificationReferenceSubquery, embeddedDataSpecificationReferenceReferredSubquery, iec61360Subquery := queries.GetEmbeddedDataSpecificationSubqueries(dialect, "submodel_element_embedded_data_specification", "submodel_element_id", "tlsme.id")
 	qualifierSubquery := queries.GetQualifierSubquery(dialect, goqu.T("submodel_element_qualifier"), "sme_id", "qualifier_id", goqu.I("tlsme.id"))
+	displayNamesSubquery := queries.GetDisplayNamesQuery(dialect, "tlsme.displayname_id")
+	descriptionsSubquery := queries.GetDescriptionQuery(dialect, "tlsme.description_id")
 
 	valueByType := getValueSubquery(dialect)
 
@@ -49,6 +94,8 @@ func GetSubmodelElementsSubquery(dialect goqu.DialectWrapper, rootSubmodelElemen
 		goqu.V("category"), goqu.I("tlsme.category"),
 		goqu.V("model_type"), goqu.I("tlsme.model_type"),
 		goqu.V("position"), goqu.I("tlsme.position"),
+		goqu.V("displayNames"), displayNamesSubquery,
+		goqu.V("descriptions"), descriptionsSubquery,
 		goqu.V("value"), valueByType,
 		goqu.V("semanticId"), semanticIDSubquery,
 		goqu.V("semanticIdReferred"), semanticIDReferredSubquery,
@@ -63,19 +110,41 @@ func GetSubmodelElementsSubquery(dialect goqu.DialectWrapper, rootSubmodelElemen
 	smeSubquery := dialect.From(goqu.T("submodel_element").As("tlsme")).
 		Select(goqu.Func("jsonb_agg", obj))
 
+	if filter.HasSubmodelFilter() {
+		smeSubquery = smeSubquery.Where(
+			goqu.I("tlsme.submodel_id").Eq(filter.SubmodelFilter.SubmodelIDFilter),
+		)
+	} else {
+		_ = fmt.Errorf("no SubmodelFilter provided for SubmodelElement Query, but SubmodelElements always belong to a Submodel - consider defining a SubmodelID Filter in your GetSubmodelELementsSubquery call")
+		return nil, common.NewInternalServerError("unable to fetch SubmodelElements. See console for details")
+	}
+
+	if filter.HasIDShortPathFilter() {
+		smeSubquery = smeSubquery.Where(
+			// (idshort_path = $2 OR idshort_path LIKE $2 || '.%' OR idshort_path LIKE $2 || '[%')
+			goqu.Or(
+				goqu.I("tlsme.idshort_path").Eq(filter.SubmodelElementIDShortPathFilter.SubmodelElementIDShortPath),
+				goqu.I("tlsme.idshort_path").Like(
+					goqu.L("? || '.%'", filter.SubmodelElementIDShortPathFilter.SubmodelElementIDShortPath),
+				),
+				goqu.I("tlsme.idshort_path").Like(
+					goqu.L("? || '[%'", filter.SubmodelElementIDShortPathFilter.SubmodelElementIDShortPath),
+				),
+			),
+		)
+	}
+
 	if rootSubmodelElements {
 		smeSubquery = smeSubquery.Where(
-			goqu.I("tlsme.submodel_id").Eq(goqu.I("s.id")),
 			goqu.I("tlsme.parent_sme_id").IsNull(),
 		)
 	} else {
 		smeSubquery = smeSubquery.Where(
-			goqu.I("tlsme.submodel_id").Eq(goqu.I("s.id")),
 			goqu.I("tlsme.parent_sme_id").IsNotNull(),
 		)
 	}
 
-	return smeSubquery
+	return smeSubquery, nil
 }
 
 func getValueSubquery(dialect goqu.DialectWrapper) exp.CaseExpression {

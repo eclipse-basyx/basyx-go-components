@@ -62,6 +62,22 @@ func NewSMEBuilder(smeRow SubmodelElementRow) (*model.SubmodelElement, *Submodel
 		specificSME.SetSemanticID(refs[0])
 	}
 
+	if isArrayNotEmpty(smeRow.Descriptions) {
+		descriptions, err := ParseLangStringTextType(smeRow.Descriptions)
+		if err != nil {
+			return nil, nil, fmt.Errorf("error parsing descriptions: %w", err)
+		}
+		specificSME.SetDescription(descriptions)
+	}
+
+	if isArrayNotEmpty(smeRow.DisplayNames) {
+		displayNames, err := ParseLangStringNameType(smeRow.DisplayNames)
+		if err != nil {
+			return nil, nil, fmt.Errorf("error parsing display names: %w", err)
+		}
+		specificSME.SetDisplayName(displayNames)
+	}
+
 	builder := NewEmbeddedDataSpecificationsBuilder()
 
 	err = builder.BuildContentsIec61360(smeRow.DataSpecIEC61360)
@@ -107,4 +123,8 @@ func getSubmodelElementObjectBasedOnModelType(smeRow SubmodelElementRow) (model.
 	default:
 		return nil, fmt.Errorf("modelType %s is unknown", smeRow.ModelType)
 	}
+}
+
+func isArrayNotEmpty(data json.RawMessage) bool {
+	return len(data) > 0 && string(data) != "null"
 }

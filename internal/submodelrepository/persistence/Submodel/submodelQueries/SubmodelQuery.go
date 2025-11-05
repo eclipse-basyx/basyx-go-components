@@ -65,34 +65,10 @@ func GetQueryWithGoqu(submodelID string, limit int64, cursor string, aasQuery *g
 	dialect := goqu.Dialect("postgres")
 
 	// Build display names subquery
-	displayNameObj := goqu.Func("jsonb_build_object",
-		goqu.V("language"), goqu.I("dn.language"),
-		goqu.V("text"), goqu.I("dn.text"),
-		goqu.V("id"), goqu.I("dn.id"),
-	)
-
-	displayNamesSubquery := dialect.From(goqu.T("lang_string_name_type_reference").As("dn_ref")).
-		Select(goqu.Func("jsonb_agg", goqu.L("?", displayNameObj))).
-		Join(
-			goqu.T("lang_string_name_type").As("dn"),
-			goqu.On(goqu.I("dn.lang_string_name_type_reference_id").Eq(goqu.I("dn_ref.id"))),
-		).
-		Where(goqu.I("dn_ref.id").Eq(goqu.I("s.displayname_id")))
+	displayNamesSubquery := queries.GetDisplayNamesQuery(dialect, "s.displayname_id")
 
 	// Build descriptions subquery
-	descriptionObj := goqu.Func("jsonb_build_object",
-		goqu.V("language"), goqu.I("d.language"),
-		goqu.V("text"), goqu.I("d.text"),
-		goqu.V("id"), goqu.I("d.id"),
-	)
-
-	descriptionsSubquery := dialect.From(goqu.T("lang_string_text_type_reference").As("dr")).
-		Select(goqu.Func("jsonb_agg", goqu.L("?", descriptionObj))).
-		Join(
-			goqu.T("lang_string_text_type").As("d"),
-			goqu.On(goqu.I("d.lang_string_text_type_reference_id").Eq(goqu.I("dr.id"))),
-		).
-		Where(goqu.I("dr.id").Eq(goqu.I("s.description_id")))
+	descriptionsSubquery := queries.GetDescriptionQuery(dialect, "s.description_id")
 
 	semanticIDSubquery, semanticIDReferredSubquery := queries.GetReferenceQueries(dialect, goqu.I("s.semantic_id"))
 
@@ -155,6 +131,23 @@ func GetQueryWithGoqu(submodelID string, limit int64, cursor string, aasQuery *g
 	// Build AdministrativeInformation subquery
 	administrationSubquery := queries.GetAdministrationSubquery(dialect, "s.administration_id")
 
+	// SubmodelElementFilter
+	filter := SubmodelElementFilter{
+		SubmodelFilter: &SubmodelElementSubmodelFilter{
+			SubmodelIDFilter: goqu.I("s.id"),
+		},
+	}
+
+	// Submodel Elements Subqueries
+	RootSubmodelElementSubquery, err := GetSubmodelElementsSubquery(dialect, true, filter)
+	if err != nil {
+		return "", err
+	}
+	ChildSubmodelElementSubquery, err := GetSubmodelElementsSubquery(dialect, false, filter)
+	if err != nil {
+		return "", err
+	}
+
 	// Main query
 	query := dialect.From(goqu.T("submodel").As("s")).
 		Select(
@@ -174,8 +167,8 @@ func GetQueryWithGoqu(submodelID string, limit int64, cursor string, aasQuery *g
 			goqu.L("COALESCE((?), '[]'::jsonb)", qualifierSubquery).As("submodel_qualifiers"),
 			goqu.L("COALESCE((?), '[]'::jsonb)", extensionSubquery).As("submodel_extensions"),
 			goqu.L("COALESCE((?), '[]'::jsonb)", administrationSubquery).As("submodel_administrative_information"),
-			goqu.L("COALESCE((?), '[]'::jsonb)", GetSubmodelElementsSubquery(dialect, true)).As("submodel_root_submodel_elements"),
-			goqu.L("COALESCE((?), '[]'::jsonb)", GetSubmodelElementsSubquery(dialect, false)).As("submodel_child_submodel_elements"),
+			goqu.L("COALESCE((?), '[]'::jsonb)", RootSubmodelElementSubquery).As("submodel_root_submodel_elements"),
+			goqu.L("COALESCE((?), '[]'::jsonb)", ChildSubmodelElementSubquery).As("submodel_child_submodel_elements"),
 		)
 
 	// Add optional WHERE clause for submodel ID filtering

@@ -36,7 +36,6 @@ import (
 	"fmt"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
-	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
 
 // SubmodelRow represents a row from the Submodel table in the database.
@@ -354,10 +353,23 @@ type SubmodelElementRow struct {
 	Position int `json:"position"`
 }
 
+// PropertyValueRow represents a data row for a Property element's value in the database.
+// Properties are fundamental data-carrying elements in AAS that store typed values.
+//
+// This structure captures the essential information of a property value, including the
+// actual value as a string and its data type according to XSD (XML Schema Definition) standards.
+// The value is stored as a string in the database and must be interpreted according to its ValueType.
 type PropertyValueRow struct {
-	Value     string               `json:"value"`
+	// Value is the actual value of the property stored as a string.
+	// The string representation must be interpreted according to the ValueType field.
+	Value string `json:"value"`
+
+	// ValueType specifies the XSD data type of the value.
+	// This determines how the Value string should be parsed and interpreted
+	// (e.g., xs:string, xs:int, xs:boolean, xs:dateTime, etc.).
 	ValueType model.DataTypeDefXsd `json:"value_type"`
-	// TODO: VALUEID
+
+	// TODO: VALUEID - Add support for valueId reference which provides semantic information about the value
 }
 
 // ParseReferredReferencesFromRows parses referred reference data from already unmarshalled ReferredReferenceRow objects.
@@ -449,18 +461,18 @@ func ParseReferredReferences(row json.RawMessage, referenceBuilderRefs map[int64
 //     This map is populated by this function and can be used later for processing referred references.
 //
 // Returns:
-//   - []*gen.Reference: Slice of parsed Reference objects. Each Reference contains all its associated Keys.
+//   - []*model.Reference: Slice of parsed Reference objects. Each Reference contains all its associated Keys.
 //
 // The function:
 //   - Groups multiple rows with the same ReferenceID into a single Reference
 //   - Creates new ReferenceBuilder instances for each unique ReferenceId
 //   - Validates key data completeness (KeyID, KeyType, KeyValue)
 //   - Returns only the unique references (one per ReferenceID)
-func ParseReferencesFromRows(semanticIDData []ReferenceRow, referenceBuilderRefs map[int64]*ReferenceBuilder) []*gen.Reference {
-	resultArray := make([]*gen.Reference, 0)
+func ParseReferencesFromRows(semanticIDData []ReferenceRow, referenceBuilderRefs map[int64]*ReferenceBuilder) []*model.Reference {
+	resultArray := make([]*model.Reference, 0)
 
 	for _, ref := range semanticIDData {
-		var semanticID *gen.Reference
+		var semanticID *model.Reference
 		var semanticIDBuilder *ReferenceBuilder
 
 		_, semanticIDCreated := referenceBuilderRefs[ref.ReferenceID]
@@ -495,11 +507,11 @@ func ParseReferencesFromRows(semanticIDData []ReferenceRow, referenceBuilderRefs
 //     This map is populated by this function and can be used later for processing referred references.
 //
 // Returns:
-//   - []*gen.Reference: Slice of parsed Reference objects. Each Reference contains all its associated Keys.
+//   - []*model.Reference: Slice of parsed Reference objects. Each Reference contains all its associated Keys.
 //   - error: An error if JSON unmarshalling fails. Nil key data is logged as warnings but does not cause failure.
-func ParseReferences(row json.RawMessage, referenceBuilderRefs map[int64]*ReferenceBuilder) ([]*gen.Reference, error) {
+func ParseReferences(row json.RawMessage, referenceBuilderRefs map[int64]*ReferenceBuilder) ([]*model.Reference, error) {
 	if len(row) == 0 {
-		return make([]*gen.Reference, 0), nil
+		return make([]*model.Reference, 0), nil
 	}
 
 	var semanticIDData []ReferenceRow
@@ -520,7 +532,7 @@ func ParseReferences(row json.RawMessage, referenceBuilderRefs map[int64]*Refere
 //   - displayNames: JSON-encoded array of objects containing id, text, and language fields
 //
 // Returns:
-//   - []gen.LangStringNameType: Slice of parsed language-specific name objects
+//   - []model.LangStringNameType: Slice of parsed language-specific name objects
 //   - error: An error if JSON unmarshalling fails or if required fields are missing
 //
 // The function:
@@ -530,8 +542,8 @@ func ParseReferences(row json.RawMessage, referenceBuilderRefs map[int64]*Refere
 //   - Uses panic recovery to handle runtime errors during type assertions
 //
 // Note: Only objects with an 'id' field are processed to ensure data integrity.
-func ParseLangStringNameType(displayNames json.RawMessage) ([]gen.LangStringNameType, error) {
-	var names []gen.LangStringNameType
+func ParseLangStringNameType(displayNames json.RawMessage) ([]model.LangStringNameType, error) {
+	var names []model.LangStringNameType
 	// remove id field from json
 	var temp []map[string]interface{}
 	if err := json.Unmarshal(displayNames, &temp); err != nil {
@@ -547,7 +559,7 @@ func ParseLangStringNameType(displayNames json.RawMessage) ([]gen.LangStringName
 	for _, item := range temp {
 		if _, ok := item["id"]; ok {
 			delete(item, "id")
-			names = append(names, gen.LangStringNameType{
+			names = append(names, model.LangStringNameType{
 				Text:     item["text"].(string),
 				Language: item["language"].(string),
 			})
@@ -567,7 +579,7 @@ func ParseLangStringNameType(displayNames json.RawMessage) ([]gen.LangStringName
 //   - descriptions: JSON-encoded array of objects containing id, text, and language fields
 //
 // Returns:
-//   - []gen.LangStringTextType: Slice of parsed language-specific text objects
+//   - []model.LangStringTextType: Slice of parsed language-specific text objects
 //   - error: An error if JSON unmarshalling fails or if required fields are missing
 //
 // The function:
@@ -579,8 +591,8 @@ func ParseLangStringNameType(displayNames json.RawMessage) ([]gen.LangStringName
 // Note: Only objects with an 'id' field are processed to ensure data integrity.
 // This function is similar to ParseLangStringNameType but produces LangStringTextType
 // objects which may have different validation rules or usage contexts.
-func ParseLangStringTextType(descriptions json.RawMessage) ([]gen.LangStringTextType, error) {
-	var texts []gen.LangStringTextType
+func ParseLangStringTextType(descriptions json.RawMessage) ([]model.LangStringTextType, error) {
+	var texts []model.LangStringTextType
 	// remove id field from json
 	var temp []map[string]interface{}
 	if len(descriptions) == 0 {
@@ -599,7 +611,7 @@ func ParseLangStringTextType(descriptions json.RawMessage) ([]gen.LangStringText
 	for _, item := range temp {
 		if _, ok := item["id"]; ok {
 			delete(item, "id")
-			texts = append(texts, gen.LangStringTextType{
+			texts = append(texts, model.LangStringTextType{
 				Text:     item["text"].(string),
 				Language: item["language"].(string),
 			})
@@ -619,14 +631,14 @@ func ParseLangStringTextType(descriptions json.RawMessage) ([]gen.LangStringText
 //   - descriptions: JSON-encoded array of objects containing id, text, and language fields
 //
 // Returns:
-//   - []gen.LangStringPreferredNameTypeIec61360: Slice of parsed language-specific preferred name objects
+//   - []model.LangStringPreferredNameTypeIec61360: Slice of parsed language-specific preferred name objects
 //   - error: An error if JSON unmarshalling fails or if required fields are missing
 //
 // The function handles empty input by returning an empty slice. It uses panic recovery to
 // handle runtime errors during type assertions. Only objects with an 'id' field are processed
 // to ensure data integrity.
-func ParseLangStringPreferredNameTypeIec61360(descriptions json.RawMessage) ([]gen.LangStringPreferredNameTypeIec61360, error) {
-	var texts []gen.LangStringPreferredNameTypeIec61360
+func ParseLangStringPreferredNameTypeIec61360(descriptions json.RawMessage) ([]model.LangStringPreferredNameTypeIec61360, error) {
+	var texts []model.LangStringPreferredNameTypeIec61360
 	// remove id field from json
 	var temp []map[string]interface{}
 	if len(descriptions) == 0 {
@@ -645,7 +657,7 @@ func ParseLangStringPreferredNameTypeIec61360(descriptions json.RawMessage) ([]g
 	for _, item := range temp {
 		if _, ok := item["id"]; ok {
 			delete(item, "id")
-			texts = append(texts, gen.LangStringPreferredNameTypeIec61360{
+			texts = append(texts, model.LangStringPreferredNameTypeIec61360{
 				Text:     item["text"].(string),
 				Language: item["language"].(string),
 			})
@@ -665,14 +677,14 @@ func ParseLangStringPreferredNameTypeIec61360(descriptions json.RawMessage) ([]g
 //   - descriptions: JSON-encoded array of objects containing id, text, and language fields
 //
 // Returns:
-//   - []gen.LangStringShortNameTypeIec61360: Slice of parsed language-specific short name objects
+//   - []model.LangStringShortNameTypeIec61360: Slice of parsed language-specific short name objects
 //   - error: An error if JSON unmarshalling fails or if required fields are missing
 //
 // The function handles empty input by returning an empty slice. It uses panic recovery to
 // handle runtime errors during type assertions. Only objects with an 'id' field are processed
 // to ensure data integrity.
-func ParseLangStringShortNameTypeIec61360(descriptions json.RawMessage) ([]gen.LangStringShortNameTypeIec61360, error) {
-	var texts []gen.LangStringShortNameTypeIec61360
+func ParseLangStringShortNameTypeIec61360(descriptions json.RawMessage) ([]model.LangStringShortNameTypeIec61360, error) {
+	var texts []model.LangStringShortNameTypeIec61360
 	// remove id field from json
 	var temp []map[string]interface{}
 	if len(descriptions) == 0 {
@@ -691,7 +703,7 @@ func ParseLangStringShortNameTypeIec61360(descriptions json.RawMessage) ([]gen.L
 	for _, item := range temp {
 		if _, ok := item["id"]; ok {
 			delete(item, "id")
-			texts = append(texts, gen.LangStringShortNameTypeIec61360{
+			texts = append(texts, model.LangStringShortNameTypeIec61360{
 				Text:     item["text"].(string),
 				Language: item["language"].(string),
 			})
@@ -711,14 +723,14 @@ func ParseLangStringShortNameTypeIec61360(descriptions json.RawMessage) ([]gen.L
 //   - descriptions: JSON-encoded array of objects containing id, text, and language fields
 //
 // Returns:
-//   - []gen.LangStringDefinitionTypeIec61360: Slice of parsed language-specific definition objects
+//   - []model.LangStringDefinitionTypeIec61360: Slice of parsed language-specific definition objects
 //   - error: An error if JSON unmarshalling fails or if required fields are missing
 //
 // The function handles empty input by returning an empty slice. It uses panic recovery to
 // handle runtime errors during type assertions. Only objects with an 'id' field are processed
 // to ensure data integrity.
-func ParseLangStringDefinitionTypeIec61360(descriptions json.RawMessage) ([]gen.LangStringDefinitionTypeIec61360, error) {
-	var texts []gen.LangStringDefinitionTypeIec61360
+func ParseLangStringDefinitionTypeIec61360(descriptions json.RawMessage) ([]model.LangStringDefinitionTypeIec61360, error) {
+	var texts []model.LangStringDefinitionTypeIec61360
 	// remove id field from json
 	var temp []map[string]interface{}
 	if len(descriptions) == 0 {
@@ -737,7 +749,7 @@ func ParseLangStringDefinitionTypeIec61360(descriptions json.RawMessage) ([]gen.
 	for _, item := range temp {
 		if _, ok := item["id"]; ok {
 			delete(item, "id")
-			texts = append(texts, gen.LangStringDefinitionTypeIec61360{
+			texts = append(texts, model.LangStringDefinitionTypeIec61360{
 				Text:     item["text"].(string),
 				Language: item["language"].(string),
 			})
