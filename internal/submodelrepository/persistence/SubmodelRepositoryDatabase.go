@@ -354,14 +354,16 @@ func (p *PostgreSQLSubmodelDatabase) CreateSubmodel(sm gen.Submodel) error {
 		return common.NewInternalServerError("Failed to create Administration - no changes applied - see console for details")
 	}
 
-	var edsJSONString string
+	edsJSONString := "[]"
 	if sm.EmbeddedDataSpecifications != nil {
 		edsBytes, err := json.Marshal(sm.EmbeddedDataSpecifications)
 		if err != nil {
 			fmt.Println(err)
 			return common.NewInternalServerError("Failed to marshal EmbeddedDataSpecifications - no changes applied - see console for details")
 		}
-		edsJSONString = string(edsBytes)
+		if edsBytes != nil {
+			edsJSONString = string(edsBytes)
+		}
 	}
 
 	const q = `
