@@ -9,15 +9,17 @@
 
 package model
 
+// HasSemantics type of HasSemantics
 type HasSemantics struct {
-	SemanticId *Reference `json:"semanticId,omitempty"`
+	SemanticID *Reference `json:"semanticId,omitempty"`
 
+	//nolint:all
 	SupplementalSemanticIds []Reference `json:"supplementalSemanticIds,omitempty"`
 }
 
 // AssertHasSemanticsRequired checks if the required fields are not zero-ed
 func AssertHasSemanticsRequired(obj HasSemantics) error {
-	if err := AssertReferenceRequired(*obj.SemanticId); err != nil {
+	if err := AssertReferenceRequired(*obj.SemanticID); err != nil {
 		return err
 	}
 	for _, el := range obj.SupplementalSemanticIds {
@@ -30,7 +32,7 @@ func AssertHasSemanticsRequired(obj HasSemantics) error {
 
 // AssertHasSemanticsConstraints checks if the values respects the defined constraints
 func AssertHasSemanticsConstraints(obj HasSemantics) error {
-	if err := AssertReferenceConstraints(*obj.SemanticId); err != nil {
+	if err := AssertReferenceConstraints(*obj.SemanticID); err != nil {
 		return err
 	}
 	for _, el := range obj.SupplementalSemanticIds {

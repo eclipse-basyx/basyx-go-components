@@ -9,8 +9,9 @@
 
 package model
 
+// ValueList struct representing a list of ValueReferencePairs
 type ValueList struct {
-	ValueReferencePairs []ValueReferencePair `json:"valueReferencePair"`
+	ValueReferencePairs []*ValueReferencePair `json:"valueReferencePair"`
 }
 
 // AssertValueListRequired checks if the required fields are not zero-ed
@@ -25,8 +26,10 @@ func AssertValueListRequired(obj ValueList) error {
 	}
 
 	for _, el := range obj.ValueReferencePairs {
-		if err := AssertValueReferencePairRequired(el); err != nil {
-			return err
+		if el != nil {
+			if err := AssertValueReferencePairRequired(*el); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
@@ -35,8 +38,10 @@ func AssertValueListRequired(obj ValueList) error {
 // AssertValueListConstraints checks if the values respects the defined constraints
 func AssertValueListConstraints(obj ValueList) error {
 	for _, el := range obj.ValueReferencePairs {
-		if err := AssertValueReferencePairConstraints(el); err != nil {
-			return err
+		if el != nil {
+			if err := AssertValueReferencePairConstraints(*el); err != nil {
+				return err
+			}
 		}
 	}
 	return nil

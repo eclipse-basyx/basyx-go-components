@@ -11,6 +11,7 @@ package model
 
 import "encoding/json"
 
+// DataSpecificationIec61360 type of DataSpecificationIec61360
 type DataSpecificationIec61360 struct {
 	ModelType string `json:"modelType" validate:"regexp=^DataSpecificationIec61360$"`
 
@@ -20,7 +21,7 @@ type DataSpecificationIec61360 struct {
 
 	Unit string `json:"unit,omitempty" validate:"regexp=^([\\\\x09\\\\x0a\\\\x0d\\\\x20-\\\\ud7ff\\\\ue000-\\\\ufffd]|\\\\ud800[\\\\udc00-\\\\udfff]|[\\\\ud801-\\\\udbfe][\\\\udc00-\\\\udfff]|\\\\udbff[\\\\udc00-\\\\udfff])*$"`
 
-	UnitId *Reference `json:"unitId,omitempty"`
+	UnitID *Reference `json:"unitId,omitempty"`
 
 	SourceOfDefinition string `json:"sourceOfDefinition,omitempty" validate:"regexp=^([\\\\x09\\\\x0a\\\\x0d\\\\x20-\\\\ud7ff\\\\ue000-\\\\ufffd]|\\\\ud800[\\\\udc00-\\\\udfff]|[\\\\ud801-\\\\udbfe][\\\\udc00-\\\\udfff]|\\\\udbff[\\\\udc00-\\\\udfff])*$"`
 
@@ -39,86 +40,107 @@ type DataSpecificationIec61360 struct {
 	LevelType *LevelType `json:"levelType,omitempty"`
 }
 
+//nolint:all
 func (d DataSpecificationIec61360) GetPrefferedName() []LangStringPreferredNameTypeIec61360 {
 	return d.PreferredName
 }
 
+//nolint:all
 func (d DataSpecificationIec61360) GetShortName() []LangStringShortNameTypeIec61360 {
 	return d.ShortName
 }
 
+//nolint:all
 func (d DataSpecificationIec61360) GetUnit() string {
 	return d.Unit
 }
 
-func (d DataSpecificationIec61360) GetUnitId() *Reference {
-	return d.UnitId
+//nolint:all
+func (d DataSpecificationIec61360) GetUnitID() *Reference {
+	return d.UnitID
 }
 
+//nolint:all
 func (d DataSpecificationIec61360) GetSourceOfDefinition() string {
 	return d.SourceOfDefinition
 }
 
+//nolint:all
 func (d DataSpecificationIec61360) GetSymbol() string {
 	return d.Symbol
 }
 
+//nolint:all
 func (d DataSpecificationIec61360) GetDataType() DataTypeIec61360 {
 	return d.DataType
 }
 
+//nolint:all
 func (d DataSpecificationIec61360) GetDefinition() []LangStringDefinitionTypeIec61360 {
 	return d.Definition
 }
 
+//nolint:all
 func (d DataSpecificationIec61360) GetValueFormat() string {
 	return d.ValueFormat
 }
 
+//nolint:all
 func (d DataSpecificationIec61360) GetValueList() *ValueList {
 	return d.ValueList
 }
 
+//nolint:all
 func (d DataSpecificationIec61360) GetLevelType() *LevelType {
 	return d.LevelType
 }
 
+//nolint:all
 func (d *DataSpecificationIec61360) SetPrefferedName(preferredName []LangStringPreferredNameTypeIec61360) {
 	d.PreferredName = preferredName
 }
 
+//nolint:all
 func (d *DataSpecificationIec61360) SetShortName(shortName []LangStringShortNameTypeIec61360) {
 	d.ShortName = shortName
 }
 
+//nolint:all
 func (d *DataSpecificationIec61360) SetUnit(unit string) {
 	d.Unit = unit
 }
 
-func (d *DataSpecificationIec61360) SetUnitId(unitId *Reference) {
-	d.UnitId = unitId
+//nolint:all
+func (d *DataSpecificationIec61360) SetUnitID(unitID *Reference) {
+	d.UnitID = unitID
 }
 
+//nolint:all
 func (d *DataSpecificationIec61360) SetSourceOfDefinition(sourceOfDefinition string) {
 	d.SourceOfDefinition = sourceOfDefinition
 }
 
+//nolint:all
 func (d *DataSpecificationIec61360) SetSymbol(symbol string) {
 	d.Symbol = symbol
 }
 
+//nolint:all
 func (d *DataSpecificationIec61360) SetDataType(dataType *DataTypeIec61360) {
 	d.DataType = *dataType
 }
 
+//nolint:all
 func (d *DataSpecificationIec61360) SetDefinition(definition []LangStringDefinitionTypeIec61360) {
 	d.Definition = definition
 }
 
+//nolint:all
 func (d *DataSpecificationIec61360) SetValueFormat(valueFormat string) {
 	d.ValueFormat = valueFormat
 }
 
+//nolint:all
 func (d *DataSpecificationIec61360) SetValueList(valueList *ValueList) {
 	if valueList != nil {
 		d.ValueList = valueList
@@ -127,6 +149,7 @@ func (d *DataSpecificationIec61360) SetValueList(valueList *ValueList) {
 	}
 }
 
+//nolint:all
 func (d *DataSpecificationIec61360) SetLevelType(levelType *LevelType) {
 	d.LevelType = levelType
 }
@@ -143,18 +166,22 @@ func AssertDataSpecificationIec61360Required(obj DataSpecificationIec61360) erro
 		}
 	}
 
-	for _, el := range obj.PreferredName {
-		if err := AssertLangStringPreferredNameTypeIec61360Required(el); err != nil {
-			return err
+	if obj.PreferredName != nil {
+		for _, el := range obj.PreferredName {
+			if err := AssertLangStringPreferredNameTypeIec61360Required(el); err != nil {
+				return err
+			}
 		}
 	}
-	for _, el := range obj.ShortName {
-		if err := AssertLangStringShortNameTypeIec61360Required(el); err != nil {
-			return err
+	if obj.ShortName != nil {
+		for _, el := range obj.ShortName {
+			if err := AssertLangStringShortNameTypeIec61360Required(el); err != nil {
+				return err
+			}
 		}
 	}
-	if obj.UnitId != nil {
-		if err := AssertReferenceRequired(*obj.UnitId); err != nil {
+	if obj.UnitID != nil {
+		if err := AssertReferenceRequired(*obj.UnitID); err != nil {
 			return err
 		}
 	}
@@ -178,18 +205,22 @@ func AssertDataSpecificationIec61360Required(obj DataSpecificationIec61360) erro
 
 // AssertDataSpecificationIec61360Constraints checks if the values respects the defined constraints
 func AssertDataSpecificationIec61360Constraints(obj DataSpecificationIec61360) error {
-	for _, el := range obj.PreferredName {
-		if err := AssertLangStringPreferredNameTypeIec61360Constraints(el); err != nil {
-			return err
+	if obj.PreferredName != nil {
+		for _, el := range obj.PreferredName {
+			if err := AssertLangStringPreferredNameTypeIec61360Constraints(el); err != nil {
+				return err
+			}
 		}
 	}
-	for _, el := range obj.ShortName {
-		if err := AssertLangStringShortNameTypeIec61360Constraints(el); err != nil {
-			return err
+	if obj.ShortName != nil {
+		for _, el := range obj.ShortName {
+			if err := AssertLangStringShortNameTypeIec61360Constraints(el); err != nil {
+				return err
+			}
 		}
 	}
-	if obj.UnitId != nil {
-		if err := AssertReferenceConstraints(*obj.UnitId); err != nil {
+	if obj.UnitID != nil {
+		if err := AssertReferenceConstraints(*obj.UnitID); err != nil {
 			return err
 		}
 	}
@@ -211,13 +242,14 @@ func AssertDataSpecificationIec61360Constraints(obj DataSpecificationIec61360) e
 	return nil
 }
 
+//nolint:all
 func (d *DataSpecificationIec61360) UnmarshalJSON(data []byte) error {
 	aux := &struct {
 		ModelType          string                                `json:"modelType"`
 		PreferredName      []LangStringPreferredNameTypeIec61360 `json:"preferredName"`
 		ShortName          []LangStringShortNameTypeIec61360     `json:"shortName,omitempty"`
 		Unit               string                                `json:"unit,omitempty"`
-		UnitId             *Reference                            `json:"unitId,omitempty"`
+		UnitID             *Reference                            `json:"unitId,omitempty"`
 		SourceOfDefinition string                                `json:"sourceOfDefinition,omitempty"`
 		Symbol             string                                `json:"symbol,omitempty"`
 		DataType           DataTypeIec61360                      `json:"dataType,omitempty"`
@@ -243,7 +275,7 @@ func (d *DataSpecificationIec61360) UnmarshalJSON(data []byte) error {
 	d.PreferredName = aux.PreferredName
 	d.ShortName = aux.ShortName
 	d.Unit = aux.Unit
-	d.UnitId = aux.UnitId
+	d.UnitID = aux.UnitID
 	d.SourceOfDefinition = aux.SourceOfDefinition
 	d.Symbol = aux.Symbol
 	d.DataType = aux.DataType

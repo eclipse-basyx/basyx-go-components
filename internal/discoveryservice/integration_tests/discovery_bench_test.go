@@ -1,3 +1,29 @@
+/*******************************************************************************
+* Copyright (C) 2025 the Eclipse BaSyx Authors and Fraunhofer IESE
+*
+* Permission is hereby granted, free of charge, to any person obtaining
+* a copy of this software and associated documentation files (the
+* "Software"), to deal in the Software without restriction, including
+* without limitation the rights to use, copy, modify, merge, publish,
+* distribute, sublicense, and/or sell copies of the Software, and to
+* permit persons to whom the Software is furnished to do so, subject to
+* the following conditions:
+*
+* The above copyright notice and this permission notice shall be
+* included in all copies or substantial portions of the Software.
+*
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+* NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+* LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+* OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+* WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*
+* SPDX-License-Identifier: MIT
+******************************************************************************/
+
+// Package bench provides a benchmark for the discovery service.
 package bench
 
 import (
@@ -18,18 +44,18 @@ var seedFlag = flag.Int64("seed", 1, "rng seed for discovery bench determinism")
 
 type discoveryState struct {
 	rng         *mrand.Rand
-	aasToLinks  map[string][]model.SpecificAssetId
+	aasToLinks  map[string][]model.SpecificAssetID
 	aasList     []string
 	cursorByAAS map[string]string
-	reusePool   []model.SpecificAssetId // reused name/value pairs to simulate overlap
+	reusePool   []model.SpecificAssetID // reused name/value pairs to simulate overlap
 }
 
 func newDiscoveryState(seed int64) *discoveryState {
 	return &discoveryState{
 		rng:         mrand.New(mrand.NewSource(seed)),
-		aasToLinks:  make(map[string][]model.SpecificAssetId),
+		aasToLinks:  make(map[string][]model.SpecificAssetID),
 		cursorByAAS: make(map[string]string),
-		reusePool:   make([]model.SpecificAssetId, 0, 512),
+		reusePool:   make([]model.SpecificAssetID, 0, 512),
 	}
 }
 
@@ -80,7 +106,7 @@ func (s *discoveryState) pickWeightedOp() string {
 	return "search"
 }
 
-func (s *discoveryState) add(aasID string, links []model.SpecificAssetId) {
+func (s *discoveryState) add(aasID string, links []model.SpecificAssetID) {
 	if _, ok := s.aasToLinks[aasID]; ok {
 		return
 	}
@@ -114,13 +140,13 @@ func (s *discoveryState) randomAAS() (string, bool) {
 	return s.aasList[s.rng.Intn(len(s.aasList))], true
 }
 
-func (s *discoveryState) randomLinks(n int) []model.SpecificAssetId {
-	out := make([]model.SpecificAssetId, n)
+func (s *discoveryState) randomLinks(n int) []model.SpecificAssetID {
+	out := make([]model.SpecificAssetID, n)
 	for i := 0; i < n; i++ {
 		if len(s.reusePool) > 0 && s.pct(reusePctPost) {
 			out[i] = s.reusePool[s.rng.Intn(len(s.reusePool))]
 		} else {
-			out[i] = model.SpecificAssetId{
+			out[i] = model.SpecificAssetID{
 
 				Name:  "n_" + s.randHex(6),
 				Value: "v_" + s.randHex(6),
@@ -265,7 +291,7 @@ func (d *DiscoveryBench) DoOne(iter int) testenv.ComponentResult {
 				},
 			}
 		}
-		pairs := make([]model.SpecificAssetId, k)
+		pairs := make([]model.SpecificAssetID, k)
 		for i := 0; i < k; i++ {
 			if len(st.aasList) == 0 {
 				break

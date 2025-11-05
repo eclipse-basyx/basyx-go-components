@@ -1,0 +1,16 @@
+{
+  "AllAccessPermissionRules": {
+    "rules": [
+      {
+        "USEACL": "form",
+        "OBJECTS": [{"ROUTE" : "/*"}],
+        "FORMULA": {
+          "$and": [
+            {"$boolean": true},
+            {"$eq": [{"$numVal": 1}, {"$numVal": 1}]}
+          ]
+        }
+      }
+    ]
+  }
+}

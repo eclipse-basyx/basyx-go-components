@@ -1,22 +1,20 @@
+// Package main implements the Submodel Repository Service server.
 package main
 
 import (
 	"context"
-	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"strconv"
-	"time"
 
 	"github.com/go-chi/chi/v5"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	api "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/api"
-	persistence_postgresql "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence"
-	persistence_utils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
+	persistencepostgresql "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence"
 	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/submodelrepositoryapi/go"
 )
 
@@ -43,20 +41,11 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 
 	// Instantiate generated services & controllers
 	// ==== Submodel Repository Service ====
-	smDatabase, err := persistence_postgresql.NewPostgreSQLSubmodelBackend("postgres://"+config.Postgres.User+":"+config.Postgres.Password+"@"+config.Postgres.Host+":"+strconv.Itoa(config.Postgres.Port)+"/"+config.Postgres.DBName+"?sslmode=disable", config.Postgres.MaxOpenConnections, config.Postgres.MaxIdleConnections, config.Postgres.ConnMaxLifetimeMinutes, config.Server.CacheEnabled, databaseSchema)
+	smDatabase, err := persistencepostgresql.NewPostgreSQLSubmodelBackend("postgres://"+config.Postgres.User+":"+config.Postgres.Password+"@"+config.Postgres.Host+":"+strconv.Itoa(config.Postgres.Port)+"/"+config.Postgres.DBName+"?sslmode=disable", config.Postgres.MaxOpenConnections, config.Postgres.MaxIdleConnections, config.Postgres.ConnMaxLifetimeMinutes, config.Server.CacheEnabled, databaseSchema)
 	if err != nil {
 		log.Fatalf("Failed to initialize database connection: %v", err)
 		return err
 	}
-
-	//TEST
-	start := time.Now().Local().UnixMilli()
-	sm, err := persistence_utils.GetSubmodelById(smDatabase.GetDB(), "1")
-	end := time.Now().Local().UnixMilli()
-	fmt.Printf("Total time: %d milliseconds\n", end-start)
-	jsonSubmodel, _ := json.Marshal(sm)
-	fmt.Println(string(jsonSubmodel))
-	//TEST
 
 	smSvc := api.NewSubmodelRepositoryAPIAPIService(*smDatabase)
 	smCtrl := openapi.NewSubmodelRepositoryAPIAPIController(smSvc, config.Server.ContextPath)
@@ -81,6 +70,8 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 		}
 	}()
 
+	// submodelrepository.TestNewSubmodelHandler(smDatabase)
+
 	<-ctx.Done()
 	log.Println("Shutting down server...")
 	return nil
@@ -88,7 +79,7 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 
 func main() {
 	ctx := context.Background()
-	//load config path from flag
+	// load config path from flag
 	configPath := ""
 	databaseSchema := ""
 	flag.StringVar(&configPath, "config", "", "Path to config file")

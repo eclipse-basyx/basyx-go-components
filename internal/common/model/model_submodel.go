@@ -13,11 +13,13 @@ import (
 	"encoding/json"
 )
 
+// Submodel struct representing a Submodel.
 type Submodel struct {
-	Extensions []Extension `json:"extensions,omitempty"`
+	Extension []Extension `json:"extension,omitempty"`
 
 	Category string `json:"category,omitempty" validate:"regexp=^([\\\\x09\\\\x0a\\\\x0d\\\\x20-\\\\ud7ff\\\\ue000-\\\\ufffd]|\\\\ud800[\\\\udc00-\\\\udfff]|[\\\\ud801-\\\\udbfe][\\\\udc00-\\\\udfff]|\\\\udbff[\\\\udc00-\\\\udfff])*$"`
 
+	//nolint:all
 	IdShort string `json:"idShort,omitempty"`
 
 	DisplayName []LangStringNameType `json:"displayName,omitempty"`
@@ -28,15 +30,16 @@ type Submodel struct {
 
 	Administration *AdministrativeInformation `json:"administration,omitempty"`
 
-	Id string `json:"id" validate:"regexp=^([\\\\x09\\\\x0a\\\\x0d\\\\x20-\\\\ud7ff\\\\ue000-\\\\ufffd]|\\\\ud800[\\\\udc00-\\\\udfff]|[\\\\ud801-\\\\udbfe][\\\\udc00-\\\\udfff]|\\\\udbff[\\\\udc00-\\\\udfff])*$"`
+	ID string `json:"id" validate:"regexp=^([\\\\x09\\\\x0a\\\\x0d\\\\x20-\\\\ud7ff\\\\ue000-\\\\ufffd]|\\\\ud800[\\\\udc00-\\\\udfff]|[\\\\ud801-\\\\udbfe][\\\\udc00-\\\\udfff]|\\\\udbff[\\\\udc00-\\\\udfff])*$"`
 
 	Kind ModellingKind `json:"kind,omitempty"`
 
-	SemanticId *Reference `json:"semanticId,omitempty"`
+	SemanticID *Reference `json:"semanticId,omitempty"`
 
+	//nolint:all
 	SupplementalSemanticIds []*Reference `json:"supplementalSemanticIds,omitempty"`
 
-	Qualifiers []Qualifier `json:"qualifiers,omitempty"`
+	Qualifier []Qualifier `json:"qualifier,omitempty"`
 
 	EmbeddedDataSpecifications []EmbeddedDataSpecification `json:"embeddedDataSpecifications,omitempty"`
 
@@ -47,7 +50,8 @@ type Submodel struct {
 func (s *Submodel) UnmarshalJSON(data []byte) error {
 	type Alias Submodel
 	aux := &struct {
-		SubmodelElements []json.RawMessage `json:"submodelElements,omitempty"`
+		SubmodelElements           []json.RawMessage `json:"submodelElements,omitempty"`
+		EmbeddedDataSpecifications []json.RawMessage `json:"embeddedDataSpecifications,omitempty"`
 		*Alias
 	}{
 		Alias: (*Alias)(s),
@@ -63,6 +67,16 @@ func (s *Submodel) UnmarshalJSON(data []byte) error {
 		}
 		s.SubmodelElements[i] = elem
 	}
+
+	s.EmbeddedDataSpecifications = make([]EmbeddedDataSpecification, len(aux.EmbeddedDataSpecifications))
+	for i, raw := range aux.EmbeddedDataSpecifications {
+		var eds EmbeddedDataSpecification
+		if err := json.Unmarshal(raw, &eds); err != nil {
+			return err
+		}
+		s.EmbeddedDataSpecifications[i] = eds
+	}
+
 	return nil
 }
 
@@ -70,7 +84,7 @@ func (s *Submodel) UnmarshalJSON(data []byte) error {
 func AssertSubmodelRequired(obj Submodel) error {
 	elements := map[string]interface{}{
 		"modelType": obj.ModelType,
-		"id":        obj.Id,
+		"id":        obj.ID,
 	}
 	for name, el := range elements {
 		if isZero := IsZeroValue(el); isZero {
@@ -78,12 +92,12 @@ func AssertSubmodelRequired(obj Submodel) error {
 		}
 	}
 
-	for _, el := range obj.Extensions {
+	for _, el := range obj.Extension {
 		if err := AssertExtensionRequired(el); err != nil {
 			return err
 		}
 	}
-	if err := AssertReferableAllOfIdShortRequired(obj.IdShort); err != nil {
+	if err := AssertIdShortRequired(obj.IdShort); err != nil {
 		return err
 	}
 	if obj.DisplayName != nil {
@@ -105,8 +119,8 @@ func AssertSubmodelRequired(obj Submodel) error {
 			return err
 		}
 	}
-	if obj.SemanticId != nil {
-		if err := AssertReferenceRequired(*obj.SemanticId); err != nil {
+	if obj.SemanticID != nil {
+		if err := AssertReferenceRequired(*obj.SemanticID); err != nil {
 			return err
 		}
 	}
@@ -117,7 +131,7 @@ func AssertSubmodelRequired(obj Submodel) error {
 			}
 		}
 	}
-	for _, el := range obj.Qualifiers {
+	for _, el := range obj.Qualifier {
 		if err := AssertQualifierRequired(el); err != nil {
 			return err
 		}
@@ -132,12 +146,12 @@ func AssertSubmodelRequired(obj Submodel) error {
 
 // AssertSubmodelConstraints checks if the values respects the defined constraints
 func AssertSubmodelConstraints(obj Submodel) error {
-	for _, el := range obj.Extensions {
+	for _, el := range obj.Extension {
 		if err := AssertExtensionConstraints(el); err != nil {
 			return err
 		}
 	}
-	if err := AssertReferableAllOfIdShortConstraints(obj.IdShort); err != nil {
+	if err := AssertstringConstraints(obj.IdShort); err != nil {
 		return err
 	}
 	if obj.DisplayName != nil {
@@ -159,8 +173,8 @@ func AssertSubmodelConstraints(obj Submodel) error {
 			return err
 		}
 	}
-	if obj.SemanticId != nil {
-		if err := AssertReferenceConstraints(*obj.SemanticId); err != nil {
+	if obj.SemanticID != nil {
+		if err := AssertReferenceConstraints(*obj.SemanticID); err != nil {
 			return err
 		}
 	}
@@ -171,7 +185,7 @@ func AssertSubmodelConstraints(obj Submodel) error {
 			}
 		}
 	}
-	for _, el := range obj.Qualifiers {
+	for _, el := range obj.Qualifier {
 		if err := AssertQualifierConstraints(el); err != nil {
 			return err
 		}

@@ -1,3 +1,4 @@
+// Benchmark Main Package
 package main
 
 import (
@@ -54,11 +55,12 @@ func sendRequest(method, url string, body []byte) {
 	start := time.Now()
 	var resp *http.Response
 	var err error
-	if method == "POST" {
+	switch method {
+	case "POST":
 		resp, err = httpClient.Post(url, "application/json", bytes.NewBuffer(body))
-	} else if method == "GET" {
+	case "GET":
 		resp, err = httpClient.Get(url)
-	} else if method == "DELETE" {
+	case "DELETE":
 		req, reqErr := http.NewRequest(http.MethodDelete, url, nil)
 		if reqErr != nil {
 			fmt.Println("Error creating DELETE request:", reqErr)
@@ -79,7 +81,11 @@ func sendRequest(method, url string, body []byte) {
 		fmt.Printf("Error sending %s request: %v\n", method, err)
 		stats.failedRequests++
 	} else {
-		defer resp.Body.Close()
+		defer func() {
+			if closeErr := resp.Body.Close(); closeErr != nil {
+				fmt.Printf("Error closing response body: %v\n", closeErr)
+			}
+		}()
 		if (method == "DELETE" && resp.StatusCode == 204) || (method != "DELETE" && resp.StatusCode >= 200 && resp.StatusCode < 300) {
 			stats.successfulRequests++
 		} else {
@@ -138,7 +144,7 @@ func main() {
 	stats.startTime = time.Now()
 
 	// POST phase
-	runBenchmarkPhase("POST", func(i int, body []byte) {
+	runBenchmarkPhase("POST", func(_ int, body []byte) {
 		url := baseURL + "/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements"
 		sendRequest("POST", url, body)
 	})
@@ -151,7 +157,7 @@ func main() {
 		fmt.Println("Starting GET phase...")
 	}
 	// GET phase
-	runBenchmarkPhase("GET", func(i int, body []byte) {
+	runBenchmarkPhase("GET", func(i int, _ []byte) {
 		url := baseURL + "/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/Level" + strconv.Itoa(i)
 		sendRequest("GET", url, nil)
 	})
@@ -159,7 +165,7 @@ func main() {
 	printStats("GET")
 
 	// DELETE phase
-	runBenchmarkPhase("DELETE", func(i int, body []byte) {
+	runBenchmarkPhase("DELETE", func(i int, _ []byte) {
 		url := baseURL + "/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/Level" + strconv.Itoa(i)
 		sendRequest("DELETE", url, nil)
 	})

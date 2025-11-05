@@ -14,6 +14,7 @@ import (
 	"strings"
 )
 
+// Resource type of Resource
 type Resource struct {
 	Path string `json:"path" validate:"regexp=^([\\\\x09\\\\x0a\\\\x0d\\\\x20-\\\\ud7ff\\\\ue000-\\\\ufffd]|\\\\ud800[\\\\udc00-\\\\udfff]|[\\\\ud801-\\\\udbfe][\\\\udc00-\\\\udfff]|\\\\udbff[\\\\udc00-\\\\udfff])*$"`
 
@@ -31,7 +32,7 @@ func AssertResourceRequired(obj Resource) error {
 		}
 	}
 
-	if err := AssertstringRequired(obj.ContentType); err != nil {
+	if err := AssertIdShortRequired(obj.ContentType); err != nil {
 		return err
 	}
 	return nil
@@ -45,8 +46,10 @@ func AssertResourceConstraints(obj Resource) error {
 	return nil
 }
 
-// AssertstringRequired checks if a string is not empty.
-func AssertstringRequired(value string) error {
+// AssertIdShortRequired checks if a string is not empty.
+//
+//nolint:all
+func AssertIdShortRequired(value string) error {
 	if strings.TrimSpace(value) == "" {
 		return errors.New("field is required and cannot be empty")
 	}

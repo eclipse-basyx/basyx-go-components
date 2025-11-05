@@ -9,6 +9,7 @@
 
 package model
 
+// Result type of Result
 type Result struct {
 	Messages []Message `json:"messages,omitempty"`
 }

@@ -1,0 +1,42 @@
+name: Common Package Tests
+
+on:
+  pull_request:
+    paths:
+      - 'internal/common/**/*.go'
+      - 'go.mod'
+      - 'go.sum'
+      - '.github/workflows/common-tests.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'internal/common/**/*.go'
+      - 'go.mod'
+      - 'go.sum'
+      - '.github/workflows/common-tests.yml'
+
+jobs:
+  common-tests:
+    name: Run Common Package Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v5
+        
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          # Use the version in go.mod if present; otherwise pin a version
+          go-version-file: go.mod
+          cache: true
+          
+      - name: Get dependencies
+        run: go mod download
+        
+      - name: Run common model grammar tests
+        run: go test github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar -v -cover
+        
+      - name: Run common security model tests
+        run: |
+          cd internal/common/security/model/unit_tests
+          go test -v -cover

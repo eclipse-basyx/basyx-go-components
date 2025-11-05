@@ -9,6 +9,7 @@
 
 package model
 
+// FileValue type of FileValue
 type FileValue struct {
 	ContentType string `json:"contentType"`
 
@@ -31,6 +32,8 @@ func AssertFileValueRequired(obj FileValue) error {
 }
 
 // AssertFileValueConstraints checks if the values respects the defined constraints
+//
+//nolint:all
 func AssertFileValueConstraints(obj FileValue) error {
 	return nil
 }

@@ -15,6 +15,8 @@ import (
 	"time"
 )
 
+// Logger wraps an HTTP handler to log request details including method, URI, handler name, and duration.
+// It logs the HTTP method, request URI, the name of the handler, and the time taken to process the request.
 func Logger(inner http.Handler, name string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()

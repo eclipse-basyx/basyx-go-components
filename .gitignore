@@ -37,3 +37,6 @@ debug.test.*
 *.dlv_history
 
 .DS_Store
+
+# JetBrains IDEs
+.idea

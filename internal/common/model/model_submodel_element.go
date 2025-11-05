@@ -14,13 +14,14 @@ import (
 	"fmt"
 )
 
+// SubmodelElement interface representing a SubmodelElement.
 type SubmodelElement interface {
 	GetModelType() string
 	GetIdShort() string
 	GetCategory() string
 	GetDisplayName() []LangStringNameType
 	GetDescription() []LangStringTextType
-	GetSemanticId() *Reference
+	GetSemanticID() *Reference
 	GetSupplementalSemanticIds() []Reference
 	GetQualifiers() []Qualifier
 	GetEmbeddedDataSpecifications() []EmbeddedDataSpecification
@@ -31,7 +32,7 @@ type SubmodelElement interface {
 	SetCategory(string)
 	SetDisplayName([]LangStringNameType)
 	SetDescription([]LangStringTextType)
-	SetSemanticId(*Reference)
+	SetSemanticID(*Reference)
 	SetSupplementalSemanticIds([]Reference)
 	SetQualifiers([]Qualifier)
 	SetEmbeddedDataSpecifications([]EmbeddedDataSpecification)
@@ -118,11 +119,11 @@ func UnmarshalSubmodelElement(data []byte) (SubmodelElement, error) {
 		}
 		return &bee, nil
 	case "Capability":
-		var cap Capability
-		if err := json.Unmarshal(data, &cap); err != nil {
+		var capability Capability
+		if err := json.Unmarshal(data, &capability); err != nil {
 			return nil, fmt.Errorf("failed to unmarshal Capability: %w", err)
 		}
-		return &cap, nil
+		return &capability, nil
 	case "SubmodelElementCollection":
 		var sec SubmodelElementCollection
 		if err := json.Unmarshal(data, &sec); err != nil {
@@ -156,7 +157,7 @@ func AssertSubmodelElementRequired(obj SubmodelElement) error {
 			return err
 		}
 	}
-	if err := AssertReferableAllOfIdShortRequired(obj.GetIdShort()); err != nil {
+	if err := AssertIdShortRequired(obj.GetIdShort()); err != nil {
 		return err
 	}
 	for _, el := range obj.GetDisplayName() {
@@ -169,7 +170,7 @@ func AssertSubmodelElementRequired(obj SubmodelElement) error {
 			return err
 		}
 	}
-	if err := AssertReferenceRequired(*obj.GetSemanticId()); err != nil {
+	if err := AssertReferenceRequired(*obj.GetSemanticID()); err != nil {
 		return err
 	}
 	for _, el := range obj.GetSupplementalSemanticIds() {
@@ -197,7 +198,7 @@ func AssertSubmodelElementConstraints(obj SubmodelElement) error {
 			return err
 		}
 	}
-	if err := AssertReferableAllOfIdShortConstraints(obj.GetIdShort()); err != nil {
+	if err := AssertstringConstraints(obj.GetIdShort()); err != nil {
 		return err
 	}
 	for _, el := range obj.GetDisplayName() {
@@ -210,7 +211,7 @@ func AssertSubmodelElementConstraints(obj SubmodelElement) error {
 			return err
 		}
 	}
-	if err := AssertReferenceConstraints(*obj.GetSemanticId()); err != nil {
+	if err := AssertReferenceConstraints(*obj.GetSemanticID()); err != nil {
 		return err
 	}
 	for _, el := range obj.GetSupplementalSemanticIds() {

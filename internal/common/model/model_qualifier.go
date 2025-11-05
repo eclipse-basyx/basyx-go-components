@@ -9,9 +9,11 @@
 
 package model
 
+// Qualifier  type of Qualifier
 type Qualifier struct {
-	SemanticId *Reference `json:"semanticId,omitempty"`
+	SemanticID *Reference `json:"semanticId,omitempty"`
 
+	//nolint:all
 	SupplementalSemanticIds []Reference `json:"supplementalSemanticIds,omitempty"`
 
 	Kind QualifierKind `json:"kind,omitempty"`
@@ -22,7 +24,7 @@ type Qualifier struct {
 
 	Value string `json:"value,omitempty"`
 
-	ValueId *Reference `json:"valueId,omitempty"`
+	ValueID *Reference `json:"valueId,omitempty"`
 }
 
 // AssertQualifierRequired checks if the required fields are not zero-ed
@@ -37,32 +39,40 @@ func AssertQualifierRequired(obj Qualifier) error {
 		}
 	}
 
-	if err := AssertReferenceRequired(*obj.SemanticId); err != nil {
-		return err
+	if obj.SemanticID != nil {
+		if err := AssertReferenceRequired(*obj.SemanticID); err != nil {
+			return err
+		}
 	}
 	for _, el := range obj.SupplementalSemanticIds {
 		if err := AssertReferenceRequired(el); err != nil {
 			return err
 		}
 	}
-	if err := AssertReferenceRequired(*obj.ValueId); err != nil {
-		return err
+	if obj.ValueID != nil {
+		if err := AssertReferenceRequired(*obj.ValueID); err != nil {
+			return err
+		}
 	}
 	return nil
 }
 
 // AssertQualifierConstraints checks if the values respects the defined constraints
 func AssertQualifierConstraints(obj Qualifier) error {
-	if err := AssertReferenceConstraints(*obj.SemanticId); err != nil {
-		return err
+	if obj.SemanticID != nil {
+		if err := AssertReferenceConstraints(*obj.SemanticID); err != nil {
+			return err
+		}
 	}
 	for _, el := range obj.SupplementalSemanticIds {
 		if err := AssertReferenceConstraints(el); err != nil {
 			return err
 		}
 	}
-	if err := AssertReferenceConstraints(*obj.ValueId); err != nil {
-		return err
+	if obj.ValueID != nil {
+		if err := AssertReferenceConstraints(*obj.ValueID); err != nil {
+			return err
+		}
 	}
 	return nil
 }

@@ -13,9 +13,12 @@ import (
 	"fmt"
 )
 
+//nolint:all
 type ModellingKind string
 
 // List of ModellingKind
+//
+//nolint:all
 const (
 	MODELLINGKIND_INSTANCE ModellingKind = "Instance"
 	MODELLINGKIND_TEMPLATE ModellingKind = "Template"
@@ -51,11 +54,15 @@ func NewModellingKindFromValue(v string) (ModellingKind, error) {
 }
 
 // AssertModellingKindRequired checks if the required fields are not zero-ed
+//
+//nolint:all
 func AssertModellingKindRequired(obj ModellingKind) error {
 	return nil
 }
 
 // AssertModellingKindConstraints checks if the values respects the defined constraints
+//
+//nolint:all
 func AssertModellingKindConstraints(obj ModellingKind) error {
 	return nil
 }

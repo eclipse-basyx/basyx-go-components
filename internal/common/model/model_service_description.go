@@ -15,11 +15,15 @@ type ServiceDescription struct {
 }
 
 // AssertServiceDescriptionRequired checks if the required fields are not zero-ed
+//
+//nolint:all
 func AssertServiceDescriptionRequired(obj ServiceDescription) error {
 	return nil
 }
 
 // AssertServiceDescriptionConstraints checks if the values respects the defined constraints
+//
+//nolint:all
 func AssertServiceDescriptionConstraints(obj ServiceDescription) error {
 	return nil
 }

@@ -9,15 +9,20 @@
 
 package model
 
+// FileAllOfContentType type of File
 type FileAllOfContentType struct {
 }
 
 // AssertFileAllOfContentTypeRequired checks if the required fields are not zero-ed
+//
+//nolint:all
 func AssertFileAllOfContentTypeRequired(obj FileAllOfContentType) error {
 	return nil
 }
 
 // AssertFileAllOfContentTypeConstraints checks if the values respects the defined constraints
+//
+//nolint:all
 func AssertFileAllOfContentTypeConstraints(obj FileAllOfContentType) error {
 	return nil
 }

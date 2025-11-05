@@ -9,9 +9,11 @@
 
 package model
 
+// Extension type of Extension
 type Extension struct {
-	SemanticId *Reference `json:"semanticId,omitempty"`
+	SemanticID *Reference `json:"semanticId,omitempty"`
 
+	//nolint:all
 	SupplementalSemanticIds []Reference `json:"supplementalSemanticIds,omitempty"`
 
 	Name string `json:"name" validate:"regexp=^([\\\\x09\\\\x0a\\\\x0d\\\\x20-\\\\ud7ff\\\\ue000-\\\\ufffd]|\\\\ud800[\\\\udc00-\\\\udfff]|[\\\\ud801-\\\\udbfe][\\\\udc00-\\\\udfff]|\\\\udbff[\\\\udc00-\\\\udfff])*$"`
@@ -33,9 +35,10 @@ func AssertExtensionRequired(obj Extension) error {
 			return &RequiredError{Field: name}
 		}
 	}
-
-	if err := AssertReferenceRequired(*obj.SemanticId); err != nil {
-		return err
+	if obj.SemanticID != nil {
+		if err := AssertReferenceRequired(*obj.SemanticID); err != nil {
+			return err
+		}
 	}
 	for _, el := range obj.SupplementalSemanticIds {
 		if err := AssertReferenceRequired(el); err != nil {
@@ -52,8 +55,10 @@ func AssertExtensionRequired(obj Extension) error {
 
 // AssertExtensionConstraints checks if the values respects the defined constraints
 func AssertExtensionConstraints(obj Extension) error {
-	if err := AssertReferenceConstraints(*obj.SemanticId); err != nil {
-		return err
+	if obj.SemanticID != nil {
+		if err := AssertReferenceConstraints(*obj.SemanticID); err != nil {
+			return err
+		}
 	}
 	for _, el := range obj.SupplementalSemanticIds {
 		if err := AssertReferenceConstraints(el); err != nil {

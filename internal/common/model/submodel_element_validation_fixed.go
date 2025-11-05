@@ -48,7 +48,7 @@ func AssertSubmodelElementRequiredFixed(obj SubmodelElement) error {
 			return err
 		}
 	}
-	if err := AssertReferableAllOfIdShortRequired(obj.GetIdShort()); err != nil {
+	if err := AssertIdShortRequired(obj.GetIdShort()); err != nil {
 		return err
 	}
 	for _, el := range obj.GetDisplayName() {
@@ -62,8 +62,8 @@ func AssertSubmodelElementRequiredFixed(obj SubmodelElement) error {
 		}
 	}
 	// Only validate non-empty references
-	if obj.GetSemanticId() != nil && !isReferenceEmpty(*obj.GetSemanticId()) {
-		if err := AssertReferenceRequired(*obj.GetSemanticId()); err != nil {
+	if obj.GetSemanticID() != nil && !isReferenceEmpty(*obj.GetSemanticID()) {
+		if err := AssertReferenceRequired(*obj.GetSemanticID()); err != nil {
 			return err
 		}
 	}
@@ -95,7 +95,7 @@ func AssertSubmodelElementConstraintsFixed(obj SubmodelElement) error {
 			return err
 		}
 	}
-	if err := AssertReferableAllOfIdShortConstraints(obj.GetIdShort()); err != nil {
+	if err := AssertstringConstraints(obj.GetIdShort()); err != nil {
 		return err
 	}
 	for _, el := range obj.GetDisplayName() {
@@ -109,8 +109,8 @@ func AssertSubmodelElementConstraintsFixed(obj SubmodelElement) error {
 		}
 	}
 	// Only validate constraints on non-empty references
-	if obj.GetSemanticId() != nil && !isReferenceEmpty(*obj.GetSemanticId()) {
-		if err := AssertReferenceConstraints(*obj.GetSemanticId()); err != nil {
+	if obj.GetSemanticID() != nil && !isReferenceEmpty(*obj.GetSemanticID()) {
+		if err := AssertReferenceConstraints(*obj.GetSemanticID()); err != nil {
 			return err
 		}
 	}

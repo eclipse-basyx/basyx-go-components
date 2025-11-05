@@ -9,6 +9,7 @@
 
 package model
 
+// GetSubmodelElementsValueResult type of GetSubmodelElementsValueResult
 type GetSubmodelElementsValueResult struct {
 	PagingMetadata PagedResultPagingMetadata `json:"paging_metadata,omitempty"`
 

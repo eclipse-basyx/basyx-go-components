@@ -13,9 +13,12 @@ import (
 	"fmt"
 )
 
+// EntityType type of EntityType
 type EntityType string
 
 // List of EntityType
+//
+//nolint:all
 const (
 	ENTITYTYPE_CO_MANAGED_ENTITY   EntityType = "CoManagedEntity"
 	ENTITYTYPE_SELF_MANAGED_ENTITY EntityType = "SelfManagedEntity"
@@ -51,11 +54,15 @@ func NewEntityTypeFromValue(v string) (EntityType, error) {
 }
 
 // AssertEntityTypeRequired checks if the required fields are not zero-ed
+//
+//nolint:all
 func AssertEntityTypeRequired(obj EntityType) error {
 	return nil
 }
 
 // AssertEntityTypeConstraints checks if the values respects the defined constraints
+//
+//nolint:all
 func AssertEntityTypeConstraints(obj EntityType) error {
 	return nil
 }

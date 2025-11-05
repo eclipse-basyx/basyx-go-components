@@ -9,6 +9,7 @@
 
 package model
 
+// Environment type of Environment
 type Environment struct {
 	AssetAdministrationShells []AssetAdministrationShell `json:"assetAdministrationShells,omitempty"`
 

@@ -1,0 +1,20 @@
+{
+  "AllAccessPermissionRules": {
+    "rules": [
+      {
+        "ACL": {
+          "ACCESS": "ALLOW",
+          "RIGHTS": ["READ","UPDATE"],
+          "ATTRIBUTES": [{"CLAIM": "email"}]
+        },
+        "OBJECTS": [{"ROUTE" : "/*"}],
+        "FORMULA": {
+          "$and": [
+            {"$boolean": true},
+            {"$eq": [{"$numVal": 1}, {"$numVal": 1}]}
+          ]
+        }
+      }
+    ]
+  }
+}

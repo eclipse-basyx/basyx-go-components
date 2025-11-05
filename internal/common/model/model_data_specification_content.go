@@ -9,11 +9,12 @@
 
 package model
 
+// DataSpecificationContent type of DataSpecificationContent
 type DataSpecificationContent interface {
 	GetPrefferedName() []LangStringPreferredNameTypeIec61360
 	GetShortName() []LangStringShortNameTypeIec61360
 	GetUnit() string
-	GetUnitId() *Reference
+	GetUnitID() *Reference
 	GetSourceOfDefinition() string
 	GetSymbol() string
 	GetDataType() DataTypeIec61360
@@ -25,7 +26,7 @@ type DataSpecificationContent interface {
 	SetPrefferedName([]LangStringPreferredNameTypeIec61360)
 	SetShortName([]LangStringShortNameTypeIec61360)
 	SetUnit(string)
-	SetUnitId(*Reference)
+	SetUnitID(*Reference)
 	SetSourceOfDefinition(string)
 	SetSymbol(string)
 	SetDataType(*DataTypeIec61360)
