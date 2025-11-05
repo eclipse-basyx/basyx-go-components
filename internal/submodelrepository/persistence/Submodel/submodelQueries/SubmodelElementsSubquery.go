@@ -268,6 +268,8 @@ func getValueSubquery(dialect goqu.DialectWrapper) exp.CaseExpression {
 // }
 
 func getPropertySubquery(dialect goqu.DialectWrapper) *goqu.SelectDataset {
+	valueIDSubquery, valueIDReferredSubquery := queries.GetReferenceQueries(dialect, goqu.I("pr.value_id"))
+
 	return dialect.From(goqu.T("property_element").As("pr")).
 		Select(
 			goqu.Func("jsonb_build_object",
@@ -279,6 +281,8 @@ func getPropertySubquery(dialect goqu.DialectWrapper) *goqu.SelectDataset {
 					goqu.L("?::text", goqu.I("pr.value_datetime")),
 				),
 				goqu.V("value_type"), goqu.I("pr.value_type"),
+				goqu.V("value_id"), valueIDSubquery,
+				goqu.V("value_id_referred"), valueIDReferredSubquery,
 			),
 		).
 		Where(goqu.I("pr.id").Eq(goqu.I("tlsme.id"))).

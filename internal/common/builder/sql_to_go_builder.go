@@ -369,7 +369,10 @@ type PropertyValueRow struct {
 	// (e.g., xs:string, xs:int, xs:boolean, xs:dateTime, etc.).
 	ValueType model.DataTypeDefXsd `json:"value_type"`
 
-	// TODO: VALUEID - Add support for valueId reference which provides semantic information about the value
+	// ValueID contains value ID reference data as JSON data
+	ValueID json.RawMessage `json:"value_id"`
+	// ValueIDReferred contains referred value ID references as JSON data
+	ValueIDReferred json.RawMessage `json:"value_id_referred"`
 }
 
 // ParseReferredReferencesFromRows parses referred reference data from already unmarshalled ReferredReferenceRow objects.

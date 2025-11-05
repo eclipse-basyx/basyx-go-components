@@ -34,8 +34,11 @@ package submodelelements
 import (
 	"database/sql"
 	"errors"
+	"fmt"
 
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	persistenceutils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 )
 
@@ -188,7 +191,6 @@ func (p PostgreSQLPropertyHandler) Delete(idShortOrPath string) error {
 //   - error: An error if the database insert operation fails
 func insertProperty(property *gen.Property, tx *sql.Tx, id int) error {
 	var valueText, valueNum, valueBool, valueTime, valueDatetime sql.NullString
-	var valueID sql.NullInt64
 
 	switch property.ValueType {
 	case "xs:string", "xs:anyURI", "xs:base64Binary", "xs:hexBinary":
@@ -211,13 +213,14 @@ func insertProperty(property *gen.Property, tx *sql.Tx, id int) error {
 	}
 
 	// Handle valueID if present
-	if property.ValueID != nil && len(property.ValueID.Keys) > 0 && property.ValueID.Keys[0].Value != "" {
-		// Assuming ValueID references another element by ID - you may need to adjust this logic
-		valueID = sql.NullInt64{Int64: 0, Valid: false} // Implement proper ID resolution here
+	valueIDDbID, err := persistenceutils.CreateReference(tx, property.ValueID, sql.NullInt64{}, sql.NullInt64{})
+	if err != nil {
+		fmt.Println(err)
+		return common.NewInternalServerError("Failed to create SemanticID - no changes applied - see console for details")
 	}
 
 	// Insert Property-specific data
-	_, err := tx.Exec(`INSERT INTO property_element (id, value_type, value_text, value_num, value_bool, value_time, value_datetime, value_id)
+	_, err = tx.Exec(`INSERT INTO property_element (id, value_type, value_text, value_num, value_bool, value_time, value_datetime, value_id)
 					 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
 		id,
 		property.ValueType,
@@ -226,7 +229,11 @@ func insertProperty(property *gen.Property, tx *sql.Tx, id int) error {
 		valueBool,
 		valueTime,
 		valueDatetime,
-		valueID,
+		valueIDDbID,
 	)
-	return err
+	if err != nil {
+		return err
+	}
+
+	return nil
 }

@@ -39,15 +39,14 @@ type SubmodelElementBuilder struct {
 
 // NewSMEBuilder Creates a Root SubmodelElement and the Builder
 func NewSMEBuilder(smeRow SubmodelElementRow) (*model.SubmodelElement, *SubmodelElementBuilder, error) {
-	specificSME, err := getSubmodelElementObjectBasedOnModelType(smeRow)
+	refBuilderMap := make(map[int64]*ReferenceBuilder)
+	specificSME, err := getSubmodelElementObjectBasedOnModelType(smeRow, refBuilderMap)
 	if err != nil {
 		return nil, nil, err
 	}
 	specificSME.SetIdShort(smeRow.IDShort)
 	specificSME.SetCategory(smeRow.Category)
 	specificSME.SetModelType(smeRow.ModelType)
-
-	refBuilderMap := make(map[int64]*ReferenceBuilder)
 
 	refs, err := ParseReferences(smeRow.SemanticID, refBuilderMap)
 	if err != nil {
@@ -108,7 +107,7 @@ func (b *SubmodelElementBuilder) AddChildSME() error {
 	return nil
 }
 
-func getSubmodelElementObjectBasedOnModelType(smeRow SubmodelElementRow) (model.SubmodelElement, error) {
+func getSubmodelElementObjectBasedOnModelType(smeRow SubmodelElementRow, refBuilderMap map[int64]*ReferenceBuilder) (model.SubmodelElement, error) {
 	switch smeRow.ModelType {
 	case "Property":
 		var valueRow PropertyValueRow
@@ -116,10 +115,29 @@ func getSubmodelElementObjectBasedOnModelType(smeRow SubmodelElementRow) (model.
 		if err != nil {
 			return nil, err
 		}
-		return &model.Property{
+		var refs []*model.Reference
+		if isArrayNotEmpty(valueRow.ValueID) {
+			refs, err = ParseReferences(valueRow.ValueID, refBuilderMap)
+			if err != nil {
+				return nil, err
+			}
+			if isArrayNotEmpty(valueRow.ValueIDReferred) {
+				if err = ParseReferredReferences(valueRow.ValueIDReferred, refBuilderMap); err != nil {
+					return nil, err
+				}
+			}
+		}
+
+		prop := &model.Property{
 			Value:     valueRow.Value,
 			ValueType: valueRow.ValueType,
-		}, nil
+		}
+
+		if len(refs) > 0 {
+			prop.ValueID = refs[0]
+		}
+
+		return prop, nil
 	default:
 		return nil, fmt.Errorf("modelType %s is unknown", smeRow.ModelType)
 	}
