@@ -357,11 +357,11 @@ func (p *PostgreSQLSubmodelDatabase) CreateSubmodel(sm gen.Submodel) error {
 	var edsJSONString string
 	if sm.EmbeddedDataSpecifications != nil {
 		edsBytes, err := json.Marshal(sm.EmbeddedDataSpecifications)
-		edsJSONString = string(edsBytes)
 		if err != nil {
 			fmt.Println(err)
 			return common.NewInternalServerError("Failed to marshal EmbeddedDataSpecifications - no changes applied - see console for details")
 		}
+		edsJSONString = string(edsBytes)
 	}
 
 	const q = `

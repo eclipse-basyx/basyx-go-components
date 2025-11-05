@@ -201,10 +201,7 @@ func getSubmodels(db *sql.DB, submodelIDFilter string, limit int64, cursor strin
 
 		// Embedded Data Specifications
 		if isArrayNotEmpty(row.EmbeddedDataSpecification) {
-			start = time.Now().Local().UnixMicro()
 			err = json.Unmarshal(row.EmbeddedDataSpecification, &EmbeddedDataSpecifications)
-			end = time.Now().Local().UnixMicro()
-			fmt.Printf("Total EmbeddedDataSpecification time: %d microseconds\n", end-start)
 			// Print size of EmbeddedDataSpecifications in bytes
 			if err != nil {
 				fmt.Println(err)
