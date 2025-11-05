@@ -3,6 +3,7 @@ package aasregistrydatabase
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -14,7 +15,9 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+    builders "github.com/eclipse-basyx/basyx-go-components/internal/common/builder"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+    "github.com/eclipse-basyx/basyx-go-components/internal/common/queries"
 	persistence_utils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
 )
 
@@ -612,6 +615,9 @@ func (p *PostgreSQLAASRegistryDatabase) ListAssetAdministrationShellDescriptors(
     d := goqu.Dialect(dialect)
     aas := goqu.T(tblAASDescriptor).As("aas")
 
+    // Inline AdministrativeInformation subquery to fetch all admin info per row
+    adminJSON := queries.GetAdministrationSubquery(d, "aas."+colAdminInfoID)
+
     ds := d.
         From(aas).
         Select(
@@ -624,6 +630,7 @@ func (p *PostgreSQLAASRegistryDatabase) ListAssetAdministrationShellDescriptors(
             aas.Col(colAdminInfoID),
             aas.Col(colDisplayNameID),
             aas.Col(colDescriptionID),
+            goqu.L("COALESCE((?), '[]'::jsonb)", adminJSON).As("administration"),
         )
 	if cursor != "" {
 		ds = ds.Where(aas.Col(colAASID).Gte(cursor))
@@ -655,37 +662,39 @@ func (p *PostgreSQLAASRegistryDatabase) ListAssetAdministrationShellDescriptors(
 		_ = rows.Close()
 	}()
 
-	type rowData struct {
-		descID        int64
-		assetKindStr  sql.NullString
-		assetType     sql.NullString
-		globalAssetID sql.NullString
-		idShort       sql.NullString
-		idStr         string
-		adminInfoID   sql.NullInt64
-		displayNameID sql.NullInt64
-		descriptionID sql.NullInt64
-	}
+    type rowData struct {
+        descID        int64
+        assetKindStr  sql.NullString
+        assetType     sql.NullString
+        globalAssetID sql.NullString
+        idShort       sql.NullString
+        idStr         string
+        adminInfoID   sql.NullInt64
+        displayNameID sql.NullInt64
+        descriptionID sql.NullInt64
+        adminJSON     json.RawMessage
+    }
 
 	all := make([]rowData, 0, peekLimit)
 	for rows.Next() {
 		var r rowData
-		if err := rows.Scan(
-			&r.descID,
-			&r.assetKindStr,
-			&r.assetType,
-			&r.globalAssetID,
-			&r.idShort,
-			&r.idStr,
-			&r.adminInfoID,
-			&r.displayNameID,
-			&r.descriptionID,
-		); err != nil {
-			fmt.Println("ListAssetAdministrationShellDescriptors: scan error:", err)
-			return nil, "", common.NewInternalServerError("Failed to scan AAS descriptor row. See server logs for details.")
-		}
-		all = append(all, r)
-	}
+        if err := rows.Scan(
+            &r.descID,
+            &r.assetKindStr,
+            &r.assetType,
+            &r.globalAssetID,
+            &r.idShort,
+            &r.idStr,
+            &r.adminInfoID,
+            &r.displayNameID,
+            &r.descriptionID,
+            &r.adminJSON,
+        ); err != nil {
+            fmt.Println("ListAssetAdministrationShellDescriptors: scan error:", err)
+            return nil, "", common.NewInternalServerError("Failed to scan AAS descriptor row. See server logs for details.")
+        }
+        all = append(all, r)
+    }
 	if rows.Err() != nil {
 		fmt.Println("ListAssetAdministrationShellDescriptors: rows error:", rows.Err())
 		return nil, "", common.NewInternalServerError("Failed to iterate AAS descriptors. See server logs for details.")
@@ -701,15 +710,13 @@ func (p *PostgreSQLAASRegistryDatabase) ListAssetAdministrationShellDescriptors(
 		return []model.AssetAdministrationShellDescriptor{}, nextCursor, nil
 	}
 
-	descIDs := make([]int64, 0, len(all))
-	adminInfoIDs := make([]int64, 0, len(all))
-	displayNameIDs := make([]int64, 0, len(all))
-	descriptionIDs := make([]int64, 0, len(all))
+    descIDs := make([]int64, 0, len(all))
+    displayNameIDs := make([]int64, 0, len(all))
+    descriptionIDs := make([]int64, 0, len(all))
 
-	seenDesc := make(map[int64]struct{}, len(all))
-	seenAI := map[int64]struct{}{}
-	seenDN := map[int64]struct{}{}
-	seenDE := map[int64]struct{}{}
+    seenDesc := make(map[int64]struct{}, len(all))
+    seenDN := map[int64]struct{}{}
+    seenDE := map[int64]struct{}{}
 
 	for _, r := range all {
 
@@ -718,13 +725,7 @@ func (p *PostgreSQLAASRegistryDatabase) ListAssetAdministrationShellDescriptors(
 			descIDs = append(descIDs, r.descID)
 		}
 
-		if r.adminInfoID.Valid {
-			id := r.adminInfoID.Int64
-			if _, ok := seenAI[id]; !ok {
-				seenAI[id] = struct{}{}
-				adminInfoIDs = append(adminInfoIDs, id)
-			}
-		}
+        // Administrative information is fetched inline via subquery; no ID batching needed
 
 		if r.displayNameID.Valid {
 			id := r.displayNameID.Int64
@@ -744,29 +745,16 @@ func (p *PostgreSQLAASRegistryDatabase) ListAssetAdministrationShellDescriptors(
 	}
 
 	fmt.Printf("loop took %v\n", time.Since(startA))
-	admByID := map[int64]*model.AdministrativeInformation{}
-	dnByID := map[int64][]model.LangStringNameType{}
-	descByID := map[int64][]model.LangStringTextType{}
-	endpointsByDesc := map[int64][]model.Endpoint{}
-	specificByDesc := map[int64][]model.SpecificAssetID{}
-	extByDesc := map[int64][]model.Extension{}
-	smdByDesc := map[int64][]model.SubmodelDescriptor{}
+    dnByID := map[int64][]model.LangStringNameType{}
+    descByID := map[int64][]model.LangStringTextType{}
+    endpointsByDesc := map[int64][]model.Endpoint{}
+    specificByDesc := map[int64][]model.SpecificAssetID{}
+    extByDesc := map[int64][]model.Extension{}
+    smdByDesc := map[int64][]model.SubmodelDescriptor{}
 
 	g, gctx := errgroup.WithContext(ctx)
 
-	if len(adminInfoIDs) > 0 {
-		ids := append([]int64(nil), adminInfoIDs...)
-		g.Go(func() error {
-			start := time.Now()
-			defer func() { fmt.Printf("readAdministrativeInformationByIDs took %v\n", time.Since(start)) }()
-			m, err := readAdministrativeInformationByIDs(gctx, p.db, "aas_descriptor", ids)
-			if err != nil {
-				return err
-			}
-			admByID = m
-			return nil
-		})
-	}
+    // Administrative information is already included per row; no separate fetch
 
 	if len(displayNameIDs) > 0 {
 		ids := append([]int64(nil), displayNameIDs...)
@@ -861,13 +849,26 @@ func (p *PostgreSQLAASRegistryDatabase) ListAssetAdministrationShellDescriptors(
 			ak = &v
 		}
 
-		var adminInfo *model.AdministrativeInformation
-		if r.adminInfoID.Valid {
-			if v, ok := admByID[r.adminInfoID.Int64]; ok {
-				tmp := v
-				adminInfo = tmp
-			}
-		}
+        var adminInfo *model.AdministrativeInformation
+        if common.IsArrayNotEmpty(r.adminJSON) {
+            adminRow, err := builders.ParseAdministrationRow(r.adminJSON)
+            if err != nil {
+                return nil, "", fmt.Errorf("parsing administration row for AAS %s failed: %w", r.idStr, err)
+            }
+            if adminRow != nil {
+                built, err := builders.BuildAdministration(*adminRow)
+                if err != nil {
+                    return nil, "", fmt.Errorf("building administration for AAS %s failed: %w", r.idStr, err)
+                }
+                adminInfo = &model.AdministrativeInformation{
+                    Version:                    built.Version,
+                    Revision:                   built.Revision,
+                    TemplateID:                 built.TemplateID,
+                    Creator:                    built.Creator,
+                    EmbeddedDataSpecifications: built.EmbeddedDataSpecifications,
+                }
+            }
+        }
 
 		var displayName []model.LangStringNameType
 		if r.displayNameID.Valid {

@@ -70,5 +70,4 @@ var (
 	tDescriptor            = goqu.T(tblDescriptor)
 	tAASDescriptorEndpoint = goqu.T(tblAASDescriptorEndpoint)
 	tSpecificAssetID       = goqu.T(tblSpecificAssetID)
-	tExtension             = goqu.T(tblExtension)
 )
