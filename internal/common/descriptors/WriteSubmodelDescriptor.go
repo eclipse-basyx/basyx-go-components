@@ -96,7 +96,7 @@ func createSubModelDescriptors(tx *sql.Tx, aasDescriptorID int64, submodelDescri
 			if len(val.Endpoints) == 0 {
 				return common.NewErrBadRequest("Submodel Descriptor needs at least 1 Endpoint.")
 			}
-			if err = createEndpoints(tx, submodelDescriptorID, val.Endpoints); err != nil {
+			if err = CreateEndpoints(tx, submodelDescriptorID, val.Endpoints); err != nil {
 				return err
 			}
 		}

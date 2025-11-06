@@ -33,10 +33,15 @@
 package registryofregistriespostgresql
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 
+	"github.com/doug-martin/goqu/v9"
+	aasregistrydatabase "github.com/eclipse-basyx/basyx-go-components/internal/aasregistry/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	persistence_utils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
 )
 
 // PostgreSQLRegistryOfRegistriesDatabase provides PostgreSQL-based persistence for the RegistryOfRegistries Service.
@@ -77,4 +82,149 @@ func NewPostgreSQLRegistryOfRegistriesBackend(dsn string, _ /* maxOpenConns */, 
 	}
 
 	return &PostgreSQLRegistryOfRegistriesDatabase{db: db, cacheEnabled: cacheEnabled}, nil
+}
+
+func (p *PostgreSQLRegistryOfRegistriesDatabase) GetRegistryDescriptorById(ctx context.Context, registryIdentifier string) (model.RegistryDescriptor, error) {
+
+	d := goqu.Dialect("postgres")
+
+	reg := goqu.T("registry_descriptor").As("reg")
+
+	sqlStr, args, buildErr := d.
+		From(reg).
+		Select(
+			reg.Col("descriptor_id"),
+			reg.Col("registry_type"),
+			reg.Col("global_asset_id"),
+			reg.Col("id_short"),
+			reg.Col("id"),
+			reg.Col("administrative_information_id"),
+			reg.Col("displayname_id"),
+			reg.Col("description_id"),
+		).
+		Where(reg.Col("id").Eq(registryIdentifier)).
+		Limit(1).
+		ToSQL()
+	if buildErr != nil {
+		return model.RegistryDescriptor{}, buildErr
+	}
+
+	var (
+		descID                 int64
+		registryType           sql.NullString
+		globalAssetID, idShort sql.NullString
+		idStr                  string
+		adminInfoID            sql.NullInt64
+		displayNameID          sql.NullInt64
+		descriptionID          sql.NullInt64
+	)
+
+	if err := p.db.QueryRowContext(ctx, sqlStr, args...).Scan(
+		&descID,
+		&registryType,
+		&globalAssetID,
+		&idShort,
+		&idStr,
+		&adminInfoID,
+		&displayNameID,
+		&descriptionID,
+	); err != nil {
+		if err == sql.ErrNoRows {
+			return model.RegistryDescriptor{}, common.NewErrNotFound("Registry Descriptor not found")
+		}
+		return model.RegistryDescriptor{}, err
+	}
+
+	var (
+		displayName []model.LangStringNameType
+		description []model.LangStringTextType
+		endpoints   []model.Endpoint
+	)
+
+	displayName, err := persistence_utils.GetLangStringNameTypes(p.db, displayNameID)
+	if err != nil {
+		return model.RegistryDescriptor{}, err
+	}
+	description, err = persistence_utils.GetLangStringTextTypes(p.db, descriptionID)
+	if err != nil {
+		return model.RegistryDescriptor{}, err
+	}
+	endpoints, err = aasregistrydatabase.ReadEndpointsByDescriptorID(ctx, p.db, descID)
+	if err != nil {
+		return model.RegistryDescriptor{}, err
+	}
+
+	return model.RegistryDescriptor{
+		RegistryType:  registryType.String,
+		GlobalAssetId: globalAssetID.String,
+		IdShort:       idShort.String,
+		Id:            idStr,
+		DisplayName:   displayName,
+		Description:   description,
+		Endpoints:     endpoints,
+	}, nil
+}
+
+func (p *PostgreSQLRegistryOfRegistriesDatabase) PostRegistryDescriptor(ctx context.Context, registryDescriptor model.RegistryDescriptor) error {
+	d := goqu.Dialect("postgres")
+	tx, err := p.db.Begin()
+	if err != nil {
+		return err
+	}
+	descTbl := goqu.T("")
+
+	sqlStr, args, buildErr := d.
+		Insert("descriptor").
+		Returning(descTbl.Col("id")).
+		ToSQL()
+	if buildErr != nil {
+		return buildErr
+	}
+	var descriptorID int64
+	if err := tx.QueryRow(sqlStr, args...).Scan(&descriptorID); err != nil {
+		return err
+	}
+
+	var displayNameID, descriptionID sql.NullInt64
+
+	dnID, err := persistence_utils.CreateLangStringNameTypes(tx, registryDescriptor.DisplayName)
+	if err != nil {
+		fmt.Println(err)
+		return common.NewInternalServerError("Failed to create DisplayName - no changes applied - see console for details")
+	}
+	displayNameID = dnID
+
+	descID, err := persistence_utils.CreateLangStringTextTypesN(tx, registryDescriptor.Description)
+	if err != nil {
+		fmt.Println(err)
+		return common.NewInternalServerError("Failed to create Description - no changes applied - see console for details")
+	}
+	descriptionID = descID
+
+	sqlStr, args, buildErr = d.
+		Insert("registry_descriptor").
+		Rows(goqu.Record{
+			"descriptor_id":                 descriptorID,
+			"description_id":                descriptionID,
+			"displayname_id":                displayNameID,
+			"administrative_information_id": nil,
+			"registry_type":                 registryDescriptor.RegistryType,
+			"global_asset_id":               registryDescriptor.GlobalAssetId,
+			"id_short":                      registryDescriptor.IdShort,
+			"id":                            registryDescriptor.Id,
+		}).
+		ToSQL()
+	if buildErr != nil {
+		return buildErr
+	}
+	if _, err = tx.Exec(sqlStr, args...); err != nil {
+		return err
+	}
+
+	if err = aasregistrydatabase.CreateEndpoints(tx, descriptorID, registryDescriptor.Endpoints); err != nil {
+		fmt.Println(err)
+		return common.NewInternalServerError("Failed to create Endpoints - no changes applied - see console for details")
+	}
+
+	return tx.Commit()
 }

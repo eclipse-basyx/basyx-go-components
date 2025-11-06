@@ -656,6 +656,27 @@ CREATE INDEX IF NOT EXISTS ix_dsiec_id ON data_specification_iec61360(id);
 CREATE INDEX IF NOT EXISTS ix_ref_root_id ON reference(rootreference, id);
 CREATE INDEX IF NOT EXISTS ix_ref_type ON reference(type);
 CREATE INDEX IF NOT EXISTS ix_refkey_refid ON reference_key(value);
+
+CREATE TABLE IF NOT EXISTS registry_descriptor (
+  descriptor_id BIGINT PRIMARY KEY REFERENCES descriptor(id) ON DELETE CASCADE,
+  description_id BIGINT REFERENCES lang_string_text_type_reference(id) ON DELETE SET NULL,
+  displayname_id BIGINT REFERENCES lang_string_name_type_reference(id) ON DELETE SET NULL,
+  administrative_information_id BIGINT REFERENCES registry_administrative_information(id) ON DELETE CASCADE,
+  registry_type VARCHAR(2048),
+  global_asset_id VARCHAR(2048),
+  id_short VARCHAR(128),
+  id VARCHAR(2048) NOT NULL UNIQUE
+);
+
+CREATE TABLE IF NOT EXISTS registry_administrative_information (
+  id                BIGSERIAL PRIMARY KEY,
+  version           VARCHAR(4),
+  revision          VARCHAR(4),
+  company           BIGINT REFERENCES reference(id),
+  templateId        VARCHAR(2048)
+);
+
+-- descriptor_extension: speed lookups by either side + pair-membership checks
 CREATE INDEX IF NOT EXISTS ix_descriptor_extension_descriptor_id ON descriptor_extension(descriptor_id);
 CREATE INDEX IF NOT EXISTS ix_descriptor_extension_extension_id  ON descriptor_extension(extension_id);
 CREATE INDEX IF NOT EXISTS ix_descriptor_extension_pair          ON descriptor_extension(descriptor_id, extension_id);

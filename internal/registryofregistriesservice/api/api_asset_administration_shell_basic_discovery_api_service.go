@@ -14,8 +14,10 @@ package api
 import (
 	"context"
 	"errors"
+	"log"
 	"net/http"
 
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	registryofregistriespostgresql "github.com/eclipse-basyx/basyx-go-components/internal/registryofregistriesservice/persistence"
 )
@@ -43,4 +45,63 @@ func (s *AssetAdministrationShellRegistryOfRegistriesAPIAPIService) GetRegistrie
 	ctx context.Context,
 ) (model.ImplResponse, error) {
 	return model.Response(http.StatusNotImplemented, nil), errors.New("GetAllSubmodelsValueOnly method not implemented")
+}
+
+func (s *AssetAdministrationShellRegistryOfRegistriesAPIAPIService) GetRegistryDescriptorById(ctx context.Context, registryIdentifier string) (model.ImplResponse, error) {
+	decoded, decodeErr := common.DecodeString(registryIdentifier)
+	if decodeErr != nil {
+		log.Printf("R [%s] Error in GetRegistryDescriptorById: decode registryIdentifier=%q: %v", componentName, registryIdentifier, decodeErr)
+		return common.NewErrorResponse(
+			decodeErr, http.StatusBadRequest, componentName, "GetRegistryDescriptorById", "BadRequest-Decode",
+		), nil
+	}
+
+	result, err := s.registryOfRegistriesBackend.GetRegistryDescriptorById(ctx, decoded)
+
+	if err != nil {
+		switch {
+		case common.IsErrBadRequest(err):
+			log.Printf("🧩 [%s] Error in GetRegistryDescriptorById: bad request (aasId=%q): %v", componentName, string(decoded), err)
+			return common.NewErrorResponse(
+				err, http.StatusBadRequest, componentName, "GetRegistryDescriptorById", "BadRequest",
+			), nil
+		case common.IsErrNotFound(err):
+			log.Printf("🧩 [%s] Error in GetRegistryDescriptorById: not found (aasId=%q): %v", componentName, string(decoded), err)
+			return common.NewErrorResponse(
+				err, http.StatusNotFound, componentName, "GetRegistryDescriptorById", "NotFound",
+			), nil
+		default:
+			log.Printf("🧩 [%s] Error in GetRegistryDescriptorById: internal (aasId=%q): %v", componentName, string(decoded), err)
+			return common.NewErrorResponse(
+				err, http.StatusInternalServerError, componentName, "GetRegistryDescriptorById", "Unhandled",
+			), err
+		}
+	}
+	return model.Response(http.StatusOK, result), nil
+}
+
+func (s *AssetAdministrationShellRegistryOfRegistriesAPIAPIService) PostRegistryDescriptor(ctx context.Context, registryDescriptor model.RegistryDescriptor) (model.ImplResponse, error) {
+	err := s.registryOfRegistriesBackend.PostRegistryDescriptor(ctx, registryDescriptor)
+
+	if err != nil {
+		switch {
+		case common.IsErrBadRequest(err):
+			log.Printf("🧩 [%s] Error in InsertRegistryDescriptor: bad request (aasId=%q): %v", componentName, registryDescriptor.Id, err)
+			return common.NewErrorResponse(
+				err, http.StatusBadRequest, componentName, "InsertRegistryDescriptor", "BadRequest",
+			), nil
+		case common.IsErrConflict(err):
+			log.Printf("🧩 [%s] Error in InsertRegistryDescriptor: conflict (aasId=%q): %v", componentName, registryDescriptor.Id, err)
+			return common.NewErrorResponse(
+				err, http.StatusConflict, componentName, "InsertRegistryDescriptor", "Conflict",
+			), nil
+		default:
+			log.Printf("🧩 [%s] Error in InsertRegistryDescriptor: internal (aasId=%q): %v", componentName, registryDescriptor.Id, err)
+			return common.NewErrorResponse(
+				err, http.StatusInternalServerError, componentName, "InsertRegistryDescriptor", "Unhandled",
+			), err
+		}
+	}
+
+	return model.Response(http.StatusCreated, registryDescriptor), nil
 }

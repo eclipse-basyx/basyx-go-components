@@ -22,7 +22,8 @@ import (
 // The AssetAdministrationShellBasicDiscoveryAPIAPIRouter implementation should parse necessary information from the http request,
 // pass the data to a AssetAdministrationShellBasicDiscoveryAPIAPIServicer to perform the required actions, then write the service results to the http response.
 type AssetAdministrationShellRegistryOfRegistrieAPIAPIRouter interface {
-	GetRegistriesTest(http.ResponseWriter, *http.Request)
+	GetRegistryByID(http.ResponseWriter, *http.Request)
+	PostRegistry(http.ResponseWriter, *http.Request)
 }
 
 // AssetAdministrationShellBasicDiscoveryAPIAPIServicer defines the api actions for the AssetAdministrationShellBasicDiscoveryAPIAPI service
@@ -30,5 +31,6 @@ type AssetAdministrationShellRegistryOfRegistrieAPIAPIRouter interface {
 // while the service implementation can be ignored with the .openapi-generator-ignore file
 // and updated with the logic required for the API.
 type AssetAdministrationShellRegistryOfRegistriesAPIAPIServicer interface {
-	GetRegistriesTest(context.Context) (model.ImplResponse, error)
+	GetRegistryDescriptorById(context.Context, string) (model.ImplResponse, error)
+	PostRegistryDescriptor(context.Context, model.RegistryDescriptor) (model.ImplResponse, error)
 }

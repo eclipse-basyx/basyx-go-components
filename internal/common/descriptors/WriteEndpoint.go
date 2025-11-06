@@ -49,7 +49,7 @@ func createEndpointProtocolVersion(tx *sql.Tx, endpointID int64, endpointProtoco
 	return err
 }
 
-func createEndpoints(tx *sql.Tx, descriptorID int64, endpoints []model.Endpoint) error {
+func CreateEndpoints(tx *sql.Tx, descriptorID int64, endpoints []model.Endpoint) error {
 	if endpoints == nil {
 		return nil
 	}

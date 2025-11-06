@@ -12,10 +12,14 @@
 package registryofregistriesapi
 
 import (
+	"encoding/json"
+	"log"
 	"net/http"
 	"strings"
 
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	"github.com/go-chi/chi/v5"
 )
 
 const (
@@ -55,17 +59,87 @@ func NewAssetAdministrationShellRegistryOfRegistriesAPIAPIController(s AssetAdmi
 // Routes returns all the api routes for the AssetAdministrationShellRegistryOfRegistriesAPIAPIController
 func (c *AssetAdministrationShellRegistryOfRegistriesAPIAPIController) Routes() Routes {
 	return Routes{
-		"GetRegistriesTest": Route{
+		"GetRegistryByID": Route{
 			strings.ToUpper("Get"),
-			"/lookup/shells",
-			c.GetRegistriesTest,
+			"/lookup/registries/{registryIdentifier}",
+			c.GetRegistryByID,
+		},
+		"PostRegistryByID": Route{
+			strings.ToUpper("Post"),
+			"/lookup/registries",
+			c.PostRegistry,
 		},
 	}
 }
 
 // GetRegistriesTest - Returns a list of Asset Administration Shell ids linked to specific Asset identifiers
-func (c *AssetAdministrationShellRegistryOfRegistriesAPIAPIController) GetRegistriesTest(w http.ResponseWriter, r *http.Request) {
-	result, err := c.service.GetRegistriesTest(r.Context())
+func (c *AssetAdministrationShellRegistryOfRegistriesAPIAPIController) GetRegistryByID(w http.ResponseWriter, r *http.Request) {
+	registryIdentifierParam := chi.URLParam(r, "registryIdentifier")
+	if registryIdentifierParam == "" {
+		log.Printf("Reg [%s] Error in GetRegistryByID: missing path parameter registryIdentifier", componentName)
+		result := common.NewErrorResponse(
+			common.NewErrBadRequest("Missing path parameter 'registryIdentifier'"),
+			http.StatusBadRequest,
+			componentName,
+			"GetRegistryByID",
+			"registryIdentifier",
+		)
+		EncodeJSONResponse(result.Body, &result.Code, w)
+		return
+	}
+	result, err := c.service.GetRegistryDescriptorById(r.Context(), registryIdentifierParam)
+	// If an error occurred, encode the error with the status code
+	if err != nil {
+		c.errorHandler(w, r, err, &result)
+		return
+	}
+	// If no error, encode the body and the result code
+	_ = EncodeJSONResponse(result.Body, &result.Code, w)
+}
+
+// GetRegistriesTest - Returns a list of Asset Administration Shell ids linked to specific Asset identifiers
+func (c *AssetAdministrationShellRegistryOfRegistriesAPIAPIController) PostRegistry(w http.ResponseWriter, r *http.Request) {
+	var registryDescriptorParam model.RegistryDescriptor
+	d := json.NewDecoder(r.Body)
+	d.DisallowUnknownFields()
+	if err := d.Decode(&registryDescriptorParam); err != nil {
+		log.Printf("🧩 [%s] Error in PostRegistryDescriptor: decode body: %v", componentName, err)
+		result := common.NewErrorResponse(
+			err,
+			http.StatusBadRequest,
+			componentName,
+			"PostRegistryDescriptor",
+			"RequestBody",
+		)
+		EncodeJSONResponse(result.Body, &result.Code, w)
+		return
+	}
+
+	if err := model.AssertRegistryDescriptorRequired(registryDescriptorParam); err != nil {
+		log.Printf("🧩 [%s] Error in PostRegistryDescriptor: required validation failed: %v", componentName, err)
+		result := common.NewErrorResponse(
+			err,
+			http.StatusBadRequest,
+			componentName,
+			"PostRegistryDescriptor",
+			"RequestBody",
+		)
+		EncodeJSONResponse(result.Body, &result.Code, w)
+		return
+	}
+	if err := model.AssertRegistryDescriptorConstraints(registryDescriptorParam); err != nil {
+		log.Printf("🧩 [%s] Error in PostRegistryDescriptor: constraints validation failed: %v", componentName, err)
+		result := common.NewErrorResponse(
+			err,
+			http.StatusBadRequest,
+			componentName,
+			"PostRegistryDescriptor",
+			"RequestBody",
+		)
+		EncodeJSONResponse(result.Body, &result.Code, w)
+		return
+	}
+	result, err := c.service.PostRegistryDescriptor(r.Context(), registryDescriptorParam)
 	// If an error occurred, encode the error with the status code
 	if err != nil {
 		c.errorHandler(w, r, err, &result)
