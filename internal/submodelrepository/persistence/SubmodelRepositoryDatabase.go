@@ -36,6 +36,8 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"sync"
+	"time"
 
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 
@@ -108,19 +110,44 @@ func (p *PostgreSQLSubmodelDatabase) GetAllSubmodels(limit int32, cursor string,
 	if limit == 0 {
 		limit = 100
 	}
-	sm, cursor, err := submodelpersistence.GetAllSubmodels(p.db, int64(limit), cursor, nil)
-	if err != nil {
-		return nil, "", err
-	}
-	result := []gen.Submodel{}
 
-	for _, s := range sm {
+	type result struct {
+		sm     []*gen.Submodel
+		smMap  map[string]*gen.Submodel
+		cursor string
+		err    error
+	}
+
+	var wg sync.WaitGroup
+	resultChan := make(chan result, 1)
+
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		sm, smMap, cursor, err := submodelpersistence.GetAllSubmodels(p.db, int64(limit), cursor, nil)
+		resultChan <- result{sm: sm, smMap: smMap, cursor: cursor, err: err}
+	}()
+
+	go func() {
+		defer wg.Done()
+	}()
+
+	wg.Wait()
+	res := <-resultChan
+
+	if res.err != nil {
+		return nil, "", res.err
+	}
+
+	submodels := []gen.Submodel{}
+
+	for _, s := range res.sm {
 		if s != nil {
-			result = append(result, *s)
+			submodels = append(submodels, *s)
 		}
 	}
 
-	return result, cursor, nil
+	return submodels, res.cursor, nil
 }
 
 // GetAllSubmodelsMetadata retrieves metadata for all submodels without their full content.
@@ -241,12 +268,53 @@ func (p *PostgreSQLSubmodelDatabase) GetAllSubmodelsMetadata(
 //   - gen.Submodel: The complete submodel with all its elements
 //   - error: Error if submodel not found or retrieval fails
 func (p *PostgreSQLSubmodelDatabase) GetSubmodel(id string) (gen.Submodel, error) {
-	sm, err := submodelpersistence.GetSubmodelByID(p.db, id)
-	if err != nil {
-		return gen.Submodel{}, err
+	type result struct {
+		sm  *gen.Submodel
+		err error
 	}
 
-	return *sm, nil
+	type resultSME struct {
+		smes []gen.SubmodelElement
+		err  error
+	}
+
+	var wg sync.WaitGroup
+	resultChan := make(chan result, 1)
+	resultChanSME := make(chan resultSME, 1)
+
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		sm, err := submodelpersistence.GetSubmodelByID(p.db, id)
+		resultChan <- result{sm: sm, err: err}
+	}()
+
+	go func() {
+		defer wg.Done()
+		start := time.Now().Local().UnixMicro()
+		smes, err := submodelpersistence.GetSubmodelElementsForSubmodel(p.db, id)
+		end := time.Now().Local().UnixMicro()
+		fmt.Printf("SubmodelElements retrieval time: %d microseconds\n", end-start)
+		resultChanSME <- resultSME{smes: smes, err: err}
+	}()
+
+	wg.Wait()
+	res := <-resultChan
+
+	resSME := <-resultChanSME
+	if resSME.err != nil {
+		return gen.Submodel{}, resSME.err
+	}
+
+	if res.sm != nil {
+		res.sm.SubmodelElements = resSME.smes
+	}
+
+	if res.err != nil {
+		return gen.Submodel{}, res.err
+	}
+
+	return *res.sm, nil
 }
 
 // DeleteSubmodel removes a submodel and all its associated data from the database.
