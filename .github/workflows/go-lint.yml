@@ -16,19 +16,16 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v5  # latest major is v5 :contentReference[oaicite:0]{index=0}
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6  # latest major is v6 :contentReference[oaicite:1]{index=1}
         with:
-          # Use the version in go.mod if present; otherwise pin a version
           go-version-file: go.mod
           cache: true
 
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v8
+        uses: golangci/golangci-lint-action@v8  # latest major version is v8.0.0 :contentReference[oaicite:2]{index=2}
         with:
-          # Use latest version to support Go 1.25
-          version: latest
-          # Install the latest golangci-lint from source if needed
+          version: v2.6.1   # latest release of golangci-lint itself :contentReference[oaicite:3]{index=3}
           install-mode: "goinstall"
