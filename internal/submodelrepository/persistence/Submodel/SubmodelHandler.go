@@ -29,7 +29,6 @@ package submodelpersistence
 
 import (
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"sort"
 	"time"
@@ -177,7 +176,7 @@ func getSubmodels(db *sql.DB, submodelIDFilter string, limit int64, cursor strin
 			result = append(result, submodel)
 			break
 		}
-		if isArrayNotEmpty(row.SemanticID) {
+		if common.IsArrayNotEmpty(row.SemanticID) {
 			semanticID, err = builders.ParseReferences(row.SemanticID, referenceBuilderRefs)
 			if err != nil {
 				return nil, "", err
@@ -192,7 +191,7 @@ func getSubmodels(db *sql.DB, submodelIDFilter string, limit int64, cursor strin
 		}
 
 		// SupplementalSemanticIDs
-		if isArrayNotEmpty(row.SupplementalSemanticIDs) {
+		if common.IsArrayNotEmpty(row.SupplementalSemanticIDs) {
 			supplementalSemanticIDs, err := builders.ParseReferences(row.SupplementalSemanticIDs, referenceBuilderRefs)
 			if err != nil {
 				return nil, "", err
@@ -218,7 +217,7 @@ func getSubmodels(db *sql.DB, submodelIDFilter string, limit int64, cursor strin
 		}
 
 		// Embedded Data Specifications
-		if isArrayNotEmpty(row.EmbeddedDataSpecification) {
+		if common.IsArrayNotEmpty(row.EmbeddedDataSpecification) {
 			err = json.Unmarshal(row.EmbeddedDataSpecification, &EmbeddedDataSpecifications)
 			// Print size of EmbeddedDataSpecifications in bytes
 			if err != nil {
@@ -229,7 +228,7 @@ func getSubmodels(db *sql.DB, submodelIDFilter string, limit int64, cursor strin
 		}
 
 		// Qualifiers
-		if isArrayNotEmpty(row.Qualifiers) {
+		if common.IsArrayNotEmpty(row.Qualifiers) {
 			builder := builders.NewQualifiersBuilder()
 			qualifierRows, err := builders.ParseQualifiersRow(row.Qualifiers)
 			if err != nil {
@@ -260,7 +259,7 @@ func getSubmodels(db *sql.DB, submodelIDFilter string, limit int64, cursor strin
 		}
 
 		// Extensions
-		if isArrayNotEmpty(row.Extensions) {
+		if common.IsArrayNotEmpty(row.Extensions) {
 			builder := builders.NewExtensionsBuilder()
 			extensionRows, err := builders.ParseExtensionRows(row.Extensions)
 			if err != nil {
@@ -291,7 +290,7 @@ func getSubmodels(db *sql.DB, submodelIDFilter string, limit int64, cursor strin
 		}
 
 		// Administration
-		if isArrayNotEmpty(row.Administration) {
+		if common.IsArrayNotEmpty(row.Administration) {
 			adminRow, err := builders.ParseAdministrationRow(row.Administration)
 			if err != nil {
 				fmt.Println(err)
@@ -316,7 +315,7 @@ func getSubmodels(db *sql.DB, submodelIDFilter string, limit int64, cursor strin
 
 		// RootSubmodelElements
 		smeBuilderMap := make(map[int64]*builders.SubmodelElementBuilder)
-		if isArrayNotEmpty(row.RootSubmodelElements) {
+		if common.IsArrayNotEmpty(row.RootSubmodelElements) {
 			var RootSubmodelElements []model.SubmodelElementRow
 			err := json.Unmarshal(row.RootSubmodelElements, &RootSubmodelElements)
 			if err != nil {
@@ -342,7 +341,7 @@ func getSubmodels(db *sql.DB, submodelIDFilter string, limit int64, cursor strin
 				}
 			}
 		}
-		if isArrayNotEmpty(row.ChildSubmodelElements) {
+		if common.IsArrayNotEmpty(row.ChildSubmodelElements) {
 			var ChildSubmodelElements []model.SubmodelElementRow
 			err := json.Unmarshal(row.ChildSubmodelElements, &ChildSubmodelElements)
 			if err != nil {
@@ -415,7 +414,7 @@ func getSubmodels(db *sql.DB, submodelIDFilter string, limit int64, cursor strin
 // Returns:
 //   - error: An error if parsing the language strings fails, nil otherwise
 func addDisplayNames(row model.SubmodelRow, submodel *model.Submodel) error {
-	if isArrayNotEmpty(row.DisplayNames) {
+	if common.IsArrayNotEmpty(row.DisplayNames) {
 		displayNames, err := builders.ParseLangStringNameType(row.DisplayNames)
 		if err != nil {
 			return fmt.Errorf("error parsing display names: %w", err)
@@ -438,7 +437,7 @@ func addDisplayNames(row model.SubmodelRow, submodel *model.Submodel) error {
 // Returns:
 //   - error: An error if parsing the language strings fails, nil otherwise
 func addDescriptions(row model.SubmodelRow, submodel *model.Submodel) error {
-	if isArrayNotEmpty(row.Descriptions) {
+	if common.IsArrayNotEmpty(row.Descriptions) {
 		descriptions, err := builders.ParseLangStringTextType(row.Descriptions)
 		if err != nil {
 			return fmt.Errorf("error parsing descriptions: %w", err)
@@ -446,20 +445,6 @@ func addDescriptions(row model.SubmodelRow, submodel *model.Submodel) error {
 		submodel.Description = descriptions
 	}
 	return nil
-}
-
-// isArrayNotEmpty checks if a JSON array contains data.
-//
-// This utility function determines whether a JSON RawMessage contains an actual
-// array with data, as opposed to being empty or containing a null value.
-//
-// Parameters:
-//   - data: JSON RawMessage to check
-//
-// Returns:
-//   - bool: true if the data is not empty and not "null", false otherwise
-func isArrayNotEmpty(data json.RawMessage) bool {
-	return len(data) > 0 && string(data) != "null"
 }
 
 // hasSemanticID validates that exactly one semantic ID reference exists.
@@ -555,6 +540,11 @@ func attachChildrenToSubmodelElements(nodes map[int64]*node, children map[int64]
 	}
 }
 
+// node is a helper struct to build the hierarchical structure of SubmodelElements.
+//
+// It holds metadata such as database ID, parent ID, path, position, and the actual
+// SubmodelElement data. This struct is used during the reconstruction of the
+// nested structure of submodel elements from flat database rows.
 type node struct {
 	id       int64                 // Database ID of the element
 	parentID int64                 // Parent element ID for hierarchy

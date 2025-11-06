@@ -30,6 +30,7 @@ import (
 	"fmt"
 	"log"
 
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -58,7 +59,7 @@ func BuildSubmodelElement(smeRow model.SubmodelElementRow) (*model.SubmodelEleme
 	specificSME.SetCategory(smeRow.Category)
 	specificSME.SetModelType(smeRow.ModelType)
 
-	if isArrayNotEmpty(smeRow.Descriptions) {
+	if common.IsArrayNotEmpty(smeRow.Descriptions) {
 		descriptions, err := ParseLangStringTextType(smeRow.Descriptions)
 		if err != nil {
 			return nil, nil, fmt.Errorf("error parsing descriptions: %w", err)
@@ -66,7 +67,7 @@ func BuildSubmodelElement(smeRow model.SubmodelElementRow) (*model.SubmodelEleme
 		specificSME.SetDescription(descriptions)
 	}
 
-	if isArrayNotEmpty(smeRow.DisplayNames) {
+	if common.IsArrayNotEmpty(smeRow.DisplayNames) {
 		displayNames, err := ParseLangStringNameType(smeRow.DisplayNames)
 		if err != nil {
 			return nil, nil, fmt.Errorf("error parsing display names: %w", err)
@@ -88,7 +89,7 @@ func BuildSubmodelElement(smeRow model.SubmodelElementRow) (*model.SubmodelEleme
 	supplementalSemanticIDs := []*model.Reference{}
 	suppl := []model.Reference{}
 	// SupplementalSemanticIDs
-	if isArrayNotEmpty(smeRow.SupplementalSemanticIDs) {
+	if common.IsArrayNotEmpty(smeRow.SupplementalSemanticIDs) {
 		supplementalSemanticIDs, err = ParseReferences(smeRow.SupplementalSemanticIDs, refBuilderMap)
 		if err != nil {
 			return nil, nil, err
@@ -102,7 +103,7 @@ func BuildSubmodelElement(smeRow model.SubmodelElementRow) (*model.SubmodelEleme
 	}
 
 	// Qualifiers
-	if isArrayNotEmpty(smeRow.Qualifiers) {
+	if common.IsArrayNotEmpty(smeRow.Qualifiers) {
 		builder := NewQualifiersBuilder()
 		qualifierRows, err := ParseQualifiersRow(smeRow.Qualifiers)
 		if err != nil {
@@ -262,10 +263,6 @@ func buildBasicEventElement(smeRow model.SubmodelElementRow, refBuilderMap map[i
 	return bee, nil
 }
 
-func isArrayNotEmpty(data json.RawMessage) bool {
-	return len(data) > 0 && string(data) != "null"
-}
-
 func moreThanZeroReferences(referenceArray []*model.Reference) bool {
 	return len(referenceArray) > 0
 }
@@ -273,12 +270,12 @@ func moreThanZeroReferences(referenceArray []*model.Reference) bool {
 func getSingleReference(reference json.RawMessage, referredReference json.RawMessage, refBuilderMap map[int64]*ReferenceBuilder) (*model.Reference, error) {
 	var refs []*model.Reference
 	var err error
-	if isArrayNotEmpty(reference) {
+	if common.IsArrayNotEmpty(reference) {
 		refs, err = ParseReferences(reference, refBuilderMap)
 		if err != nil {
 			return nil, err
 		}
-		if isArrayNotEmpty(referredReference) {
+		if common.IsArrayNotEmpty(referredReference) {
 			if err = ParseReferredReferences(referredReference, refBuilderMap); err != nil {
 				return nil, err
 			}
