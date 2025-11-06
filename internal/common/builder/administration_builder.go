@@ -30,6 +30,7 @@ package builder
 import (
 	"log"
 
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -57,7 +58,7 @@ import (
 //	if err != nil {
 //	    log.Printf("Failed to build administration: %v", err)
 //	}
-func BuildAdministration(adminRow AdministrationRow) (*gen.AdministrativeInformation, error) {
+func BuildAdministration(adminRow model.AdministrationRow) (*gen.AdministrativeInformation, error) {
 	administration := &gen.AdministrativeInformation{
 		Version:    adminRow.Version,
 		Revision:   adminRow.Revision,

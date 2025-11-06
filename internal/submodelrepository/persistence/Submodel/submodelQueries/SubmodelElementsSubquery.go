@@ -91,6 +91,7 @@ func GetSubmodelElementsSubquery(dialect goqu.DialectWrapper, rootSubmodelElemen
 		goqu.V("parent_id"), goqu.I("tlsme.parent_sme_id"),
 		goqu.V("root_id"), goqu.I("tlsme.root_sme_id"),
 		goqu.V("id_short"), goqu.I("tlsme.id_short"),
+		goqu.V("id_short_path"), goqu.I("tlsme.idshort_path"),
 		goqu.V("category"), goqu.I("tlsme.category"),
 		goqu.V("model_type"), goqu.I("tlsme.model_type"),
 		goqu.V("position"), goqu.I("tlsme.position"),
@@ -151,10 +152,10 @@ func getValueSubquery(dialect goqu.DialectWrapper) exp.CaseExpression {
 		// 	goqu.I("tlsme.model_type").Eq("AnnotatedRelationshipElement"),
 		// 	getAnnotatedRelationshipElementSubquery(dialect),
 		// ).
-		// When(
-		// 	goqu.I("tlsme.model_type").Eq("BasicEventElement"),
-		// 	getBasicEventElementSubquery(dialect),
-		// ).
+		When(
+			goqu.I("tlsme.model_type").Eq("BasicEventElement"),
+			getBasicEventElementSubquery(dialect),
+		).
 		// When(
 		// 	goqu.I("tlsme.model_type").Eq("Blob"),
 		// 	getBlobSubquery(dialect),
@@ -168,21 +169,17 @@ func getValueSubquery(dialect goqu.DialectWrapper) exp.CaseExpression {
 		// 	getEntitySubquery(dialect),
 		// ).
 		// When(
-		// 	goqu.I("tlsme.model_type").Eq("EventElement"),
-		// 	getEventElementSubquery(dialect),
-		// ).
-		// When(
 		// 	goqu.I("tlsme.model_type").Eq("File"),
 		// 	getFileSubquery(dialect),
 		// ).
-		// When(
-		// 	goqu.I("tlsme.model_type").Eq("SubmodelElementList"),
-		// 	getSubmodelElementListSubquery(dialect),
-		// ).
-		// When(
-		// 	goqu.I("tlsme.model_type").Eq("MultiLanguageProperty"),
-		// 	getMultiLanguagePropertySubquery(dialect),
-		// ).
+		When(
+			goqu.I("tlsme.model_type").Eq("SubmodelElementList"),
+			getSubmodelElementListSubquery(dialect),
+		).
+		When(
+			goqu.I("tlsme.model_type").Eq("MultiLanguageProperty"),
+			getMultiLanguagePropertySubquery(dialect),
+		).
 		// When(
 		// 	goqu.I("tlsme.model_type").Eq("Operation"),
 		// 	getOperationSubquery(dialect),
@@ -191,10 +188,10 @@ func getValueSubquery(dialect goqu.DialectWrapper) exp.CaseExpression {
 			goqu.I("tlsme.model_type").Eq("Property"),
 			getPropertySubquery(dialect),
 		).
-		// When(
-		// 	goqu.I("tlsme.model_type").Eq("Range"),
-		// 	getRangeSubquery(dialect),
-		// ).
+		When(
+			goqu.I("tlsme.model_type").Eq("Range"),
+			getRangeSubquery(dialect),
+		).
 		// When(
 		// 	goqu.I("tlsme.model_type").Eq("ReferenceElement"),
 		// 	getReferenceElementSubquery(dialect),
@@ -211,9 +208,28 @@ func getValueSubquery(dialect goqu.DialectWrapper) exp.CaseExpression {
 // 	return nil
 // }
 
-// func getBasicEventElementSubquery(dialect goqu.DialectWrapper) *goqu.SelectDataset {
-// 	return nil
-// }
+func getBasicEventElementSubquery(dialect goqu.DialectWrapper) *goqu.SelectDataset {
+	observedRef, observedRefReferred := queries.GetReferenceQueries(dialect, goqu.I("bee.observed_ref"))
+	messageBrokerRef, messageBrokerRefReferred := queries.GetReferenceQueries(dialect, goqu.I("bee.message_broker_ref"))
+
+	return dialect.From(goqu.T("submodel_element_list").As("bee")).
+		Select(
+			goqu.Func("jsonb_build_object",
+				goqu.V("direction"), goqu.I("bee.direction"),
+				goqu.V("state"), goqu.I("bee.state"),
+				goqu.V("message_topic"), goqu.I("bee.message_topic"),
+				goqu.V("last_update"), goqu.I("bee.last_update"),
+				goqu.V("min_interval"), goqu.I("bee.min_interval"),
+				goqu.V("max_interval"), goqu.I("bee.max_interval"),
+				goqu.V("observed_ref"), observedRef,
+				goqu.V("observed_ref_referred"), observedRefReferred,
+				goqu.V("message_broker_ref"), messageBrokerRef,
+				goqu.V("message_broker_ref_referred"), messageBrokerRefReferred,
+			),
+		).
+		Where(goqu.I("bee.id").Eq(goqu.I("tlsme.id"))).
+		Limit(1)
+}
 
 // func getBlobSubquery(dialect goqu.DialectWrapper) *goqu.SelectDataset {
 // 	return nil
@@ -231,35 +247,47 @@ func getValueSubquery(dialect goqu.DialectWrapper) exp.CaseExpression {
 // 	return nil
 // }
 
-// func getEventElementSubquery(dialect goqu.DialectWrapper) *goqu.SelectDataset {
-// 	return nil
-// }
+func getSubmodelElementListSubquery(dialect goqu.DialectWrapper) *goqu.SelectDataset {
+	semanticIDListElement, semanticIDListElementReferred := queries.GetReferenceQueries(dialect, goqu.I("list.semantic_id_list_element"))
 
-// func getSubmodelElementListSubquery(dialect goqu.DialectWrapper) *goqu.SelectDataset {
-// 	return nil
-// }
+	return dialect.From(goqu.T("submodel_element_list").As("list")).
+		Select(
+			goqu.Func("jsonb_build_object",
+				goqu.V("order_relevant"), goqu.I("list.order_relevant"),
+				goqu.V("type_value_list_element"), goqu.I("list.type_value_list_element"),
+				goqu.V("value_type_list_element"), goqu.I("list.value_type_list_element"),
+				goqu.V("semantic_id_list_element"), semanticIDListElement,
+				goqu.V("semantic_id_list_element_referred"), semanticIDListElementReferred,
+			),
+		).
+		Where(goqu.I("list.id").Eq(goqu.I("tlsme.id"))).
+		Limit(1)
+}
 
-// func getSubmodelElementCollectionSubquery(dialect goqu.DialectWrapper) *goqu.SelectDataset {
-// 	return dialect.From(goqu.T("property_element").As("pr")).
-// 		Select(
-// 			goqu.Func("jsonb_build_object",
-// 				goqu.V("value"), goqu.COALESCE(
-// 					goqu.I("pr.value_text"),
-// 					goqu.L("?::text", goqu.I("pr.value_num")),
-// 					goqu.L("?::text", goqu.I("pr.value_bool")),
-// 					goqu.L("?::text", goqu.I("pr.value_time")),
-// 					goqu.L("?::text", goqu.I("pr.value_datetime")),
-// 				),
-// 				goqu.V("value_type"), goqu.I("pr.value_type"),
-// 			),
-// 		).
-// 		Where(goqu.I("pr.id").Eq(goqu.I("tlsme.id"))).
-// 		Limit(1)
-// }
+func getMultiLanguagePropertySubquery(dialect goqu.DialectWrapper) *goqu.SelectDataset {
+	valueIDSubquery, valueIDReferredSubquery := queries.GetReferenceQueries(dialect, goqu.I("mlp.value_id"))
 
-// func getMultiLanguagePropertySubquery(dialect goqu.DialectWrapper) *goqu.SelectDataset {
-// 	return nil
-// }
+	mlpValueObject := goqu.Func("jsonb_build_object",
+		goqu.V("language"), goqu.I("mlpval.language"),
+		goqu.V("text"), goqu.I("mlpval.text"),
+		goqu.V("id"), goqu.I("mlpval.id"),
+	)
+
+	mlpValueSubquery := dialect.From(goqu.T("multilanguage_property_value").As("mlpval")).
+		Select(goqu.Func("jsonb_agg", goqu.L("?", mlpValueObject))).
+		Where(goqu.I("mlpval.id").Eq(goqu.I("tlsme.id")))
+
+	return dialect.From(goqu.T("multilanguage_property").As("mlp")).
+		Select(
+			goqu.Func("jsonb_build_object",
+				goqu.V("value_id"), valueIDSubquery,
+				goqu.V("value_id_referred"), valueIDReferredSubquery,
+				goqu.V("value"), mlpValueSubquery,
+			),
+		).
+		Where(goqu.I("mlp.id").Eq(goqu.I("tlsme.id"))).
+		Limit(1)
+}
 
 // func getOperationSubquery(dialect goqu.DialectWrapper) *goqu.SelectDataset {
 // 	return nil
@@ -287,9 +315,28 @@ func getPropertySubquery(dialect goqu.DialectWrapper) *goqu.SelectDataset {
 		Limit(1)
 }
 
-// func getRangeSubquery(dialect goqu.DialectWrapper) *goqu.SelectDataset {
-// 	return nil
-// }
+func getRangeSubquery(dialect goqu.DialectWrapper) *goqu.SelectDataset {
+	return dialect.From(goqu.T("range_element").As("range")).
+		Select(
+			goqu.Func("jsonb_build_object",
+				goqu.V("value_type"), goqu.I("range.value_type"),
+				goqu.V("min"), goqu.COALESCE(
+					goqu.I("range.min_text"),
+					goqu.L("?::text", goqu.I("range.min_num")),
+					goqu.L("?::text", goqu.I("range.min_time")),
+					goqu.L("?::text", goqu.I("range.min_datetime")),
+				),
+				goqu.V("max"), goqu.COALESCE(
+					goqu.I("range.max_text"),
+					goqu.L("?::text", goqu.I("range.max_num")),
+					goqu.L("?::text", goqu.I("range.max_time")),
+					goqu.L("?::text", goqu.I("range.max_datetime")),
+				),
+			),
+		).
+		Where(goqu.I("range.id").Eq(goqu.I("tlsme.id"))).
+		Limit(1)
+}
 
 // func getReferenceElementSubquery(dialect goqu.DialectWrapper) *goqu.SelectDataset {
 // 	return nil

@@ -38,6 +38,7 @@ import (
 	_ "github.com/doug-martin/goqu/v9/dialect/postgres"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	builders "github.com/eclipse-basyx/basyx-go-components/internal/common/builder"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	submodel_query "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/Submodel/submodelQueries"
@@ -135,7 +136,7 @@ func getSubmodels(db *sql.DB, submodelIDFilter string, limit int64, cursor strin
 	}
 	defer func() { _ = rows.Close() }()
 	var count int64
-	var row builders.SubmodelRow
+	var row model.SubmodelRow
 	var EmbeddedDataSpecifications []gen.EmbeddedDataSpecification
 	var semanticID []*gen.Reference
 	for rows.Next() {
@@ -300,11 +301,14 @@ func getSubmodels(db *sql.DB, submodelIDFilter string, limit int64, cursor strin
 			}
 		}
 
+		nodes := make(map[int64]*node, 256)
+		children := make(map[int64][]*node, 256)
+		roots := make([]*node, 0, 16)
+
 		// RootSubmodelElements
 		smeBuilderMap := make(map[int64]*builders.SubmodelElementBuilder)
-		submodelElements := []SubmodelElementSubmodelMetadata{}
 		if isArrayNotEmpty(row.RootSubmodelElements) {
-			var RootSubmodelElements []builders.SubmodelElementRow
+			var RootSubmodelElements []model.SubmodelElementRow
 			err := json.Unmarshal(row.RootSubmodelElements, &RootSubmodelElements)
 			if err != nil {
 				return nil, "", err
@@ -317,41 +321,57 @@ func getSubmodels(db *sql.DB, submodelIDFilter string, limit int64, cursor strin
 						return nil, "", err
 					}
 					smeBuilderMap[smeRow.DbID] = builder
-
-					submodelElements = append(submodelElements, SubmodelElementSubmodelMetadata{
-						SubmodelElement: *sme,
-						DatabaseID:      int(smeRow.DbID),
-					})
+					n := &node{
+						id:       smeRow.DbID,
+						parentID: 0, // Root elements have no parent
+						path:     smeRow.IDShortPath,
+						position: smeRow.Position,
+						element:  *sme,
+					}
+					nodes[smeRow.DbID] = n
+					roots = append(roots, n)
 				}
 			}
 		}
 		if isArrayNotEmpty(row.ChildSubmodelElements) {
-			var ChildSubmodelElements []builders.SubmodelElementRow
+			var ChildSubmodelElements []model.SubmodelElementRow
 			err := json.Unmarshal(row.ChildSubmodelElements, &ChildSubmodelElements)
 			if err != nil {
 				return nil, "", err
 			}
 			for _, smeRow := range ChildSubmodelElements {
-				builder, exists := smeBuilderMap[*smeRow.RootID]
-				if exists {
-					err := builder.AddChildSME(int(smeRow.DbID), int(*smeRow.ParentID), smeRow)
+				_, exists := smeBuilderMap[smeRow.DbID]
+				if !exists {
+					sme, builder, err := builders.BuildSubmodelElement(smeRow)
 					if err != nil {
 						return nil, "", err
 					}
+					smeBuilderMap[smeRow.DbID] = builder
+					n := &node{
+						id:       smeRow.DbID,
+						parentID: *smeRow.ParentID,
+						path:     smeRow.IDShortPath,
+						position: smeRow.Position,
+						element:  *sme,
+					}
+					nodes[smeRow.DbID] = n
+					children[*smeRow.ParentID] = append(children[*smeRow.ParentID], n)
 				}
 			}
 		}
 
-		for _, builder := range smeBuilderMap {
-			builder.BuildHierarchy()
-		}
-		// Sort submodel elements according to their database IDs to maintain consistent order
-		sort.SliceStable(submodelElements, func(i, j int) bool {
-			return submodelElements[i].DatabaseID < submodelElements[j].DatabaseID
+		attachChildrenToSubmodelElements(nodes, children)
+
+		sort.SliceStable(roots, func(i, j int) bool {
+			a, b := roots[i], roots[j]
+			return a.id < b.id
 		})
-		for _, smeMeta := range submodelElements {
-			submodel.SubmodelElements = append(submodel.SubmodelElements, smeMeta.SubmodelElement)
+
+		res := make([]gen.SubmodelElement, 0, len(roots))
+		for _, r := range roots {
+			res = append(res, r.element)
 		}
+		submodel.SubmodelElements = res
 
 		result = append(result, submodel)
 	}
@@ -385,7 +405,7 @@ func getSubmodels(db *sql.DB, submodelIDFilter string, limit int64, cursor strin
 //
 // Returns:
 //   - error: An error if parsing the language strings fails, nil otherwise
-func addDisplayNames(row builders.SubmodelRow, submodel *gen.Submodel) error {
+func addDisplayNames(row model.SubmodelRow, submodel *gen.Submodel) error {
 	if isArrayNotEmpty(row.DisplayNames) {
 		displayNames, err := builders.ParseLangStringNameType(row.DisplayNames)
 		if err != nil {
@@ -408,7 +428,7 @@ func addDisplayNames(row builders.SubmodelRow, submodel *gen.Submodel) error {
 //
 // Returns:
 //   - error: An error if parsing the language strings fails, nil otherwise
-func addDescriptions(row builders.SubmodelRow, submodel *gen.Submodel) error {
+func addDescriptions(row model.SubmodelRow, submodel *gen.Submodel) error {
 	if isArrayNotEmpty(row.Descriptions) {
 		descriptions, err := builders.ParseLangStringTextType(row.Descriptions)
 		if err != nil {
@@ -483,4 +503,53 @@ func getSubmodelDataFromDbWithJSONQuery(db *sql.DB, submodelID string, limit int
 		return nil, err
 	}
 	return rows, nil
+}
+
+// attachChildrenToSubmodelElements reconstructs the hierarchical structure of submodel elements.
+//
+// This function attaches child elements to their parent containers (SubmodelElementCollection
+// or SubmodelElementList) in the proper order. It performs a stable sort based on position
+// (if set) with path as tie-breaker, ensuring consistent ordering of children.
+//
+// The function operates in O(n log n) time where n is the number of children, using an
+// efficient sorting algorithm and direct map lookups.
+//
+// Parameters:
+//   - nodes: Map of all nodes indexed by their database ID
+//   - children: Map of parent ID to slice of child nodes
+//
+// Note: Only SubmodelElementCollection and SubmodelElementList types support children.
+// Other element types are silently skipped even if they have entries in the children map.
+func attachChildrenToSubmodelElements(nodes map[int64]*node, children map[int64][]*node) {
+	for id, parent := range nodes {
+		kids := children[id]
+		if len(kids) == 0 {
+			continue
+		}
+
+		// Stable order: by position (if set), otherwise by path as tie-breaker
+		sort.SliceStable(kids, func(i, j int) bool {
+			a, b := kids[i], kids[j]
+			return a.position < b.position
+		})
+
+		switch p := parent.element.(type) {
+		case *gen.SubmodelElementCollection:
+			for _, ch := range kids {
+				p.Value = append(p.Value, ch.element)
+			}
+		case *gen.SubmodelElementList:
+			for _, ch := range kids {
+				p.Value = append(p.Value, ch.element)
+			}
+		}
+	}
+}
+
+type node struct {
+	id       int64               // Database ID of the element
+	parentID int64               // Parent element ID for hierarchy
+	path     string              // Full path for navigation
+	position int                 // Position within parent for ordering
+	element  gen.SubmodelElement // The actual submodel element data
 }

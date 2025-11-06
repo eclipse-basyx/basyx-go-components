@@ -29,7 +29,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"sort"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	jsoniter "github.com/json-iterator/go"
@@ -37,40 +36,27 @@ import (
 
 // SubmodelElementBuilder represents one root level Submodel Element
 type SubmodelElementBuilder struct {
-	ChildSubmodelElementMap map[int]*ChildSubmodelElementMetadata // Maps database IDs to reference metadata for hierarchy building
-	DatabaseID              int
-	SubmodelElement         *model.SubmodelElement
-}
-
-type ChildSubmodelElementMetadata struct {
-	Parent          int
 	DatabaseID      int
 	SubmodelElement *model.SubmodelElement
 }
 
 // BuildSubmodelElement Creates a Root SubmodelElement and the Builder
-func BuildSubmodelElement(smeRow SubmodelElementRow) (*model.SubmodelElement, *SubmodelElementBuilder, error) {
+func BuildSubmodelElement(smeRow model.SubmodelElementRow) (*model.SubmodelElement, *SubmodelElementBuilder, error) {
 	refBuilderMap := make(map[int64]*ReferenceBuilder)
 	specificSME, err := getSubmodelElementObjectBasedOnModelType(smeRow, refBuilderMap)
 	if err != nil {
 		return nil, nil, err
 	}
-	specificSME.SetIdShort(smeRow.IDShort)
-	specificSME.SetCategory(smeRow.Category)
-	specificSME.SetModelType(smeRow.ModelType)
-
-	refs, err := ParseReferences(smeRow.SemanticID, refBuilderMap)
+	semanticID, err := getSingleReference(smeRow.SemanticID, smeRow.SemanticIDReferred, refBuilderMap)
 	if err != nil {
 		return nil, nil, err
 	}
-
-	if err = ParseReferredReferences(smeRow.SemanticIDReferred, refBuilderMap); err != nil {
-		return nil, nil, err
+	if semanticID != nil {
+		specificSME.SetSemanticID(semanticID)
 	}
-
-	if len(refs) > 0 {
-		specificSME.SetSemanticID(refs[0])
-	}
+	specificSME.SetIdShort(smeRow.IDShort)
+	specificSME.SetCategory(smeRow.Category)
+	specificSME.SetModelType(smeRow.ModelType)
 
 	if isArrayNotEmpty(smeRow.Descriptions) {
 		descriptions, err := ParseLangStringTextType(smeRow.Descriptions)
@@ -159,132 +145,121 @@ func BuildSubmodelElement(smeRow SubmodelElementRow) (*model.SubmodelElement, *S
 	return &specificSME, &SubmodelElementBuilder{DatabaseID: int(smeRow.DbID), SubmodelElement: &specificSME}, nil
 }
 
-// AddChildSME is Only needed for Lists, Collections, Operations, AnnotatedRelationshipElements and Entites
-func (b *SubmodelElementBuilder) AddChildSME(childDbID int, parentID int, childRow SubmodelElementRow) error {
-	childSME, _, err := BuildSubmodelElement(childRow)
-	if err != nil {
-		return err
-	}
-	if b.ChildSubmodelElementMap == nil {
-		b.ChildSubmodelElementMap = make(map[int]*ChildSubmodelElementMetadata)
-	}
-	b.ChildSubmodelElementMap[childDbID] = &ChildSubmodelElementMetadata{
-		Parent:          parentID,
-		SubmodelElement: childSME,
-	}
-	if parentID == b.DatabaseID {
-		// Direct child of root, add to root element
-		switch (*b.SubmodelElement).GetModelType() {
-		case "SubmodelElementCollection":
-			collection := (*b.SubmodelElement).(*model.SubmodelElementCollection)
-			collection.Value = append(collection.Value, *childSME)
-		}
-	}
-	return nil
-}
-
-func (b *SubmodelElementBuilder) BuildHierarchy() {
-	// Convert map to slice for sorting
-	var sortedMetadata []*ChildSubmodelElementMetadata
-	for _, metadata := range b.ChildSubmodelElementMap {
-		sortedMetadata = append(sortedMetadata, metadata)
-	}
-
-	sort.SliceStable(sortedMetadata, func(i, j int) bool {
-		return sortedMetadata[i].DatabaseID < sortedMetadata[j].DatabaseID
-	})
-
-	for _, refMetadata := range sortedMetadata {
-		if refMetadata.Parent == b.DatabaseID {
-			// Already assigned to root, skip
-			continue
-		}
-		parentID := refMetadata.Parent
-		submodelElement := refMetadata.SubmodelElement
-		parentObj := b.ChildSubmodelElementMap[parentID].SubmodelElement
-		switch (*parentObj).GetModelType() {
-		case "SubmodelElementCollection":
-			collection := (*parentObj).(*model.SubmodelElementCollection)
-			collection.Value = append(collection.Value, *submodelElement)
-		case "SubmodelElementList":
-			fmt.Println("Not implemented")
-		}
-	}
-}
-
-func getSubmodelElementObjectBasedOnModelType(smeRow SubmodelElementRow, refBuilderMap map[int64]*ReferenceBuilder) (model.SubmodelElement, error) {
+func getSubmodelElementObjectBasedOnModelType(smeRow model.SubmodelElementRow, refBuilderMap map[int64]*ReferenceBuilder) (model.SubmodelElement, error) {
 	switch smeRow.ModelType {
 	case "Property":
-		var valueRow PropertyValueRow
-		err := json.Unmarshal(smeRow.Value, &valueRow)
+		prop, err := buildProperty(smeRow, refBuilderMap)
 		if err != nil {
 			return nil, err
 		}
-		var refs []*model.Reference
-		if isArrayNotEmpty(valueRow.ValueID) {
-			refs, err = ParseReferences(valueRow.ValueID, refBuilderMap)
-			if err != nil {
-				return nil, err
-			}
-			if isArrayNotEmpty(valueRow.ValueIDReferred) {
-				if err = ParseReferredReferences(valueRow.ValueIDReferred, refBuilderMap); err != nil {
-					return nil, err
-				}
-			}
-		}
-
-		prop := &model.Property{
-			Value:     valueRow.Value,
-			ValueType: valueRow.ValueType,
-		}
-
-		if len(refs) > 0 {
-			prop.ValueID = refs[0]
-		}
-
 		return prop, nil
 	case "SubmodelElementCollection":
-		collection := &model.SubmodelElementCollection{Value: []model.SubmodelElement{}}
-		return collection, nil
-	// case "Operation":
-	// 	operation := &model.Operation{}
-	// 	return operation, nil
-	// case "Entity":
-	// 	entity := &model.Entity{}
-	// 	return entity, nil
-	// case "AnnotatedRelationshipElement":
-	// 	annotatedRelElem := &model.AnnotatedRelationshipElement{}
-	// 	return annotatedRelElem, nil
-	// case "MultiLanguageProperty":
-	// 	mlProp := &model.MultiLanguageProperty{}
-	// 	return mlProp, nil
-	// case "File":
-	// 	file := &model.File{}
-	// 	return file, nil
-	// case "Blob":
-	// 	blob := &model.Blob{}
-	// 	return blob, nil
-	// case "ReferenceElement":
-	// 	refElem := &model.ReferenceElement{}
-	// 	return refElem, nil
-	// case "RelationshipElement":
-	// 	relElem := &model.RelationshipElement{}
-	// 	return relElem, nil
-	// case "Range":
-	// 	rng := &model.Range{}
-	// 	return rng, nil
-	// case "BasicEventElement":
-	// 	eventElem := &model.BasicEventElement{}
-	// 	return eventElem, nil
-	// case "SubmodelElementList":
-	// 	smeList := &model.SubmodelElementList{}
-	// 	return smeList, nil
-	// case "Capability":
-	// 	capability := &model.Capability{}
-	// 	return capability, nil
+		return buildSubmodelElementCollection()
+	case "Operation":
+		operation := &model.Operation{}
+		return operation, nil
+	case "Entity":
+		entity := &model.Entity{}
+		return entity, nil
+	case "AnnotatedRelationshipElement":
+		annotatedRelElem := &model.AnnotatedRelationshipElement{}
+		return annotatedRelElem, nil
+	case "MultiLanguageProperty":
+		mlProp := &model.MultiLanguageProperty{}
+		return mlProp, nil
+	case "File":
+		file := &model.File{}
+		return file, nil
+	case "Blob":
+		blob := &model.Blob{}
+		return blob, nil
+	case "ReferenceElement":
+		refElem := &model.ReferenceElement{}
+		return refElem, nil
+	case "RelationshipElement":
+		relElem := &model.RelationshipElement{}
+		return relElem, nil
+	case "Range":
+		rng := &model.Range{}
+		return rng, nil
+	case "BasicEventElement":
+		eventElem, err := buildBasicEventElement(smeRow, refBuilderMap)
+		if err != nil {
+			return nil, err
+		}
+		return eventElem, nil
+	case "SubmodelElementList":
+		smeList := &model.SubmodelElementList{Value: []model.SubmodelElement{}}
+		return smeList, nil
+	case "Capability":
+		capability := &model.Capability{}
+		return capability, nil
 	default:
 		return nil, fmt.Errorf("modelType %s is unknown", smeRow.ModelType)
 	}
+}
+
+func buildSubmodelElementCollection() (model.SubmodelElement, error) {
+	collection := &model.SubmodelElementCollection{Value: []model.SubmodelElement{}}
+	return collection, nil
+}
+
+func buildProperty(smeRow model.SubmodelElementRow, refBuilderMap map[int64]*ReferenceBuilder) (*model.Property, error) {
+	var valueRow model.PropertyValueRow
+	err := json.Unmarshal(smeRow.Value, &valueRow)
+	if err != nil {
+		return nil, err
+	}
+	valueID, err := getSingleReference(valueRow.ValueID, valueRow.ValueIDReferred, refBuilderMap)
+	if err != nil {
+		return nil, err
+	}
+
+	prop := &model.Property{
+		Value:     valueRow.Value,
+		ValueType: valueRow.ValueType,
+		ValueID:   valueID,
+	}
+
+	return prop, nil
+}
+
+func buildBasicEventElement(smeRow model.SubmodelElementRow, refBuilderMap map[int64]*ReferenceBuilder) (*model.BasicEventElement, error) {
+	var valueRow model.BasicEventElementValueRow
+	err := json.Unmarshal(smeRow.Value, &valueRow)
+	if err != nil {
+		return nil, err
+	}
+	observedRefs, err := getSingleReference(valueRow.ObservedRef, valueRow.ObservedRefReferred, refBuilderMap)
+	if err != nil {
+		return nil, err
+	}
+	messageBrokerRefs, err := getSingleReference(valueRow.MessageBrokerRef, valueRow.MessageBrokerRefReferred, refBuilderMap)
+	if err != nil {
+		return nil, err
+	}
+
+	state, err := model.NewStateOfEventFromValue(valueRow.State)
+	if err != nil {
+		return nil, err
+	}
+
+	direction, err := model.NewDirectionFromValue(valueRow.Direction)
+	if err != nil {
+		return nil, err
+	}
+
+	bee := &model.BasicEventElement{
+		Direction:     direction,
+		State:         state,
+		MessageTopic:  valueRow.MessageTopic,
+		LastUpdate:    valueRow.LastUpdate,
+		MinInterval:   valueRow.MinInterval,
+		MaxInterval:   valueRow.MaxInterval,
+		Observed:      observedRefs,
+		MessageBroker: messageBrokerRefs,
+	}
+	return bee, nil
 }
 
 func isArrayNotEmpty(data json.RawMessage) bool {
@@ -293,4 +268,24 @@ func isArrayNotEmpty(data json.RawMessage) bool {
 
 func moreThanZeroReferences(referenceArray []*model.Reference) bool {
 	return len(referenceArray) > 0
+}
+
+func getSingleReference(reference json.RawMessage, referredReference json.RawMessage, refBuilderMap map[int64]*ReferenceBuilder) (*model.Reference, error) {
+	var refs []*model.Reference
+	var err error
+	if isArrayNotEmpty(reference) {
+		refs, err = ParseReferences(reference, refBuilderMap)
+		if err != nil {
+			return nil, err
+		}
+		if isArrayNotEmpty(referredReference) {
+			if err = ParseReferredReferences(referredReference, refBuilderMap); err != nil {
+				return nil, err
+			}
+		}
+	}
+	if len(refs) > 0 {
+		return refs[0], nil
+	}
+	return nil, nil
 }

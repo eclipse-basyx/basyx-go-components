@@ -156,7 +156,7 @@ func TestMain(m *testing.M) {
 	}
 
 	// Create DB Connection here
-	sql, err := sql.Open("postgres", "postgres://admin:admin123@127.0.0.1:5432/basyxTestDB?sslmode=disable")
+	sql, err := sql.Open("postgres", "postgres://admin:admin123@127.0.0.1:6432/basyxTestDB?sslmode=disable")
 
 	if err != nil {
 		fmt.Printf("Failed to connect to database: %v\n", err)
