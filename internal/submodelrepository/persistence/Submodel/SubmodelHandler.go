@@ -31,9 +31,7 @@ import (
 	"database/sql"
 	"fmt"
 	"os"
-	"runtime"
 	"sort"
-	"sync"
 	"time"
 
 	// nolint:all
@@ -43,6 +41,7 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	submodel_query "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/Submodel/submodelQueries"
+	submodelsubqueries "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/Submodel/submodelQueries"
 	jsoniter "github.com/json-iterator/go"
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 )
@@ -158,7 +157,9 @@ func getSubmodels(db *sql.DB, submodelIDFilter string, limit int64, cursor strin
 			&row.DisplayNames, &row.Descriptions,
 			&row.SemanticID, &row.ReferredSemanticIDs,
 			&row.SupplementalSemanticIDs, &row.SupplementalReferredSemIDs,
-			&row.Qualifiers, &row.Extensions, &row.Administration, &row.RootSubmodelElements, &row.ChildSubmodelElements, &row.TotalSubmodels,
+			&row.Qualifiers, &row.Extensions, &row.Administration,
+			// &row.RootSubmodelElements, &row.ChildSubmodelElements,
+			&row.TotalSubmodels,
 		); err != nil {
 			return nil, "", fmt.Errorf("error scanning row: %w", err)
 		}
@@ -312,78 +313,11 @@ func getSubmodels(db *sql.DB, submodelIDFilter string, limit int64, cursor strin
 			}
 		}
 
-		nodes := make(map[int64]*node, 256)
-		children := make(map[int64][]*node, 256)
-		roots := make([]*node, 0, 16)
-
-		// RootSubmodelElements
-		smeBuilderMap := make(map[int64]*builders.SubmodelElementBuilder)
-		if common.IsArrayNotEmpty(row.RootSubmodelElements) {
-			var RootSubmodelElements []model.SubmodelElementRow
-			err := json.Unmarshal(row.RootSubmodelElements, &RootSubmodelElements)
-			if err != nil {
-				return nil, "", err
-			}
-			for _, smeRow := range RootSubmodelElements {
-				_, exists := smeBuilderMap[smeRow.DbID]
-				if !exists {
-					sme, builder, err := builders.BuildSubmodelElement(smeRow)
-					if err != nil {
-						return nil, "", err
-					}
-					smeBuilderMap[smeRow.DbID] = builder
-					n := &node{
-						id:       smeRow.DbID,
-						parentID: 0, // Root elements have no parent
-						path:     smeRow.IDShortPath,
-						position: smeRow.Position,
-						element:  *sme,
-					}
-					nodes[smeRow.DbID] = n
-					roots = append(roots, n)
-				}
-			}
+		smes, err := addSubmodelElementsToSubmodel(db, submodel)
+		if err != nil {
+			return nil, "", err
 		}
-		if common.IsArrayNotEmpty(row.ChildSubmodelElements) {
-			var ChildSubmodelElements []model.SubmodelElementRow
-			err := json.Unmarshal(row.ChildSubmodelElements, &ChildSubmodelElements)
-			if err != nil {
-				return nil, "", err
-			}
-			for _, smeRow := range ChildSubmodelElements {
-				_, exists := smeBuilderMap[smeRow.DbID]
-				if !exists {
-					sme, builder, err := builders.BuildSubmodelElement(smeRow)
-					if err != nil {
-						return nil, "", err
-					}
-					smeBuilderMap[smeRow.DbID] = builder
-					n := &node{
-						id:       smeRow.DbID,
-						parentID: *smeRow.ParentID,
-						path:     smeRow.IDShortPath,
-						position: smeRow.Position,
-						element:  *sme,
-					}
-					nodes[smeRow.DbID] = n
-					children[*smeRow.ParentID] = append(children[*smeRow.ParentID], n)
-				}
-			}
-		}
-
-		attachChildrenToSubmodelElements(nodes, children)
-
-		sort.SliceStable(roots, func(i, j int) bool {
-			a, b := roots[i], roots[j]
-			return a.id < b.id
-		})
-
-		res := make([]model.SubmodelElement, 0, len(roots))
-		for _, r := range roots {
-			res = append(res, r.element)
-		}
-		submodel.SubmodelElements = res
-
+		submodel.SubmodelElements = smes
 		result = append(result, submodel)
 	}
 
@@ -402,6 +336,90 @@ func getSubmodels(db *sql.DB, submodelIDFilter string, limit int64, cursor strin
 
 	// No more pages
 	return result, "", nil
+}
+
+func addSubmodelElementsToSubmodel(db *sql.DB, submodel *model.Submodel) ([]model.SubmodelElement, error) {
+	filter := submodelsubqueries.SubmodelElementFilter{
+		SubmodelFilter: &submodelsubqueries.SubmodelElementSubmodelFilter{
+			SubmodelIDFilter: submodel.ID,
+		},
+	}
+	submodelElementQuery, err := submodelsubqueries.GetSubmodelElementsSubquery(filter)
+	if err != nil {
+		return nil, err
+	}
+	q, params, err := submodelElementQuery.ToSQL()
+
+	rows, err := db.Query(q, params...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	nodes := make(map[int64]*node, 256)
+	children := make(map[int64][]*node, 256)
+	roots := make([]*node, 0, 16)
+
+	// RootSubmodelElements
+	smeBuilderMap := make(map[int64]*builders.SubmodelElementBuilder)
+	for rows.Next() {
+		smeRow := model.SubmodelElementRow{}
+		if err := rows.Scan(
+			&smeRow.DbID,
+			&smeRow.ParentID,
+			&smeRow.RootID,
+			&smeRow.IDShort,
+			&smeRow.IDShortPath,
+			&smeRow.Category,
+			&smeRow.ModelType,
+			&smeRow.Position,
+			&smeRow.EmbeddedDataSpecifications,
+			&smeRow.DisplayNames,
+			&smeRow.Descriptions,
+			&smeRow.Value,
+			&smeRow.SemanticID,
+			&smeRow.SemanticIDReferred,
+			&smeRow.SupplementalSemanticIDs,
+			&smeRow.SupplementalSemanticIDsReferred,
+			&smeRow.Qualifiers,
+		); err != nil {
+			return nil, err
+		}
+		_, exists := smeBuilderMap[smeRow.DbID.Int64]
+		if !exists {
+			sme, builder, err := builders.BuildSubmodelElement(smeRow)
+			if err != nil {
+				return nil, err
+			}
+			smeBuilderMap[smeRow.DbID.Int64] = builder
+			n := &node{
+				id:       smeRow.DbID.Int64,
+				parentID: smeRow.ParentID.Int64,
+				path:     smeRow.IDShortPath,
+				position: smeRow.Position,
+				element:  *sme,
+			}
+			nodes[smeRow.DbID.Int64] = n
+			if smeRow.ParentID.Valid {
+				children[smeRow.ParentID.Int64] = append(children[smeRow.ParentID.Int64], n)
+			} else {
+				roots = append(roots, n)
+			}
+		}
+	}
+
+	attachChildrenToSubmodelElements(nodes, children)
+
+	sort.SliceStable(roots, func(i, j int) bool {
+		a, b := roots[i], roots[j]
+		return a.id < b.id
+	})
+
+	res := make([]model.SubmodelElement, 0, len(roots))
+	for _, r := range roots {
+		res = append(res, r.element)
+	}
+	return res, nil
 }
 
 // addDisplayNames parses and adds display names to a submodel.

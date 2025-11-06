@@ -28,6 +28,7 @@
 package model
 
 import (
+	"database/sql"
 	"encoding/json"
 )
 
@@ -301,39 +302,39 @@ type AdministrationRow struct {
 // order of elements at the same level.
 type SubmodelElementRow struct {
 	// DbID is the unique identifier of the submodel element in the database
-	DbID int64 `json:"db_id"`
+	DbID sql.NullInt64 `json:"db_id"`
 	// ParentID is the database ID of the parent submodel element (nullable for root elements)
-	ParentID *int64 `json:"parent_id"`
+	ParentID sql.NullInt64 `json:"parent_id"`
 	// RootID is the database ID of the root submodel element (nullable for root elements)
-	RootID *int64 `json:"root_id"`
+	RootID sql.NullInt64 `json:"root_id"`
 	// IDShort is the short identifier for the submodel element
 	IDShort string `json:"id_short"`
 	// IDShortPath is the identifier path for the submodel element
 	IDShortPath string `json:"id_short_path"`
 	// DisplayNames contains localized names as JSON data
-	DisplayNames json.RawMessage `json:"displayNames"`
+	DisplayNames *json.RawMessage `json:"displayNames,omitempty"`
 	// Descriptions contains localized descriptions as JSON data
-	Descriptions json.RawMessage `json:"descriptions"`
+	Descriptions *json.RawMessage `json:"descriptions,omitempty"`
 	// Category defines the category classification of the submodel element
 	Category string `json:"category"`
 	// ModelType specifies the concrete type of the submodel element (e.g., Property, Operation, SubmodelElementCollection)
 	ModelType string `json:"model_type"`
 	// Value contains the actual value data of the submodel element as JSON data
-	Value json.RawMessage `json:"value"`
+	Value *json.RawMessage `json:"value"`
 	// SemanticID is a reference to a semantic definition as JSON data
-	SemanticID json.RawMessage `json:"semanticId"`
+	SemanticID *json.RawMessage `json:"semanticId"`
 	// SemanticIDReferred contains referred semantic ID references as JSON data
-	SemanticIDReferred json.RawMessage `json:"semanticIdReferred"`
+	SemanticIDReferred *json.RawMessage `json:"semanticIdReferred"`
 	// SupplementalSemanticIDs contains supplemental semantic identifiers as JSON data
-	SupplementalSemanticIDs json.RawMessage `json:"supplementalSemanticIdReferenceRows"`
+	SupplementalSemanticIDs *json.RawMessage `json:"supplementalSemanticIdReferenceRows"`
 	// SupplementalSemanticIDsReferred contains referred supplemental semantic ID references as JSON data
-	SupplementalSemanticIDsReferred json.RawMessage `json:"supplementalSemanticIdReferredReferenceRows"`
+	SupplementalSemanticIDsReferred *json.RawMessage `json:"supplementalSemanticIdReferredReferenceRows"`
 	// Qualifiers contains qualifier information as JSON data
-	Qualifiers json.RawMessage `json:"qualifiers"`
+	Qualifiers *json.RawMessage `json:"qualifiers"`
 	// Position specifies the position/order of the submodel element among its siblings
 	Position int `json:"position"`
 	// EmbeddedDataSpecifications contains embedded data specifications as JSON data
-	EmbeddedDataSpecifications json.RawMessage `json:"embeddedDataSpecifications"`
+	EmbeddedDataSpecifications *json.RawMessage `json:"embeddedDataSpecifications"`
 }
 
 // PropertyValueRow represents a data row for a Property element's value in the database.

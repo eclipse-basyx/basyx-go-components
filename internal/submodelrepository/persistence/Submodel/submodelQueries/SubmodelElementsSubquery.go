@@ -77,41 +77,40 @@ func (s *SubmodelElementFilter) HasIDShortPathFilter() bool {
 }
 
 // GetSubmodelElementsSubquery builds a subquery to retrieve submodel elements for a given submodel.
-func GetSubmodelElementsSubquery(dialect goqu.DialectWrapper, rootSubmodelElements bool, filter SubmodelElementFilter) (*goqu.SelectDataset, error) {
-	semanticIDSubquery, semanticIDReferredSubquery := queries.GetReferenceQueries(dialect, goqu.I("tlsme.semantic_id"))
-	supplSemanticIDSubquery, supplSemanticIDReferredSubquery := queries.GetSupplementalSemanticIDQueries(dialect, goqu.T("submodel_element_supplemental_semantic_id"), "submodel_element_id", "reference_id", goqu.I("tlsme.id"))
-	qualifierSubquery := queries.GetQualifierSubquery(dialect, goqu.T("submodel_element_qualifier"), "sme_id", "qualifier_id", goqu.I("tlsme.id"))
-	displayNamesSubquery := queries.GetDisplayNamesQuery(dialect, "tlsme.displayname_id")
-	descriptionsSubquery := queries.GetDescriptionQuery(dialect, "tlsme.description_id")
+func GetSubmodelElementsSubquery(filter SubmodelElementFilter) (*goqu.SelectDataset, error) {
+	dialect := goqu.Dialect("postgres")
+	semanticIDSubquery, semanticIDReferredSubquery := queries.GetReferenceQueries(dialect, goqu.I("sme.semantic_id"))
+	supplSemanticIDSubquery, supplSemanticIDReferredSubquery := queries.GetSupplementalSemanticIDQueries(dialect, goqu.T("submodel_element_supplemental_semantic_id"), "submodel_element_id", "reference_id", goqu.I("sme.id"))
+	qualifierSubquery := queries.GetQualifierSubquery(dialect, goqu.T("submodel_element_qualifier"), "sme_id", "qualifier_id", goqu.I("sme.id"))
+	displayNamesSubquery := queries.GetDisplayNamesQuery(dialect, "sme.displayname_id")
+	descriptionsSubquery := queries.GetDescriptionQuery(dialect, "sme.description_id")
 
 	valueByType := getValueSubquery(dialect)
 
-	obj := goqu.Func("jsonb_build_object",
-		goqu.V("db_id"), goqu.I("tlsme.id"),
-		goqu.V("parent_id"), goqu.I("tlsme.parent_sme_id"),
-		goqu.V("root_id"), goqu.I("tlsme.root_sme_id"),
-		goqu.V("id_short"), goqu.I("tlsme.id_short"),
-		goqu.V("id_short_path"), goqu.I("tlsme.idshort_path"),
-		goqu.V("category"), goqu.I("tlsme.category"),
-		goqu.V("model_type"), goqu.I("tlsme.model_type"),
-		goqu.V("position"), goqu.I("tlsme.position"),
-		goqu.V("embeddedDataSpecifications"), goqu.I("tlsme.embedded_data_specification"),
-		goqu.V("displayNames"), displayNamesSubquery,
-		goqu.V("descriptions"), descriptionsSubquery,
-		goqu.V("value"), valueByType,
-		goqu.V("semanticId"), semanticIDSubquery,
-		goqu.V("semanticIdReferred"), semanticIDReferredSubquery,
-		goqu.V("supplementalSemanticIdReferenceRows"), supplSemanticIDSubquery,
-		goqu.V("supplementalSemanticIdReferredReferenceRows"), supplSemanticIDReferredSubquery,
-		goqu.V("qualifiers"), qualifierSubquery,
-	)
-
-	smeSubquery := dialect.From(goqu.T("submodel_element").As("tlsme")).
-		Select(goqu.Func("jsonb_agg", obj))
+	query := dialect.From(goqu.T("submodel_element").As("sme")).
+		Select(
+			goqu.I("sme.id").As("db_id"),
+			goqu.I("sme.parent_sme_id").As("parent_id"),
+			goqu.I("sme.root_sme_id").As("root_id"),
+			goqu.I("sme.id_short").As("id_short"),
+			goqu.I("sme.idshort_path").As("idshort_path"),
+			goqu.I("sme.category").As("category"),
+			goqu.I("sme.model_type").As("model_type"),
+			goqu.I("sme.position").As("position"),
+			goqu.I("sme.embedded_data_specification").As("embeddedDataSpecifications"),
+			displayNamesSubquery.As("displayNames"),
+			descriptionsSubquery.As("descriptions"),
+			valueByType.As("value"),
+			semanticIDSubquery.As("semanticId"),
+			semanticIDReferredSubquery.As("semanticIdReferred"),
+			supplSemanticIDSubquery.As("supplementalSemanticIdReferenceRows"),
+			supplSemanticIDReferredSubquery.As("supplementalSemanticIdReferredReferenceRows"),
+			qualifierSubquery.As("qualifiers"),
+		)
 
 	if filter.HasSubmodelFilter() {
-		smeSubquery = smeSubquery.Where(
-			goqu.I("tlsme.submodel_id").Eq(filter.SubmodelFilter.SubmodelIDFilter),
+		query = query.Where(
+			goqu.I("sme.submodel_id").Eq(filter.SubmodelFilter.SubmodelIDFilter),
 		)
 	} else {
 		_ = fmt.Errorf("no SubmodelFilter provided for SubmodelElement Query, but SubmodelElements always belong to a Submodel - consider defining a SubmodelID Filter in your GetSubmodelELementsSubquery call")
@@ -119,85 +118,74 @@ func GetSubmodelElementsSubquery(dialect goqu.DialectWrapper, rootSubmodelElemen
 	}
 
 	if filter.HasIDShortPathFilter() {
-		smeSubquery = smeSubquery.Where(
-			// (idshort_path = $2 OR idshort_path LIKE $2 || '.%' OR idshort_path LIKE $2 || '[%')
+		query = query.Where(
 			goqu.Or(
-				goqu.I("tlsme.idshort_path").Eq(filter.SubmodelElementIDShortPathFilter.SubmodelElementIDShortPath),
-				goqu.I("tlsme.idshort_path").Like(
+				goqu.I("sme.idshort_path").Eq(filter.SubmodelElementIDShortPathFilter.SubmodelElementIDShortPath),
+				goqu.I("sme.idshort_path").Like(
 					goqu.L("? || '.%'", filter.SubmodelElementIDShortPathFilter.SubmodelElementIDShortPath),
 				),
-				goqu.I("tlsme.idshort_path").Like(
+				goqu.I("sme.idshort_path").Like(
 					goqu.L("? || '[%'", filter.SubmodelElementIDShortPathFilter.SubmodelElementIDShortPath),
 				),
 			),
 		)
 	}
 
-	if rootSubmodelElements {
-		smeSubquery = smeSubquery.Where(
-			goqu.I("tlsme.parent_sme_id").IsNull(),
-		)
-	} else {
-		smeSubquery = smeSubquery.Where(
-			goqu.I("tlsme.parent_sme_id").IsNotNull(),
-		)
-	}
-
-	return smeSubquery, nil
+	return query, nil
 }
 
 func getValueSubquery(dialect goqu.DialectWrapper) exp.CaseExpression {
 	valueByType := goqu.Case().
 		// When(
-		// 	goqu.I("tlsme.model_type").Eq("AnnotatedRelationshipElement"),
+		// 	goqu.I("sme.model_type").Eq("AnnotatedRelationshipElement"),
 		// 	getAnnotatedRelationshipElementSubquery(dialect),
 		// ).
 		When(
-			goqu.I("tlsme.model_type").Eq("BasicEventElement"),
+			goqu.I("sme.model_type").Eq("BasicEventElement"),
 			getBasicEventElementSubquery(dialect),
 		).
 		// When(
-		// 	goqu.I("tlsme.model_type").Eq("Blob"),
+		// 	goqu.I("sme.model_type").Eq("Blob"),
 		// 	getBlobSubquery(dialect),
 		// ).
 		// When(
-		// 	goqu.I("tlsme.model_type").Eq("Capability"),
+		// 	goqu.I("sme.model_type").Eq("Capability"),
 		// 	getCapabilitySubquery(dialect),
 		// ).
 		// When(
-		// 	goqu.I("tlsme.model_type").Eq("Entity"),
+		// 	goqu.I("sme.model_type").Eq("Entity"),
 		// 	getEntitySubquery(dialect),
 		// ).
 		// When(
-		// 	goqu.I("tlsme.model_type").Eq("File"),
+		// 	goqu.I("sme.model_type").Eq("File"),
 		// 	getFileSubquery(dialect),
 		// ).
 		When(
-			goqu.I("tlsme.model_type").Eq("SubmodelElementList"),
+			goqu.I("sme.model_type").Eq("SubmodelElementList"),
 			getSubmodelElementListSubquery(dialect),
 		).
 		When(
-			goqu.I("tlsme.model_type").Eq("MultiLanguageProperty"),
+			goqu.I("sme.model_type").Eq("MultiLanguageProperty"),
 			getMultiLanguagePropertySubquery(dialect),
 		).
 		// When(
-		// 	goqu.I("tlsme.model_type").Eq("Operation"),
+		// 	goqu.I("sme.model_type").Eq("Operation"),
 		// 	getOperationSubquery(dialect),
 		// ).
 		When(
-			goqu.I("tlsme.model_type").Eq("Property"),
+			goqu.I("sme.model_type").Eq("Property"),
 			getPropertySubquery(dialect),
 		).
 		When(
-			goqu.I("tlsme.model_type").Eq("Range"),
+			goqu.I("sme.model_type").Eq("Range"),
 			getRangeSubquery(dialect),
 		).
 		// When(
-		// 	goqu.I("tlsme.model_type").Eq("ReferenceElement"),
+		// 	goqu.I("sme.model_type").Eq("ReferenceElement"),
 		// 	getReferenceElementSubquery(dialect),
 		// ).
 		// When(
-		// 	goqu.I("tlsme.model_type").Eq("RelationshipElement"),
+		// 	goqu.I("sme.model_type").Eq("RelationshipElement"),
 		// 	getRelationshipElementSubquery(dialect),
 		// ).
 		Else(goqu.V(nil))
@@ -227,7 +215,7 @@ func getBasicEventElementSubquery(dialect goqu.DialectWrapper) *goqu.SelectDatas
 				goqu.V("message_broker_ref_referred"), messageBrokerRefReferred,
 			),
 		).
-		Where(goqu.I("bee.id").Eq(goqu.I("tlsme.id"))).
+		Where(goqu.I("bee.id").Eq(goqu.I("sme.id"))).
 		Limit(1)
 }
 
@@ -260,7 +248,7 @@ func getSubmodelElementListSubquery(dialect goqu.DialectWrapper) *goqu.SelectDat
 				goqu.V("semantic_id_list_element_referred"), semanticIDListElementReferred,
 			),
 		).
-		Where(goqu.I("list.id").Eq(goqu.I("tlsme.id"))).
+		Where(goqu.I("list.id").Eq(goqu.I("sme.id"))).
 		Limit(1)
 }
 
@@ -275,7 +263,7 @@ func getMultiLanguagePropertySubquery(dialect goqu.DialectWrapper) *goqu.SelectD
 
 	mlpValueSubquery := dialect.From(goqu.T("multilanguage_property_value").As("mlpval")).
 		Select(goqu.Func("jsonb_agg", goqu.L("?", mlpValueObject))).
-		Where(goqu.I("mlpval.id").Eq(goqu.I("tlsme.id")))
+		Where(goqu.I("mlpval.id").Eq(goqu.I("sme.id")))
 
 	return dialect.From(goqu.T("multilanguage_property").As("mlp")).
 		Select(
@@ -285,7 +273,7 @@ func getMultiLanguagePropertySubquery(dialect goqu.DialectWrapper) *goqu.SelectD
 				goqu.V("value"), mlpValueSubquery,
 			),
 		).
-		Where(goqu.I("mlp.id").Eq(goqu.I("tlsme.id"))).
+		Where(goqu.I("mlp.id").Eq(goqu.I("sme.id"))).
 		Limit(1)
 }
 
@@ -311,7 +299,7 @@ func getPropertySubquery(dialect goqu.DialectWrapper) *goqu.SelectDataset {
 				goqu.V("value_id_referred"), valueIDReferredSubquery,
 			),
 		).
-		Where(goqu.I("pr.id").Eq(goqu.I("tlsme.id"))).
+		Where(goqu.I("pr.id").Eq(goqu.I("sme.id"))).
 		Limit(1)
 }
 
@@ -334,7 +322,7 @@ func getRangeSubquery(dialect goqu.DialectWrapper) *goqu.SelectDataset {
 				),
 			),
 		).
-		Where(goqu.I("range.id").Eq(goqu.I("tlsme.id"))).
+		Where(goqu.I("range.id").Eq(goqu.I("sme.id"))).
 		Limit(1)
 }
 

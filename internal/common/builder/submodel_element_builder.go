@@ -30,7 +30,6 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -59,26 +58,26 @@ func BuildSubmodelElement(smeRow model.SubmodelElementRow) (*model.SubmodelEleme
 	specificSME.SetCategory(smeRow.Category)
 	specificSME.SetModelType(smeRow.ModelType)
 
-	if common.IsArrayNotEmpty(smeRow.Descriptions) {
-		descriptions, err := ParseLangStringTextType(smeRow.Descriptions)
+	if smeRow.Descriptions != nil {
+		descriptions, err := ParseLangStringTextType(*smeRow.Descriptions)
 		if err != nil {
 			return nil, nil, fmt.Errorf("error parsing descriptions: %w", err)
 		}
 		specificSME.SetDescription(descriptions)
 	}
 
-	if common.IsArrayNotEmpty(smeRow.DisplayNames) {
-		displayNames, err := ParseLangStringNameType(smeRow.DisplayNames)
+	if smeRow.DisplayNames != nil {
+		displayNames, err := ParseLangStringNameType(*smeRow.DisplayNames)
 		if err != nil {
 			return nil, nil, fmt.Errorf("error parsing display names: %w", err)
 		}
 		specificSME.SetDisplayName(displayNames)
 	}
 
-	if len(smeRow.EmbeddedDataSpecifications) > 0 {
+	if smeRow.EmbeddedDataSpecifications != nil {
 		var eds []model.EmbeddedDataSpecification
 		var json = jsoniter.ConfigCompatibleWithStandardLibrary
-		err := json.Unmarshal(smeRow.EmbeddedDataSpecifications, &eds)
+		err := json.Unmarshal(*smeRow.EmbeddedDataSpecifications, &eds)
 		if err != nil {
 			log.Printf("error unmarshaling embedded data specifications: %v", err)
 			return nil, nil, err
@@ -89,23 +88,23 @@ func BuildSubmodelElement(smeRow model.SubmodelElementRow) (*model.SubmodelEleme
 	supplementalSemanticIDs := []*model.Reference{}
 	suppl := []model.Reference{}
 	// SupplementalSemanticIDs
-	if common.IsArrayNotEmpty(smeRow.SupplementalSemanticIDs) {
-		supplementalSemanticIDs, err = ParseReferences(smeRow.SupplementalSemanticIDs, refBuilderMap)
+	if smeRow.SupplementalSemanticIDs != nil {
+		supplementalSemanticIDs, err = ParseReferences(*smeRow.SupplementalSemanticIDs, refBuilderMap)
 		if err != nil {
 			return nil, nil, err
 		}
-		if moreThanZeroReferences(supplementalSemanticIDs) {
-			err = ParseReferredReferences(smeRow.SupplementalSemanticIDsReferred, refBuilderMap)
-			if err != nil {
-				return nil, nil, err
-			}
-		}
+		// if moreThanZeroReferences(supplementalSemanticIDs) {
+		// 	err = ParseReferredReferences(smeRow.SupplementalSemanticIDsReferred, refBuilderMap)
+		// 	if err != nil {
+		// 		return nil, nil, err
+		// 	}
+		// }
 	}
 
 	// Qualifiers
-	if common.IsArrayNotEmpty(smeRow.Qualifiers) {
+	if smeRow.Qualifiers != nil {
 		builder := NewQualifiersBuilder()
-		qualifierRows, err := ParseQualifiersRow(smeRow.Qualifiers)
+		qualifierRows, err := ParseQualifiersRow(*smeRow.Qualifiers)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -143,7 +142,7 @@ func BuildSubmodelElement(smeRow model.SubmodelElementRow) (*model.SubmodelEleme
 		specificSME.SetSupplementalSemanticIds(suppl)
 	}
 
-	return &specificSME, &SubmodelElementBuilder{DatabaseID: int(smeRow.DbID), SubmodelElement: &specificSME}, nil
+	return &specificSME, &SubmodelElementBuilder{DatabaseID: int(smeRow.DbID.Int64), SubmodelElement: &specificSME}, nil
 }
 
 func getSubmodelElementObjectBasedOnModelType(smeRow model.SubmodelElementRow, refBuilderMap map[int64]*ReferenceBuilder) (model.SubmodelElement, error) {
@@ -207,11 +206,14 @@ func buildSubmodelElementCollection() (model.SubmodelElement, error) {
 
 func buildProperty(smeRow model.SubmodelElementRow, refBuilderMap map[int64]*ReferenceBuilder) (*model.Property, error) {
 	var valueRow model.PropertyValueRow
-	err := json.Unmarshal(smeRow.Value, &valueRow)
+	if smeRow.Value == nil {
+		return nil, fmt.Errorf("smeRow.Value is nil")
+	}
+	err := json.Unmarshal(*smeRow.Value, &valueRow)
 	if err != nil {
 		return nil, err
 	}
-	valueID, err := getSingleReference(valueRow.ValueID, valueRow.ValueIDReferred, refBuilderMap)
+	valueID, err := getSingleReference(&valueRow.ValueID, &valueRow.ValueIDReferred, refBuilderMap)
 	if err != nil {
 		return nil, err
 	}
@@ -227,15 +229,18 @@ func buildProperty(smeRow model.SubmodelElementRow, refBuilderMap map[int64]*Ref
 
 func buildBasicEventElement(smeRow model.SubmodelElementRow, refBuilderMap map[int64]*ReferenceBuilder) (*model.BasicEventElement, error) {
 	var valueRow model.BasicEventElementValueRow
-	err := json.Unmarshal(smeRow.Value, &valueRow)
+	if smeRow.Value == nil {
+		return nil, fmt.Errorf("smeRow.Value is nil")
+	}
+	err := json.Unmarshal(*smeRow.Value, &valueRow)
 	if err != nil {
 		return nil, err
 	}
-	observedRefs, err := getSingleReference(valueRow.ObservedRef, valueRow.ObservedRefReferred, refBuilderMap)
+	observedRefs, err := getSingleReference(&valueRow.ObservedRef, &valueRow.ObservedRefReferred, refBuilderMap)
 	if err != nil {
 		return nil, err
 	}
-	messageBrokerRefs, err := getSingleReference(valueRow.MessageBrokerRef, valueRow.MessageBrokerRefReferred, refBuilderMap)
+	messageBrokerRefs, err := getSingleReference(&valueRow.MessageBrokerRef, &valueRow.MessageBrokerRefReferred, refBuilderMap)
 	if err != nil {
 		return nil, err
 	}
@@ -267,16 +272,16 @@ func moreThanZeroReferences(referenceArray []*model.Reference) bool {
 	return len(referenceArray) > 0
 }
 
-func getSingleReference(reference json.RawMessage, referredReference json.RawMessage, refBuilderMap map[int64]*ReferenceBuilder) (*model.Reference, error) {
+func getSingleReference(reference *json.RawMessage, referredReference *json.RawMessage, refBuilderMap map[int64]*ReferenceBuilder) (*model.Reference, error) {
 	var refs []*model.Reference
 	var err error
-	if common.IsArrayNotEmpty(reference) {
-		refs, err = ParseReferences(reference, refBuilderMap)
+	if reference != nil {
+		refs, err = ParseReferences(*reference, refBuilderMap)
 		if err != nil {
 			return nil, err
 		}
-		if common.IsArrayNotEmpty(referredReference) {
-			if err = ParseReferredReferences(referredReference, refBuilderMap); err != nil {
+		if referredReference != nil {
+			if err = ParseReferredReferences(*referredReference, refBuilderMap); err != nil {
 				return nil, err
 			}
 		}

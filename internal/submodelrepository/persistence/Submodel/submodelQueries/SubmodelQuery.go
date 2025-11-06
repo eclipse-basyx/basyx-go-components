@@ -130,21 +130,21 @@ func GetQueryWithGoqu(submodelID string, limit int64, cursor string, aasQuery *g
 	administrationSubquery := queries.GetAdministrationSubquery(dialect, "s.administration_id")
 
 	// SubmodelElementFilter
-	filter := SubmodelElementFilter{
-		SubmodelFilter: &SubmodelElementSubmodelFilter{
-			SubmodelIDFilter: goqu.I("s.id"),
-		},
-	}
+	// filter := SubmodelElementFilter{
+	// 	SubmodelFilter: &SubmodelElementSubmodelFilter{
+	// 		SubmodelIDFilter: goqu.I("s.id"),
+	// 	},
+	// }
 
 	// Submodel Elements Subqueries
-	RootSubmodelElementSubquery, err := GetSubmodelElementsSubquery(dialect, true, filter)
-	if err != nil {
-		return "", err
-	}
-	ChildSubmodelElementSubquery, err := GetSubmodelElementsSubquery(dialect, false, filter)
-	if err != nil {
-		return "", err
-	}
+	// RootSubmodelElementSubquery, err := GetSubmodelElementsSubquery(dialect, true, filter)
+	// if err != nil {
+	// 	return "", err
+	// }
+	// ChildSubmodelElementSubquery, err := GetSubmodelElementsSubquery(dialect, false, filter)
+	// if err != nil {
+	// 	return "", err
+	// }
 
 	// Main query
 	query := dialect.From(goqu.T("submodel").As("s")).
@@ -163,8 +163,8 @@ func GetQueryWithGoqu(submodelID string, limit int64, cursor string, aasQuery *g
 			goqu.L("COALESCE((?), '[]'::jsonb)", qualifierSubquery).As("submodel_qualifiers"),
 			goqu.L("COALESCE((?), '[]'::jsonb)", extensionSubquery).As("submodel_extensions"),
 			goqu.L("COALESCE((?), '[]'::jsonb)", administrationSubquery).As("submodel_administrative_information"),
-			goqu.L("COALESCE((?), '[]'::jsonb)", RootSubmodelElementSubquery).As("submodel_root_submodel_elements"),
-			goqu.L("COALESCE((?), '[]'::jsonb)", ChildSubmodelElementSubquery).As("submodel_child_submodel_elements"),
+			// goqu.L("COALESCE((?), '[]'::jsonb)", RootSubmodelElementSubquery).As("submodel_root_submodel_elements"),
+			// goqu.L("COALESCE((?), '[]'::jsonb)", ChildSubmodelElementSubquery).As("submodel_child_submodel_elements"),
 		)
 
 	// Add optional WHERE clause for submodel ID filtering
