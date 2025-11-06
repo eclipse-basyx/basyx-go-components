@@ -70,7 +70,7 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 		}
 	}()
 
-	//submodelrepository.TestNewSubmodelHandler(smDatabase)
+	// submodelrepository.TestNewSubmodelHandler(smDatabase)
 
 	<-ctx.Done()
 	log.Println("Shutting down server...")

@@ -39,7 +39,6 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	builders "github.com/eclipse-basyx/basyx-go-components/internal/common/builder"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
-	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	submodel_query "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/Submodel/submodelQueries"
 	jsoniter "github.com/json-iterator/go"
@@ -56,9 +55,9 @@ import (
 //   - submodelIdFilter: The ID of the submodel to retrieve
 //
 // Returns:
-//   - *gen.Submodel: Fully populated Submodel object with all nested structures
+//   - *model.Submodel: Fully populated Submodel object with all nested structures
 //   - error: An error if database query fails, scanning fails, data parsing fails, or submodel is not found
-func GetSubmodelByID(db *sql.DB, submodelIDFilter string) (*gen.Submodel, error) {
+func GetSubmodelByID(db *sql.DB, submodelIDFilter string) (*model.Submodel, error) {
 	submodels, _, err := getSubmodels(db, submodelIDFilter, 1, "", nil)
 	if err != nil {
 		return nil, err
@@ -81,15 +80,16 @@ func GetSubmodelByID(db *sql.DB, submodelIDFilter string) (*gen.Submodel, error)
 //   - query: Optional AAS QueryLanguage filtering
 //
 // Returns:
-//   - []*gen.Submodel: Slice of fully populated Submodel objects with all nested structures
+//   - []*model.Submodel: Slice of fully populated Submodel objects with all nested structures
 //   - string: Next cursor for pagination (empty string if no more pages)
 //   - error: An error if database query fails, scanning fails, or data parsing fails
-func GetAllSubmodels(db *sql.DB, limit int64, cursor string, query *grammar.QueryWrapper) ([]*gen.Submodel, string, error) {
+func GetAllSubmodels(db *sql.DB, limit int64, cursor string, query *grammar.QueryWrapper) ([]*model.Submodel, string, error) {
 	return getSubmodels(db, "", limit, cursor, query)
 }
 
+// SubmodelElementSubmodelMetadata holds metadata for a SubmodelElement including its database ID.
 type SubmodelElementSubmodelMetadata struct {
-	SubmodelElement gen.SubmodelElement
+	SubmodelElement model.SubmodelElement
 	DatabaseID      int
 }
 
@@ -108,7 +108,7 @@ type SubmodelElementSubmodelMetadata struct {
 //   - query: Optional AAS QueryLanguage filtering
 //
 // Returns:
-//   - []*gen.Submodel: Slice of fully populated Submodel objects with all nested structures
+//   - []*model.Submodel: Slice of fully populated Submodel objects with all nested structures
 //   - string: Next cursor for pagination (empty string if no more pages)
 //   - error: An error if database query fails, scanning fails, or data parsing fails
 //
@@ -123,9 +123,9 @@ type SubmodelElementSubmodelMetadata struct {
 // Note: The function builds nested reference structures in two phases:
 //  1. Initial parsing during row iteration
 //  2. Final structure building after all rows are processed
-func getSubmodels(db *sql.DB, submodelIDFilter string, limit int64, cursor string, query *grammar.QueryWrapper) ([]*gen.Submodel, string, error) {
+func getSubmodels(db *sql.DB, submodelIDFilter string, limit int64, cursor string, query *grammar.QueryWrapper) ([]*model.Submodel, string, error) {
 	var json = jsoniter.ConfigCompatibleWithStandardLibrary
-	var result []*gen.Submodel
+	var result []*model.Submodel
 	referenceBuilderRefs := make(map[int64]*builders.ReferenceBuilder)
 	start := time.Now().Local().UnixMilli()
 	rows, err := getSubmodelDataFromDbWithJSONQuery(db, submodelIDFilter, limit, cursor, query)
@@ -137,8 +137,8 @@ func getSubmodels(db *sql.DB, submodelIDFilter string, limit int64, cursor strin
 	defer func() { _ = rows.Close() }()
 	var count int64
 	var row model.SubmodelRow
-	var EmbeddedDataSpecifications []gen.EmbeddedDataSpecification
-	var semanticID []*gen.Reference
+	var EmbeddedDataSpecifications []model.EmbeddedDataSpecification
+	var semanticID []*model.Reference
 	for rows.Next() {
 		count++
 		if err := rows.Scan(
@@ -153,16 +153,16 @@ func getSubmodels(db *sql.DB, submodelIDFilter string, limit int64, cursor strin
 		}
 
 		if result == nil {
-			result = make([]*gen.Submodel, 0, row.TotalSubmodels)
+			result = make([]*model.Submodel, 0, row.TotalSubmodels)
 		}
 
-		submodel := &gen.Submodel{
+		submodel := &model.Submodel{
 			ModelType:        "Submodel",
 			ID:               row.ID,
 			IdShort:          row.IDShort,
 			Category:         row.Category,
-			Kind:             gen.ModellingKind(row.Kind),
-			SubmodelElements: []gen.SubmodelElement{},
+			Kind:             model.ModellingKind(row.Kind),
+			SubmodelElements: []model.SubmodelElement{},
 		}
 		if count > limit {
 			result = append(result, submodel)
@@ -367,7 +367,7 @@ func getSubmodels(db *sql.DB, submodelIDFilter string, limit int64, cursor strin
 			return a.id < b.id
 		})
 
-		res := make([]gen.SubmodelElement, 0, len(roots))
+		res := make([]model.SubmodelElement, 0, len(roots))
 		for _, r := range roots {
 			res = append(res, r.element)
 		}
@@ -405,7 +405,7 @@ func getSubmodels(db *sql.DB, submodelIDFilter string, limit int64, cursor strin
 //
 // Returns:
 //   - error: An error if parsing the language strings fails, nil otherwise
-func addDisplayNames(row model.SubmodelRow, submodel *gen.Submodel) error {
+func addDisplayNames(row model.SubmodelRow, submodel *model.Submodel) error {
 	if isArrayNotEmpty(row.DisplayNames) {
 		displayNames, err := builders.ParseLangStringNameType(row.DisplayNames)
 		if err != nil {
@@ -428,7 +428,7 @@ func addDisplayNames(row model.SubmodelRow, submodel *gen.Submodel) error {
 //
 // Returns:
 //   - error: An error if parsing the language strings fails, nil otherwise
-func addDescriptions(row model.SubmodelRow, submodel *gen.Submodel) error {
+func addDescriptions(row model.SubmodelRow, submodel *model.Submodel) error {
 	if isArrayNotEmpty(row.Descriptions) {
 		descriptions, err := builders.ParseLangStringTextType(row.Descriptions)
 		if err != nil {
@@ -463,7 +463,7 @@ func isArrayNotEmpty(data json.RawMessage) bool {
 //
 // Returns:
 //   - bool: true if exactly one semantic ID reference exists, false otherwise
-func hasSemanticID(semanticIDData []*gen.Reference) bool {
+func hasSemanticID(semanticIDData []*model.Reference) bool {
 	return len(semanticIDData) == 1
 }
 
@@ -474,7 +474,7 @@ func hasSemanticID(semanticIDData []*gen.Reference) bool {
 //
 // Returns:
 //   - bool: true if at least one Reference exists, false otherwise
-func moreThanZeroReferences(referenceArray []*gen.Reference) bool {
+func moreThanZeroReferences(referenceArray []*model.Reference) bool {
 	return len(referenceArray) > 0
 }
 
@@ -534,11 +534,11 @@ func attachChildrenToSubmodelElements(nodes map[int64]*node, children map[int64]
 		})
 
 		switch p := parent.element.(type) {
-		case *gen.SubmodelElementCollection:
+		case *model.SubmodelElementCollection:
 			for _, ch := range kids {
 				p.Value = append(p.Value, ch.element)
 			}
-		case *gen.SubmodelElementList:
+		case *model.SubmodelElementList:
 			for _, ch := range kids {
 				p.Value = append(p.Value, ch.element)
 			}
@@ -547,9 +547,9 @@ func attachChildrenToSubmodelElements(nodes map[int64]*node, children map[int64]
 }
 
 type node struct {
-	id       int64               // Database ID of the element
-	parentID int64               // Parent element ID for hierarchy
-	path     string              // Full path for navigation
-	position int                 // Position within parent for ordering
-	element  gen.SubmodelElement // The actual submodel element data
+	id       int64                 // Database ID of the element
+	parentID int64                 // Parent element ID for hierarchy
+	path     string                // Full path for navigation
+	position int                   // Position within parent for ordering
+	element  model.SubmodelElement // The actual submodel element data
 }

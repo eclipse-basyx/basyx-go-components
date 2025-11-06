@@ -212,7 +212,7 @@ func getBasicEventElementSubquery(dialect goqu.DialectWrapper) *goqu.SelectDatas
 	observedRef, observedRefReferred := queries.GetReferenceQueries(dialect, goqu.I("bee.observed_ref"))
 	messageBrokerRef, messageBrokerRefReferred := queries.GetReferenceQueries(dialect, goqu.I("bee.message_broker_ref"))
 
-	return dialect.From(goqu.T("submodel_element_list").As("bee")).
+	return dialect.From(goqu.T("basic_event_element").As("bee")).
 		Select(
 			goqu.Func("jsonb_build_object",
 				goqu.V("direction"), goqu.I("bee.direction"),
