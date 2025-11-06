@@ -19,7 +19,7 @@ jobs:
         uses: actions/checkout@v5
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           # Use the version in go.mod if present; otherwise pin a version
           go-version-file: go.mod
