@@ -126,6 +126,14 @@ type SubmodelElementSubmodelMetadata struct {
 func getSubmodels(db *sql.DB, submodelIDFilter string, limit int64, cursor string, query *grammar.QueryWrapper) ([]*model.Submodel, string, error) {
 	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	var result []*model.Submodel
+	var submodelCount int
+	err := db.QueryRow("SELECT COUNT(*) FROM submodel").Scan(&submodelCount)
+	if err != nil {
+		return nil, "", fmt.Errorf("error getting submodel count: %w", err)
+	}
+	if limit > 0 && submodelCount < int(limit) {
+		limit = int64(submodelCount)
+	}
 	referenceBuilderRefs := make(map[int64]*builders.ReferenceBuilder)
 	start := time.Now().Local().UnixMilli()
 	rows, err := getSubmodelDataFromDbWithJSONQuery(db, submodelIDFilter, limit, cursor, query)
@@ -135,6 +143,7 @@ func getSubmodels(db *sql.DB, submodelIDFilter string, limit int64, cursor strin
 		return nil, "", fmt.Errorf("error getting submodel data from DB: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
+
 	var count int64
 	var row model.SubmodelRow
 	var EmbeddedDataSpecifications []model.EmbeddedDataSpecification
