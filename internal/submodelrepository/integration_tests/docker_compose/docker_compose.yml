@@ -1,6 +1,6 @@
 services:
   db_it:
-    image: postgres:15
+    image: postgres:18
     container_name: postgres_db_it
     environment:
       POSTGRES_USER: admin

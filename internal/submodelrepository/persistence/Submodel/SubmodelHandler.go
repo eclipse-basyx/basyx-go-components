@@ -30,7 +30,10 @@ package submodelpersistence
 import (
 	"database/sql"
 	"fmt"
+	"os"
+	"runtime"
 	"sort"
+	"sync"
 	"time"
 
 	// nolint:all
@@ -489,6 +492,11 @@ func getSubmodelDataFromDbWithJSONQuery(db *sql.DB, submodelID string, limit int
 	q, err := submodel_query.GetQueryWithGoqu(submodelID, limit, cursor, query)
 	if err != nil {
 		fmt.Printf("Error building query: %v\n", err)
+		return nil, err
+	}
+	err = os.WriteFile("submodel_query.sql", []byte(q), 0644)
+	if err != nil {
+		fmt.Printf("Error writing query to file: %v\n", err)
 		return nil, err
 	}
 	rows, err := db.Query(q)
