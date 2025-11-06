@@ -31,6 +31,7 @@ import (
 	"log"
 
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	jsoniter "github.com/json-iterator/go"
 )
 
 // BuildAdministration constructs an AdministrativeInformation object from database query results.
@@ -78,27 +79,20 @@ func BuildAdministration(adminRow AdministrationRow) (*gen.AdministrativeInforma
 		administration.Creator = refs[0]
 	}
 
-	builder := NewEmbeddedDataSpecificationsBuilder()
-
-	err = builder.BuildContentsIec61360(adminRow.EdsDataSpecificationIEC61360)
-	if err != nil {
-		log.Printf("Failed to build contents: %v", err)
-	}
-
-	err = builder.BuildReferences(adminRow.EdsDataSpecifications, adminRow.EdsDataSpecificationsReferred)
-	if err != nil {
-		log.Printf("Failed to build references: %v", err)
-	}
-
-	eds := builder.Build()
-
-	if len(eds) > 0 {
-		administration.EmbeddedDataSpecifications = eds
+	if adminRow.EmbeddedDataSpecification != nil {
+		var edsList []gen.EmbeddedDataSpecification
+		var json = jsoniter.ConfigCompatibleWithStandardLibrary
+		err := json.Unmarshal(adminRow.EmbeddedDataSpecification, &edsList)
+		if err != nil {
+			log.Printf("Failed to build embedded data specifications: %v", err)
+		} else {
+			administration.EmbeddedDataSpecifications = edsList
+		}
 	}
 
 	for _, refBuilder := range refBuilderMap {
 		refBuilder.BuildNestedStructure()
 	}
-	
+
 	return administration, nil
 }

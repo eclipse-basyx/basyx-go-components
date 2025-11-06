@@ -85,9 +85,9 @@ func TestNewSubmodelHandler(smDatabase *persistencepostgresql.PostgreSQLSubmodel
 		log.Fatalf("Failed to parse JSON: %v", err)
 	}
 	start := time.Now()
-	sms, cursor, err := submodelpersistence.GetAllSubmodels(smDatabase.GetDB(), 5, "", nil)
+	sms, cursor, err := submodelpersistence.GetAllSubmodels(smDatabase.GetDB(), 100, "", nil)
 	end := time.Now()
-	fmt.Printf("Query Execution Time: %d milliseconds\n", end.Sub(start).Milliseconds())
+	fmt.Printf("Total Execution Time: %d milliseconds\n", end.Sub(start).Milliseconds())
 	fmt.Println(cursor)
 	if err != nil {
 		log.Fatalf("Failed to execute query: %v", err)

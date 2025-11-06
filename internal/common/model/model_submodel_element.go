@@ -10,8 +10,9 @@
 package model
 
 import (
-	"encoding/json"
 	"fmt"
+
+	jsoniter "github.com/json-iterator/go"
 )
 
 // SubmodelElement interface representing a SubmodelElement.
@@ -45,6 +46,7 @@ func UnmarshalSubmodelElement(data []byte) (SubmodelElement, error) {
 	var raw struct {
 		ModelType string `json:"modelType"`
 	}
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return nil, fmt.Errorf("failed to determine modelType: %w", err)

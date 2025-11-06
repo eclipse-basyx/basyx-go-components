@@ -28,6 +28,7 @@ package persistenceutils
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"reflect"
 
@@ -438,25 +439,25 @@ func CreateAdministrativeInformation(tx *sql.Tx, adminInfo *gen.AdministrativeIn
 			}
 		}
 
-		err = tx.QueryRow(`INSERT INTO administrative_information (version, revision, creator, templateID) VALUES ($1, $2, $3, $4) RETURNING id`,
-			adminInfo.Version, adminInfo.Revision, creatorID, adminInfo.TemplateID).Scan(&id)
+		edsJSONString := "[]"
+		if len(adminInfo.EmbeddedDataSpecifications) > 0 {
+			edsBytes, err := json.Marshal(adminInfo.EmbeddedDataSpecifications)
+			if err != nil {
+				fmt.Println(err)		
+				return sql.NullInt64{}, common.NewInternalServerError("Failed to marshal EmbeddedDataSpecifications - no changes applied - see console for details")
+			}
+			if edsBytes != nil {
+				edsJSONString = string(edsBytes)
+			}
+		}
+
+		err = tx.QueryRow(`INSERT INTO administrative_information (version, revision, creator, templateID, embedded_data_specification) VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+			adminInfo.Version, adminInfo.Revision, creatorID, adminInfo.TemplateID, edsJSONString).Scan(&id)
 		if err != nil {
 			return sql.NullInt64{}, err
 		}
 		adminInfoID = sql.NullInt64{Int64: int64(id), Valid: true}
 
-		if len(adminInfo.EmbeddedDataSpecifications) > 0 {
-			for i, eds := range adminInfo.EmbeddedDataSpecifications {
-				edsID, err := CreateEmbeddedDataSpecification(tx, eds, i)
-				if err != nil {
-					return sql.NullInt64{}, err
-				}
-				_, err = tx.Exec(`INSERT INTO administrative_information_embedded_data_specification (administrative_information_id, embedded_data_specification_id) VALUES ($1, $2)`, adminInfoID, edsID)
-				if err != nil {
-					return sql.NullInt64{}, err
-				}
-			}
-		}
 	}
 	return adminInfoID, nil
 }

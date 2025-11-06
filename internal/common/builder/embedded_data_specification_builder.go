@@ -33,6 +33,7 @@ import (
 	"sort"
 
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	jsoniter "github.com/json-iterator/go"
 )
 
 // EmbeddedDataSpecificationsBuilder constructs EmbeddedDataSpecification objects from
@@ -118,6 +119,7 @@ func NewEmbeddedDataSpecificationsBuilder() *EmbeddedDataSpecificationsBuilder {
 //	}
 func (edsb *EmbeddedDataSpecificationsBuilder) BuildReferences(edsReferenceRows json.RawMessage, edsReferredReferenceRows json.RawMessage) error {
 	var edsRefRow []EdsReferenceRow
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	if err := json.Unmarshal(edsReferenceRows, &edsRefRow); err != nil {
 		return fmt.Errorf("failed to unmarshal edsReferenceRows: %w", err)
 	}
@@ -190,6 +192,7 @@ func (edsb *EmbeddedDataSpecificationsBuilder) BuildReferences(edsReferenceRows 
 //	}
 func (edsb *EmbeddedDataSpecificationsBuilder) BuildContentsIec61360(iecRows json.RawMessage) error {
 	var iecContents []EdsContentIec61360Row
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	if err := json.Unmarshal(iecRows, &iecContents); err != nil {
 		return fmt.Errorf("failed to unmarshal iecRows: %w", err)
 	}
@@ -236,6 +239,7 @@ func (edsb *EmbeddedDataSpecificationsBuilder) BuildContentsIec61360(iecRows jso
 		if len(data.LevelType) == 0 {
 			levelType = nil
 		} else {
+			var json = jsoniter.ConfigCompatibleWithStandardLibrary
 			if err := json.Unmarshal(data.LevelType, &levelType); err != nil {
 				return fmt.Errorf("error converting LevelType for Embedded Data Specification Content ID %d: %w", data.IecID, err)
 			}
@@ -299,6 +303,7 @@ func buildUnitID(data EdsContentIec61360Row) (map[int64]*ReferenceBuilder, []*ge
 func (*EmbeddedDataSpecificationsBuilder) addValueListIfSet(data EdsContentIec61360Row, referenceBuilderMap map[int64]*ReferenceBuilder) (*gen.ValueList, error) {
 	if len(data.ValueListEntries) > 0 {
 		var valueListRows []ValueListRow
+		var json = jsoniter.ConfigCompatibleWithStandardLibrary
 		if err := json.Unmarshal(data.ValueListEntries, &valueListRows); err != nil {
 			return nil, fmt.Errorf("failed to unmarshal ValueListEntries for iec content %d: %w", data.IecID, err)
 		}
