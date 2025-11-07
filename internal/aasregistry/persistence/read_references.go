@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"time"
 
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/builder"
@@ -36,7 +35,6 @@ func GetReferencesByIDsBatch(db *sql.DB, ids []int64) (map[int64]*model.Referenc
 	if len(ids) == 0 {
 		return map[int64]*model.Reference{}, nil
 	}
-	start := time.Now()
 
 	d := goqu.Dialect(dialect)
 
@@ -90,7 +88,6 @@ func GetReferencesByIDsBatch(db *sql.DB, ids []int64) (map[int64]*model.Referenc
 			return nil, fmt.Errorf("scan root row: %w", err)
 		}
 
-		// Ensure builder exists per root
 		_, ok := refs[rr.rootID]
 		var b *builder.ReferenceBuilder
 		if !ok {
@@ -102,7 +99,6 @@ func GetReferencesByIDsBatch(db *sql.DB, ids []int64) (map[int64]*model.Referenc
 			b = builders[rr.rootID]
 		}
 
-		// Add key if present
 		if rr.keyID.Valid && rr.keyType.Valid && rr.keyValue.Valid {
 			b.CreateKey(rr.keyID.Int64, rr.keyType.String, rr.keyValue.String)
 		}
@@ -111,12 +107,10 @@ func GetReferencesByIDsBatch(db *sql.DB, ids []int64) (map[int64]*model.Referenc
 		return nil, fmt.Errorf("iterate root rows: %w", err)
 	}
 
-	// If no roots found at all, return empty
 	if len(refs) == 0 {
 		return map[int64]*model.Reference{}, nil
 	}
 
-	// --- 2) Load all descendants for all roots in one go (including their keys) ---
 	ref := goqu.T("reference").As("ref")
 
 	qDesc := d.
@@ -169,7 +163,6 @@ func GetReferencesByIDsBatch(db *sql.DB, ids []int64) (map[int64]*model.Referenc
 		_ = descRows.Close()
 	}()
 
-	// Track "seen" per root to avoid duplicate CreateReferredSemanticId calls
 	seenPerRoot := make(map[int64]map[int64]bool)
 
 	for descRows.Next() {
@@ -178,12 +171,10 @@ func GetReferencesByIDsBatch(db *sql.DB, ids []int64) (map[int64]*model.Referenc
 			return nil, fmt.Errorf("scan descendant row: %w", err)
 		}
 		if !dr.rootRef.Valid {
-			// Shouldn't happen if data is consistent; skip safely
 			continue
 		}
 		rootID := dr.rootRef.Int64
 
-		// Only build trees for roots we actually loaded
 		b, ok := builders[rootID]
 		if !ok {
 			continue
@@ -198,13 +189,11 @@ func GetReferencesByIDsBatch(db *sql.DB, ids []int64) (map[int64]*model.Referenc
 			parentID = dr.parentRef.Int64
 		}
 
-		// Create node once
 		if !seenPerRoot[rootID][dr.id] {
 			b.CreateReferredSemanticID(dr.id, parentID, dr.typ)
 			seenPerRoot[rootID][dr.id] = true
 		}
 
-		// Add key if present
 		if dr.keyID.Valid && dr.keyType.Valid && dr.keyValue.Valid {
 			if err := b.CreateReferredSemanticIDKey(dr.id, dr.keyID.Int64, dr.keyType.String, dr.keyValue.String); err != nil {
 				return nil, err
@@ -215,13 +204,10 @@ func GetReferencesByIDsBatch(db *sql.DB, ids []int64) (map[int64]*model.Referenc
 		return nil, fmt.Errorf("iterate descendant rows: %w", err)
 	}
 
-	// --- 3) Link nested structures per root ---
 	for _, b := range builders {
 		b.BuildNestedStructure()
 	}
 
-	duration := time.Since(start)
-	fmt.Printf("batch references took %v to complete\n", duration)
 	return refs, nil
 }
 
@@ -231,9 +217,9 @@ func readEntityReferences1ToMany(
 	ctx context.Context,
 	db *sql.DB,
 	entityIDs []int64,
-	relationTable string, // e.g. "extension_reference_supplemental"
-	entityFKCol string, // e.g. "extension_id"
-	referenceFKCol string, // e.g. "reference_id"
+	relationTable string,
+	entityFKCol string,
+	referenceFKCol string,
 ) (map[int64][]model.Reference, error) {
 	out := make(map[int64][]model.Reference, len(entityIDs))
 	if len(entityIDs) == 0 {
@@ -283,7 +269,6 @@ func readEntityReferences1ToMany(
 		return nil, fmt.Errorf("iterate links: %w", err)
 	}
 
-	// ensure presence for all requested IDs
 	for _, id := range ids {
 		if _, ok := perEntityRefIDs[id]; !ok {
 			perEntityRefIDs[id] = nil
@@ -297,7 +282,6 @@ func readEntityReferences1ToMany(
 		return out, nil
 	}
 
-	// (Optional) de-duplicate if desired; keeping behavior identical to original:
 	uniqRefIDs := allRefIDs
 
 	refByID, err := GetReferencesByIDsBatch(db, uniqRefIDs)
@@ -305,7 +289,6 @@ func readEntityReferences1ToMany(
 		return nil, fmt.Errorf("GetReferencesByIdsBatch: %w", err)
 	}
 
-	// assemble per entity
 	for eID, refIDs := range perEntityRefIDs {
 		if len(refIDs) == 0 {
 			out[eID] = nil

@@ -52,7 +52,6 @@ func readAdministrativeInformationByIDs(
 		return out, nil
 	}
 
-	// Deduplicate IDs
 	seen := make(map[int64]struct{}, len(adminInfoIDs))
 	uniq := make([]int64, 0, len(adminInfoIDs))
 	for _, id := range adminInfoIDs {

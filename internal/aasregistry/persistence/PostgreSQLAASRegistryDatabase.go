@@ -23,27 +23,6 @@ type PostgreSQLAASRegistryDatabase struct {
 	cacheEnabled bool
 }
 
-// logDBStats prints database pool stats to help diagnose concurrency and pooling behavior.
-func (p *PostgreSQLAASRegistryDatabase) logDBStats(label string) {
-	if p == nil || p.db == nil {
-		return
-	}
-	s := p.db.Stats()
-	fmt.Printf(
-		"DB pool [%s]: Open=%d InUse=%d Idle=%d Wait=%d WaitDur=%v MaxOpen=%d MaxIdleClosed=%d MaxIdleTimeClosed=%d MaxLifetimeClosed=%d\n",
-		label,
-		s.OpenConnections,
-		s.InUse,
-		s.Idle,
-		s.WaitCount,
-		s.WaitDuration,
-		s.MaxOpenConnections,
-		s.MaxIdleClosed,
-		s.MaxIdleTimeClosed,
-		s.MaxLifetimeClosed,
-	)
-}
-
 // NewPostgreSQLAASRegistryDatabase creates a new PostgreSQL-backed AAS registry
 // database handle. It initializes the database using the provided DSN and
 // schema path (or the default bundled schema when empty), and configures the
@@ -57,13 +36,11 @@ func NewPostgreSQLAASRegistryDatabase(
 	databaseSchema string,
 ) (*PostgreSQLAASRegistryDatabase, error) {
 
-	// Initialize database using common helper
 	db, err := common.InitializeDatabase(dsn, databaseSchema)
 	if err != nil {
 		return nil, err
 	}
 
-	// Configure connection pool
 	if maxOpenConns > 0 {
 		db.SetMaxOpenConns(maxOpenConns)
 	}
@@ -132,21 +109,18 @@ func (p *PostgreSQLAASRegistryDatabase) InsertAdministrationShellDescriptorTx(_ 
 
 	dnID, err := persistence_utils.CreateLangStringNameTypes(tx, aasd.DisplayName)
 	if err != nil {
-		fmt.Println(err)
 		return common.NewInternalServerError("Failed to create DisplayName - no changes applied - see console for details")
 	}
 	displayNameID = dnID
 
 	descID, err := persistence_utils.CreateLangStringTextTypesN(tx, aasd.Description)
 	if err != nil {
-		fmt.Println(err)
 		return common.NewInternalServerError("Failed to create Description - no changes applied - see console for details")
 	}
 	descriptionID = descID
 
 	adminID, err := persistence_utils.CreateAdministrativeInformation(tx, aasd.Administration)
 	if err != nil {
-		fmt.Println(err)
 		return common.NewInternalServerError("Failed to create Administration - no changes applied - see console for details")
 	}
 	administrationID = adminID
@@ -173,12 +147,10 @@ func (p *PostgreSQLAASRegistryDatabase) InsertAdministrationShellDescriptorTx(_ 
 	}
 
 	if err = createEndpoints(tx, descriptorID, aasd.Endpoints); err != nil {
-		fmt.Println(err)
 		return common.NewInternalServerError("Failed to create Endpoints - no changes applied - see console for details")
 	}
 
 	if err = createSpecificAssetID(tx, descriptorID, aasd.SpecificAssetIds); err != nil {
-		fmt.Println(err)
 		return common.NewInternalServerError("Failed to create Specific Asset Ids - no changes applied - see console for details")
 	}
 
@@ -199,7 +171,6 @@ func (p *PostgreSQLAASRegistryDatabase) InsertAdministrationShellDescriptorTx(_ 
 func (p *PostgreSQLAASRegistryDatabase) GetAssetAdministrationShellDescriptorByID(
 	ctx context.Context, aasIdentifier string,
 ) (model.AssetAdministrationShellDescriptor, error) {
-	adda := time.Now()
 	d := goqu.Dialect(dialect)
 
 	aas := goqu.T(tblAASDescriptor).As("aas")
@@ -271,11 +242,7 @@ func (p *PostgreSQLAASRegistryDatabase) GetAssetAdministrationShellDescriptorByI
 		smds             []model.SubmodelDescriptor
 	)
 
-	// Log DB stats before starting parallel helper fetches
-	p.logDBStats("GetAASDescriptorByID: before helpers")
 	g.Go(func() error {
-		start := time.Now()
-		defer func() { fmt.Printf("readAdministrativeInformationByID took %v\n", time.Since(start)) }()
 		if adminInfoID.Valid {
 			ai, err := readAdministrativeInformationByID(ctx, p.db, "aas_descriptor", adminInfoID)
 			if err != nil {
@@ -285,10 +252,7 @@ func (p *PostgreSQLAASRegistryDatabase) GetAssetAdministrationShellDescriptorByI
 		}
 		return nil
 	})
-	start := time.Now()
 	g.Go(func() error {
-		start := time.Now()
-		defer func() { fmt.Printf("GetLangStringNameTypes took %v\n", time.Since(start)) }()
 		dn, err := persistence_utils.GetLangStringNameTypes(p.db, displayNameID)
 		if err != nil {
 			return err
@@ -298,8 +262,6 @@ func (p *PostgreSQLAASRegistryDatabase) GetAssetAdministrationShellDescriptorByI
 	})
 
 	g.Go(func() error {
-		start := time.Now()
-		defer func() { fmt.Printf("GetLangStringTextTypes took %v\n", time.Since(start)) }()
 		desc, err := persistence_utils.GetLangStringTextTypes(p.db, descriptionID)
 		if err != nil {
 			return err
@@ -308,11 +270,7 @@ func (p *PostgreSQLAASRegistryDatabase) GetAssetAdministrationShellDescriptorByI
 		return nil
 	})
 
-	duration := time.Since(start)
-	fmt.Printf("single langstring block took %v to complete\n", duration)
 	g.Go(func() error {
-		start := time.Now()
-		defer func() { fmt.Printf("readEndpointsByDescriptorID took %v\n", time.Since(start)) }()
 		eps, err := readEndpointsByDescriptorID(ctx, p.db, descID)
 		if err != nil {
 			return err
@@ -322,8 +280,6 @@ func (p *PostgreSQLAASRegistryDatabase) GetAssetAdministrationShellDescriptorByI
 	})
 
 	g.Go(func() error {
-		start := time.Now()
-		defer func() { fmt.Printf("readSpecificAssetIDsByDescriptorID took %v\n", time.Since(start)) }()
 		ids, err := readSpecificAssetIDsByDescriptorID(ctx, p.db, descID)
 		if err != nil {
 			return err
@@ -333,8 +289,6 @@ func (p *PostgreSQLAASRegistryDatabase) GetAssetAdministrationShellDescriptorByI
 	})
 
 	g.Go(func() error {
-		start := time.Now()
-		defer func() { fmt.Printf("readExtensionsByDescriptorID took %v\n", time.Since(start)) }()
 		ext, err := readExtensionsByDescriptorID(ctx, p.db, descID)
 		if err != nil {
 			return err
@@ -344,8 +298,6 @@ func (p *PostgreSQLAASRegistryDatabase) GetAssetAdministrationShellDescriptorByI
 	})
 
 	g.Go(func() error {
-		start := time.Now()
-		defer func() { fmt.Printf("readSubmodelDescriptorsByAASDescriptorID took %v\n", time.Since(start)) }()
 		sm, err := readSubmodelDescriptorsByAASDescriptorID(ctx, p.db, descID)
 		if err != nil {
 			return err
@@ -354,14 +306,9 @@ func (p *PostgreSQLAASRegistryDatabase) GetAssetAdministrationShellDescriptorByI
 		return nil
 	})
 
-	// Log DB stats after scheduling helpers and after waiting
-	p.logDBStats("GetAASDescriptorByID: after schedule helpers")
 	if err := g.Wait(); err != nil {
 		return model.AssetAdministrationShellDescriptor{}, err
 	}
-	p.logDBStats("GetAASDescriptorByID: after wait helpers")
-	ada := time.Since(adda)
-	fmt.Printf("total block took %v to complete\n", ada)
 
 	return model.AssetAdministrationShellDescriptor{
 		AssetKind:           ak,
@@ -393,7 +340,6 @@ func (p *PostgreSQLAASRegistryDatabase) DeleteAssetAdministrationShellDescriptor
 	d := goqu.Dialect(dialect)
 	aas := goqu.T(tblAASDescriptor).As("aas")
 
-	// Lookup the root descriptor id for this AAS
 	sqlStr, args, buildErr := d.
 		From(aas).
 		Select(aas.Col(colDescriptorID)).
@@ -412,7 +358,6 @@ func (p *PostgreSQLAASRegistryDatabase) DeleteAssetAdministrationShellDescriptor
 		return scanErr
 	}
 
-	// Delete the main descriptor; cascades handle related rows
 	delStr, delArgs, buildDelErr := d.
 		Delete(tblDescriptor).
 		Where(goqu.C(colID).Eq(descID)).
@@ -435,7 +380,6 @@ func (p *PostgreSQLAASRegistryDatabase) ReplaceAdministrationShellDescriptor(ctx
 		d := goqu.Dialect(dialect)
 		aas := goqu.T(tblAASDescriptor).As("aas")
 
-		// Lookup existing descriptor id by AAS Id
 		sqlStr, args, buildErr := d.
 			From(aas).
 			Select(aas.Col(colDescriptorID)).
@@ -452,7 +396,6 @@ func (p *PostgreSQLAASRegistryDatabase) ReplaceAdministrationShellDescriptor(ctx
 		}
 		if scanErr == nil {
 			existed = true
-			// delete existing row; cascades clear dependents
 			delStr, delArgs, buildDelErr := d.
 				Delete(tblDescriptor).
 				Where(goqu.C(colID).Eq(descID)).
@@ -465,118 +408,9 @@ func (p *PostgreSQLAASRegistryDatabase) ReplaceAdministrationShellDescriptor(ctx
 			}
 		}
 
-		// Insert replacement
 		return p.InsertAdministrationShellDescriptorTx(ctx, tx, aasd)
 	})
 	return existed, err
-}
-
-// GetLangStringTextTypesByIDs fetches LangStringTextType rows for the given
-// reference IDs and groups them by their reference ID. An empty input returns
-// an empty map.
-func GetLangStringTextTypesByIDs(
-	db *sql.DB,
-	textTypeIDs []int64,
-) (map[int64][]model.LangStringTextType, error) {
-	start := time.Now()
-	out := make(map[int64][]model.LangStringTextType, len(textTypeIDs))
-	if len(textTypeIDs) == 0 {
-		return out, nil
-	}
-
-	dialect := goqu.Dialect("postgres")
-
-	ds := dialect.
-		From("lang_string_text_type").
-		Select("lang_string_text_type_reference_id", "text", "language").
-		Where(goqu.C("lang_string_text_type_reference_id").In(textTypeIDs))
-
-	sqlStr, args, err := ds.ToSQL()
-	if err != nil {
-		return nil, err
-	}
-
-	rows, err := db.Query(sqlStr, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
-		_ = rows.Close()
-	}()
-
-	for rows.Next() {
-		var refID int64
-		var text, language string
-		if err := rows.Scan(&refID, &text, &language); err != nil {
-			return nil, err
-		}
-		out[refID] = append(out[refID], model.LangStringTextType{
-			Text:     text,
-			Language: language,
-		})
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-
-	duration := time.Since(start)
-	fmt.Printf("name types block took %v to complete\n", duration)
-	return out, nil
-}
-
-// GetLangStringNameTypesByIDs fetches LangStringNameType rows for the given
-// reference IDs and groups them by their reference ID. An empty input returns
-// an empty map.
-func GetLangStringNameTypesByIDs(
-	db *sql.DB,
-	nameTypeIDs []int64,
-) (map[int64][]model.LangStringNameType, error) {
-
-	start := time.Now()
-	out := make(map[int64][]model.LangStringNameType, len(nameTypeIDs))
-	if len(nameTypeIDs) == 0 {
-		return out, nil
-	}
-
-	dialect := goqu.Dialect("postgres")
-
-	// Build query
-	ds := dialect.
-		From("lang_string_name_type").
-		Select("lang_string_name_type_reference_id", "text", "language").
-		Where(goqu.C("lang_string_name_type_reference_id").In(nameTypeIDs))
-
-	sqlStr, args, err := ds.ToSQL()
-	if err != nil {
-		return nil, err
-	}
-
-	rows, err := db.Query(sqlStr, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
-		_ = rows.Close()
-	}()
-
-	for rows.Next() {
-		var refID int64
-		var text, language string
-		if err := rows.Scan(&refID, &text, &language); err != nil {
-			return nil, err
-		}
-		out[refID] = append(out[refID], model.LangStringNameType{
-			Text:     text,
-			Language: language,
-		})
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-
-	duration := time.Since(start)
-	fmt.Printf("name types block took %v to complete\n", duration)
-	return out, nil
 }
 
 // ListAssetAdministrationShellDescriptors lists AAS descriptors optionally
@@ -591,8 +425,6 @@ func (p *PostgreSQLAASRegistryDatabase) ListAssetAdministrationShellDescriptors(
 	assetType string,
 ) ([]model.AssetAdministrationShellDescriptor, string, error) {
 
-	adda := time.Now()
-	startA := time.Now()
 	if limit <= 0 {
 		limit = 100
 	}
@@ -631,13 +463,11 @@ func (p *PostgreSQLAASRegistryDatabase) ListAssetAdministrationShellDescriptors(
 
 	sqlStr, args, buildErr := ds.ToSQL()
 	if buildErr != nil {
-		fmt.Println("ListAssetAdministrationShellDescriptors: build error:", buildErr)
 		return nil, "", common.NewInternalServerError("Failed to build AAS descriptor query. See server logs for details.")
 	}
 
 	rows, err := p.db.QueryContext(ctx, sqlStr, args...)
 	if err != nil {
-		fmt.Println("ListAssetAdministrationShellDescriptors: query error:", err)
 		return nil, "", common.NewInternalServerError("Failed to query AAS descriptors. See server logs for details.")
 	}
 	defer func() {
@@ -670,13 +500,11 @@ func (p *PostgreSQLAASRegistryDatabase) ListAssetAdministrationShellDescriptors(
 			&r.displayNameID,
 			&r.descriptionID,
 		); err != nil {
-			fmt.Println("ListAssetAdministrationShellDescriptors: scan error:", err)
 			return nil, "", common.NewInternalServerError("Failed to scan AAS descriptor row. See server logs for details.")
 		}
 		all = append(all, r)
 	}
 	if rows.Err() != nil {
-		fmt.Println("ListAssetAdministrationShellDescriptors: rows error:", rows.Err())
 		return nil, "", common.NewInternalServerError("Failed to iterate AAS descriptors. See server logs for details.")
 	}
 
@@ -707,8 +535,6 @@ func (p *PostgreSQLAASRegistryDatabase) ListAssetAdministrationShellDescriptors(
 			descIDs = append(descIDs, r.descID)
 		}
 
-		// Administrative information is fetched inline via subquery; no ID batching needed
-
 		if r.adminInfoID.Valid {
 			id := r.adminInfoID.Int64
 			if _, ok := seenAI[id]; !ok {
@@ -733,7 +559,6 @@ func (p *PostgreSQLAASRegistryDatabase) ListAssetAdministrationShellDescriptors(
 		}
 	}
 
-	fmt.Printf("loop took %v\n", time.Since(startA))
 	admByID := map[int64]*model.AdministrativeInformation{}
 	dnByID := map[int64][]model.LangStringNameType{}
 	descByID := map[int64][]model.LangStringTextType{}
@@ -758,8 +583,6 @@ func (p *PostgreSQLAASRegistryDatabase) ListAssetAdministrationShellDescriptors(
 	if len(displayNameIDs) > 0 {
 		ids := append([]int64(nil), displayNameIDs...)
 		g.Go(func() error {
-			start := time.Now()
-			defer func() { fmt.Printf("GetLangStringNameTypesByIDs took %v\n", time.Since(start)) }()
 			m, err := GetLangStringNameTypesByIDs(p.db, ids)
 			if err != nil {
 				return err
@@ -772,8 +595,6 @@ func (p *PostgreSQLAASRegistryDatabase) ListAssetAdministrationShellDescriptors(
 	if len(descriptionIDs) > 0 {
 		ids := append([]int64(nil), descriptionIDs...)
 		g.Go(func() error {
-			start := time.Now()
-			defer func() { fmt.Printf("GetLangStringTextTypesByIDs took %v\n", time.Since(start)) }()
 			m, err := GetLangStringTextTypesByIDs(p.db, ids)
 			if err != nil {
 				return err
@@ -786,8 +607,6 @@ func (p *PostgreSQLAASRegistryDatabase) ListAssetAdministrationShellDescriptors(
 	if len(descIDs) > 0 {
 		ids := append([]int64(nil), descIDs...)
 		g.Go(func() error {
-			start := time.Now()
-			defer func() { fmt.Printf("readEndpointsByDescriptorIDs took %v\n", time.Since(start)) }()
 			m, err := readEndpointsByDescriptorIDs(gctx, p.db, ids)
 			if err != nil {
 				return err
@@ -796,8 +615,6 @@ func (p *PostgreSQLAASRegistryDatabase) ListAssetAdministrationShellDescriptors(
 			return nil
 		})
 		g.Go(func() error {
-			start := time.Now()
-			defer func() { fmt.Printf("readSpecificAssetIDsByDescriptorIDs took %v\n", time.Since(start)) }()
 			m, err := readSpecificAssetIDsByDescriptorIDs(gctx, p.db, ids)
 			if err != nil {
 				return err
@@ -806,8 +623,6 @@ func (p *PostgreSQLAASRegistryDatabase) ListAssetAdministrationShellDescriptors(
 			return nil
 		})
 		g.Go(func() error {
-			start := time.Now()
-			defer func() { fmt.Printf("readExtensionsByDescriptorIDs took %v\n", time.Since(start)) }()
 			m, err := readExtensionsByDescriptorIDs(gctx, p.db, ids)
 			if err != nil {
 				return err
@@ -816,8 +631,6 @@ func (p *PostgreSQLAASRegistryDatabase) ListAssetAdministrationShellDescriptors(
 			return nil
 		})
 		g.Go(func() error {
-			start := time.Now()
-			defer func() { fmt.Printf("readSubmodelDescriptorsByAASDescriptorIDs took %v\n", time.Since(start)) }()
 			m, err := readSubmodelDescriptorsByAASDescriptorIDs(gctx, p.db, ids)
 			if err != nil {
 				return err
@@ -827,15 +640,9 @@ func (p *PostgreSQLAASRegistryDatabase) ListAssetAdministrationShellDescriptors(
 		})
 	}
 
-	// Log DB stats for the batched helper phase
-	p.logDBStats("ListAASDescriptors: after schedule helpers")
-
 	if err := g.Wait(); err != nil {
 		return nil, "", err
 	}
-	p.logDBStats("ListAASDescriptors: after wait helpers")
-	lel := time.Since(adda)
-	fmt.Printf("total block took %v to complete all requests\n", lel)
 
 	out := make([]model.AssetAdministrationShellDescriptor, 0, len(all))
 	for _, r := range all {
@@ -882,8 +689,6 @@ func (p *PostgreSQLAASRegistryDatabase) ListAssetAdministrationShellDescriptors(
 		})
 	}
 
-	ada := time.Since(adda)
-	fmt.Printf("total block took %v to complete\n", ada)
 	return out, nextCursor, nil
 }
 
@@ -908,13 +713,11 @@ func (p *PostgreSQLAASRegistryDatabase) ListSubmodelDescriptorsForAAS(
 	cursor string,
 ) ([]model.SubmodelDescriptor, string, error) {
 
-	start := time.Now()
 	if limit <= 0 {
 		limit = 10000000
 	}
 	peekLimit := int(limit) + 1
 
-	// 1) Resolve the single AAS descriptor id for the provided AAS Id string.
 	d := goqu.Dialect(dialect)
 	aas := goqu.T(tblAASDescriptor).As("aas")
 
@@ -926,39 +729,28 @@ func (p *PostgreSQLAASRegistryDatabase) ListSubmodelDescriptorsForAAS(
 
 	sqlStr, args, buildErr := ds.ToSQL()
 	if buildErr != nil {
-		fmt.Println("ListSubmodelDescriptorsForAAS: build error:", buildErr)
 		return nil, "", common.NewInternalServerError("Failed to build AAS lookup query. See server logs for details.")
 	}
 
 	var descID int64
 	if err := p.db.QueryRowContext(ctx, sqlStr, args...).Scan(&descID); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			// No such AAS => empty page
 			return []model.SubmodelDescriptor{}, "", nil
 		}
-		fmt.Println("ListSubmodelDescriptorsForAAS: query error:", err)
 		return nil, "", common.NewInternalServerError("Failed to query AAS descriptor id. See server logs for details.")
 	}
 
-	// 2) Fetch all submodel descriptors for that descriptor id using your existing helper.
-	//    (Keeps logic consistent with your other readers.)
-	tFetch := time.Now()
 	m, err := readSubmodelDescriptorsByAASDescriptorIDs(ctx, p.db, []int64{descID})
-	fmt.Printf("readSubmodelDescriptorsByAASDescriptorIDs took %v\n", time.Since(tFetch))
 	if err != nil {
-		fmt.Println("ListSubmodelDescriptorsForAAS: readSubmodelDescriptorsByAASDescriptorIDs error:", err)
 		return nil, "", err
 	}
 	list := append([]model.SubmodelDescriptor{}, m[descID]...)
 
-	// 3) Sort by Id ascending (stable).
 	sort.Slice(list, func(i, j int) bool {
 		return list[i].Id < list[j].Id
 	})
 
-	// 4) Apply cursor (Id >= cursor).
 	if cursor != "" {
-		// Binary search lower bound for cursor.
 		lo, hi := 0, len(list)
 		for lo < hi {
 			mid := (lo + hi) / 2
@@ -971,7 +763,6 @@ func (p *PostgreSQLAASRegistryDatabase) ListSubmodelDescriptorsForAAS(
 		list = list[lo:]
 	}
 
-	// 5) Peek & trim to page size, compute nextCursor.
 	var nextCursor string
 	switch {
 	case len(list) > peekLimit:
@@ -987,7 +778,6 @@ func (p *PostgreSQLAASRegistryDatabase) ListSubmodelDescriptorsForAAS(
 		list = list[:limit]
 	}
 
-	fmt.Printf("ListSubmodelDescriptorsForAAS: total block took %v to complete\n", time.Since(start))
 	return list, nextCursor, nil
 }
 
@@ -1011,7 +801,6 @@ func (p *PostgreSQLAASRegistryDatabase) InsertSubmodelDescriptorForAAS(
 
 	sqlStr, args, buildErr := ds.ToSQL()
 	if buildErr != nil {
-		fmt.Println("InsertSubmodelDescriptorForAAS: build error:", buildErr)
 		return common.NewInternalServerError("Failed to build AAS lookup query. See server logs for details.")
 	}
 
@@ -1020,11 +809,9 @@ func (p *PostgreSQLAASRegistryDatabase) InsertSubmodelDescriptorForAAS(
 		if errors.Is(err, sql.ErrNoRows) {
 			return common.NewErrNotFound("AAS Descriptor not found")
 		}
-		fmt.Println("InsertSubmodelDescriptorForAAS: query error:", err)
 		return common.NewInternalServerError("Failed to query AAS descriptor id. See server logs for details.")
 	}
 
-	// Begin tx and insert using existing helper
 	tx, err := p.db.BeginTx(ctx, nil)
 	if err != nil {
 		return common.NewInternalServerError("Failed to start postgres transaction. See console for information.")
@@ -1061,7 +848,6 @@ func (p *PostgreSQLAASRegistryDatabase) ReplaceSubmodelDescriptorForAAS(
 		aas := goqu.T(tblAASDescriptor).As("aas")
 		smd := goqu.T(tblSubmodelDescriptor).As("smd")
 
-		// Resolve AAS descriptor id from AAS Id
 		sqlStr, args, buildErr := d.
 			From(aas).
 			Select(aas.Col(colDescriptorID)).
@@ -1079,7 +865,6 @@ func (p *PostgreSQLAASRegistryDatabase) ReplaceSubmodelDescriptorForAAS(
 			return common.NewInternalServerError("Failed to query AAS descriptor id. See server logs for details.")
 		}
 
-		// Lookup existing submodel descriptor globally by submodel Id (may belong to any AAS)
 		sqlStr2, args2, buildErr2 := d.
 			From(smd).
 			Select(smd.Col(colDescriptorID)).
@@ -1104,7 +889,6 @@ func (p *PostgreSQLAASRegistryDatabase) ReplaceSubmodelDescriptorForAAS(
 			return scanErr
 		}
 
-		// Insert replacement submodel descriptor
 		if err := createSubModelDescriptors(tx, aasDescID, []model.SubmodelDescriptor{submodel}); err != nil {
 			return err
 		}
@@ -1174,7 +958,6 @@ func (p *PostgreSQLAASRegistryDatabase) GetSubmodelDescriptorForAASByID(
 	aasID string,
 	submodelID string,
 ) (model.SubmodelDescriptor, error) {
-	// Resolve AAS descriptor id
 	d := goqu.Dialect(dialect)
 	aas := goqu.T(tblAASDescriptor).As("aas")
 
@@ -1196,10 +979,7 @@ func (p *PostgreSQLAASRegistryDatabase) GetSubmodelDescriptorForAASByID(
 		return model.SubmodelDescriptor{}, common.NewInternalServerError("Failed to query AAS descriptor id. See server logs for details.")
 	}
 
-	// Fetch all submodels for that AAS and find the one with matching Id
-	tFetch := time.Now()
 	m, err := readSubmodelDescriptorsByAASDescriptorIDs(ctx, p.db, []int64{descID})
-	fmt.Printf("readSubmodelDescriptorsByAASDescriptorIDs took %v\n", time.Since(tFetch))
 	if err != nil {
 		return model.SubmodelDescriptor{}, err
 	}
@@ -1222,7 +1002,6 @@ func (p *PostgreSQLAASRegistryDatabase) DeleteSubmodelDescriptorForAASByID(
 	aas := goqu.T(tblAASDescriptor).As("aas")
 	smd := goqu.T(tblSubmodelDescriptor).As("smd")
 
-	// Join to find the underlying descriptor id to delete
 	ds := d.
 		From(smd).
 		InnerJoin(aas, goqu.On(smd.Col(colAASDescriptorID).Eq(aas.Col(colDescriptorID)))).
@@ -1247,7 +1026,6 @@ func (p *PostgreSQLAASRegistryDatabase) DeleteSubmodelDescriptorForAASByID(
 		return common.NewInternalServerError("Failed to query submodel descriptor id. See server logs for details.")
 	}
 
-	// Delete from descriptor (cascades remove all sub-rows)
 	tx, err := p.db.BeginTx(ctx, nil)
 	if err != nil {
 		return common.NewInternalServerError("Failed to start postgres transaction. See console for information.")

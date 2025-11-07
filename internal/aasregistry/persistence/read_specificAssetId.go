@@ -36,16 +36,15 @@ func readSpecificAssetIDsByDescriptorIDs(
 	d := goqu.Dialect(dialect)
 	sai := goqu.T(tblSpecificAssetID).As("sai")
 
-	// Pull all SAI rows for the descriptors; include descriptor_id for grouping.
 	sqlStr, args, err := d.
 		From(sai).
 		Select(
-			sai.Col(colDescriptorID),       // 0
-			sai.Col(colID),                 // 1
-			sai.Col(colName),               // 2
-			sai.Col(colValue),              // 3
-			sai.Col(colSemanticID),         // 4 (nullable ref id)
-			sai.Col(colExternalSubjectRef), // 5 (nullable ref id)
+			sai.Col(colDescriptorID),
+			sai.Col(colID),
+			sai.Col(colName),
+			sai.Col(colValue),
+			sai.Col(colSemanticID),
+			sai.Col(colExternalSubjectRef),
 		).
 		Where(sai.Col(colDescriptorID).In(uniqDesc)).
 		Order(sai.Col(colDescriptorID).Asc(), sai.Col(colID).Asc()).
@@ -69,7 +68,6 @@ func readSpecificAssetIDsByDescriptorIDs(
 		_ = rows.Close()
 	}()
 
-	// Collect per-descriptor rowData and IDs for batch lookups
 	perDesc := make(map[int64][]rowData, len(uniqDesc))
 	allSpecificIDs := make([]int64, 0, 256)
 	semRefIDs := make([]int64, 0, 128)
@@ -101,7 +99,6 @@ func readSpecificAssetIDsByDescriptorIDs(
 	}
 
 	if len(allSpecificIDs) == 0 {
-		// Ensure keys (optional)
 		for _, id := range uniqDesc {
 			if _, ok := out[id]; !ok {
 				out[id] = nil
@@ -113,24 +110,20 @@ func readSpecificAssetIDsByDescriptorIDs(
 	uniqSem := semRefIDs
 	uniqExt := extRefIDs
 
-	// Batch supplemental semantics: specific_id -> []Reference
 	suppBySpecific, err := readSpecificAssetIDSupplementalSemanticBySpecificIDs(ctx, db, allSpecificIDs)
 	if err != nil {
 		return nil, err
 	}
 
-	// Batch main references (semantic + external) using the package helper
 	allRefIDs := append(append([]int64{}, uniqSem...), uniqExt...)
 	refByID := make(map[int64]*model.Reference)
 	if len(allRefIDs) > 0 {
-		// If your helper has a different signature, adjust here.
 		refByID, err = GetReferencesByIDsBatch(db, allRefIDs)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	// Assemble in stable order per descriptor
 	for descID, rowsForDesc := range perDesc {
 		for _, r := range rowsForDesc {
 			var semRef *model.Reference
@@ -152,7 +145,6 @@ func readSpecificAssetIDsByDescriptorIDs(
 		}
 	}
 
-	// Ensure keys exist (optional)
 	for _, id := range uniqDesc {
 		if _, ok := out[id]; !ok {
 			out[id] = nil

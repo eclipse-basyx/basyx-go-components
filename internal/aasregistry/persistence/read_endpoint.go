@@ -4,9 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"fmt"
-	"time"
 
+	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/lib/pq"
 )
@@ -20,12 +19,12 @@ func readEndpointsByDescriptorID(
 	v, err := readEndpointsByDescriptorIDs(ctx, db, []int64{descriptorID})
 	return v[descriptorID], err
 }
+
 func readEndpointsByDescriptorIDs(
 	ctx context.Context,
 	db *sql.DB,
 	descriptorIDs []int64,
 ) (map[int64][]model.Endpoint, error) {
-	start := time.Now() // ⏱ start timing
 
 	out := make(map[int64][]model.Endpoint, len(descriptorIDs))
 	if len(descriptorIDs) == 0 {
@@ -42,43 +41,72 @@ func readEndpointsByDescriptorIDs(
 		}
 	}
 
-	const q = `
-    SELECT
-        e.descriptor_id,
-        e.id,
-        COALESCE(e.href, '') AS href,
-        COALESCE(e.endpoint_protocol, '') AS endpoint_protocol,
-        COALESCE(e.sub_protocol, '') AS sub_protocol,
-        COALESCE(e.sub_protocol_body, '') AS sub_protocol_body,
-        COALESCE(e.sub_protocol_body_encoding, '') AS sub_protocol_body_encoding,
-        COALESCE(e.interface, '') AS interface,
-        COALESCE(ARRAY_AGG(v.endpoint_protocol_version
-                 ORDER BY v.id) FILTER (WHERE v.endpoint_protocol_version IS NOT NULL),
-                 '{}') AS versions,
-        COALESCE(JSON_AGG(JSON_BUILD_OBJECT(
-                 'type', s.security_type,
-                 'key', s.security_key,
-                 'value', s.security_value
-               ) ORDER BY s.id)
-               FILTER (WHERE s.security_type IS NOT NULL), '[]') AS sec_attrs
-    FROM aas_descriptor_endpoint e
-    LEFT JOIN endpoint_protocol_version v
-           ON v.endpoint_id = e.id
-    LEFT JOIN security_attributes s
-           ON s.endpoint_id = e.id
-    WHERE e.descriptor_id = ANY($1)
-    GROUP BY e.descriptor_id, e.id, e.href, e.endpoint_protocol,
-             e.sub_protocol, e.sub_protocol_body, e.sub_protocol_body_encoding, e.interface
-    ORDER BY e.descriptor_id ASC, e.id ASC;
-    `
+	d := goqu.Dialect("postgres")
 
-	rows, err := db.QueryContext(ctx, q, pq.Array(uniq))
+	// Build the SQL with goqu; keep expressions as literals where it’s simpler
+	ds := d.
+		From(goqu.T("aas_descriptor_endpoint").As("e")).
+		LeftJoin(
+			goqu.T("endpoint_protocol_version").As("v"),
+			goqu.On(goqu.I("v.endpoint_id").Eq(goqu.I("e.id"))),
+		).
+		LeftJoin(
+			goqu.T("security_attributes").As("s"),
+			goqu.On(goqu.I("s.endpoint_id").Eq(goqu.I("e.id"))),
+		).
+		Where(goqu.I("e.descriptor_id").In(uniq)).
+		Select(
+			goqu.I("e.descriptor_id"),
+			goqu.I("e.id"),
+			goqu.L(`COALESCE(e.href, '')`).As("href"),
+			goqu.L(`COALESCE(e.endpoint_protocol, '')`).As("endpoint_protocol"),
+			goqu.L(`COALESCE(e.sub_protocol, '')`).As("sub_protocol"),
+			goqu.L(`COALESCE(e.sub_protocol_body, '')`).As("sub_protocol_body"),
+			goqu.L(`COALESCE(e.sub_protocol_body_encoding, '')`).As("sub_protocol_body_encoding"),
+			goqu.L(`COALESCE(e.interface, '')`).As(`interface`),
+
+			// versions
+			goqu.L(
+				`COALESCE(ARRAY_AGG(v.endpoint_protocol_version ORDER BY v.id)
+                  FILTER (WHERE v.endpoint_protocol_version IS NOT NULL), '{}')`,
+			).As("versions"),
+
+			// sec_attrs
+			goqu.L(
+				`COALESCE(JSON_AGG(JSON_BUILD_OBJECT(
+                    'type', s.security_type,
+                    'key', s.security_key,
+                    'value', s.security_value
+                  ) ORDER BY s.id)
+                  FILTER (WHERE s.security_type IS NOT NULL), '[]')`,
+			).As("sec_attrs"),
+		).
+		GroupBy(
+			goqu.I("e.descriptor_id"),
+			goqu.I("e.id"),
+			goqu.I("e.href"),
+			goqu.I("e.endpoint_protocol"),
+			goqu.I("e.sub_protocol"),
+			goqu.I("e.sub_protocol_body"),
+			goqu.I("e.sub_protocol_body_encoding"),
+			goqu.I("e.interface"),
+		).
+		Order(
+			goqu.I("e.descriptor_id").Asc(),
+			goqu.I("e.id").Asc(),
+		).
+		Prepared(true)
+
+	sqlStr, args, err := ds.ToSQL()
 	if err != nil {
 		return nil, err
 	}
-	defer func() {
-		_ = rows.Close()
-	}()
+
+	rows, err := db.QueryContext(ctx, sqlStr, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
 
 	type secAttr struct {
 		Type  string `json:"type"`
@@ -133,16 +161,11 @@ func readEndpointsByDescriptorIDs(
 		return nil, err
 	}
 
-	// Ensure keys for all requested descriptors
 	for _, id := range uniq {
 		if _, ok := out[id]; !ok {
 			out[id] = nil
 		}
 	}
-
-	// ⏱ print time taken
-	duration := time.Since(start)
-	fmt.Printf("endpoint block took %v to complete\n", duration)
 
 	return out, nil
 }
