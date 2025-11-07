@@ -18,7 +18,7 @@ COMPOSE_FILE = "docker_compose/docker_compose.yml"
 DB_CONTAINER = "postgres_db"  # optional: used if you have a healthcheck on DB
 DISCOVERY_URL = "http://localhost:5004/shell-descriptors"
 
-TOTAL_ITERS = 10000
+TOTAL_ITERS = 100000
 SEED = 42
 
 # How many iterations should be POST-only (prewarm). Set to 0 to disable.
@@ -83,153 +83,14 @@ def url_b64_encode(s: str):
 def ts():
     return datetime.now().strftime("%H:%M:%S")
 
-# ──────────────────────────────────────────────
-# Benchmark payload (template)
-# ──────────────────────────────────────────────
-data_big = {
-    "description": [
-        {"language": "en", "text": "Machine consisting of multiple parts which are assets provided by different companies"},
-        {"language": "de", "text": "Maschine bestehend aus mehreren Assets, welche von verschiedenen anderen Firmen bereitgestellt werden"}
-    ],
-    "displayName": [
-        {"language": "en", "text": "Composite Machine"},
-        {"language": "de", "text": "Verbundmaschine"}
-    ],
-    "specificAssetIds": [
-        {
-            "name": "h1",
-            "value": "value",
-            "semanticId": {"type": "ModelReference"},
-            "supplementalSemanticIds": [
-                {
-                    "type": "ModelReference",
-                    "keys": [{"type": "AnnotatedRelationshipElement", "value": "ddsfkjn"}]
-                }
-            ]
-        }
-    ],
-    "administration": {
-        "version": "1",
-        "revision": "1",
-        "creator": {
-            "type": "ModelReference",
-            "keys": [{"type": "AnnotatedRelationshipElement", "value": "dfok"}],
-            "referredSemanticId": {
-                "type": "ExternalReference",
-                "keys": [{"type": "AnnotatedRelationshipElement", "value": "fkvkfk"}]
-            }
-        }
-    },
-    "assetKind": "Instance",
-    "assetType": "machine",
-    "endpoints": [
-        {
-            "interface": "AAS-3.0",
-            "protocolInformation": {
-                "href": "https://demo3.digital-twin.host/aas-environment/shells/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy83NjA5XzQxMTZfMTYyMF8yN1Tk5",
-                "endpointProtocol": "https",
-                "subprotocol": "lol",
-                "subprotocolBody": "lil",
-                "subprotocolBodyEncoding": "dsoinf",
-                "securityAttributes": [
-                    {"type": "NONE", "key": "dofijs", "value": "NONE"}
-                ]
-            }
-        }
-    ],
-    "globalAssetId": "https://iese.fraunhofer.de/ids/asset/5079_8944_8914_9414",
-    "idShort": "machine",
-    # "id" will be overwritten with a unique value per POST
-    "id": "https://iese.fraunhofer.de/ids/aas/sdfgbfdb",
-    "extensions": [
-        {
-            "name": "help",
-            "valueType": "xs:string",
-            "value": "test",
-            "semanticId": {
-                "type": "ExternalReference",
-                "keys": [{"type": "AnnotatedRelationshipElement", "value": "ddsfkjn"}],
-                "referredSemanticId": {
-                    "type": "ExternalReference",
-                    "keys": [{"type": "AnnotatedRelationshipElement", "value": "ddsfkjn"}]
-                }
-            },
-            "supplementalSemanticIds": [
-                {
-                    "type": "ExternalReference",
-                    "keys": [{"type": "AnnotatedRelationshipElement", "value": "ddsfkjn"}],
-                    "referredSemanticId": {
-                        "type": "ExternalReference",
-                        "keys": [{"type": "AnnotatedRelationshipElement", "value": "ddsfkjn"}]
-                    }
-                }
-            ]
-        }
-    ],
-    "submodelDescriptors": [
-        {
-            # "id" will be overwritten with a unique value per POST
-            "id": "https://iese.fraunhofer.de/ids/aas/yxcyxc",
-            "endpoints": [
-                {
-                    "interface": "AAS-3.0",
-                    "protocolInformation": {
-                        "href": "https://demo3.digital-twin.host/aas-environment/shells/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy83NjA5XzQxMTZfMTYyMF8yNTk15",
-                        "endpointProtocol": "https"
-                    }
-                }
-            ],
-            "semanticId": {
-                "type": "ExternalReference",
-                "keys": [{"type": "AnnotatedRelationshipElement", "value": "ddsfkjn"}],
-                "referredSemanticId": {
-                    "type": "ExternalReference",
-                    "keys": [{"type": "AnnotatedRelationshipElement", "value": "ddsfkjn"}]
-                }
-            },
-            "supplementalSemanticIds": [
-                {
-                    "type": "ExternalReference",
-                    "keys": [{"type": "AnnotatedRelationshipElement", "value": "ddsfkjn"}],
-                    "referredSemanticId": {
-                        "type": "ExternalReference",
-                        "keys": [{"type": "AnnotatedRelationshipElement", "value": "ddsfkjn"}]
-                    }
-                }
-            ],
-            "extensions": [
-                {"name": "help", "valueType": "xs:string", "value": "test"}
-            ]
-        }
-    ]
-}
 
-data = {
-    "idShort": "InduCoreIC5000",
-    "id": "https://id.idta-showcase.net/namespace/InduCoreIC5000/v1",
-    "endpoints": [
-        {
-            "protocolInformation": {
-                "href": "https://idta.basyx-enterprise.net/controller/datasource/unprotected-repository-aas/shells/aHR0cHM6Ly9pZC5pZHRhLXNob3djYXNlLm5ldC9uYW1lc3BhY2UvSW5kdUNvcmVJQzUwMDAvdjE",
-                "endpointProtocol": "http"
-            },
-            "interface": "AAS-3.0"
-        }
-    ],
-    "administration": {
-        "version": "1",
-        "revision": "1",
-        "creator": {
-            "type": "ModelReference",
-            "keys": [{"type": "AnnotatedRelationshipElement", "value": "dfok"}],
-            "referredSemanticId": {
-                "type": "ExternalReference",
-                "keys": [{"type": "AnnotatedRelationshipElement", "value": "fkvkfk"}]
-            }
-        }
-    },
-}
-payload_template = data
+JSON_FILE = "bodies/simple.json"  # path to your file
+
+# --- Load JSON file ---
+with open(JSON_FILE, "r", encoding="utf-8") as f:
+    payload_template = json.load(f)
+
+
 # ──────────────────────────────────────────────
 # Cleanup handler
 # ──────────────────────────────────────────────
