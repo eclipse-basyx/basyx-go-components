@@ -7,7 +7,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"strconv"
 
 	ass_registry_api "github.com/eclipse-basyx/basyx-go-components/internal/aasregistry/api"
 	aasregistrydatabase "github.com/eclipse-basyx/basyx-go-components/internal/aasregistry/persistence"
@@ -19,51 +18,57 @@ import (
 func runServer(ctx context.Context, configPath string, databaseSchema string) error {
 	log.Default().Println("Loading AAS Registry Service...")
 	log.Default().Println("Config Path:", configPath)
-	// Load configuration
-	config, err := common.LoadConfig(configPath)
+
+	cfg, err := common.LoadConfig(configPath)
 	if err != nil {
-		log.Fatalf("Failed to load configuration: %v", err)
+		log.Fatalf("Failed to load config: %v", err)
 		return err
 	}
 
-	// Create Chi router
 	r := chi.NewRouter()
 
-	// Enable CORS and health endpoint via common helpers
-	common.AddCors(r, config)
-	common.AddHealthEndpoint(r, config)
+	common.AddCors(r, cfg)
+	common.AddHealthEndpoint(r, cfg)
 
-	// Instantiate generated services & controllers
-	// ==== AAS Registry Service ====
+	dsn := fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=disable",
+		cfg.Postgres.User,
+		cfg.Postgres.Password,
+		cfg.Postgres.Host,
+		cfg.Postgres.Port,
+		cfg.Postgres.DBName,
+	)
+	log.Printf("🗄️  Connecting to Postgres with DSN: postgres://%s:****@%s:%d/%s?sslmode=disable",
+		cfg.Postgres.User, cfg.Postgres.Host, cfg.Postgres.Port, cfg.Postgres.DBName)
+
 	smDatabase, err := aasregistrydatabase.NewPostgreSQLAASRegistryDatabase(
-		"postgres://"+config.Postgres.User+":"+config.Postgres.Password+"@"+config.Postgres.Host+":"+strconv.Itoa(config.Postgres.Port)+"/"+config.Postgres.DBName+"?sslmode=disable",
-		config.Postgres.MaxOpenConnections,
-		config.Postgres.MaxIdleConnections,
-		config.Postgres.ConnMaxLifetimeMinutes,
-		config.Server.CacheEnabled,
+		dsn,
+		cfg.Postgres.MaxOpenConnections,
+		cfg.Postgres.MaxIdleConnections,
+		cfg.Postgres.ConnMaxLifetimeMinutes,
+		cfg.Server.CacheEnabled,
 		databaseSchema,
 	)
+
 	if err != nil {
-		log.Fatalf("Failed to initialize database connection: %v", err)
+		log.Printf("❌ DB connect failed: %v", err)
 		return err
 	}
+	log.Println("✅ Postgres connection established")
+
 	smSvc := ass_registry_api.NewAssetAdministrationShellRegistryAPIAPIService(*smDatabase)
-	smCtrl := apis.NewAssetAdministrationShellRegistryAPIAPIController(smSvc, config.Server.ContextPath)
+	smCtrl := apis.NewAssetAdministrationShellRegistryAPIAPIController(smSvc, cfg.Server.ContextPath)
 	for _, rt := range smCtrl.Routes() {
 		r.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
 	}
-
-	// ==== Description Service ====
 	descSvc := apis.NewDescriptionAPIAPIService()
 	descCtrl := apis.NewDescriptionAPIAPIController(descSvc)
 	for _, rt := range descCtrl.Routes() {
 		r.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
 	}
 
-	// Start the server
-	addr := "0.0.0.0:" + fmt.Sprintf("%d", config.Server.Port)
-	log.Printf("▶️  AAS Registry listening on %s\n", addr)
-	// Start server in a goroutine
+	addr := "0.0.0.0:" + fmt.Sprintf("%d", cfg.Server.Port)
+	log.Printf("▶️ AAS Registry listening on %s (contextPath=%q)\n", addr, cfg.Server.ContextPath)
+
 	go func() {
 		if err := http.ListenAndServe(addr, r); err != http.ErrServerClosed {
 			log.Printf("Server error: %v", err)
@@ -77,7 +82,7 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 
 func main() {
 	ctx := context.Background()
-	// load config and optional schema path from flags
+
 	configPath := ""
 	databaseSchema := ""
 	flag.StringVar(&configPath, "config", "", "Path to config file")
@@ -95,7 +100,3 @@ func main() {
 		log.Fatalf("Server error: %v", err)
 	}
 }
-
-// Note: configuration loading, CORS, and health endpoint are provided by internal/common
-
-//
