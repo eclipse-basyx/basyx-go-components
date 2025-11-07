@@ -13,7 +13,7 @@ import (
 
 func readSubmodelDescriptorsByAASDescriptorID(
 	ctx context.Context,
-	db Queryer,
+	db *sql.DB,
 	aasDescriptorID int64,
 ) ([]model.SubmodelDescriptor, error) {
 
@@ -23,7 +23,7 @@ func readSubmodelDescriptorsByAASDescriptorID(
 
 func readSubmodelDescriptorsByAASDescriptorIDs(
 	ctx context.Context,
-	db Queryer,
+	db *sql.DB,
 	aasDescriptorIDs []int64,
 ) (map[int64][]model.SubmodelDescriptor, error) {
 	start := time.Now()

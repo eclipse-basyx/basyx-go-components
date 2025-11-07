@@ -11,18 +11,18 @@ import (
 )
 
 func readExtensionsByDescriptorID(
-    ctx context.Context,
-    db Queryer,
-    descriptorID int64,
+	ctx context.Context,
+	db *sql.DB,
+	descriptorID int64,
 ) ([]model.Extension, error) {
 	v, err := readExtensionsByDescriptorIDs(ctx, db, []int64{descriptorID})
 	return v[descriptorID], err
 }
 
 func readExtensionsByDescriptorIDs(
-    ctx context.Context,
-    db Queryer,
-    descriptorIDs []int64,
+	ctx context.Context,
+	db *sql.DB,
+	descriptorIDs []int64,
 ) (map[int64][]model.Extension, error) {
 	start := time.Now()
 	out := make(map[int64][]model.Extension, len(descriptorIDs))
@@ -71,7 +71,7 @@ func readExtensionsByDescriptorIDs(
 		vDT      sql.NullString
 	}
 
-    rows, err := db.QueryContext(ctx, sqlStr, args...)
+	rows, err := db.QueryContext(ctx, sqlStr, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -121,30 +121,30 @@ func readExtensionsByDescriptorIDs(
 	uniqExtIDs := allExtIDs
 	uniqSemRefIDs := semRefIDs
 
-    suppByExt, err := readEntityReferences1ToMany(
-        ctx, db, uniqExtIDs,
-        "extension_supplemental_semantic_id", "extension_id", "reference_id",
-    )
+	suppByExt, err := readEntityReferences1ToMany(
+		ctx, db, uniqExtIDs,
+		"extension_supplemental_semantic_id", "extension_id", "reference_id",
+	)
 	if err != nil {
 		return nil, err
 	}
 
-    refersByExt, err := readEntityReferences1ToMany(
-        ctx, db, uniqExtIDs,
-        "extension_refers_to", "extension_id", "reference_id",
-    )
+	refersByExt, err := readEntityReferences1ToMany(
+		ctx, db, uniqExtIDs,
+		"extension_refers_to", "extension_id", "reference_id",
+	)
 	if err != nil {
 		return nil, err
 	}
 
-    semRefByID := make(map[int64]*model.Reference)
-    if len(uniqSemRefIDs) > 0 {
-        var err error
-        semRefByID, err = GetReferencesByIDsBatch(db, uniqSemRefIDs)
-        if err != nil {
-            return nil, fmt.Errorf("GetReferencesByIdsBatch (semantic refs): %w", err)
-        }
-    }
+	semRefByID := make(map[int64]*model.Reference)
+	if len(uniqSemRefIDs) > 0 {
+		var err error
+		semRefByID, err = GetReferencesByIDsBatch(db, uniqSemRefIDs)
+		if err != nil {
+			return nil, fmt.Errorf("GetReferencesByIdsBatch (semantic refs): %w", err)
+		}
+	}
 
 	for descID, rowsForDesc := range perDesc {
 		for _, r := range rowsForDesc {

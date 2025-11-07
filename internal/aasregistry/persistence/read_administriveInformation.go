@@ -18,7 +18,7 @@ import (
 // readAdministrativeInformationByID fetches a single AdministrativeInformation by a nullable ID.
 func readAdministrativeInformationByID(
 	ctx context.Context,
-	db Queryer,
+	db *sql.DB,
 	tableName string,
 	adminInfoID sql.NullInt64,
 ) (*model.AdministrativeInformation, error) {
@@ -40,7 +40,7 @@ func readAdministrativeInformationByID(
 // readAdministrativeInformationByIDs fetches multiple AdministrativeInformation records keyed by ID.
 func readAdministrativeInformationByIDs(
 	ctx context.Context,
-	db Queryer,
+	db *sql.DB,
 	tableName string,
 	adminInfoIDs []int64,
 ) (map[int64]*model.AdministrativeInformation, error) {

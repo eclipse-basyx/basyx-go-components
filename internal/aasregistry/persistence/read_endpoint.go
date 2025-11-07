@@ -2,6 +2,7 @@ package aasregistrydatabase
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"time"
@@ -12,7 +13,7 @@ import (
 
 func readEndpointsByDescriptorID(
 	ctx context.Context,
-	db Queryer,
+	db *sql.DB,
 	descriptorID int64,
 ) ([]model.Endpoint, error) {
 
@@ -21,7 +22,7 @@ func readEndpointsByDescriptorID(
 }
 func readEndpointsByDescriptorIDs(
 	ctx context.Context,
-	db Queryer,
+	db *sql.DB,
 	descriptorIDs []int64,
 ) (map[int64][]model.Endpoint, error) {
 	start := time.Now() // ⏱ start timing
