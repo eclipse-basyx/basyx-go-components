@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 
 	"github.com/doug-martin/goqu/v9"
+	// nolint:revive
+	_ "github.com/doug-martin/goqu/v9/dialect/postgres"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/lib/pq"
 )
