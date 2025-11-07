@@ -11,9 +11,9 @@ import (
 )
 
 func readSpecificAssetIDsByDescriptorID(
-	ctx context.Context,
-	db *sql.DB,
-	descriptorID int64,
+    ctx context.Context,
+    db Queryer,
+    descriptorID int64,
 ) ([]model.SpecificAssetID, error) {
 
 	v, err := readSpecificAssetIDsByDescriptorIDs(ctx, db, []int64{descriptorID})
@@ -22,9 +22,9 @@ func readSpecificAssetIDsByDescriptorID(
 
 // Bulk: descriptorIDs -> []SpecificAssetId
 func readSpecificAssetIDsByDescriptorIDs(
-	ctx context.Context,
-	db *sql.DB,
-	descriptorIDs []int64,
+    ctx context.Context,
+    db Queryer,
+    descriptorIDs []int64,
 ) (map[int64][]model.SpecificAssetID, error) {
 	start := time.Now()
 	out := make(map[int64][]model.SpecificAssetID, len(descriptorIDs))
@@ -61,7 +61,7 @@ func readSpecificAssetIDsByDescriptorIDs(
 		semanticRefID        sql.NullInt64
 		externalSubjectRefID sql.NullInt64
 	}
-	rows, err := db.QueryContext(ctx, sqlStr, args...)
+    rows, err := db.QueryContext(ctx, sqlStr, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -114,21 +114,21 @@ func readSpecificAssetIDsByDescriptorIDs(
 	uniqExt := extRefIDs
 
 	// Batch supplemental semantics: specific_id -> []Reference
-	suppBySpecific, err := readSpecificAssetIDSupplementalSemanticBySpecificIDs(ctx, db, allSpecificIDs)
+    suppBySpecific, err := readSpecificAssetIDSupplementalSemanticBySpecificIDs(ctx, db, allSpecificIDs)
 	if err != nil {
 		return nil, err
 	}
 
 	// Batch main references (semantic + external) using the package helper
 	allRefIDs := append(append([]int64{}, uniqSem...), uniqExt...)
-	refByID := make(map[int64]*model.Reference)
-	if len(allRefIDs) > 0 {
-		// If your helper has a different signature, adjust here.
-		refByID, err = GetReferencesByIDsBatch(db, allRefIDs)
-		if err != nil {
-			return nil, err
-		}
-	}
+    refByID := make(map[int64]*model.Reference)
+    if len(allRefIDs) > 0 {
+        // If your helper has a different signature, adjust here.
+        refByID, err = GetReferencesByIDsBatch(db, allRefIDs)
+        if err != nil {
+            return nil, err
+        }
+    }
 
 	// Assemble in stable order per descriptor
 	for descID, rowsForDesc := range perDesc {
@@ -165,9 +165,9 @@ func readSpecificAssetIDsByDescriptorIDs(
 }
 
 func readSpecificAssetIDSupplementalSemanticBySpecificIDs(
-	ctx context.Context,
-	db *sql.DB,
-	specificAssetIDs []int64,
+    ctx context.Context,
+    db Queryer,
+    specificAssetIDs []int64,
 ) (map[int64][]model.Reference, error) {
 	out := make(map[int64][]model.Reference, len(specificAssetIDs))
 	if len(specificAssetIDs) == 0 {
@@ -175,14 +175,14 @@ func readSpecificAssetIDSupplementalSemanticBySpecificIDs(
 	}
 	uniqSpecific := specificAssetIDs
 
-	m, err := readEntityReferences1ToMany(
-		ctx,
-		db,
-		specificAssetIDs,
-		tblSpecificAssetIDSuppSemantic,
-		colSpecificAssetIDID,
-		colReferenceID,
-	)
+    m, err := readEntityReferences1ToMany(
+        ctx,
+        db,
+        specificAssetIDs,
+        tblSpecificAssetIDSuppSemantic,
+        colSpecificAssetIDID,
+        colReferenceID,
+    )
 	if err != nil {
 		return nil, err
 	}

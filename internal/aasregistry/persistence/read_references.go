@@ -1,10 +1,10 @@
 package aasregistrydatabase
 
 import (
-	"context"
-	"database/sql"
-	"fmt"
-	"time"
+    "context"
+    "database/sql"
+    "fmt"
+    "time"
 
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/builder"
@@ -32,7 +32,7 @@ import (
 // errors, or if the builder returns an error while attaching keys.
 //
 // Note: the function prints the elapsed time to stdout for basic diagnostics.
-func GetReferencesByIDsBatch(db *sql.DB, ids []int64) (map[int64]*model.Reference, error) {
+func GetReferencesByIDsBatch(db Queryer, ids []int64) (map[int64]*model.Reference, error) {
 	if len(ids) == 0 {
 		return map[int64]*model.Reference{}, nil
 	}
@@ -73,7 +73,7 @@ func GetReferencesByIDsBatch(db *sql.DB, ids []int64) (map[int64]*model.Referenc
 		keyValue sql.NullString
 	}
 
-	rows, err := db.Query(sqlRoots, argsRoots...)
+    rows, err := db.QueryContext(context.Background(), sqlRoots, argsRoots...)
 	if err != nil {
 		return nil, fmt.Errorf("load roots: %w", err)
 	}
@@ -161,7 +161,7 @@ func GetReferencesByIDsBatch(db *sql.DB, ids []int64) (map[int64]*model.Referenc
 		keyValue  sql.NullString
 	}
 
-	descRows, err := db.Query(sqlDesc, argsDesc...)
+    descRows, err := db.QueryContext(context.Background(), sqlDesc, argsDesc...)
 	if err != nil {
 		return nil, fmt.Errorf("load descendants: %w", err)
 	}
@@ -228,12 +228,12 @@ func GetReferencesByIDsBatch(db *sql.DB, ids []int64) (map[int64]*model.Referenc
 // readEntityReferences1ToMany loads references for a batch of entity IDs
 // via a link table (entityFKCol -> referenceFKCol), hydrating full Reference trees.
 func readEntityReferences1ToMany(
-	ctx context.Context,
-	db *sql.DB,
-	entityIDs []int64,
-	relationTable string, // e.g. "extension_reference_supplemental"
-	entityFKCol string, // e.g. "extension_id"
-	referenceFKCol string, // e.g. "reference_id"
+    ctx context.Context,
+    db Queryer,
+    entityIDs []int64,
+    relationTable string, // e.g. "extension_reference_supplemental"
+    entityFKCol string, // e.g. "extension_id"
+    referenceFKCol string, // e.g. "reference_id"
 ) (map[int64][]model.Reference, error) {
 	out := make(map[int64][]model.Reference, len(entityIDs))
 	if len(entityIDs) == 0 {
@@ -257,7 +257,7 @@ func readEntityReferences1ToMany(
 		return nil, fmt.Errorf("build link query: %w", err)
 	}
 
-	rows, err := db.QueryContext(ctx, sqlStr, args...)
+    rows, err := db.QueryContext(ctx, sqlStr, args...)
 	if err != nil {
 		return nil, fmt.Errorf("query links: %w", err)
 	}
@@ -300,7 +300,7 @@ func readEntityReferences1ToMany(
 	// (Optional) de-duplicate if desired; keeping behavior identical to original:
 	uniqRefIDs := allRefIDs
 
-	refByID, err := GetReferencesByIDsBatch(db, uniqRefIDs)
+    refByID, err := GetReferencesByIDsBatch(db, uniqRefIDs)
 	if err != nil {
 		return nil, fmt.Errorf("GetReferencesByIdsBatch: %w", err)
 	}

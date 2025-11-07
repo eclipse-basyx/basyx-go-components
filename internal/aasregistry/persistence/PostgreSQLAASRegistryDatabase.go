@@ -3,7 +3,6 @@ package aasregistrydatabase
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"sort"
@@ -13,9 +12,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
-	builders "github.com/eclipse-basyx/basyx-go-components/internal/common/builder"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
-	"github.com/eclipse-basyx/basyx-go-components/internal/common/queries"
 	persistence_utils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
 )
 
@@ -205,181 +202,136 @@ func (p *PostgreSQLAASRegistryDatabase) GetAssetAdministrationShellDescriptorByI
 	adda := time.Now()
 	d := goqu.Dialect(dialect)
 
-	aas := goqu.T(tblAASDescriptor).As("aas")
+	var result model.AssetAdministrationShellDescriptor
+	if err := p.WithTx(ctx, func(tx *sql.Tx) error {
+		aas := goqu.T(tblAASDescriptor).As("aas")
 
-	sqlStr, args, buildErr := d.
-		From(aas).
-		Select(
-			aas.Col(colDescriptorID),
-			aas.Col(colAssetKind),
-			aas.Col(colAssetType),
-			aas.Col(colGlobalAssetID),
-			aas.Col(colIDShort),
-			aas.Col(colAASID),
-			aas.Col(colAdminInfoID),
-			aas.Col(colDisplayNameID),
-			aas.Col(colDescriptionID),
-		).
-		Where(aas.Col(colAASID).Eq(aasIdentifier)).
-		Limit(1).
-		ToSQL()
-	if buildErr != nil {
-		return model.AssetAdministrationShellDescriptor{}, buildErr
-	}
-
-	var (
-		descID                            int64
-		assetKindStr                      sql.NullString
-		assetType, globalAssetID, idShort sql.NullString
-		idStr                             string
-		adminInfoID                       sql.NullInt64
-		displayNameID                     sql.NullInt64
-		descriptionID                     sql.NullInt64
-	)
-
-	if err := p.db.QueryRowContext(ctx, sqlStr, args...).Scan(
-		&descID,
-		&assetKindStr,
-		&assetType,
-		&globalAssetID,
-		&idShort,
-		&idStr,
-		&adminInfoID,
-		&displayNameID,
-		&descriptionID,
-	); err != nil {
-		if err == sql.ErrNoRows {
-			return model.AssetAdministrationShellDescriptor{}, common.NewErrNotFound("AAS Descriptor not found")
+		sqlStr, args, buildErr := d.
+			From(aas).
+			Select(
+				aas.Col(colDescriptorID),
+				aas.Col(colAssetKind),
+				aas.Col(colAssetType),
+				aas.Col(colGlobalAssetID),
+				aas.Col(colIDShort),
+				aas.Col(colAASID),
+				aas.Col(colAdminInfoID),
+				aas.Col(colDisplayNameID),
+				aas.Col(colDescriptionID),
+			).
+			Where(aas.Col(colAASID).Eq(aasIdentifier)).
+			Limit(1).
+			ToSQL()
+		if buildErr != nil {
+			return buildErr
 		}
-		return model.AssetAdministrationShellDescriptor{}, err
-	}
 
-	var ak *model.AssetKind
-	if assetKindStr.Valid && assetKindStr.String != "" {
-		v, err := model.NewAssetKindFromValue(assetKindStr.String)
-		if err != nil {
-			return model.AssetAdministrationShellDescriptor{}, fmt.Errorf("invalid AssetKind %q", assetKindStr.String)
+		var (
+			descID                            int64
+			assetKindStr                      sql.NullString
+			assetType, globalAssetID, idShort sql.NullString
+			idStr                             string
+			adminInfoID                       sql.NullInt64
+			displayNameID                     sql.NullInt64
+			descriptionID                     sql.NullInt64
+		)
+
+		if err := tx.QueryRowContext(ctx, sqlStr, args...).Scan(
+			&descID,
+			&assetKindStr,
+			&assetType,
+			&globalAssetID,
+			&idShort,
+			&idStr,
+			&adminInfoID,
+			&displayNameID,
+			&descriptionID,
+		); err != nil {
+			if err == sql.ErrNoRows {
+				return common.NewErrNotFound("AAS Descriptor not found")
+			}
+			return err
 		}
-		ak = &v
-	}
-	g, ctx := errgroup.WithContext(ctx)
 
-	var (
-		adminInfo        *model.AdministrativeInformation
-		displayName      []model.LangStringNameType
-		description      []model.LangStringTextType
-		endpoints        []model.Endpoint
-		specificAssetIDs []model.SpecificAssetID
-		extensions       []model.Extension
-		smds             []model.SubmodelDescriptor
-	)
+		var ak *model.AssetKind
+		if assetKindStr.Valid && assetKindStr.String != "" {
+			v, err := model.NewAssetKindFromValue(assetKindStr.String)
+			if err != nil {
+				return fmt.Errorf("invalid AssetKind %q", assetKindStr.String)
+			}
+			ak = &v
+		}
 
-	// Log DB stats before starting parallel helper fetches
-	p.logDBStats("GetAASDescriptorByID: before helpers")
-	g.Go(func() error {
-		start := time.Now()
-		defer func() { fmt.Printf("readAdministrativeInformationByID took %v\n", time.Since(start)) }()
+		var adminInfo *model.AdministrativeInformation
 		if adminInfoID.Valid {
-			ai, err := readAdministrativeInformationByID(ctx, p.db, "aas_descriptor", adminInfoID)
+			ai, err := readAdministrativeInformationByID(ctx, tx, "aas_descriptor", adminInfoID)
 			if err != nil {
 				return err
 			}
 			adminInfo = ai
 		}
-		return nil
-	})
-	start := time.Now()
-	g.Go(func() error {
-		start := time.Now()
-		defer func() { fmt.Printf("GetLangStringNameTypes took %v\n", time.Since(start)) }()
-		dn, err := persistence_utils.GetLangStringNameTypes(p.db, displayNameID)
+
+		// Read displayName and description via tx using batch helpers with single IDs
+		var displayName []model.LangStringNameType
+		if displayNameID.Valid {
+			m, err := GetLangStringNameTypesByIDs(tx, []int64{displayNameID.Int64})
+			if err != nil {
+				return err
+			}
+			displayName = m[displayNameID.Int64]
+		}
+		var description []model.LangStringTextType
+		if descriptionID.Valid {
+			m, err := GetLangStringTextTypesByIDs(tx, []int64{descriptionID.Int64})
+			if err != nil {
+				return err
+			}
+			description = m[descriptionID.Int64]
+		}
+
+		// Other dependent reads inside the same tx (sequential to keep tx safe)
+		endpoints, err := readEndpointsByDescriptorID(ctx, tx, descID)
 		if err != nil {
 			return err
 		}
-		displayName = dn
-		return nil
-	})
 
-	g.Go(func() error {
-		start := time.Now()
-		defer func() { fmt.Printf("GetLangStringTextTypes took %v\n", time.Since(start)) }()
-		desc, err := persistence_utils.GetLangStringTextTypes(p.db, descriptionID)
+		specificAssetIDs, err := readSpecificAssetIDsByDescriptorID(ctx, tx, descID)
 		if err != nil {
 			return err
 		}
-		description = desc
-		return nil
-	})
 
-	duration := time.Since(start)
-	fmt.Printf("single langstring block took %v to complete\n", duration)
-	g.Go(func() error {
-		start := time.Now()
-		defer func() { fmt.Printf("readEndpointsByDescriptorID took %v\n", time.Since(start)) }()
-		eps, err := readEndpointsByDescriptorID(ctx, p.db, descID)
+		extensions, err := readExtensionsByDescriptorID(ctx, tx, descID)
 		if err != nil {
 			return err
 		}
-		endpoints = eps
-		return nil
-	})
 
-	g.Go(func() error {
-		start := time.Now()
-		defer func() { fmt.Printf("readSpecificAssetIDsByDescriptorID took %v\n", time.Since(start)) }()
-		ids, err := readSpecificAssetIDsByDescriptorID(ctx, p.db, descID)
+		smds, err := readSubmodelDescriptorsByAASDescriptorID(ctx, tx, descID)
 		if err != nil {
 			return err
 		}
-		specificAssetIDs = ids
-		return nil
-	})
 
-	g.Go(func() error {
-		start := time.Now()
-		defer func() { fmt.Printf("readExtensionsByDescriptorID took %v\n", time.Since(start)) }()
-		ext, err := readExtensionsByDescriptorID(ctx, p.db, descID)
-		if err != nil {
-			return err
+		result = model.AssetAdministrationShellDescriptor{
+			AssetKind:           ak,
+			AssetType:           assetType.String,
+			GlobalAssetId:       globalAssetID.String,
+			IdShort:             idShort.String,
+			Id:                  idStr,
+			Administration:      adminInfo,
+			DisplayName:         displayName,
+			Description:         description,
+			Endpoints:           endpoints,
+			SpecificAssetIds:    specificAssetIDs,
+			Extensions:          extensions,
+			SubmodelDescriptors: smds,
 		}
-		extensions = ext
 		return nil
-	})
-
-	g.Go(func() error {
-		start := time.Now()
-		defer func() { fmt.Printf("readSubmodelDescriptorsByAASDescriptorID took %v\n", time.Since(start)) }()
-		sm, err := readSubmodelDescriptorsByAASDescriptorID(ctx, p.db, descID)
-		if err != nil {
-			return err
-		}
-		smds = sm
-		return nil
-	})
-
-	// Log DB stats after scheduling helpers and after waiting
-	p.logDBStats("GetAASDescriptorByID: after schedule helpers")
-	if err := g.Wait(); err != nil {
+	}); err != nil {
 		return model.AssetAdministrationShellDescriptor{}, err
 	}
-	p.logDBStats("GetAASDescriptorByID: after wait helpers")
+
 	ada := time.Since(adda)
 	fmt.Printf("total block took %v to complete\n", ada)
-
-	return model.AssetAdministrationShellDescriptor{
-		AssetKind:           ak,
-		AssetType:           assetType.String,
-		GlobalAssetId:       globalAssetID.String,
-		IdShort:             idShort.String,
-		Id:                  idStr,
-		Administration:      adminInfo,
-		DisplayName:         displayName,
-		Description:         description,
-		Endpoints:           endpoints,
-		SpecificAssetIds:    specificAssetIDs,
-		Extensions:          extensions,
-		SubmodelDescriptors: smds,
-	}, nil
+	return result, nil
 }
 
 // DeleteAssetAdministrationShellDescriptorByID deletes the main descriptor row for a given AAS id.
@@ -478,7 +430,7 @@ func (p *PostgreSQLAASRegistryDatabase) ReplaceAdministrationShellDescriptor(ctx
 // reference IDs and groups them by their reference ID. An empty input returns
 // an empty map.
 func GetLangStringTextTypesByIDs(
-	db *sql.DB,
+	db Queryer,
 	textTypeIDs []int64,
 ) (map[int64][]model.LangStringTextType, error) {
 	start := time.Now()
@@ -499,7 +451,7 @@ func GetLangStringTextTypesByIDs(
 		return nil, err
 	}
 
-	rows, err := db.Query(sqlStr, args...)
+	rows, err := db.QueryContext(context.Background(), sqlStr, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -531,7 +483,7 @@ func GetLangStringTextTypesByIDs(
 // reference IDs and groups them by their reference ID. An empty input returns
 // an empty map.
 func GetLangStringNameTypesByIDs(
-	db *sql.DB,
+	db Queryer,
 	nameTypeIDs []int64,
 ) (map[int64][]model.LangStringNameType, error) {
 
@@ -554,7 +506,7 @@ func GetLangStringNameTypesByIDs(
 		return nil, err
 	}
 
-	rows, err := db.Query(sqlStr, args...)
+	rows, err := db.QueryContext(context.Background(), sqlStr, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -604,9 +556,6 @@ func (p *PostgreSQLAASRegistryDatabase) ListAssetAdministrationShellDescriptors(
 	d := goqu.Dialect(dialect)
 	aas := goqu.T(tblAASDescriptor).As("aas")
 
-	// Inline AdministrativeInformation subquery to fetch all admin info per row
-	adminJSON := queries.GetAdministrationSubquery(d, "aas."+colAdminInfoID)
-
 	ds := d.
 		From(aas).
 		Select(
@@ -619,7 +568,6 @@ func (p *PostgreSQLAASRegistryDatabase) ListAssetAdministrationShellDescriptors(
 			aas.Col(colAdminInfoID),
 			aas.Col(colDisplayNameID),
 			aas.Col(colDescriptionID),
-			goqu.L("COALESCE((?), '[]'::jsonb)", adminJSON).As("administration"),
 		)
 	if cursor != "" {
 		ds = ds.Where(aas.Col(colAASID).Gte(cursor))
@@ -661,7 +609,6 @@ func (p *PostgreSQLAASRegistryDatabase) ListAssetAdministrationShellDescriptors(
 		adminInfoID   sql.NullInt64
 		displayNameID sql.NullInt64
 		descriptionID sql.NullInt64
-		adminJSON     json.RawMessage
 	}
 
 	all := make([]rowData, 0, peekLimit)
@@ -677,7 +624,6 @@ func (p *PostgreSQLAASRegistryDatabase) ListAssetAdministrationShellDescriptors(
 			&r.adminInfoID,
 			&r.displayNameID,
 			&r.descriptionID,
-			&r.adminJSON,
 		); err != nil {
 			fmt.Println("ListAssetAdministrationShellDescriptors: scan error:", err)
 			return nil, "", common.NewInternalServerError("Failed to scan AAS descriptor row. See server logs for details.")
@@ -703,7 +649,9 @@ func (p *PostgreSQLAASRegistryDatabase) ListAssetAdministrationShellDescriptors(
 	displayNameIDs := make([]int64, 0, len(all))
 	descriptionIDs := make([]int64, 0, len(all))
 
+	adminInfoIDs := make([]int64, 0, len(all))
 	seenDesc := make(map[int64]struct{}, len(all))
+	seenAI := map[int64]struct{}{}
 	seenDN := map[int64]struct{}{}
 	seenDE := map[int64]struct{}{}
 
@@ -714,7 +662,13 @@ func (p *PostgreSQLAASRegistryDatabase) ListAssetAdministrationShellDescriptors(
 			descIDs = append(descIDs, r.descID)
 		}
 
-		// Administrative information is fetched inline via subquery; no ID batching needed
+		if r.adminInfoID.Valid {
+			id := r.adminInfoID.Int64
+			if _, ok := seenAI[id]; !ok {
+				seenAI[id] = struct{}{}
+				adminInfoIDs = append(adminInfoIDs, id)
+			}
+		}
 
 		if r.displayNameID.Valid {
 			id := r.displayNameID.Int64
@@ -734,6 +688,7 @@ func (p *PostgreSQLAASRegistryDatabase) ListAssetAdministrationShellDescriptors(
 	}
 
 	fmt.Printf("loop took %v\n", time.Since(startA))
+	admByID := map[int64]*model.AdministrativeInformation{}
 	dnByID := map[int64][]model.LangStringNameType{}
 	descByID := map[int64][]model.LangStringTextType{}
 	endpointsByDesc := map[int64][]model.Endpoint{}
@@ -743,8 +698,17 @@ func (p *PostgreSQLAASRegistryDatabase) ListAssetAdministrationShellDescriptors(
 
 	g, gctx := errgroup.WithContext(ctx)
 
-	// Administrative information is already included per row; no separate fetch
-
+	if len(adminInfoIDs) > 0 {
+		ids := append([]int64(nil), adminInfoIDs...)
+		g.Go(func() error {
+			m, err := readAdministrativeInformationByIDs(gctx, p.db, "aas_descriptor", ids)
+			if err != nil {
+				return err
+			}
+			admByID = m
+			return nil
+		})
+	}
 	if len(displayNameIDs) > 0 {
 		ids := append([]int64(nil), displayNameIDs...)
 		g.Go(func() error {
@@ -839,23 +803,10 @@ func (p *PostgreSQLAASRegistryDatabase) ListAssetAdministrationShellDescriptors(
 		}
 
 		var adminInfo *model.AdministrativeInformation
-		if common.IsArrayNotEmpty(r.adminJSON) {
-			adminRow, err := builders.ParseAdministrationRow(r.adminJSON)
-			if err != nil {
-				return nil, "", fmt.Errorf("parsing administration row for AAS %s failed: %w", r.idStr, err)
-			}
-			if adminRow != nil {
-				built, err := builders.BuildAdministration(*adminRow)
-				if err != nil {
-					return nil, "", fmt.Errorf("building administration for AAS %s failed: %w", r.idStr, err)
-				}
-				adminInfo = &model.AdministrativeInformation{
-					Version:                    built.Version,
-					Revision:                   built.Revision,
-					TemplateID:                 built.TemplateID,
-					Creator:                    built.Creator,
-					EmbeddedDataSpecifications: built.EmbeddedDataSpecifications,
-				}
+		if r.adminInfoID.Valid {
+			if v, ok := admByID[r.adminInfoID.Int64]; ok {
+				tmp := v
+				adminInfo = tmp
 			}
 		}
 
@@ -905,93 +856,92 @@ func (p *PostgreSQLAASRegistryDatabase) ListAssetAdministrationShellDescriptors(
 //	of submodels per AAS can become very large and you need DB-level pagination, you can
 //	push the ORDER/LIMIT/GTE predicate down into SQL against your submodel tables.
 func (p *PostgreSQLAASRegistryDatabase) ListSubmodelDescriptorsForAAS(
-	ctx context.Context,
-	aasID string,
-	limit int32,
-	cursor string,
+    ctx context.Context,
+    aasID string,
+    limit int32,
+    cursor string,
 ) ([]model.SubmodelDescriptor, string, error) {
+    start := time.Now()
+    if limit <= 0 {
+        limit = 10000000
+    }
+    peekLimit := int(limit) + 1
 
-	start := time.Now()
-	if limit <= 0 {
-		limit = 10000000
-	}
-	peekLimit := int(limit) + 1
+    d := goqu.Dialect(dialect)
+    aas := goqu.T(tblAASDescriptor).As("aas")
 
-	// 1) Resolve the single AAS descriptor id for the provided AAS Id string.
-	d := goqu.Dialect(dialect)
-	aas := goqu.T(tblAASDescriptor).As("aas")
+    var (
+        out        []model.SubmodelDescriptor
+        nextCursor string
+    )
 
-	ds := d.
-		From(aas).
-		Select(aas.Col(colDescriptorID)).
-		Where(aas.Col(colAASID).Eq(aasID)).
-		Limit(1)
+    if err := p.WithTx(ctx, func(tx *sql.Tx) error {
+        ds := d.
+            From(aas).
+            Select(aas.Col(colDescriptorID)).
+            Where(aas.Col(colAASID).Eq(aasID)).
+            Limit(1)
 
-	sqlStr, args, buildErr := ds.ToSQL()
-	if buildErr != nil {
-		fmt.Println("ListSubmodelDescriptorsForAAS: build error:", buildErr)
-		return nil, "", common.NewInternalServerError("Failed to build AAS lookup query. See server logs for details.")
-	}
+        sqlStr, args, buildErr := ds.ToSQL()
+        if buildErr != nil {
+            fmt.Println("ListSubmodelDescriptorsForAAS: build error:", buildErr)
+            return common.NewInternalServerError("Failed to build AAS lookup query. See server logs for details.")
+        }
 
-	var descID int64
-	if err := p.db.QueryRowContext(ctx, sqlStr, args...).Scan(&descID); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			// No such AAS => empty page
-			return []model.SubmodelDescriptor{}, "", nil
-		}
-		fmt.Println("ListSubmodelDescriptorsForAAS: query error:", err)
-		return nil, "", common.NewInternalServerError("Failed to query AAS descriptor id. See server logs for details.")
-	}
+        var descID int64
+        if err := tx.QueryRowContext(ctx, sqlStr, args...).Scan(&descID); err != nil {
+            if errors.Is(err, sql.ErrNoRows) {
+                out = []model.SubmodelDescriptor{}
+                return nil
+            }
+            fmt.Println("ListSubmodelDescriptorsForAAS: query error:", err)
+            return common.NewInternalServerError("Failed to query AAS descriptor id. See server logs for details.")
+        }
 
-	// 2) Fetch all submodel descriptors for that descriptor id using your existing helper.
-	//    (Keeps logic consistent with your other readers.)
-	tFetch := time.Now()
-	m, err := readSubmodelDescriptorsByAASDescriptorIDs(ctx, p.db, []int64{descID})
-	fmt.Printf("readSubmodelDescriptorsByAASDescriptorIDs took %v\n", time.Since(tFetch))
-	if err != nil {
-		fmt.Println("ListSubmodelDescriptorsForAAS: readSubmodelDescriptorsByAASDescriptorIDs error:", err)
-		return nil, "", err
-	}
-	list := append([]model.SubmodelDescriptor{}, m[descID]...)
+        tFetch := time.Now()
+        m, err := readSubmodelDescriptorsByAASDescriptorIDs(ctx, tx, []int64{descID})
+        fmt.Printf("readSubmodelDescriptorsByAASDescriptorIDs took %v\n", time.Since(tFetch))
+        if err != nil {
+            fmt.Println("ListSubmodelDescriptorsForAAS: readSubmodelDescriptorsByAASDescriptorIDs error:", err)
+            return err
+        }
+        list := append([]model.SubmodelDescriptor{}, m[descID]...)
 
-	// 3) Sort by Id ascending (stable).
-	sort.Slice(list, func(i, j int) bool {
-		return list[i].Id < list[j].Id
-	})
+        sort.Slice(list, func(i, j int) bool { return list[i].Id < list[j].Id })
 
-	// 4) Apply cursor (Id >= cursor).
-	if cursor != "" {
-		// Binary search lower bound for cursor.
-		lo, hi := 0, len(list)
-		for lo < hi {
-			mid := (lo + hi) / 2
-			if list[mid].Id < cursor {
-				lo = mid + 1
-			} else {
-				hi = mid
-			}
-		}
-		list = list[lo:]
-	}
+        if cursor != "" {
+            lo, hi := 0, len(list)
+            for lo < hi {
+                mid := (lo + hi) / 2
+                if list[mid].Id < cursor {
+                    lo = mid + 1
+                } else {
+                    hi = mid
+                }
+            }
+            list = list[lo:]
+        }
 
-	// 5) Peek & trim to page size, compute nextCursor.
-	var nextCursor string
-	switch {
-	case len(list) > peekLimit:
-		nextCursor = list[peekLimit-1].Id
-		list = list[:peekLimit-1]
+        switch {
+        case len(list) > peekLimit:
+            nextCursor = list[peekLimit-1].Id
+            list = list[:peekLimit-1]
+        case len(list) == peekLimit:
+            nextCursor = list[limit].Id
+            list = list[:limit]
+        case len(list) > int(limit):
+            nextCursor = list[limit].Id
+            list = list[:limit]
+        }
 
-	case len(list) == peekLimit:
-		nextCursor = list[limit].Id
-		list = list[:limit]
+        out = list
+        return nil
+    }); err != nil {
+        return nil, "", err
+    }
 
-	case len(list) > int(limit):
-		nextCursor = list[limit].Id
-		list = list[:limit]
-	}
-
-	fmt.Printf("ListSubmodelDescriptorsForAAS: total block took %v to complete\n", time.Since(start))
-	return list, nextCursor, nil
+    fmt.Printf("ListSubmodelDescriptorsForAAS: total block took %v to complete\n", time.Since(start))
+    return out, nextCursor, nil
 }
 
 // InsertSubmodelDescriptorForAAS inserts a single SubmodelDescriptor under the AAS
@@ -1173,45 +1123,50 @@ func (p *PostgreSQLAASRegistryDatabase) ExistsSubmodelForAAS(ctx context.Context
 // AAS (by AAS Id string) and Submodel Id. Returns NotFound if either the AAS or the
 // Submodel under that AAS does not exist.
 func (p *PostgreSQLAASRegistryDatabase) GetSubmodelDescriptorForAASByID(
-	ctx context.Context,
-	aasID string,
-	submodelID string,
+    ctx context.Context,
+    aasID string,
+    submodelID string,
 ) (model.SubmodelDescriptor, error) {
-	// Resolve AAS descriptor id
-	d := goqu.Dialect(dialect)
-	aas := goqu.T(tblAASDescriptor).As("aas")
+    d := goqu.Dialect(dialect)
+    aas := goqu.T(tblAASDescriptor).As("aas")
 
-	ds := d.
-		From(aas).
-		Select(aas.Col(colDescriptorID)).
-		Where(aas.Col(colAASID).Eq(aasID)).
-		Limit(1)
+    var out model.SubmodelDescriptor
+    if err := p.WithTx(ctx, func(tx *sql.Tx) error {
+        ds := d.
+            From(aas).
+            Select(aas.Col(colDescriptorID)).
+            Where(aas.Col(colAASID).Eq(aasID)).
+            Limit(1)
 
-	sqlStr, args, buildErr := ds.ToSQL()
-	if buildErr != nil {
-		return model.SubmodelDescriptor{}, common.NewInternalServerError("Failed to build AAS lookup query. See server logs for details.")
-	}
-	var descID int64
-	if err := p.db.QueryRowContext(ctx, sqlStr, args...).Scan(&descID); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return model.SubmodelDescriptor{}, common.NewErrNotFound("AAS Descriptor not found")
-		}
-		return model.SubmodelDescriptor{}, common.NewInternalServerError("Failed to query AAS descriptor id. See server logs for details.")
-	}
+        sqlStr, args, buildErr := ds.ToSQL()
+        if buildErr != nil {
+            return common.NewInternalServerError("Failed to build AAS lookup query. See server logs for details.")
+        }
+        var descID int64
+        if err := tx.QueryRowContext(ctx, sqlStr, args...).Scan(&descID); err != nil {
+            if errors.Is(err, sql.ErrNoRows) {
+                return common.NewErrNotFound("AAS Descriptor not found")
+            }
+            return common.NewInternalServerError("Failed to query AAS descriptor id. See server logs for details.")
+        }
 
-	// Fetch all submodels for that AAS and find the one with matching Id
-	tFetch := time.Now()
-	m, err := readSubmodelDescriptorsByAASDescriptorIDs(ctx, p.db, []int64{descID})
-	fmt.Printf("readSubmodelDescriptorsByAASDescriptorIDs took %v\n", time.Since(tFetch))
-	if err != nil {
-		return model.SubmodelDescriptor{}, err
-	}
-	for _, smd := range m[descID] {
-		if smd.Id == submodelID {
-			return smd, nil
-		}
-	}
-	return model.SubmodelDescriptor{}, common.NewErrNotFound("Submodel Descriptor not found")
+        tFetch := time.Now()
+        m, err := readSubmodelDescriptorsByAASDescriptorIDs(ctx, tx, []int64{descID})
+        fmt.Printf("readSubmodelDescriptorsByAASDescriptorIDs took %v\n", time.Since(tFetch))
+        if err != nil {
+            return err
+        }
+        for _, smd := range m[descID] {
+            if smd.Id == submodelID {
+                out = smd
+                return nil
+            }
+        }
+        return common.NewErrNotFound("Submodel Descriptor not found")
+    }); err != nil {
+        return model.SubmodelDescriptor{}, err
+    }
+    return out, nil
 }
 
 // DeleteSubmodelDescriptorForAASByID deletes the submodel descriptor under the given AAS.

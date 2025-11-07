@@ -2,7 +2,6 @@ package aasregistrydatabase
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"time"
@@ -13,7 +12,7 @@ import (
 
 func readEndpointsByDescriptorID(
 	ctx context.Context,
-	db *sql.DB,
+	db Queryer,
 	descriptorID int64,
 ) ([]model.Endpoint, error) {
 
@@ -22,7 +21,7 @@ func readEndpointsByDescriptorID(
 }
 func readEndpointsByDescriptorIDs(
 	ctx context.Context,
-	db *sql.DB,
+	db Queryer,
 	descriptorIDs []int64,
 ) (map[int64][]model.Endpoint, error) {
 	start := time.Now() // ⏱ start timing
@@ -76,9 +75,9 @@ func readEndpointsByDescriptorIDs(
 	if err != nil {
 		return nil, err
 	}
-    defer func() {
-        _ = rows.Close()
-    }()
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	type secAttr struct {
 		Type  string `json:"type"`
