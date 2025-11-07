@@ -18,7 +18,8 @@ COMPOSE_FILE = "docker_compose/docker_compose.yml"
 DB_CONTAINER = "postgres_db"  # optional: used if you have a healthcheck on DB
 DISCOVERY_URL = "http://localhost:5004/shell-descriptors"
 
-TOTAL_ITERS = 100000
+JSON_FILE = "bodies/complex.json"  # path to your file
+TOTAL_ITERS = 10000
 SEED = 42
 
 # How many iterations should be POST-only (prewarm). Set to 0 to disable.
@@ -84,7 +85,6 @@ def ts():
     return datetime.now().strftime("%H:%M:%S")
 
 
-JSON_FILE = "bodies/simple.json"  # path to your file
 
 # --- Load JSON file ---
 with open(JSON_FILE, "r", encoding="utf-8") as f:

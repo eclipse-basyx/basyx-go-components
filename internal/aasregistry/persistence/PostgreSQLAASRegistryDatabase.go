@@ -426,7 +426,7 @@ func (p *PostgreSQLAASRegistryDatabase) ListAssetAdministrationShellDescriptors(
 ) ([]model.AssetAdministrationShellDescriptor, string, error) {
 
 	if limit <= 0 {
-		limit = 100
+		limit = 100000000
 	}
 	peekLimit := int(limit) + 1
 
