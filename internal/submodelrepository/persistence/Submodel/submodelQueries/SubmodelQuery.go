@@ -61,7 +61,7 @@ import (
 // The function uses COALESCE to ensure empty arrays ('[]'::jsonb) instead of NULL values,
 // which simplifies downstream JSON parsing. It also includes a total count window function
 // for efficient result set pagination and slice pre-sizing.
-func GetQueryWithGoqu(submodelID string, limit int64, cursor string, aasQuery *grammar.QueryWrapper) (string, error) {
+func GetQueryWithGoqu(submodelID string, limit int64, cursor string, aasQuery *grammar.QueryWrapper, onlyIds bool) (string, error) {
 	dialect := goqu.Dialect("postgres")
 
 	// Build display names subquery
@@ -167,6 +167,14 @@ func GetQueryWithGoqu(submodelID string, limit int64, cursor string, aasQuery *g
 			// goqu.L("COALESCE((?), '[]'::jsonb)", ChildSubmodelElementSubquery).As("submodel_child_submodel_elements"),
 		)
 
+	if onlyIds {
+		// If only IDs are requested, adjust the selection to only include the submodel ID
+		query = dialect.From(goqu.T("submodel").As("s")).
+			Select(
+				goqu.I("s.id").As("submodel_id"),
+			)
+	}
+
 	// Add optional WHERE clause for submodel ID filtering
 	if submodelID != "" {
 		query = addSubmodelIDFilterToQuery(query, submodelID)
@@ -183,11 +191,15 @@ func GetQueryWithGoqu(submodelID string, limit int64, cursor string, aasQuery *g
 		}
 	}
 
-	query = addSubmodelCountToQuery(query)
+	// query = addSubmodelCountToQuery(query)
 	query = addGroupBySubmodelID(query)
 
 	// Add pagination if limit or cursor is specified
-	query = addPaginationToQuery(query, limit, cursor)
+	shouldPeekAhead := true
+	if onlyIds {
+		shouldPeekAhead = false
+	}
+	query = addPaginationToQuery(query, limit, cursor, shouldPeekAhead)
 
 	sql, _, err := query.ToSQL()
 	if err != nil {
@@ -249,7 +261,7 @@ func applyAASQuery(aasQuery *grammar.QueryWrapper, query *goqu.SelectDataset) (*
 //   - limit controls the maximum number of results returned
 //   - Results are ALWAYS ordered by submodel ID for consistent pagination
 //   - Uses "peek ahead" pattern (limit + 1) to determine if there are more pages
-func addPaginationToQuery(query *goqu.SelectDataset, limit int64, cursor string) *goqu.SelectDataset {
+func addPaginationToQuery(query *goqu.SelectDataset, limit int64, cursor string, peekAhead bool) *goqu.SelectDataset {
 	// Add ordering by submodel ID for consistent pagination (ALWAYS when this function is called)
 	query = query.Order(goqu.I("s.id").Asc())
 
@@ -261,8 +273,10 @@ func addPaginationToQuery(query *goqu.SelectDataset, limit int64, cursor string)
 	// Add limit if provided (use peek ahead pattern)
 	if limit > 0 {
 		// Add 1 to limit for peek ahead to determine if there are more results
-		peekLimit := limit + 1
-		query = query.Limit(uint(peekLimit))
+		if peekAhead {
+			limit += 1
+		}
+		query = query.Limit(uint(limit))
 	}
 
 	return query

@@ -34,6 +34,7 @@ package builder
 import (
 	"encoding/json"
 	"fmt"
+	"sync"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	jsoniter "github.com/json-iterator/go"
@@ -49,6 +50,7 @@ import (
 //   - semanticIdData: Slice of already unmarshalled ReferredReferenceRow objects
 //   - referenceBuilderRefs: Map of reference IDs to their corresponding ReferenceBuilder instances.
 //     This map is used to look up parent references and must be pre-populated with root references.
+//   - mu: Optional mutex for concurrent access protection. If nil, no locking is performed.
 //
 // Returns:
 //   - error: An error if a parent reference is not found in the map.
@@ -58,13 +60,22 @@ import (
 //   - Skips entries with nil RootReference, ReferenceID, ParentReference, or ReferenceType
 //   - Verifies parent references exist in the builder map
 //   - Ensures key data (KeyID, KeyType, KeyValue) is complete
-func ParseReferredReferencesFromRows(semanticIDData []model.ReferredReferenceRow, referenceBuilderRefs map[int64]*ReferenceBuilder) error {
+func ParseReferredReferencesFromRows(semanticIDData []model.ReferredReferenceRow, referenceBuilderRefs map[int64]*ReferenceBuilder, mu *sync.RWMutex) error {
 	for _, ref := range semanticIDData {
 		if ref.RootReference == nil {
 			fmt.Println("[WARNING - ParseReferredReferencesFromRows] RootReference was nil - skipping Reference Creation.")
 			continue
 		}
+
+		// Read lock to check if builder exists
+		if mu != nil {
+			mu.RLock()
+		}
 		builder, semanticIDCreated := referenceBuilderRefs[*ref.RootReference]
+		if mu != nil {
+			mu.RUnlock()
+		}
+
 		if !semanticIDCreated {
 			return fmt.Errorf("parent reference with id %d not found for referred reference with id %d", ref.ParentReference, ref.ReferenceID)
 		}
@@ -99,11 +110,12 @@ func ParseReferredReferencesFromRows(semanticIDData []model.ReferredReferenceRow
 //   - row: JSON-encoded array of ReferredReferenceRow objects from the database
 //   - referenceBuilderRefs: Map of reference IDs to their corresponding ReferenceBuilder instances.
 //     This map is used to look up parent references and must be pre-populated with root references.
+//   - mu: Optional mutex for concurrent access protection. If nil, no locking is performed.
 //
 // Returns:
 //   - error: An error if JSON unmarshalling fails or if a parent reference is not found in the map.
 //     Nil references or keys are logged as warnings but do not cause the function to fail.
-func ParseReferredReferences(row json.RawMessage, referenceBuilderRefs map[int64]*ReferenceBuilder) error {
+func ParseReferredReferences(row json.RawMessage, referenceBuilderRefs map[int64]*ReferenceBuilder, mu *sync.RWMutex) error {
 	if len(row) == 0 {
 		return nil
 	}
@@ -114,7 +126,7 @@ func ParseReferredReferences(row json.RawMessage, referenceBuilderRefs map[int64
 		return fmt.Errorf("error unmarshalling referred semantic ID data: %w", err)
 	}
 
-	return ParseReferredReferencesFromRows(semanticIDData, referenceBuilderRefs)
+	return ParseReferredReferencesFromRows(semanticIDData, referenceBuilderRefs, mu)
 }
 
 // ParseReferencesFromRows parses reference data from already unmarshalled ReferenceRow objects.
@@ -127,6 +139,7 @@ func ParseReferredReferences(row json.RawMessage, referenceBuilderRefs map[int64
 //   - semanticIdData: Slice of already unmarshalled ReferenceRow objects
 //   - referenceBuilderRefs: Map that tracks reference IDs to their corresponding ReferenceBuilder instances.
 //     This map is populated by this function and can be used later for processing referred references.
+//   - mu: Optional mutex for concurrent access protection. If nil, no locking is performed.
 //
 // Returns:
 //   - []*model.Reference: Slice of parsed Reference objects. Each Reference contains all its associated Keys.
@@ -136,21 +149,44 @@ func ParseReferredReferences(row json.RawMessage, referenceBuilderRefs map[int64
 //   - Creates new ReferenceBuilder instances for each unique ReferenceId
 //   - Validates key data completeness (KeyID, KeyType, KeyValue)
 //   - Returns only the unique references (one per ReferenceID)
-func ParseReferencesFromRows(semanticIDData []model.ReferenceRow, referenceBuilderRefs map[int64]*ReferenceBuilder) []*model.Reference {
+func ParseReferencesFromRows(semanticIDData []model.ReferenceRow, referenceBuilderRefs map[int64]*ReferenceBuilder, mu *sync.RWMutex) []*model.Reference {
 	resultArray := make([]*model.Reference, 0)
 
 	for _, ref := range semanticIDData {
 		var semanticID *model.Reference
 		var semanticIDBuilder *ReferenceBuilder
 
+		// Check if reference already exists
+		if mu != nil {
+			mu.RLock()
+		}
 		_, semanticIDCreated := referenceBuilderRefs[ref.ReferenceID]
+		if mu != nil {
+			mu.RUnlock()
+		}
 
 		if !semanticIDCreated {
 			semanticID, semanticIDBuilder = NewReferenceBuilder(ref.ReferenceType, ref.ReferenceID)
+
+			// Write lock to add to map
+			if mu != nil {
+				mu.Lock()
+			}
 			referenceBuilderRefs[ref.ReferenceID] = semanticIDBuilder
+			if mu != nil {
+				mu.Unlock()
+			}
+
 			resultArray = append(resultArray, semanticID)
 		} else {
+			// Read lock to get from map
+			if mu != nil {
+				mu.RLock()
+			}
 			semanticIDBuilder = referenceBuilderRefs[ref.ReferenceID]
+			if mu != nil {
+				mu.RUnlock()
+			}
 		}
 
 		if ref.KeyID == nil || ref.KeyType == nil || ref.KeyValue == nil {
@@ -173,11 +209,12 @@ func ParseReferencesFromRows(semanticIDData []model.ReferenceRow, referenceBuild
 //   - row: JSON-encoded array of ReferenceRow objects from the database
 //   - referenceBuilderRefs: Map that tracks reference IDs to their corresponding ReferenceBuilder instances.
 //     This map is populated by this function and can be used later for processing referred references.
+//   - mu: Optional mutex for concurrent access protection. If nil, no locking is performed.
 //
 // Returns:
 //   - []*model.Reference: Slice of parsed Reference objects. Each Reference contains all its associated Keys.
 //   - error: An error if JSON unmarshalling fails. Nil key data is logged as warnings but does not cause failure.
-func ParseReferences(row json.RawMessage, referenceBuilderRefs map[int64]*ReferenceBuilder) ([]*model.Reference, error) {
+func ParseReferences(row json.RawMessage, referenceBuilderRefs map[int64]*ReferenceBuilder, mu *sync.RWMutex) ([]*model.Reference, error) {
 	if len(row) == 0 {
 		return make([]*model.Reference, 0), nil
 	}
@@ -188,7 +225,7 @@ func ParseReferences(row json.RawMessage, referenceBuilderRefs map[int64]*Refere
 		return nil, fmt.Errorf("error unmarshalling semantic ID data: %w", err)
 	}
 
-	return ParseReferencesFromRows(semanticIDData, referenceBuilderRefs), nil
+	return ParseReferencesFromRows(semanticIDData, referenceBuilderRefs, mu), nil
 }
 
 // ParseLangStringNameType parses localized name strings from JSON data.

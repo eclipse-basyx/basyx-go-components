@@ -29,6 +29,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"sync"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	jsoniter "github.com/json-iterator/go"
@@ -42,113 +43,224 @@ type SubmodelElementBuilder struct {
 
 // BuildSubmodelElement Creates a Root SubmodelElement and the Builder
 func BuildSubmodelElement(smeRow model.SubmodelElementRow) (*model.SubmodelElement, *SubmodelElementBuilder, error) {
+	var wg sync.WaitGroup
 	refBuilderMap := make(map[int64]*ReferenceBuilder)
-	specificSME, err := getSubmodelElementObjectBasedOnModelType(smeRow, refBuilderMap)
+	var refMutex sync.RWMutex
+	specificSME, err := getSubmodelElementObjectBasedOnModelType(smeRow, refBuilderMap, &refMutex)
 	if err != nil {
 		return nil, nil, err
 	}
-	semanticID, err := getSingleReference(smeRow.SemanticID, smeRow.SemanticIDReferred, refBuilderMap)
-	if err != nil {
-		return nil, nil, err
-	}
-	if semanticID != nil {
-		specificSME.SetSemanticID(semanticID)
-	}
+
 	specificSME.SetIdShort(smeRow.IDShort)
 	specificSME.SetCategory(smeRow.Category)
 	specificSME.SetModelType(smeRow.ModelType)
 
-	if smeRow.Descriptions != nil {
-		descriptions, err := ParseLangStringTextType(*smeRow.Descriptions)
-		if err != nil {
-			return nil, nil, fmt.Errorf("error parsing descriptions: %w", err)
-		}
-		specificSME.SetDescription(descriptions)
+	// Channels for parallel processing
+	type semanticIDResult struct {
+		semanticID *model.Reference
+		err        error
+	}
+	type descriptionResult struct {
+		descriptions []model.LangStringTextType
+		err          error
+	}
+	type displayNameResult struct {
+		displayNames []model.LangStringNameType
+		err          error
+	}
+	type embeddedDataSpecResult struct {
+		eds []model.EmbeddedDataSpecification
+		err error
+	}
+	type supplementalSemanticIDsResult struct {
+		supplementalSemanticIDs []*model.Reference
+		err                     error
+	}
+	type qualifiersResult struct {
+		qualifiers []model.Qualifier
+		err        error
 	}
 
-	if smeRow.DisplayNames != nil {
-		displayNames, err := ParseLangStringNameType(*smeRow.DisplayNames)
-		if err != nil {
-			return nil, nil, fmt.Errorf("error parsing display names: %w", err)
-		}
-		specificSME.SetDisplayName(displayNames)
-	}
+	semanticIDChan := make(chan semanticIDResult, 1)
+	descriptionChan := make(chan descriptionResult, 1)
+	displayNameChan := make(chan displayNameResult, 1)
+	embeddedDataSpecChan := make(chan embeddedDataSpecResult, 1)
+	supplementalSemanticIDsChan := make(chan supplementalSemanticIDsResult, 1)
+	qualifiersChan := make(chan qualifiersResult, 1)
 
-	if smeRow.EmbeddedDataSpecifications != nil {
-		var eds []model.EmbeddedDataSpecification
-		var json = jsoniter.ConfigCompatibleWithStandardLibrary
-		err := json.Unmarshal(*smeRow.EmbeddedDataSpecifications, &eds)
-		if err != nil {
-			log.Printf("error unmarshaling embedded data specifications: %v", err)
-			return nil, nil, err
-		}
-		specificSME.SetEmbeddedDataSpecifications(eds)
-	}
+	// Parse SemanticID
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		semanticID, err := getSingleReference(smeRow.SemanticID, smeRow.SemanticIDReferred, refBuilderMap, &refMutex)
+		semanticIDChan <- semanticIDResult{semanticID: semanticID, err: err}
+	}()
 
-	supplementalSemanticIDs := []*model.Reference{}
-	suppl := []model.Reference{}
-	// SupplementalSemanticIDs
-	if smeRow.SupplementalSemanticIDs != nil {
-		supplementalSemanticIDs, err = ParseReferences(*smeRow.SupplementalSemanticIDs, refBuilderMap)
-		if err != nil {
-			return nil, nil, err
+	// Parse Descriptions
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		if smeRow.Descriptions != nil {
+			descriptions, err := ParseLangStringTextType(*smeRow.Descriptions)
+			descriptionChan <- descriptionResult{descriptions: descriptions, err: err}
+		} else {
+			descriptionChan <- descriptionResult{}
 		}
-		// if moreThanZeroReferences(supplementalSemanticIDs) {
-		// 	err = ParseReferredReferences(smeRow.SupplementalSemanticIDsReferred, refBuilderMap)
-		// 	if err != nil {
-		// 		return nil, nil, err
-		// 	}
-		// }
-	}
+	}()
 
-	// Qualifiers
-	if smeRow.Qualifiers != nil {
-		builder := NewQualifiersBuilder()
-		qualifierRows, err := ParseQualifiersRow(*smeRow.Qualifiers)
-		if err != nil {
-			return nil, nil, err
+	// Parse DisplayNames
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		if smeRow.DisplayNames != nil {
+			displayNames, err := ParseLangStringNameType(*smeRow.DisplayNames)
+			displayNameChan <- displayNameResult{displayNames: displayNames, err: err}
+		} else {
+			displayNameChan <- displayNameResult{}
 		}
-		for _, qualifierRow := range qualifierRows {
-			_, err = builder.AddQualifier(qualifierRow.DbID, qualifierRow.Kind, qualifierRow.Type, qualifierRow.ValueType, qualifierRow.Value, qualifierRow.Position)
+	}()
+
+	// Parse EmbeddedDataSpecifications
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		if smeRow.EmbeddedDataSpecifications != nil {
+			var eds []model.EmbeddedDataSpecification
+			var json = jsoniter.ConfigCompatibleWithStandardLibrary
+			err := json.Unmarshal(*smeRow.EmbeddedDataSpecifications, &eds)
 			if err != nil {
-				return nil, nil, err
+				log.Printf("error unmarshaling embedded data specifications: %v", err)
 			}
-
-			_, err = builder.AddSemanticID(qualifierRow.DbID, qualifierRow.SemanticID, qualifierRow.SemanticIDReferredReferences)
-			if err != nil {
-				return nil, nil, err
-			}
-
-			_, err = builder.AddValueID(qualifierRow.DbID, qualifierRow.ValueID, qualifierRow.ValueIDReferredReferences)
-			if err != nil {
-				return nil, nil, err
-			}
-
-			_, err = builder.AddSupplementalSemanticIDs(qualifierRow.DbID, qualifierRow.SupplementalSemanticIDs, qualifierRow.SupplementalSemanticIDsReferredReferences)
-			if err != nil {
-				return nil, nil, err
-			}
+			embeddedDataSpecChan <- embeddedDataSpecResult{eds: eds, err: err}
+		} else {
+			embeddedDataSpecChan <- embeddedDataSpecResult{}
 		}
-		specificSME.SetQualifiers(builder.Build())
+	}()
+
+	// Parse SupplementalSemanticIDs
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		if smeRow.SupplementalSemanticIDs != nil {
+			supplementalSemanticIDs, err := ParseReferences(*smeRow.SupplementalSemanticIDs, refBuilderMap, &refMutex)
+			supplementalSemanticIDsChan <- supplementalSemanticIDsResult{supplementalSemanticIDs: supplementalSemanticIDs, err: err}
+		} else {
+			supplementalSemanticIDsChan <- supplementalSemanticIDsResult{}
+		}
+	}()
+
+	// Parse Qualifiers
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		if smeRow.Qualifiers != nil {
+			builder := NewQualifiersBuilder()
+			qualifierRows, err := ParseQualifiersRow(*smeRow.Qualifiers)
+			if err != nil {
+				qualifiersChan <- qualifiersResult{err: err}
+				return
+			}
+			for _, qualifierRow := range qualifierRows {
+				_, err = builder.AddQualifier(qualifierRow.DbID, qualifierRow.Kind, qualifierRow.Type, qualifierRow.ValueType, qualifierRow.Value, qualifierRow.Position)
+				if err != nil {
+					qualifiersChan <- qualifiersResult{err: err}
+					return
+				}
+
+				_, err = builder.AddSemanticID(qualifierRow.DbID, qualifierRow.SemanticID, qualifierRow.SemanticIDReferredReferences)
+				if err != nil {
+					qualifiersChan <- qualifiersResult{err: err}
+					return
+				}
+
+				_, err = builder.AddValueID(qualifierRow.DbID, qualifierRow.ValueID, qualifierRow.ValueIDReferredReferences)
+				if err != nil {
+					qualifiersChan <- qualifiersResult{err: err}
+					return
+				}
+
+				_, err = builder.AddSupplementalSemanticIDs(qualifierRow.DbID, qualifierRow.SupplementalSemanticIDs, qualifierRow.SupplementalSemanticIDsReferredReferences)
+				if err != nil {
+					qualifiersChan <- qualifiersResult{err: err}
+					return
+				}
+			}
+			qualifiersChan <- qualifiersResult{qualifiers: builder.Build()}
+		} else {
+			qualifiersChan <- qualifiersResult{}
+		}
+	}()
+
+	// Wait for all goroutines to complete
+	wg.Wait()
+
+	// Collect results from channels
+	semIDResult := <-semanticIDChan
+	if semIDResult.err != nil {
+		return nil, nil, fmt.Errorf("error parsing semantic ID: %w", semIDResult.err)
+	}
+	if semIDResult.semanticID != nil {
+		specificSME.SetSemanticID(semIDResult.semanticID)
 	}
 
+	descResult := <-descriptionChan
+	if descResult.err != nil {
+		return nil, nil, fmt.Errorf("error parsing descriptions: %w", descResult.err)
+	}
+	if descResult.descriptions != nil {
+		specificSME.SetDescription(descResult.descriptions)
+	}
+
+	displayResult := <-displayNameChan
+	if displayResult.err != nil {
+		return nil, nil, fmt.Errorf("error parsing display names: %w", displayResult.err)
+	}
+	if displayResult.displayNames != nil {
+		specificSME.SetDisplayName(displayResult.displayNames)
+	}
+
+	edsResult := <-embeddedDataSpecChan
+	if edsResult.err != nil {
+		return nil, nil, fmt.Errorf("error parsing embedded data specifications: %w", edsResult.err)
+	}
+	if edsResult.eds != nil {
+		specificSME.SetEmbeddedDataSpecifications(edsResult.eds)
+	}
+
+	supplResult := <-supplementalSemanticIDsChan
+	if supplResult.err != nil {
+		return nil, nil, fmt.Errorf("error parsing supplemental semantic IDs: %w", supplResult.err)
+	}
+
+	qualResult := <-qualifiersChan
+	if qualResult.err != nil {
+		return nil, nil, fmt.Errorf("error parsing qualifiers: %w", qualResult.err)
+	}
+	if qualResult.qualifiers != nil {
+		specificSME.SetQualifiers(qualResult.qualifiers)
+	}
+
+	// Build nested structure for references
 	for _, refBuilder := range refBuilderMap {
 		refBuilder.BuildNestedStructure()
 	}
-	for _, el := range supplementalSemanticIDs {
-		suppl = append(suppl, *el)
-	}
-	if len(suppl) > 0 {
+
+	// Set supplemental semantic IDs if present
+	if len(supplResult.supplementalSemanticIDs) > 0 {
+		suppl := []model.Reference{}
+		for _, el := range supplResult.supplementalSemanticIDs {
+			suppl = append(suppl, *el)
+		}
 		specificSME.SetSupplementalSemanticIds(suppl)
 	}
 
 	return &specificSME, &SubmodelElementBuilder{DatabaseID: int(smeRow.DbID.Int64), SubmodelElement: &specificSME}, nil
 }
 
-func getSubmodelElementObjectBasedOnModelType(smeRow model.SubmodelElementRow, refBuilderMap map[int64]*ReferenceBuilder) (model.SubmodelElement, error) {
+func getSubmodelElementObjectBasedOnModelType(smeRow model.SubmodelElementRow, refBuilderMap map[int64]*ReferenceBuilder, refMutex *sync.RWMutex) (model.SubmodelElement, error) {
 	switch smeRow.ModelType {
 	case "Property":
-		prop, err := buildProperty(smeRow, refBuilderMap)
+		prop, err := buildProperty(smeRow, refBuilderMap, refMutex)
 		if err != nil {
 			return nil, err
 		}
@@ -183,7 +295,7 @@ func getSubmodelElementObjectBasedOnModelType(smeRow model.SubmodelElementRow, r
 		rng := &model.Range{}
 		return rng, nil
 	case "BasicEventElement":
-		eventElem, err := buildBasicEventElement(smeRow, refBuilderMap)
+		eventElem, err := buildBasicEventElement(smeRow, refBuilderMap, refMutex)
 		if err != nil {
 			return nil, err
 		}
@@ -204,7 +316,7 @@ func buildSubmodelElementCollection() (model.SubmodelElement, error) {
 	return collection, nil
 }
 
-func buildProperty(smeRow model.SubmodelElementRow, refBuilderMap map[int64]*ReferenceBuilder) (*model.Property, error) {
+func buildProperty(smeRow model.SubmodelElementRow, refBuilderMap map[int64]*ReferenceBuilder, refMutex *sync.RWMutex) (*model.Property, error) {
 	var valueRow model.PropertyValueRow
 	if smeRow.Value == nil {
 		return nil, fmt.Errorf("smeRow.Value is nil")
@@ -213,7 +325,7 @@ func buildProperty(smeRow model.SubmodelElementRow, refBuilderMap map[int64]*Ref
 	if err != nil {
 		return nil, err
 	}
-	valueID, err := getSingleReference(&valueRow.ValueID, &valueRow.ValueIDReferred, refBuilderMap)
+	valueID, err := getSingleReference(&valueRow.ValueID, &valueRow.ValueIDReferred, refBuilderMap, refMutex)
 	if err != nil {
 		return nil, err
 	}
@@ -227,7 +339,7 @@ func buildProperty(smeRow model.SubmodelElementRow, refBuilderMap map[int64]*Ref
 	return prop, nil
 }
 
-func buildBasicEventElement(smeRow model.SubmodelElementRow, refBuilderMap map[int64]*ReferenceBuilder) (*model.BasicEventElement, error) {
+func buildBasicEventElement(smeRow model.SubmodelElementRow, refBuilderMap map[int64]*ReferenceBuilder, refMutex *sync.RWMutex) (*model.BasicEventElement, error) {
 	var valueRow model.BasicEventElementValueRow
 	if smeRow.Value == nil {
 		return nil, fmt.Errorf("smeRow.Value is nil")
@@ -236,11 +348,11 @@ func buildBasicEventElement(smeRow model.SubmodelElementRow, refBuilderMap map[i
 	if err != nil {
 		return nil, err
 	}
-	observedRefs, err := getSingleReference(&valueRow.ObservedRef, &valueRow.ObservedRefReferred, refBuilderMap)
+	observedRefs, err := getSingleReference(&valueRow.ObservedRef, &valueRow.ObservedRefReferred, refBuilderMap, refMutex)
 	if err != nil {
 		return nil, err
 	}
-	messageBrokerRefs, err := getSingleReference(&valueRow.MessageBrokerRef, &valueRow.MessageBrokerRefReferred, refBuilderMap)
+	messageBrokerRefs, err := getSingleReference(&valueRow.MessageBrokerRef, &valueRow.MessageBrokerRefReferred, refBuilderMap, refMutex)
 	if err != nil {
 		return nil, err
 	}
@@ -268,20 +380,16 @@ func buildBasicEventElement(smeRow model.SubmodelElementRow, refBuilderMap map[i
 	return bee, nil
 }
 
-func moreThanZeroReferences(referenceArray []*model.Reference) bool {
-	return len(referenceArray) > 0
-}
-
-func getSingleReference(reference *json.RawMessage, referredReference *json.RawMessage, refBuilderMap map[int64]*ReferenceBuilder) (*model.Reference, error) {
+func getSingleReference(reference *json.RawMessage, referredReference *json.RawMessage, refBuilderMap map[int64]*ReferenceBuilder, refMutex *sync.RWMutex) (*model.Reference, error) {
 	var refs []*model.Reference
 	var err error
 	if reference != nil {
-		refs, err = ParseReferences(*reference, refBuilderMap)
+		refs, err = ParseReferences(*reference, refBuilderMap, refMutex)
 		if err != nil {
 			return nil, err
 		}
 		if referredReference != nil {
-			if err = ParseReferredReferences(*referredReference, refBuilderMap); err != nil {
+			if err = ParseReferredReferences(*referredReference, refBuilderMap, refMutex); err != nil {
 				return nil, err
 			}
 		}

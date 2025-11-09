@@ -436,6 +436,7 @@ func GetSubmodelElementsWithPath(db *sql.DB, tx *sql.Tx, submodelID string, idSh
 		}
 
 		// Materialize the concrete element based on modelType (no reflection)
+		start := time.Now().Local().UnixMicro()
 		var semanticIDObj *gen.Reference
 		if semanticID.Valid {
 			semanticIDObj, err = persistenceutils.GetReferenceByReferenceDBID(db, semanticID)
@@ -443,7 +444,10 @@ func GetSubmodelElementsWithPath(db *sql.DB, tx *sql.Tx, submodelID string, idSh
 				return nil, "", err
 			}
 		}
+		end := time.Now().Local().UnixMicro()
+		fmt.Printf("SME SemanticID time: %d microseconds\n", end-start)
 
+		start = time.Now().Local().UnixMicro()
 		var el gen.SubmodelElement
 		switch modelType {
 		case "Property":
@@ -576,7 +580,8 @@ func GetSubmodelElementsWithPath(db *sql.DB, tx *sql.Tx, submodelID string, idSh
 			// Unknown/unsupported type: skip eagerly.
 			continue
 		}
-
+		end = time.Now().Local().UnixMicro()
+		fmt.Printf("SME Materialization time for %s: %d microseconds\n", modelType, end-start)
 		n := &node{
 			id:       id,
 			parentID: parentSmeID,

@@ -137,7 +137,7 @@ func (edsb *EmbeddedDataSpecificationsBuilder) BuildReferences(edsReferenceRows 
 		return err
 	}
 
-	if err := ParseReferredReferences(edsReferredReferenceRows, referenceBuilders); err != nil {
+	if err := ParseReferredReferences(edsReferredReferenceRows, referenceBuilders, nil); err != nil {
 		return err
 	}
 
@@ -289,11 +289,11 @@ func (edsb *EmbeddedDataSpecificationsBuilder) BuildContentsIec61360(iecRows jso
 func buildUnitID(data model.EdsContentIec61360Row) (map[int64]*ReferenceBuilder, []*model.Reference, error) {
 	referenceBuilderMap := make(map[int64]*ReferenceBuilder)
 
-	unitID, err := ParseReferences(data.UnitReferenceKeys, referenceBuilderMap)
+	unitID, err := ParseReferences(data.UnitReferenceKeys, referenceBuilderMap, nil)
 	if err != nil {
 		return nil, nil, fmt.Errorf("error converting UnitID reference for iec content %d: %w", data.IecID, err)
 	}
-	err = ParseReferredReferences(data.UnitReferenceReferred, referenceBuilderMap)
+	err = ParseReferredReferences(data.UnitReferenceReferred, referenceBuilderMap, nil)
 	if err != nil {
 		return nil, nil, fmt.Errorf("error converting referred UnitID reference for iec content %d: %w", data.IecID, err)
 	}
@@ -311,11 +311,11 @@ func (*EmbeddedDataSpecificationsBuilder) addValueListIfSet(data model.EdsConten
 			ValueReferencePairs: []*model.ValueReferencePair{},
 		}
 		for _, entry := range valueListRows {
-			reference, err := ParseReferences(entry.ReferenceRows, referenceBuilderMap)
+			reference, err := ParseReferences(entry.ReferenceRows, referenceBuilderMap, nil)
 			if err != nil {
 				return nil, fmt.Errorf("error parsing Reference for ValueReferencePair with ID %d", entry.ValueRefPairID)
 			}
-			err = ParseReferredReferences(entry.ReferredReferenceRows, referenceBuilderMap)
+			err = ParseReferredReferences(entry.ReferredReferenceRows, referenceBuilderMap, nil)
 			if err != nil {
 				return nil, fmt.Errorf("error parsing ReferredReference for ValueReferencePair with ID %d: %w", entry.ValueRefPairID, err)
 			}
@@ -415,7 +415,7 @@ func createEdsIDReferenceMap(edsRefRows []model.EdsReferenceRow) (map[int64][]mo
 
 func (edsb *EmbeddedDataSpecificationsBuilder) parseEdsReferencesForEachEds(edsIDReferenceRowMapping map[int64][]model.ReferenceRow, referenceBuilders map[int64]*ReferenceBuilder) error {
 	for edsID, refs := range edsIDReferenceRowMapping {
-		refsParsed := ParseReferencesFromRows(refs, referenceBuilders)
+		refsParsed := ParseReferencesFromRows(refs, referenceBuilders, nil)
 		if len(refsParsed) == 1 {
 			edsSpecWrapper := edsb.dataSpecifications[edsID]
 			edsSpecWrapper.spec.DataSpecification = refsParsed[0]

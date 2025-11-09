@@ -66,12 +66,12 @@ func BuildAdministration(adminRow model.AdministrationRow) (*model.Administrativ
 
 	refBuilderMap := make(map[int64]*ReferenceBuilder)
 
-	refs, err := ParseReferences(adminRow.Creator, refBuilderMap)
+	refs, err := ParseReferences(adminRow.Creator, refBuilderMap, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	if err = ParseReferredReferences(adminRow.CreatorReferred, refBuilderMap); err != nil {
+	if err = ParseReferredReferences(adminRow.CreatorReferred, refBuilderMap, nil); err != nil {
 		return nil, err
 	}
 

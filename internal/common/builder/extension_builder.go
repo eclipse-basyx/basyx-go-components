@@ -174,14 +174,14 @@ func (b *ExtensionsBuilder) AddSupplementalSemanticIDs(extensionDbID int64, supp
 		return nil, fmt.Errorf("tried to add SupplementalSemanticIds to Extension '%d' before creating the Extension itself", extensionDbID)
 	}
 
-	refs, err := ParseReferences(supplementalSemanticIDsRows, b.refBuilderMap)
+	refs, err := ParseReferences(supplementalSemanticIDsRows, b.refBuilderMap, nil)
 
 	if err != nil {
 		return nil, err
 	}
 
 	if len(supplementalSemanticIDsReferredSemanticIDRows) > 0 {
-		if err = ParseReferredReferences(supplementalSemanticIDsReferredSemanticIDRows, b.refBuilderMap); err != nil {
+		if err = ParseReferredReferences(supplementalSemanticIDsReferredSemanticIDRows, b.refBuilderMap, nil); err != nil {
 			return nil, err
 		}
 	}
@@ -224,14 +224,14 @@ func (b *ExtensionsBuilder) AddRefersTo(extensionDbID int64, refersToRows json.R
 		return nil, fmt.Errorf("tried to add RefersTo to Extension '%d' before creating the Extension itself", extensionDbID)
 	}
 
-	refs, err := ParseReferences(refersToRows, b.refBuilderMap)
+	refs, err := ParseReferences(refersToRows, b.refBuilderMap, nil)
 
 	if err != nil {
 		return nil, err
 	}
 
 	if len(refersToReferredRows) > 0 {
-		if err = ParseReferredReferences(refersToReferredRows, b.refBuilderMap); err != nil {
+		if err = ParseReferredReferences(refersToReferredRows, b.refBuilderMap, nil); err != nil {
 			return nil, err
 		}
 	}
@@ -254,14 +254,14 @@ func (b *ExtensionsBuilder) createExactlyOneReference(extensionDbID int64, refRo
 		return nil, fmt.Errorf("tried to add %s to Extension '%d' before creating the Extension itself", typeOfReference, extensionDbID)
 	}
 
-	refs, err := ParseReferences(refRows, b.refBuilderMap)
+	refs, err := ParseReferences(refRows, b.refBuilderMap, nil)
 
 	if err != nil {
 		return nil, err
 	}
 
 	if len(referredRefRows) > 0 {
-		if err = ParseReferredReferences(referredRefRows, b.refBuilderMap); err != nil {
+		if err = ParseReferredReferences(referredRefRows, b.refBuilderMap, nil); err != nil {
 			return nil, err
 		}
 	}

@@ -141,6 +141,7 @@ CREATE TABLE IF NOT EXISTS reference (
 
 CREATE INDEX IF NOT EXISTS ix_ref_parentref ON reference(parentReference);
 CREATE INDEX IF NOT EXISTS ix_ref_rootref ON reference(rootReference);
+CREATE INDEX IF NOT EXISTS ix_ref_rootref_id ON reference(rootreference, id);
 
 CREATE INDEX IF NOT EXISTS ix_ref_id ON reference(id);
 
@@ -153,6 +154,7 @@ CREATE TABLE IF NOT EXISTS reference_key (
   UNIQUE(reference_id, position)
 );
 
+CREATE INDEX IF NOT EXISTS ix_refkey_reference_id ON reference_key(reference_id);
 CREATE INDEX IF NOT EXISTS ix_refkey_type_val     ON reference_key(type, value);
 CREATE INDEX IF NOT EXISTS ix_refkey_val_trgm     ON reference_key USING GIN (value gin_trgm_ops);
 
@@ -279,6 +281,7 @@ CREATE TABLE IF NOT EXISTS submodel (
   category    varchar(128),
   kind        modelling_kind,
   embedded_data_specification JSONB DEFAULT '[]',
+  supplemental_semantic_ids JSONB DEFAULT '[]',
   administration_id BIGINT REFERENCES administrative_information(id) ON DELETE CASCADE,
   semantic_id BIGINT REFERENCES reference(id) ON DELETE CASCADE,
   description_id BIGINT REFERENCES lang_string_text_type_reference(id) ON DELETE CASCADE,

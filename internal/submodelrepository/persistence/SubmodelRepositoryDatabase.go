@@ -118,31 +118,68 @@ func (p *PostgreSQLSubmodelDatabase) GetAllSubmodels(limit int32, cursor string,
 		err    error
 	}
 
+	submodelIds := []string{}
+	rows, err := submodelpersistence.GetSubmodelDataFromDbWithJSONQuery(p.db, "", int64(limit), cursor, nil, true)
+	if err != nil {
+		return nil, "", err
+	}
+	defer func() {
+		if closeErr := rows.Close(); closeErr != nil {
+			fmt.Println("Error closing rows:", closeErr)
+		}
+	}()
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, "", err
+		}
+		submodelIds = append(submodelIds, id)
+	}
+
 	var wg sync.WaitGroup
 	resultChan := make(chan result, 1)
 
-	wg.Add(2)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		sm, smMap, cursor, err := submodelpersistence.GetAllSubmodels(p.db, int64(limit), cursor, nil)
 		resultChan <- result{sm: sm, smMap: smMap, cursor: cursor, err: err}
-	}()
+	})
 
-	go func() {
-		defer wg.Done()
-	}()
+	submodelElements := make(map[string][]gen.SubmodelElement)
+	var submodelElementsMutex sync.Mutex
+	var errSme error
+	wg.Go(func() {
+		for _, id := range submodelIds {
+			smes, err := submodelpersistence.GetSubmodelElementsForSubmodel(p.db, id)
+			if err != nil {
+				errSme = err
+				return
+			}
+			submodelElementsMutex.Lock()
+			submodelElements[id] = smes
+			submodelElementsMutex.Unlock()
+		}
+	})
 
 	wg.Wait()
+	fmt.Println("All goroutines done")
 	res := <-resultChan
 
 	if res.err != nil {
 		return nil, "", res.err
 	}
 
+	if errSme != nil {
+		return nil, "", errSme
+	}
+
 	submodels := []gen.Submodel{}
 
 	for _, s := range res.sm {
 		if s != nil {
+			// Add corresponding submodel elements BEFORE copying
+			if smes, exists := submodelElements[s.ID]; exists {
+				s.SubmodelElements = smes
+			}
 			submodels = append(submodels, *s)
 		}
 	}
