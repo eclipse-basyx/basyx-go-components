@@ -216,9 +216,20 @@ def main():
                         resp_body = r.text
 
             elif op == "search_limit100":
-                req_url = DISCOVERY_URL + "?limit=100"
+                # Choose a random AAS identifier for the cursor
+                if descriptor_pool:
+                    cursor_id = rng.choice(descriptor_pool)
+                else:
+                    # Fallback if nothing has been posted yet
+                    cursor_id = f"https://example.org/aas/{uuid.uuid4()}"
 
-                r = session.get(DISCOVERY_URL, params={"limit": 100})
+                # Use requests params so URL is encoded correctly
+                params = {"limit": 100, "cursor": cursor_id}
+                r = session.get(DISCOVERY_URL, params=params)
+
+                # For logging (captures the fully encoded URL)
+                req_url = r.request.url
+
                 ok = r.ok
                 code = r.status_code
                 if LOG_REQUEST_DETAILS:
@@ -226,6 +237,7 @@ def main():
                         resp_body = r.json()
                     except ValueError:
                         resp_body = r.text
+
 
         except Exception as e:
             print(f"[{ts()}] ❌ Error: {e}")
