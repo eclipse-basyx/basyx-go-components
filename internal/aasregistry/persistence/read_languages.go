@@ -5,6 +5,7 @@ import (
 
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	"github.com/lib/pq"
 )
 
 // GetLangStringTextTypesByIDs fetches LangStringTextType rows for the given
@@ -22,10 +23,11 @@ func GetLangStringTextTypesByIDs(
 
 	dialect := goqu.Dialect("postgres")
 
-	ds := dialect.
-		From("lang_string_text_type").
-		Select("lang_string_text_type_reference_id", "text", "language").
-		Where(goqu.C("lang_string_text_type_reference_id").In(textTypeIDs))
+    arr := pq.Array(textTypeIDs)
+    ds := dialect.
+        From("lang_string_text_type").
+        Select("lang_string_text_type_reference_id", "text", "language").
+        Where(goqu.L("lang_string_text_type_reference_id = ANY(?::bigint[])", arr))
 
 	sqlStr, args, err := ds.ToSQL()
 	if err != nil {
@@ -74,10 +76,11 @@ func GetLangStringNameTypesByIDs(
 	dialect := goqu.Dialect("postgres")
 
 	// Build query
-	ds := dialect.
-		From("lang_string_name_type").
-		Select("lang_string_name_type_reference_id", "text", "language").
-		Where(goqu.C("lang_string_name_type_reference_id").In(nameTypeIDs))
+    arr := pq.Array(nameTypeIDs)
+    ds := dialect.
+        From("lang_string_name_type").
+        Select("lang_string_name_type_reference_id", "text", "language").
+        Where(goqu.L("lang_string_name_type_reference_id = ANY(?::bigint[])", arr))
 
 	sqlStr, args, err := ds.ToSQL()
 	if err != nil {

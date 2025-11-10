@@ -13,6 +13,7 @@ import (
 	builders "github.com/eclipse-basyx/basyx-go-components/internal/common/builder"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/queries"
+	"github.com/lib/pq"
 )
 
 // readAdministrativeInformationByID fetches a single AdministrativeInformation by a nullable ID.
@@ -75,12 +76,13 @@ func readAdministrativeInformationByIDs(
 	adminJSON := queries.GetAdministrationSubquery(d, "s.administrative_information_id")
 
 	// SELECT only the requested IDs.
+	arr := pq.Array(uniq)
 	ds := d.From(goqu.T(tableName).As("s")).
 		Select(
 			goqu.I("s.administrative_information_id").As("id"),
 			goqu.L("COALESCE((?), '[]'::jsonb)", adminJSON),
 		).
-		Where(goqu.I("s.administrative_information_id").In(uniq))
+		Where(goqu.L("s.administrative_information_id = ANY(?::bigint[])", arr))
 
 	query, args, err := ds.ToSQL()
 	if err != nil {

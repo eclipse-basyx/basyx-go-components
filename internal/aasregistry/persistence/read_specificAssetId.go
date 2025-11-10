@@ -8,6 +8,7 @@ import (
 
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	"github.com/lib/pq"
 )
 
 func readSpecificAssetIDsByDescriptorID(
@@ -33,22 +34,23 @@ func readSpecificAssetIDsByDescriptorIDs(
 	}
 	uniqDesc := descriptorIDs
 
-	d := goqu.Dialect(dialect)
-	sai := goqu.T(tblSpecificAssetID).As("sai")
+    d := goqu.Dialect(dialect)
+    sai := goqu.T(tblSpecificAssetID).As("sai")
 
-	sqlStr, args, err := d.
-		From(sai).
-		Select(
-			sai.Col(colDescriptorID),
-			sai.Col(colID),
-			sai.Col(colName),
-			sai.Col(colValue),
-			sai.Col(colSemanticID),
-			sai.Col(colExternalSubjectRef),
-		).
-		Where(sai.Col(colDescriptorID).In(uniqDesc)).
-		Order(sai.Col(colDescriptorID).Asc(), sai.Col(colID).Asc()).
-		ToSQL()
+    arr := pq.Array(uniqDesc)
+    sqlStr, args, err := d.
+        From(sai).
+        Select(
+            sai.Col(colDescriptorID),
+            sai.Col(colID),
+            sai.Col(colName),
+            sai.Col(colValue),
+            sai.Col(colSemanticID),
+            sai.Col(colExternalSubjectRef),
+        ).
+        Where(goqu.L("sai.descriptor_id = ANY(?::bigint[])", arr)).
+        Order(sai.Col(colDescriptorID).Asc(), sai.Col(colID).Asc()).
+        ToSQL()
 	if err != nil {
 		return nil, err
 	}

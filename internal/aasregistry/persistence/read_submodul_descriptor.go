@@ -7,6 +7,7 @@ import (
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"golang.org/x/sync/errgroup"
+	"github.com/lib/pq"
 )
 
 func readSubmodelDescriptorsByAASDescriptorID(
@@ -31,27 +32,28 @@ func readSubmodelDescriptorsByAASDescriptorIDs(
 	}
 	uniqAASDesc := aasDescriptorIDs
 
-	d := goqu.Dialect(dialect)
-	smd := goqu.T(tblSubmodelDescriptor).As("smd")
+    d := goqu.Dialect(dialect)
+    smd := goqu.T(tblSubmodelDescriptor).As("smd")
 
-	sqlStr, args, err := d.
-		From(smd).
-		Select(
-			smd.Col(colAASDescriptorID),
-			smd.Col(colDescriptorID),
-			smd.Col(colIDShort),
-			smd.Col(colAASID),
-			smd.Col(colSemanticID),
-			smd.Col(colAdminInfoID),
-			smd.Col(colDescriptionID),
-			smd.Col(colDisplayNameID),
-		).
-		Where(smd.Col(colAASDescriptorID).In(uniqAASDesc)).
-		Order(
-			smd.Col(colAASDescriptorID).Asc(),
-			smd.Col(colDescriptorID).Asc(),
-		).
-		ToSQL()
+    arr := pq.Array(uniqAASDesc)
+    sqlStr, args, err := d.
+        From(smd).
+        Select(
+            smd.Col(colAASDescriptorID),
+            smd.Col(colDescriptorID),
+            smd.Col(colIDShort),
+            smd.Col(colAASID),
+            smd.Col(colSemanticID),
+            smd.Col(colAdminInfoID),
+            smd.Col(colDescriptionID),
+            smd.Col(colDisplayNameID),
+        ).
+        Where(goqu.L("smd.aas_descriptor_id = ANY(?::bigint[])", arr)).
+        Order(
+            smd.Col(colAASDescriptorID).Asc(),
+            smd.Col(colDescriptorID).Asc(),
+        ).
+        ToSQL()
 	if err != nil {
 		return nil, err
 	}

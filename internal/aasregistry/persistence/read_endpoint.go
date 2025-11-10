@@ -44,6 +44,7 @@ func readEndpointsByDescriptorIDs(
 	}
 
 	d := goqu.Dialect("postgres")
+	arr := pq.Array(uniq)
 
 	// Build the SQL with goqu; keep expressions as literals where it’s simpler
 	ds := d.
@@ -56,7 +57,7 @@ func readEndpointsByDescriptorIDs(
 			goqu.T("security_attributes").As("s"),
 			goqu.On(goqu.I("s.endpoint_id").Eq(goqu.I("e.id"))),
 		).
-		Where(goqu.I("e.descriptor_id").In(uniq)).
+		Where(goqu.L("e.descriptor_id = ANY(?::bigint[])", arr)).
 		Select(
 			goqu.I("e.descriptor_id"),
 			goqu.I("e.id"),

@@ -7,6 +7,7 @@ import (
 
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	"github.com/lib/pq"
 )
 
 func readExtensionsByDescriptorID(
@@ -34,6 +35,7 @@ func readExtensionsByDescriptorIDs(
 	e := goqu.T(tblExtension).As("e")
 
 	// Pull all extensions for all descriptors in one go
+	arr := pq.Array(uniqDesc)
 	sqlStr, args, err := d.
 		From(de).
 		InnerJoin(e, goqu.On(de.Col(colExtensionID).Eq(e.Col(colID)))).
@@ -49,7 +51,7 @@ func readExtensionsByDescriptorIDs(
 			e.Col(colValueTime),     // 8
 			e.Col(colValueDatetime), // 9
 		).
-		Where(de.Col(colDescriptorID).In(uniqDesc)).
+		Where(goqu.L("de.descriptor_id = ANY(?::bigint[])", arr)).
 		Order(de.Col(colDescriptorID).Asc(), e.Col(colID).Asc()).
 		ToSQL()
 	if err != nil {
