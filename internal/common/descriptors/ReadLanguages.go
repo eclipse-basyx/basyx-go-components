@@ -1,11 +1,12 @@
-package aasregistrydatabase
+package descriptors
 
 import (
-	"database/sql"
+    "database/sql"
+    "fmt"
 
-	"github.com/doug-martin/goqu/v9"
-	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
-	"github.com/lib/pq"
+    "github.com/doug-martin/goqu/v9"
+    "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+    "github.com/lib/pq"
 )
 
 // GetLangStringTextTypesByIDs fetches LangStringTextType rows for the given
@@ -21,13 +22,13 @@ func GetLangStringTextTypesByIDs(
 		return out, nil
 	}
 
-	dialect := goqu.Dialect("postgres")
+    dialect := goqu.Dialect(dialect)
 
     arr := pq.Array(textTypeIDs)
     ds := dialect.
-        From("lang_string_text_type").
-        Select("lang_string_text_type_reference_id", "text", "language").
-        Where(goqu.L("lang_string_text_type_reference_id = ANY(?::bigint[])", arr))
+        From(goqu.T(tblLangStringTextType)).
+        Select(colLangStringTextTypeReferenceID, colText, colLanguage).
+        Where(goqu.L(fmt.Sprintf("%s = ANY(?::bigint[])", colLangStringTextTypeReferenceID), arr))
 
 	sqlStr, args, err := ds.ToSQL()
 	if err != nil {
@@ -73,14 +74,14 @@ func GetLangStringNameTypesByIDs(
 		return out, nil
 	}
 
-	dialect := goqu.Dialect("postgres")
+    dialect := goqu.Dialect(dialect)
 
 	// Build query
     arr := pq.Array(nameTypeIDs)
     ds := dialect.
-        From("lang_string_name_type").
-        Select("lang_string_name_type_reference_id", "text", "language").
-        Where(goqu.L("lang_string_name_type_reference_id = ANY(?::bigint[])", arr))
+        From(goqu.T(tblLangStringNameType)).
+        Select(colLangStringNameTypeReferenceID, colText, colLanguage).
+        Where(goqu.L(fmt.Sprintf("%s = ANY(?::bigint[])", colLangStringNameTypeReferenceID), arr))
 
 	sqlStr, args, err := ds.ToSQL()
 	if err != nil {

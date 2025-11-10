@@ -360,7 +360,7 @@ func addDescriptions(row builders.SubmodelRow, submodel *gen.Submodel) error {
 
 // moved to common
 func isArrayNotEmpty(data json.RawMessage) bool {
-	return common.IsArrayNotEmpty(data)
+	return len(data) > 0 && string(data) != "null"
 }
 
 // hasSemanticID validates that exactly one semantic ID reference exists.

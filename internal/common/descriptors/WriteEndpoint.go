@@ -1,4 +1,4 @@
-package aasregistrydatabase
+package descriptors
 
 import (
 	"database/sql"

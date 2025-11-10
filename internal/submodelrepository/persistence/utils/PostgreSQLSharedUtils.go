@@ -443,7 +443,7 @@ func CreateAdministrativeInformation(tx *sql.Tx, adminInfo *gen.AdministrativeIn
 		if len(adminInfo.EmbeddedDataSpecifications) > 0 {
 			edsBytes, err := json.Marshal(adminInfo.EmbeddedDataSpecifications)
 			if err != nil {
-				fmt.Println(err)		
+				fmt.Println(err)
 				return sql.NullInt64{}, common.NewInternalServerError("Failed to marshal EmbeddedDataSpecifications - no changes applied - see console for details")
 			}
 			if edsBytes != nil {
@@ -728,41 +728,6 @@ func GetLangStringNameTypes(db *sql.DB, nameTypeID sql.NullInt64) ([]gen.LangStr
 //   - sql.NullInt64: Database ID of the created lang_string_text_type_reference, or an invalid NullInt64 if the slice is empty
 //   - error: An error if the insertion fails
 func CreateLangStringTextTypes(tx *sql.Tx, textTypes []gen.LangStringText) (sql.NullInt64, error) {
-	if textTypes == nil {
-		return sql.NullInt64{}, nil
-	}
-	var id int
-	var textTypeID sql.NullInt64
-	if len(textTypes) > 0 {
-		err := tx.QueryRow(`INSERT INTO lang_string_text_type_reference DEFAULT VALUES RETURNING id`).Scan(&id)
-		if err != nil {
-			return sql.NullInt64{}, err
-		}
-		textTypeID = sql.NullInt64{Int64: int64(id), Valid: true}
-		for i := 0; i < len(textTypes); i++ {
-			_, err := tx.Exec(`INSERT INTO lang_string_text_type (lang_string_text_type_reference_id, text, language) VALUES ($1, $2, $3)`, textTypeID.Int64, textTypes[i].GetText(), textTypes[i].GetLanguage())
-			if err != nil {
-				return sql.NullInt64{}, err
-			}
-		}
-	}
-	return textTypeID, nil
-}
-
-// CreateLangStringTextTypesN inserts language-specific text strings into the database.
-//
-// This function creates a reference record and then inserts all language-specific text strings
-// associated with it. Each text string contains text and language information. The text types
-// can be any implementation of the LangStringText interface.
-//
-// Parameters:
-//   - tx: Active database transaction
-//   - textTypes: Slice of LangStringTextType objects to be created
-//
-// Returns:
-//   - sql.NullInt64: Database ID of the created lang_string_text_type_reference, or an invalid NullInt64 if the slice is empty
-//   - error: An error if the insertion fails
-func CreateLangStringTextTypesN(tx *sql.Tx, textTypes []gen.LangStringTextType) (sql.NullInt64, error) {
 	if textTypes == nil {
 		return sql.NullInt64{}, nil
 	}

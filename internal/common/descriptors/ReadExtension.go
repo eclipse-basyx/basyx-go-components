@@ -1,4 +1,4 @@
-package aasregistrydatabase
+package descriptors
 
 import (
 	"context"
@@ -10,16 +10,54 @@ import (
 	"github.com/lib/pq"
 )
 
-func readExtensionsByDescriptorID(
+// ReadExtensionsByDescriptorID returns all extensions that belong to a single
+// descriptor identified by the given descriptorID.
+//
+// It is a convenience wrapper around ReadExtensionsByDescriptorIDs and simply
+// returns the slice mapped to the provided ID. If the descriptor exists but has
+// no extensions, the returned slice is empty. If the descriptorID does not
+// produce any rows, the returned slice is nil and no error is raised.
+//
+// The provided context is used for cancellation and deadline control of the
+// underlying database call.
+//
+// Errors originate from ReadExtensionsByDescriptorIDs (SQL build/exec/scan
+// failures or type conversion issues) and are returned verbatim.
+func ReadExtensionsByDescriptorID(
 	ctx context.Context,
 	db *sql.DB,
 	descriptorID int64,
 ) ([]model.Extension, error) {
-	v, err := readExtensionsByDescriptorIDs(ctx, db, []int64{descriptorID})
+	v, err := ReadExtensionsByDescriptorIDs(ctx, db, []int64{descriptorID})
 	return v[descriptorID], err
 }
 
-func readExtensionsByDescriptorIDs(
+// ReadExtensionsByDescriptorIDs retrieves extensions for the provided
+// descriptorIDs in a single database round trip.
+//
+// Return value is a map keyed by descriptor ID, each value containing that
+// descriptor's extensions. When descriptorIDs is empty, an empty map is
+// returned without querying the database.
+//
+// Result semantics and ordering:
+//   - Extensions are ordered by descriptor_id ASC, then extension id ASC.
+//   - The extension Value is selected from one of the typed columns based on the
+//     stored ValueType (xs:string/URI->text; numeric types->num; xs:boolean->bool;
+//     xs:time->time; date/datetime/duration/g*->datetime). When no explicit
+//     match exists, falls back to text if present.
+//   - SemanticID may be nil when not set; supplemental semantic IDs and RefersTo
+//     references are loaded via the respective link tables.
+//
+// Implementation notes:
+//   - Uses pq.Array with SQL ANY for efficient multi-key filtering.
+//   - Performs a single join to fetch base extension rows, then batches lookups
+//     for references to minimize round trips.
+//   - Converts ValueType strings to model.DataTypeDefXsd via
+//     model.NewDataTypeDefXsdFromValue; invalid values propagate an error.
+//
+// Errors may occur while building the SQL statement, executing the query,
+// scanning columns, or converting types.
+func ReadExtensionsByDescriptorIDs(
 	ctx context.Context,
 	db *sql.DB,
 	descriptorIDs []int64,
@@ -28,14 +66,13 @@ func readExtensionsByDescriptorIDs(
 	if len(descriptorIDs) == 0 {
 		return out, nil
 	}
-	uniqDesc := descriptorIDs
 
 	d := goqu.Dialect(dialect)
 	de := goqu.T(tblDescriptorExtension).As("de")
 	e := goqu.T(tblExtension).As("e")
 
 	// Pull all extensions for all descriptors in one go
-	arr := pq.Array(uniqDesc)
+	arr := pq.Array(descriptorIDs)
 	sqlStr, args, err := d.
 		From(de).
 		InnerJoin(e, goqu.On(de.Col(colExtensionID).Eq(e.Col(colID)))).
@@ -79,7 +116,7 @@ func readExtensionsByDescriptorIDs(
 		_ = rows.Close()
 	}()
 
-	perDesc := make(map[int64][]row, len(uniqDesc))
+	perDesc := make(map[int64][]row, len(descriptorIDs))
 	allExtIDs := make([]int64, 0, 256)
 	semRefIDs := make([]int64, 0, 128)
 
@@ -110,11 +147,6 @@ func readExtensionsByDescriptorIDs(
 	}
 
 	if len(allExtIDs) == 0 {
-		for _, id := range uniqDesc {
-			if _, ok := out[id]; !ok {
-				out[id] = nil
-			}
-		}
 		return out, nil
 	}
 
@@ -123,7 +155,7 @@ func readExtensionsByDescriptorIDs(
 
 	suppByExt, err := readEntityReferences1ToMany(
 		ctx, db, uniqExtIDs,
-		"extension_supplemental_semantic_id", "extension_id", "reference_id",
+		tblExtensionSuppSemantic, colExtensionID, colReferenceID,
 	)
 	if err != nil {
 		return nil, err
@@ -131,7 +163,7 @@ func readExtensionsByDescriptorIDs(
 
 	refersByExt, err := readEntityReferences1ToMany(
 		ctx, db, uniqExtIDs,
-		"extension_refers_to", "extension_id", "reference_id",
+		tblExtensionRefersTo, colExtensionID, colReferenceID,
 	)
 	if err != nil {
 		return nil, err
@@ -193,10 +225,5 @@ func readExtensionsByDescriptorIDs(
 		}
 	}
 
-	for _, id := range uniqDesc {
-		if _, ok := out[id]; !ok {
-			out[id] = nil
-		}
-	}
 	return out, nil
 }

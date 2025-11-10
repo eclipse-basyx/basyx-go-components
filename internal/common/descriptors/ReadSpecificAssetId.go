@@ -1,4 +1,4 @@
-package aasregistrydatabase
+package descriptors
 
 import (
 	"context"
@@ -11,18 +11,45 @@ import (
 	"github.com/lib/pq"
 )
 
-func readSpecificAssetIDsByDescriptorID(
+// ReadSpecificAssetIDsByDescriptorID returns all SpecificAssetIDs that belong to
+// a single AAS descriptor identified by its numeric descriptor ID.
+//
+// Parameters:
+// - ctx: request-scoped context used for cancelation and deadlines.
+// - db: open PostgreSQL handle.
+// - descriptorID: the primary key (bigint) of the AAS descriptor row.
+//
+// It internally delegates to ReadSpecificAssetIDsByDescriptorIDs for efficient
+// query construction and returns the slice mapped to the provided descriptorID.
+// When the descriptor has no SpecificAssetIDs, it returns an empty slice (nil
+// allowed) and a nil error.
+func ReadSpecificAssetIDsByDescriptorID(
 	ctx context.Context,
 	db *sql.DB,
 	descriptorID int64,
 ) ([]model.SpecificAssetID, error) {
 
-	v, err := readSpecificAssetIDsByDescriptorIDs(ctx, db, []int64{descriptorID})
+	v, err := ReadSpecificAssetIDsByDescriptorIDs(ctx, db, []int64{descriptorID})
 	return v[descriptorID], err
 }
 
-// Bulk: descriptorIDs -> []SpecificAssetId
-func readSpecificAssetIDsByDescriptorIDs(
+// ReadSpecificAssetIDsByDescriptorIDs performs a batched read of SpecificAssetIDs
+// for multiple AAS descriptors in a single query.
+//
+// Parameters:
+// - ctx: request-scoped context used for cancelation and deadlines.
+// - db: open PostgreSQL handle.
+// - descriptorIDs: list of AAS descriptor primary keys (bigint) to fetch for.
+//
+// Returns a map keyed by descriptor ID with the corresponding ordered slice of
+// SpecificAssetID domain models. Descriptors with no SpecificAssetIDs are
+// present in the map with a nil slice to distinguish from absent keys.
+//
+// Implementation notes:
+// - Uses goqu to build SQL and pq.Array for efficient ANY(bigint[]) filtering.
+// - Preloads semantic and external subject references in one pass to avoid N+1.
+// - Preserves a stable order by descriptor_id, id to ensure deterministic output.
+func ReadSpecificAssetIDsByDescriptorIDs(
 	ctx context.Context,
 	db *sql.DB,
 	descriptorIDs []int64,
@@ -32,25 +59,24 @@ func readSpecificAssetIDsByDescriptorIDs(
 	if len(descriptorIDs) == 0 {
 		return out, nil
 	}
-	uniqDesc := descriptorIDs
 
-    d := goqu.Dialect(dialect)
-    sai := goqu.T(tblSpecificAssetID).As("sai")
+	d := goqu.Dialect(dialect)
+	sai := goqu.T(tblSpecificAssetID).As("sai")
 
-    arr := pq.Array(uniqDesc)
-    sqlStr, args, err := d.
-        From(sai).
-        Select(
-            sai.Col(colDescriptorID),
-            sai.Col(colID),
-            sai.Col(colName),
-            sai.Col(colValue),
-            sai.Col(colSemanticID),
-            sai.Col(colExternalSubjectRef),
-        ).
-        Where(goqu.L("sai.descriptor_id = ANY(?::bigint[])", arr)).
-        Order(sai.Col(colDescriptorID).Asc(), sai.Col(colID).Asc()).
-        ToSQL()
+	arr := pq.Array(descriptorIDs)
+	sqlStr, args, err := d.
+		From(sai).
+		Select(
+			sai.Col(colDescriptorID),
+			sai.Col(colID),
+			sai.Col(colName),
+			sai.Col(colValue),
+			sai.Col(colSemanticID),
+			sai.Col(colExternalSubjectRef),
+		).
+		Where(goqu.L("sai.descriptor_id = ANY(?::bigint[])", arr)).
+		Order(sai.Col(colDescriptorID).Asc(), sai.Col(colID).Asc()).
+		ToSQL()
 	if err != nil {
 		return nil, err
 	}
@@ -70,7 +96,7 @@ func readSpecificAssetIDsByDescriptorIDs(
 		_ = rows.Close()
 	}()
 
-	perDesc := make(map[int64][]rowData, len(uniqDesc))
+	perDesc := make(map[int64][]rowData, len(descriptorIDs))
 	allSpecificIDs := make([]int64, 0, 256)
 	semRefIDs := make([]int64, 0, 128)
 	extRefIDs := make([]int64, 0, 128)
@@ -101,11 +127,6 @@ func readSpecificAssetIDsByDescriptorIDs(
 	}
 
 	if len(allSpecificIDs) == 0 {
-		for _, id := range uniqDesc {
-			if _, ok := out[id]; !ok {
-				out[id] = nil
-			}
-		}
 		return out, nil
 	}
 
@@ -144,12 +165,6 @@ func readSpecificAssetIDsByDescriptorIDs(
 				ExternalSubjectID:       extRef,
 				SupplementalSemanticIds: suppBySpecific[r.specificID],
 			})
-		}
-	}
-
-	for _, id := range uniqDesc {
-		if _, ok := out[id]; !ok {
-			out[id] = nil
 		}
 	}
 

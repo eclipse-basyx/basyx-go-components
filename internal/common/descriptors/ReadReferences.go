@@ -1,9 +1,9 @@
-package aasregistrydatabase
+package descriptors
 
 import (
-	"context"
-	"database/sql"
-	"fmt"
+    "context"
+    "database/sql"
+    "fmt"
 
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/builder"
@@ -33,32 +33,32 @@ import (
 //
 // Note: the function prints the elapsed time to stdout for basic diagnostics.
 func GetReferencesByIDsBatch(db *sql.DB, ids []int64) (map[int64]*model.Reference, error) {
-    if len(ids) == 0 {
-        return map[int64]*model.Reference{}, nil
-    }
+	if len(ids) == 0 {
+		return map[int64]*model.Reference{}, nil
+	}
 
-    d := goqu.Dialect(dialect)
-    arr := pq.Array(ids)
+	d := goqu.Dialect(dialect)
+	arr := pq.Array(ids)
 
 	// --- 1) Load roots and their keys (LEFT JOIN to include roots without keys) ---
-	r := goqu.T("reference").As("r")
-	rk := goqu.T("reference_key").As("rk")
+    r := goqu.T(tblReference).As("r")
+    rk := goqu.T(tblReferenceKey).As("rk")
 
-    qRoots := d.
-        From(r).
+	qRoots := d.
+		From(r).
         Select(
-            r.Col("id").As("root_id"),
-            r.Col("type").As("root_type"),
-            rk.Col("id").As("key_id"),
-            rk.Col("type").As("key_type"),
-            rk.Col("value").As("key_value"),
+            r.Col(colID).As("root_id"),
+            r.Col(colType).As("root_type"),
+            rk.Col(colID).As("key_id"),
+            rk.Col(colType).As("key_type"),
+            rk.Col(colValue).As("key_value"),
         ).
         LeftJoin(
             rk,
-            goqu.On(rk.Col("reference_id").Eq(r.Col("id"))),
+            goqu.On(rk.Col(colReferenceID).Eq(r.Col(colID))),
         ).
-        Where(goqu.L("r.id = ANY(?::bigint[])", arr)).
-        Order(r.Col("id").Asc())
+        Where(goqu.L(fmt.Sprintf("r.%s = ANY(?::bigint[])", colID), arr)).
+        Order(r.Col(colID).Asc())
 
 	sqlRoots, argsRoots, err := qRoots.ToSQL()
 	if err != nil {
@@ -113,33 +113,33 @@ func GetReferencesByIDsBatch(db *sql.DB, ids []int64) (map[int64]*model.Referenc
 		return map[int64]*model.Reference{}, nil
 	}
 
-	ref := goqu.T("reference").As("ref")
+    ref := goqu.T(tblReference).As("ref")
 
-    qDesc := d.
-        From(ref).
+	qDesc := d.
+		From(ref).
         Select(
-            ref.Col("id").As("id"),
-            ref.Col("type").As("type"),
-            ref.Col("parentreference").As("parentreference"),
-            ref.Col("rootreference").As("rootreference"),
-            rk.Col("id").As("key_id"),
-            rk.Col("type").As("key_type"),
-            rk.Col("value").As("key_value"),
+            ref.Col(colID).As("id"),
+            ref.Col(colType).As("type"),
+            ref.Col(colParentReference).As(colParentReference),
+            ref.Col(colRootReference).As(colRootReference),
+            rk.Col(colID).As("key_id"),
+            rk.Col(colType).As("key_type"),
+            rk.Col(colValue).As("key_value"),
         ).
         LeftJoin(
             rk,
-            goqu.On(rk.Col("reference_id").Eq(ref.Col("id"))),
+            goqu.On(rk.Col(colReferenceID).Eq(ref.Col(colID))),
         ).
         Where(
             goqu.And(
-                goqu.L("ref.rootreference = ANY(?::bigint[])", arr),
-                ref.Col("id").Neq(ref.Col("rootreference")),
+                goqu.L(fmt.Sprintf("ref.%s = ANY(?::bigint[])", colRootReference), arr),
+                ref.Col(colID).Neq(ref.Col(colRootReference)),
             ),
         ).
         Order(
-            ref.Col("rootreference").Asc(),
-            ref.Col("parentreference").Asc(),
-            ref.Col("id").Asc(),
+            ref.Col(colRootReference).Asc(),
+            ref.Col(colParentReference).Asc(),
+            ref.Col(colID).Asc(),
         )
 
 	sqlDesc, argsDesc, err := qDesc.ToSQL()
@@ -216,12 +216,12 @@ func GetReferencesByIDsBatch(db *sql.DB, ids []int64) (map[int64]*model.Referenc
 // readEntityReferences1ToMany loads references for a batch of entity IDs
 // via a link table (entityFKCol -> referenceFKCol), hydrating full Reference trees.
 func readEntityReferences1ToMany(
-    ctx context.Context,
-    db *sql.DB,
-    entityIDs []int64,
-    relationTable string,
-    entityFKCol string,
-    referenceFKCol string,
+	ctx context.Context,
+	db *sql.DB,
+	entityIDs []int64,
+	relationTable string,
+	entityFKCol string,
+	referenceFKCol string,
 ) (map[int64][]model.Reference, error) {
 	out := make(map[int64][]model.Reference, len(entityIDs))
 	if len(entityIDs) == 0 {
@@ -229,17 +229,17 @@ func readEntityReferences1ToMany(
 	}
 	ids := entityIDs
 
-    d := goqu.Dialect(dialect)
-    lt := goqu.T(relationTable)
+	d := goqu.Dialect(dialect)
+	lt := goqu.T(relationTable)
 
-    arr := pq.Array(ids)
-    ds := d.From(lt).
-        Select(
-            lt.Col(entityFKCol),
-            lt.Col(referenceFKCol),
-        ).
-        Where(goqu.L(fmt.Sprintf("%s = ANY(?::bigint[])", entityFKCol), arr)).
-        Order(lt.Col(entityFKCol).Asc(), lt.Col(referenceFKCol).Asc())
+	arr := pq.Array(ids)
+	ds := d.From(lt).
+		Select(
+			lt.Col(entityFKCol),
+			lt.Col(referenceFKCol),
+		).
+		Where(goqu.L(fmt.Sprintf("%s = ANY(?::bigint[])", entityFKCol), arr)).
+		Order(lt.Col(entityFKCol).Asc(), lt.Col(referenceFKCol).Asc())
 
 	sqlStr, args, err := ds.ToSQL()
 	if err != nil {

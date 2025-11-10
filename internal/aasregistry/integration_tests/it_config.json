@@ -382,5 +382,19 @@
     "endpoint": "http://127.0.0.1:5004/shell-descriptors",
     "shouldMatch": "expected/empty_paged_result.json",
     "expectedStatus": 200
+  },
+  {
+    "context": "Create AAS descriptor (new assetKind Role)",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:5004/shell-descriptors",
+    "data": "postBody/simple_ass_descriptor_8.json",
+    "expectedStatus": 201
+  },
+  {
+    "context": "Get AAS descriptor (new assetKind Role)",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:5004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy9tYXJ0aW5pc3Rjb29s",
+    "shouldMatch": "postBody/simple_ass_descriptor_8.json",
+    "expectedStatus": 200
   }
 ]

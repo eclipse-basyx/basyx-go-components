@@ -14,14 +14,6 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-
-  adminer:
-    image: adminer:5
-    container_name: adminer
-    ports:
-      - "8080:8080"
-    depends_on:
-      - db
   aasregistryservice:
     build:
       context: ../../../..

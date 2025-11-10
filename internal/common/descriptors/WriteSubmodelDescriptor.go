@@ -1,4 +1,4 @@
-package aasregistrydatabase
+package descriptors
 
 import (
 	"database/sql"
@@ -30,8 +30,12 @@ func createSubModelDescriptors(tx *sql.Tx, aasDescriptorID int64, submodelDescri
 				fmt.Println(err)
 				return common.NewInternalServerError("Failed to create DisplayName - no changes applied - see console for details")
 			}
+			var convertedDescription []model.LangStringText
+			for _, desc := range val.Description {
+				convertedDescription = append(convertedDescription, desc)
+			}
 
-			descriptionID, err = persistence_utils.CreateLangStringTextTypesN(tx, val.Description)
+			descriptionID, err = persistence_utils.CreateLangStringTextTypes(tx, convertedDescription)
 			if err != nil {
 				fmt.Println(err)
 				return common.NewInternalServerError("Failed to create Description - no changes applied - see console for details")
