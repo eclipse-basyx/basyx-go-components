@@ -438,3 +438,18 @@ type RangeValueRow struct {
 	// (e.g., xs:string, xs:int, xs:boolean, xs:dateTime, etc.).
 	ValueType string `json:"value_type"`
 }
+
+// OperationValueRow represents a data row for an Operation element's variables in the database.
+// Operations are submodel elements that define executable functions with input and output variables.
+//
+// This structure captures the input, output, and in-output operation variables as JSON data.
+// Each variable is represented as a collection of OperationVariable objects, allowing for
+// complex definitions of operation parameters.
+type OperationValueRow struct {
+	// InputVariables contains input operation variables as JSON data
+	InputVariables json.RawMessage `json:"input_variables"`
+	// OutputVariables contains output operation variables as JSON data
+	OutputVariables json.RawMessage `json:"output_variables"`
+	// InoutputVariables contains in-output operation variables as JSON data
+	InoutputVariables json.RawMessage `json:"inoutput_variables"`
+}

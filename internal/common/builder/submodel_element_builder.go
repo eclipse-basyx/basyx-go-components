@@ -271,7 +271,41 @@ func getSubmodelElementObjectBasedOnModelType(smeRow model.SubmodelElementRow, r
 	case "SubmodelElementCollection":
 		return buildSubmodelElementCollection()
 	case "Operation":
-		operation := &model.Operation{}
+		var json = jsoniter.ConfigCompatibleWithStandardLibrary
+		var valueRow model.OperationValueRow
+		if smeRow.Value == nil {
+			return nil, fmt.Errorf("smeRow.Value is nil")
+		}
+		err := json.Unmarshal(*smeRow.Value, &valueRow)
+		if err != nil {
+			return nil, err
+		}
+
+		var inputVars, outputVars, inoutputVars []model.OperationVariable
+		if valueRow.InputVariables != nil {
+			err = json.Unmarshal(valueRow.InputVariables, &inputVars)
+			if err != nil {
+				return nil, err
+			}
+		}
+		if valueRow.OutputVariables != nil {
+			err = json.Unmarshal(valueRow.OutputVariables, &outputVars)
+			if err != nil {
+				return nil, err
+			}
+		}
+		if valueRow.InoutputVariables != nil {
+			err = json.Unmarshal(valueRow.InoutputVariables, &inoutputVars)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		operation := &model.Operation{
+			InputVariables:    inputVars,
+			OutputVariables:   outputVars,
+			InoutputVariables: inoutputVars,
+		}
 		return operation, nil
 	case "Entity":
 		entity := &model.Entity{}

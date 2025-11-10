@@ -523,7 +523,10 @@ CREATE TABLE IF NOT EXISTS entity_specific_asset_id (
 );
 
 CREATE TABLE IF NOT EXISTS operation_element (
-  id BIGINT PRIMARY KEY REFERENCES submodel_element(id) ON DELETE CASCADE
+  id BIGINT PRIMARY KEY REFERENCES submodel_element(id) ON DELETE CASCADE,
+  input_variables JSONB DEFAULT '[]',
+  output_variables JSONB DEFAULT '[]',
+  inoutput_variables JSONB DEFAULT '[]'
 );
 CREATE TABLE IF NOT EXISTS operation_variable (
   id           BIGSERIAL PRIMARY KEY,

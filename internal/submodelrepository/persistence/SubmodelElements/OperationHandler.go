@@ -36,6 +36,7 @@ import (
 	"errors"
 
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	jsoniter "github.com/json-iterator/go"
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 )
 
@@ -182,57 +183,42 @@ func (p PostgreSQLOperationHandler) Delete(idShortOrPath string) error {
 // Returns:
 //   - error: An error if the database insert operation fails
 func insertOperation(operation *gen.Operation, tx *sql.Tx, id int, submodelID string, db *sql.DB) error {
-	_, err := tx.Exec(`INSERT INTO operation_element (id) VALUES ($1)`, id)
-	if err != nil {
-		return err
+	json := jsoniter.ConfigCompatibleWithStandardLibrary
+
+	var inputVars, outputVars, inoutputVars string
+	if operation.InputVariables != nil {
+		inputVarBytes, err := json.Marshal(operation.InputVariables)
+		if err != nil {
+			return err
+		}
+		inputVars = string(inputVarBytes)
+	} else {
+		inputVars = "[]"
 	}
 
-	// Insert variables
-	err = insertOperationVariables(tx, operation.InputVariables, "in", id, submodelID, db)
-	if err != nil {
-		return err
+	if operation.OutputVariables != nil {
+		outputVarBytes, err := json.Marshal(operation.OutputVariables)
+		if err != nil {
+			return err
+		}
+		outputVars = string(outputVarBytes)
+	} else {
+		outputVars = "[]"
 	}
-	err = insertOperationVariables(tx, operation.OutputVariables, "out", id, submodelID, db)
-	if err != nil {
-		return err
-	}
-	err = insertOperationVariables(tx, operation.InoutputVariables, "inout", id, submodelID, db)
-	if err != nil {
-		return err
-	}
-	return nil
-}
 
-// insertOperationVariables is a helper function that inserts operation variables into the operation_variable table.
-// Each variable contains a value that is itself a submodel element, which is recursively persisted using
-// the appropriate handler. Variables are stored with their role (in, out, or inout) and position.
-//
-// Parameters:
-//   - tx: The database transaction
-//   - variables: The list of operation variables to insert
-//   - role: The role of the variables ("in" for input, "out" for output, "inout" for in-output)
-//   - operationID: The database ID of the parent operation element
-//   - submodelID: The ID of the parent submodel (needed for variable value persistence)
-//   - db: The database connection (needed to get appropriate handlers for variable values)
-//
-// Returns:
-//   - error: An error if the database insert operation fails
-func insertOperationVariables(tx *sql.Tx, variables []gen.OperationVariable, role string, operationID int, submodelID string, db *sql.DB) error {
-	for i, ov := range variables {
-		// Create the value submodel element
-		handler, err := GetSMEHandler(ov.Value, db)
+	if operation.InoutputVariables != nil {
+		inoutputVarBytes, err := json.Marshal(operation.InoutputVariables)
 		if err != nil {
 			return err
 		}
-		valueID, err := handler.Create(tx, submodelID, ov.Value)
-		if err != nil {
-			return err
-		}
-		_, err = tx.Exec(`INSERT INTO operation_variable (operation_id, role, position, value_sme) VALUES ($1, $2, $3, $4)`,
-			operationID, role, i, valueID)
-		if err != nil {
-			return err
-		}
+		inoutputVars = string(inoutputVarBytes)
+	} else {
+		inoutputVars = "[]"
+	}
+
+	_, err := tx.Exec(`INSERT INTO operation_element (id,input_variables,output_variables,inoutput_variables) VALUES ($1, $2, $3, $4)`, id, inputVars, outputVars, inoutputVars)
+	if err != nil {
+		return err
 	}
 	return nil
 }

@@ -166,10 +166,10 @@ func getValueSubquery(dialect goqu.DialectWrapper) exp.CaseExpression {
 			goqu.I("sme.model_type").Eq("MultiLanguageProperty"),
 			getMultiLanguagePropertySubquery(dialect),
 		).
-		// When(
-		// 	goqu.I("sme.model_type").Eq("Operation"),
-		// 	getOperationSubquery(dialect),
-		// ).
+		When(
+			goqu.I("sme.model_type").Eq("Operation"),
+			getOperationSubquery(dialect),
+		).
 		When(
 			goqu.I("sme.model_type").Eq("Property"),
 			getPropertySubquery(dialect),
@@ -275,9 +275,18 @@ func getMultiLanguagePropertySubquery(dialect goqu.DialectWrapper) *goqu.SelectD
 		Limit(1)
 }
 
-// func getOperationSubquery(dialect goqu.DialectWrapper) *goqu.SelectDataset {
-// 	return nil
-// }
+func getOperationSubquery(dialect goqu.DialectWrapper) *goqu.SelectDataset {
+	return dialect.From(goqu.T("operation_element").As("oe")).
+		Select(
+			goqu.Func("jsonb_build_object",
+				goqu.V("input_variables"), goqu.I("oe.input_variables"),
+				goqu.V("output_variables"), goqu.I("oe.output_variables"),
+				goqu.V("inoutput_variables"), goqu.I("oe.inoutput_variables"),
+			),
+		).
+		Where(goqu.I("oe.id").Eq(goqu.I("sme.id"))).
+		Limit(1)
+}
 
 func getPropertySubquery(dialect goqu.DialectWrapper) *goqu.SelectDataset {
 	valueIDSubquery, valueIDReferredSubquery := queries.GetReferenceQueries(dialect, goqu.I("pr.value_id"))
