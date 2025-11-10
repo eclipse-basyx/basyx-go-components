@@ -57,8 +57,6 @@ type PostgreSQLSubmodelDatabase struct {
 var failedPostgresTransactionSubmodelRepo = common.NewInternalServerError("Failed to commit PostgreSQL transaction - no changes applied - see console for details")
 var beginTransactionErrorSubmodelRepo = common.NewInternalServerError("Failed to begin PostgreSQL transaction - no changes applied - see console for details")
 
-var maxCacheSize = 1000
-
 // NewPostgreSQLSubmodelBackend creates a new PostgreSQL submodel database backend.
 // It initializes a database connection with the provided DSN and schema configuration.
 //

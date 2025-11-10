@@ -61,7 +61,7 @@ import (
 // The function uses COALESCE to ensure empty arrays ('[]'::jsonb) instead of NULL values,
 // which simplifies downstream JSON parsing. It also includes a total count window function
 // for efficient result set pagination and slice pre-sizing.
-func GetQueryWithGoqu(submodelID string, limit int64, cursor string, aasQuery *grammar.QueryWrapper, onlyIds bool) (string, error) {
+func GetQueryWithGoqu(submodelID string, limit int64, cursor string, aasQuery *grammar.QueryWrapper, onlyIDs bool) (string, error) {
 	dialect := goqu.Dialect("postgres")
 
 	// Build display names subquery
@@ -96,7 +96,7 @@ func GetQueryWithGoqu(submodelID string, limit int64, cursor string, aasQuery *g
 			goqu.L("COALESCE((?), '[]'::jsonb)", administrationSubquery).As("submodel_administrative_information"),
 		)
 
-	if onlyIds {
+	if onlyIDs {
 		// If only IDs are requested, adjust the selection to only include the submodel ID
 		query = dialect.From(goqu.T("submodel").As("s")).
 			Select(
@@ -124,10 +124,7 @@ func GetQueryWithGoqu(submodelID string, limit int64, cursor string, aasQuery *g
 	query = addGroupBySubmodelID(query)
 
 	// Add pagination if limit or cursor is specified
-	shouldPeekAhead := true
-	if onlyIds {
-		shouldPeekAhead = false
-	}
+	shouldPeekAhead := !onlyIDs
 	query = addPaginationToQuery(query, limit, cursor, shouldPeekAhead)
 
 	sql, _, err := query.ToSQL()
@@ -140,11 +137,6 @@ func GetQueryWithGoqu(submodelID string, limit int64, cursor string, aasQuery *g
 
 func addGroupBySubmodelID(query *goqu.SelectDataset) *goqu.SelectDataset {
 	query = query.GroupBy(goqu.I("s.id"))
-	return query
-}
-
-func addSubmodelCountToQuery(query *goqu.SelectDataset) *goqu.SelectDataset {
-	query = query.SelectAppend(goqu.L("COUNT(s.id) OVER() AS total_submodels"))
 	return query
 }
 
@@ -203,7 +195,7 @@ func addPaginationToQuery(query *goqu.SelectDataset, limit int64, cursor string,
 	if limit > 0 {
 		// Add 1 to limit for peek ahead to determine if there are more results
 		if peekAhead {
-			limit += 1
+			limit++
 		}
 		query = query.Limit(uint(limit))
 	}

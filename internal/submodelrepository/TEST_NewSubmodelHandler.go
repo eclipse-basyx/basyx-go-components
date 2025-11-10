@@ -5,11 +5,13 @@ import (
 	persistencepostgresql "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence"
 )
 
-const (
-	benchmarkEnabled = false
-)
+// const (
+// 	benchmarkEnabled = false
+// )
 
 // TestNewSubmodelHandler is a test function to benchmark and test submodel retrieval performance.
+//
+//nolint:all
 func TestNewSubmodelHandler(smDatabase *persistencepostgresql.PostgreSQLSubmodelDatabase) {
 	// TEST
 	// if benchmarkEnabled {
