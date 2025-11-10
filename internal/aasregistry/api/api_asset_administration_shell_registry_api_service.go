@@ -306,7 +306,7 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) GetAllSubmodelDescriptor
 
 // PostSubmodelDescriptorThroughSuperpath - Creates a new Submodel Descriptor, i.e. registers a submodel
 func (s *AssetAdministrationShellRegistryAPIAPIService) PostSubmodelDescriptorThroughSuperpath(ctx context.Context, aasIdentifier string, submodelDescriptor model.SubmodelDescriptor) (model.ImplResponse, error) {
-	// Decode AAS identifier from path
+
 	decodedAAS, decodeErr := common.DecodeString(aasIdentifier)
 	if decodeErr != nil {
 		log.Printf("🧩 [%s] Error in PostSubmodelDescriptorThroughSuperpath: decode aasIdentifier=%q: %v", componentName, aasIdentifier, decodeErr)
