@@ -453,6 +453,11 @@ func (p *PostgreSQLAASRegistryDatabase) ListAssetAdministrationShellDescriptors(
 	if assetType != "" {
 		ds = ds.Where(aas.Col(colAssetType).Eq(assetType))
 	}
+
+	if assetKind != "" {
+		ds = ds.Where(aas.Col(colAssetKind).Eq(assetKind))
+	}
+
 	if akStr := fmt.Sprint(assetKind); akStr != "" && akStr != fmt.Sprint(model.ASSETKIND_NOT_APPLICABLE) {
 		ds = ds.Where(aas.Col(colAssetKind).Eq(akStr))
 	}

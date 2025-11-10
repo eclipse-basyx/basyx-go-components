@@ -5,14 +5,14 @@ import json
 
 # --- Config ---
 URL = "http://localhost:5004/shell-descriptors"
-JSON_FILE = "bodies/complex.json"  # path to your file
+JSON_FILE = "bodies/simple.json"  # path to your file
 
 # --- Load JSON file ---
 with open(JSON_FILE, "r", encoding="utf-8") as f:
     payload_template = json.load(f)
 
 # --- POST loop ---
-for i in range(1000):  # Change number if you want more inserts
+for i in range(10000):  # Change number if you want more inserts
     payload = copy.deepcopy(payload_template)
 
     # Unique Descriptor ID
