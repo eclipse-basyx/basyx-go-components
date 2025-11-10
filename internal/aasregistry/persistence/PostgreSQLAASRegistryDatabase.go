@@ -458,10 +458,6 @@ func (p *PostgreSQLAASRegistryDatabase) ListAssetAdministrationShellDescriptors(
 		ds = ds.Where(aas.Col(colAssetKind).Eq(assetKind))
 	}
 
-	if akStr := fmt.Sprint(assetKind); akStr != "" && akStr != fmt.Sprint(model.ASSETKIND_NOT_APPLICABLE) {
-		ds = ds.Where(aas.Col(colAssetKind).Eq(akStr))
-	}
-
 	ds = ds.
 		Order(aas.Col(colAASID).Asc()).
 		Limit(uint(peekLimit))
