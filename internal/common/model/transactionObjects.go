@@ -453,3 +453,20 @@ type OperationValueRow struct {
 	// InoutputVariables contains in-output operation variables as JSON data
 	InoutputVariables json.RawMessage `json:"inoutput_variables"`
 }
+
+// EntityValueRow represents a data row for an Entity element in the database.
+// Entities are submodel elements that represent real-world objects or concepts within the AAS.
+//
+// This structure captures the essential information of an entity, including its type,
+// global asset identifier, and associated statements that describe the entity's characteristics.
+// The statements are stored as JSON to accommodate complex structures.
+type EntityValueRow struct {
+	// EntityType specifies the type of the entity.
+	EntityType string `json:"entity_type"`
+	// GlobalAssetID specifies the global asset identifier of the entity.
+	GlobalAssetID string `json:"global_asset_id"`
+	// Statements contains statements that describe the entity's characteristics as JSON data.
+	Statements json.RawMessage `json:"statements"`
+	// SpecificAssetIDs contains specific asset ID references as JSON data
+	SpecificAssetIDs json.RawMessage `json:"specific_asset_ids"`
+}

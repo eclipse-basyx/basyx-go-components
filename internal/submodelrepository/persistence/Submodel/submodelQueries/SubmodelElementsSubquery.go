@@ -150,10 +150,10 @@ func getValueSubquery(dialect goqu.DialectWrapper) exp.CaseExpression {
 		// 	goqu.I("sme.model_type").Eq("Capability"),
 		// 	getCapabilitySubquery(dialect),
 		// ).
-		// When(
-		// 	goqu.I("sme.model_type").Eq("Entity"),
-		// 	getEntitySubquery(dialect),
-		// ).
+		When(
+			goqu.I("sme.model_type").Eq("Entity"),
+			getEntitySubquery(dialect),
+		).
 		// When(
 		// 	goqu.I("sme.model_type").Eq("File"),
 		// 	getFileSubquery(dialect),
@@ -225,9 +225,19 @@ func getBasicEventElementSubquery(dialect goqu.DialectWrapper) *goqu.SelectDatas
 // 	return nil
 // }
 
-// func getEntitySubquery(dialect goqu.DialectWrapper) *goqu.SelectDataset {
-// 	return nil
-// }
+func getEntitySubquery(dialect goqu.DialectWrapper) *goqu.SelectDataset {
+	return dialect.From(goqu.T("entity_element").As("ee")).
+		Select(
+			goqu.Func("jsonb_build_object",
+				goqu.V("entity_type"), goqu.I("ee.entity_type"),
+				goqu.V("globalAssetId"), goqu.I("ee.global_asset_id"),
+				goqu.V("statements"), goqu.I("ee.statements"),
+				goqu.V("specificAssetIds"), goqu.I("ee.specific_asset_ids"),
+			),
+		).
+		Where(goqu.I("ee.id").Eq(goqu.I("sme.id"))).
+		Limit(1)
+}
 
 // func getFileSubquery(dialect goqu.DialectWrapper) *goqu.SelectDataset {
 // 	return nil

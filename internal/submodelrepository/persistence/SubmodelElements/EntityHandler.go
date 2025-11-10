@@ -31,6 +31,7 @@ import (
 	"errors"
 
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	jsoniter "github.com/json-iterator/go"
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 )
 
@@ -162,27 +163,29 @@ func (p PostgreSQLEntityHandler) Delete(idShortOrPath string) error {
 }
 
 func insertEntity(entity *gen.Entity, tx *sql.Tx, id int) error {
-	_, err := tx.Exec(`INSERT INTO entity_element (id, entity_type, global_asset_id) VALUES ($1, $2, $3)`,
-		id, entity.EntityType, entity.GlobalAssetID)
-	if err != nil {
-		return err
-	}
-
-	// Insert specific asset ids
-	for _, sai := range entity.SpecificAssetIds {
-		var extRef sql.NullInt64
-		if !isEmptyReference(sai.ExternalSubjectID) {
-			refID, err := insertReference(tx, *sai.ExternalSubjectID)
-			if err != nil {
-				return err
-			}
-			extRef = sql.NullInt64{Int64: int64(refID), Valid: true}
-		}
-		_, err = tx.Exec(`INSERT INTO entity_specific_asset_id (entity_id, name, value, external_subject_ref) VALUES ($1, $2, $3, $4)`,
-			id, sai.Name, sai.Value, extRef)
+	json := jsoniter.ConfigCompatibleWithStandardLibrary
+	specificAssetIDs := "[]"
+	if entity.SpecificAssetIds != nil {
+		specificAssetIDsBytes, err := json.Marshal(entity.SpecificAssetIds)
 		if err != nil {
 			return err
 		}
+		specificAssetIDs = string(specificAssetIDsBytes)
+	}
+
+	statements := "[]"
+	if entity.Statements != nil {
+		statementsBytes, err := json.Marshal(entity.Statements)
+		if err != nil {
+			return err
+		}
+		statements = string(statementsBytes)
+	}
+
+	_, err := tx.Exec(`INSERT INTO entity_element (id, entity_type, global_asset_id, specific_asset_ids, statements) VALUES ($1, $2, $3, $4, $5)`,
+		id, entity.EntityType, entity.GlobalAssetID, specificAssetIDs, statements)
+	if err != nil {
+		return err
 	}
 	return nil
 }

@@ -512,7 +512,9 @@ CREATE TABLE IF NOT EXISTS submodel_element_list (
 CREATE TABLE IF NOT EXISTS entity_element (
   id              BIGINT PRIMARY KEY REFERENCES submodel_element(id) ON DELETE CASCADE,
   entity_type     entity_type NOT NULL,
-  global_asset_id TEXT
+  global_asset_id TEXT,
+  statements JSONB DEFAULT '[]',
+  specific_asset_ids JSONB DEFAULT '[]'
 );
 CREATE TABLE IF NOT EXISTS entity_specific_asset_id (
   id                   BIGSERIAL PRIMARY KEY,

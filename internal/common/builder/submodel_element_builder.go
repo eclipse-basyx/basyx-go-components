@@ -308,7 +308,44 @@ func getSubmodelElementObjectBasedOnModelType(smeRow model.SubmodelElementRow, r
 		}
 		return operation, nil
 	case "Entity":
-		entity := &model.Entity{}
+		var valueRow model.EntityValueRow
+		if smeRow.Value == nil {
+			return nil, fmt.Errorf("smeRow.Value is nil")
+		}
+		err := json.Unmarshal(*smeRow.Value, &valueRow)
+		if err != nil {
+			return nil, err
+		}
+
+		entityType, err := model.NewEntityTypeFromValue(valueRow.EntityType)
+		if err != nil {
+			return nil, err
+		}
+
+		var statements []model.SubmodelElement
+		if valueRow.Statements == nil {
+			statements = []model.SubmodelElement{}
+		} else {
+			err = json.Unmarshal(valueRow.Statements, &statements)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		var specificAssetIDs []model.SpecificAssetID
+		if valueRow.SpecificAssetIDs != nil {
+			err = json.Unmarshal(valueRow.SpecificAssetIDs, &specificAssetIDs)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		entity := &model.Entity{
+			EntityType:       entityType,
+			GlobalAssetID:    valueRow.GlobalAssetID,
+			Statements:       statements,
+			SpecificAssetIds: specificAssetIDs,
+		}
 		return entity, nil
 	case "AnnotatedRelationshipElement":
 		annotatedRelElem := &model.AnnotatedRelationshipElement{}
