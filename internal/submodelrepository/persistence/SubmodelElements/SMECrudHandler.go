@@ -143,17 +143,17 @@ func (p *PostgreSQLSMECrudHandler) CreateWithPath(tx *sql.Tx, submodelID string,
 	}
 
 	// Check if a SubmodelElement with the same submodelID and idshort_path already exists
-	var exists bool
-	err = tx.QueryRow(`SELECT EXISTS(SELECT 1 FROM submodel_element WHERE submodel_id = $1 AND idshort_path = $2)`,
-		submodelID, idShortPath).Scan(&exists)
-	if err != nil {
-		return 0, err
-	}
+	// var exists bool
+	// err = tx.QueryRow(`SELECT EXISTS(SELECT 1 FROM submodel_element WHERE submodel_id = $1 AND idshort_path = $2)`,
+	// 	submodelID, idShortPath).Scan(&exists)
+	// if err != nil {
+	// 	return 0, err
+	// }
 
-	if exists {
-		return 0, fmt.Errorf("SubmodelElement with submodelID '%s' and idshort_path '%s' already exists",
-			submodelID, idShortPath)
-	}
+	// if exists {
+	// 	return 0, fmt.Errorf("SubmodelElement with submodelID '%s' and idshort_path '%s' already exists",
+	// 		submodelID, idShortPath)
+	// }
 
 	var parentDBId sql.NullInt64
 	if parentID == 0 {
@@ -179,10 +179,20 @@ func (p *PostgreSQLSMECrudHandler) CreateWithPath(tx *sql.Tx, submodelID string,
 		edsJSONString = string(edsBytes)
 	}
 
+	supplementalSemanticIDsJSONString := "[]"
+	if len(submodelElement.GetSupplementalSemanticIds()) > 0 {
+		var json = jsoniter.ConfigCompatibleWithStandardLibrary
+		supplementalSemanticIDsBytes, err := json.Marshal(submodelElement.GetSupplementalSemanticIds())
+		if err != nil {
+			return 0, err
+		}
+		supplementalSemanticIDsJSONString = string(supplementalSemanticIDsBytes)
+	}
+
 	var id int
 	err = tx.QueryRow(`	INSERT INTO
-	 					submodel_element(submodel_id, parent_sme_id, position, id_short, category, model_type, semantic_id, idshort_path, description_id, displayname_id, root_sme_id, embedded_data_specification)
-						VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING id`,
+	 					submodel_element(submodel_id, parent_sme_id, position, id_short, category, model_type, semantic_id, idshort_path, description_id, displayname_id, root_sme_id, embedded_data_specification, supplemental_semantic_ids)
+						VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING id`,
 		submodelID,
 		parentDBId,
 		position,
@@ -195,6 +205,7 @@ func (p *PostgreSQLSMECrudHandler) CreateWithPath(tx *sql.Tx, submodelID string,
 		displayNameID,
 		rootDbID,
 		edsJSONString,
+		supplementalSemanticIDsJSONString,
 	).Scan(&id)
 	if err != nil {
 		return 0, err
@@ -211,20 +222,6 @@ func (p *PostgreSQLSMECrudHandler) CreateWithPath(tx *sql.Tx, submodelID string,
 			if err != nil {
 				fmt.Println(err)
 				return 0, common.NewInternalServerError("Failed to Create Qualifier for Submodel Element with ID '" + fmt.Sprintf("%d", id) + "'. See console for details.")
-			}
-		}
-	}
-
-	supplementalSemanticIDs := submodelElement.GetSupplementalSemanticIds()
-	if len(supplementalSemanticIDs) > 0 {
-		for _, supplementalSemanticID := range supplementalSemanticIDs {
-			supplementalSemanticIDDbID, err := persistenceutils.CreateReference(tx, &supplementalSemanticID, sql.NullInt64{}, sql.NullInt64{})
-			if err != nil {
-				return 0, err
-			}
-			_, err = tx.Exec(`INSERT INTO submodel_element_supplemental_semantic_id (submodel_element_id, reference_id) VALUES ($1, $2)`, id, supplementalSemanticIDDbID)
-			if err != nil {
-				return 0, err
 			}
 		}
 	}

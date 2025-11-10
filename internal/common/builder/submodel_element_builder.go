@@ -73,7 +73,7 @@ func BuildSubmodelElement(smeRow model.SubmodelElementRow) (*model.SubmodelEleme
 		err error
 	}
 	type supplementalSemanticIDsResult struct {
-		supplementalSemanticIDs []*model.Reference
+		supplementalSemanticIDs []model.Reference
 		err                     error
 	}
 	type qualifiersResult struct {
@@ -142,7 +142,12 @@ func BuildSubmodelElement(smeRow model.SubmodelElementRow) (*model.SubmodelEleme
 	go func() {
 		defer wg.Done()
 		if smeRow.SupplementalSemanticIDs != nil {
-			supplementalSemanticIDs, err := ParseReferences(*smeRow.SupplementalSemanticIDs, refBuilderMap, &refMutex)
+			var supplementalSemanticIDs []model.Reference
+			var json = jsoniter.ConfigCompatibleWithStandardLibrary
+			err := json.Unmarshal(*smeRow.SupplementalSemanticIDs, &supplementalSemanticIDs)
+			if err != nil {
+				log.Printf("error unmarshaling embedded data specifications: %v", err)
+			}
 			supplementalSemanticIDsChan <- supplementalSemanticIDsResult{supplementalSemanticIDs: supplementalSemanticIDs, err: err}
 		} else {
 			supplementalSemanticIDsChan <- supplementalSemanticIDsResult{}
@@ -248,9 +253,7 @@ func BuildSubmodelElement(smeRow model.SubmodelElementRow) (*model.SubmodelEleme
 	// Set supplemental semantic IDs if present
 	if len(supplResult.supplementalSemanticIDs) > 0 {
 		suppl := []model.Reference{}
-		for _, el := range supplResult.supplementalSemanticIDs {
-			suppl = append(suppl, *el)
-		}
+		suppl = append(suppl, supplResult.supplementalSemanticIDs...)
 		specificSME.SetSupplementalSemanticIds(suppl)
 	}
 

@@ -50,6 +50,10 @@ type SubmodelRow struct {
 	Kind string
 	// EmbeddedDataSpecification contains embedded data specifications as JSON data
 	EmbeddedDataSpecification json.RawMessage
+	// SupplementalSemanticIDs contains supplemental semantic identifiers as JSON data
+	SupplementalSemanticIDs json.RawMessage
+	// Extensions contains extension as JSON data
+	Extensions json.RawMessage
 	// DisplayNames contains localized names as JSON data
 	DisplayNames json.RawMessage
 	// Descriptions contains localized descriptions as JSON data
@@ -58,14 +62,8 @@ type SubmodelRow struct {
 	SemanticID json.RawMessage
 	// ReferredSemanticIDs contains references to additional semantic definitions as JSON data
 	ReferredSemanticIDs json.RawMessage
-	// SupplementalSemanticIDs contains supplemental semantic identifiers as JSON data
-	SupplementalSemanticIDs json.RawMessage
-	// SupplementalReferredSemIDs contains referred supplemental semantic identifiers as JSON data
-	SupplementalReferredSemIDs json.RawMessage
 	// Qualifiers contains qualifier information as JSON data
 	Qualifiers json.RawMessage
-	// Extensions contains extension as JSON data
-	Extensions json.RawMessage
 	// Administration contains administrative information as JSON data
 	Administration json.RawMessage
 	// RootSubmodelElements contains root submodel elements as JSON data

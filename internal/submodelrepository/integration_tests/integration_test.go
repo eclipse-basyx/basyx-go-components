@@ -136,6 +136,7 @@ func TestIntegration(t *testing.T) {
 				expectedBytes, _ := json.Marshal(expectedJSON)
 				responseBytes, _ := json.Marshal(responseJSON)
 				assert.JSONEq(t, string(expectedBytes), string(responseBytes), "Response does not match expected")
+				t.Logf("Expected: %s", expectedBytes)
 			}
 
 			t.Logf("Response: %s", response)

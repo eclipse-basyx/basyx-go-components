@@ -72,79 +72,11 @@ func GetQueryWithGoqu(submodelID string, limit int64, cursor string, aasQuery *g
 
 	semanticIDSubquery, semanticIDReferredSubquery := queries.GetReferenceQueries(dialect, goqu.I("s.semantic_id"))
 
-	// Build supplemental semantic ids subquery
-	supplementalSemanticIDObj := goqu.Func("jsonb_build_object",
-		goqu.V("reference_id"), goqu.I("ref.id"),
-		goqu.V("reference_type"), goqu.I("ref.type"),
-		goqu.V("key_id"), goqu.I("rk.id"),
-		goqu.V("key_type"), goqu.I("rk.type"),
-		goqu.V("key_value"), goqu.I("rk.value"),
-	)
-
-	supplementalSemanticIDsSubquery := dialect.From(goqu.T("submodel_supplemental_semantic_id").As("sssi")).
-		Select(goqu.Func("jsonb_agg", goqu.L("?", supplementalSemanticIDObj))).
-		LeftJoin(
-			goqu.T("reference").As("ref"),
-			goqu.On(goqu.I("ref.id").Eq(goqu.I("sssi.reference_id"))),
-		).
-		LeftJoin(
-			goqu.T("reference_key").As("rk"),
-			goqu.On(goqu.I("rk.reference_id").Eq(goqu.I("ref.id"))),
-		).
-		Where(goqu.I("sssi.submodel_id").Eq(goqu.I("s.id")))
-
-	// Build supplemental semantic ids referred subquery
-	supplementalSemanticIDReferredObj := goqu.Func("jsonb_build_object",
-		goqu.V("supplemental_root_reference_id"), goqu.I("sssi.reference_id"),
-		goqu.V("reference_id"), goqu.I("ref.id"),
-		goqu.V("reference_type"), goqu.I("ref.type"),
-		goqu.V("parentReference"), goqu.I("ref.parentreference"),
-		goqu.V("rootReference"), goqu.I("ref.rootreference"),
-		goqu.V("key_id"), goqu.I("rk.id"),
-		goqu.V("key_type"), goqu.I("rk.type"),
-		goqu.V("key_value"), goqu.I("rk.value"),
-	)
-
-	supplementalSemanticIDsReferredSubquery := dialect.From(goqu.T("submodel_supplemental_semantic_id").As("sssi")).
-		Select(goqu.Func("jsonb_agg", goqu.L("?", supplementalSemanticIDReferredObj))).
-		LeftJoin(
-			goqu.T("reference").As("ref"),
-			goqu.On(goqu.I("ref.rootreference").Eq(goqu.I("sssi.reference_id"))),
-		).
-		LeftJoin(
-			goqu.T("reference_key").As("rk"),
-			goqu.On(goqu.I("rk.reference_id").Eq(goqu.I("ref.id"))),
-		).
-		Where(
-			goqu.I("sssi.submodel_id").Eq(goqu.I("s.id")),
-			goqu.I("ref.id").IsNotNull(),
-		)
-
 	// Build qualifier subquery
 	qualifierSubquery := queries.GetQualifierSubquery(dialect, goqu.T("submodel_qualifier"), "submodel_id", "qualifier_id", goqu.I("s.id"))
 
-	// Build extension subquery
-	extensionSubquery := queries.GetExtensionSubquery(dialect, goqu.T("submodel_extension"), "extension_id", "submodel_id", goqu.I("s.id"))
-
 	// Build AdministrativeInformation subquery
 	administrationSubquery := queries.GetAdministrationSubquery(dialect, "s.administration_id")
-
-	// SubmodelElementFilter
-	// filter := SubmodelElementFilter{
-	// 	SubmodelFilter: &SubmodelElementSubmodelFilter{
-	// 		SubmodelIDFilter: goqu.I("s.id"),
-	// 	},
-	// }
-
-	// Submodel Elements Subqueries
-	// RootSubmodelElementSubquery, err := GetSubmodelElementsSubquery(dialect, true, filter)
-	// if err != nil {
-	// 	return "", err
-	// }
-	// ChildSubmodelElementSubquery, err := GetSubmodelElementsSubquery(dialect, false, filter)
-	// if err != nil {
-	// 	return "", err
-	// }
 
 	// Main query
 	query := dialect.From(goqu.T("submodel").As("s")).
@@ -154,17 +86,14 @@ func GetQueryWithGoqu(submodelID string, limit int64, cursor string, aasQuery *g
 			goqu.I("s.category").As("submodel_category"),
 			goqu.I("s.kind").As("submodel_kind"),
 			goqu.I("s.embedded_data_specification").As("embedded_data_specification"),
+			goqu.I("s.supplemental_semantic_ids").As("supplemental_semantic_ids"),
+			goqu.I("s.extensions").As("extensions"),
 			goqu.L("COALESCE((?), '[]'::jsonb)", displayNamesSubquery).As("submodel_display_names"),
 			goqu.L("COALESCE((?), '[]'::jsonb)", descriptionsSubquery).As("submodel_descriptions"),
 			goqu.L("COALESCE((?), '[]'::jsonb)", semanticIDSubquery).As("submodel_semantic_id"),
 			goqu.L("COALESCE((?), '[]'::jsonb)", semanticIDReferredSubquery).As("submodel_semantic_id_referred"),
-			goqu.L("COALESCE((?), '[]'::jsonb)", supplementalSemanticIDsSubquery).As("submodel_supplemental_semantic_ids"),
-			goqu.L("COALESCE((?), '[]'::jsonb)", supplementalSemanticIDsReferredSubquery).As("submodel_supplemental_semantic_id_referred"),
 			goqu.L("COALESCE((?), '[]'::jsonb)", qualifierSubquery).As("submodel_qualifiers"),
-			goqu.L("COALESCE((?), '[]'::jsonb)", extensionSubquery).As("submodel_extensions"),
 			goqu.L("COALESCE((?), '[]'::jsonb)", administrationSubquery).As("submodel_administrative_information"),
-			// goqu.L("COALESCE((?), '[]'::jsonb)", RootSubmodelElementSubquery).As("submodel_root_submodel_elements"),
-			// goqu.L("COALESCE((?), '[]'::jsonb)", ChildSubmodelElementSubquery).As("submodel_child_submodel_elements"),
 		)
 
 	if onlyIds {

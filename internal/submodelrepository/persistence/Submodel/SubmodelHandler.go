@@ -28,6 +28,7 @@
 package submodelpersistence
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"os"
@@ -42,9 +43,9 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	submodel_query "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/Submodel/submodelQueries"
-	submodelsubqueries "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/Submodel/submodelQueries"
 	jsoniter "github.com/json-iterator/go"
 	_ "github.com/lib/pq" // PostgreSQL Treiber
+	"golang.org/x/sync/errgroup"
 )
 
 // GetSubmodelByID retrieves a single submodel by its ID from the database with full nested structures.
@@ -126,286 +127,221 @@ type SubmodelElementSubmodelMetadata struct {
 //  1. Initial parsing during row iteration
 //  2. Final structure building after all rows are processed
 func getSubmodels(db *sql.DB, submodelIDFilter string, limit int64, cursor string, query *grammar.QueryWrapper) ([]*model.Submodel, map[string]*model.Submodel, string, error) {
-	var json = jsoniter.ConfigCompatibleWithStandardLibrary
-	var result []*model.Submodel
-	var submodelCount int
-	err := db.QueryRow("SELECT COUNT(*) FROM submodel").Scan(&submodelCount)
-	if err != nil {
-		return nil, nil, "", fmt.Errorf("error getting submodel count: %w", err)
-	}
-	if limit > 0 && submodelCount < int(limit) {
-		limit = int64(submodelCount)
-	}
-	referenceBuilderRefs := make(map[int64]*builders.ReferenceBuilder)
-	var refMutex sync.RWMutex
-	start := time.Now().Local().UnixMilli()
+	start := time.Now()
 	rows, err := GetSubmodelDataFromDbWithJSONQuery(db, submodelIDFilter, limit, cursor, query, false)
-	end := time.Now().Local().UnixMilli()
-	fmt.Printf("Total Query Only time: %d milliseconds\n", end-start)
+	fmt.Printf("Total Query Only time: %d milliseconds\n", time.Since(start).Milliseconds())
 	if err != nil {
 		return nil, nil, "", fmt.Errorf("error getting submodel data from DB: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
 
-	var count int64
-	var row model.SubmodelRow
-	submodelMap := make(map[string]*model.Submodel)
-	for rows.Next() {
-		var wg sync.WaitGroup
-		count++
-		if err := rows.Scan(
-			&row.ID, &row.IDShort, &row.Category, &row.Kind,
-			&row.EmbeddedDataSpecification,
-			&row.DisplayNames, &row.Descriptions,
-			&row.SemanticID, &row.ReferredSemanticIDs,
-			&row.SupplementalSemanticIDs, &row.SupplementalReferredSemIDs,
-			&row.Qualifiers, &row.Extensions, &row.Administration,
-			// &row.RootSubmodelElements, &row.ChildSubmodelElements,
-			// &row.TotalSubmodels,
-		); err != nil {
-			return nil, nil, "", fmt.Errorf("error scanning row: %w", err)
-		}
-
-		if result == nil {
-			result = make([]*model.Submodel, 0, submodelCount)
-		}
-
-		submodel := &model.Submodel{
-			ModelType:        "Submodel",
-			ID:               row.ID,
-			IdShort:          row.IDShort,
-			Category:         row.Category,
-			Kind:             model.ModellingKind(row.Kind),
-			SubmodelElements: []model.SubmodelElement{},
-		}
-		if count > limit {
-			result = append(result, submodel)
-			break
-		}
-
-		// Channels for parallel processing
-		type semanticIDResult struct {
-			semanticID []*model.Reference
-			err        error
-		}
-		type supplementalSemanticIDsResult struct {
-			supplementalSemanticIDs []*model.Reference
-			err                     error
-		}
-		type displayNamesResult struct {
-			err error
-		}
-		type descriptionsResult struct {
-			err error
-		}
-		type embeddedDataSpecResult struct {
-			embeddedDataSpecs []model.EmbeddedDataSpecification
-			err               error
-		}
-
-		semanticIDChan := make(chan semanticIDResult, 1)
-		supplementalSemanticIDsChan := make(chan supplementalSemanticIDsResult, 1)
-		displayNamesChan := make(chan displayNamesResult, 1)
-		descriptionsChan := make(chan descriptionsResult, 1)
-		embeddedDataSpecChan := make(chan embeddedDataSpecResult, 1)
-
-		// Parse SemanticID
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			if common.IsArrayNotEmpty(row.SemanticID) {
-				semanticID, err := builders.ParseReferences(row.SemanticID, referenceBuilderRefs, &refMutex)
-				if err != nil {
-					semanticIDChan <- semanticIDResult{err: err}
-					return
-				}
-				if hasSemanticID(semanticID) {
-					err = builders.ParseReferredReferences(row.ReferredSemanticIDs, referenceBuilderRefs, &refMutex)
-					if err != nil {
-						semanticIDChan <- semanticIDResult{err: err}
-						return
-					}
-				}
-				semanticIDChan <- semanticIDResult{semanticID: semanticID}
-			} else {
-				semanticIDChan <- semanticIDResult{}
-			}
-		}()
-
-		// Parse SupplementalSemanticIDs
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			if common.IsArrayNotEmpty(row.SupplementalSemanticIDs) {
-				supplementalSemanticIDs, err := builders.ParseReferences(row.SupplementalSemanticIDs, referenceBuilderRefs, &refMutex)
-				if err != nil {
-					supplementalSemanticIDsChan <- supplementalSemanticIDsResult{err: err}
-					return
-				}
-				if moreThanZeroReferences(supplementalSemanticIDs) {
-					err = builders.ParseReferredReferences(row.SupplementalReferredSemIDs, referenceBuilderRefs, &refMutex)
-					if err != nil {
-						supplementalSemanticIDsChan <- supplementalSemanticIDsResult{err: err}
-						return
-					}
-				}
-				supplementalSemanticIDsChan <- supplementalSemanticIDsResult{supplementalSemanticIDs: supplementalSemanticIDs}
-			} else {
-				supplementalSemanticIDsChan <- supplementalSemanticIDsResult{}
-			}
-		}()
-
-		// Parse DisplayNames
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			err := addDisplayNames(row, submodel)
-			displayNamesChan <- displayNamesResult{err: err}
-		}()
-
-		// Parse Descriptions
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			err := addDescriptions(row, submodel)
-			descriptionsChan <- descriptionsResult{err: err}
-		}()
-
-		// Parse Embedded Data Specifications
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			if common.IsArrayNotEmpty(row.EmbeddedDataSpecification) {
-				var embeddedDataSpecs []model.EmbeddedDataSpecification
-				err := json.Unmarshal(row.EmbeddedDataSpecification, &embeddedDataSpecs)
-				if err != nil {
-					fmt.Println(err)
-					embeddedDataSpecChan <- embeddedDataSpecResult{err: err}
-					return
-				}
-				embeddedDataSpecChan <- embeddedDataSpecResult{embeddedDataSpecs: embeddedDataSpecs}
-			} else {
-				embeddedDataSpecChan <- embeddedDataSpecResult{}
-			}
-		}()
-
-		// Qualifiers
-		type qualifiersResult struct {
-			qualifiers []model.Qualifier
-			err        error
-		}
-		qualifiersChan := make(chan qualifiersResult, 1)
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			qualifiers, err := BuildQualifiers(row, submodel)
-			qualifiersChan <- qualifiersResult{qualifiers: qualifiers, err: err}
-		}()
-
-		// Extensions
-		type extensionsResult struct {
-			extensions []model.Extension
-			err        error
-		}
-		extensionsChan := make(chan extensionsResult, 1)
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			extensions, err := BuildExtensions(row, submodel)
-			extensionsChan <- extensionsResult{extensions: extensions, err: err}
-		}()
-
-		// Administration
-		type administrationResult struct {
-			administration *model.AdministrativeInformation
-			err            error
-		}
-		administrationChan := make(chan administrationResult, 1)
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			administration, err := BuildAdministration(row, submodel)
-			administrationChan <- administrationResult{administration: administration, err: err}
-		}()
-
-		// Wait for all goroutines to complete
-		wg.Wait()
-
-		// Collect results from channels
-		semIDResult := <-semanticIDChan
-		if semIDResult.err != nil {
-			return nil, nil, "", fmt.Errorf("error parsing semantic ID: %w", semIDResult.err)
-		}
-		if hasSemanticID(semIDResult.semanticID) {
-			submodel.SemanticID = semIDResult.semanticID[0]
-		}
-
-		supplResult := <-supplementalSemanticIDsChan
-		if supplResult.err != nil {
-			return nil, nil, "", fmt.Errorf("error parsing supplemental semantic IDs: %w", supplResult.err)
-		}
-		if moreThanZeroReferences(supplResult.supplementalSemanticIDs) {
-			submodel.SupplementalSemanticIds = supplResult.supplementalSemanticIDs
-		}
-
-		dispNamesResult := <-displayNamesChan
-		if dispNamesResult.err != nil {
-			return nil, nil, "", fmt.Errorf("error parsing display names: %w", dispNamesResult.err)
-		}
-
-		descResult := <-descriptionsChan
-		if descResult.err != nil {
-			return nil, nil, "", fmt.Errorf("error parsing descriptions: %w", descResult.err)
-		}
-
-		edsResult := <-embeddedDataSpecChan
-		if edsResult.err != nil {
-			return nil, nil, "", fmt.Errorf("error parsing embedded data specifications: %w", edsResult.err)
-		}
-		if edsResult.embeddedDataSpecs != nil {
-			submodel.EmbeddedDataSpecifications = edsResult.embeddedDataSpecs
-		}
-
-		qualResult := <-qualifiersChan
-		if qualResult.err != nil {
-			return nil, nil, "", fmt.Errorf("error parsing qualifiers: %w", qualResult.err)
-		}
-		submodel.Qualifier = qualResult.qualifiers
-
-		extResult := <-extensionsChan
-		if extResult.err != nil {
-			return nil, nil, "", fmt.Errorf("error parsing extensions: %w", extResult.err)
-		}
-		submodel.Extension = extResult.extensions
-
-		adminResult := <-administrationChan
-		if adminResult.err != nil {
-			return nil, nil, "", fmt.Errorf("error parsing administration: %w", adminResult.err)
-		}
-		submodel.Administration = adminResult.administration
-
-		result = append(result, submodel)
-		submodelMap[submodel.ID] = submodel
+	submodelRows, err := scanSubmodelRows(rows)
+	if err != nil {
+		return nil, nil, "", err
 	}
 
-	for _, referenceBuilder := range referenceBuilderRefs {
-		referenceBuilder.BuildNestedStructure()
+	result, submodelMap, err := buildSubmodels(submodelRows)
+	if err != nil {
+		return nil, nil, "", err
 	}
 
-	// Handle pagination with peek ahead pattern
-	var nextCursor string
-	if limit > 0 && len(result) > int(limit) {
-		// We have more results than requested, so there's a next page
-		actualResults := result[:limit]
-		nextCursor = result[limit].ID // Use the ID of the next result as cursor
-		return actualResults, submodelMap, nextCursor, nil
-	}
-
-	// No more pages
-	return result, submodelMap, "", nil
+	nextCursor := calculateNextCursor(result, limit)
+	return result, submodelMap, nextCursor, nil
 }
 
-func BuildQualifiers(row model.SubmodelRow, submodel *model.Submodel) ([]model.Qualifier, error) {
+func scanSubmodelRows(rows *sql.Rows) ([]model.SubmodelRow, error) {
+	var submodelRows []model.SubmodelRow
+	for rows.Next() {
+		var row model.SubmodelRow
+		if err := rows.Scan(
+			&row.ID,
+			&row.IDShort,
+			&row.Category,
+			&row.Kind,
+			&row.EmbeddedDataSpecification,
+			&row.SupplementalSemanticIDs,
+			&row.Extensions,
+			&row.DisplayNames,
+			&row.Descriptions,
+			&row.SemanticID,
+			&row.ReferredSemanticIDs,
+			&row.Qualifiers,
+			&row.Administration,
+		); err != nil {
+			return nil, fmt.Errorf("error scanning row: %w", err)
+		}
+		submodelRows = append(submodelRows, row)
+	}
+	return submodelRows, nil
+}
+
+func buildSubmodels(submodelRows []model.SubmodelRow) ([]*model.Submodel, map[string]*model.Submodel, error) {
+	referenceBuilderRefs := make(map[int64]*builders.ReferenceBuilder)
+	var refMutex sync.RWMutex
+
+	ctx := context.Background()
+	g, _ := errgroup.WithContext(ctx)
+
+	result := make([]*model.Submodel, 0, len(submodelRows))
+	submodelMap := make(map[string]*model.Submodel)
+	var mu sync.Mutex
+
+	sem := make(chan struct{}, 100) // limit concurrency
+
+	for _, row := range submodelRows {
+		rowCopy := row
+		sem <- struct{}{}
+
+		g.Go(func() error {
+			defer func() { <-sem }()
+
+			submodel, err := parseSubmodelRow(rowCopy, referenceBuilderRefs, &refMutex)
+			if err != nil {
+				return err
+			}
+
+			mu.Lock()
+			result = append(result, submodel)
+			submodelMap[submodel.ID] = submodel
+			mu.Unlock()
+			return nil
+		})
+	}
+
+	if err := g.Wait(); err != nil {
+		return nil, nil, err
+	}
+
+	if err := buildAllNestedReferences(referenceBuilderRefs); err != nil {
+		return nil, nil, err
+	}
+
+	return result, submodelMap, nil
+}
+
+func parseSubmodelRow(row model.SubmodelRow, referenceBuilderRefs map[int64]*builders.ReferenceBuilder, refMutex *sync.RWMutex) (*model.Submodel, error) {
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
+
+	submodel := &model.Submodel{
+		ModelType:        "Submodel",
+		ID:               row.ID,
+		IdShort:          row.IDShort,
+		Category:         row.Category,
+		Kind:             model.ModellingKind(row.Kind),
+		SubmodelElements: []model.SubmodelElement{},
+	}
+
+	var (
+		semanticID              []*model.Reference
+		supplementalSemanticIDs []*model.Reference
+		embeddedDataSpecs       []model.EmbeddedDataSpecification
+		qualifiers              []model.Qualifier
+		extensions              []model.Extension
+		administration          *model.AdministrativeInformation
+	)
+
+	localG, _ := errgroup.WithContext(context.Background())
+
+	localG.Go(func() error {
+		if common.IsArrayNotEmpty(row.SemanticID) {
+			var err error
+			semanticID, err = builders.ParseReferences(row.SemanticID, referenceBuilderRefs, refMutex)
+			if err != nil {
+				return fmt.Errorf("error parsing semantic ID: %w", err)
+			}
+			if hasSemanticID(semanticID) {
+				err = builders.ParseReferredReferences(row.ReferredSemanticIDs, referenceBuilderRefs, refMutex)
+				if err != nil {
+					return fmt.Errorf("error parsing referred semantic IDs: %w", err)
+				}
+			}
+		}
+		return nil
+	})
+
+	localG.Go(func() error {
+		if common.IsArrayNotEmpty(row.SupplementalSemanticIDs) {
+			return json.Unmarshal(row.SupplementalSemanticIDs, &supplementalSemanticIDs)
+		}
+		return nil
+	})
+
+	localG.Go(func() error { return addDisplayNames(row, submodel) })
+	localG.Go(func() error { return addDescriptions(row, submodel) })
+
+	localG.Go(func() error {
+		if common.IsArrayNotEmpty(row.EmbeddedDataSpecification) {
+			return json.Unmarshal(row.EmbeddedDataSpecification, &embeddedDataSpecs)
+		}
+		return nil
+	})
+
+	localG.Go(func() error {
+		q, err := BuildQualifiers(row)
+		if err == nil {
+			qualifiers = q
+		}
+		return err
+	})
+
+	localG.Go(func() error {
+		if common.IsArrayNotEmpty(row.Extensions) {
+			return json.Unmarshal(row.Extensions, &extensions)
+		}
+		return nil
+	})
+
+	localG.Go(func() error {
+		a, err := BuildAdministration(row)
+		if err == nil {
+			administration = a
+		}
+		return err
+	})
+
+	if err := localG.Wait(); err != nil {
+		return nil, err
+	}
+
+	// Assign parsed data to submodel
+	if hasSemanticID(semanticID) {
+		submodel.SemanticID = semanticID[0]
+	}
+	if moreThanZeroReferences(supplementalSemanticIDs) {
+		submodel.SupplementalSemanticIds = supplementalSemanticIDs
+	}
+	if len(embeddedDataSpecs) > 0 {
+		submodel.EmbeddedDataSpecifications = embeddedDataSpecs
+	}
+	submodel.Qualifier = qualifiers
+	submodel.Extension = extensions
+	submodel.Administration = administration
+
+	return submodel, nil
+}
+
+func buildAllNestedReferences(referenceBuilderRefs map[int64]*builders.ReferenceBuilder) error {
+	var wg sync.WaitGroup
+	for _, builder := range referenceBuilderRefs {
+		wg.Add(1)
+		go func(b *builders.ReferenceBuilder) {
+			defer wg.Done()
+			b.BuildNestedStructure()
+		}(builder)
+	}
+	wg.Wait()
+	return nil
+}
+
+func calculateNextCursor(result []*model.Submodel, limit int64) string {
+	if limit > 0 && len(result) > int(limit) {
+		return result[limit].ID
+	}
+	return ""
+}
+
+// BuildQualifiers builds qualifiers from the database row.
+func BuildQualifiers(row model.SubmodelRow) ([]model.Qualifier, error) {
 	if common.IsArrayNotEmpty(row.Qualifiers) {
 		builder := builders.NewQualifiersBuilder()
 		qualifierRows, err := builders.ParseQualifiersRow(row.Qualifiers)
@@ -438,7 +374,8 @@ func BuildQualifiers(row model.SubmodelRow, submodel *model.Submodel) ([]model.Q
 	return nil, nil
 }
 
-func BuildAdministration(row model.SubmodelRow, submodel *model.Submodel) (*model.AdministrativeInformation, error) {
+// BuildAdministration builds administrative information from the database row.
+func BuildAdministration(row model.SubmodelRow) (*model.AdministrativeInformation, error) {
 	if common.IsArrayNotEmpty(row.Administration) {
 		adminRow, err := builders.ParseAdministrationRow(row.Administration)
 		if err != nil {
@@ -446,21 +383,20 @@ func BuildAdministration(row model.SubmodelRow, submodel *model.Submodel) (*mode
 			return nil, err
 		}
 		if adminRow != nil {
-
 			admin, err := builders.BuildAdministration(*adminRow)
 			if err != nil {
 				fmt.Println(err)
 				return nil, err
 			}
 			return admin, nil
-		} else {
-			return nil, nil
 		}
+		return nil, nil
 	}
 	return nil, nil
 }
 
-func BuildExtensions(row model.SubmodelRow, submodel *model.Submodel) ([]model.Extension, error) {
+// BuildExtensions builds extensions from the database row.
+func BuildExtensions(row model.SubmodelRow) ([]model.Extension, error) {
 	if common.IsArrayNotEmpty(row.Extensions) {
 		builder := builders.NewExtensionsBuilder()
 		extensionRows, err := builders.ParseExtensionRows(row.Extensions)
@@ -493,23 +429,28 @@ func BuildExtensions(row model.SubmodelRow, submodel *model.Submodel) ([]model.E
 	return nil, nil
 }
 
+// GetSubmodelElementsForSubmodel retrieves all submodel elements for a given submodel ID.
 func GetSubmodelElementsForSubmodel(db *sql.DB, submodelID string) ([]model.SubmodelElement, error) {
-	filter := submodelsubqueries.SubmodelElementFilter{
-		SubmodelFilter: &submodelsubqueries.SubmodelElementSubmodelFilter{
+	filter := submodel_query.SubmodelElementFilter{
+		SubmodelFilter: &submodel_query.SubmodelElementSubmodelFilter{
 			SubmodelIDFilter: submodelID,
 		},
 	}
-	submodelElementQuery, err := submodelsubqueries.GetSubmodelElementsSubquery(filter)
+	submodelElementQuery, err := submodel_query.GetSubmodelElementsSubquery(filter)
 	if err != nil {
 		return nil, err
 	}
 	q, params, err := submodelElementQuery.ToSQL()
-
-	rows, err := db.Query(q, params...)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	start := time.Now()
+	rows, err := db.Query(q, params...)
+	fmt.Printf("Total Submodel Elements Query Only time: %d milliseconds\n", time.Since(start).Milliseconds())
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
 
 	nodes := make(map[int64]*node, 256)
 	children := make(map[int64][]*node, 256)
@@ -517,6 +458,7 @@ func GetSubmodelElementsForSubmodel(db *sql.DB, submodelID string) ([]model.Subm
 
 	// RootSubmodelElements
 	smeBuilderMap := make(map[int64]*builders.SubmodelElementBuilder)
+	smeRows := []model.SubmodelElementRow{}
 	for rows.Next() {
 		smeRow := model.SubmodelElementRow{}
 		if err := rows.Scan(
@@ -529,38 +471,60 @@ func GetSubmodelElementsForSubmodel(db *sql.DB, submodelID string) ([]model.Subm
 			&smeRow.ModelType,
 			&smeRow.Position,
 			&smeRow.EmbeddedDataSpecifications,
+			&smeRow.SupplementalSemanticIDs,
 			&smeRow.DisplayNames,
 			&smeRow.Descriptions,
 			&smeRow.Value,
 			&smeRow.SemanticID,
 			&smeRow.SemanticIDReferred,
-			&smeRow.SupplementalSemanticIDs,
-			&smeRow.SupplementalSemanticIDsReferred,
 			&smeRow.Qualifiers,
 		); err != nil {
 			return nil, err
 		}
-		_, exists := smeBuilderMap[smeRow.DbID.Int64]
-		if !exists {
-			sme, builder, err := builders.BuildSubmodelElement(smeRow)
-			if err != nil {
-				return nil, err
+		smeRows = append(smeRows, smeRow)
+	}
+	var wg sync.WaitGroup
+	var buildError error
+	var mu sync.Mutex
+	for _, smeRow := range smeRows {
+		wg.Go(func() {
+			mu.Lock()
+			_, exists := smeBuilderMap[smeRow.DbID.Int64]
+			mu.Unlock()
+			if !exists {
+				sme, builder, err := builders.BuildSubmodelElement(smeRow)
+				if err != nil {
+					buildError = err
+					return
+				}
+				mu.Lock()
+				smeBuilderMap[smeRow.DbID.Int64] = builder
+				mu.Unlock()
+				n := &node{
+					id:       smeRow.DbID.Int64,
+					parentID: smeRow.ParentID.Int64,
+					path:     smeRow.IDShortPath,
+					position: smeRow.Position,
+					element:  *sme,
+				}
+				mu.Lock()
+				nodes[smeRow.DbID.Int64] = n
+				mu.Unlock()
+				if smeRow.ParentID.Valid {
+					mu.Lock()
+					children[smeRow.ParentID.Int64] = append(children[smeRow.ParentID.Int64], n)
+					mu.Unlock()
+				} else {
+					mu.Lock()
+					roots = append(roots, n)
+					mu.Unlock()
+				}
 			}
-			smeBuilderMap[smeRow.DbID.Int64] = builder
-			n := &node{
-				id:       smeRow.DbID.Int64,
-				parentID: smeRow.ParentID.Int64,
-				path:     smeRow.IDShortPath,
-				position: smeRow.Position,
-				element:  *sme,
-			}
-			nodes[smeRow.DbID.Int64] = n
-			if smeRow.ParentID.Valid {
-				children[smeRow.ParentID.Int64] = append(children[smeRow.ParentID.Int64], n)
-			} else {
-				roots = append(roots, n)
-			}
-		}
+		})
+	}
+	wg.Wait()
+	if buildError != nil {
+		return nil, buildError
 	}
 
 	attachChildrenToSubmodelElements(nodes, children)
@@ -648,7 +612,7 @@ func moreThanZeroReferences(referenceArray []*model.Reference) bool {
 	return len(referenceArray) > 0
 }
 
-// getSubmodelDataFromDbWithJSONQuery executes the submodel query against the database.
+// GetSubmodelDataFromDbWithJSONQuery executes the submodel query against the database.
 //
 // This function builds and executes a complex SQL query that retrieves submodel data
 // with all nested structures aggregated as JSON. It serves as a bridge between the
@@ -661,8 +625,8 @@ func moreThanZeroReferences(referenceArray []*model.Reference) bool {
 // Returns:
 //   - *sql.Rows: Result set containing submodel data with JSON-aggregated nested structures
 //   - error: An error if query building or execution fails
-func GetSubmodelDataFromDbWithJSONQuery(db *sql.DB, submodelID string, limit int64, cursor string, query *grammar.QueryWrapper, onlyIds bool) (*sql.Rows, error) {
-	q, err := submodel_query.GetQueryWithGoqu(submodelID, limit, cursor, query, onlyIds)
+func GetSubmodelDataFromDbWithJSONQuery(db *sql.DB, submodelID string, limit int64, cursor string, query *grammar.QueryWrapper, onlyIDs bool) (*sql.Rows, error) {
+	q, err := submodel_query.GetQueryWithGoqu(submodelID, limit, cursor, query, onlyIDs)
 	if err != nil {
 		fmt.Printf("Error building query: %v\n", err)
 		return nil, err

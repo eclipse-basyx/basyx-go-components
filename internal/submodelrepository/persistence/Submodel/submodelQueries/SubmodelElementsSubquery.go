@@ -80,7 +80,6 @@ func (s *SubmodelElementFilter) HasIDShortPathFilter() bool {
 func GetSubmodelElementsSubquery(filter SubmodelElementFilter) (*goqu.SelectDataset, error) {
 	dialect := goqu.Dialect("postgres")
 	semanticIDSubquery, semanticIDReferredSubquery := queries.GetReferenceQueries(dialect, goqu.I("sme.semantic_id"))
-	supplSemanticIDSubquery, supplSemanticIDReferredSubquery := queries.GetSupplementalSemanticIDQueries(dialect, goqu.T("submodel_element_supplemental_semantic_id"), "submodel_element_id", "reference_id", goqu.I("sme.id"))
 	qualifierSubquery := queries.GetQualifierSubquery(dialect, goqu.T("submodel_element_qualifier"), "sme_id", "qualifier_id", goqu.I("sme.id"))
 	displayNamesSubquery := queries.GetDisplayNamesQuery(dialect, "sme.displayname_id")
 	descriptionsSubquery := queries.GetDescriptionQuery(dialect, "sme.description_id")
@@ -98,13 +97,12 @@ func GetSubmodelElementsSubquery(filter SubmodelElementFilter) (*goqu.SelectData
 			goqu.I("sme.model_type").As("model_type"),
 			goqu.I("sme.position").As("position"),
 			goqu.I("sme.embedded_data_specification").As("embeddedDataSpecifications"),
+			goqu.I("sme.supplemental_semantic_ids").As("supplementalSemanticIds"),
 			displayNamesSubquery.As("displayNames"),
 			descriptionsSubquery.As("descriptions"),
 			valueByType.As("value"),
 			semanticIDSubquery.As("semanticId"),
 			semanticIDReferredSubquery.As("semanticIdReferred"),
-			supplSemanticIDSubquery.As("supplementalSemanticIdReferenceRows"),
-			supplSemanticIDReferredSubquery.As("supplementalSemanticIdReferredReferenceRows"),
 			qualifierSubquery.As("qualifiers"),
 		)
 
