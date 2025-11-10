@@ -439,17 +439,6 @@
     "expectedStatus": 400
   },
   {
-    "context": "064 - Cleanup: Delete All AAS Descriptors - ACTION DELETE_ALL_AAS_DESCRIPTORS",
-    "action": "DELETE_ALL_AAS_DESCRIPTORS"
-  },
-  {
-    "context": "065 - Verify AAS Descriptors Empty - GET /shell-descriptors",
-    "method": "GET",
-    "endpoint": "http://127.0.0.1:5004/shell-descriptors",
-    "shouldMatch": "expected/empty_paged_result.json",
-    "expectedStatus": 200
-  },
-  {
     "context": "066 - Create AAS Descriptor (AssetKind=Role) - POST /shell-descriptors",
     "method": "POST",
     "endpoint": "http://127.0.0.1:5004/shell-descriptors",
@@ -462,6 +451,17 @@
     "method": "GET",
     "endpoint": "http://127.0.0.1:5004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy9tYXJ0aW5pc3Rjb29s",
     "shouldMatch": "postBody/simple_ass_descriptor_8.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "064 - Cleanup: Delete All AAS Descriptors - ACTION DELETE_ALL_AAS_DESCRIPTORS",
+    "action": "DELETE_ALL_AAS_DESCRIPTORS"
+  },
+  {
+    "context": "065 - Verify AAS Descriptors Empty - GET /shell-descriptors",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:5004/shell-descriptors",
+    "shouldMatch": "expected/empty_paged_result.json",
     "expectedStatus": 200
   }
 ]
