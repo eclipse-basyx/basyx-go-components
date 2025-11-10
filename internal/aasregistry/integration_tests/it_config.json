@@ -36,7 +36,6 @@
     "context": "Delete submodel descriptor via DELTE - aas does not exist",
     "method": "DELETE",
     "endpoint": "http://127.0.0.1:5004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8yMjMzNQ/submodel-descriptors/dXJuOmV4YW1wbGU6c206MDAx",
-    "data": "postBody/simple_submodel_descriptor_2.json",
     "expectedStatus": 404
   },
   {
@@ -93,6 +92,7 @@
     "method": "POST",
     "endpoint": "http://127.0.0.1:5004/shell-descriptors",
     "data": "postBody/simple_ass_descriptor_1.json",
+    "shouldMatch": "postBody/simple_ass_descriptor_1.json",
     "expectedStatus": 201
   },
   {
@@ -100,6 +100,7 @@
     "method": "POST",
     "endpoint": "http://127.0.0.1:5004/shell-descriptors",
     "data": "postBody/simple_ass_descriptor_2.json",
+    "shouldMatch": "postBody/simple_ass_descriptor_2.json",
     "expectedStatus": 201
   },
   {
@@ -107,6 +108,7 @@
     "method": "POST",
     "endpoint": "http://127.0.0.1:5004/shell-descriptors",
     "data": "postBody/simple_ass_descriptor_3.json",
+    "shouldMatch": "postBody/simple_ass_descriptor_3.json",
     "expectedStatus": 201
   },
   {
@@ -114,6 +116,7 @@
     "method": "POST",
     "endpoint": "http://127.0.0.1:5004/shell-descriptors",
     "data": "postBody/simple_ass_descriptor_4.json",
+    "shouldMatch": "postBody/simple_ass_descriptor_4.json",
     "expectedStatus": 201
   },
   {
@@ -121,14 +124,21 @@
     "method": "POST",
     "endpoint": "http://127.0.0.1:5004/shell-descriptors",
     "data": "postBody/simple_ass_descriptor_1.json",
+    "shouldMatch": "postBody/simple_ass_descriptor_1.json",
     "expectedStatus": 409
   },
   {
     "context": "List AAS descriptors",
     "method": "GET",
     "endpoint": "http://127.0.0.1:5004/shell-descriptors",
-    "data": "expected/simple_ass_paged_result.json",
+    "shouldMatch": "expected/simple_ass_paged_result.json",
     "expectedStatus": 200
+  },
+  {
+    "context": "Delete submodel descriptor via DELTE - submodel does not exist",
+    "method": "DELETE",
+    "endpoint": "http://127.0.0.1:5004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8yMjMzNQ/submodel-descriptors/dXJuOmV4YW1wbGU6c206MDAx",
+    "expectedStatus": 404
   },
   {
     "context": "List AAS descriptors - incorrect AssetKind Parameter",
@@ -140,35 +150,35 @@
     "context": "List AAS descriptors",
     "method": "GET",
     "endpoint": "http://127.0.0.1:5004/shell-descriptors?limit=2",
-    "data": "expected/simple_ass_paged_result_limit2.json",
+    "shouldMatch": "expected/simple_ass_paged_result_limit2.json",
     "expectedStatus": 200
   },
   {
     "context": "List AAS descriptors",
     "method": "GET",
     "endpoint": "http://127.0.0.1:5004/shell-descriptors?limit=2&cursor=aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8zNGh6ZWF3",
-    "data": "expected/simple_ass_paged_result_limit2cursor.json",
+    "shouldMatch": "expected/simple_ass_paged_result_limit2cursor.json",
     "expectedStatus": 200
   },
   {
     "context": "List AAS descriptors",
     "method": "GET",
     "endpoint": "http://127.0.0.1:5004/shell-descriptors?assetKind=Type",
-    "data": "expected/simple_ass_paged_result_filter_assetKind.json",
+    "shouldMatch": "expected/simple_ass_paged_result_filter_assetKind.json",
     "expectedStatus": 200
   },
   {
     "context": "List AAS descriptors",
     "method": "GET",
     "endpoint": "http://127.0.0.1:5004/shell-descriptors?assetType=betachad",
-    "data": "expected/simple_ass_paged_result_filter_assetType.json",
+    "shouldMatch": "expected/simple_ass_paged_result_filter_assetType.json",
     "expectedStatus": 200
   },
   {
     "context": "Put AAS descriptor - id missmatch ",
     "method": "PUT",
     "endpoint": "http://127.0.0.1:5004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8yMjMzNQ",
-    "data": "postBody/simple_ass_descriptor_2.json",
+    "shouldMatch": "postBody/simple_ass_descriptor_2.json",
     "expectedStatus": 400
   },
   {
@@ -218,6 +228,7 @@
     "method": "POST",
     "endpoint": "http://127.0.0.1:5004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8yMjMzNQ/submodel-descriptors",
     "data": "postBody/simple_submodel_descriptor_1.json",
+    "shouldMatch": "postBody/simple_submodel_descriptor_1.json",
     "expectedStatus": 201
   },
   {
@@ -238,7 +249,7 @@
     "context": "Get submodel descriptor by id",
     "method": "GET",
     "endpoint": "http://127.0.0.1:5004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8yMjMzNQ/submodel-descriptors/dXJuOmV4YW1wbGU6c206MDAx",
-    "data": "postBody/simple_submodel_descriptor_1.json",
+    "shouldMatch": "postBody/simple_submodel_descriptor_1.json",
     "expectedStatus": 200
   },
   {
@@ -253,6 +264,7 @@
     "method": "POST",
     "endpoint": "http://127.0.0.1:5004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8yMjMzNQ/submodel-descriptors",
     "data": "postBody/simple_submodel_descriptor_2.json",
+    "shouldMatch": "postBody/simple_submodel_descriptor_2.json",
     "expectedStatus": 201
   },  
   {
@@ -274,6 +286,7 @@
     "method": "POST",
     "endpoint": "http://127.0.0.1:5004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8yMjMzNQ/submodel-descriptors",
     "data": "postBody/simple_submodel_descriptor_3.json",
+    "shouldMatch": "postBody/simple_submodel_descriptor_3.json",
     "expectedStatus": 201
   }, 
   {
@@ -388,6 +401,7 @@
     "method": "POST",
     "endpoint": "http://127.0.0.1:5004/shell-descriptors",
     "data": "postBody/simple_ass_descriptor_8.json",
+    "shouldMatch": "postBody/simple_ass_descriptor_8.json",
     "expectedStatus": 201
   },
   {

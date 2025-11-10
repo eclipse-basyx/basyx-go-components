@@ -4,7 +4,7 @@
         {
             "id": "https://iese.fraunhofer.de/ids/aas/22335",
             "assetKind": "Type",
-            "AssetType": "gigachad",
+            "assetType": "gigachad",
             "endpoints": [
                 {
                     "interface": "AAS-3.0",
@@ -24,7 +24,7 @@
         },{
             "id": "https://iese.fraunhofer.de/ids/aas/34hzeaw",
             "assetKind": "Type",
-            "AssetType": "betachad",
+            "assetType": "betachad",
             "endpoints": [
                 {
                     "interface": "AAS-3.0",
