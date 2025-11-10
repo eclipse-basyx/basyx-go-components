@@ -1,0 +1,11 @@
+{
+    "id": "https://iese.fraunhofer.de/ids/aas/wrongid",
+    "endpoints": [
+        {
+            "interface": "AAS-3.2",
+            "protocolInformation": {
+                "href": "https://demo3.digital-twin.host/aas-environment/shells/supersimple"
+            }
+        }
+    ]
+}

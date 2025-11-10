@@ -386,6 +386,41 @@
     "expectedStatus": 404
   },
   {
+    "context": "PUT (create) submodel descriptor simple into aas",
+    "method": "PUT",
+    "endpoint": "http://127.0.0.1:5004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy9tYXJ0aW4/submodel-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy93cm9uZ2lk",
+    "data": "postBody/simple_submodel_descriptor_4.json",
+    "shouldMatch": "expected/submodel_descriptor_simplified.json",
+    "expectedStatus": 201
+  },
+  {
+    "context": "Get AAS Descriptor with new submodel",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:5004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy9tYXJ0aW4",
+    "shouldMatch": "expected/simple_aas_with_sub_via_put.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "PUT (change) submodel descriptor simple into aas",
+    "method": "PUT",
+    "endpoint": "http://127.0.0.1:5004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy9tYXJ0aW4/submodel-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy93cm9uZ2lk",
+    "data": "postBody/simple_submodel_descriptor_4_different.json",
+    "expectedStatus": 204
+  },
+  {
+    "context": "Get AAS Descriptor with changed submodel",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:5004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy9tYXJ0aW4",
+    "shouldMatch": "expected/simple_aas_with_sub_via_put_changed.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Get AAS Descriptor with wrong encoded url",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:5004/shell-descriptors/HELLOWRONGENCODEDURL",
+    "expectedStatus": 400
+  },
+  {
     "context": "Cleanup - delete all remaining AAS descriptors",
     "action": "DELETE_ALL_AAS_DESCRIPTORS"
   },
