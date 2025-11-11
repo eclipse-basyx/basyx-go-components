@@ -499,3 +499,8 @@ type AnnotatedRelationshipElementValueRow struct {
 	// Annotations contains annotations as JSON data
 	Annotations json.RawMessage `json:"annotations"`
 }
+
+type ReferenceElementValueRow struct {
+	// Ref contains the reference as JSON data
+	Value json.RawMessage `json:"value"`
+}

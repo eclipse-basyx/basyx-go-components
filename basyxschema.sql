@@ -497,7 +497,7 @@ CREATE INDEX IF NOT EXISTS ix_range_time ON range_element(min_time, max_time)
 
 CREATE TABLE IF NOT EXISTS reference_element (
   id        BIGINT PRIMARY KEY REFERENCES submodel_element(id) ON DELETE CASCADE,
-  value_ref BIGINT REFERENCES reference(id)
+  value JSONB
 );
 
 CREATE TABLE IF NOT EXISTS relationship_element (

@@ -39,6 +39,7 @@ import (
 	"errors"
 
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	jsoniter "github.com/json-iterator/go"
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 )
 
@@ -252,29 +253,19 @@ func (p PostgreSQLReferenceElementHandler) Delete(idShortOrPath string) error {
 //   - INSERT INTO reference_key (reference_id, position, type, value) - Creates ordered keys
 //   - INSERT INTO reference_element (id, value_ref) - Links element to reference
 func insertReferenceElement(refElem *gen.ReferenceElement, tx *sql.Tx, id int) error {
-	if isEmptyReference(refElem.Value) {
-		// Insert with NULL
-		_, err := tx.Exec(`INSERT INTO reference_element (id, value_ref) VALUES ($1, $2)`, id, nil)
-		return err
-	}
-
-	// Insert the reference
-	var refID int
-	err := tx.QueryRow(`INSERT INTO reference (type) VALUES ($1) RETURNING id`, refElem.Value.Type).Scan(&refID)
-	if err != nil {
-		return err
-	}
-
-	// Insert reference keys
-	for i, key := range refElem.Value.Keys {
-		_, err = tx.Exec(`INSERT INTO reference_key (reference_id, position, type, value) VALUES ($1, $2, $3, $4)`,
-			refID, i, key.Type, key.Value)
+	var referenceJSONString sql.NullString
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
+	if !isEmptyReference(refElem.Value) {
+		bytes, err := json.Marshal(refElem.Value)
 		if err != nil {
 			return err
 		}
+		referenceJSONString = sql.NullString{String: string(bytes), Valid: true}
+	} else {
+		referenceJSONString = sql.NullString{Valid: false}
 	}
 
 	// Insert reference_element
-	_, err = tx.Exec(`INSERT INTO reference_element (id, value_ref) VALUES ($1, $2)`, id, refID)
+	_, err := tx.Exec(`INSERT INTO reference_element (id, value) VALUES ($1, $2)`, id, referenceJSONString)
 	return err
 }

@@ -605,6 +605,23 @@
                   }
                 ],
                 "type": "ExternalReference"
+              },
+              "value": {
+                "keys": [
+                  {
+                    "type": "Submodel",
+                    "value": "https://acplt.org/Test_Submodel_Missing"
+                  },
+                  {
+                    "type": "SubmodelElementCollection",
+                    "value": "ExampleSubmodelElementCollection"
+                  },
+                  {
+                    "type": "File",
+                    "value": "ExampleFile"
+                  }
+                ],
+                "type": "ModelReference"
               }
             }
           ]

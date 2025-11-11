@@ -199,10 +199,10 @@ func getValueSubquery(dialect goqu.DialectWrapper) exp.CaseExpression {
 			goqu.I("sme.model_type").Eq("Range"),
 			getRangeSubquery(dialect),
 		).
-		// When(
-		// 	goqu.I("sme.model_type").Eq("ReferenceElement"),
-		// 	getReferenceElementSubquery(dialect),
-		// ).
+		When(
+			goqu.I("sme.model_type").Eq("ReferenceElement"),
+			getReferenceElementSubquery(dialect),
+		).
 		When(
 			goqu.I("sme.model_type").Eq("RelationshipElement"),
 			getRelationshipElementSubquery(dialect),
@@ -356,9 +356,16 @@ func getRangeSubquery(dialect goqu.DialectWrapper) *goqu.SelectDataset {
 		Limit(1)
 }
 
-// func getReferenceElementSubquery(dialect goqu.DialectWrapper) *goqu.SelectDataset {
-// 	return nil
-// }
+func getReferenceElementSubquery(dialect goqu.DialectWrapper) *goqu.SelectDataset {
+	return dialect.From(goqu.T("reference_element").As("re")).
+		Select(
+			goqu.Func("jsonb_build_object",
+				goqu.V("value"), goqu.I("re.value"),
+			),
+		).
+		Where(goqu.I("re.id").Eq(goqu.I("sme.id"))).
+		Limit(1)
+}
 
 func getRelationshipElementSubquery(dialect goqu.DialectWrapper) *goqu.SelectDataset {
 	return dialect.From(goqu.T("relationship_element").As("re")).

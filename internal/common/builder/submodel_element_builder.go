@@ -441,7 +441,24 @@ func getSubmodelElementObjectBasedOnModelType(smeRow model.SubmodelElementRow, r
 		blob := &model.Blob{}
 		return blob, nil
 	case "ReferenceElement":
-		refElem := &model.ReferenceElement{}
+		var valueRow model.ReferenceElementValueRow
+		if smeRow.Value == nil {
+			return nil, fmt.Errorf("smeRow.Value is nil")
+		}
+		err := json.Unmarshal(*smeRow.Value, &valueRow)
+		if err != nil {
+			return nil, err
+		}
+
+		var ref *model.Reference
+		if valueRow.Value != nil {
+			err = json.Unmarshal(valueRow.Value, &ref)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		refElem := &model.ReferenceElement{Value: ref}
 		return refElem, nil
 	case "RelationshipElement":
 		var valueRow model.RelationshipElementValueRow
