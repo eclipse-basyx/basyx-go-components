@@ -1,0 +1,44 @@
+{
+    "description": [
+        {"language": "en", "text": "Machine consisting of multiple parts which are assets provided by different companies"},
+        {"language": "de", "text": "Maschine bestehend aus mehreren Assets, welche von verschiedenen anderen Firmen bereitgestellt werden"}
+    ],
+    "displayName": [
+        {"language": "en", "text": "Composite Machine"},
+        {"language": "de", "text": "Verbundmaschine"}
+    ],
+    "specificAssetIds": [
+        {
+            "name": "h1",
+            "value": "value",
+            "semanticId": {"type": "ModelReference"},
+            "supplementalSemanticIds": [
+                {
+                    "type": "ModelReference",
+                    "keys": [{"type": "AnnotatedRelationshipElement", "value": "ddsfkjn"}]
+                }
+            ]
+        }
+    ],
+    "assetKind": "Instance",
+    "assetType": "machine",
+    "endpoints": [
+        {
+            "interface": "AAS-3.0",
+            "protocolInformation": {
+                "href": "https://demo3.digital-twin.host/aas-environment/...",
+                "endpointProtocol": "https"
+            }
+        }
+    ],
+    "globalAssetId": "https://iese.fraunhofer.de/ids/asset/5079_8944_8914_9414",
+    "idShort": "machine",
+    "id": "https://iese.fraunhofer.de/ids/aas/22335",
+    "extensions": [
+        {
+            "name": "help",
+            "valueType": "xs:string",
+            "value": "test"
+        }
+    ]
+}

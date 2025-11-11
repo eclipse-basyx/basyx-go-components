@@ -32,6 +32,7 @@
 package builder
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 
@@ -344,6 +345,39 @@ type SubmodelElementRow struct {
 	IECLevelTypes json.RawMessage
 	// Position specifies the position/order of the submodel element among its siblings
 	Position int `json:"position"`
+}
+
+// AssetAdministrationShellDescriptorRow represents a single SQL result row
+// for an Asset Administration Shell (AAS) descriptor. It carries nullable
+// string/integer columns from the database and foreign-key references to
+// related records such as administrative information, display names, and
+// descriptions.
+type AssetAdministrationShellDescriptorRow struct {
+	DescID        int64
+	AssetKindStr  sql.NullString
+	AssetType     sql.NullString
+	GlobalAssetID sql.NullString
+	IDShort       sql.NullString
+	IDStr         string
+	AdminInfoID   sql.NullInt64
+	DisplayNameID sql.NullInt64
+	DescriptionID sql.NullInt64
+}
+
+// SubmodelDescriptorRow represents a single SQL result row for a Submodel
+// descriptor that is associated with an AAS descriptor. It includes the
+// database identifiers of the AAS and Submodel descriptors as well as
+// optional columns and foreign-key references such as semantic reference
+// and administrative information.
+type SubmodelDescriptorRow struct {
+	AasDescID     int64
+	SmdDescID     int64
+	IDShort       sql.NullString
+	ID            sql.NullString
+	SemanticRefID sql.NullInt64
+	AdminInfoID   sql.NullInt64
+	DescriptionID sql.NullInt64
+	DisplayNameID sql.NullInt64
 }
 
 // ParseReferredReferencesFromRows parses referred reference data from already unmarshalled ReferredReferenceRow objects.
