@@ -148,7 +148,7 @@ func (p *PostgreSQLSubmodelDatabase) GetAllSubmodels(limit int32, cursor string,
 		wg.Add(1)
 		go func(id string) {
 			defer wg.Done()
-			smes, err := submodelpersistence.GetSubmodelElementsForSubmodel(p.db, id)
+			smes, _, err := submodelpersistence.GetSubmodelElementsForSubmodel(p.db, id, "", "", -1)
 			if err != nil {
 				errSme = err
 				<-sem // release slot
@@ -329,7 +329,7 @@ func (p *PostgreSQLSubmodelDatabase) GetSubmodel(id string) (gen.Submodel, error
 	go func() {
 		defer wg.Done()
 		start := time.Now().Local().UnixMicro()
-		smes, err := submodelpersistence.GetSubmodelElementsForSubmodel(p.db, id)
+		smes, _, err := submodelpersistence.GetSubmodelElementsForSubmodel(p.db, id, "", "", -1)
 		end := time.Now().Local().UnixMicro()
 		fmt.Printf("SubmodelElements retrieval time: %d microseconds\n", end-start)
 		resultChanSME <- resultSME{smes: smes, err: err}
@@ -556,7 +556,7 @@ func (p *PostgreSQLSubmodelDatabase) GetSubmodelElement(submodelID string, idSho
 		}
 	}()
 
-	elements, _, err := submodelelements.GetSubmodelElementsWithPath(p.db, tx, submodelID, idShortOrPath, limit, cursor)
+	elements, cursor, err := submodelpersistence.GetSubmodelElementsForSubmodel(p.db, submodelID, idShortOrPath, cursor, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -597,7 +597,20 @@ func (p *PostgreSQLSubmodelDatabase) GetSubmodelElements(submodelID string, limi
 		}
 	}()
 
-	elements, cursor, err := submodelelements.GetSubmodelElementsWithPath(p.db, tx, submodelID, "", limit, cursor)
+	if limit <= 0 {
+		limit = 100
+	}
+
+	var count int
+	err = p.db.QueryRow("SELECT COUNT(id) FROM submodel WHERE id = $1", submodelID).Scan(&count)
+	if err != nil {
+		return nil, "", err
+	}
+	if count == 0 {
+		return nil, "", common.NewErrNotFound("Submodel with ID '" + submodelID + "' not found")
+	}
+
+	elements, cursor, err := submodelpersistence.GetSubmodelElementsForSubmodel(p.db, submodelID, "", cursor, limit)
 	if err != nil {
 		return nil, "", err
 	}

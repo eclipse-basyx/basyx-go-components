@@ -430,25 +430,32 @@ func BuildExtensions(row model.SubmodelRow) ([]model.Extension, error) {
 }
 
 // GetSubmodelElementsForSubmodel retrieves all submodel elements for a given submodel ID.
-func GetSubmodelElementsForSubmodel(db *sql.DB, submodelID string) ([]model.SubmodelElement, error) {
+func GetSubmodelElementsForSubmodel(db *sql.DB, submodelID string, idShortPath string, cursor string, limit int) ([]model.SubmodelElement, string, error) {
 	filter := submodel_query.SubmodelElementFilter{
 		SubmodelFilter: &submodel_query.SubmodelElementSubmodelFilter{
 			SubmodelIDFilter: submodelID,
 		},
 	}
-	submodelElementQuery, err := submodel_query.GetSubmodelElementsSubquery(filter)
+
+	if idShortPath != "" {
+		filter.SubmodelElementIDShortPathFilter = &submodel_query.SubmodelElementIDShortPathFilter{
+			SubmodelElementIDShortPath: idShortPath,
+		}
+	}
+
+	submodelElementQuery, err := submodel_query.GetSubmodelElementsSubquery(filter, cursor, limit)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	q, params, err := submodelElementQuery.ToSQL()
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	start := time.Now()
 	rows, err := db.Query(q, params...)
 	fmt.Printf("Total Submodel Elements Query Only time: %d milliseconds\n", time.Since(start).Milliseconds())
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	defer func() { _ = rows.Close() }()
 
@@ -480,7 +487,7 @@ func GetSubmodelElementsForSubmodel(db *sql.DB, submodelID string) ([]model.Subm
 			&smeRow.SemanticIDReferred,
 			&smeRow.Qualifiers,
 		); err != nil {
-			return nil, err
+			return nil, "", err
 		}
 		smeRows = append(smeRows, smeRow)
 	}
@@ -511,7 +518,7 @@ func GetSubmodelElementsForSubmodel(db *sql.DB, submodelID string) ([]model.Subm
 				mu.Lock()
 				nodes[smeRow.DbID.Int64] = n
 				mu.Unlock()
-				if smeRow.ParentID.Valid {
+				if smeRow.ParentID.Valid && (idShortPath != smeRow.IDShortPath) {
 					mu.Lock()
 					children[smeRow.ParentID.Int64] = append(children[smeRow.ParentID.Int64], n)
 					mu.Unlock()
@@ -525,21 +532,28 @@ func GetSubmodelElementsForSubmodel(db *sql.DB, submodelID string) ([]model.Subm
 	}
 	wg.Wait()
 	if buildError != nil {
-		return nil, buildError
+		return nil, "", buildError
 	}
 
 	attachChildrenToSubmodelElements(nodes, children)
 
 	sort.SliceStable(roots, func(i, j int) bool {
 		a, b := roots[i], roots[j]
-		return a.id < b.id
+		return a.path < b.path
 	})
 
 	res := make([]model.SubmodelElement, 0, len(roots))
 	for _, r := range roots {
 		res = append(res, r.element)
 	}
-	return res, nil
+
+	var nextCursor string
+	if (len(res) > limit) && limit != -1 {
+		nextCursor = res[limit].GetIdShort()
+		res = res[:limit]
+	}
+
+	return res, nextCursor, nil
 }
 
 // addDisplayNames parses and adds display names to a submodel.

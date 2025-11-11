@@ -222,6 +222,14 @@ func (p *PostgreSQLSMECrudHandler) CreateWithPath(tx *sql.Tx, submodelID string,
 		return 0, err
 	}
 
+	// For root elements, set root_sme_id to their own ID
+	if rootSubmodelElementID == 0 {
+		_, err = tx.Exec(`UPDATE submodel_element SET root_sme_id = $1 WHERE id = $1`, id)
+		if err != nil {
+			return 0, err
+		}
+	}
+
 	qualifiers := submodelElement.GetQualifiers()
 	if len(qualifiers) > 0 {
 		for i, qualifier := range qualifiers {

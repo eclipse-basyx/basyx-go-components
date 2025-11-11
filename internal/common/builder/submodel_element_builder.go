@@ -399,7 +399,36 @@ func getSubmodelElementObjectBasedOnModelType(smeRow model.SubmodelElementRow, r
 		refElem := &model.ReferenceElement{}
 		return refElem, nil
 	case "RelationshipElement":
-		relElem := &model.RelationshipElement{}
+		var valueRow model.ReferenceElementValueRow
+		if smeRow.Value == nil {
+			return nil, fmt.Errorf("smeRow.Value is nil")
+		}
+		err := json.Unmarshal(*smeRow.Value, &valueRow)
+		if err != nil {
+			return nil, err
+		}
+
+		var first, second *model.Reference
+		if valueRow.First != nil {
+			err = json.Unmarshal(valueRow.First, &first)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			return nil, fmt.Errorf("first reference in RelationshipElement is nil")
+		}
+		if valueRow.Second != nil {
+			err = json.Unmarshal(valueRow.Second, &second)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			return nil, fmt.Errorf("second reference in RelationshipElement is nil")
+		}
+		relElem := &model.RelationshipElement{
+			First:  first,
+			Second: second,
+		}
 		return relElem, nil
 	case "Range":
 		rng := &model.Range{}
@@ -411,7 +440,31 @@ func getSubmodelElementObjectBasedOnModelType(smeRow model.SubmodelElementRow, r
 		}
 		return eventElem, nil
 	case "SubmodelElementList":
-		smeList := &model.SubmodelElementList{Value: []model.SubmodelElement{}}
+		var valueRow model.SubmodelElementListRow
+		if smeRow.Value == nil {
+			return nil, fmt.Errorf("smeRow.Value is nil")
+		}
+		err := json.Unmarshal(*smeRow.Value, &valueRow)
+		if err != nil {
+			return nil, err
+		}
+
+		var valueTypeListElement model.DataTypeDefXsd
+		var typeValueListElement model.AasSubmodelElements
+		if valueRow.ValueTypeListElement != "" {
+			valueTypeListElement, err = model.NewDataTypeDefXsdFromValue(valueRow.ValueTypeListElement)
+			if err != nil {
+				return nil, err
+			}
+		}
+		if valueRow.TypeValueListElement != "" {
+			typeValueListElement, err = model.NewAasSubmodelElementsFromValue(valueRow.TypeValueListElement)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		smeList := &model.SubmodelElementList{Value: []model.SubmodelElement{}, ValueTypeListElement: valueTypeListElement, TypeValueListElement: &typeValueListElement}
 		return smeList, nil
 	case "Capability":
 		capability := &model.Capability{}

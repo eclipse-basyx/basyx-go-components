@@ -1,17 +1,17 @@
 {
   "category": "DemoCategory",
-  "idShort": "DemoSubmodel",
-  "modelType": "Submodel",
   "id": "http://iese.fraunhofer.de/id/sm/DemoSubmodel",
+  "idShort": "DemoSubmodel",
   "kind": "Instance",
+  "modelType": "Submodel",
   "semanticId": {
-    "type": "ModelReference",
     "keys": [
       {
         "type": "Submodel",
         "value": "http://example.com/keys/123"
       }
-    ]
+    ],
+    "type": "ModelReference"
   },
   "submodelElements": [
     {
@@ -37,24 +37,25 @@
                         {
                           "idShort": "6",
                           "modelType": "SubmodelElementList",
+                          "typeValueListElement": "Property",
                           "value": [
                             {
                               "idShort": "2",
                               "modelType": "Property",
-                              "valueType": "xs:string",
-                              "value": "12"
+                              "value": "12",
+                              "valueType": "xs:string"
                             },
                             {
                               "idShort": "3",
                               "modelType": "Property",
-                              "valueType": "xs:string",
-                              "value": "123"
+                              "value": "123",
+                              "valueType": "xs:string"
                             },
                             {
                               "idShort": "4",
                               "modelType": "Property",
-                              "valueType": "xs:string",
-                              "value": "1234"
+                              "value": "1234",
+                              "valueType": "xs:string"
                             }
                           ]
                         }
@@ -69,12 +70,18 @@
       ]
     },
     {
+      "category": "PARAMETER",
+      "idShort": "ExampleProperty",
+      "modelType": "Property",
+      "value": "some example annotation",
+      "valueType": "xs:string"
+    },
+    {
       "idShort": "ExampleSubmodelElementCollection",
       "modelType": "SubmodelElementCollection",
       "value": [
         {
           "category": "PARAMETER",
-          "idShort": "ExampleRelationshipElement",
           "description": [
             {
               "language": "en-us",
@@ -85,229 +92,7 @@
               "text": "Beispiel RelationshipElement Element"
             }
           ],
-          "modelType": "RelationshipElement",
-          "semanticId": {
-            "type": "ExternalReference",
-            "keys": [
-              {
-                "type": "GlobalReference",
-                "value": "http://acplt.org/RelationshipElements/ExampleRelationshipElement"
-              }
-            ]
-          },
-          "first": null,
-          "second": null
-        },
-        {
-          "category": "PARAMETER",
-          "idShort": "ExampleAnnotatedRelationshipElement",
-          "description": [
-            {
-              "language": "en-us",
-              "text": "Example AnnotatedRelationshipElement object"
-            },
-            {
-              "language": "de",
-              "text": "Beispiel AnnotatedRelationshipElement Element"
-            }
-          ],
-          "modelType": "AnnotatedRelationshipElement",
-          "semanticId": {
-            "type": "ExternalReference",
-            "keys": [
-              {
-                "type": "GlobalReference",
-                "value": "http://acplt.org/RelationshipElements/ExampleAnnotatedRelationshipElement"
-              }
-            ]
-          },
-          "first": null,
-          "second": null
-        },
-        {
-          "category": "PARAMETER",
-          "idShort": "ExampleOperation",
-          "description": [
-            {
-              "language": "en-us",
-              "text": "Example Operation object"
-            },
-            {
-              "language": "de",
-              "text": "Beispiel Operation Element"
-            }
-          ],
-          "modelType": "Operation",
-          "semanticId": {
-            "type": "ExternalReference",
-            "keys": [
-              {
-                "type": "GlobalReference",
-                "value": "http://acplt.org/Operations/ExampleOperation"
-              }
-            ]
-          },
-          "inputVariables": [
-            {
-              "value": {
-                "category": "CONSTANT",
-                "idShort": "ExampleProperty1",
-                "description": [
-                  {
-                    "language": "en-us",
-                    "text": "Example Property object"
-                  },
-                  {
-                    "language": "de",
-                    "text": "Beispiel Property Element"
-                  }
-                ],
-                "modelType": "Property",
-                "semanticId": {
-                  "type": "ExternalReference",
-                  "keys": [
-                    {
-                      "type": "GlobalReference",
-                      "value": "http://acplt.org/Properties/ExampleProperty"
-                    }
-                  ]
-                },
-                "qualifiers": [
-                  {
-                    "kind": "ConceptQualifier",
-                    "type": "http://acplt.org/Qualifier/ExampleQualifier",
-                    "valueType": "xs:string"
-                  }
-                ],
-                "valueType": "xs:string",
-                "value": "exampleValue"
-              }
-            }
-          ],
-          "outputVariables": [
-            {
-              "value": {
-                "category": "CONSTANT",
-                "idShort": "ExampleProperty2",
-                "description": [
-                  {
-                    "language": "en-us",
-                    "text": "Example Property object"
-                  },
-                  {
-                    "language": "de",
-                    "text": "Beispiel Property Element"
-                  }
-                ],
-                "modelType": "Property",
-                "semanticId": {
-                  "type": "ExternalReference",
-                  "keys": [
-                    {
-                      "type": "GlobalReference",
-                      "value": "http://acplt.org/Properties/ExampleProperty"
-                    }
-                  ]
-                },
-                "qualifiers": [
-                  {
-                    "kind": "ConceptQualifier",
-                    "type": "http://acplt.org/Qualifier/ExampleQualifier",
-                    "valueType": "xs:string"
-                  }
-                ],
-                "valueType": "xs:string",
-                "value": "exampleValue"
-              }
-            }
-          ],
-          "inoutputVariables": [
-            {
-              "value": {
-                "category": "CONSTANT",
-                "idShort": "ExampleProperty3",
-                "description": [
-                  {
-                    "language": "en-us",
-                    "text": "Example Property object"
-                  },
-                  {
-                    "language": "de",
-                    "text": "Beispiel Property Element"
-                  }
-                ],
-                "modelType": "Property",
-                "semanticId": {
-                  "type": "ExternalReference",
-                  "keys": [
-                    {
-                      "type": "GlobalReference",
-                      "value": "http://acplt.org/Properties/ExampleProperty"
-                    }
-                  ]
-                },
-                "qualifiers": [
-                  {
-                    "kind": "ConceptQualifier",
-                    "type": "http://acplt.org/Qualifier/ExampleQualifier",
-                    "valueType": "xs:string"
-                  }
-                ],
-                "valueType": "xs:string",
-                "value": "exampleValue"
-              }
-            }
-          ]
-        },
-        {
-          "category": "PARAMETER",
-          "idShort": "ExampleCapability",
-          "description": [
-            {
-              "language": "en-us",
-              "text": "Example Capability object"
-            },
-            {
-              "language": "de",
-              "text": "Beispiel Capability Element"
-            }
-          ],
-          "modelType": "Capability",
-          "semanticId": {
-            "type": "ExternalReference",
-            "keys": [
-              {
-                "type": "GlobalReference",
-                "value": "http://acplt.org/Capabilities/ExampleCapability"
-              }
-            ]
-          }
-        },
-        {
-          "category": "PARAMETER",
-          "idShort": "ExampleBasicEvent",
-          "description": [
-            {
-              "language": "en-us",
-              "text": "Example BasicEvent object"
-            },
-            {
-              "language": "de",
-              "text": "Beispiel BasicEvent Element"
-            }
-          ],
-          "modelType": "BasicEventElement",
-          "semanticId": {
-            "type": "ExternalReference",
-            "keys": [
-              {
-                "type": "GlobalReference",
-                "value": "http://acplt.org/Events/ExampleBasicEvent"
-              }
-            ]
-          },
-          "observed": {
-            "type": "ExternalReference",
+          "first": {
             "keys": [
               {
                 "type": "Submodel",
@@ -321,14 +106,268 @@
                 "type": "Property",
                 "value": "ExampleProperty"
               }
-            ]
+            ],
+            "type": "ModelReference"
           },
+          "idShort": "ExampleRelationshipElement",
+          "modelType": "RelationshipElement",
+          "second": {
+            "keys": [
+              {
+                "type": "Submodel",
+                "value": "https://acplt.org/Test_Submodel_Missing"
+              },
+              {
+                "type": "SubmodelElementList",
+                "value": "ExampleSubmodelElementListOrdered"
+              },
+              {
+                "type": "MultiLanguageProperty",
+                "value": "ExampleMultiLanguageProperty"
+              }
+            ],
+            "type": "ModelReference"
+          },
+          "semanticId": {
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "http://acplt.org/RelationshipElements/ExampleRelationshipElement"
+              }
+            ],
+            "type": "ExternalReference"
+          }
+        },
+        {
+          "category": "PARAMETER",
+          "description": [
+            {
+              "language": "en-us",
+              "text": "Example AnnotatedRelationshipElement object"
+            },
+            {
+              "language": "de",
+              "text": "Beispiel AnnotatedRelationshipElement Element"
+            }
+          ],
+          "first": null,
+          "idShort": "ExampleAnnotatedRelationshipElement",
+          "modelType": "AnnotatedRelationshipElement",
+          "second": null,
+          "semanticId": {
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "http://acplt.org/RelationshipElements/ExampleAnnotatedRelationshipElement"
+              }
+            ],
+            "type": "ExternalReference"
+          }
+        },
+        {
+          "category": "PARAMETER",
+          "description": [
+            {
+              "language": "en-us",
+              "text": "Example Operation object"
+            },
+            {
+              "language": "de",
+              "text": "Beispiel Operation Element"
+            }
+          ],
+          "idShort": "ExampleOperation",
+          "inoutputVariables": [
+            {
+              "value": {
+                "category": "CONSTANT",
+                "description": [
+                  {
+                    "language": "en-us",
+                    "text": "Example Property object"
+                  },
+                  {
+                    "language": "de",
+                    "text": "Beispiel Property Element"
+                  }
+                ],
+                "idShort": "ExampleProperty3",
+                "modelType": "Property",
+                "qualifiers": [
+                  {
+                    "kind": "ConceptQualifier",
+                    "type": "http://acplt.org/Qualifier/ExampleQualifier",
+                    "valueType": "xs:string"
+                  }
+                ],
+                "semanticId": {
+                  "keys": [
+                    {
+                      "type": "GlobalReference",
+                      "value": "http://acplt.org/Properties/ExampleProperty"
+                    }
+                  ],
+                  "type": "ExternalReference"
+                },
+                "value": "exampleValue",
+                "valueType": "xs:string"
+              }
+            }
+          ],
+          "inputVariables": [
+            {
+              "value": {
+                "category": "CONSTANT",
+                "description": [
+                  {
+                    "language": "en-us",
+                    "text": "Example Property object"
+                  },
+                  {
+                    "language": "de",
+                    "text": "Beispiel Property Element"
+                  }
+                ],
+                "idShort": "ExampleProperty1",
+                "modelType": "Property",
+                "qualifiers": [
+                  {
+                    "kind": "ConceptQualifier",
+                    "type": "http://acplt.org/Qualifier/ExampleQualifier",
+                    "valueType": "xs:string"
+                  }
+                ],
+                "semanticId": {
+                  "keys": [
+                    {
+                      "type": "GlobalReference",
+                      "value": "http://acplt.org/Properties/ExampleProperty"
+                    }
+                  ],
+                  "type": "ExternalReference"
+                },
+                "value": "exampleValue",
+                "valueType": "xs:string"
+              }
+            }
+          ],
+          "modelType": "Operation",
+          "outputVariables": [
+            {
+              "value": {
+                "category": "CONSTANT",
+                "description": [
+                  {
+                    "language": "en-us",
+                    "text": "Example Property object"
+                  },
+                  {
+                    "language": "de",
+                    "text": "Beispiel Property Element"
+                  }
+                ],
+                "idShort": "ExampleProperty2",
+                "modelType": "Property",
+                "qualifiers": [
+                  {
+                    "kind": "ConceptQualifier",
+                    "type": "http://acplt.org/Qualifier/ExampleQualifier",
+                    "valueType": "xs:string"
+                  }
+                ],
+                "semanticId": {
+                  "keys": [
+                    {
+                      "type": "GlobalReference",
+                      "value": "http://acplt.org/Properties/ExampleProperty"
+                    }
+                  ],
+                  "type": "ExternalReference"
+                },
+                "value": "exampleValue",
+                "valueType": "xs:string"
+              }
+            }
+          ],
+          "semanticId": {
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "http://acplt.org/Operations/ExampleOperation"
+              }
+            ],
+            "type": "ExternalReference"
+          }
+        },
+        {
+          "category": "PARAMETER",
+          "description": [
+            {
+              "language": "en-us",
+              "text": "Example Capability object"
+            },
+            {
+              "language": "de",
+              "text": "Beispiel Capability Element"
+            }
+          ],
+          "idShort": "ExampleCapability",
+          "modelType": "Capability",
+          "semanticId": {
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "http://acplt.org/Capabilities/ExampleCapability"
+              }
+            ],
+            "type": "ExternalReference"
+          }
+        },
+        {
+          "category": "PARAMETER",
+          "description": [
+            {
+              "language": "en-us",
+              "text": "Example BasicEvent object"
+            },
+            {
+              "language": "de",
+              "text": "Beispiel BasicEvent Element"
+            }
+          ],
           "direction": "input",
+          "idShort": "ExampleBasicEvent",
+          "modelType": "BasicEventElement",
+          "observed": {
+            "keys": [
+              {
+                "type": "Submodel",
+                "value": "https://acplt.org/Test_Submodel_Missing"
+              },
+              {
+                "type": "SubmodelElementList",
+                "value": "ExampleSubmodelElementListOrdered"
+              },
+              {
+                "type": "Property",
+                "value": "ExampleProperty"
+              }
+            ],
+            "type": "ExternalReference"
+          },
+          "semanticId": {
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "http://acplt.org/Events/ExampleBasicEvent"
+              }
+            ],
+            "type": "ExternalReference"
+          },
           "state": "on"
         },
         {
           "category": "PARAMETER",
-          "idShort": "ExampleSubmodelElementListOrdered",
           "description": [
             {
               "language": "en-us",
@@ -339,20 +378,21 @@
               "text": "Beispiel SubmodelElementListOrdered Element"
             }
           ],
+          "idShort": "ExampleSubmodelElementListOrdered",
           "modelType": "SubmodelElementList",
           "semanticId": {
-            "type": "ExternalReference",
             "keys": [
               {
                 "type": "GlobalReference",
                 "value": "http://acplt.org/SubmodelElementLists/ExampleSubmodelElementListOrdered"
               }
-            ]
+            ],
+            "type": "ExternalReference"
           },
+          "typeValueListElement": "SubmodelElement",
           "value": [
             {
               "category": "CONSTANT",
-              "idShort": "ExampleProperty",
               "description": [
                 {
                   "language": "en-us",
@@ -363,16 +403,8 @@
                   "text": "Beispiel Property Element"
                 }
               ],
+              "idShort": "ExampleProperty",
               "modelType": "Property",
-              "semanticId": {
-                "type": "ExternalReference",
-                "keys": [
-                  {
-                    "type": "GlobalReference",
-                    "value": "http://acplt.org/Properties/ExampleProperty"
-                  }
-                ]
-              },
               "qualifiers": [
                 {
                   "kind": "ConceptQualifier",
@@ -380,12 +412,20 @@
                   "valueType": "xs:string"
                 }
               ],
-              "valueType": "xs:string",
-              "value": "exampleValue"
+              "semanticId": {
+                "keys": [
+                  {
+                    "type": "GlobalReference",
+                    "value": "http://acplt.org/Properties/ExampleProperty"
+                  }
+                ],
+                "type": "ExternalReference"
+              },
+              "value": "exampleValue",
+              "valueType": "xs:string"
             },
             {
               "category": "CONSTANT",
-              "idShort": "ExampleMultiLanguageProperty",
               "description": [
                 {
                   "language": "en-us",
@@ -396,20 +436,20 @@
                   "text": "Beispiel MultiLanguageProperty Element"
                 }
               ],
+              "idShort": "ExampleMultiLanguageProperty",
               "modelType": "MultiLanguageProperty",
               "semanticId": {
-                "type": "ExternalReference",
                 "keys": [
                   {
                     "type": "GlobalReference",
                     "value": "http://acplt.org/MultiLanguageProperties/ExampleMultiLanguageProperty"
                   }
-                ]
+                ],
+                "type": "ExternalReference"
               }
             },
             {
               "category": "PARAMETER",
-              "idShort": "ExampleRange",
               "description": [
                 {
                   "language": "en-us",
@@ -420,15 +460,16 @@
                   "text": "Beispiel Range Element"
                 }
               ],
+              "idShort": "ExampleRange",
               "modelType": "Range",
               "semanticId": {
-                "type": "ExternalReference",
                 "keys": [
                   {
                     "type": "GlobalReference",
                     "value": "http://acplt.org/Ranges/ExampleRange"
                   }
-                ]
+                ],
+                "type": "ExternalReference"
               },
               "valueType": ""
             }
@@ -436,7 +477,6 @@
         },
         {
           "category": "PARAMETER",
-          "idShort": "ExampleSubmodelElementCollection",
           "description": [
             {
               "language": "en-us",
@@ -447,20 +487,21 @@
               "text": "Beispiel SubmodelElementCollection Element"
             }
           ],
+          "idShort": "ExampleSubmodelElementCollection",
           "modelType": "SubmodelElementCollection",
           "semanticId": {
-            "type": "ExternalReference",
             "keys": [
               {
                 "type": "GlobalReference",
                 "value": "http://acplt.org/SubmodelElementCollections/ExampleSubmodelElementCollection"
               }
-            ]
+            ],
+            "type": "ExternalReference"
           },
           "value": [
             {
               "category": "PARAMETER",
-              "idShort": "ExampleBlob",
+              "contentType": "",
               "description": [
                 {
                   "language": "en-us",
@@ -471,21 +512,21 @@
                   "text": "Beispiel Blob Element"
                 }
               ],
+              "idShort": "ExampleBlob",
               "modelType": "Blob",
               "semanticId": {
-                "type": "ExternalReference",
                 "keys": [
                   {
                     "type": "GlobalReference",
                     "value": "http://acplt.org/Blobs/ExampleBlob"
                   }
-                ]
-              },
-              "contentType": ""
+                ],
+                "type": "ExternalReference"
+              }
             },
             {
               "category": "PARAMETER",
-              "idShort": "ExampleFile",
+              "contentType": "",
               "description": [
                 {
                   "language": "en-us",
@@ -496,21 +537,20 @@
                   "text": "Beispiel File Element"
                 }
               ],
+              "idShort": "ExampleFile",
               "modelType": "File",
               "semanticId": {
-                "type": "ExternalReference",
                 "keys": [
                   {
                     "type": "GlobalReference",
                     "value": "http://acplt.org/Files/ExampleFile"
                   }
-                ]
-              },
-              "contentType": ""
+                ],
+                "type": "ExternalReference"
+              }
             },
             {
               "category": "PARAMETER",
-              "idShort": "ExampleReferenceElement",
               "description": [
                 {
                   "language": "en-us",
@@ -521,27 +561,21 @@
                   "text": "Beispiel Reference Element Element"
                 }
               ],
+              "idShort": "ExampleReferenceElement",
               "modelType": "ReferenceElement",
               "semanticId": {
-                "type": "ExternalReference",
                 "keys": [
                   {
                     "type": "GlobalReference",
                     "value": "http://acplt.org/ReferenceElements/ExampleReferenceElement"
                   }
-                ]
+                ],
+                "type": "ExternalReference"
               }
             }
           ]
         }
       ]
-    },
-    {
-      "category": "PARAMETER",
-      "idShort": "ExampleProperty",
-      "modelType": "Property",
-      "valueType": "xs:string",
-      "value": "some example annotation"
     }
   ]
 }

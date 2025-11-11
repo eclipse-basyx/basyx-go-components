@@ -77,7 +77,7 @@ func (s *SubmodelElementFilter) HasIDShortPathFilter() bool {
 }
 
 // GetSubmodelElementsSubquery builds a subquery to retrieve submodel elements for a given submodel.
-func GetSubmodelElementsSubquery(filter SubmodelElementFilter) (*goqu.SelectDataset, error) {
+func GetSubmodelElementsSubquery(filter SubmodelElementFilter, cursor string, limit int) (*goqu.SelectDataset, error) {
 	dialect := goqu.Dialect("postgres")
 	semanticIDSubquery, semanticIDReferredSubquery := queries.GetReferenceQueries(dialect, goqu.I("sme.semantic_id"))
 	qualifierSubquery := queries.GetQualifierSubquery(dialect, goqu.T("submodel_element_qualifier"), "sme_id", "qualifier_id", goqu.I("sme.id"))
@@ -130,6 +130,30 @@ func GetSubmodelElementsSubquery(filter SubmodelElementFilter) (*goqu.SelectData
 		)
 	}
 
+	// Order by idShortPath to ensure consistent pagination
+	query = query.Order(
+		goqu.I("sme.idshort_path").Asc(),
+	)
+
+	// Pagination with peeking ahead on root elements only
+	if (limit > 0 || cursor != "") && limit != -1 {
+		rootQuery := dialect.From(goqu.T("submodel_element").As("root_sme")).
+			Select(goqu.I("root_sme.id")).
+			Where(goqu.I("root_sme.parent_sme_id").IsNull()).
+			Where(goqu.I("root_sme.submodel_id").Eq(filter.SubmodelFilter.SubmodelIDFilter)).
+			Order(goqu.I("root_sme.idshort_path").Asc())
+
+		if cursor != "" {
+			rootQuery = rootQuery.Where(goqu.I("root_sme.idshort_path").Gte(cursor))
+		}
+
+		if limit > 0 {
+			rootQuery = rootQuery.Limit(uint(limit + 1)) // Fetch one extra to check for more results
+		}
+
+		query = query.Where(goqu.I("sme.root_sme_id").In(rootQuery))
+	}
+
 	return query, nil
 }
 
@@ -179,10 +203,10 @@ func getValueSubquery(dialect goqu.DialectWrapper) exp.CaseExpression {
 		// 	goqu.I("sme.model_type").Eq("ReferenceElement"),
 		// 	getReferenceElementSubquery(dialect),
 		// ).
-		// When(
-		// 	goqu.I("sme.model_type").Eq("RelationshipElement"),
-		// 	getRelationshipElementSubquery(dialect),
-		// ).
+		When(
+			goqu.I("sme.model_type").Eq("RelationshipElement"),
+			getRelationshipElementSubquery(dialect),
+		).
 		Else(goqu.V(nil))
 	return valueByType
 }
@@ -340,6 +364,14 @@ func getRangeSubquery(dialect goqu.DialectWrapper) *goqu.SelectDataset {
 // 	return nil
 // }
 
-// func getRelationshipElementSubquery(dialect goqu.DialectWrapper) *goqu.SelectDataset {
-// 	return nil
-// }
+func getRelationshipElementSubquery(dialect goqu.DialectWrapper) *goqu.SelectDataset {
+	return dialect.From(goqu.T("relationship_element").As("re")).
+		Select(
+			goqu.Func("jsonb_build_object",
+				goqu.V("first"), goqu.I("re.first"),
+				goqu.V("second"), goqu.I("re.second"),
+			),
+		).
+		Where(goqu.I("re.id").Eq(goqu.I("sme.id"))).
+		Limit(1)
+}

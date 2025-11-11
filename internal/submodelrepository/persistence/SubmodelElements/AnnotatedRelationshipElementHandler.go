@@ -34,6 +34,7 @@ import (
 	"errors"
 
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	jsoniter "github.com/json-iterator/go"
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 )
 
@@ -167,26 +168,26 @@ func (p PostgreSQLAnnotatedRelationshipElementHandler) Delete(idShortOrPath stri
 
 func insertAnnotatedRelationshipElement(areElem *gen.AnnotatedRelationshipElement, tx *sql.Tx, id int, submodelID string, db *sql.DB) error {
 	// Insert into relationship_element
-	var firstRefID, secondRefID sql.NullInt64
+	var firstRef, secondRef string
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
 	if !isEmptyReference(areElem.First) {
-		refID, err := insertReference(tx, *areElem.First)
+		ref, err := json.Marshal(areElem.First)
 		if err != nil {
 			return err
 		}
-		firstRefID = sql.NullInt64{Int64: int64(refID), Valid: true}
+		firstRef = string(ref)
 	}
 
 	if !isEmptyReference(areElem.Second) {
-		refID, err := insertReference(tx, *areElem.Second)
+		ref, err := json.Marshal(areElem.Second)
 		if err != nil {
 			return err
 		}
-		secondRefID = sql.NullInt64{Int64: int64(refID), Valid: true}
+		secondRef = string(ref)
 	}
-
-	_, err := tx.Exec(`INSERT INTO relationship_element (id, first_ref, second_ref) VALUES ($1, $2, $3)`,
-		id, firstRefID, secondRefID)
+	_, err := tx.Exec(`INSERT INTO relationship_element (id, first, second) VALUES ($1, $2, $3)`,
+		id, firstRef, secondRef)
 	if err != nil {
 		return err
 	}

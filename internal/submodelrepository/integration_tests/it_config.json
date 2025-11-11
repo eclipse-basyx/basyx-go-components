@@ -199,5 +199,19 @@
         "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlDYXBhYmlsaXR5U3VibW9kZWw",
         "shouldMatch": "postBody/postSubmodelWithCapability.json",
         "expectedStatus": 200
+    },
+    {
+        "context": "Post Submodel with RelationshipElement SubmodelElement",
+        "method": "POST",
+        "endpoint": "http://localhost:6004/submodels",
+        "data": "postBody/postSubmodelWithRelationshipElement.json",
+        "expectedStatus": 201
+    },
+    {
+        "context": "Get Submodel with RelationshipElement SubmodelElement",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlSZWxhdGlvbnNoaXBFbGVtZW50U3VibW9kZWw",
+        "shouldMatch": "postBody/postSubmodelWithRelationshipElement.json",
+        "expectedStatus": 200
     }
 ]

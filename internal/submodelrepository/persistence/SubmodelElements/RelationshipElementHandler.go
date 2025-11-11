@@ -35,6 +35,7 @@ import (
 	"errors"
 
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	jsoniter "github.com/json-iterator/go"
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 )
 
@@ -228,26 +229,27 @@ func (p PostgreSQLRelationshipElementHandler) Delete(idShortOrPath string) error
 // Returns:
 //   - error: An error if reference insertion fails or the final relationship_element insert fails
 func insertRelationshipElement(relElem *gen.RelationshipElement, tx *sql.Tx, id int) error {
-	var firstRefID, secondRefID sql.NullInt64
+	var firstRef, secondRef string
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
 	if !isEmptyReference(relElem.First) {
-		refID, err := insertReference(tx, *relElem.First)
+		ref, err := json.Marshal(relElem.First)
 		if err != nil {
 			return err
 		}
-		firstRefID = sql.NullInt64{Int64: int64(refID), Valid: true}
+		firstRef = string(ref)
 	}
 
 	if !isEmptyReference(relElem.Second) {
-		refID, err := insertReference(tx, *relElem.Second)
+		ref, err := json.Marshal(relElem.Second)
 		if err != nil {
 			return err
 		}
-		secondRefID = sql.NullInt64{Int64: int64(refID), Valid: true}
+		secondRef = string(ref)
 	}
 
-	_, err := tx.Exec(`INSERT INTO relationship_element (id, first_ref, second_ref) VALUES ($1, $2, $3)`,
-		id, firstRefID, secondRefID)
+	_, err := tx.Exec(`INSERT INTO relationship_element (id, first, second) VALUES ($1, $2, $3)`,
+		id, firstRef, secondRef)
 	return err
 }
 

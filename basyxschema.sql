@@ -490,8 +490,8 @@ CREATE TABLE IF NOT EXISTS reference_element (
 
 CREATE TABLE IF NOT EXISTS relationship_element (
   id         BIGINT PRIMARY KEY REFERENCES submodel_element(id) ON DELETE CASCADE,
-  first_ref  BIGINT REFERENCES reference(id),
-  second_ref BIGINT REFERENCES reference(id)
+  first JSONB,
+  second JSONB
 );
 CREATE TABLE IF NOT EXISTS annotated_rel_annotation (
   rel_id      BIGINT NOT NULL REFERENCES relationship_element(id) ON DELETE CASCADE,
