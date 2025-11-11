@@ -114,18 +114,21 @@
         "expectedStatus": 404
     },
     {
+        "context": "GET Get Submodels Metadata with limit",
         "method": "GET",
         "endpoint": "http://localhost:6004/submodels/$metadata?limit=5",
         "shouldMatch": "expected/expectedGetSubmodelsMetadata.json",
         "expectedStatus": 200
     },
     {
+        "context": "GET Get Submodel by Id",
         "method": "GET",
         "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw",
         "shouldMatch": "expected/expectedGetSubmodelById.json",
         "expectedStatus": 200
     },
     {
+        "context": "GET Get non-existing Submodel by Id",
         "method": "GET",
         "endpoint": "http://localhost:6004/submodels/aHR0cDovL2V4YW1wbGUuY29tL2lkL25vbnRoaW5n",
         "expectedStatus": 404
@@ -212,6 +215,20 @@
         "method": "GET",
         "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlSZWxhdGlvbnNoaXBFbGVtZW50U3VibW9kZWw",
         "shouldMatch": "postBody/postSubmodelWithRelationshipElement.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "Post Submodel with AnnotatedRelationshipElement SubmodelElement",
+        "method": "POST",
+        "endpoint": "http://localhost:6004/submodels",
+        "data": "postBody/postSubmodelWithAnnotatedRelationshipElement.json",
+        "expectedStatus": 201
+    },
+    {
+        "context": "Get Submodel with AnnotatedRelationshipElement SubmodelElement",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlBbm5vdGF0ZWRSZWxhdGlvbnNoaXBFbGVtZW50U3VibW9kZWw",
+        "shouldMatch": "postBody/postSubmodelWithAnnotatedRelationshipElement.json",
         "expectedStatus": 200
     }
 ]

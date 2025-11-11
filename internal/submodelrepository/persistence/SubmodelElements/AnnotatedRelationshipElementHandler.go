@@ -186,29 +186,20 @@ func insertAnnotatedRelationshipElement(areElem *gen.AnnotatedRelationshipElemen
 		}
 		secondRef = string(ref)
 	}
-	_, err := tx.Exec(`INSERT INTO relationship_element (id, first, second) VALUES ($1, $2, $3)`,
-		id, firstRef, secondRef)
-	if err != nil {
-		return err
+
+	annotationsJSON := "[]"
+	if len(areElem.Annotations) > 0 {
+		at, err := json.Marshal(areElem.Annotations)
+		if err != nil {
+			return err
+		}
+		annotationsJSON = string(at)
 	}
 
-	// Create annotations as separate submodel elements
-	for _, annotation := range areElem.Annotations {
-		annHandler, err := GetSMEHandler(annotation, db)
-		if err != nil {
-			return err
-		}
-
-		annID, err := annHandler.Create(tx, submodelID, annotation)
-		if err != nil {
-			return err
-		}
-
-		// Insert link
-		_, err = tx.Exec(`INSERT INTO annotated_rel_annotation (rel_id, annotation_sme) VALUES ($1, $2)`, id, annID)
-		if err != nil {
-			return err
-		}
+	_, err := tx.Exec(`INSERT INTO annotated_relationship_element (id, first, second, annotations) VALUES ($1, $2, $3, $4)`,
+		id, firstRef, secondRef, annotationsJSON)
+	if err != nil {
+		return err
 	}
 
 	return nil

@@ -70,13 +70,6 @@
       ]
     },
     {
-      "category": "PARAMETER",
-      "idShort": "ExampleProperty",
-      "modelType": "Property",
-      "value": "some example annotation",
-      "valueType": "xs:string"
-    },
-    {
       "idShort": "ExampleSubmodelElementCollection",
       "modelType": "SubmodelElementCollection",
       "value": [
@@ -139,6 +132,15 @@
           }
         },
         {
+          "annotations": [
+            {
+              "category": "PARAMETER",
+              "idShort": "ExampleProperty",
+              "modelType": "Property",
+              "value": "some example annotation",
+              "valueType": "xs:string"
+            }
+          ],
           "category": "PARAMETER",
           "description": [
             {
@@ -150,10 +152,42 @@
               "text": "Beispiel AnnotatedRelationshipElement Element"
             }
           ],
-          "first": null,
+          "first": {
+            "keys": [
+              {
+                "type": "Submodel",
+                "value": "https://acplt.org/Test_Submodel_Missing"
+              },
+              {
+                "type": "SubmodelElementList",
+                "value": "ExampleSubmodelElementListOrdered"
+              },
+              {
+                "type": "Property",
+                "value": "ExampleProperty"
+              }
+            ],
+            "type": "ModelReference"
+          },
           "idShort": "ExampleAnnotatedRelationshipElement",
           "modelType": "AnnotatedRelationshipElement",
-          "second": null,
+          "second": {
+            "keys": [
+              {
+                "type": "Submodel",
+                "value": "https://acplt.org/Test_Submodel_Missing"
+              },
+              {
+                "type": "SubmodelElementList",
+                "value": "ExampleSubmodelElementListOrdered"
+              },
+              {
+                "type": "MultiLanguageProperty",
+                "value": "ExampleMultiLanguageProperty"
+              }
+            ],
+            "type": "ModelReference"
+          },
           "semanticId": {
             "keys": [
               {

@@ -473,14 +473,29 @@ type EntityValueRow struct {
 	SpecificAssetIDs json.RawMessage `json:"specific_asset_ids"`
 }
 
-// ReferenceElementValueRow represents a data row for a ReferenceElement entity in the database.
+// RelationshipElementValueRow represents a data row for a ReferenceElement entity in the database.
 // ReferenceElements are submodel elements that encapsulate references to other AAS elements.
 //
 // This structure captures the two references that make up a ReferenceElement.
 // Each reference is stored as JSON data to accommodate the complex structure of references.
-type ReferenceElementValueRow struct {
+type RelationshipElementValueRow struct {
 	// First contains the first reference as JSON data
 	First json.RawMessage `json:"first"`
 	// Second contains the second reference as JSON data
 	Second json.RawMessage `json:"second"`
+}
+
+// AnnotatedRelationshipElementValueRow represents a data row for an AnnotatedRelationshipElement entity in the database.
+// AnnotatedRelationshipElements are submodel elements that define relationships between two references,
+// along with additional annotations that provide context or metadata about the relationship.
+//
+// This structure captures the two references that make up the relationship and the associated annotations.
+// Each component is stored as JSON data to accommodate complex structures.
+type AnnotatedRelationshipElementValueRow struct {
+	// First contains the first reference as JSON data
+	First json.RawMessage `json:"first"`
+	// Second contains the second reference as JSON data
+	Second json.RawMessage `json:"second"`
+	// Annotations contains annotations as JSON data
+	Annotations json.RawMessage `json:"annotations"`
 }

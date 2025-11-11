@@ -159,10 +159,10 @@ func GetSubmodelElementsSubquery(filter SubmodelElementFilter, cursor string, li
 
 func getValueSubquery(dialect goqu.DialectWrapper) exp.CaseExpression {
 	valueByType := goqu.Case().
-		// When(
-		// 	goqu.I("sme.model_type").Eq("AnnotatedRelationshipElement"),
-		// 	getAnnotatedRelationshipElementSubquery(dialect),
-		// ).
+		When(
+			goqu.I("sme.model_type").Eq("AnnotatedRelationshipElement"),
+			getAnnotatedRelationshipElementSubquery(dialect),
+		).
 		When(
 			goqu.I("sme.model_type").Eq("BasicEventElement"),
 			getBasicEventElementSubquery(dialect),
@@ -210,10 +210,6 @@ func getValueSubquery(dialect goqu.DialectWrapper) exp.CaseExpression {
 		Else(goqu.V(nil))
 	return valueByType
 }
-
-// func getAnnotatedRelationshipElementSubquery(dialect goqu.DialectWrapper) *goqu.SelectDataset {
-// 	return nil
-// }
 
 func getBasicEventElementSubquery(dialect goqu.DialectWrapper) *goqu.SelectDataset {
 	observedRef, observedRefReferred := queries.GetReferenceQueries(dialect, goqu.I("bee.observed_ref"))
@@ -373,5 +369,18 @@ func getRelationshipElementSubquery(dialect goqu.DialectWrapper) *goqu.SelectDat
 			),
 		).
 		Where(goqu.I("re.id").Eq(goqu.I("sme.id"))).
+		Limit(1)
+}
+
+func getAnnotatedRelationshipElementSubquery(dialect goqu.DialectWrapper) *goqu.SelectDataset {
+	return dialect.From(goqu.T("annotated_relationship_element").As("are")).
+		Select(
+			goqu.Func("jsonb_build_object",
+				goqu.V("first"), goqu.I("are.first"),
+				goqu.V("second"), goqu.I("are.second"),
+				goqu.V("annotations"), goqu.I("are.annotations"),
+			),
+		).
+		Where(goqu.I("are.id").Eq(goqu.I("sme.id"))).
 		Limit(1)
 }

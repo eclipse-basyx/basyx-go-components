@@ -384,8 +384,53 @@ func getSubmodelElementObjectBasedOnModelType(smeRow model.SubmodelElementRow, r
 		}
 		return entity, nil
 	case "AnnotatedRelationshipElement":
-		annotatedRelElem := &model.AnnotatedRelationshipElement{}
-		return annotatedRelElem, nil
+		var valueRow model.AnnotatedRelationshipElementValueRow
+		if smeRow.Value == nil {
+			return nil, fmt.Errorf("smeRow.Value is nil")
+		}
+		err := json.Unmarshal(*smeRow.Value, &valueRow)
+		if err != nil {
+			return nil, err
+		}
+
+		var first, second *model.Reference
+		if valueRow.First != nil {
+			err = json.Unmarshal(valueRow.First, &first)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			return nil, fmt.Errorf("first reference in RelationshipElement is nil")
+		}
+		if valueRow.Second != nil {
+			err = json.Unmarshal(valueRow.Second, &second)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			return nil, fmt.Errorf("second reference in RelationshipElement is nil")
+		}
+		var annotations []model.SubmodelElement
+		if valueRow.Annotations != nil {
+			var annJSONs []json.RawMessage
+			err = json.Unmarshal(valueRow.Annotations, &annJSONs)
+			if err != nil {
+				return nil, err
+			}
+			for _, annJSON := range annJSONs {
+				ann, err := model.UnmarshalSubmodelElement(annJSON)
+				if err != nil {
+					return nil, err
+				}
+				annotations = append(annotations, ann)
+			}
+		}
+		relElem := &model.AnnotatedRelationshipElement{
+			First:       first,
+			Second:      second,
+			Annotations: annotations,
+		}
+		return relElem, nil
 	case "MultiLanguageProperty":
 		mlProp := &model.MultiLanguageProperty{}
 		return mlProp, nil
@@ -399,7 +444,7 @@ func getSubmodelElementObjectBasedOnModelType(smeRow model.SubmodelElementRow, r
 		refElem := &model.ReferenceElement{}
 		return refElem, nil
 	case "RelationshipElement":
-		var valueRow model.ReferenceElementValueRow
+		var valueRow model.RelationshipElementValueRow
 		if smeRow.Value == nil {
 			return nil, fmt.Errorf("smeRow.Value is nil")
 		}
