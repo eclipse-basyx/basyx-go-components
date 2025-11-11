@@ -1,0 +1,90 @@
+name: Docker Snapshot Build
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'cmd/**'
+      - 'internal/**'
+      - 'pkg/**'
+      - 'go.mod'
+      - 'go.sum'
+      - 'basyxschema.sql'
+      - '.github/workflows/docker-snapshot.yml'
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    outputs:
+      should-run: ${{ steps.check.outputs.should-run }}
+    steps:
+      - id: check
+        run: |
+          if [[ "${GITHUB_REPOSITORY}" == "eclipse-basyx/basyx-go-components" && "${GITHUB_EVENT_REPOSITORY_FORK}" != "true" ]]; then
+            echo "✅ Running in upstream repository"
+            echo "should-run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "⏭️ Skipping build — fork detected (${GITHUB_REPOSITORY})"
+            echo "should-run=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  build-and-push:
+    needs: guard
+    if: ${{ needs.guard.outputs.should-run == 'true' }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service:
+          - name: aasregistryservice
+            image: eclipsebasyx/aasregistry-go
+          - name: discoveryservice
+            image: eclipsebasyx/aasdiscovery-go
+        #   - name: submodelrepositoryservice
+        #     image: eclipsebasyx/submodelrepository-go
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_HUB_USER }}
+          password: ${{ secrets.DOCKER_HUB_TOKEN }}
+
+      - name: Generate version metadata
+        id: meta
+        run: |
+          # Get short SHA
+          SHORT_SHA=$(git rev-parse --short HEAD)
+          # Get timestamp
+          TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+          # Create snapshot version
+          VERSION="SNAPSHOT-${TIMESTAMP}-${SHORT_SHA}"
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "short_sha=${SHORT_SHA}" >> $GITHUB_OUTPUT
+          echo "Building snapshot version: ${VERSION}"
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./cmd/${{ matrix.service.name }}/Dockerfile
+          push: true
+          tags: |
+            ${{ matrix.service.image }}:SNAPSHOT
+            ${{ matrix.service.image }}:${{ steps.meta.outputs.short_sha }}
+          build-args: |
+            VERSION=${{ steps.meta.outputs.version }}
+          cache-from: type=registry,ref=${{ matrix.service.image }}:buildcache
+          cache-to: type=registry,ref=${{ matrix.service.image }}:buildcache,mode=max
+          platforms: linux/amd64,linux/arm64,linux/arm/v7
+
+      - name: Image digest
+        run: echo "Built and pushed ${{ matrix.service.image }}:SNAPSHOT"

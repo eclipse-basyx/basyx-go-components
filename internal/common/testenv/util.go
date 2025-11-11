@@ -86,6 +86,7 @@ func makeLogRecord(iter int, componentName string, r ComponentResult, level LogD
 		lr.Op = r.Op
 		lr.Code = r.Code
 		lr.OK = r.OK
+		lr.Extra = r.Extra
 	}
 	if level >= LogFull {
 		lr.Method = r.Method
@@ -93,9 +94,6 @@ func makeLogRecord(iter int, componentName string, r ComponentResult, level LogD
 		if r.Error != nil {
 			lr.Error = r.Error.Error()
 		}
-		lr.Request = r.Request
-		lr.Response = r.Response
-		lr.Extra = r.Extra
 	}
 	return lr
 }
@@ -129,7 +127,7 @@ type ComponentResult struct {
 type LogRecord struct {
 	Iter       int    `json:"iter"`
 	Component  string `json:"component"`
-	DurationMs int64  `json:"duration_ms"`
+	DurationMs int64  `json:"duration_ns"`
 
 	Op   string `json:"op,omitempty"`
 	Code int    `json:"code,omitempty"`
@@ -192,7 +190,9 @@ func BenchmarkComponent(b *testing.B, comp ComponentBench) {
 
 	enc := json.NewEncoder(f)
 	enc.SetIndent("", "  ")
-	_ = enc.Encode(logs)
+	if err := enc.Encode(logs); err != nil {
+		b.Fatalf("failed to encode logs: %v", err)
+	}
 
 	b.Logf("wrote %s with %d records (detail=%v)", filename, len(logs), logDetail)
 }
