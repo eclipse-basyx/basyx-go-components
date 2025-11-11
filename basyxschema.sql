@@ -131,6 +131,18 @@ DO $$ BEGIN
   END IF;
 END $$;
 
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'asset_kind') THEN
+    CREATE TYPE asset_kind AS ENUM ('Instance', 'Type', 'Role', 'NotApplicable');
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'security_type') THEN
+    CREATE TYPE security_type AS ENUM ('NONE', 'RFC_TLSA', 'W3C_DID');
+  END IF;
+END $$;
+
 -- Reference (for semanticId etc.)  --  keys[i] keeps track of order
 CREATE TABLE IF NOT EXISTS reference (
   id           BIGSERIAL PRIMARY KEY,
@@ -188,6 +200,7 @@ CREATE TABLE IF NOT EXISTS administrative_information (
   version           VARCHAR(4),
   revision          VARCHAR(4),
   creator           BIGINT REFERENCES reference(id),
+  embedded_data_specification JSONB,
   templateId        VARCHAR(2048)
 );
 
@@ -258,18 +271,18 @@ CREATE INDEX IF NOT EXISTS ix_iec61360_value_list_id ON data_specification_iec61
 CREATE INDEX IF NOT EXISTS ix_iec61360_level_type_id ON data_specification_iec61360(level_type_id);
 CREATE INDEX IF NOT EXISTS ix_iec61360_data_type ON data_specification_iec61360(data_type);
 
-CREATE TABLE IF NOT EXISTS administrative_information_embedded_data_specification (
-  id                BIGSERIAL PRIMARY KEY,
-  administrative_information_id BIGINT REFERENCES administrative_information(id) ON DELETE CASCADE,
-  embedded_data_specification_id BIGSERIAL REFERENCES data_specification(id) ON DELETE CASCADE
-);
+-- CREATE TABLE IF NOT EXISTS administrative_information_embedded_data_specification (
+--   id                BIGSERIAL PRIMARY KEY,
+--   administrative_information_id BIGINT REFERENCES administrative_information(id) ON DELETE CASCADE,
+--   embedded_data_specification_id BIGSERIAL REFERENCES data_specification(id) ON DELETE CASCADE
+-- );
 CREATE INDEX IF NOT EXISTS ix_ai_creator ON administrative_information(creator);
 CREATE INDEX IF NOT EXISTS ix_ai_templateid ON administrative_information(templateid);
 
-CREATE INDEX IF NOT EXISTS ix_aieds_aiid ON administrative_information_embedded_data_specification(administrative_information_id);
-CREATE INDEX IF NOT EXISTS ix_aieds_edsid ON administrative_information_embedded_data_specification(embedded_data_specification_id);
+-- CREATE INDEX IF NOT EXISTS ix_aieds_aiid ON administrative_information_embedded_data_specification(administrative_information_id);
+-- CREATE INDEX IF NOT EXISTS ix_aieds_edsid ON administrative_information_embedded_data_specification(embedded_data_specification_id);
 
-CREATE INDEX IF NOT EXISTS ix_eds_id ON administrative_information_embedded_data_specification(id);
+-- CREATE INDEX IF NOT EXISTS ix_eds_id ON administrative_information_embedded_data_specification(id);
 
 
 CREATE TABLE IF NOT EXISTS submodel (
@@ -277,6 +290,7 @@ CREATE TABLE IF NOT EXISTS submodel (
   id_short    varchar(128),
   category    varchar(128),
   kind        modelling_kind,
+  embedded_data_specification JSONB DEFAULT '[]',
   administration_id BIGINT REFERENCES administrative_information(id) ON DELETE CASCADE,
   semantic_id BIGINT REFERENCES reference(id) ON DELETE CASCADE,
   description_id BIGINT REFERENCES lang_string_text_type_reference(id) ON DELETE CASCADE,
@@ -302,13 +316,13 @@ CREATE INDEX IF NOT EXISTS ix_smssi_reference_id ON submodel_supplemental_semant
 
 CREATE INDEX IF NOT EXISTS ix_smsup_id ON submodel_supplemental_semantic_id(id);
 
-CREATE TABLE IF NOT EXISTS submodel_embedded_data_specification (
-  id                BIGSERIAL PRIMARY KEY,
-  submodel_id       VARCHAR(2048) REFERENCES submodel(id) ON DELETE CASCADE,
-  embedded_data_specification_id BIGSERIAL REFERENCES data_specification(id) ON DELETE CASCADE
-);
+-- CREATE TABLE IF NOT EXISTS submodel_embedded_data_specification (
+--   id                BIGSERIAL PRIMARY KEY,
+--   submodel_id       VARCHAR(2048) REFERENCES submodel(id) ON DELETE CASCADE,
+--   embedded_data_specification_id BIGSERIAL REFERENCES data_specification(id) ON DELETE CASCADE
+-- );
 
-CREATE INDEX IF NOT EXISTS ix_eds_id ON submodel_embedded_data_specification(id);
+-- CREATE INDEX IF NOT EXISTS ix_eds_id ON submodel_embedded_data_specification(id);
 
 CREATE TABLE IF NOT EXISTS extension (
   id          BIGSERIAL PRIMARY KEY,
@@ -367,6 +381,7 @@ CREATE TABLE IF NOT EXISTS submodel_element (
   id_short       varchar(128) NOT NULL,
   category       varchar(128),
   model_type     aas_submodel_elements NOT NULL,
+  embedded_data_specification JSONB DEFAULT '[]',
   semantic_id    BIGINT REFERENCES reference(id),
   description_id BIGINT REFERENCES lang_string_text_type_reference(id) ON DELETE CASCADE,
   displayname_id BIGINT REFERENCES lang_string_name_type_reference(id) ON DELETE CASCADE,
@@ -610,7 +625,7 @@ CREATE INDEX IF NOT EXISTS ix_qualsup_id ON qualifier_supplemental_semantic_id(i
 CREATE INDEX IF NOT EXISTS ix_qualsup_qid ON qualifier_supplemental_semantic_id(qualifier_id);
 
 
-CREATE INDEX IF NOT EXISTS ix_seds_submodel ON submodel_embedded_data_specification (submodel_id);
+-- CREATE INDEX IF NOT EXISTS ix_seds_submodel ON submodel_embedded_data_specification (submodel_id);
 
 CREATE INDEX IF NOT EXISTS ix_dataspec_content ON data_specification (data_specification_content);
 
@@ -630,3 +645,159 @@ CREATE INDEX IF NOT EXISTS ix_ref_root_id ON reference(rootreference, id);
 CREATE INDEX IF NOT EXISTS ix_ref_type ON reference(type);
 
 CREATE INDEX IF NOT EXISTS ix_refkey_refid ON reference_key(value);
+
+CREATE TABLE IF NOT EXISTS descriptor (
+  id BIGSERIAL PRIMARY KEY
+);
+
+CREATE TABLE IF NOT EXISTS descriptor_extension (
+  id BIGSERIAL PRIMARY KEY,
+  descriptor_id BIGINT NOT NULL REFERENCES descriptor(id) ON DELETE CASCADE,
+  extension_id BIGINT NOT NULL REFERENCES extension(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS specific_asset_id (
+  id BIGSERIAL PRIMARY KEY,
+  descriptor_id BIGINT NOT NULL REFERENCES descriptor(id) ON DELETE CASCADE,
+  semantic_id BIGINT REFERENCES reference(id),
+  name VARCHAR(64) NOT NULL,
+  value VARCHAR(2048) NOT NULL,
+  external_subject_ref BIGINT REFERENCES reference(id)
+);
+
+CREATE TABLE IF NOT EXISTS specific_asset_id_supplemental_semantic_id (
+  id BIGSERIAL PRIMARY KEY,
+  specific_asset_id_id BIGINT NOT NULL REFERENCES specific_asset_id(id) ON DELETE CASCADE,
+  reference_id BIGINT NOT NULL REFERENCES reference(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS aas_descriptor_endpoint (
+  id BIGSERIAL PRIMARY KEY,
+  descriptor_id BIGINT NOT NULL REFERENCES descriptor(id) ON DELETE CASCADE,
+  href VARCHAR(2048) NOT NULL,
+  endpoint_protocol VARCHAR(128),
+  sub_protocol VARCHAR(128),
+  sub_protocol_body VARCHAR(2048),
+  sub_protocol_body_encoding VARCHAR(128),
+  interface VARCHAR(128) NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS security_attributes (
+  id BIGSERIAL NOT NULL PRIMARY KEY,
+  endpoint_id BIGINT NOT NULL REFERENCES aas_descriptor_endpoint(id) ON DELETE CASCADE,
+  security_type security_type NOT NULL,
+  security_key TEXT NOT NULL,
+  security_value TEXT NOT NULL
+);
+
+
+CREATE TABLE IF NOT EXISTS endpoint_protocol_version (
+  id BIGSERIAL PRIMARY KEY,
+  endpoint_id BIGINT NOT NULL REFERENCES aas_descriptor_endpoint(id) ON DELETE CASCADE,
+  endpoint_protocol_version VARCHAR(128) NOT NULL
+);
+
+
+CREATE TABLE IF NOT EXISTS aas_descriptor (
+  descriptor_id BIGINT PRIMARY KEY REFERENCES descriptor(id) ON DELETE CASCADE,
+  description_id BIGINT REFERENCES lang_string_text_type_reference(id) ON DELETE SET NULL,
+  displayname_id BIGINT REFERENCES lang_string_name_type_reference(id) ON DELETE SET NULL,
+  administrative_information_id BIGINT REFERENCES administrative_information(id) ON DELETE CASCADE,
+  asset_kind asset_kind,
+  asset_type VARCHAR(2048),
+  global_asset_id VARCHAR(2048),
+  id_short VARCHAR(128),
+  id VARCHAR(2048) NOT NULL UNIQUE
+);
+
+CREATE TABLE IF NOT EXISTS submodel_descriptor (
+  descriptor_id BIGINT PRIMARY KEY REFERENCES descriptor(id) ON DELETE CASCADE,
+  aas_descriptor_id BIGINT REFERENCES aas_descriptor(descriptor_id) ON DELETE CASCADE,
+  description_id BIGINT REFERENCES lang_string_text_type_reference(id) ON DELETE SET NULL,
+  displayname_id BIGINT REFERENCES lang_string_name_type_reference(id) ON DELETE SET NULL,
+  administrative_information_id BIGINT REFERENCES administrative_information(id) ON DELETE CASCADE,
+  id_short VARCHAR(128),
+  id VARCHAR(2048) NOT NULL, -- not unique because it can have duplicates over different aas descriptor.
+  semantic_id BIGINT REFERENCES reference(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS submodel_descriptor_supplemental_semantic_id (
+  id BIGSERIAL PRIMARY KEY,
+  descriptor_id BIGINT NOT NULL REFERENCES submodel_descriptor(descriptor_id) ON DELETE CASCADE,
+  reference_id BIGINT NOT NULL REFERENCES reference(id) ON DELETE CASCADE
+);
+
+-- descriptor_extension: speed lookups by either side + pair-membership checks
+CREATE INDEX IF NOT EXISTS ix_descriptor_extension_descriptor_id ON descriptor_extension(descriptor_id);
+CREATE INDEX IF NOT EXISTS ix_descriptor_extension_extension_id  ON descriptor_extension(extension_id);
+CREATE INDEX IF NOT EXISTS ix_descriptor_extension_pair          ON descriptor_extension(descriptor_id, extension_id);
+
+-- ==========================================
+-- Specific Asset IDs
+-- ==========================================
+CREATE INDEX IF NOT EXISTS ix_specasset_descriptor_id ON specific_asset_id(descriptor_id);
+CREATE INDEX IF NOT EXISTS ix_specasset_semantic_id   ON specific_asset_id(semantic_id);
+CREATE INDEX IF NOT EXISTS ix_specasset_name          ON specific_asset_id(name);
+-- Common equality filter: (name, value)
+CREATE INDEX IF NOT EXISTS ix_specasset_name_value    ON specific_asset_id(name, value);
+-- Speed partial and fuzzy searches over long values
+CREATE INDEX IF NOT EXISTS ix_specasset_value_trgm    ON specific_asset_id USING GIN (value gin_trgm_ops);
+
+-- specific_asset_id_supplemental_semantic_id
+CREATE INDEX IF NOT EXISTS ix_specasset_supp_spec_id  ON specific_asset_id_supplemental_semantic_id(specific_asset_id_id);
+CREATE INDEX IF NOT EXISTS ix_specasset_supp_ref_id   ON specific_asset_id_supplemental_semantic_id(reference_id);
+CREATE INDEX IF NOT EXISTS ix_specasset_supp_pair     ON specific_asset_id_supplemental_semantic_id(specific_asset_id_id, reference_id);
+
+-- ==========================================
+-- Endpoints & security
+-- ==========================================
+CREATE INDEX IF NOT EXISTS ix_aas_endpoint_descriptor_id   ON aas_descriptor_endpoint(descriptor_id);
+CREATE INDEX IF NOT EXISTS ix_aas_endpoint_interface       ON aas_descriptor_endpoint(interface);
+CREATE INDEX IF NOT EXISTS ix_aas_endpoint_protocols       ON aas_descriptor_endpoint(endpoint_protocol, sub_protocol);
+-- Fast lookup by href and fuzzy matching for partials
+CREATE INDEX IF NOT EXISTS ix_aas_endpoint_href            ON aas_descriptor_endpoint(href);
+CREATE INDEX IF NOT EXISTS ix_aas_endpoint_href_trgm       ON aas_descriptor_endpoint USING GIN (href gin_trgm_ops);
+-- If sub_protocol_body is probed/filtered often (JSON-like/text), enable trigram as well
+CREATE INDEX IF NOT EXISTS ix_aas_endpoint_sp_body_trgm    ON aas_descriptor_endpoint USING GIN (sub_protocol_body gin_trgm_ops);
+
+-- security_attributes
+CREATE INDEX IF NOT EXISTS ix_secattr_endpoint_id          ON security_attributes(endpoint_id);
+CREATE INDEX IF NOT EXISTS ix_secattr_type                 ON security_attributes(security_type);
+CREATE INDEX IF NOT EXISTS ix_secattr_key                  ON security_attributes(security_key);
+
+-- endpoint_protocol_version
+CREATE INDEX IF NOT EXISTS ix_epv_endpoint_id              ON endpoint_protocol_version(endpoint_id);
+CREATE INDEX IF NOT EXISTS ix_epv_version                  ON endpoint_protocol_version(endpoint_protocol_version);
+
+-- ==========================================
+-- AAS descriptor & submodel descriptors
+-- ==========================================
+-- aas_descriptor: unique(id) already exists; add common filters
+CREATE INDEX IF NOT EXISTS ix_aasd_admininfo_id            ON aas_descriptor(administrative_information_id);
+CREATE INDEX IF NOT EXISTS ix_aasd_displayname_id          ON aas_descriptor(displayname_id);
+CREATE INDEX IF NOT EXISTS ix_aasd_description_id          ON aas_descriptor(description_id);
+
+CREATE INDEX IF NOT EXISTS ix_aasd_id_short                ON aas_descriptor(id_short);
+CREATE INDEX IF NOT EXISTS ix_aasd_global_asset_id         ON aas_descriptor(global_asset_id);
+-- Useful for partial and fuzzy searches on long IDs/GAIDs
+CREATE INDEX IF NOT EXISTS ix_aasd_id_trgm                 ON aas_descriptor USING GIN (id gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS ix_aasd_global_asset_id_trgm    ON aas_descriptor USING GIN (global_asset_id gin_trgm_ops);
+-- Asset kind/type filters
+CREATE INDEX IF NOT EXISTS ix_aasd_asset_kind              ON aas_descriptor(asset_kind);
+CREATE INDEX IF NOT EXISTS ix_aasd_asset_type              ON aas_descriptor(asset_type);
+CREATE INDEX IF NOT EXISTS ix_aasd_asset_kind_type         ON aas_descriptor(asset_kind, asset_type);
+
+-- submodel_descriptor
+CREATE INDEX IF NOT EXISTS ix_smd_aas_descriptor_id        ON submodel_descriptor(aas_descriptor_id);
+CREATE INDEX IF NOT EXISTS ix_smd_admininfo_id             ON submodel_descriptor(administrative_information_id);
+CREATE INDEX IF NOT EXISTS ix_smd_semantic_id              ON submodel_descriptor(semantic_id);
+CREATE INDEX IF NOT EXISTS ix_smd_displayname_id           ON submodel_descriptor(displayname_id);
+CREATE INDEX IF NOT EXISTS ix_smd_description_id           ON submodel_descriptor(description_id);
+CREATE INDEX IF NOT EXISTS ix_smd_id_short                 ON submodel_descriptor(id_short);
+-- unique(id) already present; add trigram for partial/fuzzy
+CREATE INDEX IF NOT EXISTS ix_smd_id_trgm                  ON submodel_descriptor USING GIN (id gin_trgm_ops);
+
+-- submodel_descriptor_supplemental_semantic_id
+CREATE INDEX IF NOT EXISTS ix_smdss_descriptor_id          ON submodel_descriptor_supplemental_semantic_id(descriptor_id);
+CREATE INDEX IF NOT EXISTS ix_smdss_reference_id           ON submodel_descriptor_supplemental_semantic_id(reference_id);
+CREATE INDEX IF NOT EXISTS ix_smdss_pair                   ON submodel_descriptor_supplemental_semantic_id(descriptor_id, reference_id);

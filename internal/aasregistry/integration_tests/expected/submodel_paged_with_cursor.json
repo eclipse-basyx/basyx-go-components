@@ -1,0 +1,45 @@
+{
+    "PagingMetadata": {
+    },
+    "Result": [
+        {
+        "id": "urn:example:sm:001",
+        "endpoints": [
+            {
+            "interface": "AAS-3.0",
+            "protocolInformation": {
+                "href": "https://demo3.digital-twin.host/submodels/dXJuOmV4YW1wbGU6c206MDAx",
+                "endpointProtocol": "https"
+            }
+            }
+        ],
+        "extensions": [
+            {
+            "name": "tag",
+            "valueType": "xs:string",
+            "value": "v1"
+            }
+        ]
+        },
+        {
+        "id": "urn:example:sm:002",
+        "endpoints": [
+            {
+            "interface": "AAS-3.0",
+            "protocolInformation": {
+                "href": "https://demo3.digital-twin.host/submodels/dXJuOmV4YW1wbGU6c206MDAx/updated",
+                "endpointProtocol": "https"
+            }
+            }
+        ],
+        "extensions": [
+            {
+            "name": "tag",
+            "valueType": "xs:string",
+            "value": "v2"
+            }
+        ]
+        }
+
+    ]
+}

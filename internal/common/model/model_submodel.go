@@ -11,6 +11,8 @@ package model
 
 import (
 	"encoding/json"
+
+	jsoniter "github.com/json-iterator/go"
 )
 
 // Submodel struct representing a Submodel.
@@ -56,6 +58,7 @@ func (s *Submodel) UnmarshalJSON(data []byte) error {
 	}{
 		Alias: (*Alias)(s),
 	}
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	if err := json.Unmarshal(data, aux); err != nil {
 		return err
 	}

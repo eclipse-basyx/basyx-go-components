@@ -32,10 +32,12 @@
 package builder
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	jsoniter "github.com/json-iterator/go"
 )
 
 // SubmodelRow represents a row from the Submodel table in the database.
@@ -54,6 +56,8 @@ type SubmodelRow struct {
 	Category string
 	// Kind specifies whether the submodel is a Template or Instance
 	Kind string
+	// EmbeddedDataSpecification contains embedded data specifications as JSON data
+	EmbeddedDataSpecification json.RawMessage
 	// DisplayNames contains localized names as JSON data
 	DisplayNames json.RawMessage
 	// Descriptions contains localized descriptions as JSON data
@@ -66,14 +70,6 @@ type SubmodelRow struct {
 	SupplementalSemanticIDs json.RawMessage
 	// SupplementalReferredSemIDs contains referred supplemental semantic identifiers as JSON data
 	SupplementalReferredSemIDs json.RawMessage
-	// DataSpecReference contains embedded data specifications as JSON data
-	DataSpecReference json.RawMessage
-	// DataSpecReferenceReferred contains references to data specifications as JSON data
-	DataSpecReferenceReferred json.RawMessage
-	// DataSpecIEC61360 contains IEC 61360 data specification as JSON data
-	DataSpecIEC61360 json.RawMessage
-	// IECLevelTypes contains IEC level type information as JSON data
-	IECLevelTypes json.RawMessage
 	// Qualifiers contains qualifier information as JSON data
 	Qualifiers json.RawMessage
 	// Extensions contains extension as JSON data
@@ -297,16 +293,12 @@ type AdministrationRow struct {
 	Revision string `json:"revision"`
 	// TemplateID is the identifier of the template this element is based on
 	TemplateID string `json:"templateId"`
+	// EmbeddedDataSpecification contains embedded data specifications as JSON data
+	EmbeddedDataSpecification json.RawMessage `json:"embedded_data_specification"`
 	// Creator contains creator reference data as JSON data
 	Creator json.RawMessage `json:"creator"`
 	// CreatorReferred contains referred creator references as JSON data
 	CreatorReferred json.RawMessage `json:"creatorReferred"`
-	// EdsDataSpecifications contains embedded data specifications as JSON data
-	EdsDataSpecifications json.RawMessage `json:"edsDataSpecifications"`
-	// EdsDataSpecificationsReferred contains referred data specifications as JSON data
-	EdsDataSpecificationsReferred json.RawMessage `json:"edsDataSpecificationsReferred"`
-	// EdsDataSpecificationIEC61360 contains IEC 61360 data specifications as JSON data
-	EdsDataSpecificationIEC61360 json.RawMessage `json:"edsDataSpecificationIEC61360"`
 }
 
 // SubmodelElementRow represents a row from the SubmodelElement table in the database.
@@ -353,6 +345,39 @@ type SubmodelElementRow struct {
 	IECLevelTypes json.RawMessage
 	// Position specifies the position/order of the submodel element among its siblings
 	Position int `json:"position"`
+}
+
+// AssetAdministrationShellDescriptorRow represents a single SQL result row
+// for an Asset Administration Shell (AAS) descriptor. It carries nullable
+// string/integer columns from the database and foreign-key references to
+// related records such as administrative information, display names, and
+// descriptions.
+type AssetAdministrationShellDescriptorRow struct {
+	DescID        int64
+	AssetKindStr  sql.NullString
+	AssetType     sql.NullString
+	GlobalAssetID sql.NullString
+	IDShort       sql.NullString
+	IDStr         string
+	AdminInfoID   sql.NullInt64
+	DisplayNameID sql.NullInt64
+	DescriptionID sql.NullInt64
+}
+
+// SubmodelDescriptorRow represents a single SQL result row for a Submodel
+// descriptor that is associated with an AAS descriptor. It includes the
+// database identifiers of the AAS and Submodel descriptors as well as
+// optional columns and foreign-key references such as semantic reference
+// and administrative information.
+type SubmodelDescriptorRow struct {
+	AasDescID     int64
+	SmdDescID     int64
+	IDShort       sql.NullString
+	ID            sql.NullString
+	SemanticRefID sql.NullInt64
+	AdminInfoID   sql.NullInt64
+	DescriptionID sql.NullInt64
+	DisplayNameID sql.NullInt64
 }
 
 // ParseReferredReferencesFromRows parses referred reference data from already unmarshalled ReferredReferenceRow objects.
@@ -425,6 +450,7 @@ func ParseReferredReferences(row json.RawMessage, referenceBuilderRefs map[int64
 	}
 
 	var semanticIDData []ReferredReferenceRow
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	if err := json.Unmarshal(row, &semanticIDData); err != nil {
 		return fmt.Errorf("error unmarshalling referred semantic ID data: %w", err)
 	}
@@ -498,6 +524,7 @@ func ParseReferences(row json.RawMessage, referenceBuilderRefs map[int64]*Refere
 	}
 
 	var semanticIDData []ReferenceRow
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	if err := json.Unmarshal(row, &semanticIDData); err != nil {
 		return nil, fmt.Errorf("error unmarshalling semantic ID data: %w", err)
 	}
@@ -529,6 +556,7 @@ func ParseLangStringNameType(displayNames json.RawMessage) ([]gen.LangStringName
 	var names []gen.LangStringNameType
 	// remove id field from json
 	var temp []map[string]interface{}
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	if err := json.Unmarshal(displayNames, &temp); err != nil {
 		fmt.Printf("Error unmarshalling display names: %v\n", err)
 		return nil, err
@@ -581,6 +609,7 @@ func ParseLangStringTextType(descriptions json.RawMessage) ([]gen.LangStringText
 	if len(descriptions) == 0 {
 		return texts, nil
 	}
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	if err := json.Unmarshal(descriptions, &temp); err != nil {
 		fmt.Printf("Error unmarshalling descriptions: %v\n", err)
 		return nil, err
@@ -627,6 +656,7 @@ func ParseLangStringPreferredNameTypeIec61360(descriptions json.RawMessage) ([]g
 	if len(descriptions) == 0 {
 		return texts, nil
 	}
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	if err := json.Unmarshal(descriptions, &temp); err != nil {
 		fmt.Printf("Error unmarshalling descriptions: %v\n", err)
 		return nil, err
@@ -673,6 +703,7 @@ func ParseLangStringShortNameTypeIec61360(descriptions json.RawMessage) ([]gen.L
 	if len(descriptions) == 0 {
 		return texts, nil
 	}
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	if err := json.Unmarshal(descriptions, &temp); err != nil {
 		fmt.Printf("Error unmarshalling descriptions: %v\n", err)
 		return nil, err
@@ -719,6 +750,7 @@ func ParseLangStringDefinitionTypeIec61360(descriptions json.RawMessage) ([]gen.
 	if len(descriptions) == 0 {
 		return texts, nil
 	}
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	if err := json.Unmarshal(descriptions, &temp); err != nil {
 		fmt.Printf("Error unmarshalling descriptions: %v\n", err)
 		return nil, err
@@ -756,6 +788,7 @@ func ParseLangStringDefinitionTypeIec61360(descriptions json.RawMessage) ([]gen.
 //   - error: An error if JSON unmarshalling fails
 func ParseQualifiersRow(row json.RawMessage) ([]QualifierRow, error) {
 	var texts []QualifierRow
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	if err := json.Unmarshal(row, &texts); err != nil {
 		return nil, fmt.Errorf("error unmarshalling qualifier data: %w", err)
 	}
@@ -776,6 +809,7 @@ func ParseQualifiersRow(row json.RawMessage) ([]QualifierRow, error) {
 //   - error: An error if JSON unmarshalling fails
 func ParseExtensionRows(row json.RawMessage) ([]ExtensionRow, error) {
 	var texts []ExtensionRow
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	if err := json.Unmarshal(row, &texts); err != nil {
 		return nil, fmt.Errorf("error unmarshalling extension data: %w", err)
 	}
@@ -799,6 +833,7 @@ func ParseExtensionRows(row json.RawMessage) ([]ExtensionRow, error) {
 // as administrative information is singular per element.
 func ParseAdministrationRow(row json.RawMessage) (*AdministrationRow, error) {
 	var texts []AdministrationRow
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	if err := json.Unmarshal(row, &texts); err != nil {
 		return nil, fmt.Errorf("error unmarshalling AdministrationRow data: %w", err)
 	}

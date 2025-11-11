@@ -1,0 +1,43 @@
+{
+    "PagingMetadata": {},
+    "Result": [
+        {
+            "id": "https://iese.fraunhofer.de/ids/aas/asdb",
+            "endpoints": [
+                {
+                    "interface": "AAS-3.0",
+                    "protocolInformation": {
+                        "href": "https://demo3.digital-twin.host/aas-environment/...",
+                        "endpointProtocol": "https"
+                    }
+                }
+            ],
+            "extensions": [
+                {
+                    "name": "help",
+                    "valueType": "xs:string",
+                    "value": "test"
+                }
+            ]
+        },
+        {
+        "id": "urn:example:sm:001",
+        "endpoints": [
+            {
+            "interface": "AAS-3.0",
+            "protocolInformation": {
+                "href": "https://demo3.digital-twin.host/submodels/dXJuOmV4YW1wbGU6c206MDAx",
+                "endpointProtocol": "https"
+            }
+            }
+        ],
+        "extensions": [
+            {
+            "name": "tag",
+            "valueType": "xs:string",
+            "value": "v1"
+            }
+        ]
+        }
+    ]
+}

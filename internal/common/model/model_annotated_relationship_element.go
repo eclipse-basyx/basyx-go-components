@@ -12,6 +12,8 @@ package model
 import (
 	"encoding/json"
 	"fmt"
+
+	jsoniter "github.com/json-iterator/go"
 )
 
 // AnnotatedRelationshipElement type of SubmodelElement
@@ -306,6 +308,7 @@ func (a *AnnotatedRelationshipElement) UnmarshalJSON(data []byte) error {
 	}
 
 	// Unmarshal into the temporary struct
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	if err := json.Unmarshal(data, aux); err != nil {
 		return err
 	}

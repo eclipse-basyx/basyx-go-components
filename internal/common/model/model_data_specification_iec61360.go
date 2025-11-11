@@ -9,7 +9,7 @@
 
 package model
 
-import "encoding/json"
+import jsoniter "github.com/json-iterator/go"
 
 // DataSpecificationIec61360 type of DataSpecificationIec61360
 type DataSpecificationIec61360 struct {
@@ -260,6 +260,7 @@ func (d *DataSpecificationIec61360) UnmarshalJSON(data []byte) error {
 		LevelType          *LevelType                            `json:"levelType,omitempty"`
 	}{}
 
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	if err := json.Unmarshal(data, &aux); err != nil {
 		return err
 	}

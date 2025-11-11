@@ -1,0 +1,9 @@
+{
+    "id": "https://iese.fraunhofer.de/ids/aas/factorio",
+    "submodelDescriptors": [
+        {
+            "id": "https://iese.fraunhofer.de/ids/aas/urn:example:sm:000",
+            "endpoints": []
+        }
+    ]
+}

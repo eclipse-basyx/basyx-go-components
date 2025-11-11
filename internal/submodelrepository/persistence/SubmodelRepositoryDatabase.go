@@ -32,6 +32,7 @@ package persistencepostgresql
 
 import (
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
@@ -353,13 +354,25 @@ func (p *PostgreSQLSubmodelDatabase) CreateSubmodel(sm gen.Submodel) error {
 		return common.NewInternalServerError("Failed to create Administration - no changes applied - see console for details")
 	}
 
+	edsJSONString := "[]"
+	if sm.EmbeddedDataSpecifications != nil {
+		edsBytes, err := json.Marshal(sm.EmbeddedDataSpecifications)
+		if err != nil {
+			fmt.Println(err)
+			return common.NewInternalServerError("Failed to marshal EmbeddedDataSpecifications - no changes applied - see console for details")
+		}
+		if edsBytes != nil {
+			edsJSONString = string(edsBytes)
+		}
+	}
+
 	const q = `
-        INSERT INTO submodel (id, id_short, category, kind, model_type, semantic_id, displayname_id, description_id, administration_id)
-        VALUES ($1, $2, $3, $4, 'Submodel', $5, $6, $7, $8)
+        INSERT INTO submodel (id, id_short, category, kind, model_type, semantic_id, displayname_id, description_id, administration_id, embedded_data_specification)
+        VALUES ($1, $2, $3, $4, 'Submodel', $5, $6, $7, $8, $9)
         ON CONFLICT (id) DO NOTHING
     `
 
-	_, err = tx.Exec(q, sm.ID, sm.IdShort, sm.Category, sm.Kind, semanticIDDbID, displayNameID, descriptionID, administrationID)
+	_, err = tx.Exec(q, sm.ID, sm.IdShort, sm.Category, sm.Kind, semanticIDDbID, displayNameID, descriptionID, administrationID, edsJSONString)
 	if err != nil {
 		return err
 	}
@@ -368,19 +381,6 @@ func (p *PostgreSQLSubmodelDatabase) CreateSubmodel(sm gen.Submodel) error {
 		err = persistenceutils.InsertSupplementalSemanticIDsSubmodel(tx, sm.ID, sm.SupplementalSemanticIds)
 		if err != nil {
 			return err
-		}
-	}
-
-	if sm.EmbeddedDataSpecifications != nil {
-		for i, eds := range sm.EmbeddedDataSpecifications {
-			edsDbID, err := persistenceutils.CreateEmbeddedDataSpecification(tx, eds, i)
-			if err != nil {
-				return err
-			}
-			_, err = tx.Exec("INSERT INTO submodel_embedded_data_specification(submodel_id, embedded_data_specification_id) VALUES ($1, $2)", sm.ID, edsDbID)
-			if err != nil {
-				return err
-			}
 		}
 	}
 
