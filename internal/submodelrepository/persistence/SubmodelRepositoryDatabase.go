@@ -467,8 +467,8 @@ func (p *PostgreSQLSubmodelDatabase) CreateSubmodel(sm gen.Submodel) error {
 	}
 
 	extensionJSONString := "[]"
-	if sm.Extension != nil {
-		extensionBytes, err := json.Marshal(sm.Extension)
+	if sm.Extensions != nil {
+		extensionBytes, err := json.Marshal(sm.Extensions)
 		if err != nil {
 			fmt.Println(err)
 			return common.NewInternalServerError("Failed to marshal Extension - no changes applied - see console for details")
@@ -510,8 +510,8 @@ func (p *PostgreSQLSubmodelDatabase) CreateSubmodel(sm gen.Submodel) error {
 		}
 	}
 
-	if len(sm.Qualifier) > 0 {
-		for i, qualifier := range sm.Qualifier {
+	if len(sm.Qualifiers) > 0 {
+		for i, qualifier := range sm.Qualifiers {
 			qualifierID, err := persistenceutils.CreateQualifier(tx, qualifier, i)
 			if err != nil {
 				return err

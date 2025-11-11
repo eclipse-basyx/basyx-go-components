@@ -189,10 +189,20 @@ func (p *PostgreSQLSMECrudHandler) CreateWithPath(tx *sql.Tx, submodelID string,
 		supplementalSemanticIDsJSONString = string(supplementalSemanticIDsBytes)
 	}
 
+	extensionsJSONString := "[]"
+	if len(submodelElement.GetExtensions()) > 0 {
+		var json = jsoniter.ConfigCompatibleWithStandardLibrary
+		extensionsBytes, err := json.Marshal(submodelElement.GetExtensions())
+		if err != nil {
+			return 0, err
+		}
+		extensionsJSONString = string(extensionsBytes)
+	}
+
 	var id int
 	err = tx.QueryRow(`	INSERT INTO
-	 					submodel_element(submodel_id, parent_sme_id, position, id_short, category, model_type, semantic_id, idshort_path, description_id, displayname_id, root_sme_id, embedded_data_specification, supplemental_semantic_ids)
-						VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING id`,
+	 					submodel_element(submodel_id, parent_sme_id, position, id_short, category, model_type, semantic_id, idshort_path, description_id, displayname_id, root_sme_id, embedded_data_specification, supplemental_semantic_ids, extensions)
+						VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING id`,
 		submodelID,
 		parentDBId,
 		position,
@@ -206,6 +216,7 @@ func (p *PostgreSQLSMECrudHandler) CreateWithPath(tx *sql.Tx, submodelID string,
 		rootDbID,
 		edsJSONString,
 		supplementalSemanticIDsJSONString,
+		extensionsJSONString,
 	).Scan(&id)
 	if err != nil {
 		return 0, err

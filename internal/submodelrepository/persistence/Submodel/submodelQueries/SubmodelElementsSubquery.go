@@ -98,6 +98,7 @@ func GetSubmodelElementsSubquery(filter SubmodelElementFilter) (*goqu.SelectData
 			goqu.I("sme.position").As("position"),
 			goqu.I("sme.embedded_data_specification").As("embeddedDataSpecifications"),
 			goqu.I("sme.supplemental_semantic_ids").As("supplementalSemanticIds"),
+			goqu.I("sme.extensions").As("extensions"),
 			displayNamesSubquery.As("displayNames"),
 			descriptionsSubquery.As("descriptions"),
 			valueByType.As("value"),
@@ -145,10 +146,6 @@ func getValueSubquery(dialect goqu.DialectWrapper) exp.CaseExpression {
 		// When(
 		// 	goqu.I("sme.model_type").Eq("Blob"),
 		// 	getBlobSubquery(dialect),
-		// ).
-		// When(
-		// 	goqu.I("sme.model_type").Eq("Capability"),
-		// 	getCapabilitySubquery(dialect),
 		// ).
 		When(
 			goqu.I("sme.model_type").Eq("Entity"),
@@ -218,10 +215,6 @@ func getBasicEventElementSubquery(dialect goqu.DialectWrapper) *goqu.SelectDatas
 }
 
 // func getBlobSubquery(dialect goqu.DialectWrapper) *goqu.SelectDataset {
-// 	return nil
-// }
-
-// func getCapabilitySubquery(dialect goqu.DialectWrapper) *goqu.SelectDataset {
 // 	return nil
 // }
 

@@ -80,6 +80,10 @@ func BuildSubmodelElement(smeRow model.SubmodelElementRow) (*model.SubmodelEleme
 		qualifiers []model.Qualifier
 		err        error
 	}
+	type extensionsResult struct {
+		extensions []model.Extension
+		err        error
+	}
 
 	semanticIDChan := make(chan semanticIDResult, 1)
 	descriptionChan := make(chan descriptionResult, 1)
@@ -87,6 +91,7 @@ func BuildSubmodelElement(smeRow model.SubmodelElementRow) (*model.SubmodelEleme
 	embeddedDataSpecChan := make(chan embeddedDataSpecResult, 1)
 	supplementalSemanticIDsChan := make(chan supplementalSemanticIDsResult, 1)
 	qualifiersChan := make(chan qualifiersResult, 1)
+	extensionsChan := make(chan extensionsResult, 1)
 
 	// Parse SemanticID
 	wg.Add(1)
@@ -154,6 +159,23 @@ func BuildSubmodelElement(smeRow model.SubmodelElementRow) (*model.SubmodelEleme
 		}
 	}()
 
+	// Parse Extensions
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		if smeRow.Extensions != nil {
+			var extensions []model.Extension
+			var json = jsoniter.ConfigCompatibleWithStandardLibrary
+			err := json.Unmarshal(*smeRow.Extensions, &extensions)
+			if err != nil {
+				log.Printf("error unmarshaling embedded data specifications: %v", err)
+			}
+			extensionsChan <- extensionsResult{extensions: extensions, err: err}
+		} else {
+			extensionsChan <- extensionsResult{}
+		}
+	}()
+
 	// Parse Qualifiers
 	wg.Add(1)
 	go func() {
@@ -206,6 +228,14 @@ func BuildSubmodelElement(smeRow model.SubmodelElementRow) (*model.SubmodelEleme
 	}
 	if semIDResult.semanticID != nil {
 		specificSME.SetSemanticID(semIDResult.semanticID)
+	}
+
+	extResult := <-extensionsChan
+	if extResult.err != nil {
+		return nil, nil, fmt.Errorf("error parsing extensions: %w", extResult.err)
+	}
+	if extResult.extensions != nil {
+		specificSME.SetExtensions(extResult.extensions)
 	}
 
 	descResult := <-descriptionChan

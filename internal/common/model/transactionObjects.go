@@ -329,6 +329,8 @@ type SubmodelElementRow struct {
 	SupplementalSemanticIDsReferred *json.RawMessage `json:"supplementalSemanticIdReferredReferenceRows"`
 	// Qualifiers contains qualifier information as JSON data
 	Qualifiers *json.RawMessage `json:"qualifiers"`
+	// Qualifiers contains qualifier information as JSON data
+	Extensions *json.RawMessage `json:"extensions"`
 	// Position specifies the position/order of the submodel element among its siblings
 	Position int `json:"position"`
 	// EmbeddedDataSpecifications contains embedded data specifications as JSON data

@@ -313,8 +313,8 @@ func parseSubmodelRow(row model.SubmodelRow, referenceBuilderRefs map[int64]*bui
 	if len(embeddedDataSpecs) > 0 {
 		submodel.EmbeddedDataSpecifications = embeddedDataSpecs
 	}
-	submodel.Qualifier = qualifiers
-	submodel.Extension = extensions
+	submodel.Qualifiers = qualifiers
+	submodel.Extensions = extensions
 	submodel.Administration = administration
 
 	return submodel, nil
@@ -472,6 +472,7 @@ func GetSubmodelElementsForSubmodel(db *sql.DB, submodelID string) ([]model.Subm
 			&smeRow.Position,
 			&smeRow.EmbeddedDataSpecifications,
 			&smeRow.SupplementalSemanticIDs,
+			&smeRow.Extensions,
 			&smeRow.DisplayNames,
 			&smeRow.Descriptions,
 			&smeRow.Value,

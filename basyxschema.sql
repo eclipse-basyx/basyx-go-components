@@ -376,6 +376,7 @@ CREATE TABLE IF NOT EXISTS submodel_element (
   model_type     aas_submodel_elements NOT NULL,
   embedded_data_specification JSONB DEFAULT '[]',
   supplemental_semantic_ids JSONB DEFAULT '[]',
+  extensions JSONB DEFAULT '[]',
   semantic_id    BIGINT REFERENCES reference(id),
   description_id BIGINT REFERENCES lang_string_text_type_reference(id) ON DELETE CASCADE,
   displayname_id BIGINT REFERENCES lang_string_name_type_reference(id) ON DELETE CASCADE,

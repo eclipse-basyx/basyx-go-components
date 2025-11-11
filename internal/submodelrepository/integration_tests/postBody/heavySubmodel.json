@@ -686,7 +686,7 @@
             }
         }
     ],
-    "qualifier": [
+    "qualifiers": [
         {
             "kind": "ConceptQualifier",
             "type": "ExpressionSemantic",
@@ -861,7 +861,7 @@
             "valueType": "xs:boolean"
         }
     ],
-    "extension": [
+    "extensions": [
         {
             "name": "http://acplt.org/Extension/ExampleExtension",
             "valueType": "xs:string",

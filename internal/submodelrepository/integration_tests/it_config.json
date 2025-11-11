@@ -185,5 +185,19 @@
         "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlFbnRpdHlTdWJtb2RlbA",
         "shouldMatch": "postBody/postSubmodelWithEntity.json",
         "expectedStatus": 200
+    },
+    {
+        "context": "Post Submodel with Capability SubmodelElement",
+        "method": "POST",
+        "endpoint": "http://localhost:6004/submodels",
+        "data": "postBody/postSubmodelWithCapability.json",
+        "expectedStatus": 201
+    },
+    {
+        "context": "Get Submodel with Capability SubmodelElement",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlDYXBhYmlsaXR5U3VibW9kZWw",
+        "shouldMatch": "postBody/postSubmodelWithCapability.json",
+        "expectedStatus": 200
     }
 ]
