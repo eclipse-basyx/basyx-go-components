@@ -1,3 +1,5 @@
+// Package main implements the AAS Repository Service entrypoint.
+// It starts the HTTP server and registers the generated OpenAPI controllers.
 package main
 
 import (
@@ -14,7 +16,8 @@ import (
 	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/aasrepositoryapi/go"
 )
 
-func runServer(ctx context.Context, configPath string, databaseSchema string) error {
+func runServer(ctx context.Context, configPath string, _ string) error {
+	// _ = databaseSchema // intentionally unused for now
 	log.Default().Println("Loading AAS Repository Service...")
 	log.Default().Println("Config Path:", configPath)
 

@@ -33,26 +33,32 @@ func (s *AASRepositoryService) GetDescription(_ context.Context) (gen.ImplRespon
 // You can fill these out later once persistence and real logic are added.
 
 // DeleteAssetAdministrationShellById deletes the Asset Administration Shell identified by aasIdentifier.
+//
+//revive:disable-next-line var-naming
 func (s *AASRepositoryService) DeleteAssetAdministrationShellById(ctx context.Context, aasIdentifier string) (openapi.ImplResponse, error) {
 	return openapi.Response(http.StatusNotImplemented, nil), errors.New("not implemented")
 }
 
 // GetAllAssetAdministrationShells returns a paginated list of Asset Administration Shells.
-func (s *AASRepositoryService) GetAllAssetAdministrationShells(ctx context.Context, limit int32, cursor string, idShort string) (openapi.ImplResponse, error) {
+func (s *AASRepositoryService) GetAllAssetAdministrationShells(_ context.Context, _ int32, _ string, _ string) (openapi.ImplResponse, error) {
 	return openapi.Response(http.StatusNotImplemented, nil), errors.New("not implemented")
 }
 
 // GetAssetAdministrationShellById returns the Asset Administration Shell identified by aasIdentifier.
+//
+//revive:disable-next-line var-naming
 func (s *AASRepositoryService) GetAssetAdministrationShellById(ctx context.Context, aasIdentifier string) (openapi.ImplResponse, error) {
 	return openapi.Response(http.StatusNotImplemented, nil), errors.New("not implemented")
 }
 
 // PostAssetAdministrationShell creates a new Asset Administration Shell.
-func (s *AASRepositoryService) PostAssetAdministrationShell(ctx context.Context, aas openapi.AssetAdministrationShell) (openapi.ImplResponse, error) {
+func (s *AASRepositoryService) PostAssetAdministrationShell(_ context.Context, _ openapi.AssetAdministrationShell) (openapi.ImplResponse, error) {
 	return openapi.Response(http.StatusNotImplemented, nil), errors.New("not implemented")
 }
 
 // PutAssetAdministrationShellById updates or creates the Asset Administration Shell identified by aasIdentifier.
+//
+//revive:disable-next-line var-naming
 func (s *AASRepositoryService) PutAssetAdministrationShellById(ctx context.Context, aasIdentifier string, aas openapi.AssetAdministrationShell) (openapi.ImplResponse, error) {
 	return openapi.Response(http.StatusNotImplemented, nil), errors.New("not implemented")
 }
