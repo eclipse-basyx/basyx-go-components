@@ -14,7 +14,6 @@ import (
 	persistencepostgresql "github.com/eclipse-basyx/basyx-go-components/internal/discoveryservice/persistence"
 	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/discoveryapi"
 	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/cors"
 )
 
 func runServer(ctx context.Context, configPath string) error {
@@ -30,16 +29,7 @@ func runServer(ctx context.Context, configPath string) error {
 	// === Main Router ===
 	r := chi.NewRouter()
 
-	// --- CORS ---
-	c := cors.New(cors.Options{
-		AllowedOrigins:   []string{"*"},
-		AllowedMethods:   []string{http.MethodGet, http.MethodPost, http.MethodDelete, http.MethodOptions, http.MethodPut, http.MethodPatch},
-		AllowedHeaders:   []string{"*"}, // includes Authorization
-		AllowCredentials: true,
-	})
-	r.Use(c.Handler)
-
-	// --- Health Endpoint (public) ---
+	common.AddCors(r, cfg)
 	common.AddHealthEndpoint(r, cfg)
 
 	// === Database ===

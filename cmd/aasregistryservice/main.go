@@ -22,6 +22,7 @@ import (
 	ass_registry_api "github.com/eclipse-basyx/basyx-go-components/internal/aasregistry/api"
 	aasregistrydatabase "github.com/eclipse-basyx/basyx-go-components/internal/aasregistry/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	apis "github.com/eclipse-basyx/basyx-go-components/pkg/aasregistryapi"
 	"github.com/go-chi/chi/v5"
 )
@@ -73,9 +74,29 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	}
 	descSvc := apis.NewDescriptionAPIAPIService()
 	descCtrl := apis.NewDescriptionAPIAPIController(descSvc)
-	for _, rt := range descCtrl.Routes() {
-		r.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
+
+	base := common.NormalizeBasePath(cfg.Server.ContextPath)
+
+	// === Protected API Subrouter ===
+	apiRouter := chi.NewRouter()
+
+	// Apply OIDC + ABAC once for all discovery endpoints
+	if err := auth.SetupSecurity(ctx, cfg, apiRouter); err != nil {
+		return err
 	}
+
+	// Register all discovery routes (protected)
+	for _, rt := range smCtrl.Routes() {
+		apiRouter.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
+	}
+
+	// Register all description routes (protected)
+	for _, rt := range descCtrl.Routes() {
+		apiRouter.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
+	}
+
+	// Mount protected API under base path
+	r.Mount(base, apiRouter)
 
 	addr := "0.0.0.0:" + fmt.Sprintf("%d", cfg.Server.Port)
 	log.Printf("▶️ AAS Registry listening on %s (contextPath=%q)\n", addr, cfg.Server.ContextPath)
