@@ -1,3 +1,4 @@
+// Package api contains HTTP handler implementations for the AAS Repository Service.
 package api
 
 import (
@@ -31,22 +32,27 @@ func (s *AASRepositoryService) GetDescription(_ context.Context) (gen.ImplRespon
 // These are stub methods to make the project compile and run cleanly.
 // You can fill these out later once persistence and real logic are added.
 
+// DeleteAssetAdministrationShellById deletes the Asset Administration Shell identified by aasIdentifier.
 func (s *AASRepositoryService) DeleteAssetAdministrationShellById(ctx context.Context, aasIdentifier string) (openapi.ImplResponse, error) {
 	return openapi.Response(http.StatusNotImplemented, nil), errors.New("not implemented")
 }
 
+// GetAllAssetAdministrationShells returns a paginated list of Asset Administration Shells.
 func (s *AASRepositoryService) GetAllAssetAdministrationShells(ctx context.Context, limit int32, cursor string, idShort string) (openapi.ImplResponse, error) {
 	return openapi.Response(http.StatusNotImplemented, nil), errors.New("not implemented")
 }
 
+// GetAssetAdministrationShellById returns the Asset Administration Shell identified by aasIdentifier.
 func (s *AASRepositoryService) GetAssetAdministrationShellById(ctx context.Context, aasIdentifier string) (openapi.ImplResponse, error) {
 	return openapi.Response(http.StatusNotImplemented, nil), errors.New("not implemented")
 }
 
+// PostAssetAdministrationShell creates a new Asset Administration Shell.
 func (s *AASRepositoryService) PostAssetAdministrationShell(ctx context.Context, aas openapi.AssetAdministrationShell) (openapi.ImplResponse, error) {
 	return openapi.Response(http.StatusNotImplemented, nil), errors.New("not implemented")
 }
 
+// PutAssetAdministrationShellById updates or creates the Asset Administration Shell identified by aasIdentifier.
 func (s *AASRepositoryService) PutAssetAdministrationShellById(ctx context.Context, aasIdentifier string, aas openapi.AssetAdministrationShell) (openapi.ImplResponse, error) {
 	return openapi.Response(http.StatusNotImplemented, nil), errors.New("not implemented")
 }
