@@ -89,7 +89,7 @@ func (p PostgreSQLAnnotatedRelationshipElementHandler) Create(tx *sql.Tx, submod
 	}
 
 	// AnnotatedRelationshipElement-specific database insertion
-	err = insertAnnotatedRelationshipElement(areElem, tx, id, submodelID, p.db)
+	err = insertAnnotatedRelationshipElement(areElem, tx, id)
 	if err != nil {
 		return 0, err
 	}
@@ -125,7 +125,7 @@ func (p PostgreSQLAnnotatedRelationshipElementHandler) CreateNested(tx *sql.Tx, 
 	}
 
 	// AnnotatedRelationshipElement-specific database insertion for nested element
-	err = insertAnnotatedRelationshipElement(areElem, tx, id, submodelID, p.db)
+	err = insertAnnotatedRelationshipElement(areElem, tx, id)
 	if err != nil {
 		return 0, err
 	}
@@ -166,7 +166,7 @@ func (p PostgreSQLAnnotatedRelationshipElementHandler) Delete(idShortOrPath stri
 	return nil
 }
 
-func insertAnnotatedRelationshipElement(areElem *gen.AnnotatedRelationshipElement, tx *sql.Tx, id int, submodelID string, db *sql.DB) error {
+func insertAnnotatedRelationshipElement(areElem *gen.AnnotatedRelationshipElement, tx *sql.Tx, id int) error {
 	// Insert into relationship_element
 	var firstRef, secondRef string
 	var json = jsoniter.ConfigCompatibleWithStandardLibrary

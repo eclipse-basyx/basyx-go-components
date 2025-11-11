@@ -556,7 +556,7 @@ func (p *PostgreSQLSubmodelDatabase) GetSubmodelElement(submodelID string, idSho
 		}
 	}()
 
-	elements, cursor, err := submodelpersistence.GetSubmodelElementsForSubmodel(p.db, submodelID, idShortOrPath, cursor, limit)
+	elements, _, err := submodelpersistence.GetSubmodelElementsForSubmodel(p.db, submodelID, idShortOrPath, cursor, limit)
 	if err != nil {
 		return nil, err
 	}

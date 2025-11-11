@@ -92,7 +92,7 @@ func (p PostgreSQLOperationHandler) Create(tx *sql.Tx, submodelID string, submod
 	}
 
 	// Operation-specific database insertion
-	err = insertOperation(operation, tx, id, submodelID, p.db)
+	err = insertOperation(operation, tx, id)
 	if err != nil {
 		return 0, err
 	}
@@ -129,7 +129,7 @@ func (p PostgreSQLOperationHandler) CreateNested(tx *sql.Tx, submodelID string, 
 	}
 
 	// Operation-specific database insertion for nested element
-	err = insertOperation(operation, tx, id, submodelID, p.db)
+	err = insertOperation(operation, tx, id)
 	if err != nil {
 		return 0, err
 	}
@@ -182,7 +182,7 @@ func (p PostgreSQLOperationHandler) Delete(idShortOrPath string) error {
 //
 // Returns:
 //   - error: An error if the database insert operation fails
-func insertOperation(operation *gen.Operation, tx *sql.Tx, id int, submodelID string, db *sql.DB) error {
+func insertOperation(operation *gen.Operation, tx *sql.Tx, id int) error {
 	json := jsoniter.ConfigCompatibleWithStandardLibrary
 
 	var inputVars, outputVars, inoutputVars string
