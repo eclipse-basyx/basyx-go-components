@@ -443,7 +443,7 @@ func CreateAdministrativeInformation(tx *sql.Tx, adminInfo *gen.AdministrativeIn
 		if len(adminInfo.EmbeddedDataSpecifications) > 0 {
 			edsBytes, err := json.Marshal(adminInfo.EmbeddedDataSpecifications)
 			if err != nil {
-				fmt.Println(err)		
+				fmt.Println(err)
 				return sql.NullInt64{}, common.NewInternalServerError("Failed to marshal EmbeddedDataSpecifications - no changes applied - see console for details")
 			}
 			if edsBytes != nil {

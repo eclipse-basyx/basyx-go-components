@@ -23,6 +23,7 @@ const (
 	ASSETKIND_INSTANCE       AssetKind = "Instance"
 	ASSETKIND_NOT_APPLICABLE AssetKind = "NotApplicable"
 	ASSETKIND_TYPE           AssetKind = "Type"
+	ASSETKIND_ROLE           AssetKind = "Role"
 )
 
 // AllowedAssetKindEnumValues is all the allowed values of AssetKind enum
@@ -30,6 +31,7 @@ var AllowedAssetKindEnumValues = []AssetKind{
 	"Instance",
 	"NotApplicable",
 	"Type",
+	"Role",
 }
 
 // validAssetKindEnumValue provides a map of AssetKinds for fast verification of use input
@@ -37,6 +39,7 @@ var validAssetKindEnumValues = map[AssetKind]struct{}{
 	"Instance":      {},
 	"NotApplicable": {},
 	"Type":          {},
+	"Role":          {},
 }
 
 // IsValid return true if the value is valid for the enum, false otherwise
@@ -67,5 +70,8 @@ func AssertAssetKindRequired(obj AssetKind) error {
 //
 //nolint:all
 func AssertAssetKindConstraints(obj AssetKind) error {
+	if !obj.IsValid() {
+		return fmt.Errorf("invalid value %q for AssetKind: valid values are %v", obj, AllowedAssetKindEnumValues)
+	}
 	return nil
 }

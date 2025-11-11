@@ -1,0 +1,270 @@
+package descriptors
+
+import (
+	"context"
+	"database/sql"
+	"fmt"
+
+	"github.com/doug-martin/goqu/v9"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/builder"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	"github.com/lib/pq"
+	"golang.org/x/sync/errgroup"
+)
+
+// ReadSubmodelDescriptorsByAASDescriptorID returns all submodel descriptors that
+// belong to a single Asset Administration Shell (AAS) identified by its internal
+// descriptor id (not the AAS Id string).
+//
+// The function delegates to ReadSubmodelDescriptorsByAASDescriptorIDs for the
+// heavy lifting and unwraps the single-entry map. The returned slice contains
+// fully materialized submodel descriptors including optional fields such as
+// SemanticId, Administration, DisplayName, Description, Endpoints, Extensions
+// and SupplementalSemanticId where available. The order of results is by
+// internal descriptor id and then submodel descriptor id ascending.
+//
+// Parameters:
+//   - ctx: request-scoped context used for cancellation and deadlines
+//   - db:  open SQL database handle
+//   - aasDescriptorID: internal descriptor id of the owning AAS
+//
+// Returns the submodel descriptors slice for the given AAS or an error if the
+// query or any of the dependent lookups fail.
+func ReadSubmodelDescriptorsByAASDescriptorID(
+	ctx context.Context,
+	db *sql.DB,
+	aasDescriptorID int64,
+) ([]model.SubmodelDescriptor, error) {
+
+	v, err := ReadSubmodelDescriptorsByAASDescriptorIDs(ctx, db, []int64{aasDescriptorID})
+	return v[aasDescriptorID], err
+}
+
+// ReadSubmodelDescriptorsByAASDescriptorIDs returns all submodel descriptors for
+// a set of AAS descriptor ids (internal ids, not AAS Id strings). Results are
+// grouped by AAS descriptor id in the returned map. The function performs a
+// single base query to collect submodel rows and then issues batched lookups to
+// materialize related data (semantic references, administrative information,
+// display name and description language strings, endpoints, extensions and
+// supplemental semantic references). Batched queries are executed concurrently
+// using errgroup to reduce latency.
+//
+// If an AAS descriptor id from the input has no submodel descriptors, the map
+// will contain that key with a nil slice to signal an empty result explicitly.
+// When the input is empty, an empty map is returned.
+//
+// Parameters:
+//   - ctx: request-scoped context used for cancellation and deadlines
+//   - db:  open SQL database handle
+//   - aasDescriptorIDs: list of internal AAS descriptor ids to fetch for
+//
+// Returns a map keyed by AAS descriptor id with the corresponding submodel
+// descriptors or an error if any query fails.
+func ReadSubmodelDescriptorsByAASDescriptorIDs(
+	ctx context.Context,
+	db *sql.DB,
+	aasDescriptorIDs []int64,
+) (map[int64][]model.SubmodelDescriptor, error) {
+
+	out := make(map[int64][]model.SubmodelDescriptor, len(aasDescriptorIDs))
+	if len(aasDescriptorIDs) == 0 {
+		return out, nil
+	}
+	uniqAASDesc := aasDescriptorIDs
+
+	d := goqu.Dialect(dialect)
+	smd := goqu.T(tblSubmodelDescriptor).As("smd")
+
+	arr := pq.Array(uniqAASDesc)
+	sqlStr, args, err := d.
+		From(smd).
+		Select(
+			smd.Col(colAASDescriptorID),
+			smd.Col(colDescriptorID),
+			smd.Col(colIDShort),
+			smd.Col(colAASID),
+			smd.Col(colSemanticID),
+			smd.Col(colAdminInfoID),
+			smd.Col(colDescriptionID),
+			smd.Col(colDisplayNameID),
+		).
+		Where(goqu.L(fmt.Sprintf("smd.%s = ANY(?::bigint[])", colAASDescriptorID), arr)).
+		Order(
+			smd.Col(colAASDescriptorID).Asc(),
+			smd.Col(colDescriptorID).Asc(),
+		).
+		ToSQL()
+	if err != nil {
+		return nil, err
+	}
+
+	rows, err := db.QueryContext(ctx, sqlStr, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		_ = rows.Close()
+	}()
+
+	perAAS := make(map[int64][]builder.SubmodelDescriptorRow, len(uniqAASDesc))
+	allSmdDescIDs := make([]int64, 0, 10000)
+	semRefIDs := make([]int64, 0, 10000)
+	adminInfoIDs := make([]int64, 0, 10000)
+	descIDs := make([]int64, 0, 10000)
+	displayNameIDs := make([]int64, 0, 10000)
+
+	for rows.Next() {
+		var r builder.SubmodelDescriptorRow
+		if err := rows.Scan(
+			&r.AasDescID,
+			&r.SmdDescID,
+			&r.IDShort,
+			&r.ID,
+			&r.SemanticRefID,
+			&r.AdminInfoID,
+			&r.DescriptionID,
+			&r.DisplayNameID,
+		); err != nil {
+			return nil, err
+		}
+		perAAS[r.AasDescID] = append(perAAS[r.AasDescID], r)
+		allSmdDescIDs = append(allSmdDescIDs, r.SmdDescID)
+		if r.SemanticRefID.Valid {
+			semRefIDs = append(semRefIDs, r.SemanticRefID.Int64)
+		}
+		if r.AdminInfoID.Valid {
+			adminInfoIDs = append(adminInfoIDs, r.AdminInfoID.Int64)
+		}
+		if r.DescriptionID.Valid {
+			descIDs = append(descIDs, r.DescriptionID.Int64)
+		}
+		if r.DisplayNameID.Valid {
+			displayNameIDs = append(displayNameIDs, r.DisplayNameID.Int64)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	if len(allSmdDescIDs) == 0 {
+		for _, id := range uniqAASDesc {
+			if _, ok := out[id]; !ok {
+				out[id] = nil
+			}
+		}
+		return out, nil
+	}
+
+	uniqSmdDescIDs := allSmdDescIDs
+	uniqSemRefIDs := semRefIDs
+	uniqAdminInfoIDs := adminInfoIDs
+	uniqDescIDs := descIDs
+	uniqDisplayNameIDs := displayNameIDs
+
+	semRefByID := map[int64]*model.Reference{}
+	admByID := map[int64]*model.AdministrativeInformation{}
+	nameByID := map[int64][]model.LangStringNameType{}
+	descByID := map[int64][]model.LangStringTextType{}
+	suppBySmdDesc := map[int64][]model.Reference{}
+	endpointsByDesc := map[int64][]model.Endpoint{}
+	extensionsByDesc := map[int64][]model.Extension{}
+
+	g, gctx := errgroup.WithContext(ctx)
+
+	if len(uniqSemRefIDs) > 0 {
+		ids := uniqSemRefIDs
+		GoAssign(g, func() (map[int64]*model.Reference, error) {
+			return GetReferencesByIDsBatch(db, ids)
+		}, &semRefByID)
+	}
+
+	if len(uniqAdminInfoIDs) > 0 {
+		ids := uniqAdminInfoIDs
+		GoAssign(g, func() (map[int64]*model.AdministrativeInformation, error) {
+			return ReadAdministrativeInformationByIDs(gctx, db, tblSubmodelDescriptor, ids)
+		}, &admByID)
+	}
+
+	if len(uniqDisplayNameIDs) > 0 {
+		ids := uniqDisplayNameIDs
+		GoAssign(g, func() (map[int64][]model.LangStringNameType, error) {
+			return GetLangStringNameTypesByIDs(db, ids)
+		}, &nameByID)
+	}
+
+	if len(uniqDescIDs) > 0 {
+		ids := uniqDescIDs
+		GoAssign(g, func() (map[int64][]model.LangStringTextType, error) {
+			return GetLangStringTextTypesByIDs(db, ids)
+		}, &descByID)
+	}
+
+	if len(uniqSmdDescIDs) > 0 {
+		smdIDs := uniqSmdDescIDs
+
+		GoAssign(g, func() (map[int64][]model.Reference, error) {
+			return readEntityReferences1ToMany(
+				gctx, db, smdIDs,
+				tblSubmodelDescriptorSuppSemantic,
+				colDescriptorID,
+				colReferenceID,
+			)
+		}, &suppBySmdDesc)
+
+		// Endpoints
+		GoAssign(g, func() (map[int64][]model.Endpoint, error) {
+			return ReadEndpointsByDescriptorIDs(gctx, db, smdIDs)
+		}, &endpointsByDesc)
+
+		// Extensions
+		GoAssign(g, func() (map[int64][]model.Extension, error) {
+			return ReadExtensionsByDescriptorIDs(gctx, db, smdIDs)
+		}, &extensionsByDesc)
+	}
+
+	if err := g.Wait(); err != nil {
+		return nil, err
+	}
+
+	// Assemble
+	for aasID, rowsForAAS := range perAAS {
+		for _, r := range rowsForAAS {
+			var semanticRef *model.Reference
+			if r.SemanticRefID.Valid {
+				semanticRef = semRefByID[r.SemanticRefID.Int64]
+			}
+			var adminInfo *model.AdministrativeInformation
+			if r.AdminInfoID.Valid {
+				adminInfo = admByID[r.AdminInfoID.Int64]
+			}
+
+			var displayName []model.LangStringNameType
+			if r.DisplayNameID.Valid {
+				displayName = nameByID[r.DisplayNameID.Int64]
+			}
+			var description []model.LangStringTextType
+			if r.DescriptionID.Valid {
+				description = descByID[r.DescriptionID.Int64]
+			}
+
+			out[aasID] = append(out[aasID], model.SubmodelDescriptor{
+				IdShort:                r.IDShort.String,
+				Id:                     r.ID.String,
+				SemanticId:             semanticRef,
+				Administration:         adminInfo,
+				DisplayName:            displayName,
+				Description:            description,
+				Endpoints:              endpointsByDesc[r.SmdDescID],
+				Extensions:             extensionsByDesc[r.SmdDescID],
+				SupplementalSemanticId: suppBySmdDesc[r.SmdDescID],
+			})
+		}
+	}
+
+	for _, id := range uniqAASDesc {
+		if _, ok := out[id]; !ok {
+			out[id] = nil
+		}
+	}
+	return out, nil
+}

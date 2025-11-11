@@ -1,0 +1,85 @@
+{
+    "PagingMetadata": {},
+    "Result": [
+{
+    "id": "https://iese.fraunhofer.de/ids/aas/34hzeaw",
+    "assetKind": "Type",
+    "assetType": "betachad",
+    "endpoints": [
+        {
+            "interface": "AAS-3.0",
+            "protocolInformation": {
+                "href": "https://demo3.digital-twin.host/aas-environment/shells/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy83NjA5XzQxMTZfMTYyMF8yNTk15",
+                "endpointProtocol": "https"
+            }
+        }
+    ],
+    "extensions": [
+        {
+            "name": "lol",
+            "valueType": "xs:string",
+            "value": "kopf"
+        }
+    ]
+},
+{
+    "id": "https://iese.fraunhofer.de/ids/aas/3657le6d",
+    "assetKind": "Instance",
+    "assetType": "betachad",
+    "endpoints": [
+        {
+            "interface": "AAS-3.0",
+            "protocolInformation": {
+                "href": "https://demo3.digital-twin.host/aas-environment/shells/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy83NjA5XzQxMTZfMTYyMF8yNTk15",
+                "endpointProtocol": "https"
+            }
+        }
+    ],
+    "extensions": [
+        {
+            "name": "helpme",
+            "valueType": "xs:string",
+            "value": "LUL"
+        }
+    ]
+},
+{
+    "id": "https://iese.fraunhofer.de/ids/aas/factorio",
+    "submodelDescriptors": [
+        {
+            "id": "https://iese.fraunhofer.de/ids/aas/satisfactory",
+            "endpoints": [
+                {
+                    "interface": "AAS-3.0",
+                    "protocolInformation": {
+                        "href": "https://demo3.digital-twin.host/aas-environment/shells/supersimple"
+                    }
+                }
+            ]
+        }
+    ]
+},
+{
+    "id": "https://iese.fraunhofer.de/ids/aas/w456kjw5k6z",
+    "assetKind": "Instance",
+    "assetType": "gigachad",
+    "endpoints": [
+        {
+            "interface": "AAS-3.0",
+            "protocolInformation": {
+                "href": "https://demo3.digital-twin.host/aas-environment/shells/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy83NjA5XzQxMTZfMTYyMF8yNTk15",
+                "endpointProtocol": "https"
+            }
+        }
+    ],
+    "extensions": [
+        {
+            "name": "factorio",
+            "valueType": "xs:string",
+            "value": "gaming"
+        }
+    ]
+}
+
+    ]
+}

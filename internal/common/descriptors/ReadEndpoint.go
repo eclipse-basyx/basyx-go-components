@@ -1,0 +1,194 @@
+package descriptors
+
+import (
+    "context"
+    "database/sql"
+    "encoding/json"
+    "fmt"
+
+    "github.com/doug-martin/goqu/v9"
+    // nolint:revive
+    _ "github.com/doug-martin/goqu/v9/dialect/postgres"
+    "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+    "github.com/lib/pq"
+)
+
+// ReadEndpointsByDescriptorID returns all endpoints that belong to a single
+// descriptor identified by the given descriptorID.
+//
+// It is a convenience wrapper around ReadEndpointsByDescriptorIDs and simply
+// returns the slice mapped to the provided ID. If the descriptor exists but has
+// no endpoints, the returned slice is empty. If the descriptorID does not
+// produce any rows, the returned slice is nil and no error is raised.
+//
+// The provided context is used for cancellation and deadline control of the
+// underlying database call.
+//
+// Errors originate from ReadEndpointsByDescriptorIDs (SQL build/exec/scan or
+// JSON decoding failures) and are returned verbatim.
+func ReadEndpointsByDescriptorID(
+	ctx context.Context,
+	db *sql.DB,
+	descriptorID int64,
+) ([]model.Endpoint, error) {
+	v, err := ReadEndpointsByDescriptorIDs(ctx, db, []int64{descriptorID})
+	return v[descriptorID], err
+}
+
+// ReadEndpointsByDescriptorIDs retrieves endpoints for the provided descriptorIDs
+// in a single database round trip.
+//
+// Return value is a map keyed by descriptor ID, each value containing that
+// descriptor's endpoints. When descriptorIDs is empty, an empty map is returned
+// without querying the database.
+//
+// Result semantics and ordering:
+// - Endpoints are ordered by descriptor_id ASC, then endpoint id ASC.
+// - Protocol versions are aggregated per-endpoint and ordered by version row id.
+// - Security attributes are aggregated per-endpoint and ordered by attribute row id.
+// - Nullable text columns are COALESCE'd to empty strings; arrays default to empty.
+//
+// Implementation notes:
+// - Uses pq.Array with SQL ANY for efficient multi-key filtering.
+// - Uses LEFT JOINs so endpoints without versions or security attributes are still returned.
+// - Prepared statements are enabled via goqu to allow DB plan caching.
+//
+// Errors may occur while building the SQL statement, executing the query,
+// scanning columns, or decoding the aggregated JSON payload of security
+// attributes.
+func ReadEndpointsByDescriptorIDs(
+	ctx context.Context,
+	db *sql.DB,
+	descriptorIDs []int64,
+) (map[int64][]model.Endpoint, error) {
+	out := make(map[int64][]model.Endpoint, len(descriptorIDs))
+	if len(descriptorIDs) == 0 {
+		return out, nil
+	}
+
+    d := goqu.Dialect(dialect)
+    arr := pq.Array(descriptorIDs)
+
+    e := goqu.T(tblAASDescriptorEndpoint).As("e")
+    v := goqu.T(tblEndpointProtocolVersion).As("v")
+    s := goqu.T(tblSecurityAttributes).As("s")
+
+    ds := d.
+        From(e).
+        LeftJoin(
+            v,
+            goqu.On(v.Col(colEndpointID).Eq(e.Col(colID))),
+        ).
+        LeftJoin(
+            s,
+            goqu.On(s.Col(colEndpointID).Eq(e.Col(colID))),
+        ).
+        Where(goqu.L(fmt.Sprintf("e.%s = ANY(?::bigint[])", colDescriptorID), arr)).
+        Select(
+            e.Col(colDescriptorID),
+            e.Col(colID),
+            goqu.Func("COALESCE", e.Col(colHref), "").As(colHref),
+            goqu.Func("COALESCE", e.Col(colEndpointProtocol), "").As(colEndpointProtocol),
+            goqu.Func("COALESCE", e.Col(colSubProtocol), "").As(colSubProtocol),
+            goqu.Func("COALESCE", e.Col(colSubProtocolBody), "").As(colSubProtocolBody),
+            goqu.Func("COALESCE", e.Col(colSubProtocolBodyEncoding), "").As(colSubProtocolBodyEncoding),
+            goqu.Func("COALESCE", e.Col(colInterface), "").As(colInterface),
+
+            // versions
+            goqu.L(
+                fmt.Sprintf(
+                    "COALESCE(ARRAY_AGG(v.%s ORDER BY v.%s)\n                  FILTER (WHERE v.%s IS NOT NULL), '{}')",
+                    colEndpointProtocolVersion, colID, colEndpointProtocolVersion,
+                ),
+            ).As("versions"),
+
+            // sec_attrs
+            goqu.L(
+                fmt.Sprintf(
+                    "COALESCE(JSON_AGG(JSON_BUILD_OBJECT(\n                    'type', s.%s,\n                    'key', s.%s,\n                    'value', s.%s\n                  ) ORDER BY s.%s)\n                  FILTER (WHERE s.%s IS NOT NULL), '[]')",
+                    colSecurityType, colSecurityKey, colSecurityValue, colID, colSecurityType,
+                ),
+            ).As("sec_attrs"),
+        ).
+        GroupBy(
+            e.Col(colDescriptorID),
+            e.Col(colID),
+            e.Col(colHref),
+            e.Col(colEndpointProtocol),
+            e.Col(colSubProtocol),
+            e.Col(colSubProtocolBody),
+            e.Col(colSubProtocolBodyEncoding),
+            e.Col(colInterface),
+        ).
+        Order(
+            e.Col(colDescriptorID).Asc(),
+            e.Col(colID).Asc(),
+        ).
+        Prepared(true)
+
+	sqlStr, args, err := ds.ToSQL()
+	if err != nil {
+		return nil, err
+	}
+
+	rows, err := db.QueryContext(ctx, sqlStr, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+
+	type secAttr struct {
+		Type  string `json:"type"`
+		Key   string `json:"key"`
+		Value string `json:"value"`
+	}
+
+	for rows.Next() {
+		var (
+			descID, endpointID                                int64
+			href, proto, subProto, subBody, subBodyEnc, iface string
+			versions                                          pq.StringArray
+			secJSON                                           []byte
+		)
+		if err := rows.Scan(
+			&descID, &endpointID,
+			&href, &proto, &subProto, &subBody, &subBodyEnc, &iface,
+			&versions, &secJSON,
+		); err != nil {
+			return nil, err
+		}
+
+		var secAttrs []secAttr
+		if err := json.Unmarshal(secJSON, &secAttrs); err != nil {
+			return nil, err
+		}
+
+		converted := make([]model.ProtocolInformationSecurityAttributes, len(secAttrs))
+		for i, a := range secAttrs {
+			converted[i] = model.ProtocolInformationSecurityAttributes{
+				Type:  a.Type,
+				Key:   a.Key,
+				Value: a.Value,
+			}
+		}
+
+		out[descID] = append(out[descID], model.Endpoint{
+			Interface: iface,
+			ProtocolInformation: model.ProtocolInformation{
+				Href:                    href,
+				EndpointProtocol:        proto,
+				Subprotocol:             subProto,
+				SubprotocolBody:         subBody,
+				SubprotocolBodyEncoding: subBodyEnc,
+				EndpointProtocolVersion: []string(versions),
+				SecurityAttributes:      converted,
+			},
+		})
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return out, nil
+}
