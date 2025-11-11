@@ -1,6 +1,9 @@
 # Stage 1: Build the application
 FROM golang:1.25-alpine AS builder
 
+# Version argument for build-time injection
+ARG VERSION=dev
+
 # Install git and SSL certificates for package downloads
 RUN apk update && apk add --no-cache git ca-certificates && update-ca-certificates
 
@@ -16,8 +19,10 @@ RUN go mod download
 # Copy the entire project
 COPY . .
 
-# Build the application
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o aasregistryservice ./cmd/aasregistryservice
+# Build the application with version information
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo \
+    -ldflags "-X main.Version=${VERSION} -X main.BuildTime=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    -o aasregistryservice ./cmd/aasregistryservice
 
 # Stage 2: Create a minimal image to run the application
 FROM alpine:latest
