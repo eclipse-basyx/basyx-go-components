@@ -13,6 +13,7 @@ package openapi
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"strings"
 
@@ -88,44 +89,57 @@ func (c *AssetAdministrationShellBasicDiscoveryAPIAPIController) Routes() Routes
 
 // GetAllAssetAdministrationShellIdsByAssetLink - Returns a list of Asset Administration Shell ids linked to specific Asset identifiers
 func (c *AssetAdministrationShellBasicDiscoveryAPIAPIController) GetAllAssetAdministrationShellIdsByAssetLink(w http.ResponseWriter, r *http.Request) {
-	query, err := parseQuery(r.URL.RawQuery)
-	if err != nil {
-		result := common.NewErrorResponse(
-			common.NewErrBadRequest("Invalid query parameters"),
-			http.StatusBadRequest,
-			componentName,
-			"GetAllAssetAdministrationShellIdsByAssetLink",
-			"query",
-		)
-		EncodeJSONResponse(result.Body, &result.Code, w)
-		return
-	}
+    query, err := parseQuery(r.URL.RawQuery)
+    if err != nil {
+        log.Printf("🧭 [%s] Error in GetAllAssetAdministrationShellIdsByAssetLink: parse query raw=%q: %v", componentName, r.URL.RawQuery, err)
+        result := common.NewErrorResponse(
+            common.NewErrBadRequest("Invalid query parameters"),
+            http.StatusBadRequest,
+            componentName,
+            "GetAllAssetAdministrationShellIdsByAssetLink",
+            "query",
+        )
+        EncodeJSONResponse(result.Body, &result.Code, w)
+        return
+    }
 
 	var assetIdsParam []string
-	if query.Has("assetIds") {
-		assetIdsParam = strings.Split(query.Get("assetIds"), ",")
+	if vals, ok := query["assetIds"]; ok {
+		for _, v := range vals {
+			if v == "" {
+				continue
+			}
+			parts := strings.Split(v, ",")
+			for _, p := range parts {
+				p = strings.TrimSpace(p)
+				if p != "" {
+					assetIdsParam = append(assetIdsParam, p)
+				}
+			}
+		}
 	}
 
 	var limitParam int32
-	if query.Has("limit") {
-		param, err := parseNumericParameter[int32](
-			query.Get("limit"),
-			WithParse[int32](parseInt32),
-			WithMinimum[int32](1),
-		)
-		if err != nil {
-			result := common.NewErrorResponse(
-				common.NewErrBadRequest("Invalid 'limit' parameter"),
-				http.StatusBadRequest,
-				componentName,
-				"GetAllAssetAdministrationShellIdsByAssetLink",
-				"limit",
-			)
-			EncodeJSONResponse(result.Body, &result.Code, w)
-			return
-		}
-		limitParam = param
-	}
+    if query.Has("limit") {
+        param, err := parseNumericParameter[int32](
+            query.Get("limit"),
+            WithParse[int32](parseInt32),
+            WithMinimum[int32](1),
+        )
+        if err != nil {
+            log.Printf("🧭 [%s] Error in GetAllAssetAdministrationShellIdsByAssetLink: invalid limit=%q: %v", componentName, query.Get("limit"), err)
+            result := common.NewErrorResponse(
+                common.NewErrBadRequest("Invalid 'limit' parameter"),
+                http.StatusBadRequest,
+                componentName,
+                "GetAllAssetAdministrationShellIdsByAssetLink",
+                "limit",
+            )
+            EncodeJSONResponse(result.Body, &result.Code, w)
+            return
+        }
+        limitParam = param
+    }
 
 	var cursorParam string
 	if query.Has("cursor") {
@@ -144,40 +158,42 @@ func (c *AssetAdministrationShellBasicDiscoveryAPIAPIController) GetAllAssetAdmi
 
 // SearchAllAssetAdministrationShellIdsByAssetLink - Returns a list of Asset Administration Shell IDs linked to specific asset identifiers or the global asset ID
 func (c *AssetAdministrationShellBasicDiscoveryAPIAPIController) SearchAllAssetAdministrationShellIdsByAssetLink(w http.ResponseWriter, r *http.Request) {
-	// parse query (limit, cursor)
-	query, err := parseQuery(r.URL.RawQuery)
-	if err != nil {
-		result := common.NewErrorResponse(
-			common.NewErrBadRequest("Invalid query parameters"),
-			http.StatusBadRequest,
-			componentName,
-			"SearchAllAssetAdministrationShellIdsByAssetLink",
-			"query",
-		)
-		EncodeJSONResponse(result.Body, &result.Code, w)
-		return
-	}
+    // parse query (limit, cursor)
+    query, err := parseQuery(r.URL.RawQuery)
+    if err != nil {
+        log.Printf("🧭 [%s] Error in SearchAllAssetAdministrationShellIdsByAssetLink: parse query raw=%q: %v", componentName, r.URL.RawQuery, err)
+        result := common.NewErrorResponse(
+            common.NewErrBadRequest("Invalid query parameters"),
+            http.StatusBadRequest,
+            componentName,
+            "SearchAllAssetAdministrationShellIdsByAssetLink",
+            "query",
+        )
+        EncodeJSONResponse(result.Body, &result.Code, w)
+        return
+    }
 
 	var limitParam int32
-	if query.Has("limit") {
-		param, err := parseNumericParameter[int32](
-			query.Get("limit"),
-			WithParse[int32](parseInt32),
-			WithMinimum[int32](1),
-		)
-		if err != nil {
-			result := common.NewErrorResponse(
-				common.NewErrBadRequest("Invalid 'limit' parameter"),
-				http.StatusBadRequest,
-				componentName,
-				"SearchAllAssetAdministrationShellIdsByAssetLink",
-				"limit",
-			)
-			EncodeJSONResponse(result.Body, &result.Code, w)
-			return
-		}
-		limitParam = param
-	}
+    if query.Has("limit") {
+        param, err := parseNumericParameter[int32](
+            query.Get("limit"),
+            WithParse[int32](parseInt32),
+            WithMinimum[int32](1),
+        )
+        if err != nil {
+            log.Printf("🧭 [%s] Error in SearchAllAssetAdministrationShellIdsByAssetLink: invalid limit=%q: %v", componentName, query.Get("limit"), err)
+            result := common.NewErrorResponse(
+                common.NewErrBadRequest("Invalid 'limit' parameter"),
+                http.StatusBadRequest,
+                componentName,
+                "SearchAllAssetAdministrationShellIdsByAssetLink",
+                "limit",
+            )
+            EncodeJSONResponse(result.Body, &result.Code, w)
+            return
+        }
+        limitParam = param
+    }
 
 	var cursorParam string
 	if query.Has("cursor") {
@@ -186,34 +202,36 @@ func (c *AssetAdministrationShellBasicDiscoveryAPIAPIController) SearchAllAssetA
 
 	// Body: []AssetLink
 	var assetLinksParam []model.AssetLink
-	dec := json.NewDecoder(r.Body)
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&assetLinksParam); err != nil {
-		result := common.NewErrorResponse(
-			common.NewErrBadRequest("Incorrect RequestBody"),
-			http.StatusBadRequest,
-			componentName,
-			"SearchAllAssetAdministrationShellIdsByAssetLink",
-			"RequestBody",
-		)
-		EncodeJSONResponse(result.Body, &result.Code, w)
-		return
-	}
+    dec := json.NewDecoder(r.Body)
+    dec.DisallowUnknownFields()
+    if err := dec.Decode(&assetLinksParam); err != nil {
+        log.Printf("🧭 [%s] Error in SearchAllAssetAdministrationShellIdsByAssetLink: decode request body failed: %v", componentName, err)
+        result := common.NewErrorResponse(
+            common.NewErrBadRequest("Incorrect RequestBody"),
+            http.StatusBadRequest,
+            componentName,
+            "SearchAllAssetAdministrationShellIdsByAssetLink",
+            "RequestBody",
+        )
+        EncodeJSONResponse(result.Body, &result.Code, w)
+        return
+    }
 
 	// Validate each element
-	for _, al := range assetLinksParam {
-		if err := model.AssertAssetLinkRequired(al); err != nil {
-			result := common.NewErrorResponse(
-				common.NewErrBadRequest("Invalid asset link element"),
-				http.StatusBadRequest,
-				componentName,
-				"SearchAllAssetAdministrationShellIdsByAssetLink",
-				"assetLinks",
-			)
-			EncodeJSONResponse(result.Body, &result.Code, w)
-			return
-		}
-	}
+    for _, al := range assetLinksParam {
+        if err := model.AssertAssetLinkRequired(al); err != nil {
+            log.Printf("🧭 [%s] Error in SearchAllAssetAdministrationShellIdsByAssetLink: invalid asset link element: %+v err=%v", componentName, al, err)
+            result := common.NewErrorResponse(
+                common.NewErrBadRequest("Invalid asset link element"),
+                http.StatusBadRequest,
+                componentName,
+                "SearchAllAssetAdministrationShellIdsByAssetLink",
+                "assetLinks",
+            )
+            EncodeJSONResponse(result.Body, &result.Code, w)
+            return
+        }
+    }
 
 	// Service call
 	result, err := c.service.SearchAllAssetAdministrationShellIdsByAssetLink(
@@ -232,18 +250,19 @@ func (c *AssetAdministrationShellBasicDiscoveryAPIAPIController) SearchAllAssetA
 
 // GetAllAssetLinksByID - Returns a list of specific Asset identifiers based on an Asset Administration Shell id to edit discoverable content
 func (c *AssetAdministrationShellBasicDiscoveryAPIAPIController) GetAllAssetLinksByID(w http.ResponseWriter, r *http.Request) {
-	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
-	if aasIdentifierParam == "" {
-		result := common.NewErrorResponse(
-			common.NewErrBadRequest("Missing path parameter 'aasIdentifier'"),
-			http.StatusBadRequest,
-			componentName,
-			"GetAllAssetLinksById",
-			"aasIdentifier",
-		)
-		EncodeJSONResponse(result.Body, &result.Code, w)
-		return
-	}
+    aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
+    if aasIdentifierParam == "" {
+        log.Printf("🧭 [%s] Error in GetAllAssetLinksById: missing path parameter 'aasIdentifier'", componentName)
+        result := common.NewErrorResponse(
+            common.NewErrBadRequest("Missing path parameter 'aasIdentifier'"),
+            http.StatusBadRequest,
+            componentName,
+            "GetAllAssetLinksById",
+            "aasIdentifier",
+        )
+        EncodeJSONResponse(result.Body, &result.Code, w)
+        return
+    }
 
 	result, err := c.service.GetAllAssetLinksByID(r.Context(), aasIdentifierParam)
 	// If an error occurred, encode the error with the status code
@@ -257,47 +276,50 @@ func (c *AssetAdministrationShellBasicDiscoveryAPIAPIController) GetAllAssetLink
 
 // PostAllAssetLinksByID - Creates specific Asset identifiers linked to an Asset Administration Shell to edit discoverable content
 func (c *AssetAdministrationShellBasicDiscoveryAPIAPIController) PostAllAssetLinksByID(w http.ResponseWriter, r *http.Request) {
-	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
-	if aasIdentifierParam == "" {
-		result := common.NewErrorResponse(
-			common.NewErrBadRequest("Missing path parameter 'aasIdentifier'"),
-			http.StatusBadRequest,
-			componentName,
-			"PostAllAssetLinksById",
-			"aasIdentifier",
-		)
-		EncodeJSONResponse(result.Body, &result.Code, w)
-		return
-	}
+    aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
+    if aasIdentifierParam == "" {
+        log.Printf("🧭 [%s] Error in PostAllAssetLinksById: missing path parameter 'aasIdentifier'", componentName)
+        result := common.NewErrorResponse(
+            common.NewErrBadRequest("Missing path parameter 'aasIdentifier'"),
+            http.StatusBadRequest,
+            componentName,
+            "PostAllAssetLinksById",
+            "aasIdentifier",
+        )
+        EncodeJSONResponse(result.Body, &result.Code, w)
+        return
+    }
 
 	var specificAssetIdParam []model.SpecificAssetID
-	d := json.NewDecoder(r.Body)
-	d.DisallowUnknownFields()
-	if err := d.Decode(&specificAssetIdParam); err != nil {
-		result := common.NewErrorResponse(
-			common.NewErrBadRequest("Incorrect RequestBody"),
-			http.StatusBadRequest,
-			componentName,
-			"PostAllAssetLinksById",
-			"RequestBody",
-		)
-		EncodeJSONResponse(result.Body, &result.Code, w)
-		return
-	}
+    d := json.NewDecoder(r.Body)
+    d.DisallowUnknownFields()
+    if err := d.Decode(&specificAssetIdParam); err != nil {
+        log.Printf("🧭 [%s] Error in PostAllAssetLinksById: decode request body failed: %v", componentName, err)
+        result := common.NewErrorResponse(
+            common.NewErrBadRequest("Incorrect RequestBody"),
+            http.StatusBadRequest,
+            componentName,
+            "PostAllAssetLinksById",
+            "RequestBody",
+        )
+        EncodeJSONResponse(result.Body, &result.Code, w)
+        return
+    }
 
-	for _, el := range specificAssetIdParam {
-		if err := model.AssertSpecificAssetIdRequired(el); err != nil {
-			result := common.NewErrorResponse(
-				common.NewErrBadRequest("Invalid SpecificAssetID element"),
-				http.StatusBadRequest,
-				componentName,
-				"PostAllAssetLinksById",
-				"specificAssetIds",
-			)
-			EncodeJSONResponse(result.Body, &result.Code, w)
-			return
-		}
-	}
+    for _, el := range specificAssetIdParam {
+        if err := model.AssertSpecificAssetIdRequired(el); err != nil {
+            log.Printf("🧭 [%s] Error in PostAllAssetLinksById: invalid SpecificAssetID element: %+v err=%v", componentName, el, err)
+            result := common.NewErrorResponse(
+                common.NewErrBadRequest("Invalid SpecificAssetID element"),
+                http.StatusBadRequest,
+                componentName,
+                "PostAllAssetLinksById",
+                "specificAssetIds",
+            )
+            EncodeJSONResponse(result.Body, &result.Code, w)
+            return
+        }
+    }
 
 	result, err := c.service.PostAllAssetLinksByID(r.Context(), aasIdentifierParam, specificAssetIdParam)
 	// If an error occurred, encode the error with the status code
@@ -311,18 +333,19 @@ func (c *AssetAdministrationShellBasicDiscoveryAPIAPIController) PostAllAssetLin
 
 // DeleteAllAssetLinksByID - Deletes all specific Asset identifiers linked to an Asset Administration Shell to edit discoverable content
 func (c *AssetAdministrationShellBasicDiscoveryAPIAPIController) DeleteAllAssetLinksByID(w http.ResponseWriter, r *http.Request) {
-	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
-	if aasIdentifierParam == "" {
-		result := common.NewErrorResponse(
-			common.NewErrBadRequest("Missing path parameter 'aasIdentifier'"),
-			http.StatusBadRequest,
-			componentName,
-			"DeleteAllAssetLinksById",
-			"aasIdentifier",
-		)
-		EncodeJSONResponse(result.Body, &result.Code, w)
-		return
-	}
+    aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
+    if aasIdentifierParam == "" {
+        log.Printf("🧭 [%s] Error in DeleteAllAssetLinksById: missing path parameter 'aasIdentifier'", componentName)
+        result := common.NewErrorResponse(
+            common.NewErrBadRequest("Missing path parameter 'aasIdentifier'"),
+            http.StatusBadRequest,
+            componentName,
+            "DeleteAllAssetLinksById",
+            "aasIdentifier",
+        )
+        EncodeJSONResponse(result.Body, &result.Code, w)
+        return
+    }
 
 	result, err := c.service.DeleteAllAssetLinksByID(r.Context(), aasIdentifierParam)
 	// If an error occurred, encode the error with the status code

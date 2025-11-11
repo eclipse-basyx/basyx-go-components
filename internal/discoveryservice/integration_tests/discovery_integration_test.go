@@ -366,4 +366,53 @@ func TestDiscovery_Suite_Sophisticated(t *testing.T) {
 		assert.Equal(t, http.StatusBadRequest, resp.StatusCode, "expected 400 when no body is sent")
 	})
 
+	// New tests for GET /lookup/shells (GetAllAssetAdministrationShellIdsByAssetLink)
+	t.Run("LookupShellIdsByAssetLinkGET/Single_pair_returns_expected_AAS", func(t *testing.T) {
+		// Use data created earlier: aasB has plant=SPIDERTRON-YARD
+		res := rc.LookupShellIDsByAssetLinkGET(t, []model.SpecificAssetID{{Name: "plant", Value: "SPIDERTRON-YARD"}}, 10, "", http.StatusOK)
+		assert.Contains(t, res.Result, "urn:aas:test:oil-refinery")
+	})
+
+	t.Run("LookupShellIdsByAssetLinkGET/Multiple_pairs_repeated_params", func(t *testing.T) {
+		pairs := []model.SpecificAssetID{{Name: "plant", Value: "SPIDERTRON-YARD"}, {Name: "serialNumber", Value: "SN-engine-unit"}}
+		res := rc.LookupShellIDsByAssetLinkGET(t, pairs, 10, "", http.StatusOK)
+		assert.Equal(t, []string{"urn:aas:test:oil-refinery"}, res.Result)
+	})
+
+	t.Run("LookupShellIdsByAssetLinkGET/Multiple_pairs_single_param_comma_separated", func(t *testing.T) {
+		pairs := []model.SpecificAssetID{{Name: "plant", Value: "SPIDERTRON-YARD"}, {Name: "serialNumber", Value: "SN-engine-unit"}}
+		res := rc.LookupShellIDsByAssetLinkGET(t, pairs, 10, "", http.StatusOK)
+		assert.Equal(t, []string{"urn:aas:test:oil-refinery"}, res.Result)
+	})
+
+	t.Run("LookupShellIdsByAssetLinkGET/Pagination_two_items_limit1_cursor_points_to_next", func(t *testing.T) {
+		// Reuse dataset created in the pagination POST test: two AAS share pageGroup=science-pack-3
+		res1 := rc.LookupShellIDsByAssetLinkGET(t, []model.SpecificAssetID{{Name: "pageGroup", Value: "science-pack-3"}}, 1, "", http.StatusOK)
+		require.Len(t, res1.Result, 1)
+		require.NotEmpty(t, res1.PagingMetadata.Cursor)
+
+		dec, err := common.DecodeString(res1.PagingMetadata.Cursor)
+		require.NoError(t, err)
+		assert.NotEqual(t, res1.Result[0], dec)
+
+		res2 := rc.LookupShellIDsByAssetLinkGET(t, []model.SpecificAssetID{{Name: "pageGroup", Value: "science-pack-3"}}, 1, res1.PagingMetadata.Cursor, http.StatusOK)
+		require.Len(t, res2.Result, 1)
+		assert.NotEqual(t, res1.Result[0], res2.Result[0])
+		assert.Empty(t, res2.PagingMetadata.Cursor)
+	})
+
+	t.Run("LookupShellIdsByAssetLinkGET/BadRequest_when_cursor_not_base64", func(t *testing.T) {
+		_ = testenv.GetExpect(t, fmt.Sprintf("%s/lookup/shells?limit=1&assetIds=%s&cursor=%s", testenv.BaseURL, common.EncodeString(`{"name":"plant","value":"SPIDERTRON-YARD"}`), "not-base64!!!"), http.StatusBadRequest)
+	})
+
+	t.Run("LookupShellsByAssetLink/BadRequest_when_cursor_not_base64", func(t *testing.T) {
+		_ = rc.LookupShellsByAssetLink(t, []model.SpecificAssetID{{Name: "plant", Value: "SPIDERTRON-YARD"}}, 1, "not-base64!!!", http.StatusBadRequest)
+	})
+
+	t.Run("LookupShellIdsByAssetLinkGET/BadRequest_when_assetIds_malformed", func(t *testing.T) {
+		// malformed base64
+		url := fmt.Sprintf("%s/lookup/shells?limit=10&assetIds=%s", testenv.BaseURL, "%%ZZ-invalid")
+		_ = testenv.GetExpect(t, url, http.StatusBadRequest)
+	})
+
 }
