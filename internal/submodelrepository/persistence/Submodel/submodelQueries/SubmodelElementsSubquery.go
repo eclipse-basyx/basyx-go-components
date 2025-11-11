@@ -230,9 +230,9 @@ func getEntitySubquery(dialect goqu.DialectWrapper) *goqu.SelectDataset {
 		Select(
 			goqu.Func("jsonb_build_object",
 				goqu.V("entity_type"), goqu.I("ee.entity_type"),
-				goqu.V("globalAssetId"), goqu.I("ee.global_asset_id"),
+				goqu.V("global_asset_id"), goqu.I("ee.global_asset_id"),
 				goqu.V("statements"), goqu.I("ee.statements"),
-				goqu.V("specificAssetIds"), goqu.I("ee.specific_asset_ids"),
+				goqu.V("specific_asset_ids"), goqu.I("ee.specific_asset_ids"),
 			),
 		).
 		Where(goqu.I("ee.id").Eq(goqu.I("sme.id"))).

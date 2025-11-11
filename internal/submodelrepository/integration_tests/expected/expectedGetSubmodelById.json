@@ -146,7 +146,118 @@
                 "value": "http://acplt.org/Operations/ExampleOperation"
               }
             ]
-          }
+          },
+          "inputVariables": [
+            {
+              "value": {
+                "category": "CONSTANT",
+                "idShort": "ExampleProperty1",
+                "description": [
+                  {
+                    "language": "en-us",
+                    "text": "Example Property object"
+                  },
+                  {
+                    "language": "de",
+                    "text": "Beispiel Property Element"
+                  }
+                ],
+                "modelType": "Property",
+                "semanticId": {
+                  "type": "ExternalReference",
+                  "keys": [
+                    {
+                      "type": "GlobalReference",
+                      "value": "http://acplt.org/Properties/ExampleProperty"
+                    }
+                  ]
+                },
+                "qualifiers": [
+                  {
+                    "kind": "ConceptQualifier",
+                    "type": "http://acplt.org/Qualifier/ExampleQualifier",
+                    "valueType": "xs:string"
+                  }
+                ],
+                "valueType": "xs:string",
+                "value": "exampleValue"
+              }
+            }
+          ],
+          "outputVariables": [
+            {
+              "value": {
+                "category": "CONSTANT",
+                "idShort": "ExampleProperty2",
+                "description": [
+                  {
+                    "language": "en-us",
+                    "text": "Example Property object"
+                  },
+                  {
+                    "language": "de",
+                    "text": "Beispiel Property Element"
+                  }
+                ],
+                "modelType": "Property",
+                "semanticId": {
+                  "type": "ExternalReference",
+                  "keys": [
+                    {
+                      "type": "GlobalReference",
+                      "value": "http://acplt.org/Properties/ExampleProperty"
+                    }
+                  ]
+                },
+                "qualifiers": [
+                  {
+                    "kind": "ConceptQualifier",
+                    "type": "http://acplt.org/Qualifier/ExampleQualifier",
+                    "valueType": "xs:string"
+                  }
+                ],
+                "valueType": "xs:string",
+                "value": "exampleValue"
+              }
+            }
+          ],
+          "inoutputVariables": [
+            {
+              "value": {
+                "category": "CONSTANT",
+                "idShort": "ExampleProperty3",
+                "description": [
+                  {
+                    "language": "en-us",
+                    "text": "Example Property object"
+                  },
+                  {
+                    "language": "de",
+                    "text": "Beispiel Property Element"
+                  }
+                ],
+                "modelType": "Property",
+                "semanticId": {
+                  "type": "ExternalReference",
+                  "keys": [
+                    {
+                      "type": "GlobalReference",
+                      "value": "http://acplt.org/Properties/ExampleProperty"
+                    }
+                  ]
+                },
+                "qualifiers": [
+                  {
+                    "kind": "ConceptQualifier",
+                    "type": "http://acplt.org/Qualifier/ExampleQualifier",
+                    "valueType": "xs:string"
+                  }
+                ],
+                "valueType": "xs:string",
+                "value": "exampleValue"
+              }
+            }
+          ]
         },
         {
           "category": "PARAMETER",
@@ -424,105 +535,6 @@
           ]
         }
       ]
-    },
-    {
-      "category": "CONSTANT",
-      "idShort": "ExampleProperty1",
-      "description": [
-        {
-          "language": "en-us",
-          "text": "Example Property object"
-        },
-        {
-          "language": "de",
-          "text": "Beispiel Property Element"
-        }
-      ],
-      "modelType": "Property",
-      "semanticId": {
-        "type": "ExternalReference",
-        "keys": [
-          {
-            "type": "GlobalReference",
-            "value": "http://acplt.org/Properties/ExampleProperty"
-          }
-        ]
-      },
-      "qualifiers": [
-        {
-          "kind": "ConceptQualifier",
-          "type": "http://acplt.org/Qualifier/ExampleQualifier",
-          "valueType": "xs:string"
-        }
-      ],
-      "valueType": "xs:string",
-      "value": "exampleValue"
-    },
-    {
-      "category": "CONSTANT",
-      "idShort": "ExampleProperty2",
-      "description": [
-        {
-          "language": "en-us",
-          "text": "Example Property object"
-        },
-        {
-          "language": "de",
-          "text": "Beispiel Property Element"
-        }
-      ],
-      "modelType": "Property",
-      "semanticId": {
-        "type": "ExternalReference",
-        "keys": [
-          {
-            "type": "GlobalReference",
-            "value": "http://acplt.org/Properties/ExampleProperty"
-          }
-        ]
-      },
-      "qualifiers": [
-        {
-          "kind": "ConceptQualifier",
-          "type": "http://acplt.org/Qualifier/ExampleQualifier",
-          "valueType": "xs:string"
-        }
-      ],
-      "valueType": "xs:string",
-      "value": "exampleValue"
-    },
-    {
-      "category": "CONSTANT",
-      "idShort": "ExampleProperty3",
-      "description": [
-        {
-          "language": "en-us",
-          "text": "Example Property object"
-        },
-        {
-          "language": "de",
-          "text": "Beispiel Property Element"
-        }
-      ],
-      "modelType": "Property",
-      "semanticId": {
-        "type": "ExternalReference",
-        "keys": [
-          {
-            "type": "GlobalReference",
-            "value": "http://acplt.org/Properties/ExampleProperty"
-          }
-        ]
-      },
-      "qualifiers": [
-        {
-          "kind": "ConceptQualifier",
-          "type": "http://acplt.org/Qualifier/ExampleQualifier",
-          "valueType": "xs:string"
-        }
-      ],
-      "valueType": "xs:string",
-      "value": "exampleValue"
     },
     {
       "category": "PARAMETER",

@@ -157,5 +157,33 @@
         "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU1pbmltYWxBZG1pbmlzdHJhdGlvblN1Ym1vZGVs",
         "shouldMatch": "postBody/submodelMinimalAdministration.json",
         "expectedStatus": 200
+    },
+    {
+        "context": "Post Submodel with Operation SubmodelElement",
+        "method": "POST",
+        "endpoint": "http://localhost:6004/submodels",
+        "data": "postBody/postSubmodelWithOperation.json",
+        "expectedStatus": 201
+    },
+    {
+        "context": "Get Submodel with Operation SubmodelElement",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlPcGVyYXRpb25TdWJtb2RlbA",
+        "shouldMatch": "postBody/postSubmodelWithOperation.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "Post Submodel with Entity SubmodelElement",
+        "method": "POST",
+        "endpoint": "http://localhost:6004/submodels",
+        "data": "postBody/postSubmodelWithEntity.json",
+        "expectedStatus": 201
+    },
+    {
+        "context": "Get Submodel with Entity SubmodelElement",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlFbnRpdHlTdWJtb2RlbA",
+        "shouldMatch": "postBody/postSubmodelWithEntity.json",
+        "expectedStatus": 200
     }
 ]

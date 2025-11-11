@@ -323,12 +323,18 @@ func getSubmodelElementObjectBasedOnModelType(smeRow model.SubmodelElementRow, r
 		}
 
 		var statements []model.SubmodelElement
-		if valueRow.Statements == nil {
-			statements = []model.SubmodelElement{}
-		} else {
-			err = json.Unmarshal(valueRow.Statements, &statements)
+		if valueRow.Statements != nil {
+			var stmtJSONs []json.RawMessage
+			err = json.Unmarshal(valueRow.Statements, &stmtJSONs)
 			if err != nil {
 				return nil, err
+			}
+			for _, stmtJSON := range stmtJSONs {
+				stmt, err := model.UnmarshalSubmodelElement(stmtJSON)
+				if err != nil {
+					return nil, err
+				}
+				statements = append(statements, stmt)
 			}
 		}
 

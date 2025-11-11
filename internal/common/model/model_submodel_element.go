@@ -172,8 +172,10 @@ func AssertSubmodelElementRequired(obj SubmodelElement) error {
 			return err
 		}
 	}
-	if err := AssertReferenceRequired(*obj.GetSemanticID()); err != nil {
-		return err
+	if obj.GetSemanticID() != nil {
+		if err := AssertReferenceRequired(*obj.GetSemanticID()); err != nil {
+			return err
+		}
 	}
 	for _, el := range obj.GetSupplementalSemanticIds() {
 		if err := AssertReferenceRequired(el); err != nil {
