@@ -715,7 +715,7 @@ func (p *PostgreSQLSubmodelDatabase) AddSubmodelElementWithPath(submodelID strin
 	}
 
 	var rootSmeID int
-	err = p.db.QueryRow("SELECT root_sme_id FROM submodel_element WHERE id = $1", idShortPath).Scan(&rootSmeID)
+	err = p.db.QueryRow("SELECT root_sme_id FROM submodel_element WHERE idshort_path = $1", idShortPath).Scan(&rootSmeID)
 	if err != nil {
 		return err
 	}

@@ -112,7 +112,7 @@ func GetSubmodelElementsSubquery(filter SubmodelElementFilter, cursor string, li
 			goqu.I("sme.submodel_id").Eq(filter.SubmodelFilter.SubmodelIDFilter),
 		)
 	} else {
-		_ = fmt.Errorf("no SubmodelFilter provided for SubmodelElement Query, but SubmodelElements always belong to a Submodel - consider defining a SubmodelID Filter in your GetSubmodelELementsSubquery call")
+		_ = fmt.Errorf("no SubmodelFilter provided for SubmodelElement Query, but SubmodelElements always belong to a Submodel - consider defining a SubmodelID Filter in your GetSubmodelElementsSubquery call")
 		return nil, common.NewInternalServerError("unable to fetch SubmodelElements. See console for details")
 	}
 

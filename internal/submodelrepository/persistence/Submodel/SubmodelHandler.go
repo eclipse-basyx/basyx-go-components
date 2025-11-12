@@ -686,7 +686,7 @@ func attachChildrenToSubmodelElements(nodes map[int64]*node, children map[int64]
 			continue
 		}
 
-		// Stable order: by position (if set), otherwise by path as tie-breaker
+		// Stable order: by position (if set)
 		sort.SliceStable(kids, func(i, j int) bool {
 			a, b := kids[i], kids[j]
 			return a.position < b.position
