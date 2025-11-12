@@ -5,7 +5,7 @@
         "ACL": {
           "ATTRIBUTES": [
             {
-              "GLOBAL": "ANONYMOUS"
+              "CLAIM": "role"
             }
           ],
           "RIGHTS": [
@@ -18,9 +18,19 @@
             "ROUTE": "*"
           }
         ],
-        "FORMULA": {
-          "$boolean": true
-        }
+        "FORMULA": { "$and": [
+          { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "viewer" } ] },
+          {
+                "$eq": [
+                  {
+                    "$field": "$aasdesc#specificAssetIds[].externalSubjectId"
+                  },
+                  {
+                    "$strVal": "PUBLIC_READABLE"
+                  }
+                ]
+              }
+        ]}
       }
     ]
   }

@@ -42,6 +42,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/doug-martin/goqu/v9/exp"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -78,7 +79,10 @@ type EvalInput struct {
 // mutations, or redact fields. The Discovery Service currently does not require
 // a concrete filter structure; extend this struct when needed.
 type QueryFilter struct {
-	// TODO: not implemented because DiscoveryService does not need a concrete QueryFilter yet.
+	// Expr holds a SQL expression (goqu) representing the remaining
+	// backend-applicable constraint derived from the logical expression.
+	// It is intended to be applied by the backend persistence layer.
+	Expr exp.Expression
 }
 
 // AuthorizeWithFilter evaluates the request against the model rules in order.
@@ -91,7 +95,6 @@ func (m *AccessModel) AuthorizeWithFilter(in EvalInput) (ok bool, reason string,
 	for _, r := range all.Rules {
 		acl, attrs, objs, lexpr := materialize(all, r)
 
-		fmt.Println("rule: ", r.USEOBJECTS)
 		// Gate 1: rights
 		if !rightsContains(acl.RIGHTS, right) {
 			continue
@@ -104,13 +107,30 @@ func (m *AccessModel) AuthorizeWithFilter(in EvalInput) (ok bool, reason string,
 		if !attributesSatisfiedAttrs(attrs, in.Claims) {
 			continue
 		}
-		// Gate 4: formula
-		if lexpr != nil && !evalLE(*lexpr, in.Claims, in.IssuedUTC) {
-			continue
+		// Gate 4: formula → adapt for backend filtering
+		if lexpr != nil {
+			adapted, onlyBool := adaptLEForBackend(*lexpr, in.Claims, in.IssuedUTC)
+			if onlyBool {
+				fmt.Println("security only LE")
+				// Fully decidable here; evaluate and continue on false
+				if !evalLE(adapted, in.Claims, in.IssuedUTC) {
+					continue
+				}
+			} else {
+				// Not fully decidable → attempt to convert into backend filter
+				if expr, err := adapted.EvaluateToExpression(); err == nil {
+					fmt.Println("got a expression from LE")
+					fmt.Println(expr)
+					qf = &QueryFilter{Expr: expr}
+				} else {
+					fmt.Println("i dont get it")
+					// Fallback: evaluate now; if false, rule does not match
+					if !evalLE(*lexpr, in.Claims, in.IssuedUTC) {
+						continue
+					}
+				}
+			}
 		}
-
-		// Optional data-level restrictions (to be defined by the product)
-		qf = &QueryFilter{}
 
 		switch acl.ACCESS {
 		case grammar.ACLACCESSALLOW:
