@@ -1,4 +1,4 @@
-name: Go Lint
+name: Go Lint Custom
 
 on:
   pull_request:
@@ -25,9 +25,8 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - name: golangci-lint
-        uses: golangci/golangci-lint-action@v9
-        with:
-          version: v2.6.1
-          # Install the latest golangci-lint from source if needed
-          install-mode: "goinstall"
+      - name: Install golangci-lint
+        run: go install github.com/golangci/golangci-lint/cmd/golangci-lint@v2.6.1
+
+      - name: Run golangci-lint
+        run: golangci-lint run ./...
