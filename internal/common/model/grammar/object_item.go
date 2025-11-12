@@ -94,8 +94,8 @@ type ObjectItem struct {
 // corresponds to the wildcard "*" in the compact grammar; otherwise ID
 // contains the concrete identifier string.
 type Identifier struct {
-	// All indicates that the identifier is the wildcard "*" (i.e., select all).
-	All bool
+	// IsAll indicates that the identifier is the wildcard "*" (i.e., select all).
+	IsAll bool
 
 	// ID is the concrete identifier when All is false.
 	ID string
@@ -307,7 +307,7 @@ func parseIdentifiable(s string) (*IdentifiableValue, error) {
 	}
 	id := Identifier{}
 	if m[2] == "*" {
-		id.All = true
+		id.IsAll = true
 	} else {
 		id.ID = m[2]
 	}
@@ -324,7 +324,7 @@ func parseReferable(s string) (*ReferableValue, error) {
 	}
 	id := Identifier{}
 	if m[2] == "*" {
-		id.All = true
+		id.IsAll = true
 	} else {
 		id.ID = m[2]
 	}
@@ -350,7 +350,7 @@ func parseFragment(s string) (*FragmentValue, error) {
 	}
 	id := Identifier{}
 	if head[2] == "*" {
-		id.All = true
+		id.IsAll = true
 	} else {
 		id.ID = head[2]
 	}
@@ -375,7 +375,7 @@ func parseDescriptor(s string) (*DescriptorValue, error) {
 	}
 	id := Identifier{}
 	if m[2] == "*" {
-		id.All = true
+		id.IsAll = true
 	} else {
 		id.ID = m[2]
 	}

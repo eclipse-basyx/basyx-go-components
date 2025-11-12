@@ -344,26 +344,34 @@ func matchRouteObjectsObjItem(objs []grammar.ObjectItem, reqPath string) bool {
 	req := normalize(reqPath)
 
 	for _, oi := range objs {
-		if oi.Kind != grammar.Route {
-			continue
-		}
-		pat := normalize(oi.Route.Route)
 
-		if pat == "*" || pat == "/*" {
-			return true
-		}
+		switch oi.Kind {
+		case grammar.Route:
+			pat := normalize(oi.Route.Route)
 
-		if strings.HasSuffix(pat, "/*") {
-			base := strings.TrimSuffix(pat, "/*")
-			if base != "" && strings.HasPrefix(req, base+"/") {
+			if pat == "*" || pat == "/*" {
 				return true
 			}
-			continue
-		}
 
-		if pat == req {
+			if strings.HasSuffix(pat, "/*") {
+				base := strings.TrimSuffix(pat, "/*")
+				if base != "" && strings.HasPrefix(req, base+"/") {
+					return true
+				}
+				continue
+			}
+			if pat == req {
+				return true
+			}
+		case grammar.Descriptor:
+			desc := oi.Descriptor
+			fmt.Println(desc.ID)
+			fmt.Println(desc.Scope)
+			fmt.Println(desc.ID.ID)
+			fmt.Println(desc.ID.IsAll)
 			return true
 		}
+
 	}
 	return false
 }
