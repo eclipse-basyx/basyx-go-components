@@ -76,19 +76,13 @@ func NewPostgreSQLCapabilityHandler(db *sql.DB) (*PostgreSQLCapabilityHandler, e
 //   - int: Database ID of the created element
 //   - error: Error if creation fails or element is not of correct type
 func (p PostgreSQLCapabilityHandler) Create(tx *sql.Tx, submodelID string, submodelElement gen.SubmodelElement) (int, error) {
-	capability, ok := submodelElement.(*gen.Capability)
+	_, ok := submodelElement.(*gen.Capability)
 	if !ok {
 		return 0, errors.New("submodelElement is not of type Capability")
 	}
 
 	// First, perform base SubmodelElement operations within the transaction
 	id, err := p.decorated.Create(tx, submodelID, submodelElement)
-	if err != nil {
-		return 0, err
-	}
-
-	// Capability-specific database insertion
-	err = insertCapability(capability, tx, id)
 	if err != nil {
 		return 0, err
 	}
@@ -112,19 +106,13 @@ func (p PostgreSQLCapabilityHandler) Create(tx *sql.Tx, submodelID string, submo
 //   - int: Database ID of the created nested element
 //   - error: Error if creation fails or element is not of correct type
 func (p PostgreSQLCapabilityHandler) CreateNested(tx *sql.Tx, submodelID string, parentID int, idShortPath string, submodelElement gen.SubmodelElement, pos int, rootSubmodelElementID int) (int, error) {
-	capability, ok := submodelElement.(*gen.Capability)
+	_, ok := submodelElement.(*gen.Capability)
 	if !ok {
 		return 0, errors.New("submodelElement is not of type Capability")
 	}
 
 	// Create the nested capability with the provided idShortPath using the decorated handler
 	id, err := p.decorated.CreateWithPath(tx, submodelID, parentID, idShortPath, submodelElement, pos, rootSubmodelElementID)
-	if err != nil {
-		return 0, err
-	}
-
-	// Capability-specific database insertion for nested element
-	err = insertCapability(capability, tx, id)
 	if err != nil {
 		return 0, err
 	}
@@ -163,9 +151,4 @@ func (p PostgreSQLCapabilityHandler) Delete(idShortOrPath string) error {
 		return dErr
 	}
 	return nil
-}
-
-func insertCapability(_ *gen.Capability, tx *sql.Tx, id int) error {
-	_, err := tx.Exec(`INSERT INTO capability_element (id) VALUES ($1)`, id)
-	return err
 }
