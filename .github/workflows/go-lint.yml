@@ -28,7 +28,7 @@ jobs:
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v9
         with:
-          # Use latest version to support Go 1.25
-          version: latest
+          # Use v2.6.1 version to support Go 1.25 https://golangci-lint.run/docs/welcome/install/ -> It’s highly recommended installing a specific version of golangci-lint available on the releases page.
+          version: v2.6.1
           # Install the latest golangci-lint from source if needed
           install-mode: "goinstall"
