@@ -1,0 +1,16 @@
+{
+  "$or": [
+    {
+      "$eq": [
+        { "$field": "$sm#id" },
+        { "$numVal": 123 }
+      ]
+    },
+    {
+      "$eq": [
+        { "$field": "$sm#idShort" },
+        { "$strVal": "name" }
+      ]
+    }
+  ]
+}

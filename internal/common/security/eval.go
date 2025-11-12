@@ -149,6 +149,50 @@ func adaptLEForBackend(le grammar.LogicalExpression, claims Claims, now time.Tim
         if len(items) != 2 {
             return le, false
         }
+        // Fast path: if one side is an attribute (CLAIM/GLOBAL) and the other is a
+        // constant literal, try to resolve and reduce immediately.
+        if items[0].Attribute != nil && isConstantLiteralVal(items[1]) {
+            if l2 := replaceAttribute(items[0], claims, now); isLiteral(l2) {
+                test := grammar.LogicalExpression{}
+                switch op {
+                case "$eq":
+                    test.Eq = []grammar.Value{l2, items[1]}
+                case "$ne":
+                    test.Ne = []grammar.Value{l2, items[1]}
+                case "$gt":
+                    test.Gt = []grammar.Value{l2, items[1]}
+                case "$ge":
+                    test.Ge = []grammar.Value{l2, items[1]}
+                case "$lt":
+                    test.Lt = []grammar.Value{l2, items[1]}
+                case "$le":
+                    test.Le = []grammar.Value{l2, items[1]}
+                }
+                b := evalLE(test, claims, now)
+                return grammar.LogicalExpression{Boolean: &b}, true
+            }
+        }
+        if items[1].Attribute != nil && isConstantLiteralVal(items[0]) {
+            if r2 := replaceAttribute(items[1], claims, now); isLiteral(r2) {
+                test := grammar.LogicalExpression{}
+                switch op {
+                case "$eq":
+                    test.Eq = []grammar.Value{items[0], r2}
+                case "$ne":
+                    test.Ne = []grammar.Value{items[0], r2}
+                case "$gt":
+                    test.Gt = []grammar.Value{items[0], r2}
+                case "$ge":
+                    test.Ge = []grammar.Value{items[0], r2}
+                case "$lt":
+                    test.Lt = []grammar.Value{items[0], r2}
+                case "$le":
+                    test.Le = []grammar.Value{items[0], r2}
+                }
+                b := evalLE(test, claims, now)
+                return grammar.LogicalExpression{Boolean: &b}, true
+            }
+        }
         left := replaceAttribute(items[0], claims, now)
         right := replaceAttribute(items[1], claims, now)
 
@@ -216,56 +260,59 @@ func adaptLEForBackend(le grammar.LogicalExpression, claims Claims, now time.Tim
 
     // Logical: AND / OR
     if len(le.And) > 0 {
-        allBool := true
         out := grammar.LogicalExpression{}
+        anyUnknown := false
+        // Short-circuit: if any child becomes false => whole AND is false.
         for _, sub := range le.And {
             t, onlyBool := adaptLEForBackend(sub, claims, now)
+            if onlyBool && t.Boolean != nil {
+                if !*t.Boolean {
+                    b := false
+                    return grammar.LogicalExpression{Boolean: &b}, true
+                }
+                // true child is neutral in AND; omit it
+                continue
+            }
             out.And = append(out.And, t)
-            if !onlyBool {
-                allBool = false
-            }
+            anyUnknown = true
         }
-        if allBool {
-            // Reduce to single boolean
-            accum := true
-            for _, sub := range out.And {
-                if sub.Boolean == nil {
-                    accum = false
-                    break
-                }
-                if !*sub.Boolean {
-                    accum = false
-                    break
-                }
-            }
-            return grammar.LogicalExpression{Boolean: &accum}, true
+        if !anyUnknown {
+            // All children were true (or empty after trimming) -> true
+            b := true
+            return grammar.LogicalExpression{Boolean: &b}, true
+        }
+        // Single remaining branch -> remove redundant AND wrapper
+        if len(out.And) == 1 {
+            return out.And[0], false
         }
         return out, false
     }
 
     if len(le.Or) > 0 {
-        allBool := true
         out := grammar.LogicalExpression{}
+        anyUnknown := false
+        // Short-circuit: if any child becomes true => whole OR is true.
         for _, sub := range le.Or {
             t, onlyBool := adaptLEForBackend(sub, claims, now)
+            if onlyBool && t.Boolean != nil {
+                if *t.Boolean {
+                    b := true
+                    return grammar.LogicalExpression{Boolean: &b}, true
+                }
+                // false child is neutral in OR; omit it
+                continue
+            }
             out.Or = append(out.Or, t)
-            if !onlyBool {
-                allBool = false
-            }
+            anyUnknown = true
         }
-        if allBool {
-            accum := false
-            for _, sub := range out.Or {
-                if sub.Boolean == nil {
-                    accum = false
-                    break
-                }
-                if *sub.Boolean {
-                    accum = true
-                    break
-                }
-            }
-            return grammar.LogicalExpression{Boolean: &accum}, true
+        if !anyUnknown {
+            // All children were false (or empty after trimming) -> false
+            b := false
+            return grammar.LogicalExpression{Boolean: &b}, true
+        }
+        // Single remaining branch -> remove redundant OR wrapper
+        if len(out.Or) == 1 {
+            return out.Or[0], false
         }
         return out, false
     }
@@ -282,26 +329,24 @@ func adaptLEForBackend(le grammar.LogicalExpression, claims Claims, now time.Tim
 
     // $match: try to reduce nested matches
     if len(le.Match) > 0 {
+        // Semantics of $match in eval: AND over children
         out := grammar.LogicalExpression{}
-        allBool := true
+        anyUnknown := false
         for _, m := range le.Match {
             if t, isBool := adaptMatchForBackend(m, claims, now); isBool {
-                out.Match = append(out.Match, grammar.MatchExpression{Boolean: t.Boolean})
-            } else {
-                out.Match = append(out.Match, t)
-                allBool = false
-            }
-        }
-        if allBool {
-            // All matches reduced to booleans -> require all true
-            accum := true
-            for _, m := range out.Match {
-                if m.Boolean == nil || !*m.Boolean {
-                    accum = false
-                    break
+                if t.Boolean != nil && !*t.Boolean {
+                    b := false
+                    return grammar.LogicalExpression{Boolean: &b}, true
                 }
+                // true is neutral for AND; omit it
+                continue
             }
-            return grammar.LogicalExpression{Boolean: &accum}, true
+            out.Match = append(out.Match, m)
+            anyUnknown = true
+        }
+        if !anyUnknown {
+            b := true
+            return grammar.LogicalExpression{Boolean: &b}, true
         }
         return out, false
     }
@@ -441,6 +486,20 @@ func replaceAttribute(v grammar.Value, claims Claims, now time.Time) grammar.Val
 // isLiteral returns true if the Value represents a literal (not a field and not an attribute)
 func isLiteral(v grammar.Value) bool {
     return v.IsValue() && !v.IsField() && v.Attribute == nil
+}
+
+// isConstantLiteralVal returns true if the value is a direct literal constant
+// (not a field, not an attribute), so comparisons with it can be reduced when the
+// other side is resolvable.
+func isConstantLiteralVal(v grammar.Value) bool {
+    if v.Field != nil || v.Attribute != nil {
+        return false
+    }
+    if v.StrVal != nil || v.NumVal != nil || v.Boolean != nil || v.DateTimeVal != nil || v.TimeVal != nil || v.Year != nil || v.Month != nil || v.DayOfMonth != nil || v.DayOfWeek != nil || v.HexVal != nil {
+        return true
+    }
+    // Casts produce runtime literals via resolveValue; treat as not a constant here.
+    return false
 }
 
 // literalValueFromAny converts a Go value into a grammar.Value with a literal.

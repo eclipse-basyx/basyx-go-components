@@ -1,0 +1,33 @@
+{
+  "$and": [
+    {
+      "$or": [
+        {
+          "$eq": [
+            { "$attribute": { "CLAIM": "role" } },
+            { "$strVal": "viewer" }
+          ]
+        },
+        {
+          "$eq": [
+            { "$attribute": { "CLAIM": "role" } },
+            { "$strVal": "editor" }
+          ]
+        },
+        {
+          "$eq": [
+            { "$field": "$sm#idShort" },
+            { "$strVal": "X" }
+          ]
+        }
+      ]
+    },
+    {
+      "$eq": [
+        { "$field": "$sm#semanticId" },
+        { "$strVal": "SemanticID-Nameplate" }
+      ]
+    }
+  ]
+}
+

@@ -1,0 +1,7 @@
+{
+  "$eq": [
+    { "$attribute": { "GLOBAL": "UTCNOW" } },
+    { "$strVal": "2024-12-31T00:00:00Z" }
+  ]
+}
+

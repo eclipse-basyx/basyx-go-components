@@ -1,0 +1,52 @@
+[
+  {
+    "input": "in/simple_le.json",
+    "expected": "expected/atomic_true.json",
+    "ctx": "ctx/context1.json"
+  },
+  {
+    "input": "in/semantic_eq_only.json",
+    "expected": "expected/semantic_eq_only.json",
+    "ctx": "ctx/context1.json"
+  },
+  {
+    "input": "in/or_claim_plus_field.json",
+    "expected": "expected/atomic_true.json",
+    "ctx": "ctx/context1.json"
+  },
+  {
+    "input": "in/and_claim_plus_field.json",
+    "expected": "expected/semantic_eq_only.json",
+    "ctx": "ctx/context1.json"
+  },
+  {
+    "input": "in/time_eq_true.json",
+    "expected": "expected/atomic_true.json",
+    "ctx": "ctx/context1.json"
+  },
+  {
+    "input": "in/time_eq_false.json",
+    "expected": "expected/atomic_false.json",
+    "ctx": "ctx/context1.json"
+  },
+  {
+    "input": "in/and_time_makes_false.json",
+    "expected": "expected/atomic_false.json",
+    "ctx": "ctx/context1.json"
+  },
+  {
+    "input": "in/nested_partial_simplify.json",
+    "expected": "expected/semantic_eq_only.json",
+    "ctx": "ctx/context1.json"
+  },
+  {
+    "input": "in/nested_replace_preserve_structure.json",
+    "expected": "expected/nested_replace_preserve_structure.json",
+    "ctx": "ctx/context1.json"
+  },
+  {
+    "input": "in/nested_atomic_true.json",
+    "expected": "expected/atomic_true.json",
+    "ctx": "ctx/context1.json"
+  }
+]
