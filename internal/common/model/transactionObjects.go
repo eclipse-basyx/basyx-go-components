@@ -500,7 +500,12 @@ type AnnotatedRelationshipElementValueRow struct {
 	Annotations json.RawMessage `json:"annotations"`
 }
 
+// ReferenceElementValueRow represents a data row for a ReferenceElement entity's value in the database.
+// ReferenceElements are submodel elements that encapsulate a single reference to other AAS elements.
+//
+// This structure captures the reference value of a ReferenceElement.
+// The reference is stored as JSON data to accommodate the complex structure of references.
 type ReferenceElementValueRow struct {
-	// Ref contains the reference as JSON data
+	// Value contains the reference as JSON data
 	Value json.RawMessage `json:"value"`
 }

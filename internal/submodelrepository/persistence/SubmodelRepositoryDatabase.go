@@ -42,7 +42,7 @@ import (
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 
 	"github.com/doug-martin/goqu/v9"
-	_ "github.com/doug-martin/goqu/v9/dialect/postgres"
+	_ "github.com/doug-martin/goqu/v9/dialect/postgres" // Postgres Driver for Goqu
 	"golang.org/x/sync/errgroup"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
