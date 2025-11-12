@@ -179,37 +179,47 @@ func buildSubmodels(submodelRows []model.SubmodelRow) ([]*model.Submodel, map[st
 	referenceBuilderRefs := make(map[int64]*builders.ReferenceBuilder)
 	var refMutex sync.RWMutex
 
-	ctx := context.Background()
-	g, _ := errgroup.WithContext(ctx)
-
-	result := make([]*model.Submodel, 0, len(submodelRows))
-	submodelMap := make(map[string]*model.Submodel)
-	var mu sync.Mutex
-
-	sem := make(chan struct{}, 100) // limit concurrency
-
-	for _, row := range submodelRows {
-		rowCopy := row
-		sem <- struct{}{}
-
-		g.Go(func() error {
-			defer func() { <-sem }()
-
-			submodel, err := parseSubmodelRow(rowCopy, referenceBuilderRefs, &refMutex)
-			if err != nil {
-				return err
-			}
-
-			mu.Lock()
-			result = append(result, submodel)
-			submodelMap[submodel.ID] = submodel
-			mu.Unlock()
-			return nil
-		})
+	type parseJob struct {
+		row   model.SubmodelRow
+		index int
 	}
 
-	if err := g.Wait(); err != nil {
-		return nil, nil, err
+	type parseResult struct {
+		submodel *model.Submodel
+		index    int
+		err      error
+	}
+
+	numWorkers := 100
+	jobs := make(chan parseJob, len(submodelRows))
+	results := make(chan parseResult, len(submodelRows))
+
+	// Start workers
+	for i := 0; i < numWorkers; i++ {
+		go func() {
+			for job := range jobs {
+				submodel, err := parseSubmodelRow(job.row, referenceBuilderRefs, &refMutex)
+				results <- parseResult{submodel: submodel, index: job.index, err: err}
+			}
+		}()
+	}
+
+	// Send jobs
+	for i, row := range submodelRows {
+		jobs <- parseJob{row: row, index: i}
+	}
+	close(jobs)
+
+	// Collect results
+	result := make([]*model.Submodel, len(submodelRows))
+	submodelMap := make(map[string]*model.Submodel)
+	for i := 0; i < len(submodelRows); i++ {
+		res := <-results
+		if res.err != nil {
+			return nil, nil, res.err
+		}
+		result[res.index] = res.submodel
+		submodelMap[res.submodel.ID] = res.submodel
 	}
 
 	if err := buildAllNestedReferences(referenceBuilderRefs); err != nil {

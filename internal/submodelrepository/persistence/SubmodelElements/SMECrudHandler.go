@@ -142,19 +142,6 @@ func (p *PostgreSQLSMECrudHandler) CreateWithPath(tx *sql.Tx, submodelID string,
 		return 0, common.NewInternalServerError("Failed to create DisplayName - no changes applied - see console for details")
 	}
 
-	// Check if a SubmodelElement with the same submodelID and idshort_path already exists
-	// var exists bool
-	// err = tx.QueryRow(`SELECT EXISTS(SELECT 1 FROM submodel_element WHERE submodel_id = $1 AND idshort_path = $2)`,
-	// 	submodelID, idShortPath).Scan(&exists)
-	// if err != nil {
-	// 	return 0, err
-	// }
-
-	// if exists {
-	// 	return 0, fmt.Errorf("SubmodelElement with submodelID '%s' and idshort_path '%s' already exists",
-	// 		submodelID, idShortPath)
-	// }
-
 	var parentDBId sql.NullInt64
 	if parentID == 0 {
 		parentDBId = sql.NullInt64{}

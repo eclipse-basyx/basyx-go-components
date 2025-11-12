@@ -28,11 +28,11 @@ package builder
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"sync"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	jsoniter "github.com/json-iterator/go"
+	"golang.org/x/sync/errgroup"
 )
 
 // SubmodelElementBuilder represents one root level Submodel Element
@@ -43,7 +43,7 @@ type SubmodelElementBuilder struct {
 
 // BuildSubmodelElement Creates a Root SubmodelElement and the Builder
 func BuildSubmodelElement(smeRow model.SubmodelElementRow) (*model.SubmodelElement, *SubmodelElementBuilder, error) {
-	var wg sync.WaitGroup
+	var g errgroup.Group
 	refBuilderMap := make(map[int64]*ReferenceBuilder)
 	var refMutex sync.RWMutex
 	specificSME, err := getSubmodelElementObjectBasedOnModelType(smeRow, refBuilderMap, &refMutex)
@@ -58,31 +58,24 @@ func BuildSubmodelElement(smeRow model.SubmodelElementRow) (*model.SubmodelEleme
 	// Channels for parallel processing
 	type semanticIDResult struct {
 		semanticID *model.Reference
-		err        error
 	}
 	type descriptionResult struct {
 		descriptions []model.LangStringTextType
-		err          error
 	}
 	type displayNameResult struct {
 		displayNames []model.LangStringNameType
-		err          error
 	}
 	type embeddedDataSpecResult struct {
 		eds []model.EmbeddedDataSpecification
-		err error
 	}
 	type supplementalSemanticIDsResult struct {
 		supplementalSemanticIDs []model.Reference
-		err                     error
 	}
 	type qualifiersResult struct {
 		qualifiers []model.Qualifier
-		err        error
 	}
 	type extensionsResult struct {
 		extensions []model.Extension
-		err        error
 	}
 
 	semanticIDChan := make(chan semanticIDResult, 1)
@@ -94,183 +87,161 @@ func BuildSubmodelElement(smeRow model.SubmodelElementRow) (*model.SubmodelEleme
 	extensionsChan := make(chan extensionsResult, 1)
 
 	// Parse SemanticID
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	g.Go(func() error {
 		semanticID, err := getSingleReference(smeRow.SemanticID, smeRow.SemanticIDReferred, refBuilderMap, &refMutex)
-		semanticIDChan <- semanticIDResult{semanticID: semanticID, err: err}
-	}()
+		if err != nil {
+			return err
+		}
+		semanticIDChan <- semanticIDResult{semanticID: semanticID}
+		return nil
+	})
 
 	// Parse Descriptions
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	g.Go(func() error {
 		if smeRow.Descriptions != nil {
 			descriptions, err := ParseLangStringTextType(*smeRow.Descriptions)
-			descriptionChan <- descriptionResult{descriptions: descriptions, err: err}
+			if err != nil {
+				return err
+			}
+			descriptionChan <- descriptionResult{descriptions: descriptions}
 		} else {
 			descriptionChan <- descriptionResult{}
 		}
-	}()
+		return nil
+	})
 
 	// Parse DisplayNames
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	g.Go(func() error {
 		if smeRow.DisplayNames != nil {
 			displayNames, err := ParseLangStringNameType(*smeRow.DisplayNames)
-			displayNameChan <- displayNameResult{displayNames: displayNames, err: err}
+			if err != nil {
+				return err
+			}
+			displayNameChan <- displayNameResult{displayNames: displayNames}
 		} else {
 			displayNameChan <- displayNameResult{}
 		}
-	}()
+		return nil
+	})
 
 	// Parse EmbeddedDataSpecifications
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	g.Go(func() error {
 		if smeRow.EmbeddedDataSpecifications != nil {
 			var eds []model.EmbeddedDataSpecification
 			var json = jsoniter.ConfigCompatibleWithStandardLibrary
 			err := json.Unmarshal(*smeRow.EmbeddedDataSpecifications, &eds)
 			if err != nil {
-				log.Printf("error unmarshaling embedded data specifications: %v", err)
+				return fmt.Errorf("error unmarshaling embedded data specifications: %w", err)
 			}
-			embeddedDataSpecChan <- embeddedDataSpecResult{eds: eds, err: err}
+			embeddedDataSpecChan <- embeddedDataSpecResult{eds: eds}
 		} else {
 			embeddedDataSpecChan <- embeddedDataSpecResult{}
 		}
-	}()
+		return nil
+	})
 
 	// Parse SupplementalSemanticIDs
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	g.Go(func() error {
 		if smeRow.SupplementalSemanticIDs != nil {
 			var supplementalSemanticIDs []model.Reference
 			var json = jsoniter.ConfigCompatibleWithStandardLibrary
 			err := json.Unmarshal(*smeRow.SupplementalSemanticIDs, &supplementalSemanticIDs)
 			if err != nil {
-				log.Printf("error unmarshaling embedded data specifications: %v", err)
+				return fmt.Errorf("error unmarshaling supplemental semantic IDs: %w", err)
 			}
-			supplementalSemanticIDsChan <- supplementalSemanticIDsResult{supplementalSemanticIDs: supplementalSemanticIDs, err: err}
+			supplementalSemanticIDsChan <- supplementalSemanticIDsResult{supplementalSemanticIDs: supplementalSemanticIDs}
 		} else {
 			supplementalSemanticIDsChan <- supplementalSemanticIDsResult{}
 		}
-	}()
+		return nil
+	})
 
 	// Parse Extensions
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	g.Go(func() error {
 		if smeRow.Extensions != nil {
 			var extensions []model.Extension
 			var json = jsoniter.ConfigCompatibleWithStandardLibrary
 			err := json.Unmarshal(*smeRow.Extensions, &extensions)
 			if err != nil {
-				log.Printf("error unmarshaling embedded data specifications: %v", err)
+				return fmt.Errorf("error unmarshaling extensions: %w", err)
 			}
-			extensionsChan <- extensionsResult{extensions: extensions, err: err}
+			extensionsChan <- extensionsResult{extensions: extensions}
 		} else {
 			extensionsChan <- extensionsResult{}
 		}
-	}()
+		return nil
+	})
 
 	// Parse Qualifiers
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	g.Go(func() error {
 		if smeRow.Qualifiers != nil {
 			builder := NewQualifiersBuilder()
 			qualifierRows, err := ParseQualifiersRow(*smeRow.Qualifiers)
 			if err != nil {
-				qualifiersChan <- qualifiersResult{err: err}
-				return
+				return err
 			}
 			for _, qualifierRow := range qualifierRows {
 				_, err = builder.AddQualifier(qualifierRow.DbID, qualifierRow.Kind, qualifierRow.Type, qualifierRow.ValueType, qualifierRow.Value, qualifierRow.Position)
 				if err != nil {
-					qualifiersChan <- qualifiersResult{err: err}
-					return
+					return err
 				}
 
 				_, err = builder.AddSemanticID(qualifierRow.DbID, qualifierRow.SemanticID, qualifierRow.SemanticIDReferredReferences)
 				if err != nil {
-					qualifiersChan <- qualifiersResult{err: err}
-					return
+					return err
 				}
 
 				_, err = builder.AddValueID(qualifierRow.DbID, qualifierRow.ValueID, qualifierRow.ValueIDReferredReferences)
 				if err != nil {
-					qualifiersChan <- qualifiersResult{err: err}
-					return
+					return err
 				}
 
 				_, err = builder.AddSupplementalSemanticIDs(qualifierRow.DbID, qualifierRow.SupplementalSemanticIDs, qualifierRow.SupplementalSemanticIDsReferredReferences)
 				if err != nil {
-					qualifiersChan <- qualifiersResult{err: err}
-					return
+					return err
 				}
 			}
 			qualifiersChan <- qualifiersResult{qualifiers: builder.Build()}
 		} else {
 			qualifiersChan <- qualifiersResult{}
 		}
-	}()
+		return nil
+	})
 
 	// Wait for all goroutines to complete
-	wg.Wait()
+	if err := g.Wait(); err != nil {
+		return nil, nil, err
+	}
 
 	// Collect results from channels
 	semIDResult := <-semanticIDChan
-	if semIDResult.err != nil {
-		return nil, nil, fmt.Errorf("error parsing semantic ID: %w", semIDResult.err)
-	}
 	if semIDResult.semanticID != nil {
 		specificSME.SetSemanticID(semIDResult.semanticID)
 	}
 
 	extResult := <-extensionsChan
-	if extResult.err != nil {
-		return nil, nil, fmt.Errorf("error parsing extensions: %w", extResult.err)
-	}
 	if extResult.extensions != nil {
 		specificSME.SetExtensions(extResult.extensions)
 	}
 
 	descResult := <-descriptionChan
-	if descResult.err != nil {
-		return nil, nil, fmt.Errorf("error parsing descriptions: %w", descResult.err)
-	}
 	if descResult.descriptions != nil {
 		specificSME.SetDescription(descResult.descriptions)
 	}
 
 	displayResult := <-displayNameChan
-	if displayResult.err != nil {
-		return nil, nil, fmt.Errorf("error parsing display names: %w", displayResult.err)
-	}
 	if displayResult.displayNames != nil {
 		specificSME.SetDisplayName(displayResult.displayNames)
 	}
 
 	edsResult := <-embeddedDataSpecChan
-	if edsResult.err != nil {
-		return nil, nil, fmt.Errorf("error parsing embedded data specifications: %w", edsResult.err)
-	}
 	if edsResult.eds != nil {
 		specificSME.SetEmbeddedDataSpecifications(edsResult.eds)
 	}
 
 	supplResult := <-supplementalSemanticIDsChan
-	if supplResult.err != nil {
-		return nil, nil, fmt.Errorf("error parsing supplemental semantic IDs: %w", supplResult.err)
-	}
 
 	qualResult := <-qualifiersChan
-	if qualResult.err != nil {
-		return nil, nil, fmt.Errorf("error parsing qualifiers: %w", qualResult.err)
-	}
 	if qualResult.qualifiers != nil {
 		specificSME.SetQualifiers(qualResult.qualifiers)
 	}

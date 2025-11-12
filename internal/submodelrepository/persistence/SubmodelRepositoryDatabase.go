@@ -41,6 +41,10 @@ import (
 
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 
+	"github.com/doug-martin/goqu/v9"
+	_ "github.com/doug-martin/goqu/v9/dialect/postgres"
+	"golang.org/x/sync/errgroup"
+
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	submodelpersistence "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/Submodel"
@@ -130,38 +134,62 @@ func (p *PostgreSQLSubmodelDatabase) GetAllSubmodels(limit int32, cursor string,
 		submodelIDs = append(submodelIDs, id)
 	}
 
-	var wg sync.WaitGroup
+	var wg errgroup.Group
 	resultChan := make(chan result, 1)
 
-	wg.Go(func() {
+	wg.Go(func() error {
 		sm, smMap, cursor, err := submodelpersistence.GetAllSubmodels(p.db, int64(limit), cursor, nil)
 		resultChan <- result{sm: sm, smMap: smMap, cursor: cursor, err: err}
+		return err
 	})
 
 	submodelElements := make(map[string][]gen.SubmodelElement)
-	var submodelElementsMutex sync.Mutex
 	var errSme error
-	sem := make(chan struct{}, 10) // limit to 10 concurrent goroutines
+	var errSmeMutex sync.Mutex
+
+	type smeJob struct {
+		id string
+	}
+
+	type smeResult struct {
+		id   string
+		smes []gen.SubmodelElement
+		err  error
+	}
+
+	numWorkers := 10
+	jobs := make(chan smeJob, len(submodelIDs))
+	results := make(chan smeResult, len(submodelIDs))
+
+	for i := 0; i < numWorkers; i++ {
+		go func() {
+			for job := range jobs {
+				smes, _, err := submodelpersistence.GetSubmodelElementsForSubmodel(p.db, job.id, "", "", -1)
+				results <- smeResult{id: job.id, smes: smes, err: err}
+			}
+		}()
+	}
 
 	for _, id := range submodelIDs {
-		sem <- struct{}{} // acquire slot
-		wg.Add(1)
-		go func(id string) {
-			defer wg.Done()
-			smes, _, err := submodelpersistence.GetSubmodelElementsForSubmodel(p.db, id, "", "", -1)
-			if err != nil {
-				errSme = err
-				<-sem // release slot
-				return
-			}
-			submodelElementsMutex.Lock()
-			submodelElements[id] = smes
-			submodelElementsMutex.Unlock()
-			<-sem // release slot
-		}(id)
+		jobs <- smeJob{id: id}
 	}
-	wg.Wait()
-	fmt.Println("All goroutines done")
+	close(jobs)
+
+	for i := 0; i < len(submodelIDs); i++ {
+		res := <-results
+		if res.err != nil {
+			errSmeMutex.Lock()
+			if errSme == nil {
+				errSme = res.err
+			}
+			errSmeMutex.Unlock()
+		} else {
+			submodelElements[res.id] = res.smes
+		}
+	}
+	if err := wg.Wait(); err != nil {
+		return nil, "", err
+	}
 	res := <-resultChan
 
 	if res.err != nil {
@@ -602,7 +630,11 @@ func (p *PostgreSQLSubmodelDatabase) GetSubmodelElements(submodelID string, limi
 	}
 
 	var count int
-	err = p.db.QueryRow("SELECT COUNT(id) FROM submodel WHERE id = $1", submodelID).Scan(&count)
+	sql, args, err := goqu.Select(goqu.COUNT("id")).From("submodel").Where(goqu.I("id").Eq(submodelID)).ToSQL()
+	if err != nil {
+		return nil, "", err
+	}
+	err = p.db.QueryRow(sql, args...).Scan(&count)
 	if err != nil {
 		return nil, "", err
 	}
