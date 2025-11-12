@@ -260,10 +260,10 @@
         "expectedStatus": 200
     },
     {
-        "context": "Post Submodel with ReferenceElement SubmodelElement",
+        "context": "Post Submodel with Range SubmodelElement",
         "method": "POST",
         "endpoint": "http://localhost:6004/submodels",
-        "data": "postBody/postSubmodelWithReferenceElement.json",
+        "data": "postBody/postSubmodelWithRangeElement.json",
         "expectedStatus": 201
     },
     {
