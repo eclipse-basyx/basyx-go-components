@@ -1,4 +1,4 @@
-//nolint:revive - package name is not meaningless
+//nolint:all - package name is not meaningless
 package common
 
 import (
