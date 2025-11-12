@@ -308,7 +308,7 @@ func getSubmodelElementObjectBasedOnModelType(smeRow model.SubmodelElementRow, r
 	case "RelationshipElement":
 		return buildRelationshipElement(smeRow)
 	case "Range":
-		rng, err := buildRange()
+		rng, err := buildRange(smeRow)
 		if err != nil {
 			return nil, err
 		}
@@ -554,8 +554,24 @@ func buildBlob() (*model.Blob, error) {
 }
 
 // buildRange creates a new Range SubmodelElement.
-func buildRange() (*model.Range, error) {
-	return &model.Range{}, nil
+func buildRange(smeRow model.SubmodelElementRow) (*model.Range, error) {
+	var valueRow model.RangeValueRow
+	if smeRow.Value == nil {
+		return nil, fmt.Errorf("smeRow.Value is nil")
+	}
+	err := json.Unmarshal(*smeRow.Value, &valueRow)
+	if err != nil {
+		return nil, err
+	}
+	valueType, err := model.NewDataTypeDefXsdFromValue(valueRow.ValueType)
+	if err != nil {
+		return nil, err
+	}
+	return &model.Range{
+		Min:       valueRow.Min,
+		Max:       valueRow.Max,
+		ValueType: valueType,
+	}, nil
 }
 
 // buildCapability creates a new Capability SubmodelElement.

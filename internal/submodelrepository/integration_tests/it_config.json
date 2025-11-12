@@ -258,5 +258,19 @@
         "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlSZWZlcmVuY2VFbGVtZW50U3VibW9kZWw",
         "shouldMatch": "postBody/postSubmodelWithReferenceElement.json",
         "expectedStatus": 200
+    },
+    {
+        "context": "Post Submodel with ReferenceElement SubmodelElement",
+        "method": "POST",
+        "endpoint": "http://localhost:6004/submodels",
+        "data": "postBody/postSubmodelWithReferenceElement.json",
+        "expectedStatus": 201
+    },
+    {
+        "context": "Get Submodel with Range SubmodelElement",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlSYW5nZVN1Ym1vZGVs",
+        "shouldMatch": "postBody/postSubmodelWithRangeElement.json",
+        "expectedStatus": 200
     }
 ]
