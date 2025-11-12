@@ -925,6 +925,26 @@ func (p *PostgreSQLSubmodelDatabase) AddNestedSubmodelElementsIteratively(tx *sq
 				position:                  index,
 			})
 		}
+	case "Entity":
+		submodelElementCollection, ok := topLevelElement.(*gen.Entity)
+		if !ok {
+			return common.NewInternalServerError("Entity with modelType 'Entity' is not of type Entity")
+		}
+		for index, nestedElement := range submodelElementCollection.Statements {
+			var currentPath string
+			if startPath == "" {
+				currentPath = submodelElementCollection.IdShort
+			} else {
+				currentPath = startPath
+			}
+			stack = append(stack, ElementToProcess{
+				element:                   nestedElement,
+				parentID:                  parentID,
+				currentIDShortPath:        currentPath,
+				isFromSubmodelElementList: false,
+				position:                  index,
+			})
+		}
 	}
 
 	for len(stack) > 0 {
@@ -969,6 +989,14 @@ func (p *PostgreSQLSubmodelDatabase) AddNestedSubmodelElementsIteratively(tx *sq
 			}
 			for i := len(annotatedRelElement.Annotations) - 1; i >= 0; i-- {
 				stack = addNestedElementToStackWithNormalPath(annotatedRelElement, i, stack, newParentID, idShortPath)
+			}
+		case "Entity":
+			entityElement, ok := current.element.(*gen.Entity)
+			if !ok {
+				return common.NewInternalServerError("SubmodelElement with modelType 'Entity' is not of type Entity")
+			}
+			for i := len(entityElement.Statements) - 1; i >= 0; i-- {
+				stack = addNestedElementToStackWithNormalPath(entityElement, i, stack, newParentID, idShortPath)
 			}
 
 		}
@@ -1025,18 +1053,27 @@ func buildCurrentIDShortPath(current ElementToProcess) string {
 
 func addNestedElementToStackWithNormalPath(elem gen.SubmodelElement, i int, stack []ElementToProcess, newParentID int, idShortPath string) []ElementToProcess {
 	var nestedElement gen.SubmodelElement
-	if elem.GetModelType() == "AnnotatedRelationshipElement" {
+	switch elem.GetModelType() {
+	case "AnnotatedRelationshipElement":
 		annotatedRelElement, ok := elem.(*gen.AnnotatedRelationshipElement)
 		if !ok {
 			return stack
 		}
 		nestedElement = annotatedRelElement.Annotations[i]
-	} else {
+	case "Entity":
+		entityElement, ok := elem.(*gen.Entity)
+		if !ok {
+			return stack
+		}
+		nestedElement = entityElement.Statements[i]
+	case "SubmodelElementCollection":
 		submodelElementCollection, ok := elem.(*gen.SubmodelElementCollection)
 		if !ok {
 			return stack
 		}
 		nestedElement = submodelElementCollection.Value[i]
+	default:
+		return stack
 	}
 	stack = append(stack, ElementToProcess{
 		element:                   nestedElement,

@@ -173,17 +173,8 @@ func insertEntity(entity *gen.Entity, tx *sql.Tx, id int) error {
 		specificAssetIDs = string(specificAssetIDsBytes)
 	}
 
-	statements := "[]"
-	if entity.Statements != nil {
-		statementsBytes, err := json.Marshal(entity.Statements)
-		if err != nil {
-			return err
-		}
-		statements = string(statementsBytes)
-	}
-
-	_, err := tx.Exec(`INSERT INTO entity_element (id, entity_type, global_asset_id, specific_asset_ids, statements) VALUES ($1, $2, $3, $4, $5)`,
-		id, entity.EntityType, entity.GlobalAssetID, specificAssetIDs, statements)
+	_, err := tx.Exec(`INSERT INTO entity_element (id, entity_type, global_asset_id, specific_asset_ids) VALUES ($1, $2, $3, $4)`,
+		id, entity.EntityType, entity.GlobalAssetID, specificAssetIDs)
 	if err != nil {
 		return err
 	}

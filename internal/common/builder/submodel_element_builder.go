@@ -486,22 +486,6 @@ func buildEntity(smeRow model.SubmodelElementRow) (*model.Entity, error) {
 		return nil, err
 	}
 
-	var statements []model.SubmodelElement
-	if valueRow.Statements != nil {
-		var stmtJSONs []json.RawMessage
-		err = json.Unmarshal(valueRow.Statements, &stmtJSONs)
-		if err != nil {
-			return nil, err
-		}
-		for _, stmtJSON := range stmtJSONs {
-			stmt, err := model.UnmarshalSubmodelElement(stmtJSON)
-			if err != nil {
-				return nil, err
-			}
-			statements = append(statements, stmt)
-		}
-	}
-
 	var specificAssetIDs []model.SpecificAssetID
 	if valueRow.SpecificAssetIDs != nil {
 		err = json.Unmarshal(valueRow.SpecificAssetIDs, &specificAssetIDs)
@@ -513,7 +497,6 @@ func buildEntity(smeRow model.SubmodelElementRow) (*model.Entity, error) {
 	entity := &model.Entity{
 		EntityType:       entityType,
 		GlobalAssetID:    valueRow.GlobalAssetID,
-		Statements:       statements,
 		SpecificAssetIds: specificAssetIDs,
 	}
 	return entity, nil

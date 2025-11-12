@@ -476,6 +476,10 @@ func attachChildrenToSubmodelElements(nodes map[int64]*node, children map[int64]
 			for _, ch := range kids {
 				p.Annotations = append(p.Annotations, ch.element)
 			}
+		case *model.Entity:
+			for _, ch := range kids {
+				p.Statements = append(p.Statements, ch.element)
+			}
 		}
 	}
 }

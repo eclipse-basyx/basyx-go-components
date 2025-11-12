@@ -467,8 +467,6 @@ type EntityValueRow struct {
 	EntityType string `json:"entity_type"`
 	// GlobalAssetID specifies the global asset identifier of the entity.
 	GlobalAssetID string `json:"global_asset_id"`
-	// Statements contains statements that describe the entity's characteristics as JSON data.
-	Statements json.RawMessage `json:"statements"`
 	// SpecificAssetIDs contains specific asset ID references as JSON data
 	SpecificAssetIDs json.RawMessage `json:"specific_asset_ids"`
 }
