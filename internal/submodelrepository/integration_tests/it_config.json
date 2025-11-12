@@ -190,6 +190,13 @@
         "expectedStatus": 200
     },
     {
+        "context": "Get Submodel with AnnotatedRelationshipElement SubmodelElement - Get Annotation",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlFbnRpdHlTdWJtb2RlbA/submodel-elements/DemoEntity.StatementProperty1",
+        "shouldMatch": "postBody/expectedEntityProperty.json",
+        "expectedStatus": 200
+    },
+    {
         "context": "Post Submodel with Capability SubmodelElement",
         "method": "POST",
         "endpoint": "http://localhost:6004/submodels",
@@ -229,6 +236,13 @@
         "method": "GET",
         "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlBbm5vdGF0ZWRSZWxhdGlvbnNoaXBFbGVtZW50U3VibW9kZWw",
         "shouldMatch": "postBody/postSubmodelWithAnnotatedRelationshipElement.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "Get Submodel with AnnotatedRelationshipElement SubmodelElement - Get Annotation",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlBbm5vdGF0ZWRSZWxhdGlvbnNoaXBFbGVtZW50U3VibW9kZWw/submodel-elements/DemoAnnotatedRelationshipElement.AnnotationProperty1",
+        "shouldMatch": "postBody/expectedAREProperty.json",
         "expectedStatus": 200
     },
     {
