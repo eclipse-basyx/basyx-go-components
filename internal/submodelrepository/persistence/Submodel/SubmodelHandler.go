@@ -31,7 +31,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"os"
 	"sort"
 	"sync"
 	"time"
@@ -656,11 +655,7 @@ func GetSubmodelDataFromDbWithJSONQuery(db *sql.DB, submodelID string, limit int
 		fmt.Printf("Error building query: %v\n", err)
 		return nil, err
 	}
-	err = os.WriteFile("submodel_query.sql", []byte(q), 0644)
-	if err != nil {
-		fmt.Printf("Error writing query to file: %v\n", err)
-		return nil, err
-	}
+
 	rows, err := db.Query(q)
 	if err != nil {
 		fmt.Printf("Error querying database: %v\n", err)
