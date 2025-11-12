@@ -120,7 +120,6 @@ func GetQueryWithGoqu(submodelID string, limit int64, cursor string, aasQuery *g
 		}
 	}
 
-	// query = addSubmodelCountToQuery(query)
 	query = addGroupBySubmodelID(query)
 
 	// Add pagination if limit or cursor is specified

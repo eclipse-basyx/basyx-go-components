@@ -548,25 +548,9 @@ func buildAnnotatedRelationshipElement(smeRow model.SubmodelElementRow) (*model.
 	} else {
 		return nil, fmt.Errorf("second reference in RelationshipElement is nil")
 	}
-	var annotations []model.SubmodelElement
-	if valueRow.Annotations != nil {
-		var annJSONs []json.RawMessage
-		err = json.Unmarshal(valueRow.Annotations, &annJSONs)
-		if err != nil {
-			return nil, err
-		}
-		for _, annJSON := range annJSONs {
-			ann, err := model.UnmarshalSubmodelElement(annJSON)
-			if err != nil {
-				return nil, err
-			}
-			annotations = append(annotations, ann)
-		}
-	}
 	relElem := &model.AnnotatedRelationshipElement{
-		First:       first,
-		Second:      second,
-		Annotations: annotations,
+		First:  first,
+		Second: second,
 	}
 	return relElem, nil
 }

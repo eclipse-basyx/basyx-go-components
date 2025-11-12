@@ -31,9 +31,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"sort"
 	"sync"
-	"time"
 
 	// nolint:all
 	_ "github.com/doug-martin/goqu/v9/dialect/postgres"
@@ -126,9 +124,7 @@ type SubmodelElementSubmodelMetadata struct {
 //  1. Initial parsing during row iteration
 //  2. Final structure building after all rows are processed
 func getSubmodels(db *sql.DB, submodelIDFilter string, limit int64, cursor string, query *grammar.QueryWrapper) ([]*model.Submodel, map[string]*model.Submodel, string, error) {
-	start := time.Now()
 	rows, err := GetSubmodelDataFromDbWithJSONQuery(db, submodelIDFilter, limit, cursor, query, false)
-	fmt.Printf("Total Query Only time: %d milliseconds\n", time.Since(start).Milliseconds())
 	if err != nil {
 		return nil, nil, "", fmt.Errorf("error getting submodel data from DB: %w", err)
 	}
@@ -438,133 +434,6 @@ func BuildExtensions(row model.SubmodelRow) ([]model.Extension, error) {
 	return nil, nil
 }
 
-// GetSubmodelElementsForSubmodel retrieves all submodel elements for a given submodel ID.
-func GetSubmodelElementsForSubmodel(db *sql.DB, submodelID string, idShortPath string, cursor string, limit int) ([]model.SubmodelElement, string, error) {
-	filter := submodel_query.SubmodelElementFilter{
-		SubmodelFilter: &submodel_query.SubmodelElementSubmodelFilter{
-			SubmodelIDFilter: submodelID,
-		},
-	}
-
-	if idShortPath != "" {
-		filter.SubmodelElementIDShortPathFilter = &submodel_query.SubmodelElementIDShortPathFilter{
-			SubmodelElementIDShortPath: idShortPath,
-		}
-	}
-
-	submodelElementQuery, err := submodel_query.GetSubmodelElementsSubquery(filter, cursor, limit)
-	if err != nil {
-		return nil, "", err
-	}
-	q, params, err := submodelElementQuery.ToSQL()
-	if err != nil {
-		return nil, "", err
-	}
-	start := time.Now()
-	rows, err := db.Query(q, params...)
-	fmt.Printf("Total Submodel Elements Query Only time: %d milliseconds\n", time.Since(start).Milliseconds())
-	if err != nil {
-		return nil, "", err
-	}
-	defer func() { _ = rows.Close() }()
-
-	nodes := make(map[int64]*node, 256)
-	children := make(map[int64][]*node, 256)
-	roots := make([]*node, 0, 16)
-
-	// RootSubmodelElements
-	smeBuilderMap := make(map[int64]*builders.SubmodelElementBuilder)
-	smeRows := []model.SubmodelElementRow{}
-	for rows.Next() {
-		smeRow := model.SubmodelElementRow{}
-		if err := rows.Scan(
-			&smeRow.DbID,
-			&smeRow.ParentID,
-			&smeRow.RootID,
-			&smeRow.IDShort,
-			&smeRow.IDShortPath,
-			&smeRow.Category,
-			&smeRow.ModelType,
-			&smeRow.Position,
-			&smeRow.EmbeddedDataSpecifications,
-			&smeRow.SupplementalSemanticIDs,
-			&smeRow.Extensions,
-			&smeRow.DisplayNames,
-			&smeRow.Descriptions,
-			&smeRow.Value,
-			&smeRow.SemanticID,
-			&smeRow.SemanticIDReferred,
-			&smeRow.Qualifiers,
-		); err != nil {
-			return nil, "", err
-		}
-		smeRows = append(smeRows, smeRow)
-	}
-	var wg sync.WaitGroup
-	var buildError error
-	var mu sync.Mutex
-	for _, smeRow := range smeRows {
-		wg.Go(func() {
-			mu.Lock()
-			_, exists := smeBuilderMap[smeRow.DbID.Int64]
-			mu.Unlock()
-			if !exists {
-				sme, builder, err := builders.BuildSubmodelElement(smeRow)
-				if err != nil {
-					buildError = err
-					return
-				}
-				mu.Lock()
-				smeBuilderMap[smeRow.DbID.Int64] = builder
-				mu.Unlock()
-				n := &node{
-					id:       smeRow.DbID.Int64,
-					parentID: smeRow.ParentID.Int64,
-					path:     smeRow.IDShortPath,
-					position: smeRow.Position,
-					element:  *sme,
-				}
-				mu.Lock()
-				nodes[smeRow.DbID.Int64] = n
-				mu.Unlock()
-				if smeRow.ParentID.Valid && (idShortPath != smeRow.IDShortPath) {
-					mu.Lock()
-					children[smeRow.ParentID.Int64] = append(children[smeRow.ParentID.Int64], n)
-					mu.Unlock()
-				} else {
-					mu.Lock()
-					roots = append(roots, n)
-					mu.Unlock()
-				}
-			}
-		})
-	}
-	wg.Wait()
-	if buildError != nil {
-		return nil, "", buildError
-	}
-
-	attachChildrenToSubmodelElements(nodes, children)
-
-	sort.SliceStable(roots, func(i, j int) bool {
-		a, b := roots[i], roots[j]
-		return a.path < b.path
-	})
-
-	res := make([]model.SubmodelElement, 0, len(roots))
-	for _, r := range roots {
-		res = append(res, r.element)
-	}
-
-	var nextCursor string
-	if (len(res) > limit) && limit != -1 {
-		nextCursor = res[limit].GetIdShort()
-		res = res[:limit]
-	}
-
-	return res, nextCursor, nil
-}
-
 // addDisplayNames parses and adds display names to a submodel.
 //
 // This helper function extracts language-specific display names from the database
@@ -662,58 +531,4 @@ func GetSubmodelDataFromDbWithJSONQuery(db *sql.DB, submodelID string, limit int
 		return nil, err
 	}
 	return rows, nil
-}
-
-// attachChildrenToSubmodelElements reconstructs the hierarchical structure of submodel elements.
-//
-// This function attaches child elements to their parent containers (SubmodelElementCollection
-// or SubmodelElementList) in the proper order. It performs a stable sort based on position
-// (if set) with path as tie-breaker, ensuring consistent ordering of children.
-//
-// The function operates in O(n log n) time where n is the number of children, using an
-// efficient sorting algorithm and direct map lookups.
-//
-// Parameters:
-//   - nodes: Map of all nodes indexed by their database ID
-//   - children: Map of parent ID to slice of child nodes
-//
-// Note: Only SubmodelElementCollection and SubmodelElementList types support children.
-// Other element types are silently skipped even if they have entries in the children map.
-func attachChildrenToSubmodelElements(nodes map[int64]*node, children map[int64][]*node) {
-	for id, parent := range nodes {
-		kids := children[id]
-		if len(kids) == 0 {
-			continue
-		}
-
-		// Stable order: by position (if set)
-		sort.SliceStable(kids, func(i, j int) bool {
-			a, b := kids[i], kids[j]
-			return a.position < b.position
-		})
-
-		switch p := parent.element.(type) {
-		case *model.SubmodelElementCollection:
-			for _, ch := range kids {
-				p.Value = append(p.Value, ch.element)
-			}
-		case *model.SubmodelElementList:
-			for _, ch := range kids {
-				p.Value = append(p.Value, ch.element)
-			}
-		}
-	}
-}
-
-// node is a helper struct to build the hierarchical structure of SubmodelElements.
-//
-// It holds metadata such as database ID, parent ID, path, position, and the actual
-// SubmodelElement data. This struct is used during the reconstruction of the
-// nested structure of submodel elements from flat database rows.
-type node struct {
-	id       int64                 // Database ID of the element
-	parentID int64                 // Parent element ID for hierarchy
-	path     string                // Full path for navigation
-	position int                   // Position within parent for ordering
-	element  model.SubmodelElement // The actual submodel element data
 }

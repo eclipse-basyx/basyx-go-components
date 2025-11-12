@@ -76,8 +76,8 @@ func (s *SubmodelElementFilter) HasIDShortPathFilter() bool {
 	return s.SubmodelElementIDShortPathFilter != nil
 }
 
-// GetSubmodelElementsSubquery builds a subquery to retrieve submodel elements for a given submodel.
-func GetSubmodelElementsSubquery(filter SubmodelElementFilter, cursor string, limit int) (*goqu.SelectDataset, error) {
+// GetSubmodelElementsQuery builds a subquery to retrieve submodel elements for a given submodel.
+func GetSubmodelElementsQuery(filter SubmodelElementFilter, cursor string, limit int) (*goqu.SelectDataset, error) {
 	dialect := goqu.Dialect("postgres")
 	semanticIDSubquery, semanticIDReferredSubquery := queries.GetReferenceQueries(dialect, goqu.I("sme.semantic_id"))
 	qualifierSubquery := queries.GetQualifierSubquery(dialect, goqu.T("submodel_element_qualifier"), "sme_id", "qualifier_id", goqu.I("sme.id"))
@@ -385,7 +385,6 @@ func getAnnotatedRelationshipElementSubquery(dialect goqu.DialectWrapper) *goqu.
 			goqu.Func("jsonb_build_object",
 				goqu.V("first"), goqu.I("are.first"),
 				goqu.V("second"), goqu.I("are.second"),
-				goqu.V("annotations"), goqu.I("are.annotations"),
 			),
 		).
 		Where(goqu.I("are.id").Eq(goqu.I("sme.id"))).

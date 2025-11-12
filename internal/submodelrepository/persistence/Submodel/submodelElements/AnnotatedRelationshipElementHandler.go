@@ -187,17 +187,8 @@ func insertAnnotatedRelationshipElement(areElem *gen.AnnotatedRelationshipElemen
 		secondRef = string(ref)
 	}
 
-	annotationsJSON := "[]"
-	if len(areElem.Annotations) > 0 {
-		at, err := json.Marshal(areElem.Annotations)
-		if err != nil {
-			return err
-		}
-		annotationsJSON = string(at)
-	}
-
-	_, err := tx.Exec(`INSERT INTO annotated_relationship_element (id, first, second, annotations) VALUES ($1, $2, $3, $4)`,
-		id, firstRef, secondRef, annotationsJSON)
+	_, err := tx.Exec(`INSERT INTO annotated_relationship_element (id, first, second) VALUES ($1, $2, $3)`,
+		id, firstRef, secondRef)
 	if err != nil {
 		return err
 	}

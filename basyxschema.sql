@@ -508,8 +508,7 @@ CREATE TABLE IF NOT EXISTS relationship_element (
 CREATE TABLE IF NOT EXISTS annotated_relationship_element (
   id         BIGINT PRIMARY KEY REFERENCES submodel_element(id) ON DELETE CASCADE,
   first JSONB,
-  second JSONB,
-  annotations JSONB DEFAULT '[]'
+  second JSONB
 );
 
 CREATE TABLE IF NOT EXISTS submodel_element_collection (

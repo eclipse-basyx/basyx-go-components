@@ -496,8 +496,6 @@ type AnnotatedRelationshipElementValueRow struct {
 	First json.RawMessage `json:"first"`
 	// Second contains the second reference as JSON data
 	Second json.RawMessage `json:"second"`
-	// Annotations contains annotations as JSON data
-	Annotations json.RawMessage `json:"annotations"`
 }
 
 // ReferenceElementValueRow represents a data row for a ReferenceElement entity's value in the database.
