@@ -39,9 +39,10 @@ import (
 	"fmt"
 	"net/http"
 	"path"
+	"regexp"
 	"strings"
 
-	"github.com/doug-martin/goqu/v9/exp"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -72,7 +73,7 @@ type QueryFilter struct {
 	// Expr holds a SQL expression (goqu) representing the remaining
 	// backend-applicable constraint derived from the logical expression.
 	// It is intended to be applied by the backend persistence layer.
-	Expr exp.Expression
+	Formula grammar.LogicalExpression
 }
 
 // DecisionCode represents the result of an authorization check.
@@ -111,13 +112,32 @@ func (m *AccessModel) AuthorizeWithFilter(in EvalInput) (ok bool, code DecisionC
 			continue
 		}
 		// Gate 3: objects
-		if !matchRouteObjectsObjItem(objs, in.Path) {
+		accessWithOptinalFilter := matchRouteObjectsObjItem(objs, in.Path)
+		if !accessWithOptinalFilter.access {
 			fmt.Println("no matching object")
 			continue
 		}
+
+		combinedLE := lexpr
+		if accessWithOptinalFilter.le != nil {
+			if combinedLE == nil {
+				// no rule formula -> use route formula as-is
+				combinedLE = accessWithOptinalFilter.le
+			} else {
+				// wrap both in an AND
+				andExpr := grammar.LogicalExpression{
+					And: []grammar.LogicalExpression{
+						*combinedLE,
+						*accessWithOptinalFilter.le,
+					},
+				}
+				combinedLE = &andExpr
+			}
+		}
+
 		// Gate 4: formula → adapt for backend filtering
-		if lexpr != nil {
-			adapted, onlyBool := adaptLEForBackend(*lexpr, in.Claims, in.IssuedUTC)
+		if combinedLE != nil {
+			adapted, onlyBool := adaptLEForBackend(*combinedLE, in.Claims, in.IssuedUTC)
 			if onlyBool {
 				fmt.Println("security only LE")
 				// Fully decidable here; evaluate and continue on false
@@ -125,18 +145,9 @@ func (m *AccessModel) AuthorizeWithFilter(in EvalInput) (ok bool, code DecisionC
 					continue
 				}
 			} else {
-				// Not fully decidable → attempt to convert into backend filter
-				if expr, err := adapted.EvaluateToExpression(); err == nil {
-					fmt.Println("got a expression from LE")
-					fmt.Println(expr)
-					qf = &QueryFilter{Expr: expr}
-				} else {
-					fmt.Println("i dont get it")
-					// Fallback: evaluate now; if false, rule does not match
-					if !evalLE(*lexpr, in.Claims, in.IssuedUTC) {
-						continue
-					}
-				}
+				fmt.Println("got a expression from LE")
+				qf = &QueryFilter{Formula: adapted}
+
 			}
 		}
 
@@ -158,7 +169,8 @@ func (m *AccessModel) Authorize(in EvalInput) (bool, DecisionCode) {
 			continue
 		}
 		// Note: currently rejects access if no route is defined.
-		if !matchRouteObjectsObjItem(objs, in.Path) {
+		accessWithOptinalFilter := matchRouteObjectsObjItem(objs, in.Path)
+		if !accessWithOptinalFilter.access {
 			continue
 		}
 		if !attributesSatisfiedAll(attrs, in.Claims) {
@@ -338,42 +350,122 @@ func normalize(p string) string {
 	return p
 }
 
+func matchRoute(route string, userPath string) bool {
+	path := normalize(userPath)
+	pat := normalize(route)
+
+	// Escape regex chars first, keeping '*' as literal "\*"
+	regexPattern := regexp.QuoteMeta(pat)
+
+	// Replace ** before * (so we don't double-handle)
+	// ** -> .*
+	regexPattern = strings.ReplaceAll(regexPattern, `\*\*`, `.*`)
+	// *  -> [^/]+  (one segment, no slash)
+	regexPattern = strings.ReplaceAll(regexPattern, `\*`, `[^/]+`)
+
+	// Anchor the pattern
+	regexPattern = "^" + regexPattern + "$"
+
+	matched, _ := regexp.MatchString(regexPattern, path)
+	return matched
+}
+
+type RouteWithFilter struct {
+	route string
+	le    *grammar.LogicalExpression
+}
+
+func mapDesciptorValueToRoute(descriptorValue grammar.DescriptorValue) []RouteWithFilter {
+	switch descriptorValue.Scope {
+	case "$aasdesc":
+		if descriptorValue.ID.IsAll {
+			return []RouteWithFilter{
+				{route: "/shell-descriptors"},
+				{route: "/shell-descriptors/*"},
+			}
+		} else {
+			id := descriptorValue.ID.ID
+			encodeID := common.EncodeString(id)
+			field := grammar.ModelStringPattern("$aasdesc#id")
+			standardString := grammar.StandardString(id)
+
+			extra_filter := grammar.LogicalExpression{
+				Eq: grammar.ComparisonItems{
+					grammar.Value{Field: &field},
+					grammar.Value{StrVal: &standardString},
+				},
+			}
+
+			return []RouteWithFilter{
+				{route: "/shell-descriptors", le: &extra_filter},
+				{route: "/shell-descriptors/" + encodeID},
+			}
+		}
+
+	case "$smdesc":
+		if descriptorValue.ID.IsAll {
+			return []RouteWithFilter{
+				{route: "/shell-descriptors/*/submodel-descriptors"},
+				{route: "/shell-descriptors/*/submodel-descriptors/*"},
+			}
+		} else {
+			id := descriptorValue.ID.ID
+			encodeID := common.EncodeString(id)
+
+			field := grammar.ModelStringPattern("$smdesc#id")
+			standardString := grammar.StandardString(id)
+
+			extra_filter := grammar.LogicalExpression{
+				Eq: grammar.ComparisonItems{
+					grammar.Value{Field: &field},
+					grammar.Value{StrVal: &standardString},
+				},
+			}
+
+			return []RouteWithFilter{
+				// collection route + filter on submodel-descriptor id
+				{route: "/shell-descriptors/*/submodel-descriptors", le: &extra_filter},
+				// direct item route
+				{route: "/shell-descriptors/*/submodel-descriptors/" + encodeID},
+			}
+		}
+	}
+
+	return []RouteWithFilter{}
+}
+
+type AccessWithLE struct {
+	access bool
+	le     *grammar.LogicalExpression
+}
+
 // matchRouteObjectsObjItem returns true if any ROUTE object matches the request
 // path. Supports exact match, prefix match using "/*", and global wildcards.
-func matchRouteObjectsObjItem(objs []grammar.ObjectItem, reqPath string) bool {
-	req := normalize(reqPath)
+func matchRouteObjectsObjItem(objs []grammar.ObjectItem, reqPath string) AccessWithLE {
 
 	for _, oi := range objs {
 
 		switch oi.Kind {
 		case grammar.Route:
-			pat := normalize(oi.Route.Route)
 
-			if pat == "*" || pat == "/*" {
-				return true
+			if matchRoute(oi.Route.Route, reqPath) {
+				return AccessWithLE{access: true}
 			}
 
-			if strings.HasSuffix(pat, "/*") {
-				base := strings.TrimSuffix(pat, "/*")
-				if base != "" && strings.HasPrefix(req, base+"/") {
-					return true
-				}
-				continue
-			}
-			if pat == req {
-				return true
-			}
 		case grammar.Descriptor:
 			desc := oi.Descriptor
-			fmt.Println(desc.ID)
-			fmt.Println(desc.Scope)
-			fmt.Println(desc.ID.ID)
-			fmt.Println(desc.ID.IsAll)
-			return true
+			if desc != nil {
+				for _, routeWithFilter := range mapDesciptorValueToRoute(*desc) {
+
+					if matchRoute(routeWithFilter.route, reqPath) {
+						return AccessWithLE{access: true, le: routeWithFilter.le}
+					}
+				}
+			}
 		}
 
 	}
-	return false
+	return AccessWithLE{access: false}
 }
 
 // Cond is a helper alias used by logical evaluation and utility functions.

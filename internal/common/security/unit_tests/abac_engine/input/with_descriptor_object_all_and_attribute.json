@@ -1,0 +1,15 @@
+{
+  "AllAccessPermissionRules": {
+    "rules": [
+      {
+        "ACL": {
+          "ACCESS": "ALLOW",
+          "RIGHTS": ["READ","UPDATE"],
+          "ATTRIBUTES": [{"CLAIM": "role"}]
+        },
+        "OBJECTS": [{"DESCRIPTOR" : "$aasdesc(\"*\")"}],
+        "FORMULA": { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "admin" } ] }
+      }
+    ]
+  }
+}
