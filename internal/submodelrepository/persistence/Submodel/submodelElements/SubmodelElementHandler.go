@@ -47,7 +47,6 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/builder"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
-	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	submodelsubqueries "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/Submodel/queries"
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 )
@@ -65,7 +64,7 @@ import (
 // Returns:
 //   - PostgreSQLSMECrudInterface: Type-specific handler implementing CRUD operations
 //   - error: An error if the model type is unsupported or handler creation fails
-func GetSMEHandler(submodelElement gen.SubmodelElement, db *sql.DB) (PostgreSQLSMECrudInterface, error) {
+func GetSMEHandler(submodelElement model.SubmodelElement, db *sql.DB) (PostgreSQLSMECrudInterface, error) {
 	return GetSMEHandlerByModelType(string(submodelElement.GetModelType()), db)
 }
 
