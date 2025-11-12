@@ -1,0 +1,14 @@
+{
+    "actionButtons": {
+        "commands": [
+            {
+                "name": "$(tools) Run GoLang CI Lint",
+                "color": "white",
+                "command": ". ./lint.sh"
+            }
+        ],
+        "defaultColor": "red",
+        "reloadButton": "Reload Lint Actions",
+        "loadNpmCommands": false
+    }
+}
