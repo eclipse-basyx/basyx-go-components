@@ -40,7 +40,6 @@ import (
 	"net/http"
 	"path"
 	"strings"
-	"time"
 
 	"github.com/doug-martin/goqu/v9/exp"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
@@ -65,15 +64,6 @@ func ParseAccessModel(b []byte) (*AccessModel, error) {
 	return &AccessModel{gen: m}, nil
 }
 
-// EvalInput is the minimal set of request properties the ABAC engine needs to
-// evaluate a decision. IssuedUTC should be in UTC.
-type EvalInput struct {
-	Method    string
-	Path      string
-	Claims    Claims
-	IssuedUTC time.Time
-}
-
 // QueryFilter captures optional, fine-grained restrictions produced by a rule
 // even when ACCESS=ALLOW. Controllers can use it to restrict rows, constrain
 // mutations, or redact fields. The Discovery Service currently does not require
@@ -85,10 +75,25 @@ type QueryFilter struct {
 	Expr exp.Expression
 }
 
+// DecisionCode represents the result of an authorization check.
+// It is serialized as a JSON string for consistent use in controller
+// responses and API payloads.
+type DecisionCode string
+
+const (
+	// DecisionAllow indicates that the authorization check succeeded
+	// and the requested action is permitted.
+	DecisionAllow DecisionCode = "ALLOW"
+
+	// DecisionNoMatch indicates that no matching rule or policy was found
+	// for the authorization check, resulting in a neutral or deny outcome.
+	DecisionNoMatch DecisionCode = "NO_MATCH"
+)
+
 // AuthorizeWithFilter evaluates the request against the model rules in order.
 // It returns whether access is allowed, a human-readable reason, and an optional
 // QueryFilter for controllers to enforce (e.g., tenant scoping, redactions).
-func (m *AccessModel) AuthorizeWithFilter(in EvalInput) (ok bool, reason string, qf *QueryFilter) {
+func (m *AccessModel) AuthorizeWithFilter(in EvalInput) (ok bool, code DecisionCode, qf *QueryFilter) {
 	right := mapMethodToRight(in.Method)
 	all := m.gen.AllAccessPermissionRules
 
@@ -97,14 +102,17 @@ func (m *AccessModel) AuthorizeWithFilter(in EvalInput) (ok bool, reason string,
 
 		// Gate 1: rights
 		if !rightsContains(acl.RIGHTS, right) {
+			fmt.Println("method mismatch")
 			continue
 		}
-		// Gate 2: route
+		// Gate 2: attributes
+		if !attributesSatisfiedAll(attrs, in.Claims) {
+			fmt.Println("missing claims")
+			continue
+		}
+		// Gate 3: objects
 		if !matchRouteObjectsObjItem(objs, in.Path) {
-			continue
-		}
-		// Gate 3: attributes
-		if !attributesSatisfiedAttrs(attrs, in.Claims) {
+			fmt.Println("no matching object")
 			continue
 		}
 		// Gate 4: formula → adapt for backend filtering
@@ -132,21 +140,14 @@ func (m *AccessModel) AuthorizeWithFilter(in EvalInput) (ok bool, reason string,
 			}
 		}
 
-		switch acl.ACCESS {
-		case grammar.ACLACCESSALLOW:
-			return true, "ALLOW by rule", qf
-		case grammar.ACLACCESSDISABLED:
-			return false, "DENY (disabled) by rule", nil
-		default:
-			return false, "DENY (unknown access) by rule", nil
-		}
+		return true, DecisionAllow, qf
 	}
-	return false, "no matching rule", nil
+	return false, DecisionNoMatch, nil
 }
 
 // Authorize evaluates the request and returns an allow/deny boolean and a
 // reason, without producing a QueryFilter. Prefer AuthorizeWithFilter in new code.
-func (m *AccessModel) Authorize(in EvalInput) (bool, string) {
+func (m *AccessModel) Authorize(in EvalInput) (bool, DecisionCode) {
 	right := mapMethodToRight(in.Method)
 
 	all := m.gen.AllAccessPermissionRules
@@ -160,24 +161,17 @@ func (m *AccessModel) Authorize(in EvalInput) (bool, string) {
 		if !matchRouteObjectsObjItem(objs, in.Path) {
 			continue
 		}
-		if !attributesSatisfiedAttrs(attrs, in.Claims) {
+		if !attributesSatisfiedAll(attrs, in.Claims) {
 			continue
 		}
 		if lexpr != nil && !evalLE(*lexpr, in.Claims, in.IssuedUTC) {
 			continue
 		}
 
-		switch acl.ACCESS {
-		case grammar.ACLACCESSALLOW:
-			return true, "ALLOW by rule"
-		case grammar.ACLACCESSDISABLED:
-			return false, "DENY (disabled) by rule"
-		default:
-			return false, "DENY (unknown access) by rule"
-		}
+		return true, DecisionAllow
 	}
 
-	return false, "no matching rule"
+	return false, DecisionNoMatch
 }
 
 // materialize resolves a rule's references (USEACL, USEOBJECTS, USEFORMULA) into
@@ -289,25 +283,46 @@ func rightsContains(hay []grammar.RightsEnum, needle grammar.RightsEnum) bool {
 	return false
 }
 
-// attributesSatisfiedAttrs returns true if the provided claims satisfy at least
-// one of the required attributes. Currently supports GLOBAL=ANONYMOUS and
-// CLAIM=<claimKey> checks.
-func attributesSatisfiedAttrs(items []grammar.AttributeItem, claims Claims) bool {
+// attributesSatisfiedAll returns true only if ALL required attributes are satisfied.
+// Rules supported:
+//   - GLOBAL=ANONYMOUS         → satisfied unconditionally
+//   - CLAIM=<claimKey>         → user must have that claim key (presence check)
+//
+// If items is empty, it returns true. Unknown kinds fail closed (return false).
+func attributesSatisfiedAll(items []grammar.AttributeItem, claims Claims) bool {
+	// No required attributes → allowed
+	if len(items) == 0 {
+		return true
+	}
+
 	for _, it := range items {
 		switch it.Kind {
 		case grammar.ATTRGLOBAL:
+			// Currently only ANONYMOUS is supported per your comment.
 			if it.Value == "ANONYMOUS" {
-				return true
+				// satisfied → continue checking the rest
+				continue
 			}
+			// Unsupported GLOBAL value → fail closed
+			return false
+
 		case grammar.ATTRCLAIM:
-			for key := range claims {
-				if it.Value == key {
-					return true
-				}
+			// Presence-only check: user must have this claim key
+			fmt.Println("it.Value")
+			fmt.Println(it.Value)
+			fmt.Println(claims)
+			if _, ok := claims[it.Value]; !ok {
+				return false
 			}
+
+		default:
+			// Unknown attribute type → fail closed
+			return false
 		}
 	}
-	return false
+
+	// All attributes satisfied
+	return true
 }
 
 // normalize cleans route patterns and request paths into a consistent absolute
@@ -332,7 +347,7 @@ func matchRouteObjectsObjItem(objs []grammar.ObjectItem, reqPath string) bool {
 		if oi.Kind != grammar.Route {
 			continue
 		}
-		pat := normalize(oi.Value)
+		pat := normalize(oi.Route.Route)
 
 		if pat == "*" || pat == "/*" {
 			return true

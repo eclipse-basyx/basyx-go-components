@@ -41,6 +41,11 @@
     "should_fail": false
   },
   {
+    "file": "pass/object_descriptor.json",
+    "type": "AccessRuleModelSchemaJson",
+    "should_fail": false
+  },
+  {
     "file": "pass/one_acl.json",
     "type": "AccessRuleModelSchemaJson",
     "should_fail": false

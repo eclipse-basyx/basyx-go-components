@@ -89,9 +89,6 @@ func NewOIDC(ctx context.Context, s OIDCSettings) (*OIDC, error) {
 	return &OIDC{verifier: v, settings: s}, nil
 }
 
-// Claims represents token claims extracted from a verified ID token.
-type Claims map[string]any
-
 type ctxKey string
 
 const (

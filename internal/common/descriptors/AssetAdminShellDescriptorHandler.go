@@ -22,7 +22,7 @@
 *
 * SPDX-License-Identifier: MIT
 ******************************************************************************/
-// Author: Martin Stemmer ( Fraunhofer IESE )
+
 // Package descriptors contains the data‑access helpers that read and write
 // Asset Administration Shell (AAS) and Submodel descriptor data to a
 // PostgreSQL database.
@@ -39,6 +39,7 @@
 // Queries are built with goqu and executed via database/sql. Most read helpers
 // return plain model types from internal/common/model so callers can use the
 // results directly without further mapping.
+// Author: Martin Stemmer ( Fraunhofer IESE )
 package descriptors
 
 import (

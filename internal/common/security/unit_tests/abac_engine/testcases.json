@@ -1,0 +1,17 @@
+[
+  {
+    "input": "input/simple.json",
+    "expected": "expected/access_allowed.json",
+    "eval": "eval/get_shellDescriptors_admin.json"
+  },
+  {
+    "input": "input/no_object.json",
+    "expected": "expected/no_matching_rule.json",
+    "eval": "eval/get_shellDescriptors_admin.json"
+  },
+  {
+    "input": "input/with_descriptor_object.json",
+    "expected": "expected/access_allowed.json",
+    "eval": "eval/get_shellDescriptors_admin.json"
+  }
+]
