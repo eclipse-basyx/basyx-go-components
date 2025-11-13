@@ -7,6 +7,11 @@
                 "command": ". ./lint.sh"
             },
             {
+                "name": "$(trash) Clean Testcache",
+                "color": "white",
+                "command": "go clean -testcache"
+            },
+            {
                 "name": "$(run) Run Submodel Repository Integration Tests",
                 "color": "white",
                 "command": "go test -v ./internal/submodelrepository/integration_tests"
