@@ -657,6 +657,14 @@ CREATE INDEX IF NOT EXISTS ix_ref_root_id ON reference(rootreference, id);
 CREATE INDEX IF NOT EXISTS ix_ref_type ON reference(type);
 CREATE INDEX IF NOT EXISTS ix_refkey_refid ON reference_key(value);
 
+CREATE TABLE IF NOT EXISTS registry_administrative_information (
+  id                BIGSERIAL PRIMARY KEY,
+  version           VARCHAR(4),
+  revision          VARCHAR(4),
+  company           BIGINT REFERENCES reference(id),
+  templateId        VARCHAR(2048)
+);
+
 CREATE TABLE IF NOT EXISTS registry_descriptor (
   descriptor_id BIGINT PRIMARY KEY REFERENCES descriptor(id) ON DELETE CASCADE,
   description_id BIGINT REFERENCES lang_string_text_type_reference(id) ON DELETE SET NULL,
@@ -666,14 +674,6 @@ CREATE TABLE IF NOT EXISTS registry_descriptor (
   global_asset_id VARCHAR(2048),
   id_short VARCHAR(128),
   id VARCHAR(2048) NOT NULL UNIQUE
-);
-
-CREATE TABLE IF NOT EXISTS registry_administrative_information (
-  id                BIGSERIAL PRIMARY KEY,
-  version           VARCHAR(4),
-  revision          VARCHAR(4),
-  company           BIGINT REFERENCES reference(id),
-  templateId        VARCHAR(2048)
 );
 
 -- descriptor_extension: speed lookups by either side + pair-membership checks

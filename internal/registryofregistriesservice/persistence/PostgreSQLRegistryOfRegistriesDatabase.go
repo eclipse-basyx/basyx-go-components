@@ -38,8 +38,8 @@ import (
 	"fmt"
 
 	"github.com/doug-martin/goqu/v9"
-	aasregistrydatabase "github.com/eclipse-basyx/basyx-go-components/internal/aasregistry/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/descriptors"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	persistence_utils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
 )
@@ -149,7 +149,7 @@ func (p *PostgreSQLRegistryOfRegistriesDatabase) GetRegistryDescriptorById(ctx c
 	if err != nil {
 		return model.RegistryDescriptor{}, err
 	}
-	endpoints, err = aasregistrydatabase.ReadEndpointsByDescriptorID(ctx, p.db, descID)
+	endpoints, err = descriptors.ReadEndpointsByDescriptorID(ctx, p.db, descID)
 	if err != nil {
 		return model.RegistryDescriptor{}, err
 	}
@@ -194,7 +194,11 @@ func (p *PostgreSQLRegistryOfRegistriesDatabase) PostRegistryDescriptor(ctx cont
 	}
 	displayNameID = dnID
 
-	descID, err := persistence_utils.CreateLangStringTextTypesN(tx, registryDescriptor.Description)
+	var convertedDescription []model.LangStringText
+	for _, desc := range registryDescriptor.Description {
+		convertedDescription = append(convertedDescription, desc)
+	}
+	descID, err := persistence_utils.CreateLangStringTextTypes(tx, convertedDescription)
 	if err != nil {
 		fmt.Println(err)
 		return common.NewInternalServerError("Failed to create Description - no changes applied - see console for details")
@@ -221,7 +225,7 @@ func (p *PostgreSQLRegistryOfRegistriesDatabase) PostRegistryDescriptor(ctx cont
 		return err
 	}
 
-	if err = aasregistrydatabase.CreateEndpoints(tx, descriptorID, registryDescriptor.Endpoints); err != nil {
+	if err = descriptors.CreateEndpoints(tx, descriptorID, registryDescriptor.Endpoints); err != nil {
 		fmt.Println(err)
 		return common.NewInternalServerError("Failed to create Endpoints - no changes applied - see console for details")
 	}
