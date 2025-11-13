@@ -132,9 +132,6 @@ func TestIntegration(t *testing.T) {
 	configs, err := loadTestConfig("it_config.json")
 	require.NoError(t, err, "Failed to load test config")
 
-	// Wait for services to be ready (adjust as needed)
-	time.Sleep(15 * time.Second) // Wait for Docker Compose services
-
 	for i, config := range configs {
 		name := fmt.Sprintf("Step_%d_%s_%s", i+1, config.Method, config.Endpoint)
 		if config.Action != "" {

@@ -48,23 +48,6 @@ CREATE TABLE IF NOT EXISTS submodel_embedded_data_specification (
 
 CREATE INDEX IF NOT EXISTS ix_eds_id ON submodel_embedded_data_specification(id);
 
-
-CREATE TABLE IF NOT EXISTS extension (
-  id          BIGSERIAL PRIMARY KEY,
-  semantic_id BIGINT REFERENCES reference(id) ON DELETE CASCADE,
-  name       varchar(128) NOT NULL,
-  position   INTEGER,
-  value_type    data_type_def_xsd,
-  value_text    TEXT,
-  value_num     NUMERIC,
-  value_bool    BOOLEAN,
-  value_time    TIME,
-  value_datetime TIMESTAMPTZ
-);
-
-CREATE INDEX IF NOT EXISTS ix_ext_id ON extension(id);
-CREATE INDEX IF NOT EXISTS ix_ext_position ON extension(position);
-
 CREATE TABLE IF NOT EXISTS submodel_extension (
   id BIGSERIAL PRIMARY KEY,
   submodel_id VARCHAR(2048) NOT NULL REFERENCES submodel(id) ON DELETE CASCADE,
@@ -78,28 +61,6 @@ CREATE INDEX IF NOT EXISTS ix_smext_extension_id ON submodel_extension(extension
 CREATE INDEX IF NOT EXISTS ix_ext_semantic_id ON extension(semantic_id);
 
 CREATE INDEX IF NOT EXISTS ix_smext_id ON submodel_extension(id);
-
-CREATE TABLE IF NOT EXISTS extension_supplemental_semantic_id (
-  id BIGSERIAL PRIMARY KEY,
-  extension_id BIGINT NOT NULL REFERENCES extension(id) ON DELETE CASCADE,
-  reference_id BIGINT NOT NULL REFERENCES reference(id) ON DELETE CASCADE
-); 
-
-CREATE INDEX IF NOT EXISTS ix_essi_extension_id ON extension_supplemental_semantic_id(extension_id);
-CREATE INDEX IF NOT EXISTS ix_essi_reference_id ON extension_supplemental_semantic_id(reference_id);
-CREATE INDEX IF NOT EXISTS ix_extsup_id ON extension_supplemental_semantic_id(id);
-CREATE INDEX IF NOT EXISTS ix_extsup_eid ON extension_supplemental_semantic_id(extension_id);
-
-CREATE TABLE IF NOT EXISTS extension_refers_to (
-  id BIGSERIAL PRIMARY KEY,
-  extension_id BIGINT NOT NULL REFERENCES extension(id) ON DELETE CASCADE,
-  reference_id BIGINT NOT NULL REFERENCES reference(id) ON DELETE CASCADE
-);
-
-CREATE INDEX IF NOT EXISTS ix_extref_id ON extension_refers_to(id);
-CREATE INDEX IF NOT EXISTS ix_extref_eid ON extension_refers_to(extension_id);
-CREATE INDEX IF NOT EXISTS ix_extref_reference_id ON extension_refers_to(reference_id);
-
 
 CREATE TABLE IF NOT EXISTS submodel_element_extension (
   submodel_element_id       BIGINT NOT NULL REFERENCES submodel_element(id) ON DELETE CASCADE,
