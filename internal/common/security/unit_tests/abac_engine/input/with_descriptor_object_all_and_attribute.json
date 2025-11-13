@@ -8,7 +8,11 @@
           "ATTRIBUTES": [{"CLAIM": "role"}]
         },
         "OBJECTS": [{"DESCRIPTOR" : "$aasdesc(\"*\")"}],
-        "FORMULA": { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "admin" } ] }
+        "FORMULA": { "$eq": [ 
+          { "$attribute": { "CLAIM": "role" } }, 
+          { "$strVal": "admin" } 
+          ] 
+        }
       }
     ]
   }

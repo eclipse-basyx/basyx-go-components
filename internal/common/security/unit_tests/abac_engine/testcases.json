@@ -53,5 +53,15 @@
     "input": "input/with_descriptor_object_all_and_attribute.json",
     "expected": "expected/access_allowed.json",
     "eval": "eval/get_shellDescriptors_admin.json"
+  },
+  {
+    "input": "input/with_descriptor_object_all_and_attribute_nested_solveable.json",
+    "expected": "expected/access_allowed.json",
+    "eval": "eval/get_shellDescriptors_admin.json"
+  },
+  {
+    "input": "input/with_descriptor_object_all_and_attribute_nested.json",
+    "expected": "expected/access_allowed_with_qf2.json",
+    "eval": "eval/get_shellDescriptors_admin.json"
   }
 ]
