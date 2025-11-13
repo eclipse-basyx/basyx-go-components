@@ -443,6 +443,8 @@ type AccessWithLE struct {
 // path. Supports exact match, prefix match using "/*", and global wildcards.
 func matchRouteObjectsObjItem(objs []grammar.ObjectItem, reqPath string) AccessWithLE {
 
+	var locialExpressions []grammar.LogicalExpression
+	access := false
 	for _, oi := range objs {
 
 		switch oi.Kind {
@@ -458,14 +460,26 @@ func matchRouteObjectsObjItem(objs []grammar.ObjectItem, reqPath string) AccessW
 				for _, routeWithFilter := range mapDesciptorValueToRoute(*desc) {
 
 					if matchRoute(routeWithFilter.route, reqPath) {
-						return AccessWithLE{access: true, le: routeWithFilter.le}
+						if routeWithFilter.le != nil {
+							access = true
+							locialExpressions = append(locialExpressions, *routeWithFilter.le)
+						} else {
+							return AccessWithLE{access: true}
+						}
 					}
 				}
 			}
 		}
 
 	}
-	return AccessWithLE{access: false}
+
+	var objectLogicalExpression *grammar.LogicalExpression
+	if len(locialExpressions) > 0 {
+		objectLogicalExpression = &grammar.LogicalExpression{
+			Or: locialExpressions,
+		}
+	}
+	return AccessWithLE{access: access, le: objectLogicalExpression}
 }
 
 // Cond is a helper alias used by logical evaluation and utility functions.
