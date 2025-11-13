@@ -505,3 +505,27 @@ type ReferenceElementValueRow struct {
 	// Value contains the reference as JSON data
 	Value json.RawMessage `json:"value"`
 }
+
+// FileElementValueRow represents a data row for a FileElement entity in the database.
+// FileElements are submodel elements that represent files associated with the AAS.
+//
+// This structure captures the file path and content type of a FileElement.
+// The file path is stored as a string, while the content type specifies the MIME type of the file.
+type FileElementValueRow struct {
+	// Value contains the file path (relative or absolute) as a string
+	Value string `json:"value"`
+	// ContentType specifies the MIME type of the file content
+	ContentType string `json:"content_type"`
+}
+
+// BlobElementValueRow represents a data row for a BlobElement entity in the database.
+// BlobElements are submodel elements that represent binary large objects (BLOBs) associated with the AAS.
+//
+// This structure captures the content type and binary value of a BlobElement.
+// The content type specifies the MIME type of the blob, while the value contains the actual binary data.
+type BlobElementValueRow struct {
+	// ContentType specifies the MIME type of the blob content
+	ContentType string `json:"content_type"`
+	// Value contains the blob data as a byte array
+	Value []byte `json:"value"`
+}

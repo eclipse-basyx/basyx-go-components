@@ -20,10 +20,12 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	persistence "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence"
+	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/submodelrepositoryapi/go"
 )
 
 // SubmodelRepositoryAPIAPIService is a service that implements the logic for the SubmodelRepositoryAPIAPIServicer
@@ -547,9 +549,6 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelByIDPath(ctx context.Contex
 	// TODO: Uncomment the next line to return response Response(403, Result{}) or use other options such as http.Ok ...
 	// return gen.Response(403, Result{}), nil
 
-	// TODO: Uncomment the next line to return response Response(404, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(404, Result{}), nil
-
 	// TODO: Uncomment the next line to return response Response(500, Result{}) or use other options such as http.Ok ...
 	// return gen.Response(500, Result{}), nil
 
@@ -769,9 +768,6 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelElementsPathSubmodelRepo
 	// TODO: Uncomment the next line to return response Response(403, Result{}) or use other options such as http.Ok ...
 	// return gen.Response(403, Result{}), nil
 
-	// TODO: Uncomment the next line to return response Response(404, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(404, Result{}), nil
-
 	// TODO: Uncomment the next line to return response Response(500, Result{}) or use other options such as http.Ok ...
 	// return gen.Response(500, Result{}), nil
 
@@ -814,7 +810,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelElementByPathSubmodelRepo(c
 		return gen.Response(http.StatusBadRequest, nil), decodeErr
 	}
 
-	sme, err := s.submodelBackend.GetSubmodelElement(string(decodedSubmodelIdentifier), idShortPath, 1, "")
+	sme, err := s.submodelBackend.GetSubmodelElement(string(decodedSubmodelIdentifier), idShortPath)
 	if err != nil {
 		if common.IsErrNotFound(err) {
 			timestamp := common.GetCurrentTimestamp()
@@ -1192,68 +1188,111 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelElementByPathPathSubmodelRe
 //
 //nolint:revive
 func (s *SubmodelRepositoryAPIAPIService) GetFileByPathSubmodelRepo(ctx context.Context, submodelIdentifier string, idShortPath string) (gen.ImplResponse, error) {
-	// TODO - update GetFileByPathSubmodelRepo with the required logic for this service method.
-	// Add api_submodel_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
+	// Decode Submodel Identifier
+	decodedSubmodelIdentifier, decodeErr := base64.RawStdEncoding.DecodeString(submodelIdentifier)
+	if decodeErr != nil {
+		return gen.Response(http.StatusBadRequest, nil), decodeErr
+	}
+	submodelIdentifier = string(decodedSubmodelIdentifier)
 
-	// TODO: Uncomment the next line to return response Response(200, *os.File{}) or use other options such as http.Ok ...
-	// return gen.Response(200, *os.File{}), nil
+	// See if Submodel Exists
+	exists, err := s.submodelBackend.DoesSubmodelExist(submodelIdentifier)
+	if err != nil || !exists {
+		timestamp := common.GetCurrentTimestamp()
+		return gen.Response(http.StatusNotFound, []common.ErrorHandler{*common.NewErrorHandler("Error", errors.New("submodel not found"), "404", "SMREPO-GetFileByPathSubmodelRepo-404-NotFound", string(timestamp))}), nil
+	}
 
-	// TODO: Uncomment the next line to return response Response(400, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(400, Result{}), nil
+	if common.IsErrNotFound(err) {
+		timestamp := common.GetCurrentTimestamp()
+		return gen.Response(http.StatusNotFound, []common.ErrorHandler{*common.NewErrorHandler("Error", err, "404", "SMREPO-GetFileByPathSubmodelRepo-404-NotFound", string(timestamp))}), nil
+	}
 
-	// TODO: Uncomment the next line to return response Response(401, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(401, Result{}), nil
+	// Get Submodel Element
+	fileSme, err := s.submodelBackend.GetSubmodelElement(submodelIdentifier, idShortPath)
+	if common.IsErrNotFound(err) {
+		timestamp := common.GetCurrentTimestamp()
+		return gen.Response(http.StatusNotFound, []common.ErrorHandler{*common.NewErrorHandler("Error", err, "404", "SMREPO-GetFileByPathSubmodelRepo-404-NotFound", string(timestamp))}), nil
+	} else if err != nil {
+		return gen.Response(http.StatusInternalServerError, nil), err
+	}
 
-	// TODO: Uncomment the next line to return response Response(403, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(403, Result{}), nil
+	// check if file value starts with http:// or https://
+	fileValue, ok := fileSme.(*gen.File)
+	if !ok {
+		timestamp := common.GetCurrentTimestamp()
+		return gen.Response(http.StatusBadRequest, []common.ErrorHandler{*common.NewErrorHandler("Error", errors.New("submodel element is not of type File"), "400", "SMREPO-GetFileByPathSubmodelRepo-400-BadRequest", string(timestamp))}), nil
+	}
 
-	// TODO: Uncomment the next line to return response Response(404, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(404, Result{}), nil
+	fileURL := fileValue.Value
+	if strings.HasPrefix(fileURL, "http://") || strings.HasPrefix(fileURL, "https://") {
+		// Redirect to the file URL
+		return gen.Response(http.StatusFound, openapi.Redirect{Location: fileURL}), nil
+	}
 
-	// TODO: Uncomment the next line to return response Response(405, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(405, Result{}), nil
+	// Check if the value is an OID (stored files in Large Objects)
+	// Retrieve file from Large Object system
+	fileContent, contentType, err := s.submodelBackend.DownloadFileAttachment(submodelIdentifier, idShortPath)
+	if err != nil {
+		if common.IsErrNotFound(err) {
+			timestamp := common.GetCurrentTimestamp()
+			return gen.Response(http.StatusNotFound, []common.ErrorHandler{*common.NewErrorHandler("Error", err, "404", "SMREPO-GetFileByPathSubmodelRepo-404-NotFound", string(timestamp))}), nil
+		}
+		return gen.Response(http.StatusInternalServerError, nil), err
+	}
 
-	// TODO: Uncomment the next line to return response Response(500, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(500, Result{}), nil
-
-	// TODO: Uncomment the next line to return response Response(0, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(0, Result{}), nil
-
-	return gen.Response(http.StatusNotImplemented, nil), errors.New("GetFileByPathSubmodelRepo method not implemented")
+	// Return file with appropriate content type
+	return gen.Response(http.StatusOK, openapi.FileDownload{
+		Content:     fileContent,
+		ContentType: contentType,
+	}), nil
 }
 
 // PutFileByPathSubmodelRepo - Uploads file content to an existing submodel element at a specified path within submodel elements hierarchy
 //
 //nolint:revive
 func (s *SubmodelRepositoryAPIAPIService) PutFileByPathSubmodelRepo(ctx context.Context, submodelIdentifier string, idShortPath string, fileName string, file *os.File) (gen.ImplResponse, error) {
-	// TODO - update PutFileByPathSubmodelRepo with the required logic for this service method.
-	// Add api_submodel_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
+	// Decode Submodel Identifier
+	decodedSubmodelIdentifier, decodeErr := base64.RawStdEncoding.DecodeString(submodelIdentifier)
+	if decodeErr != nil {
+		return gen.Response(http.StatusBadRequest, nil), decodeErr
+	}
+	submodelIdentifier = string(decodedSubmodelIdentifier)
 
-	// TODO: Uncomment the next line to return response Response(204, {}) or use other options such as http.Ok ...
-	// return gen.Response(204, nil),nil
+	// Check if Submodel Exists
+	exists, err := s.submodelBackend.DoesSubmodelExist(submodelIdentifier)
+	if err != nil || !exists {
+		timestamp := common.GetCurrentTimestamp()
+		return gen.Response(http.StatusNotFound, []common.ErrorHandler{*common.NewErrorHandler("Error", errors.New("submodel not found"), "404", "SMREPO-PutFileByPathSubmodelRepo-404-NotFound", string(timestamp))}), nil
+	}
 
-	// TODO: Uncomment the next line to return response Response(400, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(400, Result{}), nil
+	// Get Submodel Element to verify it exists and is of type File
+	fileSme, err := s.submodelBackend.GetSubmodelElement(submodelIdentifier, idShortPath)
+	if common.IsErrNotFound(err) {
+		timestamp := common.GetCurrentTimestamp()
+		return gen.Response(http.StatusNotFound, []common.ErrorHandler{*common.NewErrorHandler("Error", err, "404", "SMREPO-PutFileByPathSubmodelRepo-404-NotFound", string(timestamp))}), nil
+	}
+	if err != nil {
+		return gen.Response(http.StatusInternalServerError, nil), err
+	}
 
-	// TODO: Uncomment the next line to return response Response(401, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(401, Result{}), nil
+	// Verify submodel element is of type File
+	_, ok := fileSme.(*gen.File)
+	if !ok {
+		timestamp := common.GetCurrentTimestamp()
+		return gen.Response(http.StatusBadRequest, []common.ErrorHandler{*common.NewErrorHandler("Error", errors.New("submodel element is not of type File"), "400", "SMREPO-PutFileByPathSubmodelRepo-400-BadRequest", string(timestamp))}), nil
+	}
 
-	// TODO: Uncomment the next line to return response Response(403, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(403, Result{}), nil
+	// Upload file attachment using the dedicated handler
+	err = s.submodelBackend.UploadFileAttachment(submodelIdentifier, idShortPath, file)
+	if err != nil {
+		if common.IsErrNotFound(err) {
+			timestamp := common.GetCurrentTimestamp()
+			return gen.Response(http.StatusNotFound, []common.ErrorHandler{*common.NewErrorHandler("Error", err, "404", "SMREPO-PutFileByPathSubmodelRepo-404-NotFound", string(timestamp))}), nil
+		}
+		return gen.Response(http.StatusInternalServerError, nil), err
+	}
 
-	// TODO: Uncomment the next line to return response Response(404, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(404, Result{}), nil
-
-	// TODO: Uncomment the next line to return response Response(405, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(405, Result{}), nil
-
-	// TODO: Uncomment the next line to return response Response(500, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(500, Result{}), nil
-
-	// TODO: Uncomment the next line to return response Response(0, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(0, Result{}), nil
-
-	return gen.Response(http.StatusNotImplemented, nil), errors.New("PutFileByPathSubmodelRepo method not implemented")
+	return gen.Response(http.StatusNoContent, nil), nil
 }
 
 // DeleteFileByPathSubmodelRepo - Deletes file content of an existing submodel element at a specified path within submodel elements hierarchy

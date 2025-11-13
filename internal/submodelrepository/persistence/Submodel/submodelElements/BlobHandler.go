@@ -31,8 +31,8 @@ package submodelelements
 
 import (
 	"database/sql"
-	"errors"
 
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 )
@@ -78,13 +78,18 @@ func NewPostgreSQLBlobHandler(db *sql.DB) (*PostgreSQLBlobHandler, error) {
 func (p PostgreSQLBlobHandler) Create(tx *sql.Tx, submodelID string, submodelElement gen.SubmodelElement) (int, error) {
 	blob, ok := submodelElement.(*gen.Blob)
 	if !ok {
-		return 0, errors.New("submodelElement is not of type Blob")
+		return 0, common.NewErrBadRequest("submodelElement is not of type Blob")
 	}
 
 	// First, perform base SubmodelElement operations within the transaction
 	id, err := p.decorated.Create(tx, submodelID, submodelElement)
 	if err != nil {
 		return 0, err
+	}
+
+	// Check if blob value is larger than 1GB
+	if len(blob.Value) > 1<<30 {
+		return 0, common.NewErrBadRequest("blob value exceeds maximum size of 1GB - for files larger than 1GB, you must use File submodel element instead - Postgres Limitation")
 	}
 
 	// Blob-specific database insertion
@@ -115,7 +120,7 @@ func (p PostgreSQLBlobHandler) Create(tx *sql.Tx, submodelID string, submodelEle
 func (p PostgreSQLBlobHandler) CreateNested(tx *sql.Tx, submodelID string, parentID int, idShortPath string, submodelElement gen.SubmodelElement, pos int, rootSubmodelElementID int) (int, error) {
 	blob, ok := submodelElement.(*gen.Blob)
 	if !ok {
-		return 0, errors.New("submodelElement is not of type Blob")
+		return 0, common.NewErrBadRequest("submodelElement is not of type Blob")
 	}
 
 	// Create the nested blob with the provided idShortPath using the decorated handler

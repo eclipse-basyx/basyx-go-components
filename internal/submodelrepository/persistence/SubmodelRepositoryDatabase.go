@@ -35,6 +35,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"strconv"
 	"sync"
 
@@ -334,6 +335,15 @@ func (p *PostgreSQLSubmodelDatabase) GetAllSubmodelsMetadata(
 	return submodels, "", nil
 }
 
+func (p *PostgreSQLSubmodelDatabase) DoesSubmodelExist(submodelIdentifier string) (bool, error) {
+	var count int
+	err := p.db.QueryRow("SELECT COUNT(id) FROM submodel WHERE id = $1 LIMIT 1", submodelIdentifier).Scan(&count)
+	if err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
+
 // GetSubmodel retrieves a complete submodel by its ID.
 // This method returns the full submodel including all its submodel elements and metadata.
 //
@@ -604,7 +614,7 @@ func (p *PostgreSQLSubmodelDatabase) CreateSubmodel(sm gen.Submodel) error {
 // Returns:
 //   - gen.SubmodelElement: The requested submodel element
 //   - error: Error if element not found or retrieval fails
-func (p *PostgreSQLSubmodelDatabase) GetSubmodelElement(submodelID string, idShortOrPath string, limit int, cursor string) (gen.SubmodelElement, error) {
+func (p *PostgreSQLSubmodelDatabase) GetSubmodelElement(submodelID string, idShortOrPath string) (gen.SubmodelElement, error) {
 	tx, err := p.db.Begin()
 	if err != nil {
 		fmt.Println(err)
@@ -616,7 +626,7 @@ func (p *PostgreSQLSubmodelDatabase) GetSubmodelElement(submodelID string, idSho
 		}
 	}()
 
-	elements, _, err := submodelelements.GetSubmodelElementsForSubmodel(p.db, submodelID, idShortOrPath, cursor, limit)
+	elements, _, err := submodelelements.GetSubmodelElementsForSubmodel(p.db, submodelID, idShortOrPath, "", -1)
 	if err != nil {
 		return nil, err
 	}
@@ -1096,4 +1106,32 @@ func addNestedElementToStackWithIndexPath(submodelElementList *gen.SubmodelEleme
 		position:                  index, // For lists, position is the actual index
 	})
 	return stack
+}
+
+// UploadFileAttachment uploads a file to PostgreSQL's Large Object system for a File submodel element.
+// This method delegates to the FileHandler to handle the upload process.
+//
+// Parameters:
+//   - submodelID: ID of the parent submodel
+//   - idShortPath: Path to the file element within the submodel
+//   - file: The file to upload
+//
+// Returns:
+//   - error: Error if the upload operation fails
+func (p *PostgreSQLSubmodelDatabase) UploadFileAttachment(submodelID string, idShortPath string, file *os.File) error {
+	fileHandler, err := submodelelements.NewPostgreSQLFileHandler(p.db)
+	if err != nil {
+		return fmt.Errorf("failed to create file handler: %w", err)
+	}
+	return fileHandler.UploadFileAttachment(submodelID, idShortPath, file)
+}
+
+// DownloadFileAttachment retrieves a file from PostgreSQL Large Object system.
+// Returns the file content and content type.
+func (p *PostgreSQLSubmodelDatabase) DownloadFileAttachment(submodelID string, idShortPath string) ([]byte, string, error) {
+	fileHandler, err := submodelelements.NewPostgreSQLFileHandler(p.db)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to create file handler: %w", err)
+	}
+	return fileHandler.DownloadFileAttachment(submodelID, idShortPath)
 }

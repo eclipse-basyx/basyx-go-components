@@ -31,8 +31,8 @@ package submodelelements
 
 import (
 	"database/sql"
-	"errors"
 
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 )
@@ -78,7 +78,7 @@ func NewPostgreSQLBasicEventElementHandler(db *sql.DB) (*PostgreSQLBasicEventEle
 func (p PostgreSQLBasicEventElementHandler) Create(tx *sql.Tx, submodelID string, submodelElement gen.SubmodelElement) (int, error) {
 	basicEvent, ok := submodelElement.(*gen.BasicEventElement)
 	if !ok {
-		return 0, errors.New("submodelElement is not of type BasicEventElement")
+		return 0, common.NewErrBadRequest("submodelElement is not of type BasicEventElement")
 	}
 
 	// First, perform base SubmodelElement operations within the transaction
@@ -114,7 +114,7 @@ func (p PostgreSQLBasicEventElementHandler) Create(tx *sql.Tx, submodelID string
 func (p PostgreSQLBasicEventElementHandler) CreateNested(tx *sql.Tx, submodelID string, parentID int, idShortPath string, submodelElement gen.SubmodelElement, pos int, rootSubmodelElementID int) (int, error) {
 	basicEvent, ok := submodelElement.(*gen.BasicEventElement)
 	if !ok {
-		return 0, errors.New("submodelElement is not of type BasicEventElement")
+		return 0, common.NewErrBadRequest("submodelElement is not of type BasicEventElement")
 	}
 
 	// Create the nested basic event element with the provided idShortPath using the decorated handler
