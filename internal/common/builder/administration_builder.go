@@ -30,7 +30,7 @@ package builder
 import (
 	"log"
 
-	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -46,7 +46,7 @@ import (
 //     version information, creator references, and embedded data specifications
 //
 // Returns:
-//   - *gen.AdministrativeInformation: A pointer to the constructed administrative information object
+//   - *model.AdministrativeInformation: A pointer to the constructed administrative information object
 //     with all nested references and data specifications properly built
 //   - error: An error if reference parsing fails, nil otherwise. Note that errors during embedded
 //     data specification building are logged but do not cause the function to fail
@@ -57,8 +57,8 @@ import (
 //	if err != nil {
 //	    log.Printf("Failed to build administration: %v", err)
 //	}
-func BuildAdministration(adminRow AdministrationRow) (*gen.AdministrativeInformation, error) {
-	administration := &gen.AdministrativeInformation{
+func BuildAdministration(adminRow model.AdministrationRow) (*model.AdministrativeInformation, error) {
+	administration := &model.AdministrativeInformation{
 		Version:    adminRow.Version,
 		Revision:   adminRow.Revision,
 		TemplateID: adminRow.TemplateID,
@@ -66,12 +66,12 @@ func BuildAdministration(adminRow AdministrationRow) (*gen.AdministrativeInforma
 
 	refBuilderMap := make(map[int64]*ReferenceBuilder)
 
-	refs, err := ParseReferences(adminRow.Creator, refBuilderMap)
+	refs, err := ParseReferences(adminRow.Creator, refBuilderMap, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	if err = ParseReferredReferences(adminRow.CreatorReferred, refBuilderMap); err != nil {
+	if err = ParseReferredReferences(adminRow.CreatorReferred, refBuilderMap, nil); err != nil {
 		return nil, err
 	}
 
@@ -80,7 +80,7 @@ func BuildAdministration(adminRow AdministrationRow) (*gen.AdministrativeInforma
 	}
 
 	if adminRow.EmbeddedDataSpecification != nil {
-		var edsList []gen.EmbeddedDataSpecification
+		var edsList []model.EmbeddedDataSpecification
 		var json = jsoniter.ConfigCompatibleWithStandardLibrary
 		err := json.Unmarshal(adminRow.EmbeddedDataSpecification, &edsList)
 		if err != nil {

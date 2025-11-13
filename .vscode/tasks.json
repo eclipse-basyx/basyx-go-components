@@ -16,6 +16,23 @@
                 "panel": "shared"
             },
             "problemMatcher": "$go"
+        },
+        {
+            "label": "Run AAS Registry Service",
+            "type": "shell",
+            "command": "go run ./cmd/aasregistryservice -config ./cmd/aasregistryservice/config.priv.yaml -databaseSchema ./basyxschema.sql",
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "dedicated"
+            },
+            "problemMatcher": "$go",
+            "isBackground": true
         }
     ]
 }

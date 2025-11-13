@@ -1,0 +1,19 @@
+{
+    "modelType": "Submodel",
+    "id": "MarcusThisIsAOnlyRangeSubmodel",
+    "idShort": "RangeSubmodel",
+    "kind": "Instance",
+    "administration": {
+        "revision": "1",
+        "version": "3"
+    },
+    "submodelElements": [
+        {
+            "modelType": "Range",
+            "idShort": "DemoRange",
+            "min": "0.0",
+            "max": "100.0",
+            "valueType": "xs:double"
+        }
+    ]
+}

@@ -1,31 +1,5 @@
 {
-    "id": "MarcusThisIsAHeavySubmodel",
-    "idShort": "Identification",
-    "modelType": "Submodel",
-    "kind": "Instance",
-    "displayName": [
-        {
-            "language": "de",
-            "text": "Hallo"
-        },
-        {
-            "language": "en",
-            "text": "Hello"
-        }
-    ],
-    "description": [
-        {
-            "language": "de",
-            "text": "Hallo lang"
-        },
-        {
-            "language": "en",
-            "text": "Hello long"
-        }
-    ],
     "administration": {
-        "version": "1",
-        "revision": "0",
         "creator": {
             "keys": [
                 {
@@ -37,7 +11,6 @@
                     "value": "Creator2"
                 }
             ],
-            "type": "ExternalReference",
             "referredSemanticId": {
                 "keys": [
                     {
@@ -49,7 +22,6 @@
                         "value": "FirstReferredSemanticId_Key2"
                     }
                 ],
-                "type": "ExternalReference",
                 "referredSemanticId": {
                     "keys": [
                         {
@@ -62,13 +34,54 @@
                         }
                     ],
                     "type": "ExternalReference"
-                }
-            }
+                },
+                "type": "ExternalReference"
+            },
+            "type": "ExternalReference"
         },
-        "templateId": "https://cust/123456",
         "embeddedDataSpecifications": [
             {
+                "dataSpecification": {
+                    "keys": [
+                        {
+                            "type": "GlobalReference",
+                            "value": "http://admin-shell.io/DataSpecificationTemplates/DataSpecificationIEC61360/2/0"
+                        }
+                    ],
+                    "referredSemanticId": {
+                        "keys": [
+                            {
+                                "type": "Submodel",
+                                "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental2"
+                            }
+                        ],
+                        "referredSemanticId": {
+                            "keys": [
+                                {
+                                    "type": "Submodel",
+                                    "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental3"
+                                }
+                            ],
+                            "type": "ExternalReference"
+                        },
+                        "type": "ExternalReference"
+                    },
+                    "type": "ExternalReference"
+                },
                 "dataSpecificationContent": {
+                    "dataType": "RealCount",
+                    "definition": [
+                        {
+                            "language": "en",
+                            "text": "Data Specification according to IEC 61360-2"
+                        }
+                    ],
+                    "levelType": {
+                        "max": true,
+                        "min": true,
+                        "nom": true,
+                        "typ": true
+                    },
                     "modelType": "DataSpecificationIec61360",
                     "preferredName": [
                         {
@@ -82,6 +95,8 @@
                             "text": "IEC 61360-2"
                         }
                     ],
+                    "sourceOfDefinition": "IEC 61360-2",
+                    "symbol": "kOhm",
                     "unit": "Kiloohm",
                     "unitId": {
                         "keys": [
@@ -90,9 +105,7 @@
                                 "value": "http://www.iec.ch/TC13JWG1/GA/GA13/GA13_1036"
                             }
                         ],
-                        "type": "ExternalReference",
                         "referredSemanticId": {
-                            "type": "ExternalReference",
                             "keys": [
                                 {
                                     "type": "Submodel",
@@ -100,25 +113,19 @@
                                 }
                             ],
                             "referredSemanticId": {
-                                "type": "ExternalReference",
                                 "keys": [
                                     {
                                         "type": "Submodel",
                                         "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental3"
                                     }
-                                ]
-                            }
-                        }
+                                ],
+                                "type": "ExternalReference"
+                            },
+                            "type": "ExternalReference"
+                        },
+                        "type": "ExternalReference"
                     },
-                    "sourceOfDefinition": "IEC 61360-2",
-                    "symbol": "kOhm",
-                    "dataType": "RealCount",
-                    "definition": [
-                        {
-                            "language": "en",
-                            "text": "Data Specification according to IEC 61360-2"
-                        }
-                    ],
+                    "value": "100",
                     "valueFormat": "##.##",
                     "valueList": {
                         "valueReferencePair": [
@@ -131,9 +138,7 @@
                                             "value": "100"
                                         }
                                     ],
-                                    "type": "ExternalReference",
                                     "referredSemanticId": {
-                                        "type": "ExternalReference",
                                         "keys": [
                                             {
                                                 "type": "Submodel",
@@ -141,27 +146,24 @@
                                             }
                                         ],
                                         "referredSemanticId": {
-                                            "type": "ExternalReference",
                                             "keys": [
                                                 {
                                                     "type": "Submodel",
                                                     "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental3"
                                                 }
-                                            ]
-                                        }
-                                    }
+                                            ],
+                                            "type": "ExternalReference"
+                                        },
+                                        "type": "ExternalReference"
+                                    },
+                                    "type": "ExternalReference"
                                 }
                             }
                         ]
-                    },
-                    "value": "100",
-                    "levelType": {
-                        "min": true,
-                        "nom": true,
-                        "typ": true,
-                        "max": true
                     }
-                },
+                }
+            },
+            {
                 "dataSpecification": {
                     "keys": [
                         {
@@ -169,9 +171,7 @@
                             "value": "http://admin-shell.io/DataSpecificationTemplates/DataSpecificationIEC61360/2/0"
                         }
                     ],
-                    "type": "ExternalReference",
                     "referredSemanticId": {
-                        "type": "ExternalReference",
                         "keys": [
                             {
                                 "type": "Submodel",
@@ -179,19 +179,32 @@
                             }
                         ],
                         "referredSemanticId": {
-                            "type": "ExternalReference",
                             "keys": [
                                 {
                                     "type": "Submodel",
                                     "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental3"
                                 }
-                            ]
-                        }
-                    }
-                }
-            },
-            {
+                            ],
+                            "type": "ExternalReference"
+                        },
+                        "type": "ExternalReference"
+                    },
+                    "type": "ExternalReference"
+                },
                 "dataSpecificationContent": {
+                    "dataType": "RealCount",
+                    "definition": [
+                        {
+                            "language": "en",
+                            "text": "Voltage of an electrical component"
+                        }
+                    ],
+                    "levelType": {
+                        "max": true,
+                        "min": false,
+                        "nom": true,
+                        "typ": false
+                    },
                     "modelType": "DataSpecificationIec61360",
                     "preferredName": [
                         {
@@ -205,6 +218,8 @@
                             "text": "Voltage"
                         }
                     ],
+                    "sourceOfDefinition": "IEC 61360-2",
+                    "symbol": "V",
                     "unit": "Volt",
                     "unitId": {
                         "keys": [
@@ -213,9 +228,7 @@
                                 "value": "http://www.iec.ch/TC13JWG1/GA/GA13/GA13_1036"
                             }
                         ],
-                        "type": "ExternalReference",
                         "referredSemanticId": {
-                            "type": "ExternalReference",
                             "keys": [
                                 {
                                     "type": "Submodel",
@@ -223,25 +236,19 @@
                                 }
                             ],
                             "referredSemanticId": {
-                                "type": "ExternalReference",
                                 "keys": [
                                     {
                                         "type": "Submodel",
                                         "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental3"
                                     }
-                                ]
-                            }
-                        }
+                                ],
+                                "type": "ExternalReference"
+                            },
+                            "type": "ExternalReference"
+                        },
+                        "type": "ExternalReference"
                     },
-                    "sourceOfDefinition": "IEC 61360-2",
-                    "symbol": "V",
-                    "dataType": "RealCount",
-                    "definition": [
-                        {
-                            "language": "en",
-                            "text": "Voltage of an electrical component"
-                        }
-                    ],
+                    "value": "10",
                     "valueFormat": "##.##",
                     "valueList": {
                         "valueReferencePair": [
@@ -254,9 +261,7 @@
                                             "value": "10"
                                         }
                                     ],
-                                    "type": "ExternalReference",
                                     "referredSemanticId": {
-                                        "type": "ExternalReference",
                                         "keys": [
                                             {
                                                 "type": "Submodel",
@@ -264,163 +269,91 @@
                                             }
                                         ],
                                         "referredSemanticId": {
-                                            "type": "ExternalReference",
                                             "keys": [
                                                 {
                                                     "type": "Submodel",
                                                     "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental3"
                                                 }
-                                            ]
-                                        }
-                                    }
+                                            ],
+                                            "type": "ExternalReference"
+                                        },
+                                        "type": "ExternalReference"
+                                    },
+                                    "type": "ExternalReference"
                                 }
                             }
                         ]
-                    },
-                    "value": "10",
-                    "levelType": {
-                        "min": false,
-                        "nom": true,
-                        "typ": false,
-                        "max": true
-                    }
-                },
-                "dataSpecification": {
-                    "keys": [
-                        {
-                            "type": "GlobalReference",
-                            "value": "http://admin-shell.io/DataSpecificationTemplates/DataSpecificationIEC61360/2/0"
-                        }
-                    ],
-                    "type": "ExternalReference",
-                    "referredSemanticId": {
-                        "type": "ExternalReference",
-                        "keys": [
-                            {
-                                "type": "Submodel",
-                                "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental2"
-                            }
-                        ],
-                        "referredSemanticId": {
-                            "type": "ExternalReference",
-                            "keys": [
-                                {
-                                    "type": "Submodel",
-                                    "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental3"
-                                }
-                            ]
-                        }
                     }
                 }
-            }
-        ]
-    },
-    "semanticId": {
-        "keys": [
-            {
-                "type": "Submodel",
-                "value": "RootLevel"
-            },
-            {
-                "type": "Submodel",
-                "value": "RootLevel2"
             }
         ],
-        "type": "ExternalReference",
-        "referredSemanticId": {
-            "keys": [
-                {
-                    "type": "Submodel",
-                    "value": "FirstReferredSemanticId_Key1"
-                },
-                {
-                    "type": "Submodel",
-                    "value": "FirstReferredSemanticId_Key2"
-                }
-            ],
-            "type": "ExternalReference",
-            "referredSemanticId": {
-                "keys": [
-                    {
-                        "type": "Submodel",
-                        "value": "SecondReferredSemanticId_Nested_Key1"
-                    },
-                    {
-                        "type": "Submodel",
-                        "value": "SecondReferredSemanticId_Nested_Key2"
-                    }
-                ],
-                "type": "ExternalReference"
-            }
-        }
+        "revision": "0",
+        "templateId": "https://cust/123456",
+        "version": "1"
     },
-    "supplementalSemanticIds": [
+    "description": [
         {
-            "keys": [
-                {
-                    "type": "Submodel",
-                    "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental_1"
-                },
-                {
-                    "type": "Submodel",
-                    "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental_1"
-                }
-            ],
-            "type": "ExternalReference",
-            "referredSemanticId": {
-                "type": "ExternalReference",
-                "keys": [
-                    {
-                        "type": "Submodel",
-                        "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental2"
-                    }
-                ],
-                "referredSemanticId": {
-                    "type": "ExternalReference",
-                    "keys": [
-                        {
-                            "type": "Submodel",
-                            "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental3"
-                        }
-                    ]
-                }
-            }
+            "language": "de",
+            "text": "Hallo lang"
         },
         {
-            "keys": [
-                {
-                    "type": "Submodel",
-                    "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental_22"
-                },
-                {
-                    "type": "Submodel",
-                    "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental_22"
-                }
-            ],
-            "type": "ExternalReference",
-            "referredSemanticId": {
-                "type": "ExternalReference",
-                "keys": [
-                    {
-                        "type": "Submodel",
-                        "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental2"
-                    }
-                ],
-                "referredSemanticId": {
-                    "type": "ExternalReference",
-                    "keys": [
-                        {
-                            "type": "Submodel",
-                            "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental3"
-                        }
-                    ]
-                }
-            }
+            "language": "en",
+            "text": "Hello long"
+        }
+    ],
+    "displayName": [
+        {
+            "language": "de",
+            "text": "Hallo"
+        },
+        {
+            "language": "en",
+            "text": "Hello"
         }
     ],
     "embeddedDataSpecifications": [
         {
+            "dataSpecification": {
+                "keys": [
+                    {
+                        "type": "GlobalReference",
+                        "value": "http://admin-shell.io/DataSpecificationTemplates/DataSpecificationIEC61360/2/0"
+                    }
+                ],
+                "referredSemanticId": {
+                    "keys": [
+                        {
+                            "type": "Submodel",
+                            "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental2"
+                        }
+                    ],
+                    "referredSemanticId": {
+                        "keys": [
+                            {
+                                "type": "Submodel",
+                                "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental3"
+                            }
+                        ],
+                        "type": "ExternalReference"
+                    },
+                    "type": "ExternalReference"
+                },
+                "type": "ExternalReference"
+            },
             "dataSpecificationContent": {
+                "dataType": "RealCount",
+                "definition": [
+                    {
+                        "language": "en",
+                        "text": "Data Specification according to IEC 61360-2"
+                    }
+                ],
+                "levelType": {
+                    "max": true,
+                    "min": true,
+                    "nom": true,
+                    "typ": true
+                },
                 "modelType": "DataSpecificationIec61360",
                 "preferredName": [
                     {
@@ -434,6 +367,8 @@
                         "text": "IEC 61360-2"
                     }
                 ],
+                "sourceOfDefinition": "IEC 61360-2",
+                "symbol": "kOhm",
                 "unit": "Kiloohm",
                 "unitId": {
                     "keys": [
@@ -442,9 +377,7 @@
                             "value": "http://www.iec.ch/TC13JWG1/GA/GA13/GA13_1036"
                         }
                     ],
-                    "type": "ExternalReference",
                     "referredSemanticId": {
-                        "type": "ExternalReference",
                         "keys": [
                             {
                                 "type": "Submodel",
@@ -452,25 +385,19 @@
                             }
                         ],
                         "referredSemanticId": {
-                            "type": "ExternalReference",
                             "keys": [
                                 {
                                     "type": "Submodel",
                                     "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental3"
                                 }
-                            ]
-                        }
-                    }
+                            ],
+                            "type": "ExternalReference"
+                        },
+                        "type": "ExternalReference"
+                    },
+                    "type": "ExternalReference"
                 },
-                "sourceOfDefinition": "IEC 61360-2",
-                "symbol": "kOhm",
-                "dataType": "RealCount",
-                "definition": [
-                    {
-                        "language": "en",
-                        "text": "Data Specification according to IEC 61360-2"
-                    }
-                ],
+                "value": "100",
                 "valueFormat": "##.##",
                 "valueList": {
                     "valueReferencePair": [
@@ -483,9 +410,7 @@
                                         "value": "100"
                                     }
                                 ],
-                                "type": "ExternalReference",
                                 "referredSemanticId": {
-                                    "type": "ExternalReference",
                                     "keys": [
                                         {
                                             "type": "Submodel",
@@ -493,57 +418,65 @@
                                         }
                                     ],
                                     "referredSemanticId": {
-                                        "type": "ExternalReference",
                                         "keys": [
                                             {
                                                 "type": "Submodel",
                                                 "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental3"
                                             }
-                                        ]
-                                    }
-                                }
+                                        ],
+                                        "type": "ExternalReference"
+                                    },
+                                    "type": "ExternalReference"
+                                },
+                                "type": "ExternalReference"
                             }
                         }
                     ]
-                },
-                "value": "100",
-                "levelType": {
-                    "min": true,
-                    "nom": true,
-                    "typ": true,
-                    "max": true
-                }
-            },
-            "dataSpecification": {
-                "keys": [
-                    {
-                        "type": "GlobalReference",
-                        "value": "http://admin-shell.io/DataSpecificationTemplates/DataSpecificationIEC61360/2/0"
-                    }
-                ],
-                "type": "ExternalReference",
-                "referredSemanticId": {
-                    "type": "ExternalReference",
-                    "keys": [
-                        {
-                            "type": "Submodel",
-                            "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental2"
-                        }
-                    ],
-                    "referredSemanticId": {
-                        "type": "ExternalReference",
-                        "keys": [
-                            {
-                                "type": "Submodel",
-                                "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental3"
-                            }
-                        ]
-                    }
                 }
             }
         },
         {
+            "dataSpecification": {
+                "keys": [
+                    {
+                        "type": "GlobalReference",
+                        "value": "http://admin-shell.io/DataSpecificationTemplates/DataSpecificationIEC61360/2/0_VOLT"
+                    }
+                ],
+                "referredSemanticId": {
+                    "keys": [
+                        {
+                            "type": "Submodel",
+                            "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental2_VOLT"
+                        }
+                    ],
+                    "referredSemanticId": {
+                        "keys": [
+                            {
+                                "type": "Submodel",
+                                "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental3_VOLT"
+                            }
+                        ],
+                        "type": "ExternalReference"
+                    },
+                    "type": "ExternalReference"
+                },
+                "type": "ExternalReference"
+            },
             "dataSpecificationContent": {
+                "dataType": "RealCount",
+                "definition": [
+                    {
+                        "language": "en",
+                        "text": "Voltage of an electrical component"
+                    }
+                ],
+                "levelType": {
+                    "max": true,
+                    "min": false,
+                    "nom": true,
+                    "typ": false
+                },
                 "modelType": "DataSpecificationIec61360",
                 "preferredName": [
                     {
@@ -557,6 +490,8 @@
                         "text": "Voltage"
                     }
                 ],
+                "sourceOfDefinition": "IEC 61360-2",
+                "symbol": "V",
                 "unit": "Volt",
                 "unitId": {
                     "keys": [
@@ -565,9 +500,7 @@
                             "value": "http://www.iec.ch/TC13JWG1/GA/GA13/GA13_1036_VOLT"
                         }
                     ],
-                    "type": "ExternalReference",
                     "referredSemanticId": {
-                        "type": "ExternalReference",
                         "keys": [
                             {
                                 "type": "Submodel",
@@ -575,25 +508,19 @@
                             }
                         ],
                         "referredSemanticId": {
-                            "type": "ExternalReference",
                             "keys": [
                                 {
                                     "type": "Submodel",
                                     "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental3_VOLT"
                                 }
-                            ]
-                        }
-                    }
+                            ],
+                            "type": "ExternalReference"
+                        },
+                        "type": "ExternalReference"
+                    },
+                    "type": "ExternalReference"
                 },
-                "sourceOfDefinition": "IEC 61360-2",
-                "symbol": "V",
-                "dataType": "RealCount",
-                "definition": [
-                    {
-                        "language": "en",
-                        "text": "Voltage of an electrical component"
-                    }
-                ],
+                "value": "10",
                 "valueFormat": "##.##",
                 "valueList": {
                     "valueReferencePair": [
@@ -606,9 +533,7 @@
                                         "value": "13"
                                     }
                                 ],
-                                "type": "ExternalReference",
                                 "referredSemanticId": {
-                                    "type": "ExternalReference",
                                     "keys": [
                                         {
                                             "type": "Submodel",
@@ -616,65 +541,24 @@
                                         }
                                     ],
                                     "referredSemanticId": {
-                                        "type": "ExternalReference",
                                         "keys": [
                                             {
                                                 "type": "Submodel",
                                                 "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental3_VOLT"
                                             }
-                                        ]
-                                    }
-                                }
+                                        ],
+                                        "type": "ExternalReference"
+                                    },
+                                    "type": "ExternalReference"
+                                },
+                                "type": "ExternalReference"
                             }
                         }
                     ]
-                },
-                "value": "10",
-                "levelType": {
-                    "min": false,
-                    "nom": true,
-                    "typ": false,
-                    "max": true
-                }
-            },
-            "dataSpecification": {
-                "keys": [
-                    {
-                        "type": "GlobalReference",
-                        "value": "http://admin-shell.io/DataSpecificationTemplates/DataSpecificationIEC61360/2/0_VOLT"
-                    }
-                ],
-                "type": "ExternalReference",
-                "referredSemanticId": {
-                    "type": "ExternalReference",
-                    "keys": [
-                        {
-                            "type": "Submodel",
-                            "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental2_VOLT"
-                        }
-                    ],
-                    "referredSemanticId": {
-                        "type": "ExternalReference",
-                        "keys": [
-                            {
-                                "type": "Submodel",
-                                "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental3_VOLT"
-                            }
-                        ]
-                    }
                 }
             }
         },
         {
-            "dataSpecificationContent": {
-                "modelType": "DataSpecificationIec61360",
-                "preferredName": [
-                    {
-                        "language": "en",
-                        "text": "Amperage of an electrical component"
-                    }
-                ]
-            },
             "dataSpecification": {
                 "keys": [
                     {
@@ -683,25 +567,85 @@
                     }
                 ],
                 "type": "ExternalReference"
+            },
+            "dataSpecificationContent": {
+                "modelType": "DataSpecificationIec61360",
+                "preferredName": [
+                    {
+                        "language": "en",
+                        "text": "Amperage of an electrical component"
+                    }
+                ]
             }
         }
     ],
-    "qualifier": [
+    "extensions": [
         {
-            "kind": "ConceptQualifier",
-            "type": "ExpressionSemantic",
-            "valueType": "xs:string",
-            "value": "example value",
-            "valueId": {
+            "name": "http://acplt.org/Extension/ExampleExtension",
+            "refersTo": [
+                {
+                    "keys": [
+                        {
+                            "type": "GlobalReference",
+                            "value": "0173-1#02-AAO677#002"
+                        }
+                    ],
+                    "referredSemanticId": {
+                        "keys": [
+                            {
+                                "type": "Submodel",
+                                "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental2"
+                            }
+                        ],
+                        "referredSemanticId": {
+                            "keys": [
+                                {
+                                    "type": "Submodel",
+                                    "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental3"
+                                }
+                            ],
+                            "type": "ExternalReference"
+                        },
+                        "type": "ExternalReference"
+                    },
+                    "type": "ExternalReference"
+                },
+                {
+                    "keys": [
+                        {
+                            "type": "GlobalReference",
+                            "value": "0173-1#02-AAO677#003"
+                        }
+                    ],
+                    "referredSemanticId": {
+                        "keys": [
+                            {
+                                "type": "Submodel",
+                                "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental4"
+                            }
+                        ],
+                        "referredSemanticId": {
+                            "keys": [
+                                {
+                                    "type": "Submodel",
+                                    "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental5"
+                                }
+                            ],
+                            "type": "ExternalReference"
+                        },
+                        "type": "ExternalReference"
+                    },
+                    "type": "ExternalReference"
+                }
+            ],
+            "semanticId": {
                 "keys": [
                     {
                         "type": "GlobalReference",
-                        "value": "example value"
+                        "value": "http://acplt.org/Extension/ExampleExtension"
                     }
                 ],
-                "type": "ExternalReference",
                 "referredSemanticId": {
-                    "type": "ExternalReference",
                     "keys": [
                         {
                             "type": "Submodel",
@@ -709,16 +653,178 @@
                         }
                     ],
                     "referredSemanticId": {
-                        "type": "ExternalReference",
                         "keys": [
                             {
                                 "type": "Submodel",
                                 "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental3"
                             }
-                        ]
-                    }
-                }
+                        ],
+                        "type": "ExternalReference"
+                    },
+                    "type": "ExternalReference"
+                },
+                "type": "ExternalReference"
             },
+            "supplementalSemanticIds": [
+                {
+                    "keys": [
+                        {
+                            "type": "GlobalReference",
+                            "value": "something_random_e14ad770"
+                        }
+                    ],
+                    "referredSemanticId": {
+                        "keys": [
+                            {
+                                "type": "Submodel",
+                                "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental2"
+                            }
+                        ],
+                        "referredSemanticId": {
+                            "keys": [
+                                {
+                                    "type": "Submodel",
+                                    "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental3"
+                                }
+                            ],
+                            "type": "ExternalReference"
+                        },
+                        "type": "ExternalReference"
+                    },
+                    "type": "ExternalReference"
+                }
+            ],
+            "value": "Example Extension Value",
+            "valueType": "xs:string"
+        },
+        {
+            "name": "http://acplt.org/Extension/ExampleExtension2",
+            "refersTo": [
+                {
+                    "keys": [
+                        {
+                            "type": "GlobalReference",
+                            "value": "0173-1#02-AAO677#005"
+                        }
+                    ],
+                    "referredSemanticId": {
+                        "keys": [
+                            {
+                                "type": "Submodel",
+                                "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental2Extension2"
+                            }
+                        ],
+                        "referredSemanticId": {
+                            "keys": [
+                                {
+                                    "type": "Submodel",
+                                    "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental3Extension2"
+                                }
+                            ],
+                            "type": "ExternalReference"
+                        },
+                        "type": "ExternalReference"
+                    },
+                    "type": "ExternalReference"
+                },
+                {
+                    "keys": [
+                        {
+                            "type": "GlobalReference",
+                            "value": "0173-1#02-AAO677#012"
+                        }
+                    ],
+                    "referredSemanticId": {
+                        "keys": [
+                            {
+                                "type": "Submodel",
+                                "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental4Extension2"
+                            }
+                        ],
+                        "referredSemanticId": {
+                            "keys": [
+                                {
+                                    "type": "Submodel",
+                                    "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental5Extension2"
+                                }
+                            ],
+                            "type": "ExternalReference"
+                        },
+                        "type": "ExternalReference"
+                    },
+                    "type": "ExternalReference"
+                }
+            ],
+            "semanticId": {
+                "keys": [
+                    {
+                        "type": "GlobalReference",
+                        "value": "http://acplt.org/Extension/ExampleExtension2"
+                    }
+                ],
+                "referredSemanticId": {
+                    "keys": [
+                        {
+                            "type": "Submodel",
+                            "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplementalExtension2"
+                        }
+                    ],
+                    "referredSemanticId": {
+                        "keys": [
+                            {
+                                "type": "Submodel",
+                                "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplementalExtension2_1"
+                            }
+                        ],
+                        "type": "ExternalReference"
+                    },
+                    "type": "ExternalReference"
+                },
+                "type": "ExternalReference"
+            },
+            "supplementalSemanticIds": [
+                {
+                    "keys": [
+                        {
+                            "type": "GlobalReference",
+                            "value": "something_random_e14ad770"
+                        }
+                    ],
+                    "referredSemanticId": {
+                        "keys": [
+                            {
+                                "type": "Submodel",
+                                "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplementalExtension2_2"
+                            }
+                        ],
+                        "referredSemanticId": {
+                            "keys": [
+                                {
+                                    "type": "Submodel",
+                                    "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplementalExtension2_3"
+                                }
+                            ],
+                            "type": "ExternalReference"
+                        },
+                        "type": "ExternalReference"
+                    },
+                    "type": "ExternalReference"
+                }
+            ],
+            "value": "Example Extension Value",
+            "valueType": "xs:string"
+        },
+        {
+            "name": "http://acplt.org/Extension/ExampleExtension"
+        }
+    ],
+    "id": "MarcusThisIsAHeavySubmodel",
+    "idShort": "Identification",
+    "kind": "Instance",
+    "modelType": "Submodel",
+    "qualifiers": [
+        {
+            "kind": "ConceptQualifier",
             "semanticId": {
                 "keys": [
                     {
@@ -730,7 +836,6 @@
                         "value": "RootLevel2"
                     }
                 ],
-                "type": "ExternalReference",
                 "referredSemanticId": {
                     "keys": [
                         {
@@ -742,7 +847,6 @@
                             "value": "FirstReferredSemanticId_Key2"
                         }
                     ],
-                    "type": "ExternalReference",
                     "referredSemanticId": {
                         "keys": [
                             {
@@ -755,8 +859,10 @@
                             }
                         ],
                         "type": "ExternalReference"
-                    }
-                }
+                    },
+                    "type": "ExternalReference"
+                },
+                "type": "ExternalReference"
             },
             "supplementalSemanticIds": [
                 {
@@ -770,9 +876,7 @@
                             "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental_1"
                         }
                     ],
-                    "type": "ExternalReference",
                     "referredSemanticId": {
-                        "type": "ExternalReference",
                         "keys": [
                             {
                                 "type": "Submodel",
@@ -780,15 +884,17 @@
                             }
                         ],
                         "referredSemanticId": {
-                            "type": "ExternalReference",
                             "keys": [
                                 {
                                     "type": "Submodel",
                                     "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental3"
                                 }
-                            ]
-                        }
-                    }
+                            ],
+                            "type": "ExternalReference"
+                        },
+                        "type": "ExternalReference"
+                    },
+                    "type": "ExternalReference"
                 },
                 {
                     "keys": [
@@ -801,9 +907,7 @@
                             "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental_22"
                         }
                     ],
-                    "type": "ExternalReference",
                     "referredSemanticId": {
-                        "type": "ExternalReference",
                         "keys": [
                             {
                                 "type": "Submodel",
@@ -811,22 +915,53 @@
                             }
                         ],
                         "referredSemanticId": {
-                            "type": "ExternalReference",
                             "keys": [
                                 {
                                     "type": "Submodel",
                                     "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental3"
                                 }
-                            ]
-                        }
-                    }
+                            ],
+                            "type": "ExternalReference"
+                        },
+                        "type": "ExternalReference"
+                    },
+                    "type": "ExternalReference"
                 }
-            ]
+            ],
+            "type": "ExpressionSemantic",
+            "value": "example value",
+            "valueId": {
+                "keys": [
+                    {
+                        "type": "GlobalReference",
+                        "value": "example value"
+                    }
+                ],
+                "referredSemanticId": {
+                    "keys": [
+                        {
+                            "type": "Submodel",
+                            "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental2"
+                        }
+                    ],
+                    "referredSemanticId": {
+                        "keys": [
+                            {
+                                "type": "Submodel",
+                                "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental3"
+                            }
+                        ],
+                        "type": "ExternalReference"
+                    },
+                    "type": "ExternalReference"
+                },
+                "type": "ExternalReference"
+            },
+            "valueType": "xs:string"
         },
         {
             "kind": "ValueQualifier",
             "type": "ExpressionSemantic",
-            "valueType": "xs:boolean",
             "value": "true",
             "valueId": {
                 "keys": [
@@ -835,9 +970,7 @@
                         "value": "example value"
                     }
                 ],
-                "type": "ExternalReference",
                 "referredSemanticId": {
-                    "type": "ExternalReference",
                     "keys": [
                         {
                             "type": "Submodel",
@@ -845,305 +978,67 @@
                         }
                     ],
                     "referredSemanticId": {
-                        "type": "ExternalReference",
                         "keys": [
                             {
                                 "type": "Submodel",
                                 "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental3"
                             }
-                        ]
-                    }
-                }
-            }
+                        ],
+                        "type": "ExternalReference"
+                    },
+                    "type": "ExternalReference"
+                },
+                "type": "ExternalReference"
+            },
+            "valueType": "xs:boolean"
         },
         {
             "type": "ExpressionSemantic",
             "valueType": "xs:boolean"
         }
     ],
-    "extension": [
-        {
-            "name": "http://acplt.org/Extension/ExampleExtension",
-            "valueType": "xs:string",
-            "value": "Example Extension Value",
-            "semanticId": {
-                "keys": [
-                    {
-                        "type": "GlobalReference",
-                        "value": "http://acplt.org/Extension/ExampleExtension"
-                    }
-                ],
-                "type": "ExternalReference",
-                "referredSemanticId": {
-                    "type": "ExternalReference",
-                    "keys": [
-                        {
-                            "type": "Submodel",
-                            "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental2"
-                        }
-                    ],
-                    "referredSemanticId": {
-                        "type": "ExternalReference",
-                        "keys": [
-                            {
-                                "type": "Submodel",
-                                "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental3"
-                            }
-                        ]
-                    }
-                }
+    "semanticId": {
+        "keys": [
+            {
+                "type": "Submodel",
+                "value": "RootLevel"
             },
-            "supplementalSemanticIds": [
+            {
+                "type": "Submodel",
+                "value": "RootLevel2"
+            }
+        ],
+        "referredSemanticId": {
+            "keys": [
                 {
-                    "keys": [
-                        {
-                            "type": "GlobalReference",
-                            "value": "something_random_e14ad770"
-                        }
-                    ],
-                    "type": "ExternalReference",
-                    "referredSemanticId": {
-                        "type": "ExternalReference",
-                        "keys": [
-                            {
-                                "type": "Submodel",
-                                "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental2"
-                            }
-                        ],
-                        "referredSemanticId": {
-                            "type": "ExternalReference",
-                            "keys": [
-                                {
-                                    "type": "Submodel",
-                                    "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental3"
-                                }
-                            ]
-                        }
-                    }
-                }
-            ],
-            "refersTo": [
-                {
-                    "keys": [
-                        {
-                            "type": "GlobalReference",
-                            "value": "0173-1#02-AAO677#002"
-                        }
-                    ],
-                    "type": "ExternalReference",
-                    "referredSemanticId": {
-                        "type": "ExternalReference",
-                        "keys": [
-                            {
-                                "type": "Submodel",
-                                "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental2"
-                            }
-                        ],
-                        "referredSemanticId": {
-                            "type": "ExternalReference",
-                            "keys": [
-                                {
-                                    "type": "Submodel",
-                                    "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental3"
-                                }
-                            ]
-                        }
-                    }
+                    "type": "Submodel",
+                    "value": "FirstReferredSemanticId_Key1"
                 },
                 {
-                    "keys": [
-                        {
-                            "type": "GlobalReference",
-                            "value": "0173-1#02-AAO677#003"
-                        }
-                    ],
-                    "type": "ExternalReference",
-                    "referredSemanticId": {
-                        "type": "ExternalReference",
-                        "keys": [
-                            {
-                                "type": "Submodel",
-                                "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental4"
-                            }
-                        ],
-                        "referredSemanticId": {
-                            "type": "ExternalReference",
-                            "keys": [
-                                {
-                                    "type": "Submodel",
-                                    "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental5"
-                                }
-                            ]
-                        }
-                    }
-                }
-            ]
-        },
-        {
-            "name": "http://acplt.org/Extension/ExampleExtension2",
-            "valueType": "xs:string",
-            "value": "Example Extension Value",
-            "semanticId": {
-                "keys": [
-                    {
-                        "type": "GlobalReference",
-                        "value": "http://acplt.org/Extension/ExampleExtension2"
-                    }
-                ],
-                "type": "ExternalReference",
-                "referredSemanticId": {
-                    "type": "ExternalReference",
-                    "keys": [
-                        {
-                            "type": "Submodel",
-                            "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplementalExtension2"
-                        }
-                    ],
-                    "referredSemanticId": {
-                        "type": "ExternalReference",
-                        "keys": [
-                            {
-                                "type": "Submodel",
-                                "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplementalExtension2_1"
-                            }
-                        ]
-                    }
-                }
-            },
-            "supplementalSemanticIds": [
-                {
-                    "keys": [
-                        {
-                            "type": "GlobalReference",
-                            "value": "something_random_e14ad770"
-                        }
-                    ],
-                    "type": "ExternalReference",
-                    "referredSemanticId": {
-                        "type": "ExternalReference",
-                        "keys": [
-                            {
-                                "type": "Submodel",
-                                "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplementalExtension2_2"
-                            }
-                        ],
-                        "referredSemanticId": {
-                            "type": "ExternalReference",
-                            "keys": [
-                                {
-                                    "type": "Submodel",
-                                    "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplementalExtension2_3"
-                                }
-                            ]
-                        }
-                    }
+                    "type": "Submodel",
+                    "value": "FirstReferredSemanticId_Key2"
                 }
             ],
-            "refersTo": [
-                {
-                    "keys": [
-                        {
-                            "type": "GlobalReference",
-                            "value": "0173-1#02-AAO677#005"
-                        }
-                    ],
-                    "type": "ExternalReference",
-                    "referredSemanticId": {
-                        "type": "ExternalReference",
-                        "keys": [
-                            {
-                                "type": "Submodel",
-                                "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental2Extension2"
-                            }
-                        ],
-                        "referredSemanticId": {
-                            "type": "ExternalReference",
-                            "keys": [
-                                {
-                                    "type": "Submodel",
-                                    "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental3Extension2"
-                                }
-                            ]
-                        }
+            "referredSemanticId": {
+                "keys": [
+                    {
+                        "type": "Submodel",
+                        "value": "SecondReferredSemanticId_Nested_Key1"
+                    },
+                    {
+                        "type": "Submodel",
+                        "value": "SecondReferredSemanticId_Nested_Key2"
                     }
-                },
-                {
-                    "keys": [
-                        {
-                            "type": "GlobalReference",
-                            "value": "0173-1#02-AAO677#012"
-                        }
-                    ],
-                    "type": "ExternalReference",
-                    "referredSemanticId": {
-                        "type": "ExternalReference",
-                        "keys": [
-                            {
-                                "type": "Submodel",
-                                "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental4Extension2"
-                            }
-                        ],
-                        "referredSemanticId": {
-                            "type": "ExternalReference",
-                            "keys": [
-                                {
-                                    "type": "Submodel",
-                                    "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental5Extension2"
-                                }
-                            ]
-                        }
-                    }
-                }
-            ]
+                ],
+                "type": "ExternalReference"
+            },
+            "type": "ExternalReference"
         },
-        {
-            "name": "http://acplt.org/Extension/ExampleExtension"
-        }
-    ],
+        "type": "ExternalReference"
+    },
     "submodelElements": [
         {
-            "modelType": "Property",
-            "semanticId": {
-                "keys": [
-                    {
-                        "type": "GlobalReference",
-                        "value": "0173-1#02-AAO677#002"
-                    }
-                ],
-                "type": "ExternalReference"
-            },
-            "value": "http://acplt.org/ValueId/ACPLT",
-            "valueId": {
-                "keys": [
-                    {
-                        "type": "GlobalReference",
-                        "value": "http://acplt.org/ValueId/ACPLT"
-                    }
-                ],
-                "type": "ExternalReference"
-            },
-            "valueType": "xs:string",
-            "qualifiers": [
-                {
-                    "type": "http://acplt.org/Qualifier/ExampleQualifier",
-                    "value": "100",
-                    "valueType": "xs:int",
-                    "kind": "ConceptQualifier"
-                },
-                {
-                    "type": "http://acplt.org/Qualifier/ExampleQualifier2",
-                    "value": "50",
-                    "valueType": "xs:int",
-                    "kind": "ConceptQualifier"
-                }
-            ],
-            "idShort": "ManufacturerName",
-            "displayName": [
-                {
-                    "language": "en-us",
-                    "text": "Manufacturer Name"
-                }
-            ],
+            "category": "PARAMETER",
             "description": [
                 {
                     "language": "en-us",
@@ -1153,52 +1048,1013 @@
                     "language": "de",
                     "text": "Bezeichnung für eine natürliche oder juristische Person, die für die Auslegung, Herstellung und Verpackung sowie die Etikettierung eines Produkts im Hinblick auf das 'Inverkehrbringen' im eigenen Namen verantwortlich ist"
                 }
-            ]
-        },
-        {
+            ],
+            "displayName": [
+                {
+                    "language": "en-us",
+                    "text": "Manufacturer Name"
+                }
+            ],
+            "embeddedDataSpecifications": [
+                {
+                    "dataSpecification": {
+                        "keys": [
+                            {
+                                "type": "GlobalReference",
+                                "value": "http://admin-shell.io/DataSpecificationTemplates/DataSpecificationIEC61360/2/0"
+                            }
+                        ],
+                        "referredSemanticId": {
+                            "keys": [
+                                {
+                                    "type": "Submodel",
+                                    "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental2"
+                                }
+                            ],
+                            "referredSemanticId": {
+                                "keys": [
+                                    {
+                                        "type": "Submodel",
+                                        "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental3"
+                                    }
+                                ],
+                                "type": "ExternalReference"
+                            },
+                            "type": "ExternalReference"
+                        },
+                        "type": "ExternalReference"
+                    },
+                    "dataSpecificationContent": {
+                        "dataType": "RealCount",
+                        "definition": [
+                            {
+                                "language": "en",
+                                "text": "Data Specification according to IEC 61360-2"
+                            }
+                        ],
+                        "levelType": {
+                            "max": true,
+                            "min": true,
+                            "nom": true,
+                            "typ": true
+                        },
+                        "modelType": "DataSpecificationIec61360",
+                        "preferredName": [
+                            {
+                                "language": "en",
+                                "text": "IEC 61360-2 Data Specification"
+                            }
+                        ],
+                        "shortName": [
+                            {
+                                "language": "en",
+                                "text": "IEC 61360-2"
+                            }
+                        ],
+                        "sourceOfDefinition": "IEC 61360-2",
+                        "symbol": "kOhm",
+                        "unit": "Kiloohm",
+                        "unitId": {
+                            "keys": [
+                                {
+                                    "type": "GlobalReference",
+                                    "value": "http://www.iec.ch/TC13JWG1/GA/GA13/GA13_1036"
+                                }
+                            ],
+                            "referredSemanticId": {
+                                "keys": [
+                                    {
+                                        "type": "Submodel",
+                                        "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental2"
+                                    }
+                                ],
+                                "referredSemanticId": {
+                                    "keys": [
+                                        {
+                                            "type": "Submodel",
+                                            "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental3"
+                                        }
+                                    ],
+                                    "type": "ExternalReference"
+                                },
+                                "type": "ExternalReference"
+                            },
+                            "type": "ExternalReference"
+                        },
+                        "value": "100",
+                        "valueFormat": "##.##",
+                        "valueList": {
+                            "valueReferencePair": [
+                                {
+                                    "value": "100",
+                                    "valueId": {
+                                        "keys": [
+                                            {
+                                                "type": "GlobalReference",
+                                                "value": "100"
+                                            }
+                                        ],
+                                        "referredSemanticId": {
+                                            "keys": [
+                                                {
+                                                    "type": "Submodel",
+                                                    "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental2"
+                                                }
+                                            ],
+                                            "referredSemanticId": {
+                                                "keys": [
+                                                    {
+                                                        "type": "Submodel",
+                                                        "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental3"
+                                                    }
+                                                ],
+                                                "type": "ExternalReference"
+                                            },
+                                            "type": "ExternalReference"
+                                        },
+                                        "type": "ExternalReference"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "dataSpecification": {
+                        "keys": [
+                            {
+                                "type": "GlobalReference",
+                                "value": "http://admin-shell.io/DataSpecificationTemplates/DataSpecificationIEC61360/2/0_VOLT"
+                            }
+                        ],
+                        "referredSemanticId": {
+                            "keys": [
+                                {
+                                    "type": "Submodel",
+                                    "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental2_VOLT"
+                                }
+                            ],
+                            "referredSemanticId": {
+                                "keys": [
+                                    {
+                                        "type": "Submodel",
+                                        "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental3_VOLT"
+                                    }
+                                ],
+                                "type": "ExternalReference"
+                            },
+                            "type": "ExternalReference"
+                        },
+                        "type": "ExternalReference"
+                    },
+                    "dataSpecificationContent": {
+                        "dataType": "RealCount",
+                        "definition": [
+                            {
+                                "language": "en",
+                                "text": "Voltage of an electrical component"
+                            }
+                        ],
+                        "levelType": {
+                            "max": true,
+                            "min": false,
+                            "nom": true,
+                            "typ": false
+                        },
+                        "modelType": "DataSpecificationIec61360",
+                        "preferredName": [
+                            {
+                                "language": "en",
+                                "text": "Voltage of an electrical component"
+                            }
+                        ],
+                        "shortName": [
+                            {
+                                "language": "en",
+                                "text": "Voltage"
+                            }
+                        ],
+                        "sourceOfDefinition": "IEC 61360-2",
+                        "symbol": "V",
+                        "unit": "Volt",
+                        "unitId": {
+                            "keys": [
+                                {
+                                    "type": "GlobalReference",
+                                    "value": "http://www.iec.ch/TC13JWG1/GA/GA13/GA13_1036_VOLT"
+                                }
+                            ],
+                            "referredSemanticId": {
+                                "keys": [
+                                    {
+                                        "type": "Submodel",
+                                        "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental2_VOLT"
+                                    }
+                                ],
+                                "referredSemanticId": {
+                                    "keys": [
+                                        {
+                                            "type": "Submodel",
+                                            "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental3_VOLT"
+                                        }
+                                    ],
+                                    "type": "ExternalReference"
+                                },
+                                "type": "ExternalReference"
+                            },
+                            "type": "ExternalReference"
+                        },
+                        "value": "10",
+                        "valueFormat": "##.##",
+                        "valueList": {
+                            "valueReferencePair": [
+                                {
+                                    "value": "13",
+                                    "valueId": {
+                                        "keys": [
+                                            {
+                                                "type": "GlobalReference",
+                                                "value": "13"
+                                            }
+                                        ],
+                                        "referredSemanticId": {
+                                            "keys": [
+                                                {
+                                                    "type": "Submodel",
+                                                    "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental2_VOLT"
+                                                }
+                                            ],
+                                            "referredSemanticId": {
+                                                "keys": [
+                                                    {
+                                                        "type": "Submodel",
+                                                        "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental3_VOLT"
+                                                    }
+                                                ],
+                                                "type": "ExternalReference"
+                                            },
+                                            "type": "ExternalReference"
+                                        },
+                                        "type": "ExternalReference"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "dataSpecification": {
+                        "keys": [
+                            {
+                                "type": "GlobalReference",
+                                "value": "http://admin-shell.io/DataSpecificationTemplates/DataSpecificationIEC61360/2/0_AMPERE"
+                            }
+                        ],
+                        "type": "ExternalReference"
+                    },
+                    "dataSpecificationContent": {
+                        "modelType": "DataSpecificationIec61360",
+                        "preferredName": [
+                            {
+                                "language": "en",
+                                "text": "Amperage of an electrical component"
+                            }
+                        ]
+                    }
+                }
+            ],
+            "idShort": "ManufacturerName",
             "modelType": "Property",
-            "category": "VARIABLE",
+            "qualifiers": [
+                {
+                    "kind": "ConceptQualifier",
+                    "type": "http://acplt.org/Qualifier/ExampleQualifier",
+                    "value": "100",
+                    "valueType": "xs:int"
+                },
+                {
+                    "kind": "ConceptQualifier",
+                    "type": "http://acplt.org/Qualifier/ExampleQualifier2",
+                    "value": "50",
+                    "valueType": "xs:int"
+                }
+            ],
             "semanticId": {
                 "keys": [
                     {
                         "type": "GlobalReference",
-                        "value": "http://opcfoundation.org/UA/DI/1.1/DeviceType/Serialnumber"
+                        "value": "0173-1#02-AAO677#002"
                     }
                 ],
+                "referredSemanticId": {
+                    "keys": [
+                        {
+                            "type": "Property",
+                            "value": "http://acplt.org/SubmodelTemplates/PropertySupplemental1"
+                        }
+                    ],
+                    "referredSemanticId": {
+                        "keys": [
+                            {
+                                "type": "Property",
+                                "value": "http://acplt.org/SubmodelTemplates/PropertySupplemental2"
+                            }
+                        ],
+                        "type": "ExternalReference"
+                    },
+                    "type": "ExternalReference"
+                },
                 "type": "ExternalReference"
             },
             "supplementalSemanticIds": [
                 {
                     "keys": [
                         {
-                            "type": "GlobalReference",
-                            "value": "something_random_e14ad770"
+                            "type": "Submodel",
+                            "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental_1"
+                        },
+                        {
+                            "type": "Submodel",
+                            "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental_1"
                         }
                     ],
+                    "referredSemanticId": {
+                        "keys": [
+                            {
+                                "type": "Submodel",
+                                "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental2"
+                            }
+                        ],
+                        "referredSemanticId": {
+                            "keys": [
+                                {
+                                    "type": "Submodel",
+                                    "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental3"
+                                }
+                            ],
+                            "type": "ExternalReference"
+                        },
+                        "type": "ExternalReference"
+                    },
                     "type": "ExternalReference"
                 },
                 {
                     "keys": [
                         {
-                            "type": "GlobalReference",
-                            "value": "something_random_bd061acd"
+                            "type": "Submodel",
+                            "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental_22"
+                        },
+                        {
+                            "type": "Submodel",
+                            "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental_22"
                         }
                     ],
+                    "referredSemanticId": {
+                        "keys": [
+                            {
+                                "type": "Submodel",
+                                "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental2"
+                            }
+                        ],
+                        "referredSemanticId": {
+                            "keys": [
+                                {
+                                    "type": "Submodel",
+                                    "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental3"
+                                }
+                            ],
+                            "type": "ExternalReference"
+                        },
+                        "type": "ExternalReference"
+                    },
                     "type": "ExternalReference"
                 }
             ],
-            "value": "978-8234-234-342",
+            "value": "Fraunhofer IESE",
             "valueId": {
                 "keys": [
                     {
                         "type": "GlobalReference",
-                        "value": "978-8234-234-342"
+                        "value": "http://acplt.org/ValueId/ACPLT"
                     }
                 ],
+                "referredSemanticId": {
+                    "keys": [
+                        {
+                            "type": "Property",
+                            "value": "http://acplt.org/SubmodelTemplates/PropertySupplemental3ValueId1"
+                        }
+                    ],
+                    "referredSemanticId": {
+                        "keys": [
+                            {
+                                "type": "Property",
+                                "value": "http://acplt.org/SubmodelTemplates/PropertySupplemental4valueId2"
+                            }
+                        ],
+                        "type": "ExternalReference"
+                    },
+                    "type": "ExternalReference"
+                },
                 "type": "ExternalReference"
             },
-            "valueType": "xs:string",
-            "idShort": "InstanceId"
+            "valueType": "xs:string"
+        },
+        {
+            "idShort": "ProductModelName",
+            "modelType": "Property",
+            "value": "Model X",
+            "valueType": "xs:string"
+        },
+        {
+            "category": "PARAMETER",
+            "description": [
+                {
+                    "language": "en-us",
+                    "text": "A top level SubmodelElementCollection containing a nested SME structure"
+                },
+                {
+                    "language": "de",
+                    "text": "Eine SubmodelElementCollection auf oberster Ebene, die eine verschachtelte SME-Struktur enthält"
+                }
+            ],
+            "displayName": [
+                {
+                    "language": "en-us",
+                    "text": "Top level Collection"
+                }
+            ],
+            "embeddedDataSpecifications": [
+                {
+                    "dataSpecification": {
+                        "keys": [
+                            {
+                                "type": "GlobalReference",
+                                "value": "http://admin-shell.io/DataSpecificationTemplates/DataSpecificationIEC61360/2/0"
+                            }
+                        ],
+                        "referredSemanticId": {
+                            "keys": [
+                                {
+                                    "type": "Submodel",
+                                    "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental2"
+                                }
+                            ],
+                            "referredSemanticId": {
+                                "keys": [
+                                    {
+                                        "type": "Submodel",
+                                        "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental3"
+                                    }
+                                ],
+                                "type": "ExternalReference"
+                            },
+                            "type": "ExternalReference"
+                        },
+                        "type": "ExternalReference"
+                    },
+                    "dataSpecificationContent": {
+                        "dataType": "RealCount",
+                        "definition": [
+                            {
+                                "language": "en",
+                                "text": "Data Specification according to IEC 61360-2"
+                            }
+                        ],
+                        "levelType": {
+                            "max": true,
+                            "min": true,
+                            "nom": true,
+                            "typ": true
+                        },
+                        "modelType": "DataSpecificationIec61360",
+                        "preferredName": [
+                            {
+                                "language": "en",
+                                "text": "IEC 61360-2 Data Specification"
+                            }
+                        ],
+                        "shortName": [
+                            {
+                                "language": "en",
+                                "text": "IEC 61360-2"
+                            }
+                        ],
+                        "sourceOfDefinition": "IEC 61360-2",
+                        "symbol": "kOhm",
+                        "unit": "Kiloohm",
+                        "unitId": {
+                            "keys": [
+                                {
+                                    "type": "GlobalReference",
+                                    "value": "http://www.iec.ch/TC13JWG1/GA/GA13/GA13_1036"
+                                }
+                            ],
+                            "referredSemanticId": {
+                                "keys": [
+                                    {
+                                        "type": "Submodel",
+                                        "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental2"
+                                    }
+                                ],
+                                "referredSemanticId": {
+                                    "keys": [
+                                        {
+                                            "type": "Submodel",
+                                            "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental3"
+                                        }
+                                    ],
+                                    "type": "ExternalReference"
+                                },
+                                "type": "ExternalReference"
+                            },
+                            "type": "ExternalReference"
+                        },
+                        "value": "100",
+                        "valueFormat": "##.##",
+                        "valueList": {
+                            "valueReferencePair": [
+                                {
+                                    "value": "100",
+                                    "valueId": {
+                                        "keys": [
+                                            {
+                                                "type": "GlobalReference",
+                                                "value": "100"
+                                            }
+                                        ],
+                                        "referredSemanticId": {
+                                            "keys": [
+                                                {
+                                                    "type": "Submodel",
+                                                    "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental2"
+                                                }
+                                            ],
+                                            "referredSemanticId": {
+                                                "keys": [
+                                                    {
+                                                        "type": "Submodel",
+                                                        "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental3"
+                                                    }
+                                                ],
+                                                "type": "ExternalReference"
+                                            },
+                                            "type": "ExternalReference"
+                                        },
+                                        "type": "ExternalReference"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "dataSpecification": {
+                        "keys": [
+                            {
+                                "type": "GlobalReference",
+                                "value": "http://admin-shell.io/DataSpecificationTemplates/DataSpecificationIEC61360/2/0_VOLT"
+                            }
+                        ],
+                        "referredSemanticId": {
+                            "keys": [
+                                {
+                                    "type": "Submodel",
+                                    "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental2_VOLT"
+                                }
+                            ],
+                            "referredSemanticId": {
+                                "keys": [
+                                    {
+                                        "type": "Submodel",
+                                        "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental3_VOLT"
+                                    }
+                                ],
+                                "type": "ExternalReference"
+                            },
+                            "type": "ExternalReference"
+                        },
+                        "type": "ExternalReference"
+                    },
+                    "dataSpecificationContent": {
+                        "dataType": "RealCount",
+                        "definition": [
+                            {
+                                "language": "en",
+                                "text": "Voltage of an electrical component"
+                            }
+                        ],
+                        "levelType": {
+                            "max": true,
+                            "min": false,
+                            "nom": true,
+                            "typ": false
+                        },
+                        "modelType": "DataSpecificationIec61360",
+                        "preferredName": [
+                            {
+                                "language": "en",
+                                "text": "Voltage of an electrical component"
+                            }
+                        ],
+                        "shortName": [
+                            {
+                                "language": "en",
+                                "text": "Voltage"
+                            }
+                        ],
+                        "sourceOfDefinition": "IEC 61360-2",
+                        "symbol": "V",
+                        "unit": "Volt",
+                        "unitId": {
+                            "keys": [
+                                {
+                                    "type": "GlobalReference",
+                                    "value": "http://www.iec.ch/TC13JWG1/GA/GA13/GA13_1036_VOLT"
+                                }
+                            ],
+                            "referredSemanticId": {
+                                "keys": [
+                                    {
+                                        "type": "Submodel",
+                                        "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental2_VOLT"
+                                    }
+                                ],
+                                "referredSemanticId": {
+                                    "keys": [
+                                        {
+                                            "type": "Submodel",
+                                            "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental3_VOLT"
+                                        }
+                                    ],
+                                    "type": "ExternalReference"
+                                },
+                                "type": "ExternalReference"
+                            },
+                            "type": "ExternalReference"
+                        },
+                        "value": "10",
+                        "valueFormat": "##.##",
+                        "valueList": {
+                            "valueReferencePair": [
+                                {
+                                    "value": "13",
+                                    "valueId": {
+                                        "keys": [
+                                            {
+                                                "type": "GlobalReference",
+                                                "value": "13"
+                                            }
+                                        ],
+                                        "referredSemanticId": {
+                                            "keys": [
+                                                {
+                                                    "type": "Submodel",
+                                                    "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental2_VOLT"
+                                                }
+                                            ],
+                                            "referredSemanticId": {
+                                                "keys": [
+                                                    {
+                                                        "type": "Submodel",
+                                                        "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental3_VOLT"
+                                                    }
+                                                ],
+                                                "type": "ExternalReference"
+                                            },
+                                            "type": "ExternalReference"
+                                        },
+                                        "type": "ExternalReference"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                },
+                {
+                    "dataSpecification": {
+                        "keys": [
+                            {
+                                "type": "GlobalReference",
+                                "value": "http://admin-shell.io/DataSpecificationTemplates/DataSpecificationIEC61360/2/0_AMPERE"
+                            }
+                        ],
+                        "type": "ExternalReference"
+                    },
+                    "dataSpecificationContent": {
+                        "modelType": "DataSpecificationIec61360",
+                        "preferredName": [
+                            {
+                                "language": "en",
+                                "text": "Amperage of an electrical component"
+                            }
+                        ]
+                    }
+                }
+            ],
+            "idShort": "ProductSerialNumber",
+            "modelType": "SubmodelElementCollection",
+            "qualifiers": [
+                {
+                    "kind": "ConceptQualifier",
+                    "type": "http://acplt.org/Qualifier/ExampleQualifier",
+                    "value": "Test",
+                    "valueType": "xs:string"
+                },
+                {
+                    "kind": "ConceptQualifier",
+                    "type": "http://acplt.org/Qualifier/ExampleQualifier2",
+                    "value": "true",
+                    "valueType": "xs:boolean"
+                }
+            ],
+            "semanticId": {
+                "keys": [
+                    {
+                        "type": "GlobalReference",
+                        "value": "0173-1#01-AAO677#001"
+                    }
+                ],
+                "referredSemanticId": {
+                    "keys": [
+                        {
+                            "type": "Property",
+                            "value": "http://acplt.org/SubmodelElementCollection/Referred1"
+                        }
+                    ],
+                    "referredSemanticId": {
+                        "keys": [
+                            {
+                                "type": "Property",
+                                "value": "http://acplt.org/SubmodelElementCollection/ReferredNested1"
+                            }
+                        ],
+                        "type": "ExternalReference"
+                    },
+                    "type": "ExternalReference"
+                },
+                "type": "ExternalReference"
+            },
+            "supplementalSemanticIds": [
+                {
+                    "keys": [
+                        {
+                            "type": "SubmodelElementCollection",
+                            "value": "http://acplt.org/SubmodelElementCollection/Supplemental1"
+                        },
+                        {
+                            "type": "SubmodelElementCollection",
+                            "value": "http://acplt.org/SubmodelElementCollection/Supplemental2"
+                        }
+                    ],
+                    "referredSemanticId": {
+                        "keys": [
+                            {
+                                "type": "SubmodelElementCollection",
+                                "value": "http://acplt.org/SubmodelElementCollection/SuplementalReferred1"
+                            }
+                        ],
+                        "referredSemanticId": {
+                            "keys": [
+                                {
+                                    "type": "SubmodelElementCollection",
+                                    "value": "http://acplt.org/SubmodelElementCollection/SuplementalReferredNested1"
+                                }
+                            ],
+                            "type": "ExternalReference"
+                        },
+                        "type": "ExternalReference"
+                    },
+                    "type": "ExternalReference"
+                },
+                {
+                    "keys": [
+                        {
+                            "type": "SubmodelElementCollection",
+                            "value": "http://acplt.org/SubmodelElementCollection/Supplemental3"
+                        },
+                        {
+                            "type": "SubmodelElementCollection",
+                            "value": "http://acplt.org/SubmodelElementCollection/Supplemental4"
+                        }
+                    ],
+                    "referredSemanticId": {
+                        "keys": [
+                            {
+                                "type": "SubmodelElementCollection",
+                                "value": "http://acplt.org/SubmodelElementCollection/SuplementalReferred2"
+                            }
+                        ],
+                        "referredSemanticId": {
+                            "keys": [
+                                {
+                                    "type": "SubmodelElementCollection",
+                                    "value": "http://acplt.org/SubmodelElementCollection/SuplementalReferredNested2"
+                                }
+                            ],
+                            "type": "ExternalReference"
+                        },
+                        "type": "ExternalReference"
+                    },
+                    "type": "ExternalReference"
+                }
+            ],
+            "value": [
+                {
+                    "category": "CONSTANT",
+                    "description": [
+                        {
+                            "language": "en-us",
+                            "text": "A nested SubmodelElementCollection containing a nested SME structure"
+                        },
+                        {
+                            "language": "de",
+                            "text": "Eine verschachtelte SubmodelElementCollection, die eine verschachtelte SME-Struktur enthält"
+                        }
+                    ],
+                    "displayName": [
+                        {
+                            "language": "en-us",
+                            "text": "Nested Collection"
+                        }
+                    ],
+                    "idShort": "NestedCollection1",
+                    "modelType": "SubmodelElementCollection",
+                    "semanticId": {
+                        "keys": [
+                            {
+                                "type": "GlobalReference",
+                                "value": "0173-1#01-AAO677#001"
+                            }
+                        ],
+                        "referredSemanticId": {
+                            "keys": [
+                                {
+                                    "type": "Property",
+                                    "value": "http://acplt.org/SubmodelElementCollection/Referred1"
+                                }
+                            ],
+                            "referredSemanticId": {
+                                "keys": [
+                                    {
+                                        "type": "Property",
+                                        "value": "http://acplt.org/SubmodelElementCollection/ReferredNested1"
+                                    }
+                                ],
+                                "type": "ExternalReference"
+                            },
+                            "type": "ExternalReference"
+                        },
+                        "type": "ExternalReference"
+                    },
+                    "supplementalSemanticIds": [
+                        {
+                            "keys": [
+                                {
+                                    "type": "SubmodelElementCollection",
+                                    "value": "http://acplt.org/SubmodelElementCollection/Supplemental1"
+                                },
+                                {
+                                    "type": "SubmodelElementCollection",
+                                    "value": "http://acplt.org/SubmodelElementCollection/Supplemental2"
+                                }
+                            ],
+                            "referredSemanticId": {
+                                "keys": [
+                                    {
+                                        "type": "SubmodelElementCollection",
+                                        "value": "http://acplt.org/SubmodelElementCollection/SuplementalReferred1"
+                                    }
+                                ],
+                                "referredSemanticId": {
+                                    "keys": [
+                                        {
+                                            "type": "SubmodelElementCollection",
+                                            "value": "http://acplt.org/SubmodelElementCollection/SuplementalReferredNested1"
+                                        }
+                                    ],
+                                    "type": "ExternalReference"
+                                },
+                                "type": "ExternalReference"
+                            },
+                            "type": "ExternalReference"
+                        },
+                        {
+                            "keys": [
+                                {
+                                    "type": "SubmodelElementCollection",
+                                    "value": "http://acplt.org/SubmodelElementCollection/Supplemental3"
+                                },
+                                {
+                                    "type": "SubmodelElementCollection",
+                                    "value": "http://acplt.org/SubmodelElementCollection/Supplemental4"
+                                }
+                            ],
+                            "referredSemanticId": {
+                                "keys": [
+                                    {
+                                        "type": "SubmodelElementCollection",
+                                        "value": "http://acplt.org/SubmodelElementCollection/SuplementalReferred2"
+                                    }
+                                ],
+                                "referredSemanticId": {
+                                    "keys": [
+                                        {
+                                            "type": "SubmodelElementCollection",
+                                            "value": "http://acplt.org/SubmodelElementCollection/SuplementalReferredNested2"
+                                        }
+                                    ],
+                                    "type": "ExternalReference"
+                                },
+                                "type": "ExternalReference"
+                            },
+                            "type": "ExternalReference"
+                        }
+                    ],
+                    "value": [
+                        {
+                            "displayName": [
+                                {
+                                    "language": "en-us",
+                                    "text": "Deep Nested Property"
+                                }
+                            ],
+                            "idShort": "DeepNestedProperty",
+                            "modelType": "Property",
+                            "value": "42",
+                            "valueType": "xs:int"
+                        }
+                    ]
+                },
+                {
+                    "idShort": "NestedCollection2",
+                    "modelType": "SubmodelElementCollection"
+                }
+            ]
+        }
+    ],
+    "supplementalSemanticIds": [
+        {
+            "keys": [
+                {
+                    "type": "Submodel",
+                    "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental_1"
+                },
+                {
+                    "type": "Submodel",
+                    "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental_1"
+                }
+            ],
+            "referredSemanticId": {
+                "keys": [
+                    {
+                        "type": "Submodel",
+                        "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental2"
+                    }
+                ],
+                "referredSemanticId": {
+                    "keys": [
+                        {
+                            "type": "Submodel",
+                            "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental3"
+                        }
+                    ],
+                    "type": "ExternalReference"
+                },
+                "type": "ExternalReference"
+            },
+            "type": "ExternalReference"
+        },
+        {
+            "keys": [
+                {
+                    "type": "Submodel",
+                    "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental_22"
+                },
+                {
+                    "type": "Submodel",
+                    "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental_22"
+                }
+            ],
+            "referredSemanticId": {
+                "keys": [
+                    {
+                        "type": "Submodel",
+                        "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental2"
+                    }
+                ],
+                "referredSemanticId": {
+                    "keys": [
+                        {
+                            "type": "Submodel",
+                            "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental3"
+                        }
+                    ],
+                    "type": "ExternalReference"
+                },
+                "type": "ExternalReference"
+            },
+            "type": "ExternalReference"
         }
     ]
 }

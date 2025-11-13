@@ -224,14 +224,14 @@ func (b *QualifiersBuilder) AddSupplementalSemanticIDs(qualifierDbID int64, supp
 		return nil, fmt.Errorf("tried to add SupplementalSemanticIds to Qualifier '%d' before creating the Qualifier itself", qualifierDbID)
 	}
 
-	refs, err := ParseReferences(supplementalSemanticIDsRows, b.refBuilderMap)
+	refs, err := ParseReferences(supplementalSemanticIDsRows, b.refBuilderMap, nil)
 
 	if err != nil {
 		return nil, err
 	}
 
 	if len(supplementalSemanticIDsReferredSemanticIDRows) > 0 {
-		err = ParseReferredReferences(supplementalSemanticIDsReferredSemanticIDRows, b.refBuilderMap)
+		err = ParseReferredReferences(supplementalSemanticIDsReferredSemanticIDRows, b.refBuilderMap, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -255,14 +255,14 @@ func (b *QualifiersBuilder) createExactlyOneReference(qualifierDbID int64, refRo
 		return nil, fmt.Errorf("tried to add %s to Qualifier '%d' before creating the Qualifier itself", typeOfReference, qualifierDbID)
 	}
 
-	refs, err := ParseReferences(refRows, b.refBuilderMap)
+	refs, err := ParseReferences(refRows, b.refBuilderMap, nil)
 
 	if err != nil {
 		return nil, err
 	}
 
 	if len(referredRefRows) > 0 {
-		err = ParseReferredReferences(referredRefRows, b.refBuilderMap)
+		err = ParseReferredReferences(referredRefRows, b.refBuilderMap, nil)
 		if err != nil {
 			return nil, err
 		}

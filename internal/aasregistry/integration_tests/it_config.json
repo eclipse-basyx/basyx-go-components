@@ -2,95 +2,95 @@
   {
     "context": "001 - Health Check - GET /health",
     "method": "GET",
-    "endpoint": "http://127.0.0.1:5004/health",
+    "endpoint": "http://127.0.0.1:6004/health",
     "shouldMatch": "expected/expectedHealthEndpoint.json",
     "expectedStatus": 200
   },
   {
     "context": "002 - List AAS Descriptors (Empty) - GET /shell-descriptors",
     "method": "GET",
-    "endpoint": "http://127.0.0.1:5004/shell-descriptors",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors",
     "shouldMatch": "expected/empty_paged_result.json",
     "expectedStatus": 200
   },
   {
     "context": "003 - Get AAS Descriptor by ID (Not Found) - GET /shell-descriptors/{aasId}",
     "method": "GET",
-    "endpoint": "http://127.0.0.1:5004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8yMjMzNQ",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8yMjMzNQ",
     "expectedStatus": 404
   },
   {
     "context": "004 - List Submodel Descriptors (AAS Not Found) - GET /shell-descriptors/{aasId}/submodel-descriptors",
     "method": "GET",
-    "endpoint": "http://127.0.0.1:5004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8yMjMzNQ/submodel-descriptors",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8yMjMzNQ/submodel-descriptors",
     "expectedStatus": 404
   },
   {
     "context": "005 - Replace Submodel Descriptor (AAS Not Found) - PUT /shell-descriptors/{aasId}/submodel-descriptors/{subId}",
     "method": "PUT",
-    "endpoint": "http://127.0.0.1:5004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8yMjMzNQ/submodel-descriptors/dXJuOmV4YW1wbGU6c206MDAy",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8yMjMzNQ/submodel-descriptors/dXJuOmV4YW1wbGU6c206MDAy",
     "data": "postBody/simple_submodel_descriptor_2.json",
     "expectedStatus": 404
   },
   {
     "context": "006 - Delete Submodel Descriptor (AAS Not Found) - DELETE /shell-descriptors/{aasId}/submodel-descriptors/{subId}",
     "method": "DELETE",
-    "endpoint": "http://127.0.0.1:5004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8yMjMzNQ/submodel-descriptors/dXJuOmV4YW1wbGU6c206MDAx",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8yMjMzNQ/submodel-descriptors/dXJuOmV4YW1wbGU6c206MDAx",
     "expectedStatus": 404
   },
   {
     "context": "007 - Create Submodel Descriptor (AAS Not Found) - POST /shell-descriptors/{aasId}/submodel-descriptors",
     "method": "POST",
-    "endpoint": "http://127.0.0.1:5004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8yMjMzNQ/submodel-descriptors",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8yMjMzNQ/submodel-descriptors",
     "data": "postBody/simple_submodel_descriptor_1.json",
     "expectedStatus": 404
   },
   {
     "context": "008 - Create AAS Descriptor (Missing Identifier) - POST /shell-descriptors",
     "method": "POST",
-    "endpoint": "http://127.0.0.1:5004/shell-descriptors",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors",
     "data": "postBody/simple_ass_descriptor_malformed.json",
     "expectedStatus": 400
   },
   {
     "context": "009 - Create AAS Descriptor (Invalid AssetKind) - POST /shell-descriptors",
     "method": "POST",
-    "endpoint": "http://127.0.0.1:5004/shell-descriptors",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors",
     "data": "postBody/simple_ass_descriptor_malformed_2.json",
     "expectedStatus": 400
   },
   {
     "context": "010 - Create AAS Descriptor (Invalid Key) - POST /shell-descriptors",
     "method": "POST",
-    "endpoint": "http://127.0.0.1:5004/shell-descriptors",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors",
     "data": "postBody/simple_ass_descriptor_malformed_3.json",
     "expectedStatus": 400
   },
   {
     "context": "011 - Create AAS Descriptor (Wrong Extension Value Type) - POST /shell-descriptors",
     "method": "POST",
-    "endpoint": "http://127.0.0.1:5004/shell-descriptors",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors",
     "data": "postBody/simple_ass_descriptor_malformed_4.json",
     "expectedStatus": 400
   },
   {
     "context": "012 - Create AAS Descriptor (Missing Keys in Reference) - POST /shell-descriptors",
     "method": "POST",
-    "endpoint": "http://127.0.0.1:5004/shell-descriptors",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors",
     "data": "postBody/simple_ass_descriptor_malformed_5.json",
     "expectedStatus": 400
   },
   {
     "context": "013 - Create AAS Descriptor (Empty Keys in Reference) - POST /shell-descriptors",
     "method": "POST",
-    "endpoint": "http://127.0.0.1:5004/shell-descriptors",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors",
     "data": "postBody/simple_ass_descriptor_malformed_6.json",
     "expectedStatus": 400
   },
   {
     "context": "014 - Create AAS Descriptor #1 (Simple) - POST /shell-descriptors",
     "method": "POST",
-    "endpoint": "http://127.0.0.1:5004/shell-descriptors",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors",
     "data": "postBody/simple_ass_descriptor_1.json",
     "shouldMatch": "postBody/simple_ass_descriptor_1.json",
     "expectedStatus": 201
@@ -98,7 +98,7 @@
   {
     "context": "015 - Create AAS Descriptor #2 (Simple) - POST /shell-descriptors",
     "method": "POST",
-    "endpoint": "http://127.0.0.1:5004/shell-descriptors",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors",
     "data": "postBody/simple_ass_descriptor_2.json",
     "shouldMatch": "postBody/simple_ass_descriptor_2.json",
     "expectedStatus": 201
@@ -106,7 +106,7 @@
   {
     "context": "016 - Create AAS Descriptor #3 (Simple) - POST /shell-descriptors",
     "method": "POST",
-    "endpoint": "http://127.0.0.1:5004/shell-descriptors",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors",
     "data": "postBody/simple_ass_descriptor_3.json",
     "shouldMatch": "postBody/simple_ass_descriptor_3.json",
     "expectedStatus": 201
@@ -114,7 +114,7 @@
   {
     "context": "017 - Create AAS Descriptor #4 (Simple) - POST /shell-descriptors",
     "method": "POST",
-    "endpoint": "http://127.0.0.1:5004/shell-descriptors",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors",
     "data": "postBody/simple_ass_descriptor_4.json",
     "shouldMatch": "postBody/simple_ass_descriptor_4.json",
     "expectedStatus": 201
@@ -122,7 +122,7 @@
   {
     "context": "018 - Create AAS Descriptor Duplicate (Conflict) - POST /shell-descriptors",
     "method": "POST",
-    "endpoint": "http://127.0.0.1:5004/shell-descriptors",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors",
     "data": "postBody/simple_ass_descriptor_1.json",
     "shouldMatch": "postBody/simple_ass_descriptor_1.json",
     "expectedStatus": 409
@@ -130,109 +130,109 @@
   {
     "context": "019 - List AAS Descriptors (Paged) - GET /shell-descriptors",
     "method": "GET",
-    "endpoint": "http://127.0.0.1:5004/shell-descriptors",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors",
     "shouldMatch": "expected/simple_ass_paged_result.json",
     "expectedStatus": 200
   },
   {
     "context": "020 - Delete Submodel Descriptor (Not Found) - DELETE /shell-descriptors/{aasId}/submodel-descriptors/{subId}",
     "method": "DELETE",
-    "endpoint": "http://127.0.0.1:5004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8yMjMzNQ/submodel-descriptors/dXJuOmV4YW1wbGU6c206MDAx",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8yMjMzNQ/submodel-descriptors/dXJuOmV4YW1wbGU6c206MDAx",
     "expectedStatus": 404
   },
   {
     "context": "021 - List AAS Descriptors (Invalid assetKind Param) - GET /shell-descriptors?assetKind=...",
     "method": "GET",
-    "endpoint": "http://127.0.0.1:5004/shell-descriptors?assetKind=OMEGALUL",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors?assetKind=OMEGALUL",
     "expectedStatus": 400
   },
   {
     "context": "022 - List AAS Descriptors (limit=2) - GET /shell-descriptors?limit=2",
     "method": "GET",
-    "endpoint": "http://127.0.0.1:5004/shell-descriptors?limit=2",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors?limit=2",
     "shouldMatch": "expected/simple_ass_paged_result_limit2.json",
     "expectedStatus": 200
   },
   {
     "context": "023 - List AAS Descriptors (limit=2, cursor=...) - GET /shell-descriptors?limit=2&cursor=...",
     "method": "GET",
-    "endpoint": "http://127.0.0.1:5004/shell-descriptors?limit=2&cursor=aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8zNGh6ZWF3",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors?limit=2&cursor=aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8zNGh6ZWF3",
     "shouldMatch": "expected/simple_ass_paged_result_limit2cursor.json",
     "expectedStatus": 200
   },
   {
     "context": "024 - List AAS Descriptors (Bad Cursor) - GET /shell-descriptors?cursor=...",
     "method": "GET",
-    "endpoint": "http://127.0.0.1:5004/shell-descriptors?cursor=HELLOWRONGENCODEDURL",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors?cursor=HELLOWRONGENCODEDURL",
     "expectedStatus": 400
   },
   {
     "context": "025 - List AAS Descriptors (Filter assetKind=Type) - GET /shell-descriptors?assetKind=Type",
     "method": "GET",
-    "endpoint": "http://127.0.0.1:5004/shell-descriptors?assetKind=Type",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors?assetKind=Type",
     "shouldMatch": "expected/simple_ass_paged_result_filter_assetKind.json",
     "expectedStatus": 200
   },
   {
     "context": "026 - List AAS Descriptors (Filter assetType=betachad) - GET /shell-descriptors?assetType=...",
     "method": "GET",
-    "endpoint": "http://127.0.0.1:5004/shell-descriptors?assetType=betachad",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors?assetType=betachad",
     "shouldMatch": "expected/simple_ass_paged_result_filter_assetType.json",
     "expectedStatus": 200
   },
   {
     "context": "027 - Replace AAS Descriptor (ID Mismatch) - PUT /shell-descriptors/{aasId}",
     "method": "PUT",
-    "endpoint": "http://127.0.0.1:5004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8yMjMzNQ",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8yMjMzNQ",
     "shouldMatch": "postBody/simple_ass_descriptor_2.json",
     "expectedStatus": 400
   },
   {
     "context": "028 - Get AAS Descriptor by ID - GET /shell-descriptors/{aasId}",
     "method": "GET",
-    "endpoint": "http://127.0.0.1:5004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8yMjMzNQ",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8yMjMzNQ",
     "shouldMatch": "postBody/simple_ass_descriptor_1.json",
     "expectedStatus": 200
   },
   {
     "context": "029 - Replace AAS Descriptor (204 No Content) - PUT /shell-descriptors/{aasId}",
     "method": "PUT",
-    "endpoint": "http://127.0.0.1:5004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8yMjMzNQ",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8yMjMzNQ",
     "data": "postBody/simple_ass_descriptor_5.json",
     "expectedStatus": 204
   },
   {
     "context": "030 - List Submodel Descriptors (Initially Empty) - GET /shell-descriptors/{aasId}/submodel-descriptors",
     "method": "GET",
-    "endpoint": "http://127.0.0.1:5004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8yMjMzNQ/submodel-descriptors",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8yMjMzNQ/submodel-descriptors",
     "shouldMatch": "expected/empty_paged_result.json",
     "expectedStatus": 200
   },
   {
     "context": "031 - Get AAS Descriptor by ID (Updated) - GET /shell-descriptors/{aasId}",
     "method": "GET",
-    "endpoint": "http://127.0.0.1:5004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8yMjMzNQ",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8yMjMzNQ",
     "shouldMatch": "postBody/simple_ass_descriptor_5.json",
     "expectedStatus": 200
   },
   {
     "context": "032 - Replace AAS Descriptor (Complex) - PUT /shell-descriptors/{aasId}",
     "method": "PUT",
-    "endpoint": "http://127.0.0.1:5004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8yMjMzNQ",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8yMjMzNQ",
     "data": "postBody/complex_aas_descriptor_1.json",
     "expectedStatus": 204
   },
   {
     "context": "033 - Get AAS Descriptor by ID (Complex) - GET /shell-descriptors/{aasId}",
     "method": "GET",
-    "endpoint": "http://127.0.0.1:5004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8yMjMzNQ",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8yMjMzNQ",
     "shouldMatch": "postBody/complex_aas_descriptor_1.json",
     "expectedStatus": 200
   },
   {
     "context": "034 - Create Submodel Descriptor #1 - POST /shell-descriptors/{aasId}/submodel-descriptors",
     "method": "POST",
-    "endpoint": "http://127.0.0.1:5004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8yMjMzNQ/submodel-descriptors",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8yMjMzNQ/submodel-descriptors",
     "data": "postBody/simple_submodel_descriptor_1.json",
     "shouldMatch": "postBody/simple_submodel_descriptor_1.json",
     "expectedStatus": 201
@@ -240,35 +240,35 @@
   {
     "context": "035 - Create Submodel Descriptor Duplicate (Conflict) - POST /shell-descriptors/{aasId}/submodel-descriptors",
     "method": "POST",
-    "endpoint": "http://127.0.0.1:5004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8yMjMzNQ/submodel-descriptors",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8yMjMzNQ/submodel-descriptors",
     "data": "postBody/simple_submodel_descriptor_1.json",
     "expectedStatus": 409
   },
   {
     "context": "036 - List Submodel Descriptors (After Create) - GET /shell-descriptors/{aasId}/submodel-descriptors",
     "method": "GET",
-    "endpoint": "http://127.0.0.1:5004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8yMjMzNQ/submodel-descriptors",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8yMjMzNQ/submodel-descriptors",
     "shouldMatch": "expected/submodel_paged.json",
     "expectedStatus": 200
   },
   {
     "context": "037 - Get Submodel Descriptor by ID - GET /shell-descriptors/{aasId}/submodel-descriptors/{subId}",
     "method": "GET",
-    "endpoint": "http://127.0.0.1:5004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8yMjMzNQ/submodel-descriptors/dXJuOmV4YW1wbGU6c206MDAx",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8yMjMzNQ/submodel-descriptors/dXJuOmV4YW1wbGU6c206MDAx",
     "shouldMatch": "postBody/simple_submodel_descriptor_1.json",
     "expectedStatus": 200
   },
   {
     "context": "038 - Replace Submodel Descriptor (Wrong ID) - PUT /shell-descriptors/{aasId}/submodel-descriptors/{subId}",
     "method": "PUT",
-    "endpoint": "http://127.0.0.1:5004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8yMjMzNQ/submodel-descriptors/dXJuOmV4YW1wbGU6c206MDAx",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8yMjMzNQ/submodel-descriptors/dXJuOmV4YW1wbGU6c206MDAx",
     "data": "postBody/simple_submodel_descriptor_2.json",
     "expectedStatus": 400
   },
   {
     "context": "039 - Create Submodel Descriptor #2 - POST /shell-descriptors/{aasId}/submodel-descriptors",
     "method": "POST",
-    "endpoint": "http://127.0.0.1:5004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8yMjMzNQ/submodel-descriptors",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8yMjMzNQ/submodel-descriptors",
     "data": "postBody/simple_submodel_descriptor_2.json",
     "shouldMatch": "postBody/simple_submodel_descriptor_2.json",
     "expectedStatus": 201
@@ -276,27 +276,27 @@
   {
     "context": "040 - List Submodel Descriptors (limit=2) - GET /shell-descriptors/{aasId}/submodel-descriptors?limit=2",
     "method": "GET",
-    "endpoint": "http://127.0.0.1:5004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8yMjMzNQ/submodel-descriptors?limit=2",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8yMjMzNQ/submodel-descriptors?limit=2",
     "shouldMatch": "expected/submodel_paged_with_limit.json",
     "expectedStatus": 200
   },
   {
     "context": "041 - List Submodel Descriptors (cursor=...) - GET /shell-descriptors/{aasId}/submodel-descriptors?cursor=...",
     "method": "GET",
-    "endpoint": "http://127.0.0.1:5004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8yMjMzNQ/submodel-descriptors?cursor=dXJuOmV4YW1wbGU6c206MDAx",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8yMjMzNQ/submodel-descriptors?cursor=dXJuOmV4YW1wbGU6c206MDAx",
     "shouldMatch": "expected/submodel_paged_with_cursor.json",
     "expectedStatus": 200
   },
   {
     "context": "042 - List Submodel Descriptors (Bad Cursor) - GET /shell-descriptors/{aasId}/submodel-descriptors?cursor=...",
     "method": "GET",
-    "endpoint": "http://127.0.0.1:5004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8yMjMzNQ/submodel-descriptors?cursor=HELLOWRONGENCODEDURL",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8yMjMzNQ/submodel-descriptors?cursor=HELLOWRONGENCODEDURL",
     "expectedStatus": 400
   },
   {
     "context": "043 - Create Submodel Descriptor #3 - POST /shell-descriptors/{aasId}/submodel-descriptors",
     "method": "POST",
-    "endpoint": "http://127.0.0.1:5004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8yMjMzNQ/submodel-descriptors",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8yMjMzNQ/submodel-descriptors",
     "data": "postBody/simple_submodel_descriptor_3.json",
     "shouldMatch": "postBody/simple_submodel_descriptor_3.json",
     "expectedStatus": 201
@@ -304,46 +304,46 @@
   {
     "context": "044 - Delete Submodel Descriptor #1 - DELETE /shell-descriptors/{aasId}/submodel-descriptors/{subId}",
     "method": "DELETE",
-    "endpoint": "http://127.0.0.1:5004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8yMjMzNQ/submodel-descriptors/dXJuOmV4YW1wbGU6c206MDAx",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8yMjMzNQ/submodel-descriptors/dXJuOmV4YW1wbGU6c206MDAx",
     "expectedStatus": 204
   },
   {
     "context": "045 - List AAS Descriptors (Final Complex Paged) - GET /shell-descriptors",
     "method": "GET",
-    "endpoint": "http://127.0.0.1:5004/shell-descriptors",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors",
     "shouldMatch": "expected/final_complex_paged_result.json",
     "expectedStatus": 200
   },
   {
     "context": "046 - Delete AAS Descriptor - DELETE /shell-descriptors/{aasId}",
     "method": "DELETE",
-    "endpoint": "http://127.0.0.1:5004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8yMjMzNQ",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8yMjMzNQ",
     "expectedStatus": 204
   },
   {
     "context": "047 - Get Deleted AAS Descriptor (Not Found) - GET /shell-descriptors/{aasId}",
     "method": "GET",
-    "endpoint": "http://127.0.0.1:5004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8yMjMzNQ",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8yMjMzNQ",
     "expectedStatus": 404
   },
   {
     "context": "048 - PUT as Create (Missing Endpoint in Submodel, Expect 400) - PUT /shell-descriptors/{aasId}",
     "method": "PUT",
-    "endpoint": "http://127.0.0.1:5004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy9mYWN0b3Jpbw",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy9mYWN0b3Jpbw",
     "data": "postBody/simple_ass_descriptor_malformed_7.json",
     "expectedStatus": 400
   },
   {
     "context": "049 - PUT as Create (Empty Endpoint List, Expect 400) - PUT /shell-descriptors/{aasId}",
     "method": "PUT",
-    "endpoint": "http://127.0.0.1:5004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy9mYWN0b3Jpbw",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy9mYWN0b3Jpbw",
     "data": "postBody/simple_ass_descriptor_malformed_9.json",
     "expectedStatus": 400
   },
   {
     "context": "050 - PUT as Create (Created 201) - PUT /shell-descriptors/{aasId}",
     "method": "PUT",
-    "endpoint": "http://127.0.0.1:5004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy9mYWN0b3Jpbw",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy9mYWN0b3Jpbw",
     "data": "postBody/simple_ass_descriptor_6.json",
     "shouldMatch": "postBody/simple_ass_descriptor_6.json",
     "expectedStatus": 201
@@ -351,21 +351,21 @@
   {
     "context": "051 - Get Small AAS Descriptor - GET /shell-descriptors/{aasId}",
     "method": "GET",
-    "endpoint": "http://127.0.0.1:5004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy9mYWN0b3Jpbw",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy9mYWN0b3Jpbw",
     "shouldMatch": "postBody/simple_ass_descriptor_6.json",
     "expectedStatus": 200
   },
   {
     "context": "052 - List AAS Descriptors (Final Paged Result) - GET /shell-descriptors",
     "method": "GET",
-    "endpoint": "http://127.0.0.1:5004/shell-descriptors",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors",
     "shouldMatch": "expected/final_paged_result.json",
     "expectedStatus": 200
   },
   {
     "context": "053 - PUT AAS Descriptor (Create Martin, 201) - PUT /shell-descriptors/{aasId}",
     "method": "PUT",
-    "endpoint": "http://127.0.0.1:5004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy9tYXJ0aW4",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy9tYXJ0aW4",
     "data": "postBody/simple_ass_descriptor_7.json",
     "shouldMatch": "expected/expected_ass_descriptor_7.json",
     "expectedStatus": 201
@@ -373,34 +373,34 @@
   {
     "context": "054 - PUT AAS Descriptor (Idempotent Update, 204) - PUT /shell-descriptors/{aasId}",
     "method": "PUT",
-    "endpoint": "http://127.0.0.1:5004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy9tYXJ0aW4",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy9tYXJ0aW4",
     "data": "postBody/simple_ass_descriptor_7.json",
     "expectedStatus": 204
   },
   {
     "context": "055 - GET AAS Descriptor (Martin) - GET /shell-descriptors/{aasId}",
     "method": "GET",
-    "endpoint": "http://127.0.0.1:5004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy9tYXJ0aW4",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy9tYXJ0aW4",
     "shouldMatch": "expected/expected_ass_descriptor_7.json",
     "expectedStatus": 200
   },
   {
     "context": "056 - PUT Submodel in AAS (Wrong ID, 400) - PUT /shell-descriptors/{aasId}/submodel-descriptors/{subId}",
     "method": "PUT",
-    "endpoint": "http://127.0.0.1:5004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy9tYXJ0aW4/submodel-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy9zYXRpc2ZhY3Rvcnk",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy9tYXJ0aW4/submodel-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy9zYXRpc2ZhY3Rvcnk",
     "data": "postBody/simple_submodel_descriptor_4.json",
     "expectedStatus": 400
   },
   {
     "context": "057 - GET Submodel (Not Found) - GET /shell-descriptors/{aasId}/submodel-descriptors/{subId}",
     "method": "GET",
-    "endpoint": "http://127.0.0.1:5004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy9tYXJ0aW4/submodel-descriptors/bWFydGluaXN0Y29vbA",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy9tYXJ0aW4/submodel-descriptors/bWFydGluaXN0Y29vbA",
     "expectedStatus": 404
   },
   {
     "context": "058 - PUT Submodel (Create via PUT, 201) - PUT /shell-descriptors/{aasId}/submodel-descriptors/{subId}",
     "method": "PUT",
-    "endpoint": "http://127.0.0.1:5004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy9tYXJ0aW4/submodel-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy93cm9uZ2lk",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy9tYXJ0aW4/submodel-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy93cm9uZ2lk",
     "data": "postBody/simple_submodel_descriptor_4.json",
     "shouldMatch": "expected/submodel_descriptor_simplified.json",
     "expectedStatus": 201
@@ -408,40 +408,40 @@
   {
     "context": "059 - GET AAS Descriptor (With New Submodel) - GET /shell-descriptors/{aasId}",
     "method": "GET",
-    "endpoint": "http://127.0.0.1:5004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy9tYXJ0aW4",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy9tYXJ0aW4",
     "shouldMatch": "expected/simple_aas_with_sub_via_put.json",
     "expectedStatus": 200
   },
   {
     "context": "060 - PUT Submodel (Modify via PUT, 204) - PUT /shell-descriptors/{aasId}/submodel-descriptors/{subId}",
     "method": "PUT",
-    "endpoint": "http://127.0.0.1:5004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy9tYXJ0aW4/submodel-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy93cm9uZ2lk",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy9tYXJ0aW4/submodel-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy93cm9uZ2lk",
     "data": "postBody/simple_submodel_descriptor_4_different.json",
     "expectedStatus": 204
   },
   {
     "context": "061 - Delete Submodel (Not Existing, 404) - DELETE /shell-descriptors/{aasId}/submodel-descriptors/{subId}",
     "method": "DELETE",
-    "endpoint": "http://127.0.0.1:5004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy9tYXJ0aW4/submodel-descriptors/bWFydGluaXN0ZGVyYWxsZXJjb29sc3Rl",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy9tYXJ0aW4/submodel-descriptors/bWFydGluaXN0ZGVyYWxsZXJjb29sc3Rl",
     "expectedStatus": 404
   },
   {
     "context": "062 - GET AAS Descriptor (With Changed Submodel) - GET /shell-descriptors/{aasId}",
     "method": "GET",
-    "endpoint": "http://127.0.0.1:5004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy9tYXJ0aW4",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy9tYXJ0aW4",
     "shouldMatch": "expected/simple_aas_with_sub_via_put_changed.json",
     "expectedStatus": 200
   },
   {
     "context": "063 - GET AAS Descriptor (Bad Encoded URL, 400) - GET /shell-descriptors/{badId}",
     "method": "GET",
-    "endpoint": "http://127.0.0.1:5004/shell-descriptors/HELLOWRONGENCODEDURL",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors/HELLOWRONGENCODEDURL",
     "expectedStatus": 400
   },
   {
     "context": "066 - Create AAS Descriptor (AssetKind=Role) - POST /shell-descriptors",
     "method": "POST",
-    "endpoint": "http://127.0.0.1:5004/shell-descriptors",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors",
     "data": "postBody/simple_ass_descriptor_8.json",
     "shouldMatch": "postBody/simple_ass_descriptor_8.json",
     "expectedStatus": 201
@@ -449,7 +449,7 @@
   {
     "context": "067 - Get AAS Descriptor (AssetKind=Role) - GET /shell-descriptors/{aasId}",
     "method": "GET",
-    "endpoint": "http://127.0.0.1:5004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy9tYXJ0aW5pc3Rjb29s",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy9tYXJ0aW5pc3Rjb29s",
     "shouldMatch": "postBody/simple_ass_descriptor_8.json",
     "expectedStatus": 200
   },
@@ -460,7 +460,7 @@
   {
     "context": "065 - Verify AAS Descriptors Empty - GET /shell-descriptors",
     "method": "GET",
-    "endpoint": "http://127.0.0.1:5004/shell-descriptors",
+    "endpoint": "http://127.0.0.1:6004/shell-descriptors",
     "shouldMatch": "expected/empty_paged_result.json",
     "expectedStatus": 200
   }
