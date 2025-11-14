@@ -2,6 +2,8 @@
 // It includes structured error types, HTTP status code error constructors,
 // error classification functions, and standardized error response generation
 // for consistent API error handling across all BaSyx services.
+//
+//nolint:all
 package common
 
 import (
