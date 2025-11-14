@@ -31,8 +31,8 @@ package submodelelements
 
 import (
 	"database/sql"
-	"errors"
 
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 )
@@ -78,7 +78,7 @@ func NewPostgreSQLSubmodelElementCollectionHandler(db *sql.DB) (*PostgreSQLSubmo
 func (p PostgreSQLSubmodelElementCollectionHandler) Create(tx *sql.Tx, submodelID string, submodelElement gen.SubmodelElement) (int, error) {
 	_, ok := submodelElement.(*gen.SubmodelElementCollection)
 	if !ok {
-		return 0, errors.New("submodelElement is not of type SubmodelElementCollection")
+		return 0, common.NewErrBadRequest("submodelElement is not of type SubmodelElementCollection")
 	}
 
 	// First, perform base SubmodelElement operations within the transaction
@@ -114,7 +114,7 @@ func (p PostgreSQLSubmodelElementCollectionHandler) Create(tx *sql.Tx, submodelI
 func (p PostgreSQLSubmodelElementCollectionHandler) CreateNested(tx *sql.Tx, submodelID string, parentID int, idShortPath string, submodelElement gen.SubmodelElement, pos int, rootSubmodelElementID int) (int, error) {
 	_, ok := submodelElement.(*gen.SubmodelElementCollection)
 	if !ok {
-		return 0, errors.New("submodelElement is not of type SubmodelElementCollection")
+		return 0, common.NewErrBadRequest("submodelElement is not of type SubmodelElementCollection")
 	}
 
 	// First, perform base SubmodelElement operations within the transaction

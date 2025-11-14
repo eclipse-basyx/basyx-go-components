@@ -32,8 +32,8 @@ package submodelelements
 
 import (
 	"database/sql"
-	"errors"
 
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 )
@@ -79,7 +79,7 @@ func NewPostgreSQLRangeHandler(db *sql.DB) (*PostgreSQLRangeHandler, error) {
 func (p PostgreSQLRangeHandler) Create(tx *sql.Tx, submodelID string, submodelElement gen.SubmodelElement) (int, error) {
 	rangeElem, ok := submodelElement.(*gen.Range)
 	if !ok {
-		return 0, errors.New("submodelElement is not of type Range")
+		return 0, common.NewErrBadRequest("submodelElement is not of type Range")
 	}
 
 	// First, perform base SubmodelElement operations within the transaction
@@ -115,7 +115,7 @@ func (p PostgreSQLRangeHandler) Create(tx *sql.Tx, submodelID string, submodelEl
 func (p PostgreSQLRangeHandler) CreateNested(tx *sql.Tx, submodelID string, parentID int, idShortPath string, submodelElement gen.SubmodelElement, pos int, rootSubmodelElementID int) (int, error) {
 	rangeElem, ok := submodelElement.(*gen.Range)
 	if !ok {
-		return 0, errors.New("submodelElement is not of type Range")
+		return 0, common.NewErrBadRequest("submodelElement is not of type Range")
 	}
 
 	// Create the nested range with the provided idShortPath using the decorated handler

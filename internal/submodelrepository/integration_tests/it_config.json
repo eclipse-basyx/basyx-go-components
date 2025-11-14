@@ -272,5 +272,33 @@
         "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlSYW5nZVN1Ym1vZGVs",
         "shouldMatch": "postBody/postSubmodelWithRangeElement.json",
         "expectedStatus": 200
+    },
+    {
+        "context": "Post Submodel with File SubmodelElement",
+        "method": "POST",
+        "endpoint": "http://localhost:6004/submodels",
+        "data": "postBody/postSubmodelWithFile.json",
+        "expectedStatus": 201
+    },
+    {
+        "context": "Get Submodel with File SubmodelElement",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9Pbmx5RmlsZVN1Ym1vZGVsX1Rlc3Q",
+        "shouldMatch": "postBody/postSubmodelWithFile.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "Get File SubmodelElement",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9Pbmx5RmlsZVN1Ym1vZGVsX1Rlc3Q/submodel-elements/DemoFile",
+        "shouldMatch": "expected/expectedFileSubmodelElement.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "Get SubmodelElements",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9Pbmx5RmlsZVN1Ym1vZGVsX1Rlc3Q/submodel-elements",
+        "shouldMatch": "expected/expectedSubmodelElements.json",
+        "expectedStatus": 200
     }
 ]

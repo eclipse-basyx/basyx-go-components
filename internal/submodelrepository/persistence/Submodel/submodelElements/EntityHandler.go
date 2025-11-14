@@ -28,8 +28,8 @@ package submodelelements
 
 import (
 	"database/sql"
-	"errors"
 
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	jsoniter "github.com/json-iterator/go"
 	_ "github.com/lib/pq" // PostgreSQL Treiber
@@ -76,7 +76,7 @@ func NewPostgreSQLEntityHandler(db *sql.DB) (*PostgreSQLEntityHandler, error) {
 func (p PostgreSQLEntityHandler) Create(tx *sql.Tx, submodelID string, submodelElement gen.SubmodelElement) (int, error) {
 	entity, ok := submodelElement.(*gen.Entity)
 	if !ok {
-		return 0, errors.New("submodelElement is not of type Entity")
+		return 0, common.NewErrBadRequest("submodelElement is not of type Entity")
 	}
 
 	// First, perform base SubmodelElement operations within the transaction
@@ -112,7 +112,7 @@ func (p PostgreSQLEntityHandler) Create(tx *sql.Tx, submodelID string, submodelE
 func (p PostgreSQLEntityHandler) CreateNested(tx *sql.Tx, submodelID string, parentID int, idShortPath string, submodelElement gen.SubmodelElement, pos int, rootSubmodelElementID int) (int, error) {
 	entity, ok := submodelElement.(*gen.Entity)
 	if !ok {
-		return 0, errors.New("submodelElement is not of type Entity")
+		return 0, common.NewErrBadRequest("submodelElement is not of type Entity")
 	}
 
 	// Create the nested entity with the provided idShortPath using the decorated handler

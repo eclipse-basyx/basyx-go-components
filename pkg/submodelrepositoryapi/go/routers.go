@@ -78,6 +78,18 @@ func NewRouter(routers ...Router) chi.Router {
 	return router
 }
 
+// Redirect is a helper payload type that signals the response encoder to send an HTTP redirect.
+type Redirect struct {
+	Location string
+}
+
+// FileDownload is a helper payload type for file downloads with custom content type.
+type FileDownload struct {
+	Content     []byte
+	ContentType string
+	Filename    string
+}
+
 // EncodeJSONResponse encodes a response as JSON and writes it to the HTTP response writer.
 //
 // This function handles both file responses (detected by *os.File type) and JSON responses.
@@ -93,6 +105,56 @@ func NewRouter(routers ...Router) chi.Router {
 //   - error: An error if encoding or writing fails, nil on success
 func EncodeJSONResponse(i interface{}, status *int, w http.ResponseWriter) error {
 	wHeader := w.Header()
+
+	// Handle Redirect payloads: set Location header and write status without a body.
+	if i != nil {
+		switch r := i.(type) {
+		case Redirect:
+			wHeader.Set("Location", r.Location)
+			if status != nil {
+				w.WriteHeader(*status)
+			} else {
+				w.WriteHeader(http.StatusFound)
+			}
+			return nil
+		case *Redirect:
+			if r != nil {
+				wHeader.Set("Location", r.Location)
+				if status != nil {
+					w.WriteHeader(*status)
+				} else {
+					w.WriteHeader(http.StatusFound)
+				}
+				return nil
+			}
+		case FileDownload:
+			wHeader.Set("Content-Type", r.ContentType)
+			if r.Filename != "" {
+				wHeader.Set("Content-Disposition", "attachment; filename="+r.Filename)
+			}
+			if status != nil {
+				w.WriteHeader(*status)
+			} else {
+				w.WriteHeader(http.StatusOK)
+			}
+			_, err := w.Write(r.Content)
+			return err
+		case *FileDownload:
+			if r != nil {
+				wHeader.Set("Content-Type", r.ContentType)
+				if r.Filename != "" {
+					wHeader.Set("Content-Disposition", "attachment; filename="+r.Filename)
+				}
+				if status != nil {
+					w.WriteHeader(*status)
+				} else {
+					w.WriteHeader(http.StatusOK)
+				}
+				_, err := w.Write(r.Content)
+				return err
+			}
+		}
+	}
 
 	f, ok := i.(*os.File)
 	if ok {

@@ -8,14 +8,20 @@
       "kind": "Instance",
       "modelType": "Submodel",
       "semanticId": {
-        "type": "ModelReference",
         "keys": [
           {
             "type": "Submodel",
             "value": "http://example.com/keys/123"
           }
-        ]
+        ],
+        "type": "ModelReference"
       }
+    },
+    {
+      "id": "http://iese.fraunhofer.de/id/sm/OnlyFileSubmodel",
+      "idShort": "OnlyFileSubmodel",
+      "kind": "Instance",
+      "modelType": "Submodel"
     }
   ]
 }

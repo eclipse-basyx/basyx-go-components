@@ -537,7 +537,7 @@
           "value": [
             {
               "category": "PARAMETER",
-              "contentType": "",
+              "contentType": "application/pdf",
               "description": [
                 {
                   "language": "en-us",
@@ -558,11 +558,12 @@
                   }
                 ],
                 "type": "ExternalReference"
-              }
+              },
+              "value": "\\x415149444241553d"
             },
             {
               "category": "PARAMETER",
-              "contentType": "",
+              "contentType": "application/pdf",
               "description": [
                 {
                   "language": "en-us",
@@ -583,7 +584,8 @@
                   }
                 ],
                 "type": "ExternalReference"
-              }
+              },
+              "value": "file:///TestFile.pdf"
             },
             {
               "category": "PARAMETER",

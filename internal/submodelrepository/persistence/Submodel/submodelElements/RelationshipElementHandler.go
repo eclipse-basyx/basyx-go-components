@@ -32,8 +32,8 @@ package submodelelements
 
 import (
 	"database/sql"
-	"errors"
 
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	jsoniter "github.com/json-iterator/go"
 	_ "github.com/lib/pq" // PostgreSQL Treiber
@@ -110,7 +110,7 @@ func NewPostgreSQLRelationshipElementHandler(db *sql.DB) (*PostgreSQLRelationshi
 func (p PostgreSQLRelationshipElementHandler) Create(tx *sql.Tx, submodelID string, submodelElement gen.SubmodelElement) (int, error) {
 	relElem, ok := submodelElement.(*gen.RelationshipElement)
 	if !ok {
-		return 0, errors.New("submodelElement is not of type RelationshipElement")
+		return 0, common.NewErrBadRequest("submodelElement is not of type RelationshipElement")
 	}
 
 	// First, perform base SubmodelElement operations within the transaction
@@ -155,7 +155,7 @@ func (p PostgreSQLRelationshipElementHandler) Create(tx *sql.Tx, submodelID stri
 func (p PostgreSQLRelationshipElementHandler) CreateNested(tx *sql.Tx, submodelID string, parentID int, idShortPath string, submodelElement gen.SubmodelElement, pos int, rootSubmodelElementID int) (int, error) {
 	relElem, ok := submodelElement.(*gen.RelationshipElement)
 	if !ok {
-		return 0, errors.New("submodelElement is not of type RelationshipElement")
+		return 0, common.NewErrBadRequest("submodelElement is not of type RelationshipElement")
 	}
 
 	// Create the nested relElem with the provided idShortPath using the decorated handler

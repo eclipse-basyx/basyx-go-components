@@ -33,7 +33,6 @@ package submodelelements
 
 import (
 	"database/sql"
-	"errors"
 	"fmt"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
@@ -84,7 +83,7 @@ func NewPostgreSQLPropertyHandler(db *sql.DB) (*PostgreSQLPropertyHandler, error
 func (p PostgreSQLPropertyHandler) Create(tx *sql.Tx, submodelID string, submodelElement gen.SubmodelElement) (int, error) {
 	property, ok := submodelElement.(*gen.Property)
 	if !ok {
-		return 0, errors.New("submodelElement is not of type Property")
+		return 0, common.NewErrBadRequest("submodelElement is not of type Property")
 	}
 
 	// First, perform base SubmodelElement operations within the transaction
@@ -121,7 +120,7 @@ func (p PostgreSQLPropertyHandler) Create(tx *sql.Tx, submodelID string, submode
 func (p PostgreSQLPropertyHandler) CreateNested(tx *sql.Tx, submodelID string, parentID int, idShortPath string, submodelElement gen.SubmodelElement, pos int, rootSubmodelElementID int) (int, error) {
 	property, ok := submodelElement.(*gen.Property)
 	if !ok {
-		return 0, errors.New("submodelElement is not of type Property")
+		return 0, common.NewErrBadRequest("submodelElement is not of type Property")
 	}
 
 	// Create the nested property with the provided idShortPath using the decorated handler

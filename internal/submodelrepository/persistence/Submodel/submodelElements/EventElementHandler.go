@@ -30,6 +30,7 @@ import (
 	"database/sql"
 	"errors"
 
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 )
@@ -75,7 +76,7 @@ func NewPostgreSQLEventElementHandler(db *sql.DB) (*PostgreSQLEventElementHandle
 func (p PostgreSQLEventElementHandler) Create(tx *sql.Tx, submodelID string, submodelElement gen.SubmodelElement) (int, error) {
 	_, ok := submodelElement.(*gen.EventElement)
 	if !ok {
-		return 0, errors.New("submodelElement is not of type EventElement")
+		return 0, common.NewErrBadRequest("submodelElement is not of type EventElement")
 	}
 	// First, perform base SubmodelElement operations within the transaction
 	id, err := p.decorated.Create(tx, submodelID, submodelElement)

@@ -215,8 +215,10 @@ func AssertSubmodelElementConstraints(obj SubmodelElement) error {
 			return err
 		}
 	}
-	if err := AssertReferenceConstraints(*obj.GetSemanticID()); err != nil {
-		return err
+	if obj.GetSemanticID() != nil {
+		if err := AssertReferenceConstraints(*obj.GetSemanticID()); err != nil {
+			return err
+		}
 	}
 	for _, el := range obj.GetSupplementalSemanticIds() {
 		if err := AssertReferenceConstraints(el); err != nil {

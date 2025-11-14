@@ -36,8 +36,8 @@ package submodelelements
 
 import (
 	"database/sql"
-	"errors"
 
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	jsoniter "github.com/json-iterator/go"
 	_ "github.com/lib/pq" // PostgreSQL Treiber
@@ -117,7 +117,7 @@ func NewPostgreSQLReferenceElementHandler(db *sql.DB) (*PostgreSQLReferenceEleme
 func (p PostgreSQLReferenceElementHandler) Create(tx *sql.Tx, submodelID string, submodelElement gen.SubmodelElement) (int, error) {
 	refElem, ok := submodelElement.(*gen.ReferenceElement)
 	if !ok {
-		return 0, errors.New("submodelElement is not of type ReferenceElement")
+		return 0, common.NewErrBadRequest("submodelElement is not of type ReferenceElement")
 	}
 
 	// First, perform base SubmodelElement operations within the transaction
@@ -174,7 +174,7 @@ func (p PostgreSQLReferenceElementHandler) Create(tx *sql.Tx, submodelID string,
 func (p PostgreSQLReferenceElementHandler) CreateNested(tx *sql.Tx, submodelID string, parentID int, idShortPath string, submodelElement gen.SubmodelElement, pos int, rootSubmodelElementID int) (int, error) {
 	refElem, ok := submodelElement.(*gen.ReferenceElement)
 	if !ok {
-		return 0, errors.New("submodelElement is not of type ReferenceElement")
+		return 0, common.NewErrBadRequest("submodelElement is not of type ReferenceElement")
 	}
 
 	// Create the nested refElem with the provided idShortPath using the decorated handler
