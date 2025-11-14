@@ -35,6 +35,7 @@ import (
 
 	"github.com/doug-martin/goqu/v9"
 	"github.com/doug-martin/goqu/v9/exp"
+	builder "github.com/eclipse-basyx/basyx-go-components/internal/common/builder"
 )
 
 // LogicalExpression represents a logical expression tree for AAS access control rules.
@@ -271,6 +272,55 @@ func ParseAASQLFieldToSQLColumn(field string) string {
 		return "semantic_id_reference_key.value"
 	case "$sm#semanticId.keys[].type":
 		return "semantic_id_reference_key.type"
+	case "$aasdesc#idShort":
+		return "aas_descriptor.id_short"
+	case "$aasdesc#id":
+		return "aas_descriptor.id"
+	case "$aasdesc#assetKind":
+		return "aas_descriptor.asset_kind"
+	case "$aasdesc#assetType":
+		return "aas_descriptor.asset_type"
+	case "$aasdesc#globalAssetId":
+		return "aas_descriptor.global_asset_id"
+	case "$aasdesc#specificAssetIds[].externalSubjectId":
+		return "external_subject_reference_key.value"
+	case "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value":
+		return "external_subject_reference_key.value"
+	case "$aasdesc#specificAssetIds[].externalSubjectId.keys[].type":
+		return "external_subject_reference_key.type"
+	case "$aasdesc#endpoints[].protocolinformation.href":
+		return "aas_descriptor_endpoint.href"
+	case "$aasdesc#endpoints[].interface":
+		return "aas_descriptor_endpoint.interface"
+	case "$aasdesc#submodelDescriptors[].idShort":
+		return "submodel_descriptor.id_short"
+	case "$aasdesc#submodelDescriptors[].id":
+		return "submodel_descriptor.id"
+	case "$aasdesc#submodelDescriptors[].semanticId":
+		return "aasdesc_submodel_descriptor_semantic_id_reference_key.value"
+	case "$aasdesc#submodelDescriptors[].semanticId.keys[].value":
+		return "aasdesc_submodel_descriptor_semantic_id_reference_key.value"
+	case "$aasdesc#submodelDescriptors[].semanticId.keys[].type":
+		return "aasdesc_submodel_descriptor_semantic_id_reference_key.type"
+	case "$aasdesc#submodelDescriptors[].endpoints[].interface":
+		return "submodel_descriptor_endpoint.interface"
+	case "$aasdesc#submodelDescriptors[].endpoints[].protocolinformation.href":
+		return "submodel_descriptor_endpoint.href"
+	case "$smdesc#idShort":
+		return "submodel_descriptor.id_short"
+	case "$smdesc#id":
+		return "submodel_descriptor.id"
+	case "$smdesc#semanticId":
+		return "smdesc_semantic_id_reference_key.value"
+	case "$smdesc#semanticId.keys[].value":
+		return "smdesc_semantic_id_reference_key.value"
+	case "$smdesc#semanticId.keys[].type":
+		return "smdesc_semantic_id_reference_key.type"
+	case "$smdesc#endpoints[].interface":
+		return "submodel_descriptor_endpoint.interface"
+	case "$smdesc#endpoints[].protocolinformation.href":
+		return "submodel_descriptor_endpoint.href"
+
 	}
 
 	if strings.HasPrefix(field, "$sm#semanticId.keys[") && strings.HasSuffix(field, "].value") {
@@ -278,6 +328,63 @@ func ParseAASQLFieldToSQLColumn(field string) string {
 	}
 	if strings.HasPrefix(field, "$sm#semanticId.keys[") && strings.HasSuffix(field, "].type") {
 		return "semantic_id_reference_key.type"
+	}
+	if strings.HasPrefix(field, "$aasdesc#specificAssetIds") && strings.Contains(field, ".externalSubjectId.keys[") && strings.HasSuffix(field, "].value") {
+		return "external_subject_reference_key.value"
+	}
+	if strings.HasPrefix(field, "$aasdesc#specificAssetIds") && strings.Contains(field, ".externalSubjectId.keys[") && strings.HasSuffix(field, "].type") {
+		return "external_subject_reference_key.type"
+	}
+
+	if strings.HasPrefix(field, "$smdesc#semanticId.keys[") && strings.HasSuffix(field, "].value") {
+		return "smdesc_semantic_id_reference_key.value"
+	}
+	if strings.HasPrefix(field, "$smdesc#semanticId.keys[") && strings.HasSuffix(field, "].type") {
+		return "smdesc_semantic_id_reference_key.type"
+	}
+	if strings.HasPrefix(field, "$aasdesc#submodelDescriptors") && strings.Contains(field, ".semanticId.keys[") && strings.HasSuffix(field, "].value") {
+		return "aasdesc_submodel_descriptor_semantic_id_reference_key.value"
+	}
+	if strings.HasPrefix(field, "$aasdesc#submodelDescriptors") && strings.Contains(field, ".semanticId.keys[") && strings.HasSuffix(field, "].type") {
+		return "aasdesc_submodel_descriptor_semantic_id_reference_key.type"
+	}
+
+	// Handle indexed endpoints for aas_descriptor
+	if strings.HasPrefix(field, "$aasdesc#endpoints[") && strings.Contains(field, "].interface") {
+		return "aas_descriptor_endpoint.interface"
+	}
+	if strings.HasPrefix(field, "$aasdesc#endpoints[") && strings.Contains(field, "].protocolinformation.href") {
+		return "aas_descriptor_endpoint.href"
+	}
+
+	// Handle indexed submodelDescriptors fields
+	if strings.HasPrefix(field, "$aasdesc#submodelDescriptors[") && strings.Contains(field, "].idShort") {
+		return "submodel_descriptor.id_short"
+	}
+	if strings.HasPrefix(field, "$aasdesc#submodelDescriptors[") && strings.Contains(field, "].id") {
+		return "submodel_descriptor.id"
+	}
+	if strings.HasPrefix(field, "$aasdesc#submodelDescriptors[") && strings.Contains(field, "].semanticId.type") {
+		return "aasdesc_submodel_descriptor_semantic_id_reference_key.type"
+	}
+	if strings.HasPrefix(field, "$aasdesc#submodelDescriptors[") && strings.Contains(field, "].semanticId.value") {
+		return "aasdesc_submodel_descriptor_semantic_id_reference_key.value"
+	}
+
+	// Handle indexed submodelDescriptors endpoints
+	if strings.HasPrefix(field, "$aasdesc#submodelDescriptors[") && strings.Contains(field, "].endpoints[") && strings.Contains(field, "].interface") {
+		return "submodel_descriptor_endpoint.interface"
+	}
+	if strings.HasPrefix(field, "$aasdesc#submodelDescriptors[") && strings.Contains(field, "].endpoints[") && strings.Contains(field, "].protocolinformation.href") {
+		return "submodel_descriptor_endpoint.href"
+	}
+
+	// Handle indexed smdesc endpoints
+	if strings.HasPrefix(field, "$smdesc#endpoints[") && strings.Contains(field, "].interface") {
+		return "submodel_descriptor_endpoint.interface"
+	}
+	if strings.HasPrefix(field, "$smdesc#endpoints[") && strings.Contains(field, "].protocolinformation.href") {
+		return "submodel_descriptor_endpoint.href"
 	}
 
 	return field
@@ -305,6 +412,12 @@ func ParseAASQLFieldToSQLColumn(field string) string {
 //   - error: An error if the operands are invalid, types don't match, or the operation is unsupported
 func HandleComparison(leftOperand, rightOperand *Value, operation string) (exp.Expression, error) {
 
+	// Normalize shorthand semanticId / descriptor shorthand fields to explicit keys[0].value
+	// (e.g. $aasdesc#specificAssetIds[].externalSubjectId ->
+	//  $aasdesc#specificAssetIds[].externalSubjectId.keys[0].value)
+	normalizeSemanticShorthand(leftOperand)
+	normalizeSemanticShorthand(rightOperand)
+
 	// Convert both operands
 	leftSQL, err := toSQLComponent(leftOperand, "left")
 	if err != nil {
@@ -324,44 +437,164 @@ func HandleComparison(leftOperand, rightOperand *Value, operation string) (exp.E
 		}
 	}
 
-	// Check if either operand is $sm#semanticID field
-	isLeftShorthandSemanticID := isSemanticIDShorthandField(leftOperand)
-	isRightShorthandSemanticID := isSemanticIDShorthandField(rightOperand)
-
-	isLeftSpecificKeyValueSemanticID := isSemanticIDSpecificKeyValueField(leftOperand, false)
-	isRightSpecificKeyValueSemanticID := isSemanticIDSpecificKeyValueField(rightOperand, false)
-
-	isLeftSpecificKeyTypeSemanticID := isSemanticIDSpecificKeyValueField(leftOperand, true)
-	isRightSpecificKeyTypeSemanticID := isSemanticIDSpecificKeyValueField(rightOperand, true)
-
 	// Build the comparison expression
 	comparisonExpr, err := buildComparisonExpression(leftSQL, rightSQL, operation)
 	if err != nil {
 		return nil, err
 	}
 
-	// If semantic_id is involved, add position = 0 constraint
-	if isLeftShorthandSemanticID || isRightShorthandSemanticID {
-		positionConstraint := goqu.I("semantic_id_reference_key.position").Eq(0)
-		return goqu.And(comparisonExpr, positionConstraint), nil
-	} else if (isLeftSpecificKeyValueSemanticID || isRightSpecificKeyValueSemanticID) || (isLeftSpecificKeyTypeSemanticID || isRightSpecificKeyTypeSemanticID) {
+	// Handle position constraints for fields with array indices
+	// This applies to: semanticId.keys[], externalSubjectId.keys[], endpoints[], specificAssetIds[], submodelDescriptors[]
 
-		operandToUse := leftOperand
-		if isRightSpecificKeyValueSemanticID || isRightSpecificKeyTypeSemanticID {
-			operandToUse = rightOperand
-		}
+	// Check if either operand is a semanticId / descriptor specific key field
+	isLeftSpecificKeyValueSemanticID := isSemanticIDSpecificKeyValueField(leftOperand, false)
+	isRightSpecificKeyValueSemanticID := isSemanticIDSpecificKeyValueField(rightOperand, false)
 
-		start, end := getStartAndEndIndicesOfBrackets(operandToUse)
-		if isNotWildcardAndValidIndices(start, end) {
-			positionStrOnError, position, err := getPositionAsInteger(operandToUse, start, end)
-			if err == nil {
-				positionConstraint := goqu.I("semantic_id_reference_key.position").Eq(position)
-				return goqu.And(comparisonExpr, positionConstraint), nil
+	isLeftSpecificKeyTypeSemanticID := isSemanticIDSpecificKeyValueField(leftOperand, true)
+	isRightSpecificKeyTypeSemanticID := isSemanticIDSpecificKeyValueField(rightOperand, true)
+
+	// SpecificAssetId.externalSubjectId keys
+	isLeftSpecificAssetExternalValue := isSpecificAssetExternalSubjectField(leftOperand, false)
+	isRightSpecificAssetExternalValue := isSpecificAssetExternalSubjectField(rightOperand, false)
+	isLeftSpecificAssetExternalType := isSpecificAssetExternalSubjectField(leftOperand, true)
+	isRightSpecificAssetExternalType := isSpecificAssetExternalSubjectField(rightOperand, true) // Check if either operand has array indices
+	hasArrayIndex := isArrayFieldWithIndex(leftOperand) || isArrayFieldWithIndex(rightOperand)
+
+	if !hasArrayIndex {
+		// No arrays involved, return simple comparison
+		return comparisonExpr, nil
+	}
+
+	// Determine which operand to use for extracting position
+	operandToUse := leftOperand
+	if isRightSpecificKeyValueSemanticID || isRightSpecificKeyTypeSemanticID || isRightSpecificAssetExternalValue || isRightSpecificAssetExternalType || (rightOperand.IsField() && isArrayFieldWithIndex(rightOperand)) {
+		operandToUse = rightOperand
+	}
+
+	fieldStr := string(*operandToUse.Field)
+
+	// Unified array position constraint logic
+	var positionConstraints []exp.Expression
+
+	tokens := builder.TokenizeField(fieldStr)
+	for _, token := range tokens {
+		if arrayToken, ok := token.(builder.ArrayToken); ok {
+			if arrayToken.Index >= 0 {
+				var alias string
+				if arrayToken.Name == "keys" && ((isLeftSpecificKeyValueSemanticID || isRightSpecificKeyValueSemanticID) ||
+					(isLeftSpecificKeyTypeSemanticID || isRightSpecificKeyTypeSemanticID) ||
+					(isLeftSpecificAssetExternalValue || isRightSpecificAssetExternalValue) ||
+					(isLeftSpecificAssetExternalType || isRightSpecificAssetExternalType)) {
+					alias = getReferenceKeyAlias(fieldStr)
+				} else {
+					alias = getArrayFieldAlias(fieldStr)
+				}
+				if alias != "" {
+					positionConstraints = append(positionConstraints, goqu.I(alias+".position").Eq(arrayToken.Index))
+				} else {
+					return nil, fmt.Errorf("unknown array alias for field: %s", fieldStr)
+				}
 			}
-			return nil, fmt.Errorf("invalid position in semanticID key field: %s", positionStrOnError)
 		}
 	}
+
+	// Add all position constraints
+	if len(positionConstraints) > 0 {
+		allConstraints := append([]exp.Expression{comparisonExpr}, positionConstraints...)
+		return goqu.And(allConstraints...), nil
+	}
+
 	return comparisonExpr, nil
+}
+
+// normalizeSemanticShorthand expands known shorthand fields to their explicit keys[0].value form.
+// This ensures later logic can uniformly handle position constraints on reference_key.position.
+func normalizeSemanticShorthand(operand *Value) {
+	if operand == nil || !operand.IsField() || operand.Field == nil {
+		return
+	}
+	field := string(*operand.Field)
+	// Already explicit -> nothing to do
+	if strings.Contains(field, ".keys[") {
+		return
+	}
+	if strings.HasSuffix(field, ".semanticId") || strings.HasSuffix(field, ".externalSubjectId") {
+		field = field + ".keys[0].value"
+		*operand.Field = ModelStringPattern(field)
+	}
+
+}
+
+// getReferenceKeyAlias returns the alias used for the reference_key table depending on the field context.
+// The alias must match the aliases used when joining the reference_key table elsewhere in the query builder.
+func getReferenceKeyAlias(field string) string {
+	if strings.Contains(field, "specificAssetIds") && strings.Contains(field, "externalSubjectId") {
+		return "external_subject_reference_key"
+	}
+	if strings.HasPrefix(field, "$smdesc#") {
+		return "smdesc_semantic_id_reference_key"
+	}
+	if strings.Contains(field, "submodelDescriptors") {
+		return "aasdesc_submodel_descriptor_semantic_id_reference_key"
+	}
+	if strings.Contains(field, "$sm#semanticId") {
+		return "semantic_id_reference_key"
+	}
+	// default for submodel semanticId and similar
+	return "semantic_id_reference_key"
+}
+
+// isSpecificAssetExternalSubjectField checks for specificAssetId.externalSubjectId.keys[...] patterns
+func isSpecificAssetExternalSubjectField(operand *Value, isTypeCheck bool) bool {
+	suffix := "value"
+	if isTypeCheck {
+		suffix = "type"
+	}
+	if !operand.IsField() || operand.Field == nil {
+		return false
+	}
+	field := string(*operand.Field)
+	return strings.HasPrefix(field, "$aasdesc#specificAssetIds") && strings.Contains(field, ".externalSubjectId.keys[") && strings.HasSuffix(field, "]."+suffix)
+}
+
+// isArrayFieldWithIndex checks if a field contains an array with a specific index or wildcard
+func isArrayFieldWithIndex(operand *Value) bool {
+	if !operand.IsField() || operand.Field == nil {
+		return false
+	}
+	field := string(*operand.Field)
+	return strings.Contains(field, "[")
+}
+
+// getArrayFieldAlias returns the appropriate alias for position constraints based on the array field type
+func getArrayFieldAlias(field string) string {
+	// Handle endpoints arrays
+	if strings.Contains(field, "#endpoints[") {
+		if strings.HasPrefix(field, "$aasdesc#endpoints[") {
+			return "aas_descriptor_endpoint"
+		}
+		if strings.HasPrefix(field, "$smdesc#endpoints[") {
+			return "submodel_descriptor_endpoint"
+		}
+		if strings.Contains(field, "submodelDescriptors") && strings.Contains(field, ".endpoints[") {
+			return "submodel_descriptor_endpoint"
+		}
+		if strings.Contains(field, "submodelDescriptors") && strings.Contains(field, ".semanticId") {
+			return "submodel_descriptor_semanticId"
+		}
+	}
+
+	// Handle specificAssetIds arrays
+	if strings.Contains(field, "specificAssetIds[") {
+		return "specific_asset_id"
+	}
+
+	// Handle submodelDescriptors arrays
+	if strings.Contains(field, "submodelDescriptors[") {
+		return "submodel_descriptor"
+	}
+
+	return ""
 }
 
 func getPositionAsInteger(operandToUse *Value, start int, end int) (string, int, error) {

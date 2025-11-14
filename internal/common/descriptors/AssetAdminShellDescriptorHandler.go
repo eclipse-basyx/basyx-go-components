@@ -52,6 +52,7 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/builder"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	persistence_utils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
 	"golang.org/x/sync/errgroup"
 )
@@ -424,6 +425,28 @@ func ListAssetAdministrationShellDescriptors(
 			aas.Col(colDisplayNameID),
 			aas.Col(colDescriptionID),
 		)
+
+	sai := goqu.T("specific_asset_id").As("sai")
+	rs := goqu.T("reference").As("rs")
+	rsk := goqu.T("reference_key").As("rsk")
+
+	existsDataset := d.
+		From(sai).
+		Join(rs, goqu.On(rs.Col("id").Eq(sai.Col("external_subject_ref")))).
+		Join(rsk, goqu.On(rsk.Col("reference_id").Eq(rs.Col("id"))))
+		// Where(
+		// 	sai.Col("descriptor_id").Eq(aas.Col(colDescriptorID)),
+		// 	rsk.Col("position").Eq(0),
+		// 	rsk.Col("value").Eq("asd"),
+		// )
+
+	ds = ds.Where(
+		goqu.L("EXISTS (?)", existsDataset),
+	)
+	p := auth.FromFilterFromFile()
+	wc, err := p.Formula.EvaluateToExpression()
+	fmt.Println("wc")
+	fmt.Println(existsDataset.Where(wc).ToSQL())
 	if cursor != "" {
 		ds = ds.Where(aas.Col(colAASID).Gte(cursor))
 	}

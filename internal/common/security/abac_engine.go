@@ -74,6 +74,7 @@ type QueryFilter struct {
 	// backend-applicable constraint derived from the logical expression.
 	// It is intended to be applied by the backend persistence layer.
 	Formula grammar.LogicalExpression
+	Filter  *grammar.AccessPermissionRuleFILTER
 }
 
 // DecisionCode represents the result of an authorization check.
@@ -146,7 +147,7 @@ func (m *AccessModel) AuthorizeWithFilter(in EvalInput) (ok bool, code DecisionC
 				}
 			} else {
 				fmt.Println("got a expression from LE")
-				qf = &QueryFilter{Formula: adapted}
+				qf = &QueryFilter{Formula: adapted, Filter: r.FILTER}
 
 			}
 		}

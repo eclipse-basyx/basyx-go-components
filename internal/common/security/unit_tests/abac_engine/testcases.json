@@ -78,5 +78,10 @@
     "input": "input/with_descriptor_object_single_multiple_with_route.json",
     "expected": "expected/access_allowed.json",
     "eval": "eval/get_shellDescriptors_admin.json"
+  },
+  {
+    "input": "input/monster.json",
+    "expected": "expected/access_allowed_monster.json",
+    "eval": "eval/get_shellDescriptors_admin.json"
   }
 ]

@@ -1,0 +1,74 @@
+{
+  "Formula": {
+    "$and": [
+      {
+        "$and": [
+          {
+            "$eq": [
+              {
+                "$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[3].value"
+              },
+              {
+                "$strVal": "somevalue"
+              }
+            ]
+          },
+          {
+            "$eq": [
+              {
+                "$field": "$aasdesc#endpoints[].protocolinformation.href"
+              },
+              {
+                "$strVal": "https://test.de"
+              }
+            ]
+          },
+          {
+            "$eq": [
+              {
+                "$field": "$aasdesc#submodelDescriptors[0].semanticId.type"
+              },
+              {
+                "$strVal": "Type"
+              }
+            ]
+          },
+          {
+            "$eq": [
+              {
+                "$field": "$aasdesc#submodelDescriptors[0].endpoints[].interface"
+              },
+              {
+                "$strVal": "AC 3.0"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "$or": [
+          {
+            "$eq": [
+              {
+                "$field": "$aasdesc#id"
+              },
+              {
+                "$strVal": "https://hamburg.de"
+              }
+            ]
+          },
+          {
+            "$eq": [
+              {
+                "$field": "$aasdesc#id"
+              },
+              {
+                "$strVal": "https://bremen.de"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

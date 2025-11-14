@@ -32,12 +32,15 @@ package auth
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/discoveryapi"
+	jsoniter "github.com/json-iterator/go"
 )
 
 // ABACSettings defines the configuration used to enable and control
@@ -158,4 +161,18 @@ func FromFilterCtx(ctx context.Context) *QueryFilter {
 		}
 	}
 	return nil
+}
+
+func FromFilterFromFile() *QueryFilter {
+	var query *QueryFilter
+	path := "monster.json"
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		fmt.Errorf("read input: %v", err)
+	}
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
+	if err := json.Unmarshal(raw, &query); err != nil {
+		fmt.Errorf("unmarshal input: %v", err)
+	}
+	return query
 }

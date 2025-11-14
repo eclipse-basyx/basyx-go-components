@@ -1,0 +1,29 @@
+(
+    (
+        (
+            "external_subject_reference_key"."value" = 'somevalue'
+            AND
+            ("external_subject_reference_key"."position" = 3)
+        )
+        AND
+        "aas_descriptor_endpoint"."href" = 'https://test.de'
+        AND
+        (
+            "$aasdesc#submodelDescriptors[0]"."semanticId"."type" = 'Type'
+            AND
+            ("submodel_descriptor"."position" = 0)
+        )
+        AND
+        (
+            "submodel_descriptor_endpoint"."interface" = 'AC 3.0'
+            AND
+            ("submodel_descriptor"."position" = 0)
+        )
+    )
+    AND
+    (
+        "aas_descriptor"."id" = 'https://hamburg.de'
+        OR
+        "aas_descriptor"."id" = 'https://bremen.de"
+    )
+) 

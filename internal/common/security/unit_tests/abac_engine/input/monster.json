@@ -1,0 +1,154 @@
+{
+  "AllAccessPermissionRules": {
+    "rules": [
+      {
+        "ACL": {
+          "ACCESS": "ALLOW",
+          "RIGHTS": ["READ","UPDATE"],
+          "ATTRIBUTES": [{"CLAIM": "role"}]
+        },
+        "OBJECTS": [{"DESCRIPTOR" : "$aasdesc(\"https://hamburg.de\")"},{"DESCRIPTOR" : "$aasdesc(\"https://bremen.de\")"}],
+        "FORMULA": { 
+          "$and": [
+            { 
+              "$eq": [ 
+                { 
+                  "$attribute": { "CLAIM": "role" } 
+                }, 
+                { 
+                  "$strVal": "admin" 
+                } 
+              ] 
+            },
+            {
+              "$eq": [
+                {
+                  "$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[3].value"
+                },
+                {
+                  "$strVal": "somevalue"
+                }
+              ]
+            },
+            {
+              "$eq": [
+                {
+                  "$field": "$aasdesc#endpoints[].protocolinformation.href"
+                },
+                {
+                  "$strVal": "https://test.de"
+                }
+              ]
+            },
+            {
+              "$eq": [
+                {
+                  "$field": "$aasdesc#submodelDescriptors[0].semanticId.type"
+                },
+                {
+                  "$strVal": "Type"
+                }
+              ]
+            },
+            {
+              "$eq": [
+                {
+                  "$field": "$aasdesc#submodelDescriptors[0].endpoints[].interface"
+                },
+                {
+                  "$strVal": "AC 3.0"
+                }
+              ]
+            }
+          ]
+        },
+        "FRAGMENT": "$aasdesc#assetInformation.specificAssetIds[]",
+        "CONDITION": {
+            "$or": [
+                {
+                "$match": [
+                    {
+                    "$eq": [
+                        {
+                        "$field": "$aasdesc#specificAssetIds[].name"
+                        },
+                        {
+                        "$strVal": "manufacturerPartId"
+                        }
+                    ]
+                    },
+                    {
+                    "$eq": [
+                        {
+                        "$field": "$aasdesc#specificAssetIds[].value"
+                        },
+                        {
+                        "$strVal": "99991"
+                        }
+                    ]
+                    }
+                ]
+                },
+                {
+                "$match": [
+                    {
+                    "$eq": [
+                        {
+                        "$field": "$aasdesc#specificAssetIds[].name"
+                        },
+                        {
+                        "$strVal": "customerPartId"
+                        }
+                    ]
+                    },
+                    {
+                    "$eq": [
+                        {
+                        "$field": "$aasdesc#specificAssetIds[].value"
+                        },
+                        {
+                        "$strVal": "ACME001"
+                        }
+                    ]
+                    }
+                ]
+                },
+                {
+                "$eq": [
+                    {
+                    "$field": "$aasdesc#specificAssetIds[].name"
+                    },
+                    {
+                    "$strVal": "partInstanceId"
+                    }
+                ]
+                },
+                {
+                "$eq": [
+                    {
+                    "$field": "$aasdesc#specificAssetIds[].externalSubjectId"
+                    },
+                    {
+                    "$attribute": {
+                        "CLAIM": "BusinessPartnerNumber"
+                    }
+                    }
+                ]
+                },
+                {
+                "$eq": [
+                    {
+                    "$field": "$aasdesc#specificAssetIds[].externalSubjectId"
+                    },
+                    {
+                    "$strVal": "PUBLIC_READABLE"
+                    }
+                ]
+                }
+            ]
+        }
+
+      }
+    ]
+  }
+}
