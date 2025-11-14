@@ -166,7 +166,9 @@ func uploadFileAttachment(endpoint string, filePath string, fileName string) (in
 
 	// Add the fileName field if provided
 	if fileName != "" {
-		_ = writer.WriteField("fileName", fileName)
+		if err := writer.WriteField("fileName", fileName); err != nil {
+			return 0, fmt.Errorf("failed to write fileName field: %v", err)
+		}
 	}
 
 	err = writer.Close()
