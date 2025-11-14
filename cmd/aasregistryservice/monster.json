@@ -6,7 +6,7 @@
           {
             "$eq": [
               {
-                "$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[3].value"
+                "$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[0].value"
               },
               {
                 "$strVal": "somevalue"
@@ -26,20 +26,20 @@
           {
             "$eq": [
               {
-                "$field": "$aasdesc#submodelDescriptors[0].semanticId.type"
+                "$field": "$aasdesc#submodelDescriptors[].semanticId.type"
               },
               {
-                "$strVal": "Type"
+                "$strVal": "ExternalReference"
               }
             ]
           },
           {
             "$eq": [
               {
-                "$field": "$aasdesc#submodelDescriptors[0].endpoints[].interface"
+                "$field": "$aasdesc#submodelDescriptors[].endpoints[].interface"
               },
               {
-                "$strVal": "AC 3.0"
+                "$strVal": "AC 3.02"
               }
             ]
           }

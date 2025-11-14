@@ -298,6 +298,8 @@ func ParseAASQLFieldToSQLColumn(field string) string {
 		return "submodel_descriptor.id"
 	case "$aasdesc#submodelDescriptors[].semanticId":
 		return "aasdesc_submodel_descriptor_semantic_id_reference_key.value"
+	case "$aasdesc#submodelDescriptors[].semanticId.type":
+		return "aasdesc_submodel_descriptor_semantic_id_reference.type"
 	case "$aasdesc#submodelDescriptors[].semanticId.keys[].value":
 		return "aasdesc_submodel_descriptor_semantic_id_reference_key.value"
 	case "$aasdesc#submodelDescriptors[].semanticId.keys[].type":
