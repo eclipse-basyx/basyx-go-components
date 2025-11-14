@@ -847,32 +847,23 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelElementByPathSubmodelRepo(c
 // Returns:
 //   - gen.ImplResponse: Response indicating successful update (HTTP 204)
 //   - error: Error if the update fails
-func (s *SubmodelRepositoryAPIAPIService) PutSubmodelElementByPathSubmodelRepo(_ /*ctx*/ context.Context, _ /*submodelIdentifier*/ string, _ /*idShortPath*/ string, _ /*submodelElement*/ gen.SubmodelElement, _ /*level*/ string) (gen.ImplResponse, error) {
-	// TODO - update PutSubmodelElementByPathSubmodelRepo with the required logic for this service method.
-	// Add api_submodel_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
+func (s *SubmodelRepositoryAPIAPIService) PutSubmodelElementByPathSubmodelRepo(_ /*ctx*/ context.Context, submodelIdentifier string, idShortPath string, submodelElement gen.SubmodelElement, _ /*level*/ string) (gen.ImplResponse, error) {
+	// Decode the submodel identifier from base64
+	decodedSubmodelID, err := base64.RawURLEncoding.DecodeString(submodelIdentifier)
+	if err != nil {
+		return gen.Response(http.StatusBadRequest, gen.Result{Messages: []gen.Message{{Text: "Invalid submodel identifier"}}}), nil
+	}
 
-	// TODO: Uncomment the next line to return response Response(204, {}) or use other options such as http.Ok ...
-	// return gen.Response(204, nil),nil
+	// Update the submodel element using the backend
+	err = s.submodelBackend.UpdateSubmodelElement(string(decodedSubmodelID), idShortPath, submodelElement)
+	if err != nil {
+		if common.IsErrNotFound(err) {
+			return gen.Response(http.StatusNotFound, gen.Result{Messages: []gen.Message{{Text: err.Error()}}}), nil
+		}
+		return gen.Response(http.StatusInternalServerError, gen.Result{Messages: []gen.Message{{Text: err.Error()}}}), nil
+	}
 
-	// TODO: Uncomment the next line to return response Response(400, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(400, Result{}), nil
-
-	// TODO: Uncomment the next line to return response Response(401, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(401, Result{}), nil
-
-	// TODO: Uncomment the next line to return response Response(403, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(403, Result{}), nil
-
-	// TODO: Uncomment the next line to return response Response(404, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(404, Result{}), nil
-
-	// TODO: Uncomment the next line to return response Response(500, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(500, Result{}), nil
-
-	// TODO: Uncomment the next line to return response Response(0, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(0, Result{}), nil
-
-	return gen.Response(http.StatusNotImplemented, nil), errors.New("PutSubmodelElementByPathSubmodelRepo method not implemented")
+	return gen.Response(http.StatusNoContent, nil), nil
 }
 
 // PostSubmodelElementByPathSubmodelRepo creates a new submodel element at a specified path within submodel elements hierarchy.
@@ -1224,6 +1215,12 @@ func (s *SubmodelRepositoryAPIAPIService) GetFileByPathSubmodelRepo(ctx context.
 	}
 
 	fileURL := fileValue.Value
+	// Check if value is empty
+	if fileURL == "" {
+		timestamp := common.GetCurrentTimestamp()
+		return gen.Response(http.StatusNotFound, []common.ErrorHandler{*common.NewErrorHandler("Error", errors.New("file value is empty"), "404", "SMREPO-GetFileByPathSubmodelRepo-404-NotFound", string(timestamp))}), nil
+	}
+
 	if strings.HasPrefix(fileURL, "http://") || strings.HasPrefix(fileURL, "https://") {
 		// Redirect to the file URL
 		return gen.Response(http.StatusFound, openapi.Redirect{Location: fileURL}), nil
@@ -1299,31 +1296,22 @@ func (s *SubmodelRepositoryAPIAPIService) PutFileByPathSubmodelRepo(ctx context.
 //
 //nolint:revive
 func (s *SubmodelRepositoryAPIAPIService) DeleteFileByPathSubmodelRepo(ctx context.Context, submodelIdentifier string, idShortPath string) (gen.ImplResponse, error) {
-	// TODO - update DeleteFileByPathSubmodelRepo with the required logic for this service method.
-	// Add api_submodel_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
+	// Decode the submodel identifier from base64
+	decodedSubmodelID, err := base64.RawURLEncoding.DecodeString(submodelIdentifier)
+	if err != nil {
+		return gen.Response(http.StatusBadRequest, gen.Result{Messages: []gen.Message{{Text: "Invalid submodel identifier"}}}), nil
+	}
 
-	// TODO: Uncomment the next line to return response Response(200, {}) or use other options such as http.Ok ...
-	// return gen.Response(200, nil),nil
+	// Delete the file attachment
+	err = s.submodelBackend.DeleteFileAttachment(string(decodedSubmodelID), idShortPath)
+	if err != nil {
+		if common.IsErrNotFound(err) {
+			return gen.Response(http.StatusNotFound, gen.Result{Messages: []gen.Message{{Text: err.Error()}}}), nil
+		}
+		return gen.Response(http.StatusInternalServerError, gen.Result{Messages: []gen.Message{{Text: err.Error()}}}), nil
+	}
 
-	// TODO: Uncomment the next line to return response Response(400, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(400, Result{}), nil
-
-	// TODO: Uncomment the next line to return response Response(401, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(401, Result{}), nil
-
-	// TODO: Uncomment the next line to return response Response(403, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(403, Result{}), nil
-
-	// TODO: Uncomment the next line to return response Response(404, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(404, Result{}), nil
-
-	// TODO: Uncomment the next line to return response Response(500, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(500, Result{}), nil
-
-	// TODO: Uncomment the next line to return response Response(0, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(0, Result{}), nil
-
-	return gen.Response(http.StatusNotImplemented, nil), errors.New("DeleteFileByPathSubmodelRepo method not implemented")
+	return gen.Response(http.StatusOK, nil), nil
 }
 
 // InvokeOperationSubmodelRepo - Synchronously or asynchronously invokes an Operation at a specified path

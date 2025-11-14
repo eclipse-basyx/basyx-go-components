@@ -137,7 +137,7 @@ func (p PostgreSQLFileHandler) CreateNested(tx *sql.Tx, submodelID string, paren
 }
 
 // Update modifies an existing File submodel element in the database.
-// Currently delegates to the decorated handler for base SubmodelElement updates.
+// If the file value is changed and an OID exists, the old Large Object is deleted.
 //
 // Parameters:
 //   - idShortOrPath: The idShort or path identifier of the element to update
@@ -146,6 +146,93 @@ func (p PostgreSQLFileHandler) CreateNested(tx *sql.Tx, submodelID string, paren
 // Returns:
 //   - error: Error if the update operation fails
 func (p PostgreSQLFileHandler) Update(idShortOrPath string, submodelElement gen.SubmodelElement) error {
+	file, ok := submodelElement.(*gen.File)
+	if !ok {
+		return common.NewErrBadRequest("submodelElement is not of type File")
+	}
+
+	dialect := goqu.Dialect("postgres")
+
+	// Get the current file element ID and value
+	var elementID int64
+	var currentValue string
+	query, args, err := dialect.From("submodel_element").
+		InnerJoin(
+			goqu.T("file_element"),
+			goqu.On(goqu.I("submodel_element.id").Eq(goqu.I("file_element.id"))),
+		).
+		Select("submodel_element.id", "file_element.value").
+		Where(goqu.C("idshort_path").Eq(idShortOrPath)).
+		ToSQL()
+	if err != nil {
+		return fmt.Errorf("failed to build query: %w", err)
+	}
+
+	err = p.db.QueryRow(query, args...).Scan(&elementID, &currentValue)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return common.NewErrNotFound("file element not found")
+		}
+		return fmt.Errorf("failed to get current file element: %w", err)
+	}
+
+	// Check if the value has changed
+	if currentValue != file.Value {
+		// Check if there's an OID in file_data for this element
+		var oldOID sql.NullInt64
+		fileDataQuery, fileDataArgs, err := dialect.From("file_data").
+			Select("file_oid").
+			Where(goqu.C("id").Eq(elementID)).
+			ToSQL()
+		if err != nil {
+			return fmt.Errorf("failed to build file_data query: %w", err)
+		}
+
+		err = p.db.QueryRow(fileDataQuery, fileDataArgs...).Scan(&oldOID)
+		if err != nil && err != sql.ErrNoRows {
+			return fmt.Errorf("failed to check existing file data: %w", err)
+		}
+
+		// If an OID exists, delete the Large Object
+		if oldOID.Valid {
+			_, err = p.db.Exec(`SELECT lo_unlink($1)`, oldOID.Int64)
+			if err != nil {
+				return fmt.Errorf("failed to delete large object: %w", err)
+			}
+
+			// Delete the file_data entry
+			deleteQuery, deleteArgs, err := dialect.Delete("file_data").
+				Where(goqu.C("id").Eq(elementID)).
+				ToSQL()
+			if err != nil {
+				return fmt.Errorf("failed to build delete query: %w", err)
+			}
+
+			_, err = p.db.Exec(deleteQuery, deleteArgs...)
+			if err != nil {
+				return fmt.Errorf("failed to delete file_data: %w", err)
+			}
+		}
+
+		// Update the file_element with the new value and content type
+		updateQuery, updateArgs, err := dialect.Update("file_element").
+			Set(goqu.Record{
+				"value":        file.Value,
+				"content_type": file.ContentType,
+			}).
+			Where(goqu.C("id").Eq(elementID)).
+			ToSQL()
+		if err != nil {
+			return fmt.Errorf("failed to build update query: %w", err)
+		}
+
+		_, err = p.db.Exec(updateQuery, updateArgs...)
+		if err != nil {
+			return fmt.Errorf("failed to update file_element: %w", err)
+		}
+	}
+
+	// Update base SubmodelElement properties
 	if dErr := p.decorated.Update(idShortOrPath, submodelElement); dErr != nil {
 		return dErr
 	}
@@ -459,4 +546,90 @@ func (p PostgreSQLFileHandler) DownloadFileAttachment(submodelID string, idShort
 	}
 
 	return fileContent, contentType, nil
+}
+
+// DeleteFileAttachment deletes a file from PostgreSQL's Large Object system.
+// This method removes the Large Object and clears the file_data entry, setting the File SME value to empty.
+//
+// Parameters:
+//   - submodelID: ID of the parent submodel
+//   - idShortPath: Path to the file element within the submodel
+//
+// Returns:
+//   - error: Error if the deletion operation fails
+func (p PostgreSQLFileHandler) DeleteFileAttachment(submodelID string, idShortPath string) error {
+	dialect := goqu.Dialect("postgres")
+
+	// Get the submodel element ID
+	var submodelElementID int64
+	query, args, err := dialect.From("submodel_element").
+		Select("id").
+		Where(
+			goqu.C("submodel_id").Eq(submodelID),
+			goqu.C("idshort_path").Eq(idShortPath),
+		).
+		ToSQL()
+	if err != nil {
+		return fmt.Errorf("failed to build query: %w", err)
+	}
+
+	err = p.db.QueryRow(query, args...).Scan(&submodelElementID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return common.NewErrNotFound("file element not found")
+		}
+		return fmt.Errorf("failed to get file element: %w", err)
+	}
+
+	// Get the file OID from file_data
+	var fileOID sql.NullInt64
+	fileDataQuery, fileDataArgs, err := dialect.From("file_data").
+		Select("file_oid").
+		Where(goqu.C("id").Eq(submodelElementID)).
+		ToSQL()
+	if err != nil {
+		return fmt.Errorf("failed to build file_data query: %w", err)
+	}
+
+	err = p.db.QueryRow(fileDataQuery, fileDataArgs...).Scan(&fileOID)
+	if err != nil && err != sql.ErrNoRows {
+		return fmt.Errorf("failed to get file OID: %w", err)
+	}
+
+	// If an OID exists, delete the Large Object
+	if fileOID.Valid {
+		_, err = p.db.Exec(`SELECT lo_unlink($1)`, fileOID.Int64)
+		if err != nil {
+			return fmt.Errorf("failed to delete large object: %w", err)
+		}
+
+		// Delete the file_data entry
+		deleteQuery, deleteArgs, err := dialect.Delete("file_data").
+			Where(goqu.C("id").Eq(submodelElementID)).
+			ToSQL()
+		if err != nil {
+			return fmt.Errorf("failed to build delete query: %w", err)
+		}
+
+		_, err = p.db.Exec(deleteQuery, deleteArgs...)
+		if err != nil {
+			return fmt.Errorf("failed to delete file_data: %w", err)
+		}
+	}
+
+	// Clear the value in file_element (set to empty string)
+	updateQuery, updateArgs, err := dialect.Update("file_element").
+		Set(goqu.Record{"value": ""}).
+		Where(goqu.C("id").Eq(submodelElementID)).
+		ToSQL()
+	if err != nil {
+		return fmt.Errorf("failed to build update query: %w", err)
+	}
+
+	_, err = p.db.Exec(updateQuery, updateArgs...)
+	if err != nil {
+		return fmt.Errorf("failed to update file_element: %w", err)
+	}
+
+	return nil
 }

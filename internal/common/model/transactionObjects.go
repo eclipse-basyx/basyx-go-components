@@ -45,7 +45,7 @@ type SubmodelRow struct {
 	// IDShort is the short identifier for the submodel
 	IDShort string
 	// Category defines the category classification of the submodel
-	Category string
+	Category sql.NullString
 	// Kind specifies whether the submodel is a Template or Instance
 	Kind string
 	// EmbeddedDataSpecification contains embedded data specifications as JSON data
@@ -314,7 +314,7 @@ type SubmodelElementRow struct {
 	// Descriptions contains localized descriptions as JSON data
 	Descriptions *json.RawMessage `json:"descriptions,omitempty"`
 	// Category defines the category classification of the submodel element
-	Category string `json:"category"`
+	Category sql.NullString `json:"category"`
 	// ModelType specifies the concrete type of the submodel element (e.g., Property, Operation, SubmodelElementCollection)
 	ModelType string `json:"model_type"`
 	// Value contains the actual value data of the submodel element as JSON data
@@ -527,5 +527,5 @@ type BlobElementValueRow struct {
 	// ContentType specifies the MIME type of the blob content
 	ContentType string `json:"content_type"`
 	// Value contains the blob data as a byte array
-	Value []byte `json:"value"`
+	Value string `json:"value"`
 }

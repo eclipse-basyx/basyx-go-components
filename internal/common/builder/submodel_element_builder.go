@@ -57,7 +57,9 @@ func BuildSubmodelElement(smeRow model.SubmodelElementRow) (*model.SubmodelEleme
 	}
 
 	specificSME.SetIdShort(smeRow.IDShort)
-	specificSME.SetCategory(smeRow.Category)
+	if smeRow.Category.Valid {
+		specificSME.SetCategory(smeRow.Category.String)
+	}
 	specificSME.SetModelType(smeRow.ModelType)
 
 	// Channels for parallel processing
@@ -571,7 +573,7 @@ func buildBlob(smeRow model.SubmodelElementRow) (*model.Blob, error) {
 	}
 
 	return &model.Blob{
-		Value:       string(valueRow.Value),
+		Value:       valueRow.Value,
 		ContentType: valueRow.ContentType,
 	}, nil
 }

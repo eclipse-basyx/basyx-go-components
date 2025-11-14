@@ -231,9 +231,13 @@ func parseSubmodelRow(row model.SubmodelRow, referenceBuilderRefs map[int64]*bui
 		ModelType:        "Submodel",
 		ID:               row.ID,
 		IdShort:          row.IDShort,
-		Category:         row.Category,
 		Kind:             model.ModellingKind(row.Kind),
 		SubmodelElements: []model.SubmodelElement{},
+	}
+
+	// Handle nullable Category field
+	if row.Category.Valid {
+		submodel.Category = row.Category.String
 	}
 
 	var (

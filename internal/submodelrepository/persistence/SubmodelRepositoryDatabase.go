@@ -295,12 +295,12 @@ func (p *PostgreSQLSubmodelDatabase) GetAllSubmodelsMetadata(
 	var submodels []gen.Submodel
 	for rows.Next() {
 		var sm gen.Submodel
-		var refType, keyType, keyValue sql.NullString
+		var refType, keyType, keyValue, category sql.NullString
 
 		err := rows.Scan(
 			&sm.ID,
 			&sm.IdShort,
-			&sm.Category,
+			&category,
 			&sm.Kind,
 			&sm.ModelType,
 			&refType,
@@ -310,6 +310,9 @@ func (p *PostgreSQLSubmodelDatabase) GetAllSubmodelsMetadata(
 		if err != nil {
 			fmt.Println("Error scanning metadata row:", err)
 			return nil, "", err
+		}
+		if category.Valid {
+			sm.Category = category.String
 		}
 		if refType.Valid {
 			ref := gen.Reference{
@@ -1134,4 +1137,35 @@ func (p *PostgreSQLSubmodelDatabase) DownloadFileAttachment(submodelID string, i
 		return nil, "", fmt.Errorf("failed to create file handler: %w", err)
 	}
 	return fileHandler.DownloadFileAttachment(submodelID, idShortPath)
+}
+
+// UpdateSubmodelElement updates an existing submodel element by its idShortPath.
+func (p *PostgreSQLSubmodelDatabase) UpdateSubmodelElement(submodelID string, idShortPath string, submodelElement gen.SubmodelElement) error {
+	// Get the model type to determine which handler to use
+	var modelType string
+	err := p.db.QueryRow(`SELECT model_type FROM submodel_element WHERE submodel_id = $1 AND idshort_path = $2`, submodelID, idShortPath).Scan(&modelType)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return common.NewErrNotFound("Submodel element not found")
+		}
+		return fmt.Errorf("failed to get model type: %w", err)
+	}
+
+	// Get the appropriate handler for this model type
+	handler, err := submodelelements.GetSMEHandlerByModelType(modelType, p.db)
+	if err != nil {
+		return fmt.Errorf("failed to get handler for model type %s: %w", modelType, err)
+	}
+
+	// Update the element
+	return handler.Update(idShortPath, submodelElement)
+}
+
+// DeleteFileAttachment deletes a file attachment from PostgreSQL Large Object system.
+func (p *PostgreSQLSubmodelDatabase) DeleteFileAttachment(submodelID string, idShortPath string) error {
+	fileHandler, err := submodelelements.NewPostgreSQLFileHandler(p.db)
+	if err != nil {
+		return fmt.Errorf("failed to create file handler: %w", err)
+	}
+	return fileHandler.DeleteFileAttachment(submodelID, idShortPath)
 }
