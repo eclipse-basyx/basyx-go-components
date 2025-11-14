@@ -345,6 +345,7 @@ CREATE TABLE IF NOT EXISTS blob_element (
 CREATE TABLE IF NOT EXISTS file_element (
   id           BIGINT PRIMARY KEY REFERENCES submodel_element(id) ON DELETE CASCADE,
   content_type TEXT,
+  file_name    TEXT,
   value        TEXT
 );
 CREATE TABLE IF NOT EXISTS file_data (

@@ -1228,7 +1228,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetFileByPathSubmodelRepo(ctx context.
 
 	// Check if the value is an OID (stored files in Large Objects)
 	// Retrieve file from Large Object system
-	fileContent, contentType, err := s.submodelBackend.DownloadFileAttachment(submodelIdentifier, idShortPath)
+	fileContent, contentType, fileName, err := s.submodelBackend.DownloadFileAttachment(submodelIdentifier, idShortPath)
 	if err != nil {
 		if common.IsErrNotFound(err) {
 			timestamp := common.GetCurrentTimestamp()
@@ -1241,6 +1241,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetFileByPathSubmodelRepo(ctx context.
 	return gen.Response(http.StatusOK, openapi.FileDownload{
 		Content:     fileContent,
 		ContentType: contentType,
+		Filename:    fileName,
 	}), nil
 }
 
@@ -1280,7 +1281,7 @@ func (s *SubmodelRepositoryAPIAPIService) PutFileByPathSubmodelRepo(ctx context.
 	}
 
 	// Upload file attachment using the dedicated handler
-	err = s.submodelBackend.UploadFileAttachment(submodelIdentifier, idShortPath, file)
+	err = s.submodelBackend.UploadFileAttachment(submodelIdentifier, idShortPath, file, fileName)
 	if err != nil {
 		if common.IsErrNotFound(err) {
 			timestamp := common.GetCurrentTimestamp()

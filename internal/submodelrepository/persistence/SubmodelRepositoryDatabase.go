@@ -1129,20 +1129,20 @@ func addNestedElementToStackWithIndexPath(submodelElementList *gen.SubmodelEleme
 //
 // Returns:
 //   - error: Error if the upload operation fails
-func (p *PostgreSQLSubmodelDatabase) UploadFileAttachment(submodelID string, idShortPath string, file *os.File) error {
+func (p *PostgreSQLSubmodelDatabase) UploadFileAttachment(submodelID string, idShortPath string, file *os.File, fileName string) error {
 	fileHandler, err := submodelelements.NewPostgreSQLFileHandler(p.db)
 	if err != nil {
 		return fmt.Errorf("failed to create file handler: %w", err)
 	}
-	return fileHandler.UploadFileAttachment(submodelID, idShortPath, file)
+	return fileHandler.UploadFileAttachment(submodelID, idShortPath, file, fileName)
 }
 
 // DownloadFileAttachment retrieves a file from PostgreSQL Large Object system.
 // Returns the file content and content type.
-func (p *PostgreSQLSubmodelDatabase) DownloadFileAttachment(submodelID string, idShortPath string) ([]byte, string, error) {
+func (p *PostgreSQLSubmodelDatabase) DownloadFileAttachment(submodelID string, idShortPath string) ([]byte, string, string, error) {
 	fileHandler, err := submodelelements.NewPostgreSQLFileHandler(p.db)
 	if err != nil {
-		return nil, "", fmt.Errorf("failed to create file handler: %w", err)
+		return nil, "", "", fmt.Errorf("failed to create file handler: %w", err)
 	}
 	return fileHandler.DownloadFileAttachment(submodelID, idShortPath)
 }

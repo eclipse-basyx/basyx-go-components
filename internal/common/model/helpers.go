@@ -125,27 +125,22 @@ func EncodeJSONResponse(i interface{}, status *int, w http.ResponseWriter) error
 
 	// Handle Redirect payloads: set Location header and write status without a body.
 	if i != nil {
+		var redirect *Redirect
 		switch r := i.(type) {
 		case Redirect:
+			redirect = &r
+		case *Redirect:
+			redirect = r
+		}
+		if redirect != nil {
 			if status != nil {
-				wHeader.Set("Location", r.Location)
+				wHeader.Set("Location", redirect.Location)
 				w.WriteHeader(*status)
 			} else {
-				wHeader.Set("Location", r.Location)
+				wHeader.Set("Location", redirect.Location)
 				w.WriteHeader(http.StatusFound)
 			}
 			return nil
-		case *Redirect:
-			if r != nil {
-				if status != nil {
-					wHeader.Set("Location", r.Location)
-					w.WriteHeader(*status)
-				} else {
-					wHeader.Set("Location", r.Location)
-					w.WriteHeader(http.StatusFound)
-				}
-				return nil
-			}
 		}
 	}
 
