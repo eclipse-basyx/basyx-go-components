@@ -338,6 +338,14 @@ func (p *PostgreSQLSubmodelDatabase) GetAllSubmodelsMetadata(
 	return submodels, "", nil
 }
 
+// DoesSubmodelExist checks if a submodel with the given identifier exists in the database.
+//
+// Parameters:
+//   - submodelIdentifier: Unique identifier of the submodel to check
+//
+// Returns:
+//   - bool: True if the submodel exists, false otherwise
+//   - error: Error if the query fails
 func (p *PostgreSQLSubmodelDatabase) DoesSubmodelExist(submodelIdentifier string) (bool, error) {
 	var count int
 	err := p.db.QueryRow("SELECT COUNT(id) FROM submodel WHERE id = $1 LIMIT 1", submodelIdentifier).Scan(&count)
