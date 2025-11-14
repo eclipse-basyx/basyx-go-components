@@ -1,0 +1,11 @@
+{
+    "paging_metadata": {},
+    "result": [
+        {
+            "idShort": "DemoFile",
+            "modelType": "File",
+            "value": "http://example.com/placeholder.png",
+            "contentType": "image/png"
+        }
+    ]
+}
