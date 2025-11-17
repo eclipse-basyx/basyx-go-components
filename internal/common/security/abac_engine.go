@@ -70,11 +70,8 @@ func ParseAccessModel(b []byte) (*AccessModel, error) {
 // mutations, or redact fields. The Discovery Service currently does not require
 // a concrete filter structure; extend this struct when needed.
 type QueryFilter struct {
-	// Expr holds a SQL expression (goqu) representing the remaining
-	// backend-applicable constraint derived from the logical expression.
-	// It is intended to be applied by the backend persistence layer.
-	Formula grammar.LogicalExpression
-	Filter  *grammar.AccessPermissionRuleFILTER
+	Formula *grammar.LogicalExpression          `json:"Formula,omitempty" yaml:"Formula,omitempty" mapstructure:"Formula,omitempty"`
+	Filter  *grammar.AccessPermissionRuleFILTER `json:"Filter,omitempty" yaml:"Filter,omitempty" mapstructure:"Filter,omitempty"`
 }
 
 // DecisionCode represents the result of an authorization check.
@@ -147,7 +144,7 @@ func (m *AccessModel) AuthorizeWithFilter(in EvalInput) (ok bool, code DecisionC
 				}
 			} else {
 				fmt.Println("got a expression from LE")
-				qf = &QueryFilter{Formula: adapted, Filter: r.FILTER}
+				qf = &QueryFilter{Formula: &adapted, Filter: r.FILTER}
 
 			}
 		}
@@ -155,36 +152,6 @@ func (m *AccessModel) AuthorizeWithFilter(in EvalInput) (ok bool, code DecisionC
 		return true, DecisionAllow, qf
 	}
 	return false, DecisionNoMatch, nil
-}
-
-// Authorize evaluates the request and returns an allow/deny boolean and a
-// reason, without producing a QueryFilter. Prefer AuthorizeWithFilter in new code.
-func (m *AccessModel) Authorize(in EvalInput) (bool, DecisionCode) {
-	right := mapMethodToRight(in.Method)
-
-	all := m.gen.AllAccessPermissionRules
-	for _, r := range all.Rules {
-		acl, attrs, objs, lexpr := materialize(all, r)
-
-		if !rightsContains(acl.RIGHTS, right) {
-			continue
-		}
-		// Note: currently rejects access if no route is defined.
-		accessWithOptinalFilter := matchRouteObjectsObjItem(objs, in.Path)
-		if !accessWithOptinalFilter.access {
-			continue
-		}
-		if !attributesSatisfiedAll(attrs, in.Claims) {
-			continue
-		}
-		if lexpr != nil && !evalLE(*lexpr, in.Claims, in.IssuedUTC) {
-			continue
-		}
-
-		return true, DecisionAllow
-	}
-
-	return false, DecisionNoMatch
 }
 
 // materialize resolves a rule's references (USEACL, USEOBJECTS, USEFORMULA) into
