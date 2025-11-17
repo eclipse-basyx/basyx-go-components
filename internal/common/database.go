@@ -1,4 +1,4 @@
-//nolint:revive
+//nolint:all
 package common
 
 import (

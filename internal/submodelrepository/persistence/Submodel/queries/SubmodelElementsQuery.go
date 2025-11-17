@@ -167,18 +167,18 @@ func getValueSubquery(dialect goqu.DialectWrapper) exp.CaseExpression {
 			goqu.I("sme.model_type").Eq("BasicEventElement"),
 			getBasicEventElementSubquery(dialect),
 		).
-		// When(
-		// 	goqu.I("sme.model_type").Eq("Blob"),
-		// 	getBlobSubquery(dialect),
-		// ).
+		When(
+			goqu.I("sme.model_type").Eq("Blob"),
+			getBlobSubquery(dialect),
+		).
 		When(
 			goqu.I("sme.model_type").Eq("Entity"),
 			getEntitySubquery(dialect),
 		).
-		// When(
-		// 	goqu.I("sme.model_type").Eq("File"),
-		// 	getFileSubquery(dialect),
-		// ).
+		When(
+			goqu.I("sme.model_type").Eq("File"),
+			getFileSubquery(dialect),
+		).
 		When(
 			goqu.I("sme.model_type").Eq("SubmodelElementList"),
 			getSubmodelElementListSubquery(dialect),
@@ -234,9 +234,17 @@ func getBasicEventElementSubquery(dialect goqu.DialectWrapper) *goqu.SelectDatas
 		Limit(1)
 }
 
-// func getBlobSubquery(dialect goqu.DialectWrapper) *goqu.SelectDataset {
-// 	return nil
-// }
+func getBlobSubquery(dialect goqu.DialectWrapper) *goqu.SelectDataset {
+	return dialect.From(goqu.T("blob_element").As("be")).
+		Select(
+			goqu.Func("jsonb_build_object",
+				goqu.V("content_type"), goqu.I("be.content_type"),
+				goqu.V("value"), goqu.I("be.value"),
+			),
+		).
+		Where(goqu.I("be.id").Eq(goqu.I("sme.id"))).
+		Limit(1)
+}
 
 func getEntitySubquery(dialect goqu.DialectWrapper) *goqu.SelectDataset {
 	return dialect.From(goqu.T("entity_element").As("ee")).
@@ -251,9 +259,17 @@ func getEntitySubquery(dialect goqu.DialectWrapper) *goqu.SelectDataset {
 		Limit(1)
 }
 
-// func getFileSubquery(dialect goqu.DialectWrapper) *goqu.SelectDataset {
-// 	return nil
-// }
+func getFileSubquery(dialect goqu.DialectWrapper) *goqu.SelectDataset {
+	return dialect.From(goqu.T("file_element").As("fe")).
+		Select(
+			goqu.Func("jsonb_build_object",
+				goqu.V("value"), goqu.I("fe.value"),
+				goqu.V("content_type"), goqu.I("fe.content_type"),
+			),
+		).
+		Where(goqu.I("fe.id").Eq(goqu.I("sme.id"))).
+		Limit(1)
+}
 
 func getSubmodelElementListSubquery(dialect goqu.DialectWrapper) *goqu.SelectDataset {
 	semanticIDListElement, semanticIDListElementReferred := queries.GetReferenceQueries(dialect, goqu.I("list.semantic_id_list_element"))
