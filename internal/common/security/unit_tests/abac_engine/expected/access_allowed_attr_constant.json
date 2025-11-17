@@ -1,0 +1,30 @@
+{
+  "ok": true,
+  "queryFilter": {
+    "Formula": { 
+      "$and": [
+        { 
+          "$eq": [
+            {
+              "$strVal": "admin"
+            },
+            {
+              "$field": "$aasdesc#specificAssetIds[].name"
+            }
+          ]
+        },
+        {
+          "$eq": [
+            {
+              "$field": "$aasdesc#id"
+            },
+            {
+              "$strVal": "https://martin.de"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "reason": "ALLOW"
+}

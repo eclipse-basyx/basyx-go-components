@@ -88,5 +88,10 @@
     "input": "input/test_formula_reduction.json",
     "expected": "expected/access_allowed_reduction.json",
     "eval": "eval/get_shellDescriptors_admin.json"
+  },
+  {
+    "input": "input/test_attribute_constant.json",
+    "expected": "expected/access_allowed_attr_constant.json",
+    "eval": "eval/get_shellDescriptors_admin.json"
   }
 ]

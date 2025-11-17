@@ -1,6 +1,26 @@
 {
   "AllAccessPermissionRules": {
+    
     "rules": [
+      {
+        "ACL": {
+          "ATTRIBUTES": [
+            {
+              "GLOBAL": "ANONYMOUS"
+            }
+          ],
+          "RIGHTS": [
+            "CREATE"
+          ],
+          "ACCESS": "ALLOW"
+        },
+        "OBJECTS": [
+          {
+            "ROUTE": "**"
+          }
+        ],
+        "FORMULA": {"$bool": true}
+      },
       {
         "ACL": {
           "ATTRIBUTES": [
@@ -15,7 +35,7 @@
         },
         "OBJECTS": [
           {
-            "ROUTE": "*"
+            "ROUTE": "**"
           }
         ],
         "FORMULA": { "$and": [

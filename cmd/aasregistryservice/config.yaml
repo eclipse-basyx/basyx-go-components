@@ -19,6 +19,6 @@ oidc:
   jwksURL: "" 
 
 abac:
-  enabled: false
+  enabled: true
   clientRolesAudience: "discovery-service"
   modelPath: "config/access_rules/access-rules.json"
