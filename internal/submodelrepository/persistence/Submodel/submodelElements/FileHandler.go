@@ -151,6 +151,18 @@ func (p PostgreSQLFileHandler) Update(idShortOrPath string, submodelElement gen.
 		return common.NewErrBadRequest("submodelElement is not of type File")
 	}
 
+	tx, err := p.db.Begin()
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer func() {
+		if err != nil {
+			_ = tx.Rollback()
+		} else {
+			_ = tx.Commit()
+		}
+	}()
+
 	dialect := goqu.Dialect("postgres")
 
 	// Get the current file element ID and value
@@ -168,7 +180,7 @@ func (p PostgreSQLFileHandler) Update(idShortOrPath string, submodelElement gen.
 		return fmt.Errorf("failed to build query: %w", err)
 	}
 
-	err = p.db.QueryRow(query, args...).Scan(&elementID, &currentValue)
+	err = tx.QueryRow(query, args...).Scan(&elementID, &currentValue)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return common.NewErrNotFound("file element not found")
@@ -188,14 +200,14 @@ func (p PostgreSQLFileHandler) Update(idShortOrPath string, submodelElement gen.
 			return fmt.Errorf("failed to build file_data query: %w", err)
 		}
 
-		err = p.db.QueryRow(fileDataQuery, fileDataArgs...).Scan(&oldOID)
+		err = tx.QueryRow(fileDataQuery, fileDataArgs...).Scan(&oldOID)
 		if err != nil && err != sql.ErrNoRows {
 			return fmt.Errorf("failed to check existing file data: %w", err)
 		}
 
 		// If an OID exists, delete the Large Object
 		if oldOID.Valid {
-			_, err = p.db.Exec(`SELECT lo_unlink($1)`, oldOID.Int64)
+			_, err = tx.Exec(`SELECT lo_unlink($1)`, oldOID.Int64)
 			if err != nil {
 				return fmt.Errorf("failed to delete large object: %w", err)
 			}
@@ -208,7 +220,7 @@ func (p PostgreSQLFileHandler) Update(idShortOrPath string, submodelElement gen.
 				return fmt.Errorf("failed to build delete query: %w", err)
 			}
 
-			_, err = p.db.Exec(deleteQuery, deleteArgs...)
+			_, err = tx.Exec(deleteQuery, deleteArgs...)
 			if err != nil {
 				return fmt.Errorf("failed to delete file_data: %w", err)
 			}
@@ -226,7 +238,7 @@ func (p PostgreSQLFileHandler) Update(idShortOrPath string, submodelElement gen.
 			return fmt.Errorf("failed to build update query: %w", err)
 		}
 
-		_, err = p.db.Exec(updateQuery, updateArgs...)
+		_, err = tx.Exec(updateQuery, updateArgs...)
 		if err != nil {
 			return fmt.Errorf("failed to update file_element: %w", err)
 		}
@@ -297,24 +309,6 @@ func (p PostgreSQLFileHandler) UploadFileAttachment(submodelID string, idShortPa
 		return fmt.Errorf("failed to seek file: %w", err)
 	}
 
-	// Get the submodel element ID
-	var submodelElementID int64
-	query, args, err := dialect.From("submodel_element").
-		Select("id").
-		Where(goqu.C("submodel_id").Eq(submodelID), goqu.C("idshort_path").Eq(idShortPath)).
-		ToSQL()
-	if err != nil {
-		return fmt.Errorf("failed to build query: %w", err)
-	}
-
-	err = p.db.QueryRow(query, args...).Scan(&submodelElementID)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return common.NewErrNotFound("submodel element not found")
-		}
-		return fmt.Errorf("failed to get submodel element ID: %w", err)
-	}
-
 	// Start a transaction for atomic operation
 	tx, err := p.db.Begin()
 	if err != nil {
@@ -325,6 +319,24 @@ func (p PostgreSQLFileHandler) UploadFileAttachment(submodelID string, idShortPa
 			_ = tx.Rollback()
 		}
 	}()
+
+	// Get the submodel element ID
+	var submodelElementID int64
+	query, args, err := dialect.From("submodel_element").
+		Select("id").
+		Where(goqu.C("submodel_id").Eq(submodelID), goqu.C("idshort_path").Eq(idShortPath)).
+		ToSQL()
+	if err != nil {
+		return fmt.Errorf("failed to build query: %w", err)
+	}
+
+	err = tx.QueryRow(query, args...).Scan(&submodelElementID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return common.NewErrNotFound("submodel element not found")
+		}
+		return fmt.Errorf("failed to get submodel element ID: %w", err)
+	}
 
 	// Check for existing file_data and delete old Large Object if it exists
 	var oldOID sql.NullInt64
@@ -461,6 +473,18 @@ func (p PostgreSQLFileHandler) DownloadFileAttachment(submodelID string, idShort
 	var submodelElementID int64
 	var contentType string
 	var fileName string
+	tx, err := p.db.Begin()
+	if err != nil {
+		return nil, "", "", fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer func() {
+		if err != nil {
+			_ = tx.Rollback()
+		} else {
+			_ = tx.Commit()
+		}
+	}()
+
 	query, args, err := dialect.From("submodel_element").
 		InnerJoin(
 			goqu.T("file_element"),
@@ -476,7 +500,7 @@ func (p PostgreSQLFileHandler) DownloadFileAttachment(submodelID string, idShort
 		return nil, "", "", fmt.Errorf("failed to build query: %w", err)
 	}
 
-	err = p.db.QueryRow(query, args...).Scan(&submodelElementID, &contentType, &fileName)
+	err = tx.QueryRow(query, args...).Scan(&submodelElementID, &contentType, &fileName)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, "", "", common.NewErrNotFound("file element not found")
@@ -494,7 +518,7 @@ func (p PostgreSQLFileHandler) DownloadFileAttachment(submodelID string, idShort
 		return nil, "", "", fmt.Errorf("failed to build file_data query: %w", err)
 	}
 
-	err = p.db.QueryRow(fileDataQuery, fileDataArgs...).Scan(&fileOID)
+	err = tx.QueryRow(fileDataQuery, fileDataArgs...).Scan(&fileOID)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, "", "", common.NewErrNotFound("file data not found")
@@ -505,19 +529,6 @@ func (p PostgreSQLFileHandler) DownloadFileAttachment(submodelID string, idShort
 	if !fileOID.Valid {
 		return nil, "", "", common.NewErrNotFound("file OID is null")
 	}
-
-	// Start a transaction to read the Large Object
-	tx, err := p.db.Begin()
-	if err != nil {
-		return nil, "", "", fmt.Errorf("failed to begin transaction: %w", err)
-	}
-	defer func() {
-		if err != nil {
-			_ = tx.Rollback()
-		} else {
-			_ = tx.Commit()
-		}
-	}()
 
 	// Open the Large Object for reading (0x00040000 = INV_READ mode)
 	var loFD int
@@ -575,7 +586,19 @@ func (p PostgreSQLFileHandler) DeleteFileAttachment(submodelID string, idShortPa
 		return fmt.Errorf("failed to build query: %w", err)
 	}
 
-	err = p.db.QueryRow(query, args...).Scan(&submodelElementID)
+	tx, err := p.db.Begin()
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer func() {
+		if err != nil {
+			_ = tx.Rollback()
+		} else {
+			_ = tx.Commit()
+		}
+	}()
+
+	err = tx.QueryRow(query, args...).Scan(&submodelElementID)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return common.NewErrNotFound("file element not found")
@@ -593,14 +616,14 @@ func (p PostgreSQLFileHandler) DeleteFileAttachment(submodelID string, idShortPa
 		return fmt.Errorf("failed to build file_data query: %w", err)
 	}
 
-	err = p.db.QueryRow(fileDataQuery, fileDataArgs...).Scan(&fileOID)
+	err = tx.QueryRow(fileDataQuery, fileDataArgs...).Scan(&fileOID)
 	if err != nil && err != sql.ErrNoRows {
 		return fmt.Errorf("failed to get file OID: %w", err)
 	}
 
 	// If an OID exists, delete the Large Object
 	if fileOID.Valid {
-		_, err = p.db.Exec(`SELECT lo_unlink($1)`, fileOID.Int64)
+		_, err = tx.Exec(`SELECT lo_unlink($1)`, fileOID.Int64)
 		if err != nil {
 			return fmt.Errorf("failed to delete large object: %w", err)
 		}
@@ -613,7 +636,7 @@ func (p PostgreSQLFileHandler) DeleteFileAttachment(submodelID string, idShortPa
 			return fmt.Errorf("failed to build delete query: %w", err)
 		}
 
-		_, err = p.db.Exec(deleteQuery, deleteArgs...)
+		_, err = tx.Exec(deleteQuery, deleteArgs...)
 		if err != nil {
 			return fmt.Errorf("failed to delete file_data: %w", err)
 		}
@@ -628,7 +651,7 @@ func (p PostgreSQLFileHandler) DeleteFileAttachment(submodelID string, idShortPa
 		return fmt.Errorf("failed to build update query: %w", err)
 	}
 
-	_, err = p.db.Exec(updateQuery, updateArgs...)
+	_, err = tx.Exec(updateQuery, updateArgs...)
 	if err != nil {
 		return fmt.Errorf("failed to update file_element: %w", err)
 	}
