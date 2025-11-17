@@ -6,7 +6,6 @@
 package common
 
 import (
-	"encoding/json"
 	"fmt"
 	"log"
 	"strings"
@@ -115,6 +114,7 @@ type ABACConfig struct {
 //	    log.Fatal("Failed to load config:", err)
 //	}
 func LoadConfig(configPath string) (*Config, error) {
+	PrintSplash()
 	v := viper.New()
 
 	// Set default values
@@ -218,25 +218,70 @@ func setDefaults(v *viper.Viper) {
 //	  }
 //	}
 func PrintConfiguration(cfg *Config) {
-	// Create a copy of the config to avoid modifying the original
-	cfgCopy := *cfg
-
 	// Redact sensitive information if present in the Postgres configuration
-	if cfg.Postgres.Host != "" {
-		// Simple redaction that preserves the structure but hides credentials
-		cfgCopy.Postgres.Host = "****"
-		cfgCopy.Postgres.User = "****"
-		cfgCopy.Postgres.Password = "****"
+	pgHost := cfg.Postgres.Host
+	pgUser := cfg.Postgres.User
+	pgPassword := cfg.Postgres.Password
+	if pgHost != "" {
+		pgHost = "****"
+		pgUser = "****"
+		pgPassword = "****"
 	}
 
-	// Convert to JSON for pretty printing
-	configJSON, err := json.MarshalIndent(cfgCopy, "", "  ")
-	if err != nil {
-		log.Printf("Unable to marshal configuration to JSON: %v", err)
-		return
-	}
+	divider := "---------------------"
+	var lines []string
+	lines = append(lines, "📜 Loaded configuration:")
+	lines = append(lines, divider)
+	lines = append(lines, "🔹 Server:")
+	lines = append(lines, fmt.Sprintf("  Port: %d", cfg.Server.Port))
+	lines = append(lines, fmt.Sprintf("  Context Path: %s", cfg.Server.ContextPath))
+	lines = append(lines, fmt.Sprintf("  Cache Enabled: %v", cfg.Server.CacheEnabled))
+	lines = append(lines, divider)
+	lines = append(lines, "🔹 Postgres:")
+	lines = append(lines, fmt.Sprintf("  Host: %s", pgHost))
+	lines = append(lines, fmt.Sprintf("  Port: %d", cfg.Postgres.Port))
+	lines = append(lines, fmt.Sprintf("  User: %s", pgUser))
+	lines = append(lines, fmt.Sprintf("  Password: %s", pgPassword))
+	lines = append(lines, fmt.Sprintf("  DB Name: %s", cfg.Postgres.DBName))
+	lines = append(lines, fmt.Sprintf("  Max Open Connections: %d", cfg.Postgres.MaxOpenConnections))
+	lines = append(lines, fmt.Sprintf("  Max Idle Connections: %d", cfg.Postgres.MaxIdleConnections))
+	lines = append(lines, fmt.Sprintf("  Conn Max Lifetime (min): %d", cfg.Postgres.ConnMaxLifetimeMinutes))
+	lines = append(lines, divider)
+	lines = append(lines, "🔹 CORS:")
+	lines = append(lines, fmt.Sprintf("  Allowed Origins: %v", cfg.CorsConfig.AllowedOrigins))
+	lines = append(lines, fmt.Sprintf("  Allowed Methods: %v", cfg.CorsConfig.AllowedMethods))
+	lines = append(lines, fmt.Sprintf("  Allowed Headers: %v", cfg.CorsConfig.AllowedHeaders))
+	lines = append(lines, fmt.Sprintf("  Allow Credentials: %v", cfg.CorsConfig.AllowCredentials))
+	lines = append(lines, divider)
+	lines = append(lines, "🔹 OIDC:")
+	lines = append(lines, fmt.Sprintf("  Issuer: %s", cfg.OIDC.Issuer))
+	lines = append(lines, fmt.Sprintf("  Audience: %s", cfg.OIDC.Audience))
+	lines = append(lines, fmt.Sprintf("  JWKS URL: %s", cfg.OIDC.JWKSURL))
+	lines = append(lines, divider)
+	lines = append(lines, "🔹 ABAC:")
+	lines = append(lines, fmt.Sprintf("  Enabled: %v", cfg.ABAC.Enabled))
+	lines = append(lines, fmt.Sprintf("  Client Roles Audience: %s", cfg.ABAC.ClientRolesAudience))
+	modelPath := cfg.ABAC.ModelPath
+	lines = append(lines, fmt.Sprintf("  Model Path: %s", modelPath))
+	lines = append(lines, divider)
 
-	log.Printf("📜 Loaded configuration:\n%s", string(configJSON))
+	// Find max line length for box width
+	maxLen := 0
+	for _, l := range lines {
+		if len(l) > maxLen {
+			maxLen = len(l)
+		}
+	}
+	boxTop := "╔" + strings.Repeat("═", maxLen+2) + "╗"
+	boxBottom := "╚" + strings.Repeat("═", maxLen+2) + "╝"
+
+	log.Print(boxTop)
+	for _, l := range lines {
+		// Remove leading spaces for consistent alignment
+		trimmed := strings.TrimLeft(l, " ")
+		log.Print("║  " + trimmed + strings.Repeat(" ", maxLen-len(trimmed)) + " ║")
+	}
+	log.Print(boxBottom)
 }
 
 // AddCors configures Cross-Origin Resource Sharing (CORS) middleware for the router.
