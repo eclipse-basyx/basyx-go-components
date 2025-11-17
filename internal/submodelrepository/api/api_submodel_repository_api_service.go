@@ -104,7 +104,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelByID(
 		return gen.Response(http.StatusBadRequest, nil), decodeErr
 	}
 
-	sm, err := s.submodelBackend.GetSubmodel(string(decodedSubmodelIdentifier))
+	sm, err := s.submodelBackend.GetSubmodel(string(decodedSubmodelIdentifier), false)
 	if err != nil {
 
 		if errors.Is(err, sql.ErrNoRows) {
@@ -429,7 +429,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelByIDValueOnly(ctx context.C
 		return gen.Response(http.StatusBadRequest, nil), decodeErr
 	}
 
-	sm, err := s.submodelBackend.GetSubmodel(string(decodedSubmodelIdentifier))
+	sm, err := s.submodelBackend.GetSubmodel(string(decodedSubmodelIdentifier), true)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return gen.Response(404, nil), nil
@@ -455,7 +455,7 @@ func (s *SubmodelRepositoryAPIAPIService) PatchSubmodelByIDValueOnly(ctx context
 	}
 
 	// Get the current submodel
-	sm, err := s.submodelBackend.GetSubmodel(string(decodedSubmodelIdentifier))
+	sm, err := s.submodelBackend.GetSubmodel(string(decodedSubmodelIdentifier), true)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return gen.Response(404, nil), nil

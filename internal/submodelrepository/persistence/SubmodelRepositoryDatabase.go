@@ -117,7 +117,7 @@ func (p *PostgreSQLSubmodelDatabase) GetAllSubmodels(limit int32, cursor string,
 	}
 
 	submodelIDs := []string{}
-	rows, err := submodelpersistence.GetSubmodelDataFromDbWithJSONQuery(p.db, "", int64(limit), cursor, nil, true)
+	rows, err := submodelpersistence.GetSubmodelDataFromDbWithJSONQuery(p.db, "", int64(limit), cursor, nil, true, false)
 	if err != nil {
 		return nil, "", err
 	}
@@ -138,7 +138,7 @@ func (p *PostgreSQLSubmodelDatabase) GetAllSubmodels(limit int32, cursor string,
 	resultChan := make(chan result, 1)
 
 	wg.Go(func() error {
-		sm, smMap, cursor, err := submodelpersistence.GetAllSubmodels(p.db, int64(limit), cursor, nil)
+		sm, smMap, cursor, err := submodelpersistence.GetAllSubmodels(p.db, int64(limit), cursor, nil, false)
 		resultChan <- result{sm: sm, smMap: smMap, cursor: cursor, err: err}
 		return err
 	})
@@ -148,7 +148,8 @@ func (p *PostgreSQLSubmodelDatabase) GetAllSubmodels(limit int32, cursor string,
 	var errSmeMutex sync.Mutex
 
 	type smeJob struct {
-		id string
+		id        string
+		valueOnly bool
 	}
 
 	type smeResult struct {
@@ -164,14 +165,14 @@ func (p *PostgreSQLSubmodelDatabase) GetAllSubmodels(limit int32, cursor string,
 	for i := 0; i < numWorkers; i++ {
 		go func() {
 			for job := range jobs {
-				smes, _, err := submodelelements.GetSubmodelElementsForSubmodel(p.db, job.id, "", "", -1)
+				smes, _, err := submodelelements.GetSubmodelElementsForSubmodel(p.db, job.id, "", "", -1, job.valueOnly)
 				results <- smeResult{id: job.id, smes: smes, err: err}
 			}
 		}()
 	}
 
 	for _, id := range submodelIDs {
-		jobs <- smeJob{id: id}
+		jobs <- smeJob{id: id, valueOnly: false}
 	}
 	close(jobs)
 
@@ -360,11 +361,12 @@ func (p *PostgreSQLSubmodelDatabase) DoesSubmodelExist(submodelIdentifier string
 //
 // Parameters:
 //   - id: Unique identifier of the submodel to retrieve
+//   - valueOnly: If true, only fetches data necessary for value-only representation (excludes metadata)
 //
 // Returns:
 //   - gen.Submodel: The complete submodel with all its elements
 //   - error: Error if submodel not found or retrieval fails
-func (p *PostgreSQLSubmodelDatabase) GetSubmodel(id string) (gen.Submodel, error) {
+func (p *PostgreSQLSubmodelDatabase) GetSubmodel(id string, valueOnly bool) (gen.Submodel, error) {
 	type result struct {
 		sm  *gen.Submodel
 		err error
@@ -382,13 +384,13 @@ func (p *PostgreSQLSubmodelDatabase) GetSubmodel(id string) (gen.Submodel, error
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		sm, err := submodelpersistence.GetSubmodelByID(p.db, id)
+		sm, err := submodelpersistence.GetSubmodelByID(p.db, id, valueOnly)
 		resultChan <- result{sm: sm, err: err}
 	}()
 
 	go func() {
 		defer wg.Done()
-		smes, _, err := submodelelements.GetSubmodelElementsForSubmodel(p.db, id, "", "", -1)
+		smes, _, err := submodelelements.GetSubmodelElementsForSubmodel(p.db, id, "", "", -1, valueOnly)
 		resultChanSME <- resultSME{smes: smes, err: err}
 	}()
 
@@ -637,7 +639,7 @@ func (p *PostgreSQLSubmodelDatabase) GetSubmodelElement(submodelID string, idSho
 		}
 	}()
 
-	elements, _, err := submodelelements.GetSubmodelElementsForSubmodel(p.db, submodelID, idShortOrPath, "", -1)
+	elements, _, err := submodelelements.GetSubmodelElementsForSubmodel(p.db, submodelID, idShortOrPath, "", -1, false)
 	if err != nil {
 		return nil, err
 	}
@@ -695,7 +697,7 @@ func (p *PostgreSQLSubmodelDatabase) GetSubmodelElements(submodelID string, limi
 		return nil, "", common.NewErrNotFound("Submodel with ID '" + submodelID + "' not found")
 	}
 
-	elements, cursor, err := submodelelements.GetSubmodelElementsForSubmodel(p.db, submodelID, "", cursor, limit)
+	elements, cursor, err := submodelelements.GetSubmodelElementsForSubmodel(p.db, submodelID, "", cursor, limit, false)
 	if err != nil {
 		return nil, "", err
 	}

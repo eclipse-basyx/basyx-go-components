@@ -77,35 +77,46 @@ func (s *SubmodelElementFilter) HasIDShortPathFilter() bool {
 }
 
 // GetSubmodelElementsQuery builds a subquery to retrieve submodel elements for a given submodel.
-func GetSubmodelElementsQuery(filter SubmodelElementFilter, cursor string, limit int) (*goqu.SelectDataset, error) {
+func GetSubmodelElementsQuery(filter SubmodelElementFilter, cursor string, limit int, valueOnly bool) (*goqu.SelectDataset, error) {
 	dialect := goqu.Dialect("postgres")
-	semanticIDSubquery, semanticIDReferredSubquery := queries.GetReferenceQueries(dialect, goqu.I("sme.semantic_id"))
-	qualifierSubquery := queries.GetQualifierSubquery(dialect, goqu.T("submodel_element_qualifier"), "sme_id", "qualifier_id", goqu.I("sme.id"))
-	displayNamesSubquery := queries.GetDisplayNamesQuery(dialect, "sme.displayname_id")
-	descriptionsSubquery := queries.GetDescriptionQuery(dialect, "sme.description_id")
+
+	var semanticIDSubquery, semanticIDReferredSubquery, qualifierSubquery, displayNamesSubquery, descriptionsSubquery *goqu.SelectDataset
+
+	if valueOnly {
+		// For value-only mode, return empty arrays for metadata fields
+		semanticIDSubquery = dialect.From(goqu.L("(SELECT '[]'::jsonb)")).Select(goqu.L("'[]'::jsonb"))
+		semanticIDReferredSubquery = dialect.From(goqu.L("(SELECT '[]'::jsonb)")).Select(goqu.L("'[]'::jsonb"))
+		qualifierSubquery = dialect.From(goqu.L("(SELECT '[]'::jsonb)")).Select(goqu.L("'[]'::jsonb"))
+		displayNamesSubquery = dialect.From(goqu.L("(SELECT '[]'::jsonb)")).Select(goqu.L("'[]'::jsonb"))
+		descriptionsSubquery = dialect.From(goqu.L("(SELECT '[]'::jsonb)")).Select(goqu.L("'[]'::jsonb"))
+	} else {
+		semanticIDSubquery, semanticIDReferredSubquery = queries.GetReferenceQueries(dialect, goqu.I("sme.semantic_id"))
+		qualifierSubquery = queries.GetQualifierSubquery(dialect, goqu.T("submodel_element_qualifier"), "sme_id", "qualifier_id", goqu.I("sme.id"))
+		displayNamesSubquery = queries.GetDisplayNamesQuery(dialect, "sme.displayname_id")
+		descriptionsSubquery = queries.GetDescriptionQuery(dialect, "sme.description_id")
+	}
 
 	valueByType := getValueSubquery(dialect)
 
-	query := dialect.From(goqu.T("submodel_element").As("sme")).
-		Select(
-			goqu.I("sme.id").As("db_id"),
-			goqu.I("sme.parent_sme_id").As("parent_id"),
-			goqu.I("sme.root_sme_id").As("root_id"),
-			goqu.I("sme.id_short").As("id_short"),
-			goqu.I("sme.idshort_path").As("idshort_path"),
-			goqu.I("sme.category").As("category"),
-			goqu.I("sme.model_type").As("model_type"),
-			goqu.I("sme.position").As("position"),
-			goqu.I("sme.embedded_data_specification").As("embeddedDataSpecifications"),
-			goqu.I("sme.supplemental_semantic_ids").As("supplementalSemanticIds"),
-			goqu.I("sme.extensions").As("extensions"),
-			displayNamesSubquery.As("displayNames"),
-			descriptionsSubquery.As("descriptions"),
-			valueByType.As("value"),
-			semanticIDSubquery.As("semanticId"),
-			semanticIDReferredSubquery.As("semanticIdReferred"),
-			qualifierSubquery.As("qualifiers"),
-		)
+	query := dialect.From(goqu.T("submodel_element").As("sme")).Select(
+		goqu.I("sme.id").As("db_id"),
+		goqu.I("sme.parent_sme_id").As("parent_id"),
+		goqu.I("sme.root_sme_id").As("root_id"),
+		goqu.I("sme.id_short").As("id_short"),
+		goqu.I("sme.idshort_path").As("idshort_path"),
+		goqu.I("sme.category").As("category"),
+		goqu.I("sme.model_type").As("model_type"),
+		goqu.I("sme.position").As("position"),
+		goqu.L("CASE WHEN ? THEN '[]'::jsonb ELSE sme.embedded_data_specification END", valueOnly).As("embeddedDataSpecifications"),
+		goqu.L("CASE WHEN ? THEN '[]'::jsonb ELSE sme.supplemental_semantic_ids END", valueOnly).As("supplementalSemanticIds"),
+		goqu.L("CASE WHEN ? THEN '[]'::jsonb ELSE sme.extensions END", valueOnly).As("extensions"),
+		displayNamesSubquery.As("displayNames"),
+		descriptionsSubquery.As("descriptions"),
+		valueByType.As("value"),
+		semanticIDSubquery.As("semanticId"),
+		semanticIDReferredSubquery.As("semanticIdReferred"),
+		qualifierSubquery.As("qualifiers"),
+	)
 
 	if filter.HasSubmodelFilter() {
 		query = query.Where(
