@@ -62,7 +62,8 @@
             }
           ]
         },
-        "FRAGMENT": "$aasdesc#assetInformation.specificAssetIds[]",
+        "FILTER": {
+          "FRAGMENT": "$aasdesc#assetInformation.specificAssetIds[]",
         "CONDITION": {
             "$or": [
                 {
@@ -147,7 +148,7 @@
                 }
             ]
         }
-
+        }
       }
     ]
   }
