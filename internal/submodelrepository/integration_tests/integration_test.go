@@ -8,6 +8,7 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
+	"net/http/httputil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -75,6 +76,31 @@ func makeRequest(config TestConfig, stepNumber int) (string, error) {
 			if err != nil {
 				return "", err
 			}
+
+			// Log outgoing request for debugging for requests with bodies
+			if stepNumber > 0 {
+				reqLog := fmt.Sprintf("logs/REQUEST_STEP_%d.log", stepNumber)
+				f, ferr := os.OpenFile(reqLog, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+				if ferr == nil {
+					fmt.Fprintf(f, "%s %s\n", req.Method, req.URL.String()) //nolint:errcheck
+					for k, v := range req.Header {
+						fmt.Fprintf(f, "%s: %s\n", k, strings.Join(v, ",")) //nolint:errcheck
+					}
+					// If we have a path to a data file, log its contents for easier debugging
+					if config.Data != "" {
+						if data, rerr := os.ReadFile(config.Data); rerr == nil {
+							fmt.Fprintf(f, "\n%s\n", string(data)) //nolint:errcheck
+						}
+					}
+					_ = f.Close()
+				}
+
+				// Dump the raw outgoing HTTP request — this may consume req.Body, so prefer the data file for content
+				if dump, derr := httputil.DumpRequestOut(req, false); derr == nil {
+					rawFile := fmt.Sprintf("logs/RAW_REQUEST_STEP_%d.dump", stepNumber)
+					_ = os.WriteFile(rawFile, dump, 0644) // ignore write error
+				}
+			}
 			req.Header.Set("Content-Type", "application/json")
 		} else {
 			req, err = http.NewRequest("POST", config.Endpoint, nil)
@@ -104,6 +130,29 @@ func makeRequest(config TestConfig, stepNumber int) (string, error) {
 				return "", err
 			}
 		}
+	case "PATCH":
+		if config.Data != "" {
+			data, err := os.ReadFile(config.Data)
+			if err != nil {
+				return "", fmt.Errorf("failed to read data file: %v", err)
+			}
+			req, err = http.NewRequest("PATCH", config.Endpoint, bytes.NewBuffer(data))
+			if err != nil {
+				return "", err
+			}
+			// If payload looks like a JSON object/array, use merge-patch media type
+			trimmed := strings.TrimSpace(string(data))
+			if strings.HasPrefix(trimmed, "{") || strings.HasPrefix(trimmed, "[") {
+				req.Header.Set("Content-Type", "application/merge-patch+json")
+			} else {
+				req.Header.Set("Content-Type", "application/json")
+			}
+		} else {
+			req, err = http.NewRequest("PATCH", config.Endpoint, nil)
+			if err != nil {
+				return "", err
+			}
+		}
 	default:
 		return "", fmt.Errorf("unsupported method: %s", config.Method)
 	}
@@ -115,6 +164,11 @@ func makeRequest(config TestConfig, stepNumber int) (string, error) {
 	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
+		// Log the error to a step-specific file for easier diagnosis
+		if stepNumber > 0 {
+			errLog := fmt.Sprintf("logs/REQUEST_STEP_%d.error.log", stepNumber)
+			_ = os.WriteFile(errLog, []byte(err.Error()), 0644) // ignore write error
+		}
 		return "", err
 	}
 
@@ -394,6 +448,81 @@ func TestMain(m *testing.M) {
 
 	// wait for 5sec to ensure that the DB is ready
 	time.Sleep(5 * time.Second)
+
+	// Clean up database from previous test runs
+	fmt.Println("Cleaning up database from previous test runs...")
+	cleanupQuery := `
+		-- Disable foreign key checks temporarily
+		SET session_replication_role = 'replica';
+		
+		-- Truncate all tables in reverse dependency order
+		TRUNCATE TABLE security_attributes CASCADE;
+		TRUNCATE TABLE endpoint_protocol_version CASCADE;
+		TRUNCATE TABLE aas_descriptor_endpoint CASCADE;
+		TRUNCATE TABLE specific_asset_id_supplemental_semantic_id CASCADE;
+		TRUNCATE TABLE specific_asset_id CASCADE;
+		TRUNCATE TABLE descriptor_extension CASCADE;
+		TRUNCATE TABLE submodel_descriptor_supplemental_semantic_id CASCADE;
+		TRUNCATE TABLE submodel_descriptor CASCADE;
+		TRUNCATE TABLE aas_descriptor CASCADE;
+		TRUNCATE TABLE descriptor CASCADE;
+		TRUNCATE TABLE qualifier_supplemental_semantic_id CASCADE;
+		TRUNCATE TABLE submodel_qualifier CASCADE;
+		TRUNCATE TABLE submodel_element_qualifier CASCADE;
+		TRUNCATE TABLE qualifier CASCADE;
+		TRUNCATE TABLE basic_event_element CASCADE;
+		TRUNCATE TABLE capability_element CASCADE;
+		TRUNCATE TABLE operation_variable CASCADE;
+		TRUNCATE TABLE operation_element CASCADE;
+		TRUNCATE TABLE entity_specific_asset_id CASCADE;
+		TRUNCATE TABLE entity_element CASCADE;
+		TRUNCATE TABLE submodel_element_list CASCADE;
+		TRUNCATE TABLE submodel_element_collection CASCADE;
+		TRUNCATE TABLE annotated_relationship_element CASCADE;
+		TRUNCATE TABLE relationship_element CASCADE;
+		TRUNCATE TABLE reference_element CASCADE;
+		TRUNCATE TABLE range_element CASCADE;
+		TRUNCATE TABLE file_data CASCADE;
+		TRUNCATE TABLE file_element CASCADE;
+		TRUNCATE TABLE blob_element CASCADE;
+		TRUNCATE TABLE multilanguage_property_value CASCADE;
+		TRUNCATE TABLE multilanguage_property CASCADE;
+		TRUNCATE TABLE property_element CASCADE;
+		TRUNCATE TABLE submodel_element_embedded_data_specification CASCADE;
+		TRUNCATE TABLE submodel_element_extension CASCADE;
+		TRUNCATE TABLE submodel_element_supplemental_semantic_id CASCADE;
+		TRUNCATE TABLE submodel_element CASCADE;
+		TRUNCATE TABLE submodel_embedded_data_specification CASCADE;
+		TRUNCATE TABLE extension_refers_to CASCADE;
+		TRUNCATE TABLE extension_supplemental_semantic_id CASCADE;
+		TRUNCATE TABLE submodel_extension CASCADE;
+		TRUNCATE TABLE extension CASCADE;
+		TRUNCATE TABLE submodel_supplemental_semantic_id CASCADE;
+		TRUNCATE TABLE submodel CASCADE;
+		TRUNCATE TABLE administrative_information_embedded_data_specification CASCADE;
+		TRUNCATE TABLE data_specification_iec61360 CASCADE;
+		TRUNCATE TABLE level_type CASCADE;
+		TRUNCATE TABLE value_list_value_reference_pair CASCADE;
+		TRUNCATE TABLE value_list CASCADE;
+		TRUNCATE TABLE data_specification CASCADE;
+		TRUNCATE TABLE data_specification_content CASCADE;
+		TRUNCATE TABLE administrative_information CASCADE;
+		TRUNCATE TABLE lang_string_name_type CASCADE;
+		TRUNCATE TABLE lang_string_name_type_reference CASCADE;
+		TRUNCATE TABLE lang_string_text_type CASCADE;
+		TRUNCATE TABLE lang_string_text_type_reference CASCADE;
+		TRUNCATE TABLE reference_key CASCADE;
+		TRUNCATE TABLE reference CASCADE;
+		
+		-- Re-enable foreign key checks
+		SET session_replication_role = 'origin';
+	`
+	_, err = sql.Exec(cleanupQuery)
+	if err != nil {
+		fmt.Printf("Failed to clean up database: %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Println("Database cleanup completed.")
 
 	dir, osErr := os.Getwd()
 
