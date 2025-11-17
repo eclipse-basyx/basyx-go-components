@@ -64,6 +64,7 @@ const (
 // names makes SQL generation more robust to refactors and reduces stringly‑typed
 // errors in the query code.
 const (
+	colPosition                = "position" // this column is needed for the Query Language
 	colID                      = "id"
 	colDescriptorID            = "descriptor_id"
 	colAASDescriptorID         = "aas_descriptor_id"

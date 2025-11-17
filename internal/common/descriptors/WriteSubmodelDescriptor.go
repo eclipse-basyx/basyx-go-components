@@ -45,7 +45,7 @@ func createSubModelDescriptors(tx *sql.Tx, aasDescriptorID int64, submodelDescri
 	}
 	if len(submodelDescriptors) > 0 {
 		d := goqu.Dialect(dialect)
-		for _, val := range submodelDescriptors {
+		for i, val := range submodelDescriptors {
 			var (
 				semanticID       sql.NullInt64
 				displayNameID    sql.NullInt64
@@ -98,6 +98,7 @@ func createSubModelDescriptors(tx *sql.Tx, aasDescriptorID int64, submodelDescri
 				Insert(tblSubmodelDescriptor).
 				Rows(goqu.Record{
 					colDescriptorID:    submodelDescriptorID,
+					colPosition:        i,
 					colAASDescriptorID: aasDescriptorID,
 					colDescriptionID:   descriptionID,
 					colDisplayNameID:   displayNameID,

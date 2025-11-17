@@ -154,7 +154,7 @@ func FromFilter(r *http.Request) *QueryFilter {
 
 // FromFilterCtx extracts a QueryFilter directly from a context instance.
 // TODO: use this helper in backend if you need further restriction
-func FromFilterCtx(ctx context.Context) *QueryFilter {
+func GetQueryFilter(ctx context.Context) *QueryFilter {
 	if v := ctx.Value(filterKey); v != nil {
 		if f, ok := v.(*QueryFilter); ok {
 			return f

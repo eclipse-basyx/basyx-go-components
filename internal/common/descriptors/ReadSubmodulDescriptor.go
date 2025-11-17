@@ -50,7 +50,8 @@ import (
 // fully materialized submodel descriptors including optional fields such as
 // SemanticId, Administration, DisplayName, Description, Endpoints, Extensions
 // and SupplementalSemanticId where available. The order of results is by
-// internal descriptor id and then submodel descriptor id ascending.
+// internal descriptor id, then the submodel descriptor position, and finally
+// submodel descriptor id ascending.
 //
 // Parameters:
 //   - ctx: request-scoped context used for cancellation and deadlines
@@ -119,8 +120,7 @@ func ReadSubmodelDescriptorsByAASDescriptorIDs(
 		).
 		Where(goqu.L(fmt.Sprintf("smd.%s = ANY(?::bigint[])", colAASDescriptorID), arr)).
 		Order(
-			smd.Col(colAASDescriptorID).Asc(),
-			smd.Col(colDescriptorID).Asc(),
+			smd.Col(colPosition).Asc(),
 		).
 		ToSQL()
 	if err != nil {

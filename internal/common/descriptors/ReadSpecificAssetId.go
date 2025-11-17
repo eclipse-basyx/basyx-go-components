@@ -104,7 +104,9 @@ func ReadSpecificAssetIDsByDescriptorIDs(
 			sai.Col(colExternalSubjectRef),
 		).
 		Where(goqu.L("sai.descriptor_id = ANY(?::bigint[])", arr)).
-		Order(sai.Col(colDescriptorID).Asc(), sai.Col(colID).Asc()).
+		Order(
+			sai.Col("position").Asc(),
+		).
 		ToSQL()
 	if err != nil {
 		return nil, err

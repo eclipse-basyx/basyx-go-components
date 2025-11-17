@@ -84,11 +84,12 @@ func createEndpoints(tx *sql.Tx, descriptorID int64, endpoints []model.Endpoint)
 	}
 	if len(endpoints) > 0 {
 		d := goqu.Dialect(dialect)
-		for _, val := range endpoints {
+		for i, val := range endpoints {
 			sqlStr, args, err := d.
 				Insert(tblAASDescriptorEndpoint).
 				Rows(goqu.Record{
 					colDescriptorID:            descriptorID,
+					colPosition:                i,
 					colHref:                    val.ProtocolInformation.Href,
 					colEndpointProtocol:        val.ProtocolInformation.EndpointProtocol,
 					colSubProtocol:             val.ProtocolInformation.Subprotocol,

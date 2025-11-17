@@ -72,7 +72,7 @@ func ReadEndpointsByDescriptorID(
 // without querying the database.
 //
 // Result semantics and ordering:
-// - Endpoints are ordered by descriptor_id ASC, then endpoint id ASC.
+// - Endpoints are ordered by descriptor_id ASC, then position ASC, then endpoint id ASC.
 // - Protocol versions are aggregated per-endpoint and ordered by version row id.
 // - Security attributes are aggregated per-endpoint and ordered by attribute row id.
 // - Nullable text columns are COALESCE'd to empty strings; arrays default to empty.
@@ -141,6 +141,7 @@ func ReadEndpointsByDescriptorIDs(
 		).
 		GroupBy(
 			e.Col(colDescriptorID),
+			e.Col(colPosition),
 			e.Col(colID),
 			e.Col(colHref),
 			e.Col(colEndpointProtocol),
@@ -150,8 +151,7 @@ func ReadEndpointsByDescriptorIDs(
 			e.Col(colInterface),
 		).
 		Order(
-			e.Col(colDescriptorID).Asc(),
-			e.Col(colID).Asc(),
+			e.Col(colPosition).Asc(),
 		).
 		Prepared(true)
 

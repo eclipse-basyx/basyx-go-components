@@ -43,7 +43,7 @@ func createSpecificAssetID(tx *sql.Tx, descriptorID int64, specificAssetIDs []mo
 	}
 	if len(specificAssetIDs) > 0 {
 		d := goqu.Dialect(dialect)
-		for _, val := range specificAssetIDs {
+		for i, val := range specificAssetIDs {
 			var a sql.NullInt64
 
 			externalSubjectReferenceID, err := persistence_utils.CreateReference(tx, val.ExternalSubjectID, a, a)
@@ -59,6 +59,7 @@ func createSpecificAssetID(tx *sql.Tx, descriptorID int64, specificAssetIDs []mo
 				Insert(tblSpecificAssetID).
 				Rows(goqu.Record{
 					colDescriptorID:       descriptorID,
+					colPosition:           i,
 					colSemanticID:         semanticID,
 					colName:               val.Name,
 					colValue:              val.Value,
