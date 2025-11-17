@@ -121,6 +121,16 @@ func TestLogicalExpression_EvaluateModel(t *testing.T) {
 			want: true,
 		},
 		{
+			name: "specific asset id field",
+			expr: LogicalExpression{
+				Eq: ComparisonItems{
+					field("$aasdesc#specificAssetIds[100].value"),
+					strVal("SN-001"),
+				},
+			},
+			want: false,
+		},
+		{
 			name: "submodel descriptor alias",
 			expr: LogicalExpression{
 				Eq: ComparisonItems{

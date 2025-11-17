@@ -45,6 +45,7 @@ import (
 	persistence_postgresql "github.com/eclipse-basyx/basyx-go-components/internal/aasregistry/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 )
 
 const (
@@ -111,6 +112,20 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) GetAllAssetAdministratio
 // PostAssetAdministrationShellDescriptor - Creates a new Asset Administration Shell Descriptor, i.e. registers an AAS
 func (s *AssetAdministrationShellRegistryAPIAPIService) PostAssetAdministrationShellDescriptor(ctx context.Context, assetAdministrationShellDescriptor model.AssetAdministrationShellDescriptor) (model.ImplResponse, error) {
 
+	qf := auth.GetQueryFilter(ctx)
+	if qf != nil && qf.Formula != nil {
+		isAuthenticated, err := qf.Formula.EvaluateAssetAdministrationShellDescriptor(assetAdministrationShellDescriptor)
+		if err != nil {
+			log.Printf("🧩 [%s] Error in PostAssetAdministrationShellDescriptor: internal (aasId=%q): %v", componentName, assetAdministrationShellDescriptor.Id, err)
+			return common.NewErrorResponse(
+				err, http.StatusInternalServerError, componentName, "PostAssetAdministrationShellDescriptor", "Unhandled",
+			), err
+		}
+		if !isAuthenticated {
+			return common.NewAccessDeniedResponse(), nil
+		}
+
+	}
 	// Existence check: AAS with same Id should not already exist (lightweight)
 	if strings.TrimSpace(assetAdministrationShellDescriptor.Id) != "" {
 		if exists, chkErr := s.aasRegistryBackend.ExistsAASByID(ctx, assetAdministrationShellDescriptor.Id); chkErr != nil {
@@ -164,6 +179,21 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) GetAssetAdministrationSh
 	}
 
 	result, err := s.aasRegistryBackend.GetAssetAdministrationShellDescriptorByID(ctx, string(decoded))
+
+	qf := auth.GetQueryFilter(ctx)
+	if qf != nil && qf.Formula != nil {
+		isAuthenticated, err := qf.Formula.EvaluateAssetAdministrationShellDescriptor(result)
+		if err != nil {
+			log.Printf("🧩 [%s] Error in GetAssetAdministrationShellDescriptorById: internal (aasId=%q): %v", componentName, result.Id, err)
+			return common.NewErrorResponse(
+				err, http.StatusInternalServerError, componentName, "GetAssetAdministrationShellDescriptorById", "Unhandled",
+			), err
+		}
+		if !isAuthenticated {
+			return common.NewAccessDeniedResponse(), nil
+		}
+
+	}
 	if err != nil {
 		switch {
 		case common.IsErrBadRequest(err):
@@ -190,6 +220,21 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) GetAssetAdministrationSh
 // PutAssetAdministrationShellDescriptorById - Creates or updates an existing Asset Administration Shell Descriptor
 // nolint:revive // defined by standard
 func (s *AssetAdministrationShellRegistryAPIAPIService) PutAssetAdministrationShellDescriptorById(ctx context.Context, aasIdentifier string, assetAdministrationShellDescriptor model.AssetAdministrationShellDescriptor) (model.ImplResponse, error) {
+	qf := auth.GetQueryFilter(ctx)
+	if qf != nil && qf.Formula != nil {
+		isAuthenticated, err := qf.Formula.EvaluateAssetAdministrationShellDescriptor(assetAdministrationShellDescriptor)
+		if err != nil {
+			log.Printf("🧩 [%s] Error in PutAssetAdministrationShellDescriptorById: internal (aasId=%q): %v", componentName, assetAdministrationShellDescriptor.Id, err)
+			return common.NewErrorResponse(
+				err, http.StatusInternalServerError, componentName, "PutAssetAdministrationShellDescriptorById", "Unhandled",
+			), err
+		}
+		if !isAuthenticated {
+			return common.NewAccessDeniedResponse(), nil
+		}
+
+	}
+
 	// Decode path AAS id
 	decodedAAS, decErr := common.DecodeString(aasIdentifier)
 	if decErr != nil {
@@ -238,6 +283,7 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) PutAssetAdministrationSh
 // DeleteAssetAdministrationShellDescriptorById - Deletes an Asset Administration Shell Descriptor, i.e. de-registers an AAS
 // nolint:revive // defined by standard
 func (s *AssetAdministrationShellRegistryAPIAPIService) DeleteAssetAdministrationShellDescriptorById(ctx context.Context, aasIdentifier string) (model.ImplResponse, error) {
+
 	decoded, decodeErr := common.DecodeString(aasIdentifier)
 	if decodeErr != nil {
 		log.Printf("🧩 [%s] Error in DeleteAssetAdministrationShellDescriptorById: decode aasIdentifier=%q: %v", componentName, aasIdentifier, decodeErr)
@@ -246,6 +292,42 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) DeleteAssetAdministratio
 		), nil
 	}
 
+	// retrieve asset shell for security and existence check
+	result, err := s.aasRegistryBackend.GetAssetAdministrationShellDescriptorByID(ctx, string(decoded))
+	if err != nil {
+		switch {
+		case common.IsErrNotFound(err):
+			log.Printf("🧩 [%s] Error in DeleteAssetAdministrationShellDescriptorById: not found (aasId=%q): %v", componentName, decoded, err)
+			return common.NewErrorResponse(
+				err, http.StatusNotFound, componentName, "DeleteAssetAdministrationShellDescriptorById", "NotFound",
+			), nil
+		case common.IsErrBadRequest(err):
+			log.Printf("🧩 [%s] Error in DeleteAssetAdministrationShellDescriptorById: bad request (aasId=%q): %v", componentName, decoded, err)
+			return common.NewErrorResponse(
+				err, http.StatusBadRequest, componentName, "DeleteAssetAdministrationShellDescriptorById", "BadRequest",
+			), nil
+		default:
+			log.Printf("🧩 [%s] Error in DeleteAssetAdministrationShellDescriptorById: internal (aasId=%q): %v", componentName, decoded, err)
+			return common.NewErrorResponse(
+				err, http.StatusInternalServerError, componentName, "DeleteAssetAdministrationShellDescriptorById", "Unhandled",
+			), err
+		}
+	}
+
+	qf := auth.GetQueryFilter(ctx)
+	if qf != nil && qf.Formula != nil {
+		isAuthenticated, err := qf.Formula.EvaluateAssetAdministrationShellDescriptor(result)
+		if err != nil {
+			log.Printf("🧩 [%s] Error in PutAssetAdministrationShellDescriptorById: internal (aasId=%q): %v", componentName, result.Id, err)
+			return common.NewErrorResponse(
+				err, http.StatusInternalServerError, componentName, "PutAssetAdministrationShellDescriptorById", "Unhandled",
+			), err
+		}
+		if !isAuthenticated {
+			return common.NewAccessDeniedResponse(), nil
+		}
+
+	}
 	if err := s.aasRegistryBackend.DeleteAssetAdministrationShellDescriptorByID(ctx, decoded); err != nil {
 		switch {
 		case common.IsErrNotFound(err):
@@ -278,6 +360,42 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) GetAllSubmodelDescriptor
 		return common.NewErrorResponse(
 			decodeErr, http.StatusBadRequest, componentName, "GetAllSubmodelDescriptorsThroughSuperpath", "BadRequest-Decode",
 		), nil
+	}
+
+	result, err := s.aasRegistryBackend.GetAssetAdministrationShellDescriptorByID(ctx, string(decodedAAS))
+
+	qf := auth.GetQueryFilter(ctx)
+	if qf != nil && qf.Formula != nil {
+		isAuthenticated, err := qf.Formula.EvaluateAssetAdministrationShellDescriptor(result)
+		if err != nil {
+			log.Printf("🧩 [%s] Error in GetAssetAdministrationShellDescriptorById: internal (aasId=%q): %v", componentName, result.Id, err)
+			return common.NewErrorResponse(
+				err, http.StatusInternalServerError, componentName, "GetAssetAdministrationShellDescriptorById", "Unhandled",
+			), err
+		}
+		if !isAuthenticated {
+			return common.NewAccessDeniedResponse(), nil
+		}
+
+	}
+	if err != nil {
+		switch {
+		case common.IsErrBadRequest(err):
+			log.Printf("🧩 [%s] Error in GetAssetAdministrationShellDescriptorById: bad request (aasId=%q): %v", componentName, string(decodedAAS), err)
+			return common.NewErrorResponse(
+				err, http.StatusBadRequest, componentName, "GetAssetAdministrationShellDescriptorById", "BadRequest",
+			), nil
+		case common.IsErrNotFound(err):
+			log.Printf("🧩 [%s] Error in GetAssetAdministrationShellDescriptorById: not found (aasId=%q): %v", componentName, string(decodedAAS), err)
+			return common.NewErrorResponse(
+				err, http.StatusNotFound, componentName, "GetAssetAdministrationShellDescriptorById", "NotFound",
+			), nil
+		default:
+			log.Printf("🧩 [%s] Error in GetAssetAdministrationShellDescriptorById: internal (aasId=%q): %v", componentName, string(decodedAAS), err)
+			return common.NewErrorResponse(
+				err, http.StatusInternalServerError, componentName, "GetAssetAdministrationShellDescriptorById", "Unhandled",
+			), err
+		}
 	}
 
 	// Check AAS existence
@@ -334,6 +452,20 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) GetAllSubmodelDescriptor
 // PostSubmodelDescriptorThroughSuperpath - Creates a new Submodel Descriptor, i.e. registers a submodel
 func (s *AssetAdministrationShellRegistryAPIAPIService) PostSubmodelDescriptorThroughSuperpath(ctx context.Context, aasIdentifier string, submodelDescriptor model.SubmodelDescriptor) (model.ImplResponse, error) {
 
+	qf := auth.GetQueryFilter(ctx)
+	if qf != nil && qf.Formula != nil {
+		isAuthenticated, err := qf.Formula.EvaluateSubmodelDescriptor(submodelDescriptor)
+		if err != nil {
+			log.Printf("🧩 [%s] Error in PostSubmodelDescriptorThroughSuperpath: internal (aasId=%q): %v", componentName, submodelDescriptor.Id, err)
+			return common.NewErrorResponse(
+				err, http.StatusInternalServerError, componentName, "PostSubmodelDescriptorThroughSuperpath", "Unhandled",
+			), err
+		}
+		if !isAuthenticated {
+			return common.NewAccessDeniedResponse(), nil
+		}
+
+	}
 	decodedAAS, decodeErr := common.DecodeString(aasIdentifier)
 	if decodeErr != nil {
 		log.Printf("🧩 [%s] Error in PostSubmodelDescriptorThroughSuperpath: decode aasIdentifier=%q: %v", componentName, aasIdentifier, decodeErr)
@@ -407,6 +539,22 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) GetSubmodelDescriptorByI
 	}
 
 	smd, err := s.aasRegistryBackend.GetSubmodelDescriptorForAASByID(ctx, decodedAAS, decodedSMD)
+
+	qf := auth.GetQueryFilter(ctx)
+	if qf != nil && qf.Formula != nil {
+		isAuthenticated, err := qf.Formula.EvaluateSubmodelDescriptor(smd)
+		if err != nil {
+			log.Printf("🧩 [%s] Error in GetSubmodelDescriptorByIdThroughSuperpath: internal (aasId=%q): %v", componentName, smd.Id, err)
+			return common.NewErrorResponse(
+				err, http.StatusInternalServerError, componentName, "GetSubmodelDescriptorByIdThroughSuperpath", "Unhandled",
+			), err
+		}
+		if !isAuthenticated {
+			return common.NewAccessDeniedResponse(), nil
+		}
+
+	}
+
 	if err != nil {
 		switch {
 		case common.IsErrNotFound(err):
@@ -428,6 +576,22 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) GetSubmodelDescriptorByI
 // PutSubmodelDescriptorByIdThroughSuperpath - Creates or updates an existing Submodel Descriptor
 // nolint:revive // defined by standard
 func (s *AssetAdministrationShellRegistryAPIAPIService) PutSubmodelDescriptorByIdThroughSuperpath(ctx context.Context, aasIdentifier string, submodelIdentifier string, submodelDescriptor model.SubmodelDescriptor) (model.ImplResponse, error) {
+
+	qf := auth.GetQueryFilter(ctx)
+	if qf != nil && qf.Formula != nil {
+		isAuthenticated, err := qf.Formula.EvaluateSubmodelDescriptor(submodelDescriptor)
+		if err != nil {
+			log.Printf("🧩 [%s] Error in PutSubmodelDescriptorByIdThroughSuperpath: internal (aasId=%q): %v", componentName, submodelDescriptor.Id, err)
+			return common.NewErrorResponse(
+				err, http.StatusInternalServerError, componentName, "PutSubmodelDescriptorByIdThroughSuperpath", "Unhandled",
+			), err
+		}
+		if !isAuthenticated {
+			return common.NewAccessDeniedResponse(), nil
+		}
+
+	}
+
 	// Decode path params
 	decodedAAS, decErr := common.DecodeString(aasIdentifier)
 	if decErr != nil {
@@ -504,6 +668,36 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) DeleteSubmodelDescriptor
 		), nil
 	}
 
+	smd, err := s.aasRegistryBackend.GetSubmodelDescriptorForAASByID(ctx, decodedAAS, decodedSMD)
+
+	if err != nil {
+		switch {
+		case common.IsErrNotFound(err):
+			log.Printf("🧩 [%s] Error in GetSubmodelDescriptorByIdThroughSuperpath: not found (aasId=%q submodelId=%q): %v", componentName, decodedAAS, decodedSMD, err)
+			return common.NewErrorResponse(
+				err, http.StatusNotFound, componentName, "GetSubmodelDescriptorByIdThroughSuperpath", "NotFound",
+			), nil
+		default:
+			log.Printf("🧩 [%s] Error in GetSubmodelDescriptorByIdThroughSuperpath: internal (aasId=%q submodelId=%q): %v", componentName, decodedAAS, decodedSMD, err)
+			return common.NewErrorResponse(
+				err, http.StatusInternalServerError, componentName, "GetSubmodelDescriptorByIdThroughSuperpath", "Unhandled",
+			), err
+		}
+	}
+	qf := auth.GetQueryFilter(ctx)
+	if qf != nil && qf.Formula != nil {
+		isAuthenticated, err := qf.Formula.EvaluateSubmodelDescriptor(smd)
+		if err != nil {
+			log.Printf("🧩 [%s] Error in DeleteSubmodelDescriptorByIdThroughSuperpath: internal (aasId=%q): %v", componentName, smd.Id, err)
+			return common.NewErrorResponse(
+				err, http.StatusInternalServerError, componentName, "DeleteSubmodelDescriptorByIdThroughSuperpath", "Unhandled",
+			), err
+		}
+		if !isAuthenticated {
+			return common.NewAccessDeniedResponse(), nil
+		}
+
+	}
 	if err := s.aasRegistryBackend.DeleteSubmodelDescriptorForAASByID(ctx, decodedAAS, decodedSMD); err != nil {
 		switch {
 		case common.IsErrNotFound(err):
@@ -523,5 +717,6 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) DeleteSubmodelDescriptor
 			), err
 		}
 	}
+
 	return model.Response(http.StatusNoContent, nil), nil
 }
