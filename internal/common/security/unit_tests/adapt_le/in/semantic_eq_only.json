@@ -1,7 +1,0 @@
-{
-  "$eq": [
-    { "$field": "$sm#semanticId" },
-    { "$strVal": "SemanticID-Nameplate" }
-  ]
-}
-

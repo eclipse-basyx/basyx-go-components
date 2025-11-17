@@ -8,7 +8,7 @@ import (
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 )
 
-func getFilterQueryFromContext(d goqu.DialectWrapper, ds *goqu.SelectDataset, tableCol exp.AliasedExpression, ctx context.Context) (*goqu.SelectDataset, error) {
+func getFilterQueryFromContext(ctx context.Context, d goqu.DialectWrapper, ds *goqu.SelectDataset, tableCol exp.AliasedExpression) (*goqu.SelectDataset, error) {
 
 	p := auth.GetQueryFilter(ctx)
 	if p != nil {

@@ -424,7 +424,7 @@ func ListAssetAdministrationShellDescriptors(
 			aas.Col(colDescriptionID),
 		)
 
-	ds, err := getFilterQueryFromContext(d, ds, aas, ctx)
+	ds, err := getFilterQueryFromContext(ctx, d, ds, aas)
 	if err != nil {
 		return nil, "", err
 	}

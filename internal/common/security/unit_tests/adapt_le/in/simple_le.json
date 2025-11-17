@@ -1,8 +1,0 @@
-{
-  "$or": [
-    { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "viewer" } ] },
-    { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "editor" } ] },
-    { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "admin" } ] }
-  ]
-}
-      

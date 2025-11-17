@@ -26,7 +26,9 @@ func LoadEvalInput(filename string) (EvalInput, error) {
 	if err != nil {
 		return input, err
 	}
-	defer file.Close()
+	defer func() {
+		_ = file.Close()
+	}()
 
 	if err := json.NewDecoder(file).Decode(&input); err != nil {
 		return input, err

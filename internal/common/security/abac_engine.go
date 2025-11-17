@@ -331,6 +331,9 @@ func matchRoute(route string, userPath string) bool {
 	return matched
 }
 
+// RouteWithFilter couples a concrete HTTP route pattern with an optional
+// logical expression. When the route matches a request path, the expression
+// (if present) is AND-ed into the overall filter used by the backend.
 type RouteWithFilter struct {
 	route string
 	le    *grammar.LogicalExpression
@@ -344,23 +347,22 @@ func mapDesciptorValueToRoute(descriptorValue grammar.DescriptorValue) []RouteWi
 				{route: "/shell-descriptors"},
 				{route: "/shell-descriptors/*"},
 			}
-		} else {
-			id := descriptorValue.ID.ID
-			encodeID := common.EncodeString(id)
-			field := grammar.ModelStringPattern("$aasdesc#id")
-			standardString := grammar.StandardString(id)
+		}
+		id := descriptorValue.ID.ID
+		encodeID := common.EncodeString(id)
+		field := grammar.ModelStringPattern("$aasdesc#id")
+		standardString := grammar.StandardString(id)
 
-			extra_filter := grammar.LogicalExpression{
-				Eq: grammar.ComparisonItems{
-					grammar.Value{Field: &field},
-					grammar.Value{StrVal: &standardString},
-				},
-			}
+		extraFilter := grammar.LogicalExpression{
+			Eq: grammar.ComparisonItems{
+				grammar.Value{Field: &field},
+				grammar.Value{StrVal: &standardString},
+			},
+		}
 
-			return []RouteWithFilter{
-				{route: "/shell-descriptors", le: &extra_filter},
-				{route: "/shell-descriptors/" + encodeID},
-			}
+		return []RouteWithFilter{
+			{route: "/shell-descriptors", le: &extraFilter},
+			{route: "/shell-descriptors/" + encodeID},
 		}
 
 	case "$smdesc":
@@ -369,32 +371,36 @@ func mapDesciptorValueToRoute(descriptorValue grammar.DescriptorValue) []RouteWi
 				{route: "/shell-descriptors/*/submodel-descriptors"},
 				{route: "/shell-descriptors/*/submodel-descriptors/*"},
 			}
-		} else {
-			id := descriptorValue.ID.ID
-			encodeID := common.EncodeString(id)
-
-			field := grammar.ModelStringPattern("$smdesc#id")
-			standardString := grammar.StandardString(id)
-
-			extra_filter := grammar.LogicalExpression{
-				Eq: grammar.ComparisonItems{
-					grammar.Value{Field: &field},
-					grammar.Value{StrVal: &standardString},
-				},
-			}
-
-			return []RouteWithFilter{
-				// collection route + filter on submodel-descriptor id
-				{route: "/shell-descriptors/*/submodel-descriptors", le: &extra_filter},
-				// direct item route
-				{route: "/shell-descriptors/*/submodel-descriptors/" + encodeID},
-			}
 		}
+		id := descriptorValue.ID.ID
+		encodeID := common.EncodeString(id)
+
+		field := grammar.ModelStringPattern("$smdesc#id")
+		standardString := grammar.StandardString(id)
+
+		extraFilter := grammar.LogicalExpression{
+			Eq: grammar.ComparisonItems{
+				grammar.Value{Field: &field},
+				grammar.Value{StrVal: &standardString},
+			},
+		}
+
+		return []RouteWithFilter{
+			// collection route + filter on submodel-descriptor id
+			{route: "/shell-descriptors/*/submodel-descriptors", le: &extraFilter},
+			// direct item route
+			{route: "/shell-descriptors/*/submodel-descriptors/" + encodeID},
+		}
+
 	}
 
 	return []RouteWithFilter{}
 }
 
+// AccessWithLE represents the outcome of matching a request path against a
+// set of object definitions. If access is true, the optional LogicalExpression
+// can be used to further constrain the result set (e.g. as an additional
+// backend filter).
 type AccessWithLE struct {
 	access bool
 	le     *grammar.LogicalExpression
@@ -443,7 +449,9 @@ func matchRouteObjectsObjItem(objs []grammar.ObjectItem, reqPath string) AccessW
 	return AccessWithLE{access: access, le: objectLogicalExpression}
 }
 
-// Cond is a helper alias used by logical evaluation and utility functions.
+// Cond is a generic condition map used by logical evaluation and helper
+// utilities. It is typically constructed from claims, attributes, or other
+// context information and then fed into expression evaluators.
 type Cond map[string]any
 
 // asStringMap attempts to normalize arbitrary map-like values into a

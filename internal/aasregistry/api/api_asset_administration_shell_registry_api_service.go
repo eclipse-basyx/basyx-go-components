@@ -22,7 +22,8 @@
 *
 * SPDX-License-Identifier: MIT
 ******************************************************************************/
-// Author: Martin Stemmer ( Fraunhofer IESE )
+
+// Package assregistryapi implements Asset Administration Shell Registry Service
 /*
  * DotAAS Part 2 | HTTP/REST | Asset Administration Shell Registry Service Specification
  *
@@ -31,8 +32,8 @@
  * API version: V3.1.1_SSP-001
  * Contact: info@idtwin.org
  */
-
-package ass_registry_api
+// Author: Martin Stemmer ( Fraunhofer IESE )
+package assregistryapi
 
 import (
 	"context"
@@ -151,6 +152,7 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) PostAssetAdministrationS
 }
 
 // GetAssetAdministrationShellDescriptorById - Returns a specific Asset Administration Shell Descriptor
+// nolint:revive // defined by standard
 func (s *AssetAdministrationShellRegistryAPIAPIService) GetAssetAdministrationShellDescriptorById(ctx context.Context, aasIdentifier string) (model.ImplResponse, error) {
 
 	decoded, decodeErr := common.DecodeString(aasIdentifier)
@@ -186,6 +188,7 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) GetAssetAdministrationSh
 }
 
 // PutAssetAdministrationShellDescriptorById - Creates or updates an existing Asset Administration Shell Descriptor
+// nolint:revive // defined by standard
 func (s *AssetAdministrationShellRegistryAPIAPIService) PutAssetAdministrationShellDescriptorById(ctx context.Context, aasIdentifier string, assetAdministrationShellDescriptor model.AssetAdministrationShellDescriptor) (model.ImplResponse, error) {
 	// Decode path AAS id
 	decodedAAS, decErr := common.DecodeString(aasIdentifier)
@@ -233,6 +236,7 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) PutAssetAdministrationSh
 }
 
 // DeleteAssetAdministrationShellDescriptorById - Deletes an Asset Administration Shell Descriptor, i.e. de-registers an AAS
+// nolint:revive // defined by standard
 func (s *AssetAdministrationShellRegistryAPIAPIService) DeleteAssetAdministrationShellDescriptorById(ctx context.Context, aasIdentifier string) (model.ImplResponse, error) {
 	decoded, decodeErr := common.DecodeString(aasIdentifier)
 	if decodeErr != nil {
@@ -384,6 +388,7 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) PostSubmodelDescriptorTh
 }
 
 // GetSubmodelDescriptorByIdThroughSuperpath - Returns a specific Submodel Descriptor
+// nolint:revive // defined by standard
 func (s *AssetAdministrationShellRegistryAPIAPIService) GetSubmodelDescriptorByIdThroughSuperpath(ctx context.Context, aasIdentifier string, submodelIdentifier string) (model.ImplResponse, error) {
 	// Decode path params
 	decodedAAS, decErr := common.DecodeString(aasIdentifier)
@@ -421,6 +426,7 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) GetSubmodelDescriptorByI
 }
 
 // PutSubmodelDescriptorByIdThroughSuperpath - Creates or updates an existing Submodel Descriptor
+// nolint:revive // defined by standard
 func (s *AssetAdministrationShellRegistryAPIAPIService) PutSubmodelDescriptorByIdThroughSuperpath(ctx context.Context, aasIdentifier string, submodelIdentifier string, submodelDescriptor model.SubmodelDescriptor) (model.ImplResponse, error) {
 	// Decode path params
 	decodedAAS, decErr := common.DecodeString(aasIdentifier)
@@ -481,6 +487,7 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) PutSubmodelDescriptorByI
 }
 
 // DeleteSubmodelDescriptorByIdThroughSuperpath - Deletes a Submodel Descriptor, i.e. de-registers a submodel
+// nolint:revive // defined by standard
 func (s *AssetAdministrationShellRegistryAPIAPIService) DeleteSubmodelDescriptorByIdThroughSuperpath(ctx context.Context, aasIdentifier string, submodelIdentifier string) (model.ImplResponse, error) {
 	decodedAAS, decErr := common.DecodeString(aasIdentifier)
 	if decErr != nil {

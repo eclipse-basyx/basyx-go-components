@@ -30,7 +30,6 @@ package grammar
 import (
 	"encoding/json"
 	"fmt"
-	"strconv"
 	"strings"
 
 	"github.com/doug-martin/goqu/v9"
@@ -521,7 +520,7 @@ func normalizeSemanticShorthand(operand *Value) {
 		return
 	}
 	if strings.HasSuffix(field, ".semanticId") || strings.HasSuffix(field, ".externalSubjectId") {
-		field = field + ".keys[0].value"
+		field += ".keys[0].value"
 		*operand.Field = ModelStringPattern(field)
 	}
 
@@ -597,26 +596,6 @@ func getArrayFieldAlias(field string) string {
 	}
 
 	return ""
-}
-
-func getPositionAsInteger(operandToUse *Value, start int, end int) (string, int, error) {
-	positionStr := string(*operandToUse.Field)[start+1 : end]
-	position, err := strconv.Atoi(positionStr)
-	return positionStr, position, err
-}
-
-func isNotWildcardAndValidIndices(start, end int) bool {
-	return start != -1 && end != -1 && start < end && (end-start > 1)
-}
-
-func getStartAndEndIndicesOfBrackets(operandToUse *Value) (int, int) {
-	start := strings.Index(string(*operandToUse.Field), "[")
-	end := strings.Index(string(*operandToUse.Field), "]")
-	return start, end
-}
-
-func isSemanticIDShorthandField(operand *Value) bool {
-	return operand.IsField() && operand.Field != nil && string(*operand.Field) == "$sm#semanticId"
 }
 
 func isSemanticIDSpecificKeyValueField(operand *Value, isTypeCheck bool) bool {

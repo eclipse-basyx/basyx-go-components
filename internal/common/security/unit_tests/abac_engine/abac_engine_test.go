@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 	"testing"
 
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
@@ -56,7 +55,7 @@ type resp struct {
 // expected adapted expression, and optional context (claims/now).
 func TestAdaptLEForBackend(t *testing.T) {
 	t.Parallel()
-	manifest := filepath.Join("testcases.json")
+	manifest := "testcases.json"
 
 	rawManifest, err := os.ReadFile(manifest)
 	if err != nil {
