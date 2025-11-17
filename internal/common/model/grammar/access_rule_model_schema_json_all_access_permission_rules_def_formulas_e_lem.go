@@ -28,8 +28,9 @@
 package grammar
 
 import (
-	"encoding/json"
 	"fmt"
+
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 )
 
 // AccessRuleModelSchemaJSONAllAccessPermissionRulesDEFFORMULASElem represents a formula definition
@@ -82,7 +83,7 @@ type AccessRuleModelSchemaJSONAllAccessPermissionRulesDEFFORMULASElem struct {
 //     is missing. Returns nil on successful unmarshaling and validation.
 func (j *AccessRuleModelSchemaJSONAllAccessPermissionRulesDEFFORMULASElem) UnmarshalJSON(value []byte) error {
 	var raw map[string]interface{}
-	if err := json.Unmarshal(value, &raw); err != nil {
+	if err := common.UnmarshalAndDisallowUnknownFields(value, &raw); err != nil {
 		return err
 	}
 	if _, ok := raw["formula"]; raw != nil && !ok {
@@ -93,7 +94,7 @@ func (j *AccessRuleModelSchemaJSONAllAccessPermissionRulesDEFFORMULASElem) Unmar
 	}
 	type Plain AccessRuleModelSchemaJSONAllAccessPermissionRulesDEFFORMULASElem
 	var plain Plain
-	if err := json.Unmarshal(value, &plain); err != nil {
+	if err := common.UnmarshalAndDisallowUnknownFields(value, &plain); err != nil {
 		return err
 	}
 	*j = AccessRuleModelSchemaJSONAllAccessPermissionRulesDEFFORMULASElem(plain)

@@ -23,30 +23,33 @@
 * SPDX-License-Identifier: MIT
 ******************************************************************************/
 
-// Package grammar defines the data structures for representing time literal patterns in the grammar model.
-// Author: Aaron Zielstorff ( Fraunhofer IESE ), Jannik Fried ( Fraunhofer IESE )
-package grammar
+// Package grammar defines the data structures for representing logical expressions in the grammar model.
+// Author: Martin Stemmer ( Fraunhofer IESE )
+package common
 
 import (
-	"fmt"
-	"regexp"
+	"bytes"
 
-	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	jsoniter "github.com/json-iterator/go"
 )
 
-// TimeLiteralPattern represents a time literal pattern in the format "HH:MM" or "HH:MM:SS".
-type TimeLiteralPattern string
+func UnmarshalAndDisallowUnknownFields(value []byte, v any) error {
 
-// UnmarshalJSON implements json.Unmarshaler.
-func (j *TimeLiteralPattern) UnmarshalJSON(value []byte) error {
-	type Plain TimeLiteralPattern
-	var plain Plain
-	if err := common.UnmarshalAndDisallowUnknownFields(value, &plain); err != nil {
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
+	dec := json.NewDecoder(bytes.NewReader(value))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(v); err != nil {
 		return err
 	}
-	if matched, _ := regexp.MatchString(`^[0-9][0-9]:[0-9][0-9](:[0-9][0-9])?$`, string(plain)); !matched {
-		return fmt.Errorf("field %s pattern match: must match %s", "", `^[0-9][0-9]:[0-9][0-9](:[0-9][0-9])?$`)
+	return nil
+}
+
+func Unmarshal(value []byte, v any) error {
+
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
+	dec := json.NewDecoder(bytes.NewReader(value))
+	if err := dec.Decode(v); err != nil {
+		return err
 	}
-	*j = TimeLiteralPattern(plain)
 	return nil
 }

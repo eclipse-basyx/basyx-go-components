@@ -69,5 +69,10 @@
     "file": "pass/complex_rules.json",
     "type": "AccessRuleModelSchemaJson",
     "should_fail": false
+  },
+  {
+    "file": "fail/wrong_bool.json",
+    "type": "AccessRuleModelSchemaJson",
+    "should_fail": true
   }
 ]

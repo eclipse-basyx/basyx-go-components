@@ -28,12 +28,12 @@
 package grammar
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
 
 	"github.com/doug-martin/goqu/v9"
 	"github.com/doug-martin/goqu/v9/exp"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	builder "github.com/eclipse-basyx/basyx-go-components/internal/common/builder"
 )
 
@@ -128,7 +128,8 @@ type LogicalExpression struct {
 func (le *LogicalExpression) UnmarshalJSON(value []byte) error {
 	type Plain LogicalExpression
 	var plain Plain
-	if err := json.Unmarshal(value, &plain); err != nil {
+
+	if err := common.UnmarshalAndDisallowUnknownFields(value, &plain); err != nil {
 		return err
 	}
 	if plain.And != nil && len(plain.And) < 2 {

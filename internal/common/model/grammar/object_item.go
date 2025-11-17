@@ -33,6 +33,8 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 )
 
 // Route is an OBJECTTYPE value for route objects in the grammar model.
@@ -178,9 +180,9 @@ type DescriptorValue struct {
 // Examples (structured form):
 //
 //	{"ROUTE": {"Route": "/api/submodels/123"}}
-func (o *ObjectItem) UnmarshalJSON(b []byte) error {
+func (o *ObjectItem) UnmarshalJSON(value []byte) error {
 	var raw map[string]json.RawMessage
-	if err := json.Unmarshal(b, &raw); err != nil {
+	if err := common.UnmarshalAndDisallowUnknownFields(value, &raw); err != nil {
 		return err
 	}
 	if len(raw) != 1 {
@@ -194,7 +196,8 @@ func (o *ObjectItem) UnmarshalJSON(b []byte) error {
 		}
 		// Value can be a string (grammar) or already an object; we accept both.
 		var s string
-		if err := json.Unmarshal(v, &s); err == nil {
+
+		if err := common.UnmarshalAndDisallowUnknownFields(v, &s); err == nil {
 			// parse from string grammar
 			switch kind {
 			case Route:
@@ -235,31 +238,31 @@ func (o *ObjectItem) UnmarshalJSON(b []byte) error {
 		switch kind {
 		case Route:
 			var rv RouteValue
-			if err := json.Unmarshal(v, &rv); err != nil {
+			if err := common.UnmarshalAndDisallowUnknownFields(v, &rv); err != nil {
 				return err
 			}
 			o.Kind, o.Route = Route, &rv
 		case Identifiable:
 			var iv IdentifiableValue
-			if err := json.Unmarshal(v, &iv); err != nil {
+			if err := common.UnmarshalAndDisallowUnknownFields(v, &iv); err != nil {
 				return err
 			}
 			o.Kind, o.Identifiable = Identifiable, &iv
 		case Referable:
 			var rv ReferableValue
-			if err := json.Unmarshal(v, &rv); err != nil {
+			if err := common.UnmarshalAndDisallowUnknownFields(v, &rv); err != nil {
 				return err
 			}
 			o.Kind, o.Referable = Referable, &rv
 		case Fragment:
 			var fv FragmentValue
-			if err := json.Unmarshal(v, &fv); err != nil {
+			if err := common.UnmarshalAndDisallowUnknownFields(v, &fv); err != nil {
 				return err
 			}
 			o.Kind, o.Fragment = Fragment, &fv
 		case Descriptor:
 			var dv DescriptorValue
-			if err := json.Unmarshal(v, &dv); err != nil {
+			if err := common.UnmarshalAndDisallowUnknownFields(v, &dv); err != nil {
 				return err
 			}
 			o.Kind, o.Descriptor = Descriptor, &dv
