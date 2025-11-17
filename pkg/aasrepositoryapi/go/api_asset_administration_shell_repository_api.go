@@ -17,7 +17,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/gorilla/mux"
+	"github.com/go-chi/chi/v5"
 )
 
 // AssetAdministrationShellRepositoryAPIAPIController binds http requests to an api service and writes the service results to the http response
@@ -324,7 +324,6 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) GetAllAssetAdminist
 		return
 	}
 	var assetIdsParam []string
-
 	if query.Has("assetIds") {
 		assetIdsParam = strings.Split(query.Get("assetIds"), ",")
 	}
@@ -337,7 +336,11 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) GetAllAssetAdminist
 	}
 	var limitParam int32
 	if query.Has("limit") {
-		param, err := parseNumericParameter(query.Get("limit"), 1)
+		param, err := parseNumericParameter[int32](
+			query.Get("limit"),
+			WithParse[int32](parseInt32),
+			WithMinimum[int32](1),
+		)
 		if err != nil {
 			c.errorHandler(w, r, &ParsingError{Param: "limit", Err: err}, nil)
 			return
@@ -410,7 +413,11 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) GetAllAssetAdminist
 	}
 	var limitParam int32
 	if query.Has("limit") {
-		param, err := parseNumericParameter(query.Get("limit"), 1)
+		param, err := parseNumericParameter[int32](
+			query.Get("limit"),
+			WithParse[int32](parseInt32),
+			WithMinimum[int32](1),
+		)
 		if err != nil {
 			c.errorHandler(w, r, &ParsingError{Param: "limit", Err: err}, nil)
 			return
@@ -438,8 +445,7 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) GetAllAssetAdminist
 
 // GetAssetAdministrationShellById - Returns a specific Asset Administration Shell
 func (c *AssetAdministrationShellRepositoryAPIAPIController) GetAssetAdministrationShellById(w http.ResponseWriter, r *http.Request) {
-	params := mux.Vars(r)
-	aasIdentifierParam := params["aasIdentifier"]
+	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
 	if aasIdentifierParam == "" {
 		c.errorHandler(w, r, &RequiredError{"aasIdentifier"}, nil)
 		return
@@ -456,8 +462,7 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) GetAssetAdministrat
 
 // PutAssetAdministrationShellById - Creates or updates an existing Asset Administration Shell
 func (c *AssetAdministrationShellRepositoryAPIAPIController) PutAssetAdministrationShellById(w http.ResponseWriter, r *http.Request) {
-	params := mux.Vars(r)
-	aasIdentifierParam := params["aasIdentifier"]
+	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
 	if aasIdentifierParam == "" {
 		c.errorHandler(w, r, &RequiredError{"aasIdentifier"}, nil)
 		return
@@ -489,8 +494,7 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) PutAssetAdministrat
 
 // DeleteAssetAdministrationShellById - Deletes an Asset Administration Shell
 func (c *AssetAdministrationShellRepositoryAPIAPIController) DeleteAssetAdministrationShellById(w http.ResponseWriter, r *http.Request) {
-	params := mux.Vars(r)
-	aasIdentifierParam := params["aasIdentifier"]
+	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
 	if aasIdentifierParam == "" {
 		c.errorHandler(w, r, &RequiredError{"aasIdentifier"}, nil)
 		return
@@ -507,8 +511,7 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) DeleteAssetAdminist
 
 // GetAssetAdministrationShellByIdReferenceAasRepository - Returns a specific Asset Administration Shell as a Reference
 func (c *AssetAdministrationShellRepositoryAPIAPIController) GetAssetAdministrationShellByIdReferenceAasRepository(w http.ResponseWriter, r *http.Request) {
-	params := mux.Vars(r)
-	aasIdentifierParam := params["aasIdentifier"]
+	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
 	if aasIdentifierParam == "" {
 		c.errorHandler(w, r, &RequiredError{"aasIdentifier"}, nil)
 		return
@@ -525,8 +528,7 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) GetAssetAdministrat
 
 // GetAssetInformationAasRepository - Returns the Asset Information
 func (c *AssetAdministrationShellRepositoryAPIAPIController) GetAssetInformationAasRepository(w http.ResponseWriter, r *http.Request) {
-	params := mux.Vars(r)
-	aasIdentifierParam := params["aasIdentifier"]
+	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
 	if aasIdentifierParam == "" {
 		c.errorHandler(w, r, &RequiredError{"aasIdentifier"}, nil)
 		return
@@ -543,8 +545,7 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) GetAssetInformation
 
 // PutAssetInformationAasRepository - Updates the Asset Information
 func (c *AssetAdministrationShellRepositoryAPIAPIController) PutAssetInformationAasRepository(w http.ResponseWriter, r *http.Request) {
-	params := mux.Vars(r)
-	aasIdentifierParam := params["aasIdentifier"]
+	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
 	if aasIdentifierParam == "" {
 		c.errorHandler(w, r, &RequiredError{"aasIdentifier"}, nil)
 		return
@@ -576,8 +577,7 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) PutAssetInformation
 
 // GetThumbnailAasRepository -
 func (c *AssetAdministrationShellRepositoryAPIAPIController) GetThumbnailAasRepository(w http.ResponseWriter, r *http.Request) {
-	params := mux.Vars(r)
-	aasIdentifierParam := params["aasIdentifier"]
+	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
 	if aasIdentifierParam == "" {
 		c.errorHandler(w, r, &RequiredError{"aasIdentifier"}, nil)
 		return
@@ -598,8 +598,7 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) PutThumbnailAasRepo
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
-	params := mux.Vars(r)
-	aasIdentifierParam := params["aasIdentifier"]
+	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
 	if aasIdentifierParam == "" {
 		c.errorHandler(w, r, &RequiredError{"aasIdentifier"}, nil)
 		return
@@ -629,8 +628,7 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) PutThumbnailAasRepo
 
 // DeleteThumbnailAasRepository -
 func (c *AssetAdministrationShellRepositoryAPIAPIController) DeleteThumbnailAasRepository(w http.ResponseWriter, r *http.Request) {
-	params := mux.Vars(r)
-	aasIdentifierParam := params["aasIdentifier"]
+	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
 	if aasIdentifierParam == "" {
 		c.errorHandler(w, r, &RequiredError{"aasIdentifier"}, nil)
 		return
@@ -647,21 +645,23 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) DeleteThumbnailAasR
 
 // GetAllSubmodelReferencesAasRepository - Returns all submodel references
 func (c *AssetAdministrationShellRepositoryAPIAPIController) GetAllSubmodelReferencesAasRepository(w http.ResponseWriter, r *http.Request) {
-	params := mux.Vars(r)
 	query, err := parseQuery(r.URL.RawQuery)
 	if err != nil {
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
-	aasIdentifierParam := params["aasIdentifier"]
+	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
 	if aasIdentifierParam == "" {
 		c.errorHandler(w, r, &RequiredError{"aasIdentifier"}, nil)
 		return
 	}
 	var limitParam int32
 	if query.Has("limit") {
-		param, err := parseNumericParameter(query.Get("limit"), 1)
-
+		param, err := parseNumericParameter[int32](
+			query.Get("limit"),
+			WithParse[int32](parseInt32),
+			WithMinimum[int32](1),
+		)
 		if err != nil {
 			c.errorHandler(w, r, &ParsingError{Param: "limit", Err: err}, nil)
 			return
@@ -689,8 +689,7 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) GetAllSubmodelRefer
 
 // PostSubmodelReferenceAasRepository - Creates a submodel reference at the Asset Administration Shell
 func (c *AssetAdministrationShellRepositoryAPIAPIController) PostSubmodelReferenceAasRepository(w http.ResponseWriter, r *http.Request) {
-	params := mux.Vars(r)
-	aasIdentifierParam := params["aasIdentifier"]
+	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
 	if aasIdentifierParam == "" {
 		c.errorHandler(w, r, &RequiredError{"aasIdentifier"}, nil)
 		return
@@ -722,13 +721,12 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) PostSubmodelReferen
 
 // DeleteSubmodelReferenceAasRepository - Deletes the submodel reference from the Asset Administration Shell. Does not delete the submodel itself!
 func (c *AssetAdministrationShellRepositoryAPIAPIController) DeleteSubmodelReferenceAasRepository(w http.ResponseWriter, r *http.Request) {
-	params := mux.Vars(r)
-	aasIdentifierParam := params["aasIdentifier"]
+	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
 	if aasIdentifierParam == "" {
 		c.errorHandler(w, r, &RequiredError{"aasIdentifier"}, nil)
 		return
 	}
-	submodelIdentifierParam := params["submodelIdentifier"]
+	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
 	if submodelIdentifierParam == "" {
 		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
 		return
@@ -745,18 +743,17 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) DeleteSubmodelRefer
 
 // GetSubmodelByIdAasRepository - Returns the Submodel
 func (c *AssetAdministrationShellRepositoryAPIAPIController) GetSubmodelByIdAasRepository(w http.ResponseWriter, r *http.Request) {
-	params := mux.Vars(r)
 	query, err := parseQuery(r.URL.RawQuery)
 	if err != nil {
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
-	aasIdentifierParam := params["aasIdentifier"]
+	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
 	if aasIdentifierParam == "" {
 		c.errorHandler(w, r, &RequiredError{"aasIdentifier"}, nil)
 		return
 	}
-	submodelIdentifierParam := params["submodelIdentifier"]
+	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
 	if submodelIdentifierParam == "" {
 		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
 		return
@@ -791,13 +788,12 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) GetSubmodelByIdAasR
 
 // PutSubmodelByIdAasRepository - Creates or updates the Submodel
 func (c *AssetAdministrationShellRepositoryAPIAPIController) PutSubmodelByIdAasRepository(w http.ResponseWriter, r *http.Request) {
-	params := mux.Vars(r)
-	aasIdentifierParam := params["aasIdentifier"]
+	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
 	if aasIdentifierParam == "" {
 		c.errorHandler(w, r, &RequiredError{"aasIdentifier"}, nil)
 		return
 	}
-	submodelIdentifierParam := params["submodelIdentifier"]
+	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
 	if submodelIdentifierParam == "" {
 		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
 		return
@@ -829,13 +825,12 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) PutSubmodelByIdAasR
 
 // DeleteSubmodelByIdAasRepository - Deletes the submodel from the Asset Administration Shell and the Repository.
 func (c *AssetAdministrationShellRepositoryAPIAPIController) DeleteSubmodelByIdAasRepository(w http.ResponseWriter, r *http.Request) {
-	params := mux.Vars(r)
-	aasIdentifierParam := params["aasIdentifier"]
+	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
 	if aasIdentifierParam == "" {
 		c.errorHandler(w, r, &RequiredError{"aasIdentifier"}, nil)
 		return
 	}
-	submodelIdentifierParam := params["submodelIdentifier"]
+	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
 	if submodelIdentifierParam == "" {
 		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
 		return
@@ -852,18 +847,17 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) DeleteSubmodelByIdA
 
 // PatchSubmodelAasRepository - Updates the Submodel
 func (c *AssetAdministrationShellRepositoryAPIAPIController) PatchSubmodelAasRepository(w http.ResponseWriter, r *http.Request) {
-	params := mux.Vars(r)
 	query, err := parseQuery(r.URL.RawQuery)
 	if err != nil {
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
-	aasIdentifierParam := params["aasIdentifier"]
+	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
 	if aasIdentifierParam == "" {
 		c.errorHandler(w, r, &RequiredError{"aasIdentifier"}, nil)
 		return
 	}
-	submodelIdentifierParam := params["submodelIdentifier"]
+	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
 	if submodelIdentifierParam == "" {
 		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
 		return
@@ -904,13 +898,12 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) PatchSubmodelAasRep
 
 // GetSubmodelByIdMetadataAasRepository - Returns the Submodel's metadata elements
 func (c *AssetAdministrationShellRepositoryAPIAPIController) GetSubmodelByIdMetadataAasRepository(w http.ResponseWriter, r *http.Request) {
-	params := mux.Vars(r)
-	aasIdentifierParam := params["aasIdentifier"]
+	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
 	if aasIdentifierParam == "" {
 		c.errorHandler(w, r, &RequiredError{"aasIdentifier"}, nil)
 		return
 	}
-	submodelIdentifierParam := params["submodelIdentifier"]
+	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
 	if submodelIdentifierParam == "" {
 		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
 		return
@@ -927,13 +920,12 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) GetSubmodelByIdMeta
 
 // PatchSubmodelByIdMetadataAasRepository - Updates the metadata attributes of the Submodel
 func (c *AssetAdministrationShellRepositoryAPIAPIController) PatchSubmodelByIdMetadataAasRepository(w http.ResponseWriter, r *http.Request) {
-	params := mux.Vars(r)
-	aasIdentifierParam := params["aasIdentifier"]
+	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
 	if aasIdentifierParam == "" {
 		c.errorHandler(w, r, &RequiredError{"aasIdentifier"}, nil)
 		return
 	}
-	submodelIdentifierParam := params["submodelIdentifier"]
+	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
 	if submodelIdentifierParam == "" {
 		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
 		return
@@ -965,18 +957,17 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) PatchSubmodelByIdMe
 
 // GetSubmodelByIdValueOnlyAasRepository - Returns the Submodel's ValueOnly representation
 func (c *AssetAdministrationShellRepositoryAPIAPIController) GetSubmodelByIdValueOnlyAasRepository(w http.ResponseWriter, r *http.Request) {
-	params := mux.Vars(r)
 	query, err := parseQuery(r.URL.RawQuery)
 	if err != nil {
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
-	aasIdentifierParam := params["aasIdentifier"]
+	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
 	if aasIdentifierParam == "" {
 		c.errorHandler(w, r, &RequiredError{"aasIdentifier"}, nil)
 		return
 	}
-	submodelIdentifierParam := params["submodelIdentifier"]
+	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
 	if submodelIdentifierParam == "" {
 		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
 		return
@@ -1011,18 +1002,17 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) GetSubmodelByIdValu
 
 // PatchSubmodelByIdValueOnlyAasRepository - Updates the values of the Submodel
 func (c *AssetAdministrationShellRepositoryAPIAPIController) PatchSubmodelByIdValueOnlyAasRepository(w http.ResponseWriter, r *http.Request) {
-	params := mux.Vars(r)
 	query, err := parseQuery(r.URL.RawQuery)
 	if err != nil {
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
-	aasIdentifierParam := params["aasIdentifier"]
+	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
 	if aasIdentifierParam == "" {
 		c.errorHandler(w, r, &RequiredError{"aasIdentifier"}, nil)
 		return
 	}
-	submodelIdentifierParam := params["submodelIdentifier"]
+	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
 	if submodelIdentifierParam == "" {
 		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
 		return
@@ -1055,13 +1045,12 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) PatchSubmodelByIdVa
 
 // GetSubmodelByIdReferenceAasRepository - Returns the Submodel as a Reference
 func (c *AssetAdministrationShellRepositoryAPIAPIController) GetSubmodelByIdReferenceAasRepository(w http.ResponseWriter, r *http.Request) {
-	params := mux.Vars(r)
-	aasIdentifierParam := params["aasIdentifier"]
+	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
 	if aasIdentifierParam == "" {
 		c.errorHandler(w, r, &RequiredError{"aasIdentifier"}, nil)
 		return
 	}
-	submodelIdentifierParam := params["submodelIdentifier"]
+	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
 	if submodelIdentifierParam == "" {
 		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
 		return
@@ -1078,18 +1067,17 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) GetSubmodelByIdRefe
 
 // GetSubmodelByIdPathAasRepository - Returns the elements of this submodel in path notation.
 func (c *AssetAdministrationShellRepositoryAPIAPIController) GetSubmodelByIdPathAasRepository(w http.ResponseWriter, r *http.Request) {
-	params := mux.Vars(r)
 	query, err := parseQuery(r.URL.RawQuery)
 	if err != nil {
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
-	aasIdentifierParam := params["aasIdentifier"]
+	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
 	if aasIdentifierParam == "" {
 		c.errorHandler(w, r, &RequiredError{"aasIdentifier"}, nil)
 		return
 	}
-	submodelIdentifierParam := params["submodelIdentifier"]
+	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
 	if submodelIdentifierParam == "" {
 		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
 		return
@@ -1115,25 +1103,28 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) GetSubmodelByIdPath
 
 // GetAllSubmodelElementsAasRepository - Returns all submodel elements including their hierarchy
 func (c *AssetAdministrationShellRepositoryAPIAPIController) GetAllSubmodelElementsAasRepository(w http.ResponseWriter, r *http.Request) {
-	params := mux.Vars(r)
 	query, err := parseQuery(r.URL.RawQuery)
 	if err != nil {
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
-	aasIdentifierParam := params["aasIdentifier"]
+	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
 	if aasIdentifierParam == "" {
 		c.errorHandler(w, r, &RequiredError{"aasIdentifier"}, nil)
 		return
 	}
-	submodelIdentifierParam := params["submodelIdentifier"]
+	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
 	if submodelIdentifierParam == "" {
 		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
 		return
 	}
 	var limitParam int32
 	if query.Has("limit") {
-		param, err := parseNumericParameter(query.Get("limit"), 1)
+		param, err := parseNumericParameter[int32](
+			query.Get("limit"),
+			WithParse[int32](parseInt32),
+			WithMinimum[int32](1),
+		)
 		if err != nil {
 			c.errorHandler(w, r, &ParsingError{Param: "limit", Err: err}, nil)
 			return
@@ -1179,13 +1170,12 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) GetAllSubmodelEleme
 
 // PostSubmodelElementAasRepository - Creates a new submodel element
 func (c *AssetAdministrationShellRepositoryAPIAPIController) PostSubmodelElementAasRepository(w http.ResponseWriter, r *http.Request) {
-	params := mux.Vars(r)
-	aasIdentifierParam := params["aasIdentifier"]
+	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
 	if aasIdentifierParam == "" {
 		c.errorHandler(w, r, &RequiredError{"aasIdentifier"}, nil)
 		return
 	}
-	submodelIdentifierParam := params["submodelIdentifier"]
+	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
 	if submodelIdentifierParam == "" {
 		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
 		return
@@ -1217,25 +1207,28 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) PostSubmodelElement
 
 // GetAllSubmodelElementsMetadataAasRepository - Returns all submodel elements including their hierarchy
 func (c *AssetAdministrationShellRepositoryAPIAPIController) GetAllSubmodelElementsMetadataAasRepository(w http.ResponseWriter, r *http.Request) {
-	params := mux.Vars(r)
 	query, err := parseQuery(r.URL.RawQuery)
 	if err != nil {
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
-	aasIdentifierParam := params["aasIdentifier"]
+	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
 	if aasIdentifierParam == "" {
 		c.errorHandler(w, r, &RequiredError{"aasIdentifier"}, nil)
 		return
 	}
-	submodelIdentifierParam := params["submodelIdentifier"]
+	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
 	if submodelIdentifierParam == "" {
 		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
 		return
 	}
 	var limitParam int32
 	if query.Has("limit") {
-		param, err := parseNumericParameter(query.Get("limit"), 1)
+		param, err := parseNumericParameter[int32](
+			query.Get("limit"),
+			WithParse[int32](parseInt32),
+			WithMinimum[int32](1),
+		)
 		if err != nil {
 			c.errorHandler(w, r, &ParsingError{Param: "limit", Err: err}, nil)
 			return
@@ -1263,25 +1256,28 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) GetAllSubmodelEleme
 
 // GetAllSubmodelElementsValueOnlyAasRepository - Returns all submodel elements including their hierarchy in the ValueOnly representation
 func (c *AssetAdministrationShellRepositoryAPIAPIController) GetAllSubmodelElementsValueOnlyAasRepository(w http.ResponseWriter, r *http.Request) {
-	params := mux.Vars(r)
 	query, err := parseQuery(r.URL.RawQuery)
 	if err != nil {
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
-	aasIdentifierParam := params["aasIdentifier"]
+	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
 	if aasIdentifierParam == "" {
 		c.errorHandler(w, r, &RequiredError{"aasIdentifier"}, nil)
 		return
 	}
-	submodelIdentifierParam := params["submodelIdentifier"]
+	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
 	if submodelIdentifierParam == "" {
 		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
 		return
 	}
 	var limitParam int32
 	if query.Has("limit") {
-		param, err := parseNumericParameter(query.Get("limit"), 1)
+		param, err := parseNumericParameter[int32](
+			query.Get("limit"),
+			WithParse[int32](parseInt32),
+			WithMinimum[int32](1),
+		)
 		if err != nil {
 			c.errorHandler(w, r, &ParsingError{Param: "limit", Err: err}, nil)
 			return
@@ -1318,25 +1314,28 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) GetAllSubmodelEleme
 
 // GetAllSubmodelElementsReferenceAasRepository - Returns all submodel elements as a list of References
 func (c *AssetAdministrationShellRepositoryAPIAPIController) GetAllSubmodelElementsReferenceAasRepository(w http.ResponseWriter, r *http.Request) {
-	params := mux.Vars(r)
 	query, err := parseQuery(r.URL.RawQuery)
 	if err != nil {
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
-	aasIdentifierParam := params["aasIdentifier"]
+	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
 	if aasIdentifierParam == "" {
 		c.errorHandler(w, r, &RequiredError{"aasIdentifier"}, nil)
 		return
 	}
-	submodelIdentifierParam := params["submodelIdentifier"]
+	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
 	if submodelIdentifierParam == "" {
 		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
 		return
 	}
 	var limitParam int32
 	if query.Has("limit") {
-		param, err := parseNumericParameter(query.Get("limit"), 1)
+		param, err := parseNumericParameter[int32](
+			query.Get("limit"),
+			WithParse[int32](parseInt32),
+			WithMinimum[int32](1),
+		)
 		if err != nil {
 			c.errorHandler(w, r, &ParsingError{Param: "limit", Err: err}, nil)
 			return
@@ -1373,26 +1372,28 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) GetAllSubmodelEleme
 
 // GetAllSubmodelElementsPathAasRepository - Returns all submodel elements including their hierarchy
 func (c *AssetAdministrationShellRepositoryAPIAPIController) GetAllSubmodelElementsPathAasRepository(w http.ResponseWriter, r *http.Request) {
-	params := mux.Vars(r)
 	query, err := parseQuery(r.URL.RawQuery)
 	if err != nil {
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
-	aasIdentifierParam := params["aasIdentifier"]
+	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
 	if aasIdentifierParam == "" {
 		c.errorHandler(w, r, &RequiredError{"aasIdentifier"}, nil)
 		return
 	}
-	submodelIdentifierParam := params["submodelIdentifier"]
+	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
 	if submodelIdentifierParam == "" {
 		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
 		return
 	}
 	var limitParam int32
 	if query.Has("limit") {
-		param, err := parseNumericParameter(query.Get("limit"), 1)
-
+		param, err := parseNumericParameter[int32](
+			query.Get("limit"),
+			WithParse[int32](parseInt32),
+			WithMinimum[int32](1),
+		)
 		if err != nil {
 			c.errorHandler(w, r, &ParsingError{Param: "limit", Err: err}, nil)
 			return
@@ -1438,23 +1439,22 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) GetAllSubmodelEleme
 
 // GetSubmodelElementByPathAasRepository - Returns a specific submodel element from the Submodel at a specified path
 func (c *AssetAdministrationShellRepositoryAPIAPIController) GetSubmodelElementByPathAasRepository(w http.ResponseWriter, r *http.Request) {
-	params := mux.Vars(r)
 	query, err := parseQuery(r.URL.RawQuery)
 	if err != nil {
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
-	aasIdentifierParam := params["aasIdentifier"]
+	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
 	if aasIdentifierParam == "" {
 		c.errorHandler(w, r, &RequiredError{"aasIdentifier"}, nil)
 		return
 	}
-	submodelIdentifierParam := params["submodelIdentifier"]
+	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
 	if submodelIdentifierParam == "" {
 		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
 		return
 	}
-	idShortPathParam := params["idShortPath"]
+	idShortPathParam := chi.URLParam(r, "idShortPath")
 	if idShortPathParam == "" {
 		c.errorHandler(w, r, &RequiredError{"idShortPath"}, nil)
 		return
@@ -1489,18 +1489,17 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) GetSubmodelElementB
 
 // PutSubmodelElementByPathAasRepository - Creates or updates an existing submodel element at a specified path within submodel elements hierarchy
 func (c *AssetAdministrationShellRepositoryAPIAPIController) PutSubmodelElementByPathAasRepository(w http.ResponseWriter, r *http.Request) {
-	params := mux.Vars(r)
-	aasIdentifierParam := params["aasIdentifier"]
+	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
 	if aasIdentifierParam == "" {
 		c.errorHandler(w, r, &RequiredError{"aasIdentifier"}, nil)
 		return
 	}
-	submodelIdentifierParam := params["submodelIdentifier"]
+	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
 	if submodelIdentifierParam == "" {
 		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
 		return
 	}
-	idShortPathParam := params["idShortPath"]
+	idShortPathParam := chi.URLParam(r, "idShortPath")
 	if idShortPathParam == "" {
 		c.errorHandler(w, r, &RequiredError{"idShortPath"}, nil)
 		return
@@ -1532,18 +1531,17 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) PutSubmodelElementB
 
 // PostSubmodelElementByPathAasRepository - Creates a new submodel element at a specified path within submodel elements hierarchy
 func (c *AssetAdministrationShellRepositoryAPIAPIController) PostSubmodelElementByPathAasRepository(w http.ResponseWriter, r *http.Request) {
-	params := mux.Vars(r)
-	aasIdentifierParam := params["aasIdentifier"]
+	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
 	if aasIdentifierParam == "" {
 		c.errorHandler(w, r, &RequiredError{"aasIdentifier"}, nil)
 		return
 	}
-	submodelIdentifierParam := params["submodelIdentifier"]
+	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
 	if submodelIdentifierParam == "" {
 		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
 		return
 	}
-	idShortPathParam := params["idShortPath"]
+	idShortPathParam := chi.URLParam(r, "idShortPath")
 	if idShortPathParam == "" {
 		c.errorHandler(w, r, &RequiredError{"idShortPath"}, nil)
 		return
@@ -1575,18 +1573,17 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) PostSubmodelElement
 
 // DeleteSubmodelElementByPathAasRepository - Deletes a submodel element at a specified path within the submodel elements hierarchy
 func (c *AssetAdministrationShellRepositoryAPIAPIController) DeleteSubmodelElementByPathAasRepository(w http.ResponseWriter, r *http.Request) {
-	params := mux.Vars(r)
-	aasIdentifierParam := params["aasIdentifier"]
+	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
 	if aasIdentifierParam == "" {
 		c.errorHandler(w, r, &RequiredError{"aasIdentifier"}, nil)
 		return
 	}
-	submodelIdentifierParam := params["submodelIdentifier"]
+	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
 	if submodelIdentifierParam == "" {
 		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
 		return
 	}
-	idShortPathParam := params["idShortPath"]
+	idShortPathParam := chi.URLParam(r, "idShortPath")
 	if idShortPathParam == "" {
 		c.errorHandler(w, r, &RequiredError{"idShortPath"}, nil)
 		return
@@ -1603,23 +1600,22 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) DeleteSubmodelEleme
 
 // PatchSubmodelElementValueByPathAasRepository - Updates an existing submodel element value at a specified path within submodel elements hierarchy
 func (c *AssetAdministrationShellRepositoryAPIAPIController) PatchSubmodelElementValueByPathAasRepository(w http.ResponseWriter, r *http.Request) {
-	params := mux.Vars(r)
 	query, err := parseQuery(r.URL.RawQuery)
 	if err != nil {
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
-	aasIdentifierParam := params["aasIdentifier"]
+	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
 	if aasIdentifierParam == "" {
 		c.errorHandler(w, r, &RequiredError{"aasIdentifier"}, nil)
 		return
 	}
-	submodelIdentifierParam := params["submodelIdentifier"]
+	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
 	if submodelIdentifierParam == "" {
 		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
 		return
 	}
-	idShortPathParam := params["idShortPath"]
+	idShortPathParam := chi.URLParam(r, "idShortPath")
 	if idShortPathParam == "" {
 		c.errorHandler(w, r, &RequiredError{"idShortPath"}, nil)
 		return
@@ -1660,18 +1656,17 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) PatchSubmodelElemen
 
 // GetSubmodelElementByPathMetadataAasRepository - Returns the metadata attributes if a specific submodel element from the Submodel at a specified path
 func (c *AssetAdministrationShellRepositoryAPIAPIController) GetSubmodelElementByPathMetadataAasRepository(w http.ResponseWriter, r *http.Request) {
-	params := mux.Vars(r)
-	aasIdentifierParam := params["aasIdentifier"]
+	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
 	if aasIdentifierParam == "" {
 		c.errorHandler(w, r, &RequiredError{"aasIdentifier"}, nil)
 		return
 	}
-	submodelIdentifierParam := params["submodelIdentifier"]
+	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
 	if submodelIdentifierParam == "" {
 		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
 		return
 	}
-	idShortPathParam := params["idShortPath"]
+	idShortPathParam := chi.URLParam(r, "idShortPath")
 	if idShortPathParam == "" {
 		c.errorHandler(w, r, &RequiredError{"idShortPath"}, nil)
 		return
@@ -1688,18 +1683,17 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) GetSubmodelElementB
 
 // PatchSubmodelElementValueByPathMetadata - Updates the metadata attributes of an existing submodel element value at a specified path within submodel elements hierarchy
 func (c *AssetAdministrationShellRepositoryAPIAPIController) PatchSubmodelElementValueByPathMetadata(w http.ResponseWriter, r *http.Request) {
-	params := mux.Vars(r)
-	aasIdentifierParam := params["aasIdentifier"]
+	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
 	if aasIdentifierParam == "" {
 		c.errorHandler(w, r, &RequiredError{"aasIdentifier"}, nil)
 		return
 	}
-	submodelIdentifierParam := params["submodelIdentifier"]
+	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
 	if submodelIdentifierParam == "" {
 		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
 		return
 	}
-	idShortPathParam := params["idShortPath"]
+	idShortPathParam := chi.URLParam(r, "idShortPath")
 	if idShortPathParam == "" {
 		c.errorHandler(w, r, &RequiredError{"idShortPath"}, nil)
 		return
@@ -1731,23 +1725,22 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) PatchSubmodelElemen
 
 // GetSubmodelElementByPathValueOnlyAasRepository - Returns a specific submodel element from the Submodel at a specified path in the ValueOnly representation
 func (c *AssetAdministrationShellRepositoryAPIAPIController) GetSubmodelElementByPathValueOnlyAasRepository(w http.ResponseWriter, r *http.Request) {
-	params := mux.Vars(r)
 	query, err := parseQuery(r.URL.RawQuery)
 	if err != nil {
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
-	aasIdentifierParam := params["aasIdentifier"]
+	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
 	if aasIdentifierParam == "" {
 		c.errorHandler(w, r, &RequiredError{"aasIdentifier"}, nil)
 		return
 	}
-	submodelIdentifierParam := params["submodelIdentifier"]
+	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
 	if submodelIdentifierParam == "" {
 		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
 		return
 	}
-	idShortPathParam := params["idShortPath"]
+	idShortPathParam := chi.URLParam(r, "idShortPath")
 	if idShortPathParam == "" {
 		c.errorHandler(w, r, &RequiredError{"idShortPath"}, nil)
 		return
@@ -1782,23 +1775,22 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) GetSubmodelElementB
 
 // PatchSubmodelElementValueByPathValueOnly - Updates the value of an existing submodel element value at a specified path within submodel elements hierarchy
 func (c *AssetAdministrationShellRepositoryAPIAPIController) PatchSubmodelElementValueByPathValueOnly(w http.ResponseWriter, r *http.Request) {
-	params := mux.Vars(r)
 	query, err := parseQuery(r.URL.RawQuery)
 	if err != nil {
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
-	aasIdentifierParam := params["aasIdentifier"]
+	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
 	if aasIdentifierParam == "" {
 		c.errorHandler(w, r, &RequiredError{"aasIdentifier"}, nil)
 		return
 	}
-	submodelIdentifierParam := params["submodelIdentifier"]
+	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
 	if submodelIdentifierParam == "" {
 		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
 		return
 	}
-	idShortPathParam := params["idShortPath"]
+	idShortPathParam := chi.URLParam(r, "idShortPath")
 	if idShortPathParam == "" {
 		c.errorHandler(w, r, &RequiredError{"idShortPath"}, nil)
 		return
@@ -1839,23 +1831,22 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) PatchSubmodelElemen
 
 // GetSubmodelElementByPathReferenceAasRepository - Returns the Reference of a specific submodel element from the Submodel at a specified path
 func (c *AssetAdministrationShellRepositoryAPIAPIController) GetSubmodelElementByPathReferenceAasRepository(w http.ResponseWriter, r *http.Request) {
-	params := mux.Vars(r)
 	query, err := parseQuery(r.URL.RawQuery)
 	if err != nil {
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
-	aasIdentifierParam := params["aasIdentifier"]
+	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
 	if aasIdentifierParam == "" {
 		c.errorHandler(w, r, &RequiredError{"aasIdentifier"}, nil)
 		return
 	}
-	submodelIdentifierParam := params["submodelIdentifier"]
+	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
 	if submodelIdentifierParam == "" {
 		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
 		return
 	}
-	idShortPathParam := params["idShortPath"]
+	idShortPathParam := chi.URLParam(r, "idShortPath")
 	if idShortPathParam == "" {
 		c.errorHandler(w, r, &RequiredError{"idShortPath"}, nil)
 		return
@@ -1881,23 +1872,22 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) GetSubmodelElementB
 
 // GetSubmodelElementByPathPathAasRepository - Returns a specific submodel element from the Submodel at a specified path in the Path notation
 func (c *AssetAdministrationShellRepositoryAPIAPIController) GetSubmodelElementByPathPathAasRepository(w http.ResponseWriter, r *http.Request) {
-	params := mux.Vars(r)
 	query, err := parseQuery(r.URL.RawQuery)
 	if err != nil {
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
-	aasIdentifierParam := params["aasIdentifier"]
+	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
 	if aasIdentifierParam == "" {
 		c.errorHandler(w, r, &RequiredError{"aasIdentifier"}, nil)
 		return
 	}
-	submodelIdentifierParam := params["submodelIdentifier"]
+	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
 	if submodelIdentifierParam == "" {
 		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
 		return
 	}
-	idShortPathParam := params["idShortPath"]
+	idShortPathParam := chi.URLParam(r, "idShortPath")
 	if idShortPathParam == "" {
 		c.errorHandler(w, r, &RequiredError{"idShortPath"}, nil)
 		return
@@ -1923,18 +1913,17 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) GetSubmodelElementB
 
 // GetFileByPathAasRepository - Downloads file content from a specific submodel element from the Submodel at a specified path
 func (c *AssetAdministrationShellRepositoryAPIAPIController) GetFileByPathAasRepository(w http.ResponseWriter, r *http.Request) {
-	params := mux.Vars(r)
-	aasIdentifierParam := params["aasIdentifier"]
+	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
 	if aasIdentifierParam == "" {
 		c.errorHandler(w, r, &RequiredError{"aasIdentifier"}, nil)
 		return
 	}
-	submodelIdentifierParam := params["submodelIdentifier"]
+	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
 	if submodelIdentifierParam == "" {
 		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
 		return
 	}
-	idShortPathParam := params["idShortPath"]
+	idShortPathParam := chi.URLParam(r, "idShortPath")
 	if idShortPathParam == "" {
 		c.errorHandler(w, r, &RequiredError{"idShortPath"}, nil)
 		return
@@ -1955,18 +1944,17 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) PutFileByPathAasRep
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
-	params := mux.Vars(r)
-	aasIdentifierParam := params["aasIdentifier"]
+	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
 	if aasIdentifierParam == "" {
 		c.errorHandler(w, r, &RequiredError{"aasIdentifier"}, nil)
 		return
 	}
-	submodelIdentifierParam := params["submodelIdentifier"]
+	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
 	if submodelIdentifierParam == "" {
 		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
 		return
 	}
-	idShortPathParam := params["idShortPath"]
+	idShortPathParam := chi.URLParam(r, "idShortPath")
 	if idShortPathParam == "" {
 		c.errorHandler(w, r, &RequiredError{"idShortPath"}, nil)
 		return
@@ -1996,18 +1984,17 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) PutFileByPathAasRep
 
 // DeleteFileByPathAasRepository - Deletes file content of an existing submodel element at a specified path within submodel elements hierarchy
 func (c *AssetAdministrationShellRepositoryAPIAPIController) DeleteFileByPathAasRepository(w http.ResponseWriter, r *http.Request) {
-	params := mux.Vars(r)
-	aasIdentifierParam := params["aasIdentifier"]
+	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
 	if aasIdentifierParam == "" {
 		c.errorHandler(w, r, &RequiredError{"aasIdentifier"}, nil)
 		return
 	}
-	submodelIdentifierParam := params["submodelIdentifier"]
+	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
 	if submodelIdentifierParam == "" {
 		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
 		return
 	}
-	idShortPathParam := params["idShortPath"]
+	idShortPathParam := chi.URLParam(r, "idShortPath")
 	if idShortPathParam == "" {
 		c.errorHandler(w, r, &RequiredError{"idShortPath"}, nil)
 		return
@@ -2024,18 +2011,17 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) DeleteFileByPathAas
 
 // InvokeOperationAasRepository - Synchronously invokes an Operation at a specified path
 func (c *AssetAdministrationShellRepositoryAPIAPIController) InvokeOperationAasRepository(w http.ResponseWriter, r *http.Request) {
-	params := mux.Vars(r)
-	aasIdentifierParam := params["aasIdentifier"]
+	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
 	if aasIdentifierParam == "" {
 		c.errorHandler(w, r, &RequiredError{"aasIdentifier"}, nil)
 		return
 	}
-	submodelIdentifierParam := params["submodelIdentifier"]
+	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
 	if submodelIdentifierParam == "" {
 		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
 		return
 	}
-	idShortPathParam := params["idShortPath"]
+	idShortPathParam := chi.URLParam(r, "idShortPath")
 	if idShortPathParam == "" {
 		c.errorHandler(w, r, &RequiredError{"idShortPath"}, nil)
 		return
@@ -2067,18 +2053,17 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) InvokeOperationAasR
 
 // InvokeOperationValueOnlyAasRepository - Synchronously invokes an Operation at a specified path
 func (c *AssetAdministrationShellRepositoryAPIAPIController) InvokeOperationValueOnlyAasRepository(w http.ResponseWriter, r *http.Request) {
-	params := mux.Vars(r)
-	aasIdentifierParam := params["aasIdentifier"]
+	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
 	if aasIdentifierParam == "" {
 		c.errorHandler(w, r, &RequiredError{"aasIdentifier"}, nil)
 		return
 	}
-	submodelIdentifierParam := params["submodelIdentifier"]
+	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
 	if submodelIdentifierParam == "" {
 		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
 		return
 	}
-	idShortPathParam := params["idShortPath"]
+	idShortPathParam := chi.URLParam(r, "idShortPath")
 	if idShortPathParam == "" {
 		c.errorHandler(w, r, &RequiredError{"idShortPath"}, nil)
 		return
@@ -2110,18 +2095,17 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) InvokeOperationValu
 
 // InvokeOperationAsyncAasRepository - Asynchronously invokes an Operation at a specified path
 func (c *AssetAdministrationShellRepositoryAPIAPIController) InvokeOperationAsyncAasRepository(w http.ResponseWriter, r *http.Request) {
-	params := mux.Vars(r)
-	aasIdentifierParam := params["aasIdentifier"]
+	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
 	if aasIdentifierParam == "" {
 		c.errorHandler(w, r, &RequiredError{"aasIdentifier"}, nil)
 		return
 	}
-	submodelIdentifierParam := params["submodelIdentifier"]
+	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
 	if submodelIdentifierParam == "" {
 		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
 		return
 	}
-	idShortPathParam := params["idShortPath"]
+	idShortPathParam := chi.URLParam(r, "idShortPath")
 	if idShortPathParam == "" {
 		c.errorHandler(w, r, &RequiredError{"idShortPath"}, nil)
 		return
@@ -2153,18 +2137,17 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) InvokeOperationAsyn
 
 // InvokeOperationAsyncValueOnlyAasRepository - Asynchronously invokes an Operation at a specified path
 func (c *AssetAdministrationShellRepositoryAPIAPIController) InvokeOperationAsyncValueOnlyAasRepository(w http.ResponseWriter, r *http.Request) {
-	params := mux.Vars(r)
-	aasIdentifierParam := params["aasIdentifier"]
+	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
 	if aasIdentifierParam == "" {
 		c.errorHandler(w, r, &RequiredError{"aasIdentifier"}, nil)
 		return
 	}
-	submodelIdentifierParam := params["submodelIdentifier"]
+	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
 	if submodelIdentifierParam == "" {
 		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
 		return
 	}
-	idShortPathParam := params["idShortPath"]
+	idShortPathParam := chi.URLParam(r, "idShortPath")
 	if idShortPathParam == "" {
 		c.errorHandler(w, r, &RequiredError{"idShortPath"}, nil)
 		return
@@ -2196,23 +2179,22 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) InvokeOperationAsyn
 
 // GetOperationAsyncStatusAasRepository - Returns the Operation status of an asynchronous invoked Operation
 func (c *AssetAdministrationShellRepositoryAPIAPIController) GetOperationAsyncStatusAasRepository(w http.ResponseWriter, r *http.Request) {
-	params := mux.Vars(r)
-	aasIdentifierParam := params["aasIdentifier"]
+	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
 	if aasIdentifierParam == "" {
 		c.errorHandler(w, r, &RequiredError{"aasIdentifier"}, nil)
 		return
 	}
-	submodelIdentifierParam := params["submodelIdentifier"]
+	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
 	if submodelIdentifierParam == "" {
 		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
 		return
 	}
-	idShortPathParam := params["idShortPath"]
+	idShortPathParam := chi.URLParam(r, "idShortPath")
 	if idShortPathParam == "" {
 		c.errorHandler(w, r, &RequiredError{"idShortPath"}, nil)
 		return
 	}
-	handleIdParam := params["handleId"]
+	handleIdParam := chi.URLParam(r, "handleId")
 	if handleIdParam == "" {
 		c.errorHandler(w, r, &RequiredError{"handleId"}, nil)
 		return
@@ -2229,23 +2211,22 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) GetOperationAsyncSt
 
 // GetOperationAsyncResultAasRepository - Returns the Operation result of an asynchronous invoked Operation
 func (c *AssetAdministrationShellRepositoryAPIAPIController) GetOperationAsyncResultAasRepository(w http.ResponseWriter, r *http.Request) {
-	params := mux.Vars(r)
-	aasIdentifierParam := params["aasIdentifier"]
+	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
 	if aasIdentifierParam == "" {
 		c.errorHandler(w, r, &RequiredError{"aasIdentifier"}, nil)
 		return
 	}
-	submodelIdentifierParam := params["submodelIdentifier"]
+	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
 	if submodelIdentifierParam == "" {
 		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
 		return
 	}
-	idShortPathParam := params["idShortPath"]
+	idShortPathParam := chi.URLParam(r, "idShortPath")
 	if idShortPathParam == "" {
 		c.errorHandler(w, r, &RequiredError{"idShortPath"}, nil)
 		return
 	}
-	handleIdParam := params["handleId"]
+	handleIdParam := chi.URLParam(r, "handleId")
 	if handleIdParam == "" {
 		c.errorHandler(w, r, &RequiredError{"handleId"}, nil)
 		return
@@ -2262,23 +2243,22 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) GetOperationAsyncRe
 
 // GetOperationAsyncResultValueOnlyAasRepository - Returns the ValueOnly notation of the Operation result of an asynchronous invoked Operation
 func (c *AssetAdministrationShellRepositoryAPIAPIController) GetOperationAsyncResultValueOnlyAasRepository(w http.ResponseWriter, r *http.Request) {
-	params := mux.Vars(r)
-	aasIdentifierParam := params["aasIdentifier"]
+	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
 	if aasIdentifierParam == "" {
 		c.errorHandler(w, r, &RequiredError{"aasIdentifier"}, nil)
 		return
 	}
-	submodelIdentifierParam := params["submodelIdentifier"]
+	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
 	if submodelIdentifierParam == "" {
 		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
 		return
 	}
-	idShortPathParam := params["idShortPath"]
+	idShortPathParam := chi.URLParam(r, "idShortPath")
 	if idShortPathParam == "" {
 		c.errorHandler(w, r, &RequiredError{"idShortPath"}, nil)
 		return
 	}
-	handleIdParam := params["handleId"]
+	handleIdParam := chi.URLParam(r, "handleId")
 	if handleIdParam == "" {
 		c.errorHandler(w, r, &RequiredError{"handleId"}, nil)
 		return

@@ -1,5 +1,5 @@
-// Package main implements the AAS Repository Service entrypoint.
-// It starts the HTTP server and registers the generated OpenAPI controllers.
+// Package main starts the AAS Repository Service.
+// It loads configuration, sets up routes, and runs the HTTP server.
 package main
 
 import (

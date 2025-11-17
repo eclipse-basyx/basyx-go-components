@@ -15,7 +15,6 @@ import (
 	"context"
 	"net/http"
 	"os"
-	"strconv"
 
 	model "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
@@ -178,22 +177,4 @@ type DescriptionAPIAPIServicer interface {
 // and updated with the logic required for the API.
 type SerializationAPIAPIServicer interface {
 	GenerateSerializationByIds(context.Context, []string, []string, bool) (ImplResponse, error)
-}
-
-// parseNumericParameter safely parses numeric query parameters (like "limit" or "cursor").
-func parseNumericParameter(param string, defaultValue int32) (int32, error) {
-	if param == "" {
-		return defaultValue, nil
-	}
-	val, err := strconv.ParseInt(param, 10, 32)
-	if err != nil {
-		return defaultValue, err
-	}
-	return int32(val), nil
-}
-
-// WithParse is a placeholder for request parsing wrappers.
-// It just executes the provided function directly.
-func WithParse(handler func() error) error {
-	return handler()
 }

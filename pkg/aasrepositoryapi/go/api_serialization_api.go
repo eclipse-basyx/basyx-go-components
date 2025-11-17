@@ -12,21 +12,9 @@
 package openapi
 
 import (
-	"fmt"
 	"net/http"
 	"strings"
 )
-
-func parseBoolParameter(value string) (bool, error) {
-	switch strings.ToLower(value) {
-	case "true", "1", "yes":
-		return true, nil
-	case "false", "0", "no":
-		return false, nil
-	default:
-		return false, fmt.Errorf("invalid boolean value: %s", value)
-	}
-}
 
 // SerializationAPIAPIController binds http requests to an api service and writes the service results to the http response
 type SerializationAPIAPIController struct {
@@ -86,7 +74,10 @@ func (c *SerializationAPIAPIController) GenerateSerializationByIds(w http.Respon
 	}
 	var includeConceptDescriptionsParam bool
 	if query.Has("includeConceptDescriptions") {
-		param, err := parseBoolParameter(query.Get("someFlag"))
+		param, err := parseBoolParameter(
+			query.Get("includeConceptDescriptions"),
+			WithParse[bool](parseBool),
+		)
 		if err != nil {
 			c.errorHandler(w, r, &ParsingError{Param: "includeConceptDescriptions", Err: err}, nil)
 			return

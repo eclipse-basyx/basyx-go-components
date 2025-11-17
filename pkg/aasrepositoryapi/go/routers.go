@@ -14,6 +14,9 @@ package openapi
 import (
 	"encoding/json"
 	"errors"
+	"time"
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -21,15 +24,12 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"time"
-
-	"github.com/gorilla/mux"
 )
 
 // A Route defines the parameters for an api endpoint
 type Route struct {
-	Method      string
-	Pattern     string
+	Method	  string
+	Pattern	 string
 	HandlerFunc http.HandlerFunc
 }
 
@@ -46,18 +46,13 @@ const errMsgMinValueConstraint = "provided parameter is not respecting minimum v
 const errMsgMaxValueConstraint = "provided parameter is not respecting maximum value constraint"
 
 // NewRouter creates a new router for any number of api routers
-func NewRouter(routers ...Router) *mux.Router {
-	router := mux.NewRouter().StrictSlash(true)
+func NewRouter(routers ...Router) chi.Router {
+	router := chi.NewRouter()
+	router.Use(middleware.Logger)
 	for _, api := range routers {
-		for name, route := range api.Routes() {
+		for _, route := range api.Routes() {
 			var handler http.Handler = route.HandlerFunc
-			handler = Logger(handler, name)
-
-			router.
-				Methods(route.Method).
-				Path(route.Pattern).
-				Name(name).
-				Handler(handler)
+			router.Method(route.Method, route.Pattern, handler)
 		}
 	}
 
@@ -151,7 +146,7 @@ func readFileHeaderToTempFile(fileHeader *multipart.FileHeader) (*os.File, error
 	if err != nil {
 		return nil, err
 	}
-
+	
 	return file, nil
 }
 
@@ -229,6 +224,38 @@ func parseBool(param string) (bool, error) {
 	return strconv.ParseBool(param)
 }
 
+type Operation[T Number | string | bool] func(actual string) (T, bool, error)
+
+func WithRequire[T Number | string | bool](parse ParseString[T]) Operation[T] {
+	var empty T
+	return func(actual string) (T, bool, error) {
+		if actual == "" {
+			return empty, false, errors.New(errMsgRequiredMissing)
+		}
+
+		v, err := parse(actual)
+		return v, false, err
+	}
+}
+
+func WithDefaultOrParse[T Number | string | bool](def T, parse ParseString[T]) Operation[T] {
+	return func(actual string) (T, bool, error) {
+		if actual == "" {
+			return def, true, nil
+		}
+
+		v, err := parse(actual)
+		return v, false, err
+	}
+}
+
+func WithParse[T Number | string | bool](parse ParseString[T]) Operation[T] {
+	return func(actual string) (T, bool, error) {
+		v, err := parse(actual)
+		return v, false, err
+	}
+}
+
 type Constraint[T Number | string | bool] func(actual T) error
 
 func WithMinimum[T Number](expected T) Constraint[T] {
@@ -252,10 +279,62 @@ func WithMaximum[T Number](expected T) Constraint[T] {
 }
 
 // parseNumericParameter parses a numeric parameter to its respective type.
+func parseNumericParameter[T Number](param string, fn Operation[T], checks ...Constraint[T]) (T, error) {
+	v, ok, err := fn(param)
+	if err != nil {
+		return 0, err
+	}
+
+	if !ok {
+		for _, check := range checks {
+			if err := check(v); err != nil {
+				return 0, err
+			}
+		}
+	}
+
+	return v, nil
+}
 
 // parseBoolParameter parses a string parameter to a bool
+func parseBoolParameter(param string, fn Operation[bool]) (bool, error) {
+	v, _, err := fn(param)
+	return v, err
+}
 
 // parseNumericArrayParameter parses a string parameter containing array of values to its respective type.
+func parseNumericArrayParameter[T Number](param, delim string, required bool, fn Operation[T], checks ...Constraint[T]) ([]T, error) {
+	if param == "" {
+		if required {
+			return nil, errors.New(errMsgRequiredMissing)
+		}
+
+		return nil, nil
+	}
+
+	str := strings.Split(param, delim)
+	values := make([]T, len(str))
+
+	for i, s := range str {
+		v, ok, err := fn(s)
+		if err != nil {
+			return nil, err
+		}
+
+		if !ok {
+			for _, check := range checks {
+				if err := check(v); err != nil {
+					return nil, err
+				}
+			}
+		}
+
+		values[i] = v
+	}
+
+	return values, nil
+}
+
 
 // parseQuery parses query parameters and returns an error if any malformed value pairs are encountered.
 func parseQuery(rawQuery string) (url.Values, error) {

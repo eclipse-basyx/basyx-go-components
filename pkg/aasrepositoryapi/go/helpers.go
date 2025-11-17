@@ -61,6 +61,8 @@ func AssertRecurseValueRequired[T any](value reflect.Value, callback func(T) err
 	return nil
 }
 
+// helper functions added here as they are called in api_asset_administration_shell_repository_api.go file
+
 func AssertAssetAdministrationShellRequired(obj interface{}) error    { return nil }
 func AssertAssetAdministrationShellConstraints(obj interface{}) error { return nil }
 func AssertAssetInformationRequired(obj interface{}) error            { return nil }

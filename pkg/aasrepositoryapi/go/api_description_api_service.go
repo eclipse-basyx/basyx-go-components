@@ -13,8 +13,8 @@ package openapi
 
 import (
 	"context"
-	"errors"
 	"net/http"
+	"errors"
 )
 
 // DescriptionAPIAPIService is a service that implements the logic for the DescriptionAPIAPIServicer
