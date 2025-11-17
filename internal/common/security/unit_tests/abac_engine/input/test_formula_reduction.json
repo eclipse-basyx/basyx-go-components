@@ -1,0 +1,44 @@
+{
+  "AllAccessPermissionRules": {
+    "rules": [
+      {
+        "ACL": {
+          "ACCESS": "ALLOW",
+          "RIGHTS": ["READ","UPDATE"]
+        },
+        "OBJECTS": [{"DESCRIPTOR" : "$aasdesc(\"https://martin.de\")"}],
+        "FORMULA": { 
+          "$and": [
+            { 
+              "$and": [
+                {
+                  "$eq": [
+                    {
+                      "$field": "$aasdesc#specificAssetIds[].name"
+                    },
+                    {
+                      "$strVal": "manufacturerPartId"
+                    }
+                  ]
+                },
+                {
+                  "$boolean": true
+                }
+              ]
+            },
+            { 
+              "$eq": [ 
+                { 
+                  "$attribute": { "CLAIM": "role" } 
+                }, 
+                { 
+                  "$strVal": "admin" 
+                } 
+              ] 
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

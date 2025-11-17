@@ -27,13 +27,13 @@
 package auth
 
 import (
-    "fmt"
-    "regexp"
-    "strconv"
-    "strings"
-    "time"
+	"fmt"
+	"regexp"
+	"strconv"
+	"strings"
+	"time"
 
-    "github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 )
 
 func resolveGlobalToken(name string, now time.Time) (string, bool) {
@@ -138,447 +138,453 @@ func evalLE(le grammar.LogicalExpression, claims Claims, now time.Time) bool {
 // return value indicates whether the entire expression became a pure boolean
 // expression (i.e., consists only of true/false after reduction).
 func adaptLEForBackend(le grammar.LogicalExpression, claims Claims, now time.Time) (grammar.LogicalExpression, bool) {
-    // Boolean literal stays as-is
-    if le.Boolean != nil {
-        return le, true
-    }
+	// Boolean literal stays as-is
+	if le.Boolean != nil {
+		return le, true
+	}
 
-    // Comparison operators: try to replace attributes with literals, and
-    // if both operands become literals, reduce to $boolean using evalLE.
-    reduceCmp := func(items []grammar.Value, op string) (grammar.LogicalExpression, bool) {
-        if len(items) != 2 {
-            return le, false
-        }
-        // Fast path: if one side is an attribute (CLAIM/GLOBAL) and the other is a
-        // constant literal, try to resolve and reduce immediately.
-        if items[0].Attribute != nil && isConstantLiteralVal(items[1]) {
-            if l2 := replaceAttribute(items[0], claims, now); isLiteral(l2) {
-                test := grammar.LogicalExpression{}
-                switch op {
-                case "$eq":
-                    test.Eq = []grammar.Value{l2, items[1]}
-                case "$ne":
-                    test.Ne = []grammar.Value{l2, items[1]}
-                case "$gt":
-                    test.Gt = []grammar.Value{l2, items[1]}
-                case "$ge":
-                    test.Ge = []grammar.Value{l2, items[1]}
-                case "$lt":
-                    test.Lt = []grammar.Value{l2, items[1]}
-                case "$le":
-                    test.Le = []grammar.Value{l2, items[1]}
-                }
-                b := evalLE(test, claims, now)
-                return grammar.LogicalExpression{Boolean: &b}, true
-            }
-        }
-        if items[1].Attribute != nil && isConstantLiteralVal(items[0]) {
-            if r2 := replaceAttribute(items[1], claims, now); isLiteral(r2) {
-                test := grammar.LogicalExpression{}
-                switch op {
-                case "$eq":
-                    test.Eq = []grammar.Value{items[0], r2}
-                case "$ne":
-                    test.Ne = []grammar.Value{items[0], r2}
-                case "$gt":
-                    test.Gt = []grammar.Value{items[0], r2}
-                case "$ge":
-                    test.Ge = []grammar.Value{items[0], r2}
-                case "$lt":
-                    test.Lt = []grammar.Value{items[0], r2}
-                case "$le":
-                    test.Le = []grammar.Value{items[0], r2}
-                }
-                b := evalLE(test, claims, now)
-                return grammar.LogicalExpression{Boolean: &b}, true
-            }
-        }
-        left := replaceAttribute(items[0], claims, now)
-        right := replaceAttribute(items[1], claims, now)
+	// Comparison operators: try to replace attributes with literals, and
+	// if both operands become literals, reduce to $boolean using evalLE.
+	reduceCmp := func(items []grammar.Value, op string) (grammar.LogicalExpression, bool) {
+		if len(items) != 2 {
+			return le, false
+		}
+		// Fast path: if one side is an attribute (CLAIM/GLOBAL) and the other is a
+		// constant literal, try to resolve and reduce immediately.
+		if items[0].Attribute != nil && isConstantLiteralVal(items[1]) {
+			if l2 := replaceAttribute(items[0], claims, now); isLiteral(l2) {
+				test := grammar.LogicalExpression{}
+				switch op {
+				case "$eq":
+					test.Eq = []grammar.Value{l2, items[1]}
+				case "$ne":
+					test.Ne = []grammar.Value{l2, items[1]}
+				case "$gt":
+					test.Gt = []grammar.Value{l2, items[1]}
+				case "$ge":
+					test.Ge = []grammar.Value{l2, items[1]}
+				case "$lt":
+					test.Lt = []grammar.Value{l2, items[1]}
+				case "$le":
+					test.Le = []grammar.Value{l2, items[1]}
+				}
+				b := evalLE(test, claims, now)
+				return grammar.LogicalExpression{Boolean: &b}, true
+			}
+		}
+		if items[1].Attribute != nil && isConstantLiteralVal(items[0]) {
+			if r2 := replaceAttribute(items[1], claims, now); isLiteral(r2) {
+				test := grammar.LogicalExpression{}
+				switch op {
+				case "$eq":
+					test.Eq = []grammar.Value{items[0], r2}
+				case "$ne":
+					test.Ne = []grammar.Value{items[0], r2}
+				case "$gt":
+					test.Gt = []grammar.Value{items[0], r2}
+				case "$ge":
+					test.Ge = []grammar.Value{items[0], r2}
+				case "$lt":
+					test.Lt = []grammar.Value{items[0], r2}
+				case "$le":
+					test.Le = []grammar.Value{items[0], r2}
+				}
+				b := evalLE(test, claims, now)
+				return grammar.LogicalExpression{Boolean: &b}, true
+			}
+		}
+		left := replaceAttribute(items[0], claims, now)
+		right := replaceAttribute(items[1], claims, now)
 
-        // Construct a new LE with updated operands
-        out := grammar.LogicalExpression{}
-        switch op {
-        case "$eq":
-            out.Eq = []grammar.Value{left, right}
-        case "$ne":
-            out.Ne = []grammar.Value{left, right}
-        case "$gt":
-            out.Gt = []grammar.Value{left, right}
-        case "$ge":
-            out.Ge = []grammar.Value{left, right}
-        case "$lt":
-            out.Lt = []grammar.Value{left, right}
-        case "$le":
-            out.Le = []grammar.Value{left, right}
-        case "$regex":
-            out.Regex = []grammar.StringValue{valueToStringValue(left), valueToStringValue(right)}
-        case "$contains":
-            out.Contains = []grammar.StringValue{valueToStringValue(left), valueToStringValue(right)}
-        case "$starts-with":
-            out.StartsWith = []grammar.StringValue{valueToStringValue(left), valueToStringValue(right)}
-        case "$ends-with":
-            out.EndsWith = []grammar.StringValue{valueToStringValue(left), valueToStringValue(right)}
-        }
+		// Construct a new LE with updated operands
+		out := grammar.LogicalExpression{}
+		switch op {
+		case "$eq":
+			out.Eq = []grammar.Value{left, right}
+		case "$ne":
+			out.Ne = []grammar.Value{left, right}
+		case "$gt":
+			out.Gt = []grammar.Value{left, right}
+		case "$ge":
+			out.Ge = []grammar.Value{left, right}
+		case "$lt":
+			out.Lt = []grammar.Value{left, right}
+		case "$le":
+			out.Le = []grammar.Value{left, right}
+		case "$regex":
+			out.Regex = []grammar.StringValue{valueToStringValue(left), valueToStringValue(right)}
+		case "$contains":
+			out.Contains = []grammar.StringValue{valueToStringValue(left), valueToStringValue(right)}
+		case "$starts-with":
+			out.StartsWith = []grammar.StringValue{valueToStringValue(left), valueToStringValue(right)}
+		case "$ends-with":
+			out.EndsWith = []grammar.StringValue{valueToStringValue(left), valueToStringValue(right)}
+		}
 
-        // If both operands are literals (not fields and not attributes), try to evaluate
-        if isLiteral(left) && isLiteral(right) {
-            // Evaluate by reusing evalLE on this sub-expression
-            b := false
-            tmp := out
-            if evalLE(tmp, claims, now) {
-                b = true
-            }
-            return grammar.LogicalExpression{Boolean: &b}, true
-        }
-        return out, false
-    }
+		// If both operands are literals (not fields and not attributes), try to evaluate
+		if isLiteral(left) && isLiteral(right) {
+			// Evaluate by reusing evalLE on this sub-expression
+			b := false
+			tmp := out
+			if evalLE(tmp, claims, now) {
+				b = true
+			}
+			return grammar.LogicalExpression{Boolean: &b}, true
+		}
+		return out, false
+	}
 
-    // Handle comparisons
-    switch {
-    case len(le.Eq) == 2:
-        return reduceCmp(le.Eq, "$eq")
-    case len(le.Ne) == 2:
-        return reduceCmp(le.Ne, "$ne")
-    case len(le.Gt) == 2:
-        return reduceCmp(le.Gt, "$gt")
-    case len(le.Ge) == 2:
-        return reduceCmp(le.Ge, "$ge")
-    case len(le.Lt) == 2:
-        return reduceCmp(le.Lt, "$lt")
-    case len(le.Le) == 2:
-        return reduceCmp(le.Le, "$le")
-    case len(le.Regex) == 2:
-        return reduceCmp(stringItemsToValues(le.Regex), "$regex")
-    case len(le.Contains) == 2:
-        return reduceCmp(stringItemsToValues(le.Contains), "$contains")
-    case len(le.StartsWith) == 2:
-        return reduceCmp(stringItemsToValues(le.StartsWith), "$starts-with")
-    case len(le.EndsWith) == 2:
-        return reduceCmp(stringItemsToValues(le.EndsWith), "$ends-with")
-    }
+	// Handle comparisons
+	switch {
+	case len(le.Eq) == 2:
+		return reduceCmp(le.Eq, "$eq")
+	case len(le.Ne) == 2:
+		return reduceCmp(le.Ne, "$ne")
+	case len(le.Gt) == 2:
+		return reduceCmp(le.Gt, "$gt")
+	case len(le.Ge) == 2:
+		return reduceCmp(le.Ge, "$ge")
+	case len(le.Lt) == 2:
+		return reduceCmp(le.Lt, "$lt")
+	case len(le.Le) == 2:
+		return reduceCmp(le.Le, "$le")
+	case len(le.Regex) == 2:
+		return reduceCmp(stringItemsToValues(le.Regex), "$regex")
+	case len(le.Contains) == 2:
+		return reduceCmp(stringItemsToValues(le.Contains), "$contains")
+	case len(le.StartsWith) == 2:
+		return reduceCmp(stringItemsToValues(le.StartsWith), "$starts-with")
+	case len(le.EndsWith) == 2:
+		return reduceCmp(stringItemsToValues(le.EndsWith), "$ends-with")
+	}
 
-    // Logical: AND / OR
-    if len(le.And) > 0 {
-        out := grammar.LogicalExpression{}
-        anyUnknown := false
-        // Short-circuit: if any child becomes false => whole AND is false.
-        for _, sub := range le.And {
-            t, onlyBool := adaptLEForBackend(sub, claims, now)
-            if onlyBool && t.Boolean != nil {
-                if !*t.Boolean {
-                    b := false
-                    return grammar.LogicalExpression{Boolean: &b}, true
-                }
-                // true child is neutral in AND; omit it
-                continue
-            }
-            out.And = append(out.And, t)
-            anyUnknown = true
-        }
-        if !anyUnknown {
-            // All children were true (or empty after trimming) -> true
-            b := true
-            return grammar.LogicalExpression{Boolean: &b}, true
-        }
-        // Single remaining branch -> remove redundant AND wrapper
-        if len(out.And) == 1 {
-            return out.And[0], false
-        }
-        return out, false
-    }
+	// Logical: AND / OR
+	if len(le.And) > 0 {
+		if len(le.And) == 1 {
+			return adaptLEForBackend(le.And[0], claims, now)
+		}
+		out := grammar.LogicalExpression{}
+		anyUnknown := false
+		// Short-circuit: if any child becomes false => whole AND is false.
+		for _, sub := range le.And {
+			t, onlyBool := adaptLEForBackend(sub, claims, now)
+			if onlyBool && t.Boolean != nil {
+				if !*t.Boolean {
+					b := false
+					return grammar.LogicalExpression{Boolean: &b}, true
+				}
+				// true child is neutral in AND; omit it
+				continue
+			}
+			out.And = append(out.And, t)
+			anyUnknown = true
+		}
+		if !anyUnknown {
+			// All children were true (or empty after trimming) -> true
+			b := true
+			return grammar.LogicalExpression{Boolean: &b}, true
+		}
+		// Single remaining branch -> remove redundant AND wrapper
+		if len(out.And) == 1 {
+			return out.And[0], false
+		}
+		return out, false
+	}
 
-    if len(le.Or) > 0 {
-        out := grammar.LogicalExpression{}
-        anyUnknown := false
-        // Short-circuit: if any child becomes true => whole OR is true.
-        for _, sub := range le.Or {
-            t, onlyBool := adaptLEForBackend(sub, claims, now)
-            if onlyBool && t.Boolean != nil {
-                if *t.Boolean {
-                    b := true
-                    return grammar.LogicalExpression{Boolean: &b}, true
-                }
-                // false child is neutral in OR; omit it
-                continue
-            }
-            out.Or = append(out.Or, t)
-            anyUnknown = true
-        }
-        if !anyUnknown {
-            // All children were false (or empty after trimming) -> false
-            b := false
-            return grammar.LogicalExpression{Boolean: &b}, true
-        }
-        // Single remaining branch -> remove redundant OR wrapper
-        if len(out.Or) == 1 {
-            return out.Or[0], false
-        }
-        return out, false
-    }
+	if len(le.Or) > 0 {
+		if len(le.Or) == 1 {
+			return adaptLEForBackend(le.Or[0], claims, now)
+		}
+		out := grammar.LogicalExpression{}
+		anyUnknown := false
+		// Short-circuit: if any child becomes true => whole OR is true.
+		for _, sub := range le.Or {
+			t, onlyBool := adaptLEForBackend(sub, claims, now)
+			if onlyBool && t.Boolean != nil {
+				if *t.Boolean {
+					b := true
+					return grammar.LogicalExpression{Boolean: &b}, true
+				}
+				// false child is neutral in OR; omit it
+				continue
+			}
+			out.Or = append(out.Or, t)
+			anyUnknown = true
+		}
+		if !anyUnknown {
+			// All children were false (or empty after trimming) -> false
+			b := false
+			return grammar.LogicalExpression{Boolean: &b}, true
+		}
+		// Single remaining branch -> remove redundant OR wrapper
+		if len(out.Or) == 1 {
+			return out.Or[0], false
+		}
+		return out, false
+	}
 
-    // Logical: NOT
-    if le.Not != nil {
-        t, onlyBool := adaptLEForBackend(*le.Not, claims, now)
-        if onlyBool && t.Boolean != nil {
-            b := !*t.Boolean
-            return grammar.LogicalExpression{Boolean: &b}, true
-        }
-        return grammar.LogicalExpression{Not: &t}, false
-    }
+	// Logical: NOT
+	if le.Not != nil {
+		t, onlyBool := adaptLEForBackend(*le.Not, claims, now)
+		if onlyBool && t.Boolean != nil {
+			b := !*t.Boolean
+			return grammar.LogicalExpression{Boolean: &b}, true
+		}
+		return grammar.LogicalExpression{Not: &t}, false
+	}
 
-    // $match: try to reduce nested matches
-    if len(le.Match) > 0 {
-        // Semantics of $match in eval: AND over children
-        out := grammar.LogicalExpression{}
-        anyUnknown := false
-        for _, m := range le.Match {
-            if t, isBool := adaptMatchForBackend(m, claims, now); isBool {
-                if t.Boolean != nil && !*t.Boolean {
-                    b := false
-                    return grammar.LogicalExpression{Boolean: &b}, true
-                }
-                // true is neutral for AND; omit it
-                continue
-            }
-            out.Match = append(out.Match, m)
-            anyUnknown = true
-        }
-        if !anyUnknown {
-            b := true
-            return grammar.LogicalExpression{Boolean: &b}, true
-        }
-        return out, false
-    }
+	// $match: try to reduce nested matches
+	if len(le.Match) > 0 {
+		// Semantics of $match in eval: AND over children
+		out := grammar.LogicalExpression{}
+		anyUnknown := false
+		for _, m := range le.Match {
+			if t, isBool := adaptMatchForBackend(m, claims, now); isBool {
+				if t.Boolean != nil && !*t.Boolean {
+					b := false
+					return grammar.LogicalExpression{Boolean: &b}, true
+				}
+				// true is neutral for AND; omit it
+				continue
+			}
+			out.Match = append(out.Match, m)
+			anyUnknown = true
+		}
+		if !anyUnknown {
+			b := true
+			return grammar.LogicalExpression{Boolean: &b}, true
+		}
+		return out, false
+	}
 
-    // Unknown or unsupported -> cannot fully decide here
-    return le, false
+	// Unknown or unsupported -> cannot fully decide here
+	return le, false
 }
 
 // adaptMatchForBackend reduces a MatchExpression similarly to adaptLEForBackend.
 func adaptMatchForBackend(me grammar.MatchExpression, claims Claims, now time.Time) (grammar.MatchExpression, bool) {
-    if me.Boolean != nil {
-        return me, true
-    }
-    reduceCmp := func(items []grammar.Value, op string) (grammar.MatchExpression, bool) {
-        if len(items) != 2 {
-            return me, false
-        }
-        left := replaceAttribute(items[0], claims, now)
-        right := replaceAttribute(items[1], claims, now)
-        out := grammar.MatchExpression{}
-        switch op {
-        case "$eq":
-            out.Eq = []grammar.Value{left, right}
-        case "$ne":
-            out.Ne = []grammar.Value{left, right}
-        case "$gt":
-            out.Gt = []grammar.Value{left, right}
-        case "$ge":
-            out.Ge = []grammar.Value{left, right}
-        case "$lt":
-            out.Lt = []grammar.Value{left, right}
-        case "$le":
-            out.Le = []grammar.Value{left, right}
-        case "$regex":
-            out.Regex = []grammar.StringValue{valueToStringValue(left), valueToStringValue(right)}
-        case "$contains":
-            out.Contains = []grammar.StringValue{valueToStringValue(left), valueToStringValue(right)}
-        case "$starts-with":
-            out.StartsWith = []grammar.StringValue{valueToStringValue(left), valueToStringValue(right)}
-        case "$ends-with":
-            out.EndsWith = []grammar.StringValue{valueToStringValue(left), valueToStringValue(right)}
-        }
-        if isLiteral(left) && isLiteral(right) {
-            b := false
-            tmp := grammar.LogicalExpression{}
-            switch op {
-            case "$eq":
-                tmp.Eq = out.Eq
-            case "$ne":
-                tmp.Ne = out.Ne
-            case "$gt":
-                tmp.Gt = out.Gt
-            case "$ge":
-                tmp.Ge = out.Ge
-            case "$lt":
-                tmp.Lt = out.Lt
-            case "$le":
-                tmp.Le = out.Le
-            case "$regex":
-                tmp.Regex = out.Regex
-            case "$contains":
-                tmp.Contains = out.Contains
-            case "$starts-with":
-                tmp.StartsWith = out.StartsWith
-            case "$ends-with":
-                tmp.EndsWith = out.EndsWith
-            }
-            if evalLE(tmp, claims, now) {
-                b = true
-            }
-            return grammar.MatchExpression{Boolean: &b}, true
-        }
-        return out, false
-    }
+	if me.Boolean != nil {
+		return me, true
+	}
+	reduceCmp := func(items []grammar.Value, op string) (grammar.MatchExpression, bool) {
+		if len(items) != 2 {
+			return me, false
+		}
+		left := replaceAttribute(items[0], claims, now)
+		right := replaceAttribute(items[1], claims, now)
+		out := grammar.MatchExpression{}
+		switch op {
+		case "$eq":
+			out.Eq = []grammar.Value{left, right}
+		case "$ne":
+			out.Ne = []grammar.Value{left, right}
+		case "$gt":
+			out.Gt = []grammar.Value{left, right}
+		case "$ge":
+			out.Ge = []grammar.Value{left, right}
+		case "$lt":
+			out.Lt = []grammar.Value{left, right}
+		case "$le":
+			out.Le = []grammar.Value{left, right}
+		case "$regex":
+			out.Regex = []grammar.StringValue{valueToStringValue(left), valueToStringValue(right)}
+		case "$contains":
+			out.Contains = []grammar.StringValue{valueToStringValue(left), valueToStringValue(right)}
+		case "$starts-with":
+			out.StartsWith = []grammar.StringValue{valueToStringValue(left), valueToStringValue(right)}
+		case "$ends-with":
+			out.EndsWith = []grammar.StringValue{valueToStringValue(left), valueToStringValue(right)}
+		}
+		if isLiteral(left) && isLiteral(right) {
+			b := false
+			tmp := grammar.LogicalExpression{}
+			switch op {
+			case "$eq":
+				tmp.Eq = out.Eq
+			case "$ne":
+				tmp.Ne = out.Ne
+			case "$gt":
+				tmp.Gt = out.Gt
+			case "$ge":
+				tmp.Ge = out.Ge
+			case "$lt":
+				tmp.Lt = out.Lt
+			case "$le":
+				tmp.Le = out.Le
+			case "$regex":
+				tmp.Regex = out.Regex
+			case "$contains":
+				tmp.Contains = out.Contains
+			case "$starts-with":
+				tmp.StartsWith = out.StartsWith
+			case "$ends-with":
+				tmp.EndsWith = out.EndsWith
+			}
+			if evalLE(tmp, claims, now) {
+				b = true
+			}
+			return grammar.MatchExpression{Boolean: &b}, true
+		}
+		return out, false
+	}
 
-    switch {
-    case len(me.Eq) == 2:
-        return reduceCmp(me.Eq, "$eq")
-    case len(me.Ne) == 2:
-        return reduceCmp(me.Ne, "$ne")
-    case len(me.Gt) == 2:
-        return reduceCmp(me.Gt, "$gt")
-    case len(me.Ge) == 2:
-        return reduceCmp(me.Ge, "$ge")
-    case len(me.Lt) == 2:
-        return reduceCmp(me.Lt, "$lt")
-    case len(me.Le) == 2:
-        return reduceCmp(me.Le, "$le")
-    case len(me.Regex) == 2:
-        return reduceCmp(stringItemsToValues(me.Regex), "$regex")
-    case len(me.Contains) == 2:
-        return reduceCmp(stringItemsToValues(me.Contains), "$contains")
-    case len(me.StartsWith) == 2:
-        return reduceCmp(stringItemsToValues(me.StartsWith), "$starts-with")
-    case len(me.EndsWith) == 2:
-        return reduceCmp(stringItemsToValues(me.EndsWith), "$ends-with")
-    case len(me.Match) > 0:
-        allBool := true
-        out := grammar.MatchExpression{}
-        for _, sub := range me.Match {
-            t, onlyBool := adaptMatchForBackend(sub, claims, now)
-            out.Match = append(out.Match, t)
-            if !onlyBool {
-                allBool = false
-            }
-        }
-        if allBool {
-            accum := true
-            for _, sub := range out.Match {
-                if sub.Boolean == nil || !*sub.Boolean {
-                    accum = false
-                    break
-                }
-            }
-            return grammar.MatchExpression{Boolean: &accum}, true
-        }
-        return out, false
-    }
-    return me, false
+	switch {
+	case len(me.Eq) == 2:
+		return reduceCmp(me.Eq, "$eq")
+	case len(me.Ne) == 2:
+		return reduceCmp(me.Ne, "$ne")
+	case len(me.Gt) == 2:
+		return reduceCmp(me.Gt, "$gt")
+	case len(me.Ge) == 2:
+		return reduceCmp(me.Ge, "$ge")
+	case len(me.Lt) == 2:
+		return reduceCmp(me.Lt, "$lt")
+	case len(me.Le) == 2:
+		return reduceCmp(me.Le, "$le")
+	case len(me.Regex) == 2:
+		return reduceCmp(stringItemsToValues(me.Regex), "$regex")
+	case len(me.Contains) == 2:
+		return reduceCmp(stringItemsToValues(me.Contains), "$contains")
+	case len(me.StartsWith) == 2:
+		return reduceCmp(stringItemsToValues(me.StartsWith), "$starts-with")
+	case len(me.EndsWith) == 2:
+		return reduceCmp(stringItemsToValues(me.EndsWith), "$ends-with")
+	case len(me.Match) > 0:
+		allBool := true
+		out := grammar.MatchExpression{}
+		for _, sub := range me.Match {
+			t, onlyBool := adaptMatchForBackend(sub, claims, now)
+			out.Match = append(out.Match, t)
+			if !onlyBool {
+				allBool = false
+			}
+		}
+		if allBool {
+			accum := true
+			for _, sub := range out.Match {
+				if sub.Boolean == nil || !*sub.Boolean {
+					accum = false
+					break
+				}
+			}
+			return grammar.MatchExpression{Boolean: &accum}, true
+		}
+		return out, false
+	}
+	return me, false
 }
 
 // replaceAttribute resolves a Value's $attribute (CLAIM/GLOBAL) to a literal value,
 // when possible. If the value is not an attribute, it is returned unchanged.
 func replaceAttribute(v grammar.Value, claims Claims, now time.Time) grammar.Value {
-    if v.Attribute != nil {
-        // Use existing resolver to get a concrete value
-        resolved := resolveValue(v, claims, now)
-        if lit, ok := literalValueFromAny(resolved); ok {
-            return lit
-        }
-        // If cannot build a literal, return as-is (will be non-SQL-compatible)
-        return v
-    }
-    return v
+	if v.Attribute != nil {
+		// Use existing resolver to get a concrete value
+		resolved := resolveValue(v, claims, now)
+		if lit, ok := literalValueFromAny(resolved); ok {
+			return lit
+		}
+		// If cannot build a literal, return as-is (will be non-SQL-compatible)
+		return v
+	}
+	return v
 }
 
 // isLiteral returns true if the Value represents a literal (not a field and not an attribute)
 func isLiteral(v grammar.Value) bool {
-    return v.IsValue() && !v.IsField() && v.Attribute == nil
+	return v.IsValue() && !v.IsField() && v.Attribute == nil
 }
 
 // isConstantLiteralVal returns true if the value is a direct literal constant
 // (not a field, not an attribute), so comparisons with it can be reduced when the
 // other side is resolvable.
 func isConstantLiteralVal(v grammar.Value) bool {
-    if v.Field != nil || v.Attribute != nil {
-        return false
-    }
-    if v.StrVal != nil || v.NumVal != nil || v.Boolean != nil || v.DateTimeVal != nil || v.TimeVal != nil || v.Year != nil || v.Month != nil || v.DayOfMonth != nil || v.DayOfWeek != nil || v.HexVal != nil {
-        return true
-    }
-    // Casts produce runtime literals via resolveValue; treat as not a constant here.
-    return false
+	if v.Field != nil || v.Attribute != nil {
+		return false
+	}
+	if v.StrVal != nil || v.NumVal != nil || v.Boolean != nil || v.DateTimeVal != nil || v.TimeVal != nil || v.Year != nil || v.Month != nil || v.DayOfMonth != nil || v.DayOfWeek != nil || v.HexVal != nil {
+		return true
+	}
+	// Casts produce runtime literals via resolveValue; treat as not a constant here.
+	return false
 }
 
 // literalValueFromAny converts a Go value into a grammar.Value with a literal.
 func literalValueFromAny(x any) (grammar.Value, bool) {
-    switch t := x.(type) {
-    case nil:
-        return grammar.Value{}, false
-    case bool:
-        b := t
-        return grammar.Value{Boolean: &b}, true
-    case float64:
-        f := t
-        return grammar.Value{NumVal: &f}, true
-    case float32:
-        f := float64(t)
-        return grammar.Value{NumVal: &f}, true
-    case int:
-        f := float64(t)
-        return grammar.Value{NumVal: &f}, true
-    case int32:
-        f := float64(t)
-        return grammar.Value{NumVal: &f}, true
-    case int64:
-        f := float64(t)
-        return grammar.Value{NumVal: &f}, true
-    case string:
-        s := grammar.StandardString(t)
-        return grammar.Value{StrVal: &s}, true
-    default:
-        // Fallback to string representation
-        s := grammar.StandardString(fmt.Sprint(x))
-        return grammar.Value{StrVal: &s}, true
-    }
+	switch t := x.(type) {
+	case nil:
+		return grammar.Value{}, false
+	case bool:
+		b := t
+		return grammar.Value{Boolean: &b}, true
+	case float64:
+		f := t
+		return grammar.Value{NumVal: &f}, true
+	case float32:
+		f := float64(t)
+		return grammar.Value{NumVal: &f}, true
+	case int:
+		f := float64(t)
+		return grammar.Value{NumVal: &f}, true
+	case int32:
+		f := float64(t)
+		return grammar.Value{NumVal: &f}, true
+	case int64:
+		f := float64(t)
+		return grammar.Value{NumVal: &f}, true
+	case string:
+		s := grammar.StandardString(t)
+		return grammar.Value{StrVal: &s}, true
+	default:
+		// Fallback to string representation
+		s := grammar.StandardString(fmt.Sprint(x))
+		return grammar.Value{StrVal: &s}, true
+	}
 }
 
 // stringItemsToValues is a small helper to treat StringItems like a 2-Value slice
 func stringItemsToValues(items []grammar.StringValue) []grammar.Value {
-    out := make([]grammar.Value, 0, len(items))
-    for _, it := range items {
-        // Convert StringValue to Value
-        if it.Field != nil {
-            out = append(out, grammar.Value{Field: it.Field})
-            continue
-        }
-        if it.StrVal != nil {
-            out = append(out, grammar.Value{StrVal: it.StrVal})
-            continue
-        }
-        if it.Attribute != nil {
-            // Leave as attribute inside Value for further resolution
-            out = append(out, grammar.Value{Attribute: it.Attribute})
-            continue
-        }
-        if it.StrCast != nil {
-            out = append(out, grammar.Value{StrCast: it.StrCast})
-            continue
-        }
-        out = append(out, grammar.Value{})
-    }
-    return out
+	out := make([]grammar.Value, 0, len(items))
+	for _, it := range items {
+		// Convert StringValue to Value
+		if it.Field != nil {
+			out = append(out, grammar.Value{Field: it.Field})
+			continue
+		}
+		if it.StrVal != nil {
+			out = append(out, grammar.Value{StrVal: it.StrVal})
+			continue
+		}
+		if it.Attribute != nil {
+			// Leave as attribute inside Value for further resolution
+			out = append(out, grammar.Value{Attribute: it.Attribute})
+			continue
+		}
+		if it.StrCast != nil {
+			out = append(out, grammar.Value{StrCast: it.StrCast})
+			continue
+		}
+		out = append(out, grammar.Value{})
+	}
+	return out
 }
 
 // valueToStringValue converts a Value into a StringValue best-effort for string operations
 func valueToStringValue(v grammar.Value) grammar.StringValue {
-    if v.Field != nil {
-        return grammar.StringValue{Field: v.Field}
-    }
-    if v.StrVal != nil {
-        return grammar.StringValue{StrVal: v.StrVal}
-    }
-    if v.Attribute != nil {
-        return grammar.StringValue{Attribute: v.Attribute}
-    }
-    if v.StrCast != nil {
-        return grammar.StringValue{StrCast: v.StrCast}
-    }
-    // Fallback: stringify
-    s := grammar.StandardString(fmt.Sprint(v.GetValue()))
-    return grammar.StringValue{StrVal: &s}
+	if v.Field != nil {
+		return grammar.StringValue{Field: v.Field}
+	}
+	if v.StrVal != nil {
+		return grammar.StringValue{StrVal: v.StrVal}
+	}
+	if v.Attribute != nil {
+		return grammar.StringValue{Attribute: v.Attribute}
+	}
+	if v.StrCast != nil {
+		return grammar.StringValue{StrCast: v.StrCast}
+	}
+	// Fallback: stringify
+	s := grammar.StandardString(fmt.Sprint(v.GetValue()))
+	return grammar.StringValue{StrVal: &s}
 }
 
 func evalMatch(me grammar.MatchExpression, claims Claims, now time.Time) bool {
