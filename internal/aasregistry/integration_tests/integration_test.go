@@ -130,8 +130,8 @@ func makeRequest(config TestConfig) (string, error) {
 func TestIntegration(t *testing.T) {
 	// Load test configuration
 	configs, err := loadTestConfig("it_config.json")
-	require.NoError(t, err, "Failed to load test config")
 
+	require.NoError(t, err, "Failed to load test config")
 	// Wait for services to be ready (adjust as needed)
 	time.Sleep(15 * time.Second) // Wait for Docker Compose services
 
@@ -144,7 +144,7 @@ func TestIntegration(t *testing.T) {
 			// Handle special actions from config
 			if config.Action == "DELETE_ALL_AAS_DESCRIPTORS" {
 				// Fetch current descriptors
-				body, err := makeRequest(TestConfig{Method: "GET", Endpoint: "http://127.0.0.1:5004/shell-descriptors", ExpectedStatus: 200})
+				body, err := makeRequest(TestConfig{Method: "GET", Endpoint: "http://127.0.0.1:6004/shell-descriptors", ExpectedStatus: 200})
 				require.NoError(t, err)
 
 				var list struct {
@@ -158,7 +158,7 @@ func TestIntegration(t *testing.T) {
 				// Delete each descriptor by base64url-encoded id
 				for _, item := range list.Result {
 					enc := base64.RawURLEncoding.EncodeToString([]byte(item.ID))
-					_, err := makeRequest(TestConfig{Method: "DELETE", Endpoint: fmt.Sprintf("http://127.0.0.1:5004/shell-descriptors/%s", enc), ExpectedStatus: 204})
+					_, err := makeRequest(TestConfig{Method: "DELETE", Endpoint: fmt.Sprintf("http://127.0.0.1:6004/shell-descriptors/%s", enc), ExpectedStatus: 204})
 					require.NoError(t, err)
 				}
 				return

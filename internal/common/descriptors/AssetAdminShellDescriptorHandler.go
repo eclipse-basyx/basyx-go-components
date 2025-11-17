@@ -50,7 +50,6 @@ import (
 
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
-	"github.com/eclipse-basyx/basyx-go-components/internal/common/builder"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	persistence_utils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
 	"golang.org/x/sync/errgroup"
@@ -459,9 +458,9 @@ func ListAssetAdministrationShellDescriptors(
 		_ = rows.Close()
 	}()
 
-	descRows := make([]builder.AssetAdministrationShellDescriptorRow, 0, peekLimit)
+	descRows := make([]model.AssetAdministrationShellDescriptorRow, 0, peekLimit)
 	for rows.Next() {
-		var r builder.AssetAdministrationShellDescriptorRow
+		var r model.AssetAdministrationShellDescriptorRow
 		if err := rows.Scan(
 			&r.DescID,
 			&r.AssetKindStr,

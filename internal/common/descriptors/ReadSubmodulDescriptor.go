@@ -35,7 +35,6 @@ import (
 	"fmt"
 
 	"github.com/doug-martin/goqu/v9"
-	"github.com/eclipse-basyx/basyx-go-components/internal/common/builder"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/lib/pq"
 	"golang.org/x/sync/errgroup"
@@ -135,7 +134,7 @@ func ReadSubmodelDescriptorsByAASDescriptorIDs(
 		_ = rows.Close()
 	}()
 
-	perAAS := make(map[int64][]builder.SubmodelDescriptorRow, len(uniqAASDesc))
+	perAAS := make(map[int64][]model.SubmodelDescriptorRow, len(uniqAASDesc))
 	allSmdDescIDs := make([]int64, 0, 10000)
 	semRefIDs := make([]int64, 0, 10000)
 	adminInfoIDs := make([]int64, 0, 10000)
@@ -143,7 +142,7 @@ func ReadSubmodelDescriptorsByAASDescriptorIDs(
 	displayNameIDs := make([]int64, 0, 10000)
 
 	for rows.Next() {
-		var r builder.SubmodelDescriptorRow
+		var r model.SubmodelDescriptorRow
 		if err := rows.Scan(
 			&r.AasDescID,
 			&r.SmdDescID,

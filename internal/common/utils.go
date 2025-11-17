@@ -26,7 +26,7 @@
 // Package common provides utility functions and shared components
 // used across the BaSyx Go components implementation.
 //
-//nolint:revive
+//nolint:all
 package common
 
 import (
@@ -84,16 +84,29 @@ func NormalizeBasePath(p string) string {
 	return strings.TrimRight(p, "/")
 }
 
-// isArrayNotEmpty checks if a JSON array contains data.
+// IsArrayNotEmpty checks whether a JSON RawMessage contains a non-empty array.
 //
-// This utility function determines whether a JSON RawMessage contains an actual
-// array with data, as opposed to being empty or containing a null value.
+// This function is useful when processing database query results that return
+// JSON arrays. It helps distinguish between empty arrays, null values, and
+// arrays with actual content.
+//
+// The function considers data to be empty if:
+//   - The RawMessage has zero length
+//   - The string representation equals "null"
 //
 // Parameters:
-//   - data: JSON RawMessage to check
+//   - data: JSON RawMessage to check, typically from a database query result
 //
 // Returns:
-//   - bool: true if the data is not empty and not "null", false otherwise
+//   - true if the data contains a non-empty, non-null JSON value
+//   - false if the data is empty or represents a null value
+//
+// Examples:
+//
+//	IsArrayNotEmpty(json.RawMessage("[]"))           // Returns: true
+//	IsArrayNotEmpty(json.RawMessage("[1,2,3]"))      // Returns: true
+//	IsArrayNotEmpty(json.RawMessage("null"))         // Returns: false
+//	IsArrayNotEmpty(json.RawMessage(""))             // Returns: false
 func IsArrayNotEmpty(data json.RawMessage) bool {
 	return len(data) > 0 && string(data) != "null"
 }

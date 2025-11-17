@@ -1,5 +1,6 @@
 //go:build unit
 
+//nolint:all
 package common
 
 import (

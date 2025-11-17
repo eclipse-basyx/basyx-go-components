@@ -1,13 +1,13 @@
 services:
-  db:
-    image: postgres:15
+  db-it:
+    image: postgres:18
     container_name: postgres_db
     environment:
       POSTGRES_USER: admin
       POSTGRES_PASSWORD: admin123
       POSTGRES_DB: basyxTestDB
     ports:
-      - "5432:5432"
+      - "6432:5432"
     command: ["postgres", "-c", "listen_addresses=*"]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U admin -d basyxTestDB"]
@@ -15,14 +15,14 @@ services:
       timeout: 5s
       retries: 5
 
-  aas-registry:
-    container_name: as-registry
+  aas-registry-it:
+    container_name: aas-registry-it
     build:
       context: ../../../..
       dockerfile: ./cmd/aasregistryservice/Dockerfile
     environment:
       - SERVER_PORT=5004
-      - POSTGRES_HOST=db
+      - POSTGRES_HOST=db-it
       - POSTGRES_PORT=5432
       - POSTGRES_USER=admin
       - POSTGRES_PASSWORD=admin123
@@ -32,9 +32,9 @@ services:
       - POSTGRES_CONNMAXLIFETIMEMINUTES=5
       - ABAC_ENABLED=false
     ports:
-      - "5004:5004"
+      - "6004:5004"
     depends_on:
-      db:
+      db-it:
         condition: service_healthy
     extra_hosts:
       - "localhost:host-gateway"

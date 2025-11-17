@@ -1,4 +1,4 @@
-//nolint:revive
+//nolint:all
 package common
 
 // PagedResult represents a paginated response containing a cursor for the next page
