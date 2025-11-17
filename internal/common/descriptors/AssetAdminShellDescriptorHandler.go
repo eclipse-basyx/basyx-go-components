@@ -52,7 +52,6 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/builder"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
-	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	persistence_utils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
 	"golang.org/x/sync/errgroup"
 )
@@ -426,42 +425,9 @@ func ListAssetAdministrationShellDescriptors(
 			aas.Col(colDescriptionID),
 		)
 
-	p := auth.GetQueryFilter(ctx)
-	if p != nil {
-
-		wc, err := p.Formula.EvaluateToExpression()
-		if err != nil {
-			return nil, "", err
-		}
-		existsDataset := d.
-			From(goqu.T(tblDescriptor).As("descriptor")).
-			LeftJoin(goqu.T(tblAASDescriptor).As("aas_descriptor"),
-				goqu.On(goqu.I("aas_descriptor.descriptor_id").Eq(goqu.I("descriptor.id")))).
-			LeftJoin(goqu.T(tblSpecificAssetID).As("specific_asset_id"),
-				goqu.On(goqu.I("specific_asset_id.descriptor_id").Eq(goqu.I("descriptor.id")))).
-			LeftJoin(goqu.T(tblReference).As("external_subject_reference"),
-				goqu.On(goqu.I("external_subject_reference.id").Eq(goqu.I("specific_asset_id.external_subject_ref")))).
-			LeftJoin(goqu.T(tblReferenceKey).As("external_subject_reference_key"),
-				goqu.On(goqu.I("external_subject_reference_key.reference_id").Eq(goqu.I("external_subject_reference.id")))).
-			LeftJoin(goqu.T(tblAASDescriptorEndpoint).As("aas_descriptor_endpoint"),
-				goqu.On(goqu.I("aas_descriptor_endpoint.descriptor_id").Eq(goqu.I("descriptor.id")))).
-			LeftJoin(goqu.T(tblSubmodelDescriptor).As("submodel_descriptor"),
-				goqu.On(goqu.I("submodel_descriptor.aas_descriptor_id").Eq(goqu.I("aas_descriptor.descriptor_id")))).
-			LeftJoin(goqu.T(tblAASDescriptorEndpoint).As("submodel_descriptor_endpoint"),
-				goqu.On(goqu.I("submodel_descriptor_endpoint.descriptor_id").Eq(goqu.I("submodel_descriptor.descriptor_id")))).
-			LeftJoin(goqu.T(tblReference).As("aasdesc_submodel_descriptor_semantic_id_reference"),
-				goqu.On(goqu.I("aasdesc_submodel_descriptor_semantic_id_reference.id").Eq(goqu.I("submodel_descriptor.semantic_id")))).
-			LeftJoin(goqu.T(tblReferenceKey).As("aasdesc_submodel_descriptor_semantic_id_reference_key"),
-				goqu.On(goqu.I("aasdesc_submodel_descriptor_semantic_id_reference_key.reference_id").
-					Eq(goqu.I("aasdesc_submodel_descriptor_semantic_id_reference.id")))).
-			Where(
-				goqu.I("descriptor.id").Eq(aas.Col(colDescriptorID)),
-				wc,
-			)
-
-		ds = ds.Where(
-			goqu.L("EXISTS (?)", existsDataset),
-		)
+	ds, err := getFilterQueryFromContext(d, ds, aas, ctx)
+	if err != nil {
+		return nil, "", err
 	}
 
 	if cursor != "" {
@@ -480,15 +446,14 @@ func ListAssetAdministrationShellDescriptors(
 		Order(aas.Col(colAASID).Asc()).
 		Limit(uint(peekLimit))
 
-	sqlStr, args, buildErr := ds.ToSQL()
-	fmt.Println(sqlStr)
-	if buildErr != nil {
-		return nil, "", common.NewInternalServerError("Failed to build AAS descriptor query. See server logs for details.")
+	sqlStr, args, err := ds.ToSQL()
+	if err != nil {
+		return nil, "", err
 	}
 
 	rows, err := db.QueryContext(ctx, sqlStr, args...)
 	if err != nil {
-		return nil, "", common.NewInternalServerError("Failed to query AAS descriptors. See server logs for details.")
+		return nil, "", err
 	}
 	defer func() {
 		_ = rows.Close()

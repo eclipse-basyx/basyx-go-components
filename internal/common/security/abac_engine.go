@@ -101,18 +101,15 @@ func (m *AccessModel) AuthorizeWithFilter(in EvalInput) (ok bool, code DecisionC
 
 		// Gate 1: rights
 		if !rightsContains(acl.RIGHTS, right) {
-			fmt.Println("method mismatch")
 			continue
 		}
 		// Gate 2: attributes
 		if !attributesSatisfiedAll(attrs, in.Claims) {
-			fmt.Println("missing claims")
 			continue
 		}
 		// Gate 3: objects
 		accessWithOptinalFilter := matchRouteObjectsObjItem(objs, in.Path)
 		if !accessWithOptinalFilter.access {
-			fmt.Println("no matching object")
 			continue
 		}
 
@@ -137,13 +134,11 @@ func (m *AccessModel) AuthorizeWithFilter(in EvalInput) (ok bool, code DecisionC
 		if combinedLE != nil {
 			adapted, onlyBool := adaptLEForBackend(*combinedLE, in.Claims, in.IssuedUTC)
 			if onlyBool {
-				fmt.Println("security only LE")
 				// Fully decidable here; evaluate and continue on false
 				if !evalLE(adapted, in.Claims, in.IssuedUTC) {
 					continue
 				}
 			} else {
-				fmt.Println("got a expression from LE")
 				qf = &QueryFilter{Formula: &adapted, Filter: r.FILTER}
 
 			}
@@ -288,9 +283,7 @@ func attributesSatisfiedAll(items []grammar.AttributeItem, claims Claims) bool {
 
 		case grammar.ATTRCLAIM:
 			// Presence-only check: user must have this claim key
-			fmt.Println("it.Value")
-			fmt.Println(it.Value)
-			fmt.Println(claims)
+
 			if _, ok := claims[it.Value]; !ok {
 				return false
 			}
