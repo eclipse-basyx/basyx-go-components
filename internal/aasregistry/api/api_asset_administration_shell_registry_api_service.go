@@ -38,6 +38,7 @@ package assregistryapi
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"strings"
@@ -114,6 +115,7 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) PostAssetAdministrationS
 
 	qf := auth.GetQueryFilter(ctx)
 	if qf != nil && qf.Formula != nil {
+		fmt.Println(qf)
 		isAuthenticated, err := qf.Formula.EvaluateAssetAdministrationShellDescriptor(assetAdministrationShellDescriptor)
 		if err != nil {
 			log.Printf("🧩 [%s] Error in PostAssetAdministrationShellDescriptor: internal (aasId=%q): %v", componentName, assetAdministrationShellDescriptor.Id, err)
@@ -122,6 +124,7 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) PostAssetAdministrationS
 			), err
 		}
 		if !isAuthenticated {
+			log.Printf("🧩 [%s] Access denied in PostAssetAdministrationShellDescriptor: internal (aasId=%q): %v", componentName, assetAdministrationShellDescriptor.Id, err)
 			return common.NewAccessDeniedResponse(), nil
 		}
 
@@ -230,6 +233,7 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) PutAssetAdministrationSh
 			), err
 		}
 		if !isAuthenticated {
+			log.Printf("🧩 [%s] Access denied in PutAssetAdministrationShellDescriptorById: internal (aasId=%q): %v", componentName, assetAdministrationShellDescriptor.Id, err)
 			return common.NewAccessDeniedResponse(), nil
 		}
 
@@ -324,6 +328,7 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) DeleteAssetAdministratio
 			), err
 		}
 		if !isAuthenticated {
+			log.Printf("🧩 [%s] Access denied in PutAssetAdministrationShellDescriptorById: internal (aasId=%q): %v", componentName, result.Id, err)
 			return common.NewAccessDeniedResponse(), nil
 		}
 
@@ -394,6 +399,7 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) GetAllSubmodelDescriptor
 			), err
 		}
 		if !isAuthenticated {
+			log.Printf("🧩 [%s] Access denied in GetAssetAdministrationShellDescriptorById: internal (aasId=%q): %v", componentName, result.Id, err)
 			return common.NewAccessDeniedResponse(), nil
 		}
 
@@ -463,6 +469,7 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) PostSubmodelDescriptorTh
 			), err
 		}
 		if !isAuthenticated {
+			log.Printf("🧩 [%s] Access denied in PostSubmodelDescriptorThroughSuperpath: internal (aasId=%q): %v", componentName, submodelDescriptor.Id, err)
 			return common.NewAccessDeniedResponse(), nil
 		}
 
@@ -551,6 +558,7 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) GetSubmodelDescriptorByI
 			), err
 		}
 		if !isAuthenticated {
+			log.Printf("🧩 [%s] Access denied in GetSubmodelDescriptorByIdThroughSuperpath: internal (aasId=%q): %v", componentName, smd.Id, err)
 			return common.NewAccessDeniedResponse(), nil
 		}
 
@@ -588,6 +596,7 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) PutSubmodelDescriptorByI
 			), err
 		}
 		if !isAuthenticated {
+			log.Printf("🧩 [%s] Access denied in PutSubmodelDescriptorByIdThroughSuperpath: internal (aasId=%q): %v", componentName, submodelDescriptor.Id, err)
 			return common.NewAccessDeniedResponse(), nil
 		}
 
@@ -695,6 +704,7 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) DeleteSubmodelDescriptor
 			), err
 		}
 		if !isAuthenticated {
+			log.Printf("🧩 [%s] Access denied in DeleteSubmodelDescriptorByIdThroughSuperpath: internal (aasId=%q): %v", componentName, smd.Id, err)
 			return common.NewAccessDeniedResponse(), nil
 		}
 

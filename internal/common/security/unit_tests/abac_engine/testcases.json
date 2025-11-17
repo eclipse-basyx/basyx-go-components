@@ -93,5 +93,10 @@
     "input": "input/test_attribute_constant.json",
     "expected": "expected/access_allowed_attr_constant.json",
     "eval": "eval/get_shellDescriptors_admin.json"
+  },
+  {
+    "input": "input/anonymous_write_simple.json",
+    "expected": "expected/access_allowed.json",
+    "eval": "eval/post_shellDescriptors_admin.json"
   }
 ]

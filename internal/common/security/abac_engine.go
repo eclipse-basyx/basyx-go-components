@@ -139,8 +139,8 @@ func (m *AccessModel) AuthorizeWithFilter(in EvalInput) (ok bool, code DecisionC
 					continue
 				}
 			} else {
-				qf = &QueryFilter{Formula: &adapted, Filter: r.FILTER}
 
+				qf = &QueryFilter{Formula: &adapted, Filter: r.FILTER}
 			}
 		}
 

@@ -1,0 +1,23 @@
+{
+  "PagingMetadata": {},
+  "Result": [
+    {
+      "id": "https://example.org/aas/public",
+      "specificAssetIds": [
+        {
+          "name": "public",
+          "value": "desc",
+          "externalSubjectId": {
+            "type": "ExternalReference",
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "PUBLIC_READABLE"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

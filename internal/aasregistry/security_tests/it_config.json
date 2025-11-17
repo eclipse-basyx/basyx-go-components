@@ -1,0 +1,64 @@
+[
+  {
+    "context": "Health endpoint - anonymous allowed",
+    "token": null,
+    "method": "GET",
+    "endpoint": "http://localhost:6004/health",
+    "shouldMatch": "expected/expectedHealthEndpoint.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "Shell descriptors GET - anonymous denied",
+    "token": null,
+    "method": "GET",
+    "endpoint": "http://localhost:6004/shell-descriptors",
+    "expectedStatus": 403
+  },
+  {
+    "context": "Shell descriptor POST - anonymous allowed",
+    "token": null,
+    "method": "POST",
+    "endpoint": "http://localhost:6004/shell-descriptors",
+    "data": "postBody/public_access_descriptor.json",
+    "expectedStatus": 201
+  },
+  {
+    "context": "Shell descriptors GET - viewer allowed",
+    "token": {
+      "user": "vieweruser",
+      "password": "admin"
+    },
+    "method": "GET",
+    "endpoint": "http://localhost:6004/shell-descriptors",
+    "expectedStatus": 200,
+    "shouldMatch": "expected/expectedShellDescriptorsViewer.json"
+  },
+  {
+    "context": "Shell descriptor GET by id - viewer allowed",
+    "token": {
+      "user": "vieweruser",
+      "password": "admin"
+    },
+    "method": "GET",
+    "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9hYXMvcHVibGlj",
+    "expectedStatus": 200,
+    "shouldMatch": "expected/expectedShellDescriptorViewer.json"
+  },
+  {
+    "context": "Shell descriptor GET by id - anonymous denied",
+    "token": null,
+    "method": "GET",
+    "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9hYXMvcHVibGlj",
+    "expectedStatus": 403
+  },
+  {
+    "context": "Shell descriptor DELETE - admin denied (no DELETE rule)",
+    "token": {
+      "user": "adminuser",
+      "password": "admin"
+    },
+    "method": "DELETE",
+    "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9hYXMvcHVibGlj",
+    "expectedStatus": 403
+  }
+]

@@ -1,6 +1,5 @@
 {
   "AllAccessPermissionRules": {
-    
     "rules": [
       {
         "ACL": {
@@ -19,7 +18,9 @@
             "ROUTE": "**"
           }
         ],
-        "FORMULA": {"$boolean": true}
+        "FORMULA": {
+          "$boolean": true
+        }
       },
       {
         "ACL": {
@@ -38,19 +39,32 @@
             "ROUTE": "**"
           }
         ],
-        "FORMULA": { "$and": [
-          { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "viewer" } ] },
-          {
-                "$eq": [
-                  {
-                    "$field": "$aasdesc#specificAssetIds[].externalSubjectId"
-                  },
-                  {
-                    "$strVal": "PUBLIC_READABLE"
+        "FORMULA": {
+          "$and": [
+            {
+              "$eq": [
+                {
+                  "$attribute": {
+                    "CLAIM": "role"
                   }
-                ]
-              }
-        ]}
+                },
+                {
+                  "$strVal": "viewer"
+                }
+              ]
+            },
+            {
+              "$eq": [
+                {
+                  "$field": "$aasdesc#specificAssetIds[].externalSubjectId"
+                },
+                {
+                  "$strVal": "PUBLIC_READABLE"
+                }
+              ]
+            }
+          ]
+        }
       }
     ]
   }
