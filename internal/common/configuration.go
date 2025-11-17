@@ -8,12 +8,54 @@ package common
 import (
 	"fmt"
 	"log"
+	"reflect"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/cors"
 	"github.com/spf13/viper"
 )
+
+// DefaultConfig holds all default values for configuration options.
+var DefaultConfig = struct {
+	ServerPort              int
+	ServerContextPath       string
+	ServerCacheEnabled      bool
+	PgPort                  int
+	PgDBName                string
+	PgMaxOpen               int
+	PgMaxIdle               int
+	PgConnLifetime          int
+	AllowedOrigins          []string
+	AllowedMethods          []string
+	AllowedHeaders          []string
+	AllowCredentials        bool
+	OIDCIssuer              string
+	OIDCAudience            string
+	OIDCJWKSURL             string
+	ABACEnabled             bool
+	ABACClientRolesAudience string
+	ABACModelPath           string
+}{
+	ServerPort:              5004,
+	ServerContextPath:       "",
+	ServerCacheEnabled:      false,
+	PgPort:                  5432,
+	PgDBName:                "basyxTestDB",
+	PgMaxOpen:               50,
+	PgMaxIdle:               50,
+	PgConnLifetime:          5,
+	AllowedOrigins:          []string{"*"},
+	AllowedMethods:          []string{"GET", "POST", "DELETE", "OPTIONS"},
+	AllowedHeaders:          []string{"*"},
+	AllowCredentials:        true,
+	OIDCIssuer:              "http://localhost:8080/realms/basyx",
+	OIDCAudience:            "discovery-service",
+	OIDCJWKSURL:             "",
+	ABACEnabled:             false,
+	ABACClientRolesAudience: "discovery-service",
+	ABACModelPath:           "config/access_rules/access-rules.json",
+}
 
 // PrintSplash displays the BaSyx Go API ASCII art logo to the console.
 // This function is typically called during application startup to provide
@@ -218,66 +260,73 @@ func setDefaults(v *viper.Viper) {
 //	  }
 //	}
 func PrintConfiguration(cfg *Config) {
-	// Redact sensitive information if present in the Postgres configuration
-	pgHost := cfg.Postgres.Host
-	pgUser := cfg.Postgres.User
-	pgPassword := cfg.Postgres.Password
-	if pgHost != "" {
-		pgHost = "****"
-		pgUser = "****"
-		pgPassword = "****"
-	}
-
 	divider := "---------------------"
 	var lines []string
+
+	add := func(label string, value any, def any) {
+		suffix := ""
+		if reflect.DeepEqual(value, def) {
+			suffix = " (default)"
+		}
+		lines = append(lines, fmt.Sprintf("  %s: %v%s", label, value, suffix))
+	}
+
+	// Header
 	lines = append(lines, "📜 Loaded configuration:")
 	lines = append(lines, divider)
+
+	// Server
 	lines = append(lines, "🔹 Server:")
-	lines = append(lines, fmt.Sprintf("  Port: %d", cfg.Server.Port))
-	lines = append(lines, fmt.Sprintf("  Context Path: %s", cfg.Server.ContextPath))
-	lines = append(lines, fmt.Sprintf("  Cache Enabled: %v", cfg.Server.CacheEnabled))
-	lines = append(lines, divider)
-	lines = append(lines, "🔹 Postgres:")
-	lines = append(lines, fmt.Sprintf("  Host: %s", pgHost))
-	lines = append(lines, fmt.Sprintf("  Port: %d", cfg.Postgres.Port))
-	lines = append(lines, fmt.Sprintf("  User: %s", pgUser))
-	lines = append(lines, fmt.Sprintf("  Password: %s", pgPassword))
-	lines = append(lines, fmt.Sprintf("  DB Name: %s", cfg.Postgres.DBName))
-	lines = append(lines, fmt.Sprintf("  Max Open Connections: %d", cfg.Postgres.MaxOpenConnections))
-	lines = append(lines, fmt.Sprintf("  Max Idle Connections: %d", cfg.Postgres.MaxIdleConnections))
-	lines = append(lines, fmt.Sprintf("  Conn Max Lifetime (min): %d", cfg.Postgres.ConnMaxLifetimeMinutes))
-	lines = append(lines, divider)
-	lines = append(lines, "🔹 CORS:")
-	lines = append(lines, fmt.Sprintf("  Allowed Origins: %v", cfg.CorsConfig.AllowedOrigins))
-	lines = append(lines, fmt.Sprintf("  Allowed Methods: %v", cfg.CorsConfig.AllowedMethods))
-	lines = append(lines, fmt.Sprintf("  Allowed Headers: %v", cfg.CorsConfig.AllowedHeaders))
-	lines = append(lines, fmt.Sprintf("  Allow Credentials: %v", cfg.CorsConfig.AllowCredentials))
-	lines = append(lines, divider)
-	lines = append(lines, "🔹 OIDC:")
-	lines = append(lines, fmt.Sprintf("  Issuer: %s", cfg.OIDC.Issuer))
-	lines = append(lines, fmt.Sprintf("  Audience: %s", cfg.OIDC.Audience))
-	lines = append(lines, fmt.Sprintf("  JWKS URL: %s", cfg.OIDC.JWKSURL))
-	lines = append(lines, divider)
-	lines = append(lines, "🔹 ABAC:")
-	lines = append(lines, fmt.Sprintf("  Enabled: %v", cfg.ABAC.Enabled))
-	lines = append(lines, fmt.Sprintf("  Client Roles Audience: %s", cfg.ABAC.ClientRolesAudience))
-	modelPath := cfg.ABAC.ModelPath
-	lines = append(lines, fmt.Sprintf("  Model Path: %s", modelPath))
+	add("Port", cfg.Server.Port, DefaultConfig.ServerPort)
+	add("Context Path", cfg.Server.ContextPath, DefaultConfig.ServerContextPath)
+	add("Cache Enabled", cfg.Server.CacheEnabled, DefaultConfig.ServerCacheEnabled)
+
 	lines = append(lines, divider)
 
-	// Find max line length for box width
+	// Postgres
+	lines = append(lines, "🔹 Postgres:")
+	add("Port", cfg.Postgres.Port, DefaultConfig.PgPort)
+	add("DB Name", cfg.Postgres.DBName, DefaultConfig.PgDBName)
+	add("Max Open Connections", cfg.Postgres.MaxOpenConnections, DefaultConfig.PgMaxOpen)
+	add("Max Idle Connections", cfg.Postgres.MaxIdleConnections, DefaultConfig.PgMaxIdle)
+	add("Conn Max Lifetime (min)", cfg.Postgres.ConnMaxLifetimeMinutes, DefaultConfig.PgConnLifetime)
+
+	lines = append(lines, divider)
+
+	// CORS
+	lines = append(lines, "🔹 CORS:")
+	add("Allowed Origins", cfg.CorsConfig.AllowedOrigins, DefaultConfig.AllowedOrigins)
+	add("Allowed Methods", cfg.CorsConfig.AllowedMethods, DefaultConfig.AllowedMethods)
+	add("Allowed Headers", cfg.CorsConfig.AllowedHeaders, DefaultConfig.AllowedHeaders)
+	add("Allow Credentials", cfg.CorsConfig.AllowCredentials, DefaultConfig.AllowCredentials)
+
+	lines = append(lines, divider)
+
+	// ABAC
+	lines = append(lines, "🔹 ABAC:")
+	if !cfg.ABAC.Enabled {
+		lines = append(lines, "  Enabled: false")
+	} else {
+		lines = append(lines, "  Enabled: true")
+		add("Client Roles Audience", cfg.ABAC.ClientRolesAudience, DefaultConfig.ABACClientRolesAudience)
+		add("Model Path", cfg.ABAC.ModelPath, DefaultConfig.ABACModelPath)
+	}
+
+	lines = append(lines, divider)
+
+	// Find max width
 	maxLen := 0
 	for _, l := range lines {
 		if len(l) > maxLen {
 			maxLen = len(l)
 		}
 	}
+
 	boxTop := "╔" + strings.Repeat("═", maxLen+2) + "╗"
 	boxBottom := "╚" + strings.Repeat("═", maxLen+2) + "╝"
 
 	log.Print(boxTop)
 	for _, l := range lines {
-		// Remove leading spaces for consistent alignment
 		trimmed := strings.TrimLeft(l, " ")
 		log.Print("║  " + trimmed + strings.Repeat(" ", maxLen-len(trimmed)) + " ║")
 	}
