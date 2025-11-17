@@ -139,7 +139,7 @@ func (p PostgreSQLPropertyHandler) CreateNested(tx *sql.Tx, submodelID string, p
 }
 
 // Update modifies an existing Property submodel element in the database.
-// Currently delegates all update operations to the decorated handler for base submodel element properties.
+// It updates both the base submodel element properties and the Property-specific value.
 //
 // Parameters:
 //   - idShortOrPath: The idShort or path identifying the element to update
@@ -148,10 +148,18 @@ func (p PostgreSQLPropertyHandler) CreateNested(tx *sql.Tx, submodelID string, p
 // Returns:
 //   - error: An error if the update operation fails
 func (p PostgreSQLPropertyHandler) Update(idShortOrPath string, submodelElement gen.SubmodelElement) error {
+	property, ok := submodelElement.(*gen.Property)
+	if !ok {
+		return common.NewErrBadRequest("submodelElement is not of type Property")
+	}
+
+	// First, perform base SubmodelElement update operations
 	if dErr := p.decorated.Update(idShortOrPath, submodelElement); dErr != nil {
 		return dErr
 	}
-	return nil
+
+	// Update Property-specific data
+	return p.updatePropertyValue(idShortOrPath, property)
 }
 
 // Delete removes a Property submodel element from the database.
@@ -167,6 +175,93 @@ func (p PostgreSQLPropertyHandler) Delete(idShortOrPath string) error {
 	if dErr := p.decorated.Delete(idShortOrPath); dErr != nil {
 		return dErr
 	}
+	return nil
+}
+
+// updatePropertyValue is a helper function that updates Property-specific data in the property_element table.
+// It categorizes the property value into appropriate columns based on the valueType:
+//   - Text types (xs:string, xs:anyURI, xs:base64Binary, xs:hexBinary) -> value_text
+//   - Numeric types (xs:int, xs:decimal, xs:double, xs:float, etc.) -> value_num
+//   - Boolean types (xs:boolean) -> value_bool
+//   - Time types (xs:time) -> value_time
+//   - Datetime types (xs:date, xs:dateTime, xs:duration, etc.) -> value_datetime
+//
+// Parameters:
+//   - idShortOrPath: The idShort or path identifying the element to update
+//   - property: The Property element containing the updated data
+//
+// Returns:
+//   - error: An error if the database update operation fails
+func (p PostgreSQLPropertyHandler) updatePropertyValue(idShortOrPath string, property *gen.Property) error {
+	// Get the database ID for this element
+	dbID, err := p.decorated.GetDatabaseID(idShortOrPath)
+	if err != nil {
+		return err
+	}
+
+	var valueText, valueNum, valueBool, valueTime, valueDatetime sql.NullString
+
+	switch property.ValueType {
+	case "xs:string", "xs:anyURI", "xs:base64Binary", "xs:hexBinary":
+		valueText = sql.NullString{String: property.Value, Valid: property.Value != ""}
+	case "xs:int", "xs:integer", "xs:long", "xs:short", "xs:byte",
+		"xs:unsignedInt", "xs:unsignedLong", "xs:unsignedShort", "xs:unsignedByte",
+		"xs:positiveInteger", "xs:negativeInteger", "xs:nonNegativeInteger", "xs:nonPositiveInteger",
+		"xs:decimal", "xs:double", "xs:float":
+		valueNum = sql.NullString{String: property.Value, Valid: property.Value != ""}
+	case "xs:boolean":
+		valueBool = sql.NullString{String: property.Value, Valid: property.Value != ""}
+	case "xs:time":
+		valueTime = sql.NullString{String: property.Value, Valid: property.Value != ""}
+	case "xs:date", "xs:dateTime", "xs:duration", "xs:gDay", "xs:gMonth",
+		"xs:gMonthDay", "xs:gYear", "xs:gYearMonth":
+		valueDatetime = sql.NullString{String: property.Value, Valid: property.Value != ""}
+	default:
+		// Fallback to text for unknown types
+		valueText = sql.NullString{String: property.Value, Valid: property.Value != ""}
+	}
+
+	// Handle valueID if present - need a transaction for reference creation
+	var valueIDDbID sql.NullInt64
+	if property.ValueID != nil {
+		// Start a transaction for reference creation
+		tx, err := p.db.Begin()
+		if err != nil {
+			return fmt.Errorf("failed to begin transaction: %w", err)
+		}
+		defer func() {
+			if err != nil {
+				_ = tx.Rollback()
+			}
+		}()
+
+		valueIDDbID, err = persistenceutils.CreateReference(tx, property.ValueID, sql.NullInt64{}, sql.NullInt64{})
+		if err != nil {
+			fmt.Println(err)
+			return common.NewInternalServerError("Failed to create ValueID reference - no changes applied - see console for details")
+		}
+
+		// Commit the transaction for reference creation
+		if err = tx.Commit(); err != nil {
+			return fmt.Errorf("failed to commit reference transaction: %w", err)
+		}
+	}
+
+	// Update Property-specific data
+	_, err = p.db.Exec(`UPDATE property_element SET value_type = $1, value_text = $2, value_num = $3, value_bool = $4, value_time = $5, value_datetime = $6, value_id = $7 WHERE id = $8`,
+		property.ValueType,
+		valueText,
+		valueNum,
+		valueBool,
+		valueTime,
+		valueDatetime,
+		valueIDDbID,
+		dbID,
+	)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 

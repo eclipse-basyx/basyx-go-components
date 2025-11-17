@@ -1,0 +1,23 @@
+{
+	"observed": {
+		"type": "ExternalReference",
+		"keys": [
+			{ "type": "Property", "value": "ManufacturerName" }
+		]
+	},
+	"contentType": "text/plain",
+	"value": "Updated Manufacturer Name",
+	"first": {
+		"type": "ExternalReference",
+		"keys": [
+			{ "type": "Property", "value": "first" }
+		]
+	},
+	"second": {
+		"type": "ExternalReference",
+		"keys": [
+			{ "type": "Property", "value": "second" }
+		]
+	},
+	"entityType": "CoManagedEntity"
+}
