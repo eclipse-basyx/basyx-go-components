@@ -1,0 +1,115 @@
+name: Docker Release Build
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    outputs:
+      should-run: ${{ steps.check.outputs.should-run }}
+    steps:
+      - id: check
+        run: |
+          if [[ "${GITHUB_REPOSITORY}" == "eclipse-basyx/basyx-go-components" && "${GITHUB_EVENT_REPOSITORY_FORK}" != "true" ]]; then
+            echo "✅ Running in upstream repository"
+            echo "should-run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "⏭️ Skipping build — fork detected (${GITHUB_REPOSITORY})"
+            echo "should-run=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  build-and-push:
+    needs: guard
+    if: ${{ needs.guard.outputs.should-run == 'true' }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service:
+          - name: aasregistryservice
+            image: eclipsebasyx/aasregistry-go
+          - name: discoveryservice
+            image: eclipsebasyx/aasdiscovery-go
+        #   - name: submodelrepositoryservice
+        #     image: eclipsebasyx/submodelrepository-go
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_HUB_USER }}
+          password: ${{ secrets.DOCKER_HUB_TOKEN }}
+
+      - name: Generate version tags
+        id: meta
+        run: |
+          # Remove 'v' prefix from tag if present
+          VERSION=${GITHUB_REF_NAME#v}
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          
+          # Parse semantic version (e.g., 1.2.3)
+          if [[ $VERSION =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)(-.*)?$ ]]; then
+            MAJOR="${BASH_REMATCH[1]}"
+            MINOR="${BASH_REMATCH[2]}"
+            PATCH="${BASH_REMATCH[3]}"
+            PRERELEASE="${BASH_REMATCH[4]}"
+            
+            echo "major=${MAJOR}" >> $GITHUB_OUTPUT
+            echo "minor=${MINOR}" >> $GITHUB_OUTPUT
+            echo "patch=${PATCH}" >> $GITHUB_OUTPUT
+            
+            # Build tag list
+            TAGS="${{ matrix.service.image }}:${VERSION}"
+            TAGS="${TAGS},${{ matrix.service.image }}:${MAJOR}.${MINOR}.${PATCH}"
+            
+            # Only add major/minor/latest tags for non-prerelease versions
+            if [ -z "$PRERELEASE" ]; then
+              TAGS="${TAGS},${{ matrix.service.image }}:${MAJOR}.${MINOR}"
+              TAGS="${TAGS},${{ matrix.service.image }}:${MAJOR}"
+              TAGS="${TAGS},${{ matrix.service.image }}:latest"
+            else
+              echo "Prerelease detected: ${PRERELEASE}"
+            fi
+            
+            echo "tags=${TAGS}" >> $GITHUB_OUTPUT
+            echo "Building release version: ${VERSION}"
+            echo "Docker tags: ${TAGS}"
+          else
+            echo "Error: Invalid semantic version format: ${VERSION}"
+            exit 1
+          fi
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./cmd/${{ matrix.service.name }}/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          build-args: |
+            VERSION=${{ steps.meta.outputs.version }}
+          cache-from: type=registry,ref=${{ matrix.service.image }}:buildcache
+          cache-to: type=registry,ref=${{ matrix.service.image }}:buildcache,mode=max
+          platforms: linux/amd64,linux/arm64,linux/arm/v7
+          labels: |
+            org.opencontainers.image.title=${{ matrix.service.name }}
+            org.opencontainers.image.description=Eclipse BaSyx ${{ matrix.service.name }}
+            org.opencontainers.image.version=${{ steps.meta.outputs.version }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.licenses=MIT
+
+      - name: Image digest
+        run: |
+          echo "Built and pushed ${{ matrix.service.image }}"
+          echo "Version: ${{ steps.meta.outputs.version }}"
+          echo "Tags: ${{ steps.meta.outputs.tags }}"

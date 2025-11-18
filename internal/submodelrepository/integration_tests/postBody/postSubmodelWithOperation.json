@@ -1,0 +1,43 @@
+{
+    "modelType": "Submodel",
+    "id": "MarcusThisIsAOnlyOperationSubmodel",
+    "idShort": "123",
+    "kind":"Instance",
+    "administration": {
+        "revision": "1",
+        "version": "3"
+    },
+    "submodelElements": [
+        {
+            "modelType": "Operation",
+            "idShort": "DemoOperation",
+            "inputVariables": [
+                {
+                    "value": {
+                        "modelType": "Property",
+                        "valueType": "xs:string",
+                        "value": "Test"
+                    }
+                }
+            ],
+            "outputVariables": [
+                {
+                    "value": {
+                        "modelType": "Property",
+                        "valueType": "xs:string",
+                        "value": "Test_Out"
+                    }
+                }
+            ],
+            "inoutputVariables": [
+                {
+                    "value": {
+                        "modelType": "Property",
+                        "valueType": "xs:string",
+                        "value": "Test_InOut"
+                    }
+                }
+            ]
+        }
+    ]
+}

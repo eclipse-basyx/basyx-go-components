@@ -74,6 +74,37 @@ func (c *RequestClient) DeleteLookupShells(t testing.TB, aasID string) {
 	c.DeleteLookupShellsExpect(t, aasID, http.StatusNoContent)
 }
 
+// LookupShellIDsByAssetLinkGET queries GET /lookup/shells?assetIds=...&limit=&cursor=
+func (c *RequestClient) LookupShellIDsByAssetLinkGET(
+	t testing.TB,
+	pairs []model.SpecificAssetID,
+	limit int,
+	cursor string,
+	expect int,
+) model.GetAllAssetAdministrationShellIdsByAssetLink200Response {
+	t.Helper()
+	url := fmt.Sprintf("%s/lookup/shells?limit=%d", c.BaseURL, limit)
+	// add each assetIds as base64url-encoded JSON {"name":"...","value":"..."}
+	for _, p := range pairs {
+		obj, err := json.Marshal(map[string]string{"name": p.Name, "value": p.Value})
+		require.NoError(t, err)
+		url += "&assetIds=" + common.EncodeString(string(obj))
+	}
+	if cursor != "" {
+		url += "&cursor=" + cursor
+	}
+
+	raw := testenv.GetExpect(t, url, expect)
+	var out model.GetAllAssetAdministrationShellIdsByAssetLink200Response
+	if expect == http.StatusOK {
+		var json = jsoniter.ConfigCompatibleWithStandardLibrary
+		if err := json.Unmarshal(raw, &out); err != nil {
+			t.Fatalf("unmarshal LookupShellIdsByAssetLinkGET response: %v", err)
+		}
+	}
+	return out
+}
+
 // LookupShellsByAssetLink sends a POST request to /lookup/shellsByAssetLink?limit=&cursor= (renamed from SearchBy)
 func (c *RequestClient) LookupShellsByAssetLink(
 	t testing.TB,

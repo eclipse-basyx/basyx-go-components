@@ -28,8 +28,6 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 		return err
 	}
 
-	common.PrintConfiguration(config)
-
 	// Create Chi router
 	r := chi.NewRouter()
 
@@ -41,7 +39,7 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 
 	// Instantiate generated services & controllers
 	// ==== Submodel Repository Service ====
-	smDatabase, err := persistencepostgresql.NewPostgreSQLSubmodelBackend("postgres://"+config.Postgres.User+":"+config.Postgres.Password+"@"+config.Postgres.Host+":"+strconv.Itoa(config.Postgres.Port)+"/"+config.Postgres.DBName+"?sslmode=disable", config.Postgres.MaxOpenConnections, config.Postgres.MaxIdleConnections, config.Postgres.ConnMaxLifetimeMinutes, config.Server.CacheEnabled, databaseSchema)
+	smDatabase, err := persistencepostgresql.NewPostgreSQLSubmodelBackend("postgres://"+config.Postgres.User+":"+config.Postgres.Password+"@"+config.Postgres.Host+":"+strconv.Itoa(config.Postgres.Port)+"/"+config.Postgres.DBName+"?sslmode=disable", config.Postgres.MaxOpenConnections, config.Postgres.MaxIdleConnections, config.Postgres.ConnMaxLifetimeMinutes, databaseSchema)
 	if err != nil {
 		log.Fatalf("Failed to initialize database connection: %v", err)
 		return err

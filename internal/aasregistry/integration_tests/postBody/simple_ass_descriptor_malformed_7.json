@@ -1,0 +1,8 @@
+{
+    "id": "https://iese.fraunhofer.de/ids/aas/factorio",
+    "submodelDescriptors": [
+        {
+            "id": "https://iese.fraunhofer.de/ids/aas/satisfactory"
+        }
+    ]
+}

@@ -1,27 +1,27 @@
 services:
-  db:
-    image: postgres:15
-    container_name: postgres_db
+  db_it:
+    image: postgres:18
+    container_name: postgres_db_it
     environment:
       POSTGRES_USER: admin
       POSTGRES_PASSWORD: admin123
       POSTGRES_DB: basyxTestDB
-    ports:
-      - "5432:5432"
     command: ["postgres", "-c", "listen_addresses=*"]
+    ports:
+      - "6432:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U admin -d basyxTestDB"]
       interval: 10s
       timeout: 5s
       retries: 5
-  submodel_repository:
+  submodel_repository_it:
     build:
       context: ../../../..
       dockerfile: ./cmd/submodelrepositoryservice/Dockerfile
       
     environment:
       - SERVER_PORT=5004
-      - POSTGRES_HOST=db
+      - POSTGRES_HOST=db_it
       - POSTGRES_PORT=5432
       - POSTGRES_USER=admin
       - POSTGRES_PASSWORD=admin123
@@ -30,7 +30,7 @@ services:
       - POSTGRES_MAXIDLECONNECTIONS=500
       - POSTGRES_CONNMAXLIFETIMEMINUTES=5
     ports:
-      - "5004:5004"
+      - "6004:5004"
     depends_on:
-      db:
+      db_it:
         condition: service_healthy

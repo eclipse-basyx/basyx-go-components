@@ -23,7 +23,7 @@
 * SPDX-License-Identifier: MIT
 ******************************************************************************/
 
-//nolint:revive
+//nolint:all
 package common
 
 import (

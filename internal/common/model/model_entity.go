@@ -9,6 +9,13 @@
 
 package model
 
+import (
+	"encoding/json"
+	"fmt"
+
+	jsoniter "github.com/json-iterator/go"
+)
+
 // Entity type of Entity
 type Entity struct {
 	Extensions []Extension `json:"extensions,omitempty"`
@@ -145,6 +152,39 @@ func (a *Entity) SetQualifiers(v []Qualifier) {
 //nolint:all
 func (a *Entity) SetEmbeddedDataSpecifications(v []EmbeddedDataSpecification) {
 	a.EmbeddedDataSpecifications = v
+}
+
+// UnmarshalJSON custom unmarshaler for Entity to handle the Statements field
+func (a *Entity) UnmarshalJSON(data []byte) error {
+	// Create a temporary struct with the same fields but Statements as json.RawMessage
+	type Alias Entity
+	aux := &struct {
+		Statements []json.RawMessage `json:"statements,omitempty"`
+		*Alias
+	}{
+		Alias: (*Alias)(a),
+	}
+
+	// Unmarshal into the temporary struct
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
+	if err := json.Unmarshal(data, aux); err != nil {
+		return err
+	}
+
+	// Now process the Statements field manually
+	if aux.Statements != nil {
+		statements := make([]SubmodelElement, len(aux.Statements))
+		for i, raw := range aux.Statements {
+			element, err := UnmarshalSubmodelElement(raw)
+			if err != nil {
+				return fmt.Errorf("failed to unmarshal Statements[%d]: %w", i, err)
+			}
+			statements[i] = element
+		}
+		a.Statements = statements
+	}
+
+	return nil
 }
 
 // AssertEntityRequired checks if the required fields are not zero-ed

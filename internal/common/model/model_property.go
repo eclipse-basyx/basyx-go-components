@@ -49,67 +49,67 @@ func NewProperty(valueType DataTypeDefXsd) *Property {
 }
 
 //nolint:all
-func (p Property) GetIdShort() string {
+func (p *Property) GetIdShort() string {
 	return p.IdShort
 }
 
 //nolint:all
-func (p Property) GetCategory() string {
+func (p *Property) GetCategory() string {
 	return p.Category
 }
 
 //nolint:all
-func (p Property) GetDisplayName() []LangStringNameType {
+func (p *Property) GetDisplayName() []LangStringNameType {
 	return p.DisplayName
 }
 
 //nolint:all
-func (p Property) GetDescription() []LangStringTextType {
+func (p *Property) GetDescription() []LangStringTextType {
 	return p.Description
 }
 
 //nolint:all
-func (p Property) GetModelType() string {
+func (p *Property) GetModelType() string {
 	return p.ModelType
 }
 
 //nolint:all
-func (p Property) GetSemanticID() *Reference {
+func (p *Property) GetSemanticID() *Reference {
 	return p.SemanticID
 }
 
 //nolint:all
-func (p Property) GetSupplementalSemanticIds() []Reference {
+func (p *Property) GetSupplementalSemanticIds() []Reference {
 	return p.SupplementalSemanticIds
 }
 
 //nolint:all
-func (p Property) GetQualifiers() []Qualifier {
+func (p *Property) GetQualifiers() []Qualifier {
 	return p.Qualifiers
 }
 
 //nolint:all
-func (p Property) GetEmbeddedDataSpecifications() []EmbeddedDataSpecification {
+func (p *Property) GetEmbeddedDataSpecifications() []EmbeddedDataSpecification {
 	return p.EmbeddedDataSpecifications
 }
 
 //nolint:all
-func (p Property) GetExtensions() []Extension {
+func (p *Property) GetExtensions() []Extension {
 	return p.Extensions
 }
 
 //nolint:all
-func (p Property) GetValueType() DataTypeDefXsd {
+func (p *Property) GetValueType() DataTypeDefXsd {
 	return p.ValueType
 }
 
 //nolint:all
-func (p Property) GetValue() string {
+func (p *Property) GetValue() string {
 	return p.Value
 }
 
 //nolint:all
-func (p Property) GetValueID() *Reference {
+func (p *Property) GetValueID() *Reference {
 	return p.ValueID
 }
 

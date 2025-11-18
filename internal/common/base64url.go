@@ -1,3 +1,4 @@
+//nolint:all - package name is not meaningless
 package common
 
 import (

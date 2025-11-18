@@ -13,7 +13,8 @@ package api
 
 import (
 	"context"
-	"errors"
+	"encoding/json"
+	"log"
 	"net/http"
 	"strings"
 
@@ -30,27 +31,43 @@ const (
 // This service should implement the business logic for every endpoint for the AssetAdministrationShellBasicDiscoveryAPIAPI API.
 // Include any external packages or services that will be required by this service.
 type AssetAdministrationShellBasicDiscoveryAPIAPIService struct {
-	disoveryBackend persistencepostgresql.PostgreSQLDiscoveryDatabase
+	discoveryBackend persistencepostgresql.PostgreSQLDiscoveryDatabase
 }
 
 // NewAssetAdministrationShellBasicDiscoveryAPIAPIService creates a default api service
 func NewAssetAdministrationShellBasicDiscoveryAPIAPIService(databaseBackend persistencepostgresql.PostgreSQLDiscoveryDatabase) *AssetAdministrationShellBasicDiscoveryAPIAPIService {
 	return &AssetAdministrationShellBasicDiscoveryAPIAPIService{
-		disoveryBackend: databaseBackend,
+		discoveryBackend: databaseBackend,
 	}
 }
 
 // GetAllAssetAdministrationShellIdsByAssetLink - Returns a list of Asset Administration Shell IDs linked to specific asset identifiers or the global asset ID
 // Deprecated
 func (s *AssetAdministrationShellBasicDiscoveryAPIAPIService) GetAllAssetAdministrationShellIdsByAssetLink(ctx context.Context, assetIds []string, limit int32, cursor string) (model.ImplResponse, error) {
-	// Not implemented in this service; keep a proper structured error.
-	return common.NewErrorResponse(
-		errors.New("GetAllAssetAdministrationShellIdsByAssetLink is deprecated and therefore not implemented"),
-		http.StatusGone,
-		componentName,
-		"GetAllAssetAdministrationShellIdsByAssetLink",
-		"Deprecated",
-	), nil
+
+	links := make([]model.AssetLink, 0, len(assetIds))
+	for idx, enc := range assetIds {
+		if strings.TrimSpace(enc) == "" {
+			continue
+		}
+		dec, err := common.DecodeString(enc)
+		if err != nil {
+			log.Printf("🧭 [%s] Error GetAllAssetAdministrationShellIdsByAssetLink: decode assetIds[%d]=%q failed: %v", componentName, idx, enc, err)
+			return common.NewErrorResponse(
+				err, http.StatusBadRequest, componentName, "GetAllAssetAdministrationShellIdsByAssetLink", "assetIds",
+			), nil
+		}
+		var al model.AssetLink
+		if err := json.Unmarshal([]byte(dec), &al); err != nil {
+			log.Printf("🧭 [%s] Error GetAllAssetAdministrationShellIdsByAssetLink: unmarshal assetIds[%d] decoded=%q failed: %v", componentName, idx, dec, err)
+			return common.NewErrorResponse(
+				err, http.StatusBadRequest, componentName, "GetAllAssetAdministrationShellIdsByAssetLink", "assetIds",
+			), nil
+		}
+		links = append(links, al)
+	}
+
+	return s.SearchAllAssetAdministrationShellIdsByAssetLink(ctx, limit, cursor, links)
 }
 
 // SearchAllAssetAdministrationShellIdsByAssetLink - Returns a list of Asset Administration Shell IDs linked to specific asset identifiers or the global asset ID
@@ -66,6 +83,7 @@ func (s *AssetAdministrationShellBasicDiscoveryAPIAPIService) SearchAllAssetAdmi
 	if strings.TrimSpace(cursor) != "" {
 		dec, decErr := common.DecodeString(cursor)
 		if decErr != nil {
+			log.Printf("🧭 [%s] Error SearchAllAssetAdministrationShellIdsByAssetLink: decode cursor=%q limit=%d links=%d failed: %v", componentName, cursor, limit, len(assetLink), decErr)
 			return common.NewErrorResponse(
 				decErr, http.StatusBadRequest, componentName, "SearchAllAssetAdministrationShellIdsByAssetLink", "BadCursor",
 			), nil
@@ -73,8 +91,9 @@ func (s *AssetAdministrationShellBasicDiscoveryAPIAPIService) SearchAllAssetAdmi
 		internalCursor = dec
 	}
 
-	ids, nextCursor, err := s.disoveryBackend.SearchAASIDsByAssetLinks(ctx, assetLink, limit, internalCursor)
+	ids, nextCursor, err := s.discoveryBackend.SearchAASIDsByAssetLinks(ctx, assetLink, limit, internalCursor)
 	if err != nil {
+		log.Printf("🧭 [%s] Error SearchAllAssetAdministrationShellIdsByAssetLink: backend search failed (limit=%d cursor=%q links=%d): %v", componentName, limit, internalCursor, len(assetLink), err)
 		return common.NewErrorResponse(
 			err, http.StatusInternalServerError, componentName, "SearchAllAssetAdministrationShellIdsByAssetLink", "InternalServerError",
 		), err
@@ -102,23 +121,27 @@ func (s *AssetAdministrationShellBasicDiscoveryAPIAPIService) GetAllAssetLinksBy
 
 	decoded, decodeErr := common.DecodeString(aasIdentifier)
 	if decodeErr != nil {
+		log.Printf("🧭 [%s] Error GetAllAssetLinksById: decode aasIdentifier=%q failed: %v", componentName, aasIdentifier, decodeErr)
 		return common.NewErrorResponse(
 			decodeErr, http.StatusBadRequest, componentName, "GetAllAssetLinksById", "BadRequest-Decode",
 		), nil
 	}
 
-	links, err := s.disoveryBackend.GetAllAssetLinks(string(decoded))
+	links, err := s.discoveryBackend.GetAllAssetLinks(string(decoded))
 	if err != nil {
 		switch {
 		case common.IsErrNotFound(err):
+			log.Printf("🧭 [%s] Error GetAllAssetLinksById: not found (aasId=%q): %v", componentName, string(decoded), err)
 			return common.NewErrorResponse(
 				err, http.StatusNotFound, componentName, "GetAllAssetLinksById", "NotFound",
 			), nil
 		case common.IsErrBadRequest(err):
+			log.Printf("🧭 [%s] Error GetAllAssetLinksById: bad request (aasId=%q): %v", componentName, string(decoded), err)
 			return common.NewErrorResponse(
 				err, http.StatusBadRequest, componentName, "GetAllAssetLinksById", "BadRequest",
 			), nil
 		default:
+			log.Printf("🧭 [%s] Error GetAllAssetLinksById: internal (aasId=%q): %v", componentName, string(decoded), err)
 			return common.NewErrorResponse(
 				err, http.StatusInternalServerError, componentName, "GetAllAssetLinksById", "Unhandled",
 			), err
@@ -137,19 +160,22 @@ func (s *AssetAdministrationShellBasicDiscoveryAPIAPIService) PostAllAssetLinksB
 
 	decodeDiscoveryIdentifier, decodeError := common.DecodeString(aasIdentifier)
 	if decodeError != nil {
+		log.Printf("🧭 [%s] Error PostAllAssetLinksById: decode aasIdentifier=%q failed: %v", componentName, aasIdentifier, decodeError)
 		return common.NewErrorResponse(
 			decodeError, http.StatusBadRequest, componentName, "PostAllAssetLinksById", "BadRequest-Decode",
 		), nil
 	}
 
-	err := s.disoveryBackend.CreateAllAssetLinks(string(decodeDiscoveryIdentifier), specificAssetID)
+	err := s.discoveryBackend.CreateAllAssetLinks(string(decodeDiscoveryIdentifier), specificAssetID)
 	if err != nil {
 		switch {
 		case common.IsErrBadRequest(err):
+			log.Printf("🧭 [%s] Error PostAllAssetLinksById: bad request (aasId=%q): %v", componentName, string(decodeDiscoveryIdentifier), err)
 			return common.NewErrorResponse(
 				err, http.StatusBadRequest, componentName, "PostAllAssetLinksById", "BadRequest",
 			), nil
 		default:
+			log.Printf("🧭 [%s] Error PostAllAssetLinksById: internal (aasId=%q): %v", componentName, string(decodeDiscoveryIdentifier), err)
 			return common.NewErrorResponse(
 				err, http.StatusInternalServerError, componentName, "PostAllAssetLinksById", "Unhandled",
 			), err
@@ -168,19 +194,22 @@ func (s *AssetAdministrationShellBasicDiscoveryAPIAPIService) DeleteAllAssetLink
 
 	decoded, decodeErr := common.DecodeString(aasIdentifier)
 	if decodeErr != nil {
+		log.Printf("🧭 [%s] Error DeleteAllAssetLinksById: decode aasIdentifier=%q failed: %v", componentName, aasIdentifier, decodeErr)
 		return common.NewErrorResponse(
 			decodeErr, http.StatusBadRequest, componentName, "DeleteAllAssetLinksById", "BadRequest-Decode",
 		), nil
 	}
 
-	err := s.disoveryBackend.DeleteAllAssetLinks(string(decoded))
+	err := s.discoveryBackend.DeleteAllAssetLinks(string(decoded))
 	if err != nil {
 		switch {
 		case common.IsErrNotFound(err):
+			log.Printf("🧭 [%s] Error DeleteAllAssetLinksById: not found (aasId=%q): %v", componentName, string(decoded), err)
 			return common.NewErrorResponse(
 				err, http.StatusNotFound, componentName, "DeleteAllAssetLinksById", "NotFound",
 			), nil
 		default:
+			log.Printf("🧭 [%s] Error DeleteAllAssetLinksById: internal (aasId=%q): %v", componentName, string(decoded), err)
 			return common.NewErrorResponse(
 				err, http.StatusInternalServerError, componentName, "DeleteAllAssetLinksById", "InternalServerError",
 			), err
