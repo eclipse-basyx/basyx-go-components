@@ -7,7 +7,7 @@
           "RIGHTS": ["READ","UPDATE"],
           "ATTRIBUTES": [{"CLAIM": "role"}]
         },
-        "OBJECTS": [{"DESCRIPTOR" : "$aasdesc(\"https://martin.de\")"}],
+        "OBJECTS": [{"ROUTE": "/shell-descriptors"}, {"DESCRIPTOR" : "$aasdesc(\"https://martin.de\")"}],
         "FORMULA": { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "admin" } ] }
       }
     ]
