@@ -462,6 +462,46 @@ func CreateAdministrativeInformation(tx *sql.Tx, adminInfo *gen.AdministrativeIn
 	return adminInfoID, nil
 }
 
+// CreateRegistryAdministrativeInformation inserts registry administrative information into the database.
+//
+// Registry administrative information includes version control, revision tracking, company references,
+// and embedded data specifications. This function handles the complete insertion including
+// all nested structures.
+//
+// Parameters:
+//   - tx: Active database transaction
+//   - adminInfo: Pointer to RegistryAdministrativeInformation object to be created. Returns immediately if nil.
+//
+// Returns:
+//   - sql.NullInt64: Database ID of the created registry administrative information record, or an invalid NullInt64 if adminInfo is nil
+//   - error: An error if the insertion fails or if nested structure creation fails
+func CreateRegistryAdministrativeInformation(tx *sql.Tx, adminInfo *gen.RegistryAdministrativeInformation) (sql.NullInt64, error) {
+	if adminInfo == nil {
+		return sql.NullInt64{}, nil
+	}
+	var id int
+	var adminInfoID sql.NullInt64
+	if !reflect.DeepEqual(*adminInfo, gen.RegistryAdministrativeInformation{}) {
+		var companyID sql.NullInt64
+		var err error
+		if adminInfo.Company != nil {
+			companyID, err = CreateReference(tx, adminInfo.Company, sql.NullInt64{}, sql.NullInt64{})
+			if err != nil {
+				return sql.NullInt64{}, err
+			}
+		}
+
+		err = tx.QueryRow(`INSERT INTO registry_administrative_information (version, revision, company, templateID) VALUES ($1, $2, $3, $4) RETURNING id`,
+			adminInfo.Version, adminInfo.Revision, companyID, adminInfo.TemplateID).Scan(&id)
+		if err != nil {
+			return sql.NullInt64{}, err
+		}
+		adminInfoID = sql.NullInt64{Int64: int64(id), Valid: true}
+
+	}
+	return adminInfoID, nil
+}
+
 // CreateReference inserts a reference entity and its keys into the database.
 //
 // A reference consists of a type and a sequence of keys that form a path to an element.

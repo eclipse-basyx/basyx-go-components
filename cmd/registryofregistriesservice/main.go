@@ -57,6 +57,10 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	smSvc := api.NewAssetAdministrationShellRegistryOfRegistriesAPIAPIService(*smDatabase)
 	smCtrl := registryofregistriesapi.NewAssetAdministrationShellRegistryOfRegistriesAPIAPIController(smSvc)
 
+	// === Description Service (public) ===
+	descSvc := registryofregistriesapi.NewDescriptionAPIAPIService()
+	descCtrl := registryofregistriesapi.NewDescriptionAPIAPIController(descSvc)
+
 	base := common.NormalizeBasePath(cfg.Server.ContextPath)
 
 	// === Protected API Subrouter ===
@@ -69,6 +73,11 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 
 	// Register all discovery routes (protected)
 	for _, rt := range smCtrl.Routes() {
+		apiRouter.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
+	}
+
+	// Register all description routes (protected)
+	for _, rt := range descCtrl.Routes() {
 		apiRouter.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
 	}
 

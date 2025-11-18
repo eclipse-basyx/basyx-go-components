@@ -667,9 +667,9 @@ CREATE TABLE IF NOT EXISTS registry_administrative_information (
 
 CREATE TABLE IF NOT EXISTS registry_descriptor (
   descriptor_id BIGINT PRIMARY KEY REFERENCES descriptor(id) ON DELETE CASCADE,
-  description_id BIGINT REFERENCES lang_string_text_type_reference(id) ON DELETE SET NULL,
-  displayname_id BIGINT REFERENCES lang_string_name_type_reference(id) ON DELETE SET NULL,
-  administrative_information_id BIGINT REFERENCES registry_administrative_information(id) ON DELETE CASCADE,
+  description_id BIGINT REFERENCES lang_string_text_type_reference(id),
+  displayname_id BIGINT REFERENCES lang_string_name_type_reference(id),
+  administrative_information_id BIGINT REFERENCES registry_administrative_information(id),
   registry_type VARCHAR(2048),
   global_asset_id VARCHAR(2048),
   id_short VARCHAR(128),
@@ -750,3 +750,36 @@ CREATE INDEX IF NOT EXISTS ix_smd_id_trgm                  ON submodel_descripto
 CREATE INDEX IF NOT EXISTS ix_smdss_descriptor_id          ON submodel_descriptor_supplemental_semantic_id(descriptor_id);
 CREATE INDEX IF NOT EXISTS ix_smdss_reference_id           ON submodel_descriptor_supplemental_semantic_id(reference_id);
 CREATE INDEX IF NOT EXISTS ix_smdss_pair                   ON submodel_descriptor_supplemental_semantic_id(descriptor_id, reference_id);
+
+-- ==========================================
+-- Trigger functions for cascading deletion
+-- ==========================================
+-- Trigger function to clean up orphaned records when a registry_descriptor is deleted
+CREATE OR REPLACE FUNCTION cleanup_registry_descriptor()
+RETURNS TRIGGER AS $$
+BEGIN
+    -- Delete the administrative_information record if it exists
+    IF OLD.administrative_information_id IS NOT NULL THEN
+        DELETE FROM registry_administrative_information WHERE id = OLD.administrative_information_id;
+    END IF;
+    
+    -- Delete the description_id lang_string_text_type_reference if it exists
+    IF OLD.description_id IS NOT NULL THEN
+        DELETE FROM lang_string_text_type_reference WHERE id = OLD.description_id;
+    END IF;
+    
+    -- Delete the displayname_id lang_string_name_type_reference if it exists
+    IF OLD.displayname_id IS NOT NULL THEN
+        DELETE FROM lang_string_name_type_reference WHERE id = OLD.displayname_id;
+    END IF;
+    
+    RETURN OLD;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Create trigger to execute cleanup function after registry_descriptor deletion
+DROP TRIGGER IF EXISTS trigger_cleanup_registry_descriptor ON registry_descriptor;
+CREATE TRIGGER trigger_cleanup_registry_descriptor
+    AFTER DELETE ON registry_descriptor
+    FOR EACH ROW
+    EXECUTE FUNCTION cleanup_registry_descriptor();

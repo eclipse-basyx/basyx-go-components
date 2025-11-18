@@ -26,10 +26,9 @@
 // Package persistencepostgresql provides PostgreSQL-based persistence implementation
 // for the Eclipse BaSyx RegistryOfRegistries Service.
 //
-// This package implements the storage and retrieval of Asset Administration Shell (AAS)
-// identifiers and their associated asset links in a PostgreSQL database. It supports
-// operations for creating, retrieving, searching, and deleting AAS RegistryOfRegistries information
-// with cursor-based pagination for efficient querying of large datasets.
+// This package implements the storage and retrieval of Registry identifiers in a PostgreSQL database.
+// It supports operations for creating, retrieving, searching, and deleting AAS RegistryOfRegistries
+// information with cursor-based pagination for efficient querying of large datasets.
 package registryofregistriespostgresql
 
 import (
@@ -37,18 +36,16 @@ import (
 	"database/sql"
 	"fmt"
 
-	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/descriptors"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
-	persistence_utils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
 )
 
 // PostgreSQLRegistryOfRegistriesDatabase provides PostgreSQL-based persistence for the RegistryOfRegistries Service.
 //
-// It manages AAS identifiers and their associated asset links in a PostgreSQL database,
-// using connection pooling for efficient database access. The database schema is automatically
-// initialized on startup from the RegistryOfRegistriesschema.sql file.
+// It manages registry identifiers in a PostgreSQL database, using connection pooling for efficient
+// database access. The database schema is automatically initialized on startup from the
+// RegistryOfRegistriesschema.sql file.
 type PostgreSQLRegistryOfRegistriesDatabase struct {
 	db           *sql.DB
 	cacheEnabled bool
@@ -84,151 +81,49 @@ func NewPostgreSQLRegistryOfRegistriesBackend(dsn string, _ /* maxOpenConns */, 
 	return &PostgreSQLRegistryOfRegistriesDatabase{db: db, cacheEnabled: cacheEnabled}, nil
 }
 
-func (p *PostgreSQLRegistryOfRegistriesDatabase) GetRegistryDescriptorById(ctx context.Context, registryIdentifier string) (model.RegistryDescriptor, error) {
-
-	d := goqu.Dialect("postgres")
-
-	reg := goqu.T("registry_descriptor").As("reg")
-
-	sqlStr, args, buildErr := d.
-		From(reg).
-		Select(
-			reg.Col("descriptor_id"),
-			reg.Col("registry_type"),
-			reg.Col("global_asset_id"),
-			reg.Col("id_short"),
-			reg.Col("id"),
-			reg.Col("administrative_information_id"),
-			reg.Col("displayname_id"),
-			reg.Col("description_id"),
-		).
-		Where(reg.Col("id").Eq(registryIdentifier)).
-		Limit(1).
-		ToSQL()
-	if buildErr != nil {
-		return model.RegistryDescriptor{}, buildErr
-	}
-
-	var (
-		descID                 int64
-		registryType           sql.NullString
-		globalAssetID, idShort sql.NullString
-		idStr                  string
-		adminInfoID            sql.NullInt64
-		displayNameID          sql.NullInt64
-		descriptionID          sql.NullInt64
-	)
-
-	if err := p.db.QueryRowContext(ctx, sqlStr, args...).Scan(
-		&descID,
-		&registryType,
-		&globalAssetID,
-		&idShort,
-		&idStr,
-		&adminInfoID,
-		&displayNameID,
-		&descriptionID,
-	); err != nil {
-		if err == sql.ErrNoRows {
-			return model.RegistryDescriptor{}, common.NewErrNotFound("Registry Descriptor not found")
-		}
-		return model.RegistryDescriptor{}, err
-	}
-
-	var (
-		displayName []model.LangStringNameType
-		description []model.LangStringTextType
-		endpoints   []model.Endpoint
-	)
-
-	displayName, err := persistence_utils.GetLangStringNameTypes(p.db, displayNameID)
-	if err != nil {
-		return model.RegistryDescriptor{}, err
-	}
-	description, err = persistence_utils.GetLangStringTextTypes(p.db, descriptionID)
-	if err != nil {
-		return model.RegistryDescriptor{}, err
-	}
-	endpoints, err = descriptors.ReadEndpointsByDescriptorID(ctx, p.db, descID)
-	if err != nil {
-		return model.RegistryDescriptor{}, err
-	}
-
-	return model.RegistryDescriptor{
-		RegistryType:  registryType.String,
-		GlobalAssetId: globalAssetID.String,
-		IdShort:       idShort.String,
-		Id:            idStr,
-		DisplayName:   displayName,
-		Description:   description,
-		Endpoints:     endpoints,
-	}, nil
+// InsertRegistryDescriptor inserts the provided registry descriptor
+// and all related nested entities into the database.
+func (p *PostgreSQLRegistryOfRegistriesDatabase) InsertRegistryDescriptor(
+	ctx context.Context,
+	aasd model.RegistryDescriptor,
+) error {
+	return descriptors.InsertRegistryDescriptor(ctx, p.db, aasd)
 }
 
-func (p *PostgreSQLRegistryOfRegistriesDatabase) PostRegistryDescriptor(ctx context.Context, registryDescriptor model.RegistryDescriptor) error {
-	d := goqu.Dialect("postgres")
-	tx, err := p.db.Begin()
-	if err != nil {
-		return err
-	}
-	descTbl := goqu.T("")
+// GetRegistryDescriptorByID returns the registry descriptor
+// identified by the given AAS ID.
+func (p *PostgreSQLRegistryOfRegistriesDatabase) GetRegistryDescriptorByID(
+	ctx context.Context,
+	registryIdentifier string,
+) (model.RegistryDescriptor, error) {
+	return descriptors.GetRegistryDescriptorByID(ctx, p.db, registryIdentifier)
+}
 
-	sqlStr, args, buildErr := d.
-		Insert("descriptor").
-		Returning(descTbl.Col("id")).
-		ToSQL()
-	if buildErr != nil {
-		return buildErr
-	}
-	var descriptorID int64
-	if err := tx.QueryRow(sqlStr, args...).Scan(&descriptorID); err != nil {
-		return err
-	}
+// DeleteRegistryDescriptorByID deletes the registry AAS descriptor
+// identified by the given AAS ID.
+func (p *PostgreSQLRegistryOfRegistriesDatabase) DeleteRegistryDescriptorByID(
+	ctx context.Context,
+	registryDescriptor string,
+) error {
+	return descriptors.DeleteRegistryDescriptorByID(ctx, p.db, registryDescriptor)
+}
 
-	var displayNameID, descriptionID sql.NullInt64
+// ReplaceRegistryDescriptor replaces an existing registry descriptor
+// with the given value and reports whether it existed.
+func (p *PostgreSQLRegistryOfRegistriesDatabase) ReplaceRegistryDescriptor(
+	ctx context.Context,
+	registryDescriptor model.RegistryDescriptor,
+) (bool, error) {
+	return descriptors.ReplaceRegistryDescriptor(ctx, p.db, registryDescriptor)
+}
 
-	dnID, err := persistence_utils.CreateLangStringNameTypes(tx, registryDescriptor.DisplayName)
-	if err != nil {
-		fmt.Println(err)
-		return common.NewInternalServerError("Failed to create DisplayName - no changes applied - see console for details")
-	}
-	displayNameID = dnID
-
-	var convertedDescription []model.LangStringText
-	for _, desc := range registryDescriptor.Description {
-		convertedDescription = append(convertedDescription, desc)
-	}
-	descID, err := persistence_utils.CreateLangStringTextTypes(tx, convertedDescription)
-	if err != nil {
-		fmt.Println(err)
-		return common.NewInternalServerError("Failed to create Description - no changes applied - see console for details")
-	}
-	descriptionID = descID
-
-	sqlStr, args, buildErr = d.
-		Insert("registry_descriptor").
-		Rows(goqu.Record{
-			"descriptor_id":                 descriptorID,
-			"description_id":                descriptionID,
-			"displayname_id":                displayNameID,
-			"administrative_information_id": nil,
-			"registry_type":                 registryDescriptor.RegistryType,
-			"global_asset_id":               registryDescriptor.GlobalAssetId,
-			"id_short":                      registryDescriptor.IdShort,
-			"id":                            registryDescriptor.Id,
-		}).
-		ToSQL()
-	if buildErr != nil {
-		return buildErr
-	}
-	if _, err = tx.Exec(sqlStr, args...); err != nil {
-		return err
-	}
-
-	if err = descriptors.CreateEndpoints(tx, descriptorID, registryDescriptor.Endpoints); err != nil {
-		fmt.Println(err)
-		return common.NewInternalServerError("Failed to create Endpoints - no changes applied - see console for details")
-	}
-
-	return tx.Commit()
+// ListRegistryDescriptors lists registry descriptors with optional
+// pagination and asset filtering, returning a next-page cursor when present.
+func (p *PostgreSQLRegistryOfRegistriesDatabase) ListRegistryDescriptors(
+	ctx context.Context,
+	limit int32,
+	cursor string,
+	registryType string,
+) ([]model.RegistryDescriptor, string, error) {
+	return descriptors.ListRegistryDescriptors(ctx, p.db, limit, cursor, registryType)
 }

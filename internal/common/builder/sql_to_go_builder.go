@@ -73,6 +73,23 @@ type SubmodelDescriptorRow struct {
 	DescriptionID sql.NullInt64
 	DisplayNameID sql.NullInt64
 }
+
+// RegistryDescriptorRow represents a single SQL result row for a
+// Registry descriptor. It carries nullable string/integer columns
+// from the database and foreign-key references to related records
+// such as registry administrative information, display names, and
+// descriptions.
+type RegistryDescriptorRow struct {
+	DescID        int64
+	RegistryType  sql.NullString
+	GlobalAssetID sql.NullString
+	IDShort       sql.NullString
+	IDStr         string
+	AdminInfoID   sql.NullInt64
+	DisplayNameID sql.NullInt64
+	DescriptionID sql.NullInt64
+}
+
 // ParseReferredReferencesFromRows parses referred reference data from already unmarshalled ReferredReferenceRow objects.
 //
 // This function handles the complex case where references point to other references (referred references).
@@ -565,6 +582,34 @@ func ParseAdministrationRow(row json.RawMessage) (*model.AdministrationRow, erro
 	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	if err := json.Unmarshal(row, &texts); err != nil {
 		return nil, fmt.Errorf("error unmarshalling AdministrationRow data: %w", err)
+	}
+	if len(texts) == 0 {
+		return nil, nil
+	}
+	return &texts[0], nil
+}
+
+// ParseRegistryAdministrationRow parses registry administrative information from
+// JSON into an RegistryAdministrationRow object.
+//
+// This function unmarshals JSON-encoded administrative data from the database. Since
+// administrative information is typically singular for an element, it returns a pointer
+// to a single RegistryAdministrationRow object or nil if no data is present.
+//
+// Parameters:
+//   - row: JSON-encoded array of RegistryAdministrationRow objects from the database
+//
+// Returns:
+//   - *RegistryAdministrationRow: Pointer to the parsed RegistryAdministrationRow object, or nil if no data
+//   - error: An error if JSON unmarshalling fails
+//
+// Note: The function expects an array in JSON format but returns only the first element,
+// as registry administrative information is singular per element.
+func ParseRegistryAdministrationRow(row json.RawMessage) (*model.RegistryAdministrationRow, error) {
+	var texts []model.RegistryAdministrationRow
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
+	if err := json.Unmarshal(row, &texts); err != nil {
+		return nil, fmt.Errorf("error unmarshalling RegistryAdministrationRow data: %w", err)
 	}
 	if len(texts) == 0 {
 		return nil, nil
