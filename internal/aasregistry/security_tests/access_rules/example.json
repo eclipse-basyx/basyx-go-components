@@ -1,6 +1,0 @@
-{"$eq": [ 
-    {"$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value"}, 
-    {"$strVal": "ONLY_A"}
-]}
-
-

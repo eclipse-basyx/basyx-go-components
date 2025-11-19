@@ -282,6 +282,10 @@ func ParseAASQLFieldToSQLColumn(field string) string {
 		return "aas_descriptor.asset_type"
 	case "$aasdesc#globalAssetId":
 		return "aas_descriptor.global_asset_id"
+	case "$aasdesc#specificAssetIds[].name":
+		return "specific_asset_id.name"
+	case "$aasdesc#specificAssetIds[].value":
+		return "specific_asset_id.value"
 	case "$aasdesc#specificAssetIds[].externalSubjectId":
 		return "external_subject_reference_key.value"
 	case "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value":
