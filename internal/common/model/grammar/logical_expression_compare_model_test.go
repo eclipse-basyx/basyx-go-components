@@ -46,6 +46,12 @@ func TestLogicalExpression_EvaluateModel(t *testing.T) {
 			{
 				Name:  "serial",
 				Value: "SN-001",
+				ExternalSubjectID: &model.Reference{
+					Type: model.REFERENCETYPES_EXTERNAL_REFERENCE,
+					Keys: []model.Key{
+						{Type: model.KEYTYPES_GLOBAL_REFERENCE, Value: "martin"},
+					},
+				},
 			},
 		},
 		SubmodelDescriptors: []model.SubmodelDescriptor{
@@ -158,6 +164,26 @@ func TestLogicalExpression_EvaluateModel(t *testing.T) {
 				Match: []MatchExpression{{Boolean: boolPtr(true)}},
 			},
 			wantErr: "match expressions are not supported",
+		},
+		{
+			name: "finds external subject id",
+			expr: LogicalExpression{
+				Eq: ComparisonItems{
+					field("$aasdesc#specificAssetIds[].externalSubjectId.keys[].value"),
+					strVal("martin"),
+				},
+			},
+			want: true,
+		},
+		{
+			name: "finds external subject id",
+			expr: LogicalExpression{
+				Eq: ComparisonItems{
+					field("$aasdesc#specificAssetIds[].externalSubjectId.keys[].value"),
+					strVal("martiniooo"),
+				},
+			},
+			want: false,
 		},
 	}
 

@@ -1,0 +1,7 @@
+[
+  {
+    "input": "numcast_input.json",
+    "expected": "numcast_expected.json",
+    "ctx": "numcast_ctx.json"
+  }
+]

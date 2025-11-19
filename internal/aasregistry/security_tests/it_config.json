@@ -49,7 +49,7 @@
   },
   {
     "context": "POST Descriptor A - User A - ALLOWED",
-    "token": { "user": "vieweruser", "password": "admin" },
+    "token": { "user": "userx", "password": "pwd" },
     "method": "POST",
     "endpoint": "http://localhost:6004/shell-descriptors",
     "data": "postBody/simple_aas_A.json",
@@ -57,7 +57,7 @@
   },
   {
     "context": "POST Descriptor B - User A - DENIED",
-    "token": { "user": "vieweruser", "password": "admin" },
+    "token": { "user": "userx", "password": "pwd" },
     "method": "POST",
     "endpoint": "http://localhost:6004/shell-descriptors",
     "data": "postBody/simple_aas_B.json",
@@ -65,7 +65,7 @@
   },
   {
     "context": "POST Descriptor C - User A - DENIED",
-    "token": { "user": "vieweruser", "password": "admin" },
+    "token": { "user": "userx", "password": "pwd" },
     "method": "POST",
     "endpoint": "http://localhost:6004/shell-descriptors",
     "data": "postBody/simple_aas_C.json",
@@ -73,7 +73,7 @@
   },
   {
     "context": "POST Descriptor D - User A - ALLOWED",
-    "token": { "user": "vieweruser", "password": "admin" },
+    "token": { "user": "userx", "password": "pwd" },
     "method": "POST",
     "endpoint": "http://localhost:6004/shell-descriptors",
     "data": "postBody/simple_aas_D.json",
@@ -81,7 +81,7 @@
   },
   {
     "context": "POST Descriptor X - User A - DENIED",
-    "token": { "user": "vieweruser", "password": "admin" },
+    "token": { "user": "userx", "password": "pwd" },
     "method": "POST",
     "endpoint": "http://localhost:6004/shell-descriptors",
     "data": "postBody/simple_aas_X.json",
@@ -89,7 +89,7 @@
   },
   {
     "context": "POST Descriptor A - User B - ALLOWED",
-    "token": { "user": "editoruser", "password": "admin" },
+    "token": { "user": "usery", "password": "pwd" },
     "method": "POST",
     "endpoint": "http://localhost:6004/shell-descriptors",
     "data": "postBody/simple_aas_A.json",
@@ -97,23 +97,23 @@
   },
   {
     "context": "POST Descriptor B - User B - ALLOWED",
-    "token": { "user": "editoruser", "password": "admin" },
+    "token": { "user": "usery", "password": "pwd" },
     "method": "POST",
     "endpoint": "http://localhost:6004/shell-descriptors",
     "data": "postBody/simple_aas_B.json",
-    "expectedStatus": 409
+    "expectedStatus": 201
   },
   {
     "context": "POST Descriptor C - User B - ALLOWED",
-    "token": { "user": "editoruser", "password": "admin" },
+    "token": { "user": "usery", "password": "pwd" },
     "method": "POST",
     "endpoint": "http://localhost:6004/shell-descriptors",
     "data": "postBody/simple_aas_C.json",
-    "expectedStatus": 409
+    "expectedStatus": 201
   },
   {
     "context": "POST Descriptor D - User B - ALLOWED",
-    "token": { "user": "editoruser", "password": "admin" },
+    "token": { "user": "usery", "password": "pwd" },
     "method": "POST",
     "endpoint": "http://localhost:6004/shell-descriptors",
     "data": "postBody/simple_aas_D.json",
@@ -121,7 +121,7 @@
   },
   {
     "context": "POST Descriptor X - User B - DENIED",
-    "token": { "user": "editoruser", "password": "admin" },
+    "token": { "user": "usery", "password": "pwd" },
     "method": "POST",
     "endpoint": "http://localhost:6004/shell-descriptors",
     "data": "postBody/simple_aas_X.json",
@@ -129,7 +129,7 @@
   },
   {
     "context": "POST Descriptor A - User ADMIN - ALLOWED",
-    "token": { "user": "adminuser", "password": "admin" },
+    "token": { "user": "admin", "password": "pwd" },
     "method": "POST",
     "endpoint": "http://localhost:6004/shell-descriptors",
     "data": "postBody/simple_aas_A.json",
@@ -137,7 +137,7 @@
   },
   {
     "context": "POST Descriptor B - User ADMIN - ALLOWED",
-    "token": { "user": "adminuser", "password": "admin" },
+    "token": { "user": "admin", "password": "pwd" },
     "method": "POST",
     "endpoint": "http://localhost:6004/shell-descriptors",
     "data": "postBody/simple_aas_B.json",
@@ -145,7 +145,7 @@
   },
   {
     "context": "POST Descriptor C - User ADMIN - ALLOWED",
-    "token": { "user": "adminuser", "password": "admin" },
+    "token": { "user": "admin", "password": "pwd" },
     "method": "POST",
     "endpoint": "http://localhost:6004/shell-descriptors",
     "data": "postBody/simple_aas_C.json",
@@ -153,7 +153,7 @@
   },
   {
     "context": "POST Descriptor D - User ADMIN - ALLOWED",
-    "token": { "user": "adminuser", "password": "admin" },
+    "token": { "user": "admin", "password": "pwd" },
     "method": "POST",
     "endpoint": "http://localhost:6004/shell-descriptors",
     "data": "postBody/simple_aas_D.json",
@@ -161,7 +161,7 @@
   },
   {
     "context": "POST Descriptor X - User ADMIN - ALLOWED",
-    "token": { "user": "adminuser", "password": "admin" },
+    "token": { "user": "admin", "password": "pwd" },
     "method": "POST",
     "endpoint": "http://localhost:6004/shell-descriptors",
     "data": "postBody/simple_aas_X.json",
@@ -171,137 +171,180 @@
     "context": "GET Descriptor A - User ANONONYM - ALLOWED",
     "token": null,
     "method": "GET",
+    "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9B",
     "expectedStatus": 200
   },
   {
     "context": "GET Descriptor B - User ANONONYM - DENIED",
     "token": null,
     "method": "GET",
-    "endpoint": "http://localhost:6004/shell-descriptors",
+    "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9C",
     "expectedStatus": 403
   },
   {
     "context": "GET Descriptor C - User ANONONYM - DENIED",
     "token": null,
     "method": "GET",
-    "endpoint": "http://localhost:6004/shell-descriptors",
+    "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9D",
     "expectedStatus": 403
   },
   {
     "context": "GET Descriptor D - User ANONONYM - DENIED",
     "token": null,
     "method": "GET",
-    "endpoint": "http://localhost:6004/shell-descriptors",
+    "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9E",
     "expectedStatus": 403
   },
   {
     "context": "GET Descriptor X - User ANONONYM - DENIED",
     "token": null,
     "method": "GET",
-    "endpoint": "http://localhost:6004/shell-descriptors",
+    "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9Y",
     "expectedStatus": 403
   },
   {
     "context": "GET Descriptor A - User A - ALLOWED",
-    "token": { "user": "vieweruser", "password": "admin" },
+    "token": { "user": "usera", "password": "pwd" },
     "method": "GET",
-    "endpoint": "http://localhost:6004/shell-descriptors",
+    "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9B",
     "expectedStatus": 200
   },
   {
     "context": "GET Descriptor B - User A - ALLOWED",
-    "token": { "user": "vieweruser", "password": "admin" },
+    "token": { "user": "usera", "password": "pwd" },
     "method": "GET",
-    "endpoint": "http://localhost:6004/shell-descriptors",
+    "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9C",
     "expectedStatus": 200
   },
   {
     "context": "GET Descriptor C - User A - DENIED",
-    "token": { "user": "vieweruser", "password": "admin" },
+    "token": { "user": "usera", "password": "pwd" },
     "method": "GET",
-    "endpoint": "http://localhost:6004/shell-descriptors",
+    "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9D",
     "expectedStatus": 403
   },
   {
     "context": "GET Descriptor D - User A - DENIED",
-    "token": { "user": "vieweruser", "password": "admin" },
+    "token": { "user": "usera", "password": "pwd" },
     "method": "GET",
-    "endpoint": "http://localhost:6004/shell-descriptors",
+    "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9E",
     "expectedStatus": 403
   },
   {
     "context": "GET Descriptor X - User A - DENIED",
-    "token": { "user": "vieweruser", "password": "admin" },
+    "token": { "user": "usera", "password": "pwd" },
     "method": "GET",
-    "endpoint": "http://localhost:6004/shell-descriptors",
+    "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9Y",
     "expectedStatus": 403
   },
   {
     "context": "GET Descriptor A - User B - ALLOWED",
-    "token": { "user": "editoruser", "password": "admin" },
+    "token": { "user": "userb", "password": "pwd" },
     "method": "GET",
-    "endpoint": "http://localhost:6004/shell-descriptors",
+    "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9B",
     "expectedStatus": 200
   },
   {
-    "context": "GET Descriptor B - User B - DENIED",
-    "token": { "user": "editoruser", "password": "admin" },
+    "context": "GET Descriptor B - User B - ALLOWED",
+    "token": { "user": "userb", "password": "pwd" },
     "method": "GET",
-    "endpoint": "http://localhost:6004/shell-descriptors",
-    "expectedStatus": 403
+    "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9C",
+    "expectedStatus": 200
   },
   {
     "context": "GET Descriptor C - User B - ALLOWED",
-    "token": { "user": "editoruser", "password": "admin" },
+    "token": { "user": "userb", "password": "pwd" },
     "method": "GET",
-    "endpoint": "http://localhost:6004/shell-descriptors",
+    "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9D",
     "expectedStatus": 200
   },
   {
     "context": "GET Descriptor D - User B - ALLOWED",
-    "token": { "user": "editoruser", "password": "admin" },
+    "token": { "user": "userb", "password": "pwd" },
     "method": "GET",
-    "endpoint": "http://localhost:6004/shell-descriptors",
+    "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9E",
     "expectedStatus": 200
   },
   {
     "context": "GET Descriptor X - User B - DENIED",
-    "token": { "user": "editoruser", "password": "admin" },
+    "token": { "user": "userb", "password": "pwd" },
     "method": "GET",
-    "endpoint": "http://localhost:6004/shell-descriptors",
+    "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9Y",
     "expectedStatus": 403
   },
   {
     "context": "GET Descriptor A - User ADMIN - ALLOWED",
-    "token": { "user": "adminuser", "password": "admin" },
+    "token": { "user": "admin", "password": "pwd" },
     "method": "GET",
-    "endpoint": "http://localhost:6004/shell-descriptors",
+    "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9B",
     "expectedStatus": 200
   },
   {
     "context": "GET Descriptor B - User ADMIN - ALLOWED",
-    "token": { "user": "adminuser", "password": "admin" },
+    "token": { "user": "admin", "password": "pwd" },
     "method": "GET",
-    "endpoint": "http://localhost:6004/shell-descriptors",
+    "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9C",
     "expectedStatus": 200
   },
   {
     "context": "GET Descriptor C - User ADMIN - ALLOWED",
-    "token": { "user": "adminuser", "password": "admin" },
+    "token": { "user": "admin", "password": "pwd" },
     "method": "GET",
-    "endpoint": "http://localhost:6004/shell-descriptors",
+    "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9D",
     "expectedStatus": 200
   },
   {
     "context": "GET Descriptor D - User ADMIN - ALLOWED",
-    "token": { "user": "adminuser", "password": "admin" },
+    "token": { "user": "admin", "password": "pwd" },
+    "method": "GET",
+    "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9E",
+    "expectedStatus": 200
+  },
+  {
+    "context": "GET Descriptor X - User ADMIN - ALLOWED",
+    "token": { "user": "admin", "password": "pwd" },
+    "method": "GET",
+    "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9Y",
+    "expectedStatus": 200
+  },
+  {
+    "context": "GET ALL Descriptor - User ANONONYM - ALLOWED",
+    "token": null,
     "method": "GET",
     "endpoint": "http://localhost:6004/shell-descriptors",
     "expectedStatus": 200
   },
   {
-    "context": "GET Descriptor X - User ADMIN - ALLOWED",
-    "token": { "user": "adminuser", "password": "admin" },
+    "context": "GET ALL Descriptor - User A - ALLOWED",
+    "token": { "user": "usera", "password": "pwd" },
+    "method": "GET",
+    "endpoint": "http://localhost:6004/shell-descriptors",
+    "expectedStatus": 200
+  },
+  {
+    "context": "GET ALL Descriptor - User B - ALLOWED",
+    "token": { "user": "userb", "password": "pwd" },
+    "method": "GET",
+    "endpoint": "http://localhost:6004/shell-descriptors",
+    "expectedStatus": 200
+  },
+  {
+    "context": "GET ALL Descriptor - User X - ALLOWED",
+    "token": { "user": "userx", "password": "pwd" },
+    "method": "GET",
+    "endpoint": "http://localhost:6004/shell-descriptors",
+    "expectedStatus": 200
+  },
+  {
+    "context": "GET ALL Descriptor - User Y - ALLOWED",
+    "token": { "user": "usery", "password": "pwd" },
+    "method": "GET",
+    "endpoint": "http://localhost:6004/shell-descriptors",
+    "expectedStatus": 200
+  },
+  {
+    "context": "GET ALL Descriptor - User Admin - ALLOWED",
+    "token": { "user": "admin", "password": "pwd" },
     "method": "GET",
     "endpoint": "http://localhost:6004/shell-descriptors",
     "expectedStatus": 200

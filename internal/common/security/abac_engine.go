@@ -96,6 +96,9 @@ func (m *AccessModel) AuthorizeWithFilter(in EvalInput) (ok bool, code DecisionC
 	right := mapMethodToRight(in.Method)
 	all := m.gen.AllAccessPermissionRules
 
+	var ruleExprs []grammar.LogicalExpression
+	var filter *grammar.AccessPermissionRuleFILTER
+
 	for _, r := range all.Rules {
 		acl, attrs, objs, lexpr := materialize(all, r)
 
@@ -131,22 +134,46 @@ func (m *AccessModel) AuthorizeWithFilter(in EvalInput) (ok bool, code DecisionC
 		}
 
 		// Gate 4: formula → adapt for backend filtering
-		if combinedLE != nil {
-			adapted, onlyBool := adaptLEForBackend(*combinedLE, in.Claims, in.IssuedUTC)
-			if onlyBool {
-				// Fully decidable here; evaluate and continue on false
-				if !evalLE(adapted, in.Claims, in.IssuedUTC) {
-					continue
-				}
-			} else {
-
-				qf = &QueryFilter{Formula: &adapted, Filter: r.FILTER}
-			}
+		if combinedLE == nil {
+			// rule has no formula → grants full access
+			return true, DecisionAllow, nil
 		}
 
-		return true, DecisionAllow, qf
+		adapted, onlyBool := adaptLEForBackend(*combinedLE, in.Claims, in.IssuedUTC)
+		if onlyBool {
+			// Fully decidable here; evaluate and continue on false
+			if !evalLE(adapted, in.Claims, in.IssuedUTC) {
+				continue
+			}
+			return true, DecisionAllow, nil
+		}
+
+		if filter == nil {
+			filter = r.FILTER
+		}
+		ruleExprs = append(ruleExprs, adapted)
 	}
-	return false, DecisionNoMatch, nil
+
+	if len(ruleExprs) == 0 {
+		return false, DecisionNoMatch, nil
+	}
+
+	var combined grammar.LogicalExpression
+	if len(ruleExprs) == 1 {
+		combined = ruleExprs[0]
+	} else {
+		combined = grammar.LogicalExpression{Or: ruleExprs}
+	}
+
+	simplified, onlyBool := adaptLEForBackend(combined, in.Claims, in.IssuedUTC)
+	if onlyBool {
+		if evalLE(simplified, in.Claims, in.IssuedUTC) {
+			return true, DecisionAllow, nil
+		}
+		return false, DecisionNoMatch, nil
+	}
+
+	return true, DecisionAllow, &QueryFilter{Formula: &simplified, Filter: filter}
 }
 
 // materialize resolves a rule's references (USEACL, USEOBJECTS, USEFORMULA) into

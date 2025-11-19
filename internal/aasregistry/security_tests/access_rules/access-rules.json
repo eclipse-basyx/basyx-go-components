@@ -38,7 +38,7 @@
       { "name": "isMember&manufacturerPartId", "formula": { 
         "$and": [
           {"$eq": [ {"$attribute": {"CLAIM": "role"}}, {"$strVal": "viewer"}]},
-          {"$ge": [ {"$numCast": { "$attribute": { "CLAIM": "clear" } } }, { "$numVal": 2 } ] },
+          {"$ge": [ {"$numCast": { "$attribute": { "CLAIM": "clear" } } }, { "$numVal": 1 } ] },
           {"$eq": [ {"$field": "$aasdesc#specificAssetIds[].name"}, {"$strVal": "manufacturerPartId"}]}
         ] }
       },
@@ -51,13 +51,13 @@
       { "name": "isMember&Y", "formula": { 
         "$and": [
           {"$eq": [ {"$attribute": {"CLAIM": "role"}}, {"$strVal": "editor"}]},
-          {"$ge": [ {"$numCast": { "$attribute": { "CLAIM": "clear" } } }, { "$numVal": 5 } ] },
+          {"$ge": [ {"$numCast": { "$attribute": { "CLAIM": "clear" } } }, { "$numVal": 1 } ] },
           {"$eq": [ {"$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value"}, {"$strVal": "WRITTEN_BY_Y"}]}
         ] }
       },
       { "name": "isAdmin", "formula": { 
         "$and": [
-          {"$eq": [ {"$attribute": {"CLAIM": "role"}}, {"$strVal": "editor"}]},
+          {"$eq": [ {"$attribute": {"CLAIM": "role"}}, {"$strVal": "admin"}]},
           {"$ge": [ {"$numCast": { "$attribute": { "CLAIM": "clear" } } }, { "$numVal": 10 } ] }
         ] }
       },

@@ -474,19 +474,53 @@ func adaptMatchForBackend(me grammar.MatchExpression, claims Claims, now time.Ti
 	return me, false
 }
 
-// replaceAttribute resolves a Value's $attribute (CLAIM/GLOBAL) to a literal value,
-// when possible. If the value is not an attribute, it is returned unchanged.
+// replaceAttribute resolves a Value that is deterministic from CLAIM/GLOBAL attributes
+// (including via casts) to a literal when possible. Values that reference $field
+// remain untouched because they cannot be evaluated without backend context.
 func replaceAttribute(v grammar.Value, claims Claims, now time.Time) grammar.Value {
-	if v.Attribute != nil {
+	if valueContainsAttribute(v) && !valueContainsField(v) {
 		// Use existing resolver to get a concrete value
 		resolved := resolveValue(v, claims, now)
 		if lit, ok := literalValueFromAny(resolved); ok {
 			return lit
 		}
-		// If cannot build a literal, return as-is (will be non-SQL-compatible)
-		return v
 	}
 	return v
+}
+
+func valueContainsField(v grammar.Value) bool {
+	if v.Field != nil {
+		return true
+	}
+	for _, child := range valueChildren(v) {
+		if child != nil && valueContainsField(*child) {
+			return true
+		}
+	}
+	return false
+}
+
+func valueContainsAttribute(v grammar.Value) bool {
+	if v.Attribute != nil {
+		return true
+	}
+	for _, child := range valueChildren(v) {
+		if child != nil && valueContainsAttribute(*child) {
+			return true
+		}
+	}
+	return false
+}
+
+func valueChildren(v grammar.Value) []*grammar.Value {
+	return []*grammar.Value{
+		v.BoolCast,
+		v.DateTimeCast,
+		v.HexCast,
+		v.NumCast,
+		v.StrCast,
+		v.TimeCast,
+	}
 }
 
 // isLiteral returns true if the Value represents a literal (not a field and not an attribute)

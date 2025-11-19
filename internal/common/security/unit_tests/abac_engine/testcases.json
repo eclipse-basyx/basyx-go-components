@@ -75,6 +75,11 @@
     "eval": "eval/get_shellDescriptors_admin.json"
   },
   {
+    "input": "input/multiple_rules_or.json",
+    "expected": "expected/access_allowed_multiple_rules_or.json",
+    "eval": "eval/get_shellDescriptors_admin.json"
+  },
+  {
     "input": "input/with_descriptor_object_single_multiple_with_route.json",
     "expected": "expected/access_allowed.json",
     "eval": "eval/get_shellDescriptors_admin.json"
@@ -98,5 +103,10 @@
     "input": "input/anonymous_write_simple.json",
     "expected": "expected/access_allowed.json",
     "eval": "eval/post_shellDescriptors_admin.json"
+  },
+  {
+    "input": "input/numcastformula.json",
+    "expected": "expected/access_allowed.json",
+    "eval": "eval/get_shellDescriptors_member.json"
   }
 ]
