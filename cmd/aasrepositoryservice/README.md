@@ -135,33 +135,6 @@ From regen-temp, copy only the core Go files into:
 
 pkg/aasrepositoryapi/go
 
-
-Typical set:
-
-api.go
-
-api_asset_administration_shell_repository_api.go
-
-api_asset_administration_shell_repository_api_service.go
-
-api_description_api.go
-
-api_description_api_service.go
-
-api_serialization_api.go
-
-api_serialization_api_service.go
-
-routers.go
-
-impl.go
-
-logger.go
-
-error.go
-
-helpers.go
-
 Delete the following from the component package:
 
 All model_*.go files
@@ -244,9 +217,6 @@ func NewRouter(routers ...Router) chi.Router {
 Path parameters in the controllers (e.g. api_asset_administration_shell_repository_api.go) use chi:
 
 aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
-
-
-There should be no gorilla/mux imports anywhere in this package.
 
 ### 5.4. Validation stubs in helpers.go
 
