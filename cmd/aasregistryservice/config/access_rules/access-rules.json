@@ -1,57 +1,82 @@
 {
   "AllAccessPermissionRules": {
+    "DEFATTRIBUTES": [
+      { "name": "anonym_attr",   "attributes": [ { "GLOBAL": "ANONYMOUS" } ] },
+      { "name": "role_attr",       "attributes": [ { "CLAIM": "role" } ] },
+      { "name": "member_attr",      "attributes": [ { "CLAIM": "role" }, { "CLAIM": "clear" } ] }
+    ],
+
+    "DEFOBJECTS": [
+      { "name": "health",               "objects": [ { "ROUTE": "/health" } ] },
+      { "name": "description",          "objects": [ { "ROUTE": "/description" } ] },
+      { "name": "shellDescriptorById",  "objects": [ { "ROUTE": "/shell-descriptors/*" } ] },
+      { "name": "shellDescriptors",     "objects": [ { "ROUTE": "/shell-descriptors" } ] },
+      { "name": "allShellDescriptors",  "objects": [ { "ROUTE": "/shell-descriptors" }, { "ROUTE": "/shell-descriptors/*" } ] },
+      { "name": "allShellDescriptorsObject",  "objects": [ { "DESCRIPTOR": "$aasdesc(\"*\")"} ] },
+      { "name": "specialShellDescritpor",  "objects": [ { "DESCRIPTOR": "$aasdesc(\"https://example.org/X\")" } ] }
+    ],
     
-    "rules": [
-      {
-        "ACL": {
-          "ATTRIBUTES": [
-            {
-              "GLOBAL": "ANONYMOUS"
-            }
-          ],
-          "RIGHTS": [
-            "CREATE"
-          ],
-          "ACCESS": "ALLOW"
-        },
-        "OBJECTS": [
-          {
-            "ROUTE": "**"
-          }
-        ],
-        "FORMULA": {"$boolean": true}
+    "DEFACLS": [
+      { "name": "read_only_public",   "acl": { "USEATTRIBUTES": "anonym_attr", "RIGHTS": ["READ"],   "ACCESS": "ALLOW" } },
+      { "name": "read_only_public_disabled",   "acl": { "USEATTRIBUTES": "anonym_attr", "RIGHTS": ["READ"],   "ACCESS": "DISABLED" } },
+      { "name": "write_role",   "acl": { "USEATTRIBUTES": "role_attr",    "RIGHTS": ["CREATE"],   "ACCESS": "ALLOW" } },
+      { "name": "read_role", "acl": { "USEATTRIBUTES": "role_attr",    "RIGHTS": ["READ"], "ACCESS": "ALLOW" } },
+      { "name": "write_member",   "acl": { "USEATTRIBUTES": "member_attr",    "RIGHTS": ["CREATE"],   "ACCESS": "ALLOW" } },
+      { "name": "read_member", "acl": { "USEATTRIBUTES": "member_attr",    "RIGHTS": ["READ"], "ACCESS": "ALLOW" } },
+      { "name": "admin", "acl": { "USEATTRIBUTES": "member_attr",    "RIGHTS": ["CREATE", "READ", "UPDATE", "DELETE"], "ACCESS": "ALLOW" } }
+    ],
+    
+    "DEFFORMULAS": [
+      { "name": "always_true", "formula": { "$boolean": true } },
+      { "name": "is_public_readable", "formula": {"$eq": [ {"$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value"}, {"$strVal": "PUBLIC_READABLE"}]} },
+      { "name": "isRole=viewer&customerPartId", "formula": { 
+        "$and": [
+          {"$eq": [ {"$attribute": {"CLAIM": "role"}}, {"$strVal": "viewer"}]},
+          {"$eq": [ {"$field": "$aasdesc#specificAssetIds[].name"}, {"$strVal": "customerPartId"}]}
+        ] }
       },
-      {
-        "ACL": {
-          "ATTRIBUTES": [
-            {
-              "CLAIM": "role"
-            }
-          ],
-          "RIGHTS": [
-            "READ"
-          ],
-          "ACCESS": "ALLOW"
-        },
-        "OBJECTS": [
-          {
-            "ROUTE": "**"
-          }
-        ],
-        "FORMULA": { "$and": [
-          { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "viewer" } ] },
-          {
-                "$eq": [
-                  {
-                    "$field": "$aasdesc#specificAssetIds[].externalSubjectId"
-                  },
-                  {
-                    "$strVal": "PUBLIC_READABLE"
-                  }
-                ]
-              }
-        ]}
+      { "name": "isMember&manufacturerPartId", "formula": { 
+        "$and": [
+          {"$eq": [ {"$attribute": {"CLAIM": "role"}}, {"$strVal": "viewer"}]},
+          {"$ge": [ {"$numCast": { "$attribute": { "CLAIM": "clear" } } }, { "$numVal": 2 } ] },
+          {"$eq": [ {"$field": "$aasdesc#specificAssetIds[].name"}, {"$strVal": "manufacturerPartId"}]}
+        ] }
+      },
+      { "name": "isRole=editor&X", "formula": { 
+        "$and": [
+          {"$eq": [ {"$attribute": {"CLAIM": "role"}}, {"$strVal": "editor"}]},
+          {"$eq": [ {"$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value"}, {"$strVal": "WRITTEN_BY_X"}]}
+        ] }
+      },
+      { "name": "isMember&Y", "formula": { 
+        "$and": [
+          {"$eq": [ {"$attribute": {"CLAIM": "role"}}, {"$strVal": "editor"}]},
+          {"$ge": [ {"$numCast": { "$attribute": { "CLAIM": "clear" } } }, { "$numVal": 5 } ] },
+          {"$eq": [ {"$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value"}, {"$strVal": "WRITTEN_BY_Y"}]}
+        ] }
+      },
+      { "name": "isAdmin", "formula": { 
+        "$and": [
+          {"$eq": [ {"$attribute": {"CLAIM": "role"}}, {"$strVal": "editor"}]},
+          {"$ge": [ {"$numCast": { "$attribute": { "CLAIM": "clear" } } }, { "$numVal": 10 } ] }
+        ] }
+      },
+      { "name": "isTest", "formula": { 
+        "$and": [
+          {"$eq": [ {"$attribute": {"CLAIM": "role"}}, {"$strVal": "test"}]},
+          { "$boolean": true }
+        ] }
       }
+    ], 
+    "rules": [
+      { "USEACL": "read_only_public", "USEOBJECTS": ["health"], "USEFORMULA": "always_true" },
+      { "USEACL": "admin", "USEOBJECTS": ["allShellDescriptorsObject"], "USEFORMULA": "isAdmin" },
+      { "USEACL": "read_only_public", "USEOBJECTS": ["allShellDescriptors"], "USEFORMULA": "is_public_readable" },
+      { "USEACL": "read_role", "USEOBJECTS": ["allShellDescriptors"], "USEFORMULA": "isRole=viewer&customerPartId" },
+      { "USEACL": "read_member", "USEOBJECTS": ["allShellDescriptors"], "USEFORMULA": "isMember&manufacturerPartId" },
+      { "USEACL": "write_role", "USEOBJECTS": ["allShellDescriptors"], "USEFORMULA": "isRole=editor&X" },
+      { "USEACL": "write_member", "USEOBJECTS": ["allShellDescriptors"], "USEFORMULA": "isMember&Y" },
+      { "USEACL": "read_role", "OBJECTS": [{ "DESCRIPTOR": "$aasdesc(\"https://example.org/X\")" }], "USEFORMULA": "isTest" }
     ]
   }
 }

@@ -6,7 +6,7 @@
           "ACCESS": "ALLOW",
           "RIGHTS": ["READ","UPDATE"]
         },
-        "OBJECTS": [{"ROUTE": "/shell-descriptors"}, {"DESCRIPTOR" : "$aasdesc(\"martin\")"}, {"DESCRIPTOR" : "$aasdesc(\"jannik\")"}, {"DESCRIPTOR" : "$aasdesc(\"aaron\")"}],
+        "OBJECTS": [{"DESCRIPTOR" : "$aasdesc(\"martin\")"}, {"DESCRIPTOR" : "$aasdesc(\"jannik\")"}, {"DESCRIPTOR" : "$aasdesc(\"aaron\")"}],
         "FORMULA": { 
           "$and": [
             { 

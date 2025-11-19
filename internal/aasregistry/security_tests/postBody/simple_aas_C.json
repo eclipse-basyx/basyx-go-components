@@ -1,15 +1,15 @@
 {
-  "id": "https://example.org/aas/public",
+  "id": "https://example.org/C",
   "specificAssetIds": [
     {
-      "name": "public",
-      "value": "desc",
+      "name": "manufacturerPartId",
+      "value": "23749",
       "externalSubjectId": {
         "type": "ExternalReference",
         "keys": [
           {
             "type": "GlobalReference",
-            "value": "PUBLIC_READABLE"
+            "value": "WRITTEN_BY_Y"
           }
         ]
       }

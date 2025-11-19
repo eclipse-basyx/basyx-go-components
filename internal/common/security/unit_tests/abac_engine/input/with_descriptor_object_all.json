@@ -6,7 +6,7 @@
           "ACCESS": "ALLOW",
           "RIGHTS": ["READ","UPDATE"]
         },
-        "OBJECTS": [{"ROUTE": "/shell-descriptors"}, {"DESCRIPTOR" : "$aasdesc(\"*\")"}],
+        "OBJECTS": [{"DESCRIPTOR" : "$aasdesc(\"*\")"}],
         "FORMULA": {"$boolean": true}
       }
     ]

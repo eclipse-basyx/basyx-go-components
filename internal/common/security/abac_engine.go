@@ -42,6 +42,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -330,52 +331,70 @@ func matchRoute(route string, userPath string) bool {
 	return matched
 }
 
-func retrieveDescriptorLE(descriptorValue *grammar.DescriptorValue) *grammar.LogicalExpression {
+// RouteWithFilter couples a concrete HTTP route pattern with an optional
+// logical expression. When the route matches a request path, the expression
+// (if present) is AND-ed into the overall filter used by the backend.
+type RouteWithFilter struct {
+	route string
+	le    *grammar.LogicalExpression
+}
 
-	if descriptorValue != nil {
-		switch descriptorValue.Scope {
-		case "$aasdesc":
-			if descriptorValue.ID.IsAll {
-				boolTrue := true
-				return &grammar.LogicalExpression{Boolean: &boolTrue}
+func mapDesciptorValueToRoute(descriptorValue grammar.DescriptorValue) []RouteWithFilter {
+	switch descriptorValue.Scope {
+	case "$aasdesc":
+		if descriptorValue.ID.IsAll {
+			return []RouteWithFilter{
+				{route: "/shell-descriptors"},
+				{route: "/shell-descriptors/*"},
 			}
-			id := descriptorValue.ID.ID
-
-			field := grammar.ModelStringPattern("$aasdesc#id")
-			standardString := grammar.StandardString(id)
-
-			extraFilter := grammar.LogicalExpression{
-				Eq: grammar.ComparisonItems{
-					grammar.Value{Field: &field},
-					grammar.Value{StrVal: &standardString},
-				},
-			}
-
-			return &extraFilter
-
-		case "$smdesc":
-			if descriptorValue.ID.IsAll {
-				boolTrue := true
-				return &grammar.LogicalExpression{Boolean: &boolTrue}
-			}
-			id := descriptorValue.ID.ID
-
-			field := grammar.ModelStringPattern("$smdesc#id")
-			standardString := grammar.StandardString(id)
-
-			extraFilter := grammar.LogicalExpression{
-				Eq: grammar.ComparisonItems{
-					grammar.Value{Field: &field},
-					grammar.Value{StrVal: &standardString},
-				},
-			}
-
-			return &extraFilter
-
 		}
+		id := descriptorValue.ID.ID
+		encodeID := common.EncodeString(id)
+		field := grammar.ModelStringPattern("$aasdesc#id")
+		standardString := grammar.StandardString(id)
+
+		extraFilter := grammar.LogicalExpression{
+			Eq: grammar.ComparisonItems{
+				grammar.Value{Field: &field},
+				grammar.Value{StrVal: &standardString},
+			},
+		}
+
+		return []RouteWithFilter{
+			{route: "/shell-descriptors", le: &extraFilter},
+			{route: "/shell-descriptors/" + encodeID},
+		}
+
+	case "$smdesc":
+		if descriptorValue.ID.IsAll {
+			return []RouteWithFilter{
+				{route: "/shell-descriptors/*/submodel-descriptors"},
+				{route: "/shell-descriptors/*/submodel-descriptors/*"},
+			}
+		}
+		id := descriptorValue.ID.ID
+		encodeID := common.EncodeString(id)
+
+		field := grammar.ModelStringPattern("$smdesc#id")
+		standardString := grammar.StandardString(id)
+
+		extraFilter := grammar.LogicalExpression{
+			Eq: grammar.ComparisonItems{
+				grammar.Value{Field: &field},
+				grammar.Value{StrVal: &standardString},
+			},
+		}
+
+		return []RouteWithFilter{
+			// collection route + filter on submodel-descriptor id
+			{route: "/shell-descriptors/*/submodel-descriptors", le: &extraFilter},
+			// direct item route
+			{route: "/shell-descriptors/*/submodel-descriptors/" + encodeID},
+		}
+
 	}
-	boolVal := false
-	return &grammar.LogicalExpression{Boolean: &boolVal}
+
+	return []RouteWithFilter{}
 }
 
 // AccessWithLE represents the outcome of matching a request path against a
@@ -399,11 +418,24 @@ func matchRouteObjectsObjItem(objs []grammar.ObjectItem, reqPath string) AccessW
 		case grammar.Route:
 
 			if matchRoute(oi.Route.Route, reqPath) {
-				access = true
+				return AccessWithLE{access: true}
 			}
 
 		case grammar.Descriptor:
-			locialExpressions = append(locialExpressions, *retrieveDescriptorLE(oi.Descriptor))
+			desc := oi.Descriptor
+			if desc != nil {
+				for _, routeWithFilter := range mapDesciptorValueToRoute(*desc) {
+
+					if matchRoute(routeWithFilter.route, reqPath) {
+						if routeWithFilter.le != nil {
+							access = true
+							locialExpressions = append(locialExpressions, *routeWithFilter.le)
+						} else {
+							return AccessWithLE{access: true}
+						}
+					}
+				}
+			}
 		}
 
 	}

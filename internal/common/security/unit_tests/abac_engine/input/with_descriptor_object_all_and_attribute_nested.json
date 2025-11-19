@@ -7,7 +7,7 @@
           "RIGHTS": ["READ","UPDATE"],
           "ATTRIBUTES": [{"CLAIM": "role"}]
         },
-        "OBJECTS": [{"ROUTE": "/shell-descriptors"}, {"DESCRIPTOR" : "$aasdesc(\"*\")"}],
+        "OBJECTS": [{"DESCRIPTOR" : "$aasdesc(\"*\")"}],
         "FORMULA": { 
           
           "$and": [

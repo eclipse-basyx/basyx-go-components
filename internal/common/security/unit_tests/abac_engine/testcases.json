@@ -40,6 +40,11 @@
     "eval": "eval/get_shellDescriptors_admin_single.json"
   },
   {
+    "input": "input/with_descriptor_object_single_and_attribute.json",
+    "expected": "expected/access_allowed.json",
+    "eval": "eval/get_shellDescriptors_admin_single_correct.json"
+  },
+  {
     "input": "input/with_descriptor_object_all_and_attribute.json",
     "expected": "expected/access_allowed.json",
     "eval": "eval/get_shellDescriptors_admin_single.json"
@@ -71,7 +76,7 @@
   },
   {
     "input": "input/with_descriptor_object_single_multiple_with_route.json",
-    "expected": "expected/access_allowed_with_qf.json",
+    "expected": "expected/access_allowed.json",
     "eval": "eval/get_shellDescriptors_admin.json"
   },
   {
