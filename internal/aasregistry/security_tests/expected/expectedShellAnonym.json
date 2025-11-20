@@ -2,17 +2,21 @@
   "PagingMetadata": {},
   "Result": [
     {
-      "id": "https://example.org/aas/public",
+      "id": "https://example.org/A",
       "specificAssetIds": [
         {
-          "name": "public",
-          "value": "desc",
+          "name": "customerPartId",
+          "value": "248795",
           "externalSubjectId": {
             "type": "ExternalReference",
             "keys": [
               {
                 "type": "GlobalReference",
                 "value": "PUBLIC_READABLE"
+              },
+              {
+                "type": "GlobalReference",
+                "value": "WRITTEN_BY_X"
               }
             ]
           }

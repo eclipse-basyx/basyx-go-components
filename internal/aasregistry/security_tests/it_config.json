@@ -53,6 +53,7 @@
     "method": "POST",
     "endpoint": "http://localhost:6004/shell-descriptors",
     "data": "postBody/simple_aas_A.json",
+    "shouldMatch": "postBody/simple_aas_A.json",
     "expectedStatus": 201
   },
   {
@@ -77,6 +78,7 @@
     "method": "POST",
     "endpoint": "http://localhost:6004/shell-descriptors",
     "data": "postBody/simple_aas_D.json",
+    "shouldMatch": "postBody/simple_aas_D.json",
     "expectedStatus": 201
   },
   {
@@ -101,6 +103,7 @@
     "method": "POST",
     "endpoint": "http://localhost:6004/shell-descriptors",
     "data": "postBody/simple_aas_B.json",
+    "shouldMatch": "postBody/simple_aas_B.json",
     "expectedStatus": 201
   },
   {
@@ -109,6 +112,7 @@
     "method": "POST",
     "endpoint": "http://localhost:6004/shell-descriptors",
     "data": "postBody/simple_aas_C.json",
+    "shouldMatch": "postBody/simple_aas_C.json",
     "expectedStatus": 201
   },
   {
@@ -165,6 +169,7 @@
     "method": "POST",
     "endpoint": "http://localhost:6004/shell-descriptors",
     "data": "postBody/simple_aas_X.json",
+    "shouldMatch": "postBody/simple_aas_X.json",
     "expectedStatus": 201
   },
   {
@@ -172,6 +177,7 @@
     "token": null,
     "method": "GET",
     "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9B",
+    "shouldMatch": "postBody/simple_aas_A.json",
     "expectedStatus": 200
   },
   {
@@ -207,6 +213,7 @@
     "token": { "user": "usera", "password": "pwd" },
     "method": "GET",
     "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9B",
+    "shouldMatch": "postBody/simple_aas_A.json",
     "expectedStatus": 200
   },
   {
@@ -214,6 +221,7 @@
     "token": { "user": "usera", "password": "pwd" },
     "method": "GET",
     "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9C",
+    "shouldMatch": "postBody/simple_aas_B.json",
     "expectedStatus": 200
   },
   {
@@ -242,6 +250,7 @@
     "token": { "user": "userb", "password": "pwd" },
     "method": "GET",
     "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9B",
+    "shouldMatch": "postBody/simple_aas_A.json",
     "expectedStatus": 200
   },
   {
@@ -249,6 +258,7 @@
     "token": { "user": "userb", "password": "pwd" },
     "method": "GET",
     "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9C",
+    "shouldMatch": "postBody/simple_aas_B.json",
     "expectedStatus": 200
   },
   {
@@ -256,6 +266,7 @@
     "token": { "user": "userb", "password": "pwd" },
     "method": "GET",
     "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9D",
+    "shouldMatch": "postBody/simple_aas_C.json",
     "expectedStatus": 200
   },
   {
@@ -263,6 +274,7 @@
     "token": { "user": "userb", "password": "pwd" },
     "method": "GET",
     "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9E",
+    "shouldMatch": "postBody/simple_aas_D.json",
     "expectedStatus": 200
   },
   {
@@ -277,6 +289,7 @@
     "token": { "user": "admin", "password": "pwd" },
     "method": "GET",
     "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9B",
+    "shouldMatch": "postBody/simple_aas_A.json",
     "expectedStatus": 200
   },
   {
@@ -284,6 +297,7 @@
     "token": { "user": "admin", "password": "pwd" },
     "method": "GET",
     "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9C",
+    "shouldMatch": "postBody/simple_aas_B.json",
     "expectedStatus": 200
   },
   {
@@ -291,6 +305,7 @@
     "token": { "user": "admin", "password": "pwd" },
     "method": "GET",
     "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9D",
+    "shouldMatch": "postBody/simple_aas_C.json",
     "expectedStatus": 200
   },
   {
@@ -298,6 +313,7 @@
     "token": { "user": "admin", "password": "pwd" },
     "method": "GET",
     "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9E",
+    "shouldMatch": "postBody/simple_aas_D.json",
     "expectedStatus": 200
   },
   {
@@ -305,6 +321,7 @@
     "token": { "user": "admin", "password": "pwd" },
     "method": "GET",
     "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9Y",
+    "shouldMatch": "postBody/simple_aas_X.json",
     "expectedStatus": 200
   },
   {
@@ -312,6 +329,7 @@
     "token": null,
     "method": "GET",
     "endpoint": "http://localhost:6004/shell-descriptors",
+    "shouldMatch": "expected/expectedShellAnonym.json",
     "expectedStatus": 200
   },
   {
@@ -319,6 +337,7 @@
     "token": { "user": "usera", "password": "pwd" },
     "method": "GET",
     "endpoint": "http://localhost:6004/shell-descriptors",
+    "shouldMatch": "expected/expectedShellUserA.json",
     "expectedStatus": 200
   },
   {
@@ -326,6 +345,7 @@
     "token": { "user": "userb", "password": "pwd" },
     "method": "GET",
     "endpoint": "http://localhost:6004/shell-descriptors",
+    "shouldMatch": "expected/expectedShellUserB.json",
     "expectedStatus": 200
   },
   {
@@ -333,6 +353,7 @@
     "token": { "user": "userx", "password": "pwd" },
     "method": "GET",
     "endpoint": "http://localhost:6004/shell-descriptors",
+    "shouldMatch": "expected/expectedShellUserX.json",
     "expectedStatus": 200
   },
   {
@@ -340,6 +361,7 @@
     "token": { "user": "usery", "password": "pwd" },
     "method": "GET",
     "endpoint": "http://localhost:6004/shell-descriptors",
+    "shouldMatch": "expected/expectedShellUserY.json",
     "expectedStatus": 200
   },
   {
@@ -347,6 +369,7 @@
     "token": { "user": "admin", "password": "pwd" },
     "method": "GET",
     "endpoint": "http://localhost:6004/shell-descriptors",
+    "shouldMatch": "expected/expectedShellAdmin.json",
     "expectedStatus": 200
   }
 ]
