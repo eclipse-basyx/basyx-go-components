@@ -8,6 +8,8 @@ import (
 	"testing"
 
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
+	apis "github.com/eclipse-basyx/basyx-go-components/pkg/aasregistryapi"
+	"github.com/go-chi/chi/v5"
 )
 
 func pretty(b []byte) []byte {
@@ -71,6 +73,12 @@ func TestAdaptLEForBackend(t *testing.T) {
 		t.Fatalf("empty manifest: %s", manifest)
 	}
 
+	apiRouter := chi.NewRouter()
+	smCtrl := apis.NewAssetAdministrationShellRegistryAPIAPIController(nil, "/*")
+	for _, rt := range smCtrl.Routes() {
+		apiRouter.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
+	}
+
 	for _, c := range cases {
 		c := c
 		t.Run(c.Input, func(t *testing.T) {
@@ -80,7 +88,7 @@ func TestAdaptLEForBackend(t *testing.T) {
 				t.Fatalf("read input: %v", err)
 			}
 
-			model, err := auth.ParseAccessModel(raw)
+			model, err := auth.ParseAccessModel(raw, apiRouter)
 			if err != nil {
 				t.Fatalf("model input: %v", err)
 			}

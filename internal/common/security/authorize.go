@@ -131,6 +131,7 @@ func ABACMiddleware(settings ABACSettings) func(http.Handler) http.Handler {
 				if qf != nil {
 					ctx = context.WithValue(ctx, filterKey, qf)
 				}
+
 				next.ServeHTTP(w, r.WithContext(ctx))
 				return
 			}

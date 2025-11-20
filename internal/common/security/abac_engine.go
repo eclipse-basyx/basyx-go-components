@@ -37,13 +37,13 @@ package auth
 import (
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"path"
 	"regexp"
 	"strings"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
+	api "github.com/go-chi/chi/v5"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -51,18 +51,20 @@ import (
 // (ARM) used by the ABAC engine. It holds the generated schema and provides
 // evaluation helpers.
 type AccessModel struct {
-	gen grammar.AccessRuleModelSchemaJSON
+	gen       grammar.AccessRuleModelSchemaJSON
+	apiRouter *api.Mux
+	rctx      *api.Context
 }
 
 // ParseAccessModel parses a JSON (or YAML converted to JSON) payload that
 // conforms to the Access Rule Model schema and returns a compiled AccessModel.
-func ParseAccessModel(b []byte) (*AccessModel, error) {
+func ParseAccessModel(b []byte, apiRouter *api.Mux) (*AccessModel, error) {
 	var m grammar.AccessRuleModelSchemaJSON
 	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	if err := json.Unmarshal(b, &m); err != nil {
 		return nil, fmt.Errorf("parse access model: %w", err)
 	}
-	return &AccessModel{gen: m}, nil
+	return &AccessModel{gen: m, apiRouter: apiRouter, rctx: api.NewRouteContext()}, nil
 }
 
 // QueryFilter captures optional, fine-grained restrictions produced by a rule
@@ -93,7 +95,7 @@ const (
 // It returns whether access is allowed, a human-readable reason, and an optional
 // QueryFilter for controllers to enforce (e.g., tenant scoping, redactions).
 func (m *AccessModel) AuthorizeWithFilter(in EvalInput) (ok bool, code DecisionCode, qf *QueryFilter) {
-	right := mapMethodToRight(in.Method)
+	rights := m.mapMethodAndPathToRights(in)
 	all := m.gen.AllAccessPermissionRules
 
 	var ruleExprs []grammar.LogicalExpression
@@ -107,7 +109,7 @@ func (m *AccessModel) AuthorizeWithFilter(in EvalInput) (ok bool, code DecisionC
 			continue
 		}
 		// Gate 1: rights
-		if !rightsContains(acl.RIGHTS, right) {
+		if !rightsContainsAll(acl.RIGHTS, rights) {
 			continue
 		}
 		// Gate 2: attributes
@@ -258,35 +260,43 @@ func resolveObjects(all grammar.AccessRuleModelSchemaJSONAllAccessPermissionRule
 	return out
 }
 
-// mapMethodToRight maps an HTTP method into an abstract right used by the
-// Access Rule Model (CREATE, READ, UPDATE, DELETE). Unknown methods default to READ.
-func mapMethodToRight(meth string) grammar.RightsEnum {
-	switch strings.ToUpper(meth) {
-	case http.MethodGet, http.MethodHead:
-		return grammar.RightsEnumREAD
-	case http.MethodPost:
-		return grammar.RightsEnumCREATE
-	case http.MethodPut, http.MethodPatch:
-		return grammar.RightsEnumUPDATE
-	case http.MethodDelete:
-		return grammar.RightsEnumDELETE
-	default:
-		return grammar.RightsEnumREAD
+func (m *AccessModel) mapMethodAndPathToRights(in EvalInput) []grammar.RightsEnum {
+	for _, mapping := range mapMethodAndPatternToRightsData {
+		if mapping.Method == in.Method {
+			pattern := m.apiRouter.Find(m.rctx, in.Method, in.Path)
+			if mapping.Pattern == pattern {
+				return mapping.Rights
+			}
+		}
 	}
+	return []grammar.RightsEnum{grammar.RightsEnumALL}
 }
 
-// rightsContains returns true if the required right is included in the rule's
-// rights, or if the rule grants ALL rights.
-func rightsContains(hay []grammar.RightsEnum, needle grammar.RightsEnum) bool {
+func rightsContainsAll(hay []grammar.RightsEnum, needles []grammar.RightsEnum) bool {
+	// If hay contains ALL → automatically has everything
 	for _, r := range hay {
-		if strings.EqualFold(string(r), "ALL") {
-			return true
-		}
-		if strings.EqualFold(string(r), string(needle)) {
+		if r == grammar.RightsEnumALL {
 			return true
 		}
 	}
-	return false
+
+	// Check each needle individually
+	for _, n := range needles {
+		found := false
+		for _, r := range hay {
+			if r == n {
+				found = true
+				break
+			}
+		}
+
+		// If one needle is missing → fail
+		if !found {
+			return false
+		}
+	}
+
+	return true
 }
 
 // attributesSatisfiedAll returns true only if ALL required attributes are satisfied.
