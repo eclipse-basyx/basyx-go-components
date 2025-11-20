@@ -9,6 +9,9 @@ type mapMethodAndPatternToRights struct {
 }
 
 var mapMethodAndPatternToRightsData = []mapMethodAndPatternToRights{
+	// description endpoints
+	{"GET", "/description", []grammar.RightsEnum{grammar.RightsEnumREAD}},
+
 	// aas registry
 	{"GET", "/shell-descriptors/{aasIdentifier}", []grammar.RightsEnum{grammar.RightsEnumREAD}},
 	{"PUT", "/shell-descriptors/{aasIdentifier}", []grammar.RightsEnum{grammar.RightsEnumUPDATE}},
