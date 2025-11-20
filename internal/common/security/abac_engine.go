@@ -341,8 +341,24 @@ func normalize(p string) string {
 	p = path.Clean(p)
 	return p
 }
+func matchRouteACL(pattern, path string) bool {
+	pat := normalize(pattern)
+	p := normalize(path)
 
-func matchRoute(route string, userPath string) bool {
+	// Escape regex special chars, keep '*' for later
+	regex := regexp.QuoteMeta(pat)
+
+	// Simple ACL rule: * = .*
+	regex = strings.ReplaceAll(regex, `\*`, `.*`)
+
+	// Anchor
+	regex = "^" + regex + "$"
+
+	matched, _ := regexp.MatchString(regex, p)
+	return matched
+}
+
+func matchRouteANT(route string, userPath string) bool {
 	path := normalize(userPath)
 	pat := normalize(route)
 
@@ -448,7 +464,7 @@ func matchRouteObjectsObjItem(objs []grammar.ObjectItem, reqPath string) AccessW
 		switch oi.Kind {
 		case grammar.Route:
 
-			if matchRoute(oi.Route.Route, reqPath) {
+			if matchRouteACL(oi.Route.Route, reqPath) {
 				return AccessWithLE{access: true}
 			}
 
@@ -457,7 +473,7 @@ func matchRouteObjectsObjItem(objs []grammar.ObjectItem, reqPath string) AccessW
 			if desc != nil {
 				for _, routeWithFilter := range mapDesciptorValueToRoute(*desc) {
 
-					if matchRoute(routeWithFilter.route, reqPath) {
+					if matchRouteANT(routeWithFilter.route, reqPath) {
 						if routeWithFilter.le != nil {
 							access = true
 							locialExpressions = append(locialExpressions, *routeWithFilter.le)

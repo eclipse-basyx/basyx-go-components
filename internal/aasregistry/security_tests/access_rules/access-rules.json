@@ -8,7 +8,7 @@
 
     "DEFOBJECTS": [
       { "name": "health",               "objects": [ { "ROUTE": "/health" } ] },
-      { "name": "god",          "objects": [ { "ROUTE": "**" } ] },
+      { "name": "god",          "objects": [ { "ROUTE": "*" } ] },
       { "name": "description",          "objects": [ { "ROUTE": "/description" } ] },
       { "name": "shellDescriptorById",  "objects": [ { "ROUTE": "/shell-descriptors/*" } ] },
       { "name": "shellDescriptors",     "objects": [ { "ROUTE": "/shell-descriptors" } ] },
