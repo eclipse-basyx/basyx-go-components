@@ -102,6 +102,10 @@ func (m *AccessModel) AuthorizeWithFilter(in EvalInput) (ok bool, code DecisionC
 	for _, r := range all.Rules {
 		acl, attrs, objs, lexpr := materialize(all, r)
 
+		// Gate 0: check disabled
+		if acl.ACCESS == grammar.ACLACCESSDISABLED {
+			continue
+		}
 		// Gate 1: rights
 		if !rightsContains(acl.RIGHTS, right) {
 			continue

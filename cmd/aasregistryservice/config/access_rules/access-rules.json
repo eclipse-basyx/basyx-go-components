@@ -8,6 +8,7 @@
 
     "DEFOBJECTS": [
       { "name": "health",               "objects": [ { "ROUTE": "/health" } ] },
+      { "name": "god",          "objects": [ { "ROUTE": "**" } ] },
       { "name": "description",          "objects": [ { "ROUTE": "/description" } ] },
       { "name": "shellDescriptorById",  "objects": [ { "ROUTE": "/shell-descriptors/*" } ] },
       { "name": "shellDescriptors",     "objects": [ { "ROUTE": "/shell-descriptors" } ] },
@@ -17,8 +18,8 @@
     ],
     
     "DEFACLS": [
+      { "name": "disabled_god",   "acl": { "USEATTRIBUTES": "anonym_attr", "RIGHTS": ["CREATE", "READ", "UPDATE", "DELETE"],   "ACCESS": "DISABLED" } },
       { "name": "read_only_public",   "acl": { "USEATTRIBUTES": "anonym_attr", "RIGHTS": ["READ"],   "ACCESS": "ALLOW" } },
-      { "name": "read_only_public_disabled",   "acl": { "USEATTRIBUTES": "anonym_attr", "RIGHTS": ["READ"],   "ACCESS": "DISABLED" } },
       { "name": "write_role",   "acl": { "USEATTRIBUTES": "role_attr",    "RIGHTS": ["CREATE"],   "ACCESS": "ALLOW" } },
       { "name": "read_role", "acl": { "USEATTRIBUTES": "role_attr",    "RIGHTS": ["READ"], "ACCESS": "ALLOW" } },
       { "name": "write_member",   "acl": { "USEATTRIBUTES": "member_attr",    "RIGHTS": ["CREATE"],   "ACCESS": "ALLOW" } },
@@ -57,7 +58,7 @@
       },
       { "name": "isAdmin", "formula": { 
         "$and": [
-          {"$eq": [ {"$attribute": {"CLAIM": "role"}}, {"$strVal": "editor"}]},
+          {"$eq": [ {"$attribute": {"CLAIM": "role"}}, {"$strVal": "admin"}]},
           {"$ge": [ {"$numCast": { "$attribute": { "CLAIM": "clear" } } }, { "$numVal": 10 } ] }
         ] }
       },
@@ -69,6 +70,7 @@
       }
     ], 
     "rules": [
+      { "USEACL": "disabled_god", "USEOBJECTS": ["god"], "USEFORMULA": "always_true" },
       { "USEACL": "read_only_public", "USEOBJECTS": ["health"], "USEFORMULA": "always_true" },
       { "USEACL": "admin", "USEOBJECTS": ["allShellDescriptorsObject"], "USEFORMULA": "isAdmin" },
       { "USEACL": "read_only_public", "USEOBJECTS": ["allShellDescriptors"], "USEFORMULA": "is_public_readable" },
