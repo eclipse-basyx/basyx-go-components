@@ -1,4 +1,4 @@
-REGISTRY_SECURITY.md ? Developer Guide for AAS Registry Security
+Developer Guide for AAS Registry Security - (ai generated)
 ===============================================================
 
 Audience: backend/infra engineers touching the AAS Registry service (authn/z, routing, data path).
