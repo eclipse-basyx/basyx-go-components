@@ -95,6 +95,41 @@
     "eval": "eval/get_shellDescriptors_admin.json"
   },
   {
+    "input": "input/with_sm_descriptor_all.json",
+    "expected": "expected/access_allowed.json",
+    "eval": "eval/get_submodelDescriptors_collection_admin.json"
+  },
+  {
+    "input": "input/with_sm_descriptor_single.json",
+    "expected": "expected/access_allowed_with_qf_smdesc_id.json",
+    "eval": "eval/get_submodelDescriptors_collection_admin.json"
+  },
+  {
+    "input": "input/with_sm_descriptor_single.json",
+    "expected": "expected/access_allowed.json",
+    "eval": "eval/get_submodelDescriptors_item_admin.json"
+  },
+  {
+    "input": "input/with_sm_descriptor_single.json",
+    "expected": "expected/no_matching_rule.json",
+    "eval": "eval/get_submodelDescriptors_item_other.json"
+  },
+  {
+    "input": "input/with_sm_descriptor_multiple_rules_or.json",
+    "expected": "expected/access_allowed_multiple_rules_or_smdesc.json",
+    "eval": "eval/get_submodelDescriptors_collection_admin.json"
+  },
+  {
+    "input": "input/with_sm_descriptor_single_and_attribute.json",
+    "expected": "expected/access_allowed_with_qf_smdesc_semanticid.json",
+    "eval": "eval/get_submodelDescriptors_collection_admin.json"
+  },
+  {
+    "input": "input/with_sm_descriptor_single_and_attribute.json",
+    "expected": "expected/no_matching_rule.json",
+    "eval": "eval/get_submodelDescriptors_collection_member.json"
+  },
+  {
     "input": "input/test_attribute_constant.json",
     "expected": "expected/access_allowed_attr_constant.json",
     "eval": "eval/get_shellDescriptors_admin.json"

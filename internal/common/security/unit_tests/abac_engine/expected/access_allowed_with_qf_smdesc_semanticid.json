@@ -1,0 +1,30 @@
+{
+  "ok": true,
+  "queryFilter": {
+    "Formula": {
+      "$and": [
+        {
+          "$eq": [
+            {
+              "$field": "$smdesc#semanticId.keys[].value"
+            },
+            {
+              "$strVal": "0173-1#01-AFZ734#001"
+            }
+          ]
+        },
+        {
+          "$eq": [
+            {
+              "$field": "$smdesc#id"
+            },
+            {
+              "$strVal": "sm-123"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "reason": "ALLOW"
+}
