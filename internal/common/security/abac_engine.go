@@ -82,7 +82,10 @@ const (
 // It returns whether access is allowed, a human-readable reason, and an optional
 // QueryFilter for controllers to enforce (e.g., tenant scoping, redactions).
 func (m *AccessModel) AuthorizeWithFilter(in EvalInput) (ok bool, code DecisionCode, qf *QueryFilter) {
-	rights := m.mapMethodAndPathToRights(in)
+	rights, mapped := m.mapMethodAndPathToRights(in)
+	if !mapped {
+		return false, DecisionNoMatch, nil
+	}
 	all := m.gen.AllAccessPermissionRules
 
 	var ruleExprs []grammar.LogicalExpression

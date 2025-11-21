@@ -79,16 +79,18 @@ func resolveObjects(all grammar.AccessRuleModelSchemaJSONAllAccessPermissionRule
 	return out
 }
 
-func (m *AccessModel) mapMethodAndPathToRights(in EvalInput) []grammar.RightsEnum {
+// mapMethodAndPathToRights maps an incoming HTTP method+path to required rights.
+// It returns ok=false when no mapping is found so callers can deny by default.
+func (m *AccessModel) mapMethodAndPathToRights(in EvalInput) ([]grammar.RightsEnum, bool) {
 	for _, mapping := range mapMethodAndPatternToRightsData {
 		if mapping.Method == in.Method {
 			pattern := m.apiRouter.Find(m.rctx, in.Method, in.Path)
 			if mapping.Pattern == pattern {
-				return mapping.Rights
+				return mapping.Rights, true
 			}
 		}
 	}
-	return []grammar.RightsEnum{grammar.RightsEnumALL}
+	return nil, false
 }
 
 func rightsContainsAll(hay []grammar.RightsEnum, needles []grammar.RightsEnum) bool {
