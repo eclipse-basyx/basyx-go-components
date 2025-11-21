@@ -16,9 +16,9 @@ postgres:
 oidc:
   issuer: "http://localhost:8080/realms/basyx"
   audience: "discovery-service"
-  jwksURL: "" 
 
 abac:
   enabled: true
+  enableDebugErrorResponses: true
   clientRolesAudience: "discovery-service"
   modelPath: "config/access_rules/access-rules.json"

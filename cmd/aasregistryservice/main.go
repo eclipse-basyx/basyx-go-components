@@ -40,6 +40,9 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 
 	r := chi.NewRouter()
 
+	// Make configuration available in request contexts.
+	r.Use(common.ConfigMiddleware(cfg))
+
 	c := cors.New(cors.Options{
 		AllowedOrigins:   []string{"*"},
 		AllowedMethods:   []string{http.MethodGet, http.MethodPost, http.MethodDelete, http.MethodOptions, http.MethodPut, http.MethodPatch},
