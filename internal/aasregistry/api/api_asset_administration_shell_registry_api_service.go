@@ -274,18 +274,6 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) GetAllSubmodelDescriptor
 		return *resp, err
 	}
 
-	if qf := auth.GetQueryFilter(ctx); qf != nil && qf.Formula != nil {
-		result, resp, err := loadAASForAuth(ctx, s.aasRegistryBackend, decodedAAS, "GetAssetAdministrationShellDescriptorById")
-		if resp != nil || err != nil {
-			return *resp, err
-		}
-
-		if resp, err := enforceAccessForAAS(ctx, "GetAssetAdministrationShellDescriptorById", result); resp != nil || err != nil {
-			return *resp, err
-		}
-
-	}
-
 	// Check AAS existence
 	if exists, chkErr := s.aasRegistryBackend.ExistsAASByID(ctx, decodedAAS); chkErr != nil {
 		log.Printf("🧩 [%s] Error in GetAllSubmodelDescriptorsThroughSuperpath: existence check failed (aasId=%q): %v", componentName, decodedAAS, chkErr)

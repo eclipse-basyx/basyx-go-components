@@ -14,7 +14,11 @@
       { "name": "shellDescriptors",     "objects": [ { "ROUTE": "/shell-descriptors" } ] },
       { "name": "allShellDescriptors",  "objects": [ { "ROUTE": "/shell-descriptors" }, { "ROUTE": "/shell-descriptors/*" } ] },
       { "name": "allShellDescriptorsObject",  "objects": [ { "DESCRIPTOR": "$aasdesc(\"*\")"} ] },
-      { "name": "specialShellDescritpor",  "objects": [ { "DESCRIPTOR": "$aasdesc(\"https://example.org/X\")" } ] }
+      { "name": "specialShellDescritpor",  "objects": [ { "DESCRIPTOR": "$aasdesc(\"https://example.org/X\")" } ] },
+      { "name": "submodelDescriptorById",  "objects": [ { "ROUTE": "/shell-descriptors/*/submodel-descriptors/*" } ] },
+      { "name": "submodelDescriptors",     "objects": [ { "ROUTE": "/shell-descriptors/*/submodel-descriptors" } ] },
+      { "name": "allSubmodelDescriptors",  "objects": [ { "ROUTE": "/shell-descriptors/*/submodel-descriptors" }, { "ROUTE": "/shell-descriptors/*/submodel-descriptors/*" } ] },
+      { "name": "allSubmodelDescriptorsObject",  "objects": [ { "DESCRIPTOR": "$smdesc(\"*\")"} ] }
     ],
     
     "DEFACLS": [
@@ -67,6 +71,33 @@
           {"$eq": [ {"$attribute": {"CLAIM": "role"}}, {"$strVal": "test"}]},
           { "$boolean": true }
         ] }
+      },
+      { "name": "is_public_readable_sm", "formula": {"$eq": [ {"$field": "$smdesc#semanticId.keys[].value"}, {"$strVal": "PUBLIC_READABLE"}]} },
+      { "name": "isRole=viewer&customerHref_sm", "formula": { 
+        "$and": [
+          {"$eq": [ {"$attribute": {"CLAIM": "role"}}, {"$strVal": "viewer"}]},
+          {"$eq": [ {"$field": "$smdesc#endpoints[].protocolinformation.href"}, {"$strVal": "https://endpoint.example/customer"}]}
+        ] }
+      },
+      { "name": "isMember&manufacturerHref_sm", "formula": { 
+        "$and": [
+          {"$eq": [ {"$attribute": {"CLAIM": "role"}}, {"$strVal": "viewer"}]},
+          {"$ge": [ {"$numCast": { "$attribute": { "CLAIM": "clear" } } }, { "$numVal": 1 } ] },
+          {"$eq": [ {"$field": "$smdesc#endpoints[].protocolinformation.href"}, {"$strVal": "https://endpoint.example/manufacturer"}]}
+        ] }
+      },
+      { "name": "isRole=editor&X_sm", "formula": { 
+        "$and": [
+          {"$eq": [ {"$attribute": {"CLAIM": "role"}}, {"$strVal": "editor"}]},
+          {"$eq": [ {"$field": "$smdesc#semanticId.keys[].value"}, {"$strVal": "WRITTEN_BY_X"}]}
+        ] }
+      },
+      { "name": "isMember&Y_sm", "formula": { 
+        "$and": [
+          {"$eq": [ {"$attribute": {"CLAIM": "role"}}, {"$strVal": "editor"}]},
+          {"$ge": [ {"$numCast": { "$attribute": { "CLAIM": "clear" } } }, { "$numVal": 1 } ] },
+          {"$eq": [ {"$field": "$smdesc#semanticId.keys[].value"}, {"$strVal": "WRITTEN_BY_Y"}]}
+        ] }
       }
     ], 
     "rules": [
@@ -78,7 +109,14 @@
       { "USEACL": "read_member", "USEOBJECTS": ["allShellDescriptors"], "USEFORMULA": "isMember&manufacturerPartId" },
       { "USEACL": "write_role", "USEOBJECTS": ["allShellDescriptors"], "USEFORMULA": "isRole=editor&X" },
       { "USEACL": "write_member", "USEOBJECTS": ["allShellDescriptors"], "USEFORMULA": "isMember&Y" },
-      { "USEACL": "read_role", "OBJECTS": [{ "DESCRIPTOR": "$aasdesc(\"https://example.org/X\")" }], "USEFORMULA": "isTest" }
+      { "USEACL": "read_role", "OBJECTS": [{ "DESCRIPTOR": "$aasdesc(\"https://example.org/X\")" }], "USEFORMULA": "isTest" },
+
+      { "USEACL": "admin", "USEOBJECTS": ["allSubmodelDescriptorsObject"], "USEFORMULA": "isAdmin" },
+      { "USEACL": "read_only_public", "USEOBJECTS": ["allSubmodelDescriptors"], "USEFORMULA": "is_public_readable_sm" },
+      { "USEACL": "read_role", "USEOBJECTS": ["allSubmodelDescriptors"], "USEFORMULA": "isRole=viewer&customerHref_sm" },
+      { "USEACL": "read_member", "USEOBJECTS": ["allSubmodelDescriptors"], "USEFORMULA": "isMember&manufacturerHref_sm" },
+      { "USEACL": "write_role", "USEOBJECTS": ["allSubmodelDescriptors"], "USEFORMULA": "isRole=editor&X_sm" },
+      { "USEACL": "write_member", "USEOBJECTS": ["allSubmodelDescriptors"], "USEFORMULA": "isMember&Y_sm" }
     ]
   }
 }

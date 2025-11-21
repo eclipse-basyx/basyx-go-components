@@ -35,6 +35,7 @@ import (
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 )
 
 // ListSubmodelDescriptorsForAAS lists the SubmodelDescriptors that belong to a
@@ -104,6 +105,18 @@ func ListSubmodelDescriptorsForAAS(
 		return nil, "", err
 	}
 	list := append([]model.SubmodelDescriptor{}, m[descID]...)
+
+	// Apply ABAC query filter (if present) before pagination
+	if qf := auth.GetQueryFilter(ctx); qf != nil && qf.Formula != nil {
+		filtered := list[:0]
+		for _, smd := range list {
+			// Evaluate against the submodel descriptor; ignore errors by treating as no match
+			if ok, _ := qf.Formula.EvaluateSubmodelDescriptor(smd); ok {
+				filtered = append(filtered, smd)
+			}
+		}
+		list = filtered
+	}
 
 	sort.Slice(list, func(i, j int) bool {
 		return list[i].Id < list[j].Id

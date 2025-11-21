@@ -293,6 +293,10 @@ func normalizeFieldReference(field string) (string, error) {
 	case "$aasdesc":
 		return field, nil
 	case "$smdesc":
+		// Normalize common smdesc field casing to match JSON tags
+		rest = strings.ReplaceAll(rest, "protocolinformation", "protocolInformation")
+		rest = strings.ReplaceAll(rest, "semanticid", "semanticId")
+
 		base := "$aasdesc#submodelDescriptors[]"
 		if rest == "" {
 			return base, nil
