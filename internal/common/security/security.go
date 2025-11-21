@@ -33,6 +33,8 @@
 //   - ABAC policy-based authorization
 //   - Configurable security middleware for Chi routers
 //   - Role-based access control through JWT claims
+//
+// Author: Martin Stemmer ( Fraunhofer IESE )
 package auth
 
 import (

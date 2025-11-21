@@ -22,9 +22,8 @@
 *
 * SPDX-License-Identifier: MIT
 ******************************************************************************/
-
-// Package descriptors contains the data‑access helpers that read and write
 // Author: Martin Stemmer ( Fraunhofer IESE )
+
 package descriptors
 
 import (

@@ -22,11 +22,8 @@
 *
 * SPDX-License-Identifier: MIT
 ******************************************************************************/
-
-// Package auth provides ABAC (Attribute-Based Access Control) middleware and
-// helper utilities to enforce fine-grained authorization rules in BaSyx
-// services.
 // Author: Martin Stemmer ( Fraunhofer IESE )
+
 package auth
 
 import (

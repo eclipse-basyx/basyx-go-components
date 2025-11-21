@@ -22,8 +22,8 @@
 *
 * SPDX-License-Identifier: MIT
 ******************************************************************************/
-
 // Author: Martin Stemmer ( Fraunhofer IESE )
+
 package auth
 
 import (
