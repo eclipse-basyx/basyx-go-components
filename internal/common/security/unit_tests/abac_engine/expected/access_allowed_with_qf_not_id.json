@@ -1,0 +1,18 @@
+{
+  "ok": true,
+  "queryFilter": {
+    "Formula": {
+      "$not": {
+        "$eq": [
+          {
+            "$field": "$aasdesc#id"
+          },
+          {
+            "$strVal": "block-this"
+          }
+        ]
+      }
+    }
+  },
+  "reason": "ALLOW"
+}

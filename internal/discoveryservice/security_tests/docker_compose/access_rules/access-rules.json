@@ -130,7 +130,7 @@
       { "USEACL": "read_only_member",   "USEOBJECTS": ["shellsAny"],         "USEFORMULA": "role_ge_viewer_and_clear_ge_3" },
       { "USEACL": "create_only_member", "USEOBJECTS": ["shellsAny"],         "USEFORMULA": "role_ge_editor_and_clear_ge_5" },
       { "USEACL": "delete_only_member", "USEOBJECTS": ["shellsAny"],         "USEFORMULA": "admin_and_clear_ge_8" },
-      { "USEACL": "create_only_member", "USEOBJECTS": ["shellsByAssetLink"], "USEFORMULA": "role_ge_editor_and_clear_ge_6" }
+      { "USEACL": "read_only_member",   "USEOBJECTS": ["shellsByAssetLink"], "USEFORMULA": "role_ge_editor_and_clear_ge_6" }
     ]
   }
 }

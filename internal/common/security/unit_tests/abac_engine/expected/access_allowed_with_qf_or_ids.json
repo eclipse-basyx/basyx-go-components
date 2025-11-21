@@ -1,0 +1,30 @@
+{
+  "ok": true,
+  "queryFilter": {
+    "Formula": {
+      "$or": [
+        {
+          "$eq": [
+            {
+              "$field": "$aasdesc#id"
+            },
+            {
+              "$strVal": "id-123"
+            }
+          ]
+        },
+        {
+          "$eq": [
+            {
+              "$field": "$aasdesc#id"
+            },
+            {
+              "$strVal": "id-456"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "reason": "ALLOW"
+}

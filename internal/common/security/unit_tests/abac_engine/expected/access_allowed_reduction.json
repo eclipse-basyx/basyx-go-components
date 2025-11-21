@@ -1,0 +1,30 @@
+{
+  "ok": true,
+  "queryFilter": {
+    "Formula": { 
+      "$and": [
+        { 
+          "$eq": [
+            {
+              "$field": "$aasdesc#specificAssetIds[].name"
+            },
+            {
+              "$strVal": "manufacturerPartId"
+            }
+          ]
+        },
+        {
+          "$eq": [
+            {
+              "$field": "$aasdesc#id"
+            },
+            {
+              "$strVal": "https://martin.de"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "reason": "ALLOW"
+}

@@ -1,0 +1,14 @@
+{
+  "AllAccessPermissionRules": {
+    "rules": [
+      {
+        "ACL": {
+          "ACCESS": "ALLOW",
+          "RIGHTS": ["READ","UPDATE"]
+        },
+        "OBJECTS": [{"ROUTE" : "/*"}],
+        "FORMULA": {"$boolean": true}
+      }
+    ]
+  }
+}

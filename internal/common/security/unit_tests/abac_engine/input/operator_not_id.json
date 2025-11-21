@@ -1,0 +1,31 @@
+{
+  "AllAccessPermissionRules": {
+    "rules": [
+      {
+        "ACL": {
+          "ACCESS": "ALLOW",
+          "RIGHTS": [
+            "READ"
+          ]
+        },
+        "OBJECTS": [
+          {
+            "ROUTE": "/shell-descriptors"
+          }
+        ],
+        "FORMULA": {
+          "$not": {
+            "$eq": [
+              {
+                "$field": "$aasdesc#id"
+              },
+              {
+                "$strVal": "block-this"
+              }
+            ]
+          }
+        }
+      }
+    ]
+  }
+}

@@ -30,7 +30,7 @@ package grammar
 import (
 	"fmt"
 
-	jsoniter "github.com/json-iterator/go"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 )
 
 // AccessRuleModelSchemaJSONAllAccessPermissionRulesDEFACLSElem represents an Access Control List (ACL)
@@ -89,8 +89,7 @@ type AccessRuleModelSchemaJSONAllAccessPermissionRulesDEFACLSElem struct {
 //     is missing. Returns nil on successful unmarshaling and validation.
 func (j *AccessRuleModelSchemaJSONAllAccessPermissionRulesDEFACLSElem) UnmarshalJSON(value []byte) error {
 	var raw map[string]interface{}
-	var json = jsoniter.ConfigCompatibleWithStandardLibrary
-	if err := json.Unmarshal(value, &raw); err != nil {
+	if err := common.UnmarshalAndDisallowUnknownFields(value, &raw); err != nil {
 		return err
 	}
 	if _, ok := raw["acl"]; raw != nil && !ok {
@@ -101,7 +100,7 @@ func (j *AccessRuleModelSchemaJSONAllAccessPermissionRulesDEFACLSElem) Unmarshal
 	}
 	type Plain AccessRuleModelSchemaJSONAllAccessPermissionRulesDEFACLSElem
 	var plain Plain
-	if err := json.Unmarshal(value, &plain); err != nil {
+	if err := common.UnmarshalAndDisallowUnknownFields(value, &plain); err != nil {
 		return err
 	}
 	*j = AccessRuleModelSchemaJSONAllAccessPermissionRulesDEFACLSElem(plain)

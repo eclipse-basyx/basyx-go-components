@@ -1,0 +1,23 @@
+{
+  "AllAccessPermissionRules": {
+    "rules": [
+      {
+        "ACL": {
+          "ACCESS": "ALLOW",
+          "RIGHTS": [
+            "READ",
+            "UPDATE"
+          ]
+        },
+        "OBJECTS": [
+          {
+            "DESCRIPTOR": "$smdesc(\"*\")"
+          }
+        ],
+        "FORMULA": {
+          "$boolean": true
+        }
+      }
+    ]
+  }
+}

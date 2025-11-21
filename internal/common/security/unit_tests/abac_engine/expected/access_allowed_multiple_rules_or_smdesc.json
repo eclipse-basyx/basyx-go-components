@@ -1,0 +1,30 @@
+{
+  "ok": true,
+  "queryFilter": {
+    "Formula": {
+      "$or": [
+        {
+          "$eq": [
+            {
+              "$field": "$smdesc#id"
+            },
+            {
+              "$strVal": "sm-123"
+            }
+          ]
+        },
+        {
+          "$eq": [
+            {
+              "$field": "$smdesc#id"
+            },
+            {
+              "$strVal": "sm-999"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "reason": "ALLOW"
+}

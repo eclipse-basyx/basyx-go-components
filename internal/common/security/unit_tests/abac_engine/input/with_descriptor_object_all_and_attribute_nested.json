@@ -1,0 +1,55 @@
+{
+  "AllAccessPermissionRules": {
+    "rules": [
+      {
+        "ACL": {
+          "ACCESS": "ALLOW",
+          "RIGHTS": ["READ","UPDATE"],
+          "ATTRIBUTES": [{"CLAIM": "role"}]
+        },
+        "OBJECTS": [{"DESCRIPTOR" : "$aasdesc(\"*\")"}],
+        "FORMULA": { 
+          
+          "$and": [
+            { 
+              "$or": [
+                { 
+                  "$eq": [ 
+                    { 
+                      "$attribute": { "CLAIM": "role" } 
+                    }, 
+                    { 
+                      "$strVal": "admin" 
+                    } 
+                  ] 
+                },
+                {
+                  "$eq": [
+                    {
+                      "$field": "$aasdesc#specificAssetIds[].name"
+                    },
+                    {
+                      "$strVal": "manufacturerPartId"
+                    }
+                  ]
+                }
+              ]
+            },
+            
+            
+            {
+              "$eq": [
+                {
+                  "$field": "$aasdesc#specificAssetIds[].name"
+                },
+                {
+                  "$strVal": "manufacturerPartId"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

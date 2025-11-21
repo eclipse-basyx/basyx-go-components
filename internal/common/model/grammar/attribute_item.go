@@ -28,8 +28,9 @@
 package grammar
 
 import (
-	"encoding/json"
 	"fmt"
+
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 )
 
 // AttributeItem represents an attribute in the AAS access control grammar with its type and value.
@@ -91,7 +92,7 @@ var allowedGlobalVals = map[string]struct{}{
 //     key or global value, or if the value is not a string. Returns nil on success.
 func (a *AttributeItem) UnmarshalJSON(b []byte) error {
 	var raw map[string]interface{}
-	if err := json.Unmarshal(b, &raw); err != nil {
+	if err := common.UnmarshalAndDisallowUnknownFields(b, &raw); err != nil {
 		return err
 	}
 	if len(raw) != 1 {

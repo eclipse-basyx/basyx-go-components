@@ -1,10 +1,34 @@
+/*******************************************************************************
+* Copyright (C) 2025 the Eclipse BaSyx Authors and Fraunhofer IESE
+*
+* Permission is hereby granted, free of charge, to any person obtaining
+* a copy of this software and associated documentation files (the
+* "Software"), to deal in the Software without restriction, including
+* without limitation the rights to use, copy, modify, merge, publish,
+* distribute, sublicense, and/or sell copies of the Software, and to
+* permit persons to whom the Software is furnished to do so, subject to
+* the following conditions:
+*
+* The above copyright notice and this permission notice shall be
+* included in all copies or substantial portions of the Software.
+*
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+* NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+* LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+* OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+* WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*
+* SPDX-License-Identifier: MIT
+******************************************************************************/
+// Author: Martin Stemmer ( Fraunhofer IESE )
+
 package descriptors
 
 import (
 	"context"
 	"database/sql"
-	"fmt"
-	"time"
 
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
@@ -54,7 +78,6 @@ func ReadSpecificAssetIDsByDescriptorIDs(
 	db *sql.DB,
 	descriptorIDs []int64,
 ) (map[int64][]model.SpecificAssetID, error) {
-	start := time.Now()
 	out := make(map[int64][]model.SpecificAssetID, len(descriptorIDs))
 	if len(descriptorIDs) == 0 {
 		return out, nil
@@ -75,7 +98,9 @@ func ReadSpecificAssetIDsByDescriptorIDs(
 			sai.Col(colExternalSubjectRef),
 		).
 		Where(goqu.L("sai.descriptor_id = ANY(?::bigint[])", arr)).
-		Order(sai.Col(colDescriptorID).Asc(), sai.Col(colID).Asc()).
+		Order(
+			sai.Col("position").Asc(),
+		).
 		ToSQL()
 	if err != nil {
 		return nil, err
@@ -168,8 +193,6 @@ func ReadSpecificAssetIDsByDescriptorIDs(
 		}
 	}
 
-	duration := time.Since(start)
-	fmt.Printf("specific assetId block took %v to complete\n", duration)
 	return out, nil
 }
 

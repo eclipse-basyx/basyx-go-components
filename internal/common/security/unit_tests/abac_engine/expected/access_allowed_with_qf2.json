@@ -1,0 +1,16 @@
+{
+  "ok": true,
+  "queryFilter": {
+    "Formula": {
+      "$eq": [
+        {
+          "$field": "$aasdesc#specificAssetIds[].name"
+        },
+        {
+          "$strVal": "manufacturerPartId"
+        }
+      ]
+    }
+  },
+  "reason": "ALLOW"
+}

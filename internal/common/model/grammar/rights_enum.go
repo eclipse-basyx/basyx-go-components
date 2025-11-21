@@ -28,9 +28,10 @@
 package grammar
 
 import (
-	"encoding/json"
 	"fmt"
 	"reflect"
+
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 )
 
 // RightsEnum defines the enumeration for different rights in the grammar model.
@@ -74,7 +75,7 @@ var enumValuesRightsEnum = []interface{}{
 // UnmarshalJSON implements json.Unmarshaler.
 func (j *RightsEnum) UnmarshalJSON(value []byte) error {
 	var v string
-	if err := json.Unmarshal(value, &v); err != nil {
+	if err := common.UnmarshalAndDisallowUnknownFields(value, &v); err != nil {
 		return err
 	}
 	var ok bool

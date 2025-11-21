@@ -1,0 +1,16 @@
+{
+  "AllAccessPermissionRules": {
+    "rules": [
+      {
+        "USEACL": "form",
+        "OBJECTS": [{"DESCRIPTOR" : "$aasdesc(\"*\")"}],
+        "FORMULA": {
+          "$and": [
+            {"$boolean": true},
+            {"$eq": [{"$numVal": 1}, {"$numVal": 1}]}
+          ]
+        }
+      }
+    ]
+  }
+}

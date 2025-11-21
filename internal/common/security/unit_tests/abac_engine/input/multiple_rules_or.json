@@ -1,0 +1,34 @@
+{
+  "AllAccessPermissionRules": {
+    "rules": [
+      {
+        "ACL": {
+          "ACCESS": "ALLOW",
+          "RIGHTS": ["READ"]
+        },
+        "OBJECTS": [
+          {
+            "DESCRIPTOR": "$aasdesc(\"martin\")"
+          }
+        ],
+        "FORMULA": {
+          "$boolean": true
+        }
+      },
+      {
+        "ACL": {
+          "ACCESS": "ALLOW",
+          "RIGHTS": ["READ"]
+        },
+        "OBJECTS": [
+          {
+            "DESCRIPTOR": "$aasdesc(\"jannik\")"
+          }
+        ],
+        "FORMULA": {
+          "$boolean": true
+        }
+      }
+    ]
+  }
+}

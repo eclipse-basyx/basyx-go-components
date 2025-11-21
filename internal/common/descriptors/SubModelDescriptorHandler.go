@@ -1,3 +1,29 @@
+/*******************************************************************************
+* Copyright (C) 2025 the Eclipse BaSyx Authors and Fraunhofer IESE
+*
+* Permission is hereby granted, free of charge, to any person obtaining
+* a copy of this software and associated documentation files (the
+* "Software"), to deal in the Software without restriction, including
+* without limitation the rights to use, copy, modify, merge, publish,
+* distribute, sublicense, and/or sell copies of the Software, and to
+* permit persons to whom the Software is furnished to do so, subject to
+* the following conditions:
+*
+* The above copyright notice and this permission notice shall be
+* included in all copies or substantial portions of the Software.
+*
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+* NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+* LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+* OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+* WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*
+* SPDX-License-Identifier: MIT
+******************************************************************************/
+// Author: Martin Stemmer ( Fraunhofer IESE )
+
 package descriptors
 
 import (
@@ -9,6 +35,7 @@ import (
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 )
 
 // ListSubmodelDescriptorsForAAS lists the SubmodelDescriptors that belong to a
@@ -73,11 +100,23 @@ func ListSubmodelDescriptorsForAAS(
 		return nil, "", common.NewInternalServerError("Failed to query AAS descriptor id. See server logs for details.")
 	}
 
-    m, err := ReadSubmodelDescriptorsByAASDescriptorIDs(ctx, db, []int64{descID})
+	m, err := ReadSubmodelDescriptorsByAASDescriptorIDs(ctx, db, []int64{descID})
 	if err != nil {
 		return nil, "", err
 	}
 	list := append([]model.SubmodelDescriptor{}, m[descID]...)
+
+	// Apply ABAC query filter (if present) before pagination
+	if qf := auth.GetQueryFilter(ctx); qf != nil && qf.Formula != nil {
+		filtered := list[:0]
+		for _, smd := range list {
+			// Evaluate against the submodel descriptor; ignore errors by treating as no match
+			if ok, _ := qf.Formula.EvaluateSubmodelDescriptor(smd); ok {
+				filtered = append(filtered, smd)
+			}
+		}
+		list = filtered
+	}
 
 	sort.Slice(list, func(i, j int) bool {
 		return list[i].Id < list[j].Id
@@ -279,7 +318,7 @@ func GetSubmodelDescriptorForAASByID(
 		return model.SubmodelDescriptor{}, common.NewInternalServerError("Failed to query AAS descriptor id. See server logs for details.")
 	}
 
-    m, err := ReadSubmodelDescriptorsByAASDescriptorIDs(ctx, db, []int64{descID})
+	m, err := ReadSubmodelDescriptorsByAASDescriptorIDs(ctx, db, []int64{descID})
 	if err != nil {
 		return model.SubmodelDescriptor{}, err
 	}

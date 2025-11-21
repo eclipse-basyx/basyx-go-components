@@ -1,3 +1,0 @@
-~/bin/kcadm.sh config credentials --server http://localhost:8080 --realm master --user admin --password admin
-~/bin/kc.sh export --dir /tmp/export --users realm_file
-podman cp 60303f841b34:/tmp/export .\keycloak\realm\

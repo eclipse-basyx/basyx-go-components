@@ -1,0 +1,8 @@
+{
+  "method": "GET",
+  "path": "/shell-descriptors/aas1/submodel-descriptors/c20tMTIz",
+  "claims": {
+    "role": "admin"
+  },
+  "issued_utc": "2025-11-12T14:00:00Z"
+}

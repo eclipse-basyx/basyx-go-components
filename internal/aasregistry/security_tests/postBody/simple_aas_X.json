@@ -1,0 +1,18 @@
+{
+  "id": "https://example.org/X",
+  "specificAssetIds": [
+    {
+      "name": "producerPartId",
+      "value": "248795",
+      "externalSubjectId": {
+        "type": "ExternalReference",
+        "keys": [
+          {
+            "type": "GlobalReference",
+            "value": "SPECIAL"
+          }
+        ]
+      }
+    }
+  ]
+}

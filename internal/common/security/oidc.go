@@ -22,11 +22,8 @@
 *
 * SPDX-License-Identifier: MIT
 ******************************************************************************/
-
-// Package auth contains OIDC verification and request authentication middleware
-// used by BaSyx components. It validates incoming Bearer tokens, extracts
-// claims into the request context, and optionally allows anonymous access.
 // Author: Martin Stemmer ( Fraunhofer IESE )
+
 package auth
 
 import (
@@ -88,9 +85,6 @@ func NewOIDC(ctx context.Context, s OIDCSettings) (*OIDC, error) {
 	log.Printf("✅ OIDC verifier created. Issuer=%s Audience=%s", s.Issuer, s.Audience)
 	return &OIDC{verifier: v, settings: s}, nil
 }
-
-// Claims represents token claims extracted from a verified ID token.
-type Claims map[string]any
 
 type ctxKey string
 

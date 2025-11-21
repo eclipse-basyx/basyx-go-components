@@ -1,0 +1,29 @@
+{
+  "AllAccessPermissionRules": {
+    "rules": [
+      {
+        "ACL": {
+          "ACCESS": "ALLOW",
+          "RIGHTS": [
+            "READ"
+          ]
+        },
+        "OBJECTS": [
+          {
+            "ROUTE": "/shell-descriptors"
+          }
+        ],
+        "FORMULA": {
+          "$contains": [
+            {
+              "$field": "$aasdesc#endpoints[].protocolinformation.href"
+            },
+            {
+              "$strVal": "customer"
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

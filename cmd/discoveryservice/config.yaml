@@ -16,7 +16,6 @@ postgres:
 oidc:
   issuer: "http://localhost:8080/realms/basyx"
   audience: "discovery-service"
-  jwksURL: "" 
 
 abac:
   enabled: false

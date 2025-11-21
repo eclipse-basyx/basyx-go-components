@@ -1,16 +1,42 @@
+/*******************************************************************************
+* Copyright (C) 2025 the Eclipse BaSyx Authors and Fraunhofer IESE
+*
+* Permission is hereby granted, free of charge, to any person obtaining
+* a copy of this software and associated documentation files (the
+* "Software"), to deal in the Software without restriction, including
+* without limitation the rights to use, copy, modify, merge, publish,
+* distribute, sublicense, and/or sell copies of the Software, and to
+* permit persons to whom the Software is furnished to do so, subject to
+* the following conditions:
+*
+* The above copyright notice and this permission notice shall be
+* included in all copies or substantial portions of the Software.
+*
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+* NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+* LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+* OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+* WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*
+* SPDX-License-Identifier: MIT
+******************************************************************************/
+// Author: Martin Stemmer ( Fraunhofer IESE )
+
 package descriptors
 
 import (
-    "context"
-    "database/sql"
-    "encoding/json"
-    "fmt"
+	"context"
+	"database/sql"
+	"encoding/json"
+	"fmt"
 
-    "github.com/doug-martin/goqu/v9"
-    // nolint:revive
-    _ "github.com/doug-martin/goqu/v9/dialect/postgres"
-    "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
-    "github.com/lib/pq"
+	"github.com/doug-martin/goqu/v9"
+	// nolint:revive
+	_ "github.com/doug-martin/goqu/v9/dialect/postgres"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	"github.com/lib/pq"
 )
 
 // ReadEndpointsByDescriptorID returns all endpoints that belong to a single
@@ -43,7 +69,7 @@ func ReadEndpointsByDescriptorID(
 // without querying the database.
 //
 // Result semantics and ordering:
-// - Endpoints are ordered by descriptor_id ASC, then endpoint id ASC.
+// - Endpoints are ordered by descriptor_id ASC, then position ASC, then endpoint id ASC.
 // - Protocol versions are aggregated per-endpoint and ordered by version row id.
 // - Security attributes are aggregated per-endpoint and ordered by attribute row id.
 // - Nullable text columns are COALESCE'd to empty strings; arrays default to empty.
@@ -66,65 +92,65 @@ func ReadEndpointsByDescriptorIDs(
 		return out, nil
 	}
 
-    d := goqu.Dialect(dialect)
-    arr := pq.Array(descriptorIDs)
+	d := goqu.Dialect(dialect)
+	arr := pq.Array(descriptorIDs)
 
-    e := goqu.T(tblAASDescriptorEndpoint).As("e")
-    v := goqu.T(tblEndpointProtocolVersion).As("v")
-    s := goqu.T(tblSecurityAttributes).As("s")
+	e := goqu.T(tblAASDescriptorEndpoint).As("e")
+	v := goqu.T(tblEndpointProtocolVersion).As("v")
+	s := goqu.T(tblSecurityAttributes).As("s")
 
-    ds := d.
-        From(e).
-        LeftJoin(
-            v,
-            goqu.On(v.Col(colEndpointID).Eq(e.Col(colID))),
-        ).
-        LeftJoin(
-            s,
-            goqu.On(s.Col(colEndpointID).Eq(e.Col(colID))),
-        ).
-        Where(goqu.L(fmt.Sprintf("e.%s = ANY(?::bigint[])", colDescriptorID), arr)).
-        Select(
-            e.Col(colDescriptorID),
-            e.Col(colID),
-            goqu.Func("COALESCE", e.Col(colHref), "").As(colHref),
-            goqu.Func("COALESCE", e.Col(colEndpointProtocol), "").As(colEndpointProtocol),
-            goqu.Func("COALESCE", e.Col(colSubProtocol), "").As(colSubProtocol),
-            goqu.Func("COALESCE", e.Col(colSubProtocolBody), "").As(colSubProtocolBody),
-            goqu.Func("COALESCE", e.Col(colSubProtocolBodyEncoding), "").As(colSubProtocolBodyEncoding),
-            goqu.Func("COALESCE", e.Col(colInterface), "").As(colInterface),
+	ds := d.
+		From(e).
+		LeftJoin(
+			v,
+			goqu.On(v.Col(colEndpointID).Eq(e.Col(colID))),
+		).
+		LeftJoin(
+			s,
+			goqu.On(s.Col(colEndpointID).Eq(e.Col(colID))),
+		).
+		Where(goqu.L(fmt.Sprintf("e.%s = ANY(?::bigint[])", colDescriptorID), arr)).
+		Select(
+			e.Col(colDescriptorID),
+			e.Col(colID),
+			goqu.Func("COALESCE", e.Col(colHref), "").As(colHref),
+			goqu.Func("COALESCE", e.Col(colEndpointProtocol), "").As(colEndpointProtocol),
+			goqu.Func("COALESCE", e.Col(colSubProtocol), "").As(colSubProtocol),
+			goqu.Func("COALESCE", e.Col(colSubProtocolBody), "").As(colSubProtocolBody),
+			goqu.Func("COALESCE", e.Col(colSubProtocolBodyEncoding), "").As(colSubProtocolBodyEncoding),
+			goqu.Func("COALESCE", e.Col(colInterface), "").As(colInterface),
 
-            // versions
-            goqu.L(
-                fmt.Sprintf(
-                    "COALESCE(ARRAY_AGG(v.%s ORDER BY v.%s)\n                  FILTER (WHERE v.%s IS NOT NULL), '{}')",
-                    colEndpointProtocolVersion, colID, colEndpointProtocolVersion,
-                ),
-            ).As("versions"),
+			// versions
+			goqu.L(
+				fmt.Sprintf(
+					"COALESCE(ARRAY_AGG(v.%s ORDER BY v.%s)\n                  FILTER (WHERE v.%s IS NOT NULL), '{}')",
+					colEndpointProtocolVersion, colID, colEndpointProtocolVersion,
+				),
+			).As("versions"),
 
-            // sec_attrs
-            goqu.L(
-                fmt.Sprintf(
-                    "COALESCE(JSON_AGG(JSON_BUILD_OBJECT(\n                    'type', s.%s,\n                    'key', s.%s,\n                    'value', s.%s\n                  ) ORDER BY s.%s)\n                  FILTER (WHERE s.%s IS NOT NULL), '[]')",
-                    colSecurityType, colSecurityKey, colSecurityValue, colID, colSecurityType,
-                ),
-            ).As("sec_attrs"),
-        ).
-        GroupBy(
-            e.Col(colDescriptorID),
-            e.Col(colID),
-            e.Col(colHref),
-            e.Col(colEndpointProtocol),
-            e.Col(colSubProtocol),
-            e.Col(colSubProtocolBody),
-            e.Col(colSubProtocolBodyEncoding),
-            e.Col(colInterface),
-        ).
-        Order(
-            e.Col(colDescriptorID).Asc(),
-            e.Col(colID).Asc(),
-        ).
-        Prepared(true)
+			// sec_attrs
+			goqu.L(
+				fmt.Sprintf(
+					"COALESCE(JSON_AGG(JSON_BUILD_OBJECT(\n                    'type', s.%s,\n                    'key', s.%s,\n                    'value', s.%s\n                  ) ORDER BY s.%s)\n                  FILTER (WHERE s.%s IS NOT NULL), '[]')",
+					colSecurityType, colSecurityKey, colSecurityValue, colID, colSecurityType,
+				),
+			).As("sec_attrs"),
+		).
+		GroupBy(
+			e.Col(colDescriptorID),
+			e.Col(colPosition),
+			e.Col(colID),
+			e.Col(colHref),
+			e.Col(colEndpointProtocol),
+			e.Col(colSubProtocol),
+			e.Col(colSubProtocolBody),
+			e.Col(colSubProtocolBodyEncoding),
+			e.Col(colInterface),
+		).
+		Order(
+			e.Col(colPosition).Asc(),
+		).
+		Prepared(true)
 
 	sqlStr, args, err := ds.ToSQL()
 	if err != nil {

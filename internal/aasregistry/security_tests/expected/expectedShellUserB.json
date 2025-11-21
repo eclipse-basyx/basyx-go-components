@@ -1,0 +1,81 @@
+{
+  "PagingMetadata": {},
+  "Result": [
+    {
+      "id": "https://example.org/A",
+      "specificAssetIds": [
+        {
+          "name": "customerPartId",
+          "value": "248795",
+          "externalSubjectId": {
+            "type": "ExternalReference",
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "PUBLIC_READABLE"
+              },
+              {
+                "type": "GlobalReference",
+                "value": "WRITTEN_BY_X"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "https://example.org/B",
+      "specificAssetIds": [
+        {
+          "name": "customerPartId",
+          "value": "39480543",
+          "externalSubjectId": {
+            "type": "ExternalReference",
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "WRITTEN_BY_Y"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "https://example.org/C",
+      "specificAssetIds": [
+        {
+          "name": "manufacturerPartId",
+          "value": "23749",
+          "externalSubjectId": {
+            "type": "ExternalReference",
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "WRITTEN_BY_Y"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "https://example.org/D",
+      "specificAssetIds": [
+        {
+          "name": "manufacturerPartId",
+          "value": "2389048",
+          "externalSubjectId": {
+            "type": "ExternalReference",
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "WRITTEN_BY_X"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

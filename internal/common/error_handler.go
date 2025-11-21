@@ -229,3 +229,28 @@ func NewErrorResponse(err error, errorCode int, component string, function strin
 		},
 	)
 }
+
+// NewAccessDeniedResponse returns a standardized HTTP 403 Forbidden error response.
+//
+// This function is used when a request is not allowed to proceed due to missing
+// or invalid permissions. To avoid leaking internal implementation details,
+// the response is intentionally generic and does not expose information about
+// where or why the access decision was made.
+//
+// All access-denied situations intentionally produce the exact same structure,
+// making it harder for callers to infer internal logic, rule configurations,
+// or authorization paths.
+//
+// Returns:
+//   - model.ImplResponse: A standardized 403 Forbidden response with a fixed
+//     error message and correlation code pattern.
+//
+// Example:
+//
+//	response := NewAccessDeniedResponse()
+//	// Produces a consistent "access denied" error without internal metadata.
+func NewAccessDeniedResponse() model.ImplResponse {
+	return NewErrorResponse(
+		errors.New("access denied"), http.StatusForbidden, "Middleware", "Rules", "Denied",
+	)
+}

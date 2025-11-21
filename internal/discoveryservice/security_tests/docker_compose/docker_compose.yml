@@ -33,7 +33,8 @@ services:
       - OIDC_ISSUER=http://localhost:8080/realms/basyx
       - OIDC_AUDIENCE=discovery-service
       - ABAC_ENABLED=true
-      - ABAC_MODELPATH=/config/access_rules/access-rules.json
+      - ENABLE_DEBUG_ERROR_RESPONSES=true
+      - ABAC_MODELPATH=/config/access_rules/access-rules.json 
     ports:
       - "5004:5004"
     depends_on:

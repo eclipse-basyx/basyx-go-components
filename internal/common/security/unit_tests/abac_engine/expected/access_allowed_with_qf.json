@@ -1,0 +1,17 @@
+{
+  "ok": true,
+  "reason": "ALLOW",
+  "queryFilter": {
+    "Formula": {
+      "$eq": [
+        {
+          "$field": "$aasdesc#id"
+        },
+        {
+          "$strVal": "https://martin.de"
+        }
+      ]
+    }
+  }
+}
+      
