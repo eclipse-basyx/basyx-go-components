@@ -143,5 +143,45 @@
     "input": "input/numcastformula.json",
     "expected": "expected/access_allowed.json",
     "eval": "eval/get_shellDescriptors_member.json"
+  },
+  {
+    "input": "input/operator_num_ge.json",
+    "expected": "expected/access_allowed_num_ge.json",
+    "eval": "eval/get_shellDescriptors_viewer_clear2.json"
+  },
+  {
+    "input": "input/operator_num_lt.json",
+    "expected": "expected/access_allowed.json",
+    "eval": "eval/get_shellDescriptors_viewer_clear0.json"
+  },
+  {
+    "input": "input/operator_contains_href.json",
+    "expected": "expected/access_allowed_with_qf_contains_href.json",
+    "eval": "eval/get_shellDescriptors_viewer_clear2.json"
+  },
+  {
+    "input": "input/operator_regex_href.json",
+    "expected": "expected/access_allowed_with_qf_regex_href.json",
+    "eval": "eval/get_shellDescriptors_viewer_clear2.json"
+  },
+  {
+    "input": "input/operator_and_attr_field.json",
+    "expected": "expected/access_allowed_with_qf_and_attr_field.json",
+    "eval": "eval/get_shellDescriptors_viewer_clear2.json"
+  },
+  {
+    "input": "input/operator_or_two_ids.json",
+    "expected": "expected/access_allowed_with_qf_or_ids.json",
+    "eval": "eval/get_shellDescriptors_viewer_clear2.json"
+  },
+  {
+    "input": "input/operator_not_id.json",
+    "expected": "expected/access_allowed_with_qf_not_id.json",
+    "eval": "eval/get_shellDescriptors_viewer_clear2.json"
+  },
+  {
+    "input": "input/operator_boolean_false.json",
+    "expected": "expected/no_matching_rule.json",
+    "eval": "eval/get_shellDescriptors_viewer_clear2.json"
   }
 ]

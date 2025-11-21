@@ -1,0 +1,45 @@
+{
+  "AllAccessPermissionRules": {
+    "rules": [
+      {
+        "ACL": {
+          "ACCESS": "ALLOW",
+          "RIGHTS": [
+            "READ"
+          ]
+        },
+        "OBJECTS": [
+          {
+            "ROUTE": "/shell-descriptors"
+          }
+        ],
+        "FORMULA": {
+          "$and": [
+            {
+              "$eq": [
+                {
+                  "$attribute": {
+                    "CLAIM": "role"
+                  }
+                },
+                {
+                  "$strVal": "viewer"
+                }
+              ]
+            },
+            {
+              "$eq": [
+                {
+                  "$field": "$aasdesc#id"
+                },
+                {
+                  "$strVal": "id-123"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,43 @@
+{
+  "AllAccessPermissionRules": {
+    "rules": [
+      {
+        "ACL": {
+          "ACCESS": "ALLOW",
+          "RIGHTS": [
+            "READ"
+          ]
+        },
+        "OBJECTS": [
+          {
+            "ROUTE": "/shell-descriptors"
+          }
+        ],
+        "FORMULA": {
+          "$or": [
+            {
+              "$eq": [
+                {
+                  "$field": "$aasdesc#id"
+                },
+                {
+                  "$strVal": "id-123"
+                }
+              ]
+            },
+            {
+              "$eq": [
+                {
+                  "$field": "$aasdesc#id"
+                },
+                {
+                  "$strVal": "id-456"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    ]
+  }
+}
