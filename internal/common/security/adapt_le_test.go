@@ -73,16 +73,16 @@ func TestAdaptLEForBackend(t *testing.T) {
 		t.Fatalf("empty manifest: %s", manifest)
 	}
 
-    for _, c := range cases {
-        c := c
-        t.Run(c.Input, func(t *testing.T) {
-            inPath := filepath.Join(base, c.Input)
-            expPath := filepath.Join(base, c.Expected)
-            if c.Ctx != "" {
-                t.Logf("case: input=%s expected=%s ctx=%s", inPath, expPath, filepath.Join(base, c.Ctx))
-            } else {
-                t.Logf("case: input=%s expected=%s", inPath, expPath)
-            }
+	for _, c := range cases {
+		c := c
+		t.Run(c.Input, func(t *testing.T) {
+			inPath := filepath.Join(base, c.Input)
+			expPath := filepath.Join(base, c.Expected)
+			if c.Ctx != "" {
+				t.Logf("case: input=%s expected=%s ctx=%s", inPath, expPath, filepath.Join(base, c.Ctx))
+			} else {
+				t.Logf("case: input=%s expected=%s", inPath, expPath)
+			}
 
 			raw, err := os.ReadFile(inPath)
 			if err != nil {
@@ -115,17 +115,17 @@ func TestAdaptLEForBackend(t *testing.T) {
 				}
 			}
 
-            adapted, _ := adaptLEForBackend(le, claims, now)
-            got := normJSON(adapted)
+			adapted, _ := adaptLEForBackend(le, claims, now)
+			got := normJSON(adapted)
 
 			want, err := os.ReadFile(expPath)
 			if err != nil {
 				t.Fatalf("read expected: %v", err)
 			}
-            if !bytes.Equal(canon(got), canon(bytes.TrimSpace(want))) {
-                t.Fatalf("adapt mismatch\n--- got ---\n%s\n--- want ---\n%s", pretty(got), pretty(want))
-            }
-            t.Log("ok: adaptLEForBackend matched expected output")
-        })
-    }
+			if !bytes.Equal(canon(got), canon(bytes.TrimSpace(want))) {
+				t.Fatalf("adapt mismatch\n--- got ---\n%s\n--- want ---\n%s", pretty(got), pretty(want))
+			}
+			t.Log("ok: adaptLEForBackend matched expected output")
+		})
+	}
 }

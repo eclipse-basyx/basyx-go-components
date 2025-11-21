@@ -27,6 +27,7 @@
 package auth
 
 import (
+	"encoding/json"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -34,6 +35,7 @@ import (
 	"time"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
+	jsoniter "github.com/json-iterator/go"
 )
 
 func resolveGlobalToken(name string, now time.Time) (string, bool) {
@@ -921,5 +923,36 @@ func stringValueFromDate(v grammar.Value) string {
 		return time.Time(*v.DayOfWeek).Weekday().String()
 	default:
 		return ""
+	}
+}
+
+// asStringMap attempts to normalize arbitrary map-like values into a
+// map[string]string, best-effort. Useful when claims or attributes may be
+// represented heterogeneously by upstream libraries.
+func asStringMap(v any) (map[string]string, bool) {
+	switch vv := v.(type) {
+	case map[string]string:
+		return vv, true
+	case map[string]any:
+		out := make(map[string]string, len(vv))
+		for k, val := range vv {
+			out[k] = fmt.Sprint(val)
+		}
+		return out, true
+	default:
+		b, err := json.Marshal(v)
+		if err != nil {
+			return nil, false
+		}
+		var m map[string]any
+		var json = jsoniter.ConfigCompatibleWithStandardLibrary
+		if err := json.Unmarshal(b, &m); err != nil {
+			return nil, false
+		}
+		out := make(map[string]string, len(m))
+		for k, val := range m {
+			out[k] = fmt.Sprint(val)
+		}
+		return out, true
 	}
 }
