@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
@@ -120,6 +122,53 @@ func TestAdaptLEForBackend(t *testing.T) {
 				t.Fatalf("adapt mismatch\n--- got ---\n%s\n--- want ---\n%s", pretty(got), pretty(want))
 			}
 			t.Log("ok: adaptLEForBackend matched expected output")
+		})
+	}
+}
+
+func TestParseAccessModelInvalid(t *testing.T) {
+	t.Parallel()
+
+	apiRouter := chi.NewRouter()
+	smCtrl := apis.NewAssetAdministrationShellRegistryAPIAPIController(nil, "/*")
+	for _, rt := range smCtrl.Routes() {
+		apiRouter.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
+	}
+
+	cases := []struct {
+		name     string
+		file     string
+		wantPart string
+	}{
+		{"missing_root", "invalid_missing_root.json", "AllAccessPermissionRules"},
+		{"missing_acl", "invalid_missing_acl.json", "exactly one of ACL or USEACL"},
+		{"both_acl_and_useacl", "invalid_both_acl_and_useacl.json", "only one of ACL or USEACL"},
+		{"missing_formula", "invalid_missing_formula.json", "exactly one of FORMULA or USEFORMULA"},
+		{"useacl_unknown", "invalid_useacl_unknown.json", `USEACL "missing" not found`},
+		{"useformula_unknown", "invalid_useformula_unknown.json", `USEFORMULA "missing" not found`},
+		{"useattributes_unknown", "invalid_useattributes_unknown.json", `USEATTRIBUTES "missing" not found`},
+		{"useobjects_unknown", "invalid_useobjects_unknown.json", `USEOBJECTS "missing" not found`},
+		{"useobjects_cycle", "invalid_useobjects_cycle.json", `circular USEOBJECTS reference involving "A"`},
+		{"duplicate_defacls", "invalid_duplicate_defacls.json", `DEFACLS: duplicate name "dup"`},
+	}
+
+	for _, c := range cases {
+		c := c
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			path := filepath.Join("invalid", c.file)
+			raw, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatalf("read input: %v", err)
+			}
+
+			_, err = auth.ParseAccessModel(raw, apiRouter)
+			if err == nil {
+				t.Fatalf("expected error but got nil")
+			}
+			if c.wantPart != "" && !strings.Contains(err.Error(), c.wantPart) {
+				t.Fatalf("error mismatch\nwant contains: %q\ngot: %v", c.wantPart, err)
+			}
 		})
 	}
 }

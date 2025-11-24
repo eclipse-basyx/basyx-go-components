@@ -102,6 +102,7 @@ const (
 // AuthorizeWithFilter evaluates the request against the model rules in order.
 // It returns whether access is allowed, a human-readable reason, and an optional
 // QueryFilter for controllers to enforce (e.g., tenant scoping, redactions).
+// It is important that this function does not throw errors. It either gives access or no access.
 func (m *AccessModel) AuthorizeWithFilter(in EvalInput) (ok bool, code DecisionCode, qf *QueryFilter) {
 	rights, mapped := m.mapMethodAndPathToRights(in)
 	if !mapped {
@@ -150,8 +151,8 @@ func (m *AccessModel) AuthorizeWithFilter(in EvalInput) (ok bool, code DecisionC
 
 		// Gate 4: formula → adapt for backend filtering
 		if combinedLE == nil {
-			// rule has no formula → grants full access
-			return true, DecisionAllow, nil
+			// rule has no formula: should not happen -> deny access
+			return false, DecisionNoMatch, nil
 		}
 
 		adapted, onlyBool := adaptLEForBackend(*combinedLE, in.Claims, in.IssuedUTC)
