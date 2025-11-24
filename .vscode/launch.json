@@ -37,6 +37,19 @@
                 "-databaseSchema",
                 "${workspaceFolder}/basyxschema.sql"
             ]
+        },
+        {
+            "name": "Launch AAS Repository Service",
+            "type": "go",
+            "request": "launch",
+            "mode": "debug",
+            "program": "${workspaceFolder}/cmd/aasrepositoryservice/main.go",
+            "args": [
+                "-config",
+                "${workspaceFolder}/cmd/aasrepositoryservice/config.yaml",
+                "-databaseSchema",
+                "${workspaceFolder}/basyxschema.sql"
+            ]
         }
     ]
 }
