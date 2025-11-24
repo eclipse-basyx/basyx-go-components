@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	apis "github.com/eclipse-basyx/basyx-go-components/pkg/aasregistryapi"
@@ -169,6 +170,103 @@ func TestParseAccessModelInvalid(t *testing.T) {
 			if c.wantPart != "" && !strings.Contains(err.Error(), c.wantPart) {
 				t.Fatalf("error mismatch\nwant contains: %q\ngot: %v", c.wantPart, err)
 			}
+		})
+	}
+}
+
+func TestAuthorizeWithFilterResilience(t *testing.T) {
+	t.Parallel()
+
+	apiRouter := chi.NewRouter()
+	smCtrl := apis.NewAssetAdministrationShellRegistryAPIAPIController(nil, "/*")
+	for _, rt := range smCtrl.Routes() {
+		apiRouter.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
+	}
+
+	type resilientCase struct {
+		name string
+		json string
+		eval auth.EvalInput
+	}
+
+	baseEval := auth.EvalInput{
+		Method:    "GET",
+		Path:      "/shell-descriptors",
+		IssuedUTC: time.Now().UTC(),
+		Claims:    auth.Claims{"role": "viewer"},
+	}
+
+	cases := []resilientCase{
+		{
+			name: "invalid_regex_pattern_does_not_panic",
+			json: `{
+				"AllAccessPermissionRules": {
+					"rules": [{
+						"ACL": {"ACCESS":"ALLOW","RIGHTS":["READ"]},
+						"OBJECTS": [{"ROUTE": "/shell-descriptors"}],
+						"FORMULA": {"$regex": [ {"$strVal": "foo"}, {"$strVal": "["} ]}
+					}]
+				}
+			}`,
+			eval: baseEval,
+		},
+		{
+			name: "non_numeric_compare_does_not_panic",
+			json: `{
+				"AllAccessPermissionRules": {
+					"rules": [{
+						"ACL": {"ACCESS":"ALLOW","RIGHTS":["READ"]},
+						"OBJECTS": [{"ROUTE": "/shell-descriptors"}],
+						"FORMULA": {"$gt": [ {"$attribute":{"CLAIM":"role"}}, {"$strVal":"not-a-number"} ]}
+					}]
+				}
+			}`,
+			eval: baseEval,
+		},
+		{
+			name: "invalid_time_compare_does_not_panic",
+			json: `{
+				"AllAccessPermissionRules": {
+					"rules": [{
+						"ACL": {"ACCESS":"ALLOW","RIGHTS":["READ"]},
+						"OBJECTS": [{"ROUTE": "/shell-descriptors"}],
+						"FORMULA": {"$gt": [ {"$strVal":"not-a-time"}, {"$strVal":"2020-01-01T00:00:00Z"} ]}
+					}]
+				}
+			}`,
+			eval: baseEval,
+		},
+		{
+			name: "unknown_global_token_does_not_panic",
+			json: `{
+				"AllAccessPermissionRules": {
+					"rules": [{
+						"ACL": {"ACCESS":"ALLOW","RIGHTS":["READ"]},
+						"OBJECTS": [{"ROUTE": "/shell-descriptors"}],
+						"FORMULA": {"$eq": [ {"$attribute":{"GLOBAL":"unknown"}}, {"$strVal":"x"} ]}
+					}]
+				}
+			}`,
+			eval: baseEval,
+		},
+	}
+
+	for _, c := range cases {
+		c := c
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			model, err := auth.ParseAccessModel([]byte(c.json), apiRouter)
+			if err != nil {
+				t.Fatalf("parse model: %v", err)
+			}
+
+			defer func() {
+				if r := recover(); r != nil {
+					t.Fatalf("AuthorizeWithFilter panicked: %v", r)
+				}
+			}()
+
+			_, _, _ = model.AuthorizeWithFilter(c.eval)
 		})
 	}
 }
