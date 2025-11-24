@@ -12,6 +12,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	aasrepositoryapi "github.com/eclipse-basyx/basyx-go-components/internal/aasrepository/api"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/aasrepositoryapi/go"
 )
@@ -38,7 +39,7 @@ func runServer(ctx context.Context, configPath string, _ string) error {
 	// aasCtrl := openapi.NewAssetAdministrationShellRepositoryAPIAPIController(aasSvc)
 
 	// ==== AAS Repository Service - currently pointing to the openAPI generated ====
-	aasSvc := openapi.NewAssetAdministrationShellRepositoryAPIAPIService()
+	aasSvc := aasrepositoryapi.NewAssetAdministrationShellRepositoryAPIAPIService()
 	aasCtrl := openapi.NewAssetAdministrationShellRepositoryAPIAPIController(aasSvc)
 	for _, rt := range aasCtrl.Routes() {
 		r.Method(rt.Method, rt.Pattern, rt.HandlerFunc)

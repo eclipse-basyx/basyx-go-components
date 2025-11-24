@@ -15,6 +15,8 @@ import (
 	"context"
 	"errors"
 	"net/http"
+
+	model "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
 
 // SerializationAPIAPIService is a service that implements the logic for the SerializationAPIAPIServicer
@@ -29,7 +31,7 @@ func NewSerializationAPIAPIService() *SerializationAPIAPIService {
 }
 
 // GenerateSerializationByIds - Returns an appropriate serialization based on the specified format (see SerializationFormat)
-func (s *SerializationAPIAPIService) GenerateSerializationByIds(ctx context.Context, aasIds []string, submodelIds []string, includeConceptDescriptions bool) (ImplResponse, error) {
+func (s *SerializationAPIAPIService) GenerateSerializationByIds(ctx context.Context, aasIds []string, submodelIds []string, includeConceptDescriptions bool) (model.ImplResponse, error) {
 	// TODO - update GenerateSerializationByIds with the required logic for this service method.
 	// Add api_serialization_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
 
@@ -51,5 +53,5 @@ func (s *SerializationAPIAPIService) GenerateSerializationByIds(ctx context.Cont
 	// TODO: Uncomment the next line to return response Response(0, Result{}) or use other options such as http.Ok ...
 	// return Response(0, Result{}), nil
 
-	return Response(http.StatusNotImplemented, nil), errors.New("GenerateSerializationByIds method not implemented")
+	return model.Response(http.StatusNotImplemented, nil), errors.New("GenerateSerializationByIds method not implemented")
 }
