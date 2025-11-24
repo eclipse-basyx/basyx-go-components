@@ -60,25 +60,6 @@ var mapMethodAndPatternToRightsData = []mapMethodAndPatternToRights{
 	{"DELETE", "/lookup/shells/{aasIdentifier}", []grammar.RightsEnum{grammar.RightsEnumDELETE}},
 }
 
-// resolveObjects expands DEFOBJECTS references (including nested USEOBJECTS)
-// into a concrete object list.
-func resolveObjects(all grammar.AccessRuleModelSchemaJSONAllAccessPermissionRules, names []string) []grammar.ObjectItem {
-	var out []grammar.ObjectItem
-	for _, name := range names {
-		for _, d := range all.DEFOBJECTS {
-			if d.Name == name {
-				if len(d.Objects) > 0 {
-					out = append(out, d.Objects...)
-				}
-				if len(d.USEOBJECTS) > 0 {
-					out = append(out, resolveObjects(all, d.USEOBJECTS)...)
-				}
-			}
-		}
-	}
-	return out
-}
-
 // mapMethodAndPathToRights maps an incoming HTTP method+path to required rights.
 // It returns ok=false when no mapping is found so callers can deny by default.
 func (m *AccessModel) mapMethodAndPathToRights(in EvalInput) ([]grammar.RightsEnum, bool) {
