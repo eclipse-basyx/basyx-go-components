@@ -132,27 +132,27 @@ func (o *OIDC) Middleware(next http.Handler) http.Handler {
 				next.ServeHTTP(w, r.WithContext(ctx))
 				return
 			}
-			respondOIDCError(w, http.StatusUnauthorized, "access denied")
+			respondOIDCError(w)
 			return
 		}
 
 		raw := strings.TrimSpace(strings.TrimPrefix(authz, "Bearer "))
 		if raw == "" {
-			respondOIDCError(w, http.StatusUnauthorized, "access denied")
+			respondOIDCError(w)
 			return
 		}
 
 		idToken, err := o.verifier.Verify(r.Context(), raw)
 		if err != nil {
 			log.Printf("❌ Token verification failed: %v", err)
-			respondOIDCError(w, http.StatusForbidden, "access denied")
+			respondOIDCError(w)
 			return
 		}
 
 		var rm json.RawMessage
 		if err := idToken.Claims(&rm); err != nil {
 			log.Printf("❌ Failed to fetch raw claims: %v", err)
-			respondOIDCError(w, http.StatusForbidden, "access denied")
+			respondOIDCError(w)
 			return
 		}
 
@@ -162,7 +162,7 @@ func (o *OIDC) Middleware(next http.Handler) http.Handler {
 		var c Claims
 		if err := dec.Decode(&c); err != nil {
 			log.Printf("❌ Failed to decode claims: %v", err)
-			respondOIDCError(w, http.StatusForbidden, "access denied")
+			respondOIDCError(w)
 			return
 		}
 
@@ -174,18 +174,18 @@ func (o *OIDC) Middleware(next http.Handler) http.Handler {
 				r = r.WithContext(context.WithValue(r.Context(), issuedAtKey, issuedAt))
 			} else {
 				log.Printf("❌ Invalid 'iat' value: %v", err)
-				respondOIDCError(w, http.StatusForbidden, "access denied")
+				respondOIDCError(w)
 			}
 		} else {
 			log.Printf("⚠️ Token missing 'iat' claim")
 			log.Printf("❌  Token missing 'iat' claim")
-			respondOIDCError(w, http.StatusForbidden, "access denied")
+			respondOIDCError(w)
 			return
 		}
 
 		if typ, _ := c.GetString("typ"); typ != "" && !strings.EqualFold(typ, "Bearer") {
 			log.Printf("❌ unexpected token typ: %q", typ)
-			respondOIDCError(w, http.StatusForbidden, "access denied")
+			respondOIDCError(w)
 			return
 		}
 
@@ -193,7 +193,7 @@ func (o *OIDC) Middleware(next http.Handler) http.Handler {
 		required := []string{"profile"}
 		if !hasAllScopes(c, required) {
 			log.Printf("❌ missing required scopes: %v", required)
-			respondOIDCError(w, http.StatusForbidden, "access denied")
+			respondOIDCError(w)
 			return
 		}
 
@@ -236,8 +236,8 @@ func hasAllScopes(c Claims, need []string) bool {
 
 // respondOIDCError writes a structured error response with the provided code
 // and message using the common BaSyx error format.
-func respondOIDCError(w http.ResponseWriter, code int, msg string) {
-	resp := common.NewErrorResponse(errors.New(msg), code, "Middleware", "Rules", "Denied")
+func respondOIDCError(w http.ResponseWriter) {
+	resp := common.NewErrorResponse(errors.New("access denied"), http.StatusUnauthorized, "Middleware", "Rules", "Denied")
 	err := openapi.EncodeJSONResponse(resp.Body, &resp.Code, w)
 	if err != nil {
 		log.Printf("❌ Failed to encode error response: %v", err)
