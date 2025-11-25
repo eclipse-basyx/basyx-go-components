@@ -288,15 +288,17 @@ func normalizeFieldReference(field string) (string, error) {
 	prefix := field[:hashIdx]
 	rest := strings.TrimPrefix(field[hashIdx+1:], ".")
 
+	// Normalize common smdesc field casing to match JSON tags
+	rest = strings.ReplaceAll(rest, "protocolinformation", "protocolInformation")
+	rest = strings.ReplaceAll(rest, "semanticid", "semanticId")
 	// TODO add more cases here if you have a different model type
+	fmt.Println(prefix)
 	switch prefix {
 	case "$aasdesc":
 		return field, nil
 	case "$smdesc":
-		// Normalize common smdesc field casing to match JSON tags
-		rest = strings.ReplaceAll(rest, "protocolinformation", "protocolInformation")
-		rest = strings.ReplaceAll(rest, "semanticid", "semanticId")
 
+		// normalize to $aasdesc, so rules with $aasdesc and $smdesc work
 		base := "$aasdesc#submodelDescriptors[]"
 		if rest == "" {
 			return base, nil

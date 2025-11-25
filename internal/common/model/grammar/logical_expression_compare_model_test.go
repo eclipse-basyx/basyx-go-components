@@ -66,6 +66,12 @@ func TestLogicalExpression_EvaluateModel(t *testing.T) {
 						},
 					},
 				},
+				SemanticId: &model.Reference{
+					Type: model.REFERENCETYPES_EXTERNAL_REFERENCE,
+					Keys: []model.Key{
+						{Type: model.KEYTYPES_GLOBAL_REFERENCE, Value: "klopapier"},
+					},
+				},
 			},
 		},
 	}
@@ -184,6 +190,16 @@ func TestLogicalExpression_EvaluateModel(t *testing.T) {
 				},
 			},
 			want: false,
+		},
+		{
+			name: "what happens if it gets a smdesc field",
+			expr: LogicalExpression{
+				Eq: ComparisonItems{
+					field("$smdesc#semanticId.keys[].value"),
+					strVal("klopapier"),
+				},
+			},
+			want: true,
 		},
 	}
 
