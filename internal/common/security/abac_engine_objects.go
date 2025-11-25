@@ -37,24 +37,36 @@ import (
 )
 
 type descriptorRouteMapping struct {
-	scope           string
-	collectionRoute string
-	itemRoute       string // printf-style format expecting the encoded ID or "*" for wildcard
-	filterField     string // model string pattern used to generate the EQ filter
+	scope       string
+	route       string
+	filterField string
+	hasWildcard bool
 }
 
 var descriptorRouteMappings = []descriptorRouteMapping{
 	{
-		scope:           "$aasdesc",
-		collectionRoute: "/shell-descriptors",
-		itemRoute:       "/shell-descriptors/%s",
-		filterField:     "$aasdesc#id",
+		scope:       "$aasdesc",
+		route:       "/shell-descriptors",
+		filterField: "$aasdesc#id",
+		hasWildcard: false,
 	},
 	{
-		scope:           "$smdesc",
-		collectionRoute: "/shell-descriptors/*/submodel-descriptors",
-		itemRoute:       "/shell-descriptors/*/submodel-descriptors/%s",
-		filterField:     "$smdesc#id",
+		scope:       "$aasdesc",
+		route:       "/shell-descriptors/%s",
+		filterField: "$aasdesc#id",
+		hasWildcard: true,
+	},
+	{
+		scope:       "$aasdesc",
+		route:       "/shell-descriptors/%s/submodel-descriptors",
+		filterField: "$aasdesc#id",
+		hasWildcard: true,
+	},
+	{
+		scope:       "$aasdesc",
+		route:       "/shell-descriptors/%s/submodel-descriptors/*",
+		filterField: "$aasdesc#id",
+		hasWildcard: true,
 	},
 }
 
@@ -67,16 +79,24 @@ type RouteWithFilter struct {
 }
 
 func mapDescriptorValueToRoute(descriptorValue grammar.DescriptorValue) []RouteWithFilter {
+	var routes = []RouteWithFilter{}
+
 	for _, mapping := range descriptorRouteMappings {
 		if mapping.scope != descriptorValue.Scope {
 			continue
 		}
 
 		if descriptorValue.ID.IsAll {
-			return []RouteWithFilter{
-				{route: mapping.collectionRoute},
-				{route: fmt.Sprintf(mapping.itemRoute, "*")},
+			if !mapping.hasWildcard {
+				routes = append(routes,
+					RouteWithFilter{route: mapping.route},
+				)
+				continue
 			}
+			routes = append(routes,
+				RouteWithFilter{route: fmt.Sprintf(mapping.route, "*")},
+			)
+			continue
 		}
 
 		rawID := descriptorValue.ID.ID
@@ -92,13 +112,17 @@ func mapDescriptorValueToRoute(descriptorValue grammar.DescriptorValue) []RouteW
 			},
 		}
 
-		return []RouteWithFilter{
-			{route: mapping.collectionRoute, le: &extraFilter},
-			{route: fmt.Sprintf(mapping.itemRoute, encodedID)},
+		if !mapping.hasWildcard {
+			routes = append(routes,
+				RouteWithFilter{route: mapping.route, le: &extraFilter},
+			)
 		}
+		routes = append(routes,
+			RouteWithFilter{route: fmt.Sprintf(mapping.route, encodedID)},
+		)
 	}
+	return routes
 
-	return nil
 }
 
 // AccessWithLE represents the outcome of matching a request path against a
@@ -203,4 +227,7 @@ func matchRouteANT(route string, userPath string) bool {
 
 	matched, _ := regexp.MatchString(regexPattern, path)
 	return matched
+}
+func strptr(s string) *string {
+	return &s
 }
