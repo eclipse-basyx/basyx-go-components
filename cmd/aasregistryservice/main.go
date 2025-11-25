@@ -19,7 +19,7 @@ import (
 	"net/http"
 	"os"
 
-	ass_registry_api "github.com/eclipse-basyx/basyx-go-components/internal/aasregistry/api"
+	aasregistryapi "github.com/eclipse-basyx/basyx-go-components/internal/aasregistry/api"
 	aasregistrydatabase "github.com/eclipse-basyx/basyx-go-components/internal/aasregistry/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
@@ -77,7 +77,7 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	}
 	log.Println("✅ Postgres connection established")
 
-	smSvc := ass_registry_api.NewAssetAdministrationShellRegistryAPIAPIService(*smDatabase)
+	smSvc := aasregistryapi.NewAssetAdministrationShellRegistryAPIAPIService(*smDatabase)
 	smCtrl := apis.NewAssetAdministrationShellRegistryAPIAPIController(smSvc, cfg.Server.ContextPath)
 
 	descSvc := apis.NewDescriptionAPIAPIService()
@@ -88,12 +88,12 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	// === Protected API Subrouter ===
 	apiRouter := chi.NewRouter()
 
-	// Apply OIDC + ABAC once for all discovery endpoints
+	// Apply OIDC + ABAC once for all registry endpoints
 	if err := auth.SetupSecurity(ctx, cfg, apiRouter); err != nil {
 		return err
 	}
 
-	// Register all discovery routes (protected)
+	// Register all registry routes (protected)
 	for _, rt := range smCtrl.Routes() {
 		apiRouter.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
 	}

@@ -24,7 +24,7 @@
 ******************************************************************************/
 // Author: Martin Stemmer ( Fraunhofer IESE )
 
-package assregistryapi
+package aasregistryapi
 
 import (
 	"context"

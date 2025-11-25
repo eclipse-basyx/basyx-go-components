@@ -33,7 +33,7 @@
  * Contact: info@idtwin.org
  */
 // Author: Martin Stemmer ( Fraunhofer IESE )
-package assregistryapi
+package aasregistryapi
 
 import (
 	"context"
