@@ -5,17 +5,17 @@
         "ACL": {
           "ACCESS": "ALLOW",
           "RIGHTS": [
-            "READ"
-          ],
-          "ATTRIBUTES": [{"GLOBAL": "ANONYMOUS"}]
+            "READ",
+            "UPDATE"
+          ]
         },
         "OBJECTS": [
           {
-            "ROUTE": "/shell-descriptors"
+            "DESCRIPTOR": "$aasdesc(\"*\")"
           }
         ],
         "FORMULA": {
-          "$boolean": false
+          "$boolean": true
         }
       }
     ]

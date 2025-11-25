@@ -4,7 +4,8 @@
       {
         "ACL": {
           "ACCESS": "ALLOW",
-          "RIGHTS": ["READ"]
+          "RIGHTS": ["READ"],
+          "ATTRIBUTES": [{"GLOBAL": "ANONYMOUS"}]
         },
         "OBJECTS": [
           {
@@ -18,7 +19,8 @@
       {
         "ACL": {
           "ACCESS": "ALLOW",
-          "RIGHTS": ["READ"]
+          "RIGHTS": ["READ"],
+          "ATTRIBUTES": [{"GLOBAL": "ANONYMOUS"}]
         },
         "OBJECTS": [
           {

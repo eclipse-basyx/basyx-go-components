@@ -37,9 +37,9 @@ import (
 //
 // If items is empty, it returns true. Unknown kinds fail closed (return false).
 func attributesSatisfiedAll(items []grammar.AttributeItem, claims Claims) bool {
-	// No required attributes → allowed
+	// with no attributes deny access per default
 	if len(items) == 0 {
-		return true
+		return false
 	}
 
 	for _, it := range items {
@@ -50,8 +50,8 @@ func attributesSatisfiedAll(items []grammar.AttributeItem, claims Claims) bool {
 				// satisfied → continue checking the rest
 				continue
 			}
-			// Unsupported GLOBAL value → fail closed
-			return false
+			// Unsupported GLOBAL value → ignore
+			continue
 
 		case grammar.ATTRCLAIM:
 			// Presence-only check: user must have this claim key

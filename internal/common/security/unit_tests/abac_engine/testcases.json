@@ -183,5 +183,15 @@
     "input": "input/operator_boolean_false.json",
     "expected": "expected/no_matching_rule.json",
     "eval": "eval/get_shellDescriptors_viewer_clear2.json"
+  },
+  {
+    "input": "input/no_attributes.json",
+    "expected": "expected/no_matching_rule.json",
+    "eval": "eval/get_shellDescriptors_member.json"
+  },
+  {
+    "input": "input/missing_claim.json",
+    "expected": "expected/no_matching_rule.json",
+    "eval": "eval/get_shellDescriptors_member.json"
   }
 ]

@@ -4,7 +4,8 @@
       {
         "ACL": {
           "ACCESS": "ALLOW",
-          "RIGHTS": ["READ","UPDATE"]
+          "RIGHTS": ["READ","UPDATE"],
+          "ATTRIBUTES": [{"GLOBAL": "ANONYMOUS"}]
         },
         "OBJECTS": [{"DESCRIPTOR" : "$aasdesc(\"https://martin.de\")"}],
         "FORMULA": { 
