@@ -259,13 +259,14 @@ func (le *LogicalExpression) evaluateComparison(operands []Value, operation stri
 // Returns:
 //   - string: The corresponding SQL column name, or the original field if no mapping exists
 func ParseAASQLFieldToSQLColumn(field string) string {
+
+	// TIPP: DO NOT ADD SHORTHANDS HERE!
+	// They are already normalized
 	switch field {
 	case "$sm#idShort":
 		return "s.id_short"
 	case "$sm#id":
 		return "s.id"
-	case "$sm#semanticId":
-		return "semantic_id_reference_key.value"
 	case "$sm#semanticId.type":
 		return "semantic_id_reference.type"
 	case "$sm#semanticId.keys[].value":
@@ -286,8 +287,6 @@ func ParseAASQLFieldToSQLColumn(field string) string {
 		return "specific_asset_id.name"
 	case "$aasdesc#specificAssetIds[].value":
 		return "specific_asset_id.value"
-	case "$aasdesc#specificAssetIds[].externalSubjectId":
-		return "external_subject_reference_key.value"
 	case "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value":
 		return "external_subject_reference_key.value"
 	case "$aasdesc#specificAssetIds[].externalSubjectId.keys[].type":
@@ -300,8 +299,8 @@ func ParseAASQLFieldToSQLColumn(field string) string {
 		return "submodel_descriptor.id_short"
 	case "$aasdesc#submodelDescriptors[].id":
 		return "submodel_descriptor.id"
-	case "$aasdesc#submodelDescriptors[].semanticId":
-		return "aasdesc_submodel_descriptor_semantic_id_reference_key.value"
+	case "$aasdesc#submodelDescriptors[].semanticId.value":
+		return "aasdesc_submodel_descriptor_semantic_id_reference.value"
 	case "$aasdesc#submodelDescriptors[].semanticId.type":
 		return "aasdesc_submodel_descriptor_semantic_id_reference.type"
 	case "$aasdesc#submodelDescriptors[].semanticId.keys[].value":
@@ -316,12 +315,14 @@ func ParseAASQLFieldToSQLColumn(field string) string {
 		return "submodel_descriptor.id_short"
 	case "$smdesc#id":
 		return "submodel_descriptor.id"
-	case "$smdesc#semanticId":
-		return "smdesc_semantic_id_reference_key.value"
+	case "$smdesc#semanticId.value":
+		return "aasdesc_submodel_descriptor_semantic_id_reference.value"
+	case "$smdesc#semanticId.type":
+		return "aasdesc_submodel_descriptor_semantic_id_reference.type"
 	case "$smdesc#semanticId.keys[].value":
-		return "smdesc_semantic_id_reference_key.value"
+		return "aasdesc_submodel_descriptor_semantic_id_reference_key.value"
 	case "$smdesc#semanticId.keys[].type":
-		return "smdesc_semantic_id_reference_key.type"
+		return "aasdesc_submodel_descriptor_semantic_id_reference_key.type"
 	case "$smdesc#endpoints[].interface":
 		return "submodel_descriptor_endpoint.interface"
 	case "$smdesc#endpoints[].protocolinformation.href":
@@ -343,10 +344,10 @@ func ParseAASQLFieldToSQLColumn(field string) string {
 	}
 
 	if strings.HasPrefix(field, "$smdesc#semanticId.keys[") && strings.HasSuffix(field, "].value") {
-		return "smdesc_semantic_id_reference_key.value"
+		return "aasdesc_submodel_descriptor_semantic_id_reference_key.value"
 	}
 	if strings.HasPrefix(field, "$smdesc#semanticId.keys[") && strings.HasSuffix(field, "].type") {
-		return "smdesc_semantic_id_reference_key.type"
+		return "aasdesc_submodel_descriptor_semantic_id_reference_key.type"
 	}
 	if strings.HasPrefix(field, "$aasdesc#submodelDescriptors") && strings.Contains(field, ".semanticId.keys[") && strings.HasSuffix(field, "].value") {
 		return "aasdesc_submodel_descriptor_semantic_id_reference_key.value"
