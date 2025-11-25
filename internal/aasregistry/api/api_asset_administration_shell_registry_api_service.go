@@ -23,7 +23,7 @@
 * SPDX-License-Identifier: MIT
 ******************************************************************************/
 
-// Package assregistryapi implements Asset Administration Shell Registry Service
+// Package aasregistryapi implements Asset Administration Shell Registry Service
 /*
  * DotAAS Part 2 | HTTP/REST | Asset Administration Shell Registry Service Specification
  *
