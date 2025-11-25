@@ -228,6 +228,3 @@ func matchRouteANT(route string, userPath string) bool {
 	matched, _ := regexp.MatchString(regexPattern, path)
 	return matched
 }
-func strptr(s string) *string {
-	return &s
-}
