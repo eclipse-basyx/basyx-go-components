@@ -37,7 +37,7 @@ When adding new components or features, create corresponding integration tests i
 
 `Note: You may reuse the integration_test.go template found in existing integration test folders.`
 
-You must always add an Action and Task to run the integration tests for the new component in the .vscode folder
+You must always add an Action and Task to run the integration tests for the new component in the .vscode folder.
 
 ### Best Practices
 - Cover all Endpoints
