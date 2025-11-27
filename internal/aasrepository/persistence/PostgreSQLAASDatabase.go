@@ -30,14 +30,18 @@
 // operations for creating, retrieving, searching, and deleting AAS discovery information
 // with cursor-based pagination for efficient querying of large datasets.
 
+// Package persistencepostgresql provides PostgreSQL-based persistence for the AAS repository.
 package persistencepostgresql
 
 import (
 	"database/sql"
 	"errors"
+	"log"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+
+	// Import for PostgreSQL driver
 	_ "github.com/lib/pq"
 )
 
@@ -51,7 +55,7 @@ func NewPostgreSQLAASDatabaseBackend(
 	dsn string,
 	maxOpenConns int,
 	maxIdleConns int,
-	connMaxLifetimeMinutes int,
+	_ int, // connMaxLifetimeMinutes is unused for now
 	databaseSchema string,
 ) (*PostgreSQLAASDatabase, error) {
 
@@ -72,8 +76,7 @@ func NewPostgreSQLAASDatabaseBackend(
 	return &PostgreSQLAASDatabase{DB: db}, nil
 }
 
-// PostgreSQLAASDatabaseBackend is a convenience function to create a new PostgreSQLAASDatabase.
-
+// GetAllAAS retrieves all Asset Administration Shells from the database.
 func (p *PostgreSQLAASDatabase) GetAllAAS() ([]model.AssetAdministrationShell, error) {
 	rows, err := p.DB.Query(`
         SELECT id, id_short, category, model_type 
@@ -83,7 +86,12 @@ func (p *PostgreSQLAASDatabase) GetAllAAS() ([]model.AssetAdministrationShell, e
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() {
+		if err := rows.Close(); err != nil {
+			// Option 1: log or handle the error
+			log.Printf("failed to close rows: %v", err)
+		}
+	}()
 
 	var result []model.AssetAdministrationShell
 
@@ -101,6 +109,7 @@ func (p *PostgreSQLAASDatabase) GetAllAAS() ([]model.AssetAdministrationShell, e
 	return result, nil
 }
 
+// InsertAAS inserts a new Asset Administration Shell into the database.
 func (p *PostgreSQLAASDatabase) InsertAAS(aas model.AssetAdministrationShell) error {
 	_, err := p.DB.Exec(`
         INSERT INTO aas (id, id_short, category, model_type)
@@ -114,6 +123,7 @@ func (p *PostgreSQLAASDatabase) InsertAAS(aas model.AssetAdministrationShell) er
 	return err
 }
 
+// DeleteAASByID deletes an Asset Administration Shell by its ID.
 func (p *PostgreSQLAASDatabase) DeleteAASByID(id string) error {
 	result, err := p.DB.Exec(`DELETE FROM aas WHERE id = $1`, id)
 	if err != nil {
@@ -132,6 +142,7 @@ func (p *PostgreSQLAASDatabase) DeleteAASByID(id string) error {
 	return nil
 }
 
+// GetAASByID retrieves an Asset Administration Shell by its ID.
 func (p *PostgreSQLAASDatabase) GetAASByID(id string) (*model.AssetAdministrationShell, error) {
 	row := p.DB.QueryRow(`
         SELECT id, id_short, category, model_type
