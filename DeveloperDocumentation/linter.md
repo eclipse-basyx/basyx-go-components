@@ -17,7 +17,7 @@ To run the linter locally, ensure you have golangci-lint installed. You can inst
 ```sh
 go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
 ```
-### macOS (Advise)
+### macOS (Recommended)
 ```sh
 brew install golangci-lint
 ```
