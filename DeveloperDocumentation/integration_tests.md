@@ -43,4 +43,4 @@ You must always add an Action and Task to run the integration tests for the new 
 - Cover all Endpoints
 - Use realistic data in postBody/ files
 - Validate both success and error scenarios
-- Keep it_config.json updated with new test cases as features are added
+- Keep it_config.json up to date with new test cases as features are added
