@@ -10,14 +10,14 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/go-chi/chi/v5"
-
 	aasrepositoryapi "github.com/eclipse-basyx/basyx-go-components/internal/aasrepository/api"
+	persistencepostgresql "github.com/eclipse-basyx/basyx-go-components/internal/aasrepository/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/aasrepositoryapi/go"
+	"github.com/go-chi/chi/v5"
 )
 
-func runServer(ctx context.Context, configPath string, _ string) error {
+func runServer(ctx context.Context, configPath string, databaseSchema string) error {
 	// _ = databaseSchema // intentionally unused for now
 	log.Default().Println("Loading AAS Repository Service...")
 	log.Default().Println("Config Path:", configPath)
@@ -34,12 +34,36 @@ func runServer(ctx context.Context, configPath string, _ string) error {
 	common.AddCors(r, config)
 	common.AddHealthEndpoint(r, config)
 
+	// ========== database ==========
+	// === Database ===
+	dsn := fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=disable",
+		config.Postgres.User,
+		config.Postgres.Password,
+		config.Postgres.Host,
+		config.Postgres.Port,
+		config.Postgres.DBName,
+	)
+
+	log.Printf("🗄️  Connecting to Postgres with DSN: postgres://%s:****@%s:%d/%s?sslmode=disable",
+		config.Postgres.User, config.Postgres.Host, config.Postgres.Port, config.Postgres.DBName)
+
 	// ==== AAS Repository Service Custom ====
 	// aasSvc := api.NewAASRepositoryService()
 	// aasCtrl := openapi.NewAssetAdministrationShellRepositoryAPIAPIController(aasSvc)
+	aasDatabase, err := persistencepostgresql.NewPostgreSQLAASDatabaseBackend(
+		dsn,
+		config.Postgres.MaxOpenConnections,
+		config.Postgres.MaxIdleConnections,
+		config.Postgres.ConnMaxLifetimeMinutes,
+		databaseSchema,
+	)
+	if err != nil {
+		log.Fatalf("Failed to initialize database connection: %v", err)
+		return err
+	}
 
-	// ==== AAS Repository Service - currently pointing to the openAPI generated ====
-	aasSvc := aasrepositoryapi.NewAssetAdministrationShellRepositoryAPIAPIService()
+	// ==== AAS Repository Service ====
+	aasSvc := aasrepositoryapi.NewAssetAdministrationShellRepositoryAPIAPIService(*aasDatabase)
 	aasCtrl := openapi.NewAssetAdministrationShellRepositoryAPIAPIController(aasSvc)
 	for _, rt := range aasCtrl.Routes() {
 		r.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
@@ -76,7 +100,7 @@ func main() {
 
 	if databaseSchema != "" {
 		if _, err := os.ReadFile(databaseSchema); err != nil {
-			fmt.Println("The specified database schema path is invalid or not found.")
+			fmt.Println("The specified database schema path is invalid or not found.", err)
 			os.Exit(1)
 		}
 	}

@@ -14,10 +14,13 @@ package aasrepositoryapi
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"net/http"
 	"os"
 
+	persistencepostgresql "github.com/eclipse-basyx/basyx-go-components/internal/aasrepository/persistence"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
 
@@ -25,15 +28,25 @@ import (
 // This service should implement the business logic for every endpoint for the AssetAdministrationShellRepositoryAPIAPI API.
 // Include any external packages or services that will be required by this service.
 type AssetAdministrationShellRepositoryAPIAPIService struct {
+	aasBackend persistencepostgresql.PostgreSQLAASDatabase
 }
 
 // NewAssetAdministrationShellRepositoryAPIAPIService creates a default api service
-func NewAssetAdministrationShellRepositoryAPIAPIService() *AssetAdministrationShellRepositoryAPIAPIService {
-	return &AssetAdministrationShellRepositoryAPIAPIService{}
+func NewAssetAdministrationShellRepositoryAPIAPIService(databaseBackend persistencepostgresql.PostgreSQLAASDatabase) *AssetAdministrationShellRepositoryAPIAPIService {
+	return &AssetAdministrationShellRepositoryAPIAPIService{
+		aasBackend: databaseBackend,
+	}
 }
 
 // GetAllAssetAdministrationShells - Returns all Asset Administration Shells
 func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllAssetAdministrationShells(ctx context.Context, assetIds []string, idShort string, limit int32, cursor string) (gen.ImplResponse, error) {
+	aasList, err := s.aasBackend.GetAllAAS()
+	if err != nil {
+		return gen.Response(500, "failed to fetch aas list"), nil
+	}
+
+	return gen.Response(200, aasList), nil
+
 	// TODO - update GetAllAssetAdministrationShells with the required logic for this service method.
 	// Add api_asset_administration_shell_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
 
@@ -55,11 +68,28 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllAssetAdministrat
 	// TODO: Uncomment the next line to return response gen.Response(0, Result{}) or use other options such as http.Ok ...
 	// return gen.Response(0, Result{}), nil
 
-	return gen.Response(http.StatusNotImplemented, nil), errors.New("GetAllAssetAdministrationShells method not implemented")
+	//return gen.Response(http.StatusNotImplemented, nil), errors.New("GetAllAssetAdministrationShells method not implemented")
 }
 
 // PostAssetAdministrationShell - Creates a new Asset Administration Shell
-func (s *AssetAdministrationShellRepositoryAPIAPIService) PostAssetAdministrationShell(ctx context.Context, assetAdministrationShell gen.AssetAdministrationShell) (gen.ImplResponse, error) {
+func (s *AssetAdministrationShellRepositoryAPIAPIService) PostAssetAdministrationShell(ctx context.Context, aas gen.AssetAdministrationShell) (gen.ImplResponse, error) {
+	// Validate minimal required fields
+	if aas.ID == "" {
+		return gen.Response(400, "missing required field: id"), nil
+	}
+	if aas.ModelType == "" {
+		return gen.Response(400, "missing required field: modelType"), nil
+	}
+
+	// Insert into DB
+	err := s.aasBackend.InsertAAS(aas)
+	if err != nil {
+		return gen.Response(500, "failed to insert AAS"), nil
+	}
+
+	// Return created AAS
+	return gen.Response(201, aas), nil
+
 	// TODO - update PostAssetAdministrationShell with the required logic for this service method.
 	// Add api_asset_administration_shell_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
 
@@ -84,7 +114,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) PostAssetAdministratio
 	// TODO: Uncomment the next line to return response gen.Response(0, Result{}) or use other options such as http.Ok ...
 	// return gen.Response(0, Result{}), nil
 
-	return gen.Response(http.StatusNotImplemented, nil), errors.New("PostAssetAdministrationShell method not implemented")
+	//return gen.Response(http.StatusNotImplemented, nil), errors.New("PostAssetAdministrationShell method not implemented")
 }
 
 // GetAllAssetAdministrationShellsReference - Returns References to all Asset Administration Shells
@@ -114,7 +144,24 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllAssetAdministrat
 }
 
 // GetAssetAdministrationShellById - Returns a specific Asset Administration Shell
-func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAssetAdministrationShellById(ctx context.Context, aasIdentifier string) (gen.ImplResponse, error) {
+func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAssetAdministrationShellById(ctx context.Context, aasID string) (gen.ImplResponse, error) {
+	// Decode the Base64-encoded aasID
+	decoded, decodeErr := common.DecodeString(aasID)
+	if decodeErr != nil {
+		return gen.Response(400, "invalid AAS id encoding"), nil
+	}
+
+	// Query the DB
+	shell, err := s.aasBackend.GetAASByID(string(decoded))
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return gen.Response(404, "AAS not found"), nil
+		}
+		return gen.Response(500, "failed to fetch AAS"), nil
+	}
+
+	return gen.Response(200, shell), nil
+
 	// TODO - update GetAssetAdministrationShellById with the required logic for this service method.
 	// Add api_asset_administration_shell_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
 
@@ -139,7 +186,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAssetAdministration
 	// TODO: Uncomment the next line to return response gen.Response(0, Result{}) or use other options such as http.Ok ...
 	// return gen.Response(0, Result{}), nil
 
-	return gen.Response(http.StatusNotImplemented, nil), errors.New("GetAssetAdministrationShellById method not implemented")
+	//return gen.Response(http.StatusNotImplemented, nil), errors.New("GetAssetAdministrationShellById method not implemented")
 }
 
 // PutAssetAdministrationShellById - Creates or updates an existing Asset Administration Shell
@@ -172,7 +219,25 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) PutAssetAdministration
 }
 
 // DeleteAssetAdministrationShellById - Deletes an Asset Administration Shell
-func (s *AssetAdministrationShellRepositoryAPIAPIService) DeleteAssetAdministrationShellById(ctx context.Context, aasIdentifier string) (gen.ImplResponse, error) {
+func (s *AssetAdministrationShellRepositoryAPIAPIService) DeleteAssetAdministrationShellById(ctx context.Context, aasId string) (gen.ImplResponse, error) {
+	// Decode the ID if required (BaSyx APIs base64-encode IDs)
+	decoded, decodeErr := common.DecodeString(aasId)
+	if decodeErr != nil {
+		return gen.Response(400, "invalid AAS id encoding"), nil
+	}
+
+	// Try to delete
+	err := s.aasBackend.DeleteAASByID(string(decoded))
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return gen.Response(404, "AAS not found"), nil
+		}
+		return gen.Response(500, "failed to delete AAS"), nil
+	}
+
+	// Return 204 No Content
+	return gen.Response(204, nil), nil
+
 	// TODO - update DeleteAssetAdministrationShellById with the required logic for this service method.
 	// Add api_asset_administration_shell_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
 
@@ -194,7 +259,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) DeleteAssetAdministrat
 	// TODO: Uncomment the next line to return response gen.Response(0, Result{}) or use other options such as http.Ok ...
 	// return gen.Response(0, Result{}), nil
 
-	return gen.Response(http.StatusNotImplemented, nil), errors.New("DeleteAssetAdministrationShellById method not implemented")
+	//return gen.Response(http.StatusNotImplemented, nil), errors.New("DeleteAssetAdministrationShellById method not implemented")
 }
 
 // GetAssetAdministrationShellByIdReferenceAasRepository - Returns a specific Asset Administration Shell as a Reference
