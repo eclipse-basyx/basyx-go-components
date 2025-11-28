@@ -11,7 +11,7 @@
         "FORMULA": {
           "$gt": [
             {"$attribute": {"GLOBAL": "UTCNOW"}},
-            {"$dateTimeCast": {"$strVal": "2024-12-31T23:00:00Z"}}
+            {"$dateTimeVal": "2024-12-31T23:00:00Z"}
           ]
         }
       }

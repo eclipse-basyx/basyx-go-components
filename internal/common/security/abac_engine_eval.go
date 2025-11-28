@@ -678,6 +678,11 @@ func resolveValue(v grammar.Value, claims Claims) any {
 		if f, ok := toFloat(x); ok {
 			return f
 		}
+		if s, ok := x.(string); ok {
+			if f, err := strconv.ParseFloat(s, 64); err == nil {
+				return f
+			}
+		}
 		return x
 	}
 	if v.BoolCast != nil {
@@ -739,7 +744,7 @@ func resolveAttributeValue(attr grammar.AttributeValue, claims Claims) any {
 		return nil
 	}
 	if c := m["CLAIM"]; c != "" {
-		return normalizeClaimScalar(claims[c])
+		return fmt.Sprint(normalizeClaimScalar(claims[c]))
 	}
 	if g := m["GLOBAL"]; g != "" {
 		if val, ok := resolveGlobalToken(g, claims); ok {
@@ -790,9 +795,6 @@ func toFloat(v any) (float64, bool) {
 		return float64(x), true
 	case float64:
 		return x, true
-	case string:
-		f, err := strconv.ParseFloat(x, 64)
-		return f, err == nil
 	default:
 		return 0, false
 	}

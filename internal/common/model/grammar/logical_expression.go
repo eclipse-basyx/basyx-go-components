@@ -141,6 +141,26 @@ func (le *LogicalExpression) UnmarshalJSON(value []byte) error {
 	if plain.Or != nil && len(plain.Or) < 2 {
 		return fmt.Errorf("field %s length: must be >= %d", "$or", 2)
 	}
+
+	// Enforce matching operand types for comparison operators (when both are known)
+	if err := validateComparisonItems(plain.Eq, "$eq"); err != nil {
+		return err
+	}
+	if err := validateComparisonItems(plain.Ne, "$ne"); err != nil {
+		return err
+	}
+	if err := validateComparisonItems(plain.Gt, "$gt"); err != nil {
+		return err
+	}
+	if err := validateComparisonItems(plain.Ge, "$ge"); err != nil {
+		return err
+	}
+	if err := validateComparisonItems(plain.Lt, "$lt"); err != nil {
+		return err
+	}
+	if err := validateComparisonItems(plain.Le, "$le"); err != nil {
+		return err
+	}
 	*le = LogicalExpression(plain)
 	return nil
 }

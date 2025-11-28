@@ -8,7 +8,7 @@
           "ATTRIBUTES": [{"GLOBAL": "ANONYMOUS"}]
         },
         "OBJECTS": [{"ROUTE" : "/*"}],
-        "FORMULA": {"$le": [{"$numVal": 5},  {"$attribute": {"CLAIM": "clear"}}] }
+        "FORMULA": {"$le": [{"$numVal": 5},  {"$numCast": {"$attribute": {"CLAIM": "clear"}}}] }
       }
     ]
   }

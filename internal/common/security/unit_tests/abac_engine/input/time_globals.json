@@ -13,19 +13,19 @@
             {
               "$eq": [
                 {"$attribute": {"GLOBAL": "UTCNOW"}},
-                {"$strVal": "2025-01-01T00:00:00Z"}
+                {"$dateTimeCast": {"$strVal": "2025-01-01T00:00:00Z"}}
               ]
             },
             {
               "$eq": [
                 {"$attribute": {"GLOBAL": "LOCALNOW"}},
-                {"$strVal": "2025-01-01T01:00:00+01:00"}
+                {"$dateTimeCast": {"$strVal": "2025-01-01T01:00:00+01:00"}}
               ]
             },
             {
               "$eq": [
                 {"$attribute": {"GLOBAL": "CLIENTNOW"}},
-                {"$strVal": "2025-01-01T00:00:00Z"}
+                {"$dateTimeCast": {"$strVal": "2025-01-01T00:00:00Z"}}
               ]
             }
           ]
