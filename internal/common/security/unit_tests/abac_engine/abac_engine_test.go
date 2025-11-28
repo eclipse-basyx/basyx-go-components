@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	apis "github.com/eclipse-basyx/basyx-go-components/pkg/aasregistryapi"
@@ -189,10 +188,9 @@ func TestAuthorizeWithFilterResilience(t *testing.T) {
 	}
 
 	baseEval := auth.EvalInput{
-		Method:    "GET",
-		Path:      "/shell-descriptors",
-		IssuedUTC: time.Now().UTC(),
-		Claims:    auth.Claims{"role": "viewer"},
+		Method: "GET",
+		Path:   "/shell-descriptors",
+		Claims: auth.Claims{"role": "viewer"},
 	}
 
 	cases := []resilientCase{

@@ -198,5 +198,40 @@
     "input": "input/regex_reduced.json",
     "expected": "expected/access_allowed.json",
     "eval": "eval/get_submodelDescriptors_test_regex.json"
+  },
+  {
+    "input": "input/time_globals.json",
+    "expected": "expected/access_allowed_time_claims.json",
+    "eval": "eval/get_shellDescriptors_time_match.json"
+  },
+  {
+    "input": "input/time_globals.json",
+    "expected": "expected/no_matching_rule.json",
+    "eval": "eval/get_shellDescriptors_time_mismatch.json"
+  },
+  {
+    "input": "input/time_compare_gt.json",
+    "expected": "expected/access_allowed.json",
+    "eval": "eval/get_shellDescriptors_time_match.json"
+  },
+  {
+    "input": "input/time_cast_eq.json",
+    "expected": "expected/access_allowed.json",
+    "eval": "eval/get_shellDescriptors_time_match.json"
+  },
+  {
+    "input": "input/time_parts.json",
+    "expected": "expected/access_allowed.json",
+    "eval": "eval/get_shellDescriptors_time_match.json"
+  },
+  {
+    "input": "input/time_field_filter.json",
+    "expected": "expected/access_allowed_with_qf_time_field.json",
+    "eval": "eval/get_shellDescriptors_time_match.json"
+  },
+  {
+    "input": "input/time_compare_datetime_operand.json",
+    "expected": "expected/access_allowed.json",
+    "eval": "eval/get_shellDescriptors_time_match.json"
   }
 ]

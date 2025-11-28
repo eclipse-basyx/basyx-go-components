@@ -33,7 +33,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"time"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/discoveryapi"
@@ -61,19 +60,6 @@ type Resource struct {
 	Type   string
 	Tenant string
 	Attrs  map[string]any
-}
-
-// Input bundles subject claims, action, and resource for ABAC evaluation.
-type Input struct {
-	Subject  Claims
-	Action   string
-	Resource Resource
-	Env      Env
-}
-
-// Env represents environmental authorization context (e.g., current UTC).
-type Env struct {
-	UTCNow time.Time
 }
 
 const (
@@ -107,10 +93,9 @@ func ABACMiddleware(settings ABACSettings) func(http.Handler) http.Handler {
 
 			if settings.Model != nil {
 				ok, reason, qf := settings.Model.AuthorizeWithFilter(EvalInput{
-					Method:    r.Method,
-					Path:      r.URL.Path,
-					Claims:    claims,
-					IssuedUTC: time.Now().UTC(),
+					Method: r.Method,
+					Path:   r.URL.Path,
+					Claims: claims,
 				})
 				if !ok {
 					log.Printf("❌ ABAC(model): %s", reason)

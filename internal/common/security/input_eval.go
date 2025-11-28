@@ -29,16 +29,14 @@ package auth
 import (
 	"encoding/json"
 	"os"
-	"time"
 )
 
 // EvalInput is the minimal set of request properties the ABAC engine needs to
-// evaluate a decision. IssuedUTC should be in UTC.
+// evaluate a decision.
 type EvalInput struct {
-	Method    string
-	Path      string
-	Claims    Claims
-	IssuedUTC time.Time
+	Method string
+	Path   string
+	Claims Claims
 }
 
 // Claims represents token claims extracted from a verified ID token.

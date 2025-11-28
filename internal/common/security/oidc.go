@@ -103,16 +103,6 @@ func FromContext(r *http.Request) Claims {
 	return nil
 }
 
-// IssuedAtFromContext retrieves the token issue time stored in context.
-func IssuedAtFromContext(r *http.Request) (time.Time, bool) {
-	if v := r.Context().Value(issuedAtKey); v != nil {
-		if t, ok := v.(time.Time); ok {
-			return t, true
-		}
-	}
-	return time.Time{}, false
-}
-
 // Middleware validates a Bearer token (if present) and injects claims.
 //
 // Behavior:
@@ -166,23 +156,6 @@ func (o *OIDC) Middleware(next http.Handler) http.Handler {
 			return
 		}
 
-		// Parse iat if present; do not fail the request if missing or malformed.
-		if n, ok := c["iat"].(json.Number); ok {
-			if sec, err := n.Int64(); err == nil {
-				issuedAt := time.Unix(sec, 0)
-				log.Printf("🕓 Token issued at %v", issuedAt)
-				r = r.WithContext(context.WithValue(r.Context(), issuedAtKey, issuedAt))
-			} else {
-				log.Printf("❌ Invalid 'iat' value: %v", err)
-				respondOIDCError(w)
-			}
-		} else {
-			log.Printf("⚠️ Token missing 'iat' claim")
-			log.Printf("❌  Token missing 'iat' claim")
-			respondOIDCError(w)
-			return
-		}
-
 		if typ, _ := c.GetString("typ"); typ != "" && !strings.EqualFold(typ, "Bearer") {
 			log.Printf("❌ unexpected token typ: %q", typ)
 			respondOIDCError(w)
@@ -196,6 +169,12 @@ func (o *OIDC) Middleware(next http.Handler) http.Handler {
 			respondOIDCError(w)
 			return
 		}
+
+		// add time claims sourced from the current request context
+		currTime := time.Now()
+		c["CLIENTNOW"] = currTime.Format(time.RFC3339)
+		c["LOCALNOW"] = currTime.In(time.Local).Format(time.RFC3339)
+		c["UTCNOW"] = currTime.UTC().Format(time.RFC3339)
 
 		log.Printf("✅ Token verified successfully for subject: %v", c["sub"])
 		r = r.WithContext(context.WithValue(r.Context(), claimsKey, c))

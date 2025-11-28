@@ -154,10 +154,10 @@ func (m *AccessModel) AuthorizeWithFilter(in EvalInput) (ok bool, code DecisionC
 			return false, DecisionNoMatch, nil
 		}
 
-		adapted, onlyBool := adaptLEForBackend(*combinedLE, in.Claims, in.IssuedUTC)
+		adapted, onlyBool := adaptLEForBackend(*combinedLE, in.Claims)
 		if onlyBool {
 			// Fully decidable here; evaluate and continue on false
-			if !evalLE(adapted, in.Claims, in.IssuedUTC) {
+			if !evalLE(adapted, in.Claims) {
 				continue
 			}
 			return true, DecisionAllow, nil
@@ -180,9 +180,9 @@ func (m *AccessModel) AuthorizeWithFilter(in EvalInput) (ok bool, code DecisionC
 		combined = grammar.LogicalExpression{Or: ruleExprs}
 	}
 
-	simplified, onlyBool := adaptLEForBackend(combined, in.Claims, in.IssuedUTC)
+	simplified, onlyBool := adaptLEForBackend(combined, in.Claims)
 	if onlyBool {
-		if evalLE(simplified, in.Claims, in.IssuedUTC) {
+		if evalLE(simplified, in.Claims) {
 			return true, DecisionAllow, nil
 		}
 		return false, DecisionNoMatch, nil

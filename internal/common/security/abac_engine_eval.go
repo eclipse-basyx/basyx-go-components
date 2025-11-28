@@ -38,14 +38,23 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
-func resolveGlobalToken(name string, now time.Time) (string, bool) {
+func resolveGlobalToken(name string, claims Claims) (any, bool) {
 	switch strings.ToUpper(name) {
 	case "UTCNOW":
-		return now.UTC().Format(time.RFC3339), true
+		if val, ok := claims["UTCNOW"]; ok {
+			return normalizeClaimScalar(val), true
+		}
+		return "", false
 	case "LOCALNOW":
-		return now.In(time.Local).Format(time.RFC3339), true
+		if val, ok := claims["LOCALNOW"]; ok {
+			return normalizeClaimScalar(val), true
+		}
+		return "", false
 	case "CLIENTNOW":
-		return now.Format(time.RFC3339), true
+		if val, ok := claims["CLIENTNOW"]; ok {
+			return normalizeClaimScalar(val), true
+		}
+		return "", false
 	case "ANONYMOUS":
 		return "ANONYMOUS", true
 	default:
@@ -53,34 +62,34 @@ func resolveGlobalToken(name string, now time.Time) (string, bool) {
 	}
 }
 
-func evalLE(le grammar.LogicalExpression, claims Claims, now time.Time) bool {
+func evalLE(le grammar.LogicalExpression, claims Claims) bool {
 	if le.Boolean != nil {
 		return *le.Boolean
 	}
 
 	if len(le.Gt) == 2 {
-		return numCmp(resolveValue(le.Gt[0], claims, now), resolveValue(le.Gt[1], claims, now), "gt")
+		return numCmp(resolveValue(le.Gt[0], claims), resolveValue(le.Gt[1], claims), "gt")
 	}
 	if len(le.Ge) == 2 {
-		return numCmp(resolveValue(le.Ge[0], claims, now), resolveValue(le.Ge[1], claims, now), "ge")
+		return numCmp(resolveValue(le.Ge[0], claims), resolveValue(le.Ge[1], claims), "ge")
 	}
 	if len(le.Lt) == 2 {
-		return numCmp(resolveValue(le.Lt[0], claims, now), resolveValue(le.Lt[1], claims, now), "lt")
+		return numCmp(resolveValue(le.Lt[0], claims), resolveValue(le.Lt[1], claims), "lt")
 	}
 	if len(le.Le) == 2 {
-		return numCmp(resolveValue(le.Le[0], claims, now), resolveValue(le.Le[1], claims, now), "le")
+		return numCmp(resolveValue(le.Le[0], claims), resolveValue(le.Le[1], claims), "le")
 	}
 
 	if len(le.Eq) == 2 {
-		return fmt.Sprint(resolveValue(le.Eq[0], claims, now)) == fmt.Sprint(resolveValue(le.Eq[1], claims, now))
+		return fmt.Sprint(resolveValue(le.Eq[0], claims)) == fmt.Sprint(resolveValue(le.Eq[1], claims))
 	}
 	if len(le.Ne) == 2 {
-		return fmt.Sprint(resolveValue(le.Ne[0], claims, now)) != fmt.Sprint(resolveValue(le.Ne[1], claims, now))
+		return fmt.Sprint(resolveValue(le.Ne[0], claims)) != fmt.Sprint(resolveValue(le.Ne[1], claims))
 	}
 
 	if len(le.Regex) == 2 {
-		hay := asString(resolveStringItem(le.Regex[0], claims, now))
-		pat := asString(resolveStringItem(le.Regex[1], claims, now))
+		hay := asString(resolveStringItem(le.Regex[0], claims))
+		pat := asString(resolveStringItem(le.Regex[1], claims))
 		re, err := regexp.Compile(pat)
 		if err != nil {
 			return false
@@ -88,24 +97,24 @@ func evalLE(le grammar.LogicalExpression, claims Claims, now time.Time) bool {
 		return re.MatchString(hay)
 	}
 	if len(le.Contains) == 2 {
-		hay := asString(resolveStringItem(le.Contains[0], claims, now))
-		needle := asString(resolveStringItem(le.Contains[1], claims, now))
+		hay := asString(resolveStringItem(le.Contains[0], claims))
+		needle := asString(resolveStringItem(le.Contains[1], claims))
 		return strings.Contains(hay, needle)
 	}
 	if len(le.StartsWith) == 2 {
-		hay := asString(resolveStringItem(le.StartsWith[0], claims, now))
-		prefix := asString(resolveStringItem(le.StartsWith[1], claims, now))
+		hay := asString(resolveStringItem(le.StartsWith[0], claims))
+		prefix := asString(resolveStringItem(le.StartsWith[1], claims))
 		return strings.HasPrefix(hay, prefix)
 	}
 	if len(le.EndsWith) == 2 {
-		hay := asString(resolveStringItem(le.EndsWith[0], claims, now))
-		suffix := asString(resolveStringItem(le.EndsWith[1], claims, now))
+		hay := asString(resolveStringItem(le.EndsWith[0], claims))
+		suffix := asString(resolveStringItem(le.EndsWith[1], claims))
 		return strings.HasSuffix(hay, suffix)
 	}
 
 	if len(le.And) >= 2 {
 		for _, sub := range le.And {
-			if !evalLE(sub, claims, now) {
+			if !evalLE(sub, claims) {
 				return false
 			}
 		}
@@ -113,19 +122,19 @@ func evalLE(le grammar.LogicalExpression, claims Claims, now time.Time) bool {
 	}
 	if len(le.Or) >= 2 {
 		for _, sub := range le.Or {
-			if evalLE(sub, claims, now) {
+			if evalLE(sub, claims) {
 				return true
 			}
 		}
 		return false
 	}
 	if le.Not != nil {
-		return !evalLE(*le.Not, claims, now)
+		return !evalLE(*le.Not, claims)
 	}
 
 	if len(le.Match) > 0 {
 		for _, m := range le.Match {
-			if !evalMatch(m, claims, now) {
+			if !evalMatch(m, claims) {
 				return false
 			}
 		}
@@ -139,7 +148,7 @@ func evalLE(le grammar.LogicalExpression, claims Claims, now time.Time) bool {
 // The remaining expression is returned for backend evaluation. The second
 // return value indicates whether the entire expression became a pure boolean
 // expression (i.e., consists only of true/false after reduction).
-func adaptLEForBackend(le grammar.LogicalExpression, claims Claims, now time.Time) (grammar.LogicalExpression, bool) {
+func adaptLEForBackend(le grammar.LogicalExpression, claims Claims) (grammar.LogicalExpression, bool) {
 	// Boolean literal stays as-is
 	if le.Boolean != nil {
 		return le, true
@@ -152,8 +161,8 @@ func adaptLEForBackend(le grammar.LogicalExpression, claims Claims, now time.Tim
 			return le, false
 		}
 
-		left := replaceAttribute(items[0], claims, now)
-		right := replaceAttribute(items[1], claims, now)
+		left := replaceAttribute(items[0], claims)
+		right := replaceAttribute(items[1], claims)
 
 		// Construct a new LE with updated operands
 		out := grammar.LogicalExpression{}
@@ -185,7 +194,7 @@ func adaptLEForBackend(le grammar.LogicalExpression, claims Claims, now time.Tim
 			// Evaluate by reusing evalLE on this sub-expression
 			b := false
 			tmp := out
-			if evalLE(tmp, claims, now) {
+			if evalLE(tmp, claims) {
 				b = true
 			}
 			return grammar.LogicalExpression{Boolean: &b}, true
@@ -220,13 +229,13 @@ func adaptLEForBackend(le grammar.LogicalExpression, claims Claims, now time.Tim
 	// Logical: AND / OR
 	if len(le.And) > 0 {
 		if len(le.And) == 1 {
-			return adaptLEForBackend(le.And[0], claims, now)
+			return adaptLEForBackend(le.And[0], claims)
 		}
 		out := grammar.LogicalExpression{}
 		anyUnknown := false
 		// Short-circuit: if any child becomes false => whole AND is false.
 		for _, sub := range le.And {
-			t, onlyBool := adaptLEForBackend(sub, claims, now)
+			t, onlyBool := adaptLEForBackend(sub, claims)
 			if onlyBool && t.Boolean != nil {
 				if !*t.Boolean {
 					b := false
@@ -252,13 +261,13 @@ func adaptLEForBackend(le grammar.LogicalExpression, claims Claims, now time.Tim
 
 	if len(le.Or) > 0 {
 		if len(le.Or) == 1 {
-			return adaptLEForBackend(le.Or[0], claims, now)
+			return adaptLEForBackend(le.Or[0], claims)
 		}
 		out := grammar.LogicalExpression{}
 		anyUnknown := false
 		// Short-circuit: if any child becomes true => whole OR is true.
 		for _, sub := range le.Or {
-			t, onlyBool := adaptLEForBackend(sub, claims, now)
+			t, onlyBool := adaptLEForBackend(sub, claims)
 			if onlyBool && t.Boolean != nil {
 				if *t.Boolean {
 					b := true
@@ -284,7 +293,7 @@ func adaptLEForBackend(le grammar.LogicalExpression, claims Claims, now time.Tim
 
 	// Logical: NOT
 	if le.Not != nil {
-		t, onlyBool := adaptLEForBackend(*le.Not, claims, now)
+		t, onlyBool := adaptLEForBackend(*le.Not, claims)
 		if onlyBool && t.Boolean != nil {
 			b := !*t.Boolean
 			return grammar.LogicalExpression{Boolean: &b}, true
@@ -298,7 +307,7 @@ func adaptLEForBackend(le grammar.LogicalExpression, claims Claims, now time.Tim
 		out := grammar.LogicalExpression{}
 		anyUnknown := false
 		for _, m := range le.Match {
-			if t, isBool := adaptMatchForBackend(m, claims, now); isBool {
+			if t, isBool := adaptMatchForBackend(m, claims); isBool {
 				if t.Boolean != nil && !*t.Boolean {
 					b := false
 					return grammar.LogicalExpression{Boolean: &b}, true
@@ -321,7 +330,7 @@ func adaptLEForBackend(le grammar.LogicalExpression, claims Claims, now time.Tim
 }
 
 // adaptMatchForBackend reduces a MatchExpression similarly to adaptLEForBackend.
-func adaptMatchForBackend(me grammar.MatchExpression, claims Claims, now time.Time) (grammar.MatchExpression, bool) {
+func adaptMatchForBackend(me grammar.MatchExpression, claims Claims) (grammar.MatchExpression, bool) {
 	if me.Boolean != nil {
 		return me, true
 	}
@@ -329,8 +338,8 @@ func adaptMatchForBackend(me grammar.MatchExpression, claims Claims, now time.Ti
 		if len(items) != 2 {
 			return me, false
 		}
-		left := replaceAttribute(items[0], claims, now)
-		right := replaceAttribute(items[1], claims, now)
+		left := replaceAttribute(items[0], claims)
+		right := replaceAttribute(items[1], claims)
 		out := grammar.MatchExpression{}
 		switch op {
 		case "$eq":
@@ -379,7 +388,7 @@ func adaptMatchForBackend(me grammar.MatchExpression, claims Claims, now time.Ti
 			case "$ends-with":
 				tmp.EndsWith = out.EndsWith
 			}
-			if evalLE(tmp, claims, now) {
+			if evalLE(tmp, claims) {
 				b = true
 			}
 			return grammar.MatchExpression{Boolean: &b}, true
@@ -412,7 +421,7 @@ func adaptMatchForBackend(me grammar.MatchExpression, claims Claims, now time.Ti
 		allBool := true
 		out := grammar.MatchExpression{}
 		for _, sub := range me.Match {
-			t, onlyBool := adaptMatchForBackend(sub, claims, now)
+			t, onlyBool := adaptMatchForBackend(sub, claims)
 			out.Match = append(out.Match, t)
 			if !onlyBool {
 				allBool = false
@@ -436,14 +445,26 @@ func adaptMatchForBackend(me grammar.MatchExpression, claims Claims, now time.Ti
 // replaceAttribute resolves a Value that is deterministic from CLAIM/GLOBAL attributes
 // (including via casts) to a literal when possible. Values that reference $field
 // remain untouched because they cannot be evaluated without backend context.
-func replaceAttribute(v grammar.Value, claims Claims, now time.Time) grammar.Value {
-	if valueContainsAttribute(v) && !valueContainsField(v) {
-		// Use existing resolver to get a concrete value
-		resolved := resolveValue(v, claims, now)
+func replaceAttribute(v grammar.Value, claims Claims) grammar.Value {
+	if valueContainsField(v) {
+		return v
+	}
+
+	if valueContainsAttribute(v) {
+		// Use existing resolver to get a concrete value that may depend on claims
+		resolved := resolveValue(v, claims)
 		if lit, ok := literalValueFromAny(resolved); ok {
 			return lit
 		}
 	}
+
+	// Pure literal (including casts around literals): collapse to a literal value
+	if !valueContainsAttribute(v) && !valueContainsField(v) {
+		if lit, ok := literalValueFromAny(resolveValue(v, claims)); ok {
+			return lit
+		}
+	}
+
 	return v
 }
 
@@ -566,31 +587,31 @@ func valueToStringValue(v grammar.Value) grammar.StringValue {
 	return grammar.StringValue{StrVal: &s}
 }
 
-func evalMatch(me grammar.MatchExpression, claims Claims, now time.Time) bool {
+func evalMatch(me grammar.MatchExpression, claims Claims) bool {
 	if me.Boolean != nil {
 		return *me.Boolean
 	}
 	if len(me.Gt) == 2 {
-		return numCmp(resolveValue(me.Gt[0], claims, now), resolveValue(me.Gt[1], claims, now), "gt")
+		return numCmp(resolveValue(me.Gt[0], claims), resolveValue(me.Gt[1], claims), "gt")
 	}
 	if len(me.Ge) == 2 {
-		return numCmp(resolveValue(me.Ge[0], claims, now), resolveValue(me.Ge[1], claims, now), "ge")
+		return numCmp(resolveValue(me.Ge[0], claims), resolveValue(me.Ge[1], claims), "ge")
 	}
 	if len(me.Lt) == 2 {
-		return numCmp(resolveValue(me.Lt[0], claims, now), resolveValue(me.Lt[1], claims, now), "lt")
+		return numCmp(resolveValue(me.Lt[0], claims), resolveValue(me.Lt[1], claims), "lt")
 	}
 	if len(me.Le) == 2 {
-		return numCmp(resolveValue(me.Le[0], claims, now), resolveValue(me.Le[1], claims, now), "le")
+		return numCmp(resolveValue(me.Le[0], claims), resolveValue(me.Le[1], claims), "le")
 	}
 	if len(me.Eq) == 2 {
-		return fmt.Sprint(resolveValue(me.Eq[0], claims, now)) == fmt.Sprint(resolveValue(me.Eq[1], claims, now))
+		return fmt.Sprint(resolveValue(me.Eq[0], claims)) == fmt.Sprint(resolveValue(me.Eq[1], claims))
 	}
 	if len(me.Ne) == 2 {
-		return fmt.Sprint(resolveValue(me.Ne[0], claims, now)) != fmt.Sprint(resolveValue(me.Ne[1], claims, now))
+		return fmt.Sprint(resolveValue(me.Ne[0], claims)) != fmt.Sprint(resolveValue(me.Ne[1], claims))
 	}
 	if len(me.Regex) == 2 {
-		hay := asString(resolveStringItem(me.Regex[0], claims, now))
-		pat := asString(resolveStringItem(me.Regex[1], claims, now))
+		hay := asString(resolveStringItem(me.Regex[0], claims))
+		pat := asString(resolveStringItem(me.Regex[1], claims))
 		re, err := regexp.Compile(pat)
 		if err != nil {
 			return false
@@ -598,23 +619,23 @@ func evalMatch(me grammar.MatchExpression, claims Claims, now time.Time) bool {
 		return re.MatchString(hay)
 	}
 	if len(me.Contains) == 2 {
-		hay := asString(resolveStringItem(me.Contains[0], claims, now))
-		needle := asString(resolveStringItem(me.Contains[1], claims, now))
+		hay := asString(resolveStringItem(me.Contains[0], claims))
+		needle := asString(resolveStringItem(me.Contains[1], claims))
 		return strings.Contains(hay, needle)
 	}
 	if len(me.StartsWith) == 2 {
-		hay := asString(resolveStringItem(me.StartsWith[0], claims, now))
-		prefix := asString(resolveStringItem(me.StartsWith[1], claims, now))
+		hay := asString(resolveStringItem(me.StartsWith[0], claims))
+		prefix := asString(resolveStringItem(me.StartsWith[1], claims))
 		return strings.HasPrefix(hay, prefix)
 	}
 	if len(me.EndsWith) == 2 {
-		hay := asString(resolveStringItem(me.EndsWith[0], claims, now))
-		suffix := asString(resolveStringItem(me.EndsWith[1], claims, now))
+		hay := asString(resolveStringItem(me.EndsWith[0], claims))
+		suffix := asString(resolveStringItem(me.EndsWith[1], claims))
 		return strings.HasSuffix(hay, suffix)
 	}
 	if len(me.Match) > 0 {
 		for _, sub := range me.Match {
-			if !evalMatch(sub, claims, now) {
+			if !evalMatch(sub, claims) {
 				return false
 			}
 		}
@@ -623,10 +644,10 @@ func evalMatch(me grammar.MatchExpression, claims Claims, now time.Time) bool {
 	return false
 }
 
-func resolveValue(v grammar.Value, claims Claims, now time.Time) any {
+func resolveValue(v grammar.Value, claims Claims) any {
 
 	if v.Attribute != nil {
-		return resolveAttributeValue(v.Attribute, claims, now)
+		return resolveAttributeValue(v.Attribute, claims)
 	}
 
 	if v.StrVal != nil {
@@ -650,21 +671,21 @@ func resolveValue(v grammar.Value, claims Claims, now time.Time) any {
 	}
 
 	if v.StrCast != nil {
-		return fmt.Sprint(resolveValue(*v.StrCast, claims, now))
+		return fmt.Sprint(resolveValue(*v.StrCast, claims))
 	}
 	if v.NumCast != nil {
-		x := resolveValue(*v.NumCast, claims, now)
+		x := resolveValue(*v.NumCast, claims)
 		if f, ok := toFloat(x); ok {
 			return f
 		}
 		return x
 	}
 	if v.BoolCast != nil {
-		return castToBool(resolveValue(*v.BoolCast, claims, now))
+		return castToBool(resolveValue(*v.BoolCast, claims))
 	}
 
 	if v.TimeCast != nil {
-		inner := resolveValue(*v.TimeCast, claims, now)
+		inner := resolveValue(*v.TimeCast, claims)
 
 		if t, ok := toDateTime(inner); ok {
 			return t.Format("15:04:05")
@@ -678,18 +699,18 @@ func resolveValue(v grammar.Value, claims Claims, now time.Time) any {
 	}
 	if v.DateTimeCast != nil {
 
-		return fmt.Sprint(resolveValue(*v.DateTimeCast, claims, now))
+		return fmt.Sprint(resolveValue(*v.DateTimeCast, claims))
 	}
 	if v.HexCast != nil {
-		return fmt.Sprint(resolveValue(*v.HexCast, claims, now))
+		return fmt.Sprint(resolveValue(*v.HexCast, claims))
 	}
 
 	return nil
 }
 
-func resolveStringItem(s grammar.StringValue, claims Claims, now time.Time) string {
+func resolveStringItem(s grammar.StringValue, claims Claims) string {
 	if s.Attribute != nil {
-		return asString(resolveAttributeValue(s.Attribute, claims, now))
+		return asString(resolveAttributeValue(s.Attribute, claims))
 	}
 
 	if s.StrVal != nil {
@@ -697,7 +718,7 @@ func resolveStringItem(s grammar.StringValue, claims Claims, now time.Time) stri
 	}
 
 	if s.StrCast != nil {
-		return fmt.Sprint(resolveValue(*s.StrCast, claims, now))
+		return fmt.Sprint(resolveValue(*s.StrCast, claims))
 	}
 
 	if s.Field != nil {
@@ -712,7 +733,7 @@ func asString(v any) string {
 
 // resolveAttributeValue resolves a grammar.AttributeValue to a concrete literal using claims/globals.
 // It also normalizes common claim container shapes (e.g., single-element arrays from Keycloak).
-func resolveAttributeValue(attr grammar.AttributeValue, claims Claims, now time.Time) any {
+func resolveAttributeValue(attr grammar.AttributeValue, claims Claims) any {
 	m, ok := asStringMap(attr)
 	if !ok {
 		return nil
@@ -721,7 +742,7 @@ func resolveAttributeValue(attr grammar.AttributeValue, claims Claims, now time.
 		return normalizeClaimScalar(claims[c])
 	}
 	if g := m["GLOBAL"]; g != "" {
-		if val, ok := resolveGlobalToken(g, now); ok {
+		if val, ok := resolveGlobalToken(g, claims); ok {
 			return val
 		}
 	}

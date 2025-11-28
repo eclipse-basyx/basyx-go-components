@@ -1,0 +1,20 @@
+{
+  "AllAccessPermissionRules": {
+    "rules": [
+      {
+        "ACL": {
+          "ACCESS": "ALLOW",
+          "RIGHTS": ["READ"],
+          "ATTRIBUTES": [{"GLOBAL": "ANONYMOUS"}]
+        },
+        "OBJECTS": [{"ROUTE": "/shell-descriptors"}],
+        "FORMULA": {
+          "$gt": [
+            {"$field": "$aasdesc#endpoints[0].protocolinformation.href"},
+            {"$attribute": {"GLOBAL": "UTCNOW"}}
+          ]
+        }
+      }
+    ]
+  }
+}
