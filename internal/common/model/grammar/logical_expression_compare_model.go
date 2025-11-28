@@ -30,6 +30,7 @@ package grammar
 import (
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -79,6 +80,18 @@ func (le *LogicalExpression) evaluateAgainstModel(data map[string]interface{}) (
 	}
 	if len(le.Le) > 0 {
 		return le.evaluateModelComparison(le.Le, "$le", data)
+	}
+	if len(le.Regex) > 0 {
+		return le.evaluateStringOperation(le.Regex, "$regex", data)
+	}
+	if len(le.Contains) > 0 {
+		return le.evaluateStringOperation(le.Contains, "$contains", data)
+	}
+	if len(le.StartsWith) > 0 {
+		return le.evaluateStringOperation(le.StartsWith, "$starts-with", data)
+	}
+	if len(le.EndsWith) > 0 {
+		return le.evaluateStringOperation(le.EndsWith, "$ends-with", data)
 	}
 	if len(le.And) > 0 {
 		for i, sub := range le.And {
@@ -153,6 +166,55 @@ func (le *LogicalExpression) evaluateModelComparison(operands []Value, operation
 		}
 	}
 
+	return false, nil
+}
+
+func (le *LogicalExpression) evaluateStringOperation(items []StringValue, operation string, data map[string]interface{}) (bool, error) {
+	if len(items) != 2 {
+		return false, fmt.Errorf("string operation %s requires exactly 2 operands, got %d", operation, len(items))
+	}
+	left, err := resolveStringValues(items[0], data)
+	if err != nil {
+		return false, err
+	}
+	right, err := resolveStringValues(items[1], data)
+	if err != nil {
+		return false, err
+	}
+	if len(left) == 0 || len(right) == 0 {
+		return false, nil
+	}
+
+	matchFunc := func(a, b string) (bool, error) {
+		switch operation {
+		case "$contains":
+			return strings.Contains(a, b), nil
+		case "$starts-with":
+			return strings.HasPrefix(a, b), nil
+		case "$ends-with":
+			return strings.HasSuffix(a, b), nil
+		case "$regex":
+			re, err := regexp.Compile(b)
+			if err != nil {
+				return false, err
+			}
+			return re.MatchString(a), nil
+		default:
+			return false, fmt.Errorf("unsupported string operation %s", operation)
+		}
+	}
+
+	for _, l := range left {
+		for _, r := range right {
+			ok, err := matchFunc(l, r)
+			if err != nil {
+				return false, err
+			}
+			if ok {
+				return true, nil
+			}
+		}
+	}
 	return false, nil
 }
 
@@ -262,6 +324,30 @@ func resolveOperandValue(op *Value, data map[string]interface{}) ([]interface{},
 		return castToStrings(values), nil
 	}
 	return nil, fmt.Errorf("unsupported operand type %s", op.GetValueType())
+}
+
+func resolveStringValues(op StringValue, data map[string]interface{}) ([]string, error) {
+	if op.Field != nil {
+		values, err := resolveFieldValues(data, string(*op.Field))
+		if err != nil {
+			return nil, err
+		}
+		return stringifyValues(values), nil
+	}
+	if op.StrVal != nil {
+		return []string{string(*op.StrVal)}, nil
+	}
+	if op.Attribute != nil {
+		return []string{fmt.Sprint(op.Attribute)}, nil
+	}
+	if op.StrCast != nil {
+		values, err := resolveOperandValue(op.StrCast, data)
+		if err != nil {
+			return nil, err
+		}
+		return stringifyValues(values), nil
+	}
+	return nil, nil
 }
 
 func resolveFieldValues(data map[string]interface{}, rawField string) ([]interface{}, error) {
@@ -496,6 +582,14 @@ func compareOrderedValues(op string, left, right interface{}) (bool, error) {
 
 func castToStrings(values []interface{}) []interface{} {
 	out := make([]interface{}, 0, len(values))
+	for _, v := range values {
+		out = append(out, fmt.Sprint(v))
+	}
+	return out
+}
+
+func stringifyValues(values []interface{}) []string {
+	out := make([]string, 0, len(values))
 	for _, v := range values {
 		out = append(out, fmt.Sprint(v))
 	}

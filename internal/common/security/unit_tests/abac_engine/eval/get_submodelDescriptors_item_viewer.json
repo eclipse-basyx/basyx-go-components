@@ -2,8 +2,8 @@
   "method": "GET",
   "path": "/shell-descriptors/aHR0cHM6Ly9tYXJ0aW4uZGU/submodel-descriptors/c20tMTIz",
   "claims": {
-    "role": "admin",
-    "clear": "10"
+    "role": "viewer",
+    "clear": "2"
   },
   "issued_utc": "2025-11-12T14:00:00Z"
 }

@@ -1,0 +1,114 @@
+[
+  {
+    "context": "Health endpoint - anonymous allowed",
+    "token": null,
+    "method": "GET",
+    "endpoint": "http://localhost:6004/health",
+    "shouldMatch": "expected/expectedHealthEndpoint.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "POST viewer descriptor - admin creates fixture",
+    "token": { "user": "admin", "password": "pwd" },
+    "method": "POST",
+    "endpoint": "http://localhost:6004/shell-descriptors",
+    "data": "postBody/viewer_descriptor.json",
+    "shouldMatch": "postBody/viewer_descriptor.json",
+    "expectedStatus": 201
+  },
+  {
+    "context": "POST regex descriptor - admin creates fixture",
+    "token": { "user": "admin", "password": "pwd" },
+    "method": "POST",
+    "endpoint": "http://localhost:6004/shell-descriptors",
+    "data": "postBody/regex_descriptor.json",
+    "shouldMatch": "postBody/regex_descriptor.json",
+    "expectedStatus": 201
+  },
+  {
+    "context": "POST regex descriptor 2 - admin creates fixture",
+    "token": { "user": "admin", "password": "pwd" },
+    "method": "POST",
+    "endpoint": "http://localhost:6004/shell-descriptors",
+    "data": "postBody/regex_descriptor2.json",
+    "shouldMatch": "postBody/regex_descriptor2.json",
+    "expectedStatus": 201
+  },
+  {
+    "context": "POST public descriptor - admin creates fixture",
+    "token": { "user": "admin", "password": "pwd" },
+    "method": "POST",
+    "endpoint": "http://localhost:6004/shell-descriptors",
+    "data": "postBody/public_descriptor.json",
+    "shouldMatch": "postBody/public_descriptor.json",
+    "expectedStatus": 201
+  },
+  {
+    "context": "GET viewer descriptor - viewer allowed via $starts-with",
+    "token": { "user": "usera", "password": "pwd" },
+    "method": "GET",
+    "endpoint": "http://localhost:6004/shell-descriptors/dXJuOmFhczp2aWV3ZXItYXNzZXQ",
+    "shouldMatch": "postBody/viewer_descriptor.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "GET viewer descriptor - editor denied (prefix rule)",
+    "token": { "user": "userx", "password": "pwd" },
+    "method": "GET",
+    "endpoint": "http://localhost:6004/shell-descriptors/dXJuOmFhczp2aWV3ZXItYXNzZXQ",
+    "expectedStatus": 403
+  },
+  {
+    "context": "GET regex descriptor - editor allowed via $regex",
+    "token": { "user": "userx", "password": "pwd" },
+    "method": "GET",
+    "endpoint": "http://localhost:6004/shell-descriptors/dXJuOmFhczpyZWdleC00Mg",
+    "shouldMatch": "postBody/regex_descriptor.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "GET regex descriptor - editor denied (regex rule not matched)",
+    "token": { "user": "userx", "password": "pwd" },
+    "method": "GET",
+    "endpoint": "http://localhost:6004/shell-descriptors/dXJuOmFhczpyZWdpbWF4LTQy",
+    "expectedStatus": 403
+  },
+  {
+    "context": "GET public descriptor - anonymous allowed via $ends-with",
+    "token": null,
+    "method": "GET",
+    "endpoint": "http://localhost:6004/shell-descriptors/dXJuOmFhczpkZW1vOnB1YmxpYw",
+    "shouldMatch": "postBody/public_descriptor.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "GET viewer descriptor - anonymous denied",
+    "token": null,
+    "method": "GET",
+    "endpoint": "http://localhost:6004/shell-descriptors/dXJuOmFhczp2aWV3ZXItYXNzZXQ",
+    "expectedStatus": 403
+  },
+  {
+    "context": "GET all descriptor - editor ",
+    "token": { "user": "userx", "password": "pwd" },
+    "method": "GET",
+    "endpoint": "http://localhost:6004/shell-descriptors",
+    "shouldMatch": "expected/expectedEditorResult.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "GET all descriptor - viewer ",
+    "token": { "user": "usera", "password": "pwd" },
+    "method": "GET",
+    "endpoint": "http://localhost:6004/shell-descriptors",
+    "shouldMatch": "expected/expectedViewerResult.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "GET all descriptor - anon ",
+    "method": "GET",
+    "endpoint": "http://localhost:6004/shell-descriptors",
+    "shouldMatch": "expected/expectedAnonResult.json",
+    "expectedStatus": 200
+  }
+]

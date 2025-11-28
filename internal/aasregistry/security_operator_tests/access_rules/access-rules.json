@@ -1,0 +1,38 @@
+{
+  "AllAccessPermissionRules": {
+    "DEFATTRIBUTES": [
+      { "name": "anonym_attr", "attributes": [ { "GLOBAL": "ANONYMOUS" } ] },
+      { "name": "role_attr", "attributes": [ { "CLAIM": "role" } ] }
+    ],
+
+    "DEFOBJECTS": [
+      { "name": "health", "objects": [ { "ROUTE": "/health" } ] },
+      { "name": "shell_descriptors", "objects": [ { "ROUTE": "/shell-descriptors" }, { "ROUTE": "/shell-descriptors/*" } ] }
+    ],
+
+    "DEFACLS": [
+      { "name": "read_anonymous", "acl": { "USEATTRIBUTES": "anonym_attr", "RIGHTS": ["READ"], "ACCESS": "ALLOW" } },
+      { "name": "read_role", "acl": { "USEATTRIBUTES": "role_attr", "RIGHTS": ["READ"], "ACCESS": "ALLOW" } },
+      { "name": "write_admin", "acl": { "USEATTRIBUTES": "role_attr", "RIGHTS": ["CREATE"], "ACCESS": "ALLOW" } }
+    ],
+
+    "DEFFORMULAS": [
+      { "name": "always_true", "formula": { "$boolean": true } },
+      { "name": "role_is_admin", "formula": { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "admin" } ] } },
+      { "name": "role_starts_with_view", "formula": { "$starts-with": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "view" } ] } },
+      { "name": "id_regex_editor", "formula": { "$and": [
+        { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "editor" } ] },
+        { "$regex": [ { "$field": "$aasdesc#id" }, { "$strVal": "^urn:aas:regex-[0-9]+$" } ] }
+      ] } },
+      { "name": "id_public_suffix", "formula": { "$ends-with": [ { "$field": "$aasdesc#id" }, { "$strVal": ":public" } ] } }
+    ],
+
+    "rules": [
+      { "USEACL": "read_anonymous", "USEOBJECTS": ["health"], "USEFORMULA": "always_true" },
+      { "USEACL": "write_admin", "USEOBJECTS": ["shell_descriptors"], "USEFORMULA": "role_is_admin" },
+      { "USEACL": "read_role", "USEOBJECTS": ["shell_descriptors"], "USEFORMULA": "role_starts_with_view" },
+      { "USEACL": "read_role", "USEOBJECTS": ["shell_descriptors"], "USEFORMULA": "id_regex_editor" },
+      { "USEACL": "read_anonymous", "USEOBJECTS": ["shell_descriptors"], "USEFORMULA": "id_public_suffix" }
+    ]
+  }
+}

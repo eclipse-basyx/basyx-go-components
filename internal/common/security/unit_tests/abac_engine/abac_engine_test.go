@@ -83,7 +83,6 @@ func TestAdaptLEForBackend(t *testing.T) {
 	}
 
 	for _, c := range cases {
-		c := c
 		t.Run(c.Input, func(t *testing.T) {
 
 			raw, err := os.ReadFile(c.Input)

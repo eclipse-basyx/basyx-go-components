@@ -1,0 +1,10 @@
+{
+  "id": "urn:aas:demo:public",
+  "idShort": "public",
+  "specificAssetIds": [
+    {
+      "name": "visibility",
+      "value": "public"
+    }
+  ]
+}

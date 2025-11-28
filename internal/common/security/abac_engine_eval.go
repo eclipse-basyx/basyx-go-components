@@ -151,50 +151,7 @@ func adaptLEForBackend(le grammar.LogicalExpression, claims Claims, now time.Tim
 		if len(items) != 2 {
 			return le, false
 		}
-		// Fast path: if one side is an attribute (CLAIM/GLOBAL) and the other is a
-		// constant literal, try to resolve and reduce immediately.
-		if items[0].Attribute != nil && isConstantLiteralVal(items[1]) {
-			if l2 := replaceAttribute(items[0], claims, now); isLiteral(l2) {
-				test := grammar.LogicalExpression{}
-				switch op {
-				case "$eq":
-					test.Eq = []grammar.Value{l2, items[1]}
-				case "$ne":
-					test.Ne = []grammar.Value{l2, items[1]}
-				case "$gt":
-					test.Gt = []grammar.Value{l2, items[1]}
-				case "$ge":
-					test.Ge = []grammar.Value{l2, items[1]}
-				case "$lt":
-					test.Lt = []grammar.Value{l2, items[1]}
-				case "$le":
-					test.Le = []grammar.Value{l2, items[1]}
-				}
-				b := evalLE(test, claims, now)
-				return grammar.LogicalExpression{Boolean: &b}, true
-			}
-		}
-		if items[1].Attribute != nil && isConstantLiteralVal(items[0]) {
-			if r2 := replaceAttribute(items[1], claims, now); isLiteral(r2) {
-				test := grammar.LogicalExpression{}
-				switch op {
-				case "$eq":
-					test.Eq = []grammar.Value{items[0], r2}
-				case "$ne":
-					test.Ne = []grammar.Value{items[0], r2}
-				case "$gt":
-					test.Gt = []grammar.Value{items[0], r2}
-				case "$ge":
-					test.Ge = []grammar.Value{items[0], r2}
-				case "$lt":
-					test.Lt = []grammar.Value{items[0], r2}
-				case "$le":
-					test.Le = []grammar.Value{items[0], r2}
-				}
-				b := evalLE(test, claims, now)
-				return grammar.LogicalExpression{Boolean: &b}, true
-			}
-		}
+
 		left := replaceAttribute(items[0], claims, now)
 		right := replaceAttribute(items[1], claims, now)
 
@@ -683,16 +640,7 @@ func evalMatch(me grammar.MatchExpression, claims Claims, now time.Time) bool {
 func resolveValue(v grammar.Value, claims Claims, now time.Time) any {
 
 	if v.Attribute != nil {
-		if m, ok := asStringMap(v.Attribute); ok {
-			if c := m["CLAIM"]; c != "" {
-				return claims[c]
-			}
-			if g := m["GLOBAL"]; g != "" {
-				if val, ok := resolveGlobalToken(g, now); ok {
-					return val
-				}
-			}
-		}
+		return resolveAttributeValue(v.Attribute, claims, now)
 	}
 
 	if v.StrVal != nil {
@@ -755,16 +703,7 @@ func resolveValue(v grammar.Value, claims Claims, now time.Time) any {
 
 func resolveStringItem(s grammar.StringValue, claims Claims, now time.Time) string {
 	if s.Attribute != nil {
-		if m, ok := asStringMap(s.Attribute); ok {
-			if c := m["CLAIM"]; c != "" {
-				return asString(claims[c])
-			}
-			if g := m["GLOBAL"]; g != "" {
-				if val, ok := resolveGlobalToken(g, now); ok {
-					return val
-				}
-			}
-		}
+		return asString(resolveAttributeValue(s.Attribute, claims, now))
 	}
 
 	if s.StrVal != nil {
@@ -783,6 +722,42 @@ func resolveStringItem(s grammar.StringValue, claims Claims, now time.Time) stri
 
 func asString(v any) string {
 	return fmt.Sprint(v)
+}
+
+// resolveAttributeValue resolves a grammar.AttributeValue to a concrete literal using claims/globals.
+// It also normalizes common claim container shapes (e.g., single-element arrays from Keycloak).
+func resolveAttributeValue(attr grammar.AttributeValue, claims Claims, now time.Time) any {
+	m, ok := asStringMap(attr)
+	if !ok {
+		return nil
+	}
+	if c := m["CLAIM"]; c != "" {
+		return normalizeClaimScalar(claims[c])
+	}
+	if g := m["GLOBAL"]; g != "" {
+		if val, ok := resolveGlobalToken(g, now); ok {
+			return val
+		}
+	}
+	return nil
+}
+
+// normalizeClaimScalar unwraps common container formats so operators see a scalar.
+func normalizeClaimScalar(v any) any {
+	switch val := v.(type) {
+	case []any:
+		if len(val) == 0 {
+			return ""
+		}
+		return normalizeClaimScalar(val[0])
+	case []string:
+		if len(val) == 0 {
+			return ""
+		}
+		return val[0]
+	default:
+		return v
+	}
 }
 
 func castToBool(v any) bool {

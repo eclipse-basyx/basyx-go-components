@@ -168,5 +168,35 @@
     "input": "input/with_descriptor_object_all.json",
     "expected": "expected/access_allowed.json",
     "eval": "eval/get_submodelDescriptors_item_admin.json"
+  },
+  {
+    "input": "input/compare_string_with_num_fail.json",
+    "expected": "expected/no_matching_rule.json",
+    "eval": "eval/get_submodelDescriptors_item_admin.json"
+  },
+  {
+    "input": "input/compare_string_with_num_correct.json",
+    "expected": "expected/access_allowed.json",
+    "eval": "eval/get_submodelDescriptors_item_admin.json"
+  },
+  {
+    "input": "input/compare_start_with.json",
+    "expected": "expected/access_allowed.json",
+    "eval": "eval/get_submodelDescriptors_item_viewer.json"
+  },
+  {
+    "input": "input/regex_stays.json",
+    "expected": "expected/no_matching_rule.json",
+    "eval": "eval/get_submodelDescriptors_item_viewer.json"
+  },
+  {
+    "input": "input/regex_stays.json",
+    "expected": "expected/access_allowed_regex.json",
+    "eval": "eval/get_submodelDescriptors_item_admin.json"
+  },
+  {
+    "input": "input/regex_reduced.json",
+    "expected": "expected/access_allowed.json",
+    "eval": "eval/get_submodelDescriptors_test_regex.json"
   }
 ]

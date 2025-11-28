@@ -201,6 +201,46 @@ func TestLogicalExpression_EvaluateModel(t *testing.T) {
 			},
 			want: true,
 		},
+		{
+			name: "starts-with passes",
+			expr: LogicalExpression{
+				StartsWith: StringItems{
+					strField("$aasdesc#id"),
+					strString("aas-"),
+				},
+			},
+			want: true,
+		},
+		{
+			name: "ends-with passes",
+			expr: LogicalExpression{
+				EndsWith: StringItems{
+					strField("$aasdesc#id"),
+					strString("1"),
+				},
+			},
+			want: true,
+		},
+		{
+			name: "contains fails",
+			expr: LogicalExpression{
+				Contains: StringItems{
+					strField("$aasdesc#globalAssetId"),
+					strString("MISSING"),
+				},
+			},
+			want: false,
+		},
+		{
+			name: "regex matches id",
+			expr: LogicalExpression{
+				Regex: StringItems{
+					strField("$aasdesc#id"),
+					strString("^aas-[0-9]+$"),
+				},
+			},
+			want: true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -319,9 +359,19 @@ func field(value string) Value {
 	return Value{Field: &p}
 }
 
+func strField(value string) StringValue {
+	p := ModelStringPattern(value)
+	return StringValue{Field: &p}
+}
+
 func strVal(value string) Value {
 	s := StandardString(value)
 	return Value{StrVal: &s}
+}
+
+func strString(value string) StringValue {
+	s := StandardString(value)
+	return StringValue{StrVal: &s}
 }
 
 func boolPtr(b bool) *bool {

@@ -184,6 +184,20 @@ func (le *LogicalExpression) EvaluateToExpression() (exp.Expression, error) {
 		return le.evaluateComparison(le.Le, "$le")
 	}
 
+	// Handle string operations
+	if len(le.Contains) > 0 {
+		return le.evaluateStringOperationSQL(le.Contains, "$contains")
+	}
+	if len(le.StartsWith) > 0 {
+		return le.evaluateStringOperationSQL(le.StartsWith, "$starts-with")
+	}
+	if len(le.EndsWith) > 0 {
+		return le.evaluateStringOperationSQL(le.EndsWith, "$ends-with")
+	}
+	if len(le.Regex) > 0 {
+		return le.evaluateStringOperationSQL(le.Regex, "$regex")
+	}
+
 	// Handle logical operations
 	if len(le.And) > 0 {
 		var expressions []exp.Expression
@@ -223,6 +237,18 @@ func (le *LogicalExpression) EvaluateToExpression() (exp.Expression, error) {
 	}
 
 	return nil, fmt.Errorf("logical expression has no valid operation")
+}
+
+// evaluateStringOperationSQL builds SQL expressions for string operators like $contains, $starts-with, $ends-with, and $regex.
+func (le *LogicalExpression) evaluateStringOperationSQL(items []StringValue, operation string) (exp.Expression, error) {
+	if len(items) != 2 {
+		return nil, fmt.Errorf("string operation %s requires exactly 2 operands, got %d", operation, len(items))
+	}
+
+	leftOperand := stringValueToValue(items[0])
+	rightOperand := stringValueToValue(items[1])
+
+	return HandleStringOperation(&leftOperand, &rightOperand, operation)
 }
 
 // evaluateComparison evaluates a comparison operation with the given operands
@@ -450,6 +476,66 @@ func HandleComparison(leftOperand, rightOperand *Value, operation string) (exp.E
 		return nil, err
 	}
 
+	return applyArrayPositionConstraints(leftOperand, rightOperand, comparisonExpr)
+}
+
+// HandleStringOperation builds SQL expressions for string-specific operators.
+func HandleStringOperation(leftOperand, rightOperand *Value, operation string) (exp.Expression, error) {
+	normalizeSemanticShorthand(leftOperand)
+	normalizeSemanticShorthand(rightOperand)
+
+	leftSQL, err := toSQLComponent(leftOperand, "left")
+	if err != nil {
+		return nil, err
+	}
+	rightSQL, err := toSQLComponent(rightOperand, "right")
+	if err != nil {
+		return nil, err
+	}
+
+	stringExpr, err := buildStringOperationExpression(leftSQL, rightSQL, operation)
+	if err != nil {
+		return nil, err
+	}
+
+	return applyArrayPositionConstraints(leftOperand, rightOperand, stringExpr)
+}
+
+// stringValueToValue normalizes a StringValue into a Value so existing helpers can be reused.
+func stringValueToValue(item StringValue) Value {
+	switch {
+	case item.Field != nil:
+		return Value{Field: item.Field}
+	case item.StrVal != nil:
+		return Value{StrVal: item.StrVal}
+	case item.Attribute != nil:
+		return Value{Attribute: item.Attribute}
+	case item.StrCast != nil:
+		return Value{StrCast: item.StrCast}
+	default:
+		return Value{}
+	}
+}
+
+// buildStringOperationExpression maps string operations to SQL expressions.
+func buildStringOperationExpression(left interface{}, right interface{}, operation string) (exp.Expression, error) {
+	switch operation {
+	case "$contains":
+		return goqu.L("? LIKE '%' || ? || '%'", left, right), nil
+	case "$starts-with":
+		return goqu.L("? LIKE ? || '%'", left, right), nil
+	case "$ends-with":
+		return goqu.L("? LIKE '%' || ?", left, right), nil
+	case "$regex":
+		// PostgreSQL regex match (case-sensitive). Use ~* if you need case-insensitive semantics.
+		return goqu.L("? ~ ?", left, right), nil
+	default:
+		return nil, fmt.Errorf("unsupported string operation: %s", operation)
+	}
+}
+
+// applyArrayPositionConstraints appends position constraints for array-indexed fields.
+func applyArrayPositionConstraints(leftOperand, rightOperand *Value, baseExpr exp.Expression) (exp.Expression, error) {
 	// Handle position constraints for fields with array indices
 	// This applies to: semanticId.keys[], externalSubjectId.keys[], endpoints[], specificAssetIds[], submodelDescriptors[]
 
@@ -469,7 +555,7 @@ func HandleComparison(leftOperand, rightOperand *Value, operation string) (exp.E
 
 	if !hasArrayIndex {
 		// No arrays involved, return simple comparison
-		return comparisonExpr, nil
+		return baseExpr, nil
 	}
 
 	// Determine which operand to use for extracting position
@@ -478,6 +564,9 @@ func HandleComparison(leftOperand, rightOperand *Value, operation string) (exp.E
 		operandToUse = rightOperand
 	}
 
+	if operandToUse == nil || operandToUse.Field == nil {
+		return baseExpr, nil
+	}
 	fieldStr := string(*operandToUse.Field)
 
 	// Unified array position constraint logic
@@ -507,11 +596,11 @@ func HandleComparison(leftOperand, rightOperand *Value, operation string) (exp.E
 
 	// Add all position constraints
 	if len(positionConstraints) > 0 {
-		allConstraints := append([]exp.Expression{comparisonExpr}, positionConstraints...)
+		allConstraints := append([]exp.Expression{baseExpr}, positionConstraints...)
 		return goqu.And(allConstraints...), nil
 	}
 
-	return comparisonExpr, nil
+	return baseExpr, nil
 }
 
 // normalizeSemanticShorthand expands known shorthand fields to their explicit keys[0].value form.
