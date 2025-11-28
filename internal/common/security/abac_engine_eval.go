@@ -487,20 +487,6 @@ func isLiteral(v grammar.Value) bool {
 	return v.IsValue() && !v.IsField() && v.Attribute == nil
 }
 
-// isConstantLiteralVal returns true if the value is a direct literal constant
-// (not a field, not an attribute), so comparisons with it can be reduced when the
-// other side is resolvable.
-func isConstantLiteralVal(v grammar.Value) bool {
-	if v.Field != nil || v.Attribute != nil {
-		return false
-	}
-	if v.StrVal != nil || v.NumVal != nil || v.Boolean != nil || v.DateTimeVal != nil || v.TimeVal != nil || v.Year != nil || v.Month != nil || v.DayOfMonth != nil || v.DayOfWeek != nil || v.HexVal != nil {
-		return true
-	}
-	// Casts produce runtime literals via resolveValue; treat as not a constant here.
-	return false
-}
-
 // literalValueFromAny converts a Go value into a grammar.Value with a literal.
 func literalValueFromAny(x any) (grammar.Value, bool) {
 	switch t := x.(type) {
