@@ -37,7 +37,7 @@ func (s *AssetAdministrationShellRegistryOfRegistriesAPIAPIService) GetAllRegist
 	if strings.TrimSpace(cursor) != "" {
 		dec, decErr := common.DecodeString(cursor)
 		if decErr != nil {
-			log.Printf("🧩 [%s] Error in GetAllRegistryDescriptors: decode cursor=%q limit=%d registryType=%q: %v", componentName, cursor, limit, registryType, decErr)
+			log.Printf("📍 [%s] Error in GetAllRegistryDescriptors: decode cursor=%q limit=%d registryType=%q: %v", componentName, cursor, limit, registryType, decErr)
 			return common.NewErrorResponse(
 				decErr, http.StatusBadRequest, componentName, "GetAllRegistryDescriptors", "BadCursor",
 			), nil
@@ -46,7 +46,7 @@ func (s *AssetAdministrationShellRegistryOfRegistriesAPIAPIService) GetAllRegist
 	}
 	aasds, nextCursor, err := s.registryOfRegistriesBackend.ListRegistryDescriptors(ctx, limit, internalCursor, registryType)
 	if err != nil {
-		log.Printf("🧩 [%s] Error in GetAllRegistryDescriptors: list failed (limit=%d cursor=%q registryType=%q): %v", componentName, limit, internalCursor, registryType, err)
+		log.Printf("📍 [%s] Error in GetAllRegistryDescriptors: list failed (limit=%d cursor=%q registryType=%q): %v", componentName, limit, internalCursor, registryType, err)
 		switch {
 		case common.IsErrBadRequest(err):
 			return common.NewErrorResponse(
@@ -79,17 +79,17 @@ func (s *AssetAdministrationShellRegistryOfRegistriesAPIAPIService) PostRegistry
 	if err != nil {
 		switch {
 		case common.IsErrBadRequest(err):
-			log.Printf("🧩 [%s] Error in InsertRegistryDescriptor: bad request (aasId=%q): %v", componentName, registryDescriptor.Id, err)
+			log.Printf("📍 [%s] Error in InsertRegistryDescriptor: bad request (aasId=%q): %v", componentName, registryDescriptor.Id, err)
 			return common.NewErrorResponse(
 				err, http.StatusBadRequest, componentName, "InsertRegistryDescriptor", "BadRequest",
 			), nil
 		case common.IsErrConflict(err):
-			log.Printf("🧩 [%s] Error in InsertRegistryDescriptor: conflict (aasId=%q): %v", componentName, registryDescriptor.Id, err)
+			log.Printf("📍 [%s] Error in InsertRegistryDescriptor: conflict (aasId=%q): %v", componentName, registryDescriptor.Id, err)
 			return common.NewErrorResponse(
 				err, http.StatusConflict, componentName, "InsertRegistryDescriptor", "Conflict",
 			), nil
 		default:
-			log.Printf("🧩 [%s] Error in InsertRegistryDescriptor: internal (aasId=%q): %v", componentName, registryDescriptor.Id, err)
+			log.Printf("📍 [%s] Error in InsertRegistryDescriptor: internal (aasId=%q): %v", componentName, registryDescriptor.Id, err)
 			return common.NewErrorResponse(
 				err, http.StatusInternalServerError, componentName, "InsertRegistryDescriptor", "Unhandled",
 			), err
@@ -114,17 +114,17 @@ func (s *AssetAdministrationShellRegistryOfRegistriesAPIAPIService) GetRegistryD
 	if err != nil {
 		switch {
 		case common.IsErrBadRequest(err):
-			log.Printf("🧩 [%s] Error in GetRegistryDescriptorById: bad request (aasId=%q): %v", componentName, string(decoded), err)
+			log.Printf("📍 [%s] Error in GetRegistryDescriptorById: bad request (aasId=%q): %v", componentName, string(decoded), err)
 			return common.NewErrorResponse(
 				err, http.StatusBadRequest, componentName, "GetRegistryDescriptorById", "BadRequest",
 			), nil
 		case common.IsErrNotFound(err):
-			log.Printf("🧩 [%s] Error in GetRegistryDescriptorById: not found (aasId=%q): %v", componentName, string(decoded), err)
+			log.Printf("📍 [%s] Error in GetRegistryDescriptorById: not found (aasId=%q): %v", componentName, string(decoded), err)
 			return common.NewErrorResponse(
 				err, http.StatusNotFound, componentName, "GetRegistryDescriptorById", "NotFound",
 			), nil
 		default:
-			log.Printf("🧩 [%s] Error in GetRegistryDescriptorById: internal (aasId=%q): %v", componentName, string(decoded), err)
+			log.Printf("📍 [%s] Error in GetRegistryDescriptorById: internal (aasId=%q): %v", componentName, string(decoded), err)
 			return common.NewErrorResponse(
 				err, http.StatusInternalServerError, componentName, "GetRegistryDescriptorById", "Unhandled",
 			), err
@@ -138,7 +138,7 @@ func (s *AssetAdministrationShellRegistryOfRegistriesAPIAPIService) PutRegistryD
 	// Decode path AAS id
 	decodedRegistry, decErr := common.DecodeString(registryIdentifier)
 	if decErr != nil {
-		log.Printf("🧩 [%s] Error in PutRegistryDescriptorById: decode registryIdentifier=%q: %v", componentName, registryIdentifier, decErr)
+		log.Printf("📍 [%s] Error in PutRegistryDescriptorById: decode registryIdentifier=%q: %v", componentName, registryIdentifier, decErr)
 		return common.NewErrorResponse(
 			decErr, http.StatusBadRequest, componentName, "PutRegistryDescriptorById", "BadRequest-Decode",
 		), nil
@@ -146,7 +146,7 @@ func (s *AssetAdministrationShellRegistryOfRegistriesAPIAPIService) PutRegistryD
 
 	// Enforce id consistency with path
 	if strings.TrimSpace(registryDescriptor.Id) != "" && registryDescriptor.Id != decodedRegistry {
-		log.Printf("🧩 [%s] Error in PutRegistryDescriptorById: body id does not match path id (body=%q path=%q)", componentName, registryDescriptor.Id, decodedRegistry)
+		log.Printf("📍 [%s] Error in PutRegistryDescriptorById: body id does not match path id (body=%q path=%q)", componentName, registryDescriptor.Id, decodedRegistry)
 		return common.NewErrorResponse(
 			errors.New("body id does not match path id"), http.StatusBadRequest, componentName, "PutRegistryDescriptorById", "BadRequest-IdMismatch",
 		), nil
@@ -157,17 +157,17 @@ func (s *AssetAdministrationShellRegistryOfRegistriesAPIAPIService) PutRegistryD
 	if err != nil {
 		switch {
 		case common.IsErrBadRequest(err):
-			log.Printf("🧩 [%s] Error in PutRegistryDescriptorById: bad request (registryId=%q): %v", componentName, decodedRegistry, err)
+			log.Printf("📍 [%s] Error in PutRegistryDescriptorById: bad request (registryId=%q): %v", componentName, decodedRegistry, err)
 			return common.NewErrorResponse(
 				err, http.StatusBadRequest, componentName, "PutRegistryDescriptorById", "BadRequest",
 			), nil
 		case common.IsErrConflict(err):
-			log.Printf("🧩 [%s] Error in PutRegistryDescriptorById: conflict (registryId=%q): %v", componentName, decodedRegistry, err)
+			log.Printf("📍 [%s] Error in PutRegistryDescriptorById: conflict (registryId=%q): %v", componentName, decodedRegistry, err)
 			return common.NewErrorResponse(
 				err, http.StatusConflict, componentName, "PutRegistryDescriptorById", "Conflict",
 			), nil
 		default:
-			log.Printf("🧩 [%s] Error in PutRegistryDescriptorById: internal (registryId=%q): %v", componentName, decodedRegistry, err)
+			log.Printf("📍 [%s] Error in PutRegistryDescriptorById: internal (registryId=%q): %v", componentName, decodedRegistry, err)
 			return common.NewErrorResponse(
 				err, http.StatusInternalServerError, componentName, "PutRegistryDescriptorById", "Unhandled-Insert",
 			), err
@@ -185,7 +185,7 @@ func (s *AssetAdministrationShellRegistryOfRegistriesAPIAPIService) DeleteRegist
 
 	decoded, decodeErr := common.DecodeString(registryIdentifier)
 	if decodeErr != nil {
-		log.Printf("🧭 [%s] Error DeleteRegistryDescriptorById: decode aasIdentifier=%q failed: %v", componentName, registryIdentifier, decodeErr)
+		log.Printf("📍 [%s] Error DeleteRegistryDescriptorById: decode aasIdentifier=%q failed: %v", componentName, registryIdentifier, decodeErr)
 		return common.NewErrorResponse(
 			decodeErr, http.StatusBadRequest, componentName, "DeleteRegistryDescriptorById", "BadRequest-Decode",
 		), nil
@@ -194,17 +194,17 @@ func (s *AssetAdministrationShellRegistryOfRegistriesAPIAPIService) DeleteRegist
 	if err := s.registryOfRegistriesBackend.DeleteRegistryDescriptorByID(ctx, decoded); err != nil {
 		switch {
 		case common.IsErrNotFound(err):
-			log.Printf("🧩 [%s] Error in DeleteRegistryDescriptorById: not found (aasId=%q): %v", componentName, decoded, err)
+			log.Printf("📍 [%s] Error in DeleteRegistryDescriptorById: not found (aasId=%q): %v", componentName, decoded, err)
 			return common.NewErrorResponse(
 				err, http.StatusNotFound, componentName, "DeleteRegistryDescriptorById", "NotFound",
 			), nil
 		case common.IsErrBadRequest(err):
-			log.Printf("🧩 [%s] Error in DeleteRegistryDescriptorById: bad request (aasId=%q): %v", componentName, decoded, err)
+			log.Printf("📍 [%s] Error in DeleteRegistryDescriptorById: bad request (aasId=%q): %v", componentName, decoded, err)
 			return common.NewErrorResponse(
 				err, http.StatusBadRequest, componentName, "DeleteRegistryDescriptorById", "BadRequest",
 			), nil
 		default:
-			log.Printf("🧩 [%s] Error in DeleteRegistryDescriptorById: internal (aasId=%q): %v", componentName, decoded, err)
+			log.Printf("📍 [%s] Error in DeleteRegistryDescriptorById: internal (aasId=%q): %v", componentName, decoded, err)
 			return common.NewErrorResponse(
 				err, http.StatusInternalServerError, componentName, "DeleteRegistryDescriptorById", "Unhandled",
 			), err
