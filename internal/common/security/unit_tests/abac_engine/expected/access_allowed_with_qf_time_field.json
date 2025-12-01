@@ -4,8 +4,10 @@
   "queryFilter": {
     "Formula": {
       "$gt": [
-        {
-          "$field": "$aasdesc#endpoints[0].protocolinformation.href"
+        {"$dateTimeCast": 
+          {
+            "$field": "$aasdesc#endpoints[0].protocolinformation.href"
+          }
         },
         {
           "$strVal": "2025-01-01T00:00:00Z"

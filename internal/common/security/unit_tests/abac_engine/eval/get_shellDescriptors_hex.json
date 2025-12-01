@@ -1,0 +1,7 @@
+{
+  "method": "GET",
+  "path": "/shell-descriptors",
+  "claims": {
+    "hex": "16#FF"
+  }
+}

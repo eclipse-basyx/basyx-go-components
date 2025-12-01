@@ -74,5 +74,10 @@
     "file": "fail/wrong_bool.json",
     "type": "AccessRuleModelSchemaJson",
     "should_fail": true
+  },
+  {
+    "file": "fail/compare_string_with_num_fail.json",
+    "type": "AccessRuleModelSchemaJson",
+    "should_fail": true
   }
 ]

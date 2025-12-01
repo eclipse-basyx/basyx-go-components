@@ -181,18 +181,17 @@ func (v *Value) EffectiveType() string {
 			if isNowGlobal(gv) {
 				return "datetime"
 			}
-			return "string"
 		}
-		return ""
-	case v.Field != nil:
-		return ""
-	case v.NumVal != nil, v.NumCast != nil:
+		return "string"
+	case v.HexVal != nil, v.HexCast != nil:
+		return "hex"
+	case v.NumVal != nil, v.NumCast != nil, v.Year != nil, v.Month != nil, v.DayOfMonth != nil, v.DayOfWeek != nil:
 		return "number"
-	case v.StrVal != nil, v.StrCast != nil, v.HexVal != nil, v.HexCast != nil:
+	case v.StrVal != nil, v.StrCast != nil, v.Field != nil:
 		return "string"
 	case v.Boolean != nil, v.BoolCast != nil:
 		return "bool"
-	case v.DateTimeVal != nil, v.DateTimeCast != nil, v.Year != nil, v.Month != nil, v.DayOfMonth != nil, v.DayOfWeek != nil:
+	case v.DateTimeVal != nil, v.DateTimeCast != nil:
 		return "datetime"
 	case v.TimeVal != nil, v.TimeCast != nil:
 		return "time"

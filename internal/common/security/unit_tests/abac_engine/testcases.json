@@ -170,11 +170,6 @@
     "eval": "eval/get_submodelDescriptors_item_admin.json"
   },
   {
-    "input": "input/compare_string_with_num_fail.json",
-    "expected": "expected/no_matching_rule.json",
-    "eval": "eval/get_submodelDescriptors_item_admin.json"
-  },
-  {
     "input": "input/compare_string_with_num_correct.json",
     "expected": "expected/access_allowed.json",
     "eval": "eval/get_submodelDescriptors_item_admin.json"
@@ -233,5 +228,35 @@
     "input": "input/time_compare_datetime_operand.json",
     "expected": "expected/access_allowed.json",
     "eval": "eval/get_shellDescriptors_time_match.json"
+  },
+  {
+    "input": "input/operator_time_ge.json",
+    "expected": "expected/access_allowed.json",
+    "eval": "eval/get_shellDescriptors_time_match.json"
+  },
+  {
+    "input": "input/operator_time_lt_fail.json",
+    "expected": "expected/no_matching_rule.json",
+    "eval": "eval/get_shellDescriptors_time_match.json"
+  },
+  {
+    "input": "input/operator_year_eq.json",
+    "expected": "expected/access_allowed.json",
+    "eval": "eval/get_shellDescriptors_time_match.json"
+  },
+  {
+    "input": "input/operator_dayofweek_mismatch.json",
+    "expected": "expected/no_matching_rule.json",
+    "eval": "eval/get_shellDescriptors_time_match.json"
+  },
+  {
+    "input": "input/operator_hex_eq.json",
+    "expected": "expected/access_allowed.json",
+    "eval": "eval/get_shellDescriptors_hex.json"
+  },
+  {
+    "input": "input/operator_hex_ne_fail.json",
+    "expected": "expected/no_matching_rule.json",
+    "eval": "eval/get_shellDescriptors_hex.json"
   }
 ]
