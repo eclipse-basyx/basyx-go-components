@@ -383,6 +383,13 @@ func ParseAASQLFieldToSQLColumn(field string) string {
 	if strings.HasPrefix(field, "$sm#semanticId.keys[") && strings.HasSuffix(field, "].type") {
 		return "semantic_id_reference_key.type"
 	}
+
+	if strings.HasPrefix(field, "$aasdesc#specificAssetIds[") && strings.HasSuffix(field, "].name") {
+		return "specific_asset_id.name"
+	}
+	if strings.HasPrefix(field, "$aasdesc#specificAssetIds[") && strings.HasSuffix(field, "].value") {
+		return "specific_asset_id.value"
+	}
 	if strings.HasPrefix(field, "$aasdesc#specificAssetIds") && strings.Contains(field, ".externalSubjectId.keys[") && strings.HasSuffix(field, "].value") {
 		return "external_subject_reference_key.value"
 	}
@@ -488,8 +495,8 @@ func HandleComparison(leftOperand, rightOperand *Value, operation string) (exp.E
 		lType := leftOperand.EffectiveType()
 		rType := rightOperand.EffectiveType()
 		if lType != "" && rType != "" && lType != rType {
-			return nil, fmt.Errorf("cannot compare different value types: %s and %s",
-				lType, rType)
+			// Types are not comparable; treat as always-false condition instead of hard error.
+			return goqu.L("1 = 0"), nil
 		}
 	}
 
@@ -794,8 +801,15 @@ func castOperandToSQLType(inner *Value, position string, targetType string) (exp
 	if err != nil {
 		return nil, err
 	}
-	// Use PostgreSQL :: syntax for brevity.
-	return goqu.L("?::"+targetType, sqlValue), nil
+	// Use guarded casts for time/timestamp to avoid runtime failures on non-parsable strings.
+	switch targetType {
+	case "timestamptz":
+		return goqu.L("CASE WHEN ? ~ ? THEN (?::timestamptz) END", sqlValue, `^[0-9]{4}-[0-9]{2}-[0-9]{2}T`, sqlValue), nil
+	case "time":
+		return goqu.L("CASE WHEN ? ~ ? THEN (?::time) END", sqlValue, `^[0-9]{2}:[0-9]{2}(:[0-9]{2})?$`, sqlValue), nil
+	default:
+		return goqu.L("?::"+targetType, sqlValue), nil
+	}
 }
 
 // normalizeLiteralForSQL converts grammar literals to safe SQL encodable values.

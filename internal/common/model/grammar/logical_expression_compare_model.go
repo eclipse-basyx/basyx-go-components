@@ -577,7 +577,8 @@ func compareOrderedValues(op string, left, right interface{}) (bool, error) {
 			}
 		}
 	}
-	return false, fmt.Errorf("cannot compare %T (%v) and %T (%v) with operator %s", left, left, right, right, op)
+	// If types are not comparable, treat as non-match instead of hard error.
+	return false, nil
 }
 
 func castToStrings(values []interface{}) []interface{} {

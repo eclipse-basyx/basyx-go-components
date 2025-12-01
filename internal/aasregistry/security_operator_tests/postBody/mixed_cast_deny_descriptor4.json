@@ -1,0 +1,18 @@
+{
+  "id": "urn:aas:mixed-cast-deny4",
+  "idShort": "mixedCastDeny4",
+  "specificAssetIds": [
+    { "name": "hexFlag", "value": "16#BEEF" },
+    { "name": "priority", "value": "150" },
+    { "name": "shiftTime", "value": "07:59:59" },
+    { "name": "commissionedYear", "value": "2025" }
+  ],
+  "endpoints": [
+    {
+      "interface": "http",
+      "protocolInformation": {
+        "href": "mixed-cast-endpoint-deny4"
+      }
+    }
+  ]
+}

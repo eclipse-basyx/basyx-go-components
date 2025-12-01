@@ -12,7 +12,6 @@
       { "name": "some_shell_descriptors", "objects": [ {"DESCRIPTOR": "$aasdesc(\"urn:aas:demo:public\")"}, {"DESCRIPTOR": "$aasdesc(\"urn:aas:regex-42\")"}, {"DESCRIPTOR": "$aasdesc(\"urn:aas:regimax-42\")"}, {"DESCRIPTOR": "$aasdesc(\"urn:aas:viewer-asset\")"}] },
       { "name": "time_allow_desc", "objects": [ { "ROUTE": "/shell-descriptors/dXJuOmFhczp0aW1lLWFsbG93" } ] },
       { "name": "time_deny_desc", "objects": [ { "ROUTE": "/shell-descriptors/dXJuOmFhczp0aW1lLWRlbnk" } ] },
-      { "name": "dt_field_allow", "objects": [ { "ROUTE": "/shell-descriptors/dXJuOmFhczpkdC1maWVsZC1hbGxvdw" } ] },
       { "name": "dt_field_deny", "objects": [ { "ROUTE": "/shell-descriptors/dXJuOmFhczpkdC1maWVsZC1kZW55" } ] }
     ],
 
@@ -34,7 +33,13 @@
       { "name": "id_public_suffix", "formula": { "$ends-with": [ { "$field": "$aasdesc#id" }, { "$strVal": ":public" } ] } },
       { "name": "now_after_2000", "formula": { "$gt": [ { "$attribute": { "GLOBAL": "UTCNOW" } }, { "$dateTimeVal": "2000-01-01T00:00:00Z" } ] } },
       { "name": "now_after_2100", "formula": { "$gt": [ { "$attribute": { "GLOBAL": "UTCNOW" } }, { "$dateTimeVal": "2100-01-01T00:00:00Z" } ] } },
-      { "name": "dt_field_after_cutoff", "formula": { "$gt": [ { "$dateTimeCast": { "$field": "$aasdesc#endpoints[0].protocolinformation.href" } }, { "$dateTimeVal": "2024-12-31T23:59:59Z" } ] } }
+      { "name": "dt_field_after_cutoff", "formula": { "$gt": [ { "$dateTimeCast": { "$field": "$aasdesc#endpoints[0].protocolinformation.href" } }, { "$dateTimeVal": "2024-12-31T23:59:59Z" } ] } },
+      { "name": "mixed_casts_gate", "formula": { "$and": [
+        { "$eq": [ { "$hexCast": { "$field": "$aasdesc#specificAssetIds[0].value" } }, { "$hexVal": "16#BEEF" } ] },
+        { "$ge": [ { "$numCast": { "$field": "$aasdesc#specificAssetIds[1].value" } }, { "$numVal": 100 } ] },
+        { "$gt": [ { "$timeCast": { "$field": "$aasdesc#specificAssetIds[2].value" } }, { "$timeVal": "08:00:00" } ] },
+        { "$eq": [ { "$numCast": { "$field": "$aasdesc#specificAssetIds[3].value" } }, { "$year": "2025-01-01T00:00:00Z" } ] }
+      ] } }
     ],
 
     "rules": [
@@ -45,7 +50,8 @@
       { "USEACL": "read_anonymous", "USEOBJECTS": ["some_shell_descriptors"], "USEFORMULA": "id_public_suffix" },
       { "USEACL": "read_member", "USEOBJECTS": ["time_allow_desc"], "USEFORMULA": "now_after_2000" },
       { "USEACL": "read_member", "USEOBJECTS": ["time_deny_desc"], "USEFORMULA": "now_after_2100" },
-      { "USEACL": "read_role", "USEOBJECTS": ["dt_field_allow"], "USEFORMULA": "dt_field_after_cutoff" }
+      { "USEACL": "read_role", "USEOBJECTS": ["all_shell_descriptors"], "USEFORMULA": "dt_field_after_cutoff" },
+      { "USEACL": "read_member", "USEOBJECTS": ["all_shell_descriptors"], "USEFORMULA": "mixed_casts_gate" }
     ]
   }
 }
