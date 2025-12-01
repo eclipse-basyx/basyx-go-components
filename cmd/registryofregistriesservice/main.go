@@ -11,7 +11,6 @@ import (
 	"strconv"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
-	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	"github.com/eclipse-basyx/basyx-go-components/internal/registryofregistriesservice/api"
 	registryofregistriespostgresql "github.com/eclipse-basyx/basyx-go-components/internal/registryofregistriesservice/persistence"
 	registryofregistriesapi "github.com/eclipse-basyx/basyx-go-components/pkg/registryofregistryapi"
@@ -65,11 +64,6 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 
 	// === Protected API Subrouter ===
 	apiRouter := chi.NewRouter()
-
-	// Apply OIDC + ABAC once for all discovery endpoints
-	if err := auth.SetupSecurity(ctx, cfg, apiRouter); err != nil {
-		return err
-	}
 
 	// Register all discovery routes (protected)
 	for _, rt := range smCtrl.Routes() {
