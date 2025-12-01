@@ -45,3 +45,10 @@ func (d *DateTimeLiteralPattern) UnmarshalJSON(value []byte) error {
 	*d = DateTimeLiteralPattern(t)
 	return nil
 }
+
+// MarshalJSON renders the timestamp in RFC3339 format to preserve literal fidelity.
+func (d DateTimeLiteralPattern) MarshalJSON() ([]byte, error) {
+	t := time.Time(d)
+	// Format consistently even for zero values.
+	return []byte(fmt.Sprintf("%q", t.Format(time.RFC3339))), nil
+}

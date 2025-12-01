@@ -446,6 +446,8 @@ func ListAssetAdministrationShellDescriptors(
 		Limit(uint(peekLimit))
 
 	sqlStr, args, err := ds.ToSQL()
+
+	fmt.Println(sqlStr)
 	if err != nil {
 		return nil, "", err
 	}

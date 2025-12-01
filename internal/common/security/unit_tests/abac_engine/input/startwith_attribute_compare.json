@@ -1,0 +1,23 @@
+{
+  "AllAccessPermissionRules": {
+    "DEFATTRIBUTES": [
+      { "name": "role_attr", "attributes": [ { "CLAIM": "role" } ] }
+    ],
+
+    "DEFOBJECTS": [
+      { "name": "some_shell_descriptors", "objects": [ {"DESCRIPTOR": "$aasdesc(\"urn:aas:demo:public\")"}, {"DESCRIPTOR": "$aasdesc(\"urn:aas:regex-42\")"}, {"DESCRIPTOR": "$aasdesc(\"urn:aas:regimax-42\")"}, {"DESCRIPTOR": "$aasdesc(\"urn:aas:viewer-asset\")"}] }
+    ],
+
+    "DEFACLS": [
+      { "name": "read_role", "acl": { "USEATTRIBUTES": "role_attr", "RIGHTS": ["READ"], "ACCESS": "ALLOW" } }
+    ],
+
+    "DEFFORMULAS": [
+      { "name": "role_starts_with_view", "formula": { "$starts-with": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "view" } ] } }
+    ],
+
+    "rules": [
+      { "USEACL": "read_role", "USEOBJECTS": ["some_shell_descriptors"], "USEFORMULA": "role_starts_with_view" }
+    ]
+  }
+}

@@ -531,7 +531,14 @@ func literalValueFromAny(x any) (grammar.Value, bool) {
 	case int64:
 		f := float64(t)
 		return grammar.Value{NumVal: &f}, true
+	case time.Time:
+		dt := grammar.DateTimeLiteralPattern(t)
+		return grammar.Value{DateTimeVal: &dt}, true
 	case string:
+		if parsed, err := time.Parse(time.RFC3339, t); err == nil {
+			dt := grammar.DateTimeLiteralPattern(parsed)
+			return grammar.Value{DateTimeVal: &dt}, true
+		}
 		s := grammar.StandardString(t)
 		return grammar.Value{StrVal: &s}, true
 	default:
@@ -570,6 +577,10 @@ func stringItemsToValues(items []grammar.StringValue) []grammar.Value {
 
 // valueToStringValue converts a Value into a StringValue best-effort for string operations
 func valueToStringValue(v grammar.Value) grammar.StringValue {
+	if v.DateTimeVal != nil || v.TimeVal != nil || v.Year != nil || v.Month != nil || v.DayOfMonth != nil || v.DayOfWeek != nil {
+		s := grammar.StandardString(stringValueFromDate(v))
+		return grammar.StringValue{StrVal: &s}
+	}
 	if v.Field != nil {
 		return grammar.StringValue{Field: v.Field}
 	}

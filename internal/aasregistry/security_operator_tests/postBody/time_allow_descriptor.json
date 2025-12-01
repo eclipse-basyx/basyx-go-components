@@ -1,0 +1,10 @@
+{
+  "id": "urn:aas:time-allow",
+  "idShort": "timeAllow",
+  "specificAssetIds": [
+    {
+      "name": "category",
+      "value": "time"
+    }
+  ]
+}

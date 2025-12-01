@@ -371,12 +371,12 @@ func normalizeFieldReference(field string) (string, error) {
 	if hashIdx < 0 {
 		return "", fmt.Errorf("invalid field reference %s", field)
 	}
+
+	// Normalize common smdesc field casing to match JSON tags
+	field = strings.ReplaceAll(field, "protocolinformation", "protocolInformation")
 	prefix := field[:hashIdx]
 	rest := strings.TrimPrefix(field[hashIdx+1:], ".")
 
-	// Normalize common smdesc field casing to match JSON tags
-	rest = strings.ReplaceAll(rest, "protocolinformation", "protocolInformation")
-	rest = strings.ReplaceAll(rest, "semanticid", "semanticId")
 	// TODO add more cases here if you have a different model type
 	fmt.Println(prefix)
 	switch prefix {
@@ -663,13 +663,25 @@ func toTimeOfDaySeconds(value interface{}) (int, bool) {
 }
 
 func toDateTime(value interface{}) (time.Time, bool) {
-	s := strings.TrimSpace(fmt.Sprint(value))
-	if s == "" {
-		return time.Time{}, false
+	switch v := value.(type) {
+	case time.Time:
+		return v, true
+	case DateTimeLiteralPattern:
+		return time.Time(v), true
+	case *DateTimeLiteralPattern:
+		if v == nil {
+			return time.Time{}, false
+		}
+		return time.Time(*v), true
+	default:
+		s := strings.TrimSpace(fmt.Sprint(value))
+		if s == "" {
+			return time.Time{}, false
+		}
+		t, err := time.Parse(time.RFC3339, s)
+		if err != nil {
+			return time.Time{}, false
+		}
+		return t, true
 	}
-	t, err := time.Parse(time.RFC3339, s)
-	if err != nil {
-		return time.Time{}, false
-	}
-	return t, true
 }

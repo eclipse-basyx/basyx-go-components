@@ -110,5 +110,71 @@
     "endpoint": "http://localhost:6004/shell-descriptors",
     "shouldMatch": "expected/expectedAnonResult.json",
     "expectedStatus": 200
+  },
+  {
+    "context": "POST time allow descriptor - admin creates fixture",
+    "token": { "user": "admin", "password": "pwd" },
+    "method": "POST",
+    "endpoint": "http://localhost:6004/shell-descriptors",
+    "data": "postBody/time_allow_descriptor.json",
+    "shouldMatch": "postBody/time_allow_descriptor.json",
+    "expectedStatus": 201
+  },
+  {
+    "context": "POST time deny descriptor - admin creates fixture",
+    "token": { "user": "admin", "password": "pwd" },
+    "method": "POST",
+    "endpoint": "http://localhost:6004/shell-descriptors",
+    "data": "postBody/time_deny_descriptor.json",
+    "shouldMatch": "postBody/time_deny_descriptor.json",
+    "expectedStatus": 201
+  },
+  {
+    "context": "GET time allow descriptor - viewer allowed via datetime compare",
+    "token": { "user": "userb", "password": "pwd" },
+    "method": "GET",
+    "endpoint": "http://localhost:6004/shell-descriptors/dXJuOmFhczp0aW1lLWFsbG93",
+    "shouldMatch": "postBody/time_allow_descriptor.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "GET time deny descriptor - viewer denied via datetime compare",
+    "token": { "user": "userb", "password": "pwd" },
+    "method": "GET",
+    "endpoint": "http://localhost:6004/shell-descriptors/dXJuOmFhczp0aW1lLWRlbnk=",
+    "expectedStatus": 403
+  },
+  {
+    "context": "POST time field allow descriptor - admin creates fixture",
+    "token": { "user": "admin", "password": "pwd" },
+    "method": "POST",
+    "endpoint": "http://localhost:6004/shell-descriptors",
+    "data": "postBody/time_field_allow_descriptor.json",
+    "shouldMatch": "postBody/time_field_allow_descriptor.json",
+    "expectedStatus": 201
+  },
+  {
+    "context": "POST time field deny descriptor - admin creates fixture",
+    "token": { "user": "admin", "password": "pwd" },
+    "method": "POST",
+    "endpoint": "http://localhost:6004/shell-descriptors",
+    "data": "postBody/time_field_deny_descriptor.json",
+    "shouldMatch": "postBody/time_field_deny_descriptor.json",
+    "expectedStatus": 201
+  },
+  {
+    "context": "GET time field allow descriptor - viewer allowed via field datetime compare",
+    "token": { "user": "userb", "password": "pwd" },
+    "method": "GET",
+    "endpoint": "http://localhost:6004/shell-descriptors/dXJuOmFhczpkdC1maWVsZC1hbGxvdw",
+    "shouldMatch": "postBody/time_field_allow_descriptor.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "GET time field deny descriptor - viewer denied via field datetime compare",
+    "token": { "user": "userb", "password": "pwd" },
+    "method": "GET",
+    "endpoint": "http://localhost:6004/shell-descriptors/dXJuOmFhczpkdC1maWVsZC1kZW55",
+    "expectedStatus": 403
   }
 ]

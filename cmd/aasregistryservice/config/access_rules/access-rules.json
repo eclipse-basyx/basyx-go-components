@@ -1,84 +1,51 @@
 {
   "AllAccessPermissionRules": {
     "DEFATTRIBUTES": [
-      { "name": "anonym_attr",   "attributes": [ { "GLOBAL": "ANONYMOUS" } ] },
-      { "name": "role_attr",       "attributes": [ { "CLAIM": "role" } ] },
-      { "name": "member_attr",      "attributes": [ { "CLAIM": "role" }, { "CLAIM": "clear" } ] }
+      { "name": "anonym_attr", "attributes": [ { "GLOBAL": "ANONYMOUS" } ] },
+      { "name": "role_attr", "attributes": [ { "CLAIM": "role" } ] },
+      { "name": "member_attr", "attributes": [ { "CLAIM": "role" }, { "CLAIM": "clear" } ] }
     ],
 
     "DEFOBJECTS": [
-      { "name": "health",               "objects": [ { "ROUTE": "/health" } ] },
-      { "name": "god",          "objects": [ { "ROUTE": "/*" } ] },
-      { "name": "description",          "objects": [ { "ROUTE": "/description" } ] },
-      { "name": "shellDescriptorById",  "objects": [ { "ROUTE": "/shell-descriptors/*" } ] },
-      { "name": "shellDescriptors",     "objects": [ { "ROUTE": "/shell-descriptors" } ] },
-      { "name": "allShellDescriptors",  "objects": [ { "ROUTE": "/shell-descriptors" }, { "ROUTE": "/shell-descriptors/*" } ] },
-      { "name": "allShellDescriptorsObject",  "objects": [ { "DESCRIPTOR": "$aasdesc(\"*\")"} ] },
-      { "name": "specialShellDescritpor",  "objects": [ { "DESCRIPTOR": "$aasdesc(\"https://example.org/X\")" } ] }
+      { "name": "health", "objects": [ { "ROUTE": "/health" } ] },
+      { "name": "all_shell_descriptors", "objects": [ {"DESCRIPTOR": "$aasdesc(\"*\")"}] },
+      { "name": "some_shell_descriptors", "objects": [ {"DESCRIPTOR": "$aasdesc(\"urn:aas:demo:public\")"}, {"DESCRIPTOR": "$aasdesc(\"urn:aas:regex-42\")"}, {"DESCRIPTOR": "$aasdesc(\"urn:aas:regimax-42\")"}, {"DESCRIPTOR": "$aasdesc(\"urn:aas:viewer-asset\")"}] },
+      { "name": "time_allow_desc", "objects": [ { "ROUTE": "/shell-descriptors/dXJuOmFhczp0aW1lLWFsbG93" } ] },
+      { "name": "time_deny_desc", "objects": [ { "ROUTE": "/shell-descriptors/dXJuOmFhczp0aW1lLWRlbnk" } ] },
+      { "name": "dt_field_allow", "objects": [ { "ROUTE": "/shell-descriptors/dXJuOmFhczpkdC1maWVsZC1hbGxvdw" } ] },
+      { "name": "dt_field_deny", "objects": [ { "ROUTE": "/shell-descriptors/dXJuOmFhczpkdC1maWVsZC1kZW55" } ] }
     ],
-    
+
     "DEFACLS": [
-      { "name": "disabled_god",   "acl": { "USEATTRIBUTES": "anonym_attr", "RIGHTS": ["CREATE", "READ", "UPDATE", "DELETE"],   "ACCESS": "DISABLED" } },
-      { "name": "read_only_public",   "acl": { "USEATTRIBUTES": "anonym_attr", "RIGHTS": ["READ"],   "ACCESS": "ALLOW" } },
-      { "name": "write_role",   "acl": { "USEATTRIBUTES": "role_attr",    "RIGHTS": ["CREATE"],   "ACCESS": "ALLOW" } },
-      { "name": "read_role", "acl": { "USEATTRIBUTES": "role_attr",    "RIGHTS": ["READ"], "ACCESS": "ALLOW" } },
-      { "name": "write_member",   "acl": { "USEATTRIBUTES": "member_attr",    "RIGHTS": ["CREATE"],   "ACCESS": "ALLOW" } },
-      { "name": "read_member", "acl": { "USEATTRIBUTES": "member_attr",    "RIGHTS": ["READ"], "ACCESS": "ALLOW" } },
-      { "name": "admin", "acl": { "USEATTRIBUTES": "member_attr",    "RIGHTS": ["CREATE", "READ", "UPDATE", "DELETE"], "ACCESS": "ALLOW" } }
+      { "name": "read_anonymous", "acl": { "USEATTRIBUTES": "anonym_attr", "RIGHTS": ["READ"], "ACCESS": "ALLOW" } },
+      { "name": "read_role", "acl": { "USEATTRIBUTES": "role_attr", "RIGHTS": ["READ"], "ACCESS": "ALLOW" } },
+      { "name": "read_member", "acl": { "USEATTRIBUTES": "member_attr", "RIGHTS": ["READ"], "ACCESS": "ALLOW" } },
+      { "name": "write_admin", "acl": { "USEATTRIBUTES": "role_attr", "RIGHTS": ["CREATE"], "ACCESS": "ALLOW" } }
     ],
-    
+
     "DEFFORMULAS": [
       { "name": "always_true", "formula": { "$boolean": true } },
-      { "name": "is_public_readable", "formula": {"$eq": [ {"$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value"}, {"$strVal": "PUBLIC_READABLE"}]} },
-      { "name": "isRole=viewer&customerPartId", "formula": { 
-        "$and": [
-          {"$eq": [ {"$attribute": {"CLAIM": "role"}}, {"$strVal": "viewer"}]},
-          {"$eq": [ {"$field": "$aasdesc#specificAssetIds[].name"}, {"$strVal": "customerPartId"}]}
-        ] }
-      },
-      { "name": "isMember&manufacturerPartId", "formula": { 
-        "$and": [
-          {"$eq": [ {"$attribute": {"CLAIM": "role"}}, {"$strVal": "viewer"}]},
-          {"$ge": [ {"$numCast": { "$attribute": { "CLAIM": "clear" } } }, { "$numVal": 1 } ] },
-          {"$eq": [ {"$field": "$aasdesc#specificAssetIds[].name"}, {"$strVal": "manufacturerPartId"}]}
-        ] }
-      },
-      { "name": "isRole=editor&X", "formula": { 
-        "$and": [
-          {"$eq": [ {"$attribute": {"CLAIM": "role"}}, {"$strVal": "editor"}]},
-          {"$eq": [ {"$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value"}, {"$strVal": "WRITTEN_BY_X"}]}
-        ] }
-      },
-      { "name": "isMember&Y", "formula": { 
-        "$and": [
-          {"$eq": [ {"$attribute": {"CLAIM": "role"}}, {"$strVal": "editor"}]},
-          {"$ge": [ {"$numCast": { "$attribute": { "CLAIM": "clear" } } }, { "$numVal": 1 } ] },
-          {"$eq": [ {"$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value"}, {"$strVal": "WRITTEN_BY_Y"}]}
-        ] }
-      },
-      { "name": "isAdmin", "formula": { 
-        "$and": [
-          {"$eq": [ {"$attribute": {"CLAIM": "role"}}, {"$strVal": "admin"}]},
-          {"$ge": [ {"$numCast": { "$attribute": { "CLAIM": "clear" } } }, { "$numVal": 10 } ] }
-        ] }
-      },
-      { "name": "isTest", "formula": { 
-        "$and": [
-          {"$eq": [ {"$attribute": {"CLAIM": "role"}}, {"$strVal": "test"}]},
-          { "$boolean": true }
-        ] }
-      }
-    ], 
+      { "name": "role_is_admin", "formula": { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "admin" } ] } },
+      { "name": "role_starts_with_view", "formula": { "$starts-with": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "view" } ] } },
+      { "name": "id_regex_editor", "formula": { "$and": [
+        { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "editor" } ] },
+        { "$regex": [ { "$field": "$aasdesc#id" }, { "$strVal": "^urn:aas:regex-[0-9]+$" } ] }
+      ] } },
+      { "name": "id_public_suffix", "formula": { "$ends-with": [ { "$field": "$aasdesc#id" }, { "$strVal": ":public" } ] } },
+      { "name": "now_after_2000", "formula": { "$gt": [ { "$attribute": { "GLOBAL": "UTCNOW" } }, { "$dateTimeVal": "2000-01-01T00:00:00Z" } ] } },
+      { "name": "now_after_2100", "formula": { "$gt": [ { "$attribute": { "GLOBAL": "UTCNOW" } }, { "$dateTimeVal": "2100-01-01T00:00:00Z" } ] } },
+      { "name": "dt_field_after_cutoff", "formula": { "$gt": [ { "$dateTimeCast": { "$field": "$aasdesc#endpoints[0].protocolinformation.href" } }, { "$dateTimeVal": "2024-12-31T23:59:59Z" } ] } }
+    ],
+
     "rules": [
-      { "USEACL": "disabled_god", "USEOBJECTS": ["god"], "USEFORMULA": "always_true" },
-      { "USEACL": "read_only_public", "USEOBJECTS": ["health"], "USEFORMULA": "always_true" },
-      { "USEACL": "admin", "USEOBJECTS": ["allShellDescriptorsObject"], "USEFORMULA": "isAdmin" },
-      { "USEACL": "read_only_public", "USEOBJECTS": ["allShellDescriptors"], "USEFORMULA": "is_public_readable" },
-      { "USEACL": "read_role", "USEOBJECTS": ["allShellDescriptors"], "USEFORMULA": "isRole=viewer&customerPartId" },
-      { "USEACL": "read_member", "USEOBJECTS": ["allShellDescriptors"], "USEFORMULA": "isMember&manufacturerPartId" },
-      { "USEACL": "write_role", "USEOBJECTS": ["allShellDescriptors"], "USEFORMULA": "isRole=editor&X" },
-      { "USEACL": "write_member", "USEOBJECTS": ["allShellDescriptors"], "USEFORMULA": "isMember&Y" },
-      { "USEACL": "read_role", "OBJECTS": [{ "DESCRIPTOR": "$aasdesc(\"https://example.org/X\")" }], "USEFORMULA": "isTest" }
+      { "USEACL": "read_anonymous", "USEOBJECTS": ["health"], "USEFORMULA": "always_true" },
+      { "USEACL": "write_admin", "USEOBJECTS": ["all_shell_descriptors"], "USEFORMULA": "role_is_admin" },
+      { "USEACL": "read_role", "USEOBJECTS": ["some_shell_descriptors"], "USEFORMULA": "role_starts_with_view" },
+      { "USEACL": "read_role", "USEOBJECTS": ["some_shell_descriptors"], "USEFORMULA": "id_regex_editor" },
+      { "USEACL": "read_anonymous", "USEOBJECTS": ["some_shell_descriptors"], "USEFORMULA": "id_public_suffix" },
+      { "USEACL": "read_member", "USEOBJECTS": ["time_allow_desc"], "USEFORMULA": "now_after_2000" },
+      { "USEACL": "read_member", "USEOBJECTS": ["time_deny_desc"], "USEFORMULA": "now_after_2100" },
+      { "USEACL": "read_role", "USEOBJECTS": ["dt_field_allow"], "USEFORMULA": "dt_field_after_cutoff" }
     ]
   }
 }

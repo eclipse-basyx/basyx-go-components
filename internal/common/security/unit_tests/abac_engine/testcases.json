@@ -258,5 +258,15 @@
     "input": "input/operator_hex_ne_fail.json",
     "expected": "expected/no_matching_rule.json",
     "eval": "eval/get_shellDescriptors_hex.json"
+  },
+  {
+    "input": "input/datetime_with_field.json",
+    "expected": "expected/access_allowed_datetime_with_field.json",
+    "eval": "eval/get_submodelDescriptors_item_admin.json"
+  },
+  {
+    "input": "input/startwith_attribute_compare.json",
+    "expected": "expected/access_allowed.json",
+    "eval": "eval/get_shellDescriptor_viewer.json"
   }
 ]

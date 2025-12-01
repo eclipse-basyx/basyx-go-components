@@ -30,6 +30,7 @@ package grammar
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/doug-martin/goqu/v9"
 	"github.com/doug-martin/goqu/v9/exp"
@@ -484,9 +485,11 @@ func HandleComparison(leftOperand, rightOperand *Value, operation string) (exp.E
 
 	// Validate value-to-value comparisons have matching types
 	if !leftOperand.IsField() && !rightOperand.IsField() {
-		if leftOperand.GetValueType() != rightOperand.GetValueType() {
+		lType := leftOperand.EffectiveType()
+		rType := rightOperand.EffectiveType()
+		if lType != "" && rType != "" && lType != rType {
 			return nil, fmt.Errorf("cannot compare different value types: %s and %s",
-				leftOperand.GetValueType(), rightOperand.GetValueType())
+				lType, rType)
 		}
 	}
 
@@ -726,6 +729,33 @@ func isSemanticIDSpecificKeyValueField(operand *Value, isTypeCheck bool) bool {
 }
 
 func toSQLComponent(operand *Value, position string) (interface{}, error) {
+	if operand == nil {
+		return nil, fmt.Errorf("%s operand is nil", position)
+	}
+	if operand.Attribute != nil {
+		return nil, fmt.Errorf("attribute operands are not supported in SQL evaluation")
+	}
+
+	// Handle casts first so they take precedence over any accidentally set literal/field.
+	if operand.StrCast != nil {
+		return castOperandToSQLType(operand.StrCast, position, "text")
+	}
+	if operand.NumCast != nil {
+		return castOperandToSQLType(operand.NumCast, position, "double precision")
+	}
+	if operand.BoolCast != nil {
+		return castOperandToSQLType(operand.BoolCast, position, "boolean")
+	}
+	if operand.TimeCast != nil {
+		return castOperandToSQLType(operand.TimeCast, position, "time")
+	}
+	if operand.DateTimeCast != nil {
+		return castOperandToSQLType(operand.DateTimeCast, position, "timestamptz")
+	}
+	if operand.HexCast != nil {
+		return castOperandToSQLType(operand.HexCast, position, "text")
+	}
+
 	if operand.IsField() {
 		if operand.Field == nil {
 			return nil, fmt.Errorf("%s operand is not a valid field", position)
@@ -734,7 +764,8 @@ func toSQLComponent(operand *Value, position string) (interface{}, error) {
 		fieldName = ParseAASQLFieldToSQLColumn(fieldName)
 		return goqu.I(fieldName), nil
 	}
-	return goqu.V(operand.GetValue()), nil
+
+	return goqu.V(normalizeLiteralForSQL(operand.GetValue())), nil
 }
 
 // buildComparisonExpression is a helper function to build comparison expressions
@@ -755,4 +786,34 @@ func buildComparisonExpression(left interface{}, right interface{}, operation st
 	default:
 		return nil, fmt.Errorf("unsupported comparison operation: %s", operation)
 	}
+}
+
+// castOperandToSQLType recursively converts an operand to SQL and applies a PostgreSQL cast.
+func castOperandToSQLType(inner *Value, position string, targetType string) (exp.Expression, error) {
+	sqlValue, err := toSQLComponent(inner, position)
+	if err != nil {
+		return nil, err
+	}
+	// Use PostgreSQL :: syntax for brevity.
+	return goqu.L("?::"+targetType, sqlValue), nil
+}
+
+// normalizeLiteralForSQL converts grammar literals to safe SQL encodable values.
+func normalizeLiteralForSQL(v interface{}) interface{} {
+	switch t := v.(type) {
+	case DateTimeLiteralPattern:
+		return normalizeTime(time.Time(t))
+	case time.Time:
+		return normalizeTime(t)
+	default:
+		return v
+	}
+}
+
+func normalizeTime(t time.Time) time.Time {
+	// Ensure location is set to avoid goqu encoding errors.
+	if t.Location() == nil {
+		return time.Unix(0, t.UnixNano()).UTC()
+	}
+	return t.UTC()
 }

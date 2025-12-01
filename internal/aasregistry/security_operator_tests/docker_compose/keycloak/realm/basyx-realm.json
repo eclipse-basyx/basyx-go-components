@@ -466,7 +466,7 @@
     "emailVerified" : false,
     "attributes" : {
       "clear" : [ "2" ],
-      "role" : [ "viewer" ]
+      "role" : [ "martin" ]
     },
     "createdTimestamp" : 1763553224432,
     "enabled" : true,
