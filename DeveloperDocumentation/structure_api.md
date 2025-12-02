@@ -13,9 +13,9 @@ Defines the REST API contracts for each service using OpenAPI (Swagger) YAML fil
 - Ensures consistent API documentation and validation
 
 ## How to Extend
-### For new Components
+### For new components
 - Add new endpoints to the relevant `openapi.yaml`
 - Regenerate API code if needed
 - Update documentation for new features
-### Extending an already existing Component
+### Extending an already existing component
 - Add the endpoint to the interface and the implementation
