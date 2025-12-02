@@ -539,6 +539,25 @@ CREATE TABLE IF NOT EXISTS submodel_embedded_data_specification (
   submodel_id       VARCHAR(2048) REFERENCES submodel(id) ON DELETE CASCADE,
   embedded_data_specification_id BIGSERIAL REFERENCES data_specification(id) ON DELETE CASCADE
 );
+
+CREATE TABLE IF NOT EXISTS registry_administrative_information (
+  id                BIGSERIAL PRIMARY KEY,
+  version           VARCHAR(4),
+  revision          VARCHAR(4),
+  company           BIGINT REFERENCES reference(id),
+  templateId        VARCHAR(2048)
+);
+
+CREATE TABLE IF NOT EXISTS registry_descriptor (
+  descriptor_id BIGINT PRIMARY KEY REFERENCES descriptor(id) ON DELETE CASCADE,
+  description_id BIGINT REFERENCES lang_string_text_type_reference(id),
+  displayname_id BIGINT REFERENCES lang_string_name_type_reference(id),
+  administrative_information_id BIGINT REFERENCES registry_administrative_information(id),
+  registry_type VARCHAR(2048),
+  global_asset_id VARCHAR(2048),
+  id_short VARCHAR(128),
+  id VARCHAR(2048) NOT NULL UNIQUE
+);
 -- ------------------------------------------
 -- Indexes
 -- ------------------------------------------
@@ -555,6 +574,7 @@ CREATE INDEX IF NOT EXISTS ix_lsntr_id ON lang_string_name_type_reference(id);
 CREATE INDEX IF NOT EXISTS ix_lsnt_refid ON lang_string_name_type(lang_string_name_type_reference_id);
 CREATE INDEX IF NOT EXISTS ix_edscontent_id ON data_specification_content(id);
 CREATE INDEX IF NOT EXISTS ix_admin_id ON administrative_information(id);
+CREATE INDEX IF NOT EXISTS ix_reg_admin_id ON registry_administrative_information(id);
 CREATE INDEX IF NOT EXISTS ix_valuelist_id ON value_list(id);
 CREATE INDEX IF NOT EXISTS ix_vlvrp_id ON value_list_value_reference_pair(id);
 CREATE INDEX IF NOT EXISTS ix_vlvrp_value_id ON value_list_value_reference_pair(value_id);
@@ -567,10 +587,12 @@ CREATE INDEX IF NOT EXISTS ix_iec61360_value_list_id ON data_specification_iec61
 CREATE INDEX IF NOT EXISTS ix_iec61360_level_type_id ON data_specification_iec61360(level_type_id);
 CREATE INDEX IF NOT EXISTS ix_iec61360_data_type ON data_specification_iec61360(data_type);
 CREATE INDEX IF NOT EXISTS ix_ai_creator ON administrative_information(creator);
-CREATE INDEX IF NOT EXISTS ix_ai_templateid ON administrative_information(templateid);
+CREATE INDEX IF NOT EXISTS ix_ai_templateid ON administrative_information(templateId);
 CREATE INDEX IF NOT EXISTS ix_aieds_aiid ON administrative_information_embedded_data_specification(administrative_information_id);
 CREATE INDEX IF NOT EXISTS ix_aieds_edsid ON administrative_information_embedded_data_specification(embedded_data_specification_id);
 CREATE INDEX IF NOT EXISTS ix_ai_eds_id ON administrative_information_embedded_data_specification(id);
+CREATE INDEX IF NOT EXISTS ix_reg_ai_company ON registry_administrative_information(company);
+CREATE INDEX IF NOT EXISTS ix_reg_ai_templateid ON registry_administrative_information(templateId);
 CREATE INDEX IF NOT EXISTS ix_sm_idshort ON submodel(id_short);
 CREATE INDEX IF NOT EXISTS ix_sm_admin_id ON submodel(administration_id);
 CREATE INDEX IF NOT EXISTS ix_sm_semantic_id ON submodel(semantic_id);
@@ -662,25 +684,6 @@ CREATE INDEX IF NOT EXISTS ix_ref_root_id ON reference(rootreference, id);
 CREATE INDEX IF NOT EXISTS ix_ref_type ON reference(type);
 CREATE INDEX IF NOT EXISTS ix_refkey_refid ON reference_key(value);
 
-CREATE TABLE IF NOT EXISTS registry_administrative_information (
-  id                BIGSERIAL PRIMARY KEY,
-  version           VARCHAR(4),
-  revision          VARCHAR(4),
-  company           BIGINT REFERENCES reference(id),
-  templateId        VARCHAR(2048)
-);
-
-CREATE TABLE IF NOT EXISTS registry_descriptor (
-  descriptor_id BIGINT PRIMARY KEY REFERENCES descriptor(id) ON DELETE CASCADE,
-  description_id BIGINT REFERENCES lang_string_text_type_reference(id),
-  displayname_id BIGINT REFERENCES lang_string_name_type_reference(id),
-  administrative_information_id BIGINT REFERENCES registry_administrative_information(id),
-  registry_type VARCHAR(2048),
-  global_asset_id VARCHAR(2048),
-  id_short VARCHAR(128),
-  id VARCHAR(2048) NOT NULL UNIQUE
-);
-
 -- descriptor_extension: speed lookups by either side + pair-membership checks
 CREATE INDEX IF NOT EXISTS ix_descriptor_extension_descriptor_id ON descriptor_extension(descriptor_id);
 CREATE INDEX IF NOT EXISTS ix_descriptor_extension_extension_id  ON descriptor_extension(extension_id);
@@ -755,6 +758,21 @@ CREATE INDEX IF NOT EXISTS ix_smd_id_trgm                  ON submodel_descripto
 CREATE INDEX IF NOT EXISTS ix_smdss_descriptor_id          ON submodel_descriptor_supplemental_semantic_id(descriptor_id);
 CREATE INDEX IF NOT EXISTS ix_smdss_reference_id           ON submodel_descriptor_supplemental_semantic_id(reference_id);
 CREATE INDEX IF NOT EXISTS ix_smdss_pair                   ON submodel_descriptor_supplemental_semantic_id(descriptor_id, reference_id);
+
+-- ==========================================
+-- Registry descriptor
+-- ==========================================
+-- registry_descriptor: unique(id) already exists; add common filters
+CREATE INDEX IF NOT EXISTS ix_regd_regadmininfo_id         ON registry_descriptor(administrative_information_id);
+CREATE INDEX IF NOT EXISTS ix_regd_displayname_id          ON registry_descriptor(displayname_id);
+CREATE INDEX IF NOT EXISTS ix_regd_description_id          ON registry_descriptor(description_id);
+
+CREATE INDEX IF NOT EXISTS ix_regd_id_short                ON registry_descriptor(id_short);
+CREATE INDEX IF NOT EXISTS ix_regd_global_asset_id         ON registry_descriptor(global_asset_id);
+CREATE INDEX IF NOT EXISTS ix_regd_registry_type           ON registry_descriptor(registry_type);
+-- Useful for partial and fuzzy searches on long IDs/GRIDs
+CREATE INDEX IF NOT EXISTS ix_regd_id_trgm                 ON registry_descriptor USING GIN (id gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS ix_regd_global_asset_id_trgm    ON registry_descriptor USING GIN (global_asset_id gin_trgm_ops);
 
 -- ==========================================
 -- Trigger functions for cascading deletion
