@@ -9,7 +9,7 @@ postgres:
   user: admin
   password: admin123
   # dbname: basyxGoBenchmarkTest
-  dbname: basyxTestDatabase
+  dbname: basyxTestDB
   maxOpenConnections: 500
   maxIdleConnections: 500
   connMaxLifetimeMinutes: 5

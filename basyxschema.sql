@@ -734,3 +734,12 @@ CREATE INDEX IF NOT EXISTS ix_smd_id_trgm                  ON submodel_descripto
 CREATE INDEX IF NOT EXISTS ix_smdss_descriptor_id          ON submodel_descriptor_supplemental_semantic_id(descriptor_id);
 CREATE INDEX IF NOT EXISTS ix_smdss_reference_id           ON submodel_descriptor_supplemental_semantic_id(reference_id);
 CREATE INDEX IF NOT EXISTS ix_smdss_pair                   ON submodel_descriptor_supplemental_semantic_id(descriptor_id, reference_id);
+
+
+--aas repository specific tables and indexes can be added below-- 
+CREATE TABLE IF NOT EXISTS aas (
+    id           VARCHAR(2048) PRIMARY KEY,
+    id_short     VARCHAR(2048),
+    category     VARCHAR(2048),
+    model_type   VARCHAR(128) NOT NULL
+);

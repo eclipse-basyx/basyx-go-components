@@ -48,7 +48,7 @@
                 "-config",
                 "${workspaceFolder}/cmd/aasrepositoryservice/config.yaml",
                 "-databaseSchema",
-                "${workspaceFolder}/cmd/aasrepositoryservice/resources/sql/aasschema.sql"
+                "${workspaceFolder}/basyxschema.sql"
             ]
         }
     ]
