@@ -10,7 +10,7 @@ This file provides a high-level map of the repository and links to in-depth docu
 - [pkg/](structure_pkg.md): Shared libraries and API clients
 - [examples/](structure_examples.md): Sample setups and minimal examples
 - [docu/](structure_docu.md): Documentation and security notes
-- [basyx-database-wiki/](structure_dbwiki.md): Database schema documentation
+- [basyx-database-wiki/](../basyx-database-wiki/): Database schema documentation
 - [sql_examples/](structure_sqlexamples.md): Example SQL scripts
 
 ---
