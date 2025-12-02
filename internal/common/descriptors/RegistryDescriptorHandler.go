@@ -7,7 +7,6 @@ import (
 
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
-	"github.com/eclipse-basyx/basyx-go-components/internal/common/builder"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	persistence_utils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
 	"golang.org/x/sync/errgroup"
@@ -362,9 +361,9 @@ func ListRegistryDescriptors(
 		_ = rows.Close()
 	}()
 
-	descRows := make([]builder.RegistryDescriptorRow, 0, peekLimit)
+	descRows := make([]model.RegistryDescriptorRow, 0, peekLimit)
 	for rows.Next() {
-		var r builder.RegistryDescriptorRow
+		var r model.RegistryDescriptorRow
 		if err := rows.Scan(
 			&r.DescID,
 			&r.RegistryType,

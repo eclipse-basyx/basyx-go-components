@@ -582,3 +582,19 @@ type SubmodelDescriptorRow struct {
 	DescriptionID sql.NullInt64
 	DisplayNameID sql.NullInt64
 }
+
+// RegistryDescriptorRow represents a single SQL result row for a
+// Registry descriptor. It carries nullable string/integer columns
+// from the database and foreign-key references to related records
+// such as registry administrative information, display names, and
+// descriptions.
+type RegistryDescriptorRow struct {
+	DescID        int64
+	RegistryType  sql.NullString
+	GlobalAssetID sql.NullString
+	IDShort       sql.NullString
+	IDStr         string
+	AdminInfoID   sql.NullInt64
+	DisplayNameID sql.NullInt64
+	DescriptionID sql.NullInt64
+}
