@@ -448,6 +448,7 @@ func ListAssetAdministrationShellDescriptors(
 	sqlStr, args, err := ds.ToSQL()
 
 	fmt.Println(sqlStr)
+	fmt.Println(args)
 	if err != nil {
 		return nil, "", err
 	}
@@ -462,6 +463,7 @@ func ListAssetAdministrationShellDescriptors(
 
 	descRows := make([]model.AssetAdministrationShellDescriptorRow, 0, peekLimit)
 	for rows.Next() {
+		fmt.Println("a")
 		var r model.AssetAdministrationShellDescriptorRow
 		if err := rows.Scan(
 			&r.DescID,

@@ -531,13 +531,26 @@ func literalValueFromAny(x any) (grammar.Value, bool) {
 	case int64:
 		f := float64(t)
 		return grammar.Value{NumVal: &f}, true
+	case grammar.TimeLiteralPattern:
+		tv := t
+		return grammar.Value{TimeVal: &tv}, true
 	case time.Time:
 		dt := grammar.DateTimeLiteralPattern(t)
 		return grammar.Value{DateTimeVal: &dt}, true
 	case string:
+		// Try RFC3339 datetime first
 		if parsed, err := time.Parse(time.RFC3339, t); err == nil {
 			dt := grammar.DateTimeLiteralPattern(parsed)
 			return grammar.Value{DateTimeVal: &dt}, true
+		}
+		// Then try time-of-day
+		if _, ok := toTimeOfDaySeconds(t); ok {
+			tv := grammar.TimeLiteralPattern(t)
+			return grammar.Value{TimeVal: &tv}, true
+		}
+		// Then try numeric
+		if f, err := strconv.ParseFloat(t, 64); err == nil {
+			return grammar.Value{NumVal: &f}, true
 		}
 		s := grammar.StandardString(t)
 		return grammar.Value{StrVal: &s}, true
@@ -671,7 +684,22 @@ func resolveValue(v grammar.Value, claims Claims) any {
 		return *v.Boolean
 	}
 	if v.DateTimeVal != nil || v.TimeVal != nil || v.Year != nil || v.Month != nil || v.DayOfMonth != nil || v.DayOfWeek != nil {
-		return stringValueFromDate(v)
+		// Preserve semantic types instead of stringifying so downstream type checks work.
+		switch {
+		case v.DateTimeVal != nil:
+			return time.Time(*v.DateTimeVal)
+		case v.TimeVal != nil:
+			tv := grammar.TimeLiteralPattern(*v.TimeVal)
+			return tv
+		case v.Year != nil:
+			return float64(time.Time(*v.Year).Year())
+		case v.Month != nil:
+			return float64(int(time.Time(*v.Month).Month()))
+		case v.DayOfMonth != nil:
+			return float64(time.Time(*v.DayOfMonth).Day())
+		case v.DayOfWeek != nil:
+			return float64(int(time.Time(*v.DayOfWeek).Weekday()))
+		}
 	}
 	if v.HexVal != nil {
 		return string(*v.HexVal)
@@ -837,15 +865,27 @@ func toTimeOfDaySeconds(v any) (int, bool) {
 }
 
 func toDateTime(v any) (time.Time, bool) {
-	s := strings.TrimSpace(fmt.Sprint(v))
-	if s == "" {
-		return time.Time{}, false
+	switch val := v.(type) {
+	case time.Time:
+		return val, true
+	case grammar.DateTimeLiteralPattern:
+		return time.Time(val), true
+	case *grammar.DateTimeLiteralPattern:
+		if val == nil {
+			return time.Time{}, false
+		}
+		return time.Time(*val), true
+	default:
+		s := strings.TrimSpace(fmt.Sprint(v))
+		if s == "" {
+			return time.Time{}, false
+		}
+		t, err := time.Parse(time.RFC3339, s)
+		if err != nil {
+			return time.Time{}, false
+		}
+		return t, true
 	}
-	t, err := time.Parse(time.RFC3339, s)
-	if err != nil {
-		return time.Time{}, false
-	}
-	return t, true
 }
 
 func numCmp(a, b any, op string) bool {

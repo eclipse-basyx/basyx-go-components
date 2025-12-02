@@ -142,6 +142,13 @@ func (le *LogicalExpression) evaluateModelComparison(operands []Value, operation
 	normalizeSemanticShorthand(left)
 	normalizeSemanticShorthand(right)
 
+	// Static type validation for literal-to-literal comparisons (mirrors SQL path).
+	lType := operandEffectiveTypeWithCast(left)
+	rType := operandEffectiveTypeWithCast(right)
+	if lType != "" && rType != "" && lType != rType {
+		return false, fmt.Errorf("cannot compare different value types: %s and %s", lType, rType)
+	}
+
 	leftValues, err := resolveOperandValue(left, data)
 	if err != nil {
 		return false, err
@@ -154,9 +161,14 @@ func (le *LogicalExpression) evaluateModelComparison(operands []Value, operation
 		return false, nil
 	}
 
+	expectedType := ""
+	if lType != "" && rType != "" && lType == rType {
+		expectedType = lType
+	}
+
 	for _, lv := range leftValues {
 		for _, rv := range rightValues {
-			match, err := compareValues(operation, lv, rv)
+			match, err := compareValues(operation, lv, rv, expectedType)
 			if err != nil {
 				return false, err
 			}
@@ -288,7 +300,7 @@ func resolveOperandValue(op *Value, data map[string]interface{}) ([]interface{},
 		for _, v := range values {
 			num, ok := toFloat(v)
 			if !ok {
-				return nil, fmt.Errorf("cannot cast %v to number", v)
+				continue
 			}
 			out = append(out, num)
 		}
@@ -303,7 +315,7 @@ func resolveOperandValue(op *Value, data map[string]interface{}) ([]interface{},
 		for _, v := range values {
 			b, ok := coerceBool(v)
 			if !ok {
-				return nil, fmt.Errorf("cannot cast %v to bool", v)
+				continue
 			}
 			out = append(out, b)
 		}
@@ -496,7 +508,7 @@ func marshalToMap(value any) (map[string]interface{}, error) {
 	return data, nil
 }
 
-func compareValues(operation string, left, right interface{}) (bool, error) {
+func compareValues(operation string, left, right interface{}, expectedType string) (bool, error) {
 	switch operation {
 	case "$eq":
 		if left == nil && right == nil {
@@ -505,80 +517,193 @@ func compareValues(operation string, left, right interface{}) (bool, error) {
 		if left == nil || right == nil {
 			return false, nil
 		}
-		if lb, lok := left.(bool); lok {
-			if rb, rok := right.(bool); rok {
-				return lb == rb, nil
-			}
-		}
-		if lf, lok := toFloat(left); lok {
-			if rf, rok := toFloat(right); rok {
-				return lf == rf, nil
-			}
-		}
-		if lt, lok := toDateTime(left); lok {
-			if rt, rok := toDateTime(right); rok {
-				return lt.Equal(rt), nil
-			}
-		}
-		return fmt.Sprint(left) == fmt.Sprint(right), nil
+		return compareEquality(operation, left, right, expectedType)
 	case "$ne":
-		eq, err := compareValues("$eq", left, right)
+		eq, err := compareValues("$eq", left, right, expectedType)
 		if err != nil {
-			return false, err
+			return false, nil
 		}
 		return !eq, nil
 	case "$gt", "$ge", "$lt", "$le":
-		return compareOrderedValues(operation, left, right)
+		return compareOrderedValues(operation, left, right, expectedType)
 	default:
 		return false, fmt.Errorf("unsupported comparison operation %s", operation)
 	}
 }
 
-func compareOrderedValues(op string, left, right interface{}) (bool, error) {
+func compareOrderedValues(op string, left, right interface{}, expectedType string) (bool, error) {
+	// Honor expected types when known to avoid unexpected coercions.
+	switch expectedType {
+	case "number":
+		lf, lok := toFloat(left)
+		rf, rok := toFloat(right)
+		if !lok || !rok {
+			return false, nil
+		}
+		return compareFloat(op, lf, rf)
+	case "time":
+		lt, lok := toTimeOfDaySeconds(left)
+		rt, rok := toTimeOfDaySeconds(right)
+		if !lok || !rok {
+			return false, nil
+		}
+		return compareInt(op, lt, rt)
+	case "datetime":
+		lt, lok := toDateTime(left)
+		rt, rok := toDateTime(right)
+		if !lok || !rok {
+			return false, nil
+		}
+		return compareTime(op, lt, rt)
+	case "string", "hex":
+		// Ordered comparisons are not defined for string/hex
+		return false, nil
+	case "bool":
+		return false, nil
+	}
+
+	// Fallback to permissive coercion when type is unknown.
 	if lf, lok := toFloat(left); lok {
 		if rf, rok := toFloat(right); rok {
-			switch op {
-			case "$gt":
-				return lf > rf, nil
-			case "$ge":
-				return lf >= rf, nil
-			case "$lt":
-				return lf < rf, nil
-			case "$le":
-				return lf <= rf, nil
-			}
+			return compareFloat(op, lf, rf)
 		}
 	}
 	if lt, lok := toTimeOfDaySeconds(left); lok {
 		if rt, rok := toTimeOfDaySeconds(right); rok {
-			switch op {
-			case "$gt":
-				return lt > rt, nil
-			case "$ge":
-				return lt >= rt, nil
-			case "$lt":
-				return lt < rt, nil
-			case "$le":
-				return lt <= rt, nil
-			}
+			return compareInt(op, lt, rt)
 		}
 	}
 	if lt, lok := toDateTime(left); lok {
 		if rt, rok := toDateTime(right); rok {
-			switch op {
-			case "$gt":
-				return lt.After(rt), nil
-			case "$ge":
-				return lt.After(rt) || lt.Equal(rt), nil
-			case "$lt":
-				return lt.Before(rt), nil
-			case "$le":
-				return lt.Before(rt) || lt.Equal(rt), nil
-			}
+			return compareTime(op, lt, rt)
 		}
 	}
-	// If types are not comparable, treat as non-match instead of hard error.
-	return false, nil
+	return false, fmt.Errorf("cannot compare %T (%v) and %T (%v) with operator %s", left, left, right, right, op)
+}
+
+// operandEffectiveTypeWithCast mirrors the SQL evaluator's type check: prefer cast targets over raw literals.
+func operandEffectiveTypeWithCast(v *Value) string {
+	if v == nil {
+		return ""
+	}
+	// Fields/attributes are runtime-typed; skip validation
+	if v.IsField() || v.Attribute != nil {
+		return ""
+	}
+	switch {
+	case v.NumCast != nil:
+		return "number"
+	case v.BoolCast != nil:
+		return "bool"
+	case v.TimeCast != nil:
+		return "time"
+	case v.DateTimeCast != nil:
+		return "datetime"
+	case v.HexCast != nil:
+		return "hex"
+	case v.StrCast != nil:
+		return "string"
+	default:
+		return v.EffectiveType()
+	}
+}
+
+func compareEquality(op string, left, right interface{}, expectedType string) (bool, error) {
+	switch expectedType {
+	case "bool":
+		lb, lok := left.(bool)
+		rb, rok := right.(bool)
+		if !lok || !rok {
+			return false, fmt.Errorf("cannot compare non-bool values with %s", op)
+		}
+		return lb == rb, nil
+	case "number":
+		lf, lok := toFloat(left)
+		rf, rok := toFloat(right)
+		if !lok || !rok {
+			return false, fmt.Errorf("cannot compare non-number values with %s", op)
+		}
+		return lf == rf, nil
+	case "datetime":
+		lt, lok := toDateTime(left)
+		rt, rok := toDateTime(right)
+		if !lok || !rok {
+			return false, fmt.Errorf("cannot compare non-datetime values with %s", op)
+		}
+		return lt.Equal(rt), nil
+	case "time":
+		lt, lok := toTimeOfDaySeconds(left)
+		rt, rok := toTimeOfDaySeconds(right)
+		if !lok || !rok {
+			return false, fmt.Errorf("cannot compare non-time values with %s", op)
+		}
+		return lt == rt, nil
+	case "hex", "string":
+		return fmt.Sprint(left) == fmt.Sprint(right), nil
+	}
+
+	// Fallback to permissive coercion if type is unknown.
+	if lb, lok := left.(bool); lok {
+		if rb, rok := right.(bool); rok {
+			return lb == rb, nil
+		}
+	}
+	if lf, lok := toFloat(left); lok {
+		if rf, rok := toFloat(right); rok {
+			return lf == rf, nil
+		}
+	}
+	if lt, lok := toDateTime(left); lok {
+		if rt, rok := toDateTime(right); rok {
+			return lt.Equal(rt), nil
+		}
+	}
+	return fmt.Sprint(left) == fmt.Sprint(right), nil
+}
+
+func compareFloat(op string, lf, rf float64) (bool, error) {
+	switch op {
+	case "$gt":
+		return lf > rf, nil
+	case "$ge":
+		return lf >= rf, nil
+	case "$lt":
+		return lf < rf, nil
+	case "$le":
+		return lf <= rf, nil
+	default:
+		return false, fmt.Errorf("unsupported op %s for float comparison", op)
+	}
+}
+
+func compareInt(op string, l, r int) (bool, error) {
+	switch op {
+	case "$gt":
+		return l > r, nil
+	case "$ge":
+		return l >= r, nil
+	case "$lt":
+		return l < r, nil
+	case "$le":
+		return l <= r, nil
+	default:
+		return false, fmt.Errorf("unsupported op %s for int comparison", op)
+	}
+}
+
+func compareTime(op string, l, r time.Time) (bool, error) {
+	switch op {
+	case "$gt":
+		return l.After(r), nil
+	case "$ge":
+		return l.After(r) || l.Equal(r), nil
+	case "$lt":
+		return l.Before(r), nil
+	case "$le":
+		return l.Before(r) || l.Equal(r), nil
+	default:
+		return false, fmt.Errorf("unsupported op %s for datetime comparison", op)
+	}
 }
 
 func castToStrings(values []interface{}) []interface{} {

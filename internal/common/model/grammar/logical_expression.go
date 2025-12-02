@@ -492,11 +492,11 @@ func HandleComparison(leftOperand, rightOperand *Value, operation string) (exp.E
 
 	// Validate value-to-value comparisons have matching types
 	if !leftOperand.IsField() && !rightOperand.IsField() {
-		lType := leftOperand.EffectiveType()
-		rType := rightOperand.EffectiveType()
+		lType := effectiveTypeWithCast(leftOperand)
+		rType := effectiveTypeWithCast(rightOperand)
 		if lType != "" && rType != "" && lType != rType {
-			// Types are not comparable; treat as always-false condition instead of hard error.
-			return goqu.L("1 = 0"), nil
+			return nil, fmt.Errorf("cannot compare different value types: %s and %s",
+				lType, rType)
 		}
 	}
 
@@ -580,7 +580,9 @@ func applyArrayPositionConstraints(leftOperand, rightOperand *Value, baseExpr ex
 	isLeftSpecificAssetExternalValue := isSpecificAssetExternalSubjectField(leftOperand, false)
 	isRightSpecificAssetExternalValue := isSpecificAssetExternalSubjectField(rightOperand, false)
 	isLeftSpecificAssetExternalType := isSpecificAssetExternalSubjectField(leftOperand, true)
-	isRightSpecificAssetExternalType := isSpecificAssetExternalSubjectField(rightOperand, true) // Check if either operand has array indices
+	isRightSpecificAssetExternalType := isSpecificAssetExternalSubjectField(rightOperand, true)
+
+	// Check if either operand has array indices (including inside casts)
 	hasArrayIndex := isArrayFieldWithIndex(leftOperand) || isArrayFieldWithIndex(rightOperand)
 
 	if !hasArrayIndex {
@@ -589,9 +591,9 @@ func applyArrayPositionConstraints(leftOperand, rightOperand *Value, baseExpr ex
 	}
 
 	// Determine which operand to use for extracting position
-	operandToUse := leftOperand
-	if isRightSpecificKeyValueSemanticID || isRightSpecificKeyTypeSemanticID || isRightSpecificAssetExternalValue || isRightSpecificAssetExternalType || (rightOperand.IsField() && isArrayFieldWithIndex(rightOperand)) {
-		operandToUse = rightOperand
+	operandToUse := unwrapFieldOperand(leftOperand)
+	if isRightSpecificKeyValueSemanticID || isRightSpecificKeyTypeSemanticID || isRightSpecificAssetExternalValue || isRightSpecificAssetExternalType || isArrayFieldWithIndex(rightOperand) {
+		operandToUse = unwrapFieldOperand(rightOperand)
 	}
 
 	if operandToUse == nil || operandToUse.Field == nil {
@@ -626,6 +628,19 @@ func applyArrayPositionConstraints(leftOperand, rightOperand *Value, baseExpr ex
 
 	// Add all position constraints
 	if len(positionConstraints) > 0 {
+		pos := extractArrayIndex(tokens)
+		if pos < 0 {
+			allConstraints := append([]exp.Expression{baseExpr}, positionConstraints...)
+			return goqu.And(allConstraints...), nil
+		}
+		existsExpr, ok, err := buildArrayExists(fieldStr, pos, baseExpr)
+		if err != nil {
+			return nil, err
+		}
+		if ok {
+			return existsExpr, nil
+		}
+		// Fallback to previous AND behaviour if no EXISTS plan
 		allConstraints := append([]exp.Expression{baseExpr}, positionConstraints...)
 		return goqu.And(allConstraints...), nil
 	}
@@ -636,17 +651,18 @@ func applyArrayPositionConstraints(leftOperand, rightOperand *Value, baseExpr ex
 // normalizeSemanticShorthand expands known shorthand fields to their explicit keys[0].value form.
 // This ensures later logic can uniformly handle position constraints on reference_key.position.
 func normalizeSemanticShorthand(operand *Value) {
-	if operand == nil || !operand.IsField() || operand.Field == nil {
+	inner := unwrapFieldOperand(operand)
+	if inner == nil || inner.Field == nil {
 		return
 	}
-	field := string(*operand.Field)
+	field := string(*inner.Field)
 	// Already explicit -> nothing to do
 	if strings.Contains(field, ".keys[") {
 		return
 	}
 	if strings.HasSuffix(field, ".semanticId") || strings.HasSuffix(field, ".externalSubjectId") {
 		field += ".keys[0].value"
-		*operand.Field = ModelStringPattern(field)
+		*inner.Field = ModelStringPattern(field)
 	}
 
 }
@@ -676,19 +692,21 @@ func isSpecificAssetExternalSubjectField(operand *Value, isTypeCheck bool) bool 
 	if isTypeCheck {
 		suffix = "type"
 	}
-	if !operand.IsField() || operand.Field == nil {
+	inner := unwrapFieldOperand(operand)
+	if inner == nil || inner.Field == nil {
 		return false
 	}
-	field := string(*operand.Field)
+	field := string(*inner.Field)
 	return strings.HasPrefix(field, "$aasdesc#specificAssetIds") && strings.Contains(field, ".externalSubjectId.keys[") && strings.HasSuffix(field, "]."+suffix)
 }
 
 // isArrayFieldWithIndex checks if a field contains an array with a specific index or wildcard
 func isArrayFieldWithIndex(operand *Value) bool {
-	if !operand.IsField() || operand.Field == nil {
+	inner := unwrapFieldOperand(operand)
+	if inner == nil || inner.Field == nil {
 		return false
 	}
-	field := string(*operand.Field)
+	field := string(*inner.Field)
 	return strings.Contains(field, "[")
 }
 
@@ -705,10 +723,14 @@ func getArrayFieldAlias(field string) string {
 		if strings.Contains(field, "submodelDescriptors") && strings.Contains(field, ".endpoints[") {
 			return "submodel_descriptor_endpoint"
 		}
-		if strings.Contains(field, "submodelDescriptors") && strings.Contains(field, ".semanticId") {
-			return "submodel_descriptor_semanticId"
-		}
 	}
+
+	// Handle submodelDescriptors semanticId reference keys
+	if strings.Contains(field, "submodelDescriptors") && strings.Contains(field, ".semanticId.keys[") {
+		// Use the same alias as the reference_key join for submodel descriptor semanticIds
+		return "aasdesc_submodel_descriptor_semantic_id_reference_key"
+	}
+	// TODO: extend here if new array-based fields are added to descriptors
 
 	// Handle specificAssetIds arrays
 	if strings.Contains(field, "specificAssetIds[") {
@@ -728,10 +750,11 @@ func isSemanticIDSpecificKeyValueField(operand *Value, isTypeCheck bool) bool {
 	if isTypeCheck {
 		suffix = "type"
 	}
-	if !operand.IsField() || operand.Field == nil {
+	inner := unwrapFieldOperand(operand)
+	if inner == nil || inner.Field == nil {
 		return false
 	}
-	field := string(*operand.Field)
+	field := string(*inner.Field)
 	return strings.HasPrefix(field, "$sm#semanticId.keys[") && strings.HasSuffix(field, "]."+suffix)
 }
 
@@ -795,19 +818,48 @@ func buildComparisonExpression(left interface{}, right interface{}, operation st
 	}
 }
 
+// effectiveTypeWithCast prefers the target type of an explicit cast over the raw EffectiveType.
+// This keeps type validation in sync with the SQL that will actually be generated.
+func effectiveTypeWithCast(v *Value) string {
+	if v == nil {
+		return ""
+	}
+	switch {
+	case v.NumCast != nil:
+		return "number"
+	case v.BoolCast != nil:
+		return "bool"
+	case v.TimeCast != nil:
+		return "time"
+	case v.DateTimeCast != nil:
+		return "datetime"
+	case v.HexCast != nil:
+		return "hex"
+	case v.StrCast != nil:
+		return "string"
+	default:
+		return v.EffectiveType()
+	}
+}
+
 // castOperandToSQLType recursively converts an operand to SQL and applies a PostgreSQL cast.
 func castOperandToSQLType(inner *Value, position string, targetType string) (exp.Expression, error) {
 	sqlValue, err := toSQLComponent(inner, position)
 	if err != nil {
 		return nil, err
 	}
-	// Use guarded casts for time/timestamp to avoid runtime failures on non-parsable strings.
+	// Guard casts so malformed input yields NULL instead of a PostgreSQL cast error.
 	switch targetType {
 	case "timestamptz":
-		return goqu.L("CASE WHEN ? ~ ? THEN (?::timestamptz) END", sqlValue, `^[0-9]{4}-[0-9]{2}-[0-9]{2}T`, sqlValue), nil
+		return goqu.L("CASE WHEN ?::text ~ ? THEN (?::timestamptz) END", sqlValue, `^[0-9]{4}-[0-9]{2}-[0-9]{2}T`, sqlValue), nil
 	case "time":
-		return goqu.L("CASE WHEN ? ~ ? THEN (?::time) END", sqlValue, `^[0-9]{2}:[0-9]{2}(:[0-9]{2})?$`, sqlValue), nil
+		return goqu.L("CASE WHEN ?::text ~ ? THEN (?::time) END", sqlValue, `^[0-9]{2}:[0-9]{2}(:[0-9]{2})?$`, sqlValue), nil
+	case "double precision":
+		return goqu.L("CASE WHEN ?::text ~ ? THEN (?::double precision) END", sqlValue, `^\s*-?[0-9]+(\.[0-9]+)?\s*$`, sqlValue), nil
+	case "boolean":
+		return goqu.L("CASE WHEN lower(?::text) IN ('true','false','1','0','yes','no') THEN (?::boolean) END", sqlValue, sqlValue), nil
 	default:
+		// text/hex casts are always safe
 		return goqu.L("?::"+targetType, sqlValue), nil
 	}
 }
@@ -822,6 +874,157 @@ func normalizeLiteralForSQL(v interface{}) interface{} {
 	default:
 		return v
 	}
+}
+
+// extractArrayIndex returns the first explicit array index in the token list, or -1 if none.
+func extractArrayIndex(tokens []builder.Token) int {
+	for _, token := range tokens {
+		if at, ok := token.(builder.ArrayToken); ok && at.Index >= 0 {
+			return at.Index
+		}
+	}
+	return -1
+}
+
+// buildArrayExists converts an indexed array field predicate into a correlated EXISTS where possible.
+// Returns (expr, true, nil) when handled, (nil, false, nil) when no EXISTS plan is available.
+func buildArrayExists(fieldStr string, position int, predicate exp.Expression) (exp.Expression, bool, error) {
+	switch {
+	case strings.Contains(fieldStr, "specificAssetIds["):
+		alias := "specific_asset_id"
+		sub := goqu.From(goqu.T(alias)).
+			Where(
+				goqu.I(alias+".descriptor_id").Eq(goqu.I("descriptor.id")),
+				goqu.I(alias+".position").Eq(position),
+				predicate,
+			).
+			Select(goqu.V(1))
+		return goqu.L("EXISTS (?)", sub), true, nil
+
+	case strings.Contains(fieldStr, "#endpoints[") && strings.HasPrefix(fieldStr, "$aasdesc#"):
+		alias := "aas_descriptor_endpoint"
+		sub := goqu.From(goqu.T(alias)).
+			Where(
+				goqu.I(alias+".descriptor_id").Eq(goqu.I("descriptor.id")),
+				goqu.I(alias+".position").Eq(position),
+				predicate,
+			).
+			Select(goqu.V(1))
+		return goqu.L("EXISTS (?)", sub), true, nil
+
+	case strings.Contains(fieldStr, "$aasdesc#submodelDescriptors[") && !strings.Contains(fieldStr, ".endpoints["):
+		alias := "submodel_descriptor"
+		sub := goqu.From(goqu.T(alias)).
+			Where(
+				goqu.I(alias+".aas_descriptor_id").Eq(goqu.I("descriptor.id")),
+				goqu.I(alias+".position").Eq(position),
+				predicate,
+			).
+			Select(goqu.V(1))
+		return goqu.L("EXISTS (?)", sub), true, nil
+
+	case strings.Contains(fieldStr, "$aasdesc#submodelDescriptors[") && strings.Contains(fieldStr, ".endpoints["):
+		// Correlate endpoint to its submodel descriptor, then to outer descriptor
+		epAlias := "submodel_descriptor_endpoint"
+		smdAlias := "submodel_descriptor"
+		sub := goqu.From(goqu.T(epAlias)).
+			Join(
+				goqu.T(smdAlias),
+				goqu.On(
+					goqu.I(smdAlias+".descriptor_id").Eq(goqu.I(epAlias+".descriptor_id")),
+				),
+			).
+			Where(
+				goqu.I(smdAlias+".aas_descriptor_id").Eq(goqu.I("descriptor.id")),
+				goqu.I(epAlias+".position").Eq(position),
+				predicate,
+			).
+			Select(goqu.V(1))
+		return goqu.L("EXISTS (?)", sub), true, nil
+
+	case strings.Contains(fieldStr, "$aasdesc#submodelDescriptors") && strings.Contains(fieldStr, ".semanticId.keys["):
+		// Reference keys of submodel descriptor semanticId
+		refKey := "aasdesc_submodel_descriptor_semantic_id_reference_key"
+		smdAlias := "submodel_descriptor"
+		sub := goqu.From(goqu.T(refKey)).
+			Join(
+				goqu.T(smdAlias),
+				goqu.On(
+					goqu.I(smdAlias+".semantic_id").Eq(goqu.I(refKey+".reference_id")),
+				),
+			).
+			Where(
+				goqu.I(smdAlias+".aas_descriptor_id").Eq(goqu.I("descriptor.id")),
+				goqu.I(refKey+".position").Eq(position),
+				predicate,
+			).
+			Select(goqu.V(1))
+		return goqu.L("EXISTS (?)", sub), true, nil
+
+	case strings.HasPrefix(fieldStr, "$sm#semanticId.keys["):
+		refKey := "semantic_id_reference_key"
+		ref := "semantic_id_reference"
+		sub := goqu.From(goqu.T(refKey)).
+			Join(
+				goqu.T(ref),
+				goqu.On(goqu.I(ref+".id").Eq(goqu.I(refKey+".reference_id"))),
+			).
+			Where(
+				goqu.I(ref+".id").Eq(goqu.I("descriptor.semantic_id")),
+				goqu.I(refKey+".position").Eq(position),
+				predicate,
+			).
+			Select(goqu.V(1))
+		return goqu.L("EXISTS (?)", sub), true, nil
+
+	case strings.Contains(fieldStr, "specificAssetIds") && strings.Contains(fieldStr, ".externalSubjectId.keys["):
+		// externalSubjectId keys are keyed off the specificAssetId's external_subject_ref
+		refKey := "external_subject_reference_key"
+		sai := "specific_asset_id"
+		sub := goqu.From(goqu.T(refKey)).
+			Join(
+				goqu.T(sai),
+				goqu.On(goqu.I(sai+".external_subject_ref").Eq(goqu.I(refKey+".reference_id"))),
+			).
+			Where(
+				goqu.I(sai+".descriptor_id").Eq(goqu.I("descriptor.id")),
+				goqu.I(sai+".position").Eq(position),
+				goqu.I(refKey+".position").Eq(position),
+				predicate,
+			).
+			Select(goqu.V(1))
+		return goqu.L("EXISTS (?)", sub), true, nil
+	}
+
+	return nil, false, nil
+}
+
+// unwrapFieldOperand walks through cast wrappers to find the underlying field operand.
+// This allows array position logic to work even when a field is wrapped in $numCast/$timeCast/etc.
+func unwrapFieldOperand(v *Value) *Value {
+	cur := v
+	for cur != nil {
+		if cur.Field != nil {
+			return cur
+		}
+		switch {
+		case cur.StrCast != nil:
+			cur = cur.StrCast
+		case cur.NumCast != nil:
+			cur = cur.NumCast
+		case cur.BoolCast != nil:
+			cur = cur.BoolCast
+		case cur.TimeCast != nil:
+			cur = cur.TimeCast
+		case cur.DateTimeCast != nil:
+			cur = cur.DateTimeCast
+		case cur.HexCast != nil:
+			cur = cur.HexCast
+		default:
+			return nil
+		}
+	}
+	return nil
 }
 
 func normalizeTime(t time.Time) time.Time {

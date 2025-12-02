@@ -2,7 +2,6 @@
   "id": "urn:aas:mixed-cast-allow3",
   "idShort": "mixedCastAllow3",
   "specificAssetIds": [
-    { "name": "hexFlag", "value": "16#BEEF" },
     { "name": "priority", "value": "100" },
     { "name": "shiftTime", "value": "08:01:00" },
     { "name": "commissionedYear", "value": "2025" }

@@ -268,5 +268,15 @@
     "input": "input/startwith_attribute_compare.json",
     "expected": "expected/access_allowed.json",
     "eval": "eval/get_shellDescriptor_viewer.json"
+  },
+  {
+    "input": "input/extremly_easy_to_understand.json",
+    "expected": "expected/access_allowed_with_qf_complex.json",
+    "eval": "eval/get_shellDescriptors_role.json"
+  },
+  {
+    "input": "input/extremly_easy_to_understand.json",
+    "expected": "expected/access_allowed_qf_one.json",
+    "eval": "eval/get_shellDescriptor_one_role.json"
   }
 ]

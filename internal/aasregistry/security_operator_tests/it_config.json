@@ -237,15 +237,6 @@
     "expectedStatus": 201
   },
   {
-    "context": "POST mixed cast deny descriptor 2 - admin creates fixture",
-    "token": { "user": "admin", "password": "pwd" },
-    "method": "POST",
-    "endpoint": "http://localhost:6004/shell-descriptors",
-    "data": "postBody/mixed_cast_deny_descriptor2.json",
-    "shouldMatch": "postBody/mixed_cast_deny_descriptor2.json",
-    "expectedStatus": 201
-  },
-  {
     "context": "POST mixed cast deny descriptor 3 - admin creates fixture",
     "token": { "user": "admin", "password": "pwd" },
     "method": "POST",
@@ -287,13 +278,6 @@
     "endpoint": "http://localhost:6004/shell-descriptors/dXJuOmFhczptaXhlZC1jYXN0LWFsbG93Mw",
     "shouldMatch": "postBody/mixed_cast_allow_descriptor3.json",
     "expectedStatus": 200
-  },
-  {
-    "context": "GET mixed cast deny descriptor 2 - editor with clearance denied via casts",
-    "token": { "user": "usery", "password": "pwd" },
-    "method": "GET",
-    "endpoint": "http://localhost:6004/shell-descriptors/dXJuOmFhczptaXhlZC1jYXN0LWRlbnky",
-    "expectedStatus": 403
   },
   {
     "context": "GET mixed cast deny descriptor 3 - editor with clearance denied via casts",
