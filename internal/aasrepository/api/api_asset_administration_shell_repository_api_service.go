@@ -16,12 +16,19 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
+	"log"
 	"net/http"
 	"os"
 
 	persistencepostgresql "github.com/eclipse-basyx/basyx-go-components/internal/aasrepository/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+)
+
+const (
+	componentName = "AAS-REPO"
 )
 
 // AssetAdministrationShellRepositoryAPIAPIService is a service that implements the logic for the AssetAdministrationShellRepositoryAPIAPIServicer
@@ -41,11 +48,15 @@ func NewAssetAdministrationShellRepositoryAPIAPIService(databaseBackend persiste
 // GetAllAssetAdministrationShells - Returns all Asset Administration Shells
 func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllAssetAdministrationShells(ctx context.Context, assetIds []string, idShort string, limit int32, cursor string) (gen.ImplResponse, error) {
 	aasList, err := s.aasBackend.GetAllAAS()
+	operation := "GetAllAssetAdministrationShells"
 	if err != nil {
-		return gen.Response(500, "failed to fetch aas list"), nil
+		log.Printf("🧭 [%s] Error Error %s: %v", componentName, "GetAllAssetAdministrationShells", err)
+		return common.NewErrorResponse(
+			err, http.StatusInternalServerError, componentName, operation, "Unhandled",
+		), nil
 	}
 
-	return gen.Response(200, aasList), nil
+	return model.Response(http.StatusOK, aasList), nil
 
 	// TODO - update GetAllAssetAdministrationShells with the required logic for this service method.
 	// Add api_asset_administration_shell_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
@@ -73,18 +84,43 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllAssetAdministrat
 
 // PostAssetAdministrationShell - Creates a new Asset Administration Shell
 func (s *AssetAdministrationShellRepositoryAPIAPIService) PostAssetAdministrationShell(ctx context.Context, aas gen.AssetAdministrationShell) (gen.ImplResponse, error) {
+	operation := "PostAssetAdministrationShell"
 	// Validate minimal required fields
 	if aas.ID == "" {
-		return gen.Response(400, "missing required field: id"), nil
+		err := fmt.Errorf("missing required field: id")
+		resp := common.NewErrorResponse(
+			err,
+			http.StatusBadRequest,
+			componentName,
+			operation,
+			"BadRequest",
+		)
+		return resp, nil
 	}
 	if aas.ModelType == "" {
-		return gen.Response(400, "missing required field: modelType"), nil
+		err := fmt.Errorf("missing required field: modelType")
+		resp := common.NewErrorResponse(
+			err,
+			http.StatusBadRequest,
+			componentName,
+			operation,
+			"BadRequest",
+		)
+		return resp, nil
 	}
 
 	// Insert into DB
 	err := s.aasBackend.InsertAAS(aas)
 	if err != nil {
-		return gen.Response(500, "failed to insert AAS"), nil
+		log.Printf("❌ [%s] Error %s: %v", componentName, operation, err)
+		resp := common.NewErrorResponse(
+			err,
+			http.StatusInternalServerError,
+			componentName,
+			operation,
+			"Unhandled",
+		)
+		return resp, err
 	}
 
 	// Return created AAS
@@ -145,22 +181,49 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllAssetAdministrat
 
 // GetAssetAdministrationShellById - Returns a specific Asset Administration Shell
 func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAssetAdministrationShellById(ctx context.Context, aasID string) (gen.ImplResponse, error) {
+	operation := "GetAssetAdministrationShellById"
 	// Decode the Base64-encoded aasID
 	decoded, decodeErr := common.DecodeString(aasID)
 	if decodeErr != nil {
-		return gen.Response(400, "invalid AAS id encoding"), nil
+		log.Printf("❌ [%s] Error %s: decode failed: %v", componentName, operation, decodeErr)
+		resp := common.NewErrorResponse(
+			decodeErr,
+			http.StatusBadRequest,
+			componentName,
+			operation,
+			"BadRequest-Decode",
+		)
+		return resp, nil
 	}
 
 	// Query the DB
 	shell, err := s.aasBackend.GetAASByID(string(decoded))
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return gen.Response(404, "AAS not found"), nil
+		switch {
+		case errors.Is(err, sql.ErrNoRows):
+			log.Printf("❌ [%s] Error %s: not found: %v", componentName, operation, err)
+			resp := common.NewErrorResponse(
+				err,
+				http.StatusNotFound,
+				componentName,
+				operation,
+				"NotFound",
+			)
+			return resp, nil
+		default:
+			log.Printf("❌ [%s] Error %s: internal: %v", componentName, operation, err)
+			resp := common.NewErrorResponse(
+				err,
+				http.StatusInternalServerError,
+				componentName,
+				operation,
+				"Unhandled",
+			)
+			return resp, err
 		}
-		return gen.Response(500, "failed to fetch AAS"), nil
 	}
 
-	return gen.Response(200, shell), nil
+	return model.Response(http.StatusOK, shell), nil
 
 	// TODO - update GetAssetAdministrationShellById with the required logic for this service method.
 	// Add api_asset_administration_shell_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
@@ -220,24 +283,47 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) PutAssetAdministration
 
 // DeleteAssetAdministrationShellById - Deletes an Asset Administration Shell
 func (s *AssetAdministrationShellRepositoryAPIAPIService) DeleteAssetAdministrationShellById(ctx context.Context, aasId string) (gen.ImplResponse, error) {
+	operation := "DeleteAssetAdministrationShellById"
 	// Decode the ID if required (BaSyx APIs base64-encode IDs)
 	decoded, decodeErr := common.DecodeString(aasId)
 	if decodeErr != nil {
-		return gen.Response(400, "invalid AAS id encoding"), nil
+		log.Printf("❌ [%s] Error %s: decode failed: %v", componentName, operation, decodeErr)
+		resp := common.NewErrorResponse(
+			decodeErr,
+			http.StatusBadRequest,
+			componentName,
+			operation,
+			"BadRequest-Decode",
+		)
+		return resp, nil
 	}
 
 	// Try to delete
 	err := s.aasBackend.DeleteAASByID(string(decoded))
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return gen.Response(404, "AAS not found"), nil
+		switch {
+		case errors.Is(err, sql.ErrNoRows):
+			resp := common.NewErrorResponse(
+				err,
+				http.StatusNotFound,
+				componentName,
+				operation,
+				"NotFound",
+			)
+			return resp, nil
+		default:
+			resp := common.NewErrorResponse(
+				err,
+				http.StatusInternalServerError,
+				componentName,
+				operation,
+				"Unhandled",
+			)
+			return resp, err
 		}
-		return gen.Response(500, "failed to delete AAS"), nil
 	}
 
-	// Return 204 No Content
-	return gen.Response(204, nil), nil
-
+	return model.Response(http.StatusNoContent, nil), nil
 	// TODO - update DeleteAssetAdministrationShellById with the required logic for this service method.
 	// Add api_asset_administration_shell_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
 
