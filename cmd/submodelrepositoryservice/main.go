@@ -28,8 +28,6 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 		return err
 	}
 
-	common.PrintConfiguration(config)
-
 	// Create Chi router
 	r := chi.NewRouter()
 

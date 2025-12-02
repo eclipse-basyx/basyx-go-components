@@ -31,8 +31,8 @@ package submodelelements
 
 import (
 	"database/sql"
-	"errors"
 
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	jsoniter "github.com/json-iterator/go"
 	_ "github.com/lib/pq" // PostgreSQL Treiber
@@ -79,7 +79,7 @@ func NewPostgreSQLAnnotatedRelationshipElementHandler(db *sql.DB) (*PostgreSQLAn
 func (p PostgreSQLAnnotatedRelationshipElementHandler) Create(tx *sql.Tx, submodelID string, submodelElement gen.SubmodelElement) (int, error) {
 	areElem, ok := submodelElement.(*gen.AnnotatedRelationshipElement)
 	if !ok {
-		return 0, errors.New("submodelElement is not of type AnnotatedRelationshipElement")
+		return 0, common.NewErrBadRequest("submodelElement is not of type AnnotatedRelationshipElement")
 	}
 
 	// First, perform base SubmodelElement operations within the transaction
@@ -115,7 +115,7 @@ func (p PostgreSQLAnnotatedRelationshipElementHandler) Create(tx *sql.Tx, submod
 func (p PostgreSQLAnnotatedRelationshipElementHandler) CreateNested(tx *sql.Tx, submodelID string, parentID int, idShortPath string, submodelElement gen.SubmodelElement, pos int, rootSubmodelElementID int) (int, error) {
 	areElem, ok := submodelElement.(*gen.AnnotatedRelationshipElement)
 	if !ok {
-		return 0, errors.New("submodelElement is not of type AnnotatedRelationshipElement")
+		return 0, common.NewErrBadRequest("submodelElement is not of type AnnotatedRelationshipElement")
 	}
 
 	// Create the nested areElem with the provided idShortPath using the decorated handler

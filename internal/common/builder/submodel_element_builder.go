@@ -57,7 +57,9 @@ func BuildSubmodelElement(smeRow model.SubmodelElementRow) (*model.SubmodelEleme
 	}
 
 	specificSME.SetIdShort(smeRow.IDShort)
-	specificSME.SetCategory(smeRow.Category)
+	if smeRow.Category.Valid {
+		specificSME.SetCategory(smeRow.Category.String)
+	}
 	specificSME.SetModelType(smeRow.ModelType)
 
 	// Channels for parallel processing
@@ -292,13 +294,13 @@ func getSubmodelElementObjectBasedOnModelType(smeRow model.SubmodelElementRow, r
 		}
 		return mlProp, nil
 	case "File":
-		file, err := buildFile()
+		file, err := buildFile(smeRow)
 		if err != nil {
 			return nil, err
 		}
 		return file, nil
 	case "Blob":
-		blob, err := buildBlob()
+		blob, err := buildBlob(smeRow)
 		if err != nil {
 			return nil, err
 		}
@@ -544,13 +546,36 @@ func buildMultiLanguageProperty() (*model.MultiLanguageProperty, error) {
 }
 
 // buildFile creates a new File SubmodelElement.
-func buildFile() (*model.File, error) {
-	return &model.File{}, nil
+func buildFile(smeRow model.SubmodelElementRow) (*model.File, error) {
+	var valueRow model.FileElementValueRow
+	if smeRow.Value == nil {
+		return nil, fmt.Errorf("smeRow.Value is nil")
+	}
+	err := json.Unmarshal(*smeRow.Value, &valueRow)
+	if err != nil {
+		return nil, err
+	}
+	return &model.File{
+		Value:       valueRow.Value,
+		ContentType: valueRow.ContentType,
+	}, nil
 }
 
 // buildBlob creates a new Blob SubmodelElement.
-func buildBlob() (*model.Blob, error) {
-	return &model.Blob{}, nil
+func buildBlob(smeRow model.SubmodelElementRow) (*model.Blob, error) {
+	var valueRow model.BlobElementValueRow
+	if smeRow.Value == nil {
+		return nil, fmt.Errorf("smeRow.Value is nil")
+	}
+	err := json.Unmarshal(*smeRow.Value, &valueRow)
+	if err != nil {
+		return nil, err
+	}
+
+	return &model.Blob{
+		Value:       valueRow.Value,
+		ContentType: valueRow.ContentType,
+	}, nil
 }
 
 // buildRange creates a new Range SubmodelElement.

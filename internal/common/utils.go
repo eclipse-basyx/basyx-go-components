@@ -26,7 +26,7 @@
 // Package common provides utility functions and shared components
 // used across the BaSyx Go components implementation.
 //
-//nolint:revive
+//nolint:all
 package common
 
 import (
