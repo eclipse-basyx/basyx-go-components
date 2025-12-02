@@ -36,8 +36,8 @@ package persistencepostgresql
 import (
 	"database/sql"
 	"errors"
-	"log"
 
+	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 
@@ -78,30 +78,40 @@ func NewPostgreSQLAASDatabaseBackend(
 
 // GetAllAAS retrieves all Asset Administration Shells from the database.
 func (p *PostgreSQLAASDatabase) GetAllAAS() ([]model.AssetAdministrationShell, error) {
-	rows, err := p.DB.Query(`
-        SELECT id, id_short, category, model_type 
-        FROM aas
-        ORDER BY id
-    `)
+	dialect := goqu.New("postgres", p.DB)
+
+	query, _, err := dialect.
+		From("aas").
+		Select("id", "id_short", "category", "model_type").
+		Order(goqu.I("id").Asc()).
+		ToSQL()
 	if err != nil {
 		return nil, err
 	}
-	defer func() {
-		if err := rows.Close(); err != nil {
-			// Option 1: log or handle the error
-			log.Printf("failed to close rows: %v", err)
-		}
-	}()
+
+	rows, err := p.DB.Query(query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
 
 	var result []model.AssetAdministrationShell
 
 	for rows.Next() {
 		var shell model.AssetAdministrationShell
-
-		err := rows.Scan(&shell.ID, &shell.IdShort, &shell.Category, &shell.ModelType)
-		if err != nil {
+		if err := rows.Scan(&shell.ID, &shell.IdShort, &shell.Category, &shell.ModelType); err != nil {
 			return nil, err
 		}
+
+		// Add placeholders
+		shell.DisplayName = []model.LangStringNameType{}
+		shell.Description = []model.LangStringTextType{}
+		shell.Extensions = []model.Extension{}
+		shell.EmbeddedDataSpecifications = []model.EmbeddedDataSpecification{}
+		shell.Submodels = []model.Reference{}
+		shell.DerivedFrom = nil
+		shell.Administration = model.AdministrativeInformation{}
+		shell.AssetInformation = &model.AssetInformation{}
 
 		result = append(result, shell)
 	}
@@ -111,31 +121,48 @@ func (p *PostgreSQLAASDatabase) GetAllAAS() ([]model.AssetAdministrationShell, e
 
 // InsertAAS inserts a new Asset Administration Shell into the database.
 func (p *PostgreSQLAASDatabase) InsertAAS(aas model.AssetAdministrationShell) error {
-	_, err := p.DB.Exec(`
-        INSERT INTO aas (id, id_short, category, model_type)
-        VALUES ($1, $2, $3, $4)
-    `,
-		aas.ID,
-		aas.IdShort,
-		aas.Category,
-		aas.ModelType,
-	)
+	dialect := goqu.New("postgres", p.DB)
+
+	query, _, err := dialect.
+		Insert("aas").
+		Rows(goqu.Record{
+			"id":         aas.ID,
+			"id_short":   aas.IdShort,
+			"category":   aas.Category,
+			"model_type": aas.ModelType,
+		}).
+		ToSQL()
+	if err != nil {
+		return err
+	}
+
+	_, err = p.DB.Exec(query)
 	return err
 }
 
 // DeleteAASByID deletes an Asset Administration Shell by its ID.
 func (p *PostgreSQLAASDatabase) DeleteAASByID(id string) error {
-	result, err := p.DB.Exec(`DELETE FROM aas WHERE id = $1`, id)
+	dialect := goqu.New("postgres", p.DB)
+
+	query, _, err := dialect.
+		Delete("aas").
+		Where(goqu.Ex{"id": id}).
+		ToSQL()
 	if err != nil {
 		return err
 	}
 
-	rowsAffected, err := result.RowsAffected()
+	result, err := p.DB.Exec(query)
 	if err != nil {
 		return err
 	}
 
-	if rowsAffected == 0 {
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+
+	if rows == 0 {
 		return sql.ErrNoRows
 	}
 
@@ -144,21 +171,35 @@ func (p *PostgreSQLAASDatabase) DeleteAASByID(id string) error {
 
 // GetAASByID retrieves an Asset Administration Shell by its ID.
 func (p *PostgreSQLAASDatabase) GetAASByID(id string) (*model.AssetAdministrationShell, error) {
-	row := p.DB.QueryRow(`
-        SELECT id, id_short, category, model_type
-        FROM aas
-        WHERE id = $1
-    `, id)
+	dialect := goqu.New("postgres", p.DB)
+	query, _, err := dialect.
+		From("aas").
+		Select("id", "id_short", "category", "model_type").
+		Where(goqu.Ex{"id": id}).
+		Limit(1).
+		ToSQL()
+	if err != nil {
+		return nil, err
+	}
+	row := p.DB.QueryRow(query)
 
 	var shell model.AssetAdministrationShell
-
-	err := row.Scan(&shell.ID, &shell.IdShort, &shell.Category, &shell.ModelType)
-	if err != nil {
+	if err := row.Scan(&shell.ID, &shell.IdShort, &shell.Category, &shell.ModelType); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, sql.ErrNoRows
 		}
 		return nil, err
 	}
+
+	// Placeholder values
+	shell.DisplayName = []model.LangStringNameType{}
+	shell.Description = []model.LangStringTextType{}
+	shell.Extensions = []model.Extension{}
+	shell.EmbeddedDataSpecifications = []model.EmbeddedDataSpecification{}
+	shell.Submodels = []model.Reference{}
+	shell.DerivedFrom = nil
+	shell.Administration = model.AdministrativeInformation{}
+	shell.AssetInformation = &model.AssetInformation{}
 
 	return &shell, nil
 }
