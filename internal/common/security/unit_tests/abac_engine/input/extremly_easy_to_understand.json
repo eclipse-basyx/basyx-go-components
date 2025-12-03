@@ -37,7 +37,8 @@
       { "name": "mixed_casts_gate", "formula": { "$and": [
         { "$ge": [ { "$numCast": { "$field": "$aasdesc#specificAssetIds[0].value" } }, { "$numVal": 100 } ] },
         { "$gt": [ { "$timeCast": { "$field": "$aasdesc#specificAssetIds[1].value" } }, { "$timeVal": "08:00:00" } ] },
-        { "$eq": [ { "$numCast": { "$field": "$aasdesc#specificAssetIds[2].value" } }, { "$year": "2025-01-01T00:00:00Z" } ] }
+        { "$eq": [ { "$numCast": { "$field": "$aasdesc#specificAssetIds[2].value" } }, { "$year": "2025-01-01T00:00:00Z" } ] },
+        { "$eq": [ { "$hexCast": { "$field": "$aasdesc#specificAssetIds[3].value" } }, { "$hexVal": "16#BEEF" } ] }
       ] } }
     ],
 

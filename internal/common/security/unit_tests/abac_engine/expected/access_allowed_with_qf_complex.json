@@ -154,6 +154,18 @@
                     "$numVal": 2025
                 }
                 ]
+            },
+            {
+                "$eq": [
+                {
+                    "$hexCast": {
+                    "$field": "$aasdesc#specificAssetIds[3].value"
+                    }
+                },
+                {
+                    "$hexVal": "16#BEEF"
+                }
+                ]
             }
             ]
         }

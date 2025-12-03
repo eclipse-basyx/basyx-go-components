@@ -29,6 +29,7 @@ package auth
 import (
 	"encoding/json"
 	"fmt"
+	"math/big"
 	"regexp"
 	"strconv"
 	"strings"
@@ -68,23 +69,23 @@ func evalLE(le grammar.LogicalExpression, claims Claims) bool {
 	}
 
 	if len(le.Gt) == 2 {
-		return numCmp(resolveValue(le.Gt[0], claims), resolveValue(le.Gt[1], claims), "gt")
+		return orderedCmp(le.Gt[0], le.Gt[1], claims, "gt")
 	}
 	if len(le.Ge) == 2 {
-		return numCmp(resolveValue(le.Ge[0], claims), resolveValue(le.Ge[1], claims), "ge")
+		return orderedCmp(le.Ge[0], le.Ge[1], claims, "ge")
 	}
 	if len(le.Lt) == 2 {
-		return numCmp(resolveValue(le.Lt[0], claims), resolveValue(le.Lt[1], claims), "lt")
+		return orderedCmp(le.Lt[0], le.Lt[1], claims, "lt")
 	}
 	if len(le.Le) == 2 {
-		return numCmp(resolveValue(le.Le[0], claims), resolveValue(le.Le[1], claims), "le")
+		return orderedCmp(le.Le[0], le.Le[1], claims, "le")
 	}
 
 	if len(le.Eq) == 2 {
-		return fmt.Sprint(resolveValue(le.Eq[0], claims)) == fmt.Sprint(resolveValue(le.Eq[1], claims))
+		return eqCmp(le.Eq[0], le.Eq[1], claims, false)
 	}
 	if len(le.Ne) == 2 {
-		return fmt.Sprint(resolveValue(le.Ne[0], claims)) != fmt.Sprint(resolveValue(le.Ne[1], claims))
+		return eqCmp(le.Ne[0], le.Ne[1], claims, true)
 	}
 
 	if len(le.Regex) == 2 {
@@ -132,14 +133,6 @@ func evalLE(le grammar.LogicalExpression, claims Claims) bool {
 		return !evalLE(*le.Not, claims)
 	}
 
-	if len(le.Match) > 0 {
-		for _, m := range le.Match {
-			if !evalMatch(m, claims) {
-				return false
-			}
-		}
-		return true
-	}
 	return false
 }
 
@@ -301,145 +294,8 @@ func adaptLEForBackend(le grammar.LogicalExpression, claims Claims) (grammar.Log
 		return grammar.LogicalExpression{Not: &t}, false
 	}
 
-	// $match: try to reduce nested matches
-	if len(le.Match) > 0 {
-		// Semantics of $match in eval: AND over children
-		out := grammar.LogicalExpression{}
-		anyUnknown := false
-		for _, m := range le.Match {
-			if t, isBool := adaptMatchForBackend(m, claims); isBool {
-				if t.Boolean != nil && !*t.Boolean {
-					b := false
-					return grammar.LogicalExpression{Boolean: &b}, true
-				}
-				// true is neutral for AND; omit it
-				continue
-			}
-			out.Match = append(out.Match, m)
-			anyUnknown = true
-		}
-		if !anyUnknown {
-			b := true
-			return grammar.LogicalExpression{Boolean: &b}, true
-		}
-		return out, false
-	}
-
 	// Unknown or unsupported -> cannot fully decide here
 	return le, false
-}
-
-// adaptMatchForBackend reduces a MatchExpression similarly to adaptLEForBackend.
-func adaptMatchForBackend(me grammar.MatchExpression, claims Claims) (grammar.MatchExpression, bool) {
-	if me.Boolean != nil {
-		return me, true
-	}
-	reduceCmp := func(items []grammar.Value, op string) (grammar.MatchExpression, bool) {
-		if len(items) != 2 {
-			return me, false
-		}
-		left := replaceAttribute(items[0], claims)
-		right := replaceAttribute(items[1], claims)
-		out := grammar.MatchExpression{}
-		switch op {
-		case "$eq":
-			out.Eq = []grammar.Value{left, right}
-		case "$ne":
-			out.Ne = []grammar.Value{left, right}
-		case "$gt":
-			out.Gt = []grammar.Value{left, right}
-		case "$ge":
-			out.Ge = []grammar.Value{left, right}
-		case "$lt":
-			out.Lt = []grammar.Value{left, right}
-		case "$le":
-			out.Le = []grammar.Value{left, right}
-		case "$regex":
-			out.Regex = []grammar.StringValue{valueToStringValue(left), valueToStringValue(right)}
-		case "$contains":
-			out.Contains = []grammar.StringValue{valueToStringValue(left), valueToStringValue(right)}
-		case "$starts-with":
-			out.StartsWith = []grammar.StringValue{valueToStringValue(left), valueToStringValue(right)}
-		case "$ends-with":
-			out.EndsWith = []grammar.StringValue{valueToStringValue(left), valueToStringValue(right)}
-		}
-		if isLiteral(left) && isLiteral(right) {
-			b := false
-			tmp := grammar.LogicalExpression{}
-			switch op {
-			case "$eq":
-				tmp.Eq = out.Eq
-			case "$ne":
-				tmp.Ne = out.Ne
-			case "$gt":
-				tmp.Gt = out.Gt
-			case "$ge":
-				tmp.Ge = out.Ge
-			case "$lt":
-				tmp.Lt = out.Lt
-			case "$le":
-				tmp.Le = out.Le
-			case "$regex":
-				tmp.Regex = out.Regex
-			case "$contains":
-				tmp.Contains = out.Contains
-			case "$starts-with":
-				tmp.StartsWith = out.StartsWith
-			case "$ends-with":
-				tmp.EndsWith = out.EndsWith
-			}
-			if evalLE(tmp, claims) {
-				b = true
-			}
-			return grammar.MatchExpression{Boolean: &b}, true
-		}
-		return out, false
-	}
-
-	switch {
-	case len(me.Eq) == 2:
-		return reduceCmp(me.Eq, "$eq")
-	case len(me.Ne) == 2:
-		return reduceCmp(me.Ne, "$ne")
-	case len(me.Gt) == 2:
-		return reduceCmp(me.Gt, "$gt")
-	case len(me.Ge) == 2:
-		return reduceCmp(me.Ge, "$ge")
-	case len(me.Lt) == 2:
-		return reduceCmp(me.Lt, "$lt")
-	case len(me.Le) == 2:
-		return reduceCmp(me.Le, "$le")
-	case len(me.Regex) == 2:
-		return reduceCmp(stringItemsToValues(me.Regex), "$regex")
-	case len(me.Contains) == 2:
-		return reduceCmp(stringItemsToValues(me.Contains), "$contains")
-	case len(me.StartsWith) == 2:
-		return reduceCmp(stringItemsToValues(me.StartsWith), "$starts-with")
-	case len(me.EndsWith) == 2:
-		return reduceCmp(stringItemsToValues(me.EndsWith), "$ends-with")
-	case len(me.Match) > 0:
-		allBool := true
-		out := grammar.MatchExpression{}
-		for _, sub := range me.Match {
-			t, onlyBool := adaptMatchForBackend(sub, claims)
-			out.Match = append(out.Match, t)
-			if !onlyBool {
-				allBool = false
-			}
-		}
-		if allBool {
-			accum := true
-			for _, sub := range out.Match {
-				if sub.Boolean == nil || !*sub.Boolean {
-					accum = false
-					break
-				}
-			}
-			return grammar.MatchExpression{Boolean: &accum}, true
-		}
-		return out, false
-	}
-	return me, false
 }
 
 // replaceAttribute resolves a Value that is deterministic from CLAIM/GLOBAL attributes
@@ -538,6 +394,10 @@ func literalValueFromAny(x any) (grammar.Value, bool) {
 		dt := grammar.DateTimeLiteralPattern(t)
 		return grammar.Value{DateTimeVal: &dt}, true
 	case string:
+		if hv, ok := normalizeHexString(t); ok {
+			hex := grammar.HexLiteralPattern(hv)
+			return grammar.Value{HexVal: &hex}, true
+		}
 		// Try RFC3339 datetime first
 		if parsed, err := time.Parse(time.RFC3339, t); err == nil {
 			dt := grammar.DateTimeLiteralPattern(parsed)
@@ -611,63 +471,6 @@ func valueToStringValue(v grammar.Value) grammar.StringValue {
 	return grammar.StringValue{StrVal: &s}
 }
 
-func evalMatch(me grammar.MatchExpression, claims Claims) bool {
-	if me.Boolean != nil {
-		return *me.Boolean
-	}
-	if len(me.Gt) == 2 {
-		return numCmp(resolveValue(me.Gt[0], claims), resolveValue(me.Gt[1], claims), "gt")
-	}
-	if len(me.Ge) == 2 {
-		return numCmp(resolveValue(me.Ge[0], claims), resolveValue(me.Ge[1], claims), "ge")
-	}
-	if len(me.Lt) == 2 {
-		return numCmp(resolveValue(me.Lt[0], claims), resolveValue(me.Lt[1], claims), "lt")
-	}
-	if len(me.Le) == 2 {
-		return numCmp(resolveValue(me.Le[0], claims), resolveValue(me.Le[1], claims), "le")
-	}
-	if len(me.Eq) == 2 {
-		return fmt.Sprint(resolveValue(me.Eq[0], claims)) == fmt.Sprint(resolveValue(me.Eq[1], claims))
-	}
-	if len(me.Ne) == 2 {
-		return fmt.Sprint(resolveValue(me.Ne[0], claims)) != fmt.Sprint(resolveValue(me.Ne[1], claims))
-	}
-	if len(me.Regex) == 2 {
-		hay := asString(resolveStringItem(me.Regex[0], claims))
-		pat := asString(resolveStringItem(me.Regex[1], claims))
-		re, err := regexp.Compile(pat)
-		if err != nil {
-			return false
-		}
-		return re.MatchString(hay)
-	}
-	if len(me.Contains) == 2 {
-		hay := asString(resolveStringItem(me.Contains[0], claims))
-		needle := asString(resolveStringItem(me.Contains[1], claims))
-		return strings.Contains(hay, needle)
-	}
-	if len(me.StartsWith) == 2 {
-		hay := asString(resolveStringItem(me.StartsWith[0], claims))
-		prefix := asString(resolveStringItem(me.StartsWith[1], claims))
-		return strings.HasPrefix(hay, prefix)
-	}
-	if len(me.EndsWith) == 2 {
-		hay := asString(resolveStringItem(me.EndsWith[0], claims))
-		suffix := asString(resolveStringItem(me.EndsWith[1], claims))
-		return strings.HasSuffix(hay, suffix)
-	}
-	if len(me.Match) > 0 {
-		for _, sub := range me.Match {
-			if !evalMatch(sub, claims) {
-				return false
-			}
-		}
-		return true
-	}
-	return false
-}
-
 func resolveValue(v grammar.Value, claims Claims) any {
 
 	if v.Attribute != nil {
@@ -702,6 +505,9 @@ func resolveValue(v grammar.Value, claims Claims) any {
 		}
 	}
 	if v.HexVal != nil {
+		if hv, ok := normalizeHexString(string(*v.HexVal)); ok {
+			return hv
+		}
 		return string(*v.HexVal)
 	}
 
@@ -746,6 +552,9 @@ func resolveValue(v grammar.Value, claims Claims) any {
 		return fmt.Sprint(resolveValue(*v.DateTimeCast, claims))
 	}
 	if v.HexCast != nil {
+		if hv, ok := normalizeHexAny(resolveValue(*v.HexCast, claims)); ok {
+			return hv
+		}
 		return fmt.Sprint(resolveValue(*v.HexCast, claims))
 	}
 
@@ -888,58 +697,337 @@ func toDateTime(v any) (time.Time, bool) {
 	}
 }
 
-func numCmp(a, b any, op string) bool {
-	if af, aok := toFloat(a); aok {
-		if bf, bok := toFloat(b); bok {
-			switch op {
-			case "gt":
-				return af > bf
-			case "ge":
-				return af >= bf
-			case "lt":
-				return af < bf
-			case "le":
-				return af <= bf
-			default:
-				return false
-			}
-		}
+type comparisonKind int
+
+const (
+	kindUnknown comparisonKind = iota
+	kindString
+	kindNumber
+	kindBool
+	kindDateTime
+	kindTime
+	kindHex
+)
+
+func comparisonKindOf(v grammar.Value) comparisonKind {
+	switch v.EffectiveType() {
+	case "number":
+		return kindNumber
+	case "datetime":
+		return kindDateTime
+	case "time":
+		return kindTime
+	case "hex":
+		return kindHex
+	case "bool":
+		return kindBool
+	case "string":
+		return kindString
+	default:
+		return kindUnknown
 	}
-	if as, aok := toTimeOfDaySeconds(a); aok {
-		if bs, bok := toTimeOfDaySeconds(b); bok {
-			switch op {
-			case "gt":
-				return as > bs
-			case "ge":
-				return as >= bs
-			case "lt":
-				return as < bs
-			case "le":
-				return as <= bs
-			default:
-				return false
-			}
+}
+
+func unifyComparisonKind(a, b comparisonKind) (comparisonKind, bool) {
+	if a == b {
+		return a, true
+	}
+	if a == kindUnknown {
+		return b, true
+	}
+	if b == kindUnknown {
+		return a, true
+	}
+	return kindUnknown, false
+}
+
+func orderedCmp(left, right grammar.Value, claims Claims, op string) bool {
+	k, ok := unifyComparisonKind(comparisonKindOf(left), comparisonKindOf(right))
+	if !ok {
+		return false
+	}
+	switch k {
+	case kindNumber:
+		lv, lok := resolveNumberValue(left, claims)
+		rv, rok := resolveNumberValue(right, claims)
+		if !lok || !rok {
+			return false
 		}
+		return compareFloats(lv, rv, op)
+	case kindTime:
+		lv, lok := resolveTimeValue(left, claims)
+		rv, rok := resolveTimeValue(right, claims)
+		if !lok || !rok {
+			return false
+		}
+		return compareInts(lv, rv, op)
+	case kindDateTime:
+		lv, lok := resolveDateTimeValue(left, claims)
+		rv, rok := resolveDateTimeValue(right, claims)
+		if !lok || !rok {
+			return false
+		}
+		return compareTimes(lv, rv, op)
+	case kindHex:
+		lv, lok := resolveHexValue(left, claims)
+		rv, rok := resolveHexValue(right, claims)
+		if !lok || !rok {
+			return false
+		}
+		return compareHex(lv, rv, op)
+	default:
+		return false
+	}
+}
+
+func eqCmp(left, right grammar.Value, claims Claims, negate bool) bool {
+	k, ok := unifyComparisonKind(comparisonKindOf(left), comparisonKindOf(right))
+	if !ok {
+		return negate
 	}
 
-	if at, aok := toDateTime(a); aok {
-		if bt, bok := toDateTime(b); bok {
-			switch op {
-			case "gt":
-				return at.After(bt)
-			case "ge":
-				return at.After(bt) || at.Equal(bt)
-			case "lt":
-				return at.Before(bt)
-			case "le":
-				return at.Before(bt) || at.Equal(bt)
-			default:
-				return false
-			}
-		}
+	equal := false
+	switch k {
+	case kindNumber:
+		lv, lok := resolveNumberValue(left, claims)
+		rv, rok := resolveNumberValue(right, claims)
+		equal = lok && rok && lv == rv
+	case kindDateTime:
+		lv, lok := resolveDateTimeValue(left, claims)
+		rv, rok := resolveDateTimeValue(right, claims)
+		equal = lok && rok && lv.Equal(rv)
+	case kindTime:
+		lv, lok := resolveTimeValue(left, claims)
+		rv, rok := resolveTimeValue(right, claims)
+		equal = lok && rok && lv == rv
+	case kindHex:
+		lv, lok := resolveHexValue(left, claims)
+		rv, rok := resolveHexValue(right, claims)
+		equal = lok && rok && lv == rv
+	case kindBool:
+		lv, lok := resolveBoolValue(left, claims)
+		rv, rok := resolveBoolValue(right, claims)
+		equal = lok && rok && lv == rv
+	case kindString, kindUnknown:
+		lv, lok := resolveStringValue(left, claims)
+		rv, rok := resolveStringValue(right, claims)
+		equal = lok && rok && lv == rv
+	default:
+		equal = false
 	}
 
-	return false
+	if negate {
+		return !equal
+	}
+	return equal
+}
+
+func resolveNumberValue(v grammar.Value, claims Claims) (float64, bool) {
+	switch {
+	case v.NumVal != nil:
+		return *v.NumVal, true
+	case v.Year != nil:
+		return float64(time.Time(*v.Year).Year()), true
+	case v.Month != nil:
+		return float64(int(time.Time(*v.Month).Month())), true
+	case v.DayOfMonth != nil:
+		return float64(time.Time(*v.DayOfMonth).Day()), true
+	case v.DayOfWeek != nil:
+		return float64(int(time.Time(*v.DayOfWeek).Weekday())), true
+	case v.NumCast != nil:
+		raw := resolveValue(*v.NumCast, claims)
+		if f, ok := toFloat(raw); ok {
+			return f, true
+		}
+		if s, ok := raw.(string); ok {
+			if f, err := strconv.ParseFloat(strings.TrimSpace(s), 64); err == nil {
+				return f, true
+			}
+		}
+		return 0, false
+	default:
+		raw := resolveValue(v, claims)
+		if f, ok := toFloat(raw); ok {
+			return f, true
+		}
+	}
+	return 0, false
+}
+
+func resolveDateTimeValue(v grammar.Value, claims Claims) (time.Time, bool) {
+	switch {
+	case v.DateTimeVal != nil:
+		return time.Time(*v.DateTimeVal), true
+	case v.DateTimeCast != nil:
+		return toDateTime(resolveValue(*v.DateTimeCast, claims))
+	default:
+		return toDateTime(resolveValue(v, claims))
+	}
+}
+
+func resolveTimeValue(v grammar.Value, claims Claims) (int, bool) {
+	switch {
+	case v.TimeVal != nil:
+		return toTimeOfDaySeconds(*v.TimeVal)
+	case v.TimeCast != nil:
+		raw := resolveValue(*v.TimeCast, claims)
+		if dt, ok := toDateTime(raw); ok {
+			return dt.Hour()*3600 + dt.Minute()*60 + dt.Second(), true
+		}
+		return toTimeOfDaySeconds(raw)
+	default:
+		return toTimeOfDaySeconds(resolveValue(v, claims))
+	}
+}
+
+func resolveHexValue(v grammar.Value, claims Claims) (string, bool) {
+	switch {
+	case v.HexVal != nil:
+		return normalizeHexString(string(*v.HexVal))
+	case v.HexCast != nil:
+		return normalizeHexAny(resolveValue(*v.HexCast, claims))
+	default:
+		return normalizeHexAny(resolveValue(v, claims))
+	}
+}
+
+func resolveBoolValue(v grammar.Value, claims Claims) (bool, bool) {
+	switch {
+	case v.Boolean != nil:
+		return *v.Boolean, true
+	case v.BoolCast != nil:
+		return castToBool(resolveValue(*v.BoolCast, claims)), true
+	default:
+		return false, false
+	}
+}
+
+func resolveStringValue(v grammar.Value, claims Claims) (string, bool) {
+	switch {
+	case v.StrVal != nil:
+		return string(*v.StrVal), true
+	case v.StrCast != nil:
+		return fmt.Sprint(resolveValue(*v.StrCast, claims)), true
+	case v.Attribute != nil:
+		return asString(resolveAttributeValue(v.Attribute, claims)), true
+	case v.Field != nil:
+		return "", false
+	default:
+		return asString(resolveValue(v, claims)), true
+	}
+}
+
+func compareFloats(a, b float64, op string) bool {
+	switch op {
+	case "gt":
+		return a > b
+	case "ge":
+		return a >= b
+	case "lt":
+		return a < b
+	case "le":
+		return a <= b
+	default:
+		return false
+	}
+}
+
+func compareInts(a, b int, op string) bool {
+	switch op {
+	case "gt":
+		return a > b
+	case "ge":
+		return a >= b
+	case "lt":
+		return a < b
+	case "le":
+		return a <= b
+	default:
+		return false
+	}
+}
+
+func compareTimes(a, b time.Time, op string) bool {
+	switch op {
+	case "gt":
+		return a.After(b)
+	case "ge":
+		return a.After(b) || a.Equal(b)
+	case "lt":
+		return a.Before(b)
+	case "le":
+		return a.Before(b) || a.Equal(b)
+	default:
+		return false
+	}
+}
+
+func compareHex(a, b, op string) bool {
+	if op == "eq" || op == "ne" {
+		if op == "eq" {
+			return a == b
+		}
+		return a != b
+	}
+
+	ai, aok := hexToBigInt(a)
+	bi, bok := hexToBigInt(b)
+	if !aok || !bok {
+		return false
+	}
+
+	cmp := ai.Cmp(bi)
+	switch op {
+	case "gt":
+		return cmp > 0
+	case "ge":
+		return cmp >= 0
+	case "lt":
+		return cmp < 0
+	case "le":
+		return cmp <= 0
+	default:
+		return false
+	}
+}
+
+var hexLiteralRegex = regexp.MustCompile(`(?i)^16#[0-9a-f]+$`)
+
+func normalizeHexString(raw string) (string, bool) {
+	s := strings.ToUpper(strings.TrimSpace(raw))
+	if s == "" || !hexLiteralRegex.MatchString(s) {
+		return "", false
+	}
+	return s, true
+}
+
+func normalizeHexAny(v any) (string, bool) {
+	switch h := v.(type) {
+	case grammar.HexLiteralPattern:
+		return normalizeHexString(string(h))
+	case *grammar.HexLiteralPattern:
+		if h == nil {
+			return "", false
+		}
+		return normalizeHexString(string(*h))
+	default:
+		return normalizeHexString(fmt.Sprint(v))
+	}
+}
+
+func hexToBigInt(hex string) (*big.Int, bool) {
+	if hex == "" {
+		return nil, false
+	}
+	s := strings.TrimPrefix(strings.ToLower(hex), "16#")
+	if s == "" {
+		return nil, false
+	}
+	i := new(big.Int)
+	if _, ok := i.SetString(s, 16); !ok {
+		return nil, false
+	}
+	return i, true
 }
 
 func stringValueFromDate(v grammar.Value) string {
