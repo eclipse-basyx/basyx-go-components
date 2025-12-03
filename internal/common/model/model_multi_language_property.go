@@ -95,8 +95,8 @@ func (a MultiLanguageProperty) GetEmbeddedDataSpecifications() []EmbeddedDataSpe
 // Setters
 
 //nolint:all
-func (p *MultiLanguageProperty) SetModelType(modelType string) {
-	p.ModelType = modelType
+func (a *MultiLanguageProperty) SetModelType(modelType string) {
+	a.ModelType = modelType
 }
 
 //nolint:all
@@ -254,9 +254,9 @@ func AssertMultiLanguagePropertyConstraints(obj MultiLanguageProperty) error {
 // ToValueOnly converts the MultiLanguageProperty to its value-only representation.
 // Returns an array of single-key objects: [{"en": "text"}, {"de": "Text"}]
 // Returns an empty array if no language strings are present (to preserve array indices in lists).
-func (m *MultiLanguageProperty) ToValueOnly() interface{} {
-	result := make([]map[string]string, len(m.Value))
-	for i, langString := range m.Value {
+func (a *MultiLanguageProperty) ToValueOnly() interface{} {
+	result := make([]map[string]string, len(a.Value))
+	for i, langString := range a.Value {
 		result[i] = map[string]string{
 			langString.Language: langString.Text,
 		}
@@ -268,7 +268,7 @@ func (m *MultiLanguageProperty) ToValueOnly() interface{} {
 // Expects an array of objects, each with a single language-text key-value pair.
 // Example: [{"en": "Hello"}, {"de": "Hallo"}]
 // Returns an error if the value type doesn't match the expected format.
-func (m *MultiLanguageProperty) UpdateFromValueOnly(value interface{}) error {
+func (a *MultiLanguageProperty) UpdateFromValueOnly(value interface{}) error {
 	langArray, ok := value.([]interface{})
 	if !ok {
 		return fmt.Errorf("invalid value type for MultiLanguageProperty: expected array of objects, got %T", value)
@@ -289,6 +289,6 @@ func (m *MultiLanguageProperty) UpdateFromValueOnly(value interface{}) error {
 			}
 		}
 	}
-	m.Value = langStrings
+	a.Value = langStrings
 	return nil
 }

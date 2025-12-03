@@ -249,10 +249,10 @@ func AssertBlobConstraints(obj Blob) error {
 //	  "value": "SGVsbG8gV29ybGQ=",
 //	  "contentType": "text/plain"
 //	}
-func (b *Blob) ToValueOnly() interface{} {
+func (a *Blob) ToValueOnly() interface{} {
 	return map[string]interface{}{
-		"value":       b.Value,
-		"contentType": b.ContentType,
+		"value":       a.Value,
+		"contentType": a.ContentType,
 	}
 }
 
@@ -266,18 +266,18 @@ func (b *Blob) ToValueOnly() interface{} {
 //   - value is not a map
 //   - required fields are missing
 //   - field types are invalid
-func (b *Blob) UpdateFromValueOnly(value interface{}) error {
+func (a *Blob) UpdateFromValueOnly(value interface{}) error {
 	valueMap, ok := value.(map[string]interface{})
 	if !ok {
 		return fmt.Errorf("invalid value type for Blob: expected map, got %T", value)
 	}
 
 	if v, ok := valueMap["value"].(string); ok {
-		b.Value = v
+		a.Value = v
 	}
 
 	if ct, ok := valueMap["contentType"].(string); ok {
-		b.ContentType = ct
+		a.ContentType = ct
 	}
 
 	return nil

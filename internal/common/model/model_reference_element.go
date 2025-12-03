@@ -256,11 +256,11 @@ func AssertReferenceElementConstraints(obj ReferenceElement) error {
 //	  "type": "ModelReference",
 //	  "keys": [...]
 //	}
-func (r *ReferenceElement) ToValueOnly(referenceSerializer func(Reference) interface{}) interface{} {
-	if r.Value == nil {
+func (a *ReferenceElement) ToValueOnly(referenceSerializer func(Reference) interface{}) interface{} {
+	if a.Value == nil {
 		return nil
 	}
-	return referenceSerializer(*r.Value)
+	return referenceSerializer(*a.Value)
 }
 
 // UpdateFromValueOnly updates the ReferenceElement from a Value Only representation.
@@ -271,9 +271,9 @@ func (r *ReferenceElement) ToValueOnly(referenceSerializer func(Reference) inter
 //   - referenceDeserializer: function to convert the value into a Reference
 //
 // Returns an error if deserialization fails.
-func (r *ReferenceElement) UpdateFromValueOnly(value interface{}, referenceDeserializer func(interface{}) (*Reference, error)) error {
+func (a *ReferenceElement) UpdateFromValueOnly(value interface{}, referenceDeserializer func(interface{}) (*Reference, error)) error {
 	if value == nil {
-		r.Value = nil
+		a.Value = nil
 		return nil
 	}
 
@@ -282,6 +282,6 @@ func (r *ReferenceElement) UpdateFromValueOnly(value interface{}, referenceDeser
 		return fmt.Errorf("failed to deserialize reference for ReferenceElement: %w", err)
 	}
 
-	r.Value = ref
+	a.Value = ref
 	return nil
 }

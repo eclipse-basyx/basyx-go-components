@@ -728,33 +728,3 @@ func ValueOnlyToReferencePtr(value interface{}) (*gen.Reference, error) {
 	}
 	return &ref, nil
 }
-
-// deserializeElements converts a value-only map back to SubmodelElements.
-// Used by SubmodelElementCollection and Entity for deserialization.
-// This updates existing elements in place by matching idShorts.
-func deserializeElements(value interface{}) ([]gen.SubmodelElement, error) {
-	// This deserializer is special - it doesn't create new elements,
-	// it signals that elements should be updated in place.
-	// The actual logic is in the update methods below.
-	return nil, nil
-}
-
-// deserializeElementsList converts a value-only array back to SubmodelElements.
-// Used by SubmodelElementList for deserialization.
-// This updates existing elements in place by matching indices.
-func deserializeElementsList(value interface{}) ([]gen.SubmodelElement, error) {
-	// This deserializer is special - it doesn't create new elements,
-	// it signals that elements should be updated in place.
-	// The actual logic is in the update methods below.
-	return nil, nil
-}
-
-// deserializeAnnotations converts a value-only map back to annotation SubmodelElements.
-// Used by AnnotatedRelationshipElement for deserialization.
-// This updates existing annotations in place by matching idShorts.
-func deserializeAnnotations(value interface{}) ([]gen.SubmodelElement, error) {
-	// This deserializer is special - it doesn't create new annotations,
-	// it signals that annotations should be updated in place.
-	// The actual logic is in the update methods below.
-	return nil, nil
-}

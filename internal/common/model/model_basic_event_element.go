@@ -285,11 +285,11 @@ func AssertBasicEventElementConstraints(obj BasicEventElement) error {
 //	  "state": "on",
 //	  ...
 //	}
-func (b *BasicEventElement) ToValueOnly(referenceSerializer func(Reference) interface{}) interface{} {
+func (a *BasicEventElement) ToValueOnly(referenceSerializer func(Reference) interface{}) interface{} {
 	result := make(map[string]interface{})
 
-	if b.Observed != nil {
-		result["observed"] = referenceSerializer(*b.Observed)
+	if a.Observed != nil {
+		result["observed"] = referenceSerializer(*a.Observed)
 	}
 
 	if len(result) == 0 {
@@ -307,7 +307,7 @@ func (b *BasicEventElement) ToValueOnly(referenceSerializer func(Reference) inte
 //   - referenceDeserializer: function to convert value-only form to Reference
 //
 // Returns an error if deserialization fails.
-func (b *BasicEventElement) UpdateFromValueOnly(value interface{}, referenceDeserializer func(interface{}) (*Reference, error)) error {
+func (a *BasicEventElement) UpdateFromValueOnly(value interface{}, referenceDeserializer func(interface{}) (*Reference, error)) error {
 	valueMap, ok := value.(map[string]interface{})
 	if !ok {
 		return fmt.Errorf("invalid value type for BasicEventElement: expected map, got %T", value)
@@ -318,19 +318,19 @@ func (b *BasicEventElement) UpdateFromValueOnly(value interface{}, referenceDese
 		if err != nil {
 			return fmt.Errorf("failed to deserialize 'observed' reference: %w", err)
 		}
-		b.Observed = observed
+		a.Observed = observed
 	}
 
 	if direction, ok := valueMap["direction"].(string); ok {
-		b.Direction = Direction(direction)
+		a.Direction = Direction(direction)
 	}
 
 	if state, ok := valueMap["state"].(string); ok {
-		b.State = StateOfEvent(state)
+		a.State = StateOfEvent(state)
 	}
 
 	if messageTopic, ok := valueMap["messageTopic"].(string); ok {
-		b.MessageTopic = messageTopic
+		a.MessageTopic = messageTopic
 	}
 
 	if messageBrokerVal, ok := valueMap["messageBroker"]; ok {
@@ -338,19 +338,19 @@ func (b *BasicEventElement) UpdateFromValueOnly(value interface{}, referenceDese
 		if err != nil {
 			return fmt.Errorf("failed to deserialize 'messageBroker' reference: %w", err)
 		}
-		b.MessageBroker = messageBroker
+		a.MessageBroker = messageBroker
 	}
 
 	if lastUpdate, ok := valueMap["lastUpdate"].(string); ok {
-		b.LastUpdate = lastUpdate
+		a.LastUpdate = lastUpdate
 	}
 
 	if minInterval, ok := valueMap["minInterval"].(string); ok {
-		b.MinInterval = minInterval
+		a.MinInterval = minInterval
 	}
 
 	if maxInterval, ok := valueMap["maxInterval"].(string); ok {
-		b.MaxInterval = maxInterval
+		a.MaxInterval = maxInterval
 	}
 
 	return nil

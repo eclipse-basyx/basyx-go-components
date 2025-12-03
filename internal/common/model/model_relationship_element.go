@@ -270,14 +270,14 @@ func AssertRelationshipElementConstraints(obj RelationshipElement) error {
 //	  "first": {...},
 //	  "second": {...}
 //	}
-func (r *RelationshipElement) ToValueOnly(referenceSerializer func(Reference) interface{}) interface{} {
-	if r.First == nil || r.Second == nil {
+func (a *RelationshipElement) ToValueOnly(referenceSerializer func(Reference) interface{}) interface{} {
+	if a.First == nil || a.Second == nil {
 		return nil
 	}
 
 	return map[string]interface{}{
-		"first":  referenceSerializer(*r.First),
-		"second": referenceSerializer(*r.Second),
+		"first":  referenceSerializer(*a.First),
+		"second": referenceSerializer(*a.Second),
 	}
 }
 
@@ -291,7 +291,7 @@ func (r *RelationshipElement) ToValueOnly(referenceSerializer func(Reference) in
 // Returns an error if:
 //   - value is not a map
 //   - reference deserialization fails
-func (r *RelationshipElement) UpdateFromValueOnly(value interface{}, referenceDeserializer func(interface{}) (*Reference, error)) error {
+func (a *RelationshipElement) UpdateFromValueOnly(value interface{}, referenceDeserializer func(interface{}) (*Reference, error)) error {
 	valueMap, ok := value.(map[string]interface{})
 	if !ok {
 		return fmt.Errorf("invalid value type for RelationshipElement: expected map, got %T", value)
@@ -302,7 +302,7 @@ func (r *RelationshipElement) UpdateFromValueOnly(value interface{}, referenceDe
 		if err != nil {
 			return fmt.Errorf("failed to deserialize 'first' reference: %w", err)
 		}
-		r.First = first
+		a.First = first
 	}
 
 	if secondVal, ok := valueMap["second"]; ok {
@@ -310,7 +310,7 @@ func (r *RelationshipElement) UpdateFromValueOnly(value interface{}, referenceDe
 		if err != nil {
 			return fmt.Errorf("failed to deserialize 'second' reference: %w", err)
 		}
-		r.Second = second
+		a.Second = second
 	}
 
 	return nil

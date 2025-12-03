@@ -95,8 +95,8 @@ func (a File) GetEmbeddedDataSpecifications() []EmbeddedDataSpecification {
 // Setters
 
 //nolint:all
-func (p *File) SetModelType(modelType string) {
-	p.ModelType = modelType
+func (a *File) SetModelType(modelType string) {
+	a.ModelType = modelType
 }
 
 //nolint:all
@@ -249,10 +249,10 @@ func AssertFileConstraints(obj File) error {
 //	  "value": "/path/to/file.pdf",
 //	  "contentType": "application/pdf"
 //	}
-func (f *File) ToValueOnly() interface{} {
+func (a *File) ToValueOnly() interface{} {
 	return map[string]interface{}{
-		"value":       f.Value,
-		"contentType": f.ContentType,
+		"value":       a.Value,
+		"contentType": a.ContentType,
 	}
 }
 
@@ -266,18 +266,18 @@ func (f *File) ToValueOnly() interface{} {
 //   - value is not a map
 //   - required fields are missing
 //   - field types are invalid
-func (f *File) UpdateFromValueOnly(value interface{}) error {
+func (a *File) UpdateFromValueOnly(value interface{}) error {
 	valueMap, ok := value.(map[string]interface{})
 	if !ok {
 		return fmt.Errorf("invalid value type for File: expected map, got %T", value)
 	}
 
 	if v, ok := valueMap["value"].(string); ok {
-		f.Value = v
+		a.Value = v
 	}
 
 	if ct, ok := valueMap["contentType"].(string); ok {
-		f.ContentType = ct
+		a.ContentType = ct
 	}
 
 	return nil

@@ -379,6 +379,7 @@ func (a *AnnotatedRelationshipElement) UpdateFromValueOnly(
 	return nil
 }
 
+// UnmarshalJSON custom unmarshals an AnnotatedRelationshipElement from JSON.
 func (a *AnnotatedRelationshipElement) UnmarshalJSON(data []byte) error {
 	// Create a temporary struct with the same fields but Annotations as []json.RawMessage
 	type Alias AnnotatedRelationshipElement

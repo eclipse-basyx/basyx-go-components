@@ -231,13 +231,13 @@ func AssertCapabilityConstraints(obj Capability) error {
 
 // ToValueOnly converts the Capability element to its Value Only representation.
 // Capability elements have no value, so this always returns nil.
-func (c *Capability) ToValueOnly() interface{} {
+func (a *Capability) ToValueOnly() interface{} {
 	return nil
 }
 
 // UpdateFromValueOnly updates the Capability element from a Value Only representation.
 // Capability elements have no value, so this does nothing.
-func (c *Capability) UpdateFromValueOnly(value interface{}) error {
+func (a *Capability) UpdateFromValueOnly(_ interface{}) error {
 	// Capability has no value to update
 	return nil
 }

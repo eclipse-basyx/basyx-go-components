@@ -44,14 +44,14 @@ type SubmodelElementCollection struct {
 }
 
 // UnmarshalJSON implements custom JSON unmarshaling for SubmodelElementCollection
-func (sec *SubmodelElementCollection) UnmarshalJSON(data []byte) error {
+func (a *SubmodelElementCollection) UnmarshalJSON(data []byte) error {
 	// Create a temporary struct with the same fields but Value as []json.RawMessage
 	type Alias SubmodelElementCollection
 	aux := &struct {
 		Value []json.RawMessage `json:"value,omitempty"`
 		*Alias
 	}{
-		Alias: (*Alias)(sec),
+		Alias: (*Alias)(a),
 	}
 
 	// Unmarshal into the temporary struct
@@ -62,13 +62,13 @@ func (sec *SubmodelElementCollection) UnmarshalJSON(data []byte) error {
 
 	// Now process the Value field manually
 	if aux.Value != nil {
-		sec.Value = make([]SubmodelElement, len(aux.Value))
+		a.Value = make([]SubmodelElement, len(aux.Value))
 		for i, rawElement := range aux.Value {
 			element, err := UnmarshalSubmodelElement(rawElement)
 			if err != nil {
 				return fmt.Errorf("failed to unmarshal element at index %d: %w", i, err)
 			}
-			sec.Value[i] = element
+			a.Value[i] = element
 		}
 	}
 
@@ -289,11 +289,11 @@ func AssertSubmodelElementCollectionConstraints(obj SubmodelElementCollection) e
 //	  "element2": {...},
 //	  ...
 //	}
-func (s *SubmodelElementCollection) ToValueOnly(elementSerializer func([]SubmodelElement) interface{}) interface{} {
-	if len(s.Value) == 0 {
+func (a *SubmodelElementCollection) ToValueOnly(elementSerializer func([]SubmodelElement) interface{}) interface{} {
+	if len(a.Value) == 0 {
 		return map[string]interface{}{}
 	}
-	return elementSerializer(s.Value)
+	return elementSerializer(a.Value)
 }
 
 // UpdateFromValueOnly updates the SubmodelElementCollection from a Value Only representation.
@@ -304,12 +304,12 @@ func (s *SubmodelElementCollection) ToValueOnly(elementSerializer func([]Submode
 //   - elementDeserializer: function to convert value-only form to SubmodelElement slice
 //
 // Returns an error if deserialization fails.
-func (s *SubmodelElementCollection) UpdateFromValueOnly(
+func (a *SubmodelElementCollection) UpdateFromValueOnly(
 	value interface{},
 	elementDeserializer func(interface{}) ([]SubmodelElement, error),
 ) error {
 	if value == nil {
-		s.Value = nil
+		a.Value = nil
 		return nil
 	}
 
@@ -318,6 +318,6 @@ func (s *SubmodelElementCollection) UpdateFromValueOnly(
 		return fmt.Errorf("failed to deserialize SubmodelElementCollection value: %w", err)
 	}
 
-	s.Value = elements
+	a.Value = elements
 	return nil
 }

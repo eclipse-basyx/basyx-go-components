@@ -98,8 +98,8 @@ func (a Range) GetEmbeddedDataSpecifications() []EmbeddedDataSpecification {
 // Setters
 //
 //nolint:all
-func (p *Range) SetModelType(modelType string) {
-	p.ModelType = modelType
+func (a *Range) SetModelType(modelType string) {
+	a.ModelType = modelType
 }
 
 //nolint:all
@@ -241,20 +241,20 @@ func AssertRangeConstraints(obj Range) error {
 
 // ToValueOnly converts the Range to its value-only representation.
 // Returns {"min": string, "max": string} object, or nil if both bounds are empty.
-func (r *Range) ToValueOnly() interface{} {
-	if r.Min == "" && r.Max == "" {
+func (a *Range) ToValueOnly() interface{} {
+	if a.Min == "" && a.Max == "" {
 		return nil
 	}
 	return map[string]interface{}{
-		"min": r.Min,
-		"max": r.Max,
+		"min": a.Min,
+		"max": a.Max,
 	}
 }
 
 // UpdateFromValueOnly updates the Range from a value-only representation.
 // Expects a map with optional "min" and "max" string fields.
 // Returns an error if the value is not a map.
-func (r *Range) UpdateFromValueOnly(value interface{}) error {
+func (a *Range) UpdateFromValueOnly(value interface{}) error {
 	rangeMap, ok := value.(map[string]interface{})
 	if !ok {
 		return fmt.Errorf("invalid value type for Range: expected map, got %T", value)
@@ -262,12 +262,12 @@ func (r *Range) UpdateFromValueOnly(value interface{}) error {
 
 	if minVal, exists := rangeMap["min"]; exists {
 		if minStr, ok := minVal.(string); ok {
-			r.Min = minStr
+			a.Min = minStr
 		}
 	}
 	if maxVal, exists := rangeMap["max"]; exists {
 		if maxStr, ok := maxVal.(string); ok {
-			r.Max = maxStr
+			a.Max = maxStr
 		}
 	}
 	return nil
