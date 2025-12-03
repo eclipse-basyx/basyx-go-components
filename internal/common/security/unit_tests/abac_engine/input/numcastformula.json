@@ -1,0 +1,27 @@
+{
+  "AllAccessPermissionRules": {
+    "DEFATTRIBUTES": [
+      { "name": "member_attr",      "attributes": [ { "CLAIM": "role" }, { "CLAIM": "clear" } ] }
+    ],
+
+    "DEFOBJECTS": [
+      { "name": "allShellDescriptorsObject",  "objects": [ { "DESCRIPTOR": "$aasdesc(\"*\")"} ] }
+    ],
+    
+    "DEFACLS": [
+      { "name": "admin", "acl": { "USEATTRIBUTES": "member_attr",    "RIGHTS": ["CREATE", "READ", "UPDATE", "DELETE"], "ACCESS": "ALLOW" } }
+    ],
+    
+    "DEFFORMULAS": [
+      { "name": "isAdmin", "formula": { 
+        "$and": [
+          {"$ge": [ {"$numCast": { "$attribute": { "CLAIM": "clear" } } }, { "$numVal": 2 } ] },
+          {"$eq": [ {"$attribute": {"CLAIM": "role"}}, {"$strVal": "admin"}]}
+        ] }
+      }
+    ], 
+    "rules": [
+      { "USEACL": "admin", "USEOBJECTS": ["allShellDescriptorsObject"], "USEFORMULA": "isAdmin" }
+    ]
+  }
+}

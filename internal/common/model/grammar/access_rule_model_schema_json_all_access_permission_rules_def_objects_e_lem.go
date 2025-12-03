@@ -28,8 +28,9 @@
 package grammar
 
 import (
-	"encoding/json"
 	"fmt"
+
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 )
 
 // AccessRuleModelSchemaJSONAllAccessPermissionRulesDEFOBJECTSElem represents an object definition
@@ -84,7 +85,7 @@ type AccessRuleModelSchemaJSONAllAccessPermissionRulesDEFOBJECTSElem struct {
 //     Returns nil on successful unmarshaling and validation.
 func (j *AccessRuleModelSchemaJSONAllAccessPermissionRulesDEFOBJECTSElem) UnmarshalJSON(value []byte) error {
 	var raw map[string]interface{}
-	if err := json.Unmarshal(value, &raw); err != nil {
+	if err := common.UnmarshalAndDisallowUnknownFields(value, &raw); err != nil {
 		return err
 	}
 	if _, ok := raw["name"]; raw != nil && !ok {
@@ -92,7 +93,7 @@ func (j *AccessRuleModelSchemaJSONAllAccessPermissionRulesDEFOBJECTSElem) Unmars
 	}
 	type Plain AccessRuleModelSchemaJSONAllAccessPermissionRulesDEFOBJECTSElem
 	var plain Plain
-	if err := json.Unmarshal(value, &plain); err != nil {
+	if err := common.UnmarshalAndDisallowUnknownFields(value, &plain); err != nil {
 		return err
 	}
 	*j = AccessRuleModelSchemaJSONAllAccessPermissionRulesDEFOBJECTSElem(plain)
@@ -113,7 +114,7 @@ func (j *AccessRuleModelSchemaJSONAllAccessPermissionRulesDEFOBJECTSElem) Unmars
 //     Returns nil on successful unmarshaling and validation.
 func (j *AccessRuleModelSchemaJSONAllAccessPermissionRules) UnmarshalJSON(value []byte) error {
 	var raw map[string]interface{}
-	if err := json.Unmarshal(value, &raw); err != nil {
+	if err := common.UnmarshalAndDisallowUnknownFields(value, &raw); err != nil {
 		return err
 	}
 	if _, ok := raw["rules"]; raw != nil && !ok {
@@ -121,7 +122,7 @@ func (j *AccessRuleModelSchemaJSONAllAccessPermissionRules) UnmarshalJSON(value 
 	}
 	type Plain AccessRuleModelSchemaJSONAllAccessPermissionRules
 	var plain Plain
-	if err := json.Unmarshal(value, &plain); err != nil {
+	if err := common.UnmarshalAndDisallowUnknownFields(value, &plain); err != nil {
 		return err
 	}
 	*j = AccessRuleModelSchemaJSONAllAccessPermissionRules(plain)
@@ -142,7 +143,7 @@ func (j *AccessRuleModelSchemaJSONAllAccessPermissionRules) UnmarshalJSON(value 
 //     Returns nil on successful unmarshaling and validation.
 func (j *AccessRuleModelSchemaJSON) UnmarshalJSON(value []byte) error {
 	var raw map[string]interface{}
-	if err := json.Unmarshal(value, &raw); err != nil {
+	if err := common.UnmarshalAndDisallowUnknownFields(value, &raw); err != nil {
 		return err
 	}
 	if _, ok := raw["AllAccessPermissionRules"]; raw != nil && !ok {
@@ -150,7 +151,7 @@ func (j *AccessRuleModelSchemaJSON) UnmarshalJSON(value []byte) error {
 	}
 	type Plain AccessRuleModelSchemaJSON
 	var plain Plain
-	if err := json.Unmarshal(value, &plain); err != nil {
+	if err := common.UnmarshalAndDisallowUnknownFields(value, &plain); err != nil {
 		return err
 	}
 	*j = AccessRuleModelSchemaJSON(plain)

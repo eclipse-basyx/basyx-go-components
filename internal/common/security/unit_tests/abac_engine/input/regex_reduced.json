@@ -1,0 +1,21 @@
+{
+  "AllAccessPermissionRules": {
+    "rules": [
+      {
+        "ACL": {
+          "ACCESS": "ALLOW",
+          "RIGHTS": [
+            "READ"
+          ],
+          "ATTRIBUTES": [{"CLAIM": "role"}]
+        },
+        "OBJECTS": [
+          {
+            "ROUTE": "/*"
+          }
+        ],
+        "FORMULA": { "$regex": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "^test-[0-9]+$" } ] }
+      }
+    ]
+  }
+}

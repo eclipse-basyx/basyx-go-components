@@ -1,0 +1,34 @@
+{
+  "AllAccessPermissionRules": {
+    "rules": [
+      {
+        "ACL": {
+          "ACCESS": "ALLOW",
+          "RIGHTS": ["READ"],
+          "ATTRIBUTES": [{"GLOBAL": "ANONYMOUS"}]
+        },
+        "OBJECTS": [
+          {
+            "ROUTE": "/shell-descriptors"
+          }
+        ],
+        "FORMULA": {
+          "$lt": [
+            {
+              "$timeCast": {
+                "$attribute": {
+                  "GLOBAL": "LOCALNOW"
+                }
+              }
+            },
+            {
+              "$timeCast": {
+                "$strVal": "00:00:00"
+              }
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

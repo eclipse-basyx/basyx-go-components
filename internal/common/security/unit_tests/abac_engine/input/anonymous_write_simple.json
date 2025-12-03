@@ -1,0 +1,71 @@
+{
+  "AllAccessPermissionRules": {
+    "rules": [
+      {
+        "ACL": {
+          "ATTRIBUTES": [
+            {
+              "GLOBAL": "ANONYMOUS"
+            }
+          ],
+          "RIGHTS": [
+            "CREATE"
+          ],
+          "ACCESS": "ALLOW"
+        },
+        "OBJECTS": [
+          {
+            "ROUTE": "*"
+          }
+        ],
+        "FORMULA": {
+          "$boolean": true
+        }
+      },
+      {
+        "ACL": {
+          "ATTRIBUTES": [
+            {
+              "CLAIM": "role"
+            }
+          ],
+          "RIGHTS": [
+            "READ"
+          ],
+          "ACCESS": "ALLOW"
+        },
+        "OBJECTS": [
+          {
+            "ROUTE": "*"
+          }
+        ],
+        "FORMULA": {
+          "$and": [
+            {
+              "$eq": [
+                {
+                  "$attribute": {
+                    "CLAIM": "role"
+                  }
+                },
+                {
+                  "$strVal": "viewer"
+                }
+              ]
+            },
+            {
+              "$eq": [
+                {
+                  "$field": "$aasdesc#specificAssetIds[].externalSubjectId"
+                },
+                {
+                  "$strVal": "PUBLIC_READABLE"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

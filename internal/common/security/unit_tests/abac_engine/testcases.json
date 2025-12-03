@@ -1,0 +1,297 @@
+[
+  {
+    "input": "input/simple.json",
+    "expected": "expected/access_allowed.json",
+    "eval": "eval/get_shellDescriptors_admin.json"
+  },
+  {
+    "input": "input/no_object.json",
+    "expected": "expected/no_matching_rule.json",
+    "eval": "eval/get_shellDescriptors_admin.json"
+  },
+  {
+    "input": "input/with_descriptor_object_all.json",
+    "expected": "expected/access_allowed.json",
+    "eval": "eval/get_shellDescriptors_admin.json"
+  },
+  {
+    "input": "input/with_descriptor_object_single.json",
+    "expected": "expected/access_allowed_with_qf.json",
+    "eval": "eval/get_shellDescriptors_admin.json"
+  },
+  {
+    "input": "input/with_descriptor_object_single_and_attribute.json",
+    "expected": "expected/no_matching_rule.json",
+    "eval": "eval/get_shellDescriptors_editor.json"
+  },
+  {
+    "input": "input/with_descriptor_object_single_and_attribute.json",
+    "expected": "expected/access_allowed_with_qf.json",
+    "eval": "eval/get_shellDescriptors_admin.json"
+  },
+  {
+    "input": "input/with_descriptor_object_single_and_attribute_and_rule.json",
+    "expected": "expected/access_allowed_with_qf_add.json",
+    "eval": "eval/get_shellDescriptors_admin.json"
+  },
+  {
+    "input": "input/with_descriptor_object_single_and_attribute.json",
+    "expected": "expected/no_matching_rule.json",
+    "eval": "eval/get_shellDescriptors_admin_single.json"
+  },
+  {
+    "input": "input/with_descriptor_object_single_and_attribute.json",
+    "expected": "expected/access_allowed.json",
+    "eval": "eval/get_shellDescriptors_admin_single_correct.json"
+  },
+  {
+    "input": "input/with_descriptor_object_all_and_attribute.json",
+    "expected": "expected/access_allowed.json",
+    "eval": "eval/get_shellDescriptors_admin_single.json"
+  },
+  {
+    "input": "input/with_descriptor_object_all_and_attribute.json",
+    "expected": "expected/access_allowed.json",
+    "eval": "eval/get_shellDescriptors_admin.json"
+  },
+  {
+    "input": "input/with_descriptor_object_all_and_attribute_nested_solveable.json",
+    "expected": "expected/access_allowed.json",
+    "eval": "eval/get_shellDescriptors_admin.json"
+  },
+  {
+    "input": "input/with_descriptor_object_all_and_attribute_nested.json",
+    "expected": "expected/access_allowed_with_qf2.json",
+    "eval": "eval/get_shellDescriptors_admin.json"
+  },
+  {
+    "input": "input/with_descriptor_object_single_multiple.json",
+    "expected": "expected/access_allowed_with_object_or.json",
+    "eval": "eval/get_shellDescriptors_admin.json"
+  },
+  {
+    "input": "input/with_descriptor_object_single_multiple_and_formula.json",
+    "expected": "expected/access_allowed_with_object_or_big.json",
+    "eval": "eval/get_shellDescriptors_admin.json"
+  },
+  {
+    "input": "input/multiple_rules_or.json",
+    "expected": "expected/access_allowed_multiple_rules_or.json",
+    "eval": "eval/get_shellDescriptors_admin.json"
+  },
+  {
+    "input": "input/with_descriptor_object_single_multiple_with_route.json",
+    "expected": "expected/access_allowed.json",
+    "eval": "eval/get_shellDescriptors_admin.json"
+  },
+  {
+    "input": "input/monster.json",
+    "expected": "expected/access_allowed_monster.json",
+    "eval": "eval/get_shellDescriptors_admin.json"
+  },
+  {
+    "input": "input/test_formula_reduction.json",
+    "expected": "expected/access_allowed_reduction.json",
+    "eval": "eval/get_shellDescriptors_admin.json"
+  },
+  {
+    "input": "input/test_attribute_constant.json",
+    "expected": "expected/access_allowed_attr_constant.json",
+    "eval": "eval/get_shellDescriptors_admin.json"
+  },
+  {
+    "input": "input/anonymous_write_simple.json",
+    "expected": "expected/access_allowed.json",
+    "eval": "eval/post_shellDescriptors_admin.json"
+  },
+  {
+    "input": "input/numcastformula.json",
+    "expected": "expected/access_allowed.json",
+    "eval": "eval/get_shellDescriptors_member.json"
+  },
+  {
+    "input": "input/operator_num_ge.json",
+    "expected": "expected/access_allowed_num_ge.json",
+    "eval": "eval/get_shellDescriptors_viewer_clear2.json"
+  },
+  {
+    "input": "input/operator_num_lt.json",
+    "expected": "expected/access_allowed.json",
+    "eval": "eval/get_shellDescriptors_viewer_clear0.json"
+  },
+  {
+    "input": "input/operator_contains_href.json",
+    "expected": "expected/access_allowed_with_qf_contains_href.json",
+    "eval": "eval/get_shellDescriptors_viewer_clear2.json"
+  },
+  {
+    "input": "input/operator_regex_href.json",
+    "expected": "expected/access_allowed_with_qf_regex_href.json",
+    "eval": "eval/get_shellDescriptors_viewer_clear2.json"
+  },
+  {
+    "input": "input/operator_and_attr_field.json",
+    "expected": "expected/access_allowed_with_qf_and_attr_field.json",
+    "eval": "eval/get_shellDescriptors_viewer_clear2.json"
+  },
+  {
+    "input": "input/operator_or_two_ids.json",
+    "expected": "expected/access_allowed_with_qf_or_ids.json",
+    "eval": "eval/get_shellDescriptors_viewer_clear2.json"
+  },
+  {
+    "input": "input/operator_not_id.json",
+    "expected": "expected/access_allowed_with_qf_not_id.json",
+    "eval": "eval/get_shellDescriptors_viewer_clear2.json"
+  },
+  {
+    "input": "input/operator_boolean_false.json",
+    "expected": "expected/no_matching_rule.json",
+    "eval": "eval/get_shellDescriptors_viewer_clear2.json"
+  },
+  {
+    "input": "input/no_attributes.json",
+    "expected": "expected/no_matching_rule.json",
+    "eval": "eval/get_shellDescriptors_member.json"
+  },
+  {
+    "input": "input/missing_claim.json",
+    "expected": "expected/no_matching_rule.json",
+    "eval": "eval/get_shellDescriptors_member.json"
+  },
+  {
+    "input": "input/with_descriptor_object_single.json",
+    "expected": "expected/access_allowed.json",
+    "eval": "eval/get_submodelDescriptors_item_admin.json"
+  },
+  {
+    "input": "input/with_descriptor_object_all.json",
+    "expected": "expected/access_allowed.json",
+    "eval": "eval/get_submodelDescriptors_item_admin.json"
+  },
+  {
+    "input": "input/compare_string_with_num_correct.json",
+    "expected": "expected/access_allowed.json",
+    "eval": "eval/get_submodelDescriptors_item_admin.json"
+  },
+  {
+    "input": "input/compare_start_with.json",
+    "expected": "expected/access_allowed.json",
+    "eval": "eval/get_submodelDescriptors_item_viewer.json"
+  },
+  {
+    "input": "input/regex_stays.json",
+    "expected": "expected/no_matching_rule.json",
+    "eval": "eval/get_submodelDescriptors_item_viewer.json"
+  },
+  {
+    "input": "input/regex_stays.json",
+    "expected": "expected/access_allowed_regex.json",
+    "eval": "eval/get_submodelDescriptors_item_admin.json"
+  },
+  {
+    "input": "input/regex_reduced.json",
+    "expected": "expected/access_allowed.json",
+    "eval": "eval/get_submodelDescriptors_test_regex.json"
+  },
+  {
+    "input": "input/time_globals.json",
+    "expected": "expected/access_allowed_time_claims.json",
+    "eval": "eval/get_shellDescriptors_time_match.json"
+  },
+  {
+    "input": "input/time_globals.json",
+    "expected": "expected/no_matching_rule.json",
+    "eval": "eval/get_shellDescriptors_time_mismatch.json"
+  },
+  {
+    "input": "input/time_compare_gt.json",
+    "expected": "expected/access_allowed.json",
+    "eval": "eval/get_shellDescriptors_time_match.json"
+  },
+  {
+    "input": "input/time_cast_eq.json",
+    "expected": "expected/access_allowed.json",
+    "eval": "eval/get_shellDescriptors_time_match.json"
+  },
+  {
+    "input": "input/time_parts.json",
+    "expected": "expected/access_allowed.json",
+    "eval": "eval/get_shellDescriptors_time_match.json"
+  },
+  {
+    "input": "input/time_field_filter.json",
+    "expected": "expected/access_allowed_with_qf_time_field.json",
+    "eval": "eval/get_shellDescriptors_time_match.json"
+  },
+  {
+    "input": "input/time_compare_datetime_operand.json",
+    "expected": "expected/access_allowed.json",
+    "eval": "eval/get_shellDescriptors_time_match.json"
+  },
+  {
+    "input": "input/operator_time_ge.json",
+    "expected": "expected/access_allowed.json",
+    "eval": "eval/get_shellDescriptors_time_match.json"
+  },
+  {
+    "input": "input/operator_time_lt_fail.json",
+    "expected": "expected/no_matching_rule.json",
+    "eval": "eval/get_shellDescriptors_time_match.json"
+  },
+  {
+    "input": "input/operator_year_eq.json",
+    "expected": "expected/access_allowed.json",
+    "eval": "eval/get_shellDescriptors_time_match.json"
+  },
+  {
+    "input": "input/operator_dayofweek_mismatch.json",
+    "expected": "expected/no_matching_rule.json",
+    "eval": "eval/get_shellDescriptors_time_match.json"
+  },
+  {
+    "input": "input/operator_hex_eq.json",
+    "expected": "expected/access_allowed.json",
+    "eval": "eval/get_shellDescriptors_hex.json"
+  },
+  {
+    "input": "input/operator_hex_ne_fail.json",
+    "expected": "expected/no_matching_rule.json",
+    "eval": "eval/get_shellDescriptors_hex.json"
+  },
+  {
+    "input": "input/datetime_with_field.json",
+    "expected": "expected/access_allowed_datetime_with_field.json",
+    "eval": "eval/get_submodelDescriptors_item_admin.json"
+  },
+  {
+    "input": "input/startwith_attribute_compare.json",
+    "expected": "expected/access_allowed.json",
+    "eval": "eval/get_shellDescriptor_viewer.json"
+  },
+  {
+    "input": "input/extremly_easy_to_understand.json",
+    "expected": "expected/access_allowed_with_qf_complex.json",
+    "eval": "eval/get_shellDescriptors_role.json"
+  },
+  {
+    "input": "input/extremly_easy_to_understand.json",
+    "expected": "expected/access_allowed_qf_one.json",
+    "eval": "eval/get_shellDescriptor_one_role.json"
+  },
+  {
+    "input": "input/operator_gt_string_number_with_cast.json",
+    "expected": "expected/access_allowed.json",
+    "eval": "eval/get_shellDescriptors_num_string.json"
+  },
+  {
+    "input": "input/operator_hex_gt.json",
+    "expected": "expected/no_matching_rule.json",
+    "eval": "eval/get_shellDescriptors_hex.json"
+  },
+  {
+    "input": "input/operator_hex_gt.json",
+    "expected": "expected/access_allowed.json",
+    "eval": "eval/get_shellDescriptors_hex_beef.json"
+  }
+]

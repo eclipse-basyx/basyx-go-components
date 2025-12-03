@@ -1,0 +1,10 @@
+{
+  "id": "urn:aas:regex-42",
+  "idShort": "regex",
+  "specificAssetIds": [
+    {
+      "name": "category",
+      "value": "regex"
+    }
+  ]
+}

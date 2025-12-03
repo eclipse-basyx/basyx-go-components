@@ -1,0 +1,24 @@
+{
+  "AllAccessPermissionRules": {
+    "rules": [
+      {
+        "ACL": {
+          "ACCESS": "ALLOW",
+          "RIGHTS": [
+            "READ"
+          ],
+          "ATTRIBUTES": [{"CLAIM": "role"}]
+        },
+        "OBJECTS": [
+          {
+            "ROUTE": "/*"
+          }
+        ],
+        "FORMULA": { "$and": [
+            { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "admin" } ] },
+            { "$regex": [ { "$field": "$aasdesc#id" }, { "$strVal": "^urn:aas:regex-[0-9]+$" } ] }
+        ] }
+      }
+    ]
+  }
+}

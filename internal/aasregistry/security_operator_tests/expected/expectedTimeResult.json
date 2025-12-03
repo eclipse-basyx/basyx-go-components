@@ -1,0 +1,29 @@
+{
+   "PagingMetadata":{
+      
+   },
+   "Result":[
+      {
+      "id": "urn:aas:demo:public",
+      "idShort": "public",
+      "specificAssetIds": [
+         {
+            "name": "visibility",
+            "value": "public"
+         }
+      ]
+      },
+      {
+         "id": "urn:aas:dt-field-allow",
+         "idShort": "dtFieldAllow",
+         "endpoints": [
+            {
+               "interface": "http",
+               "protocolInformation": {
+               "href": "2025-01-01T00:00:00Z"
+               }
+            }
+         ]
+      }
+   ]
+}

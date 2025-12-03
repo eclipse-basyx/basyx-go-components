@@ -27,6 +27,11 @@
 // Author: Aaron Zielstorff ( Fraunhofer IESE ), Jannik Fried ( Fraunhofer IESE )
 package grammar
 
+import (
+	"fmt"
+	"strings"
+)
+
 // Value represents a value in the grammar model, which can be a literal value or a field reference.
 type Value struct {
 	// Attribute corresponds to the JSON schema field "$attribute".
@@ -165,4 +170,55 @@ func (v *Value) IsField() bool {
 // IsValue returns true if the Value represents a literal value (not a field)
 func (v *Value) IsValue() bool {
 	return !v.IsField() && v.GetValueType() != "unknown"
+}
+
+// EffectiveType returns a coarse type label used for validation of comparison operands.
+// Attributes and fields return an empty string because their runtime type is unknown at parse time.
+func (v *Value) EffectiveType() string {
+	switch {
+	case v.Attribute != nil:
+		if gv, ok := attributeGlobalValue(v.Attribute); ok {
+			if isNowGlobal(gv) {
+				return "datetime"
+			}
+		}
+		return "string"
+	case v.HexVal != nil, v.HexCast != nil:
+		return "hex"
+	case v.NumVal != nil, v.NumCast != nil, v.Year != nil, v.Month != nil, v.DayOfMonth != nil, v.DayOfWeek != nil:
+		return "number"
+	case v.StrVal != nil, v.StrCast != nil, v.Field != nil:
+		return "string"
+	case v.Boolean != nil, v.BoolCast != nil:
+		return "bool"
+	case v.DateTimeVal != nil, v.DateTimeCast != nil:
+		return "datetime"
+	case v.TimeVal != nil, v.TimeCast != nil:
+		return "time"
+	default:
+		return ""
+	}
+}
+
+func attributeGlobalValue(attr AttributeValue) (string, bool) {
+	switch a := attr.(type) {
+	case map[string]string:
+		if v, ok := a["GLOBAL"]; ok {
+			return v, true
+		}
+	case map[string]any:
+		if v, ok := a["GLOBAL"]; ok {
+			return fmt.Sprint(v), true
+		}
+	}
+	return "", false
+}
+
+func isNowGlobal(v string) bool {
+	switch strings.ToUpper(strings.TrimSpace(v)) {
+	case "UTCNOW", "LOCALNOW", "CLIENTNOW":
+		return true
+	default:
+		return false
+	}
 }

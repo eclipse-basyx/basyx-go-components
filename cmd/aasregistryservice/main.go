@@ -19,11 +19,13 @@ import (
 	"net/http"
 	"os"
 
-	ass_registry_api "github.com/eclipse-basyx/basyx-go-components/internal/aasregistry/api"
+	aasregistryapi "github.com/eclipse-basyx/basyx-go-components/internal/aasregistry/api"
 	aasregistrydatabase "github.com/eclipse-basyx/basyx-go-components/internal/aasregistry/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	apis "github.com/eclipse-basyx/basyx-go-components/pkg/aasregistryapi"
 	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/cors"
 )
 
 func runServer(ctx context.Context, configPath string, databaseSchema string) error {
@@ -38,7 +40,16 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 
 	r := chi.NewRouter()
 
-	common.AddCors(r, cfg)
+	// Make configuration available in request contexts.
+	r.Use(common.ConfigMiddleware(cfg))
+
+	c := cors.New(cors.Options{
+		AllowedOrigins:   []string{"*"},
+		AllowedMethods:   []string{http.MethodGet, http.MethodPost, http.MethodDelete, http.MethodOptions, http.MethodPut, http.MethodPatch},
+		AllowedHeaders:   []string{"*"}, // includes Authorization
+		AllowCredentials: true,
+	})
+	r.Use(c.Handler)
 	common.AddHealthEndpoint(r, cfg)
 
 	dsn := fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=disable",
@@ -66,16 +77,34 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	}
 	log.Println("✅ Postgres connection established")
 
-	smSvc := ass_registry_api.NewAssetAdministrationShellRegistryAPIAPIService(*smDatabase)
+	smSvc := aasregistryapi.NewAssetAdministrationShellRegistryAPIAPIService(*smDatabase)
 	smCtrl := apis.NewAssetAdministrationShellRegistryAPIAPIController(smSvc, cfg.Server.ContextPath)
-	for _, rt := range smCtrl.Routes() {
-		r.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
-	}
+
 	descSvc := apis.NewDescriptionAPIAPIService()
 	descCtrl := apis.NewDescriptionAPIAPIController(descSvc)
-	for _, rt := range descCtrl.Routes() {
-		r.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
+
+	base := common.NormalizeBasePath(cfg.Server.ContextPath)
+
+	// === Protected API Subrouter ===
+	apiRouter := chi.NewRouter()
+
+	// Apply OIDC + ABAC once for all registry endpoints
+	if err := auth.SetupSecurity(ctx, cfg, apiRouter); err != nil {
+		return err
 	}
+
+	// Register all registry routes (protected)
+	for _, rt := range smCtrl.Routes() {
+		apiRouter.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
+	}
+
+	// Register all description routes (protected)
+	for _, rt := range descCtrl.Routes() {
+		apiRouter.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
+	}
+
+	// Mount protected API under base path
+	r.Mount(base, apiRouter)
 
 	addr := "0.0.0.0:" + fmt.Sprintf("%d", cfg.Server.Port)
 	log.Printf("▶️ AAS Registry listening on %s (contextPath=%q)\n", addr, cfg.Server.ContextPath)

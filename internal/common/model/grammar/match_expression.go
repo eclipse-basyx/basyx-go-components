@@ -28,8 +28,9 @@
 package grammar
 
 import (
-	"encoding/json"
 	"fmt"
+
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 )
 
 // MatchExpression represents a pattern matching expression in the AAS access control grammar.
@@ -101,7 +102,8 @@ type MatchExpression struct {
 func (j *MatchExpression) UnmarshalJSON(value []byte) error {
 	type Plain MatchExpression
 	var plain Plain
-	if err := json.Unmarshal(value, &plain); err != nil {
+
+	if err := common.UnmarshalAndDisallowUnknownFields(value, &plain); err != nil {
 		return err
 	}
 	if plain.Match != nil && len(plain.Match) < 1 {

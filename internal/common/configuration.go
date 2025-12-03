@@ -122,14 +122,14 @@ type CorsConfig struct {
 type OIDCConfig struct {
 	Issuer   string `mapstructure:"issuer" json:"issuer"`     // OIDC issuer URL
 	Audience string `mapstructure:"audience" json:"audience"` // Expected token audience
-	JWKSURL  string `mapstructure:"jwksURL" json:"jwksURL"`   // JSON Web Key Set URL
 }
 
 // ABACConfig contains Attribute-Based Access Control authorization settings.
 type ABACConfig struct {
-	Enabled             bool   `mapstructure:"enabled" json:"enabled"`                         // Enable/disable ABAC
-	ClientRolesAudience string `mapstructure:"clientRolesAudience" json:"clientRolesAudience"` // Client roles audience
-	ModelPath           string `mapstructure:"modelPath" json:"modelPath"`                     // Path to access control model
+	Enabled                   bool   `mapstructure:"enabled" json:"enabled"`                                     // Enable/disable ABAC
+	EnableDebugErrorResponses bool   `mapstructure:"enableDebugErrorResponses" json:"enableDebugErrorResponses"` // Enable/disable 403 error codes
+	ClientRolesAudience       string `mapstructure:"clientRolesAudience" json:"clientRolesAudience"`             // Client roles audience
+	ModelPath                 string `mapstructure:"modelPath" json:"modelPath"`                                 // Path to access control model
 }
 
 // LoadConfig loads the configuration from YAML files and environment variables.
@@ -226,9 +226,9 @@ func setDefaults(v *viper.Viper) {
 
 	v.SetDefault("oidc.issuer", "http://localhost:8080/realms/basyx")
 	v.SetDefault("oidc.audience", "discovery-service")
-	v.SetDefault("oidc.jwksURL", "")
 
 	v.SetDefault("abac.enabled", false)
+	v.SetDefault("abac.enableDebugErrorResponses", false)
 	v.SetDefault("abac.clientRolesAudience", "discovery-service")
 	v.SetDefault("abac.modelPath", "config/access_rules/access-rules.json")
 
