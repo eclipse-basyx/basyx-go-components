@@ -304,15 +304,13 @@ func AssertEntityConstraints(obj Entity) error {
 //	  "specificAssetIds": [...]
 //	}
 func (a *Entity) ToValueOnly(elementSerializer func([]SubmodelElement) interface{}) interface{} {
-	if len(a.Statements) == 0 {
-		return nil
-	}
-
 	result := map[string]interface{}{
-		"statements": elementSerializer(a.Statements),
 		"entityType": a.EntityType,
 	}
 
+	if len(a.Statements) > 0 {
+		result["statements"] = elementSerializer(a.Statements)
+	}
 	if a.GlobalAssetID != "" {
 		result["globalAssetId"] = a.GlobalAssetID
 	}
