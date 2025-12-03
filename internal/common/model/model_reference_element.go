@@ -9,6 +9,8 @@
 
 package model
 
+import "fmt"
+
 // ReferenceElement type of ReferenceElement
 type ReferenceElement struct {
 	Extensions []Extension `json:"extensions,omitempty"`
@@ -239,5 +241,47 @@ func AssertReferenceElementConstraints(obj ReferenceElement) error {
 			return err
 		}
 	}
+	return nil
+}
+
+// ToValueOnly converts the ReferenceElement to its Value Only representation.
+// Returns nil if the Value field is nil, otherwise returns the reference as a map.
+//
+// The reference serialization is handled by a helper function (ReferenceToValueOnly)
+// that must be provided in the value_only package.
+//
+// Example output:
+//
+//	{
+//	  "type": "ModelReference",
+//	  "keys": [...]
+//	}
+func (a *ReferenceElement) ToValueOnly(referenceSerializer func(Reference) interface{}) interface{} {
+	if a.Value == nil {
+		return nil
+	}
+	return referenceSerializer(*a.Value)
+}
+
+// UpdateFromValueOnly updates the ReferenceElement from a Value Only representation.
+// Expects a reference map structure that will be parsed by the provided deserializer.
+//
+// Parameters:
+//   - value: the value-only representation (typically a map)
+//   - referenceDeserializer: function to convert the value into a Reference
+//
+// Returns an error if deserialization fails.
+func (a *ReferenceElement) UpdateFromValueOnly(value interface{}, referenceDeserializer func(interface{}) (*Reference, error)) error {
+	if value == nil {
+		a.Value = nil
+		return nil
+	}
+
+	ref, err := referenceDeserializer(value)
+	if err != nil {
+		return fmt.Errorf("failed to deserialize reference for ReferenceElement: %w", err)
+	}
+
+	a.Value = ref
 	return nil
 }

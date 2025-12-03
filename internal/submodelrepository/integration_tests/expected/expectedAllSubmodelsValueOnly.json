@@ -1,0 +1,265 @@
+[
+    {
+        "1": {
+            "2": {
+                "3": {
+                    "4": {
+                        "5": {
+                            "6": [
+                                "12",
+                                "123",
+                                "1234"
+                            ]
+                        }
+                    }
+                }
+            }
+        },
+        "ExampleSubmodelElementCollection": {
+            "ExampleAnnotatedRelationshipElement": {
+                "annotations": {
+                    "ExampleProperty": "some example annotation"
+                },
+                "first": {
+                    "keys": [
+                        {
+                            "type": "Submodel",
+                            "value": "https://acplt.org/Test_Submodel_Missing"
+                        },
+                        {
+                            "type": "SubmodelElementList",
+                            "value": "ExampleSubmodelElementListOrdered"
+                        },
+                        {
+                            "type": "Property",
+                            "value": "ExampleProperty"
+                        }
+                    ],
+                    "type": "ModelReference"
+                },
+                "second": {
+                    "keys": [
+                        {
+                            "type": "Submodel",
+                            "value": "https://acplt.org/Test_Submodel_Missing"
+                        },
+                        {
+                            "type": "SubmodelElementList",
+                            "value": "ExampleSubmodelElementListOrdered"
+                        },
+                        {
+                            "type": "MultiLanguageProperty",
+                            "value": "ExampleMultiLanguageProperty"
+                        }
+                    ],
+                    "type": "ModelReference"
+                }
+            },
+            "ExampleBasicEvent": {
+                "observed": {
+                    "keys": [
+                        {
+                            "type": "Submodel",
+                            "value": "https://acplt.org/Test_Submodel_Missing"
+                        },
+                        {
+                            "type": "SubmodelElementList",
+                            "value": "ExampleSubmodelElementListOrdered"
+                        },
+                        {
+                            "type": "Property",
+                            "value": "ExampleProperty"
+                        }
+                    ],
+                    "type": "ExternalReference"
+                }
+            },
+            "ExampleRelationshipElement": {
+                "first": {
+                    "keys": [
+                        {
+                            "type": "Submodel",
+                            "value": "https://acplt.org/Test_Submodel_Missing"
+                        },
+                        {
+                            "type": "SubmodelElementList",
+                            "value": "ExampleSubmodelElementListOrdered"
+                        },
+                        {
+                            "type": "Property",
+                            "value": "ExampleProperty"
+                        }
+                    ],
+                    "type": "ModelReference"
+                },
+                "second": {
+                    "keys": [
+                        {
+                            "type": "Submodel",
+                            "value": "https://acplt.org/Test_Submodel_Missing"
+                        },
+                        {
+                            "type": "SubmodelElementList",
+                            "value": "ExampleSubmodelElementListOrdered"
+                        },
+                        {
+                            "type": "MultiLanguageProperty",
+                            "value": "ExampleMultiLanguageProperty"
+                        }
+                    ],
+                    "type": "ModelReference"
+                }
+            },
+            "ExampleSubmodelElementCollection": {
+                "ExampleBlob": {
+                    "contentType": "application/pdf",
+                    "value": "\\x415149444241553d"
+                },
+                "ExampleFile": {
+                    "contentType": "application/pdf",
+                    "value": "file:///TestFile.pdf"
+                },
+                "ExampleReferenceElement": {
+                    "keys": [
+                        {
+                            "type": "Submodel",
+                            "value": "https://acplt.org/Test_Submodel_Missing"
+                        },
+                        {
+                            "type": "SubmodelElementCollection",
+                            "value": "ExampleSubmodelElementCollection"
+                        },
+                        {
+                            "type": "File",
+                            "value": "ExampleFile"
+                        }
+                    ],
+                    "type": "ModelReference"
+                }
+            },
+            "ExampleSubmodelElementListOrdered": [
+                "exampleValue",
+                [
+                    {
+                        "en-us": "Example value of a MultiLanguageProperty element"
+                    },
+                    {
+                        "de": "Beispielswert für ein MultiLanguageProperty-Element"
+                    }
+                ],
+                {
+                    "max": "100",
+                    "min": "0"
+                }
+            ]
+        }
+    },
+    {
+        "DemoFile": {
+            "contentType": "",
+            "value": ""
+        }
+    },
+    {
+        "DemoFile": {
+            "contentType": "image/png",
+            "value": "http://example.com/placeholder.png"
+        }
+    },
+    {
+        "ManufacturerName": "Fraunhofer IESE",
+        "ProductModelName": "Model X",
+        "ProductSerialNumber": {
+            "NestedCollection1": {
+                "DeepNestedProperty": "42"
+            },
+            "NestedCollection2": {}
+        }
+    },
+    {},
+    {
+        "DemoAnnotatedRelationshipElement": {
+            "annotations": {
+                "AnnotationProperty1": "AnnotationValue1"
+            },
+            "first": {
+                "keys": [
+                    {
+                        "type": "Submodel",
+                        "value": "urn:uuid:123e4567-e89b-12d3-a456-426614174000"
+                    }
+                ],
+                "type": "ModelReference"
+            },
+            "second": {
+                "keys": [
+                    {
+                        "type": "Submodel",
+                        "value": "urn:uuid:123e4567-e89b-12d3-a456-426614174001"
+                    }
+                ],
+                "type": "ModelReference"
+            }
+        }
+    },
+    {},
+    {
+        "DemoEntity": {
+            "entityType": "CoManagedEntity",
+            "globalAssetId": "urn:uuid:123e4567-e89b-12d3-a456-426614174000",
+            "specificAssetIds": [
+                {
+                    "name": "CustomKey1",
+                    "value": "CustomValue1"
+                },
+                {
+                    "name": "CustomKey2",
+                    "value": "CustomValue2"
+                }
+            ],
+            "statements": {
+                "StatementProperty1": "StatementValue1"
+            }
+        }
+    },
+    {},
+    {
+        "DemoRange": {
+            "max": "100.0",
+            "min": "0.0"
+        }
+    },
+    {
+        "DemoOperation": {
+            "keys": [
+                {
+                    "type": "Submodel",
+                    "value": "urn:uuid:123e4567-e89b-12d3-a456-426614174000"
+                }
+            ],
+            "type": "ModelReference"
+        }
+    },
+    {
+        "DemoRelationshipElement": {
+            "first": {
+                "keys": [
+                    {
+                        "type": "Submodel",
+                        "value": "urn:uuid:123e4567-e89b-12d3-a456-426614174000"
+                    }
+                ],
+                "type": "ModelReference"
+            },
+            "second": {
+                "keys": [
+                    {
+                        "type": "Submodel",
+                        "value": "urn:uuid:123e4567-e89b-12d3-a456-426614174001"
+                    }
+                ],
+                "type": "ModelReference"
+            }
+        }
+    }
+]
