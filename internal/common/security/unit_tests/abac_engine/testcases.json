@@ -283,5 +283,15 @@
     "input": "input/operator_gt_string_number_with_cast.json",
     "expected": "expected/access_allowed.json",
     "eval": "eval/get_shellDescriptors_num_string.json"
+  },
+  {
+    "input": "input/operator_hex_gt.json",
+    "expected": "expected/no_matching_rule.json",
+    "eval": "eval/get_shellDescriptors_hex.json"
+  },
+  {
+    "input": "input/operator_hex_gt.json",
+    "expected": "expected/access_allowed.json",
+    "eval": "eval/get_shellDescriptors_hex_beef.json"
   }
 ]
