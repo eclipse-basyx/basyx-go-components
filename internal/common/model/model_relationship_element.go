@@ -9,6 +9,8 @@
 
 package model
 
+import "fmt"
+
 // RelationshipElement type of RelationshipElement
 type RelationshipElement struct {
 	Extensions []Extension `json:"extensions,omitempty"`
@@ -253,5 +255,63 @@ func AssertRelationshipElementConstraints(obj RelationshipElement) error {
 			return err
 		}
 	}
+	return nil
+}
+
+// ToValueOnly converts the RelationshipElement to its Value Only representation.
+// Returns a map with "first" and "second" references, or nil if either is missing.
+//
+// Parameters:
+//   - referenceSerializer: function to convert Reference to its value-only form
+//
+// Example output:
+//
+//	{
+//	  "first": {...},
+//	  "second": {...}
+//	}
+func (r *RelationshipElement) ToValueOnly(referenceSerializer func(Reference) interface{}) interface{} {
+	if r.First == nil || r.Second == nil {
+		return nil
+	}
+
+	return map[string]interface{}{
+		"first":  referenceSerializer(*r.First),
+		"second": referenceSerializer(*r.Second),
+	}
+}
+
+// UpdateFromValueOnly updates the RelationshipElement from a Value Only representation.
+// Expects a map with "first" and "second" reference fields.
+//
+// Parameters:
+//   - value: map containing "first" and "second" keys
+//   - referenceDeserializer: function to convert value-only form to Reference
+//
+// Returns an error if:
+//   - value is not a map
+//   - reference deserialization fails
+func (r *RelationshipElement) UpdateFromValueOnly(value interface{}, referenceDeserializer func(interface{}) (*Reference, error)) error {
+	valueMap, ok := value.(map[string]interface{})
+	if !ok {
+		return fmt.Errorf("invalid value type for RelationshipElement: expected map, got %T", value)
+	}
+
+	if firstVal, ok := valueMap["first"]; ok {
+		first, err := referenceDeserializer(firstVal)
+		if err != nil {
+			return fmt.Errorf("failed to deserialize 'first' reference: %w", err)
+		}
+		r.First = first
+	}
+
+	if secondVal, ok := valueMap["second"]; ok {
+		second, err := referenceDeserializer(secondVal)
+		if err != nil {
+			return fmt.Errorf("failed to deserialize 'second' reference: %w", err)
+		}
+		r.Second = second
+	}
+
 	return nil
 }

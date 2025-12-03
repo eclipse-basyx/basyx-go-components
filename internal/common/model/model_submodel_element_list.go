@@ -285,3 +285,50 @@ func AssertSubmodelElementListConstraints(obj SubmodelElementList) error {
 	}
 	return nil
 }
+
+// ToValueOnly converts the SubmodelElementList to its Value Only representation.
+// Returns an array of value-only representations of the child elements.
+// Returns nil if the list has no elements.
+//
+// Parameters:
+//   - elementSerializer: function to convert child SubmodelElements to value-only form
+//
+// Example output:
+//
+//	[
+//	  "value1",
+//	  {...},
+//	  ...
+//	]
+func (s *SubmodelElementList) ToValueOnly(elementSerializer func([]SubmodelElement) interface{}) interface{} {
+	if len(s.Value) == 0 {
+		return nil
+	}
+	return elementSerializer(s.Value)
+}
+
+// UpdateFromValueOnly updates the SubmodelElementList from a Value Only representation.
+// Expects an array of value-only element representations.
+//
+// Parameters:
+//   - value: the value-only representation (typically an array)
+//   - elementDeserializer: function to convert value-only form to SubmodelElement slice
+//
+// Returns an error if deserialization fails.
+func (s *SubmodelElementList) UpdateFromValueOnly(
+	value interface{},
+	elementDeserializer func(interface{}) ([]SubmodelElement, error),
+) error {
+	if value == nil {
+		s.Value = nil
+		return nil
+	}
+
+	elements, err := elementDeserializer(value)
+	if err != nil {
+		return fmt.Errorf("failed to deserialize SubmodelElementList value: %w", err)
+	}
+
+	s.Value = elements
+	return nil
+}

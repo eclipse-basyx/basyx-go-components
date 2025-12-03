@@ -9,6 +9,8 @@
 
 package model
 
+import "fmt"
+
 // BasicEventElement type of SubmodelElement
 type BasicEventElement struct {
 	Extensions []Extension `json:"extensions,omitempty"`
@@ -265,5 +267,91 @@ func AssertBasicEventElementConstraints(obj BasicEventElement) error {
 			return err
 		}
 	}
+	return nil
+}
+
+// ToValueOnly converts the BasicEventElement to its Value Only representation.
+// Returns a map with "observed", "direction", "state", "messageTopic", "messageBroker", "lastUpdate", and "minInterval".
+// Returns nil (BasicEventElement has no simple value representation).
+//
+// Parameters:
+//   - referenceSerializer: function to convert Reference to its value-only form
+//
+// Example output:
+//
+//	{
+//	  "observed": {...},
+//	  "direction": "input",
+//	  "state": "on",
+//	  ...
+//	}
+func (b *BasicEventElement) ToValueOnly(referenceSerializer func(Reference) interface{}) interface{} {
+	result := make(map[string]interface{})
+
+	if b.Observed != nil {
+		result["observed"] = referenceSerializer(*b.Observed)
+	}
+
+	if len(result) == 0 {
+		return nil
+	}
+
+	return result
+}
+
+// UpdateFromValueOnly updates the BasicEventElement from a Value Only representation.
+// Expects a map with event-related fields.
+//
+// Parameters:
+//   - value: map containing event data
+//   - referenceDeserializer: function to convert value-only form to Reference
+//
+// Returns an error if deserialization fails.
+func (b *BasicEventElement) UpdateFromValueOnly(value interface{}, referenceDeserializer func(interface{}) (*Reference, error)) error {
+	valueMap, ok := value.(map[string]interface{})
+	if !ok {
+		return fmt.Errorf("invalid value type for BasicEventElement: expected map, got %T", value)
+	}
+
+	if observedVal, ok := valueMap["observed"]; ok {
+		observed, err := referenceDeserializer(observedVal)
+		if err != nil {
+			return fmt.Errorf("failed to deserialize 'observed' reference: %w", err)
+		}
+		b.Observed = observed
+	}
+
+	if direction, ok := valueMap["direction"].(string); ok {
+		b.Direction = Direction(direction)
+	}
+
+	if state, ok := valueMap["state"].(string); ok {
+		b.State = StateOfEvent(state)
+	}
+
+	if messageTopic, ok := valueMap["messageTopic"].(string); ok {
+		b.MessageTopic = messageTopic
+	}
+
+	if messageBrokerVal, ok := valueMap["messageBroker"]; ok {
+		messageBroker, err := referenceDeserializer(messageBrokerVal)
+		if err != nil {
+			return fmt.Errorf("failed to deserialize 'messageBroker' reference: %w", err)
+		}
+		b.MessageBroker = messageBroker
+	}
+
+	if lastUpdate, ok := valueMap["lastUpdate"].(string); ok {
+		b.LastUpdate = lastUpdate
+	}
+
+	if minInterval, ok := valueMap["minInterval"].(string); ok {
+		b.MinInterval = minInterval
+	}
+
+	if maxInterval, ok := valueMap["maxInterval"].(string); ok {
+		b.MaxInterval = maxInterval
+	}
+
 	return nil
 }

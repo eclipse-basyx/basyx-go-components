@@ -1064,10 +1064,6 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelElementByPathValueOnlySubmo
 			timestamp := common.GetCurrentTimestamp()
 			return gen.Response(http.StatusInternalServerError, []common.ErrorHandler{*common.NewErrorHandler("Error", err, "500", "SMREPO-GetSubmodelElementByPathValueOnlySubmodelRepo-500-InternalServerError", string(timestamp))}), nil
 		}
-		if common.IsErrBadRequest(err) {
-			timestamp := common.GetCurrentTimestamp()
-			return gen.Response(http.StatusBadRequest, []common.ErrorHandler{*common.NewErrorHandler("Error", err, "400", "SMREPO-GetSubmodelElementByPathValueOnlySubmodelRepo-400-BadRequest", string(timestamp))}), nil
-		}
 		return gen.Response(http.StatusInternalServerError, nil), err
 	}
 

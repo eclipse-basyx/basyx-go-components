@@ -9,6 +9,8 @@
 
 package model
 
+import "fmt"
+
 // MultiLanguageProperty type of SubmodelElement
 type MultiLanguageProperty struct {
 	Extensions []Extension `json:"extensions,omitempty"`
@@ -246,5 +248,47 @@ func AssertMultiLanguagePropertyConstraints(obj MultiLanguageProperty) error {
 	if err := AssertReferenceConstraints(*obj.ValueID); err != nil {
 		return err
 	}
+	return nil
+}
+
+// ToValueOnly converts the MultiLanguageProperty to its value-only representation.
+// Returns an array of single-key objects: [{"en": "text"}, {"de": "Text"}]
+// Returns an empty array if no language strings are present (to preserve array indices in lists).
+func (m *MultiLanguageProperty) ToValueOnly() interface{} {
+	result := make([]map[string]string, len(m.Value))
+	for i, langString := range m.Value {
+		result[i] = map[string]string{
+			langString.Language: langString.Text,
+		}
+	}
+	return result
+}
+
+// UpdateFromValueOnly updates the MultiLanguageProperty from a value-only representation.
+// Expects an array of objects, each with a single language-text key-value pair.
+// Example: [{"en": "Hello"}, {"de": "Hallo"}]
+// Returns an error if the value type doesn't match the expected format.
+func (m *MultiLanguageProperty) UpdateFromValueOnly(value interface{}) error {
+	langArray, ok := value.([]interface{})
+	if !ok {
+		return fmt.Errorf("invalid value type for MultiLanguageProperty: expected array of objects, got %T", value)
+	}
+
+	langStrings := make([]LangStringTextType, 0, len(langArray))
+	for _, langObj := range langArray {
+		langMap, ok := langObj.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		for lang, text := range langMap {
+			if textStr, ok := text.(string); ok {
+				langStrings = append(langStrings, LangStringTextType{
+					Language: lang,
+					Text:     textStr,
+				})
+			}
+		}
+	}
+	m.Value = langStrings
 	return nil
 }

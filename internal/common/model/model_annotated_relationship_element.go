@@ -296,7 +296,89 @@ func AssertAnnotatedRelationshipElementConstraints(obj AnnotatedRelationshipElem
 	return nil
 }
 
-// UnmarshalJSON implements custom JSON unmarshaling for AnnotatedRelationshipElement
+// ToValueOnly converts the AnnotatedRelationshipElement to its Value Only representation.
+// Returns a map with "first", "second", and optionally "annotations" fields.
+// Returns nil if either first or second reference is missing.
+//
+// Parameters:
+//   - referenceSerializer: function to convert Reference to its value-only form
+//   - annotationSerializer: function to convert annotation SubmodelElements to value-only form
+//
+// Example output:
+//
+//	{
+//	  "first": {...},
+//	  "second": {...},
+//	  "annotations": {...}  // only if annotations exist
+//	}
+func (a *AnnotatedRelationshipElement) ToValueOnly(
+	referenceSerializer func(Reference) interface{},
+	annotationSerializer func([]SubmodelElement) interface{},
+) interface{} {
+	if a.First == nil || a.Second == nil {
+		return nil
+	}
+
+	result := map[string]interface{}{
+		"first":  referenceSerializer(*a.First),
+		"second": referenceSerializer(*a.Second),
+	}
+
+	if len(a.Annotations) > 0 {
+		result["annotations"] = annotationSerializer(a.Annotations)
+	}
+
+	return result
+}
+
+// UpdateFromValueOnly updates the AnnotatedRelationshipElement from a Value Only representation.
+// Expects a map with "first", "second", and optionally "annotations" fields.
+//
+// Parameters:
+//   - value: map containing "first", "second", and optional "annotations" keys
+//   - referenceDeserializer: function to convert value-only form to Reference
+//   - annotationDeserializer: function to convert value-only form to SubmodelElement slice
+//
+// Returns an error if:
+//   - value is not a map
+//   - reference or annotation deserialization fails
+func (a *AnnotatedRelationshipElement) UpdateFromValueOnly(
+	value interface{},
+	referenceDeserializer func(interface{}) (*Reference, error),
+	annotationDeserializer func(interface{}) ([]SubmodelElement, error),
+) error {
+	valueMap, ok := value.(map[string]interface{})
+	if !ok {
+		return fmt.Errorf("invalid value type for AnnotatedRelationshipElement: expected map, got %T", value)
+	}
+
+	if firstVal, ok := valueMap["first"]; ok {
+		first, err := referenceDeserializer(firstVal)
+		if err != nil {
+			return fmt.Errorf("failed to deserialize 'first' reference: %w", err)
+		}
+		a.First = first
+	}
+
+	if secondVal, ok := valueMap["second"]; ok {
+		second, err := referenceDeserializer(secondVal)
+		if err != nil {
+			return fmt.Errorf("failed to deserialize 'second' reference: %w", err)
+		}
+		a.Second = second
+	}
+
+	if annotationsVal, ok := valueMap["annotations"]; ok {
+		annotations, err := annotationDeserializer(annotationsVal)
+		if err != nil {
+			return fmt.Errorf("failed to deserialize annotations: %w", err)
+		}
+		a.Annotations = annotations
+	}
+
+	return nil
+}
+
 func (a *AnnotatedRelationshipElement) UnmarshalJSON(data []byte) error {
 	// Create a temporary struct with the same fields but Annotations as []json.RawMessage
 	type Alias AnnotatedRelationshipElement

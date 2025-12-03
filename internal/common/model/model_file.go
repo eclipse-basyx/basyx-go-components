@@ -9,7 +9,9 @@
 
 package model
 
-// File type of SubmodelElement
+import "fmt"
+
+// File Type of SubmodelElement
 type File struct {
 	Extensions []Extension `json:"extensions,omitempty"`
 
@@ -235,5 +237,48 @@ func AssertFileConstraints(obj File) error {
 			return err
 		}
 	}
+	return nil
+}
+
+// ToValueOnly converts the File element to its Value Only representation.
+// Returns a map with "value" (file path) and "contentType" fields.
+//
+// Example output:
+//
+//	{
+//	  "value": "/path/to/file.pdf",
+//	  "contentType": "application/pdf"
+//	}
+func (f *File) ToValueOnly() interface{} {
+	return map[string]interface{}{
+		"value":       f.Value,
+		"contentType": f.ContentType,
+	}
+}
+
+// UpdateFromValueOnly updates the File element from a Value Only representation.
+// Expects a map with "value" and "contentType" fields.
+//
+// Parameters:
+//   - value: a map[string]interface{} with "value" and "contentType" keys
+//
+// Returns an error if:
+//   - value is not a map
+//   - required fields are missing
+//   - field types are invalid
+func (f *File) UpdateFromValueOnly(value interface{}) error {
+	valueMap, ok := value.(map[string]interface{})
+	if !ok {
+		return fmt.Errorf("invalid value type for File: expected map, got %T", value)
+	}
+
+	if v, ok := valueMap["value"].(string); ok {
+		f.Value = v
+	}
+
+	if ct, ok := valueMap["contentType"].(string); ok {
+		f.ContentType = ct
+	}
+
 	return nil
 }

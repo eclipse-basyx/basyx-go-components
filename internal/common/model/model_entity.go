@@ -288,3 +288,88 @@ func AssertEntityConstraints(obj Entity) error {
 	}
 	return nil
 }
+
+// ToValueOnly converts the Entity to its Value Only representation.
+// Returns a map with "statements" (child elements), "globalAssetId", and "specificAssetIds".
+// Returns nil if the entity has no statements.
+//
+// Parameters:
+//   - elementSerializer: function to convert child SubmodelElements to value-only form
+//
+// Example output:
+//
+//	{
+//	  "statements": {...},
+//	  "globalAssetId": "...",
+//	  "specificAssetIds": [...]
+//	}
+func (e *Entity) ToValueOnly(elementSerializer func([]SubmodelElement) interface{}) interface{} {
+	if len(e.Statements) == 0 {
+		return nil
+	}
+
+	result := map[string]interface{}{
+		"statements": elementSerializer(e.Statements),
+		"entityType": e.EntityType,
+	}
+
+	if e.GlobalAssetID != "" {
+		result["globalAssetId"] = e.GlobalAssetID
+	}
+
+	if len(e.SpecificAssetIds) > 0 {
+		result["specificAssetIds"] = e.SpecificAssetIds
+	}
+
+	return result
+}
+
+// UpdateFromValueOnly updates the Entity from a Value Only representation.
+// Expects a map with "statements", and optionally "globalAssetId" and "specificAssetIds".
+//
+// Parameters:
+//   - value: map containing entity data
+//   - elementDeserializer: function to convert value-only form to SubmodelElement slice
+//
+// Returns an error if deserialization fails.
+func (e *Entity) UpdateFromValueOnly(
+	value interface{},
+	elementDeserializer func(interface{}) ([]SubmodelElement, error),
+) error {
+	valueMap, ok := value.(map[string]interface{})
+	if !ok {
+		return fmt.Errorf("invalid value type for Entity: expected map, got %T", value)
+	}
+
+	if statementsVal, ok := valueMap["statements"]; ok {
+		statements, err := elementDeserializer(statementsVal)
+		if err != nil {
+			return fmt.Errorf("failed to deserialize Entity statements: %w", err)
+		}
+		e.Statements = statements
+	}
+
+	if globalAssetID, ok := valueMap["globalAssetId"].(string); ok {
+		e.GlobalAssetID = globalAssetID
+	}
+
+	if specificAssetIdsVal, ok := valueMap["specificAssetIds"]; ok {
+		if specificAssetIdsSlice, ok := specificAssetIdsVal.([]interface{}); ok {
+			e.SpecificAssetIds = make([]SpecificAssetID, len(specificAssetIdsSlice))
+			for i, item := range specificAssetIdsSlice {
+				if itemMap, ok := item.(map[string]interface{}); ok {
+					var assetID SpecificAssetID
+					if name, ok := itemMap["name"].(string); ok {
+						assetID.Name = name
+					}
+					if value, ok := itemMap["value"].(string); ok {
+						assetID.Value = value
+					}
+					e.SpecificAssetIds[i] = assetID
+				}
+			}
+		}
+	}
+
+	return nil
+}

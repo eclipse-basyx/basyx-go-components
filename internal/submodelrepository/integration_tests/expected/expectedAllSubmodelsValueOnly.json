@@ -55,9 +55,25 @@
                     "type": "ModelReference"
                 }
             },
-            "ExampleBasicEvent": null,
-            "ExampleCapability": {},
-            "ExampleOperation": null,
+            "ExampleBasicEvent": {
+                "observed": {
+                    "keys": [
+                        {
+                            "type": "Submodel",
+                            "value": "https://acplt.org/Test_Submodel_Missing"
+                        },
+                        {
+                            "type": "SubmodelElementList",
+                            "value": "ExampleSubmodelElementListOrdered"
+                        },
+                        {
+                            "type": "Property",
+                            "value": "ExampleProperty"
+                        }
+                    ],
+                    "type": "ExternalReference"
+                }
+            },
             "ExampleRelationshipElement": {
                 "first": {
                     "keys": [
@@ -95,8 +111,14 @@
                 }
             },
             "ExampleSubmodelElementCollection": {
-                "ExampleBlob": "\\x415149444241553d",
-                "ExampleFile": "file:///TestFile.pdf",
+                "ExampleBlob": {
+                    "contentType": "application/pdf",
+                    "value": "\\x415149444241553d"
+                },
+                "ExampleFile": {
+                    "contentType": "application/pdf",
+                    "value": "file:///TestFile.pdf"
+                },
                 "ExampleReferenceElement": {
                     "keys": [
                         {
@@ -117,7 +139,14 @@
             },
             "ExampleSubmodelElementListOrdered": [
                 "exampleValue",
-                null,
+                [
+                    {
+                        "en-us": "Example value of a MultiLanguageProperty element"
+                    },
+                    {
+                        "de": "Beispielswert für ein MultiLanguageProperty-Element"
+                    }
+                ],
                 {
                     "max": "100",
                     "min": "0"
@@ -126,10 +155,16 @@
         }
     },
     {
-        "DemoFile": ""
+        "DemoFile": {
+            "contentType": "",
+            "value": ""
+        }
     },
     {
-        "DemoFile": "http://example.com/placeholder.png"
+        "DemoFile": {
+            "contentType": "image/png",
+            "value": "http://example.com/placeholder.png"
+        }
     },
     {
         "ManufacturerName": "Fraunhofer IESE",
@@ -167,9 +202,7 @@
             }
         }
     },
-    {
-        "DemoCapability": {}
-    },
+    {},
     {
         "DemoEntity": {
             "entityType": "CoManagedEntity",

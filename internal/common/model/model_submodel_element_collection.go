@@ -274,3 +274,50 @@ func AssertSubmodelElementCollectionConstraints(obj SubmodelElementCollection) e
 	// } TODO: REDO IF NECESSARY
 	return nil
 }
+
+// ToValueOnly converts the SubmodelElementCollection to its Value Only representation.
+// Returns a map where keys are idShort values and values are the value-only representations
+// of the child elements. Returns nil if the collection has no elements.
+//
+// Parameters:
+//   - elementSerializer: function to convert child SubmodelElements to value-only form
+//
+// Example output:
+//
+//	{
+//	  "element1": "value1",
+//	  "element2": {...},
+//	  ...
+//	}
+func (s *SubmodelElementCollection) ToValueOnly(elementSerializer func([]SubmodelElement) interface{}) interface{} {
+	if len(s.Value) == 0 {
+		return map[string]interface{}{}
+	}
+	return elementSerializer(s.Value)
+}
+
+// UpdateFromValueOnly updates the SubmodelElementCollection from a Value Only representation.
+// Expects a map where keys are idShort values.
+//
+// Parameters:
+//   - value: the value-only representation (typically a map)
+//   - elementDeserializer: function to convert value-only form to SubmodelElement slice
+//
+// Returns an error if deserialization fails.
+func (s *SubmodelElementCollection) UpdateFromValueOnly(
+	value interface{},
+	elementDeserializer func(interface{}) ([]SubmodelElement, error),
+) error {
+	if value == nil {
+		s.Value = nil
+		return nil
+	}
+
+	elements, err := elementDeserializer(value)
+	if err != nil {
+		return fmt.Errorf("failed to deserialize SubmodelElementCollection value: %w", err)
+	}
+
+	s.Value = elements
+	return nil
+}

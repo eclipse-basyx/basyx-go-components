@@ -310,7 +310,7 @@ func getMultiLanguagePropertySubquery(dialect goqu.DialectWrapper) *goqu.SelectD
 
 	mlpValueSubquery := dialect.From(goqu.T("multilanguage_property_value").As("mlpval")).
 		Select(goqu.Func("jsonb_agg", goqu.L("?", mlpValueObject))).
-		Where(goqu.I("mlpval.id").Eq(goqu.I("sme.id")))
+		Where(goqu.I("mlpval.mlp_id").Eq(goqu.I("sme.id")))
 
 	return dialect.From(goqu.T("multilanguage_property").As("mlp")).
 		Select(

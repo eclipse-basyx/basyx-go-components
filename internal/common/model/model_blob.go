@@ -9,7 +9,9 @@
 
 package model
 
-// Blob type of SubmodelElement
+import "fmt"
+
+// Blob Type of SubmodelElement
 type Blob struct {
 	Extensions []Extension `json:"extensions,omitempty"`
 
@@ -235,5 +237,48 @@ func AssertBlobConstraints(obj Blob) error {
 			return err
 		}
 	}
+	return nil
+}
+
+// ToValueOnly converts the Blob element to its Value Only representation.
+// Returns a map with "value" (base64-encoded content) and "contentType" fields.
+//
+// Example output:
+//
+//	{
+//	  "value": "SGVsbG8gV29ybGQ=",
+//	  "contentType": "text/plain"
+//	}
+func (b *Blob) ToValueOnly() interface{} {
+	return map[string]interface{}{
+		"value":       b.Value,
+		"contentType": b.ContentType,
+	}
+}
+
+// UpdateFromValueOnly updates the Blob element from a Value Only representation.
+// Expects a map with "value" and "contentType" fields.
+//
+// Parameters:
+//   - value: a map[string]interface{} with "value" and "contentType" keys
+//
+// Returns an error if:
+//   - value is not a map
+//   - required fields are missing
+//   - field types are invalid
+func (b *Blob) UpdateFromValueOnly(value interface{}) error {
+	valueMap, ok := value.(map[string]interface{})
+	if !ok {
+		return fmt.Errorf("invalid value type for Blob: expected map, got %T", value)
+	}
+
+	if v, ok := valueMap["value"].(string); ok {
+		b.Value = v
+	}
+
+	if ct, ok := valueMap["contentType"].(string); ok {
+		b.ContentType = ct
+	}
+
 	return nil
 }
