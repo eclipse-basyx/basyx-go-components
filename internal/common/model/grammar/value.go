@@ -172,31 +172,116 @@ func (v *Value) IsValue() bool {
 	return !v.IsField() && v.GetValueType() != "unknown"
 }
 
+type ComparisonKind int
+
+const (
+	KindUnknown ComparisonKind = iota
+	KindString
+	KindField
+	KindNumber
+	KindBool
+	KindDateTime
+	KindTime
+	KindHex
+)
+
 // EffectiveType returns a coarse type label used for validation of comparison operands.
 // Attributes and fields return an empty string because their runtime type is unknown at parse time.
-func (v *Value) EffectiveType() string {
+func (v *Value) EffectiveType() ComparisonKind {
 	switch {
+	// comparing
+	case v.Field != nil:
+		return KindField
 	case v.Attribute != nil:
 		if gv, ok := attributeGlobalValue(v.Attribute); ok {
 			if isNowGlobal(gv) {
-				return "datetime"
+				return KindDateTime
 			}
 		}
-		return "string"
+		return KindString
 	case v.HexVal != nil, v.HexCast != nil:
-		return "hex"
+		return KindHex
 	case v.NumVal != nil, v.NumCast != nil, v.Year != nil, v.Month != nil, v.DayOfMonth != nil, v.DayOfWeek != nil:
-		return "number"
+		return KindNumber
 	case v.StrVal != nil, v.StrCast != nil, v.Field != nil:
-		return "string"
+		return KindString
 	case v.Boolean != nil, v.BoolCast != nil:
-		return "bool"
+		return KindBool
 	case v.DateTimeVal != nil, v.DateTimeCast != nil:
-		return "datetime"
+		return KindDateTime
 	case v.TimeVal != nil, v.TimeCast != nil:
-		return "time"
+		return KindTime
 	default:
-		return ""
+		return KindUnknown
+	}
+}
+
+func (v *Value) IsComparableTo(in Value) (ComparisonKind, error) {
+	ltype := v.EffectiveType()
+	rtype := in.EffectiveType()
+
+	if ltype == KindUnknown || rtype == KindUnknown {
+		return KindUnknown, fmt.Errorf("comparison has unknown operators: %s vs %s", ltype, rtype)
+	}
+	if ltype == KindField {
+		return rtype, nil
+	}
+
+	if rtype == KindField {
+		return ltype, nil
+	}
+
+	if ltype != rtype {
+		return KindUnknown, fmt.Errorf("comparison requires matching operand types: %s vs %s", ltype, rtype)
+	}
+	return ltype, nil
+}
+
+func WrapCastAroundField(v Value, kind ComparisonKind) Value {
+	if v.EffectiveType() != KindField {
+		return v
+	}
+
+	orig := v
+	switch kind {
+	case KindString, KindField:
+		return Value{StrCast: &orig}
+	case KindDateTime:
+		return Value{DateTimeCast: &orig}
+	case KindTime:
+		return Value{TimeCast: &orig}
+	case KindBool:
+		return Value{BoolCast: &orig}
+	case KindNumber:
+		return Value{NumCast: &orig}
+	case KindHex:
+		return Value{HexCast: &orig}
+	default:
+		return v
+	}
+}
+
+// effectiveTypeWithCast prefers the target type of an explicit cast over the raw EffectiveType.
+// This keeps type validation in sync with the SQL that will actually be generated.
+func (v *Value) EffectiveTypeWithCast() ComparisonKind {
+	if v == nil {
+		return KindUnknown
+	}
+	switch {
+	case v.NumCast != nil:
+		return KindNumber
+	case v.BoolCast != nil:
+		return KindBool
+	case v.TimeCast != nil:
+		return KindTime
+	case v.DateTimeCast != nil:
+		return KindDateTime
+	case v.HexCast != nil:
+		return KindHex
+	case v.StrCast != nil:
+		return KindString
+	default:
+		return v.EffectiveType()
 	}
 }
 
