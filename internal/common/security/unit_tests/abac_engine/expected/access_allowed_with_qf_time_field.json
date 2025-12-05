@@ -1,0 +1,18 @@
+{
+  "ok": true,
+  "reason": "ALLOW",
+  "queryFilter": {
+    "Formula": {
+      "$gt": [
+        {"$dateTimeCast": 
+          {
+            "$field": "$aasdesc#endpoints[0].protocolinformation.href"
+          }
+        },
+        {
+          "$dateTimeVal": "2025-01-01T00:00:00Z"
+        }
+      ]
+    }
+  }
+}

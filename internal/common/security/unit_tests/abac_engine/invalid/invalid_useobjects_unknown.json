@@ -1,0 +1,20 @@
+{
+  "AllAccessPermissionRules": {
+    "rules": [
+      {
+        "ACL": {
+          "ACCESS": "ALLOW",
+          "RIGHTS": [
+            "READ"
+          ]
+        },
+        "USEOBJECTS": [
+          "missing"
+        ],
+        "FORMULA": {
+          "$boolean": true
+        }
+      }
+    ]
+  }
+}

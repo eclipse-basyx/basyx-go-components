@@ -1,0 +1,10 @@
+{
+  "id": "urn:aas:time-deny",
+  "idShort": "timeDeny",
+  "specificAssetIds": [
+    {
+      "name": "category",
+      "value": "time"
+    }
+  ]
+}

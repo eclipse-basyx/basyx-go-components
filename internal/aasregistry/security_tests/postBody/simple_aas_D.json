@@ -1,0 +1,18 @@
+{
+  "id": "https://example.org/D",
+  "specificAssetIds": [
+    {
+      "name": "manufacturerPartId",
+      "value": "2389048",
+      "externalSubjectId": {
+        "type": "ExternalReference",
+        "keys": [
+          {
+            "type": "GlobalReference",
+            "value": "WRITTEN_BY_X"
+          }
+        ]
+      }
+    }
+  ]
+}

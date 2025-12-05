@@ -28,8 +28,9 @@
 package grammar
 
 import (
-	"encoding/json"
 	"fmt"
+
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 )
 
 // AccessRuleModelSchemaJSONAllAccessPermissionRulesDEFATTRIBUTESElem represents an attribute definition
@@ -83,7 +84,7 @@ type AccessRuleModelSchemaJSONAllAccessPermissionRulesDEFATTRIBUTESElem struct {
 //     is missing. Returns nil on successful unmarshaling and validation.
 func (j *AccessRuleModelSchemaJSONAllAccessPermissionRulesDEFATTRIBUTESElem) UnmarshalJSON(value []byte) error {
 	var raw map[string]interface{}
-	if err := json.Unmarshal(value, &raw); err != nil {
+	if err := common.UnmarshalAndDisallowUnknownFields(value, &raw); err != nil {
 		return err
 	}
 	if _, ok := raw["attributes"]; raw != nil && !ok {
@@ -94,7 +95,7 @@ func (j *AccessRuleModelSchemaJSONAllAccessPermissionRulesDEFATTRIBUTESElem) Unm
 	}
 	type Plain AccessRuleModelSchemaJSONAllAccessPermissionRulesDEFATTRIBUTESElem
 	var plain Plain
-	if err := json.Unmarshal(value, &plain); err != nil {
+	if err := common.UnmarshalAndDisallowUnknownFields(value, &plain); err != nil {
 		return err
 	}
 	*j = AccessRuleModelSchemaJSONAllAccessPermissionRulesDEFATTRIBUTESElem(plain)

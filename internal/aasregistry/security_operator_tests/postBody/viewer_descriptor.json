@@ -1,0 +1,10 @@
+{
+  "id": "urn:aas:viewer-asset",
+  "idShort": "viewer",
+  "specificAssetIds": [
+    {
+      "name": "category",
+      "value": "view"
+    }
+  ]
+}

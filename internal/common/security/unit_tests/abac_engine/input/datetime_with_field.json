@@ -1,0 +1,23 @@
+{
+  "AllAccessPermissionRules": {
+    "DEFATTRIBUTES": [
+      { "name": "role_attr", "attributes": [ { "CLAIM": "role" } ] }
+    ],
+
+    "DEFOBJECTS": [
+      { "name": "shell_descriptors", "objects": [ { "ROUTE": "/shell-descriptors" }, { "ROUTE": "/shell-descriptors/*" } ] }
+    ],
+
+    "DEFACLS": [
+      { "name": "read_role", "acl": { "USEATTRIBUTES": "role_attr", "RIGHTS": ["READ"], "ACCESS": "ALLOW" } }
+    ],
+
+    "DEFFORMULAS": [
+      { "name": "dt_field_after_cutoff", "formula": { "$gt": [ { "$dateTimeCast": { "$field": "$aasdesc#endpoints[0].protocolinformation.href" } }, { "$dateTimeVal": "2024-12-31T23:59:59Z" } ] } }
+    ],
+
+    "rules": [
+      { "USEACL": "read_role", "USEOBJECTS": ["shell_descriptors"], "USEFORMULA": "dt_field_after_cutoff" }
+    ]
+  }
+}

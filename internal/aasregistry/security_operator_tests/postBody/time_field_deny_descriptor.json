@@ -1,0 +1,12 @@
+{
+  "id": "urn:aas:dt-field-deny",
+  "idShort": "dtFieldDeny",
+  "endpoints": [
+    {
+      "interface": "http",
+      "protocolInformation": {
+        "href": "2024-01-01T00:00:00Z"
+      }
+    }
+  ]
+}

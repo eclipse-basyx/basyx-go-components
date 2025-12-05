@@ -1,0 +1,10 @@
+{
+  "id": "urn:aas:regimax-42",
+  "idShort": "regimax",
+  "specificAssetIds": [
+    {
+      "name": "category",
+      "value": "regimax"
+    }
+  ]
+}

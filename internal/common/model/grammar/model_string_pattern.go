@@ -28,9 +28,10 @@
 package grammar
 
 import (
-	"encoding/json"
 	"fmt"
 	"regexp"
+
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 )
 
 // ModelStringPattern represents a string pattern for model references in the AAS grammar.
@@ -70,7 +71,8 @@ type ModelStringPattern string
 func (j *ModelStringPattern) UnmarshalJSON(value []byte) error {
 	type Plain ModelStringPattern
 	var plain Plain
-	if err := json.Unmarshal(value, &plain); err != nil {
+
+	if err := common.UnmarshalAndDisallowUnknownFields(value, &plain); err != nil {
 		return err
 	}
 	if matched, _ := regexp.MatchString(`^(?:\$aas#(?:idShort|id|assetInformation\.assetKind|assetInformation\.assetType|assetInformation\.globalAssetId|assetInformation\.(?:specificAssetIds\[[0-9]*\](?:\.(?:name|value|externalSubjectId(?:\.type|\.keys\[\d*\](?:\.(?:type|value))?)?)?)|submodels\.(?:type|keys\[\d*\](?:\.(?:type|value))?))|submodels\.(type|keys\[\d*\](?:\.(type|value))?))|(?:\$sm#(?:semanticId(?:\.type|\.keys\[\d*\](?:\.(type|value))?)?|idShort|id))|(?:\$sme(?:\.[a-zA-Z][a-zA-Z0-9_]*\[[0-9]*\]?(?:\.[a-zA-Z][a-zA-Z0-9_]*\[[0-9]*\]?)*)?#(?:semanticId(?:\.type|\.keys\[\d*\](?:\.(type|value))?)?|idShort|value|valueType|language))|(?:\$cd#(?:idShort|id)))|(?:\$aasdesc#(?:idShort|id|assetKind|assetType|globalAssetId|specificAssetIds\[[0-9]*\]?(?:\.(name|value|externalSubjectId(?:\.type|\.keys\[\d*\](?:\.(type|value))?)?)?)|endpoints\[[0-9]*\]\.(interface|protocolinformation\.href)|submodelDescriptors\[[0-9]*\]\.(semanticId(?:\.type|\.keys\[\d*\](?:\.(type|value))?)?|idShort|id|endpoints\[[0-9]*\]\.(interface|protocolinformation\.href))))|(?:\$smdesc#(?:semanticId(?:\.type|\.keys\[\d*\](?:\.(type|value))?)?|idShort|id|endpoints\[[0-9]*\]\.(interface|protocolinformation\.href)))$`, string(plain)); !matched {

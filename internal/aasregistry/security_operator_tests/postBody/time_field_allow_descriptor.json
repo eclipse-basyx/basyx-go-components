@@ -1,0 +1,12 @@
+{
+  "id": "urn:aas:dt-field-allow",
+  "idShort": "dtFieldAllow",
+  "endpoints": [
+    {
+      "interface": "http",
+      "protocolInformation": {
+        "href": "2025-01-01T00:00:00Z"
+      }
+    }
+  ]
+}

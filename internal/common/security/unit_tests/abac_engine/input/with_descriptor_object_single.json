@@ -1,0 +1,15 @@
+{
+  "AllAccessPermissionRules": {
+    "rules": [
+      {
+        "ACL": {
+          "ACCESS": "ALLOW",
+          "RIGHTS": ["READ","UPDATE"],
+          "ATTRIBUTES": [{"GLOBAL": "ANONYMOUS"}]
+        },
+        "OBJECTS": [{"DESCRIPTOR" : "$aasdesc(\"https://martin.de\")"}],
+        "FORMULA": {"$boolean": true}
+      }
+    ]
+  }
+}

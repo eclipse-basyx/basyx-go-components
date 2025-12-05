@@ -69,13 +69,17 @@ jobs:
           cd internal/discoveryservice/integration_tests
           go test -v
 
-      - name: Run access controll validation tests
-        run: |
-          cd internal/common/security/model/unit_tests
-          go test -v
       - name: Run aas registry tests
         run: |
           cd internal/aasregistry/integration_tests
+          go test -v
+      - name: Run aas registry security tests
+        run: |
+          cd internal/aasregistry/security_tests
+          go test -v
+      - name: Run aas registry security tests 2
+        run: |
+          cd internal/aasregistry/security_operator_tests
           go test -v
       # - name: Cleanup Docker
       #   if: always()

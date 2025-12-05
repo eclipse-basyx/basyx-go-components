@@ -1,0 +1,20 @@
+{
+  "id": "https://example.org/X/SM-X",
+  "semanticId": {
+    "type": "ExternalReference",
+    "keys": [
+      {
+        "type": "GlobalReference",
+        "value": "UNIQUE_SM"
+      }
+    ]
+  },
+  "endpoints": [
+    {
+      "interface": "AAS-3.0",
+      "protocolInformation": {
+        "href": "https://endpoint.example/unique"
+      }
+    }
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "AllAccessPermissionRules": {
+    "rules": [
+      {
+        "ACL": {
+          "ACCESS": "ALLOW",
+          "RIGHTS": [
+            "READ",
+            "UPDATE"
+          ],
+          "ATTRIBUTES": [{"CLAIM": "admin"}, {"GLOBAL": "ANONYMOUS"}]
+        },
+        "OBJECTS": [
+          {
+            "DESCRIPTOR": "$aasdesc(\"*\")"
+          }
+        ],
+        "FORMULA": {
+          "$boolean": true
+        }
+      }
+    ]
+  }
+}
