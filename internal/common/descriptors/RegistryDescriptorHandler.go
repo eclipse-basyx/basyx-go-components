@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"log"
 
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
@@ -314,6 +315,7 @@ func ListRegistryDescriptors(
 	limit int32,
 	cursor string,
 	registryType string,
+	company string,
 ) ([]model.RegistryDescriptor, string, error) {
 
 	if limit <= 0 {
@@ -323,6 +325,7 @@ func ListRegistryDescriptors(
 
 	d := goqu.Dialect(dialect)
 	reg := goqu.T(tblRegistryDescriptor).As("reg")
+	rai := goqu.T(tblRegistryAdministrativeInformation).As("rai")
 
 	ds := d.
 		From(reg).
@@ -336,12 +339,28 @@ func ListRegistryDescriptors(
 			reg.Col(colDisplayNameID),
 			reg.Col(colDescriptionID),
 		)
+
 	if cursor != "" {
 		ds = ds.Where(reg.Col(colAASID).Gte(cursor))
 	}
 
+	log.Printf("registry type: %s", registryType)
+	log.Printf("company: %s", company)
+
 	if registryType != "" {
 		ds = ds.Where(reg.Col(colRegistryType).Eq(registryType))
+		log.Printf("registry type: %s", registryType)
+	}
+
+	if company != "" {
+		ds = ds.
+			Join(
+				rai,
+				goqu.On(
+					reg.Col("administrative_information_id").Eq(rai.Col("id")),
+				),
+			).
+			Where(rai.Col(colCompany).Eq(company))
 	}
 
 	ds = ds.

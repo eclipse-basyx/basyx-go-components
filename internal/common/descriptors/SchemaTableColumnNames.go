@@ -12,24 +12,25 @@ const (
 // here to provide a single source of truth for SQL builders throughout this
 // package and to keep SQL literals out of the query code.
 const (
-	tblDescriptor                     = "descriptor"
-	tblAASDescriptor                  = "aas_descriptor"
-	tblAASDescriptorEndpoint          = "aas_descriptor_endpoint"
-	tblSecurityAttributes             = "security_attributes"
-	tblEndpointProtocolVersion        = "endpoint_protocol_version"
-	tblSpecificAssetID                = "specific_asset_id"
-	tblSpecificAssetIDSuppSemantic    = "specific_asset_id_supplemental_semantic_id"
-	tblSubmodelDescriptor             = "submodel_descriptor"
-	tblSubmodelDescriptorSuppSemantic = "submodel_descriptor_supplemental_semantic_id"
-	tblExtension                      = "extension"
-	tblDescriptorExtension            = "descriptor_extension"
-	tblExtensionSuppSemantic          = "extension_supplemental_semantic_id"
-	tblExtensionRefersTo              = "extension_refers_to"
-	tblLangStringTextType             = "lang_string_text_type"
-	tblLangStringNameType             = "lang_string_name_type"
-	tblReference                      = "reference"
-	tblReferenceKey                   = "reference_key"
-	tblRegistryDescriptor             = "registry_descriptor"
+	tblDescriptor                        = "descriptor"
+	tblAASDescriptor                     = "aas_descriptor"
+	tblAASDescriptorEndpoint             = "aas_descriptor_endpoint"
+	tblSecurityAttributes                = "security_attributes"
+	tblEndpointProtocolVersion           = "endpoint_protocol_version"
+	tblSpecificAssetID                   = "specific_asset_id"
+	tblSpecificAssetIDSuppSemantic       = "specific_asset_id_supplemental_semantic_id"
+	tblSubmodelDescriptor                = "submodel_descriptor"
+	tblSubmodelDescriptorSuppSemantic    = "submodel_descriptor_supplemental_semantic_id"
+	tblExtension                         = "extension"
+	tblDescriptorExtension               = "descriptor_extension"
+	tblExtensionSuppSemantic             = "extension_supplemental_semantic_id"
+	tblExtensionRefersTo                 = "extension_refers_to"
+	tblLangStringTextType                = "lang_string_text_type"
+	tblLangStringNameType                = "lang_string_name_type"
+	tblReference                         = "reference"
+	tblReferenceKey                      = "reference_key"
+	tblRegistryDescriptor                = "registry_descriptor"
+	tblRegistryAdministrativeInformation = "registry_administrative_information"
 )
 
 // Columns holds the column names used by descriptor queries. Centralizing the
@@ -78,6 +79,7 @@ const (
 	colExtensionID = "extension_id"
 
 	colRegistryType = "registry_type"
+	colCompany      = "company"
 
 	// Generic/common column names used in descriptor queries
 	colType            = "type"

@@ -31,22 +31,22 @@ func NewAssetAdministrationShellRegistryOfRegistriesAPIAPIService(registryOfRegi
 }
 
 // GetAllRegistryDescriptors - Returns all Registry Descriptors
-func (s *AssetAdministrationShellRegistryOfRegistriesAPIAPIService) GetAllRegistryDescriptors(ctx context.Context, limit int32, cursor string, registryType string) (model.ImplResponse, error) {
+func (s *AssetAdministrationShellRegistryOfRegistriesAPIAPIService) GetAllRegistryDescriptors(ctx context.Context, limit int32, cursor string, registryType string, company string) (model.ImplResponse, error) {
 
 	var internalCursor string
 	if strings.TrimSpace(cursor) != "" {
 		dec, decErr := common.DecodeString(cursor)
 		if decErr != nil {
-			log.Printf("📍 [%s] Error in GetAllRegistryDescriptors: decode cursor=%q limit=%d registryType=%q: %v", componentName, cursor, limit, registryType, decErr)
+			log.Printf("📍 [%s] Error in GetAllRegistryDescriptors: decode cursor=%q limit=%d registryType=%q company=%q: %v", componentName, cursor, limit, registryType, company, decErr)
 			return common.NewErrorResponse(
 				decErr, http.StatusBadRequest, componentName, "GetAllRegistryDescriptors", "BadCursor",
 			), nil
 		}
 		internalCursor = dec
 	}
-	aasds, nextCursor, err := s.registryOfRegistriesBackend.ListRegistryDescriptors(ctx, limit, internalCursor, registryType)
+	aasds, nextCursor, err := s.registryOfRegistriesBackend.ListRegistryDescriptors(ctx, limit, internalCursor, registryType, company)
 	if err != nil {
-		log.Printf("📍 [%s] Error in GetAllRegistryDescriptors: list failed (limit=%d cursor=%q registryType=%q): %v", componentName, limit, internalCursor, registryType, err)
+		log.Printf("📍 [%s] Error in GetAllRegistryDescriptors: list failed (limit=%d cursor=%q registryType=%q company=%q): %v", componentName, limit, internalCursor, registryType, company, err)
 		switch {
 		case common.IsErrBadRequest(err):
 			return common.NewErrorResponse(

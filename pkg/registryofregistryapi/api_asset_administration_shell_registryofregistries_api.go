@@ -117,13 +117,17 @@ func (c *AssetAdministrationShellRegistryOfRegistriesAPIAPIController) GetAllReg
 		cursorParam = query.Get("cursor")
 	}
 	var registryTypeParam string
-	if query.Has("assetType") {
+	if query.Has("registryType") {
 		registryTypeParam = query.Get("registryType")
 	}
+	var companyParam string
+	if query.Has("company") {
+		companyParam = query.Get("company")
+	}
 
-	result, err := c.service.GetAllRegistryDescriptors(r.Context(), limitParam, cursorParam, registryTypeParam)
+	result, err := c.service.GetAllRegistryDescriptors(r.Context(), limitParam, cursorParam, registryTypeParam, companyParam)
 	if err != nil {
-		log.Printf("🧩 [%s] Error in GetAllRegistryDescriptors: service failure (limit=%d cursor=%q registryType=%q): %v", componentName, limitParam, cursorParam, registryTypeParam, err)
+		log.Printf("🧩 [%s] Error in GetAllRegistryDescriptors: service failure (limit=%d cursor=%q registryType=%q companyParam=%q): %v", componentName, limitParam, cursorParam, registryTypeParam, companyParam, err)
 		c.errorHandler(w, r, err, &result)
 		return
 	}
