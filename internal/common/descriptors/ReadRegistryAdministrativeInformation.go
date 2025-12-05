@@ -135,6 +135,7 @@ func ReadRegistryAdministrativeInformationByIDs(
 			Version:    admin.Version,
 			Revision:   admin.Revision,
 			TemplateID: admin.TemplateID,
+			Creator:    admin.Creator,
 			Company:    admin.Company,
 		}
 	}

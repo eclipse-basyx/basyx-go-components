@@ -464,7 +464,7 @@ func CreateAdministrativeInformation(tx *sql.Tx, adminInfo *gen.AdministrativeIn
 
 // CreateRegistryAdministrativeInformation inserts registry administrative information into the database.
 //
-// Registry administrative information includes version control, revision tracking, company references,
+// Registry administrative information includes version control, revision tracking, creator references,
 // and embedded data specifications. This function handles the complete insertion including
 // all nested structures.
 //
@@ -482,17 +482,17 @@ func CreateRegistryAdministrativeInformation(tx *sql.Tx, adminInfo *gen.Registry
 	var id int
 	var adminInfoID sql.NullInt64
 	if !reflect.DeepEqual(*adminInfo, gen.RegistryAdministrativeInformation{}) {
-		var companyID sql.NullInt64
+		var creatorID sql.NullInt64
 		var err error
-		if adminInfo.Company != nil {
-			companyID, err = CreateReference(tx, adminInfo.Company, sql.NullInt64{}, sql.NullInt64{})
+		if adminInfo.Creator != nil {
+			creatorID, err = CreateReference(tx, adminInfo.Creator, sql.NullInt64{}, sql.NullInt64{})
 			if err != nil {
 				return sql.NullInt64{}, err
 			}
 		}
 
-		err = tx.QueryRow(`INSERT INTO registry_administrative_information (version, revision, company, templateID) VALUES ($1, $2, $3, $4) RETURNING id`,
-			adminInfo.Version, adminInfo.Revision, companyID, adminInfo.TemplateID).Scan(&id)
+		err = tx.QueryRow(`INSERT INTO registry_administrative_information (version, revision, creator, templateID, company) VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+			adminInfo.Version, adminInfo.Revision, creatorID, adminInfo.TemplateID, adminInfo.Company).Scan(&id)
 		if err != nil {
 			return sql.NullInt64{}, err
 		}

@@ -40,15 +40,17 @@ type RegistryAdministrativeInformation struct {
 
 	Revision string `json:"revision,omitempty" validate:"regexp=^([0-9]|[1-9][0-9]*)$"`
 
-	Company *Reference `json:"company,omitempty"`
+	Creator *Reference `json:"creator,omitempty"`
 
 	TemplateID string `json:"templateId,omitempty" validate:"regexp=^([\\\\x09\\\\x0a\\\\x0d\\\\x20-\\\\ud7ff\\\\ue000-\\\\ufffd]|\\\\ud800[\\\\udc00-\\\\udfff]|[\\\\ud801-\\\\udbfe][\\\\udc00-\\\\udfff]|\\\\udbff[\\\\udc00-\\\\udfff])*$"`
+
+	Company string `json:"company,omitempty" validate:"regexp=^[A-Za-z0-9]*)$"`
 }
 
 // AssertRegistryAdministrativeInformationRequired checks if the required fields are not zero-ed
 func AssertRegistryAdministrativeInformationRequired(obj RegistryAdministrativeInformation) error {
-	if obj.Company != nil {
-		if err := AssertReferenceRequired(*obj.Company); err != nil {
+	if obj.Creator != nil {
+		if err := AssertReferenceRequired(*obj.Creator); err != nil {
 			return err
 		}
 	}
@@ -57,8 +59,8 @@ func AssertRegistryAdministrativeInformationRequired(obj RegistryAdministrativeI
 
 // AssertRegistryAdministrativeInformationConstraints checks if the values respects the defined constraints
 func AssertRegistryAdministrativeInformationConstraints(obj RegistryAdministrativeInformation) error {
-	if obj.Company != nil {
-		if err := AssertReferenceConstraints(*obj.Company); err != nil {
+	if obj.Creator != nil {
+		if err := AssertReferenceConstraints(*obj.Creator); err != nil {
 			return err
 		}
 	}

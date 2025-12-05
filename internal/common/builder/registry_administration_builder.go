@@ -32,13 +32,13 @@ import (
 )
 
 // BuildRegistryAdministration constructs a RegistryAdministrativeInformation object from database query results.
-// It processes administrative metadata including version, revision, template ID, and company references,
+// It processes administrative metadata including version, revision, template ID, creator references, and company information
 //
-// The function handles the complexity of building nested reference structures for the company field.
+// The function handles the complexity of building nested reference structures for the creator field.
 //
 // Parameters:
 //   - adminRow: An RegistryAdministrationRow containing administrative data from the database, including
-//     version information and company references
+//     version information, creator references, and company information
 //
 // Returns:
 //   - *model.RegistryAdministrativeInformation: A pointer to the constructed registry administrative information object
@@ -56,21 +56,22 @@ func BuildRegistryAdministration(adminRow model.RegistryAdministrationRow) (*mod
 		Version:    adminRow.Version,
 		Revision:   adminRow.Revision,
 		TemplateID: adminRow.TemplateID,
+		Company:    adminRow.Company,
 	}
 
 	refBuilderMap := make(map[int64]*ReferenceBuilder)
 
-	refs, err := ParseReferences(adminRow.Company, refBuilderMap, nil)
+	refs, err := ParseReferences(adminRow.Creator, refBuilderMap, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	if err = ParseReferredReferences(adminRow.CompanyReferred, refBuilderMap, nil); err != nil {
+	if err = ParseReferredReferences(adminRow.CreatorReferred, refBuilderMap, nil); err != nil {
 		return nil, err
 	}
 
 	if len(refs) > 0 {
-		administration.Company = refs[0]
+		administration.Creator = refs[0]
 	}
 
 	for _, refBuilder := range refBuilderMap {

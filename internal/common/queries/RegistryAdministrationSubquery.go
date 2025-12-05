@@ -31,9 +31,9 @@ import "github.com/doug-martin/goqu/v9"
 // GetRegistryAdministrationSubquery constructs a complex SQL subquery for retrieving
 // registry administrative information related to a submodel or other AAS elements. This function
 // builds a comprehensive query that includes:
-//   - Registry administrative information (version, revision, templateId)
-//   - Company references with their keys
-//   - Company referred references (hierarchical references)
+//   - Registry administrative information (version, revision, templateId, company)
+//   - Creator references with their keys
+//   - Creator referred references (hierarchical references)
 //
 // The function creates multiple nested subqueries to aggregate related data into JSONB objects,
 // allowing for efficient retrieval of all registry administrative information in a single query.
@@ -56,8 +56,8 @@ import "github.com/doug-martin/goqu/v9"
 //	    Select(..., goqu.L("?", adminSubquery).As("administration"))
 func GetRegistryAdministrationSubquery(dialect goqu.DialectWrapper, joinConditionColumn string) *goqu.SelectDataset {
 
-	// Build the jsonb object for administration company references
-	companyObj := goqu.Func("jsonb_build_object",
+	// Build the jsonb object for administration creator references
+	creatorObj := goqu.Func("jsonb_build_object",
 		goqu.V("reference_id"), goqu.I("r.id"),
 		goqu.V("reference_type"), goqu.I("r.type"),
 		goqu.V("key_id"), goqu.I("rk.id"),
@@ -65,11 +65,11 @@ func GetRegistryAdministrationSubquery(dialect goqu.DialectWrapper, joinConditio
 		goqu.V("key_value"), goqu.I("rk.value"),
 	)
 
-	administrationCompanySubquery := dialect.From(goqu.T("registry_administrative_information").As("admi")).
-		Select(goqu.Func("jsonb_agg", goqu.L("?", companyObj))).
+	administrationCreatorSubquery := dialect.From(goqu.T("registry_administrative_information").As("admi")).
+		Select(goqu.Func("jsonb_agg", goqu.L("?", creatorObj))).
 		Join(
 			goqu.T("reference").As("r"),
-			goqu.On(goqu.I("r.id").Eq(goqu.I("admi.company"))),
+			goqu.On(goqu.I("r.id").Eq(goqu.I("admi.creator"))),
 		).
 		Join(
 			goqu.T("reference_key").As("rk"),
@@ -77,8 +77,8 @@ func GetRegistryAdministrationSubquery(dialect goqu.DialectWrapper, joinConditio
 		).
 		Where(goqu.I("admi.id").Eq(goqu.I(joinConditionColumn)))
 
-	// Build the jsonb object for administration company referred references
-	companyReferredObj := goqu.Func("jsonb_build_object",
+	// Build the jsonb object for administration creator referred references
+	creatorReferredObj := goqu.Func("jsonb_build_object",
 		goqu.V("reference_id"), goqu.I("r.id"),
 		goqu.V("reference_type"), goqu.I("r.type"),
 		goqu.V("parentReference"), goqu.I("r.parentreference"),
@@ -88,11 +88,11 @@ func GetRegistryAdministrationSubquery(dialect goqu.DialectWrapper, joinConditio
 		goqu.V("key_value"), goqu.I("rk.value"),
 	)
 
-	administrationCompanyReferredSubquery := dialect.From(goqu.T("registry_administrative_information").As("admi")).
-		Select(goqu.Func("jsonb_agg", goqu.L("?", companyReferredObj))).
+	administrationCreatorReferredSubquery := dialect.From(goqu.T("registry_administrative_information").As("admi")).
+		Select(goqu.Func("jsonb_agg", goqu.L("?", creatorReferredObj))).
 		Join(
 			goqu.T("reference").As("r"),
-			goqu.On(goqu.I("r.rootreference").Eq(goqu.I("admi.company"))),
+			goqu.On(goqu.I("r.rootreference").Eq(goqu.I("admi.creator"))),
 		).
 		LeftJoin(
 			goqu.T("reference_key").As("rk"),
@@ -108,8 +108,9 @@ func GetRegistryAdministrationSubquery(dialect goqu.DialectWrapper, joinConditio
 		goqu.V("version"), goqu.C("version").Table("ai"),
 		goqu.V("revision"), goqu.C("revision").Table("ai"),
 		goqu.V("templateId"), goqu.C("templateid").Table("ai"),
-		goqu.V("company"), goqu.L("?", administrationCompanySubquery),
-		goqu.V("companyReferred"), goqu.L("?", administrationCompanyReferredSubquery),
+		goqu.V("creator"), goqu.L("?", administrationCreatorSubquery),
+		goqu.V("creatorReferred"), goqu.L("?", administrationCreatorReferredSubquery),
+		goqu.V("company"), goqu.C("company").Table("ai"),
 	)
 
 	administrativeInformationSubquery := dialect.From(goqu.T("registry_administrative_information").As("ai")).

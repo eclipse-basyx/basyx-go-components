@@ -544,8 +544,9 @@ CREATE TABLE IF NOT EXISTS registry_administrative_information (
   id                BIGSERIAL PRIMARY KEY,
   version           VARCHAR(4),
   revision          VARCHAR(4),
-  company           BIGINT REFERENCES reference(id),
-  templateId        VARCHAR(2048)
+  creator           BIGINT REFERENCES reference(id),
+  templateId        VARCHAR(2048),
+  company           VARCHAR(2048)
 );
 
 CREATE TABLE IF NOT EXISTS registry_descriptor (
@@ -591,6 +592,7 @@ CREATE INDEX IF NOT EXISTS ix_ai_templateid ON administrative_information(templa
 CREATE INDEX IF NOT EXISTS ix_aieds_aiid ON administrative_information_embedded_data_specification(administrative_information_id);
 CREATE INDEX IF NOT EXISTS ix_aieds_edsid ON administrative_information_embedded_data_specification(embedded_data_specification_id);
 CREATE INDEX IF NOT EXISTS ix_ai_eds_id ON administrative_information_embedded_data_specification(id);
+CREATE INDEX IF NOT EXISTS ix_reg_ai_creator ON registry_administrative_information(creator);
 CREATE INDEX IF NOT EXISTS ix_reg_ai_company ON registry_administrative_information(company);
 CREATE INDEX IF NOT EXISTS ix_reg_ai_templateid ON registry_administrative_information(templateId);
 CREATE INDEX IF NOT EXISTS ix_sm_idshort ON submodel(id_short);
