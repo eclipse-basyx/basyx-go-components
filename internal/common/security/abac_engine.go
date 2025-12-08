@@ -74,13 +74,19 @@ func ParseAccessModel(b []byte, apiRouter *api.Mux) (*AccessModel, error) {
 	}, nil
 }
 
+// FragmentMapping maps fragments to logical expressions
+type FragmentMapping struct {
+	Fragment  string                     `json:"Fragment" yaml:"Fragment" mapstructure:"Fragment"`
+	Condition *grammar.LogicalExpression `json:"Condition,omitempty" yaml:"Condition,omitempty" mapstructure:"Condition,omitempty"`
+}
+
 // QueryFilter captures optional, fine-grained restrictions produced by a rule
 // even when ACCESS=ALLOW. Controllers can use it to restrict rows, constrain
 // mutations, or redact fields. The Discovery Service currently does not require
 // a concrete filter structure; extend this struct when needed.
 type QueryFilter struct {
-	Formula *grammar.LogicalExpression          `json:"Formula,omitempty" yaml:"Formula,omitempty" mapstructure:"Formula,omitempty"`
-	Filter  *grammar.AccessPermissionRuleFILTER `json:"Filter,omitempty" yaml:"Filter,omitempty" mapstructure:"Filter,omitempty"`
+	Formula *grammar.LogicalExpression `json:"Formula,omitempty" yaml:"Formula,omitempty" mapstructure:"Formula,omitempty"`
+	Filters []FragmentMapping          `json:"Filters,omitempty" yaml:"Filters,omitempty" mapstructure:"Filters,omitempty"`
 }
 
 // DecisionCode represents the result of an authorization check.
@@ -109,7 +115,6 @@ func (m *AccessModel) AuthorizeWithFilter(in EvalInput) (ok bool, code DecisionC
 	}
 
 	var ruleExprs []grammar.LogicalExpression
-	var filter *grammar.AccessPermissionRuleFILTER
 
 	for _, r := range m.rules {
 		acl, attrs, objs, lexpr := r.acl, r.attrs, r.objs, r.lexpr
@@ -163,9 +168,7 @@ func (m *AccessModel) AuthorizeWithFilter(in EvalInput) (ok bool, code DecisionC
 			return true, DecisionAllow, nil
 		}
 
-		if filter == nil {
-			filter = r.filter
-		}
+		// TODO: handle filter
 		ruleExprs = append(ruleExprs, adapted)
 	}
 
@@ -188,5 +191,5 @@ func (m *AccessModel) AuthorizeWithFilter(in EvalInput) (ok bool, code DecisionC
 		return false, DecisionNoMatch, nil
 	}
 
-	return true, DecisionAllow, &QueryFilter{Formula: &simplified, Filter: filter}
+	return true, DecisionAllow, &QueryFilter{Formula: &simplified}
 }
