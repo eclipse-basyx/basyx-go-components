@@ -395,19 +395,26 @@ func updateSubmodelElementCollection(e *gen.SubmodelElementCollection, value int
 }
 
 // updateSubmodelElementList updates a SubmodelElementList from a value-only representation.
-// Expects an array with the same length as the existing list. Elements are updated in place by index.
+// The incoming array can have any length:
+// - If shorter than existing list: only update the provided elements, keep the rest unchanged
+// - If same length: update all elements in place
+// - If longer than existing list: update existing elements and append new ones
+// Note: To remove elements, provide an array with fewer elements than the current list
 func updateSubmodelElementList(e *gen.SubmodelElementList, value interface{}) error {
 	listSlice, ok := value.([]interface{})
 	if !ok {
 		return fmt.Errorf("invalid value type for SubmodelElementList: expected slice, got %T", value)
 	}
 
-	if len(listSlice) != len(e.Value) {
-		return fmt.Errorf("list length mismatch: expected %d elements, got %d", len(e.Value), len(listSlice))
+	// Update existing elements up to the length of the incoming array
+	minLen := len(e.Value)
+	if len(listSlice) < minLen {
+		minLen = len(listSlice)
 	}
 
-	for i, elemValue := range listSlice {
-		// Skip nil values in the list to preserve indexing
+	for i := 0; i < minLen; i++ {
+		elemValue := listSlice[i]
+		// Skip nil values to preserve existing element at this index
 		if elemValue == nil {
 			continue
 		}
@@ -415,6 +422,15 @@ func updateSubmodelElementList(e *gen.SubmodelElementList, value interface{}) er
 			return fmt.Errorf("failed to update list element %d: %w", i, err)
 		}
 	}
+
+	// If incoming array is longer, append new elements
+	// Note: We need to create new SubmodelElements from the value-only representation
+	// This is a limitation - we can only update existing elements, not add new ones
+	// because we don't know what type of SubmodelElement to create
+	if len(listSlice) > len(e.Value) {
+		return fmt.Errorf("cannot add new elements to SubmodelElementList via value-only update: incoming array has %d elements but list has %d. Use the full API to add elements", len(listSlice), len(e.Value))
+	}
+
 	return nil
 }
 

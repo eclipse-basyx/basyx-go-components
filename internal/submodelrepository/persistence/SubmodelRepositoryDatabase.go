@@ -1260,13 +1260,9 @@ func (p *PostgreSQLSubmodelDatabase) UpdateSubmodel(sm gen.Submodel) error {
 		return err
 	}
 
-	// Update all submodel elements
-	for _, element := range sm.SubmodelElements {
-		err = p.UpdateSubmodelElement(sm.ID, element.GetIdShort(), element)
-		if err != nil {
-			return err
-		}
-	}
+	// Note: UpdateSubmodel only updates the submodel metadata, not the submodel elements.
+	// To update submodel elements, use UpdateSubmodelElement for individual elements
+	// or delete and recreate the submodel if you need to change the element structure.
 
 	if err := tx.Commit(); err != nil {
 		fmt.Println(err)

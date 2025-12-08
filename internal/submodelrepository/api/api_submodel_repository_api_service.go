@@ -449,37 +449,9 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelByIDValueOnly(ctx context.C
 //
 //nolint:revive
 func (s *SubmodelRepositoryAPIAPIService) PatchSubmodelByIDValueOnly(ctx context.Context, submodelIdentifier string, body map[string]interface{}, level string) (gen.ImplResponse, error) {
-	decodedSubmodelIdentifier, decodeErr := base64.RawStdEncoding.DecodeString(submodelIdentifier)
-	if decodeErr != nil {
-		return gen.Response(http.StatusBadRequest, nil), decodeErr
-	}
-
-	// Get the current submodel
-	sm, err := s.submodelBackend.GetSubmodel(string(decodedSubmodelIdentifier), true)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return gen.Response(404, nil), nil
-		}
-		if common.IsErrNotFound(err) {
-			return gen.Response(404, nil), err
-		}
-		return gen.Response(500, nil), err
-	}
-
-	// Update the submodel with value-only data
-	if err := UpdateSubmodelFromValueOnly(&sm, body); err != nil {
-		return gen.Response(400, nil), err
-	}
-
-	// Save the updated submodel
-	if err := s.submodelBackend.UpdateSubmodel(sm); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return gen.Response(404, nil), nil
-		}
-		return gen.Response(500, nil), err
-	}
-
-	return gen.Response(http.StatusNoContent, nil), nil
+	// TODO: PATCH value-only is not yet implemented
+	// This will be implemented in a separate PR
+	return gen.Response(http.StatusNotImplemented, nil), errors.New("PatchSubmodelByIDValueOnly method not implemented")
 }
 
 // GetSubmodelByIDReference - Returns the Reference of a specific Submodel
@@ -1081,56 +1053,9 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelElementByPathValueOnlySubmo
 //
 //nolint:revive
 func (s *SubmodelRepositoryAPIAPIService) PatchSubmodelElementByPathValueOnlySubmodelRepo(ctx context.Context, submodelIdentifier string, idShortPath string, submodelElementValue gen.SubmodelElementValue, level string) (gen.ImplResponse, error) {
-	decodedSubmodelIdentifier, decodeErr := base64.RawStdEncoding.DecodeString(submodelIdentifier)
-	if decodeErr != nil {
-		return gen.Response(http.StatusBadRequest, nil), decodeErr
-	}
-
-	// Get the existing submodel element
-	existingSme, err := s.submodelBackend.GetSubmodelElement(string(decodedSubmodelIdentifier), idShortPath)
-	if err != nil {
-		if common.IsErrNotFound(err) {
-			timestamp := common.GetCurrentTimestamp()
-			return gen.Response(http.StatusNotFound, []common.ErrorHandler{*common.NewErrorHandler("Error", err, "404", "SMREPO-PatchSubmodelElementByPathValueOnlySubmodelRepo-404-NotFound", string(timestamp))}), nil
-		}
-		if common.IsErrBadRequest(err) {
-			timestamp := common.GetCurrentTimestamp()
-			return gen.Response(http.StatusBadRequest, []common.ErrorHandler{*common.NewErrorHandler("Error", err, "400", "SMREPO-PatchSubmodelElementByPathValueOnlySubmodelRepo-400-BadRequest", string(timestamp))}), nil
-		}
-		if common.IsInternalServerError(err) {
-			timestamp := common.GetCurrentTimestamp()
-			return gen.Response(http.StatusInternalServerError, []common.ErrorHandler{*common.NewErrorHandler("Error", err, "500", "SMREPO-PatchSubmodelElementByPathValueOnlySubmodelRepo-500-InternalServerError", string(timestamp))}), nil
-		}
-		return gen.Response(http.StatusInternalServerError, nil), err
-	}
-
-	// Update the element from value-only representation
-	// The API receives a SubmodelElementValue typed object - convert it to the value-only
-	// representation expected by UpdateSubmodelElementFromValueOnly.
-	valueOnly := SubmodelElementValueToValueOnly(submodelElementValue)
-	if err := UpdateSubmodelElementFromValueOnly(existingSme, valueOnly); err != nil {
-		timestamp := common.GetCurrentTimestamp()
-		return gen.Response(http.StatusBadRequest, []common.ErrorHandler{*common.NewErrorHandler("Error", err, "400", "SMREPO-PatchSubmodelElementByPathValueOnlySubmodelRepo-400-BadRequest", string(timestamp))}), nil
-	}
-
-	// Save the updated element
-	if err := s.submodelBackend.UpdateSubmodelElement(string(decodedSubmodelIdentifier), idShortPath, existingSme); err != nil {
-		if common.IsErrNotFound(err) {
-			timestamp := common.GetCurrentTimestamp()
-			return gen.Response(http.StatusNotFound, []common.ErrorHandler{*common.NewErrorHandler("Error", err, "404", "SMREPO-PatchSubmodelElementByPathValueOnlySubmodelRepo-404-NotFound", string(timestamp))}), nil
-		}
-		if common.IsErrBadRequest(err) {
-			timestamp := common.GetCurrentTimestamp()
-			return gen.Response(http.StatusBadRequest, []common.ErrorHandler{*common.NewErrorHandler("Error", err, "400", "SMREPO-PatchSubmodelElementByPathValueOnlySubmodelRepo-400-BadRequest", string(timestamp))}), nil
-		}
-		if common.IsInternalServerError(err) {
-			timestamp := common.GetCurrentTimestamp()
-			return gen.Response(http.StatusInternalServerError, []common.ErrorHandler{*common.NewErrorHandler("Error", err, "500", "SMREPO-PatchSubmodelElementByPathValueOnlySubmodelRepo-500-InternalServerError", string(timestamp))}), nil
-		}
-		return gen.Response(http.StatusInternalServerError, nil), err
-	}
-
-	return gen.Response(http.StatusNoContent, nil), nil
+	// TODO: PATCH value-only is not yet implemented
+	// This will be implemented in a separate PR
+	return gen.Response(http.StatusNotImplemented, nil), errors.New("PatchSubmodelElementByPathValueOnlySubmodelRepo method not implemented")
 }
 
 // GetSubmodelElementByPathReferenceSubmodelRepo - Returns the Referee of a specific submodel element from the Submodel at a specified path
