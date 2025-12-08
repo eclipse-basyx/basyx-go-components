@@ -28,7 +28,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo \
 FROM alpine:latest
 
 # Install certificates and tools for HTTPS and health checks
-RUN apk --no-cache add ca-certificates wget
+RUN apk --no-cache --no-scripts add ca-certificates wget
 
 WORKDIR /root/
 
