@@ -291,28 +291,6 @@ type AdministrationRow struct {
 	CreatorReferred json.RawMessage `json:"creatorReferred"`
 }
 
-// RegistryAdministrationRow represents a data row for registry administrative information in the database.
-// Registry administrative information includes version control and revision tracking..
-//
-// This structure captures metadata about the lifecycle and provenance of registries,
-// including version numbers, revision information, company information, and creator references.
-type RegistryAdministrationRow struct {
-	// DbID is the unique identifier of the administration record in the database
-	DbID int64 `json:"dbId"`
-	// Version is the version number of the element
-	Version string `json:"version"`
-	// Revision is the revision number of the element
-	Revision string `json:"revision"`
-	// TemplateID is the identifier of the template this element is based on
-	TemplateID string `json:"templateId"`
-	// Creator contains creator reference data as JSON data
-	Creator json.RawMessage `json:"creator"`
-	// CreatorReferred contains referred creator references as JSON data
-	CreatorReferred json.RawMessage `json:"creatorReferred"`
-	// Company is the company name of the registry
-	Company string `json:"company"`
-}
-
 // SubmodelElementRow represents a row from the SubmodelElement table in the database.
 // Submodel elements are the actual data carriers within a submodel, representing properties,
 // operations, collections, and other structural elements.
@@ -595,6 +573,7 @@ type RegistryDescriptorRow struct {
 	RegistryType  sql.NullString
 	GlobalAssetID sql.NullString
 	IDShort       sql.NullString
+	Company       sql.NullString
 	IDStr         string
 	AdminInfoID   sql.NullInt64
 	DisplayNameID sql.NullInt64

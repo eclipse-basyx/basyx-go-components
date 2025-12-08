@@ -16,7 +16,7 @@ type RegistryDescriptor struct {
 
 	DisplayName []LangStringNameType `json:"displayName,omitempty"`
 
-	Administration *RegistryAdministrativeInformation `json:"administration,omitempty"`
+	Administration *AdministrativeInformation `json:"administration,omitempty"`
 
 	RegistryType string `json:"registryType,omitempty" validate:"regexp=^([\\\\x09\\\\x0a\\\\x0d\\\\x20-\\\\ud7ff\\\\ue000-\\\\ufffd]|\\\\ud800[\\\\udc00-\\\\udfff]|[\\\\ud801-\\\\udbfe][\\\\udc00-\\\\udfff]|\\\\udbff[\\\\udc00-\\\\udfff])*$"`
 
@@ -27,6 +27,8 @@ type RegistryDescriptor struct {
 	IdShort string `json:"idShort,omitempty" validate:"regexp=^[a-zA-Z][a-zA-Z0-9_-]*[a-zA-Z0-9_]+$"`
 
 	Id string `json:"id" validate:"regexp=^([\\\\x09\\\\x0a\\\\x0d\\\\x20-\\\\ud7ff\\\\ue000-\\\\ufffd]|\\\\ud800[\\\\udc00-\\\\udfff]|[\\\\ud801-\\\\udbfe][\\\\udc00-\\\\udfff]|\\\\udbff[\\\\udc00-\\\\udfff])*$"`
+
+	Company string `json:"company,omitempty" validate:"regexp=^[A-Za-z0-9]*)$"`
 }
 
 // AssertRegistryDescriptorRequired checks if the required fields are not zero-ed
@@ -51,7 +53,7 @@ func AssertRegistryDescriptorRequired(obj RegistryDescriptor) error {
 		}
 	}
 	if obj.Administration != nil {
-		if err := AssertRegistryAdministrativeInformationRequired(*obj.Administration); err != nil {
+		if err := AssertAdministrativeInformationRequired(*obj.Administration); err != nil {
 			return err
 		}
 	}
@@ -77,7 +79,7 @@ func AssertRegistryDescriptorConstraints(obj RegistryDescriptor) error {
 	}
 
 	if obj.Administration != nil {
-		if err := AssertRegistryAdministrativeInformationConstraints(*obj.Administration); err != nil {
+		if err := AssertAdministrativeInformationConstraints(*obj.Administration); err != nil {
 			return err
 		}
 	}

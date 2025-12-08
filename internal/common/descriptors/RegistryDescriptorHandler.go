@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"log"
 
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
@@ -74,7 +73,7 @@ func InsertRegistryDescriptorTx(_ context.Context, tx *sql.Tx, aasd model.Regist
 	}
 	descriptionID = descID
 
-	adminID, err := persistence_utils.CreateRegistryAdministrativeInformation(tx, aasd.Administration)
+	adminID, err := persistence_utils.CreateAdministrativeInformation(tx, aasd.Administration)
 	if err != nil {
 		return common.NewInternalServerError("Failed to create Administration - no changes applied - see console for details")
 	}
@@ -91,6 +90,7 @@ func InsertRegistryDescriptorTx(_ context.Context, tx *sql.Tx, aasd model.Regist
 			colGlobalAssetID: aasd.GlobalAssetId,
 			colIDShort:       aasd.IdShort,
 			colAASID:         aasd.Id,
+			colCompany:       aasd.Company,
 		}).
 		ToSQL()
 	if buildErr != nil {
@@ -127,6 +127,7 @@ func GetRegistryDescriptorByID(
 			reg.Col(colRegistryType),
 			reg.Col(colGlobalAssetID),
 			reg.Col(colIDShort),
+			reg.Col(colCompany),
 			reg.Col(colAASID),
 			reg.Col(colAdminInfoID),
 			reg.Col(colDisplayNameID),
@@ -140,12 +141,12 @@ func GetRegistryDescriptorByID(
 	}
 
 	var (
-		descID                               int64
-		registryType, globalAssetID, idShort sql.NullString
-		idStr                                string
-		adminInfoID                          sql.NullInt64
-		displayNameID                        sql.NullInt64
-		descriptionID                        sql.NullInt64
+		descID                                        int64
+		registryType, globalAssetID, idShort, company sql.NullString
+		idStr                                         string
+		adminInfoID                                   sql.NullInt64
+		displayNameID                                 sql.NullInt64
+		descriptionID                                 sql.NullInt64
 	)
 
 	if err := db.QueryRowContext(ctx, sqlStr, args...).Scan(
@@ -153,6 +154,7 @@ func GetRegistryDescriptorByID(
 		&registryType,
 		&globalAssetID,
 		&idShort,
+		&company,
 		&idStr,
 		&adminInfoID,
 		&displayNameID,
@@ -167,7 +169,7 @@ func GetRegistryDescriptorByID(
 	g, ctx := errgroup.WithContext(ctx)
 
 	var (
-		adminInfo   *model.RegistryAdministrativeInformation
+		adminInfo   *model.AdministrativeInformation
 		displayName []model.LangStringNameType
 		description []model.LangStringTextType
 		endpoints   []model.Endpoint
@@ -175,7 +177,7 @@ func GetRegistryDescriptorByID(
 
 	g.Go(func() error {
 		if adminInfoID.Valid {
-			ai, err := ReadRegistryAdministrativeInformationByID(ctx, db, tblRegistryDescriptor, adminInfoID)
+			ai, err := ReadAdministrativeInformationByID(ctx, db, tblRegistryDescriptor, adminInfoID)
 			if err != nil {
 				return err
 			}
@@ -201,6 +203,7 @@ func GetRegistryDescriptorByID(
 		RegistryType:   registryType.String,
 		GlobalAssetId:  globalAssetID.String,
 		IdShort:        idShort.String,
+		Company:        company.String,
 		Id:             idStr,
 		Administration: adminInfo,
 		DisplayName:    displayName,
@@ -325,7 +328,6 @@ func ListRegistryDescriptors(
 
 	d := goqu.Dialect(dialect)
 	reg := goqu.T(tblRegistryDescriptor).As("reg")
-	rai := goqu.T(tblRegistryAdministrativeInformation).As("rai")
 
 	ds := d.
 		From(reg).
@@ -334,6 +336,7 @@ func ListRegistryDescriptors(
 			reg.Col(colRegistryType),
 			reg.Col(colGlobalAssetID),
 			reg.Col(colIDShort),
+			reg.Col(colCompany),
 			reg.Col(colAASID),
 			reg.Col(colAdminInfoID),
 			reg.Col(colDisplayNameID),
@@ -344,23 +347,12 @@ func ListRegistryDescriptors(
 		ds = ds.Where(reg.Col(colAASID).Gte(cursor))
 	}
 
-	log.Printf("registry type: %s", registryType)
-	log.Printf("company: %s", company)
-
 	if registryType != "" {
 		ds = ds.Where(reg.Col(colRegistryType).Eq(registryType))
-		log.Printf("registry type: %s", registryType)
 	}
 
 	if company != "" {
-		ds = ds.
-			Join(
-				rai,
-				goqu.On(
-					reg.Col("administrative_information_id").Eq(rai.Col("id")),
-				),
-			).
-			Where(rai.Col(colCompany).Eq(company))
+		ds = ds.Where(reg.Col(colCompany).Eq(company))
 	}
 
 	ds = ds.
@@ -388,6 +380,7 @@ func ListRegistryDescriptors(
 			&r.RegistryType,
 			&r.GlobalAssetID,
 			&r.IDShort,
+			&r.Company,
 			&r.IDStr,
 			&r.AdminInfoID,
 			&r.DisplayNameID,
@@ -452,7 +445,7 @@ func ListRegistryDescriptors(
 		}
 	}
 
-	admByID := map[int64]*model.RegistryAdministrativeInformation{}
+	admByID := map[int64]*model.AdministrativeInformation{}
 	dnByID := map[int64][]model.LangStringNameType{}
 	descByID := map[int64][]model.LangStringTextType{}
 	endpointsByDesc := map[int64][]model.Endpoint{}
@@ -461,8 +454,8 @@ func ListRegistryDescriptors(
 
 	if len(adminInfoIDs) > 0 {
 		ids := append([]int64(nil), adminInfoIDs...)
-		GoAssign(g, func() (map[int64]*model.RegistryAdministrativeInformation, error) {
-			return ReadRegistryAdministrativeInformationByIDs(gctx, db, tblRegistryDescriptor, ids)
+		GoAssign(g, func() (map[int64]*model.AdministrativeInformation, error) {
+			return ReadAdministrativeInformationByIDs(gctx, db, tblRegistryDescriptor, ids)
 		}, &admByID)
 	}
 	if len(displayNameIDs) > 0 {
@@ -492,7 +485,7 @@ func ListRegistryDescriptors(
 
 	out := make([]model.RegistryDescriptor, 0, len(descRows))
 	for _, r := range descRows {
-		var adminInfo *model.RegistryAdministrativeInformation
+		var adminInfo *model.AdministrativeInformation
 		if r.AdminInfoID.Valid {
 			if v, ok := admByID[r.AdminInfoID.Int64]; ok {
 				tmp := v
@@ -514,6 +507,7 @@ func ListRegistryDescriptors(
 			RegistryType:   r.RegistryType.String,
 			GlobalAssetId:  r.GlobalAssetID.String,
 			IdShort:        r.IDShort.String,
+			Company:        r.Company.String,
 			Id:             r.IDStr,
 			Administration: adminInfo,
 			DisplayName:    displayName,
