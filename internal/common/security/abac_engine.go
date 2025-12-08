@@ -76,8 +76,8 @@ func ParseAccessModel(b []byte, apiRouter *api.Mux) (*AccessModel, error) {
 
 // FragmentMapping maps fragments to logical expressions
 type FragmentMapping struct {
-	Fragment  string                     `json:"Fragment" yaml:"Fragment" mapstructure:"Fragment"`
-	Condition *grammar.LogicalExpression `json:"Condition,omitempty" yaml:"Condition,omitempty" mapstructure:"Condition,omitempty"`
+	Fragment  string                    `json:"Fragment" yaml:"Fragment" mapstructure:"Fragment"`
+	Condition grammar.LogicalExpression `json:"Condition" yaml:"Condition" mapstructure:"Condition"`
 }
 
 // QueryFilter captures optional, fine-grained restrictions produced by a rule
@@ -115,6 +115,8 @@ func (m *AccessModel) AuthorizeWithFilter(in EvalInput) (ok bool, code DecisionC
 	}
 
 	var ruleExprs []grammar.LogicalExpression
+	var fragfilters []FragmentMapping
+	var noFilters []grammar.LogicalExpression
 
 	for _, r := range m.rules {
 		acl, attrs, objs, lexpr := r.acl, r.attrs, r.objs, r.lexpr
@@ -168,8 +170,21 @@ func (m *AccessModel) AuthorizeWithFilter(in EvalInput) (ok bool, code DecisionC
 			return true, DecisionAllow, nil
 		}
 
-		// TODO: handle filter
 		ruleExprs = append(ruleExprs, adapted)
+
+		if r.filter != nil {
+			filterCondRaw := grammar.LogicalExpression{
+				And: []grammar.LogicalExpression{
+					*r.filter.CONDITION,
+					adapted,
+				}}
+
+			fragmentMapping := FragmentMapping{Fragment: *r.filter.FRAGMENT, Condition: filterCondRaw}
+			fragfilters = append(fragfilters, fragmentMapping)
+		} else {
+			noFilters = append(noFilters, adapted)
+		}
+
 	}
 
 	if len(ruleExprs) == 0 {
@@ -191,5 +206,40 @@ func (m *AccessModel) AuthorizeWithFilter(in EvalInput) (ok bool, code DecisionC
 		return false, DecisionNoMatch, nil
 	}
 
-	return true, DecisionAllow, &QueryFilter{Formula: &simplified}
+	combinedFiltersMap := make(map[string]grammar.LogicalExpression)
+
+	for _, f := range fragfilters {
+		if existing, ok := combinedFiltersMap[f.Fragment]; ok {
+			// Append new condition into OR
+			combinedFiltersMap[f.Fragment] = grammar.LogicalExpression{
+				Or: append(existing.Or, f.Condition),
+			}
+		} else {
+			// Create initial OR list
+			combinedFiltersMap[f.Fragment] = grammar.LogicalExpression{
+				Or: []grammar.LogicalExpression{f.Condition},
+			}
+		}
+	}
+
+	var combinedFilters = []FragmentMapping{}
+
+	for fragment, expr := range combinedFiltersMap {
+		for _, noFilter := range noFilters {
+
+			// Append noFilter into OR
+			expr = grammar.LogicalExpression{
+				Or: append(expr.Or, noFilter),
+			}
+
+			expr, _ = adaptLEForBackend(expr, in.Claims)
+		}
+
+		combinedFilters = append(combinedFilters, FragmentMapping{
+			Fragment:  fragment,
+			Condition: expr,
+		})
+
+	}
+	return true, DecisionAllow, &QueryFilter{Formula: &simplified, Filters: combinedFilters}
 }
