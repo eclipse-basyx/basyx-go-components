@@ -157,7 +157,7 @@ func adaptLEForBackend(le grammar.LogicalExpression, claims Claims) (grammar.Log
 		left := replaceAttribute(items[0], claims)
 		right := replaceAttribute(items[1], claims)
 		isStringOp := op == "$regex" || op == "$contains" || op == "$starts-with" || op == "$ends-with"
-		comparisonType := grammar.KindUnknown
+		var comparisonType grammar.ComparisonKind
 		if isStringOp {
 			// String operators work on the string representation regardless of the literal's native type.
 			comparisonType = grammar.KindString
