@@ -172,18 +172,51 @@ func (v *Value) IsValue() bool {
 	return !v.IsField() && v.GetValueType() != "unknown"
 }
 
+// ComparisonKind describes the coarse-grained type category used when comparing values.
 type ComparisonKind int
 
 const (
+	// KindUnknown represents an unresolved or unsupported type.
 	KindUnknown ComparisonKind = iota
+	// KindString represents string operands.
 	KindString
+	// KindField represents a field reference whose runtime type is unknown.
 	KindField
+	// KindNumber represents numeric operands.
 	KindNumber
+	// KindBool represents boolean operands.
 	KindBool
+	// KindDateTime represents date-time operands.
 	KindDateTime
+	// KindTime represents time-only operands.
 	KindTime
+	// KindHex represents hexadecimal operands.
 	KindHex
 )
+
+// String returns a human-readable name for the comparison kind.
+func (k ComparisonKind) String() string {
+	switch k {
+	case KindUnknown:
+		return "Unknown"
+	case KindString:
+		return "String"
+	case KindField:
+		return "Field"
+	case KindNumber:
+		return "Number"
+	case KindBool:
+		return "Bool"
+	case KindDateTime:
+		return "DateTime"
+	case KindTime:
+		return "Time"
+	case KindHex:
+		return "Hex"
+	default:
+		return fmt.Sprintf("ComparisonKind(%d)", int(k))
+	}
+}
 
 // EffectiveType returns a coarse type label used for validation of comparison operands.
 // Attributes and fields return an empty string because their runtime type is unknown at parse time.
@@ -203,7 +236,7 @@ func (v *Value) EffectiveType() ComparisonKind {
 		return KindHex
 	case v.NumVal != nil, v.NumCast != nil, v.Year != nil, v.Month != nil, v.DayOfMonth != nil, v.DayOfWeek != nil:
 		return KindNumber
-	case v.StrVal != nil, v.StrCast != nil, v.Field != nil:
+	case v.StrVal != nil, v.StrCast != nil:
 		return KindString
 	case v.Boolean != nil, v.BoolCast != nil:
 		return KindBool
@@ -216,12 +249,13 @@ func (v *Value) EffectiveType() ComparisonKind {
 	}
 }
 
+// IsComparableTo checks whether two values can be compared and returns the common comparison kind.
 func (v *Value) IsComparableTo(in Value) (ComparisonKind, error) {
 	ltype := v.EffectiveType()
 	rtype := in.EffectiveType()
 
 	if ltype == KindUnknown || rtype == KindUnknown {
-		return KindUnknown, fmt.Errorf("comparison has unknown operators: %s vs %s", ltype, rtype)
+		return KindUnknown, fmt.Errorf("comparison has unknown operators: %s vs %s", ltype.String(), rtype.String())
 	}
 	if ltype == KindField {
 		return rtype, nil
@@ -232,11 +266,12 @@ func (v *Value) IsComparableTo(in Value) (ComparisonKind, error) {
 	}
 
 	if ltype != rtype {
-		return KindUnknown, fmt.Errorf("comparison requires matching operand types: %s vs %s", ltype, rtype)
+		return KindUnknown, fmt.Errorf("comparison requires matching operand types: %s vs %s", ltype.String(), rtype.String())
 	}
 	return ltype, nil
 }
 
+// WrapCastAroundField wraps a field value in an explicit cast to align both operands' types.
 func WrapCastAroundField(v Value, kind ComparisonKind) Value {
 	if v.EffectiveType() != KindField {
 		return v
@@ -261,7 +296,7 @@ func WrapCastAroundField(v Value, kind ComparisonKind) Value {
 	}
 }
 
-// effectiveTypeWithCast prefers the target type of an explicit cast over the raw EffectiveType.
+// EffectiveTypeWithCast prefers the target type of an explicit cast over the raw EffectiveType.
 // This keeps type validation in sync with the SQL that will actually be generated.
 func (v *Value) EffectiveTypeWithCast() ComparisonKind {
 	if v == nil {
