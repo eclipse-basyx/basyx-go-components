@@ -530,6 +530,19 @@ type BlobElementValueRow struct {
 	Value string `json:"value"`
 }
 
+// MultiLanguagePropertyElementValueRow represents a data row for a MultiLanguageProperty entity in the database.
+// MultiLanguageProperties are submodel elements that represent text values in multiple languages.
+//
+// This structure captures the language-text pairs and optional value ID reference.
+type MultiLanguagePropertyElementValueRow struct {
+	// Value contains the array of language-text pairs
+	Value []LangStringTextType `json:"value"`
+	// ValueID is a reference to a related concept or value definition (optional)
+	ValueID *json.RawMessage `json:"value_id"`
+	// ValueIDReferred contains the referred semantic ID for the value reference (optional)
+	ValueIDReferred *json.RawMessage `json:"value_id_referred"`
+}
+
 // AssetAdministrationShellDescriptorRow represents a single SQL result row
 // for an Asset Administration Shell (AAS) descriptor. It carries nullable
 // string/integer columns from the database and foreign-key references to

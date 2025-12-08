@@ -310,7 +310,7 @@ func DeleteSubmodelElementByPath(tx *sql.Tx, submodelID string, idShortOrPath st
 }
 
 // GetSubmodelElementsForSubmodel retrieves all submodel elements for a given submodel ID.
-func GetSubmodelElementsForSubmodel(db *sql.DB, submodelID string, idShortPath string, cursor string, limit int) ([]model.SubmodelElement, string, error) {
+func GetSubmodelElementsForSubmodel(db *sql.DB, submodelID string, idShortPath string, cursor string, limit int, valueOnly bool) ([]model.SubmodelElement, string, error) {
 	filter := submodelsubqueries.SubmodelElementFilter{
 		SubmodelFilter: &submodelsubqueries.SubmodelElementSubmodelFilter{
 			SubmodelIDFilter: submodelID,
@@ -323,7 +323,7 @@ func GetSubmodelElementsForSubmodel(db *sql.DB, submodelID string, idShortPath s
 		}
 	}
 
-	submodelElementQuery, err := submodelsubqueries.GetSubmodelElementsQuery(filter, cursor, limit)
+	submodelElementQuery, err := submodelsubqueries.GetSubmodelElementsQuery(filter, cursor, limit, valueOnly)
 	if err != nil {
 		return nil, "", err
 	}
