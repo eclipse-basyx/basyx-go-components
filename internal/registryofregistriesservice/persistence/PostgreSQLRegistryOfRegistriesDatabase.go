@@ -23,7 +23,7 @@
 * SPDX-License-Identifier: MIT
 ******************************************************************************/
 
-// Package persistencepostgresql provides PostgreSQL-based persistence implementation
+// Package registryofregistriespostgresql provides PostgreSQL-based persistence implementation
 // for the Eclipse BaSyx RegistryOfRegistries Service.
 //
 // This package implements the storage and retrieval of Registry identifiers in a PostgreSQL database.

@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	componentName = "DISC"
+	componentName = "ROR"
 )
 
 // AssetAdministrationShellRegistryOfRegistriesAPIAPIService is a service that implements the logic for the AssetAdministrationShellRegistryOfRegistriesAPIAPIServicer

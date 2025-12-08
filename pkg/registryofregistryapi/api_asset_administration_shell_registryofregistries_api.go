@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	componentName = "DISC_VAL"
+	componentName = "AASROR_VAL"
 )
 
 // AssetAdministrationShellRegistryOfRegistriesAPIAPIController binds http requests to an api service and writes the service results to the http response
@@ -71,7 +71,7 @@ func (c *AssetAdministrationShellRegistryOfRegistriesAPIAPIController) Routes() 
 		"DeleteRegistryDescriptorById": Route{
 			strings.ToUpper("Delete"),
 			"/registry-descriptors/{registryIdentifier}",
-			c.DeleteRegistryById,
+			c.DeleteRegistryDescriptorById,
 		},
 	}
 }
@@ -273,16 +273,16 @@ func (c *AssetAdministrationShellRegistryOfRegistriesAPIAPIController) PutRegist
 	_ = EncodeJSONResponse(result.Body, &result.Code, w)
 }
 
-// DeleteRegistryById - Deletes a Registry Descriptor, i.e. de-registers a registry
-func (c *AssetAdministrationShellRegistryOfRegistriesAPIAPIController) DeleteRegistryById(w http.ResponseWriter, r *http.Request) {
+// DeleteRegistryDescriptorById - Deletes a Registry Descriptor, i.e. de-registers a registry
+func (c *AssetAdministrationShellRegistryOfRegistriesAPIAPIController) DeleteRegistryDescriptorById(w http.ResponseWriter, r *http.Request) {
 	registryIdentifierParam := chi.URLParam(r, "registryIdentifier")
 	if registryIdentifierParam == "" {
-		log.Printf("Reg [%s] Error in DeleteRegistryByID: missing path parameter registryIdentifier", componentName)
+		log.Printf("Reg [%s] Error in DeleteRegistryDescriptorById: missing path parameter registryIdentifier", componentName)
 		result := common.NewErrorResponse(
 			common.NewErrBadRequest("Missing path parameter 'registryIdentifier'"),
 			http.StatusBadRequest,
 			componentName,
-			"DeleteRegistryByID",
+			"DeleteRegistryDescriptorById",
 			"registryIdentifier",
 		)
 		EncodeJSONResponse(result.Body, &result.Code, w)
