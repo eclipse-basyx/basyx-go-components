@@ -219,10 +219,9 @@ func (k ComparisonKind) String() string {
 }
 
 // EffectiveType returns a coarse type label used for validation of comparison operands.
-// Attributes and fields return an empty string because their runtime type is unknown at parse time.
+// Fields return KindField, most attributes return KindString (except for UTCNOW-like globals which return KindDateTime).
 func (v *Value) EffectiveType() ComparisonKind {
 	switch {
-	// comparing
 	case v.Field != nil:
 		return KindField
 	case v.Attribute != nil:
@@ -255,7 +254,7 @@ func (v *Value) IsComparableTo(in Value) (ComparisonKind, error) {
 	rtype := in.EffectiveType()
 
 	if ltype == KindUnknown || rtype == KindUnknown {
-		return KindUnknown, fmt.Errorf("comparison has unknown operators: %s vs %s", ltype.String(), rtype.String())
+		return KindUnknown, fmt.Errorf("comparison has unknown operand types: %s vs %s", ltype.String(), rtype.String())
 	}
 	if ltype == KindField {
 		return rtype, nil
