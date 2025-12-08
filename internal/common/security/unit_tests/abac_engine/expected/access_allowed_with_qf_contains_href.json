@@ -4,7 +4,10 @@
     "Formula": {
       "$contains": [
         {
-          "$field": "$aasdesc#endpoints[].protocolinformation.href"
+          
+          "$strCast": {
+            "$field": "$aasdesc#endpoints[].protocolinformation.href"
+          }
         },
         {
           "$strVal": "customer"

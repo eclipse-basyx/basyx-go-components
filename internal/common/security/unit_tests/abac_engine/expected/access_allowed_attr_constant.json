@@ -9,14 +9,18 @@
               "$strVal": "admin"
             },
             {
-              "$field": "$aasdesc#specificAssetIds[].name"
+              "$strCast": {
+                "$field": "$aasdesc#specificAssetIds[].name"
+              }
             }
           ]
         },
         {
           "$eq": [
             {
-              "$field": "$aasdesc#id"
+              "$strCast": {
+                "$field": "$aasdesc#id"
+              }
             },
             {
               "$strVal": "https://martin.de"
