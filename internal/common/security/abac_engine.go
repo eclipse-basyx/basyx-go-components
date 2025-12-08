@@ -231,9 +231,8 @@ func (m *AccessModel) AuthorizeWithFilter(in EvalInput) (ok bool, code DecisionC
 			expr = grammar.LogicalExpression{
 				Or: append(expr.Or, noFilter),
 			}
-
-			expr, _ = adaptLEForBackend(expr, in.Claims)
 		}
+		expr, _ = adaptLEForBackend(expr, in.Claims)
 
 		combinedFilters = append(combinedFilters, FragmentMapping{
 			Fragment:  fragment,

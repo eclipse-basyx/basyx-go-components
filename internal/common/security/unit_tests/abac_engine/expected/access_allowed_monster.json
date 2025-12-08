@@ -5,86 +5,82 @@
       {
         "Fragment": "$aasdesc#assetInformation.specificAssetIds[]",
         "Condition": {
-          "$or": [
+          "$and": [
+            {
+              "$eq": [
+                {
+                  "$field": "$aasdesc#specificAssetIds[].name"
+                },
+                {
+                  "$strVal": "manufacturerPartId"
+                }
+              ]
+            },
             {
               "$and": [
                 {
-                  "$eq": [
-                    {
-                      "$field": "$aasdesc#specificAssetIds[].name"
-                    },
-                    {
-                      "$strVal": "manufacturerPartId"
-                    }
-                  ]
-                },
-                {
                   "$and": [
                     {
-                      "$and": [
+                      "$eq": [
                         {
-                          "$eq": [
-                            {
-                              "$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[3].value"
-                            },
-                            {
-                              "$strVal": "somevalue"
-                            }
-                          ]
+                          "$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[3].value"
                         },
                         {
-                          "$eq": [
-                            {
-                              "$field": "$aasdesc#endpoints[].protocolinformation.href"
-                            },
-                            {
-                              "$strVal": "https://test.de"
-                            }
-                          ]
-                        },
-                        {
-                          "$eq": [
-                            {
-                              "$field": "$aasdesc#submodelDescriptors[0].semanticId.type"
-                            },
-                            {
-                              "$strVal": "Type"
-                            }
-                          ]
-                        },
-                        {
-                          "$eq": [
-                            {
-                              "$field": "$aasdesc#submodelDescriptors[0].endpoints[].interface"
-                            },
-                            {
-                              "$strVal": "AC 3.0"
-                            }
-                          ]
+                          "$strVal": "somevalue"
                         }
                       ]
                     },
                     {
-                      "$or": [
+                      "$eq": [
                         {
-                          "$eq": [
-                            {
-                              "$field": "$aasdesc#id"
-                            },
-                            {
-                              "$strVal": "https://hamburg.de"
-                            }
-                          ]
+                          "$field": "$aasdesc#endpoints[].protocolinformation.href"
                         },
                         {
-                          "$eq": [
-                            {
-                              "$field": "$aasdesc#id"
-                            },
-                            {
-                              "$strVal": "https://bremen.de"
-                            }
-                          ]
+                          "$strVal": "https://test.de"
+                        }
+                      ]
+                    },
+                    {
+                      "$eq": [
+                        {
+                          "$field": "$aasdesc#submodelDescriptors[0].semanticId.type"
+                        },
+                        {
+                          "$strVal": "Type"
+                        }
+                      ]
+                    },
+                    {
+                      "$eq": [
+                        {
+                          "$field": "$aasdesc#submodelDescriptors[0].endpoints[].interface"
+                        },
+                        {
+                          "$strVal": "AC 3.0"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "$or": [
+                    {
+                      "$eq": [
+                        {
+                          "$field": "$aasdesc#id"
+                        },
+                        {
+                          "$strVal": "https://hamburg.de"
+                        }
+                      ]
+                    },
+                    {
+                      "$eq": [
+                        {
+                          "$field": "$aasdesc#id"
+                        },
+                        {
+                          "$strVal": "https://bremen.de"
                         }
                       ]
                     }
