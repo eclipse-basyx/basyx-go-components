@@ -2,9 +2,7 @@ module github.com/eclipse-basyx/basyx-go-components
 
 go 1.25.0
 
-require (
-	github.com/go-chi/chi/v5 v5.2.3
-)
+require github.com/go-chi/chi/v5 v5.2.3
 
 require (
 	github.com/coreos/go-oidc v2.4.0+incompatible
@@ -15,7 +13,7 @@ require (
 	github.com/lib/pq v1.10.9
 	github.com/spf13/viper v1.21.0
 	github.com/stretchr/testify v1.11.1
-	golang.org/x/sync v0.18.0
+	golang.org/x/sync v0.19.0
 )
 
 require (
@@ -31,7 +29,6 @@ require (
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/pquerna/cachecontrol v0.2.0 // indirect
 	github.com/sagikazarmark/locafero v0.12.0 // indirect
-	github.com/sourcegraph/conc v0.3.1-0.20240121214520-5f936abd7ae8 // indirect
 	github.com/spf13/afero v1.15.0 // indirect
 	github.com/spf13/cast v1.10.0 // indirect
 	github.com/spf13/pflag v1.0.10 // indirect
