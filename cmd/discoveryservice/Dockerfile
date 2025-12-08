@@ -20,7 +20,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo \
     -o discoveryservice ./cmd/discoveryservice
 
 # Stage 2: Minimal runtime image
-FROM alpine:latest
+FROM alpine:3.22
 
 RUN apk --no-cache --no-scripts add ca-certificates wget
 WORKDIR /root/
