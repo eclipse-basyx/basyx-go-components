@@ -35,10 +35,10 @@
       { "name": "now_after_2100", "formula": { "$gt": [ { "$attribute": { "GLOBAL": "UTCNOW" } }, { "$dateTimeVal": "2100-01-01T00:00:00Z" } ] } },
       { "name": "dt_field_after_cutoff", "formula": { "$gt": [ { "$dateTimeCast": { "$field": "$aasdesc#endpoints[0].protocolinformation.href" } }, { "$dateTimeVal": "2024-12-31T23:59:59Z" } ] } },
       { "name": "mixed_casts_gate", "formula": { "$and": [
-        { "$ge": [ { "$numCast": { "$field": "$aasdesc#specificAssetIds[0].value" } }, { "$numVal": 100 } ] },
-        { "$gt": [ { "$timeCast": { "$field": "$aasdesc#specificAssetIds[1].value" } }, { "$timeVal": "08:00:00" } ] },
-        { "$eq": [ { "$numCast": { "$field": "$aasdesc#specificAssetIds[2].value" } }, { "$year": "2025-01-01T00:00:00Z" } ] },
-        { "$eq": [ { "$hexCast": { "$field": "$aasdesc#specificAssetIds[3].value" } }, { "$hexVal": "16#BEEF" } ] }
+        { "$ge": [ { "$field": "$aasdesc#specificAssetIds[0].value" }, { "$numVal": 100 } ] },
+        { "$gt": [ { "$field": "$aasdesc#specificAssetIds[1].value" }, { "$timeVal": "08:00:00" } ] },
+        { "$eq": [ { "$field": "$aasdesc#specificAssetIds[2].value" }, { "$year": "2025-01-01T00:00:00Z" } ] },
+        { "$eq": [ { "$field": "$aasdesc#specificAssetIds[3].value" }, { "$hexVal": "16#BEEF" } ] }
       ] } }
     ],
 

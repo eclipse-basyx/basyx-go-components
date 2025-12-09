@@ -6,7 +6,9 @@
         {
           "$eq": [
             {
-              "$field": "$smdesc#id"
+              "$strCast": {
+                "$field": "$smdesc#id"
+              }
             },
             {
               "$strVal": "sm-123"
@@ -16,7 +18,9 @@
         {
           "$eq": [
             {
-              "$field": "$smdesc#id"
+              "$strCast": {
+                "$field": "$smdesc#id"
+              }
             },
             {
               "$strVal": "sm-999"

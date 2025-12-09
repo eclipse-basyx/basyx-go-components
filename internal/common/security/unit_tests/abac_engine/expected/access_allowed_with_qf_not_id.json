@@ -5,7 +5,9 @@
       "$not": {
         "$eq": [
           {
-            "$field": "$aasdesc#id"
+            "$strCast": {
+              "$field": "$aasdesc#id"
+            }
           },
           {
             "$strVal": "block-this"

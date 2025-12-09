@@ -1,7 +1,7 @@
 {
   "ok": true,
   "queryFilter": {
-    "Formula": { "$regex": [ { "$field": "$aasdesc#id" }, { "$strVal": "^urn:aas:regex-[0-9]+$" } ] }
+    "Formula": { "$regex": [ { "$strCast": { "$field": "$aasdesc#id" }}, { "$strVal": "^urn:aas:regex-[0-9]+$" } ] }
   },
   "reason": "ALLOW"
 }
