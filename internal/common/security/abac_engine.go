@@ -74,11 +74,7 @@ func ParseAccessModel(b []byte, apiRouter *api.Mux) (*AccessModel, error) {
 	}, nil
 }
 
-// FragmentMapping maps fragments to logical expressions
-type FragmentMapping struct {
-	Fragment  string                    `json:"Fragment" yaml:"Fragment" mapstructure:"Fragment"`
-	Condition grammar.LogicalExpression `json:"Condition" yaml:"Condition" mapstructure:"Condition"`
-}
+type FragmentFilters map[string]grammar.LogicalExpression
 
 // QueryFilter captures optional, fine-grained restrictions produced by a rule
 // even when ACCESS=ALLOW. Controllers can use it to restrict rows, constrain
@@ -86,7 +82,7 @@ type FragmentMapping struct {
 // a concrete filter structure; extend this struct when needed.
 type QueryFilter struct {
 	Formula *grammar.LogicalExpression `json:"Formula,omitempty" yaml:"Formula,omitempty" mapstructure:"Formula,omitempty"`
-	Filters []FragmentMapping          `json:"Filters,omitempty" yaml:"Filters,omitempty" mapstructure:"Filters,omitempty"`
+	Filters FragmentFilters            `json:"Filters,omitempty" yaml:"Filters,omitempty" mapstructure:"Filters,omitempty"`
 }
 
 // DecisionCode represents the result of an authorization check.
@@ -108,14 +104,14 @@ const (
 // It returns whether access is allowed, a human-readable reason, and an optional
 // QueryFilter for controllers to enforce (e.g., tenant scoping, redactions).
 // It is important that this function does not throw errors. It either gives access or no access.
-func (m *AccessModel) AuthorizeWithFilter(in EvalInput) (ok bool, code DecisionCode, qf *QueryFilter) {
+func (m *AccessModel) AuthorizeWithFilter(in EvalInput) (bool, DecisionCode, *QueryFilter) {
 	rights, mapped := m.mapMethodAndPathToRights(in)
 	if !mapped {
 		return false, DecisionNoMatch, nil
 	}
 
 	var ruleExprs []grammar.LogicalExpression
-	var fragfilters []FragmentMapping
+	fragfilters := make(map[string][]grammar.LogicalExpression)
 	var noFilters []grammar.LogicalExpression
 
 	for _, r := range m.rules {
@@ -178,8 +174,8 @@ func (m *AccessModel) AuthorizeWithFilter(in EvalInput) (ok bool, code DecisionC
 					adapted,
 				}}
 
-			fragmentMapping := FragmentMapping{Fragment: *r.filter.FRAGMENT, Condition: filterCondRaw}
-			fragfilters = append(fragfilters, fragmentMapping)
+			fragment := *r.filter.FRAGMENT
+			fragfilters[fragment] = append(fragfilters[fragment], filterCondRaw)
 		} else {
 			noFilters = append(noFilters, adapted)
 		}
@@ -198,31 +194,18 @@ func (m *AccessModel) AuthorizeWithFilter(in EvalInput) (ok bool, code DecisionC
 	}
 
 	simplified, onlyBool := adaptLEForBackend(combined, in.Claims)
+	hasFormula := true
 	if onlyBool {
 		if !evalLE(simplified, in.Claims) {
 			return false, DecisionNoMatch, nil
 		}
+		hasFormula = false
 	}
 
-	combinedFiltersMap := make(map[string]grammar.LogicalExpression)
+	combinedFiltersMap := make(FragmentFilters, len(fragfilters))
 
-	for _, f := range fragfilters {
-		if existing, ok := combinedFiltersMap[f.Fragment]; ok {
-			// Append new condition into OR
-			combinedFiltersMap[f.Fragment] = grammar.LogicalExpression{
-				Or: append(existing.Or, f.Condition),
-			}
-		} else {
-			// Create initial OR list
-			combinedFiltersMap[f.Fragment] = grammar.LogicalExpression{
-				Or: []grammar.LogicalExpression{f.Condition},
-			}
-		}
-	}
-
-	var combinedFilters = []FragmentMapping{}
-
-	for fragment, expr := range combinedFiltersMap {
+	for fragment, conds := range fragfilters {
+		expr := grammar.LogicalExpression{Or: conds}
 		for _, noFilter := range noFilters {
 
 			// Append noFilter into OR
@@ -232,11 +215,18 @@ func (m *AccessModel) AuthorizeWithFilter(in EvalInput) (ok bool, code DecisionC
 		}
 		expr, _ = adaptLEForBackend(expr, in.Claims)
 
-		combinedFilters = append(combinedFilters, FragmentMapping{
-			Fragment:  fragment,
-			Condition: expr,
-		})
+		combinedFiltersMap[fragment] = expr
 
 	}
-	return true, DecisionAllow, &QueryFilter{Formula: &simplified, Filters: combinedFilters}
+	var qf *QueryFilter
+	if hasFormula || len(combinedFiltersMap) > 0 {
+		qf = &QueryFilter{}
+		if hasFormula {
+			qf.Formula = &simplified
+		}
+		if len(combinedFiltersMap) > 0 {
+			qf.Filters = combinedFiltersMap
+		}
+	}
+	return true, DecisionAllow, qf
 }

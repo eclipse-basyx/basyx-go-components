@@ -28,7 +28,7 @@
       { "USEACL": "all_admin", "USEOBJECTS": ["all_shell_descriptors"], "USEFORMULA": "role_is_admin" },
       { "USEACL": "user", "USEOBJECTS": ["all_shell_descriptors"], "USEFORMULA": "role_is_viewer",
         "FILTER": {
-          "FRAGMENT": "$aasdesc#assetInformation.specificAssetIds[].name",
+          "FRAGMENT": "$aasdesc#specificAssetIds[].name",
           "CONDITION": 
            {
             "$eq": [

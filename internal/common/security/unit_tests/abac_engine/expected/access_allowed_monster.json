@@ -1,111 +1,109 @@
 {
   "ok": true,
   "queryFilter": {
-    "Filters": [
-      {
-        "Fragment": "$aasdesc#assetInformation.specificAssetIds[]",
-        "Condition": {
-          "$and": [
-            {
-              "$eq": [
-                {
-                  "$strCast": {
-                    "$field": "$aasdesc#specificAssetIds[].name"
+    "Filters": {
+      "$aasdesc#assetInformation.specificAssetIds[]": {
+        "$and": [
+          {
+            "$eq": [
+              {
+                "$strCast": {
+                  "$field": "$aasdesc#specificAssetIds[].name"
+                }
+              },
+              {
+                "$strVal": "manufacturerPartId"
+              }
+            ]
+          },
+          {
+            "$and": [
+              {
+                "$and": [
+                  {
+                    "$eq": [
+                      {
+                        "$strCast": {
+                          "$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[3].value"
+                        }
+                      },
+                      {
+                        "$strVal": "somevalue"
+                      }
+                    ]
+                  },
+                  {
+                    "$eq": [
+                      {
+                        "$strCast": {
+                          "$field": "$aasdesc#endpoints[].protocolinformation.href"
+                        }
+                      },
+                      {
+                        "$strVal": "https://test.de"
+                      }
+                    ]
+                  },
+                  {
+                    "$eq": [
+                      {
+                        "$strCast": {
+                          "$field": "$aasdesc#submodelDescriptors[0].semanticId.type"
+                        }
+                      },
+                      {
+                        "$strVal": "Type"
+                      }
+                    ]
+                  },
+                  {
+                    "$eq": [
+                      {
+                        "$strCast": {
+                          "$field": "$aasdesc#submodelDescriptors[0].endpoints[].interface"
+                        }
+                      },
+                      {
+                        "$strVal": "AC 3.0"
+                      }
+                    ]
                   }
-                },
-                {
-                  "$strVal": "manufacturerPartId"
-                }
-              ]
-            },
-            {
-              "$and": [
-                {
-                  "$and": [
-                    {
-                      "$eq": [
-                        {
-                          "$strCast": {
-                            "$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[3].value"
-                          }
-                        },
-                        {
-                          "$strVal": "somevalue"
+                ]
+              },
+              {
+                "$or": [
+                  {
+                    "$eq": [
+                      {
+                        "$strCast": {
+                          "$field": "$aasdesc#id"
                         }
-                      ]
-                    },
-                    {
-                      "$eq": [
-                        {
-                          "$strCast": {
-                            "$field": "$aasdesc#endpoints[].protocolinformation.href"
-                          }
-                        },
-                        {
-                          "$strVal": "https://test.de"
+                      },
+                      {
+                        "$strVal": "https://hamburg.de"
+                      }
+                    ]
+                  },
+                  {
+                    "$eq": [
+                      {
+                        "$strCast": {
+                          "$field": "$aasdesc#id"
                         }
-                      ]
-                    },
-                    {
-                      "$eq": [
-                        {
-                          "$strCast": {
-                            "$field": "$aasdesc#submodelDescriptors[0].semanticId.type"
-                          }
-                        },
-                        {
-                          "$strVal": "Type"
-                        }
-                      ]
-                    },
-                    {
-                      "$eq": [
-                        {
-                          "$strCast": {
-                            "$field": "$aasdesc#submodelDescriptors[0].endpoints[].interface"
-                          }
-                        },
-                        {
-                          "$strVal": "AC 3.0"
-                        }
-                      ]
-                    }
-                  ]
-                },
-                {
-                  "$or": [
-                    {
-                      "$eq": [
-                        {
-                          "$strCast": {
-                            "$field": "$aasdesc#id"
-                          }
-                        },
-                        {
-                          "$strVal": "https://hamburg.de"
-                        }
-                      ]
-                    },
-                    {
-                      "$eq": [
-                        {
-                          "$strCast": {
-                            "$field": "$aasdesc#id"
-                          }
-                        },
-                        {
-                          "$strVal": "https://bremen.de"
-                        }
-                      ]
-                    }
-                  ]
-                }
-              ]
-            }
-          ]
-        }
+                      },
+                      {
+                        "$strVal": "https://bremen.de"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
       }
-    ],
+    }
+    ,
     "Formula": {
       "$and": [
         {
