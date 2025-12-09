@@ -87,7 +87,7 @@ func ReadSpecificAssetIDsByDescriptorIDs(
 	sai := goqu.T(tblSpecificAssetID).As("sai")
 
 	arr := pq.Array(descriptorIDs)
-	sqlStr, args, err := d.
+	ds := d.
 		From(sai).
 		Select(
 			sai.Col(colDescriptorID),
@@ -100,8 +100,14 @@ func ReadSpecificAssetIDsByDescriptorIDs(
 		Where(goqu.L("sai.descriptor_id = ANY(?::bigint[])", arr)).
 		Order(
 			sai.Col("position").Asc(),
-		).
-		ToSQL()
+		)
+
+	ds, err := addSpecificAssetFilter(ctx, d, ds, sai)
+	if err != nil {
+		return nil, err
+	}
+
+	sqlStr, args, err := ds.ToSQL()
 	if err != nil {
 		return nil, err
 	}
