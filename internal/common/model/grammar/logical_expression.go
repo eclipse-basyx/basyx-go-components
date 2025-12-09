@@ -170,10 +170,6 @@ func validateComparisonItems(items ComparisonItems, op string) error {
 	if len(items) != 2 {
 		return fmt.Errorf("comparison %s requires exactly 2 operands, got %d", op, len(items))
 	}
-	ltype := items[0].EffectiveType()
-	rtype := items[1].EffectiveType()
-	if ltype != "" && rtype != "" && ltype != rtype {
-		return fmt.Errorf("comparison %s requires matching operand types: %s vs %s", op, ltype, rtype)
-	}
-	return nil
+	_, err := items[0].IsComparableTo(items[1])
+	return err
 }

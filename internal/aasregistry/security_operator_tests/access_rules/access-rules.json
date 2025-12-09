@@ -30,13 +30,13 @@
         { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "editor" } ] },
         { "$regex": [ { "$field": "$aasdesc#id" }, { "$strVal": "^urn:aas:regex-[0-9]+$" } ] }
       ] } },
-      { "name": "id_public_suffix", "formula": { "$ends-with": [ { "$field": "$aasdesc#id" }, { "$strVal": ":public" } ] } },
+      { "name": "id_public_suffix", "formula": { "$ends-with": [ { "$strCast": { "$field": "$aasdesc#id" }}, { "$strVal": ":public" } ] } },
       { "name": "now_after_2000", "formula": { "$gt": [ { "$attribute": { "GLOBAL": "UTCNOW" } }, { "$dateTimeVal": "2000-01-01T00:00:00Z" } ] } },
       { "name": "now_after_2100", "formula": { "$gt": [ { "$attribute": { "GLOBAL": "UTCNOW" } }, { "$dateTimeVal": "2100-01-01T00:00:00Z" } ] } },
       { "name": "dt_field_after_cutoff", "formula": { "$gt": [ { "$dateTimeCast": { "$field": "$aasdesc#endpoints[0].protocolinformation.href" } }, { "$dateTimeVal": "2024-12-31T23:59:59Z" } ] } },
       { "name": "mixed_casts_gate", "formula": { "$and": [
-        { "$ge": [ { "$numCast": { "$field": "$aasdesc#specificAssetIds[0].value" } }, { "$numVal": 100 } ] },
-        { "$gt": [ { "$timeCast": { "$field": "$aasdesc#specificAssetIds[1].value" } }, { "$timeVal": "08:00:00" } ] },
+        { "$ge": [ { "$field": "$aasdesc#specificAssetIds[0].value" }, { "$numVal": 100 } ] },
+        { "$gt": [ { "$field": "$aasdesc#specificAssetIds[1].value" }, { "$timeVal": "08:00:00" } ] },
         { "$eq": [ { "$numCast": { "$field": "$aasdesc#specificAssetIds[2].value" } }, { "$year": "2025-01-01T00:00:00Z" } ] }
       ] } }
     ],

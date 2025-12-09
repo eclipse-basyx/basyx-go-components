@@ -1,5 +1,5 @@
 # Stage 1: Build the application
-FROM golang:1.25-alpine AS builder
+FROM golang:1.25-alpine3.22 AS builder
 
 # Version argument for build-time injection
 ARG VERSION=dev
@@ -20,9 +20,9 @@ RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo \
     -o discoveryservice ./cmd/discoveryservice
 
 # Stage 2: Minimal runtime image
-FROM alpine:latest
+FROM alpine:3.22
 
-RUN apk --no-cache add ca-certificates wget
+RUN apk --no-cache --no-scripts add ca-certificates wget
 WORKDIR /root/
 
 # Copy binary

@@ -6,7 +6,9 @@
         {
           "$eq": [
             {
-              "$field": "$aasdesc#specificAssetIds[].name"
+              "$strCast": {
+                "$field": "$aasdesc#specificAssetIds[].name"
+              }
             },
             {
               "$strVal": "manufacturerPartId"
@@ -18,7 +20,9 @@
             {
               "$eq": [
                 {
-                  "$field": "$aasdesc#id"
+                  "$strCast": {
+                    "$field": "$aasdesc#id"
+                  }
                 },
                 {
                   "$strVal": "martin"
@@ -28,7 +32,9 @@
             {
               "$eq": [
                 {
-                  "$field": "$aasdesc#id"
+                  "$strCast": {
+                    "$field": "$aasdesc#id"
+                  }
                 },
                 {
                   "$strVal": "jannik"
@@ -38,7 +44,9 @@
             {
               "$eq": [
                 {
-                  "$field": "$aasdesc#id"
+                  "$strCast": {
+                    "$field": "$aasdesc#id"
+                  }
                 },
                 {
                   "$strVal": "aaron"
