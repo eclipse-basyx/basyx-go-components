@@ -84,9 +84,10 @@ func addSpecificAssetFilter(ctx context.Context, d goqu.DialectWrapper, ds *goqu
 		return ds, nil
 	}
 	filters := p.Filters
+
 	for _, fm := range filters {
 		switch fm.Fragment {
-		case "$aasdesc#specificAssetIds[]":
+		case "$aasdesc#assetInformation.specificAssetIds[]":
 
 			wc, err := fm.Condition.EvaluateToExpression()
 			if err != nil {
@@ -125,10 +126,35 @@ func addSpecificAssetFilter(ctx context.Context, d goqu.DialectWrapper, ds *goqu
 			ds = ds.Where(goqu.L("EXISTS (?)", existsDataset))
 			continue
 
-		case "$aasdesc#specificAssetIds[].name":
-			continue
 		}
 	}
 	return ds, nil
 
+}
+
+func getColumnSelectStatement(ctx context.Context, sai exp.AliasedExpression, colName string) (exp.AliasedExpression, error) {
+
+	p := auth.GetQueryFilter(ctx)
+	if p == nil {
+		return sai.Col(colName).As(colName), nil
+	}
+	filters := p.Filters
+
+	for _, fm := range filters {
+		switch fm.Fragment {
+		case "$aasdesc#assetInformation.specificAssetIds[].name":
+			wc, err := fm.Condition.EvaluateToExpression()
+			if err != nil {
+				return nil, err
+			}
+			return goqu.Case().
+				When(
+					wc,
+					sai.Col(colName),
+				).
+				Else(nil).
+				As(colName), nil
+		}
+	}
+	return sai.Col(colName).As(colName), nil
 }

@@ -167,7 +167,6 @@ func (m *AccessModel) AuthorizeWithFilter(in EvalInput) (ok bool, code DecisionC
 			if !evalLE(adapted, in.Claims) {
 				continue
 			}
-			return true, DecisionAllow, nil
 		}
 
 		ruleExprs = append(ruleExprs, adapted)
@@ -200,10 +199,9 @@ func (m *AccessModel) AuthorizeWithFilter(in EvalInput) (ok bool, code DecisionC
 
 	simplified, onlyBool := adaptLEForBackend(combined, in.Claims)
 	if onlyBool {
-		if evalLE(simplified, in.Claims) {
-			return true, DecisionAllow, nil
+		if !evalLE(simplified, in.Claims) {
+			return false, DecisionNoMatch, nil
 		}
-		return false, DecisionNoMatch, nil
 	}
 
 	combinedFiltersMap := make(map[string]grammar.LogicalExpression)

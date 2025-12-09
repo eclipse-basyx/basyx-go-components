@@ -29,6 +29,7 @@ package descriptors
 import (
 	"context"
 	"database/sql"
+	"fmt"
 
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
@@ -84,30 +85,36 @@ func ReadSpecificAssetIDsByDescriptorIDs(
 	}
 
 	d := goqu.Dialect(dialect)
-	sai := goqu.T(tblSpecificAssetID).As("sai")
+	sai := goqu.T(tblSpecificAssetID).As("specific_asset_id")
 
 	arr := pq.Array(descriptorIDs)
+
+	colNameStmt, err := getColumnSelectStatement(ctx, sai, colName)
+	if err != nil {
+		return nil, err
+	}
 	ds := d.
 		From(sai).
 		Select(
 			sai.Col(colDescriptorID),
 			sai.Col(colID),
-			sai.Col(colName),
+			colNameStmt,
 			sai.Col(colValue),
 			sai.Col(colSemanticID),
 			sai.Col(colExternalSubjectRef),
 		).
-		Where(goqu.L("sai.descriptor_id = ANY(?::bigint[])", arr)).
+		Where(goqu.L("specific_asset_id.descriptor_id = ANY(?::bigint[])", arr)).
 		Order(
 			sai.Col("position").Asc(),
 		)
 
-	ds, err := addSpecificAssetFilter(ctx, d, ds, sai)
+	ds, err = addSpecificAssetFilter(ctx, d, ds, sai)
 	if err != nil {
 		return nil, err
 	}
 
 	sqlStr, args, err := ds.ToSQL()
+	fmt.Println(sqlStr)
 	if err != nil {
 		return nil, err
 	}
