@@ -41,7 +41,7 @@ type RegistryOfRegistriesAPIAPIService struct {
 	registryOfRegistriesBackend registryofregistriespostgresql.PostgreSQLRegistryOfRegistriesDatabase
 }
 
-// RegistryOfRegistriesAPIAPIService creates a default api service
+// NewRegistryOfRegistriesAPIAPIService creates a default api service
 func NewRegistryOfRegistriesAPIAPIService(registryOfRegistriesBackend registryofregistriespostgresql.PostgreSQLRegistryOfRegistriesDatabase) *RegistryOfRegistriesAPIAPIService {
 	return &RegistryOfRegistriesAPIAPIService{
 		registryOfRegistriesBackend: registryOfRegistriesBackend,
