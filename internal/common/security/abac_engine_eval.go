@@ -156,6 +156,21 @@ func adaptLEForBackend(le grammar.LogicalExpression, claims Claims) (grammar.Log
 
 		left := replaceAttribute(items[0], claims)
 		right := replaceAttribute(items[1], claims)
+		isStringOp := op == "$regex" || op == "$contains" || op == "$starts-with" || op == "$ends-with"
+		var comparisonType grammar.ComparisonKind
+		if isStringOp {
+			// String operators work on the string representation regardless of the literal's native type.
+			comparisonType = grammar.KindString
+		} else {
+			var err error
+			comparisonType, err = left.IsComparableTo(right)
+			if err != nil {
+				return le, false
+			}
+		}
+
+		left = grammar.WrapCastAroundField(left, comparisonType)
+		right = grammar.WrapCastAroundField(right, comparisonType)
 
 		// Construct a new LE with updated operands
 		out := grammar.LogicalExpression{}
@@ -697,78 +712,35 @@ func toDateTime(v any) (time.Time, bool) {
 	}
 }
 
-type comparisonKind int
-
-const (
-	kindUnknown comparisonKind = iota
-	kindString
-	kindNumber
-	kindBool
-	kindDateTime
-	kindTime
-	kindHex
-)
-
-func comparisonKindOf(v grammar.Value) comparisonKind {
-	switch v.EffectiveType() {
-	case "number":
-		return kindNumber
-	case "datetime":
-		return kindDateTime
-	case "time":
-		return kindTime
-	case "hex":
-		return kindHex
-	case "bool":
-		return kindBool
-	case "string":
-		return kindString
-	default:
-		return kindUnknown
-	}
-}
-
-func unifyComparisonKind(a, b comparisonKind) (comparisonKind, bool) {
-	if a == b {
-		return a, true
-	}
-	if a == kindUnknown {
-		return b, true
-	}
-	if b == kindUnknown {
-		return a, true
-	}
-	return kindUnknown, false
-}
-
 func orderedCmp(left, right grammar.Value, claims Claims, op string) bool {
-	k, ok := unifyComparisonKind(comparisonKindOf(left), comparisonKindOf(right))
-	if !ok {
+	comparisonType, err := left.IsComparableTo(right)
+	if err != nil {
 		return false
 	}
-	switch k {
-	case kindNumber:
+
+	switch comparisonType {
+	case grammar.KindNumber:
 		lv, lok := resolveNumberValue(left, claims)
 		rv, rok := resolveNumberValue(right, claims)
 		if !lok || !rok {
 			return false
 		}
 		return compareFloats(lv, rv, op)
-	case kindTime:
+	case grammar.KindTime:
 		lv, lok := resolveTimeValue(left, claims)
 		rv, rok := resolveTimeValue(right, claims)
 		if !lok || !rok {
 			return false
 		}
 		return compareInts(lv, rv, op)
-	case kindDateTime:
+	case grammar.KindDateTime:
 		lv, lok := resolveDateTimeValue(left, claims)
 		rv, rok := resolveDateTimeValue(right, claims)
 		if !lok || !rok {
 			return false
 		}
 		return compareTimes(lv, rv, op)
-	case kindHex:
+	case grammar.KindHex:
 		lv, lok := resolveHexValue(left, claims)
 		rv, rok := resolveHexValue(right, claims)
 		if !lok || !rok {
@@ -781,34 +753,34 @@ func orderedCmp(left, right grammar.Value, claims Claims, op string) bool {
 }
 
 func eqCmp(left, right grammar.Value, claims Claims, negate bool) bool {
-	k, ok := unifyComparisonKind(comparisonKindOf(left), comparisonKindOf(right))
-	if !ok {
+	comparisonType, err := left.IsComparableTo(right)
+	if err != nil {
 		return negate
 	}
 
 	equal := false
-	switch k {
-	case kindNumber:
+	switch comparisonType {
+	case grammar.KindNumber:
 		lv, lok := resolveNumberValue(left, claims)
 		rv, rok := resolveNumberValue(right, claims)
 		equal = lok && rok && lv == rv
-	case kindDateTime:
+	case grammar.KindDateTime:
 		lv, lok := resolveDateTimeValue(left, claims)
 		rv, rok := resolveDateTimeValue(right, claims)
 		equal = lok && rok && lv.Equal(rv)
-	case kindTime:
+	case grammar.KindTime:
 		lv, lok := resolveTimeValue(left, claims)
 		rv, rok := resolveTimeValue(right, claims)
 		equal = lok && rok && lv == rv
-	case kindHex:
+	case grammar.KindHex:
 		lv, lok := resolveHexValue(left, claims)
 		rv, rok := resolveHexValue(right, claims)
 		equal = lok && rok && lv == rv
-	case kindBool:
+	case grammar.KindBool:
 		lv, lok := resolveBoolValue(left, claims)
 		rv, rok := resolveBoolValue(right, claims)
 		equal = lok && rok && lv == rv
-	case kindString, kindUnknown:
+	case grammar.KindString:
 		lv, lok := resolveStringValue(left, claims)
 		rv, rok := resolveStringValue(right, claims)
 		equal = lok && rok && lv == rv
