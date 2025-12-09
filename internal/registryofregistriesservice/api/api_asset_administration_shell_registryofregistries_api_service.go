@@ -6,12 +6,12 @@
 // persistence backend (see `internal/registryofregistriesservice/persistence`).
 //
 // The service is responsible for common tasks such as:
-//  - decoding/validating request path and query parameters
-//  - invoking the backend for CRUD operations on RegistryDescriptor objects
-//  - mapping backend errors to appropriate HTTP error responses
-//  - encoding paged results and response payloads
+//   - decoding/validating request path and query parameters
+//   - invoking the backend for CRUD operations on RegistryDescriptor objects
+//   - mapping backend errors to appropriate HTTP error responses
+//   - encoding paged results and response payloads
 //
-// Exported functionality includes the `AssetAdministrationShellRegistryOfRegistriesAPIAPIService`
+// Exported functionality includes the `RegistryOfRegistriesAPIAPIService`
 // type, which exposes methods for listing, creating, reading, updating and
 // deleting Registry Descriptors. The service expects a backend implementing
 // `registryofregistriespostgresql.PostgreSQLRegistryOfRegistriesDatabase` that
@@ -34,22 +34,22 @@ const (
 	componentName = "ROR"
 )
 
-// AssetAdministrationShellRegistryOfRegistriesAPIAPIService is a service that implements the logic for the AssetAdministrationShellRegistryOfRegistriesAPIAPIServicer
+// RegistryOfRegistriesAPIAPIService is a service that implements the logic for the RegistryOfRegistriesAPIAPIService
 // This service should implement the business logic for every endpoint for the AssetAdministrationShellRegistryOfRegistriesAPIAPI API.
 // Include any external packages or services that will be required by this service.
-type AssetAdministrationShellRegistryOfRegistriesAPIAPIService struct {
+type RegistryOfRegistriesAPIAPIService struct {
 	registryOfRegistriesBackend registryofregistriespostgresql.PostgreSQLRegistryOfRegistriesDatabase
 }
 
-// NewAssetAdministrationShellRegistryOfRegistriesAPIAPIService creates a default api service
-func NewAssetAdministrationShellRegistryOfRegistriesAPIAPIService(registryOfRegistriesBackend registryofregistriespostgresql.PostgreSQLRegistryOfRegistriesDatabase) *AssetAdministrationShellRegistryOfRegistriesAPIAPIService {
-	return &AssetAdministrationShellRegistryOfRegistriesAPIAPIService{
+// RegistryOfRegistriesAPIAPIService creates a default api service
+func NewRegistryOfRegistriesAPIAPIService(registryOfRegistriesBackend registryofregistriespostgresql.PostgreSQLRegistryOfRegistriesDatabase) *RegistryOfRegistriesAPIAPIService {
+	return &RegistryOfRegistriesAPIAPIService{
 		registryOfRegistriesBackend: registryOfRegistriesBackend,
 	}
 }
 
 // GetAllRegistryDescriptors - Returns all Registry Descriptors
-func (s *AssetAdministrationShellRegistryOfRegistriesAPIAPIService) GetAllRegistryDescriptors(ctx context.Context, limit int32, cursor string, registryType string, company string) (model.ImplResponse, error) {
+func (s *RegistryOfRegistriesAPIAPIService) GetAllRegistryDescriptors(ctx context.Context, limit int32, cursor string, registryType string, company string) (model.ImplResponse, error) {
 
 	var internalCursor string
 	if strings.TrimSpace(cursor) != "" {
@@ -92,7 +92,7 @@ func (s *AssetAdministrationShellRegistryOfRegistriesAPIAPIService) GetAllRegist
 }
 
 // PostRegistryDescriptor - Creates a new Registry Descriptor, i.e. registers a Registry
-func (s *AssetAdministrationShellRegistryOfRegistriesAPIAPIService) PostRegistryDescriptor(ctx context.Context, registryDescriptor model.RegistryDescriptor) (model.ImplResponse, error) {
+func (s *RegistryOfRegistriesAPIAPIService) PostRegistryDescriptor(ctx context.Context, registryDescriptor model.RegistryDescriptor) (model.ImplResponse, error) {
 	err := s.registryOfRegistriesBackend.InsertRegistryDescriptor(ctx, registryDescriptor)
 	if err != nil {
 		switch {
@@ -119,10 +119,10 @@ func (s *AssetAdministrationShellRegistryOfRegistriesAPIAPIService) PostRegistry
 
 // GetRegistryDescriptorById - Returns a specific Registry Descriptor
 // nolint:revive // defined by standard
-func (s *AssetAdministrationShellRegistryOfRegistriesAPIAPIService) GetRegistryDescriptorById(ctx context.Context, registryIdentifier string) (model.ImplResponse, error) {
+func (s *RegistryOfRegistriesAPIAPIService) GetRegistryDescriptorById(ctx context.Context, registryIdentifier string) (model.ImplResponse, error) {
 	decoded, decodeErr := common.DecodeString(registryIdentifier)
 	if decodeErr != nil {
-		log.Printf("R [%s] Error in GetRegistryDescriptorById: decode registryIdentifier=%q: %v", componentName, registryIdentifier, decodeErr)
+		log.Printf("📍 [%s] Error in GetRegistryDescriptorById: decode registryIdentifier=%q: %v", componentName, registryIdentifier, decodeErr)
 		return common.NewErrorResponse(
 			decodeErr, http.StatusBadRequest, componentName, "GetRegistryDescriptorById", "BadRequest-Decode",
 		), nil
@@ -154,7 +154,7 @@ func (s *AssetAdministrationShellRegistryOfRegistriesAPIAPIService) GetRegistryD
 
 // PutRegistryDescriptorById - Creates or updates an existing Registry Descriptor
 // nolint:revive // defined by standard
-func (s *AssetAdministrationShellRegistryOfRegistriesAPIAPIService) PutRegistryDescriptorById(ctx context.Context, registryIdentifier string, registryDescriptor model.RegistryDescriptor) (model.ImplResponse, error) {
+func (s *RegistryOfRegistriesAPIAPIService) PutRegistryDescriptorById(ctx context.Context, registryIdentifier string, registryDescriptor model.RegistryDescriptor) (model.ImplResponse, error) {
 	// Decode path AAS id
 	decodedRegistry, decErr := common.DecodeString(registryIdentifier)
 	if decErr != nil {
@@ -202,7 +202,7 @@ func (s *AssetAdministrationShellRegistryOfRegistriesAPIAPIService) PutRegistryD
 
 // DeleteRegistryDescriptorById - Deletes a Registry Descriptor, i.e. de-registers a Registry
 // nolint:revive // defined by standard
-func (s *AssetAdministrationShellRegistryOfRegistriesAPIAPIService) DeleteRegistryDescriptorById(ctx context.Context, registryIdentifier string) (model.ImplResponse, error) {
+func (s *RegistryOfRegistriesAPIAPIService) DeleteRegistryDescriptorById(ctx context.Context, registryIdentifier string) (model.ImplResponse, error) {
 
 	decoded, decodeErr := common.DecodeString(registryIdentifier)
 	if decodeErr != nil {

@@ -39,7 +39,7 @@ func InsertRegistryDescriptor(ctx context.Context, db *sql.DB, registryDescripto
 // The function inserts the base descriptor row first and then creates related
 // entities (display name/description/admin info/endpoints). If any step fails,
 // the error is returned and the caller is responsible for rolling back the transaction.
-func InsertRegistryDescriptorTx(_ context.Context, tx *sql.Tx, aasd model.RegistryDescriptor) error {
+func InsertRegistryDescriptorTx(_ context.Context, tx *sql.Tx, regdesc model.RegistryDescriptor) error {
 	d := goqu.Dialect(dialect)
 
 	descTbl := goqu.T(tblDescriptor)
@@ -58,13 +58,13 @@ func InsertRegistryDescriptorTx(_ context.Context, tx *sql.Tx, aasd model.Regist
 
 	var displayNameID, descriptionID, administrationID sql.NullInt64
 
-	dnID, err := persistence_utils.CreateLangStringNameTypes(tx, aasd.DisplayName)
+	dnID, err := persistence_utils.CreateLangStringNameTypes(tx, regdesc.DisplayName)
 	if err != nil {
 		return common.NewInternalServerError("Failed to create DisplayName - no changes applied - see console for details")
 	}
 	displayNameID = dnID
 	var convertedDescription []model.LangStringText
-	for _, desc := range aasd.Description {
+	for _, desc := range regdesc.Description {
 		convertedDescription = append(convertedDescription, desc)
 	}
 	descID, err := persistence_utils.CreateLangStringTextTypes(tx, convertedDescription)
@@ -73,7 +73,7 @@ func InsertRegistryDescriptorTx(_ context.Context, tx *sql.Tx, aasd model.Regist
 	}
 	descriptionID = descID
 
-	adminID, err := persistence_utils.CreateAdministrativeInformation(tx, aasd.Administration)
+	adminID, err := persistence_utils.CreateAdministrativeInformation(tx, regdesc.Administration)
 	if err != nil {
 		return common.NewInternalServerError("Failed to create Administration - no changes applied - see console for details")
 	}
@@ -86,11 +86,11 @@ func InsertRegistryDescriptorTx(_ context.Context, tx *sql.Tx, aasd model.Regist
 			colDescriptionID: descriptionID,
 			colDisplayNameID: displayNameID,
 			colAdminInfoID:   administrationID,
-			colRegistryType:  aasd.RegistryType,
-			colGlobalAssetID: aasd.GlobalAssetId,
-			colIDShort:       aasd.IdShort,
-			colAASID:         aasd.Id,
-			colCompany:       aasd.Company,
+			colRegistryType:  regdesc.RegistryType,
+			colGlobalAssetID: regdesc.GlobalAssetId,
+			colIDShort:       regdesc.IdShort,
+			colRegDescID:     regdesc.Id,
+			colCompany:       regdesc.Company,
 		}).
 		ToSQL()
 	if buildErr != nil {
@@ -100,7 +100,7 @@ func InsertRegistryDescriptorTx(_ context.Context, tx *sql.Tx, aasd model.Regist
 		return err
 	}
 
-	if err = CreateEndpoints(tx, descriptorID, aasd.Endpoints); err != nil {
+	if err = CreateEndpoints(tx, descriptorID, regdesc.Endpoints); err != nil {
 		return common.NewInternalServerError("Failed to create Endpoints - no changes applied - see console for details")
 	}
 
@@ -128,12 +128,12 @@ func GetRegistryDescriptorByID(
 			reg.Col(colGlobalAssetID),
 			reg.Col(colIDShort),
 			reg.Col(colCompany),
-			reg.Col(colAASID),
+			reg.Col(colRegDescID),
 			reg.Col(colAdminInfoID),
 			reg.Col(colDisplayNameID),
 			reg.Col(colDescriptionID),
 		).
-		Where(reg.Col(colAASID).Eq(registryIdentifier)).
+		Where(reg.Col(colRegDescID).Eq(registryIdentifier)).
 		Limit(1).
 		ToSQL()
 	if buildErr != nil {
@@ -213,9 +213,8 @@ func GetRegistryDescriptorByID(
 }
 
 // DeleteRegistryDescriptorByID deletes the descriptor for the
-// given Registry Id string. Deletion happens on the base descriptor row with ON
+// given Registry Descriptor Id string. Deletion happens on the base descriptor row with ON
 // DELETE CASCADE removing dependent rows.
-//
 // The delete runs in its own transaction.
 func DeleteRegistryDescriptorByID(ctx context.Context, db *sql.DB, registryIdentifier string) error {
 	return WithTx(ctx, db, func(tx *sql.Tx) error {
@@ -227,13 +226,13 @@ func DeleteRegistryDescriptorByID(ctx context.Context, db *sql.DB, registryIdent
 // transaction. It resolves the internal descriptor id and removes the base
 // descriptor row. Dependent rows are removed via ON DELETE CASCADE.
 func DeleteRegistryDescriptorByIDTx(ctx context.Context, tx *sql.Tx, registryIdentifier string) error {
-	d := goqu.Dialect("postqres")
-	reg := goqu.T("registry_descriptor").As("reg")
+	d := goqu.Dialect("postgres")
+	reg := goqu.T(tblRegistryDescriptor).As("reg")
 
 	sqlStr, args, buildErr := d.
 		From(reg).
 		Select(reg.Col(colDescriptorID)).
-		Where(reg.Col(colAASID).Eq(registryIdentifier)).
+		Where(reg.Col(colRegDescID).Eq(registryIdentifier)).
 		Limit(1).
 		ToSQL()
 	if buildErr != nil {
@@ -274,7 +273,7 @@ func ReplaceRegistryDescriptor(ctx context.Context, db *sql.DB, registryDescript
 		sqlStr, args, buildErr := d.
 			From(reg).
 			Select(reg.Col(colDescriptorID)).
-			Where(reg.Col(colAASID).Eq(registryDescriptor.Id)).
+			Where(reg.Col(colRegDescID).Eq(registryDescriptor.Id)).
 			Limit(1).
 			ToSQL()
 		if buildErr != nil {
@@ -322,7 +321,7 @@ func ListRegistryDescriptors(
 ) ([]model.RegistryDescriptor, string, error) {
 
 	if limit <= 0 {
-		limit = 1000000
+		limit = 100
 	}
 	peekLimit := int(limit) + 1
 
@@ -337,14 +336,14 @@ func ListRegistryDescriptors(
 			reg.Col(colGlobalAssetID),
 			reg.Col(colIDShort),
 			reg.Col(colCompany),
-			reg.Col(colAASID),
+			reg.Col(colRegDescID),
 			reg.Col(colAdminInfoID),
 			reg.Col(colDisplayNameID),
 			reg.Col(colDescriptionID),
 		)
 
 	if cursor != "" {
-		ds = ds.Where(reg.Col(colAASID).Gte(cursor))
+		ds = ds.Where(reg.Col(colRegDescID).Gte(cursor))
 	}
 
 	if registryType != "" {
@@ -356,7 +355,7 @@ func ListRegistryDescriptors(
 	}
 
 	ds = ds.
-		Order(reg.Col(colAASID).Asc()).
+		Order(reg.Col(colRegDescID).Asc()).
 		Limit(uint(peekLimit))
 
 	sqlStr, args, buildErr := ds.ToSQL()

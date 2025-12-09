@@ -28,7 +28,7 @@ type RegistryDescriptor struct {
 
 	Id string `json:"id" validate:"regexp=^([\\\\x09\\\\x0a\\\\x0d\\\\x20-\\\\ud7ff\\\\ue000-\\\\ufffd]|\\\\ud800[\\\\udc00-\\\\udfff]|[\\\\ud801-\\\\udbfe][\\\\udc00-\\\\udfff]|\\\\udbff[\\\\udc00-\\\\udfff])*$"`
 
-	Company string `json:"company,omitempty" validate:"regexp=^[A-Za-z0-9]*)$"`
+	Company string `json:"company,omitempty" validate:"regexp=^[A-Za-z0-9]*$"`
 }
 
 // AssertRegistryDescriptorRequired checks if the required fields are not zero-ed

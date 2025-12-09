@@ -11,13 +11,13 @@ import (
 
 // AssetAdministrationShellRegistryOfRegistrieAPIAPIRouter defines the required methods for binding the api requests to a responses for the AssetAdministrationShellRegistryOfRegistriesAPIAPI
 // The AssetAdministrationShellRegistryOfRegistrieAPIAPIRouter implementation should parse necessary information from the http request,
-// pass the data to a AssetAdministrationShellRegistryOfRegistriesAPIAPIServicer to perform the required actions, then write the service results to the http response.
-type AssetAdministrationShellRegistryOfRegistrieAPIAPIRouter interface {
+// pass the data to a RegistryOfRegistriesAPIAPIServicer to perform the required actions, then write the service results to the http response.
+type RegistryOfRegistrieAPIAPIRouter interface {
 	GetAllRegistryDescriptors(http.ResponseWriter, *http.Request)
 	PostRegistryDescriptor(http.ResponseWriter, *http.Request)
 	GetRegistryDescriptorById(http.ResponseWriter, *http.Request)
 	PutRegistryDescriptorById(http.ResponseWriter, *http.Request)
-	DeleteRegistryById(http.ResponseWriter, *http.Request)
+	DeleteRegistryDescriptorById(http.ResponseWriter, *http.Request)
 }
 
 // DescriptionAPIAPIRouter defines the required methods for binding the api requests to a responses for the DescriptionAPIAPI
@@ -27,11 +27,11 @@ type DescriptionAPIAPIRouter interface {
 	GetDescription(http.ResponseWriter, *http.Request)
 }
 
-// AssetAdministrationShellRegistryOfRegistriesAPIAPIServicer defines the api actions for the AssetAdministrationShellRegistryOfRegistriesAPIAPI service
+// RegistryOfRegistriesAPIAPIServicer defines the api actions for the AssetAdministrationShellRegistryOfRegistriesAPIAPI service
 // This interface intended to stay up to date with the openapi yaml used to generate it,
 // while the service implementation can be ignored with the .openapi-generator-ignore file
 // and updated with the logic required for the API.
-type AssetAdministrationShellRegistryOfRegistriesAPIAPIServicer interface {
+type RegistryOfRegistriesAPIAPIServicer interface {
 	GetAllRegistryDescriptors(context.Context, int32, string, string, string) (model.ImplResponse, error)
 	PostRegistryDescriptor(context.Context, model.RegistryDescriptor) (model.ImplResponse, error)
 	GetRegistryDescriptorById(context.Context, string) (model.ImplResponse, error)

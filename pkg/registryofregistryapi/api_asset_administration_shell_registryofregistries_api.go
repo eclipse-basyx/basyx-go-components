@@ -17,25 +17,25 @@ const (
 	componentName = "AASROR_VAL"
 )
 
-// AssetAdministrationShellRegistryOfRegistriesAPIAPIController binds http requests to an api service and writes the service results to the http response
-type AssetAdministrationShellRegistryOfRegistriesAPIAPIController struct {
-	service      AssetAdministrationShellRegistryOfRegistriesAPIAPIServicer
+// RegistryOfRegistriesAPIAPIController binds http requests to an api service and writes the service results to the http response
+type RegistryOfRegistriesAPIAPIController struct {
+	service      RegistryOfRegistriesAPIAPIServicer
 	errorHandler model.ErrorHandler
 }
 
-// AssetAdministrationShellRegistryOfRegistriesAPIAPIOption for how the controller is set up.
-type AssetAdministrationShellRegistryOfRegistriesAPIAPIOption func(*AssetAdministrationShellRegistryOfRegistriesAPIAPIController)
+// RegistryOfRegistriesAPIAPIOption for how the controller is set up.
+type RegistryOfRegistriesAPIAPIOption func(*RegistryOfRegistriesAPIAPIController)
 
-// WithAssetAdministrationShellRegistryOfRegistriesAPIAPIErrorHandler inject ErrorHandler into controller
-func WithAssetAdministrationShellRegistryOfRegistriesAPIAPIErrorHandler(h model.ErrorHandler) AssetAdministrationShellRegistryOfRegistriesAPIAPIOption {
-	return func(c *AssetAdministrationShellRegistryOfRegistriesAPIAPIController) {
+// WithRegistryOfRegistriesAPIAPIErrorHandler inject ErrorHandler into controller
+func WithRegistryOfRegistriesAPIAPIErrorHandler(h model.ErrorHandler) RegistryOfRegistriesAPIAPIOption {
+	return func(c *RegistryOfRegistriesAPIAPIController) {
 		c.errorHandler = h
 	}
 }
 
-// NewAssetAdministrationShellRegistryOfRegistriesAPIAPIController creates a default api controller
-func NewAssetAdministrationShellRegistryOfRegistriesAPIAPIController(s AssetAdministrationShellRegistryOfRegistriesAPIAPIServicer, opts ...AssetAdministrationShellRegistryOfRegistriesAPIAPIOption) *AssetAdministrationShellRegistryOfRegistriesAPIAPIController {
-	controller := &AssetAdministrationShellRegistryOfRegistriesAPIAPIController{
+// NewRegistryOfRegistriesAPIAPIController creates a default api controller
+func NewRegistryOfRegistriesAPIAPIController(s RegistryOfRegistriesAPIAPIServicer, opts ...RegistryOfRegistriesAPIAPIOption) *RegistryOfRegistriesAPIAPIController {
+	controller := &RegistryOfRegistriesAPIAPIController{
 		service:      s,
 		errorHandler: model.DefaultErrorHandler,
 	}
@@ -47,8 +47,8 @@ func NewAssetAdministrationShellRegistryOfRegistriesAPIAPIController(s AssetAdmi
 	return controller
 }
 
-// Routes returns all the api routes for the AssetAdministrationShellRegistryOfRegistriesAPIAPIController
-func (c *AssetAdministrationShellRegistryOfRegistriesAPIAPIController) Routes() Routes {
+// Routes returns all the api routes for the RegistryOfRegistriesAPIAPIController
+func (c *RegistryOfRegistriesAPIAPIController) Routes() Routes {
 	return Routes{
 		"GetAllRegistryDescriptors": Route{
 			strings.ToUpper("Get"),
@@ -79,7 +79,7 @@ func (c *AssetAdministrationShellRegistryOfRegistriesAPIAPIController) Routes() 
 }
 
 // GetAllRegistryDescriptors - Returns all Registry Descriptors
-func (c *AssetAdministrationShellRegistryOfRegistriesAPIAPIController) GetAllRegistryDescriptors(w http.ResponseWriter, r *http.Request) {
+func (c *RegistryOfRegistriesAPIAPIController) GetAllRegistryDescriptors(w http.ResponseWriter, r *http.Request) {
 	query, err := parseQuery(r.URL.RawQuery)
 	if err != nil {
 		log.Printf("📍 [%s] Error in GetAllRegistryDescriptors: parse query raw=%q: %v", componentName, r.URL.RawQuery, err)
@@ -137,7 +137,7 @@ func (c *AssetAdministrationShellRegistryOfRegistriesAPIAPIController) GetAllReg
 }
 
 // PostRegistryDescriptor - Creates a new Registry Descriptor, i.e. registers a registry
-func (c *AssetAdministrationShellRegistryOfRegistriesAPIAPIController) PostRegistryDescriptor(w http.ResponseWriter, r *http.Request) {
+func (c *RegistryOfRegistriesAPIAPIController) PostRegistryDescriptor(w http.ResponseWriter, r *http.Request) {
 	var registryDescriptorParam model.RegistryDescriptor
 	d := json.NewDecoder(r.Body)
 	d.DisallowUnknownFields()
@@ -188,7 +188,7 @@ func (c *AssetAdministrationShellRegistryOfRegistriesAPIAPIController) PostRegis
 }
 
 // GetRegistryDescriptorById - Returns a specific Registry Descriptor
-func (c *AssetAdministrationShellRegistryOfRegistriesAPIAPIController) GetRegistryDescriptorById(w http.ResponseWriter, r *http.Request) {
+func (c *RegistryOfRegistriesAPIAPIController) GetRegistryDescriptorById(w http.ResponseWriter, r *http.Request) {
 
 	registryIdentifierParam := chi.URLParam(r, "registryIdentifier")
 	if registryIdentifierParam == "" {
@@ -213,7 +213,7 @@ func (c *AssetAdministrationShellRegistryOfRegistriesAPIAPIController) GetRegist
 }
 
 // PutRegistryDescriptorById - Creates or updates an existing Registry Descriptor
-func (c *AssetAdministrationShellRegistryOfRegistriesAPIAPIController) PutRegistryDescriptorById(w http.ResponseWriter, r *http.Request) {
+func (c *RegistryOfRegistriesAPIAPIController) PutRegistryDescriptorById(w http.ResponseWriter, r *http.Request) {
 	registryIdentifierParam := chi.URLParam(r, "registryIdentifier")
 	if registryIdentifierParam == "" {
 		log.Printf("📍 [%s] Error in PutRegistryDescriptorById: missing path parameter registryIdentifier", componentName)
@@ -276,10 +276,10 @@ func (c *AssetAdministrationShellRegistryOfRegistriesAPIAPIController) PutRegist
 }
 
 // DeleteRegistryDescriptorById - Deletes a Registry Descriptor, i.e. de-registers a registry
-func (c *AssetAdministrationShellRegistryOfRegistriesAPIAPIController) DeleteRegistryDescriptorById(w http.ResponseWriter, r *http.Request) {
+func (c *RegistryOfRegistriesAPIAPIController) DeleteRegistryDescriptorById(w http.ResponseWriter, r *http.Request) {
 	registryIdentifierParam := chi.URLParam(r, "registryIdentifier")
 	if registryIdentifierParam == "" {
-		log.Printf("Reg [%s] Error in DeleteRegistryDescriptorById: missing path parameter registryIdentifier", componentName)
+		log.Printf("📍 [%s] Error in DeleteRegistryDescriptorById: missing path parameter registryIdentifier", componentName)
 		result := common.NewErrorResponse(
 			common.NewErrBadRequest("Missing path parameter 'registryIdentifier'"),
 			http.StatusBadRequest,

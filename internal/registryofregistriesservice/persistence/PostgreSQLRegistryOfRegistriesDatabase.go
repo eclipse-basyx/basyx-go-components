@@ -34,7 +34,6 @@ package registryofregistriespostgresql
 import (
 	"context"
 	"database/sql"
-	"fmt"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/descriptors"
@@ -72,7 +71,6 @@ type PostgreSQLRegistryOfRegistriesDatabase struct {
 // The function reads and executes RegistryOfRegistriesschema.sql from the current working directory's
 // resources/sql subdirectory to set up the required database tables.
 func NewPostgreSQLRegistryOfRegistriesBackend(dsn string, _ /* maxOpenConns */, _ /* maxIdleConns */ int, _ /* connMaxLifetimeMinutes */ int, cacheEnabled bool, databaseSchema string) (*PostgreSQLRegistryOfRegistriesDatabase, error) {
-	fmt.Println(dsn)
 	db, err := common.InitializeDatabase(dsn, databaseSchema)
 	if err != nil {
 		return nil, err
@@ -91,7 +89,7 @@ func (p *PostgreSQLRegistryOfRegistriesDatabase) InsertRegistryDescriptor(
 }
 
 // GetRegistryDescriptorByID returns the registry descriptor
-// identified by the given AAS ID.
+// identified by the given registry descriptor ID.
 func (p *PostgreSQLRegistryOfRegistriesDatabase) GetRegistryDescriptorByID(
 	ctx context.Context,
 	registryIdentifier string,
@@ -99,8 +97,8 @@ func (p *PostgreSQLRegistryOfRegistriesDatabase) GetRegistryDescriptorByID(
 	return descriptors.GetRegistryDescriptorByID(ctx, p.db, registryIdentifier)
 }
 
-// DeleteRegistryDescriptorByID deletes the registry AAS descriptor
-// identified by the given AAS ID.
+// DeleteRegistryDescriptorByID deletes the registry descriptor
+// identified by the given ID.
 func (p *PostgreSQLRegistryOfRegistriesDatabase) DeleteRegistryDescriptorByID(
 	ctx context.Context,
 	registryDescriptor string,

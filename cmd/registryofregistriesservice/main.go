@@ -1,4 +1,4 @@
-// Package main implements the Discovery Service server.
+// Package main implements the Registry of Registries Service server.
 package main
 
 import (
@@ -19,7 +19,7 @@ import (
 )
 
 func runServer(ctx context.Context, configPath string, databaseSchema string) error {
-	log.Default().Println("Loading Discovery Service...")
+	log.Default().Println("Loading Registry of Registries Service...")
 	log.Default().Println("Config Path:", configPath)
 
 	cfg, err := common.LoadConfig(configPath)
@@ -46,15 +46,15 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	log.Printf("🗄️  Connecting to Postgres with DSN: postgres://%s:****@%s:%d/%s?sslmode=disable",
 		cfg.Postgres.User, cfg.Postgres.Host, cfg.Postgres.Port, cfg.Postgres.DBName)
 
-	smDatabase, err := registryofregistriespostgresql.NewPostgreSQLRegistryOfRegistriesBackend("postgres://"+cfg.Postgres.User+":"+cfg.Postgres.Password+"@"+cfg.Postgres.Host+":"+strconv.Itoa(cfg.Postgres.Port)+"/"+cfg.Postgres.DBName+"?sslmode=disable", cfg.Postgres.MaxOpenConnections, cfg.Postgres.MaxIdleConnections, cfg.Postgres.ConnMaxLifetimeMinutes, cfg.Server.CacheEnabled, databaseSchema)
+	rorDatabase, err := registryofregistriespostgresql.NewPostgreSQLRegistryOfRegistriesBackend("postgres://"+cfg.Postgres.User+":"+cfg.Postgres.Password+"@"+cfg.Postgres.Host+":"+strconv.Itoa(cfg.Postgres.Port)+"/"+cfg.Postgres.DBName+"?sslmode=disable", cfg.Postgres.MaxOpenConnections, cfg.Postgres.MaxIdleConnections, cfg.Postgres.ConnMaxLifetimeMinutes, cfg.Server.CacheEnabled, databaseSchema)
 	if err != nil {
 		log.Printf("❌ DB connect failed: %v", err)
 		return err
 	}
 	log.Println("✅ Postgres connection established")
 
-	smSvc := api.NewAssetAdministrationShellRegistryOfRegistriesAPIAPIService(*smDatabase)
-	smCtrl := registryofregistriesapi.NewAssetAdministrationShellRegistryOfRegistriesAPIAPIController(smSvc)
+	rorSvc := api.NewRegistryOfRegistriesAPIAPIService(*rorDatabase)
+	rorCtrl := registryofregistriesapi.NewRegistryOfRegistriesAPIAPIController(rorSvc)
 
 	// === Description Service (public) ===
 	descSvc := registryofregistriesapi.NewDescriptionAPIAPIService()
@@ -65,12 +65,12 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	// === Protected API Subrouter ===
 	apiRouter := chi.NewRouter()
 
-	// Register all discovery routes (protected)
-	for _, rt := range smCtrl.Routes() {
+	// Register all registry of registries routes
+	for _, rt := range rorCtrl.Routes() {
 		apiRouter.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
 	}
 
-	// Register all description routes (protected)
+	// Register all description routes
 	for _, rt := range descCtrl.Routes() {
 		apiRouter.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
 	}
@@ -80,7 +80,7 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 
 	// === Start Server ===
 	addr := fmt.Sprintf("0.0.0.0:%d", cfg.Server.Port)
-	log.Printf("▶️ AAS Discovery listening on %s (contextPath=%q)\n", addr, cfg.Server.ContextPath)
+	log.Printf("▶️ Registry of Registries listening on %s (contextPath=%q)\n", addr, cfg.Server.ContextPath)
 
 	go func() {
 		if err := http.ListenAndServe(addr, r); err != http.ErrServerClosed {
