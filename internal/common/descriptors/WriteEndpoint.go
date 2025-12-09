@@ -75,6 +75,25 @@ func createEndpointProtocolVersion(tx *sql.Tx, endpointID int64, endpointProtoco
 	return err
 }
 
+// CreateEndpoints inserts a list of endpoints for a descriptor into the
+// database within the provided transaction. For each endpoint the base
+// endpoint row is inserted into the `tblAASDescriptorEndpoint` table and the
+// generated row id is used to insert related rows:
+//   - protocol version(s) via `createEndpointProtocolVersion`
+//   - security attributes via `createEndpointAttributes`
+//
+// The function is safe to call with a nil slice (no-op) and returns any
+// SQL/DB error encountered. The caller is responsible for managing the
+// surrounding transaction (commit/rollback).
+//
+// Parameters:
+//   - tx: active SQL transaction used for all inserts
+//   - descriptorID: internal descriptor id to associate endpoints with
+//   - endpoints: slice of model.Endpoint to persist; the order in the slice
+//     is stored in the `colPosition` column
+//
+// Returns:
+//   - error: non-nil if any insert or subsequent dependent write fails
 func CreateEndpoints(tx *sql.Tx, descriptorID int64, endpoints []model.Endpoint) error {
 	if endpoints == nil {
 		return nil
