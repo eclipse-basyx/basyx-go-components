@@ -539,6 +539,60 @@ CREATE TABLE IF NOT EXISTS submodel_embedded_data_specification (
   submodel_id       VARCHAR(2048) REFERENCES submodel(id) ON DELETE CASCADE,
   embedded_data_specification_id BIGSERIAL REFERENCES data_specification(id) ON DELETE CASCADE
 );
+
+------ AAS Repository Tables ------
+--aas repository specific tables and indexes can be added below-- 
+-- AAS DISPLAY NAME LINK TABLE
+CREATE TABLE IF NOT EXISTS aas_display_name_ref (
+    aas_id VARCHAR(2048) NOT NULL REFERENCES aas(id) ON DELETE CASCADE,
+    lang_string_name_type_reference_id BIGINT NOT NULL REFERENCES lang_string_name_type_reference(id) ON DELETE CASCADE,
+    PRIMARY KEY (aas_id, lang_string_name_type_reference_id)
+);
+-- AAS DESCRIPTION LINK TABLE
+CREATE TABLE IF NOT EXISTS aas_description_ref (
+    aas_id VARCHAR(2048) NOT NULL REFERENCES aas(id) ON DELETE CASCADE,
+    lang_string_text_type_reference_id BIGINT NOT NULL REFERENCES lang_string_text_type_reference(id) ON DELETE CASCADE,
+    PRIMARY KEY (aas_id, lang_string_text_type_reference_id)
+);
+
+CREATE TABLE IF NOT EXISTS asset_information (
+    id BIGSERIAL PRIMARY KEY,
+    asset_kind VARCHAR(64),
+    global_asset_id VARCHAR(2048),
+    asset_type VARCHAR(2048)
+);
+
+CREATE TABLE IF NOT EXISTS aas_specific_asset_id (
+    id BIGSERIAL PRIMARY KEY,
+    asset_information_id BIGINT NOT NULL REFERENCES asset_information(id) ON DELETE CASCADE,
+    name VARCHAR(256) NOT NULL,
+    value VARCHAR(1024) NOT NULL,
+    semantic_id BIGINT REFERENCES reference(id),
+    external_subject_id BIGINT REFERENCES reference(id)
+);
+
+
+CREATE TABLE IF NOT EXISTS resource (
+    id BIGSERIAL PRIMARY KEY,
+    path VARCHAR(2048) NOT NULL,
+    content_type VARCHAR(256)
+);
+
+CREATE TABLE IF NOT EXISTS asset_information_default_thumbnail (
+    asset_information_id BIGINT NOT NULL REFERENCES asset_information(id) ON DELETE CASCADE,
+    default_thumbnail_id BIGINT NOT NULL REFERENCES resource(id) ON DELETE CASCADE,
+    PRIMARY KEY (asset_information_id, default_thumbnail_id)
+);
+
+CREATE TABLE IF NOT EXISTS aas (
+    id           VARCHAR(2048) PRIMARY KEY,
+    id_short     VARCHAR(2048),
+    category     VARCHAR(2048),
+    model_type   VARCHAR(128) NOT NULL,
+    administration_id BIGINT REFERENCES administrative_information(id),
+    asset_information_id BIGINT REFERENCES asset_information(id),
+    derived_from_reference_id BIGINT REFERENCES reference(id)
+);
 -- ------------------------------------------
 -- Indexes
 -- ------------------------------------------
@@ -734,12 +788,3 @@ CREATE INDEX IF NOT EXISTS ix_smd_id_trgm                  ON submodel_descripto
 CREATE INDEX IF NOT EXISTS ix_smdss_descriptor_id          ON submodel_descriptor_supplemental_semantic_id(descriptor_id);
 CREATE INDEX IF NOT EXISTS ix_smdss_reference_id           ON submodel_descriptor_supplemental_semantic_id(reference_id);
 CREATE INDEX IF NOT EXISTS ix_smdss_pair                   ON submodel_descriptor_supplemental_semantic_id(descriptor_id, reference_id);
-
-
---aas repository specific tables and indexes can be added below-- 
-CREATE TABLE IF NOT EXISTS aas (
-    id           VARCHAR(2048) PRIMARY KEY,
-    id_short     VARCHAR(2048),
-    category     VARCHAR(2048),
-    model_type   VARCHAR(128) NOT NULL
-);
