@@ -74,7 +74,12 @@ func ParseAccessModel(b []byte, apiRouter *api.Mux) (*AccessModel, error) {
 	}, nil
 }
 
-type FragmentFilters map[string]grammar.LogicalExpression
+type FilterConditionParts struct {
+	mainPart     grammar.LogicalExpression
+	optionalPart grammar.LogicalExpression
+}
+
+type FragmentFilters map[string]FilterConditionParts
 
 // QueryFilter captures optional, fine-grained restrictions produced by a rule
 // even when ACCESS=ALLOW. Controllers can use it to restrict rows, constrain
@@ -112,7 +117,7 @@ func (m *AccessModel) AuthorizeWithFilter(in EvalInput) (bool, DecisionCode, *Qu
 
 	var ruleExprs []grammar.LogicalExpression
 	fragfilters := make(map[string][]grammar.LogicalExpression)
-	var noFilters []grammar.LogicalExpression
+	noFilters := make(map[string][]grammar.LogicalExpression)
 
 	for _, r := range m.rules {
 		acl, attrs, objs, lexpr := r.acl, r.attrs, r.objs, r.lexpr
@@ -176,8 +181,9 @@ func (m *AccessModel) AuthorizeWithFilter(in EvalInput) (bool, DecisionCode, *Qu
 
 			fragment := *r.filter.FRAGMENT
 			fragfilters[fragment] = append(fragfilters[fragment], filterCondRaw)
+			noFilters[fragment] = append(noFilters[fragment], adapted)
 		} else {
-			noFilters = append(noFilters, adapted)
+			noFilters["ignore"] = append(noFilters["ignore"], adapted)
 		}
 
 	}
@@ -205,17 +211,20 @@ func (m *AccessModel) AuthorizeWithFilter(in EvalInput) (bool, DecisionCode, *Qu
 	combinedFiltersMap := make(FragmentFilters, len(fragfilters))
 
 	for fragment, conds := range fragfilters {
-		expr := grammar.LogicalExpression{Or: conds}
-		for _, noFilter := range noFilters {
+		falseBool := false
+		expr := grammar.LogicalExpression{Boolean: &falseBool}
 
-			// Append noFilter into OR
-			expr = grammar.LogicalExpression{
-				Or: append(expr.Or, noFilter),
+		for fragment2, conds2 := range noFilters {
+			if fragment != fragment2 {
+				// Append noFilter into OR
+				expr = grammar.LogicalExpression{
+					Or: append(expr.Or, conds2...),
+				}
 			}
 		}
 		expr, _ = adaptLEForBackend(expr, in.Claims)
 
-		combinedFiltersMap[fragment] = expr
+		combinedFiltersMap[fragment] = FilterConditionParts{mainPart: grammar.LogicalExpression{Or: conds}, optionalPart: expr}
 
 	}
 	var qf *QueryFilter
@@ -229,4 +238,34 @@ func (m *AccessModel) AuthorizeWithFilter(in EvalInput) (bool, DecisionCode, *Qu
 		}
 	}
 	return true, DecisionAllow, qf
+}
+
+func (q *QueryFilter) GetFilterLE(key string, negateMainPart bool) (bool, grammar.LogicalExpression) {
+	filter, ok := q.Filters[key]
+	if ok {
+		var mainPart grammar.LogicalExpression
+		if negateMainPart {
+			mainPart = grammar.LogicalExpression{Not: &filter.mainPart}
+		} else {
+			mainPart = filter.mainPart
+		}
+		return true, grammar.LogicalExpression{Or: []grammar.LogicalExpression{mainPart, filter.optionalPart}}
+	}
+	falseBool := false
+	return ok, grammar.LogicalExpression{Boolean: &falseBool}
+}
+
+func (q *QueryFilter) ExistsLE(key string, negateMainPart bool) (bool, grammar.LogicalExpression) {
+	filter, ok := q.Filters[key]
+	if ok {
+		var mainPart grammar.LogicalExpression
+		if negateMainPart {
+			mainPart = grammar.LogicalExpression{Not: &filter.mainPart}
+		} else {
+			mainPart = filter.mainPart
+		}
+		return true, grammar.LogicalExpression{Or: []grammar.LogicalExpression{mainPart, filter.optionalPart}}
+	}
+	trueBool := true
+	return ok, grammar.LogicalExpression{Boolean: &trueBool}
 }

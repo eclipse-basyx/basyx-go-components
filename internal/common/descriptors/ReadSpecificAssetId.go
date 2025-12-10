@@ -89,31 +89,36 @@ func ReadSpecificAssetIDsByDescriptorIDs(
 
 	arr := pq.Array(descriptorIDs)
 
-	colNameStmt, err := getColumnSelectStatement(ctx, sai, colName)
+	expressions, err := getColumnSelectStatement(ctx, d, sai)
 	if err != nil {
 		return nil, err
 	}
-	ds := d.
-		From(sai).
-		Select(
-			sai.Col(colDescriptorID),
-			sai.Col(colID),
-			colNameStmt,
-			sai.Col(colValue),
-			sai.Col(colSemanticID),
-			sai.Col(colExternalSubjectRef),
-		).
+	base := withDescriptorJoins(
+		d.From(sai), sai,
+	).Select(
+		expressions[0],
+		expressions[1],
+		expressions[2],
+		expressions[3],
+		expressions[4],
+		expressions[5],
+	).
 		Where(goqu.L("specific_asset_id.descriptor_id = ANY(?::bigint[])", arr)).
+		GroupBy(
+			expressions[0], // descriptor_id
+			expressions[1], // id
+		).
 		Order(
+			sai.Col("id").Asc(),
 			sai.Col("position").Asc(),
 		)
 
-	ds, err = addSpecificAssetFilter(ctx, d, ds, sai)
+	base, err = addSpecificAssetFilter(ctx, d, base, sai)
 	if err != nil {
 		return nil, err
 	}
 
-	sqlStr, args, err := ds.ToSQL()
+	sqlStr, args, err := base.ToSQL()
 	fmt.Println(sqlStr)
 	if err != nil {
 		return nil, err

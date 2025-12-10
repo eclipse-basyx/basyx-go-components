@@ -20,15 +20,35 @@
     "DEFFORMULAS": [
       { "name": "always_true", "formula": { "$boolean": true } },
       { "name": "role_is_admin", "formula": { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "admin" } ] } },
-      { "name": "role_is_viewer", "formula": { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "viewer" } ] } }
+      { 
+        "name": "role_is_viewer_written_x", 
+        "formula": { 
+          "$and": 
+          [
+            { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "viewer" } ] },
+            {"$eq": [ {"$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value"}, {"$strVal": "WRITTEN_BY_X"}]}
+          ]
+        }
+      },
+      { 
+        "name": "role_is_viewer_written_y", 
+        "formula": { 
+          "$and": 
+          [
+            { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "viewer" } ] },
+            {"$eq": [ {"$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value"}, {"$strVal": "WRITTEN_BY_Y"}]}
+          ]
+        }
+      }
+       
     ],
 
     "rules": [
       { "USEACL": "read_anonymous", "USEOBJECTS": ["description"], "USEFORMULA": "always_true" },
       { "USEACL": "all_admin", "USEOBJECTS": ["all_shell_descriptors"], "USEFORMULA": "role_is_admin" },
-      { "USEACL": "user", "USEOBJECTS": ["all_shell_descriptors"], "USEFORMULA": "role_is_viewer",
+      { "USEACL": "user", "USEOBJECTS": ["all_shell_descriptors"], "USEFORMULA": "role_is_viewer_written_x",
         "FILTER": {
-          "FRAGMENT": "$aasdesc#specificAssetIds[].name",
+          "FRAGMENT": "$aasdesc#specificAssetIds[].value",
           "CONDITION": 
            {
             "$eq": [
@@ -36,7 +56,23 @@
                 "$field": "$aasdesc#specificAssetIds[].name"
               },
               {
-                "$strVal": "manufacturerPartId"
+                "$strVal": "customerPartId"
+              }
+            ]
+          }
+        }
+      },
+      { "USEACL": "user", "USEOBJECTS": ["all_shell_descriptors"], "USEFORMULA": "role_is_viewer_written_y",
+        "FILTER": {
+          "FRAGMENT": "$aasdesc#specificAssetIds[]",
+          "CONDITION": 
+           {
+            "$eq": [
+              {
+                "$field": "$aasdesc#specificAssetIds[].name"
+              },
+              {
+                "$strVal": "customerPartId"
               }
             ]
           }
