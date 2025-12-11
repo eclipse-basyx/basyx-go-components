@@ -104,8 +104,8 @@ func pagedResponse(results interface{}, nextCursor string) model.ImplResponse {
 		pm.Cursor = common.EncodeString(nextCursor)
 	}
 	res := struct {
-		PagingMetadata interface{}
-		Result         interface{}
+		PagingMetadata interface{} `json:"pagingMetadata"`
+		Result         interface{} `json:"result"`
 	}{
 		PagingMetadata: pm,
 		Result:         results,
