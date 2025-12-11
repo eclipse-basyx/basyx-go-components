@@ -98,18 +98,20 @@ func enforceAccessForSubmodel(ctx context.Context, operation string, smd model.S
 }
 
 // pagedResponse builds the common paged envelope used across list endpoints.
-func pagedResponse(results interface{}, nextCursor string) model.ImplResponse {
+func pagedResponse[T any](results T, nextCursor string) model.ImplResponse {
 	pm := model.PagedResultPagingMetadata{}
 	if nextCursor != "" {
 		pm.Cursor = common.EncodeString(nextCursor)
 	}
+
 	res := struct {
-		PagingMetadata interface{}
-		Result         interface{}
+		PagingMetadata model.PagedResultPagingMetadata `json:"pagingMetadata"`
+		Result         T                               `json:"result"`
 	}{
 		PagingMetadata: pm,
 		Result:         results,
 	}
+
 	return model.Response(http.StatusOK, res)
 }
 

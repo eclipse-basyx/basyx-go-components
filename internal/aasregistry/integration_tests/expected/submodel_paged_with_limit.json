@@ -1,8 +1,8 @@
 {
-    "PagingMetadata": {
+    "pagingMetadata": {
         "cursor": "dXJuOmV4YW1wbGU6c206MDAy"
     },
-    "Result": [
+    "result": [
         {
             "id": "https://iese.fraunhofer.de/ids/aas/asdb",
             "endpoints": [
