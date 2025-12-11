@@ -1,0 +1,34 @@
+{
+  "AllAccessPermissionRules": {
+    "rules": [
+      {
+        "ACL": {
+          "ACCESS": "ALLOW",
+          "RIGHTS": [
+            "READ"
+          ],
+          "ATTRIBUTES": [{"GLOBAL": "ANONYMOUS"}]
+        },
+        "OBJECTS": [
+          {
+            "ROUTE": "/shell-descriptors"
+          }
+        ],
+        "FORMULA": {
+          "$lt": [
+            {
+              "$numCast": {
+                "$attribute": {
+                  "CLAIM": "clear"
+                }
+              }
+            },
+            {
+              "$numVal": 1
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

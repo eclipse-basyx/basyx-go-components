@@ -543,6 +543,7 @@ CREATE TABLE IF NOT EXISTS submodel_embedded_data_specification (
   embedded_data_specification_id BIGSERIAL REFERENCES data_specification(id) ON DELETE CASCADE
 );
 
+<<<<<<< ours
 ------ AAS Repository Tables ------
 --aas repository specific tables and indexes can be added below-- 
 -- AAS DISPLAY NAME LINK TABLE
@@ -602,6 +603,8 @@ CREATE TABLE IF NOT EXISTS aas_extension (
     PRIMARY KEY (aas_id, extension_id)
     );
 
+=======
+>>>>>>> theirs
 CREATE TABLE IF NOT EXISTS registry_descriptor (
   descriptor_id BIGINT PRIMARY KEY REFERENCES descriptor(id) ON DELETE CASCADE,
   description_id BIGINT REFERENCES lang_string_text_type_reference(id),

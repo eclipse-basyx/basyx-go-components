@@ -1,0 +1,36 @@
+{
+  "AllAccessPermissionRules": {
+    "rules": [
+      {
+        "ACL": {
+          "ACCESS": "ALLOW",
+          "RIGHTS": ["READ"],
+          "ATTRIBUTES": [{"GLOBAL": "ANONYMOUS"}]
+        },
+        "OBJECTS": [{"ROUTE": "/shell-descriptors"}],
+        "FORMULA": {
+          "$and": [
+            {
+              "$eq": [
+                {"$attribute": {"GLOBAL": "UTCNOW"}},
+                {"$dateTimeCast": {"$strVal": "2025-01-01T00:00:00Z"}}
+              ]
+            },
+            {
+              "$eq": [
+                {"$attribute": {"GLOBAL": "LOCALNOW"}},
+                {"$dateTimeCast": {"$strVal": "2025-01-01T01:00:00+01:00"}}
+              ]
+            },
+            {
+              "$eq": [
+                {"$attribute": {"GLOBAL": "CLIENTNOW"}},
+                {"$dateTimeCast": {"$strVal": "2025-01-01T00:00:00Z"}}
+              ]
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

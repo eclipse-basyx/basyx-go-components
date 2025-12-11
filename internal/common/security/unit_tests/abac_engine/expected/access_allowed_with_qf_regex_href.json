@@ -1,0 +1,18 @@
+{
+  "ok": true,
+  "queryFilter": {
+    "Formula": {
+      "$regex": [
+        {
+          "$strCast": {
+            "$field": "$aasdesc#endpoints[].protocolinformation.href"
+          }
+        },
+        {
+          "$strVal": "customer.*https"
+        }
+      ]
+    }
+  },
+  "reason": "ALLOW"
+}

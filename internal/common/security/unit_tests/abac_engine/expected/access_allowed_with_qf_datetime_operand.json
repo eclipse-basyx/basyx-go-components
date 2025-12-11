@@ -1,0 +1,18 @@
+{
+  "ok": true,
+  "reason": "ALLOW",
+  "queryFilter": {
+    "Formula": {
+      "$gt": [
+        {
+          "$strVal": "2025-01-01T00:00:00Z"
+        },
+        {
+          "$dateTimeCast": {
+            "$strVal": "2024-12-31T23:00:00Z"
+          }
+        }
+      ]
+    }
+  }
+}

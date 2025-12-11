@@ -28,9 +28,10 @@
 package grammar
 
 import (
-	"encoding/json"
 	"fmt"
 	"regexp"
+
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 )
 
 // HexLiteralPattern represents a hexadecimal literal in the AAS grammar.
@@ -70,7 +71,7 @@ type HexLiteralPattern string
 func (j *HexLiteralPattern) UnmarshalJSON(value []byte) error {
 	type Plain HexLiteralPattern
 	var plain Plain
-	if err := json.Unmarshal(value, &plain); err != nil {
+	if err := common.UnmarshalAndDisallowUnknownFields(value, &plain); err != nil {
 		return err
 	}
 	if matched, _ := regexp.MatchString(`^16#[0-9A-F]+$`, string(plain)); !matched {

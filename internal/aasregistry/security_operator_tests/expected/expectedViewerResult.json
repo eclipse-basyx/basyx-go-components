@@ -1,0 +1,47 @@
+{
+   "PagingMetadata":{
+      
+   },
+   "Result":[
+      {
+         "idShort":"public",
+         "id":"urn:aas:demo:public",
+         "specificAssetIds":[
+            {
+               "name":"visibility",
+               "value":"public"
+            }
+         ]
+      },
+      {
+         "id": "urn:aas:regex-42",
+         "idShort": "regex",
+         "specificAssetIds": [
+            {
+               "name": "category",
+               "value": "regex"
+            }
+         ]
+      },
+      {
+         "id": "urn:aas:regimax-42",
+         "idShort": "regimax",
+         "specificAssetIds": [
+            {
+               "name": "category",
+               "value": "regimax"
+            }
+         ]
+      },
+      {
+         "id": "urn:aas:viewer-asset",
+         "idShort": "viewer",
+         "specificAssetIds": [
+            {
+               "name": "category",
+               "value": "view"
+            }
+         ]
+         }
+   ]
+}

@@ -1,0 +1,20 @@
+{
+  "AllAccessPermissionRules": {
+    "rules": [
+      {
+        "ACL": {
+          "ACCESS": "ALLOW",
+          "RIGHTS": ["READ"],
+          "ATTRIBUTES": [{"GLOBAL": "ANONYMOUS"}]
+        },
+        "OBJECTS": [{"ROUTE": "/shell-descriptors"}],
+        "FORMULA": {
+          "$gt": [
+            {"$dateTimeCast": {"$attribute": {"GLOBAL": "UTCNOW"}}},
+            {"$dateTimeCast": {"$strVal": "2024-12-31T23:00:00Z"}}
+          ]
+        }
+      }
+    ]
+  }
+}

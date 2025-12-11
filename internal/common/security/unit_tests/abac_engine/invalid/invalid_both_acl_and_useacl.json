@@ -1,0 +1,34 @@
+{
+  "AllAccessPermissionRules": {
+    "DEFACLS": [
+      {
+        "name": "default",
+        "acl": {
+          "ACCESS": "ALLOW",
+          "RIGHTS": [
+            "READ"
+          ]
+        }
+      }
+    ],
+    "rules": [
+      {
+        "ACL": {
+          "ACCESS": "ALLOW",
+          "RIGHTS": [
+            "READ"
+          ]
+        },
+        "USEACL": "default",
+        "OBJECTS": [
+          {
+            "ROUTE": "/*"
+          }
+        ],
+        "FORMULA": {
+          "$boolean": true
+        }
+      }
+    ]
+  }
+}

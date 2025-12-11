@@ -1,0 +1,43 @@
+{
+  "AllAccessPermissionRules": {
+    "DEFACLS": [
+      {
+        "name": "dup",
+        "acl": {
+          "ACCESS": "ALLOW",
+          "RIGHTS": [
+            "READ"
+          ]
+        }
+      },
+      {
+        "name": "dup",
+        "acl": {
+          "ACCESS": "ALLOW",
+          "RIGHTS": [
+            "UPDATE"
+          ]
+        }
+      }
+    ],
+    "DEFFORMULAS": [
+      {
+        "name": "f",
+        "formula": {
+          "$boolean": true
+        }
+      }
+    ],
+    "rules": [
+      {
+        "USEACL": "dup",
+        "USEFORMULA": "f",
+        "OBJECTS": [
+          {
+            "ROUTE": "/*"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,9 +1,35 @@
+/*******************************************************************************
+* Copyright (C) 2025 the Eclipse BaSyx Authors and Fraunhofer IESE
+*
+* Permission is hereby granted, free of charge, to any person obtaining
+* a copy of this software and associated documentation files (the
+* "Software"), to deal in the Software without restriction, including
+* without limitation the rights to use, copy, modify, merge, publish,
+* distribute, sublicense, and/or sell copies of the Software, and to
+* permit persons to whom the Software is furnished to do so, subject to
+* the following conditions:
+*
+* The above copyright notice and this permission notice shall be
+* included in all copies or substantial portions of the Software.
+*
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+* NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+* LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+* OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+* WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*
+* SPDX-License-Identifier: MIT
+******************************************************************************/
+// Author: Martin Stemmer ( Fraunhofer IESE )
+
 package descriptors
 
 import (
-    "context"
-    "database/sql"
-    "fmt"
+	"context"
+	"database/sql"
+	"fmt"
 
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/builder"
@@ -41,24 +67,24 @@ func GetReferencesByIDsBatch(db *sql.DB, ids []int64) (map[int64]*model.Referenc
 	arr := pq.Array(ids)
 
 	// --- 1) Load roots and their keys (LEFT JOIN to include roots without keys) ---
-    r := goqu.T(tblReference).As("r")
-    rk := goqu.T(tblReferenceKey).As("rk")
+	r := goqu.T(tblReference).As("r")
+	rk := goqu.T(tblReferenceKey).As("rk")
 
 	qRoots := d.
 		From(r).
-        Select(
-            r.Col(colID).As("root_id"),
-            r.Col(colType).As("root_type"),
-            rk.Col(colID).As("key_id"),
-            rk.Col(colType).As("key_type"),
-            rk.Col(colValue).As("key_value"),
-        ).
-        LeftJoin(
-            rk,
-            goqu.On(rk.Col(colReferenceID).Eq(r.Col(colID))),
-        ).
-        Where(goqu.L(fmt.Sprintf("r.%s = ANY(?::bigint[])", colID), arr)).
-        Order(r.Col(colID).Asc())
+		Select(
+			r.Col(colID).As("root_id"),
+			r.Col(colType).As("root_type"),
+			rk.Col(colID).As("key_id"),
+			rk.Col(colType).As("key_type"),
+			rk.Col(colValue).As("key_value"),
+		).
+		LeftJoin(
+			rk,
+			goqu.On(rk.Col(colReferenceID).Eq(r.Col(colID))),
+		).
+		Where(goqu.L(fmt.Sprintf("r.%s = ANY(?::bigint[])", colID), arr)).
+		Order(r.Col(colID).Asc())
 
 	sqlRoots, argsRoots, err := qRoots.ToSQL()
 	if err != nil {
@@ -113,34 +139,34 @@ func GetReferencesByIDsBatch(db *sql.DB, ids []int64) (map[int64]*model.Referenc
 		return map[int64]*model.Reference{}, nil
 	}
 
-    ref := goqu.T(tblReference).As("ref")
+	ref := goqu.T(tblReference).As("ref")
 
 	qDesc := d.
 		From(ref).
-        Select(
-            ref.Col(colID).As("id"),
-            ref.Col(colType).As("type"),
-            ref.Col(colParentReference).As(colParentReference),
-            ref.Col(colRootReference).As(colRootReference),
-            rk.Col(colID).As("key_id"),
-            rk.Col(colType).As("key_type"),
-            rk.Col(colValue).As("key_value"),
-        ).
-        LeftJoin(
-            rk,
-            goqu.On(rk.Col(colReferenceID).Eq(ref.Col(colID))),
-        ).
-        Where(
-            goqu.And(
-                goqu.L(fmt.Sprintf("ref.%s = ANY(?::bigint[])", colRootReference), arr),
-                ref.Col(colID).Neq(ref.Col(colRootReference)),
-            ),
-        ).
-        Order(
-            ref.Col(colRootReference).Asc(),
-            ref.Col(colParentReference).Asc(),
-            ref.Col(colID).Asc(),
-        )
+		Select(
+			ref.Col(colID).As("id"),
+			ref.Col(colType).As("type"),
+			ref.Col(colParentReference).As(colParentReference),
+			ref.Col(colRootReference).As(colRootReference),
+			rk.Col(colID).As("key_id"),
+			rk.Col(colType).As("key_type"),
+			rk.Col(colValue).As("key_value"),
+		).
+		LeftJoin(
+			rk,
+			goqu.On(rk.Col(colReferenceID).Eq(ref.Col(colID))),
+		).
+		Where(
+			goqu.And(
+				goqu.L(fmt.Sprintf("ref.%s = ANY(?::bigint[])", colRootReference), arr),
+				ref.Col(colID).Neq(ref.Col(colRootReference)),
+			),
+		).
+		Order(
+			ref.Col(colRootReference).Asc(),
+			ref.Col(colParentReference).Asc(),
+			ref.Col(colID).Asc(),
+		)
 
 	sqlDesc, argsDesc, err := qDesc.ToSQL()
 	if err != nil {

@@ -5,7 +5,7 @@ import json
 
 # --- Config ---
 URL = "http://localhost:5004/shell-descriptors"
-JSON_FILE = "bodies/complex.json"  # path to your file
+JSON_FILE = "bodies/medium.json"  # path to your file
 
 # --- Load JSON file ---
 with open(JSON_FILE, "r", encoding="utf-8") as f:

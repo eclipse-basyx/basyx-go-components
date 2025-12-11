@@ -22,22 +22,21 @@
 *
 * SPDX-License-Identifier: MIT
 ******************************************************************************/
-
-// Package auth provides ABAC (Attribute-Based Access Control) middleware and
-// helper utilities to enforce fine-grained authorization rules in BaSyx
-// services.
 // Author: Martin Stemmer ( Fraunhofer IESE )
+
 package auth
 
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
-	"time"
+	"os"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/discoveryapi"
+	jsoniter "github.com/json-iterator/go"
 )
 
 // ABACSettings defines the configuration used to enable and control
@@ -61,19 +60,6 @@ type Resource struct {
 	Type   string
 	Tenant string
 	Attrs  map[string]any
-}
-
-// Input bundles subject claims, action, and resource for ABAC evaluation.
-type Input struct {
-	Subject  Claims
-	Action   string
-	Resource Resource
-	Env      Env
-}
-
-// Env represents environmental authorization context (e.g., current UTC).
-type Env struct {
-	UTCNow time.Time
 }
 
 const (
@@ -107,10 +93,9 @@ func ABACMiddleware(settings ABACSettings) func(http.Handler) http.Handler {
 
 			if settings.Model != nil {
 				ok, reason, qf := settings.Model.AuthorizeWithFilter(EvalInput{
-					Method:    r.Method,
-					Path:      r.URL.Path,
-					Claims:    claims,
-					IssuedUTC: time.Now().UTC(),
+					Method: r.Method,
+					Path:   r.URL.Path,
+					Claims: claims,
 				})
 				if !ok {
 					log.Printf("❌ ABAC(model): %s", reason)
@@ -128,6 +113,7 @@ func ABACMiddleware(settings ABACSettings) func(http.Handler) http.Handler {
 				if qf != nil {
 					ctx = context.WithValue(ctx, filterKey, qf)
 				}
+
 				next.ServeHTTP(w, r.WithContext(ctx))
 				return
 			}
@@ -137,11 +123,15 @@ func ABACMiddleware(settings ABACSettings) func(http.Handler) http.Handler {
 	}
 }
 
-// FromFilter returns a QueryFilter previously stored in the request context.
-// It is used to enforce policy-induced restrictions on downstream queries.
-// TODO: use this helper in backend if you need further restriction
-func FromFilter(r *http.Request) *QueryFilter {
-	if v := r.Context().Value(filterKey); v != nil {
+// GetQueryFilter extracts a *QueryFilter from the provided context.
+// It returns nil if no QueryFilter is stored under the filterKey.
+//
+// This helper can be used from any point in the codebase where the
+// QueryFilter is needed. The returned filter may still require additional
+// processing (e.g., building the actual AASQL expression) depending on the
+// specific component using it.
+func GetQueryFilter(ctx context.Context) *QueryFilter {
+	if v := ctx.Value(filterKey); v != nil {
 		if f, ok := v.(*QueryFilter); ok {
 			return f
 		}
@@ -149,13 +139,23 @@ func FromFilter(r *http.Request) *QueryFilter {
 	return nil
 }
 
-// FromFilterCtx extracts a QueryFilter directly from a context instance.
-// TODO: use this helper in backend if you need further restriction
-func FromFilterCtx(ctx context.Context) *QueryFilter {
-	if v := ctx.Value(filterKey); v != nil {
-		if f, ok := v.(*QueryFilter); ok {
-			return f
-		}
+// FromFilterFromFile loads a QueryFilter from a JSON file.
+//
+// This function is intended for testing and development only.
+// It reads the JSON file at the given path and unmarshals it into a
+// *QueryFilter. If reading or unmarshaling fails, it returns a nil
+// QueryFilter along with the encountered error.
+func FromFilterFromFile(path string) (*QueryFilter, error) {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("read input file %q: %w", path, err)
 	}
-	return nil
+
+	var query *QueryFilter
+	json := jsoniter.ConfigCompatibleWithStandardLibrary
+	if err := json.Unmarshal(raw, &query); err != nil {
+		return nil, fmt.Errorf("unmarshal input file %q: %w", path, err)
+	}
+
+	return query, nil
 }

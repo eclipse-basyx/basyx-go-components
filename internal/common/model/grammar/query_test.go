@@ -93,7 +93,7 @@ func TestQueryWrapperUnmarshal_NestedAndOr(t *testing.T) {
 						"$or": [
 							{
 								"$gt": [
-									{"$field": "$sm#id"},
+									{"$numCast":{"$field": "$sm#id"}},
 									{"$numVal": 100}
 								]
 							},
@@ -161,37 +161,37 @@ func TestQueryWrapperUnmarshal_AllComparisonOperators(t *testing.T) {
 	}{
 		{
 			name:    "Equality",
-			json:    `{"Query": {"$condition": {"$eq": [{"$field": "$sm#id"}, {"$numVal": 1}]}}}`,
+			json:    `{"Query": {"$condition": {"$eq": [{"$numCast":{"$field": "$sm#id"}}, {"$numVal": 1}]}}}`,
 			checkOp: func(le *LogicalExpression) bool { return len(le.Eq) == 2 },
 			opName:  "$eq",
 		},
 		{
 			name:    "Not Equal",
-			json:    `{"Query": {"$condition": {"$ne": [{"$field": "$sm#id"}, {"$numVal": 1}]}}}`,
+			json:    `{"Query": {"$condition": {"$ne": [{"$numCast":{"$field": "$sm#id"}}, {"$numVal": 1}]}}}`,
 			checkOp: func(le *LogicalExpression) bool { return len(le.Ne) == 2 },
 			opName:  "$ne",
 		},
 		{
 			name:    "Greater Than",
-			json:    `{"Query": {"$condition": {"$gt": [{"$field": "$sm#id"}, {"$numVal": 1}]}}}`,
+			json:    `{"Query": {"$condition": {"$gt": [{"$numCast":{"$field": "$sm#id"}}, {"$numVal": 1}]}}}`,
 			checkOp: func(le *LogicalExpression) bool { return len(le.Gt) == 2 },
 			opName:  "$gt",
 		},
 		{
 			name:    "Greater or Equal",
-			json:    `{"Query": {"$condition": {"$ge": [{"$field": "$sm#id"}, {"$numVal": 1}]}}}`,
+			json:    `{"Query": {"$condition": {"$ge": [{"$numCast":{"$field": "$sm#id"}}, {"$numVal": 1}]}}}`,
 			checkOp: func(le *LogicalExpression) bool { return len(le.Ge) == 2 },
 			opName:  "$ge",
 		},
 		{
 			name:    "Less Than",
-			json:    `{"Query": {"$condition": {"$lt": [{"$field": "$sm#id"}, {"$numVal": 1}]}}}`,
+			json:    `{"Query": {"$condition": {"$lt": [{"$numCast":{"$field": "$sm#id"}}, {"$numVal": 1}]}}}`,
 			checkOp: func(le *LogicalExpression) bool { return len(le.Lt) == 2 },
 			opName:  "$lt",
 		},
 		{
 			name:    "Less or Equal",
-			json:    `{"Query": {"$condition": {"$le": [{"$field": "$sm#id"}, {"$numVal": 1}]}}}`,
+			json:    `{"Query": {"$condition": {"$le": [{"$numCast":{"$field": "$sm#id"}}, {"$numVal": 1}]}}}`,
 			checkOp: func(le *LogicalExpression) bool { return len(le.Le) == 2 },
 			opName:  "$le",
 		},
@@ -233,7 +233,7 @@ func TestQueryWrapperUnmarshal_DifferentValueTypes(t *testing.T) {
 		},
 		{
 			name: "Numeric Value",
-			json: `{"Query": {"$condition": {"$eq": [{"$field": "$sm#id"}, {"$numVal": 42}]}}}`,
+			json: `{"Query": {"$condition": {"$eq": [{"$numCast":{"$field": "$sm#id"}}, {"$numVal": 42}]}}}`,
 			checkVal: func(v *Value) bool {
 				return v.NumVal != nil && *v.NumVal == 42
 			},
@@ -241,7 +241,7 @@ func TestQueryWrapperUnmarshal_DifferentValueTypes(t *testing.T) {
 		},
 		{
 			name: "Float Value",
-			json: `{"Query": {"$condition": {"$eq": [{"$field": "$sm#id"}, {"$numVal": 3.14}]}}}`,
+			json: `{"Query": {"$condition": {"$eq": [{"$numCast":{"$field": "$sm#id"}}, {"$numVal": 3.14}]}}}`,
 			checkVal: func(v *Value) bool {
 				return v.NumVal != nil && *v.NumVal == 3.14
 			},
@@ -249,7 +249,7 @@ func TestQueryWrapperUnmarshal_DifferentValueTypes(t *testing.T) {
 		},
 		{
 			name: "Boolean Value",
-			json: `{"Query": {"$condition": {"$eq": [{"$field": "$sm#id"}, {"$boolean": true}]}}}`,
+			json: `{"Query": {"$condition": {"$eq": [{"$boolCast":{"$field": "$sm#id"}}, {"$boolean": true}]}}}`,
 			checkVal: func(v *Value) bool {
 				return v.Boolean != nil && *v.Boolean == true
 			},

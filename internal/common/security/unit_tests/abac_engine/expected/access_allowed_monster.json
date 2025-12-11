@@ -1,0 +1,177 @@
+{
+  "ok": true,
+  "queryFilter": {
+    "Filter": {
+      "CONDITION": {
+        "$or": [
+          {
+            "$match": [
+              {
+                "$eq": [
+                  {
+                    "$field": "$aasdesc#specificAssetIds[].name"
+                  },
+                  {
+                    "$strVal": "manufacturerPartId"
+                  }
+                ]
+              },
+              {
+                "$eq": [
+                  {
+                    "$field": "$aasdesc#specificAssetIds[].value"
+                  },
+                  {
+                    "$strVal": "99991"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "$match": [
+              {
+                "$eq": [
+                  {
+                    "$field": "$aasdesc#specificAssetIds[].name"
+                  },
+                  {
+                    "$strVal": "customerPartId"
+                  }
+                ]
+              },
+              {
+                "$eq": [
+                  {
+                    "$field": "$aasdesc#specificAssetIds[].value"
+                  },
+                  {
+                    "$strVal": "ACME001"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "$eq": [
+              {
+                "$field": "$aasdesc#specificAssetIds[].name"
+              },
+              {
+                "$strVal": "partInstanceId"
+              }
+            ]
+          },
+          {
+            "$eq": [
+              {
+                "$field": "$aasdesc#specificAssetIds[].externalSubjectId"
+              },
+              {
+                "$attribute": {
+                  "CLAIM": "BusinessPartnerNumber"
+                }
+              }
+            ]
+          },
+          {
+            "$eq": [
+              {
+                "$field": "$aasdesc#specificAssetIds[].externalSubjectId"
+              },
+              {
+                "$strVal": "PUBLIC_READABLE"
+              }
+            ]
+          }
+        ]
+      },
+      "FRAGMENT": "$aasdesc#assetInformation.specificAssetIds[]"
+    },
+    "Formula": {
+      "$and": [
+        {
+          "$and": [
+            {
+              "$eq": [
+                {
+                "$strCast": {
+                    "$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[3].value"
+                }
+                },
+                {
+                  "$strVal": "somevalue"
+                }
+              ]
+            },
+            {
+              "$eq": [
+                {
+                "$strCast": {
+                    "$field": "$aasdesc#endpoints[].protocolinformation.href"
+                }
+                },
+                {
+                  "$strVal": "https://test.de"
+                }
+              ]
+            },
+            {
+              "$eq": [
+                {
+                "$strCast": {
+                    "$field": "$aasdesc#submodelDescriptors[0].semanticId.type"
+                }
+                },
+                {
+                  "$strVal": "Type"
+                }
+              ]
+            },
+            {
+              "$eq": [
+                {
+                "$strCast": {
+                    "$field": "$aasdesc#submodelDescriptors[0].endpoints[].interface"
+                }
+                },
+                {
+                  "$strVal": "AC 3.0"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "$or": [
+            {
+              "$eq": [
+                {
+                "$strCast": {
+                    "$field": "$aasdesc#id"
+                }
+                },
+                {
+                  "$strVal": "https://hamburg.de"
+                }
+              ]
+            },
+            {
+              "$eq": [
+                {
+                "$strCast": {
+                    "$field": "$aasdesc#id"
+                }
+                },
+                {
+                  "$strVal": "https://bremen.de"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "reason": "ALLOW"
+}

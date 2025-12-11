@@ -1,0 +1,16 @@
+{
+  "AllAccessPermissionRules": {
+    "rules": [
+      {
+        "OBJECTS": [
+          {
+            "ROUTE": "/*"
+          }
+        ],
+        "FORMULA": {
+          "$boolean": true
+        }
+      }
+    ]
+  }
+}
