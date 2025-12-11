@@ -466,6 +466,7 @@ CREATE TABLE IF NOT EXISTS descriptor_extension (
 
 CREATE TABLE IF NOT EXISTS specific_asset_id (
   id BIGSERIAL PRIMARY KEY,
+  position     INTEGER NOT NULL,                -- <- Array-Index
   descriptor_id BIGINT NOT NULL REFERENCES descriptor(id) ON DELETE CASCADE,
   semantic_id BIGINT REFERENCES reference(id),
   name VARCHAR(64) NOT NULL,
@@ -482,6 +483,7 @@ CREATE TABLE IF NOT EXISTS specific_asset_id_supplemental_semantic_id (
 CREATE TABLE IF NOT EXISTS aas_descriptor_endpoint (
   id BIGSERIAL PRIMARY KEY,
   descriptor_id BIGINT NOT NULL REFERENCES descriptor(id) ON DELETE CASCADE,
+  position     INTEGER NOT NULL,                -- <- Array-Index
   href VARCHAR(2048) NOT NULL,
   endpoint_protocol VARCHAR(128),
   sub_protocol VARCHAR(128),
@@ -520,6 +522,7 @@ CREATE TABLE IF NOT EXISTS aas_descriptor (
 
 CREATE TABLE IF NOT EXISTS submodel_descriptor (
   descriptor_id BIGINT PRIMARY KEY REFERENCES descriptor(id) ON DELETE CASCADE,
+  position     INTEGER NOT NULL,                -- <- Array-Index
   aas_descriptor_id BIGINT REFERENCES aas_descriptor(descriptor_id) ON DELETE CASCADE,
   description_id BIGINT REFERENCES lang_string_text_type_reference(id) ON DELETE SET NULL,
   displayname_id BIGINT REFERENCES lang_string_name_type_reference(id) ON DELETE SET NULL,
@@ -571,7 +574,6 @@ CREATE TABLE IF NOT EXISTS aas_specific_asset_id (
     external_subject_id BIGINT REFERENCES reference(id)
 );
 
-
 CREATE TABLE IF NOT EXISTS resource (
     id BIGSERIAL PRIMARY KEY,
     path VARCHAR(2048) NOT NULL,
@@ -592,6 +594,24 @@ CREATE TABLE IF NOT EXISTS aas (
     administration_id BIGINT REFERENCES administrative_information(id),
     asset_information_id BIGINT REFERENCES asset_information(id),
     derived_from_reference_id BIGINT REFERENCES reference(id)
+);
+
+CREATE TABLE IF NOT EXISTS aas_extension (
+    aas_id VARCHAR(2048) NOT NULL REFERENCES aas(id) ON DELETE CASCADE,
+    extension_id BIGINT NOT NULL REFERENCES extension(id) ON DELETE CASCADE,
+    PRIMARY KEY (aas_id, extension_id)
+    );
+
+CREATE TABLE IF NOT EXISTS registry_descriptor (
+  descriptor_id BIGINT PRIMARY KEY REFERENCES descriptor(id) ON DELETE CASCADE,
+  description_id BIGINT REFERENCES lang_string_text_type_reference(id),
+  displayname_id BIGINT REFERENCES lang_string_name_type_reference(id),
+  administrative_information_id BIGINT REFERENCES administrative_information(id),
+  registry_type VARCHAR(2048),
+  global_asset_id VARCHAR(2048),
+  id_short VARCHAR(128),
+  id VARCHAR(2048) NOT NULL UNIQUE,
+  company VARCHAR(2048)
 );
 -- ------------------------------------------
 -- Indexes
@@ -621,7 +641,7 @@ CREATE INDEX IF NOT EXISTS ix_iec61360_value_list_id ON data_specification_iec61
 CREATE INDEX IF NOT EXISTS ix_iec61360_level_type_id ON data_specification_iec61360(level_type_id);
 CREATE INDEX IF NOT EXISTS ix_iec61360_data_type ON data_specification_iec61360(data_type);
 CREATE INDEX IF NOT EXISTS ix_ai_creator ON administrative_information(creator);
-CREATE INDEX IF NOT EXISTS ix_ai_templateid ON administrative_information(templateid);
+CREATE INDEX IF NOT EXISTS ix_ai_templateid ON administrative_information(templateId);
 CREATE INDEX IF NOT EXISTS ix_aieds_aiid ON administrative_information_embedded_data_specification(administrative_information_id);
 CREATE INDEX IF NOT EXISTS ix_aieds_edsid ON administrative_information_embedded_data_specification(embedded_data_specification_id);
 CREATE INDEX IF NOT EXISTS ix_ai_eds_id ON administrative_information_embedded_data_specification(id);
@@ -715,6 +735,8 @@ CREATE INDEX IF NOT EXISTS ix_dsiec_id ON data_specification_iec61360(id);
 CREATE INDEX IF NOT EXISTS ix_ref_root_id ON reference(rootreference, id);
 CREATE INDEX IF NOT EXISTS ix_ref_type ON reference(type);
 CREATE INDEX IF NOT EXISTS ix_refkey_refid ON reference_key(value);
+
+-- descriptor_extension: speed lookups by either side + pair-membership checks
 CREATE INDEX IF NOT EXISTS ix_descriptor_extension_descriptor_id ON descriptor_extension(descriptor_id);
 CREATE INDEX IF NOT EXISTS ix_descriptor_extension_extension_id  ON descriptor_extension(extension_id);
 CREATE INDEX IF NOT EXISTS ix_descriptor_extension_pair          ON descriptor_extension(descriptor_id, extension_id);
@@ -746,6 +768,8 @@ CREATE INDEX IF NOT EXISTS ix_aas_endpoint_href            ON aas_descriptor_end
 CREATE INDEX IF NOT EXISTS ix_aas_endpoint_href_trgm       ON aas_descriptor_endpoint USING GIN (href gin_trgm_ops);
 -- If sub_protocol_body is probed/filtered often (JSON-like/text), enable trigram as well
 CREATE INDEX IF NOT EXISTS ix_aas_endpoint_sp_body_trgm    ON aas_descriptor_endpoint USING GIN (sub_protocol_body gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS ix_aas_endpoint_descriptor_position ON aas_descriptor_endpoint(descriptor_id, position);
+CREATE INDEX IF NOT EXISTS ix_aas_endpoint_position ON aas_descriptor_endpoint(position);
 
 -- security_attributes
 CREATE INDEX IF NOT EXISTS ix_secattr_endpoint_id          ON security_attributes(endpoint_id);
@@ -783,8 +807,60 @@ CREATE INDEX IF NOT EXISTS ix_smd_description_id           ON submodel_descripto
 CREATE INDEX IF NOT EXISTS ix_smd_id_short                 ON submodel_descriptor(id_short);
 -- unique(id) already present; add trigram for partial/fuzzy
 CREATE INDEX IF NOT EXISTS ix_smd_id_trgm                  ON submodel_descriptor USING GIN (id gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS ix_smd_aas_descriptor_position  ON submodel_descriptor(aas_descriptor_id, position);
+CREATE INDEX IF NOT EXISTS ix_smd_position                  ON submodel_descriptor(position);
+CREATE INDEX IF NOT EXISTS ix_specific_asset_id_position   ON specific_asset_id(descriptor_id, position);
 
 -- submodel_descriptor_supplemental_semantic_id
 CREATE INDEX IF NOT EXISTS ix_smdss_descriptor_id          ON submodel_descriptor_supplemental_semantic_id(descriptor_id);
 CREATE INDEX IF NOT EXISTS ix_smdss_reference_id           ON submodel_descriptor_supplemental_semantic_id(reference_id);
 CREATE INDEX IF NOT EXISTS ix_smdss_pair                   ON submodel_descriptor_supplemental_semantic_id(descriptor_id, reference_id);
+
+-- ==========================================
+-- Registry descriptor
+-- ==========================================
+-- registry_descriptor: unique(id) already exists; add common filters
+CREATE INDEX IF NOT EXISTS ix_regd_admininfo_id            ON registry_descriptor(administrative_information_id);
+CREATE INDEX IF NOT EXISTS ix_regd_displayname_id          ON registry_descriptor(displayname_id);
+CREATE INDEX IF NOT EXISTS ix_regd_description_id          ON registry_descriptor(description_id);
+
+CREATE INDEX IF NOT EXISTS ix_regd_id_short                ON registry_descriptor(id_short);
+CREATE INDEX IF NOT EXISTS ix_regd_global_asset_id         ON registry_descriptor(global_asset_id);
+CREATE INDEX IF NOT EXISTS ix_regd_registry_type           ON registry_descriptor(registry_type);
+CREATE INDEX IF NOT EXISTS ix_regd_company                 ON registry_descriptor(company);
+-- Useful for partial and fuzzy searches on long IDs/GRIDs
+CREATE INDEX IF NOT EXISTS ix_regd_id_trgm                 ON registry_descriptor USING GIN (id gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS ix_regd_global_asset_id_trgm    ON registry_descriptor USING GIN (global_asset_id gin_trgm_ops);
+
+-- ==========================================
+-- Trigger functions for cascading deletion
+-- ==========================================
+-- Trigger function to clean up orphaned records when a registry_descriptor is deleted
+CREATE OR REPLACE FUNCTION cleanup_registry_descriptor()
+RETURNS TRIGGER AS $$
+BEGIN
+    -- Delete the administrative_information record if it exists
+    IF OLD.administrative_information_id IS NOT NULL THEN
+        DELETE FROM administrative_information WHERE id = OLD.administrative_information_id;
+    END IF;
+    
+    -- Delete the description_id lang_string_text_type_reference if it exists
+    IF OLD.description_id IS NOT NULL THEN
+        DELETE FROM lang_string_text_type_reference WHERE id = OLD.description_id;
+    END IF;
+    
+    -- Delete the displayname_id lang_string_name_type_reference if it exists
+    IF OLD.displayname_id IS NOT NULL THEN
+        DELETE FROM lang_string_name_type_reference WHERE id = OLD.displayname_id;
+    END IF;
+    
+    RETURN OLD;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Create trigger to execute cleanup function after registry_descriptor deletion
+DROP TRIGGER IF EXISTS trigger_cleanup_registry_descriptor ON registry_descriptor;
+CREATE TRIGGER trigger_cleanup_registry_descriptor
+    AFTER DELETE ON registry_descriptor
+    FOR EACH ROW
+    EXECUTE FUNCTION cleanup_registry_descriptor();
