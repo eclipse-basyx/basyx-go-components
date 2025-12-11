@@ -1,0 +1,54 @@
+services:
+  registry-of-registries:
+    container_name: registry-of-registries
+    image: eclipsebasyx/registryofregistries-go:SNAPSHOT
+    ports:
+      - 5080:5080
+    environment:
+      - SERVER_PORT=5080
+      - POSTGRES_HOST=db
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=admin123
+      - POSTGRES_DBNAME=basyxRoRDB
+      - POSTGRES_MAXOPENCONNECTIONS=500
+      - POSTGRES_MAXIDLECONNECTIONS=500
+      - POSTGRES_CONNMAXLIFETIMEMINUTES=5
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--output-document=-", "http://localhost:5080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # PostgreSQL database
+  db:
+    container_name: postgres_db
+    image: postgres:15
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin123
+      POSTGRES_DB: basyxRoRDB
+    ports:
+      - "5432:5432"
+    command: ["postgres", "-c", "listen_addresses=*"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d basyxRoRDB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Data initialization service
+  data-init:
+    container_name: ror-data-init
+    image: curlimages/curl:latest
+    volumes:
+      - ./startup.sh:/startup.sh:ro
+    entrypoint: ["/bin/sh", "/startup.sh"]
+    network_mode: "host"
+    depends_on:
+      registry-of-registries:
+        condition: service_healthy

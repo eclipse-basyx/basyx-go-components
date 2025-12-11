@@ -55,6 +55,7 @@ const (
 	tblLangStringNameType             = "lang_string_name_type"
 	tblReference                      = "reference"
 	tblReferenceKey                   = "reference_key"
+	tblRegistryDescriptor             = "registry_descriptor"
 )
 
 // Columns holds the column names used by descriptor queries. Centralizing the
@@ -73,6 +74,7 @@ const (
 	colGlobalAssetID           = "global_asset_id"
 	colIDShort                 = "id_short"
 	colAASID                   = "id"
+	colRegDescID               = "id"
 	colHref                    = "href"
 	colEndpointProtocol        = "endpoint_protocol"
 	colSubProtocol             = "sub_protocol"
@@ -102,6 +104,9 @@ const (
 	colValueDatetime = "value_datetime"
 
 	colExtensionID = "extension_id"
+
+	colRegistryType = "registry_type"
+	colCompany      = "company"
 
 	// Generic/common column names used in descriptor queries
 	colType            = "type"

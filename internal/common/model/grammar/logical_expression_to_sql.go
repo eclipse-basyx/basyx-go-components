@@ -361,14 +361,10 @@ func HandleComparison(leftOperand, rightOperand *Value, operation string) (exp.E
 		return nil, err
 	}
 
-	// Validate value-to-value comparisons have matching types
-	if !leftOperand.IsField() && !rightOperand.IsField() {
-		lType := effectiveTypeWithCast(leftOperand)
-		rType := effectiveTypeWithCast(rightOperand)
-		if lType != "" && rType != "" && lType != rType {
-			return nil, fmt.Errorf("cannot compare different value types: %s and %s",
-				lType, rType)
-		}
+	// has to be compatible
+	_, err = leftOperand.IsComparableTo(*rightOperand)
+	if err != nil {
+		return nil, err
 	}
 
 	// Build the comparison expression
@@ -686,30 +682,6 @@ func buildComparisonExpression(left interface{}, right interface{}, operation st
 		return exp.NewLiteralExpression("? <= ?", left, right), nil
 	default:
 		return nil, fmt.Errorf("unsupported comparison operation: %s", operation)
-	}
-}
-
-// effectiveTypeWithCast prefers the target type of an explicit cast over the raw EffectiveType.
-// This keeps type validation in sync with the SQL that will actually be generated.
-func effectiveTypeWithCast(v *Value) string {
-	if v == nil {
-		return ""
-	}
-	switch {
-	case v.NumCast != nil:
-		return "number"
-	case v.BoolCast != nil:
-		return "bool"
-	case v.TimeCast != nil:
-		return "time"
-	case v.DateTimeCast != nil:
-		return "datetime"
-	case v.HexCast != nil:
-		return "hex"
-	case v.StrCast != nil:
-		return "string"
-	default:
-		return v.EffectiveType()
 	}
 }
 

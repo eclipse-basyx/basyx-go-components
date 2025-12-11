@@ -12,19 +12,19 @@
           "$and": [
             {
               "$starts-with": [
-                {"$attribute": {"GLOBAL": "UTCNOW"}},
+                {"$strCast": {"$attribute": {"GLOBAL": "UTCNOW"}}},
                 {"$strVal": "2025-01-01"}
               ]
             },
             {
               "$regex": [
-                {"$attribute": {"GLOBAL": "UTCNOW"}},
+                {"$strCast": {"$attribute": {"GLOBAL": "UTCNOW"}}},
                 {"$strVal": "^2025-01-01T00"}
               ]
             },
             {
               "$contains": [
-                {"$attribute": {"GLOBAL": "UTCNOW"}},
+                {"$strCast": {"$attribute": {"GLOBAL": "UTCNOW"}}},
                 {"$strVal": "2025-01-01"}
               ]
             },
