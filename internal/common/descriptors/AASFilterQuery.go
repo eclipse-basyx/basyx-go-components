@@ -31,13 +31,14 @@ import (
 
 	"github.com/doug-martin/goqu/v9"
 	"github.com/doug-martin/goqu/v9/exp"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 )
 
 func getFilterQueryFromContext(ctx context.Context, d goqu.DialectWrapper, ds *goqu.SelectDataset, tableCol exp.AliasedExpression) (*goqu.SelectDataset, error) {
 
 	p := auth.GetQueryFilter(ctx)
-	if p != nil {
+	if p != nil && p.Formula != nil {
 
 		wc, err := p.Formula.EvaluateToExpression()
 		if err != nil {
@@ -74,4 +75,124 @@ func getFilterQueryFromContext(ctx context.Context, d goqu.DialectWrapper, ds *g
 		)
 	}
 	return ds, nil
+}
+
+// addSpecificAssetFilter applies ABAC filtering on SpecificAssetID rows by
+// attaching the policy condition directly to the already-joined main dataset.
+func addSpecificAssetFilter(
+	ctx context.Context,
+	d goqu.DialectWrapper,
+	ds *goqu.SelectDataset,
+	sai exp.AliasedExpression,
+) (*goqu.SelectDataset, error) {
+	p := auth.GetQueryFilter(ctx)
+	if p == nil {
+		return ds, nil
+	}
+
+	ok, filter := p.GetFilterLE("$aasdesc#specificAssetIds[]", false)
+
+	if !ok {
+		return ds, nil
+	}
+
+	wc, err := filter.EvaluateToExpression()
+	if err != nil {
+		return nil, err
+	}
+
+	// 🔑 All required tables (descriptor, aas_descriptor, specific_asset_id_a, references, etc.)
+	// are already joined onto `ds` via withDescriptorJoins(...).
+	// So we can simply add the WHERE condition here instead of doing EXISTS with
+	// another full join tree.
+	ds = ds.Where(wc)
+
+	return ds, nil
+}
+
+func getColumnSelectStatement(ctx context.Context, d goqu.DialectWrapper, sai exp.AliasedExpression) ([]exp.Expression, error) {
+
+	defaultReturn := []exp.Expression{
+		sai.Col(colDescriptorID),
+		sai.Col(colID),
+		sai.Col(colName).As(colName),
+		sai.Col(colValue).As(colValue),
+		sai.Col(colSemanticID).As(colSemanticID),
+		sai.Col(colExternalSubjectRef).As(colExternalSubjectRef),
+	}
+	p := auth.GetQueryFilter(ctx)
+	if p == nil {
+		return defaultReturn, nil
+	}
+	ok1, filter1 := p.ExistsLE("$aasdesc#specificAssetIds[].name", true)
+	ok2, filter2 := p.ExistsLE("$aasdesc#specificAssetIds[].value", true)
+
+	if !ok1 && !ok2 {
+		return defaultReturn, nil
+	}
+	filter := grammar.LogicalExpression{And: []grammar.LogicalExpression{filter1, filter2}}
+	wcALL, err := filter.EvaluateToExpression()
+	if err != nil {
+		return nil, err
+	}
+	wc1, err := filter1.EvaluateToExpression()
+	if err != nil {
+		return nil, err
+	}
+	wc2, err := filter2.EvaluateToExpression()
+	if err != nil {
+		return nil, err
+	}
+
+	expressions := []exp.Expression{
+		sai.Col(colDescriptorID),
+		sai.Col(colID),
+		goqu.MAX(CaseWhenColumn(wc2, sai, colName)).As(colName),
+		goqu.MAX(CaseWhenColumn(wc1, sai, colValue)).As(colValue),
+		goqu.MAX(CaseWhenColumn(wcALL, sai, colSemanticID)).As(colSemanticID),
+		goqu.MAX(CaseWhenColumn(wcALL, sai, colExternalSubjectRef)).As(colExternalSubjectRef),
+	}
+
+	return expressions, nil
+
+}
+
+func CaseWhenColumn(wc exp.Expression, sai exp.AliasedExpression, col string) exp.CaseExpression {
+	return goqu.Case().
+		When(
+			wc,
+			sai.Col(col),
+		).
+		Else(nil)
+}
+
+// 1) helper that adds the shared joins
+func withDescriptorJoins(ds *goqu.SelectDataset, sai exp.AliasedExpression) *goqu.SelectDataset {
+	return ds.
+		LeftJoin(goqu.T(tblDescriptor).As("descriptor"),
+			goqu.On(
+				goqu.I("descriptor.id").Eq(goqu.I("specific_asset_id.descriptor_id")),
+			)).
+		LeftJoin(goqu.T(tblAASDescriptor).As("aas_descriptor"),
+			goqu.On(goqu.I("aas_descriptor.descriptor_id").Eq(goqu.I("descriptor.id")))).
+		LeftJoin(goqu.T(tblSpecificAssetID).As("specific_asset_id_a"),
+			goqu.On(
+				goqu.I("specific_asset_id_a.descriptor_id").Eq(goqu.I("descriptor.id")),
+				goqu.I("specific_asset_id_a.id").Eq(sai.Col(colID)),
+			)).
+		LeftJoin(goqu.T(tblReference).As("external_subject_reference"),
+			goqu.On(goqu.I("external_subject_reference.id").Eq(goqu.I("specific_asset_id_a.external_subject_ref")))).
+		LeftJoin(goqu.T(tblReferenceKey).As("external_subject_reference_key"),
+			goqu.On(goqu.I("external_subject_reference_key.reference_id").Eq(goqu.I("external_subject_reference.id")))).
+		LeftJoin(goqu.T(tblAASDescriptorEndpoint).As("aas_descriptor_endpoint"),
+			goqu.On(goqu.I("aas_descriptor_endpoint.descriptor_id").Eq(goqu.I("descriptor.id")))).
+		LeftJoin(goqu.T(tblSubmodelDescriptor).As("submodel_descriptor"),
+			goqu.On(goqu.I("submodel_descriptor.aas_descriptor_id").Eq(goqu.I("aas_descriptor.descriptor_id")))).
+		LeftJoin(goqu.T(tblAASDescriptorEndpoint).As("submodel_descriptor_endpoint"),
+			goqu.On(goqu.I("submodel_descriptor_endpoint.descriptor_id").Eq(goqu.I("submodel_descriptor.descriptor_id")))).
+		LeftJoin(goqu.T(tblReference).As("aasdesc_submodel_descriptor_semantic_id_reference"),
+			goqu.On(goqu.I("aasdesc_submodel_descriptor_semantic_id_reference.id").Eq(goqu.I("submodel_descriptor.semantic_id")))).
+		LeftJoin(goqu.T(tblReferenceKey).As("aasdesc_submodel_descriptor_semantic_id_reference_key"),
+			goqu.On(goqu.I("aasdesc_submodel_descriptor_semantic_id_reference_key.reference_id").
+				Eq(goqu.I("aasdesc_submodel_descriptor_semantic_id_reference.id"))))
 }

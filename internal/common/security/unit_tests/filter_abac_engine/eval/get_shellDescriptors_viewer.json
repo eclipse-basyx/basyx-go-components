@@ -1,0 +1,8 @@
+{
+  "method": "GET",
+  "path": "/shell-descriptors",
+  "claims": {
+    "role": "viewer"
+  },
+  "issued_utc": "2025-11-12T14:00:00Z"
+}

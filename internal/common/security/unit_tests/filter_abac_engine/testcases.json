@@ -1,0 +1,7 @@
+[
+  {
+    "input": "input/simple.json",
+    "expected": "expected/access_allowed.json",
+    "eval": "eval/get_shellDescriptors_viewer.json"
+  }
+]
