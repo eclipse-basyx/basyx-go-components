@@ -1,0 +1,218 @@
+services:
+  aas-registry:
+    container_name: aas-registry
+    image: eclipsebasyx/aasregistry-go:SNAPSHOT
+    ports:
+      - 8082:8080
+    environment:
+      - SERVER_PORT=8080
+      - POSTGRES_HOST=db
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=admin123
+      - POSTGRES_DBNAME=basyxTestDB
+      - POSTGRES_MAXOPENCONNECTIONS=500
+      - POSTGRES_MAXIDLECONNECTIONS=500
+      - POSTGRES_CONNMAXLIFETIMEMINUTES=5
+      - OIDC_ISSUER=http://localhost:8080/realms/basyx
+      - OIDC_AUDIENCE=discovery-service
+      - ABAC_ENABLED=true
+      - ENABLE_DEBUG_ERROR_RESPONSES=false
+      - ABAC_MODELPATH=/config/access_rules/access-rules.json
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--output-document=-", "http://localhost:8082/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    depends_on:
+      db:
+        condition: service_healthy
+      keycloak-healthcheck:
+        condition: service_completed_successfully
+    volumes:
+      - ./access_rules:/config/access_rules
+    extra_hosts:
+      - "localhost:host-gateway"
+    
+  sm-registry:
+    container_name: sm-registry
+    image: eclipsebasyx/submodel-registry-log-mem:2.0.0-SNAPSHOT
+    ports:
+      - 8083:8080
+    volumes:
+      - ./basyx/sm-registry.yml:/workspace/config/application.yml
+    extra_hosts:
+      - "localhost:host-gateway"
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--output-document=-", "http://localhost:8083/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  aas-discovery:
+    container_name: aas-discovery
+    image: eclipsebasyx/aasdiscovery-go:SNAPSHOT
+    environment:
+      - SERVER_PORT=8081
+      - POSTGRES_HOST=db
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=admin123
+      - POSTGRES_DBNAME=basyxTestDB
+      - POSTGRES_MAXOPENCONNECTIONS=500
+      - POSTGRES_MAXIDLECONNECTIONS=500
+      - POSTGRES_CONNMAXLIFETIMEMINUTES=5
+      - OIDC_ISSUER=http://localhost:8080/realms/basyx
+      - OIDC_AUDIENCE=discovery-service
+      - ABAC_ENABLED=true
+      - ENABLE_DEBUG_ERROR_RESPONSES=false
+      - ABAC_MODELPATH=/config/access_rules/access-rules.json
+    ports:
+      - "8084:8081"
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--output-document=-", "http://localhost:8084/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    depends_on:
+      db:
+        condition: service_healthy
+      keycloak-healthcheck:
+        condition: service_completed_successfully
+    volumes:
+      - ./access_rules:/config/access_rules
+    extra_hosts:
+      - "localhost:host-gateway"
+
+  keycloak:
+    image: keycloak/keycloak:26.0.6
+    container_name: keycloak
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://db:5432/basyxTestDB
+      KC_DB_USERNAME: admin
+      KC_DB_PASSWORD: admin123
+      KC_HOSTNAME: localhost
+      KC_HOSTNAME_PORT: "8080"
+      KC_HOSTNAME_URL: "http://localhost:8080"
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_HTTP_ENABLED: "true"
+      KC_HTTPS_ENABLED: "false"
+      KC_HEALTH_ENABLED: "true"
+      KC_HOSTNAME_STRICT: "false"
+      KC_HOSTNAME_STRICT_BACKCHANNEL: "false"
+      KC_IMPORT: /opt/keycloak/data/import/
+      KC_HTTP_MANAGEMENT_ENABLED: "true"
+    command: ["start-dev", "--import-realm", "--health-enabled=true"]
+    ports:
+      - 8080:8080
+    volumes:
+      - ./keycloak/realm:/opt/keycloak/data/import
+
+  keycloak-healthcheck:
+    image: curlimages/curl:latest
+    container_name: keycloak-healthcheck
+    command: >
+      sh -c "
+        echo 'Waiting for Keycloak to become ready...';
+        until curl -sf http://keycloak:9000/health/ready; do
+          sleep 5;
+        done;
+        echo 'Keycloak is ready!'"
+    depends_on:
+      - keycloak
+
+      
+  aas-ui:
+    container_name: aas-web-ui
+    image: eclipsebasyx/aas-gui:v2-251211
+    ports:
+      - "3000:3000"
+    environment:
+      AAS_REGISTRY_PATH: "http://localhost:8082/shell-descriptors"
+      SUBMODEL_REGISTRY_PATH: "http://localhost:8083/submodel-descriptors"
+      AAS_DISCOVERY_PATH: "http://localhost:8084/lookup/shells"
+      AAS_REPO_PATH: "http://localhost:8081/shells"
+      SUBMODEL_REPO_PATH: "http://localhost:8081/submodels"
+      CD_REPO_PATH: "http://localhost:8081/concept-descriptions"
+    restart: always
+
+  # PostgreSQL database
+  db:
+    container_name: postgres_db
+    image: postgres:15
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin123
+      POSTGRES_DB: basyxTestDB
+    ports:
+      - "5432:5432"
+    command: ["postgres", "-c", "listen_addresses=*"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d basyxTestDB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  aas-environment:
+    image: eclipsebasyx/aas-environment:2.0.0-SNAPSHOT
+    container_name: secured-aas-env
+    extra_hosts:
+      - "localhost:host-gateway"
+    volumes:
+      - ./aas:/application/aas
+      - ./access_rules/aas-env-rules.json:/application/rbac_rules.json
+    ports:
+      - '8081:8081'
+    restart: unless-stopped
+    environment:
+      # Component configuration
+      SERVER_PORT: 8081
+      BASYX_BACKEND: InMemory
+      BASYX_CORS_ALLOWED_ORIGINS: '*'
+      BASYX_CORS_ALLOWED_METHODS: 'GET,POST,PUT,PATCH,DELETE,OPTIONS,HEAD'
+      BASYX_ENVIRONMENT: file:aas
+      BASYX_AASREPOSITORY_FEATURE_DISCOVERYINTEGRATION: http://localhost:8084
+      BASYX_AASREPOSITORY_FEATURE_REGISTRYINTEGRATION: http://localhost:8082
+      BASYX_SUBMODELREPOSITORY_FEATURE_REGISTRYINTEGRATION: http://localhost:8083
+      BASYX_EXTERNALURL: http://localhost:8081
+      SPRING_SERVLET_MULTIPART_MAX_FILE_SIZE: 1024MB
+      SPRING_SERVLET_MULTIPART_MAX_REQUEST_SIZE: 1024MB
+      # Security configuration
+      BASYX_FEATURE_AUTHORIZATION_ENABLED: true
+      BASYX_FEATURE_AUTHORIZATION_TYPE: rbac
+      BASYX_FEATURE_AUTHORIZATION_JWTBEARERTOKENPROVIDER: keycloak
+      BASYX_FEATURE_AUTHORIZATION_RBAC_FILE: file:/application/rbac_rules.json
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: http://localhost:8080/realms/basyx
+      BASYX_AASENVIRONMENT_AUTHORIZATION_PRECONFIGURATION_TOKEN_ENDPOINT: http://localhost:8080/realms/basyx/protocol/openid-connect/token
+      BASYX_AASENVIRONMENT_AUTHORIZATION_PRECONFIGURATION_GRANT_TYPE: CLIENT_CREDENTIALS
+      BASYX_AASENVIRONMENT_AUTHORIZATION_PRECONFIGURATION_CLIENT_ID: aas-env
+      BASYX_AASENVIRONMENT_AUTHORIZATION_PRECONFIGURATION_CLIENT_SECRET: gqj6bXy7uBx0F97mXzy4vOsnD1frqYcB
+      BASYX_AASREPOSITORY_FEATURE_DISCOVERYINTEGRATION_AUTHORIZATION_ENABLED: true
+      BASYX_AASREPOSITORY_FEATURE_DISCOVERYINTEGRATION_AUTHORIZATION_TOKEN_ENDPOINT: http://localhost:8080/realms/basyx/protocol/openid-connect/token
+      BASYX_AASREPOSITORY_FEATURE_DISCOVERYINTEGRATION_AUTHORIZATION_GRANT_TYPE: CLIENT_CREDENTIALS
+      BASYX_AASREPOSITORY_FEATURE_DISCOVERYINTEGRATION_AUTHORIZATION_CLIENT_ID: aas-env
+      BASYX_AASREPOSITORY_FEATURE_DISCOVERYINTEGRATION_AUTHORIZATION_CLIENT_SECRET: gqj6bXy7uBx0F97mXzy4vOsnD1frqYcB
+      BASYX_AASREPOSITORY_FEATURE_REGISTRYINTEGRATION_AUTHORIZATION_ENABLED: true
+      BASYX_AASREPOSITORY_FEATURE_REGISTRYINTEGRATION_AUTHORIZATION_TOKEN_ENDPOINT: http://localhost:8080/realms/basyx/protocol/openid-connect/token
+      BASYX_AASREPOSITORY_FEATURE_REGISTRYINTEGRATION_AUTHORIZATION_GRANT_TYPE: CLIENT_CREDENTIALS
+      BASYX_AASREPOSITORY_FEATURE_REGISTRYINTEGRATION_AUTHORIZATION_CLIENT_ID: aas-env
+      BASYX_AASREPOSITORY_FEATURE_REGISTRYINTEGRATION_AUTHORIZATION_CLIENT_SECRET: gqj6bXy7uBx0F97mXzy4vOsnD1frqYcB
+      BASYX_SUBMODELREPOSITORY_FEATURE_REGISTRYINTEGRATION_AUTHORIZATION_ENABLED: true
+      BASYX_SUBMODELREPOSITORY_FEATURE_REGISTRYINTEGRATION_AUTHORIZATION_TOKEN_ENDPOINT: http://localhost:8080/realms/basyx/protocol/openid-connect/token
+      BASYX_SUBMODELREPOSITORY_FEATURE_REGISTRYINTEGRATION_AUTHORIZATION_GRANT_TYPE: CLIENT_CREDENTIALS
+      BASYX_SUBMODELREPOSITORY_FEATURE_REGISTRYINTEGRATION_AUTHORIZATION_CLIENT_ID: aas-env
+      BASYX_SUBMODELREPOSITORY_FEATURE_REGISTRYINTEGRATION_AUTHORIZATION_CLIENT_SECRET: gqj6bXy7uBx0F97mXzy4vOsnD1frqYcB
+    depends_on:
+      aas-discovery:
+        condition: service_healthy
+      aas-registry:
+        condition: service_healthy
+      sm-registry:
+        condition: service_healthy
+      keycloak-healthcheck:
+        condition: service_completed_successfully

@@ -13,8 +13,6 @@ package apis
 
 import (
 	"context"
-	"errors"
-	"net/http"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
@@ -44,5 +42,9 @@ func (s *DescriptionAPIAPIService) GetSelfDescription(ctx context.Context) (mode
 	// TODO: Uncomment the next line to return response Response(0, Result{}) or use other options such as http.Ok ...
 	// return Response(0, Result{}), nil
 
-	return model.Response(http.StatusNotImplemented, nil), errors.New("GetSelfDescription method not implemented")
+	return model.Response(200, model.ServiceDescription{
+		Profiles: []string{
+			"https://admin-shell.io/aas/API/3/1/AssetAdministrationShellRegistryServiceSpecification/SSP-001",
+		},
+	}), nil
 }
