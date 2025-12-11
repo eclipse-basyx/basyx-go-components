@@ -75,8 +75,8 @@ func ParseAccessModel(b []byte, apiRouter *api.Mux) (*AccessModel, error) {
 }
 
 type FilterConditionParts struct {
-	mainPart     grammar.LogicalExpression
-	optionalPart grammar.LogicalExpression
+	MainPart     grammar.LogicalExpression `json:"mainPart,omitempty" yaml:"mainPart,omitempty" mapstructure:"mainPart,omitempty"`
+	OptionalPart grammar.LogicalExpression `json:"optionalPart,omitempty" yaml:"optionalPart,omitempty" mapstructure:"optionalPart,omitempty"`
 }
 
 type FragmentFilters map[string]FilterConditionParts
@@ -224,7 +224,7 @@ func (m *AccessModel) AuthorizeWithFilter(in EvalInput) (bool, DecisionCode, *Qu
 		}
 		expr, _ = adaptLEForBackend(expr, in.Claims)
 
-		combinedFiltersMap[fragment] = FilterConditionParts{mainPart: grammar.LogicalExpression{Or: conds}, optionalPart: expr}
+		combinedFiltersMap[fragment] = FilterConditionParts{MainPart: grammar.LogicalExpression{Or: conds}, OptionalPart: expr}
 
 	}
 	var qf *QueryFilter
@@ -245,11 +245,11 @@ func (q *QueryFilter) GetFilterLE(key string, negateMainPart bool) (bool, gramma
 	if ok {
 		var mainPart grammar.LogicalExpression
 		if negateMainPart {
-			mainPart = grammar.LogicalExpression{Not: &filter.mainPart}
+			mainPart = grammar.LogicalExpression{Not: &filter.MainPart}
 		} else {
-			mainPart = filter.mainPart
+			mainPart = filter.MainPart
 		}
-		return true, grammar.LogicalExpression{Or: []grammar.LogicalExpression{mainPart, filter.optionalPart}}
+		return true, grammar.LogicalExpression{Or: []grammar.LogicalExpression{mainPart, filter.OptionalPart}}
 	}
 	falseBool := false
 	return ok, grammar.LogicalExpression{Boolean: &falseBool}
@@ -260,11 +260,11 @@ func (q *QueryFilter) ExistsLE(key string, negateMainPart bool) (bool, grammar.L
 	if ok {
 		var mainPart grammar.LogicalExpression
 		if negateMainPart {
-			mainPart = grammar.LogicalExpression{Not: &filter.mainPart}
+			mainPart = grammar.LogicalExpression{Not: &filter.MainPart}
 		} else {
-			mainPart = filter.mainPart
+			mainPart = filter.MainPart
 		}
-		return true, grammar.LogicalExpression{Or: []grammar.LogicalExpression{mainPart, filter.optionalPart}}
+		return true, grammar.LogicalExpression{Or: []grammar.LogicalExpression{mainPart, filter.OptionalPart}}
 	}
 	trueBool := true
 	return ok, grammar.LogicalExpression{Boolean: &trueBool}

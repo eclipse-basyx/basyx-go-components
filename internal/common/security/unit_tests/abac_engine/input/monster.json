@@ -61,20 +61,6 @@
               ]
             }
           ]
-        },
-        "FILTER": {
-          "FRAGMENT": "$aasdesc#assetInformation.specificAssetIds[]",
-          "CONDITION": 
-           {
-            "$eq": [
-              {
-                "$field": "$aasdesc#specificAssetIds[].name"
-              },
-              {
-                "$strVal": "manufacturerPartId"
-              }
-            ]
-          }
         }
       }
     ]

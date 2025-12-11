@@ -1,0 +1,124 @@
+ {
+  "ok": true,
+  "queryFilter": {
+    "Filters": {
+      "$aasdesc#specificAssetIds[]": {
+        "mainPart": {
+          "$or": [
+            {
+              "$and": [
+                {
+                  "$eq": [
+                    {
+                      "$field": "$aasdesc#specificAssetIds[].name"
+                    },
+                    {
+                      "$strVal": "manufacturPartId"
+                    }
+                  ]
+                },
+                {
+                  "$eq": [
+                    {
+                      "$strCast": {
+                        "$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value"
+                      }
+                    },
+                    {
+                      "$strVal": "WRITTEN_BY_X"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "optionalPart": {
+          "$eq": [
+            {
+              "$strCast": {
+                "$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value"
+              }
+            },
+            {
+              "$strVal": "WRITTEN_BY_Y"
+            }
+          ]
+        }
+      },
+      "$aasdesc#specificAssetIds[].name": {
+        "mainPart": {
+          "$or": [
+            {
+              "$and": [
+                {
+                  "$eq": [
+                    {
+                      "$field": "$aasdesc#specificAssetIds[].name"
+                    },
+                    {
+                      "$strVal": "customerPartId"
+                    }
+                  ]
+                },
+                {
+                  "$eq": [
+                    {
+                      "$strCast": {
+                        "$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value"
+                      }
+                    },
+                    {
+                      "$strVal": "WRITTEN_BY_Y"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "optionalPart": {
+          "$eq": [
+            {
+              "$strCast": {
+                "$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value"
+              }
+            },
+            {
+              "$strVal": "WRITTEN_BY_X"
+            }
+          ]
+        }
+      }
+    },
+    "Formula": {
+      "$or": [
+        {
+          "$eq": [
+            {
+              "$strCast": {
+                "$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value"
+              }
+            },
+            {
+              "$strVal": "WRITTEN_BY_X"
+            }
+          ]
+        },
+        {
+          "$eq": [
+            {
+              "$strCast": {
+                "$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value"
+              }
+            },
+            {
+              "$strVal": "WRITTEN_BY_Y"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "reason": "ALLOW"
+}
