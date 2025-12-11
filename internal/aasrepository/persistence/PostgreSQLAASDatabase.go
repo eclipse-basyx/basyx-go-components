@@ -36,6 +36,7 @@ package persistencepostgresql
 import (
 	"database/sql"
 	"errors"
+	"log"
 
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
@@ -93,7 +94,11 @@ func (p *PostgreSQLAASDatabase) GetAllAAS() ([]model.AssetAdministrationShell, e
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() {
+		if err := rows.Close(); err != nil {
+			log.Printf("failed to close rows: %v", err)
+		}
+	}()
 
 	var result []model.AssetAdministrationShell
 
@@ -605,7 +610,7 @@ func (p *PostgreSQLAASDatabase) GetAASByID(id string) (*model.AssetAdministratio
 	shell.Submodels = []model.Reference{}
 	// shell.DerivedFrom = nil
 	// shell.Administration = model.AdministrativeInformation{}
-	//shell.AssetInformation = &model.AssetInformation{}
+	// shell.AssetInformation = &model.AssetInformation{}
 
 	return &shell, nil
 }
@@ -629,7 +634,11 @@ func (p *PostgreSQLAASDatabase) fetchDescription(aasID string) ([]model.LangStri
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() {
+		if err := rows.Close(); err != nil {
+			log.Printf("failed to close rows: %v", err)
+		}
+	}()
 
 	var refIDs []int64
 	for rows.Next() {
@@ -664,12 +673,16 @@ func (p *PostgreSQLAASDatabase) fetchDescription(aasID string) ([]model.LangStri
 		for textRows.Next() {
 			var d model.LangStringTextType
 			if err := textRows.Scan(&d.Language, &d.Text); err != nil {
-				textRows.Close()
+				if err := textRows.Close(); err != nil {
+					log.Printf("error: %v", err)
+				}
 				return nil, err
 			}
 			descriptions = append(descriptions, d)
 		}
-		textRows.Close()
+		if err := textRows.Close(); err != nil {
+			log.Printf("error: %v", err)
+		}
 	}
 
 	return descriptions, nil
@@ -692,7 +705,11 @@ func (p *PostgreSQLAASDatabase) fetchDisplayName(aasID string) ([]model.LangStri
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() {
+		if err := rows.Close(); err != nil {
+			log.Printf("Error: %v", err)
+		}
+	}()
 
 	var refIDs []int64
 	for rows.Next() {
@@ -729,12 +746,16 @@ func (p *PostgreSQLAASDatabase) fetchDisplayName(aasID string) ([]model.LangStri
 		for lnRows.Next() {
 			var ln model.LangStringNameType
 			if err := lnRows.Scan(&ln.Language, &ln.Text); err != nil {
-				lnRows.Close()
+				if err := lnRows.Close(); err != nil {
+					log.Printf("failed to close rows: %v", err)
+				}
 				return nil, err
 			}
 			displayNames = append(displayNames, ln)
 		}
-		lnRows.Close()
+		if err := lnRows.Close(); err != nil {
+			log.Printf("failed to close rows: %v", err)
+		}
 	}
 
 	return displayNames, nil
@@ -788,15 +809,24 @@ func (p *PostgreSQLAASDatabase) fetchAssetInformation(id int64) (model.AssetInfo
 	if err != nil {
 		return ai, err
 	}
-	defer rows.Close()
+	defer func() {
+		if err := rows.Close(); err != nil {
+			log.Printf("Error: %v", err)
+		}
+	}()
 
 	for rows.Next() {
 		var name, value string
-		rows.Scan(&name, &value)
+		if err := rows.Scan(&name, &value); err != nil {
+			return ai, err
+		}
 		ai.SpecificAssetIds = append(ai.SpecificAssetIds, model.SpecificAssetID{
 			Name:  name,
 			Value: value,
 		})
+	}
+	if err := rows.Err(); err != nil {
+		return ai, err
 	}
 
 	// --- Load Thumbnail ---
@@ -893,7 +923,11 @@ func (p *PostgreSQLAASDatabase) fetchReference(id int64) (*model.Reference, erro
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() {
+		if err := rows.Close(); err != nil {
+			log.Printf("error: %v", err)
+		}
+	}()
 
 	for rows.Next() {
 		var pos int
