@@ -300,47 +300,5 @@
         "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9Pbmx5RmlsZVN1Ym1vZGVsX1Rlc3Q/submodel-elements",
         "shouldMatch": "expected/expectedSubmodelElements.json",
         "expectedStatus": 200
-    },
-    {
-        "context": "Get All Submodels ValueOnly",
-        "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/$value",
-        "shouldMatch": "expected/expectedAllSubmodelsValueOnly.json",
-        "expectedStatus": 200
-    },
-    {
-        "context": "Get Heavy Submodel ValueOnly",
-        "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQUhlYXZ5U3VibW9kZWw/$value",
-        "shouldMatch": "expected/expectedHeavySubmodelValueOnly.json",
-        "expectedStatus": 200
-    },
-    {
-        "context": "Get Minimal Administration Submodel ValueOnly",
-        "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU1pbmltYWxBZG1pbmlzdHJhdGlvblN1Ym1vZGVs/$value",
-        "shouldMatch": "expected/expectedMinimalAdministrationSubmodelValueOnly.json",
-        "expectedStatus": 200
-    },
-    {
-        "context": "Get All Submodel Elements ValueOnly - Heavy Submodel",
-        "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQUhlYXZ5U3VibW9kZWw/submodel-elements/$value",
-        "shouldMatch": "expected/expectedHeavySubmodelElementsValueOnly.json",
-        "expectedStatus": 200
-    },
-    {
-        "context": "Get ManufacturerName Property ValueOnly",
-        "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQUhlYXZ5U3VibW9kZWw/submodel-elements/ManufacturerName/$value",
-        "shouldMatch": "expected/expectedManufacturerNameValueOnly.json",
-        "expectedStatus": 200
-    },
-    {
-        "context": "Get ProductSerialNumber Collection ValueOnly",
-        "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQUhlYXZ5U3VibW9kZWw/submodel-elements/ProductSerialNumber/$value",
-        "shouldMatch": "expected/expectedProductSerialNumberValueOnly.json",
-        "expectedStatus": 200
     }
 ]

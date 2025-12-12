@@ -9,8 +9,6 @@
 
 package model
 
-import "fmt"
-
 // Range  type of Range
 type Range struct {
 	Extensions []Extension `json:"extensions,omitempty"`
@@ -98,8 +96,8 @@ func (a Range) GetEmbeddedDataSpecifications() []EmbeddedDataSpecification {
 // Setters
 //
 //nolint:all
-func (a *Range) SetModelType(modelType string) {
-	a.ModelType = modelType
+func (p *Range) SetModelType(modelType string) {
+	p.ModelType = modelType
 }
 
 //nolint:all
@@ -234,40 +232,6 @@ func AssertRangeConstraints(obj Range) error {
 	for _, el := range obj.EmbeddedDataSpecifications {
 		if err := AssertEmbeddedDataSpecificationConstraints(el); err != nil {
 			return err
-		}
-	}
-	return nil
-}
-
-// ToValueOnly converts the Range to its value-only representation.
-// Returns {"min": string, "max": string} object, or nil if both bounds are empty.
-func (a *Range) ToValueOnly() interface{} {
-	if a.Min == "" && a.Max == "" {
-		return nil
-	}
-	return map[string]interface{}{
-		"min": a.Min,
-		"max": a.Max,
-	}
-}
-
-// UpdateFromValueOnly updates the Range from a value-only representation.
-// Expects a map with optional "min" and "max" string fields.
-// Returns an error if the value is not a map.
-func (a *Range) UpdateFromValueOnly(value interface{}) error {
-	rangeMap, ok := value.(map[string]interface{})
-	if !ok {
-		return fmt.Errorf("invalid value type for Range: expected map, got %T", value)
-	}
-
-	if minVal, exists := rangeMap["min"]; exists {
-		if minStr, ok := minVal.(string); ok {
-			a.Min = minStr
-		}
-	}
-	if maxVal, exists := rangeMap["max"]; exists {
-		if maxStr, ok := maxVal.(string); ok {
-			a.Max = maxStr
 		}
 	}
 	return nil

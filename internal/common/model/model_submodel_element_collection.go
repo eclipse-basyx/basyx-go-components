@@ -44,14 +44,14 @@ type SubmodelElementCollection struct {
 }
 
 // UnmarshalJSON implements custom JSON unmarshaling for SubmodelElementCollection
-func (a *SubmodelElementCollection) UnmarshalJSON(data []byte) error {
+func (sec *SubmodelElementCollection) UnmarshalJSON(data []byte) error {
 	// Create a temporary struct with the same fields but Value as []json.RawMessage
 	type Alias SubmodelElementCollection
 	aux := &struct {
 		Value []json.RawMessage `json:"value,omitempty"`
 		*Alias
 	}{
-		Alias: (*Alias)(a),
+		Alias: (*Alias)(sec),
 	}
 
 	// Unmarshal into the temporary struct
@@ -62,13 +62,13 @@ func (a *SubmodelElementCollection) UnmarshalJSON(data []byte) error {
 
 	// Now process the Value field manually
 	if aux.Value != nil {
-		a.Value = make([]SubmodelElement, len(aux.Value))
+		sec.Value = make([]SubmodelElement, len(aux.Value))
 		for i, rawElement := range aux.Value {
 			element, err := UnmarshalSubmodelElement(rawElement)
 			if err != nil {
 				return fmt.Errorf("failed to unmarshal element at index %d: %w", i, err)
 			}
-			a.Value[i] = element
+			sec.Value[i] = element
 		}
 	}
 
@@ -272,52 +272,5 @@ func AssertSubmodelElementCollectionConstraints(obj SubmodelElementCollection) e
 	// 		return err
 	// 	}
 	// } TODO: REDO IF NECESSARY
-	return nil
-}
-
-// ToValueOnly converts the SubmodelElementCollection to its Value Only representation.
-// Returns a map where keys are idShort values and values are the value-only representations
-// of the child elements. Returns nil if the collection has no elements.
-//
-// Parameters:
-//   - elementSerializer: function to convert child SubmodelElements to value-only form
-//
-// Example output:
-//
-//	{
-//	  "element1": "value1",
-//	  "element2": {...},
-//	  ...
-//	}
-func (a *SubmodelElementCollection) ToValueOnly(elementSerializer func([]SubmodelElement) interface{}) interface{} {
-	if len(a.Value) == 0 {
-		return map[string]interface{}{}
-	}
-	return elementSerializer(a.Value)
-}
-
-// UpdateFromValueOnly updates the SubmodelElementCollection from a Value Only representation.
-// Expects a map where keys are idShort values.
-//
-// Parameters:
-//   - value: the value-only representation (typically a map)
-//   - elementDeserializer: function to convert value-only form to SubmodelElement slice
-//
-// Returns an error if deserialization fails.
-func (a *SubmodelElementCollection) UpdateFromValueOnly(
-	value interface{},
-	elementDeserializer func(interface{}) ([]SubmodelElement, error),
-) error {
-	if value == nil {
-		a.Value = nil
-		return nil
-	}
-
-	elements, err := elementDeserializer(value)
-	if err != nil {
-		return fmt.Errorf("failed to deserialize SubmodelElementCollection value: %w", err)
-	}
-
-	a.Value = elements
 	return nil
 }

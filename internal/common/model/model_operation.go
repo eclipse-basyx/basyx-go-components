@@ -264,16 +264,3 @@ func AssertOperationConstraints(obj Operation) error {
 	}
 	return nil
 }
-
-// ToValueOnly converts the Operation element to its Value Only representation.
-// Operation elements have no value, so this always returns nil.
-func (a *Operation) ToValueOnly() interface{} {
-	return nil
-}
-
-// UpdateFromValueOnly updates the Operation element from a Value Only representation.
-// Operation elements have no value, so this does nothing.
-func (a *Operation) UpdateFromValueOnly(_ interface{}) error {
-	// Operation has no value to update
-	return nil
-}

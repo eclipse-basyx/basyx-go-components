@@ -9,9 +9,7 @@
 
 package model
 
-import "fmt"
-
-// File Type of SubmodelElement
+// File type of SubmodelElement
 type File struct {
 	Extensions []Extension `json:"extensions,omitempty"`
 
@@ -95,8 +93,8 @@ func (a File) GetEmbeddedDataSpecifications() []EmbeddedDataSpecification {
 // Setters
 
 //nolint:all
-func (a *File) SetModelType(modelType string) {
-	a.ModelType = modelType
+func (p *File) SetModelType(modelType string) {
+	p.ModelType = modelType
 }
 
 //nolint:all
@@ -237,48 +235,5 @@ func AssertFileConstraints(obj File) error {
 			return err
 		}
 	}
-	return nil
-}
-
-// ToValueOnly converts the File element to its Value Only representation.
-// Returns a map with "value" (file path) and "contentType" fields.
-//
-// Example output:
-//
-//	{
-//	  "value": "/path/to/file.pdf",
-//	  "contentType": "application/pdf"
-//	}
-func (a *File) ToValueOnly() interface{} {
-	return map[string]interface{}{
-		"value":       a.Value,
-		"contentType": a.ContentType,
-	}
-}
-
-// UpdateFromValueOnly updates the File element from a Value Only representation.
-// Expects a map with "value" and "contentType" fields.
-//
-// Parameters:
-//   - value: a map[string]interface{} with "value" and "contentType" keys
-//
-// Returns an error if:
-//   - value is not a map
-//   - required fields are missing
-//   - field types are invalid
-func (a *File) UpdateFromValueOnly(value interface{}) error {
-	valueMap, ok := value.(map[string]interface{})
-	if !ok {
-		return fmt.Errorf("invalid value type for File: expected map, got %T", value)
-	}
-
-	if v, ok := valueMap["value"].(string); ok {
-		a.Value = v
-	}
-
-	if ct, ok := valueMap["contentType"].(string); ok {
-		a.ContentType = ct
-	}
-
 	return nil
 }

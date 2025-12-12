@@ -117,7 +117,7 @@ func (p *PostgreSQLSubmodelDatabase) GetAllSubmodels(limit int32, cursor string,
 	}
 
 	submodelIDs := []string{}
-	rows, err := submodelpersistence.GetSubmodelDataFromDbWithJSONQuery(p.db, "", int64(limit), cursor, nil, true, false)
+	rows, err := submodelpersistence.GetSubmodelDataFromDbWithJSONQuery(p.db, "", int64(limit), cursor, nil, true)
 	if err != nil {
 		return nil, "", err
 	}
@@ -138,7 +138,7 @@ func (p *PostgreSQLSubmodelDatabase) GetAllSubmodels(limit int32, cursor string,
 	resultChan := make(chan result, 1)
 
 	wg.Go(func() error {
-		sm, smMap, cursor, err := submodelpersistence.GetAllSubmodels(p.db, int64(limit), cursor, nil, false)
+		sm, smMap, cursor, err := submodelpersistence.GetAllSubmodels(p.db, int64(limit), cursor, nil)
 		resultChan <- result{sm: sm, smMap: smMap, cursor: cursor, err: err}
 		return err
 	})
@@ -148,8 +148,7 @@ func (p *PostgreSQLSubmodelDatabase) GetAllSubmodels(limit int32, cursor string,
 	var errSmeMutex sync.Mutex
 
 	type smeJob struct {
-		id        string
-		valueOnly bool
+		id string
 	}
 
 	type smeResult struct {
@@ -165,14 +164,14 @@ func (p *PostgreSQLSubmodelDatabase) GetAllSubmodels(limit int32, cursor string,
 	for i := 0; i < numWorkers; i++ {
 		go func() {
 			for job := range jobs {
-				smes, _, err := submodelelements.GetSubmodelElementsForSubmodel(p.db, job.id, "", "", -1, job.valueOnly)
+				smes, _, err := submodelelements.GetSubmodelElementsForSubmodel(p.db, job.id, "", "", -1)
 				results <- smeResult{id: job.id, smes: smes, err: err}
 			}
 		}()
 	}
 
 	for _, id := range submodelIDs {
-		jobs <- smeJob{id: id, valueOnly: false}
+		jobs <- smeJob{id: id}
 	}
 	close(jobs)
 
@@ -361,12 +360,11 @@ func (p *PostgreSQLSubmodelDatabase) DoesSubmodelExist(submodelIdentifier string
 //
 // Parameters:
 //   - id: Unique identifier of the submodel to retrieve
-//   - valueOnly: If true, only fetches data necessary for value-only representation (excludes metadata)
 //
 // Returns:
 //   - gen.Submodel: The complete submodel with all its elements
 //   - error: Error if submodel not found or retrieval fails
-func (p *PostgreSQLSubmodelDatabase) GetSubmodel(id string, valueOnly bool) (gen.Submodel, error) {
+func (p *PostgreSQLSubmodelDatabase) GetSubmodel(id string) (gen.Submodel, error) {
 	type result struct {
 		sm  *gen.Submodel
 		err error
@@ -384,13 +382,13 @@ func (p *PostgreSQLSubmodelDatabase) GetSubmodel(id string, valueOnly bool) (gen
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		sm, err := submodelpersistence.GetSubmodelByID(p.db, id, valueOnly)
+		sm, err := submodelpersistence.GetSubmodelByID(p.db, id)
 		resultChan <- result{sm: sm, err: err}
 	}()
 
 	go func() {
 		defer wg.Done()
-		smes, _, err := submodelelements.GetSubmodelElementsForSubmodel(p.db, id, "", "", -1, valueOnly)
+		smes, _, err := submodelelements.GetSubmodelElementsForSubmodel(p.db, id, "", "", -1)
 		resultChanSME <- resultSME{smes: smes, err: err}
 	}()
 
@@ -639,7 +637,7 @@ func (p *PostgreSQLSubmodelDatabase) GetSubmodelElement(submodelID string, idSho
 		}
 	}()
 
-	elements, _, err := submodelelements.GetSubmodelElementsForSubmodel(p.db, submodelID, idShortOrPath, "", -1, false)
+	elements, _, err := submodelelements.GetSubmodelElementsForSubmodel(p.db, submodelID, idShortOrPath, "", -1)
 	if err != nil {
 		return nil, err
 	}
@@ -697,7 +695,7 @@ func (p *PostgreSQLSubmodelDatabase) GetSubmodelElements(submodelID string, limi
 		return nil, "", common.NewErrNotFound("Submodel with ID '" + submodelID + "' not found")
 	}
 
-	elements, cursor, err := submodelelements.GetSubmodelElementsForSubmodel(p.db, submodelID, "", cursor, limit, false)
+	elements, cursor, err := submodelelements.GetSubmodelElementsForSubmodel(p.db, submodelID, "", cursor, limit)
 	if err != nil {
 		return nil, "", err
 	}
@@ -1147,128 +1145,6 @@ func (p *PostgreSQLSubmodelDatabase) DownloadFileAttachment(submodelID string, i
 		return nil, "", "", fmt.Errorf("failed to create file handler: %w", err)
 	}
 	return fileHandler.DownloadFileAttachment(submodelID, idShortPath)
-}
-
-// UpdateSubmodel updates an existing submodel and all its elements in the database.
-// This method updates the submodel metadata and then iterates through all submodel elements,
-// calling UpdateSubmodelElement for each one to persist the changes.
-//
-// Parameters:
-//   - sm: The updated submodel with all its properties and elements
-//
-// Returns:
-//   - error: Error if the update operation fails
-func (p *PostgreSQLSubmodelDatabase) UpdateSubmodel(sm gen.Submodel) error {
-	tx, err := p.db.Begin()
-	if err != nil {
-		fmt.Println(err)
-		return beginTransactionErrorSubmodelRepo
-	}
-
-	defer func() {
-		if err != nil {
-			_ = tx.Rollback()
-		}
-	}()
-
-	// Update submodel metadata
-	var semanticIDDbID, displayNameID, descriptionID, administrationID sql.NullInt64
-
-	semanticIDDbID, err = persistenceutils.CreateReference(tx, sm.SemanticID, sql.NullInt64{}, sql.NullInt64{})
-	if err != nil {
-		fmt.Println(err)
-		return common.NewInternalServerError("Failed to create SemanticID - no changes applied - see console for details")
-	}
-
-	displayNameID, err = persistenceutils.CreateLangStringNameTypes(tx, sm.DisplayName)
-	if err != nil {
-		fmt.Println(err)
-		return common.NewInternalServerError("Failed to create DisplayName - no changes applied - see console for details")
-	}
-
-	// Handle possibly nil Description
-	var convertedDescription []gen.LangStringText
-	for _, desc := range sm.Description {
-		convertedDescription = append(convertedDescription, desc)
-	}
-	descriptionID, err = persistenceutils.CreateLangStringTextTypes(tx, convertedDescription)
-	if err != nil {
-		fmt.Println(err)
-		return common.NewInternalServerError("Failed to create Description - no changes applied - see console for details")
-	}
-
-	administrationID, err = persistenceutils.CreateAdministrativeInformation(tx, sm.Administration)
-	if err != nil {
-		fmt.Println(err)
-		return common.NewInternalServerError("Failed to create Administration - no changes applied - see console for details")
-	}
-
-	edsJSONString := "[]"
-	if sm.EmbeddedDataSpecifications != nil {
-		edsBytes, err := json.Marshal(sm.EmbeddedDataSpecifications)
-		if err != nil {
-			fmt.Println(err)
-			return common.NewInternalServerError("Failed to marshal EmbeddedDataSpecifications - no changes applied - see console for details")
-		}
-		if edsBytes != nil {
-			edsJSONString = string(edsBytes)
-		}
-	}
-
-	extensionJSONString := "[]"
-	if sm.Extensions != nil {
-		extensionBytes, err := json.Marshal(sm.Extensions)
-		if err != nil {
-			fmt.Println(err)
-			return common.NewInternalServerError("Failed to marshal Extension - no changes applied - see console for details")
-		}
-		if extensionBytes != nil {
-			extensionJSONString = string(extensionBytes)
-		}
-	}
-
-	supplementalSemanticIDs := "[]"
-	if sm.SupplementalSemanticIds != nil {
-		supplBytes, err := json.Marshal(sm.SupplementalSemanticIds)
-		if err != nil {
-			fmt.Println(err)
-			return common.NewInternalServerError("Failed to marshal SupplementalSemanticIds - no changes applied - see console for details")
-		}
-		if supplBytes != nil {
-			supplementalSemanticIDs = string(supplBytes)
-		}
-	}
-
-	update := goqu.Update("submodel").Set(goqu.Record{
-		"id_short":                    sm.IdShort,
-		"category":                    sm.Category,
-		"kind":                        sm.Kind,
-		"semantic_id":                 semanticIDDbID,
-		"displayname_id":              displayNameID,
-		"description_id":              descriptionID,
-		"administration_id":           administrationID,
-		"embedded_data_specification": edsJSONString,
-		"extensions":                  extensionJSONString,
-		"supplemental_semantic_ids":   supplementalSemanticIDs,
-	}).Where(goqu.I("id").Eq(sm.ID))
-	sql, args, err := update.ToSQL()
-	if err != nil {
-		return err
-	}
-	_, err = tx.Exec(sql, args...)
-	if err != nil {
-		return err
-	}
-
-	// Note: UpdateSubmodel only updates the submodel metadata, not the submodel elements.
-	// To update submodel elements, use UpdateSubmodelElement for individual elements
-	// or delete and recreate the submodel if you need to change the element structure.
-
-	if err := tx.Commit(); err != nil {
-		fmt.Println(err)
-		return failedPostgresTransactionSubmodelRepo
-	}
-	return nil
 }
 
 // UpdateSubmodelElement updates an existing submodel element by its idShortPath.

@@ -288,7 +288,7 @@ func getSubmodelElementObjectBasedOnModelType(smeRow model.SubmodelElementRow, r
 	case "AnnotatedRelationshipElement":
 		return buildAnnotatedRelationshipElement(smeRow)
 	case "MultiLanguageProperty":
-		mlProp, err := buildMultiLanguageProperty(smeRow)
+		mlProp, err := buildMultiLanguageProperty()
 		if err != nil {
 			return nil, err
 		}
@@ -541,32 +541,8 @@ func buildAnnotatedRelationshipElement(smeRow model.SubmodelElementRow) (*model.
 }
 
 // buildMultiLanguageProperty creates a new MultiLanguageProperty SubmodelElement.
-func buildMultiLanguageProperty(smeRow model.SubmodelElementRow) (*model.MultiLanguageProperty, error) {
-	mlp := &model.MultiLanguageProperty{}
-
-	if smeRow.Value == nil {
-		return mlp, nil
-	}
-
-	var valueRow model.MultiLanguagePropertyElementValueRow
-	err := json.Unmarshal(*smeRow.Value, &valueRow)
-	if err != nil {
-		return nil, err
-	}
-
-	mlp.Value = valueRow.Value
-
-	// Handle ValueID reference if present
-	if valueRow.ValueID != nil {
-		var valueID model.Reference
-		err = json.Unmarshal(*valueRow.ValueID, &valueID)
-		if err != nil {
-			return nil, err
-		}
-		mlp.ValueID = &valueID
-	}
-
-	return mlp, nil
+func buildMultiLanguageProperty() (*model.MultiLanguageProperty, error) {
+	return &model.MultiLanguageProperty{}, nil
 }
 
 // buildFile creates a new File SubmodelElement.

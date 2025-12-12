@@ -9,8 +9,6 @@
 
 package model
 
-import "fmt"
-
 // Property Type of SubmodelElement
 type Property struct {
 	Extensions []Extension `json:"extensions,omitempty"`
@@ -268,25 +266,5 @@ func AssertPropertyConstraints(obj Property) error {
 			return err
 		}
 	}
-	return nil
-}
-
-// ToValueOnly converts the Property to its value-only representation.
-// Returns the raw string value, or nil if empty.
-func (p *Property) ToValueOnly() interface{} {
-	if p.Value == "" {
-		return nil
-	}
-	return p.Value
-}
-
-// UpdateFromValueOnly updates the Property from a value-only representation.
-// Expects a string value. Returns an error if the value type doesn't match.
-func (p *Property) UpdateFromValueOnly(value interface{}) error {
-	strValue, ok := value.(string)
-	if !ok {
-		return fmt.Errorf("invalid value type for Property: expected string, got %T", value)
-	}
-	p.Value = strValue
 	return nil
 }
