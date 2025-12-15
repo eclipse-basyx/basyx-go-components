@@ -1,6 +1,6 @@
 {
-  "PagingMetadata": {},
-  "Result": [
+  "pagingMetadata": {},
+  "result": [
     {
       "id": "https://example.org/X/SM-A",
       "semanticId": {

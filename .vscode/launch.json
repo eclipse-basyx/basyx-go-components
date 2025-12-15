@@ -13,6 +13,19 @@
             ]
         },
         {
+            "name": "Launch RegistryOfRegistries Service",
+            "type": "go",
+            "request": "launch",
+            "mode": "debug",
+            "program": "${workspaceFolder}/cmd/registryofregistriesservice/main.go",
+            "args": [
+                "-config",
+                "${workspaceFolder}/cmd/registryofregistriesservice/config.yaml",
+                "-databaseSchema",
+                "${workspaceFolder}/basyxschema.sql"
+            ]
+        },
+        {
             "name": "Launch Submodel Repository Service",
             "type": "go",
             "request": "launch",
