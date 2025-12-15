@@ -48,7 +48,7 @@ var expMapper = []ExpressionIdentifiableMapper{
 		canBeFiltered: false,
 	},
 	{
-		iexp:          sai.Col(colID),
+		iexp:          sai.Col(colName),
 		canBeFiltered: true,
 		identifable:   strPtr("$aasdesc#specificAssetIds[].name"),
 	},

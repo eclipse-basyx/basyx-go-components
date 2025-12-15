@@ -74,11 +74,15 @@ func ParseAccessModel(b []byte, apiRouter *api.Mux) (*AccessModel, error) {
 	}, nil
 }
 
+// FilterConditionParts holds the main and optional logical expressions that
+// together define a fragment-level filter.
 type FilterConditionParts struct {
 	MainPart     grammar.LogicalExpression `json:"mainPart,omitempty" yaml:"mainPart,omitempty" mapstructure:"mainPart,omitempty"`
 	OptionalPart grammar.LogicalExpression `json:"optionalPart,omitempty" yaml:"optionalPart,omitempty" mapstructure:"optionalPart,omitempty"`
 }
 
+// FragmentFilters groups conditional parts by fragment name so callers can pick
+// the subset relevant to the resource they are processing.
 type FragmentFilters map[string]FilterConditionParts
 
 // QueryFilter captures optional, fine-grained restrictions produced by a rule
@@ -240,7 +244,12 @@ func (m *AccessModel) AuthorizeWithFilter(in EvalInput) (bool, DecisionCode, *Qu
 	return true, DecisionAllow, qf
 }
 
-func (q *QueryFilter) GetFilterLE(key string, negateMainPart bool) (bool, grammar.LogicalExpression) {
+// FilterExpressionFor returns the logical expression that enforces the fragment
+// filter identified by key. If negateMainPart is true, the main part is wrapped
+// in a NOT before being combined with the optional part. The boolean indicates
+// whether the fragment exists; when it does not exist, a false expression is
+// returned so callers can reject the lookup.
+func (q *QueryFilter) FilterExpressionFor(key string, negateMainPart bool) (bool, grammar.LogicalExpression) {
 	filter, ok := q.Filters[key]
 	if ok {
 		var mainPart grammar.LogicalExpression
@@ -255,7 +264,13 @@ func (q *QueryFilter) GetFilterLE(key string, negateMainPart bool) (bool, gramma
 	return ok, grammar.LogicalExpression{Boolean: &falseBool}
 }
 
-func (q *QueryFilter) ExistsLE(key string, negateMainPart bool) (bool, grammar.LogicalExpression) {
+// ExistsExpressionFor builds a logical expression that evaluates to true when
+// the fragment filter identified by key is satisfied. If negateMainPart is
+// true, the main part is wrapped in a NOT before being combined with the
+// optional part. The boolean indicates whether the fragment exists; when it
+// does not, a true expression is returned so callers can skip additional
+// filtering.
+func (q *QueryFilter) ExistsExpressionFor(key string, negateMainPart bool) (bool, grammar.LogicalExpression) {
 	filter, ok := q.Filters[key]
 	if ok {
 		var mainPart grammar.LogicalExpression

@@ -93,7 +93,7 @@ func addSpecificAssetFilter(
 		return ds, nil
 	}
 
-	ok, filter := p.GetFilterLE(identifable, false)
+	ok, filter := p.FilterExpressionFor(identifable, false)
 
 	if !ok {
 		return ds, nil
@@ -109,6 +109,9 @@ func addSpecificAssetFilter(
 	return ds, nil
 }
 
+// ExpressionIdentifiableMapper links a selectable expression with an optional
+// identifier name used for ABAC fragment filtering; canBeFiltered controls
+// whether the expression participates in filter-based projections.
 type ExpressionIdentifiableMapper struct {
 	iexp          exp.IdentifierExpression
 	canBeFiltered bool
@@ -149,7 +152,7 @@ func getColumnSelectStatement(ctx context.Context, expressionMappers []Expressio
 		}
 		if expMapper.identifable != nil {
 
-			isOk, filter := p.ExistsLE(*expMapper.identifable, true)
+			isOk, filter := p.ExistsExpressionFor(*expMapper.identifable, true)
 			if isOk {
 				ok = true
 			}
@@ -182,17 +185,15 @@ func getColumnSelectStatement(ctx context.Context, expressionMappers []Expressio
 		if err != nil {
 			return nil, err
 		}
-		result = append(result, goqu.MAX(CaseWhenColumn(wc, expMapper.iexp)))
+		result = append(result, goqu.MAX(caseWhenColumn(wc, expMapper.iexp)))
 
 	}
-
-	//ok1, filter1 := p.ExistsLE("$aasdesc#specificAssetIds[].name", true)
 
 	return result, nil
 
 }
 
-func CaseWhenColumn(wc exp.Expression, iexp exp.IdentifierExpression) exp.CaseExpression {
+func caseWhenColumn(wc exp.Expression, iexp exp.IdentifierExpression) exp.CaseExpression {
 	return goqu.Case().
 		When(
 			wc,
