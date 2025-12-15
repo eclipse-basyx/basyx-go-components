@@ -37,17 +37,17 @@ import (
 
 func getJoinTables(d goqu.DialectWrapper) *goqu.SelectDataset {
 
-	joinTables := d.From(goqu.T(tblDescriptor).As("descriptor")).
+	joinTables := d.From(goqu.T(tblDescriptor).As("dsc")).
 		LeftJoin(goqu.T(tblAASDescriptor).As("aas_descriptor"),
-			goqu.On(goqu.I("aas_descriptor.descriptor_id").Eq(goqu.I("descriptor.id")))).
+			goqu.On(goqu.I("aas_descriptor.descriptor_id").Eq(goqu.I("dsc.id")))).
 		LeftJoin(goqu.T(tblSpecificAssetID).As("specific_asset_id"),
-			goqu.On(goqu.I("specific_asset_id.descriptor_id").Eq(goqu.I("descriptor.id")))).
+			goqu.On(goqu.I("specific_asset_id.descriptor_id").Eq(goqu.I("dsc.id")))).
 		LeftJoin(goqu.T(tblReference).As("external_subject_reference"),
 			goqu.On(goqu.I("external_subject_reference.id").Eq(goqu.I("specific_asset_id.external_subject_ref")))).
 		LeftJoin(goqu.T(tblReferenceKey).As("external_subject_reference_key"),
 			goqu.On(goqu.I("external_subject_reference_key.reference_id").Eq(goqu.I("external_subject_reference.id")))).
 		LeftJoin(goqu.T(tblAASDescriptorEndpoint).As("aas_descriptor_endpoint"),
-			goqu.On(goqu.I("aas_descriptor_endpoint.descriptor_id").Eq(goqu.I("descriptor.id")))).
+			goqu.On(goqu.I("aas_descriptor_endpoint.descriptor_id").Eq(goqu.I("dsc.id")))).
 		LeftJoin(goqu.T(tblSubmodelDescriptor).As("submodel_descriptor"),
 			goqu.On(goqu.I("submodel_descriptor.aas_descriptor_id").Eq(goqu.I("aas_descriptor.descriptor_id")))).
 		LeftJoin(goqu.T(tblAASDescriptorEndpoint).As("submodel_descriptor_endpoint"),
@@ -113,12 +113,12 @@ func addSpecificAssetFilter(
 // identifier name used for ABAC fragment filtering; canBeFiltered controls
 // whether the expression participates in filter-based projections.
 type ExpressionIdentifiableMapper struct {
-	iexp          exp.IdentifierExpression
+	iexp          exp.Expression
 	canBeFiltered bool
 	identifable   *string
 }
 type expressionIdentifiableMapperIntermediate struct {
-	iexp          exp.IdentifierExpression
+	iexp          exp.Expression
 	canBeFiltered bool
 	identifable   *string
 	mapper        *grammar.LogicalExpression
@@ -193,7 +193,7 @@ func getColumnSelectStatement(ctx context.Context, expressionMappers []Expressio
 
 }
 
-func caseWhenColumn(wc exp.Expression, iexp exp.IdentifierExpression) exp.CaseExpression {
+func caseWhenColumn(wc exp.Expression, iexp exp.Expression) exp.CaseExpression {
 	return goqu.Case().
 		When(
 			wc,

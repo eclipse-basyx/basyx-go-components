@@ -146,11 +146,11 @@ func InsertAdministrationShellDescriptorTx(_ context.Context, tx *sql.Tx, aasd m
 	}
 
 	if err = createEndpoints(tx, descriptorID, aasd.Endpoints); err != nil {
-		return common.NewInternalServerError("Failed to create Endpoints - no changes applied - see console for details")
+		return err
 	}
 
 	if err = createSpecificAssetID(tx, descriptorID, aasd.SpecificAssetIds); err != nil {
-		return common.NewInternalServerError("Failed to create Specific Asset Ids - no changes applied - see console for details")
+		return err
 	}
 
 	if err = createExtensions(tx, descriptorID, aasd.Extensions); err != nil {

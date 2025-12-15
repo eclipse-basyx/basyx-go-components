@@ -549,15 +549,16 @@ type MultiLanguagePropertyElementValueRow struct {
 // related records such as administrative information, display names, and
 // descriptions.
 type AssetAdministrationShellDescriptorRow struct {
-	DescID        int64
-	AssetKindStr  sql.NullString
-	AssetType     sql.NullString
-	GlobalAssetID sql.NullString
-	IDShort       sql.NullString
-	IDStr         string
-	AdminInfoID   sql.NullInt64
-	DisplayNameID sql.NullInt64
-	DescriptionID sql.NullInt64
+	DescID           int64
+	AssetKindStr     sql.NullString
+	AssetType        sql.NullString
+	GlobalAssetID    sql.NullString
+	IDShort          sql.NullString
+	IDStr            string
+	AdminInfoID      sql.NullInt64
+	DisplayNameID    sql.NullInt64
+	DescriptionID    sql.NullInt64
+	SpecificAssetIds json.RawMessage
 }
 
 // SubmodelDescriptorRow represents a single SQL result row for a Submodel
