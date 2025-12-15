@@ -39,6 +39,15 @@ import (
 	"github.com/lib/pq"
 )
 
+type rowData struct {
+	descID               int64
+	specificID           int64
+	name, value          sql.NullString
+	semanticJSON         json.RawMessage
+	supplementalJSON     json.RawMessage
+	externalSubjectRefID sql.NullInt64
+}
+
 var sai = goqu.T(tblSpecificAssetID).As("specific_asset_id")
 var expMapper = []ExpressionIdentifiableMapper{
 	{
@@ -204,15 +213,6 @@ func ReadSpecificAssetIDsByDescriptorIDs(
 	fmt.Println(sqlStr)
 	if err != nil {
 		return nil, err
-	}
-
-	type rowData struct {
-		descID               int64
-		specificID           int64
-		name, value          sql.NullString
-		semanticJSON         json.RawMessage
-		supplementalJSON     json.RawMessage
-		externalSubjectRefID sql.NullInt64
 	}
 	rows, err := db.QueryContext(ctx, sqlStr, args...)
 	if err != nil {
