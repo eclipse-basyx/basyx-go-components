@@ -30,11 +30,42 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"time"
 
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/lib/pq"
 )
+
+var sai = goqu.T(tblSpecificAssetID).As("specific_asset_id")
+var expMapper = []ExpressionIdentifiableMapper{
+	{
+		iexp:          sai.Col(colDescriptorID),
+		canBeFiltered: false,
+	},
+	{
+		iexp:          sai.Col(colID),
+		canBeFiltered: false,
+	},
+	{
+		iexp:          sai.Col(colID),
+		canBeFiltered: true,
+		identifable:   strPtr("$aasdesc#specificAssetIds[].name"),
+	},
+	{
+		iexp:          sai.Col(colValue),
+		canBeFiltered: true,
+		identifable:   strPtr("$aasdesc#specificAssetIds[].value"),
+	},
+	{
+		iexp:          sai.Col(colSemanticID),
+		canBeFiltered: true,
+	},
+	{
+		iexp:          sai.Col(colExternalSubjectRef),
+		canBeFiltered: true,
+	},
+}
 
 // ReadSpecificAssetIDsByDescriptorID returns all SpecificAssetIDs that belong to
 // a single AAS descriptor identified by its numeric descriptor ID.
@@ -79,23 +110,25 @@ func ReadSpecificAssetIDsByDescriptorIDs(
 	db *sql.DB,
 	descriptorIDs []int64,
 ) (map[int64][]model.SpecificAssetID, error) {
+	start := time.Now()
+	defer func() {
+		fmt.Printf("ReadSpecificAssetIDsByDescriptorIDs took %s for %d descriptor IDs\n", time.Since(start), len(descriptorIDs))
+	}()
+
 	out := make(map[int64][]model.SpecificAssetID, len(descriptorIDs))
 	if len(descriptorIDs) == 0 {
 		return out, nil
 	}
 
 	d := goqu.Dialect(dialect)
-	sai := goqu.T(tblSpecificAssetID).As("specific_asset_id")
 
 	arr := pq.Array(descriptorIDs)
 
-	expressions, err := getColumnSelectStatement(ctx, d, sai)
+	expressions, err := getColumnSelectStatement(ctx, expMapper)
 	if err != nil {
 		return nil, err
 	}
-	base := withDescriptorJoins(
-		d.From(sai), sai,
-	).Select(
+	base := getJoinTables(d).Select(
 		expressions[0],
 		expressions[1],
 		expressions[2],
@@ -109,11 +142,10 @@ func ReadSpecificAssetIDsByDescriptorIDs(
 			expressions[1], // id
 		).
 		Order(
-			sai.Col("id").Asc(),
 			sai.Col("position").Asc(),
 		)
 
-	base, err = addSpecificAssetFilter(ctx, d, base, sai)
+	base, err = addSpecificAssetFilter(ctx, base, "$aasdesc#specificAssetIds[]")
 	if err != nil {
 		return nil, err
 	}
@@ -248,4 +280,8 @@ func nvl(ns sql.NullString) string {
 		return ns.String
 	}
 	return ""
+}
+
+func strPtr(s string) *string {
+	return &s
 }
