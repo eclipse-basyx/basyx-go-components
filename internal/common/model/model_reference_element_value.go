@@ -9,11 +9,23 @@
 
 package model
 
+import "encoding/json"
+
 // ReferenceElementValue type of ReferenceElementValue
 type ReferenceElementValue struct {
 	Type ReferenceTypes `json:"type,omitempty"`
 
 	Keys []Key `json:"keys,omitempty"`
+}
+
+// MarshalValueOnly serializes ReferenceElementValue in Value-Only format
+func (r ReferenceElementValue) MarshalValueOnly() ([]byte, error) {
+	return json.Marshal(r)
+}
+
+// MarshalJSON implements custom JSON marshaling for ReferenceElementValue
+func (r ReferenceElementValue) MarshalJSON() ([]byte, error) {
+	return r.MarshalValueOnly()
 }
 
 // AssertReferenceElementValueRequired checks if the required fields are not zero-ed

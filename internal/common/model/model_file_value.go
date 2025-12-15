@@ -9,11 +9,23 @@
 
 package model
 
+import "encoding/json"
+
 // FileValue type of FileValue
 type FileValue struct {
 	ContentType string `json:"contentType"`
 
 	Value string `json:"value"`
+}
+
+// MarshalValueOnly serializes FileValue in Value-Only format
+func (f FileValue) MarshalValueOnly() ([]byte, error) {
+	return json.Marshal(f)
+}
+
+// MarshalJSON implements custom JSON marshaling for FileValue
+func (f FileValue) MarshalJSON() ([]byte, error) {
+	return f.MarshalValueOnly()
 }
 
 // AssertFileValueRequired checks if the required fields are not zero-ed

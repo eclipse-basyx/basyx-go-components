@@ -9,9 +9,21 @@
 
 package model
 
+import "encoding/json"
+
 // BasicEventElementValue type of EventElementValue
 type BasicEventElementValue struct {
 	Observed ReferenceValue `json:"observed"`
+}
+
+// MarshalValueOnly serializes BasicEventElementValue in Value-Only format
+func (b BasicEventElementValue) MarshalValueOnly() ([]byte, error) {
+	return json.Marshal(b)
+}
+
+// MarshalJSON implements custom JSON marshaling for BasicEventElementValue
+func (b BasicEventElementValue) MarshalJSON() ([]byte, error) {
+	return b.MarshalValueOnly()
 }
 
 // AssertBasicEventElementValueRequired checks if the required fields are not zero-ed

@@ -9,11 +9,23 @@
 
 package model
 
+import "encoding/json"
+
 // RelationshipElementValue A relationship element value consisting of two reference values.
 type RelationshipElementValue struct {
 	First ReferenceValue `json:"first"`
 
 	Second ReferenceValue `json:"second"`
+}
+
+// MarshalValueOnly serializes RelationshipElementValue in Value-Only format
+func (r RelationshipElementValue) MarshalValueOnly() ([]byte, error) {
+	return json.Marshal(r)
+}
+
+// MarshalJSON implements custom JSON marshaling for RelationshipElementValue
+func (r RelationshipElementValue) MarshalJSON() ([]byte, error) {
+	return r.MarshalValueOnly()
 }
 
 // AssertRelationshipElementValueRequired checks if the required fields are not zero-ed

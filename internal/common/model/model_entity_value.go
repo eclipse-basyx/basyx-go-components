@@ -9,6 +9,8 @@
 
 package model
 
+import "encoding/json"
+
 // EntityValue type of EntityValue
 type EntityValue struct {
 	EntityType EntityType `json:"entityType"`
@@ -19,6 +21,16 @@ type EntityValue struct {
 	SpecificAssetIds []map[string]interface{} `json:"specificAssetIds,omitempty"`
 
 	Statements []map[string]interface{} `json:"statements,omitempty"`
+}
+
+// MarshalValueOnly serializes EntityValue in Value-Only format
+func (e EntityValue) MarshalValueOnly() ([]byte, error) {
+	return json.Marshal(e)
+}
+
+// MarshalJSON implements custom JSON marshaling for EntityValue
+func (e EntityValue) MarshalJSON() ([]byte, error) {
+	return e.MarshalValueOnly()
 }
 
 // AssertEntityValueRequired checks if the required fields are not zero-ed

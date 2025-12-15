@@ -9,31 +9,32 @@
 
 package model
 
+import "encoding/json"
+
 // RangeValue  type of RangeValue
 type RangeValue struct {
-	Max RangeValueType `json:"max,omitempty"`
+	Max string `json:"max,omitempty"`
 
-	Min RangeValueType `json:"min,omitempty"`
+	Min string `json:"min,omitempty"`
+}
+
+// MarshalValueOnly serializes RangeValue in Value-Only format
+func (r RangeValue) MarshalValueOnly() ([]byte, error) {
+	return json.Marshal(r)
+}
+
+// MarshalJSON implements custom JSON marshaling for RangeValue
+func (r RangeValue) MarshalJSON() ([]byte, error) {
+	return r.MarshalValueOnly()
 }
 
 // AssertRangeValueRequired checks if the required fields are not zero-ed
 func AssertRangeValueRequired(obj RangeValue) error {
-	if err := AssertRangeValueTypeRequired(obj.Max); err != nil {
-		return err
-	}
-	if err := AssertRangeValueTypeRequired(obj.Min); err != nil {
-		return err
-	}
+	// Min and max are optional in value-only representation
 	return nil
 }
 
 // AssertRangeValueConstraints checks if the values respects the defined constraints
 func AssertRangeValueConstraints(obj RangeValue) error {
-	if err := AssertRangeValueTypeConstraints(obj.Max); err != nil {
-		return err
-	}
-	if err := AssertRangeValueTypeConstraints(obj.Min); err != nil {
-		return err
-	}
 	return nil
 }

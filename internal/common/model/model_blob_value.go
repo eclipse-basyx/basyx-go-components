@@ -9,11 +9,23 @@
 
 package model
 
+import "encoding/json"
+
 // BlobValue type of Blob
 type BlobValue struct {
 	ContentType string `json:"contentType"`
 
 	Value string `json:"value,omitempty"`
+}
+
+// MarshalValueOnly serializes BlobValue in Value-Only format
+func (b BlobValue) MarshalValueOnly() ([]byte, error) {
+	return json.Marshal(b)
+}
+
+// MarshalJSON implements custom JSON marshaling for BlobValue
+func (b BlobValue) MarshalJSON() ([]byte, error) {
+	return b.MarshalValueOnly()
 }
 
 // AssertBlobValueRequired checks if the required fields are not zero-ed

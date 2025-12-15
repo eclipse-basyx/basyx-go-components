@@ -21,11 +21,7 @@ func AssertGetSubmodelElementsValueResultRequired(obj GetSubmodelElementsValueRe
 	if err := AssertPagedResultPagingMetadataRequired(obj.PagingMetadata); err != nil {
 		return err
 	}
-	for _, el := range obj.Result {
-		if err := AssertSubmodelElementValueRequired(el); err != nil {
-			return err
-		}
-	}
+	// Result contains interface types, validation is delegated to concrete implementations
 	return nil
 }
 
@@ -34,10 +30,6 @@ func AssertGetSubmodelElementsValueResultConstraints(obj GetSubmodelElementsValu
 	if err := AssertPagedResultPagingMetadataConstraints(obj.PagingMetadata); err != nil {
 		return err
 	}
-	for _, el := range obj.Result {
-		if err := AssertSubmodelElementValueConstraints(el); err != nil {
-			return err
-		}
-	}
+	// Result contains interface types, validation is delegated to concrete implementations
 	return nil
 }

@@ -9,6 +9,8 @@
 
 package model
 
+import "encoding/json"
+
 // AnnotatedRelationshipElementValue type of SubmodelElementValue
 type AnnotatedRelationshipElementValue struct {
 	First ReferenceValue `json:"first"`
@@ -16,6 +18,16 @@ type AnnotatedRelationshipElementValue struct {
 	Second ReferenceValue `json:"second"`
 
 	Annotations []map[string]interface{} `json:"annotations,omitempty"`
+}
+
+// MarshalValueOnly serializes AnnotatedRelationshipElementValue in Value-Only format
+func (a AnnotatedRelationshipElementValue) MarshalValueOnly() ([]byte, error) {
+	return json.Marshal(a)
+}
+
+// MarshalJSON implements custom JSON marshaling for AnnotatedRelationshipElementValue
+func (a AnnotatedRelationshipElementValue) MarshalJSON() ([]byte, error) {
+	return a.MarshalValueOnly()
 }
 
 // AssertAnnotatedRelationshipElementValueRequired checks if the required fields are not zero-ed

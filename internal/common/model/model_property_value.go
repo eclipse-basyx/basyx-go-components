@@ -9,14 +9,34 @@
 
 package model
 
-// PropertyValue  type of PropertyValue
+import "encoding/json"
+
+// PropertyValue represents the Value-Only serialization of a Property.
+// According to spec: Property is serialized as ${Property/value} where value is a string.
 type PropertyValue struct {
+	Value string `json:"-"`
+}
+
+// MarshalValueOnly serializes PropertyValue in Value-Only format (just the value string)
+func (p PropertyValue) MarshalValueOnly() ([]byte, error) {
+	return json.Marshal(p.Value)
+}
+
+// MarshalJSON implements custom JSON marshaling for PropertyValue
+func (p PropertyValue) MarshalJSON() ([]byte, error) {
+	return p.MarshalValueOnly()
+}
+
+// UnmarshalJSON implements custom JSON unmarshaling for PropertyValue
+func (p *PropertyValue) UnmarshalJSON(data []byte) error {
+	return json.Unmarshal(data, &p.Value)
 }
 
 // AssertPropertyValueRequired checks if the required fields are not zero-ed
-//
-//nolint:all
 func AssertPropertyValueRequired(obj PropertyValue) error {
+	if obj.Value == "" {
+		return &RequiredError{Field: "value"}
+	}
 	return nil
 }
 
