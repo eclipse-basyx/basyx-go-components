@@ -145,7 +145,7 @@ func InsertAdministrationShellDescriptorTx(_ context.Context, tx *sql.Tx, aasd m
 		return err
 	}
 
-	if err = createEndpoints(tx, descriptorID, aasd.Endpoints); err != nil {
+	if err = CreateEndpoints(tx, descriptorID, aasd.Endpoints); err != nil {
 		return err
 	}
 
