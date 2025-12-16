@@ -468,12 +468,24 @@ CREATE TABLE IF NOT EXISTS specific_asset_id (
   id BIGSERIAL PRIMARY KEY,
   position     INTEGER NOT NULL,                -- <- Array-Index
   descriptor_id BIGINT NOT NULL REFERENCES descriptor(id) ON DELETE CASCADE,
-  semantic_id JSONB,
+  semantic_id BIGINT REFERENCES reference(id),
   supplemental_semantic_ids JSONB,
   name VARCHAR(64) NOT NULL,
   value VARCHAR(2048) NOT NULL,
   external_subject_ref BIGINT REFERENCES reference(id)
 );
+
+CREATE TABLE IF NOT EXISTS specific_asset_id_supplemental_semantic_id (
+  id BIGSERIAL PRIMARY KEY,
+  specific_asset_id_id BIGINT NOT NULL REFERENCES specific_asset_id(id) ON DELETE CASCADE,
+  reference_id BIGINT NOT NULL REFERENCES reference(id) ON DELETE CASCADE
+);
+
+
+-- specific_asset_id_supplemental_semantic_id
+CREATE INDEX IF NOT EXISTS ix_specasset_supp_spec_id  ON specific_asset_id_supplemental_semantic_id(specific_asset_id_id);
+CREATE INDEX IF NOT EXISTS ix_specasset_supp_ref_id   ON specific_asset_id_supplemental_semantic_id(reference_id);
+CREATE INDEX IF NOT EXISTS ix_specasset_supp_pair     ON specific_asset_id_supplemental_semantic_id(specific_asset_id_id, reference_id);
 
 
 CREATE TABLE IF NOT EXISTS aas_descriptor_endpoint (

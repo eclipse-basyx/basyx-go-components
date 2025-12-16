@@ -12,7 +12,7 @@ with open(JSON_FILE, "r", encoding="utf-8") as f:
     payload_template = json.load(f)
 
 # --- POST loop ---
-for i in range(10000):  # Change number if you want more inserts
+for i in range(30000):  # Change number if you want more inserts
     payload = copy.deepcopy(payload_template)
 
     # Unique Descriptor ID

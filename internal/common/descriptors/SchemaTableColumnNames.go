@@ -88,10 +88,11 @@ const (
 	colSecurityValue           = "security_value"
 	colEndpointProtocolVersion = "endpoint_protocol_version"
 
-	colSemanticID         = "semantic_id"
-	colName               = "name"
-	colValue              = "value"
-	colExternalSubjectRef = "external_subject_ref"
+	colSemanticID              = "semantic_id"
+	colSupplementalSemanticIDs = "supplemental_semantic_ids"
+	colName                    = "name"
+	colValue                   = "value"
+	colExternalSubjectRef      = "external_subject_ref"
 
 	colSpecificAssetIDID = "specific_asset_id_id"
 	colReferenceID       = "reference_id"

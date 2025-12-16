@@ -29,12 +29,10 @@ package descriptors
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"time"
 
 	"github.com/doug-martin/goqu/v9"
-	"github.com/doug-martin/goqu/v9/exp"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/lib/pq"
 )
@@ -43,8 +41,7 @@ type rowData struct {
 	descID               int64
 	specificID           int64
 	name, value          sql.NullString
-	semanticJSON         json.RawMessage
-	supplementalJSON     json.RawMessage
+	semanticRefID        sql.NullInt64
 	externalSubjectRefID sql.NullInt64
 }
 
@@ -73,10 +70,6 @@ var expMapper = []ExpressionIdentifiableMapper{
 		canBeFiltered: true,
 	},
 	{
-		iexp:          sai.Col("supplemental_semantic_ids"),
-		canBeFiltered: true,
-	},
-	{
 		iexp:          sai.Col(colExternalSubjectRef),
 		canBeFiltered: true,
 	},
@@ -102,50 +95,6 @@ func ReadSpecificAssetIDsByDescriptorID(
 
 	v, err := ReadSpecificAssetIDsByDescriptorIDs(ctx, db, []int64{descriptorID})
 	return v[descriptorID], err
-}
-
-// GetSpecificAssetIDsSubquery subquery that is not used at the momement
-func GetSpecificAssetIDsSubquery(
-	ctx context.Context,
-	joinOn exp.IdentifierExpression, // e.g. goqu.I("aas.descriptor_id")
-) (*goqu.SelectDataset, error) {
-	d := goqu.Dialect(dialect)
-
-	expressions, err := getColumnSelectStatement(ctx, expMapper)
-	if err != nil {
-		return nil, err
-	}
-
-	// Build a JSON object for each specific_asset_id row
-	// expressions[] map to: descriptor_id, id, name, value, semantic_id, supplemental_semantic_ids, external_subject_ref
-	rowObj := goqu.Func(
-		"jsonb_build_object",
-		goqu.L("'descriptor_id'"), expressions[0],
-		goqu.L("'id'"), expressions[1],
-		goqu.L("'name'"), expressions[2],
-		goqu.L("'value'"), expressions[3],
-		goqu.L("'semantic_id'"), expressions[4],
-		goqu.L("'supplemental_semantic_ids'"), expressions[5],
-		goqu.L("'external_subject_ref'"), expressions[6],
-	)
-
-	// Aggregate to a single jsonb array, deterministic ordering by position
-	// NOTE: ORDER BY inside jsonb_agg requires a literal expression in goqu.
-	agg := goqu.COALESCE(
-		goqu.L("jsonb_agg(? ORDER BY ?)", rowObj, sai.Col("position")),
-		goqu.L("'[]'::jsonb"),
-	)
-
-	base := getJoinTables(d).
-		Select(agg).
-		Where(joinOn.Eq(sai.Col(colDescriptorID))) // correlate to outer row (aas.descriptor_id = specific_asset_id.descriptor_id)
-
-	base, err = addSpecificAssetFilter(ctx, base, "$aasdesc#specificAssetIds[]")
-	if err != nil {
-		return nil, err
-	}
-
-	return base, nil
 }
 
 // ReadSpecificAssetIDsByDescriptorIDs performs a batched read of SpecificAssetIDs
@@ -194,7 +143,6 @@ func ReadSpecificAssetIDsByDescriptorIDs(
 		expressions[3],
 		expressions[4],
 		expressions[5],
-		expressions[6],
 	).
 		Where(goqu.L("specific_asset_id.descriptor_id = ANY(?::bigint[])", arr)).
 		GroupBy(
@@ -225,6 +173,7 @@ func ReadSpecificAssetIDsByDescriptorIDs(
 
 	perDesc := make(map[int64][]rowData, len(descriptorIDs))
 	allSpecificIDs := make([]int64, 0, 256)
+	semRefIDs := make([]int64, 0, 128)
 	extRefIDs := make([]int64, 0, 128)
 
 	for rows.Next() {
@@ -234,15 +183,16 @@ func ReadSpecificAssetIDsByDescriptorIDs(
 			&r.specificID,
 			&r.name,
 			&r.value,
-			&r.semanticJSON,
-			&r.supplementalJSON,
+			&r.semanticRefID,
 			&r.externalSubjectRefID,
 		); err != nil {
 			return nil, err
 		}
 		perDesc[r.descID] = append(perDesc[r.descID], r)
 		allSpecificIDs = append(allSpecificIDs, r.specificID)
-
+		if r.semanticRefID.Valid {
+			semRefIDs = append(semRefIDs, r.semanticRefID.Int64)
+		}
 		if r.externalSubjectRefID.Valid {
 			extRefIDs = append(extRefIDs, r.externalSubjectRefID.Int64)
 		}
@@ -255,9 +205,18 @@ func ReadSpecificAssetIDsByDescriptorIDs(
 		return out, nil
 	}
 
+	uniqSem := semRefIDs
+	uniqExt := extRefIDs
+
+	suppBySpecific, err := readSpecificAssetIDSupplementalSemanticBySpecificIDs(ctx, db, allSpecificIDs)
+	if err != nil {
+		return nil, err
+	}
+
+	allRefIDs := append(append([]int64{}, uniqSem...), uniqExt...)
 	refByID := make(map[int64]*model.Reference)
-	if len(extRefIDs) > 0 {
-		refByID, err = GetReferencesByIDsBatch(db, extRefIDs)
+	if len(allRefIDs) > 0 {
+		refByID, err = GetReferencesByIDsBatch(db, allRefIDs)
 		if err != nil {
 			return nil, err
 		}
@@ -265,17 +224,10 @@ func ReadSpecificAssetIDsByDescriptorIDs(
 
 	for descID, rowsForDesc := range perDesc {
 		for _, r := range rowsForDesc {
-
-			semRef, err := unmarshalRefPtr(r.semanticJSON)
-			if err != nil {
-				return nil, fmt.Errorf("unmarshal semantic_id (specific_asset_id=%d): %w", r.specificID, err)
+			var semRef *model.Reference
+			if r.semanticRefID.Valid {
+				semRef = refByID[r.semanticRefID.Int64]
 			}
-
-			suppRefs, err := unmarshalRefs(r.supplementalJSON)
-			if err != nil {
-				return nil, fmt.Errorf("unmarshal supplemental_semantic_ids (specific_asset_id=%d): %w", r.specificID, err)
-			}
-
 			var extRef *model.Reference
 			if r.externalSubjectRefID.Valid {
 				extRef = refByID[r.externalSubjectRefID.Int64]
@@ -286,11 +238,40 @@ func ReadSpecificAssetIDsByDescriptorIDs(
 				Value:                   nvl(r.value),
 				SemanticID:              semRef,
 				ExternalSubjectID:       extRef,
-				SupplementalSemanticIds: suppRefs,
+				SupplementalSemanticIds: suppBySpecific[r.specificID],
 			})
 		}
 	}
 
+	return out, nil
+}
+
+func readSpecificAssetIDSupplementalSemanticBySpecificIDs(
+	ctx context.Context,
+	db *sql.DB,
+	specificAssetIDs []int64,
+) (map[int64][]model.Reference, error) {
+	out := make(map[int64][]model.Reference, len(specificAssetIDs))
+	if len(specificAssetIDs) == 0 {
+		return out, nil
+	}
+	uniqSpecific := specificAssetIDs
+
+	m, err := readEntityReferences1ToMany(
+		ctx,
+		db,
+		specificAssetIDs,
+		tblSpecificAssetIDSuppSemantic,
+		colSpecificAssetIDID,
+		colReferenceID,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, id := range uniqSpecific {
+		out[id] = m[id]
+	}
 	return out, nil
 }
 
@@ -303,35 +284,4 @@ func nvl(ns sql.NullString) string {
 
 func strPtr(s string) *string {
 	return &s
-}
-
-func isNullJSON(b []byte) bool {
-	if len(b) == 0 {
-		return true
-	}
-	// Handles NULL scan (nil/empty) and JSON null
-	return string(b) == "null"
-}
-
-func unmarshalRefPtr(raw json.RawMessage) (*model.Reference, error) {
-	if isNullJSON(raw) {
-		return nil, nil
-	}
-	var r model.Reference
-	if err := json.Unmarshal(raw, &r); err != nil {
-		return nil, err
-	}
-	return &r, nil
-}
-
-func unmarshalRefs(raw json.RawMessage) ([]model.Reference, error) {
-	if isNullJSON(raw) {
-		return nil, nil
-	}
-	// If your DB stores [] by default, this will produce empty slice.
-	var refs []model.Reference
-	if err := json.Unmarshal(raw, &refs); err != nil {
-		return nil, err
-	}
-	return refs, nil
 }
