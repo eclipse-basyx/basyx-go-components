@@ -46,32 +46,31 @@ type rowData struct {
 	externalSubjectRefID sql.NullInt64
 }
 
-var sai = goqu.T(tblSpecificAssetID).As("specific_asset_id")
 var expMapper = []auth.ExpressionIdentifiableMapper{
 	{
-		Exp:           sai.Col(colDescriptorID),
+		Exp:           tSpecificAssetID.Col(colDescriptorID),
 		CanBeFiltered: false,
 	},
 	{
-		Exp:           sai.Col(colID),
+		Exp:           tSpecificAssetID.Col(colID),
 		CanBeFiltered: false,
 	},
 	{
-		Exp:           sai.Col(colName),
+		Exp:           tSpecificAssetID.Col(colName),
 		CanBeFiltered: true,
 		Identifable:   strPtr("$aasdesc#specificAssetIds[].name"),
 	},
 	{
-		Exp:           sai.Col(colValue),
+		Exp:           tSpecificAssetID.Col(colValue),
 		CanBeFiltered: true,
 		Identifable:   strPtr("$aasdesc#specificAssetIds[].value"),
 	},
 	{
-		Exp:           sai.Col(colSemanticID),
+		Exp:           tSpecificAssetID.Col(colSemanticID),
 		CanBeFiltered: true,
 	},
 	{
-		Exp:           sai.Col(colExternalSubjectRef),
+		Exp:           tSpecificAssetID.Col(colExternalSubjectRef),
 		CanBeFiltered: true,
 	},
 }
@@ -145,13 +144,13 @@ func ReadSpecificAssetIDsByDescriptorIDs(
 		expressions[4],
 		expressions[5],
 	).
-		Where(goqu.L("specific_asset_id.descriptor_id = ANY(?::bigint[])", arr)).
+		Where(goqu.L(fmt.Sprintf("%s.%s = ANY(?::bigint[])", aliasSpecificAssetID, colDescriptorID), arr)).
 		GroupBy(
 			expressions[0], // descriptor_id
 			expressions[1], // id
 		).
 		Order(
-			sai.Col("position").Asc(),
+			tSpecificAssetID.Col(colPosition).Asc(),
 		)
 
 	base, err = auth.AddSpecificAssetFilter(ctx, base, "$aasdesc#specificAssetIds[]")

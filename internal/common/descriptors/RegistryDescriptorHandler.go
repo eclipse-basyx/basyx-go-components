@@ -248,7 +248,7 @@ func DeleteRegistryDescriptorByIDTx(ctx context.Context, tx *sql.Tx, registryIde
 	}
 
 	delStr, delArgs, buildDelErr := d.
-		Delete("descriptor").
+		Delete(tblDescriptor).
 		Where(goqu.C(colID).Eq(descID)).
 		ToSQL()
 	if buildDelErr != nil {

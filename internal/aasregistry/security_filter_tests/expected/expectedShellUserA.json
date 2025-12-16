@@ -1,0 +1,86 @@
+{
+  "pagingMetadata": {},
+  "result": [
+    {
+      "id": "https://example.org/A",
+        "endpoints": [
+            {
+                "protocolInformation": {
+                    "href": "hrefA",
+                    "endpointProtocol": "http"
+                },
+                "interface": "AAS-3.0"
+            }
+        ],
+        "extensions": [
+            {
+                "name": "help",
+                "valueType": "xs:string",
+                "value": "test"
+            }
+        ]
+    },
+    {
+      "id": "https://example.org/B",
+        "endpoints": [
+            {
+                "protocolInformation": {
+                    "href": "hrefB",
+                    "endpointProtocol": "http"
+                },
+                "interface": "AAS-3.0"
+            }
+        ],
+        "extensions": [
+            {
+                "name": "help",
+                "valueType": "xs:string",
+                "value": "test"
+            }
+        ],
+      "specificAssetIds": [
+        {
+          "name": "customerPartId"
+        }
+      ]
+    },
+    {
+      "id": "https://example.org/C",
+        "endpoints": [
+            {
+                "protocolInformation": {
+                    "href": "https://idta.basyx-enterprise.net/controller/datasource/unprotected-repository-aas/shells/aHR0cHM6Ly9pZC5pZHRhLXNob3djYXNlLm5ldC9uYW1lc3BhY2UvSW5kdUNvcmVJQzUwMDAvdjE",
+                    "endpointProtocol": "https"
+                },
+                "interface": "AAS-3.0"
+            }
+        ],
+        "extensions": [
+            {
+                "name": "help",
+                "valueType": "xs:string",
+                "value": "test"
+            }
+        ],
+      "specificAssetIds": [
+        {
+          "name": "lul",
+          "value": "23749",
+          "externalSubjectId": {
+            "type": "ExternalReference",
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "WRITTEN_BY_X"
+              },
+              {
+                "type": "GlobalReference",
+                "value": "WRITTEN_BY_Y"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

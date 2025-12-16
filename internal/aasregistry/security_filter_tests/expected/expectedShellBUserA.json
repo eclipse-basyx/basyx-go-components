@@ -1,0 +1,24 @@
+{
+  "id": "https://example.org/B",
+    "endpoints": [
+        {
+            "protocolInformation": {
+                "href": "hrefB",
+                "endpointProtocol": "http"
+            },
+            "interface": "AAS-3.0"
+        }
+    ],
+    "extensions": [
+        {
+            "name": "help",
+            "valueType": "xs:string",
+            "value": "test"
+        }
+    ],
+  "specificAssetIds": [
+    {
+      "name": "customerPartId"
+    }
+  ]
+}
