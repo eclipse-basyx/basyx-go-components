@@ -122,7 +122,6 @@ func mapDescriptorValueToRoute(descriptorValue grammar.DescriptorValue) []RouteW
 		)
 	}
 	return routes
-
 }
 
 // AccessWithLE represents the outcome of matching a request path against a
@@ -137,35 +136,29 @@ type AccessWithLE struct {
 // matchRouteObjectsObjItem returns true if any ROUTE object matches the request
 // path. Supports exact match, prefix match using "/*", and global wildcards.
 func matchRouteObjectsObjItem(objs []grammar.ObjectItem, reqPath string) AccessWithLE {
-
 	var locialExpressions []grammar.LogicalExpression
 	access := false
 	for _, oi := range objs {
-
 		switch oi.Kind {
 		case grammar.Route:
-
 			if matchRouteACL(oi.Route.Route, reqPath) {
 				return AccessWithLE{access: true}
 			}
-
 		case grammar.Descriptor:
 			desc := oi.Descriptor
 			if desc != nil {
 				for _, routeWithFilter := range mapDescriptorValueToRoute(*desc) {
-
 					if matchRouteANT(routeWithFilter.route, reqPath) {
-						if routeWithFilter.le != nil {
-							access = true
-							locialExpressions = append(locialExpressions, *routeWithFilter.le)
-						} else {
+						if routeWithFilter.le == nil {
 							return AccessWithLE{access: true}
 						}
+
+						access = true
+						locialExpressions = append(locialExpressions, *routeWithFilter.le)
 					}
 				}
 			}
 		}
-
 	}
 
 	var objectLogicalExpression *grammar.LogicalExpression
@@ -192,9 +185,9 @@ func normalize(p string) string {
 	return p
 }
 
-func matchRouteACL(pattern, path string) bool {
+func matchRouteACL(pattern, userPath string) bool {
 	pat := normalize(pattern)
-	p := normalize(path)
+	userPathNorm := normalize(userPath)
 
 	// Escape regex special chars, keep '*' for later
 	regex := regexp.QuoteMeta(pat)
@@ -205,12 +198,12 @@ func matchRouteACL(pattern, path string) bool {
 	// Anchor
 	regex = "^" + regex + "$"
 
-	matched, _ := regexp.MatchString(regex, p)
+	matched, _ := regexp.MatchString(regex, userPathNorm)
 	return matched
 }
 
 func matchRouteANT(route string, userPath string) bool {
-	path := normalize(userPath)
+	userPathNorm := normalize(userPath)
 	pat := normalize(route)
 
 	// Escape regex chars first, keeping '*' as literal "\*"
@@ -225,6 +218,6 @@ func matchRouteANT(route string, userPath string) bool {
 	// Anchor the pattern
 	regexPattern = "^" + regexPattern + "$"
 
-	matched, _ := regexp.MatchString(regexPattern, path)
+	matched, _ := regexp.MatchString(regexPattern, userPathNorm)
 	return matched
 }

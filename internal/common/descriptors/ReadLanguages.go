@@ -42,7 +42,6 @@ func GetLangStringTextTypesByIDs(
 	db *sql.DB,
 	textTypeIDs []int64,
 ) (map[int64][]model.LangStringTextType, error) {
-
 	out := make(map[int64][]model.LangStringTextType, len(textTypeIDs))
 	if len(textTypeIDs) == 0 {
 		return out, nil
@@ -94,7 +93,6 @@ func GetLangStringNameTypesByIDs(
 	db *sql.DB,
 	nameTypeIDs []int64,
 ) (map[int64][]model.LangStringNameType, error) {
-
 	out := make(map[int64][]model.LangStringNameType, len(nameTypeIDs))
 	if len(nameTypeIDs) == 0 {
 		return out, nil

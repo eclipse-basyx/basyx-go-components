@@ -6,7 +6,7 @@
  * API version: V3.0.3_SSP-001
  * Contact: info@idtwin.org
  */
-
+//nolint:all
 package model
 
 import "encoding/json"

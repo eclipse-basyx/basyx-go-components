@@ -22,7 +22,7 @@
 *
 * SPDX-License-Identifier: MIT
 ******************************************************************************/
-
+//nolint:all
 package model
 
 // LangStringText interface for LangStringText

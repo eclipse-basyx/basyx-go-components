@@ -1,3 +1,4 @@
+//nolint:all
 package main
 
 import (
@@ -183,9 +184,9 @@ func makeRequest(config TestConfig, stepNumber int) (string, error) {
 			fmt.Fprintf(f, "Response body: %s\n", body) //nolint:errcheck
 			_ = f.Close()
 		}
-		fmt.Printf("Response status code: %d\n", resp.StatusCode)
+		_, _ = fmt.Printf("Response status code: %d\n", resp.StatusCode)
 		body, _ := io.ReadAll(resp.Body)
-		fmt.Printf("Response body: %s\n", body)
+		_, _ = fmt.Printf("Response body: %s\n", body)
 		return "", fmt.Errorf("expected status %d but got %d", config.ExpectedStatus, resp.StatusCode)
 	}
 
@@ -429,20 +430,20 @@ func TestFileAttachmentOperations(t *testing.T) {
 // TestMain handles setup and teardown
 func TestMain(m *testing.M) {
 	// Setup: Start Docker Compose
-	fmt.Println("Starting Docker Compose...")
+	_, _ = fmt.Println("Starting Docker Compose...")
 	cmd := exec.Command("docker", "compose", "-f", "docker_compose/docker_compose.yml", "up", "-d", "--build")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
-		fmt.Printf("Failed to start Docker Compose: %v\n", err)
+		_, _ = fmt.Printf("Failed to start Docker Compose: %v\n", err)
 		os.Exit(1)
 	}
 
 	// Create DB Connection here
-	sql, err := sql.Open("postgres", "postgres://admin:admin123@127.0.0.1:6432/basyxTestDB?sslmode=disable")
+	sqlQuery, err := sql.Open("postgres", "postgres://admin:admin123@127.0.0.1:6432/basyxTestDB?sslmode=disable")
 
 	if err != nil {
-		fmt.Printf("Failed to connect to database: %v\n", err)
+		_, _ = fmt.Printf("Failed to connect to database: %v\n", err)
 		os.Exit(1)
 	}
 
@@ -452,36 +453,36 @@ func TestMain(m *testing.M) {
 	dir, osErr := os.Getwd()
 
 	if osErr != nil {
-		fmt.Printf("Failed to get working directory: %v\n", osErr)
+		_, _ = fmt.Printf("Failed to get working directory: %v\n", osErr)
 		os.Exit(1)
 	}
 
 	queryString, fileError := os.ReadFile(dir + "/sql/demoSubmodel.sql")
 
 	if fileError != nil {
-		fmt.Printf("Failed to read SQL file: %v\n", fileError)
+		_, _ = fmt.Printf("Failed to read SQL file: %v\n", fileError)
 		os.Exit(1)
 	}
 
-	_, err = sql.Exec(string(queryString))
+	_, err = sqlQuery.Exec(string(queryString))
 
 	if err != nil {
-		fmt.Printf("Failed to execute SQL script: %v\n", err)
+		_, _ = fmt.Printf("Failed to execute SQL script: %v\n", err)
 		os.Exit(1)
 	}
 
-	fmt.Println("Database initialized successfully.")
+	_, _ = fmt.Println("Database initialized successfully.")
 
 	// Run tests
 	code := m.Run()
 
 	// Teardown: Stop Docker Compose
-	fmt.Println("Stopping Docker Compose...")
+	_, _ = fmt.Println("Stopping Docker Compose...")
 	// cmd = exec.Command("docker", "compose", "-f", "docker_compose/docker_compose.yml", "down")
 	// cmd.Stdout = os.Stdout
 	// cmd.Stderr = os.Stderr
 	// if err := cmd.Run(); err != nil {
-	// 	fmt.Printf("Failed to stop Docker Compose: %v\n", err)
+	// 	_, _ = fmt.Printf("Failed to stop Docker Compose: %v\n", err)
 	// }
 
 	os.Exit(code)

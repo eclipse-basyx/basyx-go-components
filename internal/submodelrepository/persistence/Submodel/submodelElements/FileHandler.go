@@ -33,6 +33,8 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
@@ -245,10 +247,7 @@ func (p PostgreSQLFileHandler) Update(idShortOrPath string, submodelElement gen.
 	}
 
 	// Update base SubmodelElement properties
-	if dErr := p.decorated.Update(idShortOrPath, submodelElement); dErr != nil {
-		return dErr
-	}
-	return nil
+	return p.decorated.Update(idShortOrPath, submodelElement)
 }
 
 // Delete removes a File submodel element from the database.
@@ -261,10 +260,7 @@ func (p PostgreSQLFileHandler) Update(idShortOrPath string, submodelElement gen.
 // Returns:
 //   - error: Error if the delete operation fails
 func (p PostgreSQLFileHandler) Delete(idShortOrPath string) error {
-	if dErr := p.decorated.Delete(idShortOrPath); dErr != nil {
-		return dErr
-	}
-	return nil
+	return p.decorated.Delete(idShortOrPath)
 }
 
 // UploadFileAttachment uploads a file to PostgreSQL's Large Object system and stores the OID reference.
@@ -277,11 +273,33 @@ func (p PostgreSQLFileHandler) Delete(idShortOrPath string) error {
 //
 // Returns:
 //   - error: Error if the upload operation fails
+//
+//nolint:revive // cyclomatic complexity is acceptable for this function as the SQL process is complex and requires multiple steps, refactoring would not improve readability
 func (p PostgreSQLFileHandler) UploadFileAttachment(submodelID string, idShortPath string, file *os.File, fileName string) error {
 	dialect := goqu.Dialect("postgres")
 
+	// Validate and clean the file path
+	filePath := filepath.Clean(file.Name())
+
+	// Optional: Ensure it's within an expected base directory
+	expectedBaseDir := "/tmp" // or your configured upload directory
+	absPath, err := filepath.Abs(filePath)
+	if err != nil {
+		return fmt.Errorf("failed to resolve file path: %w", err)
+	}
+	absBaseDir, err := filepath.Abs(expectedBaseDir)
+	if err != nil {
+		return fmt.Errorf("failed to resolve base directory: %w", err)
+	}
+	// Ensure base directory ends with separator for proper prefix matching
+	if !strings.HasSuffix(absBaseDir, string(filepath.Separator)) {
+		absBaseDir += string(filepath.Separator)
+	}
+	if !strings.HasPrefix(absPath+string(filepath.Separator), absBaseDir) {
+		return fmt.Errorf("file path outside allowed directory")
+	}
+
 	// Reopen the file since it might be closed by the OpenAPI framework
-	filePath := file.Name()
 	reopenedFile, err := os.Open(filePath)
 	if err != nil {
 		return fmt.Errorf("failed to reopen file: %w", err)

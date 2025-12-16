@@ -10,7 +10,7 @@ import (
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
-	api "github.com/eclipse-basyx/basyx-go-components/internal/discoveryservice/api"
+	"github.com/eclipse-basyx/basyx-go-components/internal/discoveryservice/api"
 	persistencepostgresql "github.com/eclipse-basyx/basyx-go-components/internal/discoveryservice/persistence"
 	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/discoveryapi"
 	"github.com/go-chi/chi/v5"
@@ -23,7 +23,6 @@ func runServer(ctx context.Context, configPath string) error {
 
 	cfg, err := common.LoadConfig(configPath)
 	if err != nil {
-		log.Fatalf("Failed to load config: %v", err)
 		return err
 	}
 
@@ -98,8 +97,16 @@ func runServer(ctx context.Context, configPath string) error {
 	addr := fmt.Sprintf("0.0.0.0:%d", cfg.Server.Port)
 	log.Printf("▶️ AAS Discovery listening on %s (contextPath=%q)\n", addr, cfg.Server.ContextPath)
 
+	server := &http.Server{
+		Addr:         addr,
+		Handler:      r,
+		ReadTimeout:  15 * 1e9, // 15 seconds
+		WriteTimeout: 15 * 1e9, // 15 seconds
+		IdleTimeout:  60 * 1e9, // 60 seconds
+	}
+
 	go func() {
-		if err := http.ListenAndServe(addr, r); err != http.ErrServerClosed {
+		if err := server.ListenAndServe(); err != http.ErrServerClosed {
 			log.Printf("Server error: %v", err)
 		}
 	}()

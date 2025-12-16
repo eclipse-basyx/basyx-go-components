@@ -68,7 +68,6 @@ func NewAssetAdministrationShellRegistryAPIAPIService(databaseBackend persistenc
 
 // GetAllAssetAdministrationShellDescriptors - Returns all Asset Administration Shell Descriptors
 func (s *AssetAdministrationShellRegistryAPIAPIService) GetAllAssetAdministrationShellDescriptors(ctx context.Context, limit int32, cursor string, assetKind model.AssetKind, assetType string) (model.ImplResponse, error) {
-
 	internalCursor, resp, err := decodeCursor(strings.TrimSpace(cursor), "GetAllAssetAdministrationShellDescriptors")
 	if resp != nil || err != nil {
 		return *resp, err
@@ -93,7 +92,6 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) GetAllAssetAdministratio
 
 // PostAssetAdministrationShellDescriptor - Creates a new Asset Administration Shell Descriptor, i.e. registers an AAS
 func (s *AssetAdministrationShellRegistryAPIAPIService) PostAssetAdministrationShellDescriptor(ctx context.Context, assetAdministrationShellDescriptor model.AssetAdministrationShellDescriptor) (model.ImplResponse, error) {
-
 	if resp, err := enforceAccessForAAS(ctx, "PostAssetAdministrationShellDescriptor", assetAdministrationShellDescriptor); resp != nil || err != nil {
 		return *resp, err
 	}
@@ -140,7 +138,6 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) PostAssetAdministrationS
 // GetAssetAdministrationShellDescriptorById - Returns a specific Asset Administration Shell Descriptor
 // nolint:revive // defined by standard
 func (s *AssetAdministrationShellRegistryAPIAPIService) GetAssetAdministrationShellDescriptorById(ctx context.Context, aasIdentifier string) (model.ImplResponse, error) {
-
 	decoded, resp, err := decodePathParam(aasIdentifier, "aasIdentifier", "GetAssetAdministrationShellDescriptorById", "BadRequest-Decode")
 	if resp != nil || err != nil {
 		return *resp, err
@@ -226,7 +223,6 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) PutAssetAdministrationSh
 // DeleteAssetAdministrationShellDescriptorById - Deletes an Asset Administration Shell Descriptor, i.e. de-registers an AAS
 // nolint:revive // defined by standard
 func (s *AssetAdministrationShellRegistryAPIAPIService) DeleteAssetAdministrationShellDescriptorById(ctx context.Context, aasIdentifier string) (model.ImplResponse, error) {
-
 	decoded, resp, err := decodePathParam(aasIdentifier, "aasIdentifier", "DeleteAssetAdministrationShellDescriptorById", "BadRequest-Decode")
 	if resp != nil || err != nil {
 		return *resp, err
@@ -309,7 +305,6 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) GetAllSubmodelDescriptor
 
 // PostSubmodelDescriptorThroughSuperpath - Creates a new Submodel Descriptor, i.e. registers a submodel
 func (s *AssetAdministrationShellRegistryAPIAPIService) PostSubmodelDescriptorThroughSuperpath(ctx context.Context, aasIdentifier string, submodelDescriptor model.SubmodelDescriptor) (model.ImplResponse, error) {
-
 	if resp, err := enforceAccessForSubmodel(ctx, "PostSubmodelDescriptorThroughSuperpath", submodelDescriptor); resp != nil || err != nil {
 		return *resp, err
 	}
@@ -403,7 +398,6 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) GetSubmodelDescriptorByI
 // PutSubmodelDescriptorByIdThroughSuperpath - Creates or updates an existing Submodel Descriptor
 // nolint:revive // defined by standard
 func (s *AssetAdministrationShellRegistryAPIAPIService) PutSubmodelDescriptorByIdThroughSuperpath(ctx context.Context, aasIdentifier string, submodelIdentifier string, submodelDescriptor model.SubmodelDescriptor) (model.ImplResponse, error) {
-
 	if resp, err := enforceAccessForSubmodel(ctx, "PutSubmodelDescriptorByIdThroughSuperpath", submodelDescriptor); resp != nil || err != nil {
 		return *resp, err
 	}

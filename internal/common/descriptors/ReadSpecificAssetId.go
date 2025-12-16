@@ -52,7 +52,6 @@ func ReadSpecificAssetIDsByDescriptorID(
 	db *sql.DB,
 	descriptorID int64,
 ) ([]model.SpecificAssetID, error) {
-
 	v, err := ReadSpecificAssetIDsByDescriptorIDs(ctx, db, []int64{descriptorID})
 	return v[descriptorID], err
 }

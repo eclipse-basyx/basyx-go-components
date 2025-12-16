@@ -1,3 +1,4 @@
+//nolint:all
 package main
 
 import (
@@ -173,9 +174,9 @@ func makeRequest(config TestConfig) (string, error) {
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != expectedStatus {
-		fmt.Printf("Response status code: %d\n", resp.StatusCode)
+		_, _ = fmt.Printf("Response status code: %d\n", resp.StatusCode)
 		body, _ := io.ReadAll(resp.Body)
-		fmt.Printf("Response body: %s\n", body)
+		_, _ = fmt.Printf("Response body: %s\n", body)
 		return "", fmt.Errorf("expected status %d but got %d", expectedStatus, resp.StatusCode)
 	}
 
@@ -225,27 +226,27 @@ func TestIntegration(t *testing.T) {
 func TestMain(m *testing.M) {
 	executable, _, err := testenv.FindCompose()
 	if err != nil {
-		fmt.Println("compose engine not found:", err)
+		_, _ = fmt.Println("compose engine not found:", err)
 		os.Exit(m.Run())
 	}
 
-	fmt.Println("Starting Docker Compose...")
+	_, _ = fmt.Println("Starting Docker Compose...")
 	cmd := exec.Command(executable, "compose", "-f", "docker_compose/docker_compose.yml", "up", "-d", "--build")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
-		fmt.Printf("Failed to start Docker Compose: %v\n", err)
+		_, _ = fmt.Printf("Failed to start Docker Compose: %v\n", err)
 		os.Exit(1)
 	}
 
 	code := m.Run()
 
-	fmt.Println("Stopping Docker Compose...")
+	_, _ = fmt.Println("Stopping Docker Compose...")
 	cmd = exec.Command(executable, "compose", "-f", "docker_compose/docker_compose.yml", "down")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
-		fmt.Printf("Failed to stop Docker Compose: %v\n", err)
+		_, _ = fmt.Printf("Failed to stop Docker Compose: %v\n", err)
 	}
 
 	os.Exit(code)

@@ -24,7 +24,8 @@
 ******************************************************************************/
 
 // Author: Jannik Fried ( Fraunhofer IESE ), Aaron Zielstorff ( Fraunhofer IESE )
-
+//
+//nolint:all
 package model
 
 import (

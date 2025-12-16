@@ -25,6 +25,8 @@
 
 // Package grammar defines the data structures for representing logical expressions in the grammar model.
 // Author: Aaron Zielstorff ( Fraunhofer IESE ), Jannik Fried ( Fraunhofer IESE ), Martin Stemmer ( Fraunhofer IESE )
+//
+//nolint:all
 package grammar
 
 import (
@@ -177,7 +179,6 @@ func (le *LogicalExpression) evaluateComparison(operands []Value, operation stri
 // Returns:
 //   - string: The corresponding SQL column name, or the original field if no mapping exists
 func ParseAASQLFieldToSQLColumn(field string) string {
-
 	// TIPP: DO NOT ADD SHORTHANDS HERE!
 	// They are already normalized
 	switch field {
@@ -343,7 +344,6 @@ func ParseAASQLFieldToSQLColumn(field string) string {
 //   - exp.Expression: A goqu expression representing the comparison with any necessary constraints
 //   - error: An error if the operands are invalid, types don't match, or the operation is unsupported
 func HandleComparison(leftOperand, rightOperand *Value, operation string) (exp.Expression, error) {
-
 	// Normalize shorthand semanticId / descriptor shorthand fields to explicit keys[0].value
 	// (e.g. $aasdesc#specificAssetIds[].externalSubjectId ->
 	//  $aasdesc#specificAssetIds[].externalSubjectId.keys[0].value)

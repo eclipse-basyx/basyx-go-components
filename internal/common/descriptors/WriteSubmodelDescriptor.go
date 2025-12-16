@@ -53,7 +53,7 @@ func createSubModelDescriptors(tx *sql.Tx, aasDescriptorID int64, submodelDescri
 
 			displayNameID, err = persistence_utils.CreateLangStringNameTypes(tx, val.DisplayName)
 			if err != nil {
-				fmt.Println(err)
+				_, _ = fmt.Println(err)
 				return common.NewInternalServerError("Failed to create DisplayName - no changes applied - see console for details")
 			}
 			var convertedDescription []model.LangStringText
@@ -63,13 +63,13 @@ func createSubModelDescriptors(tx *sql.Tx, aasDescriptorID int64, submodelDescri
 
 			descriptionID, err = persistence_utils.CreateLangStringTextTypes(tx, convertedDescription)
 			if err != nil {
-				fmt.Println(err)
+				_, _ = fmt.Println(err)
 				return common.NewInternalServerError("Failed to create Description - no changes applied - see console for details")
 			}
 
 			administrationID, err = persistence_utils.CreateAdministrativeInformation(tx, val.Administration)
 			if err != nil {
-				fmt.Println(err)
+				_, _ = fmt.Println(err)
 				return common.NewInternalServerError("Failed to create Administration - no changes applied - see console for details")
 			}
 

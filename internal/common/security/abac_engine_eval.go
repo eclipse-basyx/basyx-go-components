@@ -136,87 +136,70 @@ func evalLE(le grammar.LogicalExpression, claims Claims) bool {
 	return false
 }
 
+// reduceCmp: try to replace attributes with literals, and
+// if both operands become literals, reduce to $boolean using evalLE.
+func reduceCmp(items []grammar.Value, op string, le grammar.LogicalExpression, claims Claims) (*grammar.LogicalExpression, bool) {
+	if len(items) != 2 {
+		return &le, false
+	}
+
+	left := replaceAttribute(items[0], claims)
+	right := replaceAttribute(items[1], claims)
+
+	// Construct a new LE with updated operands
+	out := grammar.LogicalExpression{}
+	switch op {
+	case "$eq":
+		out.Eq = []grammar.Value{left, right}
+	case "$ne":
+		out.Ne = []grammar.Value{left, right}
+	case "$gt":
+		out.Gt = []grammar.Value{left, right}
+	case "$ge":
+		out.Ge = []grammar.Value{left, right}
+	case "$lt":
+		out.Lt = []grammar.Value{left, right}
+	case "$le":
+		out.Le = []grammar.Value{left, right}
+	case "$regex":
+		out.Regex = []grammar.StringValue{valueToStringValue(left), valueToStringValue(right)}
+	case "$contains":
+		out.Contains = []grammar.StringValue{valueToStringValue(left), valueToStringValue(right)}
+	case "$starts-with":
+		out.StartsWith = []grammar.StringValue{valueToStringValue(left), valueToStringValue(right)}
+	case "$ends-with":
+		out.EndsWith = []grammar.StringValue{valueToStringValue(left), valueToStringValue(right)}
+	}
+
+	// If both operands are literals (not fields and not attributes), try to evaluate
+	if isLiteral(left) && isLiteral(right) {
+		// Evaluate by reusing evalLE on this sub-expression
+		b := false
+		tmp := out
+		if evalLE(tmp, claims) {
+			b = true
+		}
+		return &grammar.LogicalExpression{Boolean: &b}, true
+	}
+	return &out, false
+}
+
 // adaptLEForBackend takes a logical expression and partially evaluates parts
 // that depend only on CLAIM or GLOBAL attributes into $boolean true/false.
 // The remaining expression is returned for backend evaluation. The second
 // return value indicates whether the entire expression became a pure boolean
 // expression (i.e., consists only of true/false after reduction).
+//
+// nolint:revive // Cyclomatic complexity is 22 instead of 20 which is fine for now.
 func adaptLEForBackend(le grammar.LogicalExpression, claims Claims) (grammar.LogicalExpression, bool) {
 	// Boolean literal stays as-is
 	if le.Boolean != nil {
 		return le, true
 	}
 
-	// Comparison operators: try to replace attributes with literals, and
-	// if both operands become literals, reduce to $boolean using evalLE.
-	reduceCmp := func(items []grammar.Value, op string) (grammar.LogicalExpression, bool) {
-		if len(items) != 2 {
-			return le, false
-		}
-
-		left := replaceAttribute(items[0], claims)
-		right := replaceAttribute(items[1], claims)
-
-		// Construct a new LE with updated operands
-		out := grammar.LogicalExpression{}
-		switch op {
-		case "$eq":
-			out.Eq = []grammar.Value{left, right}
-		case "$ne":
-			out.Ne = []grammar.Value{left, right}
-		case "$gt":
-			out.Gt = []grammar.Value{left, right}
-		case "$ge":
-			out.Ge = []grammar.Value{left, right}
-		case "$lt":
-			out.Lt = []grammar.Value{left, right}
-		case "$le":
-			out.Le = []grammar.Value{left, right}
-		case "$regex":
-			out.Regex = []grammar.StringValue{valueToStringValue(left), valueToStringValue(right)}
-		case "$contains":
-			out.Contains = []grammar.StringValue{valueToStringValue(left), valueToStringValue(right)}
-		case "$starts-with":
-			out.StartsWith = []grammar.StringValue{valueToStringValue(left), valueToStringValue(right)}
-		case "$ends-with":
-			out.EndsWith = []grammar.StringValue{valueToStringValue(left), valueToStringValue(right)}
-		}
-
-		// If both operands are literals (not fields and not attributes), try to evaluate
-		if isLiteral(left) && isLiteral(right) {
-			// Evaluate by reusing evalLE on this sub-expression
-			b := false
-			tmp := out
-			if evalLE(tmp, claims) {
-				b = true
-			}
-			return grammar.LogicalExpression{Boolean: &b}, true
-		}
-		return out, false
-	}
-
-	// Handle comparisons
-	switch {
-	case len(le.Eq) == 2:
-		return reduceCmp(le.Eq, "$eq")
-	case len(le.Ne) == 2:
-		return reduceCmp(le.Ne, "$ne")
-	case len(le.Gt) == 2:
-		return reduceCmp(le.Gt, "$gt")
-	case len(le.Ge) == 2:
-		return reduceCmp(le.Ge, "$ge")
-	case len(le.Lt) == 2:
-		return reduceCmp(le.Lt, "$lt")
-	case len(le.Le) == 2:
-		return reduceCmp(le.Le, "$le")
-	case len(le.Regex) == 2:
-		return reduceCmp(stringItemsToValues(le.Regex), "$regex")
-	case len(le.Contains) == 2:
-		return reduceCmp(stringItemsToValues(le.Contains), "$contains")
-	case len(le.StartsWith) == 2:
-		return reduceCmp(stringItemsToValues(le.StartsWith), "$starts-with")
-	case len(le.EndsWith) == 2:
-		return reduceCmp(stringItemsToValues(le.EndsWith), "$ends-with")
+	rle, rbool := handleComparison(le, claims)
+	if rle != nil {
+		return *rle, rbool
 	}
 
 	// Logical: AND / OR
@@ -296,6 +279,33 @@ func adaptLEForBackend(le grammar.LogicalExpression, claims Claims) (grammar.Log
 
 	// Unknown or unsupported -> cannot fully decide here
 	return le, false
+}
+
+func handleComparison(le grammar.LogicalExpression, claims Claims) (*grammar.LogicalExpression, bool) {
+	// Handle comparisons
+	switch {
+	case len(le.Eq) == 2:
+		return reduceCmp(le.Eq, "$eq", le, claims)
+	case len(le.Ne) == 2:
+		return reduceCmp(le.Ne, "$ne", le, claims)
+	case len(le.Gt) == 2:
+		return reduceCmp(le.Gt, "$gt", le, claims)
+	case len(le.Ge) == 2:
+		return reduceCmp(le.Ge, "$ge", le, claims)
+	case len(le.Lt) == 2:
+		return reduceCmp(le.Lt, "$lt", le, claims)
+	case len(le.Le) == 2:
+		return reduceCmp(le.Le, "$le", le, claims)
+	case len(le.Regex) == 2:
+		return reduceCmp(stringItemsToValues(le.Regex), "$regex", le, claims)
+	case len(le.Contains) == 2:
+		return reduceCmp(stringItemsToValues(le.Contains), "$contains", le, claims)
+	case len(le.StartsWith) == 2:
+		return reduceCmp(stringItemsToValues(le.StartsWith), "$starts-with", le, claims)
+	case len(le.EndsWith) == 2:
+		return reduceCmp(stringItemsToValues(le.EndsWith), "$ends-with", le, claims)
+	}
+	return nil, false
 }
 
 // replaceAttribute resolves a Value that is deterministic from CLAIM/GLOBAL attributes
@@ -471,8 +481,8 @@ func valueToStringValue(v grammar.Value) grammar.StringValue {
 	return grammar.StringValue{StrVal: &s}
 }
 
+//nolint:revive // Cyclomatic complexity is acceptable here as the function is still readable and compact.
 func resolveValue(v grammar.Value, claims Claims) any {
-
 	if v.Attribute != nil {
 		return resolveAttributeValue(v.Attribute, claims)
 	}
@@ -548,7 +558,6 @@ func resolveValue(v grammar.Value, claims Claims) any {
 		return fmt.Sprint(inner)
 	}
 	if v.DateTimeCast != nil {
-
 		return fmt.Sprint(resolveValue(*v.DateTimeCast, claims))
 	}
 	if v.HexCast != nil {
@@ -780,6 +789,7 @@ func orderedCmp(left, right grammar.Value, claims Claims, op string) bool {
 	}
 }
 
+//nolint:revive // cyclomatic complexity is acceptable here as it is still readable
 func eqCmp(left, right grammar.Value, claims Claims, negate bool) bool {
 	k, ok := unifyComparisonKind(comparisonKindOf(left), comparisonKindOf(right))
 	if !ok {
@@ -1068,8 +1078,8 @@ func asStringMap(v any) (map[string]string, bool) {
 			return nil, false
 		}
 		var m map[string]any
-		var json = jsoniter.ConfigCompatibleWithStandardLibrary
-		if err := json.Unmarshal(b, &m); err != nil {
+		var jsonMarshaller = jsoniter.ConfigCompatibleWithStandardLibrary
+		if err := jsonMarshaller.Unmarshal(b, &m); err != nil {
 			return nil, false
 		}
 		out := make(map[string]string, len(m))

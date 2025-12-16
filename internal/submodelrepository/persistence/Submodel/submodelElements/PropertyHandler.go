@@ -148,10 +148,7 @@ func (p PostgreSQLPropertyHandler) CreateNested(tx *sql.Tx, submodelID string, p
 // Returns:
 //   - error: An error if the update operation fails
 func (p PostgreSQLPropertyHandler) Update(idShortOrPath string, submodelElement gen.SubmodelElement) error {
-	if dErr := p.decorated.Update(idShortOrPath, submodelElement); dErr != nil {
-		return dErr
-	}
-	return nil
+	return p.decorated.Update(idShortOrPath, submodelElement)
 }
 
 // Delete removes a Property submodel element from the database.
@@ -164,10 +161,7 @@ func (p PostgreSQLPropertyHandler) Update(idShortOrPath string, submodelElement 
 // Returns:
 //   - error: An error if the delete operation fails
 func (p PostgreSQLPropertyHandler) Delete(idShortOrPath string) error {
-	if dErr := p.decorated.Delete(idShortOrPath); dErr != nil {
-		return dErr
-	}
-	return nil
+	return p.decorated.Delete(idShortOrPath)
 }
 
 // insertProperty is a helper function that inserts Property-specific data into the property_element table.
@@ -214,7 +208,7 @@ func insertProperty(property *gen.Property, tx *sql.Tx, id int) error {
 	// Handle valueID if present
 	valueIDDbID, err := persistenceutils.CreateReference(tx, property.ValueID, sql.NullInt64{}, sql.NullInt64{})
 	if err != nil {
-		fmt.Println(err)
+		_, _ = fmt.Println(err)
 		return common.NewInternalServerError("Failed to create SemanticID - no changes applied - see console for details")
 	}
 

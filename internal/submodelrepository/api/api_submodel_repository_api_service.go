@@ -24,7 +24,7 @@ import (
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
-	persistence "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence"
+	persistencepostgresql "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence"
 	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/submodelrepositoryapi/go"
 )
 
@@ -32,11 +32,11 @@ import (
 // This service should implement the business logic for every endpoint for the SubmodelRepositoryAPIAPI API.
 // Include any external packages or services that will be required by this service.
 type SubmodelRepositoryAPIAPIService struct {
-	submodelBackend persistence.PostgreSQLSubmodelDatabase
+	submodelBackend persistencepostgresql.PostgreSQLSubmodelDatabase
 }
 
 // NewSubmodelRepositoryAPIAPIService creates a default api service
-func NewSubmodelRepositoryAPIAPIService(databaseBackend persistence.PostgreSQLSubmodelDatabase) *SubmodelRepositoryAPIAPIService {
+func NewSubmodelRepositoryAPIAPIService(databaseBackend persistencepostgresql.PostgreSQLSubmodelDatabase) *SubmodelRepositoryAPIAPIService {
 	return &SubmodelRepositoryAPIAPIService{
 		submodelBackend: databaseBackend,
 	}
@@ -106,7 +106,6 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelByID(
 
 	sm, err := s.submodelBackend.GetSubmodel(string(decodedSubmodelIdentifier), false)
 	if err != nil {
-
 		if errors.Is(err, sql.ErrNoRows) {
 			return gen.Response(404, nil), nil
 		}
@@ -162,7 +161,7 @@ func (s *SubmodelRepositoryAPIAPIService) PostSubmodel(
 ) (gen.ImplResponse, error) {
 	err := s.submodelBackend.CreateSubmodel(submodel)
 	if err != nil {
-		fmt.Println("Error creating submodel: " + err.Error())
+		_, _ = fmt.Println("Error creating submodel: " + err.Error())
 		return gen.Response(500, nil), err
 	}
 	// According to REST convention, return 201 Created + the created resource

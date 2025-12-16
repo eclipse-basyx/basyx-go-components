@@ -388,13 +388,13 @@ func BuildAdministration(row model.SubmodelRow) (*model.AdministrativeInformatio
 	if common.IsArrayNotEmpty(row.Administration) {
 		adminRow, err := builders.ParseAdministrationRow(row.Administration)
 		if err != nil {
-			fmt.Println(err)
+			_, _ = fmt.Println(err)
 			return nil, err
 		}
 		if adminRow != nil {
 			admin, err := builders.BuildAdministration(*adminRow)
 			if err != nil {
-				fmt.Println(err)
+				_, _ = fmt.Println(err)
 				return nil, err
 			}
 			return admin, nil
@@ -525,13 +525,13 @@ func moreThanZeroReferences(referenceArray []*model.Reference) bool {
 func GetSubmodelDataFromDbWithJSONQuery(db *sql.DB, submodelID string, limit int64, cursor string, query *grammar.QueryWrapper, onlyIDs bool) (*sql.Rows, error) {
 	q, err := submodel_query.GetQueryWithGoqu(submodelID, limit, cursor, query, onlyIDs)
 	if err != nil {
-		fmt.Printf("Error building query: %v\n", err)
+		_, _ = fmt.Printf("Error building query: %v\n", err)
 		return nil, err
 	}
 
 	rows, err := db.Query(q)
 	if err != nil {
-		fmt.Printf("Error querying database: %v\n", err)
+		_, _ = fmt.Printf("Error querying database: %v\n", err)
 		return nil, err
 	}
 	return rows, nil

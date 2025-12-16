@@ -31,6 +31,7 @@ import (
 	"fmt"
 
 	"github.com/doug-martin/goqu/v9"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/queries"
 )
@@ -124,14 +125,17 @@ func GetQueryWithGoqu(submodelID string, limit int64, cursor string, aasQuery *g
 
 	// Add pagination if limit or cursor is specified
 	shouldPeekAhead := !onlyIDs
-	query = addPaginationToQuery(query, limit, cursor, shouldPeekAhead)
+	query, err := addPaginationToQuery(query, limit, cursor, shouldPeekAhead)
+	if err != nil {
+		return "", err
+	}
 
-	sql, _, err := query.ToSQL()
+	sqlQuery, _, err := query.ToSQL()
 	if err != nil {
 		return "", fmt.Errorf("error generating SQL: %w", err)
 	}
 
-	return sql, nil
+	return sqlQuery, nil
 }
 
 func addGroupBySubmodelID(query *goqu.SelectDataset) *goqu.SelectDataset {
@@ -181,7 +185,7 @@ func applyAASQuery(aasQuery *grammar.QueryWrapper, query *goqu.SelectDataset) (*
 //   - limit controls the maximum number of results returned
 //   - Results are ALWAYS ordered by submodel ID for consistent pagination
 //   - Uses "peek ahead" pattern (limit + 1) to determine if there are more pages
-func addPaginationToQuery(query *goqu.SelectDataset, limit int64, cursor string, peekAhead bool) *goqu.SelectDataset {
+func addPaginationToQuery(query *goqu.SelectDataset, limit int64, cursor string, peekAhead bool) (*goqu.SelectDataset, error) {
 	// Add ordering by submodel ID for consistent pagination (ALWAYS when this function is called)
 	query = query.Order(goqu.I("s.id").Asc())
 
@@ -196,8 +200,11 @@ func addPaginationToQuery(query *goqu.SelectDataset, limit int64, cursor string,
 		if peekAhead {
 			limit++
 		}
+		if limit < 0 {
+			return nil, common.NewErrBadRequest("Limit needs to be > 0")
+		}
 		query = query.Limit(uint(limit))
 	}
 
-	return query
+	return query, nil
 }
