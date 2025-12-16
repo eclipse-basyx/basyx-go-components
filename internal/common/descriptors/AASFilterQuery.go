@@ -31,10 +31,10 @@ import (
 
 	"github.com/doug-martin/goqu/v9"
 	"github.com/doug-martin/goqu/v9/exp"
-	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 )
 
+// getJoinTables relevant for only aas descriptors
 func getJoinTables(d goqu.DialectWrapper) *goqu.SelectDataset {
 
 	joinTables := d.From(goqu.T(tblDescriptor).As("descriptor")).
@@ -59,6 +59,8 @@ func getJoinTables(d goqu.DialectWrapper) *goqu.SelectDataset {
 				Eq(goqu.I("aasdesc_submodel_descriptor_semantic_id_reference.id"))))
 	return joinTables
 }
+
+// getFilterQueryFromContext relevant for only aas descriptors
 func getFilterQueryFromContext(ctx context.Context, d goqu.DialectWrapper, ds *goqu.SelectDataset, tableCol exp.AliasedExpression) (*goqu.SelectDataset, error) {
 
 	p := auth.GetQueryFilter(ctx)
@@ -80,124 +82,4 @@ func getFilterQueryFromContext(ctx context.Context, d goqu.DialectWrapper, ds *g
 		)
 	}
 	return ds, nil
-}
-
-func addSpecificAssetFilter(
-	ctx context.Context,
-	ds *goqu.SelectDataset,
-	identifable string,
-
-) (*goqu.SelectDataset, error) {
-	p := auth.GetQueryFilter(ctx)
-	if p == nil {
-		return ds, nil
-	}
-
-	ok, filter := p.FilterExpressionFor(identifable, false)
-
-	if !ok {
-		return ds, nil
-	}
-
-	wc, err := filter.EvaluateToExpression()
-	if err != nil {
-		return nil, err
-	}
-
-	ds = ds.Where(wc)
-
-	return ds, nil
-}
-
-// ExpressionIdentifiableMapper links a selectable expression with an optional
-// identifier name used for ABAC fragment filtering; canBeFiltered controls
-// whether the expression participates in filter-based projections.
-type ExpressionIdentifiableMapper struct {
-	iexp          exp.Expression
-	canBeFiltered bool
-	identifable   *string
-}
-type expressionIdentifiableMapperIntermediate struct {
-	iexp          exp.Expression
-	canBeFiltered bool
-	identifable   *string
-	mapper        *grammar.LogicalExpression
-}
-
-func extractExpressions(mappers []ExpressionIdentifiableMapper) []exp.Expression {
-	expressions := make([]exp.Expression, 0, len(mappers))
-
-	for _, m := range mappers {
-		expressions = append(expressions, m.iexp)
-	}
-
-	return expressions
-}
-
-func getColumnSelectStatement(ctx context.Context, expressionMappers []ExpressionIdentifiableMapper) ([]exp.Expression, error) {
-
-	defaultReturn := extractExpressions(expressionMappers)
-	p := auth.GetQueryFilter(ctx)
-	if p == nil {
-		return defaultReturn, nil
-	}
-
-	var ok = false
-	expressionMappersIntermediate := []expressionIdentifiableMapperIntermediate{}
-	for _, expMapper := range expressionMappers {
-		mapper := expressionIdentifiableMapperIntermediate{
-			iexp:          expMapper.iexp,
-			canBeFiltered: expMapper.canBeFiltered,
-			identifable:   expMapper.identifable,
-		}
-		if expMapper.identifable != nil {
-
-			isOk, filter := p.ExistsExpressionFor(*expMapper.identifable, true)
-			if isOk {
-				ok = true
-			}
-
-			mapper.mapper = &filter
-		}
-		expressionMappersIntermediate = append(expressionMappersIntermediate, mapper)
-	}
-	if !ok {
-		return defaultReturn, nil
-	}
-	result := []exp.Expression{}
-	for i, expMapper := range expressionMappersIntermediate {
-		if !expMapper.canBeFiltered {
-			result = append(result, expMapper.iexp)
-			continue
-		}
-		conditions := []grammar.LogicalExpression{}
-		for j, expMapper2 := range expressionMappersIntermediate {
-			if i == j {
-				continue
-			}
-			if expMapper2.identifable != nil {
-				conditions = append(conditions, *expMapper2.mapper)
-			}
-		}
-		//TODO: use simplify function on that (need to be refactored out of security first)
-		finalFilter := grammar.LogicalExpression{And: conditions}
-		wc, err := finalFilter.EvaluateToExpression()
-		if err != nil {
-			return nil, err
-		}
-		result = append(result, goqu.MAX(caseWhenColumn(wc, expMapper.iexp)))
-
-	}
-
-	return result, nil
-
-}
-
-func caseWhenColumn(wc exp.Expression, iexp exp.Expression) exp.CaseExpression {
-	return goqu.Case().
-		When(
-			wc,
-			iexp,
-		).
-		Else(nil)
 }

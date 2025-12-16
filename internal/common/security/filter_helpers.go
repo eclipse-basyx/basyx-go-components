@@ -1,0 +1,163 @@
+/*******************************************************************************
+* Copyright (C) 2025 the Eclipse BaSyx Authors and Fraunhofer IESE
+*
+* Permission is hereby granted, free of charge, to any person obtaining
+* a copy of this software and associated documentation files (the
+* "Software"), to deal in the Software without restriction, including
+* without limitation the rights to use, copy, modify, merge, publish,
+* distribute, sublicense, and/or sell copies of the Software, and to
+* permit persons to whom the Software is furnished to do so, subject to
+* the following conditions:
+*
+* The above copyright notice and this permission notice shall be
+* included in all copies or substantial portions of the Software.
+*
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+* NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+* LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+* OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+* WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*
+* SPDX-License-Identifier: MIT
+******************************************************************************/
+// Author: Martin Stemmer ( Fraunhofer IESE )
+
+package auth
+
+import (
+	"context"
+
+	"github.com/doug-martin/goqu/v9"
+	"github.com/doug-martin/goqu/v9/exp"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
+)
+
+// AddSpecificAssetFilter appends the WHERE clause for the given fragment
+// identifier if a QueryFilter is present in the context. When no filter is
+// available or the fragment is not defined, the original dataset is returned
+// unchanged.
+func AddSpecificAssetFilter(
+	ctx context.Context,
+	ds *goqu.SelectDataset,
+	identifable string,
+
+) (*goqu.SelectDataset, error) {
+	p := GetQueryFilter(ctx)
+	if p == nil {
+		return ds, nil
+	}
+
+	ok, filter := p.FilterExpressionFor(identifable, false)
+
+	if !ok {
+		return ds, nil
+	}
+
+	wc, err := filter.EvaluateToExpression()
+	if err != nil {
+		return nil, err
+	}
+
+	ds = ds.Where(wc)
+
+	return ds, nil
+}
+
+// ExpressionIdentifiableMapper links a selectable expression with an optional
+// identifier name used for ABAC fragment filtering; canBeFiltered controls
+// whether the expression participates in filter-based projections.
+type ExpressionIdentifiableMapper struct {
+	Exp           exp.Expression
+	CanBeFiltered bool
+	Identifable   *string
+}
+type expressionIdentifiableMapperIntermediate struct {
+	exp           exp.Expression
+	canBeFiltered bool
+	identifable   *string
+	mapper        *grammar.LogicalExpression
+}
+
+func extractExpressions(mappers []ExpressionIdentifiableMapper) []exp.Expression {
+	expressions := make([]exp.Expression, 0, len(mappers))
+
+	for _, m := range mappers {
+		expressions = append(expressions, m.Exp)
+	}
+
+	return expressions
+}
+
+// GetColumnSelectStatement builds the list of SELECT expressions while honoring
+// fragment filters stored in the context. Filterable expressions are wrapped
+// in CASE/MAX projections so their values are only exposed when the other
+// fragment filters succeed; otherwise the raw expressions are returned.
+func GetColumnSelectStatement(ctx context.Context, expressionMappers []ExpressionIdentifiableMapper) ([]exp.Expression, error) {
+
+	defaultReturn := extractExpressions(expressionMappers)
+	p := GetQueryFilter(ctx)
+	if p == nil {
+		return defaultReturn, nil
+	}
+
+	var ok = false
+	expressionMappersIntermediate := []expressionIdentifiableMapperIntermediate{}
+	for _, expMapper := range expressionMappers {
+		mapper := expressionIdentifiableMapperIntermediate{
+			exp:           expMapper.Exp,
+			canBeFiltered: expMapper.CanBeFiltered,
+			identifable:   expMapper.Identifable,
+		}
+		if expMapper.Identifable != nil {
+
+			isOk, filter := p.ExistsExpressionFor(*expMapper.Identifable, true)
+			if isOk {
+				ok = true
+			}
+
+			mapper.mapper = &filter
+		}
+		expressionMappersIntermediate = append(expressionMappersIntermediate, mapper)
+	}
+	if !ok {
+		return defaultReturn, nil
+	}
+	result := []exp.Expression{}
+	for i, expMapper := range expressionMappersIntermediate {
+		if !expMapper.canBeFiltered {
+			result = append(result, expMapper.exp)
+			continue
+		}
+		conditions := []grammar.LogicalExpression{}
+		for j, expMapper2 := range expressionMappersIntermediate {
+			if i == j {
+				continue
+			}
+			if expMapper2.identifable != nil {
+				conditions = append(conditions, *expMapper2.mapper)
+			}
+		}
+		//TODO: use simplify function on that (need to be refactored out of security first)
+		finalFilter := grammar.LogicalExpression{And: conditions}
+		wc, err := finalFilter.EvaluateToExpression()
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, goqu.MAX(caseWhenColumn(wc, expMapper.exp)))
+
+	}
+
+	return result, nil
+
+}
+
+func caseWhenColumn(wc exp.Expression, iexp exp.Expression) exp.CaseExpression {
+	return goqu.Case().
+		When(
+			wc,
+			iexp,
+		).
+		Else(nil)
+}

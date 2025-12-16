@@ -34,6 +34,7 @@ import (
 
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	"github.com/lib/pq"
 )
 
@@ -46,32 +47,32 @@ type rowData struct {
 }
 
 var sai = goqu.T(tblSpecificAssetID).As("specific_asset_id")
-var expMapper = []ExpressionIdentifiableMapper{
+var expMapper = []auth.ExpressionIdentifiableMapper{
 	{
-		iexp:          sai.Col(colDescriptorID),
-		canBeFiltered: false,
+		Exp:           sai.Col(colDescriptorID),
+		CanBeFiltered: false,
 	},
 	{
-		iexp:          sai.Col(colID),
-		canBeFiltered: false,
+		Exp:           sai.Col(colID),
+		CanBeFiltered: false,
 	},
 	{
-		iexp:          sai.Col(colName),
-		canBeFiltered: true,
-		identifable:   strPtr("$aasdesc#specificAssetIds[].name"),
+		Exp:           sai.Col(colName),
+		CanBeFiltered: true,
+		Identifable:   strPtr("$aasdesc#specificAssetIds[].name"),
 	},
 	{
-		iexp:          sai.Col(colValue),
-		canBeFiltered: true,
-		identifable:   strPtr("$aasdesc#specificAssetIds[].value"),
+		Exp:           sai.Col(colValue),
+		CanBeFiltered: true,
+		Identifable:   strPtr("$aasdesc#specificAssetIds[].value"),
 	},
 	{
-		iexp:          sai.Col(colSemanticID),
-		canBeFiltered: true,
+		Exp:           sai.Col(colSemanticID),
+		CanBeFiltered: true,
 	},
 	{
-		iexp:          sai.Col(colExternalSubjectRef),
-		canBeFiltered: true,
+		Exp:           sai.Col(colExternalSubjectRef),
+		CanBeFiltered: true,
 	},
 }
 
@@ -132,7 +133,7 @@ func ReadSpecificAssetIDsByDescriptorIDs(
 
 	arr := pq.Array(descriptorIDs)
 
-	expressions, err := getColumnSelectStatement(ctx, expMapper)
+	expressions, err := auth.GetColumnSelectStatement(ctx, expMapper)
 	if err != nil {
 		return nil, err
 	}
@@ -153,7 +154,7 @@ func ReadSpecificAssetIDsByDescriptorIDs(
 			sai.Col("position").Asc(),
 		)
 
-	base, err = addSpecificAssetFilter(ctx, base, "$aasdesc#specificAssetIds[]")
+	base, err = auth.AddSpecificAssetFilter(ctx, base, "$aasdesc#specificAssetIds[]")
 	if err != nil {
 		return nil, err
 	}
