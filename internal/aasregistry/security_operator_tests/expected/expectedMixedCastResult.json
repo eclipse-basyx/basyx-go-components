@@ -1,0 +1,115 @@
+{
+   "pagingMetadata": {},
+   "result": [
+      {
+         "idShort": "public",
+         "id": "urn:aas:demo:public",
+         "specificAssetIds": [
+               {
+                  "name": "visibility",
+                  "value": "public"
+               }
+         ]
+      },
+      {
+         "endpoints": [
+               {
+                  "interface": "http",
+                  "protocolInformation": {
+                     "href": "2025-01-01T00:00:00Z"
+                  }
+               }
+         ],
+         "idShort": "dtFieldAllow",
+         "id": "urn:aas:dt-field-allow"
+      },
+      {
+         "endpoints": [
+               {
+                  "interface": "http",
+                  "protocolInformation": {
+                     "href": "mixed-cast-endpoint"
+                  }
+               }
+         ],
+         "idShort": "mixedCastAllow",
+         "id": "urn:aas:mixed-cast-allow",
+         "specificAssetIds": [
+               {
+                  "name": "priority",
+                  "value": "101"
+               },
+               {
+                  "name": "shiftTime",
+                  "value": "09:15:00"
+               },
+               {
+                  "name": "commissionedYear",
+                  "value": "2025"
+               }
+         ]
+      },
+      {
+         "endpoints": [
+               {
+                  "interface": "http",
+                  "protocolInformation": {
+                     "href": "mixed-cast-endpoint-2"
+                  }
+               }
+         ],
+         "idShort": "mixedCastAllow2",
+         "id": "urn:aas:mixed-cast-allow2",
+         "specificAssetIds": [
+               {
+                  "name": "priority",
+                  "value": "150"
+               },
+               {
+                  "name": "shiftTime",
+                  "value": "10:00:00"
+               },
+               {
+                  "name": "commissionedYear",
+                  "value": "2025"
+               }
+         ]
+      },
+      {
+         "endpoints": [
+               {
+                  "interface": "http",
+                  "protocolInformation": {
+                     "href": "mixed-cast-endpoint-3"
+                  }
+               }
+         ],
+         "idShort": "mixedCastAllow3",
+         "id": "urn:aas:mixed-cast-allow3",
+         "specificAssetIds": [
+               {
+                  "name": "priority",
+                  "value": "100"
+               },
+               {
+                  "name": "shiftTime",
+                  "value": "08:01:00"
+               },
+               {
+                  "name": "commissionedYear",
+                  "value": "2025"
+               }
+         ]
+      },
+      {
+         "idShort": "regex",
+         "id": "urn:aas:regex-42",
+         "specificAssetIds": [
+               {
+                  "name": "category",
+                  "value": "regex"
+               }
+         ]
+      }
+   ]
+}

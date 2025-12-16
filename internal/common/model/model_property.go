@@ -9,6 +9,8 @@
 
 package model
 
+import "fmt"
+
 // Property Type of SubmodelElement
 type Property struct {
 	Extensions []Extension `json:"extensions,omitempty"`
@@ -49,67 +51,67 @@ func NewProperty(valueType DataTypeDefXsd) *Property {
 }
 
 //nolint:all
-func (p Property) GetIdShort() string {
+func (p *Property) GetIdShort() string {
 	return p.IdShort
 }
 
 //nolint:all
-func (p Property) GetCategory() string {
+func (p *Property) GetCategory() string {
 	return p.Category
 }
 
 //nolint:all
-func (p Property) GetDisplayName() []LangStringNameType {
+func (p *Property) GetDisplayName() []LangStringNameType {
 	return p.DisplayName
 }
 
 //nolint:all
-func (p Property) GetDescription() []LangStringTextType {
+func (p *Property) GetDescription() []LangStringTextType {
 	return p.Description
 }
 
 //nolint:all
-func (p Property) GetModelType() string {
+func (p *Property) GetModelType() string {
 	return p.ModelType
 }
 
 //nolint:all
-func (p Property) GetSemanticID() *Reference {
+func (p *Property) GetSemanticID() *Reference {
 	return p.SemanticID
 }
 
 //nolint:all
-func (p Property) GetSupplementalSemanticIds() []Reference {
+func (p *Property) GetSupplementalSemanticIds() []Reference {
 	return p.SupplementalSemanticIds
 }
 
 //nolint:all
-func (p Property) GetQualifiers() []Qualifier {
+func (p *Property) GetQualifiers() []Qualifier {
 	return p.Qualifiers
 }
 
 //nolint:all
-func (p Property) GetEmbeddedDataSpecifications() []EmbeddedDataSpecification {
+func (p *Property) GetEmbeddedDataSpecifications() []EmbeddedDataSpecification {
 	return p.EmbeddedDataSpecifications
 }
 
 //nolint:all
-func (p Property) GetExtensions() []Extension {
+func (p *Property) GetExtensions() []Extension {
 	return p.Extensions
 }
 
 //nolint:all
-func (p Property) GetValueType() DataTypeDefXsd {
+func (p *Property) GetValueType() DataTypeDefXsd {
 	return p.ValueType
 }
 
 //nolint:all
-func (p Property) GetValue() string {
+func (p *Property) GetValue() string {
 	return p.Value
 }
 
 //nolint:all
-func (p Property) GetValueID() *Reference {
+func (p *Property) GetValueID() *Reference {
 	return p.ValueID
 }
 
@@ -266,5 +268,25 @@ func AssertPropertyConstraints(obj Property) error {
 			return err
 		}
 	}
+	return nil
+}
+
+// ToValueOnly converts the Property to its value-only representation.
+// Returns the raw string value, or nil if empty.
+func (p *Property) ToValueOnly() interface{} {
+	if p.Value == "" {
+		return nil
+	}
+	return p.Value
+}
+
+// UpdateFromValueOnly updates the Property from a value-only representation.
+// Expects a string value. Returns an error if the value type doesn't match.
+func (p *Property) UpdateFromValueOnly(value interface{}) error {
+	strValue, ok := value.(string)
+	if !ok {
+		return fmt.Errorf("invalid value type for Property: expected string, got %T", value)
+	}
+	p.Value = strValue
 	return nil
 }

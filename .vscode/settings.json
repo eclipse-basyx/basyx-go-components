@@ -1,0 +1,29 @@
+{
+    "actionButtons": {
+        "commands": [
+            {
+                "name": "$(tools) Run GoLang CI Lint",
+                "color": "white",
+                "command": ". ./lint.sh"
+            },
+            {
+                "name": "$(trash) Clean Testcache",
+                "color": "white",
+                "command": "go clean -testcache"
+            },
+            {
+                "name": "$(run) Run Submodel Repository Integration Tests",
+                "color": "white",
+                "command": "go test -v ./internal/submodelrepository/integration_tests"
+            },
+            {
+                "name": "$(run) Run AAS Registry Integration Tests",
+                "color": "white",
+                "command": "go test -v ./internal/aasregistry/integration_tests"
+            }
+        ],
+        "defaultColor": "red",
+        "reloadButton": "Reload Actions",
+        "loadNpmCommands": false
+    }
+}

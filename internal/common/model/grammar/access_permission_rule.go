@@ -28,9 +28,10 @@
 package grammar
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
+
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 )
 
 // AccessPermissionRule represents a complete access control rule for Asset Administration Shell (AAS) resources.
@@ -138,7 +139,7 @@ func (j *AccessPermissionRule) UnmarshalJSON(value []byte) error {
 	type Plain AccessPermissionRule
 	var plain Plain
 
-	if err := json.Unmarshal(value, &plain); err != nil {
+	if err := common.UnmarshalAndDisallowUnknownFields(value, &plain); err != nil {
 		return err
 	}
 

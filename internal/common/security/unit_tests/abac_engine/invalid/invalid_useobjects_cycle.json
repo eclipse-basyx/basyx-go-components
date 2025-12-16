@@ -1,0 +1,34 @@
+{
+  "AllAccessPermissionRules": {
+    "DEFOBJECTS": [
+      {
+        "name": "A",
+        "USEOBJECTS": [
+          "B"
+        ]
+      },
+      {
+        "name": "B",
+        "USEOBJECTS": [
+          "A"
+        ]
+      }
+    ],
+    "rules": [
+      {
+        "ACL": {
+          "ACCESS": "ALLOW",
+          "RIGHTS": [
+            "READ"
+          ]
+        },
+        "USEOBJECTS": [
+          "A"
+        ],
+        "FORMULA": {
+          "$boolean": true
+        }
+      }
+    ]
+  }
+}

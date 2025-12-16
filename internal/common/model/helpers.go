@@ -62,6 +62,25 @@ func Response(code int, body interface{}) ImplResponse {
 	}
 }
 
+// Redirect is a helper payload type that signals the response encoder to send an HTTP redirect.
+type Redirect struct {
+	Location string
+}
+
+// ResponseWithHeaders builds an ImplResponse and converts a Location header into a Redirect payload
+// so the encoder can set the Location header on the actual HTTP response.
+func ResponseWithHeaders(code int, payload interface{}, headers map[string]string) ImplResponse {
+	// If a Location header is provided and no payload is required, return Redirect so encoder can act.
+	if headers != nil {
+		if loc, ok := headers["Location"]; ok {
+			// Use Redirect as body to signal encoder to set Location header and status.
+			return Response(code, Redirect{Location: loc})
+		}
+	}
+	// fallback to normal response
+	return Response(code, payload)
+}
+
 // IsZeroValue checks if the val is the zero-ed value.
 func IsZeroValue(val interface{}) bool {
 	return val == nil || reflect.DeepEqual(val, reflect.Zero(reflect.TypeOf(val)).Interface())
@@ -103,6 +122,27 @@ func AssertRecurseValueRequired[T any](value reflect.Value, callback func(T) err
 // EncodeJSONResponse uses the json encoder to write an interface to the http response with an optional status code
 func EncodeJSONResponse(i interface{}, status *int, w http.ResponseWriter) error {
 	wHeader := w.Header()
+
+	// Handle Redirect payloads: set Location header and write status without a body.
+	if i != nil {
+		var redirect *Redirect
+		switch r := i.(type) {
+		case Redirect:
+			redirect = &r
+		case *Redirect:
+			redirect = r
+		}
+		if redirect != nil {
+			if status != nil {
+				wHeader.Set("Location", redirect.Location)
+				w.WriteHeader(*status)
+			} else {
+				wHeader.Set("Location", redirect.Location)
+				w.WriteHeader(http.StatusFound)
+			}
+			return nil
+		}
+	}
 
 	f, ok := i.(*os.File)
 	if ok {

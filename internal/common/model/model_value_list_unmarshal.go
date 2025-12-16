@@ -1,8 +1,9 @@
 package model
 
 import (
-	"encoding/json"
 	"fmt"
+
+	jsoniter "github.com/json-iterator/go"
 )
 
 // UnmarshalJSON implements custom unmarshaling for ValueList that can handle both
@@ -10,6 +11,7 @@ import (
 func (vl *ValueList) UnmarshalJSON(data []byte) error {
 	// First try to unmarshal as array directly
 	var pairs []*ValueReferencePair
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	if err := json.Unmarshal(data, &pairs); err == nil {
 		vl.ValueReferencePairs = pairs
 		return nil

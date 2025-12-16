@@ -1,0 +1,23 @@
+{
+  "AllAccessPermissionRules": {
+    "DEFFORMULAS": [
+      {
+        "name": "f",
+        "formula": {
+          "$boolean": true
+        }
+      }
+    ],
+    "rules": [
+      {
+        "USEACL": "missing",
+        "USEFORMULA": "f",
+        "OBJECTS": [
+          {
+            "ROUTE": "/*"
+          }
+        ]
+      }
+    ]
+  }
+}

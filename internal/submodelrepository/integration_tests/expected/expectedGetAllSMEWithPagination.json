@@ -1,7 +1,5 @@
 {
-    "paging_metadata": {
-        "cursor": "myTopLevelProperty"
-    },
+    "paging_metadata": {},
     "result": [
         {
             "idShort": "myTopLevelProperty",

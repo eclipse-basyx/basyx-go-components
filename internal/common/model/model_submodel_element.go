@@ -10,8 +10,9 @@
 package model
 
 import (
-	"encoding/json"
 	"fmt"
+
+	jsoniter "github.com/json-iterator/go"
 )
 
 // SubmodelElement interface representing a SubmodelElement.
@@ -45,6 +46,7 @@ func UnmarshalSubmodelElement(data []byte) (SubmodelElement, error) {
 	var raw struct {
 		ModelType string `json:"modelType"`
 	}
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return nil, fmt.Errorf("failed to determine modelType: %w", err)
@@ -170,8 +172,10 @@ func AssertSubmodelElementRequired(obj SubmodelElement) error {
 			return err
 		}
 	}
-	if err := AssertReferenceRequired(*obj.GetSemanticID()); err != nil {
-		return err
+	if obj.GetSemanticID() != nil {
+		if err := AssertReferenceRequired(*obj.GetSemanticID()); err != nil {
+			return err
+		}
 	}
 	for _, el := range obj.GetSupplementalSemanticIds() {
 		if err := AssertReferenceRequired(el); err != nil {
@@ -211,8 +215,10 @@ func AssertSubmodelElementConstraints(obj SubmodelElement) error {
 			return err
 		}
 	}
-	if err := AssertReferenceConstraints(*obj.GetSemanticID()); err != nil {
-		return err
+	if obj.GetSemanticID() != nil {
+		if err := AssertReferenceConstraints(*obj.GetSemanticID()); err != nil {
+			return err
+		}
 	}
 	for _, el := range obj.GetSupplementalSemanticIds() {
 		if err := AssertReferenceConstraints(el); err != nil {

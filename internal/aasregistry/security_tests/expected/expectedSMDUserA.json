@@ -1,0 +1,36 @@
+{
+  "pagingMetadata": {},
+  "result": [
+    {
+      "id": "https://example.org/X/SM-A",
+      "semanticId": {
+        "type": "ExternalReference",
+        "keys": [
+          { "type": "GlobalReference", "value": "PUBLIC_READABLE" },
+          { "type": "GlobalReference", "value": "WRITTEN_BY_X" }
+        ]
+      },
+      "endpoints": [
+        {
+          "interface": "AAS-3.0",
+          "protocolInformation": { "href": "https://endpoint.example/customer" }
+        }
+      ]
+    },
+    {
+      "id": "https://example.org/X/SM-B",
+      "semanticId": {
+        "type": "ExternalReference",
+        "keys": [
+          { "type": "GlobalReference", "value": "WRITTEN_BY_Y" }
+        ]
+      },
+      "endpoints": [
+        {
+          "interface": "AAS-3.0",
+          "protocolInformation": { "href": "https://endpoint.example/customer" }
+        }
+      ]
+    }
+  ]
+}

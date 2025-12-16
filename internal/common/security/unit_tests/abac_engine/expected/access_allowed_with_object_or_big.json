@@ -1,0 +1,62 @@
+{
+  "ok": true,
+  "queryFilter": {
+    "Formula": {
+      "$and": [
+        {
+          "$eq": [
+            {
+              "$strCast": {
+                "$field": "$aasdesc#specificAssetIds[].name"
+              }
+            },
+            {
+              "$strVal": "manufacturerPartId"
+            }
+          ]
+        },
+        {
+          "$or": [
+            {
+              "$eq": [
+                {
+                  "$strCast": {
+                    "$field": "$aasdesc#id"
+                  }
+                },
+                {
+                  "$strVal": "martin"
+                }
+              ]
+            },
+            {
+              "$eq": [
+                {
+                  "$strCast": {
+                    "$field": "$aasdesc#id"
+                  }
+                },
+                {
+                  "$strVal": "jannik"
+                }
+              ]
+            },
+            {
+              "$eq": [
+                {
+                  "$strCast": {
+                    "$field": "$aasdesc#id"
+                  }
+                },
+                {
+                  "$strVal": "aaron"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "reason": "ALLOW"
+}

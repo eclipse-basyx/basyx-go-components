@@ -21,10 +21,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           # Use the version in go.mod if present; otherwise pin a version
           go-version-file: go.mod
@@ -34,9 +34,17 @@ jobs:
         run: go mod download
         
       - name: Run common model grammar tests
-        run: go test github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar -v -cover
+        run: go test github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar -count=1 -v -cover
         
       - name: Run common security model tests
         run: |
-          cd internal/common/security/model/unit_tests
-          go test -v -cover
+          cd internal/common/security/unit_tests/model
+          go test -count=1 -v -cover
+      
+      - name: Run common tokenizer tests
+        run: go test -count=1 -v -cover -run 'TestTokenizeFieldPaths' ./internal/common/builder
+
+      - name: Run common security abac engine tests
+        run: |
+          cd internal/common/security/unit_tests/abac_engine
+          go test -count=1 -v -cover

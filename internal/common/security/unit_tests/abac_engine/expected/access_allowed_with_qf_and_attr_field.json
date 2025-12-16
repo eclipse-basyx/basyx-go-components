@@ -1,0 +1,18 @@
+{
+  "ok": true,
+  "queryFilter": {
+    "Formula": {
+      "$eq": [
+        {
+          "$strCast": {
+            "$field": "$aasdesc#id"
+          }
+        },
+        {
+          "$strVal": "id-123"
+        }
+      ]
+    }
+  },
+  "reason": "ALLOW"
+}

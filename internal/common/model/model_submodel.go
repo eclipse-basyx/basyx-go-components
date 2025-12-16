@@ -11,11 +11,13 @@ package model
 
 import (
 	"encoding/json"
+
+	jsoniter "github.com/json-iterator/go"
 )
 
 // Submodel struct representing a Submodel.
 type Submodel struct {
-	Extension []Extension `json:"extension,omitempty"`
+	Extensions []Extension `json:"extensions,omitempty"`
 
 	Category string `json:"category,omitempty" validate:"regexp=^([\\\\x09\\\\x0a\\\\x0d\\\\x20-\\\\ud7ff\\\\ue000-\\\\ufffd]|\\\\ud800[\\\\udc00-\\\\udfff]|[\\\\ud801-\\\\udbfe][\\\\udc00-\\\\udfff]|\\\\udbff[\\\\udc00-\\\\udfff])*$"`
 
@@ -39,7 +41,7 @@ type Submodel struct {
 	//nolint:all
 	SupplementalSemanticIds []*Reference `json:"supplementalSemanticIds,omitempty"`
 
-	Qualifier []Qualifier `json:"qualifier,omitempty"`
+	Qualifiers []Qualifier `json:"qualifiers,omitempty"`
 
 	EmbeddedDataSpecifications []EmbeddedDataSpecification `json:"embeddedDataSpecifications,omitempty"`
 
@@ -56,6 +58,7 @@ func (s *Submodel) UnmarshalJSON(data []byte) error {
 	}{
 		Alias: (*Alias)(s),
 	}
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	if err := json.Unmarshal(data, aux); err != nil {
 		return err
 	}
@@ -92,7 +95,7 @@ func AssertSubmodelRequired(obj Submodel) error {
 		}
 	}
 
-	for _, el := range obj.Extension {
+	for _, el := range obj.Extensions {
 		if err := AssertExtensionRequired(el); err != nil {
 			return err
 		}
@@ -131,7 +134,7 @@ func AssertSubmodelRequired(obj Submodel) error {
 			}
 		}
 	}
-	for _, el := range obj.Qualifier {
+	for _, el := range obj.Qualifiers {
 		if err := AssertQualifierRequired(el); err != nil {
 			return err
 		}
@@ -146,7 +149,7 @@ func AssertSubmodelRequired(obj Submodel) error {
 
 // AssertSubmodelConstraints checks if the values respects the defined constraints
 func AssertSubmodelConstraints(obj Submodel) error {
-	for _, el := range obj.Extension {
+	for _, el := range obj.Extensions {
 		if err := AssertExtensionConstraints(el); err != nil {
 			return err
 		}
@@ -185,7 +188,7 @@ func AssertSubmodelConstraints(obj Submodel) error {
 			}
 		}
 	}
-	for _, el := range obj.Qualifier {
+	for _, el := range obj.Qualifiers {
 		if err := AssertQualifierConstraints(el); err != nil {
 			return err
 		}

@@ -9,6 +9,13 @@
 
 package model
 
+import (
+	"encoding/json"
+	"fmt"
+
+	jsoniter "github.com/json-iterator/go"
+)
+
 // Entity type of Entity
 type Entity struct {
 	Extensions []Extension `json:"extensions,omitempty"`
@@ -147,6 +154,39 @@ func (a *Entity) SetEmbeddedDataSpecifications(v []EmbeddedDataSpecification) {
 	a.EmbeddedDataSpecifications = v
 }
 
+// UnmarshalJSON custom unmarshaler for Entity to handle the Statements field
+func (a *Entity) UnmarshalJSON(data []byte) error {
+	// Create a temporary struct with the same fields but Statements as json.RawMessage
+	type Alias Entity
+	aux := &struct {
+		Statements []json.RawMessage `json:"statements,omitempty"`
+		*Alias
+	}{
+		Alias: (*Alias)(a),
+	}
+
+	// Unmarshal into the temporary struct
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
+	if err := json.Unmarshal(data, aux); err != nil {
+		return err
+	}
+
+	// Now process the Statements field manually
+	if aux.Statements != nil {
+		statements := make([]SubmodelElement, len(aux.Statements))
+		for i, raw := range aux.Statements {
+			element, err := UnmarshalSubmodelElement(raw)
+			if err != nil {
+				return fmt.Errorf("failed to unmarshal Statements[%d]: %w", i, err)
+			}
+			statements[i] = element
+		}
+		a.Statements = statements
+	}
+
+	return nil
+}
+
 // AssertEntityRequired checks if the required fields are not zero-ed
 func AssertEntityRequired(obj Entity) error {
 	elements := map[string]interface{}{
@@ -246,5 +286,88 @@ func AssertEntityConstraints(obj Entity) error {
 			return err
 		}
 	}
+	return nil
+}
+
+// ToValueOnly converts the Entity to its Value Only representation.
+// Returns a map with "statements" (child elements), "globalAssetId", and "specificAssetIds".
+// Returns nil if the entity has no statements.
+//
+// Parameters:
+//   - elementSerializer: function to convert child SubmodelElements to value-only form
+//
+// Example output:
+//
+//	{
+//	  "statements": {...},
+//	  "globalAssetId": "...",
+//	  "specificAssetIds": [...]
+//	}
+func (a *Entity) ToValueOnly(elementSerializer func([]SubmodelElement) interface{}) interface{} {
+	result := map[string]interface{}{
+		"entityType": a.EntityType,
+	}
+
+	if len(a.Statements) > 0 {
+		result["statements"] = elementSerializer(a.Statements)
+	}
+	if a.GlobalAssetID != "" {
+		result["globalAssetId"] = a.GlobalAssetID
+	}
+
+	if len(a.SpecificAssetIds) > 0 {
+		result["specificAssetIds"] = a.SpecificAssetIds
+	}
+
+	return result
+}
+
+// UpdateFromValueOnly updates the Entity from a Value Only representation.
+// Expects a map with "statements", and optionally "globalAssetId" and "specificAssetIds".
+//
+// Parameters:
+//   - value: map containing entity data
+//   - elementDeserializer: function to convert value-only form to SubmodelElement slice
+//
+// Returns an error if deserialization fails.
+func (a *Entity) UpdateFromValueOnly(
+	value interface{},
+	elementDeserializer func(interface{}) ([]SubmodelElement, error),
+) error {
+	valueMap, ok := value.(map[string]interface{})
+	if !ok {
+		return fmt.Errorf("invalid value type for Entity: expected map, got %T", value)
+	}
+
+	if statementsVal, ok := valueMap["statements"]; ok {
+		statements, err := elementDeserializer(statementsVal)
+		if err != nil {
+			return fmt.Errorf("failed to deserialize Entity statements: %w", err)
+		}
+		a.Statements = statements
+	}
+
+	if globalAssetID, ok := valueMap["globalAssetId"].(string); ok {
+		a.GlobalAssetID = globalAssetID
+	}
+
+	if specificAssetIDsVal, ok := valueMap["specificAssetIds"]; ok {
+		if specificAssetIDsSlice, ok := specificAssetIDsVal.([]interface{}); ok {
+			a.SpecificAssetIds = make([]SpecificAssetID, len(specificAssetIDsSlice))
+			for i, item := range specificAssetIDsSlice {
+				if itemMap, ok := item.(map[string]interface{}); ok {
+					var assetID SpecificAssetID
+					if name, ok := itemMap["name"].(string); ok {
+						assetID.Name = name
+					}
+					if value, ok := itemMap["value"].(string); ok {
+						assetID.Value = value
+					}
+					a.SpecificAssetIds[i] = assetID
+				}
+			}
+		}
+	}
+
 	return nil
 }

@@ -1,0 +1,27 @@
+{
+   "pagingMetadata":{
+      
+   },
+   "result":[
+      {
+         "idShort":"public",
+         "id":"urn:aas:demo:public",
+         "specificAssetIds":[
+            {
+               "name":"visibility",
+               "value":"public"
+            }
+         ]
+      },
+      {
+         "idShort":"regex",
+         "id":"urn:aas:regex-42",
+         "specificAssetIds":[
+            {
+               "name":"category",
+               "value":"regex"
+            }
+         ]
+      }
+   ]
+}

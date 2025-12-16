@@ -30,6 +30,10 @@ func AssertReferenceRequired(obj Reference) error {
 		}
 	}
 
+	if len(obj.Keys) < 1 {
+		return &RequiredError{Field: "keys must contain at least one element"}
+	}
+
 	for _, el := range obj.Keys {
 		if err := AssertKeyRequired(el); err != nil {
 			return err

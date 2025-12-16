@@ -28,9 +28,10 @@
 package grammar
 
 import (
-	"encoding/json"
 	"fmt"
 	"reflect"
+
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 )
 
 // ACLACCESS defines the access mode for an Access Control List (ACL) entry.
@@ -71,7 +72,7 @@ var enumValuesACLACCESS = []interface{}{
 //     enum values. Returns nil on successful unmarshaling and validation.
 func (j *ACLACCESS) UnmarshalJSON(value []byte) error {
 	var v string
-	if err := json.Unmarshal(value, &v); err != nil {
+	if err := common.UnmarshalAndDisallowUnknownFields(value, &v); err != nil {
 		return err
 	}
 	var ok bool
@@ -104,7 +105,7 @@ func (j *ACLACCESS) UnmarshalJSON(value []byte) error {
 //     Returns nil on successful unmarshaling and validation.
 func (j *ACL) UnmarshalJSON(value []byte) error {
 	var raw map[string]interface{}
-	if err := json.Unmarshal(value, &raw); err != nil {
+	if err := common.UnmarshalAndDisallowUnknownFields(value, &raw); err != nil {
 		return err
 	}
 	if _, ok := raw["ACCESS"]; raw != nil && !ok {
@@ -115,7 +116,7 @@ func (j *ACL) UnmarshalJSON(value []byte) error {
 	}
 	type Plain ACL
 	var plain Plain
-	if err := json.Unmarshal(value, &plain); err != nil {
+	if err := common.UnmarshalAndDisallowUnknownFields(value, &plain); err != nil {
 		return err
 	}
 	*j = ACL(plain)

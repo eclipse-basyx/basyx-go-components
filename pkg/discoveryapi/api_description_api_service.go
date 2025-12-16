@@ -31,6 +31,6 @@ func NewDescriptionAPIAPIService() *DescriptionAPIAPIService {
 // GetDescription - Returns the self-describing information of a network resource (ServiceDescription)
 func (s *DescriptionAPIAPIService) GetDescription(ctx context.Context) (model.ImplResponse, error) {
 	return model.Response(200, model.ServiceDescription{
-		Profiles: []string{"https://admin-shell.io/aas/API/3/0/DiscoveryServiceSpecification/SSP-001"},
+		Profiles: []string{"https://admin-shell.io/aas/API/3/1/DiscoveryServiceSpecification/SSP-001"},
 	}), nil
 }

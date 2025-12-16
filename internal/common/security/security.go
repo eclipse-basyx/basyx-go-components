@@ -33,6 +33,8 @@
 //   - ABAC policy-based authorization
 //   - Configurable security middleware for Chi routers
 //   - Role-based access control through JWT claims
+//
+// Author: Martin Stemmer ( Fraunhofer IESE )
 package auth
 
 import (
@@ -40,7 +42,7 @@ import (
 	"os"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
-	"github.com/go-chi/chi/v5"
+	api "github.com/go-chi/chi/v5"
 )
 
 // SetupSecurity configures and applies security middleware to a Chi router
@@ -78,7 +80,7 @@ import (
 //  1. Incoming requests are first processed by OIDC middleware for authentication
 //  2. Authenticated requests are then evaluated by ABAC middleware for authorization
 //  3. Only requests that pass both checks are allowed to proceed to handlers
-func SetupSecurity(ctx context.Context, cfg *common.Config, r chi.Router) error {
+func SetupSecurity(ctx context.Context, cfg *common.Config, r *api.Mux) error {
 	if !cfg.ABAC.Enabled {
 		return nil
 	}
@@ -98,7 +100,7 @@ func SetupSecurity(ctx context.Context, cfg *common.Config, r chi.Router) error 
 		if err != nil {
 			return err
 		}
-		m, err := ParseAccessModel(data)
+		m, err := ParseAccessModel(data, r)
 		if err != nil {
 			return err
 		}

@@ -26,12 +26,16 @@
 // Package common provides utility functions and shared components
 // used across the BaSyx Go components implementation.
 //
-//nolint:revive
+//nolint:all
 package common
 
 import (
+	"bytes"
+	"encoding/json"
 	"strings"
 	"time"
+
+	jsoniter "github.com/json-iterator/go"
 )
 
 // GetCurrentTimestamp returns the current timestamp in RFC3339 format.
@@ -81,4 +85,79 @@ func NormalizeBasePath(p string) string {
 		p = "/" + p
 	}
 	return strings.TrimRight(p, "/")
+}
+
+// IsArrayNotEmpty checks whether a JSON RawMessage contains a non-empty array.
+//
+// This function is useful when processing database query results that return
+// JSON arrays. It helps distinguish between empty arrays, null values, and
+// arrays with actual content.
+//
+// The function considers data to be empty if:
+//   - The RawMessage has zero length
+//   - The string representation equals "null"
+//
+// Parameters:
+//   - data: JSON RawMessage to check, typically from a database query result
+//
+// Returns:
+//   - true if the data contains a non-empty, non-null JSON value
+//   - false if the data is empty or represents a null value
+//
+// Examples:
+//
+//	IsArrayNotEmpty(json.RawMessage("[]"))           // Returns: true
+//	IsArrayNotEmpty(json.RawMessage("[1,2,3]"))      // Returns: true
+//	IsArrayNotEmpty(json.RawMessage("null"))         // Returns: false
+//	IsArrayNotEmpty(json.RawMessage(""))             // Returns: false
+func IsArrayNotEmpty(data json.RawMessage) bool {
+	return len(data) > 0 && string(data) != "null"
+}
+
+// UnmarshalAndDisallowUnknownFields unmarshals the given JSON payload into the
+// provided target value and rejects any unknown fields.
+//
+// This function behaves like a strict JSON parser: if the input contains fields
+// not defined in the target structure, an error is returned. This is useful when
+// validating external input to ensure that only expected fields are accepted.
+//
+// Parameters:
+//   - value: Raw JSON bytes.
+//   - v:     Pointer to the target value to unmarshal into.
+//
+// Returns:
+//   - error: Non-nil if the JSON is invalid or contains unknown fields.
+func UnmarshalAndDisallowUnknownFields(value []byte, v any) error {
+
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
+	dec := json.NewDecoder(bytes.NewReader(value))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(v); err != nil {
+		return err
+	}
+	return nil
+}
+
+// Unmarshal unmarshals the given JSON payload into the provided target value
+// without rejecting unknown fields.
+//
+// Unlike UnmarshalAndDisallowUnknownFields, this function allows additional
+// fields in the input JSON. Unknown fields are silently ignored, which is useful
+// when the input may contain optional or future fields not represented in the
+// target structure.
+//
+// Parameters:
+//   - value: Raw JSON bytes.
+//   - v:     Pointer to the target value to unmarshal into.
+//
+// Returns:
+//   - error: Non-nil if the JSON is invalid.
+func Unmarshal(value []byte, v any) error {
+
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
+	dec := json.NewDecoder(bytes.NewReader(value))
+	if err := dec.Decode(v); err != nil {
+		return err
+	}
+	return nil
 }

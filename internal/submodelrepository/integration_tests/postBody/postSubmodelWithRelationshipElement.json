@@ -1,0 +1,34 @@
+{
+    "modelType": "Submodel",
+    "id": "MarcusThisIsAOnlyRelationshipElementSubmodel",
+    "idShort": "RelationshipElementSubmodel",
+    "kind": "Instance",
+    "administration": {
+        "revision": "1",
+        "version": "3"
+    },
+    "submodelElements": [
+        {
+            "modelType": "RelationshipElement",
+            "idShort": "DemoRelationshipElement",
+            "first": {
+                "type": "ModelReference",
+                "keys": [
+                    {
+                        "type": "Submodel",
+                        "value": "urn:uuid:123e4567-e89b-12d3-a456-426614174000"
+                    }
+                ]
+            },
+            "second": {
+                "type": "ModelReference",
+                "keys": [
+                    {
+                        "type": "Submodel",
+                        "value": "urn:uuid:123e4567-e89b-12d3-a456-426614174001"
+                    }
+                ]
+            }
+        }
+    ]
+}

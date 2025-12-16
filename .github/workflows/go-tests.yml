@@ -21,9 +21,9 @@ jobs:
   #   runs-on: ubuntu-latest
   #   steps:
   #     - name: Check out code
-  #       uses: actions/checkout@v5
+  #       uses: actions/checkout@v6
   #     - name: Set up Go
-  #       uses: actions/setup-go@v5
+  #       uses: actions/setup-go@v6
   #       with:
   #         go-version: '1.25'
   #     - name: Get dependencies
@@ -36,10 +36,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           # Use the version in go.mod if present; otherwise pin a version
           go-version-file: go.mod
@@ -69,9 +69,17 @@ jobs:
           cd internal/discoveryservice/integration_tests
           go test -v
 
-      - name: Run access controll validation tests
+      - name: Run aas registry tests
         run: |
-          cd internal/common/security/model/unit_tests
+          cd internal/aasregistry/integration_tests
+          go test -v
+      - name: Run aas registry security tests
+        run: |
+          cd internal/aasregistry/security_tests
+          go test -v
+      - name: Run aas registry security tests 2
+        run: |
+          cd internal/aasregistry/security_operator_tests
           go test -v
       # - name: Cleanup Docker
       #   if: always()

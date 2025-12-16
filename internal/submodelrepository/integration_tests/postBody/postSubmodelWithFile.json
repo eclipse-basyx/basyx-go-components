@@ -1,0 +1,18 @@
+{
+    "id": "http://iese.fraunhofer.de/id/sm/OnlyFileSubmodel_Test",
+    "idShort": "OnlyFileSubmodel_Test",
+    "modelType": "Submodel",
+    "kind": "Instance",
+    "administration": {
+        "revision": "1",
+        "version": "3"
+    },
+    "submodelElements": [
+        {
+            "idShort": "DemoFile",
+            "modelType": "File",
+            "contentType": "image/png",
+            "value": "http://example.com/placeholder.png"
+        }
+    ]
+}

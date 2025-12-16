@@ -1,5 +1,8 @@
 # Stage 1: Build the application
-FROM golang:1.25-alpine AS builder
+FROM golang:1.25-alpine3.22 AS builder
+
+# Version argument for build-time injection
+ARG VERSION=dev
 
 RUN apk update && apk add --no-cache git ca-certificates && update-ca-certificates
 WORKDIR /app
@@ -11,14 +14,15 @@ RUN go mod download
 # Copy full source
 COPY . .
 
-# Build discoveryservice binary
-# (Adjust module path if needed; this targets ./cmd/discoveryservice)
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o discoveryservice ./cmd/discoveryservice
+# Build discoveryservice binary with version information
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo \
+    -ldflags "-X main.Version=${VERSION} -X main.BuildTime=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    -o discoveryservice ./cmd/discoveryservice
 
 # Stage 2: Minimal runtime image
-FROM alpine:latest
+FROM alpine:3.22
 
-RUN apk --no-cache add ca-certificates wget
+RUN apk --no-cache --no-scripts add ca-certificates wget
 WORKDIR /root/
 
 # Copy binary

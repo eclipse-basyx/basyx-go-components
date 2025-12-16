@@ -28,9 +28,10 @@
 package grammar
 
 import (
-	"encoding/json"
 	"fmt"
 	"regexp"
+
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 )
 
 // TimeLiteralPattern represents a time literal pattern in the format "HH:MM" or "HH:MM:SS".
@@ -40,7 +41,7 @@ type TimeLiteralPattern string
 func (j *TimeLiteralPattern) UnmarshalJSON(value []byte) error {
 	type Plain TimeLiteralPattern
 	var plain Plain
-	if err := json.Unmarshal(value, &plain); err != nil {
+	if err := common.UnmarshalAndDisallowUnknownFields(value, &plain); err != nil {
 		return err
 	}
 	if matched, _ := regexp.MatchString(`^[0-9][0-9]:[0-9][0-9](:[0-9][0-9])?$`, string(plain)); !matched {

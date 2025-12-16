@@ -11,6 +11,7 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/testenv"
+	jsoniter "github.com/json-iterator/go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -47,6 +48,7 @@ func (c *RequestClient) GetLookupShellsExpect(t testing.TB, aasID string, expect
 		return nil
 	}
 	var got []model.SpecificAssetID
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	if err := json.Unmarshal(raw, &got); err != nil {
 		t.Fatalf("unmarshal GetLookupShells response: %v", err)
 	}
@@ -72,6 +74,37 @@ func (c *RequestClient) DeleteLookupShells(t testing.TB, aasID string) {
 	c.DeleteLookupShellsExpect(t, aasID, http.StatusNoContent)
 }
 
+// LookupShellIDsByAssetLinkGET queries GET /lookup/shells?assetIds=...&limit=&cursor=
+func (c *RequestClient) LookupShellIDsByAssetLinkGET(
+	t testing.TB,
+	pairs []model.SpecificAssetID,
+	limit int,
+	cursor string,
+	expect int,
+) model.GetAllAssetAdministrationShellIdsByAssetLink200Response {
+	t.Helper()
+	url := fmt.Sprintf("%s/lookup/shells?limit=%d", c.BaseURL, limit)
+	// add each assetIds as base64url-encoded JSON {"name":"...","value":"..."}
+	for _, p := range pairs {
+		obj, err := json.Marshal(map[string]string{"name": p.Name, "value": p.Value})
+		require.NoError(t, err)
+		url += "&assetIds=" + common.EncodeString(string(obj))
+	}
+	if cursor != "" {
+		url += "&cursor=" + cursor
+	}
+
+	raw := testenv.GetExpect(t, url, expect)
+	var out model.GetAllAssetAdministrationShellIdsByAssetLink200Response
+	if expect == http.StatusOK {
+		var json = jsoniter.ConfigCompatibleWithStandardLibrary
+		if err := json.Unmarshal(raw, &out); err != nil {
+			t.Fatalf("unmarshal LookupShellIdsByAssetLinkGET response: %v", err)
+		}
+	}
+	return out
+}
+
 // LookupShellsByAssetLink sends a POST request to /lookup/shellsByAssetLink?limit=&cursor= (renamed from SearchBy)
 func (c *RequestClient) LookupShellsByAssetLink(
 	t testing.TB,
@@ -91,6 +124,7 @@ func (c *RequestClient) LookupShellsByAssetLink(
 	}
 	raw := testenv.PostJSONExpect(t, url, body, expect)
 	var out model.GetAllAssetAdministrationShellIdsByAssetLink200Response
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	if expect == http.StatusOK {
 		if err := json.Unmarshal(raw, &out); err != nil {
 			t.Fatalf("unmarshal LookupShellsByAssetLink response: %v", err)

@@ -1,0 +1,23 @@
+{
+    "id": "https://iese.fraunhofer.de/ids/aas/martinistcool",
+    "administration": {
+        "version": "1"
+    },
+    "specificAssetIds": [
+        {"name": "1", "value": "2"}
+    ],
+    "submodelDescriptors": [
+        {
+            "id": "https://iese.fraunhofer.de/ids/aas/satisfactory",
+            "endpoints": [
+                {
+                    "interface": "AAS-3.0",
+                    "protocolInformation": {
+                        "href": "https://demo3.digital-twin.host/aas-environment/shells/supersimple"
+                    }
+                }
+            ]
+        }
+    ],
+    "assetKind": "Role"
+}

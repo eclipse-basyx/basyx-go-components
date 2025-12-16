@@ -28,9 +28,10 @@
 package grammar
 
 import (
-	"encoding/json"
 	"fmt"
 	"regexp"
+
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 )
 
 // StandardString represents a standard string that must not start with the '$' character.
@@ -40,7 +41,7 @@ type StandardString string
 func (j *StandardString) UnmarshalJSON(value []byte) error {
 	type Plain StandardString
 	var plain Plain
-	if err := json.Unmarshal(value, &plain); err != nil {
+	if err := common.UnmarshalAndDisallowUnknownFields(value, &plain); err != nil {
 		return err
 	}
 	if matched, _ := regexp.MatchString(`^([^$].*|)$`, string(plain)); !matched {

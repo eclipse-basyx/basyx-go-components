@@ -2,160 +2,345 @@
     {
         "context": "Health endpoint",
         "method": "GET",
-        "endpoint": "http://localhost:5004/health",
+        "endpoint": "http://localhost:6004/health",
         "shouldMatch": "expected/expectedHealthEndpoint.json",
         "expectedStatus": 200
     },
     {
         "context": "Create Top Level Property",
         "method": "POST",
-        "endpoint": "http://localhost:5004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements",
+        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements",
         "data": "postBody/postTopLevelProperty.json",
         "expectedStatus": 201
     },
     {
         "context": "Get Top Level Property",
         "method": "GET",
-        "endpoint": "http://localhost:5004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/myTopLevelProperty",
+        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/myTopLevelProperty",
         "shouldMatch": "expected/expectedGetTopLevelProperty.json",
         "expectedStatus": 200
     },
     {
         "context": "Pagination valid",
         "method": "GET",
-        "endpoint": "http://localhost:5004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements",
+        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements",
         "shouldMatch": "expected/expectedGetAllSMEWithPagination.json",
         "expectedStatus": 200
     },
     {
         "context": "Delete item in nested structure",
         "method": "POST",
-        "endpoint": "http://localhost:5004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements",
+        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements",
         "data": "postBody/postNestedStructure.json",
         "expectedStatus": 201
     },
     {
         "context": "Delete item in nested structure",
         "method": "DELETE",
-        "endpoint": "http://localhost:5004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/1.2.3.4.5.6[0]",
+        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/1.2.3.4.5.6[0]",
         "data": "postBody/postNestedStructure.json",
         "expectedStatus": 204
     },
     {
         "context": "Delete item in nested structure - Delete non-existing item",
         "method": "DELETE",
-        "endpoint": "http://localhost:5004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/1.2.3.4.5.6[3]",
+        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/1.2.3.4.5.6[3]",
         "data": "postBody/postNestedStructure.json",
         "expectedStatus": 404
     },
     {
         "context": "Delete item in nested structure",
         "method": "GET",
-        "endpoint": "http://localhost:5004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/1",
+        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/1",
         "shouldMatch": "expected/expectedNestedStructureAfterDeleteListItem.json",
         "expectedStatus": 200
     },
     {
         "context": "Delete item in nested structure",
         "method": "GET",
-        "endpoint": "http://localhost:5004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/1.2.3.4.5.6[0]",
+        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/1.2.3.4.5.6[0]",
         "shouldMatch": "expected/expectedItemInListAfterDelete.json",
         "expectedStatus": 200
     },
     {
         "context": "Delete Top Level Property",
         "method": "DELETE",
-        "endpoint": "http://localhost:5004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/myTopLevelProperty",
+        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/myTopLevelProperty",
         "expectedStatus": 204
     },
     {
         "context": "Get Deleted Top Level Property",
         "method": "GET",
-        "endpoint": "http://localhost:5004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/myTopLevelProperty",
+        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/myTopLevelProperty",
         "expectedStatus": 404
     },
     {
         "context": "Get SMEs From nonexisting Submodel",
         "method": "GET",
-        "endpoint": "http://localhost:5004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWwx/submodel-elements",
+        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWwx/submodel-elements",
         "expectedStatus": 404
     },
     {
         "context": "Create Full Submodel Elements Json",
         "method": "POST",
-        "endpoint": "http://localhost:5004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements",
+        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements",
         "data": "postBody/postFullSME.json",
         "expectedStatus": 201
     },
     {
         "context": "Post Full Submodel",
         "method": "POST",
-        "endpoint": "http://localhost:5004/submodels",
+        "endpoint": "http://localhost:6004/submodels",
         "data": "postBody/postFullSM.json",
         "expectedStatus": 201
     },
     {
         "context": "Get Full Submodel",
         "method": "GET",
-        "endpoint": "http://localhost:5004/submodels/aHR0cDovL2FjcGx0Lm9yZy9TdWJtb2RlbHMvQXNzZXRzL1Rlc3RBc3NldC9JZGVudGlmaWNhdGlvbg",
+        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2FjcGx0Lm9yZy9TdWJtb2RlbHMvQXNzZXRzL1Rlc3RBc3NldC9JZGVudGlmaWNhdGlvbg",
         "shouldMatch": "expected/expectedGetFullSM.json",
         "expectedStatus": 200
     },
     {
         "context": "Delete Full Submodel",
         "method": "DELETE",
-        "endpoint": "http://localhost:5004/submodels/aHR0cDovL2FjcGx0Lm9yZy9TdWJtb2RlbHMvQXNzZXRzL1Rlc3RBc3NldC9JZGVudGlmaWNhdGlvbg",
+        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2FjcGx0Lm9yZy9TdWJtb2RlbHMvQXNzZXRzL1Rlc3RBc3NldC9JZGVudGlmaWNhdGlvbg",
         "expectedStatus": 204
     },
     {
         "context": "Get Deleted Full Submodel",
         "method": "GET",
-        "endpoint": "http://localhost:5004/submodels/aHR0cDovL2FjcGx0Lm9yZy9TdWJtb2RlbHMvQXNzZXRzL1Rlc3RBc3NldC9JZGVudGlmaWNhdGlvbg",
+        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2FjcGx0Lm9yZy9TdWJtb2RlbHMvQXNzZXRzL1Rlc3RBc3NldC9JZGVudGlmaWNhdGlvbg",
         "expectedStatus": 404
     },
     {
-    "method": "GET",
-    "endpoint": "http://localhost:5004/submodels/$metadata?limit=5",
-    "shouldMatch": "expected/expectedGetSubmodelsMetadata.json",
-    "expectedStatus": 200
+        "context": "GET Get Submodels Metadata with limit",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/$metadata?limit=5",
+        "shouldMatch": "expected/expectedGetSubmodelsMetadata.json",
+        "expectedStatus": 200
     },
     {
-    "method": "GET",
-    "endpoint": "http://localhost:5004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw",
-    "shouldMatch": "expected/expectedGetSubmodelById.json",
-    "expectedStatus": 200
+        "context": "GET Get Submodel by Id",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw",
+        "shouldMatch": "expected/expectedGetSubmodelById.json",
+        "expectedStatus": 200
     },
     {
-    "method": "GET",
-    "endpoint": "http://localhost:5004/submodels/aHR0cDovL2V4YW1wbGUuY29tL2lkL25vbnRoaW5n",
-    "expectedStatus": 404
+        "context": "GET Get non-existing Submodel by Id",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2V4YW1wbGUuY29tL2lkL25vbnRoaW5n",
+        "expectedStatus": 404
     },
     {
-    "context": "Post heavy Submodel",
-    "method": "POST",
-    "endpoint": "http://localhost:5004/submodels",
-    "data": "postBody/heavySubmodel.json",
-    "expectedStatus": 201
+        "context": "Post heavy Submodel",
+        "method": "POST",
+        "endpoint": "http://localhost:6004/submodels",
+        "data": "postBody/heavySubmodel.json",
+        "expectedStatus": 201
     },
     {
-    "context": "Get heavy Submodel",
-    "method": "GET",
-    "endpoint": "http://localhost:5004/submodels/TWFyY3VzVGhpc0lzQUhlYXZ5U3VibW9kZWw",
-    "shouldMatch": "expected/expectedGetHeavySubmodel.json",
-    "expectedStatus": 200
+        "context": "Get heavy Submodel",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQUhlYXZ5U3VibW9kZWw",
+        "shouldMatch": "postBody/heavySubmodel.json",
+        "expectedStatus": 200
     },
     {
-    "context": "Post minimal Administration Submodel",
-    "method": "POST",
-    "endpoint": "http://localhost:5004/submodels",
-    "data": "postBody/submodelMinimalAdministration.json",
-    "expectedStatus": 201
+        "context": "Post minimal Administration Submodel",
+        "method": "POST",
+        "endpoint": "http://localhost:6004/submodels",
+        "data": "postBody/submodelMinimalAdministration.json",
+        "expectedStatus": 201
     },
     {
-    "context": "Get minimal Administration Submodel",
-    "method": "GET",
-    "endpoint": "http://localhost:5004/submodels/TWFyY3VzVGhpc0lzQU1pbmltYWxBZG1pbmlzdHJhdGlvblN1Ym1vZGVs",
-    "shouldMatch": "postBody/submodelMinimalAdministration.json",
-    "expectedStatus": 200
+        "context": "Get minimal Administration Submodel",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU1pbmltYWxBZG1pbmlzdHJhdGlvblN1Ym1vZGVs",
+        "shouldMatch": "postBody/submodelMinimalAdministration.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "Post Submodel with Operation SubmodelElement",
+        "method": "POST",
+        "endpoint": "http://localhost:6004/submodels",
+        "data": "postBody/postSubmodelWithOperation.json",
+        "expectedStatus": 201
+    },
+    {
+        "context": "Get Submodel with Operation SubmodelElement",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlPcGVyYXRpb25TdWJtb2RlbA",
+        "shouldMatch": "postBody/postSubmodelWithOperation.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "Post Submodel with Entity SubmodelElement",
+        "method": "POST",
+        "endpoint": "http://localhost:6004/submodels",
+        "data": "postBody/postSubmodelWithEntity.json",
+        "expectedStatus": 201
+    },
+    {
+        "context": "Get Submodel with Entity SubmodelElement",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlFbnRpdHlTdWJtb2RlbA",
+        "shouldMatch": "postBody/postSubmodelWithEntity.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "Get Submodel with Entity SubmodelElement - Get Statement",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlFbnRpdHlTdWJtb2RlbA/submodel-elements/DemoEntity.StatementProperty1",
+        "shouldMatch": "expected/expectedEntityProperty.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "Post Submodel with Capability SubmodelElement",
+        "method": "POST",
+        "endpoint": "http://localhost:6004/submodels",
+        "data": "postBody/postSubmodelWithCapability.json",
+        "expectedStatus": 201
+    },
+    {
+        "context": "Get Submodel with Capability SubmodelElement",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlDYXBhYmlsaXR5U3VibW9kZWw",
+        "shouldMatch": "postBody/postSubmodelWithCapability.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "Post Submodel with RelationshipElement SubmodelElement",
+        "method": "POST",
+        "endpoint": "http://localhost:6004/submodels",
+        "data": "postBody/postSubmodelWithRelationshipElement.json",
+        "expectedStatus": 201
+    },
+    {
+        "context": "Get Submodel with RelationshipElement SubmodelElement",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlSZWxhdGlvbnNoaXBFbGVtZW50U3VibW9kZWw",
+        "shouldMatch": "postBody/postSubmodelWithRelationshipElement.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "Post Submodel with AnnotatedRelationshipElement SubmodelElement",
+        "method": "POST",
+        "endpoint": "http://localhost:6004/submodels",
+        "data": "postBody/postSubmodelWithAnnotatedRelationshipElement.json",
+        "expectedStatus": 201
+    },
+    {
+        "context": "Get Submodel with AnnotatedRelationshipElement SubmodelElement",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlBbm5vdGF0ZWRSZWxhdGlvbnNoaXBFbGVtZW50U3VibW9kZWw",
+        "shouldMatch": "postBody/postSubmodelWithAnnotatedRelationshipElement.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "Get Submodel with AnnotatedRelationshipElement SubmodelElement - Get Annotation",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlBbm5vdGF0ZWRSZWxhdGlvbnNoaXBFbGVtZW50U3VibW9kZWw/submodel-elements/DemoAnnotatedRelationshipElement.AnnotationProperty1",
+        "shouldMatch": "expected/expectedAREProperty.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "Post Submodel with ReferenceElement SubmodelElement",
+        "method": "POST",
+        "endpoint": "http://localhost:6004/submodels",
+        "data": "postBody/postSubmodelWithReferenceElement.json",
+        "expectedStatus": 201
+    },
+    {
+        "context": "Get Submodel with ReferenceElement SubmodelElement",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlSZWZlcmVuY2VFbGVtZW50U3VibW9kZWw",
+        "shouldMatch": "postBody/postSubmodelWithReferenceElement.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "Post Submodel with Range SubmodelElement",
+        "method": "POST",
+        "endpoint": "http://localhost:6004/submodels",
+        "data": "postBody/postSubmodelWithRangeElement.json",
+        "expectedStatus": 201
+    },
+    {
+        "context": "Get Submodel with Range SubmodelElement",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlSYW5nZVN1Ym1vZGVs",
+        "shouldMatch": "postBody/postSubmodelWithRangeElement.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "Post Submodel with File SubmodelElement",
+        "method": "POST",
+        "endpoint": "http://localhost:6004/submodels",
+        "data": "postBody/postSubmodelWithFile.json",
+        "expectedStatus": 201
+    },
+    {
+        "context": "Get Submodel with File SubmodelElement",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9Pbmx5RmlsZVN1Ym1vZGVsX1Rlc3Q",
+        "shouldMatch": "postBody/postSubmodelWithFile.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "Get File SubmodelElement",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9Pbmx5RmlsZVN1Ym1vZGVsX1Rlc3Q/submodel-elements/DemoFile",
+        "shouldMatch": "expected/expectedFileSubmodelElement.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "Get SubmodelElements",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9Pbmx5RmlsZVN1Ym1vZGVsX1Rlc3Q/submodel-elements",
+        "shouldMatch": "expected/expectedSubmodelElements.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "Get All Submodels ValueOnly",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/$value",
+        "shouldMatch": "expected/expectedAllSubmodelsValueOnly.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "Get Heavy Submodel ValueOnly",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQUhlYXZ5U3VibW9kZWw/$value",
+        "shouldMatch": "expected/expectedHeavySubmodelValueOnly.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "Get Minimal Administration Submodel ValueOnly",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU1pbmltYWxBZG1pbmlzdHJhdGlvblN1Ym1vZGVs/$value",
+        "shouldMatch": "expected/expectedMinimalAdministrationSubmodelValueOnly.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "Get All Submodel Elements ValueOnly - Heavy Submodel",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQUhlYXZ5U3VibW9kZWw/submodel-elements/$value",
+        "shouldMatch": "expected/expectedHeavySubmodelElementsValueOnly.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "Get ManufacturerName Property ValueOnly",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQUhlYXZ5U3VibW9kZWw/submodel-elements/ManufacturerName/$value",
+        "shouldMatch": "expected/expectedManufacturerNameValueOnly.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "Get ProductSerialNumber Collection ValueOnly",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQUhlYXZ5U3VibW9kZWw/submodel-elements/ProductSerialNumber/$value",
+        "shouldMatch": "expected/expectedProductSerialNumberValueOnly.json",
+        "expectedStatus": 200
     }
 ]

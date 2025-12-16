@@ -6,15 +6,56 @@
 package common
 
 import (
-	"encoding/json"
 	"fmt"
 	"log"
+	"reflect"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/cors"
 	"github.com/spf13/viper"
 )
+
+// DefaultConfig holds all default values for configuration options.
+var DefaultConfig = struct {
+	ServerPort              int
+	ServerContextPath       string
+	ServerCacheEnabled      bool
+	PgPort                  int
+	PgDBName                string
+	PgMaxOpen               int
+	PgMaxIdle               int
+	PgConnLifetime          int
+	AllowedOrigins          []string
+	AllowedMethods          []string
+	AllowedHeaders          []string
+	AllowCredentials        bool
+	OIDCIssuer              string
+	OIDCAudience            string
+	OIDCJWKSURL             string
+	ABACEnabled             bool
+	ABACClientRolesAudience string
+	ABACModelPath           string
+}{
+	ServerPort:              5004,
+	ServerContextPath:       "",
+	ServerCacheEnabled:      false,
+	PgPort:                  5432,
+	PgDBName:                "basyxTestDB",
+	PgMaxOpen:               50,
+	PgMaxIdle:               50,
+	PgConnLifetime:          5,
+	AllowedOrigins:          []string{"*"},
+	AllowedMethods:          []string{"GET", "POST", "DELETE", "OPTIONS"},
+	AllowedHeaders:          []string{"*"},
+	AllowCredentials:        true,
+	OIDCIssuer:              "http://localhost:8080/realms/basyx",
+	OIDCAudience:            "discovery-service",
+	OIDCJWKSURL:             "",
+	ABACEnabled:             false,
+	ABACClientRolesAudience: "discovery-service",
+	ABACModelPath:           "config/access_rules/access-rules.json",
+}
 
 // PrintSplash displays the BaSyx Go API ASCII art logo to the console.
 // This function is typically called during application startup to provide
@@ -81,14 +122,14 @@ type CorsConfig struct {
 type OIDCConfig struct {
 	Issuer   string `mapstructure:"issuer" json:"issuer"`     // OIDC issuer URL
 	Audience string `mapstructure:"audience" json:"audience"` // Expected token audience
-	JWKSURL  string `mapstructure:"jwksURL" json:"jwksURL"`   // JSON Web Key Set URL
 }
 
 // ABACConfig contains Attribute-Based Access Control authorization settings.
 type ABACConfig struct {
-	Enabled             bool   `mapstructure:"enabled" json:"enabled"`                         // Enable/disable ABAC
-	ClientRolesAudience string `mapstructure:"clientRolesAudience" json:"clientRolesAudience"` // Client roles audience
-	ModelPath           string `mapstructure:"modelPath" json:"modelPath"`                     // Path to access control model
+	Enabled                   bool   `mapstructure:"enabled" json:"enabled"`                                     // Enable/disable ABAC
+	EnableDebugErrorResponses bool   `mapstructure:"enableDebugErrorResponses" json:"enableDebugErrorResponses"` // Enable/disable 403 error codes
+	ClientRolesAudience       string `mapstructure:"clientRolesAudience" json:"clientRolesAudience"`             // Client roles audience
+	ModelPath                 string `mapstructure:"modelPath" json:"modelPath"`                                 // Path to access control model
 }
 
 // LoadConfig loads the configuration from YAML files and environment variables.
@@ -115,6 +156,7 @@ type ABACConfig struct {
 //	    log.Fatal("Failed to load config:", err)
 //	}
 func LoadConfig(configPath string) (*Config, error) {
+	PrintSplash()
 	v := viper.New()
 
 	// Set default values
@@ -184,9 +226,9 @@ func setDefaults(v *viper.Viper) {
 
 	v.SetDefault("oidc.issuer", "http://localhost:8080/realms/basyx")
 	v.SetDefault("oidc.audience", "discovery-service")
-	v.SetDefault("oidc.jwksURL", "")
 
 	v.SetDefault("abac.enabled", false)
+	v.SetDefault("abac.enableDebugErrorResponses", false)
 	v.SetDefault("abac.clientRolesAudience", "discovery-service")
 	v.SetDefault("abac.modelPath", "config/access_rules/access-rules.json")
 
@@ -218,25 +260,77 @@ func setDefaults(v *viper.Viper) {
 //	  }
 //	}
 func PrintConfiguration(cfg *Config) {
-	// Create a copy of the config to avoid modifying the original
-	cfgCopy := *cfg
+	divider := "---------------------"
+	var lines []string
 
-	// Redact sensitive information if present in the Postgres configuration
-	if cfg.Postgres.Host != "" {
-		// Simple redaction that preserves the structure but hides credentials
-		cfgCopy.Postgres.Host = "****"
-		cfgCopy.Postgres.User = "****"
-		cfgCopy.Postgres.Password = "****"
+	add := func(label string, value any, def any) {
+		suffix := ""
+		if reflect.DeepEqual(value, def) {
+			suffix = " (default)"
+		}
+		lines = append(lines, fmt.Sprintf("  %s: %v%s", label, value, suffix))
 	}
 
-	// Convert to JSON for pretty printing
-	configJSON, err := json.MarshalIndent(cfgCopy, "", "  ")
-	if err != nil {
-		log.Printf("Unable to marshal configuration to JSON: %v", err)
-		return
+	// Header
+	lines = append(lines, "📜 Loaded configuration:")
+	lines = append(lines, divider)
+
+	// Server
+	lines = append(lines, "🔹 Server:")
+	add("Port", cfg.Server.Port, DefaultConfig.ServerPort)
+	add("Context Path", cfg.Server.ContextPath, DefaultConfig.ServerContextPath)
+	add("Cache Enabled", cfg.Server.CacheEnabled, DefaultConfig.ServerCacheEnabled)
+
+	lines = append(lines, divider)
+
+	// Postgres
+	lines = append(lines, "🔹 Postgres:")
+	add("Port", cfg.Postgres.Port, DefaultConfig.PgPort)
+	add("DB Name", cfg.Postgres.DBName, DefaultConfig.PgDBName)
+	add("Max Open Connections", cfg.Postgres.MaxOpenConnections, DefaultConfig.PgMaxOpen)
+	add("Max Idle Connections", cfg.Postgres.MaxIdleConnections, DefaultConfig.PgMaxIdle)
+	add("Conn Max Lifetime (min)", cfg.Postgres.ConnMaxLifetimeMinutes, DefaultConfig.PgConnLifetime)
+
+	lines = append(lines, divider)
+
+	// CORS
+	lines = append(lines, "🔹 CORS:")
+	add("Allowed Origins", cfg.CorsConfig.AllowedOrigins, DefaultConfig.AllowedOrigins)
+	add("Allowed Methods", cfg.CorsConfig.AllowedMethods, DefaultConfig.AllowedMethods)
+	add("Allowed Headers", cfg.CorsConfig.AllowedHeaders, DefaultConfig.AllowedHeaders)
+	add("Allow Credentials", cfg.CorsConfig.AllowCredentials, DefaultConfig.AllowCredentials)
+
+	lines = append(lines, divider)
+
+	// ABAC
+	lines = append(lines, "🔹 ABAC:")
+	if !cfg.ABAC.Enabled {
+		lines = append(lines, "  Enabled: false")
+	} else {
+		lines = append(lines, "  Enabled: true")
+		add("Client Roles Audience", cfg.ABAC.ClientRolesAudience, DefaultConfig.ABACClientRolesAudience)
+		add("Model Path", cfg.ABAC.ModelPath, DefaultConfig.ABACModelPath)
 	}
 
-	log.Printf("📜 Loaded configuration:\n%s", string(configJSON))
+	lines = append(lines, divider)
+
+	// Find max width
+	maxLen := 0
+	for _, l := range lines {
+		if len(l) > maxLen {
+			maxLen = len(l)
+		}
+	}
+
+	boxTop := "╔" + strings.Repeat("═", maxLen+2) + "╗"
+	boxBottom := "╚" + strings.Repeat("═", maxLen+2) + "╝"
+
+	log.Print(boxTop)
+	for _, l := range lines {
+		trimmed := strings.TrimLeft(l, " ")
+		log.Print("║  " + trimmed + strings.Repeat(" ", maxLen-len(trimmed)) + " ║")
+	}
+	log.Print(boxBottom)
 }
 
 // AddCors configures Cross-Origin Resource Sharing (CORS) middleware for the router.
