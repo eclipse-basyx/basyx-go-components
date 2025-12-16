@@ -5,7 +5,9 @@
     "Formula": {
       "$eq": [
         {
-          "$field": "$aasdesc#id"
+          "$strCast": {
+            "$field": "$aasdesc#id"
+          }
         },
         {
           "$strVal": "https://martin.de"

@@ -1,7 +1,7 @@
 {
-    "PagingMetadata": {
+    "pagingMetadata": {
     },
-    "Result": [
+    "result": [
         {
         "id": "urn:example:sm:001",
         "endpoints": [

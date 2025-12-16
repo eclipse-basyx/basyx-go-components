@@ -4,7 +4,9 @@
     "Formula": {
       "$eq": [
         {
-          "$field": "$aasdesc#specificAssetIds[].name"
+          "$strCast": {
+            "$field": "$aasdesc#specificAssetIds[].name"
+          }
         },
         {
           "$strVal": "manufacturerPartId"

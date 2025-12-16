@@ -1,0 +1,16 @@
+{
+  "AllAccessPermissionRules": {
+    "rules": [
+      {
+        "USEACL": "form",
+        "OBJECTS": [{"FACTORIO" : "/*"}],
+        "FORMULA": {
+          "$and": [
+            {"$boolean": true},
+            {"$eq": [{"$strVal": "1"}, {"$numVal": 1}]}
+          ]
+        }
+      }
+    ]
+  }
+}

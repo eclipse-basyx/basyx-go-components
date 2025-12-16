@@ -144,11 +144,10 @@ func (le *LogicalExpression) evaluateModelComparison(operands []Value, operation
 	normalizeSemanticShorthand(left)
 	normalizeSemanticShorthand(right)
 
-	// Static type validation for literal-to-literal comparisons (mirrors SQL path).
-	lType := operandEffectiveTypeWithCast(left)
-	rType := operandEffectiveTypeWithCast(right)
-	if lType != "" && rType != "" && lType != rType {
-		return false, fmt.Errorf("cannot compare different value types: %s and %s", lType, rType)
+	// has to be compatible
+	expectedType, err := left.IsComparableTo(*right)
+	if err != nil {
+		return false, err
 	}
 
 	leftValues, err := resolveOperandValue(left, data)
@@ -161,11 +160,6 @@ func (le *LogicalExpression) evaluateModelComparison(operands []Value, operation
 	}
 	if len(leftValues) == 0 || len(rightValues) == 0 {
 		return false, nil
-	}
-
-	expectedType := ""
-	if lType != "" && rType != "" && lType == rType {
-		expectedType = lType
 	}
 
 	for _, lv := range leftValues {
@@ -510,7 +504,7 @@ func marshalToMap(value any) (map[string]interface{}, error) {
 	return data, nil
 }
 
-func compareValues(operation string, left, right interface{}, expectedType string) (bool, error) {
+func compareValues(operation string, left, right interface{}, expectedType ComparisonKind) (bool, error) {
 	switch operation {
 	case "$eq":
 		if left == nil && right == nil {
@@ -533,34 +527,34 @@ func compareValues(operation string, left, right interface{}, expectedType strin
 	}
 }
 
-func compareOrderedValues(op string, left, right interface{}, expectedType string) (bool, error) {
+func compareOrderedValues(op string, left, right interface{}, expectedType ComparisonKind) (bool, error) {
 	// Honor expected types when known to avoid unexpected coercions.
 	switch expectedType {
-	case "number":
+	case KindNumber:
 		lf, lok := toFloat(left)
 		rf, rok := toFloat(right)
 		if !lok || !rok {
 			return false, nil
 		}
 		return compareFloat(op, lf, rf)
-	case "time":
+	case KindTime:
 		lt, lok := toTimeOfDaySeconds(left)
 		rt, rok := toTimeOfDaySeconds(right)
 		if !lok || !rok {
 			return false, nil
 		}
 		return compareInt(op, lt, rt)
-	case "datetime":
+	case KindDateTime:
 		lt, lok := toDateTime(left)
 		rt, rok := toDateTime(right)
 		if !lok || !rok {
 			return false, nil
 		}
 		return compareTime(op, lt, rt)
-	case "string", "hex":
+	case KindString, KindHex:
 		// Ordered comparisons are not defined for string/hex
 		return false, nil
-	case "bool":
+	case KindBool:
 		return false, nil
 	}
 
@@ -583,64 +577,37 @@ func compareOrderedValues(op string, left, right interface{}, expectedType strin
 	return false, fmt.Errorf("cannot compare %T (%v) and %T (%v) with operator %s", left, left, right, right, op)
 }
 
-// operandEffectiveTypeWithCast mirrors the SQL evaluator's type check: prefer cast targets over raw literals.
-func operandEffectiveTypeWithCast(v *Value) string {
-	if v == nil {
-		return ""
-	}
-	// Fields/attributes are runtime-typed; skip validation
-	if v.IsField() || v.Attribute != nil {
-		return ""
-	}
-	switch {
-	case v.NumCast != nil:
-		return "number"
-	case v.BoolCast != nil:
-		return "bool"
-	case v.TimeCast != nil:
-		return "time"
-	case v.DateTimeCast != nil:
-		return "datetime"
-	case v.HexCast != nil:
-		return "hex"
-	case v.StrCast != nil:
-		return "string"
-	default:
-		return v.EffectiveType()
-	}
-}
-
-func compareEquality(op string, left, right interface{}, expectedType string) (bool, error) {
+func compareEquality(op string, left, right interface{}, expectedType ComparisonKind) (bool, error) {
 	switch expectedType {
-	case "bool":
+	case KindBool:
 		lb, lok := left.(bool)
 		rb, rok := right.(bool)
 		if !lok || !rok {
 			return false, fmt.Errorf("cannot compare non-bool values with %s", op)
 		}
 		return lb == rb, nil
-	case "number":
+	case KindNumber:
 		lf, lok := toFloat(left)
 		rf, rok := toFloat(right)
 		if !lok || !rok {
 			return false, fmt.Errorf("cannot compare non-number values with %s", op)
 		}
 		return lf == rf, nil
-	case "datetime":
+	case KindDateTime:
 		lt, lok := toDateTime(left)
 		rt, rok := toDateTime(right)
 		if !lok || !rok {
 			return false, fmt.Errorf("cannot compare non-datetime values with %s", op)
 		}
 		return lt.Equal(rt), nil
-	case "time":
+	case KindTime:
 		lt, lok := toTimeOfDaySeconds(left)
 		rt, rok := toTimeOfDaySeconds(right)
 		if !lok || !rok {
 			return false, fmt.Errorf("cannot compare non-time values with %s", op)
 		}
 		return lt == rt, nil
-	case "hex", "string":
+	case KindHex, KindString:
 		return fmt.Sprint(left) == fmt.Sprint(right), nil
 	}
 
