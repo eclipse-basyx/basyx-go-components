@@ -319,9 +319,9 @@ func (p *PostgreSQLDiscoveryDatabase) SearchAASIDsByAssetLinks(
 		var valuesSQL strings.Builder
 		for i, l := range links {
 			if i > 0 {
-				valuesSQL.WriteString(", ")
+				_, _ = valuesSQL.WriteString(", ")
 			}
-			valuesSQL.WriteString(fmt.Sprintf("($%d, $%d)", argPos, argPos+1))
+			_, _ = valuesSQL.WriteString(fmt.Sprintf("($%d, $%d)", argPos, argPos+1))
 			args = append(args, l.Name, l.Value)
 			argPos += 2
 		}

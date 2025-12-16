@@ -105,7 +105,7 @@ func main() {
 	if databaseSchema != "" {
 		_, fileError := os.ReadFile(databaseSchema)
 		if fileError != nil {
-			fmt.Println("The specified database schema path is invalid or the file was not found.")
+			_, _ = fmt.Println("The specified database schema path is invalid or the file was not found.")
 			os.Exit(1)
 		}
 	}
