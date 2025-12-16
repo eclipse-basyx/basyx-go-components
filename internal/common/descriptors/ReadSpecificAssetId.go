@@ -103,9 +103,10 @@ func ReadSpecificAssetIDsByDescriptorID(
 	v, err := ReadSpecificAssetIDsByDescriptorIDs(ctx, db, []int64{descriptorID})
 	return v[descriptorID], err
 }
+
+// GetSpecificAssetIDsSubquery subquery that is not used at the momement
 func GetSpecificAssetIDsSubquery(
 	ctx context.Context,
-	db *sql.DB,
 	joinOn exp.IdentifierExpression, // e.g. goqu.I("aas.descriptor_id")
 ) (*goqu.SelectDataset, error) {
 	d := goqu.Dialect(dialect)

@@ -37,17 +37,17 @@ import (
 
 func getJoinTables(d goqu.DialectWrapper) *goqu.SelectDataset {
 
-	joinTables := d.From(goqu.T(tblDescriptor).As("dsc")).
+	joinTables := d.From(goqu.T(tblDescriptor).As("descriptor")).
 		LeftJoin(goqu.T(tblAASDescriptor).As("aas_descriptor"),
-			goqu.On(goqu.I("aas_descriptor.descriptor_id").Eq(goqu.I("dsc.id")))).
+			goqu.On(goqu.I("aas_descriptor.descriptor_id").Eq(goqu.I("descriptor.id")))).
 		LeftJoin(goqu.T(tblSpecificAssetID).As("specific_asset_id"),
-			goqu.On(goqu.I("specific_asset_id.descriptor_id").Eq(goqu.I("dsc.id")))).
+			goqu.On(goqu.I("specific_asset_id.descriptor_id").Eq(goqu.I("descriptor.id")))).
 		LeftJoin(goqu.T(tblReference).As("external_subject_reference"),
 			goqu.On(goqu.I("external_subject_reference.id").Eq(goqu.I("specific_asset_id.external_subject_ref")))).
 		LeftJoin(goqu.T(tblReferenceKey).As("external_subject_reference_key"),
 			goqu.On(goqu.I("external_subject_reference_key.reference_id").Eq(goqu.I("external_subject_reference.id")))).
 		LeftJoin(goqu.T(tblAASDescriptorEndpoint).As("aas_descriptor_endpoint"),
-			goqu.On(goqu.I("aas_descriptor_endpoint.descriptor_id").Eq(goqu.I("dsc.id")))).
+			goqu.On(goqu.I("aas_descriptor_endpoint.descriptor_id").Eq(goqu.I("descriptor.id")))).
 		LeftJoin(goqu.T(tblSubmodelDescriptor).As("submodel_descriptor"),
 			goqu.On(goqu.I("submodel_descriptor.aas_descriptor_id").Eq(goqu.I("aas_descriptor.descriptor_id")))).
 		LeftJoin(goqu.T(tblAASDescriptorEndpoint).As("submodel_descriptor_endpoint"),
@@ -71,7 +71,7 @@ func getFilterQueryFromContext(ctx context.Context, d goqu.DialectWrapper, ds *g
 		existsDataset :=
 			getJoinTables(d).
 				Where(
-					goqu.I("dsc.id").Eq(tableCol.Col(colDescriptorID)),
+					goqu.I("descriptor.id").Eq(tableCol.Col(colDescriptorID)),
 					wc,
 				)
 
