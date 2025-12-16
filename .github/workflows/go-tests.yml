@@ -31,8 +31,8 @@ jobs:
   #     - name: Run unit tests
   #       run: go test ./... -v -tags=unit
 
-  integration-tests:
-    name: Run Integration Tests
+  discovery-service-security-tests:
+    name: Discovery Service Security Tests
     runs-on: ubuntu-latest
     steps:
       - name: Check out code
@@ -41,48 +41,118 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
-          # Use the version in go.mod if present; otherwise pin a version
           go-version-file: go.mod
           cache: true
 
       - name: Get dependencies
         run: go mod download
-      # - name: Setup Docker Compose
-      #   run: |
-      #     cd internal/submodelrepository/integration_tests
-      #     docker compose -f docker_compose/docker_compose.yml up -d --build
-      #     echo "Waiting for services to be ready..."
-      #     sleep 30
 
       - name: Run discovery service security tests
         run: |
           cd internal/discoveryservice/security_tests
           go test -v
 
-      - name: Run integration tests
+  submodel-repository-integration-tests:
+    name: Submodel Repository Integration Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Get dependencies
+        run: go mod download
+
+      - name: Run submodel repository integration tests
         run: |
           cd internal/submodelrepository/integration_tests
           go test -v .
 
-      - name: Run discovery service tests
+  discovery-service-integration-tests:
+    name: Discovery Service Integration Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Get dependencies
+        run: go mod download
+
+      - name: Run discovery service integration tests
         run: |
           cd internal/discoveryservice/integration_tests
           go test -v
 
-      - name: Run aas registry tests
+  aas-registry-integration-tests:
+    name: AAS Registry Integration Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Get dependencies
+        run: go mod download
+
+      - name: Run aas registry integration tests
         run: |
           cd internal/aasregistry/integration_tests
           go test -v
+
+  aas-registry-security-tests:
+    name: AAS Registry Security Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Get dependencies
+        run: go mod download
+
       - name: Run aas registry security tests
         run: |
           cd internal/aasregistry/security_tests
           go test -v
-      - name: Run aas registry security tests 2
+
+  aas-registry-security-operator-tests:
+    name: AAS Registry Security Operator Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Get dependencies
+        run: go mod download
+
+      - name: Run aas registry security operator tests
         run: |
           cd internal/aasregistry/security_operator_tests
           go test -v
-      # - name: Cleanup Docker
-      #   if: always()
-      #   run: |
-      #     cd internal/submodelrepository/integration_tests
-      #     docker compose -f docker_compose/docker_compose.yml down
