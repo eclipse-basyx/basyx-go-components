@@ -53,7 +53,7 @@ func createSpecificAssetID(tx *sql.Tx, descriptorID int64, specificAssetIDs []mo
 			if err != nil {
 				return err
 			}
-			supplementalSemanticIdsValue, err := json.Marshal(val.SupplementalSemanticIds)
+			supplementalSemanticIDsValue, err := json.Marshal(val.SupplementalSemanticIds)
 			if err != nil {
 				return err
 			}
@@ -63,7 +63,7 @@ func createSpecificAssetID(tx *sql.Tx, descriptorID int64, specificAssetIDs []mo
 					colDescriptorID:             descriptorID,
 					colPosition:                 i,
 					colSemanticID:               semanticIDValue,
-					"supplemental_semantic_ids": supplementalSemanticIdsValue,
+					"supplemental_semantic_ids": supplementalSemanticIDsValue,
 					colName:                     val.Name,
 					colValue:                    val.Value,
 					colExternalSubjectRef:       externalSubjectReferenceID,

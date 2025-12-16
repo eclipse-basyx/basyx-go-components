@@ -71,7 +71,7 @@ func getFilterQueryFromContext(ctx context.Context, d goqu.DialectWrapper, ds *g
 		existsDataset :=
 			getJoinTables(d).
 				Where(
-					goqu.I("descriptor.id").Eq(tableCol.Col(colDescriptorID)),
+					goqu.I("dsc.id").Eq(tableCol.Col(colDescriptorID)),
 					wc,
 				)
 
