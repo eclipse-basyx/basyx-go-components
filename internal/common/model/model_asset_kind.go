@@ -64,6 +64,9 @@ func AssertAssetKindRequired(_ AssetKind) error {
 }
 
 // AssertAssetKindConstraints checks if the values respects the defined constraints
-func AssertAssetKindConstraints(_ AssetKind) error {
+func AssertAssetKindConstraints(obj AssetKind) error {
+	if !obj.IsValid() {
+		return fmt.Errorf("invalid value %q for AssetKind: valid values are %v", obj, AllowedAssetKindEnumValues)
+	}
 	return nil
 }
