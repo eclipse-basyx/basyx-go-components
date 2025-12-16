@@ -478,12 +478,12 @@ func TestMain(m *testing.M) {
 
 	// Teardown: Stop Docker Compose
 	_, _ = fmt.Println("Stopping Docker Compose...")
-	// cmd = exec.Command("docker", "compose", "-f", "docker_compose/docker_compose.yml", "down")
-	// cmd.Stdout = os.Stdout
-	// cmd.Stderr = os.Stderr
-	// if err := cmd.Run(); err != nil {
-	// 	_, _ = fmt.Printf("Failed to stop Docker Compose: %v\n", err)
-	// }
+	cmd = exec.Command("docker", "compose", "-f", "docker_compose/docker_compose.yml", "down")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		_, _ = fmt.Printf("Failed to stop Docker Compose: %v\n", err)
+	}
 
 	os.Exit(code)
 }
