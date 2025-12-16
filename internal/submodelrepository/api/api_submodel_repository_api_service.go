@@ -707,6 +707,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelElementsValueOnlySubmode
 	}
 
 	// Convert all submodel elements to Value-Only representation
+	// Each element must be wrapped with its idShort as the key
 	valueOnlyResults := make([]gen.SubmodelElementValue, 0, len(sm.SubmodelElements))
 	for _, element := range sm.SubmodelElements {
 		valueOnly, err := gen.SubmodelElementToValueOnly(element)
@@ -714,7 +715,13 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelElementsValueOnlySubmode
 			return gen.Response(500, nil), err
 		}
 		if valueOnly != nil {
-			valueOnlyResults = append(valueOnlyResults, valueOnly)
+			// Wrap each element value in a map with idShort as key
+			idShort := element.GetIdShort()
+			if idShort != "" {
+				wrapped := make(gen.SubmodelElementCollectionValue)
+				wrapped[idShort] = valueOnly
+				valueOnlyResults = append(valueOnlyResults, wrapped)
+			}
 		}
 	}
 

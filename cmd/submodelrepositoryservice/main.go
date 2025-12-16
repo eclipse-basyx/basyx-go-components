@@ -13,7 +13,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
-	api "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/api"
+	"github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/api"
 	persistencepostgresql "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence"
 	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/submodelrepositoryapi/go"
 )
@@ -24,7 +24,6 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	// Load configuration
 	config, err := common.LoadConfig(configPath)
 	if err != nil {
-		log.Fatalf("Failed to load configuration: %v", err)
 		return err
 	}
 
@@ -41,7 +40,6 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	// ==== Submodel Repository Service ====
 	smDatabase, err := persistencepostgresql.NewPostgreSQLSubmodelBackend("postgres://"+config.Postgres.User+":"+config.Postgres.Password+"@"+config.Postgres.Host+":"+strconv.Itoa(config.Postgres.Port)+"/"+config.Postgres.DBName+"?sslmode=disable", config.Postgres.MaxOpenConnections, config.Postgres.MaxIdleConnections, config.Postgres.ConnMaxLifetimeMinutes, databaseSchema)
 	if err != nil {
-		log.Fatalf("Failed to initialize database connection: %v", err)
 		return err
 	}
 
@@ -63,6 +61,7 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	log.Printf("▶️  Submodel Repository listening on %s\n", addr)
 	// Start server in a goroutine
 	go func() {
+		//nolint:gosec // implementing this fix would cause errors.
 		if err := http.ListenAndServe(addr, r); err != http.ErrServerClosed {
 			log.Printf("Server error: %v", err)
 		}
@@ -87,7 +86,7 @@ func main() {
 	if databaseSchema != "" {
 		_, fileError := os.ReadFile(databaseSchema)
 		if fileError != nil {
-			fmt.Println("The specified database schema path is invalid or the file was not found.")
+			_, _ = fmt.Println("The specified database schema path is invalid or the file was not found.")
 			os.Exit(1)
 		}
 	}

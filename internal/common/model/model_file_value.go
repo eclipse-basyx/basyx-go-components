@@ -37,9 +37,9 @@ package model
 import "encoding/json"
 
 type FileValue struct {
-	ContentType string `json:"contentType,omitempty"`
+	ContentType string `json:"contentType"`
 
-	Value string `json:"value,omitempty"`
+	Value string `json:"value"`
 }
 
 // MarshalValueOnly serializes FileValue in Value-Only format

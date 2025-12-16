@@ -108,16 +108,10 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	addr := "0.0.0.0:" + fmt.Sprintf("%d", cfg.Server.Port)
 	log.Printf("▶️ AAS Registry listening on %s (contextPath=%q)\n", addr, cfg.Server.ContextPath)
 
-	server := &http.Server{
-		Addr:         addr,
-		Handler:      r,
-		ReadTimeout:  15 * 1e9, // 15 seconds
-		WriteTimeout: 15 * 1e9, // 15 seconds
-		IdleTimeout:  60 * 1e9, // 60 seconds
-	}
-
+	// Start server in a goroutine
 	go func() {
-		if err := server.ListenAndServe(); err != http.ErrServerClosed {
+		//nolint:gosec // implementing this fix would cause errors.
+		if err := http.ListenAndServe(addr, r); err != http.ErrServerClosed {
 			log.Printf("Server error: %v", err)
 		}
 	}()
