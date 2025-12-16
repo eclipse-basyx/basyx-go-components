@@ -4,7 +4,9 @@
     "Formula": {
       "$eq": [
         {
-          "$field": "$aasdesc#id"
+          "$strCast": {
+            "$field": "$aasdesc#id"
+          }
         },
         {
           "$strVal": "id-123"

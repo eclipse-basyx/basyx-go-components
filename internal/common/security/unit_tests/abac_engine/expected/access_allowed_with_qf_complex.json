@@ -8,7 +8,9 @@
             {
                 "$eq": [
                 {
-                    "$field": "$aasdesc#id"
+                    "$strCast": {
+                        "$field": "$aasdesc#id"
+                    }
                 },
                 {
                     "$strVal": "urn:aas:demo:public"
@@ -18,7 +20,9 @@
             {
                 "$eq": [
                 {
-                    "$field": "$aasdesc#id"
+                    "$strCast": {
+                        "$field": "$aasdesc#id"
+                    }
                 },
                 {
                     "$strVal": "urn:aas:regex-42"
@@ -28,7 +32,9 @@
             {
                 "$eq": [
                 {
-                    "$field": "$aasdesc#id"
+                    "$strCast": {
+                        "$field": "$aasdesc#id"
+                    }
                 },
                 {
                     "$strVal": "urn:aas:regimax-42"
@@ -38,7 +44,9 @@
             {
                 "$eq": [
                 {
-                    "$field": "$aasdesc#id"
+                    "$strCast": {
+                        "$field": "$aasdesc#id"
+                    }
                 },
                 {
                     "$strVal": "urn:aas:viewer-asset"
@@ -52,7 +60,9 @@
             {
                 "$ends-with": [
                 {
-                    "$field": "$aasdesc#id"
+                    "$strCast": {
+                        "$field": "$aasdesc#id"
+                    }
                 },
                 {
                     "$strVal": ":public"
@@ -64,7 +74,9 @@
                 {
                     "$eq": [
                     {
-                        "$field": "$aasdesc#id"
+                        "$strCast": {
+                            "$field": "$aasdesc#id"
+                        }
                     },
                     {
                         "$strVal": "urn:aas:demo:public"
@@ -74,7 +86,9 @@
                 {
                     "$eq": [
                     {
-                        "$field": "$aasdesc#id"
+                        "$strCast": {
+                            "$field": "$aasdesc#id"
+                        }
                     },
                     {
                         "$strVal": "urn:aas:regex-42"
@@ -84,7 +98,9 @@
                 {
                     "$eq": [
                     {
-                        "$field": "$aasdesc#id"
+                        "$strCast": {
+                            "$field": "$aasdesc#id"
+                        }
                     },
                     {
                         "$strVal": "urn:aas:regimax-42"
@@ -94,7 +110,9 @@
                 {
                     "$eq": [
                     {
-                        "$field": "$aasdesc#id"
+                        "$strCast": {
+                            "$field": "$aasdesc#id"
+                        }
                     },
                     {
                         "$strVal": "urn:aas:viewer-asset"
