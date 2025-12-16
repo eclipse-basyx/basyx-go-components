@@ -18,7 +18,8 @@ type BasicEventElementValue struct {
 
 // MarshalValueOnly serializes BasicEventElementValue in Value-Only format
 func (b BasicEventElementValue) MarshalValueOnly() ([]byte, error) {
-	return json.Marshal(b)
+	type Alias BasicEventElementValue
+	return json.Marshal((Alias)(b))
 }
 
 // MarshalJSON implements custom JSON marshaling for BasicEventElementValue

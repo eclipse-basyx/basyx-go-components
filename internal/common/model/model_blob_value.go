@@ -20,7 +20,8 @@ type BlobValue struct {
 
 // MarshalValueOnly serializes BlobValue in Value-Only format
 func (b BlobValue) MarshalValueOnly() ([]byte, error) {
-	return json.Marshal(b)
+	type Alias BlobValue
+	return json.Marshal((Alias)(b))
 }
 
 // MarshalJSON implements custom JSON marshaling for BlobValue

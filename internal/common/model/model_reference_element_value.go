@@ -20,7 +20,8 @@ type ReferenceElementValue struct {
 
 // MarshalValueOnly serializes ReferenceElementValue in Value-Only format
 func (r ReferenceElementValue) MarshalValueOnly() ([]byte, error) {
-	return json.Marshal(r)
+	type Alias ReferenceElementValue
+	return json.Marshal((Alias)(r))
 }
 
 // MarshalJSON implements custom JSON marshaling for ReferenceElementValue

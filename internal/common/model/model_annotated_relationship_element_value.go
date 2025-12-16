@@ -17,12 +17,13 @@ type AnnotatedRelationshipElementValue struct {
 
 	Second ReferenceValue `json:"second"`
 
-	Annotations []map[string]interface{} `json:"annotations,omitempty"`
+	Annotations map[string]interface{} `json:"annotations,omitempty"`
 }
 
 // MarshalValueOnly serializes AnnotatedRelationshipElementValue in Value-Only format
 func (a AnnotatedRelationshipElementValue) MarshalValueOnly() ([]byte, error) {
-	return json.Marshal(a)
+	type Alias AnnotatedRelationshipElementValue
+	return json.Marshal((Alias)(a))
 }
 
 // MarshalJSON implements custom JSON marshaling for AnnotatedRelationshipElementValue

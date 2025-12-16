@@ -1,0 +1,10 @@
+{
+    "ManufacturerName": "Updated Manufacturer",
+    "ProductModelName": "Updated Model",
+    "ProductSerialNumber": {
+        "NestedCollection1": {
+            "DeepNestedProperty": "42"
+        },
+        "NestedCollection2": {}
+    }
+}

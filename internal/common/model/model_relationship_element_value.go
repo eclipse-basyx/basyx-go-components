@@ -20,7 +20,8 @@ type RelationshipElementValue struct {
 
 // MarshalValueOnly serializes RelationshipElementValue in Value-Only format
 func (r RelationshipElementValue) MarshalValueOnly() ([]byte, error) {
-	return json.Marshal(r)
+	type Alias RelationshipElementValue
+	return json.Marshal((Alias)(r))
 }
 
 // MarshalJSON implements custom JSON marshaling for RelationshipElementValue

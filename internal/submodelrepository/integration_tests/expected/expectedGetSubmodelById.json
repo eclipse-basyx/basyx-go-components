@@ -480,7 +480,17 @@
                   }
                 ],
                 "type": "ExternalReference"
-              }
+              },
+              "value": [
+                {
+                  "language": "en-us",
+                  "text": "Example value of a MultiLanguageProperty element"
+                },
+                {
+                  "language": "de",
+                  "text": "Beispielswert für ein MultiLanguageProperty-Element"
+                }
+              ]
             },
             {
               "category": "PARAMETER",

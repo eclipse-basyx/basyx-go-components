@@ -518,6 +518,19 @@ type FileElementValueRow struct {
 	ContentType string `json:"content_type"`
 }
 
+// MultiLanguagePropertyElementValueRow represents a data row for a MultiLanguageProperty entity in the database.
+// MultiLanguageProperties are submodel elements that represent text values in multiple languages.
+//
+// This structure captures the language-text pairs and optional value ID reference.
+type MultiLanguagePropertyElementValueRow struct {
+	// Value contains the array of language-text pairs
+	Value []LangStringTextType `json:"value"`
+	// ValueID is a reference to a related concept or value definition (optional)
+	ValueID *json.RawMessage `json:"value_id"`
+	// ValueIDReferred contains the referred semantic ID for the value reference (optional)
+	ValueIDReferred *json.RawMessage `json:"value_id_referred"`
+}
+
 // BlobElementValueRow represents a data row for a BlobElement entity in the database.
 // BlobElements are submodel elements that represent binary large objects (BLOBs) associated with the AAS.
 //

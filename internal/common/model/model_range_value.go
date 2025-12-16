@@ -20,7 +20,8 @@ type RangeValue struct {
 
 // MarshalValueOnly serializes RangeValue in Value-Only format
 func (r RangeValue) MarshalValueOnly() ([]byte, error) {
-	return json.Marshal(r)
+	type Alias RangeValue
+	return json.Marshal((Alias)(r))
 }
 
 // MarshalJSON implements custom JSON marshaling for RangeValue
@@ -29,12 +30,12 @@ func (r RangeValue) MarshalJSON() ([]byte, error) {
 }
 
 // AssertRangeValueRequired checks if the required fields are not zero-ed
-func AssertRangeValueRequired(obj RangeValue) error {
+func AssertRangeValueRequired(_ RangeValue) error {
 	// Min and max are optional in value-only representation
 	return nil
 }
 
 // AssertRangeValueConstraints checks if the values respects the defined constraints
-func AssertRangeValueConstraints(obj RangeValue) error {
+func AssertRangeValueConstraints(_ RangeValue) error {
 	return nil
 }

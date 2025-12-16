@@ -66,7 +66,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodels(
 	_ /*level*/ string,
 	_ /*extent*/ string,
 ) (gen.ImplResponse, error) {
-	sms, nextCursor, err := s.submodelBackend.GetAllSubmodels(limit, cursor, idShort)
+	sms, nextCursor, err := s.submodelBackend.GetAllSubmodels(limit, cursor, idShort, false)
 	if err != nil {
 		return gen.Response(500, nil), err
 	}
@@ -104,7 +104,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelByID(
 		return gen.Response(http.StatusBadRequest, nil), decodeErr
 	}
 
-	sm, err := s.submodelBackend.GetSubmodel(string(decodedSubmodelIdentifier))
+	sm, err := s.submodelBackend.GetSubmodel(string(decodedSubmodelIdentifier), false)
 	if err != nil {
 
 		if errors.Is(err, sql.ErrNoRows) {
@@ -230,7 +230,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsMetadata(
 //
 //nolint:revive
 func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsValueOnly(ctx context.Context, semanticID string, idShort string, limit int32, cursor string, level string, extent string) (gen.ImplResponse, error) {
-	sms, nextCursor, err := s.submodelBackend.GetAllSubmodels(limit, cursor, idShort)
+	sms, nextCursor, err := s.submodelBackend.GetAllSubmodels(limit, cursor, idShort, true)
 	if err != nil {
 		return gen.Response(500, nil), err
 	}
@@ -448,7 +448,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelByIDValueOnly(ctx context.C
 		return gen.Response(http.StatusBadRequest, nil), decodeErr
 	}
 
-	sm, err := s.submodelBackend.GetSubmodel(string(decodedSubmodelIdentifier))
+	sm, err := s.submodelBackend.GetSubmodel(string(decodedSubmodelIdentifier), true)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return gen.Response(404, nil), nil
@@ -582,7 +582,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelElements(_ /*ctx*/ conte
 		return gen.Response(http.StatusBadRequest, nil), decodeErr
 	}
 
-	sme, cursor, err := s.submodelBackend.GetSubmodelElements(string(decodedSubmodelIdentifier), int(limit), cursor)
+	sme, cursor, err := s.submodelBackend.GetSubmodelElements(string(decodedSubmodelIdentifier), int(limit), cursor, false)
 	if err != nil {
 		if common.IsErrNotFound(err) {
 			timestamp := common.GetCurrentTimestamp()
@@ -696,7 +696,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelElementsValueOnlySubmode
 		return gen.Response(http.StatusBadRequest, nil), decodeErr
 	}
 
-	sm, err := s.submodelBackend.GetSubmodel(string(decodedSubmodelIdentifier))
+	sm, err := s.submodelBackend.GetSubmodel(string(decodedSubmodelIdentifier), true)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return gen.Response(404, nil), nil
@@ -820,7 +820,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelElementByPathSubmodelRepo(c
 		return gen.Response(http.StatusBadRequest, nil), decodeErr
 	}
 
-	sme, err := s.submodelBackend.GetSubmodelElement(string(decodedSubmodelIdentifier), idShortPath)
+	sme, err := s.submodelBackend.GetSubmodelElement(string(decodedSubmodelIdentifier), idShortPath, false)
 	if err != nil {
 		if common.IsErrNotFound(err) {
 			timestamp := common.GetCurrentTimestamp()
@@ -1071,7 +1071,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelElementByPathValueOnlySubmo
 	}
 
 	// Get the submodel element by path
-	element, err := s.submodelBackend.GetSubmodelElement(string(decodedSubmodelIdentifier), idShortPath)
+	element, err := s.submodelBackend.GetSubmodelElement(string(decodedSubmodelIdentifier), idShortPath, true)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return gen.Response(404, nil), nil
@@ -1212,7 +1212,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetFileByPathSubmodelRepo(ctx context.
 	}
 
 	// Get Submodel Element
-	fileSme, err := s.submodelBackend.GetSubmodelElement(submodelIdentifier, idShortPath)
+	fileSme, err := s.submodelBackend.GetSubmodelElement(submodelIdentifier, idShortPath, false)
 	if common.IsErrNotFound(err) {
 		timestamp := common.GetCurrentTimestamp()
 		return gen.Response(http.StatusNotFound, []common.ErrorHandler{*common.NewErrorHandler("Error", err, "404", "SMREPO-GetFileByPathSubmodelRepo-404-NotFound", string(timestamp))}), nil
@@ -1277,7 +1277,7 @@ func (s *SubmodelRepositoryAPIAPIService) PutFileByPathSubmodelRepo(ctx context.
 	}
 
 	// Get Submodel Element to verify it exists and is of type File
-	fileSme, err := s.submodelBackend.GetSubmodelElement(submodelIdentifier, idShortPath)
+	fileSme, err := s.submodelBackend.GetSubmodelElement(submodelIdentifier, idShortPath, false)
 	if common.IsErrNotFound(err) {
 		timestamp := common.GetCurrentTimestamp()
 		return gen.Response(http.StatusNotFound, []common.ErrorHandler{*common.NewErrorHandler("Error", err, "404", "SMREPO-PutFileByPathSubmodelRepo-404-NotFound", string(timestamp))}), nil

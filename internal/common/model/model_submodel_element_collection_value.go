@@ -37,13 +37,13 @@ func (s SubmodelElementCollectionValue) MarshalJSON() ([]byte, error) {
 }
 
 // AssertSubmodelElementCollectionValueRequired checks if the required fields are not zero-ed
-func AssertSubmodelElementCollectionValueRequired(obj SubmodelElementCollectionValue) error {
+func AssertSubmodelElementCollectionValueRequired(_ SubmodelElementCollectionValue) error {
 	// Collection itself is optional, individual elements are validated by their own types
 	return nil
 }
 
 // AssertSubmodelElementCollectionValueConstraints checks if the values respects the defined constraints
-func AssertSubmodelElementCollectionValueConstraints(obj SubmodelElementCollectionValue) error {
+func AssertSubmodelElementCollectionValueConstraints(_ SubmodelElementCollectionValue) error {
 	// Constraints are validated by individual element types
 	return nil
 }

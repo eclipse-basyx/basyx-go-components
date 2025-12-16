@@ -20,7 +20,8 @@ type FileValue struct {
 
 // MarshalValueOnly serializes FileValue in Value-Only format
 func (f FileValue) MarshalValueOnly() ([]byte, error) {
-	return json.Marshal(f)
+	type Alias FileValue
+	return json.Marshal((Alias)(f))
 }
 
 // MarshalJSON implements custom JSON marshaling for FileValue

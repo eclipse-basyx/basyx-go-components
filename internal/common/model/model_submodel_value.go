@@ -37,13 +37,13 @@ func (s SubmodelValue) MarshalJSON() ([]byte, error) {
 }
 
 // AssertSubmodelValueRequired checks if the required fields are not zero-ed
-func AssertSubmodelValueRequired(obj SubmodelValue) error {
+func AssertSubmodelValueRequired(_ SubmodelValue) error {
 	// Submodel value itself is optional, individual elements are validated by their own types
 	return nil
 }
 
 // AssertSubmodelValueConstraints checks if the values respects the defined constraints
-func AssertSubmodelValueConstraints(obj SubmodelValue) error {
+func AssertSubmodelValueConstraints(_ SubmodelValue) error {
 	// Constraints are validated by individual element types
 	return nil
 }

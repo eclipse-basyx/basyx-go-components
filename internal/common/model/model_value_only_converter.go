@@ -153,14 +153,14 @@ func AnnotatedRelationshipElementToValueOnly(are *AnnotatedRelationshipElement) 
 
 	// Convert annotations
 	if len(are.Annotations) > 0 {
-		result.Annotations = make([]map[string]interface{}, 0, len(are.Annotations))
+		result.Annotations = make(map[string]interface{})
 		for _, annotation := range are.Annotations {
+			idShort := annotation.GetIdShort()
+			if idShort == "" {
+				continue
+			}
 			if annotationValue, err := SubmodelElementToValueOnly(annotation); err == nil && annotationValue != nil {
-				// Serialize the annotation value
-				annotationMap := map[string]interface{}{
-					annotation.GetIdShort(): annotationValue,
-				}
-				result.Annotations = append(result.Annotations, annotationMap)
+				result.Annotations[idShort] = annotationValue
 			}
 		}
 	}
@@ -178,15 +178,15 @@ func EntityToValueOnly(e *Entity) (EntityValue, error) {
 	// Convert SpecificAssetIds
 	if len(e.SpecificAssetIds) > 0 {
 		result.SpecificAssetIds = make([]map[string]interface{}, 0, len(e.SpecificAssetIds))
-		for _, assetId := range e.SpecificAssetIds {
-			assetIdMap := map[string]interface{}{
-				"name":  assetId.Name,
-				"value": assetId.Value,
+		for _, assetID := range e.SpecificAssetIds {
+			assetIDMap := map[string]interface{}{
+				"name":  assetID.Name,
+				"value": assetID.Value,
 			}
-			if assetId.ExternalSubjectID != nil {
-				assetIdMap["externalSubjectId"] = assetId.ExternalSubjectID
+			if assetID.ExternalSubjectID != nil {
+				assetIDMap["externalSubjectId"] = assetID.ExternalSubjectID
 			}
-			result.SpecificAssetIds = append(result.SpecificAssetIds, assetIdMap)
+			result.SpecificAssetIds = append(result.SpecificAssetIds, assetIDMap)
 		}
 	}
 
@@ -208,7 +208,7 @@ func EntityToValueOnly(e *Entity) (EntityValue, error) {
 				statementsMap[idShort] = valueOnly
 			}
 		}
-		result.Statements = []map[string]interface{}{statementsMap}
+		result.Statements = statementsMap
 	}
 
 	return result, nil

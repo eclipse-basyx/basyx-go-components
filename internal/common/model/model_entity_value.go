@@ -20,12 +20,13 @@ type EntityValue struct {
 	//nolint:all
 	SpecificAssetIds []map[string]interface{} `json:"specificAssetIds,omitempty"`
 
-	Statements []map[string]interface{} `json:"statements,omitempty"`
+	Statements map[string]interface{} `json:"statements,omitempty"`
 }
 
 // MarshalValueOnly serializes EntityValue in Value-Only format
 func (e EntityValue) MarshalValueOnly() ([]byte, error) {
-	return json.Marshal(e)
+	type Alias EntityValue
+	return json.Marshal((Alias)(e))
 }
 
 // MarshalJSON implements custom JSON marshaling for EntityValue

@@ -104,7 +104,7 @@ func (p *PostgreSQLSubmodelDatabase) GetDB() *sql.DB {
 //   - []gen.Submodel: List of submodels
 //   - string: Next cursor for pagination (empty if no more pages)
 //   - error: Error if retrieval fails
-func (p *PostgreSQLSubmodelDatabase) GetAllSubmodels(limit int32, cursor string, _ /* idShort */ string) ([]gen.Submodel, string, error) {
+func (p *PostgreSQLSubmodelDatabase) GetAllSubmodels(limit int32, cursor string, _ /* idShort */ string, valueOnly bool) ([]gen.Submodel, string, error) {
 	if limit == 0 {
 		limit = 100
 	}
@@ -164,7 +164,7 @@ func (p *PostgreSQLSubmodelDatabase) GetAllSubmodels(limit int32, cursor string,
 	for i := 0; i < numWorkers; i++ {
 		go func() {
 			for job := range jobs {
-				smes, _, err := submodelelements.GetSubmodelElementsForSubmodel(p.db, job.id, "", "", -1)
+				smes, _, err := submodelelements.GetSubmodelElementsForSubmodel(p.db, job.id, "", "", -1, valueOnly)
 				results <- smeResult{id: job.id, smes: smes, err: err}
 			}
 		}()
@@ -364,7 +364,7 @@ func (p *PostgreSQLSubmodelDatabase) DoesSubmodelExist(submodelIdentifier string
 // Returns:
 //   - gen.Submodel: The complete submodel with all its elements
 //   - error: Error if submodel not found or retrieval fails
-func (p *PostgreSQLSubmodelDatabase) GetSubmodel(id string) (gen.Submodel, error) {
+func (p *PostgreSQLSubmodelDatabase) GetSubmodel(id string, valueOnly bool) (gen.Submodel, error) {
 	type result struct {
 		sm  *gen.Submodel
 		err error
@@ -388,7 +388,7 @@ func (p *PostgreSQLSubmodelDatabase) GetSubmodel(id string) (gen.Submodel, error
 
 	go func() {
 		defer wg.Done()
-		smes, _, err := submodelelements.GetSubmodelElementsForSubmodel(p.db, id, "", "", -1)
+		smes, _, err := submodelelements.GetSubmodelElementsForSubmodel(p.db, id, "", "", -1, valueOnly)
 		resultChanSME <- resultSME{smes: smes, err: err}
 	}()
 
@@ -625,7 +625,7 @@ func (p *PostgreSQLSubmodelDatabase) CreateSubmodel(sm gen.Submodel) error {
 // Returns:
 //   - gen.SubmodelElement: The requested submodel element
 //   - error: Error if element not found or retrieval fails
-func (p *PostgreSQLSubmodelDatabase) GetSubmodelElement(submodelID string, idShortOrPath string) (gen.SubmodelElement, error) {
+func (p *PostgreSQLSubmodelDatabase) GetSubmodelElement(submodelID string, idShortOrPath string, valueOnly bool) (gen.SubmodelElement, error) {
 	tx, err := p.db.Begin()
 	if err != nil {
 		fmt.Println(err)
@@ -637,7 +637,7 @@ func (p *PostgreSQLSubmodelDatabase) GetSubmodelElement(submodelID string, idSho
 		}
 	}()
 
-	elements, _, err := submodelelements.GetSubmodelElementsForSubmodel(p.db, submodelID, idShortOrPath, "", -1)
+	elements, _, err := submodelelements.GetSubmodelElementsForSubmodel(p.db, submodelID, idShortOrPath, "", -1, valueOnly)
 	if err != nil {
 		return nil, err
 	}
@@ -666,7 +666,7 @@ func (p *PostgreSQLSubmodelDatabase) GetSubmodelElement(submodelID string, idSho
 //   - []gen.SubmodelElement: List of submodel elements
 //   - string: Next cursor for pagination
 //   - error: Error if retrieval fails
-func (p *PostgreSQLSubmodelDatabase) GetSubmodelElements(submodelID string, limit int, cursor string) ([]gen.SubmodelElement, string, error) {
+func (p *PostgreSQLSubmodelDatabase) GetSubmodelElements(submodelID string, limit int, cursor string, valueOnly bool) ([]gen.SubmodelElement, string, error) {
 	tx, err := p.db.Begin()
 	if err != nil {
 		fmt.Println(err)
@@ -695,7 +695,7 @@ func (p *PostgreSQLSubmodelDatabase) GetSubmodelElements(submodelID string, limi
 		return nil, "", common.NewErrNotFound("Submodel with ID '" + submodelID + "' not found")
 	}
 
-	elements, cursor, err := submodelelements.GetSubmodelElementsForSubmodel(p.db, submodelID, "", cursor, limit)
+	elements, cursor, err := submodelelements.GetSubmodelElementsForSubmodel(p.db, submodelID, "", cursor, limit, valueOnly)
 	if err != nil {
 		return nil, "", err
 	}
