@@ -57,7 +57,7 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 		databaseSchema,
 	)
 	if err != nil {
-		log.Fatalf("Failed to initialize database connection: %v", err)
+		log.Printf("Failed to initialize database connection: %v", err)
 		return err
 	}
 

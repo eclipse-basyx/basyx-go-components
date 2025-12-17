@@ -59,7 +59,6 @@ func NewPostgreSQLAASDatabaseBackend(
 	_ int, // connMaxLifetimeMinutes is unused for now
 	databaseSchema string,
 ) (*PostgreSQLAASDatabase, error) {
-
 	// common.InitializeDatabase executes the SQL schema file automatically.
 	db, err := common.InitializeDatabase(dsn, databaseSchema)
 	if err != nil {
@@ -178,349 +177,22 @@ func (p *PostgreSQLAASDatabase) GetAllAAS() ([]model.AssetAdministrationShell, e
 
 // InsertAAS inserts a new Asset Administration Shell into the database.
 func (p *PostgreSQLAASDatabase) InsertAAS(aas model.AssetAdministrationShell) error {
-	dialect := goqu.New("postgres", p.DB)
-
-	query, _, err := dialect.
-		Insert("aas").
-		Rows(goqu.Record{
-			"id":         aas.ID,
-			"id_short":   aas.IdShort,
-			"category":   aas.Category,
-			"model_type": aas.ModelType,
-		}).
-		ToSQL()
-	if err != nil {
+	if err := p.insertBaseAAS(aas); err != nil {
 		return err
 	}
-
-	_, err = p.DB.Exec(query)
-	if err != nil {
+	if err := p.insertDisplayName(aas); err != nil {
 		return err
 	}
-
-	// -------------------------------------------------
-	// 2) HANDLE DISPLAY NAME (LangStringNameType)
-	// -------------------------------------------------
-	if len(aas.DisplayName) > 0 {
-		// 2.1 insert into lang_string_name_type_reference
-		query, _, err = dialect.
-			Insert("lang_string_name_type_reference").
-			Rows(goqu.Record{}).
-			Returning("id").
-			ToSQL()
-		if err != nil {
-			return err
-		}
-
-		var refID int64
-		err = p.DB.QueryRow(query).Scan(&refID)
-		if err != nil {
-			return err
-		}
-
-		// 2.2 insert each language entry
-		for _, dn := range aas.DisplayName {
-			query, _, err = dialect.
-				Insert("lang_string_name_type").
-				Rows(goqu.Record{
-					"lang_string_name_type_reference_id": refID,
-					"language":                           dn.Language,
-					"text":                               dn.Text,
-				}).
-				ToSQL()
-			if err != nil {
-				return err
-			}
-
-			_, err = p.DB.Exec(query)
-			if err != nil {
-				return err
-			}
-		}
-
-		// 2.3 link AAS and reference
-		query, _, err = dialect.
-			Insert("aas_display_name_ref").
-			Rows(goqu.Record{
-				"aas_id":                             aas.ID,
-				"lang_string_name_type_reference_id": refID,
-			}).
-			ToSQL()
-		if err != nil {
-			return err
-		}
-
-		_, err = p.DB.Exec(query)
-		if err != nil {
-			return err
-		}
-	}
-
-	// -------------------------------------------------
-	// 3) HANDLE DESCRIPTION (LangStringTextType)
-	// -------------------------------------------------
-	if len(aas.Description) > 0 {
-		// 3.1 insert new reference group
-		query, _, err = dialect.
-			Insert("lang_string_text_type_reference").
-			Rows(goqu.Record{}).
-			Returning("id").
-			ToSQL()
-		if err != nil {
-			return err
-		}
-
-		var descRefID int64
-		err = p.DB.QueryRow(query).Scan(&descRefID)
-		if err != nil {
-			return err
-		}
-
-		// 3.2 insert each multilingual description entry
-		for _, d := range aas.Description {
-			query, _, err = dialect.
-				Insert("lang_string_text_type").
-				Rows(goqu.Record{
-					"lang_string_text_type_reference_id": descRefID,
-					"language":                           d.Language,
-					"text":                               d.Text,
-				}).
-				ToSQL()
-			if err != nil {
-				return err
-			}
-
-			_, err = p.DB.Exec(query)
-			if err != nil {
-				return err
-			}
-		}
-
-		// 3.3 link AAS and description reference
-		query, _, err = dialect.
-			Insert("aas_description_ref").
-			Rows(goqu.Record{
-				"aas_id":                             aas.ID,
-				"lang_string_text_type_reference_id": descRefID,
-			}).
-			ToSQL()
-		if err != nil {
-			return err
-		}
-
-		_, err = p.DB.Exec(query)
-		if err != nil {
-			return err
-		}
-	}
-	// -------------------------------------------------
-	// ADMINISTRATION
-	// -------------------------------------------------
-	// Only create admin info if fields are not empty
-	if aas.Administration.Version != "" || aas.Administration.Revision != "" || aas.Administration.TemplateID != "" {
-		query, _, err = dialect.
-			Insert("administrative_information").
-			Rows(goqu.Record{
-				"version":    aas.Administration.Version,
-				"revision":   aas.Administration.Revision,
-				"templateid": aas.Administration.TemplateID,
-			}).
-			Returning("id").
-			ToSQL()
-		if err != nil {
-			return err
-		}
-
-		var newAdminID int64
-		err = p.DB.QueryRow(query).Scan(&newAdminID)
-		if err != nil {
-			return err
-		}
-
-		// Update AAS table with foreign key
-		upd, _, err := dialect.
-			Update("aas").
-			Set(goqu.Record{"administration_id": newAdminID}).
-			Where(goqu.Ex{"id": aas.ID}).
-			ToSQL()
-		if err != nil {
-			return err
-		}
-
-		_, err = p.DB.Exec(upd)
-		if err != nil {
-			return err
-		}
-	}
-	// -------------------------------------------------
-	// ASSET INFORMATION
-	// -------------------------------------------------
-	// var assetInfoID *int64
-
-	if aas.AssetInformation != nil {
-
-		// 1) Insert into asset_information
-		query, _, err = dialect.
-			Insert("asset_information").
-			Rows(goqu.Record{
-				"asset_kind":      aas.AssetInformation.AssetKind,
-				"global_asset_id": aas.AssetInformation.GlobalAssetID,
-				"asset_type":      aas.AssetInformation.AssetType,
-			}).
-			Returning("id").
-			ToSQL()
-		if err != nil {
-			return err
-		}
-
-		var newAssetInfoID int64
-		err = p.DB.QueryRow(query).Scan(&newAssetInfoID)
-		if err != nil {
-			return err
-		}
-
-		// assetInfoID = &newAssetInfoID
-		// 2) Link AAS -> asset_information
-		upd, _, err := dialect.
-			Update("aas").
-			Set(goqu.Record{
-				"asset_information_id": newAssetInfoID,
-			}).
-			Where(goqu.Ex{"id": aas.ID}).
-			ToSQL()
-		if err != nil {
-			return err
-		}
-
-		_, err = p.DB.Exec(upd)
-		if err != nil {
-			return err
-		}
-
-		// -------------------------------------------------
-		// SPECIFIC ASSET IDS
-		// -------------------------------------------------
-		for _, sid := range aas.AssetInformation.SpecificAssetIds {
-			query, _, err = dialect.
-				Insert("aas_specific_asset_id").
-				Rows(goqu.Record{
-					"asset_information_id": newAssetInfoID,
-					"name":                 sid.Name,
-					"value":                sid.Value,
-					"semantic_id":          sid.SemanticID,        // later handle Reference properly
-					"external_subject_id":  sid.ExternalSubjectID, // later as well
-				}).
-				ToSQL()
-			if err != nil {
-				return err
-			}
-
-			_, err = p.DB.Exec(query)
-			if err != nil {
-				return err
-			}
-		}
-
-		// -------------------------------------------------
-		// DEFAULT THUMBNAIL (Resource)
-		// -------------------------------------------------
-		if aas.AssetInformation.DefaultThumbnail.Path != "" {
-
-			// 1) Insert into resource
-			query, _, err = dialect.
-				Insert("resource").
-				Rows(goqu.Record{
-					"path":         aas.AssetInformation.DefaultThumbnail.Path,
-					"content_type": aas.AssetInformation.DefaultThumbnail.ContentType,
-				}).
-				Returning("id").
-				ToSQL()
-			if err != nil {
-				return err
-			}
-
-			var resourceID int64
-			err = p.DB.QueryRow(query).Scan(&resourceID)
-			if err != nil {
-				return err
-			}
-
-			// 2) Insert into link table
-			query, _, err = dialect.
-				Insert("asset_information_default_thumbnail").
-				Rows(goqu.Record{
-					"asset_information_id": newAssetInfoID,
-					"default_thumbnail_id": resourceID,
-				}).
-				ToSQL()
-			if err != nil {
-				return err
-			}
-
-			_, err = p.DB.Exec(query)
-			if err != nil {
-				return err
-			}
-		}
-		// -------------------------------------------------
-		// DERIVED FROM (Reference)
-		// -------------------------------------------------
-		if aas.DerivedFrom != nil {
-			refID, err := p.insertReference(aas.DerivedFrom)
-			if err != nil {
-				return err
-			}
-
-			// Update AAS table
-			upd, _, err := dialect.
-				Update("aas").
-				Set(goqu.Record{
-					"derived_from_reference_id": refID,
-				}).
-				Where(goqu.Ex{"id": aas.ID}).
-				ToSQL()
-			if err != nil {
-				return err
-			}
-
-			_, err = p.DB.Exec(upd)
-			if err != nil {
-				return err
-			}
-		}
-
-	}
-
-	return nil
-}
-
-// DeleteAASByID deletes an Asset Administration Shell by its ID.
-func (p *PostgreSQLAASDatabase) DeleteAASByID(id string) error {
-	dialect := goqu.New("postgres", p.DB)
-
-	query, _, err := dialect.
-		Delete("aas").
-		Where(goqu.Ex{"id": id}).
-		ToSQL()
-	if err != nil {
+	if err := p.insertDescription(aas); err != nil {
 		return err
 	}
-
-	result, err := p.DB.Exec(query)
-	if err != nil {
+	if err := p.insertAdministration(aas); err != nil {
 		return err
 	}
-
-	rows, err := result.RowsAffected()
-	if err != nil {
+	if err := p.insertAssetInformation(aas); err != nil {
 		return err
 	}
-
-	if rows == 0 {
-		return sql.ErrNoRows
-	}
-
-	return nil
+	return p.insertAssetInformation(aas)
 }
 
 // GetAASByID retrieves an Asset Administration Shell by its ID.
@@ -615,6 +287,35 @@ func (p *PostgreSQLAASDatabase) GetAASByID(id string) (*model.AssetAdministratio
 	return &shell, nil
 }
 
+// DeleteAASByID deletes an Asset Administration Shell by its ID.
+func (p *PostgreSQLAASDatabase) DeleteAASByID(id string) error {
+	dialect := goqu.New("postgres", p.DB)
+
+	query, _, err := dialect.
+		Delete("aas").
+		Where(goqu.Ex{"id": id}).
+		ToSQL()
+	if err != nil {
+		return err
+	}
+
+	result, err := p.DB.Exec(query)
+	if err != nil {
+		return err
+	}
+
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+
+	if rows == 0 {
+		return sql.ErrNoRows
+	}
+
+	return nil
+}
+
 // ----------------------
 // Helper Functions
 // ----------------------
@@ -656,7 +357,7 @@ func (p *PostgreSQLAASDatabase) fetchDescription(aasID string) ([]model.LangStri
 	var descriptions []model.LangStringTextType
 
 	for _, rid := range refIDs {
-		sql, _, err := dialect.
+		querySql, _, err := dialect.
 			From("lang_string_text_type").
 			Select("language", "text").
 			Where(goqu.Ex{"lang_string_text_type_reference_id": rid}).
@@ -665,7 +366,7 @@ func (p *PostgreSQLAASDatabase) fetchDescription(aasID string) ([]model.LangStri
 			return nil, err
 		}
 
-		textRows, err := p.DB.Query(sql)
+		textRows, err := p.DB.Query(querySql)
 		if err != nil {
 			return nil, err
 		}
@@ -729,7 +430,7 @@ func (p *PostgreSQLAASDatabase) fetchDisplayName(aasID string) ([]model.LangStri
 	var displayNames []model.LangStringNameType
 
 	for _, rid := range refIDs {
-		sql, _, err := dialect.
+		querySql, _, err := dialect.
 			From("lang_string_name_type").
 			Select("language", "text").
 			Where(goqu.Ex{"lang_string_name_type_reference_id": rid}).
@@ -738,7 +439,7 @@ func (p *PostgreSQLAASDatabase) fetchDisplayName(aasID string) ([]model.LangStri
 			return nil, err
 		}
 
-		lnRows, err := p.DB.Query(sql)
+		lnRows, err := p.DB.Query(querySql)
 		if err != nil {
 			return nil, err
 		}
@@ -897,7 +598,6 @@ func (p *PostgreSQLAASDatabase) insertReference(ref *model.Reference) (int64, er
 }
 
 func (p *PostgreSQLAASDatabase) fetchReference(id int64) (*model.Reference, error) {
-
 	// Fetch reference
 	row := p.DB.QueryRow(`
         SELECT type FROM reference WHERE id = $1
@@ -945,4 +645,290 @@ func (p *PostgreSQLAASDatabase) fetchReference(id int64) (*model.Reference, erro
 	}
 
 	return ref, nil
+}
+
+// insertBaseAAS inserts the base AAS information into the database.
+func (p *PostgreSQLAASDatabase) insertBaseAAS(aas model.AssetAdministrationShell) error {
+	dialect := goqu.New("postgres", p.DB)
+	query, _, err := dialect.
+		Insert("aas").
+		Rows(goqu.Record{
+			"id":         aas.ID,
+			"id_short":   aas.IdShort,
+			"category":   aas.Category,
+			"model_type": aas.ModelType,
+		}).
+		ToSQL()
+	if err != nil {
+		return err
+	}
+
+	_, err = p.DB.Exec(query)
+	return err
+}
+
+// insertDisplayName inserts the DisplayName entries for the AAS.
+func (p *PostgreSQLAASDatabase) insertDisplayName(aas model.AssetAdministrationShell) error {
+	if len(aas.DisplayName) == 0 {
+		return nil
+	}
+
+	dialect := goqu.New("postgres", p.DB)
+
+	// Insert reference
+	query, _, err := dialect.
+		Insert("lang_string_name_type_reference").
+		Rows(goqu.Record{}).
+		Returning("id").
+		ToSQL()
+	if err != nil {
+		return err
+	}
+
+	var refID int64
+	if err = p.DB.QueryRow(query).Scan(&refID); err != nil {
+		return err
+	}
+
+	// Insert language entries
+	for _, dn := range aas.DisplayName {
+		query, _, err = dialect.
+			Insert("lang_string_name_type").
+			Rows(goqu.Record{
+				"lang_string_name_type_reference_id": refID,
+				"language":                           dn.Language,
+				"text":                               dn.Text,
+			}).
+			ToSQL()
+		if err != nil {
+			return err
+		}
+
+		if _, err = p.DB.Exec(query); err != nil {
+			return err
+		}
+	}
+
+	// Link AAS and reference
+	query, _, err = dialect.
+		Insert("aas_display_name_ref").
+		Rows(goqu.Record{
+			"aas_id":                             aas.ID,
+			"lang_string_name_type_reference_id": refID,
+		}).
+		ToSQL()
+	if err != nil {
+		return err
+	}
+
+	_, err = p.DB.Exec(query)
+	return err
+}
+
+// insertDescription inserts the Description entries for the AAS.
+func (p *PostgreSQLAASDatabase) insertDescription(aas model.AssetAdministrationShell) error {
+	if len(aas.Description) == 0 {
+		return nil
+	}
+
+	dialect := goqu.New("postgres", p.DB)
+
+	query, _, err := dialect.
+		Insert("lang_string_text_type_reference").
+		Rows(goqu.Record{}).
+		Returning("id").
+		ToSQL()
+	if err != nil {
+		return err
+	}
+
+	var descRefID int64
+	if err = p.DB.QueryRow(query).Scan(&descRefID); err != nil {
+		return err
+	}
+
+	for _, d := range aas.Description {
+		query, _, err = dialect.
+			Insert("lang_string_text_type").
+			Rows(goqu.Record{
+				"lang_string_text_type_reference_id": descRefID,
+				"language":                           d.Language,
+				"text":                               d.Text,
+			}).
+			ToSQL()
+		if err != nil {
+			return err
+		}
+		if _, err = p.DB.Exec(query); err != nil {
+			return err
+		}
+	}
+
+	query, _, err = dialect.
+		Insert("aas_description_ref").
+		Rows(goqu.Record{
+			"aas_id":                             aas.ID,
+			"lang_string_text_type_reference_id": descRefID,
+		}).
+		ToSQL()
+	if err != nil {
+		return err
+	}
+
+	_, err = p.DB.Exec(query)
+	return err
+}
+
+// insertAdministration inserts the AdministrativeInformation for the AAS.
+func (p *PostgreSQLAASDatabase) insertAdministration(aas model.AssetAdministrationShell) error {
+	if aas.Administration.Version == "" && aas.Administration.Revision == "" && aas.Administration.TemplateID == "" {
+		return nil
+	}
+
+	dialect := goqu.New("postgres", p.DB)
+	query, _, err := dialect.
+		Insert("administrative_information").
+		Rows(goqu.Record{
+			"version":    aas.Administration.Version,
+			"revision":   aas.Administration.Revision,
+			"templateid": aas.Administration.TemplateID,
+		}).
+		Returning("id").
+		ToSQL()
+	if err != nil {
+		return err
+	}
+
+	var adminID int64
+	if err = p.DB.QueryRow(query).Scan(&adminID); err != nil {
+		return err
+	}
+
+	upd, _, err := dialect.
+		Update("aas").
+		Set(goqu.Record{"administration_id": adminID}).
+		Where(goqu.Ex{"id": aas.ID}).
+		ToSQL()
+	if err != nil {
+		return err
+	}
+
+	_, err = p.DB.Exec(upd)
+	return err
+}
+
+// insertAssetInformation inserts the AssetInformation for the AAS.
+func (p *PostgreSQLAASDatabase) insertAssetInformation(aas model.AssetAdministrationShell) error {
+	if aas.AssetInformation == nil {
+		return nil
+	}
+
+	dialect := goqu.New("postgres", p.DB)
+
+	// 1) Insert asset_information
+	query, _, err := dialect.
+		Insert("asset_information").
+		Rows(goqu.Record{
+			"asset_kind":      aas.AssetInformation.AssetKind,
+			"global_asset_id": aas.AssetInformation.GlobalAssetID,
+			"asset_type":      aas.AssetInformation.AssetType,
+		}).
+		Returning("id").
+		ToSQL()
+	if err != nil {
+		return err
+	}
+
+	var assetInfoID int64
+	if err = p.DB.QueryRow(query).Scan(&assetInfoID); err != nil {
+		return err
+	}
+
+	// 2) Link AAS -> asset_information
+	upd, _, err := dialect.
+		Update("aas").
+		Set(goqu.Record{"asset_information_id": assetInfoID}).
+		Where(goqu.Ex{"id": aas.ID}).
+		ToSQL()
+	if err != nil {
+		return err
+	}
+	if _, err = p.DB.Exec(upd); err != nil {
+		return err
+	}
+
+	// 3) Specific Asset IDs
+	for _, sid := range aas.AssetInformation.SpecificAssetIds {
+		query, _, err = dialect.
+			Insert("aas_specific_asset_id").
+			Rows(goqu.Record{
+				"asset_information_id": assetInfoID,
+				"name":                 sid.Name,
+				"value":                sid.Value,
+				"semantic_id":          sid.SemanticID,
+				"external_subject_id":  sid.ExternalSubjectID,
+			}).
+			ToSQL()
+		if err != nil {
+			return err
+		}
+		if _, err = p.DB.Exec(query); err != nil {
+			return err
+		}
+	}
+
+	// 4) Default Thumbnail
+	if aas.AssetInformation.DefaultThumbnail.Path != "" {
+		query, _, err = dialect.
+			Insert("resource").
+			Rows(goqu.Record{
+				"path":         aas.AssetInformation.DefaultThumbnail.Path,
+				"content_type": aas.AssetInformation.DefaultThumbnail.ContentType,
+			}).
+			Returning("id").
+			ToSQL()
+		if err != nil {
+			return err
+		}
+
+		var resourceID int64
+		if err = p.DB.QueryRow(query).Scan(&resourceID); err != nil {
+			return err
+		}
+
+		query, _, err = dialect.
+			Insert("asset_information_default_thumbnail").
+			Rows(goqu.Record{
+				"asset_information_id": assetInfoID,
+				"default_thumbnail_id": resourceID,
+			}).
+			ToSQL()
+		if err != nil {
+			return err
+		}
+		if _, err = p.DB.Exec(query); err != nil {
+			return err
+		}
+	}
+
+	// 5) DerivedFrom Reference
+	if aas.DerivedFrom != nil {
+		refID, err := p.insertReference(aas.DerivedFrom)
+		if err != nil {
+			return err
+		}
+		upd, _, err := dialect.
+			Update("aas").
+			Set(goqu.Record{"derived_from_reference_id": refID}).
+			Where(goqu.Ex{"id": aas.ID}).
+			ToSQL()
+		if err != nil {
+			return err
+		}
+		if _, err = p.DB.Exec(upd); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
