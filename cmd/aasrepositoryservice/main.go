@@ -52,9 +52,9 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	// aasCtrl := openapi.NewAssetAdministrationShellRepositoryAPIAPIController(aasSvc)
 	aasDatabase, err := persistencepostgresql.NewPostgreSQLAASDatabaseBackend(
 		dsn,
-		config.Postgres.MaxOpenConnections,
-		config.Postgres.MaxIdleConnections,
-		config.Postgres.ConnMaxLifetimeMinutes,
+		int(config.Postgres.MaxOpenConnections),
+		int(config.Postgres.MaxIdleConnections),
+		int(config.Postgres.ConnMaxLifetimeMinutes),
 		databaseSchema,
 	)
 	if err != nil {
