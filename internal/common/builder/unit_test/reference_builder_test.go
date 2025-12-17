@@ -265,16 +265,19 @@ func TestBuildNestedStructure_ThreeLevels(t *testing.T) {
 	level1 := ref.ReferredSemanticID
 	if level1 == nil {
 		t.Fatal("Expected level 1 ReferredSemanticId")
+		return
 	}
 
 	level2 := level1.ReferredSemanticID
 	if level2 == nil {
 		t.Fatal("Expected level 2 ReferredSemanticId")
+		return
 	}
 
 	level3 := level2.ReferredSemanticID
 	if level3 == nil {
 		t.Fatal("Expected level 3 ReferredSemanticId")
+		return
 	}
 
 	if level3.Keys[0].Value != "Level3" {
@@ -283,6 +286,7 @@ func TestBuildNestedStructure_ThreeLevels(t *testing.T) {
 
 	if level3.ReferredSemanticID != nil {
 		t.Fatal("Expected no ReferredSemanticID at level 3")
+		return
 	}
 }
 
@@ -338,20 +342,24 @@ func TestCompleteReferenceHierarchy(t *testing.T) {
 	level1 := ref.ReferredSemanticID
 	if level1 == nil {
 		t.Fatal("Expected level 1 ReferredSemanticId")
+		return
 	}
 
 	if len(level1.Keys) != 2 {
 		t.Fatalf("Expected 2 keys at level 1, got %d", len(level1.Keys))
+		return
 	}
 
 	// Verify second level
 	level2 := level1.ReferredSemanticID
 	if level2 == nil {
 		t.Fatal("Expected level 2 ReferredSemanticId")
+		return
 	}
 
 	if len(level2.Keys) != 1 {
 		t.Fatalf("Expected 1 key at level 2, got %d", len(level2.Keys))
+		return
 	}
 
 	if level2.Keys[0].Value != "https://example.com/parent-concept" {
