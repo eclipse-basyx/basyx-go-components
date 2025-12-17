@@ -36,7 +36,8 @@ DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'modelling_kind') THEN
     CREATE TYPE modelling_kind AS ENUM ('Instance', 'Template');
  END IF;
-END $$;
+END;
+$$;
 
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'aas_submodel_elements') THEN
@@ -47,7 +48,8 @@ DO $$ BEGIN
       'SubmodelElement','SubmodelElementCollection','SubmodelElementList'
     );
   END IF;
-END $$;
+END;
+$$;
 
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'data_type_def_xsd') THEN
@@ -60,43 +62,50 @@ DO $$ BEGIN
       'xs:unsignedInt','xs:unsignedLong','xs:unsignedShort'
     );
   END IF;
-END $$;
+END;
+$$;
 
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'reference_types') THEN
     CREATE TYPE reference_types AS ENUM ('ExternalReference', 'ModelReference');
   END IF;
-END $$;
+END;
+$$;
 
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'qualifier_kind') THEN
     CREATE TYPE qualifier_kind AS ENUM ('ConceptQualifier','TemplateQualifier','ValueQualifier');
   END IF;
-END $$;
+END;
+$$;
 
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'entity_type') THEN
     CREATE TYPE entity_type AS ENUM ('CoManagedEntity','SelfManagedEntity');
   END IF;
-END $$;
+END;
+$$;
 
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'direction') THEN
     CREATE TYPE direction AS ENUM ('input','output');
   END IF;
-END $$;
+END;
+$$;
 
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'state_of_event') THEN
     CREATE TYPE state_of_event AS ENUM ('off','on');
   END IF;
-END $$;
+END;
+$$;
 
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'operation_var_role') THEN
     CREATE TYPE operation_var_role AS ENUM ('in','out','inout');
   END IF;
-END $$;
+END;
+$$;
 
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'key_type') THEN
@@ -105,7 +114,8 @@ DO $$ BEGIN
       'MultiLanguageProperty','Operation','Property','Range','Referable','ReferenceElement','RelationshipElement','Submodel','SubmodelElement',
       'SubmodelElementCollection','SubmodelElementList');
   END IF;
-END $$;
+END;
+$$;
 
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'data_type_iec61360') THEN
@@ -131,19 +141,22 @@ DO $$ BEGIN
       'File'
     );
   END IF;
-END $$;
+END;
+$$;
 
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'asset_kind') THEN
     CREATE TYPE asset_kind AS ENUM ('Instance', 'Type', 'Role', 'NotApplicable');
   END IF;
-END $$;
+END;
+$$;
 
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'security_type') THEN
     CREATE TYPE security_type AS ENUM ('NONE', 'RFC_TLSA', 'W3C_DID');
   END IF;
-END $$;
+END;
+$$;
 
 -- ------------------------------------------
 -- Tables
@@ -545,45 +558,12 @@ CREATE TABLE IF NOT EXISTS submodel_embedded_data_specification (
 
 ------ AAS Repository Tables ------
 --aas repository specific tables and indexes can be added below-- 
--- AAS DISPLAY NAME LINK TABLE
-CREATE TABLE IF NOT EXISTS aas_display_name_ref (
-    aas_id VARCHAR(2048) NOT NULL REFERENCES aas(id) ON DELETE CASCADE,
-    lang_string_name_type_reference_id BIGINT NOT NULL REFERENCES lang_string_name_type_reference(id) ON DELETE CASCADE,
-    PRIMARY KEY (aas_id, lang_string_name_type_reference_id)
-);
--- AAS DESCRIPTION LINK TABLE
-CREATE TABLE IF NOT EXISTS aas_description_ref (
-    aas_id VARCHAR(2048) NOT NULL REFERENCES aas(id) ON DELETE CASCADE,
-    lang_string_text_type_reference_id BIGINT NOT NULL REFERENCES lang_string_text_type_reference(id) ON DELETE CASCADE,
-    PRIMARY KEY (aas_id, lang_string_text_type_reference_id)
-);
 
 CREATE TABLE IF NOT EXISTS asset_information (
     id BIGSERIAL PRIMARY KEY,
     asset_kind VARCHAR(64),
     global_asset_id VARCHAR(2048),
     asset_type VARCHAR(2048)
-);
-
-CREATE TABLE IF NOT EXISTS aas_specific_asset_id (
-    id BIGSERIAL PRIMARY KEY,
-    asset_information_id BIGINT NOT NULL REFERENCES asset_information(id) ON DELETE CASCADE,
-    name VARCHAR(256) NOT NULL,
-    value VARCHAR(1024) NOT NULL,
-    semantic_id BIGINT REFERENCES reference(id),
-    external_subject_id BIGINT REFERENCES reference(id)
-);
-
-CREATE TABLE IF NOT EXISTS resource (
-    id BIGSERIAL PRIMARY KEY,
-    path VARCHAR(2048) NOT NULL,
-    content_type VARCHAR(256)
-);
-
-CREATE TABLE IF NOT EXISTS asset_information_default_thumbnail (
-    asset_information_id BIGINT NOT NULL REFERENCES asset_information(id) ON DELETE CASCADE,
-    default_thumbnail_id BIGINT NOT NULL REFERENCES resource(id) ON DELETE CASCADE,
-    PRIMARY KEY (asset_information_id, default_thumbnail_id)
 );
 
 CREATE TABLE IF NOT EXISTS aas (
@@ -595,6 +575,41 @@ CREATE TABLE IF NOT EXISTS aas (
     asset_information_id BIGINT REFERENCES asset_information(id),
     derived_from_reference_id BIGINT REFERENCES reference(id)
 );
+
+CREATE TABLE IF NOT EXISTS aas_display_name_ref (
+    aas_id VARCHAR(2048) NOT NULL REFERENCES aas(id) ON DELETE CASCADE,
+    lang_string_name_type_reference_id BIGINT NOT NULL REFERENCES lang_string_name_type_reference(id) ON DELETE CASCADE,
+    PRIMARY KEY (aas_id, lang_string_name_type_reference_id)
+);
+
+CREATE TABLE IF NOT EXISTS aas_description_ref (
+    aas_id VARCHAR(2048) NOT NULL REFERENCES aas(id) ON DELETE CASCADE,
+    lang_string_text_type_reference_id BIGINT NOT NULL REFERENCES lang_string_text_type_reference(id) ON DELETE CASCADE,
+    PRIMARY KEY (aas_id, lang_string_text_type_reference_id)
+);
+
+CREATE TABLE IF NOT EXISTS aas_specific_asset_id (
+    id BIGSERIAL PRIMARY KEY,
+    asset_information_id BIGINT NOT NULL REFERENCES asset_information(id) ON DELETE CASCADE,
+    name VARCHAR(256) NOT NULL,
+    value VARCHAR(1024) NOT NULL,
+    semantic_id BIGINT REFERENCES reference(id),
+    external_subject_id BIGINT REFERENCES reference(id)
+);
+
+CREATE TABLE IF NOT EXISTS aas_resource (
+    id BIGSERIAL PRIMARY KEY,
+    path VARCHAR(2048) NOT NULL,
+    content_type VARCHAR(256)
+);
+
+CREATE TABLE IF NOT EXISTS asset_information_default_thumbnail (
+    asset_information_id BIGINT NOT NULL REFERENCES asset_information(id) ON DELETE CASCADE,
+    default_thumbnail_id BIGINT NOT NULL REFERENCES aas_resource(id) ON DELETE CASCADE,
+    PRIMARY KEY (asset_information_id, default_thumbnail_id)
+);
+
+
 
 CREATE TABLE IF NOT EXISTS aas_extension (
     aas_id VARCHAR(2048) NOT NULL REFERENCES aas(id) ON DELETE CASCADE,
