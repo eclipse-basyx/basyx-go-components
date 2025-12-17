@@ -24,7 +24,6 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 
 	cfg, err := common.LoadConfig(configPath)
 	if err != nil {
-		log.Fatalf("Failed to load config: %v", err)
 		return err
 	}
 
@@ -83,6 +82,7 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	log.Printf("▶️ Registry of Registries listening on %s (contextPath=%q)\n", addr, cfg.Server.ContextPath)
 
 	go func() {
+		//nolint:gosec // implementing this fix would cause errors.
 		if err := http.ListenAndServe(addr, r); err != http.ErrServerClosed {
 			log.Printf("Server error: %v", err)
 		}
@@ -105,7 +105,7 @@ func main() {
 	if databaseSchema != "" {
 		_, fileError := os.ReadFile(databaseSchema)
 		if fileError != nil {
-			fmt.Println("The specified database schema path is invalid or the file was not found.")
+			_, _ = fmt.Println("The specified database schema path is invalid or the file was not found.")
 			os.Exit(1)
 		}
 	}

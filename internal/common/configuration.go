@@ -105,7 +105,7 @@ type PostgresConfig struct {
 	User                   string `yaml:"user"`                   // Database username
 	Password               string `yaml:"password"`               // Database password
 	DBName                 string `yaml:"dbname"`                 // Database name
-	MaxOpenConnections     int    `yaml:"maxOpenConnections"`     // Maximum open connections
+	MaxOpenConnections     int32  `yaml:"maxOpenConnections"`     // Maximum open connections
 	MaxIdleConnections     int    `yaml:"maxIdleConnections"`     // Maximum idle connections
 	ConnMaxLifetimeMinutes int    `yaml:"connMaxLifetimeMinutes"` // Connection lifetime in minutes
 }

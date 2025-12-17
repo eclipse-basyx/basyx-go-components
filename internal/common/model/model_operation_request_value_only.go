@@ -1,24 +1,48 @@
+/*******************************************************************************
+* Copyright (C) 2025 the Eclipse BaSyx Authors and Fraunhofer IESE
+*
+* Permission is hereby granted, free of charge, to any person obtaining
+* a copy of this software and associated documentation files (the
+* "Software"), to deal in the Software without restriction, including
+* without limitation the rights to use, copy, modify, merge, publish,
+* distribute, sublicense, and/or sell copies of the Software, and to
+* permit persons to whom the Software is furnished to do so, subject to
+* the following conditions:
+*
+* The above copyright notice and this permission notice shall be
+* included in all copies or substantial portions of the Software.
+*
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+* NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+* LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+* OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+* WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*
+* SPDX-License-Identifier: MIT
+******************************************************************************/
+
 /*
  * DotAAS Part 2 | HTTP/REST | Submodel Repository Service Specification
  *
- * The entire Submodel Repository Service Specification as part of the [Specification of the Asset Administration Shell: Part 2](http://industrialdigitaltwin.org/en/content-hub).   Publisher: Industrial Digital Twin Association (IDTA) 2023
+ * The entire Submodel Repository Service Specification as part of the [Specification of the Asset Administration Shell: Part 2](https://industrialdigitaltwin.org/en/content-hub/aasspecifications).   Copyright: Industrial Digital Twin Association (IDTA) 2025
  *
- * API version: V3.0.3_SSP-001
+ * API version: V3.1.1_SSP-001
  * Contact: info@idtwin.org
  */
-
+//nolint:all
 package model
 
 // OperationRequestValueOnly type of OperationRequestValueOnly
 type OperationRequestValueOnly struct {
-
-	// The ValueOnly serialization (patternProperties and propertyNames will be supported probably with OpenApi 3.1). For the full description of the generic JSON validation schema see the ValueOnly-Serialization as defined in the 'Specification of the Asset Administration Shell - Part 2'.
+	// The ValueOnly serialization (patternProperties and propertyNames will probably be supported with OpenApi 3.1). For the full description of the generic JSON validation schema see the ValueOnly-Serialization as defined in the 'Specification of the Asset Administration Shell - Part 2'.
 	InoutputArguments map[string]interface{} `json:"inoutputArguments,omitempty"`
 
-	// The ValueOnly serialization (patternProperties and propertyNames will be supported probably with OpenApi 3.1). For the full description of the generic JSON validation schema see the ValueOnly-Serialization as defined in the 'Specification of the Asset Administration Shell - Part 2'.
+	// The ValueOnly serialization (patternProperties and propertyNames will probably be supported with OpenApi 3.1). For the full description of the generic JSON validation schema see the ValueOnly-Serialization as defined in the 'Specification of the Asset Administration Shell - Part 2'.
 	InputArguments map[string]interface{} `json:"inputArguments,omitempty"`
 
-	ClientTimeoutDuration string `json:"clientTimeoutDuration" validate:"regexp=^-?P((([0-9]+Y([0-9]+M)?([0-9]+D)?|([0-9]+M)([0-9]+D)?|([0-9]+D))(T(([0-9]+H)([0-9]+M)?([0-9]+(\\\\.[0-9]+)?S)?|([0-9]+M)([0-9]+(\\\\.[0-9]+)?S)?|([0-9]+(\\\\.[0-9]+)?S)))?)|(T(([0-9]+H)([0-9]+M)?([0-9]+(\\\\.[0-9]+)?S)?|([0-9]+M)([0-9]+(\\\\.[0-9]+)?S)?|([0-9]+(\\\\.[0-9]+)?S))))$"`
+	ClientTimeoutDuration string `json:"clientTimeoutDuration" validate:"regexp=^(-?)P(?=.)((\\\\d+)Y)?((\\\\d+)M)?((\\\\d+)D)?(T(?=.)((\\\\d+)H)?((\\\\d+)M)?(\\\\d*(\\\\.\\\\d+)?S)?)?$"`
 }
 
 // AssertOperationRequestValueOnlyRequired checks if the required fields are not zero-ed
@@ -36,8 +60,6 @@ func AssertOperationRequestValueOnlyRequired(obj OperationRequestValueOnly) erro
 }
 
 // AssertOperationRequestValueOnlyConstraints checks if the values respects the defined constraints
-//
-//nolint:all
-func AssertOperationRequestValueOnlyConstraints(obj OperationRequestValueOnly) error {
+func AssertOperationRequestValueOnlyConstraints(_ OperationRequestValueOnly) error {
 	return nil
 }

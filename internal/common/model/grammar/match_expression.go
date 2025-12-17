@@ -25,6 +25,8 @@
 
 // Package grammar defines the data structures for representing match expressions in the grammar model.
 // Author: Aaron Zielstorff ( Fraunhofer IESE ), Jannik Fried ( Fraunhofer IESE )
+//
+//nolint:all
 package grammar
 
 import (

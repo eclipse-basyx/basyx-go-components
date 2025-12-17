@@ -118,14 +118,13 @@ func GetSubmodelElementsQuery(filter SubmodelElementFilter, cursor string, limit
 		qualifierSubquery.As("qualifiers"),
 	)
 
-	if filter.HasSubmodelFilter() {
-		query = query.Where(
-			goqu.I("sme.submodel_id").Eq(filter.SubmodelFilter.SubmodelIDFilter),
-		)
-	} else {
+	if !filter.HasSubmodelFilter() {
 		_ = fmt.Errorf("no SubmodelFilter provided for SubmodelElement Query, but SubmodelElements always belong to a Submodel - consider defining a SubmodelID Filter in your GetSubmodelElementsSubquery call")
 		return nil, common.NewInternalServerError("unable to fetch SubmodelElements. See console for details")
 	}
+	query = query.Where(
+		goqu.I("sme.submodel_id").Eq(filter.SubmodelFilter.SubmodelIDFilter),
+	)
 
 	if filter.HasIDShortPathFilter() {
 		query = query.Where(
@@ -159,7 +158,12 @@ func GetSubmodelElementsQuery(filter SubmodelElementFilter, cursor string, limit
 		}
 
 		if limit > 0 {
-			rootQuery = rootQuery.Limit(uint(limit + 1)) // Fetch one extra to check for more results
+			// Ensure limit is non-negative before converting to uint to avoid integer overflow
+			limitPlusOne := limit + 1
+			if limitPlusOne < 0 {
+				return nil, common.NewErrBadRequest("limit value causes integer overflow")
+			}
+			rootQuery = rootQuery.Limit(uint(limitPlusOne)) // Fetch one extra to check for more results
 		}
 
 		query = query.Where(goqu.I("sme.root_sme_id").In(rootQuery))

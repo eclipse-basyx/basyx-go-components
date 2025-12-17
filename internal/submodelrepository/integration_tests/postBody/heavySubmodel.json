@@ -128,7 +128,7 @@
                     "value": "100",
                     "valueFormat": "##.##",
                     "valueList": {
-                        "valueReferencePair": [
+                        "valueReferencePairs": [
                             {
                                 "value": "100",
                                 "valueId": {
@@ -251,7 +251,7 @@
                     "value": "10",
                     "valueFormat": "##.##",
                     "valueList": {
-                        "valueReferencePair": [
+                        "valueReferencePairs": [
                             {
                                 "value": "10",
                                 "valueId": {
@@ -400,7 +400,7 @@
                 "value": "100",
                 "valueFormat": "##.##",
                 "valueList": {
-                    "valueReferencePair": [
+                    "valueReferencePairs": [
                         {
                             "value": "100",
                             "valueId": {
@@ -523,7 +523,7 @@
                 "value": "10",
                 "valueFormat": "##.##",
                 "valueList": {
-                    "valueReferencePair": [
+                    "valueReferencePairs": [
                         {
                             "value": "13",
                             "valueId": {
@@ -1144,7 +1144,7 @@
                         "value": "100",
                         "valueFormat": "##.##",
                         "valueList": {
-                            "valueReferencePair": [
+                            "valueReferencePairs": [
                                 {
                                     "value": "100",
                                     "valueId": {
@@ -1267,7 +1267,7 @@
                         "value": "10",
                         "valueFormat": "##.##",
                         "valueList": {
-                            "valueReferencePair": [
+                            "valueReferencePairs": [
                                 {
                                     "value": "13",
                                     "valueId": {
@@ -1573,7 +1573,7 @@
                         "value": "100",
                         "valueFormat": "##.##",
                         "valueList": {
-                            "valueReferencePair": [
+                            "valueReferencePairs": [
                                 {
                                     "value": "100",
                                     "valueId": {
@@ -1696,7 +1696,7 @@
                         "value": "10",
                         "valueFormat": "##.##",
                         "valueList": {
-                            "valueReferencePair": [
+                            "valueReferencePairs": [
                                 {
                                     "value": "13",
                                     "valueId": {

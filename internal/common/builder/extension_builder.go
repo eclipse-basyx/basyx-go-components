@@ -103,13 +103,13 @@ func (b *ExtensionsBuilder) AddExtension(extensionDbID int64, name string, value
 		if valueType != "" {
 			ValueType, err := gen.NewDataTypeDefXsdFromValue(valueType)
 			if err != nil {
-				fmt.Println(err)
+				_, _ = fmt.Println(err)
 				return nil, fmt.Errorf("error parsing ValueType for Extension '%d' to Go Struct. See console for details", extensionDbID)
 			}
 			b.extensions[extensionDbID].extension.ValueType = ValueType
 		}
 	} else {
-		fmt.Printf("[Warning] Extension with id '%d' already exists - skipping.", extensionDbID)
+		_, _ = fmt.Printf("[Warning] Extension with id '%d' already exists - skipping.", extensionDbID)
 	}
 	return b, nil
 }

@@ -42,11 +42,35 @@ type SubmodelElementBuilder struct {
 	SubmodelElement *model.SubmodelElement
 }
 
+// Channels for parallel processing
+type semanticIDResult struct {
+	semanticID *model.Reference
+}
+type descriptionResult struct {
+	descriptions []model.LangStringTextType
+}
+type displayNameResult struct {
+	displayNames []model.LangStringNameType
+}
+type embeddedDataSpecResult struct {
+	eds []model.EmbeddedDataSpecification
+}
+type supplementalSemanticIDsResult struct {
+	supplementalSemanticIDs []model.Reference
+}
+type qualifiersResult struct {
+	qualifiers []model.Qualifier
+}
+type extensionsResult struct {
+	extensions []model.Extension
+}
+
 // BuildSubmodelElement constructs a SubmodelElement from the provided database row.
 // It parses the row data, builds the appropriate submodel element type, and sets common attributes
 // like IDShort, Category, and ModelType. It also handles parallel parsing of related data such as
 // semantic IDs, descriptions, and qualifiers. Returns the constructed SubmodelElement and a
 // SubmodelElementBuilder for further management.
+// nolint:revive // This method is already refactored and further changes would not improve readability.
 func BuildSubmodelElement(smeRow model.SubmodelElementRow) (*model.SubmodelElement, *SubmodelElementBuilder, error) {
 	var g errgroup.Group
 	refBuilderMap := make(map[int64]*ReferenceBuilder)
@@ -61,29 +85,6 @@ func BuildSubmodelElement(smeRow model.SubmodelElementRow) (*model.SubmodelEleme
 		specificSME.SetCategory(smeRow.Category.String)
 	}
 	specificSME.SetModelType(smeRow.ModelType)
-
-	// Channels for parallel processing
-	type semanticIDResult struct {
-		semanticID *model.Reference
-	}
-	type descriptionResult struct {
-		descriptions []model.LangStringTextType
-	}
-	type displayNameResult struct {
-		displayNames []model.LangStringNameType
-	}
-	type embeddedDataSpecResult struct {
-		eds []model.EmbeddedDataSpecification
-	}
-	type supplementalSemanticIDsResult struct {
-		supplementalSemanticIDs []model.Reference
-	}
-	type qualifiersResult struct {
-		qualifiers []model.Qualifier
-	}
-	type extensionsResult struct {
-		extensions []model.Extension
-	}
 
 	semanticIDChan := make(chan semanticIDResult, 1)
 	descriptionChan := make(chan descriptionResult, 1)
@@ -411,31 +412,31 @@ func buildBasicEventElement(smeRow model.SubmodelElementRow, refBuilderMap map[i
 // buildOperation constructs an Operation SubmodelElement from the database row,
 // parsing input, output, and inoutput variables.
 func buildOperation(smeRow model.SubmodelElementRow) (*model.Operation, error) {
-	var json = jsoniter.ConfigCompatibleWithStandardLibrary
+	var jsonMarshaller = jsoniter.ConfigCompatibleWithStandardLibrary
 	var valueRow model.OperationValueRow
 	if smeRow.Value == nil {
 		return nil, fmt.Errorf("smeRow.Value is nil")
 	}
-	err := json.Unmarshal(*smeRow.Value, &valueRow)
+	err := jsonMarshaller.Unmarshal(*smeRow.Value, &valueRow)
 	if err != nil {
 		return nil, err
 	}
 
 	var inputVars, outputVars, inoutputVars []model.OperationVariable
 	if valueRow.InputVariables != nil {
-		err = json.Unmarshal(valueRow.InputVariables, &inputVars)
+		err = jsonMarshaller.Unmarshal(valueRow.InputVariables, &inputVars)
 		if err != nil {
 			return nil, err
 		}
 	}
 	if valueRow.OutputVariables != nil {
-		err = json.Unmarshal(valueRow.OutputVariables, &outputVars)
+		err = jsonMarshaller.Unmarshal(valueRow.OutputVariables, &outputVars)
 		if err != nil {
 			return nil, err
 		}
 	}
 	if valueRow.InoutputVariables != nil {
-		err = json.Unmarshal(valueRow.InoutputVariables, &inoutputVars)
+		err = jsonMarshaller.Unmarshal(valueRow.InoutputVariables, &inoutputVars)
 		if err != nil {
 			return nil, err
 		}
@@ -517,21 +518,19 @@ func buildAnnotatedRelationshipElement(smeRow model.SubmodelElementRow) (*model.
 	}
 
 	var first, second *model.Reference
-	if valueRow.First != nil {
-		err = json.Unmarshal(valueRow.First, &first)
-		if err != nil {
-			return nil, err
-		}
-	} else {
+	if valueRow.First == nil {
 		return nil, fmt.Errorf("first reference in RelationshipElement is nil")
 	}
-	if valueRow.Second != nil {
-		err = json.Unmarshal(valueRow.Second, &second)
-		if err != nil {
-			return nil, err
-		}
-	} else {
+	err = json.Unmarshal(valueRow.First, &first)
+	if err != nil {
+		return nil, err
+	}
+	if valueRow.Second == nil {
 		return nil, fmt.Errorf("second reference in RelationshipElement is nil")
+	}
+	err = json.Unmarshal(valueRow.Second, &second)
+	if err != nil {
+		return nil, err
 	}
 	relElem := &model.AnnotatedRelationshipElement{
 		First:  first,
@@ -665,21 +664,19 @@ func buildRelationshipElement(smeRow model.SubmodelElementRow) (*model.Relations
 	}
 
 	var first, second *model.Reference
-	if valueRow.First != nil {
-		err = json.Unmarshal(valueRow.First, &first)
-		if err != nil {
-			return nil, err
-		}
-	} else {
+	if valueRow.First == nil {
 		return nil, fmt.Errorf("first reference in RelationshipElement is nil")
 	}
-	if valueRow.Second != nil {
-		err = json.Unmarshal(valueRow.Second, &second)
-		if err != nil {
-			return nil, err
-		}
-	} else {
+	err = json.Unmarshal(valueRow.First, &first)
+	if err != nil {
+		return nil, err
+	}
+	if valueRow.Second == nil {
 		return nil, fmt.Errorf("second reference in RelationshipElement is nil")
+	}
+	err = json.Unmarshal(valueRow.Second, &second)
+	if err != nil {
+		return nil, err
 	}
 	relElem := &model.RelationshipElement{
 		First:  first,

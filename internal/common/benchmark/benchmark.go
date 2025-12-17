@@ -49,7 +49,7 @@ var httpClient = &http.Client{
 func sendRequest(method, url string, body []byte) {
 	defer func() {
 		if r := recover(); r != nil {
-			fmt.Printf("Panic in sendRequest: %v\n", r)
+			_, _ = fmt.Printf("Panic in sendRequest: %v\n", r)
 		}
 	}()
 	start := time.Now()
@@ -63,7 +63,7 @@ func sendRequest(method, url string, body []byte) {
 	case "DELETE":
 		req, reqErr := http.NewRequest(http.MethodDelete, url, nil)
 		if reqErr != nil {
-			fmt.Println("Error creating DELETE request:", reqErr)
+			_, _ = fmt.Println("Error creating DELETE request:", reqErr)
 			stats.mu.Lock()
 			stats.totalRequests++
 			stats.failedRequests++
@@ -78,19 +78,19 @@ func sendRequest(method, url string, body []byte) {
 	stats.totalRequests++
 	stats.totalResponseTime += duration
 	if err != nil {
-		fmt.Printf("Error sending %s request: %v\n", method, err)
+		_, _ = fmt.Printf("Error sending %s request: %v\n", method, err)
 		stats.failedRequests++
 	} else {
 		defer func() {
 			if closeErr := resp.Body.Close(); closeErr != nil {
-				fmt.Printf("Error closing response body: %v\n", closeErr)
+				_, _ = fmt.Printf("Error closing response body: %v\n", closeErr)
 			}
 		}()
 		if (method == "DELETE" && resp.StatusCode == 204) || (method != "DELETE" && resp.StatusCode >= 200 && resp.StatusCode < 300) {
 			stats.successfulRequests++
 		} else {
 			stats.failedRequests++
-			fmt.Printf("Failed %s request: Status %s\n", method, resp.Status)
+			_, _ = fmt.Printf("Failed %s request: Status %s\n", method, resp.Status)
 		}
 	}
 	stats.mu.Unlock()
@@ -125,14 +125,14 @@ func runBenchmarkPhase(phase string, action func(int, []byte)) {
 					var err error
 					body, err = json.Marshal(sme)
 					if err != nil {
-						fmt.Println("Error marshaling JSON:", err)
+						_, _ = fmt.Println("Error marshaling JSON:", err)
 						continue
 					}
 				}
 				action(i, body)
 				// Print progress every 1000 requests to reduce I/O
 				if i%1000 == 0 {
-					fmt.Printf("Progress (%s): %d\n", phase, i)
+					_, _ = fmt.Printf("Progress (%s): %d\n", phase, i)
 				}
 			}
 		}()
@@ -152,9 +152,9 @@ func main() {
 	printStats("POST")
 	if shouldPost && shouldGet {
 		// Wait 15 Seconds to allow DB to settle
-		fmt.Println("Waiting 15 seconds to allow DB to settle...")
+		_, _ = fmt.Println("Waiting 15 seconds to allow DB to settle...")
 		time.Sleep(15 * time.Second)
-		fmt.Println("Starting GET phase...")
+		_, _ = fmt.Println("Starting GET phase...")
 	}
 	// GET phase
 	runBenchmarkPhase("GET", func(i int, _ []byte) {
@@ -177,16 +177,16 @@ func printStats(phase string) {
 	stats.mu.Lock()
 	stats.endTime = time.Now()
 	totalTime := stats.endTime.Sub(stats.startTime)
-	fmt.Printf("\nBenchmark Statistics After %s:\n", phase)
-	fmt.Printf("Total Time: %v\n", totalTime)
-	fmt.Printf("Total Requests: %d\n", stats.totalRequests)
-	fmt.Printf("Successful Requests: %d\n", stats.successfulRequests)
-	fmt.Printf("Failed Requests: %d\n", stats.failedRequests)
+	_, _ = fmt.Printf("\nBenchmark Statistics After %s:\n", phase)
+	_, _ = fmt.Printf("Total Time: %v\n", totalTime)
+	_, _ = fmt.Printf("Total Requests: %d\n", stats.totalRequests)
+	_, _ = fmt.Printf("Successful Requests: %d\n", stats.successfulRequests)
+	_, _ = fmt.Printf("Failed Requests: %d\n", stats.failedRequests)
 	if stats.totalRequests > 0 {
 		avgResponseTime := stats.totalResponseTime / time.Duration(stats.totalRequests)
-		fmt.Printf("Average Response Time: %v\n", avgResponseTime)
+		_, _ = fmt.Printf("Average Response Time: %v\n", avgResponseTime)
 		throughput := float64(stats.totalRequests) / totalTime.Seconds()
-		fmt.Printf("Throughput: %.2f requests/second\n", throughput)
+		_, _ = fmt.Printf("Throughput: %.2f requests/second\n", throughput)
 	}
 	stats.mu.Unlock()
 }

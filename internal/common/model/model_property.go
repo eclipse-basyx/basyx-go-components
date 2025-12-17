@@ -1,17 +1,39 @@
+/*******************************************************************************
+* Copyright (C) 2025 the Eclipse BaSyx Authors and Fraunhofer IESE
+*
+* Permission is hereby granted, free of charge, to any person obtaining
+* a copy of this software and associated documentation files (the
+* "Software"), to deal in the Software without restriction, including
+* without limitation the rights to use, copy, modify, merge, publish,
+* distribute, sublicense, and/or sell copies of the Software, and to
+* permit persons to whom the Software is furnished to do so, subject to
+* the following conditions:
+*
+* The above copyright notice and this permission notice shall be
+* included in all copies or substantial portions of the Software.
+*
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+* NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+* LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+* OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+* WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*
+* SPDX-License-Identifier: MIT
+******************************************************************************/
+
 /*
  * DotAAS Part 2 | HTTP/REST | Submodel Repository Service Specification
  *
- * The entire Submodel Repository Service Specification as part of the [Specification of the Asset Administration Shell: Part 2](http://industrialdigitaltwin.org/en/content-hub).   Publisher: Industrial Digital Twin Association (IDTA) 2023
+ * The entire Submodel Repository Service Specification as part of the [Specification of the Asset Administration Shell: Part 2](https://industrialdigitaltwin.org/en/content-hub/aasspecifications).   Copyright: Industrial Digital Twin Association (IDTA) 2025
  *
- * API version: V3.0.3_SSP-001
+ * API version: V3.1.1_SSP-001
  * Contact: info@idtwin.org
  */
-
+//nolint:all
 package model
 
-import "fmt"
-
-// Property Type of SubmodelElement
 type Property struct {
 	Extensions []Extension `json:"extensions,omitempty"`
 
@@ -28,7 +50,6 @@ type Property struct {
 
 	SemanticID *Reference `json:"semanticId,omitempty"`
 
-	//nolint:all
 	SupplementalSemanticIds []Reference `json:"supplementalSemanticIds,omitempty"`
 
 	Qualifiers []Qualifier `json:"qualifiers,omitempty"`
@@ -37,7 +58,7 @@ type Property struct {
 
 	ValueType DataTypeDefXsd `json:"valueType"`
 
-	Value string `json:"value,omitempty"`
+	Value string `json:"value,omitempty" validate:"regexp=^([\\\\x09\\\\x0a\\\\x0d\\\\x20-\\\\ud7ff\\\\ue000-\\\\ufffd]|\\\\ud800[\\\\udc00-\\\\udfff]|[\\\\ud801-\\\\udbfe][\\\\udc00-\\\\udfff]|\\\\udbff[\\\\udc00-\\\\udfff])*$"`
 
 	ValueID *Reference `json:"valueId,omitempty"`
 }
@@ -182,7 +203,7 @@ func AssertPropertyRequired(obj Property) error {
 			return err
 		}
 	}
-	if err := AssertIdShortRequired(obj.IdShort); err != nil {
+	if err := AssertStringConstraints(obj.IdShort); err != nil {
 		return err
 	}
 	for _, el := range obj.DisplayName {
@@ -230,7 +251,7 @@ func AssertPropertyConstraints(obj Property) error {
 			return err
 		}
 	}
-	if err := AssertstringConstraints(obj.IdShort); err != nil {
+	if err := AssertStringConstraints(obj.IdShort); err != nil {
 		return err
 	}
 	for _, el := range obj.DisplayName {
@@ -268,25 +289,5 @@ func AssertPropertyConstraints(obj Property) error {
 			return err
 		}
 	}
-	return nil
-}
-
-// ToValueOnly converts the Property to its value-only representation.
-// Returns the raw string value, or nil if empty.
-func (p *Property) ToValueOnly() interface{} {
-	if p.Value == "" {
-		return nil
-	}
-	return p.Value
-}
-
-// UpdateFromValueOnly updates the Property from a value-only representation.
-// Expects a string value. Returns an error if the value type doesn't match.
-func (p *Property) UpdateFromValueOnly(value interface{}) error {
-	strValue, ok := value.(string)
-	if !ok {
-		return fmt.Errorf("invalid value type for Property: expected string, got %T", value)
-	}
-	p.Value = strValue
 	return nil
 }

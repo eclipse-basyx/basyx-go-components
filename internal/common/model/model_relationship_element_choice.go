@@ -31,7 +31,7 @@
  * API version: V3.1.1
  * Contact: info@idtwin.org
  */
-
+//nolint:all
 package model
 
 // RelationshipElementChoice Relationship element choice

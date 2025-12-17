@@ -185,10 +185,7 @@ func (p PostgreSQLRelationshipElementHandler) CreateNested(tx *sql.Tx, submodelI
 // Returns:
 //   - error: An error if the decorated update operation fails
 func (p PostgreSQLRelationshipElementHandler) Update(idShortOrPath string, submodelElement gen.SubmodelElement) error {
-	if dErr := p.decorated.Update(idShortOrPath, submodelElement); dErr != nil {
-		return dErr
-	}
-	return nil
+	return p.decorated.Update(idShortOrPath, submodelElement)
 }
 
 // Delete removes a RelationshipElement identified by its idShort or path.
@@ -202,10 +199,7 @@ func (p PostgreSQLRelationshipElementHandler) Update(idShortOrPath string, submo
 // Returns:
 //   - error: An error if the decorated delete operation fails
 func (p PostgreSQLRelationshipElementHandler) Delete(idShortOrPath string) error {
-	if dErr := p.decorated.Delete(idShortOrPath); dErr != nil {
-		return dErr
-	}
-	return nil
+	return p.decorated.Delete(idShortOrPath)
 }
 
 // insertRelationshipElement persists RelationshipElement-specific data to the database.

@@ -1,12 +1,37 @@
+/*******************************************************************************
+* Copyright (C) 2025 the Eclipse BaSyx Authors and Fraunhofer IESE
+*
+* Permission is hereby granted, free of charge, to any person obtaining
+* a copy of this software and associated documentation files (the
+* "Software"), to deal in the Software without restriction, including
+* without limitation the rights to use, copy, modify, merge, publish,
+* distribute, sublicense, and/or sell copies of the Software, and to
+* permit persons to whom the Software is furnished to do so, subject to
+* the following conditions:
+*
+* The above copyright notice and this permission notice shall be
+* included in all copies or substantial portions of the Software.
+*
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+* NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+* LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+* OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+* WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*
+* SPDX-License-Identifier: MIT
+******************************************************************************/
+
 /*
  * DotAAS Part 2 | HTTP/REST | Submodel Repository Service Specification
  *
- * The entire Submodel Repository Service Specification as part of the [Specification of the Asset Administration Shell: Part 2](http://industrialdigitaltwin.org/en/content-hub).   Publisher: Industrial Digital Twin Association (IDTA) 2023
+ * The entire Submodel Repository Service Specification as part of the [Specification of the Asset Administration Shell: Part 2](https://industrialdigitaltwin.org/en/content-hub/aasspecifications).   Copyright: Industrial Digital Twin Association (IDTA) 2025
  *
- * API version: V3.0.3_SSP-001
+ * API version: V3.1.1_SSP-001
  * Contact: info@idtwin.org
  */
-
+//nolint:all
 package model
 
 import (
@@ -33,7 +58,6 @@ type Entity struct {
 
 	SemanticID *Reference `json:"semanticId,omitempty"`
 
-	//nolint:all
 	SupplementalSemanticIds []Reference `json:"supplementalSemanticIds,omitempty"`
 
 	Qualifiers []Qualifier `json:"qualifiers,omitempty"`
@@ -42,11 +66,10 @@ type Entity struct {
 
 	Statements []SubmodelElement `json:"statements,omitempty"`
 
-	EntityType EntityType `json:"entityType"`
+	EntityType EntityType `json:"entityType,omitempty"`
 
 	GlobalAssetID string `json:"globalAssetId,omitempty" validate:"regexp=^([\\\\x09\\\\x0a\\\\x0d\\\\x20-\\\\ud7ff\\\\ue000-\\\\ufffd]|\\\\ud800[\\\\udc00-\\\\udfff]|[\\\\ud801-\\\\udbfe][\\\\udc00-\\\\udfff]|\\\\udbff[\\\\udc00-\\\\udfff])*$"`
 
-	//nolint:all
 	SpecificAssetIds []SpecificAssetID `json:"specificAssetIds,omitempty"`
 }
 
@@ -190,8 +213,7 @@ func (a *Entity) UnmarshalJSON(data []byte) error {
 // AssertEntityRequired checks if the required fields are not zero-ed
 func AssertEntityRequired(obj Entity) error {
 	elements := map[string]interface{}{
-		"modelType":  obj.ModelType,
-		"entityType": obj.EntityType,
+		"modelType": obj.ModelType,
 	}
 	for name, el := range elements {
 		if isZero := IsZeroValue(el); isZero {
@@ -217,8 +239,10 @@ func AssertEntityRequired(obj Entity) error {
 			return err
 		}
 	}
-	if err := AssertReferenceRequired(*obj.SemanticID); err != nil {
-		return err
+	if obj.SemanticID != nil {
+		if err := AssertReferenceRequired(*obj.SemanticID); err != nil {
+			return err
+		}
 	}
 	for _, el := range obj.SupplementalSemanticIds {
 		if err := AssertReferenceRequired(el); err != nil {
@@ -250,7 +274,7 @@ func AssertEntityConstraints(obj Entity) error {
 			return err
 		}
 	}
-	if err := AssertstringConstraints(obj.IdShort); err != nil {
+	if err := AssertStringConstraints(obj.IdShort); err != nil {
 		return err
 	}
 	for _, el := range obj.DisplayName {
@@ -263,8 +287,10 @@ func AssertEntityConstraints(obj Entity) error {
 			return err
 		}
 	}
-	if err := AssertReferenceConstraints(*obj.SemanticID); err != nil {
-		return err
+	if obj.SemanticID != nil {
+		if err := AssertReferenceConstraints(*obj.SemanticID); err != nil {
+			return err
+		}
 	}
 	for _, el := range obj.SupplementalSemanticIds {
 		if err := AssertReferenceConstraints(el); err != nil {
@@ -286,88 +312,5 @@ func AssertEntityConstraints(obj Entity) error {
 			return err
 		}
 	}
-	return nil
-}
-
-// ToValueOnly converts the Entity to its Value Only representation.
-// Returns a map with "statements" (child elements), "globalAssetId", and "specificAssetIds".
-// Returns nil if the entity has no statements.
-//
-// Parameters:
-//   - elementSerializer: function to convert child SubmodelElements to value-only form
-//
-// Example output:
-//
-//	{
-//	  "statements": {...},
-//	  "globalAssetId": "...",
-//	  "specificAssetIds": [...]
-//	}
-func (a *Entity) ToValueOnly(elementSerializer func([]SubmodelElement) interface{}) interface{} {
-	result := map[string]interface{}{
-		"entityType": a.EntityType,
-	}
-
-	if len(a.Statements) > 0 {
-		result["statements"] = elementSerializer(a.Statements)
-	}
-	if a.GlobalAssetID != "" {
-		result["globalAssetId"] = a.GlobalAssetID
-	}
-
-	if len(a.SpecificAssetIds) > 0 {
-		result["specificAssetIds"] = a.SpecificAssetIds
-	}
-
-	return result
-}
-
-// UpdateFromValueOnly updates the Entity from a Value Only representation.
-// Expects a map with "statements", and optionally "globalAssetId" and "specificAssetIds".
-//
-// Parameters:
-//   - value: map containing entity data
-//   - elementDeserializer: function to convert value-only form to SubmodelElement slice
-//
-// Returns an error if deserialization fails.
-func (a *Entity) UpdateFromValueOnly(
-	value interface{},
-	elementDeserializer func(interface{}) ([]SubmodelElement, error),
-) error {
-	valueMap, ok := value.(map[string]interface{})
-	if !ok {
-		return fmt.Errorf("invalid value type for Entity: expected map, got %T", value)
-	}
-
-	if statementsVal, ok := valueMap["statements"]; ok {
-		statements, err := elementDeserializer(statementsVal)
-		if err != nil {
-			return fmt.Errorf("failed to deserialize Entity statements: %w", err)
-		}
-		a.Statements = statements
-	}
-
-	if globalAssetID, ok := valueMap["globalAssetId"].(string); ok {
-		a.GlobalAssetID = globalAssetID
-	}
-
-	if specificAssetIDsVal, ok := valueMap["specificAssetIds"]; ok {
-		if specificAssetIDsSlice, ok := specificAssetIDsVal.([]interface{}); ok {
-			a.SpecificAssetIds = make([]SpecificAssetID, len(specificAssetIDsSlice))
-			for i, item := range specificAssetIDsSlice {
-				if itemMap, ok := item.(map[string]interface{}); ok {
-					var assetID SpecificAssetID
-					if name, ok := itemMap["name"].(string); ok {
-						assetID.Name = name
-					}
-					if value, ok := itemMap["value"].(string); ok {
-						assetID.Value = value
-					}
-					a.SpecificAssetIds[i] = assetID
-				}
-			}
-		}
-	}
-
 	return nil
 }

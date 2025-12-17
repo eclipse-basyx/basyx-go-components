@@ -72,7 +72,6 @@ func ListSubmodelDescriptorsForAAS(
 	limit int32,
 	cursor string,
 ) ([]model.SubmodelDescriptor, string, error) {
-
 	if limit <= 0 {
 		limit = 10000000
 	}
@@ -172,7 +171,6 @@ func InsertSubmodelDescriptorForAAS(
 	aasID string,
 	submodel model.SubmodelDescriptor,
 ) error {
-
 	// Lookup AAS descriptor id by AAS Id string
 	d := goqu.Dialect(dialect)
 	aas := goqu.T(tblAASDescriptor).As("aas")
@@ -211,10 +209,7 @@ func InsertSubmodelDescriptorForAAS(
 	if err = createSubModelDescriptors(tx, aasDescID, []model.SubmodelDescriptor{submodel}); err != nil {
 		return err
 	}
-	if err = tx.Commit(); err != nil {
-		return err
-	}
-	return nil
+	return tx.Commit()
 }
 
 // ReplaceSubmodelDescriptorForAAS atomically replaces the submodel descriptor
@@ -277,10 +272,7 @@ func ReplaceSubmodelDescriptorForAAS(
 			return scanErr
 		}
 
-		if err := createSubModelDescriptors(tx, aasDescID, []model.SubmodelDescriptor{submodel}); err != nil {
-			return err
-		}
-		return nil
+		return createSubModelDescriptors(tx, aasDescID, []model.SubmodelDescriptor{submodel})
 	})
 	return existed, err
 }
@@ -388,10 +380,7 @@ func DeleteSubmodelDescriptorForAASByID(
 	if _, err = tx.Exec(delSQL, delArgs...); err != nil {
 		return err
 	}
-	if err = tx.Commit(); err != nil {
-		return err
-	}
-	return nil
+	return tx.Commit()
 }
 
 // ExistsSubmodelForAAS performs a lightweight existence check for a submodel

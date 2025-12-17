@@ -311,6 +311,8 @@ func ReplaceRegistryDescriptor(ctx context.Context, db *sql.DB, registryDescript
 // It returns the page of fully assembled descriptors and, when more results are
 // available, a next cursor value (the Id immediately after the page). When
 // limit <= 0, a conservative large default is applied.
+//
+// nolint:revive // complexity is 31 which is +1 above the allowed threshold of 30
 func ListRegistryDescriptors(
 	ctx context.Context,
 	db *sql.DB,
@@ -319,7 +321,6 @@ func ListRegistryDescriptors(
 	registryType string,
 	company string,
 ) ([]model.RegistryDescriptor, string, error) {
-
 	if limit <= 0 {
 		limit = 100
 	}
@@ -352,6 +353,10 @@ func ListRegistryDescriptors(
 
 	if company != "" {
 		ds = ds.Where(reg.Col(colCompany).Eq(company))
+	}
+
+	if peekLimit < 0 {
+		return nil, "", common.NewErrBadRequest("Limit is too high.")
 	}
 
 	ds = ds.
@@ -414,7 +419,6 @@ func ListRegistryDescriptors(
 	seenDE := map[int64]struct{}{}
 
 	for _, r := range descRows {
-
 		if _, ok := seenDesc[r.DescID]; !ok {
 			seenDesc[r.DescID] = struct{}{}
 			descIDs = append(descIDs, r.DescID)

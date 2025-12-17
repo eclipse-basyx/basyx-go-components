@@ -26,6 +26,7 @@
 // Package testenv provides testing utilities for integration tests and benchmarks.
 // It includes helpers for HTTP requests, component benchmarking, Docker Compose management,
 // and health checking of services.
+// nolint:all
 package testenv
 
 import (

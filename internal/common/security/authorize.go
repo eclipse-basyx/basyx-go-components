@@ -29,14 +29,11 @@ package auth
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log"
 	"net/http"
-	"os"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/discoveryapi"
-	jsoniter "github.com/json-iterator/go"
 )
 
 // ABACSettings defines the configuration used to enable and control
@@ -77,7 +74,6 @@ type ResolveResource func(r *http.Request) (Resource, error)
 // If enabled, Claims must be present in context or the request is rejected.
 // If the model denies access, a 403 Forbidden is returned.
 func ABACMiddleware(settings ABACSettings) func(http.Handler) http.Handler {
-
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if !settings.Enabled {
@@ -137,25 +133,4 @@ func GetQueryFilter(ctx context.Context) *QueryFilter {
 		}
 	}
 	return nil
-}
-
-// FromFilterFromFile loads a QueryFilter from a JSON file.
-//
-// This function is intended for testing and development only.
-// It reads the JSON file at the given path and unmarshals it into a
-// *QueryFilter. If reading or unmarshaling fails, it returns a nil
-// QueryFilter along with the encountered error.
-func FromFilterFromFile(path string) (*QueryFilter, error) {
-	raw, err := os.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("read input file %q: %w", path, err)
-	}
-
-	var query *QueryFilter
-	json := jsoniter.ConfigCompatibleWithStandardLibrary
-	if err := json.Unmarshal(raw, &query); err != nil {
-		return nil, fmt.Errorf("unmarshal input file %q: %w", path, err)
-	}
-
-	return query, nil
 }

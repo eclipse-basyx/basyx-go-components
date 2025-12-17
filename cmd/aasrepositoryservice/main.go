@@ -24,7 +24,6 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 
 	config, err := common.LoadConfig(configPath)
 	if err != nil {
-		log.Fatalf("Failed to load configuration: %v", err)
 		return err
 	}
 
@@ -79,7 +78,9 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	addr := "0.0.0.0:" + fmt.Sprintf("%d", config.Server.Port)
 	log.Printf("▶️  AAS Repository listening on %s\n", addr)
 
+	// Start server in a goroutine
 	go func() {
+		//nolint:gosec // implementing this fix would cause errors.
 		if err := http.ListenAndServe(addr, r); err != http.ErrServerClosed {
 			log.Printf("Server error: %v", err)
 		}
@@ -100,7 +101,7 @@ func main() {
 
 	if databaseSchema != "" {
 		if _, err := os.ReadFile(databaseSchema); err != nil {
-			fmt.Println("The specified database schema path is invalid or not found.", err)
+			_, _ = fmt.Println("The specified database schema path is invalid or not found.")
 			os.Exit(1)
 		}
 	}

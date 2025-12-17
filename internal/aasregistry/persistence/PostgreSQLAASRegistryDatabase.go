@@ -56,19 +56,19 @@ type PostgreSQLAASRegistryDatabase struct {
 // be used concurrently by multiple goroutines.
 func NewPostgreSQLAASRegistryDatabase(
 	dsn string,
-	maxOpenConns, maxIdleConns int,
+	maxOpenConns int32,
+	maxIdleConns int,
 	connMaxLifetimeMinutes int,
 	cacheEnabled bool,
 	databaseSchema string,
 ) (*PostgreSQLAASRegistryDatabase, error) {
-
 	db, err := common.InitializeDatabase(dsn, databaseSchema)
 	if err != nil {
 		return nil, err
 	}
 
 	if maxOpenConns > 0 {
-		db.SetMaxOpenConns(maxOpenConns)
+		db.SetMaxOpenConns(int(maxOpenConns))
 	}
 	if maxIdleConns > 0 {
 		db.SetMaxIdleConns(maxIdleConns)
