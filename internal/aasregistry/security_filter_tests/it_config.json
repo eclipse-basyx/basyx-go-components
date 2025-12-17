@@ -28,6 +28,7 @@
     "token": { "user": "usera", "password": "pwd" },
     "method": "GET",
     "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9B",
+    "shouldMatch": "expected/expectedShellAUserA.json",
     "expectedStatus": 200
   },
   {
@@ -35,6 +36,7 @@
     "token": { "user": "usera", "password": "pwd" },
     "method": "GET",
     "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9C",
+    "shouldMatch": "expected/expectedShellBUserA.json",
     "expectedStatus": 200
   },
   {
@@ -42,6 +44,7 @@
     "token": { "user": "usera", "password": "pwd" },
     "method": "GET",
     "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9D",
+    "shouldMatch": "expected/expectedShellCUserA.json",
     "expectedStatus": 200
   },
   {

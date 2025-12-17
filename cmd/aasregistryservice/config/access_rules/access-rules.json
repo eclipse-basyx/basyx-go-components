@@ -48,7 +48,7 @@
       { "USEACL": "all_admin", "USEOBJECTS": ["all_shell_descriptors"], "USEFORMULA": "role_is_admin" },
       { "USEACL": "user", "USEOBJECTS": ["all_shell_descriptors"], "USEFORMULA": "role_is_viewer_written_x",
         "FILTER": {
-          "FRAGMENT": "$aasdesc#specificAssetIds[].value",
+          "FRAGMENT": "$aasdesc#specificAssetIds[]",
           "CONDITION": 
            {
             "$eq": [
@@ -56,7 +56,7 @@
                 "$field": "$aasdesc#specificAssetIds[].name"
               },
               {
-                "$strVal": "lul"
+                "$strVal": "customerPartId"
               }
             ]
           }
@@ -72,7 +72,7 @@
                 "$field": "$aasdesc#specificAssetIds[].name"
               },
               {
-                "$strVal": "lul"
+                "$strVal": "customerPartId"
               }
             ]
           }

@@ -174,123 +174,14 @@ func InsertAdministrationShellDescriptorTx(_ context.Context, tx *sql.Tx, aasd m
 func GetAssetAdministrationShellDescriptorByID(
 	ctx context.Context, db *sql.DB, aasIdentifier string,
 ) (model.AssetAdministrationShellDescriptor, error) {
-	d := goqu.Dialect(dialect)
-
-	aas := goqu.T(tblAASDescriptor).As("aas")
-
-	sqlStr, args, buildErr := d.
-		From(aas).
-		Select(
-			aas.Col(colDescriptorID),
-			aas.Col(colAssetKind),
-			aas.Col(colAssetType),
-			aas.Col(colGlobalAssetID),
-			aas.Col(colIDShort),
-			aas.Col(colAASID),
-			aas.Col(colAdminInfoID),
-			aas.Col(colDisplayNameID),
-			aas.Col(colDescriptionID),
-		).
-		Where(aas.Col(colAASID).Eq(aasIdentifier)).
-		Limit(1).
-		ToSQL()
-	if buildErr != nil {
-		return model.AssetAdministrationShellDescriptor{}, buildErr
-	}
-
-	var (
-		descID                            int64
-		assetKindStr                      sql.NullString
-		assetType, globalAssetID, idShort sql.NullString
-		idStr                             string
-		adminInfoID                       sql.NullInt64
-		displayNameID                     sql.NullInt64
-		descriptionID                     sql.NullInt64
-	)
-
-	if err := db.QueryRowContext(ctx, sqlStr, args...).Scan(
-		&descID,
-		&assetKindStr,
-		&assetType,
-		&globalAssetID,
-		&idShort,
-		&idStr,
-		&adminInfoID,
-		&displayNameID,
-		&descriptionID,
-	); err != nil {
-		if err == sql.ErrNoRows {
-			return model.AssetAdministrationShellDescriptor{}, common.NewErrNotFound("AAS Descriptor not found")
-		}
+	result, _, err := ListAssetAdministrationShellDescriptors(ctx, db, 1, "", "", "", aasIdentifier)
+	if err != nil {
 		return model.AssetAdministrationShellDescriptor{}, err
 	}
-
-	var ak *model.AssetKind
-	if assetKindStr.Valid && assetKindStr.String != "" {
-		v, err := model.NewAssetKindFromValue(assetKindStr.String)
-		if err != nil {
-			return model.AssetAdministrationShellDescriptor{}, fmt.Errorf("invalid AssetKind %q", assetKindStr.String)
-		}
-		ak = &v
+	if len(result) != 1 {
+		return model.AssetAdministrationShellDescriptor{}, common.NewErrNotFound("AAS Descriptor not found")
 	}
-	g, ctx := errgroup.WithContext(ctx)
-
-	var (
-		adminInfo        *model.AdministrativeInformation
-		displayName      []model.LangStringNameType
-		description      []model.LangStringTextType
-		endpoints        []model.Endpoint
-		specificAssetIDs []model.SpecificAssetID
-		extensions       []model.Extension
-		smds             []model.SubmodelDescriptor
-	)
-
-	g.Go(func() error {
-		if adminInfoID.Valid {
-			ai, err := ReadAdministrativeInformationByID(ctx, db, tblAASDescriptor, adminInfoID)
-			if err != nil {
-				return err
-			}
-			adminInfo = ai
-		}
-		return nil
-	})
-	GoAssign(g, func() ([]model.LangStringNameType, error) {
-		return persistence_utils.GetLangStringNameTypes(db, displayNameID)
-	}, &displayName)
-
-	GoAssign(g, func() ([]model.LangStringTextType, error) {
-		return persistence_utils.GetLangStringTextTypes(db, descriptionID)
-	}, &description)
-
-	GoAssign(g, func() ([]model.Endpoint, error) { return ReadEndpointsByDescriptorID(ctx, db, descID) }, &endpoints)
-
-	GoAssign(g, func() ([]model.SpecificAssetID, error) { return ReadSpecificAssetIDsByDescriptorID(ctx, db, descID) }, &specificAssetIDs)
-
-	GoAssign(g, func() ([]model.Extension, error) { return ReadExtensionsByDescriptorID(ctx, db, descID) }, &extensions)
-
-	GoAssign(g, func() ([]model.SubmodelDescriptor, error) {
-		return ReadSubmodelDescriptorsByAASDescriptorID(ctx, db, descID)
-	}, &smds)
-
-	if err := g.Wait(); err != nil {
-		return model.AssetAdministrationShellDescriptor{}, err
-	}
-
-	return model.AssetAdministrationShellDescriptor{
-		AssetKind:           ak,
-		AssetType:           assetType.String,
-		GlobalAssetId:       globalAssetID.String,
-		IdShort:             idShort.String,
-		Id:                  idStr,
-		Administration:      adminInfo,
-		DisplayName:         displayName,
-		Description:         description,
-		Endpoints:           endpoints,
-		SpecificAssetIds:    specificAssetIDs,
-		Extensions:          extensions,
-		SubmodelDescriptors: smds,
-	}, nil
+	return result[0], nil
 }
 
 // DeleteAssetAdministrationShellDescriptorByID deletes the descriptor for the
@@ -401,6 +292,7 @@ func ListAssetAdministrationShellDescriptors(
 	cursor string,
 	assetKind model.AssetKind,
 	assetType string,
+	identifiable string,
 ) ([]model.AssetAdministrationShellDescriptor, string, error) {
 	start := time.Now()
 	defer func() {
@@ -444,6 +336,10 @@ func ListAssetAdministrationShellDescriptors(
 
 	if assetKind != "" {
 		ds = ds.Where(aas.Col(colAssetKind).Eq(assetKind))
+	}
+
+	if identifiable != "" {
+		ds = ds.Where(aas.Col(colID).Eq(identifiable))
 	}
 
 	ds = ds.
