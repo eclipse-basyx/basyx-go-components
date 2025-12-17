@@ -39,9 +39,7 @@ func createExtensions(tx *sql.Tx, descriptorID int64, extensions []model.Extensi
 		return nil
 	}
 	if len(extensions) > 0 {
-
 		for id, val := range extensions {
-
 			a, err := persistence_utils.CreateExtension(tx, val, id)
 
 			if err != nil {
@@ -51,7 +49,6 @@ func createExtensions(tx *sql.Tx, descriptorID int64, extensions []model.Extensi
 			if err = createDescriptorExtensionLink(tx, descriptorID, a.Int64); err != nil {
 				return err
 			}
-
 		}
 	}
 	return nil

@@ -1,6 +1,6 @@
 {
-   "PagingMetadata": {},
-   "Result": [
+   "pagingMetadata": {},
+   "result": [
       {
          "idShort": "public",
          "id": "urn:aas:demo:public",

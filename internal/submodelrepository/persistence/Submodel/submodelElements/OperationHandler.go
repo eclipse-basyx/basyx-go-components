@@ -147,10 +147,7 @@ func (p PostgreSQLOperationHandler) CreateNested(tx *sql.Tx, submodelID string, 
 // Returns:
 //   - error: An error if the update operation fails
 func (p PostgreSQLOperationHandler) Update(idShortOrPath string, submodelElement gen.SubmodelElement) error {
-	if dErr := p.decorated.Update(idShortOrPath, submodelElement); dErr != nil {
-		return dErr
-	}
-	return nil
+	return p.decorated.Update(idShortOrPath, submodelElement)
 }
 
 // Delete removes an Operation submodel element from the database.
@@ -163,10 +160,7 @@ func (p PostgreSQLOperationHandler) Update(idShortOrPath string, submodelElement
 // Returns:
 //   - error: An error if the delete operation fails
 func (p PostgreSQLOperationHandler) Delete(idShortOrPath string) error {
-	if dErr := p.decorated.Delete(idShortOrPath); dErr != nil {
-		return dErr
-	}
-	return nil
+	return p.decorated.Delete(idShortOrPath)
 }
 
 // insertOperation is a helper function that inserts Operation-specific data into the operation_element table.

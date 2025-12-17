@@ -181,12 +181,11 @@ func (rb *ReferenceBuilder) CreateReferredSemanticID(referredSemanticIDDbID int6
 //	}
 func (rb *ReferenceBuilder) CreateReferredSemanticIDKey(referredSemanticIDDbID int64, keyID int64, keyType string, keyValue string) error {
 	builder, exists := rb.referredSemanticIDBuilders[referredSemanticIDDbID]
-	if exists {
-		builder.CreateKey(keyID, keyType, keyValue)
-	} else {
-		fmt.Printf("[ReferenceBuilder:CreateReferredSemanticIDKey] Failed to find Referred SemanticID Builder for Referred SemanticID with Database ID '%d' and Key Database id '%d'", referredSemanticIDDbID, keyID)
+	if !exists {
+		_, _ = fmt.Printf("[ReferenceBuilder:CreateReferredSemanticIDKey] Failed to find Referred SemanticID Builder for Referred SemanticID with Database ID '%d' and Key Database id '%d'", referredSemanticIDDbID, keyID)
 		return common.NewInternalServerError("Error during ReferredSemanticID creation. See console for details.")
 	}
+	builder.CreateKey(keyID, keyType, keyValue)
 	return nil
 }
 

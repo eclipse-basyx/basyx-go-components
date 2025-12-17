@@ -1,6 +1,6 @@
 {
-  "PagingMetadata": {},
-  "Result": [
+  "pagingMetadata": {},
+  "result": [
     {
       "id": "https://example.org/A",
       "specificAssetIds": [

@@ -31,6 +31,7 @@ import (
 	"fmt"
 
 	"github.com/doug-martin/goqu/v9"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/queries"
 )
@@ -53,7 +54,6 @@ import (
 //
 // Parameters:
 //   - submodelID: Optional filter for a specific submodel ID. Empty string retrieves all submodels.
-//   - valueOnly: If true, only fetches data necessary for value-only representation (excludes metadata)
 //
 // Returns:
 //   - string: The complete SQL query string ready for execution
@@ -62,76 +62,30 @@ import (
 // The function uses COALESCE to ensure empty arrays ('[]'::jsonb) instead of NULL values,
 // which simplifies downstream JSON parsing. It also includes a total count window function
 // for efficient result set pagination and slice pre-sizing.
-func GetQueryWithGoqu(submodelID string, limit int64, cursor string, aasQuery *grammar.QueryWrapper, onlyIDs bool, valueOnly bool) (string, error) {
+func GetQueryWithGoqu(submodelID string, limit int64, cursor string, aasQuery *grammar.QueryWrapper, onlyIDs bool) (string, error) {
 	dialect := goqu.Dialect("postgres")
 
-	if onlyIDs {
-		// If only IDs are requested, adjust the selection to only include the submodel ID
-		query := dialect.From(goqu.T("submodel").As("s")).
-			Select(
-				goqu.I("s.id").As("submodel_id"),
-			)
-
-		// Add optional WHERE clause for submodel ID filtering
-		if submodelID != "" {
-			query = addSubmodelIDFilterToQuery(query, submodelID)
-		}
-
-		// Add optional AAS QueryLanguage filtering
-		if aasQuery != nil {
-			query = addJoinsToQueryForAASQL(query)
-			var err error
-			query, err = applyAASQuery(aasQuery, query)
-			if err != nil {
-				return "", fmt.Errorf("error applying AAS QueryLanguage filtering: %w", err)
-			}
-		}
-
-		query = addGroupBySubmodelID(query)
-		shouldPeekAhead := false
-		query = addPaginationToQuery(query, limit, cursor, shouldPeekAhead)
-
-		sql, _, err := query.ToSQL()
-		if err != nil {
-			return "", fmt.Errorf("error generating SQL: %w", err)
-		}
-		return sql, nil
-	}
-
-	// Build core subqueries
+	// Build display names subquery
 	displayNamesSubquery := queries.GetDisplayNamesQuery(dialect, "s.displayname_id")
+
+	// Build descriptions subquery
 	descriptionsSubquery := queries.GetDescriptionQuery(dialect, "s.description_id")
 
-	// Main query with basic fields always included
+	semanticIDSubquery, semanticIDReferredSubquery := queries.GetReferenceQueries(dialect, goqu.I("s.semantic_id"))
+
+	// Build qualifier subquery
+	qualifierSubquery := queries.GetQualifierSubquery(dialect, goqu.T("submodel_qualifier"), "submodel_id", "qualifier_id", goqu.I("s.id"))
+
+	// Build AdministrativeInformation subquery
+	administrationSubquery := queries.GetAdministrationSubquery(dialect, "s.administration_id")
+
+	// Main query
 	query := dialect.From(goqu.T("submodel").As("s")).
 		Select(
 			goqu.I("s.id").As("submodel_id"),
 			goqu.I("s.id_short").As("submodel_id_short"),
 			goqu.I("s.category").As("submodel_category"),
 			goqu.I("s.kind").As("submodel_kind"),
-		)
-
-	if valueOnly {
-		// For value-only mode, only include essential identification fields
-		// Metadata fields are excluded to reduce network overhead
-		query = query.SelectAppend(
-			goqu.L("'[]'::jsonb").As("embedded_data_specification"),
-			goqu.L("'[]'::jsonb").As("supplemental_semantic_ids"),
-			goqu.L("'[]'::jsonb").As("extensions"),
-			goqu.L("COALESCE((?), '[]'::jsonb)", displayNamesSubquery).As("submodel_display_names"),
-			goqu.L("COALESCE((?), '[]'::jsonb)", descriptionsSubquery).As("submodel_descriptions"),
-			goqu.L("'[]'::jsonb").As("submodel_semantic_id"),
-			goqu.L("'[]'::jsonb").As("submodel_semantic_id_referred"),
-			goqu.L("'[]'::jsonb").As("submodel_qualifiers"),
-			goqu.L("'[]'::jsonb").As("submodel_administrative_information"),
-		)
-	} else {
-		// Full mode: include all metadata
-		semanticIDSubquery, semanticIDReferredSubquery := queries.GetReferenceQueries(dialect, goqu.I("s.semantic_id"))
-		qualifierSubquery := queries.GetQualifierSubquery(dialect, goqu.T("submodel_qualifier"), "submodel_id", "qualifier_id", goqu.I("s.id"))
-		administrationSubquery := queries.GetAdministrationSubquery(dialect, "s.administration_id")
-
-		query = query.SelectAppend(
 			goqu.I("s.embedded_data_specification").As("embedded_data_specification"),
 			goqu.I("s.supplemental_semantic_ids").As("supplemental_semantic_ids"),
 			goqu.I("s.extensions").As("extensions"),
@@ -142,6 +96,13 @@ func GetQueryWithGoqu(submodelID string, limit int64, cursor string, aasQuery *g
 			goqu.L("COALESCE((?), '[]'::jsonb)", qualifierSubquery).As("submodel_qualifiers"),
 			goqu.L("COALESCE((?), '[]'::jsonb)", administrationSubquery).As("submodel_administrative_information"),
 		)
+
+	if onlyIDs {
+		// If only IDs are requested, adjust the selection to only include the submodel ID
+		query = dialect.From(goqu.T("submodel").As("s")).
+			Select(
+				goqu.I("s.id").As("submodel_id"),
+			)
 	}
 
 	// Add optional WHERE clause for submodel ID filtering
@@ -164,14 +125,17 @@ func GetQueryWithGoqu(submodelID string, limit int64, cursor string, aasQuery *g
 
 	// Add pagination if limit or cursor is specified
 	shouldPeekAhead := !onlyIDs
-	query = addPaginationToQuery(query, limit, cursor, shouldPeekAhead)
+	query, err := addPaginationToQuery(query, limit, cursor, shouldPeekAhead)
+	if err != nil {
+		return "", err
+	}
 
-	sql, _, err := query.ToSQL()
+	sqlQuery, _, err := query.ToSQL()
 	if err != nil {
 		return "", fmt.Errorf("error generating SQL: %w", err)
 	}
 
-	return sql, nil
+	return sqlQuery, nil
 }
 
 func addGroupBySubmodelID(query *goqu.SelectDataset) *goqu.SelectDataset {
@@ -221,7 +185,7 @@ func applyAASQuery(aasQuery *grammar.QueryWrapper, query *goqu.SelectDataset) (*
 //   - limit controls the maximum number of results returned
 //   - Results are ALWAYS ordered by submodel ID for consistent pagination
 //   - Uses "peek ahead" pattern (limit + 1) to determine if there are more pages
-func addPaginationToQuery(query *goqu.SelectDataset, limit int64, cursor string, peekAhead bool) *goqu.SelectDataset {
+func addPaginationToQuery(query *goqu.SelectDataset, limit int64, cursor string, peekAhead bool) (*goqu.SelectDataset, error) {
 	// Add ordering by submodel ID for consistent pagination (ALWAYS when this function is called)
 	query = query.Order(goqu.I("s.id").Asc())
 
@@ -236,8 +200,11 @@ func addPaginationToQuery(query *goqu.SelectDataset, limit int64, cursor string,
 		if peekAhead {
 			limit++
 		}
+		if limit < 0 {
+			return nil, common.NewErrBadRequest("Limit needs to be > 0")
+		}
 		query = query.Limit(uint(limit))
 	}
 
-	return query
+	return query, nil
 }

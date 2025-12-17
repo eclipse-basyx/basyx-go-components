@@ -156,11 +156,7 @@ func InsertAdministrationShellDescriptorTx(_ context.Context, tx *sql.Tx, aasd m
 		return err
 	}
 
-	if err = createSubModelDescriptors(tx, descriptorID, aasd.SubmodelDescriptors); err != nil {
-		return err
-	}
-
-	return nil
+	return createSubModelDescriptors(tx, descriptorID, aasd.SubmodelDescriptors)
 }
 
 // GetAssetAdministrationShellDescriptorByID returns a fully materialized
@@ -385,28 +381,13 @@ func ReplaceAdministrationShellDescriptor(ctx context.Context, db *sql.DB, aasd 
 	return existed, err
 }
 
-// ListAssetAdministrationShellDescriptors lists AAS descriptors with optional
-// filtering by AssetKind and AssetType. Results are ordered by AAS Id
-// ascending and support cursor‑based pagination where the cursor is the AAS Id
-// of the first element to include (i.e. Id >= cursor).
-//
-// It returns the page of fully assembled descriptors and, when more results are
-// available, a next cursor value (the Id immediately after the page). When
-// limit <= 0, a conservative large default is applied.
-func ListAssetAdministrationShellDescriptors(
+func buildListAssetAdministrationShellDescriptorsQuery(
 	ctx context.Context,
-	db *sql.DB,
-	limit int32,
+	peekLimit int32,
 	cursor string,
 	assetKind model.AssetKind,
 	assetType string,
-) ([]model.AssetAdministrationShellDescriptor, string, error) {
-
-	if limit <= 0 {
-		limit = 1000000
-	}
-	peekLimit := int(limit) + 1
-
+) (*goqu.SelectDataset, error) {
 	d := goqu.Dialect(dialect)
 	aas := goqu.T(tblAASDescriptor).As("aas")
 
@@ -426,7 +407,7 @@ func ListAssetAdministrationShellDescriptors(
 
 	ds, err := getFilterQueryFromContext(ctx, d, ds, aas)
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
 
 	if cursor != "" {
@@ -441,14 +422,46 @@ func ListAssetAdministrationShellDescriptors(
 		ds = ds.Where(aas.Col(colAssetKind).Eq(assetKind))
 	}
 
+	if peekLimit < 0 {
+		return nil, common.NewErrBadRequest("Limit has to be higher than 0")
+	}
 	ds = ds.
 		Order(aas.Col(colAASID).Asc()).
 		Limit(uint(peekLimit))
+	return ds, nil
+}
+
+// ListAssetAdministrationShellDescriptors lists AAS descriptors with optional
+// filtering by AssetKind and AssetType. Results are ordered by AAS Id
+// ascending and support cursor‑based pagination where the cursor is the AAS Id
+// of the first element to include (i.e. Id >= cursor).
+//
+// It returns the page of fully assembled descriptors and, when more results are
+// available, a next cursor value (the Id immediately after the page). When
+// limit <= 0, a conservative large default is applied.
+//
+//nolint:revive // Its only 31 instead of 30 - 1 is okay
+func ListAssetAdministrationShellDescriptors(
+	ctx context.Context,
+	db *sql.DB,
+	limit int32,
+	cursor string,
+	assetKind model.AssetKind,
+	assetType string,
+) ([]model.AssetAdministrationShellDescriptor, string, error) {
+	if limit <= 0 {
+		limit = 1000000
+	}
+	peekLimit := limit + 1
+	ds, err := buildListAssetAdministrationShellDescriptorsQuery(ctx, peekLimit, cursor, assetKind, assetType)
+	if err != nil {
+		return nil, "", err
+	}
 
 	sqlStr, args, err := ds.ToSQL()
 
-	fmt.Println(sqlStr)
-	fmt.Println(args)
+	_, _ = fmt.Println(sqlStr)
+	_, _ = fmt.Println(args)
 	if err != nil {
 		return nil, "", err
 	}
@@ -463,7 +476,7 @@ func ListAssetAdministrationShellDescriptors(
 
 	descRows := make([]model.AssetAdministrationShellDescriptorRow, 0, peekLimit)
 	for rows.Next() {
-		fmt.Println("a")
+		_, _ = fmt.Println("a")
 		var r model.AssetAdministrationShellDescriptorRow
 		if err := rows.Scan(
 			&r.DescID,
@@ -505,7 +518,6 @@ func ListAssetAdministrationShellDescriptors(
 	seenDE := map[int64]struct{}{}
 
 	for _, r := range descRows {
-
 		if _, ok := seenDesc[r.DescID]; !ok {
 			seenDesc[r.DescID] = struct{}{}
 			descIDs = append(descIDs, r.DescID)

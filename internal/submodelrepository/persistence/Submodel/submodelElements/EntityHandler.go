@@ -140,10 +140,7 @@ func (p PostgreSQLEntityHandler) CreateNested(tx *sql.Tx, submodelID string, par
 // Returns:
 //   - error: Error if the update operation fails
 func (p PostgreSQLEntityHandler) Update(idShortOrPath string, submodelElement gen.SubmodelElement) error {
-	if dErr := p.decorated.Update(idShortOrPath, submodelElement); dErr != nil {
-		return dErr
-	}
-	return nil
+	return p.decorated.Update(idShortOrPath, submodelElement)
 }
 
 // Delete removes an Entity submodel element from the database.
@@ -156,10 +153,7 @@ func (p PostgreSQLEntityHandler) Update(idShortOrPath string, submodelElement ge
 // Returns:
 //   - error: Error if the delete operation fails
 func (p PostgreSQLEntityHandler) Delete(idShortOrPath string) error {
-	if dErr := p.decorated.Delete(idShortOrPath); dErr != nil {
-		return dErr
-	}
-	return nil
+	return p.decorated.Delete(idShortOrPath)
 }
 
 func insertEntity(entity *gen.Entity, tx *sql.Tx, id int) error {

@@ -1,8 +1,8 @@
 {
-    "PagingMetadata": {
+    "pagingMetadata": {
         "cursor": "aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL2Fhcy8zNjU3bGU2ZA"
     },
-    "Result": [
+    "result": [
         {
             "id": "https://iese.fraunhofer.de/ids/aas/22335",
             "assetKind": "Type",

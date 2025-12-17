@@ -50,7 +50,6 @@ func NewRegistryOfRegistriesAPIAPIService(registryOfRegistriesBackend registryof
 
 // GetAllRegistryDescriptors - Returns all Registry Descriptors
 func (s *RegistryOfRegistriesAPIAPIService) GetAllRegistryDescriptors(ctx context.Context, limit int32, cursor string, registryType string, company string) (model.ImplResponse, error) {
-
 	var internalCursor string
 	if strings.TrimSpace(cursor) != "" {
 		dec, decErr := common.DecodeString(cursor)
