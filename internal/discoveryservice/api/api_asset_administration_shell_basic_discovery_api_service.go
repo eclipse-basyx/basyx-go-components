@@ -44,7 +44,6 @@ func NewAssetAdministrationShellBasicDiscoveryAPIAPIService(databaseBackend pers
 // GetAllAssetAdministrationShellIdsByAssetLink - Returns a list of Asset Administration Shell IDs linked to specific asset identifiers or the global asset ID
 // Deprecated
 func (s *AssetAdministrationShellBasicDiscoveryAPIAPIService) GetAllAssetAdministrationShellIdsByAssetLink(ctx context.Context, assetIds []string, limit int32, cursor string) (model.ImplResponse, error) {
-
 	links := make([]model.AssetLink, 0, len(assetIds))
 	for idx, enc := range assetIds {
 		if strings.TrimSpace(enc) == "" {
@@ -77,7 +76,6 @@ func (s *AssetAdministrationShellBasicDiscoveryAPIAPIService) SearchAllAssetAdmi
 	cursor string,
 	assetLink []model.AssetLink,
 ) (model.ImplResponse, error) {
-
 	// Decode the incoming cursor only if it’s non-empty; empty means "start from the beginning".
 	var internalCursor string
 	if strings.TrimSpace(cursor) != "" {
@@ -118,7 +116,6 @@ func (s *AssetAdministrationShellBasicDiscoveryAPIAPIService) GetAllAssetLinksBy
 	ctx context.Context,
 	aasIdentifier string,
 ) (model.ImplResponse, error) {
-
 	decoded, decodeErr := common.DecodeString(aasIdentifier)
 	if decodeErr != nil {
 		log.Printf("🧭 [%s] Error GetAllAssetLinksById: decode aasIdentifier=%q failed: %v", componentName, aasIdentifier, decodeErr)
@@ -157,7 +154,6 @@ func (s *AssetAdministrationShellBasicDiscoveryAPIAPIService) PostAllAssetLinksB
 	aasIdentifier string,
 	specificAssetID []model.SpecificAssetID,
 ) (model.ImplResponse, error) {
-
 	decodeDiscoveryIdentifier, decodeError := common.DecodeString(aasIdentifier)
 	if decodeError != nil {
 		log.Printf("🧭 [%s] Error PostAllAssetLinksById: decode aasIdentifier=%q failed: %v", componentName, aasIdentifier, decodeError)
@@ -191,7 +187,6 @@ func (s *AssetAdministrationShellBasicDiscoveryAPIAPIService) DeleteAllAssetLink
 	ctx context.Context,
 	aasIdentifier string,
 ) (model.ImplResponse, error) {
-
 	decoded, decodeErr := common.DecodeString(aasIdentifier)
 	if decodeErr != nil {
 		log.Printf("🧭 [%s] Error DeleteAllAssetLinksById: decode aasIdentifier=%q failed: %v", componentName, aasIdentifier, decodeErr)

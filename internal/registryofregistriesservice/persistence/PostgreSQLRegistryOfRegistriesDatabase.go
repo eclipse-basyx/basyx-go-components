@@ -70,7 +70,7 @@ type PostgreSQLRegistryOfRegistriesDatabase struct {
 //
 // The function reads and executes RegistryOfRegistriesschema.sql from the current working directory's
 // resources/sql subdirectory to set up the required database tables.
-func NewPostgreSQLRegistryOfRegistriesBackend(dsn string, _ /* maxOpenConns */, _ /* maxIdleConns */ int, _ /* connMaxLifetimeMinutes */ int, cacheEnabled bool, databaseSchema string) (*PostgreSQLRegistryOfRegistriesDatabase, error) {
+func NewPostgreSQLRegistryOfRegistriesBackend(dsn string, _ int32 /* maxOpenConns */, _ /* maxIdleConns */ int, _ /* connMaxLifetimeMinutes */ int, cacheEnabled bool, databaseSchema string) (*PostgreSQLRegistryOfRegistriesDatabase, error) {
 	db, err := common.InitializeDatabase(dsn, databaseSchema)
 	if err != nil {
 		return nil, err

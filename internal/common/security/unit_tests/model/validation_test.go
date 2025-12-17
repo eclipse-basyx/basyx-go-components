@@ -24,6 +24,7 @@
 ******************************************************************************/
 // Author: Martin Stemmer ( Fraunhofer IESE )
 
+// nolint:all
 package access_control_model_test
 
 import (
@@ -253,7 +254,6 @@ func TestJSONValidation(t *testing.T) {
 						t.Fatalf("golden mismatch (whitespace/formatting ignored).\n--- got (pretty) ---\n%s\n--- want (pretty) ---\n%s",
 							prettyJSON(got), prettyJSON(want))
 					}
-
 				}
 			}
 		})

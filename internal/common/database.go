@@ -50,7 +50,7 @@ func InitializeDatabase(dsn string, schemaFilePath string) (*sql.DB, error) {
 		return nil, err
 	}
 	if schemaFilePath == "" {
-		fmt.Println("No SQL Schema passed - skipping schema loading.")
+		_, _ = fmt.Println("No SQL Schema passed - skipping schema loading.")
 		return db, nil
 	}
 	queryString, fileError := os.ReadFile(schemaFilePath)

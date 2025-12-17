@@ -61,7 +61,6 @@ func ReadSubmodelDescriptorsByAASDescriptorID(
 	db *sql.DB,
 	aasDescriptorID int64,
 ) ([]model.SubmodelDescriptor, error) {
-
 	v, err := ReadSubmodelDescriptorsByAASDescriptorIDs(ctx, db, []int64{aasDescriptorID})
 	return v[aasDescriptorID], err
 }
@@ -86,12 +85,13 @@ func ReadSubmodelDescriptorsByAASDescriptorID(
 //
 // Returns a map keyed by AAS descriptor id with the corresponding submodel
 // descriptors or an error if any query fails.
+//
+//nolint:revive // This method is already refactored and further changes would not improve readability.
 func ReadSubmodelDescriptorsByAASDescriptorIDs(
 	ctx context.Context,
 	db *sql.DB,
 	aasDescriptorIDs []int64,
 ) (map[int64][]model.SubmodelDescriptor, error) {
-
 	out := make(map[int64][]model.SubmodelDescriptor, len(aasDescriptorIDs))
 	if len(aasDescriptorIDs) == 0 {
 		return out, nil

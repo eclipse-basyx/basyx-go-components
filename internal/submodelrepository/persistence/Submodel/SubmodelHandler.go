@@ -57,8 +57,8 @@ import (
 // Returns:
 //   - *model.Submodel: Fully populated Submodel object with all nested structures
 //   - error: An error if database query fails, scanning fails, data parsing fails, or submodel is not found
-func GetSubmodelByID(db *sql.DB, submodelIDFilter string, valueOnly bool) (*model.Submodel, error) {
-	submodels, _, _, err := getSubmodels(db, submodelIDFilter, 1, "", nil, valueOnly)
+func GetSubmodelByID(db *sql.DB, submodelIDFilter string) (*model.Submodel, error) {
+	submodels, _, _, err := getSubmodels(db, submodelIDFilter, 1, "", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -78,14 +78,13 @@ func GetSubmodelByID(db *sql.DB, submodelIDFilter string, valueOnly bool) (*mode
 //   - limit: Maximum number of results to return (0 means no limit)
 //   - cursor: The submodel ID to start pagination from (empty string means start from beginning)
 //   - query: Optional AAS QueryLanguage filtering
-//   - valueOnly: If true, only fetches data necessary for value-only representation (excludes metadata)
 //
 // Returns:
 //   - []*model.Submodel: Slice of fully populated Submodel objects with all nested structures
 //   - string: Next cursor for pagination (empty string if no more pages)
 //   - error: An error if database query fails, scanning fails, or data parsing fails
-func GetAllSubmodels(db *sql.DB, limit int64, cursor string, query *grammar.QueryWrapper, valueOnly bool) ([]*model.Submodel, map[string]*model.Submodel, string, error) {
-	return getSubmodels(db, "", limit, cursor, query, valueOnly)
+func GetAllSubmodels(db *sql.DB, limit int64, cursor string, query *grammar.QueryWrapper) ([]*model.Submodel, map[string]*model.Submodel, string, error) {
+	return getSubmodels(db, "", limit, cursor, query)
 }
 
 // SubmodelElementSubmodelMetadata holds metadata for a SubmodelElement including its database ID.
@@ -124,8 +123,8 @@ type SubmodelElementSubmodelMetadata struct {
 // Note: The function builds nested reference structures in two phases:
 //  1. Initial parsing during row iteration
 //  2. Final structure building after all rows are processed
-func getSubmodels(db *sql.DB, submodelIDFilter string, limit int64, cursor string, query *grammar.QueryWrapper, valueOnly bool) ([]*model.Submodel, map[string]*model.Submodel, string, error) {
-	rows, err := GetSubmodelDataFromDbWithJSONQuery(db, submodelIDFilter, limit, cursor, query, false, valueOnly)
+func getSubmodels(db *sql.DB, submodelIDFilter string, limit int64, cursor string, query *grammar.QueryWrapper) ([]*model.Submodel, map[string]*model.Submodel, string, error) {
+	rows, err := GetSubmodelDataFromDbWithJSONQuery(db, submodelIDFilter, limit, cursor, query, false)
 	if err != nil {
 		return nil, nil, "", fmt.Errorf("error getting submodel data from DB: %w", err)
 	}
@@ -389,13 +388,13 @@ func BuildAdministration(row model.SubmodelRow) (*model.AdministrativeInformatio
 	if common.IsArrayNotEmpty(row.Administration) {
 		adminRow, err := builders.ParseAdministrationRow(row.Administration)
 		if err != nil {
-			fmt.Println(err)
+			_, _ = fmt.Println(err)
 			return nil, err
 		}
 		if adminRow != nil {
 			admin, err := builders.BuildAdministration(*adminRow)
 			if err != nil {
-				fmt.Println(err)
+				_, _ = fmt.Println(err)
 				return nil, err
 			}
 			return admin, nil
@@ -519,21 +518,20 @@ func moreThanZeroReferences(referenceArray []*model.Reference) bool {
 // Parameters:
 //   - db: Database connection to execute the query against
 //   - submodelID: Optional filter for a specific submodel ID. Empty string retrieves all submodels.
-//   - valueOnly: If true, only fetches data necessary for value-only representation (excludes metadata)
 //
 // Returns:
 //   - *sql.Rows: Result set containing submodel data with JSON-aggregated nested structures
 //   - error: An error if query building or execution fails
-func GetSubmodelDataFromDbWithJSONQuery(db *sql.DB, submodelID string, limit int64, cursor string, query *grammar.QueryWrapper, onlyIDs bool, valueOnly bool) (*sql.Rows, error) {
-	q, err := submodel_query.GetQueryWithGoqu(submodelID, limit, cursor, query, onlyIDs, valueOnly)
+func GetSubmodelDataFromDbWithJSONQuery(db *sql.DB, submodelID string, limit int64, cursor string, query *grammar.QueryWrapper, onlyIDs bool) (*sql.Rows, error) {
+	q, err := submodel_query.GetQueryWithGoqu(submodelID, limit, cursor, query, onlyIDs)
 	if err != nil {
-		fmt.Printf("Error building query: %v\n", err)
+		_, _ = fmt.Printf("Error building query: %v\n", err)
 		return nil, err
 	}
 
 	rows, err := db.Query(q)
 	if err != nil {
-		fmt.Printf("Error querying database: %v\n", err)
+		_, _ = fmt.Printf("Error querying database: %v\n", err)
 		return nil, err
 	}
 	return rows, nil

@@ -1,17 +1,39 @@
+/*******************************************************************************
+* Copyright (C) 2025 the Eclipse BaSyx Authors and Fraunhofer IESE
+*
+* Permission is hereby granted, free of charge, to any person obtaining
+* a copy of this software and associated documentation files (the
+* "Software"), to deal in the Software without restriction, including
+* without limitation the rights to use, copy, modify, merge, publish,
+* distribute, sublicense, and/or sell copies of the Software, and to
+* permit persons to whom the Software is furnished to do so, subject to
+* the following conditions:
+*
+* The above copyright notice and this permission notice shall be
+* included in all copies or substantial portions of the Software.
+*
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+* NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+* LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+* OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+* WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*
+* SPDX-License-Identifier: MIT
+******************************************************************************/
+
 /*
  * DotAAS Part 2 | HTTP/REST | Submodel Repository Service Specification
  *
- * The entire Submodel Repository Service Specification as part of the [Specification of the Asset Administration Shell: Part 2](http://industrialdigitaltwin.org/en/content-hub).   Publisher: Industrial Digital Twin Association (IDTA) 2023
+ * The entire Submodel Repository Service Specification as part of the [Specification of the Asset Administration Shell: Part 2](https://industrialdigitaltwin.org/en/content-hub/aasspecifications).   Copyright: Industrial Digital Twin Association (IDTA) 2025
  *
- * API version: V3.0.3_SSP-001
+ * API version: V3.1.1_SSP-001
  * Contact: info@idtwin.org
  */
-
+//nolint:all
 package model
 
-import "fmt"
-
-// BasicEventElement type of SubmodelElement
 type BasicEventElement struct {
 	Extensions []Extension `json:"extensions,omitempty"`
 
@@ -188,8 +210,10 @@ func AssertBasicEventElementRequired(obj BasicEventElement) error {
 			return err
 		}
 	}
-	if err := AssertReferenceRequired(*obj.SemanticID); err != nil {
-		return err
+	if obj.SemanticID != nil {
+		if err := AssertReferenceRequired(*obj.SemanticID); err != nil {
+			return err
+		}
 	}
 	for _, el := range obj.SupplementalSemanticIds {
 		if err := AssertReferenceRequired(el); err != nil {
@@ -226,7 +250,7 @@ func AssertBasicEventElementConstraints(obj BasicEventElement) error {
 			return err
 		}
 	}
-	if err := AssertstringConstraints(obj.IdShort); err != nil {
+	if err := AssertStringConstraints(obj.IdShort); err != nil {
 		return err
 	}
 	for _, el := range obj.DisplayName {
@@ -267,91 +291,5 @@ func AssertBasicEventElementConstraints(obj BasicEventElement) error {
 			return err
 		}
 	}
-	return nil
-}
-
-// ToValueOnly converts the BasicEventElement to its Value Only representation.
-// Returns a map with "observed", "direction", "state", "messageTopic", "messageBroker", "lastUpdate", and "minInterval".
-// Returns nil (BasicEventElement has no simple value representation).
-//
-// Parameters:
-//   - referenceSerializer: function to convert Reference to its value-only form
-//
-// Example output:
-//
-//	{
-//	  "observed": {...},
-//	  "direction": "input",
-//	  "state": "on",
-//	  ...
-//	}
-func (a *BasicEventElement) ToValueOnly(referenceSerializer func(Reference) interface{}) interface{} {
-	result := make(map[string]interface{})
-
-	if a.Observed != nil {
-		result["observed"] = referenceSerializer(*a.Observed)
-	}
-
-	if len(result) == 0 {
-		return nil
-	}
-
-	return result
-}
-
-// UpdateFromValueOnly updates the BasicEventElement from a Value Only representation.
-// Expects a map with event-related fields.
-//
-// Parameters:
-//   - value: map containing event data
-//   - referenceDeserializer: function to convert value-only form to Reference
-//
-// Returns an error if deserialization fails.
-func (a *BasicEventElement) UpdateFromValueOnly(value interface{}, referenceDeserializer func(interface{}) (*Reference, error)) error {
-	valueMap, ok := value.(map[string]interface{})
-	if !ok {
-		return fmt.Errorf("invalid value type for BasicEventElement: expected map, got %T", value)
-	}
-
-	if observedVal, ok := valueMap["observed"]; ok {
-		observed, err := referenceDeserializer(observedVal)
-		if err != nil {
-			return fmt.Errorf("failed to deserialize 'observed' reference: %w", err)
-		}
-		a.Observed = observed
-	}
-
-	if direction, ok := valueMap["direction"].(string); ok {
-		a.Direction = Direction(direction)
-	}
-
-	if state, ok := valueMap["state"].(string); ok {
-		a.State = StateOfEvent(state)
-	}
-
-	if messageTopic, ok := valueMap["messageTopic"].(string); ok {
-		a.MessageTopic = messageTopic
-	}
-
-	if messageBrokerVal, ok := valueMap["messageBroker"]; ok {
-		messageBroker, err := referenceDeserializer(messageBrokerVal)
-		if err != nil {
-			return fmt.Errorf("failed to deserialize 'messageBroker' reference: %w", err)
-		}
-		a.MessageBroker = messageBroker
-	}
-
-	if lastUpdate, ok := valueMap["lastUpdate"].(string); ok {
-		a.LastUpdate = lastUpdate
-	}
-
-	if minInterval, ok := valueMap["minInterval"].(string); ok {
-		a.MinInterval = minInterval
-	}
-
-	if maxInterval, ok := valueMap["maxInterval"].(string); ok {
-		a.MaxInterval = maxInterval
-	}
-
 	return nil
 }

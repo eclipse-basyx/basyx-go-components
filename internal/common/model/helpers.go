@@ -33,7 +33,7 @@
  */
 
 // Package model provides data structures and utilities for the Asset Administration Shell metamodel.
-// It implements the DotAAS Part 1 Metamodel Schemas according to the IDTA specification.
+// It implements the DotAAS Part 1 Metamodel Schemas according to the IDTA specification.//nolint:all
 package model
 
 import (

@@ -63,7 +63,7 @@ import (
 func ParseReferredReferencesFromRows(semanticIDData []model.ReferredReferenceRow, referenceBuilderRefs map[int64]*ReferenceBuilder, mu *sync.RWMutex) error {
 	for _, ref := range semanticIDData {
 		if ref.RootReference == nil {
-			fmt.Println("[WARNING - ParseReferredReferencesFromRows] RootReference was nil - skipping Reference Creation.")
+			_, _ = fmt.Println("[WARNING - ParseReferredReferencesFromRows] RootReference was nil - skipping Reference Creation.")
 			continue
 		}
 
@@ -80,15 +80,15 @@ func ParseReferredReferencesFromRows(semanticIDData []model.ReferredReferenceRow
 			return fmt.Errorf("parent reference with id %d not found for referred reference with id %d", ref.ParentReference, ref.ReferenceID)
 		}
 		if ref.ReferenceID == nil || ref.ParentReference == nil {
-			fmt.Println("[WARNING - ParseReferredReferencesFromRows] ReferenceID or ParentReference was nil - skipping Reference Creation.")
+			_, _ = fmt.Println("[WARNING - ParseReferredReferencesFromRows] ReferenceID or ParentReference was nil - skipping Reference Creation.")
 			continue
 		}
 		if ref.ReferenceType == nil {
-			fmt.Println("[WARNING - ParseReferredReferencesFromRows] ReferenceType was nil - skipping Reference Creation for Reference with Reference ID", *ref.ReferenceID)
+			_, _ = fmt.Println("[WARNING - ParseReferredReferencesFromRows] ReferenceType was nil - skipping Reference Creation for Reference with Reference ID", *ref.ReferenceID)
 			continue
 		}
 		if ref.KeyID == nil || ref.KeyType == nil || ref.KeyValue == nil {
-			fmt.Println("[WARNING - ParseReferredReferencesFromRows] KeyID, KeyType or KeyValue was nil - skipping Reference Creation for Reference with Reference ID", *ref.ReferenceID)
+			_, _ = fmt.Println("[WARNING - ParseReferredReferencesFromRows] KeyID, KeyType or KeyValue was nil - skipping Reference Creation for Reference with Reference ID", *ref.ReferenceID)
 			continue
 		}
 		builder.CreateReferredSemanticID(*ref.ReferenceID, *ref.ParentReference, *ref.ReferenceType)
@@ -121,8 +121,8 @@ func ParseReferredReferences(row json.RawMessage, referenceBuilderRefs map[int64
 	}
 
 	var semanticIDData []model.ReferredReferenceRow
-	var json = jsoniter.ConfigCompatibleWithStandardLibrary
-	if err := json.Unmarshal(row, &semanticIDData); err != nil {
+	var jsonMarshaller = jsoniter.ConfigCompatibleWithStandardLibrary
+	if err := jsonMarshaller.Unmarshal(row, &semanticIDData); err != nil {
 		return fmt.Errorf("error unmarshalling referred semantic ID data: %w", err)
 	}
 
@@ -190,7 +190,7 @@ func ParseReferencesFromRows(semanticIDData []model.ReferenceRow, referenceBuild
 		}
 
 		if ref.KeyID == nil || ref.KeyType == nil || ref.KeyValue == nil {
-			fmt.Println("[WARNING - ParseReferencesFromRows] KeyID, KeyType or KeyValue was nil - skipping Key Creation for Reference with Reference ID", ref.ReferenceID)
+			_, _ = fmt.Println("[WARNING - ParseReferencesFromRows] KeyID, KeyType or KeyValue was nil - skipping Key Creation for Reference with Reference ID", ref.ReferenceID)
 			continue
 		}
 		semanticIDBuilder.CreateKey(*ref.KeyID, *ref.KeyType, *ref.KeyValue)
@@ -220,8 +220,8 @@ func ParseReferences(row json.RawMessage, referenceBuilderRefs map[int64]*Refere
 	}
 
 	var semanticIDData []model.ReferenceRow
-	var json = jsoniter.ConfigCompatibleWithStandardLibrary
-	if err := json.Unmarshal(row, &semanticIDData); err != nil {
+	var jsonMarshaller = jsoniter.ConfigCompatibleWithStandardLibrary
+	if err := jsonMarshaller.Unmarshal(row, &semanticIDData); err != nil {
 		return nil, fmt.Errorf("error unmarshalling semantic ID data: %w", err)
 	}
 
@@ -252,14 +252,14 @@ func ParseLangStringNameType(displayNames json.RawMessage) ([]model.LangStringNa
 	var names []model.LangStringNameType
 	// remove id field from json
 	var temp []map[string]interface{}
-	var json = jsoniter.ConfigCompatibleWithStandardLibrary
-	if err := json.Unmarshal(displayNames, &temp); err != nil {
-		fmt.Printf("Error unmarshalling display names: %v\n", err)
+	var jsonMarshaller = jsoniter.ConfigCompatibleWithStandardLibrary
+	if err := jsonMarshaller.Unmarshal(displayNames, &temp); err != nil {
+		_, _ = fmt.Printf("Error unmarshalling display names: %v\n", err)
 		return nil, err
 	}
 	defer func() {
 		if r := recover(); r != nil {
-			fmt.Printf("Error parsing display names: %v\n", r)
+			_, _ = fmt.Printf("Error parsing display names: %v\n", r)
 		}
 	}()
 
@@ -305,14 +305,14 @@ func ParseLangStringTextType(descriptions json.RawMessage) ([]model.LangStringTe
 	if len(descriptions) == 0 {
 		return texts, nil
 	}
-	var json = jsoniter.ConfigCompatibleWithStandardLibrary
-	if err := json.Unmarshal(descriptions, &temp); err != nil {
-		fmt.Printf("Error unmarshalling descriptions: %v\n", err)
+	var jsonMarshaller = jsoniter.ConfigCompatibleWithStandardLibrary
+	if err := jsonMarshaller.Unmarshal(descriptions, &temp); err != nil {
+		_, _ = fmt.Printf("Error unmarshalling descriptions: %v\n", err)
 		return nil, err
 	}
 	defer func() {
 		if r := recover(); r != nil {
-			fmt.Printf("Error parsing descriptions: %v\n", r)
+			_, _ = fmt.Printf("Error parsing descriptions: %v\n", r)
 		}
 	}()
 
@@ -352,14 +352,14 @@ func ParseLangStringPreferredNameTypeIec61360(descriptions json.RawMessage) ([]m
 	if len(descriptions) == 0 {
 		return texts, nil
 	}
-	var json = jsoniter.ConfigCompatibleWithStandardLibrary
-	if err := json.Unmarshal(descriptions, &temp); err != nil {
-		fmt.Printf("Error unmarshalling descriptions: %v\n", err)
+	var jsonMarshaller = jsoniter.ConfigCompatibleWithStandardLibrary
+	if err := jsonMarshaller.Unmarshal(descriptions, &temp); err != nil {
+		_, _ = fmt.Printf("Error unmarshalling descriptions: %v\n", err)
 		return nil, err
 	}
 	defer func() {
 		if r := recover(); r != nil {
-			fmt.Printf("Error parsing descriptions: %v\n", r)
+			_, _ = fmt.Printf("Error parsing descriptions: %v\n", r)
 		}
 	}()
 
@@ -399,14 +399,14 @@ func ParseLangStringShortNameTypeIec61360(descriptions json.RawMessage) ([]model
 	if len(descriptions) == 0 {
 		return texts, nil
 	}
-	var json = jsoniter.ConfigCompatibleWithStandardLibrary
-	if err := json.Unmarshal(descriptions, &temp); err != nil {
-		fmt.Printf("Error unmarshalling descriptions: %v\n", err)
+	var jsonMarshaller = jsoniter.ConfigCompatibleWithStandardLibrary
+	if err := jsonMarshaller.Unmarshal(descriptions, &temp); err != nil {
+		_, _ = fmt.Printf("Error unmarshalling descriptions: %v\n", err)
 		return nil, err
 	}
 	defer func() {
 		if r := recover(); r != nil {
-			fmt.Printf("Error parsing descriptions: %v\n", r)
+			_, _ = fmt.Printf("Error parsing descriptions: %v\n", r)
 		}
 	}()
 
@@ -446,14 +446,14 @@ func ParseLangStringDefinitionTypeIec61360(descriptions json.RawMessage) ([]mode
 	if len(descriptions) == 0 {
 		return texts, nil
 	}
-	var json = jsoniter.ConfigCompatibleWithStandardLibrary
-	if err := json.Unmarshal(descriptions, &temp); err != nil {
-		fmt.Printf("Error unmarshalling descriptions: %v\n", err)
+	var jsonMarshaller = jsoniter.ConfigCompatibleWithStandardLibrary
+	if err := jsonMarshaller.Unmarshal(descriptions, &temp); err != nil {
+		_, _ = fmt.Printf("Error unmarshalling descriptions: %v\n", err)
 		return nil, err
 	}
 	defer func() {
 		if r := recover(); r != nil {
-			fmt.Printf("Error parsing descriptions: %v\n", r)
+			_, _ = fmt.Printf("Error parsing descriptions: %v\n", r)
 		}
 	}()
 
@@ -484,8 +484,8 @@ func ParseLangStringDefinitionTypeIec61360(descriptions json.RawMessage) ([]mode
 //   - error: An error if JSON unmarshalling fails
 func ParseQualifiersRow(row json.RawMessage) ([]model.QualifierRow, error) {
 	var texts []model.QualifierRow
-	var json = jsoniter.ConfigCompatibleWithStandardLibrary
-	if err := json.Unmarshal(row, &texts); err != nil {
+	var jsonMarshaller = jsoniter.ConfigCompatibleWithStandardLibrary
+	if err := jsonMarshaller.Unmarshal(row, &texts); err != nil {
 		return nil, fmt.Errorf("error unmarshalling qualifier data: %w", err)
 	}
 	return texts, nil
@@ -505,8 +505,8 @@ func ParseQualifiersRow(row json.RawMessage) ([]model.QualifierRow, error) {
 //   - error: An error if JSON unmarshalling fails
 func ParseExtensionRows(row json.RawMessage) ([]model.ExtensionRow, error) {
 	var texts []model.ExtensionRow
-	var json = jsoniter.ConfigCompatibleWithStandardLibrary
-	if err := json.Unmarshal(row, &texts); err != nil {
+	var jsonMarshaller = jsoniter.ConfigCompatibleWithStandardLibrary
+	if err := jsonMarshaller.Unmarshal(row, &texts); err != nil {
 		return nil, fmt.Errorf("error unmarshalling extension data: %w", err)
 	}
 	return texts, nil
@@ -529,8 +529,8 @@ func ParseExtensionRows(row json.RawMessage) ([]model.ExtensionRow, error) {
 // as administrative information is singular per element.
 func ParseAdministrationRow(row json.RawMessage) (*model.AdministrationRow, error) {
 	var texts []model.AdministrationRow
-	var json = jsoniter.ConfigCompatibleWithStandardLibrary
-	if err := json.Unmarshal(row, &texts); err != nil {
+	var jsonMarshaller = jsoniter.ConfigCompatibleWithStandardLibrary
+	if err := jsonMarshaller.Unmarshal(row, &texts); err != nil {
 		return nil, fmt.Errorf("error unmarshalling AdministrationRow data: %w", err)
 	}
 	if len(texts) == 0 {

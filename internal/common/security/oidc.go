@@ -113,7 +113,6 @@ func FromContext(r *http.Request) Claims {
 //     and store claims and iat in the request context.
 func (o *OIDC) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-
 		authz := r.Header.Get("Authorization")
 		if !strings.HasPrefix(authz, "Bearer ") {
 			if o.settings.AllowAnonymous {

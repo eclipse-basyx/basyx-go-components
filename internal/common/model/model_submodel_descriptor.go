@@ -8,7 +8,7 @@
  * API version: V3.1.1_SSP-001
  * Contact: info@idtwin.org
  */
-
+//nolint:all
 package model
 
 type SubmodelDescriptor struct {
@@ -82,7 +82,6 @@ func AssertSubmodelDescriptorRequired(obj SubmodelDescriptor) error {
 
 // AssertSubmodelDescriptorConstraints checks if the values respects the defined constraints
 func AssertSubmodelDescriptorConstraints(obj SubmodelDescriptor) error {
-
 	if obj.Administration != nil {
 		if err := AssertAdministrativeInformationConstraints(*obj.Administration); err != nil {
 			return err

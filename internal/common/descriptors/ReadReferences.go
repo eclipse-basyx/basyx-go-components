@@ -32,6 +32,7 @@ import (
 	"fmt"
 
 	"github.com/doug-martin/goqu/v9"
+	"github.com/doug-martin/goqu/v9/exp"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/builder"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/lib/pq"
@@ -70,21 +71,7 @@ func GetReferencesByIDsBatch(db *sql.DB, ids []int64) (map[int64]*model.Referenc
 	r := goqu.T(tblReference).As("r")
 	rk := goqu.T(tblReferenceKey).As("rk")
 
-	qRoots := d.
-		From(r).
-		Select(
-			r.Col(colID).As("root_id"),
-			r.Col(colType).As("root_type"),
-			rk.Col(colID).As("key_id"),
-			rk.Col(colType).As("key_type"),
-			rk.Col(colValue).As("key_value"),
-		).
-		LeftJoin(
-			rk,
-			goqu.On(rk.Col(colReferenceID).Eq(r.Col(colID))),
-		).
-		Where(goqu.L(fmt.Sprintf("r.%s = ANY(?::bigint[])", colID), arr)).
-		Order(r.Col(colID).Asc())
+	qRoots := getQRoots(d, r, rk, arr)
 
 	sqlRoots, argsRoots, err := qRoots.ToSQL()
 	if err != nil {
@@ -141,46 +128,11 @@ func GetReferencesByIDsBatch(db *sql.DB, ids []int64) (map[int64]*model.Referenc
 
 	ref := goqu.T(tblReference).As("ref")
 
-	qDesc := d.
-		From(ref).
-		Select(
-			ref.Col(colID).As("id"),
-			ref.Col(colType).As("type"),
-			ref.Col(colParentReference).As(colParentReference),
-			ref.Col(colRootReference).As(colRootReference),
-			rk.Col(colID).As("key_id"),
-			rk.Col(colType).As("key_type"),
-			rk.Col(colValue).As("key_value"),
-		).
-		LeftJoin(
-			rk,
-			goqu.On(rk.Col(colReferenceID).Eq(ref.Col(colID))),
-		).
-		Where(
-			goqu.And(
-				goqu.L(fmt.Sprintf("ref.%s = ANY(?::bigint[])", colRootReference), arr),
-				ref.Col(colID).Neq(ref.Col(colRootReference)),
-			),
-		).
-		Order(
-			ref.Col(colRootReference).Asc(),
-			ref.Col(colParentReference).Asc(),
-			ref.Col(colID).Asc(),
-		)
+	qDesc := getQDesc(d, ref, rk, arr)
 
 	sqlDesc, argsDesc, err := qDesc.ToSQL()
 	if err != nil {
 		return nil, fmt.Errorf("build descendant query: %w", err)
-	}
-
-	type descRow struct {
-		id        int64
-		typ       string
-		parentRef sql.NullInt64
-		rootRef   sql.NullInt64
-		keyID     sql.NullInt64
-		keyType   sql.NullString
-		keyValue  sql.NullString
 	}
 
 	descRows, err := db.Query(sqlDesc, argsDesc...)
@@ -191,12 +143,35 @@ func GetReferencesByIDsBatch(db *sql.DB, ids []int64) (map[int64]*model.Referenc
 		_ = descRows.Close()
 	}()
 
+	if err := processDescendantRows(descRows, builders); err != nil {
+		return nil, err
+	}
+
+	for _, b := range builders {
+		b.BuildNestedStructure()
+	}
+
+	return refs, nil
+}
+
+// processDescendantRows processes the descendant rows and builds the reference tree
+func processDescendantRows(descRows *sql.Rows, builders map[int64]*builder.ReferenceBuilder) error {
+	type descRow struct {
+		id        int64
+		typ       string
+		parentRef sql.NullInt64
+		rootRef   sql.NullInt64
+		keyID     sql.NullInt64
+		keyType   sql.NullString
+		keyValue  sql.NullString
+	}
+
 	seenPerRoot := make(map[int64]map[int64]bool)
 
 	for descRows.Next() {
 		var dr descRow
 		if err := descRows.Scan(&dr.id, &dr.typ, &dr.parentRef, &dr.rootRef, &dr.keyID, &dr.keyType, &dr.keyValue); err != nil {
-			return nil, fmt.Errorf("scan descendant row: %w", err)
+			return fmt.Errorf("scan descendant row: %w", err)
 		}
 		if !dr.rootRef.Valid {
 			continue
@@ -224,19 +199,64 @@ func GetReferencesByIDsBatch(db *sql.DB, ids []int64) (map[int64]*model.Referenc
 
 		if dr.keyID.Valid && dr.keyType.Valid && dr.keyValue.Valid {
 			if err := b.CreateReferredSemanticIDKey(dr.id, dr.keyID.Int64, dr.keyType.String, dr.keyValue.String); err != nil {
-				return nil, err
+				return err
 			}
 		}
 	}
 	if err := descRows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate descendant rows: %w", err)
+		return fmt.Errorf("iterate descendant rows: %w", err)
 	}
 
-	for _, b := range builders {
-		b.BuildNestedStructure()
-	}
+	return nil
+}
 
-	return refs, nil
+func getQRoots(d goqu.DialectWrapper, r exp.AliasedExpression, rk exp.AliasedExpression, arr any) *goqu.SelectDataset {
+	qRoots := d.
+		From(r).
+		Select(
+			r.Col(colID).As("root_id"),
+			r.Col(colType).As("root_type"),
+			rk.Col(colID).As("key_id"),
+			rk.Col(colType).As("key_type"),
+			rk.Col(colValue).As("key_value"),
+		).
+		LeftJoin(
+			rk,
+			goqu.On(rk.Col(colReferenceID).Eq(r.Col(colID))),
+		).
+		Where(goqu.L(fmt.Sprintf("r.%s = ANY(?::bigint[])", colID), arr)).
+		Order(r.Col(colID).Asc())
+	return qRoots
+}
+
+func getQDesc(d goqu.DialectWrapper, ref exp.AliasedExpression, rk exp.AliasedExpression, arr any) *goqu.SelectDataset {
+	qDesc := d.
+		From(ref).
+		Select(
+			ref.Col(colID).As("id"),
+			ref.Col(colType).As("type"),
+			ref.Col(colParentReference).As(colParentReference),
+			ref.Col(colRootReference).As(colRootReference),
+			rk.Col(colID).As("key_id"),
+			rk.Col(colType).As("key_type"),
+			rk.Col(colValue).As("key_value"),
+		).
+		LeftJoin(
+			rk,
+			goqu.On(rk.Col(colReferenceID).Eq(ref.Col(colID))),
+		).
+		Where(
+			goqu.And(
+				goqu.L(fmt.Sprintf("ref.%s = ANY(?::bigint[])", colRootReference), arr),
+				ref.Col(colID).Neq(ref.Col(colRootReference)),
+			),
+		).
+		Order(
+			ref.Col(colRootReference).Asc(),
+			ref.Col(colParentReference).Asc(),
+			ref.Col(colID).Asc(),
+		)
+	return qDesc
 }
 
 // readEntityReferences1ToMany loads references for a batch of entity IDs

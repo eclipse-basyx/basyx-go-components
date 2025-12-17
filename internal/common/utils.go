@@ -128,7 +128,6 @@ func IsArrayNotEmpty(data json.RawMessage) bool {
 // Returns:
 //   - error: Non-nil if the JSON is invalid or contains unknown fields.
 func UnmarshalAndDisallowUnknownFields(value []byte, v any) error {
-
 	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	dec := json.NewDecoder(bytes.NewReader(value))
 	dec.DisallowUnknownFields()
@@ -153,7 +152,6 @@ func UnmarshalAndDisallowUnknownFields(value []byte, v any) error {
 // Returns:
 //   - error: Non-nil if the JSON is invalid.
 func Unmarshal(value []byte, v any) error {
-
 	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	dec := json.NewDecoder(bytes.NewReader(value))
 	if err := dec.Decode(v); err != nil {
