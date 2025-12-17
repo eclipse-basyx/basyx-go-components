@@ -47,15 +47,15 @@ func TestNewReferenceBuilder(t *testing.T) {
 	}
 
 	if string(ref.Type) != refType {
-		t.Errorf("Expected reference type %s, got %s", refType, ref.Type)
+		t.Fatalf("Expected reference type %s, got %s", refType, ref.Type)
 	}
 
 	if ref.Keys == nil {
-		t.Error("Expected Keys slice to be initialized")
+		t.Fatal("Expected Keys slice to be initialized")
 	}
 
 	if len(ref.Keys) != 0 {
-		t.Errorf("Expected empty Keys slice, got length %d", len(ref.Keys))
+		t.Fatalf("Expected empty Keys slice, got length %d", len(ref.Keys))
 	}
 }
 
@@ -278,11 +278,11 @@ func TestBuildNestedStructure_ThreeLevels(t *testing.T) {
 	}
 
 	if level3.Keys[0].Value != "Level3" {
-		t.Errorf("Expected level 3 key value 'Level3', got '%s'", level3.Keys[0].Value)
+		t.Fatalf("Expected level 3 key value 'Level3', got '%s'", level3.Keys[0].Value)
 	}
 
 	if level3.ReferredSemanticID != nil {
-		t.Error("Expected no ReferredSemanticID at level 3")
+		t.Fatal("Expected no ReferredSemanticID at level 3")
 	}
 }
 
@@ -341,7 +341,7 @@ func TestCompleteReferenceHierarchy(t *testing.T) {
 	}
 
 	if len(level1.Keys) != 2 {
-		t.Errorf("Expected 2 keys at level 1, got %d", len(level1.Keys))
+		t.Fatalf("Expected 2 keys at level 1, got %d", len(level1.Keys))
 	}
 
 	// Verify second level
@@ -351,10 +351,10 @@ func TestCompleteReferenceHierarchy(t *testing.T) {
 	}
 
 	if len(level2.Keys) != 1 {
-		t.Errorf("Expected 1 key at level 2, got %d", len(level2.Keys))
+		t.Fatalf("Expected 1 key at level 2, got %d", len(level2.Keys))
 	}
 
 	if level2.Keys[0].Value != "https://example.com/parent-concept" {
-		t.Errorf("Expected correct key value at level 2, got '%s'", level2.Keys[0].Value)
+		t.Fatalf("Expected correct key value at level 2, got '%s'", level2.Keys[0].Value)
 	}
 }
