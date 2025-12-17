@@ -74,11 +74,6 @@ func AssertExtensionRequired(obj Extension) error {
 			return err
 		}
 	}
-	if obj.ValueType != "" {
-		if err := AssertDataTypeDefXsdConstraints(obj.ValueType); err != nil {
-			return err
-		}
-	}
 	return nil
 }
 
@@ -96,6 +91,11 @@ func AssertExtensionConstraints(obj Extension) error {
 	}
 	for _, el := range obj.RefersTo {
 		if err := AssertReferenceConstraints(el); err != nil {
+			return err
+		}
+	}
+	if obj.ValueType != "" {
+		if err := AssertDataTypeDefXsdConstraints(obj.ValueType); err != nil {
 			return err
 		}
 	}
