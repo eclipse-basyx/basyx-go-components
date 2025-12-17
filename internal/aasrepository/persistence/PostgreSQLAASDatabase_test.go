@@ -19,7 +19,9 @@ func setupMockDB(t *testing.T) (*PostgreSQLAASDatabase, sqlmock.Sqlmock, func())
 	}
 
 	cleanup := func() {
-		db.Close()
+		if err := db.Close(); err != nil {
+			t.Fatalf("failed to close db: %v", err)
+		}
 	}
 
 	return pg, mock, cleanup
