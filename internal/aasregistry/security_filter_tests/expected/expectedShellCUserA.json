@@ -18,7 +18,6 @@
     ],
   "specificAssetIds": [
     {
-      "name": "lul",
       "value": "23749",
       "externalSubjectId": {
         "type": "ExternalReference",

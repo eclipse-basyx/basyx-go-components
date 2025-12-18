@@ -1,8 +1,8 @@
 {
   "pagingMetadata": {},
-  "result": [
-    {
-      "id": "https://example.org/A",
+    "result": [
+      {
+        "id": "https://example.org/A",
         "endpoints": [
             {
                 "protocolInformation": {
@@ -40,7 +40,17 @@
         ],
       "specificAssetIds": [
         {
-          "name": "customerPartId"
+          "name": "customerPartId",
+          "value": "39480543",
+          "externalSubjectId": {
+            "type": "ExternalReference",
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "WRITTEN_BY_Y"
+              }
+            ]
+          }
         }
       ]
     },
@@ -64,7 +74,6 @@
         ],
       "specificAssetIds": [
         {
-          "name": "lul",
           "value": "23749",
           "externalSubjectId": {
             "type": "ExternalReference",

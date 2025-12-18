@@ -1,5 +1,5 @@
 {
-  "id": "https://example.org/A",
+    "id": "https://example.org/A",
     "endpoints": [
         {
             "protocolInformation": {

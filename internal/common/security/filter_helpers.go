@@ -31,7 +31,6 @@ import (
 
 	"github.com/doug-martin/goqu/v9"
 	"github.com/doug-martin/goqu/v9/exp"
-	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 )
 
 // AddSpecificAssetFilter appends the WHERE clause for the given fragment
@@ -73,12 +72,6 @@ type ExpressionIdentifiableMapper struct {
 	CanBeFiltered bool
 	Identifable   *string
 }
-type expressionIdentifiableMapperIntermediate struct {
-	exp           exp.Expression
-	canBeFiltered bool
-	identifable   *string
-	mapper        *grammar.LogicalExpression
-}
 
 func extractExpressions(mappers []ExpressionIdentifiableMapper) []exp.Expression {
 	expressions := make([]exp.Expression, 0, len(mappers))
@@ -103,50 +96,29 @@ func GetColumnSelectStatement(ctx context.Context, expressionMappers []Expressio
 	}
 
 	var ok = false
-	expressionMappersIntermediate := []expressionIdentifiableMapperIntermediate{}
+
+	result := []exp.Expression{}
 	for _, expMapper := range expressionMappers {
-		mapper := expressionIdentifiableMapperIntermediate{
-			exp:           expMapper.Exp,
-			canBeFiltered: expMapper.CanBeFiltered,
-			identifable:   expMapper.Identifable,
-		}
+
 		if expMapper.Identifable != nil {
 
-			isOk, filter := p.ExistsExpressionFor(*expMapper.Identifable, true)
+			isOk, filter := p.ExistsExpressionFor(*expMapper.Identifable, false)
 			if isOk {
 				ok = true
 			}
 
-			mapper.mapper = &filter
+			wc, err := filter.EvaluateToExpression()
+			if err != nil {
+				return nil, err
+			}
+			result = append(result, goqu.MAX(caseWhenColumn(wc, expMapper.Exp)))
+		} else {
+			result = append(result, expMapper.Exp)
 		}
-		expressionMappersIntermediate = append(expressionMappersIntermediate, mapper)
+
 	}
 	if !ok {
 		return defaultReturn, nil
-	}
-	result := []exp.Expression{}
-	for i, expMapper := range expressionMappersIntermediate {
-		if !expMapper.canBeFiltered {
-			result = append(result, expMapper.exp)
-			continue
-		}
-		conditions := []grammar.LogicalExpression{}
-		for j, expMapper2 := range expressionMappersIntermediate {
-			if i == j {
-				continue
-			}
-			if expMapper2.identifable != nil {
-				conditions = append(conditions, *expMapper2.mapper)
-			}
-		}
-		//TODO: use simplify function on that (need to be refactored out of security first)
-		finalFilter := grammar.LogicalExpression{And: conditions}
-		wc, err := finalFilter.EvaluateToExpression()
-		if err != nil {
-			return nil, err
-		}
-		result = append(result, goqu.MAX(caseWhenColumn(wc, expMapper.exp)))
-
 	}
 
 	return result, nil

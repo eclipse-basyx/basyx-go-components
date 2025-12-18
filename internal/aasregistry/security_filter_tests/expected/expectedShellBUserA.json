@@ -18,7 +18,17 @@
     ],
   "specificAssetIds": [
     {
-      "name": "customerPartId"
+      "name": "customerPartId",
+      "value": "39480543",
+      "externalSubjectId": {
+        "type": "ExternalReference",
+        "keys": [
+          {
+            "type": "GlobalReference",
+            "value": "WRITTEN_BY_Y"
+          }
+        ]
+      }
     }
   ]
 }
