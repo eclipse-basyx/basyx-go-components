@@ -119,7 +119,7 @@ func ReadSpecificAssetIDsByDescriptorIDs(
 ) (map[int64][]model.SpecificAssetID, error) {
 	start := time.Now()
 	defer func() {
-		fmt.Printf("ReadSpecificAssetIDsByDescriptorIDs took %s for %d descriptor IDs\n", time.Since(start), len(descriptorIDs))
+		_, _ = fmt.Printf("ReadSpecificAssetIDsByDescriptorIDs took %s for %d descriptor IDs\n", time.Since(start), len(descriptorIDs))
 	}()
 
 	out := make(map[int64][]model.SpecificAssetID, len(descriptorIDs))
@@ -158,7 +158,7 @@ func ReadSpecificAssetIDsByDescriptorIDs(
 	}
 
 	sqlStr, args, err := base.ToSQL()
-	fmt.Println(sqlStr)
+	_, _ = fmt.Println(sqlStr)
 	if err != nil {
 		return nil, err
 	}

@@ -36,7 +36,6 @@ import (
 
 // getJoinTables relevant for only aas descriptors
 func getJoinTables(d goqu.DialectWrapper) *goqu.SelectDataset {
-
 	specificAssetID := goqu.T(tblSpecificAssetID).As(aliasSpecificAssetID)
 	externalSubjectReference := goqu.T(tblReference).As(aliasExternalSubjectReference)
 	externalSubjectReferenceKey := goqu.T(tblReferenceKey).As(aliasExternalSubjectReferenceKey)
@@ -90,7 +89,6 @@ func getJoinTables(d goqu.DialectWrapper) *goqu.SelectDataset {
 func getFilterQueryFromContext(ctx context.Context, d goqu.DialectWrapper, ds *goqu.SelectDataset, tableCol exp.AliasedExpression) (*goqu.SelectDataset, error) {
 	p := auth.GetQueryFilter(ctx)
 	if p != nil && p.Formula != nil {
-
 		wc, err := p.Formula.EvaluateToExpression()
 		if err != nil {
 			return nil, err
