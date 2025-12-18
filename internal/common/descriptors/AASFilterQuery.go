@@ -46,7 +46,7 @@ func getJoinTables(d goqu.DialectWrapper) *goqu.SelectDataset {
 	submodelDescriptorSemanticIDReferenceKey := goqu.T(tblReferenceKey).As(aliasSubmodelDescriptorSemanticIDReferenceKey)
 
 	joinTables := d.From(tDescriptor).
-		LeftJoin(
+		InnerJoin(
 			tAASDescriptor,
 			goqu.On(tAASDescriptor.Col(colDescriptorID).Eq(tDescriptor.Col(colID))),
 		).
