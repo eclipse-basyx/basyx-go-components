@@ -12,6 +12,24 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
+func loadEvalInput(filename string) (auth.EvalInput, error) {
+	var input auth.EvalInput
+
+	file, err := os.Open(filename)
+	if err != nil {
+		return input, err
+	}
+	defer func() {
+		_ = file.Close()
+	}()
+
+	if err := json.NewDecoder(file).Decode(&input); err != nil {
+		return input, err
+	}
+
+	return input, nil
+}
+
 func pretty(b []byte) []byte {
 	var v any
 	_ = json.Unmarshal(b, &v)
@@ -96,7 +114,7 @@ func TestAdaptLEForBackend(t *testing.T) {
 			var evalInput auth.EvalInput
 			if c.EvalInput != "" {
 				fmt.Println("eval")
-				evalInput, err = auth.LoadEvalInput(c.EvalInput)
+				evalInput, err = loadEvalInput(c.EvalInput)
 				if err != nil {
 					t.Fatalf("eval input: %v", err)
 				}
