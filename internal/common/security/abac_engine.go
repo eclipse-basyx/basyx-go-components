@@ -45,11 +45,11 @@ type AccessModel struct {
 }
 
 type materializedRule struct {
-	acl    grammar.ACL
-	attrs  []grammar.AttributeItem
-	objs   []grammar.ObjectItem
-	lexpr  *grammar.LogicalExpression
-	filter *grammar.AccessPermissionRuleFILTER
+	acl        grammar.ACL
+	attrs      []grammar.AttributeItem
+	objs       []grammar.ObjectItem
+	lexpr      *grammar.LogicalExpression
+	filterList []grammar.AccessPermissionRuleFILTER
 }
 
 // ParseAccessModel parses a JSON (or YAML converted to JSON) payload that
@@ -176,18 +176,26 @@ func (m *AccessModel) AuthorizeWithFilter(in EvalInput) (bool, DecisionCode, *Qu
 
 		ruleExprs = append(ruleExprs, adapted)
 
-		if r.filter != nil {
-			filterCondRaw := grammar.LogicalExpression{
-				And: []grammar.LogicalExpression{
-					*r.filter.CONDITION,
-					adapted,
-				}}
+		filterConditions := make(map[string][]grammar.LogicalExpression)
 
-			fragment := *r.filter.FRAGMENT
-			fragfilters[fragment] = append(fragfilters[fragment], filterCondRaw)
-			noFilters[fragment] = append(noFilters[fragment], adapted)
-		} else {
-			noFilters["ignore"] = append(noFilters["ignore"], adapted)
+		for _, filter := range r.filterList {
+			if filter.FRAGMENT != nil && filter.CONDITION != nil {
+				fragment := string(*filter.FRAGMENT)
+				filterConditions[fragment] =
+					append(filterConditions[fragment], *filter.CONDITION)
+			}
+		}
+		for fragment, conditions := range filterConditions {
+			if len(conditions) > 0 {
+				filterCondRaw := grammar.LogicalExpression{
+					And: append(conditions, adapted),
+				}
+
+				fragfilters[fragment] = append(fragfilters[fragment], filterCondRaw)
+				noFilters[fragment] = append(noFilters[fragment], adapted)
+			} else {
+				noFilters["ignore"] = append(noFilters["ignore"], adapted)
+			}
 		}
 
 	}
