@@ -25,6 +25,8 @@
 
 // Package grammar defines the data structures for representing logical expressions in the grammar model.
 // Author: Martin ( Fraunhofer IESE )
+//
+//nolint:all
 package grammar
 
 import (
@@ -384,7 +386,7 @@ func normalizeFieldReference(field string) (string, error) {
 	rest := strings.TrimPrefix(field[hashIdx+1:], ".")
 
 	// TODO add more cases here if you have a different model type
-	fmt.Println(prefix)
+	_, _ = fmt.Println(prefix)
 	switch prefix {
 	case "$aasdesc":
 		return field, nil

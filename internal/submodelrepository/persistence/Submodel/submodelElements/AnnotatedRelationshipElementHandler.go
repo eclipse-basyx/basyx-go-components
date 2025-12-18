@@ -144,10 +144,7 @@ func (p PostgreSQLAnnotatedRelationshipElementHandler) CreateNested(tx *sql.Tx, 
 // Returns:
 //   - error: Error if update fails
 func (p PostgreSQLAnnotatedRelationshipElementHandler) Update(idShortOrPath string, submodelElement gen.SubmodelElement) error {
-	if dErr := p.decorated.Update(idShortOrPath, submodelElement); dErr != nil {
-		return dErr
-	}
-	return nil
+	return p.decorated.Update(idShortOrPath, submodelElement)
 }
 
 // Delete removes an AnnotatedRelationshipElement identified by its idShort or path from the database.
@@ -160,10 +157,7 @@ func (p PostgreSQLAnnotatedRelationshipElementHandler) Update(idShortOrPath stri
 // Returns:
 //   - error: Error if deletion fails
 func (p PostgreSQLAnnotatedRelationshipElementHandler) Delete(idShortOrPath string) error {
-	if dErr := p.decorated.Delete(idShortOrPath); dErr != nil {
-		return dErr
-	}
-	return nil
+	return p.decorated.Delete(idShortOrPath)
 }
 
 func insertAnnotatedRelationshipElement(areElem *gen.AnnotatedRelationshipElement, tx *sql.Tx, id int) error {

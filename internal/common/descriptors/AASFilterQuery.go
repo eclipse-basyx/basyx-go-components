@@ -88,7 +88,6 @@ func getJoinTables(d goqu.DialectWrapper) *goqu.SelectDataset {
 
 // getFilterQueryFromContext relevant for only aas descriptors
 func getFilterQueryFromContext(ctx context.Context, d goqu.DialectWrapper, ds *goqu.SelectDataset, tableCol exp.AliasedExpression) (*goqu.SelectDataset, error) {
-
 	p := auth.GetQueryFilter(ctx)
 	if p != nil && p.Formula != nil {
 

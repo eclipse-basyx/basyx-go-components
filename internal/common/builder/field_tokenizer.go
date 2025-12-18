@@ -59,7 +59,6 @@ func TokenizeField(field string) []Token {
 	var tokens []Token
 	for _, t := range rawToken {
 		if strings.Contains(t, "[") && strings.Contains(t, "]") {
-
 			// nolint:gocritic // safe: guarded by Contains() above
 			name := t[:strings.Index(t, "[")]
 			indexStr := t[strings.Index(t, "[")+1 : strings.Index(t, "]")]

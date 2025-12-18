@@ -25,6 +25,8 @@
 
 // Package grammar defines the data structures for representing attribute values in the grammar model.
 // Author: Aaron Zielstorff ( Fraunhofer IESE ), Jannik Fried ( Fraunhofer IESE )
+//
+//nolint:all
 package grammar
 
 // AttributeValue represents a value associated with an attribute in the AAS access control grammar.

@@ -74,12 +74,13 @@ type PostgreSQLDiscoveryDatabase struct {
 //
 // The function reads and executes discoveryschema.sql from the current working directory's
 // resources/sql subdirectory to set up the required database tables.
-func NewPostgreSQLDiscoveryBackend(dsn string, maxConns int) (*PostgreSQLDiscoveryDatabase, error) {
+func NewPostgreSQLDiscoveryBackend(dsn string, maxConns int32) (*PostgreSQLDiscoveryDatabase, error) {
 	cfg, err := pgxpool.ParseConfig(dsn)
 	if err != nil {
 		return nil, err
 	}
-	cfg.MaxConns = int32(maxConns)
+
+	cfg.MaxConns = maxConns
 	cfg.MaxConnLifetime = 5 * time.Minute
 
 	pool, err := pgxpool.NewWithConfig(context.Background(), cfg)
@@ -88,6 +89,7 @@ func NewPostgreSQLDiscoveryBackend(dsn string, maxConns int) (*PostgreSQLDiscove
 	}
 
 	dir, _ := os.Getwd()
+	//nolint:gosec // it is not really a variable here
 	schema, err := os.ReadFile(dir + "/resources/sql/discoveryschema.sql")
 	if err != nil {
 		return nil, err
@@ -118,7 +120,7 @@ func (p *PostgreSQLDiscoveryDatabase) GetAllAssetLinks(aasID string) ([]model.Sp
 	ctx := context.Background()
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
-		fmt.Println(err)
+		_, _ = fmt.Println(err)
 		return nil, common.NewInternalServerError("Failed to start postgres transaction. See console for information.")
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
@@ -128,13 +130,13 @@ func (p *PostgreSQLDiscoveryDatabase) GetAllAssetLinks(aasID string) ([]model.Sp
 		if err == pgx.ErrNoRows {
 			return nil, common.NewErrNotFound("AAS identifier '" + aasID + "'")
 		}
-		fmt.Println(err)
+		_, _ = fmt.Println(err)
 		return nil, common.NewInternalServerError("Failed to fetch aas identifier. See console for information.")
 	}
 
 	rows, err := tx.Query(ctx, `SELECT name, value FROM asset_link WHERE aasRef = $1 ORDER BY id`, referenceID)
 	if err != nil {
-		fmt.Println(err)
+		_, _ = fmt.Println(err)
 		return nil, common.NewInternalServerError("Failed to query asset links. See console for information.")
 	}
 	defer rows.Close()
@@ -143,7 +145,7 @@ func (p *PostgreSQLDiscoveryDatabase) GetAllAssetLinks(aasID string) ([]model.Sp
 	for rows.Next() {
 		var name, value string
 		if err := rows.Scan(&name, &value); err != nil {
-			fmt.Println(err)
+			_, _ = fmt.Println(err)
 			return nil, common.NewInternalServerError("Failed to scan asset link. See console for information.")
 		}
 		result = append(result, model.SpecificAssetID{
@@ -152,12 +154,12 @@ func (p *PostgreSQLDiscoveryDatabase) GetAllAssetLinks(aasID string) ([]model.Sp
 		})
 	}
 	if rows.Err() != nil {
-		fmt.Println(rows.Err())
+		_, _ = fmt.Println(rows.Err())
 		return nil, common.NewInternalServerError("Failed to iterate asset links. See console for information.")
 	}
 
 	if err := tx.Commit(ctx); err != nil {
-		fmt.Println(err)
+		_, _ = fmt.Println(err)
 		return nil, common.NewInternalServerError("Failed to commit postgres transaction. See console for information.")
 	}
 
@@ -182,7 +184,7 @@ func (p *PostgreSQLDiscoveryDatabase) DeleteAllAssetLinks(aasID string) error {
 
 	tag, err := p.pool.Exec(ctx, `DELETE FROM aas_identifier WHERE aasID = $1`, aasID)
 	if err != nil {
-		fmt.Println(err)
+		_, _ = fmt.Println(err)
 		return common.NewInternalServerError("Failed to delete AAS identifier. See console for information.")
 	}
 	if tag.RowsAffected() == 0 {
@@ -214,7 +216,7 @@ func (p *PostgreSQLDiscoveryDatabase) CreateAllAssetLinks(aasID string, specific
 	ctx := context.Background()
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
-		fmt.Println(err)
+		_, _ = fmt.Println(err)
 		return common.NewInternalServerError("Failed to start postgres transaction. See console for information.")
 	}
 	defer func() {
@@ -224,7 +226,7 @@ func (p *PostgreSQLDiscoveryDatabase) CreateAllAssetLinks(aasID string, specific
 	var referenceID int64
 	err = tx.QueryRow(ctx, "INSERT INTO aas_identifier (aasID) VALUES ($1) ON CONFLICT (aasID) DO UPDATE SET aasID = EXCLUDED.aasID RETURNING id", aasID).Scan(&referenceID)
 	if err != nil {
-		fmt.Println(err)
+		_, _ = fmt.Println(err)
 		return common.NewInternalServerError("Failed to insert aas identifier. See console for information.")
 	}
 
@@ -244,12 +246,12 @@ func (p *PostgreSQLDiscoveryDatabase) CreateAllAssetLinks(aasID string, specific
 		pgx.CopyFromRows(rows),
 	)
 	if err != nil {
-		fmt.Println(err)
+		_, _ = fmt.Println(err)
 		return common.NewInternalServerError("Failed to insert asset link. See console for information.")
 	}
 
 	if err := tx.Commit(ctx); err != nil {
-		fmt.Println(err)
+		_, _ = fmt.Println(err)
 		return common.NewInternalServerError("Failed to commit postgres transaction. See console for information.")
 	}
 	return nil
@@ -291,7 +293,6 @@ func (p *PostgreSQLDiscoveryDatabase) SearchAASIDsByAssetLinks(
 	limit int32,
 	cursor string,
 ) ([]string, string, error) {
-
 	if limit <= 0 {
 		limit = 100
 	}
@@ -318,9 +319,9 @@ func (p *PostgreSQLDiscoveryDatabase) SearchAASIDsByAssetLinks(
 		var valuesSQL strings.Builder
 		for i, l := range links {
 			if i > 0 {
-				valuesSQL.WriteString(", ")
+				_, _ = valuesSQL.WriteString(", ")
 			}
-			valuesSQL.WriteString(fmt.Sprintf("($%d, $%d)", argPos, argPos+1))
+			_, _ = valuesSQL.WriteString(fmt.Sprintf("($%d, $%d)", argPos, argPos+1))
 			args = append(args, l.Name, l.Value)
 			argPos += 2
 		}
@@ -342,7 +343,7 @@ func (p *PostgreSQLDiscoveryDatabase) SearchAASIDsByAssetLinks(
 
 	rows, err := p.pool.Query(ctx, sqlStr, args...)
 	if err != nil {
-		fmt.Println("SearchAASIDsByAssetLinks: query error:", err)
+		_, _ = fmt.Println("SearchAASIDsByAssetLinks: query error:", err)
 		return nil, "", common.NewInternalServerError("Failed to query AAS IDs. See server logs for details.")
 	}
 	defer rows.Close()
@@ -351,13 +352,13 @@ func (p *PostgreSQLDiscoveryDatabase) SearchAASIDsByAssetLinks(
 	for rows.Next() {
 		var id string
 		if err := rows.Scan(&id); err != nil {
-			fmt.Println("SearchAASIDsByAssetLinks: scan error:", err)
+			_, _ = fmt.Println("SearchAASIDsByAssetLinks: scan error:", err)
 			return nil, "", common.NewInternalServerError("Failed to scan AAS ID. See server logs for details.")
 		}
 		buf = append(buf, id)
 	}
 	if rows.Err() != nil {
-		fmt.Println("SearchAASIDsByAssetLinks: rows error:", rows.Err())
+		_, _ = fmt.Println("SearchAASIDsByAssetLinks: rows error:", rows.Err())
 		return nil, "", common.NewInternalServerError("Failed to iterate AAS IDs. See server logs for details.")
 	}
 

@@ -71,7 +71,6 @@ type AdministrationRow struct {
 //	mainQuery := dialect.From("submodel").As("s").
 //	    Select(..., goqu.L("?", adminSubquery).As("administration"))
 func GetAdministrationSubquery(dialect goqu.DialectWrapper, joinConditionColumn string) *goqu.SelectDataset {
-
 	// Build the jsonb object for administration creator references
 	creatorObj := goqu.Func("jsonb_build_object",
 		goqu.V("reference_id"), goqu.I("r.id"),

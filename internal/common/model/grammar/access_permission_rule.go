@@ -25,6 +25,8 @@
 
 // Package grammar defines the data structures for representing the AAS Access Rule Language.
 // Author: Aaron Zielstorff ( Fraunhofer IESE ), Jannik Fried ( Fraunhofer IESE )
+//
+//nolint:all
 package grammar
 
 import (
@@ -138,7 +140,6 @@ type AccessPermissionRule struct {
 //   - Neither FORMULA nor USEFORMULA is defined
 //     Returns nil on successful unmarshaling and validation.
 func (j *AccessPermissionRule) UnmarshalJSON(value []byte) error {
-
 	type Plain AccessPermissionRule
 	var plain Plain
 

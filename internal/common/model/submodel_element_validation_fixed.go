@@ -22,7 +22,7 @@
 *
 * SPDX-License-Identifier: MIT
 ******************************************************************************/
-
+//nolint:all
 package model
 
 import "reflect"
@@ -95,7 +95,7 @@ func AssertSubmodelElementConstraintsFixed(obj SubmodelElement) error {
 			return err
 		}
 	}
-	if err := AssertstringConstraints(obj.GetIdShort()); err != nil {
+	if err := AssertStringConstraints(obj.GetIdShort()); err != nil {
 		return err
 	}
 	for _, el := range obj.GetDisplayName() {

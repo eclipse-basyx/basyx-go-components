@@ -25,6 +25,8 @@
 
 // Package grammar defines the data structures for representing the AAS Access Rule Language.
 // Author: Aaron Zielstorff ( Fraunhofer IESE ), Jannik Fried ( Fraunhofer IESE )
+//
+//nolint:all
 package grammar
 
 // AccessPermissionRuleFILTER represents an optional filter component within an access permission rule.

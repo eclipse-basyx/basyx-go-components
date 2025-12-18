@@ -143,10 +143,7 @@ func (p PostgreSQLRangeHandler) CreateNested(tx *sql.Tx, submodelID string, pare
 // Returns:
 //   - error: An error if the update operation fails
 func (p PostgreSQLRangeHandler) Update(idShortOrPath string, submodelElement gen.SubmodelElement) error {
-	if dErr := p.decorated.Update(idShortOrPath, submodelElement); dErr != nil {
-		return dErr
-	}
-	return nil
+	return p.decorated.Update(idShortOrPath, submodelElement)
 }
 
 // Delete removes a Range submodel element from the database.
@@ -159,10 +156,7 @@ func (p PostgreSQLRangeHandler) Update(idShortOrPath string, submodelElement gen
 // Returns:
 //   - error: An error if the delete operation fails
 func (p PostgreSQLRangeHandler) Delete(idShortOrPath string) error {
-	if dErr := p.decorated.Delete(idShortOrPath); dErr != nil {
-		return dErr
-	}
-	return nil
+	return p.decorated.Delete(idShortOrPath)
 }
 
 // insertRange is a helper function that inserts Range-specific data into the range_element table.

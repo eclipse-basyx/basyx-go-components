@@ -144,10 +144,7 @@ func (p PostgreSQLMultiLanguagePropertyHandler) CreateNested(tx *sql.Tx, submode
 // Returns:
 //   - error: An error if the update operation fails
 func (p PostgreSQLMultiLanguagePropertyHandler) Update(idShortOrPath string, submodelElement gen.SubmodelElement) error {
-	if dErr := p.decorated.Update(idShortOrPath, submodelElement); dErr != nil {
-		return dErr
-	}
-	return nil
+	return p.decorated.Update(idShortOrPath, submodelElement)
 }
 
 // Delete removes a MultiLanguageProperty submodel element from the database.
@@ -160,10 +157,7 @@ func (p PostgreSQLMultiLanguagePropertyHandler) Update(idShortOrPath string, sub
 // Returns:
 //   - error: An error if the delete operation fails
 func (p PostgreSQLMultiLanguagePropertyHandler) Delete(idShortOrPath string) error {
-	if dErr := p.decorated.Delete(idShortOrPath); dErr != nil {
-		return dErr
-	}
-	return nil
+	return p.decorated.Delete(idShortOrPath)
 }
 
 // insertMultiLanguageProperty is a helper function that inserts MultiLanguageProperty-specific data

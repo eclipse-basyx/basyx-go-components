@@ -143,10 +143,7 @@ func (p PostgreSQLSubmodelElementCollectionHandler) CreateNested(tx *sql.Tx, sub
 // Returns:
 //   - error: Error if update fails
 func (p PostgreSQLSubmodelElementCollectionHandler) Update(idShortOrPath string, submodelElement gen.SubmodelElement) error {
-	if dErr := p.decorated.Update(idShortOrPath, submodelElement); dErr != nil {
-		return dErr
-	}
-	return nil
+	return p.decorated.Update(idShortOrPath, submodelElement)
 }
 
 // Delete removes a SubmodelElementCollection identified by its idShort or path from the database.
@@ -159,8 +156,5 @@ func (p PostgreSQLSubmodelElementCollectionHandler) Update(idShortOrPath string,
 // Returns:
 //   - error: Error if deletion fails
 func (p PostgreSQLSubmodelElementCollectionHandler) Delete(idShortOrPath string) error {
-	if dErr := p.decorated.Delete(idShortOrPath); dErr != nil {
-		return dErr
-	}
-	return nil
+	return p.decorated.Delete(idShortOrPath)
 }

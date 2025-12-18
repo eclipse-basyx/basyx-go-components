@@ -23,6 +23,7 @@
 * SPDX-License-Identifier: MIT
 ******************************************************************************/
 
+//nolint:all
 package bench
 
 import (
@@ -50,7 +51,7 @@ var (
 func TestMain(m *testing.M) {
 	eng, baseArgs, err := testenv.FindCompose()
 	if err != nil {
-		fmt.Println("compose engine not found:", err)
+		_, _ = fmt.Println("compose engine not found:", err)
 		composeAvailable = false
 		os.Exit(m.Run())
 	}
@@ -67,7 +68,7 @@ func TestMain(m *testing.M) {
 	//nolint:all
 	ctxUp, _ := context.WithTimeout(context.Background(), 10*time.Minute)
 	if err := testenv.RunCompose(ctxUp, composeEngine, upArgs...); err != nil {
-		fmt.Println("failed to start compose:", err)
+		_, _ = fmt.Println("failed to start compose:", err)
 		composeAvailable = false
 	}
 

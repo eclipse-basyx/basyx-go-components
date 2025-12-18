@@ -116,6 +116,8 @@ func NewPostgreSQLSMECrudHandler(db *sql.DB) (*PostgreSQLSMECrudHandler, error) 
 // Example:
 //
 //	id, err := handler.CreateWithPath(tx, "submodel123", parentDbID, "sensors.temperature", tempProp, 0)
+//
+//nolint:revive // cyclomatic-complexity is acceptable here due to the multiple steps involved in creation
 func (p *PostgreSQLSMECrudHandler) CreateWithPath(tx *sql.Tx, submodelID string, parentID int, idShortPath string, submodelElement gen.SubmodelElement, position int, rootSubmodelElementID int) (int, error) {
 	var referenceID sql.NullInt64
 	var err error
@@ -132,13 +134,13 @@ func (p *PostgreSQLSMECrudHandler) CreateWithPath(tx *sql.Tx, submodelID string,
 	}
 	descriptionID, err := persistenceutils.CreateLangStringTextTypes(tx, convertedDescription)
 	if err != nil {
-		fmt.Println(err)
+		_, _ = fmt.Println(err)
 		return 0, common.NewInternalServerError("Failed to create Description - no changes applied - see console for details")
 	}
 
 	displayNameID, err := persistenceutils.CreateLangStringNameTypes(tx, submodelElement.GetDisplayName())
 	if err != nil {
-		fmt.Println(err)
+		_, _ = fmt.Println(err)
 		return 0, common.NewInternalServerError("Failed to create DisplayName - no changes applied - see console for details")
 	}
 
@@ -226,7 +228,7 @@ func (p *PostgreSQLSMECrudHandler) CreateWithPath(tx *sql.Tx, submodelID string,
 			}
 			_, err = tx.Exec(`INSERT INTO submodel_element_qualifier(sme_id, qualifier_id) VALUES($1, $2)`, id, qualifierID)
 			if err != nil {
-				fmt.Println(err)
+				_, _ = fmt.Println(err)
 				return 0, common.NewInternalServerError("Failed to Create Qualifier for Submodel Element with ID '" + fmt.Sprintf("%d", id) + "'. See console for details.")
 			}
 		}

@@ -25,6 +25,8 @@
 
 // Package grammar defines the data structures for representing access control lists in the grammar model.
 // Author: Aaron Zielstorff ( Fraunhofer IESE ), Jannik Fried ( Fraunhofer IESE )
+//
+//nolint:all
 package grammar
 
 // ACL (Access Control List) defines the authorization decision and permissions for AAS resources.
