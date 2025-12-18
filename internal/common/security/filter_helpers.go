@@ -88,7 +88,6 @@ func extractExpressions(mappers []ExpressionIdentifiableMapper) []exp.Expression
 // in CASE/MAX projections so their values are only exposed when the other
 // fragment filters succeed; otherwise the raw expressions are returned.
 func GetColumnSelectStatement(ctx context.Context, expressionMappers []ExpressionIdentifiableMapper) ([]exp.Expression, error) {
-
 	defaultReturn := extractExpressions(expressionMappers)
 	p := GetQueryFilter(ctx)
 	if p == nil {
@@ -96,12 +95,9 @@ func GetColumnSelectStatement(ctx context.Context, expressionMappers []Expressio
 	}
 
 	var ok = false
-
 	result := []exp.Expression{}
 	for _, expMapper := range expressionMappers {
-
 		if expMapper.Identifable != nil {
-
 			isOk, filter := p.ExistsExpressionFor(*expMapper.Identifable, false)
 			if isOk {
 				ok = true
@@ -115,14 +111,12 @@ func GetColumnSelectStatement(ctx context.Context, expressionMappers []Expressio
 		} else {
 			result = append(result, expMapper.Exp)
 		}
-
 	}
 	if !ok {
 		return defaultReturn, nil
 	}
 
 	return result, nil
-
 }
 
 func caseWhenColumn(wc exp.Expression, iexp exp.Expression) exp.CaseExpression {

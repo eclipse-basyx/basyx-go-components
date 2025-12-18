@@ -197,7 +197,6 @@ func (m *AccessModel) AuthorizeWithFilter(in EvalInput) (bool, DecisionCode, *Qu
 				noFilters["ignore"] = append(noFilters["ignore"], adapted)
 			}
 		}
-
 	}
 
 	if len(ruleExprs) == 0 {
@@ -237,7 +236,6 @@ func (m *AccessModel) AuthorizeWithFilter(in EvalInput) (bool, DecisionCode, *Qu
 		expr, _ = adaptLEForBackend(expr, in.Claims)
 
 		combinedFiltersMap[fragment] = FilterConditionParts{MainPart: grammar.LogicalExpression{Or: conds}, OptionalPart: expr}
-
 	}
 	var qf *QueryFilter
 	if hasFormula || len(combinedFiltersMap) > 0 {
