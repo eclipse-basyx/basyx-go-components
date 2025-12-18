@@ -36,6 +36,7 @@ import (
 	// nolint:revive
 	_ "github.com/doug-martin/goqu/v9/dialect/postgres"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	"github.com/lib/pq"
 )
 
@@ -94,13 +95,11 @@ func ReadEndpointsByDescriptorIDs(
 
 	d := goqu.Dialect(dialect)
 	arr := pq.Array(descriptorIDs)
-
-	e := goqu.T(tblAASDescriptorEndpoint).As("e")
+	e := goqu.T(tblAASDescriptorEndpoint).As(aliasAASDescriptorEndpoint)
 	v := goqu.T(tblEndpointProtocolVersion).As("v")
 	s := goqu.T(tblSecurityAttributes).As("s")
 
-	ds := d.
-		From(e).
+	ds := getJoinTables(d).
 		LeftJoin(
 			v,
 			goqu.On(v.Col(colEndpointID).Eq(e.Col(colID))),
@@ -109,7 +108,7 @@ func ReadEndpointsByDescriptorIDs(
 			s,
 			goqu.On(s.Col(colEndpointID).Eq(e.Col(colID))),
 		).
-		Where(goqu.L(fmt.Sprintf("e.%s = ANY(?::bigint[])", colDescriptorID), arr)).
+		Where(goqu.L(fmt.Sprintf("aas_descriptor_endpoint.%s = ANY(?::bigint[])", colDescriptorID), arr)).
 		Select(
 			e.Col(colDescriptorID),
 			e.Col(colID),
@@ -151,6 +150,11 @@ func ReadEndpointsByDescriptorIDs(
 			e.Col(colPosition).Asc(),
 		).
 		Prepared(true)
+
+	ds, err := auth.AddSpecificAssetFilter(ctx, ds, "$aasdesc#endpoints[]")
+	if err != nil {
+		return nil, err
+	}
 
 	sqlStr, args, err := ds.ToSQL()
 	if err != nil {
