@@ -34,16 +34,19 @@ import (
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 )
 
+var (
+	specificAssetIDAlias                          = goqu.T(tblSpecificAssetID).As(aliasSpecificAssetID)
+	externalSubjectReferenceAlias                 = goqu.T(tblReference).As(aliasExternalSubjectReference)
+	externalSubjectReferenceKeyAlias              = goqu.T(tblReferenceKey).As(aliasExternalSubjectReferenceKey)
+	aasDescriptorEndpointAlias                    = goqu.T(tblAASDescriptorEndpoint).As(aliasAASDescriptorEndpoint)
+	submodelDescriptorAlias                       = goqu.T(tblSubmodelDescriptor).As(aliasSubmodelDescriptor)
+	submodelDescriptorEndpointAlias               = goqu.T(tblAASDescriptorEndpoint).As(aliasSubmodelDescriptorEndpoint)
+	submodelDescriptorSemanticIDReferenceAlias    = goqu.T(tblReference).As(aliasSubmodelDescriptorSemanticIDReference)
+	submodelDescriptorSemanticIDReferenceKeyAlias = goqu.T(tblReferenceKey).As(aliasSubmodelDescriptorSemanticIDReferenceKey)
+)
+
 // getJoinTables relevant for only aas descriptors
 func getJoinTables(d goqu.DialectWrapper) *goqu.SelectDataset {
-	specificAssetID := goqu.T(tblSpecificAssetID).As(aliasSpecificAssetID)
-	externalSubjectReference := goqu.T(tblReference).As(aliasExternalSubjectReference)
-	externalSubjectReferenceKey := goqu.T(tblReferenceKey).As(aliasExternalSubjectReferenceKey)
-	aasDescriptorEndpoint := goqu.T(tblAASDescriptorEndpoint).As(aliasAASDescriptorEndpoint)
-	submodelDescriptor := goqu.T(tblSubmodelDescriptor).As(aliasSubmodelDescriptor)
-	submodelDescriptorEndpoint := goqu.T(tblAASDescriptorEndpoint).As(aliasSubmodelDescriptorEndpoint)
-	submodelDescriptorSemanticIDReference := goqu.T(tblReference).As(aliasSubmodelDescriptorSemanticIDReference)
-	submodelDescriptorSemanticIDReferenceKey := goqu.T(tblReferenceKey).As(aliasSubmodelDescriptorSemanticIDReferenceKey)
 
 	joinTables := d.From(tDescriptor).
 		InnerJoin(
@@ -51,36 +54,36 @@ func getJoinTables(d goqu.DialectWrapper) *goqu.SelectDataset {
 			goqu.On(tAASDescriptor.Col(colDescriptorID).Eq(tDescriptor.Col(colID))),
 		).
 		LeftJoin(
-			specificAssetID,
-			goqu.On(specificAssetID.Col(colDescriptorID).Eq(tDescriptor.Col(colID))),
+			specificAssetIDAlias,
+			goqu.On(specificAssetIDAlias.Col(colDescriptorID).Eq(tDescriptor.Col(colID))),
 		).
 		LeftJoin(
-			externalSubjectReference,
-			goqu.On(externalSubjectReference.Col(colID).Eq(specificAssetID.Col(colExternalSubjectRef))),
+			externalSubjectReferenceAlias,
+			goqu.On(externalSubjectReferenceAlias.Col(colID).Eq(specificAssetIDAlias.Col(colExternalSubjectRef))),
 		).
 		LeftJoin(
-			externalSubjectReferenceKey,
-			goqu.On(externalSubjectReferenceKey.Col(colReferenceID).Eq(externalSubjectReference.Col(colID))),
+			externalSubjectReferenceKeyAlias,
+			goqu.On(externalSubjectReferenceKeyAlias.Col(colReferenceID).Eq(externalSubjectReferenceAlias.Col(colID))),
 		).
 		LeftJoin(
-			aasDescriptorEndpoint,
-			goqu.On(aasDescriptorEndpoint.Col(colDescriptorID).Eq(tDescriptor.Col(colID))),
+			aasDescriptorEndpointAlias,
+			goqu.On(aasDescriptorEndpointAlias.Col(colDescriptorID).Eq(tDescriptor.Col(colID))),
 		).
 		LeftJoin(
-			submodelDescriptor,
-			goqu.On(submodelDescriptor.Col(colAASDescriptorID).Eq(tAASDescriptor.Col(colDescriptorID))),
+			submodelDescriptorAlias,
+			goqu.On(submodelDescriptorAlias.Col(colAASDescriptorID).Eq(tAASDescriptor.Col(colDescriptorID))),
 		).
 		LeftJoin(
-			submodelDescriptorEndpoint,
-			goqu.On(submodelDescriptorEndpoint.Col(colDescriptorID).Eq(submodelDescriptor.Col(colDescriptorID))),
+			submodelDescriptorEndpointAlias,
+			goqu.On(submodelDescriptorEndpointAlias.Col(colDescriptorID).Eq(submodelDescriptorAlias.Col(colDescriptorID))),
 		).
 		LeftJoin(
-			submodelDescriptorSemanticIDReference,
-			goqu.On(submodelDescriptorSemanticIDReference.Col(colID).Eq(submodelDescriptor.Col(colSemanticID))),
+			submodelDescriptorSemanticIDReferenceAlias,
+			goqu.On(submodelDescriptorSemanticIDReferenceAlias.Col(colID).Eq(submodelDescriptorAlias.Col(colSemanticID))),
 		).
 		LeftJoin(
-			submodelDescriptorSemanticIDReferenceKey,
-			goqu.On(submodelDescriptorSemanticIDReferenceKey.Col(colReferenceID).Eq(submodelDescriptorSemanticIDReference.Col(colID))),
+			submodelDescriptorSemanticIDReferenceKeyAlias,
+			goqu.On(submodelDescriptorSemanticIDReferenceKeyAlias.Col(colReferenceID).Eq(submodelDescriptorSemanticIDReferenceAlias.Col(colID))),
 		)
 	return joinTables
 }
