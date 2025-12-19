@@ -36,8 +36,7 @@ DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'modelling_kind') THEN
     CREATE TYPE modelling_kind AS ENUM ('Instance', 'Template');
  END IF;
-END;
-$$;
+END $$;
 
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'aas_submodel_elements') THEN
@@ -48,8 +47,7 @@ DO $$ BEGIN
       'SubmodelElement','SubmodelElementCollection','SubmodelElementList'
     );
   END IF;
-END;
-$$;
+END $$;
 
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'data_type_def_xsd') THEN
@@ -62,50 +60,43 @@ DO $$ BEGIN
       'xs:unsignedInt','xs:unsignedLong','xs:unsignedShort'
     );
   END IF;
-END;
-$$;
+END $$;
 
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'reference_types') THEN
     CREATE TYPE reference_types AS ENUM ('ExternalReference', 'ModelReference');
   END IF;
-END;
-$$;
+END $$;
 
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'qualifier_kind') THEN
     CREATE TYPE qualifier_kind AS ENUM ('ConceptQualifier','TemplateQualifier','ValueQualifier');
   END IF;
-END;
-$$;
+END $$;
 
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'entity_type') THEN
     CREATE TYPE entity_type AS ENUM ('CoManagedEntity','SelfManagedEntity');
   END IF;
-END;
-$$;
+END $$;
 
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'direction') THEN
     CREATE TYPE direction AS ENUM ('input','output');
   END IF;
-END;
-$$;
+END $$;
 
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'state_of_event') THEN
     CREATE TYPE state_of_event AS ENUM ('off','on');
   END IF;
-END;
-$$;
+END $$;
 
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'operation_var_role') THEN
     CREATE TYPE operation_var_role AS ENUM ('in','out','inout');
   END IF;
-END;
-$$;
+END $$;
 
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'key_type') THEN
@@ -114,8 +105,7 @@ DO $$ BEGIN
       'MultiLanguageProperty','Operation','Property','Range','Referable','ReferenceElement','RelationshipElement','Submodel','SubmodelElement',
       'SubmodelElementCollection','SubmodelElementList');
   END IF;
-END;
-$$;
+END $$;
 
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'data_type_iec61360') THEN
@@ -141,22 +131,19 @@ DO $$ BEGIN
       'File'
     );
   END IF;
-END;
-$$;
+END $$;
 
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'asset_kind') THEN
     CREATE TYPE asset_kind AS ENUM ('Instance', 'Type', 'Role', 'NotApplicable');
   END IF;
-END;
-$$;
+END $$;
 
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'security_type') THEN
     CREATE TYPE security_type AS ENUM ('NONE', 'RFC_TLSA', 'W3C_DID');
   END IF;
-END;
-$$;
+END $$;
 
 -- ------------------------------------------
 -- Tables

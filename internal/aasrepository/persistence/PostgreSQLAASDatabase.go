@@ -537,7 +537,7 @@ func (p *PostgreSQLAASDatabase) fetchAssetInformation(id int64) (model.AssetInfo
 	row = p.DB.QueryRow(`
 		SELECT r.path, r.content_type
 		FROM asset_information_default_thumbnail dt
-		JOIN resource r ON r.id = dt.default_thumbnail_id
+		JOIN aas_resource r ON r.id = dt.default_thumbnail_id
 		WHERE dt.asset_information_id = $1
 	`, id)
 
@@ -880,7 +880,7 @@ func (p *PostgreSQLAASDatabase) insertAssetInformation(aas model.AssetAdministra
 	// 4) Default Thumbnail
 	if aas.AssetInformation.DefaultThumbnail.Path != "" {
 		query, _, err = dialect.
-			Insert("resource").
+			Insert("aas_resource").
 			Rows(goqu.Record{
 				"path":         aas.AssetInformation.DefaultThumbnail.Path,
 				"content_type": aas.AssetInformation.DefaultThumbnail.ContentType,
