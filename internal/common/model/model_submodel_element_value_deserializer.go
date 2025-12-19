@@ -25,25 +25,15 @@ func UnmarshalSubmodelElementValue(data []byte) (SubmodelElementValue, error) {
 		if err := json.Unmarshal(data, &strVal); err == nil {
 			return PropertyValue{Value: strVal}, nil
 		}
-		// Or it might be an array (SubmodelElementListValue or MultiLanguagePropertyValue)
-		var arrVal []interface{}
-		if err := json.Unmarshal(data, &arrVal); err == nil {
-			// Check if it's an array of language strings
-			if len(arrVal) > 0 {
-				if firstItem, ok := arrVal[0].(map[string]interface{}); ok {
-					if _, hasLang := firstItem["language"]; hasLang {
-						if _, hasText := firstItem["text"]; hasText {
-							var mlp MultiLanguagePropertyValue
-							if err := json.Unmarshal(data, &mlp); err == nil {
-								return mlp, nil
-							}
-						}
-					}
-				}
-			}
-			// Otherwise, it's a SubmodelElementListValue
-			// This is more complex as it contains heterogeneous types
-			return parseSubmodelElementListValue(data)
+		// Try to parse it as ambiguous type
+		var ambiguous AmbiguousSubmodelElementValue
+		err := json.Unmarshal(data, &ambiguous)
+		if err == nil {
+			return ambiguous, nil
+		}
+		value, err := parseSubmodelElementListValue(data)
+		if err == nil {
+			return value, nil
 		}
 		return nil, fmt.Errorf("failed to unmarshal SubmodelElementValue: %w", err)
 	}
@@ -125,11 +115,29 @@ func UnmarshalSubmodelElementValue(data []byte) (SubmodelElementValue, error) {
 	if _, hasFirst := raw["first"]; hasFirst {
 		if _, hasSecond := raw["second"]; hasSecond {
 			// RelationshipElementValue or AnnotatedRelationshipElementValue
-			if _, hasAnnotations := raw["annotations"]; hasAnnotations {
+			if annotationsRaw, hasAnnotations := raw["annotations"]; hasAnnotations {
+				// Manually parse AnnotatedRelationshipElementValue to handle annotations recursively
 				var val AnnotatedRelationshipElementValue
-				if err := json.Unmarshal(data, &val); err != nil {
-					return nil, err
+
+				// Parse first and second
+				firstBytes, _ := json.Marshal(raw["first"])
+				if err := json.Unmarshal(firstBytes, &val.First); err != nil {
+					return nil, fmt.Errorf("failed to unmarshal first: %w", err)
 				}
+
+				secondBytes, _ := json.Marshal(raw["second"])
+				if err := json.Unmarshal(secondBytes, &val.Second); err != nil {
+					return nil, fmt.Errorf("failed to unmarshal second: %w", err)
+				}
+
+				// Parse annotations as SubmodelElementCollectionValue
+				annotationsBytes, _ := json.Marshal(annotationsRaw)
+				annotations, err := parseSubmodelElementCollectionValue(annotationsBytes)
+				if err != nil {
+					return nil, fmt.Errorf("failed to unmarshal annotations: %w", err)
+				}
+				val.Annotations = annotations.(SubmodelElementCollectionValue)
+
 				return val, nil
 			}
 			var val RelationshipElementValue

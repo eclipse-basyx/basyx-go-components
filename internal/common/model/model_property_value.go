@@ -52,6 +52,11 @@ func (p PropertyValue) MarshalJSON() ([]byte, error) {
 	return p.MarshalValueOnly()
 }
 
+// GetModelType returns the model type name for Property
+func (p PropertyValue) GetModelType() string {
+	return "Property"
+}
+
 // UnmarshalJSON implements custom JSON unmarshaling for PropertyValue
 func (p *PropertyValue) UnmarshalJSON(data []byte) error {
 	return json.Unmarshal(data, &p.Value)

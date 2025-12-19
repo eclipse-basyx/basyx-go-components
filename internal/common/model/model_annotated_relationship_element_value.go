@@ -42,7 +42,7 @@ type AnnotatedRelationshipElementValue struct {
 	Second ReferenceValue `json:"second,omitempty"`
 
 	// The ValueOnly serialization (patternProperties and propertyNames will probably be supported with OpenApi 3.1). For the full description of the generic JSON validation schema see the ValueOnly-Serialization as defined in the 'Specification of the Asset Administration Shell - Part 2'.
-	Annotations map[string]interface{} `json:"annotations,omitempty"`
+	Annotations map[string]SubmodelElementValue `json:"annotations,omitempty"`
 }
 
 // MarshalValueOnly serializes AnnotatedRelationshipElementValue in Value-Only format
@@ -54,6 +54,11 @@ func (a AnnotatedRelationshipElementValue) MarshalValueOnly() ([]byte, error) {
 // MarshalJSON implements custom JSON marshaling for AnnotatedRelationshipElementValue
 func (a AnnotatedRelationshipElementValue) MarshalJSON() ([]byte, error) {
 	return a.MarshalValueOnly()
+}
+
+// GetModelType returns the model type name for AnnotatedRelationshipElement
+func (a AnnotatedRelationshipElementValue) GetModelType() string {
+	return "AnnotatedRelationshipElement"
 }
 
 // AssertAnnotatedRelationshipElementValueRequired checks if the required fields are not zero-ed

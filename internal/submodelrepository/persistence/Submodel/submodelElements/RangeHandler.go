@@ -142,8 +142,12 @@ func (p PostgreSQLRangeHandler) CreateNested(tx *sql.Tx, submodelID string, pare
 //
 // Returns:
 //   - error: An error if the update operation fails
-func (p PostgreSQLRangeHandler) Update(idShortOrPath string, submodelElement gen.SubmodelElement) error {
-	return p.decorated.Update(idShortOrPath, submodelElement)
+func (p PostgreSQLRangeHandler) Update(submodelID string, idShortOrPath string, submodelElement gen.SubmodelElement) error {
+	return p.decorated.Update(submodelID, idShortOrPath, submodelElement)
+}
+
+func (p PostgreSQLRangeHandler) UpdateValueOnly(submodelID string, idShortOrPath string, valueOnly gen.SubmodelElementValue) error {
+	return nil
 }
 
 // Delete removes a Range submodel element from the database.

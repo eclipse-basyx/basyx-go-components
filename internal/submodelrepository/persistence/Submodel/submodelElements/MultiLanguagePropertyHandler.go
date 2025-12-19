@@ -143,8 +143,12 @@ func (p PostgreSQLMultiLanguagePropertyHandler) CreateNested(tx *sql.Tx, submode
 //
 // Returns:
 //   - error: An error if the update operation fails
-func (p PostgreSQLMultiLanguagePropertyHandler) Update(idShortOrPath string, submodelElement gen.SubmodelElement) error {
-	return p.decorated.Update(idShortOrPath, submodelElement)
+func (p PostgreSQLMultiLanguagePropertyHandler) Update(submodelID string, idShortOrPath string, submodelElement gen.SubmodelElement) error {
+	return p.decorated.Update(submodelID, idShortOrPath, submodelElement)
+}
+
+func (p PostgreSQLMultiLanguagePropertyHandler) UpdateValueOnly(submodelID string, idShortOrPath string, valueOnly gen.SubmodelElementValue) error {
+	return nil
 }
 
 // Delete removes a MultiLanguageProperty submodel element from the database.

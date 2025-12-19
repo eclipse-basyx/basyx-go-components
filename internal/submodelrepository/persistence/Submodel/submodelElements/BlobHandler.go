@@ -149,8 +149,12 @@ func (p PostgreSQLBlobHandler) CreateNested(tx *sql.Tx, submodelID string, paren
 //
 // Returns:
 //   - error: Error if update fails
-func (p PostgreSQLBlobHandler) Update(idShortOrPath string, submodelElement gen.SubmodelElement) error {
-	return p.decorated.Update(idShortOrPath, submodelElement)
+func (p PostgreSQLBlobHandler) Update(submodelID string, idShortOrPath string, submodelElement gen.SubmodelElement) error {
+	return p.decorated.Update(submodelID, idShortOrPath, submodelElement)
+}
+
+func (p PostgreSQLBlobHandler) UpdateValueOnly(submodelID string, idShortOrPath string, valueOnly gen.SubmodelElementValue) error {
+	return nil
 }
 
 // Delete removes a Blob element identified by its idShort or path from the database.

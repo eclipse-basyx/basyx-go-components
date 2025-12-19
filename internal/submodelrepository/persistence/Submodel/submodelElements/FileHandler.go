@@ -147,7 +147,7 @@ func (p PostgreSQLFileHandler) CreateNested(tx *sql.Tx, submodelID string, paren
 //
 // Returns:
 //   - error: Error if the update operation fails
-func (p PostgreSQLFileHandler) Update(idShortOrPath string, submodelElement gen.SubmodelElement) error {
+func (p PostgreSQLFileHandler) Update(submodelID string, idShortOrPath string, submodelElement gen.SubmodelElement) error {
 	file, ok := submodelElement.(*gen.File)
 	if !ok {
 		return common.NewErrBadRequest("submodelElement is not of type File")
@@ -247,7 +247,11 @@ func (p PostgreSQLFileHandler) Update(idShortOrPath string, submodelElement gen.
 	}
 
 	// Update base SubmodelElement properties
-	return p.decorated.Update(idShortOrPath, submodelElement)
+	return p.decorated.Update(submodelID, idShortOrPath, submodelElement)
+}
+
+func (p PostgreSQLFileHandler) UpdateValueOnly(submodelID string, idShortOrPath string, valueOnly gen.SubmodelElementValue) error {
+	return nil
 }
 
 // Delete removes a File submodel element from the database.

@@ -48,6 +48,7 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/builder"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	submodelsubqueries "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/Submodel/queries"
+	persistenceutils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 )
 
@@ -213,6 +214,21 @@ func GetSMEHandlerByModelType(modelType string, db *sql.DB) (PostgreSQLSMECrudIn
 		return nil, errors.New("ModelType " + modelType + " unsupported.")
 	}
 	return handler, nil
+}
+
+func UpdateNestedElements(db *sql.DB, elems []persistenceutils.ValueOnlyElementsToProcess, idShortOrPath string, submodelID string) error {
+	for _, elem := range elems {
+		if elem.IdShortPath == idShortOrPath {
+			continue // Skip the root element as it's already processed
+		}
+		modelType := elem.Element.GetModelType()
+		handler, err := GetSMEHandlerByModelType(modelType, db)
+		handler.UpdateValueOnly(submodelID, elem.IdShortPath, elem.Element)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // DeleteSubmodelElementByPath removes a submodel element by its idShort or path including all nested elements.

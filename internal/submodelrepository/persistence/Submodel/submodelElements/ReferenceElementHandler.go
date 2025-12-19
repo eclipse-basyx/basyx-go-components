@@ -204,8 +204,12 @@ func (p PostgreSQLReferenceElementHandler) CreateNested(tx *sql.Tx, submodelID s
 //
 // Note: This is currently a placeholder that delegates to the decorated handler.
 // Full implementation would include updating the reference value and keys.
-func (p PostgreSQLReferenceElementHandler) Update(idShortOrPath string, submodelElement gen.SubmodelElement) error {
-	return p.decorated.Update(idShortOrPath, submodelElement)
+func (p PostgreSQLReferenceElementHandler) Update(submodelID string, idShortOrPath string, submodelElement gen.SubmodelElement) error {
+	return p.decorated.Update(submodelID, idShortOrPath, submodelElement)
+}
+
+func (p PostgreSQLReferenceElementHandler) UpdateValueOnly(submodelID string, idShortOrPath string, valueOnly gen.SubmodelElementValue) error {
+	return nil
 }
 
 // Delete removes a ReferenceElement and all its associated data from the database.

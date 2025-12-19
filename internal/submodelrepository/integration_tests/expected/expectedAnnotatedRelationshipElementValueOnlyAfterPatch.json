@@ -1,0 +1,25 @@
+{
+    "first": {
+        "type": "ModelReference",
+        "keys": [
+            {
+                "type": "Submodel",
+                "value": "urn:uuid:updated-annotated-first"
+            }
+        ]
+    },
+    "second": {
+        "type": "ModelReference",
+        "keys": [
+            {
+                "type": "Submodel",
+                "value": "urn:uuid:updated-annotated-second"
+            }
+        ]
+    },
+    "annotations": [
+        {
+            "AnnotationProperty1": "Updated Annotation Value"
+        }
+    ]
+}

@@ -31,6 +31,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
+	"strconv"
 
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
@@ -1019,4 +1020,104 @@ func InsertSupplementalSemanticIDsSME(tx *sql.Tx, smeID int64, supplementalSeman
 
 func isEmptyReference(ref gen.Reference) bool {
 	return reflect.DeepEqual(ref, gen.Reference{})
+}
+
+type ValueOnlyElementsToProcess struct {
+	Element     gen.SubmodelElementValue
+	IdShortPath string
+}
+
+func BuildElementsToProcessStackValueOnly(db *sql.DB, submodelID string, idShortOrPath string, valueOnly gen.SubmodelElementValue) ([]ValueOnlyElementsToProcess, error) {
+	stack := []ValueOnlyElementsToProcess{}
+	elementsToProcess := []ValueOnlyElementsToProcess{}
+	stack = append(stack, ValueOnlyElementsToProcess{
+		Element:     valueOnly,
+		IdShortPath: idShortOrPath,
+	})
+	// Build Iteratively
+	for len(stack) > 0 {
+		// Pop
+		current := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+
+		switch elem := current.Element.(type) {
+		case gen.AmbiguousSubmodelElementValue:
+			// Check if it is a MLP or SME List in the database
+			//1. GoQu query
+			sqlQuery, args := buildCheckMultiLanguagePropertyOrSubmodelElementListQuery(current.IdShortPath, submodelID)
+			row := db.QueryRow(sqlQuery, args...)
+			var modelType string
+			if err := row.Scan(&modelType); err != nil {
+				return nil, err
+			}
+			if modelType == "MultiLanguageProperty" {
+				mlpValue, err := elem.ConvertToMultiLanguagePropertyValue()
+				if err != nil {
+					return nil, err
+				}
+				el := ValueOnlyElementsToProcess{
+					Element:     mlpValue,
+					IdShortPath: current.IdShortPath,
+				}
+				elementsToProcess = append(elementsToProcess, el)
+			} else {
+				value, err := elem.ConvertToSubmodelElementListValue()
+				if err != nil {
+					return nil, err
+				}
+				for i, v := range value {
+					stack = append(stack, ValueOnlyElementsToProcess{
+						Element:     v,
+						IdShortPath: current.IdShortPath + "[" + strconv.Itoa(i) + "]",
+					})
+				}
+			}
+		case gen.SubmodelElementCollectionValue:
+			for idShort, v := range elem {
+				stack = append(stack, ValueOnlyElementsToProcess{
+					Element:     v,
+					IdShortPath: current.IdShortPath + "." + idShort,
+				})
+			}
+		case gen.SubmodelElementListValue:
+			for i, v := range elem {
+				el := ValueOnlyElementsToProcess{
+					Element:     v,
+					IdShortPath: current.IdShortPath + "[" + strconv.Itoa(i) + "]",
+				}
+				stack = append(stack, el)
+			}
+		case gen.AnnotatedRelationshipElementValue:
+			el := ValueOnlyElementsToProcess{
+				Element:     elem,
+				IdShortPath: current.IdShortPath,
+			}
+			elementsToProcess = append(elementsToProcess, el)
+			for idShort, annotation := range elem.Annotations {
+				stack = append(stack, ValueOnlyElementsToProcess{
+					Element:     annotation,
+					IdShortPath: current.IdShortPath + "." + idShort,
+				})
+			}
+		default:
+			// Process basic element
+			el := ValueOnlyElementsToProcess{
+				Element:     elem,
+				IdShortPath: current.IdShortPath,
+			}
+			elementsToProcess = append(elementsToProcess, el)
+		}
+	}
+	return elementsToProcess, nil
+}
+
+func buildCheckMultiLanguagePropertyOrSubmodelElementListQuery(idShortOrPath string, submodelID string) (string, []interface{}) {
+	sqlQuery := `
+	SELECT sme.model_type
+	FROM submodel_element sme
+	WHERE sme.idshort_path = $1 AND sme.submodel_id = $2
+	LIMIT 1;
+	`
+	args := []interface{}{idShortOrPath, submodelID}
+	return sqlQuery, args
 }

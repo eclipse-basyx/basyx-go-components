@@ -13,7 +13,7 @@ import "encoding/json"
 
 // MultiLanguagePropertyValue represents the Value-Only serialization of a MultiLanguageProperty.
 // According to spec: Serialized as array of JSON objects with language and localized string.
-type MultiLanguagePropertyValue []LangStringTextType
+type MultiLanguagePropertyValue []map[string]string
 
 // MarshalValueOnly serializes MultiLanguagePropertyValue in Value-Only format
 // Serializes as array of objects with language code as key and text as value
@@ -21,7 +21,13 @@ func (m MultiLanguagePropertyValue) MarshalValueOnly() ([]byte, error) {
 	// Convert to compact format: [{"en-us":"text"}, {"de":"text"}]
 	result := make([]map[string]string, len(m))
 	for i, item := range m {
-		result[i] = map[string]string{item.Language: item.Text}
+		langText := make(map[string]string)
+		if lang, ok := item["language"]; ok {
+			if text, ok := item["text"]; ok {
+				langText[lang] = text
+			}
+		}
+		result[i] = langText
 	}
 	return json.Marshal(result)
 }
@@ -31,22 +37,7 @@ func (m MultiLanguagePropertyValue) MarshalJSON() ([]byte, error) {
 	return m.MarshalValueOnly()
 }
 
-// AssertMultiLanguagePropertyValueRequired checks if the required fields are not zero-ed
-func AssertMultiLanguagePropertyValueRequired(obj MultiLanguagePropertyValue) error {
-	for _, el := range obj {
-		if err := AssertLangStringTextTypeRequired(el); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// AssertMultiLanguagePropertyValueConstraints checks if the values respects the defined constraints
-func AssertMultiLanguagePropertyValueConstraints(obj MultiLanguagePropertyValue) error {
-	for _, el := range obj {
-		if err := AssertLangStringTextTypeConstraints(el); err != nil {
-			return err
-		}
-	}
-	return nil
+// GetModelType returns the model type name for MultiLanguageProperty
+func (m MultiLanguagePropertyValue) GetModelType() string {
+	return "MultiLanguageProperty"
 }

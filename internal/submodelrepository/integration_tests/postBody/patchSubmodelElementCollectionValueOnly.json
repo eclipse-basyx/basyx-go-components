@@ -1,0 +1,13 @@
+{
+    "ExampleProperty": "Updated Collection Property Value",
+    "ExampleMultiLanguageProperty": [
+        {
+            "language": "en-us",
+            "text": "Updated English in Collection"
+        }
+    ],
+    "ExampleRange": {
+        "min": "5",
+        "max": "50"
+    }
+}

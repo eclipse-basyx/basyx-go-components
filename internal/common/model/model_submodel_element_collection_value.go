@@ -36,6 +36,11 @@ func (s SubmodelElementCollectionValue) MarshalJSON() ([]byte, error) {
 	return s.MarshalValueOnly()
 }
 
+// GetModelType returns the model type name for SubmodelElementCollection
+func (s SubmodelElementCollectionValue) GetModelType() string {
+	return "SubmodelElementCollection"
+}
+
 // AssertSubmodelElementCollectionValueRequired checks if the required fields are not zero-ed
 func AssertSubmodelElementCollectionValueRequired(_ SubmodelElementCollectionValue) error {
 	// Collection itself is optional, individual elements are validated by their own types

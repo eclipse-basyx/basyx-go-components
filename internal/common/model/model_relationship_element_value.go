@@ -54,6 +54,11 @@ func (r RelationshipElementValue) MarshalJSON() ([]byte, error) {
 	return r.MarshalValueOnly()
 }
 
+// GetModelType returns the model type name for RelationshipElement
+func (r RelationshipElementValue) GetModelType() string {
+	return "RelationshipElement"
+}
+
 // AssertRelationshipElementValueRequired checks if the required fields are not zero-ed
 func AssertRelationshipElementValueRequired(obj RelationshipElementValue) error {
 	if err := AssertReferenceValueRequired(obj.First); err != nil {

@@ -32,6 +32,7 @@ package submodelelements
 import (
 	"database/sql"
 
+	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	_ "github.com/lib/pq" // PostgreSQL Treiber
@@ -142,8 +143,118 @@ func (p PostgreSQLBasicEventElementHandler) CreateNested(tx *sql.Tx, submodelID 
 //
 // Returns:
 //   - error: Error if update fails
-func (p PostgreSQLBasicEventElementHandler) Update(idShortOrPath string, submodelElement gen.SubmodelElement) error {
-	return p.decorated.Update(idShortOrPath, submodelElement)
+func (p PostgreSQLBasicEventElementHandler) Update(submodelID string, idShortOrPath string, submodelElement gen.SubmodelElement) error {
+	return p.decorated.Update(submodelID, idShortOrPath, submodelElement)
+}
+
+func (p PostgreSQLBasicEventElementHandler) UpdateValueOnly(submodelID string, idShortOrPath string, valueOnly gen.SubmodelElementValue) error {
+	basicEventValue, ok := valueOnly.(gen.BasicEventElementValue)
+	if !ok {
+		return common.NewErrBadRequest("valueOnly is not of type BasicEventElementValue")
+	}
+
+	// Begin transaction
+	tx, err := p.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	dialect := goqu.Dialect("postgres")
+
+	// Get the element ID from the database
+	var elementID int
+	var oldObservedRefID sql.NullInt64
+	query, args, err := dialect.From("submodel_element").
+		InnerJoin(
+			goqu.T("basic_event_element"),
+			goqu.On(goqu.I("submodel_element.id").Eq(goqu.I("basic_event_element.id"))),
+		).
+		Select("submodel_element.id", "basic_event_element.observed_ref").
+		Where(
+			goqu.C("idshort_path").Eq(idShortOrPath),
+			goqu.C("submodel_id").Eq(submodelID),
+		).
+		ToSQL()
+	if err != nil {
+		return err
+	}
+
+	err = tx.QueryRow(query, args...).Scan(&elementID, &oldObservedRefID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return common.NewErrNotFound("BasicEventElement not found")
+		}
+		return err
+	}
+
+	// Delete old observed reference if it exists
+	if oldObservedRefID.Valid {
+		deleteQuery, deleteArgs, err := dialect.Delete("reference").
+			Where(goqu.C("id").Eq(oldObservedRefID.Int64)).
+			ToSQL()
+		if err != nil {
+			return err
+		}
+		_, err = tx.Exec(deleteQuery, deleteArgs...)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Insert new observed reference
+	var newObservedRefID sql.NullInt64
+	if len(basicEventValue.Observed.Keys) > 0 {
+		insertQuery, insertArgs, err := dialect.Insert("reference").
+			Rows(goqu.Record{"type": basicEventValue.Observed.Type}).
+			Returning("id").
+			ToSQL()
+		if err != nil {
+			return err
+		}
+
+		var refID int
+		err = tx.QueryRow(insertQuery, insertArgs...).Scan(&refID)
+		if err != nil {
+			return err
+		}
+		newObservedRefID = sql.NullInt64{Int64: int64(refID), Valid: true}
+
+		// Insert reference keys
+		for i, key := range basicEventValue.Observed.Keys {
+			keyQuery, keyArgs, err := dialect.Insert("reference_key").
+				Rows(goqu.Record{
+					"reference_id": refID,
+					"position":     i,
+					"type":         key.Type,
+					"value":        key.Value,
+				}).
+				ToSQL()
+			if err != nil {
+				return err
+			}
+			_, err = tx.Exec(keyQuery, keyArgs...)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	// Update the basic_event_element table with new observed reference
+	updateQuery, updateArgs, err := dialect.Update("basic_event_element").
+		Set(goqu.Record{"observed_ref": newObservedRefID}).
+		Where(goqu.C("id").Eq(elementID)).
+		ToSQL()
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.Exec(updateQuery, updateArgs...)
+	if err != nil {
+		return err
+	}
+
+	return tx.Commit()
 }
 
 // Delete removes a BasicEventElement identified by its idShort or path from the database.
