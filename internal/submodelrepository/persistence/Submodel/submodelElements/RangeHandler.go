@@ -33,6 +33,7 @@ package submodelelements
 import (
 	"database/sql"
 
+	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	_ "github.com/lib/pq" // PostgreSQL Treiber
@@ -147,7 +148,48 @@ func (p PostgreSQLRangeHandler) Update(submodelID string, idShortOrPath string, 
 }
 
 func (p PostgreSQLRangeHandler) UpdateValueOnly(submodelID string, idShortOrPath string, valueOnly gen.SubmodelElementValue) error {
-	return nil
+	rangeValue, ok := valueOnly.(*gen.RangeValue)
+	if !ok {
+		return common.NewErrBadRequest("valueOnly is not of type Range")
+	}
+
+	// Get Value Type to determine which columns to update
+	var valueType string
+	err := p.db.QueryRow(`SELECT re.value_type FROM submodel_element sme
+		JOIN range_element re ON sme.id = re.id
+		WHERE sme.submodel_id = $1 AND (sme.id_short = $2 OR sme.id_short_path = $2)`,
+		submodelID, idShortOrPath).Scan(&valueType)
+	if err != nil {
+		return err
+	}
+
+	// Determine column names based on value type
+	minCol, maxCol := getRangeColumnNames(valueType)
+
+	// Build and execute update query using GoQu
+	query, args, err := goqu.Update("range_element").
+		Set(goqu.Record{
+			minCol: rangeValue.Min,
+			maxCol: rangeValue.Max,
+		}).
+		Where(goqu.I("id").Eq(
+			goqu.From("submodel_element").
+				Select("id").
+				Where(goqu.Ex{
+					"submodel_id": submodelID,
+				}).
+				Where(goqu.Or(
+					goqu.I("id_short").Eq(idShortOrPath),
+					goqu.I("id_short_path").Eq(idShortOrPath),
+				)),
+		)).
+		ToSQL()
+	if err != nil {
+		return err
+	}
+
+	_, err = p.db.Exec(query, args...)
+	return err
 }
 
 // Delete removes a Range submodel element from the database.
@@ -209,4 +251,26 @@ func insertRange(rangeElem *gen.Range, tx *sql.Tx, id int) error {
 		id, rangeElem.ValueType,
 		minText, maxText, minNum, maxNum, minTime, maxTime, minDatetime, maxDatetime)
 	return err
+}
+
+// getRangeColumnNames returns the appropriate column names for min and max values
+// based on the XML Schema datatype of the Range element.
+func getRangeColumnNames(valueType string) (minCol, maxCol string) {
+	switch valueType {
+	case "xs:string", "xs:anyURI", "xs:base64Binary", "xs:hexBinary":
+		return "min_text", "max_text"
+	case "xs:int", "xs:integer", "xs:long", "xs:short",
+		"xs:unsignedInt", "xs:unsignedLong", "xs:unsignedShort", "xs:unsignedByte",
+		"xs:positiveInteger", "xs:negativeInteger", "xs:nonNegativeInteger", "xs:nonPositiveInteger",
+		"xs:decimal", "xs:double", "xs:float":
+		return "min_num", "max_num"
+	case "xs:time":
+		return "min_time", "max_time"
+	case "xs:date", "xs:dateTime", "xs:duration", "xs:gDay", "xs:gMonth",
+		"xs:gMonthDay", "xs:gYear", "xs:gYearMonth":
+		return "min_datetime", "max_datetime"
+	default:
+		// Fallback to text
+		return "min_text", "max_text"
+	}
 }

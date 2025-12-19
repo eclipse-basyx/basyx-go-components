@@ -37,6 +37,7 @@ package submodelelements
 import (
 	"database/sql"
 
+	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	jsoniter "github.com/json-iterator/go"
@@ -209,13 +210,42 @@ func (p PostgreSQLReferenceElementHandler) Update(submodelID string, idShortOrPa
 }
 
 func (p PostgreSQLReferenceElementHandler) UpdateValueOnly(submodelID string, idShortOrPath string, valueOnly gen.SubmodelElementValue) error {
-	return nil
+	refElemVal, ok := valueOnly.(*gen.ReferenceElementValue)
+	if !ok {
+		return common.NewErrBadRequest("valueOnly is not of type ReferenceElementValue")
+	}
+
+	// Marshal reference value to JSON using helper function
+	referenceJSONString, err := marshalReferenceValueToJSON(refElemVal)
+	if err != nil {
+		return err
+	}
+
+	// Build and execute update query using GoQu
+	query, args, err := goqu.Update("reference_element").
+		Set(goqu.Record{
+			"value": referenceJSONString,
+		}).
+		Where(goqu.I("id").Eq(
+			goqu.From("submodel_element").
+				Select("id").
+				Where(goqu.Ex{
+					"submodel_id": submodelID,
+				}).
+				Where(goqu.Or(
+					goqu.I("id_short").Eq(idShortOrPath),
+					goqu.I("id_short_path").Eq(idShortOrPath),
+				)),
+		)).
+		ToSQL()
+	if err != nil {
+		return err
+	}
+
+	_, err = p.db.Exec(query, args...)
+	return err
 }
 
-// Delete removes a ReferenceElement and all its associated data from the database.
-// This includes the base SubmodelElement record, the reference_element record, and cascading
-// deletion of the reference and reference_key records.
-//
 // Parameters:
 //   - idShortOrPath: The idShort or full path of the ReferenceElement to delete
 //
@@ -266,4 +296,23 @@ func insertReferenceElement(refElem *gen.ReferenceElement, tx *sql.Tx, id int) e
 	// Insert reference_element
 	_, err := tx.Exec(`INSERT INTO reference_element (id, value) VALUES ($1, $2)`, id, referenceJSONString)
 	return err
+}
+
+// marshalReferenceValueToJSON converts a ReferenceElementValue to a JSON string for database storage.
+// Returns a sql.NullString with Valid=true if the reference has keys, otherwise Valid=false.
+func marshalReferenceValueToJSON(refElemVal *gen.ReferenceElementValue) (sql.NullString, error) {
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
+	var referenceJSONString sql.NullString
+
+	if len(refElemVal.Keys) > 0 {
+		bytes, err := json.Marshal(refElemVal)
+		if err != nil {
+			return sql.NullString{}, err
+		}
+		referenceJSONString = sql.NullString{String: string(bytes), Valid: true}
+	} else {
+		referenceJSONString = sql.NullString{Valid: false}
+	}
+
+	return referenceJSONString, nil
 }

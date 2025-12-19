@@ -34,6 +34,7 @@ import (
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	persistenceutils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 )
 
@@ -147,6 +148,14 @@ func (p PostgreSQLSubmodelElementCollectionHandler) Update(submodelID string, id
 }
 
 func (p PostgreSQLSubmodelElementCollectionHandler) UpdateValueOnly(submodelID string, idShortOrPath string, valueOnly gen.SubmodelElementValue) error {
+	elems, err := persistenceutils.BuildElementsToProcessStackValueOnly(p.db, submodelID, idShortOrPath, valueOnly)
+	if err != nil {
+		return err
+	}
+	err = UpdateNestedElements(p.db, elems, idShortOrPath, submodelID)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
