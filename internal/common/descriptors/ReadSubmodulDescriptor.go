@@ -29,10 +29,10 @@ package descriptors
 import (
 	"context"
 	"database/sql"
-	"fmt"
 
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	"github.com/lib/pq"
 	"golang.org/x/sync/errgroup"
 )
@@ -99,30 +99,72 @@ func ReadSubmodelDescriptorsByAASDescriptorIDs(
 	uniqAASDesc := aasDescriptorIDs
 
 	d := goqu.Dialect(dialect)
-	smd := goqu.T(tblSubmodelDescriptor).As("smd")
-
+	var mapper = []auth.ExpressionIdentifiableMapper{
+		{
+			Exp:           submodelDescriptorAlias.Col(colAASDescriptorID),
+			CanBeFiltered: false,
+		},
+		{
+			Exp:           submodelDescriptorAlias.Col(colDescriptorID),
+			CanBeFiltered: false,
+		},
+		{
+			Exp:           submodelDescriptorAlias.Col(colIDShort),
+			CanBeFiltered: true,
+			Identifable:   strPtr("$aasdesc#submodelDescriptors[].idShort"),
+		},
+		{
+			Exp:           submodelDescriptorAlias.Col(colAASID),
+			CanBeFiltered: false,
+		},
+		{
+			Exp:           submodelDescriptorAlias.Col(colSemanticID),
+			CanBeFiltered: false,
+		},
+		{
+			Exp:           submodelDescriptorAlias.Col(colAdminInfoID),
+			CanBeFiltered: false,
+		},
+		{
+			Exp:           submodelDescriptorAlias.Col(colDescriptionID),
+			CanBeFiltered: false,
+		},
+		{
+			Exp:           submodelDescriptorAlias.Col(colDisplayNameID),
+			CanBeFiltered: false,
+		},
+	}
+	expressions, err := auth.GetColumnSelectStatement(ctx, mapper)
+	if err != nil {
+		return nil, err
+	}
 	arr := pq.Array(uniqAASDesc)
-	sqlStr, args, err := d.
-		From(smd).
+	ds := getJoinTables(d).
 		Select(
-			smd.Col(colAASDescriptorID),
-			smd.Col(colDescriptorID),
-			smd.Col(colIDShort),
-			smd.Col(colAASID),
-			smd.Col(colSemanticID),
-			smd.Col(colAdminInfoID),
-			smd.Col(colDescriptionID),
-			smd.Col(colDisplayNameID),
+			expressions[0],
+			expressions[1],
+			expressions[2],
+			expressions[3],
+			expressions[4],
+			expressions[5],
+			expressions[6],
+			expressions[7],
 		).
-		Where(goqu.L(fmt.Sprintf("smd.%s = ANY(?::bigint[])", colAASDescriptorID), arr)).
+		Where(goqu.L("? = ANY(?::bigint[])", submodelDescriptorAlias.Col(colAASDescriptorID), arr)).
+		GroupBy(expressions[0], expressions[1]).
 		Order(
-			smd.Col(colPosition).Asc(),
-		).
-		ToSQL()
+			submodelDescriptorAlias.Col(colPosition).Asc(),
+		)
+
+	ds, err = auth.AddFilterQueryFromContext(ctx, ds, "$aasdesc#submodelDescriptors[]")
 	if err != nil {
 		return nil, err
 	}
 
+	sqlStr, args, err := ds.ToSQL()
+	if err != nil {
+		return nil, err
+	}
 	rows, err := db.QueryContext(ctx, sqlStr, args...)
 	if err != nil {
 		return nil, err
