@@ -2,7 +2,7 @@
   "ok": true,
   "queryFilter": {
     "Filters": {
-      "$aasdesc#specificAssetIds[]": {
+      "$aasdesc#idShort": {
         "mainPart": {
           "$or": [
             {
@@ -16,35 +16,12 @@
                       "$strVal": "manufacturPartId"
                     }
                   ]
-                },
-                {
-                  "$eq": [
-                    {
-                      "$strCast": {
-                        "$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value"
-                      }
-                    },
-                    {
-                      "$strVal": "WRITTEN_BY_X"
-                    }
-                  ]
                 }
               ]
             }
           ]
         },
-        "optionalPart": {
-          "$eq": [
-            {
-              "$strCast": {
-                "$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value"
-              }
-            },
-            {
-              "$strVal": "WRITTEN_BY_Y"
-            }
-          ]
-        }
+        "optionalPart": { "$boolean": true }
       },
       "$aasdesc#specificAssetIds[].name": {
         "mainPart": {

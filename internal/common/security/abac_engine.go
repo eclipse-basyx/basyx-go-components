@@ -109,6 +109,11 @@ const (
 	DecisionNoMatch DecisionCode = "NO_MATCH"
 )
 
+type filterFrag struct {
+	fragment string
+	id       int
+}
+
 // AuthorizeWithFilter evaluates the request against the model rules in order.
 // It returns whether access is allowed, a human-readable reason, and an optional
 // QueryFilter for controllers to enforce (e.g., tenant scoping, redactions).
@@ -120,10 +125,11 @@ func (m *AccessModel) AuthorizeWithFilter(in EvalInput) (bool, DecisionCode, *Qu
 	}
 
 	var ruleExprs []grammar.LogicalExpression
-	fragfilters := make(map[string][]grammar.LogicalExpression)
-	noFilters := make(map[string][]grammar.LogicalExpression)
+	frags := []string{}
+	fragfilters := make(map[filterFrag][]grammar.LogicalExpression)
+	noFilters := make(map[filterFrag][]grammar.LogicalExpression)
 
-	for _, r := range m.rules {
+	for i, r := range m.rules {
 		acl, attrs, objs, lexpr := r.acl, r.attrs, r.objs, r.lexpr
 		// Gate 0: check disabled
 		if acl.ACCESS == grammar.ACLACCESSDISABLED {
@@ -190,11 +196,21 @@ func (m *AccessModel) AuthorizeWithFilter(in EvalInput) (bool, DecisionCode, *Qu
 				filterCondRaw := grammar.LogicalExpression{
 					And: append(conditions, adapted),
 				}
+				found := false
+				for _, v := range frags {
+					if v == fragment {
+						found = true
+						break
+					}
+				}
+				if !found {
+					fragfilters[filterFrag{fragment, i}] = append(fragfilters[filterFrag{fragment, i}], filterCondRaw)
+				}
 
-				fragfilters[fragment] = append(fragfilters[fragment], filterCondRaw)
-				noFilters[fragment] = append(noFilters[fragment], adapted)
+				frags = append(frags, fragment)
+				noFilters[filterFrag{fragment, i}] = append(noFilters[filterFrag{fragment, i}], adapted)
 			} else {
-				noFilters["ignore"] = append(noFilters["ignore"], adapted)
+				noFilters[filterFrag{"ignore", i}] = append(noFilters[filterFrag{"ignore", i}], adapted)
 			}
 		}
 	}
@@ -226,16 +242,18 @@ func (m *AccessModel) AuthorizeWithFilter(in EvalInput) (bool, DecisionCode, *Qu
 		expr := grammar.LogicalExpression{Boolean: &falseBool}
 
 		for fragment2, conds2 := range noFilters {
-			if fragment != fragment2 {
+			if fragment.fragment != fragment2.fragment && fragment.id != fragment2.id {
+
 				// Append noFilter into OR
 				expr = grammar.LogicalExpression{
 					Or: append(expr.Or, conds2...),
 				}
+
 			}
 		}
-		expr, _ = adaptLEForBackend(expr, in.Claims)
+		//expr, _ = adaptLEForBackend(expr, in.Claims)
 
-		combinedFiltersMap[fragment] = FilterConditionParts{MainPart: grammar.LogicalExpression{Or: conds}, OptionalPart: expr}
+		combinedFiltersMap[fragment.fragment] = FilterConditionParts{MainPart: grammar.LogicalExpression{Or: conds}, OptionalPart: expr}
 	}
 	var qf *QueryFilter
 	if hasFormula || len(combinedFiltersMap) > 0 {
