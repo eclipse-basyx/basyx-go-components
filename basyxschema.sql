@@ -548,7 +548,7 @@ CREATE TABLE IF NOT EXISTS submodel_embedded_data_specification (
 
 CREATE TABLE IF NOT EXISTS asset_information (
     id BIGSERIAL PRIMARY KEY,
-    asset_kind VARCHAR(64),
+    asset_kind asset_kind,
     global_asset_id VARCHAR(2048),
     asset_type VARCHAR(2048)
 );
