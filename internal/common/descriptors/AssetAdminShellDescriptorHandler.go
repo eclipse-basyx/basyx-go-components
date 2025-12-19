@@ -51,6 +51,7 @@ import (
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	persistence_utils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
 	"golang.org/x/sync/errgroup"
 )
@@ -281,48 +282,94 @@ func buildListAssetAdministrationShellDescriptorsQuery(
 	identifiable string,
 ) (*goqu.SelectDataset, error) {
 	d := goqu.Dialect(dialect)
-	aas := goqu.T(tblAASDescriptor).As("aas")
+	var mapper = []auth.ExpressionIdentifiableMapper{
+		{
+			Exp:           tAASDescriptor.Col(colDescriptorID),
+			CanBeFiltered: false,
+		},
+		{
+			Exp:           tAASDescriptor.Col(colAssetKind),
+			CanBeFiltered: true,
+			Identifable:   strPtr("$aasdesc#assetKind"),
+		},
+		{
+			Exp:           tAASDescriptor.Col(colAssetType),
+			CanBeFiltered: true,
+			Identifable:   strPtr("$aasdesc#assetType"),
+		},
+		{
+			Exp:           tAASDescriptor.Col(colGlobalAssetID),
+			CanBeFiltered: true,
+			Identifable:   strPtr("$aasdesc#globalAssetId"),
+		},
+		{
+			Exp:           tAASDescriptor.Col(colIDShort),
+			CanBeFiltered: true,
+			Identifable:   strPtr("$aasdesc#idShort"),
+		},
+		{
+			Exp:           tAASDescriptor.Col(colAASID),
+			CanBeFiltered: false,
+		},
+		{
+			Exp:           tAASDescriptor.Col(colAdminInfoID),
+			CanBeFiltered: false,
+		},
+		{
+			Exp:           tAASDescriptor.Col(colDisplayNameID),
+			CanBeFiltered: false,
+		},
+		{
+			Exp:           tAASDescriptor.Col(colDescriptionID),
+			CanBeFiltered: false,
+		},
+	}
 
-	ds := d.
-		From(aas).
+	expressions, err := auth.GetColumnSelectStatement(ctx, mapper)
+	if err != nil {
+		return nil, err
+	}
+
+	ds := getJoinTables(d).
 		Select(
-			aas.Col(colDescriptorID),
-			aas.Col(colAssetKind),
-			aas.Col(colAssetType),
-			aas.Col(colGlobalAssetID),
-			aas.Col(colIDShort),
-			aas.Col(colAASID),
-			aas.Col(colAdminInfoID),
-			aas.Col(colDisplayNameID),
-			aas.Col(colDescriptionID),
-		)
-
-	ds, err := getFilterQueryFromContext(ctx, d, ds, aas)
+			expressions[0],
+			expressions[1],
+			expressions[2],
+			expressions[3],
+			expressions[4],
+			expressions[5],
+			expressions[6],
+			expressions[7],
+			expressions[8],
+		).GroupBy(
+		expressions[0], // descriptor_id
+	)
+	ds, err = auth.AddFormulaQueryFromContext(ctx, ds)
 	if err != nil {
 		return nil, err
 	}
 
 	if cursor != "" {
-		ds = ds.Where(aas.Col(colAASID).Gte(cursor))
+		ds = ds.Where(tAASDescriptor.Col(colAASID).Gte(cursor))
 	}
 
 	if assetType != "" {
-		ds = ds.Where(aas.Col(colAssetType).Eq(assetType))
+		ds = ds.Where(tAASDescriptor.Col(colAssetType).Eq(assetType))
 	}
 
 	if assetKind != "" {
-		ds = ds.Where(aas.Col(colAssetKind).Eq(assetKind))
+		ds = ds.Where(tAASDescriptor.Col(colAssetKind).Eq(assetKind))
 	}
 
 	if identifiable != "" {
-		ds = ds.Where(aas.Col(colID).Eq(identifiable))
+		ds = ds.Where(tAASDescriptor.Col(colID).Eq(identifiable))
 	}
 
 	if peekLimit < 0 {
 		return nil, common.NewErrBadRequest("Limit has to be higher than 0")
 	}
 	ds = ds.
-		Order(aas.Col(colAASID).Asc()).
+		Order(tAASDescriptor.Col(colAASID).Asc()).
 		Limit(uint(peekLimit))
 	return ds, nil
 }

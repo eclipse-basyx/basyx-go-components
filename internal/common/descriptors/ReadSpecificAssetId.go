@@ -152,7 +152,7 @@ func ReadSpecificAssetIDsByDescriptorIDs(
 			tSpecificAssetID.Col(colPosition).Asc(),
 		)
 
-	base, err = auth.AddSpecificAssetFilter(ctx, base, "$aasdesc#specificAssetIds[]")
+	base, err = auth.AddFilterQueryFromContext(ctx, base, "$aasdesc#specificAssetIds[]")
 	if err != nil {
 		return nil, err
 	}

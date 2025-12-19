@@ -27,11 +27,7 @@
 package descriptors
 
 import (
-	"context"
-
 	"github.com/doug-martin/goqu/v9"
-	"github.com/doug-martin/goqu/v9/exp"
-	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 )
 
 var (
@@ -85,26 +81,4 @@ func getJoinTables(d goqu.DialectWrapper) *goqu.SelectDataset {
 			goqu.On(submodelDescriptorSemanticIDReferenceKeyAlias.Col(colReferenceID).Eq(submodelDescriptorSemanticIDReferenceAlias.Col(colID))),
 		)
 	return joinTables
-}
-
-// getFilterQueryFromContext relevant for only aas descriptors
-func getFilterQueryFromContext(ctx context.Context, d goqu.DialectWrapper, ds *goqu.SelectDataset, tableCol exp.AliasedExpression) (*goqu.SelectDataset, error) {
-	p := auth.GetQueryFilter(ctx)
-	if p != nil && p.Formula != nil {
-		wc, err := p.Formula.EvaluateToExpression()
-		if err != nil {
-			return nil, err
-		}
-		existsDataset :=
-			getJoinTables(d).
-				Where(
-					tDescriptor.Col(colID).Eq(tableCol.Col(colDescriptorID)),
-					wc,
-				)
-
-		ds = ds.Where(
-			goqu.L("EXISTS (?)", existsDataset),
-		)
-	}
-	return ds, nil
 }

@@ -33,11 +33,11 @@ import (
 	"github.com/doug-martin/goqu/v9/exp"
 )
 
-// AddSpecificAssetFilter appends the WHERE clause for the given fragment
+// AddFilterQueryFromContext appends the WHERE clause for the given fragment
 // identifier if a QueryFilter is present in the context. When no filter is
 // available or the fragment is not defined, the original dataset is returned
 // unchanged.
-func AddSpecificAssetFilter(
+func AddFilterQueryFromContext(
 	ctx context.Context,
 	ds *goqu.SelectDataset,
 	identifable string,
@@ -126,4 +126,24 @@ func caseWhenColumn(wc exp.Expression, iexp exp.Expression) exp.CaseExpression {
 			iexp,
 		).
 		Else(nil)
+}
+
+// AddFormulaQueryFromContext appends the Formula-based WHERE clause found in
+// the context's QueryFilter to the provided dataset. When no filter formula is
+// present, the dataset is returned unchanged; errors from expression building
+// are propagated.
+func AddFormulaQueryFromContext(ctx context.Context, ds *goqu.SelectDataset) (*goqu.SelectDataset, error) {
+	p := GetQueryFilter(ctx)
+	if p != nil && p.Formula != nil {
+		wc, err := p.Formula.EvaluateToExpression()
+		if err != nil {
+			return nil, err
+		}
+
+		ds = ds.Where(
+
+			wc,
+		)
+	}
+	return ds, nil
 }

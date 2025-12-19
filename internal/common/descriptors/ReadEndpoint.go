@@ -154,7 +154,7 @@ func ReadEndpointsByDescriptorIDs(
 		).
 		Prepared(true)
 
-	ds, err := auth.AddSpecificAssetFilter(ctx, ds, "$aasdesc#endpoints[]")
+	ds, err := auth.AddFilterQueryFromContext(ctx, ds, "$aasdesc#endpoints[]")
 	if err != nil {
 		return nil, err
 	}
