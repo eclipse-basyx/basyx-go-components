@@ -47,7 +47,6 @@ var (
 
 // getJoinTables relevant for only aas descriptors
 func getJoinTables(d goqu.DialectWrapper) *goqu.SelectDataset {
-
 	joinTables := d.From(tDescriptor).
 		InnerJoin(
 			tAASDescriptor,
