@@ -251,7 +251,7 @@ func (m *AccessModel) AuthorizeWithFilter(in EvalInput) (bool, DecisionCode, *Qu
 
 			}
 		}
-		//expr, _ = adaptLEForBackend(expr, in.Claims)
+		expr, _ = adaptLEForBackend(expr, in.Claims)
 
 		combinedFiltersMap[fragment.fragment] = FilterConditionParts{MainPart: grammar.LogicalExpression{Or: conds}, OptionalPart: expr}
 	}
