@@ -118,6 +118,8 @@ type filterFrag struct {
 // It returns whether access is allowed, a human-readable reason, and an optional
 // QueryFilter for controllers to enforce (e.g., tenant scoping, redactions).
 // It is important that this function does not throw errors. It either gives access or no access.
+//
+//nolint:revive // i will refactor this function at some point
 func (m *AccessModel) AuthorizeWithFilter(in EvalInput) (bool, DecisionCode, *QueryFilter) {
 	rights, mapped := m.mapMethodAndPathToRights(in)
 	if !mapped {
