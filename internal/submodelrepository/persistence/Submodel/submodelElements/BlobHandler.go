@@ -149,8 +149,31 @@ func (p PostgreSQLBlobHandler) CreateNested(tx *sql.Tx, submodelID string, paren
 //
 // Returns:
 //   - error: Error if update fails
-func (p PostgreSQLBlobHandler) Update(idShortOrPath string, submodelElement gen.SubmodelElement) error {
-	return p.decorated.Update(idShortOrPath, submodelElement)
+func (p PostgreSQLBlobHandler) Update(submodelID string, idShortOrPath string, submodelElement gen.SubmodelElement) error {
+	return p.decorated.Update(submodelID, idShortOrPath, submodelElement)
+}
+
+func (p PostgreSQLBlobHandler) UpdateValueOnly(submodelID string, idShortOrPath string, valueOnly gen.SubmodelElementValue) error {
+	blobValueOnly, ok := valueOnly.(*gen.BlobValue)
+	if !ok {
+		return common.NewErrBadRequest("valueOnly is not of type BlobValue")
+	}
+
+	// Check if blob value is larger than 1GB
+	if len(blobValueOnly.Value) > 1<<30 {
+		return common.NewErrBadRequest("blob value exceeds maximum size of 1GB - for files larger than 1GB, you must use File submodel element instead - Postgres Limitation")
+	}
+
+	// Update only the blob-specific fields in the database
+	_, err := p.db.Exec(`UPDATE blob_element SET content_type = $1, value = $2
+		WHERE id = (SELECT sme.id FROM submodel_element sme
+		             JOIN submodel sm ON sme.submodel_id = sm.id
+		             WHERE sm.submodel_id = $3 AND sme.id_short = $4 OR sme.path = $4)`,
+		blobValueOnly.ContentType, []byte(blobValueOnly.Value), submodelID, idShortOrPath)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // Delete removes a Blob element identified by its idShort or path from the database.

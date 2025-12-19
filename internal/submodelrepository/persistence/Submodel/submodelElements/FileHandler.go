@@ -147,7 +147,7 @@ func (p PostgreSQLFileHandler) CreateNested(tx *sql.Tx, submodelID string, paren
 //
 // Returns:
 //   - error: Error if the update operation fails
-func (p PostgreSQLFileHandler) Update(idShortOrPath string, submodelElement gen.SubmodelElement) error {
+func (p PostgreSQLFileHandler) Update(submodelID string, idShortOrPath string, submodelElement gen.SubmodelElement) error {
 	file, ok := submodelElement.(*gen.File)
 	if !ok {
 		return common.NewErrBadRequest("submodelElement is not of type File")
@@ -247,7 +247,25 @@ func (p PostgreSQLFileHandler) Update(idShortOrPath string, submodelElement gen.
 	}
 
 	// Update base SubmodelElement properties
-	return p.decorated.Update(idShortOrPath, submodelElement)
+	return p.decorated.Update(submodelID, idShortOrPath, submodelElement)
+}
+
+func (p PostgreSQLFileHandler) UpdateValueOnly(submodelID string, idShortOrPath string, valueOnly gen.SubmodelElementValue) error {
+	fileValueOnly, ok := valueOnly.(*gen.FileValue)
+	if !ok {
+		return common.NewErrBadRequest("valueOnly is not of type FileValue")
+	}
+
+	// Update only the file-specific fields in the database
+	_, err := p.db.Exec(`UPDATE file_element SET content_type = $1, value = $2
+		WHERE id = (SELECT sme.id FROM submodel_element sme
+		             JOIN submodel sm ON sme.submodel_id = sm.id
+		             WHERE sm.submodel_id = $3 AND sme.id_short = $4 OR sme.path = $4)`,
+		fileValueOnly.ContentType, fileValueOnly.Value, submodelID, idShortOrPath)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // Delete removes a File submodel element from the database.

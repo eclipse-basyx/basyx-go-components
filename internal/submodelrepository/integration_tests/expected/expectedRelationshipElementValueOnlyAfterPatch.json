@@ -1,0 +1,20 @@
+{
+    "first": {
+        "type": "ModelReference",
+        "keys": [
+            {
+                "type": "Submodel",
+                "value": "urn:uuid:updated-first-reference"
+            }
+        ]
+    },
+    "second": {
+        "type": "ModelReference",
+        "keys": [
+            {
+                "type": "Submodel",
+                "value": "urn:uuid:updated-second-reference"
+            }
+        ]
+    }
+}

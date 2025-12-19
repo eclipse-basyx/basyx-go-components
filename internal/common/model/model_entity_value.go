@@ -58,6 +58,11 @@ func (e EntityValue) MarshalJSON() ([]byte, error) {
 	return e.MarshalValueOnly()
 }
 
+// GetModelType returns the model type name for Entity
+func (e EntityValue) GetModelType() string {
+	return "Entity"
+}
+
 // AssertEntityValueRequired checks if the required fields are not zero-ed
 func AssertEntityValueRequired(_ EntityValue) error {
 	return nil

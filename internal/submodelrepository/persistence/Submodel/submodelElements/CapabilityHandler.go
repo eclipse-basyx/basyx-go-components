@@ -130,8 +130,12 @@ func (p PostgreSQLCapabilityHandler) CreateNested(tx *sql.Tx, submodelID string,
 //
 // Returns:
 //   - error: Error if update fails
-func (p PostgreSQLCapabilityHandler) Update(idShortOrPath string, submodelElement gen.SubmodelElement) error {
-	return p.decorated.Update(idShortOrPath, submodelElement)
+func (p PostgreSQLCapabilityHandler) Update(submodelID string, idShortOrPath string, submodelElement gen.SubmodelElement) error {
+	return p.decorated.Update(submodelID, idShortOrPath, submodelElement)
+}
+
+func (p PostgreSQLCapabilityHandler) UpdateValueOnly(submodelID string, idShortOrPath string, valueOnly gen.SubmodelElementValue) error {
+	return nil
 }
 
 // Delete removes a Capability element identified by its idShort or path from the database.

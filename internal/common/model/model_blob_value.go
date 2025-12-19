@@ -54,6 +54,11 @@ func (b BlobValue) MarshalJSON() ([]byte, error) {
 	return b.MarshalValueOnly()
 }
 
+// GetModelType returns the model type name for Blob
+func (b BlobValue) GetModelType() string {
+	return "Blob"
+}
+
 // AssertBlobValueRequired checks if the required fields are not zero-ed
 func AssertBlobValueRequired(_ BlobValue) error {
 	return nil

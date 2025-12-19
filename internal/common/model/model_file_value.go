@@ -53,6 +53,11 @@ func (f FileValue) MarshalJSON() ([]byte, error) {
 	return f.MarshalValueOnly()
 }
 
+// GetModelType returns the model type name for File
+func (f FileValue) GetModelType() string {
+	return "File"
+}
+
 // AssertFileValueRequired checks if the required fields are not zero-ed
 func AssertFileValueRequired(_ FileValue) error {
 	return nil

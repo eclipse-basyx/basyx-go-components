@@ -53,6 +53,11 @@ func (r RangeValue) MarshalJSON() ([]byte, error) {
 	return r.MarshalValueOnly()
 }
 
+// GetModelType returns the model type name for Range
+func (r RangeValue) GetModelType() string {
+	return "Range"
+}
+
 // AssertRangeValueRequired checks if the required fields are not zero-ed
 func AssertRangeValueRequired(obj RangeValue) error {
 	elements := map[string]interface{}{

@@ -74,7 +74,13 @@ func PropertyToValueOnly(p *Property) PropertyValue {
 
 // MultiLanguagePropertyToValueOnly converts a MultiLanguageProperty to MultiLanguagePropertyValue
 func MultiLanguagePropertyToValueOnly(mlp *MultiLanguageProperty) MultiLanguagePropertyValue {
-	return MultiLanguagePropertyValue(mlp.Value)
+	result := make(MultiLanguagePropertyValue, len(mlp.Value))
+	for i, langString := range mlp.Value {
+		langText := make(map[string]string)
+		langText[langString.Language] = langString.Text
+		result[i] = langText
+	}
+	return result
 }
 
 // RangeToValueOnly converts a Range to RangeValue
@@ -153,7 +159,7 @@ func AnnotatedRelationshipElementToValueOnly(are *AnnotatedRelationshipElement) 
 
 	// Convert annotations
 	if len(are.Annotations) > 0 {
-		result.Annotations = make(map[string]interface{})
+		result.Annotations = make(map[string]SubmodelElementValue)
 		for _, annotation := range are.Annotations {
 			idShort := annotation.GetIdShort()
 			if idShort == "" {

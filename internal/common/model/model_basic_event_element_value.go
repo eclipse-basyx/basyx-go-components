@@ -52,6 +52,11 @@ func (b BasicEventElementValue) MarshalJSON() ([]byte, error) {
 	return b.MarshalValueOnly()
 }
 
+// GetModelType returns the model type name for BasicEventElement
+func (b BasicEventElementValue) GetModelType() string {
+	return "BasicEventElement"
+}
+
 // AssertBasicEventElementValueRequired checks if the required fields are not zero-ed
 func AssertBasicEventElementValueRequired(obj BasicEventElementValue) error {
 	elements := map[string]interface{}{

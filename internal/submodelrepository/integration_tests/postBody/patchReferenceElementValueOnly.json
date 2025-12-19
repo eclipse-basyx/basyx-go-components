@@ -1,0 +1,9 @@
+{
+    "type": "ModelReference",
+    "keys": [
+        {
+            "type": "Submodel",
+            "value": "urn:uuid:updated-reference-12345"
+        }
+    ]
+}

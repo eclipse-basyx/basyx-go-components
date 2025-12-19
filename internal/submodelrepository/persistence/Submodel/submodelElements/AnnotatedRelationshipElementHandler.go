@@ -34,6 +34,7 @@ import (
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	persistenceutils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
 	jsoniter "github.com/json-iterator/go"
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 )
@@ -143,8 +144,67 @@ func (p PostgreSQLAnnotatedRelationshipElementHandler) CreateNested(tx *sql.Tx, 
 //
 // Returns:
 //   - error: Error if update fails
-func (p PostgreSQLAnnotatedRelationshipElementHandler) Update(idShortOrPath string, submodelElement gen.SubmodelElement) error {
-	return p.decorated.Update(idShortOrPath, submodelElement)
+func (p PostgreSQLAnnotatedRelationshipElementHandler) Update(submodelID string, idShortOrPath string, submodelElement gen.SubmodelElement) error {
+	return p.decorated.Update(submodelID, idShortOrPath, submodelElement)
+}
+
+func (p PostgreSQLAnnotatedRelationshipElementHandler) UpdateValueOnly(submodelID string, idShortOrPath string, valueOnly gen.SubmodelElementValue) error {
+	elems, err := persistenceutils.BuildElementsToProcessStackValueOnly(p.db, submodelID, idShortOrPath, valueOnly)
+	if err != nil {
+		return err
+	}
+
+	// Update 'first' and 'second' references for AnnotatedRelationshipElement
+	if areValue, ok := valueOnly.(gen.AnnotatedRelationshipElementValue); ok {
+		// Get the element ID from the database
+		var elementID int
+		err := p.db.QueryRow(`
+			SELECT sme.id 
+			FROM submodel_element sme 
+			WHERE sme.idshort_path = $1 AND sme.submodel_id = $2
+		`, idShortOrPath, submodelID).Scan(&elementID)
+		if err != nil {
+			return err
+		}
+
+		// Marshal the references to JSON
+		var json = jsoniter.ConfigCompatibleWithStandardLibrary
+		var firstRef, secondRef *string
+
+		if len(areValue.First.Keys) > 0 {
+			ref, err := json.Marshal(areValue.First)
+			if err != nil {
+				return err
+			}
+			refStr := string(ref)
+			firstRef = &refStr
+		}
+
+		if len(areValue.Second.Keys) > 0 {
+			ref, err := json.Marshal(areValue.Second)
+			if err != nil {
+				return err
+			}
+			refStr := string(ref)
+			secondRef = &refStr
+		}
+
+		// Update the references in the database
+		_, err = p.db.Exec(`
+			UPDATE annotated_relationship_element 
+			SET first = $1, second = $2 
+			WHERE id = $3
+		`, firstRef, secondRef, elementID)
+		if err != nil {
+			return err
+		}
+	}
+
+	err = UpdateNestedElements(p.db, elems, idShortOrPath, submodelID)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // Delete removes an AnnotatedRelationshipElement identified by its idShort or path from the database.

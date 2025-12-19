@@ -35,6 +35,7 @@ import (
 	"database/sql"
 	"fmt"
 
+	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	persistenceutils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
@@ -147,8 +148,73 @@ func (p PostgreSQLPropertyHandler) CreateNested(tx *sql.Tx, submodelID string, p
 //
 // Returns:
 //   - error: An error if the update operation fails
-func (p PostgreSQLPropertyHandler) Update(idShortOrPath string, submodelElement gen.SubmodelElement) error {
-	return p.decorated.Update(idShortOrPath, submodelElement)
+func (p PostgreSQLPropertyHandler) Update(submodelID string, idShortOrPath string, submodelElement gen.SubmodelElement) error {
+	return p.decorated.Update(submodelID, idShortOrPath, submodelElement)
+}
+
+func (p PostgreSQLPropertyHandler) UpdateValueOnly(submodelID string, idShortOrPath string, valueOnly gen.SubmodelElementValue) error {
+	var elementID int
+	goquQuery, args, err := goqu.From("submodel_element").
+		Select("id").
+		Where(goqu.Ex{
+			"submodel_id":  submodelID,
+			"idshort_path": idShortOrPath,
+		}).ToSQL()
+	if err != nil {
+		return err
+	}
+
+	row := p.db.QueryRow(goquQuery, args...)
+	err = row.Scan(&elementID)
+
+	goquQuery, args, err = goqu.From("property_element").Select("value_type").Where(goqu.C("id").Eq(elementID)).ToSQL()
+	if err != nil {
+		return err
+	}
+	var valueType string
+	row = p.db.QueryRow(goquQuery, args...)
+	err = row.Scan(&valueType)
+	// Update based on valueType
+	propertyValue, ok := valueOnly.(gen.PropertyValue)
+	if !ok {
+		return common.NewErrBadRequest("valueOnly is not of type PropertyValue")
+	}
+
+	var valueText, valueNum, valueBool, valueTime, valueDatetime sql.NullString
+
+	switch valueType {
+	case "xs:string", "xs:anyURI", "xs:base64Binary", "xs:hexBinary":
+		valueText = sql.NullString{String: propertyValue.Value, Valid: propertyValue.Value != ""}
+	case "xs:int", "xs:integer", "xs:long", "xs:short", "xs:byte",
+		"xs:unsignedInt", "xs:unsignedLong", "xs:unsignedShort", "xs:unsignedByte",
+		"xs:positiveInteger", "xs:negativeInteger", "xs:nonNegativeInteger", "xs:nonPositiveInteger",
+		"xs:decimal", "xs:double", "xs:float":
+		valueNum = sql.NullString{String: propertyValue.Value, Valid: propertyValue.Value != ""}
+	case "xs:boolean":
+		valueBool = sql.NullString{String: propertyValue.Value, Valid: propertyValue.Value != ""}
+	case "xs:time":
+		valueTime = sql.NullString{String: propertyValue.Value, Valid: propertyValue.Value != ""}
+	case "xs:date", "xs:dateTime", "xs:duration", "xs:gDay", "xs:gMonth",
+		"xs:gMonthDay", "xs:gYear", "xs:gYearMonth":
+		valueDatetime = sql.NullString{String: propertyValue.Value, Valid: propertyValue.Value != ""}
+	default:
+		// Fallback to text for unknown types
+		valueText = sql.NullString{String: propertyValue.Value, Valid: propertyValue.Value != ""}
+	}
+
+	_, err = p.db.Exec(`UPDATE property_element SET value_text = $1, value_num = $2, value_bool = $3, value_time = $4, value_datetime = $5 WHERE id = $6`,
+		valueText,
+		valueNum,
+		valueBool,
+		valueTime,
+		valueDatetime,
+		elementID,
+	)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // Delete removes a Property submodel element from the database.

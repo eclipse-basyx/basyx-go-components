@@ -1175,7 +1175,12 @@ func (p *PostgreSQLSubmodelDatabase) UpdateSubmodelElement(submodelID string, id
 	}
 
 	// Update the element
-	return handler.Update(idShortPath, submodelElement)
+	return handler.Update(submodelID, idShortPath, submodelElement)
+}
+
+// UpdateSubmodelElementValue updates only the value of an existing submodel element by its idShortPath.
+func (p *PostgreSQLSubmodelDatabase) UpdateSubmodelElementValue(submodelID string, idShortPath string, value gen.SubmodelElementValue) error {
+	return p.UpdateValueOnly(submodelID, idShortPath, value)
 }
 
 // DeleteFileAttachment deletes a file attachment from PostgreSQL Large Object system.
@@ -1185,4 +1190,28 @@ func (p *PostgreSQLSubmodelDatabase) DeleteFileAttachment(submodelID string, idS
 		return fmt.Errorf("failed to create file handler: %w", err)
 	}
 	return fileHandler.DeleteFileAttachment(submodelID, idShortPath)
+}
+
+func (p *PostgreSQLSubmodelDatabase) UpdateValueOnly(submodelID string, idShortOrPath string, valueOnly gen.SubmodelElementValue) error {
+
+	// Get the model type to determine which handler to use
+	var modelType string
+	err := p.db.QueryRow(`SELECT model_type FROM submodel_element WHERE submodel_id = $1 AND idshort_path = $2`, submodelID, idShortOrPath).Scan(&modelType)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return common.NewErrNotFound("Submodel element not found")
+		}
+		return fmt.Errorf("failed to get model type: %w", err)
+	}
+
+	//
+
+	// Get the appropriate handler for this model type
+	handler, err := submodelelements.GetSMEHandlerByModelType(modelType, p.db)
+	if err != nil {
+		return fmt.Errorf("failed to get handler for model type %s: %w", modelType, err)
+	}
+
+	// Update the value only
+	return handler.UpdateValueOnly(submodelID, idShortOrPath, valueOnly)
 }

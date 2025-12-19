@@ -143,8 +143,33 @@ func (p PostgreSQLMultiLanguagePropertyHandler) CreateNested(tx *sql.Tx, submode
 //
 // Returns:
 //   - error: An error if the update operation fails
-func (p PostgreSQLMultiLanguagePropertyHandler) Update(idShortOrPath string, submodelElement gen.SubmodelElement) error {
-	return p.decorated.Update(idShortOrPath, submodelElement)
+func (p PostgreSQLMultiLanguagePropertyHandler) Update(submodelID string, idShortOrPath string, submodelElement gen.SubmodelElement) error {
+	return p.decorated.Update(submodelID, idShortOrPath, submodelElement)
+}
+
+func (p PostgreSQLMultiLanguagePropertyHandler) UpdateValueOnly(submodelID string, idShortOrPath string, valueOnly gen.SubmodelElementValue) error {
+	mlp, ok := valueOnly.(*gen.MultiLanguagePropertyValue)
+	if !ok {
+		return common.NewErrBadRequest("valueOnly is not of type MultiLanguagePropertyValue")
+	}
+
+	// Delete existing values
+	_, err := p.db.Exec(`DELETE FROM multilanguage_property_value WHERE mlp_id = (SELECT id FROM submodel_element WHERE submodel_id = $1 AND id_short_path = $2)`, submodelID, idShortOrPath)
+	if err != nil {
+		return err
+	}
+
+	// Insert new values
+	for _, val := range *mlp {
+		for lang, text := range val {
+			_, err = p.db.Exec(`INSERT INTO multilanguage_property_value (mlp_id, language, text) VALUES ((SELECT id FROM submodel_element WHERE submodel_id = $1 AND id_short_path = $2), $3, $4)`,
+				submodelID, idShortOrPath, lang, text)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 // Delete removes a MultiLanguageProperty submodel element from the database.
