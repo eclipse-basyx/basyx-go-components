@@ -29,11 +29,51 @@ package descriptors
 import (
 	"context"
 	"database/sql"
+	"fmt"
+	"time"
 
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	"github.com/lib/pq"
 )
+
+type rowData struct {
+	descID               int64
+	specificID           int64
+	name, value          sql.NullString
+	semanticRefID        sql.NullInt64
+	externalSubjectRefID sql.NullInt64
+}
+
+var expMapper = []auth.ExpressionIdentifiableMapper{
+	{
+		Exp:           tSpecificAssetID.Col(colDescriptorID),
+		CanBeFiltered: false,
+	},
+	{
+		Exp:           tSpecificAssetID.Col(colID),
+		CanBeFiltered: false,
+	},
+	{
+		Exp:           tSpecificAssetID.Col(colName),
+		CanBeFiltered: true,
+		Identifable:   strPtr("$aasdesc#specificAssetIds[].name"),
+	},
+	{
+		Exp:           tSpecificAssetID.Col(colValue),
+		CanBeFiltered: true,
+		Identifable:   strPtr("$aasdesc#specificAssetIds[].value"),
+	},
+	{
+		Exp:           tSpecificAssetID.Col(colSemanticID),
+		CanBeFiltered: true,
+	},
+	{
+		Exp:           tSpecificAssetID.Col(colExternalSubjectRef),
+		CanBeFiltered: true,
+	},
+}
 
 // ReadSpecificAssetIDsByDescriptorID returns all SpecificAssetIDs that belong to
 // a single AAS descriptor identified by its numeric descriptor ID.
@@ -77,40 +117,50 @@ func ReadSpecificAssetIDsByDescriptorIDs(
 	db *sql.DB,
 	descriptorIDs []int64,
 ) (map[int64][]model.SpecificAssetID, error) {
+	start := time.Now()
+	defer func() {
+		_, _ = fmt.Printf("ReadSpecificAssetIDsByDescriptorIDs took %s for %d descriptor IDs\n", time.Since(start), len(descriptorIDs))
+	}()
+
 	out := make(map[int64][]model.SpecificAssetID, len(descriptorIDs))
 	if len(descriptorIDs) == 0 {
 		return out, nil
 	}
 
 	d := goqu.Dialect(dialect)
-	sai := goqu.T(tblSpecificAssetID).As("sai")
 
 	arr := pq.Array(descriptorIDs)
-	sqlStr, args, err := d.
-		From(sai).
-		Select(
-			sai.Col(colDescriptorID),
-			sai.Col(colID),
-			sai.Col(colName),
-			sai.Col(colValue),
-			sai.Col(colSemanticID),
-			sai.Col(colExternalSubjectRef),
+
+	expressions, err := auth.GetColumnSelectStatement(ctx, expMapper)
+	if err != nil {
+		return nil, err
+	}
+	base := getJoinTables(d).Select(
+		expressions[0],
+		expressions[1],
+		expressions[2],
+		expressions[3],
+		expressions[4],
+		expressions[5],
+	).
+		Where(goqu.L(fmt.Sprintf("%s.%s = ANY(?::bigint[])", aliasSpecificAssetID, colDescriptorID), arr)).
+		GroupBy(
+			expressions[0], // descriptor_id
+			expressions[1], // id
 		).
-		Where(goqu.L("sai.descriptor_id = ANY(?::bigint[])", arr)).
 		Order(
-			sai.Col("position").Asc(),
-		).
-		ToSQL()
+			tSpecificAssetID.Col(colPosition).Asc(),
+		)
+
+	base, err = auth.AddFilterQueryFromContext(ctx, base, "$aasdesc#specificAssetIds[]")
 	if err != nil {
 		return nil, err
 	}
 
-	type rowData struct {
-		descID               int64
-		specificID           int64
-		name, value          sql.NullString
-		semanticRefID        sql.NullInt64
-		externalSubjectRefID sql.NullInt64
+	sqlStr, args, err := base.ToSQL()
+	_, _ = fmt.Println(sqlStr)
+	if err != nil {
+		return nil, err
 	}
 	rows, err := db.QueryContext(ctx, sqlStr, args...)
 	if err != nil {
@@ -229,4 +279,8 @@ func nvl(ns sql.NullString) string {
 		return ns.String
 	}
 	return ""
+}
+
+func strPtr(s string) *string {
+	return &s
 }

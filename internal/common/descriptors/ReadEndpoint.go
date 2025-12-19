@@ -35,7 +35,9 @@ import (
 	"github.com/doug-martin/goqu/v9"
 	// nolint:revive
 	_ "github.com/doug-martin/goqu/v9/dialect/postgres"
+	"github.com/doug-martin/goqu/v9/exp"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	"github.com/lib/pq"
 )
 
@@ -56,8 +58,9 @@ func ReadEndpointsByDescriptorID(
 	ctx context.Context,
 	db *sql.DB,
 	descriptorID int64,
+	joinOn exp.AliasedExpression,
 ) ([]model.Endpoint, error) {
-	v, err := ReadEndpointsByDescriptorIDs(ctx, db, []int64{descriptorID})
+	v, err := ReadEndpointsByDescriptorIDs(ctx, db, []int64{descriptorID}, joinOn)
 	return v[descriptorID], err
 }
 
@@ -86,6 +89,7 @@ func ReadEndpointsByDescriptorIDs(
 	ctx context.Context,
 	db *sql.DB,
 	descriptorIDs []int64,
+	joinOn exp.AliasedExpression,
 ) (map[int64][]model.Endpoint, error) {
 	out := make(map[int64][]model.Endpoint, len(descriptorIDs))
 	if len(descriptorIDs) == 0 {
@@ -95,30 +99,28 @@ func ReadEndpointsByDescriptorIDs(
 	d := goqu.Dialect(dialect)
 	arr := pq.Array(descriptorIDs)
 
-	e := goqu.T(tblAASDescriptorEndpoint).As("e")
 	v := goqu.T(tblEndpointProtocolVersion).As("v")
 	s := goqu.T(tblSecurityAttributes).As("s")
 
-	ds := d.
-		From(e).
+	ds := getJoinTables(d).
 		LeftJoin(
 			v,
-			goqu.On(v.Col(colEndpointID).Eq(e.Col(colID))),
+			goqu.On(v.Col(colEndpointID).Eq(joinOn.Col(colID))),
 		).
 		LeftJoin(
 			s,
-			goqu.On(s.Col(colEndpointID).Eq(e.Col(colID))),
+			goqu.On(s.Col(colEndpointID).Eq(joinOn.Col(colID))),
 		).
-		Where(goqu.L(fmt.Sprintf("e.%s = ANY(?::bigint[])", colDescriptorID), arr)).
+		Where(goqu.L("? = ANY(?::bigint[])", joinOn.Col(colDescriptorID), arr)).
 		Select(
-			e.Col(colDescriptorID),
-			e.Col(colID),
-			goqu.Func("COALESCE", e.Col(colHref), "").As(colHref),
-			goqu.Func("COALESCE", e.Col(colEndpointProtocol), "").As(colEndpointProtocol),
-			goqu.Func("COALESCE", e.Col(colSubProtocol), "").As(colSubProtocol),
-			goqu.Func("COALESCE", e.Col(colSubProtocolBody), "").As(colSubProtocolBody),
-			goqu.Func("COALESCE", e.Col(colSubProtocolBodyEncoding), "").As(colSubProtocolBodyEncoding),
-			goqu.Func("COALESCE", e.Col(colInterface), "").As(colInterface),
+			joinOn.Col(colDescriptorID),
+			joinOn.Col(colID),
+			goqu.Func("COALESCE", joinOn.Col(colHref), "").As(colHref),
+			goqu.Func("COALESCE", joinOn.Col(colEndpointProtocol), "").As(colEndpointProtocol),
+			goqu.Func("COALESCE", joinOn.Col(colSubProtocol), "").As(colSubProtocol),
+			goqu.Func("COALESCE", joinOn.Col(colSubProtocolBody), "").As(colSubProtocolBody),
+			goqu.Func("COALESCE", joinOn.Col(colSubProtocolBodyEncoding), "").As(colSubProtocolBodyEncoding),
+			goqu.Func("COALESCE", joinOn.Col(colInterface), "").As(colInterface),
 
 			// versions
 			goqu.L(
@@ -137,20 +139,25 @@ func ReadEndpointsByDescriptorIDs(
 			).As("sec_attrs"),
 		).
 		GroupBy(
-			e.Col(colDescriptorID),
-			e.Col(colPosition),
-			e.Col(colID),
-			e.Col(colHref),
-			e.Col(colEndpointProtocol),
-			e.Col(colSubProtocol),
-			e.Col(colSubProtocolBody),
-			e.Col(colSubProtocolBodyEncoding),
-			e.Col(colInterface),
+			joinOn.Col(colDescriptorID),
+			joinOn.Col(colPosition),
+			joinOn.Col(colID),
+			joinOn.Col(colHref),
+			joinOn.Col(colEndpointProtocol),
+			joinOn.Col(colSubProtocol),
+			joinOn.Col(colSubProtocolBody),
+			joinOn.Col(colSubProtocolBodyEncoding),
+			joinOn.Col(colInterface),
 		).
 		Order(
-			e.Col(colPosition).Asc(),
+			joinOn.Col(colPosition).Asc(),
 		).
 		Prepared(true)
+
+	ds, err := auth.AddFilterQueryFromContext(ctx, ds, "$aasdesc#endpoints[]")
+	if err != nil {
+		return nil, err
+	}
 
 	sqlStr, args, err := ds.ToSQL()
 	if err != nil {

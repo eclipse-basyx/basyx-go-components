@@ -100,6 +100,7 @@ func TestAdaptLEForBackend(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.Input, func(t *testing.T) {
+
 			raw, err := os.ReadFile(c.Input)
 			if err != nil {
 				t.Fatalf("read input: %v", err)
@@ -113,7 +114,7 @@ func TestAdaptLEForBackend(t *testing.T) {
 			// Load optional eval input (ctx) if provided
 			var evalInput auth.EvalInput
 			if c.EvalInput != "" {
-				_, _ = fmt.Println("eval")
+				fmt.Println("eval")
 				evalInput, err = loadEvalInput(c.EvalInput)
 				if err != nil {
 					t.Fatalf("eval input: %v", err)

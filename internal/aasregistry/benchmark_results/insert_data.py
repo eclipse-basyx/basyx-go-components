@@ -5,14 +5,14 @@ import json
 
 # --- Config ---
 URL = "http://localhost:5004/shell-descriptors"
-JSON_FILE = "bodies/medium.json"  # path to your file
+JSON_FILE = "bodies/simple_aas_A.json"  # path to your file
 
 # --- Load JSON file ---
 with open(JSON_FILE, "r", encoding="utf-8") as f:
     payload_template = json.load(f)
 
 # --- POST loop ---
-for i in range(2000):  # Change number if you want more inserts
+for i in range(30000):  # Change number if you want more inserts
     payload = copy.deepcopy(payload_template)
 
     # Unique Descriptor ID

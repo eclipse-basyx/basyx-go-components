@@ -164,10 +164,6 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) GetAssetAdministrationSh
 		}
 	}
 
-	if resp, err := enforceAccessForAAS(ctx, "GetAssetAdministrationShellDescriptorById", result); resp != nil || err != nil {
-		return *resp, err
-	}
-
 	return model.Response(http.StatusOK, result), nil
 }
 

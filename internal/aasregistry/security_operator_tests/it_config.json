@@ -56,7 +56,7 @@
     "token": { "user": "userx", "password": "pwd" },
     "method": "GET",
     "endpoint": "http://localhost:6004/shell-descriptors/dXJuOmFhczp2aWV3ZXItYXNzZXQ",
-    "expectedStatus": 403
+    "expectedStatus": 404
   },
   {
     "context": "GET regex descriptor - editor allowed via $regex",
@@ -71,7 +71,7 @@
     "token": { "user": "userx", "password": "pwd" },
     "method": "GET",
     "endpoint": "http://localhost:6004/shell-descriptors/dXJuOmFhczpyZWdpbWF4LTQy",
-    "expectedStatus": 403
+    "expectedStatus": 404
   },
   {
     "context": "GET public descriptor - anonymous allowed via $ends-with",
@@ -86,7 +86,7 @@
     "token": null,
     "method": "GET",
     "endpoint": "http://localhost:6004/shell-descriptors/dXJuOmFhczp2aWV3ZXItYXNzZXQ",
-    "expectedStatus": 403
+    "expectedStatus": 404
   },
   {
     "context": "GET all descriptor - editor ",
@@ -142,7 +142,7 @@
     "token": { "user": "userb", "password": "pwd" },
     "method": "GET",
     "endpoint": "http://localhost:6004/shell-descriptors/dXJuOmFhczp0aW1lLWRlbnk=",
-    "expectedStatus": 403
+    "expectedStatus": 404
   },
   {
     "context": "POST time field allow descriptor - admin creates fixture",
@@ -175,7 +175,7 @@
     "token": { "user": "userb", "password": "pwd" },
     "method": "GET",
     "endpoint": "http://localhost:6004/shell-descriptors/dXJuOmFhczpkdC1maWVsZC1kZW55",
-    "expectedStatus": 403
+    "expectedStatus": 404
   },
   {
     "context": "GET ALL time field allow descriptors - viewer ",
@@ -216,7 +216,7 @@
     "token": { "user": "usery", "password": "pwd" },
     "method": "GET",
     "endpoint": "http://localhost:6004/shell-descriptors/dXJuOmFhczptaXhlZC1jYXN0LWRlbnk",
-    "expectedStatus": 403
+    "expectedStatus": 404
   },
   {
     "context": "POST mixed cast allow descriptor 2 - admin creates fixture",
@@ -284,21 +284,21 @@
     "token": { "user": "usery", "password": "pwd" },
     "method": "GET",
     "endpoint": "http://localhost:6004/shell-descriptors/dXJuOmFhczptaXhlZC1jYXN0LWRlbnkz",
-    "expectedStatus": 403
+    "expectedStatus": 404
   },
   {
     "context": "GET mixed cast deny descriptor 4 - editor with clearance denied via casts",
     "token": { "user": "usery", "password": "pwd" },
     "method": "GET",
     "endpoint": "http://localhost:6004/shell-descriptors/dXJuOmFhczptaXhlZC1jYXN0LWRlbnk0",
-    "expectedStatus": 403
+    "expectedStatus": 404
   },
   {
     "context": "GET mixed cast deny descriptor 5 - editor with clearance denied via casts",
     "token": { "user": "usery", "password": "pwd" },
     "method": "GET",
     "endpoint": "http://localhost:6004/shell-descriptors/dXJuOmFhczptaXhlZC1jYXN0LWRlbnk1",
-    "expectedStatus": 403
+    "expectedStatus": 404
   },
   {
     "context": "GET ALL mixed cast allow descriptors - editor with clearance",

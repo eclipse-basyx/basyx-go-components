@@ -79,7 +79,7 @@
                   "$field": "$aasdesc#endpoints[].protocolinformation.href"
                 },
                 {
-                  "$strVal": "hrefA"
+                  "$strVal": "hrefB"
                 }
               ]
             }

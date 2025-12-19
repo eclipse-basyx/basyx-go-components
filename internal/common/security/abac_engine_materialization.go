@@ -129,7 +129,11 @@ func buildDefinitionIndex(all grammar.AccessRuleModelSchemaJSONAllAccessPermissi
 // into concrete ACL, attributes, objects, and an optional logical expression.
 // It returns an error when a referenced definition is missing.
 func materializeRule(index definitionIndex, r grammar.AccessPermissionRule) (materializedRule, error) {
-	mr := materializedRule{filter: r.FILTER}
+	filterList := r.FILTERLIST
+	if r.FILTER != nil {
+		filterList = append(filterList, *r.FILTER)
+	}
+	mr := materializedRule{filterList: filterList}
 
 	// ACL / USEACL
 	switch {

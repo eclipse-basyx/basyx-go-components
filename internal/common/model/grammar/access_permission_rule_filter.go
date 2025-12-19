@@ -72,7 +72,7 @@ type AccessPermissionRuleFILTER struct {
 	CONDITION *LogicalExpression `json:"CONDITION,omitempty" yaml:"CONDITION,omitempty" mapstructure:"CONDITION,omitempty"`
 
 	// FRAGMENT corresponds to the JSON schema field "FRAGMENT".
-	FRAGMENT *string `json:"FRAGMENT,omitempty" yaml:"FRAGMENT,omitempty" mapstructure:"FRAGMENT,omitempty"`
+	FRAGMENT *FragmentStringPattern `json:"FRAGMENT,omitempty" yaml:"FRAGMENT,omitempty" mapstructure:"FRAGMENT,omitempty"`
 
 	// USEFORMULA corresponds to the JSON schema field "USEFORMULA".
 	USEFORMULA *string `json:"USEFORMULA,omitempty" yaml:"USEFORMULA,omitempty" mapstructure:"USEFORMULA,omitempty"`
