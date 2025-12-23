@@ -98,6 +98,8 @@ func GetSMEHandler(submodelElement model.SubmodelElement, db *sql.DB) (PostgreSQ
 // Returns:
 //   - PostgreSQLSMECrudInterface: Type-specific handler implementing CRUD operations
 //   - error: An error if the model type is unsupported or handler creation fails
+//
+//nolint:revive // cyclomatic-complexity is acceptable here due to the factory pattern
 func GetSMEHandlerByModelType(modelType string, db *sql.DB) (PostgreSQLSMECrudInterface, error) {
 	var handler PostgreSQLSMECrudInterface
 
@@ -105,105 +107,105 @@ func GetSMEHandlerByModelType(modelType string, db *sql.DB) (PostgreSQLSMECrudIn
 	case "AnnotatedRelationshipElement":
 		areHandler, err := NewPostgreSQLAnnotatedRelationshipElementHandler(db)
 		if err != nil {
-			fmt.Println("Error creating AnnotatedRelationshipElement handler:", err)
+			_, _ = fmt.Println("Error creating AnnotatedRelationshipElement handler:", err)
 			return nil, common.NewInternalServerError("Failed to create AnnotatedRelationshipElement handler. See console for details.")
 		}
 		handler = areHandler
 	case "BasicEventElement":
 		beeHandler, err := NewPostgreSQLBasicEventElementHandler(db)
 		if err != nil {
-			fmt.Println("Error creating BasicEventElement handler:", err)
+			_, _ = fmt.Println("Error creating BasicEventElement handler:", err)
 			return nil, common.NewInternalServerError("Failed to create BasicEventElement handler. See console for details.")
 		}
 		handler = beeHandler
 	case "Blob":
 		blobHandler, err := NewPostgreSQLBlobHandler(db)
 		if err != nil {
-			fmt.Println("Error creating Blob handler:", err)
+			_, _ = fmt.Println("Error creating Blob handler:", err)
 			return nil, common.NewInternalServerError("Failed to create Blob handler. See console for details.")
 		}
 		handler = blobHandler
 	case "Capability":
 		capHandler, err := NewPostgreSQLCapabilityHandler(db)
 		if err != nil {
-			fmt.Println("Error creating Capability handler:", err)
+			_, _ = fmt.Println("Error creating Capability handler:", err)
 			return nil, common.NewInternalServerError("Failed to create Capability handler. See console for details.")
 		}
 		handler = capHandler
 	case "Entity":
 		entityHandler, err := NewPostgreSQLEntityHandler(db)
 		if err != nil {
-			fmt.Println("Error creating Entity handler:", err)
+			_, _ = fmt.Println("Error creating Entity handler:", err)
 			return nil, common.NewInternalServerError("Failed to create Entity handler. See console for details.")
 		}
 		handler = entityHandler
 	case "EventElement":
 		eventElemHandler, err := NewPostgreSQLEventElementHandler(db)
 		if err != nil {
-			fmt.Println("Error creating EventElement handler:", err)
+			_, _ = fmt.Println("Error creating EventElement handler:", err)
 			return nil, common.NewInternalServerError("Failed to create EventElement handler. See console for details.")
 		}
 		handler = eventElemHandler
 	case "File":
 		fileHandler, err := NewPostgreSQLFileHandler(db)
 		if err != nil {
-			fmt.Println("Error creating File handler:", err)
+			_, _ = fmt.Println("Error creating File handler:", err)
 			return nil, common.NewInternalServerError("Failed to create File handler. See console for details.")
 		}
 		handler = fileHandler
 	case "MultiLanguageProperty":
 		mlpHandler, err := NewPostgreSQLMultiLanguagePropertyHandler(db)
 		if err != nil {
-			fmt.Println("Error creating MultiLanguageProperty handler:", err)
+			_, _ = fmt.Println("Error creating MultiLanguageProperty handler:", err)
 			return nil, common.NewInternalServerError("Failed to create MultiLanguageProperty handler. See console for details.")
 		}
 		handler = mlpHandler
 	case "Operation":
 		opHandler, err := NewPostgreSQLOperationHandler(db)
 		if err != nil {
-			fmt.Println("Error creating Operation handler:", err)
+			_, _ = fmt.Println("Error creating Operation handler:", err)
 			return nil, common.NewInternalServerError("Failed to create Operation handler. See console for details.")
 		}
 		handler = opHandler
 	case "Property":
 		propHandler, err := NewPostgreSQLPropertyHandler(db)
 		if err != nil {
-			fmt.Println("Error creating Property handler:", err)
+			_, _ = fmt.Println("Error creating Property handler:", err)
 			return nil, common.NewInternalServerError("Failed to create Property handler. See console for details.")
 		}
 		handler = propHandler
 	case "Range":
 		rangeHandler, err := NewPostgreSQLRangeHandler(db)
 		if err != nil {
-			fmt.Println("Error creating Range handler:", err)
+			_, _ = fmt.Println("Error creating Range handler:", err)
 			return nil, common.NewInternalServerError("Failed to create Range handler. See console for details.")
 		}
 		handler = rangeHandler
 	case "ReferenceElement":
 		refElemHandler, err := NewPostgreSQLReferenceElementHandler(db)
 		if err != nil {
-			fmt.Println("Error creating ReferenceElement handler:", err)
+			_, _ = fmt.Println("Error creating ReferenceElement handler:", err)
 			return nil, common.NewInternalServerError("Failed to create ReferenceElement handler. See console for details.")
 		}
 		handler = refElemHandler
 	case "RelationshipElement":
 		relElemHandler, err := NewPostgreSQLRelationshipElementHandler(db)
 		if err != nil {
-			fmt.Println("Error creating RelationshipElement handler:", err)
+			_, _ = fmt.Println("Error creating RelationshipElement handler:", err)
 			return nil, common.NewInternalServerError("Failed to create RelationshipElement handler. See console for details.")
 		}
 		handler = relElemHandler
 	case "SubmodelElementCollection":
 		smeColHandler, err := NewPostgreSQLSubmodelElementCollectionHandler(db)
 		if err != nil {
-			fmt.Println("Error creating SubmodelElementCollection handler:", err)
+			_, _ = fmt.Println("Error creating SubmodelElementCollection handler:", err)
 			return nil, common.NewInternalServerError("Failed to create SubmodelElementCollection handler. See console for details.")
 		}
 		handler = smeColHandler
 	case "SubmodelElementList":
 		smeListHandler, err := NewPostgreSQLSubmodelElementListHandler(db)
 		if err != nil {
-			fmt.Println("Error creating SubmodelElementList handler:", err)
+			_, _ = fmt.Println("Error creating SubmodelElementList handler:", err)
 			return nil, common.NewInternalServerError("Failed to create SubmodelElementList handler. See console for details.")
 		}
 		handler = smeListHandler
@@ -253,11 +255,11 @@ func DeleteSubmodelElementByPath(tx *sql.Tx, submodelID string, idShortOrPath st
 			),
 		),
 	)
-	sql, args, err := del.ToSQL()
+	sqlQuery, args, err := del.ToSQL()
 	if err != nil {
 		return err
 	}
-	result, err := tx.Exec(sql, args...)
+	result, err := tx.Exec(sqlQuery, args...)
 	if err != nil {
 		return err
 	}

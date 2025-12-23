@@ -57,7 +57,7 @@ func CreateExtension(tx *sql.Tx, extension gen.Extension) (sql.NullInt64, error)
 	if extension.SemanticID != nil {
 		id, err := CreateReference(tx, extension.SemanticID, sql.NullInt64{}, sql.NullInt64{})
 		if err != nil {
-			fmt.Println(err)
+			_, _ = fmt.Println(err)
 			return sql.NullInt64{}, common.NewInternalServerError("Error inserting SemanticID Reference for Extension.")
 		}
 		semanticIDRefDbID = id
@@ -99,14 +99,14 @@ func CreateExtension(tx *sql.Tx, extension gen.Extension) (sql.NullInt64, error)
 	RETURNING id`, extension.Name, valueType, valueText, valueNum, valueBool, valueTime, valueDatetime, semanticIDRefDbID).Scan(&extensionDbID)
 
 	if err != nil {
-		fmt.Println(err)
+		_, _ = fmt.Println(err)
 		return sql.NullInt64{}, common.NewInternalServerError("Error inserting Extension. See console for details.")
 	}
 
 	for _, supplemental := range extension.SupplementalSemanticIds {
 		id, err := CreateReference(tx, &supplemental, sql.NullInt64{}, sql.NullInt64{})
 		if err != nil {
-			fmt.Println(err)
+			_, _ = fmt.Println(err)
 			return sql.NullInt64{}, common.NewInternalServerError("Error inserting Supplemental Semantic IDs for Extension. See console for details.")
 		}
 		_, err = tx.Exec(`
@@ -116,7 +116,7 @@ func CreateExtension(tx *sql.Tx, extension gen.Extension) (sql.NullInt64, error)
 		`, extensionDbID, id)
 
 		if err != nil {
-			fmt.Println(err)
+			_, _ = fmt.Println(err)
 			return sql.NullInt64{}, common.NewInternalServerError("Error linking Supplemental Semantic IDs with Extension. See console for details.")
 		}
 	}
@@ -124,7 +124,7 @@ func CreateExtension(tx *sql.Tx, extension gen.Extension) (sql.NullInt64, error)
 	for _, referred := range extension.RefersTo {
 		id, err := CreateReference(tx, &referred, sql.NullInt64{}, sql.NullInt64{})
 		if err != nil {
-			fmt.Println(err)
+			_, _ = fmt.Println(err)
 			return sql.NullInt64{}, common.NewInternalServerError("Error inserting RefersTo for Extension. See console for details.")
 		}
 		_, err = tx.Exec(`
@@ -134,7 +134,7 @@ func CreateExtension(tx *sql.Tx, extension gen.Extension) (sql.NullInt64, error)
 		`, extensionDbID, id)
 
 		if err != nil {
-			fmt.Println(err)
+			_, _ = fmt.Println(err)
 			return sql.NullInt64{}, common.NewInternalServerError("Error linking RefersTo Reference with Extension. See console for details.")
 		}
 	}
@@ -164,7 +164,7 @@ func CreateQualifier(tx *sql.Tx, qualifier gen.Qualifier) (sql.NullInt64, error)
 	if qualifier.ValueID != nil {
 		id, err := CreateReference(tx, qualifier.ValueID, sql.NullInt64{}, sql.NullInt64{})
 		if err != nil {
-			fmt.Println(err)
+			_, _ = fmt.Println(err)
 			return sql.NullInt64{}, common.NewInternalServerError("Error inserting ValueID Reference for Qualifier.")
 		}
 		valueIDRefDbID = id
@@ -173,7 +173,7 @@ func CreateQualifier(tx *sql.Tx, qualifier gen.Qualifier) (sql.NullInt64, error)
 	if qualifier.SemanticID != nil {
 		id, err := CreateReference(tx, qualifier.SemanticID, sql.NullInt64{}, sql.NullInt64{})
 		if err != nil {
-			fmt.Println(err)
+			_, _ = fmt.Println(err)
 			return sql.NullInt64{}, common.NewInternalServerError("Error inserting SemanticID Reference for Qualifier.")
 		}
 		semanticIDRefDbID = id
@@ -215,14 +215,14 @@ func CreateQualifier(tx *sql.Tx, qualifier gen.Qualifier) (sql.NullInt64, error)
 	RETURNING id`, kind, qualifier.Type, qualifier.ValueType, valueText, valueNum, valueBool, valueTime, valueDatetime, valueIDRefDbID, semanticIDRefDbID).Scan(&qualifierDbID)
 
 	if err != nil {
-		fmt.Println(err)
+		_, _ = fmt.Println(err)
 		return sql.NullInt64{}, common.NewInternalServerError("Error inserting Qualifier. See console for details.")
 	}
 
 	for _, supplemental := range qualifier.SupplementalSemanticIds {
 		id, err := CreateReference(tx, &supplemental, sql.NullInt64{}, sql.NullInt64{})
 		if err != nil {
-			fmt.Println(err)
+			_, _ = fmt.Println(err)
 			return sql.NullInt64{}, common.NewInternalServerError("Error inserting Supplemental Semantic IDs for Qualifier. See console for details.")
 		}
 		_, err = tx.Exec(`
@@ -232,7 +232,7 @@ func CreateQualifier(tx *sql.Tx, qualifier gen.Qualifier) (sql.NullInt64, error)
 		`, qualifierDbID, id)
 
 		if err != nil {
-			fmt.Println(err)
+			_, _ = fmt.Println(err)
 			return sql.NullInt64{}, common.NewInternalServerError("Error linking Supplemental Semantic IDs with Qualifier. See console for details.")
 		}
 	}
@@ -258,7 +258,7 @@ func CreateEmbeddedDataSpecification(tx *sql.Tx, embeddedDataSpecification gen.E
 	var embeddedDataSpecificationDbID sql.NullInt64
 	err := tx.QueryRow(`INSERT INTO data_specification_content DEFAULT VALUES RETURNING id`).Scan(&embeddedDataSpecificationContentDbID)
 	if err != nil {
-		fmt.Println(err)
+		_, _ = fmt.Println(err)
 		return sql.NullInt64{}, common.NewInternalServerError("Error inserting DataSpecificationContent. See console for details.")
 	}
 	dataSpecificationDbID, err := CreateReference(tx, embeddedDataSpecification.DataSpecification, sql.NullInt64{}, sql.NullInt64{})
@@ -270,13 +270,13 @@ func CreateEmbeddedDataSpecification(tx *sql.Tx, embeddedDataSpecification gen.E
 		return sql.NullInt64{}, err
 	}
 	// Check if embeddedDataSpecificationContent is of type DataSpecificationIec61360
-	if ds, ok := embeddedDataSpecification.DataSpecificationContent.(*gen.DataSpecificationIec61360); ok {
-		err = insertDataSpecificationIec61360(tx, ds, embeddedDataSpecificationContentDbID)
-		if err != nil {
-			return sql.NullInt64{}, err
-		}
-	} else {
+	ds, ok := embeddedDataSpecification.DataSpecificationContent.(*gen.DataSpecificationIec61360)
+	if !ok {
 		return sql.NullInt64{}, common.NewErrBadRequest("Unsupported DataSpecificationContent type")
+	}
+	err = insertDataSpecificationIec61360(tx, ds, embeddedDataSpecificationContentDbID)
+	if err != nil {
+		return sql.NullInt64{}, err
 	}
 
 	return embeddedDataSpecificationDbID, nil
@@ -590,17 +590,17 @@ func GetReferenceByReferenceDBID(db *sql.DB, referenceID sql.NullInt64) (*gen.Re
 		Where(goqu.Ex{"reference_id": referenceID.Int64}).
 		Order(goqu.I("position").Asc())
 
-	sql, args, err := ds.ToSQL()
+	sqlQuery, args, err := ds.ToSQL()
 	if err != nil {
 		return nil, err
 	}
-	rows, err := db.Query(sql, args...)
+	rows, err := db.Query(sqlQuery, args...)
 	if err != nil {
 		return nil, err
 	}
 	defer func() {
 		if closeErr := rows.Close(); closeErr != nil {
-			fmt.Printf("Error closing rows: %v\n", closeErr)
+			_, _ = fmt.Printf("Error closing rows: %v\n", closeErr)
 		}
 	}()
 
@@ -696,7 +696,7 @@ func GetLangStringNameTypes(db *sql.DB, nameTypeID sql.NullInt64) ([]gen.LangStr
 	}
 	defer func() {
 		if closeErr := rows.Close(); closeErr != nil {
-			fmt.Printf("Error closing rows: %v\n", closeErr)
+			_, _ = fmt.Printf("Error closing rows: %v\n", closeErr)
 		}
 	}()
 
@@ -780,7 +780,7 @@ func GetLangStringTextTypes(db *sql.DB, textTypeID sql.NullInt64) ([]gen.LangStr
 	}
 	defer func() {
 		if closeErr := rows.Close(); closeErr != nil {
-			fmt.Printf("Error closing rows: %v\n", closeErr)
+			_, _ = fmt.Printf("Error closing rows: %v\n", closeErr)
 		}
 	}()
 
@@ -951,7 +951,6 @@ func insertSupplementalSemanticIDsForExtensions(extension gen.Extension, semanti
 			if err != nil {
 				return err
 			}
-
 		}
 	}
 	return nil

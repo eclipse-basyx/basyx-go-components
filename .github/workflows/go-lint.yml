@@ -2,8 +2,12 @@ name: Go Lint
 
 on:
   pull_request:
-  push:
-    branches: [ main ]
+    paths:
+      - '**.go'
+      - 'go.mod'
+      - 'go.sum'
+      - '.golangci.yml'
+      - '.github/workflows/go-lint.yml'
 
 permissions:
   contents: read

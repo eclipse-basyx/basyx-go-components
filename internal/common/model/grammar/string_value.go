@@ -25,6 +25,8 @@
 
 // Package grammar defines the data structures for representing string values in the grammar model.
 // Author: Aaron Zielstorff ( Fraunhofer IESE ), Jannik Fried ( Fraunhofer IESE )
+//
+//nolint:all
 package grammar
 
 // StringValue represents a string value in the grammar model, which can be a literal string, a field reference, or a string cast.

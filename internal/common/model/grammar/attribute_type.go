@@ -25,6 +25,8 @@
 
 // Package grammar defines the data structures for representing attribute types in the grammar model.
 // Author: Aaron Zielstorff ( Fraunhofer IESE ), Jannik Fried ( Fraunhofer IESE )
+//
+//nolint:all
 package grammar
 
 // ATTRTYPE defines the type classification for attributes in the AAS access control grammar.

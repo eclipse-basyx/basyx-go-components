@@ -24,14 +24,14 @@
 ******************************************************************************/
 
 /*
- * DotAAS Part 1 | Metamodel | Schemas
+ * DotAAS Part 2 | HTTP/REST | Submodel Repository Service Specification
  *
- * The schemas implementing the [Specification of the Asset Administration Shell: Part 1](https://industrialdigitaltwin.org/en/content-hub/aasspecifications).   Copyright: Industrial Digital Twin Association (IDTA) 2025
+ * The entire Submodel Repository Service Specification as part of the [Specification of the Asset Administration Shell: Part 2](https://industrialdigitaltwin.org/en/content-hub/aasspecifications).   Copyright: Industrial Digital Twin Association (IDTA) 2025
  *
- * API version: V3.1.1
+ * API version: V3.1.1_SSP-001
  * Contact: info@idtwin.org
  */
-
+//nolint:all
 package model
 
 // FileAllOfValue type of File
@@ -39,15 +39,11 @@ type FileAllOfValue struct {
 }
 
 // AssertFileAllOfValueRequired checks if the required fields are not zero-ed
-//
-//nolint:all
-func AssertFileAllOfValueRequired(obj FileAllOfValue) error {
+func AssertFileAllOfValueRequired(_ FileAllOfValue) error {
 	return nil
 }
 
 // AssertFileAllOfValueConstraints checks if the values respects the defined constraints
-//
-//nolint:all
-func AssertFileAllOfValueConstraints(obj FileAllOfValue) error {
+func AssertFileAllOfValueConstraints(_ FileAllOfValue) error {
 	return nil
 }

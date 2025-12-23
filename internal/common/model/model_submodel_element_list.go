@@ -1,12 +1,37 @@
+/*******************************************************************************
+* Copyright (C) 2025 the Eclipse BaSyx Authors and Fraunhofer IESE
+*
+* Permission is hereby granted, free of charge, to any person obtaining
+* a copy of this software and associated documentation files (the
+* "Software"), to deal in the Software without restriction, including
+* without limitation the rights to use, copy, modify, merge, publish,
+* distribute, sublicense, and/or sell copies of the Software, and to
+* permit persons to whom the Software is furnished to do so, subject to
+* the following conditions:
+*
+* The above copyright notice and this permission notice shall be
+* included in all copies or substantial portions of the Software.
+*
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+* NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+* LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+* OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+* WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*
+* SPDX-License-Identifier: MIT
+******************************************************************************/
+
 /*
  * DotAAS Part 2 | HTTP/REST | Submodel Repository Service Specification
  *
- * The entire Submodel Repository Service Specification as part of the [Specification of the Asset Administration Shell: Part 2](http://industrialdigitaltwin.org/en/content-hub).   Publisher: Industrial Digital Twin Association (IDTA) 2023
+ * The entire Submodel Repository Service Specification as part of the [Specification of the Asset Administration Shell: Part 2](https://industrialdigitaltwin.org/en/content-hub/aasspecifications).   Copyright: Industrial Digital Twin Association (IDTA) 2025
  *
- * API version: V3.0.3_SSP-001
+ * API version: V3.1.1_SSP-001
  * Contact: info@idtwin.org
  */
-
+//nolint:all
 package model
 
 import (
@@ -53,14 +78,14 @@ type SubmodelElementList struct {
 }
 
 // UnmarshalJSON implements custom JSON unmarshaling for SubmodelElementList
-func (a *SubmodelElementList) UnmarshalJSON(data []byte) error {
+func (sel *SubmodelElementList) UnmarshalJSON(data []byte) error {
 	// Create a temporary struct with the same fields but Value as []json.RawMessage
 	type Alias SubmodelElementList
 	aux := &struct {
 		Value []json.RawMessage `json:"value,omitempty"`
 		*Alias
 	}{
-		Alias: (*Alias)(a),
+		Alias: (*Alias)(sel),
 	}
 
 	// Unmarshal into the temporary struct
@@ -71,13 +96,13 @@ func (a *SubmodelElementList) UnmarshalJSON(data []byte) error {
 
 	// Now process the Value field manually
 	if aux.Value != nil {
-		a.Value = make([]SubmodelElement, len(aux.Value))
+		sel.Value = make([]SubmodelElement, len(aux.Value))
 		for i, rawElement := range aux.Value {
 			element, err := UnmarshalSubmodelElement(rawElement)
 			if err != nil {
 				return fmt.Errorf("failed to unmarshal element at index %d: %w", i, err)
 			}
-			a.Value[i] = element
+			sel.Value[i] = element
 		}
 	}
 
@@ -205,7 +230,7 @@ func AssertSubmodelElementListRequired(obj SubmodelElementList) error {
 			return err
 		}
 	}
-	if err := AssertIdShortRequired(obj.IdShort); err != nil {
+	if err := AssertStringConstraints(obj.IdShort); err != nil {
 		return err
 	}
 	for _, el := range obj.DisplayName {
@@ -218,8 +243,10 @@ func AssertSubmodelElementListRequired(obj SubmodelElementList) error {
 			return err
 		}
 	}
-	if err := AssertReferenceRequired(*obj.SemanticID); err != nil {
-		return err
+	if obj.SemanticID != nil {
+		if err := AssertReferenceRequired(*obj.SemanticID); err != nil {
+			return err
+		}
 	}
 	for _, el := range obj.SupplementalSemanticIds {
 		if err := AssertReferenceRequired(el); err != nil {
@@ -236,8 +263,10 @@ func AssertSubmodelElementListRequired(obj SubmodelElementList) error {
 			return err
 		}
 	}
-	if err := AssertReferenceRequired(*obj.SemanticIdListElement); err != nil {
-		return err
+	if obj.SemanticIdListElement != nil {
+		if err := AssertReferenceRequired(*obj.SemanticIdListElement); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -249,7 +278,7 @@ func AssertSubmodelElementListConstraints(obj SubmodelElementList) error {
 			return err
 		}
 	}
-	if err := AssertstringConstraints(obj.IdShort); err != nil {
+	if err := AssertStringConstraints(obj.IdShort); err != nil {
 		return err
 	}
 	for _, el := range obj.DisplayName {
@@ -262,8 +291,10 @@ func AssertSubmodelElementListConstraints(obj SubmodelElementList) error {
 			return err
 		}
 	}
-	if err := AssertReferenceConstraints(*obj.SemanticID); err != nil {
-		return err
+	if obj.SemanticID != nil {
+		if err := AssertReferenceConstraints(*obj.SemanticID); err != nil {
+			return err
+		}
 	}
 	for _, el := range obj.SupplementalSemanticIds {
 		if err := AssertReferenceConstraints(el); err != nil {
@@ -280,55 +311,10 @@ func AssertSubmodelElementListConstraints(obj SubmodelElementList) error {
 			return err
 		}
 	}
-	if err := AssertReferenceConstraints(*obj.SemanticIdListElement); err != nil {
-		return err
+	if obj.SemanticIdListElement != nil {
+		if err := AssertReferenceConstraints(*obj.SemanticIdListElement); err != nil {
+			return err
+		}
 	}
-	return nil
-}
-
-// ToValueOnly converts the SubmodelElementList to its Value Only representation.
-// Returns an array of value-only representations of the child elements.
-// Returns nil if the list has no elements.
-//
-// Parameters:
-//   - elementSerializer: function to convert child SubmodelElements to value-only form
-//
-// Example output:
-//
-//	[
-//	  "value1",
-//	  {...},
-//	  ...
-//	]
-func (a *SubmodelElementList) ToValueOnly(elementSerializer func([]SubmodelElement) interface{}) interface{} {
-	if len(a.Value) == 0 {
-		return nil
-	}
-	return elementSerializer(a.Value)
-}
-
-// UpdateFromValueOnly updates the SubmodelElementList from a Value Only representation.
-// Expects an array of value-only element representations.
-//
-// Parameters:
-//   - value: the value-only representation (typically an array)
-//   - elementDeserializer: function to convert value-only form to SubmodelElement slice
-//
-// Returns an error if deserialization fails.
-func (a *SubmodelElementList) UpdateFromValueOnly(
-	value interface{},
-	elementDeserializer func(interface{}) ([]SubmodelElement, error),
-) error {
-	if value == nil {
-		a.Value = nil
-		return nil
-	}
-
-	elements, err := elementDeserializer(value)
-	if err != nil {
-		return fmt.Errorf("failed to deserialize SubmodelElementList value: %w", err)
-	}
-
-	a.Value = elements
 	return nil
 }

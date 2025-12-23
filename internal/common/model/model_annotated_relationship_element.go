@@ -1,12 +1,37 @@
+/*******************************************************************************
+* Copyright (C) 2025 the Eclipse BaSyx Authors and Fraunhofer IESE
+*
+* Permission is hereby granted, free of charge, to any person obtaining
+* a copy of this software and associated documentation files (the
+* "Software"), to deal in the Software without restriction, including
+* without limitation the rights to use, copy, modify, merge, publish,
+* distribute, sublicense, and/or sell copies of the Software, and to
+* permit persons to whom the Software is furnished to do so, subject to
+* the following conditions:
+*
+* The above copyright notice and this permission notice shall be
+* included in all copies or substantial portions of the Software.
+*
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+* NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+* LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+* OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+* WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*
+* SPDX-License-Identifier: MIT
+******************************************************************************/
+
 /*
  * DotAAS Part 2 | HTTP/REST | Submodel Repository Service Specification
  *
- * The entire Submodel Repository Service Specification as part of the [Specification of the Asset Administration Shell: Part 2](http://industrialdigitaltwin.org/en/content-hub).   Publisher: Industrial Digital Twin Association (IDTA) 2023
+ * The entire Submodel Repository Service Specification as part of the [Specification of the Asset Administration Shell: Part 2](https://industrialdigitaltwin.org/en/content-hub/aasspecifications).   Copyright: Industrial Digital Twin Association (IDTA) 2025
  *
- * API version: V3.0.3_SSP-001
+ * API version: V3.1.1_SSP-001
  * Contact: info@idtwin.org
  */
-
+//nolint:all
 package model
 
 import (
@@ -16,7 +41,6 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
-// AnnotatedRelationshipElement type of SubmodelElement
 type AnnotatedRelationshipElement struct {
 	Extensions []Extension `json:"extensions,omitempty"`
 
@@ -33,7 +57,6 @@ type AnnotatedRelationshipElement struct {
 
 	SemanticID *Reference `json:"semanticId,omitempty"`
 
-	//nolint:all
 	SupplementalSemanticIds []Reference `json:"supplementalSemanticIds,omitempty"`
 
 	Qualifiers []Qualifier `json:"qualifiers,omitempty"`
@@ -240,7 +263,6 @@ func AssertAnnotatedRelationshipElementRequired(obj AnnotatedRelationshipElement
 			return err
 		}
 	}
-
 	return nil
 }
 
@@ -251,7 +273,7 @@ func AssertAnnotatedRelationshipElementConstraints(obj AnnotatedRelationshipElem
 			return err
 		}
 	}
-	if err := AssertstringConstraints(obj.IdShort); err != nil {
+	if err := AssertStringConstraints(obj.IdShort); err != nil {
 		return err
 	}
 	for _, el := range obj.DisplayName {
@@ -296,90 +318,7 @@ func AssertAnnotatedRelationshipElementConstraints(obj AnnotatedRelationshipElem
 	return nil
 }
 
-// ToValueOnly converts the AnnotatedRelationshipElement to its Value Only representation.
-// Returns a map with "first", "second", and optionally "annotations" fields.
-// Returns nil if either first or second reference is missing.
-//
-// Parameters:
-//   - referenceSerializer: function to convert Reference to its value-only form
-//   - annotationSerializer: function to convert annotation SubmodelElements to value-only form
-//
-// Example output:
-//
-//	{
-//	  "first": {...},
-//	  "second": {...},
-//	  "annotations": {...}  // only if annotations exist
-//	}
-func (a *AnnotatedRelationshipElement) ToValueOnly(
-	referenceSerializer func(Reference) interface{},
-	annotationSerializer func([]SubmodelElement) interface{},
-) interface{} {
-	if a.First == nil || a.Second == nil {
-		return nil
-	}
-
-	result := map[string]interface{}{
-		"first":  referenceSerializer(*a.First),
-		"second": referenceSerializer(*a.Second),
-	}
-
-	if len(a.Annotations) > 0 {
-		result["annotations"] = annotationSerializer(a.Annotations)
-	}
-
-	return result
-}
-
-// UpdateFromValueOnly updates the AnnotatedRelationshipElement from a Value Only representation.
-// Expects a map with "first", "second", and optionally "annotations" fields.
-//
-// Parameters:
-//   - value: map containing "first", "second", and optional "annotations" keys
-//   - referenceDeserializer: function to convert value-only form to Reference
-//   - annotationDeserializer: function to convert value-only form to SubmodelElement slice
-//
-// Returns an error if:
-//   - value is not a map
-//   - reference or annotation deserialization fails
-func (a *AnnotatedRelationshipElement) UpdateFromValueOnly(
-	value interface{},
-	referenceDeserializer func(interface{}) (*Reference, error),
-	annotationDeserializer func(interface{}) ([]SubmodelElement, error),
-) error {
-	valueMap, ok := value.(map[string]interface{})
-	if !ok {
-		return fmt.Errorf("invalid value type for AnnotatedRelationshipElement: expected map, got %T", value)
-	}
-
-	if firstVal, ok := valueMap["first"]; ok {
-		first, err := referenceDeserializer(firstVal)
-		if err != nil {
-			return fmt.Errorf("failed to deserialize 'first' reference: %w", err)
-		}
-		a.First = first
-	}
-
-	if secondVal, ok := valueMap["second"]; ok {
-		second, err := referenceDeserializer(secondVal)
-		if err != nil {
-			return fmt.Errorf("failed to deserialize 'second' reference: %w", err)
-		}
-		a.Second = second
-	}
-
-	if annotationsVal, ok := valueMap["annotations"]; ok {
-		annotations, err := annotationDeserializer(annotationsVal)
-		if err != nil {
-			return fmt.Errorf("failed to deserialize annotations: %w", err)
-		}
-		a.Annotations = annotations
-	}
-
-	return nil
-}
-
-// UnmarshalJSON custom unmarshals an AnnotatedRelationshipElement from JSON.
+// UnmarshalJSON implements custom JSON unmarshaling for AnnotatedRelationshipElement
 func (a *AnnotatedRelationshipElement) UnmarshalJSON(data []byte) error {
 	// Create a temporary struct with the same fields but Annotations as []json.RawMessage
 	type Alias AnnotatedRelationshipElement

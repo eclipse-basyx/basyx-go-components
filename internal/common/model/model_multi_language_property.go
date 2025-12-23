@@ -1,15 +1,38 @@
+/*******************************************************************************
+* Copyright (C) 2025 the Eclipse BaSyx Authors and Fraunhofer IESE
+*
+* Permission is hereby granted, free of charge, to any person obtaining
+* a copy of this software and associated documentation files (the
+* "Software"), to deal in the Software without restriction, including
+* without limitation the rights to use, copy, modify, merge, publish,
+* distribute, sublicense, and/or sell copies of the Software, and to
+* permit persons to whom the Software is furnished to do so, subject to
+* the following conditions:
+*
+* The above copyright notice and this permission notice shall be
+* included in all copies or substantial portions of the Software.
+*
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+* NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+* LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+* OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+* WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*
+* SPDX-License-Identifier: MIT
+******************************************************************************/
+
 /*
  * DotAAS Part 2 | HTTP/REST | Submodel Repository Service Specification
  *
- * The entire Submodel Repository Service Specification as part of the [Specification of the Asset Administration Shell: Part 2](http://industrialdigitaltwin.org/en/content-hub).   Publisher: Industrial Digital Twin Association (IDTA) 2023
+ * The entire Submodel Repository Service Specification as part of the [Specification of the Asset Administration Shell: Part 2](https://industrialdigitaltwin.org/en/content-hub/aasspecifications).   Copyright: Industrial Digital Twin Association (IDTA) 2025
  *
- * API version: V3.0.3_SSP-001
+ * API version: V3.1.1_SSP-001
  * Contact: info@idtwin.org
  */
-
+//nolint:all
 package model
-
-import "fmt"
 
 // MultiLanguageProperty type of SubmodelElement
 type MultiLanguageProperty struct {
@@ -28,7 +51,6 @@ type MultiLanguageProperty struct {
 
 	SemanticID *Reference `json:"semanticId,omitempty"`
 
-	//nolint:all
 	SupplementalSemanticIds []Reference `json:"supplementalSemanticIds,omitempty"`
 
 	Qualifiers []Qualifier `json:"qualifiers,omitempty"`
@@ -95,8 +117,8 @@ func (a MultiLanguageProperty) GetEmbeddedDataSpecifications() []EmbeddedDataSpe
 // Setters
 
 //nolint:all
-func (a *MultiLanguageProperty) SetModelType(modelType string) {
-	a.ModelType = modelType
+func (p *MultiLanguageProperty) SetModelType(modelType string) {
+	p.ModelType = modelType
 }
 
 //nolint:all
@@ -160,7 +182,7 @@ func AssertMultiLanguagePropertyRequired(obj MultiLanguageProperty) error {
 			return err
 		}
 	}
-	if err := AssertIdShortRequired(obj.IdShort); err != nil {
+	if err := AssertStringConstraints(obj.IdShort); err != nil {
 		return err
 	}
 	for _, el := range obj.DisplayName {
@@ -173,8 +195,10 @@ func AssertMultiLanguagePropertyRequired(obj MultiLanguageProperty) error {
 			return err
 		}
 	}
-	if err := AssertReferenceRequired(*obj.SemanticID); err != nil {
-		return err
+	if obj.SemanticID != nil {
+		if err := AssertReferenceRequired(*obj.SemanticID); err != nil {
+			return err
+		}
 	}
 	for _, el := range obj.SupplementalSemanticIds {
 		if err := AssertReferenceRequired(el); err != nil {
@@ -196,8 +220,10 @@ func AssertMultiLanguagePropertyRequired(obj MultiLanguageProperty) error {
 			return err
 		}
 	}
-	if err := AssertReferenceRequired(*obj.ValueID); err != nil {
-		return err
+	if obj.ValueID == nil {
+		if err := AssertReferenceRequired(*obj.ValueID); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -209,7 +235,7 @@ func AssertMultiLanguagePropertyConstraints(obj MultiLanguageProperty) error {
 			return err
 		}
 	}
-	if err := AssertstringConstraints(obj.IdShort); err != nil {
+	if err := AssertStringConstraints(obj.IdShort); err != nil {
 		return err
 	}
 	for _, el := range obj.DisplayName {
@@ -222,8 +248,10 @@ func AssertMultiLanguagePropertyConstraints(obj MultiLanguageProperty) error {
 			return err
 		}
 	}
-	if err := AssertReferenceConstraints(*obj.SemanticID); err != nil {
-		return err
+	if obj.SemanticID != nil {
+		if err := AssertReferenceConstraints(*obj.SemanticID); err != nil {
+			return err
+		}
 	}
 	for _, el := range obj.SupplementalSemanticIds {
 		if err := AssertReferenceConstraints(el); err != nil {
@@ -245,50 +273,10 @@ func AssertMultiLanguagePropertyConstraints(obj MultiLanguageProperty) error {
 			return err
 		}
 	}
-	if err := AssertReferenceConstraints(*obj.ValueID); err != nil {
-		return err
-	}
-	return nil
-}
-
-// ToValueOnly converts the MultiLanguageProperty to its value-only representation.
-// Returns an array of single-key objects: [{"en": "text"}, {"de": "Text"}]
-// Returns an empty array if no language strings are present (to preserve array indices in lists).
-func (a *MultiLanguageProperty) ToValueOnly() interface{} {
-	result := make([]map[string]string, len(a.Value))
-	for i, langString := range a.Value {
-		result[i] = map[string]string{
-			langString.Language: langString.Text,
+	if obj.ValueID != nil {
+		if err := AssertReferenceConstraints(*obj.ValueID); err != nil {
+			return err
 		}
 	}
-	return result
-}
-
-// UpdateFromValueOnly updates the MultiLanguageProperty from a value-only representation.
-// Expects an array of objects, each with a single language-text key-value pair.
-// Example: [{"en": "Hello"}, {"de": "Hallo"}]
-// Returns an error if the value type doesn't match the expected format.
-func (a *MultiLanguageProperty) UpdateFromValueOnly(value interface{}) error {
-	langArray, ok := value.([]interface{})
-	if !ok {
-		return fmt.Errorf("invalid value type for MultiLanguageProperty: expected array of objects, got %T", value)
-	}
-
-	langStrings := make([]LangStringTextType, 0, len(langArray))
-	for _, langObj := range langArray {
-		langMap, ok := langObj.(map[string]interface{})
-		if !ok {
-			continue
-		}
-		for lang, text := range langMap {
-			if textStr, ok := text.(string); ok {
-				langStrings = append(langStrings, LangStringTextType{
-					Language: lang,
-					Text:     textStr,
-				})
-			}
-		}
-	}
-	a.Value = langStrings
 	return nil
 }

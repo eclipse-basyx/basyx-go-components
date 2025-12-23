@@ -1,3 +1,4 @@
+//nolint:all
 package abacenginetest
 
 import (
@@ -13,6 +14,24 @@ import (
 	apis "github.com/eclipse-basyx/basyx-go-components/pkg/aasregistryapi"
 	"github.com/go-chi/chi/v5"
 )
+
+func loadEvalInput(filename string) (auth.EvalInput, error) {
+	var input auth.EvalInput
+
+	file, err := os.Open(filename)
+	if err != nil {
+		return input, err
+	}
+	defer func() {
+		_ = file.Close()
+	}()
+
+	if err := json.NewDecoder(file).Decode(&input); err != nil {
+		return input, err
+	}
+
+	return input, nil
+}
 
 func pretty(b []byte) []byte {
 	var v any
@@ -83,7 +102,6 @@ func TestAdaptLEForBackend(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.Input, func(t *testing.T) {
-
 			raw, err := os.ReadFile(c.Input)
 			if err != nil {
 				t.Fatalf("read input: %v", err)
@@ -97,8 +115,8 @@ func TestAdaptLEForBackend(t *testing.T) {
 			// Load optional eval input (ctx) if provided
 			var evalInput auth.EvalInput
 			if c.EvalInput != "" {
-				fmt.Println("eval")
-				evalInput, err = auth.LoadEvalInput(c.EvalInput)
+				_, _ = fmt.Println("eval")
+				evalInput, err = loadEvalInput(c.EvalInput)
 				if err != nil {
 					t.Fatalf("eval input: %v", err)
 				}

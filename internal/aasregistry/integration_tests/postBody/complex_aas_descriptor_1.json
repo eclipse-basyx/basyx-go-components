@@ -118,7 +118,7 @@
                     ],
                     "valueFormat": "##.##",
                     "valueList": {
-                        "valueReferencePair": [
+                        "valueReferencePairs": [
                             {
                                 "value": "100",
                                 "valueId": {
@@ -241,7 +241,7 @@
                     ],
                     "valueFormat": "##.##",
                     "valueList": {
-                        "valueReferencePair": [
+                        "valueReferencePairs": [
                             {
                                 "value": "10",
                                 "valueId": {

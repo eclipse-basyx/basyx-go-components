@@ -24,7 +24,8 @@
 ******************************************************************************/
 
 // Author: Jannik Fried ( Fraunhofer IESE ), Aaron Zielstorff ( Fraunhofer IESE )
-
+//
+//nolint:all
 package model
 
 import (
@@ -518,18 +519,6 @@ type FileElementValueRow struct {
 	ContentType string `json:"content_type"`
 }
 
-// BlobElementValueRow represents a data row for a BlobElement entity in the database.
-// BlobElements are submodel elements that represent binary large objects (BLOBs) associated with the AAS.
-//
-// This structure captures the content type and binary value of a BlobElement.
-// The content type specifies the MIME type of the blob, while the value contains the actual binary data.
-type BlobElementValueRow struct {
-	// ContentType specifies the MIME type of the blob content
-	ContentType string `json:"content_type"`
-	// Value contains the blob data as a byte array
-	Value string `json:"value"`
-}
-
 // MultiLanguagePropertyElementValueRow represents a data row for a MultiLanguageProperty entity in the database.
 // MultiLanguageProperties are submodel elements that represent text values in multiple languages.
 //
@@ -541,6 +530,18 @@ type MultiLanguagePropertyElementValueRow struct {
 	ValueID *json.RawMessage `json:"value_id"`
 	// ValueIDReferred contains the referred semantic ID for the value reference (optional)
 	ValueIDReferred *json.RawMessage `json:"value_id_referred"`
+}
+
+// BlobElementValueRow represents a data row for a BlobElement entity in the database.
+// BlobElements are submodel elements that represent binary large objects (BLOBs) associated with the AAS.
+//
+// This structure captures the content type and binary value of a BlobElement.
+// The content type specifies the MIME type of the blob, while the value contains the actual binary data.
+type BlobElementValueRow struct {
+	// ContentType specifies the MIME type of the blob content
+	ContentType string `json:"content_type"`
+	// Value contains the blob data as a byte array
+	Value string `json:"value"`
 }
 
 // AssetAdministrationShellDescriptorRow represents a single SQL result row

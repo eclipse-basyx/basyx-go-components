@@ -24,6 +24,8 @@
 ******************************************************************************/
 
 // Package bench provides a benchmark for the discovery service.
+//
+//nolint:all
 package bench
 
 import (

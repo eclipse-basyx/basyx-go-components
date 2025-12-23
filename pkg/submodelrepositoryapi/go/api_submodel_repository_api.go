@@ -1592,19 +1592,15 @@ func (c *SubmodelRepositoryAPIAPIController) PatchSubmodelElementByPathValueOnly
 		c.errorHandler(w, r, &RequiredError{"idShortPath"}, nil)
 		return
 	}
-	var submodelElementValueParam model.SubmodelElementValue
-	d := json.NewDecoder(r.Body)
-	d.DisallowUnknownFields()
-	if err := d.Decode(&submodelElementValueParam); err != nil {
+	// SubmodelElementValue is an interface, deserialize from JSON
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
-	if err := model.AssertSubmodelElementValueRequired(submodelElementValueParam); err != nil {
-		c.errorHandler(w, r, err, nil)
-		return
-	}
-	if err := model.AssertSubmodelElementValueConstraints(submodelElementValueParam); err != nil {
-		c.errorHandler(w, r, err, nil)
+	submodelElementValueParam, err := model.UnmarshalSubmodelElementValue(body)
+	if err != nil {
+		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
 	var levelParam string
