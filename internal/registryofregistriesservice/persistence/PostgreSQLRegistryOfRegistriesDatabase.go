@@ -123,6 +123,7 @@ func (p *PostgreSQLRegistryOfRegistriesDatabase) ListRegistryDescriptors(
 	cursor string,
 	registryType string,
 	company string,
+	endpointInterface string,
 ) ([]model.RegistryDescriptor, string, error) {
-	return descriptors.ListRegistryDescriptors(ctx, p.db, limit, cursor, registryType, company)
+	return descriptors.ListRegistryDescriptors(ctx, p.db, limit, cursor, registryType, company, endpointInterface)
 }
