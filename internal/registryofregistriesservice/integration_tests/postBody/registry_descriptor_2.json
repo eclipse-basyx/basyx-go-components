@@ -1,0 +1,39 @@
+{
+    "description": [
+        {
+            "language": "en",
+            "text": "AAS Discovery Service for D4E Tenant 0"
+        }
+    ],
+    "displayname": [
+        {
+            "language": "en",
+            "text": "D4E Tenant 0 AAS Discovery"
+        }
+    ],
+    "administration": {
+        "version": "1",
+        "revision": "0",
+        "creator": {
+            "type": "ExternalReference",
+            "keys": [
+                {
+                    "type": "GlobalReference",
+                    "value": "https://iese.fraunhofer.de"
+                }
+            ]
+        }
+    },
+    "endpoints": [
+        {
+            "protocolInformation": {
+                "href": "https://demo.digital-twin.host/aas-discovery/lookup/shells",
+                "endpointProtocol": "HTTPS"
+            },
+            "interface": "AAS-DISCOVERY-3.0"
+        }
+    ],
+    "idShort": "D4ETenant0AASDiscovery",
+    "id": "https://iese.fraunhofer.de/ror/d4e-tenant-0-aas-discovery",
+    "company": "Fraunhofer IESE"
+}
