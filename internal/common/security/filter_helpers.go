@@ -101,13 +101,14 @@ func GetColumnSelectStatement(ctx context.Context, expressionMappers []Expressio
 			filter := p.FilterExpressionFor(*expMapper.Identifable)
 			if filter != nil {
 				ok = true
+				wc, err := filter.EvaluateToExpression()
+				if err != nil {
+					return nil, err
+				}
+				result = append(result, goqu.MAX(caseWhenColumn(wc, expMapper.Exp)))
+			} else {
+				result = append(result, expMapper.Exp)
 			}
-
-			wc, err := filter.EvaluateToExpression()
-			if err != nil {
-				return nil, err
-			}
-			result = append(result, goqu.MAX(caseWhenColumn(wc, expMapper.Exp)))
 		} else {
 			result = append(result, expMapper.Exp)
 		}

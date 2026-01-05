@@ -210,10 +210,10 @@ func (m *AccessModel) AuthorizeWithFilter(in EvalInput) (bool, DecisionCode, *Qu
 		for _, fragment := range allFragments {
 			cur := combinedFragments[fragment]
 			if existing, ok := qfr.Filters[fragment]; ok {
-				cur.Or = append(combinedFragments[fragment].Or, existing)
+				cur.Or = append(cur.Or, existing)
 
 			} else {
-				cur.Or = append(combinedFragments[fragment].Or, *qfr.Formula)
+				cur.Or = append(cur.Or, *qfr.Formula)
 			}
 			combinedFragments[fragment] = cur
 		}
@@ -261,6 +261,13 @@ func (m *AccessModel) AuthorizeWithFilter(in EvalInput) (bool, DecisionCode, *Qu
 	return true, DecisionAllow, qf
 }
 
+// FilterExpressionFor returns the logical expression associated with the
+// fragment `key` from the QueryFilter's `Filters` map. If the map is nil or
+// no entry exists for `key`, nil is returned.
+//
+// Note: map values are returned by value, so this method returns the address
+// of a copy of the stored `grammar.LogicalExpression`. Callers should not rely
+// on mutating the returned value to modify the original map entry.
 func (q *QueryFilter) FilterExpressionFor(key string) *grammar.LogicalExpression {
 	frag, ok := q.Filters[key]
 	if !ok {
