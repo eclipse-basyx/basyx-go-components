@@ -18,18 +18,9 @@ type MultiLanguagePropertyValue []map[string]string
 // MarshalValueOnly serializes MultiLanguagePropertyValue in Value-Only format
 // Serializes as array of objects with language code as key and text as value
 func (m MultiLanguagePropertyValue) MarshalValueOnly() ([]byte, error) {
-	// Convert to compact format: [{"en-us":"text"}, {"de":"text"}]
-	result := make([]map[string]string, len(m))
-	for i, item := range m {
-		langText := make(map[string]string)
-		if lang, ok := item["language"]; ok {
-			if text, ok := item["text"]; ok {
-				langText[lang] = text
-			}
-		}
-		result[i] = langText
-	}
-	return json.Marshal(result)
+	// The data is already in the correct format: [{"en-us":"text"}, {"de":"text"}]
+	// Each map element already has language code as key and text as value
+	return json.Marshal([]map[string]string(m))
 }
 
 // MarshalJSON implements custom JSON marshaling for MultiLanguagePropertyValue

@@ -1099,6 +1099,18 @@ func BuildElementsToProcessStackValueOnly(db *sql.DB, submodelID string, idShort
 					IdShortPath: current.IdShortPath + "." + idShort,
 				})
 			}
+		case gen.EntityValue:
+			el := ValueOnlyElementsToProcess{
+				Element:     elem,
+				IdShortPath: current.IdShortPath,
+			}
+			elementsToProcess = append(elementsToProcess, el)
+			for idShort, child := range elem.Statements {
+				stack = append(stack, ValueOnlyElementsToProcess{
+					Element:     child,
+					IdShortPath: current.IdShortPath + "." + idShort,
+				})
+			}
 		default:
 			// Process basic element
 			el := ValueOnlyElementsToProcess{

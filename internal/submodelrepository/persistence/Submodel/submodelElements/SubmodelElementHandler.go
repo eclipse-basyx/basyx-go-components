@@ -81,7 +81,6 @@ func GetSMEHandler(submodelElement model.SubmodelElement, db *sql.DB) (PostgreSQ
 //   - Blob: Binary data element
 //   - Capability: Functional capability description
 //   - Entity: Logical or physical entity
-//   - EventElement: Base event element
 //   - File: File reference element
 //   - MultiLanguageProperty: Property with multi-language support
 //   - Operation: Invocable operation
@@ -140,13 +139,6 @@ func GetSMEHandlerByModelType(modelType string, db *sql.DB) (PostgreSQLSMECrudIn
 			return nil, common.NewInternalServerError("Failed to create Entity handler. See console for details.")
 		}
 		handler = entityHandler
-	case "EventElement":
-		eventElemHandler, err := NewPostgreSQLEventElementHandler(db)
-		if err != nil {
-			_, _ = fmt.Println("Error creating EventElement handler:", err)
-			return nil, common.NewInternalServerError("Failed to create EventElement handler. See console for details.")
-		}
-		handler = eventElemHandler
 	case "File":
 		fileHandler, err := NewPostgreSQLFileHandler(db)
 		if err != nil {

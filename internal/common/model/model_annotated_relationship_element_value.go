@@ -37,9 +37,9 @@ package model
 import "encoding/json"
 
 type AnnotatedRelationshipElementValue struct {
-	First ReferenceValue `json:"first,omitempty"`
+	First Reference `json:"first,omitempty"`
 
-	Second ReferenceValue `json:"second,omitempty"`
+	Second Reference `json:"second,omitempty"`
 
 	// The ValueOnly serialization (patternProperties and propertyNames will probably be supported with OpenApi 3.1). For the full description of the generic JSON validation schema see the ValueOnly-Serialization as defined in the 'Specification of the Asset Administration Shell - Part 2'.
 	Annotations map[string]SubmodelElementValue `json:"annotations,omitempty"`

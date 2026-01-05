@@ -188,20 +188,6 @@ func (p PostgreSQLBasicEventElementHandler) UpdateValueOnly(submodelID string, i
 		return err
 	}
 
-	// Delete old observed reference if it exists
-	if oldObservedRefID.Valid {
-		deleteQuery, deleteArgs, err := dialect.Delete("reference").
-			Where(goqu.C("id").Eq(oldObservedRefID.Int64)).
-			ToSQL()
-		if err != nil {
-			return err
-		}
-		_, err = tx.Exec(deleteQuery, deleteArgs...)
-		if err != nil {
-			return err
-		}
-	}
-
 	// Insert new observed reference
 	var newObservedRefID sql.NullInt64
 	if len(basicEventValue.Observed.Keys) > 0 {
@@ -252,6 +238,20 @@ func (p PostgreSQLBasicEventElementHandler) UpdateValueOnly(submodelID string, i
 	_, err = tx.Exec(updateQuery, updateArgs...)
 	if err != nil {
 		return err
+	}
+
+	// Delete old observed reference if it exists
+	if oldObservedRefID.Valid {
+		deleteQuery, deleteArgs, err := dialect.Delete("reference").
+			Where(goqu.C("id").Eq(oldObservedRefID.Int64)).
+			ToSQL()
+		if err != nil {
+			return err
+		}
+		_, err = tx.Exec(deleteQuery, deleteArgs...)
+		if err != nil {
+			return err
+		}
 	}
 
 	return tx.Commit()

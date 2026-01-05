@@ -123,14 +123,14 @@ func RelationshipElementToValueOnly(re *RelationshipElement) RelationshipElement
 	result := RelationshipElementValue{}
 
 	if re.First != nil {
-		result.First = ReferenceValue{
+		result.First = &Reference{
 			Type: re.First.Type,
 			Keys: re.First.Keys,
 		}
 	}
 
 	if re.Second != nil {
-		result.Second = ReferenceValue{
+		result.Second = &Reference{
 			Type: re.Second.Type,
 			Keys: re.Second.Keys,
 		}
@@ -144,14 +144,14 @@ func AnnotatedRelationshipElementToValueOnly(are *AnnotatedRelationshipElement) 
 	result := AnnotatedRelationshipElementValue{}
 
 	if are.First != nil {
-		result.First = ReferenceValue{
+		result.First = Reference{
 			Type: are.First.Type,
 			Keys: are.First.Keys,
 		}
 	}
 
 	if are.Second != nil {
-		result.Second = ReferenceValue{
+		result.Second = Reference{
 			Type: are.Second.Type,
 			Keys: are.Second.Keys,
 		}
@@ -198,7 +198,7 @@ func EntityToValueOnly(e *Entity) (EntityValue, error) {
 
 	// Convert Statements
 	if len(e.Statements) > 0 {
-		statementsMap := make(map[string]interface{})
+		statementsMap := make(map[string]SubmodelElementValue)
 		for _, statement := range e.Statements {
 			idShort := statement.GetIdShort()
 			if idShort == "" {
@@ -225,7 +225,7 @@ func BasicEventElementToValueOnly(bee *BasicEventElement) BasicEventElementValue
 	result := BasicEventElementValue{}
 
 	if bee.Observed != nil {
-		result.Observed = ReferenceValue{
+		result.Observed = Reference{
 			Type: bee.Observed.Type,
 			Keys: bee.Observed.Keys,
 		}

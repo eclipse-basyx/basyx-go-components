@@ -210,7 +210,7 @@ func (p PostgreSQLReferenceElementHandler) Update(submodelID string, idShortOrPa
 }
 
 func (p PostgreSQLReferenceElementHandler) UpdateValueOnly(submodelID string, idShortOrPath string, valueOnly gen.SubmodelElementValue) error {
-	refElemVal, ok := valueOnly.(*gen.ReferenceElementValue)
+	refElemVal, ok := valueOnly.(gen.ReferenceElementValue)
 	if !ok {
 		return common.NewErrBadRequest("valueOnly is not of type ReferenceElementValue")
 	}
@@ -230,12 +230,9 @@ func (p PostgreSQLReferenceElementHandler) UpdateValueOnly(submodelID string, id
 			goqu.From("submodel_element").
 				Select("id").
 				Where(goqu.Ex{
-					"submodel_id": submodelID,
-				}).
-				Where(goqu.Or(
-					goqu.I("id_short").Eq(idShortOrPath),
-					goqu.I("id_short_path").Eq(idShortOrPath),
-				)),
+					"submodel_id":  submodelID,
+					"idshort_path": idShortOrPath,
+				}),
 		)).
 		ToSQL()
 	if err != nil {
@@ -300,7 +297,7 @@ func insertReferenceElement(refElem *gen.ReferenceElement, tx *sql.Tx, id int) e
 
 // marshalReferenceValueToJSON converts a ReferenceElementValue to a JSON string for database storage.
 // Returns a sql.NullString with Valid=true if the reference has keys, otherwise Valid=false.
-func marshalReferenceValueToJSON(refElemVal *gen.ReferenceElementValue) (sql.NullString, error) {
+func marshalReferenceValueToJSON(refElemVal gen.ReferenceElementValue) (sql.NullString, error) {
 	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	var referenceJSONString sql.NullString
 

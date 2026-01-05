@@ -251,20 +251,89 @@ func (p PostgreSQLFileHandler) Update(submodelID string, idShortOrPath string, s
 }
 
 func (p PostgreSQLFileHandler) UpdateValueOnly(submodelID string, idShortOrPath string, valueOnly gen.SubmodelElementValue) error {
-	fileValueOnly, ok := valueOnly.(*gen.FileValue)
+	fileValueOnly, ok := valueOnly.(gen.FileValue)
 	if !ok {
 		return common.NewErrBadRequest("valueOnly is not of type FileValue")
 	}
+	tx, err := p.db.Begin()
+	if err != nil {
+		return common.NewInternalServerError(fmt.Sprintf("failed to begin transaction: %s", err))
+	}
+	dialect := goqu.Dialect("postgres")
 
-	// Update only the file-specific fields in the database
-	_, err := p.db.Exec(`UPDATE file_element SET content_type = $1, value = $2
-		WHERE id = (SELECT sme.id FROM submodel_element sme
-		             JOIN submodel sm ON sme.submodel_id = sm.id
-		             WHERE sm.submodel_id = $3 AND sme.id_short = $4 OR sme.path = $4)`,
-		fileValueOnly.ContentType, fileValueOnly.Value, submodelID, idShortOrPath)
+	var elementID int
+	query, args, err := dialect.From("submodel_element").
+		InnerJoin(
+			goqu.T("file_element"),
+			goqu.On(goqu.I("submodel_element.id").Eq(goqu.I("file_element.id"))),
+		).
+		Select("submodel_element.id").
+		Where(
+			goqu.C("idshort_path").Eq(idShortOrPath),
+			goqu.C("submodel_id").Eq(submodelID),
+		).
+		ToSQL()
 	if err != nil {
 		return err
 	}
+
+	err = tx.QueryRow(query, args...).Scan(&elementID)
+	if err != nil {
+		return err
+	}
+
+	// Check for existing file_data and delete old Large Object if it exists
+	var oldOID sql.NullInt64
+	fileDataQuery, fileDataArgs, err := dialect.From("file_data").
+		Select("file_oid").
+		Where(goqu.C("id").Eq(elementID)).
+		ToSQL()
+	if err != nil {
+		return fmt.Errorf("failed to build file_data query: %w", err)
+	}
+	err = tx.QueryRow(fileDataQuery, fileDataArgs...).Scan(&oldOID)
+	if err != nil && err != sql.ErrNoRows {
+		return fmt.Errorf("failed to check existing file data: %w", err)
+	}
+	// Delete old Large Object if it exists
+	if oldOID.Valid {
+		_, err = tx.Exec(`SELECT lo_unlink($1)`, oldOID.Int64)
+		if err != nil {
+			return fmt.Errorf("failed to delete large object: %w", err)
+		}
+
+		// Delete the file_data entry
+		deleteQuery, deleteArgs, err := dialect.Delete("file_data").
+			Where(goqu.C("id").Eq(elementID)).
+			ToSQL()
+		if err != nil {
+			return fmt.Errorf("failed to build delete query: %w", err)
+		}
+
+		_, err = tx.Exec(deleteQuery, deleteArgs...)
+		if err != nil {
+			return fmt.Errorf("failed to delete file_data: %w", err)
+		}
+	}
+
+	// Build the update query
+	updateQuery, args, err := dialect.Update("file_element").
+		Set(goqu.Record{
+			"content_type": fileValueOnly.ContentType,
+			"value":        fileValueOnly.Value,
+		}).
+		Where(goqu.C("id").Eq(elementID)).
+		ToSQL()
+	if err != nil {
+		return fmt.Errorf("failed to build update query: %w", err)
+	}
+
+	_, err = tx.Exec(updateQuery, args...)
+	if err != nil {
+		return common.NewInternalServerError(fmt.Sprintf("failed to execute update query: %s", err))
+	}
+
+	tx.Commit()
 	return nil
 }
 

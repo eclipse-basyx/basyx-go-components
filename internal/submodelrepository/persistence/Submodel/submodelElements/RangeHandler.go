@@ -148,17 +148,41 @@ func (p PostgreSQLRangeHandler) Update(submodelID string, idShortOrPath string, 
 }
 
 func (p PostgreSQLRangeHandler) UpdateValueOnly(submodelID string, idShortOrPath string, valueOnly gen.SubmodelElementValue) error {
-	rangeValue, ok := valueOnly.(*gen.RangeValue)
+	rangeValue, ok := valueOnly.(gen.RangeValue)
 	if !ok {
 		return common.NewErrBadRequest("valueOnly is not of type Range")
 	}
 
+	tx, err := p.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err != nil {
+			tx.Rollback()
+		}
+	}()
+
+	dialect := goqu.Dialect("postgres")
+
 	// Get Value Type to determine which columns to update
+	selectQuery, selectArgs, err := dialect.From(goqu.T("submodel_element").As("sme")).
+		InnerJoin(
+			goqu.T("range_element").As("re"),
+			goqu.On(goqu.I("sme.id").Eq(goqu.I("re.id"))),
+		).
+		Select(goqu.I("re.value_type")).
+		Where(
+			goqu.I("sme.submodel_id").Eq(submodelID),
+			goqu.I("sme.idshort_path").Eq(idShortOrPath),
+		).
+		ToSQL()
+	if err != nil {
+		return err
+	}
+
 	var valueType string
-	err := p.db.QueryRow(`SELECT re.value_type FROM submodel_element sme
-		JOIN range_element re ON sme.id = re.id
-		WHERE sme.submodel_id = $1 AND (sme.id_short = $2 OR sme.id_short_path = $2)`,
-		submodelID, idShortOrPath).Scan(&valueType)
+	err = p.db.QueryRow(selectQuery, selectArgs...).Scan(&valueType)
 	if err != nil {
 		return err
 	}
@@ -166,29 +190,47 @@ func (p PostgreSQLRangeHandler) UpdateValueOnly(submodelID string, idShortOrPath
 	// Determine column names based on value type
 	minCol, maxCol := getRangeColumnNames(valueType)
 
-	// Build and execute update query using GoQu
-	query, args, err := goqu.Update("range_element").
-		Set(goqu.Record{
-			minCol: rangeValue.Min,
-			maxCol: rangeValue.Max,
-		}).
-		Where(goqu.I("id").Eq(
-			goqu.From("submodel_element").
-				Select("id").
-				Where(goqu.Ex{
-					"submodel_id": submodelID,
-				}).
-				Where(goqu.Or(
-					goqu.I("id_short").Eq(idShortOrPath),
-					goqu.I("id_short_path").Eq(idShortOrPath),
-				)),
-		)).
+	// Build subquery to get the submodel element ID
+	var elementID int
+	idQuery, args, err := dialect.From("submodel_element").
+		Select("id").
+		Where(
+			goqu.C("submodel_id").Eq(submodelID),
+			goqu.C("idshort_path").Eq(idShortOrPath),
+		).ToSQL()
+	if err != nil {
+		return err
+	}
+	err = tx.QueryRow(idQuery, args...).Scan(&elementID)
+	if err != nil {
+		return err
+	}
+
+	// Build update record with all columns, setting unused ones to NULL
+	updateRecord := goqu.Record{
+		"min_text":     nil,
+		"max_text":     nil,
+		"min_num":      nil,
+		"max_num":      nil,
+		"min_time":     nil,
+		"max_time":     nil,
+		"min_datetime": nil,
+		"max_datetime": nil,
+	}
+	// Set the appropriate columns based on value type
+	updateRecord[minCol] = rangeValue.Min
+	updateRecord[maxCol] = rangeValue.Max
+
+	// Build and execute update query
+	updateQuery, updateArgs, err := dialect.Update("range_element").
+		Set(updateRecord).
+		Where(goqu.C("id").Eq(elementID)).
 		ToSQL()
 	if err != nil {
 		return err
 	}
 
-	_, err = p.db.Exec(query, args...)
+	_, err = p.db.Exec(updateQuery, updateArgs...)
 	return err
 }
 

@@ -38,7 +38,7 @@ import "encoding/json"
 
 // BasicEventElementValue type of EventElementValue
 type BasicEventElementValue struct {
-	Observed ReferenceValue `json:"observed"`
+	Observed Reference `json:"observed"`
 }
 
 // MarshalValueOnly serializes BasicEventElementValue in Value-Only format

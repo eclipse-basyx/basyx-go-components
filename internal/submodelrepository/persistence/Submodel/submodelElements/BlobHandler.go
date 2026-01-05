@@ -32,6 +32,7 @@ package submodelelements
 import (
 	"database/sql"
 
+	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	_ "github.com/lib/pq" // PostgreSQL Treiber
@@ -154,9 +155,16 @@ func (p PostgreSQLBlobHandler) Update(submodelID string, idShortOrPath string, s
 }
 
 func (p PostgreSQLBlobHandler) UpdateValueOnly(submodelID string, idShortOrPath string, valueOnly gen.SubmodelElementValue) error {
-	blobValueOnly, ok := valueOnly.(*gen.BlobValue)
+	blobValueOnly, ok := valueOnly.(gen.BlobValue)
 	if !ok {
-		return common.NewErrBadRequest("valueOnly is not of type BlobValue")
+		if fileValueOnly, isMistakenAsFileValue := valueOnly.(gen.FileValue); isMistakenAsFileValue {
+			blobValueOnly = gen.BlobValue{
+				ContentType: fileValueOnly.ContentType,
+				Value:       fileValueOnly.Value,
+			}
+		} else {
+			return common.NewErrBadRequest("valueOnly is not of type BlobValue")
+		}
 	}
 
 	// Check if blob value is larger than 1GB
@@ -165,11 +173,36 @@ func (p PostgreSQLBlobHandler) UpdateValueOnly(submodelID string, idShortOrPath 
 	}
 
 	// Update only the blob-specific fields in the database
-	_, err := p.db.Exec(`UPDATE blob_element SET content_type = $1, value = $2
-		WHERE id = (SELECT sme.id FROM submodel_element sme
-		             JOIN submodel sm ON sme.submodel_id = sm.id
-		             WHERE sm.submodel_id = $3 AND sme.id_short = $4 OR sme.path = $4)`,
-		blobValueOnly.ContentType, []byte(blobValueOnly.Value), submodelID, idShortOrPath)
+	dialect := goqu.Dialect("postgres")
+
+	var elementID int
+	query, args, err := dialect.From("submodel_element").
+		InnerJoin(
+			goqu.T("blob_element"),
+			goqu.On(goqu.I("submodel_element.id").Eq(goqu.I("blob_element.id"))),
+		).
+		Select("submodel_element.id").
+		Where(
+			goqu.C("idshort_path").Eq(idShortOrPath),
+			goqu.C("submodel_id").Eq(submodelID),
+		).
+		ToSQL()
+	if err != nil {
+		return err
+	}
+	err = p.db.QueryRow(query, args...).Scan(&elementID)
+	if err != nil {
+		return err
+	}
+
+	updateQuery, updateArgs, err := dialect.Update("blob_element").
+		Set(goqu.Record{"content_type": blobValueOnly.ContentType, "value": []byte(blobValueOnly.Value)}).
+		Where(goqu.C("id").Eq(elementID)).
+		ToSQL()
+	if err != nil {
+		return err
+	}
+	_, err = p.db.Exec(updateQuery, updateArgs...)
 	if err != nil {
 		return err
 	}

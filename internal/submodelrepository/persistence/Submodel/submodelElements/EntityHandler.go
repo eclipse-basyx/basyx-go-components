@@ -29,8 +29,10 @@ package submodelelements
 import (
 	"database/sql"
 
+	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	persistenceutils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
 	jsoniter "github.com/json-iterator/go"
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 )
@@ -144,7 +146,81 @@ func (p PostgreSQLEntityHandler) Update(submodelID string, idShortOrPath string,
 }
 
 func (p PostgreSQLEntityHandler) UpdateValueOnly(submodelID string, idShortOrPath string, valueOnly gen.SubmodelElementValue) error {
-	return nil
+	tx, err := p.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = tx.Rollback()
+	}()
+
+	entityValueOnly, ok := valueOnly.(gen.EntityValue)
+	if !ok {
+		return common.NewErrBadRequest("valueOnly is not of type EntityValue")
+	}
+	elems, err := persistenceutils.BuildElementsToProcessStackValueOnly(p.db, submodelID, idShortOrPath, valueOnly)
+	if err != nil {
+		return err
+	}
+	err = UpdateNestedElements(p.db, elems, idShortOrPath, submodelID)
+	if err != nil {
+		return err
+	}
+
+	dialect := goqu.Dialect("postgres")
+
+	var elementID int
+	query, args, err := dialect.From("submodel_element").
+		InnerJoin(
+			goqu.T("entity_element"),
+			goqu.On(goqu.I("submodel_element.id").Eq(goqu.I("entity_element.id"))),
+		).
+		Select("submodel_element.id").
+		Where(
+			goqu.C("idshort_path").Eq(idShortOrPath),
+			goqu.C("submodel_id").Eq(submodelID),
+		).
+		ToSQL()
+	if err != nil {
+		return err
+	}
+	err = tx.QueryRow(query, args...).Scan(&elementID)
+	if err != nil {
+		return err
+	}
+
+	var specificAssetIDs string
+	if entityValueOnly.SpecificAssetIds != nil {
+		json := jsoniter.ConfigCompatibleWithStandardLibrary
+		specificAssetIDsBytes, err := json.Marshal(entityValueOnly.SpecificAssetIds)
+		if err != nil {
+			return err
+		}
+		specificAssetIDs = string(specificAssetIDsBytes)
+	} else {
+		specificAssetIDs = "[]"
+	}
+
+	updateQuery, args, err := dialect.Update("entity_element").
+		Set(
+			goqu.Record{
+				"entity_type":        entityValueOnly.EntityType,
+				"global_asset_id":    entityValueOnly.GlobalAssetID,
+				"specific_asset_ids": specificAssetIDs,
+			},
+		).
+		Where(goqu.C("id").Eq(elementID)).
+		ToSQL()
+	if err != nil {
+		return err
+	}
+	_, err = tx.Exec(updateQuery, args...)
+	if err != nil {
+		return err
+	}
+
+	err = tx.Commit()
+	return err
 }
 
 // Delete removes an Entity submodel element from the database.
