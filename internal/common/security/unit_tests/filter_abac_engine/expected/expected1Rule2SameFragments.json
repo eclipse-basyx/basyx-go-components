@@ -1,0 +1,60 @@
+{
+  "ok": true,
+  "queryFilter": {
+    "Filters": {
+      "$aasdesc#idShort": {
+        "$and": [
+          {
+            "$eq": [
+              {
+                "$strCast": {
+                  "$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value"
+                }
+              },
+              {
+                "$strVal": "WRITTEN_BY_X"
+              }
+            ]
+          },
+          {
+            "$eq": [
+              {
+                "$strCast": {
+                  "$field": "$aasdesc#endpoints[].protocolinformation.href"
+                }
+              },
+              {
+                "$strVal": "hrefA"
+              }
+            ]
+          },
+          {
+            "$eq": [
+              {
+                "$strCast": {
+                  "$field": "$aasdesc#endpoints[].protocolinformation.href"
+                }
+              },
+              {
+                "$strVal": "hrefB"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "Formula": {
+      "$eq": [
+        {
+          "$strCast": {
+            "$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value"
+          }
+        },
+        {
+          "$strVal": "WRITTEN_BY_X"
+        }
+      ]
+    }
+  },
+  "reason": "ALLOW"
+}

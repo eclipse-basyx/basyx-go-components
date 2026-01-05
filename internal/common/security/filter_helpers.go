@@ -48,9 +48,9 @@ func AddFilterQueryFromContext(
 		return ds, nil
 	}
 
-	ok, filter := p.FilterExpressionFor(identifable, false)
+	filter := p.FilterExpressionFor(identifable)
 
-	if !ok {
+	if filter == nil {
 		return ds, nil
 	}
 
@@ -98,8 +98,8 @@ func GetColumnSelectStatement(ctx context.Context, expressionMappers []Expressio
 	result := []exp.Expression{}
 	for _, expMapper := range expressionMappers {
 		if expMapper.Identifable != nil {
-			isOk, filter := p.ExistsExpressionFor(*expMapper.Identifable, false)
-			if isOk {
+			filter := p.FilterExpressionFor(*expMapper.Identifable)
+			if filter != nil {
 				ok = true
 			}
 

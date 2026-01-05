@@ -1,7 +1,37 @@
 [
   {
-    "input": "input/simple.json",
-    "expected": "expected/access_allowed.json",
+    "input": "input/2Rules1Fragment.json",
+    "expected": "expected/expected2Rules1Fragment.json",
+    "eval": "eval/get_shellDescriptors_viewer.json"
+  },
+  {
+    "input": "input/1Rule1Fragment.json",
+    "expected": "expected/expected1Rule1Fragment.json",
+    "eval": "eval/get_shellDescriptors_viewer.json"
+  },
+  {
+    "input": "input/1Rule2Fragments.json",
+    "expected": "expected/expected1Rule2Fragments.json",
+    "eval": "eval/get_shellDescriptors_viewer.json"
+  },
+  {
+    "input": "input/1Rule2SameFragments.json",
+    "expected": "expected/expected1Rule2SameFragments.json",
+    "eval": "eval/get_shellDescriptors_viewer.json"
+  },
+  {
+    "input": "input/2Rules2Fragments.json",
+    "expected": "expected/expected2Rules2Fragments.json",
+    "eval": "eval/get_shellDescriptors_viewer.json"
+  },
+  {
+    "input": "input/2Rules2FragmentsLeaf.json",
+    "expected": "expected/expected2Rules2FragmentsLeaf.json",
+    "eval": "eval/get_shellDescriptors_viewer.json"
+  },
+  {
+    "input": "input/2Rules3Fragments.json",
+    "expected": "expected/expected2Rules3Fragments.json",
     "eval": "eval/get_shellDescriptors_viewer.json"
   }
 ]

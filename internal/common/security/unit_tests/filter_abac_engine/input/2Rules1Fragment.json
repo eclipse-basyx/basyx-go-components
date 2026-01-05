@@ -22,13 +22,22 @@
       { "name": "role_is_admin", "formula": { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "admin" } ] } },
       { 
         "name": "role_is_viewer_written_x", 
-        "formula": {
-          "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "viewer" } ] 
+        "formula": { 
+          "$and": 
+          [
+            { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "viewer" } ] },
+            {"$eq": [ {"$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value"}, {"$strVal": "WRITTEN_BY_X"}]}
+          ]
         }
       },
       { 
         "name": "role_is_viewer_written_y", 
-        "formula": { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "viewer" } ] 
+        "formula": { 
+          "$and": 
+          [
+            { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "viewer" } ] },
+            {"$eq": [ {"$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value"}, {"$strVal": "WRITTEN_BY_Y"}]}
+          ]
         }
       }
        
@@ -41,20 +50,6 @@
         "FILTERLIST": [
           {
             "FRAGMENT": "$aasdesc#idShort",
-            "CONDITION": 
-            {
-              "$eq": [
-                {
-                  "$field": "$aasdesc#endpoints[].protocolinformation.href"
-                },
-                {
-                  "$strVal": "hrefA"
-                }
-              ]
-            }
-          },
-          {
-            "FRAGMENT": "$aasdesc#globalAssetId",
             "CONDITION": 
             {
               "$eq": [
