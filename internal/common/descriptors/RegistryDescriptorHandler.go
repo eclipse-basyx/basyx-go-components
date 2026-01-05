@@ -359,7 +359,7 @@ func ListRegistryDescriptors(
 
 	if endpointInterface != "" {
 		ds = ds.
-			Join(
+			LeftJoin(
 				aasdescendp,
 				goqu.On(
 					reg.Col(colDescriptorID).Eq(aasdescendp.Col(colDescriptorID)),

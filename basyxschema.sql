@@ -779,10 +779,21 @@ CREATE INDEX IF NOT EXISTS ix_regd_global_asset_id_trgm    ON registry_descripto
 -- Trigger function to clean up orphaned records when a registry_descriptor is deleted
 CREATE OR REPLACE FUNCTION cleanup_registry_descriptor()
 RETURNS TRIGGER AS $$
+DECLARE
+    v_creator BIGINT;
 BEGIN
     -- Delete the administrative_information record if it exists
     IF OLD.administrative_information_id IS NOT NULL THEN
+        -- Get the creator reference ID before deleting the administrative_information
+        SELECT creator INTO v_creator FROM administrative_information WHERE id = OLD.administrative_information_id;
+        
+        -- Delete the administrative_information record
         DELETE FROM administrative_information WHERE id = OLD.administrative_information_id;
+        
+        -- Delete the creator reference if it exists and is orphaned
+        IF v_creator IS NOT NULL THEN
+            DELETE FROM reference WHERE id = v_creator;
+        END IF;
     END IF;
     
     -- Delete the description_id lang_string_text_type_reference if it exists
