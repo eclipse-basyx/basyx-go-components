@@ -1,0 +1,39 @@
+services:
+  db_it:
+    image: postgres:18
+    container_name: postgres_db_it
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin123
+      POSTGRES_DB: basyxTestDB
+    ports:
+      - "6432:5432"
+    command: [ "postgres", "-c", "listen_addresses=*" ]
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U admin -d basyxTestDB" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  registry-of-registries-it:
+    container_name: registry-of-registries-it
+    build:
+      context: ../../../..
+      dockerfile: ./cmd/registryofregistriesservice/Dockerfile
+    environment:
+      - SERVER_PORT=5004
+      - POSTGRES_HOST=db_it
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=admin123
+      - POSTGRES_DBNAME=basyxTestDB
+      - POSTGRES_MAXOPENCONNECTIONS=500
+      - POSTGRES_MAXIDLECONNECTIONS=500
+      - POSTGRES_CONNMAXLIFETIMEMINUTES=5
+    ports:
+      - "5004:5004"
+    depends_on:
+      db_it:
+        condition: service_healthy
+    extra_hosts:
+      - "localhost:host-gateway"

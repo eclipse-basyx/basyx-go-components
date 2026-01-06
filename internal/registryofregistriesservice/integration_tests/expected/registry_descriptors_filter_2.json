@@ -1,0 +1,83 @@
+{
+    "PagingMetadata": {},
+    "Result": [
+        {
+            "description": [
+                {
+                    "language": "en",
+                    "text": "Example AAS Registry"
+                }
+            ],
+            "displayName": [
+                {
+                    "language": "en",
+                    "text": "AAS Registry 1"
+                }
+            ],
+            "administration": {
+                "version": "1",
+                "revision": "0",
+                "creator": {
+                    "type": "ExternalReference",
+                    "keys": [
+                        {
+                            "type": "GlobalReference",
+                            "value": "https://example.com"
+                        }
+                    ]
+                }
+            },
+            "endpoints": [
+                {
+                    "interface": "AAS-REGISTRY-3.0",
+                    "protocolInformation": {
+                        "href": "https://example.com/aas-registry",
+                        "endpointProtocol": "HTTPS"
+                    }
+                }
+            ],
+            "idShort": "ExampleAASRegistry",
+            "id": "https://example.com/ror/example-aas-registry",
+            "company": "ExampleCompany"
+        },
+        {
+            "description": [
+                {
+                    "language": "en",
+                    "text": "AAS Registry of the AAS Dataspace for Everybody Tenant 0"
+                }
+            ],
+            "displayName": [
+                {
+                    "language": "en",
+                    "text": "D4E Tenant 0 AAS Registry"
+                }
+            ],
+            "administration": {
+                "version": "1",
+                "revision": "0",
+                "creator": {
+                    "type": "ExternalReference",
+                    "keys": [
+                        {
+                            "type": "GlobalReference",
+                            "value": "https://iese.fraunhofer.de"
+                        }
+                    ]
+                }
+            },
+            "endpoints": [
+                {
+                    "interface": "AAS-REGISTRY-3.0",
+                    "protocolInformation": {
+                        "href": "https://demo.digital-twin.host/aas-registry",
+                        "endpointProtocol": "HTTPS"
+                    }
+                }
+            ],
+            "idShort": "D4ETenant0AASRegistry",
+            "id": "https://iese.fraunhofer.de/ror/d4e-tenant-0-aas-registry",
+            "company": "Fraunhofer IESE"
+        }
+    ]
+}

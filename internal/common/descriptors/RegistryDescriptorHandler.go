@@ -193,7 +193,9 @@ func GetRegistryDescriptorByID(
 		return persistence_utils.GetLangStringTextTypes(db, descriptionID)
 	}, &description)
 
-	GoAssign(g, func() ([]model.Endpoint, error) { return ReadEndpointsByDescriptorID(ctx, db, descID) }, &endpoints)
+	GoAssign(g, func() ([]model.Endpoint, error) {
+		return ReadEndpointsByDescriptorID(ctx, db, descID, aasDescriptorEndpointAlias)
+	}, &endpoints)
 
 	if err := g.Wait(); err != nil {
 		return model.RegistryDescriptor{}, err
@@ -248,7 +250,7 @@ func DeleteRegistryDescriptorByIDTx(ctx context.Context, tx *sql.Tx, registryIde
 	}
 
 	delStr, delArgs, buildDelErr := d.
-		Delete("descriptor").
+		Delete(tblDescriptor).
 		Where(goqu.C(colID).Eq(descID)).
 		ToSQL()
 	if buildDelErr != nil {
@@ -320,6 +322,7 @@ func ListRegistryDescriptors(
 	cursor string,
 	registryType string,
 	company string,
+	endpointInterface string,
 ) ([]model.RegistryDescriptor, string, error) {
 	if limit <= 0 {
 		limit = 100
@@ -328,6 +331,7 @@ func ListRegistryDescriptors(
 
 	d := goqu.Dialect(dialect)
 	reg := goqu.T(tblRegistryDescriptor).As("reg")
+	aasdescendp := goqu.T(tblAASDescriptorEndpoint).As("aasdescendp")
 
 	ds := d.
 		From(reg).
@@ -353,6 +357,17 @@ func ListRegistryDescriptors(
 
 	if company != "" {
 		ds = ds.Where(reg.Col(colCompany).Eq(company))
+	}
+
+	if endpointInterface != "" {
+		ds = ds.
+			LeftJoin(
+				aasdescendp,
+				goqu.On(
+					reg.Col(colDescriptorID).Eq(aasdescendp.Col(colDescriptorID)),
+				),
+			).
+			Where(aasdescendp.Col(colInterface).Eq(endpointInterface))
 	}
 
 	if peekLimit < 0 {
@@ -478,7 +493,7 @@ func ListRegistryDescriptors(
 	if len(descIDs) > 0 {
 		ids := append([]int64(nil), descIDs...)
 		GoAssign(g, func() (map[int64][]model.Endpoint, error) {
-			return ReadEndpointsByDescriptorIDs(gctx, db, ids)
+			return ReadEndpointsByDescriptorIDs(gctx, db, ids, aasDescriptorEndpointAlias)
 		}, &endpointsByDesc)
 	}
 

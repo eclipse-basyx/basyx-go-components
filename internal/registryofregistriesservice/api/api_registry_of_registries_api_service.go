@@ -49,21 +49,21 @@ func NewRegistryOfRegistriesAPIAPIService(registryOfRegistriesBackend registryof
 }
 
 // GetAllRegistryDescriptors - Returns all Registry Descriptors
-func (s *RegistryOfRegistriesAPIAPIService) GetAllRegistryDescriptors(ctx context.Context, limit int32, cursor string, registryType string, company string) (model.ImplResponse, error) {
+func (s *RegistryOfRegistriesAPIAPIService) GetAllRegistryDescriptors(ctx context.Context, limit int32, cursor string, registryType string, company string, endpointInterface string) (model.ImplResponse, error) {
 	var internalCursor string
 	if strings.TrimSpace(cursor) != "" {
 		dec, decErr := common.DecodeString(cursor)
 		if decErr != nil {
-			log.Printf("📍 [%s] Error in GetAllRegistryDescriptors: decode cursor=%q limit=%d registryType=%q company=%q: %v", componentName, cursor, limit, registryType, company, decErr)
+			log.Printf("📍 [%s] Error in GetAllRegistryDescriptors: decode cursor=%q limit=%d registryType=%q company=%q endpointInterface=%q: %v", componentName, cursor, limit, registryType, company, endpointInterface, decErr)
 			return common.NewErrorResponse(
 				decErr, http.StatusBadRequest, componentName, "GetAllRegistryDescriptors", "BadCursor",
 			), nil
 		}
 		internalCursor = dec
 	}
-	aasds, nextCursor, err := s.registryOfRegistriesBackend.ListRegistryDescriptors(ctx, limit, internalCursor, registryType, company)
+	aasds, nextCursor, err := s.registryOfRegistriesBackend.ListRegistryDescriptors(ctx, limit, internalCursor, registryType, company, endpointInterface)
 	if err != nil {
-		log.Printf("📍 [%s] Error in GetAllRegistryDescriptors: list failed (limit=%d cursor=%q registryType=%q company=%q): %v", componentName, limit, internalCursor, registryType, company, err)
+		log.Printf("📍 [%s] Error in GetAllRegistryDescriptors: list failed (limit=%d cursor=%q registryType=%q company=%q endpointInterface=%q): %v", componentName, limit, internalCursor, registryType, company, endpointInterface, err)
 		switch {
 		case common.IsErrBadRequest(err):
 			return common.NewErrorResponse(

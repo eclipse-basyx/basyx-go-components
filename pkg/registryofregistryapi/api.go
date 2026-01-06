@@ -32,7 +32,7 @@ type DescriptionAPIAPIRouter interface {
 // while the service implementation can be ignored with the .openapi-generator-ignore file
 // and updated with the logic required for the API.
 type RegistryOfRegistriesAPIAPIServicer interface {
-	GetAllRegistryDescriptors(context.Context, int32, string, string, string) (model.ImplResponse, error)
+	GetAllRegistryDescriptors(context.Context, int32, string, string, string, string) (model.ImplResponse, error)
 	PostRegistryDescriptor(context.Context, model.RegistryDescriptor) (model.ImplResponse, error)
 	GetRegistryDescriptorById(context.Context, string) (model.ImplResponse, error)
 	PutRegistryDescriptorById(context.Context, string, model.RegistryDescriptor) (model.ImplResponse, error)

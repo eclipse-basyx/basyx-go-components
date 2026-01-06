@@ -1,0 +1,257 @@
+[
+    {
+        "context": "001 - Health Check - GET /health",
+        "method": "GET",
+        "endpoint": "http://127.0.0.1:5004/health",
+        "shouldMatch": "expected/expected_health_endpoint.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "002 - List Registry Descriptors (Empty) - GET /registry-descriptors",
+        "method": "GET",
+        "endpoint": "http://127.0.0.1:5004/registry-descriptors",
+        "shouldMatch": "expected/empty_paged_result.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "003 - Create Registry Descriptor #1 - POST /registry-descriptors",
+        "method": "POST",
+        "endpoint": "http://127.0.0.1:5004/registry-descriptors",
+        "data": "postBody/registry_descriptor_1.json",
+        "shouldMatch": "postBody/registry_descriptor_1.json",
+        "expectedStatus": 201
+    },
+    {
+        "context": "004 - Create Registry Descriptor (Conflict - Duplicate) - POST /registry-descriptors",
+        "method": "POST",
+        "endpoint": "http://127.0.0.1:5004/registry-descriptors",
+        "data": "postBody/registry_descriptor_1.json",
+        "expectedStatus": 500
+    },
+    {
+        "context": "005 - Create Registry Descriptor (Conflict - Missing Identifier) - POST /registry-descriptors",
+        "method": "POST",
+        "endpoint": "http://127.0.0.1:5004/registry-descriptors",
+        "data": "postBody/registry_descriptor_malformed_2.json",
+        "expectedStatus": 400
+    },
+    {
+        "context": "006 - Create Registry Descriptor (Conflict - Empty Interface in Endpoint) - POST /registry-descriptors",
+        "method": "POST",
+        "endpoint": "http://127.0.0.1:5004/registry-descriptors",
+        "data": "postBody/registry_descriptor_malformed_3.json",
+        "expectedStatus": 400
+    },
+    {
+        "context": "007 - Create Registry Descriptor (Conflict - Empty Protocol Information in Endpoint) - POST /registry-descriptors",
+        "method": "POST",
+        "endpoint": "http://127.0.0.1:5004/registry-descriptors",
+        "data": "postBody/registry_descriptor_malformed_4.json",
+        "expectedStatus": 400
+    },
+    {
+        "context": "008 - Create Registry Descriptor (Conflict - Empty HREF in Protocol Information) - POST /registry-descriptors",
+        "method": "POST",
+        "endpoint": "http://127.0.0.1:5004/registry-descriptors",
+        "data": "postBody/registry_descriptor_malformed_5.json",
+        "expectedStatus": 400
+    },
+    {
+        "context": "009 - Create Registry Descriptor (Conflict - Empty Creator in Administrative Information) - POST /registry-descriptors",
+        "method": "POST",
+        "endpoint": "http://127.0.0.1:5004/registry-descriptors",
+        "data": "postBody/registry_descriptor_malformed_6.json",
+        "expectedStatus": 400
+    },
+    {
+        "context": "010 - Create Registry Descriptor (Conflict - Missing Keys in Reference) - POST /registry-descriptors",
+        "method": "POST",
+        "endpoint": "http://127.0.0.1:5004/registry-descriptors",
+        "data": "postBody/registry_descriptor_malformed_7.json",
+        "expectedStatus": 400
+    },
+    {
+        "context": "011 - Create Registry Descriptor (Conflict - Empty Keys in Reference) - POST /registry-descriptors",
+        "method": "POST",
+        "endpoint": "http://127.0.0.1:5004/registry-descriptors",
+        "data": "postBody/registry_descriptor_malformed_8.json",
+        "expectedStatus": 400
+    },
+    {
+        "context": "012 - Create Registry Descriptor (Conflict - Empty Type in Key) - POST /registry-descriptors",
+        "method": "POST",
+        "endpoint": "http://127.0.0.1:5004/registry-descriptors",
+        "data": "postBody/registry_descriptor_malformed_9.json",
+        "expectedStatus": 400
+    },
+    {
+        "context": "013 - Create Registry Descriptor (Conflict - Empty Value in Key) - POST /registry-descriptors",
+        "method": "POST",
+        "endpoint": "http://127.0.0.1:5004/registry-descriptors",
+        "data": "postBody/registry_descriptor_malformed_10.json",
+        "expectedStatus": 400
+    },
+    {
+        "context": "014 - Create Registry Descriptor (Conflict - Empty Language in Description) - POST /registry-descriptors",
+        "method": "POST",
+        "endpoint": "http://127.0.0.1:5004/registry-descriptors",
+        "data": "postBody/registry_descriptor_malformed_11.json",
+        "expectedStatus": 400
+    },
+    {
+        "context": "015 - Create Registry Descriptor (Conflict - Empty Text in Description) - POST /registry-descriptors",
+        "method": "POST",
+        "endpoint": "http://127.0.0.1:5004/registry-descriptors",
+        "data": "postBody/registry_descriptor_malformed_12.json",
+        "expectedStatus": 400
+    },
+    {
+        "context": "016 - Create Registry Descriptor (Conflict - Empty Language in DisplayName) - POST /registry-descriptors",
+        "method": "POST",
+        "endpoint": "http://127.0.0.1:5004/registry-descriptors",
+        "data": "postBody/registry_descriptor_malformed_13.json",
+        "expectedStatus": 400
+    },
+    {
+        "context": "017 - Create Registry Descriptor (Conflict - Empty Text in DisplayName) - POST /registry-descriptors",
+        "method": "POST",
+        "endpoint": "http://127.0.0.1:5004/registry-descriptors",
+        "data": "postBody/registry_descriptor_malformed_14.json",
+        "expectedStatus": 400
+    },
+    {
+        "context": "018 - Create Registry Descriptor #2 - POST /registry-descriptors",
+        "method": "POST",
+        "endpoint": "http://127.0.0.1:5004/registry-descriptors",
+        "data": "postBody/registry_descriptor_2.json",
+        "shouldMatch": "postBody/registry_descriptor_2.json",
+        "expectedStatus": 201
+    },
+    {
+        "context": "019 - Create Registry Descriptor #3 - POST /registry-descriptors",
+        "method": "POST",
+        "endpoint": "http://127.0.0.1:5004/registry-descriptors",
+        "data": "postBody/registry_descriptor_3.json",
+        "shouldMatch": "postBody/registry_descriptor_3.json",
+        "expectedStatus": 201
+    },
+    {
+        "context": "020 - Create Registry Descriptor #4 - POST /registry-descriptors",
+        "method": "POST",
+        "endpoint": "http://127.0.0.1:5004/registry-descriptors",
+        "data": "postBody/registry_descriptor_4.json",
+        "shouldMatch": "postBody/registry_descriptor_4.json",
+        "expectedStatus": 201
+    },
+    {
+        "context": "021 - Get Registry Descriptor by ID (Conflict - Not Found) - GET /registry-descriptors/{id}",
+        "method": "GET",
+        "endpoint": "http://127.0.0.1:5004/registry-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvaWRzL3JlZ2lzdHJ5LzE",
+        "expectedStatus": 404
+    },
+    {
+        "context": "022 - List Registry Descriptors - GET /registry-descriptors",
+        "method": "GET",
+        "endpoint": "http://127.0.0.1:5004/registry-descriptors",
+        "shouldMatch": "expected/registry_descriptors_1-4.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "023 - List Registry Descriptors (Limit) - GET /registry-descriptors?limit=2",
+        "method": "GET",
+        "endpoint": "http://127.0.0.1:5004/registry-descriptors?limit=2",
+        "shouldMatch": "expected/registry_descriptors_1-2.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "024 - List Registry Descriptors (Limit + Cursor) - GET /registry-descriptors?limit=1&cursor=...",
+        "method": "GET",
+        "endpoint": "http://127.0.0.1:5004/registry-descriptors?limit=1&cursor=aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvcm9yL2Q0ZS10ZW5hbnQtMC1hYXMtZGlzY292ZXJ5",
+        "shouldMatch": "expected/registry_descriptor_cursor_limit.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "025 - List Registry Descriptors (Nonexistent Cursor) - GET /registry-descriptors?cursor=...",
+        "method": "GET",
+        "endpoint": "http://127.0.0.1:5004/registry-descriptors?limit=1&cursor=bHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvcm9yL2Q0ZS10ZW5hbnQtMC1hYXMtZGlzY292ZXJ5",
+        "shouldMatch": "expected/empty_paged_result.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "026 - List Registry Descriptors (Conflict - Invalid Cursor (Not Base64)) - GET /registry-descriptors?cursor=...",
+        "method": "GET",
+        "endpoint": "http://127.0.0.1:5004/registry-descriptors?cursor=$HR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvcm9yL2Q0ZS10ZW5hbnQtMC1hYXMtZGlzY292ZXJ5",
+        "expectedStatus": 400
+    },
+    {
+        "context": "027 - List Registry Descriptors (Conflict - Invalid Cursor (Non-UTF8 Bytes)) - GET /registry-descriptors?cursor=...",
+        "method": "GET",
+        "endpoint": "http://127.0.0.1:5004/registry-descriptors?cursor=aaa",
+        "expectedStatus": 400
+    },
+    {
+        "context": "028 - List Registry Descriptors (Filter Company) - GET /registry-descriptors?company=Fraunhofer IESE",
+        "method": "GET",
+        "endpoint": "http://127.0.0.1:5004/registry-descriptors?company=Fraunhofer%20IESE",
+        "shouldMatch": "expected/registry_descriptors_filter_1.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "029 - List Registry Descriptors (Filter Endpoint Interface) - GET /registry-descriptors?endpointInterface=AAS-REGISTRY-3.0",
+        "method": "GET",
+        "endpoint": "http://127.0.0.1:5004/registry-descriptors?endpointInterface=AAS-REGISTRY-3.0",
+        "shouldMatch": "expected/registry_descriptors_filter_2.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "030 - List Registry Descriptors (Filter Company + Filter Endpoint Interface) - GET /registry-descriptors?company=Fraunhofer IESE&endpointInterface=AAS-REGISTRY-3.0",
+        "method": "GET",
+        "endpoint": "http://127.0.0.1:5004/registry-descriptors?company=Fraunhofer%20IESE&endpointInterface=AAS-REGISTRY-3.0",
+        "shouldMatch": "expected/registry_descriptors_filter_3.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "031 - Delete Registry Descriptor by ID - DELETE /registry-descriptors/{id}",
+        "method": "DELETE",
+        "endpoint": "http://127.0.0.1:5004/registry-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvcm9yL2Q0ZS10ZW5hbnQtMC1hYXMtZGlzY292ZXJ5",
+        "expectedStatus": 204
+    },
+    {
+        "context": "032 - Delete Registry Descriptor by ID (Conflict - Not Found) - DELETE /registry-descriptors/{id}",
+        "method": "DELETE",
+        "endpoint": "http://127.0.0.1:5004/registry-descriptors/aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvcm9yL2Q0ZS10ZW5hbnQtMC1hYXMtZGlzY292ZXJ5",
+        "expectedStatus": 404
+    },
+    {
+        "context": "033 - Update Registry Descriptor - PUT /registry-descriptors/{id}",
+        "method": "PUT",
+        "endpoint": "http://127.0.0.1:5004/registry-descriptors/aHR0cHM6Ly9leGFtcGxlLmNvbS9yb3IvZXhhbXBsZS1hYXMtZGlzY292ZXJ5",
+        "data": "postBody/registry_descriptor_5.json",
+        "expectedStatus": 204
+    },
+    {
+        "context": "034 - Update Registry Descriptor (Conflict - Nonexistent ID) - PUT /registry-descriptors/{id}",
+        "method": "PUT",
+        "endpoint": "http://127.0.0.1:5004/registry-descriptors/aHR0cHM6Ly9leGFtcGxlLmNvbS9yb3IvZXhhbXBsZS1hYXMtZGlzY292ZXJ5LW5vbmV4aXN0ZW50",
+        "data": "postBody/registry_descriptor_5.json",
+        "expectedStatus": 400
+    },
+    {
+        "context": "035 - Update Registry Descriptor (Conflict - Body ID Mismatch) - PUT /registry-descriptors/{id}",
+        "method": "PUT",
+        "endpoint": "http://127.0.0.1:5004/registry-descriptors/aHR0cHM6Ly9leGFtcGxlLmNvbS9yb3IvZXhhbXBsZS1hYXMtZGlzY292ZXJ5",
+        "data": "postBody/registry_descriptor_6.json",
+        "expectedStatus": 400
+    },
+    {
+        "context": "064 - Cleanup: Delete All AAS Descriptors - ACTION DELETE_ALL_REGISTRY_DESCRIPTORS",
+        "action": "DELETE_ALL_REGISTRY_DESCRIPTORS"
+    },
+    {
+        "context": "037 - Verify that Cleanup has worked - GET /registry-descriptors",
+        "method": "GET",
+        "endpoint": "http://127.0.0.1:5004/registry-descriptors",
+        "shouldMatch": "expected/empty_paged_result.json",
+        "expectedStatus": 200
+    }
+]

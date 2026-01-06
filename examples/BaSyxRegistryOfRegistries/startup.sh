@@ -102,7 +102,7 @@ curl --location --request POST 'http://localhost:5080/registry-descriptors' \
     "endpoints": [
         {
             "protocolInformation": {
-                "href": "https://demo.digital-twin.host/aas-discovery/lookup/shells",
+                "href": "https://demo.digital-twin.host/aas-discovery",
                 "endpointProtocol": "HTTPS"
             },
             "interface": "AAS-DISCOVERY-3.0"

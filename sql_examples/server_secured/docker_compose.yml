@@ -2,13 +2,22 @@ services:
   db:
     image: postgres:15
     container_name: postgres_db
+    shm_size: 1gb
     environment:
       POSTGRES_USER: admin
       POSTGRES_PASSWORD: admin123
       POSTGRES_DB: basyxTestDB
     ports:
       - "5432:5432"
-    command: ["postgres", "-c", "listen_addresses=*"]
+    command:
+      [
+        "postgres",
+        "-c", "listen_addresses=*",
+        "-c", "max_worker_processes=16",
+        "-c", "max_parallel_workers=16",
+        "-c", "max_parallel_workers_per_gather=4",
+        "-c", "work_mem=256MB"
+      ]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U admin -d basyxTestDB"]
       interval: 10s
