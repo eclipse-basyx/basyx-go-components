@@ -1,0 +1,1 @@
+$aasdesc#endpoints[0].interface

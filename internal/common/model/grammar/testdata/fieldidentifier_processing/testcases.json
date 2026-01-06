@@ -1,0 +1,77 @@
+[
+  {
+    "name": "aasdesc_specificAsset_externalSubject_keys_value_indexed",
+    "kind": "scalar",
+    "input": "posbody/aasdesc_specificAsset_externalSubject_keys_value_indexed.txt",
+    "expected": "expected/aasdesc_specificAsset_externalSubject_keys_value_indexed.json"
+  },
+  {
+    "name": "aasdesc_submodelDescriptor_endpoints_href_indexed",
+    "kind": "scalar",
+    "input": "posbody/aasdesc_submodelDescriptor_endpoints_href_indexed.txt",
+    "expected": "expected/aasdesc_submodelDescriptor_endpoints_href_indexed.json"
+  },
+  {
+    "name": "aasdesc_endpoints_href_wildcard",
+    "kind": "scalar",
+    "input": "posbody/aasdesc_endpoints_href_wildcard.txt",
+    "expected": "expected/aasdesc_endpoints_href_wildcard.json"
+  },
+  {
+    "name": "aasdesc_endpoints_interface_indexed",
+    "kind": "scalar",
+    "input": "posbody/aasdesc_endpoints_interface_indexed.txt",
+    "expected": "expected/aasdesc_endpoints_interface_indexed.json"
+  },
+  {
+    "name": "aasdesc_submodelDescriptor_semanticId_keys_type_indexed",
+    "kind": "scalar",
+    "input": "posbody/aasdesc_submodelDescriptor_semanticId_keys_type_indexed.txt",
+    "expected": "expected/aasdesc_submodelDescriptor_semanticId_keys_type_indexed.json"
+  },
+  {
+    "name": "smdesc_endpoints_href_indexed",
+    "kind": "scalar",
+    "input": "posbody/smdesc_endpoints_href_indexed.txt",
+    "expected": "expected/smdesc_endpoints_href_indexed.json"
+  },
+  {
+    "name": "sm_semanticId_keys_value_indexed",
+    "kind": "scalar",
+    "input": "posbody/sm_semanticId_keys_value_indexed.txt",
+    "expected": "expected/sm_semanticId_keys_value_indexed.json"
+  },
+  {
+    "name": "aasdesc_endpoints_fragment_wildcard",
+    "kind": "fragment",
+    "input": "posbody/aasdesc_endpoints_fragment_wildcard.txt",
+    "expected": "expected/aasdesc_endpoints_fragment_wildcard.json"
+  },
+  {
+    "name": "aasdesc_endpoints_fragment_indexed",
+    "kind": "fragment",
+    "input": "posbody/aasdesc_endpoints_fragment_indexed.txt",
+    "expected": "expected/aasdesc_endpoints_fragment_indexed.json"
+  },
+  {
+    "name": "scalar_rejects_fragment",
+    "kind": "scalar",
+    "input": "posbody/scalar_rejects_fragment.txt",
+    "should_fail": true,
+    "error_contains": "must not end in an array segment"
+  },
+  {
+    "name": "fragment_rejects_scalar",
+    "kind": "fragment",
+    "input": "posbody/fragment_rejects_scalar.txt",
+    "should_fail": true,
+    "error_contains": "must end in an array segment"
+  },
+  {
+    "name": "rejects_unknown_root",
+    "kind": "scalar",
+    "input": "posbody/rejects_unknown_root.txt",
+    "should_fail": true,
+    "error_contains": "unsupported or unmapped field identifier"
+  }
+]

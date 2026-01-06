@@ -1,0 +1,1 @@
+$aasdesc#submodelDescriptors[1].endpoints[0].protocolinformation.href

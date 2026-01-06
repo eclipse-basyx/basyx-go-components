@@ -1,0 +1,6 @@
+{
+  "column": "semantic_id_reference_key.value",
+  "bindings": [
+    {"alias": "semantic_id_reference_key.position", "index": 0}
+  ]
+}

@@ -1,0 +1,6 @@
+{
+  "column": "submodel_descriptor_endpoint.href",
+  "bindings": [
+    {"alias": "submodel_descriptor_endpoint.position", "index": 0}
+  ]
+}

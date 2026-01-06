@@ -1,0 +1,1 @@
+$smdesc#endpoints[0].protocolinformation.href

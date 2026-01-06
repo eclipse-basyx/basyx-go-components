@@ -1,0 +1,5 @@
+{
+  "bindings": [
+    {"alias": "aas_descriptor_endpoint.position", "index": 2}
+  ]
+}

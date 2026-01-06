@@ -259,14 +259,15 @@ func ParseAASQLFieldToSQLColumn(field string) string {
 	if strings.HasPrefix(field, "$aasdesc#specificAssetIds[") && strings.HasSuffix(field, "].name") {
 		return "specific_asset_id.name"
 	}
-	if strings.HasPrefix(field, "$aasdesc#specificAssetIds[") && strings.HasSuffix(field, "].value") {
-		return "specific_asset_id.value"
-	}
 	if strings.HasPrefix(field, "$aasdesc#specificAssetIds") && strings.Contains(field, ".externalSubjectId.keys[") && strings.HasSuffix(field, "].value") {
 		return "external_subject_reference_key.value"
 	}
 	if strings.HasPrefix(field, "$aasdesc#specificAssetIds") && strings.Contains(field, ".externalSubjectId.keys[") && strings.HasSuffix(field, "].type") {
 		return "external_subject_reference_key.type"
+	}
+	// Keep generic specificAssetIds[...].value mapping last so it doesn't shadow nested paths.
+	if strings.HasPrefix(field, "$aasdesc#specificAssetIds[") && strings.HasSuffix(field, "].value") {
+		return "specific_asset_id.value"
 	}
 
 	if strings.HasPrefix(field, "$smdesc#semanticId.keys[") && strings.HasSuffix(field, "].value") {
