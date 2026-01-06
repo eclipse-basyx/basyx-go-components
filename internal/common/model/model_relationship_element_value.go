@@ -61,12 +61,12 @@ func (r RelationshipElementValue) GetModelType() string {
 
 // AssertRelationshipElementValueRequired checks if the required fields are not zero-ed
 func AssertRelationshipElementValueRequired(obj RelationshipElementValue) error {
-	if obj.First == nil {
+	if obj.First != nil {
 		if err := AssertReferenceValueRequired(*obj.First); err != nil {
 			return err
 		}
 	}
-	if obj.Second == nil {
+	if obj.Second != nil {
 		if err := AssertReferenceValueRequired(*obj.Second); err != nil {
 			return err
 		}
@@ -76,12 +76,12 @@ func AssertRelationshipElementValueRequired(obj RelationshipElementValue) error 
 
 // AssertRelationshipElementValueConstraints checks if the values respects the defined constraints
 func AssertRelationshipElementValueConstraints(obj RelationshipElementValue) error {
-	if obj.First == nil {
+	if obj.First != nil {
 		if err := AssertReferenceValueConstraints(*obj.First); err != nil {
 			return err
 		}
 	}
-	if obj.Second == nil {
+	if obj.Second != nil {
 		if err := AssertReferenceValueConstraints(*obj.Second); err != nil {
 			return err
 		}

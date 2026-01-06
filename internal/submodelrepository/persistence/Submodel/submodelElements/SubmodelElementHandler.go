@@ -247,8 +247,8 @@ func UpdateNestedElements(db *sql.DB, elems []persistenceutils.ValueOnlyElements
 // GetModelTypeByIdShortPathAndSubmodelID retrieves the model type of a submodel element
 //
 // Parameters:
-//   - db: Database connection
-//   - submodelID: ID of the parent submodel
+// - db: Database connection
+// - submodelID: ID of the parent submodel
 //
 // - idShortOrPath: idShort or hierarchical path of the submodel element
 // Returns:

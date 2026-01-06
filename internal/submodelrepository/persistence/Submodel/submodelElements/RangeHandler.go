@@ -241,7 +241,12 @@ func (p PostgreSQLRangeHandler) UpdateValueOnly(submodelID string, idShortOrPath
 		return err
 	}
 
-	_, err = p.db.Exec(updateQuery, updateArgs...)
+	_, err = tx.Exec(updateQuery, updateArgs...)
+	if err != nil {
+		return err
+	}
+
+	err = tx.Commit()
 	return err
 }
 

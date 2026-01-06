@@ -1212,8 +1212,6 @@ func (p *PostgreSQLSubmodelDatabase) UpdateValueOnly(submodelID string, idShortO
 		return fmt.Errorf("failed to get model type: %w", err)
 	}
 
-	//
-
 	// Get the appropriate handler for this model type
 	handler, err := submodelelements.GetSMEHandlerByModelType(modelType, p.db)
 	if err != nil {
