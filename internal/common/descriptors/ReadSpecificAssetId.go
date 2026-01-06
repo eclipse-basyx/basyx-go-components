@@ -116,7 +116,6 @@ func ReadSpecificAssetIDsByDescriptorIDs(
 	db *sql.DB,
 	descriptorIDs []int64,
 ) (map[int64][]model.SpecificAssetID, error) {
-
 	out := make(map[int64][]model.SpecificAssetID, len(descriptorIDs))
 	if len(descriptorIDs) == 0 {
 		return out, nil
