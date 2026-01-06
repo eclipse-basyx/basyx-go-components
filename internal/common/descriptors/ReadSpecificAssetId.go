@@ -30,7 +30,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"time"
 
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
@@ -58,12 +57,12 @@ var expMapper = []auth.ExpressionIdentifiableMapper{
 	{
 		Exp:           tSpecificAssetID.Col(colName),
 		CanBeFiltered: true,
-		Identifable:   strPtr("$aasdesc#specificAssetIds[].name"),
+		Fragment:      strPtr("$aasdesc#specificAssetIds[].name"),
 	},
 	{
 		Exp:           tSpecificAssetID.Col(colValue),
 		CanBeFiltered: true,
-		Identifable:   strPtr("$aasdesc#specificAssetIds[].value"),
+		Fragment:      strPtr("$aasdesc#specificAssetIds[].value"),
 	},
 	{
 		Exp:           tSpecificAssetID.Col(colSemanticID),
@@ -117,10 +116,6 @@ func ReadSpecificAssetIDsByDescriptorIDs(
 	db *sql.DB,
 	descriptorIDs []int64,
 ) (map[int64][]model.SpecificAssetID, error) {
-	start := time.Now()
-	defer func() {
-		_, _ = fmt.Printf("ReadSpecificAssetIDsByDescriptorIDs took %s for %d descriptor IDs\n", time.Since(start), len(descriptorIDs))
-	}()
 
 	out := make(map[int64][]model.SpecificAssetID, len(descriptorIDs))
 	if len(descriptorIDs) == 0 {
@@ -158,7 +153,6 @@ func ReadSpecificAssetIDsByDescriptorIDs(
 	}
 
 	sqlStr, args, err := base.ToSQL()
-	_, _ = fmt.Println(sqlStr)
 	if err != nil {
 		return nil, err
 	}

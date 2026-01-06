@@ -111,7 +111,7 @@ func ReadSubmodelDescriptorsByAASDescriptorIDs(
 		{
 			Exp:           submodelDescriptorAlias.Col(colIDShort),
 			CanBeFiltered: true,
-			Identifable:   strPtr("$aasdesc#submodelDescriptors[].idShort"),
+			Fragment:      strPtr("$aasdesc#submodelDescriptors[].idShort"),
 		},
 		{
 			Exp:           submodelDescriptorAlias.Col(colAASID),

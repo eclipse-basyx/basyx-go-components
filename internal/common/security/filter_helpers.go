@@ -40,7 +40,7 @@ import (
 func AddFilterQueryFromContext(
 	ctx context.Context,
 	ds *goqu.SelectDataset,
-	identifable string,
+	fragment string,
 
 ) (*goqu.SelectDataset, error) {
 	p := GetQueryFilter(ctx)
@@ -48,7 +48,7 @@ func AddFilterQueryFromContext(
 		return ds, nil
 	}
 
-	filter := p.FilterExpressionFor(identifable)
+	filter := p.FilterExpressionFor(fragment)
 
 	if filter == nil {
 		return ds, nil
@@ -70,7 +70,7 @@ func AddFilterQueryFromContext(
 type ExpressionIdentifiableMapper struct {
 	Exp           exp.Expression
 	CanBeFiltered bool
-	Identifable   *string
+	Fragment      *string
 }
 
 func extractExpressions(mappers []ExpressionIdentifiableMapper) []exp.Expression {
@@ -97,8 +97,8 @@ func GetColumnSelectStatement(ctx context.Context, expressionMappers []Expressio
 	var ok = false
 	result := []exp.Expression{}
 	for _, expMapper := range expressionMappers {
-		if expMapper.Identifable != nil {
-			filter := p.FilterExpressionFor(*expMapper.Identifable)
+		if expMapper.Fragment != nil {
+			filter := p.FilterExpressionFor(*expMapper.Fragment)
 			if filter != nil {
 				ok = true
 				wc, err := filter.EvaluateToExpression()
