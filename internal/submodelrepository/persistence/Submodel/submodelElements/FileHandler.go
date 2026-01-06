@@ -147,7 +147,7 @@ func (p PostgreSQLFileHandler) CreateNested(tx *sql.Tx, submodelID string, paren
 //
 // Returns:
 //   - error: Error if the update operation fails
-func (p PostgreSQLFileHandler) Update(idShortOrPath string, submodelElement gen.SubmodelElement) error {
+func (p PostgreSQLFileHandler) Update(submodelID string, idShortOrPath string, submodelElement gen.SubmodelElement) error {
 	file, ok := submodelElement.(*gen.File)
 	if !ok {
 		return common.NewErrBadRequest("submodelElement is not of type File")
@@ -247,7 +247,104 @@ func (p PostgreSQLFileHandler) Update(idShortOrPath string, submodelElement gen.
 	}
 
 	// Update base SubmodelElement properties
-	return p.decorated.Update(idShortOrPath, submodelElement)
+	return p.decorated.Update(submodelID, idShortOrPath, submodelElement)
+}
+
+// UpdateValueOnly updates only the value of an existing File submodel element identified by its idShort or path.
+// It processes the new value and updates nested elements accordingly.
+//
+// Parameters:
+//   - submodelID: The ID of the parent submodel
+//   - idShortOrPath: The idShort or path identifying the element to update
+//   - valueOnly: The new value to set (must be of type gen.FileValue)
+//
+// Returns:
+//   - error: An error if the update operation fails
+func (p PostgreSQLFileHandler) UpdateValueOnly(submodelID string, idShortOrPath string, valueOnly gen.SubmodelElementValue) error {
+	fileValueOnly, ok := valueOnly.(gen.FileValue)
+	if !ok {
+		return common.NewErrBadRequest("valueOnly is not of type FileValue")
+	}
+	tx, err := p.db.Begin()
+	if err != nil {
+		return common.NewInternalServerError(fmt.Sprintf("failed to begin transaction: %s", err))
+	}
+	dialect := goqu.Dialect("postgres")
+
+	var elementID int
+	query, args, err := dialect.From("submodel_element").
+		InnerJoin(
+			goqu.T("file_element"),
+			goqu.On(goqu.I("submodel_element.id").Eq(goqu.I("file_element.id"))),
+		).
+		Select("submodel_element.id").
+		Where(
+			goqu.C("idshort_path").Eq(idShortOrPath),
+			goqu.C("submodel_id").Eq(submodelID),
+		).
+		ToSQL()
+	if err != nil {
+		return err
+	}
+
+	err = tx.QueryRow(query, args...).Scan(&elementID)
+	if err != nil {
+		return err
+	}
+
+	// Check for existing file_data and delete old Large Object if it exists
+	var oldOID sql.NullInt64
+	fileDataQuery, fileDataArgs, err := dialect.From("file_data").
+		Select("file_oid").
+		Where(goqu.C("id").Eq(elementID)).
+		ToSQL()
+	if err != nil {
+		return fmt.Errorf("failed to build file_data query: %w", err)
+	}
+	err = tx.QueryRow(fileDataQuery, fileDataArgs...).Scan(&oldOID)
+	if err != nil && err != sql.ErrNoRows {
+		return fmt.Errorf("failed to check existing file data: %w", err)
+	}
+	// Delete old Large Object if it exists
+	if oldOID.Valid {
+		_, err = tx.Exec(`SELECT lo_unlink($1)`, oldOID.Int64)
+		if err != nil {
+			return fmt.Errorf("failed to delete large object: %w", err)
+		}
+
+		// Delete the file_data entry
+		deleteQuery, deleteArgs, err := dialect.Delete("file_data").
+			Where(goqu.C("id").Eq(elementID)).
+			ToSQL()
+		if err != nil {
+			return fmt.Errorf("failed to build delete query: %w", err)
+		}
+
+		_, err = tx.Exec(deleteQuery, deleteArgs...)
+		if err != nil {
+			return fmt.Errorf("failed to delete file_data: %w", err)
+		}
+	}
+
+	// Build the update query
+	updateQuery, args, err := dialect.Update("file_element").
+		Set(goqu.Record{
+			"content_type": fileValueOnly.ContentType,
+			"value":        fileValueOnly.Value,
+		}).
+		Where(goqu.C("id").Eq(elementID)).
+		ToSQL()
+	if err != nil {
+		return fmt.Errorf("failed to build update query: %w", err)
+	}
+
+	_, err = tx.Exec(updateQuery, args...)
+	if err != nil {
+		return common.NewInternalServerError(fmt.Sprintf("failed to execute update query: %s", err))
+	}
+
+	err = tx.Commit()
+	return err
 }
 
 // Delete removes a File submodel element from the database.

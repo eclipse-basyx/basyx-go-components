@@ -32,8 +32,10 @@ package submodelelements
 import (
 	"database/sql"
 
+	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	persistenceutils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
 	jsoniter "github.com/json-iterator/go"
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 )
@@ -143,8 +145,105 @@ func (p PostgreSQLAnnotatedRelationshipElementHandler) CreateNested(tx *sql.Tx, 
 //
 // Returns:
 //   - error: Error if update fails
-func (p PostgreSQLAnnotatedRelationshipElementHandler) Update(idShortOrPath string, submodelElement gen.SubmodelElement) error {
-	return p.decorated.Update(idShortOrPath, submodelElement)
+func (p PostgreSQLAnnotatedRelationshipElementHandler) Update(submodelID string, idShortOrPath string, submodelElement gen.SubmodelElement) error {
+	return p.decorated.Update(submodelID, idShortOrPath, submodelElement)
+}
+
+// UpdateValueOnly updates only the value of an existing AnnotatedRelationshipElement submodel element identified by its idShort or path.
+// It updates the 'first' and 'second' references based on the provided value.
+//
+// Parameters:
+//   - submodelID: The ID of the parent submodel
+//   - idShortOrPath: The idShort or path identifying the element to update
+//   - valueOnly: The new value to set (must be of type gen.AnnotatedRelationshipElementValue)
+//
+// Returns:
+//   - error: An error if the update operation fails
+func (p PostgreSQLAnnotatedRelationshipElementHandler) UpdateValueOnly(submodelID string, idShortOrPath string, valueOnly gen.SubmodelElementValue) error {
+	// Start transaction
+	tx, err := p.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err != nil {
+			_ = tx.Rollback()
+		}
+	}()
+
+	elems, err := persistenceutils.BuildElementsToProcessStackValueOnly(p.db, submodelID, idShortOrPath, valueOnly)
+	if err != nil {
+		return err
+	}
+
+	// Update 'first' and 'second' references for AnnotatedRelationshipElement
+	if areValue, ok := valueOnly.(gen.AnnotatedRelationshipElementValue); ok {
+		dialect := goqu.Dialect("postgres")
+
+		// Get the element ID from the database using goqu
+		var elementID int
+		idQuery, args, err := dialect.From("submodel_element").
+			Select("id").
+			Where(goqu.Ex{
+				"idshort_path": idShortOrPath,
+				"submodel_id":  submodelID,
+			}).ToSQL()
+		if err != nil {
+			return err
+		}
+
+		err = tx.QueryRow(idQuery, args...).Scan(&elementID)
+		if err != nil {
+			return err
+		}
+
+		// Marshal the references to JSON
+		var json = jsoniter.ConfigCompatibleWithStandardLibrary
+		var firstRef, secondRef *string
+
+		if len(areValue.First.Keys) > 0 {
+			ref, err := json.Marshal(areValue.First)
+			if err != nil {
+				return err
+			}
+			refStr := string(ref)
+			firstRef = &refStr
+		}
+
+		if len(areValue.Second.Keys) > 0 {
+			ref, err := json.Marshal(areValue.Second)
+			if err != nil {
+				return err
+			}
+			refStr := string(ref)
+			secondRef = &refStr
+		}
+
+		// Update the references in the database using goqu
+		updateQuery, updateArgs, err := dialect.Update("annotated_relationship_element").
+			Set(goqu.Record{
+				"first":  firstRef,
+				"second": secondRef,
+			}).
+			Where(goqu.C("id").Eq(elementID)).
+			ToSQL()
+		if err != nil {
+			return err
+		}
+
+		_, err = tx.Exec(updateQuery, updateArgs...)
+		if err != nil {
+			return err
+		}
+	}
+
+	err = UpdateNestedElements(p.db, elems, idShortOrPath, submodelID)
+	if err != nil {
+		return err
+	}
+
+	err = tx.Commit()
+	return err
 }
 
 // Delete removes an AnnotatedRelationshipElement identified by its idShort or path from the database.

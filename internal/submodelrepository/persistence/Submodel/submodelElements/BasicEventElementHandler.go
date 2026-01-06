@@ -31,7 +31,10 @@ package submodelelements
 
 import (
 	"database/sql"
+	"encoding/json"
+	"fmt"
 
+	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	_ "github.com/lib/pq" // PostgreSQL Treiber
@@ -142,8 +145,83 @@ func (p PostgreSQLBasicEventElementHandler) CreateNested(tx *sql.Tx, submodelID 
 //
 // Returns:
 //   - error: Error if update fails
-func (p PostgreSQLBasicEventElementHandler) Update(idShortOrPath string, submodelElement gen.SubmodelElement) error {
-	return p.decorated.Update(idShortOrPath, submodelElement)
+func (p PostgreSQLBasicEventElementHandler) Update(submodelID string, idShortOrPath string, submodelElement gen.SubmodelElement) error {
+	return p.decorated.Update(submodelID, idShortOrPath, submodelElement)
+}
+
+// UpdateValueOnly updates only the value of an existing BasicEventElement submodel element identified by its idShort or path.
+// It updates the observed reference in the database.
+//
+// Parameters:
+//   - submodelID: The ID of the parent submodel
+//   - idShortOrPath: The idShort or path identifying the element to update
+//   - valueOnly: The new value to set (must be of type gen.BasicEventElementValue)
+//
+// Returns:
+//   - error: An error if the update operation fails or if the valueOnly type is incorrect
+func (p PostgreSQLBasicEventElementHandler) UpdateValueOnly(submodelID string, idShortOrPath string, valueOnly gen.SubmodelElementValue) error {
+	basicEventValue, ok := valueOnly.(gen.BasicEventElementValue)
+	if !ok {
+		return common.NewErrBadRequest("valueOnly is not of type BasicEventElementValue")
+	}
+
+	// Begin transaction
+	tx, err := p.db.Begin()
+	if err != nil {
+		return err
+	}
+
+	defer func() {
+		if err != nil {
+			_ = tx.Rollback()
+		}
+	}()
+
+	dialect := goqu.Dialect("postgres")
+
+	var newObservedJson sql.NullString
+	observedBytes, err := json.Marshal(basicEventValue.Observed)
+	if err != nil {
+		return common.NewErrBadRequest(fmt.Sprintf("failed to marshal observed value: %s", err))
+	}
+	newObservedJson = sql.NullString{String: string(observedBytes), Valid: true}
+
+	// Get the element ID from the database
+	var elementID int
+	query, args, err := dialect.From("submodel_element").
+		Select("id").
+		Where(
+			goqu.C("idshort_path").Eq(idShortOrPath),
+			goqu.C("submodel_id").Eq(submodelID),
+		).
+		ToSQL()
+	if err != nil {
+		return err
+	}
+
+	err = tx.QueryRow(query, args...).Scan(&elementID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return common.NewErrNotFound("BasicEventElement not found")
+		}
+		return err
+	}
+
+	// Update the basic_event_element table with new observed reference
+	updateQuery, updateArgs, err := dialect.Update("basic_event_element").
+		Set(goqu.Record{"observed": newObservedJson}).
+		Where(goqu.C("id").Eq(elementID)).
+		ToSQL()
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.Exec(updateQuery, updateArgs...)
+	if err != nil {
+		return err
+	}
+
+	return tx.Commit()
 }
 
 // Delete removes a BasicEventElement identified by its idShort or path from the database.
@@ -160,42 +238,22 @@ func (p PostgreSQLBasicEventElementHandler) Delete(idShortOrPath string) error {
 }
 
 func insertBasicEventElement(basicEvent *gen.BasicEventElement, tx *sql.Tx, id int) error {
-	var observedRefID sql.NullInt64
+	var observedRefJson sql.NullString
 	if !isEmptyReference(basicEvent.Observed) {
-		var refID int
-		err := tx.QueryRow(`INSERT INTO reference (type) VALUES ($1) RETURNING id`, basicEvent.Observed.Type).Scan(&refID)
+		observedBytes, err := json.Marshal(basicEvent.Observed)
 		if err != nil {
 			return err
 		}
-		observedRefID = sql.NullInt64{Int64: int64(refID), Valid: true}
-
-		keys := basicEvent.Observed.Keys
-		for i := range keys {
-			_, err = tx.Exec(`INSERT INTO reference_key (reference_id, position, type, value) VALUES ($1, $2, $3, $4)`,
-				refID, i, keys[i].Type, keys[i].Value)
-			if err != nil {
-				return err
-			}
-		}
+		observedRefJson = sql.NullString{String: string(observedBytes), Valid: true}
 	}
 
-	var messageBrokerRefID sql.NullInt64
+	var messageBrokerRefJson sql.NullString
 	if !isEmptyReference(basicEvent.MessageBroker) {
-		var refID int
-		err := tx.QueryRow(`INSERT INTO reference (type) VALUES ($1) RETURNING id`, basicEvent.MessageBroker.Type).Scan(&refID)
+		messageBrokerBytes, err := json.Marshal(basicEvent.MessageBroker)
 		if err != nil {
 			return err
 		}
-		messageBrokerRefID = sql.NullInt64{Int64: int64(refID), Valid: true}
-
-		keys := basicEvent.MessageBroker.Keys
-		for i := range keys {
-			_, err = tx.Exec(`INSERT INTO reference_key (reference_id, position, type, value) VALUES ($1, $2, $3, $4)`,
-				refID, i, keys[i].Type, keys[i].Value)
-			if err != nil {
-				return err
-			}
-		}
+		messageBrokerRefJson = sql.NullString{String: string(messageBrokerBytes), Valid: true}
 	}
 
 	// Handle nullable fields
@@ -219,7 +277,7 @@ func insertBasicEventElement(basicEvent *gen.BasicEventElement, tx *sql.Tx, id i
 		messageTopic = sql.NullString{String: basicEvent.MessageTopic, Valid: true}
 	}
 
-	_, err := tx.Exec(`INSERT INTO basic_event_element (id, observed_ref, direction, state, message_topic, message_broker_ref, last_update, min_interval, max_interval) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-		id, observedRefID, basicEvent.Direction, basicEvent.State, messageTopic, messageBrokerRefID, lastUpdate, minInterval, maxInterval)
+	_, err := tx.Exec(`INSERT INTO basic_event_element (id, observed, direction, state, message_topic, message_broker, last_update, min_interval, max_interval) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+		id, observedRefJson, basicEvent.Direction, basicEvent.State, messageTopic, messageBrokerRefJson, lastUpdate, minInterval, maxInterval)
 	return err
 }

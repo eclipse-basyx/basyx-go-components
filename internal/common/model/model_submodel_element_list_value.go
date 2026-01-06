@@ -36,6 +36,11 @@ func (s SubmodelElementListValue) MarshalJSON() ([]byte, error) {
 	return s.MarshalValueOnly()
 }
 
+// GetModelType returns the model type name for SubmodelElementList
+func (s SubmodelElementListValue) GetModelType() string {
+	return "SubmodelElementList"
+}
+
 // AssertSubmodelElementListValueRequired checks if the required fields are not zero-ed
 func AssertSubmodelElementListValueRequired(_ SubmodelElementListValue) error {
 	// List itself is optional, individual elements are validated by their own types

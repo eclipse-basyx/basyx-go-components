@@ -37,6 +37,7 @@ package submodelelements
 import (
 	"database/sql"
 
+	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	jsoniter "github.com/json-iterator/go"
@@ -204,14 +205,59 @@ func (p PostgreSQLReferenceElementHandler) CreateNested(tx *sql.Tx, submodelID s
 //
 // Note: This is currently a placeholder that delegates to the decorated handler.
 // Full implementation would include updating the reference value and keys.
-func (p PostgreSQLReferenceElementHandler) Update(idShortOrPath string, submodelElement gen.SubmodelElement) error {
-	return p.decorated.Update(idShortOrPath, submodelElement)
+func (p PostgreSQLReferenceElementHandler) Update(submodelID string, idShortOrPath string, submodelElement gen.SubmodelElement) error {
+	return p.decorated.Update(submodelID, idShortOrPath, submodelElement)
 }
 
-// Delete removes a ReferenceElement and all its associated data from the database.
-// This includes the base SubmodelElement record, the reference_element record, and cascading
-// deletion of the reference and reference_key records.
+// UpdateValueOnly updates only the value of an existing ReferenceElement identified by its idShort or full path.
+// This method specifically updates the reference value (type and keys) without modifying other attributes.
 //
+// The method performs the following operations:
+//  1. Type assertion to ensure the valueOnly is a ReferenceElementValue
+//  2. Marshals the reference value to JSON for database storage
+//  3. Constructs and executes an update query to modify only the value field
+//
+// Parameters:
+//   - idShortOrPath: The idShort or full path of the ReferenceElement to update
+//   - valueOnly: The new ReferenceElementValue containing updated reference data
+//
+// Returns:
+//   - error: Any error encountered during type assertion, marshaling, or database operations
+func (p PostgreSQLReferenceElementHandler) UpdateValueOnly(submodelID string, idShortOrPath string, valueOnly gen.SubmodelElementValue) error {
+	refElemVal, ok := valueOnly.(gen.ReferenceElementValue)
+	if !ok {
+		return common.NewErrBadRequest("valueOnly is not of type ReferenceElementValue")
+	}
+
+	// Marshal reference value to JSON using helper function
+	referenceJSONString, err := marshalReferenceValueToJSON(refElemVal)
+	if err != nil {
+		return err
+	}
+
+	// Build and execute update query using GoQu
+	query, args, err := goqu.Update("reference_element").
+		Set(goqu.Record{
+			"value": referenceJSONString,
+		}).
+		Where(goqu.I("id").Eq(
+			goqu.From("submodel_element").
+				Select("id").
+				Where(goqu.Ex{
+					"submodel_id":  submodelID,
+					"idshort_path": idShortOrPath,
+				}),
+		)).
+		ToSQL()
+	if err != nil {
+		return err
+	}
+
+	_, err = p.db.Exec(query, args...)
+	return err
+}
+
+// Delete removes a ReferenceElement identified by its idShort or full path from the database.
 // Parameters:
 //   - idShortOrPath: The idShort or full path of the ReferenceElement to delete
 //
@@ -262,4 +308,23 @@ func insertReferenceElement(refElem *gen.ReferenceElement, tx *sql.Tx, id int) e
 	// Insert reference_element
 	_, err := tx.Exec(`INSERT INTO reference_element (id, value) VALUES ($1, $2)`, id, referenceJSONString)
 	return err
+}
+
+// marshalReferenceValueToJSON converts a ReferenceElementValue to a JSON string for database storage.
+// Returns a sql.NullString with Valid=true if the reference has keys, otherwise Valid=false.
+func marshalReferenceValueToJSON(refElemVal gen.ReferenceElementValue) (sql.NullString, error) {
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
+	var referenceJSONString sql.NullString
+
+	if len(refElemVal.Keys) > 0 {
+		bytes, err := json.Marshal(refElemVal)
+		if err != nil {
+			return sql.NullString{}, err
+		}
+		referenceJSONString = sql.NullString{String: string(bytes), Valid: true}
+	} else {
+		referenceJSONString = sql.NullString{Valid: false}
+	}
+
+	return referenceJSONString, nil
 }

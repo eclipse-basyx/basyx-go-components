@@ -40,4 +40,5 @@ package model
 type SubmodelElementValue interface {
 	// MarshalValueOnly serializes the value in Value-Only format
 	MarshalValueOnly() ([]byte, error)
+	GetModelType() string
 }

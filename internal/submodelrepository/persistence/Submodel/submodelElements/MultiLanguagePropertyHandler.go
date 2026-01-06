@@ -33,7 +33,9 @@ package submodelelements
 
 import (
 	"database/sql"
+	"fmt"
 
+	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	_ "github.com/lib/pq" // PostgreSQL Treiber
@@ -143,8 +145,78 @@ func (p PostgreSQLMultiLanguagePropertyHandler) CreateNested(tx *sql.Tx, submode
 //
 // Returns:
 //   - error: An error if the update operation fails
-func (p PostgreSQLMultiLanguagePropertyHandler) Update(idShortOrPath string, submodelElement gen.SubmodelElement) error {
-	return p.decorated.Update(idShortOrPath, submodelElement)
+func (p PostgreSQLMultiLanguagePropertyHandler) Update(submodelID string, idShortOrPath string, submodelElement gen.SubmodelElement) error {
+	return p.decorated.Update(submodelID, idShortOrPath, submodelElement)
+}
+
+// UpdateValueOnly updates only the value of an existing MultiLanguageProperty submodel element identified by its idShort or path.
+// It deletes existing language-text pairs and inserts the new set of values provided.
+//
+// Parameters:
+//   - submodelID: The ID of the parent submodel
+//   - idShortOrPath: The idShort or path identifying the element to update
+//   - valueOnly: The new value to set (must be of type gen.MultiLanguagePropertyValue)
+//
+// Returns:
+//   - error: An error if the update operation fails or if the valueOnly type is incorrect
+func (p PostgreSQLMultiLanguagePropertyHandler) UpdateValueOnly(submodelID string, idShortOrPath string, valueOnly gen.SubmodelElementValue) error {
+	mlp, ok := valueOnly.(gen.MultiLanguagePropertyValue)
+	if !ok {
+		ambiguous, isAmbiguous := valueOnly.(gen.AmbiguousSubmodelElementValue)
+		if !isAmbiguous {
+			return common.NewErrBadRequest("valueOnly is not of type MultiLanguagePropertyValue")
+		}
+		var err error
+		mlp, err = ambiguous.ConvertToMultiLanguagePropertyValue()
+		if err != nil {
+			return common.NewErrBadRequest("valueOnly contains non-MultiLanguagePropertyValue entries")
+		}
+	}
+
+	dialect := goqu.Dialect("postgres")
+
+	// Build subquery to get the submodel element ID
+	subquery := dialect.From("submodel_element").
+		Select("id").
+		Where(
+			goqu.C("submodel_id").Eq(submodelID),
+			goqu.C("idshort_path").Eq(idShortOrPath),
+		)
+
+	// Delete existing values
+	deleteQuery, deleteArgs, err := dialect.Delete("multilanguage_property_value").
+		Where(goqu.C("mlp_id").Eq(subquery)).
+		ToSQL()
+	if err != nil {
+		return fmt.Errorf("failed to build delete query: %w", err)
+	}
+
+	_, err = p.db.Exec(deleteQuery, deleteArgs...)
+	if err != nil {
+		return fmt.Errorf("failed to delete existing values: %w", err)
+	}
+
+	// Insert new values
+	for _, val := range mlp {
+		for lang, text := range val {
+			insertQuery, insertArgs, err := dialect.Insert("multilanguage_property_value").
+				Rows(goqu.Record{
+					"mlp_id":   subquery,
+					"language": lang,
+					"text":     text,
+				}).
+				ToSQL()
+			if err != nil {
+				return fmt.Errorf("failed to build insert query: %w", err)
+			}
+
+			_, err = p.db.Exec(insertQuery, insertArgs...)
+			if err != nil {
+				return fmt.Errorf("failed to insert value: %w", err)
+			}
+		}
+	}
+	return nil
 }
 
 // Delete removes a MultiLanguageProperty submodel element from the database.

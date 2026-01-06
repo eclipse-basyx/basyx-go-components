@@ -32,7 +32,9 @@ package submodelelements
 
 import (
 	"database/sql"
+	"fmt"
 
+	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	jsoniter "github.com/json-iterator/go"
@@ -78,7 +80,8 @@ func NewPostgreSQLRelationshipElementHandler(db *sql.DB) (*PostgreSQLRelationshi
 
 // Create persists a new root-level RelationshipElement to the database.
 //
-// This method creates a RelationshipElement at the root level of a submodel. It delegates
+// This method creates a RelationshipElement at
+// the root level of a submodel. It delegates
 // base element creation to the decorated handler, then persists the relationship-specific
 // data including the first and second references that define the relationship.
 //
@@ -184,8 +187,88 @@ func (p PostgreSQLRelationshipElementHandler) CreateNested(tx *sql.Tx, submodelI
 //
 // Returns:
 //   - error: An error if the decorated update operation fails
-func (p PostgreSQLRelationshipElementHandler) Update(idShortOrPath string, submodelElement gen.SubmodelElement) error {
-	return p.decorated.Update(idShortOrPath, submodelElement)
+func (p PostgreSQLRelationshipElementHandler) Update(submodelID string, idShortOrPath string, submodelElement gen.SubmodelElement) error {
+	return p.decorated.Update(submodelID, idShortOrPath, submodelElement)
+}
+
+// UpdateValueOnly updates only the value fields of an existing RelationshipElement.
+//
+// This method allows for partial updates of a RelationshipElement, specifically targeting
+// the "first" and "second" references without modifying other base element properties.
+// It constructs an update record dynamically based on which fields are provided in
+// the valueOnly parameter.
+//
+// Parameters:
+//   - submodelID: ID of the parent submodel
+//   - idShortOrPath: idShort or hierarchical path to the element to update
+//   - valueOnly: The RelationshipElementValue containing fields to update
+//
+// Returns:
+//   - error: An error if the update operation fails
+func (p PostgreSQLRelationshipElementHandler) UpdateValueOnly(submodelID string, idShortOrPath string, valueOnly gen.SubmodelElementValue) error {
+	relElemVal, ok := valueOnly.(gen.RelationshipElementValue)
+	if !ok {
+		return common.NewErrBadRequest("valueOnly is not of type RelationshipElementValue")
+	}
+
+	tx, err := p.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err != nil {
+			_ = tx.Rollback()
+		}
+	}()
+
+	dialect := goqu.Dialect("postgres")
+	json := jsoniter.ConfigCompatibleWithStandardLibrary
+
+	// Build update record with only the fields that are set
+	updateRecord := goqu.Record{}
+
+	if !isEmptyReference(relElemVal.First) {
+		firstRefByte, err := json.Marshal(relElemVal.First)
+		if err != nil {
+			return err
+		}
+		updateRecord["first"] = string(firstRefByte)
+	}
+
+	if !isEmptyReference(relElemVal.Second) {
+		secondRefByte, err := json.Marshal(relElemVal.Second)
+		if err != nil {
+			return err
+		}
+		updateRecord["second"] = string(secondRefByte)
+	}
+
+	// If nothing to update, return early
+	if len(updateRecord) == 0 {
+		return nil
+	}
+
+	query, args, err := dialect.Update("relationship_element").
+		Set(updateRecord).
+		Where(goqu.I("id").Eq(
+			dialect.From("submodel_element").
+				Select("id").
+				Where(goqu.Ex{
+					"submodel_id":  submodelID,
+					"idshort_path": idShortOrPath,
+				}),
+		)).
+		ToSQL()
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.Exec(query, args...)
+	if err != nil {
+		return common.NewInternalServerError(fmt.Sprintf("failed to execute update for RelationshipElement: %s", err.Error()))
+	}
+	err = tx.Commit()
+	return err
 }
 
 // Delete removes a RelationshipElement identified by its idShort or path.

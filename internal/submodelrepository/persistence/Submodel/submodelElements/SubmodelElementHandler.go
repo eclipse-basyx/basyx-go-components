@@ -48,6 +48,7 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/builder"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	submodelsubqueries "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/Submodel/queries"
+	persistenceutils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 )
 
@@ -80,7 +81,6 @@ func GetSMEHandler(submodelElement model.SubmodelElement, db *sql.DB) (PostgreSQ
 //   - Blob: Binary data element
 //   - Capability: Functional capability description
 //   - Entity: Logical or physical entity
-//   - EventElement: Base event element
 //   - File: File reference element
 //   - MultiLanguageProperty: Property with multi-language support
 //   - Operation: Invocable operation
@@ -139,13 +139,6 @@ func GetSMEHandlerByModelType(modelType string, db *sql.DB) (PostgreSQLSMECrudIn
 			return nil, common.NewInternalServerError("Failed to create Entity handler. See console for details.")
 		}
 		handler = entityHandler
-	case "EventElement":
-		eventElemHandler, err := NewPostgreSQLEventElementHandler(db)
-		if err != nil {
-			_, _ = fmt.Println("Error creating EventElement handler:", err)
-			return nil, common.NewInternalServerError("Failed to create EventElement handler. See console for details.")
-		}
-		handler = eventElemHandler
 	case "File":
 		fileHandler, err := NewPostgreSQLFileHandler(db)
 		if err != nil {
@@ -213,6 +206,77 @@ func GetSMEHandlerByModelType(modelType string, db *sql.DB) (PostgreSQLSMECrudIn
 		return nil, errors.New("ModelType " + modelType + " unsupported.")
 	}
 	return handler, nil
+}
+
+// UpdateNestedElements updates nested submodel elements based on value-only patches.
+//
+// Parameters:
+//   - db: Database connection
+//   - elems: List of elements to process
+//   - idShortOrPath: idShort or hierarchical path of the root element
+//   - submodelID: ID of the parent submodel
+//
+// Returns:
+//   - error: Error if update fails
+func UpdateNestedElements(db *sql.DB, elems []persistenceutils.ValueOnlyElementsToProcess, idShortOrPath string, submodelID string) error {
+	for _, elem := range elems {
+		if elem.IdShortPath == idShortOrPath {
+			continue // Skip the root element as it's already processed
+		}
+		modelType := elem.Element.GetModelType()
+		if modelType == "File" {
+			// We have to check the database because File could be ambiguous between File and Blob
+			actual, err := GetModelTypeByIdShortPathAndSubmodelID(db, submodelID, elem.IdShortPath)
+			if err != nil {
+				return err
+			}
+			modelType = actual
+		}
+		handler, err := GetSMEHandlerByModelType(modelType, db)
+		if err != nil {
+			return err
+		}
+		err = handler.UpdateValueOnly(submodelID, elem.IdShortPath, elem.Element)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// GetModelTypeByIdShortPathAndSubmodelID retrieves the model type of a submodel element
+//
+// Parameters:
+// - db: Database connection
+// - submodelID: ID of the parent submodel
+//
+// - idShortOrPath: idShort or hierarchical path of the submodel element
+// Returns:
+// - string: Model type of the submodel element
+// - error: Error if retrieval fails or element is not found
+func GetModelTypeByIdShortPathAndSubmodelID(db *sql.DB, submodelID string, idShortOrPath string) (string, error) {
+	dialect := goqu.Dialect("postgres")
+
+	query, args, err := dialect.From("submodel_element").
+		Select("model_type").
+		Where(
+			goqu.C("submodel_id").Eq(submodelID),
+			goqu.C("idshort_path").Eq(idShortOrPath),
+		).
+		ToSQL()
+	if err != nil {
+		return "", err
+	}
+
+	var modelType string
+	err = db.QueryRow(query, args...).Scan(&modelType)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", common.NewErrNotFound("Submodel-Element ID-Short: " + idShortOrPath)
+		}
+		return "", err
+	}
+	return modelType, nil
 }
 
 // DeleteSubmodelElementByPath removes a submodel element by its idShort or path including all nested elements.

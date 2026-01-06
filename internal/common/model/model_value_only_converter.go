@@ -74,7 +74,13 @@ func PropertyToValueOnly(p *Property) PropertyValue {
 
 // MultiLanguagePropertyToValueOnly converts a MultiLanguageProperty to MultiLanguagePropertyValue
 func MultiLanguagePropertyToValueOnly(mlp *MultiLanguageProperty) MultiLanguagePropertyValue {
-	return MultiLanguagePropertyValue(mlp.Value)
+	result := make(MultiLanguagePropertyValue, len(mlp.Value))
+	for i, langString := range mlp.Value {
+		langText := make(map[string]string)
+		langText[langString.Language] = langString.Text
+		result[i] = langText
+	}
+	return result
 }
 
 // RangeToValueOnly converts a Range to RangeValue
@@ -117,17 +123,11 @@ func RelationshipElementToValueOnly(re *RelationshipElement) RelationshipElement
 	result := RelationshipElementValue{}
 
 	if re.First != nil {
-		result.First = ReferenceValue{
-			Type: re.First.Type,
-			Keys: re.First.Keys,
-		}
+		result.First = re.First
 	}
 
 	if re.Second != nil {
-		result.Second = ReferenceValue{
-			Type: re.Second.Type,
-			Keys: re.Second.Keys,
-		}
+		result.Second = re.Second
 	}
 
 	return result
@@ -138,22 +138,16 @@ func AnnotatedRelationshipElementToValueOnly(are *AnnotatedRelationshipElement) 
 	result := AnnotatedRelationshipElementValue{}
 
 	if are.First != nil {
-		result.First = ReferenceValue{
-			Type: are.First.Type,
-			Keys: are.First.Keys,
-		}
+		result.First = *are.First
 	}
 
 	if are.Second != nil {
-		result.Second = ReferenceValue{
-			Type: are.Second.Type,
-			Keys: are.Second.Keys,
-		}
+		result.Second = *are.Second
 	}
 
 	// Convert annotations
 	if len(are.Annotations) > 0 {
-		result.Annotations = make(map[string]interface{})
+		result.Annotations = make(map[string]SubmodelElementValue)
 		for _, annotation := range are.Annotations {
 			idShort := annotation.GetIdShort()
 			if idShort == "" {
@@ -192,7 +186,7 @@ func EntityToValueOnly(e *Entity) (EntityValue, error) {
 
 	// Convert Statements
 	if len(e.Statements) > 0 {
-		statementsMap := make(map[string]interface{})
+		statementsMap := make(map[string]SubmodelElementValue)
 		for _, statement := range e.Statements {
 			idShort := statement.GetIdShort()
 			if idShort == "" {
@@ -219,10 +213,7 @@ func BasicEventElementToValueOnly(bee *BasicEventElement) BasicEventElementValue
 	result := BasicEventElementValue{}
 
 	if bee.Observed != nil {
-		result.Observed = ReferenceValue{
-			Type: bee.Observed.Type,
-			Keys: bee.Observed.Keys,
-		}
+		result.Observed = *bee.Observed
 	}
 
 	return result
