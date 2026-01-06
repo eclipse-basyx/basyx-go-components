@@ -33,7 +33,7 @@
                 {
                     "interface": "AAS-DISCOVERY-3.0",
                     "protocolInformation": {
-                        "href": "https://demo.digital-twin.host/aas-discovery/lookup/shells",
+                        "href": "https://demo.digital-twin.host/aas-discovery",
                         "endpointProtocol": "HTTPS"
                     }
                 }
