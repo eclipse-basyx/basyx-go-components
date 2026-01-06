@@ -2,7 +2,9 @@
     "Updated List Item 1",
     [
         {
-            "language": "en-us",
+            "language": "en-us"
+        },
+        {
             "text": "Updated List MLP"
         }
     ],

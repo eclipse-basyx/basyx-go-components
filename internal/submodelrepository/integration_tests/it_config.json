@@ -360,14 +360,14 @@
     {
         "context": "PATCH MultiLanguageProperty ValueOnly - Update ExampleMultiLanguageProperty",
         "method": "PATCH",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/ExampleSubmodelElementCollection.ExampleSubmodelElementListOrdered.ExampleMultiLanguageProperty/$value",
+        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/ExampleSubmodelElementCollection.ExampleSubmodelElementListOrdered[1]/$value",
         "data": "postBody/patchMultiLanguagePropertyValueOnly.json",
         "expectedStatus": 204
     },
     {
         "context": "PATCH MultiLanguageProperty ValueOnly - Verify ExampleMultiLanguageProperty Update",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/ExampleSubmodelElementCollection.ExampleSubmodelElementListOrdered.ExampleMultiLanguageProperty/$value",
+        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/ExampleSubmodelElementCollection.ExampleSubmodelElementListOrdered[1]/$value",
         "shouldMatch": "expected/expectedMultiLanguagePropertyValueOnlyAfterPatch.json",
         "expectedStatus": 200
     },
@@ -458,14 +458,14 @@
     {
         "context": "PATCH SubmodelElementCollection ValueOnly - Update ExampleSubmodelElementCollection",
         "method": "PATCH",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/ExampleSubmodelElementCollection.ExampleSubmodelElementCollection/$value",
+        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/ExampleSubmodelElementCollection/$value",
         "data": "postBody/patchSubmodelElementCollectionValueOnly.json",
         "expectedStatus": 204
     },
     {
         "context": "PATCH SubmodelElementCollection ValueOnly - Verify ExampleSubmodelElementCollection Update",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/ExampleSubmodelElementCollection.ExampleSubmodelElementCollection/$value",
+        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/ExampleSubmodelElementCollection/$value",
         "shouldMatch": "expected/expectedSubmodelElementCollectionValueOnlyAfterPatch.json",
         "expectedStatus": 200
     },

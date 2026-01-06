@@ -17,9 +17,7 @@
             }
         ]
     },
-    "annotations": [
-        {
-            "AnnotationProperty1": "Updated Annotation Value"
-        }
-    ]
+    "annotations": {
+        "AnnotationProperty1": "Updated Annotation Value"
+    }
 }

@@ -115,7 +115,7 @@
                 "ExampleSubmodelElementCollection": {
                     "ExampleBlob": {
                         "contentType": "application/pdf",
-                        "value": "\\x415149444241553d"
+                        "value": "AQIDBAU="
                     },
                     "ExampleFile": {
                         "contentType": "application/pdf",

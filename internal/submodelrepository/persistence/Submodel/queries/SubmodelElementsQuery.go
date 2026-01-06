@@ -227,9 +227,6 @@ func getValueSubquery(dialect goqu.DialectWrapper) exp.CaseExpression {
 }
 
 func getBasicEventElementSubquery(dialect goqu.DialectWrapper) *goqu.SelectDataset {
-	observedRef, observedRefReferred := queries.GetReferenceQueries(dialect, goqu.I("bee.observed_ref"))
-	messageBrokerRef, messageBrokerRefReferred := queries.GetReferenceQueries(dialect, goqu.I("bee.message_broker_ref"))
-
 	return dialect.From(goqu.T("basic_event_element").As("bee")).
 		Select(
 			goqu.Func("jsonb_build_object",
@@ -239,10 +236,8 @@ func getBasicEventElementSubquery(dialect goqu.DialectWrapper) *goqu.SelectDatas
 				goqu.V("last_update"), goqu.I("bee.last_update"),
 				goqu.V("min_interval"), goqu.I("bee.min_interval"),
 				goqu.V("max_interval"), goqu.I("bee.max_interval"),
-				goqu.V("observed_ref"), observedRef,
-				goqu.V("observed_ref_referred"), observedRefReferred,
-				goqu.V("message_broker_ref"), messageBrokerRef,
-				goqu.V("message_broker_ref_referred"), messageBrokerRefReferred,
+				goqu.V("observed"), goqu.I("bee.observed"),
+				goqu.V("message_broker"), goqu.I("bee.message_broker"),
 			),
 		).
 		Where(goqu.I("bee.id").Eq(goqu.I("sme.id"))).
@@ -254,7 +249,7 @@ func getBlobSubquery(dialect goqu.DialectWrapper) *goqu.SelectDataset {
 		Select(
 			goqu.Func("jsonb_build_object",
 				goqu.V("content_type"), goqu.I("be.content_type"),
-				goqu.V("value"), goqu.I("be.value"),
+				goqu.V("value"), goqu.L("encode(be.value, 'base64')"),
 			),
 		).
 		Where(goqu.I("be.id").Eq(goqu.I("sme.id"))).

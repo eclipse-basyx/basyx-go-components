@@ -30,6 +30,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	jsoniter "github.com/json-iterator/go"
 	"golang.org/x/sync/errgroup"
@@ -377,13 +378,18 @@ func buildBasicEventElement(smeRow model.SubmodelElementRow, refBuilderMap map[i
 	if err != nil {
 		return nil, err
 	}
-	observedRefs, err := getSingleReference(&valueRow.ObservedRef, &valueRow.ObservedRefReferred, refBuilderMap, refMutex)
-	if err != nil {
-		return nil, err
+	var observedRefs, messageBrokerRefs *model.Reference
+	if valueRow.Observed != nil {
+		err = json.Unmarshal(valueRow.Observed, &observedRefs)
+		if err != nil {
+			return nil, err
+		}
 	}
-	messageBrokerRefs, err := getSingleReference(&valueRow.MessageBrokerRef, &valueRow.MessageBrokerRefReferred, refBuilderMap, refMutex)
-	if err != nil {
-		return nil, err
+	if valueRow.MessageBroker != nil {
+		err = json.Unmarshal(valueRow.MessageBroker, &messageBrokerRefs)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	state, err := model.NewStateOfEventFromValue(valueRow.State)
@@ -594,9 +600,12 @@ func buildBlob(smeRow model.SubmodelElementRow) (*model.Blob, error) {
 	if err != nil {
 		return nil, err
 	}
-
+	decoded, err := common.Decode(valueRow.Value)
+	if err != nil {
+		return nil, err
+	}
 	return &model.Blob{
-		Value:       valueRow.Value,
+		Value:       string(decoded),
 		ContentType: valueRow.ContentType,
 	}, nil
 }

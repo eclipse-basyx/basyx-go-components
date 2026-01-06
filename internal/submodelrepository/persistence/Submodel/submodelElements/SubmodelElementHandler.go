@@ -214,6 +214,14 @@ func UpdateNestedElements(db *sql.DB, elems []persistenceutils.ValueOnlyElements
 			continue // Skip the root element as it's already processed
 		}
 		modelType := elem.Element.GetModelType()
+		if modelType == "File" {
+			// We have to check the database because File could be ambiguous between File and Blob
+			actual, err := GetModelTypeByIdShortPathAndSubmodelID(db, submodelID, elem.IdShortPath)
+			if err != nil {
+				return err
+			}
+			modelType = actual
+		}
 		handler, err := GetSMEHandlerByModelType(modelType, db)
 		handler.UpdateValueOnly(submodelID, elem.IdShortPath, elem.Element)
 		if err != nil {
@@ -221,6 +229,31 @@ func UpdateNestedElements(db *sql.DB, elems []persistenceutils.ValueOnlyElements
 		}
 	}
 	return nil
+}
+
+func GetModelTypeByIdShortPathAndSubmodelID(db *sql.DB, submodelID string, idShortOrPath string) (string, error) {
+	dialect := goqu.Dialect("postgres")
+
+	query, args, err := dialect.From("submodel_element").
+		Select("model_type").
+		Where(
+			goqu.C("submodel_id").Eq(submodelID),
+			goqu.C("idshort_path").Eq(idShortOrPath),
+		).
+		ToSQL()
+	if err != nil {
+		return "", err
+	}
+
+	var modelType string
+	err = db.QueryRow(query, args...).Scan(&modelType)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", common.NewErrNotFound("Submodel-Element ID-Short: " + idShortOrPath)
+		}
+		return "", err
+	}
+	return modelType, nil
 }
 
 // DeleteSubmodelElementByPath removes a submodel element by its idShort or path including all nested elements.

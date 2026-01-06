@@ -31,6 +31,8 @@ package submodelelements
 
 import (
 	"database/sql"
+	"encoding/json"
+	"fmt"
 
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
@@ -162,15 +164,17 @@ func (p PostgreSQLBasicEventElementHandler) UpdateValueOnly(submodelID string, i
 
 	dialect := goqu.Dialect("postgres")
 
+	var newObservedJson sql.NullString
+	observedBytes, err := json.Marshal(basicEventValue.Observed)
+	if err != nil {
+		return common.NewErrBadRequest(fmt.Sprintf("failed to marshal observed value: %s", err))
+	}
+	newObservedJson = sql.NullString{String: string(observedBytes), Valid: true}
+
 	// Get the element ID from the database
 	var elementID int
-	var oldObservedRefID sql.NullInt64
 	query, args, err := dialect.From("submodel_element").
-		InnerJoin(
-			goqu.T("basic_event_element"),
-			goqu.On(goqu.I("submodel_element.id").Eq(goqu.I("basic_event_element.id"))),
-		).
-		Select("submodel_element.id", "basic_event_element.observed_ref").
+		Select("id").
 		Where(
 			goqu.C("idshort_path").Eq(idShortOrPath),
 			goqu.C("submodel_id").Eq(submodelID),
@@ -180,7 +184,7 @@ func (p PostgreSQLBasicEventElementHandler) UpdateValueOnly(submodelID string, i
 		return err
 	}
 
-	err = tx.QueryRow(query, args...).Scan(&elementID, &oldObservedRefID)
+	err = tx.QueryRow(query, args...).Scan(&elementID)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return common.NewErrNotFound("BasicEventElement not found")
@@ -188,47 +192,9 @@ func (p PostgreSQLBasicEventElementHandler) UpdateValueOnly(submodelID string, i
 		return err
 	}
 
-	// Insert new observed reference
-	var newObservedRefID sql.NullInt64
-	if len(basicEventValue.Observed.Keys) > 0 {
-		insertQuery, insertArgs, err := dialect.Insert("reference").
-			Rows(goqu.Record{"type": basicEventValue.Observed.Type}).
-			Returning("id").
-			ToSQL()
-		if err != nil {
-			return err
-		}
-
-		var refID int
-		err = tx.QueryRow(insertQuery, insertArgs...).Scan(&refID)
-		if err != nil {
-			return err
-		}
-		newObservedRefID = sql.NullInt64{Int64: int64(refID), Valid: true}
-
-		// Insert reference keys
-		for i, key := range basicEventValue.Observed.Keys {
-			keyQuery, keyArgs, err := dialect.Insert("reference_key").
-				Rows(goqu.Record{
-					"reference_id": refID,
-					"position":     i,
-					"type":         key.Type,
-					"value":        key.Value,
-				}).
-				ToSQL()
-			if err != nil {
-				return err
-			}
-			_, err = tx.Exec(keyQuery, keyArgs...)
-			if err != nil {
-				return err
-			}
-		}
-	}
-
 	// Update the basic_event_element table with new observed reference
 	updateQuery, updateArgs, err := dialect.Update("basic_event_element").
-		Set(goqu.Record{"observed_ref": newObservedRefID}).
+		Set(goqu.Record{"observed": newObservedJson}).
 		Where(goqu.C("id").Eq(elementID)).
 		ToSQL()
 	if err != nil {
@@ -238,20 +204,6 @@ func (p PostgreSQLBasicEventElementHandler) UpdateValueOnly(submodelID string, i
 	_, err = tx.Exec(updateQuery, updateArgs...)
 	if err != nil {
 		return err
-	}
-
-	// Delete old observed reference if it exists
-	if oldObservedRefID.Valid {
-		deleteQuery, deleteArgs, err := dialect.Delete("reference").
-			Where(goqu.C("id").Eq(oldObservedRefID.Int64)).
-			ToSQL()
-		if err != nil {
-			return err
-		}
-		_, err = tx.Exec(deleteQuery, deleteArgs...)
-		if err != nil {
-			return err
-		}
 	}
 
 	return tx.Commit()
@@ -271,42 +223,22 @@ func (p PostgreSQLBasicEventElementHandler) Delete(idShortOrPath string) error {
 }
 
 func insertBasicEventElement(basicEvent *gen.BasicEventElement, tx *sql.Tx, id int) error {
-	var observedRefID sql.NullInt64
+	var observedRefJson sql.NullString
 	if !isEmptyReference(basicEvent.Observed) {
-		var refID int
-		err := tx.QueryRow(`INSERT INTO reference (type) VALUES ($1) RETURNING id`, basicEvent.Observed.Type).Scan(&refID)
+		observedBytes, err := json.Marshal(basicEvent.Observed)
 		if err != nil {
 			return err
 		}
-		observedRefID = sql.NullInt64{Int64: int64(refID), Valid: true}
-
-		keys := basicEvent.Observed.Keys
-		for i := range keys {
-			_, err = tx.Exec(`INSERT INTO reference_key (reference_id, position, type, value) VALUES ($1, $2, $3, $4)`,
-				refID, i, keys[i].Type, keys[i].Value)
-			if err != nil {
-				return err
-			}
-		}
+		observedRefJson = sql.NullString{String: string(observedBytes), Valid: true}
 	}
 
-	var messageBrokerRefID sql.NullInt64
+	var messageBrokerRefJson sql.NullString
 	if !isEmptyReference(basicEvent.MessageBroker) {
-		var refID int
-		err := tx.QueryRow(`INSERT INTO reference (type) VALUES ($1) RETURNING id`, basicEvent.MessageBroker.Type).Scan(&refID)
+		messageBrokerBytes, err := json.Marshal(basicEvent.MessageBroker)
 		if err != nil {
 			return err
 		}
-		messageBrokerRefID = sql.NullInt64{Int64: int64(refID), Valid: true}
-
-		keys := basicEvent.MessageBroker.Keys
-		for i := range keys {
-			_, err = tx.Exec(`INSERT INTO reference_key (reference_id, position, type, value) VALUES ($1, $2, $3, $4)`,
-				refID, i, keys[i].Type, keys[i].Value)
-			if err != nil {
-				return err
-			}
-		}
+		messageBrokerRefJson = sql.NullString{String: string(messageBrokerBytes), Valid: true}
 	}
 
 	// Handle nullable fields
@@ -330,7 +262,7 @@ func insertBasicEventElement(basicEvent *gen.BasicEventElement, tx *sql.Tx, id i
 		messageTopic = sql.NullString{String: basicEvent.MessageTopic, Valid: true}
 	}
 
-	_, err := tx.Exec(`INSERT INTO basic_event_element (id, observed_ref, direction, state, message_topic, message_broker_ref, last_update, min_interval, max_interval) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-		id, observedRefID, basicEvent.Direction, basicEvent.State, messageTopic, messageBrokerRefID, lastUpdate, minInterval, maxInterval)
+	_, err := tx.Exec(`INSERT INTO basic_event_element (id, observed, direction, state, message_topic, message_broker, last_update, min_interval, max_interval) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+		id, observedRefJson, basicEvent.Direction, basicEvent.State, messageTopic, messageBrokerRefJson, lastUpdate, minInterval, maxInterval)
 	return err
 }

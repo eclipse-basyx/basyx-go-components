@@ -1048,7 +1048,7 @@ func BuildElementsToProcessStackValueOnly(db *sql.DB, submodelID string, idShort
 			row := db.QueryRow(sqlQuery, args...)
 			var modelType string
 			if err := row.Scan(&modelType); err != nil {
-				return nil, err
+				return nil, common.NewErrNotFound(fmt.Sprintf("Submodel Element with ID Short Path %s and Submodel ID %s not found", current.IdShortPath, submodelID))
 			}
 			if modelType == "MultiLanguageProperty" {
 				mlpValue, err := elem.ConvertToMultiLanguagePropertyValue()
