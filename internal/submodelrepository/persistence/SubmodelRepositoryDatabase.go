@@ -1217,6 +1217,14 @@ func (p *PostgreSQLSubmodelDatabase) UpdateSubmodelElementValueOnly(submodelID s
 	return handler.UpdateValueOnly(submodelID, idShortOrPath, valueOnly)
 }
 
+// UpdateSubmodelValueOnly updates only the values of multiple submodel elements within a submodel.
+//
+// Parameters:
+//   - submodelID: ID of the submodel to update
+//   - valueOnly: Map of idShorts to their new values
+//
+// Returns:
+//   - error: Error if the update operation fails
 func (p *PostgreSQLSubmodelDatabase) UpdateSubmodelValueOnly(submodelID string, valueOnly gen.SubmodelValue) error {
 	var count int
 	err := p.db.QueryRow("SELECT COUNT(id) FROM submodel WHERE id = $1", submodelID).Scan(&count)
