@@ -32,6 +32,7 @@ package submodelelements
 import (
 	"database/sql"
 
+	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	persistenceutils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
@@ -159,6 +160,17 @@ func (p PostgreSQLAnnotatedRelationshipElementHandler) Update(submodelID string,
 // Returns:
 //   - error: An error if the update operation fails
 func (p PostgreSQLAnnotatedRelationshipElementHandler) UpdateValueOnly(submodelID string, idShortOrPath string, valueOnly gen.SubmodelElementValue) error {
+	// Start transaction
+	tx, err := p.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err != nil {
+			_ = tx.Rollback()
+		}
+	}()
+
 	elems, err := persistenceutils.BuildElementsToProcessStackValueOnly(p.db, submodelID, idShortOrPath, valueOnly)
 	if err != nil {
 		return err
@@ -166,13 +178,21 @@ func (p PostgreSQLAnnotatedRelationshipElementHandler) UpdateValueOnly(submodelI
 
 	// Update 'first' and 'second' references for AnnotatedRelationshipElement
 	if areValue, ok := valueOnly.(gen.AnnotatedRelationshipElementValue); ok {
-		// Get the element ID from the database
+		dialect := goqu.Dialect("postgres")
+
+		// Get the element ID from the database using goqu
 		var elementID int
-		err := p.db.QueryRow(`
-			SELECT sme.id 
-			FROM submodel_element sme 
-			WHERE sme.idshort_path = $1 AND sme.submodel_id = $2
-		`, idShortOrPath, submodelID).Scan(&elementID)
+		idQuery, args, err := dialect.From("submodel_element").
+			Select("id").
+			Where(goqu.Ex{
+				"idshort_path": idShortOrPath,
+				"submodel_id":  submodelID,
+			}).ToSQL()
+		if err != nil {
+			return err
+		}
+
+		err = tx.QueryRow(idQuery, args...).Scan(&elementID)
 		if err != nil {
 			return err
 		}
@@ -199,12 +219,19 @@ func (p PostgreSQLAnnotatedRelationshipElementHandler) UpdateValueOnly(submodelI
 			secondRef = &refStr
 		}
 
-		// Update the references in the database
-		_, err = p.db.Exec(`
-			UPDATE annotated_relationship_element 
-			SET first = $1, second = $2 
-			WHERE id = $3
-		`, firstRef, secondRef, elementID)
+		// Update the references in the database using goqu
+		updateQuery, updateArgs, err := dialect.Update("annotated_relationship_element").
+			Set(goqu.Record{
+				"first":  firstRef,
+				"second": secondRef,
+			}).
+			Where(goqu.C("id").Eq(elementID)).
+			ToSQL()
+		if err != nil {
+			return err
+		}
+
+		_, err = tx.Exec(updateQuery, updateArgs...)
 		if err != nil {
 			return err
 		}
@@ -214,7 +241,9 @@ func (p PostgreSQLAnnotatedRelationshipElementHandler) UpdateValueOnly(submodelI
 	if err != nil {
 		return err
 	}
-	return nil
+
+	err = tx.Commit()
+	return err
 }
 
 // Delete removes an AnnotatedRelationshipElement identified by its idShort or path from the database.
