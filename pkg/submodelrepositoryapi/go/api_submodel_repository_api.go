@@ -855,7 +855,7 @@ func (c *SubmodelRepositoryAPIAPIController) PatchSubmodelByIDValueOnly(w http.R
 		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
 		return
 	}
-	var bodyParam map[string]interface{}
+	var bodyParam model.SubmodelValue
 	d := json.NewDecoder(r.Body)
 	d.DisallowUnknownFields()
 	if err := d.Decode(&bodyParam); err != nil {

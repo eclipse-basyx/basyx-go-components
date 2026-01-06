@@ -1178,11 +1178,6 @@ func (p *PostgreSQLSubmodelDatabase) UpdateSubmodelElement(submodelID string, id
 	return handler.Update(submodelID, idShortPath, submodelElement)
 }
 
-// UpdateSubmodelElementValue updates only the value of an existing submodel element by its idShortPath.
-func (p *PostgreSQLSubmodelDatabase) UpdateSubmodelElementValue(submodelID string, idShortPath string, value gen.SubmodelElementValue) error {
-	return p.UpdateValueOnly(submodelID, idShortPath, value)
-}
-
 // DeleteFileAttachment deletes a file attachment from PostgreSQL Large Object system.
 func (p *PostgreSQLSubmodelDatabase) DeleteFileAttachment(submodelID string, idShortPath string) error {
 	fileHandler, err := submodelelements.NewPostgreSQLFileHandler(p.db)
@@ -1192,7 +1187,7 @@ func (p *PostgreSQLSubmodelDatabase) DeleteFileAttachment(submodelID string, idS
 	return fileHandler.DeleteFileAttachment(submodelID, idShortPath)
 }
 
-// UpdateValueOnly updates only the value of a submodel element identified by its idShort or path.
+// UpdateSubmodelElementValueOnly updates only the value of a submodel element identified by its idShort or path.
 //
 // Parameters:
 //   - submodelID: ID of the parent submodel
@@ -1201,7 +1196,7 @@ func (p *PostgreSQLSubmodelDatabase) DeleteFileAttachment(submodelID string, idS
 //
 // Returns:
 //   - error: Error if the update operation fails
-func (p *PostgreSQLSubmodelDatabase) UpdateValueOnly(submodelID string, idShortOrPath string, valueOnly gen.SubmodelElementValue) error {
+func (p *PostgreSQLSubmodelDatabase) UpdateSubmodelElementValueOnly(submodelID string, idShortOrPath string, valueOnly gen.SubmodelElementValue) error {
 	// Get the model type to determine which handler to use
 	var modelType string
 	err := p.db.QueryRow(`SELECT model_type FROM submodel_element WHERE submodel_id = $1 AND idshort_path = $2`, submodelID, idShortOrPath).Scan(&modelType)
@@ -1220,4 +1215,26 @@ func (p *PostgreSQLSubmodelDatabase) UpdateValueOnly(submodelID string, idShortO
 
 	// Update the value only
 	return handler.UpdateValueOnly(submodelID, idShortOrPath, valueOnly)
+}
+
+func (p *PostgreSQLSubmodelDatabase) UpdateSubmodelValueOnly(submodelID string, valueOnly gen.SubmodelValue) error {
+	var count int
+	err := p.db.QueryRow("SELECT COUNT(id) FROM submodel WHERE id = $1", submodelID).Scan(&count)
+	if err != nil {
+		_, _ = fmt.Println(err)
+		return common.NewInternalServerError("Error checking for Submodel existence. See console for details.")
+	}
+
+	if count == 0 {
+		return common.NewErrNotFound(fmt.Sprintf("Submodel with ID %s does not exist", submodelID))
+	}
+
+	for idShort, submodelElementValue := range valueOnly {
+		err = p.UpdateSubmodelElementValueOnly(submodelID, idShort, submodelElementValue)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }

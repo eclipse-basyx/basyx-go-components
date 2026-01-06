@@ -470,32 +470,24 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelByIDValueOnly(ctx context.C
 // PatchSubmodelByIDValueOnly - Updates the values of an existing Submodel
 //
 //nolint:revive
-func (s *SubmodelRepositoryAPIAPIService) PatchSubmodelByIDValueOnly(ctx context.Context, submodelIdentifier string, body map[string]interface{}, level string) (gen.ImplResponse, error) {
-	// TODO - update PatchSubmodelByIDValueOnly with the required logic for this service method.
-	// Add api_submodel_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
+func (s *SubmodelRepositoryAPIAPIService) PatchSubmodelByIDValueOnly(ctx context.Context, submodelIdentifier string, body gen.SubmodelValue, level string) (gen.ImplResponse, error) {
+	decodedIdentifier, err := base64.RawStdEncoding.DecodeString(submodelIdentifier)
+	if err != nil {
+		return common.NewErrorResponse(err, http.StatusBadRequest, "SMRepo", "PatchSubmodelByIDValueOnly", "Malformed Submodel Identifier"), nil
+	}
 
-	// TODO: Uncomment the next line to return response Response(204, {}) or use other options such as http.Ok ...
-	// return gen.Response(204, nil),nil
-
-	// TODO: Uncomment the next line to return response Response(400, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(400, Result{}), nil
-
-	// TODO: Uncomment the next line to return response Response(401, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(401, Result{}), nil
-
-	// TODO: Uncomment the next line to return response Response(403, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(403, Result{}), nil
-
-	// TODO: Uncomment the next line to return response Response(404, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(404, Result{}), nil
-
-	// TODO: Uncomment the next line to return response Response(500, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(500, Result{}), nil
-
-	// TODO: Uncomment the next line to return response Response(0, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(0, Result{}), nil
-
-	return gen.Response(http.StatusNotImplemented, nil), errors.New("PatchSubmodelByIDValueOnly method not implemented")
+	err = s.submodelBackend.UpdateSubmodelValueOnly(string(decodedIdentifier), body)
+	if err != nil {
+		if common.IsErrBadRequest(err) {
+			return common.NewErrorResponse(err, http.StatusBadRequest, "SMRepo", "PatchSubmodelByIDValueOnly", "Bad Request while Updating Submodel Value"), nil
+		}
+		if common.IsErrNotFound(err) {
+			return common.NewErrorResponse(err, http.StatusNotFound, "SMRepo", "PatchSubmodelByIDValueOnly", "Submodel Element was not found"), nil
+		}
+		_, _ = fmt.Println(err)
+		return common.NewErrorResponse(err, http.StatusInternalServerError, "SMRepo", "PatchSubmodelByIDValueOny", "Unknown Error - check console for details"), nil
+	}
+	return gen.Response(http.StatusNoContent, nil), nil
 }
 
 // GetSubmodelByIDReference - Returns the Reference of a specific Submodel
@@ -1111,7 +1103,7 @@ func (s *SubmodelRepositoryAPIAPIService) PatchSubmodelElementByPathValueOnlySub
 	}
 
 	// Update the submodel element value using the backend
-	err := s.submodelBackend.UpdateSubmodelElementValue(string(decodedIdentifier), idShortPath, submodelElementValue)
+	err := s.submodelBackend.UpdateSubmodelElementValueOnly(string(decodedIdentifier), idShortPath, submodelElementValue)
 	if err != nil {
 		if common.IsErrNotFound(err) {
 			return gen.Response(http.StatusNotFound, gen.Result{Messages: []gen.Message{{Text: err.Error()}}}), nil
