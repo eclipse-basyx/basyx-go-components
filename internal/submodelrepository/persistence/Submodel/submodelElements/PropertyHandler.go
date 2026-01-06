@@ -152,6 +152,16 @@ func (p PostgreSQLPropertyHandler) Update(submodelID string, idShortOrPath strin
 	return p.decorated.Update(submodelID, idShortOrPath, submodelElement)
 }
 
+// UpdateValueOnly updates only the value of an existing Property submodel element identified by its idShort or path.
+// It categorizes the new value based on the property's value type and updates the corresponding database columns.
+//
+// Parameters:
+//   - submodelID: The ID of the parent submodel
+//   - idShortOrPath: The idShort or path identifying the element to update
+//   - valueOnly: The new value to set (must be of type gen.SubmodelElementValue)
+//
+// Returns:
+//   - error: An error if the update operation fails or if the valueOnly type is incorrect
 func (p PostgreSQLPropertyHandler) UpdateValueOnly(submodelID string, idShortOrPath string, valueOnly gen.SubmodelElementValue) error {
 	var elementID int
 	goquQuery, args, err := goqu.From("submodel_element").
@@ -166,6 +176,12 @@ func (p PostgreSQLPropertyHandler) UpdateValueOnly(submodelID string, idShortOrP
 
 	row := p.db.QueryRow(goquQuery, args...)
 	err = row.Scan(&elementID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return common.NewErrNotFound(fmt.Sprintf("Property element not found for the given idShortOrPath %s", idShortOrPath))
+		}
+		return err
+	}
 
 	goquQuery, args, err = goqu.From("property_element").Select("value_type").Where(goqu.C("id").Eq(elementID)).ToSQL()
 	if err != nil {
@@ -174,6 +190,12 @@ func (p PostgreSQLPropertyHandler) UpdateValueOnly(submodelID string, idShortOrP
 	var valueType string
 	row = p.db.QueryRow(goquQuery, args...)
 	err = row.Scan(&valueType)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return common.NewErrNotFound(fmt.Sprintf("Property element not found for the given idShortOrPath %s", idShortOrPath))
+		}
+		return err
+	}
 	// Update based on valueType
 	propertyValue, ok := valueOnly.(gen.PropertyValue)
 	if !ok {

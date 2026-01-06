@@ -147,6 +147,17 @@ func (p PostgreSQLRangeHandler) Update(submodelID string, idShortOrPath string, 
 	return p.decorated.Update(submodelID, idShortOrPath, submodelElement)
 }
 
+// UpdateValueOnly updates only the value-specific fields of an existing Range submodel element.
+// It updates the min and max values based on the value type of the Range element,
+// ensuring that only the relevant columns are modified while others are set to NULL.
+//
+// Parameters:
+//   - submodelID: The ID of the parent submodel
+//   - idShortOrPath: The idShort or path identifying the element to update
+//   - valueOnly: The RangeValue containing the new min and max values
+//
+// Returns:
+//   - error: An error if the update operation fails or if the valueOnly is not of type RangeValue
 func (p PostgreSQLRangeHandler) UpdateValueOnly(submodelID string, idShortOrPath string, valueOnly gen.SubmodelElementValue) error {
 	rangeValue, ok := valueOnly.(gen.RangeValue)
 	if !ok {
@@ -159,7 +170,7 @@ func (p PostgreSQLRangeHandler) UpdateValueOnly(submodelID string, idShortOrPath
 	}
 	defer func() {
 		if err != nil {
-			tx.Rollback()
+			_ = tx.Rollback()
 		}
 	}()
 

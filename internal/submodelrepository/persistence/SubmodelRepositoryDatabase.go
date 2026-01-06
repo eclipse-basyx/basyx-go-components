@@ -1192,8 +1192,16 @@ func (p *PostgreSQLSubmodelDatabase) DeleteFileAttachment(submodelID string, idS
 	return fileHandler.DeleteFileAttachment(submodelID, idShortPath)
 }
 
+// UpdateValueOnly updates only the value of a submodel element identified by its idShort or path.
+//
+// Parameters:
+//   - submodelID: ID of the parent submodel
+//   - idShortOrPath: idShort or hierarchical path to the element
+//   - valueOnly: The new value to set for the submodel element
+//
+// Returns:
+//   - error: Error if the update operation fails
 func (p *PostgreSQLSubmodelDatabase) UpdateValueOnly(submodelID string, idShortOrPath string, valueOnly gen.SubmodelElementValue) error {
-
 	// Get the model type to determine which handler to use
 	var modelType string
 	err := p.db.QueryRow(`SELECT model_type FROM submodel_element WHERE submodel_id = $1 AND idshort_path = $2`, submodelID, idShortOrPath).Scan(&modelType)

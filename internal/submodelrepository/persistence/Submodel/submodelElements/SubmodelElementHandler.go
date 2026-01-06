@@ -208,6 +208,16 @@ func GetSMEHandlerByModelType(modelType string, db *sql.DB) (PostgreSQLSMECrudIn
 	return handler, nil
 }
 
+// UpdateNestedElements updates nested submodel elements based on value-only patches.
+//
+// Parameters:
+//   - db: Database connection
+//   - elems: List of elements to process
+//   - idShortOrPath: idShort or hierarchical path of the root element
+//   - submodelID: ID of the parent submodel
+//
+// Returns:
+//   - error: Error if update fails
 func UpdateNestedElements(db *sql.DB, elems []persistenceutils.ValueOnlyElementsToProcess, idShortOrPath string, submodelID string) error {
 	for _, elem := range elems {
 		if elem.IdShortPath == idShortOrPath {
@@ -223,7 +233,10 @@ func UpdateNestedElements(db *sql.DB, elems []persistenceutils.ValueOnlyElements
 			modelType = actual
 		}
 		handler, err := GetSMEHandlerByModelType(modelType, db)
-		handler.UpdateValueOnly(submodelID, elem.IdShortPath, elem.Element)
+		if err != nil {
+			return err
+		}
+		err = handler.UpdateValueOnly(submodelID, elem.IdShortPath, elem.Element)
 		if err != nil {
 			return err
 		}
@@ -231,6 +244,16 @@ func UpdateNestedElements(db *sql.DB, elems []persistenceutils.ValueOnlyElements
 	return nil
 }
 
+// GetModelTypeByIdShortPathAndSubmodelID retrieves the model type of a submodel element
+//
+// Parameters:
+//   - db: Database connection
+//   - submodelID: ID of the parent submodel
+//
+// - idShortOrPath: idShort or hierarchical path of the submodel element
+// Returns:
+// - string: Model type of the submodel element
+// - error: Error if retrieval fails or element is not found
 func GetModelTypeByIdShortPathAndSubmodelID(db *sql.DB, submodelID string, idShortOrPath string) (string, error) {
 	dialect := goqu.Dialect("postgres")
 

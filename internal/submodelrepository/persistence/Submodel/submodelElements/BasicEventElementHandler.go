@@ -149,6 +149,16 @@ func (p PostgreSQLBasicEventElementHandler) Update(submodelID string, idShortOrP
 	return p.decorated.Update(submodelID, idShortOrPath, submodelElement)
 }
 
+// UpdateValueOnly updates only the value of an existing BasicEventElement submodel element identified by its idShort or path.
+// It updates the observed reference in the database.
+//
+// Parameters:
+//   - submodelID: The ID of the parent submodel
+//   - idShortOrPath: The idShort or path identifying the element to update
+//   - valueOnly: The new value to set (must be of type gen.BasicEventElementValue)
+//
+// Returns:
+//   - error: An error if the update operation fails or if the valueOnly type is incorrect
 func (p PostgreSQLBasicEventElementHandler) UpdateValueOnly(submodelID string, idShortOrPath string, valueOnly gen.SubmodelElementValue) error {
 	basicEventValue, ok := valueOnly.(gen.BasicEventElementValue)
 	if !ok {
@@ -160,7 +170,12 @@ func (p PostgreSQLBasicEventElementHandler) UpdateValueOnly(submodelID string, i
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+
+	defer func() {
+		if err != nil {
+			_ = tx.Rollback()
+		}
+	}()
 
 	dialect := goqu.Dialect("postgres")
 

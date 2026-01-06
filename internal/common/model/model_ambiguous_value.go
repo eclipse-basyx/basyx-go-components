@@ -29,6 +29,14 @@ package model
 
 import "encoding/json"
 
+// AmbiguousSubmodelElementValue represents a submodel element value that can take multiple forms.
+// It is used to handle cases where the exact type of the submodel element value is not known
+// at compile time, allowing for dynamic interpretation as either a SubmodelElementListValue
+// or a MultiLanguagePropertyValue.
+//
+// Why? In the case that a SubmodelElementList contains only SubmodelElementCollection which
+// then only contain Properties - the JSON representation is identical to a MultiLanguageProperty
+// and thus the deserialization is ambiguous.
 type AmbiguousSubmodelElementValue []map[string]any
 
 // MarshalValueOnly serializes SubmodelElementListValue in Value-Only format - This method shall never be called
@@ -42,6 +50,9 @@ func (s AmbiguousSubmodelElementValue) MarshalJSON() ([]byte, error) {
 	return s.MarshalValueOnly()
 }
 
+// ConvertToSubmodelElementListValue converts the ambiguous value to a SubmodelElementListValue
+//
+// Returns an error if the conversion fails
 func (s AmbiguousSubmodelElementValue) ConvertToSubmodelElementListValue() (SubmodelElementListValue, error) {
 	result := make(SubmodelElementListValue, 0, len(s))
 	for _, item := range s {
@@ -59,6 +70,9 @@ func (s AmbiguousSubmodelElementValue) ConvertToSubmodelElementListValue() (Subm
 	return result, nil
 }
 
+// ConvertToMultiLanguagePropertyValue converts the ambiguous value to a MultiLanguagePropertyValue
+//
+// Returns an error if the conversion fails
 func (s AmbiguousSubmodelElementValue) ConvertToMultiLanguagePropertyValue() (MultiLanguagePropertyValue, error) {
 	result := make(MultiLanguagePropertyValue, 0, len(s))
 	for _, item := range s {
@@ -76,6 +90,7 @@ func (s AmbiguousSubmodelElementValue) ConvertToMultiLanguagePropertyValue() (Mu
 	return result, nil
 }
 
+// GetModelType returns an empty string as AmbiguousSubmodelElementValue does not have a specific model type
 func (s AmbiguousSubmodelElementValue) GetModelType() string {
 	return ""
 }

@@ -150,7 +150,17 @@ func (p PostgreSQLOperationHandler) Update(submodelID string, idShortOrPath stri
 	return p.decorated.Update(submodelID, idShortOrPath, submodelElement)
 }
 
-func (p PostgreSQLOperationHandler) UpdateValueOnly(submodelID string, idShortOrPath string, valueOnly gen.SubmodelElementValue) error {
+// UpdateValueOnly updates only the value of an existing Operation submodel element identified by its idShort or path.
+// Operation has no Value Only representation, so this method currently performs no action and returns nil.
+//
+// Parameters:
+//   - submodelID: The ID of the parent submodel
+//   - idShortOrPath: The idShort or path identifying the element to update
+//   - valueOnly: The new value to set (must be of type gen.SubmodelElementValue)
+//
+// Returns:
+//   - error: An error if the update operation fails
+func (p PostgreSQLOperationHandler) UpdateValueOnly(_ string, _ string, _ gen.SubmodelElementValue) error {
 	return nil
 }
 

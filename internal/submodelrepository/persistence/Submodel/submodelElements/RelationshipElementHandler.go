@@ -191,6 +191,20 @@ func (p PostgreSQLRelationshipElementHandler) Update(submodelID string, idShortO
 	return p.decorated.Update(submodelID, idShortOrPath, submodelElement)
 }
 
+// UpdateValueOnly updates only the value fields of an existing RelationshipElement.
+//
+// This method allows for partial updates of a RelationshipElement, specifically targeting
+// the "first" and "second" references without modifying other base element properties.
+// It constructs an update record dynamically based on which fields are provided in
+// the valueOnly parameter.
+//
+// Parameters:
+//   - submodelID: ID of the parent submodel
+//   - idShortOrPath: idShort or hierarchical path to the element to update
+//   - valueOnly: The RelationshipElementValue containing fields to update
+//
+// Returns:
+//   - error: An error if the update operation fails
 func (p PostgreSQLRelationshipElementHandler) UpdateValueOnly(submodelID string, idShortOrPath string, valueOnly gen.SubmodelElementValue) error {
 	relElemVal, ok := valueOnly.(gen.RelationshipElementValue)
 	if !ok {

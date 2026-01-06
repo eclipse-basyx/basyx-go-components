@@ -1022,11 +1022,29 @@ func isEmptyReference(ref gen.Reference) bool {
 	return reflect.DeepEqual(ref, gen.Reference{})
 }
 
+// ValueOnlyElementsToProcess represents a SubmodelElementValue along with its ID short path.
 type ValueOnlyElementsToProcess struct {
 	Element     gen.SubmodelElementValue
 	IdShortPath string
 }
 
+// BuildElementsToProcessStackValueOnly builds a stack of SubmodelElementValues to process iteratively.
+//
+// This function constructs a stack of SubmodelElementValues starting from a given root element.
+// It processes the elements iteratively, handling collections, lists, and ambiguous types
+// (like MultiLanguageProperty or SubmodelElementList) by querying the database to determine
+// their actual types. The resulting stack contains all elements to be processed along with
+// their corresponding ID short paths.
+//
+// Parameters:
+//   - db: Database connection
+//   - submodelID: String identifier of the submodel
+//   - idShortOrPath: ID short or path of the root element
+//   - valueOnly: The root SubmodelElementValue to start processing from
+//
+// Returns:
+//   - []ValueOnlyElementsToProcess: Slice of elements to process with their ID short paths
+//   - error: An error if any database query fails or if type conversion fails
 func BuildElementsToProcessStackValueOnly(db *sql.DB, submodelID string, idShortOrPath string, valueOnly gen.SubmodelElementValue) ([]ValueOnlyElementsToProcess, error) {
 	stack := []ValueOnlyElementsToProcess{}
 	elementsToProcess := []ValueOnlyElementsToProcess{}
@@ -1036,14 +1054,12 @@ func BuildElementsToProcessStackValueOnly(db *sql.DB, submodelID string, idShort
 	})
 	// Build Iteratively
 	for len(stack) > 0 {
-		// Pop
 		current := stack[len(stack)-1]
 		stack = stack[:len(stack)-1]
 
 		switch elem := current.Element.(type) {
 		case gen.AmbiguousSubmodelElementValue:
 			// Check if it is a MLP or SME List in the database
-			//1. GoQu query
 			sqlQuery, args := buildCheckMultiLanguagePropertyOrSubmodelElementListQuery(current.IdShortPath, submodelID)
 			row := db.QueryRow(sqlQuery, args...)
 			var modelType string

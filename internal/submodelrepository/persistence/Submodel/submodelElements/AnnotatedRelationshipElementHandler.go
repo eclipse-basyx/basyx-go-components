@@ -148,6 +148,16 @@ func (p PostgreSQLAnnotatedRelationshipElementHandler) Update(submodelID string,
 	return p.decorated.Update(submodelID, idShortOrPath, submodelElement)
 }
 
+// UpdateValueOnly updates only the value of an existing AnnotatedRelationshipElement submodel element identified by its idShort or path.
+// It updates the 'first' and 'second' references based on the provided value.
+//
+// Parameters:
+//   - submodelID: The ID of the parent submodel
+//   - idShortOrPath: The idShort or path identifying the element to update
+//   - valueOnly: The new value to set (must be of type gen.AnnotatedRelationshipElementValue)
+//
+// Returns:
+//   - error: An error if the update operation fails
 func (p PostgreSQLAnnotatedRelationshipElementHandler) UpdateValueOnly(submodelID string, idShortOrPath string, valueOnly gen.SubmodelElementValue) error {
 	elems, err := persistenceutils.BuildElementsToProcessStackValueOnly(p.db, submodelID, idShortOrPath, valueOnly)
 	if err != nil {

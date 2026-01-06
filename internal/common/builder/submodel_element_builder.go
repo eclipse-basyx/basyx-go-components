@@ -318,7 +318,7 @@ func getSubmodelElementObjectBasedOnModelType(smeRow model.SubmodelElementRow, r
 		}
 		return rng, nil
 	case "BasicEventElement":
-		eventElem, err := buildBasicEventElement(smeRow, refBuilderMap, refMutex)
+		eventElem, err := buildBasicEventElement(smeRow)
 		if err != nil {
 			return nil, err
 		}
@@ -369,7 +369,7 @@ func buildProperty(smeRow model.SubmodelElementRow, refBuilderMap map[int64]*Ref
 
 // buildBasicEventElement constructs a BasicEventElement SubmodelElement from the database row,
 // parsing the event details and building references for observed and message broker.
-func buildBasicEventElement(smeRow model.SubmodelElementRow, refBuilderMap map[int64]*ReferenceBuilder, refMutex *sync.RWMutex) (*model.BasicEventElement, error) {
+func buildBasicEventElement(smeRow model.SubmodelElementRow) (*model.BasicEventElement, error) {
 	var valueRow model.BasicEventElementValueRow
 	if smeRow.Value == nil {
 		return nil, fmt.Errorf("smeRow.Value is nil")

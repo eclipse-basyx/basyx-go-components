@@ -149,18 +149,27 @@ func (p PostgreSQLMultiLanguagePropertyHandler) Update(submodelID string, idShor
 	return p.decorated.Update(submodelID, idShortOrPath, submodelElement)
 }
 
+// UpdateValueOnly updates only the value of an existing MultiLanguageProperty submodel element identified by its idShort or path.
+// It deletes existing language-text pairs and inserts the new set of values provided.
+//
+// Parameters:
+//   - submodelID: The ID of the parent submodel
+//   - idShortOrPath: The idShort or path identifying the element to update
+//   - valueOnly: The new value to set (must be of type gen.MultiLanguagePropertyValue)
+//
+// Returns:
+//   - error: An error if the update operation fails or if the valueOnly type is incorrect
 func (p PostgreSQLMultiLanguagePropertyHandler) UpdateValueOnly(submodelID string, idShortOrPath string, valueOnly gen.SubmodelElementValue) error {
 	mlp, ok := valueOnly.(gen.MultiLanguagePropertyValue)
 	if !ok {
 		ambiguous, isAmbiguous := valueOnly.(gen.AmbiguousSubmodelElementValue)
-		if isAmbiguous {
-			var err error
-			mlp, err = ambiguous.ConvertToMultiLanguagePropertyValue()
-			if err != nil {
-				return common.NewErrBadRequest("valueOnly contains non-MultiLanguagePropertyValue entries")
-			}
-		} else {
+		if !isAmbiguous {
 			return common.NewErrBadRequest("valueOnly is not of type MultiLanguagePropertyValue")
+		}
+		var err error
+		mlp, err = ambiguous.ConvertToMultiLanguagePropertyValue()
+		if err != nil {
+			return common.NewErrBadRequest("valueOnly contains non-MultiLanguagePropertyValue entries")
 		}
 	}
 

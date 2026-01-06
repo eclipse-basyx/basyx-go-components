@@ -145,6 +145,16 @@ func (p PostgreSQLEntityHandler) Update(submodelID string, idShortOrPath string,
 	return p.decorated.Update(submodelID, idShortOrPath, submodelElement)
 }
 
+// UpdateValueOnly updates only the value of an existing Entity submodel element identified by its idShort or path.
+// It updates the entity type, global asset ID, and specific asset IDs based on the provided value.
+//
+// Parameters:
+//   - submodelID: The ID of the parent submodel
+//   - idShortOrPath: The idShort or path identifying the element to update
+//   - valueOnly: The new value to set (must be of type gen.EntityValue)
+//
+// Returns:
+//   - error: An error if the update operation fails
 func (p PostgreSQLEntityHandler) UpdateValueOnly(submodelID string, idShortOrPath string, valueOnly gen.SubmodelElementValue) error {
 	tx, err := p.db.Begin()
 	if err != nil {

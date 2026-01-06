@@ -154,17 +154,25 @@ func (p PostgreSQLBlobHandler) Update(submodelID string, idShortOrPath string, s
 	return p.decorated.Update(submodelID, idShortOrPath, submodelElement)
 }
 
+// UpdateValueOnly updates only the value of an existing Blob submodel element identified by its idShort or path.
+// It updates the content type and binary value in the database.
+//
+// Parameters:
+//   - submodelID: The ID of the parent submodel
+//   - idShortOrPath: The idShort or path identifying the element to update
+//   - valueOnly: The new value to set (must be of type gen.BlobValue)
+//
+// Returns:
+//   - error: An error if the update operation fails or if the valueOnly type is incorrect
 func (p PostgreSQLBlobHandler) UpdateValueOnly(submodelID string, idShortOrPath string, valueOnly gen.SubmodelElementValue) error {
 	blobValueOnly, ok := valueOnly.(gen.BlobValue)
 	if !ok {
-		if fileValueOnly, isMistakenAsFileValue := valueOnly.(gen.FileValue); isMistakenAsFileValue {
-			blobValueOnly = gen.BlobValue{
-				ContentType: fileValueOnly.ContentType,
-				Value:       fileValueOnly.Value,
-			}
-		} else {
+		var fileValueOnly gen.FileValue
+		var isMistakenAsFileValue bool
+		if fileValueOnly, isMistakenAsFileValue = valueOnly.(gen.FileValue); !isMistakenAsFileValue {
 			return common.NewErrBadRequest("valueOnly is not of type BlobValue")
 		}
+		blobValueOnly = gen.BlobValue(fileValueOnly)
 	}
 
 	// Check if blob value is larger than 1GB

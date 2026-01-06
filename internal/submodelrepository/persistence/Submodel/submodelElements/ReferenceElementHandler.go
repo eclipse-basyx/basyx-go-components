@@ -209,6 +209,20 @@ func (p PostgreSQLReferenceElementHandler) Update(submodelID string, idShortOrPa
 	return p.decorated.Update(submodelID, idShortOrPath, submodelElement)
 }
 
+// UpdateValueOnly updates only the value of an existing ReferenceElement identified by its idShort or full path.
+// This method specifically updates the reference value (type and keys) without modifying other attributes.
+//
+// The method performs the following operations:
+//  1. Type assertion to ensure the valueOnly is a ReferenceElementValue
+//  2. Marshals the reference value to JSON for database storage
+//  3. Constructs and executes an update query to modify only the value field
+//
+// Parameters:
+//   - idShortOrPath: The idShort or full path of the ReferenceElement to update
+//   - valueOnly: The new ReferenceElementValue containing updated reference data
+//
+// Returns:
+//   - error: Any error encountered during type assertion, marshaling, or database operations
 func (p PostgreSQLReferenceElementHandler) UpdateValueOnly(submodelID string, idShortOrPath string, valueOnly gen.SubmodelElementValue) error {
 	refElemVal, ok := valueOnly.(gen.ReferenceElementValue)
 	if !ok {
@@ -243,6 +257,7 @@ func (p PostgreSQLReferenceElementHandler) UpdateValueOnly(submodelID string, id
 	return err
 }
 
+// Delete removes a ReferenceElement identified by its idShort or full path from the database.
 // Parameters:
 //   - idShortOrPath: The idShort or full path of the ReferenceElement to delete
 //

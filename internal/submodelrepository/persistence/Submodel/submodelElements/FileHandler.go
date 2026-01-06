@@ -250,6 +250,16 @@ func (p PostgreSQLFileHandler) Update(submodelID string, idShortOrPath string, s
 	return p.decorated.Update(submodelID, idShortOrPath, submodelElement)
 }
 
+// UpdateValueOnly updates only the value of an existing File submodel element identified by its idShort or path.
+// It processes the new value and updates nested elements accordingly.
+//
+// Parameters:
+//   - submodelID: The ID of the parent submodel
+//   - idShortOrPath: The idShort or path identifying the element to update
+//   - valueOnly: The new value to set (must be of type gen.FileValue)
+//
+// Returns:
+//   - error: An error if the update operation fails
 func (p PostgreSQLFileHandler) UpdateValueOnly(submodelID string, idShortOrPath string, valueOnly gen.SubmodelElementValue) error {
 	fileValueOnly, ok := valueOnly.(gen.FileValue)
 	if !ok {
@@ -333,8 +343,8 @@ func (p PostgreSQLFileHandler) UpdateValueOnly(submodelID string, idShortOrPath 
 		return common.NewInternalServerError(fmt.Sprintf("failed to execute update query: %s", err))
 	}
 
-	tx.Commit()
-	return nil
+	err = tx.Commit()
+	return err
 }
 
 // Delete removes a File submodel element from the database.
