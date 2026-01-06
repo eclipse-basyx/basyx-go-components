@@ -45,11 +45,11 @@ type AccessModel struct {
 }
 
 type materializedRule struct {
-	acl    grammar.ACL
-	attrs  []grammar.AttributeItem
-	objs   []grammar.ObjectItem
-	lexpr  *grammar.LogicalExpression
-	filter *grammar.AccessPermissionRuleFILTER
+	acl        grammar.ACL
+	attrs      []grammar.AttributeItem
+	objs       []grammar.ObjectItem
+	lexpr      *grammar.LogicalExpression
+	filterList []grammar.AccessPermissionRuleFILTER
 }
 
 // ParseAccessModel parses a JSON (or YAML converted to JSON) payload that
@@ -74,13 +74,17 @@ func ParseAccessModel(b []byte, apiRouter *api.Mux) (*AccessModel, error) {
 	}, nil
 }
 
+// FragmentFilters groups conditional parts by fragment name so callers can pick
+// the subset relevant to the resource they are processing.
+type FragmentFilters map[string]grammar.LogicalExpression
+
 // QueryFilter captures optional, fine-grained restrictions produced by a rule
 // even when ACCESS=ALLOW. Controllers can use it to restrict rows, constrain
 // mutations, or redact fields. The Discovery Service currently does not require
 // a concrete filter structure; extend this struct when needed.
 type QueryFilter struct {
-	Formula *grammar.LogicalExpression          `json:"Formula,omitempty" yaml:"Formula,omitempty" mapstructure:"Formula,omitempty"`
-	Filter  *grammar.AccessPermissionRuleFILTER `json:"Filter,omitempty" yaml:"Filter,omitempty" mapstructure:"Filter,omitempty"`
+	Formula *grammar.LogicalExpression `json:"Formula,omitempty" yaml:"Formula,omitempty" mapstructure:"Formula,omitempty"`
+	Filters FragmentFilters            `json:"Filters,omitempty" yaml:"Filters,omitempty" mapstructure:"Filters,omitempty"`
 }
 
 // DecisionCode represents the result of an authorization check.
@@ -102,14 +106,16 @@ const (
 // It returns whether access is allowed, a human-readable reason, and an optional
 // QueryFilter for controllers to enforce (e.g., tenant scoping, redactions).
 // It is important that this function does not throw errors. It either gives access or no access.
-func (m *AccessModel) AuthorizeWithFilter(in EvalInput) (ok bool, code DecisionCode, qf *QueryFilter) {
+//
+//nolint:revive // i will refactor this function at some point
+func (m *AccessModel) AuthorizeWithFilter(in EvalInput) (bool, DecisionCode, *QueryFilter) {
 	rights, mapped := m.mapMethodAndPathToRights(in)
 	if !mapped {
 		return false, DecisionNoMatch, nil
 	}
 
-	var ruleExprs []grammar.LogicalExpression
-	var filter *grammar.AccessPermissionRuleFILTER
+	var ruleExprs []QueryFilter
+	var allFragments []string
 
 	for _, r := range m.rules {
 		acl, attrs, objs, lexpr := r.acl, r.attrs, r.objs, r.lexpr
@@ -160,33 +166,112 @@ func (m *AccessModel) AuthorizeWithFilter(in EvalInput) (ok bool, code DecisionC
 			if !evalLE(adapted, in.Claims) {
 				continue
 			}
-			return true, DecisionAllow, nil
+		}
+		fragments := make(map[string]grammar.LogicalExpression)
+		for _, filter := range r.filterList {
+			fragment := string(*filter.FRAGMENT)
+
+			if existing, ok := fragments[fragment]; ok {
+				existing.And = append(existing.And, *filter.CONDITION)
+				fragments[fragment] = existing
+			} else {
+				fragments[fragment] = grammar.LogicalExpression{
+					And: []grammar.LogicalExpression{
+						adapted,
+						*filter.CONDITION,
+					},
+				}
+			}
+			allFragments = append(allFragments, fragment)
 		}
 
-		if filter == nil {
-			filter = r.filter
+		// Deduplicate And expressions in fragments
+		for fragment, expr := range fragments {
+			if len(expr.And) > 0 {
+				expr.And = deduplicateLogicalExpressions(expr.And)
+				fragments[fragment] = expr
+			}
 		}
-		ruleExprs = append(ruleExprs, adapted)
+
+		ruleExprs = append(ruleExprs, QueryFilter{&adapted, fragments})
+
 	}
 
 	if len(ruleExprs) == 0 {
 		return false, DecisionNoMatch, nil
 	}
 
-	var combined grammar.LogicalExpression
-	if len(ruleExprs) == 1 {
-		combined = ruleExprs[0]
-	} else {
-		combined = grammar.LogicalExpression{Or: ruleExprs}
+	combined := grammar.LogicalExpression{Or: []grammar.LogicalExpression{}}
+	combinedFragments := make(map[string]grammar.LogicalExpression)
+	for _, qfr := range ruleExprs {
+		combined.Or = append(combined.Or, *qfr.Formula)
+
+		// filter
+		for _, fragment := range allFragments {
+			cur := combinedFragments[fragment]
+			if existing, ok := qfr.Filters[fragment]; ok {
+				cur.Or = append(cur.Or, existing)
+
+			} else {
+				cur.Or = append(cur.Or, *qfr.Formula)
+			}
+			combinedFragments[fragment] = cur
+		}
+	}
+
+	// Deduplicate Or expressions in combined and fragments
+	combined.Or = deduplicateLogicalExpressions(combined.Or)
+	for fragment, expr := range combinedFragments {
+		if len(expr.Or) > 0 {
+			expr.Or = deduplicateLogicalExpressions(expr.Or)
+			combinedFragments[fragment] = expr
+		}
+	}
+
+	for fragment, le := range combinedFragments {
+		simpleFilter, onlyBool := adaptLEForBackend(le, in.Claims)
+		if onlyBool {
+			delete(combinedFragments, fragment)
+		} else {
+			combinedFragments[fragment] = simpleFilter
+		}
 	}
 
 	simplified, onlyBool := adaptLEForBackend(combined, in.Claims)
+
+	hasFormula := true
 	if onlyBool {
-		if evalLE(simplified, in.Claims) {
-			return true, DecisionAllow, nil
+		if !evalLE(simplified, in.Claims) {
+			return false, DecisionNoMatch, nil
 		}
-		return false, DecisionNoMatch, nil
+		hasFormula = false
 	}
 
-	return true, DecisionAllow, &QueryFilter{Formula: &simplified, Filter: filter}
+	var qf *QueryFilter
+	if hasFormula || len(combinedFragments) > 0 {
+		qf = &QueryFilter{}
+		if hasFormula {
+			qf.Formula = &simplified
+		}
+		if len(combinedFragments) > 0 {
+			qf.Filters = combinedFragments
+		}
+	}
+
+	return true, DecisionAllow, qf
+}
+
+// FilterExpressionFor returns the logical expression associated with the
+// fragment `key` from the QueryFilter's `Filters` map. If the map is nil or
+// no entry exists for `key`, nil is returned.
+//
+// Note: map values are returned by value, so this method returns the address
+// of a copy of the stored `grammar.LogicalExpression`. Callers should not rely
+// on mutating the returned value to modify the original map entry.
+func (q *QueryFilter) FilterExpressionFor(key string) *grammar.LogicalExpression {
+	frag, ok := q.Filters[key]
+	if !ok {
+		return nil
+	}
+	return &frag
 }

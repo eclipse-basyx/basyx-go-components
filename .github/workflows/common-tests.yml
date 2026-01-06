@@ -48,3 +48,8 @@ jobs:
         run: |
           cd internal/common/security/unit_tests/abac_engine
           go test -count=1 -v -cover
+          
+      - name: Run common security filter tests
+        run: |
+          cd internal/common/security/unit_tests/filter_abac_engine
+          go test -count=1 -v -cover

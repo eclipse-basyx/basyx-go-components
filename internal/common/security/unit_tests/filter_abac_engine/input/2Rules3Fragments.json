@@ -1,0 +1,99 @@
+{
+  "AllAccessPermissionRules": {
+    "DEFATTRIBUTES": [
+      { "name": "anonym_attr", "attributes": [ { "GLOBAL": "ANONYMOUS" } ] },
+      { "name": "role_attr", "attributes": [ { "CLAIM": "role" } ] },
+      { "name": "member_attr", "attributes": [ { "CLAIM": "role" }, { "CLAIM": "clear" } ] }
+    ],
+
+    "DEFOBJECTS": [
+      { "name": "description", "objects": [ { "ROUTE": "/description" } ] },
+      { "name": "all_shell_descriptors", "objects": [ {"DESCRIPTOR": "$aasdesc(\"*\")"}] }
+    ],
+
+    "DEFACLS": [
+      { "name": "read_anonymous", "acl": { "USEATTRIBUTES": "anonym_attr", "RIGHTS": ["READ"], "ACCESS": "ALLOW" } },
+      { "name": "all_admin", "acl": { "USEATTRIBUTES": "role_attr", "RIGHTS": ["ALL"], "ACCESS": "ALLOW" } },
+      { "name": "user", "acl": { "USEATTRIBUTES": "role_attr", "RIGHTS": ["READ"], "ACCESS": "ALLOW" } }
+    ],
+
+    "DEFFORMULAS": [
+      { "name": "always_true", "formula": { "$boolean": true } },
+      { "name": "role_is_admin", "formula": { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "admin" } ] } },
+      { 
+        "name": "role_is_viewer_written_x", 
+        "formula": { 
+          "$and": 
+          [
+            { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "viewer" } ] },
+            {"$eq": [ {"$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value"}, {"$strVal": "WRITTEN_BY_X"}]}
+          ]
+        }
+      },
+      { 
+        "name": "role_is_viewer_written_y", 
+        "formula": { 
+          "$and": 
+          [
+            { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "viewer" } ] },
+            {"$eq": [ {"$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value"}, {"$strVal": "WRITTEN_BY_Y"}]}
+          ]
+        }
+      }
+       
+    ],
+
+    "rules": [
+      { "USEACL": "read_anonymous", "USEOBJECTS": ["description"], "USEFORMULA": "always_true" },
+      { "USEACL": "all_admin", "USEOBJECTS": ["all_shell_descriptors"], "USEFORMULA": "role_is_admin" },
+      { "USEACL": "user", "USEOBJECTS": ["all_shell_descriptors"], "USEFORMULA": "role_is_viewer_written_x",
+        "FILTERLIST": [
+          {
+            "FRAGMENT": "$aasdesc#endpoints[]",
+            "CONDITION": 
+            {
+              "$eq": [
+                {
+                  "$field": "$aasdesc#endpoints[].protocolinformation.href"
+                },
+                {
+                  "$strVal": "hrefB"
+                }
+              ]
+            }
+          },
+          {
+            "FRAGMENT": "$aasdesc#endpoints[].protocolinformation",
+            "CONDITION": 
+            {
+              "$eq": [
+                {
+                  "$field": "$aasdesc#endpoints[].protocolinformation.href"
+                },
+                {
+                  "$strVal": "hrefA"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      { "USEACL": "user", "USEOBJECTS": ["all_shell_descriptors"], "USEFORMULA": "role_is_viewer_written_y",
+        "FILTER": {
+            "FRAGMENT": "$aasdesc#endpoints[]",
+            "CONDITION": 
+            {
+              "$eq": [
+                {
+                  "$field": "$aasdesc#endpoints[].protocolinformation.href"
+                },
+                {
+                  "$strVal": "hrefB"
+                }
+              ]
+            }
+          }
+      }
+    ]
+  }
+}

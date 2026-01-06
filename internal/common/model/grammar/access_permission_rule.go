@@ -92,6 +92,9 @@ type AccessPermissionRule struct {
 	// FILTER corresponds to the JSON schema field "FILTER".
 	FILTER *AccessPermissionRuleFILTER `json:"FILTER,omitempty" yaml:"FILTER,omitempty" mapstructure:"FILTER,omitempty"`
 
+	// FILTERLIST corresponds to the JSON schema field "FILTERLIST".
+	FILTERLIST []AccessPermissionRuleFILTER `json:"FILTERLIST,omitempty" yaml:"FILTERLIST,omitempty" mapstructure:"FILTERLIST,omitempty"`
+
 	// FORMULA corresponds to the JSON schema field "FORMULA".
 	FORMULA *LogicalExpression `json:"FORMULA,omitempty" yaml:"FORMULA,omitempty" mapstructure:"FORMULA,omitempty"`
 

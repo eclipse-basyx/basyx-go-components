@@ -39,6 +39,35 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
+// deduplicateLogicalExpressions removes duplicate expressions from a slice.
+// Two expressions are considered equal if their JSON representations match.
+func deduplicateLogicalExpressions(exprs []grammar.LogicalExpression) []grammar.LogicalExpression {
+	if len(exprs) <= 1 {
+		return exprs
+	}
+
+	seen := make(map[string]struct{})
+	result := make([]grammar.LogicalExpression, 0, len(exprs))
+
+	for _, expr := range exprs {
+		// Use JSON marshaling to create a canonical representation
+		jsonBytes, err := json.Marshal(expr)
+		if err != nil {
+			// If marshaling fails, keep the expression to be safe
+			result = append(result, expr)
+			continue
+		}
+
+		key := string(jsonBytes)
+		if _, exists := seen[key]; !exists {
+			seen[key] = struct{}{}
+			result = append(result, expr)
+		}
+	}
+
+	return result
+}
+
 func resolveGlobalToken(name string, claims Claims) (any, bool) {
 	switch strings.ToUpper(name) {
 	case "UTCNOW":
@@ -243,6 +272,8 @@ func adaptLEForBackend(le grammar.LogicalExpression, claims Claims) (grammar.Log
 			b := true
 			return grammar.LogicalExpression{Boolean: &b}, true
 		}
+		// Deduplicate expressions in AND
+		out.And = deduplicateLogicalExpressions(out.And)
 		// Single remaining branch -> remove redundant AND wrapper
 		if len(out.And) == 1 {
 			return out.And[0], false
@@ -275,6 +306,8 @@ func adaptLEForBackend(le grammar.LogicalExpression, claims Claims) (grammar.Log
 			b := false
 			return grammar.LogicalExpression{Boolean: &b}, true
 		}
+		// Deduplicate expressions in OR
+		out.Or = deduplicateLogicalExpressions(out.Or)
 		// Single remaining branch -> remove redundant OR wrapper
 		if len(out.Or) == 1 {
 			return out.Or[0], false

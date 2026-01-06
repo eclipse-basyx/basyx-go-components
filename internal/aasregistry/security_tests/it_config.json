@@ -185,28 +185,28 @@
     "token": null,
     "method": "GET",
     "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9C",
-    "expectedStatus": 403
+    "expectedStatus": 404
   },
   {
     "context": "GET Descriptor C - User ANONONYM - DENIED",
     "token": null,
     "method": "GET",
     "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9D",
-    "expectedStatus": 403
+    "expectedStatus": 404
   },
   {
     "context": "GET Descriptor D - User ANONONYM - DENIED",
     "token": null,
     "method": "GET",
     "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9E",
-    "expectedStatus": 403
+    "expectedStatus": 404
   },
   {
     "context": "GET Descriptor X - User ANONONYM - DENIED",
     "token": null,
     "method": "GET",
     "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9Y",
-    "expectedStatus": 403
+    "expectedStatus": 404
   },
   {
     "context": "GET Descriptor A - User A - ALLOWED",
@@ -229,21 +229,21 @@
     "token": { "user": "usera", "password": "pwd" },
     "method": "GET",
     "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9D",
-    "expectedStatus": 403
+    "expectedStatus": 404
   },
   {
     "context": "GET Descriptor D - User A - DENIED",
     "token": { "user": "usera", "password": "pwd" },
     "method": "GET",
     "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9E",
-    "expectedStatus": 403
+    "expectedStatus": 404
   },
   {
     "context": "GET Descriptor X - User A - DENIED",
     "token": { "user": "usera", "password": "pwd" },
     "method": "GET",
     "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9Y",
-    "expectedStatus": 403
+    "expectedStatus": 404
   },
   {
     "context": "GET Descriptor A - User B - ALLOWED",
@@ -282,7 +282,7 @@
     "token": { "user": "userb", "password": "pwd" },
     "method": "GET",
     "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9Y",
-    "expectedStatus": 403
+    "expectedStatus": 404
   },
   {
     "context": "GET Descriptor A - User ADMIN - ALLOWED",
