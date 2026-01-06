@@ -320,6 +320,7 @@ func ListRegistryDescriptors(
 	cursor string,
 	registryType string,
 	company string,
+	endpointInterface string,
 ) ([]model.RegistryDescriptor, string, error) {
 	if limit <= 0 {
 		limit = 100
@@ -328,6 +329,7 @@ func ListRegistryDescriptors(
 
 	d := goqu.Dialect(dialect)
 	reg := goqu.T(tblRegistryDescriptor).As("reg")
+	aasdescendp := goqu.T(tblAASDescriptorEndpoint).As("aasdescendp")
 
 	ds := d.
 		From(reg).
@@ -353,6 +355,17 @@ func ListRegistryDescriptors(
 
 	if company != "" {
 		ds = ds.Where(reg.Col(colCompany).Eq(company))
+	}
+
+	if endpointInterface != "" {
+		ds = ds.
+			LeftJoin(
+				aasdescendp,
+				goqu.On(
+					reg.Col(colDescriptorID).Eq(aasdescendp.Col(colDescriptorID)),
+				),
+			).
+			Where(aasdescendp.Col(colInterface).Eq(endpointInterface))
 	}
 
 	if peekLimit < 0 {

@@ -126,10 +126,14 @@ func (c *RegistryOfRegistriesAPIAPIController) GetAllRegistryDescriptors(w http.
 	if query.Has("company") {
 		companyParam = query.Get("company")
 	}
+	var endpointInterfaceParam string
+	if query.Has("endpointInterface") {
+		endpointInterfaceParam = query.Get("endpointInterface")
+	}
 
-	result, err := c.service.GetAllRegistryDescriptors(r.Context(), limitParam, cursorParam, registryTypeParam, companyParam)
+	result, err := c.service.GetAllRegistryDescriptors(r.Context(), limitParam, cursorParam, registryTypeParam, companyParam, endpointInterfaceParam)
 	if err != nil {
-		log.Printf("📍 [%s] Error in GetAllRegistryDescriptors: service failure (limit=%d cursor=%q registryType=%q companyParam=%q): %v", componentName, limitParam, cursorParam, registryTypeParam, companyParam, err)
+		log.Printf("📍 [%s] Error in GetAllRegistryDescriptors: service failure (limit=%d cursor=%q registryType=%q company=%q endpointInterface=%q): %v", componentName, limitParam, cursorParam, registryTypeParam, companyParam, endpointInterfaceParam, err)
 		c.errorHandler(w, r, err, &result)
 		return
 	}
