@@ -577,11 +577,18 @@ CREATE TABLE IF NOT EXISTS aas_description_ref (
 
 CREATE TABLE IF NOT EXISTS aas_specific_asset_id (
     id BIGSERIAL PRIMARY KEY,
+    -- FK required to model to represent SpecificAssetID inside AssetInformation
     asset_information_id BIGINT NOT NULL REFERENCES asset_information(id) ON DELETE CASCADE,
     name VARCHAR(256) NOT NULL,
     value VARCHAR(1024) NOT NULL,
     semantic_id BIGINT REFERENCES reference(id),
     external_subject_id BIGINT REFERENCES reference(id)
+);
+
+CREATE TABLE IF NOT EXISTS aas_specific_asset_id_supplemental_semantic_id (
+    specific_asset_id_id BIGINT NOT NULL REFERENCES aas_specific_asset_id(id) ON DELETE CASCADE,
+    supplemental_semantic_id BIGINT NOT NULL REFERENCES reference(id) ON DELETE CASCADE,
+    PRIMARY KEY (specific_asset_id_id, supplemental_semantic_id)
 );
 
 CREATE TABLE IF NOT EXISTS aas_resource (
@@ -595,8 +602,6 @@ CREATE TABLE IF NOT EXISTS asset_information_default_thumbnail (
     default_thumbnail_id BIGINT NOT NULL REFERENCES aas_resource(id) ON DELETE CASCADE,
     PRIMARY KEY (asset_information_id, default_thumbnail_id)
 );
-
-
 
 CREATE TABLE IF NOT EXISTS aas_extension (
     aas_id VARCHAR(2048) NOT NULL REFERENCES aas(id) ON DELETE CASCADE,
