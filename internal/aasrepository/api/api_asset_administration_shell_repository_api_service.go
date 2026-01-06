@@ -100,6 +100,16 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) PostAssetAdministratio
 	err := s.aasBackend.InsertAAS(aas)
 	if err != nil {
 		log.Printf("❌ [%s] Error %s: %v", componentName, operation, err)
+		if common.IsErrConflict(err) {
+			resp := common.NewErrorResponse(
+				err,
+				http.StatusConflict,
+				componentName,
+				operation,
+				"Conflict",
+			)
+			return resp, nil
+		}
 		resp := common.NewErrorResponse(
 			err,
 			http.StatusInternalServerError,
@@ -109,7 +119,6 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) PostAssetAdministratio
 		)
 		return resp, err
 	}
-
 	// Return created AAS
 	return gen.Response(201, aas), nil
 

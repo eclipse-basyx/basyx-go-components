@@ -36,6 +36,7 @@ package persistencepostgresql
 import (
 	"database/sql"
 	"errors"
+	"fmt"
 	"log"
 
 	"github.com/doug-martin/goqu/v9"
@@ -177,6 +178,14 @@ func (p *PostgreSQLAASDatabase) GetAllAAS() ([]model.AssetAdministrationShell, e
 
 // InsertAAS inserts a new Asset Administration Shell into the database.
 func (p *PostgreSQLAASDatabase) InsertAAS(aas model.AssetAdministrationShell) error {
+	exists, err := p.existsAAS(aas.ID)
+	if err != nil {
+		return err
+	} else if exists {
+		return common.NewErrConflict(
+			fmt.Sprintf("AAS with id '%s' already exists", aas.ID),
+		)
+	}
 	if err := p.insertBaseAAS(aas); err != nil {
 		return err
 	}
@@ -187,9 +196,6 @@ func (p *PostgreSQLAASDatabase) InsertAAS(aas model.AssetAdministrationShell) er
 		return err
 	}
 	if err := p.insertAdministration(aas); err != nil {
-		return err
-	}
-	if err := p.insertAssetInformation(aas); err != nil {
 		return err
 	}
 	return p.insertAssetInformation(aas)
@@ -931,4 +937,14 @@ func (p *PostgreSQLAASDatabase) insertAssetInformation(aas model.AssetAdministra
 	}
 
 	return nil
+}
+
+// checks if an AAS with the given ID exists in the database.
+func (p *PostgreSQLAASDatabase) existsAAS(id string) (bool, error) {
+	var exists bool
+	err := p.DB.QueryRow(
+		`SELECT EXISTS (SELECT 1 FROM aas WHERE id = $1)`,
+		id,
+	).Scan(&exists)
+	return exists, err
 }
