@@ -16,7 +16,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -86,19 +85,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllAssetAdministrat
 func (s *AssetAdministrationShellRepositoryAPIAPIService) PostAssetAdministrationShell(ctx context.Context, aas gen.AssetAdministrationShell) (gen.ImplResponse, error) {
 	operation := "PostAssetAdministrationShell"
 	// Validate minimal required fields
-	if aas.ID == "" {
-		err := fmt.Errorf("missing required field: id")
-		resp := common.NewErrorResponse(
-			err,
-			http.StatusBadRequest,
-			componentName,
-			operation,
-			"BadRequest",
-		)
-		return resp, nil
-	}
-	if aas.ModelType == "" {
-		err := fmt.Errorf("missing required field: modelType")
+	if err := gen.AssertAssetAdministrationShellMinimalConstraintsCheck(aas); err != nil {
 		resp := common.NewErrorResponse(
 			err,
 			http.StatusBadRequest,
