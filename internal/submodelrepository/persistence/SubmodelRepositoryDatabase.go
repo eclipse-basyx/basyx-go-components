@@ -1004,7 +1004,7 @@ func (p *PostgreSQLSubmodelDatabase) UpdateSubmodelElement(submodelID string, id
 	}
 
 	// Update the element
-	return handler.Update(submodelID, idShortPath, submodelElement)
+	return handler.Update(submodelID, idShortPath, submodelElement, nil)
 }
 
 // DeleteFileAttachment deletes a file attachment from PostgreSQL Large Object system.
