@@ -105,7 +105,7 @@ func toSQLResolvedFieldOrValue(operand *Value, explicitCastType string, position
 	}
 	ident := goqu.I(resolved.Column)
 	if explicitCastType != "" {
-		return goqu.L("?::"+explicitCastType, ident), &resolved, nil
+		return safeCastSQLValue(ident, explicitCastType), &resolved, nil
 	}
 	return ident, &resolved, nil
 }
@@ -569,12 +569,12 @@ func HandleComparison(leftOperand, rightOperand *Value, operation string) (exp.E
 	// Cast the field side to the non-field operand's type (unless already explicitly casted).
 	if leftResolved != nil && rightResolved == nil && leftCastType == "" {
 		if t := sqlTypeForOperand(rightOperand); t != "" {
-			leftSQL = goqu.L("?::"+t, goqu.I(leftResolved.Column))
+			leftSQL = safeCastSQLValue(goqu.I(leftResolved.Column), t)
 		}
 	}
 	if rightResolved != nil && leftResolved == nil && rightCastType == "" {
 		if t := sqlTypeForOperand(leftOperand); t != "" {
-			rightSQL = goqu.L("?::"+t, goqu.I(rightResolved.Column))
+			rightSQL = safeCastSQLValue(goqu.I(rightResolved.Column), t)
 		}
 	}
 
@@ -645,12 +645,12 @@ func HandleStringOperation(leftOperand, rightOperand *Value, operation string) (
 
 	if leftResolved != nil && rightResolved == nil && leftCastType == "" {
 		if t := sqlTypeForOperand(rightOperand); t != "" {
-			leftSQL = goqu.L("?::"+t, goqu.I(leftResolved.Column))
+			leftSQL = safeCastSQLValue(goqu.I(leftResolved.Column), t)
 		}
 	}
 	if rightResolved != nil && leftResolved == nil && rightCastType == "" {
 		if t := sqlTypeForOperand(leftOperand); t != "" {
-			rightSQL = goqu.L("?::"+t, goqu.I(rightResolved.Column))
+			rightSQL = safeCastSQLValue(goqu.I(rightResolved.Column), t)
 		}
 	}
 
@@ -787,26 +787,34 @@ func buildComparisonExpression(left interface{}, right interface{}, operation st
 	}
 }
 
+// safeCastSQLValue applies a PostgreSQL cast to the provided SQL value.
+//
+// For types that can raise runtime errors (e.g. timestamptz, time, numeric, boolean), the cast is guarded
+// so non-castable inputs yield NULL instead of a PostgreSQL cast error.
+// This is critical for security rules: a failed cast should simply cause the predicate to not match.
+func safeCastSQLValue(sqlValue interface{}, targetType string) exp.Expression {
+	switch targetType {
+	case "timestamptz":
+		return goqu.L("CASE WHEN ?::text ~ ? THEN (?::timestamptz) END", sqlValue, `^[0-9]{4}-[0-9]{2}-[0-9]{2}T`, sqlValue)
+	case "time":
+		return goqu.L("CASE WHEN ?::text ~ ? THEN (?::time) END", sqlValue, `^[0-9]{2}:[0-9]{2}(:[0-9]{2})?$`, sqlValue)
+	case "double precision":
+		return goqu.L("CASE WHEN ?::text ~ ? THEN (?::double precision) END", sqlValue, `^\s*-?[0-9]+(\.[0-9]+)?\s*$`, sqlValue)
+	case "boolean":
+		return goqu.L("CASE WHEN lower(?::text) IN ('true','false','1','0','yes','no') THEN (?::boolean) END", sqlValue, sqlValue)
+	default:
+		// text/hex casts are always safe
+		return goqu.L("?::"+targetType, sqlValue)
+	}
+}
+
 // castOperandToSQLType recursively converts an operand to SQL and applies a PostgreSQL cast.
 func castOperandToSQLType(inner *Value, position string, targetType string) (exp.Expression, error) {
 	sqlValue, err := toSQLComponent(inner, position)
 	if err != nil {
 		return nil, err
 	}
-	// Guard casts so malformed input yields NULL instead of a PostgreSQL cast error.
-	switch targetType {
-	case "timestamptz":
-		return goqu.L("CASE WHEN ?::text ~ ? THEN (?::timestamptz) END", sqlValue, `^[0-9]{4}-[0-9]{2}-[0-9]{2}T`, sqlValue), nil
-	case "time":
-		return goqu.L("CASE WHEN ?::text ~ ? THEN (?::time) END", sqlValue, `^[0-9]{2}:[0-9]{2}(:[0-9]{2})?$`, sqlValue), nil
-	case "double precision":
-		return goqu.L("CASE WHEN ?::text ~ ? THEN (?::double precision) END", sqlValue, `^\s*-?[0-9]+(\.[0-9]+)?\s*$`, sqlValue), nil
-	case "boolean":
-		return goqu.L("CASE WHEN lower(?::text) IN ('true','false','1','0','yes','no') THEN (?::boolean) END", sqlValue, sqlValue), nil
-	default:
-		// text/hex casts are always safe
-		return goqu.L("?::"+targetType, sqlValue), nil
-	}
+	return safeCastSQLValue(sqlValue, targetType), nil
 }
 
 // normalizeLiteralForSQL converts grammar literals to safe SQL encodable values.

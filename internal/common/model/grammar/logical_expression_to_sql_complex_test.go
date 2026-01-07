@@ -49,45 +49,45 @@ func TestLogicalExpression_ToSQL_ComplexCases(t *testing.T) {
 			noExists: true,
 		},
 		{
-			name:    "gt number adds implicit ::double precision",
+			name:    "gt number adds implicit guarded ::double precision",
 			expr:    LogicalExpression{Gt: ComparisonItems{field("$aasdesc#id"), Value{NumVal: floatPtr(10)}}},
-			wantSQL: []string{"::double precision", "> ?"},
+			wantSQL: []string{"CASE WHEN", "::double precision", "> ?"},
 			wantArgs: []interface{}{
 				float64(10),
 			},
 			noExists: true,
 		},
 		{
-			name:    "ge number with explicit $numCast",
+			name:    "ge number with explicit $numCast is guarded",
 			expr:    LogicalExpression{Ge: ComparisonItems{Value{NumCast: valuePtr(field("$aasdesc#id"))}, Value{NumVal: floatPtr(10)}}},
-			wantSQL: []string{"::double precision", ">= ?"},
+			wantSQL: []string{"CASE WHEN", "::double precision", ">= ?"},
 			wantArgs: []interface{}{
 				float64(10),
 			},
 			noExists: true,
 		},
 		{
-			name:    "eq boolean adds implicit ::boolean",
+			name:    "eq boolean adds implicit guarded ::boolean",
 			expr:    LogicalExpression{Eq: ComparisonItems{field("$aasdesc#assetKind"), Value{Boolean: &kind}}},
-			wantSQL: []string{"::boolean", "= ?"},
+			wantSQL: []string{"CASE WHEN", "::boolean", "= ?"},
 			wantArgs: []interface{}{
 				true,
 			},
 			noExists: true,
 		},
 		{
-			name:    "lt time adds implicit ::time",
+			name:    "lt time adds implicit guarded ::time",
 			expr:    LogicalExpression{Lt: ComparisonItems{field("$aasdesc#idShort"), Value{TimeVal: &timeVal}}},
-			wantSQL: []string{"::time", "< ?"},
+			wantSQL: []string{"CASE WHEN", "::time", "< ?"},
 			wantArgs: []interface{}{
 				string(timeVal),
 			},
 			noExists: true,
 		},
 		{
-			name:    "eq datetime adds implicit ::timestamptz",
+			name:    "eq datetime adds implicit guarded ::timestamptz",
 			expr:    LogicalExpression{Eq: ComparisonItems{field("$aasdesc#id"), Value{DateTimeVal: &dtVal}}},
-			wantSQL: []string{"::timestamptz", "= ?"},
+			wantSQL: []string{"CASE WHEN", "::timestamptz", "= ?"},
 			wantArgs: []interface{}{
 				dt,
 			},
