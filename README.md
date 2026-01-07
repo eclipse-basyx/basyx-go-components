@@ -4,7 +4,7 @@
 
 # BaSyx Go Components
 
-Welcome to the BaSyx Go Components project! This guide is designed to help new developers onboard quickly, understand the architecture, and contribute effectively.
+Welcome to the BaSyx Go project! This guide is designed to help new developers onboard quickly, understand the architecture, and contribute effectively.
 
 ## Table of Contents
 1. [Project Overview](#project-overview)
