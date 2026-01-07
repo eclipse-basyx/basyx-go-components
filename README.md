@@ -28,7 +28,7 @@ BaSyx Go Components is an open-source implementation of the Eclipse BaSyx framew
 
 ## 2. Architecture Overview
 
-The system is composed of microservices for AAS registry, submodel repository, discovery, and file server. Each service exposes REST APIs and interacts with a PostgreSQL database. Security is enforced via OIDC and ABAC middleware. See [docu/security/DISCOVERY_AUTHORIZATION_README.md](docu/security/DISCOVERY_AUTHORIZATION_README.md) for a detailed flow and architecture diagram.
+The system is composed of microservices for AAS registry, submodel repository, discovery, and file server. Each service exposes REST APIs and interacts with a PostgreSQL database. Security is enforced via OIDC and ABAC middleware. See [docu/security/REGISTRY_SECURITY.md](docu/security/REGISTRY_SECURITY.md) for a detailed flow and architecture diagram.
 
 ## 3. Setup & Installation
 
@@ -149,7 +149,7 @@ See [structure.md](docu/developer/structure.md) and related files for details on
 ## 11. Troubleshooting & Error Reference
 
 - See [docu/errors.md](docu/errors.md) for common error scenarios and solutions
-- For security and authorization, see [docu/security/DISCOVERY_AUTHORIZATION_README.md](docu/security/DISCOVERY_AUTHORIZATION_README.md)
+- For security and authorization, see [docu/security/REGISTRY_SECURITY.md](docu/security/REGISTRY_SECURITY.md)
 
 ## 12. Glossary of Terms & Abbreviations
 
