@@ -27,6 +27,7 @@
 package grammar
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -42,11 +43,60 @@ import (
 // do not produce any ArrayIndexBinding entries.
 type ArrayIndexBinding struct {
 	// Alias is the SQL identifier for the array position column.
-	// It always ends with ".position" (e.g. "specific_asset_id.position").
+	// Typically this ends with ".position" for array bindings (e.g. "specific_asset_id.position"),
+	// but it may also reference other binding columns (e.g. "submodel_element.idshort_path" for $sme).
 	Alias string
 
-	// Index is the concrete array position.
-	Index int
+	// Index is the concrete binding value.
+	//
+	// For array segments, this is the numeric position. For $sme idShortPath constraints,
+	// this contains the extracted idShortPath string.
+	Index ArrayIndex
+}
+
+// ArrayIndex is a small JSON-union type that can represent either a numeric array index
+// or a string identifier (used for $sme idShortPath constraints).
+type ArrayIndex struct {
+	intValue    *int
+	stringValue *string
+}
+
+func NewArrayIndexPosition(i int) ArrayIndex {
+	return ArrayIndex{intValue: &i}
+}
+
+func NewArrayIndexString(s string) ArrayIndex {
+	return ArrayIndex{stringValue: &s}
+}
+
+func (a ArrayIndex) MarshalJSON() ([]byte, error) {
+	if a.intValue != nil {
+		return []byte(fmt.Sprintf("%d", *a.intValue)), nil
+	}
+	if a.stringValue != nil {
+		return json.Marshal(*a.stringValue)
+	}
+	return []byte("null"), nil
+}
+
+func (a *ArrayIndex) UnmarshalJSON(b []byte) error {
+	// Accept either JSON number (int) or JSON string.
+	var asNumber json.Number
+	if err := json.Unmarshal(b, &asNumber); err == nil {
+		if i, err := asNumber.Int64(); err == nil {
+			iv := int(i)
+			a.intValue = &iv
+			a.stringValue = nil
+			return nil
+		}
+	}
+	var asString string
+	if err := json.Unmarshal(b, &asString); err == nil {
+		a.stringValue = &asString
+		a.intValue = nil
+		return nil
+	}
+	return fmt.Errorf("invalid ArrayIndex JSON: %s", string(b))
 }
 
 // ResolvedFieldPath is the SQL-resolved representation of a FieldIdentifier.
@@ -124,10 +174,9 @@ func ResolveScalarFieldToSQL(field *ModelStringPattern) (ResolvedFieldPath, erro
 		return ResolvedFieldPath{}, fmt.Errorf("scalar field identifier must not end in an array segment: %q", fieldStr)
 	}
 
-	column := ParseAASQLFieldToSQLColumn(fieldStr)
-	// If no mapping exists, ParseAASQLFieldToSQLColumn returns the input unchanged.
-	if column == fieldStr || strings.Contains(column, "$") {
-		return ResolvedFieldPath{}, fmt.Errorf("unsupported or unmapped field identifier: %q", fieldStr)
+	column, err := ResolveAASQLFieldToSQLColumn(fieldStr)
+	if err != nil {
+		return ResolvedFieldPath{}, err
 	}
 
 	bindings, err := resolveArrayBindings(fieldStr, tokens)
@@ -174,11 +223,68 @@ const (
 	ctxAASDesc
 	ctxSMDesc
 	ctxSM
+	ctxSME
 	ctxSpecificAssetID
 	ctxAASDescEndpoint
 	ctxSubmodelDescriptor
 	ctxSubmodelDescriptorEndpoint
 )
+
+type arraySegmentContextMapping struct {
+	PositionAlias string
+	NextContext   resolveContext
+}
+
+type arraySegmentMapping struct {
+	// ByContext is used for array segments that don't require a preceding simple token.
+	ByContext map[resolveContext]arraySegmentContextMapping
+
+	// ByParent is used for array segments that depend on a preceding simple token
+	// (e.g. "semanticId.keys[]" vs "externalSubjectId.keys[]").
+	ByParent map[string]map[resolveContext]arraySegmentContextMapping
+}
+
+// arraySegmentMappings defines how array-like path segments map to SQL join aliases.
+//
+// The mapping is intentionally centralized so that supported fragment/scalar field
+// identifiers can be extended by adding data rather than growing switch statements.
+//
+// NOTE: PositionAlias must already include the trailing ".position".
+var arraySegmentMappings = map[string]arraySegmentMapping{
+	"specificAssetIds": {
+		ByContext: map[resolveContext]arraySegmentContextMapping{
+			ctxAASDesc: {PositionAlias: "specific_asset_id.position", NextContext: ctxSpecificAssetID},
+		},
+	},
+
+	"endpoints": {
+		ByContext: map[resolveContext]arraySegmentContextMapping{
+			ctxAASDesc:            {PositionAlias: "aas_descriptor_endpoint.position", NextContext: ctxAASDescEndpoint},
+			ctxSMDesc:             {PositionAlias: "submodel_descriptor_endpoint.position", NextContext: ctxSubmodelDescriptorEndpoint},
+			ctxSubmodelDescriptor: {PositionAlias: "submodel_descriptor_endpoint.position", NextContext: ctxSubmodelDescriptorEndpoint},
+		},
+	},
+
+	"submodelDescriptors": {
+		ByContext: map[resolveContext]arraySegmentContextMapping{
+			ctxAASDesc: {PositionAlias: "submodel_descriptor.position", NextContext: ctxSubmodelDescriptor},
+		},
+	},
+
+	"keys": {
+		ByParent: map[string]map[resolveContext]arraySegmentContextMapping{
+			"externalSubjectId": {
+				ctxSpecificAssetID: {PositionAlias: "external_subject_reference_key.position", NextContext: ctxSpecificAssetID},
+			},
+			"semanticId": {
+				ctxSM:                 {PositionAlias: "semantic_id_reference_key.position", NextContext: ctxSM},
+				ctxSME:                {PositionAlias: "semantic_id_reference_key.position", NextContext: ctxSME},
+				ctxSMDesc:             {PositionAlias: "aasdesc_submodel_descriptor_semantic_id_reference_key.position", NextContext: ctxSMDesc},
+				ctxSubmodelDescriptor: {PositionAlias: "aasdesc_submodel_descriptor_semantic_id_reference_key.position", NextContext: ctxSubmodelDescriptor},
+			},
+		},
+	},
+}
 
 func contextFromFieldPrefix(fieldStr string) resolveContext {
 	// prefix is like "$aasdesc" (before '#')
@@ -186,26 +292,56 @@ func contextFromFieldPrefix(fieldStr string) resolveContext {
 	if len(parts) != 2 {
 		return ctxUnknown
 	}
-	switch parts[0] {
+	// For $sme we allow an idShortPath before '#', e.g. "$sme.temperature".
+	prefix := parts[0]
+	root := prefix
+	if idx := strings.Index(prefix, "."); idx >= 0 {
+		root = prefix[:idx]
+	}
+	switch root {
 	case "$aasdesc":
 		return ctxAASDesc
 	case "$smdesc":
 		return ctxSMDesc
 	case "$sm":
 		return ctxSM
+	case "$sme":
+		return ctxSME
 	default:
 		return ctxUnknown
 	}
+}
+
+func smeIDShortPathFromField(fieldStr string) (string, bool) {
+	parts := strings.SplitN(fieldStr, "#", 2)
+	if len(parts) != 2 {
+		return "", false
+	}
+	prefix := parts[0]
+	if !strings.HasPrefix(prefix, "$sme") {
+		return "", false
+	}
+	path := strings.TrimPrefix(prefix, "$sme")
+	path = strings.TrimPrefix(path, ".")
+	if strings.TrimSpace(path) == "" {
+		return "", false
+	}
+	return path, true
 }
 
 func resolveArrayBindings(fieldStr string, tokens []builder.Token) ([]ArrayIndexBinding, error) {
 	ctx := contextFromFieldPrefix(fieldStr)
 	if ctx == ctxUnknown {
 		// Keep error explicit: this is meant for registry queries today.
-		return nil, fmt.Errorf("unsupported field root (expected $aasdesc#, $smdesc#, or $sm#): %q", fieldStr)
+		return nil, fmt.Errorf("unsupported field root (expected $aasdesc#, $smdesc#, $sm#, or $sme...#): %q", fieldStr)
 	}
 
 	var bindings []ArrayIndexBinding
+	if ctx == ctxSME {
+		if idShortPath, ok := smeIDShortPathFromField(fieldStr); ok {
+			bindings = append(bindings, ArrayIndexBinding{Alias: "submodel_element.idshort_path", Index: NewArrayIndexString(idShortPath)})
+		}
+	}
 	prevSimple := ""
 	for _, tok := range tokens {
 		switch t := tok.(type) {
@@ -213,13 +349,13 @@ func resolveArrayBindings(fieldStr string, tokens []builder.Token) ([]ArrayIndex
 			prevSimple = t.Name
 
 		case builder.ArrayToken:
-			alias, nextCtx, err := resolveArrayToken(fieldStr, ctx, prevSimple, t.Name)
+			positionAlias, nextCtx, err := resolveArrayToken(fieldStr, ctx, prevSimple, t.Name)
 			if err != nil {
 				return nil, err
 			}
 			// Only explicit array indices create bindings. Wildcard "[]" produces no binding.
 			if t.Index >= 0 {
-				bindings = append(bindings, ArrayIndexBinding{Alias: alias + ".position", Index: t.Index})
+				bindings = append(bindings, ArrayIndexBinding{Alias: positionAlias, Index: NewArrayIndexPosition(t.Index)})
 			}
 			ctx = nextCtx
 			prevSimple = ""
@@ -232,56 +368,27 @@ func resolveArrayBindings(fieldStr string, tokens []builder.Token) ([]ArrayIndex
 	return bindings, nil
 }
 
-func resolveArrayToken(fieldStr string, ctx resolveContext, prevSimple string, arrayName string) (alias string, next resolveContext, err error) {
-	// Aliases must match the ones used by descriptor SQL builders.
-	switch arrayName {
-	case "specificAssetIds":
-		if ctx != ctxAASDesc {
-			return "", ctx, fmt.Errorf("specificAssetIds not valid in this context for field %q", fieldStr)
-		}
-		return "specific_asset_id", ctxSpecificAssetID, nil
-
-	case "endpoints":
-		// endpoints can be on $aasdesc, $smdesc, or inside a submodelDescriptor (which is also a descriptor)
-		switch ctx {
-		case ctxAASDesc:
-			return "aas_descriptor_endpoint", ctxAASDescEndpoint, nil
-		case ctxSMDesc, ctxSubmodelDescriptor:
-			// same physical table, but joined under a different alias
-			return "submodel_descriptor_endpoint", ctxSubmodelDescriptorEndpoint, nil
-		default:
-			return "", ctx, fmt.Errorf("endpoints not valid in this context for field %q", fieldStr)
-		}
-
-	case "submodelDescriptors":
-		if ctx != ctxAASDesc {
-			return "", ctx, fmt.Errorf("submodelDescriptors not valid in this context for field %q", fieldStr)
-		}
-		return "submodel_descriptor", ctxSubmodelDescriptor, nil
-
-	case "keys":
-		// keys always refers to a reference_key table; which alias depends on the reference being accessed.
-		// We rely on the preceding simple token to disambiguate.
-		switch prevSimple {
-		case "externalSubjectId":
-			if ctx != ctxSpecificAssetID {
-				return "", ctx, fmt.Errorf("externalSubjectId.keys not valid in this context for field %q", fieldStr)
-			}
-			return "external_subject_reference_key", ctx, nil
-		case "semanticId":
-			switch ctx {
-			case ctxSM:
-				return "semantic_id_reference_key", ctx, nil
-			case ctxSMDesc, ctxSubmodelDescriptor:
-				return "aasdesc_submodel_descriptor_semantic_id_reference_key", ctx, nil
-			default:
-				return "", ctx, fmt.Errorf("semanticId.keys not valid in this context for field %q", fieldStr)
-			}
-		default:
-			return "", ctx, fmt.Errorf("cannot resolve keys[] array without a known parent (got %q) for field %q", prevSimple, fieldStr)
-		}
-
-	default:
+func resolveArrayToken(fieldStr string, ctx resolveContext, prevSimple string, arrayName string) (positionAlias string, next resolveContext, err error) {
+	mapping, ok := arraySegmentMappings[arrayName]
+	if !ok {
 		return "", ctx, fmt.Errorf("unsupported array segment %q in field %q", arrayName, fieldStr)
 	}
+
+	if mapping.ByParent != nil {
+		parentMappings, ok := mapping.ByParent[prevSimple]
+		if !ok {
+			return "", ctx, fmt.Errorf("cannot resolve %s[] array without a known parent (got %q) for field %q", arrayName, prevSimple, fieldStr)
+		}
+		ctxMapping, ok := parentMappings[ctx]
+		if !ok {
+			return "", ctx, fmt.Errorf("%s.%s not valid in this context for field %q", prevSimple, arrayName, fieldStr)
+		}
+		return ctxMapping.PositionAlias, ctxMapping.NextContext, nil
+	}
+
+	ctxMapping, ok := mapping.ByContext[ctx]
+	if !ok {
+		return "", ctx, fmt.Errorf("%s not valid in this context for field %q", arrayName, fieldStr)
+	}
+	return ctxMapping.PositionAlias, ctxMapping.NextContext, nil
 }

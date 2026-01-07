@@ -1,0 +1,1 @@
+$aasdesc#submodelDescriptors[1].semanticId.type

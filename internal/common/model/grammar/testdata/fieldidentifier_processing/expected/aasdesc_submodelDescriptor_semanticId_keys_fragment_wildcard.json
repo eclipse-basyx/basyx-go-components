@@ -1,0 +1,5 @@
+{
+  "bindings": [
+    {"alias": "submodel_descriptor.position", "index": 3}
+  ]
+}

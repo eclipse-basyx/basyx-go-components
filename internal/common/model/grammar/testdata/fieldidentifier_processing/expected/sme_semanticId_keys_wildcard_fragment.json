@@ -1,0 +1,8 @@
+{
+  "bindings": [
+    {
+      "alias": "submodel_element.idshort_path",
+      "index": "temperature"
+    }
+  ]
+}

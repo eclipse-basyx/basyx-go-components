@@ -1,0 +1,5 @@
+{
+  "bindings": [
+    {"alias": "external_subject_reference_key.position", "index": 3}
+  ]
+}

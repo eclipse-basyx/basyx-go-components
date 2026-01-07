@@ -1,0 +1,4 @@
+{
+  "column": "COALESCE(property_element.value_text, property_element.value_num::text, property_element.value_bool::text, property_element.value_time::text, property_element.value_datetime::text)",
+  "bindings": []
+}

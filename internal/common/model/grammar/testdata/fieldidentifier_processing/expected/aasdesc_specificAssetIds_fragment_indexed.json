@@ -1,0 +1,5 @@
+{
+  "bindings": [
+    {"alias": "specific_asset_id.position", "index": 4}
+  ]
+}

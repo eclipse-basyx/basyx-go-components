@@ -1,0 +1,1 @@
+$sme.MyList[2].temp#valueType

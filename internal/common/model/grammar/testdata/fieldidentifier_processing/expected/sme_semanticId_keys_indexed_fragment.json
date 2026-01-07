@@ -1,0 +1,12 @@
+{
+  "bindings": [
+    {
+      "alias": "submodel_element.idshort_path",
+      "index": "engine"
+    },
+    {
+      "alias": "semantic_id_reference_key.position",
+      "index": 1
+    }
+  ]
+}

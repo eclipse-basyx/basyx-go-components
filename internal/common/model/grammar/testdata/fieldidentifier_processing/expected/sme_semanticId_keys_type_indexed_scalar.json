@@ -1,0 +1,13 @@
+{
+  "column": "semantic_id_reference_key.type",
+  "bindings": [
+    {
+      "alias": "submodel_element.idshort_path",
+      "index": "some.path"
+    },
+    {
+      "alias": "semantic_id_reference_key.position",
+      "index": 3
+    }
+  ]
+}

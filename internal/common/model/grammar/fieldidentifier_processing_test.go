@@ -47,7 +47,7 @@ type fidTestCase struct {
 
 type expectedBinding struct {
 	Alias string `json:"alias"`
-	Index int    `json:"index"`
+	Index any    `json:"index"`
 }
 
 type expectedScalar struct {

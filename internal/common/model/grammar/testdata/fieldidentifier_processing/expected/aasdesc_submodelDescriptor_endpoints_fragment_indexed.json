@@ -1,0 +1,6 @@
+{
+  "bindings": [
+    {"alias": "submodel_descriptor.position", "index": 1},
+    {"alias": "submodel_descriptor_endpoint.position", "index": 2}
+  ]
+}
