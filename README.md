@@ -1,3 +1,7 @@
+<div align="center">
+  <img src="docu/assets/Logo_Go_light.svg" alt="BaSyx Go Logo" width="400"/>
+</div>
+
 # BaSyx Go Components - Developer Documentation
 
 Welcome to the BaSyx Go Components project! This guide is designed to help new developers onboard quickly, understand the architecture, and contribute effectively.
