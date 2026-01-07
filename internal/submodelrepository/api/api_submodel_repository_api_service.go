@@ -342,7 +342,7 @@ func (s *SubmodelRepositoryAPIAPIService) PutSubmodelByID(ctx context.Context, s
 	}
 
 	if string(decodedIdentifier) != submodel.ID {
-		return common.NewErrorResponse(errors.New("Submodel ID in path and body do not match"), http.StatusBadRequest, "SMRepo", "PatchSubmodelByID", "ID Mismatch"), nil
+		return common.NewErrorResponse(errors.New("submodel ID in path and body do not match"), http.StatusBadRequest, "SMRepo", "PatchSubmodelByID", "ID Mismatch"), nil
 	}
 
 	isUpdate, err := s.submodelBackend.PutSubmodel(string(decodedIdentifier), submodel)

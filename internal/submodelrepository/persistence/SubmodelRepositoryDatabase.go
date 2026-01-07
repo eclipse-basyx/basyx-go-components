@@ -471,14 +471,29 @@ func (p *PostgreSQLSubmodelDatabase) DeleteSubmodel(id string, optionalTX *sql.T
 	return nil
 }
 
+// PutSubmodel creates or updates a submodel in the database.
+// If the submodel already exists, it is deleted and recreated with the new data.
+// This method ensures that the submodel is fully replaced with the provided data.
+//
+// Parameters:
+//   - submodelID: Unique identifier of the submodel to create or update
+//   - submodel: The submodel data to store
+//
+// Returns:
+//   - bool: True if the submodel was updated (existed before), false if created new
+//   - error: Error if creation or update fails
 func (p *PostgreSQLSubmodelDatabase) PutSubmodel(submodelID string, submodel gen.Submodel) (bool, error) {
 	tx, cu, err := common.StartTransaction(p.db)
+	if err != nil {
+		_, _ = fmt.Println(err)
+		return false, beginTransactionErrorSubmodelRepo
+	}
+	defer cu(&err)
 	exists, err := p.DoesSubmodelExist(submodelID, tx)
 	if err != nil {
 		_, _ = fmt.Println(err)
 		return false, common.NewInternalServerError("Error while checking for submodel Existence - see console for details.")
 	}
-	defer cu(&err)
 	if exists {
 		err = p.DeleteSubmodel(submodelID, tx)
 		if err != nil {
@@ -487,7 +502,10 @@ func (p *PostgreSQLSubmodelDatabase) PutSubmodel(submodelID string, submodel gen
 	}
 
 	err = p.CreateSubmodel(submodel, tx)
-	tx.Commit()
+	if err != nil {
+		return false, err
+	}
+	err = tx.Commit()
 	return exists, err
 }
 
