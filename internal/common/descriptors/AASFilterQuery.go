@@ -40,13 +40,3 @@ var (
 	submodelDescriptorSemanticIDReferenceAlias    = goqu.T(tblReference).As(aliasSubmodelDescriptorSemanticIDReference)
 	submodelDescriptorSemanticIDReferenceKeyAlias = goqu.T(tblReferenceKey).As(aliasSubmodelDescriptorSemanticIDReferenceKey)
 )
-
-// getJoinTables relevant for only aas descriptors
-func getJoinTables(d goqu.DialectWrapper) *goqu.SelectDataset {
-	joinTables := d.From(tDescriptor).
-		InnerJoin(
-			tAASDescriptor,
-			goqu.On(tAASDescriptor.Col(colDescriptorID).Eq(tDescriptor.Col(colID))),
-		)
-	return joinTables
-}

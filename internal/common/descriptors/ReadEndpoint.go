@@ -58,9 +58,9 @@ func ReadEndpointsByDescriptorID(
 	ctx context.Context,
 	db *sql.DB,
 	descriptorID int64,
-	joinOn exp.AliasedExpression,
+	joinOnMainTable bool,
 ) ([]model.Endpoint, error) {
-	v, err := ReadEndpointsByDescriptorIDs(ctx, db, []int64{descriptorID}, joinOn)
+	v, err := ReadEndpointsByDescriptorIDs(ctx, db, []int64{descriptorID}, joinOnMainTable)
 	return v[descriptorID], err
 }
 
@@ -89,7 +89,7 @@ func ReadEndpointsByDescriptorIDs(
 	ctx context.Context,
 	db *sql.DB,
 	descriptorIDs []int64,
-	joinOn exp.AliasedExpression,
+	joinOnMainTable bool,
 ) (map[int64][]model.Endpoint, error) {
 	out := make(map[int64][]model.Endpoint, len(descriptorIDs))
 	if len(descriptorIDs) == 0 {
@@ -102,11 +102,30 @@ func ReadEndpointsByDescriptorIDs(
 	v := goqu.T(tblEndpointProtocolVersion).As("v")
 	s := goqu.T(tblSecurityAttributes).As("s")
 
-	ds := getJoinTables(d).
-		LeftJoin(
-			v,
-			goqu.On(v.Col(colEndpointID).Eq(joinOn.Col(colID))),
-		).
+	ds := d.From(tDescriptor).
+		InnerJoin(
+			tAASDescriptor,
+			goqu.On(tAASDescriptor.Col(colDescriptorID).Eq(tDescriptor.Col(colID))),
+		)
+	var joinOn exp.AliasedExpression
+	if joinOnMainTable {
+		joinOn = aasDescriptorEndpointAlias
+		ds = ds.LeftJoin(
+			aasDescriptorEndpointAlias,
+			goqu.On(aasDescriptorEndpointAlias.Col(colDescriptorID).Eq(tDescriptor.Col(colID))),
+		)
+	} else {
+		joinOn = submodelDescriptorEndpointAlias
+		ds = ds.LeftJoin(
+			submodelDescriptorEndpointAlias,
+			goqu.On(submodelDescriptorEndpointAlias.Col(colDescriptorID).Eq(tDescriptor.Col(colID))),
+		)
+	}
+
+	ds = ds.LeftJoin(
+		v,
+		goqu.On(v.Col(colEndpointID).Eq(joinOn.Col(colID))),
+	).
 		LeftJoin(
 			s,
 			goqu.On(s.Col(colEndpointID).Eq(joinOn.Col(colID))),
@@ -163,6 +182,8 @@ func ReadEndpointsByDescriptorIDs(
 	if err != nil {
 		return nil, err
 	}
+	_, _ = fmt.Println("endpoints")
+	_, _ = fmt.Println(sqlStr)
 
 	rows, err := db.QueryContext(ctx, sqlStr, args...)
 	if err != nil {

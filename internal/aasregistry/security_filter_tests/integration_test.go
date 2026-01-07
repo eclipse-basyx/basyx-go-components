@@ -241,6 +241,8 @@ func TestMain(m *testing.M) {
 
 	code := m.Run()
 
+	os.Exit(code)
+
 	fmt.Println("Stopping Docker Compose...")
 	cmd = exec.Command(executable, "compose", "-f", "docker_compose/docker_compose.yml", "down")
 	cmd.Stdout = os.Stdout
@@ -248,6 +250,4 @@ func TestMain(m *testing.M) {
 	if err := cmd.Run(); err != nil {
 		fmt.Printf("Failed to stop Docker Compose: %v\n", err)
 	}
-
-	os.Exit(code)
 }

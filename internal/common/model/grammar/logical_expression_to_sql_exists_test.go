@@ -133,3 +133,67 @@ func TestHandleComparison_BuildsExistsForSpecificAssetExternalSubjectKeyValue(t 
 		t.Fatalf("expected args to contain %q, got %#v", string(lit), args)
 	}
 }
+
+func TestHandleComparison_BuildsExistsForSpecificAssetExternalSubjectKeyValue_WildcardsNoBindings(t *testing.T) {
+	field := ModelStringPattern("$aasdesc#specificAssetIds[].externalSubjectId.keys[].value")
+	lit := StandardString("WRITTEN_BY_X")
+
+	left := Value{Field: &field}
+	right := Value{StrVal: &lit}
+
+	expr, err := HandleComparison(&left, &right, "$eq")
+	if err != nil {
+		t.Fatalf("HandleComparison returned error: %v", err)
+	}
+
+	d := goqu.Dialect("postgres")
+	ds := d.From(goqu.T("descriptor").As("descriptor")).Select(goqu.V(1)).Where(expr).Prepared(true)
+
+	sql, args, err := ds.ToSQL()
+	if err != nil {
+		t.Fatalf("ToSQL returned error: %v", err)
+	}
+
+	// Ensure we used correlated EXISTS with the right base and joins, even without any index bindings.
+	if !strings.Contains(sql, "EXISTS") {
+		t.Fatalf("expected EXISTS in SQL, got: %s", sql)
+	}
+	if !strings.Contains(sql, "FROM \"specific_asset_id\"") {
+		t.Fatalf("expected specific_asset_id base table in SQL, got: %s", sql)
+	}
+	if !strings.Contains(sql, "JOIN \"reference\" AS \"external_subject_reference\"") {
+		t.Fatalf("expected join to external_subject_reference in SQL, got: %s", sql)
+	}
+	if !strings.Contains(sql, "JOIN \"reference_key\" AS \"external_subject_reference_key\"") {
+		t.Fatalf("expected join to external_subject_reference_key in SQL, got: %s", sql)
+	}
+
+	// Correlation back to the outer descriptor.
+	if !strings.Contains(sql, "\"specific_asset_id\".\"descriptor_id\" = \"descriptor\".\"id\"") {
+		t.Fatalf("expected correlation predicate in SQL, got: %s", sql)
+	}
+
+	// No binding constraints for wildcards.
+	if strings.Contains(sql, "\"specific_asset_id\".\"position\"") {
+		t.Fatalf("did not expect specific_asset_id.position constraint in SQL, got: %s", sql)
+	}
+	if strings.Contains(sql, "\"external_subject_reference_key\".\"position\"") {
+		t.Fatalf("did not expect external_subject_reference_key.position constraint in SQL, got: %s", sql)
+	}
+
+	// Predicate on the resolved column.
+	if !strings.Contains(sql, "\"external_subject_reference_key\".\"value\"") {
+		t.Fatalf("expected predicate on external_subject_reference_key.value in SQL, got: %s", sql)
+	}
+	if argListContains(args, 0) {
+		t.Fatalf("did not expect args to contain %d (no bindings), got %#v", 0, args)
+	}
+	// Prepared queries pass constants like SELECT 1 as bind args; with no array bindings
+	// we expect exactly: outer SELECT 1, inner SELECT 1, and the literal value.
+	if len(args) != 3 {
+		t.Fatalf("expected exactly 3 args (outer 1, inner 1, literal), got %#v", args)
+	}
+	if !argListContains(args, string(lit)) {
+		t.Fatalf("expected args to contain %q, got %#v", string(lit), args)
+	}
+}

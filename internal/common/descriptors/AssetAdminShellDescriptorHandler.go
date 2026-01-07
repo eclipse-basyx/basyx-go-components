@@ -330,7 +330,11 @@ func buildListAssetAdministrationShellDescriptorsQuery(
 		return nil, err
 	}
 
-	ds := getJoinTables(d).
+	ds := d.From(tDescriptor).
+		InnerJoin(
+			tAASDescriptor,
+			goqu.On(tAASDescriptor.Col(colDescriptorID).Eq(tDescriptor.Col(colID))),
+		).
 		Select(
 			expressions[0],
 			expressions[1],
@@ -524,7 +528,7 @@ func ListAssetAdministrationShellDescriptors(
 	if len(descIDs) > 0 {
 		ids := append([]int64(nil), descIDs...)
 		GoAssign(g, func() (map[int64][]model.Endpoint, error) {
-			return ReadEndpointsByDescriptorIDs(gctx, db, ids, aasDescriptorEndpointAlias)
+			return ReadEndpointsByDescriptorIDs(gctx, db, ids, true)
 		}, &endpointsByDesc)
 		GoAssign(g, func() (map[int64][]model.SpecificAssetID, error) {
 			return ReadSpecificAssetIDsByDescriptorIDs(gctx, db, ids)

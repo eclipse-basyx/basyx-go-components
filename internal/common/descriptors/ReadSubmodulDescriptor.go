@@ -139,7 +139,15 @@ func ReadSubmodelDescriptorsByAASDescriptorIDs(
 		return nil, err
 	}
 	arr := pq.Array(uniqAASDesc)
-	ds := getJoinTables(d).
+	ds := d.From(tDescriptor).
+		InnerJoin(
+			tAASDescriptor,
+			goqu.On(tAASDescriptor.Col(colDescriptorID).Eq(tDescriptor.Col(colID))),
+		).
+		LeftJoin(
+			submodelDescriptorAlias,
+			goqu.On(submodelDescriptorAlias.Col(colAASDescriptorID).Eq(tAASDescriptor.Col(colDescriptorID))),
+		).
 		Select(
 			expressions[0],
 			expressions[1],
@@ -280,7 +288,7 @@ func ReadSubmodelDescriptorsByAASDescriptorIDs(
 
 		// Endpoints
 		GoAssign(g, func() (map[int64][]model.Endpoint, error) {
-			return ReadEndpointsByDescriptorIDs(gctx, db, smdIDs, submodelDescriptorEndpointAlias)
+			return ReadEndpointsByDescriptorIDs(gctx, db, smdIDs, false)
 		}, &endpointsByDesc)
 
 		// Extensions

@@ -183,32 +183,61 @@ func requiredAliasesFromResolved(resolved []ResolvedFieldPath) (map[string]struc
 	return req, nil
 }
 
+func expandAliasesWithDeps(aliases map[string]struct{}, rules map[string]existsJoinRule) map[string]struct{} {
+	out := map[string]struct{}{}
+	var visit func(a string)
+	visit = func(a string) {
+		if a == "" {
+			return
+		}
+		if _, ok := out[a]; ok {
+			return
+		}
+		out[a] = struct{}{}
+		r, ok := rules[a]
+		if !ok {
+			return
+		}
+		for _, dep := range r.Deps {
+			visit(dep)
+		}
+	}
+	for a := range aliases {
+		visit(a)
+	}
+	return out
+}
+
 func buildExistsForResolvedFieldPaths(resolved []ResolvedFieldPath, predicate exp.Expression) (exp.Expression, error) {
 	required, err := requiredAliasesFromResolved(resolved)
 	if err != nil {
 		return nil, err
 	}
 
-	// Choose a base alias with a direct correlation to outer descriptor.
+	rules := existsJoinRulesForAASDescriptors()
+	expanded := expandAliasesWithDeps(required, rules)
+
+	// Choose a base alias that can be correlated to the outer descriptor.
+	// Important: required aliases might be leaf tables (e.g. reference_key), and we
+	// still need to include their dependency chain to reach a correlatable base.
 	base := ""
-	if _, ok := required["specific_asset_id"]; ok {
-		base = "specific_asset_id"
-	} else if _, ok := required["aas_descriptor_endpoint"]; ok {
-		base = "aas_descriptor_endpoint"
-	} else if _, ok := required["submodel_descriptor"]; ok {
-		base = "submodel_descriptor"
-	} else {
-		// Best-effort fallback: pick any alias.
-		for a := range required {
-			base = a
+	for _, cand := range []string{"specific_asset_id", "aas_descriptor_endpoint", "submodel_descriptor", "aas_descriptor"} {
+		if _, ok := expanded[cand]; ok {
+			base = cand
 			break
 		}
 	}
 	if base == "" {
-		return nil, fmt.Errorf("cannot build EXISTS: no aliases required")
+		for a := range expanded {
+			if existsCorrelationForAlias(a) != nil {
+				base = a
+				break
+			}
+		}
 	}
-
-	rules := existsJoinRulesForAASDescriptors()
+	if base == "" {
+		return nil, fmt.Errorf("cannot build EXISTS: no correlatable base alias found")
+	}
 	baseTable, ok := existsTableForAlias(base)
 	if !ok {
 		return nil, fmt.Errorf("cannot build EXISTS: no table mapping for alias %q", base)
