@@ -277,7 +277,7 @@ func getSubmodelElementModelTypeByIDShortPathAndSubmodelID(db *sql.DB, submodelI
 	return modelType, nil
 }
 
-func processByModelType(modelType string, newParentID int, idShortPath string, current ElementToProcess, stack []ElementToProcess) ([]ElementToProcess, error) {
+func processByModelType(newParentID int, idShortPath string, current ElementToProcess, stack []ElementToProcess) ([]ElementToProcess, error) {
 	switch string(current.element.GetModelType()) {
 	case "SubmodelElementCollection":
 		submodelElementCollection, ok := current.element.(*gen.SubmodelElementCollection)

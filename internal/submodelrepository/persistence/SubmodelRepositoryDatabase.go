@@ -845,7 +845,7 @@ func (p *PostgreSQLSubmodelDatabase) AddNestedSubmodelElementsIteratively(tx *sq
 		if err != nil {
 			return err
 		}
-		stack, err = processByModelType(current.element.GetModelType(), newParentID, idShortPath, current, stack)
+		stack, err = processByModelType(newParentID, idShortPath, current, stack)
 		if err != nil {
 			return err
 		}
