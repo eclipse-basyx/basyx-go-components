@@ -484,28 +484,28 @@
         "expectedStatus": 200
     },
     {
-        "context": "PATCH Submodel ValeOnly - Non Existing Submodel",
+        "context": "PATCH Submodel ValueOnly - Non Existing Submodel",
         "method": "PATCH",
         "endpoint": "http://localhost:6004/submodels/SmFubmlrU2F5c1RoaXNTdWJtb2RlbERvZXNudEV4aXN0c1NvTnVoVWhoaA/$value",
         "data": "postBody/patchSubmodelValueOnly.json",
         "expectedStatus": 404
     },
     {
-        "context": "PATCH Submodel ValeOnly - Existing Submodel",
+        "context": "PATCH Submodel ValueOnly - Existing Submodel",
         "method": "PATCH",
         "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/$value",
         "data": "postBody/patchSubmodelValueOnly.json",
         "expectedStatus": 204
     },
     {
-        "context": "PATCH Submodel ValeOnly - Verify Patch Submodel",
+        "context": "PATCH Submodel ValueOnly - Verify Patch Submodel",
         "method": "GET",
         "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/$value",
         "shouldMatch": "postBody/patchSubmodelValueOnly.json",
         "expectedStatus": 200
     },
     {
-        "context": "PATCH Submodel ValeOnly - Existing Submodel Non-Existent SME",
+        "context": "PATCH Submodel ValueOnly - Existing Submodel Non-Existent SME",
         "method": "PATCH",
         "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/$value",
         "data": "postBody/patchSubmodelValueOnlyNonExistingSME.json",
