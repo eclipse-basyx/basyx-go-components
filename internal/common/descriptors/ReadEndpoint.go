@@ -117,9 +117,13 @@ func ReadEndpointsByDescriptorIDs(
 	} else {
 		joinOn = submodelDescriptorEndpointAlias
 		ds = ds.LeftJoin(
-			submodelDescriptorEndpointAlias,
-			goqu.On(submodelDescriptorEndpointAlias.Col(colDescriptorID).Eq(tDescriptor.Col(colID))),
-		)
+			submodelDescriptorAlias,
+			goqu.On(submodelDescriptorAlias.Col(colAASDescriptorID).Eq(tAASDescriptor.Col(colDescriptorID))),
+		).
+			LeftJoin(
+				submodelDescriptorEndpointAlias,
+				goqu.On(submodelDescriptorEndpointAlias.Col(colDescriptorID).Eq(submodelDescriptorAlias.Col(colDescriptorID))),
+			)
 	}
 
 	ds = ds.LeftJoin(
