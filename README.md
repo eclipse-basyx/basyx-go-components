@@ -4,7 +4,7 @@
 
 # BaSyx Go Components
 
-Welcome to the BaSyx Go Components project! This guide is designed to help new developers onboard quickly, understand the architecture, and contribute effectively.
+Welcome to the BaSyx Go project! This guide is designed to help new developers onboard quickly, understand the architecture, and contribute effectively.
 
 ## Table of Contents
 1. [Project Overview](#project-overview)
@@ -24,11 +24,11 @@ Welcome to the BaSyx Go Components project! This guide is designed to help new d
 
 ## 1. Project Overview
 
-BaSyx Go Components is an open-source implementation of the Eclipse BaSyx framework in Go, providing Asset Administration Shell (AAS) services, registries, repositories, and more. The project is modular, scalable, and designed for industrial digital twin scenarios.
+BaSyx Go Components is an open-source implementation of the Eclipse BaSyx framework in Go, providing Asset Administration Shell (AAS) API components like registries, repositories, and more. The project is modular, scalable, and designed for industrial digital twin scenarios.
 
 ## 2. Architecture Overview
 
-The system is composed of microservices for AAS registry, submodel repository, discovery, and file server. Each service exposes REST APIs and interacts with a PostgreSQL database. Security is enforced via OIDC and ABAC middleware. See [docu/security/REGISTRY_SECURITY.md](docu/security/REGISTRY_SECURITY.md) for a detailed flow and architecture diagram.
+The project is composed of microservices for AAS and Submodel registries, AAS and Submodel repositories, the AAS discovery service, and the AASX file server. Each service exposes REST APIs and interacts with a PostgreSQL database. Security is enforced via OIDC and ABAC middleware. See [docu/security/REGISTRY_SECURITY.md](docu/security/REGISTRY_SECURITY.md) for a detailed flow and architecture diagram.
 
 ## 3. Setup & Installation
 
