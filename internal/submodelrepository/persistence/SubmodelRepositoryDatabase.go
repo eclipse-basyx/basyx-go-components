@@ -1226,14 +1226,13 @@ func (p *PostgreSQLSubmodelDatabase) UpdateSubmodelElementValueOnly(submodelID s
 // Returns:
 //   - error: Error if the update operation fails
 func (p *PostgreSQLSubmodelDatabase) UpdateSubmodelValueOnly(submodelID string, valueOnly gen.SubmodelValue) error {
-	var count int
-	err := p.db.QueryRow("SELECT COUNT(id) FROM submodel WHERE id = $1", submodelID).Scan(&count)
+	exists, err := p.DoesSubmodelExist(submodelID)
 	if err != nil {
 		_, _ = fmt.Println(err)
-		return common.NewInternalServerError("Error checking for Submodel existence. See console for details.")
+		return err
 	}
 
-	if count == 0 {
+	if !exists {
 		return common.NewErrNotFound(fmt.Sprintf("Submodel with ID %s does not exist", submodelID))
 	}
 
