@@ -482,10 +482,10 @@ func (s *SubmodelRepositoryAPIAPIService) PatchSubmodelByIDValueOnly(ctx context
 			return common.NewErrorResponse(err, http.StatusBadRequest, "SMRepo", "PatchSubmodelByIDValueOnly", "Bad Request while Updating Submodel Value"), nil
 		}
 		if common.IsErrNotFound(err) {
-			return common.NewErrorResponse(err, http.StatusNotFound, "SMRepo", "PatchSubmodelByIDValueOnly", "Submodel Element was not found"), nil
+			return common.NewErrorResponse(err, http.StatusNotFound, "SMRepo", "PatchSubmodelByIDValueOnly", fmt.Sprintf("Submodel with id %s or SubmodelElement in request body was not found", decodedIdentifier)), nil
 		}
 		_, _ = fmt.Println(err)
-		return common.NewErrorResponse(err, http.StatusInternalServerError, "SMRepo", "PatchSubmodelByIDValueOny", "Unknown Error - check console for details"), nil
+		return common.NewErrorResponse(err, http.StatusInternalServerError, "SMRepo", "PatchSubmodelByIDValueOnly", "Unknown Error - check console for details"), nil
 	}
 	return gen.Response(http.StatusNoContent, nil), nil
 }
