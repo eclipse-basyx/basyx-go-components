@@ -162,6 +162,8 @@ CREATE TABLE IF NOT EXISTS reference_key (
   value        TEXT     NOT NULL,
   UNIQUE(reference_id, position)
 );
+CREATE INDEX ON reference_key (reference_id, value);
+
 CREATE TABLE IF NOT EXISTS lang_string_text_type_reference(
   id       BIGINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY
 );
@@ -474,6 +476,11 @@ CREATE TABLE IF NOT EXISTS specific_asset_id (
   external_subject_ref BIGINT REFERENCES reference(id)
 );
 
+CREATE INDEX ON specific_asset_id (descriptor_id);
+CREATE INDEX ON specific_asset_id (descriptor_id, name);
+CREATE INDEX ON specific_asset_id (descriptor_id, position);
+CREATE INDEX ON specific_asset_id (descriptor_id, external_subject_ref);
+
 CREATE TABLE IF NOT EXISTS specific_asset_id_supplemental_semantic_id (
   id BIGSERIAL PRIMARY KEY,
   specific_asset_id_id BIGINT NOT NULL REFERENCES specific_asset_id(id) ON DELETE CASCADE,
@@ -519,6 +526,7 @@ CREATE TABLE IF NOT EXISTS aas_descriptor (
   id_short VARCHAR(128),
   id VARCHAR(2048) NOT NULL UNIQUE
 );
+CREATE INDEX ON aas_descriptor (descriptor_id);
 
 CREATE TABLE IF NOT EXISTS submodel_descriptor (
   descriptor_id BIGINT PRIMARY KEY REFERENCES descriptor(id) ON DELETE CASCADE,
