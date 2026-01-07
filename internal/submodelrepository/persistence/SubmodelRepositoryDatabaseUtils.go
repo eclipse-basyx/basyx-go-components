@@ -28,6 +28,7 @@
 package persistencepostgresql
 
 import (
+	"database/sql"
 	"fmt"
 	"strconv"
 
@@ -262,4 +263,54 @@ func getSupplementalSemanticIDsJSONStringFromSubmodel(sm *gen.Submodel) (string,
 		}
 	}
 	return supplementalSemanticIDs, nil
+}
+
+func getSubmodelElementModelTypeByIDShortPathAndSubmodelID(db *sql.DB, submodelID string, idShortOrPath string) (string, error) {
+	var modelType string
+	err := db.QueryRow(`SELECT model_type FROM submodel_element WHERE submodel_id = $1 AND idshort_path = $2`, submodelID, idShortOrPath).Scan(&modelType)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return "", common.NewErrNotFound("Submodel element not found")
+		}
+		return "", common.NewInternalServerError(fmt.Sprintf("Failed to get ModelType for SubmodelElement %s", idShortOrPath))
+	}
+	return modelType, nil
+}
+
+func processByModelType(modelType string, newParentID int, idShortPath string, current ElementToProcess, stack []ElementToProcess) ([]ElementToProcess, error) {
+	switch string(current.element.GetModelType()) {
+	case "SubmodelElementCollection":
+		submodelElementCollection, ok := current.element.(*gen.SubmodelElementCollection)
+		if !ok {
+			return nil, common.NewInternalServerError("SubmodelElement with modelType 'SubmodelElementCollection' is not of type SubmodelElementCollection")
+		}
+		for i := len(submodelElementCollection.Value) - 1; i >= 0; i-- {
+			stack = addNestedElementToStackWithNormalPath(submodelElementCollection, i, stack, newParentID, idShortPath)
+		}
+	case "SubmodelElementList":
+		submodelElementList, ok := current.element.(*gen.SubmodelElementList)
+		if !ok {
+			return nil, common.NewInternalServerError("SubmodelElement with modelType 'SubmodelElementList' is not of type SubmodelElementList")
+		}
+		for index := len(submodelElementList.Value) - 1; index >= 0; index-- {
+			stack = addNestedElementToStackWithIndexPath(submodelElementList, index, idShortPath, stack, newParentID)
+		}
+	case "AnnotatedRelationshipElement":
+		annotatedRelElement, ok := current.element.(*gen.AnnotatedRelationshipElement)
+		if !ok {
+			return nil, common.NewInternalServerError("SubmodelElement with modelType 'AnnotatedRelationshipElement' is not of type AnnotatedRelationshipElement")
+		}
+		for i := len(annotatedRelElement.Annotations) - 1; i >= 0; i-- {
+			stack = addNestedElementToStackWithNormalPath(annotatedRelElement, i, stack, newParentID, idShortPath)
+		}
+	case "Entity":
+		entityElement, ok := current.element.(*gen.Entity)
+		if !ok {
+			return nil, common.NewInternalServerError("SubmodelElement with modelType 'Entity' is not of type Entity")
+		}
+		for i := len(entityElement.Statements) - 1; i >= 0; i-- {
+			stack = addNestedElementToStackWithNormalPath(entityElement, i, stack, newParentID, idShortPath)
+		}
+	}
+	return stack, nil
 }

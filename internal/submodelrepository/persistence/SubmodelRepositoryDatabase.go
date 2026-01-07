@@ -845,40 +845,9 @@ func (p *PostgreSQLSubmodelDatabase) AddNestedSubmodelElementsIteratively(tx *sq
 		if err != nil {
 			return err
 		}
-
-		switch string(current.element.GetModelType()) {
-		case "SubmodelElementCollection":
-			submodelElementCollection, ok := current.element.(*gen.SubmodelElementCollection)
-			if !ok {
-				return common.NewInternalServerError("SubmodelElement with modelType 'SubmodelElementCollection' is not of type SubmodelElementCollection")
-			}
-			for i := len(submodelElementCollection.Value) - 1; i >= 0; i-- {
-				stack = addNestedElementToStackWithNormalPath(submodelElementCollection, i, stack, newParentID, idShortPath)
-			}
-		case "SubmodelElementList":
-			submodelElementList, ok := current.element.(*gen.SubmodelElementList)
-			if !ok {
-				return common.NewInternalServerError("SubmodelElement with modelType 'SubmodelElementList' is not of type SubmodelElementList")
-			}
-			for index := len(submodelElementList.Value) - 1; index >= 0; index-- {
-				stack = addNestedElementToStackWithIndexPath(submodelElementList, index, idShortPath, stack, newParentID)
-			}
-		case "AnnotatedRelationshipElement":
-			annotatedRelElement, ok := current.element.(*gen.AnnotatedRelationshipElement)
-			if !ok {
-				return common.NewInternalServerError("SubmodelElement with modelType 'AnnotatedRelationshipElement' is not of type AnnotatedRelationshipElement")
-			}
-			for i := len(annotatedRelElement.Annotations) - 1; i >= 0; i-- {
-				stack = addNestedElementToStackWithNormalPath(annotatedRelElement, i, stack, newParentID, idShortPath)
-			}
-		case "Entity":
-			entityElement, ok := current.element.(*gen.Entity)
-			if !ok {
-				return common.NewInternalServerError("SubmodelElement with modelType 'Entity' is not of type Entity")
-			}
-			for i := len(entityElement.Statements) - 1; i >= 0; i-- {
-				stack = addNestedElementToStackWithNormalPath(entityElement, i, stack, newParentID, idShortPath)
-			}
+		stack, err = processByModelType(current.element.GetModelType(), newParentID, idShortPath, current, stack)
+		if err != nil {
+			return err
 		}
 	}
 
@@ -945,13 +914,9 @@ func (p *PostgreSQLSubmodelDatabase) DownloadFileAttachment(submodelID string, i
 // UpdateSubmodelElement updates an existing submodel element by its idShortPath.
 func (p *PostgreSQLSubmodelDatabase) UpdateSubmodelElement(submodelID string, idShortPath string, submodelElement gen.SubmodelElement) error {
 	// Get the model type to determine which handler to use
-	var modelType string
-	err := p.db.QueryRow(`SELECT model_type FROM submodel_element WHERE submodel_id = $1 AND idshort_path = $2`, submodelID, idShortPath).Scan(&modelType)
+	modelType, err := getSubmodelElementModelTypeByIDShortPathAndSubmodelID(p.db, submodelID, idShortPath)
 	if err != nil {
-		if err == sql.ErrNoRows {
-			return common.NewErrNotFound("Submodel element not found")
-		}
-		return fmt.Errorf("failed to get model type: %w", err)
+		return err
 	}
 
 	// Get the appropriate handler for this model type
@@ -984,13 +949,9 @@ func (p *PostgreSQLSubmodelDatabase) DeleteFileAttachment(submodelID string, idS
 //   - error: Error if the update operation fails
 func (p *PostgreSQLSubmodelDatabase) UpdateSubmodelElementValueOnly(submodelID string, idShortOrPath string, valueOnly gen.SubmodelElementValue) error {
 	// Get the model type to determine which handler to use
-	var modelType string
-	err := p.db.QueryRow(`SELECT model_type FROM submodel_element WHERE submodel_id = $1 AND idshort_path = $2`, submodelID, idShortOrPath).Scan(&modelType)
+	modelType, err := getSubmodelElementModelTypeByIDShortPathAndSubmodelID(p.db, submodelID, idShortOrPath)
 	if err != nil {
-		if err == sql.ErrNoRows {
-			return common.NewErrNotFound("Submodel element not found")
-		}
-		return fmt.Errorf("failed to get model type: %w", err)
+		return err
 	}
 
 	// Get the appropriate handler for this model type
