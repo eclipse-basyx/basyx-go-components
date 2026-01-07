@@ -24,7 +24,7 @@ Welcome to the BaSyx Go project! This guide is designed to help new developers o
 
 ## 1. Project Overview
 
-BaSyx Go Components is an open-source implementation of the Eclipse BaSyx framework in Go, providing Asset Administration Shell (AAS) services, registries, repositories, and more. The project is modular, scalable, and designed for industrial digital twin scenarios.
+BaSyx Go Components is an open-source implementation of the Eclipse BaSyx framework in Go, providing Asset Administration Shell (AAS) API components like registries, repositories, and more. The project is modular, scalable, and designed for industrial digital twin scenarios.
 
 ## 2. Architecture Overview
 
