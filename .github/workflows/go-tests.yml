@@ -72,16 +72,6 @@ jobs:
         run: |
           cd internal/submodelrepository/integration_tests
           go test -v .
-          go test -v .
-          go test -v .
-          go test -v .
-          go test -v .
-          go test -v .
-          go test -v .
-          go test -v .
-          go test -v .
-          go test -v .
-          go test -v .
 
   discovery-service-integration-tests:
     name: Discovery Service Integration Tests
