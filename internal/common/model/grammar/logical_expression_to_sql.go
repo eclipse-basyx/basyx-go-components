@@ -39,6 +39,359 @@ import (
 	builder "github.com/eclipse-basyx/basyx-go-components/internal/common/builder"
 )
 
+type existsJoinRule struct {
+	Alias string
+	Deps  []string
+	Apply func(ds *goqu.SelectDataset) *goqu.SelectDataset
+}
+
+// extractFieldOperandAndCast walks through cast wrappers to find the underlying field operand
+// and returns the outermost cast target type (if any).
+func extractFieldOperandAndCast(v *Value) (*Value, string) {
+	cur := v
+	castType := ""
+	for cur != nil {
+		// Record only the outermost cast.
+		if castType == "" {
+			switch {
+			case cur.StrCast != nil:
+				castType = "text"
+			case cur.NumCast != nil:
+				castType = "double precision"
+			case cur.BoolCast != nil:
+				castType = "boolean"
+			case cur.TimeCast != nil:
+				castType = "time"
+			case cur.DateTimeCast != nil:
+				castType = "timestamptz"
+			case cur.HexCast != nil:
+				castType = "text"
+			}
+		}
+
+		if cur.Field != nil {
+			return cur, castType
+		}
+		switch {
+		case cur.StrCast != nil:
+			cur = cur.StrCast
+		case cur.NumCast != nil:
+			cur = cur.NumCast
+		case cur.BoolCast != nil:
+			cur = cur.BoolCast
+		case cur.TimeCast != nil:
+			cur = cur.TimeCast
+		case cur.DateTimeCast != nil:
+			cur = cur.DateTimeCast
+		case cur.HexCast != nil:
+			cur = cur.HexCast
+		default:
+			return nil, ""
+		}
+	}
+	return nil, ""
+}
+
+func toSQLResolvedFieldOrValue(operand *Value, explicitCastType string, position string) (interface{}, *ResolvedFieldPath, error) {
+	fieldOperand, _ := extractFieldOperandAndCast(operand)
+	if fieldOperand == nil || fieldOperand.Field == nil {
+		val, err := toSQLComponent(operand, position)
+		return val, nil, err
+	}
+	fieldStr := string(*fieldOperand.Field)
+	f := ModelStringPattern(fieldStr)
+	resolved, err := ResolveScalarFieldToSQL(&f)
+	if err != nil {
+		// Fallback to legacy mapping if this field isn't handled by the resolver.
+		fieldName := ParseAASQLFieldToSQLColumn(fieldStr)
+		ident := goqu.I(fieldName)
+		if explicitCastType != "" {
+			return goqu.L("?::"+explicitCastType, ident), nil, nil
+		}
+		return ident, nil, nil
+	}
+	ident := goqu.I(resolved.Column)
+	if explicitCastType != "" {
+		return goqu.L("?::"+explicitCastType, ident), &resolved, nil
+	}
+	return ident, &resolved, nil
+}
+
+func anyResolvedHasBindings(resolved []ResolvedFieldPath) bool {
+	for _, r := range resolved {
+		if len(r.ArrayBindings) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+func collectResolvedFieldPaths(a, b *ResolvedFieldPath) []ResolvedFieldPath {
+	var out []ResolvedFieldPath
+	if a != nil {
+		out = append(out, *a)
+	}
+	if b != nil {
+		out = append(out, *b)
+	}
+	return out
+}
+
+func sqlTypeForOperand(v *Value) string {
+	if v == nil {
+		return ""
+	}
+	switch {
+	case v.StrVal != nil:
+		return "text"
+	case v.NumVal != nil:
+		return "double precision"
+	case v.Boolean != nil:
+		return "boolean"
+	case v.TimeVal != nil:
+		return "time"
+	case v.DateTimeVal != nil:
+		return "timestamptz"
+	default:
+		return ""
+	}
+}
+
+func leadingAlias(expr string) (string, bool) {
+	expr = strings.TrimSpace(expr)
+	if expr == "" {
+		return "", false
+	}
+	idx := strings.Index(expr, ".")
+	if idx <= 0 {
+		return "", false
+	}
+	return expr[:idx], true
+}
+
+func requiredAliasesFromResolved(resolved []ResolvedFieldPath) (map[string]struct{}, error) {
+	req := map[string]struct{}{}
+	for _, r := range resolved {
+		if strings.TrimSpace(r.Column) != "" {
+			a, ok := leadingAlias(r.Column)
+			if !ok {
+				return nil, fmt.Errorf("cannot extract alias from column %q", r.Column)
+			}
+			req[a] = struct{}{}
+		}
+		for _, b := range r.ArrayBindings {
+			a, ok := leadingAlias(b.Alias)
+			if !ok {
+				return nil, fmt.Errorf("cannot extract alias from binding alias %q", b.Alias)
+			}
+			req[a] = struct{}{}
+		}
+	}
+	return req, nil
+}
+
+func buildExistsForResolvedFieldPaths(resolved []ResolvedFieldPath, predicate exp.Expression) (exp.Expression, error) {
+	required, err := requiredAliasesFromResolved(resolved)
+	if err != nil {
+		return nil, err
+	}
+
+	// Choose a base alias with a direct correlation to outer descriptor.
+	base := ""
+	if _, ok := required["specific_asset_id"]; ok {
+		base = "specific_asset_id"
+	} else if _, ok := required["aas_descriptor_endpoint"]; ok {
+		base = "aas_descriptor_endpoint"
+	} else if _, ok := required["submodel_descriptor"]; ok {
+		base = "submodel_descriptor"
+	} else {
+		// Best-effort fallback: pick any alias.
+		for a := range required {
+			base = a
+			break
+		}
+	}
+	if base == "" {
+		return nil, fmt.Errorf("cannot build EXISTS: no aliases required")
+	}
+
+	rules := existsJoinRulesForAASDescriptors()
+	baseTable, ok := existsTableForAlias(base)
+	if !ok {
+		return nil, fmt.Errorf("cannot build EXISTS: no table mapping for alias %q", base)
+	}
+
+	d := goqu.Dialect("postgres")
+	ds := d.From(goqu.T(baseTable).As(base)).Select(goqu.V(1))
+
+	applied := map[string]struct{}{base: {}}
+	visiting := map[string]struct{}{}
+
+	var ensure func(alias string) error
+	ensure = func(alias string) error {
+		if alias == "" {
+			return nil
+		}
+		if _, ok := applied[alias]; ok {
+			return nil
+		}
+		if _, ok := visiting[alias]; ok {
+			return fmt.Errorf("cyclic EXISTS join dependency for alias %q", alias)
+		}
+		rule, ok := rules[alias]
+		if !ok {
+			return fmt.Errorf("no EXISTS join rule registered for alias %q", alias)
+		}
+		visiting[alias] = struct{}{}
+		for _, dep := range rule.Deps {
+			if err := ensure(dep); err != nil {
+				return err
+			}
+		}
+		delete(visiting, alias)
+		ds = rule.Apply(ds)
+		applied[alias] = struct{}{}
+		return nil
+	}
+
+	for alias := range required {
+		if alias == base {
+			continue
+		}
+		if err := ensure(alias); err != nil {
+			return nil, err
+		}
+	}
+
+	where := []exp.Expression{predicate}
+	if corr := existsCorrelationForAlias(base); corr != nil {
+		where = append(where, corr)
+	}
+
+	// Add all binding constraints.
+	for _, r := range resolved {
+		for _, b := range r.ArrayBindings {
+			// Only apply non-nil binding values.
+			if b.Index.intValue != nil {
+				where = append(where, goqu.I(b.Alias).Eq(*b.Index.intValue))
+			}
+			if b.Index.stringValue != nil {
+				where = append(where, goqu.I(b.Alias).Eq(*b.Index.stringValue))
+			}
+		}
+	}
+
+	ds = ds.Where(goqu.And(where...))
+	return goqu.L("EXISTS (?)", ds), nil
+}
+
+func andBindingsForResolvedFieldPaths(resolved []ResolvedFieldPath, predicate exp.Expression) exp.Expression {
+	where := []exp.Expression{predicate}
+	for _, r := range resolved {
+		for _, b := range r.ArrayBindings {
+			if b.Index.intValue != nil {
+				where = append(where, goqu.I(b.Alias).Eq(*b.Index.intValue))
+			}
+			if b.Index.stringValue != nil {
+				where = append(where, goqu.I(b.Alias).Eq(*b.Index.stringValue))
+			}
+		}
+	}
+	return goqu.And(where...)
+}
+
+func existsTableForAlias(alias string) (string, bool) {
+	switch alias {
+	case "specific_asset_id":
+		return "specific_asset_id", true
+	case "external_subject_reference":
+		return "reference", true
+	case "external_subject_reference_key":
+		return "reference_key", true
+	case "aas_descriptor_endpoint":
+		return "aas_descriptor_endpoint", true
+	case "submodel_descriptor":
+		return "submodel_descriptor", true
+	case "submodel_descriptor_endpoint":
+		return "aas_descriptor_endpoint", true
+	case "aasdesc_submodel_descriptor_semantic_id_reference":
+		return "reference", true
+	case "aasdesc_submodel_descriptor_semantic_id_reference_key":
+		return "reference_key", true
+	default:
+		return "", false
+	}
+}
+
+func existsCorrelationForAlias(base string) exp.Expression {
+	switch base {
+	case "specific_asset_id":
+		return goqu.I("specific_asset_id.descriptor_id").Eq(goqu.I("descriptor.id"))
+	case "aas_descriptor_endpoint":
+		return goqu.I("aas_descriptor_endpoint.descriptor_id").Eq(goqu.I("descriptor.id"))
+	case "submodel_descriptor":
+		// submodel_descriptor.aas_descriptor_id points to the AAS descriptor (descriptor.id)
+		return goqu.I("submodel_descriptor.aas_descriptor_id").Eq(goqu.I("descriptor.id"))
+	default:
+		return nil
+	}
+}
+
+func existsJoinRulesForAASDescriptors() map[string]existsJoinRule {
+	return map[string]existsJoinRule{
+		"external_subject_reference": {
+			Alias: "external_subject_reference",
+			Deps:  []string{"specific_asset_id"},
+			Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
+				return ds.Join(
+					goqu.T("reference").As("external_subject_reference"),
+					goqu.On(goqu.I("external_subject_reference.id").Eq(goqu.I("specific_asset_id.external_subject_ref"))),
+				)
+			},
+		},
+		"external_subject_reference_key": {
+			Alias: "external_subject_reference_key",
+			Deps:  []string{"external_subject_reference"},
+			Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
+				return ds.Join(
+					goqu.T("reference_key").As("external_subject_reference_key"),
+					goqu.On(goqu.I("external_subject_reference_key.reference_id").Eq(goqu.I("external_subject_reference.id"))),
+				)
+			},
+		},
+		"submodel_descriptor_endpoint": {
+			Alias: "submodel_descriptor_endpoint",
+			Deps:  []string{"submodel_descriptor"},
+			Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
+				return ds.Join(
+					goqu.T("aas_descriptor_endpoint").As("submodel_descriptor_endpoint"),
+					goqu.On(goqu.I("submodel_descriptor_endpoint.descriptor_id").Eq(goqu.I("submodel_descriptor.descriptor_id"))),
+				)
+			},
+		},
+		"aasdesc_submodel_descriptor_semantic_id_reference": {
+			Alias: "aasdesc_submodel_descriptor_semantic_id_reference",
+			Deps:  []string{"submodel_descriptor"},
+			Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
+				return ds.Join(
+					goqu.T("reference").As("aasdesc_submodel_descriptor_semantic_id_reference"),
+					goqu.On(goqu.I("aasdesc_submodel_descriptor_semantic_id_reference.id").Eq(goqu.I("submodel_descriptor.semantic_id"))),
+				)
+			},
+		},
+		"aasdesc_submodel_descriptor_semantic_id_reference_key": {
+			Alias: "aasdesc_submodel_descriptor_semantic_id_reference_key",
+			Deps:  []string{"aasdesc_submodel_descriptor_semantic_id_reference"},
+			Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
+				return ds.Join(
+					goqu.T("reference_key").As("aasdesc_submodel_descriptor_semantic_id_reference_key"),
+					goqu.On(goqu.I("aasdesc_submodel_descriptor_semantic_id_reference_key.reference_id").Eq(goqu.I("aasdesc_submodel_descriptor_semantic_id_reference.id"))),
+				)
+			},
+		},
+	}
+}
+
 // EvaluateToExpression converts the logical expression tree into a goqu SQL expression.
 //
 // This method traverses the logical expression tree and constructs a corresponding SQL
@@ -351,15 +704,52 @@ func HandleComparison(leftOperand, rightOperand *Value, operation string) (exp.E
 	normalizeSemanticShorthand(leftOperand)
 	normalizeSemanticShorthand(rightOperand)
 
-	// Convert both operands
-	leftSQL, err := toSQLComponent(leftOperand, "left")
+	leftField, leftCastType := extractFieldOperandAndCast(leftOperand)
+	rightField, rightCastType := extractFieldOperandAndCast(rightOperand)
+
+	// Field-to-field comparisons are forbidden by the query language.
+	// We can safely assume comparisons have either 0 or 1 field operands.
+	if leftField != nil && rightField != nil {
+		return nil, fmt.Errorf("field-to-field comparisons are not supported")
+	}
+
+	// Fast-path: both are values (no FieldIdentifiers involved).
+	if leftField == nil && rightField == nil {
+		leftSQL, err := toSQLComponent(leftOperand, "left")
+		if err != nil {
+			return nil, err
+		}
+		rightSQL, err := toSQLComponent(rightOperand, "right")
+		if err != nil {
+			return nil, err
+		}
+		// has to be compatible
+		_, err = leftOperand.IsComparableTo(*rightOperand)
+		if err != nil {
+			return nil, err
+		}
+		return buildComparisonExpression(leftSQL, rightSQL, operation)
+	}
+
+	leftSQL, leftResolved, err := toSQLResolvedFieldOrValue(leftOperand, leftCastType, "left")
+	if err != nil {
+		return nil, err
+	}
+	rightSQL, rightResolved, err := toSQLResolvedFieldOrValue(rightOperand, rightCastType, "right")
 	if err != nil {
 		return nil, err
 	}
 
-	rightSQL, err := toSQLComponent(rightOperand, "right")
-	if err != nil {
-		return nil, err
+	// Cast the field side to the non-field operand's type (unless already explicitly casted).
+	if leftResolved != nil && rightResolved == nil && leftCastType == "" {
+		if t := sqlTypeForOperand(rightOperand); t != "" {
+			leftSQL = goqu.L("?::"+t, goqu.I(leftResolved.Column))
+		}
+	}
+	if rightResolved != nil && leftResolved == nil && rightCastType == "" {
+		if t := sqlTypeForOperand(leftOperand); t != "" {
+			rightSQL = goqu.L("?::"+t, goqu.I(rightResolved.Column))
+		}
 	}
 
 	// has to be compatible
@@ -368,13 +758,27 @@ func HandleComparison(leftOperand, rightOperand *Value, operation string) (exp.E
 		return nil, err
 	}
 
-	// Build the comparison expression
 	comparisonExpr, err := buildComparisonExpression(leftSQL, rightSQL, operation)
 	if err != nil {
 		return nil, err
 	}
 
-	return applyArrayPositionConstraints(leftOperand, rightOperand, comparisonExpr)
+	resolved := collectResolvedFieldPaths(leftResolved, rightResolved)
+	// No resolved fields (should not happen due to earlier fast-path), fall back.
+	if len(resolved) == 0 {
+		return comparisonExpr, nil
+	}
+
+	// If any resolved path has bindings, build a correlated EXISTS with joins + constraints.
+	if anyResolvedHasBindings(resolved) {
+		if existsExpr, err := buildExistsForResolvedFieldPaths(resolved, comparisonExpr); err == nil {
+			return existsExpr, nil
+		}
+		// Fallback: if we cannot build an EXISTS join graph for the involved aliases,
+		// apply bindings as plain AND constraints.
+		return andBindingsForResolvedFieldPaths(resolved, comparisonExpr), nil
+	}
+	return comparisonExpr, nil
 }
 
 // HandleStringOperation builds SQL expressions for string-specific operators.
@@ -382,13 +786,46 @@ func HandleStringOperation(leftOperand, rightOperand *Value, operation string) (
 	normalizeSemanticShorthand(leftOperand)
 	normalizeSemanticShorthand(rightOperand)
 
-	leftSQL, err := toSQLComponent(leftOperand, "left")
+	leftField, leftCastType := extractFieldOperandAndCast(leftOperand)
+	rightField, rightCastType := extractFieldOperandAndCast(rightOperand)
+
+	// Field-to-field string operations are forbidden by the query language.
+	// We can safely assume string operations have either 0 or 1 field operands.
+	if leftField != nil && rightField != nil {
+		return nil, fmt.Errorf("field-to-field string operations are not supported")
+	}
+
+	// Fast-path: no FieldIdentifiers involved.
+	if leftField == nil && rightField == nil {
+		leftSQL, err := toSQLComponent(leftOperand, "left")
+		if err != nil {
+			return nil, err
+		}
+		rightSQL, err := toSQLComponent(rightOperand, "right")
+		if err != nil {
+			return nil, err
+		}
+		return buildStringOperationExpression(leftSQL, rightSQL, operation)
+	}
+
+	leftSQL, leftResolved, err := toSQLResolvedFieldOrValue(leftOperand, leftCastType, "left")
 	if err != nil {
 		return nil, err
 	}
-	rightSQL, err := toSQLComponent(rightOperand, "right")
+	rightSQL, rightResolved, err := toSQLResolvedFieldOrValue(rightOperand, rightCastType, "right")
 	if err != nil {
 		return nil, err
+	}
+
+	if leftResolved != nil && rightResolved == nil && leftCastType == "" {
+		if t := sqlTypeForOperand(rightOperand); t != "" {
+			leftSQL = goqu.L("?::"+t, goqu.I(leftResolved.Column))
+		}
+	}
+	if rightResolved != nil && leftResolved == nil && rightCastType == "" {
+		if t := sqlTypeForOperand(leftOperand); t != "" {
+			rightSQL = goqu.L("?::"+t, goqu.I(rightResolved.Column))
+		}
 	}
 
 	stringExpr, err := buildStringOperationExpression(leftSQL, rightSQL, operation)
@@ -396,7 +833,17 @@ func HandleStringOperation(leftOperand, rightOperand *Value, operation string) (
 		return nil, err
 	}
 
-	return applyArrayPositionConstraints(leftOperand, rightOperand, stringExpr)
+	resolved := collectResolvedFieldPaths(leftResolved, rightResolved)
+	if len(resolved) == 0 {
+		return stringExpr, nil
+	}
+	if anyResolvedHasBindings(resolved) {
+		if existsExpr, err := buildExistsForResolvedFieldPaths(resolved, stringExpr); err == nil {
+			return existsExpr, nil
+		}
+		return andBindingsForResolvedFieldPaths(resolved, stringExpr), nil
+	}
+	return stringExpr, nil
 }
 
 // stringValueToValue normalizes a StringValue into a Value so existing helpers can be reused.
@@ -659,8 +1106,14 @@ func toSQLComponent(operand *Value, position string) (interface{}, error) {
 			return nil, fmt.Errorf("%s operand is not a valid field", position)
 		}
 		fieldName := string(*operand.Field)
-		fieldName = ParseAASQLFieldToSQLColumn(fieldName)
-		return goqu.I(fieldName), nil
+		f := ModelStringPattern(fieldName)
+		resolved, err := ResolveScalarFieldToSQL(&f)
+		if err != nil {
+			// Keep legacy behavior as a fallback for fields that are not handled by the resolver.
+			fieldName = ParseAASQLFieldToSQLColumn(fieldName)
+			return goqu.I(fieldName), nil
+		}
+		return goqu.I(resolved.Column), nil
 	}
 
 	return goqu.V(normalizeLiteralForSQL(operand.GetValue())), nil
