@@ -61,14 +61,19 @@ type ArrayIndex struct {
 	stringValue *string
 }
 
+// NewArrayIndexPosition creates an ArrayIndex representing a numeric array position.
 func NewArrayIndexPosition(i int) ArrayIndex {
 	return ArrayIndex{intValue: &i}
 }
 
+// NewArrayIndexString creates an ArrayIndex representing a string constraint (e.g. $sme idShortPath).
 func NewArrayIndexString(s string) ArrayIndex {
 	return ArrayIndex{stringValue: &s}
 }
 
+// MarshalJSON implements json.Marshaler.
+//
+// It encodes numeric indices as JSON numbers and string indices as JSON strings.
 func (a ArrayIndex) MarshalJSON() ([]byte, error) {
 	if a.intValue != nil {
 		return []byte(fmt.Sprintf("%d", *a.intValue)), nil
@@ -79,6 +84,9 @@ func (a ArrayIndex) MarshalJSON() ([]byte, error) {
 	return []byte("null"), nil
 }
 
+// UnmarshalJSON implements json.Unmarshaler.
+//
+// It accepts either a JSON number (stored as an int) or a JSON string.
 func (a *ArrayIndex) UnmarshalJSON(b []byte) error {
 	// Accept either JSON number (int) or JSON string.
 	var asNumber json.Number
