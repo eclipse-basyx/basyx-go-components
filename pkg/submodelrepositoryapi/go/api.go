@@ -115,7 +115,7 @@ type SubmodelRepositoryAPIAPIServicer interface {
 	GetSubmodelByIDMetadata(context.Context, string) (model.ImplResponse, error)
 	PatchSubmodelByIDMetadata(context.Context, string, model.SubmodelMetadata) (model.ImplResponse, error)
 	GetSubmodelByIDValueOnly(context.Context, string, string, string) (model.ImplResponse, error)
-	PatchSubmodelByIDValueOnly(context.Context, string, map[string]interface{}, string) (model.ImplResponse, error)
+	PatchSubmodelByIDValueOnly(context.Context, string, model.SubmodelValue, string) (model.ImplResponse, error)
 	GetSubmodelByIDReference(context.Context, string) (model.ImplResponse, error)
 	GetSubmodelByIDPath(context.Context, string, string) (model.ImplResponse, error)
 	GetAllSubmodelElements(context.Context, string, int32, string, string, string) (model.ImplResponse, error)
