@@ -170,10 +170,10 @@ See `basyx-database-wiki/` and `sql_examples/` for details on tables, relationsh
 
 ## Frequently Asked Questions
 
-**Q: How do I add a new submodel type?**
-- Implement the submodel logic in `internal/submodelrepository/`
-- Update OpenAPI specs in `api/submodelrepository/openapi.yaml`
-- Add tests in `integration_tests/`
+**Q: How do I add a new component?**
+- Implement the submodel logic in `internal/<COMPONENT_NAME>/`
+- Save and Use OpenAPI specs in `api/<COMPONENT_NAME>/openapi.yaml`
+- Add tests in `internal/<COMPONENT_NAME>/integration_tests/`
 
 **Q: How do I handle file attachments?**
 - Use the File SME logic in `internal/submodelrepository/persistence/Submodel/submodelElements/FileHandler.go`
