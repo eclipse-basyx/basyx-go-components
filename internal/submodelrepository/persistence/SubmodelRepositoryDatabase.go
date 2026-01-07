@@ -334,7 +334,6 @@ func (p *PostgreSQLSubmodelDatabase) DoesSubmodelExist(submodelIdentifier string
 	sqlQuery, args, err := goqu.Select(goqu.COUNT("id")).
 		From("submodel").
 		Where(goqu.I("id").Eq(submodelIdentifier)).
-		Limit(1).
 		ToSQL()
 	if err != nil {
 		return false, err
