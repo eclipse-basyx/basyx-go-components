@@ -9,10 +9,33 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"os"
 	"os/exec"
 	"testing"
 	"time"
 )
+
+type ITConfig struct {
+	BaseURL               string `json:"baseUrl"`
+	StartupTimeoutSeconds int    `json:"startupTimeoutSeconds"`
+	PollIntervalSeconds   int    `json:"pollIntervalSeconds"`
+}
+
+func loadITConfig(t *testing.T) ITConfig {
+	t.Helper()
+
+	data, err := os.ReadFile("it_config.json")
+	if err != nil {
+		t.Fatalf("failed to read it_config.json: %v", err)
+	}
+
+	var cfg ITConfig
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		t.Fatalf("failed to parse it_config.json: %v", err)
+	}
+
+	return cfg
+}
 
 func startDockerCompose(t *testing.T) {
 	t.Helper()
@@ -38,11 +61,11 @@ func stopDockerCompose(t *testing.T) {
 	}
 }
 
-func waitForService(t *testing.T, baseURL string) {
+func waitForService(t *testing.T, baseURL string, timeout time.Duration, interval time.Duration) {
 	t.Helper()
 
 	client := &http.Client{Timeout: 2 * time.Second}
-	deadline := time.Now().Add(60 * time.Second)
+	deadline := time.Now().Add(timeout)
 
 	for time.Now().Before(deadline) {
 		resp, err := client.Get(baseURL + "/shells")
@@ -50,7 +73,7 @@ func waitForService(t *testing.T, baseURL string) {
 			resp.Body.Close()
 			return
 		}
-		time.Sleep(2 * time.Second)
+		time.Sleep(interval)
 	}
 
 	t.Fatalf("service did not become ready within timeout")
@@ -60,22 +83,25 @@ func TestAASRepository_PostAndGet(t *testing.T) {
 	startDockerCompose(t)
 	defer stopDockerCompose(t)
 
-	baseURL := "http://localhost:5105"
+	// baseURL := "http://localhost:5105"
 
-	waitForService(t, baseURL)
+	// waitForService(t, baseURL)
+	cfg := loadITConfig(t)
+
+	waitForService(
+		t,
+		cfg.BaseURL,
+		time.Duration(cfg.StartupTimeoutSeconds)*time.Second,
+		time.Duration(cfg.PollIntervalSeconds)*time.Second,
+	)
 
 	// ---- POST /shells ----
-	createPayload := map[string]any{
-		"id":        "aas-integration-test-1",
-		"idShort":   "IntegrationTestAAS",
-		"category":  "INSTANCE",
-		"modelType": "AssetAdministrationShell",
-		"assetInformation": map[string]any{
-			"assetKind": "INSTANCE",
-		},
+	payloadBytes, err := os.ReadFile("postBody/aas_minimal.json")
+	if err != nil {
+		t.Fatalf("failed to read post body: %v", err)
 	}
 
-	body, err := json.Marshal(createPayload)
+	body := payloadBytes
 	if err != nil {
 		t.Fatalf("failed to marshal create payload: %v", err)
 	}
@@ -83,7 +109,7 @@ func TestAASRepository_PostAndGet(t *testing.T) {
 	req, err := http.NewRequestWithContext(
 		context.Background(),
 		http.MethodPost,
-		baseURL+"/shells",
+		cfg.BaseURL+"/shells",
 		bytes.NewReader(body),
 	)
 	if err != nil {
@@ -108,7 +134,7 @@ func TestAASRepository_PostAndGet(t *testing.T) {
 	}
 
 	// ---- GET /shells ----
-	listResp, err := http.Get(baseURL + "/shells")
+	listResp, err := http.Get(cfg.BaseURL + "/shells")
 	if err != nil {
 		t.Fatalf("GET /shells failed: %v", err)
 	}

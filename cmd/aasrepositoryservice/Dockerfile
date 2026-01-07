@@ -30,7 +30,7 @@ RUN apk add --no-cache ca-certificates
 COPY --from=builder /app/aasrepositoryservice .
 
 # Copy resources if needed
-COPY cmd/aasrepositoryservice/resources ./resources
+# COPY cmd/aasrepositoryservice/resources ./resources
 
 # Expose port (informational; not required to map)
 EXPOSE 5105
