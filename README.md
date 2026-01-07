@@ -171,6 +171,7 @@ See `basyx-database-wiki/` and `sql_examples/` for details on tables, relationsh
 ## Frequently Asked Questions
 
 **Q: How do I add a new component?**
+- Add main.go in `cmd/<COMPONENT_NAME>/main.go` 
 - Implement the logic in `internal/<COMPONENT_NAME>/`
 - Save and Use OpenAPI specs in `api/<COMPONENT_NAME>/openapi.yaml`
 - Add tests in `internal/<COMPONENT_NAME>/integration_tests/`
