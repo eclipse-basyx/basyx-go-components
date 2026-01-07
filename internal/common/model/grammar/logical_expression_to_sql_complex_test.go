@@ -42,74 +42,66 @@ func TestLogicalExpression_ToSQL_ComplexCases(t *testing.T) {
 		{
 			name:    "eq string adds implicit ::text",
 			expr:    LogicalExpression{Eq: ComparisonItems{field("$aasdesc#idShort"), strVal("shell-short")}},
-			wantSQL: []string{"::text", "= ?"},
+			wantSQL: []string{"EXISTS", "FROM \"aas_descriptor\"", "::text", "= ?"},
 			wantArgs: []interface{}{
 				"shell-short",
 			},
-			noExists: true,
 		},
 		{
 			name:    "gt number adds implicit guarded ::double precision",
 			expr:    LogicalExpression{Gt: ComparisonItems{field("$aasdesc#id"), Value{NumVal: floatPtr(10)}}},
-			wantSQL: []string{"CASE WHEN", "::double precision", "> ?"},
+			wantSQL: []string{"EXISTS", "FROM \"aas_descriptor\"", "CASE WHEN", "::double precision", "> ?"},
 			wantArgs: []interface{}{
 				float64(10),
 			},
-			noExists: true,
 		},
 		{
 			name:    "ge number with explicit $numCast is guarded",
 			expr:    LogicalExpression{Ge: ComparisonItems{Value{NumCast: valuePtr(field("$aasdesc#id"))}, Value{NumVal: floatPtr(10)}}},
-			wantSQL: []string{"CASE WHEN", "::double precision", ">= ?"},
+			wantSQL: []string{"EXISTS", "FROM \"aas_descriptor\"", "CASE WHEN", "::double precision", ">= ?"},
 			wantArgs: []interface{}{
 				float64(10),
 			},
-			noExists: true,
 		},
 		{
 			name:    "eq boolean adds implicit guarded ::boolean",
 			expr:    LogicalExpression{Eq: ComparisonItems{field("$aasdesc#assetKind"), Value{Boolean: &kind}}},
-			wantSQL: []string{"CASE WHEN", "::boolean", "= ?"},
+			wantSQL: []string{"EXISTS", "FROM \"aas_descriptor\"", "CASE WHEN", "::boolean", "= ?"},
 			wantArgs: []interface{}{
 				true,
 			},
-			noExists: true,
 		},
 		{
 			name:    "lt time adds implicit guarded ::time",
 			expr:    LogicalExpression{Lt: ComparisonItems{field("$aasdesc#idShort"), Value{TimeVal: &timeVal}}},
-			wantSQL: []string{"CASE WHEN", "::time", "< ?"},
+			wantSQL: []string{"EXISTS", "FROM \"aas_descriptor\"", "CASE WHEN", "::time", "< ?"},
 			wantArgs: []interface{}{
 				string(timeVal),
 			},
-			noExists: true,
 		},
 		{
 			name:    "eq datetime adds implicit guarded ::timestamptz",
 			expr:    LogicalExpression{Eq: ComparisonItems{field("$aasdesc#id"), Value{DateTimeVal: &dtVal}}},
-			wantSQL: []string{"CASE WHEN", "::timestamptz", "= ?"},
+			wantSQL: []string{"EXISTS", "FROM \"aas_descriptor\"", "CASE WHEN", "::timestamptz", "= ?"},
 			wantArgs: []interface{}{
 				dt,
 			},
-			noExists: true,
 		},
 		{
 			name:    "contains uses LIKE and casts field to text",
 			expr:    LogicalExpression{Contains: StringItems{strField("$aasdesc#assetType"), strString("blocked")}},
-			wantSQL: []string{"LIKE", "::text"},
+			wantSQL: []string{"EXISTS", "FROM \"aas_descriptor\"", "LIKE", "::text"},
 			wantArgs: []interface{}{
 				"blocked",
 			},
-			noExists: true,
 		},
 		{
 			name:    "regex uses ~ and respects explicit $strCast",
 			expr:    LogicalExpression{Regex: StringItems{StringValue{StrCast: valuePtr(field("$aasdesc#assetType"))}, strString("^foo.*")}},
-			wantSQL: []string{"~", "::text"},
+			wantSQL: []string{"EXISTS", "FROM \"aas_descriptor\"", "~", "::text"},
 			wantArgs: []interface{}{
 				"^foo.*",
 			},
-			noExists: true,
 		},
 		{
 			name: "or mixes value-to-value with EXISTS",

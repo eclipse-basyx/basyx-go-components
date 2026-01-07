@@ -47,38 +47,6 @@ func getJoinTables(d goqu.DialectWrapper) *goqu.SelectDataset {
 		InnerJoin(
 			tAASDescriptor,
 			goqu.On(tAASDescriptor.Col(colDescriptorID).Eq(tDescriptor.Col(colID))),
-		).
-		LeftJoin(
-			specificAssetIDAlias,
-			goqu.On(specificAssetIDAlias.Col(colDescriptorID).Eq(tDescriptor.Col(colID))),
-		).
-		LeftJoin(
-			externalSubjectReferenceAlias,
-			goqu.On(externalSubjectReferenceAlias.Col(colID).Eq(specificAssetIDAlias.Col(colExternalSubjectRef))),
-		).
-		LeftJoin(
-			externalSubjectReferenceKeyAlias,
-			goqu.On(externalSubjectReferenceKeyAlias.Col(colReferenceID).Eq(externalSubjectReferenceAlias.Col(colID))),
-		).
-		LeftJoin(
-			aasDescriptorEndpointAlias,
-			goqu.On(aasDescriptorEndpointAlias.Col(colDescriptorID).Eq(tDescriptor.Col(colID))),
-		).
-		LeftJoin(
-			submodelDescriptorAlias,
-			goqu.On(submodelDescriptorAlias.Col(colAASDescriptorID).Eq(tAASDescriptor.Col(colDescriptorID))),
-		).
-		LeftJoin(
-			submodelDescriptorEndpointAlias,
-			goqu.On(submodelDescriptorEndpointAlias.Col(colDescriptorID).Eq(submodelDescriptorAlias.Col(colDescriptorID))),
-		).
-		LeftJoin(
-			submodelDescriptorSemanticIDReferenceAlias,
-			goqu.On(submodelDescriptorSemanticIDReferenceAlias.Col(colID).Eq(submodelDescriptorAlias.Col(colSemanticID))),
-		).
-		LeftJoin(
-			submodelDescriptorSemanticIDReferenceKeyAlias,
-			goqu.On(submodelDescriptorSemanticIDReferenceKeyAlias.Col(colReferenceID).Eq(submodelDescriptorSemanticIDReferenceAlias.Col(colID))),
 		)
 	return joinTables
 }

@@ -295,6 +295,8 @@ func andBindingsForResolvedFieldPaths(resolved []ResolvedFieldPath, predicate ex
 
 func existsTableForAlias(alias string) (string, bool) {
 	switch alias {
+	case "aas_descriptor":
+		return "aas_descriptor", true
 	case "specific_asset_id":
 		return "specific_asset_id", true
 	case "external_subject_reference":
@@ -318,6 +320,8 @@ func existsTableForAlias(alias string) (string, bool) {
 
 func existsCorrelationForAlias(base string) exp.Expression {
 	switch base {
+	case "aas_descriptor":
+		return goqu.I("aas_descriptor.descriptor_id").Eq(goqu.I("descriptor.id"))
 	case "specific_asset_id":
 		return goqu.I("specific_asset_id.descriptor_id").Eq(goqu.I("descriptor.id"))
 	case "aas_descriptor_endpoint":
@@ -596,12 +600,12 @@ func HandleComparison(leftOperand, rightOperand *Value, operation string) (exp.E
 	}
 
 	// If any resolved path has bindings, build a correlated EXISTS with joins + constraints.
+	if existsExpr, err := buildExistsForResolvedFieldPaths(resolved, comparisonExpr); err == nil {
+		return existsExpr, nil
+	}
+	// Fallback: if we cannot build an EXISTS join graph for the involved aliases,
+	// apply bindings as plain AND constraints (only matters when bindings exist).
 	if anyResolvedHasBindings(resolved) {
-		if existsExpr, err := buildExistsForResolvedFieldPaths(resolved, comparisonExpr); err == nil {
-			return existsExpr, nil
-		}
-		// Fallback: if we cannot build an EXISTS join graph for the involved aliases,
-		// apply bindings as plain AND constraints.
 		return andBindingsForResolvedFieldPaths(resolved, comparisonExpr), nil
 	}
 	return comparisonExpr, nil
@@ -663,10 +667,10 @@ func HandleStringOperation(leftOperand, rightOperand *Value, operation string) (
 	if len(resolved) == 0 {
 		return stringExpr, nil
 	}
+	if existsExpr, err := buildExistsForResolvedFieldPaths(resolved, stringExpr); err == nil {
+		return existsExpr, nil
+	}
 	if anyResolvedHasBindings(resolved) {
-		if existsExpr, err := buildExistsForResolvedFieldPaths(resolved, stringExpr); err == nil {
-			return existsExpr, nil
-		}
 		return andBindingsForResolvedFieldPaths(resolved, stringExpr), nil
 	}
 	return stringExpr, nil
