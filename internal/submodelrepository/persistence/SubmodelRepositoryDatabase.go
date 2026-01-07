@@ -417,7 +417,7 @@ func (p *PostgreSQLSubmodelDatabase) DeleteSubmodel(id string) error {
 		_, _ = fmt.Println(err)
 		return beginTransactionErrorSubmodelRepo
 	}
-	defer cu()
+	defer cu(&err)
 
 	del := goqu.Delete("submodel").Where(goqu.I("id").Eq(id))
 	query, args, err := del.ToSQL()
@@ -465,7 +465,7 @@ func (p *PostgreSQLSubmodelDatabase) CreateSubmodel(sm gen.Submodel) error {
 		return beginTransactionErrorSubmodelRepo
 	}
 
-	defer cu()
+	defer cu(&err)
 
 	var semanticIDDbID, displayNameID, descriptionID, administrationID sql.NullInt64
 
@@ -594,7 +594,7 @@ func (p *PostgreSQLSubmodelDatabase) GetSubmodelElement(submodelID string, idSho
 		_, _ = fmt.Println(err)
 		return nil, beginTransactionErrorSubmodelRepo
 	}
-	defer cu()
+	defer cu(&err)
 
 	elements, _, err := submodelelements.GetSubmodelElementsForSubmodel(p.db, submodelID, idShortOrPath, "", -1, valueOnly)
 	if err != nil {
@@ -631,7 +631,7 @@ func (p *PostgreSQLSubmodelDatabase) GetSubmodelElements(submodelID string, limi
 		_, _ = fmt.Println(err)
 		return nil, "", beginTransactionErrorSubmodelRepo
 	}
-	defer cu()
+	defer cu(&err)
 
 	if limit <= 0 {
 		limit = 100
@@ -692,7 +692,7 @@ func (p *PostgreSQLSubmodelDatabase) AddSubmodelElementWithPath(submodelID strin
 		return beginTransactionErrorSubmodelRepo
 	}
 
-	defer cu()
+	defer cu(&err)
 
 	parentID, err := crud.GetDatabaseID(idShortPath)
 	if err != nil {
