@@ -510,5 +510,33 @@
         "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/$value",
         "data": "postBody/patchSubmodelValueOnlyNonExistingSME.json",
         "expectedStatus": 404
+    },
+        {
+        "context": "PUT Submodel - Update existing Submodel",
+        "method": "PUT",
+        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw",
+        "data": "postBody/putSubmodelUpdate.json",
+        "expectedStatus": 204
+    },
+    {
+        "context": "PUT Submodel - Verify updated Submodel",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw",
+        "shouldMatch": "expected/expectedSubmodelAfterPutUpdate.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "PUT Submodel - Create Submodel",
+        "method": "PUT",
+        "endpoint": "http://localhost:6004/submodels/QmFTeXg",
+        "data": "postBody/putSubmodelCreate.json",
+        "expectedStatus": 201
+    },
+    {
+        "context": "PUT Submodel - Verify created Submodel",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/QmFTeXg",
+        "shouldMatch": "expected/expectedSubmodelAfterPutCreate.json",
+        "expectedStatus": 200
     }
 ]

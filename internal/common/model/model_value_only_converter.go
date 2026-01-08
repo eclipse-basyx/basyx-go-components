@@ -73,12 +73,14 @@ func PropertyToValueOnly(p *Property) PropertyValue {
 }
 
 // MultiLanguagePropertyToValueOnly converts a MultiLanguageProperty to MultiLanguagePropertyValue
+// Preserves the original order of language strings from the input
 func MultiLanguagePropertyToValueOnly(mlp *MultiLanguageProperty) MultiLanguagePropertyValue {
-	result := make(MultiLanguagePropertyValue, len(mlp.Value))
-	for i, langString := range mlp.Value {
+	result := make(MultiLanguagePropertyValue, 0, len(mlp.Value))
+	for i := 0; i < len(mlp.Value); i++ {
+		langString := mlp.Value[i]
 		langText := make(map[string]string)
 		langText[langString.Language] = langString.Text
-		result[i] = langText
+		result = append(result, langText)
 	}
 	return result
 }

@@ -329,7 +329,19 @@ func (p *PostgreSQLSubmodelDatabase) GetAllSubmodelsMetadata(
 // Returns:
 //   - bool: True if the submodel exists, false otherwise
 //   - error: Error if the query fails
-func (p *PostgreSQLSubmodelDatabase) DoesSubmodelExist(submodelIdentifier string) (bool, error) {
+func (p *PostgreSQLSubmodelDatabase) DoesSubmodelExist(submodelIdentifier string, tx *sql.Tx) (bool, error) {
+	var localTX *sql.Tx
+	if tx != nil {
+		localTX = tx
+	} else {
+		startedTX, cu, err := common.StartTransaction(p.db)
+		if err != nil {
+			_, _ = fmt.Println(err)
+			return false, beginTransactionErrorSubmodelRepo
+		}
+		defer cu(&err)
+		localTX = startedTX
+	}
 	var count int
 	sqlQuery, args, err := goqu.Select(goqu.COUNT("id")).
 		From("submodel").
@@ -338,10 +350,18 @@ func (p *PostgreSQLSubmodelDatabase) DoesSubmodelExist(submodelIdentifier string
 	if err != nil {
 		return false, err
 	}
-	err = p.db.QueryRow(sqlQuery, args...).Scan(&count)
+	err = localTX.QueryRow(sqlQuery, args...).Scan(&count)
 	if err != nil {
 		return false, err
 	}
+
+	if tx == nil {
+		if err := localTX.Commit(); err != nil {
+			_, _ = fmt.Println(err)
+			return false, failedPostgresTransactionSubmodelRepo
+		}
+	}
+
 	return count > 0, nil
 }
 
@@ -410,14 +430,19 @@ func (p *PostgreSQLSubmodelDatabase) GetSubmodel(id string, valueOnly bool) (gen
 //
 // Returns:
 //   - error: Error if deletion fails or submodel not found (sql.ErrNoRows)
-func (p *PostgreSQLSubmodelDatabase) DeleteSubmodel(id string) error {
-	tx, cu, err := common.StartTransaction(p.db)
-
-	if err != nil {
-		_, _ = fmt.Println(err)
-		return beginTransactionErrorSubmodelRepo
+func (p *PostgreSQLSubmodelDatabase) DeleteSubmodel(id string, optionalTX *sql.Tx) error {
+	var tx *sql.Tx
+	if optionalTX == nil {
+		startedTX, cu, err := common.StartTransaction(p.db)
+		if err != nil {
+			_, _ = fmt.Println(err)
+			return beginTransactionErrorSubmodelRepo
+		}
+		defer cu(&err)
+		tx = startedTX
+	} else {
+		tx = optionalTX
 	}
-	defer cu(&err)
 
 	del := goqu.Delete("submodel").Where(goqu.I("id").Eq(id))
 	query, args, err := del.ToSQL()
@@ -437,12 +462,51 @@ func (p *PostgreSQLSubmodelDatabase) DeleteSubmodel(id string) error {
 	if rowsAffected == 0 {
 		return sql.ErrNoRows
 	}
-
-	if err := tx.Commit(); err != nil {
-		_, _ = fmt.Println(err)
-		return failedPostgresTransactionSubmodelRepo
+	if optionalTX == nil {
+		if err := tx.Commit(); err != nil {
+			_, _ = fmt.Println(err)
+			return failedPostgresTransactionSubmodelRepo
+		}
 	}
 	return nil
+}
+
+// PutSubmodel creates or updates a submodel in the database.
+// If the submodel already exists, it is deleted and recreated with the new data.
+// This method ensures that the submodel is fully replaced with the provided data.
+//
+// Parameters:
+//   - submodelID: Unique identifier of the submodel to create or update
+//   - submodel: The submodel data to store
+//
+// Returns:
+//   - bool: True if the submodel was updated (existed before), false if created new
+//   - error: Error if creation or update fails
+func (p *PostgreSQLSubmodelDatabase) PutSubmodel(submodelID string, submodel gen.Submodel) (bool, error) {
+	tx, cu, err := common.StartTransaction(p.db)
+	if err != nil {
+		_, _ = fmt.Println(err)
+		return false, beginTransactionErrorSubmodelRepo
+	}
+	defer cu(&err)
+	exists, err := p.DoesSubmodelExist(submodelID, tx)
+	if err != nil {
+		_, _ = fmt.Println(err)
+		return false, common.NewInternalServerError("Error while checking for submodel Existence - see console for details.")
+	}
+	if exists {
+		err = p.DeleteSubmodel(submodelID, tx)
+		if err != nil {
+			return false, err
+		}
+	}
+
+	err = p.CreateSubmodel(submodel, tx)
+	if err != nil {
+		return false, err
+	}
+	err = tx.Commit()
+	return exists, err
 }
 
 // CreateSubmodel inserts a new submodel into the database.
@@ -457,16 +521,29 @@ func (p *PostgreSQLSubmodelDatabase) DeleteSubmodel(id string) error {
 //   - error: Error if creation fails, nil if successful or if submodel already exists
 //
 //nolint:revive // This function is already refactored in smaller parts, but further splitting it would reduce readability.
-func (p *PostgreSQLSubmodelDatabase) CreateSubmodel(sm gen.Submodel) error {
-	tx, cu, err := common.StartTransaction(p.db)
+func (p *PostgreSQLSubmodelDatabase) CreateSubmodel(sm gen.Submodel, optionalTX *sql.Tx) error {
 
-	if err != nil {
-		_, _ = fmt.Println(err)
-		return beginTransactionErrorSubmodelRepo
+	var tx *sql.Tx
+	if optionalTX == nil {
+		startedTX, cu, err := common.StartTransaction(p.db)
+		tx = startedTX
+
+		if err != nil {
+			_, _ = fmt.Println(err)
+			return beginTransactionErrorSubmodelRepo
+		}
+
+		defer cu(&err)
+	} else {
+		tx = optionalTX
 	}
-
-	defer cu(&err)
-
+	exists, err := p.DoesSubmodelExist(sm.ID, tx)
+	if err != nil {
+		return err
+	}
+	if exists {
+		return common.NewErrConflict(fmt.Sprintf("Submodel with ID %s already exists", sm.ID))
+	}
 	var semanticIDDbID, displayNameID, descriptionID, administrationID sql.NullInt64
 
 	semanticIDDbID, err = persistenceutils.CreateReference(tx, sm.SemanticID, sql.NullInt64{}, sql.NullInt64{})
@@ -568,9 +645,11 @@ func (p *PostgreSQLSubmodelDatabase) CreateSubmodel(sm gen.Submodel) error {
 		}
 	}
 
-	if err := tx.Commit(); err != nil {
-		_, _ = fmt.Println(err)
-		return failedPostgresTransactionSubmodelRepo
+	if optionalTX == nil {
+		if err := tx.Commit(); err != nil {
+			_, _ = fmt.Println(err)
+			return failedPostgresTransactionSubmodelRepo
+		}
 	}
 	return nil
 }
@@ -972,7 +1051,7 @@ func (p *PostgreSQLSubmodelDatabase) UpdateSubmodelElementValueOnly(submodelID s
 // Returns:
 //   - error: Error if the update operation fails
 func (p *PostgreSQLSubmodelDatabase) UpdateSubmodelValueOnly(submodelID string, valueOnly gen.SubmodelValue) error {
-	exists, err := p.DoesSubmodelExist(submodelID)
+	exists, err := p.DoesSubmodelExist(submodelID, nil)
 	if err != nil {
 		_, _ = fmt.Println(err)
 		return err
