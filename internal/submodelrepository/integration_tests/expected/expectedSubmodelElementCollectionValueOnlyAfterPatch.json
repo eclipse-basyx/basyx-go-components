@@ -1,7 +1,9 @@
 {
     "ExampleAnnotatedRelationshipElement": {
+        "annotations": {
+            "ExampleProperty": "some example annotation_UPDATED"
+        },
         "first": {
-            "type": "ModelReference",
             "keys": [
                 {
                     "type": "Submodel",
@@ -15,10 +17,10 @@
                     "type": "Property",
                     "value": "ExampleProperty_UPDATED"
                 }
-            ]
+            ],
+            "type": "ModelReference"
         },
         "second": {
-            "type": "ModelReference",
             "keys": [
                 {
                     "type": "Submodel",
@@ -32,15 +34,12 @@
                     "type": "MultiLanguageProperty",
                     "value": "ExampleMultiLanguageProperty_UPDATED"
                 }
-            ]
-        },
-        "annotations": {
-            "ExampleProperty": "some example annotation_UPDATED"
+            ],
+            "type": "ModelReference"
         }
     },
     "ExampleBasicEvent": {
         "observed": {
-            "type": "ExternalReference",
             "keys": [
                 {
                     "type": "Submodel",
@@ -54,12 +53,12 @@
                     "type": "Property",
                     "value": "ExampleProperty_UPDATED"
                 }
-            ]
+            ],
+            "type": "ExternalReference"
         }
     },
     "ExampleRelationshipElement": {
         "first": {
-            "type": "ModelReference",
             "keys": [
                 {
                     "type": "Submodel",
@@ -73,10 +72,10 @@
                     "type": "Property",
                     "value": "ExampleProperty_UPDATED"
                 }
-            ]
+            ],
+            "type": "ModelReference"
         },
         "second": {
-            "type": "ModelReference",
             "keys": [
                 {
                     "type": "Submodel",
@@ -90,7 +89,8 @@
                     "type": "MultiLanguageProperty",
                     "value": "ExampleMultiLanguageProperty_UPDATED"
                 }
-            ]
+            ],
+            "type": "ModelReference"
         }
     },
     "ExampleSubmodelElementCollection": {
@@ -103,7 +103,6 @@
             "value": "file:///TestFile.pdf_UPDATED"
         },
         "ExampleReferenceElement": {
-            "type": "ModelReference",
             "keys": [
                 {
                     "type": "Submodel",
@@ -117,17 +116,18 @@
                     "type": "File",
                     "value": "ExampleFile_UPDATED"
                 }
-            ]
+            ],
+            "type": "ModelReference"
         }
     },
     "ExampleSubmodelElementListOrdered": [
         "exampleValue",
         [
             {
-                "en-us": "Updated English value_UPDATED"
+                "de": "Aktualisierter deutscher Wert_UPDATED"
             },
             {
-                "de": "Aktualisierter deutscher Wert_UPDATED"
+                "en-us": "Updated English value_UPDATED"
             },
             {
                 "fr": "Valeur française mise à jour_UPDATED"

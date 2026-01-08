@@ -143,10 +143,10 @@
                     "exampleValue",
                     [
                         {
-                            "en-us": "Example value of a MultiLanguageProperty element"
+                            "de": "Beispielswert für ein MultiLanguageProperty-Element"
                         },
                         {
-                            "de": "Beispielswert für ein MultiLanguageProperty-Element"
+                            "en-us": "Example value of a MultiLanguageProperty element"
                         }
                     ],
                     {
