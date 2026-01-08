@@ -28,6 +28,34 @@
         "expectedStatus": 200
     },
     {
+        "context": "PUT - Update Top Level Property",
+        "method": "PUT",
+        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/myTopLevelProperty",
+        "data": "postBody/putTopLevelProperty.json",
+        "expectedStatus": 204
+    },
+    {
+        "context": "GET - Verify Updated Top Level Property",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/myTopLevelProperty",
+        "shouldMatch": "postBody/putTopLevelProperty.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "PUT - Update SubmodelElement",
+        "method": "PUT",
+        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/myTopLevelProperty",
+        "data": "postBody/putTopLevelPropertySubmodelElement.json",
+        "expectedStatus": 204
+    },
+    {
+        "context": "GET - Verify Updated SubmodelElement",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/myTopLevelProperty",
+        "shouldMatch": "postBody/putTopLevelPropertySubmodelElement.json",
+        "expectedStatus": 200
+    },
+    {
         "context": "Delete item in nested structure",
         "method": "POST",
         "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements",

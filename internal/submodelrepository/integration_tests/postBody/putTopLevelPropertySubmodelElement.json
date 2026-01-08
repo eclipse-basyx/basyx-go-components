@@ -1,0 +1,28 @@
+{
+    "idShort": "myTopLevelProperty",
+    "modelType": "Property",
+    "value": "123",
+    "valueType": "xs:integer",
+    "semanticId": {
+        "type": "ModelReference",
+        "keys": [
+            {
+                "type": "Submodel",
+                "value": "123"
+            }
+        ]
+    },
+    "displayName": [
+        {
+            "language": "en",
+            "text": "My Top Level Property"
+        }
+    ],
+    "description": [
+        {
+            "language": "en",
+            "text": "This is my top level property"
+        }
+    ],
+    "category": "Parameter"
+}

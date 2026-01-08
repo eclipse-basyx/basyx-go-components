@@ -270,19 +270,192 @@ func (p *PostgreSQLSMECrudHandler) Create(tx *sql.Tx, submodelID string, submode
 
 // Update updates an existing SubmodelElement identified by its idShort or path.
 //
-// This method is currently a placeholder for future implementation of element updates.
-// When implemented, it should handle updating element properties, semantic IDs, and
-// potentially restructuring relationships if the element is moved within the hierarchy.
+// This method updates the mutable properties of an existing submodel element within
+// a transaction context. It preserves the element's identity (idShort, path, parent,
+// position, model type) while allowing updates to metadata fields.
+//
+// Updated fields include:
+//   - category: Element category classification
+//   - semanticId: Reference to semantic definition
+//   - description: Localized descriptions
+//   - displayName: Localized display names
+//   - qualifiers: Qualifier constraints
+//   - embeddedDataSpecifications: Embedded data specifications
+//   - supplementalSemanticIds: Additional semantic references
+//   - extensions: Custom extensions
+//
+// Immutable fields (not updated):
+//   - idShort: Element identifier
+//   - idShortPath: Hierarchical path
+//   - parent_sme_id: Parent element reference
+//   - position: Position in parent
+//   - model_type: Element type
+//   - submodel_id: Parent submodel
 //
 // Parameters:
+//   - submodelID: ID of the parent submodel (used for validation)
 //   - idShortOrPath: The idShort or full path of the element to update
 //   - submodelElement: The updated element data
+//   - tx: Active transaction context for atomic operations
 //
 // Returns:
-//   - error: Currently always returns nil (not yet implemented)
+//   - error: An error if the element is not found, validation fails, or update fails
 //
-// nolint:revive
-func (p *PostgreSQLSMECrudHandler) Update(submodelID string, idShortOrPath string, submodelElement gen.SubmodelElement) error {
+// Example:
+//
+//	err := handler.Update(tx, "submodel123", "sensors.temperature", updatedProperty)
+//
+//nolint:revive // cyclomatic-complexity is acceptable here due to the multiple update steps
+func (p *PostgreSQLSMECrudHandler) Update(submodelID string, idShortOrPath string, submodelElement gen.SubmodelElement, tx *sql.Tx) error {
+	// First, get the existing element ID and verify it exists in the correct submodel
+	var existingID int
+	var oldSemanticID, oldDescriptionID, oldDisplayNameID sql.NullInt64
+	err := tx.QueryRow(`
+		SELECT id, semantic_id, description_id, displayname_id 
+		FROM submodel_element 
+		WHERE idshort_path = $1 AND submodel_id = $2`,
+		idShortOrPath, submodelID).Scan(&existingID, &oldSemanticID, &oldDescriptionID, &oldDisplayNameID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return common.NewErrNotFound("SubmodelElement with path '" + idShortOrPath + "' not found in submodel '" + submodelID + "'")
+		}
+		return err
+	}
+
+	// Handle semantic ID update
+	var newSemanticID sql.NullInt64
+	if submodelElement.GetSemanticID() != nil {
+		newSemanticID, err = persistenceutils.CreateReference(tx, submodelElement.GetSemanticID(), sql.NullInt64{}, sql.NullInt64{})
+		if err != nil {
+			return err
+		}
+	}
+
+	// Delete old semantic ID reference if it existed
+	if oldSemanticID.Valid {
+		err = persistenceutils.DeleteReference(tx, int(oldSemanticID.Int64))
+		if err != nil {
+			_, _ = fmt.Println(err)
+			return common.NewInternalServerError("Failed to delete old semantic ID - see console for details")
+		}
+	}
+
+	// Handle description update
+	var convertedDescription []gen.LangStringText
+	for _, desc := range submodelElement.GetDescription() {
+		convertedDescription = append(convertedDescription, desc)
+	}
+	newDescriptionID, err := persistenceutils.CreateLangStringTextTypes(tx, convertedDescription)
+	if err != nil {
+		_, _ = fmt.Println(err)
+		return common.NewInternalServerError("Failed to update Description - see console for details")
+	}
+
+	// Delete old description if it existed
+	if oldDescriptionID.Valid {
+		err = persistenceutils.DeleteLangStringTextTypes(tx, int(oldDescriptionID.Int64))
+		if err != nil {
+			_, _ = fmt.Println(err)
+			return common.NewInternalServerError("Failed to delete old description - see console for details")
+		}
+	}
+
+	// Handle display name update
+	newDisplayNameID, err := persistenceutils.CreateLangStringNameTypes(tx, submodelElement.GetDisplayName())
+	if err != nil {
+		_, _ = fmt.Println(err)
+		return common.NewInternalServerError("Failed to update DisplayName - see console for details")
+	}
+
+	// Delete old display name if it existed
+	if oldDisplayNameID.Valid {
+		err = persistenceutils.DeleteLangStringNameTypes(tx, int(oldDisplayNameID.Int64))
+		if err != nil {
+			_, _ = fmt.Println(err)
+			return common.NewInternalServerError("Failed to delete old display name - see console for details")
+		}
+	}
+
+	// Handle embedded data specifications
+	edsJSONString := "[]"
+	if len(submodelElement.GetEmbeddedDataSpecifications()) > 0 {
+		var json = jsoniter.ConfigCompatibleWithStandardLibrary
+		edsBytes, err := json.Marshal(submodelElement.GetEmbeddedDataSpecifications())
+		if err != nil {
+			return err
+		}
+		edsJSONString = string(edsBytes)
+	}
+
+	// Handle supplemental semantic IDs
+	supplementalSemanticIDsJSONString := "[]"
+	if len(submodelElement.GetSupplementalSemanticIds()) > 0 {
+		var json = jsoniter.ConfigCompatibleWithStandardLibrary
+		supplementalSemanticIDsBytes, err := json.Marshal(submodelElement.GetSupplementalSemanticIds())
+		if err != nil {
+			return err
+		}
+		supplementalSemanticIDsJSONString = string(supplementalSemanticIDsBytes)
+	}
+
+	// Handle extensions
+	extensionsJSONString := "[]"
+	if len(submodelElement.GetExtensions()) > 0 {
+		var json = jsoniter.ConfigCompatibleWithStandardLibrary
+		extensionsBytes, err := json.Marshal(submodelElement.GetExtensions())
+		if err != nil {
+			return err
+		}
+		extensionsJSONString = string(extensionsBytes)
+	}
+
+	// Update the main submodel_element record
+	_, err = tx.Exec(`
+		UPDATE submodel_element 
+		SET category = $1, 
+		    semantic_id = $2, 
+		    description_id = $3, 
+		    displayname_id = $4,
+		    embedded_data_specification = $5,
+		    supplemental_semantic_ids = $6,
+		    extensions = $7
+		WHERE id = $8`,
+		submodelElement.GetCategory(),
+		newSemanticID,
+		newDescriptionID,
+		newDisplayNameID,
+		edsJSONString,
+		supplementalSemanticIDsJSONString,
+		extensionsJSONString,
+		existingID,
+	)
+	if err != nil {
+		return err
+	}
+
+	// Handle qualifiers update - delete old ones first
+	_, err = tx.Exec(`DELETE FROM submodel_element_qualifier WHERE sme_id = $1`, existingID)
+	if err != nil {
+		_, _ = fmt.Println(err)
+		return common.NewInternalServerError("Failed to delete old qualifiers - see console for details")
+	}
+
+	// Create new qualifiers
+	qualifiers := submodelElement.GetQualifiers()
+	if len(qualifiers) > 0 {
+		for i, qualifier := range qualifiers {
+			qualifierID, err := persistenceutils.CreateQualifier(tx, qualifier, i)
+			if err != nil {
+				return err
+			}
+			_, err = tx.Exec(`INSERT INTO submodel_element_qualifier(sme_id, qualifier_id) VALUES($1, $2)`, existingID, qualifierID)
+			if err != nil {
+				_, _ = fmt.Println(err)
+				return common.NewInternalServerError("Failed to create qualifier for Submodel Element with ID '" + fmt.Sprintf("%d", existingID) + "'. See console for details.")
+			}
+		}
+	}
+
 	return nil
 }
 

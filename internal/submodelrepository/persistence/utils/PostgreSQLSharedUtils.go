@@ -1149,3 +1149,87 @@ func buildCheckMultiLanguagePropertyOrSubmodelElementListQuery(idShortOrPath str
 	args := []interface{}{idShortOrPath, submodelID}
 	return sqlQuery, args
 }
+
+// DeleteReference deletes a reference and all its associated keys from the database.
+//
+// This function removes a reference record and all its associated key entries from the
+// reference_key table. It should be called when a reference is no longer needed to prevent
+// orphaned records.
+//
+// Parameters:
+//   - tx: Active database transaction
+//   - referenceID: Database ID of the reference to delete
+//
+// Returns:
+//   - error: An error if the deletion fails
+func DeleteReference(tx *sql.Tx, referenceID int) error {
+	// First delete all associated keys
+	_, err := tx.Exec(`DELETE FROM reference_key WHERE reference_id = $1`, referenceID)
+	if err != nil {
+		return err
+	}
+
+	// Then delete the reference itself
+	_, err = tx.Exec(`DELETE FROM reference WHERE id = $1`, referenceID)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// DeleteLangStringTextTypes deletes a lang_string_text_type_reference and all its associated text entries.
+//
+// This function removes a text type reference record and all its associated language string entries
+// from the lang_string_text_type table. It should be called when a description or similar text
+// reference is no longer needed.
+//
+// Parameters:
+//   - tx: Active database transaction
+//   - referenceID: Database ID of the lang_string_text_type_reference to delete
+//
+// Returns:
+//   - error: An error if the deletion fails
+func DeleteLangStringTextTypes(tx *sql.Tx, referenceID int) error {
+	// First delete all associated text entries
+	_, err := tx.Exec(`DELETE FROM lang_string_text_type WHERE lang_string_text_type_reference_id = $1`, referenceID)
+	if err != nil {
+		return err
+	}
+
+	// Then delete the reference itself
+	_, err = tx.Exec(`DELETE FROM lang_string_text_type_reference WHERE id = $1`, referenceID)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// DeleteLangStringNameTypes deletes a lang_string_name_type_reference and all its associated name entries.
+//
+// This function removes a name type reference record and all its associated language string entries
+// from the lang_string_name_type table. It should be called when a display name reference is no
+// longer needed.
+//
+// Parameters:
+//   - tx: Active database transaction
+//   - referenceID: Database ID of the lang_string_name_type_reference to delete
+//
+// Returns:
+//   - error: An error if the deletion fails
+func DeleteLangStringNameTypes(tx *sql.Tx, referenceID int) error {
+	// First delete all associated name entries
+	_, err := tx.Exec(`DELETE FROM lang_string_name_type WHERE lang_string_name_type_reference_id = $1`, referenceID)
+	if err != nil {
+		return err
+	}
+
+	// Then delete the reference itself
+	_, err = tx.Exec(`DELETE FROM lang_string_name_type_reference WHERE id = $1`, referenceID)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
