@@ -96,8 +96,8 @@ func TestHandleComparison_BuildsExistsForSpecificAssetExternalSubjectKeyValue(t 
 	if !strings.Contains(sql, "EXISTS") {
 		t.Fatalf("expected EXISTS in SQL, got: %s", sql)
 	}
-	if !strings.Contains(sql, "FROM \"specific_asset_id\"") {
-		t.Fatalf("expected specific_asset_id base table in SQL, got: %s", sql)
+	if !strings.Contains(sql, "FROM \"aas_descriptor\"") {
+		t.Fatalf("expected aas_descriptor base table in SQL, got: %s", sql)
 	}
 	if !strings.Contains(sql, "JOIN \"reference\" AS \"external_subject_reference\"") {
 		t.Fatalf("expected join to external_subject_reference in SQL, got: %s", sql)
@@ -107,7 +107,7 @@ func TestHandleComparison_BuildsExistsForSpecificAssetExternalSubjectKeyValue(t 
 	}
 
 	// Correlation back to the outer descriptor.
-	if !strings.Contains(sql, "\"specific_asset_id\".\"descriptor_id\" = \"descriptor\".\"id\"") {
+	if !strings.Contains(sql, "\"aas_descriptor\".\"descriptor_id\" = \"descriptor\".\"id\"") {
 		t.Fatalf("expected correlation predicate in SQL, got: %s", sql)
 	}
 
@@ -158,8 +158,8 @@ func TestHandleComparison_BuildsExistsForSpecificAssetExternalSubjectKeyValue_Wi
 	if !strings.Contains(sql, "EXISTS") {
 		t.Fatalf("expected EXISTS in SQL, got: %s", sql)
 	}
-	if !strings.Contains(sql, "FROM \"specific_asset_id\"") {
-		t.Fatalf("expected specific_asset_id base table in SQL, got: %s", sql)
+	if !strings.Contains(sql, "FROM \"aas_descriptor\"") {
+		t.Fatalf("expected aas_descriptor base table in SQL, got: %s", sql)
 	}
 	if !strings.Contains(sql, "JOIN \"reference\" AS \"external_subject_reference\"") {
 		t.Fatalf("expected join to external_subject_reference in SQL, got: %s", sql)
@@ -169,7 +169,7 @@ func TestHandleComparison_BuildsExistsForSpecificAssetExternalSubjectKeyValue_Wi
 	}
 
 	// Correlation back to the outer descriptor.
-	if !strings.Contains(sql, "\"specific_asset_id\".\"descriptor_id\" = \"descriptor\".\"id\"") {
+	if !strings.Contains(sql, "\"aas_descriptor\".\"descriptor_id\" = \"descriptor\".\"id\"") {
 		t.Fatalf("expected correlation predicate in SQL, got: %s", sql)
 	}
 

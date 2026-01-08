@@ -131,7 +131,7 @@ func TestLogicalExpression_ToSQL_ComplexCases(t *testing.T) {
 					]}
 				]
 			}`,
-			wantSQL: []string{"EXISTS", "FROM \"submodel_descriptor\""},
+			wantSQL: []string{"EXISTS", "FROM \"aas_descriptor\"", "JOIN \"submodel_descriptor\""},
 			wantArgs: []interface{}{
 				2,
 				0,

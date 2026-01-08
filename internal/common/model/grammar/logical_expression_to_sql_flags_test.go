@@ -166,8 +166,8 @@ func TestBuildResolvedFieldPathFlagCTEs_GroupsSameJoinGraph(t *testing.T) {
 	if !strings.Contains(sql, "GROUP BY") {
 		t.Fatalf("expected GROUP BY in SQL, got: %s", sql)
 	}
-	if !strings.Contains(sql, "FROM \"specific_asset_id\"") {
-		t.Fatalf("expected base specific_asset_id in SQL, got: %s", sql)
+	if !strings.Contains(sql, "FROM \"aas_descriptor\"") {
+		t.Fatalf("expected base aas_descriptor in SQL, got: %s", sql)
 	}
 	if !strings.Contains(sql, "JOIN \"reference\" AS \"external_subject_reference\"") {
 		t.Fatalf("expected join to external_subject_reference in SQL, got: %s", sql)
