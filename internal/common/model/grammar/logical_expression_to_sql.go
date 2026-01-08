@@ -55,12 +55,12 @@ type existsJoinPlan struct {
 }
 
 type JoinPlanConfig struct {
-	PreferredBase string
-	BaseAliases   []string
-	Rules         map[string]existsJoinRule
-	TableForAlias func(string) (string, bool)
+	PreferredBase   string
+	BaseAliases     []string
+	Rules           map[string]existsJoinRule
+	TableForAlias   func(string) (string, bool)
 	GroupKeyForBase func(string) (exp.IdentifierExpression, error)
-	Correlatable  func(string) bool
+	Correlatable    func(string) bool
 }
 
 func NewResolvedFieldPathCollectorForRoot(root string, cteAlias string) (*ResolvedFieldPathCollector, error) {
@@ -89,8 +89,8 @@ func joinPlanConfigForRoot(root string) (JoinPlanConfig, error) {
 
 func normalizeRoot(root string) string {
 	r := strings.TrimSpace(root)
-	if strings.HasPrefix(r, "$") {
-		r = strings.TrimPrefix(r, "$")
+	if after, ok := strings.CutPrefix(r, "$"); ok {
+		r = after
 	}
 	if idx := strings.Index(r, "."); idx >= 0 {
 		r = r[:idx]
@@ -235,14 +235,14 @@ type ResolvedFieldPathFlag struct {
 // ResolvedFieldPathCollector collects resolved field path predicates and assigns
 // unique flag aliases that can be referenced in WHERE clauses.
 type ResolvedFieldPathCollector struct {
-	CTEAlias               string
-	nextID                 int
-	nextGroupID            int
-	keyToAlias             map[string]string
-	groupKeyToAlias        map[string]string
-	flagAliasToGroupAlias  map[string]string
-	entries                []ResolvedFieldPathFlag
-	joinConfig             *JoinPlanConfig
+	CTEAlias              string
+	nextID                int
+	nextGroupID           int
+	keyToAlias            map[string]string
+	groupKeyToAlias       map[string]string
+	flagAliasToGroupAlias map[string]string
+	entries               []ResolvedFieldPathFlag
+	joinConfig            *JoinPlanConfig
 }
 
 // NewResolvedFieldPathCollector creates a collector with the provided CTE alias.
@@ -373,8 +373,8 @@ type ResolvedFieldPathFlagCTE struct {
 // BuildResolvedFieldPathFlagCTEs builds one or more CTE datasets for the provided entries.
 // Entries that share the same join graph are grouped into a single CTE with multiple flag columns.
 //
-	// Join planning is root-specific via JoinPlanConfig; use NewResolvedFieldPathCollectorForRoot
-	// (or a custom config) to target $sm/$sme/$smdesc.
+// Join planning is root-specific via JoinPlanConfig; use NewResolvedFieldPathCollectorForRoot
+// (or a custom config) to target $sm/$sme/$smdesc.
 func BuildResolvedFieldPathFlagCTEs(cteAlias string, entries []ResolvedFieldPathFlag) ([]ResolvedFieldPathFlagCTE, error) {
 	return BuildResolvedFieldPathFlagCTEsWithWhere(cteAlias, entries, nil)
 }
