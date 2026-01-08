@@ -35,6 +35,7 @@ import (
 	"fmt"
 	"reflect"
 
+	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	persistenceutils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
@@ -307,14 +308,30 @@ func (p *PostgreSQLSMECrudHandler) Create(tx *sql.Tx, submodelID string, submode
 //
 //nolint:revive // cyclomatic-complexity is acceptable here due to the multiple update steps
 func (p *PostgreSQLSMECrudHandler) Update(submodelID string, idShortOrPath string, submodelElement gen.SubmodelElement, tx *sql.Tx) error {
+	dialect := goqu.Dialect("postgres")
+
 	// First, get the existing element ID and verify it exists in the correct submodel
 	var existingID int
 	var oldSemanticID, oldDescriptionID, oldDisplayNameID sql.NullInt64
-	err := tx.QueryRow(`
-		SELECT id, semantic_id, description_id, displayname_id 
-		FROM submodel_element 
-		WHERE idshort_path = $1 AND submodel_id = $2`,
-		idShortOrPath, submodelID).Scan(&existingID, &oldSemanticID, &oldDescriptionID, &oldDisplayNameID)
+
+	selectQuery := dialect.From(goqu.T("submodel_element")).
+		Select(
+			goqu.C("id"),
+			goqu.C("semantic_id"),
+			goqu.C("description_id"),
+			goqu.C("displayname_id"),
+		).
+		Where(
+			goqu.C("idshort_path").Eq(idShortOrPath),
+			goqu.C("submodel_id").Eq(submodelID),
+		)
+
+	selectSQL, selectArgs, err := selectQuery.ToSQL()
+	if err != nil {
+		return err
+	}
+
+	err = tx.QueryRow(selectSQL, selectArgs...).Scan(&existingID, &oldSemanticID, &oldDescriptionID, &oldDisplayNameID)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return common.NewErrNotFound("SubmodelElement with path '" + idShortOrPath + "' not found in submodel '" + submodelID + "'")
@@ -410,31 +427,38 @@ func (p *PostgreSQLSMECrudHandler) Update(submodelID string, idShortOrPath strin
 	}
 
 	// Update the main submodel_element record
-	_, err = tx.Exec(`
-		UPDATE submodel_element 
-		SET category = $1, 
-		    semantic_id = $2, 
-		    description_id = $3, 
-		    displayname_id = $4,
-		    embedded_data_specification = $5,
-		    supplemental_semantic_ids = $6,
-		    extensions = $7
-		WHERE id = $8`,
-		submodelElement.GetCategory(),
-		newSemanticID,
-		newDescriptionID,
-		newDisplayNameID,
-		edsJSONString,
-		supplementalSemanticIDsJSONString,
-		extensionsJSONString,
-		existingID,
-	)
+	updateQuery := dialect.Update(goqu.T("submodel_element")).
+		Set(goqu.Record{
+			"category":                    submodelElement.GetCategory(),
+			"semantic_id":                 newSemanticID,
+			"description_id":              newDescriptionID,
+			"displayname_id":              newDisplayNameID,
+			"embedded_data_specification": edsJSONString,
+			"supplemental_semantic_ids":   supplementalSemanticIDsJSONString,
+			"extensions":                  extensionsJSONString,
+		}).
+		Where(goqu.C("id").Eq(existingID))
+
+	updateSQL, updateArgs, err := updateQuery.ToSQL()
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.Exec(updateSQL, updateArgs...)
 	if err != nil {
 		return err
 	}
 
 	// Handle qualifiers update - delete old ones first
-	_, err = tx.Exec(`DELETE FROM submodel_element_qualifier WHERE sme_id = $1`, existingID)
+	deleteQualifiersQuery := dialect.Delete(goqu.T("submodel_element_qualifier")).
+		Where(goqu.C("sme_id").Eq(existingID))
+
+	deleteSQL, deleteArgs, err := deleteQualifiersQuery.ToSQL()
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.Exec(deleteSQL, deleteArgs...)
 	if err != nil {
 		_, _ = fmt.Println(err)
 		return common.NewInternalServerError("Failed to delete old qualifiers - see console for details")
@@ -448,7 +472,17 @@ func (p *PostgreSQLSMECrudHandler) Update(submodelID string, idShortOrPath strin
 			if err != nil {
 				return err
 			}
-			_, err = tx.Exec(`INSERT INTO submodel_element_qualifier(sme_id, qualifier_id) VALUES($1, $2)`, existingID, qualifierID)
+
+			insertQualifierQuery := dialect.Insert(goqu.T("submodel_element_qualifier")).
+				Cols("sme_id", "qualifier_id").
+				Vals(goqu.Vals{existingID, qualifierID})
+
+			insertSQL, insertArgs, err := insertQualifierQuery.ToSQL()
+			if err != nil {
+				return err
+			}
+
+			_, err = tx.Exec(insertSQL, insertArgs...)
 			if err != nil {
 				_, _ = fmt.Println(err)
 				return common.NewInternalServerError("Failed to create qualifier for Submodel Element with ID '" + fmt.Sprintf("%d", existingID) + "'. See console for details.")
