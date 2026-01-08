@@ -167,23 +167,24 @@ func ApplyResolvedFieldPathCTEs(
 		return ds, nil
 	}
 
-	cte, err := grammar.BuildResolvedFieldPathFlagCTEUnionWithWhere(collector.CTEAlias, entries, cteWhere)
+	ctes, err := grammar.BuildResolvedFieldPathFlagCTEsWithCollector(collector, entries, cteWhere)
 	if err != nil {
 		return nil, err
 	}
-	if cte == nil {
+	if len(ctes) == 0 {
 		return ds, nil
 	}
 
-	if strings.TrimSpace(cte.Alias) == "" {
-		return nil, fmt.Errorf("CTE alias is empty")
+	for _, cte := range ctes {
+		if strings.TrimSpace(cte.Alias) == "" {
+			return nil, fmt.Errorf("CTE alias is empty")
+		}
+		ds = ds.With(cte.Alias, cte.Dataset).
+			LeftJoin(
+				goqu.T(cte.Alias),
+				goqu.On(goqu.I(cte.Alias+".descriptor_id").Eq(goqu.I("descriptor.id"))),
+			)
 	}
-
-	ds = ds.With(cte.Alias, cte.Dataset).
-		LeftJoin(
-			goqu.T(cte.Alias),
-			goqu.On(goqu.I(cte.Alias+".descriptor_id").Eq(goqu.I("descriptor.id"))),
-		)
 
 	return ds, nil
 }

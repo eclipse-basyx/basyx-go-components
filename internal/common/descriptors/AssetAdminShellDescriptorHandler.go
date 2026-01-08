@@ -51,8 +51,8 @@ import (
 
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
-	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	persistence_utils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
 	"golang.org/x/sync/errgroup"
@@ -416,7 +416,7 @@ func ListAssetAdministrationShellDescriptors(
 	if err != nil {
 		return nil, "", err
 	}
-
+	fmt.Println("d")
 	sqlStr, args, err := ds.ToSQL()
 
 	_, _ = fmt.Println(sqlStr)

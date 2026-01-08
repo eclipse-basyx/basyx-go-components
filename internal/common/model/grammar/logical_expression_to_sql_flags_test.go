@@ -44,7 +44,7 @@ func TestLogicalExpression_EvaluateToExpression_WithCollector_UsesFlagAlias(t *t
 	if strings.Contains(sql, "EXISTS") {
 		t.Fatalf("did not expect EXISTS in SQL, got: %s", sql)
 	}
-	if !strings.Contains(sql, "\"descriptor_flags\".\""+alias+"\"") {
+	if !strings.Contains(sql, "\"descriptor_flags_1\".\""+alias+"\"") {
 		t.Fatalf("expected SQL to reference flag alias %q, got: %s", alias, sql)
 	}
 
@@ -146,7 +146,7 @@ func TestBuildResolvedFieldPathFlagCTEs_GroupsSameJoinGraph(t *testing.T) {
 	}
 
 	entries := collector.Entries()
-	ctes, err := BuildResolvedFieldPathFlagCTEs(collector.CTEAlias, entries)
+	ctes, err := BuildResolvedFieldPathFlagCTEsWithCollector(collector, entries, nil)
 	if err != nil {
 		t.Fatalf("BuildResolvedFieldPathFlagCTEs returned error: %v", err)
 	}
@@ -222,7 +222,7 @@ func TestResolvedFieldPathFlags_FinalQueryExample(t *testing.T) {
 	descriptorIDs := []int64{1334}
 	where := goqu.L("specific_asset_id.descriptor_id = ANY(?::bigint[])", pq.Array(descriptorIDs))
 
-	ctes, err := BuildResolvedFieldPathFlagCTEsWithWhere(collector.CTEAlias, collector.Entries(), where)
+	ctes, err := BuildResolvedFieldPathFlagCTEsWithCollector(collector, collector.Entries(), where)
 	if err != nil {
 		t.Fatalf("BuildResolvedFieldPathFlagCTEsWithWhere returned error: %v", err)
 	}
@@ -250,11 +250,11 @@ func TestResolvedFieldPathFlags_FinalQueryExample(t *testing.T) {
 	if strings.Contains(sql, "EXISTS") {
 		t.Fatalf("did not expect EXISTS in SQL, got: %s", sql)
 	}
-	if !strings.Contains(sql, "WITH descriptor_flags") {
+	if !strings.Contains(sql, "WITH descriptor_flags_1") {
 		t.Fatalf("expected CTE in SQL, got: %s", sql)
 	}
 	for _, entry := range collector.Entries() {
-		if !strings.Contains(sql, "\"descriptor_flags\".\""+entry.Alias+"\"") {
+		if !strings.Contains(sql, "\"descriptor_flags_1\".\""+entry.Alias+"\"") {
 			t.Fatalf("expected flag alias %q in SQL, got: %s", entry.Alias, sql)
 		}
 	}
@@ -289,7 +289,7 @@ func TestResolvedFieldPathFlags_MultipleCTEsExample(t *testing.T) {
 	descriptorIDs := []int64{1334}
 	where := goqu.L("specific_asset_id.descriptor_id = ANY(?::bigint[])", pq.Array(descriptorIDs))
 
-	ctes, err := BuildResolvedFieldPathFlagCTEsWithWhere(collector.CTEAlias, collector.Entries(), where)
+	ctes, err := BuildResolvedFieldPathFlagCTEsWithCollector(collector, collector.Entries(), where)
 	if err != nil {
 		t.Fatalf("BuildResolvedFieldPathFlagCTEsWithWhere returned error: %v", err)
 	}

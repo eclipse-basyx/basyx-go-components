@@ -65,10 +65,13 @@ type ResolvedFieldPathFlag struct {
 // ResolvedFieldPathCollector collects resolved field path predicates and assigns
 // unique flag aliases that can be referenced in WHERE clauses.
 type ResolvedFieldPathCollector struct {
-	CTEAlias   string
-	nextID     int
-	keyToAlias map[string]string
-	entries    []ResolvedFieldPathFlag
+	CTEAlias               string
+	nextID                 int
+	nextGroupID            int
+	keyToAlias             map[string]string
+	groupKeyToAlias        map[string]string
+	flagAliasToGroupAlias  map[string]string
+	entries                []ResolvedFieldPathFlag
 }
 
 // NewResolvedFieldPathCollector creates a collector with the provided CTE alias.
@@ -78,8 +81,10 @@ func NewResolvedFieldPathCollector(cteAlias string) *ResolvedFieldPathCollector 
 		cteAlias = "descriptor_flags"
 	}
 	return &ResolvedFieldPathCollector{
-		CTEAlias:   cteAlias,
-		keyToAlias: map[string]string{},
+		CTEAlias:              cteAlias,
+		keyToAlias:            map[string]string{},
+		groupKeyToAlias:       map[string]string{},
+		flagAliasToGroupAlias: map[string]string{},
 	}
 }
 
@@ -111,9 +116,14 @@ func (c *ResolvedFieldPathCollector) Register(resolved []ResolvedFieldPath, pred
 	c.keyToAlias[key] = alias
 	c.entries = append(c.entries, ResolvedFieldPathFlag{
 		Alias:     alias,
-		Resolved: resolved,
+		Resolved:  resolved,
 		Predicate: predicate,
 	})
+	groupAlias, err := c.groupAliasForResolved(resolved)
+	if err != nil {
+		return "", err
+	}
+	c.flagAliasToGroupAlias[alias] = groupAlias
 	return alias, nil
 }
 
@@ -154,10 +164,31 @@ func (c *ResolvedFieldPathCollector) qualifiedAlias(alias string) string {
 	if c == nil {
 		return alias
 	}
+	if groupAlias, ok := c.flagAliasToGroupAlias[alias]; ok && strings.TrimSpace(groupAlias) != "" {
+		return groupAlias + "." + alias
+	}
 	if strings.TrimSpace(c.CTEAlias) == "" {
 		return alias
 	}
 	return c.CTEAlias + "." + alias
+}
+
+func (c *ResolvedFieldPathCollector) groupAliasForResolved(resolved []ResolvedFieldPath) (string, error) {
+	if c == nil {
+		return "", fmt.Errorf("resolved field path collector is nil")
+	}
+	plan, err := buildJoinPlanForResolved(resolved)
+	if err != nil {
+		return "", err
+	}
+	key := joinPlanSignature(plan)
+	if alias, ok := c.groupKeyToAlias[key]; ok {
+		return alias, nil
+	}
+	c.nextGroupID++
+	alias := fmt.Sprintf("%s_%d", c.CTEAlias, c.nextGroupID)
+	c.groupKeyToAlias[key] = alias
+	return alias, nil
 }
 
 // ResolvedFieldPathFlagCTE groups multiple flag expressions that share the same join graph.
@@ -221,6 +252,61 @@ func BuildResolvedFieldPathFlagCTEsWithWhere(cteAlias string, entries []Resolved
 		}
 		ctes = append(ctes, ResolvedFieldPathFlagCTE{
 			Alias:   alias,
+			Dataset: ds,
+			Flags:   group.entries,
+		})
+	}
+
+	return ctes, nil
+}
+
+// BuildResolvedFieldPathFlagCTEsWithCollector builds one or more CTE datasets for the provided entries
+// and uses the collector's join-group aliases to name the CTEs.
+func BuildResolvedFieldPathFlagCTEsWithCollector(collector *ResolvedFieldPathCollector, entries []ResolvedFieldPathFlag, where exp.Expression) ([]ResolvedFieldPathFlagCTE, error) {
+	if collector == nil {
+		return nil, fmt.Errorf("resolved field path collector is nil")
+	}
+	if len(entries) == 0 {
+		return nil, nil
+	}
+
+	type cteGroup struct {
+		plan    existsJoinPlan
+		entries []ResolvedFieldPathFlag
+		alias   string
+	}
+
+	grouped := map[string]*cteGroup{}
+	order := make([]string, 0, len(entries))
+
+	for _, entry := range entries {
+		plan, err := buildJoinPlanForResolved(entry.Resolved)
+		if err != nil {
+			return nil, err
+		}
+		key := joinPlanSignature(plan)
+		groupAlias, err := collector.groupAliasForResolved(entry.Resolved)
+		if err != nil {
+			return nil, err
+		}
+		group, ok := grouped[key]
+		if !ok {
+			group = &cteGroup{plan: plan, alias: groupAlias}
+			grouped[key] = group
+			order = append(order, key)
+		}
+		group.entries = append(group.entries, entry)
+	}
+
+	ctes := make([]ResolvedFieldPathFlagCTE, 0, len(grouped))
+	for _, key := range order {
+		group := grouped[key]
+		ds, err := buildFlagCTEDataset(group.plan, group.entries, where)
+		if err != nil {
+			return nil, err
+		}
+		ctes = append(ctes, ResolvedFieldPathFlagCTE{
+			Alias:   group.alias,
 			Dataset: ds,
 			Flags:   group.entries,
 		})
@@ -614,15 +700,10 @@ func buildJoinPlanForResolved(resolved []ResolvedFieldPath) (existsJoinPlan, err
 	// Important: required aliases might be leaf tables (e.g. reference_key), and we
 	// still need to include their dependency chain to reach a correlatable base.
 	base := ""
-	rootCount := 0
-	for _, cand := range []string{"specific_asset_id", "aas_descriptor_endpoint", "submodel_descriptor"} {
-		if _, ok := expanded[cand]; ok {
-			rootCount++
-		}
-	}
-	if rootCount > 1 {
+	if _, ok := expanded["aas_descriptor"]; ok && len(expanded) > 1 {
 		base = "aas_descriptor"
-	} else {
+	}
+	if base == "" {
 		for _, cand := range []string{"specific_asset_id", "aas_descriptor_endpoint", "submodel_descriptor", "aas_descriptor"} {
 			if _, ok := expanded[cand]; ok {
 				base = cand
