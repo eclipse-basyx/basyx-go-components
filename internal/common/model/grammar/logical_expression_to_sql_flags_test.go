@@ -237,7 +237,7 @@ func TestResolvedFieldPathFlags_FinalQueryExample(t *testing.T) {
 	}
 	ds = ds.LeftJoin(
 		goqu.T(ctes[0].Alias),
-		goqu.On(goqu.I(ctes[0].Alias+".descriptor_id").Eq(goqu.I("descriptor.id"))),
+		goqu.On(goqu.I(ctes[0].Alias+".root_id").Eq(goqu.I("descriptor.id"))),
 	).Where(whereExpr).Prepared(true)
 
 	sql, args, err := ds.ToSQL()
@@ -312,7 +312,7 @@ func TestResolvedFieldPathFlags_MultipleCTEsExample(t *testing.T) {
 		ds = ds.With(cte.Alias, cte.Dataset)
 		ds = ds.LeftJoin(
 			goqu.T(cte.Alias),
-			goqu.On(goqu.I(cte.Alias+".descriptor_id").Eq(goqu.I("descriptor.id"))),
+				goqu.On(goqu.I(cte.Alias+".root_id").Eq(goqu.I("descriptor.id"))),
 		)
 	}
 	ds = ds.Where(whereExpr).Prepared(true)

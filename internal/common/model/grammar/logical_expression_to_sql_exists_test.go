@@ -101,7 +101,7 @@ func TestHandleComparison_BuildsExistsForSpecificAssetExternalSubjectKeyValue(t 
 		ds = ds.With(cte.Alias, cte.Dataset).
 			LeftJoin(
 				goqu.T(cte.Alias),
-				goqu.On(goqu.I(cte.Alias+".descriptor_id").Eq(goqu.I("descriptor.id"))),
+				goqu.On(goqu.I(cte.Alias+".root_id").Eq(goqu.I("descriptor.id"))),
 			)
 	}
 	ds = ds.Prepared(true)
@@ -174,7 +174,7 @@ func TestHandleComparison_BuildsExistsForSpecificAssetExternalSubjectKeyValue_Wi
 		ds = ds.With(cte.Alias, cte.Dataset).
 			LeftJoin(
 				goqu.T(cte.Alias),
-				goqu.On(goqu.I(cte.Alias+".descriptor_id").Eq(goqu.I("descriptor.id"))),
+				goqu.On(goqu.I(cte.Alias+".root_id").Eq(goqu.I("descriptor.id"))),
 			)
 	}
 	ds = ds.Prepared(true)

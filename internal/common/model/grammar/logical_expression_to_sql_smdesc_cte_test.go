@@ -56,7 +56,7 @@ func TestLogicalExpression_SMDesc_WithCollector_BuildsCTE(t *testing.T) {
 		ds = ds.With(cte.Alias, cte.Dataset).
 			LeftJoin(
 				goqu.T(cte.Alias),
-				goqu.On(goqu.I(cte.Alias+".descriptor_id").Eq(goqu.I("descriptor.id"))),
+				goqu.On(goqu.I(cte.Alias+".root_id").Eq(goqu.I("descriptor.id"))),
 			)
 	}
 

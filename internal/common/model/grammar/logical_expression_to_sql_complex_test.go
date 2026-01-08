@@ -34,7 +34,7 @@ func toPreparedSQLForDescriptor(t *testing.T, le LogicalExpression) (string, []i
 		ds = ds.With(cte.Alias, cte.Dataset).
 			LeftJoin(
 				goqu.T(cte.Alias),
-				goqu.On(goqu.I(cte.Alias+".descriptor_id").Eq(goqu.I("descriptor.id"))),
+			goqu.On(goqu.I(cte.Alias+".root_id").Eq(goqu.I("descriptor.id"))),
 			)
 	}
 	ds = ds.Prepared(true)

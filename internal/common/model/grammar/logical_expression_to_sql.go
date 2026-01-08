@@ -373,13 +373,14 @@ type ResolvedFieldPathFlagCTE struct {
 // BuildResolvedFieldPathFlagCTEs builds one or more CTE datasets for the provided entries.
 // Entries that share the same join graph are grouped into a single CTE with multiple flag columns.
 //
-// TODO: Extend join planning for other query components ($sm, $sme, etc.) with their own tables.
+	// Join planning is root-specific via JoinPlanConfig; use NewResolvedFieldPathCollectorForRoot
+	// (or a custom config) to target $sm/$sme/$smdesc.
 func BuildResolvedFieldPathFlagCTEs(cteAlias string, entries []ResolvedFieldPathFlag) ([]ResolvedFieldPathFlagCTE, error) {
 	return BuildResolvedFieldPathFlagCTEsWithWhere(cteAlias, entries, nil)
 }
 
 // BuildResolvedFieldPathFlagCTEsWithWhere builds one or more CTE datasets for the provided entries
-// and applies an optional WHERE clause to each CTE (e.g., descriptor_id filters).
+// and applies an optional WHERE clause to each CTE (e.g., root key filters).
 func BuildResolvedFieldPathFlagCTEsWithWhere(cteAlias string, entries []ResolvedFieldPathFlag, where exp.Expression) ([]ResolvedFieldPathFlagCTE, error) {
 	if len(entries) == 0 {
 		return nil, nil
@@ -546,7 +547,8 @@ func buildFlagCTEDataset(plan existsJoinPlan, entries []ResolvedFieldPathFlag, w
 		return nil, err
 	}
 
-	selects := []interface{}{descriptorExpr.As("descriptor_id")}
+	// Keep a stable column name; this is the root key used by ApplyResolvedFieldPathCTEs.
+	selects := []interface{}{descriptorExpr.As("root_id")}
 	for _, entry := range entries {
 		flagExpr := andBindingsForResolvedFieldPaths(entry.Resolved, entry.Predicate)
 		selects = append(selects, goqu.L("COALESCE(BOOL_OR(?), false)", flagExpr).As(entry.Alias))
@@ -826,7 +828,7 @@ func buildJoinPlanForResolvedWithConfig(resolved []ResolvedFieldPath, config Joi
 
 	expanded := expandAliasesWithDeps(required, config.Rules)
 
-	// Choose a base alias that can be correlated to the outer descriptor.
+	// Choose a base alias that can be correlated to the outer root key.
 	// Important: required aliases might be leaf tables (e.g. reference_key), and we
 	// still need to include their dependency chain to reach a correlatable base.
 	base := ""

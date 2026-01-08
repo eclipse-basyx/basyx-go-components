@@ -51,7 +51,7 @@ func TestLogicalExpression_EvaluateToExpression_NestedTree_WithExistsAndNot(t *t
 		ds = ds.With(cte.Alias, cte.Dataset).
 			LeftJoin(
 				goqu.T(cte.Alias),
-				goqu.On(goqu.I(cte.Alias+".descriptor_id").Eq(goqu.I("descriptor.id"))),
+				goqu.On(goqu.I(cte.Alias+".root_id").Eq(goqu.I("descriptor.id"))),
 			)
 	}
 	ds = ds.Prepared(true)
@@ -144,7 +144,7 @@ func TestLogicalExpression_EvaluateToExpression_NestedJSON_UnmarshalAndGenerateS
 		ds = ds.With(cte.Alias, cte.Dataset).
 			LeftJoin(
 				goqu.T(cte.Alias),
-				goqu.On(goqu.I(cte.Alias+".descriptor_id").Eq(goqu.I("descriptor.id"))),
+				goqu.On(goqu.I(cte.Alias+".root_id").Eq(goqu.I("descriptor.id"))),
 			)
 	}
 	ds = ds.Prepared(true)
