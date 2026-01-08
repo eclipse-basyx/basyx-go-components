@@ -135,12 +135,12 @@ func TestBuildResolvedFieldPathFlagCTEs_GroupsSameJoinGraph(t *testing.T) {
 	collector := NewResolvedFieldPathCollector("descriptor_flags")
 
 	a, _, err := expr1.EvaluateToExpression(collector)
-	fmt.Println(a)
+	_, _ = fmt.Println(a)
 	if err != nil {
 		t.Fatalf("EvaluateToExpression returned error: %v", err)
 	}
 	b, _, err := expr2.EvaluateToExpression(collector)
-	fmt.Println(b)
+	_, _ = fmt.Println(b)
 	if err != nil {
 		t.Fatalf("EvaluateToExpression returned error: %v", err)
 	}
@@ -155,7 +155,7 @@ func TestBuildResolvedFieldPathFlagCTEs_GroupsSameJoinGraph(t *testing.T) {
 	}
 
 	sql, _, err := ctes[0].Dataset.Prepared(true).ToSQL()
-	fmt.Println(sql)
+	_, _ = fmt.Println(sql)
 	if err != nil {
 		t.Fatalf("ToSQL returned error: %v", err)
 	}

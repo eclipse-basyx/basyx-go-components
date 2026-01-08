@@ -198,7 +198,7 @@ func ReadEndpointsByDescriptorIDs(
 		return nil, err
 	}
 	_, _ = fmt.Println("endpoints")
-	//_, _ = fmt.Println(sqlStr, args)
+	// _, _ = fmt.Println(sqlStr, args)
 
 	rows, err := db.QueryContext(ctx, sqlStr, args...)
 	if err != nil {

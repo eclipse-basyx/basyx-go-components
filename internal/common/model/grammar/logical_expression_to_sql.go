@@ -614,10 +614,20 @@ func buildJoinPlanForResolved(resolved []ResolvedFieldPath) (existsJoinPlan, err
 	// Important: required aliases might be leaf tables (e.g. reference_key), and we
 	// still need to include their dependency chain to reach a correlatable base.
 	base := ""
-	for _, cand := range []string{"specific_asset_id", "aas_descriptor_endpoint", "submodel_descriptor", "aas_descriptor"} {
+	rootCount := 0
+	for _, cand := range []string{"specific_asset_id", "aas_descriptor_endpoint", "submodel_descriptor"} {
 		if _, ok := expanded[cand]; ok {
-			base = cand
-			break
+			rootCount++
+		}
+	}
+	if rootCount > 1 {
+		base = "aas_descriptor"
+	} else {
+		for _, cand := range []string{"specific_asset_id", "aas_descriptor_endpoint", "submodel_descriptor", "aas_descriptor"} {
+			if _, ok := expanded[cand]; ok {
+				base = cand
+				break
+			}
 		}
 	}
 	if base == "" {
@@ -709,6 +719,36 @@ func existsCorrelationForAlias(base string) exp.Expression {
 
 func existsJoinRulesForAASDescriptors() map[string]existsJoinRule {
 	return map[string]existsJoinRule{
+		"specific_asset_id": {
+			Alias: "specific_asset_id",
+			Deps:  []string{"aas_descriptor"},
+			Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
+				return ds.Join(
+					goqu.T("specific_asset_id").As("specific_asset_id"),
+					goqu.On(goqu.I("specific_asset_id.descriptor_id").Eq(goqu.I("aas_descriptor.descriptor_id"))),
+				)
+			},
+		},
+		"aas_descriptor_endpoint": {
+			Alias: "aas_descriptor_endpoint",
+			Deps:  []string{"aas_descriptor"},
+			Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
+				return ds.Join(
+					goqu.T("aas_descriptor_endpoint").As("aas_descriptor_endpoint"),
+					goqu.On(goqu.I("aas_descriptor_endpoint.descriptor_id").Eq(goqu.I("aas_descriptor.descriptor_id"))),
+				)
+			},
+		},
+		"submodel_descriptor": {
+			Alias: "submodel_descriptor",
+			Deps:  []string{"aas_descriptor"},
+			Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
+				return ds.Join(
+					goqu.T("submodel_descriptor").As("submodel_descriptor"),
+					goqu.On(goqu.I("submodel_descriptor.aas_descriptor_id").Eq(goqu.I("aas_descriptor.descriptor_id"))),
+				)
+			},
+		},
 		"external_subject_reference": {
 			Alias: "external_subject_reference",
 			Deps:  []string{"specific_asset_id"},
