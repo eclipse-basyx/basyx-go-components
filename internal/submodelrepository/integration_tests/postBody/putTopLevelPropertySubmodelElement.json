@@ -24,5 +24,294 @@
             "text": "This is my top level property"
         }
     ],
-    "category": "Parameter"
+    "category": "Parameter",
+    "supplementalSemanticIds": [
+        {
+            "type": "ModelReference",
+            "keys": [
+                {
+                    "type": "Submodel",
+                    "value": "1234"
+                }
+            ]
+        }
+    ],
+    "embeddedDataSpecifications": [
+            {
+                "dataSpecificationContent": {
+                    "modelType": "DataSpecificationIec61360",
+                    "preferredName": [
+                        {
+                            "language": "en",
+                            "text": "IEC 61360-2 Data Specification"
+                        }
+                    ],
+                    "shortName": [
+                        {
+                            "language": "en",
+                            "text": "IEC 61360-2"
+                        }
+                    ],
+                    "unit": "Kiloohm",
+                    "unitId": {
+                        "keys": [
+                            {
+                                "type": "GlobalReference",
+                                "value": "http://www.iec.ch/TC13JWG1/GA/GA13/GA13_1036"
+                            }
+                        ],
+                        "type": "ExternalReference",
+                        "referredSemanticId": {
+                            "type": "ExternalReference",
+                            "keys": [
+                                {
+                                    "type": "Submodel",
+                                    "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental2"
+                                }
+                            ],
+                            "referredSemanticId": {
+                                "type": "ExternalReference",
+                                "keys": [
+                                    {
+                                        "type": "Submodel",
+                                        "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental3"
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "sourceOfDefinition": "IEC 61360-2",
+                    "symbol": "kOhm",
+                    "dataType": "RealCount",
+                    "definition": [
+                        {
+                            "language": "en",
+                            "text": "Data Specification according to IEC 61360-2"
+                        }
+                    ],
+                    "valueFormat": "##.##",
+                    "valueList": {
+                        "valueReferencePairs": [
+                            {
+                                "value": "100",
+                                "valueId": {
+                                    "keys": [
+                                        {
+                                            "type": "GlobalReference",
+                                            "value": "100"
+                                        }
+                                    ],
+                                    "type": "ExternalReference",
+                                    "referredSemanticId": {
+                                        "type": "ExternalReference",
+                                        "keys": [
+                                            {
+                                                "type": "Submodel",
+                                                "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental2"
+                                            }
+                                        ],
+                                        "referredSemanticId": {
+                                            "type": "ExternalReference",
+                                            "keys": [
+                                                {
+                                                    "type": "Submodel",
+                                                    "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental3"
+                                                }
+                                            ]
+                                        }
+                                    }
+                                }
+                            }
+                        ]
+                    },
+                    "value": "100",
+                    "levelType": {
+                        "min": true,
+                        "nom": true,
+                        "typ": true,
+                        "max": true
+                    }
+                },
+                "dataSpecification": {
+                    "keys": [
+                        {
+                            "type": "GlobalReference",
+                            "value": "http://admin-shell.io/DataSpecificationTemplates/DataSpecificationIEC61360/2/0"
+                        }
+                    ],
+                    "type": "ExternalReference",
+                    "referredSemanticId": {
+                        "type": "ExternalReference",
+                        "keys": [
+                            {
+                                "type": "Submodel",
+                                "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental2"
+                            }
+                        ],
+                        "referredSemanticId": {
+                            "type": "ExternalReference",
+                            "keys": [
+                                {
+                                    "type": "Submodel",
+                                    "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental3"
+                                }
+                            ]
+                        }
+                    }
+                }
+            },
+            {
+                "dataSpecificationContent": {
+                    "modelType": "DataSpecificationIec61360",
+                    "preferredName": [
+                        {
+                            "language": "en",
+                            "text": "Voltage of an electrical component"
+                        }
+                    ],
+                    "shortName": [
+                        {
+                            "language": "en",
+                            "text": "Voltage"
+                        }
+                    ],
+                    "unit": "Volt",
+                    "unitId": {
+                        "keys": [
+                            {
+                                "type": "GlobalReference",
+                                "value": "http://www.iec.ch/TC13JWG1/GA/GA13/GA13_1036"
+                            }
+                        ],
+                        "type": "ExternalReference",
+                        "referredSemanticId": {
+                            "type": "ExternalReference",
+                            "keys": [
+                                {
+                                    "type": "Submodel",
+                                    "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental2"
+                                }
+                            ],
+                            "referredSemanticId": {
+                                "type": "ExternalReference",
+                                "keys": [
+                                    {
+                                        "type": "Submodel",
+                                        "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental3"
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "sourceOfDefinition": "IEC 61360-2",
+                    "symbol": "V",
+                    "dataType": "RealCount",
+                    "definition": [
+                        {
+                            "language": "en",
+                            "text": "Voltage of an electrical component"
+                        }
+                    ],
+                    "valueFormat": "##.##",
+                    "valueList": {
+                        "valueReferencePairs": [
+                            {
+                                "value": "10",
+                                "valueId": {
+                                    "keys": [
+                                        {
+                                            "type": "GlobalReference",
+                                            "value": "10"
+                                        }
+                                    ],
+                                    "type": "ExternalReference",
+                                    "referredSemanticId": {
+                                        "type": "ExternalReference",
+                                        "keys": [
+                                            {
+                                                "type": "Submodel",
+                                                "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental2"
+                                            }
+                                        ],
+                                        "referredSemanticId": {
+                                            "type": "ExternalReference",
+                                            "keys": [
+                                                {
+                                                    "type": "Submodel",
+                                                    "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental3"
+                                                }
+                                            ]
+                                        }
+                                    }
+                                }
+                            }
+                        ]
+                    },
+                    "value": "10",
+                    "levelType": {
+                        "min": false,
+                        "nom": true,
+                        "typ": false,
+                        "max": true
+                    }
+                },
+                "dataSpecification": {
+                    "keys": [
+                        {
+                            "type": "GlobalReference",
+                            "value": "http://admin-shell.io/DataSpecificationTemplates/DataSpecificationIEC61360/2/0"
+                        }
+                    ],
+                    "type": "ExternalReference",
+                    "referredSemanticId": {
+                        "type": "ExternalReference",
+                        "keys": [
+                            {
+                                "type": "Submodel",
+                                "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental2"
+                            }
+                        ],
+                        "referredSemanticId": {
+                            "type": "ExternalReference",
+                            "keys": [
+                                {
+                                    "type": "Submodel",
+                                    "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental3"
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+        ],
+    "qualifiers": [
+        {
+            "type": "ValueQualifier",
+            "valueType": "xs:integer",
+            "value": "123",
+            "valueId": {
+                "type": "ModelReference",
+                "keys": [
+                    {
+                        "type": "Submodel",
+                        "value": "123"
+                    }
+                ]
+            }
+        },
+        {
+            "type": "ValueQualifier",
+            "valueType": "xs:integer",
+            "value": "1234",
+            "valueId": {
+                "type": "ModelReference",
+                "keys": [
+                    {
+                        "type": "Submodel",
+                        "value": "1234"
+                    }
+                ]
+            }
+        }
+    ]
 }

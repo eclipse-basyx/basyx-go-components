@@ -1150,11 +1150,17 @@ func buildCheckMultiLanguagePropertyOrSubmodelElementListQuery(idShortOrPath str
 	return sqlQuery, args
 }
 
-// DeleteReference deletes a reference and all its associated keys from the database.
+// DeleteReference deletes a reference and all its associated keys and nested child references from the database.
 //
-// This function removes a reference record and all its associated key entries from the
-// reference_key table. It should be called when a reference is no longer needed to prevent
+// This function recursively removes a reference record, all its associated key entries from the
+// reference_key table, and all nested child references (referred semantic IDs) that have this
+// reference as their parent. It should be called when a reference is no longer needed to prevent
 // orphaned records.
+//
+// The deletion follows this order:
+//   - Recursively delete all child references (where parentReference = referenceID)
+//   - Delete all associated reference keys
+//   - Delete the reference itself
 //
 // Parameters:
 //   - tx: Active database transaction
@@ -1163,13 +1169,41 @@ func buildCheckMultiLanguagePropertyOrSubmodelElementListQuery(idShortOrPath str
 // Returns:
 //   - error: An error if the deletion fails
 func DeleteReference(tx *sql.Tx, referenceID int) error {
-	// First delete all associated keys
-	_, err := tx.Exec(`DELETE FROM reference_key WHERE reference_id = $1`, referenceID)
+	// First, recursively delete all child references (nested referred semantic IDs)
+	rows, err := tx.Query(`SELECT id FROM reference WHERE parentReference = $1`, referenceID)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = rows.Close()
+	}()
+
+	var childIDs []int
+	for rows.Next() {
+		var childID int
+		if err := rows.Scan(&childID); err != nil {
+			return err
+		}
+		childIDs = append(childIDs, childID)
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+
+	// Recursively delete each child reference
+	for _, childID := range childIDs {
+		if err := DeleteReference(tx, childID); err != nil {
+			return err
+		}
+	}
+
+	// Delete all associated keys for this reference
+	_, err = tx.Exec(`DELETE FROM reference_key WHERE reference_id = $1`, referenceID)
 	if err != nil {
 		return err
 	}
 
-	// Then delete the reference itself
+	// Finally, delete the reference itself
 	_, err = tx.Exec(`DELETE FROM reference WHERE id = $1`, referenceID)
 	if err != nil {
 		return err
@@ -1229,6 +1263,86 @@ func DeleteLangStringNameTypes(tx *sql.Tx, referenceID int) error {
 	_, err = tx.Exec(`DELETE FROM lang_string_name_type_reference WHERE id = $1`, referenceID)
 	if err != nil {
 		return err
+	}
+
+	return nil
+}
+
+// DeleteQualifier deletes a qualifier and all its associated data from the database.
+//
+// This function removes a qualifier record and all its associated data including:
+//   - Supplemental semantic ID references from qualifier_supplemental_semantic_id table
+//   - The actual supplemental semantic ID references
+//   - The valueId reference if it exists
+//   - The semanticId reference if it exists
+//   - The qualifier record itself
+//
+// Parameters:
+//   - tx: Active database transaction
+//   - qualifierID: Database ID of the qualifier to delete
+//
+// Returns:
+//   - error: An error if the deletion fails
+func DeleteQualifier(tx *sql.Tx, qualifierID int) error {
+	// First, get the valueId and semanticId references to delete them after
+	var valueID, semanticID sql.NullInt64
+	err := tx.QueryRow(`SELECT value_id, semantic_id FROM qualifier WHERE id = $1`, qualifierID).Scan(&valueID, &semanticID)
+	if err != nil {
+		return err
+	}
+
+	// Get all supplemental semantic ID references
+	rows, err := tx.Query(`SELECT reference_id FROM qualifier_supplemental_semantic_id WHERE qualifier_id = $1`, qualifierID)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = rows.Close()
+	}()
+
+	var supplementalRefIDs []int
+	for rows.Next() {
+		var refID int
+		if err := rows.Scan(&refID); err != nil {
+			return err
+		}
+		supplementalRefIDs = append(supplementalRefIDs, refID)
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+
+	// Delete junction table entries for supplemental semantic IDs
+	_, err = tx.Exec(`DELETE FROM qualifier_supplemental_semantic_id WHERE qualifier_id = $1`, qualifierID)
+	if err != nil {
+		return err
+	}
+
+	// Delete all supplemental semantic ID references
+	for _, refID := range supplementalRefIDs {
+		if err := DeleteReference(tx, refID); err != nil {
+			return err
+		}
+	}
+
+	// Delete the qualifier record
+	_, err = tx.Exec(`DELETE FROM qualifier WHERE id = $1`, qualifierID)
+	if err != nil {
+		return err
+	}
+
+	// Delete valueId reference if it exists
+	if valueID.Valid {
+		if err := DeleteReference(tx, int(valueID.Int64)); err != nil {
+			return err
+		}
+	}
+
+	// Delete semanticId reference if it exists
+	if semanticID.Valid {
+		if err := DeleteReference(tx, int(semanticID.Int64)); err != nil {
+			return err
+		}
 	}
 
 	return nil

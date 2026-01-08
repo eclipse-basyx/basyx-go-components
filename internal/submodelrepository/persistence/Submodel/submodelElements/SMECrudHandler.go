@@ -348,15 +348,6 @@ func (p *PostgreSQLSMECrudHandler) Update(submodelID string, idShortOrPath strin
 		}
 	}
 
-	// Delete old semantic ID reference if it existed
-	if oldSemanticID.Valid {
-		err = persistenceutils.DeleteReference(tx, int(oldSemanticID.Int64))
-		if err != nil {
-			_, _ = fmt.Println(err)
-			return common.NewInternalServerError("Failed to delete old semantic ID - see console for details")
-		}
-	}
-
 	// Handle description update
 	var convertedDescription []gen.LangStringText
 	for _, desc := range submodelElement.GetDescription() {
@@ -368,29 +359,11 @@ func (p *PostgreSQLSMECrudHandler) Update(submodelID string, idShortOrPath strin
 		return common.NewInternalServerError("Failed to update Description - see console for details")
 	}
 
-	// Delete old description if it existed
-	if oldDescriptionID.Valid {
-		err = persistenceutils.DeleteLangStringTextTypes(tx, int(oldDescriptionID.Int64))
-		if err != nil {
-			_, _ = fmt.Println(err)
-			return common.NewInternalServerError("Failed to delete old description - see console for details")
-		}
-	}
-
 	// Handle display name update
 	newDisplayNameID, err := persistenceutils.CreateLangStringNameTypes(tx, submodelElement.GetDisplayName())
 	if err != nil {
 		_, _ = fmt.Println(err)
 		return common.NewInternalServerError("Failed to update DisplayName - see console for details")
-	}
-
-	// Delete old display name if it existed
-	if oldDisplayNameID.Valid {
-		err = persistenceutils.DeleteLangStringNameTypes(tx, int(oldDisplayNameID.Int64))
-		if err != nil {
-			_, _ = fmt.Println(err)
-			return common.NewInternalServerError("Failed to delete old display name - see console for details")
-		}
 	}
 
 	// Handle embedded data specifications
@@ -426,7 +399,7 @@ func (p *PostgreSQLSMECrudHandler) Update(submodelID string, idShortOrPath strin
 		extensionsJSONString = string(extensionsBytes)
 	}
 
-	// Update the main submodel_element record
+	// Update the main submodel_element record FIRST to release foreign key constraints
 	updateQuery := dialect.Update(goqu.T("submodel_element")).
 		Set(goqu.Record{
 			"category":                    submodelElement.GetCategory(),
@@ -449,7 +422,53 @@ func (p *PostgreSQLSMECrudHandler) Update(submodelID string, idShortOrPath strin
 		return err
 	}
 
-	// Handle qualifiers update - delete old ones first
+	// NOW delete old references after the foreign keys have been updated
+	if oldSemanticID.Valid {
+		err = persistenceutils.DeleteReference(tx, int(oldSemanticID.Int64))
+		if err != nil {
+			_, _ = fmt.Println(err)
+			return common.NewInternalServerError("Failed to delete old semantic ID - see console for details")
+		}
+	}
+
+	if oldDescriptionID.Valid {
+		err = persistenceutils.DeleteLangStringTextTypes(tx, int(oldDescriptionID.Int64))
+		if err != nil {
+			_, _ = fmt.Println(err)
+			return common.NewInternalServerError("Failed to delete old description - see console for details")
+		}
+	}
+
+	if oldDisplayNameID.Valid {
+		err = persistenceutils.DeleteLangStringNameTypes(tx, int(oldDisplayNameID.Int64))
+		if err != nil {
+			_, _ = fmt.Println(err)
+			return common.NewInternalServerError("Failed to delete old display name - see console for details")
+		}
+	}
+
+	// Handle qualifiers update - first retrieve old qualifier IDs, then delete them properly
+	rows, err := tx.Query(`SELECT qualifier_id FROM submodel_element_qualifier WHERE sme_id = $1`, existingID)
+	if err != nil {
+		_, _ = fmt.Println(err)
+		return common.NewInternalServerError("Failed to retrieve old qualifiers - see console for details")
+	}
+
+	var oldQualifierIDs []int
+	for rows.Next() {
+		var qualifierID int
+		if err := rows.Scan(&qualifierID); err != nil {
+			_ = rows.Close()
+			return err
+		}
+		oldQualifierIDs = append(oldQualifierIDs, qualifierID)
+	}
+	_ = rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+
+	// Delete junction table entries
 	deleteQualifiersQuery := dialect.Delete(goqu.T("submodel_element_qualifier")).
 		Where(goqu.C("sme_id").Eq(existingID))
 
@@ -461,7 +480,15 @@ func (p *PostgreSQLSMECrudHandler) Update(submodelID string, idShortOrPath strin
 	_, err = tx.Exec(deleteSQL, deleteArgs...)
 	if err != nil {
 		_, _ = fmt.Println(err)
-		return common.NewInternalServerError("Failed to delete old qualifiers - see console for details")
+		return common.NewInternalServerError("Failed to delete old qualifier associations - see console for details")
+	}
+
+	// Delete the actual qualifier records and their associated data
+	for _, qualifierID := range oldQualifierIDs {
+		if err := persistenceutils.DeleteQualifier(tx, qualifierID); err != nil {
+			_, _ = fmt.Println(err)
+			return common.NewInternalServerError("Failed to delete old qualifier - see console for details")
+		}
 	}
 
 	// Create new qualifiers
