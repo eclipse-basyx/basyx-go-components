@@ -315,37 +315,6 @@ func BuildResolvedFieldPathFlagCTEsWithCollector(collector *ResolvedFieldPathCol
 	return ctes, nil
 }
 
-// BuildResolvedFieldPathFlagCTEUnionWithWhere builds a single CTE containing all provided
-// flag expressions by using a join plan that covers the union of required aliases.
-// This keeps a single CTE alias that matches EvaluateToExpression's flag references.
-func BuildResolvedFieldPathFlagCTEUnionWithWhere(cteAlias string, entries []ResolvedFieldPathFlag, where exp.Expression) (*ResolvedFieldPathFlagCTE, error) {
-	if len(entries) == 0 {
-		return nil, nil
-	}
-	if strings.TrimSpace(cteAlias) == "" {
-		cteAlias = "descriptor_flags"
-	}
-
-	var merged []ResolvedFieldPath
-	for _, entry := range entries {
-		merged = append(merged, entry.Resolved...)
-	}
-
-	plan, err := buildJoinPlanForResolved(merged)
-	if err != nil {
-		return nil, err
-	}
-	ds, err := buildFlagCTEDataset(plan, entries, where)
-	if err != nil {
-		return nil, err
-	}
-	return &ResolvedFieldPathFlagCTE{
-		Alias:   cteAlias,
-		Dataset: ds,
-		Flags:   entries,
-	}, nil
-}
-
 func joinPlanSignature(plan existsJoinPlan) string {
 	aliases := make([]string, 0, len(plan.ExpandedAliases))
 	aliases = append(aliases, plan.ExpandedAliases...)
