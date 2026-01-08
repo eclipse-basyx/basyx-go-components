@@ -79,7 +79,7 @@ func TestHandleComparison_BuildsExistsForSpecificAssetExternalSubjectKeyValue(t 
 	left := Value{Field: &field}
 	right := Value{StrVal: &lit}
 
-	collector := NewResolvedFieldPathCollector("descriptor_flags")
+	collector := mustCollectorForRoot(t, "$aasdesc", "descriptor_flags")
 	expr, _, err := HandleComparisonWithCollector(&left, &right, "$eq", collector)
 	if err != nil {
 		t.Fatalf("HandleComparison returned error: %v", err)
@@ -152,7 +152,7 @@ func TestHandleComparison_BuildsExistsForSpecificAssetExternalSubjectKeyValue_Wi
 	left := Value{Field: &field}
 	right := Value{StrVal: &lit}
 
-	collector := NewResolvedFieldPathCollector("descriptor_flags")
+	collector := mustCollectorForRoot(t, "$aasdesc", "descriptor_flags")
 	expr, _, err := HandleComparisonWithCollector(&left, &right, "$eq", collector)
 	if err != nil {
 		t.Fatalf("HandleComparison returned error: %v", err)

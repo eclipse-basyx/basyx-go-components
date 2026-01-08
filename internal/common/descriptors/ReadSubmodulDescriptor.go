@@ -136,7 +136,10 @@ func ReadSubmodelDescriptorsByAASDescriptorIDs(
 			CanBeFiltered: false,
 		},
 	}
-	collector := grammar.NewResolvedFieldPathCollector("descriptor_flags")
+	collector, err := grammar.NewResolvedFieldPathCollectorForRoot("$aasdesc", "descriptor_flags")
+	if err != nil {
+		return nil, err
+	}
 	expressions, err := auth.GetColumnSelectStatement(ctx, mapper, collector)
 	if err != nil {
 		return nil, err

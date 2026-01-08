@@ -12,7 +12,7 @@ import (
 
 func toPreparedSQLForDescriptor(t *testing.T, le LogicalExpression) (string, []interface{}) {
 	t.Helper()
-	collector := NewResolvedFieldPathCollector("descriptor_flags")
+	collector := mustCollectorForRoot(t, "$aasdesc", "descriptor_flags")
 	whereExpr, _, err := le.EvaluateToExpression(collector)
 	if err != nil {
 		t.Fatalf("EvaluateToExpression returned error: %v", err)

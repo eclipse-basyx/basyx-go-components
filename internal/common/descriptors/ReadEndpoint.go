@@ -183,8 +183,11 @@ func ReadEndpointsByDescriptorIDs(
 		).
 		Prepared(true)
 
-	collector := grammar.NewResolvedFieldPathCollector("descriptor_flags")
-	ds, err := auth.AddFilterQueryFromContext(ctx, ds, "$aasdesc#endpoints[]", collector)
+	collector, err := grammar.NewResolvedFieldPathCollectorForRoot("$aasdesc", "descriptor_flags")
+	if err != nil {
+		return nil, err
+	}
+	ds, err = auth.AddFilterQueryFromContext(ctx, ds, "$aasdesc#endpoints[]", collector)
 	if err != nil {
 		return nil, err
 	}

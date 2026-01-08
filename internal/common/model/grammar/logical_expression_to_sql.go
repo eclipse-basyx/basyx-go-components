@@ -54,6 +54,176 @@ type existsJoinPlan struct {
 	Rules           map[string]existsJoinRule
 }
 
+type JoinPlanConfig struct {
+	PreferredBase string
+	BaseAliases   []string
+	Rules         map[string]existsJoinRule
+	TableForAlias func(string) (string, bool)
+	GroupKeyForBase func(string) (exp.IdentifierExpression, error)
+	Correlatable  func(string) bool
+}
+
+func NewResolvedFieldPathCollectorForRoot(root string, cteAlias string) (*ResolvedFieldPathCollector, error) {
+	if strings.TrimSpace(cteAlias) == "" {
+		return nil, fmt.Errorf("cteAlias must be provided")
+	}
+	cfg, err := joinPlanConfigForRoot(root)
+	if err != nil {
+		return nil, err
+	}
+	return NewResolvedFieldPathCollectorWithConfig(cteAlias, &cfg), nil
+}
+
+func joinPlanConfigForRoot(root string) (JoinPlanConfig, error) {
+	switch normalizeRoot(root) {
+	case "aasdesc", "smdesc":
+		return defaultJoinPlanConfig(), nil
+	case "sm":
+		return joinPlanConfigForSM(), nil
+	case "sme":
+		return joinPlanConfigForSME(), nil
+	default:
+		return JoinPlanConfig{}, fmt.Errorf("unsupported collector root %q", root)
+	}
+}
+
+func normalizeRoot(root string) string {
+	r := strings.TrimSpace(root)
+	if strings.HasPrefix(r, "$") {
+		r = strings.TrimPrefix(r, "$")
+	}
+	if idx := strings.Index(r, "."); idx >= 0 {
+		r = r[:idx]
+	}
+	return r
+}
+
+func joinPlanConfigForSM() JoinPlanConfig {
+	return JoinPlanConfig{
+		PreferredBase: "s",
+		BaseAliases:   []string{"s", "semantic_id_reference", "semantic_id_reference_key"},
+		Rules: map[string]existsJoinRule{
+			"s": {
+				Alias: "s",
+				Deps:  nil,
+				Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
+					return ds
+				},
+			},
+			"semantic_id_reference": {
+				Alias: "semantic_id_reference",
+				Deps:  []string{"s"},
+				Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
+					return ds.Join(
+						goqu.T("reference").As("semantic_id_reference"),
+						goqu.On(goqu.I("semantic_id_reference.id").Eq(goqu.I("s.semantic_id"))),
+					)
+				},
+			},
+			"semantic_id_reference_key": {
+				Alias: "semantic_id_reference_key",
+				Deps:  []string{"semantic_id_reference"},
+				Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
+					return ds.Join(
+						goqu.T("reference_key").As("semantic_id_reference_key"),
+						goqu.On(goqu.I("semantic_id_reference_key.reference_id").Eq(goqu.I("semantic_id_reference.id"))),
+					)
+				},
+			},
+		},
+		TableForAlias: func(alias string) (string, bool) {
+			switch alias {
+			case "s":
+				return "submodel", true
+			case "semantic_id_reference":
+				return "reference", true
+			case "semantic_id_reference_key":
+				return "reference_key", true
+			default:
+				return "", false
+			}
+		},
+		GroupKeyForBase: func(base string) (exp.IdentifierExpression, error) {
+			if base == "s" {
+				return goqu.I("s.id"), nil
+			}
+			return nil, fmt.Errorf("unsupported SM base alias %q", base)
+		},
+		Correlatable: func(alias string) bool {
+			return alias == "s"
+		},
+	}
+}
+
+func joinPlanConfigForSME() JoinPlanConfig {
+	return JoinPlanConfig{
+		PreferredBase: "submodel_element",
+		BaseAliases:   []string{"submodel_element", "property_element", "semantic_id_reference", "semantic_id_reference_key"},
+		Rules: map[string]existsJoinRule{
+			"submodel_element": {
+				Alias: "submodel_element",
+				Deps:  nil,
+				Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
+					return ds
+				},
+			},
+			"property_element": {
+				Alias: "property_element",
+				Deps:  []string{"submodel_element"},
+				Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
+					return ds.Join(
+						goqu.T("property_element").As("property_element"),
+						goqu.On(goqu.I("property_element.id").Eq(goqu.I("submodel_element.id"))),
+					)
+				},
+			},
+			"semantic_id_reference": {
+				Alias: "semantic_id_reference",
+				Deps:  []string{"submodel_element"},
+				Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
+					return ds.Join(
+						goqu.T("reference").As("semantic_id_reference"),
+						goqu.On(goqu.I("semantic_id_reference.id").Eq(goqu.I("submodel_element.semantic_id"))),
+					)
+				},
+			},
+			"semantic_id_reference_key": {
+				Alias: "semantic_id_reference_key",
+				Deps:  []string{"semantic_id_reference"},
+				Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
+					return ds.Join(
+						goqu.T("reference_key").As("semantic_id_reference_key"),
+						goqu.On(goqu.I("semantic_id_reference_key.reference_id").Eq(goqu.I("semantic_id_reference.id"))),
+					)
+				},
+			},
+		},
+		TableForAlias: func(alias string) (string, bool) {
+			switch alias {
+			case "submodel_element":
+				return "submodel_element", true
+			case "property_element":
+				return "property_element", true
+			case "semantic_id_reference":
+				return "reference", true
+			case "semantic_id_reference_key":
+				return "reference_key", true
+			default:
+				return "", false
+			}
+		},
+		GroupKeyForBase: func(base string) (exp.IdentifierExpression, error) {
+			if base == "submodel_element" {
+				return goqu.I("submodel_element.id"), nil
+			}
+			return nil, fmt.Errorf("unsupported SME base alias %q", base)
+		},
+		Correlatable: func(alias string) bool {
+			return alias == "submodel_element"
+		},
+	}
+}
+
 // ResolvedFieldPathFlag ties a resolved field path set to the boolean flag alias that
 // will be emitted in a precomputed CTE.
 type ResolvedFieldPathFlag struct {
@@ -72,11 +242,12 @@ type ResolvedFieldPathCollector struct {
 	groupKeyToAlias        map[string]string
 	flagAliasToGroupAlias  map[string]string
 	entries                []ResolvedFieldPathFlag
+	joinConfig             *JoinPlanConfig
 }
 
 // NewResolvedFieldPathCollector creates a collector with the provided CTE alias.
 // When cteAlias is empty, "descriptor_flags" is used.
-func NewResolvedFieldPathCollector(cteAlias string) *ResolvedFieldPathCollector {
+func NewResolvedFieldPathCollectorWithConfig(cteAlias string, config *JoinPlanConfig) *ResolvedFieldPathCollector {
 	if strings.TrimSpace(cteAlias) == "" {
 		cteAlias = "descriptor_flags"
 	}
@@ -85,6 +256,7 @@ func NewResolvedFieldPathCollector(cteAlias string) *ResolvedFieldPathCollector 
 		keyToAlias:            map[string]string{},
 		groupKeyToAlias:       map[string]string{},
 		flagAliasToGroupAlias: map[string]string{},
+		joinConfig:            config,
 	}
 }
 
@@ -177,7 +349,7 @@ func (c *ResolvedFieldPathCollector) groupAliasForResolved(resolved []ResolvedFi
 	if c == nil {
 		return "", fmt.Errorf("resolved field path collector is nil")
 	}
-	plan, err := buildJoinPlanForResolved(resolved)
+	plan, err := buildJoinPlanForResolvedWithConfig(resolved, c.effectiveJoinConfig())
 	if err != nil {
 		return "", err
 	}
@@ -225,7 +397,7 @@ func BuildResolvedFieldPathFlagCTEsWithWhere(cteAlias string, entries []Resolved
 	order := make([]string, 0, len(entries))
 
 	for _, entry := range entries {
-		plan, err := buildJoinPlanForResolved(entry.Resolved)
+		plan, err := buildJoinPlanForResolvedWithConfig(entry.Resolved, defaultJoinPlanConfig())
 		if err != nil {
 			return nil, err
 		}
@@ -246,7 +418,7 @@ func BuildResolvedFieldPathFlagCTEsWithWhere(cteAlias string, entries []Resolved
 		if len(grouped) > 1 {
 			alias = fmt.Sprintf("%s_%d", cteAlias, idx+1)
 		}
-		ds, err := buildFlagCTEDataset(group.plan, group.entries, where)
+		ds, err := buildFlagCTEDataset(group.plan, group.entries, where, defaultJoinPlanConfig())
 		if err != nil {
 			return nil, err
 		}
@@ -280,7 +452,7 @@ func BuildResolvedFieldPathFlagCTEsWithCollector(collector *ResolvedFieldPathCol
 	order := make([]string, 0, len(entries))
 
 	for _, entry := range entries {
-		plan, err := buildJoinPlanForResolved(entry.Resolved)
+		plan, err := buildJoinPlanForResolvedWithConfig(entry.Resolved, collector.effectiveJoinConfig())
 		if err != nil {
 			return nil, err
 		}
@@ -301,7 +473,7 @@ func BuildResolvedFieldPathFlagCTEsWithCollector(collector *ResolvedFieldPathCol
 	ctes := make([]ResolvedFieldPathFlagCTE, 0, len(grouped))
 	for _, key := range order {
 		group := grouped[key]
-		ds, err := buildFlagCTEDataset(group.plan, group.entries, where)
+		ds, err := buildFlagCTEDataset(group.plan, group.entries, where, collector.effectiveJoinConfig())
 		if err != nil {
 			return nil, err
 		}
@@ -322,7 +494,7 @@ func joinPlanSignature(plan existsJoinPlan) string {
 	return plan.BaseAlias + "|" + strings.Join(aliases, ",")
 }
 
-func buildFlagCTEDataset(plan existsJoinPlan, entries []ResolvedFieldPathFlag, where exp.Expression) (*goqu.SelectDataset, error) {
+func buildFlagCTEDataset(plan existsJoinPlan, entries []ResolvedFieldPathFlag, where exp.Expression, config JoinPlanConfig) (*goqu.SelectDataset, error) {
 	if len(entries) == 0 {
 		return nil, fmt.Errorf("cannot build flag CTE dataset with no entries")
 	}
@@ -369,7 +541,7 @@ func buildFlagCTEDataset(plan existsJoinPlan, entries []ResolvedFieldPathFlag, w
 		}
 	}
 
-	descriptorExpr, err := descriptorIDForBaseAlias(plan.BaseAlias)
+	descriptorExpr, err := config.GroupKeyForBase(plan.BaseAlias)
 	if err != nil {
 		return nil, err
 	}
@@ -385,6 +557,47 @@ func buildFlagCTEDataset(plan existsJoinPlan, entries []ResolvedFieldPathFlag, w
 		ds = ds.Where(where)
 	}
 	return ds, nil
+}
+
+func defaultJoinPlanConfig() JoinPlanConfig {
+	return JoinPlanConfig{
+		PreferredBase:   "aas_descriptor",
+		BaseAliases:     []string{"specific_asset_id", "aas_descriptor_endpoint", "submodel_descriptor", "aas_descriptor"},
+		Rules:           existsJoinRulesForAASDescriptors(),
+		TableForAlias:   existsTableForAlias,
+		GroupKeyForBase: descriptorIDForBaseAlias,
+		Correlatable: func(alias string) bool {
+			return existsCorrelationForAlias(alias) != nil
+		},
+	}
+}
+
+func (c *ResolvedFieldPathCollector) effectiveJoinConfig() JoinPlanConfig {
+	if c == nil || c.joinConfig == nil {
+		return defaultJoinPlanConfig()
+	}
+	cfg := *c.joinConfig
+	if cfg.Rules == nil {
+		cfg.Rules = existsJoinRulesForAASDescriptors()
+	}
+	if cfg.TableForAlias == nil {
+		cfg.TableForAlias = existsTableForAlias
+	}
+	if cfg.GroupKeyForBase == nil {
+		cfg.GroupKeyForBase = descriptorIDForBaseAlias
+	}
+	if cfg.BaseAliases == nil {
+		cfg.BaseAliases = []string{"specific_asset_id", "aas_descriptor_endpoint", "submodel_descriptor", "aas_descriptor"}
+	}
+	if strings.TrimSpace(cfg.PreferredBase) == "" {
+		cfg.PreferredBase = "aas_descriptor"
+	}
+	if cfg.Correlatable == nil {
+		cfg.Correlatable = func(alias string) bool {
+			return existsCorrelationForAlias(alias) != nil
+		}
+	}
+	return cfg
 }
 
 func descriptorIDForBaseAlias(base string) (exp.IdentifierExpression, error) {
@@ -540,14 +753,30 @@ func leadingAlias(expr string) (string, bool) {
 }
 
 func requiredAliasesFromResolved(resolved []ResolvedFieldPath) (map[string]struct{}, error) {
+	return requiredAliasesFromResolvedWithConfig(resolved, defaultJoinPlanConfig())
+}
+
+func requiredAliasesFromResolvedWithConfig(resolved []ResolvedFieldPath, config JoinPlanConfig) (map[string]struct{}, error) {
 	req := map[string]struct{}{}
 	for _, r := range resolved {
 		if strings.TrimSpace(r.Column) != "" {
 			a, ok := leadingAlias(r.Column)
-			if !ok {
+			if ok {
+				if _, exists := config.Rules[a]; exists {
+					req[a] = struct{}{}
+					continue
+				}
+			}
+			found := false
+			for alias := range config.Rules {
+				if strings.Contains(r.Column, alias+".") {
+					req[alias] = struct{}{}
+					found = true
+				}
+			}
+			if !found {
 				return nil, fmt.Errorf("cannot extract alias from column %q", r.Column)
 			}
-			req[a] = struct{}{}
 		}
 		for _, b := range r.ArrayBindings {
 			a, ok := leadingAlias(b.Alias)
@@ -586,42 +815,52 @@ func expandAliasesWithDeps(aliases map[string]struct{}, rules map[string]existsJ
 }
 
 func buildJoinPlanForResolved(resolved []ResolvedFieldPath) (existsJoinPlan, error) {
-	required, err := requiredAliasesFromResolved(resolved)
+	return buildJoinPlanForResolvedWithConfig(resolved, defaultJoinPlanConfig())
+}
+
+func buildJoinPlanForResolvedWithConfig(resolved []ResolvedFieldPath, config JoinPlanConfig) (existsJoinPlan, error) {
+	required, err := requiredAliasesFromResolvedWithConfig(resolved, config)
 	if err != nil {
 		return existsJoinPlan{}, err
 	}
 
-	// TODO: Add join rules for other components (e.g. $sm, $sme) with their own tables.
-	rules := existsJoinRulesForAASDescriptors()
-	expanded := expandAliasesWithDeps(required, rules)
+	expanded := expandAliasesWithDeps(required, config.Rules)
 
 	// Choose a base alias that can be correlated to the outer descriptor.
 	// Important: required aliases might be leaf tables (e.g. reference_key), and we
 	// still need to include their dependency chain to reach a correlatable base.
 	base := ""
-	if _, ok := expanded["aas_descriptor"]; ok && len(expanded) > 1 {
-		base = "aas_descriptor"
+	if config.PreferredBase != "" {
+		if _, ok := expanded[config.PreferredBase]; ok && len(expanded) > 1 {
+			base = config.PreferredBase
+		}
 	}
 	if base == "" {
-		for _, cand := range []string{"specific_asset_id", "aas_descriptor_endpoint", "submodel_descriptor", "aas_descriptor"} {
+		for _, cand := range config.BaseAliases {
 			if _, ok := expanded[cand]; ok {
 				base = cand
 				break
 			}
 		}
 	}
-	if base == "" {
+	if base == "" && config.Correlatable != nil {
 		for a := range expanded {
-			if existsCorrelationForAlias(a) != nil {
+			if config.Correlatable(a) {
 				base = a
 				break
 			}
 		}
 	}
 	if base == "" {
+		for a := range expanded {
+			base = a
+			break
+		}
+	}
+	if base == "" {
 		return existsJoinPlan{}, fmt.Errorf("cannot build join plan: no correlatable base alias found")
 	}
-	baseTable, ok := existsTableForAlias(base)
+	baseTable, ok := config.TableForAlias(base)
 	if !ok {
 		return existsJoinPlan{}, fmt.Errorf("cannot build join plan: no table mapping for alias %q", base)
 	}
@@ -637,7 +876,7 @@ func buildJoinPlanForResolved(resolved []ResolvedFieldPath) (existsJoinPlan, err
 		BaseTable:       baseTable,
 		RequiredAliases: required,
 		ExpandedAliases: expandedAliases,
-		Rules:           rules,
+		Rules:           config.Rules,
 	}, nil
 }
 

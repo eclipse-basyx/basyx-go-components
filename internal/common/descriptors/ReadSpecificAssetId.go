@@ -131,7 +131,10 @@ func ReadSpecificAssetIDsByDescriptorIDs(
 
 	arr := pq.Array(descriptorIDs)
 
-	collector := grammar.NewResolvedFieldPathCollector("descriptor_flags")
+	collector, err := grammar.NewResolvedFieldPathCollectorForRoot("$aasdesc", "descriptor_flags")
+	if err != nil {
+		return nil, err
+	}
 	expressions, err := auth.GetColumnSelectStatement(ctx, expMapper, collector)
 	if err != nil {
 		return nil, err

@@ -17,7 +17,7 @@ func TestLogicalExpression_EvaluateToExpression_WithCollector_UsesFlagAlias(t *t
 		},
 	}
 
-	collector := NewResolvedFieldPathCollector("descriptor_flags")
+	collector := mustCollectorForRoot(t, "$aasdesc", "descriptor_flags")
 	whereExpr, resolved, err := expr.EvaluateToExpression(collector)
 	if err != nil {
 		t.Fatalf("EvaluateToExpression returned error: %v", err)
@@ -89,7 +89,7 @@ func TestLogicalExpression_EvaluateToExpression_WithCollector_ReusesAlias(t *tes
 		},
 	}
 
-	collector := NewResolvedFieldPathCollector("descriptor_flags")
+	collector := mustCollectorForRoot(t, "$aasdesc", "descriptor_flags")
 
 	_, _, err := expr.EvaluateToExpression(collector)
 	if err != nil {
@@ -132,7 +132,7 @@ func TestBuildResolvedFieldPathFlagCTEs_GroupsSameJoinGraph(t *testing.T) {
 		},
 	}
 
-	collector := NewResolvedFieldPathCollector("descriptor_flags")
+	collector := mustCollectorForRoot(t, "$aasdesc", "descriptor_flags")
 
 	a, _, err := expr1.EvaluateToExpression(collector)
 	_, _ = fmt.Println(a)
@@ -211,7 +211,7 @@ func TestResolvedFieldPathFlags_FinalQueryExample(t *testing.T) {
 		},
 	}
 
-	collector := NewResolvedFieldPathCollector("descriptor_flags")
+	collector := mustCollectorForRoot(t, "$aasdesc", "descriptor_flags")
 	whereExpr, resolved, err := expr.EvaluateToExpression(collector)
 	if err != nil {
 		t.Fatalf("EvaluateToExpression returned error: %v", err)
@@ -278,7 +278,7 @@ func TestResolvedFieldPathFlags_MultipleCTEsExample(t *testing.T) {
 		},
 	}
 
-	collector := NewResolvedFieldPathCollector("descriptor_flags")
+	collector := mustCollectorForRoot(t, "$aasdesc", "descriptor_flags")
 	whereExpr, resolved, err := expr.EvaluateToExpression(collector)
 	if err != nil {
 		t.Fatalf("EvaluateToExpression returned error: %v", err)

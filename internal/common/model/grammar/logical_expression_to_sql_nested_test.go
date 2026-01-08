@@ -29,7 +29,7 @@ func TestLogicalExpression_EvaluateToExpression_NestedTree_WithExistsAndNot(t *t
 		},
 	}
 
-	collector := NewResolvedFieldPathCollector("descriptor_flags")
+	collector := mustCollectorForRoot(t, "$aasdesc", "descriptor_flags")
 	whereExpr, _, err := expr.EvaluateToExpression(collector)
 	if err != nil {
 		t.Fatalf("EvaluateToExpression returned error: %v", err)
@@ -122,7 +122,7 @@ func TestLogicalExpression_EvaluateToExpression_NestedJSON_UnmarshalAndGenerateS
 		t.Fatalf("failed to unmarshal LogicalExpression: %v", err)
 	}
 
-	collector := NewResolvedFieldPathCollector("descriptor_flags")
+	collector := mustCollectorForRoot(t, "$aasdesc", "descriptor_flags")
 	whereExpr, _, err := le.EvaluateToExpression(collector)
 	if err != nil {
 		t.Fatalf("EvaluateToExpression returned error: %v", err)
@@ -176,7 +176,7 @@ func TestLogicalExpression_EvaluateToExpression_FieldToFieldComparisonForbidden(
 		Eq: ComparisonItems{field("$aasdesc#idShort"), field("$aasdesc#id")},
 	}
 
-	collector := NewResolvedFieldPathCollector("descriptor_flags")
+	collector := mustCollectorForRoot(t, "$aasdesc", "descriptor_flags")
 	_, _, err := expr.EvaluateToExpression(collector)
 	if err == nil {
 		t.Fatal("expected error for field-to-field comparison, got nil")
