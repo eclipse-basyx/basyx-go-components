@@ -145,8 +145,8 @@ func (p PostgreSQLAnnotatedRelationshipElementHandler) CreateNested(tx *sql.Tx, 
 //
 // Returns:
 //   - error: Error if update fails
-func (p PostgreSQLAnnotatedRelationshipElementHandler) Update(submodelID string, idShortOrPath string, submodelElement gen.SubmodelElement) error {
-	return p.decorated.Update(submodelID, idShortOrPath, submodelElement)
+func (p PostgreSQLAnnotatedRelationshipElementHandler) Update(submodelID string, idShortOrPath string, submodelElement gen.SubmodelElement, tx *sql.Tx) error {
+	return p.decorated.Update(submodelID, idShortOrPath, submodelElement, tx)
 }
 
 // UpdateValueOnly updates only the value of an existing AnnotatedRelationshipElement submodel element identified by its idShort or path.

@@ -28,6 +28,7 @@ package builder
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
 	"sync"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
@@ -560,6 +561,13 @@ func buildMultiLanguageProperty(smeRow model.SubmodelElementRow) (*model.MultiLa
 	}
 
 	mlp.Value = valueRow.Value
+
+	sort.SliceStable(mlp.Value, func(i, j int) bool {
+		if mlp.Value[i].Language == mlp.Value[j].Language {
+			return mlp.Value[i].Text < mlp.Value[j].Text
+		}
+		return mlp.Value[i].Language < mlp.Value[j].Language
+	})
 
 	// Handle ValueID reference if present
 	if valueRow.ValueID != nil {

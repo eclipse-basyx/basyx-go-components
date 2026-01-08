@@ -143,8 +143,8 @@ func (p PostgreSQLRangeHandler) CreateNested(tx *sql.Tx, submodelID string, pare
 //
 // Returns:
 //   - error: An error if the update operation fails
-func (p PostgreSQLRangeHandler) Update(submodelID string, idShortOrPath string, submodelElement gen.SubmodelElement) error {
-	return p.decorated.Update(submodelID, idShortOrPath, submodelElement)
+func (p PostgreSQLRangeHandler) Update(submodelID string, idShortOrPath string, submodelElement gen.SubmodelElement, tx *sql.Tx) error {
+	return p.decorated.Update(submodelID, idShortOrPath, submodelElement, tx)
 }
 
 // UpdateValueOnly updates only the value-specific fields of an existing Range submodel element.

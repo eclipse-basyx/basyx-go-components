@@ -140,7 +140,6 @@ func (p PostgreSQLPropertyHandler) CreateNested(tx *sql.Tx, submodelID string, p
 }
 
 // Update modifies an existing Property submodel element in the database.
-// Currently delegates all update operations to the decorated handler for base submodel element properties.
 //
 // Parameters:
 //   - idShortOrPath: The idShort or path identifying the element to update
@@ -148,8 +147,107 @@ func (p PostgreSQLPropertyHandler) CreateNested(tx *sql.Tx, submodelID string, p
 //
 // Returns:
 //   - error: An error if the update operation fails
-func (p PostgreSQLPropertyHandler) Update(submodelID string, idShortOrPath string, submodelElement gen.SubmodelElement) error {
-	return p.decorated.Update(submodelID, idShortOrPath, submodelElement)
+func (p PostgreSQLPropertyHandler) Update(submodelID string, idShortOrPath string, submodelElement gen.SubmodelElement, tx *sql.Tx) error {
+	var localTX *sql.Tx
+	var err error
+	var cu func(*error)
+	if tx == nil {
+		var startedTx *sql.Tx
+		startedTx, cu, err = common.StartTransaction(p.db)
+		if err != nil {
+			return err
+		}
+		localTX = startedTx
+		defer cu(&err)
+	} else {
+		localTX = tx
+	}
+
+	property, ok := submodelElement.(*gen.Property)
+	if !ok {
+		return common.NewErrBadRequest("submodelElement is not of type Property")
+	}
+
+	// Update base submodel element fields
+	err = p.decorated.Update(submodelID, idShortOrPath, submodelElement, localTX)
+	if err != nil {
+		return err
+	}
+
+	// Get the element ID
+	var elementID int
+	goquQuery, args, err := goqu.From("submodel_element").
+		Select("id").
+		Where(goqu.Ex{
+			"submodel_id":  submodelID,
+			"idshort_path": idShortOrPath,
+		}).ToSQL()
+	if err != nil {
+		return err
+	}
+
+	row := localTX.QueryRow(goquQuery, args...)
+	err = row.Scan(&elementID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return common.NewErrNotFound(fmt.Sprintf("Property element not found for the given idShortOrPath %s", idShortOrPath))
+		}
+		return err
+	}
+
+	// Update Property-specific fields
+	var valueText, valueNum, valueBool, valueTime, valueDatetime sql.NullString
+
+	switch property.ValueType {
+	case "xs:string", "xs:anyURI", "xs:base64Binary", "xs:hexBinary":
+		valueText = sql.NullString{String: property.Value, Valid: property.Value != ""}
+	case "xs:int", "xs:integer", "xs:long", "xs:short", "xs:byte",
+		"xs:unsignedInt", "xs:unsignedLong", "xs:unsignedShort", "xs:unsignedByte",
+		"xs:positiveInteger", "xs:negativeInteger", "xs:nonNegativeInteger", "xs:nonPositiveInteger",
+		"xs:decimal", "xs:double", "xs:float":
+		valueNum = sql.NullString{String: property.Value, Valid: property.Value != ""}
+	case "xs:boolean":
+		valueBool = sql.NullString{String: property.Value, Valid: property.Value != ""}
+	case "xs:time":
+		valueTime = sql.NullString{String: property.Value, Valid: property.Value != ""}
+	case "xs:date", "xs:dateTime", "xs:duration", "xs:gDay", "xs:gMonth",
+		"xs:gMonthDay", "xs:gYear", "xs:gYearMonth":
+		valueDatetime = sql.NullString{String: property.Value, Valid: property.Value != ""}
+	default:
+		valueText = sql.NullString{String: property.Value, Valid: property.Value != ""}
+	}
+
+	valueIDDbID, err := persistenceutils.CreateReference(localTX, property.ValueID, sql.NullInt64{}, sql.NullInt64{})
+	if err != nil {
+		_, _ = fmt.Println(err)
+		return common.NewInternalServerError("Failed to update ValueID - no changes applied - see console for details")
+	}
+
+	_, err = localTX.Exec(`UPDATE property_element 
+		SET value_type = $1, value_text = $2, value_num = $3, value_bool = $4, value_time = $5, value_datetime = $6, value_id = $7 
+		WHERE id = $8`,
+		property.ValueType,
+		valueText,
+		valueNum,
+		valueBool,
+		valueTime,
+		valueDatetime,
+		valueIDDbID,
+		elementID,
+	)
+	if err != nil {
+		return err
+	}
+
+	if tx == nil {
+		err = localTX.Commit()
+		if err != nil {
+			_, _ = fmt.Println(err)
+			return common.NewInternalServerError("Error committing SQL Transaction. See console for details.")
+		}
+	}
+
+	return nil
 }
 
 // UpdateValueOnly updates only the value of an existing Property submodel element identified by its idShort or path.
