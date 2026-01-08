@@ -616,76 +616,6 @@ func expandAliasesWithDeps(aliases map[string]struct{}, rules map[string]existsJ
 	return out
 }
 
-func buildExistsForResolvedFieldPaths(resolved []ResolvedFieldPath, predicate exp.Expression) (exp.Expression, error) {
-	plan, err := buildJoinPlanForResolved(resolved)
-	if err != nil {
-		return nil, err
-	}
-
-	d := goqu.Dialect("postgres")
-	ds := d.From(goqu.T(plan.BaseTable).As(plan.BaseAlias)).Select(goqu.V(1))
-
-	applied := map[string]struct{}{plan.BaseAlias: {}}
-	visiting := map[string]struct{}{}
-
-	var ensure func(alias string) error
-	ensure = func(alias string) error {
-		if alias == "" {
-			return nil
-		}
-		if _, ok := applied[alias]; ok {
-			return nil
-		}
-		if _, ok := visiting[alias]; ok {
-			return fmt.Errorf("cyclic EXISTS join dependency for alias %q", alias)
-		}
-		rule, ok := plan.Rules[alias]
-		if !ok {
-			return fmt.Errorf("no EXISTS join rule registered for alias %q", alias)
-		}
-		visiting[alias] = struct{}{}
-		for _, dep := range rule.Deps {
-			if err := ensure(dep); err != nil {
-				return err
-			}
-		}
-		delete(visiting, alias)
-		ds = rule.Apply(ds)
-		applied[alias] = struct{}{}
-		return nil
-	}
-
-	for alias := range plan.RequiredAliases {
-		if alias == plan.BaseAlias {
-			continue
-		}
-		if err := ensure(alias); err != nil {
-			return nil, err
-		}
-	}
-
-	where := []exp.Expression{predicate}
-	if corr := existsCorrelationForAlias(plan.BaseAlias); corr != nil {
-		where = append(where, corr)
-	}
-
-	// Add all binding constraints.
-	for _, r := range resolved {
-		for _, b := range r.ArrayBindings {
-			// Only apply non-nil binding values.
-			if b.Index.intValue != nil {
-				where = append(where, goqu.I(b.Alias).Eq(*b.Index.intValue))
-			}
-			if b.Index.stringValue != nil {
-				where = append(where, goqu.I(b.Alias).Eq(*b.Index.stringValue))
-			}
-		}
-	}
-
-	ds = ds.Where(goqu.And(where...))
-	return goqu.L("EXISTS (?)", ds), nil
-}
-
 func buildJoinPlanForResolved(resolved []ResolvedFieldPath) (existsJoinPlan, error) {
 	required, err := requiredAliasesFromResolved(resolved)
 	if err != nil {
@@ -1119,13 +1049,6 @@ func HandleComparisonWithCollector(leftOperand, rightOperand *Value, operation s
 	if collector != nil {
 		return comparisonExpr, resolved, nil
 	}
-
-	// If any resolved path has bindings, build a correlated EXISTS with joins + constraints.
-	if existsExpr, err := buildExistsForResolvedFieldPaths(resolved, comparisonExpr); err == nil {
-		return existsExpr, resolved, nil
-	}
-	// Fallback: if we cannot build an EXISTS join graph for the involved aliases,
-	// apply bindings as plain AND constraints (only matters when bindings exist).
 	if anyResolvedHasBindings(resolved) {
 		return andBindingsForResolvedFieldPaths(resolved, comparisonExpr), resolved, nil
 	}
@@ -1205,9 +1128,6 @@ func HandleStringOperationWithCollector(leftOperand, rightOperand *Value, operat
 	}
 	if collector != nil {
 		return stringExpr, resolved, nil
-	}
-	if existsExpr, err := buildExistsForResolvedFieldPaths(resolved, stringExpr); err == nil {
-		return existsExpr, resolved, nil
 	}
 	if anyResolvedHasBindings(resolved) {
 		return andBindingsForResolvedFieldPaths(resolved, stringExpr), resolved, nil

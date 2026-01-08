@@ -29,21 +29,40 @@ func TestLogicalExpression_EvaluateToExpression_NestedTree_WithExistsAndNot(t *t
 		},
 	}
 
-	whereExpr, _, err := expr.EvaluateToExpression(nil)
+	collector := NewResolvedFieldPathCollector("descriptor_flags")
+	whereExpr, _, err := expr.EvaluateToExpression(collector)
 	if err != nil {
 		t.Fatalf("EvaluateToExpression returned error: %v", err)
 	}
 
 	d := goqu.Dialect("postgres")
-	ds := d.From(goqu.T("descriptor").As("descriptor")).Select(goqu.V(1)).Where(whereExpr).Prepared(true)
+	ds := d.From(goqu.T("descriptor").As("descriptor")).
+		InnerJoin(
+			goqu.T("aas_descriptor").As("aas_descriptor"),
+			goqu.On(goqu.I("aas_descriptor.descriptor_id").Eq(goqu.I("descriptor.id"))),
+		).
+		Select(goqu.V(1)).
+		Where(whereExpr)
+	ctes, err := BuildResolvedFieldPathFlagCTEsWithCollector(collector, collector.Entries(), nil)
+	if err != nil {
+		t.Fatalf("BuildResolvedFieldPathFlagCTEsWithCollector returned error: %v", err)
+	}
+	for _, cte := range ctes {
+		ds = ds.With(cte.Alias, cte.Dataset).
+			LeftJoin(
+				goqu.T(cte.Alias),
+				goqu.On(goqu.I(cte.Alias+".descriptor_id").Eq(goqu.I("descriptor.id"))),
+			)
+	}
+	ds = ds.Prepared(true)
 
 	sql, args, err := ds.ToSQL()
 	if err != nil {
 		t.Fatalf("ToSQL returned error: %v", err)
 	}
 
-	if !strings.Contains(sql, "EXISTS") {
-		t.Fatalf("expected EXISTS in SQL, got: %s", sql)
+	if strings.Contains(sql, "EXISTS") {
+		t.Fatalf("did not expect EXISTS in SQL, got: %s", sql)
 	}
 	if !strings.Contains(sql, " OR ") {
 		t.Fatalf("expected OR in SQL, got: %s", sql)
@@ -53,6 +72,9 @@ func TestLogicalExpression_EvaluateToExpression_NestedTree_WithExistsAndNot(t *t
 	}
 	if !strings.Contains(sql, "LIKE") {
 		t.Fatalf("expected LIKE for $contains in SQL, got: %s", sql)
+	}
+	if !strings.Contains(sql, "descriptor_flags_1") {
+		t.Fatalf("expected descriptor_flags_1 in SQL, got: %s", sql)
 	}
 
 	// Ensure important bindings/values are present in args.
@@ -100,27 +122,49 @@ func TestLogicalExpression_EvaluateToExpression_NestedJSON_UnmarshalAndGenerateS
 		t.Fatalf("failed to unmarshal LogicalExpression: %v", err)
 	}
 
-	whereExpr, _, err := le.EvaluateToExpression(nil)
+	collector := NewResolvedFieldPathCollector("descriptor_flags")
+	whereExpr, _, err := le.EvaluateToExpression(collector)
 	if err != nil {
 		t.Fatalf("EvaluateToExpression returned error: %v", err)
 	}
 
 	d := goqu.Dialect("postgres")
-	ds := d.From(goqu.T("descriptor").As("descriptor")).Select(goqu.V(1)).Where(whereExpr).Prepared(true)
+	ds := d.From(goqu.T("descriptor").As("descriptor")).
+		InnerJoin(
+			goqu.T("aas_descriptor").As("aas_descriptor"),
+			goqu.On(goqu.I("aas_descriptor.descriptor_id").Eq(goqu.I("descriptor.id"))),
+		).
+		Select(goqu.V(1)).
+		Where(whereExpr)
+	ctes, err := BuildResolvedFieldPathFlagCTEsWithCollector(collector, collector.Entries(), nil)
+	if err != nil {
+		t.Fatalf("BuildResolvedFieldPathFlagCTEsWithCollector returned error: %v", err)
+	}
+	for _, cte := range ctes {
+		ds = ds.With(cte.Alias, cte.Dataset).
+			LeftJoin(
+				goqu.T(cte.Alias),
+				goqu.On(goqu.I(cte.Alias+".descriptor_id").Eq(goqu.I("descriptor.id"))),
+			)
+	}
+	ds = ds.Prepared(true)
 
 	sql, args, err := ds.ToSQL()
 	if err != nil {
 		t.Fatalf("ToSQL returned error: %v", err)
 	}
 
-	if !strings.Contains(sql, "EXISTS") {
-		t.Fatalf("expected EXISTS in SQL, got: %s", sql)
+	if strings.Contains(sql, "EXISTS") {
+		t.Fatalf("did not expect EXISTS in SQL, got: %s", sql)
 	}
 	if !strings.Contains(sql, " OR ") {
 		t.Fatalf("expected OR in SQL, got: %s", sql)
 	}
 	if !strings.Contains(sql, "NOT") {
 		t.Fatalf("expected NOT in SQL, got: %s", sql)
+	}
+	if !strings.Contains(sql, "descriptor_flags_1") {
+		t.Fatalf("expected descriptor_flags_1 in SQL, got: %s", sql)
 	}
 	if !argListContains(args, "WRITTEN_BY_X") {
 		t.Fatalf("expected args to contain %q, got %#v", "WRITTEN_BY_X", args)
@@ -132,7 +176,8 @@ func TestLogicalExpression_EvaluateToExpression_FieldToFieldComparisonForbidden(
 		Eq: ComparisonItems{field("$aasdesc#idShort"), field("$aasdesc#id")},
 	}
 
-	_, _, err := expr.EvaluateToExpression(nil)
+	collector := NewResolvedFieldPathCollector("descriptor_flags")
+	_, _, err := expr.EvaluateToExpression(collector)
 	if err == nil {
 		t.Fatal("expected error for field-to-field comparison, got nil")
 	}

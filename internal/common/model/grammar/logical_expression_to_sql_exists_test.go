@@ -79,36 +79,47 @@ func TestHandleComparison_BuildsExistsForSpecificAssetExternalSubjectKeyValue(t 
 	left := Value{Field: &field}
 	right := Value{StrVal: &lit}
 
-	expr, err := HandleComparison(&left, &right, "$eq")
+	collector := NewResolvedFieldPathCollector("descriptor_flags")
+	expr, _, err := HandleComparisonWithCollector(&left, &right, "$eq", collector)
 	if err != nil {
 		t.Fatalf("HandleComparison returned error: %v", err)
 	}
 
 	d := goqu.Dialect("postgres")
-	ds := d.From(goqu.T("descriptor").As("descriptor")).Select(goqu.V(1)).Where(expr).Prepared(true)
+	ds := d.From(goqu.T("descriptor").As("descriptor")).
+		InnerJoin(
+			goqu.T("aas_descriptor").As("aas_descriptor"),
+			goqu.On(goqu.I("aas_descriptor.descriptor_id").Eq(goqu.I("descriptor.id"))),
+		).
+		Select(goqu.V(1)).
+		Where(expr)
+	ctes, err := BuildResolvedFieldPathFlagCTEsWithCollector(collector, collector.Entries(), nil)
+	if err != nil {
+		t.Fatalf("BuildResolvedFieldPathFlagCTEsWithCollector returned error: %v", err)
+	}
+	for _, cte := range ctes {
+		ds = ds.With(cte.Alias, cte.Dataset).
+			LeftJoin(
+				goqu.T(cte.Alias),
+				goqu.On(goqu.I(cte.Alias+".descriptor_id").Eq(goqu.I("descriptor.id"))),
+			)
+	}
+	ds = ds.Prepared(true)
 
 	sql, args, err := ds.ToSQL()
 	if err != nil {
 		t.Fatalf("ToSQL returned error: %v", err)
 	}
 
-	// Ensure we used correlated EXISTS with the right base and joins.
-	if !strings.Contains(sql, "EXISTS") {
-		t.Fatalf("expected EXISTS in SQL, got: %s", sql)
-	}
-	if !strings.Contains(sql, "FROM \"aas_descriptor\"") {
-		t.Fatalf("expected aas_descriptor base table in SQL, got: %s", sql)
+	// Ensure the CTE includes the right joins.
+	if !strings.Contains(sql, "WITH descriptor_flags_1") {
+		t.Fatalf("expected descriptor_flags_1 CTE in SQL, got: %s", sql)
 	}
 	if !strings.Contains(sql, "JOIN \"reference\" AS \"external_subject_reference\"") {
 		t.Fatalf("expected join to external_subject_reference in SQL, got: %s", sql)
 	}
 	if !strings.Contains(sql, "JOIN \"reference_key\" AS \"external_subject_reference_key\"") {
 		t.Fatalf("expected join to external_subject_reference_key in SQL, got: %s", sql)
-	}
-
-	// Correlation back to the outer descriptor.
-	if !strings.Contains(sql, "\"aas_descriptor\".\"descriptor_id\" = \"descriptor\".\"id\"") {
-		t.Fatalf("expected correlation predicate in SQL, got: %s", sql)
 	}
 
 	// Binding constraints (array indices).
@@ -141,36 +152,47 @@ func TestHandleComparison_BuildsExistsForSpecificAssetExternalSubjectKeyValue_Wi
 	left := Value{Field: &field}
 	right := Value{StrVal: &lit}
 
-	expr, err := HandleComparison(&left, &right, "$eq")
+	collector := NewResolvedFieldPathCollector("descriptor_flags")
+	expr, _, err := HandleComparisonWithCollector(&left, &right, "$eq", collector)
 	if err != nil {
 		t.Fatalf("HandleComparison returned error: %v", err)
 	}
 
 	d := goqu.Dialect("postgres")
-	ds := d.From(goqu.T("descriptor").As("descriptor")).Select(goqu.V(1)).Where(expr).Prepared(true)
+	ds := d.From(goqu.T("descriptor").As("descriptor")).
+		InnerJoin(
+			goqu.T("aas_descriptor").As("aas_descriptor"),
+			goqu.On(goqu.I("aas_descriptor.descriptor_id").Eq(goqu.I("descriptor.id"))),
+		).
+		Select(goqu.V(1)).
+		Where(expr)
+	ctes, err := BuildResolvedFieldPathFlagCTEsWithCollector(collector, collector.Entries(), nil)
+	if err != nil {
+		t.Fatalf("BuildResolvedFieldPathFlagCTEsWithCollector returned error: %v", err)
+	}
+	for _, cte := range ctes {
+		ds = ds.With(cte.Alias, cte.Dataset).
+			LeftJoin(
+				goqu.T(cte.Alias),
+				goqu.On(goqu.I(cte.Alias+".descriptor_id").Eq(goqu.I("descriptor.id"))),
+			)
+	}
+	ds = ds.Prepared(true)
 
 	sql, args, err := ds.ToSQL()
 	if err != nil {
 		t.Fatalf("ToSQL returned error: %v", err)
 	}
 
-	// Ensure we used correlated EXISTS with the right base and joins, even without any index bindings.
-	if !strings.Contains(sql, "EXISTS") {
-		t.Fatalf("expected EXISTS in SQL, got: %s", sql)
-	}
-	if !strings.Contains(sql, "FROM \"aas_descriptor\"") {
-		t.Fatalf("expected aas_descriptor base table in SQL, got: %s", sql)
+	// Ensure the CTE includes the right joins, even without any index bindings.
+	if !strings.Contains(sql, "WITH descriptor_flags_1") {
+		t.Fatalf("expected descriptor_flags_1 CTE in SQL, got: %s", sql)
 	}
 	if !strings.Contains(sql, "JOIN \"reference\" AS \"external_subject_reference\"") {
 		t.Fatalf("expected join to external_subject_reference in SQL, got: %s", sql)
 	}
 	if !strings.Contains(sql, "JOIN \"reference_key\" AS \"external_subject_reference_key\"") {
 		t.Fatalf("expected join to external_subject_reference_key in SQL, got: %s", sql)
-	}
-
-	// Correlation back to the outer descriptor.
-	if !strings.Contains(sql, "\"aas_descriptor\".\"descriptor_id\" = \"descriptor\".\"id\"") {
-		t.Fatalf("expected correlation predicate in SQL, got: %s", sql)
 	}
 
 	// No binding constraints for wildcards.
@@ -188,11 +210,7 @@ func TestHandleComparison_BuildsExistsForSpecificAssetExternalSubjectKeyValue_Wi
 	if argListContains(args, 0) {
 		t.Fatalf("did not expect args to contain %d (no bindings), got %#v", 0, args)
 	}
-	// Prepared queries pass constants like SELECT 1 as bind args; with no array bindings
-	// we expect exactly: outer SELECT 1, inner SELECT 1, and the literal value.
-	if len(args) != 3 {
-		t.Fatalf("expected exactly 3 args (outer 1, inner 1, literal), got %#v", args)
-	}
+	// Prepared queries pass constants like SELECT 1 as bind args; ensure the literal value is present.
 	if !argListContains(args, string(lit)) {
 		t.Fatalf("expected args to contain %q, got %#v", string(lit), args)
 	}
