@@ -47,9 +47,11 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	persistence_utils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
@@ -325,7 +327,8 @@ func buildListAssetAdministrationShellDescriptorsQuery(
 		},
 	}
 
-	expressions, err := auth.GetColumnSelectStatement(ctx, mapper)
+	collector := grammar.NewResolvedFieldPathCollector("descriptor_flags")
+	expressions, err := auth.GetColumnSelectStatement(ctx, mapper, collector)
 	if err != nil {
 		return nil, err
 	}
@@ -348,7 +351,11 @@ func buildListAssetAdministrationShellDescriptorsQuery(
 		).GroupBy(
 		expressions[0], // descriptor_id
 	)
-	ds, err = auth.AddFormulaQueryFromContext(ctx, ds)
+	ds, err = auth.AddFormulaQueryFromContext(ctx, ds, collector)
+	if err != nil {
+		return nil, err
+	}
+	ds, err = auth.ApplyResolvedFieldPathCTEs(ds, collector, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -397,6 +404,10 @@ func ListAssetAdministrationShellDescriptors(
 	assetType string,
 	identifiable string,
 ) ([]model.AssetAdministrationShellDescriptor, string, error) {
+	start := time.Now()
+	defer func() {
+		_, _ = fmt.Printf("ListAssetAdministrationShellDescriptors took %s for limit %d\n", time.Since(start), limit)
+	}()
 	if limit <= 0 {
 		limit = 1000000
 	}

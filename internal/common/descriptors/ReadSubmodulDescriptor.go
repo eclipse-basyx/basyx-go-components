@@ -29,8 +29,10 @@ package descriptors
 import (
 	"context"
 	"database/sql"
+	"fmt"
 
 	"github.com/doug-martin/goqu/v9"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	"github.com/lib/pq"
@@ -134,7 +136,8 @@ func ReadSubmodelDescriptorsByAASDescriptorIDs(
 			CanBeFiltered: false,
 		},
 	}
-	expressions, err := auth.GetColumnSelectStatement(ctx, mapper)
+	collector := grammar.NewResolvedFieldPathCollector("descriptor_flags")
+	expressions, err := auth.GetColumnSelectStatement(ctx, mapper, collector)
 	if err != nil {
 		return nil, err
 	}
@@ -164,7 +167,12 @@ func ReadSubmodelDescriptorsByAASDescriptorIDs(
 			submodelDescriptorAlias.Col(colPosition).Asc(),
 		)
 
-	ds, err = auth.AddFilterQueryFromContext(ctx, ds, "$aasdesc#submodelDescriptors[]")
+	ds, err = auth.AddFilterQueryFromContext(ctx, ds, "$aasdesc#submodelDescriptors[]", collector)
+	if err != nil {
+		return nil, err
+	}
+	cteWhere := goqu.L(fmt.Sprintf("%s.%s = ANY(?::bigint[])", aliasSubmodelDescriptor, colAASDescriptorID), arr)
+	ds, err = auth.ApplyResolvedFieldPathCTEs(ds, collector, cteWhere)
 	if err != nil {
 		return nil, err
 	}

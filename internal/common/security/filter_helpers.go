@@ -28,9 +28,12 @@ package auth
 
 import (
 	"context"
+	"fmt"
+	"strings"
 
 	"github.com/doug-martin/goqu/v9"
 	"github.com/doug-martin/goqu/v9/exp"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 )
 
 // AddFilterQueryFromContext appends the WHERE clause for the given fragment
@@ -41,7 +44,7 @@ func AddFilterQueryFromContext(
 	ctx context.Context,
 	ds *goqu.SelectDataset,
 	fragment string,
-
+	collector *grammar.ResolvedFieldPathCollector,
 ) (*goqu.SelectDataset, error) {
 	p := GetQueryFilter(ctx)
 	if p == nil {
@@ -54,7 +57,7 @@ func AddFilterQueryFromContext(
 		return ds, nil
 	}
 
-	wc, err := filter.EvaluateToExpression()
+	wc, _, err := filter.EvaluateToExpression(collector)
 	if err != nil {
 		return nil, err
 	}
@@ -87,7 +90,7 @@ func extractExpressions(mappers []ExpressionIdentifiableMapper) []exp.Expression
 // fragment filters stored in the context. Filterable expressions are wrapped
 // in CASE/MAX projections so their values are only exposed when the other
 // fragment filters succeed; otherwise the raw expressions are returned.
-func GetColumnSelectStatement(ctx context.Context, expressionMappers []ExpressionIdentifiableMapper) ([]exp.Expression, error) {
+func GetColumnSelectStatement(ctx context.Context, expressionMappers []ExpressionIdentifiableMapper, collector *grammar.ResolvedFieldPathCollector) ([]exp.Expression, error) {
 	defaultReturn := extractExpressions(expressionMappers)
 	p := GetQueryFilter(ctx)
 	if p == nil {
@@ -101,7 +104,7 @@ func GetColumnSelectStatement(ctx context.Context, expressionMappers []Expressio
 			filter := p.FilterExpressionFor(*expMapper.Fragment)
 			if filter != nil {
 				ok = true
-				wc, err := filter.EvaluateToExpression()
+				wc, _, err := filter.EvaluateToExpression(collector)
 				if err != nil {
 					return nil, err
 				}
@@ -133,10 +136,10 @@ func caseWhenColumn(wc exp.Expression, iexp exp.Expression) exp.CaseExpression {
 // the context's QueryFilter to the provided dataset. When no filter formula is
 // present, the dataset is returned unchanged; errors from expression building
 // are propagated.
-func AddFormulaQueryFromContext(ctx context.Context, ds *goqu.SelectDataset) (*goqu.SelectDataset, error) {
+func AddFormulaQueryFromContext(ctx context.Context, ds *goqu.SelectDataset, collector *grammar.ResolvedFieldPathCollector) (*goqu.SelectDataset, error) {
 	p := GetQueryFilter(ctx)
 	if p != nil && p.Formula != nil {
-		wc, err := p.Formula.EvaluateToExpression()
+		wc, _, err := p.Formula.EvaluateToExpression(collector)
 		if err != nil {
 			return nil, err
 		}
@@ -146,5 +149,41 @@ func AddFormulaQueryFromContext(ctx context.Context, ds *goqu.SelectDataset) (*g
 			wc,
 		)
 	}
+	return ds, nil
+}
+
+// ApplyResolvedFieldPathCTEs attaches the collected flag CTE to the dataset and joins it
+// on descriptor.id so flag expressions referenced in WHERE/CASE clauses are available.
+func ApplyResolvedFieldPathCTEs(
+	ds *goqu.SelectDataset,
+	collector *grammar.ResolvedFieldPathCollector,
+	cteWhere exp.Expression,
+) (*goqu.SelectDataset, error) {
+	if collector == nil {
+		return ds, nil
+	}
+	entries := collector.Entries()
+	if len(entries) == 0 {
+		return ds, nil
+	}
+
+	cte, err := grammar.BuildResolvedFieldPathFlagCTEUnionWithWhere(collector.CTEAlias, entries, cteWhere)
+	if err != nil {
+		return nil, err
+	}
+	if cte == nil {
+		return ds, nil
+	}
+
+	if strings.TrimSpace(cte.Alias) == "" {
+		return nil, fmt.Errorf("CTE alias is empty")
+	}
+
+	ds = ds.With(cte.Alias, cte.Dataset).
+		LeftJoin(
+			goqu.T(cte.Alias),
+			goqu.On(goqu.I(cte.Alias+".descriptor_id").Eq(goqu.I("descriptor.id"))),
+		)
+
 	return ds, nil
 }

@@ -30,8 +30,10 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"time"
 
 	"github.com/doug-martin/goqu/v9"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	"github.com/lib/pq"
@@ -116,6 +118,10 @@ func ReadSpecificAssetIDsByDescriptorIDs(
 	db *sql.DB,
 	descriptorIDs []int64,
 ) (map[int64][]model.SpecificAssetID, error) {
+	start := time.Now()
+	defer func() {
+		_, _ = fmt.Printf("ReadSpecificAssetIDsByDescriptorIDs took %s for %d descriptor IDs\n", time.Since(start), len(descriptorIDs))
+	}()
 	out := make(map[int64][]model.SpecificAssetID, len(descriptorIDs))
 	if len(descriptorIDs) == 0 {
 		return out, nil
@@ -125,7 +131,8 @@ func ReadSpecificAssetIDsByDescriptorIDs(
 
 	arr := pq.Array(descriptorIDs)
 
-	expressions, err := auth.GetColumnSelectStatement(ctx, expMapper)
+	collector := grammar.NewResolvedFieldPathCollector("descriptor_flags")
+	expressions, err := auth.GetColumnSelectStatement(ctx, expMapper, collector)
 	if err != nil {
 		return nil, err
 	}
@@ -154,7 +161,12 @@ func ReadSpecificAssetIDsByDescriptorIDs(
 			tSpecificAssetID.Col(colPosition).Asc(),
 		)
 
-	base, err = auth.AddFilterQueryFromContext(ctx, base, "$aasdesc#specificAssetIds[]")
+	base, err = auth.AddFilterQueryFromContext(ctx, base, "$aasdesc#specificAssetIds[]", collector)
+	if err != nil {
+		return nil, err
+	}
+	cteWhere := goqu.L(fmt.Sprintf("%s.%s = ANY(?::bigint[])", aliasSpecificAssetID, colDescriptorID), arr)
+	base, err = auth.ApplyResolvedFieldPathCTEs(base, collector, cteWhere)
 	if err != nil {
 		return nil, err
 	}

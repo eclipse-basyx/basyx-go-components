@@ -12,7 +12,7 @@ import (
 
 func toPreparedSQLForDescriptor(t *testing.T, le LogicalExpression) (string, []interface{}) {
 	t.Helper()
-	whereExpr, err := le.EvaluateToExpression()
+	whereExpr, _, err := le.EvaluateToExpression(nil)
 	if err != nil {
 		t.Fatalf("EvaluateToExpression returned error: %v", err)
 	}

@@ -31,12 +31,14 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/doug-martin/goqu/v9"
 	// nolint:revive
 	_ "github.com/doug-martin/goqu/v9/dialect/postgres"
 	"github.com/doug-martin/goqu/v9/exp"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	"github.com/lib/pq"
 )
@@ -91,6 +93,10 @@ func ReadEndpointsByDescriptorIDs(
 	descriptorIDs []int64,
 	joinOnMainTable bool,
 ) (map[int64][]model.Endpoint, error) {
+	start := time.Now()
+	defer func() {
+		_, _ = fmt.Printf("ReadEndpointsByDescriptorIDs took %s for %d descriptor IDs\n", time.Since(start), len(descriptorIDs))
+	}()
 	out := make(map[int64][]model.Endpoint, len(descriptorIDs))
 	if len(descriptorIDs) == 0 {
 		return out, nil
@@ -177,7 +183,12 @@ func ReadEndpointsByDescriptorIDs(
 		).
 		Prepared(true)
 
-	ds, err := auth.AddFilterQueryFromContext(ctx, ds, "$aasdesc#endpoints[]")
+	collector := grammar.NewResolvedFieldPathCollector("descriptor_flags")
+	ds, err := auth.AddFilterQueryFromContext(ctx, ds, "$aasdesc#endpoints[]", collector)
+	if err != nil {
+		return nil, err
+	}
+	ds, err = auth.ApplyResolvedFieldPathCTEs(ds, collector, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -187,7 +198,7 @@ func ReadEndpointsByDescriptorIDs(
 		return nil, err
 	}
 	_, _ = fmt.Println("endpoints")
-	_, _ = fmt.Println(sqlStr)
+	//_, _ = fmt.Println(sqlStr, args)
 
 	rows, err := db.QueryContext(ctx, sqlStr, args...)
 	if err != nil {

@@ -160,7 +160,7 @@ func applyAASQuery(aasQuery *grammar.QueryWrapper, query *goqu.SelectDataset) (*
 	}
 
 	// Evaluate the logical expression to a SQL expression
-	expr, err := aasQuery.Query.Condition.EvaluateToExpression()
+	expr, _, err := aasQuery.Query.Condition.EvaluateToExpression(nil)
 	if err != nil {
 		return nil, fmt.Errorf("error evaluating query condition: %w", err)
 	}

@@ -28,7 +28,7 @@ func TestQueryWrapper_SMECondition_ToSQL(t *testing.T) {
 		t.Fatal("Expected Condition to be set")
 	}
 
-	whereExpr, err := wrapper.Query.Condition.EvaluateToExpression()
+	whereExpr, _, err := wrapper.Query.Condition.EvaluateToExpression(nil)
 	if err != nil {
 		t.Fatalf("EvaluateToExpression returned error: %v", err)
 	}

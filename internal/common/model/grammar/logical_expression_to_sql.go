@@ -30,7 +30,9 @@
 package grammar
 
 import (
+	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -42,6 +44,307 @@ type existsJoinRule struct {
 	Alias string
 	Deps  []string
 	Apply func(ds *goqu.SelectDataset) *goqu.SelectDataset
+}
+
+type existsJoinPlan struct {
+	BaseAlias       string
+	BaseTable       string
+	RequiredAliases map[string]struct{}
+	ExpandedAliases []string
+	Rules           map[string]existsJoinRule
+}
+
+// ResolvedFieldPathFlag ties a resolved field path set to the boolean flag alias that
+// will be emitted in a precomputed CTE.
+type ResolvedFieldPathFlag struct {
+	Alias     string
+	Resolved  []ResolvedFieldPath
+	Predicate exp.Expression
+}
+
+// ResolvedFieldPathCollector collects resolved field path predicates and assigns
+// unique flag aliases that can be referenced in WHERE clauses.
+type ResolvedFieldPathCollector struct {
+	CTEAlias   string
+	nextID     int
+	keyToAlias map[string]string
+	entries    []ResolvedFieldPathFlag
+}
+
+// NewResolvedFieldPathCollector creates a collector with the provided CTE alias.
+// When cteAlias is empty, "descriptor_flags" is used.
+func NewResolvedFieldPathCollector(cteAlias string) *ResolvedFieldPathCollector {
+	if strings.TrimSpace(cteAlias) == "" {
+		cteAlias = "descriptor_flags"
+	}
+	return &ResolvedFieldPathCollector{
+		CTEAlias:   cteAlias,
+		keyToAlias: map[string]string{},
+	}
+}
+
+// Entries returns a shallow copy of the collected flag definitions.
+func (c *ResolvedFieldPathCollector) Entries() []ResolvedFieldPathFlag {
+	if c == nil {
+		return nil
+	}
+	out := make([]ResolvedFieldPathFlag, len(c.entries))
+	copy(out, c.entries)
+	return out
+}
+
+// Register adds a new resolved predicate or returns the existing alias if it was already registered.
+func (c *ResolvedFieldPathCollector) Register(resolved []ResolvedFieldPath, predicate exp.Expression) (string, error) {
+	if c == nil {
+		return "", fmt.Errorf("resolved field path collector is nil")
+	}
+	key, err := c.signature(resolved, predicate)
+	if err != nil {
+		return "", err
+	}
+	if alias, ok := c.keyToAlias[key]; ok {
+		return alias, nil
+	}
+
+	c.nextID++
+	alias := fmt.Sprintf("rfp_%d", c.nextID)
+	c.keyToAlias[key] = alias
+	c.entries = append(c.entries, ResolvedFieldPathFlag{
+		Alias:     alias,
+		Resolved: resolved,
+		Predicate: predicate,
+	})
+	return alias, nil
+}
+
+func (c *ResolvedFieldPathCollector) signature(resolved []ResolvedFieldPath, predicate exp.Expression) (string, error) {
+	resolvedJSON, err := json.Marshal(resolved)
+	if err != nil {
+		return "", err
+	}
+	predicateJSON, err := predicateSignature(predicate)
+	if err != nil {
+		return "", err
+	}
+	return string(resolvedJSON) + "|" + predicateJSON, nil
+}
+
+func predicateSignature(expr exp.Expression) (string, error) {
+	d := goqu.Dialect("postgres")
+	ds := d.From(goqu.T("descriptor").As("descriptor")).Select(goqu.V(1)).Where(expr).Prepared(true)
+	sql, args, err := ds.ToSQL()
+	if err != nil {
+		return "", err
+	}
+	payload := struct {
+		SQL  string        `json:"sql"`
+		Args []interface{} `json:"args"`
+	}{
+		SQL:  sql,
+		Args: args,
+	}
+	b, err := json.Marshal(payload)
+	if err != nil {
+		return "", err
+	}
+	return string(b), nil
+}
+
+func (c *ResolvedFieldPathCollector) qualifiedAlias(alias string) string {
+	if c == nil {
+		return alias
+	}
+	if strings.TrimSpace(c.CTEAlias) == "" {
+		return alias
+	}
+	return c.CTEAlias + "." + alias
+}
+
+// ResolvedFieldPathFlagCTE groups multiple flag expressions that share the same join graph.
+type ResolvedFieldPathFlagCTE struct {
+	Alias   string
+	Dataset *goqu.SelectDataset
+	Flags   []ResolvedFieldPathFlag
+}
+
+// BuildResolvedFieldPathFlagCTEs builds one or more CTE datasets for the provided entries.
+// Entries that share the same join graph are grouped into a single CTE with multiple flag columns.
+//
+// TODO: Extend join planning for other query components ($sm, $sme, etc.) with their own tables.
+func BuildResolvedFieldPathFlagCTEs(cteAlias string, entries []ResolvedFieldPathFlag) ([]ResolvedFieldPathFlagCTE, error) {
+	return BuildResolvedFieldPathFlagCTEsWithWhere(cteAlias, entries, nil)
+}
+
+// BuildResolvedFieldPathFlagCTEsWithWhere builds one or more CTE datasets for the provided entries
+// and applies an optional WHERE clause to each CTE (e.g., descriptor_id filters).
+func BuildResolvedFieldPathFlagCTEsWithWhere(cteAlias string, entries []ResolvedFieldPathFlag, where exp.Expression) ([]ResolvedFieldPathFlagCTE, error) {
+	if len(entries) == 0 {
+		return nil, nil
+	}
+	if strings.TrimSpace(cteAlias) == "" {
+		cteAlias = "descriptor_flags"
+	}
+
+	type cteGroup struct {
+		plan    existsJoinPlan
+		entries []ResolvedFieldPathFlag
+	}
+
+	grouped := map[string]*cteGroup{}
+	order := make([]string, 0, len(entries))
+
+	for _, entry := range entries {
+		plan, err := buildJoinPlanForResolved(entry.Resolved)
+		if err != nil {
+			return nil, err
+		}
+		key := joinPlanSignature(plan)
+		group, ok := grouped[key]
+		if !ok {
+			group = &cteGroup{plan: plan}
+			grouped[key] = group
+			order = append(order, key)
+		}
+		group.entries = append(group.entries, entry)
+	}
+
+	ctes := make([]ResolvedFieldPathFlagCTE, 0, len(grouped))
+	for idx, key := range order {
+		group := grouped[key]
+		alias := cteAlias
+		if len(grouped) > 1 {
+			alias = fmt.Sprintf("%s_%d", cteAlias, idx+1)
+		}
+		ds, err := buildFlagCTEDataset(group.plan, group.entries, where)
+		if err != nil {
+			return nil, err
+		}
+		ctes = append(ctes, ResolvedFieldPathFlagCTE{
+			Alias:   alias,
+			Dataset: ds,
+			Flags:   group.entries,
+		})
+	}
+
+	return ctes, nil
+}
+
+// BuildResolvedFieldPathFlagCTEUnionWithWhere builds a single CTE containing all provided
+// flag expressions by using a join plan that covers the union of required aliases.
+// This keeps a single CTE alias that matches EvaluateToExpression's flag references.
+func BuildResolvedFieldPathFlagCTEUnionWithWhere(cteAlias string, entries []ResolvedFieldPathFlag, where exp.Expression) (*ResolvedFieldPathFlagCTE, error) {
+	if len(entries) == 0 {
+		return nil, nil
+	}
+	if strings.TrimSpace(cteAlias) == "" {
+		cteAlias = "descriptor_flags"
+	}
+
+	var merged []ResolvedFieldPath
+	for _, entry := range entries {
+		merged = append(merged, entry.Resolved...)
+	}
+
+	plan, err := buildJoinPlanForResolved(merged)
+	if err != nil {
+		return nil, err
+	}
+	ds, err := buildFlagCTEDataset(plan, entries, where)
+	if err != nil {
+		return nil, err
+	}
+	return &ResolvedFieldPathFlagCTE{
+		Alias:   cteAlias,
+		Dataset: ds,
+		Flags:   entries,
+	}, nil
+}
+
+func joinPlanSignature(plan existsJoinPlan) string {
+	aliases := make([]string, 0, len(plan.ExpandedAliases))
+	aliases = append(aliases, plan.ExpandedAliases...)
+	sort.Strings(aliases)
+	return plan.BaseAlias + "|" + strings.Join(aliases, ",")
+}
+
+func buildFlagCTEDataset(plan existsJoinPlan, entries []ResolvedFieldPathFlag, where exp.Expression) (*goqu.SelectDataset, error) {
+	if len(entries) == 0 {
+		return nil, fmt.Errorf("cannot build flag CTE dataset with no entries")
+	}
+
+	d := goqu.Dialect("postgres")
+	ds := d.From(goqu.T(plan.BaseTable).As(plan.BaseAlias))
+
+	applied := map[string]struct{}{plan.BaseAlias: {}}
+	visiting := map[string]struct{}{}
+
+	var ensure func(alias string) error
+	ensure = func(alias string) error {
+		if alias == "" {
+			return nil
+		}
+		if alias == plan.BaseAlias {
+			return nil
+		}
+		if _, ok := applied[alias]; ok {
+			return nil
+		}
+		if _, ok := visiting[alias]; ok {
+			return fmt.Errorf("cyclic CTE join dependency for alias %q", alias)
+		}
+		rule, ok := plan.Rules[alias]
+		if !ok {
+			return fmt.Errorf("no CTE join rule registered for alias %q", alias)
+		}
+		visiting[alias] = struct{}{}
+		for _, dep := range rule.Deps {
+			if err := ensure(dep); err != nil {
+				return err
+			}
+		}
+		delete(visiting, alias)
+		ds = rule.Apply(ds)
+		applied[alias] = struct{}{}
+		return nil
+	}
+
+	for _, alias := range plan.ExpandedAliases {
+		if err := ensure(alias); err != nil {
+			return nil, err
+		}
+	}
+
+	descriptorExpr, err := descriptorIDForBaseAlias(plan.BaseAlias)
+	if err != nil {
+		return nil, err
+	}
+
+	selects := []interface{}{descriptorExpr.As("descriptor_id")}
+	for _, entry := range entries {
+		flagExpr := andBindingsForResolvedFieldPaths(entry.Resolved, entry.Predicate)
+		selects = append(selects, goqu.L("COALESCE(BOOL_OR(?), false)", flagExpr).As(entry.Alias))
+	}
+
+	ds = ds.Select(selects...).GroupBy(descriptorExpr)
+	if where != nil {
+		ds = ds.Where(where)
+	}
+	return ds, nil
+}
+
+func descriptorIDForBaseAlias(base string) (exp.IdentifierExpression, error) {
+	switch base {
+	case "aas_descriptor":
+		return goqu.I("aas_descriptor.descriptor_id"), nil
+	case "specific_asset_id":
+		return goqu.I("specific_asset_id.descriptor_id"), nil
+	case "aas_descriptor_endpoint":
+		return goqu.I("aas_descriptor_endpoint.descriptor_id"), nil
+	case "submodel_descriptor":
+		return goqu.I("submodel_descriptor.aas_descriptor_id"), nil
+	default:
+		return nil, fmt.Errorf("unsupported base alias for descriptor id selection: %q", base)
+	}
 }
 
 // extractFieldOperandAndCast walks through cast wrappers to find the underlying field operand
@@ -113,6 +416,25 @@ func toSQLResolvedFieldOrValue(operand *Value, explicitCastType string, position
 func anyResolvedHasBindings(resolved []ResolvedFieldPath) bool {
 	for _, r := range resolved {
 		if len(r.ArrayBindings) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+func resolvedNeedsCTE(resolved []ResolvedFieldPath) bool {
+	if anyResolvedHasBindings(resolved) {
+		return true
+	}
+	for _, r := range resolved {
+		if strings.TrimSpace(r.Column) == "" {
+			continue
+		}
+		alias, ok := leadingAlias(r.Column)
+		if !ok {
+			continue
+		}
+		if alias != "aas_descriptor" {
 			return true
 		}
 	}
@@ -209,11 +531,82 @@ func expandAliasesWithDeps(aliases map[string]struct{}, rules map[string]existsJ
 }
 
 func buildExistsForResolvedFieldPaths(resolved []ResolvedFieldPath, predicate exp.Expression) (exp.Expression, error) {
-	required, err := requiredAliasesFromResolved(resolved)
+	plan, err := buildJoinPlanForResolved(resolved)
 	if err != nil {
 		return nil, err
 	}
 
+	d := goqu.Dialect("postgres")
+	ds := d.From(goqu.T(plan.BaseTable).As(plan.BaseAlias)).Select(goqu.V(1))
+
+	applied := map[string]struct{}{plan.BaseAlias: {}}
+	visiting := map[string]struct{}{}
+
+	var ensure func(alias string) error
+	ensure = func(alias string) error {
+		if alias == "" {
+			return nil
+		}
+		if _, ok := applied[alias]; ok {
+			return nil
+		}
+		if _, ok := visiting[alias]; ok {
+			return fmt.Errorf("cyclic EXISTS join dependency for alias %q", alias)
+		}
+		rule, ok := plan.Rules[alias]
+		if !ok {
+			return fmt.Errorf("no EXISTS join rule registered for alias %q", alias)
+		}
+		visiting[alias] = struct{}{}
+		for _, dep := range rule.Deps {
+			if err := ensure(dep); err != nil {
+				return err
+			}
+		}
+		delete(visiting, alias)
+		ds = rule.Apply(ds)
+		applied[alias] = struct{}{}
+		return nil
+	}
+
+	for alias := range plan.RequiredAliases {
+		if alias == plan.BaseAlias {
+			continue
+		}
+		if err := ensure(alias); err != nil {
+			return nil, err
+		}
+	}
+
+	where := []exp.Expression{predicate}
+	if corr := existsCorrelationForAlias(plan.BaseAlias); corr != nil {
+		where = append(where, corr)
+	}
+
+	// Add all binding constraints.
+	for _, r := range resolved {
+		for _, b := range r.ArrayBindings {
+			// Only apply non-nil binding values.
+			if b.Index.intValue != nil {
+				where = append(where, goqu.I(b.Alias).Eq(*b.Index.intValue))
+			}
+			if b.Index.stringValue != nil {
+				where = append(where, goqu.I(b.Alias).Eq(*b.Index.stringValue))
+			}
+		}
+	}
+
+	ds = ds.Where(goqu.And(where...))
+	return goqu.L("EXISTS (?)", ds), nil
+}
+
+func buildJoinPlanForResolved(resolved []ResolvedFieldPath) (existsJoinPlan, error) {
+	required, err := requiredAliasesFromResolved(resolved)
+	if err != nil {
+		return existsJoinPlan{}, err
+	}
+
+	// TODO: Add join rules for other components (e.g. $sm, $sme) with their own tables.
 	rules := existsJoinRulesForAASDescriptors()
 	expanded := expandAliasesWithDeps(required, rules)
 
@@ -236,75 +629,26 @@ func buildExistsForResolvedFieldPaths(resolved []ResolvedFieldPath, predicate ex
 		}
 	}
 	if base == "" {
-		return nil, fmt.Errorf("cannot build EXISTS: no correlatable base alias found")
+		return existsJoinPlan{}, fmt.Errorf("cannot build join plan: no correlatable base alias found")
 	}
 	baseTable, ok := existsTableForAlias(base)
 	if !ok {
-		return nil, fmt.Errorf("cannot build EXISTS: no table mapping for alias %q", base)
+		return existsJoinPlan{}, fmt.Errorf("cannot build join plan: no table mapping for alias %q", base)
 	}
 
-	d := goqu.Dialect("postgres")
-	ds := d.From(goqu.T(baseTable).As(base)).Select(goqu.V(1))
-
-	applied := map[string]struct{}{base: {}}
-	visiting := map[string]struct{}{}
-
-	var ensure func(alias string) error
-	ensure = func(alias string) error {
-		if alias == "" {
-			return nil
-		}
-		if _, ok := applied[alias]; ok {
-			return nil
-		}
-		if _, ok := visiting[alias]; ok {
-			return fmt.Errorf("cyclic EXISTS join dependency for alias %q", alias)
-		}
-		rule, ok := rules[alias]
-		if !ok {
-			return fmt.Errorf("no EXISTS join rule registered for alias %q", alias)
-		}
-		visiting[alias] = struct{}{}
-		for _, dep := range rule.Deps {
-			if err := ensure(dep); err != nil {
-				return err
-			}
-		}
-		delete(visiting, alias)
-		ds = rule.Apply(ds)
-		applied[alias] = struct{}{}
-		return nil
+	expandedAliases := make([]string, 0, len(expanded))
+	for alias := range expanded {
+		expandedAliases = append(expandedAliases, alias)
 	}
+	sort.Strings(expandedAliases)
 
-	for alias := range required {
-		if alias == base {
-			continue
-		}
-		if err := ensure(alias); err != nil {
-			return nil, err
-		}
-	}
-
-	where := []exp.Expression{predicate}
-	if corr := existsCorrelationForAlias(base); corr != nil {
-		where = append(where, corr)
-	}
-
-	// Add all binding constraints.
-	for _, r := range resolved {
-		for _, b := range r.ArrayBindings {
-			// Only apply non-nil binding values.
-			if b.Index.intValue != nil {
-				where = append(where, goqu.I(b.Alias).Eq(*b.Index.intValue))
-			}
-			if b.Index.stringValue != nil {
-				where = append(where, goqu.I(b.Alias).Eq(*b.Index.stringValue))
-			}
-		}
-	}
-
-	ds = ds.Where(goqu.And(where...))
-	return goqu.L("EXISTS (?)", ds), nil
+	return existsJoinPlan{
+		BaseAlias:       base,
+		BaseTable:       baseTable,
+		RequiredAliases: required,
+		ExpandedAliases: expandedAliases,
+		Rules:           rules,
+	}, nil
 }
 
 func andBindingsForResolvedFieldPaths(resolved []ResolvedFieldPath, predicate exp.Expression) exp.Expression {
@@ -423,6 +767,8 @@ func existsJoinRulesForAASDescriptors() map[string]existsJoinRule {
 // This method traverses the logical expression tree and constructs a corresponding SQL
 // WHERE clause expression that can be used with the goqu query builder. It handles all
 // supported comparison operations, logical operators (AND, OR, NOT), and nested expressions.
+// When a collector is provided, comparisons that would otherwise require EXISTS joins are
+// registered as flag predicates and replaced by references to the collector's aliases.
 //
 // The method supports special handling for AAS-specific fields, particularly semantic IDs,
 // where additional constraints (like position = 0) may be added to the generated SQL.
@@ -434,106 +780,111 @@ func existsJoinRulesForAASDescriptors() map[string]existsJoinRule {
 //
 // Returns:
 //   - exp.Expression: A goqu expression that can be used in SQL WHERE clauses
+//   - []ResolvedFieldPath: All resolved field paths discovered while evaluating the expression
 //   - error: An error if the expression is invalid, has no valid operation, or if
 //     evaluation of nested expressions fails
-func (le *LogicalExpression) EvaluateToExpression() (exp.Expression, error) {
+func (le *LogicalExpression) EvaluateToExpression(collector *ResolvedFieldPathCollector) (exp.Expression, []ResolvedFieldPath, error) {
 	// Handle comparison operations
 	if len(le.Eq) > 0 {
-		return le.evaluateComparison(le.Eq, "$eq")
+		return le.evaluateComparison(le.Eq, "$eq", collector)
 	}
 	if len(le.Ne) > 0 {
-		return le.evaluateComparison(le.Ne, "$ne")
+		return le.evaluateComparison(le.Ne, "$ne", collector)
 	}
 	if len(le.Gt) > 0 {
-		return le.evaluateComparison(le.Gt, "$gt")
+		return le.evaluateComparison(le.Gt, "$gt", collector)
 	}
 	if len(le.Ge) > 0 {
-		return le.evaluateComparison(le.Ge, "$ge")
+		return le.evaluateComparison(le.Ge, "$ge", collector)
 	}
 	if len(le.Lt) > 0 {
-		return le.evaluateComparison(le.Lt, "$lt")
+		return le.evaluateComparison(le.Lt, "$lt", collector)
 	}
 	if len(le.Le) > 0 {
-		return le.evaluateComparison(le.Le, "$le")
+		return le.evaluateComparison(le.Le, "$le", collector)
 	}
 
 	// Handle string operations
 	if len(le.Contains) > 0 {
-		return le.evaluateStringOperationSQL(le.Contains, "$contains")
+		return le.evaluateStringOperationSQL(le.Contains, "$contains", collector)
 	}
 	if len(le.StartsWith) > 0 {
-		return le.evaluateStringOperationSQL(le.StartsWith, "$starts-with")
+		return le.evaluateStringOperationSQL(le.StartsWith, "$starts-with", collector)
 	}
 	if len(le.EndsWith) > 0 {
-		return le.evaluateStringOperationSQL(le.EndsWith, "$ends-with")
+		return le.evaluateStringOperationSQL(le.EndsWith, "$ends-with", collector)
 	}
 	if len(le.Regex) > 0 {
-		return le.evaluateStringOperationSQL(le.Regex, "$regex")
+		return le.evaluateStringOperationSQL(le.Regex, "$regex", collector)
 	}
 
 	// Handle logical operations
 	if len(le.And) > 0 {
 		var expressions []exp.Expression
+		var resolved []ResolvedFieldPath
 		for i, nestedExpr := range le.And {
-			expr, err := nestedExpr.EvaluateToExpression()
+			expr, childResolved, err := nestedExpr.EvaluateToExpression(collector)
 			if err != nil {
-				return nil, fmt.Errorf("error evaluating AND condition at index %d: %w", i, err)
+				return nil, nil, fmt.Errorf("error evaluating AND condition at index %d: %w", i, err)
 			}
 			expressions = append(expressions, expr)
+			resolved = append(resolved, childResolved...)
 		}
-		return goqu.And(expressions...), nil
+		return goqu.And(expressions...), resolved, nil
 	}
 
 	if len(le.Or) > 0 {
 		var expressions []exp.Expression
+		var resolved []ResolvedFieldPath
 		for i, nestedExpr := range le.Or {
-			expr, err := nestedExpr.EvaluateToExpression()
+			expr, childResolved, err := nestedExpr.EvaluateToExpression(collector)
 			if err != nil {
-				return nil, fmt.Errorf("error evaluating OR condition at index %d: %w", i, err)
+				return nil, nil, fmt.Errorf("error evaluating OR condition at index %d: %w", i, err)
 			}
 			expressions = append(expressions, expr)
+			resolved = append(resolved, childResolved...)
 		}
-		return goqu.Or(expressions...), nil
+		return goqu.Or(expressions...), resolved, nil
 	}
 
 	if le.Not != nil {
-		expr, err := le.Not.EvaluateToExpression()
+		expr, resolved, err := le.Not.EvaluateToExpression(collector)
 		if err != nil {
-			return nil, fmt.Errorf("error evaluating NOT condition: %w", err)
+			return nil, nil, fmt.Errorf("error evaluating NOT condition: %w", err)
 		}
-		return goqu.L("NOT (?)", expr), nil
+		return goqu.L("NOT (?)", expr), resolved, nil
 	}
 
 	// Handle boolean literal
 	if le.Boolean != nil {
-		return goqu.L("?", *le.Boolean), nil
+		return goqu.L("?", *le.Boolean), nil, nil
 	}
 
-	return nil, fmt.Errorf("logical expression has no valid operation")
+	return nil, nil, fmt.Errorf("logical expression has no valid operation")
 }
 
 // evaluateStringOperationSQL builds SQL expressions for string operators like $contains, $starts-with, $ends-with, and $regex.
-func (le *LogicalExpression) evaluateStringOperationSQL(items []StringValue, operation string) (exp.Expression, error) {
+func (le *LogicalExpression) evaluateStringOperationSQL(items []StringValue, operation string, collector *ResolvedFieldPathCollector) (exp.Expression, []ResolvedFieldPath, error) {
 	if len(items) != 2 {
-		return nil, fmt.Errorf("string operation %s requires exactly 2 operands, got %d", operation, len(items))
+		return nil, nil, fmt.Errorf("string operation %s requires exactly 2 operands, got %d", operation, len(items))
 	}
 
 	leftOperand := stringValueToValue(items[0])
 	rightOperand := stringValueToValue(items[1])
 
-	return HandleStringOperation(&leftOperand, &rightOperand, operation)
+	return HandleStringOperationWithCollector(&leftOperand, &rightOperand, operation, collector)
 }
 
 // evaluateComparison evaluates a comparison operation with the given operands
-func (le *LogicalExpression) evaluateComparison(operands []Value, operation string) (exp.Expression, error) {
+func (le *LogicalExpression) evaluateComparison(operands []Value, operation string, collector *ResolvedFieldPathCollector) (exp.Expression, []ResolvedFieldPath, error) {
 	if len(operands) != 2 {
-		return nil, fmt.Errorf("comparison operation %s requires exactly 2 operands, got %d", operation, len(operands))
+		return nil, nil, fmt.Errorf("comparison operation %s requires exactly 2 operands, got %d", operation, len(operands))
 	}
 
 	leftOperand := &operands[0]
 	rightOperand := &operands[1]
 
-	return HandleComparison(leftOperand, rightOperand, operation)
+	return HandleComparisonWithCollector(leftOperand, rightOperand, operation, collector)
 }
 
 // HandleComparison builds a SQL comparison expression from two Value operands.
@@ -557,6 +908,13 @@ func (le *LogicalExpression) evaluateComparison(operands []Value, operation stri
 //   - exp.Expression: A goqu expression representing the comparison with any necessary constraints
 //   - error: An error if the operands are invalid, types don't match, or the operation is unsupported
 func HandleComparison(leftOperand, rightOperand *Value, operation string) (exp.Expression, error) {
+	expr, _, err := HandleComparisonWithCollector(leftOperand, rightOperand, operation, nil)
+	return expr, err
+}
+
+// HandleComparisonWithCollector builds a SQL comparison expression from two Value operands
+// and optionally registers resolved field paths in the collector.
+func HandleComparisonWithCollector(leftOperand, rightOperand *Value, operation string, collector *ResolvedFieldPathCollector) (exp.Expression, []ResolvedFieldPath, error) {
 	// Normalize shorthand semanticId / descriptor shorthand fields to explicit keys[0].value
 	// (e.g. $aasdesc#specificAssetIds[].externalSubjectId ->
 	//  $aasdesc#specificAssetIds[].externalSubjectId.keys[0].value)
@@ -569,34 +927,35 @@ func HandleComparison(leftOperand, rightOperand *Value, operation string) (exp.E
 	// Field-to-field comparisons are forbidden by the query language.
 	// We can safely assume comparisons have either 0 or 1 field operands.
 	if leftField != nil && rightField != nil {
-		return nil, fmt.Errorf("field-to-field comparisons are not supported")
+		return nil, nil, fmt.Errorf("field-to-field comparisons are not supported")
 	}
 
 	// Fast-path: both are values (no FieldIdentifiers involved).
 	if leftField == nil && rightField == nil {
 		leftSQL, err := toSQLComponent(leftOperand, "left")
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		rightSQL, err := toSQLComponent(rightOperand, "right")
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		// has to be compatible
 		_, err = leftOperand.IsComparableTo(*rightOperand)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
-		return buildComparisonExpression(leftSQL, rightSQL, operation)
+		expr, err := buildComparisonExpression(leftSQL, rightSQL, operation)
+		return expr, nil, err
 	}
 
 	leftSQL, leftResolved, err := toSQLResolvedFieldOrValue(leftOperand, leftCastType, "left")
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	rightSQL, rightResolved, err := toSQLResolvedFieldOrValue(rightOperand, rightCastType, "right")
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	// Cast the field side to the non-field operand's type (unless already explicitly casted).
@@ -614,34 +973,53 @@ func HandleComparison(leftOperand, rightOperand *Value, operation string) (exp.E
 	// has to be compatible
 	_, err = leftOperand.IsComparableTo(*rightOperand)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	comparisonExpr, err := buildComparisonExpression(leftSQL, rightSQL, operation)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	resolved := collectResolvedFieldPaths(leftResolved, rightResolved)
 	// No resolved fields (should not happen due to earlier fast-path), fall back.
 	if len(resolved) == 0 {
-		return comparisonExpr, nil
+		return comparisonExpr, nil, nil
+	}
+
+	if collector != nil && resolvedNeedsCTE(resolved) {
+		alias, err := collector.Register(resolved, comparisonExpr)
+		if err != nil {
+			return nil, nil, err
+		}
+		return goqu.I(collector.qualifiedAlias(alias)), resolved, nil
+	}
+
+	if collector != nil {
+		return comparisonExpr, resolved, nil
 	}
 
 	// If any resolved path has bindings, build a correlated EXISTS with joins + constraints.
 	if existsExpr, err := buildExistsForResolvedFieldPaths(resolved, comparisonExpr); err == nil {
-		return existsExpr, nil
+		return existsExpr, resolved, nil
 	}
 	// Fallback: if we cannot build an EXISTS join graph for the involved aliases,
 	// apply bindings as plain AND constraints (only matters when bindings exist).
 	if anyResolvedHasBindings(resolved) {
-		return andBindingsForResolvedFieldPaths(resolved, comparisonExpr), nil
+		return andBindingsForResolvedFieldPaths(resolved, comparisonExpr), resolved, nil
 	}
-	return comparisonExpr, nil
+	return comparisonExpr, resolved, nil
 }
 
 // HandleStringOperation builds SQL expressions for string-specific operators.
 func HandleStringOperation(leftOperand, rightOperand *Value, operation string) (exp.Expression, error) {
+	expr, _, err := HandleStringOperationWithCollector(leftOperand, rightOperand, operation, nil)
+	return expr, err
+}
+
+// HandleStringOperationWithCollector builds SQL expressions for string-specific operators
+// and optionally registers resolved field paths in the collector.
+func HandleStringOperationWithCollector(leftOperand, rightOperand *Value, operation string, collector *ResolvedFieldPathCollector) (exp.Expression, []ResolvedFieldPath, error) {
 	normalizeSemanticShorthand(leftOperand)
 	normalizeSemanticShorthand(rightOperand)
 
@@ -651,29 +1029,30 @@ func HandleStringOperation(leftOperand, rightOperand *Value, operation string) (
 	// Field-to-field string operations are forbidden by the query language.
 	// We can safely assume string operations have either 0 or 1 field operands.
 	if leftField != nil && rightField != nil {
-		return nil, fmt.Errorf("field-to-field string operations are not supported")
+		return nil, nil, fmt.Errorf("field-to-field string operations are not supported")
 	}
 
 	// Fast-path: no FieldIdentifiers involved.
 	if leftField == nil && rightField == nil {
 		leftSQL, err := toSQLComponent(leftOperand, "left")
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		rightSQL, err := toSQLComponent(rightOperand, "right")
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
-		return buildStringOperationExpression(leftSQL, rightSQL, operation)
+		expr, err := buildStringOperationExpression(leftSQL, rightSQL, operation)
+		return expr, nil, err
 	}
 
 	leftSQL, leftResolved, err := toSQLResolvedFieldOrValue(leftOperand, leftCastType, "left")
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	rightSQL, rightResolved, err := toSQLResolvedFieldOrValue(rightOperand, rightCastType, "right")
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	if leftResolved != nil && rightResolved == nil && leftCastType == "" {
@@ -689,20 +1068,30 @@ func HandleStringOperation(leftOperand, rightOperand *Value, operation string) (
 
 	stringExpr, err := buildStringOperationExpression(leftSQL, rightSQL, operation)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	resolved := collectResolvedFieldPaths(leftResolved, rightResolved)
 	if len(resolved) == 0 {
-		return stringExpr, nil
+		return stringExpr, nil, nil
+	}
+	if collector != nil && resolvedNeedsCTE(resolved) {
+		alias, err := collector.Register(resolved, stringExpr)
+		if err != nil {
+			return nil, nil, err
+		}
+		return goqu.I(collector.qualifiedAlias(alias)), resolved, nil
+	}
+	if collector != nil {
+		return stringExpr, resolved, nil
 	}
 	if existsExpr, err := buildExistsForResolvedFieldPaths(resolved, stringExpr); err == nil {
-		return existsExpr, nil
+		return existsExpr, resolved, nil
 	}
 	if anyResolvedHasBindings(resolved) {
-		return andBindingsForResolvedFieldPaths(resolved, stringExpr), nil
+		return andBindingsForResolvedFieldPaths(resolved, stringExpr), resolved, nil
 	}
-	return stringExpr, nil
+	return stringExpr, resolved, nil
 }
 
 // stringValueToValue normalizes a StringValue into a Value so existing helpers can be reused.
