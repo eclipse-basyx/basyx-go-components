@@ -1,9 +1,9 @@
 [
     {
-       "en-us" : "Updated English value"
+        "de": "Aktualisierter deutscher Wert"
     },
     {
-        "de": "Aktualisierter deutscher Wert"
+        "en-us": "Updated English value"
     },
     {
         "fr": "Valeur française mise à jour"

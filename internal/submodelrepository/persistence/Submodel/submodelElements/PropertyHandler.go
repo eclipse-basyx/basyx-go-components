@@ -243,7 +243,7 @@ func (p PostgreSQLPropertyHandler) Update(submodelID string, idShortOrPath strin
 		err = localTX.Commit()
 		if err != nil {
 			_, _ = fmt.Println(err)
-			return common.NewInternalServerError("Error commiting SQL Transaction. See console for details.")
+			return common.NewInternalServerError("Error committing SQL Transaction. See console for details.")
 		}
 	}
 
