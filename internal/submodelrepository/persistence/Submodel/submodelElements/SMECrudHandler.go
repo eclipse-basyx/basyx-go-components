@@ -448,7 +448,16 @@ func (p *PostgreSQLSMECrudHandler) Update(submodelID string, idShortOrPath strin
 	}
 
 	// Handle qualifiers update - first retrieve old qualifier IDs, then delete them properly
-	rows, err := tx.Query(`SELECT qualifier_id FROM submodel_element_qualifier WHERE sme_id = $1`, existingID)
+	selectQualifiersQuery := dialect.From(goqu.T("submodel_element_qualifier")).
+		Select(goqu.C("qualifier_id")).
+		Where(goqu.C("sme_id").Eq(existingID))
+
+	selectQualifiersSQL, selectQualifiersArgs, err := selectQualifiersQuery.ToSQL()
+	if err != nil {
+		return err
+	}
+
+	rows, err := tx.Query(selectQualifiersSQL, selectQualifiersArgs...)
 	if err != nil {
 		_, _ = fmt.Println(err)
 		return common.NewInternalServerError("Failed to retrieve old qualifiers - see console for details")
@@ -512,7 +521,7 @@ func (p *PostgreSQLSMECrudHandler) Update(submodelID string, idShortOrPath strin
 			_, err = tx.Exec(insertSQL, insertArgs...)
 			if err != nil {
 				_, _ = fmt.Println(err)
-				return common.NewInternalServerError("Failed to create qualifier for Submodel Element with ID '" + fmt.Sprintf("%d", existingID) + "'. See console for details.")
+				return common.NewInternalServerError("Failed to create qualifier for Submodel Element with ID Short'" + idShortOrPath + "'. See console for details.")
 			}
 		}
 	}
