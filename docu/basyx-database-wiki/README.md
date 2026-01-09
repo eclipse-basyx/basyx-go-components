@@ -366,7 +366,6 @@ CREATE EXTENSION pg_trgm;  -- Trigram fuzzy search
 ## Additional Documentation
 
 For deeper dives:
-- [SQL Schema In-Depth](./sql-schema-in-depth.md) - Detailed table structures
 - [Enums & Types](./enums.md) - All enum definitions
 - [Usage Examples](./examples.md) - Real-world query examples
 
