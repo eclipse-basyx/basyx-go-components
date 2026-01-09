@@ -87,14 +87,16 @@ graph TB
 ### 2. The Three Main Entity Types
 
 #### **Submodel** (`submodel` table)
-- Top-level container for structured data
-- Has semantic ID defining its type
+- Top-level container
 - Contains submodel elements
 
 #### **Submodel Element** (`submodel_element` table + type-specific tables)
 - Polymorphic - 13 different types (Property, File, Operation, etc.)
 - Stored hierarchically with ltree paths
 - Type-specific data in child tables (`property_element`, `file_element`, etc.)
+- Uniquely identifiable via submodel_id and idshort_path
+  - idshort_path itself is only unique in the submodel_id scope
+  - In the sql file each submodel element has one PK (id) that is an auto incremented integer.
 
 #### **Descriptor** (`descriptor` + `aas_descriptor`/`submodel_descriptor`)
 - Registry entries pointing to service endpoints
@@ -118,7 +120,7 @@ graph TB
 submodel
 ├── id (VARCHAR 2048) - Unique identifier
 ├── id_short - Short human-readable name
-├── semantic_id → reference - What type of submodel is this?
+├── semantic_id → reference
 ├── description_id → lang_string_text_type_reference
 ├── kind (ENUM) - Instance or Template
 └── [metadata fields]
