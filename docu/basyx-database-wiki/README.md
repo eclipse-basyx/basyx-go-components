@@ -26,7 +26,7 @@ The BaSyx database schema provides persistent storage for:
 
 ```mermaid
 graph TB
-    subgraph REGISTRY["<b>REGISTRY LAYER</b>"]
+    subgraph REGISTRY["<b style='color: black;'>REGISTRY LAYER</b>"]
         AASD["AAS<br/>Descriptor"]
         SMD["Submodel<br/>Descriptor"]
         ROR["Registry of<br/>Registries"]
