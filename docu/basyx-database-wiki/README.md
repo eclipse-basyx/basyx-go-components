@@ -32,14 +32,14 @@ graph TB
         ROR["Registry of<br/>Registries"]
     end
     
-    subgraph REPOSITORY["<b>REPOSITORY LAYER</b>"]
+    subgraph REPOSITORY["<b style='color: black'>REPOSITORY LAYER</b>"]
         AAS["AAS<br/>(future)"]
         SM["Submodel<br/>(primary table)"]
         SME["Submodel Elements<br/>(hierarchical tree)"]
         SM --> SME
     end
     
-    subgraph SHARED["<b>SHARED COMPONENTS</b>"]
+    subgraph SHARED["<b style='color: black'>SHARED COMPONENTS</b>"]
         REF["References<br/>(semantic)"]
         LANG["Lang Strings<br/>(i18n text)"]
         EXT["Extensions<br/>(metadata)"]
