@@ -103,7 +103,7 @@ SELECT
     model_type
 FROM submodel_element
 WHERE submodel_id = 'urn:example:submodel:123'
-  AND idshort_path <@ 'TechnicalData'  -- <@ means "is descendant of"
+  AND idshort_path <@ 'TechnicalData'  -- <@ means "is a descendant of or equal to"
 ORDER BY idshort_path;
 ```
 
