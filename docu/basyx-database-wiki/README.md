@@ -17,8 +17,9 @@ The BaSyx database schema provides persistent storage for:
 2. [Core Components](#core-components)
 3. [Key Tables Explained](#key-tables-explained)
 4. [Data Types & Enums](#data-types--enums)
-5. [Performance Features](#performance-features)
-6. [Quick Reference](#quick-reference)
+5. [Files](#files)
+6. [Performance Features](#performance-features)
+7. [Quick Reference](#quick-reference)
 
 ---
 
@@ -251,6 +252,20 @@ Full enum definitions in [enums.md](./enums.md).
 - **ltree**: PostgreSQL extension for hierarchical paths (`idshort_path`)
 - **pg_trgm**: Trigram extension for fuzzy text search
 - **JSONB**: Used for flexible arrays (e.g., `specific_asset_ids`)
+
+---
+
+## Files
+File-type submodel elements are handled with care for large data.
+They are stored in two parts:
+1. **Metadata** in `file_element` table (contentType, value path)
+2. **Binary Data** is stored in PostgreSQL Large Objects (LOBs) via `file_data` table.
+
+The `file_element.value` field contains the OID reference to the actual binary data stored as a large object.
+
+When retrieving file data, applications should use PostgreSQL's Large Object API to read the binary content efficiently.
+
+If you don't want to store Files in the database, you can also use a File Path as value pointing to an external storage location.
 
 ---
 
