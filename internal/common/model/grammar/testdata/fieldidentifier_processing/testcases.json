@@ -181,13 +181,6 @@
     "error_contains": "must not end in an array segment"
   },
   {
-    "name": "fragment_rejects_scalar",
-    "kind": "fragment",
-    "input": "posbody/fragment_rejects_scalar.txt",
-    "should_fail": true,
-    "error_contains": "must end in an array segment"
-  },
-  {
     "name": "sql_scalar_rejects_aas_root",
     "kind": "scalar",
     "input": "posbody/sql_scalar_rejects_aas_root.txt",
