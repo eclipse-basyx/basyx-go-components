@@ -9,7 +9,7 @@ The BaSyx database schema provides persistent storage for:
 - **Submodels** - Structured data describing asset aspects
 - **Submodel Elements** - The actual data properties, files, operations, etc.
 - **Descriptors** - Registry entries for AAS and Submodels (locations, endpoints)
-- **References** - Semantic identifiers linking to external definitions
+- **References** - e.g. Semantic IDs linking to ConceptDescriptions and other 'Reference' Objects
 
 ## 📋 Table of Contents
 
@@ -41,8 +41,8 @@ graph TB
     
     subgraph SHARED["<b style='color: black'>SHARED COMPONENTS</b>"]
         REF["References<br/>(semantic)"]
-        LANG["Lang Strings<br/>(i18n text)"]
-        EXT["Extensions<br/>(metadata)"]
+        LANG["Lang Strings<br/>"]
+        EXT["Extensions<br/>"]
     end
     
     AASD -.-> AAS
@@ -75,16 +75,7 @@ graph TB
 
 ## Core Components
 
-### 1. Registry vs Repository
-
-| **Registry** (Discovery) | **Repository** (Storage) |
-|--------------------------|--------------------------|
-| Stores **descriptors** (metadata) | Stores **actual data** |
-| Tells you *where* to find things | Stores the *things* themselves |
-| Endpoints, locations | Full AAS/Submodel content |
-| `aas_descriptor`, `submodel_descriptor` | `submodel`, `submodel_element` |
-
-### 2. The Three Main Entity Types
+### The Main Entity Types
 
 #### **Submodel** (`submodel` table)
 - Top-level container
@@ -103,7 +94,7 @@ graph TB
 - Contains URLs, protocols, security info
 - Links descriptors to actual content
 
-### 3. Shared Infrastructure
+### Shared Infrastructure
 
 - **reference**: Semantic identifiers (e.g., "this property means 'temperature'")
 - **lang_string_*_type**: Multi-language text (descriptions, display names)
@@ -182,7 +173,7 @@ reference_key (stores the actual key chain)
 └── value (TEXT) - The actual IRI/identifier
 ```
 
-**Purpose**: Stores semantic identifiers following the AAS Reference structure.
+**Purpose**: Stores References, such as Semantic IDs and other 'Reference' Objects.
 
 **Example**: A reference to a ConceptDescription might have:
 - `reference.type` = 'ModelReference'
