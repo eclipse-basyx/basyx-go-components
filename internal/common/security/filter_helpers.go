@@ -51,18 +51,18 @@ func AddFilterQueryFromContext(
 		return ds, nil
 	}
 
-	filter := p.FilterExpressionFor(fragment)
-
-	if filter == nil {
+	filters := p.FilterExpressionEntriesFor(fragment)
+	if len(filters) == 0 {
 		return ds, nil
 	}
+	for _, filter := range filters {
+		wc, _, err := filter.Expression.EvaluateToExpressionWithNegatedFragments(collector, []grammar.FragmentStringPattern{grammar.FragmentStringPattern(filter.Fragment)})
 
-	wc, _, err := filter.EvaluateToExpression(collector)
-	if err != nil {
-		return nil, err
+		if err != nil {
+			return nil, err
+		}
+		ds = ds.Where(wc)
 	}
-
-	ds = ds.Where(wc)
 
 	return ds, nil
 }
@@ -101,14 +101,27 @@ func GetColumnSelectStatement(ctx context.Context, expressionMappers []Expressio
 	result := []exp.Expression{}
 	for _, expMapper := range expressionMappers {
 		if expMapper.Fragment != nil {
-			filter := p.FilterExpressionFor(*expMapper.Fragment)
-			if filter != nil {
+			filters := p.FilterExpressionEntriesFor(*expMapper.Fragment)
+			if len(filters) != 0 {
 				ok = true
-				wc, _, err := filter.EvaluateToExpression(collector)
-				if err != nil {
-					return nil, err
+
+				wcs := make([]exp.Expression, 0, len(filters))
+				for _, filter := range filters {
+					wc, _, err := filter.Expression.EvaluateToExpressionWithNegatedFragments(
+						collector,
+						[]grammar.FragmentStringPattern{grammar.FragmentStringPattern(filter.Fragment)},
+					)
+					if err != nil {
+						return nil, err
+					}
+					wcs = append(wcs, wc)
 				}
-				result = append(result, goqu.MAX(caseWhenColumn(wc, expMapper.Exp)))
+
+				combined := wcs[0]
+				if len(wcs) > 1 {
+					combined = goqu.And(wcs...)
+				}
+				result = append(result, goqu.MAX(caseWhenColumn(combined, expMapper.Exp)))
 			} else {
 				result = append(result, expMapper.Exp)
 			}

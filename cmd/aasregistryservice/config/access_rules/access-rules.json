@@ -7,50 +7,61 @@
     ],
 
     "DEFOBJECTS": [
-      { "name": "health", "objects": [ { "ROUTE": "/health" } ] },
-      { "name": "all_shell_descriptors", "objects": [ {"DESCRIPTOR": "$aasdesc(\"*\")"}] },
-      { "name": "some_shell_descriptors", "objects": [ {"DESCRIPTOR": "$aasdesc(\"urn:aas:demo:public\")"}, {"DESCRIPTOR": "$aasdesc(\"urn:aas:regex-42\")"}, {"DESCRIPTOR": "$aasdesc(\"urn:aas:regimax-42\")"}, {"DESCRIPTOR": "$aasdesc(\"urn:aas:viewer-asset\")"}] },
-      { "name": "time_allow_desc", "objects": [ { "ROUTE": "/shell-descriptors/dXJuOmFhczp0aW1lLWFsbG93" } ] },
-      { "name": "time_deny_desc", "objects": [ { "ROUTE": "/shell-descriptors/dXJuOmFhczp0aW1lLWRlbnk" } ] },
-      { "name": "dt_field_deny", "objects": [ { "ROUTE": "/shell-descriptors/dXJuOmFhczpkdC1maWVsZC1kZW55" } ] }
+      { "name": "description", "objects": [ { "ROUTE": "/description" } ] },
+      { "name": "all_shell_descriptors", "objects": [ {"DESCRIPTOR": "$aasdesc(\"*\")"}] }
     ],
 
     "DEFACLS": [
       { "name": "read_anonymous", "acl": { "USEATTRIBUTES": "anonym_attr", "RIGHTS": ["READ"], "ACCESS": "ALLOW" } },
-      { "name": "read_role", "acl": { "USEATTRIBUTES": "role_attr", "RIGHTS": ["READ"], "ACCESS": "ALLOW" } },
-      { "name": "read_member", "acl": { "USEATTRIBUTES": "member_attr", "RIGHTS": ["READ"], "ACCESS": "ALLOW" } },
-      { "name": "write_admin", "acl": { "USEATTRIBUTES": "role_attr", "RIGHTS": ["CREATE"], "ACCESS": "ALLOW" } }
+      { "name": "all_admin", "acl": { "USEATTRIBUTES": "role_attr", "RIGHTS": ["ALL"], "ACCESS": "ALLOW" } },
+      { "name": "user", "acl": { "USEATTRIBUTES": "role_attr", "RIGHTS": ["READ"], "ACCESS": "ALLOW" } }
     ],
 
     "DEFFORMULAS": [
       { "name": "always_true", "formula": { "$boolean": true } },
       { "name": "role_is_admin", "formula": { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "admin" } ] } },
-      { "name": "role_starts_with_view", "formula": { "$starts-with": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "view" } ] } },
-      { "name": "id_regex_editor", "formula": { "$and": [
-        { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "editor" } ] },
-        { "$regex": [ { "$field": "$aasdesc#id" }, { "$strVal": "^urn:aas:regex-[0-9]+$" } ] }
-      ] } },
-      { "name": "id_public_suffix", "formula": { "$ends-with": [ { "$strCast": { "$field": "$aasdesc#id" }}, { "$strVal": ":public" } ] } },
-      { "name": "now_after_2000", "formula": { "$gt": [ { "$attribute": { "GLOBAL": "UTCNOW" } }, { "$dateTimeVal": "2000-01-01T00:00:00Z" } ] } },
-      { "name": "now_after_2100", "formula": { "$gt": [ { "$attribute": { "GLOBAL": "UTCNOW" } }, { "$dateTimeVal": "2100-01-01T00:00:00Z" } ] } },
-      { "name": "dt_field_after_cutoff", "formula": { "$gt": [ { "$dateTimeCast": { "$field": "$aasdesc#endpoints[0].protocolinformation.href" } }, { "$dateTimeVal": "2024-12-31T23:59:59Z" } ] } },
-      { "name": "mixed_casts_gate", "formula": { "$and": [
-        { "$ge": [ { "$field": "$aasdesc#specificAssetIds[0].value" }, { "$numVal": 100 } ] },
-        { "$gt": [ { "$field": "$aasdesc#specificAssetIds[1].value" }, { "$timeVal": "08:00:00" } ] },
-        { "$eq": [ { "$numCast": { "$field": "$aasdesc#specificAssetIds[2].value" } }, { "$year": "2025-01-01T00:00:00Z" } ] }
-      ] } }
+      { 
+        "name": "role_is_viewer_written_x", 
+        "formula": { 
+          "$and": 
+          [
+            { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "viewer" } ] },
+            {"$eq": [ {"$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value"}, {"$strVal": "WRITTEN_BY_X"}]}
+          ]
+        }
+      },
+      { 
+        "name": "role_is_viewer_written_y", 
+        "formula": { 
+          "$and": 
+          [
+            { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "viewer" } ] },
+            {"$eq": [ {"$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value"}, {"$strVal": "WRITTEN_BY_Y"}]}
+          ]
+        }
+      }
+       
     ],
 
     "rules": [
-      { "USEACL": "read_anonymous", "USEOBJECTS": ["health"], "USEFORMULA": "always_true" },
-      { "USEACL": "write_admin", "USEOBJECTS": ["all_shell_descriptors"], "USEFORMULA": "role_is_admin" },
-      { "USEACL": "read_role", "USEOBJECTS": ["some_shell_descriptors"], "USEFORMULA": "role_starts_with_view" },
-      { "USEACL": "read_role", "USEOBJECTS": ["some_shell_descriptors"], "USEFORMULA": "id_regex_editor" },
-      { "USEACL": "read_anonymous", "USEOBJECTS": ["some_shell_descriptors"], "USEFORMULA": "id_public_suffix" },
-      { "USEACL": "read_member", "USEOBJECTS": ["time_allow_desc"], "USEFORMULA": "now_after_2000" },
-      { "USEACL": "read_member", "USEOBJECTS": ["time_deny_desc"], "USEFORMULA": "now_after_2100" },
-      { "USEACL": "read_role", "USEOBJECTS": ["all_shell_descriptors"], "USEFORMULA": "dt_field_after_cutoff" },
-      { "USEACL": "read_member", "USEOBJECTS": ["all_shell_descriptors"], "USEFORMULA": "mixed_casts_gate" }
+      { "USEACL": "read_anonymous", "USEOBJECTS": ["description"], "USEFORMULA": "always_true" },
+      { "USEACL": "all_admin", "USEOBJECTS": ["all_shell_descriptors"], "USEFORMULA": "role_is_admin" },
+      { "USEACL": "user", "USEOBJECTS": ["all_shell_descriptors"], "USEFORMULA": "role_is_viewer_written_y",
+        "FILTER": {
+          "FRAGMENT": "$aasdesc#specificAssetIds[2].name",
+          "CONDITION": 
+           {
+            "$eq": [
+              {
+                "$field": "$aasdesc#specificAssetIds[].name"
+              },
+              {
+                "$strVal": "customerPartId"
+              }
+            ]
+          }
+        }
+      }
     ]
   }
 }

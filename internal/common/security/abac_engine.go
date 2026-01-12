@@ -28,6 +28,10 @@ package auth
 
 import (
 	"fmt"
+	"regexp"
+	"sort"
+	"strconv"
+	"strings"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	api "github.com/go-chi/chi/v5"
@@ -85,6 +89,14 @@ type FragmentFilters map[string]grammar.LogicalExpression
 type QueryFilter struct {
 	Formula *grammar.LogicalExpression `json:"Formula,omitempty" yaml:"Formula,omitempty" mapstructure:"Formula,omitempty"`
 	Filters FragmentFilters            `json:"Filters,omitempty" yaml:"Filters,omitempty" mapstructure:"Filters,omitempty"`
+}
+
+// FragmentExpression pairs a concrete fragment key with its logical expression.
+// This is useful for wildcard lookups like "...[]" where multiple indexed
+// fragments may match.
+type FragmentExpression struct {
+	Fragment   string
+	Expression grammar.LogicalExpression
 }
 
 // DecisionCode represents the result of an authorization check.
@@ -261,17 +273,146 @@ func (m *AccessModel) AuthorizeWithFilter(in EvalInput) (bool, DecisionCode, *Qu
 	return true, DecisionAllow, qf
 }
 
-// FilterExpressionFor returns the logical expression associated with the
-// fragment `key` from the QueryFilter's `Filters` map. If the map is nil or
-// no entry exists for `key`, nil is returned.
+// FilterExpressionEntriesFor returns all (fragment, expression) pairs in the
+// QueryFilter's `Filters` map that match `key`.
+//
+// Matching rules:
+//   - If `key` contains no "[]", the lookup is exact.
+//   - If `key` contains one or more "[]", each "[]" is treated as an index-wildcard
+//     that matches only numeric indices at that exact position. The rest of the
+//     fragment path must match exactly.
+//
+// The returned expressions are returned by value (copies of the map values).
+// The result order is stable: increasing numeric index, then lexicographic key.
+func (q *QueryFilter) FilterExpressionEntriesFor(key string) []FragmentExpression {
+	if q == nil || q.Filters == nil {
+		return nil
+	}
+
+	// Non-wildcard: exact match only.
+	if !strings.Contains(key, "[]") {
+		expr, ok := q.Filters[key]
+		if !ok {
+			return nil
+		}
+		return []FragmentExpression{{Fragment: key, Expression: expr}}
+	}
+
+	// Wildcard: include the literal "[]" entry (if present) *and* any indexed variants
+	// that have the exact same path, except for numeric indices replacing "[]".
+	out := make([]FragmentExpression, 0, 1)
+	if expr, ok := q.Filters[key]; ok {
+		out = append(out, FragmentExpression{Fragment: key, Expression: expr})
+	}
+
+	// Build regex that matches the same fragment path but with numeric indices where the key has "[]".
+	// Example: "$aasdesc#specificAssetIds[].name" -> `^\$aasdesc\#specificAssetIds\[(\d+)\]\.name$`
+	var rx strings.Builder
+	// TODO new FilterExpressionEntriesFor wont need a complex regex builder anymore
+	_, _ = rx.WriteString("^")
+	pos := 0
+	for {
+		idx := strings.Index(key[pos:], "[]")
+		if idx < 0 {
+			_, _ = rx.WriteString(regexp.QuoteMeta(key[pos:]))
+			break
+		}
+		_, _ = rx.WriteString(regexp.QuoteMeta(key[pos : pos+idx]))
+		// Append a capturing group for the numeric index.
+		_, _ = rx.WriteString(`\[(\d+)\]`)
+		pos = pos + idx + 2
+	}
+	_, _ = rx.WriteString("$")
+	re := regexp.MustCompile(rx.String())
+
+	type hit struct {
+		indices []int
+		key     string
+		exp     grammar.LogicalExpression
+	}
+	var hits []hit
+	for k, v := range q.Filters {
+		m := re.FindStringSubmatch(k)
+		if m == nil {
+			continue
+		}
+		indices := make([]int, 0, len(m)-1)
+		ok := true
+		for i := 1; i < len(m); i++ {
+			idx, err := strconv.Atoi(m[i])
+			if err != nil {
+				ok = false
+				break
+			}
+			indices = append(indices, idx)
+		}
+		if !ok {
+			continue
+		}
+		hits = append(hits, hit{indices: indices, key: k, exp: v})
+	}
+	if len(hits) == 0 {
+		if len(out) == 0 {
+			return nil
+		}
+		return out
+	}
+
+	sort.Slice(hits, func(i, j int) bool {
+		a := hits[i].indices
+		b := hits[j].indices
+		mini := len(a)
+		if len(b) < mini {
+			mini = len(b)
+		}
+		for x := 0; x < mini; x++ {
+			if a[x] != b[x] {
+				return a[x] < b[x]
+			}
+		}
+		if len(a) != len(b) {
+			return len(a) < len(b)
+		}
+		return hits[i].key < hits[j].key
+	})
+
+	// Keep existing entries (literal [] key) first, then append indexed ones.
+	for _, h := range hits {
+		out = append(out, FragmentExpression{Fragment: h.key, Expression: h.exp})
+	}
+	return out
+}
+
+// FilterExpressionsFor returns all logical expressions in the QueryFilter's
+// `Filters` map that match `key`.
+func (q *QueryFilter) FilterExpressionsFor(key string) []grammar.LogicalExpression {
+	entries := q.FilterExpressionEntriesFor(key)
+	if len(entries) == 0 {
+		return nil
+	}
+	out := make([]grammar.LogicalExpression, 0, len(entries))
+	for _, e := range entries {
+		out = append(out, e.Expression)
+	}
+	return out
+}
+
+// FilterExpressionFor returns a single logical expression for `key`.
+//
+// If `key` is an index-wildcard (ends with "[]") and multiple expressions match,
+// they are combined into a single OR-expression.
 //
 // Note: map values are returned by value, so this method returns the address
 // of a copy of the stored `grammar.LogicalExpression`. Callers should not rely
 // on mutating the returned value to modify the original map entry.
 func (q *QueryFilter) FilterExpressionFor(key string) *grammar.LogicalExpression {
-	frag, ok := q.Filters[key]
-	if !ok {
+	exprs := q.FilterExpressionsFor(key)
+	if len(exprs) == 0 {
 		return nil
 	}
-	return &frag
+	if len(exprs) == 1 {
+		return &exprs[0]
+	}
+	combined := grammar.LogicalExpression{Or: deduplicateLogicalExpressions(exprs)}
+	return &combined
 }

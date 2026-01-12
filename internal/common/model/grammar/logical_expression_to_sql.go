@@ -313,7 +313,11 @@ func (c *ResolvedFieldPathCollector) signature(resolved []ResolvedFieldPath, pre
 
 func predicateSignature(expr exp.Expression) (string, error) {
 	d := goqu.Dialect("postgres")
-	ds := d.From(goqu.T("descriptor").As("descriptor")).Select(goqu.V(1)).Where(expr).Prepared(true)
+	ds := d.From(goqu.T("descriptor").As("descriptor")).Select(goqu.V(1))
+	if expr != nil {
+		ds = ds.Where(expr)
+	}
+	ds = ds.Prepared(true)
 	sql, args, err := ds.ToSQL()
 	if err != nil {
 		return "", err
@@ -883,7 +887,10 @@ func buildJoinPlanForResolvedWithConfig(resolved []ResolvedFieldPath, config Joi
 }
 
 func andBindingsForResolvedFieldPaths(resolved []ResolvedFieldPath, predicate exp.Expression) exp.Expression {
-	where := []exp.Expression{predicate}
+	where := make([]exp.Expression, 0, 1)
+	if predicate != nil {
+		where = append(where, predicate)
+	}
 	for _, r := range resolved {
 		for _, b := range r.ArrayBindings {
 			if b.Index.intValue != nil {
@@ -894,7 +901,20 @@ func andBindingsForResolvedFieldPaths(resolved []ResolvedFieldPath, predicate ex
 			}
 		}
 	}
+	if len(where) == 0 {
+		return goqu.L("1=1")
+	}
 	return goqu.And(where...)
+}
+
+// wrapBindingsAsResolvedPath wraps bare array bindings into a minimal ResolvedFieldPath
+// with an empty column. This is useful for fragment-only resolutions that produce only
+// array index constraints without resolving a concrete SQL column.
+func wrapBindingsAsResolvedPath(bindings []ArrayIndexBinding) ResolvedFieldPath {
+	return ResolvedFieldPath{
+		Column:        "", // Empty: this is bindings-only
+		ArrayBindings: bindings,
+	}
 }
 
 func existsTableForAlias(alias string) (string, bool) {
@@ -1023,6 +1043,51 @@ func existsJoinRulesForAASDescriptors() map[string]existsJoinRule {
 	}
 }
 
+func (le *LogicalExpression) evaluateFragmentToExpression(collector *ResolvedFieldPathCollector, fragment FragmentStringPattern) (exp.Expression, []ResolvedFieldPath, error) {
+	bindings, err := ResolveFragmentFieldToSQL(&fragment)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// Wrap bindings as a minimal ResolvedFieldPath for consistency.
+	// Since fragments may only produce array constraints without a concrete column,
+	// we allow empty Column fields in this context.
+	resolved := []ResolvedFieldPath{wrapBindingsAsResolvedPath(bindings)}
+
+	// Fragments resolve only to array bindings. We translate these into a predicate
+	// without injecting a literal TRUE into the SQL.
+	var fragmentExpr exp.Expression
+	if len(bindings) == 0 {
+		// Wildcard fragment (e.g. endpoints[]) applies to all rows.
+		fragmentExpr = goqu.L("1=1")
+	} else {
+		where := make([]exp.Expression, 0, len(bindings))
+		for _, b := range bindings {
+			if b.Index.intValue != nil {
+				where = append(where, goqu.I(b.Alias).Eq(*b.Index.intValue))
+			}
+			if b.Index.stringValue != nil {
+				where = append(where, goqu.I(b.Alias).Eq(*b.Index.stringValue))
+			}
+		}
+		fragmentExpr = goqu.And(where...)
+	}
+
+	if collector != nil && resolvedNeedsCTE(resolved) {
+		// Important: do NOT include binding constraints in the registered predicate.
+		// The CTE builder (buildFlagCTEDataset) will always apply array bindings from
+		// ResolvedFieldPath via andBindingsForResolvedFieldPaths; registering bindings
+		// here would duplicate them (e.g. position = ? AND position = ?).
+		alias, err := collector.Register(resolved, nil)
+		if err != nil {
+			return nil, nil, err
+		}
+		return goqu.I(collector.qualifiedAlias(alias)), resolved, nil
+	}
+
+	return fragmentExpr, resolved, nil
+}
+
 // EvaluateToExpression converts the logical expression tree into a goqu SQL expression.
 //
 // This method traverses the logical expression tree and constructs a corresponding SQL
@@ -1045,6 +1110,9 @@ func existsJoinRulesForAASDescriptors() map[string]existsJoinRule {
 //   - error: An error if the expression is invalid, has no valid operation, or if
 //     evaluation of nested expressions fails
 func (le *LogicalExpression) EvaluateToExpression(collector *ResolvedFieldPathCollector) (exp.Expression, []ResolvedFieldPath, error) {
+	if le == nil {
+		return nil, nil, fmt.Errorf("logical expression is nil")
+	}
 	// Handle comparison operations
 	if len(le.Eq) > 0 {
 		return le.evaluateComparison(le.Eq, "$eq", collector)
@@ -1122,6 +1190,57 @@ func (le *LogicalExpression) EvaluateToExpression(collector *ResolvedFieldPathCo
 	}
 
 	return nil, nil, fmt.Errorf("logical expression has no valid operation")
+}
+
+// EvaluateToExpressionWithNegatedFragments evaluates the logical expression and then ORs it
+// with an OR-group of NOT(fragmentExpr) expressions.
+//
+// This is primarily useful for fragment-scoped filtering: the main condition should only
+// apply when the current row is part of the targeted fragment; for all other rows the
+// predicate should evaluate to true.
+//
+// Semantics:
+//
+//	combined = mainExpr OR (OR_i NOT(fragmentExpr_i))
+//
+// The returned resolved field paths include both the main expression's resolved paths and
+// those required for the fragment expressions.
+func (le *LogicalExpression) EvaluateToExpressionWithNegatedFragments(
+	collector *ResolvedFieldPathCollector,
+	fragments []FragmentStringPattern,
+) (exp.Expression, []ResolvedFieldPath, error) {
+	if le == nil {
+		return nil, nil, fmt.Errorf("logical expression is nil")
+	}
+
+	mainExpr, resolved, err := le.EvaluateToExpression(collector)
+	if err != nil {
+		return nil, nil, err
+	}
+	if len(fragments) == 0 {
+		return mainExpr, resolved, nil
+	}
+
+	negated := make([]exp.Expression, 0, len(fragments))
+	for i, f := range fragments {
+		fragExpr, fragResolved, err := le.evaluateFragmentToExpression(collector, f)
+		if err != nil {
+			return nil, nil, fmt.Errorf("error evaluating fragment at index %d: %w", i, err)
+		}
+		// If the fragment has no bindings (wildcard like endpoints[]), it evaluates to 1=1.
+		// NOT(1=1) is always false, so adding it to an OR-group is redundant.
+		if !anyResolvedHasBindings(fragResolved) {
+			continue
+		}
+		resolved = append(resolved, fragResolved...)
+		negated = append(negated, goqu.L("NOT (?)", fragExpr))
+	}
+	if len(negated) == 0 {
+		return mainExpr, resolved, nil
+	}
+
+	fragmentGuard := goqu.Or(negated...)
+	return goqu.Or(mainExpr, fragmentGuard), resolved, nil
 }
 
 // evaluateStringOperationSQL builds SQL expressions for string operators like $contains, $starts-with, $ends-with, and $regex.

@@ -2,6 +2,7 @@ package grammar
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -178,6 +179,19 @@ func TestLogicalExpression_EvaluateToExpression_FieldToFieldComparisonForbidden(
 
 	collector := mustCollectorForRoot(t, "$aasdesc", "descriptor_flags")
 	_, _, err := expr.EvaluateToExpression(collector)
+	if err == nil {
+		t.Fatal("expected error for field-to-field comparison, got nil")
+	}
+}
+
+func TestLUL(t *testing.T) {
+	expr := LogicalExpression{
+		Eq: ComparisonItems{field("$aasdesc#endpoints[0]"), strVal("djn")},
+	}
+
+	collector := mustCollectorForRoot(t, "$aasdesc", "descriptor_flags")
+	_, re, err := expr.EvaluateToExpression(collector)
+	_, _ = fmt.Println(re)
 	if err == nil {
 		t.Fatal("expected error for field-to-field comparison, got nil")
 	}

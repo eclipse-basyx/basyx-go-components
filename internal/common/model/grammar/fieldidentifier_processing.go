@@ -216,7 +216,8 @@ func ResolveFragmentFieldToSQL(field *FragmentStringPattern) ([]ArrayIndexBindin
 		return nil, fmt.Errorf("invalid field identifier (empty path): %q", fieldStr)
 	}
 
-	// Fragment identifiers must end in an array segment.
+	// Fragment identifiers must end in an array segment; otherwise they represent a
+	// scalar field and should be handled via ResolveScalarFieldToSQL.
 	if _, ok := tokens[len(tokens)-1].(builder.ArrayToken); !ok {
 		return nil, fmt.Errorf("fragment field identifier must end in an array segment: %q", fieldStr)
 	}
