@@ -130,22 +130,6 @@ func TestLogicalExpression_EvaluateToExpressionWithNegatedFragments_WithCollecto
 		Select(goqu.V(1)).
 		Where(whereExpr)
 
-	entries := collector.Entries()
-	ctes, err := BuildResolvedFieldPathFlagCTEsWithCollector(collector, entries, nil)
-	if err != nil {
-		t.Fatalf("BuildResolvedFieldPathFlagCTEsWithCollector returned error: %v", err)
-	}
-	if len(ctes) == 0 {
-		t.Fatalf("expected at least one CTE")
-	}
-	for _, cte := range ctes {
-		ds = ds.With(cte.Alias, cte.Dataset).
-			LeftJoin(
-				goqu.T(cte.Alias),
-				goqu.On(goqu.I(cte.Alias+".root_id").Eq(goqu.I("descriptor.id"))),
-			)
-	}
-
 	ds = ds.Prepared(true)
 	sqlStr, _, err := ds.ToSQL()
 	_, _ = fmt.Println(sqlStr)
@@ -155,34 +139,19 @@ func TestLogicalExpression_EvaluateToExpressionWithNegatedFragments_WithCollecto
 	if strings.Contains(strings.ToLower(sqlStr), "true") {
 		t.Fatalf("did not expect literal TRUE in SQL, got: %s", sqlStr)
 	}
-	if !strings.Contains(sqlStr, "WITH descriptor_flags_1") {
-		t.Fatalf("expected SQL to include descriptor_flags CTE, got: %s", sqlStr)
-	}
-	if !strings.Contains(sqlStr, "LEFT JOIN \"descriptor_flags_1\"") {
-		t.Fatalf("expected SQL to left-join descriptor_flags CTE, got: %s", sqlStr)
-	}
-	if !strings.Contains(sqlStr, "\"descriptor_flags_1\".") {
-		t.Fatalf("expected SQL to reference descriptor_flags CTE alias, got: %s", sqlStr)
-	}
 	if !strings.Contains(strings.ToUpper(sqlStr), "NOT") {
 		t.Fatalf("expected NOT in SQL, got: %s", sqlStr)
 	}
 	if !strings.Contains(sqlStr, "\"aas_descriptor\".\"id_short\"") {
 		t.Fatalf("expected idShort column in SQL, got: %s", sqlStr)
 	}
-
-	cteSQL, _, err := ctes[0].Dataset.Prepared(true).ToSQL()
-
-	if err != nil {
-		t.Fatalf("CTE ToSQL returned error: %v", err)
+	if strings.Contains(sqlStr, "descriptor_flags") {
+		t.Fatalf("did not expect descriptor_flags CTE usage anymore, got: %s", sqlStr)
 	}
-	if strings.Contains(strings.ToLower(cteSQL), "true") {
-		t.Fatalf("did not expect literal TRUE in CTE SQL, got: %s", cteSQL)
+	if !strings.Contains(sqlStr, "\"aas_descriptor_endpoint\".\"position\"") {
+		t.Fatalf("expected endpoint position binding in SQL, got: %s", sqlStr)
 	}
-	if !strings.Contains(cteSQL, "\"aas_descriptor_endpoint\"") {
-		t.Fatalf("expected CTE SQL to join aas_descriptor_endpoint, got: %s", cteSQL)
-	}
-	if !strings.Contains(cteSQL, "\"aas_descriptor_endpoint\".\"position\"") {
-		t.Fatalf("expected CTE SQL to include position constraint, got: %s", cteSQL)
+	if len(collector.Entries()) != 0 {
+		t.Fatalf("expected collector to stay empty for fragments, got %d entries", len(collector.Entries()))
 	}
 }

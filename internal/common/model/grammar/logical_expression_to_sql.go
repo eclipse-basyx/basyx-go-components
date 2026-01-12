@@ -1044,15 +1044,13 @@ func existsJoinRulesForAASDescriptors() map[string]existsJoinRule {
 }
 
 func (le *LogicalExpression) evaluateFragmentToExpression(collector *ResolvedFieldPathCollector, fragment FragmentStringPattern) (exp.Expression, []ResolvedFieldPath, error) {
+	// NOTE: Fragment expressions are intentionally kept simple.
+	// A fragment resolves only to array index bindings (e.g. "specific_asset_id.position = 0").
+	// We do not register fragments in the ResolvedFieldPathCollector anymore.
 	bindings, err := ResolveFragmentFieldToSQL(&fragment)
 	if err != nil {
 		return nil, nil, err
 	}
-
-	// Wrap bindings as a minimal ResolvedFieldPath for consistency.
-	// Since fragments may only produce array constraints without a concrete column,
-	// we allow empty Column fields in this context.
-	resolved := []ResolvedFieldPath{wrapBindingsAsResolvedPath(bindings)}
 
 	// Fragments resolve only to array bindings. We translate these into a predicate
 	// without injecting a literal TRUE into the SQL.
@@ -1073,19 +1071,9 @@ func (le *LogicalExpression) evaluateFragmentToExpression(collector *ResolvedFie
 		fragmentExpr = goqu.And(where...)
 	}
 
-	if collector != nil && resolvedNeedsCTE(resolved) {
-		// Important: do NOT include binding constraints in the registered predicate.
-		// The CTE builder (buildFlagCTEDataset) will always apply array bindings from
-		// ResolvedFieldPath via andBindingsForResolvedFieldPaths; registering bindings
-		// here would duplicate them (e.g. position = ? AND position = ?).
-		alias, err := collector.Register(resolved, nil)
-		if err != nil {
-			return nil, nil, err
-		}
-		return goqu.I(collector.qualifiedAlias(alias)), resolved, nil
-	}
-
-	return fragmentExpr, resolved, nil
+	// collector intentionally ignored for fragments
+	_ = collector
+	return fragmentExpr, nil, nil
 }
 
 // EvaluateToExpression converts the logical expression tree into a goqu SQL expression.
@@ -1223,16 +1211,20 @@ func (le *LogicalExpression) EvaluateToExpressionWithNegatedFragments(
 
 	negated := make([]exp.Expression, 0, len(fragments))
 	for i, f := range fragments {
-		fragExpr, fragResolved, err := le.evaluateFragmentToExpression(collector, f)
+		// Preserve the optimization: wildcard fragments (no fixed bindings) should not
+		// contribute a redundant OR NOT(1=1) term.
+		bindings, err := ResolveFragmentFieldToSQL(&f)
 		if err != nil {
 			return nil, nil, fmt.Errorf("error evaluating fragment at index %d: %w", i, err)
 		}
-		// If the fragment has no bindings (wildcard like endpoints[]), it evaluates to 1=1.
-		// NOT(1=1) is always false, so adding it to an OR-group is redundant.
-		if !anyResolvedHasBindings(fragResolved) {
+		if len(bindings) == 0 {
 			continue
 		}
-		resolved = append(resolved, fragResolved...)
+
+		fragExpr, _, err := le.evaluateFragmentToExpression(collector, f)
+		if err != nil {
+			return nil, nil, fmt.Errorf("error evaluating fragment at index %d: %w", i, err)
+		}
 		negated = append(negated, goqu.L("NOT (?)", fragExpr))
 	}
 	if len(negated) == 0 {

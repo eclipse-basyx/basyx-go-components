@@ -1,0 +1,59 @@
+{
+  "id": "https://example.org/C",
+    "endpoints": [
+        {
+            "protocolInformation": {
+                "href": "https://idta.basyx-enterprise.net/controller/datasource/unprotected-repository-aas/shells/aHR0cHM6Ly9pZC5pZHRhLXNob3djYXNlLm5ldC9uYW1lc3BhY2UvSW5kdUNvcmVJQzUwMDAvdjE",
+                "endpointProtocol": "https"
+            },
+            "interface": "AAS-3.0"
+        }
+    ],
+    "extensions": [
+        {
+            "name": "help",
+            "valueType": "xs:string",
+            "value": "test"
+        }
+    ],
+  "specificAssetIds": [
+    {
+      "name": "irrelevantPartId",
+      "value": "123",
+      "externalSubjectId": {
+        "type": "ExternalReference",
+        "keys": [
+          {
+            "type": "GlobalReference",
+            "value": "PUBLIC_READABLE"
+          },
+          {
+            "type": "GlobalReference",
+            "value": "WRITTEN_BY_X"
+          },
+          {
+            "type": "GlobalReference",
+            "value": "WRITTEN_BY_Y"
+          }
+        ]
+      }
+    },
+    {
+      "name": "lul",
+      "value": "23749",
+      "externalSubjectId": {
+        "type": "ExternalReference",
+        "keys": [
+          {
+            "type": "GlobalReference",
+            "value": "WRITTEN_BY_X"
+          },
+          {
+            "type": "GlobalReference",
+            "value": "WRITTEN_BY_Y"
+          }
+        ]
+      }
+    }
+  ]
+}
