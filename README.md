@@ -7,18 +7,18 @@
 Welcome to the BaSyx Go project! This guide is designed to help new developers onboard quickly, understand the architecture, and contribute effectively.
 
 ## Table of Contents
-1. [Project Overview](#project-overview)
-2. [Architecture Overview](#architecture-overview)
-3. [Setup & Installation](#setup--installation)
-4. [Environment Variables & Configuration](#environment-variables--configuration)
-5. [Code Style & Conventions](#code-style--conventions)
-6. [Module Structure](#module-structure)
-7. [Common Workflows](#common-workflows)
-8. [API Usage](#api-usage)
-9. [Contribution Guidelines](#contribution-guidelines)
-10. [Repository Automation](#repository-automation)
-11. [Troubleshooting & Error Reference](#troubleshooting--error-reference)
-12. [Glossary of Terms & Abbreviations](#glossary-of-terms--abbreviations)
+1. [Project Overview](#1-project-overview)
+2. [Architecture Overview](#2-architecture-overview)
+3. [Setup & Installation](#3-setup--installation)
+4. [Environment Variables & Configuration](#4-environment-variables--configuration)
+5. [Code Style & Conventions](#5-code-style--conventions)
+6. [Module Structure](#6-module-structure)
+7. [Common Workflows](#7-common-workflows)
+8. [API Usage](#8-api-usage)
+9. [Contribution Guidelines](#9-contribution-guidelines)
+10. [Repository Automation](#10-repository-automation)
+11. [Troubleshooting & Error Reference](#11-troubleshooting--error-reference)
+12. [Glossary of Terms & Abbreviations](#12-glossary-of-terms--abbreviations)
 
 ---
 
