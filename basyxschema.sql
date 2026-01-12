@@ -413,11 +413,11 @@ CREATE TABLE IF NOT EXISTS operation_variable (
 );
 CREATE TABLE IF NOT EXISTS basic_event_element (
   id                BIGINT PRIMARY KEY REFERENCES submodel_element(id) ON DELETE CASCADE,
-  observed_ref      BIGINT REFERENCES reference(id),
+  observed          JSONB,
   direction         direction NOT NULL,
   state             state_of_event NOT NULL,
   message_topic     TEXT,
-  message_broker_ref BIGINT REFERENCES reference(id),
+  message_broker    JSONB,
   last_update       TIMESTAMPTZ,
   min_interval      INTERVAL,
   max_interval      INTERVAL

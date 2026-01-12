@@ -54,6 +54,11 @@ func (r ReferenceElementValue) MarshalJSON() ([]byte, error) {
 	return r.MarshalValueOnly()
 }
 
+// GetModelType returns the model type name for ReferenceElement
+func (r ReferenceElementValue) GetModelType() string {
+	return "ReferenceElement"
+}
+
 // AssertReferenceElementValueRequired checks if the required fields are not zero-ed
 func AssertReferenceElementValueRequired(obj ReferenceElementValue) error {
 	for _, el := range obj.Keys {

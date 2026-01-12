@@ -32,6 +32,7 @@ package submodelelements
 import (
 	"database/sql"
 
+	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	_ "github.com/lib/pq" // PostgreSQL Treiber
@@ -149,8 +150,84 @@ func (p PostgreSQLBlobHandler) CreateNested(tx *sql.Tx, submodelID string, paren
 //
 // Returns:
 //   - error: Error if update fails
-func (p PostgreSQLBlobHandler) Update(idShortOrPath string, submodelElement gen.SubmodelElement) error {
-	return p.decorated.Update(idShortOrPath, submodelElement)
+func (p PostgreSQLBlobHandler) Update(submodelID string, idShortOrPath string, submodelElement gen.SubmodelElement, tx *sql.Tx) error {
+	return p.decorated.Update(submodelID, idShortOrPath, submodelElement, tx)
+}
+
+// UpdateValueOnly updates only the value of an existing Blob submodel element identified by its idShort or path.
+// It updates the content type and binary value in the database.
+//
+// Parameters:
+//   - submodelID: The ID of the parent submodel
+//   - idShortOrPath: The idShort or path identifying the element to update
+//   - valueOnly: The new value to set (must be of type gen.BlobValue)
+//
+// Returns:
+//   - error: An error if the update operation fails or if the valueOnly type is incorrect
+func (p PostgreSQLBlobHandler) UpdateValueOnly(submodelID string, idShortOrPath string, valueOnly gen.SubmodelElementValue) error {
+	blobValueOnly, ok := valueOnly.(gen.BlobValue)
+	if !ok {
+		var fileValueOnly gen.FileValue
+		var isMistakenAsFileValue bool
+		if fileValueOnly, isMistakenAsFileValue = valueOnly.(gen.FileValue); !isMistakenAsFileValue {
+			return common.NewErrBadRequest("valueOnly is not of type BlobValue")
+		}
+		blobValueOnly = gen.BlobValue(fileValueOnly)
+	}
+
+	// Check if blob value is larger than 1GB
+	if len(blobValueOnly.Value) > 1<<30 {
+		return common.NewErrBadRequest("blob value exceeds maximum size of 1GB - for files larger than 1GB, you must use File submodel element instead - Postgres Limitation")
+	}
+
+	// Start transaction
+	tx, err := p.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err != nil {
+			_ = tx.Rollback()
+		}
+	}()
+
+	// Update only the blob-specific fields in the database
+	dialect := goqu.Dialect("postgres")
+
+	var elementID int
+	query, args, err := dialect.From("submodel_element").
+		InnerJoin(
+			goqu.T("blob_element"),
+			goqu.On(goqu.I("submodel_element.id").Eq(goqu.I("blob_element.id"))),
+		).
+		Select("submodel_element.id").
+		Where(
+			goqu.C("idshort_path").Eq(idShortOrPath),
+			goqu.C("submodel_id").Eq(submodelID),
+		).
+		ToSQL()
+	if err != nil {
+		return err
+	}
+	err = tx.QueryRow(query, args...).Scan(&elementID)
+	if err != nil {
+		return err
+	}
+
+	updateQuery, updateArgs, err := dialect.Update("blob_element").
+		Set(goqu.Record{"content_type": blobValueOnly.ContentType, "value": []byte(blobValueOnly.Value)}).
+		Where(goqu.C("id").Eq(elementID)).
+		ToSQL()
+	if err != nil {
+		return err
+	}
+	_, err = tx.Exec(updateQuery, updateArgs...)
+	if err != nil {
+		return err
+	}
+
+	err = tx.Commit()
+	return err
 }
 
 // Delete removes a Blob element identified by its idShort or path from the database.

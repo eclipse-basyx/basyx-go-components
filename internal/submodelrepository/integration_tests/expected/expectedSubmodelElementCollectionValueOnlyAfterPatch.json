@@ -1,0 +1,141 @@
+{
+    "ExampleAnnotatedRelationshipElement": {
+        "annotations": {
+            "ExampleProperty": "some example annotation_UPDATED"
+        },
+        "first": {
+            "keys": [
+                {
+                    "type": "Submodel",
+                    "value": "https://acplt.org/Test_Submodel_Missing_UPDATED"
+                },
+                {
+                    "type": "SubmodelElementList",
+                    "value": "ExampleSubmodelElementListOrdered_UPDATED"
+                },
+                {
+                    "type": "Property",
+                    "value": "ExampleProperty_UPDATED"
+                }
+            ],
+            "type": "ModelReference"
+        },
+        "second": {
+            "keys": [
+                {
+                    "type": "Submodel",
+                    "value": "https://acplt.org/Test_Submodel_Missing_UPDATED"
+                },
+                {
+                    "type": "SubmodelElementList",
+                    "value": "ExampleSubmodelElementListOrdered_UPDATED"
+                },
+                {
+                    "type": "MultiLanguageProperty",
+                    "value": "ExampleMultiLanguageProperty_UPDATED"
+                }
+            ],
+            "type": "ModelReference"
+        }
+    },
+    "ExampleBasicEvent": {
+        "observed": {
+            "keys": [
+                {
+                    "type": "Submodel",
+                    "value": "https://acplt.org/Test_Submodel_Missing_UPDATED"
+                },
+                {
+                    "type": "SubmodelElementList",
+                    "value": "ExampleSubmodelElementListOrdered_UPDATED"
+                },
+                {
+                    "type": "Property",
+                    "value": "ExampleProperty_UPDATED"
+                }
+            ],
+            "type": "ExternalReference"
+        }
+    },
+    "ExampleRelationshipElement": {
+        "first": {
+            "keys": [
+                {
+                    "type": "Submodel",
+                    "value": "https://acplt.org/Test_Submodel_Missing_UPDATED"
+                },
+                {
+                    "type": "SubmodelElementList",
+                    "value": "ExampleSubmodelElementListOrdered_UPDATED"
+                },
+                {
+                    "type": "Property",
+                    "value": "ExampleProperty_UPDATED"
+                }
+            ],
+            "type": "ModelReference"
+        },
+        "second": {
+            "keys": [
+                {
+                    "type": "Submodel",
+                    "value": "https://acplt.org/Test_Submodel_Missing_UPDATED"
+                },
+                {
+                    "type": "SubmodelElementList",
+                    "value": "ExampleSubmodelElementListOrdered_UPDATED"
+                },
+                {
+                    "type": "MultiLanguageProperty",
+                    "value": "ExampleMultiLanguageProperty_UPDATED"
+                }
+            ],
+            "type": "ModelReference"
+        }
+    },
+    "ExampleSubmodelElementCollection": {
+        "ExampleBlob": {
+            "contentType": "application/json",
+            "value": "hallo"
+        },
+        "ExampleFile": {
+            "contentType": "application/pdf",
+            "value": "file:///TestFile.pdf_UPDATED"
+        },
+        "ExampleReferenceElement": {
+            "keys": [
+                {
+                    "type": "Submodel",
+                    "value": "https://acplt.org/Test_Submodel_Missing_UPDATED"
+                },
+                {
+                    "type": "SubmodelElementCollection",
+                    "value": "ExampleSubmodelElementCollection_UPDATED"
+                },
+                {
+                    "type": "File",
+                    "value": "ExampleFile_UPDATED"
+                }
+            ],
+            "type": "ModelReference"
+        }
+    },
+    "ExampleSubmodelElementListOrdered": [
+        "exampleValue",
+        [
+            {
+                "de": "Aktualisierter deutscher Wert_UPDATED"
+            },
+            {
+                "en-us": "Updated English value_UPDATED"
+            },
+            {
+                "fr": "Valeur française mise à jour_UPDATED"
+            }
+        ],
+        {
+            "max": "101",
+            "min": "1"
+        }
+    ]
+}

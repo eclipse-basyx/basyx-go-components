@@ -1,0 +1,80 @@
+{
+  "ok": true,
+  "queryFilter": {
+    "Filters": {
+      "$aasdesc#idShort": {
+        "$or": [
+          {
+            "$and": [
+              {
+                "$eq": [
+                  {
+                    "$strCast": {
+                      "$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value"
+                    }
+                  },
+                  {
+                    "$strVal": "WRITTEN_BY_X"
+                  }
+                ]
+              },
+              {
+                "$eq": [
+                  {
+                    "$strCast": {
+                      "$field": "$aasdesc#endpoints[].protocolinformation.href"
+                    }
+                  },
+                  {
+                    "$strVal": "hrefA"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "$eq": [
+              {
+                "$strCast": {
+                  "$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value"
+                }
+              },
+              {
+                "$strVal": "WRITTEN_BY_Y"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "Formula": {
+      "$or": [
+        {
+          "$eq": [
+            {
+              "$strCast": {
+                "$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value"
+              }
+            },
+            {
+              "$strVal": "WRITTEN_BY_X"
+            }
+          ]
+        },
+        {
+          "$eq": [
+            {
+              "$strCast": {
+                "$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value"
+              }
+            },
+            {
+              "$strVal": "WRITTEN_BY_Y"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "reason": "ALLOW"
+}

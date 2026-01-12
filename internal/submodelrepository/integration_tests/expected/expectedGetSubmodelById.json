@@ -483,12 +483,12 @@
               },
               "value": [
                 {
-                  "language": "en-us",
-                  "text": "Example value of a MultiLanguageProperty element"
-                },
-                {
                   "language": "de",
                   "text": "Beispielswert für ein MultiLanguageProperty-Element"
+                },
+                {
+                  "language": "en-us",
+                  "text": "Example value of a MultiLanguageProperty element"
                 }
               ]
             },
@@ -569,7 +569,7 @@
                 ],
                 "type": "ExternalReference"
               },
-              "value": "\\x415149444241553d"
+              "value": "AQIDBAU="
             },
             {
               "category": "PARAMETER",

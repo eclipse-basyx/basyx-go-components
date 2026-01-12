@@ -28,6 +28,20 @@
         "expectedStatus": 200
     },
     {
+        "context": "PUT - Update Top Level Property",
+        "method": "PUT",
+        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/myTopLevelProperty",
+        "data": "postBody/putTopLevelProperty.json",
+        "expectedStatus": 204
+    },
+    {
+        "context": "GET - Verify Updated Top Level Property",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/myTopLevelProperty",
+        "shouldMatch": "postBody/putTopLevelProperty.json",
+        "expectedStatus": 200
+    },
+    {
         "context": "Delete item in nested structure",
         "method": "POST",
         "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements",
@@ -341,6 +355,202 @@
         "method": "GET",
         "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQUhlYXZ5U3VibW9kZWw/submodel-elements/ProductSerialNumber/$value",
         "shouldMatch": "expected/expectedProductSerialNumberValueOnly.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "PATCH Property ValueOnly - Update ProductModelName",
+        "method": "PATCH",
+        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQUhlYXZ5U3VibW9kZWw/submodel-elements/ProductModelName/$value",
+        "data": "postBody/patchPropertyValueOnly.json",
+        "expectedStatus": 204
+    },
+    {
+        "context": "PATCH Property ValueOnly - Verify ProductModelName Update",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQUhlYXZ5U3VibW9kZWw/submodel-elements/ProductModelName/$value",
+        "shouldMatch": "expected/expectedPropertyValueOnlyAfterPatch.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "PATCH MultiLanguageProperty ValueOnly - Update ExampleMultiLanguageProperty",
+        "method": "PATCH",
+        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/ExampleSubmodelElementCollection.ExampleSubmodelElementListOrdered[1]/$value",
+        "data": "postBody/patchMultiLanguagePropertyValueOnly.json",
+        "expectedStatus": 204
+    },
+    {
+        "context": "PATCH MultiLanguageProperty ValueOnly - Verify ExampleMultiLanguageProperty Update",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/ExampleSubmodelElementCollection.ExampleSubmodelElementListOrdered[1]/$value",
+        "shouldMatch": "expected/expectedMultiLanguagePropertyValueOnlyAfterPatch.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "PATCH Range ValueOnly - Update DemoRange",
+        "method": "PATCH",
+        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlSYW5nZVN1Ym1vZGVs/submodel-elements/DemoRange/$value",
+        "data": "postBody/patchRangeValueOnly.json",
+        "expectedStatus": 204
+    },
+    {
+        "context": "PATCH Range ValueOnly - Verify DemoRange Update",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlSYW5nZVN1Ym1vZGVs/submodel-elements/DemoRange/$value",
+        "shouldMatch": "expected/expectedRangeValueOnlyAfterPatch.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "PATCH ReferenceElement ValueOnly - Update DemoOperation",
+        "method": "PATCH",
+        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlSZWZlcmVuY2VFbGVtZW50U3VibW9kZWw/submodel-elements/DemoOperation/$value",
+        "data": "postBody/patchReferenceElementValueOnly.json",
+        "expectedStatus": 204
+    },
+    {
+        "context": "PATCH ReferenceElement ValueOnly - Verify DemoOperation Update",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlSZWZlcmVuY2VFbGVtZW50U3VibW9kZWw/submodel-elements/DemoOperation/$value",
+        "shouldMatch": "expected/expectedReferenceElementValueOnlyAfterPatch.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "PATCH File ValueOnly - Update DemoFile",
+        "method": "PATCH",
+        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9Pbmx5RmlsZVN1Ym1vZGVsX1Rlc3Q/submodel-elements/DemoFile/$value",
+        "data": "postBody/patchFileValueOnly.json",
+        "expectedStatus": 204
+    },
+    {
+        "context": "PATCH File ValueOnly - Verify DemoFile Update",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9Pbmx5RmlsZVN1Ym1vZGVsX1Rlc3Q/submodel-elements/DemoFile/$value",
+        "shouldMatch": "expected/expectedFileValueOnlyAfterPatch.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "PATCH Blob ValueOnly - Update ExampleBlob",
+        "method": "PATCH",
+        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/ExampleSubmodelElementCollection.ExampleSubmodelElementCollection.ExampleBlob/$value",
+        "data": "postBody/patchBlobValueOnly.json",
+        "expectedStatus": 204
+    },
+    {
+        "context": "PATCH Blob ValueOnly - Verify ExampleBlob Update",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/ExampleSubmodelElementCollection.ExampleSubmodelElementCollection.ExampleBlob/$value",
+        "shouldMatch": "expected/expectedBlobValueOnlyAfterPatch.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "PATCH RelationshipElement ValueOnly - Update DemoRelationshipElement",
+        "method": "PATCH",
+        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlSZWxhdGlvbnNoaXBFbGVtZW50U3VibW9kZWw/submodel-elements/DemoRelationshipElement/$value",
+        "data": "postBody/patchRelationshipElementValueOnly.json",
+        "expectedStatus": 204
+    },
+    {
+        "context": "PATCH RelationshipElement ValueOnly - Verify DemoRelationshipElement Update",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlSZWxhdGlvbnNoaXBFbGVtZW50U3VibW9kZWw/submodel-elements/DemoRelationshipElement/$value",
+        "shouldMatch": "expected/expectedRelationshipElementValueOnlyAfterPatch.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "PATCH AnnotatedRelationshipElement ValueOnly - Update DemoAnnotatedRelationshipElement",
+        "method": "PATCH",
+        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlBbm5vdGF0ZWRSZWxhdGlvbnNoaXBFbGVtZW50U3VibW9kZWw/submodel-elements/DemoAnnotatedRelationshipElement/$value",
+        "data": "postBody/patchAnnotatedRelationshipElementValueOnly.json",
+        "expectedStatus": 204
+    },
+    {
+        "context": "PATCH AnnotatedRelationshipElement ValueOnly - Verify DemoAnnotatedRelationshipElement Update",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlBbm5vdGF0ZWRSZWxhdGlvbnNoaXBFbGVtZW50U3VibW9kZWw/submodel-elements/DemoAnnotatedRelationshipElement/$value",
+        "shouldMatch": "expected/expectedAnnotatedRelationshipElementValueOnlyAfterPatch.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "PATCH SubmodelElementCollection ValueOnly - Update ExampleSubmodelElementCollection",
+        "method": "PATCH",
+        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/ExampleSubmodelElementCollection/$value",
+        "data": "postBody/patchSubmodelElementCollectionValueOnly.json",
+        "expectedStatus": 204
+    },
+    {
+        "context": "PATCH SubmodelElementCollection ValueOnly - Verify ExampleSubmodelElementCollection Update",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/ExampleSubmodelElementCollection/$value",
+        "shouldMatch": "expected/expectedSubmodelElementCollectionValueOnlyAfterPatch.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "PATCH SubmodelElementList ValueOnly - Update ExampleSubmodelElementListOrdered",
+        "method": "PATCH",
+        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/ExampleSubmodelElementCollection.ExampleSubmodelElementListOrdered/$value",
+        "data": "postBody/patchSubmodelElementListValueOnly.json",
+        "expectedStatus": 204
+    },
+    {
+        "context": "PATCH SubmodelElementList ValueOnly - Verify ExampleSubmodelElementListOrdered Update",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/ExampleSubmodelElementCollection.ExampleSubmodelElementListOrdered/$value",
+        "shouldMatch": "expected/expectedSubmodelElementListValueOnlyAfterPatch.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "PATCH Submodel ValueOnly - Non Existing Submodel",
+        "method": "PATCH",
+        "endpoint": "http://localhost:6004/submodels/SmFubmlrU2F5c1RoaXNTdWJtb2RlbERvZXNudEV4aXN0c1NvTnVoVWhoaA/$value",
+        "data": "postBody/patchSubmodelValueOnly.json",
+        "expectedStatus": 404
+    },
+    {
+        "context": "PATCH Submodel ValueOnly - Existing Submodel",
+        "method": "PATCH",
+        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/$value",
+        "data": "postBody/patchSubmodelValueOnly.json",
+        "expectedStatus": 204
+    },
+    {
+        "context": "PATCH Submodel ValueOnly - Verify Patch Submodel",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/$value",
+        "shouldMatch": "postBody/patchSubmodelValueOnly.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "PATCH Submodel ValueOnly - Existing Submodel Non-Existent SME",
+        "method": "PATCH",
+        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/$value",
+        "data": "postBody/patchSubmodelValueOnlyNonExistingSME.json",
+        "expectedStatus": 404
+    },
+        {
+        "context": "PUT Submodel - Update existing Submodel",
+        "method": "PUT",
+        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw",
+        "data": "postBody/putSubmodelUpdate.json",
+        "expectedStatus": 204
+    },
+    {
+        "context": "PUT Submodel - Verify updated Submodel",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw",
+        "shouldMatch": "expected/expectedSubmodelAfterPutUpdate.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "PUT Submodel - Create Submodel",
+        "method": "PUT",
+        "endpoint": "http://localhost:6004/submodels/QmFTeXg",
+        "data": "postBody/putSubmodelCreate.json",
+        "expectedStatus": 201
+    },
+    {
+        "context": "PUT Submodel - Verify created Submodel",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/QmFTeXg",
+        "shouldMatch": "expected/expectedSubmodelAfterPutCreate.json",
         "expectedStatus": 200
     }
 ]

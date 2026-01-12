@@ -31,6 +31,7 @@ import (
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	persistenceutils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 )
 
@@ -139,8 +140,30 @@ func (p PostgreSQLSubmodelElementListHandler) CreateNested(tx *sql.Tx, submodelI
 //
 // Returns:
 //   - error: Error if the update operation fails
-func (p PostgreSQLSubmodelElementListHandler) Update(idShortOrPath string, submodelElement gen.SubmodelElement) error {
-	return p.decorated.Update(idShortOrPath, submodelElement)
+func (p PostgreSQLSubmodelElementListHandler) Update(submodelID string, idShortOrPath string, submodelElement gen.SubmodelElement, tx *sql.Tx) error {
+	return p.decorated.Update(submodelID, idShortOrPath, submodelElement, tx)
+}
+
+// UpdateValueOnly updates only the value of an existing SubmodelElementList submodel element identified by its idShort or path.
+// It processes the new value and updates nested elements accordingly.
+//
+// Parameters:
+//   - submodelID: The ID of the parent submodel
+//   - idShortOrPath: The idShort or path identifying the element to update
+//   - valueOnly: The new value to set (must be of type gen.SubmodelElementValue)
+//
+// Returns:
+//   - error: An error if the update operation fails
+func (p PostgreSQLSubmodelElementListHandler) UpdateValueOnly(submodelID string, idShortOrPath string, valueOnly gen.SubmodelElementValue) error {
+	elems, err := persistenceutils.BuildElementsToProcessStackValueOnly(p.db, submodelID, idShortOrPath, valueOnly)
+	if err != nil {
+		return err
+	}
+	err = UpdateNestedElements(p.db, elems, idShortOrPath, submodelID)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // Delete removes a SubmodelElementList submodel element from the database.
