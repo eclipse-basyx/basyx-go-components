@@ -25,7 +25,6 @@ import (
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	apis "github.com/eclipse-basyx/basyx-go-components/pkg/aasregistryapi"
 	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/cors"
 )
 
 func runServer(ctx context.Context, configPath string, databaseSchema string) error {
@@ -42,13 +41,7 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	// Make configuration available in request contexts.
 	r.Use(common.ConfigMiddleware(cfg))
 
-	c := cors.New(cors.Options{
-		AllowedOrigins:   []string{"*"},
-		AllowedMethods:   []string{http.MethodGet, http.MethodPost, http.MethodDelete, http.MethodOptions, http.MethodPut, http.MethodPatch},
-		AllowedHeaders:   []string{"*"}, // includes Authorization
-		AllowCredentials: true,
-	})
-	r.Use(c.Handler)
+	common.AddCors(r, cfg)
 	common.AddHealthEndpoint(r, cfg)
 
 	dsn := fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=disable",
