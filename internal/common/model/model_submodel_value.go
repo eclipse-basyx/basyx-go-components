@@ -36,6 +36,31 @@ func (s SubmodelValue) MarshalJSON() ([]byte, error) {
 	return s.MarshalValueOnly()
 }
 
+// UnmarshalJSON implements custom JSON unmarshaling for SubmodelValue
+func (s *SubmodelValue) UnmarshalJSON(data []byte) error {
+	// Unmarshal into raw messages first
+	var rawMap map[string]json.RawMessage
+	if err := json.Unmarshal(data, &rawMap); err != nil {
+		return err
+	}
+
+	// Initialize the map if needed
+	if *s == nil {
+		*s = make(SubmodelValue)
+	}
+
+	// Process each element using the SubmodelElementValue deserializer
+	for key, rawValue := range rawMap {
+		value, err := UnmarshalSubmodelElementValue(rawValue)
+		if err != nil {
+			return err
+		}
+		(*s)[key] = value
+	}
+
+	return nil
+}
+
 // GetModelType returns the model type name for Submodel
 func (s SubmodelValue) GetModelType() string {
 	return "Submodel"

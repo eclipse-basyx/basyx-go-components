@@ -9,7 +9,10 @@
 //nolint:all
 package model
 
-import "fmt"
+import (
+	"fmt"
+	"sort"
+)
 
 // ToValueOnly converts a Submodel to its Value-Only representation
 func (s *Submodel) ToValueOnly() (SubmodelValue, error) {
@@ -73,12 +76,26 @@ func PropertyToValueOnly(p *Property) PropertyValue {
 }
 
 // MultiLanguagePropertyToValueOnly converts a MultiLanguageProperty to MultiLanguagePropertyValue
+// Preserves the original order of language strings from the input
 func MultiLanguagePropertyToValueOnly(mlp *MultiLanguageProperty) MultiLanguagePropertyValue {
-	result := make(MultiLanguagePropertyValue, len(mlp.Value))
-	for i, langString := range mlp.Value {
+	// Create a copy to avoid mutating input order
+	vals := make([]LangStringTextType, len(mlp.Value))
+	copy(vals, mlp.Value)
+
+	// Ensure deterministic order by language code, then text as tie-breaker
+	sort.SliceStable(vals, func(i, j int) bool {
+		if vals[i].Language == vals[j].Language {
+			return vals[i].Text < vals[j].Text
+		}
+		return vals[i].Language < vals[j].Language
+	})
+
+	result := make(MultiLanguagePropertyValue, 0, len(vals))
+	for i := 0; i < len(vals); i++ {
+		langString := vals[i]
 		langText := make(map[string]string)
 		langText[langString.Language] = langString.Text
-		result[i] = langText
+		result = append(result, langText)
 	}
 	return result
 }
