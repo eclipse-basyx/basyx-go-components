@@ -636,5 +636,19 @@
         "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/ExampleSubmodelElementCollection.ExampleSubmodelElementListOrdered[1]",
         "shouldMatch": "bodies/put/putMultiLanguageProperty.json",
         "expectedStatus": 200
+    },
+    {
+        "context": "PUT Operation SubmodelElement",
+        "method": "PUT",
+        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlPcGVyYXRpb25TdWJtb2RlbA/submodel-elements/DemoOperation",
+        "data": "bodies/put/putOperation.json",
+        "expectedStatus": 204
+    },    
+    {
+        "context": "PUT Operation - Verify updated Element",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlPcGVyYXRpb25TdWJtb2RlbA/submodel-elements/DemoOperation",
+        "shouldMatch": "bodies/put/putOperation.json",
+        "expectedStatus": 200
     }
 ]

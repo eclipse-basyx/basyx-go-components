@@ -138,16 +138,127 @@ func (p PostgreSQLOperationHandler) CreateNested(tx *sql.Tx, submodelID string, 
 }
 
 // Update modifies an existing Operation submodel element in the database.
-// Currently delegates all update operations to the decorated handler for base submodel element properties.
+// This method handles both the common submodel element properties and the specific
+// operation data including input, output, and in-output variables.
 //
 // Parameters:
+//   - submodelID: ID of the parent submodel
 //   - idShortOrPath: The idShort or path identifying the element to update
 //   - submodelElement: The updated Operation element data
+//   - tx: Active database transaction (can be nil, will create one if needed)
+//   - isPut: true: Replaces the element with the body data; false: Updates only passed data
 //
 // Returns:
 //   - error: An error if the update operation fails
 func (p PostgreSQLOperationHandler) Update(submodelID string, idShortOrPath string, submodelElement gen.SubmodelElement, tx *sql.Tx, isPut bool) error {
-	return p.decorated.Update(submodelID, idShortOrPath, submodelElement, tx, isPut)
+	var err error
+	localTx := tx
+
+	if tx == nil {
+		var startedTx *sql.Tx
+		var cu func(*error)
+
+		startedTx, cu, err = common.StartTransaction(p.db)
+
+		defer cu(&err)
+
+		localTx = startedTx
+	}
+
+	operation, ok := submodelElement.(*gen.Operation)
+	if !ok {
+		return common.NewErrBadRequest("submodelElement is not of type Operation")
+	}
+
+	json := jsoniter.ConfigCompatibleWithStandardLibrary
+
+	// Build update record based on isPut flag
+	// For PUT: always update all fields (even if nil/empty, which clears them)
+	// For PATCH: only update fields that are provided (not nil)
+
+	updateFields := make(map[string]interface{})
+
+	if isPut || operation.InputVariables != nil {
+		var inputVars string
+		if operation.InputVariables != nil {
+			inputVarBytes, err := json.Marshal(operation.InputVariables)
+			if err != nil {
+				return err
+			}
+			inputVars = string(inputVarBytes)
+		} else {
+			inputVars = "[]"
+		}
+		updateFields["input_variables"] = inputVars
+	}
+
+	if isPut || operation.OutputVariables != nil {
+		var outputVars string
+		if operation.OutputVariables != nil {
+			outputVarBytes, err := json.Marshal(operation.OutputVariables)
+			if err != nil {
+				return err
+			}
+			outputVars = string(outputVarBytes)
+		} else {
+			outputVars = "[]"
+		}
+		updateFields["output_variables"] = outputVars
+	}
+
+	if isPut || operation.InoutputVariables != nil {
+		var inoutputVars string
+		if operation.InoutputVariables != nil {
+			inoutputVarBytes, err := json.Marshal(operation.InoutputVariables)
+			if err != nil {
+				return err
+			}
+			inoutputVars = string(inoutputVarBytes)
+		} else {
+			inoutputVars = "[]"
+		}
+		updateFields["inoutput_variables"] = inoutputVars
+	}
+
+	// Only execute update if there are fields to update
+	if len(updateFields) > 0 {
+		// Build UPDATE query dynamically
+		query := "UPDATE operation_element SET "
+		args := make([]interface{}, 0)
+		argCounter := 1
+
+		for field, value := range updateFields {
+			if argCounter > 1 {
+				query += ", "
+			}
+			query += field + " = $" + string(rune('0'+argCounter))
+			args = append(args, value)
+			argCounter++
+		}
+
+		query += " WHERE id = (SELECT id FROM submodel_element WHERE idshort_path = $" +
+			string(rune('0'+argCounter)) + " AND submodel_id = $" + string(rune('0'+argCounter+1)) + ")"
+		args = append(args, idShortOrPath, submodelID)
+
+		_, err = localTx.Exec(query, args...)
+		if err != nil {
+			return err
+		}
+	}
+
+	err = p.decorated.Update(submodelID, idShortOrPath, submodelElement, localTx, isPut)
+	if err != nil {
+		return err
+	}
+
+	if tx == nil {
+		err = localTx.Commit()
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // UpdateValueOnly updates only the value of an existing Operation submodel element identified by its idShort or path.
