@@ -758,10 +758,6 @@ func leadingAlias(expr string) (string, bool) {
 	return expr[:idx], true
 }
 
-func requiredAliasesFromResolved(resolved []ResolvedFieldPath) (map[string]struct{}, error) {
-	return requiredAliasesFromResolvedWithConfig(resolved, defaultJoinPlanConfig())
-}
-
 func requiredAliasesFromResolvedWithConfig(resolved []ResolvedFieldPath, config JoinPlanConfig) (map[string]struct{}, error) {
 	req := map[string]struct{}{}
 	for _, r := range resolved {
@@ -818,10 +814,6 @@ func expandAliasesWithDeps(aliases map[string]struct{}, rules map[string]existsJ
 		visit(a)
 	}
 	return out
-}
-
-func buildJoinPlanForResolved(resolved []ResolvedFieldPath) (existsJoinPlan, error) {
-	return buildJoinPlanForResolvedWithConfig(resolved, defaultJoinPlanConfig())
 }
 
 func buildJoinPlanForResolvedWithConfig(resolved []ResolvedFieldPath, config JoinPlanConfig) (existsJoinPlan, error) {
@@ -1054,26 +1046,110 @@ func (le *LogicalExpression) evaluateFragmentToExpression(collector *ResolvedFie
 
 	// Fragments resolve only to array bindings. We translate these into a predicate
 	// without injecting a literal TRUE into the SQL.
-	var fragmentExpr exp.Expression
-	if len(bindings) == 0 {
-		// Wildcard fragment (e.g. endpoints[]) applies to all rows.
-		fragmentExpr = goqu.L("1=1")
-	} else {
-		where := make([]exp.Expression, 0, len(bindings))
-		for _, b := range bindings {
-			if b.Index.intValue != nil {
-				where = append(where, goqu.I(b.Alias).Eq(*b.Index.intValue))
-			}
-			if b.Index.stringValue != nil {
-				where = append(where, goqu.I(b.Alias).Eq(*b.Index.stringValue))
-			}
-		}
-		fragmentExpr = goqu.And(where...)
-	}
+	fragmentExpr := andBindingsForResolvedFieldPaths([]ResolvedFieldPath{wrapBindingsAsResolvedPath(bindings)}, nil)
 
 	// collector intentionally ignored for fragments
 	_ = collector
 	return fragmentExpr, nil, nil
+}
+
+type binaryOperationValidator func(leftOperand, rightOperand *Value) error
+
+func handleBinaryOperationWithCollector(
+	leftOperand, rightOperand *Value,
+	operation string,
+	collector *ResolvedFieldPathCollector,
+	fieldToFieldErr error,
+	build func(left interface{}, right interface{}, operation string) (exp.Expression, error),
+	validate binaryOperationValidator,
+) (exp.Expression, []ResolvedFieldPath, error) {
+	if leftOperand == nil || rightOperand == nil {
+		return nil, nil, fmt.Errorf("binary operation operands must not be nil")
+	}
+
+	normalizeSemanticShorthand(leftOperand)
+	normalizeSemanticShorthand(rightOperand)
+
+	leftField, leftCastType := extractFieldOperandAndCast(leftOperand)
+	rightField, rightCastType := extractFieldOperandAndCast(rightOperand)
+
+	// Field-to-field operations are forbidden by the query language.
+	// We can safely assume operations have either 0 or 1 field operands.
+	if leftField != nil && rightField != nil {
+		return nil, nil, fieldToFieldErr
+	}
+
+	// Fast-path: both are values (no FieldIdentifiers involved).
+	if leftField == nil && rightField == nil {
+		leftSQL, err := toSQLComponent(leftOperand, "left")
+		if err != nil {
+			return nil, nil, err
+		}
+		rightSQL, err := toSQLComponent(rightOperand, "right")
+		if err != nil {
+			return nil, nil, err
+		}
+		if validate != nil {
+			if err := validate(leftOperand, rightOperand); err != nil {
+				return nil, nil, err
+			}
+		}
+		expr, err := build(leftSQL, rightSQL, operation)
+		return expr, nil, err
+	}
+
+	leftSQL, leftResolved, err := toSQLResolvedFieldOrValue(leftOperand, leftCastType, "left")
+	if err != nil {
+		return nil, nil, err
+	}
+	rightSQL, rightResolved, err := toSQLResolvedFieldOrValue(rightOperand, rightCastType, "right")
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// Cast the field side to the non-field operand's type (unless already explicitly casted).
+	if leftResolved != nil && rightResolved == nil && leftCastType == "" {
+		if t := sqlTypeForOperand(rightOperand); t != "" {
+			leftSQL = safeCastSQLValue(goqu.I(leftResolved.Column), t)
+		}
+	}
+	if rightResolved != nil && leftResolved == nil && rightCastType == "" {
+		if t := sqlTypeForOperand(leftOperand); t != "" {
+			rightSQL = safeCastSQLValue(goqu.I(rightResolved.Column), t)
+		}
+	}
+
+	if validate != nil {
+		if err := validate(leftOperand, rightOperand); err != nil {
+			return nil, nil, err
+		}
+	}
+
+	opExpr, err := build(leftSQL, rightSQL, operation)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	resolved := collectResolvedFieldPaths(leftResolved, rightResolved)
+	// No resolved fields (should not happen due to earlier fast-path), fall back.
+	if len(resolved) == 0 {
+		return opExpr, nil, nil
+	}
+
+	if collector != nil && resolvedNeedsCTE(resolved) {
+		alias, err := collector.Register(resolved, opExpr)
+		if err != nil {
+			return nil, nil, err
+		}
+		return goqu.I(collector.qualifiedAlias(alias)), resolved, nil
+	}
+	if collector != nil {
+		return opExpr, resolved, nil
+	}
+	if anyResolvedHasBindings(resolved) {
+		return andBindingsForResolvedFieldPaths(resolved, opExpr), resolved, nil
+	}
+	return opExpr, resolved, nil
 }
 
 // EvaluateToExpression converts the logical expression tree into a goqu SQL expression.
@@ -1287,93 +1363,19 @@ func HandleComparison(leftOperand, rightOperand *Value, operation string) (exp.E
 // HandleComparisonWithCollector builds a SQL comparison expression from two Value operands
 // and optionally registers resolved field paths in the collector.
 func HandleComparisonWithCollector(leftOperand, rightOperand *Value, operation string, collector *ResolvedFieldPathCollector) (exp.Expression, []ResolvedFieldPath, error) {
-	// Normalize shorthand semanticId / descriptor shorthand fields to explicit keys[0].value
-	// (e.g. $aasdesc#specificAssetIds[].externalSubjectId ->
-	//  $aasdesc#specificAssetIds[].externalSubjectId.keys[0].value)
-	normalizeSemanticShorthand(leftOperand)
-	normalizeSemanticShorthand(rightOperand)
-
-	leftField, leftCastType := extractFieldOperandAndCast(leftOperand)
-	rightField, rightCastType := extractFieldOperandAndCast(rightOperand)
-
-	// Field-to-field comparisons are forbidden by the query language.
-	// We can safely assume comparisons have either 0 or 1 field operands.
-	if leftField != nil && rightField != nil {
-		return nil, nil, fmt.Errorf("field-to-field comparisons are not supported")
+	validate := func(leftOperand, rightOperand *Value) error {
+		_, err := leftOperand.IsComparableTo(*rightOperand)
+		return err
 	}
-
-	// Fast-path: both are values (no FieldIdentifiers involved).
-	if leftField == nil && rightField == nil {
-		leftSQL, err := toSQLComponent(leftOperand, "left")
-		if err != nil {
-			return nil, nil, err
-		}
-		rightSQL, err := toSQLComponent(rightOperand, "right")
-		if err != nil {
-			return nil, nil, err
-		}
-		// has to be compatible
-		_, err = leftOperand.IsComparableTo(*rightOperand)
-		if err != nil {
-			return nil, nil, err
-		}
-		expr, err := buildComparisonExpression(leftSQL, rightSQL, operation)
-		return expr, nil, err
-	}
-
-	leftSQL, leftResolved, err := toSQLResolvedFieldOrValue(leftOperand, leftCastType, "left")
-	if err != nil {
-		return nil, nil, err
-	}
-	rightSQL, rightResolved, err := toSQLResolvedFieldOrValue(rightOperand, rightCastType, "right")
-	if err != nil {
-		return nil, nil, err
-	}
-
-	// Cast the field side to the non-field operand's type (unless already explicitly casted).
-	if leftResolved != nil && rightResolved == nil && leftCastType == "" {
-		if t := sqlTypeForOperand(rightOperand); t != "" {
-			leftSQL = safeCastSQLValue(goqu.I(leftResolved.Column), t)
-		}
-	}
-	if rightResolved != nil && leftResolved == nil && rightCastType == "" {
-		if t := sqlTypeForOperand(leftOperand); t != "" {
-			rightSQL = safeCastSQLValue(goqu.I(rightResolved.Column), t)
-		}
-	}
-
-	// has to be compatible
-	_, err = leftOperand.IsComparableTo(*rightOperand)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	comparisonExpr, err := buildComparisonExpression(leftSQL, rightSQL, operation)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	resolved := collectResolvedFieldPaths(leftResolved, rightResolved)
-	// No resolved fields (should not happen due to earlier fast-path), fall back.
-	if len(resolved) == 0 {
-		return comparisonExpr, nil, nil
-	}
-
-	if collector != nil && resolvedNeedsCTE(resolved) {
-		alias, err := collector.Register(resolved, comparisonExpr)
-		if err != nil {
-			return nil, nil, err
-		}
-		return goqu.I(collector.qualifiedAlias(alias)), resolved, nil
-	}
-
-	if collector != nil {
-		return comparisonExpr, resolved, nil
-	}
-	if anyResolvedHasBindings(resolved) {
-		return andBindingsForResolvedFieldPaths(resolved, comparisonExpr), resolved, nil
-	}
-	return comparisonExpr, resolved, nil
+	return handleBinaryOperationWithCollector(
+		leftOperand,
+		rightOperand,
+		operation,
+		collector,
+		fmt.Errorf("field-to-field comparisons are not supported"),
+		buildComparisonExpression,
+		validate,
+	)
 }
 
 // HandleStringOperation builds SQL expressions for string-specific operators.
@@ -1385,75 +1387,15 @@ func HandleStringOperation(leftOperand, rightOperand *Value, operation string) (
 // HandleStringOperationWithCollector builds SQL expressions for string-specific operators
 // and optionally registers resolved field paths in the collector.
 func HandleStringOperationWithCollector(leftOperand, rightOperand *Value, operation string, collector *ResolvedFieldPathCollector) (exp.Expression, []ResolvedFieldPath, error) {
-	normalizeSemanticShorthand(leftOperand)
-	normalizeSemanticShorthand(rightOperand)
-
-	leftField, leftCastType := extractFieldOperandAndCast(leftOperand)
-	rightField, rightCastType := extractFieldOperandAndCast(rightOperand)
-
-	// Field-to-field string operations are forbidden by the query language.
-	// We can safely assume string operations have either 0 or 1 field operands.
-	if leftField != nil && rightField != nil {
-		return nil, nil, fmt.Errorf("field-to-field string operations are not supported")
-	}
-
-	// Fast-path: no FieldIdentifiers involved.
-	if leftField == nil && rightField == nil {
-		leftSQL, err := toSQLComponent(leftOperand, "left")
-		if err != nil {
-			return nil, nil, err
-		}
-		rightSQL, err := toSQLComponent(rightOperand, "right")
-		if err != nil {
-			return nil, nil, err
-		}
-		expr, err := buildStringOperationExpression(leftSQL, rightSQL, operation)
-		return expr, nil, err
-	}
-
-	leftSQL, leftResolved, err := toSQLResolvedFieldOrValue(leftOperand, leftCastType, "left")
-	if err != nil {
-		return nil, nil, err
-	}
-	rightSQL, rightResolved, err := toSQLResolvedFieldOrValue(rightOperand, rightCastType, "right")
-	if err != nil {
-		return nil, nil, err
-	}
-
-	if leftResolved != nil && rightResolved == nil && leftCastType == "" {
-		if t := sqlTypeForOperand(rightOperand); t != "" {
-			leftSQL = safeCastSQLValue(goqu.I(leftResolved.Column), t)
-		}
-	}
-	if rightResolved != nil && leftResolved == nil && rightCastType == "" {
-		if t := sqlTypeForOperand(leftOperand); t != "" {
-			rightSQL = safeCastSQLValue(goqu.I(rightResolved.Column), t)
-		}
-	}
-
-	stringExpr, err := buildStringOperationExpression(leftSQL, rightSQL, operation)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	resolved := collectResolvedFieldPaths(leftResolved, rightResolved)
-	if len(resolved) == 0 {
-		return stringExpr, nil, nil
-	}
-	if collector != nil && resolvedNeedsCTE(resolved) {
-		alias, err := collector.Register(resolved, stringExpr)
-		if err != nil {
-			return nil, nil, err
-		}
-		return goqu.I(collector.qualifiedAlias(alias)), resolved, nil
-	}
-	if collector != nil {
-		return stringExpr, resolved, nil
-	}
-	if anyResolvedHasBindings(resolved) {
-		return andBindingsForResolvedFieldPaths(resolved, stringExpr), resolved, nil
-	}
-	return stringExpr, resolved, nil
+	return handleBinaryOperationWithCollector(
+		leftOperand,
+		rightOperand,
+		operation,
+		collector,
+		fmt.Errorf("field-to-field string operations are not supported"),
+		buildStringOperationExpression,
+		nil,
+	)
 }
 
 // stringValueToValue normalizes a StringValue into a Value so existing helpers can be reused.
