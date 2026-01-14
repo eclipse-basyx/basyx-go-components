@@ -430,14 +430,14 @@
     {
         "context": "PATCH ReferenceElement ValueOnly - Update DemoOperation",
         "method": "PATCH",
-        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlSZWZlcmVuY2VFbGVtZW50U3VibW9kZWw/submodel-elements/DemoOperation/$value",
+        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlSZWZlcmVuY2VFbGVtZW50U3VibW9kZWw/submodel-elements/DemoReferenceElement/$value",
         "data": "bodies/patch/patchReferenceElementValueOnly.json",
         "expectedStatus": 204
     },
     {
         "context": "PATCH ReferenceElement ValueOnly - Verify DemoOperation Update",
         "method": "GET",
-        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlSZWZlcmVuY2VFbGVtZW50U3VibW9kZWw/submodel-elements/DemoOperation/$value",
+        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlSZWZlcmVuY2VFbGVtZW50U3VibW9kZWw/submodel-elements/DemoReferenceElement/$value",
         "shouldMatch": "expected/expectedReferenceElementValueOnlyAfterPatch.json",
         "expectedStatus": 200
     },
@@ -663,6 +663,20 @@
         "method": "GET",
         "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlSZWZlcmVuY2VFbGVtZW50U3VibW9kZWw/submodel-elements/DemoReferenceElement",
         "shouldMatch": "bodies/put/putReferenceElement.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "PUT RelationshipElement (Replace)",
+        "method": "PUT",
+        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlSZWxhdGlvbnNoaXBFbGVtZW50U3VibW9kZWw/submodel-elements/DemoRelationshipElement",
+        "data": "bodies/put/putRelationshipElement.json",
+        "expectedStatus": 204
+    },
+    {
+        "context": "Get Submodel with RelationshipElement SubmodelElement",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlSZWxhdGlvbnNoaXBFbGVtZW50U3VibW9kZWw/submodel-elements/DemoRelationshipElement",
+        "shouldMatch": "bodies/put/putRelationshipElement.json",
         "expectedStatus": 200
     }
 ]
