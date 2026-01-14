@@ -1,5 +1,5 @@
 /*******************************************************************************
-* Copyright (C) 2025 the Eclipse BaSyx Authors and Fraunhofer IESE
+* Copyright (C) 2026 the Eclipse BaSyx Authors and Fraunhofer IESE
 *
 * Permission is hereby granted, free of charge, to any person obtaining
 * a copy of this software and associated documentation files (the
@@ -65,27 +65,8 @@ func CreateExtension(tx *sql.Tx, extension gen.Extension, position int) (sql.Nul
 		semanticIDRefDbID = id
 	}
 
-	var valueText, valueNum, valueBool, valueTime, valueDatetime sql.NullString
-
-	switch extension.ValueType {
-	case "xs:string", "xs:anyURI", "xs:base64Binary", "xs:hexBinary":
-		valueText = sql.NullString{String: extension.Value, Valid: extension.Value != ""}
-	case "xs:int", "xs:integer", "xs:long", "xs:short", "xs:byte",
-		"xs:unsignedInt", "xs:unsignedLong", "xs:unsignedShort", "xs:unsignedByte",
-		"xs:positiveInteger", "xs:negativeInteger", "xs:nonNegativeInteger", "xs:nonPositiveInteger",
-		"xs:decimal", "xs:double", "xs:float":
-		valueNum = sql.NullString{String: extension.Value, Valid: extension.Value != ""}
-	case "xs:boolean":
-		valueBool = sql.NullString{String: extension.Value, Valid: extension.Value != ""}
-	case "xs:time":
-		valueTime = sql.NullString{String: extension.Value, Valid: extension.Value != ""}
-	case "xs:date", "xs:dateTime", "xs:duration", "xs:gDay", "xs:gMonth",
-		"xs:gMonthDay", "xs:gYear", "xs:gYearMonth":
-		valueDatetime = sql.NullString{String: extension.Value, Valid: extension.Value != ""}
-	default:
-		// Fallback to text for unknown types
-		valueText = sql.NullString{String: extension.Value, Valid: extension.Value != ""}
-	}
+	// Use the centralized value type mapper
+	typedValue := MapValueByType(string(extension.ValueType), extension.Value)
 
 	var valueType any
 	if extension.ValueType != "" && !reflect.ValueOf(extension.ValueType).IsZero() {
@@ -98,7 +79,7 @@ func CreateExtension(tx *sql.Tx, extension gen.Extension, position int) (sql.Nul
 	INSERT INTO
 	extension (name, position, value_type, value_text, value_num, value_bool, value_time, value_datetime, semantic_id)
 	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-	RETURNING id`, extension.Name, position, valueType, valueText, valueNum, valueBool, valueTime, valueDatetime, semanticIDRefDbID).Scan(&extensionDbID)
+	RETURNING id`, extension.Name, position, valueType, typedValue.Text, typedValue.Numeric, typedValue.Boolean, typedValue.Time, typedValue.DateTime, semanticIDRefDbID).Scan(&extensionDbID)
 
 	if err != nil {
 		_, _ = fmt.Println(err)
@@ -181,27 +162,8 @@ func CreateQualifier(tx *sql.Tx, qualifier gen.Qualifier, position int) (sql.Nul
 		semanticIDRefDbID = id
 	}
 
-	var valueText, valueNum, valueBool, valueTime, valueDatetime sql.NullString
-
-	switch qualifier.ValueType {
-	case "xs:string", "xs:anyURI", "xs:base64Binary", "xs:hexBinary":
-		valueText = sql.NullString{String: qualifier.Value, Valid: qualifier.Value != ""}
-	case "xs:int", "xs:integer", "xs:long", "xs:short", "xs:byte",
-		"xs:unsignedInt", "xs:unsignedLong", "xs:unsignedShort", "xs:unsignedByte",
-		"xs:positiveInteger", "xs:negativeInteger", "xs:nonNegativeInteger", "xs:nonPositiveInteger",
-		"xs:decimal", "xs:double", "xs:float":
-		valueNum = sql.NullString{String: qualifier.Value, Valid: qualifier.Value != ""}
-	case "xs:boolean":
-		valueBool = sql.NullString{String: qualifier.Value, Valid: qualifier.Value != ""}
-	case "xs:time":
-		valueTime = sql.NullString{String: qualifier.Value, Valid: qualifier.Value != ""}
-	case "xs:date", "xs:dateTime", "xs:duration", "xs:gDay", "xs:gMonth",
-		"xs:gMonthDay", "xs:gYear", "xs:gYearMonth":
-		valueDatetime = sql.NullString{String: qualifier.Value, Valid: qualifier.Value != ""}
-	default:
-		// Fallback to text for unknown types
-		valueText = sql.NullString{String: qualifier.Value, Valid: qualifier.Value != ""}
-	}
+	// Use the centralized value type mapper
+	typedValue := MapValueByType(string(qualifier.ValueType), qualifier.Value)
 
 	var kind any
 	if qualifier.Kind != "" && !reflect.ValueOf(qualifier.Kind).IsZero() {
@@ -214,7 +176,7 @@ func CreateQualifier(tx *sql.Tx, qualifier gen.Qualifier, position int) (sql.Nul
 	INSERT INTO
 	qualifier (kind, position, type, value_type, value_text, value_num, value_bool, value_time, value_datetime, value_id, semantic_id)
 	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-	RETURNING id`, kind, position, qualifier.Type, qualifier.ValueType, valueText, valueNum, valueBool, valueTime, valueDatetime, valueIDRefDbID, semanticIDRefDbID).Scan(&qualifierDbID)
+	RETURNING id`, kind, position, qualifier.Type, qualifier.ValueType, typedValue.Text, typedValue.Numeric, typedValue.Boolean, typedValue.Time, typedValue.DateTime, valueIDRefDbID, semanticIDRefDbID).Scan(&qualifierDbID)
 
 	if err != nil {
 		_, _ = fmt.Println(err)
@@ -1025,6 +987,12 @@ func isEmptyReference(ref gen.Reference) bool {
 // ValueOnlyElementsToProcess represents a SubmodelElementValue along with its ID short path.
 type ValueOnlyElementsToProcess struct {
 	Element     gen.SubmodelElementValue
+	IdShortPath string
+}
+
+// SubmodelElementToProcess represents a SubmodelElement along with its ID short path.
+type SubmodelElementToProcess struct {
+	Element     gen.SubmodelElement
 	IdShortPath string
 }
 

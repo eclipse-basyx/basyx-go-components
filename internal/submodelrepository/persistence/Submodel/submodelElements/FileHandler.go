@@ -1,5 +1,5 @@
 /*******************************************************************************
-* Copyright (C) 2025 the Eclipse BaSyx Authors and Fraunhofer IESE
+* Copyright (C) 2026 the Eclipse BaSyx Authors and Fraunhofer IESE
 *
 * Permission is hereby granted, free of charge, to any person obtaining
 * a copy of this software and associated documentation files (the
@@ -147,7 +147,7 @@ func (p PostgreSQLFileHandler) CreateNested(tx *sql.Tx, submodelID string, paren
 //
 // Returns:
 //   - error: Error if the update operation fails
-func (p PostgreSQLFileHandler) Update(submodelID string, idShortOrPath string, submodelElement gen.SubmodelElement, tx *sql.Tx) error {
+func (p PostgreSQLFileHandler) Update(submodelID string, idShortOrPath string, submodelElement gen.SubmodelElement, tx *sql.Tx, isPut bool) error {
 	file, ok := submodelElement.(*gen.File)
 	if !ok {
 		return common.NewErrBadRequest("submodelElement is not of type File")
@@ -247,7 +247,7 @@ func (p PostgreSQLFileHandler) Update(submodelID string, idShortOrPath string, s
 	}
 
 	// Update base SubmodelElement properties
-	return p.decorated.Update(submodelID, idShortOrPath, submodelElement, tx)
+	return p.decorated.Update(submodelID, idShortOrPath, submodelElement, tx, isPut)
 }
 
 // UpdateValueOnly updates only the value of an existing File submodel element identified by its idShort or path.

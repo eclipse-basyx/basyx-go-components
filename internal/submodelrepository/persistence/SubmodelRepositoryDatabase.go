@@ -1,5 +1,5 @@
 /*******************************************************************************
-* Copyright (C) 2025 the Eclipse BaSyx Authors and Fraunhofer IESE
+* Copyright (C) 2026 the Eclipse BaSyx Authors and Fraunhofer IESE
 *
 * Permission is hereby granted, free of charge, to any person obtaining
 * a copy of this software and associated documentation files (the
@@ -46,6 +46,8 @@ import (
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	smrepoconfig "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/config"
+	smrepoerrors "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/errors"
 	submodelpersistence "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/Submodel"
 	submodelelements "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/Submodel/submodelElements"
 	persistenceutils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
@@ -57,8 +59,9 @@ type PostgreSQLSubmodelDatabase struct {
 	db *sql.DB
 }
 
-var failedPostgresTransactionSubmodelRepo = common.NewInternalServerError("Failed to commit PostgreSQL transaction - no changes applied - see console for details")
-var beginTransactionErrorSubmodelRepo = common.NewInternalServerError("Failed to begin PostgreSQL transaction - no changes applied - see console for details")
+// Transaction error variables moved to smrepoerrors package for centralized error handling
+var failedPostgresTransactionSubmodelRepo = smrepoerrors.ErrTransactionCommitFailed
+var beginTransactionErrorSubmodelRepo = smrepoerrors.ErrTransactionBeginFailed
 
 // NewPostgreSQLSubmodelBackend creates a new PostgreSQL submodel database backend.
 // It initializes a database connection with the provided DSN and schema configuration.
@@ -105,7 +108,7 @@ func (p *PostgreSQLSubmodelDatabase) GetDB() *sql.DB {
 //   - error: Error if retrieval fails
 func (p *PostgreSQLSubmodelDatabase) GetAllSubmodels(limit int32, cursor string, _ /* idShort */ string, valueOnly bool) ([]gen.Submodel, string, error) {
 	if limit == 0 {
-		limit = 100
+		limit = smrepoconfig.DefaultPageLimit
 	}
 
 	submodelIDs := []string{}
@@ -139,7 +142,7 @@ func (p *PostgreSQLSubmodelDatabase) GetAllSubmodels(limit int32, cursor string,
 	var errSme error
 	var errSmeMutex sync.Mutex
 
-	numWorkers := 10
+	numWorkers := smrepoconfig.WorkerPoolSize
 	jobs := make(chan smeJob, len(submodelIDs))
 	results := make(chan smeResult, len(submodelIDs))
 
@@ -773,7 +776,7 @@ func (p *PostgreSQLSubmodelDatabase) AddSubmodelElementWithPath(submodelID strin
 
 	defer cu(&err)
 
-	parentID, err := crud.GetDatabaseID(idShortPath)
+	parentID, err := crud.GetDatabaseID(submodelID, idShortPath)
 	if err != nil {
 		_, _ = fmt.Println(err)
 		return common.NewInternalServerError("Failed to execute PostgreSQL Query - no changes applied - see console for details.")
@@ -990,7 +993,24 @@ func (p *PostgreSQLSubmodelDatabase) DownloadFileAttachment(submodelID string, i
 }
 
 // UpdateSubmodelElement updates an existing submodel element by its idShortPath.
-func (p *PostgreSQLSubmodelDatabase) UpdateSubmodelElement(submodelID string, idShortPath string, submodelElement gen.SubmodelElement) error {
+// This method determines the appropriate handler based on the element's model type
+// and delegates the update operation to that handler.
+//
+// Parameters:
+//   - submodelID: ID of the parent submodel
+//   - idShortPath: idShort or hierarchical path to the element
+//   - submodelElement: The updated submodel element
+//   - isPut: Flag indicating if this is a full replacement (PUT) or partial update (PATCH)
+//
+// Returns:
+//   - error: Error if the update operation fails
+func (p *PostgreSQLSubmodelDatabase) UpdateSubmodelElement(submodelID string, idShortPath string, submodelElement gen.SubmodelElement, isPut bool) error {
+	tx, cu, err := common.StartTransaction(p.db)
+	if err != nil {
+		_, _ = fmt.Println(err)
+		return beginTransactionErrorSubmodelRepo
+	}
+	defer cu(&err)
 	// Get the model type to determine which handler to use
 	modelType, err := getSubmodelElementModelTypeByIDShortPathAndSubmodelID(p.db, submodelID, idShortPath)
 	if err != nil {
@@ -1002,9 +1022,37 @@ func (p *PostgreSQLSubmodelDatabase) UpdateSubmodelElement(submodelID string, id
 	if err != nil {
 		return fmt.Errorf("failed to get handler for model type %s: %w", modelType, err)
 	}
+	err = handler.Update(submodelID, idShortPath, submodelElement, nil, isPut)
 
-	// Update the element
-	return handler.Update(submodelID, idShortPath, submodelElement, nil)
+	if err != nil {
+		return err
+	}
+
+	if isPut {
+		err = handleNestedElementsAfterPut(p, idShortPath, modelType, tx, submodelID, submodelElement)
+		if err != nil {
+			return err
+		}
+	}
+
+	if err = tx.Commit(); err != nil {
+		_, _ = fmt.Println(err)
+		return failedPostgresTransactionSubmodelRepo
+	}
+	return nil
+}
+
+func handleNestedElementsAfterPut(p *PostgreSQLSubmodelDatabase, idShortPath string, modelType string, tx *sql.Tx, submodelID string, submodelElement gen.SubmodelElement) error {
+	var elementID int
+	smeHandler := submodelelements.PostgreSQLSMECrudHandler{Db: p.db}
+	elementID, err := smeHandler.GetDatabaseID(submodelID, idShortPath)
+	if err != nil {
+		return err
+	}
+	if modelType == "AnnotatedRelationshipElement" {
+		err = p.AddNestedSubmodelElementsIteratively(tx, submodelID, elementID, submodelElement, idShortPath, elementID)
+	}
+	return err
 }
 
 // DeleteFileAttachment deletes a file attachment from PostgreSQL Large Object system.

@@ -1,5 +1,5 @@
 /*******************************************************************************
-* Copyright (C) 2025 the Eclipse BaSyx Authors and Fraunhofer IESE
+* Copyright (C) 2026 the Eclipse BaSyx Authors and Fraunhofer IESE
 *
 * Permission is hereby granted, free of charge, to any person obtaining
 * a copy of this software and associated documentation files (the
@@ -147,7 +147,7 @@ func (p PostgreSQLPropertyHandler) CreateNested(tx *sql.Tx, submodelID string, p
 //
 // Returns:
 //   - error: An error if the update operation fails
-func (p PostgreSQLPropertyHandler) Update(submodelID string, idShortOrPath string, submodelElement gen.SubmodelElement, tx *sql.Tx) error {
+func (p PostgreSQLPropertyHandler) Update(submodelID string, idShortOrPath string, submodelElement gen.SubmodelElement, tx *sql.Tx, isPut bool) error {
 	var localTX *sql.Tx
 	var err error
 	var cu func(*error)
@@ -169,7 +169,7 @@ func (p PostgreSQLPropertyHandler) Update(submodelID string, idShortOrPath strin
 	}
 
 	// Update base submodel element fields
-	err = p.decorated.Update(submodelID, idShortOrPath, submodelElement, localTX)
+	err = p.decorated.Update(submodelID, idShortOrPath, submodelElement, localTX, isPut)
 	if err != nil {
 		return err
 	}
@@ -195,27 +195,8 @@ func (p PostgreSQLPropertyHandler) Update(submodelID string, idShortOrPath strin
 		return err
 	}
 
-	// Update Property-specific fields
-	var valueText, valueNum, valueBool, valueTime, valueDatetime sql.NullString
-
-	switch property.ValueType {
-	case "xs:string", "xs:anyURI", "xs:base64Binary", "xs:hexBinary":
-		valueText = sql.NullString{String: property.Value, Valid: property.Value != ""}
-	case "xs:int", "xs:integer", "xs:long", "xs:short", "xs:byte",
-		"xs:unsignedInt", "xs:unsignedLong", "xs:unsignedShort", "xs:unsignedByte",
-		"xs:positiveInteger", "xs:negativeInteger", "xs:nonNegativeInteger", "xs:nonPositiveInteger",
-		"xs:decimal", "xs:double", "xs:float":
-		valueNum = sql.NullString{String: property.Value, Valid: property.Value != ""}
-	case "xs:boolean":
-		valueBool = sql.NullString{String: property.Value, Valid: property.Value != ""}
-	case "xs:time":
-		valueTime = sql.NullString{String: property.Value, Valid: property.Value != ""}
-	case "xs:date", "xs:dateTime", "xs:duration", "xs:gDay", "xs:gMonth",
-		"xs:gMonthDay", "xs:gYear", "xs:gYearMonth":
-		valueDatetime = sql.NullString{String: property.Value, Valid: property.Value != ""}
-	default:
-		valueText = sql.NullString{String: property.Value, Valid: property.Value != ""}
-	}
+	// Update Property-specific fields using centralized value type mapper
+	typedValue := persistenceutils.MapValueByType(string(property.ValueType), property.Value)
 
 	valueIDDbID, err := persistenceutils.CreateReference(localTX, property.ValueID, sql.NullInt64{}, sql.NullInt64{})
 	if err != nil {
@@ -227,11 +208,11 @@ func (p PostgreSQLPropertyHandler) Update(submodelID string, idShortOrPath strin
 		SET value_type = $1, value_text = $2, value_num = $3, value_bool = $4, value_time = $5, value_datetime = $6, value_id = $7 
 		WHERE id = $8`,
 		property.ValueType,
-		valueText,
-		valueNum,
-		valueBool,
-		valueTime,
-		valueDatetime,
+		typedValue.Text,
+		typedValue.Numeric,
+		typedValue.Boolean,
+		typedValue.Time,
+		typedValue.DateTime,
 		valueIDDbID,
 		elementID,
 	)
@@ -294,40 +275,20 @@ func (p PostgreSQLPropertyHandler) UpdateValueOnly(submodelID string, idShortOrP
 		}
 		return err
 	}
-	// Update based on valueType
+	// Update based on valueType using centralized value type mapper
 	propertyValue, ok := valueOnly.(gen.PropertyValue)
 	if !ok {
 		return common.NewErrBadRequest("valueOnly is not of type PropertyValue")
 	}
 
-	var valueText, valueNum, valueBool, valueTime, valueDatetime sql.NullString
-
-	switch valueType {
-	case "xs:string", "xs:anyURI", "xs:base64Binary", "xs:hexBinary":
-		valueText = sql.NullString{String: propertyValue.Value, Valid: propertyValue.Value != ""}
-	case "xs:int", "xs:integer", "xs:long", "xs:short", "xs:byte",
-		"xs:unsignedInt", "xs:unsignedLong", "xs:unsignedShort", "xs:unsignedByte",
-		"xs:positiveInteger", "xs:negativeInteger", "xs:nonNegativeInteger", "xs:nonPositiveInteger",
-		"xs:decimal", "xs:double", "xs:float":
-		valueNum = sql.NullString{String: propertyValue.Value, Valid: propertyValue.Value != ""}
-	case "xs:boolean":
-		valueBool = sql.NullString{String: propertyValue.Value, Valid: propertyValue.Value != ""}
-	case "xs:time":
-		valueTime = sql.NullString{String: propertyValue.Value, Valid: propertyValue.Value != ""}
-	case "xs:date", "xs:dateTime", "xs:duration", "xs:gDay", "xs:gMonth",
-		"xs:gMonthDay", "xs:gYear", "xs:gYearMonth":
-		valueDatetime = sql.NullString{String: propertyValue.Value, Valid: propertyValue.Value != ""}
-	default:
-		// Fallback to text for unknown types
-		valueText = sql.NullString{String: propertyValue.Value, Valid: propertyValue.Value != ""}
-	}
+	typedValue := persistenceutils.MapValueByType(valueType, propertyValue.Value)
 
 	_, err = p.db.Exec(`UPDATE property_element SET value_text = $1, value_num = $2, value_bool = $3, value_time = $4, value_datetime = $5 WHERE id = $6`,
-		valueText,
-		valueNum,
-		valueBool,
-		valueTime,
-		valueDatetime,
+		typedValue.Text,
+		typedValue.Numeric,
+		typedValue.Boolean,
+		typedValue.Time,
+		typedValue.DateTime,
 		elementID,
 	)
 	if err != nil {
@@ -369,27 +330,8 @@ func (p PostgreSQLPropertyHandler) Delete(idShortOrPath string) error {
 // Returns:
 //   - error: An error if the database insert operation fails
 func insertProperty(property *gen.Property, tx *sql.Tx, id int) error {
-	var valueText, valueNum, valueBool, valueTime, valueDatetime sql.NullString
-
-	switch property.ValueType {
-	case "xs:string", "xs:anyURI", "xs:base64Binary", "xs:hexBinary":
-		valueText = sql.NullString{String: property.Value, Valid: property.Value != ""}
-	case "xs:int", "xs:integer", "xs:long", "xs:short", "xs:byte",
-		"xs:unsignedInt", "xs:unsignedLong", "xs:unsignedShort", "xs:unsignedByte",
-		"xs:positiveInteger", "xs:negativeInteger", "xs:nonNegativeInteger", "xs:nonPositiveInteger",
-		"xs:decimal", "xs:double", "xs:float":
-		valueNum = sql.NullString{String: property.Value, Valid: property.Value != ""}
-	case "xs:boolean":
-		valueBool = sql.NullString{String: property.Value, Valid: property.Value != ""}
-	case "xs:time":
-		valueTime = sql.NullString{String: property.Value, Valid: property.Value != ""}
-	case "xs:date", "xs:dateTime", "xs:duration", "xs:gDay", "xs:gMonth",
-		"xs:gMonthDay", "xs:gYear", "xs:gYearMonth":
-		valueDatetime = sql.NullString{String: property.Value, Valid: property.Value != ""}
-	default:
-		// Fallback to text for unknown types
-		valueText = sql.NullString{String: property.Value, Valid: property.Value != ""}
-	}
+	// Use centralized value type mapper
+	typedValue := persistenceutils.MapValueByType(string(property.ValueType), property.Value)
 
 	// Handle valueID if present
 	valueIDDbID, err := persistenceutils.CreateReference(tx, property.ValueID, sql.NullInt64{}, sql.NullInt64{})
@@ -403,11 +345,11 @@ func insertProperty(property *gen.Property, tx *sql.Tx, id int) error {
 					 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
 		id,
 		property.ValueType,
-		valueText,
-		valueNum,
-		valueBool,
-		valueTime,
-		valueDatetime,
+		typedValue.Text,
+		typedValue.Numeric,
+		typedValue.Boolean,
+		typedValue.Time,
+		typedValue.DateTime,
 		valueIDDbID,
 	)
 	if err != nil {

@@ -1,5 +1,5 @@
 /*******************************************************************************
-* Copyright (C) 2025 the Eclipse BaSyx Authors and Fraunhofer IESE
+* Copyright (C) 2026 the Eclipse BaSyx Authors and Fraunhofer IESE
 *
 * Permission is hereby granted, free of charge, to any person obtaining
 * a copy of this software and associated documentation files (the
@@ -140,8 +140,8 @@ func (p PostgreSQLSubmodelElementListHandler) CreateNested(tx *sql.Tx, submodelI
 //
 // Returns:
 //   - error: Error if the update operation fails
-func (p PostgreSQLSubmodelElementListHandler) Update(submodelID string, idShortOrPath string, submodelElement gen.SubmodelElement, tx *sql.Tx) error {
-	return p.decorated.Update(submodelID, idShortOrPath, submodelElement, tx)
+func (p PostgreSQLSubmodelElementListHandler) Update(submodelID string, idShortOrPath string, submodelElement gen.SubmodelElement, tx *sql.Tx, isPut bool) error {
+	return p.decorated.Update(submodelID, idShortOrPath, submodelElement, tx, isPut)
 }
 
 // UpdateValueOnly updates only the value of an existing SubmodelElementList submodel element identified by its idShort or path.
@@ -159,7 +159,7 @@ func (p PostgreSQLSubmodelElementListHandler) UpdateValueOnly(submodelID string,
 	if err != nil {
 		return err
 	}
-	err = UpdateNestedElements(p.db, elems, idShortOrPath, submodelID)
+	err = UpdateNestedElementsValueOnly(p.db, elems, idShortOrPath, submodelID)
 	if err != nil {
 		return err
 	}

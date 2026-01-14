@@ -888,8 +888,8 @@ func (s *SubmodelRepositoryAPIAPIService) PutSubmodelElementByPathSubmodelRepo(_
 		return gen.Response(http.StatusBadRequest, gen.Result{Messages: []gen.Message{{Text: "Invalid submodel identifier"}}}), nil
 	}
 
-	// Update the submodel element using the backend
-	err = s.submodelBackend.UpdateSubmodelElement(string(decodedSubmodelID), idShortPath, submodelElement)
+	// Update the submodel element using the backend with isPut set to true
+	err = s.submodelBackend.UpdateSubmodelElement(string(decodedSubmodelID), idShortPath, submodelElement, true)
 	if err != nil {
 		if common.IsErrNotFound(err) {
 			return gen.Response(http.StatusNotFound, gen.Result{Messages: []gen.Message{{Text: err.Error()}}}), nil
