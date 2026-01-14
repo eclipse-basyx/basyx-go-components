@@ -244,7 +244,7 @@ func UpdateNestedElementsValueOnly(db *sql.DB, elems []persistenceutils.ValueOnl
 	return nil
 }
 
-// UpdateNestedElementsValueOnly updates nested submodel elements based on value-only patches.
+// UpdateNestedElements updates nested submodel elements based on value-only patches.
 //
 // Parameters:
 //   - db: Database connection

@@ -1026,7 +1026,7 @@ func (p *PostgreSQLSubmodelDatabase) UpdateSubmodelElement(submodelID string, id
 	}
 
 	if isPut {
-		err = handleNestedElementsAfterPut(isPut, p, err, idShortPath, modelType, tx, submodelID, submodelElement)
+		err = handleNestedElementsAfterPut(p, idShortPath, modelType, tx, submodelID, submodelElement)
 		if err != nil {
 			return err
 		}
@@ -1039,15 +1039,14 @@ func (p *PostgreSQLSubmodelDatabase) UpdateSubmodelElement(submodelID string, id
 	return nil
 }
 
-func handleNestedElementsAfterPut(isPut bool, p *PostgreSQLSubmodelDatabase, err error, idShortPath string, modelType string, tx *sql.Tx, submodelID string, submodelElement gen.SubmodelElement) error {
+func handleNestedElementsAfterPut(p *PostgreSQLSubmodelDatabase, idShortPath string, modelType string, tx *sql.Tx, submodelID string, submodelElement gen.SubmodelElement) error {
 	var elementID int
 	smeHandler := submodelelements.PostgreSQLSMECrudHandler{Db: p.db}
-	elementID, err = smeHandler.GetDatabaseID(submodelID, idShortPath)
+	elementID, err := smeHandler.GetDatabaseID(submodelID, idShortPath)
 	if err != nil {
 		return err
 	}
-	switch modelType {
-	case "AnnotatedRelationshipElement":
+	if modelType == "AnnotatedRelationshipElement" {
 		err = p.AddNestedSubmodelElementsIteratively(tx, submodelID, elementID, submodelElement, idShortPath, elementID)
 	}
 	return err

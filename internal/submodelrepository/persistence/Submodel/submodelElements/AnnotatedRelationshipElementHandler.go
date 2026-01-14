@@ -174,6 +174,7 @@ func (p PostgreSQLAnnotatedRelationshipElementHandler) Update(submodelID string,
 		return common.NewErrBadRequest(fmt.Sprintf("Missing Field 'Second' for AnnotatedRelationshipElement with idShortPath '%s'", idShortOrPath))
 	}
 
+	//nolint:revive // TODO
 	if are.Annotations != nil && !isPut {
 		// PATCH
 	} else if isPut {
@@ -182,7 +183,6 @@ func (p PostgreSQLAnnotatedRelationshipElementHandler) Update(submodelID string,
 		if err != nil {
 			return err
 		}
-
 	}
 
 	err = p.decorated.Update(submodelID, idShortOrPath, submodelElement, localTx, isPut)
