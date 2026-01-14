@@ -174,6 +174,41 @@ func (p PostgreSQLAnnotatedRelationshipElementHandler) Update(submodelID string,
 		return common.NewErrBadRequest(fmt.Sprintf("Missing Field 'Second' for AnnotatedRelationshipElement with idShortPath '%s'", idShortOrPath))
 	}
 
+	firstRef, err := serializeReference(are.First, jsoniter.ConfigCompatibleWithStandardLibrary)
+	if err != nil {
+		return err
+	}
+	secondRef, err := serializeReference(are.Second, jsoniter.ConfigCompatibleWithStandardLibrary)
+	if err != nil {
+		return err
+	}
+
+	// Update with goqu
+	dialect := goqu.Dialect("postgres")
+
+	updateQuery, updateArgs, err := dialect.Update("annotated_relationship_element").
+		Set(goqu.Record{
+			"first":  firstRef,
+			"second": secondRef,
+		}).
+		Where(goqu.C("id").In(
+			dialect.From("submodel_element").
+				Select("id").
+				Where(goqu.Ex{
+					"idshort_path": idShortOrPath,
+					"submodel_id":  submodelID,
+				}),
+		)).
+		ToSQL()
+	if err != nil {
+		return err
+	}
+
+	_, err = localTx.Exec(updateQuery, updateArgs...)
+	if err != nil {
+		return err
+	}
+
 	//nolint:revive // TODO
 	if are.Annotations != nil && !isPut {
 		// PATCH
@@ -316,27 +351,33 @@ func insertAnnotatedRelationshipElement(areElem *gen.AnnotatedRelationshipElemen
 	var firstRef, secondRef string
 	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
-	if !isEmptyReference(areElem.First) {
-		ref, err := json.Marshal(areElem.First)
-		if err != nil {
-			return err
-		}
-		firstRef = string(ref)
+	firstRef, err := serializeReference(areElem.First, json)
+	if err != nil {
+		return err
 	}
 
-	if !isEmptyReference(areElem.Second) {
-		ref, err := json.Marshal(areElem.Second)
-		if err != nil {
-			return err
-		}
-		secondRef = string(ref)
+	secondRef, err = serializeReference(areElem.Second, json)
+	if err != nil {
+		return err
 	}
 
-	_, err := tx.Exec(`INSERT INTO annotated_relationship_element (id, first, second) VALUES ($1, $2, $3)`,
+	_, err = tx.Exec(`INSERT INTO annotated_relationship_element (id, first, second) VALUES ($1, $2, $3)`,
 		id, firstRef, secondRef)
 	if err != nil {
 		return err
 	}
 
 	return nil
+}
+
+func serializeReference(ref *gen.Reference, json jsoniter.API) (string, error) {
+	var firstRef string
+	if !isEmptyReference(ref) {
+		ref, err := json.Marshal(ref)
+		if err != nil {
+			return "", err
+		}
+		firstRef = string(ref)
+	}
+	return firstRef, nil
 }
