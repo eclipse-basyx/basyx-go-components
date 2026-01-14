@@ -220,7 +220,7 @@ func (p PostgreSQLRangeHandler) Update(submodelID string, idShortOrPath string, 
 		updateRecord["max_time"] = typedValue.MaxTime
 		updateRecord["min_datetime"] = typedValue.MinDateTime
 		updateRecord["max_datetime"] = typedValue.MaxDateTime
-	} else {
+	} else { //nolint:all - elseif: can replace 'else {if cond {}}' with 'else if cond {}' -> this would make the code less readable and has differing semantics
 		// PATCH: Only update if min/max are provided
 		if rangeElem.Min != "" || rangeElem.Max != "" {
 			typedValue := persistenceutils.MapRangeValueByType(string(rangeElem.ValueType), rangeElem.Min, rangeElem.Max)
