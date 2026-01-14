@@ -678,5 +678,19 @@
         "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlSZWxhdGlvbnNoaXBFbGVtZW50U3VibW9kZWw/submodel-elements/DemoRelationshipElement",
         "shouldMatch": "bodies/put/putRelationshipElement.json",
         "expectedStatus": 200
+    },
+    {
+        "context": "PUT Range SubmodelElement (Replace)",
+        "method": "PUT",
+        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlSYW5nZVN1Ym1vZGVs/submodel-elements/DemoRange",
+        "data": "bodies/put/putRange.json",
+        "expectedStatus": 204
+    },
+    {
+        "context": "PUT Range - Verify updated Element",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlSYW5nZVN1Ym1vZGVs/submodel-elements/DemoRange",
+        "shouldMatch": "bodies/put/putRange.json",
+        "expectedStatus": 200
     }
 ]
