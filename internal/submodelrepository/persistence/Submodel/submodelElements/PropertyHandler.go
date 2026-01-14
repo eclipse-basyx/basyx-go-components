@@ -306,14 +306,22 @@ func (p PostgreSQLPropertyHandler) UpdateValueOnly(submodelID string, idShortOrP
 
 	typedValue := persistenceutils.MapValueByType(valueType, propertyValue.Value)
 
-	_, err = p.db.Exec(`UPDATE property_element SET value_text = $1, value_num = $2, value_bool = $3, value_time = $4, value_datetime = $5 WHERE id = $6`,
-		typedValue.Text,
-		typedValue.Numeric,
-		typedValue.Boolean,
-		typedValue.Time,
-		typedValue.DateTime,
-		elementID,
-	)
+	dialect := goqu.Dialect("postgres")
+	updateQuery, updateArgs, err := dialect.Update("property_element").
+		Set(goqu.Record{
+			"value_text":     typedValue.Text,
+			"value_num":      typedValue.Numeric,
+			"value_bool":     typedValue.Boolean,
+			"value_time":     typedValue.Time,
+			"value_datetime": typedValue.DateTime,
+		}).
+		Where(goqu.C("id").Eq(elementID)).
+		ToSQL()
+	if err != nil {
+		return err
+	}
+
+	_, err = p.db.Exec(updateQuery, updateArgs...)
 	if err != nil {
 		return err
 	}
@@ -364,17 +372,23 @@ func insertProperty(property *gen.Property, tx *sql.Tx, id int) error {
 	}
 
 	// Insert Property-specific data
-	_, err = tx.Exec(`INSERT INTO property_element (id, value_type, value_text, value_num, value_bool, value_time, value_datetime, value_id)
-					 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-		id,
-		property.ValueType,
-		typedValue.Text,
-		typedValue.Numeric,
-		typedValue.Boolean,
-		typedValue.Time,
-		typedValue.DateTime,
-		valueIDDbID,
-	)
+	dialect := goqu.Dialect("postgres")
+	insertQuery, insertArgs, err := dialect.Insert("property_element").
+		Rows(goqu.Record{
+			"id":             id,
+			"value_type":     property.ValueType,
+			"value_text":     typedValue.Text,
+			"value_num":      typedValue.Numeric,
+			"value_bool":     typedValue.Boolean,
+			"value_time":     typedValue.Time,
+			"value_datetime": typedValue.DateTime,
+			"value_id":       valueIDDbID,
+		}).
+		ToSQL()
+	if err != nil {
+		return err
+	}
+	_, err = tx.Exec(insertQuery, insertArgs...)
 	if err != nil {
 		return err
 	}

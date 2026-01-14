@@ -29,6 +29,7 @@ package submodelelements
 import (
 	"database/sql"
 
+	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	persistenceutils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
@@ -197,8 +198,19 @@ func insertSubmodelElementList(smeList *gen.SubmodelElementList, tx *sql.Tx, id 
 		valueType = sql.NullString{String: string(smeList.ValueTypeListElement), Valid: true}
 	}
 
-	_, err := tx.Exec(`INSERT INTO submodel_element_list (id, order_relevant, semantic_id_list_element, type_value_list_element, value_type_list_element)
-					 VALUES ($1, $2, $3, $4, $5)`,
-		id, smeList.OrderRelevant, semanticID, typeValue, valueType)
+	dialect := goqu.Dialect("postgres")
+	insertQuery, insertArgs, err := dialect.Insert("submodel_element_list").
+		Rows(goqu.Record{
+			"id":                       id,
+			"order_relevant":           smeList.OrderRelevant,
+			"semantic_id_list_element": semanticID,
+			"type_value_list_element":  typeValue,
+			"value_type_list_element":  valueType,
+		}).
+		ToSQL()
+	if err != nil {
+		return err
+	}
+	_, err = tx.Exec(insertQuery, insertArgs...)
 	return err
 }

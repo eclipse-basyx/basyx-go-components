@@ -32,6 +32,7 @@ package submodelelements
 import (
 	"database/sql"
 
+	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	persistenceutils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
@@ -89,7 +90,14 @@ func (p PostgreSQLSubmodelElementCollectionHandler) Create(tx *sql.Tx, submodelI
 	}
 
 	// SubmodelElementCollection-specific database insertion
-	_, err = tx.Exec(`INSERT INTO submodel_element_collection (id) VALUES ($1)`, id)
+	dialect := goqu.Dialect("postgres")
+	insertQuery, insertArgs, err := dialect.Insert("submodel_element_collection").
+		Rows(goqu.Record{"id": id}).
+		ToSQL()
+	if err != nil {
+		return 0, err
+	}
+	_, err = tx.Exec(insertQuery, insertArgs...)
 	if err != nil {
 		return 0, err
 	}
@@ -125,7 +133,14 @@ func (p PostgreSQLSubmodelElementCollectionHandler) CreateNested(tx *sql.Tx, sub
 	}
 
 	// SubmodelElementCollection-specific database insertion
-	_, err = tx.Exec(`INSERT INTO submodel_element_collection (id) VALUES ($1)`, id)
+	dialect := goqu.Dialect("postgres")
+	insertQuery, insertArgs, err := dialect.Insert("submodel_element_collection").
+		Rows(goqu.Record{"id": id}).
+		ToSQL()
+	if err != nil {
+		return 0, err
+	}
+	_, err = tx.Exec(insertQuery, insertArgs...)
 	if err != nil {
 		return 0, err
 	}

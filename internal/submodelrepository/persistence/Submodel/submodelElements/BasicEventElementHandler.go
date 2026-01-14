@@ -409,7 +409,24 @@ func insertBasicEventElement(basicEvent *gen.BasicEventElement, tx *sql.Tx, id i
 		messageTopic = sql.NullString{String: basicEvent.MessageTopic, Valid: true}
 	}
 
-	_, err := tx.Exec(`INSERT INTO basic_event_element (id, observed, direction, state, message_topic, message_broker, last_update, min_interval, max_interval) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-		id, observedRefJson, basicEvent.Direction, basicEvent.State, messageTopic, messageBrokerRefJson, lastUpdate, minInterval, maxInterval)
+	dialect := goqu.Dialect("postgres")
+	insertQuery, insertArgs, err := dialect.Insert("basic_event_element").
+		Rows(goqu.Record{
+			"id":             id,
+			"observed":        observedRefJson,
+			"direction":       basicEvent.Direction,
+			"state":           basicEvent.State,
+			"message_topic":   messageTopic,
+			"message_broker":  messageBrokerRefJson,
+			"last_update":     lastUpdate,
+			"min_interval":    minInterval,
+			"max_interval":    maxInterval,
+		}).
+		ToSQL()
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.Exec(insertQuery, insertArgs...)
 	return err
 }

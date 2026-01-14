@@ -380,7 +380,17 @@ func insertReferenceElement(refElem *gen.ReferenceElement, tx *sql.Tx, id int) e
 	}
 
 	// Insert reference_element
-	_, err := tx.Exec(`INSERT INTO reference_element (id, value) VALUES ($1, $2)`, id, referenceJSONString)
+	dialect := goqu.Dialect("postgres")
+	insertQuery, insertArgs, err := dialect.Insert("reference_element").
+		Rows(goqu.Record{
+			"id":    id,
+			"value": referenceJSONString,
+		}).
+		ToSQL()
+	if err != nil {
+		return err
+	}
+	_, err = tx.Exec(insertQuery, insertArgs...)
 	return err
 }
 

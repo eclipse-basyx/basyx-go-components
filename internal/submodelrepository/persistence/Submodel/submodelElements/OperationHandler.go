@@ -34,6 +34,7 @@ package submodelelements
 import (
 	"database/sql"
 
+	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	jsoniter "github.com/json-iterator/go"
@@ -335,7 +336,19 @@ func insertOperation(operation *gen.Operation, tx *sql.Tx, id int) error {
 		inoutputVars = "[]"
 	}
 
-	_, err := tx.Exec(`INSERT INTO operation_element (id,input_variables,output_variables,inoutput_variables) VALUES ($1, $2, $3, $4)`, id, inputVars, outputVars, inoutputVars)
+	dialect := goqu.Dialect("postgres")
+	insertQuery, insertArgs, err := dialect.Insert("operation_element").
+		Rows(goqu.Record{
+			"id":                 id,
+			"input_variables":    inputVars,
+			"output_variables":   outputVars,
+			"inoutput_variables": inoutputVars,
+		}).
+		ToSQL()
+	if err != nil {
+		return err
+	}
+	_, err = tx.Exec(insertQuery, insertArgs...)
 	if err != nil {
 		return err
 	}

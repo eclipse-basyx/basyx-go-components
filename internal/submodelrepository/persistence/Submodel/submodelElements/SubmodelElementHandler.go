@@ -297,21 +297,51 @@ func DeleteSubmodelElementByPath(tx *sql.Tx, submodelID string, idShortOrPath st
 		}
 
 		// get the id of the parent SubmodelElementList
+		dialect := goqu.Dialect("postgres")
+		selectQuery, selectArgs, err := dialect.From("submodel_element").
+			Select("id").
+			Where(goqu.And(
+				goqu.C("submodel_id").Eq(submodelID),
+				goqu.C("idshort_path").Eq(parentPath),
+			)).
+			ToSQL()
+		if err != nil {
+			return err
+		}
+		
 		var parentID int
-		err = tx.QueryRow(`SELECT id FROM submodel_element WHERE submodel_id = $1 AND idshort_path = $2`, submodelID, parentPath).Scan(&parentID)
+		err = tx.QueryRow(selectQuery, selectArgs...).Scan(&parentID)
 		if err != nil {
 			return err
 		}
 
 		// update the indices of the remaining elements in the SubmodelElementList
-		updateQuery := `UPDATE submodel_element SET position = position - 1 WHERE parent_sme_id = $1 AND position > $2`
-		_, err = tx.Exec(updateQuery, parentID, deletedIndex)
+		updateQuery, updateArgs, err := dialect.Update("submodel_element").
+			Set(goqu.Record{"position": goqu.L("position - 1")}).
+			Where(goqu.And(
+				goqu.C("parent_sme_id").Eq(parentID),
+				goqu.C("position").Gt(deletedIndex),
+			)).
+			ToSQL()
+		if err != nil {
+			return err
+		}
+		_, err = tx.Exec(updateQuery, updateArgs...)
 		if err != nil {
 			return err
 		}
 		// update their idshort_path as well
-		updatePathQuery := `UPDATE submodel_element SET idshort_path = regexp_replace(idshort_path, '\[' || (position + 1) || '\]', '[' || position || ']') WHERE parent_sme_id = $1 AND position >= $2`
-		_, err = tx.Exec(updatePathQuery, parentID, deletedIndex)
+		updatePathQuery, updatePathArgs, err := dialect.Update("submodel_element").
+			Set(goqu.Record{"idshort_path": goqu.L("regexp_replace(idshort_path, '\\[' || (position + 1) || '\\]', '[' || position || ']')")}).
+			Where(goqu.And(
+				goqu.C("parent_sme_id").Eq(parentID),
+				goqu.C("position").Gte(deletedIndex),
+			)).
+			ToSQL()
+		if err != nil {
+			return err
+		}
+		_, err = tx.Exec(updatePathQuery, updatePathArgs...)
 		if err != nil {
 			return err
 		}

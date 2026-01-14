@@ -370,8 +370,19 @@ func insertAnnotatedRelationshipElement(areElem *gen.AnnotatedRelationshipElemen
 		return err
 	}
 
-	_, err = tx.Exec(`INSERT INTO annotated_relationship_element (id, first, second) VALUES ($1, $2, $3)`,
-		id, firstRef, secondRef)
+	dialect := goqu.Dialect("postgres")
+	insertQuery, insertArgs, err := dialect.Insert("annotated_relationship_element").
+		Rows(goqu.Record{
+			"id":     id,
+			"first":  firstRef,
+			"second": secondRef,
+		}).
+		ToSQL()
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.Exec(insertQuery, insertArgs...)
 	if err != nil {
 		return err
 	}

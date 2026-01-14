@@ -92,8 +92,18 @@ func (p PostgreSQLFileHandler) Create(tx *sql.Tx, submodelID string, submodelEle
 	}
 
 	// File-specific database insertion
-	_, err = tx.Exec(`INSERT INTO file_element (id, content_type, value) VALUES ($1, $2, $3)`,
-		id, file.ContentType, file.Value)
+	dialect := goqu.Dialect("postgres")
+	insertQuery, insertArgs, err := dialect.Insert("file_element").
+		Rows(goqu.Record{
+			"id":           id,
+			"content_type": file.ContentType,
+			"value":        file.Value,
+		}).
+		ToSQL()
+	if err != nil {
+		return 0, err
+	}
+	_, err = tx.Exec(insertQuery, insertArgs...)
 	if err != nil {
 		return 0, err
 	}
@@ -129,8 +139,18 @@ func (p PostgreSQLFileHandler) CreateNested(tx *sql.Tx, submodelID string, paren
 	}
 
 	// File-specific database insertion for nested element
-	_, err = tx.Exec(`INSERT INTO file_element (id, content_type, value) VALUES ($1, $2, $3)`,
-		id, file.ContentType, file.Value)
+	dialect := goqu.Dialect("postgres")
+	insertQuery, insertArgs, err := dialect.Insert("file_element").
+		Rows(goqu.Record{
+			"id":           id,
+			"content_type": file.ContentType,
+			"value":        file.Value,
+		}).
+		ToSQL()
+	if err != nil {
+		return 0, err
+	}
+	_, err = tx.Exec(insertQuery, insertArgs...)
 	if err != nil {
 		return 0, err
 	}

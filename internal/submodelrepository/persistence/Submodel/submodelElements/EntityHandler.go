@@ -257,8 +257,19 @@ func insertEntity(entity *gen.Entity, tx *sql.Tx, id int) error {
 		specificAssetIDs = string(specificAssetIDsBytes)
 	}
 
-	_, err := tx.Exec(`INSERT INTO entity_element (id, entity_type, global_asset_id, specific_asset_ids) VALUES ($1, $2, $3, $4)`,
-		id, entity.EntityType, entity.GlobalAssetID, specificAssetIDs)
+	dialect := goqu.Dialect("postgres")
+	insertQuery, insertArgs, err := dialect.Insert("entity_element").
+		Rows(goqu.Record{
+			"id":                  id,
+			"entity_type":         entity.EntityType,
+			"global_asset_id":     entity.GlobalAssetID,
+			"specific_asset_ids":  specificAssetIDs,
+		}).
+		ToSQL()
+	if err != nil {
+		return err
+	}
+	_, err = tx.Exec(insertQuery, insertArgs...)
 	if err != nil {
 		return err
 	}

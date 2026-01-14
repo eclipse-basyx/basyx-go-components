@@ -417,8 +417,18 @@ func insertRelationshipElement(relElem *gen.RelationshipElement, tx *sql.Tx, id 
 		secondRef = string(ref)
 	}
 
-	_, err := tx.Exec(`INSERT INTO relationship_element (id, first, second) VALUES ($1, $2, $3)`,
-		id, firstRef, secondRef)
+	dialect := goqu.Dialect("postgres")
+	insertQuery, insertArgs, err := dialect.Insert("relationship_element").
+		Rows(goqu.Record{
+			"id":     id,
+			"first":  firstRef,
+			"second": secondRef,
+		}).
+		ToSQL()
+	if err != nil {
+		return err
+	}
+	_, err = tx.Exec(insertQuery, insertArgs...)
 	return err
 }
 
@@ -445,14 +455,37 @@ func insertRelationshipElement(relElem *gen.RelationshipElement, tx *sql.Tx, id 
 // Note: This function is used for both first and second references in relationship elements,
 // as well as any other reference structures that need full persistence with keys.
 func insertReference(tx *sql.Tx, ref gen.Reference) (int, error) {
-	var refID int
-	err := tx.QueryRow(`INSERT INTO reference (type) VALUES ($1) RETURNING id`, ref.Type).Scan(&refID)
+	dialect := goqu.Dialect("postgres")
+	
+	// Insert reference and get ID
+	insertQuery, insertArgs, err := dialect.Insert("reference").
+		Rows(goqu.Record{"type": ref.Type}).
+		Returning("id").
+		ToSQL()
 	if err != nil {
 		return 0, err
 	}
+	
+	var refID int
+	err = tx.QueryRow(insertQuery, insertArgs...).Scan(&refID)
+	if err != nil {
+		return 0, err
+	}
+	
+	// Insert keys
 	for i, key := range ref.Keys {
-		_, err = tx.Exec(`INSERT INTO reference_key (reference_id, position, type, value) VALUES ($1, $2, $3, $4)`,
-			refID, i, key.Type, key.Value)
+		insertKeyQuery, insertKeyArgs, err := dialect.Insert("reference_key").
+			Rows(goqu.Record{
+				"reference_id": refID,
+				"position":     i,
+				"type":         key.Type,
+				"value":        key.Value,
+			}).
+			ToSQL()
+		if err != nil {
+			return 0, err
+		}
+		_, err = tx.Exec(insertKeyQuery, insertKeyArgs...)
 		if err != nil {
 			return 0, err
 		}

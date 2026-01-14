@@ -214,7 +214,15 @@ func (p *PostgreSQLSMECrudHandler) CreateWithPath(tx *sql.Tx, submodelID string,
 
 	// For root elements, set root_sme_id to their own ID
 	if rootSubmodelElementID == 0 {
-		_, err = tx.Exec(`UPDATE submodel_element SET root_sme_id = $1 WHERE id = $1`, id)
+		dialect := goqu.Dialect("postgres")
+		updateQuery, updateArgs, err := dialect.Update("submodel_element").
+			Set(goqu.Record{"root_sme_id": id}).
+			Where(goqu.C("id").Eq(id)).
+			ToSQL()
+		if err != nil {
+			return 0, err
+		}
+		_, err = tx.Exec(updateQuery, updateArgs...)
 		if err != nil {
 			return 0, err
 		}
@@ -227,7 +235,18 @@ func (p *PostgreSQLSMECrudHandler) CreateWithPath(tx *sql.Tx, submodelID string,
 			if err != nil {
 				return 0, err
 			}
-			_, err = tx.Exec(`INSERT INTO submodel_element_qualifier(sme_id, qualifier_id) VALUES($1, $2)`, id, qualifierID)
+			
+			dialect := goqu.Dialect("postgres")
+			insertQuery, insertArgs, err := dialect.Insert("submodel_element_qualifier").
+				Rows(goqu.Record{
+					"sme_id":       id,
+					"qualifier_id": qualifierID,
+				}).
+				ToSQL()
+			if err != nil {
+				return 0, err
+			}
+			_, err = tx.Exec(insertQuery, insertArgs...)
 			if err != nil {
 				_, _ = fmt.Println(err)
 				return 0, common.NewInternalServerError("Failed to Create Qualifier for Submodel Element with ID '" + fmt.Sprintf("%d", id) + "'. See console for details.")
@@ -563,8 +582,20 @@ func (p *PostgreSQLSMECrudHandler) Delete(idShortOrPath string) error {
 //
 //	dbID, err := handler.GetDatabaseID("sensors.temperature")
 func (p *PostgreSQLSMECrudHandler) GetDatabaseID(submodelID string, idShortPath string) (int, error) {
+	dialect := goqu.Dialect("postgres")
+	selectQuery, selectArgs, err := dialect.From("submodel_element").
+		Select("id").
+		Where(goqu.And(
+			goqu.C("idshort_path").Eq(idShortPath),
+			goqu.C("submodel_id").Eq(submodelID),
+		)).
+		ToSQL()
+	if err != nil {
+		return 0, err
+	}
+	
 	var id int
-	err := p.Db.QueryRow(`SELECT id FROM submodel_element WHERE idshort_path = $1 AND submodel_id = $2`, idShortPath, submodelID).Scan(&id)
+	err = p.Db.QueryRow(selectQuery, selectArgs...).Scan(&id)
 	if err != nil {
 		return 0, err
 	}
@@ -594,8 +625,17 @@ func (p *PostgreSQLSMECrudHandler) GetDatabaseID(submodelID string, idShortPath 
 //	nextPos, err := handler.GetNextPosition(parentDbID)
 //	// Use nextPos when creating the next child element
 func (p *PostgreSQLSMECrudHandler) GetNextPosition(parentID int) (int, error) {
+	dialect := goqu.Dialect("postgres")
+	selectQuery, selectArgs, err := dialect.From("submodel_element").
+		Select(goqu.MAX("position")).
+		Where(goqu.C("parent_sme_id").Eq(parentID)).
+		ToSQL()
+	if err != nil {
+		return 0, err
+	}
+	
 	var position sql.NullInt64
-	err := p.Db.QueryRow(`SELECT MAX(position) FROM submodel_element WHERE parent_sme_id = $1`, parentID).Scan(&position)
+	err = p.Db.QueryRow(selectQuery, selectArgs...).Scan(&position)
 	if err != nil {
 		return 0, err
 	}
@@ -623,8 +663,17 @@ func (p *PostgreSQLSMECrudHandler) GetNextPosition(parentID int) (int, error) {
 //	modelType, err := handler.GetSubmodelElementType("sensors.temperature")
 //	// Use modelType to get the appropriate handler via GetSMEHandlerByModelType
 func (p *PostgreSQLSMECrudHandler) GetSubmodelElementType(idShortPath string) (string, error) {
+	dialect := goqu.Dialect("postgres")
+	selectQuery, selectArgs, err := dialect.From("submodel_element").
+		Select("model_type").
+		Where(goqu.C("idshort_path").Eq(idShortPath)).
+		ToSQL()
+	if err != nil {
+		return "", err
+	}
+	
 	var modelType string
-	err := p.Db.QueryRow(`SELECT model_type FROM submodel_element WHERE idshort_path = $1`, idShortPath).Scan(&modelType)
+	err = p.Db.QueryRow(selectQuery, selectArgs...).Scan(&modelType)
 	if err != nil {
 		return "", err
 	}

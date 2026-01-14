@@ -283,13 +283,25 @@ func insertRange(rangeElem *gen.Range, tx *sql.Tx, id int) error {
 	typedValue := persistenceutils.MapRangeValueByType(string(rangeElem.ValueType), rangeElem.Min, rangeElem.Max)
 
 	// Insert Range-specific data
-	_, err := tx.Exec(`INSERT INTO range_element (id, value_type, min_text, max_text, min_num, max_num, min_time, max_time, min_datetime, max_datetime)
-					 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-		id, rangeElem.ValueType,
-		typedValue.MinText, typedValue.MaxText,
-		typedValue.MinNumeric, typedValue.MaxNumeric,
-		typedValue.MinTime, typedValue.MaxTime,
-		typedValue.MinDateTime, typedValue.MaxDateTime)
+	dialect := goqu.Dialect("postgres")
+	insertQuery, insertArgs, err := dialect.Insert("range_element").
+		Rows(goqu.Record{
+			"id":           id,
+			"value_type":   rangeElem.ValueType,
+			"min_text":     typedValue.MinText,
+			"max_text":     typedValue.MaxText,
+			"min_num":      typedValue.MinNumeric,
+			"max_num":      typedValue.MaxNumeric,
+			"min_time":     typedValue.MinTime,
+			"max_time":     typedValue.MaxTime,
+			"min_datetime": typedValue.MinDateTime,
+			"max_datetime": typedValue.MaxDateTime,
+		}).
+		ToSQL()
+	if err != nil {
+		return err
+	}
+	_, err = tx.Exec(insertQuery, insertArgs...)
 	return err
 }
 

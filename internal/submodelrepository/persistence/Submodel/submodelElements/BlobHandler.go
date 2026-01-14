@@ -96,8 +96,19 @@ func (p PostgreSQLBlobHandler) Create(tx *sql.Tx, submodelID string, submodelEle
 	}
 
 	// Blob-specific database insertion
-	_, err = tx.Exec(`INSERT INTO blob_element (id, content_type, value) VALUES ($1, $2, $3)`,
-		id, blob.ContentType, []byte(blob.Value))
+	dialect := goqu.Dialect("postgres")
+	insertQuery, insertArgs, err := dialect.Insert("blob_element").
+		Rows(goqu.Record{
+			"id":           id,
+			"content_type": blob.ContentType,
+			"value":        []byte(blob.Value),
+		}).
+		ToSQL()
+	if err != nil {
+		return 0, err
+	}
+
+	_, err = tx.Exec(insertQuery, insertArgs...)
 	if err != nil {
 		return 0, err
 	}
@@ -133,8 +144,19 @@ func (p PostgreSQLBlobHandler) CreateNested(tx *sql.Tx, submodelID string, paren
 	}
 
 	// Blob-specific database insertion for nested element
-	_, err = tx.Exec(`INSERT INTO blob_element (id, content_type, value) VALUES ($1, $2, $3)`,
-		id, blob.ContentType, []byte(blob.Value))
+	dialect := goqu.Dialect("postgres")
+	insertQuery, insertArgs, err := dialect.Insert("blob_element").
+		Rows(goqu.Record{
+			"id":           id,
+			"content_type": blob.ContentType,
+			"value":        []byte(blob.Value),
+		}).
+		ToSQL()
+	if err != nil {
+		return 0, err
+	}
+
+	_, err = tx.Exec(insertQuery, insertArgs...)
 	if err != nil {
 		return 0, err
 	}

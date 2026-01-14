@@ -371,15 +371,33 @@ func (p PostgreSQLMultiLanguagePropertyHandler) Delete(idShortOrPath string) err
 //   - error: An error if the database insert operation fails
 func insertMultiLanguageProperty(mlp *gen.MultiLanguageProperty, tx *sql.Tx, id int) error {
 	// Insert into multilanguage_property
-	_, err := tx.Exec(`INSERT INTO multilanguage_property (id) VALUES ($1)`, id)
+	dialect := goqu.Dialect("postgres")
+	insertQuery, insertArgs, err := dialect.Insert("multilanguage_property").
+		Rows(goqu.Record{"id": id}).
+		ToSQL()
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.Exec(insertQuery, insertArgs...)
 	if err != nil {
 		return err
 	}
 
 	// Insert values
 	for _, val := range mlp.Value {
-		_, err = tx.Exec(`INSERT INTO multilanguage_property_value (mlp_id, language, text) VALUES ($1, $2, $3)`,
-			id, val.Language, val.Text)
+		insertQuery, insertArgs, err := dialect.Insert("multilanguage_property_value").
+			Rows(goqu.Record{
+				"mlp_id":   id,
+				"language": val.Language,
+				"text":     val.Text,
+			}).
+			ToSQL()
+		if err != nil {
+			return err
+		}
+
+		_, err = tx.Exec(insertQuery, insertArgs...)
 		if err != nil {
 			return err
 		}
