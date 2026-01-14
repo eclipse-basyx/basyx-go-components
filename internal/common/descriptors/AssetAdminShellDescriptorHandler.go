@@ -47,7 +47,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"time"
 
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
@@ -407,10 +406,7 @@ func ListAssetAdministrationShellDescriptors(
 	assetType string,
 	identifiable string,
 ) ([]model.AssetAdministrationShellDescriptor, string, error) {
-	start := time.Now()
-	defer func() {
-		_, _ = fmt.Printf("ListAssetAdministrationShellDescriptors took %s for limit %d\n", time.Since(start), limit)
-	}()
+
 	if limit <= 0 {
 		limit = 1000000
 	}
@@ -419,11 +415,8 @@ func ListAssetAdministrationShellDescriptors(
 	if err != nil {
 		return nil, "", err
 	}
-	fmt.Println("d")
 	sqlStr, args, err := ds.ToSQL()
 
-	_, _ = fmt.Println(sqlStr)
-	_, _ = fmt.Println(args)
 	if err != nil {
 		return nil, "", err
 	}
@@ -438,7 +431,6 @@ func ListAssetAdministrationShellDescriptors(
 
 	descRows := make([]model.AssetAdministrationShellDescriptorRow, 0, peekLimit)
 	for rows.Next() {
-		_, _ = fmt.Println("a")
 		var r model.AssetAdministrationShellDescriptorRow
 		if err := rows.Scan(
 			&r.DescID,

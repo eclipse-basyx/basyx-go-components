@@ -248,5 +248,6 @@ func TestMain(m *testing.M) {
 	if err := cmd.Run(); err != nil {
 		fmt.Printf("Failed to stop Docker Compose: %v\n", err)
 	}
+
 	os.Exit(code)
 }
