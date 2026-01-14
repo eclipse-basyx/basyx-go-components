@@ -1,0 +1,22 @@
+{
+    "category": "PARAMETER",
+    "idShort": "ExampleBlob",
+    "description": [
+        {
+            "language": "de",
+            "text": "Beispiel Blob Element Aktualisiert"
+        }
+    ],
+    "modelType": "Blob",
+    "semanticId": {
+        "type": "ExternalReference",
+        "keys": [
+            {
+                "type": "GlobalReference",
+                "value": "http://acplt.org/Blobs/ExampleBlob-aktualisiert"
+            }
+        ]
+    },
+    "value": "hallo-neu",
+    "contentType": "application/xml"
+}

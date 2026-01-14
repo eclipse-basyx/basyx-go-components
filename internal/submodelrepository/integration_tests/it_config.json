@@ -10,7 +10,7 @@
         "context": "Create Top Level Property",
         "method": "POST",
         "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements",
-        "data": "postBody/postTopLevelProperty.json",
+        "data": "bodies/post/postTopLevelProperty.json",
         "expectedStatus": 201
     },
     {
@@ -31,63 +31,63 @@
         "context": "PUT - Update Top Level Property",
         "method": "PUT",
         "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/myTopLevelProperty",
-        "data": "postBody/putTopLevelProperty.json",
+        "data": "bodies/put/putTopLevelProperty.json",
         "expectedStatus": 204
     },
     {
         "context": "GET - Verify Updated Top Level Property",
         "method": "GET",
         "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/myTopLevelProperty",
-        "shouldMatch": "postBody/putTopLevelProperty.json",
+        "shouldMatch": "bodies/put/putTopLevelProperty.json",
         "expectedStatus": 200
     },
     {
         "context": "PUT - Update SubmodelElement",
         "method": "PUT",
         "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/myTopLevelProperty",
-        "data": "postBody/putTopLevelPropertySubmodelElement.json",
+        "data": "bodies/put/putTopLevelPropertySubmodelElement.json",
         "expectedStatus": 204
     },
     {
         "context": "GET - Verify Updated SubmodelElement",
         "method": "GET",
         "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/myTopLevelProperty",
-        "shouldMatch": "postBody/putTopLevelPropertySubmodelElement.json",
+        "shouldMatch": "bodies/put/putTopLevelPropertySubmodelElement.json",
         "expectedStatus": 200
     },
     {
         "context": "PUT - Revert Top Level Property",
         "method": "PUT",
         "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/myTopLevelProperty",
-        "data": "postBody/putTopLevelProperty.json",
+        "data": "bodies/put/putTopLevelProperty.json",
         "expectedStatus": 204
     },
     {
         "context": "GET - Verify Reverted Top Level Property",
         "method": "GET",
         "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/myTopLevelProperty",
-        "shouldMatch": "postBody/putTopLevelProperty.json",
+        "shouldMatch": "bodies/put/putTopLevelProperty.json",
         "expectedStatus": 200
     },
     {
         "context": "Delete item in nested structure",
         "method": "POST",
         "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements",
-        "data": "postBody/postNestedStructure.json",
+        "data": "bodies/post/postNestedStructure.json",
         "expectedStatus": 201
     },
     {
         "context": "Delete item in nested structure",
         "method": "DELETE",
         "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/1.2.3.4.5.6[0]",
-        "data": "postBody/postNestedStructure.json",
+        "data": "bodies/post/postNestedStructure.json",
         "expectedStatus": 204
     },
     {
         "context": "Delete item in nested structure - Delete non-existing item",
         "method": "DELETE",
         "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/1.2.3.4.5.6[3]",
-        "data": "postBody/postNestedStructure.json",
+        "data": "bodies/post/postNestedStructure.json",
         "expectedStatus": 404
     },
     {
@@ -126,14 +126,14 @@
         "context": "Create Full Submodel Elements Json",
         "method": "POST",
         "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements",
-        "data": "postBody/postFullSME.json",
+        "data": "bodies/post/postFullSME.json",
         "expectedStatus": 201
     },
     {
         "context": "Post Full Submodel",
         "method": "POST",
         "endpoint": "http://localhost:6004/submodels",
-        "data": "postBody/postFullSM.json",
+        "data": "bodies/post/postFullSM.json",
         "expectedStatus": 201
     },
     {
@@ -179,56 +179,56 @@
         "context": "Post heavy Submodel",
         "method": "POST",
         "endpoint": "http://localhost:6004/submodels",
-        "data": "postBody/heavySubmodel.json",
+        "data": "bodies//heavySubmodel.json",
         "expectedStatus": 201
     },
     {
         "context": "Get heavy Submodel",
         "method": "GET",
         "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQUhlYXZ5U3VibW9kZWw",
-        "shouldMatch": "postBody/heavySubmodel.json",
+        "shouldMatch": "bodies//heavySubmodel.json",
         "expectedStatus": 200
     },
     {
         "context": "Post minimal Administration Submodel",
         "method": "POST",
         "endpoint": "http://localhost:6004/submodels",
-        "data": "postBody/submodelMinimalAdministration.json",
+        "data": "bodies//submodelMinimalAdministration.json",
         "expectedStatus": 201
     },
     {
         "context": "Get minimal Administration Submodel",
         "method": "GET",
         "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU1pbmltYWxBZG1pbmlzdHJhdGlvblN1Ym1vZGVs",
-        "shouldMatch": "postBody/submodelMinimalAdministration.json",
+        "shouldMatch": "bodies//submodelMinimalAdministration.json",
         "expectedStatus": 200
     },
     {
         "context": "Post Submodel with Operation SubmodelElement",
         "method": "POST",
         "endpoint": "http://localhost:6004/submodels",
-        "data": "postBody/postSubmodelWithOperation.json",
+        "data": "bodies/post/postSubmodelWithOperation.json",
         "expectedStatus": 201
     },
     {
         "context": "Get Submodel with Operation SubmodelElement",
         "method": "GET",
         "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlPcGVyYXRpb25TdWJtb2RlbA",
-        "shouldMatch": "postBody/postSubmodelWithOperation.json",
+        "shouldMatch": "bodies/post/postSubmodelWithOperation.json",
         "expectedStatus": 200
     },
     {
         "context": "Post Submodel with Entity SubmodelElement",
         "method": "POST",
         "endpoint": "http://localhost:6004/submodels",
-        "data": "postBody/postSubmodelWithEntity.json",
+        "data": "bodies/post/postSubmodelWithEntity.json",
         "expectedStatus": 201
     },
     {
         "context": "Get Submodel with Entity SubmodelElement",
         "method": "GET",
         "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlFbnRpdHlTdWJtb2RlbA",
-        "shouldMatch": "postBody/postSubmodelWithEntity.json",
+        "shouldMatch": "bodies/post/postSubmodelWithEntity.json",
         "expectedStatus": 200
     },
     {
@@ -242,42 +242,42 @@
         "context": "Post Submodel with Capability SubmodelElement",
         "method": "POST",
         "endpoint": "http://localhost:6004/submodels",
-        "data": "postBody/postSubmodelWithCapability.json",
+        "data": "bodies/post/postSubmodelWithCapability.json",
         "expectedStatus": 201
     },
     {
         "context": "Get Submodel with Capability SubmodelElement",
         "method": "GET",
         "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlDYXBhYmlsaXR5U3VibW9kZWw",
-        "shouldMatch": "postBody/postSubmodelWithCapability.json",
+        "shouldMatch": "bodies/post/postSubmodelWithCapability.json",
         "expectedStatus": 200
     },
     {
         "context": "Post Submodel with RelationshipElement SubmodelElement",
         "method": "POST",
         "endpoint": "http://localhost:6004/submodels",
-        "data": "postBody/postSubmodelWithRelationshipElement.json",
+        "data": "bodies/post/postSubmodelWithRelationshipElement.json",
         "expectedStatus": 201
     },
     {
         "context": "Get Submodel with RelationshipElement SubmodelElement",
         "method": "GET",
         "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlSZWxhdGlvbnNoaXBFbGVtZW50U3VibW9kZWw",
-        "shouldMatch": "postBody/postSubmodelWithRelationshipElement.json",
+        "shouldMatch": "bodies/post/postSubmodelWithRelationshipElement.json",
         "expectedStatus": 200
     },
     {
         "context": "Post Submodel with AnnotatedRelationshipElement SubmodelElement",
         "method": "POST",
         "endpoint": "http://localhost:6004/submodels",
-        "data": "postBody/postSubmodelWithAnnotatedRelationshipElement.json",
+        "data": "bodies/post/postSubmodelWithAnnotatedRelationshipElement.json",
         "expectedStatus": 201
     },
     {
         "context": "Get Submodel with AnnotatedRelationshipElement SubmodelElement",
         "method": "GET",
         "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlBbm5vdGF0ZWRSZWxhdGlvbnNoaXBFbGVtZW50U3VibW9kZWw",
-        "shouldMatch": "postBody/postSubmodelWithAnnotatedRelationshipElement.json",
+        "shouldMatch": "bodies/post/postSubmodelWithAnnotatedRelationshipElement.json",
         "expectedStatus": 200
     },
     {
@@ -291,42 +291,42 @@
         "context": "Post Submodel with ReferenceElement SubmodelElement",
         "method": "POST",
         "endpoint": "http://localhost:6004/submodels",
-        "data": "postBody/postSubmodelWithReferenceElement.json",
+        "data": "bodies/post/postSubmodelWithReferenceElement.json",
         "expectedStatus": 201
     },
     {
         "context": "Get Submodel with ReferenceElement SubmodelElement",
         "method": "GET",
         "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlSZWZlcmVuY2VFbGVtZW50U3VibW9kZWw",
-        "shouldMatch": "postBody/postSubmodelWithReferenceElement.json",
+        "shouldMatch": "bodies/post/postSubmodelWithReferenceElement.json",
         "expectedStatus": 200
     },
     {
         "context": "Post Submodel with Range SubmodelElement",
         "method": "POST",
         "endpoint": "http://localhost:6004/submodels",
-        "data": "postBody/postSubmodelWithRangeElement.json",
+        "data": "bodies/post/postSubmodelWithRangeElement.json",
         "expectedStatus": 201
     },
     {
         "context": "Get Submodel with Range SubmodelElement",
         "method": "GET",
         "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlSYW5nZVN1Ym1vZGVs",
-        "shouldMatch": "postBody/postSubmodelWithRangeElement.json",
+        "shouldMatch": "bodies/post/postSubmodelWithRangeElement.json",
         "expectedStatus": 200
     },
     {
         "context": "Post Submodel with File SubmodelElement",
         "method": "POST",
         "endpoint": "http://localhost:6004/submodels",
-        "data": "postBody/postSubmodelWithFile.json",
+        "data": "bodies/post/postSubmodelWithFile.json",
         "expectedStatus": 201
     },
     {
         "context": "Get Submodel with File SubmodelElement",
         "method": "GET",
         "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9Pbmx5RmlsZVN1Ym1vZGVsX1Rlc3Q",
-        "shouldMatch": "postBody/postSubmodelWithFile.json",
+        "shouldMatch": "bodies/post/postSubmodelWithFile.json",
         "expectedStatus": 200
     },
     {
@@ -389,7 +389,7 @@
         "context": "PATCH Property ValueOnly - Update ProductModelName",
         "method": "PATCH",
         "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQUhlYXZ5U3VibW9kZWw/submodel-elements/ProductModelName/$value",
-        "data": "postBody/patchPropertyValueOnly.json",
+        "data": "bodies/patch/patchPropertyValueOnly.json",
         "expectedStatus": 204
     },
     {
@@ -403,7 +403,7 @@
         "context": "PATCH MultiLanguageProperty ValueOnly - Update ExampleMultiLanguageProperty",
         "method": "PATCH",
         "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/ExampleSubmodelElementCollection.ExampleSubmodelElementListOrdered[1]/$value",
-        "data": "postBody/patchMultiLanguagePropertyValueOnly.json",
+        "data": "bodies/patch/patchMultiLanguagePropertyValueOnly.json",
         "expectedStatus": 204
     },
     {
@@ -417,7 +417,7 @@
         "context": "PATCH Range ValueOnly - Update DemoRange",
         "method": "PATCH",
         "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlSYW5nZVN1Ym1vZGVs/submodel-elements/DemoRange/$value",
-        "data": "postBody/patchRangeValueOnly.json",
+        "data": "bodies/patch/patchRangeValueOnly.json",
         "expectedStatus": 204
     },
     {
@@ -431,7 +431,7 @@
         "context": "PATCH ReferenceElement ValueOnly - Update DemoOperation",
         "method": "PATCH",
         "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlSZWZlcmVuY2VFbGVtZW50U3VibW9kZWw/submodel-elements/DemoOperation/$value",
-        "data": "postBody/patchReferenceElementValueOnly.json",
+        "data": "bodies/patch/patchReferenceElementValueOnly.json",
         "expectedStatus": 204
     },
     {
@@ -445,7 +445,7 @@
         "context": "PATCH File ValueOnly - Update DemoFile",
         "method": "PATCH",
         "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9Pbmx5RmlsZVN1Ym1vZGVsX1Rlc3Q/submodel-elements/DemoFile/$value",
-        "data": "postBody/patchFileValueOnly.json",
+        "data": "bodies/patch/patchFileValueOnly.json",
         "expectedStatus": 204
     },
     {
@@ -459,7 +459,7 @@
         "context": "PATCH Blob ValueOnly - Update ExampleBlob",
         "method": "PATCH",
         "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/ExampleSubmodelElementCollection.ExampleSubmodelElementCollection.ExampleBlob/$value",
-        "data": "postBody/patchBlobValueOnly.json",
+        "data": "bodies/patch/patchBlobValueOnly.json",
         "expectedStatus": 204
     },
     {
@@ -473,7 +473,7 @@
         "context": "PATCH RelationshipElement ValueOnly - Update DemoRelationshipElement",
         "method": "PATCH",
         "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlSZWxhdGlvbnNoaXBFbGVtZW50U3VibW9kZWw/submodel-elements/DemoRelationshipElement/$value",
-        "data": "postBody/patchRelationshipElementValueOnly.json",
+        "data": "bodies/patch/patchRelationshipElementValueOnly.json",
         "expectedStatus": 204
     },
     {
@@ -487,7 +487,7 @@
         "context": "PATCH AnnotatedRelationshipElement ValueOnly - Update DemoAnnotatedRelationshipElement",
         "method": "PATCH",
         "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlBbm5vdGF0ZWRSZWxhdGlvbnNoaXBFbGVtZW50U3VibW9kZWw/submodel-elements/DemoAnnotatedRelationshipElement/$value",
-        "data": "postBody/patchAnnotatedRelationshipElementValueOnly.json",
+        "data": "bodies/patch/patchAnnotatedRelationshipElementValueOnly.json",
         "expectedStatus": 204
     },
     {
@@ -501,7 +501,7 @@
         "context": "PATCH SubmodelElementCollection ValueOnly - Update ExampleSubmodelElementCollection",
         "method": "PATCH",
         "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/ExampleSubmodelElementCollection/$value",
-        "data": "postBody/patchSubmodelElementCollectionValueOnly.json",
+        "data": "bodies/patch/patchSubmodelElementCollectionValueOnly.json",
         "expectedStatus": 204
     },
     {
@@ -515,7 +515,7 @@
         "context": "PATCH SubmodelElementList ValueOnly - Update ExampleSubmodelElementListOrdered",
         "method": "PATCH",
         "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/ExampleSubmodelElementCollection.ExampleSubmodelElementListOrdered/$value",
-        "data": "postBody/patchSubmodelElementListValueOnly.json",
+        "data": "bodies/patch/patchSubmodelElementListValueOnly.json",
         "expectedStatus": 204
     },
     {
@@ -529,35 +529,35 @@
         "context": "PATCH Submodel ValueOnly - Non Existing Submodel",
         "method": "PATCH",
         "endpoint": "http://localhost:6004/submodels/SmFubmlrU2F5c1RoaXNTdWJtb2RlbERvZXNudEV4aXN0c1NvTnVoVWhoaA/$value",
-        "data": "postBody/patchSubmodelValueOnly.json",
+        "data": "bodies/patch/patchSubmodelValueOnly.json",
         "expectedStatus": 404
     },
     {
         "context": "PATCH Submodel ValueOnly - Existing Submodel",
         "method": "PATCH",
         "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/$value",
-        "data": "postBody/patchSubmodelValueOnly.json",
+        "data": "bodies/patch/patchSubmodelValueOnly.json",
         "expectedStatus": 204
     },
     {
         "context": "PATCH Submodel ValueOnly - Verify Patch Submodel",
         "method": "GET",
         "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/$value",
-        "shouldMatch": "postBody/patchSubmodelValueOnly.json",
+        "shouldMatch": "bodies/patch/patchSubmodelValueOnly.json",
         "expectedStatus": 200
     },
     {
         "context": "PATCH Submodel ValueOnly - Existing Submodel Non-Existent SME",
         "method": "PATCH",
         "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/$value",
-        "data": "postBody/patchSubmodelValueOnlyNonExistingSME.json",
+        "data": "bodies/patch/patchSubmodelValueOnlyNonExistingSME.json",
         "expectedStatus": 404
     },
         {
         "context": "PUT Submodel - Update existing Submodel",
         "method": "PUT",
         "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw",
-        "data": "postBody/putSubmodelUpdate.json",
+        "data": "bodies/put/putSubmodelUpdate.json",
         "expectedStatus": 204
     },
     {
@@ -571,7 +571,7 @@
         "context": "PUT Submodel - Create Submodel",
         "method": "PUT",
         "endpoint": "http://localhost:6004/submodels/QmFTeXg",
-        "data": "postBody/putSubmodelCreate.json",
+        "data": "bodies/put/putSubmodelCreate.json",
         "expectedStatus": 201
     },
     {
@@ -585,42 +585,42 @@
         "context": "PUT AnnotatedRelationshipElement SubmodelElement (Replace)",
         "method": "PUT",
         "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlBbm5vdGF0ZWRSZWxhdGlvbnNoaXBFbGVtZW50U3VibW9kZWw/submodel-elements/DemoAnnotatedRelationshipElement",
-        "data": "postBody/putARE.json",
+        "data": "bodies/put/putARE.json",
         "expectedStatus": 204
     },
     {
         "context": "PUT AnnotatedRelationshipElement - Verify updated Element",
         "method": "GET",
         "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlBbm5vdGF0ZWRSZWxhdGlvbnNoaXBFbGVtZW50U3VibW9kZWw/submodel-elements/DemoAnnotatedRelationshipElement",
-        "shouldMatch": "postBody/putARE.json",
+        "shouldMatch": "bodies/put/putARE.json",
         "expectedStatus": 200
     },
     {
         "context": "POST BasicEventElement Submodel",
         "method": "POST",
         "endpoint": "http://localhost:6004/submodels",
-        "data": "postBody/postSubmodelWithBasicEventElement.json",
+        "data": "bodies/post/postSubmodelWithBasicEventElement.json",
         "expectedStatus": 201
     },
     {
         "context": "GET BasicEventElement Submodel",
         "method": "GET",
         "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlCYXNpY0V2ZW50RWxlbWVudFN1Ym1vZGVs",
-        "shouldMatch": "postBody/postSubmodelWithBasicEventElement.json",
+        "shouldMatch": "bodies/post/postSubmodelWithBasicEventElement.json",
         "expectedStatus": 200
     },
     {
         "context": "PUT BasicEventElement SubmodelElement (Replace)",
         "method": "PUT",
         "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlCYXNpY0V2ZW50RWxlbWVudFN1Ym1vZGVs/submodel-elements/ExampleBasicEvent",
-        "data": "postBody/putBasicEventElement.json",
+        "data": "bodies/put/putBasicEventElement.json",
         "expectedStatus": 204
     },
     {
         "context": "PUT BasicEventElement - Verify updated Element",
         "method": "GET",
         "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlCYXNpY0V2ZW50RWxlbWVudFN1Ym1vZGVs/submodel-elements/ExampleBasicEvent",
-        "shouldMatch": "postBody/putBasicEventElement.json",
+        "shouldMatch": "bodies/put/putBasicEventElement.json",
         "expectedStatus": 200
     }
 ]

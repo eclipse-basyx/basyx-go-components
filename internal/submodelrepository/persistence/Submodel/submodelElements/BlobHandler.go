@@ -143,17 +143,93 @@ func (p PostgreSQLBlobHandler) CreateNested(tx *sql.Tx, submodelID string, paren
 }
 
 // Update modifies an existing Blob element identified by its idShort or path.
-// This method delegates the update operation to the decorated CRUD handler which handles
-// the common submodel element update logic.
+// This method handles both the common submodel element properties and the specific blob
+// data including content type and binary value storage.
 //
 // Parameters:
+//   - submodelID: ID of the parent submodel
 //   - idShortOrPath: idShort or hierarchical path to the element to update
 //   - submodelElement: Updated element data
+//   - tx: Active database transaction (can be nil, will create one if needed)
+//   - isPut: true: Replaces the Submodel Element with the Body Data (Deletes non-specified fields); false: Updates only passed request body data, unspecified is ignored
 //
 // Returns:
 //   - error: Error if update fails
 func (p PostgreSQLBlobHandler) Update(submodelID string, idShortOrPath string, submodelElement gen.SubmodelElement, tx *sql.Tx, isPut bool) error {
-	return p.decorated.Update(submodelID, idShortOrPath, submodelElement, tx, isPut)
+	var err error
+	localTx := tx
+
+	if tx == nil {
+		var startedTx *sql.Tx
+		var cu func(*error)
+
+		startedTx, cu, err = common.StartTransaction(p.db)
+
+		defer cu(&err)
+
+		localTx = startedTx
+	}
+
+	blob, ok := submodelElement.(*gen.Blob)
+	if !ok {
+		return common.NewErrBadRequest("submodelElement is not of type Blob")
+	}
+
+	// Check if blob value is larger than maximum allowed size
+	if len(blob.Value) > smrepoconfig.MaxBlobSizeBytes {
+		return smrepoerrors.ErrBlobTooLarge
+	}
+
+	// Handle optional fields
+	var contentType sql.NullString
+	if blob.ContentType != "" {
+		contentType = sql.NullString{String: blob.ContentType, Valid: true}
+	}
+
+	var value []byte
+	if blob.Value != "" {
+		value = []byte(blob.Value)
+	}
+
+	// Update with goqu
+	dialect := goqu.Dialect("postgres")
+
+	updateQuery, updateArgs, err := dialect.Update("blob_element").
+		Set(goqu.Record{
+			"content_type": contentType,
+			"value":        value,
+		}).
+		Where(goqu.C("id").In(
+			dialect.From("submodel_element").
+				Select("id").
+				Where(goqu.Ex{
+					"idshort_path": idShortOrPath,
+					"submodel_id":  submodelID,
+				}),
+		)).
+		ToSQL()
+	if err != nil {
+		return err
+	}
+
+	_, err = localTx.Exec(updateQuery, updateArgs...)
+	if err != nil {
+		return err
+	}
+
+	err = p.decorated.Update(submodelID, idShortOrPath, submodelElement, localTx, isPut)
+	if err != nil {
+		return err
+	}
+
+	if tx == nil {
+		err = localTx.Commit()
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // UpdateValueOnly updates only the value of an existing Blob submodel element identified by its idShort or path.

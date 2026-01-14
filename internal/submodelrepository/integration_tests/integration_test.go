@@ -363,7 +363,7 @@ func TestFileAttachmentOperations(t *testing.T) {
 	t.Run("3_Update_File_Element_Value_Should_Delete_LargeObject", func(t *testing.T) {
 		// Update the File SME value to an external URL (should trigger LO cleanup)
 		endpoint := fmt.Sprintf("%s/submodels/%s/submodel-elements/DemoFile", baseURL, submodelID)
-		updateData, err := os.ReadFile("postBody/updateFileElement.json")
+		updateData, err := os.ReadFile("bodies/updateFileElement.json")
 		require.NoError(t, err, "Failed to read update data")
 
 		req, err := http.NewRequest("PUT", endpoint, bytes.NewBuffer(updateData))
