@@ -562,7 +562,7 @@ CREATE TABLE IF NOT EXISTS aas (
     asset_information_id BIGINT REFERENCES asset_information(id),
     derived_from_reference_id BIGINT REFERENCES reference(id),
     displayname_id BIGINT REFERENCES lang_string_name_type_reference(id),
-    description_id BIGINT REFERENCES lang_string_text_type_reference(id),
+    description_id BIGINT REFERENCES lang_string_text_type_reference(id)
 );
 
 CREATE TABLE IF NOT EXISTS aas_specific_asset_id (
