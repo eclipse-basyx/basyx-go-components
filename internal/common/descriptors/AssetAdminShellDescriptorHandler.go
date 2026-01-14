@@ -285,44 +285,35 @@ func buildListAssetAdministrationShellDescriptorsQuery(
 	d := goqu.Dialect(dialect)
 	var mapper = []auth.ExpressionIdentifiableMapper{
 		{
-			Exp:           tAASDescriptor.Col(colDescriptorID),
-			CanBeFiltered: false,
+			Exp: tAASDescriptor.Col(colDescriptorID),
 		},
 		{
-			Exp:           tAASDescriptor.Col(colAssetKind),
-			CanBeFiltered: true,
-			Fragment:      fragPtr("$aasdesc#assetKind"),
+			Exp:      tAASDescriptor.Col(colAssetKind),
+			Fragment: fragPtr("$aasdesc#assetKind"),
 		},
 		{
-			Exp:           tAASDescriptor.Col(colAssetType),
-			CanBeFiltered: true,
-			Fragment:      fragPtr("$aasdesc#assetType"),
+			Exp:      tAASDescriptor.Col(colAssetType),
+			Fragment: fragPtr("$aasdesc#assetType"),
 		},
 		{
-			Exp:           tAASDescriptor.Col(colGlobalAssetID),
-			CanBeFiltered: true,
-			Fragment:      fragPtr("$aasdesc#globalAssetId"),
+			Exp:      tAASDescriptor.Col(colGlobalAssetID),
+			Fragment: fragPtr("$aasdesc#globalAssetId"),
 		},
 		{
-			Exp:           tAASDescriptor.Col(colIDShort),
-			CanBeFiltered: true,
-			Fragment:      fragPtr("$aasdesc#idShort"),
+			Exp:      tAASDescriptor.Col(colIDShort),
+			Fragment: fragPtr("$aasdesc#idShort"),
 		},
 		{
-			Exp:           tAASDescriptor.Col(colAASID),
-			CanBeFiltered: false,
+			Exp: tAASDescriptor.Col(colAASID),
 		},
 		{
-			Exp:           tAASDescriptor.Col(colAdminInfoID),
-			CanBeFiltered: false,
+			Exp: tAASDescriptor.Col(colAdminInfoID),
 		},
 		{
-			Exp:           tAASDescriptor.Col(colDisplayNameID),
-			CanBeFiltered: false,
+			Exp: tAASDescriptor.Col(colDisplayNameID),
 		},
 		{
-			Exp:           tAASDescriptor.Col(colDescriptionID),
-			CanBeFiltered: false,
+			Exp: tAASDescriptor.Col(colDescriptionID),
 		},
 	}
 

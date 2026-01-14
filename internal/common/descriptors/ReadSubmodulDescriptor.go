@@ -103,37 +103,29 @@ func ReadSubmodelDescriptorsByAASDescriptorIDs(
 	d := goqu.Dialect(dialect)
 	var mapper = []auth.ExpressionIdentifiableMapper{
 		{
-			Exp:           submodelDescriptorAlias.Col(colAASDescriptorID),
-			CanBeFiltered: false,
+			Exp: submodelDescriptorAlias.Col(colAASDescriptorID),
 		},
 		{
-			Exp:           submodelDescriptorAlias.Col(colDescriptorID),
-			CanBeFiltered: false,
+			Exp: submodelDescriptorAlias.Col(colDescriptorID),
 		},
 		{
-			Exp:           submodelDescriptorAlias.Col(colIDShort),
-			CanBeFiltered: true,
-			Fragment:      fragPtr("$aasdesc#submodelDescriptors[].idShort"),
+			Exp:      submodelDescriptorAlias.Col(colIDShort),
+			Fragment: fragPtr("$aasdesc#submodelDescriptors[].idShort"),
 		},
 		{
-			Exp:           submodelDescriptorAlias.Col(colAASID),
-			CanBeFiltered: false,
+			Exp: submodelDescriptorAlias.Col(colAASID),
 		},
 		{
-			Exp:           submodelDescriptorAlias.Col(colSemanticID),
-			CanBeFiltered: false,
+			Exp: submodelDescriptorAlias.Col(colSemanticID),
 		},
 		{
-			Exp:           submodelDescriptorAlias.Col(colAdminInfoID),
-			CanBeFiltered: false,
+			Exp: submodelDescriptorAlias.Col(colAdminInfoID),
 		},
 		{
-			Exp:           submodelDescriptorAlias.Col(colDescriptionID),
-			CanBeFiltered: false,
+			Exp: submodelDescriptorAlias.Col(colDescriptionID),
 		},
 		{
-			Exp:           submodelDescriptorAlias.Col(colDisplayNameID),
-			CanBeFiltered: false,
+			Exp: submodelDescriptorAlias.Col(colDisplayNameID),
 		},
 	}
 	collector, err := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootAASDesc)

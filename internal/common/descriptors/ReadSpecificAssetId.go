@@ -48,30 +48,24 @@ type rowData struct {
 
 var expMapper = []auth.ExpressionIdentifiableMapper{
 	{
-		Exp:           tSpecificAssetID.Col(colDescriptorID),
-		CanBeFiltered: false,
+		Exp: tSpecificAssetID.Col(colDescriptorID),
 	},
 	{
-		Exp:           tSpecificAssetID.Col(colID),
-		CanBeFiltered: false,
+		Exp: tSpecificAssetID.Col(colID),
 	},
 	{
-		Exp:           tSpecificAssetID.Col(colName),
-		CanBeFiltered: true,
-		Fragment:      fragPtr("$aasdesc#specificAssetIds[].name"),
+		Exp:      tSpecificAssetID.Col(colName),
+		Fragment: fragPtr("$aasdesc#specificAssetIds[].name"),
 	},
 	{
-		Exp:           tSpecificAssetID.Col(colValue),
-		CanBeFiltered: true,
-		Fragment:      fragPtr("$aasdesc#specificAssetIds[].value"),
+		Exp:      tSpecificAssetID.Col(colValue),
+		Fragment: fragPtr("$aasdesc#specificAssetIds[].value"),
 	},
 	{
-		Exp:           tSpecificAssetID.Col(colSemanticID),
-		CanBeFiltered: true,
+		Exp: tSpecificAssetID.Col(colSemanticID),
 	},
 	{
-		Exp:           tSpecificAssetID.Col(colExternalSubjectRef),
-		CanBeFiltered: true,
+		Exp: tSpecificAssetID.Col(colExternalSubjectRef),
 	},
 }
 

@@ -71,9 +71,8 @@ func AddFilterQueryFromContext(
 // identifier name used for ABAC fragment filtering; canBeFiltered controls
 // whether the expression participates in filter-based projections.
 type ExpressionIdentifiableMapper struct {
-	Exp           exp.Expression
-	CanBeFiltered bool
-	Fragment      *grammar.FragmentStringPattern
+	Exp      exp.Expression
+	Fragment *grammar.FragmentStringPattern
 }
 
 func extractExpressions(mappers []ExpressionIdentifiableMapper) []exp.Expression {
