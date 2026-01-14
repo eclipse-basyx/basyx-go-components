@@ -32,8 +32,8 @@ import (
 	"fmt"
 
 	"github.com/doug-martin/goqu/v9"
-	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	"github.com/lib/pq"
 	"golang.org/x/sync/errgroup"
@@ -113,7 +113,7 @@ func ReadSubmodelDescriptorsByAASDescriptorIDs(
 		{
 			Exp:           submodelDescriptorAlias.Col(colIDShort),
 			CanBeFiltered: true,
-			Fragment:      strPtr("$aasdesc#submodelDescriptors[].idShort"),
+			Fragment:      fragPtr("$aasdesc#submodelDescriptors[].idShort"),
 		},
 		{
 			Exp:           submodelDescriptorAlias.Col(colAASID),

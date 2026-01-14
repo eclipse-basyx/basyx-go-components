@@ -292,22 +292,22 @@ func buildListAssetAdministrationShellDescriptorsQuery(
 		{
 			Exp:           tAASDescriptor.Col(colAssetKind),
 			CanBeFiltered: true,
-			Fragment:      strPtr("$aasdesc#assetKind"),
+			Fragment:      fragPtr("$aasdesc#assetKind"),
 		},
 		{
 			Exp:           tAASDescriptor.Col(colAssetType),
 			CanBeFiltered: true,
-			Fragment:      strPtr("$aasdesc#assetType"),
+			Fragment:      fragPtr("$aasdesc#assetType"),
 		},
 		{
 			Exp:           tAASDescriptor.Col(colGlobalAssetID),
 			CanBeFiltered: true,
-			Fragment:      strPtr("$aasdesc#globalAssetId"),
+			Fragment:      fragPtr("$aasdesc#globalAssetId"),
 		},
 		{
 			Exp:           tAASDescriptor.Col(colIDShort),
 			CanBeFiltered: true,
-			Fragment:      strPtr("$aasdesc#idShort"),
+			Fragment:      fragPtr("$aasdesc#idShort"),
 		},
 		{
 			Exp:           tAASDescriptor.Col(colAASID),

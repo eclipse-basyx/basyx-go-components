@@ -43,7 +43,7 @@ import (
 func AddFilterQueryFromContext(
 	ctx context.Context,
 	ds *goqu.SelectDataset,
-	fragment string,
+	fragment grammar.FragmentStringPattern,
 	collector *grammar.ResolvedFieldPathCollector,
 ) (*goqu.SelectDataset, error) {
 	p := GetQueryFilter(ctx)
@@ -73,7 +73,7 @@ func AddFilterQueryFromContext(
 type ExpressionIdentifiableMapper struct {
 	Exp           exp.Expression
 	CanBeFiltered bool
-	Fragment      *string
+	Fragment      *grammar.FragmentStringPattern
 }
 
 func extractExpressions(mappers []ExpressionIdentifiableMapper) []exp.Expression {

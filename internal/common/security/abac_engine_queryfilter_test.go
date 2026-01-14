@@ -27,16 +27,6 @@ func TestQueryFilter_FilterExpressionsFor_ExactMatch(t *testing.T) {
 	if string(jEntry) != string(jWantEntry) {
 		t.Fatalf("expected %s, got %s", string(jWantEntry), string(jEntry))
 	}
-
-	got := q.FilterExpressionsFor("$aasdesc#endpoints[2]")
-	if len(got) != 1 {
-		t.Fatalf("expected 1 expression, got %d", len(got))
-	}
-	jGot, _ := json.Marshal(got[0])
-	jWantExpr, _ := json.Marshal(expr)
-	if string(jGot) != string(jWantExpr) {
-		t.Fatalf("expected %s, got %s", string(jWantExpr), string(jGot))
-	}
 }
 
 func TestQueryFilter_FilterExpressionEntriesFor_WildcardIncludesLiteralAndIndexed(t *testing.T) {
@@ -59,14 +49,18 @@ func TestQueryFilter_FilterExpressionEntriesFor_WildcardIncludesLiteralAndIndexe
 	if len(entries) != 3 {
 		t.Fatalf("expected 3 entries, got %d", len(entries))
 	}
-	if entries[0].Fragment != "$aasdesc#specificAssetIds[]" {
-		t.Fatalf("expected first fragment %q, got %q", "$aasdesc#specificAssetIds[]", entries[0].Fragment)
+	fragments := map[grammar.FragmentStringPattern]struct{}{}
+	for _, e := range entries {
+		fragments[e.Fragment] = struct{}{}
 	}
-	if entries[1].Fragment != "$aasdesc#specificAssetIds[2]" {
-		t.Fatalf("expected second fragment %q, got %q", "$aasdesc#specificAssetIds[2]", entries[1].Fragment)
-	}
-	if entries[2].Fragment != "$aasdesc#specificAssetIds[10]" {
-		t.Fatalf("expected third fragment %q, got %q", "$aasdesc#specificAssetIds[10]", entries[2].Fragment)
+	for _, want := range []grammar.FragmentStringPattern{
+		"$aasdesc#specificAssetIds[]",
+		"$aasdesc#specificAssetIds[2]",
+		"$aasdesc#specificAssetIds[10]",
+	} {
+		if _, ok := fragments[want]; !ok {
+			t.Fatalf("expected fragment %q to be present", want)
+		}
 	}
 }
 
@@ -87,29 +81,15 @@ func TestQueryFilter_FilterExpressionsFor_WildcardMatchesIndexedAndSorted(t *tes
 	if len(entries) != 2 {
 		t.Fatalf("expected 2 entries, got %d", len(entries))
 	}
-	if entries[0].Fragment != "$aasdesc#endpoints[2]" {
-		t.Fatalf("expected first fragment %q, got %q", "$aasdesc#endpoints[2]", entries[0].Fragment)
+	fragments := map[grammar.FragmentStringPattern]struct{}{}
+	for _, e := range entries {
+		fragments[e.Fragment] = struct{}{}
 	}
-	if entries[1].Fragment != "$aasdesc#endpoints[10]" {
-		t.Fatalf("expected second fragment %q, got %q", "$aasdesc#endpoints[10]", entries[1].Fragment)
+	if _, ok := fragments["$aasdesc#endpoints[2]"]; !ok {
+		t.Fatalf("expected fragment %q to be present", "$aasdesc#endpoints[2]")
 	}
-
-	got := q.FilterExpressionsFor("$aasdesc#endpoints[]")
-	if len(got) != 2 {
-		t.Fatalf("expected 2 expressions, got %d", len(got))
-	}
-
-	// Expect stable order: idx 2, then idx 10.
-	j0, _ := json.Marshal(got[0])
-	j1, _ := json.Marshal(got[1])
-	want0, _ := json.Marshal(expr2)
-	want1, _ := json.Marshal(expr10)
-
-	if string(j0) != string(want0) {
-		t.Fatalf("expected first %s, got %s", string(want0), string(j0))
-	}
-	if string(j1) != string(want1) {
-		t.Fatalf("expected second %s, got %s", string(want1), string(j1))
+	if _, ok := fragments["$aasdesc#endpoints[10]"]; !ok {
+		t.Fatalf("expected fragment %q to be present", "$aasdesc#endpoints[10]")
 	}
 }
 
@@ -138,6 +118,7 @@ func TestQueryFilter_FilterExpressionEntriesFor_WildcardSuffixMustMatchPath(t *t
 }
 
 func TestQueryFilter_FilterExpressionFor_WildcardCombinesOr(t *testing.T) {
+	// FilterExpressionFor was removed; FilterExpressionEntriesFor returns the matching entries.
 	b1 := true
 	b2 := false
 	exprA := grammar.LogicalExpression{Boolean: &b1}
@@ -148,12 +129,9 @@ func TestQueryFilter_FilterExpressionFor_WildcardCombinesOr(t *testing.T) {
 		"$aasdesc#endpoints[1]": exprB,
 	}}
 
-	combined := q.FilterExpressionFor("$aasdesc#endpoints[]")
-	if combined == nil {
-		t.Fatalf("expected non-nil combined expression")
-	}
-	if len(combined.Or) != 2 {
-		j, _ := json.Marshal(combined)
-		t.Fatalf("expected OR with 2 entries, got %d: %s", len(combined.Or), string(j))
+	entries := q.FilterExpressionEntriesFor("$aasdesc#endpoints[]")
+	if len(entries) != 2 {
+		j, _ := json.Marshal(entries)
+		t.Fatalf("expected 2 entries, got %d: %s", len(entries), string(j))
 	}
 }

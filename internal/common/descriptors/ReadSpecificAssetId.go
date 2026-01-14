@@ -33,8 +33,8 @@ import (
 	"time"
 
 	"github.com/doug-martin/goqu/v9"
-	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	"github.com/lib/pq"
 )
@@ -59,12 +59,12 @@ var expMapper = []auth.ExpressionIdentifiableMapper{
 	{
 		Exp:           tSpecificAssetID.Col(colName),
 		CanBeFiltered: true,
-		Fragment:      strPtr("$aasdesc#specificAssetIds[].name"),
+		Fragment:      fragPtr("$aasdesc#specificAssetIds[].name"),
 	},
 	{
 		Exp:           tSpecificAssetID.Col(colValue),
 		CanBeFiltered: true,
-		Fragment:      strPtr("$aasdesc#specificAssetIds[].value"),
+		Fragment:      fragPtr("$aasdesc#specificAssetIds[].value"),
 	},
 	{
 		Exp:           tSpecificAssetID.Col(colSemanticID),
@@ -298,6 +298,7 @@ func nvl(ns sql.NullString) string {
 	return ""
 }
 
-func strPtr(s string) *string {
-	return &s
+func fragPtr(s string) *grammar.FragmentStringPattern {
+	frag := grammar.FragmentStringPattern(s)
+	return &frag
 }
