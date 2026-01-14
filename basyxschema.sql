@@ -560,19 +560,9 @@ CREATE TABLE IF NOT EXISTS aas (
     model_type   VARCHAR(128) NOT NULL,
     administration_id BIGINT REFERENCES administrative_information(id),
     asset_information_id BIGINT REFERENCES asset_information(id),
-    derived_from_reference_id BIGINT REFERENCES reference(id)
-);
-
-CREATE TABLE IF NOT EXISTS aas_display_name_ref (
-    aas_id VARCHAR(2048) NOT NULL REFERENCES aas(id) ON DELETE CASCADE,
-    lang_string_name_type_reference_id BIGINT NOT NULL REFERENCES lang_string_name_type_reference(id) ON DELETE CASCADE,
-    PRIMARY KEY (aas_id, lang_string_name_type_reference_id)
-);
-
-CREATE TABLE IF NOT EXISTS aas_description_ref (
-    aas_id VARCHAR(2048) NOT NULL REFERENCES aas(id) ON DELETE CASCADE,
-    lang_string_text_type_reference_id BIGINT NOT NULL REFERENCES lang_string_text_type_reference(id) ON DELETE CASCADE,
-    PRIMARY KEY (aas_id, lang_string_text_type_reference_id)
+    derived_from_reference_id BIGINT REFERENCES reference(id),
+    displayname_id BIGINT REFERENCES lang_string_name_type_reference(id),
+    description_id BIGINT REFERENCES lang_string_text_type_reference(id),
 );
 
 CREATE TABLE IF NOT EXISTS aas_specific_asset_id (
