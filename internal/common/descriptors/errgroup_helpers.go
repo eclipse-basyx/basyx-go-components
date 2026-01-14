@@ -1,5 +1,5 @@
 /*******************************************************************************
-* Copyright (C) 2025 the Eclipse BaSyx Authors and Fraunhofer IESE
+* Copyright (C) 2026 the Eclipse BaSyx Authors and Fraunhofer IESE
 *
 * Permission is hereby granted, free of charge, to any person obtaining
 * a copy of this software and associated documentation files (the
@@ -35,8 +35,9 @@ import "golang.org/x/sync/errgroup"
 // handling the error.
 //
 // Example:
-//   var out map[int64][]T
-//   GoAssign(g, func() (map[int64][]T, error) { return load(... ) }, &out)
+//
+//	var out map[int64][]T
+//	GoAssign(g, func() (map[int64][]T, error) { return load(... ) }, &out)
 //
 // The function is generic and can be used for any result type.
 func GoAssign[T any](g *errgroup.Group, fn func() (T, error), dst *T) {
