@@ -192,62 +192,70 @@ func (p PostgreSQLMultiLanguagePropertyHandler) Update(submodelID string, idShor
 	}
 
 	// Handle optional valueId field
-	var valueIdRef sql.NullInt64
-	if mlp.ValueID != nil && !isEmptyReference(mlp.ValueID) {
-		// Insert the reference and get the ID
-		refID, err := insertReference(localTx, *mlp.ValueID)
-		if err != nil {
-			return err
-		}
-		valueIdRef = sql.NullInt64{Int64: int64(refID), Valid: true}
-	}
-
-	// Update multilanguage_property table with valueId
-	updateQuery, updateArgs, err := dialect.Update("multilanguage_property").
-		Set(goqu.Record{
-			"value_id": valueIdRef,
-		}).
-		Where(goqu.C("id").Eq(elementID)).
-		ToSQL()
-	if err != nil {
-		return err
-	}
-
-	_, err = localTx.Exec(updateQuery, updateArgs...)
-	if err != nil {
-		return err
-	}
-
-	// Handle Value field - delete existing values and insert new ones
-	deleteQuery, deleteArgs, err := dialect.Delete("multilanguage_property_value").
-		Where(goqu.C("mlp_id").Eq(elementID)).
-		ToSQL()
-	if err != nil {
-		return err
-	}
-
-	_, err = localTx.Exec(deleteQuery, deleteArgs...)
-	if err != nil {
-		return err
-	}
-
-	// Insert new values if provided
-	if mlp.Value != nil {
-		for _, val := range mlp.Value {
-			insertQuery, insertArgs, err := dialect.Insert("multilanguage_property_value").
-				Rows(goqu.Record{
-					"mlp_id":   elementID,
-					"language": val.Language,
-					"text":     val.Text,
-				}).
-				ToSQL()
+	// For PUT: always update (even if nil, which clears the field)
+	// For PATCH: only update if provided (not nil)
+	if isPut || mlp.ValueID != nil {
+		var valueIdRef sql.NullInt64
+		if mlp.ValueID != nil && !isEmptyReference(mlp.ValueID) {
+			// Insert the reference and get the ID
+			refID, err := insertReference(localTx, *mlp.ValueID)
 			if err != nil {
 				return err
 			}
+			valueIdRef = sql.NullInt64{Int64: int64(refID), Valid: true}
+		}
 
-			_, err = localTx.Exec(insertQuery, insertArgs...)
-			if err != nil {
-				return err
+		// Update multilanguage_property table with valueId
+		updateQuery, updateArgs, err := dialect.Update("multilanguage_property").
+			Set(goqu.Record{
+				"value_id": valueIdRef,
+			}).
+			Where(goqu.C("id").Eq(elementID)).
+			ToSQL()
+		if err != nil {
+			return err
+		}
+
+		_, err = localTx.Exec(updateQuery, updateArgs...)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Handle Value field - delete existing values and insert new ones
+	// For PUT: always replace (delete all and insert new)
+	// For PATCH: only update if provided (not nil)
+	if isPut || mlp.Value != nil {
+		deleteQuery, deleteArgs, err := dialect.Delete("multilanguage_property_value").
+			Where(goqu.C("mlp_id").Eq(elementID)).
+			ToSQL()
+		if err != nil {
+			return err
+		}
+
+		_, err = localTx.Exec(deleteQuery, deleteArgs...)
+		if err != nil {
+			return err
+		}
+
+		// Insert new values if provided
+		if mlp.Value != nil {
+			for _, val := range mlp.Value {
+				insertQuery, insertArgs, err := dialect.Insert("multilanguage_property_value").
+					Rows(goqu.Record{
+						"mlp_id":   elementID,
+						"language": val.Language,
+						"text":     val.Text,
+					}).
+					ToSQL()
+				if err != nil {
+					return err
+				}
+
+				_, err = localTx.Exec(insertQuery, insertArgs...)
+				if err != nil {
+					return err
+				}
 			}
 		}
 	}

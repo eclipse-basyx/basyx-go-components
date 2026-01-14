@@ -179,7 +179,13 @@ func (p PostgreSQLBasicEventElementHandler) Update(submodelID string, idShortOrP
 		return common.NewErrBadRequest(fmt.Sprintf("Missing Field 'State' for BasicEventElement with idShortPath '%s'", idShortOrPath))
 	}
 
-	// Serialize observed reference
+	// Update with goqu
+	dialect := goqu.Dialect("postgres")
+
+	// Build the update record
+	updateRecord := goqu.Record{}
+
+	// Required fields - always update
 	var observedRefJson sql.NullString
 	if !isEmptyReference(basicEvent.Observed) {
 		observedBytes, err := json.Marshal(basicEvent.Observed)
@@ -188,52 +194,60 @@ func (p PostgreSQLBasicEventElementHandler) Update(submodelID string, idShortOrP
 		}
 		observedRefJson = sql.NullString{String: string(observedBytes), Valid: true}
 	}
+	updateRecord["observed"] = observedRefJson
+	updateRecord["direction"] = basicEvent.Direction
+	updateRecord["state"] = basicEvent.State
 
-	// Serialize message broker reference (optional)
-	var messageBrokerRefJson sql.NullString
-	if !isEmptyReference(basicEvent.MessageBroker) {
-		messageBrokerBytes, err := json.Marshal(basicEvent.MessageBroker)
-		if err != nil {
-			return err
+	// Optional fields - update based on isPut flag
+	// For PUT: always update (even if empty, which clears the field)
+	// For PATCH: only update if provided (not empty)
+
+	if isPut || !isEmptyReference(basicEvent.MessageBroker) {
+		var messageBrokerRefJson sql.NullString
+		if !isEmptyReference(basicEvent.MessageBroker) {
+			messageBrokerBytes, err := json.Marshal(basicEvent.MessageBroker)
+			if err != nil {
+				return err
+			}
+			messageBrokerRefJson = sql.NullString{String: string(messageBrokerBytes), Valid: true}
 		}
-		messageBrokerRefJson = sql.NullString{String: string(messageBrokerBytes), Valid: true}
+		updateRecord["message_broker"] = messageBrokerRefJson
 	}
 
-	// Handle optional fields
-	var lastUpdate sql.NullString
-	if basicEvent.LastUpdate != "" {
-		lastUpdate = sql.NullString{String: basicEvent.LastUpdate, Valid: true}
+	if isPut || basicEvent.LastUpdate != "" {
+		var lastUpdate sql.NullString
+		if basicEvent.LastUpdate != "" {
+			lastUpdate = sql.NullString{String: basicEvent.LastUpdate, Valid: true}
+		}
+		updateRecord["last_update"] = lastUpdate
 	}
 
-	var minInterval sql.NullString
-	if basicEvent.MinInterval != "" {
-		minInterval = sql.NullString{String: basicEvent.MinInterval, Valid: true}
+	if isPut || basicEvent.MinInterval != "" {
+		var minInterval sql.NullString
+		if basicEvent.MinInterval != "" {
+			minInterval = sql.NullString{String: basicEvent.MinInterval, Valid: true}
+		}
+		updateRecord["min_interval"] = minInterval
 	}
 
-	var maxInterval sql.NullString
-	if basicEvent.MaxInterval != "" {
-		maxInterval = sql.NullString{String: basicEvent.MaxInterval, Valid: true}
+	if isPut || basicEvent.MaxInterval != "" {
+		var maxInterval sql.NullString
+		if basicEvent.MaxInterval != "" {
+			maxInterval = sql.NullString{String: basicEvent.MaxInterval, Valid: true}
+		}
+		updateRecord["max_interval"] = maxInterval
 	}
 
-	var messageTopic sql.NullString
-	if basicEvent.MessageTopic != "" {
-		messageTopic = sql.NullString{String: basicEvent.MessageTopic, Valid: true}
+	if isPut || basicEvent.MessageTopic != "" {
+		var messageTopic sql.NullString
+		if basicEvent.MessageTopic != "" {
+			messageTopic = sql.NullString{String: basicEvent.MessageTopic, Valid: true}
+		}
+		updateRecord["message_topic"] = messageTopic
 	}
-
-	// Update with goqu
-	dialect := goqu.Dialect("postgres")
 
 	updateQuery, updateArgs, err := dialect.Update("basic_event_element").
-		Set(goqu.Record{
-			"observed":       observedRefJson,
-			"direction":      basicEvent.Direction,
-			"state":          basicEvent.State,
-			"message_topic":  messageTopic,
-			"message_broker": messageBrokerRefJson,
-			"last_update":    lastUpdate,
-			"min_interval":   minInterval,
-			"max_interval":   maxInterval,
-		}).
+		Set(updateRecord).
 		Where(goqu.C("id").In(
 			dialect.From("submodel_element").
 				Select("id").

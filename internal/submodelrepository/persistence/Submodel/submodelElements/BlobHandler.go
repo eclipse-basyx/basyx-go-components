@@ -180,41 +180,51 @@ func (p PostgreSQLBlobHandler) Update(submodelID string, idShortOrPath string, s
 		return smrepoerrors.ErrBlobTooLarge
 	}
 
-	// Handle optional fields
-	var contentType sql.NullString
-	if blob.ContentType != "" {
-		contentType = sql.NullString{String: blob.ContentType, Valid: true}
-	}
-
-	var value []byte
-	if blob.Value != "" {
-		value = []byte(blob.Value)
-	}
-
 	// Update with goqu
 	dialect := goqu.Dialect("postgres")
 
-	updateQuery, updateArgs, err := dialect.Update("blob_element").
-		Set(goqu.Record{
-			"content_type": contentType,
-			"value":        value,
-		}).
-		Where(goqu.C("id").In(
-			dialect.From("submodel_element").
-				Select("id").
-				Where(goqu.Ex{
-					"idshort_path": idShortOrPath,
-					"submodel_id":  submodelID,
-				}),
-		)).
-		ToSQL()
-	if err != nil {
-		return err
+	// Build the update record based on isPut flag
+	// For PUT: always update all fields (even if empty, which clears them)
+	// For PATCH: only update fields that are provided (not empty)
+	updateRecord := goqu.Record{}
+
+	if isPut || blob.ContentType != "" {
+		var contentType sql.NullString
+		if blob.ContentType != "" {
+			contentType = sql.NullString{String: blob.ContentType, Valid: true}
+		}
+		updateRecord["content_type"] = contentType
 	}
 
-	_, err = localTx.Exec(updateQuery, updateArgs...)
-	if err != nil {
-		return err
+	if isPut || blob.Value != "" {
+		var value []byte
+		if blob.Value != "" {
+			value = []byte(blob.Value)
+		}
+		updateRecord["value"] = value
+	}
+
+	// Only execute update if there are fields to update
+	if len(updateRecord) > 0 {
+		updateQuery, updateArgs, err := dialect.Update("blob_element").
+			Set(updateRecord).
+			Where(goqu.C("id").In(
+				dialect.From("submodel_element").
+					Select("id").
+					Where(goqu.Ex{
+						"idshort_path": idShortOrPath,
+						"submodel_id":  submodelID,
+					}),
+			)).
+			ToSQL()
+		if err != nil {
+			return err
+		}
+
+		_, err = localTx.Exec(updateQuery, updateArgs...)
+		if err != nil {
+			return err
+		}
 	}
 
 	err = p.decorated.Update(submodelID, idShortOrPath, submodelElement, localTx, isPut)

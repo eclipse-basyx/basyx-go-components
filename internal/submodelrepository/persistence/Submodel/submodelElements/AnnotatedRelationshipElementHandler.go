@@ -209,16 +209,25 @@ func (p PostgreSQLAnnotatedRelationshipElementHandler) Update(submodelID string,
 		return err
 	}
 
-	//nolint:revive // TODO
-	if are.Annotations != nil && !isPut {
-		// PATCH
-	} else if isPut {
-		// PUT -> Remove all Childs and then recreate the ones from the body -> Recreation is done by the SubmodelRepositoryDatabase Update Method
+	// Handle Annotations field based on isPut flag
+	// For PUT: always delete all children (annotations) and recreate from body
+	// For PATCH: only delete and recreate children if annotations are provided
+	if isPut {
+		// PUT -> Remove all children and then recreate the ones from the body
+		// Recreation is done by the SubmodelRepositoryDatabase Update Method
+		err = DeleteAllChildren(p.db, submodelID, idShortOrPath, localTx)
+		if err != nil {
+			return err
+		}
+	} else if are.Annotations != nil {
+		// PATCH with annotations provided -> Remove all children and recreate from body
+		// Recreation is done by the SubmodelRepositoryDatabase Update Method
 		err = DeleteAllChildren(p.db, submodelID, idShortOrPath, localTx)
 		if err != nil {
 			return err
 		}
 	}
+	// For PATCH without annotations (nil), existing annotations are preserved
 
 	err = p.decorated.Update(submodelID, idShortOrPath, submodelElement, localTx, isPut)
 
