@@ -30,8 +30,8 @@ func TestLogicalExpression_evaluateFragmentToExpression_NoCollector_AppliesBindi
 	if strings.Contains(strings.ToLower(sql), "true") {
 		t.Fatalf("did not expect literal TRUE in SQL, got: %s", sql)
 	}
-	if strings.Contains(sql, "descriptor_flags") {
-		t.Fatalf("did not expect CTE flag alias without collector, got SQL: %s", sql)
+	if strings.Contains(sql, "flagtable") {
+		t.Fatalf("did not expect flagtable CTE usage anymore, got: %s", sql)
 	}
 	if !strings.Contains(sql, "\"aas_descriptor_endpoint\".\"position\"") {
 		t.Fatalf("expected SQL to reference aas_descriptor_endpoint.position, got: %s", sql)
@@ -183,8 +183,8 @@ func TestLogicalExpression_evaluateFragmentToExpression_WithCollector_UsesFlagAl
 	if err != nil {
 		t.Fatalf("ToSQL returned error: %v", err)
 	}
-	if strings.Contains(sql, "descriptor_flags") {
-		t.Fatalf("did not expect CTE flag alias in fragment SQL anymore, got: %s", sql)
+	if strings.Contains(sql, "flagtable") {
+		t.Fatalf("did not expect flagtable CTE usage anymore, got: %s", sql)
 	}
 	if !strings.Contains(sql, "\"aas_descriptor_endpoint\".\"position\"") {
 		t.Fatalf("expected endpoint position binding in SQL, got: %s", sql)

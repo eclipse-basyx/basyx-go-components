@@ -112,8 +112,8 @@ func TestHandleComparison_BuildsExistsForSpecificAssetExternalSubjectKeyValue(t 
 	}
 
 	// Ensure the CTE includes the right joins.
-	if !strings.Contains(sql, "WITH descriptor_flags_1") {
-		t.Fatalf("expected descriptor_flags_1 CTE in SQL, got: %s", sql)
+	if !strings.Contains(sql, "WITH flagtable_1") {
+		t.Fatalf("expected flagtable_1 CTE in SQL, got: %s", sql)
 	}
 	if !strings.Contains(sql, "JOIN \"reference\" AS \"external_subject_reference\"") {
 		t.Fatalf("expected join to external_subject_reference in SQL, got: %s", sql)
@@ -185,8 +185,8 @@ func TestHandleComparison_BuildsExistsForSpecificAssetExternalSubjectKeyValue_Wi
 	}
 
 	// Ensure the CTE includes the right joins, even without any index bindings.
-	if !strings.Contains(sql, "WITH descriptor_flags_1") {
-		t.Fatalf("expected descriptor_flags_1 CTE in SQL, got: %s", sql)
+	if !strings.Contains(sql, "WITH flagtable_1") {
+		t.Fatalf("expected flagtable_1 CTE in SQL, got: %s", sql)
 	}
 	if !strings.Contains(sql, "JOIN \"reference\" AS \"external_subject_reference\"") {
 		t.Fatalf("expected join to external_subject_reference in SQL, got: %s", sql)

@@ -38,11 +38,11 @@ func TestLogicalExpression_ToSQL_ImplicitCast_WithCollector_FlagCTEPredicateUses
 
 	sql, args := toPreparedSQLForDescriptor(t, le)
 
-	if !strings.Contains(sql, "WITH descriptor_flags_1") {
-		t.Fatalf("expected a descriptor_flags_1 CTE (collector path), got: %s", sql)
+	if !strings.Contains(sql, "WITH flagtable_1") {
+		t.Fatalf("expected a flagtable_1 CTE (collector path), got: %s", sql)
 	}
-	if !strings.Contains(sql, "descriptor_flags_1") {
-		t.Fatalf("expected SQL to reference descriptor_flags_1, got: %s", sql)
+	if !strings.Contains(sql, "flagtable_1") {
+		t.Fatalf("expected SQL to reference flagtable_1, got: %s", sql)
 	}
 	if !strings.Contains(sql, "::text") {
 		t.Fatalf("expected implicit ::text cast in SQL, got: %s", sql)

@@ -145,8 +145,8 @@ func TestLogicalExpression_EvaluateToExpressionWithNegatedFragments_WithCollecto
 	if !strings.Contains(sqlStr, "\"aas_descriptor\".\"id_short\"") {
 		t.Fatalf("expected idShort column in SQL, got: %s", sqlStr)
 	}
-	if strings.Contains(sqlStr, "descriptor_flags") {
-		t.Fatalf("did not expect descriptor_flags CTE usage anymore, got: %s", sqlStr)
+	if strings.Contains(sqlStr, "flagtable") {
+		t.Fatalf("did not expect flagtable CTE usage anymore, got: %s", sqlStr)
 	}
 	if !strings.Contains(sqlStr, "\"aas_descriptor_endpoint\".\"position\"") {
 		t.Fatalf("expected endpoint position binding in SQL, got: %s", sqlStr)

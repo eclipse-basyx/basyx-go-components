@@ -64,7 +64,7 @@ type JoinPlanConfig struct {
 }
 
 // DefaultCollectorCTEAlias is the fixed alias used for all collector-generated CTEs.
-const DefaultCollectorCTEAlias = "descriptor_flags"
+const DefaultCollectorCTEAlias = "flagtable"
 
 // CollectorRoot defines the supported collector roots.
 //
@@ -287,10 +287,10 @@ type ResolvedFieldPathCollector struct {
 }
 
 // NewResolvedFieldPathCollector creates a collector with the provided CTE alias.
-// When cteAlias is empty, "descriptor_flags" is used.
+// When cteAlias is empty, DefaultCollectorCTEAlias is used.
 func NewResolvedFieldPathCollectorWithConfig(cteAlias string, config *JoinPlanConfig) *ResolvedFieldPathCollector {
 	if strings.TrimSpace(cteAlias) == "" {
-		cteAlias = "descriptor_flags"
+		cteAlias = DefaultCollectorCTEAlias
 	}
 	return &ResolvedFieldPathCollector{
 		CTEAlias:              cteAlias,
@@ -431,7 +431,7 @@ func BuildResolvedFieldPathFlagCTEsWithWhere(cteAlias string, entries []Resolved
 		return nil, nil
 	}
 	if strings.TrimSpace(cteAlias) == "" {
-		cteAlias = "descriptor_flags"
+		cteAlias = DefaultCollectorCTEAlias
 	}
 
 	order, grouped, err := groupFlagsByJoinPlan(entries, defaultJoinPlanConfig(), nil)

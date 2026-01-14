@@ -137,7 +137,7 @@ func TestLogicalExpression_ToSQL_ComplexCases(t *testing.T) {
 				{Eq: ComparisonItems{strVal("same"), strVal("same")}},
 				{Eq: ComparisonItems{field("$aasdesc#specificAssetIds[0].externalSubjectId.keys[1].value"), strVal("WRITTEN_BY_X")}},
 			}},
-			wantSQL: []string{" OR ", "descriptor_flags_1"},
+			wantSQL: []string{" OR ", "flagtable_1"},
 			wantArgs: []interface{}{
 				"same",
 				"WRITTEN_BY_X",
@@ -160,7 +160,7 @@ func TestLogicalExpression_ToSQL_ComplexCases(t *testing.T) {
 					]}
 				]
 			}`,
-			wantSQL: []string{"descriptor_flags_1"},
+			wantSQL: []string{"flagtable_1"},
 			wantArgs: []interface{}{
 				2,
 				0,

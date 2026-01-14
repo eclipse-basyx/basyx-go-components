@@ -59,10 +59,10 @@ func TestLogicalExpression_SME_WithCollector_BuildsCTE(t *testing.T) {
 	if strings.Contains(sql, "EXISTS") {
 		t.Fatalf("did not expect EXISTS in SQL, got: %s", sql)
 	}
-	if !strings.Contains(sql, "WITH descriptor_flags_1") {
-		t.Fatalf("expected descriptor_flags_1 CTE in SQL, got: %s", sql)
+		if !strings.Contains(sql, "WITH flagtable_1") {
+			t.Fatalf("expected flagtable_1 CTE in SQL, got: %s", sql)
 	}
-	if !strings.Contains(sql, "\"descriptor_flags_1\".\"rfp_1\"") {
+		if !strings.Contains(sql, "\"flagtable_1\".\"rfp_1\"") {
 		t.Fatalf("expected SME flag alias in SQL, got: %s", sql)
 	}
 	if !strings.Contains(sql, "\"submodel_element\".\"idshort_path\"") {
@@ -101,8 +101,8 @@ func TestLogicalExpression_SME_WithCollector_MultiConditions(t *testing.T) {
 	t.Logf("SQL: %s", sql)
 	t.Logf("Args: %#v", args)
 
-	if !strings.Contains(sql, "WITH descriptor_flags_1") {
-		t.Fatalf("expected descriptor_flags_1 CTE in SQL, got: %s", sql)
+	if !strings.Contains(sql, "WITH flagtable_1") {
+		t.Fatalf("expected flagtable_1 CTE in SQL, got: %s", sql)
 	}
 	if !strings.Contains(sql, "\"submodel_element\".\"idshort_path\"") {
 		t.Fatalf("expected idshort_path binding in SQL, got: %s", sql)
@@ -153,8 +153,8 @@ func TestLogicalExpression_SME_NestedOrAnd(t *testing.T) {
 	if strings.Contains(sql, "EXISTS") {
 		t.Fatalf("did not expect EXISTS in SQL, got: %s", sql)
 	}
-	if !strings.Contains(sql, "WITH descriptor_flags_1") {
-		t.Fatalf("expected descriptor_flags_1 CTE in SQL, got: %s", sql)
+	if !strings.Contains(sql, "WITH flagtable_1") {
+		t.Fatalf("expected flagtable_1 CTE in SQL, got: %s", sql)
 	}
 	if !strings.Contains(sql, " OR ") {
 		t.Fatalf("expected OR in SQL, got: %s", sql)

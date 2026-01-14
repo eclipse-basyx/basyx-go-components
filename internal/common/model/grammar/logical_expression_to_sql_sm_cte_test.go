@@ -62,7 +62,7 @@ func TestLogicalExpression_SM_WithCollector_BuildsCTE(t *testing.T) {
 	if strings.Contains(sql, "EXISTS") {
 		t.Fatalf("did not expect EXISTS in SQL, got: %s", sql)
 	}
-	if !strings.Contains(sql, "WITH descriptor_flags_1") || !strings.Contains(sql, "descriptor_flags_2") {
+	if !strings.Contains(sql, "WITH flagtable_1") || !strings.Contains(sql, "flagtable_2") {
 		t.Fatalf("expected multiple SM CTEs in SQL, got: %s", sql)
 	}
 	if !argListContains(args, "sm-1") {
@@ -108,7 +108,7 @@ func TestLogicalExpression_SM_NestedAndOr(t *testing.T) {
 	if strings.Contains(sql, "EXISTS") {
 		t.Fatalf("did not expect EXISTS in SQL, got: %s", sql)
 	}
-	if !strings.Contains(sql, "WITH descriptor_flags_1") || !strings.Contains(sql, "descriptor_flags_2") {
+	if !strings.Contains(sql, "WITH flagtable_1") || !strings.Contains(sql, "flagtable_2") {
 		t.Fatalf("expected multiple SM CTEs in SQL, got: %s", sql)
 	}
 	if !strings.Contains(sql, " OR ") {

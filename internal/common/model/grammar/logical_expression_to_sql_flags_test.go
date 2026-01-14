@@ -44,7 +44,7 @@ func TestLogicalExpression_EvaluateToExpression_WithCollector_UsesFlagAlias(t *t
 	if strings.Contains(sql, "EXISTS") {
 		t.Fatalf("did not expect EXISTS in SQL, got: %s", sql)
 	}
-	if !strings.Contains(sql, "\"descriptor_flags_1\".\""+alias+"\"") {
+	if !strings.Contains(sql, "\"flagtable_1\".\""+alias+"\"") {
 		t.Fatalf("expected SQL to reference flag alias %q, got: %s", alias, sql)
 	}
 
@@ -250,11 +250,11 @@ func TestResolvedFieldPathFlags_FinalQueryExample(t *testing.T) {
 	if strings.Contains(sql, "EXISTS") {
 		t.Fatalf("did not expect EXISTS in SQL, got: %s", sql)
 	}
-	if !strings.Contains(sql, "WITH descriptor_flags_1") {
+	if !strings.Contains(sql, "WITH flagtable_1") {
 		t.Fatalf("expected CTE in SQL, got: %s", sql)
 	}
 	for _, entry := range collector.Entries() {
-		if !strings.Contains(sql, "\"descriptor_flags_1\".\""+entry.Alias+"\"") {
+		if !strings.Contains(sql, "\"flagtable_1\".\""+entry.Alias+"\"") {
 			t.Fatalf("expected flag alias %q in SQL, got: %s", entry.Alias, sql)
 		}
 	}
@@ -324,7 +324,7 @@ func TestResolvedFieldPathFlags_MultipleCTEsExample(t *testing.T) {
 	t.Logf("Final SQL: %s", sql)
 	t.Logf("Args: %#v", args)
 
-	if !strings.Contains(sql, "WITH descriptor_flags_1") || !strings.Contains(sql, "descriptor_flags_2") {
+	if !strings.Contains(sql, "WITH flagtable_1") || !strings.Contains(sql, "flagtable_2") {
 		t.Fatalf("expected multiple CTEs in SQL, got: %s", sql)
 	}
 }

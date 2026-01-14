@@ -74,8 +74,8 @@ func TestLogicalExpression_EvaluateToExpression_NestedTree_WithExistsAndNot(t *t
 	if !strings.Contains(sql, "LIKE") {
 		t.Fatalf("expected LIKE for $contains in SQL, got: %s", sql)
 	}
-	if !strings.Contains(sql, "descriptor_flags_1") {
-		t.Fatalf("expected descriptor_flags_1 in SQL, got: %s", sql)
+	if !strings.Contains(sql, "flagtable_1") {
+		t.Fatalf("expected flagtable_1 in SQL, got: %s", sql)
 	}
 
 	// Ensure important bindings/values are present in args.
@@ -164,8 +164,8 @@ func TestLogicalExpression_EvaluateToExpression_NestedJSON_UnmarshalAndGenerateS
 	if !strings.Contains(sql, "NOT") {
 		t.Fatalf("expected NOT in SQL, got: %s", sql)
 	}
-	if !strings.Contains(sql, "descriptor_flags_1") {
-		t.Fatalf("expected descriptor_flags_1 in SQL, got: %s", sql)
+	if !strings.Contains(sql, "flagtable_1") {
+		t.Fatalf("expected flagtable_1 in SQL, got: %s", sql)
 	}
 	if !argListContains(args, "WRITTEN_BY_X") {
 		t.Fatalf("expected args to contain %q, got %#v", "WRITTEN_BY_X", args)
