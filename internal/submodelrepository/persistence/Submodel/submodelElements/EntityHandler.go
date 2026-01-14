@@ -141,8 +141,8 @@ func (p PostgreSQLEntityHandler) CreateNested(tx *sql.Tx, submodelID string, par
 //
 // Returns:
 //   - error: Error if the update operation fails
-func (p PostgreSQLEntityHandler) Update(submodelID string, idShortOrPath string, submodelElement gen.SubmodelElement, tx *sql.Tx) error {
-	return p.decorated.Update(submodelID, idShortOrPath, submodelElement, tx)
+func (p PostgreSQLEntityHandler) Update(submodelID string, idShortOrPath string, submodelElement gen.SubmodelElement, tx *sql.Tx, isPut bool) error {
+	return p.decorated.Update(submodelID, idShortOrPath, submodelElement, tx, isPut)
 }
 
 // UpdateValueOnly updates only the value of an existing Entity submodel element identified by its idShort or path.
@@ -172,7 +172,7 @@ func (p PostgreSQLEntityHandler) UpdateValueOnly(submodelID string, idShortOrPat
 	if err != nil {
 		return err
 	}
-	err = UpdateNestedElements(p.db, elems, idShortOrPath, submodelID)
+	err = UpdateNestedElementsValueOnly(p.db, elems, idShortOrPath, submodelID)
 	if err != nil {
 		return err
 	}

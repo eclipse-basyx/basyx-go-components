@@ -52,7 +52,7 @@ import (
 // The handler operates within transaction contexts to ensure atomicity of operations
 // and maintains hierarchical relationships through parent-child linkage and path tracking.
 type PostgreSQLSMECrudHandler struct {
-	db *sql.DB
+	Db *sql.DB
 }
 
 // isEmptyReference checks if a Reference is empty (zero value).
@@ -86,7 +86,7 @@ func isEmptyReference(ref *gen.Reference) bool {
 //   - *PostgreSQLSMECrudHandler: Initialized handler ready for CRUD operations
 //   - error: Always nil in current implementation, kept for interface consistency
 func NewPostgreSQLSMECrudHandler(db *sql.DB) (*PostgreSQLSMECrudHandler, error) {
-	return &PostgreSQLSMECrudHandler{db: db}, nil
+	return &PostgreSQLSMECrudHandler{Db: db}, nil
 }
 
 // CreateWithPath performs base SubmodelElement creation with explicit path and position management.
@@ -307,7 +307,7 @@ func (p *PostgreSQLSMECrudHandler) Create(tx *sql.Tx, submodelID string, submode
 //	err := handler.Update(tx, "submodel123", "sensors.temperature", updatedProperty)
 //
 //nolint:revive // cyclomatic-complexity is acceptable here due to the multiple update steps
-func (p *PostgreSQLSMECrudHandler) Update(submodelID string, idShortOrPath string, submodelElement gen.SubmodelElement, tx *sql.Tx) error {
+func (p *PostgreSQLSMECrudHandler) Update(submodelID string, idShortOrPath string, submodelElement gen.SubmodelElement, tx *sql.Tx, isPut bool) error {
 	dialect := goqu.Dialect("postgres")
 
 	// First, get the existing element ID and verify it exists in the correct submodel
@@ -562,9 +562,9 @@ func (p *PostgreSQLSMECrudHandler) Delete(idShortOrPath string) error {
 // Example:
 //
 //	dbID, err := handler.GetDatabaseID("sensors.temperature")
-func (p *PostgreSQLSMECrudHandler) GetDatabaseID(idShortPath string) (int, error) {
+func (p *PostgreSQLSMECrudHandler) GetDatabaseID(submodelID string, idShortPath string) (int, error) {
 	var id int
-	err := p.db.QueryRow(`SELECT id FROM submodel_element WHERE idshort_path = $1`, idShortPath).Scan(&id)
+	err := p.Db.QueryRow(`SELECT id FROM submodel_element WHERE idshort_path = $1 AND submodel_id = $2`, idShortPath, submodelID).Scan(&id)
 	if err != nil {
 		return 0, err
 	}
@@ -595,7 +595,7 @@ func (p *PostgreSQLSMECrudHandler) GetDatabaseID(idShortPath string) (int, error
 //	// Use nextPos when creating the next child element
 func (p *PostgreSQLSMECrudHandler) GetNextPosition(parentID int) (int, error) {
 	var position sql.NullInt64
-	err := p.db.QueryRow(`SELECT MAX(position) FROM submodel_element WHERE parent_sme_id = $1`, parentID).Scan(&position)
+	err := p.Db.QueryRow(`SELECT MAX(position) FROM submodel_element WHERE parent_sme_id = $1`, parentID).Scan(&position)
 	if err != nil {
 		return 0, err
 	}
@@ -624,7 +624,7 @@ func (p *PostgreSQLSMECrudHandler) GetNextPosition(parentID int) (int, error) {
 //	// Use modelType to get the appropriate handler via GetSMEHandlerByModelType
 func (p *PostgreSQLSMECrudHandler) GetSubmodelElementType(idShortPath string) (string, error) {
 	var modelType string
-	err := p.db.QueryRow(`SELECT model_type FROM submodel_element WHERE idshort_path = $1`, idShortPath).Scan(&modelType)
+	err := p.Db.QueryRow(`SELECT model_type FROM submodel_element WHERE idshort_path = $1`, idShortPath).Scan(&modelType)
 	if err != nil {
 		return "", err
 	}

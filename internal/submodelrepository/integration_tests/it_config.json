@@ -580,5 +580,19 @@
         "endpoint": "http://localhost:6004/submodels/QmFTeXg",
         "shouldMatch": "expected/expectedSubmodelAfterPutCreate.json",
         "expectedStatus": 200
+    },
+    {
+        "context": "PUT AnnotatedRelationshipElement SubmodelElement (Replace)",
+        "method": "PUT",
+        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlBbm5vdGF0ZWRSZWxhdGlvbnNoaXBFbGVtZW50U3VibW9kZWw/submodel-elements/DemoAnnotatedRelationshipElement",
+        "data": "postBody/putARE.json",
+        "expectedStatus": 204
+    },
+        {
+        "context": "PUT AnnotatedRelationshipElement - Verify updated Element",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlBbm5vdGF0ZWRSZWxhdGlvbnNoaXBFbGVtZW50U3VibW9kZWw/submodel-elements/DemoAnnotatedRelationshipElement",
+        "shouldMatch": "postBody/putARE.json",
+        "expectedStatus": 200
     }
 ]

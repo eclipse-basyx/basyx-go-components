@@ -147,7 +147,7 @@ func (p PostgreSQLPropertyHandler) CreateNested(tx *sql.Tx, submodelID string, p
 //
 // Returns:
 //   - error: An error if the update operation fails
-func (p PostgreSQLPropertyHandler) Update(submodelID string, idShortOrPath string, submodelElement gen.SubmodelElement, tx *sql.Tx) error {
+func (p PostgreSQLPropertyHandler) Update(submodelID string, idShortOrPath string, submodelElement gen.SubmodelElement, tx *sql.Tx, isPut bool) error {
 	var localTX *sql.Tx
 	var err error
 	var cu func(*error)
@@ -169,7 +169,7 @@ func (p PostgreSQLPropertyHandler) Update(submodelID string, idShortOrPath strin
 	}
 
 	// Update base submodel element fields
-	err = p.decorated.Update(submodelID, idShortOrPath, submodelElement, localTX)
+	err = p.decorated.Update(submodelID, idShortOrPath, submodelElement, localTX, isPut)
 	if err != nil {
 		return err
 	}

@@ -773,7 +773,7 @@ func (p *PostgreSQLSubmodelDatabase) AddSubmodelElementWithPath(submodelID strin
 
 	defer cu(&err)
 
-	parentID, err := crud.GetDatabaseID(idShortPath)
+	parentID, err := crud.GetDatabaseID(submodelID, idShortPath)
 	if err != nil {
 		_, _ = fmt.Println(err)
 		return common.NewInternalServerError("Failed to execute PostgreSQL Query - no changes applied - see console for details.")
@@ -990,7 +990,24 @@ func (p *PostgreSQLSubmodelDatabase) DownloadFileAttachment(submodelID string, i
 }
 
 // UpdateSubmodelElement updates an existing submodel element by its idShortPath.
-func (p *PostgreSQLSubmodelDatabase) UpdateSubmodelElement(submodelID string, idShortPath string, submodelElement gen.SubmodelElement) error {
+// This method determines the appropriate handler based on the element's model type
+// and delegates the update operation to that handler.
+//
+// Parameters:
+//   - submodelID: ID of the parent submodel
+//   - idShortPath: idShort or hierarchical path to the element
+//   - submodelElement: The updated submodel element
+//   - isPut: Flag indicating if this is a full replacement (PUT) or partial update (PATCH)
+//
+// Returns:
+//   - error: Error if the update operation fails
+func (p *PostgreSQLSubmodelDatabase) UpdateSubmodelElement(submodelID string, idShortPath string, submodelElement gen.SubmodelElement, isPut bool) error {
+	tx, cu, err := common.StartTransaction(p.db)
+	if err != nil {
+		_, _ = fmt.Println(err)
+		return beginTransactionErrorSubmodelRepo
+	}
+	defer cu(&err)
 	// Get the model type to determine which handler to use
 	modelType, err := getSubmodelElementModelTypeByIDShortPathAndSubmodelID(p.db, submodelID, idShortPath)
 	if err != nil {
@@ -1002,9 +1019,37 @@ func (p *PostgreSQLSubmodelDatabase) UpdateSubmodelElement(submodelID string, id
 	if err != nil {
 		return fmt.Errorf("failed to get handler for model type %s: %w", modelType, err)
 	}
+	err = handler.Update(submodelID, idShortPath, submodelElement, nil, isPut)
 
-	// Update the element
-	return handler.Update(submodelID, idShortPath, submodelElement, nil)
+	if err != nil {
+		return err
+	}
+
+	if isPut {
+		err = handleNestedElementsAfterPut(p, idShortPath, modelType, tx, submodelID, submodelElement)
+		if err != nil {
+			return err
+		}
+	}
+
+	if err = tx.Commit(); err != nil {
+		_, _ = fmt.Println(err)
+		return failedPostgresTransactionSubmodelRepo
+	}
+	return nil
+}
+
+func handleNestedElementsAfterPut(p *PostgreSQLSubmodelDatabase, idShortPath string, modelType string, tx *sql.Tx, submodelID string, submodelElement gen.SubmodelElement) error {
+	var elementID int
+	smeHandler := submodelelements.PostgreSQLSMECrudHandler{Db: p.db}
+	elementID, err := smeHandler.GetDatabaseID(submodelID, idShortPath)
+	if err != nil {
+		return err
+	}
+	if modelType == "AnnotatedRelationshipElement" {
+		err = p.AddNestedSubmodelElementsIteratively(tx, submodelID, elementID, submodelElement, idShortPath, elementID)
+	}
+	return err
 }
 
 // DeleteFileAttachment deletes a file attachment from PostgreSQL Large Object system.
