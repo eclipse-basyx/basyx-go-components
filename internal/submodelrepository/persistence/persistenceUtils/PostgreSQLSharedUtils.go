@@ -649,13 +649,33 @@ func CreateLangStringNameTypes(tx *sql.Tx, nameTypes []gen.LangStringNameType) (
 	var id int
 	var nameTypeID sql.NullInt64
 	if len(nameTypes) > 0 {
-		err := tx.QueryRow(`INSERT INTO lang_string_name_type_reference DEFAULT VALUES RETURNING id`).Scan(&id)
+		ds := goqu.Dialect("postgres").
+			Insert("lang_string_name_type_reference").
+			Returning("id")
+
+		q, args, err := ds.ToSQL()
+		if err != nil {
+			return sql.NullInt64{}, err
+		}
+
+		err = tx.QueryRow(q, args...).Scan(&id)
 		if err != nil {
 			return sql.NullInt64{}, err
 		}
 		nameTypeID = sql.NullInt64{Int64: int64(id), Valid: true}
+
 		for i := 0; i < len(nameTypes); i++ {
-			_, err := tx.Exec(`INSERT INTO lang_string_name_type (lang_string_name_type_reference_id, text, language) VALUES ($1, $2, $3)`, nameTypeID.Int64, nameTypes[i].Text, nameTypes[i].Language)
+			ds := goqu.Dialect("postgres").
+				Insert("lang_string_name_type").
+				Cols("lang_string_name_type_reference_id", "text", "language").
+				Vals(goqu.Vals{nameTypeID.Int64, nameTypes[i].Text, nameTypes[i].Language})
+
+			q, args, err := ds.ToSQL()
+			if err != nil {
+				return sql.NullInt64{}, err
+			}
+
+			_, err = tx.Exec(q, args...)
 			if err != nil {
 				return sql.NullInt64{}, err
 			}
