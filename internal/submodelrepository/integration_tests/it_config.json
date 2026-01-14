@@ -622,5 +622,19 @@
         "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlCYXNpY0V2ZW50RWxlbWVudFN1Ym1vZGVs/submodel-elements/ExampleBasicEvent",
         "shouldMatch": "bodies/put/putBasicEventElement.json",
         "expectedStatus": 200
+    },
+    {
+        "context": "PUT MultiLanguageProperty SubmodelElement (Replace)",
+        "method": "PUT",
+        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/ExampleSubmodelElementCollection.ExampleSubmodelElementListOrdered[1]",
+        "data": "bodies/put/putMultiLanguageProperty.json",
+        "expectedStatus": 204
+    },
+    {
+        "context": "PUT MultiLanguageProperty - Verify updated Element",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/ExampleSubmodelElementCollection.ExampleSubmodelElementListOrdered[1]",
+        "shouldMatch": "bodies/put/putMultiLanguageProperty.json",
+        "expectedStatus": 200
     }
 ]

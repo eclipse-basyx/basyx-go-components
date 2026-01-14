@@ -137,16 +137,134 @@ func (p PostgreSQLMultiLanguagePropertyHandler) CreateNested(tx *sql.Tx, submode
 }
 
 // Update modifies an existing MultiLanguageProperty submodel element in the database.
-// Currently delegates all update operations to the decorated handler for base submodel element properties.
+// This method handles both the common submodel element properties and the specific
+// multi-language property data including language-text pairs and valueId reference.
 //
 // Parameters:
+//   - submodelID: ID of the parent submodel
 //   - idShortOrPath: The idShort or path identifying the element to update
 //   - submodelElement: The updated MultiLanguageProperty element data
+//   - tx: Active database transaction (can be nil, will create one if needed)
+//   - isPut: true: Replaces the element with the body data; false: Updates only passed data
 //
 // Returns:
 //   - error: An error if the update operation fails
 func (p PostgreSQLMultiLanguagePropertyHandler) Update(submodelID string, idShortOrPath string, submodelElement gen.SubmodelElement, tx *sql.Tx, isPut bool) error {
-	return p.decorated.Update(submodelID, idShortOrPath, submodelElement, tx, isPut)
+	var err error
+	localTx := tx
+
+	if tx == nil {
+		var startedTx *sql.Tx
+		var cu func(*error)
+
+		startedTx, cu, err = common.StartTransaction(p.db)
+
+		defer cu(&err)
+
+		localTx = startedTx
+	}
+
+	mlp, ok := submodelElement.(*gen.MultiLanguageProperty)
+	if !ok {
+		return common.NewErrBadRequest("submodelElement is not of type MultiLanguageProperty")
+	}
+
+	dialect := goqu.Dialect("postgres")
+
+	// Get the element ID from the database
+	var elementID int
+	idQuery, args, err := dialect.From("submodel_element").
+		Select("id").
+		Where(goqu.Ex{
+			"idshort_path": idShortOrPath,
+			"submodel_id":  submodelID,
+		}).ToSQL()
+	if err != nil {
+		return err
+	}
+
+	err = localTx.QueryRow(idQuery, args...).Scan(&elementID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return common.NewErrNotFound(fmt.Sprintf("MultiLanguageProperty with idShortPath '%s' not found", idShortOrPath))
+		}
+		return err
+	}
+
+	// Handle optional valueId field
+	var valueIdRef sql.NullInt64
+	if mlp.ValueID != nil && !isEmptyReference(mlp.ValueID) {
+		// Insert the reference and get the ID
+		refID, err := insertReference(localTx, *mlp.ValueID)
+		if err != nil {
+			return err
+		}
+		valueIdRef = sql.NullInt64{Int64: int64(refID), Valid: true}
+	}
+
+	// Update multilanguage_property table with valueId
+	updateQuery, updateArgs, err := dialect.Update("multilanguage_property").
+		Set(goqu.Record{
+			"value_id": valueIdRef,
+		}).
+		Where(goqu.C("id").Eq(elementID)).
+		ToSQL()
+	if err != nil {
+		return err
+	}
+
+	_, err = localTx.Exec(updateQuery, updateArgs...)
+	if err != nil {
+		return err
+	}
+
+	// Handle Value field - delete existing values and insert new ones
+	deleteQuery, deleteArgs, err := dialect.Delete("multilanguage_property_value").
+		Where(goqu.C("mlp_id").Eq(elementID)).
+		ToSQL()
+	if err != nil {
+		return err
+	}
+
+	_, err = localTx.Exec(deleteQuery, deleteArgs...)
+	if err != nil {
+		return err
+	}
+
+	// Insert new values if provided
+	if mlp.Value != nil {
+		for _, val := range mlp.Value {
+			insertQuery, insertArgs, err := dialect.Insert("multilanguage_property_value").
+				Rows(goqu.Record{
+					"mlp_id":   elementID,
+					"language": val.Language,
+					"text":     val.Text,
+				}).
+				ToSQL()
+			if err != nil {
+				return err
+			}
+
+			_, err = localTx.Exec(insertQuery, insertArgs...)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	err = p.decorated.Update(submodelID, idShortOrPath, submodelElement, localTx, isPut)
+	if err != nil {
+		return err
+	}
+
+	if tx == nil {
+		err = localTx.Commit()
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // UpdateValueOnly updates only the value of an existing MultiLanguageProperty submodel element identified by its idShort or path.

@@ -1,0 +1,20 @@
+{
+    "category": "CONSTANT",
+    "description": [
+        {
+            "language": "de",
+            "text": "Beispiel MultiLanguageProperty Element - UP"
+        }
+    ],
+    "idShort": "ExampleMultiLanguageProperty",
+    "modelType": "MultiLanguageProperty",
+    "semanticId": {
+        "keys": [
+            {
+                "type": "GlobalReference",
+                "value": "http://acplt.org/MultiLanguageProperties/ExampleMultiLanguageProperty-UP"
+            }
+        ],
+        "type": "ExternalReference"
+    }
+}
