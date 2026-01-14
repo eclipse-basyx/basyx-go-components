@@ -308,7 +308,7 @@ func DeleteSubmodelElementByPath(tx *sql.Tx, submodelID string, idShortOrPath st
 		if err != nil {
 			return err
 		}
-		
+
 		var parentID int
 		err = tx.QueryRow(selectQuery, selectArgs...).Scan(&parentID)
 		if err != nil {

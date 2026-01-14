@@ -235,7 +235,7 @@ func (p *PostgreSQLSMECrudHandler) CreateWithPath(tx *sql.Tx, submodelID string,
 			if err != nil {
 				return 0, err
 			}
-			
+
 			dialect := goqu.Dialect("postgres")
 			insertQuery, insertArgs, err := dialect.Insert("submodel_element_qualifier").
 				Rows(goqu.Record{
@@ -593,7 +593,7 @@ func (p *PostgreSQLSMECrudHandler) GetDatabaseID(submodelID string, idShortPath 
 	if err != nil {
 		return 0, err
 	}
-	
+
 	var id int
 	err = p.Db.QueryRow(selectQuery, selectArgs...).Scan(&id)
 	if err != nil {
@@ -633,7 +633,7 @@ func (p *PostgreSQLSMECrudHandler) GetNextPosition(parentID int) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	
+
 	var position sql.NullInt64
 	err = p.Db.QueryRow(selectQuery, selectArgs...).Scan(&position)
 	if err != nil {
@@ -671,7 +671,7 @@ func (p *PostgreSQLSMECrudHandler) GetSubmodelElementType(idShortPath string) (s
 	if err != nil {
 		return "", err
 	}
-	
+
 	var modelType string
 	err = p.Db.QueryRow(selectQuery, selectArgs...).Scan(&modelType)
 	if err != nil {

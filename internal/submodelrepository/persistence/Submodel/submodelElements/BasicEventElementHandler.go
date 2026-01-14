@@ -413,14 +413,14 @@ func insertBasicEventElement(basicEvent *gen.BasicEventElement, tx *sql.Tx, id i
 	insertQuery, insertArgs, err := dialect.Insert("basic_event_element").
 		Rows(goqu.Record{
 			"id":             id,
-			"observed":        observedRefJson,
-			"direction":       basicEvent.Direction,
-			"state":           basicEvent.State,
-			"message_topic":   messageTopic,
-			"message_broker":  messageBrokerRefJson,
-			"last_update":     lastUpdate,
-			"min_interval":    minInterval,
-			"max_interval":    maxInterval,
+			"observed":       observedRefJson,
+			"direction":      basicEvent.Direction,
+			"state":          basicEvent.State,
+			"message_topic":  messageTopic,
+			"message_broker": messageBrokerRefJson,
+			"last_update":    lastUpdate,
+			"min_interval":   minInterval,
+			"max_interval":   maxInterval,
 		}).
 		ToSQL()
 	if err != nil {

@@ -456,7 +456,7 @@ func insertRelationshipElement(relElem *gen.RelationshipElement, tx *sql.Tx, id 
 // as well as any other reference structures that need full persistence with keys.
 func insertReference(tx *sql.Tx, ref gen.Reference) (int, error) {
 	dialect := goqu.Dialect("postgres")
-	
+
 	// Insert reference and get ID
 	insertQuery, insertArgs, err := dialect.Insert("reference").
 		Rows(goqu.Record{"type": ref.Type}).
@@ -465,13 +465,13 @@ func insertReference(tx *sql.Tx, ref gen.Reference) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	
+
 	var refID int
 	err = tx.QueryRow(insertQuery, insertArgs...).Scan(&refID)
 	if err != nil {
 		return 0, err
 	}
-	
+
 	// Insert keys
 	for i, key := range ref.Keys {
 		insertKeyQuery, insertKeyArgs, err := dialect.Insert("reference_key").
