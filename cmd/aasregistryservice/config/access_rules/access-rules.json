@@ -42,7 +42,7 @@
       },
       { 
         "name": "anonym_PUBLIC_READABLE", 
-        "formula": {"$eq": [ {"$field": "$aasdesc#specificAssetIds[1].externalSubjectId.keys[0].value"}, {"$strVal": "PUBLIC_READABLE"} ]}
+        "formula": {"$eq": [ {"$field": "$aasdesc#specificAssetIds[0].externalSubjectId.keys[0].value"}, {"$strVal": "PUBLIC_READABLE"} ]}
       }
        
     ],
@@ -53,81 +53,11 @@
       "FILTERLIST": [
           {
             "FRAGMENT": "$aasdesc#specificAssetIds[0]",
-            "CONDITION": 
-            {
-              "$eq": [
-                {
-                  "$field": "$aasdesc#specificAssetIds[1].name"
-                },
-                {
-                  "$strVal": "Banane2"
-                }
-              ]
-            }
-          },
-          {
-            "FRAGMENT": "$aasdesc#specificAssetIds[0].name",
-            "CONDITION": 
-            {
-              "$eq": [
-                {
-                  "$field": "$aasdesc#specificAssetIds[1].name"
-                },
-                {
-                  "$strVal": "Banane2"
-                }
-              ]
-            }
-          },
-          {
-            "FRAGMENT": "$aasdesc#specificAssetIds[1].name",
-            "CONDITION": 
-            {
-              "$eq": [
-                {
-                  "$field": "$aasdesc#specificAssetIds[0].name"
-                },
-                {
-                  "$strVal": "irrelevantPartId"
-                }
-              ]
-            }
+            "CONDITION": { "$boolean": false}
           }
         ]
       },
-      { "USEACL": "all_admin", "USEOBJECTS": ["all_shell_descriptors"], "USEFORMULA": "role_is_admin" },
-      { "USEACL": "user", "USEOBJECTS": ["all_shell_descriptors"], "USEFORMULA": "role_is_viewer_written_x",
-        "FILTERLIST": [
-          {
-            "FRAGMENT": "$aasdesc#specificAssetIds[0].name",
-            "CONDITION": 
-            {
-              "$eq": [
-                {
-                  "$field": "$aasdesc#specificAssetIds[1].name"
-                },
-                {
-                  "$strVal": "Banane2"
-                }
-              ]
-            }
-          },
-          {
-            "FRAGMENT": "$aasdesc#specificAssetIds[1].name",
-            "CONDITION": 
-            {
-              "$eq": [
-                {
-                  "$field": "$aasdesc#specificAssetIds[0].name"
-                },
-                {
-                  "$strVal": "irrelevantPartId"
-                }
-              ]
-            }
-          }
-        ]
-      }
+      { "USEACL": "all_admin", "USEOBJECTS": ["all_shell_descriptors"], "USEFORMULA": "role_is_admin" }
     ]
   }
 }

@@ -241,12 +241,9 @@ func (m *AccessModel) AuthorizeWithFilter(in EvalInput) (bool, DecisionCode, *Qu
 	}
 
 	for fragment, le := range combinedFragments {
-		simpleFilter, onlyBool := adaptLEForBackend(le, in.Claims)
-		if onlyBool {
-			delete(combinedFragments, fragment)
-		} else {
-			combinedFragments[fragment] = simpleFilter
-		}
+		simpleFilter, _ := adaptLEForBackend(le, in.Claims)
+		combinedFragments[fragment] = simpleFilter
+
 	}
 
 	simplified, onlyBool := adaptLEForBackend(combined, in.Claims)
