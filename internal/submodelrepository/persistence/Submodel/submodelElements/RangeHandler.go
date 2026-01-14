@@ -36,6 +36,7 @@ import (
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	persistenceutils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 )
 
@@ -278,57 +279,22 @@ func (p PostgreSQLRangeHandler) Delete(idShortOrPath string) error {
 // Returns:
 //   - error: An error if the database insert operation fails
 func insertRange(rangeElem *gen.Range, tx *sql.Tx, id int) error {
-	var minText, maxText, minNum, maxNum, minTime, maxTime, minDatetime, maxDatetime sql.NullString
-
-	switch rangeElem.ValueType {
-	case "xs:string", "xs:anyURI", "xs:base64Binary", "xs:hexBinary":
-		minText = sql.NullString{String: rangeElem.Min, Valid: rangeElem.Min != ""}
-		maxText = sql.NullString{String: rangeElem.Max, Valid: rangeElem.Max != ""}
-	case "xs:int", "xs:integer", "xs:long", "xs:short",
-		"xs:unsignedInt", "xs:unsignedLong", "xs:unsignedShort", "xs:unsignedByte",
-		"xs:positiveInteger", "xs:negativeInteger", "xs:nonNegativeInteger", "xs:nonPositiveInteger",
-		"xs:decimal", "xs:double", "xs:float":
-		minNum = sql.NullString{String: rangeElem.Min, Valid: rangeElem.Min != ""}
-		maxNum = sql.NullString{String: rangeElem.Max, Valid: rangeElem.Max != ""}
-	case "xs:time":
-		minTime = sql.NullString{String: rangeElem.Min, Valid: rangeElem.Min != ""}
-		maxTime = sql.NullString{String: rangeElem.Max, Valid: rangeElem.Max != ""}
-	case "xs:date", "xs:dateTime", "xs:duration", "xs:gDay", "xs:gMonth",
-		"xs:gMonthDay", "xs:gYear", "xs:gYearMonth":
-		minDatetime = sql.NullString{String: rangeElem.Min, Valid: rangeElem.Min != ""}
-		maxDatetime = sql.NullString{String: rangeElem.Max, Valid: rangeElem.Max != ""}
-	default:
-		// Fallback to text
-		minText = sql.NullString{String: rangeElem.Min, Valid: rangeElem.Min != ""}
-		maxText = sql.NullString{String: rangeElem.Max, Valid: rangeElem.Max != ""}
-	}
+	// Use centralized value type mapper for min/max values
+	typedValue := persistenceutils.MapRangeValueByType(string(rangeElem.ValueType), rangeElem.Min, rangeElem.Max)
 
 	// Insert Range-specific data
 	_, err := tx.Exec(`INSERT INTO range_element (id, value_type, min_text, max_text, min_num, max_num, min_time, max_time, min_datetime, max_datetime)
 					 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
 		id, rangeElem.ValueType,
-		minText, maxText, minNum, maxNum, minTime, maxTime, minDatetime, maxDatetime)
+		typedValue.MinText, typedValue.MaxText,
+		typedValue.MinNumeric, typedValue.MaxNumeric,
+		typedValue.MinTime, typedValue.MaxTime,
+		typedValue.MinDateTime, typedValue.MaxDateTime)
 	return err
 }
 
 // getRangeColumnNames returns the appropriate column names for min and max values
 // based on the XML Schema datatype of the Range element.
 func getRangeColumnNames(valueType string) (minCol, maxCol string) {
-	switch valueType {
-	case "xs:string", "xs:anyURI", "xs:base64Binary", "xs:hexBinary":
-		return "min_text", "max_text"
-	case "xs:int", "xs:integer", "xs:long", "xs:short",
-		"xs:unsignedInt", "xs:unsignedLong", "xs:unsignedShort", "xs:unsignedByte",
-		"xs:positiveInteger", "xs:negativeInteger", "xs:nonNegativeInteger", "xs:nonPositiveInteger",
-		"xs:decimal", "xs:double", "xs:float":
-		return "min_num", "max_num"
-	case "xs:time":
-		return "min_time", "max_time"
-	case "xs:date", "xs:dateTime", "xs:duration", "xs:gDay", "xs:gMonth",
-		"xs:gMonthDay", "xs:gYear", "xs:gYearMonth":
-		return "min_datetime", "max_datetime"
-	default:
-		// Fallback to text
-		return "min_text", "max_text"
-	}
+	return persistenceutils.GetRangeColumnNames(valueType)
 }

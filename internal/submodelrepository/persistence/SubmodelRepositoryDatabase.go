@@ -46,6 +46,8 @@ import (
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	smrepoconfig "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/config"
+	smrepoerrors "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/errors"
 	submodelpersistence "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/Submodel"
 	submodelelements "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/Submodel/submodelElements"
 	persistenceutils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
@@ -57,8 +59,9 @@ type PostgreSQLSubmodelDatabase struct {
 	db *sql.DB
 }
 
-var failedPostgresTransactionSubmodelRepo = common.NewInternalServerError("Failed to commit PostgreSQL transaction - no changes applied - see console for details")
-var beginTransactionErrorSubmodelRepo = common.NewInternalServerError("Failed to begin PostgreSQL transaction - no changes applied - see console for details")
+// Transaction error variables moved to smrepoerrors package for centralized error handling
+var failedPostgresTransactionSubmodelRepo = smrepoerrors.ErrTransactionCommitFailed
+var beginTransactionErrorSubmodelRepo = smrepoerrors.ErrTransactionBeginFailed
 
 // NewPostgreSQLSubmodelBackend creates a new PostgreSQL submodel database backend.
 // It initializes a database connection with the provided DSN and schema configuration.
@@ -105,7 +108,7 @@ func (p *PostgreSQLSubmodelDatabase) GetDB() *sql.DB {
 //   - error: Error if retrieval fails
 func (p *PostgreSQLSubmodelDatabase) GetAllSubmodels(limit int32, cursor string, _ /* idShort */ string, valueOnly bool) ([]gen.Submodel, string, error) {
 	if limit == 0 {
-		limit = 100
+		limit = smrepoconfig.DefaultPageLimit
 	}
 
 	submodelIDs := []string{}
@@ -139,7 +142,7 @@ func (p *PostgreSQLSubmodelDatabase) GetAllSubmodels(limit int32, cursor string,
 	var errSme error
 	var errSmeMutex sync.Mutex
 
-	numWorkers := 10
+	numWorkers := smrepoconfig.WorkerPoolSize
 	jobs := make(chan smeJob, len(submodelIDs))
 	results := make(chan smeResult, len(submodelIDs))
 
