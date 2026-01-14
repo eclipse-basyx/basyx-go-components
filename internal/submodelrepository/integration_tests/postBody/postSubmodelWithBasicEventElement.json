@@ -1,0 +1,55 @@
+{
+    "modelType": "Submodel",
+    "id": "MarcusThisIsAOnlyBasicEventElementSubmodel",
+    "idShort": "BasicEventElementSubmodel",
+    "kind": "Instance",
+    "administration": {
+        "revision": "1",
+        "version": "3"
+    },
+    "submodelElements": [
+        {
+            "modelType": "BasicEventElement",
+            "observed": {
+                "keys": [
+                    {
+                        "type": "Submodel",
+                        "value": "https://acplt.org/Test_Submodel_Missing"
+                    },
+                    {
+                        "type": "SubmodelElementList",
+                        "value": "ExampleSubmodelElementListOrdered"
+                    },
+                    {
+                        "type": "Property",
+                        "value": "ExampleProperty"
+                    }
+                ],
+                "type": "ExternalReference"
+            },
+            "semanticId": {
+                "keys": [
+                    {
+                        "type": "GlobalReference",
+                        "value": "http://acplt.org/Events/ExampleBasicEvent"
+                    }
+                ],
+                "type": "ExternalReference"
+            },
+            "category": "PARAMETER",
+            "idShort": "ExampleBasicEvent",
+            "direction": "input",
+            "state": "on",
+            "description": [
+                {
+                    "language": "en-us",
+                    "text": "Example BasicEvent object"
+                },
+                {
+                    "language": "de",
+                    "text": "Beispiel BasicEvent Element"
+                }
+            ]
+        }
+    ]
+}

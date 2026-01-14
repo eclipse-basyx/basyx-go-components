@@ -588,11 +588,39 @@
         "data": "postBody/putARE.json",
         "expectedStatus": 204
     },
-        {
+    {
         "context": "PUT AnnotatedRelationshipElement - Verify updated Element",
         "method": "GET",
         "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlBbm5vdGF0ZWRSZWxhdGlvbnNoaXBFbGVtZW50U3VibW9kZWw/submodel-elements/DemoAnnotatedRelationshipElement",
         "shouldMatch": "postBody/putARE.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "POST BasicEventElement Submodel",
+        "method": "POST",
+        "endpoint": "http://localhost:6004/submodels",
+        "data": "postBody/postSubmodelWithBasicEventElement.json",
+        "expectedStatus": 201
+    },
+    {
+        "context": "GET BasicEventElement Submodel",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlCYXNpY0V2ZW50RWxlbWVudFN1Ym1vZGVs",
+        "shouldMatch": "postBody/postSubmodelWithBasicEventElement.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "PUT BasicEventElement SubmodelElement (Replace)",
+        "method": "PUT",
+        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlCYXNpY0V2ZW50RWxlbWVudFN1Ym1vZGVs/submodel-elements/ExampleBasicEvent",
+        "data": "postBody/putBasicEventElement.json",
+        "expectedStatus": 204
+    },
+    {
+        "context": "PUT BasicEventElement - Verify updated Element",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlCYXNpY0V2ZW50RWxlbWVudFN1Ym1vZGVs/submodel-elements/ExampleBasicEvent",
+        "shouldMatch": "postBody/putBasicEventElement.json",
         "expectedStatus": 200
     }
 ]

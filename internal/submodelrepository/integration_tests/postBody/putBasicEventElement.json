@@ -1,0 +1,31 @@
+{
+    "modelType": "BasicEventElement",
+    "observed": {
+        "keys": [
+            {
+                "type": "Submodel",
+                "value": "https://acplt.org/Test_Submodel_Missing-Updated"
+            }
+        ],
+        "type": "ExternalReference"
+    },
+    "semanticId": {
+        "keys": [
+            {
+                "type": "GlobalReference",
+                "value": "http://acplt.org/Events/ExampleBasicEvent-Updated"
+            }
+        ],
+        "type": "ExternalReference"
+    },
+    "category": "PARAMETER",
+    "idShort": "ExampleBasicEvent",
+    "direction": "output",
+    "state": "off",
+    "description": [
+        {
+            "language": "de",
+            "text": "Beispiel BasicEvent Element - Aktualisiert"
+        }
+    ]
+}
