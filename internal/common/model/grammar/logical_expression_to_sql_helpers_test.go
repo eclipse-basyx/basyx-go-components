@@ -2,9 +2,13 @@ package grammar
 
 import "testing"
 
-func mustCollectorForRoot(t *testing.T, root string, alias string) *ResolvedFieldPathCollector {
+func mustCollectorForRoot(t *testing.T, root string) *ResolvedFieldPathCollector {
 	t.Helper()
-	collector, err := NewResolvedFieldPathCollectorForRoot(root, alias)
+	parsed, err := ParseCollectorRoot(root)
+	if err != nil {
+		t.Fatalf("ParseCollectorRoot returned error: %v", err)
+	}
+	collector, err := NewResolvedFieldPathCollectorForRoot(parsed)
 	if err != nil {
 		t.Fatalf("NewResolvedFieldPathCollectorForRoot returned error: %v", err)
 	}

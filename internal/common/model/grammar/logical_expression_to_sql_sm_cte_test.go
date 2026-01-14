@@ -9,7 +9,7 @@ import (
 
 func buildSMSQL(t *testing.T, expr LogicalExpression) (string, []interface{}) {
 	t.Helper()
-	collector := mustCollectorForRoot(t, "$sm", "sm_flags")
+	collector := mustCollectorForRoot(t, "$sm")
 	whereExpr, _, err := expr.EvaluateToExpression(collector)
 	if err != nil {
 		t.Fatalf("EvaluateToExpression returned error: %v", err)
@@ -62,7 +62,7 @@ func TestLogicalExpression_SM_WithCollector_BuildsCTE(t *testing.T) {
 	if strings.Contains(sql, "EXISTS") {
 		t.Fatalf("did not expect EXISTS in SQL, got: %s", sql)
 	}
-	if !strings.Contains(sql, "WITH sm_flags_1") || !strings.Contains(sql, "sm_flags_2") {
+	if !strings.Contains(sql, "WITH descriptor_flags_1") || !strings.Contains(sql, "descriptor_flags_2") {
 		t.Fatalf("expected multiple SM CTEs in SQL, got: %s", sql)
 	}
 	if !argListContains(args, "sm-1") {
@@ -108,7 +108,7 @@ func TestLogicalExpression_SM_NestedAndOr(t *testing.T) {
 	if strings.Contains(sql, "EXISTS") {
 		t.Fatalf("did not expect EXISTS in SQL, got: %s", sql)
 	}
-	if !strings.Contains(sql, "WITH sm_flags_1") || !strings.Contains(sql, "sm_flags_2") {
+	if !strings.Contains(sql, "WITH descriptor_flags_1") || !strings.Contains(sql, "descriptor_flags_2") {
 		t.Fatalf("expected multiple SM CTEs in SQL, got: %s", sql)
 	}
 	if !strings.Contains(sql, " OR ") {

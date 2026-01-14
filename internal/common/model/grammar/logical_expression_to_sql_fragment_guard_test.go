@@ -113,7 +113,7 @@ func TestLogicalExpression_EvaluateToExpressionWithNegatedFragments_NoCollector_
 func TestLogicalExpression_EvaluateToExpressionWithNegatedFragments_WithCollector_UsesFlagAndBuildsCTE(t *testing.T) {
 	le := &LogicalExpression{Eq: ComparisonItems{field("$aasdesc#idShort"), strVal("shell-short")}}
 
-	collector := mustCollectorForRoot(t, "$aasdesc", "descriptor_flags")
+	collector := mustCollectorForRoot(t, "$aasdesc")
 	fragments := []FragmentStringPattern{FragmentStringPattern("$aasdesc#endpoints[2]")}
 
 	whereExpr, _, err := le.EvaluateToExpressionWithNegatedFragments(collector, fragments)

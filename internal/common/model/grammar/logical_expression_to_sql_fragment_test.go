@@ -164,7 +164,7 @@ func TestLogicalExpression_evaluateFragmentToExpression_WithCollector_UsesFlagAl
 	le := LogicalExpression{}
 	fragment := FragmentStringPattern("$aasdesc#endpoints[2]")
 
-	collector := mustCollectorForRoot(t, "$aasdesc", "descriptor_flags")
+	collector := mustCollectorForRoot(t, "$aasdesc")
 	whereExpr, _, err := le.evaluateFragmentToExpression(collector, fragment)
 	if err != nil {
 		t.Fatalf("evaluateFragmentToExpression returned error: %v", err)

@@ -25,7 +25,7 @@ func TestLogicalExpression_SMDesc_WithCollector_BuildsCTE(t *testing.T) {
 		},
 	}
 
-	collector, err := NewResolvedFieldPathCollectorForRoot("$smdesc", "smdesc_flags")
+	collector, err := NewResolvedFieldPathCollectorForRoot(CollectorRootSMDesc)
 	if err != nil {
 		t.Fatalf("NewResolvedFieldPathCollectorForRoot returned error: %v", err)
 	}
@@ -70,7 +70,7 @@ func TestLogicalExpression_SMDesc_WithCollector_BuildsCTE(t *testing.T) {
 	if strings.Contains(sql, "EXISTS") {
 		t.Fatalf("did not expect EXISTS in SQL, got: %s", sql)
 	}
-	if !strings.Contains(sql, "WITH smdesc_flags_1") || !strings.Contains(sql, "smdesc_flags_2") {
+	if !strings.Contains(sql, "WITH descriptor_flags_1") || !strings.Contains(sql, "descriptor_flags_2") {
 		t.Fatalf("expected multiple SMDesc CTEs in SQL, got: %s", sql)
 	}
 	if !argListContains(args, "sub-short") {

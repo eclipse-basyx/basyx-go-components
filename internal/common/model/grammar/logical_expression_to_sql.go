@@ -63,24 +63,65 @@ type JoinPlanConfig struct {
 	Correlatable    func(string) bool
 }
 
-func NewResolvedFieldPathCollectorForRoot(root string, cteAlias string) (*ResolvedFieldPathCollector, error) {
-	if strings.TrimSpace(cteAlias) == "" {
-		return nil, fmt.Errorf("cteAlias must be provided")
+// DefaultCollectorCTEAlias is the fixed alias used for all collector-generated CTEs.
+const DefaultCollectorCTEAlias = "descriptor_flags"
+
+// CollectorRoot defines the supported collector roots.
+//
+// Use these constants instead of passing arbitrary strings so supported roots are
+// discoverable at compile time.
+type CollectorRoot string
+
+const (
+	CollectorRootAASDesc CollectorRoot = "aasdesc"
+	CollectorRootSMDesc  CollectorRoot = "smdesc"
+	CollectorRootSM      CollectorRoot = "sm"
+	CollectorRootSME     CollectorRoot = "sme"
+)
+
+// ParseCollectorRoot converts roots like "$aasdesc" or "aasdesc" into a CollectorRoot.
+func ParseCollectorRoot(root string) (CollectorRoot, error) {
+	switch normalizeRoot(root) {
+	case string(CollectorRootAASDesc):
+		return CollectorRootAASDesc, nil
+	case string(CollectorRootSMDesc):
+		return CollectorRootSMDesc, nil
+	case string(CollectorRootSM):
+		return CollectorRootSM, nil
+	case string(CollectorRootSME):
+		return CollectorRootSME, nil
+	default:
+		return "", fmt.Errorf("unsupported collector root %q", root)
+	}
+}
+
+func (r CollectorRoot) isValid() bool {
+	switch r {
+	case CollectorRootAASDesc, CollectorRootSMDesc, CollectorRootSM, CollectorRootSME:
+		return true
+	default:
+		return false
+	}
+}
+
+func NewResolvedFieldPathCollectorForRoot(root CollectorRoot) (*ResolvedFieldPathCollector, error) {
+	if !root.isValid() {
+		return nil, fmt.Errorf("unsupported collector root %q", root)
 	}
 	cfg, err := joinPlanConfigForRoot(root)
 	if err != nil {
 		return nil, err
 	}
-	return NewResolvedFieldPathCollectorWithConfig(cteAlias, &cfg), nil
+	return NewResolvedFieldPathCollectorWithConfig(DefaultCollectorCTEAlias, &cfg), nil
 }
 
-func joinPlanConfigForRoot(root string) (JoinPlanConfig, error) {
-	switch normalizeRoot(root) {
-	case "aasdesc", "smdesc":
+func joinPlanConfigForRoot(root CollectorRoot) (JoinPlanConfig, error) {
+	switch root {
+	case CollectorRootAASDesc, CollectorRootSMDesc:
 		return defaultJoinPlanConfig(), nil
-	case "sm":
+	case CollectorRootSM:
 		return joinPlanConfigForSM(), nil
-	case "sme":
+	case CollectorRootSME:
 		return joinPlanConfigForSME(), nil
 	default:
 		return JoinPlanConfig{}, fmt.Errorf("unsupported collector root %q", root)
@@ -393,27 +434,9 @@ func BuildResolvedFieldPathFlagCTEsWithWhere(cteAlias string, entries []Resolved
 		cteAlias = "descriptor_flags"
 	}
 
-	type cteGroup struct {
-		plan    existsJoinPlan
-		entries []ResolvedFieldPathFlag
-	}
-
-	grouped := map[string]*cteGroup{}
-	order := make([]string, 0, len(entries))
-
-	for _, entry := range entries {
-		plan, err := buildJoinPlanForResolvedWithConfig(entry.Resolved, defaultJoinPlanConfig())
-		if err != nil {
-			return nil, err
-		}
-		key := joinPlanSignature(plan)
-		group, ok := grouped[key]
-		if !ok {
-			group = &cteGroup{plan: plan}
-			grouped[key] = group
-			order = append(order, key)
-		}
-		group.entries = append(group.entries, entry)
+	order, grouped, err := groupFlagsByJoinPlan(entries, defaultJoinPlanConfig(), nil)
+	if err != nil {
+		return nil, err
 	}
 
 	ctes := make([]ResolvedFieldPathFlagCTE, 0, len(grouped))
@@ -447,32 +470,12 @@ func BuildResolvedFieldPathFlagCTEsWithCollector(collector *ResolvedFieldPathCol
 		return nil, nil
 	}
 
-	type cteGroup struct {
-		plan    existsJoinPlan
-		entries []ResolvedFieldPathFlag
-		alias   string
+	aliasForResolved := func(resolved []ResolvedFieldPath) (string, error) {
+		return collector.groupAliasForResolved(resolved)
 	}
-
-	grouped := map[string]*cteGroup{}
-	order := make([]string, 0, len(entries))
-
-	for _, entry := range entries {
-		plan, err := buildJoinPlanForResolvedWithConfig(entry.Resolved, collector.effectiveJoinConfig())
-		if err != nil {
-			return nil, err
-		}
-		key := joinPlanSignature(plan)
-		groupAlias, err := collector.groupAliasForResolved(entry.Resolved)
-		if err != nil {
-			return nil, err
-		}
-		group, ok := grouped[key]
-		if !ok {
-			group = &cteGroup{plan: plan, alias: groupAlias}
-			grouped[key] = group
-			order = append(order, key)
-		}
-		group.entries = append(group.entries, entry)
+	order, grouped, err := groupFlagsByJoinPlan(entries, collector.effectiveJoinConfig(), aliasForResolved)
+	if err != nil {
+		return nil, err
 	}
 
 	ctes := make([]ResolvedFieldPathFlagCTE, 0, len(grouped))
@@ -490,6 +493,46 @@ func BuildResolvedFieldPathFlagCTEsWithCollector(collector *ResolvedFieldPathCol
 	}
 
 	return ctes, nil
+}
+
+type cteGroup struct {
+	plan    existsJoinPlan
+	entries []ResolvedFieldPathFlag
+	alias   string
+}
+
+func groupFlagsByJoinPlan(
+	entries []ResolvedFieldPathFlag,
+	config JoinPlanConfig,
+	aliasForResolved func([]ResolvedFieldPath) (string, error),
+) ([]string, map[string]*cteGroup, error) {
+	grouped := map[string]*cteGroup{}
+	order := make([]string, 0, len(entries))
+
+	for _, entry := range entries {
+		plan, err := buildJoinPlanForResolvedWithConfig(entry.Resolved, config)
+		if err != nil {
+			return nil, nil, err
+		}
+		key := joinPlanSignature(plan)
+
+		group, ok := grouped[key]
+		if !ok {
+			alias := ""
+			if aliasForResolved != nil {
+				alias, err = aliasForResolved(entry.Resolved)
+				if err != nil {
+					return nil, nil, err
+				}
+			}
+			group = &cteGroup{plan: plan, alias: alias}
+			grouped[key] = group
+			order = append(order, key)
+		}
+		group.entries = append(group.entries, entry)
+	}
+
+	return order, grouped, nil
 }
 
 func joinPlanSignature(plan existsJoinPlan) string {
@@ -1296,11 +1339,7 @@ func (le *LogicalExpression) EvaluateToExpressionWithNegatedFragments(
 		if len(bindings) == 0 {
 			continue
 		}
-
-		fragExpr, _, err := le.evaluateFragmentToExpression(collector, f)
-		if err != nil {
-			return nil, nil, fmt.Errorf("error evaluating fragment at index %d: %w", i, err)
-		}
+		fragExpr := andBindingsForResolvedFieldPaths([]ResolvedFieldPath{wrapBindingsAsResolvedPath(bindings)}, nil)
 		negated = append(negated, goqu.L("NOT (?)", fragExpr))
 	}
 	if len(negated) == 0 {
