@@ -1,5 +1,5 @@
 /*******************************************************************************
-* Copyright (C) 2025 the Eclipse BaSyx Authors and Fraunhofer IESE
+* Copyright (C) 2026 the Eclipse BaSyx Authors and Fraunhofer IESE
 *
 * Permission is hereby granted, free of charge, to any person obtaining
 * a copy of this software and associated documentation files (the
@@ -36,7 +36,6 @@ package submodelelements
 import (
 	"database/sql"
 	"errors"
-	"fmt"
 	"sort"
 	"strconv"
 	"sync"
@@ -98,114 +97,9 @@ func GetSMEHandler(submodelElement model.SubmodelElement, db *sql.DB) (PostgreSQ
 // Returns:
 //   - PostgreSQLSMECrudInterface: Type-specific handler implementing CRUD operations
 //   - error: An error if the model type is unsupported or handler creation fails
-//
-//nolint:revive // cyclomatic-complexity is acceptable here due to the factory pattern
 func GetSMEHandlerByModelType(modelType string, db *sql.DB) (PostgreSQLSMECrudInterface, error) {
-	var handler PostgreSQLSMECrudInterface
-
-	switch modelType {
-	case "AnnotatedRelationshipElement":
-		areHandler, err := NewPostgreSQLAnnotatedRelationshipElementHandler(db)
-		if err != nil {
-			_, _ = fmt.Println("Error creating AnnotatedRelationshipElement handler:", err)
-			return nil, common.NewInternalServerError("Failed to create AnnotatedRelationshipElement handler. See console for details.")
-		}
-		handler = areHandler
-	case "BasicEventElement":
-		beeHandler, err := NewPostgreSQLBasicEventElementHandler(db)
-		if err != nil {
-			_, _ = fmt.Println("Error creating BasicEventElement handler:", err)
-			return nil, common.NewInternalServerError("Failed to create BasicEventElement handler. See console for details.")
-		}
-		handler = beeHandler
-	case "Blob":
-		blobHandler, err := NewPostgreSQLBlobHandler(db)
-		if err != nil {
-			_, _ = fmt.Println("Error creating Blob handler:", err)
-			return nil, common.NewInternalServerError("Failed to create Blob handler. See console for details.")
-		}
-		handler = blobHandler
-	case "Capability":
-		capHandler, err := NewPostgreSQLCapabilityHandler(db)
-		if err != nil {
-			_, _ = fmt.Println("Error creating Capability handler:", err)
-			return nil, common.NewInternalServerError("Failed to create Capability handler. See console for details.")
-		}
-		handler = capHandler
-	case "Entity":
-		entityHandler, err := NewPostgreSQLEntityHandler(db)
-		if err != nil {
-			_, _ = fmt.Println("Error creating Entity handler:", err)
-			return nil, common.NewInternalServerError("Failed to create Entity handler. See console for details.")
-		}
-		handler = entityHandler
-	case "File":
-		fileHandler, err := NewPostgreSQLFileHandler(db)
-		if err != nil {
-			_, _ = fmt.Println("Error creating File handler:", err)
-			return nil, common.NewInternalServerError("Failed to create File handler. See console for details.")
-		}
-		handler = fileHandler
-	case "MultiLanguageProperty":
-		mlpHandler, err := NewPostgreSQLMultiLanguagePropertyHandler(db)
-		if err != nil {
-			_, _ = fmt.Println("Error creating MultiLanguageProperty handler:", err)
-			return nil, common.NewInternalServerError("Failed to create MultiLanguageProperty handler. See console for details.")
-		}
-		handler = mlpHandler
-	case "Operation":
-		opHandler, err := NewPostgreSQLOperationHandler(db)
-		if err != nil {
-			_, _ = fmt.Println("Error creating Operation handler:", err)
-			return nil, common.NewInternalServerError("Failed to create Operation handler. See console for details.")
-		}
-		handler = opHandler
-	case "Property":
-		propHandler, err := NewPostgreSQLPropertyHandler(db)
-		if err != nil {
-			_, _ = fmt.Println("Error creating Property handler:", err)
-			return nil, common.NewInternalServerError("Failed to create Property handler. See console for details.")
-		}
-		handler = propHandler
-	case "Range":
-		rangeHandler, err := NewPostgreSQLRangeHandler(db)
-		if err != nil {
-			_, _ = fmt.Println("Error creating Range handler:", err)
-			return nil, common.NewInternalServerError("Failed to create Range handler. See console for details.")
-		}
-		handler = rangeHandler
-	case "ReferenceElement":
-		refElemHandler, err := NewPostgreSQLReferenceElementHandler(db)
-		if err != nil {
-			_, _ = fmt.Println("Error creating ReferenceElement handler:", err)
-			return nil, common.NewInternalServerError("Failed to create ReferenceElement handler. See console for details.")
-		}
-		handler = refElemHandler
-	case "RelationshipElement":
-		relElemHandler, err := NewPostgreSQLRelationshipElementHandler(db)
-		if err != nil {
-			_, _ = fmt.Println("Error creating RelationshipElement handler:", err)
-			return nil, common.NewInternalServerError("Failed to create RelationshipElement handler. See console for details.")
-		}
-		handler = relElemHandler
-	case "SubmodelElementCollection":
-		smeColHandler, err := NewPostgreSQLSubmodelElementCollectionHandler(db)
-		if err != nil {
-			_, _ = fmt.Println("Error creating SubmodelElementCollection handler:", err)
-			return nil, common.NewInternalServerError("Failed to create SubmodelElementCollection handler. See console for details.")
-		}
-		handler = smeColHandler
-	case "SubmodelElementList":
-		smeListHandler, err := NewPostgreSQLSubmodelElementListHandler(db)
-		if err != nil {
-			_, _ = fmt.Println("Error creating SubmodelElementList handler:", err)
-			return nil, common.NewInternalServerError("Failed to create SubmodelElementList handler. See console for details.")
-		}
-		handler = smeListHandler
-	default:
-		return nil, errors.New("ModelType " + modelType + " unsupported.")
-	}
-	return handler, nil
+	// Use the centralized handler registry for cleaner factory pattern
+	return GetHandlerFromRegistry(modelType, db)
 }
 
 // UpdateNestedElementsValueOnly updates nested submodel elements based on value-only patches.

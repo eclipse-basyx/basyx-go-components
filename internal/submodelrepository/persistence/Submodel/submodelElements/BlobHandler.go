@@ -1,5 +1,5 @@
 /*******************************************************************************
-* Copyright (C) 2025 the Eclipse BaSyx Authors and Fraunhofer IESE
+* Copyright (C) 2026 the Eclipse BaSyx Authors and Fraunhofer IESE
 *
 * Permission is hereby granted, free of charge, to any person obtaining
 * a copy of this software and associated documentation files (the
@@ -35,6 +35,8 @@ import (
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	smrepoconfig "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/config"
+	smrepoerrors "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/errors"
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 )
 
@@ -88,9 +90,9 @@ func (p PostgreSQLBlobHandler) Create(tx *sql.Tx, submodelID string, submodelEle
 		return 0, err
 	}
 
-	// Check if blob value is larger than 1GB
-	if len(blob.Value) > 1<<30 {
-		return 0, common.NewErrBadRequest("blob value exceeds maximum size of 1GB - for files larger than 1GB, you must use File submodel element instead - Postgres Limitation")
+	// Check if blob value is larger than maximum allowed size
+	if len(blob.Value) > smrepoconfig.MaxBlobSizeBytes {
+		return 0, smrepoerrors.ErrBlobTooLarge
 	}
 
 	// Blob-specific database insertion
