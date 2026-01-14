@@ -22,7 +22,7 @@
 *
 * SPDX-License-Identifier: MIT
 ******************************************************************************/
-// Author: Aaron Zielstorff ( Fraunhofer IESE ), Jannik Fried ( Fraunhofer IESE ), Martin Stemmer ( Fraunhofer IESE )
+// Author: Martin Stemmer ( Fraunhofer IESE )
 
 package grammar
 
