@@ -1,1 +1,0 @@
-$aasdesc#specificAssetIds[2].externalSubjectId.keys[5].type

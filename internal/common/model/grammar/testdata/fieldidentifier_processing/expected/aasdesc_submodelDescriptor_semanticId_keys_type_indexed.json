@@ -1,7 +1,0 @@
-{
-  "column": "aasdesc_submodel_descriptor_semantic_id_reference_key.type",
-  "bindings": [
-    {"alias": "submodel_descriptor.position", "index": 3},
-    {"alias": "aasdesc_submodel_descriptor_semantic_id_reference_key.position", "index": 7}
-  ]
-}

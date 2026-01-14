@@ -1,6 +1,0 @@
-{
-  "column": "submodel_descriptor.id",
-  "bindings": [
-    {"alias": "submodel_descriptor.position", "index": 1}
-  ]
-}

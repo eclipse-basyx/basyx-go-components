@@ -1,7 +1,0 @@
-{
-  "column": "external_subject_reference_key.type",
-  "bindings": [
-    {"alias": "specific_asset_id.position", "index": 2},
-    {"alias": "external_subject_reference_key.position", "index": 5}
-  ]
-}

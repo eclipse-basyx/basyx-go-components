@@ -1,1 +1,0 @@
-$aasdesc#submodelDescriptors[1].endpoints[2]

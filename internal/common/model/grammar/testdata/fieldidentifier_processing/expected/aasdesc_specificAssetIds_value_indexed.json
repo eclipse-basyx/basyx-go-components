@@ -1,6 +1,0 @@
-{
-  "column": "specific_asset_id.value",
-  "bindings": [
-    {"alias": "specific_asset_id.position", "index": 0}
-  ]
-}

@@ -1,9 +1,0 @@
-{
-  "column": "property_element.value_type",
-  "bindings": [
-    {
-      "alias": "submodel_element.idshort_path",
-      "index": "MyList[2].temp"
-    }
-  ]
-}
