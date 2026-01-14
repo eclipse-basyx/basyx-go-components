@@ -650,5 +650,19 @@
         "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlPcGVyYXRpb25TdWJtb2RlbA/submodel-elements/DemoOperation",
         "shouldMatch": "bodies/put/putOperation.json",
         "expectedStatus": 200
+    },
+    {
+        "context": "PUT ReferenceElement SubmodelElement (Replace)",
+        "method": "PUT",
+        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlSZWZlcmVuY2VFbGVtZW50U3VibW9kZWw/submodel-elements/DemoReferenceElement",
+        "data": "bodies/put/putReferenceElement.json",
+        "expectedStatus": 204
+    },    
+    {
+        "context": "GET ReferenceElement - Verify updated Element",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlSZWZlcmVuY2VFbGVtZW50U3VibW9kZWw/submodel-elements/DemoReferenceElement",
+        "shouldMatch": "bodies/put/putReferenceElement.json",
+        "expectedStatus": 200
     }
 ]

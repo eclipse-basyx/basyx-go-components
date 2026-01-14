@@ -194,19 +194,93 @@ func (p PostgreSQLReferenceElementHandler) CreateNested(tx *sql.Tx, submodelID s
 }
 
 // Update modifies an existing ReferenceElement identified by its idShort or full path.
-// This method delegates to the decorated handler which implements the base update logic.
+// This method handles both the common submodel element properties and the specific
+// reference element data including the reference value.
 //
 // Parameters:
+//   - submodelID: ID of the parent submodel
 //   - idShortOrPath: The idShort or full path of the ReferenceElement to update
 //   - submodelElement: The updated ReferenceElement with new values
+//   - tx: Active database transaction (can be nil, will create one if needed)
+//   - isPut: true: Replaces the element with the body data; false: Updates only passed data
 //
 // Returns:
 //   - error: Any error encountered during the update operation
-//
-// Note: This is currently a placeholder that delegates to the decorated handler.
-// Full implementation would include updating the reference value and keys.
 func (p PostgreSQLReferenceElementHandler) Update(submodelID string, idShortOrPath string, submodelElement gen.SubmodelElement, tx *sql.Tx, isPut bool) error {
-	return p.decorated.Update(submodelID, idShortOrPath, submodelElement, tx, isPut)
+	var err error
+	localTx := tx
+
+	if tx == nil {
+		var startedTx *sql.Tx
+		var cu func(*error)
+
+		startedTx, cu, err = common.StartTransaction(p.db)
+
+		defer cu(&err)
+
+		localTx = startedTx
+	}
+
+	refElem, ok := submodelElement.(*gen.ReferenceElement)
+	if !ok {
+		return common.NewErrBadRequest("submodelElement is not of type ReferenceElement")
+	}
+
+	// Handle optional Value field based on isPut flag
+	// For PUT: always update (even if nil, which clears the field)
+	// For PATCH: only update if provided (not nil)
+	if isPut || refElem.Value != nil {
+		var referenceJSONString sql.NullString
+		var json = jsoniter.ConfigCompatibleWithStandardLibrary
+
+		if refElem.Value != nil && !isEmptyReference(refElem.Value) {
+			bytes, err := json.Marshal(refElem.Value)
+			if err != nil {
+				return err
+			}
+			referenceJSONString = sql.NullString{String: string(bytes), Valid: true}
+		} else {
+			referenceJSONString = sql.NullString{Valid: false}
+		}
+
+		// Update reference_element table
+		dialect := goqu.Dialect("postgres")
+		updateQuery, updateArgs, err := dialect.Update("reference_element").
+			Set(goqu.Record{
+				"value": referenceJSONString,
+			}).
+			Where(goqu.C("id").In(
+				dialect.From("submodel_element").
+					Select("id").
+					Where(goqu.Ex{
+						"idshort_path": idShortOrPath,
+						"submodel_id":  submodelID,
+					}),
+			)).
+			ToSQL()
+		if err != nil {
+			return err
+		}
+
+		_, err = localTx.Exec(updateQuery, updateArgs...)
+		if err != nil {
+			return err
+		}
+	}
+
+	err = p.decorated.Update(submodelID, idShortOrPath, submodelElement, localTx, isPut)
+	if err != nil {
+		return err
+	}
+
+	if tx == nil {
+		err = localTx.Commit()
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // UpdateValueOnly updates only the value of an existing ReferenceElement identified by its idShort or full path.
