@@ -163,3 +163,14 @@ func AssertAssetAdministrationShellConstraints(obj AssetAdministrationShell) err
 	}
 	return nil
 }
+
+// AssertAssetAdministrationShellMinimalConstraintsCheck checks minimal constraints
+func AssertAssetAdministrationShellMinimalConstraintsCheck(obj AssetAdministrationShell) error {
+	if IsZeroValue(obj.ID) {
+		return &RequiredError{Field: "id"}
+	}
+	if IsZeroValue(obj.ModelType) {
+		return &RequiredError{Field: "modelType"}
+	}
+	return nil
+}

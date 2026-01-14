@@ -1,0 +1,7 @@
+
+    {
+    "baseUrl": "http://localhost:5105",
+    "startupTimeoutSeconds": 60,
+    "pollIntervalSeconds": 2
+    }
+ 
