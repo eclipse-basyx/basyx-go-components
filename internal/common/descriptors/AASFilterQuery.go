@@ -31,12 +31,8 @@ import (
 )
 
 var (
-	specificAssetIDAlias                          = goqu.T(tblSpecificAssetID).As(aliasSpecificAssetID)
-	externalSubjectReferenceAlias                 = goqu.T(tblReference).As(aliasExternalSubjectReference)
-	externalSubjectReferenceKeyAlias              = goqu.T(tblReferenceKey).As(aliasExternalSubjectReferenceKey)
-	aasDescriptorEndpointAlias                    = goqu.T(tblAASDescriptorEndpoint).As(aliasAASDescriptorEndpoint)
-	submodelDescriptorAlias                       = goqu.T(tblSubmodelDescriptor).As(aliasSubmodelDescriptor)
-	submodelDescriptorEndpointAlias               = goqu.T(tblAASDescriptorEndpoint).As(aliasSubmodelDescriptorEndpoint)
-	submodelDescriptorSemanticIDReferenceAlias    = goqu.T(tblReference).As(aliasSubmodelDescriptorSemanticIDReference)
-	submodelDescriptorSemanticIDReferenceKeyAlias = goqu.T(tblReferenceKey).As(aliasSubmodelDescriptorSemanticIDReferenceKey)
+	specificAssetIDAlias            = goqu.T(tblSpecificAssetID).As(aliasSpecificAssetID)
+	aasDescriptorEndpointAlias      = goqu.T(tblAASDescriptorEndpoint).As(aliasAASDescriptorEndpoint)
+	submodelDescriptorAlias         = goqu.T(tblSubmodelDescriptor).As(aliasSubmodelDescriptor)
+	submodelDescriptorEndpointAlias = goqu.T(tblAASDescriptorEndpoint).As(aliasSubmodelDescriptorEndpoint)
 )
