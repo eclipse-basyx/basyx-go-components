@@ -31,6 +31,7 @@ package submodelelements
 
 import (
 	"database/sql"
+	"fmt"
 
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
@@ -142,11 +143,62 @@ func (p PostgreSQLAnnotatedRelationshipElementHandler) CreateNested(tx *sql.Tx, 
 // Parameters:
 //   - idShortOrPath: idShort or hierarchical path to the element to update
 //   - submodelElement: Updated element data
+//   - isPut: true: Replaces the Submodel Element with the Body Data (Deletes non-specified fields); false: Updates only passed request body data, unspecified is ignored
 //
 // Returns:
 //   - error: Error if update fails
-func (p PostgreSQLAnnotatedRelationshipElementHandler) Update(submodelID string, idShortOrPath string, submodelElement gen.SubmodelElement, tx *sql.Tx) error {
-	return p.decorated.Update(submodelID, idShortOrPath, submodelElement, tx)
+func (p PostgreSQLAnnotatedRelationshipElementHandler) Update(submodelID string, idShortOrPath string, submodelElement gen.SubmodelElement, tx *sql.Tx, isPut bool) error {
+	var err error
+	localTx := tx
+
+	if tx == nil {
+		var startedTx *sql.Tx
+		var cu func(*error)
+
+		startedTx, cu, err = common.StartTransaction(p.db)
+
+		defer cu(&err)
+
+		localTx = startedTx
+	}
+
+	are, ok := submodelElement.(*gen.AnnotatedRelationshipElement)
+	if !ok {
+		return common.NewErrBadRequest("submodelElement is not of type AnnotatedRelationshipElement")
+	}
+
+	if are.First == nil {
+		return common.NewErrBadRequest(fmt.Sprintf("Missing Field 'First' for AnnotatedRelationshipElement with idShortPath '%s'", idShortOrPath))
+	}
+	if are.Second == nil {
+		return common.NewErrBadRequest(fmt.Sprintf("Missing Field 'Second' for AnnotatedRelationshipElement with idShortPath '%s'", idShortOrPath))
+	}
+
+	if are.Annotations != nil && !isPut {
+		// PATCH
+	} else if isPut {
+		// PUT -> Remove all Childs and then recreate the ones from the body -> Recreation is done by the SubmodelRepositoryDatabase Update Method
+		err = DeleteAllChildren(p.db, submodelID, idShortOrPath, localTx)
+		if err != nil {
+			return err
+		}
+
+	}
+
+	err = p.decorated.Update(submodelID, idShortOrPath, submodelElement, localTx, isPut)
+
+	if err != nil {
+		return err
+	}
+
+	if tx == nil {
+		err = localTx.Commit()
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // UpdateValueOnly updates only the value of an existing AnnotatedRelationshipElement submodel element identified by its idShort or path.
@@ -237,7 +289,7 @@ func (p PostgreSQLAnnotatedRelationshipElementHandler) UpdateValueOnly(submodelI
 		}
 	}
 
-	err = UpdateNestedElements(p.db, elems, idShortOrPath, submodelID)
+	err = UpdateNestedElementsValueOnly(p.db, elems, idShortOrPath, submodelID)
 	if err != nil {
 		return err
 	}

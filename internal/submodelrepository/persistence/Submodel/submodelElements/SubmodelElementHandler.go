@@ -208,7 +208,7 @@ func GetSMEHandlerByModelType(modelType string, db *sql.DB) (PostgreSQLSMECrudIn
 	return handler, nil
 }
 
-// UpdateNestedElements updates nested submodel elements based on value-only patches.
+// UpdateNestedElementsValueOnly updates nested submodel elements based on value-only patches.
 //
 // Parameters:
 //   - db: Database connection
@@ -218,7 +218,7 @@ func GetSMEHandlerByModelType(modelType string, db *sql.DB) (PostgreSQLSMECrudIn
 //
 // Returns:
 //   - error: Error if update fails
-func UpdateNestedElements(db *sql.DB, elems []persistenceutils.ValueOnlyElementsToProcess, idShortOrPath string, submodelID string) error {
+func UpdateNestedElementsValueOnly(db *sql.DB, elems []persistenceutils.ValueOnlyElementsToProcess, idShortOrPath string, submodelID string) error {
 	for _, elem := range elems {
 		if elem.IdShortPath == idShortOrPath {
 			continue // Skip the root element as it's already processed
@@ -238,6 +238,59 @@ func UpdateNestedElements(db *sql.DB, elems []persistenceutils.ValueOnlyElements
 		}
 		err = handler.UpdateValueOnly(submodelID, elem.IdShortPath, elem.Element)
 		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// UpdateNestedElementsValueOnly updates nested submodel elements based on value-only patches.
+//
+// Parameters:
+//   - db: Database connection
+//   - elems: List of elements to process
+//   - idShortOrPath: idShort or hierarchical path of the root element
+//   - submodelID: ID of the parent submodel
+//
+// Returns:
+//   - error: Error if update fails
+func UpdateNestedElements(db *sql.DB, elems []persistenceutils.SubmodelElementToProcess, idShortOrPath string, submodelID string, tx *sql.Tx, isPut bool) error {
+	localTx := tx
+	var err error
+	if tx == nil {
+		var cu func(*error)
+		localTx, cu, err = common.StartTransaction(db)
+		if err != nil {
+			return err
+		}
+
+		defer cu(&err)
+	}
+	for _, elem := range elems {
+		if elem.IdShortPath == idShortOrPath {
+			continue // Skip the root element as it's already processed
+		}
+		modelType := elem.Element.GetModelType()
+		if modelType == "File" {
+			// We have to check the database because File could be ambiguous between File and Blob
+			actual, err := GetModelTypeByIdShortPathAndSubmodelID(db, submodelID, elem.IdShortPath)
+			if err != nil {
+				return err
+			}
+			modelType = actual
+		}
+		handler, err := GetSMEHandlerByModelType(modelType, db)
+		if err != nil {
+			return err
+		}
+		err = handler.Update(submodelID, elem.IdShortPath, elem.Element, localTx, isPut)
+		if err != nil {
+			return err
+		}
+	}
+
+	if tx == nil {
+		if err = localTx.Commit(); err != nil {
 			return err
 		}
 	}
@@ -498,6 +551,55 @@ func GetSubmodelElementsForSubmodel(db *sql.DB, submodelID string, idShortPath s
 	}
 
 	return res, nextCursor, nil
+}
+
+// DeleteAllChildren removes all associated children
+//
+// Parameters:
+// - db: The database connection
+// - submodelId: The Identifier of the Submodel the SubmodelElement belongs to
+// - idShortPath: The parents idShortPath to delete the children from
+// - tx: transaction context (will be set if nil)
+func DeleteAllChildren(db *sql.DB, submodelId string, idShortPath string, tx *sql.Tx) error {
+	var err error
+	localTx := tx
+	if tx == nil {
+		var cu func(*error)
+		localTx, cu, err = common.StartTransaction(db)
+		if err != nil {
+			return err
+		}
+
+		defer cu(&err)
+	}
+
+	// Delete All Elements that start with idShortPath + "." or with idShortPath + "["
+
+	del := goqu.Delete("submodel_element").Where(
+		goqu.And(
+			goqu.I("submodel_id").Eq(submodelId),
+			goqu.Or(
+				goqu.I("idshort_path").Like(idShortPath+".%"),
+				goqu.I("idshort_path").Like(idShortPath+"[%"),
+			),
+		),
+	)
+	sqlQuery, args, err := del.ToSQL()
+	if err != nil {
+		return err
+	}
+	_, err = localTx.Exec(sqlQuery, args...)
+	if err != nil {
+		return err
+	}
+
+	if tx == nil {
+		if err = localTx.Commit(); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // attachChildrenToSubmodelElements reconstructs the hierarchical structure of submodel elements.

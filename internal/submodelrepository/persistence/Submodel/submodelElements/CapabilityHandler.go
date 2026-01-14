@@ -130,8 +130,8 @@ func (p PostgreSQLCapabilityHandler) CreateNested(tx *sql.Tx, submodelID string,
 //
 // Returns:
 //   - error: Error if update fails
-func (p PostgreSQLCapabilityHandler) Update(submodelID string, idShortOrPath string, submodelElement gen.SubmodelElement, tx *sql.Tx) error {
-	return p.decorated.Update(submodelID, idShortOrPath, submodelElement, tx)
+func (p PostgreSQLCapabilityHandler) Update(submodelID string, idShortOrPath string, submodelElement gen.SubmodelElement, tx *sql.Tx, isPut bool) error {
+	return p.decorated.Update(submodelID, idShortOrPath, submodelElement, tx, isPut)
 }
 
 // UpdateValueOnly updates only the value of an existing Capability submodel element identified by its idShort or path.

@@ -1028,6 +1028,12 @@ type ValueOnlyElementsToProcess struct {
 	IdShortPath string
 }
 
+// SubmodelElementToProcess represents a SubmodelElement along with its ID short path.
+type SubmodelElementToProcess struct {
+	Element     gen.SubmodelElement
+	IdShortPath string
+}
+
 // BuildElementsToProcessStackValueOnly builds a stack of SubmodelElementValues to process iteratively.
 //
 // This function constructs a stack of SubmodelElementValues starting from a given root element.

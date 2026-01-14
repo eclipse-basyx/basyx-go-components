@@ -146,8 +146,8 @@ func (p PostgreSQLOperationHandler) CreateNested(tx *sql.Tx, submodelID string, 
 //
 // Returns:
 //   - error: An error if the update operation fails
-func (p PostgreSQLOperationHandler) Update(submodelID string, idShortOrPath string, submodelElement gen.SubmodelElement, tx *sql.Tx) error {
-	return p.decorated.Update(submodelID, idShortOrPath, submodelElement, tx)
+func (p PostgreSQLOperationHandler) Update(submodelID string, idShortOrPath string, submodelElement gen.SubmodelElement, tx *sql.Tx, isPut bool) error {
+	return p.decorated.Update(submodelID, idShortOrPath, submodelElement, tx, isPut)
 }
 
 // UpdateValueOnly updates only the value of an existing Operation submodel element identified by its idShort or path.
