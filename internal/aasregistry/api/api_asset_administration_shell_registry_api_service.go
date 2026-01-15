@@ -95,21 +95,6 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) PostAssetAdministrationS
 	if resp, err := enforceAccessForAAS(ctx, "PostAssetAdministrationShellDescriptor", assetAdministrationShellDescriptor); resp != nil || err != nil {
 		return *resp, err
 	}
-	// Existence check: AAS with same Id should not already exist (lightweight)
-	if strings.TrimSpace(assetAdministrationShellDescriptor.Id) != "" {
-		if exists, chkErr := s.aasRegistryBackend.ExistsAASByID(ctx, assetAdministrationShellDescriptor.Id); chkErr != nil {
-			log.Printf("🧩 [%s] Error in PostAssetAdministrationShellDescriptor: existence check failed (aasId=%q): %v", componentName, assetAdministrationShellDescriptor.Id, chkErr)
-			return common.NewErrorResponse(
-				chkErr, http.StatusInternalServerError, componentName, "PostAssetAdministrationShellDescriptor", "Unhandled-Precheck",
-			), chkErr
-		} else if exists {
-			e := common.NewErrConflict("AAS with given id already exists")
-			log.Printf("🧩 [%s] Error in PostAssetAdministrationShellDescriptor: conflict (aasId=%q): %v", componentName, assetAdministrationShellDescriptor.Id, e)
-			return common.NewErrorResponse(
-				e, http.StatusConflict, componentName, "PostAssetAdministrationShellDescriptor", "Conflict-Exists",
-			), nil
-		}
-	}
 
 	err := s.aasRegistryBackend.InsertAdministrationShellDescriptor(ctx, assetAdministrationShellDescriptor)
 	if err != nil {
