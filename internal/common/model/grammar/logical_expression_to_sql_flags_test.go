@@ -1,6 +1,7 @@
 package grammar
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
@@ -326,5 +327,361 @@ func TestResolvedFieldPathFlags_MultipleCTEsExample(t *testing.T) {
 
 	if !strings.Contains(sql, "WITH flagtable_1") || !strings.Contains(sql, "flagtable_2") {
 		t.Fatalf("expected multiple CTEs in SQL, got: %s", sql)
+	}
+}
+
+func TestLogicalExpression_EvaluateToExpression_MatchExpression_SameRow(t *testing.T) {
+	jsonStr := `{
+		"$match": [
+			{
+				"$eq": [
+					{"$field": "$aasdesc#specificAssetIds[0].name"},
+					{"$strVal": "customerPartId"}
+				]
+			},
+			{
+				"$eq": [
+					{"$field": "$aasdesc#specificAssetIds[].value"},
+					{"$strVal": "ACME001"}
+				]
+			}
+		]
+	}`
+
+	var le LogicalExpression
+	if err := json.Unmarshal([]byte(jsonStr), &le); err != nil {
+		t.Fatalf("failed to unmarshal LogicalExpression: %v", err)
+	}
+
+	collector := mustCollectorForRoot(t, "$aasdesc")
+	whereExpr, _, err := le.EvaluateToExpression(collector)
+	if err != nil {
+		t.Fatalf("EvaluateToExpression returned error: %v", err)
+	}
+
+	entries := collector.Entries()
+	if len(entries) != 1 {
+		t.Fatalf("expected 1 collected entry for match expression, got %d", len(entries))
+	}
+
+	ctes, err := BuildResolvedFieldPathFlagCTEsWithCollector(collector, entries, nil)
+	if err != nil {
+		t.Fatalf("BuildResolvedFieldPathFlagCTEsWithCollector returned error: %v", err)
+	}
+	if len(ctes) != 1 {
+		t.Fatalf("expected 1 CTE for match expression, got %d", len(ctes))
+	}
+
+	cteSQL, cteArgs, err := ctes[0].Dataset.Prepared(true).ToSQL()
+	if err != nil {
+		t.Fatalf("ToSQL returned error: %v", err)
+	}
+	if strings.Count(cteSQL, "BOOL_OR") != 1 {
+		t.Fatalf("expected exactly one BOOL_OR in SQL, got: %s", cteSQL)
+	}
+	if !strings.Contains(cteSQL, "\"specific_asset_id\".\"name\"") {
+		t.Fatalf("expected predicate on specific_asset_id.name in SQL, got: %s", cteSQL)
+	}
+	if !strings.Contains(cteSQL, "\"specific_asset_id\".\"value\"") {
+		t.Fatalf("expected predicate on specific_asset_id.value in SQL, got: %s", cteSQL)
+	}
+	if !argListContains(cteArgs, "customerPartId") {
+		t.Fatalf("expected args to contain %q, got %#v", "customerPartId", cteArgs)
+	}
+	if !argListContains(cteArgs, "ACME001") {
+		t.Fatalf("expected args to contain %q, got %#v", "ACME001", cteArgs)
+	}
+
+	d := goqu.Dialect("postgres")
+	ds := d.From(goqu.T("descriptor").As("descriptor")).
+		InnerJoin(
+			goqu.T("aas_descriptor").As("aas_descriptor"),
+			goqu.On(goqu.I("aas_descriptor.descriptor_id").Eq(goqu.I("descriptor.id"))),
+		).
+		Select(goqu.V(1)).
+		Where(whereExpr)
+	for _, cte := range ctes {
+		ds = ds.With(cte.Alias, cte.Dataset).
+			LeftJoin(
+				goqu.T(cte.Alias),
+				goqu.On(goqu.I(cte.Alias+".root_id").Eq(goqu.I("descriptor.id"))),
+			)
+	}
+	ds = ds.Prepared(true)
+
+	sql, args, err := ds.ToSQL()
+	if err != nil {
+		t.Fatalf("ToSQL returned error: %v", err)
+	}
+
+	if strings.Contains(sql, "EXISTS") {
+		t.Fatalf("did not expect EXISTS in SQL, got: %s", sql)
+	}
+	if !strings.Contains(sql, "WITH flagtable_1") {
+		t.Fatalf("expected flagtable_1 CTE in SQL, got: %s", sql)
+	}
+	if strings.Contains(sql, "flagtable_2") {
+		t.Fatalf("did not expect multiple flag CTEs, got: %s", sql)
+	}
+	if !argListContains(args, "customerPartId") {
+		t.Fatalf("expected args to contain %q, got %#v", "customerPartId", args)
+	}
+	if !argListContains(args, "ACME001") {
+		t.Fatalf("expected args to contain %q, got %#v", "ACME001", args)
+	}
+}
+
+func TestLogicalExpression_EvaluateToExpression_MatchExpression_NestedMatch(t *testing.T) {
+	jsonStr := `{
+		"$match": [
+			{
+				"$match": [
+					{
+						"$eq": [
+							{"$field": "$aasdesc#specificAssetIds[].name"},
+							{"$strVal": "customerPartId"}
+						]
+					},
+					{
+						"$eq": [
+							{"$field": "$aasdesc#specificAssetIds[].value"},
+							{"$strVal": "ACME001"}
+						]
+					}
+				]
+			},
+			{
+				"$eq": [
+					{"$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[0].value"},
+					{"$strVal": "WRITTEN_BY_X"}
+				]
+			}
+		]
+	}`
+
+	var le LogicalExpression
+	if err := json.Unmarshal([]byte(jsonStr), &le); err != nil {
+		t.Fatalf("failed to unmarshal LogicalExpression: %v", err)
+	}
+
+	collector := mustCollectorForRoot(t, "$aasdesc")
+	whereExpr, _, err := le.EvaluateToExpression(collector)
+	if err != nil {
+		t.Fatalf("EvaluateToExpression returned error: %v", err)
+	}
+
+	entries := collector.Entries()
+	if len(entries) != 1 {
+		t.Fatalf("expected 1 collected entry for nested match expression, got %d", len(entries))
+	}
+
+	ctes, err := BuildResolvedFieldPathFlagCTEsWithCollector(collector, entries, nil)
+	if err != nil {
+		t.Fatalf("BuildResolvedFieldPathFlagCTEsWithCollector returned error: %v", err)
+	}
+	if len(ctes) != 1 {
+		t.Fatalf("expected 1 CTE for nested match expression, got %d", len(ctes))
+	}
+
+	cteSQL, cteArgs, err := ctes[0].Dataset.Prepared(true).ToSQL()
+	if err != nil {
+		t.Fatalf("ToSQL returned error: %v", err)
+	}
+	if strings.Count(cteSQL, "BOOL_OR") != 1 {
+		t.Fatalf("expected exactly one BOOL_OR in SQL, got: %s", cteSQL)
+	}
+	if !strings.Contains(cteSQL, "\"specific_asset_id\".\"name\"") {
+		t.Fatalf("expected predicate on specific_asset_id.name in SQL, got: %s", cteSQL)
+	}
+	if !strings.Contains(cteSQL, "\"specific_asset_id\".\"value\"") {
+		t.Fatalf("expected predicate on specific_asset_id.value in SQL, got: %s", cteSQL)
+	}
+	if !strings.Contains(cteSQL, "\"external_subject_reference_key\".\"value\"") {
+		t.Fatalf("expected predicate on external_subject_reference_key.value in SQL, got: %s", cteSQL)
+	}
+	if !argListContains(cteArgs, "customerPartId") {
+		t.Fatalf("expected args to contain %q, got %#v", "customerPartId", cteArgs)
+	}
+	if !argListContains(cteArgs, "ACME001") {
+		t.Fatalf("expected args to contain %q, got %#v", "ACME001", cteArgs)
+	}
+	if !argListContains(cteArgs, "WRITTEN_BY_X") {
+		t.Fatalf("expected args to contain %q, got %#v", "WRITTEN_BY_X", cteArgs)
+	}
+
+	d := goqu.Dialect("postgres")
+	ds := d.From(goqu.T("descriptor").As("descriptor")).
+		InnerJoin(
+			goqu.T("aas_descriptor").As("aas_descriptor"),
+			goqu.On(goqu.I("aas_descriptor.descriptor_id").Eq(goqu.I("descriptor.id"))),
+		).
+		Select(goqu.V(1)).
+		Where(whereExpr)
+	for _, cte := range ctes {
+		ds = ds.With(cte.Alias, cte.Dataset).
+			LeftJoin(
+				goqu.T(cte.Alias),
+				goqu.On(goqu.I(cte.Alias+".root_id").Eq(goqu.I("descriptor.id"))),
+			)
+	}
+	ds = ds.Prepared(true)
+
+	sql, args, err := ds.ToSQL()
+	fmt.Println(sql)
+	if err != nil {
+		t.Fatalf("ToSQL returned error: %v", err)
+	}
+
+	if strings.Contains(sql, "EXISTS") {
+		t.Fatalf("did not expect EXISTS in SQL, got: %s", sql)
+	}
+	if !strings.Contains(sql, "WITH flagtable_1") {
+		t.Fatalf("expected flagtable_1 CTE in SQL, got: %s", sql)
+	}
+	if strings.Contains(sql, "flagtable_2") {
+		t.Fatalf("did not expect multiple flag CTEs, got: %s", sql)
+	}
+	if !argListContains(args, "customerPartId") {
+		t.Fatalf("expected args to contain %q, got %#v", "customerPartId", args)
+	}
+	if !argListContains(args, "ACME001") {
+		t.Fatalf("expected args to contain %q, got %#v", "ACME001", args)
+	}
+	if !argListContains(args, "WRITTEN_BY_X") {
+		t.Fatalf("expected args to contain %q, got %#v", "WRITTEN_BY_X", args)
+	}
+}
+
+func TestLogicalExpression_EvaluateToExpression_MatchExpression_OrTwoMatches(t *testing.T) {
+	jsonStr := `{
+		"$or": [
+			{
+				"$match": [
+					{
+						"$eq": [
+							{"$field": "$aasdesc#specificAssetIds[].name"},
+							{"$strVal": "customerPartId"}
+						]
+					},
+					{
+						"$eq": [
+							{"$field": "$aasdesc#specificAssetIds[].value"},
+							{"$strVal": "ACME001"}
+						]
+					}
+				]
+			},
+			{
+				"$match": [
+					{
+						"$eq": [
+							{"$field": "$aasdesc#specificAssetIds[].name"},
+							{"$strVal": "supplierPartId"}
+						]
+					},
+					{
+						"$eq": [
+							{"$field": "$aasdesc#specificAssetIds[].value"},
+							{"$strVal": "SUP-123"}
+						]
+					}
+				]
+			}
+		]
+	}`
+
+	var le LogicalExpression
+	if err := json.Unmarshal([]byte(jsonStr), &le); err != nil {
+		t.Fatalf("failed to unmarshal LogicalExpression: %v", err)
+	}
+
+	collector := mustCollectorForRoot(t, "$aasdesc")
+	whereExpr, _, err := le.EvaluateToExpression(collector)
+	if err != nil {
+		t.Fatalf("EvaluateToExpression returned error: %v", err)
+	}
+
+	entries := collector.Entries()
+	if len(entries) != 2 {
+		t.Fatalf("expected 2 collected entries for OR match expression, got %d", len(entries))
+	}
+
+	ctes, err := BuildResolvedFieldPathFlagCTEsWithCollector(collector, entries, nil)
+	if err != nil {
+		t.Fatalf("BuildResolvedFieldPathFlagCTEsWithCollector returned error: %v", err)
+	}
+	if len(ctes) != 1 {
+		t.Fatalf("expected 1 CTE for OR match expression, got %d", len(ctes))
+	}
+
+	cteSQL, cteArgs, err := ctes[0].Dataset.Prepared(true).ToSQL()
+	if err != nil {
+		t.Fatalf("ToSQL returned error: %v", err)
+	}
+	if strings.Count(cteSQL, "BOOL_OR") != 2 {
+		t.Fatalf("expected two BOOL_OR expressions in SQL, got: %s", cteSQL)
+	}
+	if !argListContains(cteArgs, "customerPartId") {
+		t.Fatalf("expected args to contain %q, got %#v", "customerPartId", cteArgs)
+	}
+	if !argListContains(cteArgs, "ACME001") {
+		t.Fatalf("expected args to contain %q, got %#v", "ACME001", cteArgs)
+	}
+	if !argListContains(cteArgs, "supplierPartId") {
+		t.Fatalf("expected args to contain %q, got %#v", "supplierPartId", cteArgs)
+	}
+	if !argListContains(cteArgs, "SUP-123") {
+		t.Fatalf("expected args to contain %q, got %#v", "SUP-123", cteArgs)
+	}
+
+	d := goqu.Dialect("postgres")
+	ds := d.From(goqu.T("descriptor").As("descriptor")).
+		InnerJoin(
+			goqu.T("aas_descriptor").As("aas_descriptor"),
+			goqu.On(goqu.I("aas_descriptor.descriptor_id").Eq(goqu.I("descriptor.id"))),
+		).
+		Select(goqu.V(1)).
+		Where(whereExpr)
+	for _, cte := range ctes {
+		ds = ds.With(cte.Alias, cte.Dataset).
+			LeftJoin(
+				goqu.T(cte.Alias),
+				goqu.On(goqu.I(cte.Alias+".root_id").Eq(goqu.I("descriptor.id"))),
+			)
+	}
+	ds = ds.Prepared(true)
+
+	sql, args, err := ds.ToSQL()
+	fmt.Println(sql)
+	if err != nil {
+		t.Fatalf("ToSQL returned error: %v", err)
+	}
+
+	if strings.Contains(sql, "EXISTS") {
+		t.Fatalf("did not expect EXISTS in SQL, got: %s", sql)
+	}
+	if !strings.Contains(sql, " OR ") {
+		t.Fatalf("expected OR in SQL, got: %s", sql)
+	}
+	if !strings.Contains(sql, "WITH flagtable_1") {
+		t.Fatalf("expected flagtable_1 CTE in SQL, got: %s", sql)
+	}
+	if !strings.Contains(sql, "\"flagtable_1\".\""+entries[0].Alias+"\"") {
+		t.Fatalf("expected SQL to reference flag alias %q, got: %s", entries[0].Alias, sql)
+	}
+	if !strings.Contains(sql, "\"flagtable_1\".\""+entries[1].Alias+"\"") {
+		t.Fatalf("expected SQL to reference flag alias %q, got: %s", entries[1].Alias, sql)
+	}
+	if !argListContains(args, "customerPartId") {
+		t.Fatalf("expected args to contain %q, got %#v", "customerPartId", args)
+	}
+	if !argListContains(args, "ACME001") {
+		t.Fatalf("expected args to contain %q, got %#v", "ACME001", args)
+	}
+	if !argListContains(args, "supplierPartId") {
+		t.Fatalf("expected args to contain %q, got %#v", "supplierPartId", args)
+	}
+	if !argListContains(args, "SUP-123") {
+		t.Fatalf("expected args to contain %q, got %#v", "SUP-123", args)
 	}
 }
