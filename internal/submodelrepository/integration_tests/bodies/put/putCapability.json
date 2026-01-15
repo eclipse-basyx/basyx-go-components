@@ -1,0 +1,24 @@
+{
+    "category": "PARAMETER",
+    "description": [
+        {
+            "language": "de",
+            "text": "Beispiel Capability Element - Updated"
+        },
+        {
+            "language": "en-us",
+            "text": "Example Capability object - Updated"
+        }
+    ],
+    "idShort": "DemoCapability",
+    "modelType": "Capability",
+    "semanticId": {
+        "keys": [
+            {
+                "type": "GlobalReference",
+                "value": "http://acplt.org/Capabilities/UpdatedCapability"
+            }
+        ],
+        "type": "ExternalReference"
+    }
+}

@@ -1,0 +1,6 @@
+{
+    "idShort": "NestedFile",
+    "modelType": "File",
+    "contentType": "application/json",
+    "value": "file:///nested/test.json"
+}

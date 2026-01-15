@@ -1,0 +1,35 @@
+{
+    "category": "PARAMETER",
+    "description": [
+        {
+            "language": "en-us",
+            "text": "New Test Entity"
+        },
+        {
+            "language": "de",
+            "text": "Neue Test Entität"
+        }
+    ],
+    "entityType": "CoManagedEntity",
+    "globalAssetId": "https://acplt.org/NewTestAsset",
+    "idShort": "NewTestEntity",
+    "modelType": "Entity",
+    "semanticId": {
+        "keys": [
+            {
+                "type": "GlobalReference",
+                "value": "http://acplt.org/Entities/NewTestEntity"
+            }
+        ],
+        "type": "ExternalReference"
+    },
+    "statements": [
+        {
+            "category": "PARAMETER",
+            "idShort": "EntityProperty",
+            "modelType": "Property",
+            "value": "entityValue",
+            "valueType": "xs:string"
+        }
+    ]
+}

@@ -1,0 +1,26 @@
+{
+    "category": "PARAMETER",
+    "contentType": "application/octet-stream",
+    "description": [
+        {
+            "language": "en-us",
+            "text": "New Test Blob"
+        },
+        {
+            "language": "de",
+            "text": "Neuer Test Blob"
+        }
+    ],
+    "idShort": "NewTestBlob",
+    "modelType": "Blob",
+    "semanticId": {
+        "keys": [
+            {
+                "type": "GlobalReference",
+                "value": "http://acplt.org/Blobs/NewTestBlob"
+            }
+        ],
+        "type": "ExternalReference"
+    },
+    "value": "dGVzdEJsb2JEYXRh"
+}

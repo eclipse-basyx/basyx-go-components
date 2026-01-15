@@ -1,0 +1,6 @@
+{
+    "idShort": "NestedPropertyAnnotation",
+    "modelType": "Property",
+    "value": "nestedInAnnotation",
+    "valueType": "xs:string"
+}

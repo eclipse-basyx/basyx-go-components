@@ -1,0 +1,27 @@
+{
+    "category": "PARAMETER",
+    "description": [
+        {
+            "language": "en-us",
+            "text": "New Test Range"
+        },
+        {
+            "language": "de",
+            "text": "Neuer Test Bereich"
+        }
+    ],
+    "idShort": "NewTestRange",
+    "max": "200",
+    "min": "10",
+    "modelType": "Range",
+    "semanticId": {
+        "keys": [
+            {
+                "type": "GlobalReference",
+                "value": "http://acplt.org/Ranges/NewTestRange"
+            }
+        ],
+        "type": "ExternalReference"
+    },
+    "valueType": "xs:int"
+}

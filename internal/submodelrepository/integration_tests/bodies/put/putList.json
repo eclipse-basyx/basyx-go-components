@@ -1,0 +1,54 @@
+{
+    "category": "PARAMETER",
+    "description": [
+        {
+            "language": "de",
+            "text": "Beispiel SubmodelElementListOrdered Element - Updated"
+        },
+        {
+            "language": "en-us",
+            "text": "Example SubmodelElementListOrdered object - Updated"
+        }
+    ],
+    "idShort": "ExampleSubmodelElementListOrdered",
+    "modelType": "SubmodelElementList",
+    "orderRelevant": true,
+    "semanticId": {
+        "keys": [
+            {
+                "type": "GlobalReference",
+                "value": "http://acplt.org/SubmodelElementLists/ExampleSubmodelElementListOrdered"
+            }
+        ],
+        "type": "ExternalReference"
+    },
+    "typeValueListElement": "SubmodelElement",
+    "value": [
+        {
+            "category": "CONSTANT",
+            "description": [
+                {
+                    "language": "de",
+                    "text": "Neues Property Element"
+                },
+                {
+                    "language": "en-us",
+                    "text": "New Property object"
+                }
+            ],
+            "idShort": "NewProperty",
+            "modelType": "Property",
+            "semanticId": {
+                "keys": [
+                    {
+                        "type": "GlobalReference",
+                        "value": "http://acplt.org/Properties/NewProperty"
+                    }
+                ],
+                "type": "ExternalReference"
+            },
+            "value": "newListValue",
+            "valueType": "xs:string"
+        }
+    ]
+}

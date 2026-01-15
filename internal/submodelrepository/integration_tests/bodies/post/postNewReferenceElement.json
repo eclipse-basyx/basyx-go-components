@@ -1,0 +1,37 @@
+{
+    "category": "PARAMETER",
+    "description": [
+        {
+            "language": "en-us",
+            "text": "New Test Reference Element"
+        },
+        {
+            "language": "de",
+            "text": "Neues Test Referenz Element"
+        }
+    ],
+    "idShort": "NewTestReferenceElement",
+    "modelType": "ReferenceElement",
+    "semanticId": {
+        "keys": [
+            {
+                "type": "GlobalReference",
+                "value": "http://acplt.org/ReferenceElements/NewTestReferenceElement"
+            }
+        ],
+        "type": "ExternalReference"
+    },
+    "value": {
+        "keys": [
+            {
+                "type": "Submodel",
+                "value": "https://acplt.org/Test_Submodel"
+            },
+            {
+                "type": "Property",
+                "value": "TestProperty"
+            }
+        ],
+        "type": "ModelReference"
+    }
+}

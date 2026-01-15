@@ -1,0 +1,13 @@
+{
+    "idShort": "NestedReference",
+    "modelType": "ReferenceElement",
+    "value": {
+        "type": "ModelReference",
+        "keys": [
+            {
+                "type": "Submodel",
+                "value": "http://iese.fraunhofer.de/id/sm/DemoSubmodel"
+            }
+        ]
+    }
+}

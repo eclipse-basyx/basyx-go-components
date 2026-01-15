@@ -779,6 +779,10 @@ func (p *PostgreSQLSubmodelDatabase) AddSubmodelElementWithPath(submodelID strin
 	parentID, err := crud.GetDatabaseID(submodelID, idShortPath)
 	if err != nil {
 		_, _ = fmt.Println(err)
+		// if is no rows error, then the specified path does not exist
+		if errors.Is(err, sql.ErrNoRows) {
+			return common.NewErrNotFound("Parent element with path '" + idShortPath + "' not found in submodel '" + submodelID + "'")
+		}
 		return common.NewInternalServerError("Failed to execute PostgreSQL Query - no changes applied - see console for details.")
 	}
 	nextPosition, err := crud.GetNextPosition(parentID)
@@ -790,7 +794,7 @@ func (p *PostgreSQLSubmodelDatabase) AddSubmodelElementWithPath(submodelID strin
 	if err != nil {
 		return err
 	}
-	if modelType != "SubmodelElementCollection" && modelType != "SubmodelElementList" {
+	if modelType != "SubmodelElementCollection" && modelType != "SubmodelElementList" && modelType != "Entity" && modelType != "AnnotatedRelationshipElement" {
 		return errors.New("cannot add nested element to non-collection/list element")
 	}
 	var newIDShortPath string
@@ -1049,7 +1053,7 @@ func handleNestedElementsAfterPut(p *PostgreSQLSubmodelDatabase, idShortPath str
 	if err != nil {
 		return err
 	}
-	if modelType == "AnnotatedRelationshipElement" {
+	if isModelTypeWithNestedElements(modelType) {
 		err = p.AddNestedSubmodelElementsIteratively(tx, submodelID, elementID, submodelElement, idShortPath, elementID)
 	}
 	return err
@@ -1117,4 +1121,8 @@ func (p *PostgreSQLSubmodelDatabase) UpdateSubmodelValueOnly(submodelID string, 
 	}
 
 	return nil
+}
+
+func isModelTypeWithNestedElements(modelType string) bool {
+	return modelType == "AnnotatedRelationshipElement" || modelType == "SubmodelElementCollection" || modelType == "SubmodelElementList" || modelType == "Entity"
 }

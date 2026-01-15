@@ -10,7 +10,7 @@
     "submodelElements": [
         {
             "modelType": "ReferenceElement",
-            "idShort": "DemoOperation",
+            "idShort": "DemoReferenceElement",
             "value": {
                 "type": "ModelReference",
                 "keys": [

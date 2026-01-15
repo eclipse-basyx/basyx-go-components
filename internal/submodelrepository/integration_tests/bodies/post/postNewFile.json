@@ -1,0 +1,26 @@
+{
+    "category": "PARAMETER",
+    "contentType": "text/plain",
+    "description": [
+        {
+            "language": "en-us",
+            "text": "New Test File"
+        },
+        {
+            "language": "de",
+            "text": "Neue Test Datei"
+        }
+    ],
+    "idShort": "NewTestFile",
+    "modelType": "File",
+    "semanticId": {
+        "keys": [
+            {
+                "type": "GlobalReference",
+                "value": "http://acplt.org/Files/NewTestFile"
+            }
+        ],
+        "type": "ExternalReference"
+    },
+    "value": "file:///NewTestFile.txt"
+}

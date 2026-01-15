@@ -1,0 +1,24 @@
+{
+    "category": "PARAMETER",
+    "description": [
+        {
+            "language": "en-us",
+            "text": "New Test Capability"
+        },
+        {
+            "language": "de",
+            "text": "Neue Test Fähigkeit"
+        }
+    ],
+    "idShort": "NewTestCapability",
+    "modelType": "Capability",
+    "semanticId": {
+        "keys": [
+            {
+                "type": "GlobalReference",
+                "value": "http://acplt.org/Capabilities/NewTestCapability"
+            }
+        ],
+        "type": "ExternalReference"
+    }
+}
