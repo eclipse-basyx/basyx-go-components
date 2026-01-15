@@ -65,12 +65,12 @@ type SubmodelElementList struct {
 
 	EmbeddedDataSpecifications []EmbeddedDataSpecification `json:"embeddedDataSpecifications,omitempty"`
 
-	OrderRelevant bool `json:"orderRelevant,omitempty"`
+	OrderRelevant bool `json:"orderRelevant"`
 
 	//nolint:all
 	SemanticIdListElement *Reference `json:"semanticIdListElement,omitempty"`
 
-	TypeValueListElement *AasSubmodelElements `json:"typeValueListElement,omitempty"`
+	TypeValueListElement *AasSubmodelElements `json:"typeValueListElement"`
 
 	ValueTypeListElement DataTypeDefXsd `json:"valueTypeListElement,omitempty"`
 

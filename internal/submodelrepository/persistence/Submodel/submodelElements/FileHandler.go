@@ -197,6 +197,7 @@ func (p PostgreSQLFileHandler) Update(submodelID string, idShortOrPath string, s
 		).
 		Select("submodel_element.id", "file_element.value").
 		Where(goqu.C("idshort_path").Eq(idShortOrPath)).
+		Where(goqu.C("submodel_id").Eq(submodelID)).
 		ToSQL()
 	if err != nil {
 		return fmt.Errorf("failed to build query: %w", err)
@@ -263,6 +264,21 @@ func (p PostgreSQLFileHandler) Update(submodelID string, idShortOrPath string, s
 		_, err = tx.Exec(updateQuery, updateArgs...)
 		if err != nil {
 			return fmt.Errorf("failed to update file_element: %w", err)
+		}
+	} else {
+		// Only Update content type if value hasn't changed
+		updateQuery, updateArgs, err := dialect.Update("file_element").
+			Set(goqu.Record{
+				"content_type": file.ContentType,
+			}).
+			Where(goqu.C("id").Eq(elementID)).
+			ToSQL()
+		if err != nil {
+			return fmt.Errorf("failed to build update query: %w", err)
+		}
+		_, err = tx.Exec(updateQuery, updateArgs...)
+		if err != nil {
+			return fmt.Errorf("failed to update file_element content type: %w", err)
 		}
 	}
 

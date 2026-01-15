@@ -327,6 +327,32 @@ func (p *PostgreSQLSMECrudHandler) Create(tx *sql.Tx, submodelID string, submode
 //
 //nolint:revive // cyclomatic-complexity is acceptable here due to the multiple update steps
 func (p *PostgreSQLSMECrudHandler) Update(submodelID string, idShortOrPath string, submodelElement gen.SubmodelElement, tx *sql.Tx, isPut bool) error {
+	// Handle transaction creation if tx is nil
+	var localTx *sql.Tx
+	var err error
+	needsCommit := false
+
+	if tx == nil {
+		localTx, err = p.Db.Begin()
+		if err != nil {
+			return err
+		}
+		needsCommit = true
+		defer func() {
+			if needsCommit {
+				if r := recover(); r != nil {
+					_ = localTx.Rollback()
+					panic(r)
+				}
+				if err != nil {
+					_ = localTx.Rollback()
+				}
+			}
+		}()
+	} else {
+		localTx = tx
+	}
+
 	dialect := goqu.Dialect("postgres")
 
 	// First, get the existing element ID and verify it exists in the correct submodel
@@ -350,7 +376,7 @@ func (p *PostgreSQLSMECrudHandler) Update(submodelID string, idShortOrPath strin
 		return err
 	}
 
-	err = tx.QueryRow(selectSQL, selectArgs...).Scan(&existingID, &oldSemanticID, &oldDescriptionID, &oldDisplayNameID)
+	err = localTx.QueryRow(selectSQL, selectArgs...).Scan(&existingID, &oldSemanticID, &oldDescriptionID, &oldDisplayNameID)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return common.NewErrNotFound("SubmodelElement with path '" + idShortOrPath + "' not found in submodel '" + submodelID + "'")
@@ -361,7 +387,7 @@ func (p *PostgreSQLSMECrudHandler) Update(submodelID string, idShortOrPath strin
 	// Handle semantic ID update
 	var newSemanticID sql.NullInt64
 	if submodelElement.GetSemanticID() != nil {
-		newSemanticID, err = persistenceutils.CreateReference(tx, submodelElement.GetSemanticID(), sql.NullInt64{}, sql.NullInt64{})
+		newSemanticID, err = persistenceutils.CreateReference(localTx, submodelElement.GetSemanticID(), sql.NullInt64{}, sql.NullInt64{})
 		if err != nil {
 			return err
 		}
@@ -372,14 +398,14 @@ func (p *PostgreSQLSMECrudHandler) Update(submodelID string, idShortOrPath strin
 	for _, desc := range submodelElement.GetDescription() {
 		convertedDescription = append(convertedDescription, desc)
 	}
-	newDescriptionID, err := persistenceutils.CreateLangStringTextTypes(tx, convertedDescription)
+	newDescriptionID, err := persistenceutils.CreateLangStringTextTypes(localTx, convertedDescription)
 	if err != nil {
 		_, _ = fmt.Println(err)
 		return common.NewInternalServerError("Failed to update Description - see console for details")
 	}
 
 	// Handle display name update
-	newDisplayNameID, err := persistenceutils.CreateLangStringNameTypes(tx, submodelElement.GetDisplayName())
+	newDisplayNameID, err := persistenceutils.CreateLangStringNameTypes(localTx, submodelElement.GetDisplayName())
 	if err != nil {
 		_, _ = fmt.Println(err)
 		return common.NewInternalServerError("Failed to update DisplayName - see console for details")
@@ -436,14 +462,14 @@ func (p *PostgreSQLSMECrudHandler) Update(submodelID string, idShortOrPath strin
 		return err
 	}
 
-	_, err = tx.Exec(updateSQL, updateArgs...)
+	_, err = localTx.Exec(updateSQL, updateArgs...)
 	if err != nil {
 		return err
 	}
 
 	// NOW delete old references after the foreign keys have been updated
 	if oldSemanticID.Valid {
-		err = persistenceutils.DeleteReference(tx, int(oldSemanticID.Int64))
+		err = persistenceutils.DeleteReference(localTx, int(oldSemanticID.Int64))
 		if err != nil {
 			_, _ = fmt.Println(err)
 			return common.NewInternalServerError("Failed to delete old semantic ID - see console for details")
@@ -451,7 +477,7 @@ func (p *PostgreSQLSMECrudHandler) Update(submodelID string, idShortOrPath strin
 	}
 
 	if oldDescriptionID.Valid {
-		err = persistenceutils.DeleteLangStringTextTypes(tx, int(oldDescriptionID.Int64))
+		err = persistenceutils.DeleteLangStringTextTypes(localTx, int(oldDescriptionID.Int64))
 		if err != nil {
 			_, _ = fmt.Println(err)
 			return common.NewInternalServerError("Failed to delete old description - see console for details")
@@ -459,7 +485,7 @@ func (p *PostgreSQLSMECrudHandler) Update(submodelID string, idShortOrPath strin
 	}
 
 	if oldDisplayNameID.Valid {
-		err = persistenceutils.DeleteLangStringNameTypes(tx, int(oldDisplayNameID.Int64))
+		err = persistenceutils.DeleteLangStringNameTypes(localTx, int(oldDisplayNameID.Int64))
 		if err != nil {
 			_, _ = fmt.Println(err)
 			return common.NewInternalServerError("Failed to delete old display name - see console for details")
@@ -476,7 +502,7 @@ func (p *PostgreSQLSMECrudHandler) Update(submodelID string, idShortOrPath strin
 		return err
 	}
 
-	rows, err := tx.Query(selectQualifiersSQL, selectQualifiersArgs...)
+	rows, err := localTx.Query(selectQualifiersSQL, selectQualifiersArgs...)
 	if err != nil {
 		_, _ = fmt.Println(err)
 		return common.NewInternalServerError("Failed to retrieve old qualifiers - see console for details")
@@ -505,7 +531,7 @@ func (p *PostgreSQLSMECrudHandler) Update(submodelID string, idShortOrPath strin
 		return err
 	}
 
-	_, err = tx.Exec(deleteSQL, deleteArgs...)
+	_, err = localTx.Exec(deleteSQL, deleteArgs...)
 	if err != nil {
 		_, _ = fmt.Println(err)
 		return common.NewInternalServerError("Failed to delete old qualifier associations - see console for details")
@@ -513,7 +539,7 @@ func (p *PostgreSQLSMECrudHandler) Update(submodelID string, idShortOrPath strin
 
 	// Delete the actual qualifier records and their associated data
 	for _, qualifierID := range oldQualifierIDs {
-		if err := persistenceutils.DeleteQualifier(tx, qualifierID); err != nil {
+		if err := persistenceutils.DeleteQualifier(localTx, qualifierID); err != nil {
 			_, _ = fmt.Println(err)
 			return common.NewInternalServerError("Failed to delete old qualifier - see console for details")
 		}
@@ -523,7 +549,7 @@ func (p *PostgreSQLSMECrudHandler) Update(submodelID string, idShortOrPath strin
 	qualifiers := submodelElement.GetQualifiers()
 	if len(qualifiers) > 0 {
 		for i, qualifier := range qualifiers {
-			qualifierID, err := persistenceutils.CreateQualifier(tx, qualifier, i)
+			qualifierID, err := persistenceutils.CreateQualifier(localTx, qualifier, i)
 			if err != nil {
 				return err
 			}
@@ -537,12 +563,21 @@ func (p *PostgreSQLSMECrudHandler) Update(submodelID string, idShortOrPath strin
 				return err
 			}
 
-			_, err = tx.Exec(insertSQL, insertArgs...)
+			_, err = localTx.Exec(insertSQL, insertArgs...)
 			if err != nil {
 				_, _ = fmt.Println(err)
 				return common.NewInternalServerError("Failed to create qualifier for Submodel Element with ID Short'" + idShortOrPath + "'. See console for details.")
 			}
 		}
+	}
+
+	// Commit transaction if we created it
+	if needsCommit {
+		err = localTx.Commit()
+		if err != nil {
+			return err
+		}
+		needsCommit = false
 	}
 
 	return nil

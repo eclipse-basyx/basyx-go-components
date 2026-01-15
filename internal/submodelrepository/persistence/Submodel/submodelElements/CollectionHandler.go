@@ -149,17 +149,67 @@ func (p PostgreSQLSubmodelElementCollectionHandler) CreateNested(tx *sql.Tx, sub
 }
 
 // Update modifies an existing SubmodelElementCollection identified by its idShort or path.
-// This method delegates the update operation to the decorated CRUD handler which handles
-// the common submodel element update logic.
+// Handles both PUT (complete replacement) and PATCH (partial update) operations based on isPut flag.
+//
+// For PUT operations (isPut=true):
+//   - Deletes all child elements in the collection (complete replacement)
+//   - Updates base submodel element properties
+//
+// For PATCH operations (isPut=false):
+//   - Updates only the provided base submodel element properties
+//   - Preserves existing child elements
 //
 // Parameters:
+//   - submodelID: The ID of the parent submodel
 //   - idShortOrPath: idShort or hierarchical path to the collection to update
-//   - submodelElement: Updated collection data
+//   - submodelElement: Updated collection data (must be of type *gen.SubmodelElementCollection)
+//   - tx: Optional database transaction (created if nil)
+//   - isPut: true for PUT (replace all), false for PATCH (update only provided fields)
 //
 // Returns:
-//   - error: Error if update fails
+//   - error: Error if update fails or element is not of correct type
 func (p PostgreSQLSubmodelElementCollectionHandler) Update(submodelID string, idShortOrPath string, submodelElement gen.SubmodelElement, tx *sql.Tx, isPut bool) error {
-	return p.decorated.Update(submodelID, idShortOrPath, submodelElement, tx, isPut)
+	_, ok := submodelElement.(*gen.SubmodelElementCollection)
+	if !ok {
+		return common.NewErrBadRequest("submodelElement is not of type SubmodelElementCollection")
+	}
+
+	// Manage transaction
+	var localTx *sql.Tx
+	var err error
+	if tx == nil {
+		localTx, err = p.db.Begin()
+		if err != nil {
+			return err
+		}
+		defer func() {
+			if err != nil {
+				_ = localTx.Rollback()
+			}
+		}()
+		tx = localTx
+	}
+
+	// For PUT operations, delete all children first (complete replacement)
+	if isPut {
+		err = DeleteAllChildren(p.db, submodelID, idShortOrPath, localTx)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Update base submodel element properties
+	err = p.decorated.Update(submodelID, idShortOrPath, submodelElement, tx, isPut)
+	if err != nil {
+		return err
+	}
+
+	// Commit transaction if we created it
+	if localTx != nil {
+		err = localTx.Commit()
+	}
+
+	return err
 }
 
 // UpdateValueOnly updates only the value of an existing SubmodelElementCollection submodel element identified by its idShort or path.

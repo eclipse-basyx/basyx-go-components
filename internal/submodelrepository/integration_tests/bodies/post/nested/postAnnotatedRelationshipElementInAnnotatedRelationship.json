@@ -1,0 +1,22 @@
+{
+    "idShort": "NestedAnnotatedRelAnnotation",
+    "modelType": "AnnotatedRelationshipElement",
+    "first": {
+        "type": "ExternalReference",
+        "keys": [
+            {
+                "type": "GlobalReference",
+                "value": "http://example.com/a"
+            }
+        ]
+    },
+    "second": {
+        "type": "ExternalReference",
+        "keys": [
+            {
+                "type": "GlobalReference",
+                "value": "http://example.com/b"
+            }
+        ]
+    }
+}

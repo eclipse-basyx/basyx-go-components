@@ -9,7 +9,6 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
-	"net/http/httputil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -79,29 +78,29 @@ func makeRequest(config TestConfig, stepNumber int) (string, error) {
 			}
 
 			// Log outgoing request for debugging for requests with bodies
-			if stepNumber > 0 {
-				reqLog := fmt.Sprintf("logs/REQUEST_STEP_%d.log", stepNumber)
-				f, ferr := os.OpenFile(reqLog, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
-				if ferr == nil {
-					fmt.Fprintf(f, "%s %s\n", req.Method, req.URL.String()) //nolint:errcheck
-					for k, v := range req.Header {
-						fmt.Fprintf(f, "%s: %s\n", k, strings.Join(v, ",")) //nolint:errcheck
-					}
-					// If we have a path to a data file, log its contents for easier debugging
-					if config.Data != "" {
-						if data, rerr := os.ReadFile(config.Data); rerr == nil {
-							fmt.Fprintf(f, "\n%s\n", string(data)) //nolint:errcheck
-						}
-					}
-					_ = f.Close()
-				}
+			// if stepNumber > 0 {
+			// 	reqLog := fmt.Sprintf("logs/REQUEST_STEP_%d.log", stepNumber)
+			// 	f, ferr := os.OpenFile(reqLog, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+			// 	if ferr == nil {
+			// 		fmt.Fprintf(f, "%s %s\n", req.Method, req.URL.String()) //nolint:errcheck
+			// 		for k, v := range req.Header {
+			// 			fmt.Fprintf(f, "%s: %s\n", k, strings.Join(v, ",")) //nolint:errcheck
+			// 		}
+			// 		// If we have a path to a data file, log its contents for easier debugging
+			// 		if config.Data != "" {
+			// 			if data, rerr := os.ReadFile(config.Data); rerr == nil {
+			// 				fmt.Fprintf(f, "\n%s\n", string(data)) //nolint:errcheck
+			// 			}
+			// 		}
+			// 		_ = f.Close()
+			// 	}
 
-				// Dump the raw outgoing HTTP request — this may consume req.Body, so prefer the data file for content
-				if dump, derr := httputil.DumpRequestOut(req, false); derr == nil {
-					rawFile := fmt.Sprintf("logs/RAW_REQUEST_STEP_%d.dump", stepNumber)
-					_ = os.WriteFile(rawFile, dump, 0644) // ignore write error
-				}
-			}
+			// 	// Dump the raw outgoing HTTP request — this may consume req.Body, so prefer the data file for content
+			// 	if dump, derr := httputil.DumpRequestOut(req, false); derr == nil {
+			// 		rawFile := fmt.Sprintf("logs/RAW_REQUEST_STEP_%d.dump", stepNumber)
+			// 		_ = os.WriteFile(rawFile, dump, 0644) // ignore write error
+			// 	}
+			// }
 			req.Header.Set("Content-Type", "application/json")
 		} else {
 			req, err = http.NewRequest("POST", config.Endpoint, nil)
@@ -166,10 +165,10 @@ func makeRequest(config TestConfig, stepNumber int) (string, error) {
 	resp, err := client.Do(req)
 	if err != nil {
 		// Log the error to a step-specific file for easier diagnosis
-		if stepNumber > 0 {
-			errLog := fmt.Sprintf("logs/REQUEST_STEP_%d.error.log", stepNumber)
-			_ = os.WriteFile(errLog, []byte(err.Error()), 0644) // ignore write error
-		}
+		// if stepNumber > 0 {
+		// 	errLog := fmt.Sprintf("logs/REQUEST_STEP_%d.error.log", stepNumber)
+		// 	_ = os.WriteFile(errLog, []byte(err.Error()), 0644) // ignore write error
+		// }
 		return "", err
 	}
 

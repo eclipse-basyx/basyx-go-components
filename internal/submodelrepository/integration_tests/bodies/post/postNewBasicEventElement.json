@@ -1,0 +1,39 @@
+{
+    "category": "PARAMETER",
+    "description": [
+        {
+            "language": "en-us",
+            "text": "New Test BasicEventElement"
+        },
+        {
+            "language": "de",
+            "text": "Neues Test BasicEventElement"
+        }
+    ],
+    "direction": "output",
+    "idShort": "NewTestBasicEvent",
+    "modelType": "BasicEventElement",
+    "observed": {
+        "keys": [
+            {
+                "type": "Submodel",
+                "value": "https://acplt.org/Test_Submodel"
+            },
+            {
+                "type": "Property",
+                "value": "ObservedProperty"
+            }
+        ],
+        "type": "ModelReference"
+    },
+    "semanticId": {
+        "keys": [
+            {
+                "type": "GlobalReference",
+                "value": "http://acplt.org/Events/NewTestBasicEvent"
+            }
+        ],
+        "type": "ExternalReference"
+    },
+    "state": "on"
+}

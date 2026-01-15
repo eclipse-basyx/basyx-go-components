@@ -1,0 +1,15 @@
+{
+    "idShort": "NestedEvent",
+    "modelType": "BasicEventElement",
+    "observed": {
+        "type": "ModelReference",
+        "keys": [
+            {
+                "type": "Property",
+                "value": "TestProperty"
+            }
+        ]
+    },
+    "direction": "output",
+    "state": "on"
+}
