@@ -1327,7 +1327,7 @@ func AnyFieldsToUpdate(updateRecord goqu.Record) bool {
 }
 
 // StartTXIfNeeded starts a new database transaction if one is not already in progress.
-func StartTXIfNeeded(tx *sql.Tx, err error, db *sql.DB) (error, func(*error), *sql.Tx) {
+func StartTXIfNeeded(tx *sql.Tx, err error, db *sql.DB) (func(*error), *sql.Tx, error) {
 	var cu func(*error)
 	localTx := tx
 	if !IsTransactionAlreadyInProgress(tx) {
@@ -1337,13 +1337,13 @@ func StartTXIfNeeded(tx *sql.Tx, err error, db *sql.DB) (error, func(*error), *s
 
 		localTx = startedTx
 	}
-	return err, cu, localTx
+	return cu, localTx, err
 }
 
 // CommitTransactionIfNeeded commits the database transaction if it was started locally.
-func CommitTransactionIfNeeded(tx *sql.Tx, err error, localTx *sql.Tx) error {
+func CommitTransactionIfNeeded(tx *sql.Tx, localTx *sql.Tx) error {
 	if !IsTransactionAlreadyInProgress(tx) {
-		err = localTx.Commit()
+		err := localTx.Commit()
 		if err != nil {
 			return err
 		}

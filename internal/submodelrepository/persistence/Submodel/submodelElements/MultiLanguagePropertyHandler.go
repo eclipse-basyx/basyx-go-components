@@ -157,7 +157,7 @@ func (p PostgreSQLMultiLanguagePropertyHandler) Update(submodelID string, idShor
 	}
 
 	var err error
-	err, cu, localTx := persistenceutils.StartTXIfNeeded(tx, err, p.db)
+	cu, localTx, err := persistenceutils.StartTXIfNeeded(tx, err, p.db)
 	if err != nil {
 		return err
 	}
@@ -243,7 +243,7 @@ func (p PostgreSQLMultiLanguagePropertyHandler) Update(submodelID string, idShor
 		}
 	}
 
-	return persistenceutils.CommitTransactionIfNeeded(tx, err, localTx)
+	return persistenceutils.CommitTransactionIfNeeded(tx, localTx)
 }
 
 // UpdateValueOnly updates only the value of an existing MultiLanguageProperty submodel element identified by its idShort or path.

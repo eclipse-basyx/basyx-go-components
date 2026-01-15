@@ -155,7 +155,7 @@ func (p PostgreSQLRangeHandler) Update(submodelID string, idShortOrPath string, 
 	}
 
 	var err error
-	err, cu, localTx := persistenceutils.StartTXIfNeeded(tx, err, p.db)
+	cu, localTx, err := persistenceutils.StartTXIfNeeded(tx, err, p.db)
 	if err != nil {
 		return err
 	}
@@ -189,7 +189,7 @@ func (p PostgreSQLRangeHandler) Update(submodelID string, idShortOrPath string, 
 		return err
 	}
 
-	return persistenceutils.CommitTransactionIfNeeded(tx, err, localTx)
+	return persistenceutils.CommitTransactionIfNeeded(tx, localTx)
 }
 
 // UpdateValueOnly updates only the value-specific fields of an existing Range submodel element.

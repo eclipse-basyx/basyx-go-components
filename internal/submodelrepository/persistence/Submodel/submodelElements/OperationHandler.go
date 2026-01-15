@@ -159,7 +159,7 @@ func (p PostgreSQLOperationHandler) Update(submodelID string, idShortOrPath stri
 	}
 
 	var err error
-	err, cu, localTx := persistenceutils.StartTXIfNeeded(tx, err, p.db)
+	cu, localTx, err := persistenceutils.StartTXIfNeeded(tx, err, p.db)
 	if err != nil {
 		return err
 	}
@@ -204,7 +204,7 @@ func (p PostgreSQLOperationHandler) Update(submodelID string, idShortOrPath stri
 		}
 	}
 
-	return persistenceutils.CommitTransactionIfNeeded(tx, err, localTx)
+	return persistenceutils.CommitTransactionIfNeeded(tx, localTx)
 }
 
 // UpdateValueOnly updates only the value of an existing Operation submodel element identified by its idShort or path.

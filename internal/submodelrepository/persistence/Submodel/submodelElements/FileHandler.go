@@ -174,7 +174,7 @@ func (p PostgreSQLFileHandler) Update(submodelID string, idShortOrPath string, s
 	}
 
 	var err error
-	err, cu, localTx := persistenceutils.StartTXIfNeeded(tx, err, p.db)
+	cu, localTx, err := persistenceutils.StartTXIfNeeded(tx, err, p.db)
 	if err != nil {
 		return err
 	}
@@ -229,7 +229,7 @@ func (p PostgreSQLFileHandler) Update(submodelID string, idShortOrPath string, s
 
 		// If an OID exists, delete the Large Object
 		if oldOID.Valid {
-			err = removeLOFile(err, localTx, oldOID, dialect, elementID)
+			err = removeLOFile(localTx, oldOID, dialect, elementID)
 			if err != nil {
 				return err
 			}
@@ -268,7 +268,7 @@ func (p PostgreSQLFileHandler) Update(submodelID string, idShortOrPath string, s
 		}
 	}
 
-	return persistenceutils.CommitTransactionIfNeeded(tx, err, localTx)
+	return persistenceutils.CommitTransactionIfNeeded(tx, localTx)
 }
 
 // UpdateValueOnly updates only the value of an existing File submodel element identified by its idShort or path.
@@ -777,8 +777,8 @@ func (p PostgreSQLFileHandler) DeleteFileAttachment(submodelID string, idShortPa
 	return nil
 }
 
-func removeLOFile(err error, tx *sql.Tx, oldOID sql.NullInt64, dialect goqu.DialectWrapper, elementID int64) error {
-	_, err = tx.Exec(`SELECT lo_unlink($1)`, oldOID.Int64)
+func removeLOFile(tx *sql.Tx, oldOID sql.NullInt64, dialect goqu.DialectWrapper, elementID int64) error {
+	_, err := tx.Exec(`SELECT lo_unlink($1)`, oldOID.Int64)
 	if err != nil {
 		return fmt.Errorf("failed to delete large object: %w", err)
 	}

@@ -154,7 +154,7 @@ func (p PostgreSQLAnnotatedRelationshipElementHandler) Update(submodelID string,
 	}
 
 	var err error
-	err, cu, localTx := persistenceutils.StartTXIfNeeded(tx, err, p.db)
+	cu, localTx, err := persistenceutils.StartTXIfNeeded(tx, err, p.db)
 	if err != nil {
 		return err
 	}
@@ -215,7 +215,7 @@ func (p PostgreSQLAnnotatedRelationshipElementHandler) Update(submodelID string,
 		}
 	}
 
-	return persistenceutils.CommitTransactionIfNeeded(tx, err, localTx)
+	return persistenceutils.CommitTransactionIfNeeded(tx, localTx)
 }
 
 func validateRequiredFields(are *gen.AnnotatedRelationshipElement, idShortOrPath string) error {

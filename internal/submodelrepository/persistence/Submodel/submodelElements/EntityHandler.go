@@ -135,7 +135,7 @@ func (p PostgreSQLEntityHandler) CreateNested(tx *sql.Tx, submodelID string, par
 // Update modifies an existing Entity element identified by its idShort or path.
 // This method delegates the update operation to the decorated CRUD handler which handles
 // the common submodel element update logic and additionally manages Entity-specific fields.
-
+//
 // Parameters:
 //   - submodelID: The ID of the parent submodel
 //   - idShortOrPath: The idShort or path identifier of the element to update
@@ -152,7 +152,7 @@ func (p PostgreSQLEntityHandler) Update(submodelID string, idShortOrPath string,
 	}
 
 	var err error
-	err, cu, localTx := persistenceutils.StartTXIfNeeded(tx, err, p.db)
+	cu, localTx, err := persistenceutils.StartTXIfNeeded(tx, err, p.db)
 	if err != nil {
 		return err
 	}
@@ -200,7 +200,7 @@ func (p PostgreSQLEntityHandler) Update(submodelID string, idShortOrPath string,
 		}
 	}
 
-	return persistenceutils.CommitTransactionIfNeeded(tx, err, localTx)
+	return persistenceutils.CommitTransactionIfNeeded(tx, localTx)
 }
 
 // UpdateValueOnly updates only the value of an existing Entity submodel element identified by its idShort or path.
