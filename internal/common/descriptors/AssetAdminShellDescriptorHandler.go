@@ -51,6 +51,7 @@ import (
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	persistence_utils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
 	"golang.org/x/sync/errgroup"
@@ -284,53 +285,52 @@ func buildListAssetAdministrationShellDescriptorsQuery(
 	d := goqu.Dialect(dialect)
 	var mapper = []auth.ExpressionIdentifiableMapper{
 		{
-			Exp:           tAASDescriptor.Col(colDescriptorID),
-			CanBeFiltered: false,
+			Exp: tAASDescriptor.Col(colDescriptorID),
 		},
 		{
-			Exp:           tAASDescriptor.Col(colAssetKind),
-			CanBeFiltered: true,
-			Fragment:      strPtr("$aasdesc#assetKind"),
+			Exp:      tAASDescriptor.Col(colAssetKind),
+			Fragment: fragPtr("$aasdesc#assetKind"),
 		},
 		{
-			Exp:           tAASDescriptor.Col(colAssetType),
-			CanBeFiltered: true,
-			Fragment:      strPtr("$aasdesc#assetType"),
+			Exp:      tAASDescriptor.Col(colAssetType),
+			Fragment: fragPtr("$aasdesc#assetType"),
 		},
 		{
-			Exp:           tAASDescriptor.Col(colGlobalAssetID),
-			CanBeFiltered: true,
-			Fragment:      strPtr("$aasdesc#globalAssetId"),
+			Exp:      tAASDescriptor.Col(colGlobalAssetID),
+			Fragment: fragPtr("$aasdesc#globalAssetId"),
 		},
 		{
-			Exp:           tAASDescriptor.Col(colIDShort),
-			CanBeFiltered: true,
-			Fragment:      strPtr("$aasdesc#idShort"),
+			Exp:      tAASDescriptor.Col(colIDShort),
+			Fragment: fragPtr("$aasdesc#idShort"),
 		},
 		{
-			Exp:           tAASDescriptor.Col(colAASID),
-			CanBeFiltered: false,
+			Exp: tAASDescriptor.Col(colAASID),
 		},
 		{
-			Exp:           tAASDescriptor.Col(colAdminInfoID),
-			CanBeFiltered: false,
+			Exp: tAASDescriptor.Col(colAdminInfoID),
 		},
 		{
-			Exp:           tAASDescriptor.Col(colDisplayNameID),
-			CanBeFiltered: false,
+			Exp: tAASDescriptor.Col(colDisplayNameID),
 		},
 		{
-			Exp:           tAASDescriptor.Col(colDescriptionID),
-			CanBeFiltered: false,
+			Exp: tAASDescriptor.Col(colDescriptionID),
 		},
 	}
 
-	expressions, err := auth.GetColumnSelectStatement(ctx, mapper)
+	collector, err := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootAASDesc)
+	if err != nil {
+		return nil, err
+	}
+	expressions, err := auth.GetColumnSelectStatement(ctx, mapper, collector)
 	if err != nil {
 		return nil, err
 	}
 
-	ds := getJoinTables(d).
+	ds := d.From(tDescriptor).
+		InnerJoin(
+			tAASDescriptor,
+			goqu.On(tAASDescriptor.Col(colDescriptorID).Eq(tDescriptor.Col(colID))),
+		).
 		Select(
 			expressions[0],
 			expressions[1],
@@ -344,7 +344,11 @@ func buildListAssetAdministrationShellDescriptorsQuery(
 		).GroupBy(
 		expressions[0], // descriptor_id
 	)
-	ds, err = auth.AddFormulaQueryFromContext(ctx, ds)
+	ds, err = auth.AddFormulaQueryFromContext(ctx, ds, collector)
+	if err != nil {
+		return nil, err
+	}
+	ds, err = auth.ApplyResolvedFieldPathCTEs(ds, collector, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -393,6 +397,7 @@ func ListAssetAdministrationShellDescriptors(
 	assetType string,
 	identifiable string,
 ) ([]model.AssetAdministrationShellDescriptor, string, error) {
+
 	if limit <= 0 {
 		limit = 1000000
 	}
@@ -401,11 +406,8 @@ func ListAssetAdministrationShellDescriptors(
 	if err != nil {
 		return nil, "", err
 	}
-
 	sqlStr, args, err := ds.ToSQL()
 
-	_, _ = fmt.Println(sqlStr)
-	_, _ = fmt.Println(args)
 	if err != nil {
 		return nil, "", err
 	}
@@ -420,7 +422,6 @@ func ListAssetAdministrationShellDescriptors(
 
 	descRows := make([]model.AssetAdministrationShellDescriptorRow, 0, peekLimit)
 	for rows.Next() {
-		_, _ = fmt.Println("a")
 		var r model.AssetAdministrationShellDescriptorRow
 		if err := rows.Scan(
 			&r.DescID,
@@ -524,7 +525,7 @@ func ListAssetAdministrationShellDescriptors(
 	if len(descIDs) > 0 {
 		ids := append([]int64(nil), descIDs...)
 		GoAssign(g, func() (map[int64][]model.Endpoint, error) {
-			return ReadEndpointsByDescriptorIDs(gctx, db, ids, aasDescriptorEndpointAlias)
+			return ReadEndpointsByDescriptorIDs(gctx, db, ids, true)
 		}, &endpointsByDesc)
 		GoAssign(g, func() (map[int64][]model.SpecificAssetID, error) {
 			return ReadSpecificAssetIDsByDescriptorIDs(gctx, db, ids)

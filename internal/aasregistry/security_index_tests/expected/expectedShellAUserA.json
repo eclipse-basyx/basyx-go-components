@@ -1,0 +1,70 @@
+{
+  "id": "https://example.org/A",
+    "endpoints": [
+        {
+            "protocolInformation": {
+                "href": "hrefA",
+                "endpointProtocol": "http"
+            },
+            "interface": "AAS-3.0"
+        }
+    ],
+    "extensions": [
+        {
+            "name": "help",
+            "valueType": "xs:string",
+            "value": "test"
+        }
+    ],
+  "specificAssetIds": [
+    {
+      "name": "",
+      "value": "123",
+      "externalSubjectId": {
+        "type": "ExternalReference",
+        "keys": [
+          {
+            "type": "GlobalReference",
+            "value": "PUBLIC_READABLE"
+          },
+          {
+            "type": "GlobalReference",
+            "value": "WRITTEN_BY_X"
+          },
+          {
+            "type": "GlobalReference",
+            "value": "WRITTEN_BY_Y"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Banane",
+      "value": "248795",
+      "externalSubjectId": {
+        "type": "ExternalReference",
+        "keys": [
+          {
+            "type": "GlobalReference",
+            "value": "PUBLIC_READABLE"
+          },
+          {
+            "type": "GlobalReference",
+            "value": "WRITTEN_BY_X"
+          }
+        ]
+      },
+      "semanticId": {"type": "ModelReference", "keys": [{"type": "AnnotatedRelationshipElement", "value": "ddsfkjn"}]},
+      "supplementalSemanticIds": [
+          {
+              "type": "ModelReference",
+              "keys": [{"type": "AnnotatedRelationshipElement", "value": "sfgjgfd"}]
+          },
+          {
+              "type": "ModelReference",
+              "keys": [{"type": "AnnotatedRelationshipElement", "value": "aoieurhgf"}]
+          }
+      ]
+    }
+  ]
+}

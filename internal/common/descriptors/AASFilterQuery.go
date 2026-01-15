@@ -31,54 +31,8 @@ import (
 )
 
 var (
-	specificAssetIDAlias                          = goqu.T(tblSpecificAssetID).As(aliasSpecificAssetID)
-	externalSubjectReferenceAlias                 = goqu.T(tblReference).As(aliasExternalSubjectReference)
-	externalSubjectReferenceKeyAlias              = goqu.T(tblReferenceKey).As(aliasExternalSubjectReferenceKey)
-	aasDescriptorEndpointAlias                    = goqu.T(tblAASDescriptorEndpoint).As(aliasAASDescriptorEndpoint)
-	submodelDescriptorAlias                       = goqu.T(tblSubmodelDescriptor).As(aliasSubmodelDescriptor)
-	submodelDescriptorEndpointAlias               = goqu.T(tblAASDescriptorEndpoint).As(aliasSubmodelDescriptorEndpoint)
-	submodelDescriptorSemanticIDReferenceAlias    = goqu.T(tblReference).As(aliasSubmodelDescriptorSemanticIDReference)
-	submodelDescriptorSemanticIDReferenceKeyAlias = goqu.T(tblReferenceKey).As(aliasSubmodelDescriptorSemanticIDReferenceKey)
+	specificAssetIDAlias            = goqu.T(tblSpecificAssetID).As(aliasSpecificAssetID)
+	aasDescriptorEndpointAlias      = goqu.T(tblAASDescriptorEndpoint).As(aliasAASDescriptorEndpoint)
+	submodelDescriptorAlias         = goqu.T(tblSubmodelDescriptor).As(aliasSubmodelDescriptor)
+	submodelDescriptorEndpointAlias = goqu.T(tblAASDescriptorEndpoint).As(aliasSubmodelDescriptorEndpoint)
 )
-
-// getJoinTables relevant for only aas descriptors
-func getJoinTables(d goqu.DialectWrapper) *goqu.SelectDataset {
-	joinTables := d.From(tDescriptor).
-		InnerJoin(
-			tAASDescriptor,
-			goqu.On(tAASDescriptor.Col(colDescriptorID).Eq(tDescriptor.Col(colID))),
-		).
-		LeftJoin(
-			specificAssetIDAlias,
-			goqu.On(specificAssetIDAlias.Col(colDescriptorID).Eq(tDescriptor.Col(colID))),
-		).
-		LeftJoin(
-			externalSubjectReferenceAlias,
-			goqu.On(externalSubjectReferenceAlias.Col(colID).Eq(specificAssetIDAlias.Col(colExternalSubjectRef))),
-		).
-		LeftJoin(
-			externalSubjectReferenceKeyAlias,
-			goqu.On(externalSubjectReferenceKeyAlias.Col(colReferenceID).Eq(externalSubjectReferenceAlias.Col(colID))),
-		).
-		LeftJoin(
-			aasDescriptorEndpointAlias,
-			goqu.On(aasDescriptorEndpointAlias.Col(colDescriptorID).Eq(tDescriptor.Col(colID))),
-		).
-		LeftJoin(
-			submodelDescriptorAlias,
-			goqu.On(submodelDescriptorAlias.Col(colAASDescriptorID).Eq(tAASDescriptor.Col(colDescriptorID))),
-		).
-		LeftJoin(
-			submodelDescriptorEndpointAlias,
-			goqu.On(submodelDescriptorEndpointAlias.Col(colDescriptorID).Eq(submodelDescriptorAlias.Col(colDescriptorID))),
-		).
-		LeftJoin(
-			submodelDescriptorSemanticIDReferenceAlias,
-			goqu.On(submodelDescriptorSemanticIDReferenceAlias.Col(colID).Eq(submodelDescriptorAlias.Col(colSemanticID))),
-		).
-		LeftJoin(
-			submodelDescriptorSemanticIDReferenceKeyAlias,
-			goqu.On(submodelDescriptorSemanticIDReferenceKeyAlias.Col(colReferenceID).Eq(submodelDescriptorSemanticIDReferenceAlias.Col(colID))),
-		)
-	return joinTables
-}

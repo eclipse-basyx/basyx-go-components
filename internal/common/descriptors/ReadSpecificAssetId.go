@@ -33,6 +33,7 @@ import (
 
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	"github.com/lib/pq"
 )
@@ -47,30 +48,24 @@ type rowData struct {
 
 var expMapper = []auth.ExpressionIdentifiableMapper{
 	{
-		Exp:           tSpecificAssetID.Col(colDescriptorID),
-		CanBeFiltered: false,
+		Exp: tSpecificAssetID.Col(colDescriptorID),
 	},
 	{
-		Exp:           tSpecificAssetID.Col(colID),
-		CanBeFiltered: false,
+		Exp: tSpecificAssetID.Col(colID),
 	},
 	{
-		Exp:           tSpecificAssetID.Col(colName),
-		CanBeFiltered: true,
-		Fragment:      strPtr("$aasdesc#specificAssetIds[].name"),
+		Exp:      tSpecificAssetID.Col(colName),
+		Fragment: fragPtr("$aasdesc#specificAssetIds[].name"),
 	},
 	{
-		Exp:           tSpecificAssetID.Col(colValue),
-		CanBeFiltered: true,
-		Fragment:      strPtr("$aasdesc#specificAssetIds[].value"),
+		Exp:      tSpecificAssetID.Col(colValue),
+		Fragment: fragPtr("$aasdesc#specificAssetIds[].value"),
 	},
 	{
-		Exp:           tSpecificAssetID.Col(colSemanticID),
-		CanBeFiltered: true,
+		Exp: tSpecificAssetID.Col(colSemanticID),
 	},
 	{
-		Exp:           tSpecificAssetID.Col(colExternalSubjectRef),
-		CanBeFiltered: true,
+		Exp: tSpecificAssetID.Col(colExternalSubjectRef),
 	},
 }
 
@@ -125,11 +120,23 @@ func ReadSpecificAssetIDsByDescriptorIDs(
 
 	arr := pq.Array(descriptorIDs)
 
-	expressions, err := auth.GetColumnSelectStatement(ctx, expMapper)
+	collector, err := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootAASDesc)
 	if err != nil {
 		return nil, err
 	}
-	base := getJoinTables(d).Select(
+	expressions, err := auth.GetColumnSelectStatement(ctx, expMapper, collector)
+	if err != nil {
+		return nil, err
+	}
+	base := d.From(tDescriptor).
+		InnerJoin(
+			tAASDescriptor,
+			goqu.On(tAASDescriptor.Col(colDescriptorID).Eq(tDescriptor.Col(colID))),
+		).
+		LeftJoin(
+			specificAssetIDAlias,
+			goqu.On(specificAssetIDAlias.Col(colDescriptorID).Eq(tDescriptor.Col(colID))),
+		).Select(
 		expressions[0],
 		expressions[1],
 		expressions[2],
@@ -146,7 +153,12 @@ func ReadSpecificAssetIDsByDescriptorIDs(
 			tSpecificAssetID.Col(colPosition).Asc(),
 		)
 
-	base, err = auth.AddFilterQueryFromContext(ctx, base, "$aasdesc#specificAssetIds[]")
+	base, err = auth.AddFilterQueryFromContext(ctx, base, "$aasdesc#specificAssetIds[]", collector)
+	if err != nil {
+		return nil, err
+	}
+	cteWhere := goqu.L(fmt.Sprintf("%s.%s = ANY(?::bigint[])", aliasSpecificAssetID, colDescriptorID), arr)
+	base, err = auth.ApplyResolvedFieldPathCTEs(base, collector, cteWhere)
 	if err != nil {
 		return nil, err
 	}
@@ -155,6 +167,7 @@ func ReadSpecificAssetIDsByDescriptorIDs(
 	if err != nil {
 		return nil, err
 	}
+
 	rows, err := db.QueryContext(ctx, sqlStr, args...)
 	if err != nil {
 		return nil, err
@@ -274,6 +287,7 @@ func nvl(ns sql.NullString) string {
 	return ""
 }
 
-func strPtr(s string) *string {
-	return &s
+func fragPtr(s string) *grammar.FragmentStringPattern {
+	frag := grammar.FragmentStringPattern(s)
+	return &frag
 }

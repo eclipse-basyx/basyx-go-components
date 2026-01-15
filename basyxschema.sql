@@ -1,5 +1,5 @@
 /*******************************************************************************
-* Copyright (C) 2025 the Eclipse BaSyx Authors and Fraunhofer IESE
+* Copyright (C) 2026 the Eclipse BaSyx Authors and Fraunhofer IESE
 *
 * Permission is hereby granted, free of charge, to any person obtaining
 * a copy of this software and associated documentation files (the
@@ -162,6 +162,7 @@ CREATE TABLE IF NOT EXISTS reference_key (
   value        TEXT     NOT NULL,
   UNIQUE(reference_id, position)
 );
+
 CREATE TABLE IF NOT EXISTS lang_string_text_type_reference(
   id       BIGINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY
 );
@@ -474,6 +475,7 @@ CREATE TABLE IF NOT EXISTS specific_asset_id (
   external_subject_ref BIGINT REFERENCES reference(id)
 );
 
+
 CREATE TABLE IF NOT EXISTS specific_asset_id_supplemental_semantic_id (
   id BIGSERIAL PRIMARY KEY,
   specific_asset_id_id BIGINT NOT NULL REFERENCES specific_asset_id(id) ON DELETE CASCADE,
@@ -561,6 +563,8 @@ CREATE INDEX IF NOT EXISTS ix_ref_parentref ON reference(parentReference);
 CREATE INDEX IF NOT EXISTS ix_ref_rootref ON reference(rootReference);
 CREATE INDEX IF NOT EXISTS ix_ref_rootref_id ON reference(rootreference, id);
 CREATE INDEX IF NOT EXISTS ix_ref_id ON reference(id);
+
+CREATE INDEX IF NOT EXISTS ix_refkey_reference_val ON reference_key (reference_id, value);
 CREATE INDEX IF NOT EXISTS ix_refkey_reference_id ON reference_key(reference_id);
 CREATE INDEX IF NOT EXISTS ix_refkey_type_val     ON reference_key(type, value);
 CREATE INDEX IF NOT EXISTS ix_refkey_val_trgm     ON reference_key USING GIN (value gin_trgm_ops);
@@ -685,6 +689,12 @@ CREATE INDEX IF NOT EXISTS ix_descriptor_extension_pair          ON descriptor_e
 -- ==========================================
 -- Specific Asset IDs
 -- ==========================================
+
+
+CREATE INDEX IF NOT EXISTS ix_specasset_descriptor_id_name ON specific_asset_id (descriptor_id, name);
+CREATE INDEX IF NOT EXISTS ix_specasset_descriptor_id_position ON specific_asset_id (descriptor_id, position);
+CREATE INDEX IF NOT EXISTS ix_specasset_descriptor_id_external_subject_ref ON specific_asset_id (descriptor_id, external_subject_ref);
+
 CREATE INDEX IF NOT EXISTS ix_specasset_descriptor_id ON specific_asset_id(descriptor_id);
 CREATE INDEX IF NOT EXISTS ix_specasset_semantic_id   ON specific_asset_id(semantic_id);
 CREATE INDEX IF NOT EXISTS ix_specasset_name          ON specific_asset_id(name);

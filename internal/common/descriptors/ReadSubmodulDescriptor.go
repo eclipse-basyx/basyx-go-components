@@ -29,9 +29,11 @@ package descriptors
 import (
 	"context"
 	"database/sql"
+	"fmt"
 
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	"github.com/lib/pq"
 	"golang.org/x/sync/errgroup"
@@ -101,45 +103,49 @@ func ReadSubmodelDescriptorsByAASDescriptorIDs(
 	d := goqu.Dialect(dialect)
 	var mapper = []auth.ExpressionIdentifiableMapper{
 		{
-			Exp:           submodelDescriptorAlias.Col(colAASDescriptorID),
-			CanBeFiltered: false,
+			Exp: submodelDescriptorAlias.Col(colAASDescriptorID),
 		},
 		{
-			Exp:           submodelDescriptorAlias.Col(colDescriptorID),
-			CanBeFiltered: false,
+			Exp: submodelDescriptorAlias.Col(colDescriptorID),
 		},
 		{
-			Exp:           submodelDescriptorAlias.Col(colIDShort),
-			CanBeFiltered: true,
-			Fragment:      strPtr("$aasdesc#submodelDescriptors[].idShort"),
+			Exp:      submodelDescriptorAlias.Col(colIDShort),
+			Fragment: fragPtr("$aasdesc#submodelDescriptors[].idShort"),
 		},
 		{
-			Exp:           submodelDescriptorAlias.Col(colAASID),
-			CanBeFiltered: false,
+			Exp: submodelDescriptorAlias.Col(colAASID),
 		},
 		{
-			Exp:           submodelDescriptorAlias.Col(colSemanticID),
-			CanBeFiltered: false,
+			Exp: submodelDescriptorAlias.Col(colSemanticID),
 		},
 		{
-			Exp:           submodelDescriptorAlias.Col(colAdminInfoID),
-			CanBeFiltered: false,
+			Exp: submodelDescriptorAlias.Col(colAdminInfoID),
 		},
 		{
-			Exp:           submodelDescriptorAlias.Col(colDescriptionID),
-			CanBeFiltered: false,
+			Exp: submodelDescriptorAlias.Col(colDescriptionID),
 		},
 		{
-			Exp:           submodelDescriptorAlias.Col(colDisplayNameID),
-			CanBeFiltered: false,
+			Exp: submodelDescriptorAlias.Col(colDisplayNameID),
 		},
 	}
-	expressions, err := auth.GetColumnSelectStatement(ctx, mapper)
+	collector, err := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootAASDesc)
+	if err != nil {
+		return nil, err
+	}
+	expressions, err := auth.GetColumnSelectStatement(ctx, mapper, collector)
 	if err != nil {
 		return nil, err
 	}
 	arr := pq.Array(uniqAASDesc)
-	ds := getJoinTables(d).
+	ds := d.From(tDescriptor).
+		InnerJoin(
+			tAASDescriptor,
+			goqu.On(tAASDescriptor.Col(colDescriptorID).Eq(tDescriptor.Col(colID))),
+		).
+		LeftJoin(
+			submodelDescriptorAlias,
+			goqu.On(submodelDescriptorAlias.Col(colAASDescriptorID).Eq(tAASDescriptor.Col(colDescriptorID))),
+		).
 		Select(
 			expressions[0],
 			expressions[1],
@@ -156,7 +162,12 @@ func ReadSubmodelDescriptorsByAASDescriptorIDs(
 			submodelDescriptorAlias.Col(colPosition).Asc(),
 		)
 
-	ds, err = auth.AddFilterQueryFromContext(ctx, ds, "$aasdesc#submodelDescriptors[]")
+	ds, err = auth.AddFilterQueryFromContext(ctx, ds, "$aasdesc#submodelDescriptors[]", collector)
+	if err != nil {
+		return nil, err
+	}
+	cteWhere := goqu.L(fmt.Sprintf("%s.%s = ANY(?::bigint[])", aliasSubmodelDescriptor, colAASDescriptorID), arr)
+	ds, err = auth.ApplyResolvedFieldPathCTEs(ds, collector, cteWhere)
 	if err != nil {
 		return nil, err
 	}
@@ -280,7 +291,7 @@ func ReadSubmodelDescriptorsByAASDescriptorIDs(
 
 		// Endpoints
 		GoAssign(g, func() (map[int64][]model.Endpoint, error) {
-			return ReadEndpointsByDescriptorIDs(gctx, db, smdIDs, submodelDescriptorEndpointAlias)
+			return ReadEndpointsByDescriptorIDs(gctx, db, smdIDs, false)
 		}, &endpointsByDesc)
 
 		// Extensions
