@@ -92,8 +92,20 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) GetAllAssetAdministratio
 
 // PostAssetAdministrationShellDescriptor - Creates a new Asset Administration Shell Descriptor, i.e. registers an AAS
 func (s *AssetAdministrationShellRegistryAPIAPIService) PostAssetAdministrationShellDescriptor(ctx context.Context, assetAdministrationShellDescriptor model.AssetAdministrationShellDescriptor) (model.ImplResponse, error) {
-	if resp, err := enforceAccessForAAS(ctx, "PostAssetAdministrationShellDescriptor", assetAdministrationShellDescriptor); resp != nil || err != nil {
-		return *resp, err
+	// Existence check: AAS with same Id should not already exist (lightweight)
+	if strings.TrimSpace(assetAdministrationShellDescriptor.Id) != "" {
+		if exists, chkErr := s.aasRegistryBackend.ExistsAASByID(ctx, assetAdministrationShellDescriptor.Id); chkErr != nil {
+			log.Printf("🧩 [%s] Error in PostAssetAdministrationShellDescriptor: existence check failed (aasId=%q): %v", componentName, assetAdministrationShellDescriptor.Id, chkErr)
+			return common.NewErrorResponse(
+				chkErr, http.StatusInternalServerError, componentName, "PostAssetAdministrationShellDescriptor", "Unhandled-Precheck",
+			), chkErr
+		} else if exists {
+			e := common.NewErrConflict("AAS with given id already exists")
+			log.Printf("🧩 [%s] Error in PostAssetAdministrationShellDescriptor: conflict (aasId=%q): %v", componentName, assetAdministrationShellDescriptor.Id, e)
+			return common.NewErrorResponse(
+				e, http.StatusConflict, componentName, "PostAssetAdministrationShellDescriptor", "Conflict-Exists",
+			), nil
+		}
 	}
 
 	err := s.aasRegistryBackend.InsertAdministrationShellDescriptor(ctx, assetAdministrationShellDescriptor)
@@ -117,7 +129,22 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) PostAssetAdministrationS
 		}
 	}
 
-	return model.Response(http.StatusCreated, assetAdministrationShellDescriptor), nil
+	result, err := s.aasRegistryBackend.GetAssetAdministrationShellDescriptorByID(ctx, assetAdministrationShellDescriptor.Id)
+	if err != nil {
+		switch {
+		case common.IsErrNotFound(err):
+			log.Printf("🧩 [%s] Error in InsertAdministrationShellDescriptor: not found (aasId=%q): %v", componentName, assetAdministrationShellDescriptor.Id, err)
+			return common.NewErrorResponse(
+				err, http.StatusForbidden, componentName, "InsertAdministrationShellDescriptor", "Forbidden",
+			), nil
+		default:
+			log.Printf("🧩 [%s] Error in InsertAdministrationShellDescriptor: internal (aasId=%q): %v", componentName, assetAdministrationShellDescriptor.Id, err)
+			return common.NewErrorResponse(
+				err, http.StatusInternalServerError, componentName, "InsertAdministrationShellDescriptor", "Unhandled",
+			), err
+		}
+	}
+	return model.Response(http.StatusCreated, result), nil
 }
 
 // GetAssetAdministrationShellDescriptorById - Returns a specific Asset Administration Shell Descriptor
