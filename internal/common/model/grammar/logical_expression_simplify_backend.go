@@ -65,9 +65,9 @@ type SimplifyDecision int
 const (
 	// SimplifyUndecided - the expression still depends on backend-only values (typically $field).
 	SimplifyUndecided SimplifyDecision = iota
-	// SimplifyTrue - expression is trival and true
+	// SimplifyTrue - expression is trivial and true
 	SimplifyTrue
-	// SimplifyFalse - expression is trival and false
+	// SimplifyFalse - expression is trivial and false
 	SimplifyFalse
 )
 
