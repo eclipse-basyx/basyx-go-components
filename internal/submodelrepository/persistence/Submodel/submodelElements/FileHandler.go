@@ -34,7 +34,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
@@ -175,12 +174,15 @@ func (p PostgreSQLFileHandler) Update(submodelID string, idShortOrPath string, s
 	}
 
 	var err error
-	err, localTx := persistenceutils.StartTXIfNeeded(tx, err, p.db)
+	err, cu, localTx := persistenceutils.StartTXIfNeeded(tx, err, p.db)
 	if err != nil {
 		return err
 	}
-
-	p.decorated.Update(submodelID, idShortOrPath, submodelElement, tx, isPut)
+	defer cu(&err)
+	err = p.decorated.Update(submodelID, idShortOrPath, submodelElement, localTx, isPut)
+	if err != nil {
+		return err
+	}
 
 	dialect := goqu.Dialect("postgres")
 
@@ -200,7 +202,7 @@ func (p PostgreSQLFileHandler) Update(submodelID string, idShortOrPath string, s
 		return fmt.Errorf("failed to build query: %w", err)
 	}
 
-	err = tx.QueryRow(query, args...).Scan(&elementID, &currentValue)
+	err = localTx.QueryRow(query, args...).Scan(&elementID, &currentValue)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return common.NewErrNotFound("file element not found")
@@ -220,14 +222,14 @@ func (p PostgreSQLFileHandler) Update(submodelID string, idShortOrPath string, s
 			return fmt.Errorf("failed to build file_data query: %w", err)
 		}
 
-		err = tx.QueryRow(fileDataQuery, fileDataArgs...).Scan(&oldOID)
+		err = localTx.QueryRow(fileDataQuery, fileDataArgs...).Scan(&oldOID)
 		if err != nil && err != sql.ErrNoRows {
 			return fmt.Errorf("failed to check existing file data: %w", err)
 		}
 
 		// If an OID exists, delete the Large Object
 		if oldOID.Valid {
-			err = removeLOFile(err, tx, oldOID, dialect, elementID)
+			err = removeLOFile(err, localTx, oldOID, dialect, elementID)
 			if err != nil {
 				return err
 			}
@@ -245,7 +247,7 @@ func (p PostgreSQLFileHandler) Update(submodelID string, idShortOrPath string, s
 			return fmt.Errorf("failed to build update query: %w", err)
 		}
 
-		_, err = tx.Exec(updateQuery, updateArgs...)
+		_, err = localTx.Exec(updateQuery, updateArgs...)
 		if err != nil {
 			return fmt.Errorf("failed to update file_element: %w", err)
 		}
@@ -260,7 +262,7 @@ func (p PostgreSQLFileHandler) Update(submodelID string, idShortOrPath string, s
 		if err != nil {
 			return fmt.Errorf("failed to build update query: %w", err)
 		}
-		_, err = tx.Exec(updateQuery, updateArgs...)
+		_, err = localTx.Exec(updateQuery, updateArgs...)
 		if err != nil {
 			return fmt.Errorf("failed to update file_element content type: %w", err)
 		}
@@ -396,24 +398,6 @@ func (p PostgreSQLFileHandler) UploadFileAttachment(submodelID string, idShortPa
 
 	// Validate and clean the file path
 	filePath := filepath.Clean(file.Name())
-
-	// Optional: Ensure it's within an expected base directory
-	expectedBaseDir := "/tmp" // or your configured upload directory
-	absPath, err := filepath.Abs(filePath)
-	if err != nil {
-		return fmt.Errorf("failed to resolve file path: %w", err)
-	}
-	absBaseDir, err := filepath.Abs(expectedBaseDir)
-	if err != nil {
-		return fmt.Errorf("failed to resolve base directory: %w", err)
-	}
-	// Ensure base directory ends with separator for proper prefix matching
-	if !strings.HasSuffix(absBaseDir, string(filepath.Separator)) {
-		absBaseDir += string(filepath.Separator)
-	}
-	if !strings.HasPrefix(absPath+string(filepath.Separator), absBaseDir) {
-		return fmt.Errorf("file path outside allowed directory")
-	}
 
 	// Reopen the file since it might be closed by the OpenAPI framework
 	reopenedFile, err := os.Open(filePath)

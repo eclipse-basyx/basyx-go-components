@@ -168,11 +168,11 @@ func (p PostgreSQLSubmodelElementCollectionHandler) Update(submodelID string, id
 	}
 
 	var err error
-	err, localTx := persistenceutils.StartTXIfNeeded(tx, err, p.db)
+	err, cu, localTx := persistenceutils.StartTXIfNeeded(tx, err, p.db)
 	if err != nil {
 		return err
 	}
-
+	defer cu(&err)
 	// For PUT operations, delete all children first (complete replacement)
 	if isPut {
 		err = DeleteAllChildren(p.db, submodelID, idShortOrPath, localTx)

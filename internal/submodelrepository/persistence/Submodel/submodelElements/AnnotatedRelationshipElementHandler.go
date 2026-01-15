@@ -154,10 +154,11 @@ func (p PostgreSQLAnnotatedRelationshipElementHandler) Update(submodelID string,
 	}
 
 	var err error
-	err, localTx := persistenceutils.StartTXIfNeeded(tx, err, p.db)
+	err, cu, localTx := persistenceutils.StartTXIfNeeded(tx, err, p.db)
 	if err != nil {
 		return err
 	}
+	defer cu(&err)
 
 	err = p.decorated.Update(submodelID, idShortOrPath, submodelElement, localTx, isPut)
 	if err != nil {

@@ -152,29 +152,32 @@ func (p PostgreSQLSubmodelElementListHandler) Update(submodelID string, idShortO
 	}
 
 	var err error
-	err, localTx := persistenceutils.StartTXIfNeeded(tx, err, p.db)
+	err, cu, localTx := persistenceutils.StartTXIfNeeded(tx, err, p.db)
 	if err != nil {
 		return err
 	}
-
+	defer cu(&err)
 	// For PUT operations, delete all children first (complete replacement)
 	if isPut {
-		err = DeleteAllChildren(p.db, submodelID, idShortOrPath, tx)
+		err = DeleteAllChildren(p.db, submodelID, idShortOrPath, localTx)
 		if err != nil {
 			return err
 		}
 	}
 
 	// Update base submodel element properties
-	err = p.decorated.Update(submodelID, idShortOrPath, submodelElement, tx, isPut)
+	err = p.decorated.Update(submodelID, idShortOrPath, submodelElement, localTx, isPut)
 	if err != nil {
 		return err
 	}
 
 	elementID, err := p.decorated.GetDatabaseID(submodelID, idShortOrPath)
+	if err != nil {
+		return err
+	}
 
 	// Build update record for SubmodelElementList-specific fields
-	updateRecord, err := buildUpdateListRecordObject(smeList, isPut, tx)
+	updateRecord, err := buildUpdateListRecordObject(smeList, isPut, localTx)
 	if err != nil {
 		return err
 	}
@@ -190,7 +193,7 @@ func (p PostgreSQLSubmodelElementListHandler) Update(submodelID string, idShortO
 		return err
 	}
 
-	_, err = tx.Exec(updateQuery, updateArgs...)
+	_, err = localTx.Exec(updateQuery, updateArgs...)
 	if err != nil {
 		return err
 	}

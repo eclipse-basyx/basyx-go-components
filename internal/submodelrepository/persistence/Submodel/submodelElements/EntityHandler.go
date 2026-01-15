@@ -152,11 +152,11 @@ func (p PostgreSQLEntityHandler) Update(submodelID string, idShortOrPath string,
 	}
 
 	var err error
-	err, localTx := persistenceutils.StartTXIfNeeded(tx, err, p.db)
+	err, cu, localTx := persistenceutils.StartTXIfNeeded(tx, err, p.db)
 	if err != nil {
 		return err
 	}
-
+	defer cu(&err)
 	// For PUT operations or when Statements are provided, delete all children
 	if isPut || entity.Statements != nil {
 		err = DeleteAllChildren(p.db, submodelID, idShortOrPath, tx)
@@ -172,6 +172,9 @@ func (p PostgreSQLEntityHandler) Update(submodelID string, idShortOrPath string,
 	}
 
 	elementID, err := p.decorated.GetDatabaseID(submodelID, idShortOrPath)
+	if err != nil {
+		return err
+	}
 
 	// Build update record for Entity-specific fields
 	updateRecord, err := buildUpdateEntityRecordObject(isPut, entity)
@@ -191,7 +194,7 @@ func (p PostgreSQLEntityHandler) Update(submodelID string, idShortOrPath string,
 			return err
 		}
 
-		_, err = tx.Exec(updateQuery, updateArgs...)
+		_, err = localTx.Exec(updateQuery, updateArgs...)
 		if err != nil {
 			return err
 		}

@@ -185,16 +185,19 @@ func (p PostgreSQLBlobHandler) Update(submodelID string, idShortOrPath string, s
 	}
 
 	var err error
-	err, localTx := persistenceutils.StartTXIfNeeded(tx, err, p.db)
+	err, cu, localTx := persistenceutils.StartTXIfNeeded(tx, err, p.db)
 	if err != nil {
 		return err
 	}
-
+	defer cu(&err)
 	if isBlobSizeExceeded(blob) {
 		return smrepoerrors.ErrBlobTooLarge
 	}
 
 	elementID, err := p.decorated.GetDatabaseID(submodelID, idShortOrPath)
+	if err != nil {
+		return err
+	}
 
 	dialect := goqu.Dialect("postgres")
 
