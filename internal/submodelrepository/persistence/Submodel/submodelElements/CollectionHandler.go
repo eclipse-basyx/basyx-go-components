@@ -148,16 +148,9 @@ func (p PostgreSQLSubmodelElementCollectionHandler) CreateNested(tx *sql.Tx, sub
 	return id, nil
 }
 
-// Update modifies an existing SubmodelElementCollection identified by its idShort or path.
-// Handles both PUT (complete replacement) and PATCH (partial update) operations based on isPut flag.
-//
-// For PUT operations (isPut=true):
-//   - Deletes all child elements in the collection (complete replacement)
-//   - Updates base submodel element properties
-//
-// For PATCH operations (isPut=false):
-//   - Updates only the provided base submodel element properties
-//   - Preserves existing child elements
+// Update modifies an existing SubmodelElementCollection element identified by its idShort or path.
+// This method delegates the update operation to the decorated CRUD handler which handles
+// the common submodel element update logic.
 //
 // Parameters:
 //   - submodelID: The ID of the parent submodel
@@ -174,20 +167,10 @@ func (p PostgreSQLSubmodelElementCollectionHandler) Update(submodelID string, id
 		return common.NewErrBadRequest("submodelElement is not of type SubmodelElementCollection")
 	}
 
-	// Manage transaction
-	var localTx *sql.Tx
 	var err error
-	if tx == nil {
-		localTx, err = p.db.Begin()
-		if err != nil {
-			return err
-		}
-		defer func() {
-			if err != nil {
-				_ = localTx.Rollback()
-			}
-		}()
-		tx = localTx
+	err, localTx := persistenceutils.StartTXIfNeeded(tx, err, p.db)
+	if err != nil {
+		return err
 	}
 
 	// For PUT operations, delete all children first (complete replacement)
@@ -198,18 +181,15 @@ func (p PostgreSQLSubmodelElementCollectionHandler) Update(submodelID string, id
 		}
 	}
 
+	// PATCH operations preserve existing children, so no deletion needed - TODO
+
 	// Update base submodel element properties
 	err = p.decorated.Update(submodelID, idShortOrPath, submodelElement, tx, isPut)
 	if err != nil {
 		return err
 	}
 
-	// Commit transaction if we created it
-	if localTx != nil {
-		err = localTx.Commit()
-	}
-
-	return err
+	return persistenceutils.CommitTransactionIfNeeded(tx, err, localTx)
 }
 
 // UpdateValueOnly updates only the value of an existing SubmodelElementCollection submodel element identified by its idShort or path.

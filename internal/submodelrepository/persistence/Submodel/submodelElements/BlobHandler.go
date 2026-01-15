@@ -37,6 +37,7 @@ import (
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	smrepoconfig "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/config"
 	smrepoerrors "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/errors"
+	persistenceutils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 )
 
@@ -178,66 +179,34 @@ func (p PostgreSQLBlobHandler) CreateNested(tx *sql.Tx, submodelID string, paren
 // Returns:
 //   - error: Error if update fails
 func (p PostgreSQLBlobHandler) Update(submodelID string, idShortOrPath string, submodelElement gen.SubmodelElement, tx *sql.Tx, isPut bool) error {
-	var err error
-	localTx := tx
-
-	if tx == nil {
-		var startedTx *sql.Tx
-		var cu func(*error)
-
-		startedTx, cu, err = common.StartTransaction(p.db)
-
-		defer cu(&err)
-
-		localTx = startedTx
-	}
-
 	blob, ok := submodelElement.(*gen.Blob)
 	if !ok {
 		return common.NewErrBadRequest("submodelElement is not of type Blob")
 	}
 
-	// Check if blob value is larger than maximum allowed size
-	if len(blob.Value) > smrepoconfig.MaxBlobSizeBytes {
+	var err error
+	err, localTx := persistenceutils.StartTXIfNeeded(tx, err, p.db)
+	if err != nil {
+		return err
+	}
+
+	if isBlobSizeExceeded(blob) {
 		return smrepoerrors.ErrBlobTooLarge
 	}
 
-	// Update with goqu
+	elementID, err := p.decorated.GetDatabaseID(submodelID, idShortOrPath)
+
 	dialect := goqu.Dialect("postgres")
 
 	// Build the update record based on isPut flag
 	// For PUT: always update all fields (even if empty, which clears them)
 	// For PATCH: only update fields that are provided (not empty)
-	updateRecord := goqu.Record{}
+	updateRecord := buildUpdateBlobRecordObject(isPut, blob)
 
-	if isPut || blob.ContentType != "" {
-		var contentType sql.NullString
-		if blob.ContentType != "" {
-			contentType = sql.NullString{String: blob.ContentType, Valid: true}
-		}
-		updateRecord["content_type"] = contentType
-	}
-
-	if isPut || blob.Value != "" {
-		var value []byte
-		if blob.Value != "" {
-			value = []byte(blob.Value)
-		}
-		updateRecord["value"] = value
-	}
-
-	// Only execute update if there are fields to update
-	if len(updateRecord) > 0 {
+	if persistenceutils.AnyFieldsToUpdate(updateRecord) {
 		updateQuery, updateArgs, err := dialect.Update("blob_element").
 			Set(updateRecord).
-			Where(goqu.C("id").In(
-				dialect.From("submodel_element").
-					Select("id").
-					Where(goqu.Ex{
-						"idshort_path": idShortOrPath,
-						"submodel_id":  submodelID,
-					}),
-			)).
+			Where(goqu.C("id").Eq(elementID)).
 			ToSQL()
 		if err != nil {
 			return err
@@ -254,14 +223,7 @@ func (p PostgreSQLBlobHandler) Update(submodelID string, idShortOrPath string, s
 		return err
 	}
 
-	if tx == nil {
-		err = localTx.Commit()
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
+	return persistenceutils.CommitTransactionIfNeeded(tx, err, localTx)
 }
 
 // UpdateValueOnly updates only the value of an existing Blob submodel element identified by its idShort or path.
@@ -351,4 +313,29 @@ func (p PostgreSQLBlobHandler) UpdateValueOnly(submodelID string, idShortOrPath 
 //   - error: Error if deletion fails
 func (p PostgreSQLBlobHandler) Delete(idShortOrPath string) error {
 	return p.decorated.Delete(idShortOrPath)
+}
+
+func isBlobSizeExceeded(blob *gen.Blob) bool {
+	return len(blob.Value) > smrepoconfig.MaxBlobSizeBytes
+}
+
+func buildUpdateBlobRecordObject(isPut bool, blob *gen.Blob) goqu.Record {
+	updateRecord := goqu.Record{}
+
+	if isPut || blob.ContentType != "" {
+		var contentType sql.NullString
+		if blob.ContentType != "" {
+			contentType = sql.NullString{String: blob.ContentType, Valid: true}
+		}
+		updateRecord["content_type"] = contentType
+	}
+
+	if isPut || blob.Value != "" {
+		var value []byte
+		if blob.Value != "" {
+			value = []byte(blob.Value)
+		}
+		updateRecord["value"] = value
+	}
+	return updateRecord
 }

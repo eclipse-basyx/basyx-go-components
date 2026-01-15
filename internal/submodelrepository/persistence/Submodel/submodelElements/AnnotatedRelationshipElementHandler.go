@@ -137,8 +137,8 @@ func (p PostgreSQLAnnotatedRelationshipElementHandler) CreateNested(tx *sql.Tx, 
 }
 
 // Update modifies an existing AnnotatedRelationshipElement identified by its idShort or path.
-// This method delegates the update operation to the decorated CRUD handler which handles
-// the common submodel element update logic.
+// This method handles both the common submodel element properties and the specific annotated
+// relationship data such as the 'first' and 'second' references and annotations.
 //
 // Parameters:
 //   - idShortOrPath: idShort or hierarchical path to the element to update
@@ -148,30 +148,30 @@ func (p PostgreSQLAnnotatedRelationshipElementHandler) CreateNested(tx *sql.Tx, 
 // Returns:
 //   - error: Error if update fails
 func (p PostgreSQLAnnotatedRelationshipElementHandler) Update(submodelID string, idShortOrPath string, submodelElement gen.SubmodelElement, tx *sql.Tx, isPut bool) error {
-	var err error
-	localTx := tx
-
-	if tx == nil {
-		var startedTx *sql.Tx
-		var cu func(*error)
-
-		startedTx, cu, err = common.StartTransaction(p.db)
-
-		defer cu(&err)
-
-		localTx = startedTx
-	}
-
 	are, ok := submodelElement.(*gen.AnnotatedRelationshipElement)
 	if !ok {
 		return common.NewErrBadRequest("submodelElement is not of type AnnotatedRelationshipElement")
 	}
 
-	if are.First == nil {
-		return common.NewErrBadRequest(fmt.Sprintf("Missing Field 'First' for AnnotatedRelationshipElement with idShortPath '%s'", idShortOrPath))
+	var err error
+	err, localTx := persistenceutils.StartTXIfNeeded(tx, err, p.db)
+	if err != nil {
+		return err
 	}
-	if are.Second == nil {
-		return common.NewErrBadRequest(fmt.Sprintf("Missing Field 'Second' for AnnotatedRelationshipElement with idShortPath '%s'", idShortOrPath))
+
+	err = p.decorated.Update(submodelID, idShortOrPath, submodelElement, localTx, isPut)
+	if err != nil {
+		return err
+	}
+
+	err = validateRequiredFields(are, idShortOrPath)
+	if err != nil {
+		return err
+	}
+
+	elementID, err := p.decorated.GetDatabaseID(submodelID, idShortOrPath)
+	if err != nil {
+		return err
 	}
 
 	firstRef, err := serializeReference(are.First, jsoniter.ConfigCompatibleWithStandardLibrary)
@@ -191,14 +191,7 @@ func (p PostgreSQLAnnotatedRelationshipElementHandler) Update(submodelID string,
 			"first":  firstRef,
 			"second": secondRef,
 		}).
-		Where(goqu.C("id").In(
-			dialect.From("submodel_element").
-				Select("id").
-				Where(goqu.Ex{
-					"idshort_path": idShortOrPath,
-					"submodel_id":  submodelID,
-				}),
-		)).
+		Where(goqu.C("id").Eq(elementID)).
 		ToSQL()
 	if err != nil {
 		return err
@@ -211,7 +204,7 @@ func (p PostgreSQLAnnotatedRelationshipElementHandler) Update(submodelID string,
 
 	// Handle Annotations field based on isPut flag
 	// For PUT: always delete all children (annotations) and recreate from body
-	// For PATCH: only delete and recreate children if annotations are provided
+	// For PATCH (TODO): only delete and recreate children if annotations are provided
 	if isPut {
 		// PUT -> Remove all children and then recreate the ones from the body
 		// Recreation is done by the SubmodelRepositoryDatabase Update Method
@@ -219,29 +212,18 @@ func (p PostgreSQLAnnotatedRelationshipElementHandler) Update(submodelID string,
 		if err != nil {
 			return err
 		}
-	} else if are.Annotations != nil {
-		// PATCH with annotations provided -> Remove all children and recreate from body
-		// Recreation is done by the SubmodelRepositoryDatabase Update Method
-		err = DeleteAllChildren(p.db, submodelID, idShortOrPath, localTx)
-		if err != nil {
-			return err
-		}
-	}
-	// For PATCH without annotations (nil), existing annotations are preserved
-
-	err = p.decorated.Update(submodelID, idShortOrPath, submodelElement, localTx, isPut)
-
-	if err != nil {
-		return err
 	}
 
-	if tx == nil {
-		err = localTx.Commit()
-		if err != nil {
-			return err
-		}
-	}
+	return persistenceutils.CommitTransactionIfNeeded(tx, err, localTx)
+}
 
+func validateRequiredFields(are *gen.AnnotatedRelationshipElement, idShortOrPath string) error {
+	if isEmptyReference(are.First) {
+		return common.NewErrBadRequest(fmt.Sprintf("Missing Field 'First' for AnnotatedRelationshipElement with idShortPath '%s'", idShortOrPath))
+	}
+	if isEmptyReference(are.Second) {
+		return common.NewErrBadRequest(fmt.Sprintf("Missing Field 'Second' for AnnotatedRelationshipElement with idShortPath '%s'", idShortOrPath))
+	}
 	return nil
 }
 

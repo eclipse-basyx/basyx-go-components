@@ -37,6 +37,7 @@ import (
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	persistenceutils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
 	jsoniter "github.com/json-iterator/go"
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 )
@@ -152,23 +153,20 @@ func (p PostgreSQLOperationHandler) CreateNested(tx *sql.Tx, submodelID string, 
 // Returns:
 //   - error: An error if the update operation fails
 func (p PostgreSQLOperationHandler) Update(submodelID string, idShortOrPath string, submodelElement gen.SubmodelElement, tx *sql.Tx, isPut bool) error {
-	var err error
-	localTx := tx
-
-	if tx == nil {
-		var startedTx *sql.Tx
-		var cu func(*error)
-
-		startedTx, cu, err = common.StartTransaction(p.db)
-
-		defer cu(&err)
-
-		localTx = startedTx
-	}
-
 	operation, ok := submodelElement.(*gen.Operation)
 	if !ok {
 		return common.NewErrBadRequest("submodelElement is not of type Operation")
+	}
+
+	var err error
+	err, localTx := persistenceutils.StartTXIfNeeded(tx, err, p.db)
+	if err != nil {
+		return err
+	}
+
+	err = p.decorated.Update(submodelID, idShortOrPath, submodelElement, localTx, isPut)
+	if err != nil {
+		return err
 	}
 
 	json := jsoniter.ConfigCompatibleWithStandardLibrary
@@ -177,89 +175,36 @@ func (p PostgreSQLOperationHandler) Update(submodelID string, idShortOrPath stri
 	// For PUT: always update all fields (even if nil/empty, which clears them)
 	// For PATCH: only update fields that are provided (not nil)
 
-	updateFields := make(map[string]interface{})
-
-	if isPut || operation.InputVariables != nil {
-		var inputVars string
-		if operation.InputVariables != nil {
-			inputVarBytes, err := json.Marshal(operation.InputVariables)
-			if err != nil {
-				return err
-			}
-			inputVars = string(inputVarBytes)
-		} else {
-			inputVars = "[]"
-		}
-		updateFields["input_variables"] = inputVars
-	}
-
-	if isPut || operation.OutputVariables != nil {
-		var outputVars string
-		if operation.OutputVariables != nil {
-			outputVarBytes, err := json.Marshal(operation.OutputVariables)
-			if err != nil {
-				return err
-			}
-			outputVars = string(outputVarBytes)
-		} else {
-			outputVars = "[]"
-		}
-		updateFields["output_variables"] = outputVars
-	}
-
-	if isPut || operation.InoutputVariables != nil {
-		var inoutputVars string
-		if operation.InoutputVariables != nil {
-			inoutputVarBytes, err := json.Marshal(operation.InoutputVariables)
-			if err != nil {
-				return err
-			}
-			inoutputVars = string(inoutputVarBytes)
-		} else {
-			inoutputVars = "[]"
-		}
-		updateFields["inoutput_variables"] = inoutputVars
-	}
-
-	// Only execute update if there are fields to update
-	if len(updateFields) > 0 {
-		// Build UPDATE query dynamically
-		query := "UPDATE operation_element SET "
-		args := make([]interface{}, 0)
-		argCounter := 1
-
-		for field, value := range updateFields {
-			if argCounter > 1 {
-				query += ", "
-			}
-			query += field + " = $" + string(rune('0'+argCounter))
-			args = append(args, value)
-			argCounter++
-		}
-
-		query += " WHERE id = (SELECT id FROM submodel_element WHERE idshort_path = $" +
-			string(rune('0'+argCounter)) + " AND submodel_id = $" + string(rune('0'+argCounter+1)) + ")"
-		args = append(args, idShortOrPath, submodelID)
-
-		_, err = localTx.Exec(query, args...)
-		if err != nil {
-			return err
-		}
-	}
-
-	err = p.decorated.Update(submodelID, idShortOrPath, submodelElement, localTx, isPut)
+	updateRecord, err := buildUpdateOperationRecordObject(isPut, operation, json)
 	if err != nil {
 		return err
 	}
 
-	if tx == nil {
-		err = localTx.Commit()
+	// Only execute update if there are fields to update
+	if persistenceutils.AnyFieldsToUpdate(updateRecord) {
+		dialect := goqu.Dialect("postgres")
+		updateQuery, updateArgs, err := dialect.Update("operation_element").
+			Set(updateRecord).
+			Where(goqu.C("id").In(
+				dialect.From("submodel_element").
+					Select("id").
+					Where(goqu.Ex{
+						"idshort_path": idShortOrPath,
+						"submodel_id":  submodelID,
+					}),
+			)).
+			ToSQL()
+		if err != nil {
+			return err
+		}
+
+		_, err = localTx.Exec(updateQuery, updateArgs...)
 		if err != nil {
 			return err
 		}
 	}
 
-	return nil
+	return persistenceutils.CommitTransactionIfNeeded(tx, err, localTx)
 }
 
 // UpdateValueOnly updates only the value of an existing Operation submodel element identified by its idShort or path.
@@ -353,4 +298,51 @@ func insertOperation(operation *gen.Operation, tx *sql.Tx, id int) error {
 		return err
 	}
 	return nil
+}
+
+func buildUpdateOperationRecordObject(isPut bool, operation *gen.Operation, json jsoniter.API) (goqu.Record, error) {
+	updateRecord := goqu.Record{}
+
+	if isPut || operation.InputVariables != nil {
+		var inputVars string
+		if operation.InputVariables != nil {
+			inputVarBytes, err := json.Marshal(operation.InputVariables)
+			if err != nil {
+				return nil, err
+			}
+			inputVars = string(inputVarBytes)
+		} else {
+			inputVars = "[]"
+		}
+		updateRecord["input_variables"] = inputVars
+	}
+
+	if isPut || operation.OutputVariables != nil {
+		var outputVars string
+		if operation.OutputVariables != nil {
+			outputVarBytes, err := json.Marshal(operation.OutputVariables)
+			if err != nil {
+				return nil, err
+			}
+			outputVars = string(outputVarBytes)
+		} else {
+			outputVars = "[]"
+		}
+		updateRecord["output_variables"] = outputVars
+	}
+
+	if isPut || operation.InoutputVariables != nil {
+		var inoutputVars string
+		if operation.InoutputVariables != nil {
+			inoutputVarBytes, err := json.Marshal(operation.InoutputVariables)
+			if err != nil {
+				return nil, err
+			}
+			inoutputVars = string(inoutputVarBytes)
+		} else {
+			inoutputVars = "[]"
+		}
+		updateRecord["inoutput_variables"] = inoutputVars
+	}
+	return updateRecord, nil
 }

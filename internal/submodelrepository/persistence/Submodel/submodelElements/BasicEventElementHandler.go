@@ -37,6 +37,7 @@ import (
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	persistenceutils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 )
 
@@ -149,23 +150,25 @@ func (p PostgreSQLBasicEventElementHandler) CreateNested(tx *sql.Tx, submodelID 
 // Returns:
 //   - error: Error if update fails
 func (p PostgreSQLBasicEventElementHandler) Update(submodelID string, idShortOrPath string, submodelElement gen.SubmodelElement, tx *sql.Tx, isPut bool) error {
-	var err error
-	localTx := tx
-
-	if tx == nil {
-		var startedTx *sql.Tx
-		var cu func(*error)
-
-		startedTx, cu, err = common.StartTransaction(p.db)
-
-		defer cu(&err)
-
-		localTx = startedTx
-	}
-
 	basicEvent, ok := submodelElement.(*gen.BasicEventElement)
 	if !ok {
 		return common.NewErrBadRequest("submodelElement is not of type BasicEventElement")
+	}
+
+	var err error
+	err, localTx := persistenceutils.StartTXIfNeeded(tx, err, p.db)
+	if err != nil {
+		return err
+	}
+
+	err = p.decorated.Update(submodelID, idShortOrPath, submodelElement, localTx, isPut)
+	if err != nil {
+		return err
+	}
+
+	elementID, err := p.decorated.GetDatabaseID(submodelID, idShortOrPath)
+	if err != nil {
+		return err
 	}
 
 	// Validate required fields
@@ -183,6 +186,28 @@ func (p PostgreSQLBasicEventElementHandler) Update(submodelID string, idShortOrP
 	dialect := goqu.Dialect("postgres")
 
 	// Build the update record
+	updateRecord, err := buildUpdateBasicEventElementRecordObject(basicEvent, isPut)
+	if err != nil {
+		return err
+	}
+
+	// Update the BasicEventElement-specific table
+	updateQuery, updateArgs, err := dialect.Update("basic_event_element").
+		Set(updateRecord).
+		Where(goqu.C("id").Eq(elementID)).
+		ToSQL()
+	if err != nil {
+		return err
+	}
+	_, err = localTx.Exec(updateQuery, updateArgs...)
+	if err != nil {
+		return err
+	}
+
+	return persistenceutils.CommitTransactionIfNeeded(tx, err, localTx)
+}
+
+func buildUpdateBasicEventElementRecordObject(basicEvent *gen.BasicEventElement, isPut bool) (goqu.Record, error) {
 	updateRecord := goqu.Record{}
 
 	// Required fields - always update
@@ -190,7 +215,7 @@ func (p PostgreSQLBasicEventElementHandler) Update(submodelID string, idShortOrP
 	if !isEmptyReference(basicEvent.Observed) {
 		observedBytes, err := json.Marshal(basicEvent.Observed)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		observedRefJson = sql.NullString{String: string(observedBytes), Valid: true}
 	}
@@ -201,13 +226,12 @@ func (p PostgreSQLBasicEventElementHandler) Update(submodelID string, idShortOrP
 	// Optional fields - update based on isPut flag
 	// For PUT: always update (even if empty, which clears the field)
 	// For PATCH: only update if provided (not empty)
-
 	if isPut || !isEmptyReference(basicEvent.MessageBroker) {
 		var messageBrokerRefJson sql.NullString
 		if !isEmptyReference(basicEvent.MessageBroker) {
 			messageBrokerBytes, err := json.Marshal(basicEvent.MessageBroker)
 			if err != nil {
-				return err
+				return nil, err
 			}
 			messageBrokerRefJson = sql.NullString{String: string(messageBrokerBytes), Valid: true}
 		}
@@ -245,40 +269,7 @@ func (p PostgreSQLBasicEventElementHandler) Update(submodelID string, idShortOrP
 		}
 		updateRecord["message_topic"] = messageTopic
 	}
-
-	updateQuery, updateArgs, err := dialect.Update("basic_event_element").
-		Set(updateRecord).
-		Where(goqu.C("id").In(
-			dialect.From("submodel_element").
-				Select("id").
-				Where(goqu.Ex{
-					"idshort_path": idShortOrPath,
-					"submodel_id":  submodelID,
-				}),
-		)).
-		ToSQL()
-	if err != nil {
-		return err
-	}
-
-	_, err = localTx.Exec(updateQuery, updateArgs...)
-	if err != nil {
-		return err
-	}
-
-	err = p.decorated.Update(submodelID, idShortOrPath, submodelElement, localTx, isPut)
-	if err != nil {
-		return err
-	}
-
-	if tx == nil {
-		err = localTx.Commit()
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
+	return updateRecord, nil
 }
 
 // UpdateValueOnly updates only the value of an existing BasicEventElement submodel element identified by its idShort or path.

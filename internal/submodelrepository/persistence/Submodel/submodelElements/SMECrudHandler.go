@@ -632,6 +632,9 @@ func (p *PostgreSQLSMECrudHandler) GetDatabaseID(submodelID string, idShortPath 
 	var id int
 	err = p.Db.QueryRow(selectQuery, selectArgs...).Scan(&id)
 	if err != nil {
+		if err == sql.ErrNoRows {
+			return 0, common.NewErrNotFound("SubmodelElement with path '" + idShortPath + "' not found in submodel '" + submodelID + "'")
+		}
 		return 0, err
 	}
 	return id, nil

@@ -38,6 +38,7 @@ import (
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	persistenceutils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 )
 
@@ -150,44 +151,26 @@ func (p PostgreSQLMultiLanguagePropertyHandler) CreateNested(tx *sql.Tx, submode
 // Returns:
 //   - error: An error if the update operation fails
 func (p PostgreSQLMultiLanguagePropertyHandler) Update(submodelID string, idShortOrPath string, submodelElement gen.SubmodelElement, tx *sql.Tx, isPut bool) error {
-	var err error
-	localTx := tx
-
-	if tx == nil {
-		var startedTx *sql.Tx
-		var cu func(*error)
-
-		startedTx, cu, err = common.StartTransaction(p.db)
-
-		defer cu(&err)
-
-		localTx = startedTx
-	}
-
 	mlp, ok := submodelElement.(*gen.MultiLanguageProperty)
 	if !ok {
 		return common.NewErrBadRequest("submodelElement is not of type MultiLanguageProperty")
 	}
 
-	dialect := goqu.Dialect("postgres")
-
-	// Get the element ID from the database
-	var elementID int
-	idQuery, args, err := dialect.From("submodel_element").
-		Select("id").
-		Where(goqu.Ex{
-			"idshort_path": idShortOrPath,
-			"submodel_id":  submodelID,
-		}).ToSQL()
+	var err error
+	err, localTx := persistenceutils.StartTXIfNeeded(tx, err, p.db)
 	if err != nil {
 		return err
 	}
 
-	err = localTx.QueryRow(idQuery, args...).Scan(&elementID)
+	err = p.decorated.Update(submodelID, idShortOrPath, submodelElement, localTx, isPut)
 	if err != nil {
-		if err == sql.ErrNoRows {
-			return common.NewErrNotFound(fmt.Sprintf("MultiLanguageProperty with idShortPath '%s' not found", idShortOrPath))
-		}
+		return err
+	}
+
+	dialect := goqu.Dialect("postgres")
+
+	elementID, err := p.decorated.GetDatabaseID(submodelID, idShortOrPath)
+	if err != nil {
 		return err
 	}
 
@@ -260,19 +243,7 @@ func (p PostgreSQLMultiLanguagePropertyHandler) Update(submodelID string, idShor
 		}
 	}
 
-	err = p.decorated.Update(submodelID, idShortOrPath, submodelElement, localTx, isPut)
-	if err != nil {
-		return err
-	}
-
-	if tx == nil {
-		err = localTx.Commit()
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
+	return persistenceutils.CommitTransactionIfNeeded(tx, err, localTx)
 }
 
 // UpdateValueOnly updates only the value of an existing MultiLanguageProperty submodel element identified by its idShort or path.

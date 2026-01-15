@@ -132,19 +132,10 @@ func (p PostgreSQLEntityHandler) CreateNested(tx *sql.Tx, submodelID string, par
 	return id, nil
 }
 
-// Update modifies an existing Entity submodel element in the database.
-// Handles both PUT (complete replacement) and PATCH (partial update) operations based on isPut flag.
-//
-// For PUT operations (isPut=true):
-//   - Deletes all child elements (Statements) - complete replacement
-//   - Replaces EntityType (optional field - cleared if empty)
-//   - Replaces GlobalAssetID (optional field - cleared if empty)
-//   - Replaces SpecificAssetIds (optional field - cleared if empty)
-//
-// For PATCH operations (isPut=false):
-//   - Preserves existing child elements unless Statements field is provided
-//   - Updates EntityType, GlobalAssetID, and SpecificAssetIds only if provided in the request
-//
+// Update modifies an existing Entity element identified by its idShort or path.
+// This method delegates the update operation to the decorated CRUD handler which handles
+// the common submodel element update logic and additionally manages Entity-specific fields.
+
 // Parameters:
 //   - submodelID: The ID of the parent submodel
 //   - idShortOrPath: The idShort or path identifier of the element to update
@@ -160,20 +151,10 @@ func (p PostgreSQLEntityHandler) Update(submodelID string, idShortOrPath string,
 		return common.NewErrBadRequest("submodelElement is not of type Entity")
 	}
 
-	// Manage transaction
-	var localTx *sql.Tx
 	var err error
-	if tx == nil {
-		localTx, err = p.db.Begin()
-		if err != nil {
-			return err
-		}
-		defer func() {
-			if err != nil {
-				_ = localTx.Rollback()
-			}
-		}()
-		tx = localTx
+	err, localTx := persistenceutils.StartTXIfNeeded(tx, err, p.db)
+	if err != nil {
+		return err
 	}
 
 	// For PUT operations or when Statements are provided, delete all children
@@ -190,66 +171,18 @@ func (p PostgreSQLEntityHandler) Update(submodelID string, idShortOrPath string,
 		return err
 	}
 
-	// Get element ID
-	dialect := goqu.Dialect("postgres")
-	idQuery, idArgs, err := dialect.From("submodel_element").
-		Select("id").
-		Where(goqu.And(
-			goqu.C("submodel_id").Eq(submodelID),
-			goqu.C("idshort_path").Eq(idShortOrPath),
-		)).
-		ToSQL()
-	if err != nil {
-		return err
-	}
-
-	var elementID int
-	err = tx.QueryRow(idQuery, idArgs...).Scan(&elementID)
-	if err != nil {
-		return err
-	}
+	elementID, err := p.decorated.GetDatabaseID(submodelID, idShortOrPath)
 
 	// Build update record for Entity-specific fields
-	updateRecord := goqu.Record{}
-
-	if isPut {
-		// PUT: Always update all fields
-		json := jsoniter.ConfigCompatibleWithStandardLibrary
-		specificAssetIDs := "[]"
-		if entity.SpecificAssetIds != nil {
-			specificAssetIDsBytes, err := json.Marshal(entity.SpecificAssetIds)
-			if err != nil {
-				return err
-			}
-			specificAssetIDs = string(specificAssetIDsBytes)
-		}
-
-		updateRecord["entity_type"] = entity.EntityType
-		updateRecord["global_asset_id"] = entity.GlobalAssetID
-		updateRecord["specific_asset_ids"] = specificAssetIDs
-	} else {
-		// PATCH: Only update provided fields
-		// Note: EntityType is a string enum, so we check if it's not empty
-		if entity.EntityType != "" {
-			updateRecord["entity_type"] = entity.EntityType
-		}
-
-		if entity.GlobalAssetID != "" {
-			updateRecord["global_asset_id"] = entity.GlobalAssetID
-		}
-
-		if entity.SpecificAssetIds != nil {
-			json := jsoniter.ConfigCompatibleWithStandardLibrary
-			specificAssetIDsBytes, err := json.Marshal(entity.SpecificAssetIds)
-			if err != nil {
-				return err
-			}
-			updateRecord["specific_asset_ids"] = string(specificAssetIDsBytes)
-		}
+	updateRecord, err := buildUpdateEntityRecordObject(isPut, entity)
+	if err != nil {
+		return err
 	}
 
+	dialect := goqu.Dialect("postgres")
+
 	// Execute update if there are fields to update
-	if len(updateRecord) > 0 {
+	if persistenceutils.AnyFieldsToUpdate(updateRecord) {
 		updateQuery, updateArgs, err := dialect.Update("entity_element").
 			Set(updateRecord).
 			Where(goqu.C("id").Eq(elementID)).
@@ -264,12 +197,7 @@ func (p PostgreSQLEntityHandler) Update(submodelID string, idShortOrPath string,
 		}
 	}
 
-	// Commit transaction if we created it
-	if localTx != nil {
-		err = localTx.Commit()
-	}
-
-	return err
+	return persistenceutils.CommitTransactionIfNeeded(tx, err, localTx)
 }
 
 // UpdateValueOnly updates only the value of an existing Entity submodel element identified by its idShort or path.
@@ -401,4 +329,45 @@ func insertEntity(entity *gen.Entity, tx *sql.Tx, id int) error {
 		return err
 	}
 	return nil
+}
+
+func buildUpdateEntityRecordObject(isPut bool, entity *gen.Entity) (goqu.Record, error) {
+	updateRecord := goqu.Record{}
+
+	if isPut {
+		// PUT: Always update all fields
+		json := jsoniter.ConfigCompatibleWithStandardLibrary
+		specificAssetIDs := "[]"
+		if entity.SpecificAssetIds != nil {
+			specificAssetIDsBytes, err := json.Marshal(entity.SpecificAssetIds)
+			if err != nil {
+				return nil, err
+			}
+			specificAssetIDs = string(specificAssetIDsBytes)
+		}
+
+		updateRecord["entity_type"] = entity.EntityType
+		updateRecord["global_asset_id"] = entity.GlobalAssetID
+		updateRecord["specific_asset_ids"] = specificAssetIDs
+	} else {
+		// PATCH: Only update provided fields
+		// Note: EntityType is a string enum, so we check if it's not empty
+		if entity.EntityType != "" {
+			updateRecord["entity_type"] = entity.EntityType
+		}
+
+		if entity.GlobalAssetID != "" {
+			updateRecord["global_asset_id"] = entity.GlobalAssetID
+		}
+
+		if entity.SpecificAssetIds != nil {
+			json := jsoniter.ConfigCompatibleWithStandardLibrary
+			specificAssetIDsBytes, err := json.Marshal(entity.SpecificAssetIds)
+			if err != nil {
+				return nil, err
+			}
+			updateRecord["specific_asset_ids"] = string(specificAssetIDsBytes)
+		}
+	}
+	return updateRecord, nil
 }

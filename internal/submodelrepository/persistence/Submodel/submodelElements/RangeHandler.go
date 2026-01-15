@@ -135,16 +135,9 @@ func (p PostgreSQLRangeHandler) CreateNested(tx *sql.Tx, submodelID string, pare
 	return id, nil
 }
 
-// Update modifies an existing Range submodel element in the database.
-// Handles both PUT (complete replacement) and PATCH (partial update) operations based on isPut flag.
-//
-// For PUT operations (isPut=true):
-//   - Updates valueType (required field)
-//   - Replaces min and max values (clears all typed columns if values are empty)
-//
-// For PATCH operations (isPut=false):
-//   - Updates valueType if provided
-//   - Updates min and max values only if explicitly provided in the request
+// Update modifies an existing Range submodel element identified by its idShort or path.
+// It updates both the common submodel element properties via the decorated handler
+// and the Range-specific fields such as min/max values based on the value type.
 //
 // Parameters:
 //   - submodelID: The ID of the parent submodel
@@ -161,79 +154,26 @@ func (p PostgreSQLRangeHandler) Update(submodelID string, idShortOrPath string, 
 		return common.NewErrBadRequest("submodelElement is not of type Range")
 	}
 
-	// Manage transaction
-	var localTx *sql.Tx
 	var err error
-	if tx == nil {
-		localTx, err = p.db.Begin()
-		if err != nil {
-			return err
-		}
-		defer func() {
-			if err != nil {
-				_ = localTx.Rollback()
-			}
-		}()
-		tx = localTx
-	}
-
-	// Update base submodel element properties
-	err = p.decorated.Update(submodelID, idShortOrPath, submodelElement, tx, isPut)
+	err, localTx := persistenceutils.StartTXIfNeeded(tx, err, p.db)
 	if err != nil {
 		return err
 	}
 
-	// Get element ID
+	err = p.decorated.Update(submodelID, idShortOrPath, submodelElement, localTx, isPut)
+	if err != nil {
+		return err
+	}
+
+	elementID, err := p.decorated.GetDatabaseID(submodelID, idShortOrPath)
+	if err != nil {
+		return err
+	}
+
 	dialect := goqu.Dialect("postgres")
-	idQuery, idArgs, err := dialect.From("submodel_element").
-		Select("id").
-		Where(goqu.And(
-			goqu.C("submodel_id").Eq(submodelID),
-			goqu.C("idshort_path").Eq(idShortOrPath),
-		)).
-		ToSQL()
-	if err != nil {
-		return err
-	}
-
-	var elementID int
-	err = tx.QueryRow(idQuery, idArgs...).Scan(&elementID)
-	if err != nil {
-		return err
-	}
 
 	// Build update record for Range-specific fields
-	updateRecord := goqu.Record{}
-
-	// ValueType is always updated (required field)
-	updateRecord["value_type"] = rangeElem.ValueType
-
-	// Handle min and max based on isPut flag
-	if isPut {
-		// PUT: Always replace min/max values
-		typedValue := persistenceutils.MapRangeValueByType(string(rangeElem.ValueType), rangeElem.Min, rangeElem.Max)
-		updateRecord["min_text"] = typedValue.MinText
-		updateRecord["max_text"] = typedValue.MaxText
-		updateRecord["min_num"] = typedValue.MinNumeric
-		updateRecord["max_num"] = typedValue.MaxNumeric
-		updateRecord["min_time"] = typedValue.MinTime
-		updateRecord["max_time"] = typedValue.MaxTime
-		updateRecord["min_datetime"] = typedValue.MinDateTime
-		updateRecord["max_datetime"] = typedValue.MaxDateTime
-	} else { //nolint:all - elseif: can replace 'else {if cond {}}' with 'else if cond {}' -> this would make the code less readable and has differing semantics
-		// PATCH: Only update if min/max are provided
-		if rangeElem.Min != "" || rangeElem.Max != "" {
-			typedValue := persistenceutils.MapRangeValueByType(string(rangeElem.ValueType), rangeElem.Min, rangeElem.Max)
-			updateRecord["min_text"] = typedValue.MinText
-			updateRecord["max_text"] = typedValue.MaxText
-			updateRecord["min_num"] = typedValue.MinNumeric
-			updateRecord["max_num"] = typedValue.MaxNumeric
-			updateRecord["min_time"] = typedValue.MinTime
-			updateRecord["max_time"] = typedValue.MaxTime
-			updateRecord["min_datetime"] = typedValue.MinDateTime
-			updateRecord["max_datetime"] = typedValue.MaxDateTime
-		}
-	}
+	updateRecord := buildUpdateRangeRecordObject(rangeElem, isPut)
 
 	// Execute update
 	updateQuery, updateArgs, err := dialect.Update("range_element").
@@ -249,12 +189,7 @@ func (p PostgreSQLRangeHandler) Update(submodelID string, idShortOrPath string, 
 		return err
 	}
 
-	// Commit transaction if we created it
-	if localTx != nil {
-		err = localTx.Commit()
-	}
-
-	return err
+	return persistenceutils.CommitTransactionIfNeeded(tx, err, localTx)
 }
 
 // UpdateValueOnly updates only the value-specific fields of an existing Range submodel element.
@@ -418,4 +353,42 @@ func insertRange(rangeElem *gen.Range, tx *sql.Tx, id int) error {
 // based on the XML Schema datatype of the Range element.
 func getRangeColumnNames(valueType string) (minCol, maxCol string) {
 	return persistenceutils.GetRangeColumnNames(valueType)
+}
+
+func buildUpdateRangeRecordObject(rangeElem *gen.Range, isPut bool) goqu.Record {
+	updateRecord := goqu.Record{}
+
+	// ValueType is always updated (required field)
+	updateRecord["value_type"] = rangeElem.ValueType
+
+	// Handle min and max based on isPut flag
+	if isPut {
+		// PUT: Always replace min/max values
+		typedValue := persistenceutils.MapRangeValueByType(string(rangeElem.ValueType), rangeElem.Min, rangeElem.Max)
+		updateRecord["min_text"] = typedValue.MinText
+		updateRecord["max_text"] = typedValue.MaxText
+		updateRecord["min_num"] = typedValue.MinNumeric
+		updateRecord["max_num"] = typedValue.MaxNumeric
+		updateRecord["min_time"] = typedValue.MinTime
+		updateRecord["max_time"] = typedValue.MaxTime
+		updateRecord["min_datetime"] = typedValue.MinDateTime
+		updateRecord["max_datetime"] = typedValue.MaxDateTime
+	} else { //nolint:all - elseif: can replace 'else {if cond {}}' with 'else if cond {}' -> this would make the code less readable and has differing semantics
+		// PATCH: Only update if min/max are provided
+		typedValue := persistenceutils.MapRangeValueByType(string(rangeElem.ValueType), rangeElem.Min, rangeElem.Max)
+		if rangeElem.Min != "" {
+			updateRecord["min_text"] = typedValue.MinText
+			updateRecord["min_num"] = typedValue.MinNumeric
+			updateRecord["min_time"] = typedValue.MinTime
+			updateRecord["min_datetime"] = typedValue.MinDateTime
+		}
+		if rangeElem.Max != "" {
+			updateRecord["max_text"] = typedValue.MaxText
+			updateRecord["max_num"] = typedValue.MaxNumeric
+			updateRecord["max_time"] = typedValue.MaxTime
+			updateRecord["max_datetime"] = typedValue.MaxDateTime
+		}
+
+	}
+	return updateRecord
 }

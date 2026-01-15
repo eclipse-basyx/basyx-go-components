@@ -39,6 +39,7 @@ import (
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	persistenceutils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 )
 
@@ -173,17 +174,13 @@ func (p PostgreSQLFileHandler) Update(submodelID string, idShortOrPath string, s
 		return common.NewErrBadRequest("submodelElement is not of type File")
 	}
 
-	tx, err := p.db.Begin()
+	var err error
+	err, localTx := persistenceutils.StartTXIfNeeded(tx, err, p.db)
 	if err != nil {
-		return fmt.Errorf("failed to begin transaction: %w", err)
+		return err
 	}
-	defer func() {
-		if err != nil {
-			_ = tx.Rollback()
-		} else {
-			_ = tx.Commit()
-		}
-	}()
+
+	p.decorated.Update(submodelID, idShortOrPath, submodelElement, tx, isPut)
 
 	dialect := goqu.Dialect("postgres")
 
@@ -211,8 +208,8 @@ func (p PostgreSQLFileHandler) Update(submodelID string, idShortOrPath string, s
 		return fmt.Errorf("failed to get current file element: %w", err)
 	}
 
-	// Check if the value has changed
-	if currentValue != file.Value {
+	hasFileValueChanged := currentValue != file.Value
+	if hasFileValueChanged {
 		// Check if there's an OID in file_data for this element
 		var oldOID sql.NullInt64
 		fileDataQuery, fileDataArgs, err := dialect.From("file_data").
@@ -230,22 +227,9 @@ func (p PostgreSQLFileHandler) Update(submodelID string, idShortOrPath string, s
 
 		// If an OID exists, delete the Large Object
 		if oldOID.Valid {
-			_, err = tx.Exec(`SELECT lo_unlink($1)`, oldOID.Int64)
+			err = removeLOFile(err, tx, oldOID, dialect, elementID)
 			if err != nil {
-				return fmt.Errorf("failed to delete large object: %w", err)
-			}
-
-			// Delete the file_data entry
-			deleteQuery, deleteArgs, err := dialect.Delete("file_data").
-				Where(goqu.C("id").Eq(elementID)).
-				ToSQL()
-			if err != nil {
-				return fmt.Errorf("failed to build delete query: %w", err)
-			}
-
-			_, err = tx.Exec(deleteQuery, deleteArgs...)
-			if err != nil {
-				return fmt.Errorf("failed to delete file_data: %w", err)
+				return err
 			}
 		}
 
@@ -282,8 +266,7 @@ func (p PostgreSQLFileHandler) Update(submodelID string, idShortOrPath string, s
 		}
 	}
 
-	// Update base SubmodelElement properties
-	return p.decorated.Update(submodelID, idShortOrPath, submodelElement, tx, isPut)
+	return persistenceutils.CommitTransactionIfNeeded(tx, err, localTx)
 }
 
 // UpdateValueOnly updates only the value of an existing File submodel element identified by its idShort or path.
@@ -807,5 +790,26 @@ func (p PostgreSQLFileHandler) DeleteFileAttachment(submodelID string, idShortPa
 		return fmt.Errorf("failed to update file_element: %w", err)
 	}
 
+	return nil
+}
+
+func removeLOFile(err error, tx *sql.Tx, oldOID sql.NullInt64, dialect goqu.DialectWrapper, elementID int64) error {
+	_, err = tx.Exec(`SELECT lo_unlink($1)`, oldOID.Int64)
+	if err != nil {
+		return fmt.Errorf("failed to delete large object: %w", err)
+	}
+
+	// Delete the file_data entry
+	deleteQuery, deleteArgs, err := dialect.Delete("file_data").
+		Where(goqu.C("id").Eq(elementID)).
+		ToSQL()
+	if err != nil {
+		return fmt.Errorf("failed to build delete query: %w", err)
+	}
+
+	_, err = tx.Exec(deleteQuery, deleteArgs...)
+	if err != nil {
+		return fmt.Errorf("failed to delete file_data: %w", err)
+	}
 	return nil
 }

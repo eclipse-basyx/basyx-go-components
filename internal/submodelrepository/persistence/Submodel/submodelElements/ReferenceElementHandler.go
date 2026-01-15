@@ -40,6 +40,7 @@ import (
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	persistenceutils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
 	jsoniter "github.com/json-iterator/go"
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 )
@@ -207,23 +208,25 @@ func (p PostgreSQLReferenceElementHandler) CreateNested(tx *sql.Tx, submodelID s
 // Returns:
 //   - error: Any error encountered during the update operation
 func (p PostgreSQLReferenceElementHandler) Update(submodelID string, idShortOrPath string, submodelElement gen.SubmodelElement, tx *sql.Tx, isPut bool) error {
-	var err error
-	localTx := tx
-
-	if tx == nil {
-		var startedTx *sql.Tx
-		var cu func(*error)
-
-		startedTx, cu, err = common.StartTransaction(p.db)
-
-		defer cu(&err)
-
-		localTx = startedTx
-	}
-
 	refElem, ok := submodelElement.(*gen.ReferenceElement)
 	if !ok {
 		return common.NewErrBadRequest("submodelElement is not of type ReferenceElement")
+	}
+
+	var err error
+	err, localTx := persistenceutils.StartTXIfNeeded(tx, err, p.db)
+	if err != nil {
+		return err
+	}
+
+	err = p.decorated.Update(submodelID, idShortOrPath, submodelElement, localTx, isPut)
+	if err != nil {
+		return err
+	}
+
+	elementID, err := p.decorated.GetDatabaseID(submodelID, idShortOrPath)
+	if err != nil {
+		return err
 	}
 
 	// Handle optional Value field based on isPut flag
@@ -249,14 +252,7 @@ func (p PostgreSQLReferenceElementHandler) Update(submodelID string, idShortOrPa
 			Set(goqu.Record{
 				"value": referenceJSONString,
 			}).
-			Where(goqu.C("id").In(
-				dialect.From("submodel_element").
-					Select("id").
-					Where(goqu.Ex{
-						"idshort_path": idShortOrPath,
-						"submodel_id":  submodelID,
-					}),
-			)).
+			Where(goqu.C("id").Eq(elementID)).
 			ToSQL()
 		if err != nil {
 			return err
@@ -268,19 +264,7 @@ func (p PostgreSQLReferenceElementHandler) Update(submodelID string, idShortOrPa
 		}
 	}
 
-	err = p.decorated.Update(submodelID, idShortOrPath, submodelElement, localTx, isPut)
-	if err != nil {
-		return err
-	}
-
-	if tx == nil {
-		err = localTx.Commit()
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
+	return persistenceutils.CommitTransactionIfNeeded(tx, err, localTx)
 }
 
 // UpdateValueOnly updates only the value of an existing ReferenceElement identified by its idShort or full path.

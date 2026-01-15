@@ -132,16 +132,9 @@ func (p PostgreSQLSubmodelElementListHandler) CreateNested(tx *sql.Tx, submodelI
 	return id, nil
 }
 
-// Update modifies an existing SubmodelElementList submodel element in the database.
-// Handles both PUT (complete replacement) and PATCH (partial update) operations based on isPut flag.
-//
-// For PUT operations (isPut=true):
-//   - Deletes all child elements in the list (complete replacement)
-//   - Updates all list-specific fields including OrderRelevant, SemanticIdListElement, TypeValueListElement, and ValueTypeListElement
-//
-// For PATCH operations (isPut=false):
-//   - Updates only the provided list-specific fields
-//   - Preserves existing child elements
+// Update modifies an existing SubmodelElementList element identified by its idShort or path.
+// This method delegates the update operation to the decorated CRUD handler which handles
+// the common submodel element update logic and then updates SubmodelElementList-specific fields.
 //
 // Parameters:
 //   - submodelID: The ID of the parent submodel
@@ -158,20 +151,10 @@ func (p PostgreSQLSubmodelElementListHandler) Update(submodelID string, idShortO
 		return common.NewErrBadRequest("submodelElement is not of type SubmodelElementList")
 	}
 
-	// Manage transaction
-	var localTx *sql.Tx
 	var err error
-	if tx == nil {
-		localTx, err = p.db.Begin()
-		if err != nil {
-			return err
-		}
-		defer func() {
-			if err != nil {
-				_ = localTx.Rollback()
-			}
-		}()
-		tx = localTx
+	err, localTx := persistenceutils.StartTXIfNeeded(tx, err, p.db)
+	if err != nil {
+		return err
 	}
 
 	// For PUT operations, delete all children first (complete replacement)
@@ -188,74 +171,15 @@ func (p PostgreSQLSubmodelElementListHandler) Update(submodelID string, idShortO
 		return err
 	}
 
-	// Get element ID
-	dialect := goqu.Dialect("postgres")
-	idQuery, idArgs, err := dialect.From("submodel_element").
-		Select("id").
-		Where(goqu.And(
-			goqu.C("submodel_id").Eq(submodelID),
-			goqu.C("idshort_path").Eq(idShortOrPath),
-		)).
-		ToSQL()
-	if err != nil {
-		return err
-	}
-
-	var elementID int
-	err = tx.QueryRow(idQuery, idArgs...).Scan(&elementID)
-	if err != nil {
-		return err
-	}
+	elementID, err := p.decorated.GetDatabaseID(submodelID, idShortOrPath)
 
 	// Build update record for SubmodelElementList-specific fields
-	updateRecord := goqu.Record{}
-
-	// OrderRelevant is always updated
-	updateRecord["order_relevant"] = smeList.OrderRelevant
-
-	if isPut {
-		// PUT: Always update all fields
-		var semanticID sql.NullInt64
-		if smeList.SemanticIdListElement != nil && !isEmptyReference(smeList.SemanticIdListElement) {
-			refID, err := insertReference(tx, *smeList.SemanticIdListElement)
-			if err != nil {
-				return err
-			}
-			semanticID = sql.NullInt64{Int64: int64(refID), Valid: true}
-		}
-		updateRecord["semantic_id_list_element"] = semanticID
-
-		var typeValue sql.NullString
-		if smeList.TypeValueListElement != nil {
-			typeValue = sql.NullString{String: string(*smeList.TypeValueListElement), Valid: true}
-		}
-		updateRecord["type_value_list_element"] = typeValue
-
-		var valueType sql.NullString
-		if smeList.ValueTypeListElement != "" {
-			valueType = sql.NullString{String: string(smeList.ValueTypeListElement), Valid: true}
-		}
-		updateRecord["value_type_list_element"] = valueType
-	} else {
-		// PATCH: Only update provided fields
-		if smeList.SemanticIdListElement != nil {
-			if !isEmptyReference(smeList.SemanticIdListElement) {
-				refID, err := insertReference(tx, *smeList.SemanticIdListElement)
-				if err != nil {
-					return err
-				}
-				updateRecord["semantic_id_list_element"] = sql.NullInt64{Int64: int64(refID), Valid: true}
-			}
-		}
-
-		if smeList.TypeValueListElement != nil {
-			updateRecord["type_value_list_element"] = sql.NullString{String: string(*smeList.TypeValueListElement), Valid: true}
-		}
-
-		if smeList.ValueTypeListElement != "" {
-			updateRecord["value_type_list_element"] = sql.NullString{String: string(smeList.ValueTypeListElement), Valid: true}
-		}
+	updateRecord, err := buildUpdateListRecordObject(smeList, isPut, tx)
+	if err != nil {
+		return err
 	}
+
+	dialect := goqu.Dialect("postgres")
 
 	// Execute update
 	updateQuery, updateArgs, err := dialect.Update("submodel_element_list").
@@ -271,12 +195,7 @@ func (p PostgreSQLSubmodelElementListHandler) Update(submodelID string, idShortO
 		return err
 	}
 
-	// Commit transaction if we created it
-	if localTx != nil {
-		err = localTx.Commit()
-	}
-
-	return err
+	return persistenceutils.CommitTransactionIfNeeded(tx, err, localTx)
 }
 
 // UpdateValueOnly updates only the value of an existing SubmodelElementList submodel element identified by its idShort or path.
@@ -347,4 +266,56 @@ func insertSubmodelElementList(smeList *gen.SubmodelElementList, tx *sql.Tx, id 
 	}
 	_, err = tx.Exec(insertQuery, insertArgs...)
 	return err
+}
+
+func buildUpdateListRecordObject(smeList *gen.SubmodelElementList, isPut bool, tx *sql.Tx) (goqu.Record, error) {
+	updateRecord := goqu.Record{}
+
+	// OrderRelevant is always updated
+	updateRecord["order_relevant"] = smeList.OrderRelevant
+
+	if isPut {
+		// PUT: Always update all fields
+		var semanticID sql.NullInt64
+		if smeList.SemanticIdListElement != nil && !isEmptyReference(smeList.SemanticIdListElement) {
+			refID, err := insertReference(tx, *smeList.SemanticIdListElement)
+			if err != nil {
+				return nil, err
+			}
+			semanticID = sql.NullInt64{Int64: int64(refID), Valid: true}
+		}
+		updateRecord["semantic_id_list_element"] = semanticID
+
+		var typeValue sql.NullString
+		if smeList.TypeValueListElement != nil {
+			typeValue = sql.NullString{String: string(*smeList.TypeValueListElement), Valid: true}
+		}
+		updateRecord["type_value_list_element"] = typeValue
+
+		var valueType sql.NullString
+		if smeList.ValueTypeListElement != "" {
+			valueType = sql.NullString{String: string(smeList.ValueTypeListElement), Valid: true}
+		}
+		updateRecord["value_type_list_element"] = valueType
+	} else {
+		// PATCH: Only update provided fields
+		if smeList.SemanticIdListElement != nil {
+			if !isEmptyReference(smeList.SemanticIdListElement) {
+				refID, err := insertReference(tx, *smeList.SemanticIdListElement)
+				if err != nil {
+					return nil, err
+				}
+				updateRecord["semantic_id_list_element"] = sql.NullInt64{Int64: int64(refID), Valid: true}
+			}
+		}
+
+		if smeList.TypeValueListElement != nil {
+			updateRecord["type_value_list_element"] = sql.NullString{String: string(*smeList.TypeValueListElement), Valid: true}
+		}
+
+		if smeList.ValueTypeListElement != "" {
+			updateRecord["value_type_list_element"] = sql.NullString{String: string(smeList.ValueTypeListElement), Valid: true}
+		}
+	}
+	return updateRecord, nil
 }
