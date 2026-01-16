@@ -62,8 +62,9 @@ func ReadSubmodelDescriptorsByAASDescriptorID(
 	ctx context.Context,
 	db DBQueryer,
 	aasDescriptorID int64,
+	isMain bool,
 ) ([]model.SubmodelDescriptor, error) {
-	v, err := ReadSubmodelDescriptorsByAASDescriptorIDs(ctx, db, []int64{aasDescriptorID})
+	v, err := ReadSubmodelDescriptorsByAASDescriptorIDs(ctx, db, []int64{aasDescriptorID}, isMain)
 	return v[aasDescriptorID], err
 }
 
@@ -93,6 +94,7 @@ func ReadSubmodelDescriptorsByAASDescriptorIDs(
 	ctx context.Context,
 	db DBQueryer,
 	aasDescriptorIDs []int64,
+	isMain bool,
 ) (map[int64][]model.SubmodelDescriptor, error) {
 	out := make(map[int64][]model.SubmodelDescriptor, len(aasDescriptorIDs))
 	if len(aasDescriptorIDs) == 0 {
@@ -121,7 +123,8 @@ func ReadSubmodelDescriptorsByAASDescriptorIDs(
 			Exp: submodelDescriptorAlias.Col(colAASID),
 		},
 		{
-			Exp: submodelDescriptorAlias.Col(colSemanticID),
+			Exp:      submodelDescriptorAlias.Col(colSemanticID),
+			Fragment: fragPtr("$aasdesc#submodelDescriptors[].semanticId"),
 		},
 		{
 			Exp: submodelDescriptorAlias.Col(colAdminInfoID),
@@ -133,7 +136,13 @@ func ReadSubmodelDescriptorsByAASDescriptorIDs(
 			Exp: submodelDescriptorAlias.Col(colDisplayNameID),
 		},
 	}
-	collector, err := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootAASDesc)
+	var root grammar.CollectorRoot
+	if isMain {
+		root = grammar.CollectorRootSMDesc
+	} else {
+		root = grammar.CollectorRootAASDesc
+	}
+	collector, err := grammar.NewResolvedFieldPathCollectorForRoot(root)
 	if err != nil {
 		return nil, err
 	}
@@ -171,6 +180,12 @@ func ReadSubmodelDescriptorsByAASDescriptorIDs(
 	if err != nil {
 		return nil, err
 	}
+	if isMain {
+		ds, err = auth.AddFormulaQueryFromContext(ctx, ds, collector)
+		if err != nil {
+			return nil, err
+		}
+	}
 	cteWhere := goqu.L(fmt.Sprintf("%s.%s = ANY(?::bigint[])", aliasSubmodelDescriptor, colAASDescriptorID), arr)
 	ds, err = auth.ApplyResolvedFieldPathCTEs(ds, collector, cteWhere)
 	if err != nil {
@@ -178,6 +193,7 @@ func ReadSubmodelDescriptorsByAASDescriptorIDs(
 	}
 
 	sqlStr, args, err := ds.ToSQL()
+	fmt.Println(sqlStr, args)
 	if err != nil {
 		return nil, err
 	}

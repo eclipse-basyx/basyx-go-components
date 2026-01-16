@@ -1,6 +1,7 @@
 package grammar
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -49,6 +50,10 @@ func TestLogicalExpression_SMDesc_WithCollector_BuildsCTE(t *testing.T) {
 			goqu.T("aas_descriptor").As("aas_descriptor"),
 			goqu.On(goqu.I("aas_descriptor.descriptor_id").Eq(goqu.I("descriptor.id"))),
 		).
+		LeftJoin(
+			goqu.T("submodel_descriptor").As("submodel_descriptor"),
+			goqu.On(goqu.I("submodel_descriptor.aas_descriptor_id").Eq(goqu.I("aas_descriptor.descriptor_id"))),
+		).
 		Select(goqu.V(1)).
 		Where(whereExpr)
 
@@ -56,11 +61,12 @@ func TestLogicalExpression_SMDesc_WithCollector_BuildsCTE(t *testing.T) {
 		ds = ds.With(cte.Alias, cte.Dataset).
 			LeftJoin(
 				goqu.T(cte.Alias),
-				goqu.On(goqu.I(cte.Alias+".root_id").Eq(goqu.I("descriptor.id"))),
+				goqu.On(goqu.I(cte.Alias+".root_id").Eq(goqu.I("submodel_descriptor.descriptor_id"))),
 			)
 	}
 
 	sql, args, err := ds.Prepared(true).ToSQL()
+	_, _ = fmt.Println(sql)
 	if err != nil {
 		t.Fatalf("ToSQL returned error: %v", err)
 	}

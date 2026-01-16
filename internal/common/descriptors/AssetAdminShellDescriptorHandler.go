@@ -604,7 +604,7 @@ func listAssetAdministrationShellDescriptors(
 				return ReadExtensionsByDescriptorIDs(gctx, db, ids)
 			}, &extByDesc)
 			GoAssign(g, func() (map[int64][]model.SubmodelDescriptor, error) {
-				return ReadSubmodelDescriptorsByAASDescriptorIDs(gctx, db, ids)
+				return ReadSubmodelDescriptorsByAASDescriptorIDs(gctx, db, ids, false)
 			}, &smdByDesc)
 		}
 
@@ -644,7 +644,7 @@ func listAssetAdministrationShellDescriptors(
 			if err != nil {
 				return nil, "", err
 			}
-			smdByDesc, err = ReadSubmodelDescriptorsByAASDescriptorIDs(ctx, db, descIDs)
+			smdByDesc, err = ReadSubmodelDescriptorsByAASDescriptorIDs(ctx, db, descIDs, false)
 			if err != nil {
 				return nil, "", err
 			}
