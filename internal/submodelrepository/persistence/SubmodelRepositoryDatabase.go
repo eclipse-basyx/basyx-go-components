@@ -1148,7 +1148,7 @@ func isModelTypeWithNestedElements(modelType string) bool {
 
 func doesSubmodelElementExist(db *sql.DB, submodelID string, idShortOrPath string) (bool, error) {
 	dialect := goqu.Dialect("postgres")
-	selectQuery := dialect.From("submodel_element").Select("COUNT(id)").Where(
+	selectQuery := dialect.From("submodel_element").Select(goqu.COUNT("id")).Where(
 		goqu.I("submodel_id").Eq(submodelID),
 		goqu.I("idshort_path").Eq(idShortOrPath),
 	)
