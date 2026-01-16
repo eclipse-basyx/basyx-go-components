@@ -594,7 +594,7 @@
         "data": "bodies/patch/patchSubmodelValueOnlyNonExistingSME.json",
         "expectedStatus": 404
     },
-        {
+    {
         "context": "PUT Submodel - Update existing Submodel",
         "method": "PUT",
         "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw",
@@ -1839,5 +1839,41 @@
         "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.AnnotatedRelationship.NestedRangeAnnotation",
         "shouldMatch": "bodies/post/nested/postRangeInAnnotatedRelationship.json",
         "expectedStatus": 200
+    },
+    {
+        "context": "POST (Colliding) - Range in AnnotatedRelationship - Expected 409",
+        "method": "POST",
+        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.AnnotatedRelationship",
+        "data": "bodies/post/nested/postRangeInAnnotatedRelationship.json",
+        "expectedStatus": 409
+    },
+    {
+        "context": "POST (Colliding) - Range in Entity - Expected 409",
+        "method": "POST",
+        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.Entity",
+        "data": "bodies/post/nested/postRangeInEntity.json",
+        "expectedStatus": 409
+    },
+    {
+        "context": "POST (Colliding) - Capability in List - Expected 409",
+        "method": "POST",
+        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.List",
+        "data": "bodies/post/nested/postCapabilityInList.json",
+        "expectedStatus": 409
+    },
+    {
+        "context": "POST (Colliding) - Capability in Collection - Expected 409",
+        "method": "POST",
+        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer",
+        "data": "bodies/post/nested/postCapabilityInCollection.json",
+        "expectedStatus": 409
+    },
+    {
+        "context": "POST (Colliding) - Property Element",
+        "method": "POST",
+        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements",
+        "data": "bodies/post/postNewProperty.json",
+        "expectedStatus": 409
     }
+
 ]

@@ -356,6 +356,15 @@ func (s *SubmodelRepositoryAPIAPIService) PutSubmodelByID(ctx context.Context, s
 				"BadRequest",
 			), err
 		}
+		if common.IsErrConflict(err) {
+			return common.NewErrorResponse(
+				err,
+				http.StatusConflict,
+				"SMRepo",
+				"PutSubmodelByID",
+				"Conflict",
+			), err
+		}
 		return common.NewErrorResponse(
 			err,
 			http.StatusInternalServerError,
