@@ -442,21 +442,7 @@ func ListAssetAdministrationShellDescriptors(
 	return listAssetAdministrationShellDescriptors(ctx, db, limit, cursor, assetKind, assetType, identifiable, true)
 }
 
-// ListAssetAdministrationShellDescriptorsTx lists AAS descriptors using the
-// provided transaction. It avoids parallel DB access because *sql.Tx is not
-// safe for concurrent use by multiple goroutines.
-func ListAssetAdministrationShellDescriptorsTx(
-	ctx context.Context,
-	tx *sql.Tx,
-	limit int32,
-	cursor string,
-	assetKind model.AssetKind,
-	assetType string,
-	identifiable string,
-) ([]model.AssetAdministrationShellDescriptor, string, error) {
-	return listAssetAdministrationShellDescriptors(ctx, tx, limit, cursor, assetKind, assetType, identifiable, false)
-}
-
+//nolint:revive // has to be refactored later. i have no time
 func listAssetAdministrationShellDescriptors(
 	ctx context.Context,
 	db DBQueryer,
