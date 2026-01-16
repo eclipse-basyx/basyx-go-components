@@ -1147,13 +1147,22 @@ func isModelTypeWithNestedElements(modelType string) bool {
 }
 
 func doesSubmodelElementExist(db *sql.DB, submodelID string, idShortOrPath string) (bool, error) {
-	smeHandler := submodelelements.PostgreSQLSMECrudHandler{Db: db}
-	elementID, err := smeHandler.GetDatabaseID(submodelID, idShortOrPath)
+	dialect := goqu.Dialect("postgres")
+	selectQuery := dialect.From("submodel_element").Select("COUNT(id)").Where(
+		goqu.I("submodel_id").Eq(submodelID),
+		goqu.I("idshort_path").Eq(idShortOrPath),
+	)
+
+	query, args, err := selectQuery.ToSQL()
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return false, nil
-		}
 		return false, err
 	}
-	return elementID > 0, nil
+
+	var count int
+	err = db.QueryRow(query, args...).Scan(&count)
+	if err != nil {
+		return false, err
+	}
+
+	return count > 0, nil
 }
