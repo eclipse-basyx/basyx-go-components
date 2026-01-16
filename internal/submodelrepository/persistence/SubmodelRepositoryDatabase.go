@@ -804,6 +804,15 @@ func (p *PostgreSQLSubmodelDatabase) AddSubmodelElementWithPath(submodelID strin
 		newIDShortPath = idShortPath + "." + submodelElement.GetIdShort()
 	}
 
+	exists, err := doesSubmodelElementExist(p.db, submodelID, newIDShortPath)
+	if err != nil {
+		_, _ = fmt.Println(err)
+		return common.NewInternalServerError("Failed to check for existing SubmodelElement - no changes applied - see console for details.")
+	}
+	if exists {
+		return common.NewErrConflict("SubmodelElement with idShort '" + submodelElement.GetIdShort() + "' already exists in submodel '" + submodelID + "'")
+	}
+
 	var rootSmeID int
 	sqlQuery, args, err := goqu.Select("root_sme_id").From("submodel_element").Where(goqu.I("idshort_path").Eq(idShortPath)).ToSQL()
 	if err != nil {
@@ -882,6 +891,16 @@ func (p *PostgreSQLSubmodelDatabase) AddSubmodelElementWithTransaction(tx *sql.T
 	if err != nil {
 		return err
 	}
+
+	exists, err := doesSubmodelElementExist(p.db, submodelID, submodelElement.GetIdShort())
+	if err != nil {
+		_, _ = fmt.Println(err)
+		return common.NewInternalServerError("Failed to check for existing SubmodelElement - no changes applied - see console for details.")
+	}
+	if exists {
+		return common.NewErrConflict("SubmodelElement with idShort '" + submodelElement.GetIdShort() + "' already exists in submodel '" + submodelID + "'")
+	}
+
 	rootID, err := handler.Create(tx, submodelID, submodelElement)
 	if err != nil {
 		return err
@@ -1125,4 +1144,16 @@ func (p *PostgreSQLSubmodelDatabase) UpdateSubmodelValueOnly(submodelID string, 
 
 func isModelTypeWithNestedElements(modelType string) bool {
 	return modelType == "AnnotatedRelationshipElement" || modelType == "SubmodelElementCollection" || modelType == "SubmodelElementList" || modelType == "Entity"
+}
+
+func doesSubmodelElementExist(db *sql.DB, submodelID string, idShortOrPath string) (bool, error) {
+	smeHandler := submodelelements.PostgreSQLSMECrudHandler{Db: db}
+	elementID, err := smeHandler.GetDatabaseID(submodelID, idShortOrPath)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return false, nil
+		}
+		return false, err
+	}
+	return elementID > 0, nil
 }
