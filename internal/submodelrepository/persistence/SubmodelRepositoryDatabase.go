@@ -463,6 +463,9 @@ func (p *PostgreSQLSubmodelDatabase) DeleteSubmodel(id string, optionalTX *sql.T
 		return err
 	}
 	_, err = tx.Exec(querySME, argsSME...)
+	if err != nil {
+		return err
+	}
 
 	// Check if a row was actually deleted
 	rowsAffected, err := res.RowsAffected()
@@ -831,7 +834,7 @@ func (p *PostgreSQLSubmodelDatabase) AddSubmodelElementWithPath(submodelID strin
 		newIDShortPath = idShortPath + "." + submodelElement.GetIdShort()
 	}
 
-	exists, err := doesSubmodelElementExistWithTx(tx, submodelID, newIDShortPath)
+	exists, err := doesSubmodelElementExist(tx, submodelID, newIDShortPath)
 	if err != nil {
 		_, _ = fmt.Println(err)
 		return common.NewInternalServerError("Failed to check for existing SubmodelElement - no changes applied - see console for details.")
@@ -919,7 +922,7 @@ func (p *PostgreSQLSubmodelDatabase) AddSubmodelElementWithTransaction(tx *sql.T
 		return err
 	}
 
-	exists, err := doesSubmodelElementExistWithTx(tx, submodelID, submodelElement.GetIdShort())
+	exists, err := doesSubmodelElementExist(tx, submodelID, submodelElement.GetIdShort())
 	if err != nil {
 		_, _ = fmt.Println(err)
 		return common.NewInternalServerError("Failed to check for existing SubmodelElement - no changes applied - see console for details.")
@@ -1173,29 +1176,8 @@ func isModelTypeWithNestedElements(modelType string) bool {
 	return modelType == "AnnotatedRelationshipElement" || modelType == "SubmodelElementCollection" || modelType == "SubmodelElementList" || modelType == "Entity"
 }
 
-func doesSubmodelElementExist(db *sql.DB, submodelID string, idShortOrPath string) (bool, error) {
-	dialect := goqu.Dialect("postgres")
-	selectQuery := dialect.From("submodel_element").Select(goqu.COUNT("id")).Where(
-		goqu.I("submodel_id").Eq(submodelID),
-		goqu.I("idshort_path").Eq(idShortOrPath),
-	)
-
-	query, args, err := selectQuery.ToSQL()
-	if err != nil {
-		return false, err
-	}
-
-	var count int
-	err = db.QueryRow(query, args...).Scan(&count)
-	if err != nil {
-		return false, err
-	}
-
-	return count > 0, nil
-}
-
-// doesSubmodelElementExistWithTx checks if a submodel element exists within a transaction context
-func doesSubmodelElementExistWithTx(tx *sql.Tx, submodelID string, idShortOrPath string) (bool, error) {
+// doesSubmodelElementExist checks if a submodel element exists within a transaction context
+func doesSubmodelElementExist(tx *sql.Tx, submodelID string, idShortOrPath string) (bool, error) {
 	dialect := goqu.Dialect("postgres")
 	selectQuery := dialect.From("submodel_element").Select(goqu.COUNT("id")).Where(
 		goqu.I("submodel_id").Eq(submodelID),
