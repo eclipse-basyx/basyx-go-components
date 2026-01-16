@@ -91,7 +91,6 @@ func InsertAdministrationShellDescriptor(ctx context.Context, db *sql.DB, aasd m
 		return model.AssetAdministrationShellDescriptor{}, err
 	}
 	return result, tx.Commit()
-
 }
 
 // InsertAdministrationShellDescriptorTx performs the same insert as
@@ -234,8 +233,14 @@ func DeleteAssetAdministrationShellDescriptorByID(ctx context.Context, db *sql.D
 	if err != nil {
 		return err
 	}
-	return deleteAssetAdministrationShellDescriptorByIDTx(ctx, tx, aasIdentifier)
 
+	err = deleteAssetAdministrationShellDescriptorByIDTx(ctx, tx, aasIdentifier)
+	if err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+
+	return tx.Commit()
 }
 
 // DeleteAssetAdministrationShellDescriptorByIDTx deletes using the provided
