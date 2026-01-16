@@ -1098,6 +1098,84 @@ func (le *LogicalExpression) evaluateFragmentToExpression(collector *ResolvedFie
 
 type binaryOperationValidator func(leftOperand, rightOperand *Value) error
 
+func handleBinaryOperationWithoutCollector(
+	leftOperand, rightOperand *Value,
+	operation string,
+	fieldToFieldErr error,
+	build func(left interface{}, right interface{}, operation string) (exp.Expression, error),
+	validate binaryOperationValidator,
+) (exp.Expression, []ResolvedFieldPath, error) {
+	if leftOperand == nil || rightOperand == nil {
+		return nil, nil, fmt.Errorf("binary operation operands must not be nil")
+	}
+
+	normalizeSemanticShorthand(leftOperand)
+	normalizeSemanticShorthand(rightOperand)
+
+	leftField, leftCastType := extractFieldOperandAndCast(leftOperand)
+	rightField, rightCastType := extractFieldOperandAndCast(rightOperand)
+
+	// Field-to-field operations are forbidden by the query language.
+	// We can safely assume operations have either 0 or 1 field operands.
+	if leftField != nil && rightField != nil {
+		return nil, nil, fieldToFieldErr
+	}
+
+	// Fast-path: both are values (no FieldIdentifiers involved).
+	if leftField == nil && rightField == nil {
+		leftSQL, err := toSQLComponent(leftOperand, "left")
+		if err != nil {
+			return nil, nil, err
+		}
+		rightSQL, err := toSQLComponent(rightOperand, "right")
+		if err != nil {
+			return nil, nil, err
+		}
+		if validate != nil {
+			if err := validate(leftOperand, rightOperand); err != nil {
+				return nil, nil, err
+			}
+		}
+		expr, err := build(leftSQL, rightSQL, operation)
+		return expr, nil, err
+	}
+
+	leftSQL, leftResolved, err := toSQLResolvedFieldOrValue(leftOperand, leftCastType, "left")
+	if err != nil {
+		return nil, nil, err
+	}
+	rightSQL, rightResolved, err := toSQLResolvedFieldOrValue(rightOperand, rightCastType, "right")
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// Cast the field side to the non-field operand's type (unless already explicitly casted).
+	if leftResolved != nil && rightResolved == nil && leftCastType == "" {
+		if t := sqlTypeForOperand(rightOperand); t != "" {
+			leftSQL = safeCastSQLValue(goqu.I(leftResolved.Column), t)
+		}
+	}
+	if rightResolved != nil && leftResolved == nil && rightCastType == "" {
+		if t := sqlTypeForOperand(leftOperand); t != "" {
+			rightSQL = safeCastSQLValue(goqu.I(rightResolved.Column), t)
+		}
+	}
+
+	if validate != nil {
+		if err := validate(leftOperand, rightOperand); err != nil {
+			return nil, nil, err
+		}
+	}
+
+	opExpr, err := build(leftSQL, rightSQL, operation)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	resolved := collectResolvedFieldPaths(leftResolved, rightResolved)
+	return opExpr, resolved, nil
+}
+
 func handleBinaryOperationWithCollector(
 	leftOperand, rightOperand *Value,
 	operation string,
@@ -1254,6 +1332,27 @@ func (le *LogicalExpression) EvaluateToExpression(collector *ResolvedFieldPathCo
 		return le.evaluateStringOperationSQL(le.Regex, "$regex", collector)
 	}
 
+	if len(le.Match) > 0 {
+		expr, resolved, err := evaluateMatchExpressions(le.Match)
+		if err != nil {
+			return nil, nil, err
+		}
+		if collector != nil && resolvedNeedsCTE(resolved) {
+			alias, err := collector.Register(resolved, expr)
+			if err != nil {
+				return nil, nil, err
+			}
+			return goqu.I(collector.qualifiedAlias(alias)), resolved, nil
+		}
+		if collector != nil {
+			return expr, resolved, nil
+		}
+		if anyResolvedHasBindings(resolved) {
+			return andBindingsForResolvedFieldPaths(resolved, expr), resolved, nil
+		}
+		return expr, resolved, nil
+	}
+
 	// Handle logical operations
 	if len(le.And) > 0 {
 		var expressions []exp.Expression
@@ -1348,6 +1447,99 @@ func (le *LogicalExpression) EvaluateToExpressionWithNegatedFragments(
 
 	fragmentGuard := goqu.Or(negated...)
 	return goqu.Or(mainExpr, fragmentGuard), resolved, nil
+}
+
+func evaluateMatchExpressions(match []MatchExpression) (exp.Expression, []ResolvedFieldPath, error) {
+	if len(match) == 0 {
+		return nil, nil, fmt.Errorf("match expression list is empty")
+	}
+	var expressions []exp.Expression
+	var resolved []ResolvedFieldPath
+	for i, m := range match {
+		expr, childResolved, err := evaluateMatchExpressionSQL(m)
+		if err != nil {
+			return nil, nil, fmt.Errorf("error evaluating match expression at index %d: %w", i, err)
+		}
+		expressions = append(expressions, expr)
+		resolved = append(resolved, childResolved...)
+	}
+	return goqu.And(expressions...), resolved, nil
+}
+
+func evaluateMatchExpressionSQL(me MatchExpression) (exp.Expression, []ResolvedFieldPath, error) {
+	if me.Boolean != nil {
+		return goqu.L("?", *me.Boolean), nil, nil
+	}
+	if len(me.Eq) > 0 {
+		return evaluateMatchComparison(me.Eq, "$eq")
+	}
+	if len(me.Ne) > 0 {
+		return evaluateMatchComparison(me.Ne, "$ne")
+	}
+	if len(me.Gt) > 0 {
+		return evaluateMatchComparison(me.Gt, "$gt")
+	}
+	if len(me.Ge) > 0 {
+		return evaluateMatchComparison(me.Ge, "$ge")
+	}
+	if len(me.Lt) > 0 {
+		return evaluateMatchComparison(me.Lt, "$lt")
+	}
+	if len(me.Le) > 0 {
+		return evaluateMatchComparison(me.Le, "$le")
+	}
+	if len(me.Contains) > 0 {
+		return evaluateMatchStringOperation(me.Contains, "$contains")
+	}
+	if len(me.StartsWith) > 0 {
+		return evaluateMatchStringOperation(me.StartsWith, "$starts-with")
+	}
+	if len(me.EndsWith) > 0 {
+		return evaluateMatchStringOperation(me.EndsWith, "$ends-with")
+	}
+	if len(me.Regex) > 0 {
+		return evaluateMatchStringOperation(me.Regex, "$regex")
+	}
+	if len(me.Match) > 0 {
+		return evaluateMatchExpressions(me.Match)
+	}
+	return nil, nil, fmt.Errorf("match expression has no valid operation")
+}
+
+func evaluateMatchComparison(operands []Value, operation string) (exp.Expression, []ResolvedFieldPath, error) {
+	if len(operands) != 2 {
+		return nil, nil, fmt.Errorf("comparison operation %s requires exactly 2 operands, got %d", operation, len(operands))
+	}
+	leftOperand := &operands[0]
+	rightOperand := &operands[1]
+	validate := func(leftOperand, rightOperand *Value) error {
+		_, err := leftOperand.IsComparableTo(*rightOperand)
+		return err
+	}
+	return handleBinaryOperationWithoutCollector(
+		leftOperand,
+		rightOperand,
+		operation,
+		fmt.Errorf("field-to-field comparisons are not supported"),
+		buildComparisonExpression,
+		validate,
+	)
+}
+
+func evaluateMatchStringOperation(items []StringValue, operation string) (exp.Expression, []ResolvedFieldPath, error) {
+	if len(items) != 2 {
+		return nil, nil, fmt.Errorf("string operation %s requires exactly 2 operands, got %d", operation, len(items))
+	}
+	leftOperand := stringValueToValue(items[0])
+	rightOperand := stringValueToValue(items[1])
+	return handleBinaryOperationWithoutCollector(
+		&leftOperand,
+		&rightOperand,
+		operation,
+		fmt.Errorf("field-to-field string operations are not supported"),
+		buildStringOperationExpression,
+		nil,
+	)
 }
 
 // evaluateStringOperationSQL builds SQL expressions for string operators like $contains, $starts-with, $ends-with, and $regex.
