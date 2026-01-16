@@ -457,6 +457,13 @@ func (p *PostgreSQLSubmodelDatabase) DeleteSubmodel(id string, optionalTX *sql.T
 		return err
 	}
 
+	delSME := goqu.Delete("submodel_element").Where(goqu.I("submodel_id").Eq(id))
+	querySME, argsSME, err := delSME.ToSQL()
+	if err != nil {
+		return err
+	}
+	_, err = tx.Exec(querySME, argsSME...)
+
 	// Check if a row was actually deleted
 	rowsAffected, err := res.RowsAffected()
 	if err != nil {
@@ -800,11 +807,31 @@ func (p *PostgreSQLSubmodelDatabase) AddSubmodelElementWithPath(submodelID strin
 	var newIDShortPath string
 	if modelType == "SubmodelElementList" {
 		newIDShortPath = idShortPath + "[" + strconv.Itoa(nextPosition) + "]"
+		// For lists, check if an element with the same idShort already exists within the list
+		checkQuery, checkArgs, err := goqu.Select(goqu.COUNT("id")).From("submodel_element").
+			Where(
+				goqu.I("submodel_id").Eq(submodelID),
+				goqu.I("parent_sme_id").Eq(parentID),
+				goqu.I("id_short").Eq(submodelElement.GetIdShort()),
+			).ToSQL()
+		if err != nil {
+			_, _ = fmt.Println(err)
+			return common.NewInternalServerError("Failed to check for duplicate idShort in list - no changes applied - see console for details.")
+		}
+		var count int
+		err = tx.QueryRow(checkQuery, checkArgs...).Scan(&count)
+		if err != nil {
+			_, _ = fmt.Println(err)
+			return common.NewInternalServerError("Failed to check for duplicate idShort in list - no changes applied - see console for details.")
+		}
+		if count > 0 {
+			return common.NewErrConflict("SubmodelElement with idShort '" + submodelElement.GetIdShort() + "' already exists in submodel '" + submodelID + "'")
+		}
 	} else {
 		newIDShortPath = idShortPath + "." + submodelElement.GetIdShort()
 	}
 
-	exists, err := doesSubmodelElementExist(p.db, submodelID, newIDShortPath)
+	exists, err := doesSubmodelElementExistWithTx(tx, submodelID, newIDShortPath)
 	if err != nil {
 		_, _ = fmt.Println(err)
 		return common.NewInternalServerError("Failed to check for existing SubmodelElement - no changes applied - see console for details.")
@@ -818,7 +845,7 @@ func (p *PostgreSQLSubmodelDatabase) AddSubmodelElementWithPath(submodelID strin
 	if err != nil {
 		return err
 	}
-	err = p.db.QueryRow(sqlQuery, args...).Scan(&rootSmeID)
+	err = tx.QueryRow(sqlQuery, args...).Scan(&rootSmeID)
 	if err != nil {
 		return err
 	}
@@ -892,7 +919,7 @@ func (p *PostgreSQLSubmodelDatabase) AddSubmodelElementWithTransaction(tx *sql.T
 		return err
 	}
 
-	exists, err := doesSubmodelElementExist(p.db, submodelID, submodelElement.GetIdShort())
+	exists, err := doesSubmodelElementExistWithTx(tx, submodelID, submodelElement.GetIdShort())
 	if err != nil {
 		_, _ = fmt.Println(err)
 		return common.NewInternalServerError("Failed to check for existing SubmodelElement - no changes applied - see console for details.")
@@ -1160,6 +1187,28 @@ func doesSubmodelElementExist(db *sql.DB, submodelID string, idShortOrPath strin
 
 	var count int
 	err = db.QueryRow(query, args...).Scan(&count)
+	if err != nil {
+		return false, err
+	}
+
+	return count > 0, nil
+}
+
+// doesSubmodelElementExistWithTx checks if a submodel element exists within a transaction context
+func doesSubmodelElementExistWithTx(tx *sql.Tx, submodelID string, idShortOrPath string) (bool, error) {
+	dialect := goqu.Dialect("postgres")
+	selectQuery := dialect.From("submodel_element").Select(goqu.COUNT("id")).Where(
+		goqu.I("submodel_id").Eq(submodelID),
+		goqu.I("idshort_path").Eq(idShortOrPath),
+	)
+
+	query, args, err := selectQuery.ToSQL()
+	if err != nil {
+		return false, err
+	}
+
+	var count int
+	err = tx.QueryRow(query, args...).Scan(&count)
 	if err != nil {
 		return false, err
 	}

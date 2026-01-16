@@ -594,7 +594,7 @@
         "data": "bodies/patch/patchSubmodelValueOnlyNonExistingSME.json",
         "expectedStatus": 404
     },
-        {
+    {
         "context": "PUT Submodel - Update existing Submodel",
         "method": "PUT",
         "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw",
