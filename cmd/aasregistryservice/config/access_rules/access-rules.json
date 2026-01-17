@@ -8,7 +8,8 @@
 
     "DEFOBJECTS": [
       { "name": "description", "objects": [ { "ROUTE": "/description" } ] },
-      { "name": "all_shell_descriptors", "objects": [ {"DESCRIPTOR": "$aasdesc(\"*\")"}] }
+      { "name": "all_shell_descriptors", "objects": [ {"DESCRIPTOR": "$aasdesc(\"*\")"}] },
+      { "name": "submodel_descriptors", "objects": [ {"ROUTE": "/shell-descriptors/*/submodel-descriptors"}] }
     ],
 
     "DEFACLS": [
@@ -26,7 +27,7 @@
           "$and": 
           [
             { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "viewer" } ] },
-            {"$eq": [ {"$field": "$aasdesc#specificAssetIds[1].externalSubjectId.keys[].value"}, {"$strVal": "WRITTEN_BY_X"}]}
+            {"$eq": [ {"$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value"}, {"$strVal": "WRITTEN_BY_X"}]}
           ]
         }
       },
@@ -36,28 +37,93 @@
           "$and": 
           [
             { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "viewer" } ] },
-            {"$eq": [ {"$field": "$aasdesc#specificAssetIds[1].externalSubjectId.keys[1].value"}, {"$strVal": "WRITTEN_BY_Y"}]}
+            {"$eq": [ {"$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value"}, {"$strVal": "WRITTEN_BY_Y"}]}
           ]
         }
       },
       { 
-        "name": "anonym_PUBLIC_READABLE", 
-        "formula": {"$eq": [ {"$field": "$aasdesc#specificAssetIds[0].externalSubjectId.keys[0].value"}, {"$strVal": "PUBLIC_READABLE"} ]}
+        "name": "role_is_editor_written_x", 
+        "formula": { 
+          "$and": 
+          [
+            { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "editor" } ] },
+            {"$eq": [ {"$field": "$smdesc#semanticId.keys[].value"}, {"$strVal": "WRITTEN_BY_X"}]}
+          ]
+        }
+      },
+      { 
+        "name": "role_is_editor_written_y", 
+        "formula": { 
+          "$and": 
+          [
+            { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "editor" } ] },
+            {"$eq": [ {"$field": "$smdesc#semanticId.keys[].value"}, {"$strVal": "WRITTEN_BY_Y"}]}
+          ]
+        }
       }
        
     ],
 
     "rules": [
       { "USEACL": "read_anonymous", "USEOBJECTS": ["description"], "USEFORMULA": "always_true" },
-      { "USEACL": "read_anonymous", "USEOBJECTS": ["all_shell_descriptors"], "USEFORMULA": "anonym_PUBLIC_READABLE",
-      "FILTERLIST": [
+      { "USEACL": "all_admin", "USEOBJECTS": ["all_shell_descriptors"], "USEFORMULA": "role_is_admin" },
+      { "USEACL": "user", "USEOBJECTS": ["all_shell_descriptors"], "USEFORMULA": "role_is_viewer_written_x",
+        "FILTERLIST": [
           {
-            "FRAGMENT": "$aasdesc#specificAssetIds[0]",
-            "CONDITION": { "$boolean": false}
+            "FRAGMENT": "$aasdesc#specificAssetIds[]",
+            "CONDITION": 
+            {
+              "$eq": [
+                {
+                  "$field": "$aasdesc#specificAssetIds[].name"
+                },
+                {
+                  "$strVal": "customerPartId"
+                }
+              ]
+            }
+          },
+          {
+            "FRAGMENT": "$aasdesc#specificAssetIds[].name",
+            "CONDITION": 
+            {
+              "$eq": [
+                {
+                  "$field": "$aasdesc#specificAssetIds[].name"
+                },
+                {
+                  "$strVal": "customerPartId"
+                }
+              ]
+            }
           }
         ]
       },
-      { "USEACL": "all_admin", "USEOBJECTS": ["all_shell_descriptors"], "USEFORMULA": "role_is_admin" }
+      { "USEACL": "user", "USEOBJECTS": ["all_shell_descriptors"], "USEFORMULA": "role_is_viewer_written_y",
+        "FILTER": {
+          "FRAGMENT": "$aasdesc#specificAssetIds[].name",
+          "CONDITION": 
+           {
+            "$eq": [
+              {
+                "$field": "$aasdesc#specificAssetIds[].name"
+              },
+              {
+                "$strVal": "customerPartId"
+              }
+            ]
+          }
+        }
+      },
+      { "USEACL": "user", "USEOBJECTS": ["submodel_descriptors"], "USEFORMULA": "role_is_editor_written_x",
+        "FILTER": {
+          "FRAGMENT": "$aasdesc#submodelDescriptors[].semanticId",
+          "CONDITION": 
+           {
+            "$boolean": false
+          }
+        }
+      }
     ]
   }
 }

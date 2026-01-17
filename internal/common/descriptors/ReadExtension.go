@@ -85,7 +85,7 @@ func ReadExtensionsByDescriptorID(
 // scanning columns, or converting types.
 func ReadExtensionsByDescriptorIDs(
 	ctx context.Context,
-	db *sql.DB,
+	db DBQueryer,
 	descriptorIDs []int64,
 ) (map[int64][]model.Extension, error) {
 	out := make(map[int64][]model.Extension, len(descriptorIDs))

@@ -33,6 +33,14 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 )
 
+// DBQueryer abstracts *sql.DB and *sql.Tx for read-only operations.
+// It is intentionally small to keep call sites flexible.
+type DBQueryer interface {
+	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
+	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
+	Query(query string, args ...any) (*sql.Rows, error)
+}
+
 // WithTx runs the given function within a database transaction.
 // It commits on success and rolls back on error.
 func WithTx(ctx context.Context, db *sql.DB, fn func(tx *sql.Tx) error) (err error) {

@@ -27,7 +27,6 @@
 package descriptors
 
 import (
-	"database/sql"
 	"fmt"
 
 	"github.com/doug-martin/goqu/v9"
@@ -39,7 +38,7 @@ import (
 // reference IDs and groups them by their reference ID. An empty input returns
 // an empty map.
 func GetLangStringTextTypesByIDs(
-	db *sql.DB,
+	db DBQueryer,
 	textTypeIDs []int64,
 ) (map[int64][]model.LangStringTextType, error) {
 	out := make(map[int64][]model.LangStringTextType, len(textTypeIDs))
@@ -90,7 +89,7 @@ func GetLangStringTextTypesByIDs(
 // reference IDs and groups them by their reference ID. An empty input returns
 // an empty map.
 func GetLangStringNameTypesByIDs(
-	db *sql.DB,
+	db DBQueryer,
 	nameTypeIDs []int64,
 ) (map[int64][]model.LangStringNameType, error) {
 	out := make(map[int64][]model.LangStringNameType, len(nameTypeIDs))

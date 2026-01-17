@@ -54,5 +54,21 @@
     "endpoint": "http://localhost:6004/shell-descriptors",
     "shouldMatch": "expected/expectedShellUserA.json",
     "expectedStatus": 200
+  },
+  {
+    "context": "POST SMDESC - Admin - ALLOWED",
+    "token": { "user": "admin", "password": "pwd" },
+    "method": "POST",
+    "endpoint": "http://localhost:6004/shell-descriptors",
+    "data": "postBody/aasdesc_with_smdesc.json",
+    "expectedStatus": 201
+  },
+  {
+    "context": "GET ALL Descriptor - User X - FILTERED",
+    "token": { "user": "userx", "password": "pwd" },
+    "method": "GET",
+    "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9JQ0hNQUdQSVpaQVNPR0VSTkU/submodel-descriptors",
+    "shouldMatch": "expected/expectedShellUserX.json",
+    "expectedStatus": 200
   }
 ]

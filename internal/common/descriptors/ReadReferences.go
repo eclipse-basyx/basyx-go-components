@@ -59,7 +59,7 @@ import (
 // errors, or if the builder returns an error while attaching keys.
 //
 // Note: the function prints the elapsed time to stdout for basic diagnostics.
-func GetReferencesByIDsBatch(db *sql.DB, ids []int64) (map[int64]*model.Reference, error) {
+func GetReferencesByIDsBatch(db DBQueryer, ids []int64) (map[int64]*model.Reference, error) {
 	if len(ids) == 0 {
 		return map[int64]*model.Reference{}, nil
 	}
@@ -263,7 +263,7 @@ func getQDesc(d goqu.DialectWrapper, ref exp.AliasedExpression, rk exp.AliasedEx
 // via a link table (entityFKCol -> referenceFKCol), hydrating full Reference trees.
 func readEntityReferences1ToMany(
 	ctx context.Context,
-	db *sql.DB,
+	db DBQueryer,
 	entityIDs []int64,
 	relationTable string,
 	entityFKCol string,

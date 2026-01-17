@@ -63,7 +63,7 @@ type row struct {
 // when the FK is valid but the referenced administration block is missing.
 func ReadAdministrativeInformationByID(
 	ctx context.Context,
-	db *sql.DB,
+	db DBQueryer,
 	tableName string,
 	adminInfoID sql.NullInt64,
 ) (*model.AdministrativeInformation, error) {
@@ -93,7 +93,7 @@ func ReadAdministrativeInformationByID(
 // are de‑duplicated before querying.
 func ReadAdministrativeInformationByIDs(
 	ctx context.Context,
-	db *sql.DB,
+	db DBQueryer,
 	tableName string,
 	adminInfoIDs []int64,
 ) (map[int64]*model.AdministrativeInformation, error) {

@@ -8,7 +8,8 @@
 
     "DEFOBJECTS": [
       { "name": "description", "objects": [ { "ROUTE": "/description" } ] },
-      { "name": "all_shell_descriptors", "objects": [ {"DESCRIPTOR": "$aasdesc(\"*\")"}] }
+      { "name": "all_shell_descriptors", "objects": [ {"DESCRIPTOR": "$aasdesc(\"*\")"}] },
+      { "name": "submodel_descriptors", "objects": [ {"ROUTE": "/shell-descriptors/*/submodel-descriptors"}] }
     ],
 
     "DEFACLS": [
@@ -37,6 +38,26 @@
           [
             { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "viewer" } ] },
             {"$eq": [ {"$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value"}, {"$strVal": "WRITTEN_BY_Y"}]}
+          ]
+        }
+      },
+      { 
+        "name": "role_is_editor_written_x", 
+        "formula": { 
+          "$and": 
+          [
+            { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "editor" } ] },
+            {"$eq": [ {"$field": "$smdesc#semanticId.keys[].value"}, {"$strVal": "WRITTEN_BY_X"}]}
+          ]
+        }
+      },
+      { 
+        "name": "role_is_editor_written_y", 
+        "formula": { 
+          "$and": 
+          [
+            { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "editor" } ] },
+            {"$eq": [ {"$field": "$smdesc#semanticId.keys[].value"}, {"$strVal": "WRITTEN_BY_Y"}]}
           ]
         }
       }
@@ -91,6 +112,15 @@
                 "$strVal": "customerPartId"
               }
             ]
+          }
+        }
+      },
+      { "USEACL": "user", "USEOBJECTS": ["submodel_descriptors"], "USEFORMULA": "role_is_editor_written_x",
+        "FILTER": {
+          "FRAGMENT": "$aasdesc#submodelDescriptors[].semanticId",
+          "CONDITION": 
+           {
+            "$boolean": false
           }
         }
       }
