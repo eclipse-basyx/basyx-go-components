@@ -313,7 +313,7 @@ func DeleteSubmodelDescriptorForAASByID(
 		}
 	}()
 
-	_, err = getSubmodelDescriptorForAASByIDSecurity(ctx, db, aasID, submodelID)
+	_, err = GetSubmodelDescriptorForAASByID(ctx, db, aasID, submodelID)
 	if err != nil {
 		return err
 	}
