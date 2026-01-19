@@ -148,7 +148,7 @@ func (p *PostgreSQLAASRegistryDatabase) InsertSubmodelDescriptorForAAS(
 	ctx context.Context,
 	aasID string,
 	submodel model.SubmodelDescriptor,
-) error {
+) (model.SubmodelDescriptor, error) {
 	return descriptors.InsertSubmodelDescriptorForAAS(ctx, p.db, aasID, submodel)
 }
 
@@ -158,7 +158,7 @@ func (p *PostgreSQLAASRegistryDatabase) ReplaceSubmodelDescriptorForAAS(
 	ctx context.Context,
 	aasID string,
 	submodel model.SubmodelDescriptor,
-) (bool, error) {
+) (model.SubmodelDescriptor, error) {
 	return descriptors.ReplaceSubmodelDescriptorForAAS(ctx, p.db, aasID, submodel)
 }
 
