@@ -115,7 +115,7 @@
           }
         }
       },
-      { "USEACL": "user", "USEOBJECTS": ["submodel_descriptors"], "USEFORMULA": "role_is_editor_written_x",
+      { "USEACL": "all_admin", "USEOBJECTS": ["submodel_descriptors"], "USEFORMULA": "role_is_editor_written_x",
         "FILTER": {
           "FRAGMENT": "$aasdesc#submodelDescriptors[].semanticId",
           "CONDITION": 
