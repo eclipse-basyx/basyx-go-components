@@ -9,7 +9,7 @@
  * Contact: info@idtwin.org
  */
 
-package apis
+package aasregistryapi
 
 import (
 	"context"
