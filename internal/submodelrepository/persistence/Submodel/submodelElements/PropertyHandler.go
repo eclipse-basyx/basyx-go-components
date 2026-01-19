@@ -140,95 +140,68 @@ func (p PostgreSQLPropertyHandler) CreateNested(tx *sql.Tx, submodelID string, p
 }
 
 // Update modifies an existing Property submodel element in the database.
+// This method handles both the common submodel element properties and the specific
+// property data including value type, value, and value ID reference.
 //
 // Parameters:
+//   - submodelID: ID of the parent submodel
 //   - idShortOrPath: The idShort or path identifying the element to update
 //   - submodelElement: The updated Property element data
+//   - tx: Active database transaction (can be nil, will create one if needed)
+//   - isPut: true: Replaces the element with the body data; false: Updates only passed data
 //
 // Returns:
 //   - error: An error if the update operation fails
 func (p PostgreSQLPropertyHandler) Update(submodelID string, idShortOrPath string, submodelElement gen.SubmodelElement, tx *sql.Tx, isPut bool) error {
-	var localTX *sql.Tx
-	var err error
-	var cu func(*error)
-	if tx == nil {
-		var startedTx *sql.Tx
-		startedTx, cu, err = common.StartTransaction(p.db)
-		if err != nil {
-			return err
-		}
-		localTX = startedTx
-		defer cu(&err)
-	} else {
-		localTX = tx
-	}
-
 	property, ok := submodelElement.(*gen.Property)
 	if !ok {
 		return common.NewErrBadRequest("submodelElement is not of type Property")
 	}
 
-	// Update base submodel element fields
-	err = p.decorated.Update(submodelID, idShortOrPath, submodelElement, localTX, isPut)
+	var err error
+	cu, localTx, err := persistenceutils.StartTXIfNeeded(tx, err, p.db)
 	if err != nil {
 		return err
+	}
+	defer cu(&err)
+	err = p.decorated.Update(submodelID, idShortOrPath, submodelElement, localTx, isPut)
+	if err != nil {
+		return err
+	}
+
+	// Validate required field
+	if property.ValueType == "" {
+		return common.NewErrBadRequest(fmt.Sprintf("Missing Field 'ValueType' for Property with idShortPath '%s'", idShortOrPath))
 	}
 
 	// Get the element ID
-	var elementID int
-	goquQuery, args, err := goqu.From("submodel_element").
-		Select("id").
-		Where(goqu.Ex{
-			"submodel_id":  submodelID,
-			"idshort_path": idShortOrPath,
-		}).ToSQL()
+	elementID, err := p.decorated.GetDatabaseID(submodelID, idShortOrPath)
 	if err != nil {
 		return err
 	}
 
-	row := localTX.QueryRow(goquQuery, args...)
-	err = row.Scan(&elementID)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return common.NewErrNotFound(fmt.Sprintf("Property element not found for the given idShortOrPath %s", idShortOrPath))
-		}
-		return err
-	}
-
-	// Update Property-specific fields using centralized value type mapper
-	typedValue := persistenceutils.MapValueByType(string(property.ValueType), property.Value)
-
-	valueIDDbID, err := persistenceutils.CreateReference(localTX, property.ValueID, sql.NullInt64{}, sql.NullInt64{})
-	if err != nil {
-		_, _ = fmt.Println(err)
-		return common.NewInternalServerError("Failed to update ValueID - no changes applied - see console for details")
-	}
-
-	_, err = localTX.Exec(`UPDATE property_element 
-		SET value_type = $1, value_text = $2, value_num = $3, value_bool = $4, value_time = $5, value_datetime = $6, value_id = $7 
-		WHERE id = $8`,
-		property.ValueType,
-		typedValue.Text,
-		typedValue.Numeric,
-		typedValue.Boolean,
-		typedValue.Time,
-		typedValue.DateTime,
-		valueIDDbID,
-		elementID,
-	)
+	// Build the update record
+	updateRecord, err := buildUpdatePropertyRecordObject(property, isPut, localTx)
 	if err != nil {
 		return err
 	}
 
-	if tx == nil {
-		err = localTX.Commit()
-		if err != nil {
-			_, _ = fmt.Println(err)
-			return common.NewInternalServerError("Error committing SQL Transaction. See console for details.")
-		}
+	// Update property_element table
+	updateQuery, updateArgs, err := goqu.Dialect("postgres").
+		Update("property_element").
+		Set(updateRecord).
+		Where(goqu.C("id").Eq(elementID)).
+		ToSQL()
+	if err != nil {
+		return err
 	}
 
-	return nil
+	_, err = localTx.Exec(updateQuery, updateArgs...)
+	if err != nil {
+		return err
+	}
+
+	return persistenceutils.CommitTransactionIfNeeded(tx, localTx)
 }
 
 // UpdateValueOnly updates only the value of an existing Property submodel element identified by its idShort or path.
@@ -283,14 +256,22 @@ func (p PostgreSQLPropertyHandler) UpdateValueOnly(submodelID string, idShortOrP
 
 	typedValue := persistenceutils.MapValueByType(valueType, propertyValue.Value)
 
-	_, err = p.db.Exec(`UPDATE property_element SET value_text = $1, value_num = $2, value_bool = $3, value_time = $4, value_datetime = $5 WHERE id = $6`,
-		typedValue.Text,
-		typedValue.Numeric,
-		typedValue.Boolean,
-		typedValue.Time,
-		typedValue.DateTime,
-		elementID,
-	)
+	dialect := goqu.Dialect("postgres")
+	updateQuery, updateArgs, err := dialect.Update("property_element").
+		Set(goqu.Record{
+			"value_text":     typedValue.Text,
+			"value_num":      typedValue.Numeric,
+			"value_bool":     typedValue.Boolean,
+			"value_time":     typedValue.Time,
+			"value_datetime": typedValue.DateTime,
+		}).
+		Where(goqu.C("id").Eq(elementID)).
+		ToSQL()
+	if err != nil {
+		return err
+	}
+
+	_, err = p.db.Exec(updateQuery, updateArgs...)
 	if err != nil {
 		return err
 	}
@@ -341,20 +322,55 @@ func insertProperty(property *gen.Property, tx *sql.Tx, id int) error {
 	}
 
 	// Insert Property-specific data
-	_, err = tx.Exec(`INSERT INTO property_element (id, value_type, value_text, value_num, value_bool, value_time, value_datetime, value_id)
-					 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-		id,
-		property.ValueType,
-		typedValue.Text,
-		typedValue.Numeric,
-		typedValue.Boolean,
-		typedValue.Time,
-		typedValue.DateTime,
-		valueIDDbID,
-	)
+	dialect := goqu.Dialect("postgres")
+	insertQuery, insertArgs, err := dialect.Insert("property_element").
+		Rows(goqu.Record{
+			"id":             id,
+			"value_type":     property.ValueType,
+			"value_text":     typedValue.Text,
+			"value_num":      typedValue.Numeric,
+			"value_bool":     typedValue.Boolean,
+			"value_time":     typedValue.Time,
+			"value_datetime": typedValue.DateTime,
+			"value_id":       valueIDDbID,
+		}).
+		ToSQL()
+	if err != nil {
+		return err
+	}
+	_, err = tx.Exec(insertQuery, insertArgs...)
 	if err != nil {
 		return err
 	}
 
 	return nil
+}
+
+func buildUpdatePropertyRecordObject(property *gen.Property, isPut bool, localTx *sql.Tx) (goqu.Record, error) {
+	updateRecord := goqu.Record{}
+
+	// Required field - always update
+	updateRecord["value_type"] = property.ValueType
+
+	// Map value by type - always update based on isPut or if value is provided
+	if isPut || property.Value != "" {
+		typedValue := persistenceutils.MapValueByType(string(property.ValueType), property.Value)
+		updateRecord["value_text"] = typedValue.Text
+		updateRecord["value_num"] = typedValue.Numeric
+		updateRecord["value_bool"] = typedValue.Boolean
+		updateRecord["value_time"] = typedValue.Time
+		updateRecord["value_datetime"] = typedValue.DateTime
+	}
+
+	// Handle optional ValueID field
+	// For PUT: always update (even if nil, which clears the field)
+	// For PATCH: only update if provided (not nil)
+	if isPut || property.ValueID != nil {
+		valueIDDbID, err := persistenceutils.CreateReference(localTx, property.ValueID, sql.NullInt64{}, sql.NullInt64{})
+		if err != nil {
+			return nil, fmt.Errorf("failed to update ValueID: %w", err)
+		}
+		updateRecord["value_id"] = valueIDDbID
+	}
+	return updateRecord, nil
 }

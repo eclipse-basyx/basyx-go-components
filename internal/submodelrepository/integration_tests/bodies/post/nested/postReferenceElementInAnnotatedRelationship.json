@@ -1,0 +1,13 @@
+{
+    "idShort": "NestedReferenceAnnotation",
+    "modelType": "ReferenceElement",
+    "value": {
+        "type": "ExternalReference",
+        "keys": [
+            {
+                "type": "GlobalReference",
+                "value": "http://example.com/ref"
+            }
+        ]
+    }
+}

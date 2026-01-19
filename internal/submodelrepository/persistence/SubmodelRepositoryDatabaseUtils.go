@@ -100,7 +100,7 @@ func getElementsToProcess(topLevelElement gen.SubmodelElement, parentID int, sta
 			if startPath == "" {
 				idShortPath = submodelElementList.IdShort + "[" + strconv.Itoa(index) + "]"
 			} else {
-				idShortPath = startPath
+				idShortPath = startPath + "[" + strconv.Itoa(index) + "]"
 			}
 			stack = append(stack, ElementToProcess{
 				element:                   nestedElement,

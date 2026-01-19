@@ -1,0 +1,20 @@
+{
+    "modelType": "Entity",
+    "idShort": "DemoEntity",
+    "globalAssetId": "urn:uuid:999e9999-e99b-99d9-a999-999999999999",
+    "entityType": "SelfManagedEntity",
+    "specificAssetIds": [
+        {
+            "name": "UpdatedKey1",
+            "value": "UpdatedValue1"
+        }
+    ],
+    "statements": [
+        {
+            "modelType": "Property",
+            "idShort": "UpdatedStatementProperty",
+            "valueType": "xs:string",
+            "value": "UpdatedStatementValue"
+        }
+    ]
+}

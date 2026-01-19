@@ -464,7 +464,8 @@
                             },
                             "valueType": "xs:int"
                         }
-                    ]
+                    ],
+                    "orderRelevant": false
                 },
                 {
                     "category": "PARAMETER",
@@ -611,6 +612,7 @@
                                                     "idShort": "6",
                                                     "modelType": "SubmodelElementList",
                                                     "typeValueListElement": "Property",
+                                                    "orderRelevant": false,
                                                     "value": [
                                                         {
                                                             "idShort": "2",

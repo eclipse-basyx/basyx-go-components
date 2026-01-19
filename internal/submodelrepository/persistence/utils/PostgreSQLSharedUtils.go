@@ -1315,3 +1315,38 @@ func DeleteQualifier(tx *sql.Tx, qualifierID int) error {
 
 	return nil
 }
+
+// IsTransactionAlreadyInProgress checks if a database transaction is already in progress.
+func IsTransactionAlreadyInProgress(tx *sql.Tx) bool {
+	return tx != nil
+}
+
+// AnyFieldsToUpdate checks if there are any fields to update in a goqu.Record
+func AnyFieldsToUpdate(updateRecord goqu.Record) bool {
+	return len(updateRecord) > 0
+}
+
+// StartTXIfNeeded starts a new database transaction if one is not already in progress.
+func StartTXIfNeeded(tx *sql.Tx, err error, db *sql.DB) (func(*error), *sql.Tx, error) {
+	var cu func(*error)
+	localTx := tx
+	if !IsTransactionAlreadyInProgress(tx) {
+		var startedTx *sql.Tx
+
+		startedTx, cu, err = common.StartTransaction(db)
+
+		localTx = startedTx
+	}
+	return cu, localTx, err
+}
+
+// CommitTransactionIfNeeded commits the database transaction if it was started locally.
+func CommitTransactionIfNeeded(tx *sql.Tx, localTx *sql.Tx) error {
+	if !IsTransactionAlreadyInProgress(tx) {
+		err := localTx.Commit()
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}

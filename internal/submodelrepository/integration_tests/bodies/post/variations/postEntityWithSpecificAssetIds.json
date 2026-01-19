@@ -1,0 +1,25 @@
+{
+    "idShort": "EntityWithAssetIds",
+    "modelType": "Entity",
+    "entityType": "SelfManagedEntity",
+    "globalAssetId": "http://example.com/asset/123",
+    "specificAssetIds": [
+        {
+            "name": "SerialNumber",
+            "value": "SN-12345",
+            "externalSubjectId": {
+                "type": "ExternalReference",
+                "keys": [
+                    {
+                        "type": "GlobalReference",
+                        "value": "http://example.com/subject"
+                    }
+                ]
+            }
+        },
+        {
+            "name": "BatchNumber",
+            "value": "BATCH-789"
+        }
+    ]
+}

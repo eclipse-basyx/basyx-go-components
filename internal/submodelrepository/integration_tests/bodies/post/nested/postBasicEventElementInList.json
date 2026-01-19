@@ -1,0 +1,15 @@
+{
+    "idShort": "NestedEventList",
+    "modelType": "BasicEventElement",
+    "observed": {
+        "type": "ModelReference",
+        "keys": [
+            {
+                "type": "Submodel",
+                "value": "http://example.com/sm"
+            }
+        ]
+    },
+    "direction": "input",
+    "state": "off"
+}

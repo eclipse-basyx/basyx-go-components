@@ -169,12 +169,12 @@ func (m *AccessModel) AuthorizeWithFilter(in EvalInput) (bool, DecisionCode, *Qu
 			return false, DecisionNoMatch, nil
 		}
 
-		adapted, onlyBool := adaptLEForBackend(*combinedLE, in.Claims)
-		if onlyBool {
-			// Fully decidable here; evaluate and continue on false
-			if !evalLE(adapted, in.Claims) {
-				continue
-			}
+		resolver := func(attr grammar.AttributeValue) any {
+			return resolveAttributeValue(attr, in.Claims)
+		}
+		adapted, decision := combinedLE.SimplifyForBackendFilter(resolver)
+		if decision == grammar.SimplifyFalse {
+			continue
 		}
 		fragments := make(map[grammar.FragmentStringPattern]grammar.LogicalExpression)
 		for _, filter := range r.filterList {
@@ -197,7 +197,6 @@ func (m *AccessModel) AuthorizeWithFilter(in EvalInput) (bool, DecisionCode, *Qu
 		// Deduplicate And expressions in fragments
 		for fragment, expr := range fragments {
 			if len(expr.And) > 0 {
-				expr.And = deduplicateLogicalExpressions(expr.And)
 				fragments[fragment] = expr
 			}
 		}
@@ -228,28 +227,31 @@ func (m *AccessModel) AuthorizeWithFilter(in EvalInput) (bool, DecisionCode, *Qu
 		}
 	}
 
-	// Deduplicate Or expressions in combined and fragments
-	combined.Or = deduplicateLogicalExpressions(combined.Or)
 	for fragment, expr := range combinedFragments {
 		if len(expr.Or) > 0 {
-			expr.Or = deduplicateLogicalExpressions(expr.Or)
 			combinedFragments[fragment] = expr
 		}
 	}
 
 	for fragment, le := range combinedFragments {
-		simpleFilter, _ := adaptLEForBackend(le, in.Claims)
+		resolver := func(attr grammar.AttributeValue) any {
+			return resolveAttributeValue(attr, in.Claims)
+		}
+		simpleFilter, _ := le.SimplifyForBackendFilter(resolver)
 		combinedFragments[fragment] = simpleFilter
 
 	}
 
-	simplified, onlyBool := adaptLEForBackend(combined, in.Claims)
+	resolver := func(attr grammar.AttributeValue) any {
+		return resolveAttributeValue(attr, in.Claims)
+	}
+	simplified, decision := combined.SimplifyForBackendFilter(resolver)
 
 	hasFormula := true
-	if onlyBool {
-		if !evalLE(simplified, in.Claims) {
-			return false, DecisionNoMatch, nil
-		}
+	switch decision {
+	case grammar.SimplifyFalse:
+		return false, DecisionNoMatch, nil
+	case grammar.SimplifyTrue:
 		hasFormula = false
 	}
 

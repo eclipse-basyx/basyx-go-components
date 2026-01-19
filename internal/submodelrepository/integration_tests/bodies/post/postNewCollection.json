@@ -1,0 +1,33 @@
+{
+    "category": "PARAMETER",
+    "description": [
+        {
+            "language": "en-us",
+            "text": "New Test Collection"
+        },
+        {
+            "language": "de",
+            "text": "Neue Test Sammlung"
+        }
+    ],
+    "idShort": "NewTestCollection",
+    "modelType": "SubmodelElementCollection",
+    "semanticId": {
+        "keys": [
+            {
+                "type": "GlobalReference",
+                "value": "http://acplt.org/SubmodelElementCollections/NewTestCollection"
+            }
+        ],
+        "type": "ExternalReference"
+    },
+    "value": [
+        {
+            "category": "CONSTANT",
+            "idShort": "CollectionProperty",
+            "modelType": "Property",
+            "value": "collectionValue",
+            "valueType": "xs:string"
+        }
+    ]
+}
