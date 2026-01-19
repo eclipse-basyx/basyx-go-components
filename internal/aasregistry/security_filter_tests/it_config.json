@@ -94,11 +94,11 @@
     "expectedStatus": 404
   },
   {
-    "context": "GET Descriptor X - ADMIN - ALLOWED",
+    "context": "GET ALL - ADMIN - ALLOWED",
     "token": { "user": "admin", "password": "pwd" },
     "method": "GET",
-    "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9B",
-    "shouldMatch": "expected/expectedShellAdminX.json",
+    "endpoint": "http://localhost:6004/shell-descriptors",
+    "shouldMatch": "postBody/allShellsAdmin.json",
     "expectedStatus": 200
   },
   {
@@ -185,7 +185,7 @@
     "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9JQ0hNQUdQSVpaQVNPR0VSTkU/submodel-descriptors",
     "data": "postBody/singlesm.json",
     "shouldMatch": "expected/singlesm.json",
-    "expectedStatus": 209
+    "expectedStatus": 409
   },
   {
     "context": "GET 1 Descriptor - User X - FILTERED",

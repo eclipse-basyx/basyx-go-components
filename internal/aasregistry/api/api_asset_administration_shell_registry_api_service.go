@@ -331,22 +331,6 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) PostSubmodelDescriptorTh
 		return *resp, err
 	}
 
-	// Conflict check: lightweight existence for submodel under this AAS
-	if strings.TrimSpace(submodelDescriptor.Id) != "" {
-		if exists, chkErr := s.aasRegistryBackend.ExistsSubmodelForAAS(ctx, decodedAAS, submodelDescriptor.Id); chkErr != nil {
-			log.Printf("🧩 [%s] Error in PostSubmodelDescriptorThroughSuperpath: existence check failed (aasId=%q submodelId=%q): %v", componentName, decodedAAS, submodelDescriptor.Id, chkErr)
-			return common.NewErrorResponse(
-				chkErr, http.StatusInternalServerError, componentName, "PostSubmodelDescriptorThroughSuperpath", "Unhandled-Precheck",
-			), chkErr
-		} else if exists {
-			e := common.NewErrConflict("Submodel with given id already exists for this AAS")
-			log.Printf("🧩 [%s] Error in PostSubmodelDescriptorThroughSuperpath: conflict (aasId=%q submodelId=%q): %v", componentName, decodedAAS, submodelDescriptor.Id, e)
-			return common.NewErrorResponse(
-				e, http.StatusConflict, componentName, "PostSubmodelDescriptorThroughSuperpath", "Conflict-Exists",
-			), nil
-		}
-	}
-
 	result, err := s.aasRegistryBackend.InsertSubmodelDescriptorForAAS(ctx, decodedAAS, submodelDescriptor)
 	// Persist submodel descriptor under the AAS
 	if err != nil {
