@@ -128,6 +128,23 @@ func (le LogicalExpression) SimplifyForBackendFilter(resolve AttributeResolver) 
 		return *rle, rdec
 	}
 
+	if len(le.Match) > 0 {
+		simplified, decision := simplifyMatchExpressionsForBackendFilter(le.Match, resolve)
+		switch decision {
+		case SimplifyTrue:
+			b := true
+			return LogicalExpression{Boolean: &b}, SimplifyTrue
+		case SimplifyFalse:
+			b := false
+			return LogicalExpression{Boolean: &b}, SimplifyFalse
+		default:
+			if len(simplified) == 1 {
+				return LogicalExpression{Match: simplified}, SimplifyUndecided
+			}
+			return LogicalExpression{Match: simplified}, SimplifyUndecided
+		}
+	}
+
 	// Logical: AND / OR
 	if len(le.And) > 0 {
 		if len(le.And) == 1 {
@@ -215,6 +232,93 @@ func (le LogicalExpression) SimplifyForBackendFilter(resolve AttributeResolver) 
 	return le, SimplifyUndecided
 }
 
+func simplifyMatchExpressionsForBackendFilter(match []MatchExpression, resolve AttributeResolver) ([]MatchExpression, SimplifyDecision) {
+	if len(match) == 0 {
+		return nil, SimplifyUndecided
+	}
+
+	out := make([]MatchExpression, 0, len(match))
+	anyUnknown := false
+	for _, m := range match {
+		t, decision := simplifyMatchExpressionForBackendFilter(m, resolve)
+		switch decision {
+		case SimplifyFalse:
+			return nil, SimplifyFalse
+		case SimplifyTrue:
+			continue
+		case SimplifyUndecided:
+		}
+		out = append(out, t)
+		anyUnknown = true
+	}
+	if !anyUnknown {
+		return nil, SimplifyTrue
+	}
+	return out, SimplifyUndecided
+}
+
+func simplifyMatchExpressionForBackendFilter(me MatchExpression, resolve AttributeResolver) (MatchExpression, SimplifyDecision) {
+	if me.Boolean != nil {
+		return me, decisionFromBool(*me.Boolean)
+	}
+
+	switch {
+	case len(me.Eq) == 2:
+		out, decision := reduceMatchCmp(me, resolve, me.Eq, "$eq")
+		return derefMatch(out, decision)
+	case len(me.Ne) == 2:
+		out, decision := reduceMatchCmp(me, resolve, me.Ne, "$ne")
+		return derefMatch(out, decision)
+	case len(me.Gt) == 2:
+		out, decision := reduceMatchCmp(me, resolve, me.Gt, "$gt")
+		return derefMatch(out, decision)
+	case len(me.Ge) == 2:
+		out, decision := reduceMatchCmp(me, resolve, me.Ge, "$ge")
+		return derefMatch(out, decision)
+	case len(me.Lt) == 2:
+		out, decision := reduceMatchCmp(me, resolve, me.Lt, "$lt")
+		return derefMatch(out, decision)
+	case len(me.Le) == 2:
+		out, decision := reduceMatchCmp(me, resolve, me.Le, "$le")
+		return derefMatch(out, decision)
+	case len(me.Regex) == 2:
+		out, decision := reduceMatchCmp(me, resolve, stringItemsToValues(me.Regex), "$regex")
+		return derefMatch(out, decision)
+	case len(me.Contains) == 2:
+		out, decision := reduceMatchCmp(me, resolve, stringItemsToValues(me.Contains), "$contains")
+		return derefMatch(out, decision)
+	case len(me.StartsWith) == 2:
+		out, decision := reduceMatchCmp(me, resolve, stringItemsToValues(me.StartsWith), "$starts-with")
+		return derefMatch(out, decision)
+	case len(me.EndsWith) == 2:
+		out, decision := reduceMatchCmp(me, resolve, stringItemsToValues(me.EndsWith), "$ends-with")
+		return derefMatch(out, decision)
+	}
+
+	if len(me.Match) > 0 {
+		simplified, decision := simplifyMatchExpressionsForBackendFilter(me.Match, resolve)
+		switch decision {
+		case SimplifyTrue:
+			b := true
+			return MatchExpression{Boolean: &b}, SimplifyTrue
+		case SimplifyFalse:
+			b := false
+			return MatchExpression{Boolean: &b}, SimplifyFalse
+		default:
+			return MatchExpression{Match: simplified}, SimplifyUndecided
+		}
+	}
+
+	return me, SimplifyUndecided
+}
+
+func derefMatch(me *MatchExpression, decision SimplifyDecision) (MatchExpression, SimplifyDecision) {
+	if me == nil {
+		return MatchExpression{}, decision
+	}
+	return *me, decision
+}
+
 func handleComparison(le LogicalExpression, resolve AttributeResolver) (*LogicalExpression, SimplifyDecision) {
 	switch {
 	case len(le.Eq) == 2:
@@ -239,6 +343,71 @@ func handleComparison(le LogicalExpression, resolve AttributeResolver) (*Logical
 		return reduceCmp(le, resolve, stringItemsToValues(le.EndsWith), "$ends-with")
 	}
 	return nil, SimplifyUndecided
+}
+
+func reduceMatchCmp(me MatchExpression, resolve AttributeResolver, items []Value, op string) (*MatchExpression, SimplifyDecision) {
+	if len(items) != 2 {
+		return &me, SimplifyUndecided
+	}
+
+	left := replaceAttribute(items[0], resolve)
+	right := replaceAttribute(items[1], resolve)
+	isStringOp := op == "$regex" || op == "$contains" || op == "$starts-with" || op == "$ends-with"
+	var comparisonType ComparisonKind
+	if isStringOp {
+		comparisonType = KindString
+	} else {
+		var err error
+		comparisonType, err = left.IsComparableTo(right)
+		if err != nil {
+			return &me, SimplifyUndecided
+		}
+	}
+
+	left = WrapCastAroundField(left, comparisonType)
+	right = WrapCastAroundField(right, comparisonType)
+
+	out := MatchExpression{}
+	leOut := LogicalExpression{}
+	switch op {
+	case "$eq":
+		out.Eq = []Value{left, right}
+		leOut.Eq = []Value{left, right}
+	case "$ne":
+		out.Ne = []Value{left, right}
+		leOut.Ne = []Value{left, right}
+	case "$gt":
+		out.Gt = []Value{left, right}
+		leOut.Gt = []Value{left, right}
+	case "$ge":
+		out.Ge = []Value{left, right}
+		leOut.Ge = []Value{left, right}
+	case "$lt":
+		out.Lt = []Value{left, right}
+		leOut.Lt = []Value{left, right}
+	case "$le":
+		out.Le = []Value{left, right}
+		leOut.Le = []Value{left, right}
+	case "$regex":
+		out.Regex = []StringValue{valueToStringValue(left), valueToStringValue(right)}
+		leOut.Regex = out.Regex
+	case "$contains":
+		out.Contains = []StringValue{valueToStringValue(left), valueToStringValue(right)}
+		leOut.Contains = out.Contains
+	case "$starts-with":
+		out.StartsWith = []StringValue{valueToStringValue(left), valueToStringValue(right)}
+		leOut.StartsWith = out.StartsWith
+	case "$ends-with":
+		out.EndsWith = []StringValue{valueToStringValue(left), valueToStringValue(right)}
+		leOut.EndsWith = out.EndsWith
+	}
+
+	if isLiteral(left) && isLiteral(right) {
+		b := evalComparisonOnly(leOut, resolve)
+		return &MatchExpression{Boolean: &b}, decisionFromBool(b)
+	}
+
+	return &out, SimplifyUndecided
 }
 
 func reduceCmp(le LogicalExpression, resolve AttributeResolver, items []Value, op string) (*LogicalExpression, SimplifyDecision) {
@@ -354,13 +523,13 @@ func replaceAttribute(v Value, resolve AttributeResolver) Value {
 
 	if valueContainsAttribute(v) {
 		resolved := resolveValue(v, resolve)
-		if lit, ok := literalValueFromAny(resolved); ok {
+		if lit, ok := literalValueFromAnyWithHint(resolved, v.EffectiveTypeWithCast()); ok {
 			return lit
 		}
 	}
 
 	if !valueContainsAttribute(v) && !valueContainsField(v) {
-		if lit, ok := literalValueFromAny(resolveValue(v, resolve)); ok {
+		if lit, ok := literalValueFromAnyWithHint(resolveValue(v, resolve), v.EffectiveTypeWithCast()); ok {
 			return lit
 		}
 	}
@@ -432,31 +601,68 @@ func literalValueFromAny(x any) (Value, bool) {
 	case TimeLiteralPattern:
 		tv := t
 		return Value{TimeVal: &tv}, true
+	case HexLiteralPattern:
+		hv := t
+		return Value{HexVal: &hv}, true
+	case *HexLiteralPattern:
+		if t == nil {
+			return Value{}, false
+		}
+		hv := *t
+		return Value{HexVal: &hv}, true
 	case time.Time:
 		dt := DateTimeLiteralPattern(t)
 		return Value{DateTimeVal: &dt}, true
 	case string:
-		if hv, ok := normalizeHexString(t); ok {
-			hex := HexLiteralPattern(hv)
-			return Value{HexVal: &hex}, true
-		}
-		if parsed, err := time.Parse(time.RFC3339, t); err == nil {
-			dt := DateTimeLiteralPattern(parsed)
-			return Value{DateTimeVal: &dt}, true
-		}
-		if _, ok := toTimeOfDaySeconds(t); ok {
-			tv := TimeLiteralPattern(t)
-			return Value{TimeVal: &tv}, true
-		}
-		if f, err := strconv.ParseFloat(t, 64); err == nil {
-			return Value{NumVal: &f}, true
-		}
 		s := StandardString(t)
 		return Value{StrVal: &s}, true
 	default:
 		s := StandardString(fmt.Sprint(x))
 		return Value{StrVal: &s}, true
 	}
+}
+
+func literalValueFromAnyWithHint(x any, hint ComparisonKind) (Value, bool) {
+	switch hint {
+	case KindDateTime:
+		if dt, ok := toDateTime(x); ok {
+			pat := DateTimeLiteralPattern(dt)
+			return Value{DateTimeVal: &pat}, true
+		}
+	case KindTime:
+		s := strings.TrimSpace(fmt.Sprint(x))
+		if s != "" {
+			if _, ok := toTimeOfDaySeconds(s); ok {
+				pat := TimeLiteralPattern(s)
+				return Value{TimeVal: &pat}, true
+			}
+		}
+	case KindHex:
+		if hv, ok := normalizeHexAny(x); ok {
+			pat := HexLiteralPattern(hv)
+			return Value{HexVal: &pat}, true
+		}
+	case KindNumber:
+		if f, ok := toFloat(x); ok {
+			return Value{NumVal: &f}, true
+		}
+	case KindBool:
+		switch v := x.(type) {
+		case bool:
+			b := v
+			return Value{Boolean: &b}, true
+		case string:
+			switch strings.ToLower(strings.TrimSpace(v)) {
+			case "true", "1", "yes", "y", "on":
+				b := true
+				return Value{Boolean: &b}, true
+			case "false", "0", "no", "n", "off":
+				b := false
+				return Value{Boolean: &b}, true
+			}
+		}
+	}
+	return literalValueFromAny(x)
 }
 
 func stringItemsToValues(items []StringValue) []Value {
@@ -544,17 +750,23 @@ func resolveCastValue(v Value, resolve AttributeResolver) any {
 	case v.TimeCast != nil:
 		inner := resolveValue(*v.TimeCast, resolve)
 		if t, ok := toDateTime(inner); ok {
-			return t.Format("15:04:05")
+			return TimeLiteralPattern(t.Format("15:04:05"))
 		}
-		if _, ok := toTimeOfDaySeconds(inner); ok {
-			return fmt.Sprint(inner)
+		if s := fmt.Sprint(inner); s != "" {
+			if _, ok := toTimeOfDaySeconds(s); ok {
+				return TimeLiteralPattern(s)
+			}
 		}
 		return fmt.Sprint(inner)
 	case v.DateTimeCast != nil:
-		return fmt.Sprint(resolveValue(*v.DateTimeCast, resolve))
+		inner := resolveValue(*v.DateTimeCast, resolve)
+		if t, ok := toDateTime(inner); ok {
+			return t
+		}
+		return fmt.Sprint(inner)
 	case v.HexCast != nil:
 		if hv, ok := normalizeHexAny(resolveValue(*v.HexCast, resolve)); ok {
-			return hv
+			return HexLiteralPattern(hv)
 		}
 		return fmt.Sprint(resolveValue(*v.HexCast, resolve))
 	default:
