@@ -271,6 +271,7 @@ type ResolvedFieldPathFlag struct {
 	Alias     string
 	Resolved  []ResolvedFieldPath
 	Predicate exp.Expression
+	UseAnd    bool
 }
 
 // ResolvedFieldPathCollector collects resolved field path predicates and assigns
@@ -313,10 +314,16 @@ func (c *ResolvedFieldPathCollector) Entries() []ResolvedFieldPathFlag {
 
 // Register adds a new resolved predicate or returns the existing alias if it was already registered.
 func (c *ResolvedFieldPathCollector) Register(resolved []ResolvedFieldPath, predicate exp.Expression) (string, error) {
+	return c.RegisterWithAgg(resolved, predicate, false)
+}
+
+// RegisterWithAgg adds a new resolved predicate or returns the existing alias if it was already registered.
+// When useAnd is true, the generated CTE uses BOOL_AND instead of BOOL_OR.
+func (c *ResolvedFieldPathCollector) RegisterWithAgg(resolved []ResolvedFieldPath, predicate exp.Expression, useAnd bool) (string, error) {
 	if c == nil {
 		return "", fmt.Errorf("resolved field path collector is nil")
 	}
-	key, err := c.signature(resolved, predicate)
+	key, err := c.signatureWithAgg(resolved, predicate, useAnd)
 	if err != nil {
 		return "", err
 	}
@@ -331,6 +338,7 @@ func (c *ResolvedFieldPathCollector) Register(resolved []ResolvedFieldPath, pred
 		Alias:     alias,
 		Resolved:  resolved,
 		Predicate: predicate,
+		UseAnd:    useAnd,
 	})
 	groupAlias, err := c.groupAliasForResolved(resolved)
 	if err != nil {
@@ -341,6 +349,10 @@ func (c *ResolvedFieldPathCollector) Register(resolved []ResolvedFieldPath, pred
 }
 
 func (c *ResolvedFieldPathCollector) signature(resolved []ResolvedFieldPath, predicate exp.Expression) (string, error) {
+	return c.signatureWithAgg(resolved, predicate, false)
+}
+
+func (c *ResolvedFieldPathCollector) signatureWithAgg(resolved []ResolvedFieldPath, predicate exp.Expression, useAnd bool) (string, error) {
 	resolvedJSON, err := json.Marshal(resolved)
 	if err != nil {
 		return "", err
@@ -349,7 +361,7 @@ func (c *ResolvedFieldPathCollector) signature(resolved []ResolvedFieldPath, pre
 	if err != nil {
 		return "", err
 	}
-	return string(resolvedJSON) + "|" + predicateJSON, nil
+	return fmt.Sprintf("%t|%s|%s", useAnd, string(resolvedJSON), predicateJSON), nil
 }
 
 func predicateSignature(expr exp.Expression) (string, error) {
@@ -598,7 +610,11 @@ func buildFlagCTEDataset(plan existsJoinPlan, entries []ResolvedFieldPathFlag, w
 	selects := []interface{}{descriptorExpr.As("root_id")}
 	for _, entry := range entries {
 		flagExpr := andBindingsForResolvedFieldPaths(entry.Resolved, entry.Predicate)
-		selects = append(selects, goqu.L("COALESCE(BOOL_OR(?), false)", flagExpr).As(entry.Alias))
+		agg := "BOOL_OR"
+		if entry.UseAnd {
+			agg = "BOOL_AND"
+		}
+		selects = append(selects, goqu.L("COALESCE("+agg+"(?), false)", flagExpr).As(entry.Alias))
 	}
 
 	ds = ds.Select(selects...).GroupBy(descriptorExpr)
@@ -1338,7 +1354,7 @@ func (le *LogicalExpression) EvaluateToExpression(collector *ResolvedFieldPathCo
 			return nil, nil, err
 		}
 		if collector != nil && resolvedNeedsCTE(resolved) {
-			alias, err := collector.Register(resolved, expr)
+			alias, err := collector.RegisterWithAgg(resolved, expr, true)
 			if err != nil {
 				return nil, nil, err
 			}
