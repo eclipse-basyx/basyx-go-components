@@ -1665,3 +1665,27 @@ func normalizeTime(t time.Time) time.Time {
 	}
 	return t.UTC()
 }
+
+func field(value string) Value {
+	p := ModelStringPattern(value)
+	return Value{Field: &p}
+}
+
+func strField(value string) StringValue {
+	p := ModelStringPattern(value)
+	return StringValue{Field: &p}
+}
+
+func strVal(value string) Value {
+	s := StandardString(value)
+	return Value{StrVal: &s}
+}
+
+func strString(value string) StringValue {
+	s := StandardString(value)
+	return StringValue{StrVal: &s}
+}
+
+func boolPtr(b bool) *bool {
+	return &b
+}
