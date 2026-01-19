@@ -99,6 +99,7 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) PostAssetAdministrationS
 				chkErr, http.StatusInternalServerError, componentName, "PostAssetAdministrationShellDescriptor", "Unhandled-Precheck",
 			), chkErr
 		} else if exists {
+			// TODO: should return 403 if no access on existing shell. Currently user gets 409 even if he has no access rights.
 			e := common.NewErrConflict("AAS with given id already exists")
 			log.Printf("🧩 [%s] Error in PostAssetAdministrationShellDescriptor: conflict (aasId=%q): %v", componentName, assetAdministrationShellDescriptor.Id, e)
 			return common.NewErrorResponse(
@@ -339,8 +340,7 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) PostSubmodelDescriptorTh
 				chkErr, http.StatusInternalServerError, componentName, "PostSubmodelDescriptorThroughSuperpath", "Unhandled-Precheck",
 			), chkErr
 		} else if exists {
-
-			// TODO: should return 403 if no access on existing submodel. currenlty user gets 409 even if he has no access rights.
+			// TODO: should return 403 if no access on existing submodel. Currently user gets 409 even if he has no access rights.
 			e := common.NewErrConflict("Submodel with given id already exists for this AAS")
 			log.Printf("🧩 [%s] Error in PostSubmodelDescriptorThroughSuperpath: conflict (aasId=%q submodelId=%q): %v", componentName, decodedAAS, submodelDescriptor.Id, e)
 			return common.NewErrorResponse(
