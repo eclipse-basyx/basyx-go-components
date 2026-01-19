@@ -339,6 +339,8 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) PostSubmodelDescriptorTh
 				chkErr, http.StatusInternalServerError, componentName, "PostSubmodelDescriptorThroughSuperpath", "Unhandled-Precheck",
 			), chkErr
 		} else if exists {
+
+			// TODO: should return 403 if no access on existing submodel. currenlty user gets 409 even if he has no access rights.
 			e := common.NewErrConflict("Submodel with given id already exists for this AAS")
 			log.Printf("🧩 [%s] Error in PostSubmodelDescriptorThroughSuperpath: conflict (aasId=%q submodelId=%q): %v", componentName, decodedAAS, submodelDescriptor.Id, e)
 			return common.NewErrorResponse(

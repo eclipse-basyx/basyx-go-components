@@ -116,15 +116,6 @@
     "expectedStatus": 404
   },
 
-  
-  {
-    "context": "POST Descriptor - User X - denied",
-    "token": { "user": "userx", "password": "pwd" },
-    "method": "POST",
-    "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9JQ0hNQUdQSVpaQVNPR0VSTkU/submodel-descriptors",
-    "data": "postBody/singlesmDenied.json",
-    "expectedStatus": 403
-  },
   {
     "context": "POST Descriptor - User X - ALLOWED",
     "token": { "user": "userx", "password": "pwd" },
@@ -170,14 +161,7 @@
   },
 
   
-  {
-    "context": "POST Descriptor - User X - denied",
-    "token": { "user": "userx", "password": "pwd" },
-    "method": "POST",
-    "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9JQ0hNQUdQSVpaQVNPR0VSTkU/submodel-descriptors",
-    "data": "postBody/singlesmDenied.json",
-    "expectedStatus": 403
-  },
+
   {
     "context": "POST Descriptor - User X - ALLOWED",
     "token": { "user": "userx", "password": "pwd" },
@@ -203,7 +187,14 @@
     "expectedStatus": 204
   },
 
-  
+  {
+    "context": "POST Descriptor - User X - denied",
+    "token": { "user": "userx", "password": "pwd" },
+    "method": "POST",
+    "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9JQ0hNQUdQSVpaQVNPR0VSTkU/submodel-descriptors",
+    "data": "postBody/singlesmDenied.json",
+    "expectedStatus": 403
+  },
 
   {
     "context": "PUT Descriptor - User X - denied",
