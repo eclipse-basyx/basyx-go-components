@@ -215,7 +215,7 @@
   
   {
     "context": "DELETE Descriptor - ADMIN - ALLOWED",
-    "token": { "user": "admin", "password": "adminpwd" },
+    "token": { "user": "admin", "password": "pwd" },
     "method": "DELETE",
     "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9JQ0hNQUdQSVpaQVNPR0VSTkU/submodel-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9YL1NNLUE",
     "expectedStatus": 204
