@@ -242,7 +242,7 @@ CREATE TABLE IF NOT EXISTS submodel (
   embedded_data_specification JSONB DEFAULT '[]',
   supplemental_semantic_ids JSONB DEFAULT '[]',
   extensions JSONB DEFAULT '[]',
-  administration_id BIGINT REFERENCES administrative_information(id) ON DELETE CASCADE,
+  administrative_information_id BIGINT REFERENCES administrative_information(id) ON DELETE CASCADE,
   semantic_id BIGINT REFERENCES reference(id) ON DELETE CASCADE,
   description_id BIGINT REFERENCES lang_string_text_type_reference(id) ON DELETE CASCADE,
   displayname_id  BIGINT REFERENCES lang_string_name_type_reference(id) ON DELETE CASCADE,

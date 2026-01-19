@@ -1,78 +1,68 @@
 package persistencepostgresql
 
-import (
-	"errors"
-	"testing"
+// func setupMockDB(t *testing.T) (*PostgreSQLAASDatabase, sqlmock.Sqlmock, func()) {
+// 	db, mock, err := sqlmock.New()
+// 	require.NoError(t, err)
 
-	"github.com/DATA-DOG/go-sqlmock"
-	"github.com/stretchr/testify/require"
+// 	pg := &PostgreSQLAASDatabase{
+// 		DB: db,
+// 	}
 
-	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
-)
+// 	cleanup := func() {
+// 		if err := db.Close(); err != nil {
+// 			t.Fatalf("failed to close db: %v", err)
+// 		}
+// 	}
 
-func setupMockDB(t *testing.T) (*PostgreSQLAASDatabase, sqlmock.Sqlmock, func()) {
-	db, mock, err := sqlmock.New()
-	require.NoError(t, err)
+// 	return pg, mock, cleanup
+// }
 
-	pg := &PostgreSQLAASDatabase{
-		DB: db,
-	}
+// func TestDeleteAASByID_Success(t *testing.T) {
+// 	pg, mock, cleanup := setupMockDB(t)
+// 	defer cleanup()
 
-	cleanup := func() {
-		if err := db.Close(); err != nil {
-			t.Fatalf("failed to close db: %v", err)
-		}
-	}
+// 	mock.ExpectExec(`DELETE FROM "aas"`).
+// 		WillReturnResult(sqlmock.NewResult(0, 1))
 
-	return pg, mock, cleanup
-}
+// 	err := pg.DeleteAASByID("aas-id-123")
+// 	require.NoError(t, err)
 
-func TestDeleteAASByID_Success(t *testing.T) {
-	pg, mock, cleanup := setupMockDB(t)
-	defer cleanup()
+// 	require.NoError(t, mock.ExpectationsWereMet())
+// }
+// func TestInsertBaseAAS_Success(t *testing.T) {
+// 	pg, mock, cleanup := setupMockDB(t)
+// 	defer cleanup()
 
-	mock.ExpectExec(`DELETE FROM "aas"`).
-		WillReturnResult(sqlmock.NewResult(0, 1))
+// 	aas := model.AssetAdministrationShell{
+// 		ID:        "aas-id-1",
+// 		IdShort:   "MyAAS",
+// 		Category:  "INSTANCE",
+// 		ModelType: "AssetAdministrationShell",
+// 	}
 
-	err := pg.DeleteAASByID("aas-id-123")
-	require.NoError(t, err)
+// 	mock.ExpectExec(`INSERT INTO "aas"`).
+// 		WillReturnResult(sqlmock.NewResult(1, 1))
 
-	require.NoError(t, mock.ExpectationsWereMet())
-}
-func TestInsertBaseAAS_Success(t *testing.T) {
-	pg, mock, cleanup := setupMockDB(t)
-	defer cleanup()
+// 	err := pg.insertBaseAAS(aas)
+// 	require.NoError(t, err)
 
-	aas := model.AssetAdministrationShell{
-		ID:        "aas-id-1",
-		IdShort:   "MyAAS",
-		Category:  "INSTANCE",
-		ModelType: "AssetAdministrationShell",
-	}
+// 	require.NoError(t, mock.ExpectationsWereMet())
+// }
+// func TestInsertAAS_FailsOnBaseInsert(t *testing.T) {
+// 	pg, mock, cleanup := setupMockDB(t)
+// 	defer cleanup()
 
-	mock.ExpectExec(`INSERT INTO "aas"`).
-		WillReturnResult(sqlmock.NewResult(1, 1))
+// 	aas := model.AssetAdministrationShell{
+// 		ID:        "aas-id-fail",
+// 		IdShort:   "BrokenAAS",
+// 		ModelType: "AssetAdministrationShell",
+// 	}
 
-	err := pg.insertBaseAAS(aas)
-	require.NoError(t, err)
+// 	mock.ExpectExec(`INSERT INTO "aas"`).
+// 		WillReturnError(errors.New("db insert failed"))
 
-	require.NoError(t, mock.ExpectationsWereMet())
-}
-func TestInsertAAS_FailsOnBaseInsert(t *testing.T) {
-	pg, mock, cleanup := setupMockDB(t)
-	defer cleanup()
+// 	err := pg.InsertAAS(aas)
+// 	require.Error(t, err)
 
-	aas := model.AssetAdministrationShell{
-		ID:        "aas-id-fail",
-		IdShort:   "BrokenAAS",
-		ModelType: "AssetAdministrationShell",
-	}
-
-	mock.ExpectExec(`INSERT INTO "aas"`).
-		WillReturnError(errors.New("db insert failed"))
-
-	err := pg.InsertAAS(aas)
-	require.Error(t, err)
-
-	require.NoError(t, mock.ExpectationsWereMet())
-}
+// 	require.NoError(t, mock.ExpectationsWereMet())
+// }

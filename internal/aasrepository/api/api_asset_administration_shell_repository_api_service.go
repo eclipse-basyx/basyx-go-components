@@ -14,7 +14,6 @@ package aasrepositoryapi
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"log"
 	"net/http"
@@ -83,44 +82,44 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllAssetAdministrat
 
 // PostAssetAdministrationShell - Creates a new Asset Administration Shell
 func (s *AssetAdministrationShellRepositoryAPIAPIService) PostAssetAdministrationShell(ctx context.Context, aas gen.AssetAdministrationShell) (gen.ImplResponse, error) {
-	operation := "PostAssetAdministrationShell"
-	// Validate minimal required fields
-	if err := gen.AssertAssetAdministrationShellMinimalConstraintsCheck(aas); err != nil {
-		resp := common.NewErrorResponse(
-			err,
-			http.StatusBadRequest,
-			componentName,
-			operation,
-			"BadRequest",
-		)
-		return resp, nil
-	}
+	// operation := "PostAssetAdministrationShell"
+	// // Validate minimal required fields
+	// if err := gen.AssertAssetAdministrationShellMinimalConstraintsCheck(aas); err != nil {
+	// 	resp := common.NewErrorResponse(
+	// 		err,
+	// 		http.StatusBadRequest,
+	// 		componentName,
+	// 		operation,
+	// 		"BadRequest",
+	// 	)
+	// 	return resp, nil
+	// }
 
-	// Insert into DB
-	err := s.aasBackend.InsertAAS(aas)
-	if err != nil {
-		log.Printf("❌ [%s] Error %s: %v", componentName, operation, err)
-		if common.IsErrConflict(err) {
-			resp := common.NewErrorResponse(
-				err,
-				http.StatusConflict,
-				componentName,
-				operation,
-				"Conflict",
-			)
-			return resp, nil
-		}
-		resp := common.NewErrorResponse(
-			err,
-			http.StatusInternalServerError,
-			componentName,
-			operation,
-			"Unhandled",
-		)
-		return resp, err
-	}
-	// Return created AAS
-	return gen.Response(201, aas), nil
+	// // Insert into DB
+	// err := s.aasBackend.InsertAAS(aas)
+	// if err != nil {
+	// 	log.Printf("❌ [%s] Error %s: %v", componentName, operation, err)
+	// 	if common.IsErrConflict(err) {
+	// 		resp := common.NewErrorResponse(
+	// 			err,
+	// 			http.StatusConflict,
+	// 			componentName,
+	// 			operation,
+	// 			"Conflict",
+	// 		)
+	// 		return resp, nil
+	// 	}
+	// 	resp := common.NewErrorResponse(
+	// 		err,
+	// 		http.StatusInternalServerError,
+	// 		componentName,
+	// 		operation,
+	// 		"Unhandled",
+	// 	)
+	// 	return resp, err
+	// }
+	// // Return created AAS
+	//  return gen.Response(201, aas), nil
 
 	// TODO - update PostAssetAdministrationShell with the required logic for this service method.
 	// Add api_asset_administration_shell_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
@@ -146,7 +145,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) PostAssetAdministratio
 	// TODO: Uncomment the next line to return response gen.Response(0, Result{}) or use other options such as http.Ok ...
 	// return gen.Response(0, Result{}), nil
 
-	//return gen.Response(http.StatusNotImplemented, nil), errors.New("PostAssetAdministrationShell method not implemented")
+	return gen.Response(http.StatusNotImplemented, nil), errors.New("PostAssetAdministrationShell method not implemented")
 }
 
 // GetAllAssetAdministrationShellsReference - Returns References to all Asset Administration Shells
@@ -177,49 +176,49 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllAssetAdministrat
 
 // GetAssetAdministrationShellById - Returns a specific Asset Administration Shell
 func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAssetAdministrationShellById(ctx context.Context, aasID string) (gen.ImplResponse, error) {
-	operation := "GetAssetAdministrationShellById"
-	// Decode the Base64-encoded aasID
-	decoded, decodeErr := common.DecodeString(aasID)
-	if decodeErr != nil {
-		log.Printf("❌ [%s] Error %s: decode failed: %v", componentName, operation, decodeErr)
-		resp := common.NewErrorResponse(
-			decodeErr,
-			http.StatusBadRequest,
-			componentName,
-			operation,
-			"BadRequest-Decode",
-		)
-		return resp, nil
-	}
+	// operation := "GetAssetAdministrationShellById"
+	// // Decode the Base64-encoded aasID
+	// decoded, decodeErr := common.DecodeString(aasID)
+	// if decodeErr != nil {
+	// 	log.Printf("❌ [%s] Error %s: decode failed: %v", componentName, operation, decodeErr)
+	// 	resp := common.NewErrorResponse(
+	// 		decodeErr,
+	// 		http.StatusBadRequest,
+	// 		componentName,
+	// 		operation,
+	// 		"BadRequest-Decode",
+	// 	)
+	// 	return resp, nil
+	// }
 
-	// Query the DB
-	shell, err := s.aasBackend.GetAASByID(string(decoded))
-	if err != nil {
-		switch {
-		case errors.Is(err, sql.ErrNoRows):
-			log.Printf("❌ [%s] Error %s: not found: %v", componentName, operation, err)
-			resp := common.NewErrorResponse(
-				err,
-				http.StatusNotFound,
-				componentName,
-				operation,
-				"NotFound",
-			)
-			return resp, nil
-		default:
-			log.Printf("❌ [%s] Error %s: internal: %v", componentName, operation, err)
-			resp := common.NewErrorResponse(
-				err,
-				http.StatusInternalServerError,
-				componentName,
-				operation,
-				"Unhandled",
-			)
-			return resp, err
-		}
-	}
+	// // Query the DB
+	// shell, err := s.aasBackend.GetAASByID(string(decoded))
+	// if err != nil {
+	// 	switch {
+	// 	case errors.Is(err, sql.ErrNoRows):
+	// 		log.Printf("❌ [%s] Error %s: not found: %v", componentName, operation, err)
+	// 		resp := common.NewErrorResponse(
+	// 			err,
+	// 			http.StatusNotFound,
+	// 			componentName,
+	// 			operation,
+	// 			"NotFound",
+	// 		)
+	// 		return resp, nil
+	// 	default:
+	// 		log.Printf("❌ [%s] Error %s: internal: %v", componentName, operation, err)
+	// 		resp := common.NewErrorResponse(
+	// 			err,
+	// 			http.StatusInternalServerError,
+	// 			componentName,
+	// 			operation,
+	// 			"Unhandled",
+	// 		)
+	// 		return resp, err
+	// 	}
+	// }
 
-	return model.Response(http.StatusOK, shell), nil
+	// return model.Response(http.StatusOK, shell), nil
 
 	// TODO - update GetAssetAdministrationShellById with the required logic for this service method.
 	// Add api_asset_administration_shell_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
@@ -245,7 +244,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAssetAdministration
 	// TODO: Uncomment the next line to return response gen.Response(0, Result{}) or use other options such as http.Ok ...
 	// return gen.Response(0, Result{}), nil
 
-	//return gen.Response(http.StatusNotImplemented, nil), errors.New("GetAssetAdministrationShellById method not implemented")
+	return gen.Response(http.StatusNotImplemented, nil), errors.New("GetAssetAdministrationShellById method not implemented")
 }
 
 // PutAssetAdministrationShellById - Creates or updates an existing Asset Administration Shell
@@ -279,47 +278,47 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) PutAssetAdministration
 
 // DeleteAssetAdministrationShellById - Deletes an Asset Administration Shell
 func (s *AssetAdministrationShellRepositoryAPIAPIService) DeleteAssetAdministrationShellById(ctx context.Context, aasId string) (gen.ImplResponse, error) {
-	operation := "DeleteAssetAdministrationShellById"
-	// Decode the ID if required (BaSyx APIs base64-encode IDs)
-	decoded, decodeErr := common.DecodeString(aasId)
-	if decodeErr != nil {
-		log.Printf("❌ [%s] Error %s: decode failed: %v", componentName, operation, decodeErr)
-		resp := common.NewErrorResponse(
-			decodeErr,
-			http.StatusBadRequest,
-			componentName,
-			operation,
-			"BadRequest-Decode",
-		)
-		return resp, nil
-	}
+	// operation := "DeleteAssetAdministrationShellById"
+	// // Decode the ID if required (BaSyx APIs base64-encode IDs)
+	// decoded, decodeErr := common.DecodeString(aasId)
+	// if decodeErr != nil {
+	// 	log.Printf("❌ [%s] Error %s: decode failed: %v", componentName, operation, decodeErr)
+	// 	resp := common.NewErrorResponse(
+	// 		decodeErr,
+	// 		http.StatusBadRequest,
+	// 		componentName,
+	// 		operation,
+	// 		"BadRequest-Decode",
+	// 	)
+	// 	return resp, nil
+	// }
 
-	// Try to delete
-	err := s.aasBackend.DeleteAASByID(string(decoded))
-	if err != nil {
-		switch {
-		case errors.Is(err, sql.ErrNoRows):
-			resp := common.NewErrorResponse(
-				err,
-				http.StatusNotFound,
-				componentName,
-				operation,
-				"NotFound",
-			)
-			return resp, nil
-		default:
-			resp := common.NewErrorResponse(
-				err,
-				http.StatusInternalServerError,
-				componentName,
-				operation,
-				"Unhandled",
-			)
-			return resp, err
-		}
-	}
+	// // Try to delete
+	// err := s.aasBackend.DeleteAASByID(string(decoded))
+	// if err != nil {
+	// 	switch {
+	// 	case errors.Is(err, sql.ErrNoRows):
+	// 		resp := common.NewErrorResponse(
+	// 			err,
+	// 			http.StatusNotFound,
+	// 			componentName,
+	// 			operation,
+	// 			"NotFound",
+	// 		)
+	// 		return resp, nil
+	// 	default:
+	// 		resp := common.NewErrorResponse(
+	// 			err,
+	// 			http.StatusInternalServerError,
+	// 			componentName,
+	// 			operation,
+	// 			"Unhandled",
+	// 		)
+	// 		return resp, err
+	// 	}
+	// }
 
-	return model.Response(http.StatusNoContent, nil), nil
+	// return model.Response(http.StatusNoContent, nil), nil
 	// TODO - update DeleteAssetAdministrationShellById with the required logic for this service method.
 	// Add api_asset_administration_shell_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
 
@@ -341,7 +340,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) DeleteAssetAdministrat
 	// TODO: Uncomment the next line to return response gen.Response(0, Result{}) or use other options such as http.Ok ...
 	// return gen.Response(0, Result{}), nil
 
-	//return gen.Response(http.StatusNotImplemented, nil), errors.New("DeleteAssetAdministrationShellById method not implemented")
+	return gen.Response(http.StatusNotImplemented, nil), errors.New("DeleteAssetAdministrationShellById method not implemented")
 }
 
 // GetAssetAdministrationShellByIdReferenceAasRepository - Returns a specific Asset Administration Shell as a Reference
