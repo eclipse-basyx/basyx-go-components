@@ -1,0 +1,9 @@
+{
+  "id": "aas-integration-test-1",
+  "idShort": "IntegrationTestAAS",
+  "category": "Instance",
+  "modelType": "AssetAdministrationShell",
+  "assetInformation": {
+    "assetKind": "Instance"
+  }
+}

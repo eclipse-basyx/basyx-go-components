@@ -243,7 +243,7 @@ CREATE TABLE IF NOT EXISTS submodel (
   embedded_data_specification JSONB DEFAULT '[]',
   supplemental_semantic_ids JSONB DEFAULT '[]',
   extensions JSONB DEFAULT '[]',
-  administration_id BIGINT REFERENCES administrative_information(id) ON DELETE CASCADE,
+  administrative_information_id BIGINT REFERENCES administrative_information(id) ON DELETE CASCADE,
   semantic_id BIGINT REFERENCES reference(id) ON DELETE CASCADE,
   description_id BIGINT REFERENCES lang_string_text_type_reference(id) ON DELETE CASCADE,
   displayname_id  BIGINT REFERENCES lang_string_name_type_reference(id) ON DELETE CASCADE,
@@ -544,6 +544,62 @@ CREATE TABLE IF NOT EXISTS submodel_embedded_data_specification (
   submodel_id       VARCHAR(2048) REFERENCES submodel(id) ON DELETE CASCADE,
   embedded_data_specification_id BIGSERIAL REFERENCES data_specification(id) ON DELETE CASCADE
 );
+
+------ AAS Repository Tables ------
+--aas repository specific tables and indexes can be added below-- 
+
+CREATE TABLE IF NOT EXISTS asset_information (
+    id BIGSERIAL PRIMARY KEY,
+    asset_kind asset_kind,
+    global_asset_id VARCHAR(2048),
+    asset_type VARCHAR(2048)
+);
+
+CREATE TABLE IF NOT EXISTS aas (
+    id           VARCHAR(2048) PRIMARY KEY,
+    id_short     VARCHAR(2048),
+    category     VARCHAR(2048),
+    model_type   VARCHAR(128) NOT NULL,
+    administration_id BIGINT REFERENCES administrative_information(id),
+    asset_information_id BIGINT REFERENCES asset_information(id),
+    derived_from_reference_id BIGINT REFERENCES reference(id),
+    displayname_id BIGINT REFERENCES lang_string_name_type_reference(id),
+    description_id BIGINT REFERENCES lang_string_text_type_reference(id)
+);
+
+CREATE TABLE IF NOT EXISTS aas_specific_asset_id (
+    id BIGSERIAL PRIMARY KEY,
+    -- FK required to model to represent SpecificAssetID inside AssetInformation
+    asset_information_id BIGINT NOT NULL REFERENCES asset_information(id) ON DELETE CASCADE,
+    name VARCHAR(256) NOT NULL,
+    value VARCHAR(1024) NOT NULL,
+    semantic_id BIGINT REFERENCES reference(id),
+    external_subject_id BIGINT REFERENCES reference(id)
+);
+
+CREATE TABLE IF NOT EXISTS aas_specific_asset_id_supplemental_semantic_id (
+    specific_asset_id_id BIGINT NOT NULL REFERENCES aas_specific_asset_id(id) ON DELETE CASCADE,
+    supplemental_semantic_id BIGINT NOT NULL REFERENCES reference(id) ON DELETE CASCADE,
+    PRIMARY KEY (specific_asset_id_id, supplemental_semantic_id)
+);
+
+CREATE TABLE IF NOT EXISTS aas_resource (
+    id BIGSERIAL PRIMARY KEY,
+    path VARCHAR(2048) NOT NULL,
+    content_type VARCHAR(256)
+);
+
+CREATE TABLE IF NOT EXISTS asset_information_default_thumbnail (
+    asset_information_id BIGINT NOT NULL REFERENCES asset_information(id) ON DELETE CASCADE,
+    default_thumbnail_id BIGINT NOT NULL REFERENCES aas_resource(id) ON DELETE CASCADE,
+    PRIMARY KEY (asset_information_id, default_thumbnail_id)
+);
+
+CREATE TABLE IF NOT EXISTS aas_extension (
+    aas_id VARCHAR(2048) NOT NULL REFERENCES aas(id) ON DELETE CASCADE,
+    extension_id BIGINT NOT NULL REFERENCES extension(id) ON DELETE CASCADE,
+    PRIMARY KEY (aas_id, extension_id)
+    );
 
 CREATE TABLE IF NOT EXISTS registry_descriptor (
   descriptor_id BIGINT PRIMARY KEY REFERENCES descriptor(id) ON DELETE CASCADE,
