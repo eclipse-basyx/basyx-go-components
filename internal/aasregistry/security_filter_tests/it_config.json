@@ -70,5 +70,20 @@
     "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9JQ0hNQUdQSVpaQVNPR0VSTkU/submodel-descriptors",
     "shouldMatch": "expected/expectedShellUserX.json",
     "expectedStatus": 200
+  },
+  {
+    "context": "GET ALL Descriptor - User X - FILTERED",
+    "token": { "user": "userx", "password": "pwd" },
+    "method": "GET",
+    "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9JQ0hNQUdQSVpaQVNPR0VSTkU/submodel-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9YL1NNLUE",
+    "expectedStatus": 404
+  },
+  {
+    "context": "GET ALL Descriptor - User X - FILTERED",
+    "token": { "user": "userx", "password": "pwd" },
+    "method": "GET",
+    "endpoint": "http://localhost:6004/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9JQ0hNQUdQSVpaQVNPR0VSTkU/submodel-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9YL1NNLUQ",
+    "shouldMatch": "expected/singlesm.json",
+    "expectedStatus": 200
   }
 ]

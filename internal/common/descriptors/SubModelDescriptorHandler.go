@@ -276,32 +276,11 @@ func GetSubmodelDescriptorForAASByID(
 	aasID string,
 	submodelID string,
 ) (model.SubmodelDescriptor, error) {
-	d := goqu.Dialect(dialect)
-	aas := goqu.T(tblAASDescriptor).As("aas")
-
-	ds := d.
-		From(aas).
-		Select(aas.Col(colDescriptorID)).
-		Where(aas.Col(colAASID).Eq(aasID)).
-		Limit(1)
-
-	sqlStr, args, buildErr := ds.ToSQL()
-	if buildErr != nil {
-		return model.SubmodelDescriptor{}, common.NewInternalServerError("Failed to build AAS lookup query. See server logs for details.")
-	}
-	var descID int64
-	if err := db.QueryRowContext(ctx, sqlStr, args...).Scan(&descID); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return model.SubmodelDescriptor{}, common.NewErrNotFound("AAS Descriptor not found")
-		}
-		return model.SubmodelDescriptor{}, common.NewInternalServerError("Failed to query AAS descriptor id. See server logs for details.")
-	}
-
-	m, err := ReadSubmodelDescriptorsByAASDescriptorIDs(ctx, db, []int64{descID}, true)
+	smdescs, _, err := ListSubmodelDescriptorsForAAS(ctx, db, aasID, 0, "")
 	if err != nil {
 		return model.SubmodelDescriptor{}, err
 	}
-	for _, smd := range m[descID] {
+	for _, smd := range smdescs {
 		if smd.Id == submodelID {
 			return smd, nil
 		}

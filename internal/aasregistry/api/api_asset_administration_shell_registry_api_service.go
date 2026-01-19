@@ -410,10 +410,6 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) GetSubmodelDescriptorByI
 		}
 	}
 
-	if resp, err := enforceAccessForSubmodel(ctx, "GetSubmodelDescriptorByIdThroughSuperpath", smd); resp != nil || err != nil {
-		return *resp, err
-	}
-
 	return model.Response(http.StatusOK, smd), nil
 }
 

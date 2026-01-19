@@ -9,7 +9,7 @@
     "DEFOBJECTS": [
       { "name": "description", "objects": [ { "ROUTE": "/description" } ] },
       { "name": "all_shell_descriptors", "objects": [ {"DESCRIPTOR": "$aasdesc(\"*\")"}] },
-      { "name": "submodel_descriptors", "objects": [ {"ROUTE": "/shell-descriptors/*/submodel-descriptors"}] }
+      { "name": "submodel_descriptors", "objects": [ {"ROUTE": "/shell-descriptors/*/submodel-descriptors"}, {"ROUTE": "/shell-descriptors/*/submodel-descriptors/*"}] }
     ],
 
     "DEFACLS": [
