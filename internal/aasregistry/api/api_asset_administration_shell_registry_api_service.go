@@ -1,5 +1,5 @@
 /*******************************************************************************
-* Copyright (C) 2025 the Eclipse BaSyx Authors and Fraunhofer IESE
+* Copyright (C) 2026 the Eclipse BaSyx Authors and Fraunhofer IESE
 *
 * Permission is hereby granted, free of charge, to any person obtaining
 * a copy of this software and associated documentation files (the
@@ -162,10 +162,6 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) GetAssetAdministrationSh
 				err, http.StatusInternalServerError, componentName, "GetAssetAdministrationShellDescriptorById", "Unhandled",
 			), err
 		}
-	}
-
-	if resp, err := enforceAccessForAAS(ctx, "GetAssetAdministrationShellDescriptorById", result); resp != nil || err != nil {
-		return *resp, err
 	}
 
 	return model.Response(http.StatusOK, result), nil

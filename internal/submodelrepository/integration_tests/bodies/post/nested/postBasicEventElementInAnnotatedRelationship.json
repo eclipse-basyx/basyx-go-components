@@ -1,0 +1,15 @@
+{
+    "idShort": "NestedEventAnnotation",
+    "modelType": "BasicEventElement",
+    "observed": {
+        "type": "ExternalReference",
+        "keys": [
+            {
+                "type": "GlobalReference",
+                "value": "http://example.com/observed"
+            }
+        ]
+    },
+    "direction": "input",
+    "state": "off"
+}

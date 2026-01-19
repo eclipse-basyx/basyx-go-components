@@ -1,5 +1,5 @@
 /*******************************************************************************
-* Copyright (C) 2025 the Eclipse BaSyx Authors and Fraunhofer IESE
+* Copyright (C) 2026 the Eclipse BaSyx Authors and Fraunhofer IESE
 *
 * Permission is hereby granted, free of charge, to any person obtaining
 * a copy of this software and associated documentation files (the
@@ -38,7 +38,7 @@ import "encoding/json"
 
 // BasicEventElementValue type of EventElementValue
 type BasicEventElementValue struct {
-	Observed ReferenceValue `json:"observed"`
+	Observed Reference `json:"observed"`
 }
 
 // MarshalValueOnly serializes BasicEventElementValue in Value-Only format
@@ -50,6 +50,11 @@ func (b BasicEventElementValue) MarshalValueOnly() ([]byte, error) {
 // MarshalJSON implements custom JSON marshaling for BasicEventElementValue
 func (b BasicEventElementValue) MarshalJSON() ([]byte, error) {
 	return b.MarshalValueOnly()
+}
+
+// GetModelType returns the model type name for BasicEventElement
+func (b BasicEventElementValue) GetModelType() string {
+	return "BasicEventElement"
 }
 
 // AssertBasicEventElementValueRequired checks if the required fields are not zero-ed

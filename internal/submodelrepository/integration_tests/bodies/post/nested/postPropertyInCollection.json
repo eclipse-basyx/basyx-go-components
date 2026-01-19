@@ -1,0 +1,6 @@
+{
+    "idShort": "NestedProperty",
+    "modelType": "Property",
+    "value": "nestedInCollection",
+    "valueType": "xs:string"
+}

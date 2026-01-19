@@ -1,5 +1,5 @@
 /*******************************************************************************
-* Copyright (C) 2025 the Eclipse BaSyx Authors and Fraunhofer IESE
+* Copyright (C) 2026 the Eclipse BaSyx Authors and Fraunhofer IESE
 *
 * Permission is hereby granted, free of charge, to any person obtaining
 * a copy of this software and associated documentation files (the
@@ -32,8 +32,10 @@ package submodelelements
 import (
 	"database/sql"
 
+	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	persistenceutils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 )
 
@@ -88,7 +90,14 @@ func (p PostgreSQLSubmodelElementCollectionHandler) Create(tx *sql.Tx, submodelI
 	}
 
 	// SubmodelElementCollection-specific database insertion
-	_, err = tx.Exec(`INSERT INTO submodel_element_collection (id) VALUES ($1)`, id)
+	dialect := goqu.Dialect("postgres")
+	insertQuery, insertArgs, err := dialect.Insert("submodel_element_collection").
+		Rows(goqu.Record{"id": id}).
+		ToSQL()
+	if err != nil {
+		return 0, err
+	}
+	_, err = tx.Exec(insertQuery, insertArgs...)
 	if err != nil {
 		return 0, err
 	}
@@ -124,7 +133,14 @@ func (p PostgreSQLSubmodelElementCollectionHandler) CreateNested(tx *sql.Tx, sub
 	}
 
 	// SubmodelElementCollection-specific database insertion
-	_, err = tx.Exec(`INSERT INTO submodel_element_collection (id) VALUES ($1)`, id)
+	dialect := goqu.Dialect("postgres")
+	insertQuery, insertArgs, err := dialect.Insert("submodel_element_collection").
+		Rows(goqu.Record{"id": id}).
+		ToSQL()
+	if err != nil {
+		return 0, err
+	}
+	_, err = tx.Exec(insertQuery, insertArgs...)
 	if err != nil {
 		return 0, err
 	}
@@ -132,18 +148,70 @@ func (p PostgreSQLSubmodelElementCollectionHandler) CreateNested(tx *sql.Tx, sub
 	return id, nil
 }
 
-// Update modifies an existing SubmodelElementCollection identified by its idShort or path.
+// Update modifies an existing SubmodelElementCollection element identified by its idShort or path.
 // This method delegates the update operation to the decorated CRUD handler which handles
 // the common submodel element update logic.
 //
 // Parameters:
+//   - submodelID: The ID of the parent submodel
 //   - idShortOrPath: idShort or hierarchical path to the collection to update
-//   - submodelElement: Updated collection data
+//   - submodelElement: Updated collection data (must be of type *gen.SubmodelElementCollection)
+//   - tx: Optional database transaction (created if nil)
+//   - isPut: true for PUT (replace all), false for PATCH (update only provided fields)
 //
 // Returns:
-//   - error: Error if update fails
-func (p PostgreSQLSubmodelElementCollectionHandler) Update(idShortOrPath string, submodelElement gen.SubmodelElement) error {
-	return p.decorated.Update(idShortOrPath, submodelElement)
+//   - error: Error if update fails or element is not of correct type
+func (p PostgreSQLSubmodelElementCollectionHandler) Update(submodelID string, idShortOrPath string, submodelElement gen.SubmodelElement, tx *sql.Tx, isPut bool) error {
+	_, ok := submodelElement.(*gen.SubmodelElementCollection)
+	if !ok {
+		return common.NewErrBadRequest("submodelElement is not of type SubmodelElementCollection")
+	}
+
+	var err error
+	cu, localTx, err := persistenceutils.StartTXIfNeeded(tx, err, p.db)
+	if err != nil {
+		return err
+	}
+	defer cu(&err)
+	// For PUT operations, delete all children first (complete replacement)
+	if isPut {
+		err = DeleteAllChildren(p.db, submodelID, idShortOrPath, localTx)
+		if err != nil {
+			return err
+		}
+	}
+
+	// PATCH operations preserve existing children, so no deletion needed - TODO
+
+	// Update base submodel element properties
+	err = p.decorated.Update(submodelID, idShortOrPath, submodelElement, tx, isPut)
+	if err != nil {
+		return err
+	}
+
+	return persistenceutils.CommitTransactionIfNeeded(tx, localTx)
+}
+
+// UpdateValueOnly updates only the value of an existing SubmodelElementCollection submodel element identified by its idShort or path.
+// It processes the new value and updates nested elements accordingly.
+//
+// Parameters:
+//   - submodelID: The ID of the parent submodel
+//   - idShortOrPath: The idShort or path identifying the element to update
+//   - valueOnly: The new value to set (must be of type gen.SubmodelElementValue)
+//
+// Returns:
+//   - error: An error if the update operation fails
+func (p PostgreSQLSubmodelElementCollectionHandler) UpdateValueOnly(submodelID string, idShortOrPath string, valueOnly gen.SubmodelElementValue) error {
+	elems, err := persistenceutils.BuildElementsToProcessStackValueOnly(p.db, submodelID, idShortOrPath, valueOnly)
+	if err != nil {
+		return err
+	}
+	err = UpdateNestedElementsValueOnly(p.db, elems, idShortOrPath, submodelID)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // Delete removes a SubmodelElementCollection identified by its idShort or path from the database.

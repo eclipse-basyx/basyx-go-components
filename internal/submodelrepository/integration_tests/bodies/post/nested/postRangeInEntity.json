@@ -1,0 +1,7 @@
+{
+    "idShort": "NestedRangeEntity",
+    "modelType": "Range",
+    "min": "0",
+    "max": "10",
+    "valueType": "xs:int"
+}

@@ -1,5 +1,5 @@
 /*******************************************************************************
-* Copyright (C) 2025 the Eclipse BaSyx Authors and Fraunhofer IESE
+* Copyright (C) 2026 the Eclipse BaSyx Authors and Fraunhofer IESE
 *
 * Permission is hereby granted, free of charge, to any person obtaining
 * a copy of this software and associated documentation files (the
@@ -72,7 +72,7 @@ type AccessPermissionRuleFILTER struct {
 	CONDITION *LogicalExpression `json:"CONDITION,omitempty" yaml:"CONDITION,omitempty" mapstructure:"CONDITION,omitempty"`
 
 	// FRAGMENT corresponds to the JSON schema field "FRAGMENT".
-	FRAGMENT *string `json:"FRAGMENT,omitempty" yaml:"FRAGMENT,omitempty" mapstructure:"FRAGMENT,omitempty"`
+	FRAGMENT *FragmentStringPattern `json:"FRAGMENT,omitempty" yaml:"FRAGMENT,omitempty" mapstructure:"FRAGMENT,omitempty"`
 
 	// USEFORMULA corresponds to the JSON schema field "USEFORMULA".
 	USEFORMULA *string `json:"USEFORMULA,omitempty" yaml:"USEFORMULA,omitempty" mapstructure:"USEFORMULA,omitempty"`

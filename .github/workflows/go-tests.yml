@@ -156,3 +156,45 @@ jobs:
         run: |
           cd internal/aasregistry/security_operator_tests
           go test -v
+          
+  aas-registry-security-filter-tests:
+    name: AAS Registry Security Filter Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Get dependencies
+        run: go mod download
+
+      - name: Run aas registry security filter tests
+        run: |
+          cd internal/aasregistry/security_filter_tests
+          go test -v
+
+  aas-registry-security-index-tests:
+    name: AAS Registry Security Index Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Get dependencies
+        run: go mod download
+
+      - name: Run aas registry security index tests
+        run: |
+          cd internal/aasregistry/security_index_tests
+          go test -v

@@ -1,0 +1,124 @@
+{
+  "ok": true,
+  "queryFilter": {
+    "Filters": {
+      "$aasdesc#endpoints[]": {
+        "$or": [
+          {
+            "$and": [
+              {
+                "$eq": [
+                  {
+                    "$strCast": {
+                      "$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value"
+                    }
+                  },
+                  {
+                    "$strVal": "WRITTEN_BY_X"
+                  }
+                ]
+              },
+              {
+                "$eq": [
+                  {
+                    "$strCast": {
+                      "$field": "$aasdesc#endpoints[].protocolinformation.href"
+                    }
+                  },
+                  {
+                    "$strVal": "hrefA"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "$eq": [
+              {
+                "$strCast": {
+                  "$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value"
+                }
+              },
+              {
+                "$strVal": "WRITTEN_BY_Y"
+              }
+            ]
+          }
+        ]
+      },
+      "$aasdesc#specificAssetIds[]": {
+        "$or": [
+          {
+            "$eq": [
+              {
+                "$strCast": {
+                  "$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value"
+                }
+              },
+              {
+                "$strVal": "WRITTEN_BY_X"
+              }
+            ]
+          },
+          {
+            "$and": [
+              {
+                "$eq": [
+                  {
+                    "$strCast": {
+                      "$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value"
+                    }
+                  },
+                  {
+                    "$strVal": "WRITTEN_BY_Y"
+                  }
+                ]
+              },
+              {
+                "$eq": [
+                  {
+                    "$strCast": {
+                      "$field": "$aasdesc#endpoints[].protocolinformation.href"
+                    }
+                  },
+                  {
+                    "$strVal": "hrefB"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "Formula": {
+      "$or": [
+        {
+          "$eq": [
+            {
+              "$strCast": {
+                "$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value"
+              }
+            },
+            {
+              "$strVal": "WRITTEN_BY_X"
+            }
+          ]
+        },
+        {
+          "$eq": [
+            {
+              "$strCast": {
+                "$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value"
+              }
+            },
+            {
+              "$strVal": "WRITTEN_BY_Y"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "reason": "ALLOW"
+}

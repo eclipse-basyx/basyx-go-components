@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (C) 2025 the Eclipse BaSyx Authors and Fraunhofer IESE
+ * Copyright (C) 2026 the Eclipse BaSyx Authors and Fraunhofer IESE
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -28,8 +28,10 @@ package builder
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
 	"sync"
 
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	jsoniter "github.com/json-iterator/go"
 	"golang.org/x/sync/errgroup"
@@ -317,7 +319,7 @@ func getSubmodelElementObjectBasedOnModelType(smeRow model.SubmodelElementRow, r
 		}
 		return rng, nil
 	case "BasicEventElement":
-		eventElem, err := buildBasicEventElement(smeRow, refBuilderMap, refMutex)
+		eventElem, err := buildBasicEventElement(smeRow)
 		if err != nil {
 			return nil, err
 		}
@@ -368,7 +370,7 @@ func buildProperty(smeRow model.SubmodelElementRow, refBuilderMap map[int64]*Ref
 
 // buildBasicEventElement constructs a BasicEventElement SubmodelElement from the database row,
 // parsing the event details and building references for observed and message broker.
-func buildBasicEventElement(smeRow model.SubmodelElementRow, refBuilderMap map[int64]*ReferenceBuilder, refMutex *sync.RWMutex) (*model.BasicEventElement, error) {
+func buildBasicEventElement(smeRow model.SubmodelElementRow) (*model.BasicEventElement, error) {
 	var valueRow model.BasicEventElementValueRow
 	if smeRow.Value == nil {
 		return nil, fmt.Errorf("smeRow.Value is nil")
@@ -377,13 +379,18 @@ func buildBasicEventElement(smeRow model.SubmodelElementRow, refBuilderMap map[i
 	if err != nil {
 		return nil, err
 	}
-	observedRefs, err := getSingleReference(&valueRow.ObservedRef, &valueRow.ObservedRefReferred, refBuilderMap, refMutex)
-	if err != nil {
-		return nil, err
+	var observedRefs, messageBrokerRefs *model.Reference
+	if valueRow.Observed != nil {
+		err = json.Unmarshal(valueRow.Observed, &observedRefs)
+		if err != nil {
+			return nil, err
+		}
 	}
-	messageBrokerRefs, err := getSingleReference(&valueRow.MessageBrokerRef, &valueRow.MessageBrokerRefReferred, refBuilderMap, refMutex)
-	if err != nil {
-		return nil, err
+	if valueRow.MessageBroker != nil {
+		err = json.Unmarshal(valueRow.MessageBroker, &messageBrokerRefs)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	state, err := model.NewStateOfEventFromValue(valueRow.State)
@@ -555,6 +562,13 @@ func buildMultiLanguageProperty(smeRow model.SubmodelElementRow) (*model.MultiLa
 
 	mlp.Value = valueRow.Value
 
+	sort.SliceStable(mlp.Value, func(i, j int) bool {
+		if mlp.Value[i].Language == mlp.Value[j].Language {
+			return mlp.Value[i].Text < mlp.Value[j].Text
+		}
+		return mlp.Value[i].Language < mlp.Value[j].Language
+	})
+
 	// Handle ValueID reference if present
 	if valueRow.ValueID != nil {
 		var valueID model.Reference
@@ -594,9 +608,12 @@ func buildBlob(smeRow model.SubmodelElementRow) (*model.Blob, error) {
 	if err != nil {
 		return nil, err
 	}
-
+	decoded, err := common.Decode(valueRow.Value)
+	if err != nil {
+		return nil, err
+	}
 	return &model.Blob{
-		Value:       valueRow.Value,
+		Value:       string(decoded),
 		ContentType: valueRow.ContentType,
 	}, nil
 }
@@ -712,6 +729,6 @@ func buildSubmodelElementList(smeRow model.SubmodelElementRow) (*model.SubmodelE
 		}
 	}
 
-	smeList := &model.SubmodelElementList{Value: []model.SubmodelElement{}, ValueTypeListElement: valueTypeListElement, TypeValueListElement: &typeValueListElement}
+	smeList := &model.SubmodelElementList{Value: []model.SubmodelElement{}, ValueTypeListElement: valueTypeListElement, TypeValueListElement: &typeValueListElement, OrderRelevant: valueRow.OrderRelevant}
 	return smeList, nil
 }

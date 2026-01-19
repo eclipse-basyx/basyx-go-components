@@ -1,0 +1,39 @@
+{
+    "description": [
+        {
+            "language": "en",
+            "text": "Example AAS Registry"
+        }
+    ],
+    "displayname": [
+        {
+            "language": "en",
+            "text": "AAS Registry 1"
+        }
+    ],
+    "administration": {
+        "version": "1",
+        "revision": "0",
+        "creator": {
+            "type": "ExternalReference",
+            "keys": [
+                {
+                    "type": "GlobalReference",
+                    "value": "https://example.com"
+                }
+            ]
+        }
+    },
+    "endpoints": [
+        {
+            "protocolInformation": {
+                "href": "https://example.com/aas-registry",
+                "endpointProtocol": "HTTPS"
+            },
+            "interface": "AAS-REGISTRY-3.0"
+        }
+    ],
+    "idShort": "ExampleAASRegistry",
+    "id": "https://example.com/ror/example-aas-registry",
+    "company": "ExampleCompany"
+}

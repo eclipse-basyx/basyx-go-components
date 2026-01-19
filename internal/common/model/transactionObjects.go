@@ -1,5 +1,5 @@
 /*******************************************************************************
-* Copyright (C) 2025 the Eclipse BaSyx Authors and Fraunhofer IESE
+* Copyright (C) 2026 the Eclipse BaSyx Authors and Fraunhofer IESE
 *
 * Permission is hereby granted, free of charge, to any person obtaining
 * a copy of this software and associated documentation files (the
@@ -379,14 +379,10 @@ type BasicEventElementValueRow struct {
 	MinInterval string `json:"min_interval"`
 	// MaxInternal specifies the maximum interval between event occurrences
 	MaxInterval string `json:"max_interval"`
-	// ObservedRef contains reference data to the observed element as JSON data
-	ObservedRef json.RawMessage `json:"observed_ref"`
-	// ObservedRefReferred contains referred reference data to the observed element as JSON data
-	ObservedRefReferred json.RawMessage `json:"observed_ref_referred"`
-	// ObservedRef contains reference data to the observed element as JSON data
-	MessageBrokerRef json.RawMessage `json:"message_broker_ref"`
-	// ObservedRefReferred contains referred reference data to the observed element as JSON data
-	MessageBrokerRefReferred json.RawMessage `json:"message_broker_ref_referred"`
+	// Observed contains reference data to the observed element as JSON data
+	Observed json.RawMessage `json:"observed"`
+	// Observed contains reference data to the observed element as JSON data
+	MessageBroker json.RawMessage `json:"message_broker"`
 }
 
 // SubmodelElementListRow represents a data row for a SubmodelElementList entity in the database.
@@ -540,7 +536,7 @@ type MultiLanguagePropertyElementValueRow struct {
 type BlobElementValueRow struct {
 	// ContentType specifies the MIME type of the blob content
 	ContentType string `json:"content_type"`
-	// Value contains the blob data as a byte array
+	// Value contains the blob data as a base64-encoded string
 	Value string `json:"value"`
 }
 

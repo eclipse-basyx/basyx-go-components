@@ -1,5 +1,5 @@
 /*******************************************************************************
-* Copyright (C) 2025 the Eclipse BaSyx Authors and Fraunhofer IESE
+* Copyright (C) 2026 the Eclipse BaSyx Authors and Fraunhofer IESE
 *
 * Permission is hereby granted, free of charge, to any person obtaining
 * a copy of this software and associated documentation files (the
@@ -51,6 +51,11 @@ func (f FileValue) MarshalValueOnly() ([]byte, error) {
 // MarshalJSON implements custom JSON marshaling for FileValue
 func (f FileValue) MarshalJSON() ([]byte, error) {
 	return f.MarshalValueOnly()
+}
+
+// GetModelType returns the model type name for File
+func (f FileValue) GetModelType() string {
+	return "File"
 }
 
 // AssertFileValueRequired checks if the required fields are not zero-ed

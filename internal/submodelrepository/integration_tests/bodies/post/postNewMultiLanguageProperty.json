@@ -1,0 +1,34 @@
+{
+    "category": "CONSTANT",
+    "description": [
+        {
+            "language": "de",
+            "text": "Neue Test Mehrsprachige Eigenschaft"
+        },
+        {
+            "language": "en-us",
+            "text": "New Test MultiLanguageProperty"
+        }
+    ],
+    "idShort": "NewTestMultiLanguageProperty",
+    "modelType": "MultiLanguageProperty",
+    "semanticId": {
+        "keys": [
+            {
+                "type": "GlobalReference",
+                "value": "http://acplt.org/MultiLanguageProperties/NewTestMultiLanguageProperty"
+            }
+        ],
+        "type": "ExternalReference"
+    },
+    "value": [
+        {
+            "language": "de",
+            "text": "Testwert auf Deutsch"
+        },
+        {
+            "language": "en-us",
+            "text": "Test value in English"
+        }
+    ]
+}

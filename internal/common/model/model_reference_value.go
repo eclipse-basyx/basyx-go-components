@@ -1,5 +1,5 @@
 /*******************************************************************************
-* Copyright (C) 2025 the Eclipse BaSyx Authors and Fraunhofer IESE
+* Copyright (C) 2026 the Eclipse BaSyx Authors and Fraunhofer IESE
 *
 * Permission is hereby granted, free of charge, to any person obtaining
 * a copy of this software and associated documentation files (the
@@ -42,7 +42,7 @@ type ReferenceValue struct {
 }
 
 // AssertReferenceValueRequired checks if the required fields are not zero-ed
-func AssertReferenceValueRequired(obj ReferenceValue) error {
+func AssertReferenceValueRequired(obj Reference) error {
 	for _, el := range obj.Keys {
 		if err := AssertKeyRequired(el); err != nil {
 			return err
@@ -52,7 +52,7 @@ func AssertReferenceValueRequired(obj ReferenceValue) error {
 }
 
 // AssertReferenceValueConstraints checks if the values respects the defined constraints
-func AssertReferenceValueConstraints(obj ReferenceValue) error {
+func AssertReferenceValueConstraints(obj Reference) error {
 	for _, el := range obj.Keys {
 		if err := AssertKeyConstraints(el); err != nil {
 			return err

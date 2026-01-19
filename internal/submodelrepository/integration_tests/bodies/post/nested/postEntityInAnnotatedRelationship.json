@@ -1,0 +1,5 @@
+{
+    "idShort": "NestedEntityAnnotation",
+    "modelType": "Entity",
+    "entityType": "CoManagedEntity"
+}

@@ -1,5 +1,5 @@
 /*******************************************************************************
-* Copyright (C) 2025 the Eclipse BaSyx Authors and Fraunhofer IESE
+* Copyright (C) 2026 the Eclipse BaSyx Authors and Fraunhofer IESE
 *
 * Permission is hereby granted, free of charge, to any person obtaining
 * a copy of this software and associated documentation files (the
@@ -58,6 +58,19 @@ const (
 	tblRegistryDescriptor             = "registry_descriptor"
 )
 
+// Common table aliases used across descriptor queries. Keeping them here avoids
+// scattering literal table names throughout the query builders.
+const (
+	aliasSpecificAssetID                          = tblSpecificAssetID
+	aliasExternalSubjectReference                 = "external_subject_reference"
+	aliasExternalSubjectReferenceKey              = "external_subject_reference_key"
+	aliasAASDescriptorEndpoint                    = tblAASDescriptorEndpoint
+	aliasSubmodelDescriptor                       = tblSubmodelDescriptor
+	aliasSubmodelDescriptorEndpoint               = "submodel_descriptor_endpoint"
+	aliasSubmodelDescriptorSemanticIDReference    = "aasdesc_submodel_descriptor_semantic_id_reference"
+	aliasSubmodelDescriptorSemanticIDReferenceKey = "aasdesc_submodel_descriptor_semantic_id_reference_key"
+)
+
 // Columns holds the column names used by descriptor queries. Centralizing the
 // names makes SQL generation more robust to refactors and reduces stringly‑typed
 // errors in the query code.
@@ -88,10 +101,11 @@ const (
 	colSecurityValue           = "security_value"
 	colEndpointProtocolVersion = "endpoint_protocol_version"
 
-	colSemanticID         = "semantic_id"
-	colName               = "name"
-	colValue              = "value"
-	colExternalSubjectRef = "external_subject_ref"
+	colSemanticID              = "semantic_id"
+	colSupplementalSemanticIDs = "supplemental_semantic_ids"
+	colName                    = "name"
+	colValue                   = "value"
+	colExternalSubjectRef      = "external_subject_ref"
 
 	colSpecificAssetIDID = "specific_asset_id_id"
 	colReferenceID       = "reference_id"
@@ -124,6 +138,7 @@ const (
 // constructing the table builders in call sites.
 var (
 	tDescriptor            = goqu.T(tblDescriptor)
+	tAASDescriptor         = goqu.T(tblAASDescriptor)
 	tAASDescriptorEndpoint = goqu.T(tblAASDescriptorEndpoint)
 	tSpecificAssetID       = goqu.T(tblSpecificAssetID)
 )

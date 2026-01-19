@@ -115,7 +115,7 @@
                 "ExampleSubmodelElementCollection": {
                     "ExampleBlob": {
                         "contentType": "application/pdf",
-                        "value": "\\x415149444241553d"
+                        "value": "AQIDBAU="
                     },
                     "ExampleFile": {
                         "contentType": "application/pdf",
@@ -143,10 +143,10 @@
                     "exampleValue",
                     [
                         {
-                            "en-us": "Example value of a MultiLanguageProperty element"
+                            "de": "Beispielswert für ein MultiLanguageProperty-Element"
                         },
                         {
-                            "de": "Beispielswert für ein MultiLanguageProperty-Element"
+                            "en-us": "Example value of a MultiLanguageProperty element"
                         }
                     ],
                     {
@@ -232,7 +232,7 @@
             }
         },
         {
-            "DemoOperation": {
+            "DemoReferenceElement": {
                 "keys": [
                     {
                         "type": "Submodel",

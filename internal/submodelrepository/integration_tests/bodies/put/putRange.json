@@ -1,0 +1,7 @@
+{
+    "modelType": "Range",
+    "idShort": "DemoRange",
+    "min": "1.0",
+    "max": "2.0",
+    "valueType": "xs:double"
+}

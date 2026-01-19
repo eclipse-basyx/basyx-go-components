@@ -1,0 +1,39 @@
+{
+    "description": [
+        {
+            "language": "en",
+            "text": ""
+        }
+    ],
+    "displayname": [
+        {
+            "language": "en",
+            "text": "D4E Tenant 0 Submodel Registry"
+        }
+    ],
+    "administration": {
+        "version": "1",
+        "revision": "0",
+        "creator": {
+            "type": "ExternalReference",
+            "keys": [
+                {
+                    "type": "GlobalReference",
+                    "value": "https://iese.fraunhofer.de"
+                }
+            ]
+        }
+    },
+    "endpoints": [
+        {
+            "protocolInformation": {
+                "href": "https://demo.digital-twin.host/sm-registry",
+                "endpointProtocol": "HTTPS"
+            },
+            "interface": "SUBMODEL-REGISTRY-3.0"
+        }
+    ],
+    "idShort": "D4ETenant0SubmodelRegistry",
+    "id": "https://iese.fraunhofer.de/ror/d4e-tenant-0-submodel-registry",
+    "company": "Fraunhofer IESE"
+}

@@ -66,3 +66,16 @@ func InitializeDatabase(dsn string, schemaFilePath string) (*sql.DB, error) {
 	}
 	return db, nil
 }
+
+func StartTransaction(db *sql.DB) (*sql.Tx, func(*error), error) {
+	tx, err := db.Begin()
+	if err != nil {
+		return nil, nil, err
+	}
+	cleanup := func(txErr *error) {
+		if txErr != nil {
+			_ = tx.Rollback()
+		}
+	}
+	return tx, cleanup, nil
+}

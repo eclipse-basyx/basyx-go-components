@@ -1,0 +1,149 @@
+{
+  "AllAccessPermissionRules": {
+    "DEFATTRIBUTES": [
+      { "name": "anonym_attr", "attributes": [ { "GLOBAL": "ANONYMOUS" } ] },
+      { "name": "role_attr", "attributes": [ { "CLAIM": "role" } ] },
+      { "name": "member_attr", "attributes": [ { "CLAIM": "role" }, { "CLAIM": "clear" } ] }
+    ],
+
+    "DEFOBJECTS": [
+      { "name": "description", "objects": [ { "ROUTE": "/description" } ] },
+      { "name": "all_shell_descriptors", "objects": [ {"DESCRIPTOR": "$aasdesc(\"*\")"}] }
+    ],
+
+    "DEFACLS": [
+      { "name": "read_anonymous", "acl": { "USEATTRIBUTES": "anonym_attr", "RIGHTS": ["READ"], "ACCESS": "ALLOW" } },
+      { "name": "all_admin", "acl": { "USEATTRIBUTES": "role_attr", "RIGHTS": ["ALL"], "ACCESS": "ALLOW" } },
+      { "name": "user", "acl": { "USEATTRIBUTES": "role_attr", "RIGHTS": ["READ"], "ACCESS": "ALLOW" } }
+    ],
+
+    "DEFFORMULAS": [
+      { "name": "always_true", "formula": { "$boolean": true } },
+      { "name": "role_is_admin", "formula": { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "admin" } ] } },
+      { 
+        "name": "role_is_viewer_written_x", 
+        "formula": { 
+          "$and": 
+          [
+            { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "viewer" } ] },
+            {"$eq": [ {"$field": "$aasdesc#specificAssetIds[1].externalSubjectId.keys[].value"}, {"$strVal": "WRITTEN_BY_X"}]}
+          ]
+        }
+      },
+      { 
+        "name": "role_is_viewer_written_y", 
+        "formula": { 
+          "$and": 
+          [
+            { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "viewer" } ] },
+            {"$eq": [ {"$field": "$aasdesc#specificAssetIds[1].externalSubjectId.keys[1].value"}, {"$strVal": "WRITTEN_BY_Y"}]}
+          ]
+        }
+      },
+      { 
+        "name": "anonym_PUBLIC_READABLE", 
+        "formula": {"$eq": [ {"$field": "$aasdesc#specificAssetIds[1].externalSubjectId.keys[0].value"}, {"$strVal": "PUBLIC_READABLE"} ]}
+      }
+       
+    ],
+
+    "rules": [
+      { "USEACL": "read_anonymous", "USEOBJECTS": ["description"], "USEFORMULA": "always_true" },
+      { "USEACL": "read_anonymous", "USEOBJECTS": ["all_shell_descriptors"], "USEFORMULA": "anonym_PUBLIC_READABLE",
+      "FILTERLIST": [
+          {
+            "FRAGMENT": "$aasdesc#specificAssetIds[0]",
+            "CONDITION": 
+            {
+              "$eq": [
+                {
+                  "$field": "$aasdesc#specificAssetIds[1].name"
+                },
+                {
+                  "$strVal": "Banane2"
+                }
+              ]
+            }
+          },
+          {
+            "FRAGMENT": "$aasdesc#specificAssetIds[0].name",
+            "CONDITION": 
+            {
+              "$eq": [
+                {
+                  "$field": "$aasdesc#specificAssetIds[1].name"
+                },
+                {
+                  "$strVal": "Banane2"
+                }
+              ]
+            }
+          },
+          {
+            "FRAGMENT": "$aasdesc#specificAssetIds[1].name",
+            "CONDITION": 
+            {
+              "$eq": [
+                {
+                  "$field": "$aasdesc#specificAssetIds[0].name"
+                },
+                {
+                  "$strVal": "irrelevantPartId"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      { "USEACL": "all_admin", "USEOBJECTS": ["all_shell_descriptors"], "USEFORMULA": "role_is_admin" },
+      { "USEACL": "user", "USEOBJECTS": ["all_shell_descriptors"], "USEFORMULA": "role_is_viewer_written_x",
+        "FILTERLIST": [
+          {
+            "FRAGMENT": "$aasdesc#specificAssetIds[0].name",
+            "CONDITION": 
+            {
+              "$eq": [
+                {
+                  "$field": "$aasdesc#specificAssetIds[1].name"
+                },
+                {
+                  "$strVal": "Banane2"
+                }
+              ]
+            }
+          },
+          {
+            "FRAGMENT": "$aasdesc#specificAssetIds[1].name",
+            "CONDITION": 
+            {
+              "$eq": [
+                {
+                  "$field": "$aasdesc#specificAssetIds[0].name"
+                },
+                {
+                  "$strVal": "irrelevantPartId"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      { "USEACL": "user", "USEOBJECTS": ["all_shell_descriptors"], "USEFORMULA": "role_is_viewer_written_y",
+        "FILTER": {
+          "FRAGMENT": "$aasdesc#specificAssetIds[1]",
+          "CONDITION": 
+           {
+            "$eq": [
+              {
+                "$field": "$aasdesc#specificAssetIds[].name"
+              },
+              {
+                "$strVal": "customerPartId"
+              }
+            ]
+          }
+        }
+      }
+    ]
+  }
+}

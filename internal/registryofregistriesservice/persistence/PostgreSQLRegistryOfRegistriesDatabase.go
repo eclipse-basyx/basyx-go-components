@@ -1,5 +1,5 @@
 /*******************************************************************************
-* Copyright (C) 2025 the Eclipse BaSyx Authors and Fraunhofer IESE
+* Copyright (C) 2026 the Eclipse BaSyx Authors and Fraunhofer IESE
 *
 * Permission is hereby granted, free of charge, to any person obtaining
 * a copy of this software and associated documentation files (the
@@ -123,6 +123,7 @@ func (p *PostgreSQLRegistryOfRegistriesDatabase) ListRegistryDescriptors(
 	cursor string,
 	registryType string,
 	company string,
+	endpointInterface string,
 ) ([]model.RegistryDescriptor, string, error) {
-	return descriptors.ListRegistryDescriptors(ctx, p.db, limit, cursor, registryType, company)
+	return descriptors.ListRegistryDescriptors(ctx, p.db, limit, cursor, registryType, company, endpointInterface)
 }

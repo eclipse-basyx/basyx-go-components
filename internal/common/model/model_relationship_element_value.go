@@ -1,5 +1,5 @@
 /*******************************************************************************
-* Copyright (C) 2025 the Eclipse BaSyx Authors and Fraunhofer IESE
+* Copyright (C) 2026 the Eclipse BaSyx Authors and Fraunhofer IESE
 *
 * Permission is hereby granted, free of charge, to any person obtaining
 * a copy of this software and associated documentation files (the
@@ -38,9 +38,9 @@ import "encoding/json"
 
 // RelationshipElementValue A relationship element value consisting of two reference values.
 type RelationshipElementValue struct {
-	First ReferenceValue `json:"first,omitempty"`
+	First *Reference `json:"first,omitempty"`
 
-	Second ReferenceValue `json:"second,omitempty"`
+	Second *Reference `json:"second,omitempty"`
 }
 
 // MarshalValueOnly serializes RelationshipElementValue in Value-Only format
@@ -54,24 +54,37 @@ func (r RelationshipElementValue) MarshalJSON() ([]byte, error) {
 	return r.MarshalValueOnly()
 }
 
+// GetModelType returns the model type name for RelationshipElement
+func (r RelationshipElementValue) GetModelType() string {
+	return "RelationshipElement"
+}
+
 // AssertRelationshipElementValueRequired checks if the required fields are not zero-ed
 func AssertRelationshipElementValueRequired(obj RelationshipElementValue) error {
-	if err := AssertReferenceValueRequired(obj.First); err != nil {
-		return err
+	if obj.First != nil {
+		if err := AssertReferenceValueRequired(*obj.First); err != nil {
+			return err
+		}
 	}
-	if err := AssertReferenceValueRequired(obj.Second); err != nil {
-		return err
+	if obj.Second != nil {
+		if err := AssertReferenceValueRequired(*obj.Second); err != nil {
+			return err
+		}
 	}
 	return nil
 }
 
 // AssertRelationshipElementValueConstraints checks if the values respects the defined constraints
 func AssertRelationshipElementValueConstraints(obj RelationshipElementValue) error {
-	if err := AssertReferenceValueConstraints(obj.First); err != nil {
-		return err
+	if obj.First != nil {
+		if err := AssertReferenceValueConstraints(*obj.First); err != nil {
+			return err
+		}
 	}
-	if err := AssertReferenceValueConstraints(obj.Second); err != nil {
-		return err
+	if obj.Second != nil {
+		if err := AssertReferenceValueConstraints(*obj.Second); err != nil {
+			return err
+		}
 	}
 	return nil
 }

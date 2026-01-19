@@ -1,0 +1,155 @@
+{
+    "1": {
+        "2": {
+            "3": {
+                "4": {
+                    "5": {
+                        "6": [
+                            "122",
+                            "1223",
+                            "12324"
+                        ]
+                    }
+                }
+            }
+        }
+    },
+    "ExampleSubmodelElementCollection": {
+        "ExampleAnnotatedRelationshipElement": {
+            "first": {
+                "type": "ModelReference",
+                "keys": [
+                    {
+                        "type": "Submodel",
+                        "value": "https://acplt.org/Test_Submodel_Missing_UPDA2TED"
+                    },
+                    {
+                        "type": "SubmodelElementList",
+                        "value": "ExampleSubmodelElementListOrdered_UPD2ATED"
+                    },
+                    {
+                        "type": "Property",
+                        "value": "ExampleProperty_UP2DATED"
+                    }
+                ]
+            },
+            "second": {
+                "type": "ModelReference",
+                "keys": [
+                    {
+                        "type": "Submodel",
+                        "value": "https://acplt.org/Test_Submodel_Missing_UPDA2TED"
+                    },
+                    {
+                        "type": "SubmodelElementList",
+                        "value": "ExampleSubmodelElementListOrdered_UPDAT2ED"
+                    },
+                    {
+                        "type": "MultiLanguageProperty",
+                        "value": "ExampleMultiLanguageProperty_UPD2ATED"
+                    }
+                ]
+            },
+            "annotations": {
+                "ExampleProperty": "some example annotation_UP2DATED"
+            }
+        },
+        "ExampleBasicEvent": {
+            "observed": {
+                "type": "ExternalReference",
+                "keys": [
+                    {
+                        "type": "Submodel",
+                        "value": "https://acplt.org/Test_Submodel_Missing_UPDA2TED"
+                    },
+                    {
+                        "type": "SubmodelElementList",
+                        "value": "ExampleSubmodelElementListOrdered_U2PDATED"
+                    },
+                    {
+                        "type": "Property",
+                        "value": "ExampleProperty_UPDATE2D"
+                    }
+                ]
+            }
+        },
+        "ExampleRelationshipElement": {
+            "first": {
+                "type": "ModelReference",
+                "keys": [
+                    {
+                        "type": "Submodel",
+                        "value": "https://acplt.org/Test_Submodel_Missing_UPDA2TED"
+                    },
+                    {
+                        "type": "SubmodelElementList",
+                        "value": "ExampleSubmodelElementListOrdered_UPDAT2ED"
+                    },
+                    {
+                        "type": "Property",
+                        "value": "ExampleProperty_UPDATE2D"
+                    }
+                ]
+            },
+            "second": {
+                "type": "ModelReference",
+                "keys": [
+                    {
+                        "type": "Submodel",
+                        "value": "https://acplt.org/Test_Submodel_Missing_UPDA2TED"
+                    },
+                    {
+                        "type": "SubmodelElementList",
+                        "value": "ExampleSubmodelElementListOrdered_UPDATE2D"
+                    },
+                    {
+                        "type": "MultiLanguageProperty",
+                        "value": "ExampleMultiLanguageProperty_UPDATED2"
+                    }
+                ]
+            }
+        },
+        "ExampleSubmodelElementCollection": {
+            "ExampleBlob": {
+                "contentType": "application/json",
+                "value": "hallo2"
+            },
+            "ExampleFile": {
+                "contentType": "application/pdf",
+                "value": "file:///TestFile.pdf_UPDATED2"
+            },
+            "ExampleReferenceElement": {
+                "type": "ModelReference",
+                "keys": [
+                    {
+                        "type": "Submodel",
+                        "value": "https://acplt.org/Test_Submodel_Missing_UPDATED2"
+                    },
+                    {
+                        "type": "SubmodelElementCollection",
+                        "value": "ExampleSubmodelElementCollection_UPDATED2"
+                    },
+                    {
+                        "type": "File",
+                        "value": "ExampleFile_UPDATED2"
+                    }
+                ]
+            }
+        },
+        "ExampleSubmodelElementListOrdered": [
+            "SM_Updated List Item 1",
+            [
+                {
+                    "language": "en-us2"
+                },
+                {
+                    "text": "Updated List MLP2"
+                }
+            ],
+            {
+                "max": "151",
+                "min": "14"
+            }
+        ]
+    }
+}

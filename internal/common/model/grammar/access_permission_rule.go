@@ -1,5 +1,5 @@
 /*******************************************************************************
-* Copyright (C) 2025 the Eclipse BaSyx Authors and Fraunhofer IESE
+* Copyright (C) 2026 the Eclipse BaSyx Authors and Fraunhofer IESE
 *
 * Permission is hereby granted, free of charge, to any person obtaining
 * a copy of this software and associated documentation files (the
@@ -91,6 +91,9 @@ type AccessPermissionRule struct {
 
 	// FILTER corresponds to the JSON schema field "FILTER".
 	FILTER *AccessPermissionRuleFILTER `json:"FILTER,omitempty" yaml:"FILTER,omitempty" mapstructure:"FILTER,omitempty"`
+
+	// FILTERLIST corresponds to the JSON schema field "FILTERLIST".
+	FILTERLIST []AccessPermissionRuleFILTER `json:"FILTERLIST,omitempty" yaml:"FILTERLIST,omitempty" mapstructure:"FILTERLIST,omitempty"`
 
 	// FORMULA corresponds to the JSON schema field "FORMULA".
 	FORMULA *LogicalExpression `json:"FORMULA,omitempty" yaml:"FORMULA,omitempty" mapstructure:"FORMULA,omitempty"`

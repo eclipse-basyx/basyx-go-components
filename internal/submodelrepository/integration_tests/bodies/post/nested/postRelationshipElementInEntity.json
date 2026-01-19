@@ -1,0 +1,22 @@
+{
+    "idShort": "NestedRelationshipEntity",
+    "modelType": "RelationshipElement",
+    "first": {
+        "type": "ModelReference",
+        "keys": [
+            {
+                "type": "Property",
+                "value": "Prop1"
+            }
+        ]
+    },
+    "second": {
+        "type": "ModelReference",
+        "keys": [
+            {
+                "type": "Property",
+                "value": "Prop2"
+            }
+        ]
+    }
+}

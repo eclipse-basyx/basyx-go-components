@@ -1,5 +1,5 @@
 /*******************************************************************************
-* Copyright (C) 2025 the Eclipse BaSyx Authors and Fraunhofer IESE
+* Copyright (C) 2026 the Eclipse BaSyx Authors and Fraunhofer IESE
 *
 * Permission is hereby granted, free of charge, to any person obtaining
 * a copy of this software and associated documentation files (the
@@ -51,6 +51,11 @@ func (r RangeValue) MarshalValueOnly() ([]byte, error) {
 // MarshalJSON implements custom JSON marshaling for RangeValue
 func (r RangeValue) MarshalJSON() ([]byte, error) {
 	return r.MarshalValueOnly()
+}
+
+// GetModelType returns the model type name for Range
+func (r RangeValue) GetModelType() string {
+	return "Range"
 }
 
 // AssertRangeValueRequired checks if the required fields are not zero-ed

@@ -1,0 +1,7 @@
+{
+    "idShort": "NestedRangeAnnotation",
+    "modelType": "Range",
+    "min": "1.5",
+    "max": "9.5",
+    "valueType": "xs:double"
+}

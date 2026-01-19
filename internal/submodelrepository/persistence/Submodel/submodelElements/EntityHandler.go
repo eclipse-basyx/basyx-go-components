@@ -1,5 +1,5 @@
 /*******************************************************************************
-* Copyright (C) 2025 the Eclipse BaSyx Authors and Fraunhofer IESE
+* Copyright (C) 2026 the Eclipse BaSyx Authors and Fraunhofer IESE
 *
 * Permission is hereby granted, free of charge, to any person obtaining
 * a copy of this software and associated documentation files (the
@@ -29,8 +29,10 @@ package submodelelements
 import (
 	"database/sql"
 
+	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	persistenceutils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
 	jsoniter "github.com/json-iterator/go"
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 )
@@ -130,17 +132,163 @@ func (p PostgreSQLEntityHandler) CreateNested(tx *sql.Tx, submodelID string, par
 	return id, nil
 }
 
-// Update modifies an existing Entity submodel element in the database.
-// Currently delegates to the decorated handler for base SubmodelElement updates.
+// Update modifies an existing Entity element identified by its idShort or path.
+// This method delegates the update operation to the decorated CRUD handler which handles
+// the common submodel element update logic and additionally manages Entity-specific fields.
 //
 // Parameters:
+//   - submodelID: The ID of the parent submodel
 //   - idShortOrPath: The idShort or path identifier of the element to update
-//   - submodelElement: The updated Entity element data
+//   - submodelElement: The updated Entity element data (must be of type *gen.Entity)
+//   - tx: Optional database transaction (created if nil)
+//   - isPut: true for PUT (replace all), false for PATCH (update only provided fields)
 //
 // Returns:
-//   - error: Error if the update operation fails
-func (p PostgreSQLEntityHandler) Update(idShortOrPath string, submodelElement gen.SubmodelElement) error {
-	return p.decorated.Update(idShortOrPath, submodelElement)
+//   - error: Error if the update operation fails or element is not of correct type
+func (p PostgreSQLEntityHandler) Update(submodelID string, idShortOrPath string, submodelElement gen.SubmodelElement, tx *sql.Tx, isPut bool) error {
+	entity, ok := submodelElement.(*gen.Entity)
+	if !ok {
+		return common.NewErrBadRequest("submodelElement is not of type Entity")
+	}
+
+	var err error
+	cu, localTx, err := persistenceutils.StartTXIfNeeded(tx, err, p.db)
+	if err != nil {
+		return err
+	}
+	defer cu(&err)
+	// For PUT operations or when Statements are provided, delete all children
+	if isPut || entity.Statements != nil {
+		err = DeleteAllChildren(p.db, submodelID, idShortOrPath, tx)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Update base submodel element properties
+	err = p.decorated.Update(submodelID, idShortOrPath, submodelElement, tx, isPut)
+	if err != nil {
+		return err
+	}
+
+	elementID, err := p.decorated.GetDatabaseID(submodelID, idShortOrPath)
+	if err != nil {
+		return err
+	}
+
+	// Build update record for Entity-specific fields
+	updateRecord, err := buildUpdateEntityRecordObject(isPut, entity)
+	if err != nil {
+		return err
+	}
+
+	dialect := goqu.Dialect("postgres")
+
+	// Execute update if there are fields to update
+	if persistenceutils.AnyFieldsToUpdate(updateRecord) {
+		updateQuery, updateArgs, err := dialect.Update("entity_element").
+			Set(updateRecord).
+			Where(goqu.C("id").Eq(elementID)).
+			ToSQL()
+		if err != nil {
+			return err
+		}
+
+		_, err = localTx.Exec(updateQuery, updateArgs...)
+		if err != nil {
+			return err
+		}
+	}
+
+	return persistenceutils.CommitTransactionIfNeeded(tx, localTx)
+}
+
+// UpdateValueOnly updates only the value of an existing Entity submodel element identified by its idShort or path.
+// It updates the entity type, global asset ID, and specific asset IDs based on the provided value.
+//
+// Parameters:
+//   - submodelID: The ID of the parent submodel
+//   - idShortOrPath: The idShort or path identifying the element to update
+//   - valueOnly: The new value to set (must be of type gen.EntityValue)
+//
+// Returns:
+//   - error: An error if the update operation fails
+func (p PostgreSQLEntityHandler) UpdateValueOnly(submodelID string, idShortOrPath string, valueOnly gen.SubmodelElementValue) error {
+	tx, err := p.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = tx.Rollback()
+	}()
+
+	entityValueOnly, ok := valueOnly.(gen.EntityValue)
+	if !ok {
+		return common.NewErrBadRequest("valueOnly is not of type EntityValue")
+	}
+	elems, err := persistenceutils.BuildElementsToProcessStackValueOnly(p.db, submodelID, idShortOrPath, valueOnly)
+	if err != nil {
+		return err
+	}
+	err = UpdateNestedElementsValueOnly(p.db, elems, idShortOrPath, submodelID)
+	if err != nil {
+		return err
+	}
+
+	dialect := goqu.Dialect("postgres")
+
+	var elementID int
+	query, args, err := dialect.From("submodel_element").
+		InnerJoin(
+			goqu.T("entity_element"),
+			goqu.On(goqu.I("submodel_element.id").Eq(goqu.I("entity_element.id"))),
+		).
+		Select("submodel_element.id").
+		Where(
+			goqu.C("idshort_path").Eq(idShortOrPath),
+			goqu.C("submodel_id").Eq(submodelID),
+		).
+		ToSQL()
+	if err != nil {
+		return err
+	}
+	err = tx.QueryRow(query, args...).Scan(&elementID)
+	if err != nil {
+		return err
+	}
+
+	var specificAssetIDs string
+	if entityValueOnly.SpecificAssetIds != nil {
+		json := jsoniter.ConfigCompatibleWithStandardLibrary
+		specificAssetIDsBytes, err := json.Marshal(entityValueOnly.SpecificAssetIds)
+		if err != nil {
+			return err
+		}
+		specificAssetIDs = string(specificAssetIDsBytes)
+	} else {
+		specificAssetIDs = "[]"
+	}
+
+	updateQuery, args, err := dialect.Update("entity_element").
+		Set(
+			goqu.Record{
+				"entity_type":        entityValueOnly.EntityType,
+				"global_asset_id":    entityValueOnly.GlobalAssetID,
+				"specific_asset_ids": specificAssetIDs,
+			},
+		).
+		Where(goqu.C("id").Eq(elementID)).
+		ToSQL()
+	if err != nil {
+		return err
+	}
+	_, err = tx.Exec(updateQuery, args...)
+	if err != nil {
+		return err
+	}
+
+	err = tx.Commit()
+	return err
 }
 
 // Delete removes an Entity submodel element from the database.
@@ -167,10 +315,62 @@ func insertEntity(entity *gen.Entity, tx *sql.Tx, id int) error {
 		specificAssetIDs = string(specificAssetIDsBytes)
 	}
 
-	_, err := tx.Exec(`INSERT INTO entity_element (id, entity_type, global_asset_id, specific_asset_ids) VALUES ($1, $2, $3, $4)`,
-		id, entity.EntityType, entity.GlobalAssetID, specificAssetIDs)
+	dialect := goqu.Dialect("postgres")
+	insertQuery, insertArgs, err := dialect.Insert("entity_element").
+		Rows(goqu.Record{
+			"id":                 id,
+			"entity_type":        entity.EntityType,
+			"global_asset_id":    entity.GlobalAssetID,
+			"specific_asset_ids": specificAssetIDs,
+		}).
+		ToSQL()
+	if err != nil {
+		return err
+	}
+	_, err = tx.Exec(insertQuery, insertArgs...)
 	if err != nil {
 		return err
 	}
 	return nil
+}
+
+func buildUpdateEntityRecordObject(isPut bool, entity *gen.Entity) (goqu.Record, error) {
+	updateRecord := goqu.Record{}
+
+	if isPut {
+		// PUT: Always update all fields
+		json := jsoniter.ConfigCompatibleWithStandardLibrary
+		specificAssetIDs := "[]"
+		if entity.SpecificAssetIds != nil {
+			specificAssetIDsBytes, err := json.Marshal(entity.SpecificAssetIds)
+			if err != nil {
+				return nil, err
+			}
+			specificAssetIDs = string(specificAssetIDsBytes)
+		}
+
+		updateRecord["entity_type"] = entity.EntityType
+		updateRecord["global_asset_id"] = entity.GlobalAssetID
+		updateRecord["specific_asset_ids"] = specificAssetIDs
+	} else {
+		// PATCH: Only update provided fields
+		// Note: EntityType is a string enum, so we check if it's not empty
+		if entity.EntityType != "" {
+			updateRecord["entity_type"] = entity.EntityType
+		}
+
+		if entity.GlobalAssetID != "" {
+			updateRecord["global_asset_id"] = entity.GlobalAssetID
+		}
+
+		if entity.SpecificAssetIds != nil {
+			json := jsoniter.ConfigCompatibleWithStandardLibrary
+			specificAssetIDsBytes, err := json.Marshal(entity.SpecificAssetIds)
+			if err != nil {
+				return nil, err
+			}
+			updateRecord["specific_asset_ids"] = string(specificAssetIDsBytes)
+		}
+	}
+	return updateRecord, nil
 }

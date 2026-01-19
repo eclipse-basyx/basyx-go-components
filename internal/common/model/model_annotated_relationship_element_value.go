@@ -1,5 +1,5 @@
 /*******************************************************************************
-* Copyright (C) 2025 the Eclipse BaSyx Authors and Fraunhofer IESE
+* Copyright (C) 2026 the Eclipse BaSyx Authors and Fraunhofer IESE
 *
 * Permission is hereby granted, free of charge, to any person obtaining
 * a copy of this software and associated documentation files (the
@@ -37,12 +37,12 @@ package model
 import "encoding/json"
 
 type AnnotatedRelationshipElementValue struct {
-	First ReferenceValue `json:"first,omitempty"`
+	First Reference `json:"first,omitempty"`
 
-	Second ReferenceValue `json:"second,omitempty"`
+	Second Reference `json:"second,omitempty"`
 
 	// The ValueOnly serialization (patternProperties and propertyNames will probably be supported with OpenApi 3.1). For the full description of the generic JSON validation schema see the ValueOnly-Serialization as defined in the 'Specification of the Asset Administration Shell - Part 2'.
-	Annotations map[string]interface{} `json:"annotations,omitempty"`
+	Annotations map[string]SubmodelElementValue `json:"annotations,omitempty"`
 }
 
 // MarshalValueOnly serializes AnnotatedRelationshipElementValue in Value-Only format
@@ -54,6 +54,11 @@ func (a AnnotatedRelationshipElementValue) MarshalValueOnly() ([]byte, error) {
 // MarshalJSON implements custom JSON marshaling for AnnotatedRelationshipElementValue
 func (a AnnotatedRelationshipElementValue) MarshalJSON() ([]byte, error) {
 	return a.MarshalValueOnly()
+}
+
+// GetModelType returns the model type name for AnnotatedRelationshipElement
+func (a AnnotatedRelationshipElementValue) GetModelType() string {
+	return "AnnotatedRelationshipElement"
 }
 
 // AssertAnnotatedRelationshipElementValueRequired checks if the required fields are not zero-ed

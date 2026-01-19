@@ -1,5 +1,5 @@
 /*******************************************************************************
-* Copyright (C) 2025 the Eclipse BaSyx Authors and Fraunhofer IESE
+* Copyright (C) 2026 the Eclipse BaSyx Authors and Fraunhofer IESE
 *
 * Permission is hereby granted, free of charge, to any person obtaining
 * a copy of this software and associated documentation files (the
@@ -29,11 +29,45 @@ package descriptors
 import (
 	"context"
 	"database/sql"
+	"fmt"
 
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
+	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	"github.com/lib/pq"
 )
+
+type rowData struct {
+	descID               int64
+	specificID           int64
+	name, value          sql.NullString
+	semanticRefID        sql.NullInt64
+	externalSubjectRefID sql.NullInt64
+}
+
+var expMapper = []auth.ExpressionIdentifiableMapper{
+	{
+		Exp: tSpecificAssetID.Col(colDescriptorID),
+	},
+	{
+		Exp: tSpecificAssetID.Col(colID),
+	},
+	{
+		Exp:      tSpecificAssetID.Col(colName),
+		Fragment: fragPtr("$aasdesc#specificAssetIds[].name"),
+	},
+	{
+		Exp:      tSpecificAssetID.Col(colValue),
+		Fragment: fragPtr("$aasdesc#specificAssetIds[].value"),
+	},
+	{
+		Exp: tSpecificAssetID.Col(colSemanticID),
+	},
+	{
+		Exp: tSpecificAssetID.Col(colExternalSubjectRef),
+	},
+}
 
 // ReadSpecificAssetIDsByDescriptorID returns all SpecificAssetIDs that belong to
 // a single AAS descriptor identified by its numeric descriptor ID.
@@ -83,35 +117,57 @@ func ReadSpecificAssetIDsByDescriptorIDs(
 	}
 
 	d := goqu.Dialect(dialect)
-	sai := goqu.T(tblSpecificAssetID).As("sai")
 
 	arr := pq.Array(descriptorIDs)
-	sqlStr, args, err := d.
-		From(sai).
-		Select(
-			sai.Col(colDescriptorID),
-			sai.Col(colID),
-			sai.Col(colName),
-			sai.Col(colValue),
-			sai.Col(colSemanticID),
-			sai.Col(colExternalSubjectRef),
+
+	collector, err := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootAASDesc)
+	if err != nil {
+		return nil, err
+	}
+	expressions, err := auth.GetColumnSelectStatement(ctx, expMapper, collector)
+	if err != nil {
+		return nil, err
+	}
+	base := d.From(tDescriptor).
+		InnerJoin(
+			tAASDescriptor,
+			goqu.On(tAASDescriptor.Col(colDescriptorID).Eq(tDescriptor.Col(colID))),
 		).
-		Where(goqu.L("sai.descriptor_id = ANY(?::bigint[])", arr)).
+		LeftJoin(
+			specificAssetIDAlias,
+			goqu.On(specificAssetIDAlias.Col(colDescriptorID).Eq(tDescriptor.Col(colID))),
+		).Select(
+		expressions[0],
+		expressions[1],
+		expressions[2],
+		expressions[3],
+		expressions[4],
+		expressions[5],
+	).
+		Where(goqu.L(fmt.Sprintf("%s.%s = ANY(?::bigint[])", aliasSpecificAssetID, colDescriptorID), arr)).
+		GroupBy(
+			expressions[0], // descriptor_id
+			expressions[1], // id
+		).
 		Order(
-			sai.Col("position").Asc(),
-		).
-		ToSQL()
+			tSpecificAssetID.Col(colPosition).Asc(),
+		)
+
+	base, err = auth.AddFilterQueryFromContext(ctx, base, "$aasdesc#specificAssetIds[]", collector)
+	if err != nil {
+		return nil, err
+	}
+	cteWhere := goqu.L(fmt.Sprintf("%s.%s = ANY(?::bigint[])", aliasSpecificAssetID, colDescriptorID), arr)
+	base, err = auth.ApplyResolvedFieldPathCTEs(base, collector, cteWhere)
 	if err != nil {
 		return nil, err
 	}
 
-	type rowData struct {
-		descID               int64
-		specificID           int64
-		name, value          sql.NullString
-		semanticRefID        sql.NullInt64
-		externalSubjectRefID sql.NullInt64
+	sqlStr, args, err := base.ToSQL()
+	if err != nil {
+		return nil, err
 	}
+
 	rows, err := db.QueryContext(ctx, sqlStr, args...)
 	if err != nil {
 		return nil, err
@@ -229,4 +285,9 @@ func nvl(ns sql.NullString) string {
 		return ns.String
 	}
 	return ""
+}
+
+func fragPtr(s string) *grammar.FragmentStringPattern {
+	frag := grammar.FragmentStringPattern(s)
+	return &frag
 }

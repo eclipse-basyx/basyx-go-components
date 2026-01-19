@@ -1,0 +1,34 @@
+{
+  "id": "https://example.org/B",
+    "endpoints": [
+        {
+            "protocolInformation": {
+                "href": "hrefB",
+                "endpointProtocol": "http"
+            },
+            "interface": "AAS-3.0"
+        }
+    ],
+    "extensions": [
+        {
+            "name": "help",
+            "valueType": "xs:string",
+            "value": "test"
+        }
+    ],
+  "specificAssetIds": [
+    {
+      "name": "customerPartId",
+      "value": "39480543",
+      "externalSubjectId": {
+        "type": "ExternalReference",
+        "keys": [
+          {
+            "type": "GlobalReference",
+            "value": "WRITTEN_BY_Y"
+          }
+        ]
+      }
+    }
+  ]
+}

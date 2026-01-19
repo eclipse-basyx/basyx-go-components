@@ -1,5 +1,5 @@
 /*******************************************************************************
-* Copyright (C) 2025 the Eclipse BaSyx Authors and Fraunhofer IESE
+* Copyright (C) 2026 the Eclipse BaSyx Authors and Fraunhofer IESE
 *
 * Permission is hereby granted, free of charge, to any person obtaining
 * a copy of this software and associated documentation files (the
@@ -37,6 +37,7 @@ import (
 type PostgreSQLSMECrudInterface interface {
 	Create(*sql.Tx, string, gen.SubmodelElement) (int, error)
 	CreateNested(*sql.Tx, string, int, string, gen.SubmodelElement, int, int) (int, error)
-	Update(string, gen.SubmodelElement) error
+	Update(string, string, gen.SubmodelElement, *sql.Tx, bool) error
+	UpdateValueOnly(string, string, gen.SubmodelElementValue) error
 	Delete(string) error
 }

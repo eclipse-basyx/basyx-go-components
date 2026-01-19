@@ -1,5 +1,5 @@
 /*******************************************************************************
-* Copyright (C) 2025 the Eclipse BaSyx Authors and Fraunhofer IESE
+* Copyright (C) 2026 the Eclipse BaSyx Authors and Fraunhofer IESE
 *
 * Permission is hereby granted, free of charge, to any person obtaining
 * a copy of this software and associated documentation files (the
@@ -44,7 +44,7 @@ type EntityValue struct {
 	SpecificAssetIds []map[string]interface{} `json:"specificAssetIds,omitempty"`
 
 	// The ValueOnly serialization (patternProperties and propertyNames will probably be supported with OpenApi 3.1). For the full description of the generic JSON validation schema see the ValueOnly-Serialization as defined in the 'Specification of the Asset Administration Shell - Part 2'.
-	Statements map[string]interface{} `json:"statements,omitempty"`
+	Statements map[string]SubmodelElementValue `json:"statements,omitempty"`
 }
 
 // MarshalValueOnly serializes EntityValue in Value-Only format
@@ -56,6 +56,42 @@ func (e EntityValue) MarshalValueOnly() ([]byte, error) {
 // MarshalJSON implements custom JSON marshaling for EntityValue
 func (e EntityValue) MarshalJSON() ([]byte, error) {
 	return e.MarshalValueOnly()
+}
+
+// UnmarshalJSON implements custom JSON unmarshaling for EntityValue
+func (e *EntityValue) UnmarshalJSON(data []byte) error {
+	// Create a temporary struct with the same fields but Statements as map[string]json.RawMessage
+	type Alias EntityValue
+	aux := &struct {
+		Statements map[string]json.RawMessage `json:"statements,omitempty"`
+		*Alias
+	}{
+		Alias: (*Alias)(e),
+	}
+
+	// Unmarshal into the temporary struct
+	if err := json.Unmarshal(data, aux); err != nil {
+		return err
+	}
+
+	// Now process the Statements field manually
+	if aux.Statements != nil {
+		e.Statements = make(map[string]SubmodelElementValue, len(aux.Statements))
+		for key, rawValue := range aux.Statements {
+			value, err := UnmarshalSubmodelElementValue(rawValue)
+			if err != nil {
+				return err
+			}
+			e.Statements[key] = value
+		}
+	}
+
+	return nil
+}
+
+// GetModelType returns the model type name for Entity
+func (e EntityValue) GetModelType() string {
+	return "Entity"
 }
 
 // AssertEntityValueRequired checks if the required fields are not zero-ed

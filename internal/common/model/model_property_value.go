@@ -1,5 +1,5 @@
 /*******************************************************************************
-* Copyright (C) 2025 the Eclipse BaSyx Authors and Fraunhofer IESE
+* Copyright (C) 2026 the Eclipse BaSyx Authors and Fraunhofer IESE
 *
 * Permission is hereby granted, free of charge, to any person obtaining
 * a copy of this software and associated documentation files (the
@@ -50,6 +50,11 @@ func (p PropertyValue) MarshalValueOnly() ([]byte, error) {
 // MarshalJSON implements custom JSON marshaling for PropertyValue
 func (p PropertyValue) MarshalJSON() ([]byte, error) {
 	return p.MarshalValueOnly()
+}
+
+// GetModelType returns the model type name for Property
+func (p PropertyValue) GetModelType() string {
+	return "Property"
 }
 
 // UnmarshalJSON implements custom JSON unmarshaling for PropertyValue
