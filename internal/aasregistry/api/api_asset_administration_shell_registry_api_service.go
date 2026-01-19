@@ -356,6 +356,11 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) PostSubmodelDescriptorTh
 			return common.NewErrorResponse(
 				err, http.StatusNotFound, componentName, "PostSubmodelDescriptorThroughSuperpath", "NotFound",
 			), nil
+		case common.IsErrDenied(err):
+			log.Printf("🧩 [%s] Error in PostSubmodelDescriptorThroughSuperpath: denied (aasId=%q submodelId=%q): %v", componentName, decodedAAS, submodelDescriptor.Id, err)
+			return common.NewErrorResponse(
+				err, http.StatusForbidden, componentName, "PostSubmodelDescriptorThroughSuperpath", "Denied",
+			), nil
 		case common.IsErrBadRequest(err):
 			log.Printf("🧩 [%s] Error in PostSubmodelDescriptorThroughSuperpath: bad request (aasId=%q submodelId=%q): %v", componentName, decodedAAS, submodelDescriptor.Id, err)
 			return common.NewErrorResponse(
@@ -448,6 +453,11 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) PutSubmodelDescriptorByI
 				return common.NewErrorResponse(
 					err, http.StatusNotFound, componentName, "PostSubmodelDescriptorThroughSuperpath", "NotFound",
 				), nil
+			case common.IsErrDenied(err):
+				log.Printf("🧩 [%s] Error in PostSubmodelDescriptorThroughSuperpath: denied (aasId=%q submodelId=%q): %v", componentName, decodedAAS, submodelDescriptor.Id, err)
+				return common.NewErrorResponse(
+					err, http.StatusForbidden, componentName, "PostSubmodelDescriptorThroughSuperpath", "Denied",
+				), nil
 			case common.IsErrBadRequest(err):
 				log.Printf("🧩 [%s] Error in PostSubmodelDescriptorThroughSuperpath: bad request (aasId=%q submodelId=%q): %v", componentName, decodedAAS, submodelDescriptor.Id, err)
 				return common.NewErrorResponse(
@@ -476,6 +486,11 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) PutSubmodelDescriptorByI
 			log.Printf("🧩 [%s] Error in PutSubmodelDescriptorByIdThroughSuperpath: not found (aasId=%q submodelId=%q): %v", componentName, decodedAAS, submodelDescriptor.Id, err)
 			return common.NewErrorResponse(
 				err, http.StatusNotFound, componentName, "PutSubmodelDescriptorByIdThroughSuperpath", "NotFound",
+			), nil
+		case common.IsErrDenied(err):
+			log.Printf("🧩 [%s] Error in PutSubmodelDescriptorByIdThroughSuperpath: denied (aasId=%q submodelId=%q): %v", componentName, decodedAAS, submodelDescriptor.Id, err)
+			return common.NewErrorResponse(
+				err, http.StatusForbidden, componentName, "PutSubmodelDescriptorByIdThroughSuperpath", "Denied",
 			), nil
 		case common.IsErrBadRequest(err):
 			log.Printf("🧩 [%s] Error in PutSubmodelDescriptorByIdThroughSuperpath: bad request (aasId=%q submodelId=%q): %v", componentName, decodedAAS, submodelDescriptor.Id, err)
@@ -516,6 +531,11 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) DeleteSubmodelDescriptor
 			log.Printf("🧩 [%s] Error in DeleteSubmodelDescriptorByIdThroughSuperpath: not found (aasId=%q submodelId=%q): %v", componentName, decodedAAS, decodedSMD, err)
 			return common.NewErrorResponse(
 				err, http.StatusNotFound, componentName, "DeleteSubmodelDescriptorByIdThroughSuperpath", "NotFound",
+			), nil
+		case common.IsErrDenied(err):
+			log.Printf("🧩 [%s] Error in DeleteSubmodelDescriptorByIdThroughSuperpath: denied (aasId=%q submodelId=%q): %v", componentName, decodedAAS, decodedSMD, err)
+			return common.NewErrorResponse(
+				err, http.StatusForbidden, componentName, "DeleteSubmodelDescriptorByIdThroughSuperpath", "Denied",
 			), nil
 		case common.IsErrBadRequest(err):
 			log.Printf("🧩 [%s] Error in DeleteSubmodelDescriptorByIdThroughSuperpath: bad request (aasId=%q submodelId=%q): %v", componentName, decodedAAS, decodedSMD, err)

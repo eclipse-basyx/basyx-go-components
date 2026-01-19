@@ -1685,7 +1685,3 @@ func strString(value string) StringValue {
 	s := StandardString(value)
 	return StringValue{StrVal: &s}
 }
-
-func boolPtr(b bool) *bool {
-	return &b
-}

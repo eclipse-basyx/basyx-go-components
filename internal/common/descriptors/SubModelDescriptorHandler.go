@@ -210,7 +210,7 @@ func insertSubmodelDescriptorForAASTx(
 		return model.SubmodelDescriptor{}, err
 	}
 
-	return GetSubmodelDescriptorForAASByID(ctx, tx, aasID, submodel.Id)
+	return getSubmodelDescriptorForAASByIDSecurity(ctx, tx, aasID, submodel.Id)
 }
 
 // ReplaceSubmodelDescriptorForAAS atomically replaces the submodel descriptor
@@ -273,6 +273,25 @@ func GetSubmodelDescriptorForAASByID(
 	return model.SubmodelDescriptor{}, common.NewErrNotFound("Submodel Descriptor not found")
 }
 
+// getSubmodelDescriptorForAASByIDSecurity return a 403 instead of 404 for security reasons
+func getSubmodelDescriptorForAASByIDSecurity(
+	ctx context.Context,
+	db DBQueryer,
+	aasID string,
+	submodelID string,
+) (model.SubmodelDescriptor, error) {
+	smdescs, _, err := ListSubmodelDescriptorsForAAS(ctx, db, aasID, 0, "")
+	if err != nil {
+		return model.SubmodelDescriptor{}, err
+	}
+	for _, smd := range smdescs {
+		if smd.Id == submodelID {
+			return smd, nil
+		}
+	}
+	return model.SubmodelDescriptor{}, common.NewErrDenided("Submodel Descriptor access not allowed")
+}
+
 // DeleteSubmodelDescriptorForAASByID deletes the submodel descriptor under the
 // given AAS. The function locates the base descriptor id by joining the AAS and
 // submodel tables and then deletes the row from the base descriptor table. ON
@@ -294,7 +313,7 @@ func DeleteSubmodelDescriptorForAASByID(
 		}
 	}()
 
-	_, err = GetSubmodelDescriptorForAASByID(ctx, db, aasID, submodelID)
+	_, err = getSubmodelDescriptorForAASByIDSecurity(ctx, db, aasID, submodelID)
 	if err != nil {
 		return err
 	}
