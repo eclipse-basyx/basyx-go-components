@@ -261,14 +261,9 @@ func GetSubmodelDescriptorForAASByID(
 	aasID string,
 	submodelID string,
 ) (model.SubmodelDescriptor, error) {
-	smdescs, _, err := ListSubmodelDescriptorsForAAS(ctx, db, aasID, 0, "")
-	if err != nil {
-		return model.SubmodelDescriptor{}, err
-	}
-	for _, smd := range smdescs {
-		if smd.Id == submodelID {
-			return smd, nil
-		}
+	res, err := getSubmodelDescriptorForAASByIDHelper(ctx, db, aasID, submodelID)
+	if err == nil {
+		return res, nil
 	}
 	return model.SubmodelDescriptor{}, common.NewErrNotFound("Submodel Descriptor not found")
 }
@@ -280,16 +275,30 @@ func getSubmodelDescriptorForAASByIDSecurity(
 	aasID string,
 	submodelID string,
 ) (model.SubmodelDescriptor, error) {
+	res, err := getSubmodelDescriptorForAASByIDHelper(ctx, db, aasID, submodelID)
+	if err == nil {
+		return res, nil
+	}
+	return model.SubmodelDescriptor{}, common.NewErrDenided("Submodel Descriptor access not allowed")
+}
+
+func getSubmodelDescriptorForAASByIDHelper(
+	ctx context.Context,
+	db DBQueryer,
+	aasID string,
+	submodelID string,
+) (model.SubmodelDescriptor, error) {
 	smdescs, _, err := ListSubmodelDescriptorsForAAS(ctx, db, aasID, 0, "")
 	if err != nil {
 		return model.SubmodelDescriptor{}, err
 	}
+	// TODO: do that in sql not in memory
 	for _, smd := range smdescs {
 		if smd.Id == submodelID {
 			return smd, nil
 		}
 	}
-	return model.SubmodelDescriptor{}, common.NewErrDenided("Submodel Descriptor access not allowed")
+	return model.SubmodelDescriptor{}, err
 }
 
 // DeleteSubmodelDescriptorForAASByID deletes the submodel descriptor under the
