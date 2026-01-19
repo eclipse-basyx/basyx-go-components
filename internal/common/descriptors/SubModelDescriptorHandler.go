@@ -210,7 +210,7 @@ func insertSubmodelDescriptorForAASTx(
 		return model.SubmodelDescriptor{}, err
 	}
 
-	return getSubmodelDescriptorForAASByIDSecurity(ctx, tx, aasID, submodel.Id)
+	return getSubmodelDescriptorForAASByIDOrDenied(ctx, tx, aasID, submodel.Id)
 }
 
 // ReplaceSubmodelDescriptorForAAS atomically replaces the submodel descriptor
@@ -230,19 +230,16 @@ func ReplaceSubmodelDescriptorForAAS(
 	if err != nil {
 		return model.SubmodelDescriptor{}, common.NewInternalServerError("Failed to start postgres transaction. See console for information.")
 	}
-	defer func() {
-		if rec := recover(); rec != nil {
-			_ = tx.Rollback()
-		}
-	}()
 
 	err = deleteSubmodelDescriptorForAASByIDTx(ctx, tx, aasID, submodel.Id)
 
 	if err != nil {
+		_ = tx.Rollback()
 		return model.SubmodelDescriptor{}, err
 	}
 	result, err := insertSubmodelDescriptorForAASTx(ctx, tx, aasID, submodel)
 	if err != nil {
+		_ = tx.Rollback()
 		return model.SubmodelDescriptor{}, err
 	}
 
@@ -275,7 +272,7 @@ func GetSubmodelDescriptorForAASByID(
 }
 
 // getSubmodelDescriptorForAASByIDSecurity return a 403 instead of 404 for security reasons
-func getSubmodelDescriptorForAASByIDSecurity(
+func getSubmodelDescriptorForAASByIDOrDenied(
 	ctx context.Context,
 	db DBQueryer,
 	aasID string,
@@ -291,7 +288,7 @@ func getSubmodelDescriptorForAASByIDSecurity(
 			return smd, nil
 		}
 	}
-	return model.SubmodelDescriptor{}, common.NewErrDenided("Submodel Descriptor access not allowed")
+	return model.SubmodelDescriptor{}, common.NewErrDenied("Submodel Descriptor access not allowed")
 }
 
 // DeleteSubmodelDescriptorForAASByID deletes the submodel descriptor under the
@@ -327,11 +324,11 @@ func DeleteSubmodelDescriptorForAASByID(
 	return tx.Commit()
 }
 
-// DeleteSubmodelDescriptorForAASByID deletes the submodel descriptor under the
-// given AAS. The function locates the base descriptor id by joining the AAS and
-// submodel tables and then deletes the row from the base descriptor table. ON
-// DELETE CASCADE in the schema cleans up related rows. The delete runs in a
-// transaction.
+// deleteSubmodelDescriptorForAASByIDTx deletes the submodel descriptor under the
+// given AAS within an existing transaction. The function locates the base
+// descriptor id by joining the AAS and submodel tables and then deletes the row
+// from the base descriptor table. ON DELETE CASCADE in the schema cleans up
+// related rows.
 func deleteSubmodelDescriptorForAASByIDTx(
 	ctx context.Context,
 	tx *sql.Tx,

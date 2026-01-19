@@ -1,7 +1,6 @@
 package grammar
 
 import (
-	"fmt"
 	"strings"
 	"testing"
 
@@ -66,7 +65,7 @@ func TestLogicalExpression_SMDesc_WithCollector_BuildsCTE(t *testing.T) {
 	}
 
 	sql, args, err := ds.Prepared(true).ToSQL()
-	_, _ = fmt.Println(sql)
+
 	if err != nil {
 		t.Fatalf("ToSQL returned error: %v", err)
 	}

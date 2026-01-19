@@ -193,7 +193,7 @@ func ReadSubmodelDescriptorsByAASDescriptorIDs(
 	}
 
 	sqlStr, args, err := ds.ToSQL()
-	fmt.Println(sqlStr, args)
+
 	if err != nil {
 		return nil, err
 	}

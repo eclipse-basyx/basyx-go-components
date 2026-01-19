@@ -120,14 +120,14 @@ func NewErrConflict(message string) error {
 	return errors.New("409 Conflict: " + message)
 }
 
-// NewErrDenided creates a standardized "403 Denied" error.
+// NewErrDenied creates a standardized "403 Denied" error.
 //
 // Parameters:
 //   - message: Description of the denied action that occurred
 //
 // Returns:
 //   - error: An error with message format "403 Denied: <message>"
-func NewErrDenided(message string) error {
+func NewErrDenied(message string) error {
 	return errors.New("403 Denied: " + message)
 }
 
@@ -202,6 +202,7 @@ func IsInternalServerError(err error) bool {
 func IsErrConflict(err error) bool {
 	return err != nil && strings.HasPrefix(err.Error(), "409 Conflict: ")
 }
+
 // IsErrDenied checks if the given error is a "403 Denied" error.
 //
 // Parameters:

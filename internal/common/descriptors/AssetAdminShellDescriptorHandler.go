@@ -284,8 +284,8 @@ func deleteAssetAdministrationShellDescriptorByIDTx(ctx context.Context, tx *sql
 // ReplaceAdministrationShellDescriptor atomically replaces the descriptor with
 // the same AAS Id: if a descriptor exists it is deleted (base descriptor row),
 // then the provided descriptor is inserted. Related rows are recreated from the
-// input. The returned boolean indicates whether a descriptor existed before the
-// replace.
+// input. The returned descriptor is the stored AssetAdministrationShellDescriptor
+// after replacement.
 func ReplaceAdministrationShellDescriptor(ctx context.Context, db *sql.DB, aasd model.AssetAdministrationShellDescriptor) (model.AssetAdministrationShellDescriptor, error) {
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
