@@ -1,0 +1,10 @@
+{
+    "idShort": "NestedMultiLangList",
+    "modelType": "MultiLanguageProperty",
+    "value": [
+        {
+            "language": "en",
+            "text": "nested in list"
+        }
+    ]
+}

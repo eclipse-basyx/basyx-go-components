@@ -37,6 +37,7 @@ import (
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	smrepoconfig "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/config"
 	smrepoerrors "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/errors"
+	persistenceutils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 )
 
@@ -96,8 +97,19 @@ func (p PostgreSQLBlobHandler) Create(tx *sql.Tx, submodelID string, submodelEle
 	}
 
 	// Blob-specific database insertion
-	_, err = tx.Exec(`INSERT INTO blob_element (id, content_type, value) VALUES ($1, $2, $3)`,
-		id, blob.ContentType, []byte(blob.Value))
+	dialect := goqu.Dialect("postgres")
+	insertQuery, insertArgs, err := dialect.Insert("blob_element").
+		Rows(goqu.Record{
+			"id":           id,
+			"content_type": blob.ContentType,
+			"value":        []byte(blob.Value),
+		}).
+		ToSQL()
+	if err != nil {
+		return 0, err
+	}
+
+	_, err = tx.Exec(insertQuery, insertArgs...)
 	if err != nil {
 		return 0, err
 	}
@@ -133,8 +145,19 @@ func (p PostgreSQLBlobHandler) CreateNested(tx *sql.Tx, submodelID string, paren
 	}
 
 	// Blob-specific database insertion for nested element
-	_, err = tx.Exec(`INSERT INTO blob_element (id, content_type, value) VALUES ($1, $2, $3)`,
-		id, blob.ContentType, []byte(blob.Value))
+	dialect := goqu.Dialect("postgres")
+	insertQuery, insertArgs, err := dialect.Insert("blob_element").
+		Rows(goqu.Record{
+			"id":           id,
+			"content_type": blob.ContentType,
+			"value":        []byte(blob.Value),
+		}).
+		ToSQL()
+	if err != nil {
+		return 0, err
+	}
+
+	_, err = tx.Exec(insertQuery, insertArgs...)
 	if err != nil {
 		return 0, err
 	}
@@ -143,17 +166,67 @@ func (p PostgreSQLBlobHandler) CreateNested(tx *sql.Tx, submodelID string, paren
 }
 
 // Update modifies an existing Blob element identified by its idShort or path.
-// This method delegates the update operation to the decorated CRUD handler which handles
-// the common submodel element update logic.
+// This method handles both the common submodel element properties and the specific blob
+// data including content type and binary value storage.
 //
 // Parameters:
+//   - submodelID: ID of the parent submodel
 //   - idShortOrPath: idShort or hierarchical path to the element to update
 //   - submodelElement: Updated element data
+//   - tx: Active database transaction (can be nil, will create one if needed)
+//   - isPut: true: Replaces the Submodel Element with the Body Data (Deletes non-specified fields); false: Updates only passed request body data, unspecified is ignored
 //
 // Returns:
 //   - error: Error if update fails
 func (p PostgreSQLBlobHandler) Update(submodelID string, idShortOrPath string, submodelElement gen.SubmodelElement, tx *sql.Tx, isPut bool) error {
-	return p.decorated.Update(submodelID, idShortOrPath, submodelElement, tx, isPut)
+	blob, ok := submodelElement.(*gen.Blob)
+	if !ok {
+		return common.NewErrBadRequest("submodelElement is not of type Blob")
+	}
+
+	var err error
+	cu, localTx, err := persistenceutils.StartTXIfNeeded(tx, err, p.db)
+	if err != nil {
+		return err
+	}
+	defer cu(&err)
+	if isBlobSizeExceeded(blob) {
+		return smrepoerrors.ErrBlobTooLarge
+	}
+
+	elementID, err := p.decorated.GetDatabaseID(submodelID, idShortOrPath)
+	if err != nil {
+		return err
+	}
+
+	dialect := goqu.Dialect("postgres")
+
+	// Build the update record based on isPut flag
+	// For PUT: always update all fields (even if empty, which clears them)
+	// For PATCH: only update fields that are provided (not empty)
+	updateRecord := buildUpdateBlobRecordObject(isPut, blob)
+
+	if persistenceutils.AnyFieldsToUpdate(updateRecord) {
+		updateQuery, updateArgs, err := dialect.Update("blob_element").
+			Set(updateRecord).
+			Where(goqu.C("id").Eq(elementID)).
+			ToSQL()
+		if err != nil {
+			return err
+		}
+
+		_, err = localTx.Exec(updateQuery, updateArgs...)
+		if err != nil {
+			return err
+		}
+	}
+
+	err = p.decorated.Update(submodelID, idShortOrPath, submodelElement, localTx, isPut)
+	if err != nil {
+		return err
+	}
+
+	return persistenceutils.CommitTransactionIfNeeded(tx, localTx)
 }
 
 // UpdateValueOnly updates only the value of an existing Blob submodel element identified by its idShort or path.
@@ -243,4 +316,29 @@ func (p PostgreSQLBlobHandler) UpdateValueOnly(submodelID string, idShortOrPath 
 //   - error: Error if deletion fails
 func (p PostgreSQLBlobHandler) Delete(idShortOrPath string) error {
 	return p.decorated.Delete(idShortOrPath)
+}
+
+func isBlobSizeExceeded(blob *gen.Blob) bool {
+	return len(blob.Value) > smrepoconfig.MaxBlobSizeBytes
+}
+
+func buildUpdateBlobRecordObject(isPut bool, blob *gen.Blob) goqu.Record {
+	updateRecord := goqu.Record{}
+
+	if isPut || blob.ContentType != "" {
+		var contentType sql.NullString
+		if blob.ContentType != "" {
+			contentType = sql.NullString{String: blob.ContentType, Valid: true}
+		}
+		updateRecord["content_type"] = contentType
+	}
+
+	if isPut || blob.Value != "" {
+		var value []byte
+		if blob.Value != "" {
+			value = []byte(blob.Value)
+		}
+		updateRecord["value"] = value
+	}
+	return updateRecord
 }

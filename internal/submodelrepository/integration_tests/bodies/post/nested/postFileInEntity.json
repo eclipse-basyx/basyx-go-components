@@ -1,0 +1,6 @@
+{
+    "idShort": "NestedFileEntity",
+    "modelType": "File",
+    "contentType": "application/xml",
+    "value": "file:///data/entity.xml"
+}

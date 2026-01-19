@@ -729,6 +729,6 @@ func buildSubmodelElementList(smeRow model.SubmodelElementRow) (*model.SubmodelE
 		}
 	}
 
-	smeList := &model.SubmodelElementList{Value: []model.SubmodelElement{}, ValueTypeListElement: valueTypeListElement, TypeValueListElement: &typeValueListElement}
+	smeList := &model.SubmodelElementList{Value: []model.SubmodelElement{}, ValueTypeListElement: valueTypeListElement, TypeValueListElement: &typeValueListElement, OrderRelevant: valueRow.OrderRelevant}
 	return smeList, nil
 }

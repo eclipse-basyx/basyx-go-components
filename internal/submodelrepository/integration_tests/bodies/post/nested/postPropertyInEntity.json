@@ -1,0 +1,6 @@
+{
+    "idShort": "NestedPropertyEntity",
+    "modelType": "Property",
+    "value": "nestedInEntity",
+    "valueType": "xs:string"
+}

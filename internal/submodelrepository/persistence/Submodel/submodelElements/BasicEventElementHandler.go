@@ -37,6 +37,7 @@ import (
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	persistenceutils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 )
 
@@ -136,17 +137,139 @@ func (p PostgreSQLBasicEventElementHandler) CreateNested(tx *sql.Tx, submodelID 
 }
 
 // Update modifies an existing BasicEventElement identified by its idShort or path.
-// This method delegates the update operation to the decorated CRUD handler which handles
-// the common submodel element update logic.
+// This method handles both the common submodel element properties and the specific event
+// properties such as observed references, message brokers, and timing intervals.
 //
 // Parameters:
+//   - submodelID: ID of the parent submodel
 //   - idShortOrPath: idShort or hierarchical path to the element to update
 //   - submodelElement: Updated element data
+//   - tx: Active database transaction (can be nil, will create one if needed)
+//   - isPut: true: Replaces the Submodel Element with the Body Data (Deletes non-specified fields); false: Updates only passed request body data, unspecified is ignored
 //
 // Returns:
 //   - error: Error if update fails
 func (p PostgreSQLBasicEventElementHandler) Update(submodelID string, idShortOrPath string, submodelElement gen.SubmodelElement, tx *sql.Tx, isPut bool) error {
-	return p.decorated.Update(submodelID, idShortOrPath, submodelElement, tx, isPut)
+	basicEvent, ok := submodelElement.(*gen.BasicEventElement)
+	if !ok {
+		return common.NewErrBadRequest("submodelElement is not of type BasicEventElement")
+	}
+
+	var err error
+	cu, localTx, err := persistenceutils.StartTXIfNeeded(tx, err, p.db)
+	if err != nil {
+		return err
+	}
+	defer cu(&err)
+	err = p.decorated.Update(submodelID, idShortOrPath, submodelElement, localTx, isPut)
+	if err != nil {
+		return err
+	}
+
+	elementID, err := p.decorated.GetDatabaseID(submodelID, idShortOrPath)
+	if err != nil {
+		return err
+	}
+
+	// Validate required fields
+	if basicEvent.Observed == nil {
+		return common.NewErrBadRequest(fmt.Sprintf("Missing Field 'Observed' for BasicEventElement with idShortPath '%s'", idShortOrPath))
+	}
+	if basicEvent.Direction == "" {
+		return common.NewErrBadRequest(fmt.Sprintf("Missing Field 'Direction' for BasicEventElement with idShortPath '%s'", idShortOrPath))
+	}
+	if basicEvent.State == "" {
+		return common.NewErrBadRequest(fmt.Sprintf("Missing Field 'State' for BasicEventElement with idShortPath '%s'", idShortOrPath))
+	}
+
+	// Update with goqu
+	dialect := goqu.Dialect("postgres")
+
+	// Build the update record
+	updateRecord, err := buildUpdateBasicEventElementRecordObject(basicEvent, isPut)
+	if err != nil {
+		return err
+	}
+
+	// Update the BasicEventElement-specific table
+	updateQuery, updateArgs, err := dialect.Update("basic_event_element").
+		Set(updateRecord).
+		Where(goqu.C("id").Eq(elementID)).
+		ToSQL()
+	if err != nil {
+		return err
+	}
+	_, err = localTx.Exec(updateQuery, updateArgs...)
+	if err != nil {
+		return err
+	}
+
+	return persistenceutils.CommitTransactionIfNeeded(tx, localTx)
+}
+
+func buildUpdateBasicEventElementRecordObject(basicEvent *gen.BasicEventElement, isPut bool) (goqu.Record, error) {
+	updateRecord := goqu.Record{}
+
+	// Required fields - always update
+	var observedRefJson sql.NullString
+	if !isEmptyReference(basicEvent.Observed) {
+		observedBytes, err := json.Marshal(basicEvent.Observed)
+		if err != nil {
+			return nil, err
+		}
+		observedRefJson = sql.NullString{String: string(observedBytes), Valid: true}
+	}
+	updateRecord["observed"] = observedRefJson
+	updateRecord["direction"] = basicEvent.Direction
+	updateRecord["state"] = basicEvent.State
+
+	// Optional fields - update based on isPut flag
+	// For PUT: always update (even if empty, which clears the field)
+	// For PATCH: only update if provided (not empty)
+	if isPut || !isEmptyReference(basicEvent.MessageBroker) {
+		var messageBrokerRefJson sql.NullString
+		if !isEmptyReference(basicEvent.MessageBroker) {
+			messageBrokerBytes, err := json.Marshal(basicEvent.MessageBroker)
+			if err != nil {
+				return nil, err
+			}
+			messageBrokerRefJson = sql.NullString{String: string(messageBrokerBytes), Valid: true}
+		}
+		updateRecord["message_broker"] = messageBrokerRefJson
+	}
+
+	if isPut || basicEvent.LastUpdate != "" {
+		var lastUpdate sql.NullString
+		if basicEvent.LastUpdate != "" {
+			lastUpdate = sql.NullString{String: basicEvent.LastUpdate, Valid: true}
+		}
+		updateRecord["last_update"] = lastUpdate
+	}
+
+	if isPut || basicEvent.MinInterval != "" {
+		var minInterval sql.NullString
+		if basicEvent.MinInterval != "" {
+			minInterval = sql.NullString{String: basicEvent.MinInterval, Valid: true}
+		}
+		updateRecord["min_interval"] = minInterval
+	}
+
+	if isPut || basicEvent.MaxInterval != "" {
+		var maxInterval sql.NullString
+		if basicEvent.MaxInterval != "" {
+			maxInterval = sql.NullString{String: basicEvent.MaxInterval, Valid: true}
+		}
+		updateRecord["max_interval"] = maxInterval
+	}
+
+	if isPut || basicEvent.MessageTopic != "" {
+		var messageTopic sql.NullString
+		if basicEvent.MessageTopic != "" {
+			messageTopic = sql.NullString{String: basicEvent.MessageTopic, Valid: true}
+		}
+		updateRecord["message_topic"] = messageTopic
+	}
+	return updateRecord, nil
 }
 
 // UpdateValueOnly updates only the value of an existing BasicEventElement submodel element identified by its idShort or path.
@@ -277,7 +400,24 @@ func insertBasicEventElement(basicEvent *gen.BasicEventElement, tx *sql.Tx, id i
 		messageTopic = sql.NullString{String: basicEvent.MessageTopic, Valid: true}
 	}
 
-	_, err := tx.Exec(`INSERT INTO basic_event_element (id, observed, direction, state, message_topic, message_broker, last_update, min_interval, max_interval) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-		id, observedRefJson, basicEvent.Direction, basicEvent.State, messageTopic, messageBrokerRefJson, lastUpdate, minInterval, maxInterval)
+	dialect := goqu.Dialect("postgres")
+	insertQuery, insertArgs, err := dialect.Insert("basic_event_element").
+		Rows(goqu.Record{
+			"id":             id,
+			"observed":       observedRefJson,
+			"direction":      basicEvent.Direction,
+			"state":          basicEvent.State,
+			"message_topic":  messageTopic,
+			"message_broker": messageBrokerRefJson,
+			"last_update":    lastUpdate,
+			"min_interval":   minInterval,
+			"max_interval":   maxInterval,
+		}).
+		ToSQL()
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.Exec(insertQuery, insertArgs...)
 	return err
 }

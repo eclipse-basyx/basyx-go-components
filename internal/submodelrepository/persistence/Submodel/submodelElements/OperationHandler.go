@@ -34,8 +34,10 @@ package submodelelements
 import (
 	"database/sql"
 
+	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	persistenceutils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
 	jsoniter "github.com/json-iterator/go"
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 )
@@ -138,16 +140,71 @@ func (p PostgreSQLOperationHandler) CreateNested(tx *sql.Tx, submodelID string, 
 }
 
 // Update modifies an existing Operation submodel element in the database.
-// Currently delegates all update operations to the decorated handler for base submodel element properties.
+// This method handles both the common submodel element properties and the specific
+// operation data including input, output, and in-output variables.
 //
 // Parameters:
+//   - submodelID: ID of the parent submodel
 //   - idShortOrPath: The idShort or path identifying the element to update
 //   - submodelElement: The updated Operation element data
+//   - tx: Active database transaction (can be nil, will create one if needed)
+//   - isPut: true: Replaces the element with the body data; false: Updates only passed data
 //
 // Returns:
 //   - error: An error if the update operation fails
 func (p PostgreSQLOperationHandler) Update(submodelID string, idShortOrPath string, submodelElement gen.SubmodelElement, tx *sql.Tx, isPut bool) error {
-	return p.decorated.Update(submodelID, idShortOrPath, submodelElement, tx, isPut)
+	operation, ok := submodelElement.(*gen.Operation)
+	if !ok {
+		return common.NewErrBadRequest("submodelElement is not of type Operation")
+	}
+
+	var err error
+	cu, localTx, err := persistenceutils.StartTXIfNeeded(tx, err, p.db)
+	if err != nil {
+		return err
+	}
+	defer cu(&err)
+	err = p.decorated.Update(submodelID, idShortOrPath, submodelElement, localTx, isPut)
+	if err != nil {
+		return err
+	}
+
+	json := jsoniter.ConfigCompatibleWithStandardLibrary
+
+	// Build update record based on isPut flag
+	// For PUT: always update all fields (even if nil/empty, which clears them)
+	// For PATCH: only update fields that are provided (not nil)
+
+	updateRecord, err := buildUpdateOperationRecordObject(isPut, operation, json)
+	if err != nil {
+		return err
+	}
+
+	// Only execute update if there are fields to update
+	if persistenceutils.AnyFieldsToUpdate(updateRecord) {
+		dialect := goqu.Dialect("postgres")
+		updateQuery, updateArgs, err := dialect.Update("operation_element").
+			Set(updateRecord).
+			Where(goqu.C("id").In(
+				dialect.From("submodel_element").
+					Select("id").
+					Where(goqu.Ex{
+						"idshort_path": idShortOrPath,
+						"submodel_id":  submodelID,
+					}),
+			)).
+			ToSQL()
+		if err != nil {
+			return err
+		}
+
+		_, err = localTx.Exec(updateQuery, updateArgs...)
+		if err != nil {
+			return err
+		}
+	}
+
+	return persistenceutils.CommitTransactionIfNeeded(tx, localTx)
 }
 
 // UpdateValueOnly updates only the value of an existing Operation submodel element identified by its idShort or path.
@@ -224,9 +281,68 @@ func insertOperation(operation *gen.Operation, tx *sql.Tx, id int) error {
 		inoutputVars = "[]"
 	}
 
-	_, err := tx.Exec(`INSERT INTO operation_element (id,input_variables,output_variables,inoutput_variables) VALUES ($1, $2, $3, $4)`, id, inputVars, outputVars, inoutputVars)
+	dialect := goqu.Dialect("postgres")
+	insertQuery, insertArgs, err := dialect.Insert("operation_element").
+		Rows(goqu.Record{
+			"id":                 id,
+			"input_variables":    inputVars,
+			"output_variables":   outputVars,
+			"inoutput_variables": inoutputVars,
+		}).
+		ToSQL()
+	if err != nil {
+		return err
+	}
+	_, err = tx.Exec(insertQuery, insertArgs...)
 	if err != nil {
 		return err
 	}
 	return nil
+}
+
+func buildUpdateOperationRecordObject(isPut bool, operation *gen.Operation, json jsoniter.API) (goqu.Record, error) {
+	updateRecord := goqu.Record{}
+
+	if isPut || operation.InputVariables != nil {
+		var inputVars string
+		if operation.InputVariables != nil {
+			inputVarBytes, err := json.Marshal(operation.InputVariables)
+			if err != nil {
+				return nil, err
+			}
+			inputVars = string(inputVarBytes)
+		} else {
+			inputVars = "[]"
+		}
+		updateRecord["input_variables"] = inputVars
+	}
+
+	if isPut || operation.OutputVariables != nil {
+		var outputVars string
+		if operation.OutputVariables != nil {
+			outputVarBytes, err := json.Marshal(operation.OutputVariables)
+			if err != nil {
+				return nil, err
+			}
+			outputVars = string(outputVarBytes)
+		} else {
+			outputVars = "[]"
+		}
+		updateRecord["output_variables"] = outputVars
+	}
+
+	if isPut || operation.InoutputVariables != nil {
+		var inoutputVars string
+		if operation.InoutputVariables != nil {
+			inoutputVarBytes, err := json.Marshal(operation.InoutputVariables)
+			if err != nil {
+				return nil, err
+			}
+			inoutputVars = string(inoutputVarBytes)
+		} else {
+			inoutputVars = "[]"
+		}
+		updateRecord["inoutput_variables"] = inoutputVars
+	}
+	return updateRecord, nil
 }
