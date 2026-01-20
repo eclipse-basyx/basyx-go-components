@@ -60,6 +60,7 @@ type JoinPlanConfig struct {
 	Rules           map[string]existsJoinRule
 	TableForAlias   func(string) (string, bool)
 	GroupKeyForBase func(string) (exp.IdentifierExpression, error)
+	RootJoinKey     func() exp.IdentifierExpression
 	Correlatable    func(string) bool
 }
 
@@ -117,8 +118,10 @@ func NewResolvedFieldPathCollectorForRoot(root CollectorRoot) (*ResolvedFieldPat
 
 func joinPlanConfigForRoot(root CollectorRoot) (JoinPlanConfig, error) {
 	switch root {
-	case CollectorRootAASDesc, CollectorRootSMDesc:
+	case CollectorRootAASDesc:
 		return defaultJoinPlanConfig(), nil
+	case CollectorRootSMDesc:
+		return joinPlanConfigForSMDesc(), nil
 	case CollectorRootSM:
 		return joinPlanConfigForSM(), nil
 	case CollectorRootSME:
@@ -190,8 +193,33 @@ func joinPlanConfigForSM() JoinPlanConfig {
 			}
 			return nil, fmt.Errorf("unsupported SM base alias %q", base)
 		},
+		RootJoinKey: func() exp.IdentifierExpression {
+			return goqu.I("s.id")
+		},
 		Correlatable: func(alias string) bool {
 			return alias == "s"
+		},
+	}
+}
+
+func joinPlanConfigForSMDesc() JoinPlanConfig {
+	rules := existsJoinRulesForSMDesc()
+	return JoinPlanConfig{
+		PreferredBase: "submodel_descriptor",
+		BaseAliases:   []string{"submodel_descriptor"},
+		Rules:         rules,
+		TableForAlias: existsTableForAlias,
+		GroupKeyForBase: func(base string) (exp.IdentifierExpression, error) {
+			if base == "submodel_descriptor" {
+				return goqu.I("submodel_descriptor.descriptor_id"), nil
+			}
+			return nil, fmt.Errorf("unsupported SMDesc base alias %q", base)
+		},
+		RootJoinKey: func() exp.IdentifierExpression {
+			return goqu.I("submodel_descriptor.descriptor_id")
+		},
+		Correlatable: func(alias string) bool {
+			return alias == "submodel_descriptor"
 		},
 	}
 }
@@ -258,6 +286,9 @@ func joinPlanConfigForSME() JoinPlanConfig {
 				return goqu.I("submodel_element.id"), nil
 			}
 			return nil, fmt.Errorf("unsupported SME base alias %q", base)
+		},
+		RootJoinKey: func() exp.IdentifierExpression {
+			return goqu.I("submodel_element.id")
 		},
 		Correlatable: func(alias string) bool {
 			return alias == "submodel_element"
@@ -631,6 +662,9 @@ func defaultJoinPlanConfig() JoinPlanConfig {
 		Rules:           existsJoinRulesForAASDescriptors(),
 		TableForAlias:   existsTableForAlias,
 		GroupKeyForBase: descriptorIDForBaseAlias,
+		RootJoinKey: func() exp.IdentifierExpression {
+			return goqu.I("descriptor.id")
+		},
 		Correlatable: func(alias string) bool {
 			return existsCorrelationForAlias(alias) != nil
 		},
@@ -651,6 +685,11 @@ func (c *ResolvedFieldPathCollector) effectiveJoinConfig() JoinPlanConfig {
 	if cfg.GroupKeyForBase == nil {
 		cfg.GroupKeyForBase = descriptorIDForBaseAlias
 	}
+	if cfg.RootJoinKey == nil {
+		cfg.RootJoinKey = func() exp.IdentifierExpression {
+			return goqu.I("descriptor.id")
+		}
+	}
 	if cfg.BaseAliases == nil {
 		cfg.BaseAliases = []string{"specific_asset_id", "aas_descriptor_endpoint", "submodel_descriptor", "aas_descriptor"}
 	}
@@ -663,6 +702,16 @@ func (c *ResolvedFieldPathCollector) effectiveJoinConfig() JoinPlanConfig {
 		}
 	}
 	return cfg
+}
+
+// EffectiveRootJoinKey returns the outer-root join key expression that should be used
+// to connect flag CTEs back to the main query.
+func (c *ResolvedFieldPathCollector) EffectiveRootJoinKey() exp.IdentifierExpression {
+	cfg := c.effectiveJoinConfig()
+	if cfg.RootJoinKey != nil {
+		return cfg.RootJoinKey()
+	}
+	return goqu.I("descriptor.id")
 }
 
 func descriptorIDForBaseAlias(base string) (exp.IdentifierExpression, error) {
@@ -1092,6 +1141,21 @@ func existsJoinRulesForAASDescriptors() map[string]existsJoinRule {
 			},
 		},
 	}
+}
+
+func existsJoinRulesForSMDesc() map[string]existsJoinRule {
+	rules := existsJoinRulesForAASDescriptors()
+	rules["aas_descriptor"] = existsJoinRule{
+		Alias: "aas_descriptor",
+		Deps:  []string{"submodel_descriptor"},
+		Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
+			return ds.Join(
+				goqu.T("aas_descriptor").As("aas_descriptor"),
+				goqu.On(goqu.I("aas_descriptor.descriptor_id").Eq(goqu.I("submodel_descriptor.aas_descriptor_id"))),
+			)
+		},
+	}
+	return rules
 }
 
 func (le *LogicalExpression) evaluateFragmentToExpression(collector *ResolvedFieldPathCollector, fragment FragmentStringPattern) (exp.Expression, []ResolvedFieldPath, error) {

@@ -83,7 +83,7 @@ var expMapper = []auth.ExpressionIdentifiableMapper{
 // allowed) and a nil error.
 func ReadSpecificAssetIDsByDescriptorID(
 	ctx context.Context,
-	db *sql.DB,
+	db DBQueryer,
 	descriptorID int64,
 ) ([]model.SpecificAssetID, error) {
 	v, err := ReadSpecificAssetIDsByDescriptorIDs(ctx, db, []int64{descriptorID})
@@ -108,7 +108,7 @@ func ReadSpecificAssetIDsByDescriptorID(
 // - Preserves a stable order by descriptor_id, id to ensure deterministic output.
 func ReadSpecificAssetIDsByDescriptorIDs(
 	ctx context.Context,
-	db *sql.DB,
+	db DBQueryer,
 	descriptorIDs []int64,
 ) (map[int64][]model.SpecificAssetID, error) {
 	out := make(map[int64][]model.SpecificAssetID, len(descriptorIDs))
@@ -253,7 +253,7 @@ func ReadSpecificAssetIDsByDescriptorIDs(
 
 func readSpecificAssetIDSupplementalSemanticBySpecificIDs(
 	ctx context.Context,
-	db *sql.DB,
+	db DBQueryer,
 	specificAssetIDs []int64,
 ) (map[int64][]model.Reference, error) {
 	out := make(map[int64][]model.Reference, len(specificAssetIDs))

@@ -28,7 +28,6 @@ package descriptors
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"fmt"
 
@@ -57,7 +56,7 @@ import (
 // JSON decoding failures) and are returned verbatim.
 func ReadEndpointsByDescriptorID(
 	ctx context.Context,
-	db *sql.DB,
+	db DBQueryer,
 	descriptorID int64,
 	joinOnMainTable bool,
 ) ([]model.Endpoint, error) {
@@ -88,7 +87,7 @@ func ReadEndpointsByDescriptorID(
 // attributes.
 func ReadEndpointsByDescriptorIDs(
 	ctx context.Context,
-	db *sql.DB,
+	db DBQueryer,
 	descriptorIDs []int64,
 	joinOnMainTable bool,
 ) (map[int64][]model.Endpoint, error) {

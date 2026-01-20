@@ -88,7 +88,7 @@ func NewPostgreSQLAASRegistryDatabase(
 func (p *PostgreSQLAASRegistryDatabase) InsertAdministrationShellDescriptor(
 	ctx context.Context,
 	aasd model.AssetAdministrationShellDescriptor,
-) error {
+) (model.AssetAdministrationShellDescriptor, error) {
 	return descriptors.InsertAdministrationShellDescriptor(ctx, p.db, aasd)
 }
 
@@ -115,7 +115,7 @@ func (p *PostgreSQLAASRegistryDatabase) DeleteAssetAdministrationShellDescriptor
 func (p *PostgreSQLAASRegistryDatabase) ReplaceAdministrationShellDescriptor(
 	ctx context.Context,
 	aasd model.AssetAdministrationShellDescriptor,
-) (bool, error) {
+) (model.AssetAdministrationShellDescriptor, error) {
 	return descriptors.ReplaceAdministrationShellDescriptor(ctx, p.db, aasd)
 }
 
@@ -148,7 +148,7 @@ func (p *PostgreSQLAASRegistryDatabase) InsertSubmodelDescriptorForAAS(
 	ctx context.Context,
 	aasID string,
 	submodel model.SubmodelDescriptor,
-) error {
+) (model.SubmodelDescriptor, error) {
 	return descriptors.InsertSubmodelDescriptorForAAS(ctx, p.db, aasID, submodel)
 }
 
@@ -158,7 +158,7 @@ func (p *PostgreSQLAASRegistryDatabase) ReplaceSubmodelDescriptorForAAS(
 	ctx context.Context,
 	aasID string,
 	submodel model.SubmodelDescriptor,
-) (bool, error) {
+) (model.SubmodelDescriptor, error) {
 	return descriptors.ReplaceSubmodelDescriptorForAAS(ctx, p.db, aasID, submodel)
 }
 

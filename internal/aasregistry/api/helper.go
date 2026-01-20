@@ -27,14 +27,11 @@
 package aasregistryapi
 
 import (
-	"context"
 	"log"
 	"net/http"
 
-	persistence_postgresql "github.com/eclipse-basyx/basyx-go-components/internal/aasregistry/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
-	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 )
 
 // decodePathParam decodes an URL path component and builds a consistent error response.
@@ -58,45 +55,6 @@ func decodeCursor(raw, operation string) (string, *model.ImplResponse, error) {
 	return decodePathParam(raw, "cursor", operation, "BadCursor")
 }
 
-type accessEvaluator func(formula *auth.QueryFilter) (bool, error)
-
-// enforceAccess evaluates the query filter formula (when present) and returns a ready-to-send response on denial or error.
-func enforceAccess(ctx context.Context, operation, targetID string, evaluate accessEvaluator) (*model.ImplResponse, error) {
-	qf := auth.GetQueryFilter(ctx)
-	if qf == nil || qf.Formula == nil {
-		return nil, nil
-	}
-
-	ok, err := evaluate(qf)
-	if err != nil {
-		log.Printf("🧩 [%s] Error in %s: evaluation failed (id=%q): %v", componentName, operation, targetID, err)
-		resp := common.NewErrorResponse(
-			err, http.StatusInternalServerError, componentName, operation, "Unhandled",
-		)
-		return &resp, err
-	}
-	if !ok {
-		log.Printf("🧩 [%s] Access denied in %s (id=%q)", componentName, operation, targetID)
-		resp := common.NewAccessDeniedResponse()
-		return &resp, nil
-	}
-	return nil, nil
-}
-
-// enforceAccessForAAS wraps enforceAccess for AAS descriptors.
-func enforceAccessForAAS(ctx context.Context, operation string, aas model.AssetAdministrationShellDescriptor) (*model.ImplResponse, error) {
-	return enforceAccess(ctx, operation, aas.Id, func(qf *auth.QueryFilter) (bool, error) {
-		return qf.Formula.EvaluateAssetAdministrationShellDescriptor(aas)
-	})
-}
-
-// enforceAccessForSubmodel wraps enforceAccess for submodel descriptors.
-func enforceAccessForSubmodel(ctx context.Context, operation string, smd model.SubmodelDescriptor) (*model.ImplResponse, error) {
-	return enforceAccess(ctx, operation, smd.Id, func(qf *auth.QueryFilter) (bool, error) {
-		return qf.Formula.EvaluateSubmodelDescriptor(smd)
-	})
-}
-
 // pagedResponse builds the common paged envelope used across list endpoints.
 func pagedResponse[T any](results T, nextCursor string) model.ImplResponse {
 	pm := model.PagedResultPagingMetadata{}
@@ -113,54 +71,4 @@ func pagedResponse[T any](results T, nextCursor string) model.ImplResponse {
 	}
 
 	return model.Response(http.StatusOK, res)
-}
-
-// loadAASForAuth retrieves an AAS descriptor and returns a ready-to-send response on handled errors.
-func loadAASForAuth(ctx context.Context, backend persistence_postgresql.PostgreSQLAASRegistryDatabase, aasID string, operation string) (model.AssetAdministrationShellDescriptor, *model.ImplResponse, error) {
-	result, err := backend.GetAssetAdministrationShellDescriptorByID(ctx, aasID)
-	if err != nil {
-		switch {
-		case common.IsErrNotFound(err):
-			log.Printf("🧩 [%s] Error in %s: not found (aasId=%q): %v", componentName, operation, aasID, err)
-			resp := common.NewErrorResponse(
-				err, http.StatusNotFound, componentName, operation, "NotFound",
-			)
-			return model.AssetAdministrationShellDescriptor{}, &resp, nil
-		case common.IsErrBadRequest(err):
-			log.Printf("🧩 [%s] Error in %s: bad request (aasId=%q): %v", componentName, aasID, operation, err)
-			resp := common.NewErrorResponse(
-				err, http.StatusBadRequest, componentName, operation, "BadRequest",
-			)
-			return model.AssetAdministrationShellDescriptor{}, &resp, nil
-		default:
-			log.Printf("🧩 [%s] Error in %s: internal (aasId=%q): %v", componentName, operation, aasID, err)
-			resp := common.NewErrorResponse(
-				err, http.StatusInternalServerError, componentName, operation, "Unhandled",
-			)
-			return model.AssetAdministrationShellDescriptor{}, &resp, err
-		}
-	}
-	return result, nil, nil
-}
-
-// loadSubmodelForAuth retrieves a submodel descriptor and returns a ready-to-send response on handled errors.
-func loadSubmodelForAuth(ctx context.Context, backend persistence_postgresql.PostgreSQLAASRegistryDatabase, aasID, smdID, operation string) (model.SubmodelDescriptor, *model.ImplResponse, error) {
-	result, err := backend.GetSubmodelDescriptorForAASByID(ctx, aasID, smdID)
-	if err != nil {
-		switch {
-		case common.IsErrNotFound(err):
-			log.Printf("🧩 [%s] Error in %s: not found (aasId=%q submodelId=%q): %v", componentName, operation, aasID, smdID, err)
-			resp := common.NewErrorResponse(
-				err, http.StatusNotFound, componentName, operation, "NotFound",
-			)
-			return model.SubmodelDescriptor{}, &resp, nil
-		default:
-			log.Printf("🧩 [%s] Error in %s: internal (aasId=%q submodelId=%q): %v", componentName, operation, aasID, smdID, err)
-			resp := common.NewErrorResponse(
-				err, http.StatusInternalServerError, componentName, operation, "Unhandled",
-			)
-			return model.SubmodelDescriptor{}, &resp, err
-		}
-	}
-	return result, nil, nil
 }

@@ -60,10 +60,11 @@ import (
 // query or any of the dependent lookups fail.
 func ReadSubmodelDescriptorsByAASDescriptorID(
 	ctx context.Context,
-	db *sql.DB,
+	db DBQueryer,
 	aasDescriptorID int64,
+	isMain bool,
 ) ([]model.SubmodelDescriptor, error) {
-	v, err := ReadSubmodelDescriptorsByAASDescriptorIDs(ctx, db, []int64{aasDescriptorID})
+	v, err := ReadSubmodelDescriptorsByAASDescriptorIDs(ctx, db, []int64{aasDescriptorID}, isMain)
 	return v[aasDescriptorID], err
 }
 
@@ -91,12 +92,18 @@ func ReadSubmodelDescriptorsByAASDescriptorID(
 //nolint:revive // This method is already refactored and further changes would not improve readability.
 func ReadSubmodelDescriptorsByAASDescriptorIDs(
 	ctx context.Context,
-	db *sql.DB,
+	db DBQueryer,
 	aasDescriptorIDs []int64,
+	isMain bool,
 ) (map[int64][]model.SubmodelDescriptor, error) {
 	out := make(map[int64][]model.SubmodelDescriptor, len(aasDescriptorIDs))
 	if len(aasDescriptorIDs) == 0 {
 		return out, nil
+	}
+
+	allowParallel := true
+	if _, ok := db.(*sql.Tx); ok {
+		allowParallel = false
 	}
 	uniqAASDesc := aasDescriptorIDs
 
@@ -116,7 +123,8 @@ func ReadSubmodelDescriptorsByAASDescriptorIDs(
 			Exp: submodelDescriptorAlias.Col(colAASID),
 		},
 		{
-			Exp: submodelDescriptorAlias.Col(colSemanticID),
+			Exp:      submodelDescriptorAlias.Col(colSemanticID),
+			Fragment: fragPtr("$aasdesc#submodelDescriptors[].semanticId"),
 		},
 		{
 			Exp: submodelDescriptorAlias.Col(colAdminInfoID),
@@ -128,7 +136,13 @@ func ReadSubmodelDescriptorsByAASDescriptorIDs(
 			Exp: submodelDescriptorAlias.Col(colDisplayNameID),
 		},
 	}
-	collector, err := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootAASDesc)
+	var root grammar.CollectorRoot
+	if isMain {
+		root = grammar.CollectorRootSMDesc
+	} else {
+		root = grammar.CollectorRootAASDesc
+	}
+	collector, err := grammar.NewResolvedFieldPathCollectorForRoot(root)
 	if err != nil {
 		return nil, err
 	}
@@ -166,6 +180,12 @@ func ReadSubmodelDescriptorsByAASDescriptorIDs(
 	if err != nil {
 		return nil, err
 	}
+	if isMain {
+		ds, err = auth.AddFormulaQueryFromContext(ctx, ds, collector)
+		if err != nil {
+			return nil, err
+		}
+	}
 	cteWhere := goqu.L(fmt.Sprintf("%s.%s = ANY(?::bigint[])", aliasSubmodelDescriptor, colAASDescriptorID), arr)
 	ds, err = auth.ApplyResolvedFieldPathCTEs(ds, collector, cteWhere)
 	if err != nil {
@@ -173,6 +193,7 @@ func ReadSubmodelDescriptorsByAASDescriptorIDs(
 	}
 
 	sqlStr, args, err := ds.ToSQL()
+
 	if err != nil {
 		return nil, err
 	}
@@ -247,61 +268,108 @@ func ReadSubmodelDescriptorsByAASDescriptorIDs(
 	endpointsByDesc := map[int64][]model.Endpoint{}
 	extensionsByDesc := map[int64][]model.Extension{}
 
-	g, gctx := errgroup.WithContext(ctx)
+	if allowParallel {
+		g, gctx := errgroup.WithContext(ctx)
 
-	if len(uniqSemRefIDs) > 0 {
-		ids := uniqSemRefIDs
-		GoAssign(g, func() (map[int64]*model.Reference, error) {
-			return GetReferencesByIDsBatch(db, ids)
-		}, &semRefByID)
-	}
+		if len(uniqSemRefIDs) > 0 {
+			ids := uniqSemRefIDs
+			GoAssign(g, func() (map[int64]*model.Reference, error) {
+				return GetReferencesByIDsBatch(db, ids)
+			}, &semRefByID)
+		}
 
-	if len(uniqAdminInfoIDs) > 0 {
-		ids := uniqAdminInfoIDs
-		GoAssign(g, func() (map[int64]*model.AdministrativeInformation, error) {
-			return ReadAdministrativeInformationByIDs(gctx, db, tblSubmodelDescriptor, ids)
-		}, &admByID)
-	}
+		if len(uniqAdminInfoIDs) > 0 {
+			ids := uniqAdminInfoIDs
+			GoAssign(g, func() (map[int64]*model.AdministrativeInformation, error) {
+				return ReadAdministrativeInformationByIDs(gctx, db, tblSubmodelDescriptor, ids)
+			}, &admByID)
+		}
 
-	if len(uniqDisplayNameIDs) > 0 {
-		ids := uniqDisplayNameIDs
-		GoAssign(g, func() (map[int64][]model.LangStringNameType, error) {
-			return GetLangStringNameTypesByIDs(db, ids)
-		}, &nameByID)
-	}
+		if len(uniqDisplayNameIDs) > 0 {
+			ids := uniqDisplayNameIDs
+			GoAssign(g, func() (map[int64][]model.LangStringNameType, error) {
+				return GetLangStringNameTypesByIDs(db, ids)
+			}, &nameByID)
+		}
 
-	if len(uniqDescIDs) > 0 {
-		ids := uniqDescIDs
-		GoAssign(g, func() (map[int64][]model.LangStringTextType, error) {
-			return GetLangStringTextTypesByIDs(db, ids)
-		}, &descByID)
-	}
+		if len(uniqDescIDs) > 0 {
+			ids := uniqDescIDs
+			GoAssign(g, func() (map[int64][]model.LangStringTextType, error) {
+				return GetLangStringTextTypesByIDs(db, ids)
+			}, &descByID)
+		}
 
-	if len(uniqSmdDescIDs) > 0 {
-		smdIDs := uniqSmdDescIDs
+		if len(uniqSmdDescIDs) > 0 {
+			smdIDs := uniqSmdDescIDs
 
-		GoAssign(g, func() (map[int64][]model.Reference, error) {
-			return readEntityReferences1ToMany(
-				gctx, db, smdIDs,
+			GoAssign(g, func() (map[int64][]model.Reference, error) {
+				return readEntityReferences1ToMany(
+					gctx, db, smdIDs,
+					tblSubmodelDescriptorSuppSemantic,
+					colDescriptorID,
+					colReferenceID,
+				)
+			}, &suppBySmdDesc)
+
+			// Endpoints
+			GoAssign(g, func() (map[int64][]model.Endpoint, error) {
+				return ReadEndpointsByDescriptorIDs(gctx, db, smdIDs, false)
+			}, &endpointsByDesc)
+
+			// Extensions
+			GoAssign(g, func() (map[int64][]model.Extension, error) {
+				return ReadExtensionsByDescriptorIDs(gctx, db, smdIDs)
+			}, &extensionsByDesc)
+		}
+
+		if err := g.Wait(); err != nil {
+			return nil, err
+		}
+	} else {
+		var err error
+		if len(uniqSemRefIDs) > 0 {
+			semRefByID, err = GetReferencesByIDsBatch(db, uniqSemRefIDs)
+			if err != nil {
+				return nil, err
+			}
+		}
+		if len(uniqAdminInfoIDs) > 0 {
+			admByID, err = ReadAdministrativeInformationByIDs(ctx, db, tblSubmodelDescriptor, uniqAdminInfoIDs)
+			if err != nil {
+				return nil, err
+			}
+		}
+		if len(uniqDisplayNameIDs) > 0 {
+			nameByID, err = GetLangStringNameTypesByIDs(db, uniqDisplayNameIDs)
+			if err != nil {
+				return nil, err
+			}
+		}
+		if len(uniqDescIDs) > 0 {
+			descByID, err = GetLangStringTextTypesByIDs(db, uniqDescIDs)
+			if err != nil {
+				return nil, err
+			}
+		}
+		if len(uniqSmdDescIDs) > 0 {
+			suppBySmdDesc, err = readEntityReferences1ToMany(
+				ctx, db, uniqSmdDescIDs,
 				tblSubmodelDescriptorSuppSemantic,
 				colDescriptorID,
 				colReferenceID,
 			)
-		}, &suppBySmdDesc)
-
-		// Endpoints
-		GoAssign(g, func() (map[int64][]model.Endpoint, error) {
-			return ReadEndpointsByDescriptorIDs(gctx, db, smdIDs, false)
-		}, &endpointsByDesc)
-
-		// Extensions
-		GoAssign(g, func() (map[int64][]model.Extension, error) {
-			return ReadExtensionsByDescriptorIDs(gctx, db, smdIDs)
-		}, &extensionsByDesc)
-	}
-
-	if err := g.Wait(); err != nil {
-		return nil, err
+			if err != nil {
+				return nil, err
+			}
+			endpointsByDesc, err = ReadEndpointsByDescriptorIDs(ctx, db, uniqSmdDescIDs, false)
+			if err != nil {
+				return nil, err
+			}
+			extensionsByDesc, err = ReadExtensionsByDescriptorIDs(ctx, db, uniqSmdDescIDs)
+			if err != nil {
+				return nil, err
+			}
+		}
 	}
 
 	// Assemble

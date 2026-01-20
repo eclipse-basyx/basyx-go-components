@@ -72,7 +72,7 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	smSvc := aasregistryapi.NewAssetAdministrationShellRegistryAPIAPIService(*smDatabase)
 	smCtrl := apis.NewAssetAdministrationShellRegistryAPIAPIController(smSvc, cfg.Server.ContextPath)
 
-	descSvc := apis.NewDescriptionAPIAPIService()
+	descSvc := aasregistryapi.NewDescriptionAPIAPIService()
 	descCtrl := apis.NewDescriptionAPIAPIController(descSvc)
 
 	base := common.NormalizeBasePath(cfg.Server.ContextPath)

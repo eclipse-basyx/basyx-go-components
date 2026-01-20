@@ -149,6 +149,23 @@ func makeRequest(config TestConfig) (string, error) {
 				return "", err
 			}
 		}
+	case "PUT":
+		if config.Data != "" {
+			data, err := os.ReadFile(config.Data)
+			if err != nil {
+				return "", fmt.Errorf("failed to read data file: %v", err)
+			}
+			req, err = http.NewRequest("PUT", config.Endpoint, bytes.NewBuffer(data))
+			if err != nil {
+				return "", err
+			}
+			req.Header.Set("Content-Type", "application/json")
+		} else {
+			req, err = http.NewRequest("PUT", config.Endpoint, nil)
+			if err != nil {
+				return "", err
+			}
+		}
 	case "DELETE":
 		req, err = http.NewRequest("DELETE", config.Endpoint, nil)
 		if err != nil {

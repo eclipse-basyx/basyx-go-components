@@ -1139,3 +1139,92 @@ func stringValueFromDate(v Value) string {
 		return ""
 	}
 }
+
+func toFloat(value interface{}) (float64, bool) {
+	switch v := value.(type) {
+	case float64:
+		return v, true
+	case float32:
+		return float64(v), true
+	case int:
+		return float64(v), true
+	case int32:
+		return float64(v), true
+	case int64:
+		return float64(v), true
+	case string:
+		f, err := strconv.ParseFloat(v, 64)
+		return f, err == nil
+	default:
+		return 0, false
+	}
+}
+
+func toTimeOfDaySeconds(value interface{}) (int, bool) {
+	s := strings.TrimSpace(fmt.Sprint(value))
+	if s == "" {
+		return 0, false
+	}
+	parts := strings.Split(s, ":")
+	if len(parts) < 2 || len(parts) > 3 {
+		return 0, false
+	}
+	h, errH := strconv.Atoi(parts[0])
+	m, errM := strconv.Atoi(parts[1])
+	sec := 0
+	var errS error
+	if len(parts) == 3 {
+		sec, errS = strconv.Atoi(parts[2])
+	}
+	if errH != nil || errM != nil || (len(parts) == 3 && errS != nil) {
+		return 0, false
+	}
+	if h < 0 || h > 23 || m < 0 || m > 59 || sec < 0 || sec > 59 {
+		return 0, false
+	}
+	return h*3600 + m*60 + sec, true
+}
+
+func toDateTime(value interface{}) (time.Time, bool) {
+	switch v := value.(type) {
+	case time.Time:
+		return v, true
+	case DateTimeLiteralPattern:
+		return time.Time(v), true
+	case *DateTimeLiteralPattern:
+		if v == nil {
+			return time.Time{}, false
+		}
+		return time.Time(*v), true
+	default:
+		s := strings.TrimSpace(fmt.Sprint(value))
+		if s == "" {
+			return time.Time{}, false
+		}
+		t, err := time.Parse(time.RFC3339, s)
+		if err != nil {
+			return time.Time{}, false
+		}
+		return t, true
+	}
+}
+
+func field(value string) Value {
+	p := ModelStringPattern(value)
+	return Value{Field: &p}
+}
+
+func strField(value string) StringValue {
+	p := ModelStringPattern(value)
+	return StringValue{Field: &p}
+}
+
+func strVal(value string) Value {
+	s := StandardString(value)
+	return Value{StrVal: &s}
+}
+
+func strString(value string) StringValue {
+	s := StandardString(value)
+	return StringValue{StrVal: &s}
+}
