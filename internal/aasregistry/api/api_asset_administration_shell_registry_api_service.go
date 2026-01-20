@@ -555,3 +555,29 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) DeleteSubmodelDescriptor
 
 	return model.Response(http.StatusNoContent, nil), nil
 }
+
+// QueryAssetAdministrationShellDescriptors - Returns all Asset Administration Shell Descriptors that confirm to the input query
+func (s *AssetAdministrationShellRegistryAPIAPIService) QueryAssetAdministrationShellDescriptors(ctx context.Context, limit int32, cursor string, query model.Query) (model.ImplResponse, error) {
+	// TODO - update QueryAssetAdministrationShellDescriptors with the required logic for this service method.
+	// Add api_asset_administration_shell_registry_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
+
+	// TODO: Uncomment the next line to return response Response(200, QueryResultAssetAdministrationShellDescriptor{}) or use other options such as http.Ok ...
+	// return Response(200, QueryResultAssetAdministrationShellDescriptor{}), nil
+
+	// TODO: Uncomment the next line to return response Response(400, Result{}) or use other options such as http.Ok ...
+	// return Response(400, Result{}), nil
+
+	// TODO: Uncomment the next line to return response Response(401, Result{}) or use other options such as http.Ok ...
+	// return Response(401, Result{}), nil
+
+	// TODO: Uncomment the next line to return response Response(403, Result{}) or use other options such as http.Ok ...
+	// return Response(403, Result{}), nil
+
+	// TODO: Uncomment the next line to return response Response(500, Result{}) or use other options such as http.Ok ...
+	// return Response(500, Result{}), nil
+
+	// TODO: Uncomment the next line to return response Response(0, Result{}) or use other options such as http.Ok ...
+	// return Response(0, Result{}), nil
+
+	return model.Response(http.StatusNotImplemented, nil), errors.New("QueryAssetAdministrationShellDescriptors method not implemented")
+}

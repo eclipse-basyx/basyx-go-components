@@ -32,6 +32,7 @@ type AssetAdministrationShellRegistryAPIAPIRouter interface {
 	GetSubmodelDescriptorByIdThroughSuperpath(http.ResponseWriter, *http.Request)
 	PutSubmodelDescriptorByIdThroughSuperpath(http.ResponseWriter, *http.Request)
 	DeleteSubmodelDescriptorByIdThroughSuperpath(http.ResponseWriter, *http.Request)
+	QueryAssetAdministrationShellDescriptors(http.ResponseWriter, *http.Request)
 }
 
 // DescriptionAPIAPIRouter defines the required methods for binding the api requests to a responses for the DescriptionAPIAPI
@@ -56,6 +57,7 @@ type AssetAdministrationShellRegistryAPIAPIServicer interface {
 	GetSubmodelDescriptorByIdThroughSuperpath(context.Context, string, string) (model.ImplResponse, error)
 	PutSubmodelDescriptorByIdThroughSuperpath(context.Context, string, string, model.SubmodelDescriptor) (model.ImplResponse, error)
 	DeleteSubmodelDescriptorByIdThroughSuperpath(context.Context, string, string) (model.ImplResponse, error)
+	QueryAssetAdministrationShellDescriptors(context.Context, int32, string, model.Query) (model.ImplResponse, error)
 }
 
 // DescriptionAPIAPIServicer defines the api actions for the DescriptionAPIAPI service

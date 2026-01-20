@@ -13,6 +13,8 @@ package apis
 
 import (
 	"encoding/json"
+	"errors"
+	"io"
 	"log"
 	"net/http"
 	"strings"
@@ -121,6 +123,12 @@ func (c *AssetAdministrationShellRegistryAPIAPIController) Routes() Routes {
 			"/shell-descriptors/{aasIdentifier}/submodel-descriptors/{submodelIdentifier}",
 			c.DeleteSubmodelDescriptorByIdThroughSuperpath,
 		},
+		"QueryAssetAdministrationShellDescriptors": Route{
+			"QueryAssetAdministrationShellDescriptors",
+			strings.ToUpper("Post"),
+			"/query/shell-descriptors",
+			c.QueryAssetAdministrationShellDescriptors,
+		},
 	}
 }
 
@@ -186,6 +194,12 @@ func (c *AssetAdministrationShellRegistryAPIAPIController) OrderedRoutes() []Rou
 			strings.ToUpper("Delete"),
 			"/shell-descriptors/{aasIdentifier}/submodel-descriptors/{submodelIdentifier}",
 			c.DeleteSubmodelDescriptorByIdThroughSuperpath,
+		},
+		Route{
+			"QueryAssetAdministrationShellDescriptors",
+			strings.ToUpper("Post"),
+			"/query/shell-descriptors",
+			c.QueryAssetAdministrationShellDescriptors,
 		},
 	}
 }
@@ -691,5 +705,96 @@ func (c *AssetAdministrationShellRegistryAPIAPIController) DeleteSubmodelDescrip
 		c.errorHandler(w, r, err, &result)
 		return
 	}
+	_ = EncodeJSONResponse(result.Body, &result.Code, w)
+}
+
+// QueryAssetAdministrationShellDescriptors - Returns all Asset Administration Shell Descriptors that confirm to the input query
+func (c *AssetAdministrationShellRegistryAPIAPIController) QueryAssetAdministrationShellDescriptors(w http.ResponseWriter, r *http.Request) {
+	query, err := parseQuery(r.URL.RawQuery)
+	if err != nil {
+		log.Printf("🧩 [%s] Error in QueryAssetAdministrationShellDescriptors: parse query raw=%q: %v", componentName, r.URL.RawQuery, err)
+		result := common.NewErrorResponse(
+			err,
+			http.StatusBadRequest,
+			componentName,
+			"QueryAssetAdministrationShellDescriptors",
+			"query",
+		)
+		EncodeJSONResponse(result.Body, &result.Code, w)
+		return
+	}
+	var limitParam int32
+	if query.Has("limit") {
+		param, err := parseNumericParameter[int32](
+			query.Get("limit"),
+			WithParse[int32](parseInt32),
+			WithMinimum[int32](1),
+		)
+		if err != nil {
+			log.Printf("🧩 [%s] Error in QueryAssetAdministrationShellDescriptors: parse limit=%q: %v", componentName, query.Get("limit"), err)
+			result := common.NewErrorResponse(
+				err,
+				http.StatusBadRequest,
+				componentName,
+				"QueryAssetAdministrationShellDescriptors",
+				"limit",
+			)
+			EncodeJSONResponse(result.Body, &result.Code, w)
+			return
+		}
+
+		limitParam = param
+	}
+	var cursorParam string
+	if query.Has("cursor") {
+		cursorParam = query.Get("cursor")
+	}
+	var queryParam model.Query
+	d := json.NewDecoder(r.Body)
+	d.DisallowUnknownFields()
+	if err := d.Decode(&queryParam); err != nil && !errors.Is(err, io.EOF) {
+		log.Printf("🧩 [%s] Error in QueryAssetAdministrationShellDescriptors: decode body: %v", componentName, err)
+		result := common.NewErrorResponse(
+			err,
+			http.StatusBadRequest,
+			componentName,
+			"QueryAssetAdministrationShellDescriptors",
+			"RequestBody",
+		)
+		EncodeJSONResponse(result.Body, &result.Code, w)
+		return
+	}
+	if err := model.AssertQueryRequired(queryParam); err != nil {
+		log.Printf("🧩 [%s] Error in QueryAssetAdministrationShellDescriptors: required validation failed: %v", componentName, err)
+		result := common.NewErrorResponse(
+			err,
+			http.StatusBadRequest,
+			componentName,
+			"QueryAssetAdministrationShellDescriptors",
+			"RequestBody",
+		)
+		EncodeJSONResponse(result.Body, &result.Code, w)
+		return
+	}
+	if err := model.AssertQueryConstraints(queryParam); err != nil {
+		log.Printf("🧩 [%s] Error in QueryAssetAdministrationShellDescriptors: constraints validation failed: %v", componentName, err)
+		result := common.NewErrorResponse(
+			err,
+			http.StatusBadRequest,
+			componentName,
+			"QueryAssetAdministrationShellDescriptors",
+			"RequestBody",
+		)
+		EncodeJSONResponse(result.Body, &result.Code, w)
+		return
+	}
+	result, err := c.service.QueryAssetAdministrationShellDescriptors(r.Context(), limitParam, cursorParam, queryParam)
+	// If an error occurred, encode the error with the status code
+	if err != nil {
+		log.Printf("🧩 [%s] Error in QueryAssetAdministrationShellDescriptors: service failure (limit=%d cursor=%q): %v", componentName, limitParam, cursorParam, err)
+		c.errorHandler(w, r, err, &result)
+		return
+	}
+	// If no error, encode the body and the result code
 	_ = EncodeJSONResponse(result.Body, &result.Code, w)
 }
