@@ -47,10 +47,10 @@ func LoadPrivateKey(path string) (*rsa.PrivateKey, error) {
 		return nil, fmt.Errorf("failed to decode PEM block")
 	}
 
-	// Try parsing as PKCS#8 first (genpkey output), then PKCS#1
+	// Assume PKCS#8 format - if this wont work, PKCS#1 will be tried next
 	key, err := x509.ParsePKCS8PrivateKey(block.Bytes)
 	if err != nil {
-		// Fallback to PKCS#1 format
+		// PKCS#1 Fallback
 		rsaKey, err := x509.ParsePKCS1PrivateKey(block.Bytes)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse private key: %w", err)
