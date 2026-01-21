@@ -75,7 +75,7 @@ type OIDCProviderSettings struct {
 
 // NewOIDC initializes an OIDC verifier from the given settings.
 func NewOIDC(ctx context.Context, s OIDCSettings) (*OIDC, error) {
-	log.Printf("Initializing OIDC verifier")
+	log.Printf("🔐 Initializing OIDC verifier…")
 
 	if len(s.Providers) == 0 {
 		return nil, fmt.Errorf("at least one OIDC provider must be configured")
