@@ -272,8 +272,8 @@ sequenceDiagram
 - `cmd/aasregistryservice/config.yaml`:
   - server.port, contextPath
   - postgres.host/port/user/password/dbname/pool settings
-  - oidc.issuer, oidc.audience (AllowAnonymous true in code)
-  - abac.enabled, abac.modelPath, abac.clientRolesAudience, abac.enableDebugErrorResponses
+  - oidc.trustlistPath (path to JSON trustlist with issuer/audience/scopes; AllowAnonymous true in code)
+  - abac.enabled, abac.modelPath, abac.enableDebugErrorResponses
 - Access model file: `cmd/aasregistryservice/config/access_rules/access-rules.json`.
 - To disable anonymous: modify `SetupSecurity` to set `AllowAnonymous: false` (code change) or enforce upstream.
 

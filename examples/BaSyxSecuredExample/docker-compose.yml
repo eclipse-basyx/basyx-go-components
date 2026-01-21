@@ -36,11 +36,9 @@ services:
       - POSTGRES_MAXOPENCONNECTIONS=500
       - POSTGRES_MAXIDLECONNECTIONS=500
       - POSTGRES_CONNMAXLIFETIMEMINUTES=5
-      - OIDC_ISSUER=http://keycloak.basyx.localhost/realms/basyx
-      - OIDC_AUDIENCE=discovery-service
       - ABAC_ENABLED=true
-      - ENABLE_DEBUG_ERROR_RESPONSES=false
-      - ABAC_MODELPATH=/config/access_rules/access-rules.json
+      - ABAC_MODELPATH=/security_env/access-rules.json
+      - OIDC_TRUSTLISTPATH=/security_env/trustlist.json
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--output-document=-", "http://localhost:8080/health"]
       interval: 10s
@@ -53,7 +51,7 @@ services:
       keycloak-healthcheck:
         condition: service_completed_successfully
     volumes:
-      - ./access_rules:/config/access_rules
+      - ./security_env:/security_env
     extra_hosts:
       - "keycloak.basyx.localhost:host-gateway"
     networks:
@@ -95,11 +93,9 @@ services:
       - POSTGRES_MAXOPENCONNECTIONS=500
       - POSTGRES_MAXIDLECONNECTIONS=500
       - POSTGRES_CONNMAXLIFETIMEMINUTES=5
-      - OIDC_ISSUER=http://keycloak.basyx.localhost/realms/basyx
-      - OIDC_AUDIENCE=discovery-service
       - ABAC_ENABLED=true
-      - ENABLE_DEBUG_ERROR_RESPONSES=false
-      - ABAC_MODELPATH=/config/access_rules/access-rules.json
+      - ABAC_MODELPATH=/security_env/access-rules.json
+      - OIDC_TRUSTLISTPATH=/security_env/trustlist.json
     ports:
       - "8084:8081"
     healthcheck:
@@ -114,7 +110,7 @@ services:
       keycloak-healthcheck:
         condition: service_completed_successfully
     volumes:
-      - ./access_rules:/config/access_rules
+      - ./security_env:/security_env
     extra_hosts:
       - "keycloak.basyx.localhost:host-gateway"
     networks:
@@ -220,7 +216,7 @@ services:
       - "aasreg.basyx.localhost:host-gateway"
     volumes:
       - ./aas:/application/aas
-      - ./access_rules/aas-env-rules.json:/application/rbac_rules.json
+      - ./security_env/aas-env-rules.json:/application/rbac_rules.json
     ports:
       - '8081:8081'
     restart: unless-stopped

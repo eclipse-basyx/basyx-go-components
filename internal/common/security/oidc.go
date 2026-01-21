@@ -29,6 +29,7 @@ package auth
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -44,46 +45,75 @@ import (
 
 // OIDC wraps an ID token verifier and related settings.
 type OIDC struct {
+	verifiers map[string]issuerVerifier
+	settings  OIDCSettings
+}
+
+type issuerVerifier struct {
+	issuer   string
 	verifier *oidc.IDTokenVerifier
-	settings OIDCSettings
+	scopes   []string
 }
 
 // OIDCSettings configures OIDC token verification.
 //
-// Issuer:   URL of the OpenID Provider ("iss").
-// Audience: expected audience / client ID for this service.
+// Providers: issuer/audience pairs (and scopes) allowed by this service.
 // AllowAnonymous: if true, requests without a Bearer token are treated as
 //
 //	anonymous instead of being rejected.
 type OIDCSettings struct {
-	Issuer         string
-	Audience       string
+	Providers      []OIDCProviderSettings
 	AllowAnonymous bool
+}
+
+// OIDCProviderSettings configures a single issuer/audience pair and scopes.
+type OIDCProviderSettings struct {
+	Issuer   string
+	Audience string
+	Scopes   []string
 }
 
 // NewOIDC initializes an OIDC verifier from the given settings.
 func NewOIDC(ctx context.Context, s OIDCSettings) (*OIDC, error) {
 	log.Printf("🔐 Initializing OIDC verifier…")
 
-	if strings.TrimSpace(s.Issuer) == "" {
-		return nil, fmt.Errorf("issuer must not be empty")
-	}
-	if strings.TrimSpace(s.Audience) == "" {
-		return nil, fmt.Errorf("audience must not be empty")
+	if len(s.Providers) == 0 {
+		return nil, fmt.Errorf("at least one OIDC provider must be configured")
 	}
 
-	provider, err := oidc.NewProvider(ctx, s.Issuer)
-	if err != nil {
-		return nil, fmt.Errorf("create OIDC provider: %w", err)
+	verifiers := make(map[string]issuerVerifier, len(s.Providers))
+	for _, p := range s.Providers {
+		issuer := strings.TrimSpace(p.Issuer)
+		audience := strings.TrimSpace(p.Audience)
+		if issuer == "" {
+			return nil, fmt.Errorf("issuer must not be empty")
+		}
+		if audience == "" {
+			return nil, fmt.Errorf("audience must not be empty")
+		}
+		if _, ok := verifiers[issuer]; ok {
+			return nil, fmt.Errorf("duplicate issuer configured: %s", issuer)
+		}
+
+		provider, err := oidc.NewProvider(ctx, issuer)
+		if err != nil {
+			return nil, fmt.Errorf("create OIDC provider: %w", err)
+		}
+
+		v := provider.Verifier(&oidc.Config{ClientID: audience})
+		if v == nil {
+			return nil, fmt.Errorf("failed to construct OIDC verifier")
+		}
+
+		verifiers[issuer] = issuerVerifier{
+			issuer:   issuer,
+			verifier: v,
+			scopes:   p.Scopes,
+		}
+		log.Printf("✅ OIDC verifier created. Issuer=%s Audience=%s", issuer, audience)
 	}
 
-	v := provider.Verifier(&oidc.Config{ClientID: s.Audience})
-	if v == nil {
-		return nil, fmt.Errorf("failed to construct OIDC verifier")
-	}
-
-	log.Printf("✅ OIDC verifier created. Issuer=%s Audience=%s", s.Issuer, s.Audience)
-	return &OIDC{verifier: v, settings: s}, nil
+	return &OIDC{verifiers: verifiers, settings: s}, nil
 }
 
 type ctxKey string
@@ -131,7 +161,21 @@ func (o *OIDC) Middleware(next http.Handler) http.Handler {
 			return
 		}
 
-		idToken, err := o.verifier.Verify(r.Context(), raw)
+		issuer, err := extractIssuer(raw)
+		if err != nil {
+			log.Printf("❌ Failed to read token issuer: %v", err)
+			respondOIDCError(w)
+			return
+		}
+
+		verifier, ok := o.verifiers[issuer]
+		if !ok {
+			log.Printf("❌ unknown token issuer: %s", issuer)
+			respondOIDCError(w)
+			return
+		}
+
+		idToken, err := verifier.verifier.Verify(r.Context(), raw)
 		if err != nil {
 			log.Printf("❌ Token verification failed: %v", err)
 			respondOIDCError(w)
@@ -162,9 +206,8 @@ func (o *OIDC) Middleware(next http.Handler) http.Handler {
 		}
 
 		// Enforce minimal scopes (kept as-is; extend if needed).
-		required := []string{"profile"}
-		if !hasAllScopes(c, required) {
-			log.Printf("❌ missing required scopes: %v", required)
+		if !hasAllScopes(c, verifier.scopes) {
+			log.Printf("❌ missing required scopes: %v", verifier.scopes)
 			respondOIDCError(w)
 			return
 		}
@@ -221,4 +264,25 @@ func respondOIDCError(w http.ResponseWriter) {
 		log.Printf("❌ Failed to encode error response: %v", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 	}
+}
+
+func extractIssuer(rawToken string) (string, error) {
+	parts := strings.Split(rawToken, ".")
+	if len(parts) < 2 {
+		return "", fmt.Errorf("token has invalid format")
+	}
+	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		return "", fmt.Errorf("decode token payload: %w", err)
+	}
+	var claims struct {
+		Issuer string `json:"iss"`
+	}
+	if err := json.Unmarshal(payload, &claims); err != nil {
+		return "", fmt.Errorf("parse token claims: %w", err)
+	}
+	if strings.TrimSpace(claims.Issuer) == "" {
+		return "", fmt.Errorf("token missing issuer")
+	}
+	return claims.Issuer, nil
 }
