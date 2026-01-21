@@ -14,11 +14,7 @@ postgres:
   connMaxLifetimeMinutes: 5
 
 oidc:
-  providers:
-    - issuer: "http://localhost:8080/realms/basyx"
-      audience: "discovery-service"
-      scopes: []
-  jwksURL: "" 
+  trustlistPath: "config/trustlist.json"
 
 abac:
   enabled: false

@@ -14,10 +14,8 @@ postgres:
   connMaxLifetimeMinutes: 5
 
 oidc:
-  providers:
-    - issuer: "https://iam-security-training.com/consumer/sts"
-      audience: "https://credential.aas-voyager.com/resources"
-      scopes: []
+  trustlistPath: "config/trustlist.json"
+
 
 abac:
   enabled: true

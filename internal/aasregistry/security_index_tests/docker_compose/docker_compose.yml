@@ -30,12 +30,9 @@ services:
       - POSTGRES_MAXOPENCONNECTIONS=500
       - POSTGRES_MAXIDLECONNECTIONS=500
       - POSTGRES_CONNMAXLIFETIMEMINUTES=5
-      - OIDC_PROVIDERS_0_ISSUER=http://localhost:8080/realms/basyx
-      - OIDC_PROVIDERS_0_AUDIENCE=discovery-service
-      - OIDC_PROVIDERS_0_SCOPES=profile,email
       - ABAC_ENABLED=true
-      - ENABLE_DEBUG_ERROR_RESPONSES=true
-      - ABAC_MODELPATH=/config/access_rules/access-rules.json
+      - ABAC_MODELPATH=/security_env/access-rules.json
+      - OIDC_TRUSTLISTPATH=/security_env/trustlist.json
     ports:
       - "6004:5004"
     depends_on:
@@ -44,7 +41,7 @@ services:
       keycloak-healthcheck:
         condition: service_completed_successfully
     volumes:
-      - ../access_rules:/config/access_rules
+      - ../security_env:/security_env
     extra_hosts:
       - "localhost:host-gateway"
 

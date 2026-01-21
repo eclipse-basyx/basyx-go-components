@@ -31,7 +31,7 @@ var DefaultConfig = struct {
 	AllowedMethods          []string
 	AllowedHeaders          []string
 	AllowCredentials        bool
-	OIDCProviders           []OIDCProviderConfig
+	OIDCTrustlistPath       string
 	OIDCJWKSURL             string
 	ABACEnabled             bool
 	ABACModelPath           string
@@ -48,11 +48,7 @@ var DefaultConfig = struct {
 	AllowedMethods:          []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
 	AllowedHeaders:          []string{},
 	AllowCredentials:        false,
-	OIDCProviders: []OIDCProviderConfig{{
-		Issuer:   "http://localhost:8080/realms/basyx",
-		Audience: "discovery-service",
-		Scopes:   []string{},
-	}},
+	OIDCTrustlistPath:       "config/trustlist.json",
 	OIDCJWKSURL:             "",
 	ABACEnabled:             false,
 	ABACModelPath:           "config/access_rules/access-rules.json",
@@ -128,7 +124,7 @@ type OIDCProviderConfig struct {
 
 // OIDCConfig contains OpenID Connect authentication provider settings.
 type OIDCConfig struct {
-	Providers []OIDCProviderConfig `mapstructure:"providers" yaml:"providers" json:"providers"` // Multiple issuer/audience pairs
+	TrustlistPath string `mapstructure:"trustlistPath" yaml:"trustlistPath" json:"trustlistPath"` // Path to trustlist JSON
 }
 
 // ABACConfig contains Attribute-Based Access Control authorization settings.
@@ -229,11 +225,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("cors.allowedHeaders", []string{})
 	v.SetDefault("cors.allowCredentials", false)
 
-	v.SetDefault("oidc.providers", []map[string]any{{
-		"issuer":   "http://localhost:8080/realms/basyx",
-		"audience": "discovery-service",
-		"scopes":   []string{},
-	}})
+	v.SetDefault("oidc.trustlistPath", "config/trustlist.json")
 
 	v.SetDefault("abac.enabled", false)
 	v.SetDefault("abac.enableDebugErrorResponses", false)
@@ -316,7 +308,7 @@ func PrintConfiguration(cfg *Config) {
 		add("Model Path", cfg.ABAC.ModelPath, DefaultConfig.ABACModelPath)
 
 		lines = append(lines, "🔹 OIDC:")
-		add("Providers", cfg.OIDC.Providers, DefaultConfig.OIDCProviders)
+		add("Trustlist Path", cfg.OIDC.TrustlistPath, DefaultConfig.OIDCTrustlistPath)
 	}
 
 	lines = append(lines, divider)

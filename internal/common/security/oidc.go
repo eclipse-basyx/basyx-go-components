@@ -110,7 +110,7 @@ func NewOIDC(ctx context.Context, s OIDCSettings) (*OIDC, error) {
 			verifier: v,
 			scopes:   p.Scopes,
 		}
-		log.Printf("OIDC verifier created. Issuer=%s Audience=%s", issuer, audience)
+		log.Printf("✅ OIDC verifier created. Issuer=%s Audience=%s", issuer, audience)
 	}
 
 	return &OIDC{verifiers: verifiers, settings: s}, nil
@@ -207,7 +207,7 @@ func (o *OIDC) Middleware(next http.Handler) http.Handler {
 
 		// Enforce minimal scopes (kept as-is; extend if needed).
 		if !hasAllScopes(c, verifier.scopes) {
-			log.Printf("??O missing required scopes: %v", verifier.scopes)
+			log.Printf("❌ missing required scopes: %v", verifier.scopes)
 			respondOIDCError(w)
 			return
 		}

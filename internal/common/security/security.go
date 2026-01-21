@@ -39,7 +39,10 @@ package auth
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"os"
+	"strings"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	api "github.com/go-chi/chi/v5"
@@ -69,7 +72,7 @@ import (
 //	router := chi.NewRouter()
 //	config := &common.Config{
 //	  ABAC: common.ABACConfig{Enabled: true, ModelPath: "access_model.json"},
-//	  OIDC: common.OIDCConfig{Issuer: "https://auth.example.com", Audience: "api"},
+//	  OIDC: common.OIDCConfig{TrustlistPath: "config/trustlist.json"},
 //	}
 //	err := SetupSecurity(context.Background(), config, router)
 //	if err != nil {
@@ -85,8 +88,26 @@ func SetupSecurity(ctx context.Context, cfg *common.Config, r *api.Mux) error {
 		return nil
 	}
 
-	oidcProviders := make([]OIDCProviderSettings, 0, len(cfg.OIDC.Providers))
-	for _, p := range cfg.OIDC.Providers {
+	trustlistPath := strings.TrimSpace(cfg.OIDC.TrustlistPath)
+	if trustlistPath == "" {
+		return fmt.Errorf("oidc trustlistPath must not be empty")
+	}
+
+	trustlistData, err := os.ReadFile(trustlistPath)
+	if err != nil {
+		return fmt.Errorf("read OIDC trustlist: %w", err)
+	}
+
+	var trustlist []common.OIDCProviderConfig
+	if err := json.Unmarshal(trustlistData, &trustlist); err != nil {
+		return fmt.Errorf("parse OIDC trustlist: %w", err)
+	}
+	if len(trustlist) == 0 {
+		return fmt.Errorf("OIDC trustlist is empty")
+	}
+
+	oidcProviders := make([]OIDCProviderSettings, 0, len(trustlist))
+	for _, p := range trustlist {
 		oidcProviders = append(oidcProviders, OIDCProviderSettings{
 			Issuer:   p.Issuer,
 			Audience: p.Audience,
