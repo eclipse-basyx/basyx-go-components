@@ -163,14 +163,14 @@ func (o *OIDC) Middleware(next http.Handler) http.Handler {
 
 		issuer, err := extractIssuer(raw)
 		if err != nil {
-			log.Printf("??O Failed to read token issuer: %v", err)
+			log.Printf("❌ Failed to read token issuer: %v", err)
 			respondOIDCError(w)
 			return
 		}
 
 		verifier, ok := o.verifiers[issuer]
 		if !ok {
-			log.Printf("??O unknown token issuer: %s", issuer)
+			log.Printf("❌ unknown token issuer: %s", issuer)
 			respondOIDCError(w)
 			return
 		}
