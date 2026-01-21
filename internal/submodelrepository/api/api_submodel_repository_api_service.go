@@ -117,6 +117,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelByID(
 	return gen.Response(200, sm), nil
 }
 
+// GetSignedSubmodelByID retrieves a signed submodel (JWS compact serialization) by its base64-encoded identifier.
 func (s *SubmodelRepositoryAPIAPIService) GetSignedSubmodelByID(
 	_ /*ctx*/ context.Context,
 	id string,
