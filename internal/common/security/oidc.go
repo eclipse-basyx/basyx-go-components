@@ -162,7 +162,7 @@ func (o *OIDC) Middleware(next http.Handler) http.Handler {
 		}
 
 		// Enforce minimal scopes (kept as-is; extend if needed).
-		required := []string{"profile"}
+		required := []string{}
 		if !hasAllScopes(c, required) {
 			log.Printf("❌ missing required scopes: %v", required)
 			respondOIDCError(w)
