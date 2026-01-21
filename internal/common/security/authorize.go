@@ -40,12 +40,10 @@ import (
 // Attribute-Based Access Control.
 //
 // Enabled: toggles ABAC enforcement.
-// ClientRolesAudience: defines the expected client audience for role validation.
 // Model: provides the AccessModel that evaluates authorization rules.
 type ABACSettings struct {
-	Enabled             bool
-	ClientRolesAudience string
-	Model               *AccessModel
+	Enabled bool
+	Model   *AccessModel
 }
 
 // Resource represents the target object of an authorization request.

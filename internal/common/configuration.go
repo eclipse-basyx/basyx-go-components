@@ -31,11 +31,9 @@ var DefaultConfig = struct {
 	AllowedMethods          []string
 	AllowedHeaders          []string
 	AllowCredentials        bool
-	OIDCIssuer              string
-	OIDCAudience            string
+	OIDCProviders           []OIDCProviderConfig
 	OIDCJWKSURL             string
 	ABACEnabled             bool
-	ABACClientRolesAudience string
 	ABACModelPath           string
 }{
 	ServerPort:              5004,
@@ -50,11 +48,13 @@ var DefaultConfig = struct {
 	AllowedMethods:          []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
 	AllowedHeaders:          []string{},
 	AllowCredentials:        false,
-	OIDCIssuer:              "http://localhost:8080/realms/basyx",
-	OIDCAudience:            "discovery-service",
+	OIDCProviders: []OIDCProviderConfig{{
+		Issuer:   "http://localhost:8080/realms/basyx",
+		Audience: "discovery-service",
+		Scopes:   []string{},
+	}},
 	OIDCJWKSURL:             "",
 	ABACEnabled:             false,
-	ABACClientRolesAudience: "discovery-service",
 	ABACModelPath:           "config/access_rules/access-rules.json",
 }
 
@@ -119,17 +119,22 @@ type CorsConfig struct {
 	AllowCredentials bool     `mapstructure:"allowCredentials" yaml:"allowCredentials"` // Allow credentials in requests
 }
 
+// OIDCProviderConfig contains OpenID Connect authentication provider settings.
+type OIDCProviderConfig struct {
+	Issuer   string   `mapstructure:"issuer" yaml:"issuer" json:"issuer"`     // OIDC issuer URL
+	Audience string   `mapstructure:"audience" yaml:"audience" json:"audience"` // Expected token audience
+	Scopes   []string `mapstructure:"scopes" yaml:"scopes" json:"scopes"`       // Required scopes
+}
+
 // OIDCConfig contains OpenID Connect authentication provider settings.
 type OIDCConfig struct {
-	Issuer   string `mapstructure:"issuer" json:"issuer"`     // OIDC issuer URL
-	Audience string `mapstructure:"audience" json:"audience"` // Expected token audience
+	Providers []OIDCProviderConfig `mapstructure:"providers" yaml:"providers" json:"providers"` // Multiple issuer/audience pairs
 }
 
 // ABACConfig contains Attribute-Based Access Control authorization settings.
 type ABACConfig struct {
-	Enabled             bool   `mapstructure:"enabled" json:"enabled"`                         // Enable/disable ABAC
-	ClientRolesAudience string `mapstructure:"clientRolesAudience" json:"clientRolesAudience"` // Client roles audience
-	ModelPath           string `mapstructure:"modelPath" json:"modelPath"`                     // Path to access control model
+	Enabled   bool   `mapstructure:"enabled" json:"enabled"`     // Enable/disable ABAC
+	ModelPath string `mapstructure:"modelPath" json:"modelPath"` // Path to access control model
 }
 
 // LoadConfig loads the configuration from YAML files and environment variables.
@@ -224,12 +229,14 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("cors.allowedHeaders", []string{})
 	v.SetDefault("cors.allowCredentials", false)
 
-	v.SetDefault("oidc.issuer", "http://localhost:8080/realms/basyx")
-	v.SetDefault("oidc.audience", "discovery-service")
+	v.SetDefault("oidc.providers", []map[string]any{{
+		"issuer":   "http://localhost:8080/realms/basyx",
+		"audience": "discovery-service",
+		"scopes":   []string{},
+	}})
 
 	v.SetDefault("abac.enabled", false)
 	v.SetDefault("abac.enableDebugErrorResponses", false)
-	v.SetDefault("abac.clientRolesAudience", "discovery-service")
 	v.SetDefault("abac.modelPath", "config/access_rules/access-rules.json")
 
 }
@@ -306,12 +313,10 @@ func PrintConfiguration(cfg *Config) {
 	lines = append(lines, "🔹 ABAC:")
 	add("Enabled", cfg.ABAC.Enabled, DefaultConfig.ABACEnabled)
 	if cfg.ABAC.Enabled {
-		add("Client Roles Audience", cfg.ABAC.ClientRolesAudience, DefaultConfig.ABACClientRolesAudience)
 		add("Model Path", cfg.ABAC.ModelPath, DefaultConfig.ABACModelPath)
 
 		lines = append(lines, "🔹 OIDC:")
-		add("Issuer", cfg.OIDC.Issuer, DefaultConfig.OIDCIssuer)
-		add("Audience", cfg.OIDC.Audience, DefaultConfig.OIDCAudience)
+		add("Providers", cfg.OIDC.Providers, DefaultConfig.OIDCProviders)
 	}
 
 	lines = append(lines, divider)

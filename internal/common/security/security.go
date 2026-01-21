@@ -85,9 +85,17 @@ func SetupSecurity(ctx context.Context, cfg *common.Config, r *api.Mux) error {
 		return nil
 	}
 
+	oidcProviders := make([]OIDCProviderSettings, 0, len(cfg.OIDC.Providers))
+	for _, p := range cfg.OIDC.Providers {
+		oidcProviders = append(oidcProviders, OIDCProviderSettings{
+			Issuer:   p.Issuer,
+			Audience: p.Audience,
+			Scopes:   p.Scopes,
+		})
+	}
+
 	oidc, err := NewOIDC(ctx, OIDCSettings{
-		Issuer:         cfg.OIDC.Issuer,
-		Audience:       cfg.OIDC.Audience,
+		Providers:      oidcProviders,
 		AllowAnonymous: true,
 	})
 	if err != nil {
@@ -108,9 +116,8 @@ func SetupSecurity(ctx context.Context, cfg *common.Config, r *api.Mux) error {
 	}
 
 	abacSettings := ABACSettings{
-		Enabled:             cfg.ABAC.Enabled,
-		ClientRolesAudience: cfg.ABAC.ClientRolesAudience,
-		Model:               model,
+		Enabled: cfg.ABAC.Enabled,
+		Model:   model,
 	}
 
 	// ✅ Apply both middlewares to the router
