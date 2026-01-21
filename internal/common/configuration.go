@@ -85,6 +85,12 @@ type Config struct {
 
 	OIDC OIDCConfig `mapstructure:"oidc" yaml:"oidc"` // OpenID Connect authentication
 	ABAC ABACConfig `mapstructure:"abac" yaml:"abac"` // Attribute-Based Access Control
+	JWS  JWSConfig  `mapstructure:"jws" yaml:"jws"`   // JWS signing configuration
+}
+
+// JWSConfig contains JSON Web Signature configuration parameters.
+type JWSConfig struct {
+	PrivateKeyPath string `mapstructure:"privateKeyPath" yaml:"privateKeyPath"` // Path to the RSA private key for signing
 }
 
 // ServerConfig contains HTTP server configuration parameters.

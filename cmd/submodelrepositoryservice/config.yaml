@@ -13,3 +13,6 @@ postgres:
   maxOpenConnections: 500
   maxIdleConnections: 500
   connMaxLifetimeMinutes: 5
+
+jws:
+  privateKeyPath: "./rsa-key.pem"

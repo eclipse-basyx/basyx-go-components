@@ -117,6 +117,37 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelByID(
 	return gen.Response(200, sm), nil
 }
 
+func (s *SubmodelRepositoryAPIAPIService) GetSignedSubmodelByID(
+	_ /*ctx*/ context.Context,
+	id string,
+	_ /*level*/ string,
+	_ /*extent*/ string,
+) (gen.ImplResponse, error) {
+	// Decode the base64-encoded submodel identifier
+	decodedSubmodelIdentifier, decodeErr := base64.RawStdEncoding.DecodeString(id)
+	if decodeErr != nil {
+		return gen.Response(http.StatusBadRequest, nil), decodeErr
+	}
+
+	// Get the signed submodel (JWS compact serialization) from the database layer
+	jwsString, err := s.submodelBackend.GetSignedSubmodel(string(decodedSubmodelIdentifier), false)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return gen.Response(404, nil), nil
+		}
+		if common.IsErrNotFound(err) {
+			return gen.Response(404, nil), err
+		}
+		// Check for signing configuration error
+		if err.Error() == "JWS signing not configured: private key not loaded" {
+			return gen.Response(http.StatusServiceUnavailable, nil), err
+		}
+		return gen.Response(500, nil), err
+	}
+
+	return gen.Response(http.StatusOK, jwsString), nil
+}
+
 // DeleteSubmodelByID removes a submodel from the repository by its base64-encoded identifier.
 // The method decodes the identifier and deletes the corresponding submodel.
 //
