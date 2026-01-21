@@ -19,39 +19,39 @@ import (
 // DefaultConfig holds all default values for configuration options.
 // THESE VALUES ARE NOT USED! THEY VALIDATE IF CONFIGURATION IS DEFAULT IN THE PRINT STATEMENT
 var DefaultConfig = struct {
-	ServerPort              int
-	ServerContextPath       string
-	ServerCacheEnabled      bool
-	PgPort                  int
-	PgDBName                string
-	PgMaxOpen               int
-	PgMaxIdle               int
-	PgConnLifetime          int
-	AllowedOrigins          []string
-	AllowedMethods          []string
-	AllowedHeaders          []string
-	AllowCredentials        bool
-	OIDCTrustlistPath       string
-	OIDCJWKSURL             string
-	ABACEnabled             bool
-	ABACModelPath           string
+	ServerPort         int
+	ServerContextPath  string
+	ServerCacheEnabled bool
+	PgPort             int
+	PgDBName           string
+	PgMaxOpen          int
+	PgMaxIdle          int
+	PgConnLifetime     int
+	AllowedOrigins     []string
+	AllowedMethods     []string
+	AllowedHeaders     []string
+	AllowCredentials   bool
+	OIDCTrustlistPath  string
+	OIDCJWKSURL        string
+	ABACEnabled        bool
+	ABACModelPath      string
 }{
-	ServerPort:              5004,
-	ServerContextPath:       "",
-	ServerCacheEnabled:      false,
-	PgPort:                  5432,
-	PgDBName:                "basyxTestDB",
-	PgMaxOpen:               50,
-	PgMaxIdle:               50,
-	PgConnLifetime:          5,
-	AllowedOrigins:          []string{},
-	AllowedMethods:          []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
-	AllowedHeaders:          []string{},
-	AllowCredentials:        false,
-	OIDCTrustlistPath:       "config/trustlist.json",
-	OIDCJWKSURL:             "",
-	ABACEnabled:             false,
-	ABACModelPath:           "config/access_rules/access-rules.json",
+	ServerPort:         5004,
+	ServerContextPath:  "",
+	ServerCacheEnabled: false,
+	PgPort:             5432,
+	PgDBName:           "basyxTestDB",
+	PgMaxOpen:          50,
+	PgMaxIdle:          50,
+	PgConnLifetime:     5,
+	AllowedOrigins:     []string{},
+	AllowedMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
+	AllowedHeaders:     []string{},
+	AllowCredentials:   false,
+	OIDCTrustlistPath:  "config/trustlist.json",
+	OIDCJWKSURL:        "",
+	ABACEnabled:        false,
+	ABACModelPath:      "config/access_rules/access-rules.json",
 }
 
 // PrintSplash displays the BaSyx Go API ASCII art logo to the console.
@@ -117,7 +117,7 @@ type CorsConfig struct {
 
 // OIDCProviderConfig contains OpenID Connect authentication provider settings.
 type OIDCProviderConfig struct {
-	Issuer   string   `mapstructure:"issuer" yaml:"issuer" json:"issuer"`     // OIDC issuer URL
+	Issuer   string   `mapstructure:"issuer" yaml:"issuer" json:"issuer"`       // OIDC issuer URL
 	Audience string   `mapstructure:"audience" yaml:"audience" json:"audience"` // Expected token audience
 	Scopes   []string `mapstructure:"scopes" yaml:"scopes" json:"scopes"`       // Required scopes
 }
