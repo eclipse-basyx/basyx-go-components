@@ -42,7 +42,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"strings"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	api "github.com/go-chi/chi/v5"
@@ -88,12 +87,7 @@ func SetupSecurity(ctx context.Context, cfg *common.Config, r *api.Mux) error {
 		return nil
 	}
 
-	trustlistPath := strings.TrimSpace(cfg.OIDC.TrustlistPath)
-	if trustlistPath == "" {
-		return fmt.Errorf("oidc trustlistPath must not be empty")
-	}
-
-	trustlistData, err := os.ReadFile(trustlistPath)
+	trustlistData, err := os.ReadFile(cfg.OIDC.TrustlistPath)
 	if err != nil {
 		return fmt.Errorf("read OIDC trustlist: %w", err)
 	}
