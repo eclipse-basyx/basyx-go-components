@@ -29,6 +29,8 @@ services:
       - POSTGRES_MAXOPENCONNECTIONS=500
       - POSTGRES_MAXIDLECONNECTIONS=500
       - POSTGRES_CONNMAXLIFETIMEMINUTES=5
+    volumes:
+      - ./rsa-key.pem:/root/rsa-key.pem:ro
     ports:
       - "6004:5004"
     depends_on:
