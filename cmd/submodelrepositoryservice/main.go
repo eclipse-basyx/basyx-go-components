@@ -4,6 +4,7 @@ package main
 import (
 	"context"
 	"crypto/rsa"
+	"embed"
 	"flag"
 	"fmt"
 	"log"
@@ -19,6 +20,9 @@ import (
 	persistencepostgresql "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence"
 	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/submodelrepositoryapi/go"
 )
+
+//go:embed openapi.yaml
+var openapiSpec embed.FS
 
 func runServer(ctx context.Context, configPath string, databaseSchema string) error {
 	log.Default().Println("Loading Submodel Repository Service...")
@@ -37,6 +41,11 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 
 	// Add health endpoint
 	common.AddHealthEndpoint(r, config)
+
+	// Add Swagger UI
+	if err := common.AddSwaggerUIFromFS(r, openapiSpec, "openapi.yaml", "Submodel Repository API", "/swagger", "/api-docs/openapi.yaml", config); err != nil {
+		log.Printf("Warning: failed to load OpenAPI spec for Swagger UI: %v", err)
+	}
 
 	// Instantiate generated services & controllers
 	// ==== Submodel Repository Service ====

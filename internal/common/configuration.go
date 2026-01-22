@@ -96,6 +96,7 @@ type JWSConfig struct {
 
 // ServerConfig contains HTTP server configuration parameters.
 type ServerConfig struct {
+	Host         string `mapstructure:"host" yaml:"host"`                 // HTTP server host (default: 0.0.0.0)
 	Port         int    `mapstructure:"port" yaml:"port"`                 // HTTP server port (default: 5004)
 	ContextPath  string `mapstructure:"contextPath" yaml:"contextPath"`   // Base path for all endpoints
 	CacheEnabled bool   `mapstructure:"cacheEnabled" yaml:"cacheEnabled"` // Enable/disable response caching
