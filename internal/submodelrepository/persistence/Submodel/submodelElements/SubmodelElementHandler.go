@@ -40,6 +40,7 @@ import (
 	"strconv"
 	"sync"
 
+	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
 	_ "github.com/doug-martin/goqu/v9/dialect/postgres" // Postgres Driver for Goqu
 
@@ -64,8 +65,8 @@ import (
 // Returns:
 //   - PostgreSQLSMECrudInterface: Type-specific handler implementing CRUD operations
 //   - error: An error if the model type is unsupported or handler creation fails
-func GetSMEHandler(submodelElement model.SubmodelElement, db *sql.DB) (PostgreSQLSMECrudInterface, error) {
-	return GetSMEHandlerByModelType(string(submodelElement.GetModelType()), db)
+func GetSMEHandler(submodelElement types.ISubmodelElement, db *sql.DB) (PostgreSQLSMECrudInterface, error) {
+	return GetSMEHandlerByModelType(string(submodelElement.ModelType()), db)
 }
 
 // GetSMEHandlerByModelType creates a handler by model type string.

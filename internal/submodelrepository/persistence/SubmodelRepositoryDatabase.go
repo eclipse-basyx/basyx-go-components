@@ -143,7 +143,7 @@ func (p *PostgreSQLSubmodelDatabase) GetAllSubmodels(limit int32, cursor string,
 		return err
 	})
 
-	submodelElements := make(map[string][]gen.SubmodelElement)
+	submodelElements := make(map[string][]types.ISubmodelElement)
 	var errSme error
 	var errSmeMutex sync.Mutex
 
@@ -384,12 +384,12 @@ func (p *PostgreSQLSubmodelDatabase) DoesSubmodelExist(submodelIdentifier string
 //   - error: Error if submodel not found or retrieval fails
 func (p *PostgreSQLSubmodelDatabase) GetSubmodel(id string, valueOnly bool) (types.Submodel, error) {
 	type result struct {
-		sm  *gen.Submodel
+		sm  *types.Submodel
 		err error
 	}
 
 	type resultSME struct {
-		smes []gen.SubmodelElement
+		smes []types.ISubmodelElement
 		err  error
 	}
 
@@ -548,7 +548,7 @@ func (p *PostgreSQLSubmodelDatabase) DeleteSubmodel(id string, optionalTX *sql.T
 // Returns:
 //   - bool: True if the submodel was updated (existed before), false if created new
 //   - error: Error if creation or update fails
-func (p *PostgreSQLSubmodelDatabase) PutSubmodel(submodelID string, submodel gen.Submodel) (bool, error) {
+func (p *PostgreSQLSubmodelDatabase) PutSubmodel(submodelID string, submodel types.Submodel) (bool, error) {
 	tx, cu, err := common.StartTransaction(p.db)
 	if err != nil {
 		_, _ = fmt.Println(err)
@@ -587,7 +587,7 @@ func (p *PostgreSQLSubmodelDatabase) PutSubmodel(submodelID string, submodel gen
 //   - error: Error if creation fails, nil if successful or if submodel already exists
 //
 //nolint:revive // This function is already refactored in smaller parts, but further splitting it would reduce readability.
-func (p *PostgreSQLSubmodelDatabase) CreateSubmodel(sm gen.Submodel, optionalTX *sql.Tx) error {
+func (p *PostgreSQLSubmodelDatabase) CreateSubmodel(sm types.Submodel, optionalTX *sql.Tx) error {
 
 	var tx *sql.Tx
 	if optionalTX == nil {
@@ -603,7 +603,7 @@ func (p *PostgreSQLSubmodelDatabase) CreateSubmodel(sm gen.Submodel, optionalTX 
 	} else {
 		tx = optionalTX
 	}
-	exists, err := p.DoesSubmodelExist(sm.ID, tx)
+	exists, err := p.DoesSubmodelExist(sm.ID(), tx)
 	if err != nil {
 		return err
 	}
@@ -612,22 +612,37 @@ func (p *PostgreSQLSubmodelDatabase) CreateSubmodel(sm gen.Submodel, optionalTX 
 	}
 	var semanticIDDbID, displayNameID, descriptionID, administrationID sql.NullInt64
 
-	semanticIDDbID, err = persistenceutils.CreateReference(tx, sm.SemanticID, sql.NullInt64{}, sql.NullInt64{})
+	semanticIDDbID, err = persistenceutils.CreateReference(tx, sm.SemanticID(), sql.NullInt64{}, sql.NullInt64{})
 	if err != nil {
 		_, _ = fmt.Println(err)
 		return common.NewInternalServerError("Failed to create SemanticID - no changes applied - see console for details")
 	}
 
-	displayNameID, err = persistenceutils.CreateLangStringNameTypes(tx, sm.DisplayName)
+	langString := []types.LangStringNameType{}
+	for _, dn := range sm.DisplayName() {
+		converted, ok := dn.(*types.LangStringNameType)
+		if !ok {
+			_, _ = fmt.Println("Error converting DisplayName to LangStringNameType")
+			return common.NewInternalServerError("Failed to create DisplayName - no changes applied - see console for details")
+		}
+		langString = append(langString, *converted)
+	}
+
+	displayNameID, err = persistenceutils.CreateLangStringNameTypes(tx, langString)
 	if err != nil {
 		_, _ = fmt.Println(err)
 		return common.NewInternalServerError("Failed to create DisplayName - no changes applied - see console for details")
 	}
 
 	// Handle possibly nil Description
-	var convertedDescription []gen.LangStringText
-	for _, desc := range sm.Description {
-		convertedDescription = append(convertedDescription, desc)
+	var convertedDescription []types.LangStringTextType
+	for _, desc := range sm.Description() {
+		converted, ok := desc.(*types.LangStringTextType)
+		if !ok {
+			_, _ = fmt.Println("Error converting Description to LangStringTextType")
+			return common.NewInternalServerError("Failed to create Description - no changes applied - see console for details")
+		}
+		convertedDescription = append(convertedDescription, *converted)
 	}
 	descriptionID, err = persistenceutils.CreateLangStringTextTypes(tx, convertedDescription)
 	if err != nil {
@@ -635,7 +650,7 @@ func (p *PostgreSQLSubmodelDatabase) CreateSubmodel(sm gen.Submodel, optionalTX 
 		return common.NewInternalServerError("Failed to create Description - no changes applied - see console for details")
 	}
 
-	administrationID, err = persistenceutils.CreateAdministrativeInformation(tx, sm.Administration)
+	administrationID, err = persistenceutils.CreateAdministrativeInformation(tx, sm.Administration())
 	if err != nil {
 		_, _ = fmt.Println(err)
 		return common.NewInternalServerError("Failed to create Administration - no changes applied - see console for details")
@@ -657,10 +672,10 @@ func (p *PostgreSQLSubmodelDatabase) CreateSubmodel(sm gen.Submodel, optionalTX 
 	}
 
 	insert := goqu.Insert("submodel").Rows(goqu.Record{
-		"id":                          sm.ID,
-		"id_short":                    sm.IdShort,
-		"category":                    sm.Category,
-		"kind":                        sm.Kind,
+		"id":                          sm.ID(),
+		"id_short":                    sm.IDShort(),
+		"category":                    sm.Category(),
+		"kind":                        sm.Kind(),
 		"model_type":                  "Submodel",
 		"semantic_id":                 semanticIDDbID,
 		"displayname_id":              displayNameID,
@@ -679,17 +694,17 @@ func (p *PostgreSQLSubmodelDatabase) CreateSubmodel(sm gen.Submodel, optionalTX 
 		return err
 	}
 
-	if len(sm.SubmodelElements) > 0 {
-		for _, element := range sm.SubmodelElements {
-			err = p.AddSubmodelElementWithTransaction(tx, sm.ID, element)
+	if len(sm.SubmodelElements()) > 0 {
+		for _, element := range sm.SubmodelElements() {
+			err = p.AddSubmodelElementWithTransaction(tx, sm.ID(), element)
 			if err != nil {
 				return err
 			}
 		}
 	}
 
-	if len(sm.Qualifiers) > 0 {
-		for i, qualifier := range sm.Qualifiers {
+	if len(sm.Qualifiers()) > 0 {
+		for i, qualifier := range sm.Qualifiers() {
 			qualifierID, err := persistenceutils.CreateQualifier(tx, qualifier, i)
 			if err != nil {
 				return err
@@ -701,12 +716,12 @@ func (p *PostgreSQLSubmodelDatabase) CreateSubmodel(sm gen.Submodel, optionalTX 
 			query, args, err := insert.ToSQL()
 			if err != nil {
 				_, _ = fmt.Println(err)
-				return common.NewInternalServerError("Failed to Create Qualifier for Submodel with ID '" + sm.ID + "'. See console for details.")
+				return common.NewInternalServerError("Failed to Create Qualifier for Submodel with ID '" + sm.ID() + "'. See console for details.")
 			}
 			_, err = tx.Exec(query, args...)
 			if err != nil {
 				_, _ = fmt.Println(err)
-				return common.NewInternalServerError("Failed to Create Qualifier for Submodel with ID '" + sm.ID + "'. See console for details.")
+				return common.NewInternalServerError("Failed to Create Qualifier for Submodel with ID '" + sm.ID() + "'. See console for details.")
 			}
 		}
 	}
@@ -731,9 +746,9 @@ func (p *PostgreSQLSubmodelDatabase) CreateSubmodel(sm gen.Submodel, optionalTX 
 //   - cursor: Pagination cursor (not currently implemented)
 //
 // Returns:
-//   - gen.SubmodelElement: The requested submodel element
+//   - types.ISubmodelElement: The requested submodel element
 //   - error: Error if element not found or retrieval fails
-func (p *PostgreSQLSubmodelDatabase) GetSubmodelElement(submodelID string, idShortOrPath string, valueOnly bool) (gen.SubmodelElement, error) {
+func (p *PostgreSQLSubmodelDatabase) GetSubmodelElement(submodelID string, idShortOrPath string, valueOnly bool) (types.ISubmodelElement, error) {
 	tx, cu, err := common.StartTransaction(p.db)
 	if err != nil {
 		_, _ = fmt.Println(err)
@@ -767,10 +782,10 @@ func (p *PostgreSQLSubmodelDatabase) GetSubmodelElement(submodelID string, idSho
 //   - cursor: Pagination cursor for retrieving next page
 //
 // Returns:
-//   - []gen.SubmodelElement: List of submodel elements
+//   - []types.ISubmodelElement: List of submodel elements
 //   - string: Next cursor for pagination
 //   - error: Error if retrieval fails
-func (p *PostgreSQLSubmodelDatabase) GetSubmodelElements(submodelID string, limit int, cursor string, valueOnly bool) ([]gen.SubmodelElement, string, error) {
+func (p *PostgreSQLSubmodelDatabase) GetSubmodelElements(submodelID string, limit int, cursor string, valueOnly bool) ([]types.ISubmodelElement, string, error) {
 	tx, cu, err := common.StartTransaction(p.db)
 	if err != nil {
 		_, _ = fmt.Println(err)
@@ -820,7 +835,7 @@ func (p *PostgreSQLSubmodelDatabase) GetSubmodelElements(submodelID string, limi
 //
 // Returns:
 //   - error: Error if addition fails or target path is invalid
-func (p *PostgreSQLSubmodelDatabase) AddSubmodelElementWithPath(submodelID string, idShortPath string, submodelElement gen.SubmodelElement) error {
+func (p *PostgreSQLSubmodelDatabase) AddSubmodelElementWithPath(submodelID string, idShortPath string, submodelElement types.ISubmodelElement) error {
 	handler, err := submodelelements.GetSMEHandler(submodelElement, p.db)
 	if err != nil {
 		return err
@@ -868,7 +883,7 @@ func (p *PostgreSQLSubmodelDatabase) AddSubmodelElementWithPath(submodelID strin
 			Where(
 				goqu.I("submodel_id").Eq(submodelID),
 				goqu.I("parent_sme_id").Eq(parentID),
-				goqu.I("id_short").Eq(submodelElement.GetIdShort()),
+				goqu.I("id_short").Eq(submodelElement.IDShort()),
 			).ToSQL()
 		if err != nil {
 			_, _ = fmt.Println(err)
@@ -881,10 +896,10 @@ func (p *PostgreSQLSubmodelDatabase) AddSubmodelElementWithPath(submodelID strin
 			return common.NewInternalServerError("Failed to check for duplicate idShort in list - no changes applied - see console for details.")
 		}
 		if count > 0 {
-			return common.NewErrConflict("SubmodelElement with idShort '" + submodelElement.GetIdShort() + "' already exists in submodel '" + submodelID + "'")
+			return common.NewErrConflict("SubmodelElement with idShort '" + *submodelElement.IDShort() + "' already exists in submodel '" + submodelID + "'")
 		}
 	} else {
-		newIDShortPath = idShortPath + "." + submodelElement.GetIdShort()
+		newIDShortPath = idShortPath + "." + *submodelElement.IDShort()
 	}
 
 	exists, err := doesSubmodelElementExist(tx, submodelID, newIDShortPath)
@@ -893,7 +908,7 @@ func (p *PostgreSQLSubmodelDatabase) AddSubmodelElementWithPath(submodelID strin
 		return common.NewInternalServerError("Failed to check for existing SubmodelElement - no changes applied - see console for details.")
 	}
 	if exists {
-		return common.NewErrConflict("SubmodelElement with idShort '" + submodelElement.GetIdShort() + "' already exists in submodel '" + submodelID + "'")
+		return common.NewErrConflict("SubmodelElement with idShort '" + *submodelElement.IDShort() + "' already exists in submodel '" + submodelID + "'")
 	}
 
 	var rootSmeID int
@@ -932,7 +947,7 @@ func (p *PostgreSQLSubmodelDatabase) AddSubmodelElementWithPath(submodelID strin
 //
 // Returns:
 //   - error: Error if addition fails
-func (p *PostgreSQLSubmodelDatabase) AddSubmodelElement(submodelID string, submodelElement gen.SubmodelElement) error {
+func (p *PostgreSQLSubmodelDatabase) AddSubmodelElement(submodelID string, submodelElement types.ISubmodelElement) error {
 	tx, err := p.db.Begin()
 	if err != nil {
 		_, _ = fmt.Println(err)
@@ -969,19 +984,19 @@ func (p *PostgreSQLSubmodelDatabase) AddSubmodelElement(submodelID string, submo
 //
 // Returns:
 //   - error: Error if addition fails
-func (p *PostgreSQLSubmodelDatabase) AddSubmodelElementWithTransaction(tx *sql.Tx, submodelID string, submodelElement gen.SubmodelElement) error {
+func (p *PostgreSQLSubmodelDatabase) AddSubmodelElementWithTransaction(tx *sql.Tx, submodelID string, submodelElement types.ISubmodelElement) error {
 	handler, err := submodelelements.GetSMEHandler(submodelElement, p.db)
 	if err != nil {
 		return err
 	}
 
-	exists, err := doesSubmodelElementExist(tx, submodelID, submodelElement.GetIdShort())
+	exists, err := doesSubmodelElementExist(tx, submodelID, *submodelElement.IDShort())
 	if err != nil {
 		_, _ = fmt.Println(err)
 		return common.NewInternalServerError("Failed to check for existing SubmodelElement - no changes applied - see console for details.")
 	}
 	if exists {
-		return common.NewErrConflict("SubmodelElement with idShort '" + submodelElement.GetIdShort() + "' already exists in submodel '" + submodelID + "'")
+		return common.NewErrConflict("SubmodelElement with idShort '" + *submodelElement.IDShort() + "' already exists in submodel '" + submodelID + "'")
 	}
 
 	rootID, err := handler.Create(tx, submodelID, submodelElement)
@@ -1009,7 +1024,7 @@ func (p *PostgreSQLSubmodelDatabase) AddSubmodelElementWithTransaction(tx *sql.T
 //
 // Returns:
 //   - error: Error if processing fails
-func (p *PostgreSQLSubmodelDatabase) AddNestedSubmodelElementsIteratively(tx *sql.Tx, submodelID string, parentID int, topLevelElement gen.SubmodelElement, startPath string, rootSubmodelElementID int) error {
+func (p *PostgreSQLSubmodelDatabase) AddNestedSubmodelElementsIteratively(tx *sql.Tx, submodelID string, parentID int, topLevelElement types.ISubmodelElement, startPath string, rootSubmodelElementID int) error {
 	stack, err := getElementsToProcess(topLevelElement, parentID, startPath)
 	if err != nil {
 		return err
@@ -1110,7 +1125,7 @@ func (p *PostgreSQLSubmodelDatabase) DownloadFileAttachment(submodelID string, i
 //
 // Returns:
 //   - error: Error if the update operation fails
-func (p *PostgreSQLSubmodelDatabase) UpdateSubmodelElement(submodelID string, idShortPath string, submodelElement gen.SubmodelElement, isPut bool) error {
+func (p *PostgreSQLSubmodelDatabase) UpdateSubmodelElement(submodelID string, idShortPath string, submodelElement types.ISubmodelElement, isPut bool) error {
 	tx, cu, err := common.StartTransaction(p.db)
 	if err != nil {
 		_, _ = fmt.Println(err)
@@ -1148,7 +1163,7 @@ func (p *PostgreSQLSubmodelDatabase) UpdateSubmodelElement(submodelID string, id
 	return nil
 }
 
-func handleNestedElementsAfterPut(p *PostgreSQLSubmodelDatabase, idShortPath string, modelType string, tx *sql.Tx, submodelID string, submodelElement gen.SubmodelElement) error {
+func handleNestedElementsAfterPut(p *PostgreSQLSubmodelDatabase, idShortPath string, modelType string, tx *sql.Tx, submodelID string, submodelElement types.ISubmodelElement) error {
 	var elementID int
 	smeHandler := submodelelements.PostgreSQLSMECrudHandler{Db: p.db}
 	elementID, err := smeHandler.GetDatabaseID(submodelID, idShortPath)
@@ -1179,7 +1194,7 @@ func (p *PostgreSQLSubmodelDatabase) DeleteFileAttachment(submodelID string, idS
 //
 // Returns:
 //   - error: Error if the update operation fails
-func (p *PostgreSQLSubmodelDatabase) UpdateSubmodelElementValueOnly(submodelID string, idShortOrPath string, valueOnly gen.SubmodelElementValue) error {
+func (p *PostgreSQLSubmodelDatabase) UpdateSubmodelElementValueOnly(submodelID string, idShortOrPath string, valueOnly types.ISubmodelElementValue) error {
 	// Get the model type to determine which handler to use
 	modelType, err := getSubmodelElementModelTypeByIDShortPathAndSubmodelID(p.db, submodelID, idShortOrPath)
 	if err != nil {

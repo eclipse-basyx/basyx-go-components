@@ -22,6 +22,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	persistencepostgresql "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence"
@@ -221,7 +222,7 @@ func (s *SubmodelRepositoryAPIAPIService) DeleteSubmodelByID(
 //   - error: Error if the creation fails
 func (s *SubmodelRepositoryAPIAPIService) PostSubmodel(
 	_ /*ctx*/ context.Context,
-	submodel gen.Submodel,
+	submodel types.Submodel,
 ) (gen.ImplResponse, error) {
 	err := s.submodelBackend.CreateSubmodel(submodel, nil)
 	if err != nil {
@@ -399,7 +400,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsPath(ctx context.Contex
 // PutSubmodelByID - Updates an existing Submodel
 //
 //nolint:revive
-func (s *SubmodelRepositoryAPIAPIService) PutSubmodelByID(ctx context.Context, submodelIdentifier string, submodel gen.Submodel) (gen.ImplResponse, error) {
+func (s *SubmodelRepositoryAPIAPIService) PutSubmodelByID(ctx context.Context, submodelIdentifier string, submodel types.Submodel) (gen.ImplResponse, error) {
 	decodedIdentifier, err := base64.RawStdEncoding.DecodeString(submodelIdentifier)
 	if err != nil {
 		return common.NewErrorResponse(err, http.StatusBadRequest, "SMRepo", "PatchSubmodelByID", "Malformed Submodel Identifier"), nil
@@ -447,7 +448,7 @@ func (s *SubmodelRepositoryAPIAPIService) PutSubmodelByID(ctx context.Context, s
 // PatchSubmodelByID - Updates an existing Submodel
 //
 //nolint:revive
-func (s *SubmodelRepositoryAPIAPIService) PatchSubmodelByID(ctx context.Context, submodelIdentifier string, submodel gen.Submodel, level string) (gen.ImplResponse, error) {
+func (s *SubmodelRepositoryAPIAPIService) PatchSubmodelByID(ctx context.Context, submodelIdentifier string, submodel types.Submodel, level string) (gen.ImplResponse, error) {
 	// TODO - update PatchSubmodelByID with the required logic for this service method.
 	// Add api_submodel_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
 
@@ -509,7 +510,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelByIDMetadata(ctx context.Co
 // PatchSubmodelByIDMetadata - Updates the metadata attributes of an existing Submodel
 //
 //nolint:revive
-func (s *SubmodelRepositoryAPIAPIService) PatchSubmodelByIDMetadata(ctx context.Context, submodelIdentifier string, submodelMetadata gen.SubmodelMetadata) (gen.ImplResponse, error) {
+func (s *SubmodelRepositoryAPIAPIService) PatchSubmodelByIDMetadata(ctx context.Context, submodelIdentifier string, submodelMetadata types.SubmodelMetadata) (gen.ImplResponse, error) {
 	// TODO - update PatchSubmodelByIDMetadata with the required logic for this service method.
 	// Add api_submodel_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
 
@@ -569,7 +570,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelByIDValueOnly(ctx context.C
 // PatchSubmodelByIDValueOnly - Updates the values of an existing Submodel
 //
 //nolint:revive
-func (s *SubmodelRepositoryAPIAPIService) PatchSubmodelByIDValueOnly(ctx context.Context, submodelIdentifier string, body gen.SubmodelValue, level string) (gen.ImplResponse, error) {
+func (s *SubmodelRepositoryAPIAPIService) PatchSubmodelByIDValueOnly(ctx context.Context, submodelIdentifier string, body types.SubmodelValue, level string) (gen.ImplResponse, error) {
 	decodedIdentifier, err := base64.RawStdEncoding.DecodeString(submodelIdentifier)
 	if err != nil {
 		return common.NewErrorResponse(err, http.StatusBadRequest, "SMRepo", "PatchSubmodelByIDValueOnly", "Malformed Submodel Identifier"), nil
@@ -713,7 +714,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelElements(_ /*ctx*/ conte
 // Returns:
 //   - gen.ImplResponse: Response containing the created submodel element (HTTP 201)
 //   - error: Error if the creation fails
-func (s *SubmodelRepositoryAPIAPIService) PostSubmodelElementSubmodelRepo(_ /*ctx*/ context.Context, submodelIdentifier string, submodelElement gen.SubmodelElement) (gen.ImplResponse, error) {
+func (s *SubmodelRepositoryAPIAPIService) PostSubmodelElementSubmodelRepo(_ /*ctx*/ context.Context, submodelIdentifier string, submodelElement types.SubmodelElement) (gen.ImplResponse, error) {
 	// TODO: Authorization logic to be implemented
 	// return gen.Response(401, Result{}), nil
 	// return gen.Response(403, Result{}), nil
@@ -799,9 +800,9 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelElementsValueOnlySubmode
 
 	// Convert all submodel elements to Value-Only representation
 	// Each element must be wrapped with its idShort as the key
-	valueOnlyResults := make([]gen.SubmodelElementValue, 0, len(sm.SubmodelElements))
+	valueOnlyResults := make([]types.SubmodelElementValue, 0, len(sm.SubmodelElements))
 	for _, element := range sm.SubmodelElements {
-		valueOnly, err := gen.SubmodelElementToValueOnly(element)
+		valueOnly, err := types.SubmodelElementToValueOnly(element)
 		if err != nil {
 			return gen.Response(500, nil), err
 		}
@@ -809,7 +810,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelElementsValueOnlySubmode
 			// Wrap each element value in a map with idShort as key
 			idShort := element.GetIdShort()
 			if idShort != "" {
-				wrapped := make(gen.SubmodelElementCollectionValue)
+				wrapped := make(types.SubmodelElementCollectionValue)
 				wrapped[idShort] = valueOnly
 				valueOnlyResults = append(valueOnlyResults, wrapped)
 			}
@@ -954,7 +955,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelElementByPathSubmodelRepo(c
 // Returns:
 //   - gen.ImplResponse: Response indicating successful update (HTTP 204)
 //   - error: Error if the update fails
-func (s *SubmodelRepositoryAPIAPIService) PutSubmodelElementByPathSubmodelRepo(_ /*ctx*/ context.Context, submodelIdentifier string, idShortPath string, submodelElement gen.SubmodelElement, _ /*level*/ string) (gen.ImplResponse, error) {
+func (s *SubmodelRepositoryAPIAPIService) PutSubmodelElementByPathSubmodelRepo(_ /*ctx*/ context.Context, submodelIdentifier string, idShortPath string, submodelElement types.SubmodelElement, _ /*level*/ string) (gen.ImplResponse, error) {
 	// Decode the submodel identifier from base64
 	decodedSubmodelID, err := base64.RawURLEncoding.DecodeString(submodelIdentifier)
 	if err != nil {
@@ -985,7 +986,7 @@ func (s *SubmodelRepositoryAPIAPIService) PutSubmodelElementByPathSubmodelRepo(_
 // Returns:
 //   - gen.ImplResponse: Response containing the created submodel element (HTTP 201)
 //   - error: Error if the creation fails
-func (s *SubmodelRepositoryAPIAPIService) PostSubmodelElementByPathSubmodelRepo(_ /*ctx*/ context.Context, submodelIdentifier string, idShortPath string, submodelElement gen.SubmodelElement) (gen.ImplResponse, error) {
+func (s *SubmodelRepositoryAPIAPIService) PostSubmodelElementByPathSubmodelRepo(_ /*ctx*/ context.Context, submodelIdentifier string, idShortPath string, submodelElement types.SubmodelElement) (gen.ImplResponse, error) {
 	// TODO: Uncomment the next line to return response Response(401, Result{}) or use other options such as http.Ok ...
 	// return gen.Response(401, Result{}), nil
 	// TODO: Uncomment the next line to return response Response(403, Result{}) or use other options such as http.Ok ...
@@ -1068,7 +1069,7 @@ func (s *SubmodelRepositoryAPIAPIService) DeleteSubmodelElementByPathSubmodelRep
 // PatchSubmodelElementByPathSubmodelRepo - Updates an existing SubmodelElement
 //
 //nolint:revive
-func (s *SubmodelRepositoryAPIAPIService) PatchSubmodelElementByPathSubmodelRepo(ctx context.Context, submodelIdentifier string, idShortPath string, submodelElement gen.SubmodelElement, level string) (gen.ImplResponse, error) {
+func (s *SubmodelRepositoryAPIAPIService) PatchSubmodelElementByPathSubmodelRepo(ctx context.Context, submodelIdentifier string, idShortPath string, submodelElement types.SubmodelElement, level string) (gen.ImplResponse, error) {
 	// TODO - update PatchSubmodelElementByPathSubmodelRepo with the required logic for this service method.
 	// Add api_submodel_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
 
@@ -1130,7 +1131,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelElementByPathMetadataSubmod
 // PatchSubmodelElementByPathMetadataSubmodelRepo - Updates the metadata attributes an existing SubmodelElement
 //
 //nolint:revive
-func (s *SubmodelRepositoryAPIAPIService) PatchSubmodelElementByPathMetadataSubmodelRepo(ctx context.Context, submodelIdentifier string, idShortPath string, submodelElementMetadata gen.SubmodelElementMetadata) (gen.ImplResponse, error) {
+func (s *SubmodelRepositoryAPIAPIService) PatchSubmodelElementByPathMetadataSubmodelRepo(ctx context.Context, submodelIdentifier string, idShortPath string, submodelElementMetadata types.SubmodelElementMetadata) (gen.ImplResponse, error) {
 	// TODO - update PatchSubmodelElementByPathMetadataSubmodelRepo with the required logic for this service method.
 	// Add api_submodel_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
 
@@ -1180,7 +1181,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelElementByPathValueOnlySubmo
 	}
 
 	// Convert to Value-Only representation
-	valueOnly, err := gen.SubmodelElementToValueOnly(element)
+	valueOnly, err := types.SubmodelElementToValueOnly(element)
 	if err != nil {
 		return gen.Response(500, nil), err
 	}
@@ -1195,7 +1196,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelElementByPathValueOnlySubmo
 // PatchSubmodelElementByPathValueOnlySubmodelRepo - Updates the value of an existing SubmodelElement
 //
 //nolint:revive
-func (s *SubmodelRepositoryAPIAPIService) PatchSubmodelElementByPathValueOnlySubmodelRepo(ctx context.Context, submodelIdentifier string, idShortPath string, submodelElementValue gen.SubmodelElementValue, level string) (gen.ImplResponse, error) {
+func (s *SubmodelRepositoryAPIAPIService) PatchSubmodelElementByPathValueOnlySubmodelRepo(ctx context.Context, submodelIdentifier string, idShortPath string, submodelElementValue types.SubmodelElementValue, level string) (gen.ImplResponse, error) {
 	decodedIdentifier, decodeErr := base64.RawStdEncoding.DecodeString(submodelIdentifier)
 	if decodeErr != nil {
 		return gen.Response(http.StatusBadRequest, nil), decodeErr

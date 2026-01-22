@@ -30,14 +30,15 @@ package submodelelements
 import (
 	"database/sql"
 
+	"github.com/FriedJannik/aas-go-sdk/types"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
 
 // PostgreSQLSMECrudInterface defines the CRUD operations for Submodel Elements in a PostgreSQL database.
 type PostgreSQLSMECrudInterface interface {
-	Create(*sql.Tx, string, gen.SubmodelElement) (int, error)
-	CreateNested(*sql.Tx, string, int, string, gen.SubmodelElement, int, int) (int, error)
-	Update(string, string, gen.SubmodelElement, *sql.Tx, bool) error
+	Create(*sql.Tx, string, types.ISubmodelElement) (int, error)
+	CreateNested(*sql.Tx, string, int, string, types.ISubmodelElement, int, int) (int, error)
+	Update(string, string, types.ISubmodelElement, *sql.Tx, bool) error
 	UpdateValueOnly(string, string, gen.SubmodelElementValue) error
 	Delete(string) error
 }

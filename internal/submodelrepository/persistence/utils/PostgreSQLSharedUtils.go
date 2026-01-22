@@ -33,6 +33,7 @@ import (
 	"reflect"
 	"strconv"
 
+	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
@@ -52,12 +53,12 @@ import (
 // Returns:
 //   - sql.NullInt64: Database ID of the created extension
 //   - error: An error if the insertion fails or if semantic ID creation fails
-func CreateExtension(tx *sql.Tx, extension gen.Extension, position int) (sql.NullInt64, error) {
+func CreateExtension(tx *sql.Tx, extension types.Extension, position int) (sql.NullInt64, error) {
 	var extensionDbID sql.NullInt64
 	var semanticIDRefDbID sql.NullInt64
 
 	if extension.SemanticID != nil {
-		id, err := CreateReference(tx, extension.SemanticID, sql.NullInt64{}, sql.NullInt64{})
+		id, err := CreateReference(tx, extension.SemanticID(), sql.NullInt64{}, sql.NullInt64{})
 		if err != nil {
 			_, _ = fmt.Println(err)
 			return sql.NullInt64{}, common.NewInternalServerError("Error inserting SemanticID Reference for Extension.")
@@ -66,10 +67,10 @@ func CreateExtension(tx *sql.Tx, extension gen.Extension, position int) (sql.Nul
 	}
 
 	// Use the centralized value type mapper
-	typedValue := MapValueByType(string(extension.ValueType), extension.Value)
+	typedValue := MapValueByType(*extension.ValueType(), extension.Value())
 
 	var valueType any
-	if extension.ValueType != "" && !reflect.ValueOf(extension.ValueType).IsZero() {
+	if extension.ValueType != nil {
 		valueType = extension.ValueType
 	} else {
 		valueType = sql.NullString{String: "", Valid: false}
@@ -86,8 +87,8 @@ func CreateExtension(tx *sql.Tx, extension gen.Extension, position int) (sql.Nul
 		return sql.NullInt64{}, common.NewInternalServerError("Error inserting Extension. See console for details.")
 	}
 
-	for _, supplemental := range extension.SupplementalSemanticIds {
-		id, err := CreateReference(tx, &supplemental, sql.NullInt64{}, sql.NullInt64{})
+	for _, supplemental := range extension.SupplementalSemanticIDs() {
+		id, err := CreateReference(tx, supplemental, sql.NullInt64{}, sql.NullInt64{})
 		if err != nil {
 			_, _ = fmt.Println(err)
 			return sql.NullInt64{}, common.NewInternalServerError("Error inserting Supplemental Semantic IDs for Extension. See console for details.")
@@ -104,8 +105,8 @@ func CreateExtension(tx *sql.Tx, extension gen.Extension, position int) (sql.Nul
 		}
 	}
 
-	for _, referred := range extension.RefersTo {
-		id, err := CreateReference(tx, &referred, sql.NullInt64{}, sql.NullInt64{})
+	for _, referred := range extension.RefersTo() {
+		id, err := CreateReference(tx, referred, sql.NullInt64{}, sql.NullInt64{})
 		if err != nil {
 			_, _ = fmt.Println(err)
 			return sql.NullInt64{}, common.NewInternalServerError("Error inserting RefersTo for Extension. See console for details.")
@@ -139,13 +140,13 @@ func CreateExtension(tx *sql.Tx, extension gen.Extension, position int) (sql.Nul
 // Returns:
 //   - sql.NullInt64: Database ID of the created qualifier
 //   - error: An error if the insertion fails or if reference creation fails
-func CreateQualifier(tx *sql.Tx, qualifier gen.Qualifier, position int) (sql.NullInt64, error) {
+func CreateQualifier(tx *sql.Tx, qualifier types.Qualifier, position int) (sql.NullInt64, error) {
 	var qualifierDbID sql.NullInt64
 	var valueIDRefDbID sql.NullInt64
 	var semanticIDRefDbID sql.NullInt64
 
-	if qualifier.ValueID != nil {
-		id, err := CreateReference(tx, qualifier.ValueID, sql.NullInt64{}, sql.NullInt64{})
+	if qualifier.ValueID() != nil {
+		id, err := CreateReference(tx, qualifier.ValueID(), sql.NullInt64{}, sql.NullInt64{})
 		if err != nil {
 			_, _ = fmt.Println(err)
 			return sql.NullInt64{}, common.NewInternalServerError("Error inserting ValueID Reference for Qualifier.")
@@ -153,8 +154,8 @@ func CreateQualifier(tx *sql.Tx, qualifier gen.Qualifier, position int) (sql.Nul
 		valueIDRefDbID = id
 	}
 
-	if qualifier.SemanticID != nil {
-		id, err := CreateReference(tx, qualifier.SemanticID, sql.NullInt64{}, sql.NullInt64{})
+	if qualifier.SemanticID() != nil {
+		id, err := CreateReference(tx, qualifier.SemanticID(), sql.NullInt64{}, sql.NullInt64{})
 		if err != nil {
 			_, _ = fmt.Println(err)
 			return sql.NullInt64{}, common.NewInternalServerError("Error inserting SemanticID Reference for Qualifier.")
@@ -163,11 +164,11 @@ func CreateQualifier(tx *sql.Tx, qualifier gen.Qualifier, position int) (sql.Nul
 	}
 
 	// Use the centralized value type mapper
-	typedValue := MapValueByType(string(qualifier.ValueType), qualifier.Value)
+	typedValue := MapValueByType(qualifier.ValueType(), qualifier.Value())
 
 	var kind any
-	if qualifier.Kind != "" && !reflect.ValueOf(qualifier.Kind).IsZero() {
-		kind = qualifier.Kind
+	if qualifier.Kind() != nil {
+		kind = qualifier.Kind()
 	} else {
 		kind = sql.NullString{String: "", Valid: false}
 	}
@@ -183,8 +184,8 @@ func CreateQualifier(tx *sql.Tx, qualifier gen.Qualifier, position int) (sql.Nul
 		return sql.NullInt64{}, common.NewInternalServerError("Error inserting Qualifier. See console for details.")
 	}
 
-	for _, supplemental := range qualifier.SupplementalSemanticIds {
-		id, err := CreateReference(tx, &supplemental, sql.NullInt64{}, sql.NullInt64{})
+	for _, supplemental := range qualifier.SupplementalSemanticIDs() {
+		id, err := CreateReference(tx, supplemental, sql.NullInt64{}, sql.NullInt64{})
 		if err != nil {
 			_, _ = fmt.Println(err)
 			return sql.NullInt64{}, common.NewInternalServerError("Error inserting Supplemental Semantic IDs for Qualifier. See console for details.")
@@ -217,7 +218,7 @@ func CreateQualifier(tx *sql.Tx, qualifier gen.Qualifier, position int) (sql.Nul
 // Returns:
 //   - sql.NullInt64: Database ID of the created embedded data specification
 //   - error: An error if the insertion fails, if the content type is unsupported, or if IEC 61360 insertion fails
-func CreateEmbeddedDataSpecification(tx *sql.Tx, embeddedDataSpecification gen.EmbeddedDataSpecification, position int) (sql.NullInt64, error) {
+func CreateEmbeddedDataSpecification(tx *sql.Tx, embeddedDataSpecification types.EmbeddedDataSpecification, position int) (sql.NullInt64, error) {
 	var embeddedDataSpecificationContentDbID sql.NullInt64
 	var embeddedDataSpecificationDbID sql.NullInt64
 	err := tx.QueryRow(`INSERT INTO data_specification_content DEFAULT VALUES RETURNING id`).Scan(&embeddedDataSpecificationContentDbID)
@@ -225,7 +226,7 @@ func CreateEmbeddedDataSpecification(tx *sql.Tx, embeddedDataSpecification gen.E
 		_, _ = fmt.Println(err)
 		return sql.NullInt64{}, common.NewInternalServerError("Error inserting DataSpecificationContent. See console for details.")
 	}
-	dataSpecificationDbID, err := CreateReference(tx, embeddedDataSpecification.DataSpecification, sql.NullInt64{}, sql.NullInt64{})
+	dataSpecificationDbID, err := CreateReference(tx, embeddedDataSpecification.DataSpecification(), sql.NullInt64{}, sql.NullInt64{})
 	if err != nil {
 		return sql.NullInt64{}, err
 	}
@@ -234,7 +235,7 @@ func CreateEmbeddedDataSpecification(tx *sql.Tx, embeddedDataSpecification gen.E
 		return sql.NullInt64{}, err
 	}
 	// Check if embeddedDataSpecificationContent is of type DataSpecificationIec61360
-	ds, ok := embeddedDataSpecification.DataSpecificationContent.(*gen.DataSpecificationIec61360)
+	ds, ok := embeddedDataSpecification.DataSpecificationContent().(*types.DataSpecificationIEC61360)
 	if !ok {
 		return sql.NullInt64{}, common.NewErrBadRequest("Unsupported DataSpecificationContent type")
 	}
@@ -246,22 +247,22 @@ func CreateEmbeddedDataSpecification(tx *sql.Tx, embeddedDataSpecification gen.E
 	return embeddedDataSpecificationDbID, nil
 }
 
-func insertDataSpecificationIec61360(tx *sql.Tx, ds *gen.DataSpecificationIec61360, embeddedDataSpecificationContentDbID sql.NullInt64, position int) error {
-	var preferredNameConverted []gen.LangStringText
-	var shortNameConverted []gen.LangStringText
-	var definitionConverted []gen.LangStringText
+func insertDataSpecificationIec61360(tx *sql.Tx, ds *types.DataSpecificationIEC61360, embeddedDataSpecificationContentDbID sql.NullInt64, position int) error {
+	var preferredNameConverted []types.ILangStringTextType
+	var shortNameConverted []types.ILangStringTextType
+	var definitionConverted []types.ILangStringTextType
 
 	// Convert PreferredName to []LangStringText (required field)
-	for _, pn := range ds.PreferredName {
+	for _, pn := range ds.PreferredName() {
 		preferredNameConverted = append(preferredNameConverted, pn)
 	}
 	// Convert ShortName to []LangStringText (optional)
-	for _, sn := range ds.ShortName {
+	for _, sn := range ds.ShortName() {
 		shortNameConverted = append(shortNameConverted, sn)
 	}
 
 	// Convert Definition to []LangStringText (optional)
-	for _, def := range ds.Definition {
+	for _, def := range ds.Definition() {
 		definitionConverted = append(definitionConverted, def)
 	}
 
@@ -281,7 +282,7 @@ func insertDataSpecificationIec61360(tx *sql.Tx, ds *gen.DataSpecificationIec613
 	}
 
 	// Insert UnitID (optional)
-	unitIDDbID, err := CreateReference(tx, ds.UnitID, sql.NullInt64{}, sql.NullInt64{})
+	unitIDDbID, err := CreateReference(tx, ds.UnitID(), sql.NullInt64{}, sql.NullInt64{})
 	if err != nil {
 		return err
 	}
@@ -296,13 +297,13 @@ func insertDataSpecificationIec61360(tx *sql.Tx, ds *gen.DataSpecificationIec613
 	}
 
 	// Insert ValueList (optional)
-	valueList, err := insertValueList(tx, ds.ValueList)
+	valueList, err := insertValueList(tx, ds.ValueList())
 	if err != nil {
 		return err
 	}
 
 	// Insert LevelType (optional)
-	levelTypeID, err := insertLevelType(tx, ds.LevelType)
+	levelTypeID, err := insertLevelType(tx, ds.LevelType())
 	if err != nil {
 		return err
 	}
@@ -310,16 +311,16 @@ func insertDataSpecificationIec61360(tx *sql.Tx, ds *gen.DataSpecificationIec613
 	var iec61360contentDbID sql.NullInt64
 
 	// Prepare optional string fields
-	unit := sql.NullString{String: ds.Unit, Valid: ds.Unit != ""}
-	sourceOfDefinition := sql.NullString{String: ds.SourceOfDefinition, Valid: ds.SourceOfDefinition != ""}
-	symbol := sql.NullString{String: ds.Symbol, Valid: ds.Symbol != ""}
-	valueFormat := sql.NullString{String: ds.ValueFormat, Valid: ds.ValueFormat != ""}
-	value := sql.NullString{String: ds.Value, Valid: ds.Value != ""}
+	unit := sql.NullString{String: *ds.Unit(), Valid: ds.Unit() != nil && *ds.Unit() != ""}
+	sourceOfDefinition := sql.NullString{String: *ds.SourceOfDefinition(), Valid: ds.SourceOfDefinition() != nil && *ds.SourceOfDefinition() != ""}
+	symbol := sql.NullString{String: *ds.Symbol(), Valid: ds.Symbol() != nil && *ds.Symbol() != ""}
+	valueFormat := sql.NullString{String: *ds.ValueFormat(), Valid: ds.ValueFormat() != nil && *ds.ValueFormat() != ""}
+	value := sql.NullString{String: *ds.Value(), Valid: ds.Value() != nil && *ds.Value() != ""}
 
 	// Handle DataType (optional)
 	var dataType interface{}
-	if ds.DataType != "" && !reflect.ValueOf(ds.DataType).IsZero() {
-		dataType = ds.DataType
+	if ds.DataType() != nil {
+		dataType = *ds.DataType()
 	} else {
 		dataType = sql.NullString{String: "", Valid: false}
 	}
@@ -334,7 +335,7 @@ func insertDataSpecificationIec61360(tx *sql.Tx, ds *gen.DataSpecificationIec613
 	return nil
 }
 
-func insertValueList(tx *sql.Tx, valueList *gen.ValueList) (sql.NullInt64, error) {
+func insertValueList(tx *sql.Tx, valueList types.IValueList) (sql.NullInt64, error) {
 	if valueList == nil {
 		return sql.NullInt64{}, nil
 	}
@@ -344,14 +345,14 @@ func insertValueList(tx *sql.Tx, valueList *gen.ValueList) (sql.NullInt64, error
 		return sql.NullInt64{}, err
 	}
 
-	if len(valueList.ValueReferencePairs) > 0 {
-		for i, vrp := range valueList.ValueReferencePairs {
-			if vrp.ValueID != nil {
-				valueIDDbID, err := CreateReference(tx, vrp.ValueID, sql.NullInt64{}, sql.NullInt64{})
+	if len(valueList.ValueReferencePairs()) > 0 {
+		for i, vrp := range valueList.ValueReferencePairs() {
+			if vrp.ValueID() != nil {
+				valueIDDbID, err := CreateReference(tx, vrp.ValueID(), sql.NullInt64{}, sql.NullInt64{})
 				if err != nil {
 					return sql.NullInt64{}, err
 				}
-				_, err = tx.Exec(`INSERT INTO value_list_value_reference_pair (value_list_id, position, value, value_id) VALUES ($1, $2, $3, $4)`, valueListDbID, i, vrp.Value, valueIDDbID)
+				_, err = tx.Exec(`INSERT INTO value_list_value_reference_pair (value_list_id, position, value, value_id) VALUES ($1, $2, $3, $4)`, valueListDbID, i, vrp.Value(), valueIDDbID)
 				if err != nil {
 					return sql.NullInt64{}, err
 				}
@@ -361,12 +362,12 @@ func insertValueList(tx *sql.Tx, valueList *gen.ValueList) (sql.NullInt64, error
 	return valueListDbID, nil
 }
 
-func insertLevelType(tx *sql.Tx, levelType *gen.LevelType) (sql.NullInt64, error) {
+func insertLevelType(tx *sql.Tx, levelType types.ILevelType) (sql.NullInt64, error) {
 	if levelType == nil {
 		return sql.NullInt64{}, nil
 	}
 	var levelTypeDbID sql.NullInt64
-	err := tx.QueryRow(`INSERT INTO level_type (min, max, nom, typ) VALUES ($1, $2, $3, $4) RETURNING id`, levelType.Min, levelType.Max, levelType.Nom, levelType.Typ).Scan(&levelTypeDbID)
+	err := tx.QueryRow(`INSERT INTO level_type (min, max, nom, typ) VALUES ($1, $2, $3, $4) RETURNING id`, levelType.Min(), levelType.Max(), levelType.Nom(), levelType.Typ()).Scan(&levelTypeDbID)
 	if err != nil {
 		return sql.NullInt64{}, err
 	}
@@ -386,25 +387,25 @@ func insertLevelType(tx *sql.Tx, levelType *gen.LevelType) (sql.NullInt64, error
 // Returns:
 //   - sql.NullInt64: Database ID of the created administrative information record, or an invalid NullInt64 if adminInfo is nil
 //   - error: An error if the insertion fails or if nested structure creation fails
-func CreateAdministrativeInformation(tx *sql.Tx, adminInfo *gen.AdministrativeInformation) (sql.NullInt64, error) {
+func CreateAdministrativeInformation(tx *sql.Tx, adminInfo types.IAdministrativeInformation) (sql.NullInt64, error) {
 	if adminInfo == nil {
 		return sql.NullInt64{}, nil
 	}
 	var id int
 	var adminInfoID sql.NullInt64
-	if !reflect.DeepEqual(*adminInfo, gen.AdministrativeInformation{}) {
+	if !reflect.DeepEqual(adminInfo, types.AdministrativeInformation{}) {
 		var creatorID sql.NullInt64
 		var err error
-		if adminInfo.Creator != nil {
-			creatorID, err = CreateReference(tx, adminInfo.Creator, sql.NullInt64{}, sql.NullInt64{})
+		if isEmptyReference(adminInfo.Creator()) {
+			creatorID, err = CreateReference(tx, adminInfo.Creator(), sql.NullInt64{}, sql.NullInt64{})
 			if err != nil {
 				return sql.NullInt64{}, err
 			}
 		}
 
 		edsJSONString := "[]"
-		if len(adminInfo.EmbeddedDataSpecifications) > 0 {
-			edsBytes, err := json.Marshal(adminInfo.EmbeddedDataSpecifications)
+		if len(adminInfo.EmbeddedDataSpecifications()) > 0 {
+			edsBytes, err := json.Marshal(adminInfo.EmbeddedDataSpecifications())
 			if err != nil {
 				_, _ = fmt.Println(err)
 				return sql.NullInt64{}, common.NewInternalServerError("Failed to marshal EmbeddedDataSpecifications - no changes applied - see console for details")
@@ -439,13 +440,13 @@ func CreateAdministrativeInformation(tx *sql.Tx, adminInfo *gen.AdministrativeIn
 // Returns:
 //   - sql.NullInt64: Database ID of the created reference, or an invalid NullInt64 if the reference is empty
 //   - error: An error if the insertion fails or if key insertion fails
-func CreateReference(tx *sql.Tx, semanticID *gen.Reference, parentID sql.NullInt64, rootID sql.NullInt64) (sql.NullInt64, error) {
+func CreateReference(tx *sql.Tx, semanticID types.IReference, parentID sql.NullInt64, rootID sql.NullInt64) (sql.NullInt64, error) {
 	var id int
 	var referenceID sql.NullInt64
 
 	insertKeyQuery := `INSERT INTO reference_key (reference_id, position, type, value) VALUES ($1, $2, $3, $4)`
 
-	if semanticID != nil && !isEmptyReference(*semanticID) {
+	if semanticID != nil && !isEmptyReference(semanticID) {
 		err := tx.QueryRow(`INSERT INTO reference (type, parentReference, rootReference) VALUES ($1, $2, $3) RETURNING id`, semanticID.Type, parentID, rootID).Scan(&id)
 		if err != nil {
 			return sql.NullInt64{}, err
@@ -605,7 +606,7 @@ func GetReferenceByReferenceDBID(db *sql.DB, referenceID sql.NullInt64) (*gen.Re
 // Returns:
 //   - sql.NullInt64: Database ID of the created lang_string_name_type_reference, or an invalid NullInt64 if the slice is empty
 //   - error: An error if the insertion fails
-func CreateLangStringNameTypes(tx *sql.Tx, nameTypes []gen.LangStringNameType) (sql.NullInt64, error) {
+func CreateLangStringNameTypes(tx *sql.Tx, nameTypes []types.LangStringNameType) (sql.NullInt64, error) {
 	if nameTypes == nil {
 		return sql.NullInt64{}, nil
 	}
@@ -618,7 +619,7 @@ func CreateLangStringNameTypes(tx *sql.Tx, nameTypes []gen.LangStringNameType) (
 		}
 		nameTypeID = sql.NullInt64{Int64: int64(id), Valid: true}
 		for i := 0; i < len(nameTypes); i++ {
-			_, err := tx.Exec(`INSERT INTO lang_string_name_type (lang_string_name_type_reference_id, text, language) VALUES ($1, $2, $3)`, nameTypeID.Int64, nameTypes[i].Text, nameTypes[i].Language)
+			_, err := tx.Exec(`INSERT INTO lang_string_name_type (lang_string_name_type_reference_id, text, language) VALUES ($1, $2, $3)`, nameTypeID.Int64, nameTypes[i].Text(), nameTypes[i].Language())
 			if err != nil {
 				return sql.NullInt64{}, err
 			}
@@ -689,7 +690,7 @@ func GetLangStringNameTypes(db *sql.DB, nameTypeID sql.NullInt64) ([]gen.LangStr
 // Returns:
 //   - sql.NullInt64: Database ID of the created lang_string_text_type_reference, or an invalid NullInt64 if the slice is empty
 //   - error: An error if the insertion fails
-func CreateLangStringTextTypes(tx *sql.Tx, textTypes []gen.LangStringText) (sql.NullInt64, error) {
+func CreateLangStringTextTypes(tx *sql.Tx, textTypes []types.ILangStringTextType) (sql.NullInt64, error) {
 	if textTypes == nil {
 		return sql.NullInt64{}, nil
 	}
@@ -702,7 +703,7 @@ func CreateLangStringTextTypes(tx *sql.Tx, textTypes []gen.LangStringText) (sql.
 		}
 		textTypeID = sql.NullInt64{Int64: int64(id), Valid: true}
 		for i := 0; i < len(textTypes); i++ {
-			_, err := tx.Exec(`INSERT INTO lang_string_text_type (lang_string_text_type_reference_id, text, language) VALUES ($1, $2, $3)`, textTypeID.Int64, textTypes[i].GetText(), textTypes[i].GetLanguage())
+			_, err := tx.Exec(`INSERT INTO lang_string_text_type (lang_string_text_type_reference_id, text, language) VALUES ($1, $2, $3)`, textTypeID.Int64, textTypes[i].Text(), textTypes[i].Language())
 			if err != nil {
 				return sql.NullInt64{}, err
 			}
@@ -980,8 +981,12 @@ func InsertSupplementalSemanticIDsSME(tx *sql.Tx, smeID int64, supplementalSeman
 
 // isEmptyReference checks if a Reference is empty (zero value)
 
-func isEmptyReference(ref gen.Reference) bool {
-	return reflect.DeepEqual(ref, gen.Reference{})
+func isEmptyReference(ref types.IReference) bool {
+	casted, ok := ref.(*types.Reference)
+	if ok {
+		return false
+	}
+	return reflect.DeepEqual(casted, types.Reference{})
 }
 
 // ValueOnlyElementsToProcess represents a SubmodelElementValue along with its ID short path.
