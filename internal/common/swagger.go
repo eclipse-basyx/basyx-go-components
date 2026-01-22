@@ -55,13 +55,13 @@ const SwaggerUIHTML = `<!DOCTYPE html>
 
 // SwaggerUIConfig holds configuration for Swagger UI endpoint setup
 type SwaggerUIConfig struct {
-	Title       string // Title shown in browser tab
-	SpecURL     string // URL to the OpenAPI spec (e.g., "/api-docs/openapi.yaml")
-	UIPath      string // Path where Swagger UI will be served (e.g., "/swagger")
-	SpecPath    string // Path where spec will be served (e.g., "/api-docs/openapi.yaml")
-	SpecContent []byte // The OpenAPI spec content
-	ServerURL   string // Server URL to use in OpenAPI spec (e.g., "http://localhost:5004/api")
-	BasePath    string // Base path for redirect to Swagger UI (e.g., "/" or "/api")
+	Title       string         // Title shown in browser tab
+	SpecURL     string         // URL to the OpenAPI spec (e.g., "/api-docs/openapi.yaml")
+	UIPath      string         // Path where Swagger UI will be served (e.g., "/swagger")
+	SpecPath    string         // Path where spec will be served (e.g., "/api-docs/openapi.yaml")
+	SpecContent []byte         // The OpenAPI spec content
+	ServerURL   string         // Server URL to use in OpenAPI spec (e.g., "http://localhost:5004/api")
+	BasePath    string         // Base path for redirect to Swagger UI (e.g., "/" or "/api")
 	Contact     *ContactConfig // Contact information to inject into OpenAPI spec
 }
 
