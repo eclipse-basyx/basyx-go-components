@@ -40,6 +40,7 @@ import (
 	"strconv"
 	"sync"
 
+	"github.com/FriedJannik/aas-go-sdk/types"
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 
 	"github.com/doug-martin/goqu/v9"
@@ -381,7 +382,7 @@ func (p *PostgreSQLSubmodelDatabase) DoesSubmodelExist(submodelIdentifier string
 // Returns:
 //   - gen.Submodel: The complete submodel with all its elements
 //   - error: Error if submodel not found or retrieval fails
-func (p *PostgreSQLSubmodelDatabase) GetSubmodel(id string, valueOnly bool) (gen.Submodel, error) {
+func (p *PostgreSQLSubmodelDatabase) GetSubmodel(id string, valueOnly bool) (types.Submodel, error) {
 	type result struct {
 		sm  *gen.Submodel
 		err error
@@ -414,7 +415,7 @@ func (p *PostgreSQLSubmodelDatabase) GetSubmodel(id string, valueOnly bool) (gen
 
 	resSME := <-resultChanSME
 	if resSME.err != nil {
-		return gen.Submodel{}, resSME.err
+		return *types.NewSubmodel("Error"), resSME.err
 	}
 
 	if res.sm != nil {
@@ -422,7 +423,7 @@ func (p *PostgreSQLSubmodelDatabase) GetSubmodel(id string, valueOnly bool) (gen
 	}
 
 	if res.err != nil {
-		return gen.Submodel{}, res.err
+		return *types.NewSubmodel("Error"), res.err
 	}
 
 	return *res.sm, nil

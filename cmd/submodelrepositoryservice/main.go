@@ -46,7 +46,7 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	if config.JWS.PrivateKeyPath != "" {
 		privateKey, err = jws.LoadPrivateKey(config.JWS.PrivateKeyPath)
 		if err != nil {
-			return fmt.Errorf("failed to load JWS private key: %w", err)
+			log.Printf("failed to load JWS private key: %w", err)
 		}
 		log.Println("JWS private key loaded successfully")
 	}
