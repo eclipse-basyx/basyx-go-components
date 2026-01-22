@@ -110,6 +110,7 @@ type SubmodelRepositoryAPIAPIServicer interface {
 	GetAllSubmodelsPath(context.Context, string, string, int32, string, string) (model.ImplResponse, error)
 	GetSubmodelByID(context.Context, string, string, string) (model.ImplResponse, error)
 	GetSignedSubmodelByID(context.Context, string, string, string) (model.ImplResponse, error)
+	GetSignedSubmodelByIDValueOnly(context.Context, string, string, string) (model.ImplResponse, error)
 	PutSubmodelByID(context.Context, string, model.Submodel) (model.ImplResponse, error)
 	DeleteSubmodelByID(context.Context, string) (model.ImplResponse, error)
 	PatchSubmodelByID(context.Context, string, model.Submodel, string) (model.ImplResponse, error)

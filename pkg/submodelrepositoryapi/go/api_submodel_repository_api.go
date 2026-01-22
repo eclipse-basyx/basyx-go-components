@@ -275,6 +275,11 @@ func (c *SubmodelRepositoryAPIAPIController) Routes() Routes {
 			c.contextPath + "/submodels/{submodelIdentifier}/$signed",
 			c.GetSignedSubmodelByID,
 		},
+		"GetSignedSubmodelByIDValueOnly": Route{
+			strings.ToUpper("Get"),
+			c.contextPath + "/submodels/{submodelIdentifier}/$value/$signed",
+			c.GetSignedSubmodelByIDValueOnly,
+		},
 	}
 }
 
@@ -695,6 +700,46 @@ func (c *SubmodelRepositoryAPIAPIController) GetSignedSubmodelByID(w http.Respon
 		extentParam = param
 	}
 	result, err := c.service.GetSignedSubmodelByID(r.Context(), submodelIdentifierParam, levelParam, extentParam)
+	// If an error occurred, encode the error with the status code
+	if err != nil {
+		c.errorHandler(w, r, err, &result)
+		return
+	}
+	// If no error, encode the body and the result code
+	_ = EncodeJSONResponse(result.Body, &result.Code, w)
+}
+
+// GetSignedSubmodelByIDValueOnly - Returns a specific Submodel in ValueOnly representation
+func (c *SubmodelRepositoryAPIAPIController) GetSignedSubmodelByIDValueOnly(w http.ResponseWriter, r *http.Request) {
+	query, err := parseQuery(r.URL.RawQuery)
+	if err != nil {
+		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
+		return
+	}
+	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
+	if submodelIdentifierParam == "" {
+		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
+		return
+	}
+	var levelParam string
+	if query.Has("level") {
+		param := query.Get("level")
+
+		levelParam = param
+	} else {
+		param := "deep"
+		levelParam = param
+	}
+	var extentParam string
+	if query.Has("extent") {
+		param := query.Get("extent")
+
+		extentParam = param
+	} else {
+		param := "withoutBlobValue"
+		extentParam = param
+	}
+	result, err := c.service.GetSignedSubmodelByIDValueOnly(r.Context(), submodelIdentifierParam, levelParam, extentParam)
 	// If an error occurred, encode the error with the status code
 	if err != nil {
 		c.errorHandler(w, r, err, &result)
