@@ -46,9 +46,10 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	if config.JWS.PrivateKeyPath != "" {
 		privateKey, err = jws.LoadPrivateKey(config.JWS.PrivateKeyPath)
 		if err != nil {
-			return fmt.Errorf("failed to load JWS private key: %w", err)
+			log.Printf("Warning: failed to load JWS private key: %v - /$signed Endpoints will be unavailable", err)
+		} else {
+			log.Println("JWS private key loaded successfully")
 		}
-		log.Println("JWS private key loaded successfully")
 	}
 
 	smDatabase, err := persistencepostgresql.NewPostgreSQLSubmodelBackend("postgres://"+config.Postgres.User+":"+config.Postgres.Password+"@"+config.Postgres.Host+":"+strconv.Itoa(config.Postgres.Port)+"/"+config.Postgres.DBName+"?sslmode=disable", config.Postgres.MaxOpenConnections, config.Postgres.MaxIdleConnections, config.Postgres.ConnMaxLifetimeMinutes, databaseSchema, privateKey)

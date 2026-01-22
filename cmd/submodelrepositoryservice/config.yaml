@@ -14,5 +14,5 @@ postgres:
   maxIdleConnections: 500
   connMaxLifetimeMinutes: 5
 
-jws:
-  privateKeyPath: "./rsa-key.pem"
+# jws:
+#   privateKeyPath: "./rsa-key.pem"

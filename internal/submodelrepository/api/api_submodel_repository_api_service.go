@@ -141,7 +141,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetSignedSubmodelByID(
 		}
 		// Check for signing configuration error
 		if err.Error() == "JWS signing not configured: private key not loaded" {
-			return gen.Response(http.StatusServiceUnavailable, nil), err
+			return gen.Response(http.StatusNotFound, nil), nil
 		}
 		return gen.Response(500, nil), err
 	}
@@ -173,7 +173,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetSignedSubmodelByIDValueOnly(
 		}
 		// Check for signing configuration error
 		if err.Error() == "JWS signing not configured: private key not loaded" {
-			return gen.Response(http.StatusServiceUnavailable, nil), err
+			return gen.Response(http.StatusNotFound, nil), nil
 		}
 		return gen.Response(500, nil), err
 	}
