@@ -8,6 +8,7 @@ package common
 import (
 	"fmt"
 	"log"
+	"os"
 	"reflect"
 	"strings"
 
@@ -85,6 +86,12 @@ type Config struct {
 
 	OIDC OIDCConfig `mapstructure:"oidc" yaml:"oidc"` // OpenID Connect authentication
 	ABAC ABACConfig `mapstructure:"abac" yaml:"abac"` // Attribute-Based Access Control
+	JWS  JWSConfig  `mapstructure:"jws" yaml:"jws"`   // JWS signing configuration
+}
+
+// JWSConfig contains JSON Web Signature configuration parameters.
+type JWSConfig struct {
+	PrivateKeyPath string `mapstructure:"privateKeyPath" yaml:"privateKeyPath"` // Path to the RSA private key for signing
 }
 
 // ServerConfig contains HTTP server configuration parameters.
@@ -231,6 +238,9 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("abac.enableDebugErrorResponses", false)
 	v.SetDefault("abac.modelPath", "config/access_rules/access-rules.json")
 
+	// JWS defaults
+	v.SetDefault("jws.privateKeyPath", "")
+
 }
 
 // PrintConfiguration prints the current configuration to the console with sensitive data redacted.
@@ -309,6 +319,23 @@ func PrintConfiguration(cfg *Config) {
 
 		lines = append(lines, "🔹 OIDC:")
 		add("Trustlist Path", cfg.OIDC.TrustlistPath, DefaultConfig.OIDCTrustlistPath)
+	}
+
+	lines = append(lines, divider)
+
+	// JWS
+	lines = append(lines, "🔹 JWS:")
+	if cfg.JWS.PrivateKeyPath != "" {
+		lines = append(lines, fmt.Sprintf("  Private Key Path: %s", cfg.JWS.PrivateKeyPath))
+		// Check if file exists
+		if _, err := os.Stat(cfg.JWS.PrivateKeyPath); err == nil {
+			lines = append(lines, "  Private Key Mounted: true ✅")
+		} else {
+			lines = append(lines, "  Private Key Mounted: false ❌")
+		}
+	} else {
+		lines = append(lines, "  Private Key Path: (not configured)")
+		lines = append(lines, "  Private Key Mounted: false")
 	}
 
 	lines = append(lines, divider)
