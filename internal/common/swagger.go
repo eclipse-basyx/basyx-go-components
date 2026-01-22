@@ -53,8 +53,8 @@ const SwaggerUIHTML = `<!DOCTYPE html>
 </body>
 </html>`
 
-// SwaggerConfig holds configuration for Swagger UI
-type SwaggerConfig struct {
+// SwaggerUIConfig holds configuration for Swagger UI endpoint setup
+type SwaggerUIConfig struct {
 	Title       string // Title shown in browser tab
 	SpecURL     string // URL to the OpenAPI spec (e.g., "/api-docs/openapi.yaml")
 	UIPath      string // Path where Swagger UI will be served (e.g., "/swagger")
@@ -62,6 +62,14 @@ type SwaggerConfig struct {
 	SpecContent []byte // The OpenAPI spec content
 	ServerURL   string // Server URL to use in OpenAPI spec (e.g., "http://localhost:5004/api")
 	BasePath    string // Base path for redirect to Swagger UI (e.g., "/" or "/api")
+	Contact     *ContactConfig // Contact information to inject into OpenAPI spec
+}
+
+// ContactConfig holds contact information for OpenAPI spec
+type ContactConfig struct {
+	Name  string // Contact name
+	Email string // Contact email
+	URL   string // Contact URL
 }
 
 // injectServerURL modifies the OpenAPI spec to use the configured server URL
@@ -96,20 +104,62 @@ func injectServerURL(specContent []byte, serverURL string) []byte {
 	return append([]byte(newServers), specContent...)
 }
 
+// injectContact modifies the OpenAPI spec to use the configured contact information
+func injectContact(specContent []byte, contact *ContactConfig) []byte {
+	if contact == nil {
+		return specContent
+	}
+
+	// Build new contact section
+	var contactLines []string
+	contactLines = append(contactLines, "  contact:")
+	if contact.Name != "" {
+		contactLines = append(contactLines, fmt.Sprintf("    name: %s", contact.Name))
+	}
+	if contact.Email != "" {
+		contactLines = append(contactLines, fmt.Sprintf("    email: %s", contact.Email))
+	}
+	if contact.URL != "" {
+		contactLines = append(contactLines, fmt.Sprintf("    url: %s", contact.URL))
+	}
+	newContact := strings.Join(contactLines, "\n") + "\n"
+
+	// Replace existing contact section within info block
+	// Match "  contact:" followed by indented lines (more than 2 spaces)
+	contactRegex := regexp.MustCompile(`(?m)^  contact:\s*\n((?:    [^\n]*\n?)*)`)
+
+	if contactRegex.Match(specContent) {
+		return contactRegex.ReplaceAll(specContent, []byte(newContact))
+	}
+
+	// If no contact section exists, add it after info: title line
+	titleRegex := regexp.MustCompile(`(?m)^(  title:[^\n]*\n)`)
+	if titleRegex.Match(specContent) {
+		return titleRegex.ReplaceAll(specContent, []byte("$1"+newContact))
+	}
+
+	return specContent
+}
+
 // AddSwaggerUI adds Swagger UI endpoints to the router
 //
 // Parameters:
 //   - r: Chi router to add endpoints to
-//   - cfg: Swagger configuration
+//   - cfg: Swagger UI configuration
 //
 // This adds two endpoints:
 //   - cfg.UIPath: Serves the Swagger UI HTML page
 //   - cfg.SpecPath: Serves the OpenAPI specification file
-func AddSwaggerUI(r *chi.Mux, cfg SwaggerConfig) {
+func AddSwaggerUI(r *chi.Mux, cfg SwaggerUIConfig) {
 	// Inject server URL into spec if configured
 	specContent := cfg.SpecContent
 	if cfg.ServerURL != "" {
-		specContent = injectServerURL(cfg.SpecContent, cfg.ServerURL)
+		specContent = injectServerURL(specContent, cfg.ServerURL)
+	}
+
+	// Inject contact information if configured
+	if cfg.Contact != nil {
+		specContent = injectContact(specContent, cfg.Contact)
 	}
 
 	// Serve the OpenAPI spec
@@ -196,7 +246,17 @@ func AddSwaggerUIFromFS(r *chi.Mux, specFS embed.FS, specFile string, title stri
 		basePath = "/"
 	}
 
-	AddSwaggerUI(r, SwaggerConfig{
+	// Build contact config if provided
+	var contact *ContactConfig
+	if serverConfig != nil && (serverConfig.Swagger.ContactName != "" || serverConfig.Swagger.ContactEmail != "" || serverConfig.Swagger.ContactURL != "") {
+		contact = &ContactConfig{
+			Name:  serverConfig.Swagger.ContactName,
+			Email: serverConfig.Swagger.ContactEmail,
+			URL:   serverConfig.Swagger.ContactURL,
+		}
+	}
+
+	AddSwaggerUI(r, SwaggerUIConfig{
 		Title:       title,
 		SpecURL:     fullSpecPath,
 		UIPath:      fullUIPath,
@@ -204,6 +264,7 @@ func AddSwaggerUIFromFS(r *chi.Mux, specFS embed.FS, specFile string, title stri
 		SpecContent: content,
 		ServerURL:   serverURL,
 		BasePath:    basePath,
+		Contact:     contact,
 	})
 
 	return nil
