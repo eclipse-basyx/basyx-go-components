@@ -5,7 +5,7 @@ services:
     ports:
       - "3000:3000"
     environment:
-      SUBMODEL_REPO_PATH: "http://localhost:8081/submodels"
+      SUBMODEL_REPO_PATH: "http://localhost:5004/submodels"
     restart: always
     depends_on:
       submodel_repository:
