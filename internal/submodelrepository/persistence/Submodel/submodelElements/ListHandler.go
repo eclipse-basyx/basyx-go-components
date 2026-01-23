@@ -29,6 +29,7 @@ package submodelelements
 import (
 	"database/sql"
 
+	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
@@ -75,8 +76,8 @@ func NewPostgreSQLSubmodelElementListHandler(db *sql.DB) (*PostgreSQLSubmodelEle
 // Returns:
 //   - int: The database ID of the created list element
 //   - error: Error if the element is not a SubmodelElementList or if database operations fail
-func (p PostgreSQLSubmodelElementListHandler) Create(tx *sql.Tx, submodelID string, submodelElement gen.SubmodelElement) (int, error) {
-	smeList, ok := submodelElement.(*gen.SubmodelElementList)
+func (p PostgreSQLSubmodelElementListHandler) Create(tx *sql.Tx, submodelID string, submodelElement types.ISubmodelElement) (int, error) {
+	smeList, ok := submodelElement.(*types.SubmodelElementList)
 	if !ok {
 		return 0, common.NewErrBadRequest("submodelElement is not of type SubmodelElementList")
 	}
@@ -111,8 +112,8 @@ func (p PostgreSQLSubmodelElementListHandler) Create(tx *sql.Tx, submodelID stri
 // Returns:
 //   - int: The database ID of the created nested list element
 //   - error: Error if the element is not a SubmodelElementList or if database operations fail
-func (p PostgreSQLSubmodelElementListHandler) CreateNested(tx *sql.Tx, submodelID string, parentID int, idShortPath string, submodelElement gen.SubmodelElement, pos int, rootSubmodelElementID int) (int, error) {
-	smeList, ok := submodelElement.(*gen.SubmodelElementList)
+func (p PostgreSQLSubmodelElementListHandler) CreateNested(tx *sql.Tx, submodelID string, parentID int, idShortPath string, submodelElement types.ISubmodelElement, pos int, rootSubmodelElementID int) (int, error) {
+	smeList, ok := submodelElement.(*types.SubmodelElementList)
 	if !ok {
 		return 0, common.NewErrBadRequest("submodelElement is not of type SubmodelElementList")
 	}
@@ -145,8 +146,8 @@ func (p PostgreSQLSubmodelElementListHandler) CreateNested(tx *sql.Tx, submodelI
 //
 // Returns:
 //   - error: Error if the update operation fails or element is not of correct type
-func (p PostgreSQLSubmodelElementListHandler) Update(submodelID string, idShortOrPath string, submodelElement gen.SubmodelElement, tx *sql.Tx, isPut bool) error {
-	smeList, ok := submodelElement.(*gen.SubmodelElementList)
+func (p PostgreSQLSubmodelElementListHandler) Update(submodelID string, idShortOrPath string, submodelElement types.ISubmodelElement, tx *sql.Tx, isPut bool) error {
+	smeList, ok := submodelElement.(*types.SubmodelElementList)
 	if !ok {
 		return common.NewErrBadRequest("submodelElement is not of type SubmodelElementList")
 	}
@@ -236,10 +237,10 @@ func (p PostgreSQLSubmodelElementListHandler) Delete(idShortOrPath string) error
 	return p.decorated.Delete(idShortOrPath)
 }
 
-func insertSubmodelElementList(smeList *gen.SubmodelElementList, tx *sql.Tx, id int) error {
+func insertSubmodelElementList(smeList *types.SubmodelElementList, tx *sql.Tx, id int) error {
 	var semanticID sql.NullInt64
-	if smeList.SemanticIdListElement != nil && !isEmptyReference(smeList.SemanticIdListElement) {
-		refID, err := insertReference(tx, *smeList.SemanticIdListElement)
+	if smeList.SemanticIDListElement() != nil && !isEmptyReference(smeList.SemanticIDListElement()) {
+		refID, err := insertReference(tx, smeList.SemanticIDListElement())
 		if err != nil {
 			return err
 		}
@@ -247,11 +248,9 @@ func insertSubmodelElementList(smeList *gen.SubmodelElementList, tx *sql.Tx, id 
 	}
 
 	var typeValue, valueType sql.NullString
-	if smeList.TypeValueListElement != nil {
-		typeValue = sql.NullString{String: string(*smeList.TypeValueListElement), Valid: true}
-	}
-	if smeList.ValueTypeListElement != "" {
-		valueType = sql.NullString{String: string(smeList.ValueTypeListElement), Valid: true}
+	typeValue = sql.NullString{String: string(smeList.TypeValueListElement()), Valid: true}
+	if smeList.ValueTypeListElement() != nil {
+		valueType = sql.NullString{String: string(*smeList.ValueTypeListElement()), Valid: true}
 	}
 
 	dialect := goqu.Dialect("postgres")

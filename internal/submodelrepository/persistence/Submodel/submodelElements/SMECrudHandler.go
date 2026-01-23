@@ -35,9 +35,9 @@ import (
 	"fmt"
 	"reflect"
 
+	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
-	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	persistenceutils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
 	jsoniter "github.com/json-iterator/go"
 	_ "github.com/lib/pq" // PostgreSQL Treiber
@@ -66,11 +66,11 @@ type PostgreSQLSMECrudHandler struct {
 //
 // Returns:
 //   - bool: true if the reference is nil or contains only zero values, false otherwise
-func isEmptyReference(ref *gen.Reference) bool {
+func isEmptyReference(ref types.IReference) bool {
 	if ref == nil {
 		return true
 	}
-	return reflect.DeepEqual(ref, gen.Reference{})
+	return reflect.DeepEqual(ref, types.Reference{})
 }
 
 // NewPostgreSQLSMECrudHandler creates a new PostgreSQL submodel element CRUD handler.
@@ -119,27 +119,23 @@ func NewPostgreSQLSMECrudHandler(db *sql.DB) (*PostgreSQLSMECrudHandler, error) 
 //	id, err := handler.CreateWithPath(tx, "submodel123", parentDbID, "sensors.temperature", tempProp, 0)
 //
 //nolint:revive // cyclomatic-complexity is acceptable here due to the multiple steps involved in creation
-func (p *PostgreSQLSMECrudHandler) CreateWithPath(tx *sql.Tx, submodelID string, parentID int, idShortPath string, submodelElement gen.SubmodelElement, position int, rootSubmodelElementID int) (int, error) {
+func (p *PostgreSQLSMECrudHandler) CreateWithPath(tx *sql.Tx, submodelID string, parentID int, idShortPath string, submodelElement types.ISubmodelElement, position int, rootSubmodelElementID int) (int, error) {
 	var referenceID sql.NullInt64
 	var err error
-	if submodelElement.GetSemanticID() != nil {
-		referenceID, err = persistenceutils.CreateReference(tx, submodelElement.GetSemanticID(), sql.NullInt64{}, sql.NullInt64{})
+	if submodelElement.SemanticID() != nil {
+		referenceID, err = persistenceutils.CreateReference(tx, submodelElement.SemanticID(), sql.NullInt64{}, sql.NullInt64{})
 		if err != nil {
 			return 0, err
 		}
 	}
 
-	var convertedDescription []gen.LangStringText
-	for _, desc := range submodelElement.GetDescription() {
-		convertedDescription = append(convertedDescription, desc)
-	}
-	descriptionID, err := persistenceutils.CreateLangStringTextTypes(tx, convertedDescription)
+	descriptionID, err := persistenceutils.CreateLangStringTextTypes(tx, submodelElement.Description())
 	if err != nil {
 		_, _ = fmt.Println(err)
 		return 0, common.NewInternalServerError("Failed to create Description - no changes applied - see console for details")
 	}
 
-	displayNameID, err := persistenceutils.CreateLangStringNameTypes(tx, submodelElement.GetDisplayName())
+	displayNameID, err := persistenceutils.CreateLangStringNameTypes(tx, submodelElement.DisplayName())
 	if err != nil {
 		_, _ = fmt.Println(err)
 		return 0, common.NewInternalServerError("Failed to create DisplayName - no changes applied - see console for details")
@@ -160,9 +156,10 @@ func (p *PostgreSQLSMECrudHandler) CreateWithPath(tx *sql.Tx, submodelID string,
 	}
 
 	edsJSONString := "[]"
-	if len(submodelElement.GetEmbeddedDataSpecifications()) > 0 {
+	eds := submodelElement.EmbeddedDataSpecifications()
+	if len(eds) > 0 {
 		var json = jsoniter.ConfigCompatibleWithStandardLibrary
-		edsBytes, err := json.Marshal(submodelElement.GetEmbeddedDataSpecifications())
+		edsBytes, err := json.Marshal(eds)
 		if err != nil {
 			return 0, err
 		}
@@ -170,9 +167,10 @@ func (p *PostgreSQLSMECrudHandler) CreateWithPath(tx *sql.Tx, submodelID string,
 	}
 
 	supplementalSemanticIDsJSONString := "[]"
-	if len(submodelElement.GetSupplementalSemanticIds()) > 0 {
+	supplementalSemanticIDs := submodelElement.SupplementalSemanticIDs()
+	if len(supplementalSemanticIDs) > 0 {
 		var json = jsoniter.ConfigCompatibleWithStandardLibrary
-		supplementalSemanticIDsBytes, err := json.Marshal(submodelElement.GetSupplementalSemanticIds())
+		supplementalSemanticIDsBytes, err := json.Marshal(supplementalSemanticIDs)
 		if err != nil {
 			return 0, err
 		}
@@ -180,9 +178,10 @@ func (p *PostgreSQLSMECrudHandler) CreateWithPath(tx *sql.Tx, submodelID string,
 	}
 
 	extensionsJSONString := "[]"
-	if len(submodelElement.GetExtensions()) > 0 {
+	extension := submodelElement.Extensions()
+	if len(extension) > 0 {
 		var json = jsoniter.ConfigCompatibleWithStandardLibrary
-		extensionsBytes, err := json.Marshal(submodelElement.GetExtensions())
+		extensionsBytes, err := json.Marshal(extension)
 		if err != nil {
 			return 0, err
 		}
@@ -196,9 +195,9 @@ func (p *PostgreSQLSMECrudHandler) CreateWithPath(tx *sql.Tx, submodelID string,
 		submodelID,
 		parentDBId,
 		position,
-		submodelElement.GetIdShort(),
-		submodelElement.GetCategory(),
-		submodelElement.GetModelType(),
+		submodelElement.IDShort(),
+		submodelElement.Category(),
+		submodelElement.ModelType(),
 		referenceID, // This will be NULL if no semantic ID was provided
 		idShortPath, // Use the provided idShortPath instead of just GetIdShort()
 		descriptionID,
@@ -228,7 +227,7 @@ func (p *PostgreSQLSMECrudHandler) CreateWithPath(tx *sql.Tx, submodelID string,
 		}
 	}
 
-	qualifiers := submodelElement.GetQualifiers()
+	qualifiers := submodelElement.Qualifiers()
 	if len(qualifiers) > 0 {
 		for i, qualifier := range qualifiers {
 			qualifierID, err := persistenceutils.CreateQualifier(tx, qualifier, i)
@@ -284,8 +283,8 @@ func (p *PostgreSQLSMECrudHandler) CreateWithPath(tx *sql.Tx, submodelID string,
 // Example:
 //
 //	id, err := handler.Create(tx, "submodel123", propertyElement)
-func (p *PostgreSQLSMECrudHandler) Create(tx *sql.Tx, submodelID string, submodelElement gen.SubmodelElement) (int, error) {
-	return p.CreateWithPath(tx, submodelID, 0, submodelElement.GetIdShort(), submodelElement, 0, 0)
+func (p *PostgreSQLSMECrudHandler) Create(tx *sql.Tx, submodelID string, submodelElement types.ISubmodelElement) (int, error) {
+	return p.CreateWithPath(tx, submodelID, 0, *submodelElement.IDShort(), submodelElement, 0, 0)
 }
 
 // Update updates an existing SubmodelElement identified by its idShort or path.
@@ -326,7 +325,7 @@ func (p *PostgreSQLSMECrudHandler) Create(tx *sql.Tx, submodelID string, submode
 //	err := handler.Update(tx, "submodel123", "sensors.temperature", updatedProperty)
 //
 //nolint:revive // cyclomatic-complexity is acceptable here due to the multiple update steps
-func (p *PostgreSQLSMECrudHandler) Update(submodelID string, idShortOrPath string, submodelElement gen.SubmodelElement, tx *sql.Tx, isPut bool) error {
+func (p *PostgreSQLSMECrudHandler) Update(submodelID string, idShortOrPath string, submodelElement types.ISubmodelElement, tx *sql.Tx, isPut bool) error {
 	// Handle transaction creation if tx is nil
 	var localTx *sql.Tx
 	var err error
@@ -386,26 +385,23 @@ func (p *PostgreSQLSMECrudHandler) Update(submodelID string, idShortOrPath strin
 
 	// Handle semantic ID update
 	var newSemanticID sql.NullInt64
-	if submodelElement.GetSemanticID() != nil {
-		newSemanticID, err = persistenceutils.CreateReference(localTx, submodelElement.GetSemanticID(), sql.NullInt64{}, sql.NullInt64{})
+	semanticID := submodelElement.SemanticID()
+	if semanticID != nil {
+		newSemanticID, err = persistenceutils.CreateReference(localTx, semanticID, sql.NullInt64{}, sql.NullInt64{})
 		if err != nil {
 			return err
 		}
 	}
 
 	// Handle description update
-	var convertedDescription []gen.LangStringText
-	for _, desc := range submodelElement.GetDescription() {
-		convertedDescription = append(convertedDescription, desc)
-	}
-	newDescriptionID, err := persistenceutils.CreateLangStringTextTypes(localTx, convertedDescription)
+	newDescriptionID, err := persistenceutils.CreateLangStringTextTypes(localTx, submodelElement.Description())
 	if err != nil {
 		_, _ = fmt.Println(err)
 		return common.NewInternalServerError("Failed to update Description - see console for details")
 	}
 
 	// Handle display name update
-	newDisplayNameID, err := persistenceutils.CreateLangStringNameTypes(localTx, submodelElement.GetDisplayName())
+	newDisplayNameID, err := persistenceutils.CreateLangStringNameTypes(localTx, submodelElement.DisplayName())
 	if err != nil {
 		_, _ = fmt.Println(err)
 		return common.NewInternalServerError("Failed to update DisplayName - see console for details")
@@ -413,9 +409,9 @@ func (p *PostgreSQLSMECrudHandler) Update(submodelID string, idShortOrPath strin
 
 	// Handle embedded data specifications
 	edsJSONString := "[]"
-	if len(submodelElement.GetEmbeddedDataSpecifications()) > 0 {
+	if len(submodelElement.EmbeddedDataSpecifications()) > 0 {
 		var json = jsoniter.ConfigCompatibleWithStandardLibrary
-		edsBytes, err := json.Marshal(submodelElement.GetEmbeddedDataSpecifications())
+		edsBytes, err := json.Marshal(submodelElement.EmbeddedDataSpecifications())
 		if err != nil {
 			return err
 		}
@@ -424,9 +420,9 @@ func (p *PostgreSQLSMECrudHandler) Update(submodelID string, idShortOrPath strin
 
 	// Handle supplemental semantic IDs
 	supplementalSemanticIDsJSONString := "[]"
-	if len(submodelElement.GetSupplementalSemanticIds()) > 0 {
+	if len(submodelElement.SupplementalSemanticIDs()) > 0 {
 		var json = jsoniter.ConfigCompatibleWithStandardLibrary
-		supplementalSemanticIDsBytes, err := json.Marshal(submodelElement.GetSupplementalSemanticIds())
+		supplementalSemanticIDsBytes, err := json.Marshal(submodelElement.SupplementalSemanticIDs())
 		if err != nil {
 			return err
 		}
@@ -435,9 +431,9 @@ func (p *PostgreSQLSMECrudHandler) Update(submodelID string, idShortOrPath strin
 
 	// Handle extensions
 	extensionsJSONString := "[]"
-	if len(submodelElement.GetExtensions()) > 0 {
+	if len(submodelElement.Extensions()) > 0 {
 		var json = jsoniter.ConfigCompatibleWithStandardLibrary
-		extensionsBytes, err := json.Marshal(submodelElement.GetExtensions())
+		extensionsBytes, err := json.Marshal(submodelElement.Extensions())
 		if err != nil {
 			return err
 		}
@@ -447,7 +443,7 @@ func (p *PostgreSQLSMECrudHandler) Update(submodelID string, idShortOrPath strin
 	// Update the main submodel_element record FIRST to release foreign key constraints
 	updateQuery := dialect.Update(goqu.T("submodel_element")).
 		Set(goqu.Record{
-			"category":                    submodelElement.GetCategory(),
+			"category":                    submodelElement.Category(),
 			"semantic_id":                 newSemanticID,
 			"description_id":              newDescriptionID,
 			"displayname_id":              newDisplayNameID,
@@ -546,7 +542,7 @@ func (p *PostgreSQLSMECrudHandler) Update(submodelID string, idShortOrPath strin
 	}
 
 	// Create new qualifiers
-	qualifiers := submodelElement.GetQualifiers()
+	qualifiers := submodelElement.Qualifiers()
 	if len(qualifiers) > 0 {
 		for i, qualifier := range qualifiers {
 			qualifierID, err := persistenceutils.CreateQualifier(localTx, qualifier, i)

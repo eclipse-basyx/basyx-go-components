@@ -34,6 +34,7 @@ import (
 	"database/sql"
 	"fmt"
 
+	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
@@ -411,7 +412,7 @@ func insertRelationshipElement(relElem *gen.RelationshipElement, tx *sql.Tx, id 
 //
 // Note: This function is used for both first and second references in relationship elements,
 // as well as any other reference structures that need full persistence with keys.
-func insertReference(tx *sql.Tx, ref gen.Reference) (int, error) {
+func insertReference(tx *sql.Tx, ref types.IReference) (int, error) {
 	dialect := goqu.Dialect("postgres")
 
 	// Insert reference and get ID
@@ -430,7 +431,7 @@ func insertReference(tx *sql.Tx, ref gen.Reference) (int, error) {
 	}
 
 	// Insert keys
-	for i, key := range ref.Keys {
+	for i, key := range ref.Keys() {
 		insertKeyQuery, insertKeyArgs, err := dialect.Insert("reference_key").
 			Rows(goqu.Record{
 				"reference_id": refID,
@@ -450,16 +451,16 @@ func insertReference(tx *sql.Tx, ref gen.Reference) (int, error) {
 	return refID, nil
 }
 
-func buildUpdateRelationshipElementRecordObject(isPut bool, relElem *gen.RelationshipElement, json jsoniter.API) (goqu.Record, error) {
+func buildUpdateRelationshipElementRecordObject(isPut bool, relElem types.IRelationshipElement, json jsoniter.API) (goqu.Record, error) {
 	updateRecord := goqu.Record{}
 
 	// Handle First reference - optional field
 	// For PUT: always update (even if nil, which clears the field)
 	// For PATCH: only update if provided (not nil)
-	if isPut || relElem.First != nil {
+	if isPut || relElem.First() != nil {
 		var firstRef string
-		if relElem.First != nil && !isEmptyReference(relElem.First) {
-			ref, err := json.Marshal(relElem.First)
+		if relElem.First() != nil && !isEmptyReference(relElem.First()) {
+			ref, err := json.Marshal(relElem.First())
 			if err != nil {
 				return nil, err
 			}
@@ -473,8 +474,8 @@ func buildUpdateRelationshipElementRecordObject(isPut bool, relElem *gen.Relatio
 	// For PATCH: only update if provided (not nil)
 	if isPut || relElem.Second != nil {
 		var secondRef string
-		if relElem.Second != nil && !isEmptyReference(relElem.Second) {
-			ref, err := json.Marshal(relElem.Second)
+		if relElem.Second() != nil && !isEmptyReference(relElem.Second()) {
+			ref, err := json.Marshal(relElem.Second())
 			if err != nil {
 				return nil, err
 			}

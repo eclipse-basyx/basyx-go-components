@@ -31,8 +31,8 @@ package submodelelements
 
 import (
 	"database/sql"
-	"fmt"
 
+	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
@@ -79,8 +79,8 @@ func NewPostgreSQLAnnotatedRelationshipElementHandler(db *sql.DB) (*PostgreSQLAn
 // Returns:
 //   - int: Database ID of the created element
 //   - error: Error if creation fails or element is not of correct type
-func (p PostgreSQLAnnotatedRelationshipElementHandler) Create(tx *sql.Tx, submodelID string, submodelElement gen.SubmodelElement) (int, error) {
-	areElem, ok := submodelElement.(*gen.AnnotatedRelationshipElement)
+func (p PostgreSQLAnnotatedRelationshipElementHandler) Create(tx *sql.Tx, submodelID string, submodelElement types.ISubmodelElement) (int, error) {
+	areElem, ok := submodelElement.(*types.AnnotatedRelationshipElement)
 	if !ok {
 		return 0, common.NewErrBadRequest("submodelElement is not of type AnnotatedRelationshipElement")
 	}
@@ -115,8 +115,8 @@ func (p PostgreSQLAnnotatedRelationshipElementHandler) Create(tx *sql.Tx, submod
 // Returns:
 //   - int: Database ID of the created nested element
 //   - error: Error if creation fails or element is not of correct type
-func (p PostgreSQLAnnotatedRelationshipElementHandler) CreateNested(tx *sql.Tx, submodelID string, parentID int, idShortPath string, submodelElement gen.SubmodelElement, pos int, rootSubmodelElementID int) (int, error) {
-	areElem, ok := submodelElement.(*gen.AnnotatedRelationshipElement)
+func (p PostgreSQLAnnotatedRelationshipElementHandler) CreateNested(tx *sql.Tx, submodelID string, parentID int, idShortPath string, submodelElement types.ISubmodelElement, pos int, rootSubmodelElementID int) (int, error) {
+	areElem, ok := submodelElement.(*types.AnnotatedRelationshipElement)
 	if !ok {
 		return 0, common.NewErrBadRequest("submodelElement is not of type AnnotatedRelationshipElement")
 	}
@@ -147,8 +147,8 @@ func (p PostgreSQLAnnotatedRelationshipElementHandler) CreateNested(tx *sql.Tx, 
 //
 // Returns:
 //   - error: Error if update fails
-func (p PostgreSQLAnnotatedRelationshipElementHandler) Update(submodelID string, idShortOrPath string, submodelElement gen.SubmodelElement, tx *sql.Tx, isPut bool) error {
-	are, ok := submodelElement.(*gen.AnnotatedRelationshipElement)
+func (p PostgreSQLAnnotatedRelationshipElementHandler) Update(submodelID string, idShortOrPath string, submodelElement types.ISubmodelElement, tx *sql.Tx, isPut bool) error {
+	are, ok := submodelElement.(*types.AnnotatedRelationshipElement)
 	if !ok {
 		return common.NewErrBadRequest("submodelElement is not of type AnnotatedRelationshipElement")
 	}
@@ -165,21 +165,16 @@ func (p PostgreSQLAnnotatedRelationshipElementHandler) Update(submodelID string,
 		return err
 	}
 
-	err = validateRequiredFields(are, idShortOrPath)
-	if err != nil {
-		return err
-	}
-
 	elementID, err := p.decorated.GetDatabaseID(submodelID, idShortOrPath)
 	if err != nil {
 		return err
 	}
 
-	firstRef, err := serializeReference(are.First, jsoniter.ConfigCompatibleWithStandardLibrary)
+	firstRef, err := serializeReference(are.First(), jsoniter.ConfigCompatibleWithStandardLibrary)
 	if err != nil {
 		return err
 	}
-	secondRef, err := serializeReference(are.Second, jsoniter.ConfigCompatibleWithStandardLibrary)
+	secondRef, err := serializeReference(are.Second(), jsoniter.ConfigCompatibleWithStandardLibrary)
 	if err != nil {
 		return err
 	}
@@ -216,16 +211,6 @@ func (p PostgreSQLAnnotatedRelationshipElementHandler) Update(submodelID string,
 	}
 
 	return persistenceutils.CommitTransactionIfNeeded(tx, localTx)
-}
-
-func validateRequiredFields(are *gen.AnnotatedRelationshipElement, idShortOrPath string) error {
-	if isEmptyReference(are.First) {
-		return common.NewErrBadRequest(fmt.Sprintf("Missing Field 'First' for AnnotatedRelationshipElement with idShortPath '%s'", idShortOrPath))
-	}
-	if isEmptyReference(are.Second) {
-		return common.NewErrBadRequest(fmt.Sprintf("Missing Field 'Second' for AnnotatedRelationshipElement with idShortPath '%s'", idShortOrPath))
-	}
-	return nil
 }
 
 // UpdateValueOnly updates only the value of an existing AnnotatedRelationshipElement submodel element identified by its idShort or path.
@@ -338,17 +323,17 @@ func (p PostgreSQLAnnotatedRelationshipElementHandler) Delete(idShortOrPath stri
 	return p.decorated.Delete(idShortOrPath)
 }
 
-func insertAnnotatedRelationshipElement(areElem *gen.AnnotatedRelationshipElement, tx *sql.Tx, id int) error {
+func insertAnnotatedRelationshipElement(areElem *types.AnnotatedRelationshipElement, tx *sql.Tx, id int) error {
 	// Insert into relationship_element
 	var firstRef, secondRef string
 	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
-	firstRef, err := serializeReference(areElem.First, json)
+	firstRef, err := serializeReference(areElem.First(), json)
 	if err != nil {
 		return err
 	}
 
-	secondRef, err = serializeReference(areElem.Second, json)
+	secondRef, err = serializeReference(areElem.Second(), json)
 	if err != nil {
 		return err
 	}
@@ -373,7 +358,7 @@ func insertAnnotatedRelationshipElement(areElem *gen.AnnotatedRelationshipElemen
 	return nil
 }
 
-func serializeReference(ref *gen.Reference, json jsoniter.API) (string, error) {
+func serializeReference(ref types.IReference, json jsoniter.API) (string, error) {
 	var firstRef string
 	if !isEmptyReference(ref) {
 		ref, err := json.Marshal(ref)

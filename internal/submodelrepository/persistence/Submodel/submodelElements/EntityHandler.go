@@ -29,6 +29,7 @@ package submodelelements
 import (
 	"database/sql"
 
+	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
@@ -75,8 +76,8 @@ func NewPostgreSQLEntityHandler(db *sql.DB) (*PostgreSQLEntityHandler, error) {
 // Returns:
 //   - int: The database ID of the created entity
 //   - error: Error if the element is not an Entity or if database operations fail
-func (p PostgreSQLEntityHandler) Create(tx *sql.Tx, submodelID string, submodelElement gen.SubmodelElement) (int, error) {
-	entity, ok := submodelElement.(*gen.Entity)
+func (p PostgreSQLEntityHandler) Create(tx *sql.Tx, submodelID string, submodelElement types.ISubmodelElement) (int, error) {
+	entity, ok := submodelElement.(*types.Entity)
 	if !ok {
 		return 0, common.NewErrBadRequest("submodelElement is not of type Entity")
 	}
@@ -111,8 +112,8 @@ func (p PostgreSQLEntityHandler) Create(tx *sql.Tx, submodelID string, submodelE
 // Returns:
 //   - int: The database ID of the created nested entity
 //   - error: Error if the element is not an Entity or if database operations fail
-func (p PostgreSQLEntityHandler) CreateNested(tx *sql.Tx, submodelID string, parentID int, idShortPath string, submodelElement gen.SubmodelElement, pos int, rootSubmodelElementID int) (int, error) {
-	entity, ok := submodelElement.(*gen.Entity)
+func (p PostgreSQLEntityHandler) CreateNested(tx *sql.Tx, submodelID string, parentID int, idShortPath string, submodelElement types.ISubmodelElement, pos int, rootSubmodelElementID int) (int, error) {
+	entity, ok := submodelElement.(*types.Entity)
 	if !ok {
 		return 0, common.NewErrBadRequest("submodelElement is not of type Entity")
 	}
@@ -145,8 +146,8 @@ func (p PostgreSQLEntityHandler) CreateNested(tx *sql.Tx, submodelID string, par
 //
 // Returns:
 //   - error: Error if the update operation fails or element is not of correct type
-func (p PostgreSQLEntityHandler) Update(submodelID string, idShortOrPath string, submodelElement gen.SubmodelElement, tx *sql.Tx, isPut bool) error {
-	entity, ok := submodelElement.(*gen.Entity)
+func (p PostgreSQLEntityHandler) Update(submodelID string, idShortOrPath string, submodelElement types.ISubmodelElement, tx *sql.Tx, isPut bool) error {
+	entity, ok := submodelElement.(*types.Entity)
 	if !ok {
 		return common.NewErrBadRequest("submodelElement is not of type Entity")
 	}
@@ -304,11 +305,11 @@ func (p PostgreSQLEntityHandler) Delete(idShortOrPath string) error {
 	return p.decorated.Delete(idShortOrPath)
 }
 
-func insertEntity(entity *gen.Entity, tx *sql.Tx, id int) error {
+func insertEntity(entity *types.Entity, tx *sql.Tx, id int) error {
 	json := jsoniter.ConfigCompatibleWithStandardLibrary
 	specificAssetIDs := "[]"
-	if entity.SpecificAssetIds != nil {
-		specificAssetIDsBytes, err := json.Marshal(entity.SpecificAssetIds)
+	if entity.SpecificAssetIDs() != nil {
+		specificAssetIDsBytes, err := json.Marshal(entity.SpecificAssetIDs())
 		if err != nil {
 			return err
 		}
@@ -334,15 +335,15 @@ func insertEntity(entity *gen.Entity, tx *sql.Tx, id int) error {
 	return nil
 }
 
-func buildUpdateEntityRecordObject(isPut bool, entity *gen.Entity) (goqu.Record, error) {
+func buildUpdateEntityRecordObject(isPut bool, entity *types.Entity) (goqu.Record, error) {
 	updateRecord := goqu.Record{}
 
 	if isPut {
 		// PUT: Always update all fields
 		json := jsoniter.ConfigCompatibleWithStandardLibrary
 		specificAssetIDs := "[]"
-		if entity.SpecificAssetIds != nil {
-			specificAssetIDsBytes, err := json.Marshal(entity.SpecificAssetIds)
+		if entity.SpecificAssetIDs() != nil {
+			specificAssetIDsBytes, err := json.Marshal(entity.SpecificAssetIDs())
 			if err != nil {
 				return nil, err
 			}
@@ -355,17 +356,17 @@ func buildUpdateEntityRecordObject(isPut bool, entity *gen.Entity) (goqu.Record,
 	} else {
 		// PATCH: Only update provided fields
 		// Note: EntityType is a string enum, so we check if it's not empty
-		if entity.EntityType != "" {
+		if entity.EntityType() != nil {
 			updateRecord["entity_type"] = entity.EntityType
 		}
 
-		if entity.GlobalAssetID != "" {
-			updateRecord["global_asset_id"] = entity.GlobalAssetID
+		if entity.GlobalAssetID() != nil {
+			updateRecord["global_asset_id"] = entity.GlobalAssetID()
 		}
 
-		if entity.SpecificAssetIds != nil {
+		if entity.SpecificAssetIDs() != nil {
 			json := jsoniter.ConfigCompatibleWithStandardLibrary
-			specificAssetIDsBytes, err := json.Marshal(entity.SpecificAssetIds)
+			specificAssetIDsBytes, err := json.Marshal(entity.SpecificAssetIDs())
 			if err != nil {
 				return nil, err
 			}

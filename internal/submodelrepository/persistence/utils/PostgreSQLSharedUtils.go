@@ -57,7 +57,7 @@ func CreateExtension(tx *sql.Tx, extension types.Extension, position int) (sql.N
 	var extensionDbID sql.NullInt64
 	var semanticIDRefDbID sql.NullInt64
 
-	if extension.SemanticID != nil {
+	if extension.SemanticID() != nil {
 		id, err := CreateReference(tx, extension.SemanticID(), sql.NullInt64{}, sql.NullInt64{})
 		if err != nil {
 			_, _ = fmt.Println(err)
@@ -67,11 +67,20 @@ func CreateExtension(tx *sql.Tx, extension types.Extension, position int) (sql.N
 	}
 
 	// Use the centralized value type mapper
-	typedValue := MapValueByType(*extension.ValueType(), extension.Value())
+	var typedValue TypedValue
+	if extension.ValueType() != nil {
+		typedValue = MapValueByType(*extension.ValueType(), extension.Value())
+	} else {
+		value := ""
+		if extension.Value() != nil {
+			value = *extension.Value()
+		}
+		typedValue = TypedValue{Text: sql.NullString{String: value, Valid: value != ""}}
+	}
 
 	var valueType any
-	if extension.ValueType != nil {
-		valueType = extension.ValueType
+	if extension.ValueType() != nil {
+		valueType = extension.ValueType()
 	} else {
 		valueType = sql.NullString{String: "", Valid: false}
 	}
@@ -140,7 +149,7 @@ func CreateExtension(tx *sql.Tx, extension types.Extension, position int) (sql.N
 // Returns:
 //   - sql.NullInt64: Database ID of the created qualifier
 //   - error: An error if the insertion fails or if reference creation fails
-func CreateQualifier(tx *sql.Tx, qualifier types.Qualifier, position int) (sql.NullInt64, error) {
+func CreateQualifier(tx *sql.Tx, qualifier types.IQualifier, position int) (sql.NullInt64, error) {
 	var qualifierDbID sql.NullInt64
 	var valueIDRefDbID sql.NullInt64
 	var semanticIDRefDbID sql.NullInt64
@@ -453,7 +462,7 @@ func CreateReference(tx *sql.Tx, semanticID types.IReference, parentID sql.NullI
 		}
 		referenceID = sql.NullInt64{Int64: int64(id), Valid: true}
 
-		references := semanticID.Keys
+		references := semanticID.Keys()
 		for i := range references {
 			_, err = tx.Exec(insertKeyQuery,
 				id, i, references[i].Type, references[i].Value)
@@ -470,11 +479,11 @@ func CreateReference(tx *sql.Tx, semanticID types.IReference, parentID sql.NullI
 	return referenceID, nil
 }
 
-func insertNestedRefferedSemanticIDs(semanticID *gen.Reference, tx *sql.Tx, referenceID sql.NullInt64, insertKeyQuery string) (sql.NullInt64, error) {
-	stack := make([]*gen.Reference, 0)
+func insertNestedRefferedSemanticIDs(semanticID types.IReference, tx *sql.Tx, referenceID sql.NullInt64, insertKeyQuery string) (sql.NullInt64, error) {
+	stack := make([]types.IReference, 0)
 	rootID := referenceID
-	if semanticID.ReferredSemanticID != nil && !isEmptyReference(*semanticID.ReferredSemanticID) {
-		stack = append(stack, semanticID.ReferredSemanticID)
+	if semanticID.ReferredSemanticID() != nil && !isEmptyReference(semanticID.ReferredSemanticID()) {
+		stack = append(stack, semanticID.ReferredSemanticID())
 	}
 	for len(stack) > 0 {
 		// Pop
@@ -495,16 +504,16 @@ func insertNestedRefferedSemanticIDs(semanticID *gen.Reference, tx *sql.Tx, refe
 		}
 		childReferenceID := sql.NullInt64{Int64: int64(childRefID), Valid: true}
 
-		for i := range current.Keys {
+		for i := range current.Keys() {
 			_, err = tx.Exec(insertKeyQuery,
-				childRefID, i, current.Keys[i].Type, current.Keys[i].Value)
+				childRefID, i, current.Keys()[i].Type, current.Keys()[i].Value)
 			if err != nil {
 				return sql.NullInt64{}, err
 			}
 		}
 
-		if current.ReferredSemanticID != nil && !isEmptyReference(*current.ReferredSemanticID) {
-			stack = append(stack, current.ReferredSemanticID)
+		if current.ReferredSemanticID() != nil && !isEmptyReference(current.ReferredSemanticID()) {
+			stack = append(stack, current.ReferredSemanticID())
 		}
 
 		referenceID = childReferenceID
@@ -606,7 +615,7 @@ func GetReferenceByReferenceDBID(db *sql.DB, referenceID sql.NullInt64) (*gen.Re
 // Returns:
 //   - sql.NullInt64: Database ID of the created lang_string_name_type_reference, or an invalid NullInt64 if the slice is empty
 //   - error: An error if the insertion fails
-func CreateLangStringNameTypes(tx *sql.Tx, nameTypes []types.LangStringNameType) (sql.NullInt64, error) {
+func CreateLangStringNameTypes(tx *sql.Tx, nameTypes []types.ILangStringNameType) (sql.NullInt64, error) {
 	if nameTypes == nil {
 		return sql.NullInt64{}, nil
 	}
@@ -775,8 +784,8 @@ func GetLangStringTextTypes(db *sql.DB, textTypeID sql.NullInt64) ([]gen.LangStr
 // Returns:
 //   - sql.NullInt64: Database ID of the created extension
 //   - error: An error if the insertion fails or if any reference creation fails
-func CreateExtensionForSubmodel(tx *sql.Tx, submodelID string, extension gen.Extension) (sql.NullInt64, error) {
-	semanticIDDbID, err := CreateReference(tx, extension.SemanticID, sql.NullInt64{}, sql.NullInt64{})
+func CreateExtensionForSubmodel(tx *sql.Tx, submodelID string, extension types.Extension) (sql.NullInt64, error) {
+	semanticIDDbID, err := CreateReference(tx, extension.SemanticID(), sql.NullInt64{}, sql.NullInt64{})
 	if err != nil {
 		return sql.NullInt64{}, err
 	}
@@ -803,7 +812,7 @@ func CreateExtensionForSubmodel(tx *sql.Tx, submodelID string, extension gen.Ext
 	return extensionDbID, nil
 }
 
-func insertExtension(extension gen.Extension, semanticIDDbID sql.NullInt64, tx *sql.Tx) (sql.NullInt64, error) {
+func insertExtension(extension types.Extension, semanticIDDbID sql.NullInt64, tx *sql.Tx) (sql.NullInt64, error) {
 	var extensionDbID sql.NullInt64
 	var valueText, valueNum, valueBool, valueTime, valueDatetime sql.NullString
 	fillValueBasedOnType(extension, &valueText, &valueNum, &valueBool, &valueTime, &valueDatetime)
@@ -822,7 +831,7 @@ func insertExtension(extension gen.Extension, semanticIDDbID sql.NullInt64, tx *
 		Vals(goqu.Vals{
 			semanticIDDbID,
 			extension.Name,
-			extension.ValueType,
+			extension.ValueType(),
 			valueText,
 			valueNum,
 			valueBool,
@@ -843,32 +852,42 @@ func insertExtension(extension gen.Extension, semanticIDDbID sql.NullInt64, tx *
 	return extensionDbID, nil
 }
 
-func fillValueBasedOnType(extension gen.Extension, valueText *sql.NullString, valueNum *sql.NullString, valueBool *sql.NullString, valueTime *sql.NullString, valueDatetime *sql.NullString) {
-	switch extension.ValueType {
-	case "xs:string", "xs:anyURI", "xs:base64Binary", "xs:hexBinary":
-		*valueText = sql.NullString{String: extension.Value, Valid: extension.Value != ""}
-	case "xs:int", "xs:integer", "xs:long", "xs:short", "xs:byte",
-		"xs:unsignedInt", "xs:unsignedLong", "xs:unsignedShort", "xs:unsignedByte",
-		"xs:positiveInteger", "xs:negativeInteger", "xs:nonNegativeInteger", "xs:nonPositiveInteger",
-		"xs:decimal", "xs:double", "xs:float":
-		*valueNum = sql.NullString{String: extension.Value, Valid: extension.Value != ""}
-	case "xs:boolean":
-		*valueBool = sql.NullString{String: extension.Value, Valid: extension.Value != ""}
-	case "xs:time":
-		*valueTime = sql.NullString{String: extension.Value, Valid: extension.Value != ""}
-	case "xs:date", "xs:dateTime", "xs:duration", "xs:gDay", "xs:gMonth",
-		"xs:gMonthDay", "xs:gYear", "xs:gYearMonth":
-		*valueDatetime = sql.NullString{String: extension.Value, Valid: extension.Value != ""}
+func fillValueBasedOnType(extension types.Extension, valueText *sql.NullString, valueNum *sql.NullString, valueBool *sql.NullString, valueTime *sql.NullString, valueDatetime *sql.NullString) {
+	valuePtr := extension.Value()
+	value := ""
+	if valuePtr != nil {
+		value = *valuePtr
+	}
+	valid := value != ""
+
+	valueType := extension.ValueType()
+	if valueType == nil {
+		// Fallback to text for nil type
+		*valueText = sql.NullString{String: value, Valid: valid}
+		return
+	}
+
+	switch {
+	case IsTextType(*valueType):
+		*valueText = sql.NullString{String: value, Valid: valid}
+	case IsNumericType(*valueType):
+		*valueNum = sql.NullString{String: value, Valid: valid}
+	case *valueType == types.DataTypeDefXSDBoolean:
+		*valueBool = sql.NullString{String: value, Valid: valid}
+	case *valueType == types.DataTypeDefXSDTime:
+		*valueTime = sql.NullString{String: value, Valid: valid}
+	case IsDateTimeType(*valueType):
+		*valueDatetime = sql.NullString{String: value, Valid: valid}
 	default:
 		// Fallback to text for unknown types
-		*valueText = sql.NullString{String: extension.Value, Valid: extension.Value != ""}
+		*valueText = sql.NullString{String: value, Valid: valid}
 	}
 }
 
-func insertRefersToReferences(extension gen.Extension, tx *sql.Tx, extensionDbID sql.NullInt64) error {
-	if len(extension.RefersTo) > 0 {
-		for _, ref := range extension.RefersTo {
-			refDbID, refErr := CreateReference(tx, &ref, sql.NullInt64{}, sql.NullInt64{})
+func insertRefersToReferences(extension types.Extension, tx *sql.Tx, extensionDbID sql.NullInt64) error {
+	if len(extension.RefersTo()) > 0 {
+		for _, ref := range extension.RefersTo() {
+			refDbID, refErr := CreateReference(tx, ref, sql.NullInt64{}, sql.NullInt64{})
 			if refErr != nil {
 				return refErr
 			}
@@ -891,13 +910,13 @@ func insertRefersToReferences(extension gen.Extension, tx *sql.Tx, extensionDbID
 	return nil
 }
 
-func insertSupplementalSemanticIDsForExtensions(extension gen.Extension, semanticIDDbID sql.NullInt64, tx *sql.Tx, extensionDbID sql.NullInt64) error {
-	if len(extension.SupplementalSemanticIds) > 0 {
+func insertSupplementalSemanticIDsForExtensions(extension types.Extension, semanticIDDbID sql.NullInt64, tx *sql.Tx, extensionDbID sql.NullInt64) error {
+	if len(extension.SupplementalSemanticIDs()) > 0 {
 		if !semanticIDDbID.Valid {
 			return common.NewErrBadRequest("Supplemental Semantic IDs require a main Semantic ID to be present. (See AAS Constraint: AASd-118)")
 		}
-		for _, supplementalSemanticID := range extension.SupplementalSemanticIds {
-			supplementalSemanticIDDbID, err := CreateReference(tx, &supplementalSemanticID, sql.NullInt64{}, sql.NullInt64{})
+		for _, supplementalSemanticID := range extension.SupplementalSemanticIDs() {
+			supplementalSemanticIDDbID, err := CreateReference(tx, supplementalSemanticID, sql.NullInt64{}, sql.NullInt64{})
 			if err != nil {
 				return err
 			}
@@ -933,7 +952,7 @@ func insertSupplementalSemanticIDsForExtensions(extension gen.Extension, semanti
 //
 // Returns:
 //   - error: An error if reference creation or linking fails
-func InsertSupplementalSemanticIDsSubmodel(tx *sql.Tx, submodelID string, supplementalSemanticIDs []*gen.Reference) error {
+func InsertSupplementalSemanticIDsSubmodel(tx *sql.Tx, submodelID string, supplementalSemanticIDs []types.IReference) error {
 	if len(supplementalSemanticIDs) > 0 {
 		for _, supplementalSemanticID := range supplementalSemanticIDs {
 			supplementalSemanticIDDbID, err := CreateReference(tx, supplementalSemanticID, sql.NullInt64{}, sql.NullInt64{})
@@ -963,10 +982,10 @@ func InsertSupplementalSemanticIDsSubmodel(tx *sql.Tx, submodelID string, supple
 //
 // Returns:
 //   - error: An error if reference creation or linking fails
-func InsertSupplementalSemanticIDsSME(tx *sql.Tx, smeID int64, supplementalSemanticIDs []gen.Reference) error {
+func InsertSupplementalSemanticIDsSME(tx *sql.Tx, smeID int64, supplementalSemanticIDs []types.IReference) error {
 	if len(supplementalSemanticIDs) > 0 {
 		for _, supplementalSemanticID := range supplementalSemanticIDs {
-			supplementalSemanticIDDbID, err := CreateReference(tx, &supplementalSemanticID, sql.NullInt64{}, sql.NullInt64{})
+			supplementalSemanticIDDbID, err := CreateReference(tx, supplementalSemanticID, sql.NullInt64{}, sql.NullInt64{})
 			if err != nil {
 				return err
 			}
