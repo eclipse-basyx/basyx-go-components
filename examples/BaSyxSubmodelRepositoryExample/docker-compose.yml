@@ -1,0 +1,49 @@
+services:
+  aas-ui:
+    container_name: aas-web-ui
+    image: eclipsebasyx/aas-gui:SNAPSHOT
+    ports:
+      - "3000:3000"
+    environment:
+      SUBMODEL_REPO_PATH: "http://localhost:8081/submodels"
+    restart: always
+    depends_on:
+      submodel_repository:
+        condition: service_healthy
+
+  # PostgreSQL database
+  db:
+    container_name: postgres_db
+    image: postgres:18
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin123
+      POSTGRES_DB: basyxTestDB
+    command: ["postgres", "-c", "listen_addresses=*"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d basyxTestDB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  submodel_repository:
+    container_name: submodel-repository-go
+    image: eclipsebasyx/submodelrepository-go:SNAPSHOT      
+    environment:
+      - SERVER_PORT=5004
+      - POSTGRES_HOST=db
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=admin123
+      - POSTGRES_DBNAME=basyxTestDB
+      - POSTGRES_MAXOPENCONNECTIONS=500
+      - POSTGRES_MAXIDLECONNECTIONS=500
+      - POSTGRES_CONNMAXLIFETIMEMINUTES=5
+      - JWS_PRIVATEKEYPATH=/root/rsa-key.pem
+    volumes:
+      - ./basyx/rsa-key.pem:/root/rsa-key.pem:ro
+    ports:
+      - "5004:5004"
+    depends_on:
+      db:
+        condition: service_healthy
