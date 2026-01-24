@@ -34,6 +34,7 @@ package submodelelements
 import (
 	"database/sql"
 
+	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
@@ -81,8 +82,8 @@ func NewPostgreSQLOperationHandler(db *sql.DB) (*PostgreSQLOperationHandler, err
 // Returns:
 //   - int: The database ID of the created element
 //   - error: An error if the element is not an Operation type or if database operations fail
-func (p PostgreSQLOperationHandler) Create(tx *sql.Tx, submodelID string, submodelElement gen.SubmodelElement) (int, error) {
-	operation, ok := submodelElement.(*gen.Operation)
+func (p PostgreSQLOperationHandler) Create(tx *sql.Tx, submodelID string, submodelElement types.ISubmodelElement) (int, error) {
+	operation, ok := submodelElement.(*types.Operation)
 	if !ok {
 		return 0, common.NewErrBadRequest("submodelElement is not of type Operation")
 	}
@@ -118,8 +119,8 @@ func (p PostgreSQLOperationHandler) Create(tx *sql.Tx, submodelID string, submod
 // Returns:
 //   - int: The database ID of the created element
 //   - error: An error if the element is not an Operation type or if database operations fail
-func (p PostgreSQLOperationHandler) CreateNested(tx *sql.Tx, submodelID string, parentID int, idShortPath string, submodelElement gen.SubmodelElement, pos int, rootSubmodelElementID int) (int, error) {
-	operation, ok := submodelElement.(*gen.Operation)
+func (p PostgreSQLOperationHandler) CreateNested(tx *sql.Tx, submodelID string, parentID int, idShortPath string, submodelElement types.ISubmodelElement, pos int, rootSubmodelElementID int) (int, error) {
+	operation, ok := submodelElement.(*types.Operation)
 	if !ok {
 		return 0, common.NewErrBadRequest("submodelElement is not of type Operation")
 	}
@@ -152,8 +153,8 @@ func (p PostgreSQLOperationHandler) CreateNested(tx *sql.Tx, submodelID string, 
 //
 // Returns:
 //   - error: An error if the update operation fails
-func (p PostgreSQLOperationHandler) Update(submodelID string, idShortOrPath string, submodelElement gen.SubmodelElement, tx *sql.Tx, isPut bool) error {
-	operation, ok := submodelElement.(*gen.Operation)
+func (p PostgreSQLOperationHandler) Update(submodelID string, idShortOrPath string, submodelElement types.ISubmodelElement, tx *sql.Tx, isPut bool) error {
+	operation, ok := submodelElement.(*types.Operation)
 	if !ok {
 		return common.NewErrBadRequest("submodelElement is not of type Operation")
 	}
@@ -213,7 +214,7 @@ func (p PostgreSQLOperationHandler) Update(submodelID string, idShortOrPath stri
 // Parameters:
 //   - submodelID: The ID of the parent submodel
 //   - idShortOrPath: The idShort or path identifying the element to update
-//   - valueOnly: The new value to set (must be of type gen.SubmodelElementValue)
+//   - valueOnly: The new value to set (must be of type types.ISubmodelElementValue)
 //
 // Returns:
 //   - error: An error if the update operation fails
@@ -247,7 +248,7 @@ func (p PostgreSQLOperationHandler) Delete(idShortOrPath string) error {
 //
 // Returns:
 //   - error: An error if the database insert operation fails
-func insertOperation(operation *gen.Operation, tx *sql.Tx, id int) error {
+func insertOperation(operation *types.Operation, tx *sql.Tx, id int) error {
 	json := jsoniter.ConfigCompatibleWithStandardLibrary
 
 	var inputVars, outputVars, inoutputVars string
@@ -300,13 +301,13 @@ func insertOperation(operation *gen.Operation, tx *sql.Tx, id int) error {
 	return nil
 }
 
-func buildUpdateOperationRecordObject(isPut bool, operation *gen.Operation, json jsoniter.API) (goqu.Record, error) {
+func buildUpdateOperationRecordObject(isPut bool, operation *types.Operation, json jsoniter.API) (goqu.Record, error) {
 	updateRecord := goqu.Record{}
 
-	if isPut || operation.InputVariables != nil {
+	if isPut || operation.InputVariables() != nil {
 		var inputVars string
-		if operation.InputVariables != nil {
-			inputVarBytes, err := json.Marshal(operation.InputVariables)
+		if operation.InputVariables() != nil {
+			inputVarBytes, err := json.Marshal(operation.InputVariables())
 			if err != nil {
 				return nil, err
 			}
@@ -317,10 +318,10 @@ func buildUpdateOperationRecordObject(isPut bool, operation *gen.Operation, json
 		updateRecord["input_variables"] = inputVars
 	}
 
-	if isPut || operation.OutputVariables != nil {
+	if isPut || operation.OutputVariables() != nil {
 		var outputVars string
-		if operation.OutputVariables != nil {
-			outputVarBytes, err := json.Marshal(operation.OutputVariables)
+		if operation.OutputVariables() != nil {
+			outputVarBytes, err := json.Marshal(operation.OutputVariables())
 			if err != nil {
 				return nil, err
 			}
@@ -331,10 +332,10 @@ func buildUpdateOperationRecordObject(isPut bool, operation *gen.Operation, json
 		updateRecord["output_variables"] = outputVars
 	}
 
-	if isPut || operation.InoutputVariables != nil {
+	if isPut || operation.InoutputVariables() != nil {
 		var inoutputVars string
-		if operation.InoutputVariables != nil {
-			inoutputVarBytes, err := json.Marshal(operation.InoutputVariables)
+		if operation.InoutputVariables() != nil {
+			inoutputVarBytes, err := json.Marshal(operation.InoutputVariables())
 			if err != nil {
 				return nil, err
 			}

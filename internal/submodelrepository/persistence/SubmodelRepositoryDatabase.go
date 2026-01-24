@@ -111,7 +111,7 @@ func (p *PostgreSQLSubmodelDatabase) GetDB() *sql.DB {
 //   - []gen.Submodel: List of submodels
 //   - string: Next cursor for pagination (empty if no more pages)
 //   - error: Error if retrieval fails
-func (p *PostgreSQLSubmodelDatabase) GetAllSubmodels(limit int32, cursor string, _ /* idShort */ string, valueOnly bool) ([]gen.Submodel, string, error) {
+func (p *PostgreSQLSubmodelDatabase) GetAllSubmodels(limit int32, cursor string, _ /* idShort */ string, valueOnly bool) ([]types.Submodel, string, error) {
 	if limit == 0 {
 		limit = smrepoconfig.DefaultPageLimit
 	}
@@ -190,13 +190,13 @@ func (p *PostgreSQLSubmodelDatabase) GetAllSubmodels(limit int32, cursor string,
 		return nil, "", errSme
 	}
 
-	submodels := []gen.Submodel{}
+	submodels := []types.Submodel{}
 
 	for _, s := range res.sm {
 		if s != nil {
 			// Add corresponding submodel elements BEFORE copying
-			if smes, exists := submodelElements[s.ID]; exists {
-				s.SubmodelElements = smes
+			if smes, exists := submodelElements[s.ID()]; exists {
+				s.SetSubmodelElements(smes)
 			}
 			submodels = append(submodels, *s)
 		}
@@ -419,7 +419,7 @@ func (p *PostgreSQLSubmodelDatabase) GetSubmodel(id string, valueOnly bool) (typ
 	}
 
 	if res.sm != nil {
-		res.sm.SubmodelElements = resSME.smes
+		res.sm.SetSubmodelElements(resSME.smes)
 	}
 
 	if res.err != nil {
@@ -618,14 +618,14 @@ func (p *PostgreSQLSubmodelDatabase) CreateSubmodel(sm types.Submodel, optionalT
 		return common.NewInternalServerError("Failed to create SemanticID - no changes applied - see console for details")
 	}
 
-	langString := []types.LangStringNameType{}
+	langString := []types.ILangStringNameType{}
 	for _, dn := range sm.DisplayName() {
 		converted, ok := dn.(*types.LangStringNameType)
 		if !ok {
 			_, _ = fmt.Println("Error converting DisplayName to LangStringNameType")
 			return common.NewInternalServerError("Failed to create DisplayName - no changes applied - see console for details")
 		}
-		langString = append(langString, *converted)
+		langString = append(langString, converted)
 	}
 
 	displayNameID, err = persistenceutils.CreateLangStringNameTypes(tx, langString)
@@ -635,14 +635,14 @@ func (p *PostgreSQLSubmodelDatabase) CreateSubmodel(sm types.Submodel, optionalT
 	}
 
 	// Handle possibly nil Description
-	var convertedDescription []types.LangStringTextType
+	var convertedDescription []types.ILangStringTextType
 	for _, desc := range sm.Description() {
 		converted, ok := desc.(*types.LangStringTextType)
 		if !ok {
 			_, _ = fmt.Println("Error converting Description to LangStringTextType")
 			return common.NewInternalServerError("Failed to create Description - no changes applied - see console for details")
 		}
-		convertedDescription = append(convertedDescription, *converted)
+		convertedDescription = append(convertedDescription, converted)
 	}
 	descriptionID, err = persistenceutils.CreateLangStringTextTypes(tx, convertedDescription)
 	if err != nil {
@@ -1138,10 +1138,14 @@ func (p *PostgreSQLSubmodelDatabase) UpdateSubmodelElement(submodelID string, id
 		return err
 	}
 
+	if modelType == nil {
+		return common.NewErrNotFound("SubmodelElement with idShort or path '" + idShortPath + "' not found in submodel '" + submodelID + "'")
+	}
+
 	// Get the appropriate handler for this model type
-	handler, err := submodelelements.GetSMEHandlerByModelType(modelType, p.db)
+	handler, err := submodelelements.GetSMEHandlerByModelType(*modelType, p.db)
 	if err != nil {
-		return fmt.Errorf("failed to get handler for model type %s: %w", modelType, err)
+		return fmt.Errorf("failed to get handler for model type %s: %w", *modelType, err)
 	}
 	err = handler.Update(submodelID, idShortPath, submodelElement, nil, isPut)
 
@@ -1150,7 +1154,7 @@ func (p *PostgreSQLSubmodelDatabase) UpdateSubmodelElement(submodelID string, id
 	}
 
 	if isPut {
-		err = handleNestedElementsAfterPut(p, idShortPath, modelType, tx, submodelID, submodelElement)
+		err = handleNestedElementsAfterPut(p, idShortPath, *modelType, tx, submodelID, submodelElement)
 		if err != nil {
 			return err
 		}
@@ -1163,7 +1167,7 @@ func (p *PostgreSQLSubmodelDatabase) UpdateSubmodelElement(submodelID string, id
 	return nil
 }
 
-func handleNestedElementsAfterPut(p *PostgreSQLSubmodelDatabase, idShortPath string, modelType string, tx *sql.Tx, submodelID string, submodelElement types.ISubmodelElement) error {
+func handleNestedElementsAfterPut(p *PostgreSQLSubmodelDatabase, idShortPath string, modelType types.ModelType, tx *sql.Tx, submodelID string, submodelElement types.ISubmodelElement) error {
 	var elementID int
 	smeHandler := submodelelements.PostgreSQLSMECrudHandler{Db: p.db}
 	elementID, err := smeHandler.GetDatabaseID(submodelID, idShortPath)
@@ -1194,15 +1198,18 @@ func (p *PostgreSQLSubmodelDatabase) DeleteFileAttachment(submodelID string, idS
 //
 // Returns:
 //   - error: Error if the update operation fails
-func (p *PostgreSQLSubmodelDatabase) UpdateSubmodelElementValueOnly(submodelID string, idShortOrPath string, valueOnly types.ISubmodelElementValue) error {
+func (p *PostgreSQLSubmodelDatabase) UpdateSubmodelElementValueOnly(submodelID string, idShortOrPath string, valueOnly gen.SubmodelElementValue) error {
 	// Get the model type to determine which handler to use
 	modelType, err := getSubmodelElementModelTypeByIDShortPathAndSubmodelID(p.db, submodelID, idShortOrPath)
 	if err != nil {
 		return err
 	}
+	if modelType == nil {
+		return common.NewErrNotFound("SubmodelElement with idShort or path '" + idShortOrPath + "' not found in submodel '" + submodelID + "'")
+	}
 
 	// Get the appropriate handler for this model type
-	handler, err := submodelelements.GetSMEHandlerByModelType(modelType, p.db)
+	handler, err := submodelelements.GetSMEHandlerByModelType(*modelType, p.db)
 	if err != nil {
 		return fmt.Errorf("failed to get handler for model type %s: %w", modelType, err)
 	}
@@ -1240,8 +1247,8 @@ func (p *PostgreSQLSubmodelDatabase) UpdateSubmodelValueOnly(submodelID string, 
 	return nil
 }
 
-func isModelTypeWithNestedElements(modelType string) bool {
-	return modelType == "AnnotatedRelationshipElement" || modelType == "SubmodelElementCollection" || modelType == "SubmodelElementList" || modelType == "Entity"
+func isModelTypeWithNestedElements(modelType types.ModelType) bool {
+	return modelType == types.ModelTypeAnnotatedRelationshipElement || modelType == types.ModelTypeSubmodelElementCollection || modelType == types.ModelTypeSubmodelElementList || modelType == types.ModelTypeEntity
 }
 
 // doesSubmodelElementExist checks if a submodel element exists within a transaction context

@@ -35,6 +35,7 @@ import (
 	"database/sql"
 	"fmt"
 
+	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
@@ -80,8 +81,8 @@ func NewPostgreSQLMultiLanguagePropertyHandler(db *sql.DB) (*PostgreSQLMultiLang
 // Returns:
 //   - int: The database ID of the created element
 //   - error: An error if the element is not a MultiLanguageProperty type or if database operations fail
-func (p PostgreSQLMultiLanguagePropertyHandler) Create(tx *sql.Tx, submodelID string, submodelElement gen.SubmodelElement) (int, error) {
-	mlp, ok := submodelElement.(*gen.MultiLanguageProperty)
+func (p PostgreSQLMultiLanguagePropertyHandler) Create(tx *sql.Tx, submodelID string, submodelElement types.ISubmodelElement) (int, error) {
+	mlp, ok := submodelElement.(*types.MultiLanguageProperty)
 	if !ok {
 		return 0, common.NewErrBadRequest("submodelElement is not of type MultiLanguageProperty")
 	}
@@ -116,8 +117,8 @@ func (p PostgreSQLMultiLanguagePropertyHandler) Create(tx *sql.Tx, submodelID st
 // Returns:
 //   - int: The database ID of the created element
 //   - error: An error if the element is not a MultiLanguageProperty type or if database operations fail
-func (p PostgreSQLMultiLanguagePropertyHandler) CreateNested(tx *sql.Tx, submodelID string, parentID int, idShortPath string, submodelElement gen.SubmodelElement, pos int, rootSubmodelElementID int) (int, error) {
-	mlp, ok := submodelElement.(*gen.MultiLanguageProperty)
+func (p PostgreSQLMultiLanguagePropertyHandler) CreateNested(tx *sql.Tx, submodelID string, parentID int, idShortPath string, submodelElement types.ISubmodelElement, pos int, rootSubmodelElementID int) (int, error) {
+	mlp, ok := submodelElement.(*types.MultiLanguageProperty)
 	if !ok {
 		return 0, common.NewErrBadRequest("submodelElement is not of type MultiLanguageProperty")
 	}
@@ -150,8 +151,8 @@ func (p PostgreSQLMultiLanguagePropertyHandler) CreateNested(tx *sql.Tx, submode
 //
 // Returns:
 //   - error: An error if the update operation fails
-func (p PostgreSQLMultiLanguagePropertyHandler) Update(submodelID string, idShortOrPath string, submodelElement gen.SubmodelElement, tx *sql.Tx, isPut bool) error {
-	mlp, ok := submodelElement.(*gen.MultiLanguageProperty)
+func (p PostgreSQLMultiLanguagePropertyHandler) Update(submodelID string, idShortOrPath string, submodelElement types.ISubmodelElement, tx *sql.Tx, isPut bool) error {
+	mlp, ok := submodelElement.(*types.MultiLanguageProperty)
 	if !ok {
 		return common.NewErrBadRequest("submodelElement is not of type MultiLanguageProperty")
 	}
@@ -179,9 +180,9 @@ func (p PostgreSQLMultiLanguagePropertyHandler) Update(submodelID string, idShor
 	// For PATCH: only update if provided (not nil)
 	if isPut || mlp.ValueID != nil {
 		var valueIdRef sql.NullInt64
-		if mlp.ValueID != nil && !isEmptyReference(mlp.ValueID) {
+		if mlp.ValueID != nil && !isEmptyReference(mlp.ValueID()) {
 			// Insert the reference and get the ID
-			refID, err := insertReference(localTx, *mlp.ValueID)
+			refID, err := insertReference(localTx, mlp.ValueID())
 			if err != nil {
 				return err
 			}
@@ -222,13 +223,13 @@ func (p PostgreSQLMultiLanguagePropertyHandler) Update(submodelID string, idShor
 		}
 
 		// Insert new values if provided
-		if mlp.Value != nil {
-			for _, val := range mlp.Value {
+		if mlp.Value() != nil {
+			for _, val := range mlp.Value() {
 				insertQuery, insertArgs, err := dialect.Insert("multilanguage_property_value").
 					Rows(goqu.Record{
 						"mlp_id":   elementID,
-						"language": val.Language,
-						"text":     val.Text,
+						"language": val.Language(),
+						"text":     val.Text(),
 					}).
 					ToSQL()
 				if err != nil {
@@ -340,7 +341,7 @@ func (p PostgreSQLMultiLanguagePropertyHandler) Delete(idShortOrPath string) err
 //
 // Returns:
 //   - error: An error if the database insert operation fails
-func insertMultiLanguageProperty(mlp *gen.MultiLanguageProperty, tx *sql.Tx, id int) error {
+func insertMultiLanguageProperty(mlp *types.MultiLanguageProperty, tx *sql.Tx, id int) error {
 	// Insert into multilanguage_property
 	dialect := goqu.Dialect("postgres")
 	insertQuery, insertArgs, err := dialect.Insert("multilanguage_property").
@@ -356,12 +357,12 @@ func insertMultiLanguageProperty(mlp *gen.MultiLanguageProperty, tx *sql.Tx, id 
 	}
 
 	// Insert values
-	for _, val := range mlp.Value {
+	for _, val := range mlp.Value() {
 		insertQuery, insertArgs, err := dialect.Insert("multilanguage_property_value").
 			Rows(goqu.Record{
 				"mlp_id":   id,
-				"language": val.Language,
-				"text":     val.Text,
+				"language": val.Language(),
+				"text":     val.Text(),
 			}).
 			ToSQL()
 		if err != nil {

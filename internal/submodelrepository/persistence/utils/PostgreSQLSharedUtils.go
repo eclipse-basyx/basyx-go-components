@@ -1016,7 +1016,7 @@ type ValueOnlyElementsToProcess struct {
 
 // SubmodelElementToProcess represents a SubmodelElement along with its ID short path.
 type SubmodelElementToProcess struct {
-	Element     gen.SubmodelElement
+	Element     types.ISubmodelElement
 	IdShortPath string
 }
 

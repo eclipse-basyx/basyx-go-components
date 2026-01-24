@@ -66,7 +66,7 @@ import (
 //   - PostgreSQLSMECrudInterface: Type-specific handler implementing CRUD operations
 //   - error: An error if the model type is unsupported or handler creation fails
 func GetSMEHandler(submodelElement types.ISubmodelElement, db *sql.DB) (PostgreSQLSMECrudInterface, error) {
-	return GetSMEHandlerByModelType(string(submodelElement.ModelType()), db)
+	return GetSMEHandlerByModelType(submodelElement.ModelType(), db)
 }
 
 // GetSMEHandlerByModelType creates a handler by model type string.
@@ -98,7 +98,7 @@ func GetSMEHandler(submodelElement types.ISubmodelElement, db *sql.DB) (PostgreS
 // Returns:
 //   - PostgreSQLSMECrudInterface: Type-specific handler implementing CRUD operations
 //   - error: An error if the model type is unsupported or handler creation fails
-func GetSMEHandlerByModelType(modelType string, db *sql.DB) (PostgreSQLSMECrudInterface, error) {
+func GetSMEHandlerByModelType(modelType types.ModelType, db *sql.DB) (PostgreSQLSMECrudInterface, error) {
 	// Use the centralized handler registry for cleaner factory pattern
 	return GetHandlerFromRegistry(modelType, db)
 }
@@ -119,13 +119,17 @@ func UpdateNestedElementsValueOnly(db *sql.DB, elems []persistenceutils.ValueOnl
 			continue // Skip the root element as it's already processed
 		}
 		modelType := elem.Element.GetModelType()
-		if modelType == "File" {
+		if modelType == types.ModelTypeFile {
 			// We have to check the database because File could be ambiguous between File and Blob
 			actual, err := GetModelTypeByIdShortPathAndSubmodelID(db, submodelID, elem.IdShortPath)
 			if err != nil {
 				return err
 			}
-			modelType = actual
+			if actual == nil {
+				return common.NewErrNotFound("Submodel-Element ID-Short: " + elem.IdShortPath)
+			}
+
+			modelType = *actual
 		}
 		handler, err := GetSMEHandlerByModelType(modelType, db)
 		if err != nil {
@@ -165,14 +169,18 @@ func UpdateNestedElements(db *sql.DB, elems []persistenceutils.SubmodelElementTo
 		if elem.IdShortPath == idShortOrPath {
 			continue // Skip the root element as it's already processed
 		}
-		modelType := elem.Element.GetModelType()
-		if modelType == "File" {
+		modelType := elem.Element.ModelType()
+		if modelType == types.ModelTypeFile {
 			// We have to check the database because File could be ambiguous between File and Blob
 			actual, err := GetModelTypeByIdShortPathAndSubmodelID(db, submodelID, elem.IdShortPath)
 			if err != nil {
 				return err
 			}
-			modelType = actual
+			if actual == nil {
+				return common.NewErrNotFound("Submodel-Element ID-Short: " + elem.IdShortPath)
+			}
+
+			modelType = *actual
 		}
 		handler, err := GetSMEHandlerByModelType(modelType, db)
 		if err != nil {
@@ -202,7 +210,7 @@ func UpdateNestedElements(db *sql.DB, elems []persistenceutils.SubmodelElementTo
 // Returns:
 // - string: Model type of the submodel element
 // - error: Error if retrieval fails or element is not found
-func GetModelTypeByIdShortPathAndSubmodelID(db *sql.DB, submodelID string, idShortOrPath string) (string, error) {
+func GetModelTypeByIdShortPathAndSubmodelID(db *sql.DB, submodelID string, idShortOrPath string) (*types.ModelType, error) {
 	dialect := goqu.Dialect("postgres")
 
 	query, args, err := dialect.From("submodel_element").
@@ -213,18 +221,18 @@ func GetModelTypeByIdShortPathAndSubmodelID(db *sql.DB, submodelID string, idSho
 		).
 		ToSQL()
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
-	var modelType string
+	var modelType types.ModelType
 	err = db.QueryRow(query, args...).Scan(&modelType)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return "", common.NewErrNotFound("Submodel-Element ID-Short: " + idShortOrPath)
+			return nil, common.NewErrNotFound("Submodel-Element ID-Short: " + idShortOrPath)
 		}
-		return "", err
+		return nil, err
 	}
-	return modelType, nil
+	return &modelType, nil
 }
 
 // DeleteSubmodelElementByPath removes a submodel element by its idShort or path including all nested elements.
@@ -354,7 +362,7 @@ func DeleteSubmodelElementByPath(tx *sql.Tx, submodelID string, idShortOrPath st
 }
 
 // GetSubmodelElementsForSubmodel retrieves all submodel elements for a given submodel ID.
-func GetSubmodelElementsForSubmodel(db *sql.DB, submodelID string, idShortPath string, cursor string, limit int, valueOnly bool) ([]model.SubmodelElement, string, error) {
+func GetSubmodelElementsForSubmodel(db *sql.DB, submodelID string, idShortPath string, cursor string, limit int, valueOnly bool) ([]types.ISubmodelElement, string, error) {
 	filter := submodelsubqueries.SubmodelElementFilter{
 		SubmodelFilter: &submodelsubqueries.SubmodelElementSubmodelFilter{
 			SubmodelIDFilter: submodelID,
@@ -464,7 +472,7 @@ func GetSubmodelElementsForSubmodel(db *sql.DB, submodelID string, idShortPath s
 		return a.path < b.path
 	})
 
-	res := make([]model.SubmodelElement, 0, len(roots))
+	res := make([]types.ISubmodelElement, 0, len(roots))
 	for _, r := range roots {
 		res = append(res, r.element)
 	}
@@ -582,9 +590,9 @@ func attachChildrenToSubmodelElements(nodes map[int64]*node, children map[int64]
 // SubmodelElement data. This struct is used during the reconstruction of the
 // nested structure of submodel elements from flat database rows.
 type node struct {
-	id       int64                 // Database ID of the element
-	parentID int64                 // Parent element ID for hierarchy
-	path     string                // Full path for navigation
-	position int                   // Position within parent for ordering
-	element  model.SubmodelElement // The actual submodel element data
+	id       int64                  // Database ID of the element
+	parentID int64                  // Parent element ID for hierarchy
+	path     string                 // Full path for navigation
+	position int                    // Position within parent for ordering
+	element  types.ISubmodelElement // The actual submodel element data
 }

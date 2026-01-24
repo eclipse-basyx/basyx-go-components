@@ -34,11 +34,15 @@
 //nolint:all
 package model
 
-import "encoding/json"
+import (
+	"encoding/json"
+
+	"github.com/FriedJannik/aas-go-sdk/types"
+)
 
 // BasicEventElementValue type of EventElementValue
 type BasicEventElementValue struct {
-	Observed Reference `json:"observed"`
+	Observed types.IReference `json:"observed"`
 }
 
 // MarshalValueOnly serializes BasicEventElementValue in Value-Only format
@@ -53,8 +57,8 @@ func (b BasicEventElementValue) MarshalJSON() ([]byte, error) {
 }
 
 // GetModelType returns the model type name for BasicEventElement
-func (b BasicEventElementValue) GetModelType() string {
-	return "BasicEventElement"
+func (b BasicEventElementValue) GetModelType() types.ModelType {
+	return types.ModelTypeBasicEventElement
 }
 
 // AssertBasicEventElementValueRequired checks if the required fields are not zero-ed

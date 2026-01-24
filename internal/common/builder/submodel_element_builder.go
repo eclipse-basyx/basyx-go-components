@@ -31,6 +31,7 @@ import (
 	"sort"
 	"sync"
 
+	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	jsoniter "github.com/json-iterator/go"
@@ -46,25 +47,25 @@ type SubmodelElementBuilder struct {
 
 // Channels for parallel processing
 type semanticIDResult struct {
-	semanticID *model.Reference
+	semanticID *types.IReference
 }
 type descriptionResult struct {
-	descriptions []model.LangStringTextType
+	descriptions []types.ILangStringTextType
 }
 type displayNameResult struct {
-	displayNames []model.LangStringNameType
+	displayNames []types.ILangStringNameType
 }
 type embeddedDataSpecResult struct {
-	eds []model.EmbeddedDataSpecification
+	eds []types.IEmbeddedDataSpecification
 }
 type supplementalSemanticIDsResult struct {
-	supplementalSemanticIDs []model.Reference
+	supplementalSemanticIDs []types.IReference
 }
 type qualifiersResult struct {
-	qualifiers []model.Qualifier
+	qualifiers []types.IQualifier
 }
 type extensionsResult struct {
-	extensions []model.Extension
+	extensions []types.IExtension
 }
 
 // BuildSubmodelElement constructs a SubmodelElement from the provided database row.
@@ -73,7 +74,7 @@ type extensionsResult struct {
 // semantic IDs, descriptions, and qualifiers. Returns the constructed SubmodelElement and a
 // SubmodelElementBuilder for further management.
 // nolint:revive // This method is already refactored and further changes would not improve readability.
-func BuildSubmodelElement(smeRow model.SubmodelElementRow) (*model.SubmodelElement, *SubmodelElementBuilder, error) {
+func BuildSubmodelElement(smeRow model.SubmodelElementRow) (*types.ISubmodelElement, *SubmodelElementBuilder, error) {
 	var g errgroup.Group
 	refBuilderMap := make(map[int64]*ReferenceBuilder)
 	var refMutex sync.RWMutex
@@ -82,11 +83,10 @@ func BuildSubmodelElement(smeRow model.SubmodelElementRow) (*model.SubmodelEleme
 		return nil, nil, err
 	}
 
-	specificSME.SetIdShort(smeRow.IDShort)
+	specificSME.SetIDShort(&smeRow.IDShort)
 	if smeRow.Category.Valid {
-		specificSME.SetCategory(smeRow.Category.String)
+		specificSME.SetCategory(&smeRow.Category.String)
 	}
-	specificSME.SetModelType(smeRow.ModelType)
 
 	semanticIDChan := make(chan semanticIDResult, 1)
 	descriptionChan := make(chan descriptionResult, 1)
@@ -274,7 +274,7 @@ func BuildSubmodelElement(smeRow model.SubmodelElementRow) (*model.SubmodelEleme
 // getSubmodelElementObjectBasedOnModelType determines the specific SubmodelElement type
 // based on the ModelType field in the row and delegates to the appropriate build function.
 // It handles reference building for types that require it.
-func getSubmodelElementObjectBasedOnModelType(smeRow model.SubmodelElementRow, refBuilderMap map[int64]*ReferenceBuilder, refMutex *sync.RWMutex) (model.SubmodelElement, error) {
+func getSubmodelElementObjectBasedOnModelType(smeRow model.SubmodelElementRow, refBuilderMap map[int64]*ReferenceBuilder, refMutex *sync.RWMutex) (types.ISubmodelElement, error) {
 	switch smeRow.ModelType {
 	case "Property":
 		prop, err := buildProperty(smeRow, refBuilderMap, refMutex)
@@ -459,7 +459,7 @@ func buildOperation(smeRow model.SubmodelElementRow) (*model.Operation, error) {
 
 // getSingleReference parses a single reference from JSON data and builds it using the reference builders.
 // Returns the first reference if available, or nil.
-func getSingleReference(reference *json.RawMessage, referredReference *json.RawMessage, refBuilderMap map[int64]*ReferenceBuilder, refMutex *sync.RWMutex) (*model.Reference, error) {
+func getSingleReference(reference *json.RawMessage, referredReference *json.RawMessage, refBuilderMap map[int64]*ReferenceBuilder, refMutex *sync.RWMutex) (*types.IReference, error) {
 	var refs []*model.Reference
 	var err error
 	if reference != nil {

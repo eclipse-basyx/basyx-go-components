@@ -34,7 +34,11 @@
 //nolint:all
 package model
 
-import "encoding/json"
+import (
+	"encoding/json"
+
+	"github.com/FriedJannik/aas-go-sdk/types"
+)
 
 // PropertyValue represents the Value-Only serialization of a Property.
 // According to spec: Property is serialized as ${Property/value} where value is a string.
@@ -53,8 +57,8 @@ func (p PropertyValue) MarshalJSON() ([]byte, error) {
 }
 
 // GetModelType returns the model type name for Property
-func (p PropertyValue) GetModelType() string {
-	return "Property"
+func (p PropertyValue) GetModelType() types.ModelType {
+	return types.ModelTypeProperty
 }
 
 // UnmarshalJSON implements custom JSON unmarshaling for PropertyValue

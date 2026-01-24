@@ -37,6 +37,7 @@ package submodelelements
 import (
 	"database/sql"
 
+	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
@@ -116,8 +117,8 @@ func NewPostgreSQLReferenceElementHandler(db *sql.DB) (*PostgreSQLReferenceEleme
 //	    },
 //	}
 //	id, err := handler.Create(tx, "submodel123", refElem)
-func (p PostgreSQLReferenceElementHandler) Create(tx *sql.Tx, submodelID string, submodelElement gen.SubmodelElement) (int, error) {
-	refElem, ok := submodelElement.(*gen.ReferenceElement)
+func (p PostgreSQLReferenceElementHandler) Create(tx *sql.Tx, submodelID string, submodelElement types.ISubmodelElement) (int, error) {
+	refElem, ok := submodelElement.(*types.ReferenceElement)
 	if !ok {
 		return 0, common.NewErrBadRequest("submodelElement is not of type ReferenceElement")
 	}
@@ -173,8 +174,8 @@ func (p PostgreSQLReferenceElementHandler) Create(tx *sql.Tx, submodelID string,
 //	    },
 //	}
 //	id, err := handler.CreateNested(tx, "submodel123", parentID, "Collection.NestedReference", nestedRefElem, 0)
-func (p PostgreSQLReferenceElementHandler) CreateNested(tx *sql.Tx, submodelID string, parentID int, idShortPath string, submodelElement gen.SubmodelElement, pos int, rootSubmodelElementID int) (int, error) {
-	refElem, ok := submodelElement.(*gen.ReferenceElement)
+func (p PostgreSQLReferenceElementHandler) CreateNested(tx *sql.Tx, submodelID string, parentID int, idShortPath string, submodelElement types.ISubmodelElement, pos int, rootSubmodelElementID int) (int, error) {
+	refElem, ok := submodelElement.(*types.ReferenceElement)
 	if !ok {
 		return 0, common.NewErrBadRequest("submodelElement is not of type ReferenceElement")
 	}
@@ -207,8 +208,8 @@ func (p PostgreSQLReferenceElementHandler) CreateNested(tx *sql.Tx, submodelID s
 //
 // Returns:
 //   - error: Any error encountered during the update operation
-func (p PostgreSQLReferenceElementHandler) Update(submodelID string, idShortOrPath string, submodelElement gen.SubmodelElement, tx *sql.Tx, isPut bool) error {
-	refElem, ok := submodelElement.(*gen.ReferenceElement)
+func (p PostgreSQLReferenceElementHandler) Update(submodelID string, idShortOrPath string, submodelElement types.ISubmodelElement, tx *sql.Tx, isPut bool) error {
+	refElem, ok := submodelElement.(*types.ReferenceElement)
 	if !ok {
 		return common.NewErrBadRequest("submodelElement is not of type ReferenceElement")
 	}
@@ -232,12 +233,12 @@ func (p PostgreSQLReferenceElementHandler) Update(submodelID string, idShortOrPa
 	// Handle optional Value field based on isPut flag
 	// For PUT: always update (even if nil, which clears the field)
 	// For PATCH: only update if provided (not nil)
-	if isPut || refElem.Value != nil {
+	if isPut || refElem.Value() != nil {
 		var referenceJSONString sql.NullString
 		var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
-		if refElem.Value != nil && !isEmptyReference(refElem.Value) {
-			bytes, err := json.Marshal(refElem.Value)
+		if refElem.Value() != nil && !isEmptyReference(refElem.Value()) {
+			bytes, err := json.Marshal(refElem.Value())
 			if err != nil {
 				return err
 			}
@@ -350,11 +351,11 @@ func (p PostgreSQLReferenceElementHandler) Delete(idShortOrPath string) error {
 //   - INSERT INTO reference (type) - Creates reference record
 //   - INSERT INTO reference_key (reference_id, position, type, value) - Creates ordered keys
 //   - INSERT INTO reference_element (id, value_ref) - Links element to reference
-func insertReferenceElement(refElem *gen.ReferenceElement, tx *sql.Tx, id int) error {
+func insertReferenceElement(refElem *types.ReferenceElement, tx *sql.Tx, id int) error {
 	var referenceJSONString sql.NullString
 	var json = jsoniter.ConfigCompatibleWithStandardLibrary
-	if !isEmptyReference(refElem.Value) {
-		bytes, err := json.Marshal(refElem.Value)
+	if !isEmptyReference(refElem.Value()) {
+		bytes, err := json.Marshal(refElem.Value())
 		if err != nil {
 			return err
 		}

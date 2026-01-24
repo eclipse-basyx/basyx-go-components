@@ -29,6 +29,8 @@ package logger
 import (
 	"log"
 	"os"
+
+	"github.com/FriedJannik/aas-go-sdk/types"
 )
 
 // Logger provides structured logging for the submodel repository.
@@ -74,6 +76,6 @@ func LogDebug(message string) {
 // Parameters:
 //   - handlerType: The type of handler that failed to create
 //   - err: The error that occurred
-func LogHandlerCreationError(handlerType string, err error) {
+func LogHandlerCreationError(handlerType types.ModelType, err error) {
 	logger.Printf("ERROR: creating %s handler: %v", handlerType, err)
 }

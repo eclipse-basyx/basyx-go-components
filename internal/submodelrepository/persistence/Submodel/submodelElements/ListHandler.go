@@ -270,17 +270,17 @@ func insertSubmodelElementList(smeList *types.SubmodelElementList, tx *sql.Tx, i
 	return err
 }
 
-func buildUpdateListRecordObject(smeList *gen.SubmodelElementList, isPut bool, tx *sql.Tx) (goqu.Record, error) {
+func buildUpdateListRecordObject(smeList types.ISubmodelElementList, isPut bool, tx *sql.Tx) (goqu.Record, error) {
 	updateRecord := goqu.Record{}
 
 	// OrderRelevant is always updated
-	updateRecord["order_relevant"] = smeList.OrderRelevant
+	updateRecord["order_relevant"] = smeList.OrderRelevant()
 
 	if isPut {
 		// PUT: Always update all fields
 		var semanticID sql.NullInt64
-		if smeList.SemanticIdListElement != nil && !isEmptyReference(smeList.SemanticIdListElement) {
-			refID, err := insertReference(tx, *smeList.SemanticIdListElement)
+		if smeList.SemanticIDListElement() != nil && !isEmptyReference(smeList.SemanticIDListElement()) {
+			refID, err := insertReference(tx, smeList.SemanticIDListElement())
 			if err != nil {
 				return nil, err
 			}
@@ -288,22 +288,22 @@ func buildUpdateListRecordObject(smeList *gen.SubmodelElementList, isPut bool, t
 		}
 		updateRecord["semantic_id_list_element"] = semanticID
 
-		var typeValue sql.NullString
+		var typeValue sql.NullInt64
 		if smeList.TypeValueListElement != nil {
-			typeValue = sql.NullString{String: string(*smeList.TypeValueListElement), Valid: true}
+			typeValue = sql.NullInt64{Int64: int64(smeList.TypeValueListElement()), Valid: true}
 		}
 		updateRecord["type_value_list_element"] = typeValue
 
-		var valueType sql.NullString
-		if smeList.ValueTypeListElement != "" {
-			valueType = sql.NullString{String: string(smeList.ValueTypeListElement), Valid: true}
+		var valueType sql.NullInt64
+		if smeList.ValueTypeListElement() != nil {
+			valueType = sql.NullInt64{Int64: int64(*smeList.ValueTypeListElement()), Valid: true}
 		}
 		updateRecord["value_type_list_element"] = valueType
 	} else {
 		// PATCH: Only update provided fields
-		if smeList.SemanticIdListElement != nil {
-			if !isEmptyReference(smeList.SemanticIdListElement) {
-				refID, err := insertReference(tx, *smeList.SemanticIdListElement)
+		if smeList.SemanticIDListElement() != nil {
+			if !isEmptyReference(smeList.SemanticIDListElement()) {
+				refID, err := insertReference(tx, smeList.SemanticIDListElement())
 				if err != nil {
 					return nil, err
 				}
@@ -311,12 +311,10 @@ func buildUpdateListRecordObject(smeList *gen.SubmodelElementList, isPut bool, t
 			}
 		}
 
-		if smeList.TypeValueListElement != nil {
-			updateRecord["type_value_list_element"] = sql.NullString{String: string(*smeList.TypeValueListElement), Valid: true}
-		}
+		updateRecord["type_value_list_element"] = sql.NullInt64{Int64: int64(smeList.TypeValueListElement()), Valid: true}
 
-		if smeList.ValueTypeListElement != "" {
-			updateRecord["value_type_list_element"] = sql.NullString{String: string(smeList.ValueTypeListElement), Valid: true}
+		if smeList.ValueTypeListElement() != nil {
+			updateRecord["value_type_list_element"] = sql.NullInt64{Int64: int64(*smeList.ValueTypeListElement()), Valid: true}
 		}
 	}
 	return updateRecord, nil

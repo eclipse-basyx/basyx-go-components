@@ -36,6 +36,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -149,11 +150,11 @@ func ParseReferredReferences(row json.RawMessage, referenceBuilderRefs map[int64
 //   - Creates new ReferenceBuilder instances for each unique ReferenceId
 //   - Validates key data completeness (KeyID, KeyType, KeyValue)
 //   - Returns only the unique references (one per ReferenceID)
-func ParseReferencesFromRows(semanticIDData []model.ReferenceRow, referenceBuilderRefs map[int64]*ReferenceBuilder, mu *sync.RWMutex) []*model.Reference {
-	resultArray := make([]*model.Reference, 0)
+func ParseReferencesFromRows(semanticIDData []model.ReferenceRow, referenceBuilderRefs map[int64]*ReferenceBuilder, mu *sync.RWMutex) []*types.IReference {
+	resultArray := make([]*types.IReference, 0)
 
 	for _, ref := range semanticIDData {
-		var semanticID *model.Reference
+		var semanticID *types.IReference
 		var semanticIDBuilder *ReferenceBuilder
 
 		// Check if reference already exists
@@ -214,9 +215,9 @@ func ParseReferencesFromRows(semanticIDData []model.ReferenceRow, referenceBuild
 // Returns:
 //   - []*model.Reference: Slice of parsed Reference objects. Each Reference contains all its associated Keys.
 //   - error: An error if JSON unmarshalling fails. Nil key data is logged as warnings but does not cause failure.
-func ParseReferences(row json.RawMessage, referenceBuilderRefs map[int64]*ReferenceBuilder, mu *sync.RWMutex) ([]*model.Reference, error) {
+func ParseReferences(row json.RawMessage, referenceBuilderRefs map[int64]*ReferenceBuilder, mu *sync.RWMutex) ([]*types.IReference, error) {
 	if len(row) == 0 {
-		return make([]*model.Reference, 0), nil
+		return make([]*types.IReference, 0), nil
 	}
 
 	var semanticIDData []model.ReferenceRow

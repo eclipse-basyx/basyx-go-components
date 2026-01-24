@@ -28,7 +28,9 @@ package submodelelements
 
 import (
 	"database/sql"
+	"fmt"
 
+	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/logger"
 )
@@ -38,47 +40,47 @@ type HandlerFactory func(*sql.DB) (PostgreSQLSMECrudInterface, error)
 
 // handlerRegistry maps model type names to their factory functions.
 // This centralizes handler creation and eliminates the large switch statement.
-var handlerRegistry = map[string]HandlerFactory{
-	"AnnotatedRelationshipElement": func(db *sql.DB) (PostgreSQLSMECrudInterface, error) {
+var handlerRegistry = map[types.ModelType]HandlerFactory{
+	types.ModelTypeAnnotatedRelationshipElement: func(db *sql.DB) (PostgreSQLSMECrudInterface, error) {
 		return NewPostgreSQLAnnotatedRelationshipElementHandler(db)
 	},
-	"BasicEventElement": func(db *sql.DB) (PostgreSQLSMECrudInterface, error) {
+	types.ModelTypeBasicEventElement: func(db *sql.DB) (PostgreSQLSMECrudInterface, error) {
 		return NewPostgreSQLBasicEventElementHandler(db)
 	},
-	"Blob": func(db *sql.DB) (PostgreSQLSMECrudInterface, error) {
+	types.ModelTypeBlob: func(db *sql.DB) (PostgreSQLSMECrudInterface, error) {
 		return NewPostgreSQLBlobHandler(db)
 	},
-	"Capability": func(db *sql.DB) (PostgreSQLSMECrudInterface, error) {
+	types.ModelTypeCapability: func(db *sql.DB) (PostgreSQLSMECrudInterface, error) {
 		return NewPostgreSQLCapabilityHandler(db)
 	},
-	"Entity": func(db *sql.DB) (PostgreSQLSMECrudInterface, error) {
+	types.ModelTypeEntity: func(db *sql.DB) (PostgreSQLSMECrudInterface, error) {
 		return NewPostgreSQLEntityHandler(db)
 	},
-	"File": func(db *sql.DB) (PostgreSQLSMECrudInterface, error) {
+	types.ModelTypeFile: func(db *sql.DB) (PostgreSQLSMECrudInterface, error) {
 		return NewPostgreSQLFileHandler(db)
 	},
-	"MultiLanguageProperty": func(db *sql.DB) (PostgreSQLSMECrudInterface, error) {
+	types.ModelTypeMultiLanguageProperty: func(db *sql.DB) (PostgreSQLSMECrudInterface, error) {
 		return NewPostgreSQLMultiLanguagePropertyHandler(db)
 	},
-	"Operation": func(db *sql.DB) (PostgreSQLSMECrudInterface, error) {
+	types.ModelTypeOperation: func(db *sql.DB) (PostgreSQLSMECrudInterface, error) {
 		return NewPostgreSQLOperationHandler(db)
 	},
-	"Property": func(db *sql.DB) (PostgreSQLSMECrudInterface, error) {
+	types.ModelTypeProperty: func(db *sql.DB) (PostgreSQLSMECrudInterface, error) {
 		return NewPostgreSQLPropertyHandler(db)
 	},
-	"Range": func(db *sql.DB) (PostgreSQLSMECrudInterface, error) {
+	types.ModelTypeRange: func(db *sql.DB) (PostgreSQLSMECrudInterface, error) {
 		return NewPostgreSQLRangeHandler(db)
 	},
-	"ReferenceElement": func(db *sql.DB) (PostgreSQLSMECrudInterface, error) {
+	types.ModelTypeReferenceElement: func(db *sql.DB) (PostgreSQLSMECrudInterface, error) {
 		return NewPostgreSQLReferenceElementHandler(db)
 	},
-	"RelationshipElement": func(db *sql.DB) (PostgreSQLSMECrudInterface, error) {
+	types.ModelTypeRelationshipElement: func(db *sql.DB) (PostgreSQLSMECrudInterface, error) {
 		return NewPostgreSQLRelationshipElementHandler(db)
 	},
-	"SubmodelElementCollection": func(db *sql.DB) (PostgreSQLSMECrudInterface, error) {
+	types.ModelTypeSubmodelElementCollection: func(db *sql.DB) (PostgreSQLSMECrudInterface, error) {
 		return NewPostgreSQLSubmodelElementCollectionHandler(db)
 	},
-	"SubmodelElementList": func(db *sql.DB) (PostgreSQLSMECrudInterface, error) {
+	types.ModelTypeSubmodelElementList: func(db *sql.DB) (PostgreSQLSMECrudInterface, error) {
 		return NewPostgreSQLSubmodelElementListHandler(db)
 	},
 }
@@ -93,16 +95,16 @@ var handlerRegistry = map[string]HandlerFactory{
 // Returns:
 //   - PostgreSQLSMECrudInterface: Type-specific handler implementing CRUD operations
 //   - error: An error if the model type is unsupported or handler creation fails
-func GetHandlerFromRegistry(modelType string, db *sql.DB) (PostgreSQLSMECrudInterface, error) {
+func GetHandlerFromRegistry(modelType types.ModelType, db *sql.DB) (PostgreSQLSMECrudInterface, error) {
 	factory, exists := handlerRegistry[modelType]
 	if !exists {
-		return nil, common.NewErrBadRequest("unknown model type: " + modelType)
+		return nil, common.NewErrBadRequest(fmt.Sprintf("unknown model type: %s", modelType))
 	}
 
 	handler, err := factory(db)
 	if err != nil {
 		logger.LogHandlerCreationError(modelType, err)
-		return nil, common.NewInternalServerError("Failed to create " + modelType + " handler. See console for details.")
+		return nil, common.NewInternalServerError(fmt.Sprintf("Failed to create %s handler. See console for details.", modelType))
 	}
 	return handler, nil
 }
@@ -113,13 +115,13 @@ func GetHandlerFromRegistry(modelType string, db *sql.DB) (PostgreSQLSMECrudInte
 // Parameters:
 //   - modelType: The model type name to register
 //   - factory: The factory function that creates handlers for this type
-func RegisterHandler(modelType string, factory HandlerFactory) {
+func RegisterHandler(modelType types.ModelType, factory HandlerFactory) {
 	handlerRegistry[modelType] = factory
 }
 
 // GetSupportedModelTypes returns a list of all model types supported by the registry.
-func GetSupportedModelTypes() []string {
-	types := make([]string, 0, len(handlerRegistry))
+func GetSupportedModelTypes() []types.ModelType {
+	types := make([]types.ModelType, 0, len(handlerRegistry))
 	for t := range handlerRegistry {
 		types = append(types, t)
 	}

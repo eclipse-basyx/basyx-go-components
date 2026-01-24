@@ -30,127 +30,11 @@ CREATE EXTENSION IF NOT EXISTS ltree;
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
 
 -- ------------------------------------------
--- Types
--- ------------------------------------------
-DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'modelling_kind') THEN
-    CREATE TYPE modelling_kind AS ENUM ('Instance', 'Template');
- END IF;
-END $$;
-
-DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'aas_submodel_elements') THEN
-    CREATE TYPE aas_submodel_elements AS ENUM (
-      'AnnotatedRelationshipElement','BasicEventElement','Blob','Capability',
-      'DataElement','Entity','EventElement','File','MultiLanguageProperty',
-      'Operation','Property','Range','ReferenceElement','RelationshipElement',
-      'SubmodelElement','SubmodelElementCollection','SubmodelElementList'
-    );
-  END IF;
-END $$;
-
-DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'data_type_def_xsd') THEN
-    CREATE TYPE data_type_def_xsd AS ENUM (
-      'xs:anyURI','xs:base64Binary','xs:boolean','xs:byte','xs:date','xs:dateTime',
-      'xs:decimal','xs:double','xs:duration','xs:float','xs:gDay','xs:gMonth',
-      'xs:gMonthDay','xs:gYear','xs:gYearMonth','xs:hexBinary','xs:int','xs:integer',
-      'xs:long','xs:negativeInteger','xs:nonNegativeInteger','xs:nonPositiveInteger',
-      'xs:positiveInteger','xs:short','xs:string','xs:time','xs:unsignedByte',
-      'xs:unsignedInt','xs:unsignedLong','xs:unsignedShort'
-    );
-  END IF;
-END $$;
-
-DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'reference_types') THEN
-    CREATE TYPE reference_types AS ENUM ('ExternalReference', 'ModelReference');
-  END IF;
-END $$;
-
-DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'qualifier_kind') THEN
-    CREATE TYPE qualifier_kind AS ENUM ('ConceptQualifier','TemplateQualifier','ValueQualifier');
-  END IF;
-END $$;
-
-DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'entity_type') THEN
-    CREATE TYPE entity_type AS ENUM ('CoManagedEntity','SelfManagedEntity');
-  END IF;
-END $$;
-
-DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'direction') THEN
-    CREATE TYPE direction AS ENUM ('input','output');
-  END IF;
-END $$;
-
-DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'state_of_event') THEN
-    CREATE TYPE state_of_event AS ENUM ('off','on');
-  END IF;
-END $$;
-
-DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'operation_var_role') THEN
-    CREATE TYPE operation_var_role AS ENUM ('in','out','inout');
-  END IF;
-END $$;
-
-DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'key_type') THEN
-    CREATE TYPE key_type AS ENUM ('AnnotatedRelationshipElement','AssetAdministrationShell','BasicEventElement','Blob',
-      'Capability','ConceptDescription','DataElement','Entity','EventElement','File','FragmentReference','GlobalReference','Identifiable',
-      'MultiLanguageProperty','Operation','Property','Range','Referable','ReferenceElement','RelationshipElement','Submodel','SubmodelElement',
-      'SubmodelElementCollection','SubmodelElementList');
-  END IF;
-END $$;
-
-DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'data_type_iec61360') THEN
-    CREATE TYPE data_type_iec61360 AS ENUM (
-      'Date',
-      'String',
-      'StringTranslatable',
-      'IntegerMeasure',
-      'IntegerCount',
-      'IntegerCurrency',
-      'RealMeasure',
-      'RealCount',
-      'RealCurrency',
-      'Boolean',
-      'Iri',
-      'Irdi',
-      'Rational',
-      'RationalMeasure',
-      'Time',
-      'Timestamp',
-      'Html',
-      'Blob',
-      'File'
-    );
-  END IF;
-END $$;
-
-DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'asset_kind') THEN
-    CREATE TYPE asset_kind AS ENUM ('Instance', 'Type', 'Role', 'NotApplicable');
-  END IF;
-END $$;
-
-DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'security_type') THEN
-    CREATE TYPE security_type AS ENUM ('NONE', 'RFC_TLSA', 'W3C_DID');
-  END IF;
-END $$;
-
--- ------------------------------------------
 -- Tables
 -- ------------------------------------------
 CREATE TABLE IF NOT EXISTS reference (
   id           BIGSERIAL PRIMARY KEY,
-  type         reference_types NOT NULL,
+  type         int NOT NULL,
   parentReference BIGINT REFERENCES reference(id),  -- Optional nesting
   rootReference BIGINT REFERENCES reference(id)  -- The root of the nesting tree
 );
@@ -158,7 +42,7 @@ CREATE TABLE IF NOT EXISTS reference_key (
   id           BIGSERIAL PRIMARY KEY,
   reference_id BIGINT NOT NULL REFERENCES reference(id) ON DELETE CASCADE,
   position     INTEGER NOT NULL,                -- <- Array-Index keys[i]
-  type         key_type     NOT NULL,
+  type         int     NOT NULL,
   value        TEXT     NOT NULL,
   UNIQUE(reference_id, position)
 );
@@ -223,7 +107,7 @@ CREATE TABLE IF NOT EXISTS data_specification_iec61360 (
   unit_id           BIGINT REFERENCES reference(id) ON DELETE CASCADE,
   source_of_definition TEXT,
   symbol           TEXT,
-  data_type        data_type_iec61360,
+  data_type        int,
   definition_id    BIGINT REFERENCES lang_string_text_type_reference(id) ON DELETE CASCADE,
   value_format     TEXT,
   value_list_id    BIGINT REFERENCES value_list(id) ON DELETE CASCADE,
@@ -239,7 +123,7 @@ CREATE TABLE IF NOT EXISTS submodel (
   id          varchar(2048) PRIMARY KEY,                 -- Identifiable.id
   id_short    varchar(128),
   category    varchar(128),
-  kind        modelling_kind,
+  kind        int,
   embedded_data_specification JSONB DEFAULT '[]',
   supplemental_semantic_ids JSONB DEFAULT '[]',
   extensions JSONB DEFAULT '[]',
@@ -259,7 +143,7 @@ CREATE TABLE IF NOT EXISTS extension (
   semantic_id BIGINT REFERENCES reference(id) ON DELETE CASCADE,
   name       varchar(128) NOT NULL,
   position   INTEGER,
-  value_type    data_type_def_xsd,
+  value_type    int,
   value_text    TEXT,
   value_num     NUMERIC,
   value_bool    BOOLEAN,
@@ -290,7 +174,7 @@ CREATE TABLE IF NOT EXISTS submodel_element (
   position       INTEGER,                                   -- for ordering in lists
   id_short       varchar(128) NOT NULL,
   category       varchar(128),
-  model_type     aas_submodel_elements NOT NULL,
+  model_type     int NOT NULL,
   embedded_data_specification JSONB DEFAULT '[]',
   supplemental_semantic_ids JSONB DEFAULT '[]',
   extensions JSONB DEFAULT '[]',
@@ -319,7 +203,7 @@ CREATE TABLE IF NOT EXISTS submodel_element_embedded_data_specification (
 );
 CREATE TABLE IF NOT EXISTS property_element (
   id            BIGINT PRIMARY KEY REFERENCES submodel_element(id) ON DELETE CASCADE,
-  value_type    data_type_def_xsd NOT NULL,
+  value_type    int NOT NULL,
   value_text    TEXT,
   value_num     NUMERIC,
   value_bool    BOOLEAN,
@@ -355,7 +239,7 @@ CREATE TABLE IF NOT EXISTS file_data (
 );
 CREATE TABLE IF NOT EXISTS range_element (
   id            BIGINT PRIMARY KEY REFERENCES submodel_element(id) ON DELETE CASCADE,
-  value_type    data_type_def_xsd NOT NULL,
+  value_type    int NOT NULL,
   min_text      TEXT,  max_text      TEXT,
   min_num       NUMERIC, max_num     NUMERIC,
   min_time      TIME,   max_time     TIME,
@@ -382,12 +266,12 @@ CREATE TABLE IF NOT EXISTS submodel_element_list (
   id                         BIGINT PRIMARY KEY REFERENCES submodel_element(id) ON DELETE CASCADE,
   order_relevant             BOOLEAN,
   semantic_id_list_element   BIGINT REFERENCES reference(id),
-  type_value_list_element    aas_submodel_elements NOT NULL,
-  value_type_list_element    data_type_def_xsd
+  type_value_list_element    int NOT NULL,
+  value_type_list_element    int
 );
 CREATE TABLE IF NOT EXISTS entity_element (
   id              BIGINT PRIMARY KEY REFERENCES submodel_element(id) ON DELETE CASCADE,
-  entity_type     entity_type NOT NULL,
+  int     int NOT NULL,
   global_asset_id TEXT,
   specific_asset_ids JSONB DEFAULT '[]'
 );
@@ -407,7 +291,7 @@ CREATE TABLE IF NOT EXISTS operation_element (
 CREATE TABLE IF NOT EXISTS operation_variable (
   id           BIGSERIAL PRIMARY KEY,
   operation_id BIGINT NOT NULL REFERENCES operation_element(id) ON DELETE CASCADE,
-  role         operation_var_role NOT NULL,
+  role         int NOT NULL,
   position     INTEGER NOT NULL,
   value_sme    BIGINT NOT NULL REFERENCES submodel_element(id) ON DELETE CASCADE,
   UNIQUE (operation_id, role, position)
@@ -415,8 +299,8 @@ CREATE TABLE IF NOT EXISTS operation_variable (
 CREATE TABLE IF NOT EXISTS basic_event_element (
   id                BIGINT PRIMARY KEY REFERENCES submodel_element(id) ON DELETE CASCADE,
   observed          JSONB,
-  direction         direction NOT NULL,
-  state             state_of_event NOT NULL,
+  int         int NOT NULL,
+  state             int NOT NULL,
   message_topic     TEXT,
   message_broker    JSONB,
   last_update       TIMESTAMPTZ,
@@ -429,9 +313,9 @@ CREATE TABLE IF NOT EXISTS capability_element (
 CREATE TABLE IF NOT EXISTS qualifier (
   id                BIGSERIAL PRIMARY KEY,
   position          INTEGER NOT NULL,
-  kind              qualifier_kind,
+  kind              int,
   type              TEXT NOT NULL,
-  value_type        data_type_def_xsd NOT NULL,
+  value_type        int NOT NULL,
   value_text        TEXT,
   value_num         NUMERIC,
   value_bool        BOOLEAN,
@@ -497,7 +381,7 @@ CREATE TABLE IF NOT EXISTS aas_descriptor_endpoint (
 CREATE TABLE IF NOT EXISTS security_attributes (
   id BIGSERIAL NOT NULL PRIMARY KEY,
   endpoint_id BIGINT NOT NULL REFERENCES aas_descriptor_endpoint(id) ON DELETE CASCADE,
-  security_type security_type NOT NULL,
+  int int NOT NULL,
   security_key TEXT NOT NULL,
   security_value TEXT NOT NULL
 );
@@ -515,7 +399,7 @@ CREATE TABLE IF NOT EXISTS aas_descriptor (
   description_id BIGINT REFERENCES lang_string_text_type_reference(id) ON DELETE SET NULL,
   displayname_id BIGINT REFERENCES lang_string_name_type_reference(id) ON DELETE SET NULL,
   administrative_information_id BIGINT REFERENCES administrative_information(id) ON DELETE CASCADE,
-  asset_kind asset_kind,
+  int int,
   asset_type VARCHAR(2048),
   global_asset_id VARCHAR(2048),
   id_short VARCHAR(128),
@@ -724,7 +608,7 @@ CREATE INDEX IF NOT EXISTS ix_aas_endpoint_position ON aas_descriptor_endpoint(p
 
 -- security_attributes
 CREATE INDEX IF NOT EXISTS ix_secattr_endpoint_id          ON security_attributes(endpoint_id);
-CREATE INDEX IF NOT EXISTS ix_secattr_type                 ON security_attributes(security_type);
+CREATE INDEX IF NOT EXISTS ix_secattr_type                 ON security_attributes(int);
 CREATE INDEX IF NOT EXISTS ix_secattr_key                  ON security_attributes(security_key);
 
 -- endpoint_protocol_version
@@ -745,9 +629,9 @@ CREATE INDEX IF NOT EXISTS ix_aasd_global_asset_id         ON aas_descriptor(glo
 CREATE INDEX IF NOT EXISTS ix_aasd_id_trgm                 ON aas_descriptor USING GIN (id gin_trgm_ops);
 CREATE INDEX IF NOT EXISTS ix_aasd_global_asset_id_trgm    ON aas_descriptor USING GIN (global_asset_id gin_trgm_ops);
 -- Asset kind/type filters
-CREATE INDEX IF NOT EXISTS ix_aasd_asset_kind              ON aas_descriptor(asset_kind);
+CREATE INDEX IF NOT EXISTS ix_aasd_asset_kind              ON aas_descriptor(int);
 CREATE INDEX IF NOT EXISTS ix_aasd_asset_type              ON aas_descriptor(asset_type);
-CREATE INDEX IF NOT EXISTS ix_aasd_asset_kind_type         ON aas_descriptor(asset_kind, asset_type);
+CREATE INDEX IF NOT EXISTS ix_aasd_asset_kind_type         ON aas_descriptor(int, asset_type);
 
 -- submodel_descriptor
 CREATE INDEX IF NOT EXISTS ix_smd_aas_descriptor_id        ON submodel_descriptor(aas_descriptor_id);

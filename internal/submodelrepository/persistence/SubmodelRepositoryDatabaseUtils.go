@@ -34,7 +34,6 @@ import (
 
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
-	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -62,7 +61,7 @@ type smeJob struct {
 
 type smeResult struct {
 	id   string
-	smes []gen.SubmodelElement
+	smes []types.ISubmodelElement
 	err  error
 }
 
@@ -266,16 +265,16 @@ func getSupplementalSemanticIDsJSONStringFromSubmodel(sm *types.Submodel) (strin
 	return supplementalSemanticIDs, nil
 }
 
-func getSubmodelElementModelTypeByIDShortPathAndSubmodelID(db *sql.DB, submodelID string, idShortOrPath string) (string, error) {
-	var modelType string
+func getSubmodelElementModelTypeByIDShortPathAndSubmodelID(db *sql.DB, submodelID string, idShortOrPath string) (*types.ModelType, error) {
+	var modelType types.ModelType
 	err := db.QueryRow(`SELECT model_type FROM submodel_element WHERE submodel_id = $1 AND idshort_path = $2`, submodelID, idShortOrPath).Scan(&modelType)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return "", common.NewErrNotFound("Submodel element not found")
+			return nil, common.NewErrNotFound("Submodel element not found")
 		}
-		return "", common.NewInternalServerError(fmt.Sprintf("Failed to get ModelType for SubmodelElement %s", idShortOrPath))
+		return nil, common.NewInternalServerError(fmt.Sprintf("Failed to get ModelType for SubmodelElement %s", idShortOrPath))
 	}
-	return modelType, nil
+	return &modelType, nil
 }
 
 func processByModelType(newParentID int, idShortPath string, current ElementToProcess, stack []ElementToProcess) ([]ElementToProcess, error) {

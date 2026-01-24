@@ -265,7 +265,7 @@ func (p PostgreSQLAnnotatedRelationshipElementHandler) UpdateValueOnly(submodelI
 		var json = jsoniter.ConfigCompatibleWithStandardLibrary
 		var firstRef, secondRef *string
 
-		if len(areValue.First.Keys) > 0 {
+		if len(areValue.First.Keys()) > 0 {
 			ref, err := json.Marshal(areValue.First)
 			if err != nil {
 				return err
@@ -274,7 +274,7 @@ func (p PostgreSQLAnnotatedRelationshipElementHandler) UpdateValueOnly(submodelI
 			firstRef = &refStr
 		}
 
-		if len(areValue.Second.Keys) > 0 {
+		if len(areValue.Second.Keys()) > 0 {
 			ref, err := json.Marshal(areValue.Second)
 			if err != nil {
 				return err

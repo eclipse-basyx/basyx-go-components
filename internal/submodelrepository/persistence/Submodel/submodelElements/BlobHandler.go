@@ -260,7 +260,13 @@ func (p PostgreSQLBlobHandler) UpdateValueOnly(submodelID string, idShortOrPath 
 		if fileValueOnly, isMistakenAsFileValue = valueOnly.(gen.FileValue); !isMistakenAsFileValue {
 			return common.NewErrBadRequest("valueOnly is not of type BlobValue")
 		}
-		blobValueOnly = gen.BlobValue(fileValueOnly)
+
+		bytea := []byte(*fileValueOnly.Value)
+
+		blobValueOnly = gen.BlobValue{
+			ContentType: fileValueOnly.ContentType,
+			Value:       bytea,
+		}
 	}
 
 	// Check if blob value is larger than 1GB

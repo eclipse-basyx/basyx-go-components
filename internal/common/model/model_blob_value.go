@@ -34,13 +34,17 @@
 //nolint:all
 package model
 
-import "encoding/json"
+import (
+	"encoding/json"
+
+	"github.com/FriedJannik/aas-go-sdk/types"
+)
 
 // BlobValue type of Blob
 type BlobValue struct {
-	ContentType string `json:"contentType,omitempty"`
+	ContentType *string `json:"contentType,omitempty"`
 
-	Value string `json:"value,omitempty"`
+	Value []byte `json:"value,omitempty"`
 }
 
 // MarshalValueOnly serializes BlobValue in Value-Only format
@@ -55,8 +59,8 @@ func (b BlobValue) MarshalJSON() ([]byte, error) {
 }
 
 // GetModelType returns the model type name for Blob
-func (b BlobValue) GetModelType() string {
-	return "Blob"
+func (b BlobValue) GetModelType() types.ModelType {
+	return types.ModelTypeBlob
 }
 
 // AssertBlobValueRequired checks if the required fields are not zero-ed
