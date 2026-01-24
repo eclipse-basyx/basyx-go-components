@@ -3,6 +3,7 @@ package main
 
 import (
 	"context"
+	"embed"
 	"flag"
 	"fmt"
 	"log"
@@ -15,6 +16,9 @@ import (
 	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/discoveryapi"
 	"github.com/go-chi/chi/v5"
 )
+
+//go:embed openapi.yaml
+var openapiSpec embed.FS
 
 func runServer(ctx context.Context, configPath string) error {
 	log.Default().Println("Loading Discovery Service...")
@@ -32,6 +36,11 @@ func runServer(ctx context.Context, configPath string) error {
 
 	// --- Health Endpoint (public) ---
 	common.AddHealthEndpoint(r, cfg)
+
+	// Add Swagger UI
+	if err := common.AddSwaggerUIFromFS(r, openapiSpec, "openapi.yaml", "Discovery Service API", "/swagger", "/api-docs/openapi.yaml", cfg); err != nil {
+		log.Printf("Warning: failed to load OpenAPI spec for Swagger UI: %v", err)
+	}
 
 	// === Database ===
 	dsn := fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=disable",

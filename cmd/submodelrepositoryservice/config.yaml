@@ -14,5 +14,10 @@ postgres:
   maxIdleConnections: 500
   connMaxLifetimeMinutes: 5
 
-jws:
-  privateKeyPath: "./rsa-key.pem"
+# jws:
+#   privateKeyPath: "./rsa-key.pem"
+
+# swagger:
+#   contactName: "Eclipse BaSyx"
+#   contactEmail: "basyx-dev@eclipse.org"
+#   contactUrl: "https://basyx.org"

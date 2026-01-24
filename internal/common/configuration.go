@@ -8,6 +8,7 @@ package common
 import (
 	"fmt"
 	"log"
+	"os"
 	"reflect"
 	"strings"
 
@@ -83,9 +84,10 @@ type Config struct {
 	Postgres   PostgresConfig `mapstructure:"postgres" yaml:"postgres"` // PostgreSQL database settings
 	CorsConfig CorsConfig     `mapstructure:"cors" yaml:"cors"`         // CORS policy configuration
 
-	OIDC OIDCConfig `mapstructure:"oidc" yaml:"oidc"` // OpenID Connect authentication
-	ABAC ABACConfig `mapstructure:"abac" yaml:"abac"` // Attribute-Based Access Control
-	JWS  JWSConfig  `mapstructure:"jws" yaml:"jws"`   // JWS signing configuration
+	OIDC    OIDCConfig    `mapstructure:"oidc" yaml:"oidc"`       // OpenID Connect authentication
+	ABAC    ABACConfig    `mapstructure:"abac" yaml:"abac"`       // Attribute-Based Access Control
+	JWS     JWSConfig     `mapstructure:"jws" yaml:"jws"`         // JWS signing configuration
+	Swagger SwaggerConfig `mapstructure:"swagger" yaml:"swagger"` // Swagger UI configuration
 }
 
 // JWSConfig contains JSON Web Signature configuration parameters.
@@ -93,8 +95,16 @@ type JWSConfig struct {
 	PrivateKeyPath string `mapstructure:"privateKeyPath" yaml:"privateKeyPath"` // Path to the RSA private key for signing
 }
 
+// SwaggerConfig contains Swagger UI configuration parameters.
+type SwaggerConfig struct {
+	ContactName  string `mapstructure:"contactName" yaml:"contactName"`   // Contact name for OpenAPI spec
+	ContactEmail string `mapstructure:"contactEmail" yaml:"contactEmail"` // Contact email for OpenAPI spec
+	ContactURL   string `mapstructure:"contactUrl" yaml:"contactUrl"`     // Contact URL for OpenAPI spec
+}
+
 // ServerConfig contains HTTP server configuration parameters.
 type ServerConfig struct {
+	Host         string `mapstructure:"host" yaml:"host"`                 // HTTP server host (default: 0.0.0.0)
 	Port         int    `mapstructure:"port" yaml:"port"`                 // HTTP server port (default: 5004)
 	ContextPath  string `mapstructure:"contextPath" yaml:"contextPath"`   // Base path for all endpoints
 	CacheEnabled bool   `mapstructure:"cacheEnabled" yaml:"cacheEnabled"` // Enable/disable response caching
@@ -237,6 +247,14 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("abac.enableDebugErrorResponses", false)
 	v.SetDefault("abac.modelPath", "config/access_rules/access-rules.json")
 
+	// JWS defaults
+	v.SetDefault("jws.privateKeyPath", "")
+
+	// Swagger defaults
+	v.SetDefault("swagger.contactName", "Eclipse BaSyx")
+	v.SetDefault("swagger.contactEmail", "basyx-dev@eclipse.org")
+	v.SetDefault("swagger.contactUrl", "https://basyx.org")
+
 }
 
 // PrintConfiguration prints the current configuration to the console with sensitive data redacted.
@@ -315,6 +333,23 @@ func PrintConfiguration(cfg *Config) {
 
 		lines = append(lines, "🔹 OIDC:")
 		add("Trustlist Path", cfg.OIDC.TrustlistPath, DefaultConfig.OIDCTrustlistPath)
+	}
+
+	lines = append(lines, divider)
+
+	// JWS
+	lines = append(lines, "🔹 JWS:")
+	if cfg.JWS.PrivateKeyPath != "" {
+		lines = append(lines, fmt.Sprintf("  Private Key Path: %s", cfg.JWS.PrivateKeyPath))
+		// Check if file exists
+		if _, err := os.Stat(cfg.JWS.PrivateKeyPath); err == nil {
+			lines = append(lines, "  Private Key Mounted: true ✅")
+		} else {
+			lines = append(lines, "  Private Key Mounted: false ❌")
+		}
+	} else {
+		lines = append(lines, "  Private Key Path: (not configured)")
+		lines = append(lines, "  Private Key Mounted: false")
 	}
 
 	lines = append(lines, divider)

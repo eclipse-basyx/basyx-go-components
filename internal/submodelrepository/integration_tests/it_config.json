@@ -1874,6 +1874,20 @@
         "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements",
         "data": "bodies/post/postNewProperty.json",
         "expectedStatus": 409
+    },
+    {
+        "context": "GET Signed Submodel",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/$signed",
+        "shouldMatch": "expected/expectedSignedSubmodel.json",
+        "expectedStatus": 200   
+    },
+    {
+        "context": "GET Signed Submodel Value Only",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/$value/$signed",
+        "shouldMatch": "expected/expectedSignedSubmodelValueOnly.json",
+        "expectedStatus": 200   
     }
 
 ]
