@@ -2,8 +2,8 @@
   "AllAccessPermissionRules": {
     "DEFATTRIBUTES": [
       { "name": "anonym_attr", "attributes": [ { "GLOBAL": "ANONYMOUS" } ] },
-      { "name": "role_attr", "attributes": [ { "CLAIM": "role" } ] },
-      { "name": "member_attr", "attributes": [ { "CLAIM": "role" }, { "CLAIM": "clear" } ] }
+      { "name": "role_attr", "attributes": [ { "CLAIM": "email" } ] },
+      { "name": "member_attr", "attributes": [ { "CLAIM": "email" }, { "CLAIM": "clear" } ] }
     ],
 
     "DEFOBJECTS": [
@@ -20,7 +20,7 @@
 
     "DEFFORMULAS": [
       { "name": "always_true", "formula": { "$boolean": true } },
-      { "name": "role_is_admin", "formula": { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "admin" } ] } },
+      { "name": "role_is_admin", "formula": { "$eq": [ { "$attribute": { "CLAIM": "email" } }, { "$strVal": "martin-stemmer@iese.fraunhofer.de" } ] } },
       { 
         "name": "role_is_viewer_written_x", 
         "formula": { 

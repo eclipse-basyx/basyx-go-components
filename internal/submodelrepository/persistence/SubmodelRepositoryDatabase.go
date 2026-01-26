@@ -31,7 +31,9 @@
 package persistencepostgresql
 
 import (
+	"crypto/rsa"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -43,6 +45,7 @@ import (
 	"github.com/doug-martin/goqu/v9"
 	_ "github.com/doug-martin/goqu/v9/dialect/postgres" // Postgres Driver for Goqu
 	"golang.org/x/sync/errgroup"
+	"gopkg.in/go-jose/go-jose.v2"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
@@ -56,7 +59,8 @@ import (
 // PostgreSQLSubmodelDatabase represents a PostgreSQL-based implementation of the submodel repository database.
 // It provides methods for CRUD operations on submodels and their elements with optional caching support.
 type PostgreSQLSubmodelDatabase struct {
-	db *sql.DB
+	db         *sql.DB
+	privateKey *rsa.PrivateKey // RSA private key for JWS signing
 }
 
 // Transaction error variables moved to smrepoerrors package for centralized error handling
@@ -77,12 +81,12 @@ var beginTransactionErrorSubmodelRepo = smrepoerrors.ErrTransactionBeginFailed
 // Returns:
 //   - *PostgreSQLSubmodelDatabase: Configured database instance
 //   - error: Error if database initialization fails
-func NewPostgreSQLSubmodelBackend(dsn string, _ int32 /* maxOpenConns */, _ /* maxIdleConns */ int, _ /* connMaxLifetimeMinutes */ int, databaseSchema string) (*PostgreSQLSubmodelDatabase, error) {
+func NewPostgreSQLSubmodelBackend(dsn string, _ int32 /* maxOpenConns */, _ /* maxIdleConns */ int, _ /* connMaxLifetimeMinutes */ int, databaseSchema string, privateKey *rsa.PrivateKey) (*PostgreSQLSubmodelDatabase, error) {
 	db, err := common.InitializeDatabase(dsn, databaseSchema)
 	if err != nil {
 		return nil, err
 	}
-	return &PostgreSQLSubmodelDatabase{db: db}, nil
+	return &PostgreSQLSubmodelDatabase{db: db, privateKey: privateKey}, nil
 }
 
 // GetDB returns the underlying SQL database connection.
@@ -422,6 +426,54 @@ func (p *PostgreSQLSubmodelDatabase) GetSubmodel(id string, valueOnly bool) (gen
 	}
 
 	return *res.sm, nil
+}
+
+// GetSignedSubmodel retrieves a submodel by its ID and returns it as a JWS-signed compact serialization.
+//
+// Parameters:
+//   - id: Unique identifier of the submodel to retrieve and sign
+//   - valueOnly: If true, returns only the value representation
+//
+// Returns:
+//   - string: JWS compact serialization of the signed submodel JSON
+//   - error: Error if submodel not found, private key not configured, or signing fails
+func (p *PostgreSQLSubmodelDatabase) GetSignedSubmodel(id string, valueOnly bool) (string, error) {
+	// Get the submodel from database
+	submodel, err := p.GetSubmodel(id, valueOnly)
+	if err != nil {
+		return "", err
+	}
+
+	// Check if private key is configured
+	if p.privateKey == nil {
+		return "", errors.New("JWS signing not configured: private key not loaded")
+	}
+
+	// Marshal submodel to JSON
+	payload, err := json.Marshal(submodel)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal submodel: %w", err)
+	}
+
+	// Create JWS signer with RS256
+	signer, err := jose.NewSigner(jose.SigningKey{Algorithm: jose.RS256, Key: p.privateKey}, nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to create JWS signer: %w", err)
+	}
+
+	// Sign the payload
+	jws, err := signer.Sign(payload)
+	if err != nil {
+		return "", fmt.Errorf("failed to sign submodel: %w", err)
+	}
+
+	// Get compact serialization
+	compactSerialized, err := jws.CompactSerialize()
+	if err != nil {
+		return "", fmt.Errorf("failed to serialize JWS: %w", err)
+	}
+
+	return compactSerialized, nil
 }
 
 // DeleteSubmodel removes a submodel and all its associated data from the database.
@@ -1196,4 +1248,9 @@ func doesSubmodelElementExist(tx *sql.Tx, submodelID string, idShortOrPath strin
 	}
 
 	return count > 0, nil
+}
+
+// GetPrivateKey returns the RSA private key for JWS signing.
+func (p *PostgreSQLSubmodelDatabase) GetPrivateKey() *rsa.PrivateKey {
+	return p.privateKey
 }

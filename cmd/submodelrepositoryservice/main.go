@@ -3,6 +3,8 @@ package main
 
 import (
 	"context"
+	"crypto/rsa"
+	"embed"
 	"flag"
 	"fmt"
 	"log"
@@ -13,10 +15,14 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/jws"
 	"github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/api"
 	persistencepostgresql "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence"
 	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/submodelrepositoryapi/go"
 )
+
+//go:embed openapi.yaml
+var openapiSpec embed.FS
 
 func runServer(ctx context.Context, configPath string, databaseSchema string) error {
 	log.Default().Println("Loading Submodel Repository Service...")
@@ -36,9 +42,26 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	// Add health endpoint
 	common.AddHealthEndpoint(r, config)
 
+	// Add Swagger UI
+	if err := common.AddSwaggerUIFromFS(r, openapiSpec, "openapi.yaml", "Submodel Repository API", "/swagger", "/api-docs/openapi.yaml", config); err != nil {
+		log.Printf("Warning: failed to load OpenAPI spec for Swagger UI: %v", err)
+	}
+
 	// Instantiate generated services & controllers
 	// ==== Submodel Repository Service ====
-	smDatabase, err := persistencepostgresql.NewPostgreSQLSubmodelBackend("postgres://"+config.Postgres.User+":"+config.Postgres.Password+"@"+config.Postgres.Host+":"+strconv.Itoa(config.Postgres.Port)+"/"+config.Postgres.DBName+"?sslmode=disable", config.Postgres.MaxOpenConnections, config.Postgres.MaxIdleConnections, config.Postgres.ConnMaxLifetimeMinutes, databaseSchema)
+
+	// Load JWS private key if configured
+	var privateKey *rsa.PrivateKey
+	if config.JWS.PrivateKeyPath != "" {
+		privateKey, err = jws.LoadPrivateKey(config.JWS.PrivateKeyPath)
+		if err != nil {
+			log.Printf("Warning: failed to load JWS private key: %v - /$signed Endpoints will be unavailable", err)
+		} else {
+			log.Println("JWS private key loaded successfully")
+		}
+	}
+
+	smDatabase, err := persistencepostgresql.NewPostgreSQLSubmodelBackend("postgres://"+config.Postgres.User+":"+config.Postgres.Password+"@"+config.Postgres.Host+":"+strconv.Itoa(config.Postgres.Port)+"/"+config.Postgres.DBName+"?sslmode=disable", config.Postgres.MaxOpenConnections, config.Postgres.MaxIdleConnections, config.Postgres.ConnMaxLifetimeMinutes, databaseSchema, privateKey)
 	if err != nil {
 		return err
 	}

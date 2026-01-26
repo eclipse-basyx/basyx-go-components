@@ -1,0 +1,7 @@
+[
+  {
+    "issuer": "http://keycloak.basyx.localhost/realms/basyx",
+    "audience": "discovery-service",
+    "scopes": ["email", "profile"]
+  }
+]

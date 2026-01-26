@@ -13,6 +13,7 @@ package main
 
 import (
 	"context"
+	"embed"
 	"flag"
 	"fmt"
 	"log"
@@ -26,6 +27,9 @@ import (
 	apis "github.com/eclipse-basyx/basyx-go-components/pkg/aasregistryapi"
 	"github.com/go-chi/chi/v5"
 )
+
+//go:embed openapi.yaml
+var openapiSpec embed.FS
 
 func runServer(ctx context.Context, configPath string, databaseSchema string) error {
 	log.Default().Println("Loading AAS Registry Service...")
@@ -43,6 +47,11 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 
 	common.AddCors(r, cfg)
 	common.AddHealthEndpoint(r, cfg)
+
+	// Add Swagger UI
+	if err := common.AddSwaggerUIFromFS(r, openapiSpec, "openapi.yaml", "AAS Registry Service API", "/swagger", "/api-docs/openapi.yaml", cfg); err != nil {
+		log.Printf("Warning: failed to load OpenAPI spec for Swagger UI: %v", err)
+	}
 
 	dsn := fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=disable",
 		cfg.Postgres.User,
