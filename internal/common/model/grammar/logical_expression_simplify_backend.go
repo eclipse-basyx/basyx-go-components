@@ -232,6 +232,12 @@ func (le LogicalExpression) SimplifyForBackendFilter(resolve AttributeResolver) 
 	return le, SimplifyUndecided
 }
 
+// SimplifyForBackendFilterNoResolver runs SimplifyForBackendFilter with a no-op resolver.
+// Attributes will remain unresolved, so only literal-only subexpressions can be reduced.
+func (le LogicalExpression) SimplifyForBackendFilterNoResolver() (LogicalExpression, SimplifyDecision) {
+	return le.SimplifyForBackendFilter(func(AttributeValue) any { return nil })
+}
+
 func simplifyMatchExpressionsForBackendFilter(match []MatchExpression, resolve AttributeResolver) ([]MatchExpression, SimplifyDecision) {
 	if len(match) == 0 {
 		return nil, SimplifyUndecided

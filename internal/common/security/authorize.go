@@ -145,6 +145,7 @@ func MergeQueryFilter(ctx context.Context, query grammar.Query) context.Context 
 	if query.Condition != nil {
 		if qf.Formula != nil {
 			combinedQuery := grammar.LogicalExpression{And: []grammar.LogicalExpression{*qf.Formula, *query.Condition}}
+			combinedQuery, _ = combinedQuery.SimplifyForBackendFilterNoResolver()
 			qf.Formula = &combinedQuery
 		} else {
 			qf.Formula = query.Condition
@@ -160,6 +161,7 @@ func MergeQueryFilter(ctx context.Context, query grammar.Query) context.Context 
 		}
 		if existing, ok := qf.Filters[*filterCond.Fragment]; ok {
 			combinedQuery := grammar.LogicalExpression{And: []grammar.LogicalExpression{existing, *filterCond.Condition}}
+			combinedQuery, _ = combinedQuery.SimplifyForBackendFilterNoResolver()
 			qf.Filters[*filterCond.Fragment] = combinedQuery
 		} else {
 			qf.Filters[*filterCond.Fragment] = *filterCond.Condition
