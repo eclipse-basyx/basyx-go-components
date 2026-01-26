@@ -561,28 +561,7 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) DeleteSubmodelDescriptor
 // QueryAssetAdministrationShellDescriptors - Returns all Asset Administration Shell Descriptors that confirm to the input query
 // nolint:revive // defined by standard
 func (s *AssetAdministrationShellRegistryAPIAPIService) QueryAssetAdministrationShellDescriptors(ctx context.Context, limit int32, cursor string, query grammar.Query) (model.ImplResponse, error) {
-	// TODO - update QueryAssetAdministrationShellDescriptors with the required logic for this service method.
-	// Add api_asset_administration_shell_registry_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
-
-	// TODO: Uncomment the next line to return response Response(200, QueryResultAssetAdministrationShellDescriptor{}) or use other options such as http.Ok ...
-	// return Response(200, QueryResultAssetAdministrationShellDescriptor{}), nil
-
-	// TODO: Uncomment the next line to return response Response(400, Result{}) or use other options such as http.Ok ...
-	// return Response(400, Result{}), nil
-
-	// TODO: Uncomment the next line to return response Response(401, Result{}) or use other options such as http.Ok ...
-	// return Response(401, Result{}), nil
-
-	// TODO: Uncomment the next line to return response Response(403, Result{}) or use other options such as http.Ok ...
-	// return Response(403, Result{}), nil
-
-	// TODO: Uncomment the next line to return response Response(500, Result{}) or use other options such as http.Ok ...
-	// return Response(500, Result{}), nil
-
-	// TODO: Uncomment the next line to return response Response(0, Result{}) or use other options such as http.Ok ...
-	// return Response(0, Result{}), nil
-
-	auth.MergeQueryFilter(ctx, query)
+	ctx = auth.MergeQueryFilter(ctx, query)
 
 	aasds, nextCursor, err := s.aasRegistryBackend.ListAssetAdministrationShellDescriptors(ctx, limit, cursor, "", "")
 	if err != nil {

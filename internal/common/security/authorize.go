@@ -136,7 +136,7 @@ func GetQueryFilter(ctx context.Context) *QueryFilter {
 
 // MergeQueryFilter combines an existing QueryFilter with a user query.
 // It guards nils and merges conditions and filter fragments using logical AND.
-func MergeQueryFilter(ctx context.Context, query grammar.Query) {
+func MergeQueryFilter(ctx context.Context, query grammar.Query) context.Context {
 	qf := GetQueryFilter(ctx)
 	if qf == nil {
 		qf = &QueryFilter{}
@@ -165,4 +165,6 @@ func MergeQueryFilter(ctx context.Context, query grammar.Query) {
 			qf.Filters[*filterCond.Fragment] = *filterCond.Condition
 		}
 	}
+
+	return context.WithValue(ctx, filterKey, qf)
 }

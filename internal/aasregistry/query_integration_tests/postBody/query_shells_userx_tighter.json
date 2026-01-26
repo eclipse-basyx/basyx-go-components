@@ -1,0 +1,38 @@
+{
+  "$condition": {
+    "$and": [
+      {
+        "$eq": [
+          { "$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value" },
+          { "$strVal": "WRITTEN_BY_X" }
+        ]
+      },
+      {
+        "$eq": [
+          { "$field": "$aasdesc#specificAssetIds[].name" },
+          { "$strVal": "Banane" }
+        ]
+      }
+    ]
+  },
+  "$filters": [
+    {
+      "$fragment": "$aasdesc#specificAssetIds[]",
+      "$condition": {
+        "$eq": [
+          { "$field": "$aasdesc#specificAssetIds[].name" },
+          { "$strVal": "Banane" }
+        ]
+      }
+    },
+    {
+      "$fragment": "$aasdesc#specificAssetIds[].name",
+      "$condition": {
+        "$eq": [
+          { "$field": "$aasdesc#specificAssetIds[].name" },
+          { "$strVal": "Banane" }
+        ]
+      }
+    }
+  ]
+}
