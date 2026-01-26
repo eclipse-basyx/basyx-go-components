@@ -21,6 +21,7 @@ import (
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -749,7 +750,7 @@ func (c *AssetAdministrationShellRegistryAPIAPIController) QueryAssetAdministrat
 	if query.Has("cursor") {
 		cursorParam = query.Get("cursor")
 	}
-	var queryParam model.Query
+	var queryParam grammar.Query
 	d := json.NewDecoder(r.Body)
 	d.DisallowUnknownFields()
 	if err := d.Decode(&queryParam); err != nil && !errors.Is(err, io.EOF) {
@@ -764,7 +765,7 @@ func (c *AssetAdministrationShellRegistryAPIAPIController) QueryAssetAdministrat
 		EncodeJSONResponse(result.Body, &result.Code, w)
 		return
 	}
-	if err := model.AssertQueryRequired(queryParam); err != nil {
+	if err := grammar.AssertQueryRequired(queryParam); err != nil {
 		log.Printf("🧩 [%s] Error in QueryAssetAdministrationShellDescriptors: required validation failed: %v", componentName, err)
 		result := common.NewErrorResponse(
 			err,
@@ -776,7 +777,7 @@ func (c *AssetAdministrationShellRegistryAPIAPIController) QueryAssetAdministrat
 		EncodeJSONResponse(result.Body, &result.Code, w)
 		return
 	}
-	if err := model.AssertQueryConstraints(queryParam); err != nil {
+	if err := grammar.AssertQueryConstraints(queryParam); err != nil {
 		log.Printf("🧩 [%s] Error in QueryAssetAdministrationShellDescriptors: constraints validation failed: %v", componentName, err)
 		result := common.NewErrorResponse(
 			err,

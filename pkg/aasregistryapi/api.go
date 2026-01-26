@@ -16,6 +16,7 @@ import (
 	"net/http"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 )
 
 // AssetAdministrationShellRegistryAPIAPIRouter defines the required methods for binding the api requests to a responses for the AssetAdministrationShellRegistryAPIAPI
@@ -57,7 +58,7 @@ type AssetAdministrationShellRegistryAPIAPIServicer interface {
 	GetSubmodelDescriptorByIdThroughSuperpath(context.Context, string, string) (model.ImplResponse, error)
 	PutSubmodelDescriptorByIdThroughSuperpath(context.Context, string, string, model.SubmodelDescriptor) (model.ImplResponse, error)
 	DeleteSubmodelDescriptorByIdThroughSuperpath(context.Context, string, string) (model.ImplResponse, error)
-	QueryAssetAdministrationShellDescriptors(context.Context, int32, string, model.Query) (model.ImplResponse, error)
+	QueryAssetAdministrationShellDescriptors(context.Context, int32, string, grammar.Query) (model.ImplResponse, error)
 }
 
 // DescriptionAPIAPIServicer defines the api actions for the DescriptionAPIAPI service

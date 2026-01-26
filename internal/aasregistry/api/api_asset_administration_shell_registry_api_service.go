@@ -45,6 +45,7 @@ import (
 	persistence_postgresql "github.com/eclipse-basyx/basyx-go-components/internal/aasregistry/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 )
 
 const (
@@ -557,7 +558,8 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) DeleteSubmodelDescriptor
 }
 
 // QueryAssetAdministrationShellDescriptors - Returns all Asset Administration Shell Descriptors that confirm to the input query
-func (s *AssetAdministrationShellRegistryAPIAPIService) QueryAssetAdministrationShellDescriptors(ctx context.Context, limit int32, cursor string, query model.Query) (model.ImplResponse, error) {
+// nolint:revive // defined by standard
+func (s *AssetAdministrationShellRegistryAPIAPIService) QueryAssetAdministrationShellDescriptors(ctx context.Context, limit int32, cursor string, query grammar.Query) (model.ImplResponse, error) {
 	// TODO - update QueryAssetAdministrationShellDescriptors with the required logic for this service method.
 	// Add api_asset_administration_shell_registry_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
 

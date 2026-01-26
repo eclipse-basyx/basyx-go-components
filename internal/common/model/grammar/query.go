@@ -33,6 +33,7 @@ import (
 	"fmt"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
 
 // Query represents a query structure with a condition field
@@ -62,5 +63,34 @@ func (j *QueryWrapper) UnmarshalJSON(value []byte) error {
 		return err
 	}
 	*j = QueryWrapper(plain)
+	return nil
+}
+
+// AssertQueryRequired checks if the required fields are not zero-ed
+func AssertQueryRequired(obj Query) error {
+	elements := map[string]interface{}{
+		"$condition": obj.Condition,
+	}
+	for name, el := range elements {
+		if isZero := model.IsZeroValue(el); isZero {
+			return &model.RequiredError{Field: name}
+		}
+	}
+
+	if obj.Condition != nil {
+		if err := AssertLogicalExpressionRequired(*obj.Condition); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// AssertQueryConstraints checks if the values respects the defined constraints
+func AssertQueryConstraints(obj Query) error {
+	if obj.Condition != nil {
+		if err := AssertLogicalExpressionConstraints(*obj.Condition); err != nil {
+			return err
+		}
+	}
 	return nil
 }
