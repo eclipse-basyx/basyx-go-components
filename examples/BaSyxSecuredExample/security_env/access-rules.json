@@ -28,11 +28,17 @@
       { "USEACL": "read_anonymous", "USEOBJECTS": ["description"], "USEFORMULA": "always_true" },
       { "USEACL": "write_admin", "USEOBJECTS": ["all_shell_descriptors", "all_assetlinks"], "USEFORMULA": "role_is_admin" },
       { "USEACL": "read_role", "USEOBJECTS": ["all_shell_descriptors", "all_assetlinks"], "FORMULA": 
-        {"$and": [
-          {"$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "viewer" } ] },
-          {"$starts-with": [{"$field": "$aasdesc#globalAssetId"}, {"$strVal": "https://htw-berlin.de"}]}
-        ]
-      }}
+
+            {"$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "viewer" } ] },
+
+        "FILTER": {
+          "FRAGMENT": "$aasdesc#specificAssetIds[].externalSubjectId",
+          "CONDITION": 
+           {
+            "$boolean": false
+          }
+        }
+      }
     ]
   }
 }
