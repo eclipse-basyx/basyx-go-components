@@ -132,3 +132,12 @@ func GetQueryFilter(ctx context.Context) *QueryFilter {
 	}
 	return nil
 }
+
+// SetQueryFilter stores the provided *QueryFilter in the given context.
+// It returns a new context containing the QueryFilter under the filterKey.
+//
+// This function is primarily intended for internal use by the ABAC middleware
+// to attach query filters to the request context after authorization checks.
+func SetQueryFilter(ctx context.Context, qf *QueryFilter) context.Context {
+	return context.WithValue(ctx, filterKey, qf)
+}

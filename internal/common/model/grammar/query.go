@@ -36,10 +36,20 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
 
+type SubFilter struct {
+	// CONDITION corresponds to the JSON schema field "CONDITION".
+	Condition *LogicalExpression `json:"$condition,omitempty" yaml:"$condition,omitempty" mapstructure:"Condition,omitempty"`
+
+	// FRAGMENT corresponds to the JSON schema field "FRAGMENT".
+	Fragment *FragmentStringPattern `json:"$fragment,omitempty" yaml:"$fragment,omitempty" mapstructure:"$fragment,omitempty"`
+}
+
 // Query represents a query structure with a condition field
 type Query struct {
-	// Condition corresponds to the JSON schema field "$condition".
+	// Condition corresponds to the JSON schema field "$cmondition".
 	Condition *LogicalExpression `json:"$condition,omitempty" yaml:"$condition,omitempty" mapstructure:"$condition,omitempty"`
+
+	FilterConditions []SubFilter `json:"$filters,omitempty" yaml:"$filters,omitempty" mapstructure:"$filters,omitempty"`
 }
 
 // QueryWrapper wraps a Query object
