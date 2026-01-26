@@ -33,6 +33,7 @@ import (
 	"net/http"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/discoveryapi"
 )
 
@@ -133,11 +134,35 @@ func GetQueryFilter(ctx context.Context) *QueryFilter {
 	return nil
 }
 
-// SetQueryFilter stores the provided *QueryFilter in the given context.
-// It returns a new context containing the QueryFilter under the filterKey.
-//
-// This function is primarily intended for internal use by the ABAC middleware
-// to attach query filters to the request context after authorization checks.
-func SetQueryFilter(ctx context.Context, qf *QueryFilter) context.Context {
-	return context.WithValue(ctx, filterKey, qf)
+// MergeQueryFilter combines an existing QueryFilter with a user query.
+// It guards nils and merges conditions and filter fragments using logical AND.
+func MergeQueryFilter(ctx context.Context, query grammar.Query) {
+	qf := GetQueryFilter(ctx)
+	if qf == nil {
+		qf = &QueryFilter{}
+	}
+
+	if query.Condition != nil {
+		if qf.Formula != nil {
+			combinedQuery := grammar.LogicalExpression{And: []grammar.LogicalExpression{*qf.Formula, *query.Condition}}
+			qf.Formula = &combinedQuery
+		} else {
+			qf.Formula = query.Condition
+		}
+	}
+
+	for _, filterCond := range query.FilterConditions {
+		if filterCond.Fragment == nil || filterCond.Condition == nil {
+			continue
+		}
+		if qf.Filters == nil {
+			qf.Filters = make(FragmentFilters)
+		}
+		if existing, ok := qf.Filters[*filterCond.Fragment]; ok {
+			combinedQuery := grammar.LogicalExpression{And: []grammar.LogicalExpression{existing, *filterCond.Condition}}
+			qf.Filters[*filterCond.Fragment] = combinedQuery
+		} else {
+			qf.Filters[*filterCond.Fragment] = *filterCond.Condition
+		}
+	}
 }

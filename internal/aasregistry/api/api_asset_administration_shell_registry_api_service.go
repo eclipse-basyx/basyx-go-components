@@ -582,47 +582,19 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) QueryAssetAdministration
 	// TODO: Uncomment the next line to return response Response(0, Result{}) or use other options such as http.Ok ...
 	// return Response(0, Result{}), nil
 
-	authFormula := auth.GetQueryFilter(ctx)
-	if authFormula == nil {
-		authFormula = &auth.QueryFilter{}
-	}
-
-	if query.Condition != nil {
-		if authFormula.Formula != nil {
-			combinedQuery := grammar.LogicalExpression{And: []grammar.LogicalExpression{*authFormula.Formula, *query.Condition}}
-			authFormula.Formula = &combinedQuery
-		} else {
-			authFormula.Formula = query.Condition
-		}
-	}
-
-	for _, filterCond := range query.FilterConditions {
-		if filterCond.Fragment == nil || filterCond.Condition == nil {
-			continue
-		}
-		if authFormula.Filters == nil {
-			authFormula.Filters = make(auth.FragmentFilters)
-		}
-		if existing, ok := authFormula.Filters[*filterCond.Fragment]; ok {
-			combinedQuery := grammar.LogicalExpression{And: []grammar.LogicalExpression{existing, *filterCond.Condition}}
-			authFormula.Filters[*filterCond.Fragment] = combinedQuery
-		} else {
-			authFormula.Filters[*filterCond.Fragment] = *filterCond.Condition
-		}
-	}
-	ctx = auth.SetQueryFilter(ctx, authFormula)
+	auth.MergeQueryFilter(ctx, query)
 
 	aasds, nextCursor, err := s.aasRegistryBackend.ListAssetAdministrationShellDescriptors(ctx, limit, cursor, "", "")
 	if err != nil {
-		log.Printf("🧩 [%s] Error in GetAllAssetAdministrationShellDescriptors: list failed (limit=%d cursor=%q assetKind=%q assetType=%q): %v", componentName, limit, cursor, err)
+		log.Printf("🧩 [%s] Error in QueryAssetAdministrationShellDescriptors: list failed (limit=%d cursor=%q ): %v", componentName, limit, cursor, err)
 		switch {
 		case common.IsErrBadRequest(err):
 			return common.NewErrorResponse(
-				err, http.StatusBadRequest, componentName, "GetAllAssetAdministrationShellDescriptors", "BadRequest",
+				err, http.StatusBadRequest, componentName, "QueryAssetAdministrationShellDescriptors", "BadRequest",
 			), nil
 		default:
 			return common.NewErrorResponse(
-				err, http.StatusInternalServerError, componentName, "GetAllAssetAdministrationShellDescriptors", "InternalServerError",
+				err, http.StatusInternalServerError, componentName, "QueryAssetAdministrationShellDescriptors", "InternalServerError",
 			), err
 		}
 	}
