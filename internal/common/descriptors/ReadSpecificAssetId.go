@@ -65,7 +65,8 @@ var expMapper = []auth.ExpressionIdentifiableMapper{
 		Exp: tSpecificAssetID.Col(colSemanticID),
 	},
 	{
-		Exp: tSpecificAssetID.Col(colExternalSubjectRef),
+		Exp:      tSpecificAssetID.Col(colExternalSubjectRef),
+		Fragment: fragPtr("$aasdesc#specificAssetIds[].externalSubjectId"),
 	},
 }
 
