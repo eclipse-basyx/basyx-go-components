@@ -208,7 +208,6 @@ func (m *AccessModel) AuthorizeWithFilterWithOptions(in EvalInput, opts grammar.
 		}
 
 		ruleExprs = append(ruleExprs, QueryFilter{&adapted, fragments})
-
 	}
 
 	if len(ruleExprs) == 0 {
@@ -225,7 +224,6 @@ func (m *AccessModel) AuthorizeWithFilterWithOptions(in EvalInput, opts grammar.
 			cur := combinedFragments[fragment]
 			if existing, ok := qfr.Filters[fragment]; ok {
 				cur.Or = append(cur.Or, existing)
-
 			} else {
 				cur.Or = append(cur.Or, *qfr.Formula)
 			}
@@ -245,7 +243,6 @@ func (m *AccessModel) AuthorizeWithFilterWithOptions(in EvalInput, opts grammar.
 		}
 		simpleFilter, _ := le.SimplifyForBackendFilterWithOptions(resolver, opts)
 		combinedFragments[fragment] = simpleFilter
-
 	}
 
 	resolver := func(attr grammar.AttributeValue) any {
