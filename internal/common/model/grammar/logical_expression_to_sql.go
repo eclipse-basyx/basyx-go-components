@@ -834,26 +834,6 @@ func collectResolvedFieldPaths(a, b *ResolvedFieldPath) []ResolvedFieldPath {
 	return out
 }
 
-func sqlTypeForOperand(v *Value) string {
-	if v == nil {
-		return ""
-	}
-	switch {
-	case v.StrVal != nil:
-		return "text"
-	case v.NumVal != nil:
-		return "double precision"
-	case v.Boolean != nil:
-		return "boolean"
-	case v.TimeVal != nil:
-		return "time"
-	case v.DateTimeVal != nil:
-		return "timestamptz"
-	default:
-		return ""
-	}
-}
-
 func leadingAlias(expr string) (string, bool) {
 	expr = strings.TrimSpace(expr)
 	if expr == "" {
@@ -1229,18 +1209,6 @@ func handleBinaryOperationWithoutCollector(
 		return nil, nil, err
 	}
 
-	// Cast the field side to the non-field operand's type (unless already explicitly casted).
-	if leftResolved != nil && rightResolved == nil && leftCastType == "" {
-		if t := sqlTypeForOperand(rightOperand); t != "" {
-			leftSQL = safeCastSQLValue(goqu.I(leftResolved.Column), t)
-		}
-	}
-	if rightResolved != nil && leftResolved == nil && rightCastType == "" {
-		if t := sqlTypeForOperand(leftOperand); t != "" {
-			rightSQL = safeCastSQLValue(goqu.I(rightResolved.Column), t)
-		}
-	}
-
 	if validate != nil {
 		if err := validate(leftOperand, rightOperand); err != nil {
 			return nil, nil, err
@@ -1306,18 +1274,6 @@ func handleBinaryOperationWithCollector(
 	rightSQL, rightResolved, err := toSQLResolvedFieldOrValue(rightOperand, rightCastType, "right")
 	if err != nil {
 		return nil, nil, err
-	}
-
-	// Cast the field side to the non-field operand's type (unless already explicitly casted).
-	if leftResolved != nil && rightResolved == nil && leftCastType == "" {
-		if t := sqlTypeForOperand(rightOperand); t != "" {
-			leftSQL = safeCastSQLValue(goqu.I(leftResolved.Column), t)
-		}
-	}
-	if rightResolved != nil && leftResolved == nil && rightCastType == "" {
-		if t := sqlTypeForOperand(leftOperand); t != "" {
-			rightSQL = safeCastSQLValue(goqu.I(rightResolved.Column), t)
-		}
 	}
 
 	if validate != nil {
