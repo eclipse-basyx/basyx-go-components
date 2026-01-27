@@ -170,10 +170,8 @@ func ReadSubmodelDescriptorsByAASDescriptorIDs(
 			expressions[6],
 			expressions[7],
 		).
-		Where(goqu.L("? = ANY(?::bigint[])", submodelDescriptorAlias.Col(colAASDescriptorID), arr))
-	if auth.NeedsGroupBy(ctx, mapper) {
-		ds = ds.GroupBy(expressions[0], expressions[1])
-	}
+		Where(goqu.L("? = ANY(?::bigint[])", submodelDescriptorAlias.Col(colAASDescriptorID), arr)).
+		GroupBy(expressions[0], expressions[1])
 	ds = ds.Order(
 		submodelDescriptorAlias.Col(colPosition).Asc(),
 	)
