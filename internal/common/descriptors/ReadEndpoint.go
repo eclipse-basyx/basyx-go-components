@@ -92,9 +92,11 @@ func ReadEndpointsByDescriptorIDs(
 	descriptorIDs []int64,
 	joinOnMainTable bool,
 ) (map[int64][]model.Endpoint, error) {
-	defer func(start time.Time) {
-		_, _ = fmt.Printf("ReadEndpointsByDescriptorIDs took %s\n", time.Since(start))
-	}(time.Now())
+	if debugEnabled(ctx) {
+		defer func(start time.Time) {
+			_, _ = fmt.Printf("ReadEndpointsByDescriptorIDs took %s\n", time.Since(start))
+		}(time.Now())
+	}
 	out := make(map[int64][]model.Endpoint, len(descriptorIDs))
 	if len(descriptorIDs) == 0 {
 		return out, nil

@@ -740,6 +740,7 @@ CREATE INDEX IF NOT EXISTS ix_epv_version                  ON endpoint_protocol_
 CREATE INDEX IF NOT EXISTS ix_aasd_admininfo_id            ON aas_descriptor(administrative_information_id);
 CREATE INDEX IF NOT EXISTS ix_aasd_displayname_id          ON aas_descriptor(displayname_id);
 CREATE INDEX IF NOT EXISTS ix_aasd_description_id          ON aas_descriptor(description_id);
+CREATE INDEX IF NOT EXISTS ix_aasd_created_at              ON aas_descriptor(created_at);
 
 CREATE INDEX IF NOT EXISTS ix_aasd_id_short                ON aas_descriptor(id_short);
 CREATE INDEX IF NOT EXISTS ix_aasd_global_asset_id         ON aas_descriptor(global_asset_id);
@@ -757,6 +758,7 @@ CREATE INDEX IF NOT EXISTS ix_smd_admininfo_id             ON submodel_descripto
 CREATE INDEX IF NOT EXISTS ix_smd_semantic_id              ON submodel_descriptor(semantic_id);
 CREATE INDEX IF NOT EXISTS ix_smd_displayname_id           ON submodel_descriptor(displayname_id);
 CREATE INDEX IF NOT EXISTS ix_smd_description_id           ON submodel_descriptor(description_id);
+CREATE INDEX IF NOT EXISTS ix_smd_created_at               ON submodel_descriptor(created_at);
 CREATE INDEX IF NOT EXISTS ix_smd_id_short                 ON submodel_descriptor(id_short);
 -- unique(id) already present; add trigram for partial/fuzzy
 CREATE INDEX IF NOT EXISTS ix_smd_id_trgm                  ON submodel_descriptor USING GIN (id gin_trgm_ops);

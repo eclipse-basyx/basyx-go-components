@@ -113,9 +113,11 @@ func ReadSpecificAssetIDsByDescriptorIDs(
 	db DBQueryer,
 	descriptorIDs []int64,
 ) (map[int64][]model.SpecificAssetID, error) {
-	defer func(start time.Time) {
-		_, _ = fmt.Printf("ReadSpecificAssetIDsByDescriptorIDs took %s\n", time.Since(start))
-	}(time.Now())
+	if debugEnabled(ctx) {
+		defer func(start time.Time) {
+			_, _ = fmt.Printf("ReadSpecificAssetIDsByDescriptorIDs took %s\n", time.Since(start))
+		}(time.Now())
+	}
 	out := make(map[int64][]model.SpecificAssetID, len(descriptorIDs))
 	if len(descriptorIDs) == 0 {
 		return out, nil
@@ -171,6 +173,9 @@ func ReadSpecificAssetIDsByDescriptorIDs(
 	sqlStr, args, err := base.ToSQL()
 	if err != nil {
 		return nil, err
+	}
+	if debugEnabled(ctx) {
+		_, _ = fmt.Println(sqlStr)
 	}
 
 	rows, err := db.QueryContext(ctx, sqlStr, args...)

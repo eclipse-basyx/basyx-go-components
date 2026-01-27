@@ -98,9 +98,11 @@ func ReadSubmodelDescriptorsByAASDescriptorIDs(
 	isMain bool,
 ) (map[int64][]model.SubmodelDescriptor, error) {
 
-	defer func(start time.Time) {
-		_, _ = fmt.Printf("ReadSubmodelDescriptorsByAASDescriptorIDs took %s\n", time.Since(start))
-	}(time.Now())
+	if debugEnabled(ctx) {
+		defer func(start time.Time) {
+			_, _ = fmt.Printf("ReadSubmodelDescriptorsByAASDescriptorIDs took %s\n", time.Since(start))
+		}(time.Now())
+	}
 	out := make(map[int64][]model.SubmodelDescriptor, len(aasDescriptorIDs))
 	if len(aasDescriptorIDs) == 0 {
 		return out, nil
@@ -201,6 +203,9 @@ func ReadSubmodelDescriptorsByAASDescriptorIDs(
 
 	if err != nil {
 		return nil, err
+	}
+	if debugEnabled(ctx) {
+		_, _ = fmt.Println(sqlStr)
 	}
 	rows, err := db.QueryContext(ctx, sqlStr, args...)
 	if err != nil {

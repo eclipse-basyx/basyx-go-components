@@ -37,6 +37,7 @@ var DefaultConfig = struct {
 	ABACEnabled          bool
 	ABACModelPath        string
 	GeneralImplicitCasts bool
+	GeneralDescriptorDebug bool
 }{
 	ServerPort:           5004,
 	ServerContextPath:    "",
@@ -55,6 +56,7 @@ var DefaultConfig = struct {
 	ABACEnabled:          false,
 	ABACModelPath:        "config/access_rules/access-rules.json",
 	GeneralImplicitCasts: true,
+	GeneralDescriptorDebug: false,
 }
 
 // PrintSplash displays the BaSyx Go API ASCII art logo to the console.
@@ -137,6 +139,7 @@ type CorsConfig struct {
 // GeneralConfig contains non-domain-specific configuration.
 type GeneralConfig struct {
 	EnableImplicitCasts bool `mapstructure:"enableImplicitCasts" yaml:"enableImplicitCasts" json:"enableImplicitCasts"` // Enable implicit casts during backend simplification
+	EnableDescriptorDebug bool `mapstructure:"enableDescriptorDebug" yaml:"enableDescriptorDebug" json:"enableDescriptorDebug"` // Enable descriptor query debug output
 }
 
 // OIDCProviderConfig contains OpenID Connect authentication provider settings.
@@ -250,6 +253,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("cors.allowCredentials", false)
 
 	v.SetDefault("general.enableImplicitCasts", true)
+	v.SetDefault("general.enableDescriptorDebug", false)
 
 	v.SetDefault("oidc.trustlistPath", "config/trustlist.json")
 
@@ -338,6 +342,7 @@ func PrintConfiguration(cfg *Config) {
 	// General
 	lines = append(lines, "🔹 General:")
 	add("Enable Implicit Casts", cfg.General.EnableImplicitCasts, DefaultConfig.GeneralImplicitCasts)
+	add("Enable Descriptor Debug", cfg.General.EnableDescriptorDebug, DefaultConfig.GeneralDescriptorDebug)
 
 	lines = append(lines, divider)
 

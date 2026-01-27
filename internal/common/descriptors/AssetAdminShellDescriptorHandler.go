@@ -445,9 +445,11 @@ func ListAssetAdministrationShellDescriptors(
 	assetType string,
 	identifiable string,
 ) ([]model.AssetAdministrationShellDescriptor, string, error) {
-	defer func(start time.Time) {
-		_, _ = fmt.Printf("ListAssetAdministrationShellDescriptors took %s\n", time.Since(start))
-	}(time.Now())
+	if debugEnabled(ctx) {
+		defer func(start time.Time) {
+			_, _ = fmt.Printf("ListAssetAdministrationShellDescriptors took %s\n", time.Since(start))
+		}(time.Now())
+	}
 	return listAssetAdministrationShellDescriptors(ctx, db, limit, cursor, assetKind, assetType, identifiable, true)
 }
 
@@ -471,7 +473,9 @@ func listAssetAdministrationShellDescriptors(
 		return nil, "", err
 	}
 	sqlStr, args, err := ds.ToSQL()
-	fmt.Println(sqlStr)
+	if debugEnabled(ctx) {
+		_, _ = fmt.Println(sqlStr)
+	}
 
 	if err != nil {
 		return nil, "", err
