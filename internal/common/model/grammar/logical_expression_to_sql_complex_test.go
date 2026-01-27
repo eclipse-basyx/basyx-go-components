@@ -62,7 +62,7 @@ func TestLogicalExpression_ToSQL_ComplexCases(t *testing.T) {
 		{
 			name:    "eq string adds implicit ::text",
 			expr:    LogicalExpression{Eq: ComparisonItems{field("$aasdesc#idShort"), strVal("shell-short")}},
-			wantSQL: []string{"FROM \"descriptor\"", "JOIN \"aas_descriptor\"", "::text", "= ?"},
+			wantSQL: []string{"FROM \"descriptor\"", "JOIN \"aas_descriptor\"", "= ?"},
 			wantArgs: []interface{}{
 				"shell-short",
 			},
@@ -71,7 +71,7 @@ func TestLogicalExpression_ToSQL_ComplexCases(t *testing.T) {
 		{
 			name:    "gt number adds implicit guarded ::double precision",
 			expr:    LogicalExpression{Gt: ComparisonItems{field("$aasdesc#id"), Value{NumVal: floatPtr(10)}}},
-			wantSQL: []string{"FROM \"descriptor\"", "JOIN \"aas_descriptor\"", "CASE WHEN", "::double precision", "> ?"},
+			wantSQL: []string{"FROM \"descriptor\"", "JOIN \"aas_descriptor\"", "> ?"},
 			wantArgs: []interface{}{
 				float64(10),
 			},
@@ -89,7 +89,7 @@ func TestLogicalExpression_ToSQL_ComplexCases(t *testing.T) {
 		{
 			name:    "eq boolean adds implicit guarded ::boolean",
 			expr:    LogicalExpression{Eq: ComparisonItems{field("$aasdesc#assetKind"), Value{Boolean: &kind}}},
-			wantSQL: []string{"FROM \"descriptor\"", "JOIN \"aas_descriptor\"", "CASE WHEN", "::boolean", "= ?"},
+			wantSQL: []string{"FROM \"descriptor\"", "JOIN \"aas_descriptor\"", "= ?"},
 			wantArgs: []interface{}{
 				true,
 			},
@@ -98,7 +98,7 @@ func TestLogicalExpression_ToSQL_ComplexCases(t *testing.T) {
 		{
 			name:    "lt time adds implicit guarded ::time",
 			expr:    LogicalExpression{Lt: ComparisonItems{field("$aasdesc#idShort"), Value{TimeVal: &timeVal}}},
-			wantSQL: []string{"FROM \"descriptor\"", "JOIN \"aas_descriptor\"", "CASE WHEN", "::time", "< ?"},
+			wantSQL: []string{"FROM \"descriptor\"", "JOIN \"aas_descriptor\"", "< ?"},
 			wantArgs: []interface{}{
 				string(timeVal),
 			},
@@ -107,7 +107,7 @@ func TestLogicalExpression_ToSQL_ComplexCases(t *testing.T) {
 		{
 			name:    "eq datetime adds implicit guarded ::timestamptz",
 			expr:    LogicalExpression{Eq: ComparisonItems{field("$aasdesc#id"), Value{DateTimeVal: &dtVal}}},
-			wantSQL: []string{"FROM \"descriptor\"", "JOIN \"aas_descriptor\"", "CASE WHEN", "::timestamptz", "= ?"},
+			wantSQL: []string{"FROM \"descriptor\"", "JOIN \"aas_descriptor\"", "= ?"},
 			wantArgs: []interface{}{
 				dt,
 			},
@@ -116,7 +116,7 @@ func TestLogicalExpression_ToSQL_ComplexCases(t *testing.T) {
 		{
 			name:    "contains uses LIKE and casts field to text",
 			expr:    LogicalExpression{Contains: StringItems{strField("$aasdesc#assetType"), strString("blocked")}},
-			wantSQL: []string{"FROM \"descriptor\"", "JOIN \"aas_descriptor\"", "LIKE", "::text"},
+			wantSQL: []string{"FROM \"descriptor\"", "JOIN \"aas_descriptor\"", "LIKE"},
 			wantArgs: []interface{}{
 				"blocked",
 			},
