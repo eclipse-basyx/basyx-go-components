@@ -512,6 +512,7 @@ CREATE TABLE IF NOT EXISTS endpoint_protocol_version (
 
 CREATE TABLE IF NOT EXISTS aas_descriptor (
   descriptor_id BIGINT PRIMARY KEY REFERENCES descriptor(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   description_id BIGINT REFERENCES lang_string_text_type_reference(id) ON DELETE SET NULL,
   displayname_id BIGINT REFERENCES lang_string_name_type_reference(id) ON DELETE SET NULL,
   administrative_information_id BIGINT REFERENCES administrative_information(id) ON DELETE CASCADE,
@@ -524,6 +525,7 @@ CREATE TABLE IF NOT EXISTS aas_descriptor (
 
 CREATE TABLE IF NOT EXISTS submodel_descriptor (
   descriptor_id BIGINT PRIMARY KEY REFERENCES descriptor(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   position     INTEGER NOT NULL,                -- <- Array-Index
   aas_descriptor_id BIGINT REFERENCES aas_descriptor(descriptor_id) ON DELETE CASCADE,
   description_id BIGINT REFERENCES lang_string_text_type_reference(id) ON DELETE SET NULL,

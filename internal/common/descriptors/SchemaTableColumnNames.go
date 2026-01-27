@@ -86,6 +86,7 @@ const (
 	colAssetType               = "asset_type"
 	colGlobalAssetID           = "global_asset_id"
 	colIDShort                 = "id_short"
+	colCreatedAt               = "created_at"
 	colAASID                   = "id"
 	colRegDescID               = "id"
 	colHref                    = "href"

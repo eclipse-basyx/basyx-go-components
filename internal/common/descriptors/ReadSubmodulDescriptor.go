@@ -30,6 +30,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"time"
 
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
@@ -96,6 +97,10 @@ func ReadSubmodelDescriptorsByAASDescriptorIDs(
 	aasDescriptorIDs []int64,
 	isMain bool,
 ) (map[int64][]model.SubmodelDescriptor, error) {
+
+	defer func(start time.Time) {
+		_, _ = fmt.Printf("ReadSubmodelDescriptorsByAASDescriptorIDs took %s\n", time.Since(start))
+	}(time.Now())
 	out := make(map[int64][]model.SubmodelDescriptor, len(aasDescriptorIDs))
 	if len(aasDescriptorIDs) == 0 {
 		return out, nil
