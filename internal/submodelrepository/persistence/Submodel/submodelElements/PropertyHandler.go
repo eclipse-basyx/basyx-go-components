@@ -322,7 +322,7 @@ func insertProperty(property *types.Property, tx *sql.Tx, id int) error {
 	insertQuery, insertArgs, err := dialect.Insert("property_element").
 		Rows(goqu.Record{
 			"id":             id,
-			"value_type":     property.ValueType,
+			"value_type":     property.ValueType(),
 			"value_text":     typedValue.Text,
 			"value_num":      typedValue.Numeric,
 			"value_bool":     typedValue.Boolean,
@@ -346,7 +346,7 @@ func buildUpdatePropertyRecordObject(property *types.Property, isPut bool, local
 	updateRecord := goqu.Record{}
 
 	// Required field - always update
-	updateRecord["value_type"] = property.ValueType
+	updateRecord["value_type"] = property.ValueType()
 
 	// Map value by type - always update based on isPut or if value is provided
 	if isPut || property.Value() != nil {
@@ -361,7 +361,7 @@ func buildUpdatePropertyRecordObject(property *types.Property, isPut bool, local
 	// Handle optional ValueID field
 	// For PUT: always update (even if nil, which clears the field)
 	// For PATCH: only update if provided (not nil)
-	if isPut || property.ValueID != nil {
+	if isPut || property.ValueID() != nil {
 		valueIDDbID, err := persistenceutils.CreateReference(localTx, property.ValueID(), sql.NullInt64{}, sql.NullInt64{})
 		if err != nil {
 			return nil, fmt.Errorf("failed to update ValueID: %w", err)

@@ -552,7 +552,7 @@ func (p *PostgreSQLSubmodelDatabase) DeleteSubmodel(id string, optionalTX *sql.T
 // Returns:
 //   - bool: True if the submodel was updated (existed before), false if created new
 //   - error: Error if creation or update fails
-func (p *PostgreSQLSubmodelDatabase) PutSubmodel(submodelID string, submodel types.Submodel) (bool, error) {
+func (p *PostgreSQLSubmodelDatabase) PutSubmodel(submodelID string, submodel types.ISubmodel) (bool, error) {
 	tx, cu, err := common.StartTransaction(p.db)
 	if err != nil {
 		_, _ = fmt.Println(err)
@@ -591,7 +591,8 @@ func (p *PostgreSQLSubmodelDatabase) PutSubmodel(submodelID string, submodel typ
 //   - error: Error if creation fails, nil if successful or if submodel already exists
 //
 //nolint:revive // This function is already refactored in smaller parts, but further splitting it would reduce readability.
-func (p *PostgreSQLSubmodelDatabase) CreateSubmodel(sm types.Submodel, optionalTX *sql.Tx) error {
+func (p *PostgreSQLSubmodelDatabase) CreateSubmodel(smInt types.ISubmodel, optionalTX *sql.Tx) error {
+	sm := *(smInt.(*types.Submodel))
 
 	var tx *sql.Tx
 	if optionalTX == nil {

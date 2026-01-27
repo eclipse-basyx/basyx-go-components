@@ -22,6 +22,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/FriedJannik/aas-go-sdk/jsonization"
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
@@ -106,6 +107,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelByID(
 	}
 
 	sm, err := s.submodelBackend.GetSubmodel(string(decodedSubmodelIdentifier), false)
+	jsonSubmodel, err := jsonization.ToJsonable(&sm)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return gen.Response(404, nil), nil
@@ -115,7 +117,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelByID(
 		}
 		return gen.Response(500, nil), err
 	}
-	return gen.Response(200, sm), nil
+	return gen.Response(200, jsonSubmodel), nil
 }
 
 // GetSignedSubmodelByID retrieves a signed submodel (JWS compact serialization) by its base64-encoded identifier.
@@ -222,7 +224,7 @@ func (s *SubmodelRepositoryAPIAPIService) DeleteSubmodelByID(
 //   - error: Error if the creation fails
 func (s *SubmodelRepositoryAPIAPIService) PostSubmodel(
 	_ /*ctx*/ context.Context,
-	submodel types.Submodel,
+	submodel types.ISubmodel,
 ) (gen.ImplResponse, error) {
 	err := s.submodelBackend.CreateSubmodel(submodel, nil)
 	if err != nil {
@@ -400,7 +402,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsPath(ctx context.Contex
 // PutSubmodelByID - Updates an existing Submodel
 //
 //nolint:revive
-func (s *SubmodelRepositoryAPIAPIService) PutSubmodelByID(ctx context.Context, submodelIdentifier string, submodel types.Submodel) (gen.ImplResponse, error) {
+func (s *SubmodelRepositoryAPIAPIService) PutSubmodelByID(ctx context.Context, submodelIdentifier string, submodel types.ISubmodel) (gen.ImplResponse, error) {
 	decodedIdentifier, err := base64.RawStdEncoding.DecodeString(submodelIdentifier)
 	if err != nil {
 		return common.NewErrorResponse(err, http.StatusBadRequest, "SMRepo", "PatchSubmodelByID", "Malformed Submodel Identifier"), nil
@@ -448,7 +450,7 @@ func (s *SubmodelRepositoryAPIAPIService) PutSubmodelByID(ctx context.Context, s
 // PatchSubmodelByID - Updates an existing Submodel
 //
 //nolint:revive
-func (s *SubmodelRepositoryAPIAPIService) PatchSubmodelByID(ctx context.Context, submodelIdentifier string, submodel types.Submodel, level string) (gen.ImplResponse, error) {
+func (s *SubmodelRepositoryAPIAPIService) PatchSubmodelByID(ctx context.Context, submodelIdentifier string, submodel types.ISubmodel, level string) (gen.ImplResponse, error) {
 	// TODO - update PatchSubmodelByID with the required logic for this service method.
 	// Add api_submodel_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
 

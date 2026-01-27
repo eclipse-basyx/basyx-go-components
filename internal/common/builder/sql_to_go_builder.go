@@ -253,8 +253,8 @@ func ParseReferences(row json.RawMessage, referenceBuilderRefs map[int64]*Refere
 //   - Uses panic recovery to handle runtime errors during type assertions
 //
 // Note: Only objects with an 'id' field are processed to ensure data integrity.
-func ParseLangStringNameType(displayNames json.RawMessage) ([]model.LangStringNameType, error) {
-	var names []model.LangStringNameType
+func ParseLangStringNameType(displayNames json.RawMessage) ([]types.ILangStringNameType, error) {
+	var names []types.ILangStringNameType
 	// remove id field from json
 	var temp []map[string]interface{}
 	var jsonMarshaller = jsoniter.ConfigCompatibleWithStandardLibrary
@@ -271,10 +271,10 @@ func ParseLangStringNameType(displayNames json.RawMessage) ([]model.LangStringNa
 	for _, item := range temp {
 		if _, ok := item["id"]; ok {
 			delete(item, "id")
-			names = append(names, model.LangStringNameType{
-				Text:     item["text"].(string),
-				Language: item["language"].(string),
-			})
+			var name types.LangStringNameType
+			name.SetLanguage(item["language"].(string))
+			name.SetText(item["text"].(string))
+			names = append(names, &name)
 		}
 	}
 
@@ -303,8 +303,8 @@ func ParseLangStringNameType(displayNames json.RawMessage) ([]model.LangStringNa
 // Note: Only objects with an 'id' field are processed to ensure data integrity.
 // This function is similar to ParseLangStringNameType but produces LangStringTextType
 // objects which may have different validation rules or usage contexts.
-func ParseLangStringTextType(descriptions json.RawMessage) ([]model.LangStringTextType, error) {
-	var texts []model.LangStringTextType
+func ParseLangStringTextType(descriptions json.RawMessage) ([]types.ILangStringTextType, error) {
+	var texts []types.ILangStringTextType
 	// remove id field from json
 	var temp []map[string]interface{}
 	if len(descriptions) == 0 {
@@ -324,10 +324,10 @@ func ParseLangStringTextType(descriptions json.RawMessage) ([]model.LangStringTe
 	for _, item := range temp {
 		if _, ok := item["id"]; ok {
 			delete(item, "id")
-			texts = append(texts, model.LangStringTextType{
-				Text:     item["text"].(string),
-				Language: item["language"].(string),
-			})
+			var text types.LangStringTextType
+			text.SetLanguage(item["language"].(string))
+			text.SetText(item["text"].(string))
+			texts = append(texts, &text)
 		}
 	}
 

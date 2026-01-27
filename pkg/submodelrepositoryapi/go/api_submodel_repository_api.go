@@ -11,11 +11,14 @@ package openapi
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
 	"strings"
 
+	aasjsonization "github.com/FriedJannik/aas-go-sdk/jsonization"
+	aasverification "github.com/FriedJannik/aas-go-sdk/verification"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/go-chi/chi/v5"
 )
@@ -356,18 +359,19 @@ func (c *SubmodelRepositoryAPIAPIController) GetAllSubmodels(w http.ResponseWrit
 
 // PostSubmodel - Creates a new Submodel
 func (c *SubmodelRepositoryAPIAPIController) PostSubmodel(w http.ResponseWriter, r *http.Request) {
-	var submodelParam model.Submodel
-	d := json.NewDecoder(r.Body)
-	d.DisallowUnknownFields()
-	if err := d.Decode(&submodelParam); err != nil {
+	// Read and unmarshal JSON to interface{} first
+	bodyBytes, err := io.ReadAll(r.Body)
+	if err != nil {
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
-	if err := model.AssertSubmodelRequired(submodelParam); err != nil {
+	var jsonable interface{}
+	if err := json.Unmarshal(bodyBytes, &jsonable); err != nil {
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
-	if err := model.AssertSubmodelConstraints(submodelParam); err != nil {
+	submodelParam, err := aasjsonization.SubmodelFromJsonable(jsonable)
+	if err != nil {
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
@@ -756,19 +760,20 @@ func (c *SubmodelRepositoryAPIAPIController) PutSubmodelByID(w http.ResponseWrit
 		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
 		return
 	}
-	var submodelParam model.Submodel
-	d := json.NewDecoder(r.Body)
-	d.DisallowUnknownFields()
-	if err := d.Decode(&submodelParam); err != nil {
+	// Read and unmarshal JSON to interface{} first
+	bodyBytes, err := io.ReadAll(r.Body)
+	if err != nil {
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
-	if err := model.AssertSubmodelRequired(submodelParam); err != nil {
-		c.errorHandler(w, r, err, nil)
+	var jsonable interface{}
+	if err := json.Unmarshal(bodyBytes, &jsonable); err != nil {
+		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
-	if err := model.AssertSubmodelConstraints(submodelParam); err != nil {
-		c.errorHandler(w, r, err, nil)
+	submodelParam, err := aasjsonization.SubmodelFromJsonable(jsonable)
+	if err != nil {
+		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
 	result, err := c.service.PutSubmodelByID(r.Context(), submodelIdentifierParam, submodelParam)
@@ -810,19 +815,20 @@ func (c *SubmodelRepositoryAPIAPIController) PatchSubmodelByID(w http.ResponseWr
 		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
 		return
 	}
-	var submodelParam model.Submodel
-	d := json.NewDecoder(r.Body)
-	d.DisallowUnknownFields()
-	if err := d.Decode(&submodelParam); err != nil {
+	// Read and unmarshal JSON to interface{} first
+	bodyBytes, err := io.ReadAll(r.Body)
+	if err != nil {
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
-	if err := model.AssertSubmodelRequired(submodelParam); err != nil {
-		c.errorHandler(w, r, err, nil)
+	var jsonable interface{}
+	if err := json.Unmarshal(bodyBytes, &jsonable); err != nil {
+		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
-	if err := model.AssertSubmodelConstraints(submodelParam); err != nil {
-		c.errorHandler(w, r, err, nil)
+	submodelParam, err := aasjsonization.SubmodelFromJsonable(jsonable)
+	if err != nil {
+		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
 	var levelParam string
@@ -1089,27 +1095,37 @@ func (c *SubmodelRepositoryAPIAPIController) PostSubmodelElementSubmodelRepo(w h
 		return
 	}
 
-	// Read the raw JSON data from the request body
+	// Read and unmarshal JSON to interface{} first
 	bodyBytes, err := io.ReadAll(r.Body)
 	if err != nil {
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
 
-	// Use our custom factory function to create the appropriate concrete type
-	submodelElementParam, err := model.UnmarshalSubmodelElement(bodyBytes)
+	// Unmarshal to generic map/interface
+	var jsonable interface{}
+	if err := json.Unmarshal(bodyBytes, &jsonable); err != nil {
+		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
+		return
+	}
+
+	// Use SDK's jsonization to deserialize into proper SDK type
+	submodelElementParam, err := aasjsonization.SubmodelElementFromJsonable(jsonable)
 	if err != nil {
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
 
-	// FIXED: Use custom validation that handles optional references correctly
-	if err := model.AssertSubmodelElementRequiredFixed(submodelElementParam); err != nil {
-		c.errorHandler(w, r, err, nil)
-		return
-	}
-	if err := model.AssertSubmodelElementConstraintsFixed(submodelElementParam); err != nil {
-		c.errorHandler(w, r, err, nil)
+	// Use SDK's verification for constraint checking
+	var validationErrors []string
+	aasverification.Verify(submodelElementParam, func(verErr *aasverification.VerificationError) bool {
+		validationErrors = append(validationErrors, verErr.Error())
+		return false // Continue collecting all errors
+	})
+
+	if len(validationErrors) > 0 {
+		err := fmt.Errorf("validation failed: %s", strings.Join(validationErrors, "; "))
+		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
 	result, err := c.service.PostSubmodelElementSubmodelRepo(r.Context(), submodelIdentifierParam, submodelElementParam)
@@ -1397,25 +1413,37 @@ func (c *SubmodelRepositoryAPIAPIController) PutSubmodelElementByPathSubmodelRep
 		return
 	}
 
-	// Read the raw JSON data from the request body
+	// Read and unmarshal JSON to interface{} first
 	bodyBytes, err := io.ReadAll(r.Body)
 	if err != nil {
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
 
-	// Use our custom factory function to create the appropriate concrete type
-	submodelElementParam, err := model.UnmarshalSubmodelElement(bodyBytes)
+	// Unmarshal to generic map/interface
+	var jsonable interface{}
+	if err := json.Unmarshal(bodyBytes, &jsonable); err != nil {
+		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
+		return
+	}
+
+	// Use SDK's jsonization to deserialize into proper SDK type
+	submodelElementParam, err := aasjsonization.SubmodelElementFromJsonable(jsonable)
 	if err != nil {
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
-	if err := model.AssertSubmodelElementRequired(submodelElementParam); err != nil {
-		c.errorHandler(w, r, err, nil)
-		return
-	}
-	if err := model.AssertSubmodelElementConstraints(submodelElementParam); err != nil {
-		c.errorHandler(w, r, err, nil)
+
+	// Use SDK's verification for constraint checking
+	var validationErrors []string
+	aasverification.Verify(submodelElementParam, func(verErr *aasverification.VerificationError) bool {
+		validationErrors = append(validationErrors, verErr.Error())
+		return false // Continue collecting all errors
+	})
+
+	if len(validationErrors) > 0 {
+		err := fmt.Errorf("validation failed: %s", strings.Join(validationErrors, "; "))
+		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
 	var levelParam string
@@ -1450,25 +1478,37 @@ func (c *SubmodelRepositoryAPIAPIController) PostSubmodelElementByPathSubmodelRe
 		return
 	}
 
-	// Read the raw JSON data from the request body
+	// Read and unmarshal JSON to interface{} first
 	bodyBytes, err := io.ReadAll(r.Body)
 	if err != nil {
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
 
-	// Use our custom factory function to create the appropriate concrete type
-	submodelElementParam, err := model.UnmarshalSubmodelElement(bodyBytes)
+	// Unmarshal to generic map/interface
+	var jsonable interface{}
+	if err := json.Unmarshal(bodyBytes, &jsonable); err != nil {
+		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
+		return
+	}
+
+	// Use SDK's jsonization to deserialize into proper SDK type
+	submodelElementParam, err := aasjsonization.SubmodelElementFromJsonable(jsonable)
 	if err != nil {
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
-	if err := model.AssertSubmodelElementRequired(submodelElementParam); err != nil {
-		c.errorHandler(w, r, err, nil)
-		return
-	}
-	if err := model.AssertSubmodelElementConstraints(submodelElementParam); err != nil {
-		c.errorHandler(w, r, err, nil)
+
+	// Use SDK's verification for constraint checking
+	var validationErrors []string
+	aasverification.Verify(submodelElementParam, func(verErr *aasverification.VerificationError) bool {
+		validationErrors = append(validationErrors, verErr.Error())
+		return false // Continue collecting all errors
+	})
+
+	if len(validationErrors) > 0 {
+		err := fmt.Errorf("validation failed: %s", strings.Join(validationErrors, "; "))
+		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
 	result, err := c.service.PostSubmodelElementByPathSubmodelRepo(r.Context(), submodelIdentifierParam, idShortPathParam, submodelElementParam)
@@ -1521,25 +1561,37 @@ func (c *SubmodelRepositoryAPIAPIController) PatchSubmodelElementByPathSubmodelR
 		return
 	}
 
-	// Read the raw JSON data from the request body
+	// Read and unmarshal JSON to interface{} first
 	bodyBytes, err := io.ReadAll(r.Body)
 	if err != nil {
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
 
-	// Use our custom factory function to create the appropriate concrete type
-	submodelElementParam, err := model.UnmarshalSubmodelElement(bodyBytes)
+	// Unmarshal to generic map/interface
+	var jsonable interface{}
+	if err := json.Unmarshal(bodyBytes, &jsonable); err != nil {
+		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
+		return
+	}
+
+	// Use SDK's jsonization to deserialize into proper SDK type
+	submodelElementParam, err := aasjsonization.SubmodelElementFromJsonable(jsonable)
 	if err != nil {
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
-	if err := model.AssertSubmodelElementRequired(submodelElementParam); err != nil {
-		c.errorHandler(w, r, err, nil)
-		return
-	}
-	if err := model.AssertSubmodelElementConstraints(submodelElementParam); err != nil {
-		c.errorHandler(w, r, err, nil)
+
+	// Use SDK's verification for constraint checking
+	var validationErrors []string
+	aasverification.Verify(submodelElementParam, func(verErr *aasverification.VerificationError) bool {
+		validationErrors = append(validationErrors, verErr.Error())
+		return false // Continue collecting all errors
+	})
+
+	if len(validationErrors) > 0 {
+		err := fmt.Errorf("validation failed: %s", strings.Join(validationErrors, "; "))
+		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
 	var levelParam string

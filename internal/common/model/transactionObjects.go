@@ -48,7 +48,7 @@ type SubmodelRow struct {
 	// Category defines the category classification of the submodel
 	Category sql.NullString
 	// Kind specifies whether the submodel is a Template or Instance
-	Kind string
+	Kind sql.NullInt64
 	// EmbeddedDataSpecification contains embedded data specifications as JSON data
 	EmbeddedDataSpecification json.RawMessage
 	// SupplementalSemanticIDs contains supplemental semantic identifiers as JSON data
@@ -317,7 +317,7 @@ type SubmodelElementRow struct {
 	// Category defines the category classification of the submodel element
 	Category sql.NullString `json:"category"`
 	// ModelType specifies the concrete type of the submodel element (e.g., Property, Operation, SubmodelElementCollection)
-	ModelType string `json:"model_type"`
+	ModelType int64 `json:"model_type"`
 	// Value contains the actual value data of the submodel element as JSON data
 	Value *json.RawMessage `json:"value"`
 	// SemanticID is a reference to a semantic definition as JSON data

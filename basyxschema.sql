@@ -42,7 +42,7 @@ CREATE TABLE IF NOT EXISTS reference_key (
   id           BIGSERIAL PRIMARY KEY,
   reference_id BIGINT NOT NULL REFERENCES reference(id) ON DELETE CASCADE,
   position     INTEGER NOT NULL,                -- <- Array-Index keys[i]
-  type         int     NOT NULL,
+  type         int    NOT NULL,
   value        TEXT     NOT NULL,
   UNIQUE(reference_id, position)
 );
@@ -174,7 +174,7 @@ CREATE TABLE IF NOT EXISTS submodel_element (
   position       INTEGER,                                   -- for ordering in lists
   id_short       varchar(128) NOT NULL,
   category       varchar(128),
-  model_type     int NOT NULL,
+  model_type     TEXT NOT NULL,
   embedded_data_specification JSONB DEFAULT '[]',
   supplemental_semantic_ids JSONB DEFAULT '[]',
   extensions JSONB DEFAULT '[]',
@@ -239,7 +239,7 @@ CREATE TABLE IF NOT EXISTS file_data (
 );
 CREATE TABLE IF NOT EXISTS range_element (
   id            BIGINT PRIMARY KEY REFERENCES submodel_element(id) ON DELETE CASCADE,
-  value_type    int NOT NULL,
+  value_type    TEXT NOT NULL,
   min_text      TEXT,  max_text      TEXT,
   min_num       NUMERIC, max_num     NUMERIC,
   min_time      TIME,   max_time     TIME,
@@ -271,7 +271,7 @@ CREATE TABLE IF NOT EXISTS submodel_element_list (
 );
 CREATE TABLE IF NOT EXISTS entity_element (
   id              BIGINT PRIMARY KEY REFERENCES submodel_element(id) ON DELETE CASCADE,
-  int     int NOT NULL,
+  entity_type     int NOT NULL,
   global_asset_id TEXT,
   specific_asset_ids JSONB DEFAULT '[]'
 );
@@ -299,7 +299,7 @@ CREATE TABLE IF NOT EXISTS operation_variable (
 CREATE TABLE IF NOT EXISTS basic_event_element (
   id                BIGINT PRIMARY KEY REFERENCES submodel_element(id) ON DELETE CASCADE,
   observed          JSONB,
-  int         int NOT NULL,
+  direction         int NOT NULL,
   state             int NOT NULL,
   message_topic     TEXT,
   message_broker    JSONB,
@@ -381,7 +381,7 @@ CREATE TABLE IF NOT EXISTS aas_descriptor_endpoint (
 CREATE TABLE IF NOT EXISTS security_attributes (
   id BIGSERIAL NOT NULL PRIMARY KEY,
   endpoint_id BIGINT NOT NULL REFERENCES aas_descriptor_endpoint(id) ON DELETE CASCADE,
-  int int NOT NULL,
+  security_type int NOT NULL,
   security_key TEXT NOT NULL,
   security_value TEXT NOT NULL
 );
@@ -399,7 +399,7 @@ CREATE TABLE IF NOT EXISTS aas_descriptor (
   description_id BIGINT REFERENCES lang_string_text_type_reference(id) ON DELETE SET NULL,
   displayname_id BIGINT REFERENCES lang_string_name_type_reference(id) ON DELETE SET NULL,
   administrative_information_id BIGINT REFERENCES administrative_information(id) ON DELETE CASCADE,
-  int int,
+  asset_kind int,
   asset_type VARCHAR(2048),
   global_asset_id VARCHAR(2048),
   id_short VARCHAR(128),
@@ -503,31 +503,9 @@ CREATE INDEX IF NOT EXISTS ix_sme_sub_type       ON submodel_element(submodel_id
 CREATE INDEX IF NOT EXISTS ix_smessi_smeid ON submodel_element_supplemental_semantic_id(submodel_element_id);
 CREATE INDEX IF NOT EXISTS ix_smeext_smeid ON submodel_element_extension(submodel_element_id);
 CREATE INDEX IF NOT EXISTS ix_smeeds_smeid ON submodel_element_embedded_data_specification(submodel_element_id);
-CREATE INDEX IF NOT EXISTS ix_prop_num      ON property_element(value_num)
-  WHERE value_type IN ('xs:byte','xs:int','xs:integer','xs:long','xs:short',
-                       'xs:decimal','xs:double','xs:float','xs:nonNegativeInteger',
-                       'xs:nonPositiveInteger','xs:positiveInteger',
-                       'xs:unsignedByte','xs:unsignedInt','xs:unsignedLong','xs:unsignedShort');
-CREATE INDEX IF NOT EXISTS ix_prop_dt       ON property_element(value_datetime)
-  WHERE value_type IN ('xs:dateTime','xs:date');
-CREATE INDEX IF NOT EXISTS ix_prop_time     ON property_element(value_time)
-  WHERE value_type = 'xs:time';
-CREATE INDEX IF NOT EXISTS ix_prop_bool     ON property_element(value_bool)
-  WHERE value_type = 'xs:boolean';
-CREATE INDEX IF NOT EXISTS ix_prop_text_trgm ON property_element USING GIN (value_text gin_trgm_ops)
-  WHERE value_type = 'xs:string';
 CREATE INDEX IF NOT EXISTS ix_mlp_lang      ON multilanguage_property_value(mlp_id, language);
 CREATE INDEX IF NOT EXISTS ix_mlp_text_trgm ON multilanguage_property_value USING GIN (text gin_trgm_ops);
 CREATE INDEX IF NOT EXISTS ix_file_value_trgm ON file_element USING GIN (value gin_trgm_ops);
-CREATE INDEX IF NOT EXISTS ix_range_num ON range_element(min_num, max_num)
-  WHERE value_type IN ('xs:byte','xs:int','xs:integer','xs:long','xs:short',
-                       'xs:decimal','xs:double','xs:float','xs:nonNegativeInteger',
-                       'xs:nonPositiveInteger','xs:positiveInteger',
-                       'xs:unsignedByte','xs:unsignedInt','xs:unsignedLong','xs:unsignedShort');
-CREATE INDEX IF NOT EXISTS ix_range_dt  ON range_element(min_datetime, max_datetime)
-  WHERE value_type IN ('xs:dateTime','xs:date');
-CREATE INDEX IF NOT EXISTS ix_range_time ON range_element(min_time, max_time)
-  WHERE value_type = 'xs:time';
 CREATE INDEX IF NOT EXISTS ix_bee_lastupd ON basic_event_element(last_update);
 CREATE INDEX IF NOT EXISTS ix_qual_semantic_id ON qualifier(semantic_id);
 CREATE INDEX IF NOT EXISTS ix_qual_value_id ON qualifier(value_id);
@@ -536,10 +514,6 @@ CREATE INDEX IF NOT EXISTS ix_smq_qualifier_id ON submodel_qualifier(qualifier_i
 CREATE INDEX IF NOT EXISTS ix_subm_qual      ON submodel_qualifier(submodel_id);
 CREATE INDEX IF NOT EXISTS ix_qual_sme       ON submodel_element_qualifier(sme_id);
 CREATE INDEX IF NOT EXISTS ix_qual_type      ON qualifier(type);
-CREATE INDEX IF NOT EXISTS ix_qual_num       ON qualifier(value_num)
-  WHERE value_type IN ('xs:decimal','xs:double','xs:float','xs:int','xs:integer','xs:long','xs:short');
-CREATE INDEX IF NOT EXISTS ix_qual_text_trgm ON qualifier USING GIN (value_text gin_trgm_ops)
-  WHERE value_type = 'xs:string';
 CREATE INDEX IF NOT EXISTS ix_sme_sub_parent  ON submodel_element (submodel_id, parent_sme_id);
 CREATE INDEX IF NOT EXISTS ix_sme_sub_depth   ON submodel_element (submodel_id, depth);
 CREATE INDEX IF NOT EXISTS ix_sme_roots_order
@@ -608,7 +582,7 @@ CREATE INDEX IF NOT EXISTS ix_aas_endpoint_position ON aas_descriptor_endpoint(p
 
 -- security_attributes
 CREATE INDEX IF NOT EXISTS ix_secattr_endpoint_id          ON security_attributes(endpoint_id);
-CREATE INDEX IF NOT EXISTS ix_secattr_type                 ON security_attributes(int);
+CREATE INDEX IF NOT EXISTS ix_secattr_type                 ON security_attributes(security_type);
 CREATE INDEX IF NOT EXISTS ix_secattr_key                  ON security_attributes(security_key);
 
 -- endpoint_protocol_version
@@ -629,9 +603,9 @@ CREATE INDEX IF NOT EXISTS ix_aasd_global_asset_id         ON aas_descriptor(glo
 CREATE INDEX IF NOT EXISTS ix_aasd_id_trgm                 ON aas_descriptor USING GIN (id gin_trgm_ops);
 CREATE INDEX IF NOT EXISTS ix_aasd_global_asset_id_trgm    ON aas_descriptor USING GIN (global_asset_id gin_trgm_ops);
 -- Asset kind/type filters
-CREATE INDEX IF NOT EXISTS ix_aasd_asset_kind              ON aas_descriptor(int);
+CREATE INDEX IF NOT EXISTS ix_aasd_asset_kind              ON aas_descriptor(asset_kind);
 CREATE INDEX IF NOT EXISTS ix_aasd_asset_type              ON aas_descriptor(asset_type);
-CREATE INDEX IF NOT EXISTS ix_aasd_asset_kind_type         ON aas_descriptor(int, asset_type);
+CREATE INDEX IF NOT EXISTS ix_aasd_asset_kind_type         ON aas_descriptor(asset_kind, asset_type);
 
 -- submodel_descriptor
 CREATE INDEX IF NOT EXISTS ix_smd_aas_descriptor_id        ON submodel_descriptor(aas_descriptor_id);

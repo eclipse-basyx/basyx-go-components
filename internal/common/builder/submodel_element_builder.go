@@ -51,22 +51,22 @@ type semanticIDResult struct {
 	semanticID types.IReference
 }
 type descriptionResult struct {
-	descriptions []model.LangStringTextType
+	descriptions []types.ILangStringTextType
 }
 type displayNameResult struct {
-	displayNames []model.LangStringNameType
+	displayNames []types.ILangStringNameType
 }
 type embeddedDataSpecResult struct {
-	eds []model.EmbeddedDataSpecification
+	eds []types.EmbeddedDataSpecification
 }
 type supplementalSemanticIDsResult struct {
-	supplementalSemanticIDs []model.Reference
+	supplementalSemanticIDs []types.Reference
 }
 type qualifiersResult struct {
-	qualifiers []model.Qualifier
+	qualifiers []types.Qualifier
 }
 type extensionsResult struct {
-	extensions []model.Extension
+	extensions []types.Extension
 }
 
 // BuildSubmodelElement constructs a SubmodelElement from the provided database row.
@@ -138,7 +138,7 @@ func BuildSubmodelElement(smeRow model.SubmodelElementRow) (types.ISubmodelEleme
 	// Parse EmbeddedDataSpecifications
 	g.Go(func() error {
 		if smeRow.EmbeddedDataSpecifications != nil {
-			var eds []model.EmbeddedDataSpecification
+			var eds []types.EmbeddedDataSpecification
 			var json = jsoniter.ConfigCompatibleWithStandardLibrary
 			err := json.Unmarshal(*smeRow.EmbeddedDataSpecifications, &eds)
 			if err != nil {
@@ -154,7 +154,7 @@ func BuildSubmodelElement(smeRow model.SubmodelElementRow) (types.ISubmodelEleme
 	// Parse SupplementalSemanticIDs
 	g.Go(func() error {
 		if smeRow.SupplementalSemanticIDs != nil {
-			var supplementalSemanticIDs []model.Reference
+			var supplementalSemanticIDs []types.Reference
 			var json = jsoniter.ConfigCompatibleWithStandardLibrary
 			err := json.Unmarshal(*smeRow.SupplementalSemanticIDs, &supplementalSemanticIDs)
 			if err != nil {
@@ -170,7 +170,7 @@ func BuildSubmodelElement(smeRow model.SubmodelElementRow) (types.ISubmodelEleme
 	// Parse Extensions
 	g.Go(func() error {
 		if smeRow.Extensions != nil {
-			var extensions []model.Extension
+			var extensions []types.Extension
 			var json = jsoniter.ConfigCompatibleWithStandardLibrary
 			err := json.Unmarshal(*smeRow.Extensions, &extensions)
 			if err != nil {
@@ -245,22 +245,12 @@ func BuildSubmodelElement(smeRow model.SubmodelElementRow) (types.ISubmodelEleme
 
 	descResult := <-descriptionChan
 	if len(descResult.descriptions) > 0 {
-		// Convert model LangStringTextType to SDK
-		sdkDescriptions := make([]types.ILangStringTextType, len(descResult.descriptions))
-		for i, d := range descResult.descriptions {
-			sdkDescriptions[i] = types.NewLangStringTextType(d.Language, d.Text)
-		}
-		specificSME.SetDescription(sdkDescriptions)
+		specificSME.SetDescription(descResult.descriptions)
 	}
 
 	displayResult := <-displayNameChan
 	if len(displayResult.displayNames) > 0 {
-		// Convert model LangStringNameType to SDK
-		sdkDisplayNames := make([]types.ILangStringNameType, len(displayResult.displayNames))
-		for i, d := range displayResult.displayNames {
-			sdkDisplayNames[i] = types.NewLangStringNameType(d.Language, d.Text)
-		}
-		specificSME.SetDisplayName(sdkDisplayNames)
+		specificSME.SetDisplayName(displayResult.displayNames)
 	}
 
 	edsResult := <-embeddedDataSpecChan
@@ -299,64 +289,64 @@ func BuildSubmodelElement(smeRow model.SubmodelElementRow) (types.ISubmodelEleme
 // It handles reference building for types that require it.
 func getSubmodelElementObjectBasedOnModelType(smeRow model.SubmodelElementRow, refBuilderMap map[int64]*ReferenceBuilder, refMutex *sync.RWMutex) (types.ISubmodelElement, error) {
 	switch smeRow.ModelType {
-	case "Property":
+	case int64(types.ModelTypeProperty):
 		prop, err := buildProperty(smeRow, refBuilderMap, refMutex)
 		if err != nil {
 			return nil, err
 		}
 		return prop, nil
-	case "SubmodelElementCollection":
+	case int64(types.ModelTypeSubmodelElementCollection):
 		return buildSubmodelElementCollection()
-	case "Operation":
+	case int64(types.ModelTypeOperation):
 		return buildOperation(smeRow)
-	case "Entity":
+	case int64(types.ModelTypeEntity):
 		return buildEntity(smeRow)
-	case "AnnotatedRelationshipElement":
+	case int64(types.ModelTypeAnnotatedRelationshipElement):
 		return buildAnnotatedRelationshipElement(smeRow)
-	case "MultiLanguageProperty":
+	case int64(types.ModelTypeMultiLanguageProperty):
 		mlProp, err := buildMultiLanguageProperty(smeRow)
 		if err != nil {
 			return nil, err
 		}
 		return mlProp, nil
-	case "File":
+	case int64(types.ModelTypeFile):
 		file, err := buildFile(smeRow)
 		if err != nil {
 			return nil, err
 		}
 		return file, nil
-	case "Blob":
+	case int64(types.ModelTypeBlob):
 		blob, err := buildBlob(smeRow)
 		if err != nil {
 			return nil, err
 		}
 		return blob, nil
-	case "ReferenceElement":
+	case int64(types.ModelTypeReferenceElement):
 		return buildReferenceElement(smeRow)
-	case "RelationshipElement":
+	case int64(types.ModelTypeRelationshipElement):
 		return buildRelationshipElement(smeRow)
-	case "Range":
+	case int64(types.ModelTypeRange):
 		rng, err := buildRange(smeRow)
 		if err != nil {
 			return nil, err
 		}
 		return rng, nil
-	case "BasicEventElement":
+	case int64(types.ModelTypeBasicEventElement):
 		eventElem, err := buildBasicEventElement(smeRow)
 		if err != nil {
 			return nil, err
 		}
 		return eventElem, nil
-	case "SubmodelElementList":
+	case int64(types.ModelTypeSubmodelElementList):
 		return buildSubmodelElementList(smeRow)
-	case "Capability":
+	case int64(types.ModelTypeCapability):
 		capability, err := buildCapability()
 		if err != nil {
 			return nil, err
 		}
 		return capability, nil
 	default:
-		return nil, fmt.Errorf("modelType %s is unknown", smeRow.ModelType)
+		return nil, common.NewInternalServerError(fmt.Sprintf("Received invalid ModelType: %d while constructing SubmodelElement", smeRow.ModelType))
 	}
 }
 
