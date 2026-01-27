@@ -389,9 +389,12 @@ func buildListAssetAdministrationShellDescriptorsQuery(
 			expressions[6],
 			expressions[7],
 			expressions[8],
-		).GroupBy(
-		expressions[0], // descriptor_id
-	)
+		)
+	if auth.NeedsGroupBy(ctx, mapper) {
+		ds = ds.GroupBy(
+			expressions[0], // descriptor_id
+		)
+	}
 	ds, err = auth.AddFormulaQueryFromContext(ctx, ds, collector)
 	if err != nil {
 		return nil, err
