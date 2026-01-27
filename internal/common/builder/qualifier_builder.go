@@ -32,7 +32,7 @@ import (
 	"fmt"
 	"sort"
 
-	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	"github.com/FriedJannik/aas-go-sdk/types"
 )
 
 // QualifiersBuilder constructs Qualifier objects with their associated references
@@ -49,7 +49,7 @@ type QualifiersBuilder struct {
 }
 
 type qualifierWithPosition struct {
-	qualifier *gen.Qualifier
+	qualifier *types.Qualifier
 	position  int
 }
 
@@ -92,30 +92,21 @@ func NewQualifiersBuilder() *QualifiersBuilder {
 //	builder := NewQualifiersBuilder()
 //	builder.AddQualifier(1, "ConceptQualifier", "ExpressionSemantic", "xs:string", "example value")
 //	builder.AddQualifier(2, "ValueQualifier", "ExpressionLogic", "xs:boolean", "true")
-func (b *QualifiersBuilder) AddQualifier(qualifierDbID int64, kind string, qType string, valueType string, value string, position int) (*QualifiersBuilder, error) {
+func (b *QualifiersBuilder) AddQualifier(qualifierDbID int64, kind int64, qType string, valueType int64, value string, position int) (*QualifiersBuilder, error) {
 	_, exists := b.qualifiers[qualifierDbID]
 	if !exists {
-		ValueType, err := gen.NewDataTypeDefXsdFromValue(valueType)
-		if err != nil {
-			_, _ = fmt.Println(err)
-			return nil, fmt.Errorf("error parsing ValueType for Qualifier '%d' to Go Struct. See console for details", qualifierDbID)
-		}
+		qualifier := types.Qualifier{}
+		qualifier.SetType(qType)
+		qualifier.SetValueType(types.DataTypeDefXSD(valueType))
+		qualifier.SetValue(&value)
 		b.qualifiers[qualifierDbID] = &qualifierWithPosition{
-			qualifier: &gen.Qualifier{
-				Type:      qType,
-				ValueType: ValueType,
-				Value:     value,
-			},
-			position: position,
+			qualifier: &qualifier,
+			position:  position,
 		}
 
-		if kind != "" {
-			Kind, err := gen.NewQualifierKindFromValue(kind)
-			if err != nil {
-				_, _ = fmt.Println(err)
-				return nil, fmt.Errorf("error parsing Qualifier Kind to Go Struct for Qualifier '%d'. See console for details", qualifierDbID)
-			}
-			b.qualifiers[qualifierDbID].qualifier.Kind = Kind
+		if kind != 0 {
+			qKind := types.QualifierKind(kind)
+			b.qualifiers[qualifierDbID].qualifier.SetKind(&qKind)
 		}
 	} else {
 		_, _ = fmt.Printf("[Warning] qualifier with id '%d' already exists - skipping.", qualifierDbID)
@@ -154,7 +145,11 @@ func (b *QualifiersBuilder) AddSemanticID(qualifierDbID int64, semanticIDRows js
 		return nil, err
 	}
 
-	qualifier.qualifier.SemanticID = semanticID
+	if semanticID != nil {
+		return nil, fmt.Errorf("expected exactly one SemanticID for Qualifier '%d' but got none", qualifierDbID)
+	}
+
+	qualifier.qualifier.SetSemanticID(*semanticID)
 
 	return b, nil
 }
@@ -191,7 +186,11 @@ func (b *QualifiersBuilder) AddValueID(qualifierDbID int64, valueIDRows json.Raw
 		return nil, err
 	}
 
-	qualifier.qualifier.ValueID = valueID
+	if valueID != nil {
+		return nil, fmt.Errorf("expected exactly one ValueID for Qualifier '%d' but got none", qualifierDbID)
+	}
+
+	qualifier.qualifier.SetValueID(*valueID)
 	return b, nil
 }
 
@@ -237,18 +236,18 @@ func (b *QualifiersBuilder) AddSupplementalSemanticIDs(qualifierDbID int64, supp
 		}
 	}
 
-	suppl := []gen.Reference{}
+	suppl := []types.IReference{}
 
 	for _, el := range refs {
 		suppl = append(suppl, *el)
 	}
 
-	qualifier.qualifier.SupplementalSemanticIds = suppl
+	qualifier.qualifier.SetSupplementalSemanticIDs(suppl)
 
 	return b, nil
 }
 
-func (b *QualifiersBuilder) createExactlyOneReference(qualifierDbID int64, refRows json.RawMessage, referredRefRows json.RawMessage, typeOfReference string) (*gen.Reference, error) {
+func (b *QualifiersBuilder) createExactlyOneReference(qualifierDbID int64, refRows json.RawMessage, referredRefRows json.RawMessage, typeOfReference string) (*types.IReference, error) {
 	_, exists := b.qualifiers[qualifierDbID]
 
 	if !exists {
@@ -313,7 +312,7 @@ func (b *QualifiersBuilder) createExactlyOneReference(qualifierDbID int64, refRo
 //	qualifiers := builder.Build()
 //
 //	// Now 'qualifiers' contains all qualifiers with complete reference hierarchies
-func (b *QualifiersBuilder) Build() []gen.Qualifier {
+func (b *QualifiersBuilder) Build() []types.Qualifier {
 	for _, builder := range b.refBuilderMap {
 		builder.BuildNestedStructure()
 	}
@@ -328,7 +327,7 @@ func (b *QualifiersBuilder) Build() []gen.Qualifier {
 		return qualifierList[i].position < qualifierList[j].position
 	})
 
-	qualifiers := make([]gen.Qualifier, 0, len(qualifierList))
+	qualifiers := make([]types.Qualifier, 0, len(qualifierList))
 	for _, item := range qualifierList {
 		qualifiers = append(qualifiers, *item.qualifier)
 	}

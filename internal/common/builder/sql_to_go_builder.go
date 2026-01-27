@@ -92,8 +92,10 @@ func ParseReferredReferencesFromRows(semanticIDData []model.ReferredReferenceRow
 			_, _ = fmt.Println("[WARNING - ParseReferredReferencesFromRows] KeyID, KeyType or KeyValue was nil - skipping Reference Creation for Reference with Reference ID", *ref.ReferenceID)
 			continue
 		}
-		builder.CreateReferredSemanticID(*ref.ReferenceID, *ref.ParentReference, *ref.ReferenceType)
-		err := builder.CreateReferredSemanticIDKey(*ref.ReferenceID, *ref.KeyID, *ref.KeyType, *ref.KeyValue)
+		referenceType := types.ReferenceTypes(*ref.ReferenceType)
+		builder.CreateReferredSemanticID(*ref.ReferenceID, *ref.ParentReference, referenceType)
+		keyType := types.KeyTypes(*ref.KeyType)
+		err := builder.CreateReferredSemanticIDKey(*ref.ReferenceID, *ref.KeyID, keyType, *ref.KeyValue)
 
 		if err != nil {
 			return fmt.Errorf("error creating key for referred reference with id %d: %w", *ref.ReferenceID, err)
@@ -154,7 +156,7 @@ func ParseReferencesFromRows(semanticIDData []model.ReferenceRow, referenceBuild
 	resultArray := make([]*types.IReference, 0)
 
 	for _, ref := range semanticIDData {
-		var semanticID *types.IReference
+		var semanticIDInterface types.IReference
 		var semanticIDBuilder *ReferenceBuilder
 
 		// Check if reference already exists
@@ -167,7 +169,8 @@ func ParseReferencesFromRows(semanticIDData []model.ReferenceRow, referenceBuild
 		}
 
 		if !semanticIDCreated {
-			semanticID, semanticIDBuilder = NewReferenceBuilder(ref.ReferenceType, ref.ReferenceID)
+			referenceType := types.ReferenceTypes(ref.ReferenceType)
+			semanticIDInterface, semanticIDBuilder = NewReferenceBuilder(referenceType, ref.ReferenceID)
 
 			// Write lock to add to map
 			if mu != nil {
@@ -178,7 +181,7 @@ func ParseReferencesFromRows(semanticIDData []model.ReferenceRow, referenceBuild
 				mu.Unlock()
 			}
 
-			resultArray = append(resultArray, semanticID)
+			resultArray = append(resultArray, &semanticIDInterface)
 		} else {
 			// Read lock to get from map
 			if mu != nil {
@@ -194,7 +197,8 @@ func ParseReferencesFromRows(semanticIDData []model.ReferenceRow, referenceBuild
 			_, _ = fmt.Println("[WARNING - ParseReferencesFromRows] KeyID, KeyType or KeyValue was nil - skipping Key Creation for Reference with Reference ID", ref.ReferenceID)
 			continue
 		}
-		semanticIDBuilder.CreateKey(*ref.KeyID, *ref.KeyType, *ref.KeyValue)
+		keyType := types.KeyTypes(*ref.KeyType)
+		semanticIDBuilder.CreateKey(*ref.KeyID, keyType, *ref.KeyValue)
 	}
 
 	return resultArray
@@ -346,8 +350,8 @@ func ParseLangStringTextType(descriptions json.RawMessage) ([]model.LangStringTe
 // The function handles empty input by returning an empty slice. It uses panic recovery to
 // handle runtime errors during type assertions. Only objects with an 'id' field are processed
 // to ensure data integrity.
-func ParseLangStringPreferredNameTypeIec61360(descriptions json.RawMessage) ([]model.LangStringPreferredNameTypeIec61360, error) {
-	var texts []model.LangStringPreferredNameTypeIec61360
+func ParseLangStringPreferredNameTypeIec61360(descriptions json.RawMessage) ([]types.ILangStringPreferredNameTypeIEC61360, error) {
+	var texts []types.ILangStringPreferredNameTypeIEC61360
 	// remove id field from json
 	var temp []map[string]interface{}
 	if len(descriptions) == 0 {
@@ -367,10 +371,11 @@ func ParseLangStringPreferredNameTypeIec61360(descriptions json.RawMessage) ([]m
 	for _, item := range temp {
 		if _, ok := item["id"]; ok {
 			delete(item, "id")
-			texts = append(texts, model.LangStringPreferredNameTypeIec61360{
-				Text:     item["text"].(string),
-				Language: item["language"].(string),
-			})
+			text := types.NewLangStringPreferredNameTypeIEC61360(
+				item["language"].(string),
+				item["text"].(string),
+			)
+			texts = append(texts, text)
 		}
 	}
 
@@ -393,8 +398,8 @@ func ParseLangStringPreferredNameTypeIec61360(descriptions json.RawMessage) ([]m
 // The function handles empty input by returning an empty slice. It uses panic recovery to
 // handle runtime errors during type assertions. Only objects with an 'id' field are processed
 // to ensure data integrity.
-func ParseLangStringShortNameTypeIec61360(descriptions json.RawMessage) ([]model.LangStringShortNameTypeIec61360, error) {
-	var texts []model.LangStringShortNameTypeIec61360
+func ParseLangStringShortNameTypeIec61360(descriptions json.RawMessage) ([]types.ILangStringShortNameTypeIEC61360, error) {
+	var texts []types.ILangStringShortNameTypeIEC61360
 	// remove id field from json
 	var temp []map[string]interface{}
 	if len(descriptions) == 0 {
@@ -414,10 +419,11 @@ func ParseLangStringShortNameTypeIec61360(descriptions json.RawMessage) ([]model
 	for _, item := range temp {
 		if _, ok := item["id"]; ok {
 			delete(item, "id")
-			texts = append(texts, model.LangStringShortNameTypeIec61360{
-				Text:     item["text"].(string),
-				Language: item["language"].(string),
-			})
+			text := types.NewLangStringShortNameTypeIEC61360(
+				item["language"].(string),
+				item["text"].(string),
+			)
+			texts = append(texts, text)
 		}
 	}
 
@@ -440,8 +446,8 @@ func ParseLangStringShortNameTypeIec61360(descriptions json.RawMessage) ([]model
 // The function handles empty input by returning an empty slice. It uses panic recovery to
 // handle runtime errors during type assertions. Only objects with an 'id' field are processed
 // to ensure data integrity.
-func ParseLangStringDefinitionTypeIec61360(descriptions json.RawMessage) ([]model.LangStringDefinitionTypeIec61360, error) {
-	var texts []model.LangStringDefinitionTypeIec61360
+func ParseLangStringDefinitionTypeIec61360(descriptions json.RawMessage) ([]types.ILangStringDefinitionTypeIEC61360, error) {
+	var texts []types.ILangStringDefinitionTypeIEC61360
 	// remove id field from json
 	var temp []map[string]interface{}
 	if len(descriptions) == 0 {
@@ -461,10 +467,11 @@ func ParseLangStringDefinitionTypeIec61360(descriptions json.RawMessage) ([]mode
 	for _, item := range temp {
 		if _, ok := item["id"]; ok {
 			delete(item, "id")
-			texts = append(texts, model.LangStringDefinitionTypeIec61360{
-				Text:     item["text"].(string),
-				Language: item["language"].(string),
-			})
+			text := types.NewLangStringDefinitionTypeIEC61360(
+				item["language"].(string),
+				item["text"].(string),
+			)
+			texts = append(texts, text)
 		}
 	}
 

@@ -224,7 +224,7 @@ func (p *PostgreSQLSubmodelDatabase) GetAllSubmodelsMetadata(
 	_ /* cursor */ string,
 	idShort string,
 	_ /* semanticID */ string,
-) ([]gen.Submodel, string, error) {
+) ([]types.Submodel, string, error) {
 	tx, err := p.db.Begin()
 	if limit <= 0 {
 		limit = 100
@@ -283,17 +283,18 @@ func (p *PostgreSQLSubmodelDatabase) GetAllSubmodelsMetadata(
 		}
 	}()
 
-	var submodels []gen.Submodel
+	var submodels []types.Submodel
 	for rows.Next() {
-		var sm gen.Submodel
-		var refType, keyType, keyValue, category sql.NullString
-
+		var sm types.Submodel
+		var keyValue, category sql.NullString
+		var ID, IDShort sql.NullString
+		var Kind, ModelType, refType, keyType sql.NullInt64
 		err := rows.Scan(
-			&sm.ID,
-			&sm.IdShort,
+			ID,
+			IDShort,
 			&category,
-			&sm.Kind,
-			&sm.ModelType,
+			&Kind,
+			&ModelType,
 			&refType,
 			&keyType,
 			&keyValue,
@@ -303,20 +304,23 @@ func (p *PostgreSQLSubmodelDatabase) GetAllSubmodelsMetadata(
 			return nil, "", err
 		}
 		if category.Valid {
-			sm.Category = category.String
+			sm.SetCategory(&category.String)
 		}
 		if refType.Valid {
-			ref := gen.Reference{
-				Type: gen.ReferenceTypes(refType.String),
-			}
+			// ref := gen.Reference{
+			// 	Type: gen.ReferenceTypes(refType.String),
+			// }
+			ref := types.Reference{}
+			ref.SetType(types.ReferenceTypes(refType.Int64))
 			// Only add keys if both type and value are valid
 			if keyType.Valid && keyValue.Valid {
-				ref.Keys = []gen.Key{{
-					Type:  gen.KeyTypes(keyType.String),
-					Value: keyValue.String,
-				}}
+				// ref.Keys = []gen.Key{{
+				// 	Type:  gen.KeyTypes(keyType.String),
+				// 	Value: keyValue.String,
+				// }}
+				ref.SetKeys([]types.IKey{types.NewKey(types.KeyTypes(keyType.Int64), keyValue.String)})
 			}
-			sm.SemanticID = &ref
+			sm.SetSemanticID(&ref)
 		}
 		submodels = append(submodels, sm)
 	}

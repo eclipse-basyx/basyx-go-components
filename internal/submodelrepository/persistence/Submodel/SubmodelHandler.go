@@ -34,6 +34,7 @@ import (
 	"sync"
 
 	// nolint:all
+	"github.com/FriedJannik/aas-go-sdk/stringification"
 	"github.com/FriedJannik/aas-go-sdk/types"
 	_ "github.com/doug-martin/goqu/v9/dialect/postgres"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
@@ -246,12 +247,12 @@ func parseSubmodelRow(row model.SubmodelRow, referenceBuilderRefs map[int64]*bui
 	}
 
 	var (
-		semanticID              []*model.Reference
-		supplementalSemanticIDs []*model.Reference
-		embeddedDataSpecs       []model.EmbeddedDataSpecification
-		qualifiers              []model.Qualifier
-		extensions              []model.Extension
-		administration          *model.AdministrativeInformation
+		semanticID              []*types.IReference
+		supplementalSemanticIDs []*types.IReference
+		embeddedDataSpecs       []types.EmbeddedDataSpecification
+		qualifiers              []types.IQualifier
+		extensions              []types.IExtension
+		administration          *types.AdministrativeInformation
 		displayNames            []types.ILangStringNameType
 		descriptions            []types.ILangStringTextType
 	)
@@ -333,22 +334,32 @@ func parseSubmodelRow(row model.SubmodelRow, referenceBuilderRefs map[int64]*bui
 
 	// Assign parsed data to submodel using SDK setters
 	if hasSemanticID(semanticID) {
-		submodel.SetSemanticID(convertReferenceToSDK(semanticID[0]))
+		submodel.SetSemanticID(*semanticID[0])
 	}
-	if moreThanZeroReferences(supplementalSemanticIDs) {
-		submodel.SetSupplementalSemanticIDs(convertReferencesToSDK(supplementalSemanticIDs))
+	if len(supplementalSemanticIDs) > 0 {
+		// Convert from []*types.IReference to []types.IReference
+		supplementalRefs := make([]types.IReference, len(supplementalSemanticIDs))
+		for i, ref := range supplementalSemanticIDs {
+			supplementalRefs[i] = *ref
+		}
+		submodel.SetSupplementalSemanticIDs(supplementalRefs)
 	}
 	if len(embeddedDataSpecs) > 0 {
-		submodel.SetEmbeddedDataSpecifications(convertEmbeddedDataSpecsToSDK(embeddedDataSpecs))
+		// Convert to slice of interface
+		eds := make([]types.IEmbeddedDataSpecification, len(embeddedDataSpecs))
+		for i := range embeddedDataSpecs {
+			eds[i] = &embeddedDataSpecs[i]
+		}
+		submodel.SetEmbeddedDataSpecifications(eds)
 	}
 	if len(qualifiers) > 0 {
-		submodel.SetQualifiers(convertQualifiersToSDK(qualifiers))
+		submodel.SetQualifiers(qualifiers)
 	}
 	if len(extensions) > 0 {
-		submodel.SetExtensions(convertExtensionsToSDK(extensions))
+		submodel.SetExtensions(extensions)
 	}
 	if administration != nil {
-		submodel.SetAdministration(convertAdministrationToSDK(administration))
+		submodel.SetAdministration(administration)
 	}
 	if len(displayNames) > 0 {
 		submodel.SetDisplayName(displayNames)
@@ -381,7 +392,7 @@ func calculateNextCursor(result []*types.Submodel, limit int64) string {
 }
 
 // BuildQualifiers builds qualifiers from the database row.
-func BuildQualifiers(row model.SubmodelRow) ([]model.Qualifier, error) {
+func BuildQualifiers(row model.SubmodelRow) ([]types.IQualifier, error) {
 	if common.IsArrayNotEmpty(row.Qualifiers) {
 		builder := builders.NewQualifiersBuilder()
 		qualifierRows, err := builders.ParseQualifiersRow(row.Qualifiers)
@@ -389,7 +400,16 @@ func BuildQualifiers(row model.SubmodelRow) ([]model.Qualifier, error) {
 			return nil, err
 		}
 		for _, qualifierRow := range qualifierRows {
-			_, err = builder.AddQualifier(qualifierRow.DbID, qualifierRow.Kind, qualifierRow.Type, qualifierRow.ValueType, qualifierRow.Value, qualifierRow.Position)
+			// Convert string enums to SDK enums
+			kindEnum, ok := stringification.QualifierKindFromString(qualifierRow.Kind)
+			if !ok {
+				return nil, fmt.Errorf("invalid QualifierKind: %s", qualifierRow.Kind)
+			}
+			valueTypeEnum, ok := stringification.DataTypeDefXSDFromString(qualifierRow.ValueType)
+			if !ok {
+				return nil, fmt.Errorf("invalid DataTypeDefXSD: %s", qualifierRow.ValueType)
+			}
+			_, err = builder.AddQualifier(qualifierRow.DbID, int64(kindEnum), qualifierRow.Type, int64(valueTypeEnum), qualifierRow.Value, qualifierRow.Position)
 			if err != nil {
 				return nil, err
 			}
@@ -409,13 +429,20 @@ func BuildQualifiers(row model.SubmodelRow) ([]model.Qualifier, error) {
 				return nil, err
 			}
 		}
-		return builder.Build(), nil
+		built := builder.Build()
+		// Convert concrete types to interfaces - need pointers since methods have pointer receivers
+		result := make([]types.IQualifier, len(built))
+		for i := range built {
+			q := built[i] // Copy to get addressable value
+			result[i] = &q
+		}
+		return result, nil
 	}
 	return nil, nil
 }
 
 // BuildAdministration builds administrative information from the database row.
-func BuildAdministration(row model.SubmodelRow) (*model.AdministrativeInformation, error) {
+func BuildAdministration(row model.SubmodelRow) (*types.AdministrativeInformation, error) {
 	if common.IsArrayNotEmpty(row.Administration) {
 		adminRow, err := builders.ParseAdministrationRow(row.Administration)
 		if err != nil {
@@ -436,7 +463,7 @@ func BuildAdministration(row model.SubmodelRow) (*model.AdministrativeInformatio
 }
 
 // BuildExtensions builds extensions from the database row.
-func BuildExtensions(row model.SubmodelRow) ([]model.Extension, error) {
+func BuildExtensions(row model.SubmodelRow) ([]types.IExtension, error) {
 	if common.IsArrayNotEmpty(row.Extensions) {
 		builder := builders.NewExtensionsBuilder()
 		extensionRows, err := builders.ParseExtensionRows(row.Extensions)
@@ -523,7 +550,7 @@ func parseDescriptionsToSDK(row model.SubmodelRow) ([]types.ILangStringTextType,
 //
 // Returns:
 //   - bool: true if exactly one semantic ID reference exists, false otherwise
-func hasSemanticID(semanticIDData []*model.Reference) bool {
+func hasSemanticID(semanticIDData []*types.IReference) bool {
 	return len(semanticIDData) == 1
 }
 

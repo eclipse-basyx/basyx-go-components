@@ -88,11 +88,11 @@ type ReferenceRow struct {
 	// ReferenceID is the unique identifier of the reference in the database
 	ReferenceID int64 `json:"reference_id"`
 	// ReferenceType specifies the type of reference (e.g., ExternalReference, ModelReference)
-	ReferenceType string `json:"reference_type"`
+	ReferenceType int64 `json:"reference_type"`
 	// KeyID is the unique identifier of the key in the database (nullable)
 	KeyID *int64 `json:"key_id"`
 	// KeyType specifies the type of the key (e.g., Submodel, Property) (nullable)
-	KeyType *string `json:"key_type"`
+	KeyType *int64 `json:"key_type"`
 	// KeyValue contains the actual value of the key (nullable)
 	KeyValue *string `json:"key_value"`
 }
@@ -109,11 +109,11 @@ type EdsReferenceRow struct {
 	// ReferenceID is the unique identifier of the reference in the database
 	ReferenceID int64 `json:"reference_id"`
 	// ReferenceType specifies the type of reference (nullable)
-	ReferenceType *string `json:"reference_type"`
+	ReferenceType *int64 `json:"reference_type"`
 	// KeyID is the unique identifier of the key in the database (nullable)
 	KeyID *int64 `json:"key_id"`
 	// KeyType specifies the type of the key (nullable)
-	KeyType *string `json:"key_type"`
+	KeyType *int64 `json:"key_type"`
 	// KeyValue contains the actual value of the key (nullable)
 	KeyValue *string `json:"key_value"`
 }
@@ -134,7 +134,7 @@ type ReferredReferenceRow struct {
 	// ReferenceID is the unique identifier of this reference in the database (nullable)
 	ReferenceID *int64 `json:"reference_id"`
 	// ReferenceType specifies the type of reference (nullable)
-	ReferenceType *string `json:"reference_type"`
+	ReferenceType *int64 `json:"reference_type"`
 	// ParentReference identifies the parent reference in the hierarchy (nullable)
 	ParentReference *int64 `json:"parentReference"`
 	// RootReference identifies the root reference in the hierarchy (nullable)
@@ -142,7 +142,7 @@ type ReferredReferenceRow struct {
 	// KeyID is the unique identifier of the key in the database (nullable)
 	KeyID *int64 `json:"key_id"`
 	// KeyType specifies the type of the key (nullable)
-	KeyType *string `json:"key_type"`
+	KeyType *int64 `json:"key_type"`
 	// KeyValue contains the actual value of the key (nullable)
 	KeyValue *string `json:"key_value"`
 }

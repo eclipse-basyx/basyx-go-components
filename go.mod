@@ -5,6 +5,7 @@ go 1.25.0
 require github.com/go-chi/chi/v5 v5.2.4
 
 require (
+	github.com/FriedJannik/aas-go-sdk v1.0.0
 	github.com/coreos/go-oidc v2.5.0+incompatible
 	github.com/doug-martin/goqu/v9 v9.19.0
 	github.com/go-chi/cors v1.2.2
@@ -18,7 +19,6 @@ require (
 )
 
 require (
-	github.com/FriedJannik/aas-go-sdk v1.0.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
 	github.com/go-viper/mapstructure/v2 v2.4.0 // indirect

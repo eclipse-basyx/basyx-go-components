@@ -30,6 +30,7 @@ package builder
 import (
 	"log"
 
+	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -57,11 +58,13 @@ import (
 //	if err != nil {
 //	    log.Printf("Failed to build administration: %v", err)
 //	}
-func BuildAdministration(adminRow model.AdministrationRow) (*model.AdministrativeInformation, error) {
-	administration := &model.AdministrativeInformation{
-		Version:    adminRow.Version,
-		Revision:   adminRow.Revision,
-		TemplateID: adminRow.TemplateID,
+func BuildAdministration(adminRow model.AdministrationRow) (*types.AdministrativeInformation, error) {
+	administration := &types.AdministrativeInformation{}
+
+	administration.SetVersion(&adminRow.Version)
+	administration.SetRevision(&adminRow.Revision)
+	if adminRow.TemplateID != "" {
+		administration.SetTemplateID(&adminRow.TemplateID)
 	}
 
 	refBuilderMap := make(map[int64]*ReferenceBuilder)
@@ -76,17 +79,21 @@ func BuildAdministration(adminRow model.AdministrationRow) (*model.Administrativ
 	}
 
 	if len(refs) > 0 {
-		administration.Creator = refs[0]
+		administration.SetCreator(*refs[0])
 	}
 
 	if adminRow.EmbeddedDataSpecification != nil {
-		var edsList []model.EmbeddedDataSpecification
+		var edsList []types.EmbeddedDataSpecification
 		var json = jsoniter.ConfigCompatibleWithStandardLibrary
 		err := json.Unmarshal(adminRow.EmbeddedDataSpecification, &edsList)
 		if err != nil {
 			log.Printf("Failed to build embedded data specifications: %v", err)
 		} else {
-			administration.EmbeddedDataSpecifications = edsList
+			abstractList := make([]types.IEmbeddedDataSpecification, len(edsList))
+			for _, eds := range edsList {
+				abstractList = append(abstractList, &eds)
+			}
+			administration.SetEmbeddedDataSpecifications(abstractList)
 		}
 	}
 

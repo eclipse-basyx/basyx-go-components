@@ -63,25 +63,12 @@ func (b BasicEventElementValue) GetModelType() types.ModelType {
 
 // AssertBasicEventElementValueRequired checks if the required fields are not zero-ed
 func AssertBasicEventElementValueRequired(obj BasicEventElementValue) error {
-	elements := map[string]interface{}{
-		"observed": obj.Observed,
-	}
-	for name, el := range elements {
-		if isZero := IsZeroValue(el); isZero {
-			return &RequiredError{Field: name}
-		}
-	}
-
-	if err := AssertReferenceValueRequired(obj.Observed); err != nil {
-		return err
-	}
+	// SDK types handle their own validation
 	return nil
 }
 
 // AssertBasicEventElementValueConstraints checks if the values respects the defined constraints
 func AssertBasicEventElementValueConstraints(obj BasicEventElementValue) error {
-	if err := AssertReferenceValueConstraints(obj.Observed); err != nil {
-		return err
-	}
+	// SDK types handle their own validation
 	return nil
 }

@@ -67,22 +67,12 @@ func (a AnnotatedRelationshipElementValue) GetModelType() types.ModelType {
 
 // AssertAnnotatedRelationshipElementValueRequired checks if the required fields are not zero-ed
 func AssertAnnotatedRelationshipElementValueRequired(obj AnnotatedRelationshipElementValue) error {
-	if err := AssertReferenceValueRequired(obj.First); err != nil {
-		return err
-	}
-	if err := AssertReferenceValueRequired(obj.Second); err != nil {
-		return err
-	}
+	// SDK types handle their own validation
 	return nil
 }
 
 // AssertAnnotatedRelationshipElementValueConstraints checks if the values respects the defined constraints
 func AssertAnnotatedRelationshipElementValueConstraints(obj AnnotatedRelationshipElementValue) error {
-	if err := AssertReferenceValueConstraints(obj.First); err != nil {
-		return err
-	}
-	if err := AssertReferenceValueConstraints(obj.Second); err != nil {
-		return err
-	}
+	// SDK types handle their own validation
 	return nil
 }

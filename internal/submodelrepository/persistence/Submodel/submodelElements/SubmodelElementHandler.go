@@ -443,7 +443,7 @@ func GetSubmodelElementsForSubmodel(db *sql.DB, submodelID string, idShortPath s
 					parentID: smeRow.ParentID.Int64,
 					path:     smeRow.IDShortPath,
 					position: smeRow.Position,
-					element:  *sme,
+					element:  sme,
 				}
 				mu.Lock()
 				nodes[smeRow.DbID.Int64] = n
@@ -479,7 +479,7 @@ func GetSubmodelElementsForSubmodel(db *sql.DB, submodelID string, idShortPath s
 
 	var nextCursor string
 	if (len(res) > limit) && limit != -1 {
-		nextCursor = res[limit].GetIdShort()
+		nextCursor = *res[limit].IDShort()
 		res = res[:limit]
 	}
 
@@ -563,22 +563,38 @@ func attachChildrenToSubmodelElements(nodes map[int64]*node, children map[int64]
 			return a.position < b.position
 		})
 
-		switch p := parent.element.(type) {
-		case *model.SubmodelElementCollection:
-			for _, ch := range kids {
-				p.Value = append(p.Value, ch.element)
+		switch parent.element.ModelType() {
+		case types.ModelTypeSubmodelElementCollection:
+			if p, ok := parent.element.(types.ISubmodelElementCollection); ok {
+				value := p.Value()
+				for _, ch := range kids {
+					value = append(value, ch.element)
+				}
+				p.SetValue(value)
 			}
-		case *model.SubmodelElementList:
-			for _, ch := range kids {
-				p.Value = append(p.Value, ch.element)
+		case types.ModelTypeSubmodelElementList:
+			if p, ok := parent.element.(types.ISubmodelElementList); ok {
+				value := p.Value()
+				for _, ch := range kids {
+					value = append(value, ch.element)
+				}
+				p.SetValue(value)
 			}
-		case *model.AnnotatedRelationshipElement:
-			for _, ch := range kids {
-				p.Annotations = append(p.Annotations, ch.element)
+		case types.ModelTypeAnnotatedRelationshipElement:
+			if p, ok := parent.element.(types.IAnnotatedRelationshipElement); ok {
+				annotations := p.Annotations()
+				for _, ch := range kids {
+					annotations = append(annotations, ch.element)
+				}
+				p.SetAnnotations(annotations)
 			}
-		case *model.Entity:
-			for _, ch := range kids {
-				p.Statements = append(p.Statements, ch.element)
+		case types.ModelTypeEntity:
+			if p, ok := parent.element.(types.IEntity); ok {
+				statements := p.Statements()
+				for _, ch := range kids {
+					statements = append(statements, ch.element)
+				}
+				p.SetStatements(statements)
 			}
 		}
 	}
