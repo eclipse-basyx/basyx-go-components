@@ -52,6 +52,17 @@ import (
 //	adapted, decision := le.SimplifyForBackendFilter(resolver)
 type AttributeResolver func(attr AttributeValue) any
 
+// SimplifyOptions controls how backend simplification treats comparisons.
+type SimplifyOptions struct {
+	// EnableImplicitCasts wraps field operands in casts to match the other operand's type.
+	EnableImplicitCasts bool
+}
+
+// DefaultSimplifyOptions returns the default settings used by SimplifyForBackendFilter.
+func DefaultSimplifyOptions() SimplifyOptions {
+	return SimplifyOptions{EnableImplicitCasts: true}
+}
+
 // SimplifyDecision is a tri-state result for SimplifyForBackendFilter.
 //
 // - SimplifyTrue / SimplifyFalse: the expression is fully decidable without backend context.
@@ -118,18 +129,26 @@ func deduplicateLogicalExpressions(exprs []LogicalExpression) []LogicalExpressio
 //
 //nolint:revive // Cyclomatic complexity is acceptable here.
 func (le LogicalExpression) SimplifyForBackendFilter(resolve AttributeResolver) (LogicalExpression, SimplifyDecision) {
+	return le.SimplifyForBackendFilterWithOptions(resolve, DefaultSimplifyOptions())
+}
+
+// SimplifyForBackendFilterWithOptions behaves like SimplifyForBackendFilter but allows
+// callers to control implicit casting behavior.
+//
+//nolint:revive // Cyclomatic complexity is acceptable here.
+func (le LogicalExpression) SimplifyForBackendFilterWithOptions(resolve AttributeResolver, opts SimplifyOptions) (LogicalExpression, SimplifyDecision) {
 	// Boolean literal stays as-is.
 	if le.Boolean != nil {
 		return le, decisionFromBool(*le.Boolean)
 	}
 
-	rle, rdec := handleComparison(le, resolve)
+	rle, rdec := handleComparison(le, resolve, opts)
 	if rle != nil {
 		return *rle, rdec
 	}
 
 	if len(le.Match) > 0 {
-		simplified, decision := simplifyMatchExpressionsForBackendFilter(le.Match, resolve)
+		simplified, decision := simplifyMatchExpressionsForBackendFilter(le.Match, resolve, opts)
 		switch decision {
 		case SimplifyTrue:
 			b := true
@@ -148,13 +167,13 @@ func (le LogicalExpression) SimplifyForBackendFilter(resolve AttributeResolver) 
 	// Logical: AND / OR
 	if len(le.And) > 0 {
 		if len(le.And) == 1 {
-			return le.And[0].SimplifyForBackendFilter(resolve)
+			return le.And[0].SimplifyForBackendFilterWithOptions(resolve, opts)
 		}
 		out := LogicalExpression{}
 		anyUnknown := false
 		// Short-circuit: if any child becomes false => whole AND is false.
 		for _, sub := range le.And {
-			t, decision := sub.SimplifyForBackendFilter(resolve)
+			t, decision := sub.SimplifyForBackendFilterWithOptions(resolve, opts)
 			switch decision {
 			case SimplifyFalse:
 				b := false
@@ -182,13 +201,13 @@ func (le LogicalExpression) SimplifyForBackendFilter(resolve AttributeResolver) 
 
 	if len(le.Or) > 0 {
 		if len(le.Or) == 1 {
-			return le.Or[0].SimplifyForBackendFilter(resolve)
+			return le.Or[0].SimplifyForBackendFilterWithOptions(resolve, opts)
 		}
 		out := LogicalExpression{}
 		anyUnknown := false
 		// Short-circuit: if any child becomes true => whole OR is true.
 		for _, sub := range le.Or {
-			t, decision := sub.SimplifyForBackendFilter(resolve)
+			t, decision := sub.SimplifyForBackendFilterWithOptions(resolve, opts)
 			switch decision {
 			case SimplifyTrue:
 				b := true
@@ -216,7 +235,7 @@ func (le LogicalExpression) SimplifyForBackendFilter(resolve AttributeResolver) 
 
 	// Logical: NOT
 	if le.Not != nil {
-		t, decision := le.Not.SimplifyForBackendFilter(resolve)
+		t, decision := le.Not.SimplifyForBackendFilterWithOptions(resolve, opts)
 		switch decision {
 		case SimplifyTrue:
 			b := false
@@ -232,7 +251,7 @@ func (le LogicalExpression) SimplifyForBackendFilter(resolve AttributeResolver) 
 	return le, SimplifyUndecided
 }
 
-func simplifyMatchExpressionsForBackendFilter(match []MatchExpression, resolve AttributeResolver) ([]MatchExpression, SimplifyDecision) {
+func simplifyMatchExpressionsForBackendFilter(match []MatchExpression, resolve AttributeResolver, opts SimplifyOptions) ([]MatchExpression, SimplifyDecision) {
 	if len(match) == 0 {
 		return nil, SimplifyUndecided
 	}
@@ -240,7 +259,7 @@ func simplifyMatchExpressionsForBackendFilter(match []MatchExpression, resolve A
 	out := make([]MatchExpression, 0, len(match))
 	anyUnknown := false
 	for _, m := range match {
-		t, decision := simplifyMatchExpressionForBackendFilter(m, resolve)
+		t, decision := simplifyMatchExpressionForBackendFilter(m, resolve, opts)
 		switch decision {
 		case SimplifyFalse:
 			return nil, SimplifyFalse
@@ -257,46 +276,46 @@ func simplifyMatchExpressionsForBackendFilter(match []MatchExpression, resolve A
 	return out, SimplifyUndecided
 }
 
-func simplifyMatchExpressionForBackendFilter(me MatchExpression, resolve AttributeResolver) (MatchExpression, SimplifyDecision) {
+func simplifyMatchExpressionForBackendFilter(me MatchExpression, resolve AttributeResolver, opts SimplifyOptions) (MatchExpression, SimplifyDecision) {
 	if me.Boolean != nil {
 		return me, decisionFromBool(*me.Boolean)
 	}
 
 	switch {
 	case len(me.Eq) == 2:
-		out, decision := reduceMatchCmp(me, resolve, me.Eq, "$eq")
+		out, decision := reduceMatchCmp(me, resolve, me.Eq, "$eq", opts)
 		return derefMatch(out, decision)
 	case len(me.Ne) == 2:
-		out, decision := reduceMatchCmp(me, resolve, me.Ne, "$ne")
+		out, decision := reduceMatchCmp(me, resolve, me.Ne, "$ne", opts)
 		return derefMatch(out, decision)
 	case len(me.Gt) == 2:
-		out, decision := reduceMatchCmp(me, resolve, me.Gt, "$gt")
+		out, decision := reduceMatchCmp(me, resolve, me.Gt, "$gt", opts)
 		return derefMatch(out, decision)
 	case len(me.Ge) == 2:
-		out, decision := reduceMatchCmp(me, resolve, me.Ge, "$ge")
+		out, decision := reduceMatchCmp(me, resolve, me.Ge, "$ge", opts)
 		return derefMatch(out, decision)
 	case len(me.Lt) == 2:
-		out, decision := reduceMatchCmp(me, resolve, me.Lt, "$lt")
+		out, decision := reduceMatchCmp(me, resolve, me.Lt, "$lt", opts)
 		return derefMatch(out, decision)
 	case len(me.Le) == 2:
-		out, decision := reduceMatchCmp(me, resolve, me.Le, "$le")
+		out, decision := reduceMatchCmp(me, resolve, me.Le, "$le", opts)
 		return derefMatch(out, decision)
 	case len(me.Regex) == 2:
-		out, decision := reduceMatchCmp(me, resolve, stringItemsToValues(me.Regex), "$regex")
+		out, decision := reduceMatchCmp(me, resolve, stringItemsToValues(me.Regex), "$regex", opts)
 		return derefMatch(out, decision)
 	case len(me.Contains) == 2:
-		out, decision := reduceMatchCmp(me, resolve, stringItemsToValues(me.Contains), "$contains")
+		out, decision := reduceMatchCmp(me, resolve, stringItemsToValues(me.Contains), "$contains", opts)
 		return derefMatch(out, decision)
 	case len(me.StartsWith) == 2:
-		out, decision := reduceMatchCmp(me, resolve, stringItemsToValues(me.StartsWith), "$starts-with")
+		out, decision := reduceMatchCmp(me, resolve, stringItemsToValues(me.StartsWith), "$starts-with", opts)
 		return derefMatch(out, decision)
 	case len(me.EndsWith) == 2:
-		out, decision := reduceMatchCmp(me, resolve, stringItemsToValues(me.EndsWith), "$ends-with")
+		out, decision := reduceMatchCmp(me, resolve, stringItemsToValues(me.EndsWith), "$ends-with", opts)
 		return derefMatch(out, decision)
 	}
 
 	if len(me.Match) > 0 {
-		simplified, decision := simplifyMatchExpressionsForBackendFilter(me.Match, resolve)
+		simplified, decision := simplifyMatchExpressionsForBackendFilter(me.Match, resolve, opts)
 		switch decision {
 		case SimplifyTrue:
 			b := true
@@ -319,33 +338,33 @@ func derefMatch(me *MatchExpression, decision SimplifyDecision) (MatchExpression
 	return *me, decision
 }
 
-func handleComparison(le LogicalExpression, resolve AttributeResolver) (*LogicalExpression, SimplifyDecision) {
+func handleComparison(le LogicalExpression, resolve AttributeResolver, opts SimplifyOptions) (*LogicalExpression, SimplifyDecision) {
 	switch {
 	case len(le.Eq) == 2:
-		return reduceCmp(le, resolve, le.Eq, "$eq")
+		return reduceCmp(le, resolve, le.Eq, "$eq", opts)
 	case len(le.Ne) == 2:
-		return reduceCmp(le, resolve, le.Ne, "$ne")
+		return reduceCmp(le, resolve, le.Ne, "$ne", opts)
 	case len(le.Gt) == 2:
-		return reduceCmp(le, resolve, le.Gt, "$gt")
+		return reduceCmp(le, resolve, le.Gt, "$gt", opts)
 	case len(le.Ge) == 2:
-		return reduceCmp(le, resolve, le.Ge, "$ge")
+		return reduceCmp(le, resolve, le.Ge, "$ge", opts)
 	case len(le.Lt) == 2:
-		return reduceCmp(le, resolve, le.Lt, "$lt")
+		return reduceCmp(le, resolve, le.Lt, "$lt", opts)
 	case len(le.Le) == 2:
-		return reduceCmp(le, resolve, le.Le, "$le")
+		return reduceCmp(le, resolve, le.Le, "$le", opts)
 	case len(le.Regex) == 2:
-		return reduceCmp(le, resolve, stringItemsToValues(le.Regex), "$regex")
+		return reduceCmp(le, resolve, stringItemsToValues(le.Regex), "$regex", opts)
 	case len(le.Contains) == 2:
-		return reduceCmp(le, resolve, stringItemsToValues(le.Contains), "$contains")
+		return reduceCmp(le, resolve, stringItemsToValues(le.Contains), "$contains", opts)
 	case len(le.StartsWith) == 2:
-		return reduceCmp(le, resolve, stringItemsToValues(le.StartsWith), "$starts-with")
+		return reduceCmp(le, resolve, stringItemsToValues(le.StartsWith), "$starts-with", opts)
 	case len(le.EndsWith) == 2:
-		return reduceCmp(le, resolve, stringItemsToValues(le.EndsWith), "$ends-with")
+		return reduceCmp(le, resolve, stringItemsToValues(le.EndsWith), "$ends-with", opts)
 	}
 	return nil, SimplifyUndecided
 }
 
-func reduceMatchCmp(me MatchExpression, resolve AttributeResolver, items []Value, op string) (*MatchExpression, SimplifyDecision) {
+func reduceMatchCmp(me MatchExpression, resolve AttributeResolver, items []Value, op string, opts SimplifyOptions) (*MatchExpression, SimplifyDecision) {
 	if len(items) != 2 {
 		return &me, SimplifyUndecided
 	}
@@ -364,8 +383,10 @@ func reduceMatchCmp(me MatchExpression, resolve AttributeResolver, items []Value
 		}
 	}
 
-	left = WrapCastAroundField(left, comparisonType)
-	right = WrapCastAroundField(right, comparisonType)
+	if opts.EnableImplicitCasts {
+		left = WrapCastAroundField(left, comparisonType)
+		right = WrapCastAroundField(right, comparisonType)
+	}
 
 	out := MatchExpression{}
 	leOut := LogicalExpression{}
@@ -410,7 +431,7 @@ func reduceMatchCmp(me MatchExpression, resolve AttributeResolver, items []Value
 	return &out, SimplifyUndecided
 }
 
-func reduceCmp(le LogicalExpression, resolve AttributeResolver, items []Value, op string) (*LogicalExpression, SimplifyDecision) {
+func reduceCmp(le LogicalExpression, resolve AttributeResolver, items []Value, op string, opts SimplifyOptions) (*LogicalExpression, SimplifyDecision) {
 	if len(items) != 2 {
 		return &le, SimplifyUndecided
 	}
@@ -429,8 +450,10 @@ func reduceCmp(le LogicalExpression, resolve AttributeResolver, items []Value, o
 		}
 	}
 
-	left = WrapCastAroundField(left, comparisonType)
-	right = WrapCastAroundField(right, comparisonType)
+	if opts.EnableImplicitCasts {
+		left = WrapCastAroundField(left, comparisonType)
+		right = WrapCastAroundField(right, comparisonType)
+	}
 
 	out := LogicalExpression{}
 	switch op {

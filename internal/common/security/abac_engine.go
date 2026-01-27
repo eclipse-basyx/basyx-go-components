@@ -118,6 +118,12 @@ const (
 //
 //nolint:revive // i will refactor this function at some point
 func (m *AccessModel) AuthorizeWithFilter(in EvalInput) (bool, DecisionCode, *QueryFilter) {
+	return m.AuthorizeWithFilterWithOptions(in, grammar.DefaultSimplifyOptions())
+}
+
+// AuthorizeWithFilterWithOptions behaves like AuthorizeWithFilter but allows callers
+// to control backend simplification behavior (e.g., implicit casts).
+func (m *AccessModel) AuthorizeWithFilterWithOptions(in EvalInput, opts grammar.SimplifyOptions) (bool, DecisionCode, *QueryFilter) {
 	rights, mapped := m.mapMethodAndPathToRights(in)
 	if !mapped {
 		return false, DecisionNoMatch, nil
@@ -172,7 +178,7 @@ func (m *AccessModel) AuthorizeWithFilter(in EvalInput) (bool, DecisionCode, *Qu
 		resolver := func(attr grammar.AttributeValue) any {
 			return resolveAttributeValue(attr, in.Claims)
 		}
-		adapted, decision := combinedLE.SimplifyForBackendFilter(resolver)
+		adapted, decision := combinedLE.SimplifyForBackendFilterWithOptions(resolver, opts)
 		if decision == grammar.SimplifyFalse {
 			continue
 		}
@@ -237,7 +243,7 @@ func (m *AccessModel) AuthorizeWithFilter(in EvalInput) (bool, DecisionCode, *Qu
 		resolver := func(attr grammar.AttributeValue) any {
 			return resolveAttributeValue(attr, in.Claims)
 		}
-		simpleFilter, _ := le.SimplifyForBackendFilter(resolver)
+		simpleFilter, _ := le.SimplifyForBackendFilterWithOptions(resolver, opts)
 		combinedFragments[fragment] = simpleFilter
 
 	}
@@ -245,7 +251,7 @@ func (m *AccessModel) AuthorizeWithFilter(in EvalInput) (bool, DecisionCode, *Qu
 	resolver := func(attr grammar.AttributeValue) any {
 		return resolveAttributeValue(attr, in.Claims)
 	}
-	simplified, decision := combined.SimplifyForBackendFilter(resolver)
+	simplified, decision := combined.SimplifyForBackendFilterWithOptions(resolver, opts)
 
 	hasFormula := true
 	switch decision {

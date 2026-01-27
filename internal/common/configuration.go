@@ -20,39 +20,41 @@ import (
 // DefaultConfig holds all default values for configuration options.
 // THESE VALUES ARE NOT USED! THEY VALIDATE IF CONFIGURATION IS DEFAULT IN THE PRINT STATEMENT
 var DefaultConfig = struct {
-	ServerPort         int
-	ServerContextPath  string
-	ServerCacheEnabled bool
-	PgPort             int
-	PgDBName           string
-	PgMaxOpen          int
-	PgMaxIdle          int
-	PgConnLifetime     int
-	AllowedOrigins     []string
-	AllowedMethods     []string
-	AllowedHeaders     []string
-	AllowCredentials   bool
-	OIDCTrustlistPath  string
-	OIDCJWKSURL        string
-	ABACEnabled        bool
-	ABACModelPath      string
+	ServerPort           int
+	ServerContextPath    string
+	ServerCacheEnabled   bool
+	PgPort               int
+	PgDBName             string
+	PgMaxOpen            int
+	PgMaxIdle            int
+	PgConnLifetime       int
+	AllowedOrigins       []string
+	AllowedMethods       []string
+	AllowedHeaders       []string
+	AllowCredentials     bool
+	OIDCTrustlistPath    string
+	OIDCJWKSURL          string
+	ABACEnabled          bool
+	ABACModelPath        string
+	GeneralImplicitCasts bool
 }{
-	ServerPort:         5004,
-	ServerContextPath:  "",
-	ServerCacheEnabled: false,
-	PgPort:             5432,
-	PgDBName:           "basyxTestDB",
-	PgMaxOpen:          50,
-	PgMaxIdle:          50,
-	PgConnLifetime:     5,
-	AllowedOrigins:     []string{},
-	AllowedMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
-	AllowedHeaders:     []string{},
-	AllowCredentials:   false,
-	OIDCTrustlistPath:  "config/trustlist.json",
-	OIDCJWKSURL:        "",
-	ABACEnabled:        false,
-	ABACModelPath:      "config/access_rules/access-rules.json",
+	ServerPort:           5004,
+	ServerContextPath:    "",
+	ServerCacheEnabled:   false,
+	PgPort:               5432,
+	PgDBName:             "basyxTestDB",
+	PgMaxOpen:            50,
+	PgMaxIdle:            50,
+	PgConnLifetime:       5,
+	AllowedOrigins:       []string{},
+	AllowedMethods:       []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
+	AllowedHeaders:       []string{},
+	AllowCredentials:     false,
+	OIDCTrustlistPath:    "config/trustlist.json",
+	OIDCJWKSURL:          "",
+	ABACEnabled:          false,
+	ABACModelPath:        "config/access_rules/access-rules.json",
+	GeneralImplicitCasts: true,
 }
 
 // PrintSplash displays the BaSyx Go API ASCII art logo to the console.
@@ -84,6 +86,7 @@ type Config struct {
 	Postgres   PostgresConfig `mapstructure:"postgres" yaml:"postgres"` // PostgreSQL database settings
 	CorsConfig CorsConfig     `mapstructure:"cors" yaml:"cors"`         // CORS policy configuration
 
+	General GeneralConfig `mapstructure:"general" yaml:"general"` // General configuration
 	OIDC    OIDCConfig    `mapstructure:"oidc" yaml:"oidc"`       // OpenID Connect authentication
 	ABAC    ABACConfig    `mapstructure:"abac" yaml:"abac"`       // Attribute-Based Access Control
 	JWS     JWSConfig     `mapstructure:"jws" yaml:"jws"`         // JWS signing configuration
@@ -129,6 +132,11 @@ type CorsConfig struct {
 	AllowedMethods   []string `mapstructure:"allowedMethods" yaml:"allowedMethods"`     // Allowed HTTP methods
 	AllowedHeaders   []string `mapstructure:"allowedHeaders" yaml:"allowedHeaders"`     // Allowed request headers
 	AllowCredentials bool     `mapstructure:"allowCredentials" yaml:"allowCredentials"` // Allow credentials in requests
+}
+
+// GeneralConfig contains non-domain-specific configuration.
+type GeneralConfig struct {
+	EnableImplicitCasts bool `mapstructure:"enableImplicitCasts" yaml:"enableImplicitCasts" json:"enableImplicitCasts"` // Enable implicit casts during backend simplification
 }
 
 // OIDCProviderConfig contains OpenID Connect authentication provider settings.
@@ -241,6 +249,8 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("cors.allowedHeaders", []string{})
 	v.SetDefault("cors.allowCredentials", false)
 
+	v.SetDefault("general.enableImplicitCasts", true)
+
 	v.SetDefault("oidc.trustlistPath", "config/trustlist.json")
 
 	v.SetDefault("abac.enabled", false)
@@ -325,12 +335,17 @@ func PrintConfiguration(cfg *Config) {
 
 	lines = append(lines, divider)
 
+	// General
+	lines = append(lines, "🔹 General:")
+	add("Enable Implicit Casts", cfg.General.EnableImplicitCasts, DefaultConfig.GeneralImplicitCasts)
+
+	lines = append(lines, divider)
+
 	// ABAC
 	lines = append(lines, "🔹 ABAC:")
 	add("Enabled", cfg.ABAC.Enabled, DefaultConfig.ABACEnabled)
 	if cfg.ABAC.Enabled {
 		add("Model Path", cfg.ABAC.ModelPath, DefaultConfig.ABACModelPath)
-
 		lines = append(lines, "🔹 OIDC:")
 		add("Trustlist Path", cfg.OIDC.TrustlistPath, DefaultConfig.OIDCTrustlistPath)
 	}

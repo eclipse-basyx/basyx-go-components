@@ -33,6 +33,7 @@ import (
 	"net/http"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/discoveryapi"
 )
 
@@ -42,8 +43,9 @@ import (
 // Enabled: toggles ABAC enforcement.
 // Model: provides the AccessModel that evaluates authorization rules.
 type ABACSettings struct {
-	Enabled bool
-	Model   *AccessModel
+	Enabled             bool
+	EnableImplicitCasts bool
+	Model               *AccessModel
 }
 
 // Resource represents the target object of an authorization request.
@@ -86,11 +88,13 @@ func ABACMiddleware(settings ABACSettings) func(http.Handler) http.Handler {
 			}
 
 			if settings.Model != nil {
-				ok, reason, qf := settings.Model.AuthorizeWithFilter(EvalInput{
+				opts := grammar.DefaultSimplifyOptions()
+				opts.EnableImplicitCasts = settings.EnableImplicitCasts
+				ok, reason, qf := settings.Model.AuthorizeWithFilterWithOptions(EvalInput{
 					Method: r.Method,
 					Path:   r.URL.Path,
 					Claims: claims,
-				})
+				}, opts)
 				if !ok {
 					log.Printf("❌ ABAC(model): %s", reason)
 

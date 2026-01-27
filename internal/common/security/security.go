@@ -131,8 +131,9 @@ func SetupSecurity(ctx context.Context, cfg *common.Config, r *api.Mux) error {
 	}
 
 	abacSettings := ABACSettings{
-		Enabled: cfg.ABAC.Enabled,
-		Model:   model,
+		Enabled:             cfg.ABAC.Enabled,
+		EnableImplicitCasts: cfg.General.EnableImplicitCasts,
+		Model:               model,
 	}
 
 	// ✅ Apply both middlewares to the router
