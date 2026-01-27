@@ -148,7 +148,8 @@ func MergeQueryFilter(ctx context.Context, query grammar.Query) context.Context 
 			combinedQuery, _ = combinedQuery.SimplifyForBackendFilterNoResolver()
 			qf.Formula = &combinedQuery
 		} else {
-			qf.Formula = query.Condition
+			simplifiedQuery, _ := query.Condition.SimplifyForBackendFilterNoResolver()
+			qf.Formula = &simplifiedQuery
 		}
 	}
 
@@ -164,7 +165,8 @@ func MergeQueryFilter(ctx context.Context, query grammar.Query) context.Context 
 			combinedQuery, _ = combinedQuery.SimplifyForBackendFilterNoResolver()
 			qf.Filters[*filterCond.Fragment] = combinedQuery
 		} else {
-			qf.Filters[*filterCond.Fragment] = *filterCond.Condition
+			simplifiedQuery, _ := filterCond.Condition.SimplifyForBackendFilterNoResolver()
+			qf.Filters[*filterCond.Fragment] = simplifiedQuery
 		}
 	}
 
