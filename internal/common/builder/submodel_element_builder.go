@@ -190,38 +190,38 @@ func BuildSubmodelElement(smeRow model.SubmodelElementRow) (types.ISubmodelEleme
 		qualifiersChan <- qualifiersResult{}
 		return nil
 		/*
-		if smeRow.Qualifiers != nil {
-			builder := NewQualifiersBuilder()
-			qualifierRows, err := ParseQualifiersRow(*smeRow.Qualifiers)
-			if err != nil {
-				return err
+			if smeRow.Qualifiers != nil {
+				builder := NewQualifiersBuilder()
+				qualifierRows, err := ParseQualifiersRow(*smeRow.Qualifiers)
+				if err != nil {
+					return err
+				}
+				for _, qualifierRow := range qualifierRows {
+					_, err = builder.AddQualifier(qualifierRow.DbID, qualifierRow.Kind, qualifierRow.Type, qualifierRow.ValueType, qualifierRow.Value, qualifierRow.Position)
+					if err != nil {
+						return err
+					}
+
+					_, err = builder.AddSemanticID(qualifierRow.DbID, qualifierRow.SemanticID, qualifierRow.SemanticIDReferredReferences)
+					if err != nil {
+						return err
+					}
+
+					_, err = builder.AddValueID(qualifierRow.DbID, qualifierRow.ValueID, qualifierRow.ValueIDReferredReferences)
+					if err != nil {
+						return err
+					}
+
+					_, err = builder.AddSupplementalSemanticIDs(qualifierRow.DbID, qualifierRow.SupplementalSemanticIDs, qualifierRow.SupplementalSemanticIDsReferredReferences)
+					if err != nil {
+						return err
+					}
+				}
+				qualifiersChan <- qualifiersResult{qualifiers: builder.Build()}
+			} else {
+				qualifiersChan <- qualifiersResult{}
 			}
-			for _, qualifierRow := range qualifierRows {
-				_, err = builder.AddQualifier(qualifierRow.DbID, qualifierRow.Kind, qualifierRow.Type, qualifierRow.ValueType, qualifierRow.Value, qualifierRow.Position)
-				if err != nil {
-					return err
-				}
-
-				_, err = builder.AddSemanticID(qualifierRow.DbID, qualifierRow.SemanticID, qualifierRow.SemanticIDReferredReferences)
-				if err != nil {
-					return err
-				}
-
-				_, err = builder.AddValueID(qualifierRow.DbID, qualifierRow.ValueID, qualifierRow.ValueIDReferredReferences)
-				if err != nil {
-					return err
-				}
-
-				_, err = builder.AddSupplementalSemanticIDs(qualifierRow.DbID, qualifierRow.SupplementalSemanticIDs, qualifierRow.SupplementalSemanticIDsReferredReferences)
-				if err != nil {
-					return err
-				}
-			}
-			qualifiersChan <- qualifiersResult{qualifiers: builder.Build()}
-		} else {
-			qualifiersChan <- qualifiersResult{}
-		}
-		return nil
+			return nil
 		*/
 	})
 
@@ -275,7 +275,7 @@ func BuildSubmodelElement(smeRow model.SubmodelElementRow) (types.ISubmodelEleme
 	qualResult := <-qualifiersChan
 	if len(qualResult.qualifiers) > 0 {
 		// TODO: Convert model.Qualifier to types.IQualifier
-		// For now, skip until QualifierBuilder is fully converted  
+		// For now, skip until QualifierBuilder is fully converted
 		// specificSME.SetQualifiers(qualResult.qualifiers)
 	}
 
@@ -497,15 +497,15 @@ func buildOperation(smeRow model.SubmodelElementRow) (types.ISubmodelElement, er
 	// TODO: Convert model.OperationVariable to types.IOperationVariable
 	// For now, skip setting variables until OperationVariable conversion is complete
 	/*
-	if len(inputVars) > 0 {
-		operation.SetInputVariables(inputVars)
-	}
-	if len(outputVars) > 0 {
-		operation.SetOutputVariables(outputVars)
-	}
-	if len(inoutputVars) > 0 {
-		operation.SetInoutputVariables(inoutputVars)
-	}
+		if len(inputVars) > 0 {
+			operation.SetInputVariables(inputVars)
+		}
+		if len(outputVars) > 0 {
+			operation.SetOutputVariables(outputVars)
+		}
+		if len(inoutputVars) > 0 {
+			operation.SetInoutputVariables(inoutputVars)
+		}
 	*/
 	_ = inputVars
 	_ = outputVars
