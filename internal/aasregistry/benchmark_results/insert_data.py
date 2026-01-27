@@ -19,6 +19,7 @@ if isinstance(payload_template, list):
 else:
     payload_templates = [payload_template]
 
+
 # --- POST loop ---
 if INSERT_LIST_ONCE and len(payload_templates) > 1:
     total_inserts = len(payload_templates)
