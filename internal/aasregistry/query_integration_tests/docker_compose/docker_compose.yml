@@ -1,0 +1,85 @@
+services:
+  db-query:
+    image: postgres:15
+    container_name: postgres_query_db
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin123
+      POSTGRES_DB: basyxTestDB
+    ports:
+      - "6433:5432"
+    command: ["postgres", "-c", "listen_addresses=*"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d basyxTestDB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  aas-registry-query:
+    container_name: aas-registry-query
+    build:
+      context: ../../../..
+      dockerfile: ./cmd/aasregistryservice/Dockerfile
+    environment:
+      - SERVER_PORT=5004
+      - POSTGRES_HOST=db-query
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=admin123
+      - POSTGRES_DBNAME=basyxTestDB
+      - POSTGRES_MAXOPENCONNECTIONS=500
+      - POSTGRES_MAXIDLECONNECTIONS=500
+      - POSTGRES_CONNMAXLIFETIMEMINUTES=5
+      - ABAC_ENABLED=true
+      - ABAC_MODELPATH=/security_env/access-rules.json
+      - OIDC_TRUSTLISTPATH=/security_env/trustlist.json
+    ports:
+      - "6005:5004"
+    depends_on:
+      db-query:
+        condition: service_healthy
+      keycloak-query-healthcheck:
+        condition: service_completed_successfully
+    volumes:
+      - ../security_env:/security_env
+    extra_hosts:
+      - "localhost:host-gateway"
+
+  keycloak-query:
+    image: keycloak/keycloak:26.0.6
+    container_name: keycloak-query
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://db-query:5432/basyxTestDB
+      KC_DB_USERNAME: admin
+      KC_DB_PASSWORD: admin123
+      KC_HOSTNAME: localhost
+      KC_HOSTNAME_PORT: "8081"
+      KC_HOSTNAME_URL: "http://localhost:8081"
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_HTTP_ENABLED: "true"
+      KC_HTTPS_ENABLED: "false"
+      KC_HEALTH_ENABLED: "true"
+      KC_HOSTNAME_STRICT: "false"
+      KC_HOSTNAME_STRICT_BACKCHANNEL: "false"
+      KC_IMPORT: /opt/keycloak/data/import/
+      KC_HTTP_MANAGEMENT_ENABLED: "true"
+    command: ["start-dev", "--import-realm", "--health-enabled=true"]
+    ports:
+      - "8081:8080"
+    volumes:
+      - ../../security_filter_tests/docker_compose/keycloak/realm:/opt/keycloak/data/import
+
+  keycloak-query-healthcheck:
+    image: curlimages/curl:latest
+    container_name: keycloak-query-healthcheck
+    command: >
+      sh -c "
+        echo 'Waiting for Keycloak to become ready...';
+        until curl -sf http://keycloak-query:9000/health/ready; do
+          sleep 5;
+        done;
+        echo 'Keycloak is ready!'"
+    depends_on:
+      - keycloak-query

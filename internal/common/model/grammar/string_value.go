@@ -43,3 +43,23 @@ type StringValue struct {
 	// StrVal corresponds to the JSON schema field "$strVal".
 	StrVal *StandardString `json:"$strVal,omitempty" yaml:"$strVal,omitempty" mapstructure:"$strVal,omitempty"`
 }
+
+// AssertStringValueRequired checks if the required fields are not zero-ed
+func AssertStringValueRequired(obj StringValue) error {
+	if obj.StrCast != nil {
+		if err := AssertValueRequired(*obj.StrCast); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// AssertStringValueConstraints checks if the values respects the defined constraints
+func AssertStringValueConstraints(obj StringValue) error {
+	if obj.StrCast != nil {
+		if err := AssertValueConstraints(*obj.StrCast); err != nil {
+			return err
+		}
+	}
+	return nil
+}
