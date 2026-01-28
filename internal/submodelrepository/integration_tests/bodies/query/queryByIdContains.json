@@ -1,0 +1,12 @@
+{
+    "$condition": {
+        "$contains": [
+            {
+                "$field": "$sm#id"
+            },
+            {
+                "$strVal": "nuhuh.de"
+            }
+        ]
+    }
+}

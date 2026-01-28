@@ -113,7 +113,7 @@ var terminalColumnMappings = map[string]terminalColumnMapping{
 			"keys": {
 				"semanticId": {
 					ctxSM:                 "semantic_id_reference_key.value",
-					ctxSME:                "semantic_id_reference_key.value",
+					ctxSME:                "sme_semantic_id_reference_key.value",
 					ctxSMDesc:             "aasdesc_submodel_descriptor_semantic_id_reference_key.value",
 					ctxSubmodelDescriptor: "aasdesc_submodel_descriptor_semantic_id_reference_key.value",
 				},
@@ -128,7 +128,7 @@ var terminalColumnMappings = map[string]terminalColumnMapping{
 		ByParentSimple: map[string]map[resolveContext]string{
 			"semanticId": {
 				ctxSM:                 "semantic_id_reference.type",
-				ctxSME:                "semantic_id_reference.type",
+				ctxSME:                "sme_semantic_id_reference.type",
 				ctxSMDesc:             "aasdesc_submodel_descriptor_semantic_id_reference.type",
 				ctxSubmodelDescriptor: "aasdesc_submodel_descriptor_semantic_id_reference.type",
 			},
@@ -137,7 +137,7 @@ var terminalColumnMappings = map[string]terminalColumnMapping{
 			"keys": {
 				"semanticId": {
 					ctxSM:                 "semantic_id_reference_key.type",
-					ctxSME:                "semantic_id_reference_key.type",
+					ctxSME:                "sme_semantic_id_reference_key.type",
 					ctxSMDesc:             "aasdesc_submodel_descriptor_semantic_id_reference_key.type",
 					ctxSubmodelDescriptor: "aasdesc_submodel_descriptor_semantic_id_reference_key.type",
 				},

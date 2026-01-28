@@ -314,7 +314,7 @@ var fieldIdentifierProcessingCases = []fidTestCase{
 		Name:       "sme_semanticId_keys_type_indexed_scalar",
 		Kind:       "scalar",
 		Input:      `$sme.some.path#semanticId.keys[3].type`,
-		WantScalar: &expectedScalar{Column: "semantic_id_reference_key.type", Bindings: []expectedBinding{{Alias: "submodel_element.idshort_path", Index: sidx("some.path")}, {Alias: "semantic_id_reference_key.position", Index: idx(3)}}},
+		WantScalar: &expectedScalar{Column: "sme_semantic_id_reference_key.type", Bindings: []expectedBinding{{Alias: "submodel_element.idshort_path", Index: sidx("some.path")}, {Alias: "semantic_id_reference_key.position", Index: idx(3)}}},
 	},
 	{
 		Name:         "sme_semanticId_keys_wildcard_fragment",

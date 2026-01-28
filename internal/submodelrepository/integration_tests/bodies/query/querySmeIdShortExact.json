@@ -1,0 +1,12 @@
+{
+    "$condition": {
+        "$eq": [
+            {
+                "$field": "$sme.Temperature#idShort"
+            },
+            {
+                "$strVal": "Temperature"
+            }
+        ]
+    }
+}
