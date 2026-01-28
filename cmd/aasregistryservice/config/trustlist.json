@@ -3,10 +3,5 @@
     "issuer": "http://localhost:8080/realms/basyx",
     "audience": "discovery-service",
     "scopes": ["email", "profile"]
-  },
-  {
-    "issuer": "https://iam-security-training.com/consumer/sts",
-    "audience": "https://credential.aas-voyager.com/resources",
-    "scopes": []
   }
 ]
