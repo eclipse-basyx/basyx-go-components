@@ -151,8 +151,11 @@ func (p *PostgreSQLSubmodelDatabase) GetAllSubmodels(limit int32, cursor string,
 	jobs := make(chan smeJob, len(submodelIDs))
 	results := make(chan smeResult, len(submodelIDs))
 
+	var workerWg sync.WaitGroup
 	for range numWorkers {
+		workerWg.Add(1)
 		go func() {
+			defer workerWg.Done()
 			for job := range jobs {
 				smes, _, err := submodelelements.GetSubmodelElementsForSubmodel(p.db, job.id, "", "", -1, valueOnly)
 				results <- smeResult{id: job.id, smes: smes, err: err}
@@ -160,13 +163,18 @@ func (p *PostgreSQLSubmodelDatabase) GetAllSubmodels(limit int32, cursor string,
 		}()
 	}
 
+	// Close results channel after all workers complete
+	go func() {
+		workerWg.Wait()
+		close(results)
+	}()
+
 	for _, id := range submodelIDs {
 		jobs <- smeJob{id: id}
 	}
 	close(jobs)
 
-	for i := 0; i < len(submodelIDs); i++ {
-		res := <-results
+	for res := range results {
 		if res.err != nil {
 			errSmeMutex.Lock()
 			if errSme == nil {
@@ -258,8 +266,11 @@ func (p *PostgreSQLSubmodelDatabase) QuerySubmodels(limit int32, cursor string, 
 	jobs := make(chan smeJob, len(submodelIDs))
 	results := make(chan smeResult, len(submodelIDs))
 
+	var workerWg sync.WaitGroup
 	for range numWorkers {
+		workerWg.Add(1)
 		go func() {
+			defer workerWg.Done()
 			for job := range jobs {
 				smes, _, err := submodelelements.GetSubmodelElementsForSubmodel(p.db, job.id, "", "", -1, valueOnly)
 				results <- smeResult{id: job.id, smes: smes, err: err}
@@ -267,13 +278,18 @@ func (p *PostgreSQLSubmodelDatabase) QuerySubmodels(limit int32, cursor string, 
 		}()
 	}
 
+	// Close results channel after all workers complete
+	go func() {
+		workerWg.Wait()
+		close(results)
+	}()
+
 	for _, id := range submodelIDs {
 		jobs <- smeJob{id: id}
 	}
 	close(jobs)
 
-	for i := 0; i < len(submodelIDs); i++ {
-		res := <-results
+	for res := range results {
 		if res.err != nil {
 			errSmeMutex.Lock()
 			if errSme == nil {
