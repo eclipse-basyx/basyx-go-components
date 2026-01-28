@@ -34,13 +34,11 @@
 //nolint:all
 package model
 
-import "github.com/FriedJannik/aas-go-sdk/types"
-
 // GetSubmodelElementsResult type of GetSubmodelElementsResult
 type GetSubmodelElementsResult struct {
 	PagingMetadata PagedResultPagingMetadata `json:"paging_metadata"`
 
-	Result []types.ISubmodelElement `json:"result,omitempty"`
+	Result []map[string]interface{} `json:"result,omitempty"`
 }
 
 // AssertGetSubmodelElementsResultRequired checks if the required fields are not zero-ed

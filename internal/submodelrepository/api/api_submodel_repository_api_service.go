@@ -69,6 +69,16 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodels(
 	_ /*extent*/ string,
 ) (gen.ImplResponse, error) {
 	sms, nextCursor, err := s.submodelBackend.GetAllSubmodels(limit, cursor, idShort, false)
+	var converted []map[string]interface{}
+
+	for _, sm := range sms {
+		jsonSubmodel, err := jsonization.ToJsonable(&sm)
+		if err != nil {
+			return gen.Response(500, nil), err
+		}
+		converted = append(converted, jsonSubmodel)
+	}
+
 	if err != nil {
 		return gen.Response(500, nil), err
 	}
@@ -78,7 +88,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodels(
 		PagingMetadata: gen.PagedResultPagingMetadata{
 			Cursor: nextCursor,
 		},
-		Result: sms,
+		Result: converted,
 	}
 	return gen.Response(200, res), nil
 }
@@ -107,7 +117,6 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelByID(
 	}
 
 	sm, err := s.submodelBackend.GetSubmodel(string(decodedSubmodelIdentifier), false)
-	jsonSubmodel, err := jsonization.ToJsonable(&sm)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return gen.Response(404, nil), nil
@@ -115,6 +124,10 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelByID(
 		if common.IsErrNotFound(err) {
 			return gen.Response(404, nil), err
 		}
+		return gen.Response(500, nil), err
+	}
+	jsonSubmodel, err := jsonization.ToJsonable(&sm)
+	if err != nil {
 		return gen.Response(500, nil), err
 	}
 	return gen.Response(200, jsonSubmodel), nil
@@ -276,13 +289,21 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsMetadata(
 	if err != nil {
 		return gen.Response(500, nil), err
 	}
+	var converted []map[string]interface{}
 
+	for _, sm := range sms {
+		jsonSubmodel, err := jsonization.ToJsonable(&sm)
+		if err != nil {
+			return gen.Response(500, nil), err
+		}
+		converted = append(converted, jsonSubmodel)
+	}
 	// using the openAPI provided response struct to include paging metadata
-	res := gen.GetSubmodelsResult{
+	res := gen.GetSubmodelsMetadataResult{
 		PagingMetadata: gen.PagedResultPagingMetadata{
 			Cursor: nextCursor,
 		},
-		Result: sms,
+		Result: converted,
 	}
 	return gen.Response(200, res), nil
 
@@ -676,6 +697,17 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelElements(_ /*ctx*/ conte
 	}
 
 	sme, cursor, err := s.submodelBackend.GetSubmodelElements(string(decodedSubmodelIdentifier), int(limit), cursor, false)
+
+	var converted []map[string]interface{}
+
+	for _, element := range sme {
+		jsonSubmodelElement, err := jsonization.ToJsonable(element)
+		if err != nil {
+			return gen.Response(500, nil), err
+		}
+		converted = append(converted, jsonSubmodelElement)
+	}
+
 	if err != nil {
 		if common.IsErrNotFound(err) {
 			timestamp := common.GetCurrentTimestamp()
@@ -699,7 +731,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelElements(_ /*ctx*/ conte
 		PagingMetadata: gen.PagedResultPagingMetadata{
 			Cursor: cursor,
 		},
-		Result: sme,
+		Result: converted,
 	}
 
 	return gen.Response(http.StatusOK, res), nil
@@ -921,6 +953,11 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelElementByPathSubmodelRepo(c
 	}
 
 	sme, err := s.submodelBackend.GetSubmodelElement(string(decodedSubmodelIdentifier), idShortPath, false)
+	converted, convErr := jsonization.ToJsonable(sme)
+	if convErr != nil {
+		return gen.Response(http.StatusInternalServerError, nil), convErr
+	}
+
 	if err != nil {
 		if common.IsErrNotFound(err) {
 			timestamp := common.GetCurrentTimestamp()
@@ -941,7 +978,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelElementByPathSubmodelRepo(c
 		return gen.Response(http.StatusInternalServerError, nil), err
 	}
 
-	return gen.Response(http.StatusOK, sme), nil
+	return gen.Response(http.StatusOK, converted), nil
 }
 
 // PutSubmodelElementByPathSubmodelRepo updates an existing submodel element at a specified path within submodel elements hierarchy.

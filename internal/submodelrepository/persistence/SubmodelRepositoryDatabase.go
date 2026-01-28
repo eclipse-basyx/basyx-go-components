@@ -40,6 +40,7 @@ import (
 	"strconv"
 	"sync"
 
+	"github.com/FriedJannik/aas-go-sdk/jsonization"
 	"github.com/FriedJannik/aas-go-sdk/types"
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 
@@ -455,7 +456,8 @@ func (p *PostgreSQLSubmodelDatabase) GetSignedSubmodel(id string, valueOnly bool
 	}
 
 	// Marshal submodel to JSON
-	payload, err := json.Marshal(submodel)
+	jsonSubmodel, err := jsonization.ToJsonable(&submodel)
+	payload, err := json.Marshal(jsonSubmodel)
 	if err != nil {
 		return "", fmt.Errorf("failed to marshal submodel: %w", err)
 	}

@@ -38,40 +38,5 @@ package model
 type GetSubmodelsMetadataResult struct {
 	PagingMetadata PagedResultPagingMetadata `json:"paging_metadata"`
 
-	Result []SubmodelMetadata `json:"result,omitempty"`
-}
-
-// AssertGetSubmodelsMetadataResultRequired checks if the required fields are not zero-ed
-func AssertGetSubmodelsMetadataResultRequired(obj GetSubmodelsMetadataResult) error {
-	elements := map[string]interface{}{
-		"paging_metadata": obj.PagingMetadata,
-	}
-	for name, el := range elements {
-		if isZero := IsZeroValue(el); isZero {
-			return &RequiredError{Field: name}
-		}
-	}
-
-	if err := AssertPagedResultPagingMetadataRequired(obj.PagingMetadata); err != nil {
-		return err
-	}
-	for _, el := range obj.Result {
-		if err := AssertSubmodelMetadataRequired(el); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// AssertGetSubmodelsMetadataResultConstraints checks if the values respects the defined constraints
-func AssertGetSubmodelsMetadataResultConstraints(obj GetSubmodelsMetadataResult) error {
-	if err := AssertPagedResultPagingMetadataConstraints(obj.PagingMetadata); err != nil {
-		return err
-	}
-	for _, el := range obj.Result {
-		if err := AssertSubmodelMetadataConstraints(el); err != nil {
-			return err
-		}
-	}
-	return nil
+	Result []map[string]any `json:"result,omitempty"`
 }

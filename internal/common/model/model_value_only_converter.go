@@ -74,7 +74,7 @@ func SubmodelElementToValueOnly(element types.ISubmodelElement) (SubmodelElement
 
 // PropertyToValueOnly converts a Property to PropertyValue
 func PropertyToValueOnly(p *types.Property) PropertyValue {
-	if p.Value == nil {
+	if p.Value() == nil {
 		return PropertyValue{}
 	}
 	return PropertyValue{Value: *p.Value()}

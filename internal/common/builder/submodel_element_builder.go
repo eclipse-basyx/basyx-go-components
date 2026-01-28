@@ -359,10 +359,12 @@ func buildSubmodelElementCollection() (types.ISubmodelElement, error) {
 // buildProperty constructs a Property SubmodelElement from the database row,
 // including parsing the value and building the associated value reference.
 func buildProperty(smeRow model.SubmodelElementRow, refBuilderMap map[int64]*ReferenceBuilder, refMutex *sync.RWMutex) (types.ISubmodelElement, error) {
-	var valueRow model.PropertyValueRow
+	// If no value data, return a Property with default valueType
 	if smeRow.Value == nil {
-		return nil, fmt.Errorf("smeRow.Value is nil")
+		return types.NewProperty(types.DataTypeDefXSDString), nil
 	}
+
+	var valueRow model.PropertyValueRow
 	err := json.Unmarshal(*smeRow.Value, &valueRow)
 	if err != nil {
 		return nil, err
@@ -372,10 +374,16 @@ func buildProperty(smeRow model.SubmodelElementRow, refBuilderMap map[int64]*Ref
 		return nil, err
 	}
 
-	// Convert model enum string to SDK enum
-	sdkValueType, ok := stringification.DataTypeDefXSDFromString(string(valueRow.ValueType))
-	if !ok {
-		return nil, fmt.Errorf("invalid DataTypeDefXSD value: %s", valueRow.ValueType)
+	// Convert model enum string to SDK enum, default to string if empty
+	var sdkValueType types.DataTypeDefXSD
+	if valueRow.ValueType == "" {
+		sdkValueType = types.DataTypeDefXSDString
+	} else {
+		var ok bool
+		sdkValueType, ok = stringification.DataTypeDefXSDFromString(string(valueRow.ValueType))
+		if !ok {
+			return nil, fmt.Errorf("invalid DataTypeDefXSD value: %s", valueRow.ValueType)
+		}
 	}
 
 	prop := types.NewProperty(sdkValueType)
