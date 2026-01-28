@@ -9,7 +9,9 @@
             "program": "${workspaceFolder}/cmd/discoveryservice/main.go",
             "args": [
                 "-config",
-                "${workspaceFolder}/cmd/discoveryservice/config.yaml"
+                "${workspaceFolder}/cmd/discoveryservice/config.yaml",
+                "-databaseSchema",
+                "${workspaceFolder}/basyxschema.sql"
             ]
         },
         {

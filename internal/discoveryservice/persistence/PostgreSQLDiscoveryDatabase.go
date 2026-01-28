@@ -34,71 +34,63 @@ package persistencepostgresql
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
-	"os"
 	"strings"
 	"time"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/descriptors"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // PostgreSQLDiscoveryDatabase provides PostgreSQL-based persistence for the Discovery Service.
 //
-// It manages AAS identifiers and their associated asset links in a PostgreSQL database,
-// using connection pooling for efficient database access. The database schema is automatically
-// initialized on startup from the discoveryschema.sql file.
+// It manages AAS identifiers and their associated specific asset IDs in a PostgreSQL database,
+// using connection pooling for efficient database access. The database schema can be initialized
+// on startup via the provided schema path.
 type PostgreSQLDiscoveryDatabase struct {
-	pool *pgxpool.Pool
+	db *sql.DB
 }
 
 // NewPostgreSQLDiscoveryBackend creates and initializes a new PostgreSQL discovery database backend.
 //
 // This function establishes a connection pool to the PostgreSQL database using the provided DSN
-// (Data Source Name), configures connection pool settings, and initializes the database schema
-// by executing the discoveryschema.sql file from the resources/sql directory.
+// (Data Source Name), configures connection pool settings, and optionally initializes the database
+// schema using the provided schema file path.
 //
 // Parameters:
 //   - dsn: PostgreSQL connection string (e.g., "postgres://user:pass@localhost:5432/dbname")
-//   - maxConns: Maximum number of connections in the pool
+//   - maxOpenConns: Maximum number of open connections in the pool
+//   - maxIdleConns: Maximum number of idle connections in the pool
+//   - connMaxLifetimeMinutes: Maximum connection lifetime in minutes
+//   - databaseSchema: SQL schema file path for initialization (empty to skip)
 //
 // Returns:
 //   - *PostgreSQLDiscoveryDatabase: Initialized database instance
 //   - error: Configuration, connection, or schema initialization error
-//
-// The connection pool is configured with:
-//   - MaxConns: Set to the provided maxConns parameter
-//   - MaxConnLifetime: 5 minutes to ensure connection freshness
-//
-// The function reads and executes discoveryschema.sql from the current working directory's
-// resources/sql subdirectory to set up the required database tables.
-func NewPostgreSQLDiscoveryBackend(dsn string, maxConns int32) (*PostgreSQLDiscoveryDatabase, error) {
-	cfg, err := pgxpool.ParseConfig(dsn)
+func NewPostgreSQLDiscoveryBackend(
+	dsn string,
+	maxOpenConns int32,
+	maxIdleConns int,
+	connMaxLifetimeMinutes int,
+	databaseSchema string,
+) (*PostgreSQLDiscoveryDatabase, error) {
+	db, err := common.InitializeDatabase(dsn, databaseSchema)
 	if err != nil {
 		return nil, err
 	}
-
-	cfg.MaxConns = maxConns
-	cfg.MaxConnLifetime = 5 * time.Minute
-
-	pool, err := pgxpool.NewWithConfig(context.Background(), cfg)
-	if err != nil {
-		return nil, err
+	if maxOpenConns > 0 {
+		db.SetMaxOpenConns(int(maxOpenConns))
+	}
+	if maxIdleConns > 0 {
+		db.SetMaxIdleConns(maxIdleConns)
+	}
+	if connMaxLifetimeMinutes > 0 {
+		db.SetConnMaxLifetime(time.Duration(connMaxLifetimeMinutes) * time.Minute)
 	}
 
-	dir, _ := os.Getwd()
-	//nolint:gosec // it is not really a variable here
-	schema, err := os.ReadFile(dir + "/resources/sql/discoveryschema.sql")
-	if err != nil {
-		return nil, err
-	}
-	if _, err := pool.Exec(context.Background(), string(schema)); err != nil {
-		return nil, err
-	}
-
-	return &PostgreSQLDiscoveryDatabase{pool: pool}, nil
+	return &PostgreSQLDiscoveryDatabase{db: db}, nil
 }
 
 // GetAllAssetLinks retrieves all asset links associated with a specific AAS identifier.
@@ -118,52 +110,17 @@ func NewPostgreSQLDiscoveryBackend(dsn string, maxConns int32) (*PostgreSQLDisco
 // error is returned.
 func (p *PostgreSQLDiscoveryDatabase) GetAllAssetLinks(aasID string) ([]model.SpecificAssetID, error) {
 	ctx := context.Background()
-	tx, err := p.pool.Begin(ctx)
+	links, err := descriptors.ReadSpecificAssetIDsByAASIdentifier(ctx, p.db, aasID)
 	if err != nil {
-		_, _ = fmt.Println(err)
-		return nil, common.NewInternalServerError("Failed to start postgres transaction. See console for information.")
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-
-	var referenceID int64
-	if err := tx.QueryRow(ctx, `SELECT id FROM aas_identifier WHERE aasID = $1`, aasID).Scan(&referenceID); err != nil {
-		if err == pgx.ErrNoRows {
-			return nil, common.NewErrNotFound("AAS identifier '" + aasID + "'")
-		}
-		_, _ = fmt.Println(err)
-		return nil, common.NewInternalServerError("Failed to fetch aas identifier. See console for information.")
-	}
-
-	rows, err := tx.Query(ctx, `SELECT name, value FROM asset_link WHERE aasRef = $1 ORDER BY id`, referenceID)
-	if err != nil {
-		_, _ = fmt.Println(err)
-		return nil, common.NewInternalServerError("Failed to query asset links. See console for information.")
-	}
-	defer rows.Close()
-
-	var result []model.SpecificAssetID
-	for rows.Next() {
-		var name, value string
-		if err := rows.Scan(&name, &value); err != nil {
+		switch {
+		case common.IsErrNotFound(err):
+			return nil, err
+		default:
 			_, _ = fmt.Println(err)
-			return nil, common.NewInternalServerError("Failed to scan asset link. See console for information.")
+			return nil, common.NewInternalServerError("Failed to query specific asset IDs. See console for information.")
 		}
-		result = append(result, model.SpecificAssetID{
-			Name:  name,
-			Value: value,
-		})
 	}
-	if rows.Err() != nil {
-		_, _ = fmt.Println(rows.Err())
-		return nil, common.NewInternalServerError("Failed to iterate asset links. See console for information.")
-	}
-
-	if err := tx.Commit(ctx); err != nil {
-		_, _ = fmt.Println(err)
-		return nil, common.NewInternalServerError("Failed to commit postgres transaction. See console for information.")
-	}
-
-	return result, nil
+	return links, nil
 }
 
 // DeleteAllAssetLinks deletes an AAS identifier and all its associated asset links.
@@ -182,12 +139,12 @@ func (p *PostgreSQLDiscoveryDatabase) GetAllAssetLinks(aasID string) ([]model.Sp
 func (p *PostgreSQLDiscoveryDatabase) DeleteAllAssetLinks(aasID string) error {
 	ctx := context.Background()
 
-	tag, err := p.pool.Exec(ctx, `DELETE FROM aas_identifier WHERE aasID = $1`, aasID)
+	result, err := p.db.ExecContext(ctx, `DELETE FROM aas_identifier WHERE aasId = $1`, aasID)
 	if err != nil {
 		_, _ = fmt.Println(err)
 		return common.NewInternalServerError("Failed to delete AAS identifier. See console for information.")
 	}
-	if tag.RowsAffected() == 0 {
+	if rows, _ := result.RowsAffected(); rows == 0 {
 		return common.NewErrNotFound(fmt.Sprintf("AAS identifier %s not found. See console for information.", aasID))
 	}
 	return nil
@@ -214,45 +171,9 @@ func (p *PostgreSQLDiscoveryDatabase) DeleteAllAssetLinks(aasID string) error {
 // The use of COPY FROM makes this method highly efficient even for large numbers of asset links.
 func (p *PostgreSQLDiscoveryDatabase) CreateAllAssetLinks(aasID string, specificAssetIDs []model.SpecificAssetID) error {
 	ctx := context.Background()
-	tx, err := p.pool.Begin(ctx)
-	if err != nil {
+	if err := descriptors.ReplaceSpecificAssetIDsByAASIdentifier(ctx, p.db, aasID, specificAssetIDs); err != nil {
 		_, _ = fmt.Println(err)
-		return common.NewInternalServerError("Failed to start postgres transaction. See console for information.")
-	}
-	defer func() {
-		_ = tx.Rollback(ctx)
-	}()
-
-	var referenceID int64
-	err = tx.QueryRow(ctx, "INSERT INTO aas_identifier (aasID) VALUES ($1) ON CONFLICT (aasID) DO UPDATE SET aasID = EXCLUDED.aasID RETURNING id", aasID).Scan(&referenceID)
-	if err != nil {
-		_, _ = fmt.Println(err)
-		return common.NewInternalServerError("Failed to insert aas identifier. See console for information.")
-	}
-
-	if _, err := tx.Exec(ctx, `DELETE FROM asset_link WHERE aasRef = $1`, referenceID); err != nil {
-		return common.NewInternalServerError("Failed to remove old asset links.")
-	}
-
-	rows := make([][]any, len(specificAssetIDs))
-	for i, v := range specificAssetIDs {
-		rows[i] = []any{v.Name, v.Value, referenceID}
-	}
-
-	_, err = tx.CopyFrom(
-		ctx,
-		pgx.Identifier{"asset_link"},
-		[]string{"name", "value", "aasref"},
-		pgx.CopyFromRows(rows),
-	)
-	if err != nil {
-		_, _ = fmt.Println(err)
-		return common.NewInternalServerError("Failed to insert asset link. See console for information.")
-	}
-
-	if err := tx.Commit(ctx); err != nil {
-		_, _ = fmt.Println(err)
-		return common.NewInternalServerError("Failed to commit postgres transaction. See console for information.")
+		return common.NewInternalServerError("Failed to store specific asset IDs. See console for information.")
 	}
 	return nil
 }
@@ -301,7 +222,7 @@ func (p *PostgreSQLDiscoveryDatabase) SearchAASIDsByAssetLinks(
 
 	args := []any{}
 	argPos := 1
-	whereCursor := fmt.Sprintf("( $%d = '' OR ai.aasID >= $%d )", argPos, argPos)
+	whereCursor := fmt.Sprintf("( $%d = '' OR ai.aasId >= $%d )", argPos, argPos)
 	args = append(args, cursor)
 	argPos++
 
@@ -311,7 +232,7 @@ func (p *PostgreSQLDiscoveryDatabase) SearchAASIDsByAssetLinks(
 			SELECT ai.aasId
 			FROM aas_identifier ai
 			WHERE %s
-			ORDER BY ai.aasID ASC
+			ORDER BY ai.aasId ASC
 			LIMIT $%d
 		`, whereCursor, argPos)
 		args = append(args, peekLimit)
@@ -330,18 +251,18 @@ func (p *PostgreSQLDiscoveryDatabase) SearchAASIDsByAssetLinks(
 			WITH v(name, value) AS (VALUES %s)
 			SELECT ai.aasId
 			FROM aas_identifier ai
-			JOIN asset_link al ON al.aasRef = ai.id
-			JOIN v ON v.name = al.name AND v.value = al.value
+			JOIN specific_asset_id sai ON sai.aasRef = ai.id
+			JOIN v ON v.name = sai.name AND v.value = sai.value
 			WHERE %s
 			GROUP BY ai.aasId
-			HAVING COUNT(DISTINCT (al.name, al.value)) = (SELECT COUNT(*) FROM v)
-			ORDER BY ai.aasID ASC
+			HAVING COUNT(DISTINCT (sai.name, sai.value)) = (SELECT COUNT(*) FROM v)
+			ORDER BY ai.aasId ASC
 			LIMIT $%d
 		`, valuesSQL.String(), whereCursor, argPos)
 		args = append(args, peekLimit)
 	}
 
-	rows, err := p.pool.Query(ctx, sqlStr, args...)
+	rows, err := p.db.QueryContext(ctx, sqlStr, args...)
 	if err != nil {
 		_, _ = fmt.Println("SearchAASIDsByAssetLinks: query error:", err)
 		return nil, "", common.NewInternalServerError("Failed to query AAS IDs. See server logs for details.")

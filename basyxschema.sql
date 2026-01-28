@@ -465,10 +465,16 @@ CREATE TABLE IF NOT EXISTS descriptor_extension (
   extension_id BIGINT NOT NULL REFERENCES extension(id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS aas_identifier (
+  id          BIGSERIAL PRIMARY KEY,
+  aasId       VARCHAR(2048) UNIQUE NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS specific_asset_id (
   id BIGSERIAL PRIMARY KEY,
   position     INTEGER NOT NULL,                -- <- Array-Index
-  descriptor_id BIGINT NOT NULL REFERENCES descriptor(id) ON DELETE CASCADE,
+  descriptor_id BIGINT REFERENCES descriptor(id) ON DELETE CASCADE,
+  aasRef BIGINT REFERENCES aas_identifier(id) ON DELETE CASCADE,
   semantic_id BIGINT REFERENCES reference(id),
   name VARCHAR(64) NOT NULL,
   value VARCHAR(2048) NOT NULL,
@@ -481,6 +487,12 @@ CREATE TABLE IF NOT EXISTS specific_asset_id_supplemental_semantic_id (
   specific_asset_id_id BIGINT NOT NULL REFERENCES specific_asset_id(id) ON DELETE CASCADE,
   reference_id BIGINT NOT NULL REFERENCES reference(id) ON DELETE CASCADE
 );
+
+ALTER TABLE IF EXISTS specific_asset_id
+  ADD COLUMN IF NOT EXISTS aasRef BIGINT REFERENCES aas_identifier(id) ON DELETE CASCADE;
+
+ALTER TABLE IF EXISTS specific_asset_id
+  ALTER COLUMN descriptor_id DROP NOT NULL;
 
 CREATE TABLE IF NOT EXISTS aas_descriptor_endpoint (
   id BIGSERIAL PRIMARY KEY,
@@ -692,10 +704,14 @@ CREATE INDEX IF NOT EXISTS ix_descriptor_extension_pair          ON descriptor_e
 -- Specific Asset IDs
 -- ==========================================
 
+CREATE UNIQUE INDEX IF NOT EXISTS ix_aas_identifier_aasid ON aas_identifier(aasId);
 
 CREATE INDEX IF NOT EXISTS ix_specasset_descriptor_id_name ON specific_asset_id (descriptor_id, name);
 CREATE INDEX IF NOT EXISTS ix_specasset_descriptor_id_position ON specific_asset_id (descriptor_id, position);
 CREATE INDEX IF NOT EXISTS ix_specasset_descriptor_id_external_subject_ref ON specific_asset_id (descriptor_id, external_subject_ref);
+
+CREATE INDEX IF NOT EXISTS ix_specasset_aasref ON specific_asset_id (aasRef);
+CREATE INDEX IF NOT EXISTS ix_specasset_name_value_aasref ON specific_asset_id (name, value, aasRef);
 
 CREATE INDEX IF NOT EXISTS ix_specasset_descriptor_id ON specific_asset_id(descriptor_id);
 CREATE INDEX IF NOT EXISTS ix_specasset_semantic_id   ON specific_asset_id(semantic_id);

@@ -28,14 +28,12 @@ WORKDIR /root/
 # Copy binary
 COPY --from=builder /app/discoveryservice /root/discoveryservice
 
-# Config + schema expected by your code:
-# Your code reads schema from: getwd() + "/resources/sql/discoveryschema.sql"
-# With WORKDIR=/root, that becomes /root/resources/sql/discoveryschema.sql
-RUN mkdir -p /config /root/resources/sql
+# Create configuration directory
+RUN mkdir -p /config
 
 # Copy default config and SQL schema for discovery service
 COPY --from=builder /app/cmd/discoveryservice/config.yaml /config/config.yaml
-COPY --from=builder /app/cmd/discoveryservice/resources/sql/discoveryschema.sql /root/resources/sql/discoveryschema.sql
+COPY --from=builder /app/basyxschema.sql /root/basyxschema.sql
 
 # Optional healthcheck script for /health
 # If you have one in the discoveryservice folder, copy it; otherwise you can omit.
@@ -49,7 +47,7 @@ ENV SERVER_PORT=5004
 EXPOSE 5004
 
 # Start service with config
-CMD ["/root/discoveryservice", "-config", "/config/config.yaml"]
+CMD ["/root/discoveryservice", "-config", "/config/config.yaml", "-databaseSchema", "basyxschema.sql"]
 
 # Health check (if script exists and your service serves /health)
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \

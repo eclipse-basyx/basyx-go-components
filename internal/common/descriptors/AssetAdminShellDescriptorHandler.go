@@ -102,7 +102,7 @@ func InsertAdministrationShellDescriptor(ctx context.Context, db *sql.DB, aasd m
 // entities (display name/description/admin info/endpoints/specific IDs/extensions
 // and submodel descriptors). If any step fails, the error is returned and the
 // caller is responsible for rolling back the transaction.
-func InsertAdministrationShellDescriptorTx(_ context.Context, tx *sql.Tx, aasd model.AssetAdministrationShellDescriptor) error {
+func InsertAdministrationShellDescriptorTx(ctx context.Context, tx *sql.Tx, aasd model.AssetAdministrationShellDescriptor) error {
 	d := goqu.Dialect(dialect)
 
 	descTbl := goqu.T(tblDescriptor)
@@ -167,7 +167,12 @@ func InsertAdministrationShellDescriptorTx(_ context.Context, tx *sql.Tx, aasd m
 		return err
 	}
 
-	if err = createSpecificAssetID(tx, descriptorID, aasd.SpecificAssetIds); err != nil {
+	aasRef, err := ensureAASIdentifierTx(ctx, tx, aasd.Id)
+	if err != nil {
+		return err
+	}
+
+	if err = createSpecificAssetID(tx, descriptorID, aasRef, aasd.SpecificAssetIds); err != nil {
 		return err
 	}
 

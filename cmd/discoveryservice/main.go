@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
@@ -20,7 +21,7 @@ import (
 //go:embed openapi.yaml
 var openapiSpec embed.FS
 
-func runServer(ctx context.Context, configPath string) error {
+func runServer(ctx context.Context, configPath string, databaseSchema string) error {
 	log.Default().Println("Loading Discovery Service...")
 	log.Default().Println("Config Path:", configPath)
 
@@ -57,6 +58,9 @@ func runServer(ctx context.Context, configPath string) error {
 	smDatabase, err := persistencepostgresql.NewPostgreSQLDiscoveryBackend(
 		dsn,
 		cfg.Postgres.MaxOpenConnections,
+		cfg.Postgres.MaxIdleConnections,
+		cfg.Postgres.ConnMaxLifetimeMinutes,
+		databaseSchema,
 	)
 	if err != nil {
 		log.Printf("❌ DB connect failed: %v", err)
@@ -114,9 +118,19 @@ func runServer(ctx context.Context, configPath string) error {
 func main() {
 	ctx := context.Background()
 	configPath := ""
+	databaseSchema := ""
 	flag.StringVar(&configPath, "config", "", "Path to config file")
+	flag.StringVar(&databaseSchema, "databaseSchema", "", "Path to Database Schema SQL file (overrides default)")
 	flag.Parse()
-	if err := runServer(ctx, configPath); err != nil {
+
+	if databaseSchema != "" {
+		if _, fileError := os.ReadFile(databaseSchema); fileError != nil {
+			_, _ = fmt.Println("The specified database schema path is invalid or the file was not found.")
+			os.Exit(1)
+		}
+	}
+
+	if err := runServer(ctx, configPath, databaseSchema); err != nil {
 		log.Fatalf("Server error: %v", err)
 	}
 }
