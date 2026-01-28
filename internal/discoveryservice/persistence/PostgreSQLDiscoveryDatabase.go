@@ -225,6 +225,9 @@ func (p *PostgreSQLDiscoveryDatabase) SearchAASIDsByAssetLinks(
 	}
 
 	peekLimit := int(limit) + 1
+	if peekLimit < 0 {
+		return nil, "", common.NewErrBadRequest("Limit has to be higher than 0")
+	}
 
 	d := goqu.Dialect("postgres")
 	ai := goqu.T("aas_identifier")
