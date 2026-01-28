@@ -1658,7 +1658,7 @@ const smRepoComponentName = "SubmodelRepository"
 //   - gen.ImplResponse: Response containing paginated submodel results
 //   - error: Error if the operation fails
 func (s *SubmodelRepositoryAPIAPIService) QuerySubmodels(
-	ctx context.Context,
+	_ context.Context,
 	limit int32,
 	cursor string,
 	query grammar.Query,

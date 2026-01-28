@@ -2157,7 +2157,10 @@ func (c *SubmodelRepositoryAPIAPIController) QuerySubmodels(w http.ResponseWrite
 			"QuerySubmodels",
 			"query",
 		)
-		EncodeJSONResponse(result.Body, &result.Code, w)
+		err := EncodeJSONResponse(result.Body, &result.Code, w)
+		if err != nil {
+			c.errorHandler(w, r, err, nil)
+		}
 		return
 	}
 	var limitParam int32
@@ -2176,7 +2179,10 @@ func (c *SubmodelRepositoryAPIAPIController) QuerySubmodels(w http.ResponseWrite
 				"QuerySubmodels",
 				"limit",
 			)
-			EncodeJSONResponse(result.Body, &result.Code, w)
+			err = EncodeJSONResponse(result.Body, &result.Code, w)
+			if err != nil {
+				c.errorHandler(w, r, err, nil)
+			}
 			return
 		}
 
@@ -2198,7 +2204,10 @@ func (c *SubmodelRepositoryAPIAPIController) QuerySubmodels(w http.ResponseWrite
 			"QuerySubmodels",
 			"RequestBody",
 		)
-		EncodeJSONResponse(result.Body, &result.Code, w)
+		err := EncodeJSONResponse(result.Body, &result.Code, w)
+		if err != nil {
+			c.errorHandler(w, r, err, nil)
+		}
 		return
 	}
 	if err := grammar.AssertQueryRequired(queryParam); err != nil {
@@ -2210,7 +2219,10 @@ func (c *SubmodelRepositoryAPIAPIController) QuerySubmodels(w http.ResponseWrite
 			"QuerySubmodels",
 			"RequestBody",
 		)
-		EncodeJSONResponse(result.Body, &result.Code, w)
+		err := EncodeJSONResponse(result.Body, &result.Code, w)
+		if err != nil {
+			c.errorHandler(w, r, err, nil)
+		}
 		return
 	}
 	if err := grammar.AssertQueryConstraints(queryParam); err != nil {
@@ -2222,7 +2234,10 @@ func (c *SubmodelRepositoryAPIAPIController) QuerySubmodels(w http.ResponseWrite
 			"QuerySubmodels",
 			"RequestBody",
 		)
-		EncodeJSONResponse(result.Body, &result.Code, w)
+		err := EncodeJSONResponse(result.Body, &result.Code, w)
+		if err != nil {
+			c.errorHandler(w, r, err, nil)
+		}
 		return
 	}
 	result, err := c.service.QuerySubmodels(r.Context(), limitParam, cursorParam, queryParam)
@@ -2233,5 +2248,10 @@ func (c *SubmodelRepositoryAPIAPIController) QuerySubmodels(w http.ResponseWrite
 		return
 	}
 	// If no error, encode the body and the result code
-	_ = EncodeJSONResponse(result.Body, &result.Code, w)
+	err = EncodeJSONResponse(result.Body, &result.Code, w)
+	if err != nil {
+		log.Printf("🧩 [%s] Error in QuerySubmodels: encoding response (limit=%d cursor=%q): %v", componentName, limitParam, cursorParam, err)
+		c.errorHandler(w, r, err, nil)
+		return
+	}
 }
