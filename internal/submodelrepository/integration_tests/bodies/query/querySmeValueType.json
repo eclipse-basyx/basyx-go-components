@@ -1,0 +1,12 @@
+{
+    "$condition": {
+        "$eq": [
+            {
+                "$field": "$sme.SimpleProperty#valueType"
+            },
+            {
+                "$strVal": "xs:string"
+            }
+        ]
+    }
+}

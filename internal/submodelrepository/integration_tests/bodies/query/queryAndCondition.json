@@ -1,0 +1,26 @@
+{
+    "$condition": {
+        "$and": [
+            {
+                "$contains": [
+                    {
+                        "$field": "$sm#id"
+                    },
+                    {
+                        "$strVal": "nuhuh.de"
+                    }
+                ]
+            },
+            {
+                "$contains": [
+                    {
+                        "$field": "$sm#idShort"
+                    },
+                    {
+                        "$strVal": "Query_Language"
+                    }
+                ]
+            }
+        ]
+    }
+}

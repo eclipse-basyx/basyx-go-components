@@ -1,0 +1,12 @@
+{
+    "$condition": {
+        "$eq": [
+            {
+                "$field": "$sm#idShort"
+            },
+            {
+                "$strVal": "Query_Language_Submodel_2"
+            }
+        ]
+    }
+}

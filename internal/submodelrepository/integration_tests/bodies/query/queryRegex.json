@@ -1,0 +1,12 @@
+{
+    "$condition": {
+        "$regex": [
+            {
+                "$field": "$sm#idShort"
+            },
+            {
+                "$strVal": "Query_Language_Submodel_[0-9]+"
+            }
+        ]
+    }
+}

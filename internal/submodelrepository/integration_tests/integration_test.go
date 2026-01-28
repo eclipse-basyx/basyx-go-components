@@ -265,7 +265,7 @@ func TestIntegration(t *testing.T) {
 			response, err := makeRequest(config, i+1)
 			require.NoError(t, err, "Request failed")
 
-			if config.Method == "GET" && config.ShouldMatch != "" {
+			if (config.Method == "GET" || config.Method == "POST") && config.ShouldMatch != "" {
 				expected, err := os.ReadFile(config.ShouldMatch)
 				require.NoError(t, err, "Failed to read expected response file")
 

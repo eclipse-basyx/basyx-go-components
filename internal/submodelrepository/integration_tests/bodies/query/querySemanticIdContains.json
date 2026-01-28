@@ -1,0 +1,12 @@
+{
+    "$condition": {
+        "$contains": [
+            {
+                "$field": "$sm#semanticId.keys[].value"
+            },
+            {
+                "$strVal": "TechnicalData"
+            }
+        ]
+    }
+}

@@ -1,0 +1,35 @@
+{
+    "idShort": "Query_Language_Submodel_2",
+    "modelType": "Submodel",
+    "id": "https://nuhuh.de/?text=SubmodelBQueryLanguage",
+    "kind": "Instance",
+    "semanticId": {
+        "type": "ExternalReference",
+        "keys": [
+            {
+                "type": "GlobalReference",
+                "value": "urn:example:semanticId:Nameplate"
+            }
+        ]
+    },
+    "submodelElements": [
+        {
+            "idShort": "ManufacturerName",
+            "modelType": "Property",
+            "valueType": "xs:string",
+            "value": "ACME Corporation"
+        },
+        {
+            "idShort": "SerialNumber",
+            "modelType": "Property",
+            "valueType": "xs:string",
+            "value": "SN-12345-ABCD"
+        },
+        {
+            "idShort": "Temperature",
+            "modelType": "Property",
+            "valueType": "xs:double",
+            "value": "25.5"
+        }
+    ]
+}

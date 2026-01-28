@@ -1,0 +1,12 @@
+{
+    "$condition": {
+        "$ends-with": [
+            {
+                "$field": "$sm#idShort"
+            },
+            {
+                "$strVal": "Submodel_1"
+            }
+        ]
+    }
+}

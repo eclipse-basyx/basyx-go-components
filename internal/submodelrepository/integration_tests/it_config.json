@@ -1888,6 +1888,238 @@
         "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/$value/$signed",
         "shouldMatch": "expected/expectedSignedSubmodelValueOnly.json",
         "expectedStatus": 200   
+    },
+    {
+        "context": "POST QL Demo Submodels - A",
+        "method": "POST",
+        "endpoint": "http://localhost:6004/submodels",
+        "data":"bodies/post/query/submodelA.json",
+        "expectedStatus": 201
+    },
+    {
+        "context": "POST QL Demo Submodels - B",
+        "method": "POST",
+        "endpoint": "http://localhost:6004/submodels",
+        "data":"bodies/post/query/submodelB.json",
+        "expectedStatus": 201
+    },
+    {
+        "context": "Query Submodel By ID Starts With",
+        "method": "POST",
+        "endpoint": "http://localhost:6004/query/submodels",
+        "data":"bodies/query/queryByIdStartsWith.json",
+        "shouldMatch":"expected/query/paginatedSubmodelAB.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "Query Submodel By ID Short Exact",
+        "method": "POST",
+        "endpoint": "http://localhost:6004/query/submodels",
+        "data":"bodies/query/queryByIdShortExact.json",
+        "shouldMatch":"expected/query/paginatedSubmodelB.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "Query Submodel By ID Short Contains",
+        "method": "POST",
+        "endpoint": "http://localhost:6004/query/submodels",
+        "data": "bodies/query/queryByIdShortContains.json",
+        "shouldMatch": "expected/query/paginatedSubmodelAB.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "Query Submodel By ID Exact",
+        "method": "POST",
+        "endpoint": "http://localhost:6004/query/submodels",
+        "data":"bodies/query/queryByIdExact.json",
+        "shouldMatch":"expected/query/paginatedSubmodelA.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "Query Submodel By ID Contains",
+        "method": "POST",
+        "endpoint": "http://localhost:6004/query/submodels",
+        "data":"bodies/query/queryByIdContains.json",
+        "shouldMatch":"expected/query/paginatedSubmodelA_278.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "Query Submodel By ID Contains 2",
+        "method": "POST",
+        "endpoint": "http://localhost:6004/query/submodels",
+        "data":"bodies/query/queryByIdContains2.json",
+        "shouldMatch":"expected/query/paginatedSubmodelB.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "POST QL Demo Submodels - C (TechnicalData)",
+        "method": "POST",
+        "endpoint": "http://localhost:6004/submodels",
+        "data":"bodies/post/query/submodelC.json",
+        "expectedStatus": 201
+    },
+    {
+        "context": "POST QL Demo Submodels - D (OperationalData)",
+        "method": "POST",
+        "endpoint": "http://localhost:6004/submodels",
+        "data":"bodies/post/query/submodelD.json",
+        "expectedStatus": 201
+    },
+    {
+        "context": "POST QL Demo Submodels - E (No SemanticId)",
+        "method": "POST",
+        "endpoint": "http://localhost:6004/submodels",
+        "data":"bodies/post/query/submodelE.json",
+        "expectedStatus": 201
+    },
+    {
+        "context": "POST QL Demo Submodels - F (No SemanticId with SME)",
+        "method": "POST",
+        "endpoint": "http://localhost:6004/submodels",
+        "data":"bodies/post/query/submodelF.json",
+        "expectedStatus": 201
+    },
+    {
+        "context": "Query Submodel By SemanticId Exact (Nameplate)",
+        "method": "POST",
+        "endpoint": "http://localhost:6004/query/submodels",
+        "data":"bodies/query/querySemanticIdExact.json",
+        "shouldMatch":"expected/query/paginatedSubmodelB.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "Query Submodel By SemanticId Contains (TechnicalData)",
+        "method": "POST",
+        "endpoint": "http://localhost:6004/query/submodels",
+        "data":"bodies/query/querySemanticIdContains.json",
+        "shouldMatch":"expected/query/paginatedSubmodelC.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "Query Submodel By SME Value Exact (ManufacturerName=ACME Corporation)",
+        "method": "POST",
+        "endpoint": "http://localhost:6004/query/submodels",
+        "data":"bodies/query/querySmeValueExact.json",
+        "shouldMatch":"expected/query/paginatedSubmodelB.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "Query Submodel By SME Value Contains (SerialNumber contains 12345)",
+        "method": "POST",
+        "endpoint": "http://localhost:6004/query/submodels",
+        "data":"bodies/query/querySmeValueContains.json",
+        "shouldMatch":"expected/query/paginatedSubmodelB.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "Query Submodel By SME idShort Exact (Temperature)",
+        "method": "POST",
+        "endpoint": "http://localhost:6004/query/submodels",
+        "data":"bodies/query/querySmeIdShortExact.json",
+        "shouldMatch":"expected/query/paginatedSubmodelsBFWithTemperature.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "Query Submodel By AND Condition (id contains nuhuh AND idShort contains Query_Language)",
+        "method": "POST",
+        "endpoint": "http://localhost:6004/query/submodels",
+        "data":"bodies/query/queryAndCondition.json",
+        "shouldMatch":"expected/query/paginatedSubmodelsIdContainsNuhuh.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "Query Submodel By OR Condition (idShort=Submodel_1 OR idShort=Submodel_3)",
+        "method": "POST",
+        "endpoint": "http://localhost:6004/query/submodels",
+        "data":"bodies/query/queryOrCondition.json",
+        "shouldMatch":"expected/query/paginatedSubmodelsOrCondition.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "Query Submodel By NOT Condition (id NOT contains nuhuh)",
+        "method": "POST",
+        "endpoint": "http://localhost:6004/query/submodels",
+        "data":"bodies/query/queryNotCondition.json",
+        "shouldMatch":"expected/query/paginatedSubmodelsNotNuhuh.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "Query Submodel By Starts-With (idShort starts with Query_Language)",
+        "method": "POST",
+        "endpoint": "http://localhost:6004/query/submodels",
+        "data":"bodies/query/queryStartsWith.json",
+        "shouldMatch":"expected/query/paginatedAllQuerySubmodels.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "Query Submodel By Ends-With (idShort ends with Submodel_1)",
+        "method": "POST",
+        "endpoint": "http://localhost:6004/query/submodels",
+        "data":"bodies/query/queryEndsWith.json",
+        "shouldMatch":"expected/query/paginatedSubmodelA.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "Query Submodel By Regex (idShort matches Query_Language_Submodel_[0-9]+)",
+        "method": "POST",
+        "endpoint": "http://localhost:6004/query/submodels",
+        "data":"bodies/query/queryRegex.json",
+        "shouldMatch":"expected/query/paginatedAllQuerySubmodels.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "Query Submodel No Match Returns Empty Result",
+        "method": "POST",
+        "endpoint": "http://localhost:6004/query/submodels",
+        "data":"bodies/query/queryNoMatch.json",
+        "shouldMatch":"expected/query/paginatedEmptyResult.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "Query Submodel By SME ValueType (SimpleProperty valueType=xs:string)",
+        "method": "POST",
+        "endpoint": "http://localhost:6004/query/submodels",
+        "data":"bodies/query/querySmeValueType.json",
+        "shouldMatch":"expected/query/paginatedSubmodelE.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "Query Submodel By Combined SME and SM (Status=Running AND idShort contains Device1)",
+        "method": "POST",
+        "endpoint": "http://localhost:6004/query/submodels",
+        "data":"bodies/query/querySmeAndSmCombined.json",
+        "shouldMatch":"expected/query/paginatedSubmodelD.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "Query Submodel Without SemanticId (LEFT JOIN test)",
+        "method": "POST",
+        "endpoint": "http://localhost:6004/query/submodels",
+        "data":"bodies/query/queryNoSemanticIdSubmodel.json",
+        "shouldMatch":"expected/query/paginatedSubmodelE.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "POST QL Demo Submodels - G (MultiLanguageProperty and SME with SemanticId)",
+        "method": "POST",
+        "endpoint": "http://localhost:6004/submodels",
+        "data":"bodies/post/query/submodelG.json",
+        "expectedStatus": 201
+    },
+    {
+        "context": "Query Submodel By SME Language (language=fr AND idShort contains Query_Language)",
+        "method": "POST",
+        "endpoint": "http://localhost:6004/query/submodels",
+        "data":"bodies/query/querySmeLanguage.json",
+        "shouldMatch":"expected/query/paginatedSubmodelG.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "Query Submodel By SME SemanticId (contains TechnicalSpecification)",
+        "method": "POST",
+        "endpoint": "http://localhost:6004/query/submodels",
+        "data":"bodies/query/querySmeSemanticId.json",
+        "shouldMatch":"expected/query/paginatedSubmodelG.json",
+        "expectedStatus": 200
     }
-
 ]
