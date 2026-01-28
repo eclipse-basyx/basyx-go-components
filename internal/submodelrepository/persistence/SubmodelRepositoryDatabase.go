@@ -49,6 +49,7 @@ import (
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	smrepoconfig "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/config"
 	smrepoerrors "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/errors"
 	submodelpersistence "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/Submodel"
@@ -138,6 +139,113 @@ func (p *PostgreSQLSubmodelDatabase) GetAllSubmodels(limit int32, cursor string,
 
 	wg.Go(func() error {
 		sm, smMap, cursor, err := submodelpersistence.GetAllSubmodels(p.db, int64(limit), cursor, nil)
+		resultChan <- result{sm: sm, smMap: smMap, cursor: cursor, err: err}
+		return err
+	})
+
+	submodelElements := make(map[string][]gen.SubmodelElement)
+	var errSme error
+	var errSmeMutex sync.Mutex
+
+	numWorkers := smrepoconfig.WorkerPoolSize
+	jobs := make(chan smeJob, len(submodelIDs))
+	results := make(chan smeResult, len(submodelIDs))
+
+	for range numWorkers {
+		go func() {
+			for job := range jobs {
+				smes, _, err := submodelelements.GetSubmodelElementsForSubmodel(p.db, job.id, "", "", -1, valueOnly)
+				results <- smeResult{id: job.id, smes: smes, err: err}
+			}
+		}()
+	}
+
+	for _, id := range submodelIDs {
+		jobs <- smeJob{id: id}
+	}
+	close(jobs)
+
+	for i := 0; i < len(submodelIDs); i++ {
+		res := <-results
+		if res.err != nil {
+			errSmeMutex.Lock()
+			if errSme == nil {
+				errSme = res.err
+			}
+			errSmeMutex.Unlock()
+		} else {
+			submodelElements[res.id] = res.smes
+		}
+	}
+	if err := wg.Wait(); err != nil {
+		return nil, "", err
+	}
+	res := <-resultChan
+
+	if res.err != nil {
+		return nil, "", res.err
+	}
+
+	if errSme != nil {
+		return nil, "", errSme
+	}
+
+	submodels := []gen.Submodel{}
+
+	for _, s := range res.sm {
+		if s != nil {
+			// Add corresponding submodel elements BEFORE copying
+			if smes, exists := submodelElements[s.ID]; exists {
+				s.SubmodelElements = smes
+			}
+			submodels = append(submodels, *s)
+		}
+	}
+
+	return submodels, res.cursor, nil
+}
+
+// QuerySubmodels retrieves a paginated list of submodels from the database that match the given query.
+// This method supports the AAS Query Language for filtering submodels based on conditions.
+//
+// Parameters:
+//   - limit: Maximum number of submodels to return (defaults to 100 if 0)
+//   - cursor: Pagination cursor for retrieving next page (empty string for first page)
+//   - query: Query wrapper containing the filter conditions
+//   - valueOnly: Whether to return only values without metadata
+//
+// Returns:
+//   - []gen.Submodel: List of submodels matching the query
+//   - string: Next cursor for pagination (empty if no more pages)
+//   - error: Error if retrieval fails
+func (p *PostgreSQLSubmodelDatabase) QuerySubmodels(limit int32, cursor string, query *grammar.QueryWrapper, valueOnly bool) ([]gen.Submodel, string, error) {
+	if limit == 0 {
+		limit = smrepoconfig.DefaultPageLimit
+	}
+
+	submodelIDs := []string{}
+	rows, err := submodelpersistence.GetSubmodelDataFromDbWithJSONQuery(p.db, "", int64(limit), cursor, query, true)
+	if err != nil {
+		return nil, "", err
+	}
+	defer func() {
+		if closeErr := rows.Close(); closeErr != nil {
+			_, _ = fmt.Println("Error closing rows:", closeErr)
+		}
+	}()
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, "", err
+		}
+		submodelIDs = append(submodelIDs, id)
+	}
+
+	var wg errgroup.Group
+	resultChan := make(chan result, 1)
+
+	wg.Go(func() error {
+		sm, smMap, cursor, err := submodelpersistence.GetAllSubmodels(p.db, int64(limit), cursor, query)
 		resultChan <- result{sm: sm, smMap: smMap, cursor: cursor, err: err}
 		return err
 	})
