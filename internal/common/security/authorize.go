@@ -136,3 +136,42 @@ func GetQueryFilter(ctx context.Context) *QueryFilter {
 	}
 	return nil
 }
+
+// MergeQueryFilter combines an existing QueryFilter with a user query.
+// It guards nils and merges conditions and filter fragments using logical AND.
+func MergeQueryFilter(ctx context.Context, query grammar.Query) context.Context {
+	qf := GetQueryFilter(ctx)
+	if qf == nil {
+		qf = &QueryFilter{}
+	}
+
+	if query.Condition != nil {
+		if qf.Formula != nil {
+			combinedQuery := grammar.LogicalExpression{And: []grammar.LogicalExpression{*qf.Formula, *query.Condition}}
+			combinedQuery, _ = combinedQuery.SimplifyForBackendFilterNoResolver()
+			qf.Formula = &combinedQuery
+		} else {
+			simplifiedQuery, _ := query.Condition.SimplifyForBackendFilterNoResolver()
+			qf.Formula = &simplifiedQuery
+		}
+	}
+
+	for _, filterCond := range query.FilterConditions {
+		if filterCond.Fragment == nil || filterCond.Condition == nil {
+			continue
+		}
+		if qf.Filters == nil {
+			qf.Filters = make(FragmentFilters)
+		}
+		if existing, ok := qf.Filters[*filterCond.Fragment]; ok {
+			combinedQuery := grammar.LogicalExpression{And: []grammar.LogicalExpression{existing, *filterCond.Condition}}
+			combinedQuery, _ = combinedQuery.SimplifyForBackendFilterNoResolver()
+			qf.Filters[*filterCond.Fragment] = combinedQuery
+		} else {
+			simplifiedQuery, _ := filterCond.Condition.SimplifyForBackendFilterNoResolver()
+			qf.Filters[*filterCond.Fragment] = simplifiedQuery
+		}
+	}
+
+	return context.WithValue(ctx, filterKey, qf)
+}

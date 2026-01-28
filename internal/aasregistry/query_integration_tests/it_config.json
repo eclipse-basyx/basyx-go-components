@@ -1,0 +1,67 @@
+[
+  {
+    "context": "GET Description - Anonymous - ALLOWED",
+    "method": "GET",
+    "endpoint": "http://localhost:6005/description",
+    "expectedStatus": 200
+  },
+  {
+    "context": "POST Descriptor A - Admin - ALLOWED",
+    "token": { "user": "admin", "password": "pwd" },
+    "method": "POST",
+    "endpoint": "http://localhost:6005/shell-descriptors",
+    "data": "postBody/simple_aas_A.json",
+    "expectedStatus": 201
+  },
+  {
+    "context": "POST Descriptor B - Admin - ALLOWED",
+    "token": { "user": "admin", "password": "pwd" },
+    "method": "POST",
+    "endpoint": "http://localhost:6005/shell-descriptors",
+    "data": "postBody/simple_aas_B.json",
+    "expectedStatus": 201
+  },
+  {
+    "context": "POST Descriptor C - Admin - ALLOWED",
+    "token": { "user": "admin", "password": "pwd" },
+    "method": "POST",
+    "endpoint": "http://localhost:6005/shell-descriptors",
+    "data": "postBody/simple_aas_C.json",
+    "expectedStatus": 201
+  },
+  {
+    "context": "POST Descriptor D - Admin - ALLOWED",
+    "token": { "user": "admin", "password": "pwd" },
+    "method": "POST",
+    "endpoint": "http://localhost:6005/shell-descriptors",
+    "data": "postBody/simple_aas_D.json",
+    "expectedStatus": 201
+  },
+  {
+    "context": "POST Query - Viewer - FILTERED",
+    "token": { "user": "usera", "password": "pwd" },
+    "method": "POST",
+    "endpoint": "http://localhost:6005/query/shell-descriptors",
+    "data": "postBody/query_shells_with_filters.json",
+    "shouldMatch": "expected/query_viewer.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "POST Query - Editor - TIGHTER",
+    "token": { "user": "userx", "password": "pwd" },
+    "method": "POST",
+    "endpoint": "http://localhost:6005/query/shell-descriptors",
+    "data": "postBody/query_shells_userx_tighter.json",
+    "shouldMatch": "expected/query_userx_tighter.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "POST Query - Admin - FULL",
+    "token": { "user": "admin", "password": "pwd" },
+    "method": "POST",
+    "endpoint": "http://localhost:6005/query/shell-descriptors",
+    "data": "postBody/query_shells_with_filters.json",
+    "shouldMatch": "expected/query_admin.json",
+    "expectedStatus": 200
+  }
+]

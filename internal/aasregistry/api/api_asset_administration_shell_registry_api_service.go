@@ -45,6 +45,8 @@ import (
 	persistence_postgresql "github.com/eclipse-basyx/basyx-go-components/internal/aasregistry/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
+	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 )
 
 const (
@@ -554,4 +556,28 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) DeleteSubmodelDescriptor
 	}
 
 	return model.Response(http.StatusNoContent, nil), nil
+}
+
+// QueryAssetAdministrationShellDescriptors - Returns all Asset Administration Shell Descriptors that confirm to the input query
+// nolint:revive // defined by standard
+func (s *AssetAdministrationShellRegistryAPIAPIService) QueryAssetAdministrationShellDescriptors(ctx context.Context, limit int32, cursor string, query grammar.Query) (model.ImplResponse, error) {
+	ctx = auth.MergeQueryFilter(ctx, query)
+
+	aasds, nextCursor, err := s.aasRegistryBackend.ListAssetAdministrationShellDescriptors(ctx, limit, cursor, "", "")
+	if err != nil {
+		log.Printf("🧩 [%s] Error in QueryAssetAdministrationShellDescriptors: list failed (limit=%d cursor=%q ): %v", componentName, limit, cursor, err)
+		switch {
+		case common.IsErrBadRequest(err):
+			return common.NewErrorResponse(
+				err, http.StatusBadRequest, componentName, "QueryAssetAdministrationShellDescriptors", "BadRequest",
+			), nil
+		default:
+			return common.NewErrorResponse(
+				err, http.StatusInternalServerError, componentName, "QueryAssetAdministrationShellDescriptors", "InternalServerError",
+			), err
+		}
+	}
+
+	return pagedResponse(aasds, nextCursor), nil
+
 }

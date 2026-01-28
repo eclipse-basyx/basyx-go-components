@@ -1,0 +1,24 @@
+{
+  "pagingMetadata": {},
+  "result": [
+    {
+      "id": "https://example.org/A",
+      "endpoints": [
+        {
+          "protocolInformation": {
+            "href": "hrefA",
+            "endpointProtocol": "http"
+          },
+          "interface": "AAS-3.0"
+        }
+      ],
+      "extensions": [
+        {
+          "name": "help",
+          "valueType": "xs:string",
+          "value": "test"
+        }
+      ]
+    }
+  ]
+}
