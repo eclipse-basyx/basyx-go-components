@@ -2121,5 +2121,36 @@
         "data":"bodies/query/querySmeSemanticId.json",
         "shouldMatch":"expected/query/paginatedSubmodelG.json",
         "expectedStatus": 200
+    },
+    {
+        "context": "POST QL Demo Submodels - H (Nested SubmodelElementCollection with Properties)",
+        "method": "POST",
+        "endpoint": "http://localhost:6004/submodels",
+        "data":"bodies/post/query/submodelH.json",
+        "expectedStatus": 201
+    },
+    {
+        "context": "Query Submodel By Nested SME Value Contains (NestedSerialNumber contains NESTED-SN)",
+        "method": "POST",
+        "endpoint": "http://localhost:6004/query/submodels",
+        "data":"bodies/query/querySmeNestedValueContains.json",
+        "shouldMatch":"expected/query/paginatedSubmodelH.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "Query Submodel By Nested SME idShort Exact (NestedTemperature)",
+        "method": "POST",
+        "endpoint": "http://localhost:6004/query/submodels",
+        "data":"bodies/query/querySmeNestedIdShortExact.json",
+        "shouldMatch":"expected/query/paginatedSubmodelH.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "Query Submodel By Deeply Nested SME Value Exact (DeeplyNestedProperty=DeepValue-XYZ)",
+        "method": "POST",
+        "endpoint": "http://localhost:6004/query/submodels",
+        "data":"bodies/query/querySmeDeepNestedValueExact.json",
+        "shouldMatch":"expected/query/paginatedSubmodelH.json",
+        "expectedStatus": 200
     }
 ]
