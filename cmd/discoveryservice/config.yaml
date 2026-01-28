@@ -17,7 +17,7 @@ oidc:
   trustlistPath: "config/trustlist.json"
 
 abac:
-  enabled: false
+  enabled: true
   enableDebugErrorResponses: true
   modelPath: "config/access_rules/access-rules.json"
 

@@ -33,6 +33,9 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	// === Main Router ===
 	r := chi.NewRouter()
 
+	// Inject config into request context (used by descriptor debug helpers)
+	r.Use(common.ConfigMiddleware(cfg))
+
 	common.AddCors(r, cfg)
 
 	// --- Health Endpoint (public) ---

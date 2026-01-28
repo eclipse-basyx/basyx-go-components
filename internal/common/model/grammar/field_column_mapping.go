@@ -192,7 +192,7 @@ var terminalColumnMappings = map[string]terminalColumnMapping{
 func ResolveAASQLFieldToSQLColumn(fieldStr string) (string, error) {
 	ctx := contextFromFieldPrefix(fieldStr)
 	if ctx == ctxUnknown {
-		return "", fmt.Errorf("unsupported field root (expected $aasdesc#, $smdesc#, $sm#, or $sme...#): %q", fieldStr)
+		return "", fmt.Errorf("unsupported field root (expected $aasdesc#, $smdesc#, $sm#, $sme...#, or $bd#): %q", fieldStr)
 	}
 
 	tokens := builder.TokenizeField(fieldStr)

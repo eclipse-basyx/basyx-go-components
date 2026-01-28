@@ -78,6 +78,7 @@ const (
 	CollectorRootSMDesc  CollectorRoot = "smdesc"
 	CollectorRootSM      CollectorRoot = "sm"
 	CollectorRootSME     CollectorRoot = "sme"
+	CollectorRootBD      CollectorRoot = "bd"
 )
 
 // ParseCollectorRoot converts roots like "$aasdesc" or "aasdesc" into a CollectorRoot.
@@ -91,6 +92,8 @@ func ParseCollectorRoot(root string) (CollectorRoot, error) {
 		return CollectorRootSM, nil
 	case string(CollectorRootSME):
 		return CollectorRootSME, nil
+	case string(CollectorRootBD):
+		return CollectorRootBD, nil
 	default:
 		return "", fmt.Errorf("unsupported collector root %q", root)
 	}
@@ -98,7 +101,7 @@ func ParseCollectorRoot(root string) (CollectorRoot, error) {
 
 func (r CollectorRoot) isValid() bool {
 	switch r {
-	case CollectorRootAASDesc, CollectorRootSMDesc, CollectorRootSM, CollectorRootSME:
+	case CollectorRootAASDesc, CollectorRootSMDesc, CollectorRootSM, CollectorRootSME, CollectorRootBD:
 		return true
 	default:
 		return false
@@ -126,6 +129,8 @@ func joinPlanConfigForRoot(root CollectorRoot) (JoinPlanConfig, error) {
 		return joinPlanConfigForSM(), nil
 	case CollectorRootSME:
 		return joinPlanConfigForSME(), nil
+	case CollectorRootBD:
+		return joinPlanConfigForBD(), nil
 	default:
 		return JoinPlanConfig{}, fmt.Errorf("unsupported collector root %q", root)
 	}
@@ -292,6 +297,55 @@ func joinPlanConfigForSME() JoinPlanConfig {
 		},
 		Correlatable: func(alias string) bool {
 			return alias == "submodel_element"
+		},
+	}
+}
+
+func joinPlanConfigForBD() JoinPlanConfig {
+	return JoinPlanConfig{
+		PreferredBase: "specific_asset_id",
+		BaseAliases:   []string{"specific_asset_id"},
+		Rules: map[string]existsJoinRule{
+			"specific_asset_id": {
+				Alias: "specific_asset_id",
+				Deps:  nil,
+				Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
+					return ds
+				},
+			},
+			"external_subject_reference": {
+				Alias: "external_subject_reference",
+				Deps:  []string{"specific_asset_id"},
+				Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
+					return ds.Join(
+						goqu.T("reference").As("external_subject_reference"),
+						goqu.On(goqu.I("external_subject_reference.id").Eq(goqu.I("specific_asset_id.external_subject_ref"))),
+					)
+				},
+			},
+			"external_subject_reference_key": {
+				Alias: "external_subject_reference_key",
+				Deps:  []string{"external_subject_reference"},
+				Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
+					return ds.Join(
+						goqu.T("reference_key").As("external_subject_reference_key"),
+						goqu.On(goqu.I("external_subject_reference_key.reference_id").Eq(goqu.I("external_subject_reference.id"))),
+					)
+				},
+			},
+		},
+		TableForAlias: existsTableForAlias,
+		GroupKeyForBase: func(base string) (exp.IdentifierExpression, error) {
+			if base == "specific_asset_id" {
+				return goqu.I("specific_asset_id.aasref"), nil
+			}
+			return nil, fmt.Errorf("unsupported BD base alias %q", base)
+		},
+		RootJoinKey: func() exp.IdentifierExpression {
+			return goqu.I("aas_identifier.id")
+		},
+		Correlatable: func(alias string) bool {
+			return alias == "specific_asset_id"
 		},
 	}
 }

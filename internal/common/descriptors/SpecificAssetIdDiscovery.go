@@ -35,8 +35,31 @@ import (
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
+	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	persistence_utils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
 )
+
+var bdExpMapper = []auth.ExpressionIdentifiableMapper{
+	{
+		Exp: tSpecificAssetID.Col(colID),
+	},
+	{
+		Exp:      tSpecificAssetID.Col(colName),
+		Fragment: fragPtr("$bd#specificAssetIds[].name"),
+	},
+	{
+		Exp:      tSpecificAssetID.Col(colValue),
+		Fragment: fragPtr("$bd#specificAssetIds[].value"),
+	},
+	{
+		Exp: tSpecificAssetID.Col(colSemanticID),
+	},
+	{
+		Exp:      tSpecificAssetID.Col(colExternalSubjectRef),
+		Fragment: fragPtr("$bd#specificAssetIds[].externalSubjectId"),
+	},
+}
 
 // ReadSpecificAssetIDsByAASIdentifier returns SpecificAssetIDs linked via the
 // discovery aas_identifier table.
@@ -46,7 +69,17 @@ func ReadSpecificAssetIDsByAASIdentifier(
 	aasID string,
 ) ([]model.SpecificAssetID, error) {
 	var aasRef int64
-	if err := db.QueryRowContext(ctx, `SELECT id FROM aas_identifier WHERE aasId = $1`, aasID).Scan(&aasRef); err != nil {
+	d := goqu.Dialect(dialect)
+	tAASIdentifier := goqu.T(tblAASIdentifier)
+	sqlStr, args, err := d.
+		From(tAASIdentifier).
+		Select(tAASIdentifier.Col(colID)).
+		Where(tAASIdentifier.Col("aasid").Eq(aasID)).
+		ToSQL()
+	if err != nil {
+		return nil, err
+	}
+	if err := db.QueryRowContext(ctx, sqlStr, args...).Scan(&aasRef); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, common.NewErrNotFound("AAS identifier '" + aasID + "'")
 		}
@@ -67,12 +100,59 @@ func ReadSpecificAssetIDsByAASRef(
 		}(time.Now())
 	}
 
-	rows, err := db.QueryContext(ctx, `
-		SELECT id, name, value, semantic_id, external_subject_ref
-		FROM specific_asset_id
-		WHERE aasRef = $1
-		ORDER BY position ASC, id ASC
-	`, aasRef)
+	d := goqu.Dialect(dialect)
+	tAASIdentifier := goqu.T(tblAASIdentifier)
+	collector, err := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootBD)
+	if err != nil {
+		return nil, err
+	}
+	expressions, err := auth.GetColumnSelectStatement(ctx, bdExpMapper, collector)
+	if err != nil {
+		return nil, err
+	}
+
+	ds := d.From(tSpecificAssetID).
+		InnerJoin(
+			tAASIdentifier,
+			goqu.On(tSpecificAssetID.Col(colAASRef).Eq(tAASIdentifier.Col(colID))),
+		).
+		Select(
+			expressions[0],
+			expressions[1],
+			expressions[2],
+			expressions[3],
+			expressions[4],
+		).
+		Where(tSpecificAssetID.Col(colAASRef).Eq(aasRef)).
+		Order(
+			tSpecificAssetID.Col(colPosition).Asc(),
+			tSpecificAssetID.Col(colID).Asc(),
+		)
+	if auth.NeedsGroupBy(ctx, bdExpMapper) {
+		ds = ds.GroupBy(
+			expressions[0], // id
+		)
+	}
+
+	ds, err = auth.AddFormulaQueryFromContext(ctx, ds, collector)
+	if err != nil {
+		return nil, err
+	}
+	cteWhere := tSpecificAssetID.Col(colAASRef).Eq(aasRef)
+	ds, err = auth.ApplyResolvedFieldPathCTEs(ds, collector, cteWhere)
+	if err != nil {
+		return nil, err
+	}
+
+	sqlStr, args, err := ds.ToSQL()
+	if err != nil {
+		return nil, err
+	}
+	if debugEnabled(ctx) {
+		_, _ = fmt.Println(sqlStr)
+	}
+
+	rows, err := db.QueryContext(ctx, sqlStr, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -222,13 +302,23 @@ func ReplaceSpecificAssetIDsByAASIdentifier(
 
 func ensureAASIdentifierTx(ctx context.Context, tx *sql.Tx, aasID string) (int64, error) {
 	var aasRef int64
-	if err := tx.QueryRowContext(
-		ctx,
-		`INSERT INTO aas_identifier (aasId) VALUES ($1)
-		 ON CONFLICT (aasId) DO UPDATE SET aasId = EXCLUDED.aasId
-		 RETURNING id`,
-		aasID,
-	).Scan(&aasRef); err != nil {
+	d := goqu.Dialect(dialect)
+	tAASIdentifier := goqu.T(tblAASIdentifier)
+	sqlStr, args, err := d.
+		Insert(tblAASIdentifier).
+		Rows(goqu.Record{"aasid": aasID}).
+		OnConflict(
+			goqu.DoUpdate(
+				"aasid",
+				goqu.Record{"aasid": goqu.I("excluded.aasid")},
+			),
+		).
+		Returning(tAASIdentifier.Col(colID)).
+		ToSQL()
+	if err != nil {
+		return 0, err
+	}
+	if err := tx.QueryRowContext(ctx, sqlStr, args...).Scan(&aasRef); err != nil {
 		return 0, err
 	}
 	return aasRef, nil

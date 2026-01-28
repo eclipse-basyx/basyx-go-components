@@ -36,12 +36,16 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"strings"
 	"time"
 
+	"github.com/doug-martin/goqu/v9"
+	// nolint:revive
+	_ "github.com/doug-martin/goqu/v9/dialect/postgres"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/descriptors"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
+	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 )
 
 // PostgreSQLDiscoveryDatabase provides PostgreSQL-based persistence for the Discovery Service.
@@ -108,8 +112,7 @@ func NewPostgreSQLDiscoveryBackend(
 // The method operates within a transaction to ensure consistency, though it performs
 // read-only operations. If the AAS identifier is not found in the database, an ErrNotFound
 // error is returned.
-func (p *PostgreSQLDiscoveryDatabase) GetAllAssetLinks(aasID string) ([]model.SpecificAssetID, error) {
-	ctx := context.Background()
+func (p *PostgreSQLDiscoveryDatabase) GetAllAssetLinks(ctx context.Context, aasID string) ([]model.SpecificAssetID, error) {
 	links, err := descriptors.ReadSpecificAssetIDsByAASIdentifier(ctx, p.db, aasID)
 	if err != nil {
 		switch {
@@ -136,10 +139,16 @@ func (p *PostgreSQLDiscoveryDatabase) GetAllAssetLinks(aasID string) ([]model.Sp
 //
 // The deletion is performed atomically. If the AAS identifier is not found (no rows affected),
 // an ErrNotFound error is returned.
-func (p *PostgreSQLDiscoveryDatabase) DeleteAllAssetLinks(aasID string) error {
-	ctx := context.Background()
-
-	result, err := p.db.ExecContext(ctx, `DELETE FROM aas_identifier WHERE aasId = $1`, aasID)
+func (p *PostgreSQLDiscoveryDatabase) DeleteAllAssetLinks(ctx context.Context, aasID string) error {
+	d := goqu.Dialect("postgres")
+	sqlStr, args, err := d.Delete("aas_identifier").
+		Where(goqu.C("aasid").Eq(aasID)).
+		ToSQL()
+	if err != nil {
+		_, _ = fmt.Println("DeleteAllAssetLinks: build error:", err)
+		return common.NewInternalServerError("Failed to delete AAS identifier. See console for information.")
+	}
+	result, err := p.db.ExecContext(ctx, sqlStr, args...)
 	if err != nil {
 		_, _ = fmt.Println(err)
 		return common.NewInternalServerError("Failed to delete AAS identifier. See console for information.")
@@ -169,8 +178,7 @@ func (p *PostgreSQLDiscoveryDatabase) DeleteAllAssetLinks(aasID string) error {
 //  3. Bulk insert the new asset links using PostgreSQL's COPY FROM feature for efficiency
 //
 // The use of COPY FROM makes this method highly efficient even for large numbers of asset links.
-func (p *PostgreSQLDiscoveryDatabase) CreateAllAssetLinks(aasID string, specificAssetIDs []model.SpecificAssetID) error {
-	ctx := context.Background()
+func (p *PostgreSQLDiscoveryDatabase) CreateAllAssetLinks(ctx context.Context, aasID string, specificAssetIDs []model.SpecificAssetID) error {
 	if err := descriptors.ReplaceSpecificAssetIDsByAASIdentifier(ctx, p.db, aasID, specificAssetIDs); err != nil {
 		_, _ = fmt.Println(err)
 		return common.NewInternalServerError("Failed to store specific asset IDs. See console for information.")
@@ -205,9 +213,7 @@ func (p *PostgreSQLDiscoveryDatabase) CreateAllAssetLinks(aasID string, specific
 // Search Logic:
 //   - Empty links: Returns all AAS IDs (paginated)
 //   - With links: Returns AAS IDs that have ALL specified asset links (exact name-value matches)
-//     Uses a GROUP BY with HAVING COUNT to ensure all links are present
-//
-// The query uses a Common Table Expression (CTE) to efficiently match asset links when provided.
+//     Uses EXISTS subqueries to enforce the AND semantics
 func (p *PostgreSQLDiscoveryDatabase) SearchAASIDsByAssetLinks(
 	ctx context.Context,
 	links []model.AssetLink,
@@ -220,46 +226,52 @@ func (p *PostgreSQLDiscoveryDatabase) SearchAASIDsByAssetLinks(
 
 	peekLimit := int(limit) + 1
 
-	args := []any{}
-	argPos := 1
-	whereCursor := fmt.Sprintf("( $%d = '' OR ai.aasId >= $%d )", argPos, argPos)
-	args = append(args, cursor)
-	argPos++
+	d := goqu.Dialect("postgres")
+	ai := goqu.T("aas_identifier")
+	sai := goqu.T("specific_asset_id").As("sai")
 
-	var sqlStr string
-	if len(links) == 0 {
-		sqlStr = fmt.Sprintf(`
-			SELECT ai.aasId
-			FROM aas_identifier ai
-			WHERE %s
-			ORDER BY ai.aasId ASC
-			LIMIT $%d
-		`, whereCursor, argPos)
-		args = append(args, peekLimit)
-	} else {
-		var valuesSQL strings.Builder
-		for i, l := range links {
-			if i > 0 {
-				_, _ = valuesSQL.WriteString(", ")
-			}
-			_, _ = valuesSQL.WriteString(fmt.Sprintf("($%d, $%d)", argPos, argPos+1))
-			args = append(args, l.Name, l.Value)
-			argPos += 2
-		}
+	ds := d.From(ai).
+		Select(ai.Col("aasid")).
+		Where(
+			goqu.Or(
+				goqu.V(cursor).Eq(""),
+				ai.Col("aasid").Gte(cursor),
+			),
+		)
 
-		sqlStr = fmt.Sprintf(`
-			WITH v(name, value) AS (VALUES %s)
-			SELECT ai.aasId
-			FROM aas_identifier ai
-			JOIN specific_asset_id sai ON sai.aasRef = ai.id
-			JOIN v ON v.name = sai.name AND v.value = sai.value
-			WHERE %s
-			GROUP BY ai.aasId
-			HAVING COUNT(DISTINCT (sai.name, sai.value)) = (SELECT COUNT(*) FROM v)
-			ORDER BY ai.aasId ASC
-			LIMIT $%d
-		`, valuesSQL.String(), whereCursor, argPos)
-		args = append(args, peekLimit)
+	for _, link := range links {
+		sub := d.From(sai).
+			Select(goqu.V(1)).
+			Where(sai.Col("aasref").Eq(ai.Col("id"))).
+			Where(sai.Col("name").Eq(link.Name)).
+			Where(sai.Col("value").Eq(link.Value))
+		ds = ds.Where(goqu.L("EXISTS ?", sub))
+	}
+
+	ds = ds.
+		Order(ai.Col("aasid").Asc()).
+		Limit(uint(peekLimit))
+
+	collector, err := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootBD)
+	if err != nil {
+		_, _ = fmt.Println("SearchAASIDsByAssetLinks: collector error:", err)
+		return nil, "", common.NewInternalServerError("Failed to build query filters. See server logs for details.")
+	}
+	ds, err = auth.AddFormulaQueryFromContext(ctx, ds, collector)
+	if err != nil {
+		_, _ = fmt.Println("SearchAASIDsByAssetLinks: filter error:", err)
+		return nil, "", common.NewInternalServerError("Failed to build query filters. See server logs for details.")
+	}
+	ds, err = auth.ApplyResolvedFieldPathCTEs(ds, collector, nil)
+	if err != nil {
+		_, _ = fmt.Println("SearchAASIDsByAssetLinks: cte error:", err)
+		return nil, "", common.NewInternalServerError("Failed to build query filters. See server logs for details.")
+	}
+
+	sqlStr, args, err := ds.ToSQL()
+	if err != nil {
+		_, _ = fmt.Println("SearchAASIDsByAssetLinks: sql build error:", err)
+		return nil, "", common.NewInternalServerError("Failed to query AAS IDs. See server logs for details.")
 	}
 
 	rows, err := p.db.QueryContext(ctx, sqlStr, args...)

@@ -227,6 +227,7 @@ const (
 	ctxSMDesc
 	ctxSM
 	ctxSME
+	ctxBD
 	ctxSpecificAssetID
 	ctxAASDescEndpoint
 	ctxSubmodelDescriptor
@@ -257,6 +258,7 @@ var arraySegmentMappings = map[string]arraySegmentMapping{
 	"specificAssetIds": {
 		ByContext: map[resolveContext]arraySegmentContextMapping{
 			ctxAASDesc: {PositionAlias: "specific_asset_id.position", NextContext: ctxSpecificAssetID},
+			ctxBD:      {PositionAlias: "specific_asset_id.position", NextContext: ctxSpecificAssetID},
 		},
 	},
 
@@ -310,6 +312,8 @@ func contextFromFieldPrefix(fieldStr string) resolveContext {
 		return ctxSM
 	case "$sme":
 		return ctxSME
+	case "$bd":
+		return ctxBD
 	default:
 		return ctxUnknown
 	}
@@ -336,7 +340,7 @@ func resolveArrayBindings(fieldStr string, tokens []builder.Token) ([]ArrayIndex
 	ctx := contextFromFieldPrefix(fieldStr)
 	if ctx == ctxUnknown {
 		// Keep error explicit: this is meant for registry queries today.
-		return nil, fmt.Errorf("unsupported field root (expected $aasdesc#, $smdesc#, $sm#, or $sme...#): %q", fieldStr)
+		return nil, fmt.Errorf("unsupported field root (expected $aasdesc#, $smdesc#, $sm#, $sme...#, or $bd#): %q", fieldStr)
 	}
 
 	var bindings []ArrayIndexBinding
