@@ -267,7 +267,11 @@ func (p *PostgreSQLDiscoveryDatabase) SearchAASIDsByAssetLinks(
 		_, _ = fmt.Println("SearchAASIDsByAssetLinks: query error:", err)
 		return nil, "", common.NewInternalServerError("Failed to query AAS IDs. See server logs for details.")
 	}
-	defer rows.Close()
+	defer func() {
+		if closeErr := rows.Close(); closeErr != nil {
+			_, _ = fmt.Println("SearchAASIDsByAssetLinks: rows close error:", closeErr)
+		}
+	}()
 
 	buf := make([]string, 0, peekLimit)
 	for rows.Next() {
