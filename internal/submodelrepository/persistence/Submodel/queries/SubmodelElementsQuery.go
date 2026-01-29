@@ -30,6 +30,7 @@ package submodelsubqueries
 import (
 	"fmt"
 
+	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
 	"github.com/doug-martin/goqu/v9/exp"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
@@ -175,51 +176,51 @@ func GetSubmodelElementsQuery(filter SubmodelElementFilter, cursor string, limit
 func getValueSubquery(dialect goqu.DialectWrapper) exp.CaseExpression {
 	valueByType := goqu.Case().
 		When(
-			goqu.I("sme.model_type").Eq("AnnotatedRelationshipElement"),
+			goqu.I("sme.model_type").Eq(types.ModelTypeAnnotatedRelationshipElement),
 			getAnnotatedRelationshipElementSubquery(dialect),
 		).
 		When(
-			goqu.I("sme.model_type").Eq("BasicEventElement"),
+			goqu.I("sme.model_type").Eq(types.ModelTypeBasicEventElement),
 			getBasicEventElementSubquery(dialect),
 		).
 		When(
-			goqu.I("sme.model_type").Eq("Blob"),
+			goqu.I("sme.model_type").Eq(types.ModelTypeBlob),
 			getBlobSubquery(dialect),
 		).
 		When(
-			goqu.I("sme.model_type").Eq("Entity"),
+			goqu.I("sme.model_type").Eq(types.ModelTypeEntity),
 			getEntitySubquery(dialect),
 		).
 		When(
-			goqu.I("sme.model_type").Eq("File"),
+			goqu.I("sme.model_type").Eq(types.ModelTypeFile),
 			getFileSubquery(dialect),
 		).
 		When(
-			goqu.I("sme.model_type").Eq("SubmodelElementList"),
+			goqu.I("sme.model_type").Eq(types.ModelTypeSubmodelElementList),
 			getSubmodelElementListSubquery(dialect),
 		).
 		When(
-			goqu.I("sme.model_type").Eq("MultiLanguageProperty"),
+			goqu.I("sme.model_type").Eq(types.ModelTypeMultiLanguageProperty),
 			getMultiLanguagePropertySubquery(dialect),
 		).
 		When(
-			goqu.I("sme.model_type").Eq("Operation"),
+			goqu.I("sme.model_type").Eq(types.ModelTypeOperation),
 			getOperationSubquery(dialect),
 		).
 		When(
-			goqu.I("sme.model_type").Eq("Property"),
+			goqu.I("sme.model_type").Eq(types.ModelTypeProperty),
 			getPropertySubquery(dialect),
 		).
 		When(
-			goqu.I("sme.model_type").Eq("Range"),
+			goqu.I("sme.model_type").Eq(types.ModelTypeRange),
 			getRangeSubquery(dialect),
 		).
 		When(
-			goqu.I("sme.model_type").Eq("ReferenceElement"),
+			goqu.I("sme.model_type").Eq(types.ModelTypeReferenceElement),
 			getReferenceElementSubquery(dialect),
 		).
 		When(
-			goqu.I("sme.model_type").Eq("RelationshipElement"),
+			goqu.I("sme.model_type").Eq(types.ModelTypeRelationshipElement),
 			getRelationshipElementSubquery(dialect),
 		).
 		Else(goqu.V(nil))

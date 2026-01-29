@@ -33,6 +33,7 @@ package submodelelements
 import (
 	"database/sql"
 
+	"github.com/FriedJannik/aas-go-sdk/jsonization"
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
@@ -360,7 +361,11 @@ func insertRelationshipElement(relElem *types.RelationshipElement, tx *sql.Tx, i
 	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
 	if !isEmptyReference(relElem.First()) {
-		ref, err := json.Marshal(relElem.First())
+		jsonable, err := jsonization.ToJsonable(relElem.First())
+		if err != nil {
+			return common.NewErrBadRequest("SMREPO-INSRELEL-FIRSTJSON Failed to convert first reference to jsonable: " + err.Error())
+		}
+		ref, err := json.Marshal(jsonable)
 		if err != nil {
 			return err
 		}
@@ -368,7 +373,11 @@ func insertRelationshipElement(relElem *types.RelationshipElement, tx *sql.Tx, i
 	}
 
 	if !isEmptyReference(relElem.Second()) {
-		ref, err := json.Marshal(relElem.Second())
+		jsonable, err := jsonization.ToJsonable(relElem.Second())
+		if err != nil {
+			return common.NewErrBadRequest("SMREPO-INSRELEL-SECONDJSON Failed to convert second reference to jsonable: " + err.Error())
+		}
+		ref, err := json.Marshal(jsonable)
 		if err != nil {
 			return err
 		}
@@ -460,7 +469,11 @@ func buildUpdateRelationshipElementRecordObject(isPut bool, relElem types.IRelat
 	if isPut || relElem.First() != nil {
 		var firstRef string
 		if relElem.First() != nil && !isEmptyReference(relElem.First()) {
-			ref, err := json.Marshal(relElem.First())
+			jsonable, err := jsonization.ToJsonable(relElem.First())
+			if err != nil {
+				return nil, common.NewErrBadRequest("SMREPO-BURERO-FIRSTJSONABLE Failed to convert first reference to jsonable: " + err.Error())
+			}
+			ref, err := json.Marshal(jsonable)
 			if err != nil {
 				return nil, err
 			}
@@ -472,10 +485,14 @@ func buildUpdateRelationshipElementRecordObject(isPut bool, relElem types.IRelat
 	// Handle Second reference - optional field
 	// For PUT: always update (even if nil, which clears the field)
 	// For PATCH: only update if provided (not nil)
-	if isPut || relElem.Second != nil {
+	if isPut || relElem.Second() != nil {
 		var secondRef string
 		if relElem.Second() != nil && !isEmptyReference(relElem.Second()) {
-			ref, err := json.Marshal(relElem.Second())
+			jsonable, err := jsonization.ToJsonable(relElem.Second())
+			if err != nil {
+				return nil, common.NewErrBadRequest("SMREPO-BURERO-SECONDJSONABLE Failed to convert second reference to jsonable: " + err.Error())
+			}
+			ref, err := json.Marshal(jsonable)
 			if err != nil {
 				return nil, err
 			}

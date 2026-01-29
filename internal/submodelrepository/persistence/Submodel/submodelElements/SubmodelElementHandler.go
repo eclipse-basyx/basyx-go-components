@@ -36,6 +36,7 @@ package submodelelements
 import (
 	"database/sql"
 	"errors"
+	"os"
 	"sort"
 	"strconv"
 	"sync"
@@ -177,7 +178,7 @@ func UpdateNestedElements(db *sql.DB, elems []persistenceutils.SubmodelElementTo
 				return err
 			}
 			if actual == nil {
-				return common.NewErrNotFound("Submodel-Element ID-Short: " + elem.IdShortPath)
+				return common.NewErrNotFound("SMREPO-UPDNESTED-NOTFOUND Submodel-Element ID-Short: " + elem.IdShortPath)
 			}
 
 			modelType = *actual
@@ -228,7 +229,7 @@ func GetModelTypeByIdShortPathAndSubmodelID(db *sql.DB, submodelID string, idSho
 	err = db.QueryRow(query, args...).Scan(&modelType)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, common.NewErrNotFound("Submodel-Element ID-Short: " + idShortOrPath)
+			return nil, common.NewErrNotFound("SMREPO-GETMODELTYPE-NOTFOUND Submodel-Element ID-Short: " + idShortOrPath)
 		}
 		return nil, err
 	}
@@ -277,15 +278,15 @@ func DeleteSubmodelElementByPath(tx *sql.Tx, submodelID string, idShortOrPath st
 	)
 	sqlQuery, args, err := del.ToSQL()
 	if err != nil {
-		return err
+		return common.NewInternalServerError("SMREPO-DELSMEBPATH-TOSQL Failed to build delete query: " + err.Error())
 	}
 	result, err := tx.Exec(sqlQuery, args...)
 	if err != nil {
-		return err
+		return common.NewInternalServerError("SMREPO-DELSMEBPATH-EXEC Failed to execute delete query: " + err.Error())
 	}
 	affectedRows, err := result.RowsAffected()
 	if err != nil {
-		return err
+		return common.NewInternalServerError("SMREPO-DELSMEBPATH-ROWSAFFECTED Failed to get affected rows: " + err.Error())
 	}
 	// if idShortPath ends with ] it is part of a SubmodelElementList and we need to update the indices of the remaining elements
 	if idShortOrPath[len(idShortOrPath)-1] == ']' {
@@ -299,7 +300,7 @@ func DeleteSubmodelElementByPath(tx *sql.Tx, submodelID string, idShortOrPath st
 				var err error
 				deletedIndex, err = strconv.Atoi(indexStr)
 				if err != nil {
-					return err
+					return common.NewInternalServerError("SMREPO-DELSMEBPATH-PARSEINDEX Failed to parse index: " + err.Error())
 				}
 				break
 			}
@@ -315,13 +316,16 @@ func DeleteSubmodelElementByPath(tx *sql.Tx, submodelID string, idShortOrPath st
 			)).
 			ToSQL()
 		if err != nil {
-			return err
+			return common.NewInternalServerError("SMREPO-DELSMEBPATH-SELECTPARENT-TOSQL Failed to build select query: " + err.Error())
 		}
 
 		var parentID int
 		err = tx.QueryRow(selectQuery, selectArgs...).Scan(&parentID)
 		if err != nil {
-			return err
+			if errors.Is(err, sql.ErrNoRows) {
+				return common.NewErrNotFound("SMREPO-DELSMEBPATH-SELECTPARENT-NOTFOUND Parent ID-Short: " + parentPath)
+			}
+			return common.NewInternalServerError("SMREPO-DELSMEBPATH-SELECTPARENT-EXEC Failed to execute select query: " + err.Error())
 		}
 
 		// update the indices of the remaining elements in the SubmodelElementList
@@ -333,11 +337,11 @@ func DeleteSubmodelElementByPath(tx *sql.Tx, submodelID string, idShortOrPath st
 			)).
 			ToSQL()
 		if err != nil {
-			return err
+			return common.NewInternalServerError("SMREPO-DELSMEBPATH-UPDATEINDICES-TOSQL Failed to build update query: " + err.Error())
 		}
 		_, err = tx.Exec(updateQuery, updateArgs...)
 		if err != nil {
-			return err
+			return common.NewInternalServerError("SMREPO-DELSMEBPATH-UPDATEINDICES-EXEC Failed to execute update query: " + err.Error())
 		}
 		// update their idshort_path as well
 		updatePathQuery, updatePathArgs, err := dialect.Update("submodel_element").
@@ -348,15 +352,15 @@ func DeleteSubmodelElementByPath(tx *sql.Tx, submodelID string, idShortOrPath st
 			)).
 			ToSQL()
 		if err != nil {
-			return err
+			return common.NewInternalServerError("SMREPO-DELSMEBPATH-UPDATEPATH-TOSQL Failed to build update path query: " + err.Error())
 		}
 		_, err = tx.Exec(updatePathQuery, updatePathArgs...)
 		if err != nil {
-			return err
+			return common.NewInternalServerError("SMREPO-DELSMEBPATH-UPDATEPATH-EXEC Failed to execute update path query: " + err.Error())
 		}
 	}
 	if affectedRows == 0 {
-		return common.NewErrNotFound("Submodel-Element ID-Short: " + idShortOrPath)
+		return common.NewErrNotFound("SMREPO-DELSMEBPATH-NOTFOUND Submodel-Element ID-Short: " + idShortOrPath)
 	}
 	return nil
 }
@@ -380,10 +384,17 @@ func GetSubmodelElementsForSubmodel(db *sql.DB, submodelID string, idShortPath s
 		return nil, "", err
 	}
 	q, params, err := submodelElementQuery.ToSQL()
+
+	if err != nil {
+		return nil, "", err
+	}
+	// write to query.txt
+	err = os.WriteFile("query.txt", []byte(q), 0644)
 	if err != nil {
 		return nil, "", err
 	}
 	rows, err := db.Query(q, params...)
+
 	if err != nil {
 		return nil, "", err
 	}

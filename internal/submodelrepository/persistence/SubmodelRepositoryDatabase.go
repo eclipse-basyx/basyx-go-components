@@ -286,13 +286,13 @@ func (p *PostgreSQLSubmodelDatabase) GetAllSubmodelsMetadata(
 
 	var submodels []types.Submodel
 	for rows.Next() {
-		var sm types.Submodel
+		sm := types.Submodel{}
 		var keyValue, category sql.NullString
 		var ID, IDShort sql.NullString
 		var Kind, ModelType, refType, keyType sql.NullInt64
 		err := rows.Scan(
-			ID,
-			IDShort,
+			&ID,
+			&IDShort,
 			&category,
 			&Kind,
 			&ModelType,
@@ -304,21 +304,28 @@ func (p *PostgreSQLSubmodelDatabase) GetAllSubmodelsMetadata(
 			_, _ = fmt.Println("Error scanning metadata row:", err)
 			return nil, "", err
 		}
+		if !ID.Valid {
+			_, _ = fmt.Printf("Warning: Skipping submodel entry with NULL ID\n")
+			continue // Skip entries without valid ID
+		}
+		sm.SetID(ID.String)
 		if category.Valid {
 			sm.SetCategory(&category.String)
 		}
+		if IDShort.Valid {
+			sm.SetIDShort(&IDShort.String)
+		}
+
+		if Kind.Valid {
+			modellingKind := types.ModellingKind(Kind.Int64)
+			sm.SetKind(&modellingKind)
+		}
+
 		if refType.Valid {
-			// ref := gen.Reference{
-			// 	Type: gen.ReferenceTypes(refType.String),
-			// }
 			ref := types.Reference{}
 			ref.SetType(types.ReferenceTypes(refType.Int64))
 			// Only add keys if both type and value are valid
 			if keyType.Valid && keyValue.Valid {
-				// ref.Keys = []gen.Key{{
-				// 	Type:  gen.KeyTypes(keyType.String),
-				// 	Value: keyValue.String,
-				// }}
 				ref.SetKeys([]types.IKey{types.NewKey(types.KeyTypes(keyType.Int64), keyValue.String)})
 			}
 			sm.SetSemanticID(&ref)
@@ -327,7 +334,7 @@ func (p *PostgreSQLSubmodelDatabase) GetAllSubmodelsMetadata(
 	}
 
 	if err := tx.Commit(); err != nil {
-		_, _ = fmt.Println(err)
+		_, _ = fmt.Println("SMREPO-GETALLSMMET-TRANSACTIONCOMMIT " + err.Error())
 		return nil, "", failedPostgresTransactionSubmodelRepo
 	}
 
@@ -349,7 +356,7 @@ func (p *PostgreSQLSubmodelDatabase) DoesSubmodelExist(submodelIdentifier string
 	} else {
 		startedTX, cu, err := common.StartTransaction(p.db)
 		if err != nil {
-			_, _ = fmt.Println(err)
+			_, _ = fmt.Println("SMREPO-DSE-STARTTX " + err.Error())
 			return false, beginTransactionErrorSubmodelRepo
 		}
 		defer cu(&err)
@@ -370,7 +377,7 @@ func (p *PostgreSQLSubmodelDatabase) DoesSubmodelExist(submodelIdentifier string
 
 	if tx == nil {
 		if err := localTX.Commit(); err != nil {
-			_, _ = fmt.Println(err)
+			_, _ = fmt.Println("SMREPO-DSE-COMMIT " + err.Error())
 			return false, failedPostgresTransactionSubmodelRepo
 		}
 	}
@@ -497,7 +504,7 @@ func (p *PostgreSQLSubmodelDatabase) DeleteSubmodel(id string, optionalTX *sql.T
 	if optionalTX == nil {
 		startedTX, cu, err := common.StartTransaction(p.db)
 		if err != nil {
-			_, _ = fmt.Println(err)
+			_, _ = fmt.Println("SMREPO-DSM-STARTTX " + err.Error())
 			return beginTransactionErrorSubmodelRepo
 		}
 		defer cu(&err)
@@ -536,7 +543,7 @@ func (p *PostgreSQLSubmodelDatabase) DeleteSubmodel(id string, optionalTX *sql.T
 	}
 	if optionalTX == nil {
 		if err := tx.Commit(); err != nil {
-			_, _ = fmt.Println(err)
+			_, _ = fmt.Println("SMREPO-DSM-COMMIT " + err.Error())
 			return failedPostgresTransactionSubmodelRepo
 		}
 	}
@@ -557,13 +564,13 @@ func (p *PostgreSQLSubmodelDatabase) DeleteSubmodel(id string, optionalTX *sql.T
 func (p *PostgreSQLSubmodelDatabase) PutSubmodel(submodelID string, submodel types.ISubmodel) (bool, error) {
 	tx, cu, err := common.StartTransaction(p.db)
 	if err != nil {
-		_, _ = fmt.Println(err)
+		_, _ = fmt.Println("SMREPO-PUTSM-STARTTX " + err.Error())
 		return false, beginTransactionErrorSubmodelRepo
 	}
 	defer cu(&err)
 	exists, err := p.DoesSubmodelExist(submodelID, tx)
 	if err != nil {
-		_, _ = fmt.Println(err)
+		_, _ = fmt.Println("SMREPO-PUTSM-DOESSMEXIST " + err.Error())
 		return false, common.NewInternalServerError("Error while checking for submodel Existence - see console for details.")
 	}
 	if exists {
@@ -602,7 +609,7 @@ func (p *PostgreSQLSubmodelDatabase) CreateSubmodel(smInt types.ISubmodel, optio
 		tx = startedTX
 
 		if err != nil {
-			_, _ = fmt.Println(err)
+			_, _ = fmt.Println("SMREPO-CRESUB-STARTTX " + err.Error())
 			return beginTransactionErrorSubmodelRepo
 		}
 
@@ -621,45 +628,34 @@ func (p *PostgreSQLSubmodelDatabase) CreateSubmodel(smInt types.ISubmodel, optio
 
 	semanticIDDbID, err = persistenceutils.CreateReference(tx, sm.SemanticID(), sql.NullInt64{}, sql.NullInt64{})
 	if err != nil {
-		_, _ = fmt.Println(err)
-		return common.NewInternalServerError("Failed to create SemanticID - no changes applied - see console for details")
+		_, _ = fmt.Println("SMREPO-SMID-CR-CRESUB " + err.Error())
+		return common.NewInternalServerError("Failed to create SemanticID - no changes applied - see console for details - SMREPO-SMID-CR-CRESUB")
 	}
 
 	langString := []types.ILangStringNameType{}
-	for _, dn := range sm.DisplayName() {
-		converted, ok := dn.(*types.LangStringNameType)
-		if !ok {
-			_, _ = fmt.Println("Error converting DisplayName to LangStringNameType")
-			return common.NewInternalServerError("Failed to create DisplayName - no changes applied - see console for details")
-		}
-		langString = append(langString, converted)
-	}
+	langString = append(langString, sm.DisplayName()...)
 
 	displayNameID, err = persistenceutils.CreateLangStringNameTypes(tx, langString)
 	if err != nil {
-		_, _ = fmt.Println(err)
-		return common.NewInternalServerError("Failed to create DisplayName - no changes applied - see console for details")
+		_, _ = fmt.Println("SMREPO-DN-CR-CRESUB-2 " + err.Error())
+		return common.NewInternalServerError("Failed to create DisplayName - no changes applied - see console for details - SMREPO-DN-CR-CRESUB-2")
 	}
 
 	// Handle possibly nil Description
 	var convertedDescription []types.ILangStringTextType
-	for _, desc := range sm.Description() {
-		converted, ok := desc.(*types.LangStringTextType)
-		if !ok {
-			_, _ = fmt.Println("Error converting Description to LangStringTextType")
-			return common.NewInternalServerError("Failed to create Description - no changes applied - see console for details")
-		}
-		convertedDescription = append(convertedDescription, converted)
+	if sm.Description() != nil {
+		convertedDescription = []types.ILangStringTextType{}
+		convertedDescription = append(convertedDescription, sm.Description()...)
 	}
 	descriptionID, err = persistenceutils.CreateLangStringTextTypes(tx, convertedDescription)
 	if err != nil {
-		_, _ = fmt.Println(err)
+		_, _ = fmt.Println("SMREPO-DES-CR-CRESUB " + err.Error())
 		return common.NewInternalServerError("Failed to create Description - no changes applied - see console for details")
 	}
 
 	administrationID, err = persistenceutils.CreateAdministrativeInformation(tx, sm.Administration())
 	if err != nil {
-		_, _ = fmt.Println(err)
+		_, _ = fmt.Println("SMREPO-ADM-CR-CRESUB " + err.Error())
 		return common.NewInternalServerError("Failed to create Administration - no changes applied - see console for details")
 	}
 
@@ -683,7 +679,7 @@ func (p *PostgreSQLSubmodelDatabase) CreateSubmodel(smInt types.ISubmodel, optio
 		"id_short":                    sm.IDShort(),
 		"category":                    sm.Category(),
 		"kind":                        sm.Kind(),
-		"model_type":                  "Submodel",
+		"model_type":                  types.ModelTypeSubmodel,
 		"semantic_id":                 semanticIDDbID,
 		"displayname_id":              displayNameID,
 		"description_id":              descriptionID,

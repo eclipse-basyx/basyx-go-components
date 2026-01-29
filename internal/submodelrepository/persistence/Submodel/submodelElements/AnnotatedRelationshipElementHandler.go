@@ -32,6 +32,7 @@ package submodelelements
 import (
 	"database/sql"
 
+	"github.com/FriedJannik/aas-go-sdk/jsonization"
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
@@ -266,7 +267,11 @@ func (p PostgreSQLAnnotatedRelationshipElementHandler) UpdateValueOnly(submodelI
 		var firstRef, secondRef *string
 
 		if len(areValue.First.Keys()) > 0 {
-			ref, err := json.Marshal(areValue.First)
+			jsonable, err := jsonization.ToJsonable(areValue.First)
+			if err != nil {
+				return common.NewErrBadRequest("SMREPO-AREUV-FIRSTJSONABLE Failed to convert first reference to jsonable: " + err.Error())
+			}
+			ref, err := json.Marshal(jsonable)
 			if err != nil {
 				return err
 			}
@@ -275,7 +280,11 @@ func (p PostgreSQLAnnotatedRelationshipElementHandler) UpdateValueOnly(submodelI
 		}
 
 		if len(areValue.Second.Keys()) > 0 {
-			ref, err := json.Marshal(areValue.Second)
+			jsonable, err := jsonization.ToJsonable(areValue.Second)
+			if err != nil {
+				return common.NewErrBadRequest("SMREPO-AREUV-SECONDJSONABLE Failed to convert second reference to jsonable: " + err.Error())
+			}
+			ref, err := json.Marshal(jsonable)
 			if err != nil {
 				return err
 			}
@@ -361,11 +370,15 @@ func insertAnnotatedRelationshipElement(areElem *types.AnnotatedRelationshipElem
 func serializeReference(ref types.IReference, json jsoniter.API) (string, error) {
 	var firstRef string
 	if !isEmptyReference(ref) {
-		ref, err := json.Marshal(ref)
+		jsonable, err := jsonization.ToJsonable(ref)
+		if err != nil {
+			return "", common.NewErrBadRequest("SMREPO-SERREF-JSONABLE Failed to convert reference to jsonable: " + err.Error())
+		}
+		refBytes, err := json.Marshal(jsonable)
 		if err != nil {
 			return "", err
 		}
-		firstRef = string(ref)
+		firstRef = string(refBytes)
 	}
 	return firstRef, nil
 }

@@ -404,9 +404,18 @@ func TestFileAttachmentOperations(t *testing.T) {
 
 // TestMain handles setup and teardown
 func TestMain(m *testing.M) {
+	// Teardown: Stop Docker Compose
+	_, _ = fmt.Println("Stopping old Docker Compose...")
+	cmd := exec.Command("docker", "compose", "-f", "docker_compose/docker_compose.yml", "down")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		_, _ = fmt.Printf("Failed to stop Docker Compose: %v\n", err)
+	}
+
 	// Setup: Start Docker Compose
 	_, _ = fmt.Println("Starting Docker Compose...")
-	cmd := exec.Command("docker", "compose", "-f", "docker_compose/docker_compose.yml", "up", "-d", "--build")
+	cmd = exec.Command("docker", "compose", "-f", "docker_compose/docker_compose.yml", "up", "-d", "--build")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
@@ -457,15 +466,6 @@ func TestMain(m *testing.M) {
 
 	// Run tests
 	code := m.Run()
-
-	// Teardown: Stop Docker Compose
-	_, _ = fmt.Println("Stopping Docker Compose...")
-	cmd = exec.Command("docker", "compose", "-f", "docker_compose/docker_compose.yml", "down")
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
-		_, _ = fmt.Printf("Failed to stop Docker Compose: %v\n", err)
-	}
 
 	os.Exit(code)
 }

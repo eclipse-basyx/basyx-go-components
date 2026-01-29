@@ -32,6 +32,7 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/FriedJannik/aas-go-sdk/jsonization"
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	jsoniter "github.com/json-iterator/go"
@@ -68,8 +69,8 @@ type smeResult struct {
 func getElementsToProcess(topLevelElement types.ISubmodelElement, parentID int, startPath string) ([]ElementToProcess, error) {
 	stack := []ElementToProcess{}
 
-	switch string(topLevelElement.ModelType()) {
-	case "SubmodelElementCollection":
+	switch topLevelElement.ModelType() {
+	case types.ModelTypeSubmodelElementCollection:
 		submodelElementCollection, ok := topLevelElement.(*types.SubmodelElementCollection)
 		if !ok {
 			return nil, common.NewInternalServerError("SubmodelElement with modelType 'SubmodelElementCollection' is not of type SubmodelElementCollection")
@@ -89,7 +90,7 @@ func getElementsToProcess(topLevelElement types.ISubmodelElement, parentID int, 
 				position:                  index,
 			})
 		}
-	case "SubmodelElementList":
+	case types.ModelTypeSubmodelElementList:
 		submodelElementList, ok := topLevelElement.(*types.SubmodelElementList)
 		if !ok {
 			return nil, common.NewInternalServerError("SubmodelElement with modelType 'SubmodelElementList' is not of type SubmodelElementList")
@@ -110,7 +111,7 @@ func getElementsToProcess(topLevelElement types.ISubmodelElement, parentID int, 
 				position:                  index,
 			})
 		}
-	case "AnnotatedRelationshipElement":
+	case types.ModelTypeAnnotatedRelationshipElement:
 		submodelElementCollection, ok := topLevelElement.(*types.AnnotatedRelationshipElement)
 		if !ok {
 			return nil, common.NewInternalServerError("AnnotatedRelationshipElement with modelType 'AnnotatedRelationshipElement' is not of type AnnotatedRelationshipElement")
@@ -130,7 +131,7 @@ func getElementsToProcess(topLevelElement types.ISubmodelElement, parentID int, 
 				position:                  index,
 			})
 		}
-	case "Entity":
+	case types.ModelTypeEntity:
 		submodelElementCollection, ok := topLevelElement.(*types.Entity)
 		if !ok {
 			return nil, common.NewInternalServerError("Entity with modelType 'Entity' is not of type Entity")
@@ -223,7 +224,7 @@ func getEDSJSONStringFromSubmodel(sm *types.Submodel) (string, error) {
 	if len(sm.EmbeddedDataSpecifications()) > 0 {
 		edsBytes, err := json.Marshal(sm.EmbeddedDataSpecifications())
 		if err != nil {
-			_, _ = fmt.Println(err)
+			_, _ = fmt.Println("SMREPO-BLD-EDS-JSON " + err.Error())
 			return "", common.NewInternalServerError("Failed to marshal EmbeddedDataSpecifications - no changes applied - see console for details")
 		}
 		if edsBytes != nil {
@@ -239,7 +240,7 @@ func getExtensionJSONStringFromSubmodel(sm *types.Submodel) (string, error) {
 	if len(sm.Extensions()) > 0 {
 		extensionBytes, err := json.Marshal(sm.Extensions())
 		if err != nil {
-			_, _ = fmt.Println(err)
+			_, _ = fmt.Println("SMREPO-BLD-EXT-JSON " + err.Error())
 			return "", common.NewInternalServerError("Failed to marshal Extension - no changes applied - see console for details")
 		}
 		if extensionBytes != nil {
@@ -253,9 +254,17 @@ func getSupplementalSemanticIDsJSONStringFromSubmodel(sm *types.Submodel) (strin
 	json := jsoniter.ConfigCompatibleWithStandardLibrary
 	supplementalSemanticIDs := "[]"
 	if len(sm.SupplementalSemanticIDs()) > 0 {
-		supplBytes, err := json.Marshal(sm.SupplementalSemanticIDs())
+		var toJson []map[string]interface{}
+		for _, ref := range sm.SupplementalSemanticIDs() {
+			jsonObj, err := jsonization.ToJsonable(ref)
+			if err != nil {
+				return "", common.NewErrBadRequest("Failed to convert Reference to jsonable object - no changes applied")
+			}
+			toJson = append(toJson, jsonObj)
+		}
+		supplBytes, err := json.Marshal(toJson)
 		if err != nil {
-			_, _ = fmt.Println(err)
+			_, _ = fmt.Println("SMREPO-BLD-SUPPL-JSON " + err.Error())
 			return "", common.NewInternalServerError("Failed to marshal SupplementalSemanticIds - no changes applied - see console for details")
 		}
 		if supplBytes != nil {

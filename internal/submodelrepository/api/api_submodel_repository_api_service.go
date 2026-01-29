@@ -953,10 +953,6 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelElementByPathSubmodelRepo(c
 	}
 
 	sme, err := s.submodelBackend.GetSubmodelElement(string(decodedSubmodelIdentifier), idShortPath, false)
-	converted, convErr := jsonization.ToJsonable(sme)
-	if convErr != nil {
-		return gen.Response(http.StatusInternalServerError, nil), convErr
-	}
 
 	if err != nil {
 		if common.IsErrNotFound(err) {
@@ -977,7 +973,10 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelElementByPathSubmodelRepo(c
 		}
 		return gen.Response(http.StatusInternalServerError, nil), err
 	}
-
+	converted, convErr := jsonization.ToJsonable(sme)
+	if convErr != nil {
+		return gen.Response(http.StatusInternalServerError, nil), convErr
+	}
 	return gen.Response(http.StatusOK, converted), nil
 }
 

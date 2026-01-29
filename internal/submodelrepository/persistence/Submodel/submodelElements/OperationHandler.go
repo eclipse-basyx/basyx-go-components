@@ -252,8 +252,8 @@ func insertOperation(operation *types.Operation, tx *sql.Tx, id int) error {
 	json := jsoniter.ConfigCompatibleWithStandardLibrary
 
 	var inputVars, outputVars, inoutputVars string
-	if operation.InputVariables != nil {
-		inputVarBytes, err := json.Marshal(operation.InputVariables)
+	if operation.InputVariables() != nil {
+		inputVarBytes, err := json.Marshal(operation.InputVariables())
 		if err != nil {
 			return err
 		}
@@ -262,8 +262,8 @@ func insertOperation(operation *types.Operation, tx *sql.Tx, id int) error {
 		inputVars = "[]"
 	}
 
-	if operation.OutputVariables != nil {
-		outputVarBytes, err := json.Marshal(operation.OutputVariables)
+	if operation.OutputVariables() != nil {
+		outputVarBytes, err := json.Marshal(operation.OutputVariables())
 		if err != nil {
 			return err
 		}
@@ -272,8 +272,8 @@ func insertOperation(operation *types.Operation, tx *sql.Tx, id int) error {
 		outputVars = "[]"
 	}
 
-	if operation.InoutputVariables != nil {
-		inoutputVarBytes, err := json.Marshal(operation.InoutputVariables)
+	if operation.InoutputVariables() != nil {
+		inoutputVarBytes, err := json.Marshal(operation.InoutputVariables())
 		if err != nil {
 			return err
 		}

@@ -37,6 +37,7 @@ package submodelelements
 import (
 	"database/sql"
 
+	"github.com/FriedJannik/aas-go-sdk/jsonization"
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
@@ -238,7 +239,11 @@ func (p PostgreSQLReferenceElementHandler) Update(submodelID string, idShortOrPa
 		var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
 		if refElem.Value() != nil && !isEmptyReference(refElem.Value()) {
-			bytes, err := json.Marshal(refElem.Value())
+			jsonable, err := jsonization.ToJsonable(refElem.Value())
+			if err != nil {
+				return common.NewErrBadRequest("SMREPO-REFU-JSONABLE Failed to convert reference to jsonable: " + err.Error())
+			}
+			bytes, err := json.Marshal(jsonable)
 			if err != nil {
 				return err
 			}
@@ -355,7 +360,11 @@ func insertReferenceElement(refElem *types.ReferenceElement, tx *sql.Tx, id int)
 	var referenceJSONString sql.NullString
 	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	if !isEmptyReference(refElem.Value()) {
-		bytes, err := json.Marshal(refElem.Value())
+		jsonable, err := jsonization.ToJsonable(refElem.Value())
+		if err != nil {
+			return common.NewErrBadRequest("SMREPO-INSREFELEM-JSONABLE Failed to convert reference to jsonable: " + err.Error())
+		}
+		bytes, err := json.Marshal(jsonable)
 		if err != nil {
 			return err
 		}

@@ -34,6 +34,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/FriedJannik/aas-go-sdk/jsonization"
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
@@ -214,7 +215,11 @@ func buildUpdateBasicEventElementRecordObject(basicEvent *types.BasicEventElemen
 	// Required fields - always update
 	var observedRefJson sql.NullString
 	if !isEmptyReference(basicEvent.Observed()) {
-		observedBytes, err := json.Marshal(basicEvent.Observed())
+		jsonable, err := jsonization.ToJsonable(basicEvent.Observed())
+		if err != nil {
+			return nil, common.NewErrBadRequest("SMREPO-BUBEERO-OBSJSONABLE Failed to convert observed to jsonable: " + err.Error())
+		}
+		observedBytes, err := json.Marshal(jsonable)
 		if err != nil {
 			return nil, err
 		}
@@ -230,7 +235,11 @@ func buildUpdateBasicEventElementRecordObject(basicEvent *types.BasicEventElemen
 	if isPut || !isEmptyReference(basicEvent.MessageBroker()) {
 		var messageBrokerRefJson sql.NullString
 		if !isEmptyReference(basicEvent.MessageBroker()) {
-			messageBrokerBytes, err := json.Marshal(basicEvent.MessageBroker())
+			jsonable, err := jsonization.ToJsonable(basicEvent.MessageBroker())
+			if err != nil {
+				return nil, common.NewErrBadRequest("SMREPO-BUBEERO-MBJSONABLE Failed to convert message broker to jsonable: " + err.Error())
+			}
+			messageBrokerBytes, err := json.Marshal(jsonable)
 			if err != nil {
 				return nil, err
 			}
@@ -304,7 +313,11 @@ func (p PostgreSQLBasicEventElementHandler) UpdateValueOnly(submodelID string, i
 	dialect := goqu.Dialect("postgres")
 
 	var newObservedJson sql.NullString
-	observedBytes, err := json.Marshal(basicEventValue.Observed)
+	jsonable, err := jsonization.ToJsonable(basicEventValue.Observed)
+	if err != nil {
+		return common.NewErrBadRequest("SMREPO-BEEUVO-OBSJSONABLE Failed to convert observed to jsonable: " + err.Error())
+	}
+	observedBytes, err := json.Marshal(jsonable)
 	if err != nil {
 		return common.NewErrBadRequest(fmt.Sprintf("failed to marshal observed value: %s", err))
 	}
@@ -364,7 +377,11 @@ func (p PostgreSQLBasicEventElementHandler) Delete(idShortOrPath string) error {
 func insertBasicEventElement(basicEvent *types.BasicEventElement, tx *sql.Tx, id int) error {
 	var observedRefJson sql.NullString
 	if !isEmptyReference(basicEvent.Observed()) {
-		observedBytes, err := json.Marshal(basicEvent.Observed())
+		jsonable, err := jsonization.ToJsonable(basicEvent.Observed())
+		if err != nil {
+			return common.NewErrBadRequest("SMREPO-IBEE-OBSJSONABLE")
+		}
+		observedBytes, err := json.Marshal(jsonable)
 		if err != nil {
 			return err
 		}
@@ -373,7 +390,11 @@ func insertBasicEventElement(basicEvent *types.BasicEventElement, tx *sql.Tx, id
 
 	var messageBrokerRefJson sql.NullString
 	if !isEmptyReference(basicEvent.MessageBroker()) {
-		messageBrokerBytes, err := json.Marshal(basicEvent.MessageBroker())
+		jsonable, err := jsonization.ToJsonable(basicEvent.MessageBroker())
+		if err != nil {
+			return common.NewErrBadRequest("SMREPO-IBEE-MBJSONABLE")
+		}
+		messageBrokerBytes, err := json.Marshal(jsonable)
 		if err != nil {
 			return err
 		}

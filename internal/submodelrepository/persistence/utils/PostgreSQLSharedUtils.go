@@ -22,6 +22,7 @@
 *
 * SPDX-License-Identifier: MIT
 ******************************************************************************/
+// Author: Jannik Fried (Fraunhofer IESE)
 
 // Package persistenceutils provides utility functions for persisting AAS entities
 package persistenceutils
@@ -60,7 +61,7 @@ func CreateExtension(tx *sql.Tx, extension types.Extension, position int) (sql.N
 	if extension.SemanticID() != nil {
 		id, err := CreateReference(tx, extension.SemanticID(), sql.NullInt64{}, sql.NullInt64{})
 		if err != nil {
-			_, _ = fmt.Println(err)
+			_, _ = fmt.Println("SMREPO-CREXT-CRSEMID " + err.Error())
 			return sql.NullInt64{}, common.NewInternalServerError("Error inserting SemanticID Reference for Extension.")
 		}
 		semanticIDRefDbID = id
@@ -89,17 +90,17 @@ func CreateExtension(tx *sql.Tx, extension types.Extension, position int) (sql.N
 	INSERT INTO
 	extension (name, position, value_type, value_text, value_num, value_bool, value_time, value_datetime, semantic_id)
 	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-	RETURNING id`, extension.Name, position, valueType, typedValue.Text, typedValue.Numeric, typedValue.Boolean, typedValue.Time, typedValue.DateTime, semanticIDRefDbID).Scan(&extensionDbID)
+	RETURNING id`, extension.Name(), position, valueType, typedValue.Text, typedValue.Numeric, typedValue.Boolean, typedValue.Time, typedValue.DateTime, semanticIDRefDbID).Scan(&extensionDbID)
 
 	if err != nil {
-		_, _ = fmt.Println(err)
+		_, _ = fmt.Println("SMREPO-CREXT-INS " + err.Error())
 		return sql.NullInt64{}, common.NewInternalServerError("Error inserting Extension. See console for details.")
 	}
 
 	for _, supplemental := range extension.SupplementalSemanticIDs() {
 		id, err := CreateReference(tx, supplemental, sql.NullInt64{}, sql.NullInt64{})
 		if err != nil {
-			_, _ = fmt.Println(err)
+			_, _ = fmt.Println("SMREPO-CREXT-CRSUPSEMID " + err.Error())
 			return sql.NullInt64{}, common.NewInternalServerError("Error inserting Supplemental Semantic IDs for Extension. See console for details.")
 		}
 		_, err = tx.Exec(`
@@ -109,7 +110,7 @@ func CreateExtension(tx *sql.Tx, extension types.Extension, position int) (sql.N
 		`, extensionDbID, id)
 
 		if err != nil {
-			_, _ = fmt.Println(err)
+			_, _ = fmt.Println("SMREPO-CREXT-LINKSUPSEMID " + err.Error())
 			return sql.NullInt64{}, common.NewInternalServerError("Error linking Supplemental Semantic IDs with Extension. See console for details.")
 		}
 	}
@@ -117,7 +118,7 @@ func CreateExtension(tx *sql.Tx, extension types.Extension, position int) (sql.N
 	for _, referred := range extension.RefersTo() {
 		id, err := CreateReference(tx, referred, sql.NullInt64{}, sql.NullInt64{})
 		if err != nil {
-			_, _ = fmt.Println(err)
+			_, _ = fmt.Println("SMREPO-CREXT-CRREF " + err.Error())
 			return sql.NullInt64{}, common.NewInternalServerError("Error inserting RefersTo for Extension. See console for details.")
 		}
 		_, err = tx.Exec(`
@@ -127,7 +128,7 @@ func CreateExtension(tx *sql.Tx, extension types.Extension, position int) (sql.N
 		`, extensionDbID, id)
 
 		if err != nil {
-			_, _ = fmt.Println(err)
+			_, _ = fmt.Println("SMREPO-CREXT-LINKREF " + err.Error())
 			return sql.NullInt64{}, common.NewInternalServerError("Error linking RefersTo Reference with Extension. See console for details.")
 		}
 	}
@@ -157,7 +158,7 @@ func CreateQualifier(tx *sql.Tx, qualifier types.IQualifier, position int) (sql.
 	if qualifier.ValueID() != nil {
 		id, err := CreateReference(tx, qualifier.ValueID(), sql.NullInt64{}, sql.NullInt64{})
 		if err != nil {
-			_, _ = fmt.Println(err)
+			_, _ = fmt.Println("SMREPO-CRQUAL-CRVALID " + err.Error())
 			return sql.NullInt64{}, common.NewInternalServerError("Error inserting ValueID Reference for Qualifier.")
 		}
 		valueIDRefDbID = id
@@ -166,7 +167,7 @@ func CreateQualifier(tx *sql.Tx, qualifier types.IQualifier, position int) (sql.
 	if qualifier.SemanticID() != nil {
 		id, err := CreateReference(tx, qualifier.SemanticID(), sql.NullInt64{}, sql.NullInt64{})
 		if err != nil {
-			_, _ = fmt.Println(err)
+			_, _ = fmt.Println("SMREPO-CRQUAL-CRSEMID " + err.Error())
 			return sql.NullInt64{}, common.NewInternalServerError("Error inserting SemanticID Reference for Qualifier.")
 		}
 		semanticIDRefDbID = id
@@ -186,17 +187,17 @@ func CreateQualifier(tx *sql.Tx, qualifier types.IQualifier, position int) (sql.
 	INSERT INTO
 	qualifier (kind, position, type, value_type, value_text, value_num, value_bool, value_time, value_datetime, value_id, semantic_id)
 	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-	RETURNING id`, kind, position, qualifier.Type, qualifier.ValueType, typedValue.Text, typedValue.Numeric, typedValue.Boolean, typedValue.Time, typedValue.DateTime, valueIDRefDbID, semanticIDRefDbID).Scan(&qualifierDbID)
+	RETURNING id`, kind, position, qualifier.Type(), qualifier.ValueType(), typedValue.Text, typedValue.Numeric, typedValue.Boolean, typedValue.Time, typedValue.DateTime, valueIDRefDbID, semanticIDRefDbID).Scan(&qualifierDbID)
 
 	if err != nil {
-		_, _ = fmt.Println(err)
+		_, _ = fmt.Println("SMREPO-CRQUAL-INS " + err.Error())
 		return sql.NullInt64{}, common.NewInternalServerError("Error inserting Qualifier. See console for details.")
 	}
 
 	for _, supplemental := range qualifier.SupplementalSemanticIDs() {
 		id, err := CreateReference(tx, supplemental, sql.NullInt64{}, sql.NullInt64{})
 		if err != nil {
-			_, _ = fmt.Println(err)
+			_, _ = fmt.Println("SMREPO-CRQUAL-CRSUPSEMID " + err.Error())
 			return sql.NullInt64{}, common.NewInternalServerError("Error inserting Supplemental Semantic IDs for Qualifier. See console for details.")
 		}
 		_, err = tx.Exec(`
@@ -206,7 +207,7 @@ func CreateQualifier(tx *sql.Tx, qualifier types.IQualifier, position int) (sql.
 		`, qualifierDbID, id)
 
 		if err != nil {
-			_, _ = fmt.Println(err)
+			_, _ = fmt.Println("SMREPO-CRQUAL-LINKSUPSEMID " + err.Error())
 			return sql.NullInt64{}, common.NewInternalServerError("Error linking Supplemental Semantic IDs with Qualifier. See console for details.")
 		}
 	}
@@ -232,7 +233,7 @@ func CreateEmbeddedDataSpecification(tx *sql.Tx, embeddedDataSpecification types
 	var embeddedDataSpecificationDbID sql.NullInt64
 	err := tx.QueryRow(`INSERT INTO data_specification_content DEFAULT VALUES RETURNING id`).Scan(&embeddedDataSpecificationContentDbID)
 	if err != nil {
-		_, _ = fmt.Println(err)
+		_, _ = fmt.Println("SMREPO-CREXT-INS " + err.Error())
 		return sql.NullInt64{}, common.NewInternalServerError("Error inserting DataSpecificationContent. See console for details.")
 	}
 	dataSpecificationDbID, err := CreateReference(tx, embeddedDataSpecification.DataSpecification(), sql.NullInt64{}, sql.NullInt64{})
@@ -416,8 +417,8 @@ func CreateAdministrativeInformation(tx *sql.Tx, adminInfo types.IAdministrative
 		if len(adminInfo.EmbeddedDataSpecifications()) > 0 {
 			edsBytes, err := json.Marshal(adminInfo.EmbeddedDataSpecifications())
 			if err != nil {
-				_, _ = fmt.Println(err)
-				return sql.NullInt64{}, common.NewInternalServerError("Failed to marshal EmbeddedDataSpecifications - no changes applied - see console for details")
+				_, _ = fmt.Println("SMREPO-CRADMININF-MARSHAL-EDS " + err.Error())
+				return sql.NullInt64{}, common.NewInternalServerError("SMREPO-CRADMININF-MARSHAL-EDS Failed to marshal EmbeddedDataSpecifications - no changes applied - see console for details")
 			}
 			if edsBytes != nil {
 				edsJSONString = string(edsBytes)
@@ -425,7 +426,7 @@ func CreateAdministrativeInformation(tx *sql.Tx, adminInfo types.IAdministrative
 		}
 
 		err = tx.QueryRow(`INSERT INTO administrative_information (version, revision, creator, templateID, embedded_data_specification) VALUES ($1, $2, $3, $4, $5) RETURNING id`,
-			adminInfo.Version, adminInfo.Revision, creatorID, adminInfo.TemplateID, edsJSONString).Scan(&id)
+			adminInfo.Version(), adminInfo.Revision(), creatorID, adminInfo.TemplateID(), edsJSONString).Scan(&id)
 		if err != nil {
 			return sql.NullInt64{}, err
 		}
@@ -456,7 +457,7 @@ func CreateReference(tx *sql.Tx, semanticID types.IReference, parentID sql.NullI
 	insertKeyQuery := `INSERT INTO reference_key (reference_id, position, type, value) VALUES ($1, $2, $3, $4)`
 
 	if semanticID != nil && !isEmptyReference(semanticID) {
-		err := tx.QueryRow(`INSERT INTO reference (type, parentReference, rootReference) VALUES ($1, $2, $3) RETURNING id`, semanticID.Type, parentID, rootID).Scan(&id)
+		err := tx.QueryRow(`INSERT INTO reference (type, parentReference, rootReference) VALUES ($1, $2, $3) RETURNING id`, semanticID.Type(), parentID, rootID).Scan(&id)
 		if err != nil {
 			return sql.NullInt64{}, err
 		}
@@ -465,7 +466,7 @@ func CreateReference(tx *sql.Tx, semanticID types.IReference, parentID sql.NullI
 		references := semanticID.Keys()
 		for i := range references {
 			_, err = tx.Exec(insertKeyQuery,
-				id, i, references[i].Type, references[i].Value)
+				id, i, references[i].Type(), references[i].Value())
 			if err != nil {
 				return sql.NullInt64{}, err
 			}
@@ -498,7 +499,7 @@ func insertNestedRefferedSemanticIDs(semanticID types.IReference, tx *sql.Tx, re
 		} else {
 			parentReference = nil
 		}
-		err := tx.QueryRow(`INSERT INTO reference (type, parentReference, rootReference) VALUES ($1, $2, $3) RETURNING id`, current.Type, parentReference, rootID).Scan(&childRefID)
+		err := tx.QueryRow(`INSERT INTO reference (type, parentReference, rootReference) VALUES ($1, $2, $3) RETURNING id`, current.Type(), parentReference, rootID).Scan(&childRefID)
 		if err != nil {
 			return sql.NullInt64{}, err
 		}
@@ -506,7 +507,7 @@ func insertNestedRefferedSemanticIDs(semanticID types.IReference, tx *sql.Tx, re
 
 		for i := range current.Keys() {
 			_, err = tx.Exec(insertKeyQuery,
-				childRefID, i, current.Keys()[i].Type, current.Keys()[i].Value)
+				childRefID, i, current.Keys()[i].Type(), current.Keys()[i].Value())
 			if err != nil {
 				return sql.NullInt64{}, err
 			}
@@ -830,7 +831,7 @@ func insertExtension(extension types.Extension, semanticIDDbID sql.NullInt64, tx
 		).
 		Vals(goqu.Vals{
 			semanticIDDbID,
-			extension.Name,
+			extension.Name(),
 			extension.ValueType(),
 			valueText,
 			valueNum,

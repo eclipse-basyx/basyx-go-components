@@ -247,17 +247,17 @@ func insertSubmodelElementList(smeList *types.SubmodelElementList, tx *sql.Tx, i
 		semanticID = sql.NullInt64{Int64: int64(refID), Valid: true}
 	}
 
-	var typeValue, valueType sql.NullString
-	typeValue = sql.NullString{String: string(smeList.TypeValueListElement()), Valid: true}
+	var typeValue, valueType sql.NullInt64
+	typeValue = sql.NullInt64{Int64: int64(smeList.TypeValueListElement()), Valid: true}
 	if smeList.ValueTypeListElement() != nil {
-		valueType = sql.NullString{String: string(*smeList.ValueTypeListElement()), Valid: true}
+		valueType = sql.NullInt64{Int64: int64(*smeList.ValueTypeListElement()), Valid: true}
 	}
 
 	dialect := goqu.Dialect("postgres")
 	insertQuery, insertArgs, err := dialect.Insert("submodel_element_list").
 		Rows(goqu.Record{
 			"id":                       id,
-			"order_relevant":           smeList.OrderRelevant,
+			"order_relevant":           smeList.OrderRelevant(),
 			"semantic_id_list_element": semanticID,
 			"type_value_list_element":  typeValue,
 			"value_type_list_element":  valueType,

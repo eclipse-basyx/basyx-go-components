@@ -313,7 +313,7 @@ func insertProperty(property *types.Property, tx *sql.Tx, id int) error {
 	// Handle valueID if present
 	valueIDDbID, err := persistenceutils.CreateReference(tx, property.ValueID(), sql.NullInt64{}, sql.NullInt64{})
 	if err != nil {
-		_, _ = fmt.Println(err)
+		_, _ = fmt.Println("SMREPO-INSPROP-CRVALID " + err.Error())
 		return common.NewInternalServerError("Failed to create SemanticID - no changes applied - see console for details")
 	}
 

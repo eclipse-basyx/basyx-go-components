@@ -56,21 +56,24 @@ type TypedValue struct {
 func MapValueByType(valueType types.DataTypeDefXSD, value *string) TypedValue {
 	tv := TypedValue{}
 	valid := value != nil && *value != ""
-
+	actualValue := ""
+	if valid {
+		actualValue = *value
+	}
 	switch {
 	case IsTextType(valueType):
-		tv.Text = sql.NullString{String: *value, Valid: valid}
+		tv.Text = sql.NullString{String: actualValue, Valid: valid}
 	case IsNumericType(valueType):
-		tv.Numeric = sql.NullString{String: *value, Valid: valid}
+		tv.Numeric = sql.NullString{String: actualValue, Valid: valid}
 	case valueType == types.DataTypeDefXSDBoolean:
-		tv.Boolean = sql.NullString{String: *value, Valid: valid}
+		tv.Boolean = sql.NullString{String: actualValue, Valid: valid}
 	case valueType == types.DataTypeDefXSDTime:
-		tv.Time = sql.NullString{String: *value, Valid: valid}
+		tv.Time = sql.NullString{String: actualValue, Valid: valid}
 	case IsDateTimeType(valueType):
-		tv.DateTime = sql.NullString{String: *value, Valid: valid}
+		tv.DateTime = sql.NullString{String: actualValue, Valid: valid}
 	default:
 		// Fallback to text for unknown types
-		tv.Text = sql.NullString{String: *value, Valid: valid}
+		tv.Text = sql.NullString{String: actualValue, Valid: valid}
 	}
 	return tv
 }

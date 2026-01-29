@@ -447,7 +447,7 @@
                         },
                         "sourceOfDefinition": "IEC 61360-2",
                         "symbol": "kOhm",
-                        "dataType": "RealCount",
+                        "dataType": "REAL_COUNT",
                         "definition": [
                             {
                                 "language": "en",
@@ -570,7 +570,7 @@
                         },
                         "sourceOfDefinition": "IEC 61360-2",
                         "symbol": "V",
-                        "dataType": "RealCount",
+                        "dataType": "REAL_COUNT",
                         "definition": [
                             {
                                 "language": "en",

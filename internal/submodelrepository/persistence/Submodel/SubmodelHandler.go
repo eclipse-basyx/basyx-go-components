@@ -34,7 +34,7 @@ import (
 	"sync"
 
 	// nolint:all
-	"github.com/FriedJannik/aas-go-sdk/stringification"
+
 	"github.com/FriedJannik/aas-go-sdk/types"
 	_ "github.com/doug-martin/goqu/v9/dialect/postgres"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
@@ -402,14 +402,8 @@ func BuildQualifiers(row model.SubmodelRow) ([]types.IQualifier, error) {
 		}
 		for _, qualifierRow := range qualifierRows {
 			// Convert string enums to SDK enums
-			kindEnum, ok := stringification.QualifierKindFromString(qualifierRow.Kind)
-			if !ok {
-				return nil, fmt.Errorf("invalid QualifierKind: %s", qualifierRow.Kind)
-			}
-			valueTypeEnum, ok := stringification.DataTypeDefXSDFromString(qualifierRow.ValueType)
-			if !ok {
-				return nil, fmt.Errorf("invalid DataTypeDefXSD: %s", qualifierRow.ValueType)
-			}
+			kindEnum := types.QualifierKind(qualifierRow.Kind)
+			valueTypeEnum := types.DataTypeDefXSD(qualifierRow.ValueType)
 			_, err = builder.AddQualifier(qualifierRow.DbID, int64(kindEnum), qualifierRow.Type, int64(valueTypeEnum), qualifierRow.Value, qualifierRow.Position)
 			if err != nil {
 				return nil, err
@@ -435,7 +429,7 @@ func BuildQualifiers(row model.SubmodelRow) ([]types.IQualifier, error) {
 		result := make([]types.IQualifier, len(built))
 		for i := range built {
 			q := built[i] // Copy to get addressable value
-			result[i] = &q
+			result[i] = q
 		}
 		return result, nil
 	}
@@ -447,13 +441,13 @@ func BuildAdministration(row model.SubmodelRow) (*types.AdministrativeInformatio
 	if common.IsArrayNotEmpty(row.Administration) {
 		adminRow, err := builders.ParseAdministrationRow(row.Administration)
 		if err != nil {
-			_, _ = fmt.Println(err)
+			_, _ = fmt.Println("SMREPO-BLD-PADMIN " + err.Error())
 			return nil, err
 		}
 		if adminRow != nil {
 			admin, err := builders.BuildAdministration(*adminRow)
 			if err != nil {
-				_, _ = fmt.Println(err)
+				_, _ = fmt.Println("SMREPO-BLD-BADMIN " + err.Error())
 				return nil, err
 			}
 			return admin, nil

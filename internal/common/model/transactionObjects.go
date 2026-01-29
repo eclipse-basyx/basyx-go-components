@@ -215,13 +215,13 @@ type QualifierRow struct {
 	// DbID is the unique identifier of the qualifier in the database
 	DbID int64 `json:"dbId"`
 	// Kind specifies the kind of qualifier (e.g., ConceptQualifier, ValueQualifier)
-	Kind string `json:"kind"`
+	Kind int64 `json:"kind"`
 	// Type is the type/name of the qualifier
 	Type string `json:"type"`
 	// Position specifies the position of the qualifier
 	Position int `json:"position"`
 	// ValueType specifies the data type of the qualifier value
-	ValueType string `json:"value_type"`
+	ValueType int64 `json:"value_type"`
 	// Value is the actual value of the qualifier
 	Value string `json:"value"`
 	// SemanticID contains semantic ID reference data as JSON data
@@ -352,7 +352,7 @@ type PropertyValueRow struct {
 	// ValueType specifies the XSD data type of the value.
 	// This determines how the Value string should be parsed and interpreted
 	// (e.g., xs:string, xs:int, xs:boolean, xs:dateTime, etc.).
-	ValueType DataTypeDefXsd `json:"value_type"`
+	ValueType int64 `json:"value_type"`
 
 	// ValueID contains value ID reference data as JSON data
 	ValueID json.RawMessage `json:"value_id"`
@@ -368,9 +368,9 @@ type PropertyValueRow struct {
 // to observed elements that trigger the events.
 type BasicEventElementValueRow struct {
 	// Direction specifies the direction of the event (e.g., input, output)
-	Direction string `json:"direction"`
+	Direction int64 `json:"direction"`
 	// State represents the current state of the event element
-	State string `json:"state"`
+	State int64 `json:"state"`
 	// MessageTopic is the topic used for event message communication
 	MessageTopic string `json:"message_topic"`
 	// LastUpdate contains the timestamp of the last event update
@@ -382,7 +382,7 @@ type BasicEventElementValueRow struct {
 	// Observed contains reference data to the observed element as JSON data
 	Observed json.RawMessage `json:"observed"`
 	// Observed contains reference data to the observed element as JSON data
-	MessageBroker json.RawMessage `json:"message_broker"`
+	MessageBroker sql.NullString `json:"message_broker"`
 }
 
 // SubmodelElementListRow represents a data row for a SubmodelElementList entity in the database.
@@ -395,9 +395,9 @@ type SubmodelElementListRow struct {
 	// OrderRelevant indicates whether the order of elements in the list is significant
 	OrderRelevant bool `json:"order_relevant"`
 	// TypeValueListElement specifies the required type for elements in the list
-	TypeValueListElement string `json:"type_value_list_element"`
+	TypeValueListElement int64 `json:"type_value_list_element"`
 	// ValueTypeListElement specifies the required value type for elements in the list
-	ValueTypeListElement string `json:"value_type_list_element"`
+	ValueTypeListElement sql.NullInt64 `json:"value_type_list_element"`
 	// SemanticIDListElement contains semantic ID reference data for list elements as JSON data
 	SemanticIDListElement json.RawMessage `json:"semantic_id_list_element"`
 	// SemanticIDListElementReferred contains referred semantic ID reference data for list elements as JSON data
@@ -435,7 +435,7 @@ type RangeValueRow struct {
 	// ValueType specifies the XSD data type of both the Min and Max values.
 	// This determines how the Min and Max strings should be parsed and interpreted
 	// (e.g., xs:string, xs:int, xs:boolean, xs:dateTime, etc.).
-	ValueType string `json:"value_type"`
+	ValueType int64 `json:"value_type"`
 }
 
 // OperationValueRow represents a data row for an Operation element's variables in the database.

@@ -31,6 +31,7 @@ import (
 	"sort"
 	"sync"
 
+	"github.com/FriedJannik/aas-go-sdk/jsonization"
 	"github.com/FriedJannik/aas-go-sdk/stringification"
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
@@ -57,16 +58,16 @@ type displayNameResult struct {
 	displayNames []types.ILangStringNameType
 }
 type embeddedDataSpecResult struct {
-	eds []types.EmbeddedDataSpecification
+	eds []types.IEmbeddedDataSpecification
 }
 type supplementalSemanticIDsResult struct {
-	supplementalSemanticIDs []types.Reference
+	supplementalSemanticIDs []types.IReference
 }
 type qualifiersResult struct {
-	qualifiers []types.Qualifier
+	qualifiers []types.IQualifier
 }
 type extensionsResult struct {
-	extensions []types.Extension
+	extensions []types.IExtension
 }
 
 // BuildSubmodelElement constructs a SubmodelElement from the provided database row.
@@ -138,13 +139,21 @@ func BuildSubmodelElement(smeRow model.SubmodelElementRow) (types.ISubmodelEleme
 	// Parse EmbeddedDataSpecifications
 	g.Go(func() error {
 		if smeRow.EmbeddedDataSpecifications != nil {
-			var eds []types.EmbeddedDataSpecification
+			var edsJsonable []map[string]interface{}
 			var json = jsoniter.ConfigCompatibleWithStandardLibrary
-			err := json.Unmarshal(*smeRow.EmbeddedDataSpecifications, &eds)
+			err := json.Unmarshal(*smeRow.EmbeddedDataSpecifications, &edsJsonable)
+			var specs []types.IEmbeddedDataSpecification
+			for _, jsonable := range edsJsonable {
+				eds, err := jsonization.EmbeddedDataSpecificationFromJsonable(jsonable)
+				if err != nil {
+					return fmt.Errorf("error converting jsonable to EmbeddedDataSpecification: %w", err)
+				}
+				specs = append(specs, eds)
+			}
 			if err != nil {
 				return fmt.Errorf("error unmarshaling embedded data specifications: %w", err)
 			}
-			embeddedDataSpecChan <- embeddedDataSpecResult{eds: eds}
+			embeddedDataSpecChan <- embeddedDataSpecResult{eds: specs}
 		} else {
 			embeddedDataSpecChan <- embeddedDataSpecResult{}
 		}
@@ -154,13 +163,25 @@ func BuildSubmodelElement(smeRow model.SubmodelElementRow) (types.ISubmodelEleme
 	// Parse SupplementalSemanticIDs
 	g.Go(func() error {
 		if smeRow.SupplementalSemanticIDs != nil {
-			var supplementalSemanticIDs []types.Reference
+			var supplementalSemanticIDsJsonable []map[string]interface{}
 			var json = jsoniter.ConfigCompatibleWithStandardLibrary
-			err := json.Unmarshal(*smeRow.SupplementalSemanticIDs, &supplementalSemanticIDs)
+			err := json.Unmarshal(*smeRow.SupplementalSemanticIDs, &supplementalSemanticIDsJsonable)
 			if err != nil {
 				return fmt.Errorf("error unmarshaling supplemental semantic IDs: %w", err)
 			}
-			supplementalSemanticIDsChan <- supplementalSemanticIDsResult{supplementalSemanticIDs: supplementalSemanticIDs}
+			var supplementalSemanticIDs []types.Reference
+			for _, jsonable := range supplementalSemanticIDsJsonable {
+				ref, err := jsonization.ReferenceFromJsonable(jsonable)
+				if err != nil {
+					return fmt.Errorf("error converting jsonable to Reference: %w", err)
+				}
+				supplementalSemanticIDs = append(supplementalSemanticIDs, *ref.(*types.Reference))
+			}
+			iSupplementalSemanticIDs := make([]types.IReference, len(supplementalSemanticIDs))
+			for i, ref := range supplementalSemanticIDs {
+				iSupplementalSemanticIDs[i] = &ref
+			}
+			supplementalSemanticIDsChan <- supplementalSemanticIDsResult{supplementalSemanticIDs: iSupplementalSemanticIDs}
 		} else {
 			supplementalSemanticIDsChan <- supplementalSemanticIDsResult{}
 		}
@@ -170,9 +191,17 @@ func BuildSubmodelElement(smeRow model.SubmodelElementRow) (types.ISubmodelEleme
 	// Parse Extensions
 	g.Go(func() error {
 		if smeRow.Extensions != nil {
-			var extensions []types.Extension
+			var extensionsJsonable []map[string]interface{}
 			var json = jsoniter.ConfigCompatibleWithStandardLibrary
-			err := json.Unmarshal(*smeRow.Extensions, &extensions)
+			err := json.Unmarshal(*smeRow.Extensions, &extensionsJsonable)
+			var extensions []types.IExtension
+			for _, jsonable := range extensionsJsonable {
+				ext, err := jsonization.ExtensionFromJsonable(jsonable)
+				if err != nil {
+					return fmt.Errorf("error converting jsonable to Extension: %w", err)
+				}
+				extensions = append(extensions, ext)
+			}
 			if err != nil {
 				return fmt.Errorf("error unmarshaling extensions: %w", err)
 			}
@@ -185,44 +214,38 @@ func BuildSubmodelElement(smeRow model.SubmodelElementRow) (types.ISubmodelEleme
 
 	// Parse Qualifiers
 	g.Go(func() error {
-		// TODO: Convert QualifierBuilder to use SDK types
-		// For now, skip qualifier parsing
-		qualifiersChan <- qualifiersResult{}
-		return nil
-		/*
-			if smeRow.Qualifiers != nil {
-				builder := NewQualifiersBuilder()
-				qualifierRows, err := ParseQualifiersRow(*smeRow.Qualifiers)
+		if smeRow.Qualifiers != nil {
+			builder := NewQualifiersBuilder()
+			qualifierRows, err := ParseQualifiersRow(*smeRow.Qualifiers)
+			if err != nil {
+				return err
+			}
+			for _, qualifierRow := range qualifierRows {
+				_, err = builder.AddQualifier(qualifierRow.DbID, qualifierRow.Kind, qualifierRow.Type, qualifierRow.ValueType, qualifierRow.Value, qualifierRow.Position)
 				if err != nil {
 					return err
 				}
-				for _, qualifierRow := range qualifierRows {
-					_, err = builder.AddQualifier(qualifierRow.DbID, qualifierRow.Kind, qualifierRow.Type, qualifierRow.ValueType, qualifierRow.Value, qualifierRow.Position)
-					if err != nil {
-						return err
-					}
 
-					_, err = builder.AddSemanticID(qualifierRow.DbID, qualifierRow.SemanticID, qualifierRow.SemanticIDReferredReferences)
-					if err != nil {
-						return err
-					}
-
-					_, err = builder.AddValueID(qualifierRow.DbID, qualifierRow.ValueID, qualifierRow.ValueIDReferredReferences)
-					if err != nil {
-						return err
-					}
-
-					_, err = builder.AddSupplementalSemanticIDs(qualifierRow.DbID, qualifierRow.SupplementalSemanticIDs, qualifierRow.SupplementalSemanticIDsReferredReferences)
-					if err != nil {
-						return err
-					}
+				_, err = builder.AddSemanticID(qualifierRow.DbID, qualifierRow.SemanticID, qualifierRow.SemanticIDReferredReferences)
+				if err != nil {
+					return err
 				}
-				qualifiersChan <- qualifiersResult{qualifiers: builder.Build()}
-			} else {
-				qualifiersChan <- qualifiersResult{}
+
+				_, err = builder.AddValueID(qualifierRow.DbID, qualifierRow.ValueID, qualifierRow.ValueIDReferredReferences)
+				if err != nil {
+					return err
+				}
+
+				_, err = builder.AddSupplementalSemanticIDs(qualifierRow.DbID, qualifierRow.SupplementalSemanticIDs, qualifierRow.SupplementalSemanticIDsReferredReferences)
+				if err != nil {
+					return err
+				}
 			}
-			return nil
-		*/
+			qualifiersChan <- qualifiersResult{qualifiers: builder.Build()}
+		} else {
+			qualifiersChan <- qualifiersResult{}
+		}
+		return nil
 	})
 
 	// Wait for all goroutines to complete
@@ -238,9 +261,7 @@ func BuildSubmodelElement(smeRow model.SubmodelElementRow) (types.ISubmodelEleme
 
 	extResult := <-extensionsChan
 	if len(extResult.extensions) > 0 {
-		// TODO: Convert model.Extension to types.IExtension
-		// For now, skip setting extensions until ExtensionBuilder is converted
-		// specificSME.SetExtensions(extResult.extensions)
+		specificSME.SetExtensions(extResult.extensions)
 	}
 
 	descResult := <-descriptionChan
@@ -255,18 +276,14 @@ func BuildSubmodelElement(smeRow model.SubmodelElementRow) (types.ISubmodelEleme
 
 	edsResult := <-embeddedDataSpecChan
 	if len(edsResult.eds) > 0 {
-		// TODO: Convert model.EmbeddedDataSpecification to types.IEmbeddedDataSpecification
-		// For now, skip until EDS builder is fully converted
-		// specificSME.SetEmbeddedDataSpecifications(edsResult.eds)
+		specificSME.SetEmbeddedDataSpecifications(edsResult.eds)
 	}
 
 	supplResult := <-supplementalSemanticIDsChan
 
 	qualResult := <-qualifiersChan
 	if len(qualResult.qualifiers) > 0 {
-		// TODO: Convert model.Qualifier to types.IQualifier
-		// For now, skip until QualifierBuilder is fully converted
-		// specificSME.SetQualifiers(qualResult.qualifiers)
+		specificSME.SetQualifiers(qualResult.qualifiers)
 	}
 
 	// Build nested structure for references
@@ -276,9 +293,7 @@ func BuildSubmodelElement(smeRow model.SubmodelElementRow) (types.ISubmodelEleme
 
 	// Set supplemental semantic IDs if present
 	if len(supplResult.supplementalSemanticIDs) > 0 {
-		// TODO: Convert model.Reference to types.IReference
-		// For now, skip until reference conversion is complete
-		// specificSME.SetSupplementalSemanticIDs(...)
+		specificSME.SetSupplementalSemanticIDs(supplResult.supplementalSemanticIDs)
 	}
 
 	return specificSME, &SubmodelElementBuilder{DatabaseID: int(smeRow.DbID.Int64), SubmodelElement: specificSME}, nil
@@ -375,18 +390,9 @@ func buildProperty(smeRow model.SubmodelElementRow, refBuilderMap map[int64]*Ref
 	}
 
 	// Convert model enum string to SDK enum, default to string if empty
-	var sdkValueType types.DataTypeDefXSD
-	if valueRow.ValueType == "" {
-		sdkValueType = types.DataTypeDefXSDString
-	} else {
-		var ok bool
-		sdkValueType, ok = stringification.DataTypeDefXSDFromString(string(valueRow.ValueType))
-		if !ok {
-			return nil, fmt.Errorf("invalid DataTypeDefXSD value: %s", valueRow.ValueType)
-		}
-	}
+	valueType := types.DataTypeDefXSD(valueRow.ValueType)
 
-	prop := types.NewProperty(sdkValueType)
+	prop := types.NewProperty(valueType)
 	if valueRow.Value != "" {
 		prop.SetValue(&valueRow.Value)
 	}
@@ -408,37 +414,35 @@ func buildBasicEventElement(smeRow model.SubmodelElementRow) (types.ISubmodelEle
 	if err != nil {
 		return nil, err
 	}
-	var observedRefs, messageBrokerRefs *model.Reference
-	if valueRow.Observed != nil {
-		err = json.Unmarshal(valueRow.Observed, &observedRefs)
+	var observedRefsJson, messageBrokerRefsJson map[string]interface{}
+	err = json.Unmarshal([]byte(valueRow.Observed), &observedRefsJson)
+	if err != nil {
+		return nil, err
+	}
+	if valueRow.MessageBroker.Valid {
+		err = json.Unmarshal([]byte(valueRow.MessageBroker.String), &messageBrokerRefsJson)
 		if err != nil {
 			return nil, err
 		}
 	}
-	if valueRow.MessageBroker != nil {
-		err = json.Unmarshal(valueRow.MessageBroker, &messageBrokerRefs)
+
+	var observedRefs, messageBrokerRefs types.IReference
+	observedRefs, err = jsonization.ReferenceFromJsonable(observedRefsJson)
+	if err != nil {
+		return nil, err
+	}
+
+	if valueRow.MessageBroker.Valid {
+		messageBrokerRefs, err = jsonization.ReferenceFromJsonable(messageBrokerRefsJson)
 		if err != nil {
 			return nil, err
 		}
 	}
 
 	// Convert state and direction strings to SDK enums
-	state, ok := stringification.StateOfEventFromString(valueRow.State)
-	if !ok {
-		return nil, fmt.Errorf("invalid StateOfEvent value: %s", valueRow.State)
-	}
-
-	direction, ok := stringification.DirectionFromString(valueRow.Direction)
-	if !ok {
-		return nil, fmt.Errorf("invalid Direction value: %s", valueRow.Direction)
-	}
-
-	// Create minimal SDK reference - full implementation pending ReferenceBuilder conversion
-	var observedSDK types.IReference
-	if observedRefs != nil {
-		observedSDK = types.NewReference(types.ReferenceTypesModelReference, []types.IKey{})
-	}
-	bee := types.NewBasicEventElement(observedSDK, direction, state)
+	state := types.StateOfEvent(valueRow.State)
+	direction := types.Direction(valueRow.Direction)
+	bee := types.NewBasicEventElement(observedRefs, direction, state)
 	if valueRow.MessageTopic != "" {
 		bee.SetMessageTopic(&valueRow.MessageTopic)
 	}
@@ -452,8 +456,7 @@ func buildBasicEventElement(smeRow model.SubmodelElementRow) (types.ISubmodelEle
 		bee.SetMaxInterval(&valueRow.MaxInterval)
 	}
 	if messageBrokerRefs != nil {
-		messageBrokerSDK := types.NewReference(types.ReferenceTypesModelReference, []types.IKey{})
-		bee.SetMessageBroker(messageBrokerSDK)
+		bee.SetMessageBroker(messageBrokerRefs)
 	}
 	return bee, nil
 }
@@ -582,25 +585,32 @@ func buildAnnotatedRelationshipElement(smeRow model.SubmodelElementRow) (types.I
 		return nil, err
 	}
 
-	var first, second *model.Reference
+	var firstJsonable, secondJsonable map[string]interface{}
 	if valueRow.First == nil {
 		return nil, fmt.Errorf("first reference in RelationshipElement is nil")
 	}
-	err = json.Unmarshal(valueRow.First, &first)
+	err = json.Unmarshal(valueRow.First, &firstJsonable)
 	if err != nil {
 		return nil, err
 	}
 	if valueRow.Second == nil {
 		return nil, fmt.Errorf("second reference in RelationshipElement is nil")
 	}
-	err = json.Unmarshal(valueRow.Second, &second)
+	err = json.Unmarshal(valueRow.Second, &secondJsonable)
 	if err != nil {
 		return nil, err
 	}
+
+	firstSDK, err := jsonization.ReferenceFromJsonable(firstJsonable)
+	if err != nil {
+		return nil, fmt.Errorf("error converting first jsonable to Reference: %w", err)
+	}
+	secondSDK, err := jsonization.ReferenceFromJsonable(secondJsonable)
+	if err != nil {
+		return nil, fmt.Errorf("error converting second jsonable to Reference: %w", err)
+	}
+
 	relElem := types.NewAnnotatedRelationshipElement()
-	// Create minimal SDK references - full implementation pending ReferenceBuilder conversion
-	firstSDK := types.NewReference(types.ReferenceTypesModelReference, []types.IKey{})
-	secondSDK := types.NewReference(types.ReferenceTypesModelReference, []types.IKey{})
 	relElem.SetFirst(firstSDK)
 	relElem.SetSecond(secondSDK)
 	return relElem, nil
@@ -637,13 +647,15 @@ func buildMultiLanguageProperty(smeRow model.SubmodelElementRow) (types.ISubmode
 
 	// Handle ValueID reference if present
 	if valueRow.ValueID != nil {
-		var valueID model.Reference
-		err = json.Unmarshal(*valueRow.ValueID, &valueID)
+		var valueIDJsonable map[string]interface{}
+		err = json.Unmarshal(*valueRow.ValueID, &valueIDJsonable)
 		if err != nil {
 			return nil, err
 		}
-		// Create minimal SDK reference - full implementation pending
-		valueIDSDK := types.NewReference(types.ReferenceTypesModelReference, []types.IKey{})
+		valueIDSDK, err := jsonization.ReferenceFromJsonable(valueIDJsonable)
+		if err != nil {
+			return nil, fmt.Errorf("error converting valueID jsonable to Reference: %w", err)
+		}
 		mlp.SetValueID(valueIDSDK)
 	}
 
@@ -699,10 +711,7 @@ func buildRange(smeRow model.SubmodelElementRow) (types.ISubmodelElement, error)
 		return nil, err
 	}
 	// Convert value type string to SDK enum
-	valueType, ok := stringification.DataTypeDefXSDFromString(valueRow.ValueType)
-	if !ok {
-		return nil, fmt.Errorf("invalid DataTypeDefXSD value: %s", valueRow.ValueType)
-	}
+	valueType := types.DataTypeDefXSD(valueRow.ValueType)
 	rng := types.NewRange(valueType)
 	if valueRow.Min != "" {
 		rng.SetMin(&valueRow.Min)
@@ -730,18 +739,21 @@ func buildReferenceElement(smeRow model.SubmodelElementRow) (types.ISubmodelElem
 		return nil, err
 	}
 
-	var ref *model.Reference
+	var refSDK types.IReference
 	if valueRow.Value != nil {
-		err = json.Unmarshal(valueRow.Value, &ref)
+		var refJsonable map[string]interface{}
+		err = json.Unmarshal(valueRow.Value, &refJsonable)
 		if err != nil {
 			return nil, err
+		}
+		refSDK, err = jsonization.ReferenceFromJsonable(refJsonable)
+		if err != nil {
+			return nil, fmt.Errorf("error converting reference jsonable to Reference: %w", err)
 		}
 	}
 
 	refElem := types.NewReferenceElement()
-	if ref != nil {
-		// Create minimal SDK reference - full implementation pending
-		refSDK := types.NewReference(types.ReferenceTypesModelReference, []types.IKey{})
+	if refSDK != nil {
 		refElem.SetValue(refSDK)
 	}
 	return refElem, nil
@@ -759,25 +771,32 @@ func buildRelationshipElement(smeRow model.SubmodelElementRow) (types.ISubmodelE
 		return nil, err
 	}
 
-	var first, second *model.Reference
+	var firstJsonable, secondJsonable map[string]interface{}
 	if valueRow.First == nil {
 		return nil, fmt.Errorf("first reference in RelationshipElement is nil")
 	}
-	err = json.Unmarshal(valueRow.First, &first)
+	err = json.Unmarshal(valueRow.First, &firstJsonable)
 	if err != nil {
 		return nil, err
 	}
 	if valueRow.Second == nil {
 		return nil, fmt.Errorf("second reference in RelationshipElement is nil")
 	}
-	err = json.Unmarshal(valueRow.Second, &second)
+	err = json.Unmarshal(valueRow.Second, &secondJsonable)
 	if err != nil {
 		return nil, err
 	}
+
+	firstSDK, err := jsonization.ReferenceFromJsonable(firstJsonable)
+	if err != nil {
+		return nil, fmt.Errorf("error converting first jsonable to Reference: %w", err)
+	}
+	secondSDK, err := jsonization.ReferenceFromJsonable(secondJsonable)
+	if err != nil {
+		return nil, fmt.Errorf("error converting second jsonable to Reference: %w", err)
+	}
+
 	relElem := types.NewRelationshipElement()
-	// Create minimal SDK references - full implementation pending ReferenceBuilder conversion
-	firstSDK := types.NewReference(types.ReferenceTypesModelReference, []types.IKey{})
-	secondSDK := types.NewReference(types.ReferenceTypesModelReference, []types.IKey{})
 	relElem.SetFirst(firstSDK)
 	relElem.SetSecond(secondSDK)
 	return relElem, nil
@@ -796,22 +815,10 @@ func buildSubmodelElementList(smeRow model.SubmodelElementRow) (types.ISubmodelE
 	}
 
 	// Convert type value list element string to SDK enum
-	var typeValueListElement types.AASSubmodelElements
-	if valueRow.TypeValueListElement != "" {
-		var ok bool
-		typeValueListElement, ok = stringification.AASSubmodelElementsFromString(valueRow.TypeValueListElement)
-		if !ok {
-			return nil, fmt.Errorf("invalid AASSubmodelElements value: %s", valueRow.TypeValueListElement)
-		}
-	}
-
+	typeValueListElement := types.AASSubmodelElements(valueRow.TypeValueListElement)
 	smeList := types.NewSubmodelElementList(typeValueListElement)
-	if valueRow.ValueTypeListElement != "" {
-		// Convert value type list element string to SDK enum
-		valueTypeListElement, ok := stringification.DataTypeDefXSDFromString(valueRow.ValueTypeListElement)
-		if !ok {
-			return nil, fmt.Errorf("invalid DataTypeDefXSD value: %s", valueRow.ValueTypeListElement)
-		}
+	if valueRow.ValueTypeListElement.Valid {
+		valueTypeListElement := types.DataTypeDefXSD(valueRow.ValueTypeListElement.Int64)
 		smeList.SetValueTypeListElement(&valueTypeListElement)
 	}
 	if valueRow.OrderRelevant {

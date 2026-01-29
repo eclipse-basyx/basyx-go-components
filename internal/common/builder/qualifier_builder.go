@@ -145,8 +145,8 @@ func (b *QualifiersBuilder) AddSemanticID(qualifierDbID int64, semanticIDRows js
 		return nil, err
 	}
 
-	if semanticID != nil {
-		return nil, fmt.Errorf("expected exactly one SemanticID for Qualifier '%d' but got none", qualifierDbID)
+	if semanticID == nil {
+		return b, nil
 	}
 
 	qualifier.qualifier.SetSemanticID(*semanticID)
@@ -186,8 +186,8 @@ func (b *QualifiersBuilder) AddValueID(qualifierDbID int64, valueIDRows json.Raw
 		return nil, err
 	}
 
-	if valueID != nil {
-		return nil, fmt.Errorf("expected exactly one ValueID for Qualifier '%d' but got none", qualifierDbID)
+	if valueID == nil {
+		return b, nil
 	}
 
 	qualifier.qualifier.SetValueID(*valueID)
@@ -240,6 +240,10 @@ func (b *QualifiersBuilder) AddSupplementalSemanticIDs(qualifierDbID int64, supp
 
 	for _, el := range refs {
 		suppl = append(suppl, *el)
+	}
+
+	if len(suppl) == 0 {
+		suppl = nil // This ensures that an empty slice is not set, adhering to JSON omitempty behavior
 	}
 
 	qualifier.qualifier.SetSupplementalSemanticIDs(suppl)
@@ -312,7 +316,7 @@ func (b *QualifiersBuilder) createExactlyOneReference(qualifierDbID int64, refRo
 //	qualifiers := builder.Build()
 //
 //	// Now 'qualifiers' contains all qualifiers with complete reference hierarchies
-func (b *QualifiersBuilder) Build() []types.Qualifier {
+func (b *QualifiersBuilder) Build() []types.IQualifier {
 	for _, builder := range b.refBuilderMap {
 		builder.BuildNestedStructure()
 	}
@@ -327,9 +331,9 @@ func (b *QualifiersBuilder) Build() []types.Qualifier {
 		return qualifierList[i].position < qualifierList[j].position
 	})
 
-	qualifiers := make([]types.Qualifier, 0, len(qualifierList))
+	qualifiers := make([]types.IQualifier, 0, len(qualifierList))
 	for _, item := range qualifierList {
-		qualifiers = append(qualifiers, *item.qualifier)
+		qualifiers = append(qualifiers, item.qualifier)
 	}
 
 	return qualifiers

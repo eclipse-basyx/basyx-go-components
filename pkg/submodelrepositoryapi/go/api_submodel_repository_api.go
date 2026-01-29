@@ -25,9 +25,10 @@ import (
 
 // SubmodelRepositoryAPIAPIController binds http requests to an api service and writes the service results to the http response
 type SubmodelRepositoryAPIAPIController struct {
-	service      SubmodelRepositoryAPIAPIServicer
-	errorHandler ErrorHandler
-	contextPath  string
+	service            SubmodelRepositoryAPIAPIServicer
+	errorHandler       ErrorHandler
+	contextPath        string
+	strictVerification bool
 }
 
 // SubmodelRepositoryAPIAPIOption for how the controller is set up.
@@ -41,11 +42,12 @@ func WithSubmodelRepositoryAPIAPIErrorHandler(h ErrorHandler) SubmodelRepository
 }
 
 // NewSubmodelRepositoryAPIAPIController creates a default api controller
-func NewSubmodelRepositoryAPIAPIController(s SubmodelRepositoryAPIAPIServicer, contextPath string, opts ...SubmodelRepositoryAPIAPIOption) *SubmodelRepositoryAPIAPIController {
+func NewSubmodelRepositoryAPIAPIController(s SubmodelRepositoryAPIAPIServicer, contextPath string, strictVerification bool, opts ...SubmodelRepositoryAPIAPIOption) *SubmodelRepositoryAPIAPIController {
 	controller := &SubmodelRepositoryAPIAPIController{
-		service:      s,
-		errorHandler: DefaultErrorHandler,
-		contextPath:  contextPath,
+		service:            s,
+		errorHandler:       DefaultErrorHandler,
+		contextPath:        contextPath,
+		strictVerification: strictVerification,
 	}
 
 	for _, opt := range opts {
@@ -1116,17 +1118,19 @@ func (c *SubmodelRepositoryAPIAPIController) PostSubmodelElementSubmodelRepo(w h
 		return
 	}
 
-	// Use SDK's verification for constraint checking
-	var validationErrors []string
-	aasverification.Verify(submodelElementParam, func(verErr *aasverification.VerificationError) bool {
-		validationErrors = append(validationErrors, verErr.Error())
-		return false // Continue collecting all errors
-	})
+	// Use SDK's verification for constraint checking (if strictVerification is enabled)
+	if c.strictVerification {
+		var validationErrors []string
+		aasverification.Verify(submodelElementParam, func(verErr *aasverification.VerificationError) bool {
+			validationErrors = append(validationErrors, verErr.Error())
+			return false // Continue collecting all errors
+		})
 
-	if len(validationErrors) > 0 {
-		err := fmt.Errorf("validation failed: %s", strings.Join(validationErrors, "; "))
-		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
-		return
+		if len(validationErrors) > 0 {
+			err := fmt.Errorf("validation failed: %s", strings.Join(validationErrors, "; "))
+			c.errorHandler(w, r, &ParsingError{Err: err}, nil)
+			return
+		}
 	}
 	result, err := c.service.PostSubmodelElementSubmodelRepo(r.Context(), submodelIdentifierParam, submodelElementParam)
 	// If an error occurred, encode the error with the status code
@@ -1434,17 +1438,19 @@ func (c *SubmodelRepositoryAPIAPIController) PutSubmodelElementByPathSubmodelRep
 		return
 	}
 
-	// Use SDK's verification for constraint checking
-	var validationErrors []string
-	aasverification.Verify(submodelElementParam, func(verErr *aasverification.VerificationError) bool {
-		validationErrors = append(validationErrors, verErr.Error())
-		return false // Continue collecting all errors
-	})
+	// Use SDK's verification for constraint checking (if strictVerification is enabled)
+	if c.strictVerification {
+		var validationErrors []string
+		aasverification.Verify(submodelElementParam, func(verErr *aasverification.VerificationError) bool {
+			validationErrors = append(validationErrors, verErr.Error())
+			return false // Continue collecting all errors
+		})
 
-	if len(validationErrors) > 0 {
-		err := fmt.Errorf("validation failed: %s", strings.Join(validationErrors, "; "))
-		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
-		return
+		if len(validationErrors) > 0 {
+			err := fmt.Errorf("validation failed: %s", strings.Join(validationErrors, "; "))
+			c.errorHandler(w, r, &ParsingError{Err: err}, nil)
+			return
+		}
 	}
 	var levelParam string
 	if query.Has("level") {
@@ -1499,17 +1505,19 @@ func (c *SubmodelRepositoryAPIAPIController) PostSubmodelElementByPathSubmodelRe
 		return
 	}
 
-	// Use SDK's verification for constraint checking
-	var validationErrors []string
-	aasverification.Verify(submodelElementParam, func(verErr *aasverification.VerificationError) bool {
-		validationErrors = append(validationErrors, verErr.Error())
-		return false // Continue collecting all errors
-	})
+	// Use SDK's verification for constraint checking (if strictVerification is enabled)
+	if c.strictVerification {
+		var validationErrors []string
+		aasverification.Verify(submodelElementParam, func(verErr *aasverification.VerificationError) bool {
+			validationErrors = append(validationErrors, verErr.Error())
+			return false // Continue collecting all errors
+		})
 
-	if len(validationErrors) > 0 {
-		err := fmt.Errorf("validation failed: %s", strings.Join(validationErrors, "; "))
-		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
-		return
+		if len(validationErrors) > 0 {
+			err := fmt.Errorf("validation failed: %s", strings.Join(validationErrors, "; "))
+			c.errorHandler(w, r, &ParsingError{Err: err}, nil)
+			return
+		}
 	}
 	result, err := c.service.PostSubmodelElementByPathSubmodelRepo(r.Context(), submodelIdentifierParam, idShortPathParam, submodelElementParam)
 	// If an error occurred, encode the error with the status code
@@ -1582,17 +1590,19 @@ func (c *SubmodelRepositoryAPIAPIController) PatchSubmodelElementByPathSubmodelR
 		return
 	}
 
-	// Use SDK's verification for constraint checking
-	var validationErrors []string
-	aasverification.Verify(submodelElementParam, func(verErr *aasverification.VerificationError) bool {
-		validationErrors = append(validationErrors, verErr.Error())
-		return false // Continue collecting all errors
-	})
+	// Use SDK's verification for constraint checking (if strictVerification is enabled)
+	if c.strictVerification {
+		var validationErrors []string
+		aasverification.Verify(submodelElementParam, func(verErr *aasverification.VerificationError) bool {
+			validationErrors = append(validationErrors, verErr.Error())
+			return false // Continue collecting all errors
+		})
 
-	if len(validationErrors) > 0 {
-		err := fmt.Errorf("validation failed: %s", strings.Join(validationErrors, "; "))
-		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
-		return
+		if len(validationErrors) > 0 {
+			err := fmt.Errorf("validation failed: %s", strings.Join(validationErrors, "; "))
+			c.errorHandler(w, r, &ParsingError{Err: err}, nil)
+			return
+		}
 	}
 	var levelParam string
 	if query.Has("level") {

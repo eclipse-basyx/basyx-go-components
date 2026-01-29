@@ -335,7 +335,7 @@ func insertRange(rangeElem *types.Range, tx *sql.Tx, id int) error {
 	insertQuery, insertArgs, err := dialect.Insert("range_element").
 		Rows(goqu.Record{
 			"id":           id,
-			"value_type":   rangeElem.ValueType,
+			"value_type":   rangeElem.ValueType(),
 			"min_text":     typedValue.MinText,
 			"max_text":     typedValue.MaxText,
 			"min_num":      typedValue.MinNumeric,
@@ -363,7 +363,7 @@ func buildUpdateRangeRecordObject(rangeElem *types.Range, isPut bool) goqu.Recor
 	updateRecord := goqu.Record{}
 
 	// ValueType is always updated (required field)
-	updateRecord["value_type"] = rangeElem.ValueType
+	updateRecord["value_type"] = rangeElem.ValueType()
 
 	// Handle min and max based on isPut flag
 	if isPut {

@@ -97,8 +97,8 @@ func (p PostgreSQLFileHandler) Create(tx *sql.Tx, submodelID string, submodelEle
 	insertQuery, insertArgs, err := dialect.Insert("file_element").
 		Rows(goqu.Record{
 			"id":           id,
-			"content_type": file.ContentType,
-			"value":        file.Value,
+			"content_type": file.ContentType(),
+			"value":        file.Value(),
 		}).
 		ToSQL()
 	if err != nil {
@@ -144,8 +144,8 @@ func (p PostgreSQLFileHandler) CreateNested(tx *sql.Tx, submodelID string, paren
 	insertQuery, insertArgs, err := dialect.Insert("file_element").
 		Rows(goqu.Record{
 			"id":           id,
-			"content_type": file.ContentType,
-			"value":        file.Value,
+			"content_type": file.ContentType(),
+			"value":        file.Value(),
 		}).
 		ToSQL()
 	if err != nil {
@@ -239,8 +239,8 @@ func (p PostgreSQLFileHandler) Update(submodelID string, idShortOrPath string, s
 		// Update the file_element with the new value and content type
 		updateQuery, updateArgs, err := dialect.Update("file_element").
 			Set(goqu.Record{
-				"value":        file.Value,
-				"content_type": file.ContentType,
+				"value":        file.Value(),
+				"content_type": file.ContentType(),
 			}).
 			Where(goqu.C("id").Eq(elementID)).
 			ToSQL()
@@ -256,7 +256,7 @@ func (p PostgreSQLFileHandler) Update(submodelID string, idShortOrPath string, s
 		// Only Update content type if value hasn't changed
 		updateQuery, updateArgs, err := dialect.Update("file_element").
 			Set(goqu.Record{
-				"content_type": file.ContentType,
+				"content_type": file.ContentType(),
 			}).
 			Where(goqu.C("id").Eq(elementID)).
 			ToSQL()

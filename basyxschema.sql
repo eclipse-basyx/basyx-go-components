@@ -131,7 +131,7 @@ CREATE TABLE IF NOT EXISTS submodel (
   semantic_id BIGINT REFERENCES reference(id) ON DELETE CASCADE,
   description_id BIGINT REFERENCES lang_string_text_type_reference(id) ON DELETE CASCADE,
   displayname_id  BIGINT REFERENCES lang_string_name_type_reference(id) ON DELETE CASCADE,
-  model_type  TEXT NOT NULL DEFAULT 'Submodel'
+  model_type  int NOT NULL DEFAULT 7
 );
 CREATE TABLE IF NOT EXISTS submodel_supplemental_semantic_id (
   id BIGSERIAL PRIMARY KEY,
@@ -174,7 +174,7 @@ CREATE TABLE IF NOT EXISTS submodel_element (
   position       INTEGER,                                   -- for ordering in lists
   id_short       varchar(128) NOT NULL,
   category       varchar(128),
-  model_type     TEXT NOT NULL,
+  model_type     int NOT NULL,
   embedded_data_specification JSONB DEFAULT '[]',
   supplemental_semantic_ids JSONB DEFAULT '[]',
   extensions JSONB DEFAULT '[]',
@@ -239,7 +239,7 @@ CREATE TABLE IF NOT EXISTS file_data (
 );
 CREATE TABLE IF NOT EXISTS range_element (
   id            BIGINT PRIMARY KEY REFERENCES submodel_element(id) ON DELETE CASCADE,
-  value_type    TEXT NOT NULL,
+  value_type    int NOT NULL,
   min_text      TEXT,  max_text      TEXT,
   min_num       NUMERIC, max_num     NUMERIC,
   min_time      TIME,   max_time     TIME,
