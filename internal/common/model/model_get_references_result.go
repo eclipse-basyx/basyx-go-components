@@ -43,7 +43,7 @@ type GetReferencesResult struct {
 
 // AssertGetReferencesResultRequired checks if the required fields are not zero-ed
 func AssertGetReferencesResultRequired(obj GetReferencesResult) error {
-	elements := map[string]interface{}{
+	elements := map[string]any{
 		"paging_metadata": obj.PagingMetadata,
 	}
 	for name, el := range elements {

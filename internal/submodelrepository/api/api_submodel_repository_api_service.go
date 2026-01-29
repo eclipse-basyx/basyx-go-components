@@ -71,10 +71,10 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodels(
 	_ /*extent*/ string,
 ) (gen.ImplResponse, error) {
 	sms, nextCursor, err := s.submodelBackend.GetAllSubmodels(limit, cursor, idShort, false)
-	var converted []map[string]interface{}
+	var converted []map[string]any
 
 	for _, sm := range sms {
-		jsonSubmodel, err := jsonization.ToJsonable(&sm)
+		jsonSubmodel, err := jsonization.ToJsonable(sm)
 		if err != nil {
 			return gen.Response(500, nil), err
 		}
@@ -291,7 +291,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsMetadata(
 	if err != nil {
 		return gen.Response(500, nil), err
 	}
-	var converted []map[string]interface{}
+	var converted []map[string]any
 
 	for _, sm := range sms {
 		jsonSubmodel, err := jsonization.ToJsonable(&sm)
@@ -343,14 +343,14 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsValueOnly(ctx context.C
 	}
 
 	// Convert each submodel to its Value-Only representation
-	valueOnlyResults := make([]map[string]interface{}, 0, len(sms))
+	valueOnlyResults := make([]map[string]any, 0, len(sms))
 	for _, sm := range sms {
-		valueOnly, err := gen.SubmodelToValueOnly(&sm)
+		valueOnly, err := gen.SubmodelToValueOnly(sm)
 		if err != nil {
 			return gen.Response(500, nil), err
 		}
-		// Convert SubmodelValue (map[string]SubmodelElementValue) to map[string]interface{}
-		resultMap := make(map[string]interface{})
+		// Convert SubmodelValue (map[string]SubmodelElementValue) to map[string]any
+		resultMap := make(map[string]any)
 		for key, val := range valueOnly {
 			resultMap[key] = val
 		}
@@ -700,7 +700,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelElements(_ /*ctx*/ conte
 
 	sme, cursor, err := s.submodelBackend.GetSubmodelElements(string(decodedSubmodelIdentifier), int(limit), cursor, false)
 
-	var converted []map[string]interface{}
+	var converted []map[string]any
 
 	for _, element := range sme {
 		jsonSubmodelElement, err := jsonization.ToJsonable(element)
@@ -1722,12 +1722,24 @@ func (s *SubmodelRepositoryAPIAPIService) QuerySubmodels(
 		}
 	}
 
+	var converted []map[string]any
+	for _, sm := range sms {
+		jsonable, err := jsonization.ToJsonable(sm)
+		if err != nil {
+			log.Printf("🧩 [%s] Error in QuerySubmodels: failed to convert submodel to jsonable: %v", smRepoComponentName, err)
+			return common.NewErrorResponse(
+				err, http.StatusInternalServerError, smRepoComponentName, "QuerySubmodels", "InternalServerError",
+			), err
+		}
+		converted = append(converted, jsonable)
+	}
+
 	// using the openAPI provided response struct to include paging metadata
 	res := gen.GetSubmodelsResult{
 		PagingMetadata: gen.PagedResultPagingMetadata{
 			Cursor: nextCursor,
 		},
-		Result: sms,
+		Result: converted,
 	}
 	return gen.Response(http.StatusOK, res), nil
 }

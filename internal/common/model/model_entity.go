@@ -212,7 +212,7 @@ func (a *Entity) UnmarshalJSON(data []byte) error {
 
 // AssertEntityRequired checks if the required fields are not zero-ed
 func AssertEntityRequired(obj Entity) error {
-	elements := map[string]interface{}{
+	elements := map[string]any{
 		"modelType": obj.ModelType,
 	}
 	for name, el := range elements {

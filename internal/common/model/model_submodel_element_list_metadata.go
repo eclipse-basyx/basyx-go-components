@@ -71,7 +71,7 @@ type SubmodelElementListMetadata struct {
 
 // AssertSubmodelElementListMetadataRequired checks if the required fields are not zero-ed
 func AssertSubmodelElementListMetadataRequired(obj SubmodelElementListMetadata) error {
-	elements := map[string]interface{}{
+	elements := map[string]any{
 		"modelType": obj.ModelType,
 	}
 	for name, el := range elements {

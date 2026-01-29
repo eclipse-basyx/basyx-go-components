@@ -113,7 +113,7 @@ func (p *PostgreSQLSubmodelDatabase) GetDB() *sql.DB {
 //   - []gen.Submodel: List of submodels
 //   - string: Next cursor for pagination (empty if no more pages)
 //   - error: Error if retrieval fails
-func (p *PostgreSQLSubmodelDatabase) GetAllSubmodels(limit int32, cursor string, _ /* idShort */ string, valueOnly bool) ([]types.Submodel, string, error) {
+func (p *PostgreSQLSubmodelDatabase) GetAllSubmodels(limit int32, cursor string, _ /* idShort */ string, valueOnly bool) ([]types.ISubmodel, string, error) {
 	if limit == 0 {
 		limit = smrepoconfig.DefaultPageLimit
 	}
@@ -200,15 +200,15 @@ func (p *PostgreSQLSubmodelDatabase) GetAllSubmodels(limit int32, cursor string,
 		return nil, "", errSme
 	}
 
-	submodels := []gen.Submodel{}
+	submodels := []types.ISubmodel{}
 
 	for _, s := range res.sm {
 		if s != nil {
 			// Add corresponding submodel elements BEFORE copying
-			if smes, exists := submodelElements[s.ID]; exists {
-				s.SubmodelElements = smes
+			if smes, exists := submodelElements[s.ID()]; exists {
+				s.SetSubmodelElements(smes)
 			}
-			submodels = append(submodels, *s)
+			submodels = append(submodels, s)
 		}
 	}
 
@@ -228,7 +228,7 @@ func (p *PostgreSQLSubmodelDatabase) GetAllSubmodels(limit int32, cursor string,
 //   - []gen.Submodel: List of submodels matching the query
 //   - string: Next cursor for pagination (empty if no more pages)
 //   - error: Error if retrieval fails
-func (p *PostgreSQLSubmodelDatabase) QuerySubmodels(limit int32, cursor string, query *grammar.QueryWrapper, valueOnly bool) ([]gen.Submodel, string, error) {
+func (p *PostgreSQLSubmodelDatabase) QuerySubmodels(limit int32, cursor string, query *grammar.QueryWrapper, valueOnly bool) ([]types.ISubmodel, string, error) {
 	if limit == 0 {
 		limit = smrepoconfig.DefaultPageLimit
 	}
@@ -260,7 +260,7 @@ func (p *PostgreSQLSubmodelDatabase) QuerySubmodels(limit int32, cursor string, 
 		return err
 	})
 
-	submodelElements := make(map[string][]gen.SubmodelElement)
+	submodelElements := make(map[string][]types.ISubmodelElement)
 	var errSme error
 	var errSmeMutex sync.Mutex
 
@@ -315,7 +315,7 @@ func (p *PostgreSQLSubmodelDatabase) QuerySubmodels(limit int32, cursor string, 
 		return nil, "", errSme
 	}
 
-	submodels := []types.Submodel{}
+	submodels := []types.ISubmodel{}
 
 	for _, s := range res.sm {
 		if s != nil {
@@ -323,7 +323,7 @@ func (p *PostgreSQLSubmodelDatabase) QuerySubmodels(limit int32, cursor string, 
 			if smes, exists := submodelElements[s.ID()]; exists {
 				s.SetSubmodelElements(smes)
 			}
-			submodels = append(submodels, *s)
+			submodels = append(submodels, s)
 		}
 	}
 

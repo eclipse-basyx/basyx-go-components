@@ -171,7 +171,7 @@ func (a *Range) SetEmbeddedDataSpecifications(v []EmbeddedDataSpecification) {
 
 // AssertRangeRequired checks if the required fields are not zero-ed
 func AssertRangeRequired(obj Range) error {
-	elements := map[string]interface{}{
+	elements := map[string]any{
 		"modelType": obj.ModelType,
 		"valueType": obj.ValueType,
 	}

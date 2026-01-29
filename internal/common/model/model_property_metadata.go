@@ -64,7 +64,7 @@ type PropertyMetadata struct {
 
 // AssertPropertyMetadataRequired checks if the required fields are not zero-ed
 func AssertPropertyMetadataRequired(obj PropertyMetadata) error {
-	elements := map[string]interface{}{
+	elements := map[string]any{
 		"modelType": obj.ModelType,
 	}
 	for name, el := range elements {

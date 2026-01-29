@@ -38,12 +38,12 @@ package model
 type GetSubmodelElementsResult struct {
 	PagingMetadata PagedResultPagingMetadata `json:"paging_metadata"`
 
-	Result []map[string]interface{} `json:"result,omitempty"`
+	Result []map[string]any `json:"result,omitempty"`
 }
 
 // AssertGetSubmodelElementsResultRequired checks if the required fields are not zero-ed
 func AssertGetSubmodelElementsResultRequired(obj GetSubmodelElementsResult) error {
-	elements := map[string]interface{}{
+	elements := map[string]any{
 		"paging_metadata": obj.PagingMetadata,
 	}
 	for name, el := range elements {

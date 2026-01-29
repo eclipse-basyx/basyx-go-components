@@ -646,8 +646,8 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetSubmodelByIdValueOn
 	// TODO - update GetSubmodelByIdValueOnlyAasRepository with the required logic for this service method.
 	// Add api_asset_administration_shell_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
 
-	// TODO: Uncomment the next line to return response gen.Response(200, map[string]interface{}{}) or use other options such as http.Ok ...
-	// return gen.Response(200, map[string]interface{}{}), nil
+	// TODO: Uncomment the next line to return response gen.Response(200, map[string]any{}) or use other options such as http.Ok ...
+	// return gen.Response(200, map[string]any{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(400, Result{}) or use other options such as http.Ok ...
 	// return gen.Response(400, Result{}), nil
@@ -671,7 +671,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetSubmodelByIdValueOn
 }
 
 // PatchSubmodelByIdValueOnlyAasRepository - Updates the values of the Submodel
-func (s *AssetAdministrationShellRepositoryAPIAPIService) PatchSubmodelByIdValueOnlyAasRepository(ctx context.Context, aasIdentifier string, submodelIdentifier string, body map[string]interface{}, level string) (gen.ImplResponse, error) {
+func (s *AssetAdministrationShellRepositoryAPIAPIService) PatchSubmodelByIdValueOnlyAasRepository(ctx context.Context, aasIdentifier string, submodelIdentifier string, body map[string]any, level string) (gen.ImplResponse, error) {
 	// TODO - update PatchSubmodelByIdValueOnlyAasRepository with the required logic for this service method.
 	// Add api_asset_administration_shell_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
 

@@ -51,7 +51,7 @@ type Extension struct {
 
 // AssertExtensionRequired checks if the required fields are not zero-ed
 func AssertExtensionRequired(obj Extension) error {
-	elements := map[string]interface{}{
+	elements := map[string]any{
 		"name": obj.Name,
 	}
 	for name, el := range elements {

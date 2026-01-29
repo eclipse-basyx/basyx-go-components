@@ -254,7 +254,7 @@ func getSupplementalSemanticIDsJSONStringFromSubmodel(sm *types.Submodel) (strin
 	json := jsoniter.ConfigCompatibleWithStandardLibrary
 	supplementalSemanticIDs := "[]"
 	if len(sm.SupplementalSemanticIDs()) > 0 {
-		var toJson []map[string]interface{}
+		var toJson []map[string]any
 		for _, ref := range sm.SupplementalSemanticIDs() {
 			jsonObj, err := jsonization.ToJsonable(ref)
 			if err != nil {

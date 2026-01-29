@@ -43,7 +43,7 @@ type ReferenceParent struct {
 
 // AssertReferenceParentRequired checks if the required fields are not zero-ed
 func AssertReferenceParentRequired(obj ReferenceParent) error {
-	elements := map[string]interface{}{
+	elements := map[string]any{
 		"type": obj.Type,
 		"keys": obj.Keys,
 	}

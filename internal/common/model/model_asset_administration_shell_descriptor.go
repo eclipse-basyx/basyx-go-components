@@ -39,7 +39,7 @@ type AssetAdministrationShellDescriptor struct {
 
 // AssertAssetAdministrationShellDescriptorRequired checks if the required fields are not zero-ed
 func AssertAssetAdministrationShellDescriptorRequired(obj AssetAdministrationShellDescriptor) error {
-	elements := map[string]interface{}{
+	elements := map[string]any{
 		"id": obj.Id,
 	}
 	for name, el := range elements {

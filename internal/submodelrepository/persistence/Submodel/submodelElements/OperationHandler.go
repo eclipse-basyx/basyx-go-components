@@ -34,6 +34,7 @@ package submodelelements
 import (
 	"database/sql"
 
+	"github.com/FriedJannik/aas-go-sdk/jsonization"
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
@@ -253,7 +254,15 @@ func insertOperation(operation *types.Operation, tx *sql.Tx, id int) error {
 
 	var inputVars, outputVars, inoutputVars string
 	if operation.InputVariables() != nil {
-		inputVarBytes, err := json.Marshal(operation.InputVariables())
+		var jsonables []map[string]any
+		for _, v := range operation.InputVariables() {
+			jsonable, err := jsonization.ToJsonable(v)
+			if err != nil {
+				return err
+			}
+			jsonables = append(jsonables, jsonable)
+		}
+		inputVarBytes, err := json.Marshal(jsonables)
 		if err != nil {
 			return err
 		}
@@ -263,7 +272,15 @@ func insertOperation(operation *types.Operation, tx *sql.Tx, id int) error {
 	}
 
 	if operation.OutputVariables() != nil {
-		outputVarBytes, err := json.Marshal(operation.OutputVariables())
+		var jsonables []map[string]any
+		for _, v := range operation.OutputVariables() {
+			jsonable, err := jsonization.ToJsonable(v)
+			if err != nil {
+				return err
+			}
+			jsonables = append(jsonables, jsonable)
+		}
+		outputVarBytes, err := json.Marshal(jsonables)
 		if err != nil {
 			return err
 		}
@@ -273,7 +290,15 @@ func insertOperation(operation *types.Operation, tx *sql.Tx, id int) error {
 	}
 
 	if operation.InoutputVariables() != nil {
-		inoutputVarBytes, err := json.Marshal(operation.InoutputVariables())
+		var jsonables []map[string]any
+		for _, v := range operation.InoutputVariables() {
+			jsonable, err := jsonization.ToJsonable(v)
+			if err != nil {
+				return err
+			}
+			jsonables = append(jsonables, jsonable)
+		}
+		inoutputVarBytes, err := json.Marshal(jsonables)
 		if err != nil {
 			return err
 		}
@@ -307,7 +332,15 @@ func buildUpdateOperationRecordObject(isPut bool, operation *types.Operation, js
 	if isPut || operation.InputVariables() != nil {
 		var inputVars string
 		if operation.InputVariables() != nil {
-			inputVarBytes, err := json.Marshal(operation.InputVariables())
+			var jsonables []map[string]any
+			for _, v := range operation.InputVariables() {
+				jsonable, err := jsonization.ToJsonable(v)
+				if err != nil {
+					return nil, err
+				}
+				jsonables = append(jsonables, jsonable)
+			}
+			inputVarBytes, err := json.Marshal(jsonables)
 			if err != nil {
 				return nil, err
 			}
@@ -321,7 +354,15 @@ func buildUpdateOperationRecordObject(isPut bool, operation *types.Operation, js
 	if isPut || operation.OutputVariables() != nil {
 		var outputVars string
 		if operation.OutputVariables() != nil {
-			outputVarBytes, err := json.Marshal(operation.OutputVariables())
+			var jsonables []map[string]any
+			for _, v := range operation.OutputVariables() {
+				jsonable, err := jsonization.ToJsonable(v)
+				if err != nil {
+					return nil, err
+				}
+				jsonables = append(jsonables, jsonable)
+			}
+			outputVarBytes, err := json.Marshal(jsonables)
 			if err != nil {
 				return nil, err
 			}
@@ -335,7 +376,15 @@ func buildUpdateOperationRecordObject(isPut bool, operation *types.Operation, js
 	if isPut || operation.InoutputVariables() != nil {
 		var inoutputVars string
 		if operation.InoutputVariables() != nil {
-			inoutputVarBytes, err := json.Marshal(operation.InoutputVariables())
+			var jsonables []map[string]any
+			for _, v := range operation.InoutputVariables() {
+				jsonable, err := jsonization.ToJsonable(v)
+				if err != nil {
+					return nil, err
+				}
+				jsonables = append(jsonables, jsonable)
+			}
+			inoutputVarBytes, err := json.Marshal(jsonables)
 			if err != nil {
 				return nil, err
 			}

@@ -44,7 +44,7 @@ type GetSubmodelElementsValueResult struct {
 
 // AssertGetSubmodelElementsValueResultRequired checks if the required fields are not zero-ed
 func AssertGetSubmodelElementsValueResultRequired(obj GetSubmodelElementsValueResult) error {
-	elements := map[string]interface{}{
+	elements := map[string]any{
 		"paging_metadata": obj.PagingMetadata,
 	}
 	for name, el := range elements {

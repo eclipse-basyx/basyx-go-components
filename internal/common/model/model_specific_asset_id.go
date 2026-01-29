@@ -49,7 +49,7 @@ type SpecificAssetID struct {
 
 // AssertSpecificAssetIdRequired checks if the required fields are not zero-ed
 func AssertSpecificAssetIdRequired(obj SpecificAssetID) error {
-	elements := map[string]interface{}{
+	elements := map[string]any{
 		"name":  obj.Name,
 		"value": obj.Value,
 	}

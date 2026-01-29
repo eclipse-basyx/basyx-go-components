@@ -170,7 +170,7 @@ func UnmarshalSubmodelElement(data []byte) (SubmodelElement, error) {
 
 // AssertSubmodelElementRequired checks if the required fields are not zero-ed
 func AssertSubmodelElementRequired(obj SubmodelElement) error {
-	elements := map[string]interface{}{
+	elements := map[string]any{
 		"modelType": obj.GetModelType(),
 	}
 	for name, el := range elements {

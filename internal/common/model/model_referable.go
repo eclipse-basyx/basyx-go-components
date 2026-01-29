@@ -52,7 +52,7 @@ type Referable struct {
 
 // AssertReferableRequired checks if the required fields are not zero-ed
 func AssertReferableRequired(obj Referable) error {
-	elements := map[string]interface{}{
+	elements := map[string]any{
 		"modelType": obj.ModelType,
 	}
 	for name, el := range elements {

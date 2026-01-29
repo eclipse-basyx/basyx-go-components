@@ -206,7 +206,7 @@ func (a *AnnotatedRelationshipElement) SetAnnotations(v []SubmodelElement) {
 
 // AssertAnnotatedRelationshipElementRequired checks if the required fields are not zero-ed
 func AssertAnnotatedRelationshipElementRequired(obj AnnotatedRelationshipElement) error {
-	elements := map[string]interface{}{
+	elements := map[string]any{
 		"modelType": obj.ModelType,
 		"first":     obj.First,
 		"second":    obj.Second,

@@ -64,7 +64,7 @@ func (r RangeValue) GetModelType() types.ModelType {
 
 // AssertRangeValueRequired checks if the required fields are not zero-ed
 func AssertRangeValueRequired(obj RangeValue) error {
-	elements := map[string]interface{}{
+	elements := map[string]any{
 		"max": obj.Max,
 		"min": obj.Min,
 	}

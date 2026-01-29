@@ -33,7 +33,7 @@ type SubmodelDescriptor struct {
 
 // AssertSubmodelDescriptorRequired checks if the required fields are not zero-ed
 func AssertSubmodelDescriptorRequired(obj SubmodelDescriptor) error {
-	elements := map[string]interface{}{
+	elements := map[string]any{
 		"endpoints": obj.Endpoints,
 		"id":        obj.Id,
 	}

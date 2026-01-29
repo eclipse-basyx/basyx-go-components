@@ -55,7 +55,7 @@ type EventPayload struct {
 
 // AssertEventPayloadRequired checks if the required fields are not zero-ed
 func AssertEventPayloadRequired(obj EventPayload) error {
-	elements := map[string]interface{}{
+	elements := map[string]any{
 		"source":              obj.Source,
 		"observableReference": obj.ObservableReference,
 		"timeStamp":           obj.TimeStamp,

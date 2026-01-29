@@ -63,7 +63,7 @@ type AnnotatedRelationshipElementMetadata struct {
 
 // AssertAnnotatedRelationshipElementMetadataRequired checks if the required fields are not zero-ed
 func AssertAnnotatedRelationshipElementMetadataRequired(obj AnnotatedRelationshipElementMetadata) error {
-	elements := map[string]interface{}{
+	elements := map[string]any{
 		"modelType": obj.ModelType,
 	}
 	for name, el := range elements {

@@ -139,7 +139,7 @@ func BuildSubmodelElement(smeRow model.SubmodelElementRow) (types.ISubmodelEleme
 	// Parse EmbeddedDataSpecifications
 	g.Go(func() error {
 		if smeRow.EmbeddedDataSpecifications != nil {
-			var edsJsonable []map[string]interface{}
+			var edsJsonable []map[string]any
 			var json = jsoniter.ConfigCompatibleWithStandardLibrary
 			err := json.Unmarshal(*smeRow.EmbeddedDataSpecifications, &edsJsonable)
 			var specs []types.IEmbeddedDataSpecification
@@ -163,7 +163,7 @@ func BuildSubmodelElement(smeRow model.SubmodelElementRow) (types.ISubmodelEleme
 	// Parse SupplementalSemanticIDs
 	g.Go(func() error {
 		if smeRow.SupplementalSemanticIDs != nil {
-			var supplementalSemanticIDsJsonable []map[string]interface{}
+			var supplementalSemanticIDsJsonable []map[string]any
 			var json = jsoniter.ConfigCompatibleWithStandardLibrary
 			err := json.Unmarshal(*smeRow.SupplementalSemanticIDs, &supplementalSemanticIDsJsonable)
 			if err != nil {
@@ -191,7 +191,7 @@ func BuildSubmodelElement(smeRow model.SubmodelElementRow) (types.ISubmodelEleme
 	// Parse Extensions
 	g.Go(func() error {
 		if smeRow.Extensions != nil {
-			var extensionsJsonable []map[string]interface{}
+			var extensionsJsonable []map[string]any
 			var json = jsoniter.ConfigCompatibleWithStandardLibrary
 			err := json.Unmarshal(*smeRow.Extensions, &extensionsJsonable)
 			var extensions []types.IExtension
@@ -414,7 +414,7 @@ func buildBasicEventElement(smeRow model.SubmodelElementRow) (types.ISubmodelEle
 	if err != nil {
 		return nil, err
 	}
-	var observedRefsJson, messageBrokerRefsJson map[string]interface{}
+	var observedRefsJson, messageBrokerRefsJson map[string]any
 	err = json.Unmarshal([]byte(valueRow.Observed), &observedRefsJson)
 	if err != nil {
 		return nil, err
@@ -585,7 +585,7 @@ func buildAnnotatedRelationshipElement(smeRow model.SubmodelElementRow) (types.I
 		return nil, err
 	}
 
-	var firstJsonable, secondJsonable map[string]interface{}
+	var firstJsonable, secondJsonable map[string]any
 	if valueRow.First == nil {
 		return nil, fmt.Errorf("first reference in RelationshipElement is nil")
 	}
@@ -647,7 +647,7 @@ func buildMultiLanguageProperty(smeRow model.SubmodelElementRow) (types.ISubmode
 
 	// Handle ValueID reference if present
 	if valueRow.ValueID != nil {
-		var valueIDJsonable map[string]interface{}
+		var valueIDJsonable map[string]any
 		err = json.Unmarshal(*valueRow.ValueID, &valueIDJsonable)
 		if err != nil {
 			return nil, err
@@ -741,7 +741,7 @@ func buildReferenceElement(smeRow model.SubmodelElementRow) (types.ISubmodelElem
 
 	var refSDK types.IReference
 	if valueRow.Value != nil {
-		var refJsonable map[string]interface{}
+		var refJsonable map[string]any
 		err = json.Unmarshal(valueRow.Value, &refJsonable)
 		if err != nil {
 			return nil, err
@@ -771,7 +771,7 @@ func buildRelationshipElement(smeRow model.SubmodelElementRow) (types.ISubmodelE
 		return nil, err
 	}
 
-	var firstJsonable, secondJsonable map[string]interface{}
+	var firstJsonable, secondJsonable map[string]any
 	if valueRow.First == nil {
 		return nil, fmt.Errorf("first reference in RelationshipElement is nil")
 	}

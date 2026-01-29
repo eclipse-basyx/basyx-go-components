@@ -53,7 +53,7 @@ func (l LangStringTextType) GetText() string {
 
 // AssertLangStringTextTypeRequired checks if the required fields are not zero-ed
 func AssertLangStringTextTypeRequired(obj LangStringTextType) error {
-	elements := map[string]interface{}{
+	elements := map[string]any{
 		"language": obj.Language,
 		"text":     obj.Text,
 	}

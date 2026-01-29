@@ -60,7 +60,7 @@ type ConceptDescription struct {
 
 // AssertConceptDescriptionRequired checks if the required fields are not zero-ed
 func AssertConceptDescriptionRequired(obj ConceptDescription) error {
-	elements := map[string]interface{}{
+	elements := map[string]any{
 		"modelType": obj.ModelType,
 		"id":        obj.ID,
 	}

@@ -43,7 +43,7 @@ type GetPathItemsResult struct {
 
 // AssertGetPathItemsResultRequired checks if the required fields are not zero-ed
 func AssertGetPathItemsResultRequired(obj GetPathItemsResult) error {
-	elements := map[string]interface{}{
+	elements := map[string]any{
 		"paging_metadata": obj.PagingMetadata,
 	}
 	for name, el := range elements {

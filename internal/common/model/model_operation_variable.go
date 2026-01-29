@@ -48,7 +48,7 @@ type OperationVariable struct {
 
 // AssertOperationVariableRequired checks if the required fields are not zero-ed
 func AssertOperationVariableRequired(obj OperationVariable) error {
-	elements := map[string]interface{}{
+	elements := map[string]any{
 		"value": obj.Value,
 	}
 	for name, el := range elements {

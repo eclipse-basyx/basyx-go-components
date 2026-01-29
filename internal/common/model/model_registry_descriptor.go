@@ -33,7 +33,7 @@ type RegistryDescriptor struct {
 
 // AssertRegistryDescriptorRequired checks if the required fields are not zero-ed
 func AssertRegistryDescriptorRequired(obj RegistryDescriptor) error {
-	elements := map[string]interface{}{
+	elements := map[string]any{
 		"id": obj.Id,
 	}
 	for name, el := range elements {

@@ -56,7 +56,7 @@ type Identifiable struct {
 
 // AssertIdentifiableRequired checks if the required fields are not zero-ed
 func AssertIdentifiableRequired(obj Identifiable) error {
-	elements := map[string]interface{}{
+	elements := map[string]any{
 		"modelType": obj.ModelType,
 		"id":        obj.ID,
 	}

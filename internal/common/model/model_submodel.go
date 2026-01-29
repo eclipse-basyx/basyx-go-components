@@ -110,7 +110,7 @@ func (s *Submodel) UnmarshalJSON(data []byte) error {
 
 // AssertSubmodelRequired checks if the required fields are not zero-ed
 func AssertSubmodelRequired(obj Submodel) error {
-	elements := map[string]interface{}{
+	elements := map[string]any{
 		"modelType": obj.ModelType,
 		"id":        obj.ID,
 	}

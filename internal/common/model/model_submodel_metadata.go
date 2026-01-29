@@ -69,7 +69,7 @@ type SubmodelMetadata struct {
 
 // AssertSubmodelMetadataRequired checks if the required fields are not zero-ed
 func AssertSubmodelMetadataRequired(obj SubmodelMetadata) error {
-	elements := map[string]interface{}{
+	elements := map[string]any{
 		"modelType": obj.ModelType,
 		"id":        obj.ID,
 	}

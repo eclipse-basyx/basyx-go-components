@@ -48,7 +48,7 @@ type Resource struct {
 
 // AssertResourceRequired checks if the required fields are not zero-ed
 func AssertResourceRequired(obj Resource) error {
-	elements := map[string]interface{}{
+	elements := map[string]any{
 		"path": obj.Path,
 	}
 	for name, el := range elements {

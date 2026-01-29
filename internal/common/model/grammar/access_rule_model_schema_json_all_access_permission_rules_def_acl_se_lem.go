@@ -90,7 +90,7 @@ type AccessRuleModelSchemaJSONAllAccessPermissionRulesDEFACLSElem struct {
 //   - error: An error if the JSON is invalid or if either of the required fields ("acl" or "name")
 //     is missing. Returns nil on successful unmarshaling and validation.
 func (j *AccessRuleModelSchemaJSONAllAccessPermissionRulesDEFACLSElem) UnmarshalJSON(value []byte) error {
-	var raw map[string]interface{}
+	var raw map[string]any
 	if err := common.UnmarshalAndDisallowUnknownFields(value, &raw); err != nil {
 		return err
 	}

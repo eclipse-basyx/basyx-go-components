@@ -74,7 +74,7 @@ func (e *EmbeddedDataSpecification) UnmarshalJSON(data []byte) error {
 	}
 
 	// Try to detect type first
-	var rawMap map[string]interface{}
+	var rawMap map[string]any
 	if err := json.Unmarshal(aux.DataSpecificationContent, &rawMap); err != nil {
 		return err
 	}
@@ -109,7 +109,7 @@ func AssertEmbeddedDataSpecificationRequired(obj EmbeddedDataSpecification) erro
 	if obj.DataSpecification == nil {
 		return errors.New("400 Bad Request: Field 'dataSpecification' is required")
 	}
-	elements := map[string]interface{}{
+	elements := map[string]any{
 		"dataSpecificationContent": obj.DataSpecificationContent,
 		"dataSpecification":        obj.DataSpecification,
 	}

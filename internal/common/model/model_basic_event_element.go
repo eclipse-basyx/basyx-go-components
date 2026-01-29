@@ -180,7 +180,7 @@ func (a *BasicEventElement) SetEmbeddedDataSpecifications(v []EmbeddedDataSpecif
 
 // AssertBasicEventElementRequired checks if the required fields are not zero-ed
 func AssertBasicEventElementRequired(obj BasicEventElement) error {
-	elements := map[string]interface{}{
+	elements := map[string]any{
 		"modelType": obj.ModelType,
 		"observed":  obj.Observed,
 		"direction": obj.Direction,

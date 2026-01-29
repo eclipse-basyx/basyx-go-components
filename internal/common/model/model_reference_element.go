@@ -167,7 +167,7 @@ func (a *ReferenceElement) SetEmbeddedDataSpecifications(v []EmbeddedDataSpecifi
 
 // AssertReferenceElementRequired checks if the required fields are not zero-ed
 func AssertReferenceElementRequired(obj ReferenceElement) error {
-	elements := map[string]interface{}{
+	elements := map[string]any{
 		"modelType": obj.ModelType,
 	}
 	for name, el := range elements {

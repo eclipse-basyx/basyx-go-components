@@ -188,7 +188,7 @@ func (p *Property) SetExtensions(extensions []Extension) {
 
 // AssertPropertyRequired checks if the required fields are not zero-ed
 func AssertPropertyRequired(obj Property) error {
-	elements := map[string]interface{}{
+	elements := map[string]any{
 		"modelType": obj.ModelType,
 		"valueType": obj.ValueType,
 	}

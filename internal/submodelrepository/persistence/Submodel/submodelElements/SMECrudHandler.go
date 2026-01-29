@@ -161,7 +161,7 @@ func (p *PostgreSQLSMECrudHandler) CreateWithPath(tx *sql.Tx, submodelID string,
 	eds := submodelElement.EmbeddedDataSpecifications()
 	if len(eds) > 0 {
 		var json = jsoniter.ConfigCompatibleWithStandardLibrary
-		var toJson []map[string]interface{}
+		var toJson []map[string]any
 		for _, ed := range eds {
 			jsonObj, err := jsonization.ToJsonable(ed)
 			if err != nil {
@@ -179,7 +179,7 @@ func (p *PostgreSQLSMECrudHandler) CreateWithPath(tx *sql.Tx, submodelID string,
 	supplementalSemanticIDsJSONString := "[]"
 	supplementalSemanticIDs := submodelElement.SupplementalSemanticIDs()
 	if len(supplementalSemanticIDs) > 0 {
-		var toJson []map[string]interface{}
+		var toJson []map[string]any
 		for _, ref := range submodelElement.SupplementalSemanticIDs() {
 			jsonObj, err := jsonization.ToJsonable(ref)
 			if err != nil {
@@ -198,7 +198,7 @@ func (p *PostgreSQLSMECrudHandler) CreateWithPath(tx *sql.Tx, submodelID string,
 	extension := submodelElement.Extensions()
 	if len(extension) > 0 {
 		var json = jsoniter.ConfigCompatibleWithStandardLibrary
-		var toJson []map[string]interface{}
+		var toJson []map[string]any
 		for _, ext := range extension {
 			jsonObj, err := jsonization.ToJsonable(ext)
 			if err != nil {
@@ -436,7 +436,7 @@ func (p *PostgreSQLSMECrudHandler) Update(submodelID string, idShortOrPath strin
 	edsJSONString := "[]"
 	if len(submodelElement.EmbeddedDataSpecifications()) > 0 {
 		var json = jsoniter.ConfigCompatibleWithStandardLibrary
-		var toJson []map[string]interface{}
+		var toJson []map[string]any
 		for _, eds := range submodelElement.EmbeddedDataSpecifications() {
 			jsonObj, err := jsonization.ToJsonable(eds)
 			if err != nil {
@@ -454,7 +454,7 @@ func (p *PostgreSQLSMECrudHandler) Update(submodelID string, idShortOrPath strin
 	// Handle supplemental semantic IDs
 	supplementalSemanticIDsJSONString := "[]"
 	if len(submodelElement.SupplementalSemanticIDs()) > 0 {
-		var toJson []map[string]interface{}
+		var toJson []map[string]any
 		for _, ref := range submodelElement.SupplementalSemanticIDs() {
 			jsonObj, err := jsonization.ToJsonable(ref)
 			if err != nil {
@@ -473,7 +473,7 @@ func (p *PostgreSQLSMECrudHandler) Update(submodelID string, idShortOrPath strin
 	extensionsJSONString := "[]"
 	if len(submodelElement.Extensions()) > 0 {
 		var json = jsoniter.ConfigCompatibleWithStandardLibrary
-		var toJson []map[string]interface{}
+		var toJson []map[string]any
 		for _, ext := range submodelElement.Extensions() {
 			jsonObj, err := jsonization.ToJsonable(ext)
 			if err != nil {

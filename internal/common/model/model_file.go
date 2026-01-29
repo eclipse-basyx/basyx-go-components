@@ -169,7 +169,7 @@ func (a *File) SetEmbeddedDataSpecifications(v []EmbeddedDataSpecification) {
 
 // AssertFileRequired checks if the required fields are not zero-ed
 func AssertFileRequired(obj File) error {
-	elements := map[string]interface{}{
+	elements := map[string]any{
 		"modelType": obj.ModelType,
 	}
 	for name, el := range elements {

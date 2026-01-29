@@ -47,7 +47,7 @@ type LevelType struct {
 
 // AssertLevelTypeRequired checks if the required fields are not zero-ed
 func AssertLevelTypeRequired(obj LevelType) error {
-	elements := map[string]interface{}{
+	elements := map[string]any{
 		"min": obj.Min,
 		"nom": obj.Nom,
 		"typ": obj.Typ,

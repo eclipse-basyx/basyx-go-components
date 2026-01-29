@@ -43,7 +43,7 @@ type Key struct {
 
 // AssertKeyRequired checks if the required fields are not zero-ed
 func AssertKeyRequired(obj Key) error {
-	elements := map[string]interface{}{
+	elements := map[string]any{
 		"type":  obj.Type,
 		"value": obj.Value,
 	}

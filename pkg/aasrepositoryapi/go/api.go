@@ -131,7 +131,7 @@ type AssetAdministrationShellRepositoryAPIAPIServicer interface {
 	GetSubmodelByIdMetadataAasRepository(context.Context, string, string) (model.ImplResponse, error)
 	PatchSubmodelByIdMetadataAasRepository(context.Context, string, string, SubmodelMetadata) (model.ImplResponse, error)
 	GetSubmodelByIdValueOnlyAasRepository(context.Context, string, string, string, string) (model.ImplResponse, error)
-	PatchSubmodelByIdValueOnlyAasRepository(context.Context, string, string, map[string]interface{}, string) (model.ImplResponse, error)
+	PatchSubmodelByIdValueOnlyAasRepository(context.Context, string, string, map[string]any, string) (model.ImplResponse, error)
 	GetSubmodelByIdReferenceAasRepository(context.Context, string, string) (model.ImplResponse, error)
 	GetSubmodelByIdPathAasRepository(context.Context, string, string, string) (model.ImplResponse, error)
 	GetAllSubmodelElementsAasRepository(context.Context, string, string, int32, string, string, string) (model.ImplResponse, error)

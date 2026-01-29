@@ -63,7 +63,7 @@ type AssetAdministrationShell struct {
 
 // AssertAssetAdministrationShellRequired checks if the required fields are not zero-ed
 func AssertAssetAdministrationShellRequired(obj AssetAdministrationShell) error {
-	elements := map[string]interface{}{
+	elements := map[string]any{
 		"modelType":        obj.ModelType,
 		"id":               obj.ID,
 		"assetInformation": obj.AssetInformation,

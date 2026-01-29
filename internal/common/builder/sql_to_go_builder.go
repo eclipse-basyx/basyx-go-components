@@ -256,7 +256,7 @@ func ParseReferences(row json.RawMessage, referenceBuilderRefs map[int64]*Refere
 func ParseLangStringNameType(displayNames json.RawMessage) ([]types.ILangStringNameType, error) {
 	var names []types.ILangStringNameType
 	// remove id field from json
-	var temp []map[string]interface{}
+	var temp []map[string]any
 	var jsonMarshaller = jsoniter.ConfigCompatibleWithStandardLibrary
 	if err := jsonMarshaller.Unmarshal(displayNames, &temp); err != nil {
 		_, _ = fmt.Printf("Error unmarshalling display names: %v\n", err)
@@ -306,7 +306,7 @@ func ParseLangStringNameType(displayNames json.RawMessage) ([]types.ILangStringN
 func ParseLangStringTextType(descriptions json.RawMessage) ([]types.ILangStringTextType, error) {
 	var texts []types.ILangStringTextType
 	// remove id field from json
-	var temp []map[string]interface{}
+	var temp []map[string]any
 	if len(descriptions) == 0 {
 		return texts, nil
 	}
@@ -353,7 +353,7 @@ func ParseLangStringTextType(descriptions json.RawMessage) ([]types.ILangStringT
 func ParseLangStringPreferredNameTypeIec61360(descriptions json.RawMessage) ([]types.ILangStringPreferredNameTypeIEC61360, error) {
 	var texts []types.ILangStringPreferredNameTypeIEC61360
 	// remove id field from json
-	var temp []map[string]interface{}
+	var temp []map[string]any
 	if len(descriptions) == 0 {
 		return texts, nil
 	}
@@ -401,7 +401,7 @@ func ParseLangStringPreferredNameTypeIec61360(descriptions json.RawMessage) ([]t
 func ParseLangStringShortNameTypeIec61360(descriptions json.RawMessage) ([]types.ILangStringShortNameTypeIEC61360, error) {
 	var texts []types.ILangStringShortNameTypeIEC61360
 	// remove id field from json
-	var temp []map[string]interface{}
+	var temp []map[string]any
 	if len(descriptions) == 0 {
 		return texts, nil
 	}
@@ -449,7 +449,7 @@ func ParseLangStringShortNameTypeIec61360(descriptions json.RawMessage) ([]types
 func ParseLangStringDefinitionTypeIec61360(descriptions json.RawMessage) ([]types.ILangStringDefinitionTypeIEC61360, error) {
 	var texts []types.ILangStringDefinitionTypeIEC61360
 	// remove id field from json
-	var temp []map[string]interface{}
+	var temp []map[string]any
 	if len(descriptions) == 0 {
 		return texts, nil
 	}

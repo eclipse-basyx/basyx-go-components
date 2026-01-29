@@ -17,7 +17,7 @@ import (
 )
 
 // ToValueOnly converts a Submodel to its Value-Only representation
-func SubmodelToValueOnly(s *types.Submodel) (SubmodelValue, error) {
+func SubmodelToValueOnly(s types.ISubmodel) (SubmodelValue, error) {
 	result := make(SubmodelValue)
 
 	for _, element := range s.SubmodelElements() {
@@ -193,9 +193,9 @@ func EntityToValueOnly(e *types.Entity) (EntityValue, error) {
 
 	// Convert SpecificAssetIds
 	if len(e.SpecificAssetIDs()) > 0 {
-		result.SpecificAssetIds = make([]map[string]interface{}, 0, len(e.SpecificAssetIDs()))
+		result.SpecificAssetIds = make([]map[string]any, 0, len(e.SpecificAssetIDs()))
 		for _, assetID := range e.SpecificAssetIDs() {
-			assetIDMap := map[string]interface{}{
+			assetIDMap := map[string]any{
 				"name":  assetID.Name(),
 				"value": assetID.Value(),
 			}

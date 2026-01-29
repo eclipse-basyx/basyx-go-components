@@ -62,7 +62,7 @@ type ReferenceElementMetadata struct {
 
 // AssertReferenceElementMetadataRequired checks if the required fields are not zero-ed
 func AssertReferenceElementMetadataRequired(obj ReferenceElementMetadata) error {
-	elements := map[string]interface{}{
+	elements := map[string]any{
 		"modelType": obj.ModelType,
 	}
 	for name, el := range elements {

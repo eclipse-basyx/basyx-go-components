@@ -34,7 +34,7 @@ func isReferenceEmpty(ref Reference) bool {
 // AssertSubmodelElementRequiredFixed is a fixed version of AssertSubmodelElementRequired
 // that doesn't validate empty optional references
 func AssertSubmodelElementRequiredFixed(obj SubmodelElement) error {
-	elements := map[string]interface{}{
+	elements := map[string]any{
 		"modelType": obj.GetModelType(),
 	}
 	for name, el := range elements {

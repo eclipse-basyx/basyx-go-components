@@ -180,7 +180,7 @@ func (d *DataSpecificationIec61360) SetLevelType(levelType *LevelType) {
 
 // AssertDataSpecificationIec61360Required checks if the required fields are not zero-ed
 func AssertDataSpecificationIec61360Required(obj DataSpecificationIec61360) error {
-	elements := map[string]interface{}{
+	elements := map[string]any{
 		"modelType":     obj.ModelType,
 		"preferredName": obj.PreferredName,
 	}

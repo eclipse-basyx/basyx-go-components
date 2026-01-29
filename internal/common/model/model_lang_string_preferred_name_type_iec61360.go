@@ -55,7 +55,7 @@ func (l LangStringPreferredNameTypeIec61360) GetText() string {
 
 // AssertLangStringPreferredNameTypeIec61360Required checks if the required fields are not zero-ed
 func AssertLangStringPreferredNameTypeIec61360Required(obj LangStringPreferredNameTypeIec61360) error {
-	elements := map[string]interface{}{
+	elements := map[string]any{
 		"language": obj.Language,
 		"text":     obj.Text,
 	}
