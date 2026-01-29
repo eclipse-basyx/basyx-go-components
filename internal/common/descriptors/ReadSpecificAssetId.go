@@ -65,7 +65,8 @@ var expMapper = []auth.ExpressionIdentifiableMapper{
 		Exp: tSpecificAssetID.Col(colSemanticID),
 	},
 	{
-		Exp: tSpecificAssetID.Col(colExternalSubjectRef),
+		Exp:      tSpecificAssetID.Col(colExternalSubjectRef),
+		Fragment: fragPtr("$aasdesc#specificAssetIds[].externalSubjectId"),
 	},
 }
 
@@ -144,11 +145,14 @@ func ReadSpecificAssetIDsByDescriptorIDs(
 		expressions[4],
 		expressions[5],
 	).
-		Where(goqu.L(fmt.Sprintf("%s.%s = ANY(?::bigint[])", aliasSpecificAssetID, colDescriptorID), arr)).
-		GroupBy(
+		Where(goqu.L(fmt.Sprintf("%s.%s = ANY(?::bigint[])", aliasSpecificAssetID, colDescriptorID), arr))
+	if auth.NeedsGroupBy(ctx, expMapper) {
+		base = base.GroupBy(
 			expressions[0], // descriptor_id
 			expressions[1], // id
-		).
+		)
+	}
+	base = base.
 		Order(
 			tSpecificAssetID.Col(colPosition).Asc(),
 		)

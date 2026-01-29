@@ -1,0 +1,19 @@
+{
+    "paging_metadata": {},
+    "result": [
+        {
+            "idShort": "NoSemanticId_Submodel",
+            "modelType": "Submodel",
+            "id": "https://example.org/submodel/NoSemanticId",
+            "kind": "Instance",
+            "submodelElements": [
+                {
+                    "idShort": "SimpleProperty",
+                    "modelType": "Property",
+                    "valueType": "xs:string",
+                    "value": "TestValue123"
+                }
+            ]
+        }
+    ]
+}

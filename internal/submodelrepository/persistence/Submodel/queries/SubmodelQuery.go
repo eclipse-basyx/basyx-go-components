@@ -149,8 +149,26 @@ func addSubmodelIDFilterToQuery(query *goqu.SelectDataset, submodelID string) *g
 }
 
 func addJoinsToQueryForAASQL(query *goqu.SelectDataset) *goqu.SelectDataset {
-	query = query.Join(goqu.T("reference").As("semantic_id_reference"), goqu.On(goqu.I("s.semantic_id").Eq(goqu.I("semantic_id_reference.id"))))
-	query = query.Join(goqu.T("reference_key").As("semantic_id_reference_key"), goqu.On(goqu.I("semantic_id_reference.id").Eq(goqu.I("semantic_id_reference_key.reference_id"))))
+	// Use LEFT JOINs to ensure submodels without semantic_id are still included
+	// when the query only filters by other fields like idShort
+	query = query.LeftJoin(goqu.T("reference").As("semantic_id_reference"), goqu.On(goqu.I("s.semantic_id").Eq(goqu.I("semantic_id_reference.id"))))
+	query = query.LeftJoin(goqu.T("reference_key").As("semantic_id_reference_key"), goqu.On(goqu.I("semantic_id_reference.id").Eq(goqu.I("semantic_id_reference_key.reference_id"))))
+
+	// Add joins for submodel element queries ($sme#idShort, $sme#value, etc.)
+	// These enable filtering submodels by their contained submodel elements
+	query = query.LeftJoin(goqu.T("submodel_element"), goqu.On(goqu.I("s.id").Eq(goqu.I("submodel_element.submodel_id"))))
+
+	// Property elements for $sme#value, $sme#valueType queries
+	query = query.LeftJoin(goqu.T("property_element"), goqu.On(goqu.I("submodel_element.id").Eq(goqu.I("property_element.id"))))
+
+	// Multilanguage property support for $sme#language queries
+	query = query.LeftJoin(goqu.T("multilanguage_property"), goqu.On(goqu.I("submodel_element.id").Eq(goqu.I("multilanguage_property.id"))))
+	query = query.LeftJoin(goqu.T("multilanguage_property_value"), goqu.On(goqu.I("multilanguage_property.id").Eq(goqu.I("multilanguage_property_value.mlp_id"))))
+
+	// SME semantic_id support for $sme#semanticId.keys[].value queries
+	query = query.LeftJoin(goqu.T("reference").As("sme_semantic_id_reference"), goqu.On(goqu.I("submodel_element.semantic_id").Eq(goqu.I("sme_semantic_id_reference.id"))))
+	query = query.LeftJoin(goqu.T("reference_key").As("sme_semantic_id_reference_key"), goqu.On(goqu.I("sme_semantic_id_reference.id").Eq(goqu.I("sme_semantic_id_reference_key.reference_id"))))
+
 	return query
 }
 

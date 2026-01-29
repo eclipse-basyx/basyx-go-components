@@ -52,6 +52,8 @@ var mapMethodAndPatternToRightsData = []mapMethodAndPatternToRights{
 	{"GET", "/shell-descriptors/{aasIdentifier}/submodel-descriptors", []grammar.RightsEnum{grammar.RightsEnumREAD}},
 	{"POST", "/shell-descriptors/{aasIdentifier}/submodel-descriptors", []grammar.RightsEnum{grammar.RightsEnumCREATE}},
 
+	{"POST", "/query/shell-descriptors", []grammar.RightsEnum{grammar.RightsEnumREAD}}, // query endpoint
+
 	// aas discovery
 	{"GET", "/lookup/shells", []grammar.RightsEnum{grammar.RightsEnumREAD}},
 	{"POST", "/lookup/shellsByAssetLink", []grammar.RightsEnum{grammar.RightsEnumREAD}}, // this is one of the reasons why we need this complex mapping

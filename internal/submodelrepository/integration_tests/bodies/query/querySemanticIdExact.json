@@ -1,0 +1,12 @@
+{
+    "$condition": {
+        "$eq": [
+            {
+                "$field": "$sm#semanticId.keys[].value"
+            },
+            {
+                "$strVal": "urn:example:semanticId:Nameplate"
+            }
+        ]
+    }
+}

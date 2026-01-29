@@ -1,0 +1,26 @@
+{
+    "$condition": {
+        "$or": [
+            {
+                "$eq": [
+                    {
+                        "$field": "$sm#idShort"
+                    },
+                    {
+                        "$strVal": "Query_Language_Submodel_1"
+                    }
+                ]
+            },
+            {
+                "$eq": [
+                    {
+                        "$field": "$sm#idShort"
+                    },
+                    {
+                        "$strVal": "Query_Language_Submodel_3"
+                    }
+                ]
+            }
+        ]
+    }
+}

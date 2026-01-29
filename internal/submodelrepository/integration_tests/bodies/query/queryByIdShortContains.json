@@ -1,0 +1,12 @@
+{
+    "$condition": {
+        "$contains": [
+            {
+                "$field": "$sm#idShort"
+            },
+            {
+                "$strVal": "Query_Language_Submodel"
+            }
+        ]
+    }
+}

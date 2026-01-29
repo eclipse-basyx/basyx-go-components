@@ -1,0 +1,53 @@
+{
+    "idShort": "Query_Language_Submodel_7_Nested",
+    "modelType": "Submodel",
+    "id": "https://example.org/submodel/NestedElementsTest",
+    "kind": "Instance",
+    "semanticId": {
+        "type": "ExternalReference",
+        "keys": [
+            {
+                "type": "GlobalReference",
+                "value": "urn:example:semanticId:NestedSubmodel"
+            }
+        ]
+    },
+    "submodelElements": [
+        {
+            "idShort": "TopLevelProperty",
+            "modelType": "Property",
+            "valueType": "xs:string",
+            "value": "TopLevelValue"
+        },
+        {
+            "idShort": "TechnicalDataCollection",
+            "modelType": "SubmodelElementCollection",
+            "value": [
+                {
+                    "idShort": "NestedTemperature",
+                    "modelType": "Property",
+                    "valueType": "xs:double",
+                    "value": "42.5"
+                },
+                {
+                    "idShort": "NestedSerialNumber",
+                    "modelType": "Property",
+                    "valueType": "xs:string",
+                    "value": "NESTED-SN-98765"
+                },
+                {
+                    "idShort": "InnerCollection",
+                    "modelType": "SubmodelElementCollection",
+                    "value": [
+                        {
+                            "idShort": "DeeplyNestedProperty",
+                            "modelType": "Property",
+                            "valueType": "xs:string",
+                            "value": "DeepValue-XYZ"
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}

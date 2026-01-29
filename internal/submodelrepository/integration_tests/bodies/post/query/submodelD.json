@@ -1,0 +1,35 @@
+{
+    "idShort": "OperationalData_Device1",
+    "modelType": "Submodel",
+    "id": "https://example.org/submodel/OperationalData/Device1",
+    "kind": "Instance",
+    "semanticId": {
+        "type": "ExternalReference",
+        "keys": [
+            {
+                "type": "GlobalReference",
+                "value": "urn:example:semanticId:OperationalData"
+            }
+        ]
+    },
+    "submodelElements": [
+        {
+            "idShort": "OperatingHours",
+            "modelType": "Property",
+            "valueType": "xs:int",
+            "value": "5000"
+        },
+        {
+            "idShort": "Status",
+            "modelType": "Property",
+            "valueType": "xs:string",
+            "value": "Running"
+        },
+        {
+            "idShort": "ManufacturerName",
+            "modelType": "Property",
+            "valueType": "xs:string",
+            "value": "TechCorp Industries"
+        }
+    ]
+}

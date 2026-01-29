@@ -1,0 +1,101 @@
+{
+    "paging_metadata": {},
+    "result": [
+        {
+            "id": "https://example.org/submodel/TechnicalData",
+            "idShort": "Query_Language_Submodel_3",
+            "kind": "Instance",
+            "modelType": "Submodel",
+            "semanticId": {
+                "keys": [
+                    {
+                        "type": "GlobalReference",
+                        "value": "urn:example:semanticId:TechnicalData"
+                    }
+                ],
+                "type": "ExternalReference"
+            },
+            "submodelElements": [
+                {
+                    "idShort": "MaxPower",
+                    "modelType": "Property",
+                    "value": "1500",
+                    "valueType": "xs:int"
+                },
+                {
+                    "idShort": "ProductStatus",
+                    "modelType": "Property",
+                    "value": "Active",
+                    "valueType": "xs:string"
+                },
+                {
+                    "idShort": "Voltage",
+                    "modelType": "Property",
+                    "value": "230.0",
+                    "valueType": "xs:double"
+                }
+            ]
+        },
+        {
+            "id": "https://nuhuh.de/?text=SubmodelAQueryLanguage",
+            "idShort": "Query_Language_Submodel_1",
+            "kind": "Instance",
+            "modelType": "Submodel"
+        },
+        {
+            "id": "https://nuhuh.de/?text=SubmodelBQueryLanguage",
+            "idShort": "Query_Language_Submodel_2",
+            "kind": "Instance",
+            "modelType": "Submodel",
+            "semanticId": {
+                "keys": [
+                    {
+                        "type": "GlobalReference",
+                        "value": "urn:example:semanticId:Nameplate"
+                    }
+                ],
+                "type": "ExternalReference"
+            },
+            "submodelElements": [
+                {
+                    "idShort": "ManufacturerName",
+                    "modelType": "Property",
+                    "value": "ACME Corporation",
+                    "valueType": "xs:string"
+                },
+                {
+                    "idShort": "SerialNumber",
+                    "modelType": "Property",
+                    "value": "SN-12345-ABCD",
+                    "valueType": "xs:string"
+                },
+                {
+                    "idShort": "Temperature",
+                    "modelType": "Property",
+                    "value": "25.5",
+                    "valueType": "xs:double"
+                }
+            ]
+        },
+        {
+            "id": "https://nuhuh.de/?text=SubmodelFQueryLanguage",
+            "idShort": "Query_Language_Submodel_5",
+            "kind": "Instance",
+            "modelType": "Submodel",
+            "submodelElements": [
+                {
+                    "idShort": "Status",
+                    "modelType": "Property",
+                    "value": "Running",
+                    "valueType": "xs:string"
+                },
+                {
+                    "idShort": "Temperature",
+                    "modelType": "Property",
+                    "value": "100.5",
+                    "valueType": "xs:double"
+                }
+            ]
+        }
+    ]
+}
