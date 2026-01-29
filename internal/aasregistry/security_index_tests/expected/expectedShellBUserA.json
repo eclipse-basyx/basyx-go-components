@@ -1,0 +1,63 @@
+{
+  "id": "https://example.org/B",
+    "endpoints": [
+        {
+            "protocolInformation": {
+                "href": "hrefB",
+                "endpointProtocol": "http"
+            },
+            "interface": "AAS-3.0"
+        }
+    ],
+    "extensions": [
+        {
+            "name": "help",
+            "valueType": "xs:string",
+            "value": "test"
+        }
+    ],
+  "specificAssetIds": [
+    {
+      "name": "irrelevantPartId",
+      "value": "123",
+      "externalSubjectId": {
+        "type": "ExternalReference",
+        "keys": [
+          {
+            "type": "GlobalReference",
+            "value": "PUBLIC_READABLE"
+          },
+          {
+            "type": "GlobalReference",
+            "value": "WRITTEN_BY_X"
+          },
+          {
+            "type": "GlobalReference",
+            "value": "WRITTEN_BY_Y"
+          }
+        ]
+      }
+    },
+    {
+      "name": "customerPartId",
+      "value": "39480543",
+      "externalSubjectId": {
+        "type": "ExternalReference",
+        "keys": [
+          {
+            "type": "GlobalReference",
+            "value": "IGNORE"
+          },
+          {
+            "type": "GlobalReference",
+            "value": "WRITTEN_BY_Y"
+          },
+          {
+            "type": "GlobalReference",
+            "value": "PUBLIC_READABLE"
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -1,5 +1,5 @@
 /*******************************************************************************
-* Copyright (C) 2025 the Eclipse BaSyx Authors and Fraunhofer IESE
+* Copyright (C) 2026 the Eclipse BaSyx Authors and Fraunhofer IESE
 *
 * Permission is hereby granted, free of charge, to any person obtaining
 * a copy of this software and associated documentation files (the
@@ -23,6 +23,7 @@
 * SPDX-License-Identifier: MIT
 ******************************************************************************/
 
+//nolint:all
 package builder_test
 
 import (

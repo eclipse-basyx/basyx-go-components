@@ -1,5 +1,5 @@
 /*******************************************************************************
-* Copyright (C) 2025 the Eclipse BaSyx Authors and Fraunhofer IESE
+* Copyright (C) 2026 the Eclipse BaSyx Authors and Fraunhofer IESE
 *
 * Permission is hereby granted, free of charge, to any person obtaining
 * a copy of this software and associated documentation files (the
@@ -37,6 +37,7 @@ import (
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	persistenceutils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
 	jsoniter "github.com/json-iterator/go"
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 )
@@ -177,18 +178,66 @@ func (p PostgreSQLRelationshipElementHandler) CreateNested(tx *sql.Tx, submodelI
 }
 
 // Update updates an existing RelationshipElement identified by its idShort or path.
-//
-// This method delegates to the decorated handler for update operations. It's currently
-// a pass-through that will leverage base handler update logic when implemented.
+// This method handles both the common submodel element properties and the specific
+// relationship element data including first and second references.
 //
 // Parameters:
+//   - submodelID: ID of the parent submodel
 //   - idShortOrPath: The idShort or full path of the element to update
 //   - submodelElement: The updated element data
+//   - tx: Active database transaction (can be nil, will create one if needed)
+//   - isPut: true: Replaces the element with the body data; false: Updates only passed data
 //
 // Returns:
 //   - error: An error if the decorated update operation fails
-func (p PostgreSQLRelationshipElementHandler) Update(submodelID string, idShortOrPath string, submodelElement gen.SubmodelElement, tx *sql.Tx) error {
-	return p.decorated.Update(submodelID, idShortOrPath, submodelElement, tx)
+func (p PostgreSQLRelationshipElementHandler) Update(submodelID string, idShortOrPath string, submodelElement gen.SubmodelElement, tx *sql.Tx, isPut bool) error {
+	relElem, ok := submodelElement.(*gen.RelationshipElement)
+	if !ok {
+		return common.NewErrBadRequest("submodelElement is not of type RelationshipElement")
+	}
+
+	var err error
+	cu, localTx, err := persistenceutils.StartTXIfNeeded(tx, err, p.db)
+	if err != nil {
+		return err
+	}
+	defer cu(&err)
+	err = p.decorated.Update(submodelID, idShortOrPath, submodelElement, localTx, isPut)
+	if err != nil {
+		return err
+	}
+
+	elementID, err := p.decorated.GetDatabaseID(submodelID, idShortOrPath)
+	if err != nil {
+		return err
+	}
+
+	dialect := goqu.Dialect("postgres")
+	json := jsoniter.ConfigCompatibleWithStandardLibrary
+
+	// Build update record based on isPut flag
+	updateRecord, err := buildUpdateRelationshipElementRecordObject(isPut, relElem, json)
+	if err != nil {
+		return err
+	}
+
+	// Only execute update if there are fields to update
+	if persistenceutils.AnyFieldsToUpdate(updateRecord) {
+		updateQuery, updateArgs, err := dialect.Update("relationship_element").
+			Set(updateRecord).
+			Where(goqu.C("id").Eq(elementID)).
+			ToSQL()
+		if err != nil {
+			return err
+		}
+
+		_, err = localTx.Exec(updateQuery, updateArgs...)
+		if err != nil {
+			return err
+		}
+	}
+
+	return persistenceutils.CommitTransactionIfNeeded(tx, localTx)
 }
 
 // UpdateValueOnly updates only the value fields of an existing RelationshipElement.
@@ -325,8 +374,18 @@ func insertRelationshipElement(relElem *gen.RelationshipElement, tx *sql.Tx, id 
 		secondRef = string(ref)
 	}
 
-	_, err := tx.Exec(`INSERT INTO relationship_element (id, first, second) VALUES ($1, $2, $3)`,
-		id, firstRef, secondRef)
+	dialect := goqu.Dialect("postgres")
+	insertQuery, insertArgs, err := dialect.Insert("relationship_element").
+		Rows(goqu.Record{
+			"id":     id,
+			"first":  firstRef,
+			"second": secondRef,
+		}).
+		ToSQL()
+	if err != nil {
+		return err
+	}
+	_, err = tx.Exec(insertQuery, insertArgs...)
 	return err
 }
 
@@ -353,17 +412,75 @@ func insertRelationshipElement(relElem *gen.RelationshipElement, tx *sql.Tx, id 
 // Note: This function is used for both first and second references in relationship elements,
 // as well as any other reference structures that need full persistence with keys.
 func insertReference(tx *sql.Tx, ref gen.Reference) (int, error) {
-	var refID int
-	err := tx.QueryRow(`INSERT INTO reference (type) VALUES ($1) RETURNING id`, ref.Type).Scan(&refID)
+	dialect := goqu.Dialect("postgres")
+
+	// Insert reference and get ID
+	insertQuery, insertArgs, err := dialect.Insert("reference").
+		Rows(goqu.Record{"type": ref.Type}).
+		Returning("id").
+		ToSQL()
 	if err != nil {
 		return 0, err
 	}
+
+	var refID int
+	err = tx.QueryRow(insertQuery, insertArgs...).Scan(&refID)
+	if err != nil {
+		return 0, err
+	}
+
+	// Insert keys
 	for i, key := range ref.Keys {
-		_, err = tx.Exec(`INSERT INTO reference_key (reference_id, position, type, value) VALUES ($1, $2, $3, $4)`,
-			refID, i, key.Type, key.Value)
+		insertKeyQuery, insertKeyArgs, err := dialect.Insert("reference_key").
+			Rows(goqu.Record{
+				"reference_id": refID,
+				"position":     i,
+				"type":         key.Type,
+				"value":        key.Value,
+			}).
+			ToSQL()
+		if err != nil {
+			return 0, err
+		}
+		_, err = tx.Exec(insertKeyQuery, insertKeyArgs...)
 		if err != nil {
 			return 0, err
 		}
 	}
 	return refID, nil
+}
+
+func buildUpdateRelationshipElementRecordObject(isPut bool, relElem *gen.RelationshipElement, json jsoniter.API) (goqu.Record, error) {
+	updateRecord := goqu.Record{}
+
+	// Handle First reference - optional field
+	// For PUT: always update (even if nil, which clears the field)
+	// For PATCH: only update if provided (not nil)
+	if isPut || relElem.First != nil {
+		var firstRef string
+		if relElem.First != nil && !isEmptyReference(relElem.First) {
+			ref, err := json.Marshal(relElem.First)
+			if err != nil {
+				return nil, err
+			}
+			firstRef = string(ref)
+		}
+		updateRecord["first"] = firstRef
+	}
+
+	// Handle Second reference - optional field
+	// For PUT: always update (even if nil, which clears the field)
+	// For PATCH: only update if provided (not nil)
+	if isPut || relElem.Second != nil {
+		var secondRef string
+		if relElem.Second != nil && !isEmptyReference(relElem.Second) {
+			ref, err := json.Marshal(relElem.Second)
+			if err != nil {
+				return nil, err
+			}
+			secondRef = string(ref)
+		}
+		updateRecord["second"] = secondRef
+	}
+	return updateRecord, nil
 }

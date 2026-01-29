@@ -37,6 +37,7 @@
                         {
                           "idShort": "6",
                           "modelType": "SubmodelElementList",
+                          "orderRelevant": false,
                           "typeValueListElement": "Property",
                           "value": [
                             {
@@ -414,6 +415,7 @@
           ],
           "idShort": "ExampleSubmodelElementListOrdered",
           "modelType": "SubmodelElementList",
+          "orderRelevant": true,
           "semanticId": {
             "keys": [
               {

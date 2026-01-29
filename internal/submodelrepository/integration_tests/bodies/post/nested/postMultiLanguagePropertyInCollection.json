@@ -1,0 +1,14 @@
+{
+    "idShort": "NestedMultiLang",
+    "modelType": "MultiLanguageProperty",
+    "value": [
+        {
+            "language": "de",
+            "text": "verschachtelt in Sammlung"
+        },
+        {
+            "language": "en",
+            "text": "nested in collection"
+        }
+    ]
+}

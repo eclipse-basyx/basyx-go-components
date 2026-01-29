@@ -1,5 +1,5 @@
 /*******************************************************************************
-* Copyright (C) 2025 the Eclipse BaSyx Authors and Fraunhofer IESE
+* Copyright (C) 2026 the Eclipse BaSyx Authors and Fraunhofer IESE
 *
 * Permission is hereby granted, free of charge, to any person obtaining
 * a copy of this software and associated documentation files (the
@@ -342,4 +342,74 @@ func isNowGlobal(v string) bool {
 	default:
 		return false
 	}
+}
+
+// AssertValueRequired checks if the required fields are not zero-ed
+func AssertValueRequired(obj Value) error {
+	if obj.StrCast != nil {
+		if err := AssertValueRequired(*obj.StrCast); err != nil {
+			return err
+		}
+	}
+	if obj.NumCast != nil {
+		if err := AssertValueRequired(*obj.NumCast); err != nil {
+			return err
+		}
+	}
+	if obj.HexCast != nil {
+		if err := AssertValueRequired(*obj.HexCast); err != nil {
+			return err
+		}
+	}
+	if obj.BoolCast != nil {
+		if err := AssertValueRequired(*obj.BoolCast); err != nil {
+			return err
+		}
+	}
+	if obj.DateTimeCast != nil {
+		if err := AssertValueRequired(*obj.DateTimeCast); err != nil {
+			return err
+		}
+	}
+	if obj.TimeCast != nil {
+		if err := AssertValueRequired(*obj.TimeCast); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// AssertValueConstraints checks if the values respects the defined constraints
+func AssertValueConstraints(obj Value) error {
+	if obj.StrCast != nil {
+		if err := AssertValueConstraints(*obj.StrCast); err != nil {
+			return err
+		}
+	}
+	if obj.NumCast != nil {
+		if err := AssertValueConstraints(*obj.NumCast); err != nil {
+			return err
+		}
+	}
+	if obj.HexCast != nil {
+		if err := AssertValueConstraints(*obj.HexCast); err != nil {
+			return err
+		}
+	}
+	if obj.BoolCast != nil {
+		if err := AssertValueConstraints(*obj.BoolCast); err != nil {
+			return err
+		}
+	}
+	if obj.DateTimeCast != nil {
+		if err := AssertValueConstraints(*obj.DateTimeCast); err != nil {
+			return err
+		}
+	}
+	if obj.TimeCast != nil {
+		if err := AssertValueConstraints(*obj.TimeCast); err != nil {
+			return err
+		}
+	}
+	return nil
 }

@@ -1,5 +1,5 @@
 /*******************************************************************************
-* Copyright (C) 2025 the Eclipse BaSyx Authors and Fraunhofer IESE
+* Copyright (C) 2026 the Eclipse BaSyx Authors and Fraunhofer IESE
 *
 * Permission is hereby granted, free of charge, to any person obtaining
 * a copy of this software and associated documentation files (the
@@ -29,6 +29,7 @@ package auth
 import (
 	"fmt"
 
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/builder"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	api "github.com/go-chi/chi/v5"
 	jsoniter "github.com/json-iterator/go"
@@ -76,7 +77,7 @@ func ParseAccessModel(b []byte, apiRouter *api.Mux) (*AccessModel, error) {
 
 // FragmentFilters groups conditional parts by fragment name so callers can pick
 // the subset relevant to the resource they are processing.
-type FragmentFilters map[string]grammar.LogicalExpression
+type FragmentFilters map[grammar.FragmentStringPattern]grammar.LogicalExpression
 
 // QueryFilter captures optional, fine-grained restrictions produced by a rule
 // even when ACCESS=ALLOW. Controllers can use it to restrict rows, constrain
@@ -85,6 +86,14 @@ type FragmentFilters map[string]grammar.LogicalExpression
 type QueryFilter struct {
 	Formula *grammar.LogicalExpression `json:"Formula,omitempty" yaml:"Formula,omitempty" mapstructure:"Formula,omitempty"`
 	Filters FragmentFilters            `json:"Filters,omitempty" yaml:"Filters,omitempty" mapstructure:"Filters,omitempty"`
+}
+
+// FragmentExpression pairs a concrete fragment key with its logical expression.
+// This is useful for wildcard lookups like "...[]" where multiple indexed
+// fragments may match.
+type FragmentExpression struct {
+	Fragment   grammar.FragmentStringPattern
+	Expression grammar.LogicalExpression
 }
 
 // DecisionCode represents the result of an authorization check.
@@ -115,7 +124,7 @@ func (m *AccessModel) AuthorizeWithFilter(in EvalInput) (bool, DecisionCode, *Qu
 	}
 
 	var ruleExprs []QueryFilter
-	var allFragments []string
+	var allFragments []grammar.FragmentStringPattern
 
 	for _, r := range m.rules {
 		acl, attrs, objs, lexpr := r.acl, r.attrs, r.objs, r.lexpr
@@ -160,16 +169,16 @@ func (m *AccessModel) AuthorizeWithFilter(in EvalInput) (bool, DecisionCode, *Qu
 			return false, DecisionNoMatch, nil
 		}
 
-		adapted, onlyBool := adaptLEForBackend(*combinedLE, in.Claims)
-		if onlyBool {
-			// Fully decidable here; evaluate and continue on false
-			if !evalLE(adapted, in.Claims) {
-				continue
-			}
+		resolver := func(attr grammar.AttributeValue) any {
+			return resolveAttributeValue(attr, in.Claims)
 		}
-		fragments := make(map[string]grammar.LogicalExpression)
+		adapted, decision := combinedLE.SimplifyForBackendFilter(resolver)
+		if decision == grammar.SimplifyFalse {
+			continue
+		}
+		fragments := make(map[grammar.FragmentStringPattern]grammar.LogicalExpression)
 		for _, filter := range r.filterList {
-			fragment := string(*filter.FRAGMENT)
+			fragment := *filter.FRAGMENT
 
 			if existing, ok := fragments[fragment]; ok {
 				existing.And = append(existing.And, *filter.CONDITION)
@@ -188,7 +197,6 @@ func (m *AccessModel) AuthorizeWithFilter(in EvalInput) (bool, DecisionCode, *Qu
 		// Deduplicate And expressions in fragments
 		for fragment, expr := range fragments {
 			if len(expr.And) > 0 {
-				expr.And = deduplicateLogicalExpressions(expr.And)
 				fragments[fragment] = expr
 			}
 		}
@@ -202,7 +210,7 @@ func (m *AccessModel) AuthorizeWithFilter(in EvalInput) (bool, DecisionCode, *Qu
 	}
 
 	combined := grammar.LogicalExpression{Or: []grammar.LogicalExpression{}}
-	combinedFragments := make(map[string]grammar.LogicalExpression)
+	combinedFragments := make(map[grammar.FragmentStringPattern]grammar.LogicalExpression)
 	for _, qfr := range ruleExprs {
 		combined.Or = append(combined.Or, *qfr.Formula)
 
@@ -219,31 +227,31 @@ func (m *AccessModel) AuthorizeWithFilter(in EvalInput) (bool, DecisionCode, *Qu
 		}
 	}
 
-	// Deduplicate Or expressions in combined and fragments
-	combined.Or = deduplicateLogicalExpressions(combined.Or)
 	for fragment, expr := range combinedFragments {
 		if len(expr.Or) > 0 {
-			expr.Or = deduplicateLogicalExpressions(expr.Or)
 			combinedFragments[fragment] = expr
 		}
 	}
 
 	for fragment, le := range combinedFragments {
-		simpleFilter, onlyBool := adaptLEForBackend(le, in.Claims)
-		if onlyBool {
-			delete(combinedFragments, fragment)
-		} else {
-			combinedFragments[fragment] = simpleFilter
+		resolver := func(attr grammar.AttributeValue) any {
+			return resolveAttributeValue(attr, in.Claims)
 		}
+		simpleFilter, _ := le.SimplifyForBackendFilter(resolver)
+		combinedFragments[fragment] = simpleFilter
+
 	}
 
-	simplified, onlyBool := adaptLEForBackend(combined, in.Claims)
+	resolver := func(attr grammar.AttributeValue) any {
+		return resolveAttributeValue(attr, in.Claims)
+	}
+	simplified, decision := combined.SimplifyForBackendFilter(resolver)
 
 	hasFormula := true
-	if onlyBool {
-		if !evalLE(simplified, in.Claims) {
-			return false, DecisionNoMatch, nil
-		}
+	switch decision {
+	case grammar.SimplifyFalse:
+		return false, DecisionNoMatch, nil
+	case grammar.SimplifyTrue:
 		hasFormula = false
 	}
 
@@ -261,17 +269,51 @@ func (m *AccessModel) AuthorizeWithFilter(in EvalInput) (bool, DecisionCode, *Qu
 	return true, DecisionAllow, qf
 }
 
-// FilterExpressionFor returns the logical expression associated with the
-// fragment `key` from the QueryFilter's `Filters` map. If the map is nil or
-// no entry exists for `key`, nil is returned.
+// FilterExpressionEntriesFor returns all (fragment, expression) pairs from
+// q.Filters whose tokenized fragment path matches the tokenized `key`.
 //
-// Note: map values are returned by value, so this method returns the address
-// of a copy of the stored `grammar.LogicalExpression`. Callers should not rely
-// on mutating the returned value to modify the original map entry.
-func (q *QueryFilter) FilterExpressionFor(key string) *grammar.LogicalExpression {
-	frag, ok := q.Filters[key]
-	if !ok {
-		return nil
+// A fragment matches when, for every token position i:
+//   - token name matches (Token.GetName()), and
+//   - token kind matches (ArrayToken vs SimpleToken).
+//
+// For ArrayToken positions, the array index is ignored. This means a wildcard
+// key such as "...[]" matches entries like "...[0]", "...[1]", etc.
+//
+// Note: the returned slice order is not guaranteed (q.Filters is a map).
+func (q *QueryFilter) FilterExpressionEntriesFor(key grammar.FragmentStringPattern) []FragmentExpression {
+	var out []FragmentExpression
+	keyTokens := builder.TokenizeField(string(key))
+
+	for k, expr := range q.Filters {
+		kTokens := builder.TokenizeField(string(k))
+
+		if len(kTokens) != len(keyTokens) {
+			continue
+		}
+
+		matches := true
+		for i := 0; i < len(kTokens); i++ {
+			if kTokens[i].GetName() != keyTokens[i].GetName() {
+				matches = false
+				break
+			}
+
+			_, kIsArray := kTokens[i].(builder.ArrayToken)
+			_, keyIsArray := keyTokens[i].(builder.ArrayToken)
+			if kIsArray != keyIsArray {
+				matches = false
+				break
+			}
+			// If both are ArrayToken we intentionally ignore the ArrayToken.Index.
+		}
+
+		if matches {
+			out = append(out, FragmentExpression{
+				Fragment:   k,
+				Expression: expr,
+			})
+		}
 	}
-	return &frag
+
+	return out
 }

@@ -1,0 +1,13 @@
+{
+    "idShort": "NestedReferenceEntity",
+    "modelType": "ReferenceElement",
+    "value": {
+        "type": "ModelReference",
+        "keys": [
+            {
+                "type": "Property",
+                "value": "TestProperty"
+            }
+        ]
+    }
+}

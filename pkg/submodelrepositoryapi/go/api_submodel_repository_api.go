@@ -11,12 +11,16 @@ package openapi
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"strings"
 
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -55,6 +59,11 @@ func NewSubmodelRepositoryAPIAPIController(s SubmodelRepositoryAPIAPIServicer, c
 // Routes returns all the api routes for the SubmodelRepositoryAPIAPIController
 func (c *SubmodelRepositoryAPIAPIController) Routes() Routes {
 	return Routes{
+		"QuerySubmodels": Route{
+			strings.ToUpper("Post"),
+			c.contextPath + "/query/submodels",
+			c.QuerySubmodels,
+		},
 		"GetAllSubmodels": Route{
 			strings.ToUpper("Get"),
 			c.contextPath + "/submodels",
@@ -269,6 +278,16 @@ func (c *SubmodelRepositoryAPIAPIController) Routes() Routes {
 			strings.ToUpper("Get"),
 			c.contextPath + "/submodels/{submodelIdentifier}/submodel-elements/{idShortPath}/operation-results/{handleId}/$value",
 			c.GetOperationAsyncResultValueOnly,
+		},
+		"GetSignedSubmodelByID": Route{
+			strings.ToUpper("Get"),
+			c.contextPath + "/submodels/{submodelIdentifier}/$signed",
+			c.GetSignedSubmodelByID,
+		},
+		"GetSignedSubmodelByIDValueOnly": Route{
+			strings.ToUpper("Get"),
+			c.contextPath + "/submodels/{submodelIdentifier}/$value/$signed",
+			c.GetSignedSubmodelByIDValueOnly,
 		},
 	}
 }
@@ -650,6 +669,86 @@ func (c *SubmodelRepositoryAPIAPIController) GetSubmodelByID(w http.ResponseWrit
 		extentParam = param
 	}
 	result, err := c.service.GetSubmodelByID(r.Context(), submodelIdentifierParam, levelParam, extentParam)
+	// If an error occurred, encode the error with the status code
+	if err != nil {
+		c.errorHandler(w, r, err, &result)
+		return
+	}
+	// If no error, encode the body and the result code
+	_ = EncodeJSONResponse(result.Body, &result.Code, w)
+}
+
+// GetSignedSubmodelByID - Returns a specific Submodel
+func (c *SubmodelRepositoryAPIAPIController) GetSignedSubmodelByID(w http.ResponseWriter, r *http.Request) {
+	query, err := parseQuery(r.URL.RawQuery)
+	if err != nil {
+		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
+		return
+	}
+	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
+	if submodelIdentifierParam == "" {
+		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
+		return
+	}
+	var levelParam string
+	if query.Has("level") {
+		param := query.Get("level")
+
+		levelParam = param
+	} else {
+		param := "deep"
+		levelParam = param
+	}
+	var extentParam string
+	if query.Has("extent") {
+		param := query.Get("extent")
+
+		extentParam = param
+	} else {
+		param := "withoutBlobValue"
+		extentParam = param
+	}
+	result, err := c.service.GetSignedSubmodelByID(r.Context(), submodelIdentifierParam, levelParam, extentParam)
+	// If an error occurred, encode the error with the status code
+	if err != nil {
+		c.errorHandler(w, r, err, &result)
+		return
+	}
+	// If no error, encode the body and the result code
+	_ = EncodeJSONResponse(result.Body, &result.Code, w)
+}
+
+// GetSignedSubmodelByIDValueOnly - Returns a specific Submodel in ValueOnly representation
+func (c *SubmodelRepositoryAPIAPIController) GetSignedSubmodelByIDValueOnly(w http.ResponseWriter, r *http.Request) {
+	query, err := parseQuery(r.URL.RawQuery)
+	if err != nil {
+		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
+		return
+	}
+	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
+	if submodelIdentifierParam == "" {
+		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
+		return
+	}
+	var levelParam string
+	if query.Has("level") {
+		param := query.Get("level")
+
+		levelParam = param
+	} else {
+		param := "deep"
+		levelParam = param
+	}
+	var extentParam string
+	if query.Has("extent") {
+		param := query.Get("extent")
+
+		extentParam = param
+	} else {
+		param := "withoutBlobValue"
+		extentParam = param
+	}
+	result, err := c.service.GetSignedSubmodelByIDValueOnly(r.Context(), submodelIdentifierParam, levelParam, extentParam)
 	// If an error occurred, encode the error with the status code
 	if err != nil {
 		c.errorHandler(w, r, err, &result)
@@ -2042,4 +2141,117 @@ func (c *SubmodelRepositoryAPIAPIController) GetOperationAsyncResultValueOnly(w 
 	}
 	// If no error, encode the body and the result code
 	_ = EncodeJSONResponse(result.Body, &result.Code, w)
+}
+
+const componentName = "SubmodelRepository"
+
+// QuerySubmodels - Returns all Submodels that match the input query
+func (c *SubmodelRepositoryAPIAPIController) QuerySubmodels(w http.ResponseWriter, r *http.Request) {
+	query, err := parseQuery(r.URL.RawQuery)
+	if err != nil {
+		log.Printf("🧩 [%s] Error in QuerySubmodels: parse query raw=%q: %v", componentName, r.URL.RawQuery, err)
+		result := common.NewErrorResponse(
+			err,
+			http.StatusBadRequest,
+			componentName,
+			"QuerySubmodels",
+			"query",
+		)
+		err := EncodeJSONResponse(result.Body, &result.Code, w)
+		if err != nil {
+			c.errorHandler(w, r, err, nil)
+		}
+		return
+	}
+	var limitParam int32
+	if query.Has("limit") {
+		param, err := parseNumericParameter[int32](
+			query.Get("limit"),
+			WithParse[int32](parseInt32),
+			WithMinimum[int32](1),
+		)
+		if err != nil {
+			log.Printf("🧩 [%s] Error in QuerySubmodels: parse limit=%q: %v", componentName, query.Get("limit"), err)
+			result := common.NewErrorResponse(
+				err,
+				http.StatusBadRequest,
+				componentName,
+				"QuerySubmodels",
+				"limit",
+			)
+			err = EncodeJSONResponse(result.Body, &result.Code, w)
+			if err != nil {
+				c.errorHandler(w, r, err, nil)
+			}
+			return
+		}
+
+		limitParam = param
+	}
+	var cursorParam string
+	if query.Has("cursor") {
+		cursorParam = query.Get("cursor")
+	}
+	var queryParam grammar.Query
+	d := json.NewDecoder(r.Body)
+	d.DisallowUnknownFields()
+	if err := d.Decode(&queryParam); err != nil && !errors.Is(err, io.EOF) {
+		log.Printf("🧩 [%s] Error in QuerySubmodels: decode body: %v", componentName, err)
+		result := common.NewErrorResponse(
+			err,
+			http.StatusBadRequest,
+			componentName,
+			"QuerySubmodels",
+			"RequestBody",
+		)
+		err := EncodeJSONResponse(result.Body, &result.Code, w)
+		if err != nil {
+			c.errorHandler(w, r, err, nil)
+		}
+		return
+	}
+	if err := grammar.AssertQueryRequired(queryParam); err != nil {
+		log.Printf("🧩 [%s] Error in QuerySubmodels: required validation failed: %v", componentName, err)
+		result := common.NewErrorResponse(
+			err,
+			http.StatusBadRequest,
+			componentName,
+			"QuerySubmodels",
+			"RequestBody",
+		)
+		err := EncodeJSONResponse(result.Body, &result.Code, w)
+		if err != nil {
+			c.errorHandler(w, r, err, nil)
+		}
+		return
+	}
+	if err := grammar.AssertQueryConstraints(queryParam); err != nil {
+		log.Printf("🧩 [%s] Error in QuerySubmodels: constraints validation failed: %v", componentName, err)
+		result := common.NewErrorResponse(
+			err,
+			http.StatusBadRequest,
+			componentName,
+			"QuerySubmodels",
+			"RequestBody",
+		)
+		err := EncodeJSONResponse(result.Body, &result.Code, w)
+		if err != nil {
+			c.errorHandler(w, r, err, nil)
+		}
+		return
+	}
+	result, err := c.service.QuerySubmodels(r.Context(), limitParam, cursorParam, queryParam)
+	// If an error occurred, encode the error with the status code
+	if err != nil {
+		log.Printf("🧩 [%s] Error in QuerySubmodels: service failure (limit=%d cursor=%q): %v", componentName, limitParam, cursorParam, err)
+		c.errorHandler(w, r, err, &result)
+		return
+	}
+	// If no error, encode the body and the result code
+	err = EncodeJSONResponse(result.Body, &result.Code, w)
+	if err != nil {
+		log.Printf("🧩 [%s] Error in QuerySubmodels: encoding response (limit=%d cursor=%q): %v", componentName, limitParam, cursorParam, err)
+		c.errorHandler(w, r, err, nil)
+		return
+	}
 }

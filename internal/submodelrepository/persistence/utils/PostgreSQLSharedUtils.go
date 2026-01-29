@@ -1,5 +1,5 @@
 /*******************************************************************************
-* Copyright (C) 2025 the Eclipse BaSyx Authors and Fraunhofer IESE
+* Copyright (C) 2026 the Eclipse BaSyx Authors and Fraunhofer IESE
 *
 * Permission is hereby granted, free of charge, to any person obtaining
 * a copy of this software and associated documentation files (the
@@ -65,27 +65,8 @@ func CreateExtension(tx *sql.Tx, extension gen.Extension, position int) (sql.Nul
 		semanticIDRefDbID = id
 	}
 
-	var valueText, valueNum, valueBool, valueTime, valueDatetime sql.NullString
-
-	switch extension.ValueType {
-	case "xs:string", "xs:anyURI", "xs:base64Binary", "xs:hexBinary":
-		valueText = sql.NullString{String: extension.Value, Valid: extension.Value != ""}
-	case "xs:int", "xs:integer", "xs:long", "xs:short", "xs:byte",
-		"xs:unsignedInt", "xs:unsignedLong", "xs:unsignedShort", "xs:unsignedByte",
-		"xs:positiveInteger", "xs:negativeInteger", "xs:nonNegativeInteger", "xs:nonPositiveInteger",
-		"xs:decimal", "xs:double", "xs:float":
-		valueNum = sql.NullString{String: extension.Value, Valid: extension.Value != ""}
-	case "xs:boolean":
-		valueBool = sql.NullString{String: extension.Value, Valid: extension.Value != ""}
-	case "xs:time":
-		valueTime = sql.NullString{String: extension.Value, Valid: extension.Value != ""}
-	case "xs:date", "xs:dateTime", "xs:duration", "xs:gDay", "xs:gMonth",
-		"xs:gMonthDay", "xs:gYear", "xs:gYearMonth":
-		valueDatetime = sql.NullString{String: extension.Value, Valid: extension.Value != ""}
-	default:
-		// Fallback to text for unknown types
-		valueText = sql.NullString{String: extension.Value, Valid: extension.Value != ""}
-	}
+	// Use the centralized value type mapper
+	typedValue := MapValueByType(string(extension.ValueType), extension.Value)
 
 	var valueType any
 	if extension.ValueType != "" && !reflect.ValueOf(extension.ValueType).IsZero() {
@@ -98,7 +79,7 @@ func CreateExtension(tx *sql.Tx, extension gen.Extension, position int) (sql.Nul
 	INSERT INTO
 	extension (name, position, value_type, value_text, value_num, value_bool, value_time, value_datetime, semantic_id)
 	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-	RETURNING id`, extension.Name, position, valueType, valueText, valueNum, valueBool, valueTime, valueDatetime, semanticIDRefDbID).Scan(&extensionDbID)
+	RETURNING id`, extension.Name, position, valueType, typedValue.Text, typedValue.Numeric, typedValue.Boolean, typedValue.Time, typedValue.DateTime, semanticIDRefDbID).Scan(&extensionDbID)
 
 	if err != nil {
 		_, _ = fmt.Println(err)
@@ -181,27 +162,8 @@ func CreateQualifier(tx *sql.Tx, qualifier gen.Qualifier, position int) (sql.Nul
 		semanticIDRefDbID = id
 	}
 
-	var valueText, valueNum, valueBool, valueTime, valueDatetime sql.NullString
-
-	switch qualifier.ValueType {
-	case "xs:string", "xs:anyURI", "xs:base64Binary", "xs:hexBinary":
-		valueText = sql.NullString{String: qualifier.Value, Valid: qualifier.Value != ""}
-	case "xs:int", "xs:integer", "xs:long", "xs:short", "xs:byte",
-		"xs:unsignedInt", "xs:unsignedLong", "xs:unsignedShort", "xs:unsignedByte",
-		"xs:positiveInteger", "xs:negativeInteger", "xs:nonNegativeInteger", "xs:nonPositiveInteger",
-		"xs:decimal", "xs:double", "xs:float":
-		valueNum = sql.NullString{String: qualifier.Value, Valid: qualifier.Value != ""}
-	case "xs:boolean":
-		valueBool = sql.NullString{String: qualifier.Value, Valid: qualifier.Value != ""}
-	case "xs:time":
-		valueTime = sql.NullString{String: qualifier.Value, Valid: qualifier.Value != ""}
-	case "xs:date", "xs:dateTime", "xs:duration", "xs:gDay", "xs:gMonth",
-		"xs:gMonthDay", "xs:gYear", "xs:gYearMonth":
-		valueDatetime = sql.NullString{String: qualifier.Value, Valid: qualifier.Value != ""}
-	default:
-		// Fallback to text for unknown types
-		valueText = sql.NullString{String: qualifier.Value, Valid: qualifier.Value != ""}
-	}
+	// Use the centralized value type mapper
+	typedValue := MapValueByType(string(qualifier.ValueType), qualifier.Value)
 
 	var kind any
 	if qualifier.Kind != "" && !reflect.ValueOf(qualifier.Kind).IsZero() {
@@ -214,7 +176,7 @@ func CreateQualifier(tx *sql.Tx, qualifier gen.Qualifier, position int) (sql.Nul
 	INSERT INTO
 	qualifier (kind, position, type, value_type, value_text, value_num, value_bool, value_time, value_datetime, value_id, semantic_id)
 	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-	RETURNING id`, kind, position, qualifier.Type, qualifier.ValueType, valueText, valueNum, valueBool, valueTime, valueDatetime, valueIDRefDbID, semanticIDRefDbID).Scan(&qualifierDbID)
+	RETURNING id`, kind, position, qualifier.Type, qualifier.ValueType, typedValue.Text, typedValue.Numeric, typedValue.Boolean, typedValue.Time, typedValue.DateTime, valueIDRefDbID, semanticIDRefDbID).Scan(&qualifierDbID)
 
 	if err != nil {
 		_, _ = fmt.Println(err)
@@ -1028,6 +990,12 @@ type ValueOnlyElementsToProcess struct {
 	IdShortPath string
 }
 
+// SubmodelElementToProcess represents a SubmodelElement along with its ID short path.
+type SubmodelElementToProcess struct {
+	Element     gen.SubmodelElement
+	IdShortPath string
+}
+
 // BuildElementsToProcessStackValueOnly builds a stack of SubmodelElementValues to process iteratively.
 //
 // This function constructs a stack of SubmodelElementValues starting from a given root element.
@@ -1148,4 +1116,237 @@ func buildCheckMultiLanguagePropertyOrSubmodelElementListQuery(idShortOrPath str
 	`
 	args := []interface{}{idShortOrPath, submodelID}
 	return sqlQuery, args
+}
+
+// DeleteReference deletes a reference and all its associated keys and nested child references from the database.
+//
+// This function recursively removes a reference record, all its associated key entries from the
+// reference_key table, and all nested child references (referred semantic IDs) that have this
+// reference as their parent. It should be called when a reference is no longer needed to prevent
+// orphaned records.
+//
+// The deletion follows this order:
+//   - Recursively delete all child references (where parentReference = referenceID)
+//   - Delete all associated reference keys
+//   - Delete the reference itself
+//
+// Parameters:
+//   - tx: Active database transaction
+//   - referenceID: Database ID of the reference to delete
+//
+// Returns:
+//   - error: An error if the deletion fails
+func DeleteReference(tx *sql.Tx, referenceID int) error {
+	// First, recursively delete all child references (nested referred semantic IDs)
+	rows, err := tx.Query(`SELECT id FROM reference WHERE parentReference = $1`, referenceID)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = rows.Close()
+	}()
+
+	var childIDs []int
+	for rows.Next() {
+		var childID int
+		if err := rows.Scan(&childID); err != nil {
+			return err
+		}
+		childIDs = append(childIDs, childID)
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+
+	// Recursively delete each child reference
+	for _, childID := range childIDs {
+		if err := DeleteReference(tx, childID); err != nil {
+			return err
+		}
+	}
+
+	// Delete all associated keys for this reference
+	_, err = tx.Exec(`DELETE FROM reference_key WHERE reference_id = $1`, referenceID)
+	if err != nil {
+		return err
+	}
+
+	// Finally, delete the reference itself
+	_, err = tx.Exec(`DELETE FROM reference WHERE id = $1`, referenceID)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// DeleteLangStringTextTypes deletes a lang_string_text_type_reference and all its associated text entries.
+//
+// This function removes a text type reference record and all its associated language string entries
+// from the lang_string_text_type table. It should be called when a description or similar text
+// reference is no longer needed.
+//
+// Parameters:
+//   - tx: Active database transaction
+//   - referenceID: Database ID of the lang_string_text_type_reference to delete
+//
+// Returns:
+//   - error: An error if the deletion fails
+func DeleteLangStringTextTypes(tx *sql.Tx, referenceID int) error {
+	// First delete all associated text entries
+	_, err := tx.Exec(`DELETE FROM lang_string_text_type WHERE lang_string_text_type_reference_id = $1`, referenceID)
+	if err != nil {
+		return err
+	}
+
+	// Then delete the reference itself
+	_, err = tx.Exec(`DELETE FROM lang_string_text_type_reference WHERE id = $1`, referenceID)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// DeleteLangStringNameTypes deletes a lang_string_name_type_reference and all its associated name entries.
+//
+// This function removes a name type reference record and all its associated language string entries
+// from the lang_string_name_type table. It should be called when a display name reference is no
+// longer needed.
+//
+// Parameters:
+//   - tx: Active database transaction
+//   - referenceID: Database ID of the lang_string_name_type_reference to delete
+//
+// Returns:
+//   - error: An error if the deletion fails
+func DeleteLangStringNameTypes(tx *sql.Tx, referenceID int) error {
+	// First delete all associated name entries
+	_, err := tx.Exec(`DELETE FROM lang_string_name_type WHERE lang_string_name_type_reference_id = $1`, referenceID)
+	if err != nil {
+		return err
+	}
+
+	// Then delete the reference itself
+	_, err = tx.Exec(`DELETE FROM lang_string_name_type_reference WHERE id = $1`, referenceID)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// DeleteQualifier deletes a qualifier and all its associated data from the database.
+//
+// This function removes a qualifier record and all its associated data including:
+//   - Supplemental semantic ID references from qualifier_supplemental_semantic_id table
+//   - The actual supplemental semantic ID references
+//   - The valueId reference if it exists
+//   - The semanticId reference if it exists
+//   - The qualifier record itself
+//
+// Parameters:
+//   - tx: Active database transaction
+//   - qualifierID: Database ID of the qualifier to delete
+//
+// Returns:
+//   - error: An error if the deletion fails
+func DeleteQualifier(tx *sql.Tx, qualifierID int) error {
+	// First, get the valueId and semanticId references to delete them after
+	var valueID, semanticID sql.NullInt64
+	err := tx.QueryRow(`SELECT value_id, semantic_id FROM qualifier WHERE id = $1`, qualifierID).Scan(&valueID, &semanticID)
+	if err != nil {
+		return err
+	}
+
+	// Get all supplemental semantic ID references
+	rows, err := tx.Query(`SELECT reference_id FROM qualifier_supplemental_semantic_id WHERE qualifier_id = $1`, qualifierID)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = rows.Close()
+	}()
+
+	var supplementalRefIDs []int
+	for rows.Next() {
+		var refID int
+		if err := rows.Scan(&refID); err != nil {
+			return err
+		}
+		supplementalRefIDs = append(supplementalRefIDs, refID)
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+
+	// Delete junction table entries for supplemental semantic IDs
+	_, err = tx.Exec(`DELETE FROM qualifier_supplemental_semantic_id WHERE qualifier_id = $1`, qualifierID)
+	if err != nil {
+		return err
+	}
+
+	// Delete all supplemental semantic ID references
+	for _, refID := range supplementalRefIDs {
+		if err := DeleteReference(tx, refID); err != nil {
+			return err
+		}
+	}
+
+	// Delete the qualifier record
+	_, err = tx.Exec(`DELETE FROM qualifier WHERE id = $1`, qualifierID)
+	if err != nil {
+		return err
+	}
+
+	// Delete valueId reference if it exists
+	if valueID.Valid {
+		if err := DeleteReference(tx, int(valueID.Int64)); err != nil {
+			return err
+		}
+	}
+
+	// Delete semanticId reference if it exists
+	if semanticID.Valid {
+		if err := DeleteReference(tx, int(semanticID.Int64)); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// IsTransactionAlreadyInProgress checks if a database transaction is already in progress.
+func IsTransactionAlreadyInProgress(tx *sql.Tx) bool {
+	return tx != nil
+}
+
+// AnyFieldsToUpdate checks if there are any fields to update in a goqu.Record
+func AnyFieldsToUpdate(updateRecord goqu.Record) bool {
+	return len(updateRecord) > 0
+}
+
+// StartTXIfNeeded starts a new database transaction if one is not already in progress.
+func StartTXIfNeeded(tx *sql.Tx, err error, db *sql.DB) (func(*error), *sql.Tx, error) {
+	var cu func(*error)
+	localTx := tx
+	if !IsTransactionAlreadyInProgress(tx) {
+		var startedTx *sql.Tx
+
+		startedTx, cu, err = common.StartTransaction(db)
+
+		localTx = startedTx
+	}
+	return cu, localTx, err
+}
+
+// CommitTransactionIfNeeded commits the database transaction if it was started locally.
+func CommitTransactionIfNeeded(tx *sql.Tx, localTx *sql.Tx) error {
+	if !IsTransactionAlreadyInProgress(tx) {
+		err := localTx.Commit()
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }

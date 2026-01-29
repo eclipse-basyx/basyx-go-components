@@ -1,5 +1,5 @@
 /*******************************************************************************
-* Copyright (C) 2025 the Eclipse BaSyx Authors and Fraunhofer IESE
+* Copyright (C) 2026 the Eclipse BaSyx Authors and Fraunhofer IESE
 *
 * Permission is hereby granted, free of charge, to any person obtaining
 * a copy of this software and associated documentation files (the
@@ -51,6 +51,8 @@ var mapMethodAndPatternToRightsData = []mapMethodAndPatternToRights{
 	{"DELETE", "/shell-descriptors/{aasIdentifier}/submodel-descriptors/{submodelIdentifier}", []grammar.RightsEnum{grammar.RightsEnumDELETE}},
 	{"GET", "/shell-descriptors/{aasIdentifier}/submodel-descriptors", []grammar.RightsEnum{grammar.RightsEnumREAD}},
 	{"POST", "/shell-descriptors/{aasIdentifier}/submodel-descriptors", []grammar.RightsEnum{grammar.RightsEnumCREATE}},
+
+	{"POST", "/query/shell-descriptors", []grammar.RightsEnum{grammar.RightsEnumREAD}}, // query endpoint
 
 	// aas discovery
 	{"GET", "/lookup/shells", []grammar.RightsEnum{grammar.RightsEnumREAD}},

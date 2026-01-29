@@ -1,5 +1,5 @@
 /*******************************************************************************
-* Copyright (C) 2025 the Eclipse BaSyx Authors and Fraunhofer IESE
+* Copyright (C) 2026 the Eclipse BaSyx Authors and Fraunhofer IESE
 *
 * Permission is hereby granted, free of charge, to any person obtaining
 * a copy of this software and associated documentation files (the
@@ -85,7 +85,7 @@ func ReadExtensionsByDescriptorID(
 // scanning columns, or converting types.
 func ReadExtensionsByDescriptorIDs(
 	ctx context.Context,
-	db *sql.DB,
+	db DBQueryer,
 	descriptorIDs []int64,
 ) (map[int64][]model.Extension, error) {
 	out := make(map[int64][]model.Extension, len(descriptorIDs))

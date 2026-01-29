@@ -1,0 +1,14 @@
+{
+    "$condition": {
+        "$not": {
+            "$contains": [
+                {
+                    "$field": "$sm#id"
+                },
+                {
+                    "$strVal": "nuhuh.de"
+                }
+            ]
+        }
+    }
+}

@@ -1,0 +1,26 @@
+{
+    "$condition": {
+        "$and": [
+            {
+                "$eq": [
+                    {
+                        "$field": "$sme#language"
+                    },
+                    {
+                        "$strVal": "fr"
+                    }
+                ]
+            },
+            {
+                "$contains": [
+                    {
+                        "$field": "$sm#idShort"
+                    },
+                    {
+                        "$strVal": "Query_Language"
+                    }
+                ]
+            }
+        ]
+    }
+}

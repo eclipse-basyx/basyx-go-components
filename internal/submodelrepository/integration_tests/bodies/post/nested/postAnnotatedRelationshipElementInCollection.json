@@ -1,0 +1,22 @@
+{
+    "idShort": "NestedAnnotatedRel",
+    "modelType": "AnnotatedRelationshipElement",
+    "first": {
+        "type": "ModelReference",
+        "keys": [
+            {
+                "type": "Property",
+                "value": "First"
+            }
+        ]
+    },
+    "second": {
+        "type": "ModelReference",
+        "keys": [
+            {
+                "type": "Property",
+                "value": "Second"
+            }
+        ]
+    }
+}

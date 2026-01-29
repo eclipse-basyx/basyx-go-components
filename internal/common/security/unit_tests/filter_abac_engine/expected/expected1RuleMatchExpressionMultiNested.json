@@ -1,0 +1,50 @@
+{
+  "ok": true,
+  "reason": "ALLOW",
+  "queryFilter": {
+    "Formula": {
+      "$match": [
+        {
+          "$eq": [
+            {
+              "$strCast": {
+                "$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value"
+              }
+            },
+            {
+              "$strVal": "viewer"
+            }
+          ]
+        },
+        {
+          "$match": [
+            {
+              "$eq": [
+                {
+                  "$numCast": {
+                    "$field": "$aasdesc#idShort"
+                  }
+                },
+                {
+                  "$numVal": 42
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "$eq": [
+            {
+              "$boolCast": {
+                "$field": "$aasdesc#assetKind"
+              }
+            },
+            {
+              "$boolean": true
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

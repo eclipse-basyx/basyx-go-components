@@ -1,0 +1,12 @@
+{
+    "$condition": {
+        "$eq": [
+            {
+                "$field": "$sme#value"
+            },
+            {
+                "$strVal": "DeepValue-XYZ"
+            }
+        ]
+    }
+}

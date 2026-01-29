@@ -1,0 +1,12 @@
+{
+    "$condition": {
+        "$eq": [
+            {
+                "$field": "$sm#id"
+            },
+            {
+                "$strVal": "urn:nonexistent:submodel:12345"
+            }
+        ]
+    }
+}

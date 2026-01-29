@@ -1,5 +1,5 @@
 /*******************************************************************************
-* Copyright (C) 2025 the Eclipse BaSyx Authors and Fraunhofer IESE
+* Copyright (C) 2026 the Eclipse BaSyx Authors and Fraunhofer IESE
 *
 * Permission is hereby granted, free of charge, to any person obtaining
 * a copy of this software and associated documentation files (the
@@ -42,4 +42,24 @@ type StringValue struct {
 
 	// StrVal corresponds to the JSON schema field "$strVal".
 	StrVal *StandardString `json:"$strVal,omitempty" yaml:"$strVal,omitempty" mapstructure:"$strVal,omitempty"`
+}
+
+// AssertStringValueRequired checks if the required fields are not zero-ed
+func AssertStringValueRequired(obj StringValue) error {
+	if obj.StrCast != nil {
+		if err := AssertValueRequired(*obj.StrCast); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// AssertStringValueConstraints checks if the values respects the defined constraints
+func AssertStringValueConstraints(obj StringValue) error {
+	if obj.StrCast != nil {
+		if err := AssertValueConstraints(*obj.StrCast); err != nil {
+			return err
+		}
+	}
+	return nil
 }

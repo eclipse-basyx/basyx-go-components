@@ -1,0 +1,66 @@
+{
+  "id": "https://example.org/ICHMAGPIZZASOGERNE",
+  "submodelDescriptors": [
+    {
+      "id": "https://example.org/X/SM-A",
+      "semanticId": {
+        "type": "ExternalReference",
+        "keys": [
+          {
+            "type": "GlobalReference",
+            "value": "WRITTEN_BY_Y"
+          }
+        ]
+      },
+      "endpoints": [
+        {
+          "interface": "AAS-3.0",
+          "protocolInformation": {
+            "href": "https://endpoint.example/customer"
+          }
+        }
+      ]
+    },
+    {
+      "id": "https://example.org/X/SM-D",
+      "semanticId": {
+        "type": "ExternalReference",
+        "keys": [
+          {
+            "type": "GlobalReference",
+            "value": "WRITTEN_BY_X"
+          }
+        ]
+      },
+      "endpoints": [
+        {
+          "interface": "AAS-3.0",
+          "protocolInformation": {
+            "href": "https://endpoint.example/manufacturer"
+          }
+        }
+      ]
+    },
+    {
+      "id": "https://example.org/X/SM-X",
+      "semanticId": {
+        "type": "ExternalReference",
+        "keys": [
+          {
+            "type": "GlobalReference",
+            "value": "UNIQUE_SM"
+          }
+        ]
+      },
+      "endpoints": [
+        {
+          "interface": "AAS-3.0",
+          "protocolInformation": {
+            "href": "https://endpoint.example/unique"
+          }
+        }
+      ]
+    }
+  ]
+
+}

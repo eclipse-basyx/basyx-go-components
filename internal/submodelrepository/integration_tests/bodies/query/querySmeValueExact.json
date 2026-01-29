@@ -1,0 +1,12 @@
+{
+    "$condition": {
+        "$eq": [
+            {
+                "$field": "$sme.ManufacturerName#value"
+            },
+            {
+                "$strVal": "ACME Corporation"
+            }
+        ]
+    }
+}

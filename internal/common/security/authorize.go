@@ -1,5 +1,5 @@
 /*******************************************************************************
-* Copyright (C) 2025 the Eclipse BaSyx Authors and Fraunhofer IESE
+* Copyright (C) 2026 the Eclipse BaSyx Authors and Fraunhofer IESE
 *
 * Permission is hereby granted, free of charge, to any person obtaining
 * a copy of this software and associated documentation files (the
@@ -33,6 +33,7 @@ import (
 	"net/http"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/discoveryapi"
 )
 
@@ -40,12 +41,10 @@ import (
 // Attribute-Based Access Control.
 //
 // Enabled: toggles ABAC enforcement.
-// ClientRolesAudience: defines the expected client audience for role validation.
 // Model: provides the AccessModel that evaluates authorization rules.
 type ABACSettings struct {
-	Enabled             bool
-	ClientRolesAudience string
-	Model               *AccessModel
+	Enabled bool
+	Model   *AccessModel
 }
 
 // Resource represents the target object of an authorization request.
@@ -133,4 +132,43 @@ func GetQueryFilter(ctx context.Context) *QueryFilter {
 		}
 	}
 	return nil
+}
+
+// MergeQueryFilter combines an existing QueryFilter with a user query.
+// It guards nils and merges conditions and filter fragments using logical AND.
+func MergeQueryFilter(ctx context.Context, query grammar.Query) context.Context {
+	qf := GetQueryFilter(ctx)
+	if qf == nil {
+		qf = &QueryFilter{}
+	}
+
+	if query.Condition != nil {
+		if qf.Formula != nil {
+			combinedQuery := grammar.LogicalExpression{And: []grammar.LogicalExpression{*qf.Formula, *query.Condition}}
+			combinedQuery, _ = combinedQuery.SimplifyForBackendFilterNoResolver()
+			qf.Formula = &combinedQuery
+		} else {
+			simplifiedQuery, _ := query.Condition.SimplifyForBackendFilterNoResolver()
+			qf.Formula = &simplifiedQuery
+		}
+	}
+
+	for _, filterCond := range query.FilterConditions {
+		if filterCond.Fragment == nil || filterCond.Condition == nil {
+			continue
+		}
+		if qf.Filters == nil {
+			qf.Filters = make(FragmentFilters)
+		}
+		if existing, ok := qf.Filters[*filterCond.Fragment]; ok {
+			combinedQuery := grammar.LogicalExpression{And: []grammar.LogicalExpression{existing, *filterCond.Condition}}
+			combinedQuery, _ = combinedQuery.SimplifyForBackendFilterNoResolver()
+			qf.Filters[*filterCond.Fragment] = combinedQuery
+		} else {
+			simplifiedQuery, _ := filterCond.Condition.SimplifyForBackendFilterNoResolver()
+			qf.Filters[*filterCond.Fragment] = simplifiedQuery
+		}
+	}
+
+	return context.WithValue(ctx, filterKey, qf)
 }

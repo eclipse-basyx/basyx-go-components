@@ -1,5 +1,5 @@
 /*******************************************************************************
-* Copyright (C) 2025 the Eclipse BaSyx Authors and Fraunhofer IESE
+* Copyright (C) 2026 the Eclipse BaSyx Authors and Fraunhofer IESE
 *
 * Permission is hereby granted, free of charge, to any person obtaining
 * a copy of this software and associated documentation files (the
@@ -112,5 +112,125 @@ func (j *MatchExpression) UnmarshalJSON(value []byte) error {
 		return fmt.Errorf("field %s length: must be >= %d", "$match", 1)
 	}
 	*j = MatchExpression(plain)
+	return nil
+}
+
+// AssertMatchExpressionRequired checks if the required fields are not zero-ed
+func AssertMatchExpressionRequired(obj MatchExpression) error {
+	for _, el := range obj.Match {
+		if err := AssertMatchExpressionRequired(el); err != nil {
+			return err
+		}
+	}
+	for _, el := range obj.Eq {
+		if err := AssertValueRequired(el); err != nil {
+			return err
+		}
+	}
+	for _, el := range obj.Ne {
+		if err := AssertValueRequired(el); err != nil {
+			return err
+		}
+	}
+	for _, el := range obj.Gt {
+		if err := AssertValueRequired(el); err != nil {
+			return err
+		}
+	}
+	for _, el := range obj.Ge {
+		if err := AssertValueRequired(el); err != nil {
+			return err
+		}
+	}
+	for _, el := range obj.Lt {
+		if err := AssertValueRequired(el); err != nil {
+			return err
+		}
+	}
+	for _, el := range obj.Le {
+		if err := AssertValueRequired(el); err != nil {
+			return err
+		}
+	}
+	for _, el := range obj.Contains {
+		if err := AssertStringValueRequired(el); err != nil {
+			return err
+		}
+	}
+	for _, el := range obj.StartsWith {
+		if err := AssertStringValueRequired(el); err != nil {
+			return err
+		}
+	}
+	for _, el := range obj.EndsWith {
+		if err := AssertStringValueRequired(el); err != nil {
+			return err
+		}
+	}
+	for _, el := range obj.Regex {
+		if err := AssertStringValueRequired(el); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// AssertMatchExpressionConstraints checks if the values respects the defined constraints
+func AssertMatchExpressionConstraints(obj MatchExpression) error {
+	for _, el := range obj.Match {
+		if err := AssertMatchExpressionConstraints(el); err != nil {
+			return err
+		}
+	}
+	for _, el := range obj.Eq {
+		if err := AssertValueConstraints(el); err != nil {
+			return err
+		}
+	}
+	for _, el := range obj.Ne {
+		if err := AssertValueConstraints(el); err != nil {
+			return err
+		}
+	}
+	for _, el := range obj.Gt {
+		if err := AssertValueConstraints(el); err != nil {
+			return err
+		}
+	}
+	for _, el := range obj.Ge {
+		if err := AssertValueConstraints(el); err != nil {
+			return err
+		}
+	}
+	for _, el := range obj.Lt {
+		if err := AssertValueConstraints(el); err != nil {
+			return err
+		}
+	}
+	for _, el := range obj.Le {
+		if err := AssertValueConstraints(el); err != nil {
+			return err
+		}
+	}
+	for _, el := range obj.Contains {
+		if err := AssertStringValueConstraints(el); err != nil {
+			return err
+		}
+	}
+	for _, el := range obj.StartsWith {
+		if err := AssertStringValueConstraints(el); err != nil {
+			return err
+		}
+	}
+	for _, el := range obj.EndsWith {
+		if err := AssertStringValueConstraints(el); err != nil {
+			return err
+		}
+	}
+	for _, el := range obj.Regex {
+		if err := AssertStringValueConstraints(el); err != nil {
+			return err
+		}
+	}
 	return nil
 }

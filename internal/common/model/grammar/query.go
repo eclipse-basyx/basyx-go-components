@@ -1,5 +1,5 @@
 /*******************************************************************************
-* Copyright (C) 2025 the Eclipse BaSyx Authors and Fraunhofer IESE
+* Copyright (C) 2026 the Eclipse BaSyx Authors and Fraunhofer IESE
 *
 * Permission is hereby granted, free of charge, to any person obtaining
 * a copy of this software and associated documentation files (the
@@ -33,12 +33,23 @@ import (
 	"fmt"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
+
+type SubFilter struct {
+	// CONDITION corresponds to the JSON schema field "CONDITION".
+	Condition *LogicalExpression `json:"$condition,omitempty" yaml:"$condition,omitempty" mapstructure:"Condition,omitempty"`
+
+	// FRAGMENT corresponds to the JSON schema field "FRAGMENT".
+	Fragment *FragmentStringPattern `json:"$fragment,omitempty" yaml:"$fragment,omitempty" mapstructure:"$fragment,omitempty"`
+}
 
 // Query represents a query structure with a condition field
 type Query struct {
-	// Condition corresponds to the JSON schema field "$condition".
+	// Condition corresponds to the JSON schema field "$cmondition".
 	Condition *LogicalExpression `json:"$condition,omitempty" yaml:"$condition,omitempty" mapstructure:"$condition,omitempty"`
+
+	FilterConditions []SubFilter `json:"$filters,omitempty" yaml:"$filters,omitempty" mapstructure:"$filters,omitempty"`
 }
 
 // QueryWrapper wraps a Query object
@@ -62,5 +73,34 @@ func (j *QueryWrapper) UnmarshalJSON(value []byte) error {
 		return err
 	}
 	*j = QueryWrapper(plain)
+	return nil
+}
+
+// AssertQueryRequired checks if the required fields are not zero-ed
+func AssertQueryRequired(obj Query) error {
+	elements := map[string]interface{}{
+		"$condition": obj.Condition,
+	}
+	for name, el := range elements {
+		if isZero := model.IsZeroValue(el); isZero {
+			return &model.RequiredError{Field: name}
+		}
+	}
+
+	if obj.Condition != nil {
+		if err := AssertLogicalExpressionRequired(*obj.Condition); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// AssertQueryConstraints checks if the values respects the defined constraints
+func AssertQueryConstraints(obj Query) error {
+	if obj.Condition != nil {
+		if err := AssertLogicalExpressionConstraints(*obj.Condition); err != nil {
+			return err
+		}
+	}
 	return nil
 }

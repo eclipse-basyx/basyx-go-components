@@ -1,5 +1,5 @@
 /*******************************************************************************
-* Copyright (C) 2025 the Eclipse BaSyx Authors and Fraunhofer IESE
+* Copyright (C) 2026 the Eclipse BaSyx Authors and Fraunhofer IESE
 *
 * Permission is hereby granted, free of charge, to any person obtaining
 * a copy of this software and associated documentation files (the
@@ -28,7 +28,6 @@ package descriptors
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"fmt"
 
@@ -37,6 +36,7 @@ import (
 	_ "github.com/doug-martin/goqu/v9/dialect/postgres"
 	"github.com/doug-martin/goqu/v9/exp"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	"github.com/lib/pq"
 )
@@ -56,11 +56,11 @@ import (
 // JSON decoding failures) and are returned verbatim.
 func ReadEndpointsByDescriptorID(
 	ctx context.Context,
-	db *sql.DB,
+	db DBQueryer,
 	descriptorID int64,
-	joinOn exp.AliasedExpression,
+	joinOnMainTable bool,
 ) ([]model.Endpoint, error) {
-	v, err := ReadEndpointsByDescriptorIDs(ctx, db, []int64{descriptorID}, joinOn)
+	v, err := ReadEndpointsByDescriptorIDs(ctx, db, []int64{descriptorID}, joinOnMainTable)
 	return v[descriptorID], err
 }
 
@@ -87,9 +87,9 @@ func ReadEndpointsByDescriptorID(
 // attributes.
 func ReadEndpointsByDescriptorIDs(
 	ctx context.Context,
-	db *sql.DB,
+	db DBQueryer,
 	descriptorIDs []int64,
-	joinOn exp.AliasedExpression,
+	joinOnMainTable bool,
 ) (map[int64][]model.Endpoint, error) {
 	out := make(map[int64][]model.Endpoint, len(descriptorIDs))
 	if len(descriptorIDs) == 0 {
@@ -102,11 +102,34 @@ func ReadEndpointsByDescriptorIDs(
 	v := goqu.T(tblEndpointProtocolVersion).As("v")
 	s := goqu.T(tblSecurityAttributes).As("s")
 
-	ds := getJoinTables(d).
-		LeftJoin(
-			v,
-			goqu.On(v.Col(colEndpointID).Eq(joinOn.Col(colID))),
+	ds := d.From(tDescriptor).
+		InnerJoin(
+			tAASDescriptor,
+			goqu.On(tAASDescriptor.Col(colDescriptorID).Eq(tDescriptor.Col(colID))),
+		)
+	var joinOn exp.AliasedExpression
+	if joinOnMainTable {
+		joinOn = aasDescriptorEndpointAlias
+		ds = ds.LeftJoin(
+			aasDescriptorEndpointAlias,
+			goqu.On(aasDescriptorEndpointAlias.Col(colDescriptorID).Eq(tDescriptor.Col(colID))),
+		)
+	} else {
+		joinOn = submodelDescriptorEndpointAlias
+		ds = ds.LeftJoin(
+			submodelDescriptorAlias,
+			goqu.On(submodelDescriptorAlias.Col(colAASDescriptorID).Eq(tAASDescriptor.Col(colDescriptorID))),
 		).
+			LeftJoin(
+				submodelDescriptorEndpointAlias,
+				goqu.On(submodelDescriptorEndpointAlias.Col(colDescriptorID).Eq(submodelDescriptorAlias.Col(colDescriptorID))),
+			)
+	}
+
+	ds = ds.LeftJoin(
+		v,
+		goqu.On(v.Col(colEndpointID).Eq(joinOn.Col(colID))),
+	).
 		LeftJoin(
 			s,
 			goqu.On(s.Col(colEndpointID).Eq(joinOn.Col(colID))),
@@ -154,7 +177,15 @@ func ReadEndpointsByDescriptorIDs(
 		).
 		Prepared(true)
 
-	ds, err := auth.AddFilterQueryFromContext(ctx, ds, "$aasdesc#endpoints[]")
+	collector, err := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootAASDesc)
+	if err != nil {
+		return nil, err
+	}
+	ds, err = auth.AddFilterQueryFromContext(ctx, ds, "$aasdesc#endpoints[]", collector)
+	if err != nil {
+		return nil, err
+	}
+	ds, err = auth.ApplyResolvedFieldPathCTEs(ds, collector, nil)
 	if err != nil {
 		return nil, err
 	}

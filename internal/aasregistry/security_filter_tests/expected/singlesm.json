@@ -1,0 +1,11 @@
+{
+  "id": "https://example.org/X/SM-D",
+  "endpoints": [
+    {
+      "interface": "AAS-3.0",
+      "protocolInformation": {
+        "href": "https://endpoint.example/manufacturer"
+      }
+    }
+  ]
+}

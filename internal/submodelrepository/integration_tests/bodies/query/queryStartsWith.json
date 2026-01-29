@@ -1,0 +1,12 @@
+{
+    "$condition": {
+        "$starts-with": [
+            {
+                "$field": "$sm#idShort"
+            },
+            {
+                "$strVal": "Query_Language"
+            }
+        ]
+    }
+}

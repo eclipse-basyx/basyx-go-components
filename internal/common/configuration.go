@@ -8,6 +8,7 @@ package common
 import (
 	"fmt"
 	"log"
+	"os"
 	"reflect"
 	"strings"
 
@@ -17,44 +18,41 @@ import (
 )
 
 // DefaultConfig holds all default values for configuration options.
+// THESE VALUES ARE NOT USED! THEY VALIDATE IF CONFIGURATION IS DEFAULT IN THE PRINT STATEMENT
 var DefaultConfig = struct {
-	ServerPort              int
-	ServerContextPath       string
-	ServerCacheEnabled      bool
-	PgPort                  int
-	PgDBName                string
-	PgMaxOpen               int
-	PgMaxIdle               int
-	PgConnLifetime          int
-	AllowedOrigins          []string
-	AllowedMethods          []string
-	AllowedHeaders          []string
-	AllowCredentials        bool
-	OIDCIssuer              string
-	OIDCAudience            string
-	OIDCJWKSURL             string
-	ABACEnabled             bool
-	ABACClientRolesAudience string
-	ABACModelPath           string
+	ServerPort         int
+	ServerContextPath  string
+	ServerCacheEnabled bool
+	PgPort             int
+	PgDBName           string
+	PgMaxOpen          int
+	PgMaxIdle          int
+	PgConnLifetime     int
+	AllowedOrigins     []string
+	AllowedMethods     []string
+	AllowedHeaders     []string
+	AllowCredentials   bool
+	OIDCTrustlistPath  string
+	OIDCJWKSURL        string
+	ABACEnabled        bool
+	ABACModelPath      string
 }{
-	ServerPort:              5004,
-	ServerContextPath:       "",
-	ServerCacheEnabled:      false,
-	PgPort:                  5432,
-	PgDBName:                "basyxTestDB",
-	PgMaxOpen:               50,
-	PgMaxIdle:               50,
-	PgConnLifetime:          5,
-	AllowedOrigins:          []string{"*"},
-	AllowedMethods:          []string{"GET", "POST", "DELETE", "OPTIONS"},
-	AllowedHeaders:          []string{"*"},
-	AllowCredentials:        true,
-	OIDCIssuer:              "http://localhost:8080/realms/basyx",
-	OIDCAudience:            "discovery-service",
-	OIDCJWKSURL:             "",
-	ABACEnabled:             false,
-	ABACClientRolesAudience: "discovery-service",
-	ABACModelPath:           "config/access_rules/access-rules.json",
+	ServerPort:         5004,
+	ServerContextPath:  "",
+	ServerCacheEnabled: false,
+	PgPort:             5432,
+	PgDBName:           "basyxTestDB",
+	PgMaxOpen:          50,
+	PgMaxIdle:          50,
+	PgConnLifetime:     5,
+	AllowedOrigins:     []string{},
+	AllowedMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
+	AllowedHeaders:     []string{},
+	AllowCredentials:   false,
+	OIDCTrustlistPath:  "config/trustlist.json",
+	OIDCJWKSURL:        "",
+	ABACEnabled:        false,
+	ABACModelPath:      "config/access_rules/access-rules.json",
 }
 
 // PrintSplash displays the BaSyx Go API ASCII art logo to the console.
@@ -82,54 +80,73 @@ func PrintSplash() {
 // It combines server settings, database configuration, CORS policy,
 // OIDC authentication, and ABAC authorization settings.
 type Config struct {
-	Server     ServerConfig   `yaml:"server"`   // HTTP server configuration
-	Postgres   PostgresConfig `yaml:"postgres"` // PostgreSQL database settings
-	CorsConfig CorsConfig     `yaml:"cors"`     // CORS policy configuration
+	Server     ServerConfig   `mapstructure:"server" yaml:"server"`     // HTTP server configuration
+	Postgres   PostgresConfig `mapstructure:"postgres" yaml:"postgres"` // PostgreSQL database settings
+	CorsConfig CorsConfig     `mapstructure:"cors" yaml:"cors"`         // CORS policy configuration
 
-	OIDC OIDCConfig `mapstructure:"oidc" json:"oidc"` // OpenID Connect authentication
-	ABAC ABACConfig `mapstructure:"abac" json:"abac"` // Attribute-Based Access Control
+	OIDC    OIDCConfig    `mapstructure:"oidc" yaml:"oidc"`       // OpenID Connect authentication
+	ABAC    ABACConfig    `mapstructure:"abac" yaml:"abac"`       // Attribute-Based Access Control
+	JWS     JWSConfig     `mapstructure:"jws" yaml:"jws"`         // JWS signing configuration
+	Swagger SwaggerConfig `mapstructure:"swagger" yaml:"swagger"` // Swagger UI configuration
+}
+
+// JWSConfig contains JSON Web Signature configuration parameters.
+type JWSConfig struct {
+	PrivateKeyPath string `mapstructure:"privateKeyPath" yaml:"privateKeyPath"` // Path to the RSA private key for signing
+}
+
+// SwaggerConfig contains Swagger UI configuration parameters.
+type SwaggerConfig struct {
+	ContactName  string `mapstructure:"contactName" yaml:"contactName"`   // Contact name for OpenAPI spec
+	ContactEmail string `mapstructure:"contactEmail" yaml:"contactEmail"` // Contact email for OpenAPI spec
+	ContactURL   string `mapstructure:"contactUrl" yaml:"contactUrl"`     // Contact URL for OpenAPI spec
 }
 
 // ServerConfig contains HTTP server configuration parameters.
 type ServerConfig struct {
-	Port         int    `yaml:"port"`         // HTTP server port (default: 5004)
-	ContextPath  string `yaml:"contextPath"`  // Base path for all endpoints
-	CacheEnabled bool   `yaml:"cacheEnabled"` // Enable/disable response caching
+	Host         string `mapstructure:"host" yaml:"host"`                 // HTTP server host (default: 0.0.0.0)
+	Port         int    `mapstructure:"port" yaml:"port"`                 // HTTP server port (default: 5004)
+	ContextPath  string `mapstructure:"contextPath" yaml:"contextPath"`   // Base path for all endpoints
+	CacheEnabled bool   `mapstructure:"cacheEnabled" yaml:"cacheEnabled"` // Enable/disable response caching
 }
 
 // PostgresConfig contains PostgreSQL database connection parameters.
 // It includes connection pooling settings for optimal performance.
 type PostgresConfig struct {
-	Host                   string `yaml:"host"`                   // Database host address
-	Port                   int    `yaml:"port"`                   // Database port (default: 5432)
-	User                   string `yaml:"user"`                   // Database username
-	Password               string `yaml:"password"`               // Database password
-	DBName                 string `yaml:"dbname"`                 // Database name
-	MaxOpenConnections     int32  `yaml:"maxOpenConnections"`     // Maximum open connections
-	MaxIdleConnections     int    `yaml:"maxIdleConnections"`     // Maximum idle connections
-	ConnMaxLifetimeMinutes int    `yaml:"connMaxLifetimeMinutes"` // Connection lifetime in minutes
+	Host                   string `mapstructure:"host" yaml:"host"`                                     // Database host address
+	Port                   int    `mapstructure:"port" yaml:"port"`                                     // Database port (default: 5432)
+	User                   string `mapstructure:"user" yaml:"user"`                                     // Database username
+	Password               string `mapstructure:"password" yaml:"password"`                             // Database password
+	DBName                 string `mapstructure:"dbname" yaml:"dbname"`                                 // Database name
+	MaxOpenConnections     int32  `mapstructure:"maxOpenConnections" yaml:"maxOpenConnections"`         // Maximum open connections
+	MaxIdleConnections     int    `mapstructure:"maxIdleConnections" yaml:"maxIdleConnections"`         // Maximum idle connections
+	ConnMaxLifetimeMinutes int    `mapstructure:"connMaxLifetimeMinutes" yaml:"connMaxLifetimeMinutes"` // Connection lifetime in minutes
 }
 
 // CorsConfig contains Cross-Origin Resource Sharing (CORS) policy settings.
 type CorsConfig struct {
-	AllowedOrigins   []string `yaml:"allowedOrigins"`   // Allowed origin domains
-	AllowedMethods   []string `yaml:"allowedMethods"`   // Allowed HTTP methods
-	AllowedHeaders   []string `yaml:"allowedHeaders"`   // Allowed request headers
-	AllowCredentials bool     `yaml:"allowCredentials"` // Allow credentials in requests
+	AllowedOrigins   []string `mapstructure:"allowedOrigins" yaml:"allowedOrigins"`     // Allowed origin domains
+	AllowedMethods   []string `mapstructure:"allowedMethods" yaml:"allowedMethods"`     // Allowed HTTP methods
+	AllowedHeaders   []string `mapstructure:"allowedHeaders" yaml:"allowedHeaders"`     // Allowed request headers
+	AllowCredentials bool     `mapstructure:"allowCredentials" yaml:"allowCredentials"` // Allow credentials in requests
+}
+
+// OIDCProviderConfig contains OpenID Connect authentication provider settings.
+type OIDCProviderConfig struct {
+	Issuer   string   `mapstructure:"issuer" yaml:"issuer" json:"issuer"`       // OIDC issuer URL
+	Audience string   `mapstructure:"audience" yaml:"audience" json:"audience"` // Expected token audience
+	Scopes   []string `mapstructure:"scopes" yaml:"scopes" json:"scopes"`       // Required scopes
 }
 
 // OIDCConfig contains OpenID Connect authentication provider settings.
 type OIDCConfig struct {
-	Issuer   string `mapstructure:"issuer" json:"issuer"`     // OIDC issuer URL
-	Audience string `mapstructure:"audience" json:"audience"` // Expected token audience
+	TrustlistPath string `mapstructure:"trustlistPath" yaml:"trustlistPath" json:"trustlistPath"` // Path to trustlist JSON
 }
 
 // ABACConfig contains Attribute-Based Access Control authorization settings.
 type ABACConfig struct {
-	Enabled                   bool   `mapstructure:"enabled" json:"enabled"`                                     // Enable/disable ABAC
-	EnableDebugErrorResponses bool   `mapstructure:"enableDebugErrorResponses" json:"enableDebugErrorResponses"` // Enable/disable 403 error codes
-	ClientRolesAudience       string `mapstructure:"clientRolesAudience" json:"clientRolesAudience"`             // Client roles audience
-	ModelPath                 string `mapstructure:"modelPath" json:"modelPath"`                                 // Path to access control model
+	Enabled   bool   `mapstructure:"enabled" json:"enabled"`     // Enable/disable ABAC
+	ModelPath string `mapstructure:"modelPath" json:"modelPath"` // Path to access control model
 }
 
 // LoadConfig loads the configuration from YAML files and environment variables.
@@ -219,18 +236,24 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("postgres.connMaxLifetimeMinutes", 5)
 
 	// CORS defaults
-	v.SetDefault("cors.allowedOrigins", []string{"*"})
-	v.SetDefault("cors.allowedMethods", []string{"GET", "POST", "DELETE", "OPTIONS"})
-	v.SetDefault("cors.allowedHeaders", []string{"*"})
-	v.SetDefault("cors.allowCredentials", true)
+	v.SetDefault("cors.allowedOrigins", []string{})
+	v.SetDefault("cors.allowedMethods", []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"})
+	v.SetDefault("cors.allowedHeaders", []string{})
+	v.SetDefault("cors.allowCredentials", false)
 
-	v.SetDefault("oidc.issuer", "http://localhost:8080/realms/basyx")
-	v.SetDefault("oidc.audience", "discovery-service")
+	v.SetDefault("oidc.trustlistPath", "config/trustlist.json")
 
 	v.SetDefault("abac.enabled", false)
 	v.SetDefault("abac.enableDebugErrorResponses", false)
-	v.SetDefault("abac.clientRolesAudience", "discovery-service")
 	v.SetDefault("abac.modelPath", "config/access_rules/access-rules.json")
+
+	// JWS defaults
+	v.SetDefault("jws.privateKeyPath", "")
+
+	// Swagger defaults
+	v.SetDefault("swagger.contactName", "Eclipse BaSyx")
+	v.SetDefault("swagger.contactEmail", "basyx-dev@eclipse.org")
+	v.SetDefault("swagger.contactUrl", "https://basyx.org")
 
 }
 
@@ -304,12 +327,29 @@ func PrintConfiguration(cfg *Config) {
 
 	// ABAC
 	lines = append(lines, "🔹 ABAC:")
-	if !cfg.ABAC.Enabled {
-		lines = append(lines, "  Enabled: false")
-	} else {
-		lines = append(lines, "  Enabled: true")
-		add("Client Roles Audience", cfg.ABAC.ClientRolesAudience, DefaultConfig.ABACClientRolesAudience)
+	add("Enabled", cfg.ABAC.Enabled, DefaultConfig.ABACEnabled)
+	if cfg.ABAC.Enabled {
 		add("Model Path", cfg.ABAC.ModelPath, DefaultConfig.ABACModelPath)
+
+		lines = append(lines, "🔹 OIDC:")
+		add("Trustlist Path", cfg.OIDC.TrustlistPath, DefaultConfig.OIDCTrustlistPath)
+	}
+
+	lines = append(lines, divider)
+
+	// JWS
+	lines = append(lines, "🔹 JWS:")
+	if cfg.JWS.PrivateKeyPath != "" {
+		lines = append(lines, fmt.Sprintf("  Private Key Path: %s", cfg.JWS.PrivateKeyPath))
+		// Check if file exists
+		if _, err := os.Stat(cfg.JWS.PrivateKeyPath); err == nil {
+			lines = append(lines, "  Private Key Mounted: true ✅")
+		} else {
+			lines = append(lines, "  Private Key Mounted: false ❌")
+		}
+	} else {
+		lines = append(lines, "  Private Key Path: (not configured)")
+		lines = append(lines, "  Private Key Mounted: false")
 	}
 
 	lines = append(lines, divider)

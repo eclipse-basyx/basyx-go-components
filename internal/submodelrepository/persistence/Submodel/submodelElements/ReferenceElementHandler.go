@@ -1,5 +1,5 @@
 /*******************************************************************************
-* Copyright (C) 2025 the Eclipse BaSyx Authors and Fraunhofer IESE
+* Copyright (C) 2026 the Eclipse BaSyx Authors and Fraunhofer IESE
 *
 * Permission is hereby granted, free of charge, to any person obtaining
 * a copy of this software and associated documentation files (the
@@ -40,6 +40,7 @@ import (
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	persistenceutils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
 	jsoniter "github.com/json-iterator/go"
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 )
@@ -194,19 +195,76 @@ func (p PostgreSQLReferenceElementHandler) CreateNested(tx *sql.Tx, submodelID s
 }
 
 // Update modifies an existing ReferenceElement identified by its idShort or full path.
-// This method delegates to the decorated handler which implements the base update logic.
+// This method handles both the common submodel element properties and the specific
+// reference element data including the reference value.
 //
 // Parameters:
+//   - submodelID: ID of the parent submodel
 //   - idShortOrPath: The idShort or full path of the ReferenceElement to update
 //   - submodelElement: The updated ReferenceElement with new values
+//   - tx: Active database transaction (can be nil, will create one if needed)
+//   - isPut: true: Replaces the element with the body data; false: Updates only passed data
 //
 // Returns:
 //   - error: Any error encountered during the update operation
-//
-// Note: This is currently a placeholder that delegates to the decorated handler.
-// Full implementation would include updating the reference value and keys.
-func (p PostgreSQLReferenceElementHandler) Update(submodelID string, idShortOrPath string, submodelElement gen.SubmodelElement, tx *sql.Tx) error {
-	return p.decorated.Update(submodelID, idShortOrPath, submodelElement, tx)
+func (p PostgreSQLReferenceElementHandler) Update(submodelID string, idShortOrPath string, submodelElement gen.SubmodelElement, tx *sql.Tx, isPut bool) error {
+	refElem, ok := submodelElement.(*gen.ReferenceElement)
+	if !ok {
+		return common.NewErrBadRequest("submodelElement is not of type ReferenceElement")
+	}
+
+	var err error
+	cu, localTx, err := persistenceutils.StartTXIfNeeded(tx, err, p.db)
+	if err != nil {
+		return err
+	}
+	defer cu(&err)
+	err = p.decorated.Update(submodelID, idShortOrPath, submodelElement, localTx, isPut)
+	if err != nil {
+		return err
+	}
+
+	elementID, err := p.decorated.GetDatabaseID(submodelID, idShortOrPath)
+	if err != nil {
+		return err
+	}
+
+	// Handle optional Value field based on isPut flag
+	// For PUT: always update (even if nil, which clears the field)
+	// For PATCH: only update if provided (not nil)
+	if isPut || refElem.Value != nil {
+		var referenceJSONString sql.NullString
+		var json = jsoniter.ConfigCompatibleWithStandardLibrary
+
+		if refElem.Value != nil && !isEmptyReference(refElem.Value) {
+			bytes, err := json.Marshal(refElem.Value)
+			if err != nil {
+				return err
+			}
+			referenceJSONString = sql.NullString{String: string(bytes), Valid: true}
+		} else {
+			referenceJSONString = sql.NullString{Valid: false}
+		}
+
+		// Update reference_element table
+		dialect := goqu.Dialect("postgres")
+		updateQuery, updateArgs, err := dialect.Update("reference_element").
+			Set(goqu.Record{
+				"value": referenceJSONString,
+			}).
+			Where(goqu.C("id").Eq(elementID)).
+			ToSQL()
+		if err != nil {
+			return err
+		}
+
+		_, err = localTx.Exec(updateQuery, updateArgs...)
+		if err != nil {
+			return err
+		}
+	}
+
+	return persistenceutils.CommitTransactionIfNeeded(tx, localTx)
 }
 
 // UpdateValueOnly updates only the value of an existing ReferenceElement identified by its idShort or full path.
@@ -306,7 +364,17 @@ func insertReferenceElement(refElem *gen.ReferenceElement, tx *sql.Tx, id int) e
 	}
 
 	// Insert reference_element
-	_, err := tx.Exec(`INSERT INTO reference_element (id, value) VALUES ($1, $2)`, id, referenceJSONString)
+	dialect := goqu.Dialect("postgres")
+	insertQuery, insertArgs, err := dialect.Insert("reference_element").
+		Rows(goqu.Record{
+			"id":    id,
+			"value": referenceJSONString,
+		}).
+		ToSQL()
+	if err != nil {
+		return err
+	}
+	_, err = tx.Exec(insertQuery, insertArgs...)
 	return err
 }
 

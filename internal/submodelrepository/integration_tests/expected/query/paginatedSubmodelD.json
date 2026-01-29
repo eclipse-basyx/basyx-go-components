@@ -1,0 +1,40 @@
+{
+    "paging_metadata": {},
+    "result": [
+        {
+            "id": "https://example.org/submodel/OperationalData/Device1",
+            "idShort": "OperationalData_Device1",
+            "kind": "Instance",
+            "modelType": "Submodel",
+            "semanticId": {
+                "keys": [
+                    {
+                        "type": "GlobalReference",
+                        "value": "urn:example:semanticId:OperationalData"
+                    }
+                ],
+                "type": "ExternalReference"
+            },
+            "submodelElements": [
+                {
+                    "idShort": "ManufacturerName",
+                    "modelType": "Property",
+                    "value": "TechCorp Industries",
+                    "valueType": "xs:string"
+                },
+                {
+                    "idShort": "OperatingHours",
+                    "modelType": "Property",
+                    "value": "5000",
+                    "valueType": "xs:int"
+                },
+                {
+                    "idShort": "Status",
+                    "modelType": "Property",
+                    "value": "Running",
+                    "valueType": "xs:string"
+                }
+            ]
+        }
+    ]
+}

@@ -1,5 +1,5 @@
 /*******************************************************************************
-* Copyright (C) 2025 the Eclipse BaSyx Authors and Fraunhofer IESE
+* Copyright (C) 2026 the Eclipse BaSyx Authors and Fraunhofer IESE
 *
 * Permission is hereby granted, free of charge, to any person obtaining
 * a copy of this software and associated documentation files (the
@@ -32,6 +32,14 @@ import (
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 )
+
+// DBQueryer abstracts *sql.DB and *sql.Tx for read-only operations.
+// It is intentionally small to keep call sites flexible.
+type DBQueryer interface {
+	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
+	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
+	Query(query string, args ...any) (*sql.Rows, error)
+}
 
 // WithTx runs the given function within a database transaction.
 // It commits on success and rolls back on error.

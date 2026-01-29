@@ -1,5 +1,5 @@
 /*******************************************************************************
-* Copyright (C) 2025 the Eclipse BaSyx Authors and Fraunhofer IESE
+* Copyright (C) 2026 the Eclipse BaSyx Authors and Fraunhofer IESE
 *
 * Permission is hereby granted, free of charge, to any person obtaining
 * a copy of this software and associated documentation files (the
@@ -31,7 +31,9 @@
 package persistencepostgresql
 
 import (
+	"crypto/rsa"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -43,9 +45,13 @@ import (
 	"github.com/doug-martin/goqu/v9"
 	_ "github.com/doug-martin/goqu/v9/dialect/postgres" // Postgres Driver for Goqu
 	"golang.org/x/sync/errgroup"
+	"gopkg.in/go-jose/go-jose.v2"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
+	smrepoconfig "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/config"
+	smrepoerrors "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/errors"
 	submodelpersistence "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/Submodel"
 	submodelelements "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/Submodel/submodelElements"
 	persistenceutils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
@@ -54,11 +60,13 @@ import (
 // PostgreSQLSubmodelDatabase represents a PostgreSQL-based implementation of the submodel repository database.
 // It provides methods for CRUD operations on submodels and their elements with optional caching support.
 type PostgreSQLSubmodelDatabase struct {
-	db *sql.DB
+	db         *sql.DB
+	privateKey *rsa.PrivateKey // RSA private key for JWS signing
 }
 
-var failedPostgresTransactionSubmodelRepo = common.NewInternalServerError("Failed to commit PostgreSQL transaction - no changes applied - see console for details")
-var beginTransactionErrorSubmodelRepo = common.NewInternalServerError("Failed to begin PostgreSQL transaction - no changes applied - see console for details")
+// Transaction error variables moved to smrepoerrors package for centralized error handling
+var failedPostgresTransactionSubmodelRepo = smrepoerrors.ErrTransactionCommitFailed
+var beginTransactionErrorSubmodelRepo = smrepoerrors.ErrTransactionBeginFailed
 
 // NewPostgreSQLSubmodelBackend creates a new PostgreSQL submodel database backend.
 // It initializes a database connection with the provided DSN and schema configuration.
@@ -74,12 +82,12 @@ var beginTransactionErrorSubmodelRepo = common.NewInternalServerError("Failed to
 // Returns:
 //   - *PostgreSQLSubmodelDatabase: Configured database instance
 //   - error: Error if database initialization fails
-func NewPostgreSQLSubmodelBackend(dsn string, _ int32 /* maxOpenConns */, _ /* maxIdleConns */ int, _ /* connMaxLifetimeMinutes */ int, databaseSchema string) (*PostgreSQLSubmodelDatabase, error) {
+func NewPostgreSQLSubmodelBackend(dsn string, _ int32 /* maxOpenConns */, _ /* maxIdleConns */ int, _ /* connMaxLifetimeMinutes */ int, databaseSchema string, privateKey *rsa.PrivateKey) (*PostgreSQLSubmodelDatabase, error) {
 	db, err := common.InitializeDatabase(dsn, databaseSchema)
 	if err != nil {
 		return nil, err
 	}
-	return &PostgreSQLSubmodelDatabase{db: db}, nil
+	return &PostgreSQLSubmodelDatabase{db: db, privateKey: privateKey}, nil
 }
 
 // GetDB returns the underlying SQL database connection.
@@ -105,7 +113,7 @@ func (p *PostgreSQLSubmodelDatabase) GetDB() *sql.DB {
 //   - error: Error if retrieval fails
 func (p *PostgreSQLSubmodelDatabase) GetAllSubmodels(limit int32, cursor string, _ /* idShort */ string, valueOnly bool) ([]gen.Submodel, string, error) {
 	if limit == 0 {
-		limit = 100
+		limit = smrepoconfig.DefaultPageLimit
 	}
 
 	submodelIDs := []string{}
@@ -139,12 +147,15 @@ func (p *PostgreSQLSubmodelDatabase) GetAllSubmodels(limit int32, cursor string,
 	var errSme error
 	var errSmeMutex sync.Mutex
 
-	numWorkers := 10
+	numWorkers := smrepoconfig.WorkerPoolSize
 	jobs := make(chan smeJob, len(submodelIDs))
 	results := make(chan smeResult, len(submodelIDs))
 
+	var workerWg sync.WaitGroup
 	for range numWorkers {
+		workerWg.Add(1)
 		go func() {
+			defer workerWg.Done()
 			for job := range jobs {
 				smes, _, err := submodelelements.GetSubmodelElementsForSubmodel(p.db, job.id, "", "", -1, valueOnly)
 				results <- smeResult{id: job.id, smes: smes, err: err}
@@ -152,13 +163,133 @@ func (p *PostgreSQLSubmodelDatabase) GetAllSubmodels(limit int32, cursor string,
 		}()
 	}
 
+	// Close results channel after all workers complete
+	go func() {
+		workerWg.Wait()
+		close(results)
+	}()
+
 	for _, id := range submodelIDs {
 		jobs <- smeJob{id: id}
 	}
 	close(jobs)
 
-	for i := 0; i < len(submodelIDs); i++ {
-		res := <-results
+	for res := range results {
+		if res.err != nil {
+			errSmeMutex.Lock()
+			if errSme == nil {
+				errSme = res.err
+			}
+			errSmeMutex.Unlock()
+		} else {
+			submodelElements[res.id] = res.smes
+		}
+	}
+	if err := wg.Wait(); err != nil {
+		return nil, "", err
+	}
+	res := <-resultChan
+
+	if res.err != nil {
+		return nil, "", res.err
+	}
+
+	if errSme != nil {
+		return nil, "", errSme
+	}
+
+	submodels := []gen.Submodel{}
+
+	for _, s := range res.sm {
+		if s != nil {
+			// Add corresponding submodel elements BEFORE copying
+			if smes, exists := submodelElements[s.ID]; exists {
+				s.SubmodelElements = smes
+			}
+			submodels = append(submodels, *s)
+		}
+	}
+
+	return submodels, res.cursor, nil
+}
+
+// QuerySubmodels retrieves a paginated list of submodels from the database that match the given query.
+// This method supports the AAS Query Language for filtering submodels based on conditions.
+//
+// Parameters:
+//   - limit: Maximum number of submodels to return (defaults to 100 if 0)
+//   - cursor: Pagination cursor for retrieving next page (empty string for first page)
+//   - query: Query wrapper containing the filter conditions
+//   - valueOnly: Whether to return only values without metadata
+//
+// Returns:
+//   - []gen.Submodel: List of submodels matching the query
+//   - string: Next cursor for pagination (empty if no more pages)
+//   - error: Error if retrieval fails
+func (p *PostgreSQLSubmodelDatabase) QuerySubmodels(limit int32, cursor string, query *grammar.QueryWrapper, valueOnly bool) ([]gen.Submodel, string, error) {
+	if limit == 0 {
+		limit = smrepoconfig.DefaultPageLimit
+	}
+
+	submodelIDs := []string{}
+	rows, err := submodelpersistence.GetSubmodelDataFromDbWithJSONQuery(p.db, "", int64(limit), cursor, query, true)
+	if err != nil {
+		return nil, "", err
+	}
+	defer func() {
+		if closeErr := rows.Close(); closeErr != nil {
+			_, _ = fmt.Println("Error closing rows:", closeErr)
+		}
+	}()
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, "", err
+		}
+		submodelIDs = append(submodelIDs, id)
+	}
+
+	var wg errgroup.Group
+	resultChan := make(chan result, 1)
+
+	wg.Go(func() error {
+		sm, smMap, cursor, err := submodelpersistence.GetAllSubmodels(p.db, int64(limit), cursor, query)
+		resultChan <- result{sm: sm, smMap: smMap, cursor: cursor, err: err}
+		return err
+	})
+
+	submodelElements := make(map[string][]gen.SubmodelElement)
+	var errSme error
+	var errSmeMutex sync.Mutex
+
+	numWorkers := smrepoconfig.WorkerPoolSize
+	jobs := make(chan smeJob, len(submodelIDs))
+	results := make(chan smeResult, len(submodelIDs))
+
+	var workerWg sync.WaitGroup
+	for range numWorkers {
+		workerWg.Add(1)
+		go func() {
+			defer workerWg.Done()
+			for job := range jobs {
+				smes, _, err := submodelelements.GetSubmodelElementsForSubmodel(p.db, job.id, "", "", -1, valueOnly)
+				results <- smeResult{id: job.id, smes: smes, err: err}
+			}
+		}()
+	}
+
+	// Close results channel after all workers complete
+	go func() {
+		workerWg.Wait()
+		close(results)
+	}()
+
+	for _, id := range submodelIDs {
+		jobs <- smeJob{id: id}
+	}
+	close(jobs)
+
+	for res := range results {
 		if res.err != nil {
 			errSmeMutex.Lock()
 			if errSme == nil {
@@ -421,6 +552,54 @@ func (p *PostgreSQLSubmodelDatabase) GetSubmodel(id string, valueOnly bool) (gen
 	return *res.sm, nil
 }
 
+// GetSignedSubmodel retrieves a submodel by its ID and returns it as a JWS-signed compact serialization.
+//
+// Parameters:
+//   - id: Unique identifier of the submodel to retrieve and sign
+//   - valueOnly: If true, returns only the value representation
+//
+// Returns:
+//   - string: JWS compact serialization of the signed submodel JSON
+//   - error: Error if submodel not found, private key not configured, or signing fails
+func (p *PostgreSQLSubmodelDatabase) GetSignedSubmodel(id string, valueOnly bool) (string, error) {
+	// Get the submodel from database
+	submodel, err := p.GetSubmodel(id, valueOnly)
+	if err != nil {
+		return "", err
+	}
+
+	// Check if private key is configured
+	if p.privateKey == nil {
+		return "", errors.New("JWS signing not configured: private key not loaded")
+	}
+
+	// Marshal submodel to JSON
+	payload, err := json.Marshal(submodel)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal submodel: %w", err)
+	}
+
+	// Create JWS signer with RS256
+	signer, err := jose.NewSigner(jose.SigningKey{Algorithm: jose.RS256, Key: p.privateKey}, nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to create JWS signer: %w", err)
+	}
+
+	// Sign the payload
+	jws, err := signer.Sign(payload)
+	if err != nil {
+		return "", fmt.Errorf("failed to sign submodel: %w", err)
+	}
+
+	// Get compact serialization
+	compactSerialized, err := jws.CompactSerialize()
+	if err != nil {
+		return "", fmt.Errorf("failed to serialize JWS: %w", err)
+	}
+
+	return compactSerialized, nil
+}
+
 // DeleteSubmodel removes a submodel and all its associated data from the database.
 // This operation also removes the submodel from the cache if caching is enabled.
 // The deletion cascades to remove all related submodel elements and references.
@@ -450,6 +629,16 @@ func (p *PostgreSQLSubmodelDatabase) DeleteSubmodel(id string, optionalTX *sql.T
 		return err
 	}
 	res, err := tx.Exec(query, args...)
+	if err != nil {
+		return err
+	}
+
+	delSME := goqu.Delete("submodel_element").Where(goqu.I("submodel_id").Eq(id))
+	querySME, argsSME, err := delSME.ToSQL()
+	if err != nil {
+		return err
+	}
+	_, err = tx.Exec(querySME, argsSME...)
 	if err != nil {
 		return err
 	}
@@ -773,9 +962,13 @@ func (p *PostgreSQLSubmodelDatabase) AddSubmodelElementWithPath(submodelID strin
 
 	defer cu(&err)
 
-	parentID, err := crud.GetDatabaseID(idShortPath)
+	parentID, err := crud.GetDatabaseID(submodelID, idShortPath)
 	if err != nil {
 		_, _ = fmt.Println(err)
+		// if is no rows error, then the specified path does not exist
+		if errors.Is(err, sql.ErrNoRows) {
+			return common.NewErrNotFound("Parent element with path '" + idShortPath + "' not found in submodel '" + submodelID + "'")
+		}
 		return common.NewInternalServerError("Failed to execute PostgreSQL Query - no changes applied - see console for details.")
 	}
 	nextPosition, err := crud.GetNextPosition(parentID)
@@ -787,14 +980,43 @@ func (p *PostgreSQLSubmodelDatabase) AddSubmodelElementWithPath(submodelID strin
 	if err != nil {
 		return err
 	}
-	if modelType != "SubmodelElementCollection" && modelType != "SubmodelElementList" {
+	if modelType != "SubmodelElementCollection" && modelType != "SubmodelElementList" && modelType != "Entity" && modelType != "AnnotatedRelationshipElement" {
 		return errors.New("cannot add nested element to non-collection/list element")
 	}
 	var newIDShortPath string
 	if modelType == "SubmodelElementList" {
 		newIDShortPath = idShortPath + "[" + strconv.Itoa(nextPosition) + "]"
+		// For lists, check if an element with the same idShort already exists within the list
+		checkQuery, checkArgs, err := goqu.Select(goqu.COUNT("id")).From("submodel_element").
+			Where(
+				goqu.I("submodel_id").Eq(submodelID),
+				goqu.I("parent_sme_id").Eq(parentID),
+				goqu.I("id_short").Eq(submodelElement.GetIdShort()),
+			).ToSQL()
+		if err != nil {
+			_, _ = fmt.Println(err)
+			return common.NewInternalServerError("Failed to check for duplicate idShort in list - no changes applied - see console for details.")
+		}
+		var count int
+		err = tx.QueryRow(checkQuery, checkArgs...).Scan(&count)
+		if err != nil {
+			_, _ = fmt.Println(err)
+			return common.NewInternalServerError("Failed to check for duplicate idShort in list - no changes applied - see console for details.")
+		}
+		if count > 0 {
+			return common.NewErrConflict("SubmodelElement with idShort '" + submodelElement.GetIdShort() + "' already exists in submodel '" + submodelID + "'")
+		}
 	} else {
 		newIDShortPath = idShortPath + "." + submodelElement.GetIdShort()
+	}
+
+	exists, err := doesSubmodelElementExist(tx, submodelID, newIDShortPath)
+	if err != nil {
+		_, _ = fmt.Println(err)
+		return common.NewInternalServerError("Failed to check for existing SubmodelElement - no changes applied - see console for details.")
+	}
+	if exists {
+		return common.NewErrConflict("SubmodelElement with idShort '" + submodelElement.GetIdShort() + "' already exists in submodel '" + submodelID + "'")
 	}
 
 	var rootSmeID int
@@ -802,7 +1024,7 @@ func (p *PostgreSQLSubmodelDatabase) AddSubmodelElementWithPath(submodelID strin
 	if err != nil {
 		return err
 	}
-	err = p.db.QueryRow(sqlQuery, args...).Scan(&rootSmeID)
+	err = tx.QueryRow(sqlQuery, args...).Scan(&rootSmeID)
 	if err != nil {
 		return err
 	}
@@ -875,6 +1097,16 @@ func (p *PostgreSQLSubmodelDatabase) AddSubmodelElementWithTransaction(tx *sql.T
 	if err != nil {
 		return err
 	}
+
+	exists, err := doesSubmodelElementExist(tx, submodelID, submodelElement.GetIdShort())
+	if err != nil {
+		_, _ = fmt.Println(err)
+		return common.NewInternalServerError("Failed to check for existing SubmodelElement - no changes applied - see console for details.")
+	}
+	if exists {
+		return common.NewErrConflict("SubmodelElement with idShort '" + submodelElement.GetIdShort() + "' already exists in submodel '" + submodelID + "'")
+	}
+
 	rootID, err := handler.Create(tx, submodelID, submodelElement)
 	if err != nil {
 		return err
@@ -990,7 +1222,24 @@ func (p *PostgreSQLSubmodelDatabase) DownloadFileAttachment(submodelID string, i
 }
 
 // UpdateSubmodelElement updates an existing submodel element by its idShortPath.
-func (p *PostgreSQLSubmodelDatabase) UpdateSubmodelElement(submodelID string, idShortPath string, submodelElement gen.SubmodelElement) error {
+// This method determines the appropriate handler based on the element's model type
+// and delegates the update operation to that handler.
+//
+// Parameters:
+//   - submodelID: ID of the parent submodel
+//   - idShortPath: idShort or hierarchical path to the element
+//   - submodelElement: The updated submodel element
+//   - isPut: Flag indicating if this is a full replacement (PUT) or partial update (PATCH)
+//
+// Returns:
+//   - error: Error if the update operation fails
+func (p *PostgreSQLSubmodelDatabase) UpdateSubmodelElement(submodelID string, idShortPath string, submodelElement gen.SubmodelElement, isPut bool) error {
+	tx, cu, err := common.StartTransaction(p.db)
+	if err != nil {
+		_, _ = fmt.Println(err)
+		return beginTransactionErrorSubmodelRepo
+	}
+	defer cu(&err)
 	// Get the model type to determine which handler to use
 	modelType, err := getSubmodelElementModelTypeByIDShortPathAndSubmodelID(p.db, submodelID, idShortPath)
 	if err != nil {
@@ -1002,9 +1251,37 @@ func (p *PostgreSQLSubmodelDatabase) UpdateSubmodelElement(submodelID string, id
 	if err != nil {
 		return fmt.Errorf("failed to get handler for model type %s: %w", modelType, err)
 	}
+	err = handler.Update(submodelID, idShortPath, submodelElement, nil, isPut)
 
-	// Update the element
-	return handler.Update(submodelID, idShortPath, submodelElement, nil)
+	if err != nil {
+		return err
+	}
+
+	if isPut {
+		err = handleNestedElementsAfterPut(p, idShortPath, modelType, tx, submodelID, submodelElement)
+		if err != nil {
+			return err
+		}
+	}
+
+	if err = tx.Commit(); err != nil {
+		_, _ = fmt.Println(err)
+		return failedPostgresTransactionSubmodelRepo
+	}
+	return nil
+}
+
+func handleNestedElementsAfterPut(p *PostgreSQLSubmodelDatabase, idShortPath string, modelType string, tx *sql.Tx, submodelID string, submodelElement gen.SubmodelElement) error {
+	var elementID int
+	smeHandler := submodelelements.PostgreSQLSMECrudHandler{Db: p.db}
+	elementID, err := smeHandler.GetDatabaseID(submodelID, idShortPath)
+	if err != nil {
+		return err
+	}
+	if isModelTypeWithNestedElements(modelType) {
+		err = p.AddNestedSubmodelElementsIteratively(tx, submodelID, elementID, submodelElement, idShortPath, elementID)
+	}
+	return err
 }
 
 // DeleteFileAttachment deletes a file attachment from PostgreSQL Large Object system.
@@ -1069,4 +1346,35 @@ func (p *PostgreSQLSubmodelDatabase) UpdateSubmodelValueOnly(submodelID string, 
 	}
 
 	return nil
+}
+
+func isModelTypeWithNestedElements(modelType string) bool {
+	return modelType == "AnnotatedRelationshipElement" || modelType == "SubmodelElementCollection" || modelType == "SubmodelElementList" || modelType == "Entity"
+}
+
+// doesSubmodelElementExist checks if a submodel element exists within a transaction context
+func doesSubmodelElementExist(tx *sql.Tx, submodelID string, idShortOrPath string) (bool, error) {
+	dialect := goqu.Dialect("postgres")
+	selectQuery := dialect.From("submodel_element").Select(goqu.COUNT("id")).Where(
+		goqu.I("submodel_id").Eq(submodelID),
+		goqu.I("idshort_path").Eq(idShortOrPath),
+	)
+
+	query, args, err := selectQuery.ToSQL()
+	if err != nil {
+		return false, err
+	}
+
+	var count int
+	err = tx.QueryRow(query, args...).Scan(&count)
+	if err != nil {
+		return false, err
+	}
+
+	return count > 0, nil
+}
+
+// GetPrivateKey returns the RSA private key for JWS signing.
+func (p *PostgreSQLSubmodelDatabase) GetPrivateKey() *rsa.PrivateKey {
+	return p.privateKey
 }

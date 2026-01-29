@@ -1,5 +1,5 @@
 /*******************************************************************************
-* Copyright (C) 2025 the Eclipse BaSyx Authors and Fraunhofer IESE
+* Copyright (C) 2026 the Eclipse BaSyx Authors and Fraunhofer IESE
 *
 * Permission is hereby granted, free of charge, to any person obtaining
 * a copy of this software and associated documentation files (the
@@ -39,6 +39,8 @@ package auth
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"os"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
@@ -69,7 +71,7 @@ import (
 //	router := chi.NewRouter()
 //	config := &common.Config{
 //	  ABAC: common.ABACConfig{Enabled: true, ModelPath: "access_model.json"},
-//	  OIDC: common.OIDCConfig{Issuer: "https://auth.example.com", Audience: "api"},
+//	  OIDC: common.OIDCConfig{TrustlistPath: "config/trustlist.json"},
 //	}
 //	err := SetupSecurity(context.Background(), config, router)
 //	if err != nil {
@@ -85,9 +87,30 @@ func SetupSecurity(ctx context.Context, cfg *common.Config, r *api.Mux) error {
 		return nil
 	}
 
+	trustlistData, err := os.ReadFile(cfg.OIDC.TrustlistPath)
+	if err != nil {
+		return fmt.Errorf("read OIDC trustlist: %w", err)
+	}
+
+	var trustlist []common.OIDCProviderConfig
+	if err := json.Unmarshal(trustlistData, &trustlist); err != nil {
+		return fmt.Errorf("parse OIDC trustlist: %w", err)
+	}
+	if len(trustlist) == 0 {
+		return fmt.Errorf("OIDC trustlist is empty")
+	}
+
+	oidcProviders := make([]OIDCProviderSettings, 0, len(trustlist))
+	for _, p := range trustlist {
+		oidcProviders = append(oidcProviders, OIDCProviderSettings{
+			Issuer:   p.Issuer,
+			Audience: p.Audience,
+			Scopes:   p.Scopes,
+		})
+	}
+
 	oidc, err := NewOIDC(ctx, OIDCSettings{
-		Issuer:         cfg.OIDC.Issuer,
-		Audience:       cfg.OIDC.Audience,
+		Providers:      oidcProviders,
 		AllowAnonymous: true,
 	})
 	if err != nil {
@@ -108,9 +131,8 @@ func SetupSecurity(ctx context.Context, cfg *common.Config, r *api.Mux) error {
 	}
 
 	abacSettings := ABACSettings{
-		Enabled:             cfg.ABAC.Enabled,
-		ClientRolesAudience: cfg.ABAC.ClientRolesAudience,
-		Model:               model,
+		Enabled: cfg.ABAC.Enabled,
+		Model:   model,
 	}
 
 	// ✅ Apply both middlewares to the router

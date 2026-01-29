@@ -1,0 +1,6 @@
+{
+    "idShort": "NestedEntityList",
+    "modelType": "Entity",
+    "entityType": "SelfManagedEntity",
+    "globalAssetId": "http://example.com/asset/nested"
+}

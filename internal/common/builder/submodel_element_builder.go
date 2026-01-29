@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (C) 2025 the Eclipse BaSyx Authors and Fraunhofer IESE
+ * Copyright (C) 2026 the Eclipse BaSyx Authors and Fraunhofer IESE
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -729,6 +729,6 @@ func buildSubmodelElementList(smeRow model.SubmodelElementRow) (*model.SubmodelE
 		}
 	}
 
-	smeList := &model.SubmodelElementList{Value: []model.SubmodelElement{}, ValueTypeListElement: valueTypeListElement, TypeValueListElement: &typeValueListElement}
+	smeList := &model.SubmodelElementList{Value: []model.SubmodelElement{}, ValueTypeListElement: valueTypeListElement, TypeValueListElement: &typeValueListElement, OrderRelevant: valueRow.OrderRelevant}
 	return smeList, nil
 }

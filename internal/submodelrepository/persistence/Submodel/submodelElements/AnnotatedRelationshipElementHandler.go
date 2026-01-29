@@ -1,5 +1,5 @@
 /*******************************************************************************
-* Copyright (C) 2025 the Eclipse BaSyx Authors and Fraunhofer IESE
+* Copyright (C) 2026 the Eclipse BaSyx Authors and Fraunhofer IESE
 *
 * Permission is hereby granted, free of charge, to any person obtaining
 * a copy of this software and associated documentation files (the
@@ -31,6 +31,7 @@ package submodelelements
 
 import (
 	"database/sql"
+	"fmt"
 
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
@@ -136,17 +137,95 @@ func (p PostgreSQLAnnotatedRelationshipElementHandler) CreateNested(tx *sql.Tx, 
 }
 
 // Update modifies an existing AnnotatedRelationshipElement identified by its idShort or path.
-// This method delegates the update operation to the decorated CRUD handler which handles
-// the common submodel element update logic.
+// This method handles both the common submodel element properties and the specific annotated
+// relationship data such as the 'first' and 'second' references and annotations.
 //
 // Parameters:
 //   - idShortOrPath: idShort or hierarchical path to the element to update
 //   - submodelElement: Updated element data
+//   - isPut: true: Replaces the Submodel Element with the Body Data (Deletes non-specified fields); false: Updates only passed request body data, unspecified is ignored
 //
 // Returns:
 //   - error: Error if update fails
-func (p PostgreSQLAnnotatedRelationshipElementHandler) Update(submodelID string, idShortOrPath string, submodelElement gen.SubmodelElement, tx *sql.Tx) error {
-	return p.decorated.Update(submodelID, idShortOrPath, submodelElement, tx)
+func (p PostgreSQLAnnotatedRelationshipElementHandler) Update(submodelID string, idShortOrPath string, submodelElement gen.SubmodelElement, tx *sql.Tx, isPut bool) error {
+	are, ok := submodelElement.(*gen.AnnotatedRelationshipElement)
+	if !ok {
+		return common.NewErrBadRequest("submodelElement is not of type AnnotatedRelationshipElement")
+	}
+
+	var err error
+	cu, localTx, err := persistenceutils.StartTXIfNeeded(tx, err, p.db)
+	if err != nil {
+		return err
+	}
+	defer cu(&err)
+
+	err = p.decorated.Update(submodelID, idShortOrPath, submodelElement, localTx, isPut)
+	if err != nil {
+		return err
+	}
+
+	err = validateRequiredFields(are, idShortOrPath)
+	if err != nil {
+		return err
+	}
+
+	elementID, err := p.decorated.GetDatabaseID(submodelID, idShortOrPath)
+	if err != nil {
+		return err
+	}
+
+	firstRef, err := serializeReference(are.First, jsoniter.ConfigCompatibleWithStandardLibrary)
+	if err != nil {
+		return err
+	}
+	secondRef, err := serializeReference(are.Second, jsoniter.ConfigCompatibleWithStandardLibrary)
+	if err != nil {
+		return err
+	}
+
+	// Update with goqu
+	dialect := goqu.Dialect("postgres")
+
+	updateQuery, updateArgs, err := dialect.Update("annotated_relationship_element").
+		Set(goqu.Record{
+			"first":  firstRef,
+			"second": secondRef,
+		}).
+		Where(goqu.C("id").Eq(elementID)).
+		ToSQL()
+	if err != nil {
+		return err
+	}
+
+	_, err = localTx.Exec(updateQuery, updateArgs...)
+	if err != nil {
+		return err
+	}
+
+	// Handle Annotations field based on isPut flag
+	// For PUT: always delete all children (annotations) and recreate from body
+	// For PATCH (TODO): only delete and recreate children if annotations are provided
+	if isPut {
+		// PUT -> Remove all children and then recreate the ones from the body
+		// Recreation is done by the SubmodelRepositoryDatabase Update Method
+		err = DeleteAllChildren(p.db, submodelID, idShortOrPath, localTx)
+		if err != nil {
+			return err
+		}
+	}
+
+	return persistenceutils.CommitTransactionIfNeeded(tx, localTx)
+}
+
+func validateRequiredFields(are *gen.AnnotatedRelationshipElement, idShortOrPath string) error {
+	if isEmptyReference(are.First) {
+		return common.NewErrBadRequest(fmt.Sprintf("Missing Field 'First' for AnnotatedRelationshipElement with idShortPath '%s'", idShortOrPath))
+	}
+	if isEmptyReference(are.Second) {
+		return common.NewErrBadRequest(fmt.Sprintf("Missing Field 'Second' for AnnotatedRelationshipElement with idShortPath '%s'", idShortOrPath))
+	}
+	return nil
 }
 
 // UpdateValueOnly updates only the value of an existing AnnotatedRelationshipElement submodel element identified by its idShort or path.
@@ -237,7 +316,7 @@ func (p PostgreSQLAnnotatedRelationshipElementHandler) UpdateValueOnly(submodelI
 		}
 	}
 
-	err = UpdateNestedElements(p.db, elems, idShortOrPath, submodelID)
+	err = UpdateNestedElementsValueOnly(p.db, elems, idShortOrPath, submodelID)
 	if err != nil {
 		return err
 	}
@@ -264,27 +343,44 @@ func insertAnnotatedRelationshipElement(areElem *gen.AnnotatedRelationshipElemen
 	var firstRef, secondRef string
 	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
-	if !isEmptyReference(areElem.First) {
-		ref, err := json.Marshal(areElem.First)
-		if err != nil {
-			return err
-		}
-		firstRef = string(ref)
+	firstRef, err := serializeReference(areElem.First, json)
+	if err != nil {
+		return err
 	}
 
-	if !isEmptyReference(areElem.Second) {
-		ref, err := json.Marshal(areElem.Second)
-		if err != nil {
-			return err
-		}
-		secondRef = string(ref)
+	secondRef, err = serializeReference(areElem.Second, json)
+	if err != nil {
+		return err
 	}
 
-	_, err := tx.Exec(`INSERT INTO annotated_relationship_element (id, first, second) VALUES ($1, $2, $3)`,
-		id, firstRef, secondRef)
+	dialect := goqu.Dialect("postgres")
+	insertQuery, insertArgs, err := dialect.Insert("annotated_relationship_element").
+		Rows(goqu.Record{
+			"id":     id,
+			"first":  firstRef,
+			"second": secondRef,
+		}).
+		ToSQL()
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.Exec(insertQuery, insertArgs...)
 	if err != nil {
 		return err
 	}
 
 	return nil
+}
+
+func serializeReference(ref *gen.Reference, json jsoniter.API) (string, error) {
+	var firstRef string
+	if !isEmptyReference(ref) {
+		ref, err := json.Marshal(ref)
+		if err != nil {
+			return "", err
+		}
+		firstRef = string(ref)
+	}
+	return firstRef, nil
 }

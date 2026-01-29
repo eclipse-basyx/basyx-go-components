@@ -1,5 +1,5 @@
 /*******************************************************************************
-* Copyright (C) 2025 the Eclipse BaSyx Authors and Fraunhofer IESE
+* Copyright (C) 2026 the Eclipse BaSyx Authors and Fraunhofer IESE
 *
 * Permission is hereby granted, free of charge, to any person obtaining
 * a copy of this software and associated documentation files (the
@@ -100,7 +100,7 @@ func getElementsToProcess(topLevelElement gen.SubmodelElement, parentID int, sta
 			if startPath == "" {
 				idShortPath = submodelElementList.IdShort + "[" + strconv.Itoa(index) + "]"
 			} else {
-				idShortPath = startPath
+				idShortPath = startPath + "[" + strconv.Itoa(index) + "]"
 			}
 			stack = append(stack, ElementToProcess{
 				element:                   nestedElement,

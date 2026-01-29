@@ -1,5 +1,5 @@
 /*******************************************************************************
-* Copyright (C) 2025 the Eclipse BaSyx Authors and Fraunhofer IESE
+* Copyright (C) 2026 the Eclipse BaSyx Authors and Fraunhofer IESE
 *
 * Permission is hereby granted, free of charge, to any person obtaining
 * a copy of this software and associated documentation files (the
@@ -65,12 +65,12 @@ type SubmodelElementList struct {
 
 	EmbeddedDataSpecifications []EmbeddedDataSpecification `json:"embeddedDataSpecifications,omitempty"`
 
-	OrderRelevant bool `json:"orderRelevant,omitempty"`
+	OrderRelevant bool `json:"orderRelevant"`
 
 	//nolint:all
 	SemanticIdListElement *Reference `json:"semanticIdListElement,omitempty"`
 
-	TypeValueListElement *AasSubmodelElements `json:"typeValueListElement,omitempty"`
+	TypeValueListElement *AasSubmodelElements `json:"typeValueListElement"`
 
 	ValueTypeListElement DataTypeDefXsd `json:"valueTypeListElement,omitempty"`
 

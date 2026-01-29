@@ -1,5 +1,5 @@
 /*******************************************************************************
-* Copyright (C) 2025 the Eclipse BaSyx Authors and Fraunhofer IESE
+* Copyright (C) 2026 the Eclipse BaSyx Authors and Fraunhofer IESE
 *
 * Permission is hereby granted, free of charge, to any person obtaining
 * a copy of this software and associated documentation files (the
@@ -34,11 +34,11 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	persistenceutils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 )
 
@@ -92,8 +92,18 @@ func (p PostgreSQLFileHandler) Create(tx *sql.Tx, submodelID string, submodelEle
 	}
 
 	// File-specific database insertion
-	_, err = tx.Exec(`INSERT INTO file_element (id, content_type, value) VALUES ($1, $2, $3)`,
-		id, file.ContentType, file.Value)
+	dialect := goqu.Dialect("postgres")
+	insertQuery, insertArgs, err := dialect.Insert("file_element").
+		Rows(goqu.Record{
+			"id":           id,
+			"content_type": file.ContentType,
+			"value":        file.Value,
+		}).
+		ToSQL()
+	if err != nil {
+		return 0, err
+	}
+	_, err = tx.Exec(insertQuery, insertArgs...)
 	if err != nil {
 		return 0, err
 	}
@@ -129,8 +139,18 @@ func (p PostgreSQLFileHandler) CreateNested(tx *sql.Tx, submodelID string, paren
 	}
 
 	// File-specific database insertion for nested element
-	_, err = tx.Exec(`INSERT INTO file_element (id, content_type, value) VALUES ($1, $2, $3)`,
-		id, file.ContentType, file.Value)
+	dialect := goqu.Dialect("postgres")
+	insertQuery, insertArgs, err := dialect.Insert("file_element").
+		Rows(goqu.Record{
+			"id":           id,
+			"content_type": file.ContentType,
+			"value":        file.Value,
+		}).
+		ToSQL()
+	if err != nil {
+		return 0, err
+	}
+	_, err = tx.Exec(insertQuery, insertArgs...)
 	if err != nil {
 		return 0, err
 	}
@@ -147,23 +167,22 @@ func (p PostgreSQLFileHandler) CreateNested(tx *sql.Tx, submodelID string, paren
 //
 // Returns:
 //   - error: Error if the update operation fails
-func (p PostgreSQLFileHandler) Update(submodelID string, idShortOrPath string, submodelElement gen.SubmodelElement, tx *sql.Tx) error {
+func (p PostgreSQLFileHandler) Update(submodelID string, idShortOrPath string, submodelElement gen.SubmodelElement, tx *sql.Tx, isPut bool) error {
 	file, ok := submodelElement.(*gen.File)
 	if !ok {
 		return common.NewErrBadRequest("submodelElement is not of type File")
 	}
 
-	tx, err := p.db.Begin()
+	var err error
+	cu, localTx, err := persistenceutils.StartTXIfNeeded(tx, err, p.db)
 	if err != nil {
-		return fmt.Errorf("failed to begin transaction: %w", err)
+		return err
 	}
-	defer func() {
-		if err != nil {
-			_ = tx.Rollback()
-		} else {
-			_ = tx.Commit()
-		}
-	}()
+	defer cu(&err)
+	err = p.decorated.Update(submodelID, idShortOrPath, submodelElement, localTx, isPut)
+	if err != nil {
+		return err
+	}
 
 	dialect := goqu.Dialect("postgres")
 
@@ -177,12 +196,13 @@ func (p PostgreSQLFileHandler) Update(submodelID string, idShortOrPath string, s
 		).
 		Select("submodel_element.id", "file_element.value").
 		Where(goqu.C("idshort_path").Eq(idShortOrPath)).
+		Where(goqu.C("submodel_id").Eq(submodelID)).
 		ToSQL()
 	if err != nil {
 		return fmt.Errorf("failed to build query: %w", err)
 	}
 
-	err = tx.QueryRow(query, args...).Scan(&elementID, &currentValue)
+	err = localTx.QueryRow(query, args...).Scan(&elementID, &currentValue)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return common.NewErrNotFound("file element not found")
@@ -190,8 +210,8 @@ func (p PostgreSQLFileHandler) Update(submodelID string, idShortOrPath string, s
 		return fmt.Errorf("failed to get current file element: %w", err)
 	}
 
-	// Check if the value has changed
-	if currentValue != file.Value {
+	hasFileValueChanged := currentValue != file.Value
+	if hasFileValueChanged {
 		// Check if there's an OID in file_data for this element
 		var oldOID sql.NullInt64
 		fileDataQuery, fileDataArgs, err := dialect.From("file_data").
@@ -202,29 +222,16 @@ func (p PostgreSQLFileHandler) Update(submodelID string, idShortOrPath string, s
 			return fmt.Errorf("failed to build file_data query: %w", err)
 		}
 
-		err = tx.QueryRow(fileDataQuery, fileDataArgs...).Scan(&oldOID)
+		err = localTx.QueryRow(fileDataQuery, fileDataArgs...).Scan(&oldOID)
 		if err != nil && err != sql.ErrNoRows {
 			return fmt.Errorf("failed to check existing file data: %w", err)
 		}
 
 		// If an OID exists, delete the Large Object
 		if oldOID.Valid {
-			_, err = tx.Exec(`SELECT lo_unlink($1)`, oldOID.Int64)
+			err = removeLOFile(localTx, oldOID, dialect, elementID)
 			if err != nil {
-				return fmt.Errorf("failed to delete large object: %w", err)
-			}
-
-			// Delete the file_data entry
-			deleteQuery, deleteArgs, err := dialect.Delete("file_data").
-				Where(goqu.C("id").Eq(elementID)).
-				ToSQL()
-			if err != nil {
-				return fmt.Errorf("failed to build delete query: %w", err)
-			}
-
-			_, err = tx.Exec(deleteQuery, deleteArgs...)
-			if err != nil {
-				return fmt.Errorf("failed to delete file_data: %w", err)
+				return err
 			}
 		}
 
@@ -240,14 +247,28 @@ func (p PostgreSQLFileHandler) Update(submodelID string, idShortOrPath string, s
 			return fmt.Errorf("failed to build update query: %w", err)
 		}
 
-		_, err = tx.Exec(updateQuery, updateArgs...)
+		_, err = localTx.Exec(updateQuery, updateArgs...)
 		if err != nil {
 			return fmt.Errorf("failed to update file_element: %w", err)
 		}
+	} else {
+		// Only Update content type if value hasn't changed
+		updateQuery, updateArgs, err := dialect.Update("file_element").
+			Set(goqu.Record{
+				"content_type": file.ContentType,
+			}).
+			Where(goqu.C("id").Eq(elementID)).
+			ToSQL()
+		if err != nil {
+			return fmt.Errorf("failed to build update query: %w", err)
+		}
+		_, err = localTx.Exec(updateQuery, updateArgs...)
+		if err != nil {
+			return fmt.Errorf("failed to update file_element content type: %w", err)
+		}
 	}
 
-	// Update base SubmodelElement properties
-	return p.decorated.Update(submodelID, idShortOrPath, submodelElement, tx)
+	return persistenceutils.CommitTransactionIfNeeded(tx, localTx)
 }
 
 // UpdateValueOnly updates only the value of an existing File submodel element identified by its idShort or path.
@@ -377,24 +398,6 @@ func (p PostgreSQLFileHandler) UploadFileAttachment(submodelID string, idShortPa
 
 	// Validate and clean the file path
 	filePath := filepath.Clean(file.Name())
-
-	// Optional: Ensure it's within an expected base directory
-	expectedBaseDir := "/tmp" // or your configured upload directory
-	absPath, err := filepath.Abs(filePath)
-	if err != nil {
-		return fmt.Errorf("failed to resolve file path: %w", err)
-	}
-	absBaseDir, err := filepath.Abs(expectedBaseDir)
-	if err != nil {
-		return fmt.Errorf("failed to resolve base directory: %w", err)
-	}
-	// Ensure base directory ends with separator for proper prefix matching
-	if !strings.HasSuffix(absBaseDir, string(filepath.Separator)) {
-		absBaseDir += string(filepath.Separator)
-	}
-	if !strings.HasPrefix(absPath+string(filepath.Separator), absBaseDir) {
-		return fmt.Errorf("file path outside allowed directory")
-	}
 
 	// Reopen the file since it might be closed by the OpenAPI framework
 	reopenedFile, err := os.Open(filePath)
@@ -771,5 +774,26 @@ func (p PostgreSQLFileHandler) DeleteFileAttachment(submodelID string, idShortPa
 		return fmt.Errorf("failed to update file_element: %w", err)
 	}
 
+	return nil
+}
+
+func removeLOFile(tx *sql.Tx, oldOID sql.NullInt64, dialect goqu.DialectWrapper, elementID int64) error {
+	_, err := tx.Exec(`SELECT lo_unlink($1)`, oldOID.Int64)
+	if err != nil {
+		return fmt.Errorf("failed to delete large object: %w", err)
+	}
+
+	// Delete the file_data entry
+	deleteQuery, deleteArgs, err := dialect.Delete("file_data").
+		Where(goqu.C("id").Eq(elementID)).
+		ToSQL()
+	if err != nil {
+		return fmt.Errorf("failed to build delete query: %w", err)
+	}
+
+	_, err = tx.Exec(deleteQuery, deleteArgs...)
+	if err != nil {
+		return fmt.Errorf("failed to delete file_data: %w", err)
+	}
 	return nil
 }

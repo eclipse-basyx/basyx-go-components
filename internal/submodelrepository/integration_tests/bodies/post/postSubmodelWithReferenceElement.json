@@ -1,0 +1,25 @@
+{
+    "modelType": "Submodel",
+    "id": "MarcusThisIsAOnlyReferenceElementSubmodel",
+    "idShort": "123",
+    "kind":"Instance",
+    "administration": {
+        "revision": "1",
+        "version": "3"
+    },
+    "submodelElements": [
+        {
+            "modelType": "ReferenceElement",
+            "idShort": "DemoReferenceElement",
+            "value": {
+                "type": "ModelReference",
+                "keys": [
+                    {
+                        "type": "Submodel",
+                        "value": "urn:uuid:123e4567-e89b-12d3-a456-426614174000"
+                    }
+                ]
+            }
+        }
+    ]
+}

@@ -1,0 +1,58 @@
+{
+    "paging_metadata": {},
+    "result": [
+        {
+            "id": "https://example.org/submodel/NestedElementsTest",
+            "idShort": "Query_Language_Submodel_7_Nested",
+            "kind": "Instance",
+            "modelType": "Submodel",
+            "semanticId": {
+                "keys": [
+                    {
+                        "type": "GlobalReference",
+                        "value": "urn:example:semanticId:NestedSubmodel"
+                    }
+                ],
+                "type": "ExternalReference"
+            },
+            "submodelElements": [
+                {
+                    "idShort": "TechnicalDataCollection",
+                    "modelType": "SubmodelElementCollection",
+                    "value": [
+                        {
+                            "idShort": "NestedTemperature",
+                            "modelType": "Property",
+                            "value": "42.5",
+                            "valueType": "xs:double"
+                        },
+                        {
+                            "idShort": "NestedSerialNumber",
+                            "modelType": "Property",
+                            "value": "NESTED-SN-98765",
+                            "valueType": "xs:string"
+                        },
+                        {
+                            "idShort": "InnerCollection",
+                            "modelType": "SubmodelElementCollection",
+                            "value": [
+                                {
+                                    "idShort": "DeeplyNestedProperty",
+                                    "modelType": "Property",
+                                    "value": "DeepValue-XYZ",
+                                    "valueType": "xs:string"
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "idShort": "TopLevelProperty",
+                    "modelType": "Property",
+                    "value": "TopLevelValue",
+                    "valueType": "xs:string"
+                }
+            ]
+        }
+    ]
+}

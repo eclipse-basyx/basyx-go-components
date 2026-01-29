@@ -33,5 +33,20 @@
     "input": "input/2Rules3Fragments.json",
     "expected": "expected/expected2Rules3Fragments.json",
     "eval": "eval/get_shellDescriptors_viewer.json"
+  },
+  {
+    "input": "input/1RuleMatchExpression.json",
+    "expected": "expected/expected1RuleMatchExpression.json",
+    "eval": "eval/get_shellDescriptors_viewer.json"
+  },
+  {
+    "input": "input/1RuleMatchExpressionMultiNested.json",
+    "expected": "expected/expected1RuleMatchExpressionMultiNested.json",
+    "eval": "eval/get_shellDescriptors_viewer.json"
+  },
+  {
+    "input": "input/1RuleMatchExpressionDropTrue.json",
+    "expected": "expected/expected1RuleMatchExpressionDropTrue.json",
+    "eval": "eval/get_shellDescriptors_viewer.json"
   }
 ]

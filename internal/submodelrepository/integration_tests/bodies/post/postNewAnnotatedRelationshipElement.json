@@ -1,0 +1,59 @@
+{
+    "annotations": [
+        {
+            "category": "PARAMETER",
+            "idShort": "AnnotationProperty",
+            "modelType": "Property",
+            "value": "annotationValue",
+            "valueType": "xs:string"
+        }
+    ],
+    "category": "PARAMETER",
+    "description": [
+        {
+            "language": "en-us",
+            "text": "New Test AnnotatedRelationshipElement"
+        },
+        {
+            "language": "de",
+            "text": "Neues Test Annotiertes Beziehungselement"
+        }
+    ],
+    "first": {
+        "keys": [
+            {
+                "type": "Submodel",
+                "value": "https://acplt.org/Test_Submodel_First"
+            },
+            {
+                "type": "Property",
+                "value": "FirstProperty"
+            }
+        ],
+        "type": "ModelReference"
+    },
+    "idShort": "NewTestAnnotatedRelationshipElement",
+    "modelType": "AnnotatedRelationshipElement",
+    "second": {
+        "keys": [
+            {
+                "type": "Submodel",
+                "value": "https://acplt.org/Test_Submodel_Second"
+            },
+            {
+                "type": "Property",
+                "value": "SecondProperty"
+            }
+        ],
+        "type": "ModelReference"
+    },
+    "semanticId": {
+        "keys": [
+            {
+                "type": "GlobalReference",
+                "value": "http://acplt.org/AnnotatedRelationshipElements/NewTestAnnotatedRelationshipElement"
+            }
+        ],
+        "type": "ExternalReference"
+    }
+}
