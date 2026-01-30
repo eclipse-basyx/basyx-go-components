@@ -314,14 +314,7 @@ func buildUnitID(data model.EdsContentIec61360Row) (map[int64]*ReferenceBuilder,
 		return nil, nil, fmt.Errorf("error converting referred UnitID reference for iec content %d: %w", data.IecID, err)
 	}
 
-	// Convert []*types.IReference to []types.IReference if needed
-	result := make([]types.IReference, len(unitID))
-	for i, ref := range unitID {
-		if ref != nil {
-			result[i] = *ref
-		}
-	}
-	return referenceBuilderMap, result, nil
+	return referenceBuilderMap, unitID, nil
 }
 
 func (*EmbeddedDataSpecificationsBuilder) addValueListIfSet(data model.EdsContentIec61360Row, referenceBuilderMap map[int64]*ReferenceBuilder) (types.IValueList, error) {
@@ -348,7 +341,7 @@ func (*EmbeddedDataSpecificationsBuilder) addValueListIfSet(data model.EdsConten
 			pair := types.NewValueReferencePair(entry.Value)
 			// Dereference pointer to interface to get interface value
 			if reference[0] != nil {
-				pair.SetValueID(*reference[0])
+				pair.SetValueID(reference[0])
 			}
 			valueReferencePairs = append(valueReferencePairs, pair)
 		}
@@ -446,7 +439,7 @@ func (edsb *EmbeddedDataSpecificationsBuilder) parseEdsReferencesForEachEds(edsI
 		edsSpecWrapper := edsb.dataSpecifications[edsID]
 		// Dereference pointer to interface to get interface value
 		if refsParsed[0] != nil {
-			edsSpecWrapper.spec.SetDataSpecification(*refsParsed[0])
+			edsSpecWrapper.spec.SetDataSpecification(refsParsed[0])
 		}
 		edsb.dataSpecifications[edsID] = edsSpecWrapper
 	}

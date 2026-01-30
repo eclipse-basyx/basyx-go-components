@@ -30,6 +30,7 @@ package builder
 import (
 	"log"
 
+	"github.com/FriedJannik/aas-go-sdk/jsonization"
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	jsoniter "github.com/json-iterator/go"
@@ -60,9 +61,12 @@ import (
 //	}
 func BuildAdministration(adminRow model.AdministrationRow) (*types.AdministrativeInformation, error) {
 	administration := &types.AdministrativeInformation{}
-
-	administration.SetVersion(&adminRow.Version)
-	administration.SetRevision(&adminRow.Revision)
+	if adminRow.Version != "" {
+		administration.SetVersion(&adminRow.Version)
+	}
+	if adminRow.Revision != "" {
+		administration.SetRevision(&adminRow.Revision)
+	}
 	if adminRow.TemplateID != "" {
 		administration.SetTemplateID(&adminRow.TemplateID)
 	}
@@ -79,21 +83,30 @@ func BuildAdministration(adminRow model.AdministrationRow) (*types.Administrativ
 	}
 
 	if len(refs) > 0 {
-		administration.SetCreator(*refs[0])
+		administration.SetCreator(refs[0])
 	}
 
 	if adminRow.EmbeddedDataSpecification != nil {
-		var edsList []types.EmbeddedDataSpecification
+		var edsList []types.IEmbeddedDataSpecification
 		var json = jsoniter.ConfigCompatibleWithStandardLibrary
-		err := json.Unmarshal(adminRow.EmbeddedDataSpecification, &edsList)
+		var jsonable []map[string]any
+		err := json.Unmarshal(adminRow.EmbeddedDataSpecification, &jsonable)
+		if err != nil {
+			log.Printf("Failed to unmarshal embedded data specifications: %v", err)
+		} else {
+			for _, obj := range jsonable {
+				eds, err := jsonization.EmbeddedDataSpecificationFromJsonable(obj)
+				if err != nil {
+					log.Printf("Failed to convert jsonable to EmbeddedDataSpecification: %v", err)
+					continue
+				}
+				edsList = append(edsList, eds)
+			}
+		}
 		if err != nil {
 			log.Printf("Failed to build embedded data specifications: %v", err)
 		} else {
-			abstractList := make([]types.IEmbeddedDataSpecification, len(edsList))
-			for _, eds := range edsList {
-				abstractList = append(abstractList, &eds)
-			}
-			administration.SetEmbeddedDataSpecifications(abstractList)
+			administration.SetEmbeddedDataSpecifications(edsList)
 		}
 	}
 

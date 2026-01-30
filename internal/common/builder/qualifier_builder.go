@@ -28,11 +28,13 @@
 package builder
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"sort"
 
 	"github.com/FriedJannik/aas-go-sdk/types"
+	"github.com/doug-martin/goqu/v9"
 )
 
 // QualifiersBuilder constructs Qualifier objects with their associated references
@@ -92,20 +94,37 @@ func NewQualifiersBuilder() *QualifiersBuilder {
 //	builder := NewQualifiersBuilder()
 //	builder.AddQualifier(1, "ConceptQualifier", "ExpressionSemantic", "xs:string", "example value")
 //	builder.AddQualifier(2, "ValueQualifier", "ExpressionLogic", "xs:boolean", "true")
-func (b *QualifiersBuilder) AddQualifier(qualifierDbID int64, kind int64, qType string, valueType int64, value string, position int) (*QualifiersBuilder, error) {
+func (b *QualifiersBuilder) AddQualifier(qualifierDbID int64, qType string, valueType int64, value string, position int, db *sql.DB) (*QualifiersBuilder, error) {
 	_, exists := b.qualifiers[qualifierDbID]
 	if !exists {
 		qualifier := types.Qualifier{}
 		qualifier.SetType(qType)
 		qualifier.SetValueType(types.DataTypeDefXSD(valueType))
-		qualifier.SetValue(&value)
+		if value != "" {
+			qualifier.SetValue(&value)
+		}
 		b.qualifiers[qualifierDbID] = &qualifierWithPosition{
 			qualifier: &qualifier,
 			position:  position,
 		}
 
-		if kind != 0 {
-			qKind := types.QualifierKind(kind)
+		// Get KIND as sql.NullInt64 from Database with goqu
+		dialect := goqu.Dialect("postgres")
+		var kind sql.NullInt64
+		query := dialect.From("qualifier").Select("kind").Where(goqu.Ex{"id": qualifierDbID})
+		sqlStr, args, err := query.ToSQL()
+		if err != nil {
+			return nil, fmt.Errorf("failed to build SQL query for qualifier kind: %v", err)
+		}
+
+		row := db.QueryRow(sqlStr, args...)
+		err = row.Scan(&kind)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan qualifier kind from database: %v", err)
+		}
+
+		if kind.Valid {
+			qKind := types.QualifierKind(kind.Int64)
 			b.qualifiers[qualifierDbID].qualifier.SetKind(&qKind)
 		}
 	} else {
@@ -149,7 +168,7 @@ func (b *QualifiersBuilder) AddSemanticID(qualifierDbID int64, semanticIDRows js
 		return b, nil
 	}
 
-	qualifier.qualifier.SetSemanticID(*semanticID)
+	qualifier.qualifier.SetSemanticID(semanticID)
 
 	return b, nil
 }
@@ -190,7 +209,7 @@ func (b *QualifiersBuilder) AddValueID(qualifierDbID int64, valueIDRows json.Raw
 		return b, nil
 	}
 
-	qualifier.qualifier.SetValueID(*valueID)
+	qualifier.qualifier.SetValueID(valueID)
 	return b, nil
 }
 
@@ -236,22 +255,16 @@ func (b *QualifiersBuilder) AddSupplementalSemanticIDs(qualifierDbID int64, supp
 		}
 	}
 
-	suppl := []types.IReference{}
-
-	for _, el := range refs {
-		suppl = append(suppl, *el)
+	if len(refs) == 0 {
+		refs = nil // This ensures that an empty slice is not set, adhering to JSON omitempty behavior
 	}
 
-	if len(suppl) == 0 {
-		suppl = nil // This ensures that an empty slice is not set, adhering to JSON omitempty behavior
-	}
-
-	qualifier.qualifier.SetSupplementalSemanticIDs(suppl)
+	qualifier.qualifier.SetSupplementalSemanticIDs(refs)
 
 	return b, nil
 }
 
-func (b *QualifiersBuilder) createExactlyOneReference(qualifierDbID int64, refRows json.RawMessage, referredRefRows json.RawMessage, typeOfReference string) (*types.IReference, error) {
+func (b *QualifiersBuilder) createExactlyOneReference(qualifierDbID int64, refRows json.RawMessage, referredRefRows json.RawMessage, typeOfReference string) (types.IReference, error) {
 	_, exists := b.qualifiers[qualifierDbID]
 
 	if !exists {

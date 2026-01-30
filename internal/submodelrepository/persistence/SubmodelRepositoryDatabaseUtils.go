@@ -222,7 +222,15 @@ func getEDSJSONStringFromSubmodel(sm *types.Submodel) (string, error) {
 	json := jsoniter.ConfigCompatibleWithStandardLibrary
 	edsJSONString := "[]"
 	if len(sm.EmbeddedDataSpecifications()) > 0 {
-		edsBytes, err := json.Marshal(sm.EmbeddedDataSpecifications())
+		var toJson []map[string]any
+		for _, eds := range sm.EmbeddedDataSpecifications() {
+			jsonObj, err := jsonization.ToJsonable(eds)
+			if err != nil {
+				return "", common.NewErrBadRequest("Failed to convert EmbeddedDataSpecification to jsonable object - no changes applied")
+			}
+			toJson = append(toJson, jsonObj)
+		}
+		edsBytes, err := json.Marshal(toJson)
 		if err != nil {
 			_, _ = fmt.Println("SMREPO-BLD-EDS-JSON " + err.Error())
 			return "", common.NewInternalServerError("Failed to marshal EmbeddedDataSpecifications - no changes applied - see console for details")
@@ -238,7 +246,15 @@ func getExtensionJSONStringFromSubmodel(sm *types.Submodel) (string, error) {
 	json := jsoniter.ConfigCompatibleWithStandardLibrary
 	extensionJSONString := "[]"
 	if len(sm.Extensions()) > 0 {
-		extensionBytes, err := json.Marshal(sm.Extensions())
+		var toJson []map[string]any
+		for _, ext := range sm.Extensions() {
+			jsonObj, err := jsonization.ToJsonable(ext)
+			if err != nil {
+				return "", common.NewErrBadRequest("Failed to convert Extension to jsonable object - no changes applied")
+			}
+			toJson = append(toJson, jsonObj)
+		}
+		extensionBytes, err := json.Marshal(toJson)
 		if err != nil {
 			_, _ = fmt.Println("SMREPO-BLD-EXT-JSON " + err.Error())
 			return "", common.NewInternalServerError("Failed to marshal Extension - no changes applied - see console for details")

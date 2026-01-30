@@ -42,7 +42,7 @@ import (
 
 // BlobValue type of Blob
 type BlobValue struct {
-	ContentType *string `json:"contentType,omitempty"`
+	ContentType string `json:"contentType,omitempty"`
 
 	Value []byte `json:"value,omitempty"`
 }

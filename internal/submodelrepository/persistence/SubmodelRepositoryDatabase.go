@@ -41,6 +41,7 @@ import (
 	"sync"
 
 	"github.com/FriedJannik/aas-go-sdk/jsonization"
+	"github.com/FriedJannik/aas-go-sdk/stringification"
 	"github.com/FriedJannik/aas-go-sdk/types"
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 
@@ -837,7 +838,7 @@ func (p *PostgreSQLSubmodelDatabase) CreateSubmodel(smInt types.ISubmodel, optio
 				return err
 			}
 			insert := goqu.Insert("submodel_qualifier").Rows(goqu.Record{
-				"submodel_id":  sm.ID,
+				"submodel_id":  sm.ID(),
 				"qualifier_id": qualifierID,
 			})
 			query, args, err := insert.ToSQL()
@@ -999,11 +1000,15 @@ func (p *PostgreSQLSubmodelDatabase) AddSubmodelElementWithPath(submodelID strin
 	if err != nil {
 		return err
 	}
-	if modelType != "SubmodelElementCollection" && modelType != "SubmodelElementList" && modelType != "Entity" && modelType != "AnnotatedRelationshipElement" {
-		return errors.New("cannot add nested element to non-collection/list element")
+	if *modelType != types.ModelTypeSubmodelElementCollection && *modelType != types.ModelTypeSubmodelElementList && *modelType != types.ModelTypeEntity && *modelType != types.ModelTypeAnnotatedRelationshipElement {
+		mt, ok := stringification.ModelTypeToString(*modelType)
+		if !ok {
+			mt = "unknown"
+		}
+		return common.NewErrBadRequest("cannot add nested element to non-collection/list element. Tried to add to element of type '" + mt + "' at path '" + idShortPath + "'")
 	}
 	var newIDShortPath string
-	if modelType == "SubmodelElementList" {
+	if *modelType == types.ModelTypeSubmodelElementList {
 		newIDShortPath = idShortPath + "[" + strconv.Itoa(nextPosition) + "]"
 		// For lists, check if an element with the same idShort already exists within the list
 		checkQuery, checkArgs, err := goqu.Select(goqu.COUNT("id")).From("submodel_element").

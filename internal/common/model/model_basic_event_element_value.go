@@ -42,7 +42,7 @@ import (
 
 // BasicEventElementValue type of EventElementValue
 type BasicEventElementValue struct {
-	Observed types.IReference `json:"observed"`
+	Observed map[string]any `json:"observed"`
 }
 
 // MarshalValueOnly serializes BasicEventElementValue in Value-Only format

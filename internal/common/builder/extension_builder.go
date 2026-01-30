@@ -145,7 +145,7 @@ func (b *ExtensionsBuilder) AddSemanticID(extensionDbID int64, semanticIDRows js
 	}
 
 	if semanticID != nil {
-		extensionWrapper.extension.SetSemanticID(*semanticID)
+		extensionWrapper.extension.SetSemanticID(semanticID)
 	}
 
 	return b, nil
@@ -191,15 +191,8 @@ func (b *ExtensionsBuilder) AddSupplementalSemanticIDs(extensionDbID int64, supp
 		}
 	}
 
-	suppl := make([]types.IReference, 0, len(refs))
-	for _, el := range refs {
-		if el != nil {
-			suppl = append(suppl, *el)
-		}
-	}
-
-	if len(suppl) > 0 {
-		extensionWrapper.extension.SetSupplementalSemanticIDs(suppl)
+	if len(refs) > 0 {
+		extensionWrapper.extension.SetSupplementalSemanticIDs(refs)
 	}
 
 	return b, nil
@@ -244,21 +237,14 @@ func (b *ExtensionsBuilder) AddRefersTo(extensionDbID int64, refersToRows json.R
 		}
 	}
 
-	refersTo := make([]types.IReference, 0, len(refs))
-	for _, el := range refs {
-		if el != nil {
-			refersTo = append(refersTo, *el)
-		}
-	}
-
-	if len(refersTo) > 0 {
-		extensionWrapper.extension.SetRefersTo(refersTo)
+	if len(refs) > 0 {
+		extensionWrapper.extension.SetRefersTo(refs)
 	}
 
 	return b, nil
 }
 
-func (b *ExtensionsBuilder) createExactlyOneReference(extensionDbID int64, refRows json.RawMessage, referredRefRows json.RawMessage, typeOfReference string) (*types.IReference, error) {
+func (b *ExtensionsBuilder) createExactlyOneReference(extensionDbID int64, refRows json.RawMessage, referredRefRows json.RawMessage, typeOfReference string) (types.IReference, error) {
 	_, exists := b.extensions[extensionDbID]
 
 	if !exists {

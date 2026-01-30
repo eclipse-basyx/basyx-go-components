@@ -36,6 +36,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/FriedJannik/aas-go-sdk/stringification"
 	"github.com/doug-martin/goqu/v9"
 	"github.com/doug-martin/goqu/v9/exp"
 )
@@ -1311,14 +1312,42 @@ func handleBinaryOperationWithoutCollector(
 		return nil, nil, err
 	}
 
+	// If one side is a resolved field and the other a literal/value, convert the literal
+	// to the field's enum representation before casting/building the SQL expression.
+	var convertedRight, convertedLeft bool
+	if leftResolved != nil && rightResolved == nil {
+		if v, ok := convertLiteralToEnumIfNeeded(*leftResolved, rightOperand); ok {
+			rightSQL = goqu.V(v)
+			convertedRight = true
+		}
+	}
+	if rightResolved != nil && leftResolved == nil {
+		if v, ok := convertLiteralToEnumIfNeeded(*rightResolved, leftOperand); ok {
+			leftSQL = goqu.V(v)
+			convertedLeft = true
+		}
+	}
+
 	// Cast the field side to the non-field operand's type (unless already explicitly casted).
 	if leftResolved != nil && rightResolved == nil && leftCastType == "" {
-		if t := sqlTypeForOperand(rightOperand); t != "" {
+		t := ""
+		if convertedRight {
+			t = "integer" // Assume enum is integer
+		} else if t2 := sqlTypeForOperand(rightOperand); t2 != "" {
+			t = t2
+		}
+		if t != "" {
 			leftSQL = safeCastSQLValue(columnToExpression(leftResolved.Column), t)
 		}
 	}
 	if rightResolved != nil && leftResolved == nil && rightCastType == "" {
-		if t := sqlTypeForOperand(leftOperand); t != "" {
+		t := ""
+		if convertedLeft {
+			t = "integer" // Assume enum is integer
+		} else if t2 := sqlTypeForOperand(leftOperand); t2 != "" {
+			t = t2
+		}
+		if t != "" {
 			rightSQL = safeCastSQLValue(columnToExpression(rightResolved.Column), t)
 		}
 	}
@@ -1390,14 +1419,42 @@ func handleBinaryOperationWithCollector(
 		return nil, nil, err
 	}
 
+	// If one side is a resolved field and the other a literal/value, convert the literal
+	// to the field's enum representation before casting/building the SQL expression.
+	var convertedRight, convertedLeft bool
+	if leftResolved != nil && rightResolved == nil {
+		if v, ok := convertLiteralToEnumIfNeeded(*leftResolved, rightOperand); ok {
+			rightSQL = goqu.V(v)
+			convertedRight = true
+		}
+	}
+	if rightResolved != nil && leftResolved == nil {
+		if v, ok := convertLiteralToEnumIfNeeded(*rightResolved, leftOperand); ok {
+			leftSQL = goqu.V(v)
+			convertedLeft = true
+		}
+	}
+
 	// Cast the field side to the non-field operand's type (unless already explicitly casted).
 	if leftResolved != nil && rightResolved == nil && leftCastType == "" {
-		if t := sqlTypeForOperand(rightOperand); t != "" {
+		t := ""
+		if convertedRight {
+			t = "integer" // Assume enum is integer
+		} else if t2 := sqlTypeForOperand(rightOperand); t2 != "" {
+			t = t2
+		}
+		if t != "" {
 			leftSQL = safeCastSQLValue(columnToExpression(leftResolved.Column), t)
 		}
 	}
 	if rightResolved != nil && leftResolved == nil && rightCastType == "" {
-		if t := sqlTypeForOperand(leftOperand); t != "" {
+		t := ""
+		if convertedLeft {
+			t = "integer" // Assume enum is integer
+		} else if t2 := sqlTypeForOperand(leftOperand); t2 != "" {
+			t = t2
+		}
+		if t != "" {
 			rightSQL = safeCastSQLValue(columnToExpression(rightResolved.Column), t)
 		}
 	}
@@ -1954,4 +2011,18 @@ func normalizeTime(t time.Time) time.Time {
 		return time.Unix(0, t.UnixNano()).UTC()
 	}
 	return t.UTC()
+}
+
+// convertLiteralToEnumIfNeeded converts a literal string Value to the enum representation
+// expected by the resolved field. Returns (convertedValue, true) if conversion applied.
+func convertLiteralToEnumIfNeeded(resolved ResolvedFieldPath, lit *Value) (interface{}, bool) {
+	// Check if the field is an enum type (e.g., valueType for DataTypeDefXSD).
+	// Heuristic: inspect column name for "value_type" (refine based on ResolveScalarFieldToSQL metadata).
+	if strings.Contains(strings.ToLower(resolved.Column), "value_type") && lit.StrVal != nil {
+		// Attempt conversion using DataTypeDefXSDFromString.
+		if enumVal, ok := stringification.DataTypeDefXSDFromString(string(*lit.StrVal)); ok {
+			return enumVal, true // enumVal is likely an int or string representing the enum.
+		}
+	}
+	return nil, false
 }

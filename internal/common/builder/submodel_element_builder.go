@@ -26,13 +26,15 @@
 package builder
 
 import (
+	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strings"
 	"sync"
 
 	"github.com/FriedJannik/aas-go-sdk/jsonization"
-	"github.com/FriedJannik/aas-go-sdk/stringification"
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
@@ -76,7 +78,7 @@ type extensionsResult struct {
 // semantic IDs, descriptions, and qualifiers. Returns the constructed SubmodelElement and a
 // SubmodelElementBuilder for further management.
 // nolint:revive // This method is already refactored and further changes would not improve readability.
-func BuildSubmodelElement(smeRow model.SubmodelElementRow) (types.ISubmodelElement, *SubmodelElementBuilder, error) {
+func BuildSubmodelElement(smeRow model.SubmodelElementRow, db *sql.DB) (types.ISubmodelElement, *SubmodelElementBuilder, error) {
 	var g errgroup.Group
 	refBuilderMap := make(map[int64]*ReferenceBuilder)
 	var refMutex sync.RWMutex
@@ -221,7 +223,7 @@ func BuildSubmodelElement(smeRow model.SubmodelElementRow) (types.ISubmodelEleme
 				return err
 			}
 			for _, qualifierRow := range qualifierRows {
-				_, err = builder.AddQualifier(qualifierRow.DbID, qualifierRow.Kind, qualifierRow.Type, qualifierRow.ValueType, qualifierRow.Value, qualifierRow.Position)
+				_, err = builder.AddQualifier(qualifierRow.DbID, qualifierRow.Type, qualifierRow.ValueType, qualifierRow.Value, qualifierRow.Position, db)
 				if err != nil {
 					return err
 				}
@@ -474,40 +476,62 @@ func buildOperation(smeRow model.SubmodelElementRow) (types.ISubmodelElement, er
 		return nil, err
 	}
 
-	var inputVars, outputVars, inoutputVars []model.OperationVariable
+	var inputVars, outputVars, inoutputVars []types.IOperationVariable
 	if valueRow.InputVariables != nil {
-		err = jsonMarshaller.Unmarshal(valueRow.InputVariables, &inputVars)
+		var inputVarsJsonable []map[string]any
+		err = jsonMarshaller.Unmarshal(valueRow.InputVariables, &inputVarsJsonable)
 		if err != nil {
 			return nil, err
+		}
+		for _, jsonable := range inputVarsJsonable {
+			varOp, err := jsonization.OperationVariableFromJsonable(jsonable)
+			if err != nil {
+				return nil, err
+			}
+			inputVars = append(inputVars, varOp)
 		}
 	}
 	if valueRow.OutputVariables != nil {
-		err = jsonMarshaller.Unmarshal(valueRow.OutputVariables, &outputVars)
+		var outputVarsJsonable []map[string]any
+		err = jsonMarshaller.Unmarshal(valueRow.OutputVariables, &outputVarsJsonable)
 		if err != nil {
 			return nil, err
 		}
+		for _, jsonable := range outputVarsJsonable {
+			varOp, err := jsonization.OperationVariableFromJsonable(jsonable)
+			if err != nil {
+				return nil, err
+			}
+			outputVars = append(outputVars, varOp)
+		}
 	}
 	if valueRow.InoutputVariables != nil {
-		err = jsonMarshaller.Unmarshal(valueRow.InoutputVariables, &inoutputVars)
+		var inoutputVarsJsonable []map[string]any
+		err = jsonMarshaller.Unmarshal(valueRow.InoutputVariables, &inoutputVarsJsonable)
 		if err != nil {
 			return nil, err
+		}
+		for _, jsonable := range inoutputVarsJsonable {
+			varOp, err := jsonization.OperationVariableFromJsonable(jsonable)
+			if err != nil {
+				return nil, err
+			}
+			inoutputVars = append(inoutputVars, varOp)
 		}
 	}
 
 	operation := types.NewOperation()
-	// TODO: Convert model.OperationVariable to types.IOperationVariable
-	// For now, skip setting variables until OperationVariable conversion is complete
-	/*
-		if len(inputVars) > 0 {
-			operation.SetInputVariables(inputVars)
-		}
-		if len(outputVars) > 0 {
-			operation.SetOutputVariables(outputVars)
-		}
-		if len(inoutputVars) > 0 {
-			operation.SetInoutputVariables(inoutputVars)
-		}
-	*/
+
+	if len(inputVars) > 0 {
+		operation.SetInputVariables(inputVars)
+	}
+	if len(outputVars) > 0 {
+		operation.SetOutputVariables(outputVars)
+	}
+	if len(inoutputVars) > 0 {
+		operation.SetInoutputVariables(inoutputVars)
+	}
+
 	_ = inputVars
 	_ = outputVars
 	_ = inoutputVars
@@ -523,9 +547,7 @@ func getSingleReference(reference *json.RawMessage, referredReference *json.RawM
 		if err != nil {
 			return nil, err
 		}
-		for _, ref := range parsedRefs {
-			refs = append(refs, *ref)
-		}
+		refs = append(refs, parsedRefs...)
 		if referredReference != nil {
 			if err = ParseReferredReferences(*referredReference, refBuilderMap, refMutex); err != nil {
 				return nil, err
@@ -550,21 +572,27 @@ func buildEntity(smeRow model.SubmodelElementRow) (types.ISubmodelElement, error
 		return nil, err
 	}
 
-	// Convert entity type string to SDK enum
-	entityType, ok := stringification.EntityTypeFromString(valueRow.EntityType)
-	if !ok {
-		return nil, fmt.Errorf("invalid EntityType value: %s", valueRow.EntityType)
-	}
+	entity := types.NewEntity()
 
-	var specificAssetIDs []model.SpecificAssetID
+	entityType := types.EntityType(valueRow.EntityType)
+
+	var specificAssetIDs []types.ISpecificAssetID
 	if valueRow.SpecificAssetIDs != nil {
-		err = json.Unmarshal(valueRow.SpecificAssetIDs, &specificAssetIDs)
+		var jsonable []map[string]any
+		err = json.Unmarshal(valueRow.SpecificAssetIDs, &jsonable)
 		if err != nil {
 			return nil, err
 		}
+		for _, j := range jsonable {
+			said, err := jsonization.SpecificAssetIDFromJsonable(j)
+			if err != nil {
+				return nil, err
+			}
+			specificAssetIDs = append(specificAssetIDs, said)
+		}
+		entity.SetSpecificAssetIDs(specificAssetIDs)
 	}
 
-	entity := types.NewEntity()
 	entity.SetEntityType(&entityType)
 	if valueRow.GlobalAssetID != "" {
 		entity.SetGlobalAssetID(&valueRow.GlobalAssetID)
@@ -673,7 +701,9 @@ func buildFile(smeRow model.SubmodelElementRow) (types.ISubmodelElement, error) 
 		return nil, err
 	}
 	file := types.NewFile()
-	file.SetContentType(&valueRow.ContentType)
+	if len(valueRow.ContentType) > 0 {
+		file.SetContentType(&valueRow.ContentType)
+	}
 	if valueRow.Value != "" {
 		file.SetValue(&valueRow.Value)
 	}
@@ -686,17 +716,42 @@ func buildBlob(smeRow model.SubmodelElementRow) (types.ISubmodelElement, error) 
 	if smeRow.Value == nil {
 		return nil, fmt.Errorf("smeRow.Value is nil")
 	}
-	err := json.Unmarshal(*smeRow.Value, &valueRow)
-	if err != nil {
+	if err := json.Unmarshal(*smeRow.Value, &valueRow); err != nil {
 		return nil, err
 	}
-	decoded, err := common.Decode(valueRow.Value)
+
+	// Postgres bytea is commonly returned as: \x<hex>
+	raw := strings.TrimSpace(valueRow.Value)
+	if raw == "" {
+		return nil, fmt.Errorf("blob value is empty")
+	}
+
+	var decoded []byte
+	var decodedHex []byte
+	var err error
+
+	if strings.HasPrefix(raw, `\x`) || strings.HasPrefix(raw, `\\x`) {
+		// handle "\x..." and "\\x..." (sometimes JSON escaping causes double slash)
+		raw = strings.TrimPrefix(raw, `\\x`)
+		raw = strings.TrimPrefix(raw, `\x`)
+
+		decoded, err = hex.DecodeString(raw)
+		if err != nil {
+			return nil, common.NewInternalServerError("Failed to hex-decode blob value: " + err.Error())
+		}
+		// as fallback copy
+		decodedHex, _ = hex.DecodeString(raw)
+	}
+	decoded, err = common.Decode(string(decoded))
 	if err != nil {
-		return nil, err
+		decoded = decodedHex // Fallback to hex decoded value
+		_, _ = fmt.Println("WARNING: Error while decoding Base64 - falling back to HEX Decoded Value as a fallback.")
 	}
 	blob := types.NewBlob()
 	blob.SetContentType(&valueRow.ContentType)
-	blob.SetValue(decoded)
+	if string(decoded) != "" {
+		blob.SetValue(decoded)
+	}
 	return blob, nil
 }
 

@@ -29,6 +29,7 @@ package submodelelements
 import (
 	"database/sql"
 
+	"github.com/FriedJannik/aas-go-sdk/jsonization"
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
@@ -309,7 +310,15 @@ func insertEntity(entity *types.Entity, tx *sql.Tx, id int) error {
 	json := jsoniter.ConfigCompatibleWithStandardLibrary
 	specificAssetIDs := "[]"
 	if entity.SpecificAssetIDs() != nil {
-		specificAssetIDsBytes, err := json.Marshal(entity.SpecificAssetIDs())
+		var jsonable []map[string]any
+		for _, saa := range entity.SpecificAssetIDs() {
+			jsonableSaa, err := jsonization.ToJsonable(saa)
+			if err != nil {
+				return common.NewErrBadRequest("SMREPO-INSENTITY-SAATJSONABLE Failed to convert Specific Asset ID to JSONABLE: " + err.Error())
+			}
+			jsonable = append(jsonable, jsonableSaa)
+		}
+		specificAssetIDsBytes, err := json.Marshal(jsonable)
 		if err != nil {
 			return err
 		}
@@ -320,8 +329,8 @@ func insertEntity(entity *types.Entity, tx *sql.Tx, id int) error {
 	insertQuery, insertArgs, err := dialect.Insert("entity_element").
 		Rows(goqu.Record{
 			"id":                 id,
-			"entity_type":        entity.EntityType,
-			"global_asset_id":    entity.GlobalAssetID,
+			"entity_type":        entity.EntityType(),
+			"global_asset_id":    entity.GlobalAssetID(),
 			"specific_asset_ids": specificAssetIDs,
 		}).
 		ToSQL()
@@ -343,21 +352,29 @@ func buildUpdateEntityRecordObject(isPut bool, entity *types.Entity) (goqu.Recor
 		json := jsoniter.ConfigCompatibleWithStandardLibrary
 		specificAssetIDs := "[]"
 		if entity.SpecificAssetIDs() != nil {
-			specificAssetIDsBytes, err := json.Marshal(entity.SpecificAssetIDs())
+			var jsonable []map[string]any
+			for _, saa := range entity.SpecificAssetIDs() {
+				jsonableSaa, err := jsonization.ToJsonable(saa)
+				if err != nil {
+					return nil, common.NewErrBadRequest("SMREPO-UPDENTITY-SAATJSONABLE Failed to convert Specific Asset ID to JSONABLE: " + err.Error())
+				}
+				jsonable = append(jsonable, jsonableSaa)
+			}
+			specificAssetIDsBytes, err := json.Marshal(jsonable)
 			if err != nil {
 				return nil, err
 			}
 			specificAssetIDs = string(specificAssetIDsBytes)
 		}
 
-		updateRecord["entity_type"] = entity.EntityType
-		updateRecord["global_asset_id"] = entity.GlobalAssetID
+		updateRecord["entity_type"] = entity.EntityType()
+		updateRecord["global_asset_id"] = entity.GlobalAssetID()
 		updateRecord["specific_asset_ids"] = specificAssetIDs
 	} else {
 		// PATCH: Only update provided fields
 		// Note: EntityType is a string enum, so we check if it's not empty
 		if entity.EntityType() != nil {
-			updateRecord["entity_type"] = entity.EntityType
+			updateRecord["entity_type"] = entity.EntityType()
 		}
 
 		if entity.GlobalAssetID() != nil {
@@ -366,7 +383,15 @@ func buildUpdateEntityRecordObject(isPut bool, entity *types.Entity) (goqu.Recor
 
 		if entity.SpecificAssetIDs() != nil {
 			json := jsoniter.ConfigCompatibleWithStandardLibrary
-			specificAssetIDsBytes, err := json.Marshal(entity.SpecificAssetIDs())
+			var jsonable []map[string]any
+			for _, saa := range entity.SpecificAssetIDs() {
+				jsonableSaa, err := jsonization.ToJsonable(saa)
+				if err != nil {
+					return nil, common.NewErrBadRequest("SMREPO-UPDENTITY-SAATJSONABLE Failed to convert Specific Asset ID to JSONABLE: " + err.Error())
+				}
+				jsonable = append(jsonable, jsonableSaa)
+			}
+			specificAssetIDsBytes, err := json.Marshal(jsonable)
 			if err != nil {
 				return nil, err
 			}

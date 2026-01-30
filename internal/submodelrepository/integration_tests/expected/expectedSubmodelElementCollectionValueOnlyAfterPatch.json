@@ -96,7 +96,7 @@
     "ExampleSubmodelElementCollection": {
         "ExampleBlob": {
             "contentType": "application/json",
-            "value": "hallo"
+            "value": "aGFsbG8="
         },
         "ExampleFile": {
             "contentType": "application/pdf",

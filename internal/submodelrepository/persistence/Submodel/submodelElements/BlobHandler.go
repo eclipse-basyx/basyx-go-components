@@ -98,6 +98,9 @@ func (p PostgreSQLBlobHandler) Create(tx *sql.Tx, submodelID string, submodelEle
 		return 0, smrepoerrors.ErrBlobTooLarge
 	}
 
+	// encode
+	encoded := common.Encode(value)
+
 	contentType := ""
 	if blob.ContentType() != nil {
 		contentType = *blob.ContentType()
@@ -109,7 +112,7 @@ func (p PostgreSQLBlobHandler) Create(tx *sql.Tx, submodelID string, submodelEle
 		Rows(goqu.Record{
 			"id":           id,
 			"content_type": contentType,
-			"value":        value,
+			"value":        encoded,
 		}).
 		ToSQL()
 	if err != nil {
@@ -152,6 +155,7 @@ func (p PostgreSQLBlobHandler) CreateNested(tx *sql.Tx, submodelID string, paren
 	}
 
 	value := blob.Value()
+	encoded := common.Encode(value)
 	contentType := ""
 	if blob.ContentType() != nil {
 		contentType = *blob.ContentType()
@@ -163,7 +167,7 @@ func (p PostgreSQLBlobHandler) CreateNested(tx *sql.Tx, submodelID string, paren
 		Rows(goqu.Record{
 			"id":           id,
 			"content_type": contentType,
-			"value":        value,
+			"value":        encoded,
 		}).
 		ToSQL()
 	if err != nil {
@@ -261,7 +265,7 @@ func (p PostgreSQLBlobHandler) UpdateValueOnly(submodelID string, idShortOrPath 
 			return common.NewErrBadRequest("valueOnly is not of type BlobValue")
 		}
 
-		bytea := []byte(*fileValueOnly.Value)
+		bytea := []byte(fileValueOnly.Value)
 
 		blobValueOnly = gen.BlobValue{
 			ContentType: fileValueOnly.ContentType,

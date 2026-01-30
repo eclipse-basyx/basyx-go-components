@@ -42,9 +42,9 @@ import (
 
 // ReferenceElementValue type of ReferenceElementValue
 type ReferenceElementValue struct {
-	Type types.ReferenceTypes `json:"type,omitempty"`
+	Type string `json:"type,omitempty"`
 
-	Keys []types.IKey `json:"keys,omitempty"`
+	Keys []map[string]any `json:"keys,omitempty"`
 }
 
 // MarshalValueOnly serializes ReferenceElementValue in Value-Only format

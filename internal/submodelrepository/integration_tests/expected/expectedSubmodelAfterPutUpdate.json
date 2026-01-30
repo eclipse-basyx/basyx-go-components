@@ -358,8 +358,7 @@
                         }
                     ],
                     "idShort": "ExampleSubmodelElementListOrdered",
-                    "modelType": "SubmodelElementList",
-                    "semanticId": {
+                    "modelType": "SubmodelElementList","semanticId": {
                         "keys": [
                             {
                                 "type": "GlobalReference",
@@ -464,8 +463,7 @@
                             },
                             "valueType": "xs:int"
                         }
-                    ],
-                    "orderRelevant": false
+                    ]
                 },
                 {
                     "category": "PARAMETER",
@@ -610,9 +608,8 @@
                                             "value": [
                                                 {
                                                     "idShort": "6",
-                                                    "modelType": "SubmodelElementList",
-                                                    "typeValueListElement": "Property",
-                                                    "orderRelevant": false,
+                                                    "modelType": "SubmodelElementList",                                "typeValueListElement": "Property",
+                                                    
                                                     "value": [
                                                         {
                                                             "idShort": "2",

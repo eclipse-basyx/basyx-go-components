@@ -34,6 +34,7 @@ import (
 	"reflect"
 	"strconv"
 
+	"github.com/FriedJannik/aas-go-sdk/jsonization"
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
@@ -406,7 +407,7 @@ func CreateAdministrativeInformation(tx *sql.Tx, adminInfo types.IAdministrative
 	if !reflect.DeepEqual(adminInfo, types.AdministrativeInformation{}) {
 		var creatorID sql.NullInt64
 		var err error
-		if isEmptyReference(adminInfo.Creator()) {
+		if !isEmptyReference(adminInfo.Creator()) {
 			creatorID, err = CreateReference(tx, adminInfo.Creator(), sql.NullInt64{}, sql.NullInt64{})
 			if err != nil {
 				return sql.NullInt64{}, err
@@ -415,7 +416,15 @@ func CreateAdministrativeInformation(tx *sql.Tx, adminInfo types.IAdministrative
 
 		edsJSONString := "[]"
 		if len(adminInfo.EmbeddedDataSpecifications()) > 0 {
-			edsBytes, err := json.Marshal(adminInfo.EmbeddedDataSpecifications())
+			var jsonable []map[string]any
+			for _, eds := range adminInfo.EmbeddedDataSpecifications() {
+				jsonObj, err := jsonization.ToJsonable(eds)
+				if err != nil {
+					return sql.NullInt64{}, common.NewErrBadRequest("Failed to convert EmbeddedDataSpecification to jsonable object - no changes applied")
+				}
+				jsonable = append(jsonable, jsonObj)
+			}
+			edsBytes, err := json.Marshal(jsonable)
 			if err != nil {
 				_, _ = fmt.Println("SMREPO-CRADMININF-MARSHAL-EDS " + err.Error())
 				return sql.NullInt64{}, common.NewInternalServerError("SMREPO-CRADMININF-MARSHAL-EDS Failed to marshal EmbeddedDataSpecifications - no changes applied - see console for details")
@@ -1055,11 +1064,11 @@ func BuildElementsToProcessStackValueOnly(db *sql.DB, submodelID string, idShort
 			// Check if it is a MLP or SME List in the database
 			sqlQuery, args := buildCheckMultiLanguagePropertyOrSubmodelElementListQuery(current.IdShortPath, submodelID)
 			row := db.QueryRow(sqlQuery, args...)
-			var modelType string
+			var modelType int64
 			if err := row.Scan(&modelType); err != nil {
 				return nil, common.NewErrNotFound(fmt.Sprintf("Submodel Element with ID Short Path %s and Submodel ID %s not found", current.IdShortPath, submodelID))
 			}
-			if modelType == "MultiLanguageProperty" {
+			if modelType == int64(types.ModelTypeMultiLanguageProperty) {
 				mlpValue, err := elem.ConvertToMultiLanguagePropertyValue()
 				if err != nil {
 					return nil, err

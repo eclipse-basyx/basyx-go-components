@@ -42,9 +42,9 @@ import (
 
 // RelationshipElementValue A relationship element value consisting of two reference values.
 type RelationshipElementValue struct {
-	First types.IReference `json:"first,omitempty"`
+	First map[string]any `json:"first,omitempty"`
 
-	Second types.IReference `json:"second,omitempty"`
+	Second map[string]any `json:"second,omitempty"`
 }
 
 // MarshalValueOnly serializes RelationshipElementValue in Value-Only format

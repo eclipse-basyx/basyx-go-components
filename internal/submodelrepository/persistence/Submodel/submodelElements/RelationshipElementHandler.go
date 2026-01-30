@@ -32,6 +32,7 @@ package submodelelements
 
 import (
 	"database/sql"
+	"fmt"
 
 	"github.com/FriedJannik/aas-go-sdk/jsonization"
 	"github.com/FriedJannik/aas-go-sdk/types"
@@ -256,70 +257,70 @@ func (p PostgreSQLRelationshipElementHandler) Update(submodelID string, idShortO
 // Returns:
 //   - error: An error if the update operation fails
 func (p PostgreSQLRelationshipElementHandler) UpdateValueOnly(submodelID string, idShortOrPath string, valueOnly gen.SubmodelElementValue) error {
-	// relElemVal, ok := valueOnly.(gen.RelationshipElementValue)
-	// if !ok {
-	// 	return common.NewErrBadRequest("valueOnly is not of type RelationshipElementValue")
-	// }
+	relElemVal, ok := valueOnly.(gen.RelationshipElementValue)
+	if !ok {
+		return common.NewErrBadRequest("valueOnly is not of type RelationshipElementValue")
+	}
 
-	// tx, err := p.db.Begin()
-	// if err != nil {
-	// 	return err
-	// }
-	// defer func() {
-	// 	if err != nil {
-	// 		_ = tx.Rollback()
-	// 	}
-	// }()
+	tx, err := p.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err != nil {
+			_ = tx.Rollback()
+		}
+	}()
 
-	// dialect := goqu.Dialect("postgres")
-	// json := jsoniter.ConfigCompatibleWithStandardLibrary
+	dialect := goqu.Dialect("postgres")
+	json := jsoniter.ConfigCompatibleWithStandardLibrary
 
-	// // Build update record with only the fields that are set
-	// updateRecord := goqu.Record{}
+	// Build update record with only the fields that are set
+	updateRecord := goqu.Record{}
 
-	// if !isEmptyReference(relElemVal.First) {
-	// 	firstRefByte, err := json.Marshal(relElemVal.First)
-	// 	if err != nil {
-	// 		return err
-	// 	}
-	// 	updateRecord["first"] = string(firstRefByte)
-	// }
+	// check if first is set (it is map[string]interface{} so we check for nil)
+	if relElemVal.First != nil {
+		firstRefByte, err := json.Marshal(relElemVal.First)
+		if err != nil {
+			return err
+		}
+		updateRecord["first"] = string(firstRefByte)
+	}
 
-	// if !isEmptyReference(relElemVal.Second) {
-	// 	secondRefByte, err := json.Marshal(relElemVal.Second)
-	// 	if err != nil {
-	// 		return err
-	// 	}
-	// 	updateRecord["second"] = string(secondRefByte)
-	// }
+	if relElemVal.Second != nil {
+		secondRefByte, err := json.Marshal(relElemVal.Second)
+		if err != nil {
+			return err
+		}
+		updateRecord["second"] = string(secondRefByte)
+	}
 
-	// // If nothing to update, return early
-	// if len(updateRecord) == 0 {
-	// 	return nil
-	// }
+	// If nothing to update, return early
+	if len(updateRecord) == 0 {
+		return nil
+	}
 
-	// query, args, err := dialect.Update("relationship_element").
-	// 	Set(updateRecord).
-	// 	Where(goqu.I("id").Eq(
-	// 		dialect.From("submodel_element").
-	// 			Select("id").
-	// 			Where(goqu.Ex{
-	// 				"submodel_id":  submodelID,
-	// 				"idshort_path": idShortOrPath,
-	// 			}),
-	// 	)).
-	// 	ToSQL()
-	// if err != nil {
-	// 	return err
-	// }
+	query, args, err := dialect.Update("relationship_element").
+		Set(updateRecord).
+		Where(goqu.I("id").Eq(
+			dialect.From("submodel_element").
+				Select("id").
+				Where(goqu.Ex{
+					"submodel_id":  submodelID,
+					"idshort_path": idShortOrPath,
+				}),
+		)).
+		ToSQL()
+	if err != nil {
+		return err
+	}
 
-	// _, err = tx.Exec(query, args...)
-	// if err != nil {
-	// 	return common.NewInternalServerError(fmt.Sprintf("failed to execute update for RelationshipElement: %s", err.Error()))
-	// }
-	// err = tx.Commit()
-	// return err
-	return nil
+	_, err = tx.Exec(query, args...)
+	if err != nil {
+		return common.NewInternalServerError(fmt.Sprintf("failed to execute update for RelationshipElement: %s", err.Error()))
+	}
+	err = tx.Commit()
+	return err
 }
 
 // Delete removes a RelationshipElement identified by its idShort or path.
@@ -426,7 +427,7 @@ func insertReference(tx *sql.Tx, ref types.IReference) (int, error) {
 
 	// Insert reference and get ID
 	insertQuery, insertArgs, err := dialect.Insert("reference").
-		Rows(goqu.Record{"type": ref.Type}).
+		Rows(goqu.Record{"type": ref.Type()}).
 		Returning("id").
 		ToSQL()
 	if err != nil {
@@ -445,8 +446,8 @@ func insertReference(tx *sql.Tx, ref types.IReference) (int, error) {
 			Rows(goqu.Record{
 				"reference_id": refID,
 				"position":     i,
-				"type":         key.Type,
-				"value":        key.Value,
+				"type":         key.Type(),
+				"value":        key.Value(),
 			}).
 			ToSQL()
 		if err != nil {

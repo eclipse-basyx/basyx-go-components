@@ -246,12 +246,14 @@ func getBasicEventElementSubquery(dialect goqu.DialectWrapper) *goqu.SelectDatas
 }
 
 func getBlobSubquery(dialect goqu.DialectWrapper) *goqu.SelectDataset {
+	selectFunc := goqu.Func("jsonb_build_object",
+		goqu.V("content_type"), goqu.I("be.content_type"),
+		goqu.V("value"), goqu.L("be.value"),
+	)
+
 	return dialect.From(goqu.T("blob_element").As("be")).
 		Select(
-			goqu.Func("jsonb_build_object",
-				goqu.V("content_type"), goqu.I("be.content_type"),
-				goqu.V("value"), goqu.L("encode(be.value, 'base64')"),
-			),
+			selectFunc,
 		).
 		Where(goqu.I("be.id").Eq(goqu.I("sme.id"))).
 		Limit(1)

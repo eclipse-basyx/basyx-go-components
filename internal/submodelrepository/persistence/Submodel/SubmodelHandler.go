@@ -35,6 +35,7 @@ import (
 
 	// nolint:all
 
+	"github.com/FriedJannik/aas-go-sdk/jsonization"
 	"github.com/FriedJannik/aas-go-sdk/types"
 	_ "github.com/doug-martin/goqu/v9/dialect/postgres"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
@@ -137,7 +138,7 @@ func getSubmodels(db *sql.DB, submodelIDFilter string, limit int64, cursor strin
 		return nil, nil, "", err
 	}
 
-	result, submodelMap, err := buildSubmodels(submodelRows)
+	result, submodelMap, err := buildSubmodels(submodelRows, db)
 	if err != nil {
 		return nil, nil, "", err
 	}
@@ -172,7 +173,7 @@ func scanSubmodelRows(rows *sql.Rows) ([]model.SubmodelRow, error) {
 	return submodelRows, nil
 }
 
-func buildSubmodels(submodelRows []model.SubmodelRow) ([]*types.Submodel, map[string]*types.Submodel, error) {
+func buildSubmodels(submodelRows []model.SubmodelRow, db *sql.DB) ([]*types.Submodel, map[string]*types.Submodel, error) {
 	referenceBuilderRefs := make(map[int64]*builders.ReferenceBuilder)
 	var refMutex sync.RWMutex
 
@@ -195,7 +196,7 @@ func buildSubmodels(submodelRows []model.SubmodelRow) ([]*types.Submodel, map[st
 	for i := 0; i < numWorkers; i++ {
 		go func() {
 			for job := range jobs {
-				submodel, err := parseSubmodelRow(job.row, referenceBuilderRefs, &refMutex)
+				submodel, err := parseSubmodelRow(job.row, referenceBuilderRefs, &refMutex, db)
 				results <- parseResult{submodel: submodel, index: job.index, err: err}
 			}
 		}()
@@ -226,7 +227,7 @@ func buildSubmodels(submodelRows []model.SubmodelRow) ([]*types.Submodel, map[st
 	return result, submodelMap, nil
 }
 
-func parseSubmodelRow(row model.SubmodelRow, referenceBuilderRefs map[int64]*builders.ReferenceBuilder, refMutex *sync.RWMutex) (*types.Submodel, error) {
+func parseSubmodelRow(row model.SubmodelRow, referenceBuilderRefs map[int64]*builders.ReferenceBuilder, refMutex *sync.RWMutex, db *sql.DB) (*types.Submodel, error) {
 	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
 	// Create submodel using SDK factory
@@ -248,9 +249,9 @@ func parseSubmodelRow(row model.SubmodelRow, referenceBuilderRefs map[int64]*bui
 	}
 
 	var (
-		semanticID              []*types.IReference
-		supplementalSemanticIDs []*types.IReference
-		embeddedDataSpecs       []types.EmbeddedDataSpecification
+		semanticID              []types.IReference
+		supplementalSemanticIDs []types.IReference
+		embeddedDataSpecs       []types.IEmbeddedDataSpecification
 		qualifiers              []types.IQualifier
 		extensions              []types.IExtension
 		administration          *types.AdministrativeInformation
@@ -279,7 +280,20 @@ func parseSubmodelRow(row model.SubmodelRow, referenceBuilderRefs map[int64]*bui
 
 	localG.Go(func() error {
 		if common.IsArrayNotEmpty(row.SupplementalSemanticIDs) {
-			return json.Unmarshal(row.SupplementalSemanticIDs, &supplementalSemanticIDs)
+			var jsonable []map[string]any
+			err := json.Unmarshal(row.SupplementalSemanticIDs, &jsonable)
+			if err != nil {
+				return fmt.Errorf("error unmarshaling supplemental semantic IDs for Submodel: %w", err)
+			}
+			var semanticIds []types.IReference
+			for _, item := range jsonable {
+				semanticId, err := jsonization.ReferenceFromJsonable(item)
+				if err != nil {
+					return fmt.Errorf("error converting supplemental semantic ID from jsonable: %w", err)
+				}
+				semanticIds = append(semanticIds, semanticId)
+			}
+			supplementalSemanticIDs = semanticIds
 		}
 		return nil
 	})
@@ -301,13 +315,26 @@ func parseSubmodelRow(row model.SubmodelRow, referenceBuilderRefs map[int64]*bui
 
 	localG.Go(func() error {
 		if common.IsArrayNotEmpty(row.EmbeddedDataSpecification) {
-			return json.Unmarshal(row.EmbeddedDataSpecification, &embeddedDataSpecs)
+			var jsonable []map[string]any
+			err := json.Unmarshal(row.EmbeddedDataSpecification, &jsonable)
+			if err != nil {
+				return fmt.Errorf("error unmarshaling embedded data specifications for Submodel: %w", err)
+			}
+			for _, item := range jsonable {
+				eds, err := jsonization.EmbeddedDataSpecificationFromJsonable(item)
+				if err != nil {
+					return fmt.Errorf("error converting embedded data specification from jsonable: %w", err)
+				}
+				embeddedDataSpecs = append(embeddedDataSpecs, eds)
+			}
+			return nil
+
 		}
 		return nil
 	})
 
 	localG.Go(func() error {
-		q, err := BuildQualifiers(row)
+		q, err := BuildQualifiers(row, db)
 		if err == nil {
 			qualifiers = q
 		}
@@ -316,7 +343,18 @@ func parseSubmodelRow(row model.SubmodelRow, referenceBuilderRefs map[int64]*bui
 
 	localG.Go(func() error {
 		if common.IsArrayNotEmpty(row.Extensions) {
-			return json.Unmarshal(row.Extensions, &extensions)
+			var jsonable []map[string]any
+			err := json.Unmarshal(row.Extensions, &jsonable)
+			if err != nil {
+				return fmt.Errorf("error unmarshaling extensions for Submodel: %w", err)
+			}
+			for _, item := range jsonable {
+				ext, err := jsonization.ExtensionFromJsonable(item)
+				if err != nil {
+					return fmt.Errorf("error converting extension from jsonable: %w", err)
+				}
+				extensions = append(extensions, ext)
+			}
 		}
 		return nil
 	})
@@ -335,23 +373,16 @@ func parseSubmodelRow(row model.SubmodelRow, referenceBuilderRefs map[int64]*bui
 
 	// Assign parsed data to submodel using SDK setters
 	if hasSemanticID(semanticID) {
-		submodel.SetSemanticID(*semanticID[0])
+		submodel.SetSemanticID(semanticID[0])
 	}
 	if len(supplementalSemanticIDs) > 0 {
 		// Convert from []*types.IReference to []types.IReference
 		supplementalRefs := make([]types.IReference, len(supplementalSemanticIDs))
-		for i, ref := range supplementalSemanticIDs {
-			supplementalRefs[i] = *ref
-		}
+		copy(supplementalRefs, supplementalSemanticIDs)
 		submodel.SetSupplementalSemanticIDs(supplementalRefs)
 	}
 	if len(embeddedDataSpecs) > 0 {
-		// Convert to slice of interface
-		eds := make([]types.IEmbeddedDataSpecification, len(embeddedDataSpecs))
-		for i := range embeddedDataSpecs {
-			eds[i] = &embeddedDataSpecs[i]
-		}
-		submodel.SetEmbeddedDataSpecifications(eds)
+		submodel.SetEmbeddedDataSpecifications(embeddedDataSpecs)
 	}
 	if len(qualifiers) > 0 {
 		submodel.SetQualifiers(qualifiers)
@@ -393,7 +424,7 @@ func calculateNextCursor(result []*types.Submodel, limit int64) string {
 }
 
 // BuildQualifiers builds qualifiers from the database row.
-func BuildQualifiers(row model.SubmodelRow) ([]types.IQualifier, error) {
+func BuildQualifiers(row model.SubmodelRow, db *sql.DB) ([]types.IQualifier, error) {
 	if common.IsArrayNotEmpty(row.Qualifiers) {
 		builder := builders.NewQualifiersBuilder()
 		qualifierRows, err := builders.ParseQualifiersRow(row.Qualifiers)
@@ -402,9 +433,8 @@ func BuildQualifiers(row model.SubmodelRow) ([]types.IQualifier, error) {
 		}
 		for _, qualifierRow := range qualifierRows {
 			// Convert string enums to SDK enums
-			kindEnum := types.QualifierKind(qualifierRow.Kind)
 			valueTypeEnum := types.DataTypeDefXSD(qualifierRow.ValueType)
-			_, err = builder.AddQualifier(qualifierRow.DbID, int64(kindEnum), qualifierRow.Type, int64(valueTypeEnum), qualifierRow.Value, qualifierRow.Position)
+			_, err = builder.AddQualifier(qualifierRow.DbID, qualifierRow.Type, int64(valueTypeEnum), qualifierRow.Value, qualifierRow.Position, db)
 			if err != nil {
 				return nil, err
 			}
@@ -539,7 +569,7 @@ func parseDescriptionsToSDK(row model.SubmodelRow) ([]types.ILangStringTextType,
 //
 // Returns:
 //   - bool: true if exactly one semantic ID reference exists, false otherwise
-func hasSemanticID(semanticIDData []*types.IReference) bool {
+func hasSemanticID(semanticIDData []types.IReference) bool {
 	return len(semanticIDData) == 1
 }
 

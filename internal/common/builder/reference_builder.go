@@ -54,8 +54,8 @@ type ReferenceBuilder struct {
 // ReferenceMetadata holds metadata about a reference in the hierarchy, including
 // its parent reference database ID and the reference object itself.
 type ReferenceMetadata struct {
-	parent    int64             // Database ID of the parent reference
-	reference *types.IReference // The reference object
+	parent    int64            // Database ID of the parent reference
+	reference types.IReference // The reference object
 }
 
 // NewReferenceBuilder creates a new ReferenceBuilder instance and initializes a Reference
@@ -148,7 +148,7 @@ func (rb *ReferenceBuilder) CreateReferredSemanticID(referredSemanticIDDbID int6
 		rb.referredSemanticIDBuilders[referredSemanticIDDbID] = newBuilder
 		rb.referredSemanticIDMap[referredSemanticIDDbID] = &ReferenceMetadata{
 			parent:    parentID,
-			reference: &referredSemanticID,
+			reference: referredSemanticID,
 		}
 		if parentID == rb.databaseID {
 			rb.reference.SetReferredSemanticID(referredSemanticID)
@@ -222,7 +222,7 @@ func (rb *ReferenceBuilder) BuildNestedStructure() {
 		}
 		parentID := refMetadata.parent
 		reference := refMetadata.reference
-		parentObj := *rb.referredSemanticIDMap[parentID].reference
-		parentObj.SetReferredSemanticID(*reference)
+		parentObj := rb.referredSemanticIDMap[parentID].reference
+		parentObj.SetReferredSemanticID(reference)
 	}
 }

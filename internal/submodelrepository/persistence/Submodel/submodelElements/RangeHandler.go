@@ -382,23 +382,23 @@ func buildUpdateRangeRecordObject(rangeElem *types.Range, isPut bool) goqu.Recor
 		updateRecord["min_datetime"] = typedValue.MinDateTime
 		updateRecord["max_datetime"] = typedValue.MaxDateTime
 	} else { //nolint:all - elseif: can replace 'else {if cond {}}' with 'else if cond {}' -> this would make the code less readable and has differing semantics
-		// PATCH: Only update if min/max are provided
-		min := ""
+		// PATCH: Only update if minVal/max are provided
+		minVal := ""
 		if rangeElem.Min() != nil {
-			min = *rangeElem.Min()
+			minVal = *rangeElem.Min()
 		}
-		max := ""
+		maxVal := ""
 		if rangeElem.Max() != nil {
-			max = *rangeElem.Max()
+			maxVal = *rangeElem.Max()
 		}
-		typedValue := persistenceutils.MapRangeValueByType(rangeElem.ValueType(), min, max)
-		if min != "" {
+		typedValue := persistenceutils.MapRangeValueByType(rangeElem.ValueType(), minVal, maxVal)
+		if minVal != "" {
 			updateRecord["min_text"] = typedValue.MinText
 			updateRecord["min_num"] = typedValue.MinNumeric
 			updateRecord["min_time"] = typedValue.MinTime
 			updateRecord["min_datetime"] = typedValue.MinDateTime
 		}
-		if max != "" {
+		if maxVal != "" {
 			updateRecord["max_text"] = typedValue.MaxText
 			updateRecord["max_num"] = typedValue.MaxNumeric
 			updateRecord["max_time"] = typedValue.MaxTime

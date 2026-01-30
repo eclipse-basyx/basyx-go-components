@@ -744,20 +744,21 @@ func (p *PostgreSQLSMECrudHandler) GetNextPosition(parentID int) (int, error) {
 //
 //	modelType, err := handler.GetSubmodelElementType("sensors.temperature")
 //	// Use modelType to get the appropriate handler via GetSMEHandlerByModelType
-func (p *PostgreSQLSMECrudHandler) GetSubmodelElementType(idShortPath string) (string, error) {
+func (p *PostgreSQLSMECrudHandler) GetSubmodelElementType(idShortPath string) (*types.ModelType, error) {
 	dialect := goqu.Dialect("postgres")
 	selectQuery, selectArgs, err := dialect.From("submodel_element").
 		Select("model_type").
 		Where(goqu.C("idshort_path").Eq(idShortPath)).
 		ToSQL()
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
-	var modelType string
+	var modelType int64
 	err = p.Db.QueryRow(selectQuery, selectArgs...).Scan(&modelType)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	return modelType, nil
+	modelTypeInstance := types.ModelType(modelType)
+	return &modelTypeInstance, nil
 }

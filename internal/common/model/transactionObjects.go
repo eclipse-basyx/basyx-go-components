@@ -214,8 +214,6 @@ type ValueListRow struct {
 type QualifierRow struct {
 	// DbID is the unique identifier of the qualifier in the database
 	DbID int64 `json:"dbId"`
-	// Kind specifies the kind of qualifier (e.g., ConceptQualifier, ValueQualifier)
-	Kind int64 `json:"kind"`
 	// Type is the type/name of the qualifier
 	Type string `json:"type"`
 	// Position specifies the position of the qualifier
@@ -461,7 +459,7 @@ type OperationValueRow struct {
 // The statements are stored as JSON to accommodate complex structures.
 type EntityValueRow struct {
 	// EntityType specifies the type of the entity.
-	EntityType string `json:"entity_type"`
+	EntityType int64 `json:"entity_type"`
 	// GlobalAssetID specifies the global asset identifier of the entity.
 	GlobalAssetID string `json:"global_asset_id"`
 	// SpecificAssetIDs contains specific asset ID references as JSON data

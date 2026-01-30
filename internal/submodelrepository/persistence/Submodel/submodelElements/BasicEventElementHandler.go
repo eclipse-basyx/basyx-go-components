@@ -313,11 +313,7 @@ func (p PostgreSQLBasicEventElementHandler) UpdateValueOnly(submodelID string, i
 	dialect := goqu.Dialect("postgres")
 
 	var newObservedJson sql.NullString
-	jsonable, err := jsonization.ToJsonable(basicEventValue.Observed)
-	if err != nil {
-		return common.NewErrBadRequest("SMREPO-BEEUVO-OBSJSONABLE Failed to convert observed to jsonable: " + err.Error())
-	}
-	observedBytes, err := json.Marshal(jsonable)
+	observedBytes, err := json.Marshal(basicEventValue.Observed)
 	if err != nil {
 		return common.NewErrBadRequest(fmt.Sprintf("failed to marshal observed value: %s", err))
 	}

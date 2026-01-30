@@ -41,9 +41,9 @@ import (
 )
 
 type EntityValue struct {
-	EntityType *types.EntityType `json:"entityType,omitempty"`
+	EntityType string `json:"entityType,omitempty"`
 
-	GlobalAssetID *string `json:"globalAssetId,omitempty" validate:"regexp=^([\\\\\\\\x09\\\\\\\\x0a\\\\\\\\x0d\\\\\\\\x20-\\\\\\\\ud7ff\\\\\\\\ue000-\\\\\\\\ufffd]|\\\\\\\\ud800[\\\\\\\\udc00-\\\\\\\\udfff]|[\\\\\\\\ud801-\\\\\\\\udbfe][\\\\\\\\udc00-\\\\\\\\udfff]|\\\\\\\\udbff[\\\\\\\\udc00-\\\\\\\\udfff])*$"`
+	GlobalAssetID string `json:"globalAssetId,omitempty" validate:"regexp=^([\\\\\\\\x09\\\\\\\\x0a\\\\\\\\x0d\\\\\\\\x20-\\\\\\\\ud7ff\\\\\\\\ue000-\\\\\\\\ufffd]|\\\\\\\\ud800[\\\\\\\\udc00-\\\\\\\\udfff]|[\\\\\\\\ud801-\\\\\\\\udbfe][\\\\\\\\udc00-\\\\\\\\udfff]|\\\\\\\\udbff[\\\\\\\\udc00-\\\\\\\\udfff])*$"`
 
 	SpecificAssetIds []map[string]any `json:"specificAssetIds,omitempty"`
 

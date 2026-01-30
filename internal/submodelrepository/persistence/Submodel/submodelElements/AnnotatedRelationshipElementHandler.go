@@ -266,31 +266,19 @@ func (p PostgreSQLAnnotatedRelationshipElementHandler) UpdateValueOnly(submodelI
 		var json = jsoniter.ConfigCompatibleWithStandardLibrary
 		var firstRef, secondRef *string
 
-		if len(areValue.First.Keys()) > 0 {
-			jsonable, err := jsonization.ToJsonable(areValue.First)
-			if err != nil {
-				return common.NewErrBadRequest("SMREPO-AREUV-FIRSTJSONABLE Failed to convert first reference to jsonable: " + err.Error())
-			}
-			ref, err := json.Marshal(jsonable)
-			if err != nil {
-				return err
-			}
-			refStr := string(ref)
-			firstRef = &refStr
+		firstRefJson, err := json.Marshal(areValue.First)
+		if err != nil {
+			return err
 		}
+		firstRefStr := string(firstRefJson)
+		firstRef = &firstRefStr
 
-		if len(areValue.Second.Keys()) > 0 {
-			jsonable, err := jsonization.ToJsonable(areValue.Second)
-			if err != nil {
-				return common.NewErrBadRequest("SMREPO-AREUV-SECONDJSONABLE Failed to convert second reference to jsonable: " + err.Error())
-			}
-			ref, err := json.Marshal(jsonable)
-			if err != nil {
-				return err
-			}
-			refStr := string(ref)
-			secondRef = &refStr
+		secondRefJson, err := json.Marshal(areValue.Second)
+		if err != nil {
+			return err
 		}
+		secondRefStr := string(secondRefJson)
+		secondRef = &secondRefStr
 
 		// Update the references in the database using goqu
 		updateQuery, updateArgs, err := dialect.Update("annotated_relationship_element").

@@ -441,7 +441,7 @@ func GetSubmodelElementsForSubmodel(db *sql.DB, submodelID string, idShortPath s
 			_, exists := smeBuilderMap[smeRow.DbID.Int64]
 			mu.Unlock()
 			if !exists {
-				sme, builder, err := builder.BuildSubmodelElement(smeRow)
+				sme, builder, err := builder.BuildSubmodelElement(smeRow, db)
 				if err != nil {
 					buildError = err
 					return
