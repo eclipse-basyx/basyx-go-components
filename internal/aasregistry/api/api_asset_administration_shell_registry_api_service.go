@@ -87,8 +87,19 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) GetAllAssetAdministratio
 			), err
 		}
 	}
+	jsonable := make([]map[string]any, 0, len(aasds))
+	for _, aasd := range aasds {
+		j, toJsonErr := aasd.ToJsonable()
+		if toJsonErr != nil {
+			log.Printf("🧩 [%s] Error in GetAllAssetAdministrationShellDescriptors: ToJsonable failed (aasId=%q): %v", componentName, aasd.Id, toJsonErr)
+			return common.NewErrorResponse(
+				toJsonErr, http.StatusInternalServerError, componentName, "GetAllAssetAdministrationShellDescriptors", "Unhandled-ToJsonable",
+			), toJsonErr
+		}
+		jsonable = append(jsonable, j)
+	}
 
-	return pagedResponse(aasds, nextCursor), nil
+	return pagedResponse(jsonable, nextCursor), nil
 }
 
 // PostAssetAdministrationShellDescriptor - Creates a new Asset Administration Shell Descriptor, i.e. registers an AAS
@@ -136,7 +147,15 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) PostAssetAdministrationS
 		}
 	}
 
-	return model.Response(http.StatusCreated, result), nil
+	j, toJsonErr := result.ToJsonable()
+	if toJsonErr != nil {
+		log.Printf("🧩 [%s] Error in PostAssetAdministrationShellDescriptor: ToJsonable failed (aasId=%q): %v", componentName, result.Id, toJsonErr)
+		return common.NewErrorResponse(
+			toJsonErr, http.StatusInternalServerError, componentName, "PostAssetAdministrationShellDescriptor", "Unhandled-ToJsonable",
+		), toJsonErr
+	}
+
+	return model.Response(http.StatusCreated, j), nil
 }
 
 // GetAssetAdministrationShellDescriptorById - Returns a specific Asset Administration Shell Descriptor
@@ -168,7 +187,14 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) GetAssetAdministrationSh
 		}
 	}
 
-	return model.Response(http.StatusOK, result), nil
+	jsonable, toJsonErr := result.ToJsonable()
+	if toJsonErr != nil {
+		return common.NewErrorResponse(
+			toJsonErr, http.StatusInternalServerError, componentName, "GetAssetAdministrationShellDescriptorById", "Unhandled-ToJsonable",
+		), toJsonErr
+	}
+
+	return model.Response(http.StatusOK, jsonable), nil
 }
 
 // PutAssetAdministrationShellDescriptorById - Creates or updates an existing Asset Administration Shell Descriptor
@@ -221,8 +247,15 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) PutAssetAdministrationSh
 				), err
 			}
 		}
+		j, toJsonErr := result.ToJsonable()
+		if toJsonErr != nil {
+			log.Printf("🧩 [%s] Error in PostAssetAdministrationShellDescriptor: ToJsonable failed (aasId=%q): %v", componentName, result.Id, toJsonErr)
+			return common.NewErrorResponse(
+				toJsonErr, http.StatusInternalServerError, componentName, "PostAssetAdministrationShellDescriptor", "Unhandled-ToJsonable",
+			), toJsonErr
+		}
 
-		return model.Response(http.StatusCreated, result), nil
+		return model.Response(http.StatusCreated, j), nil
 	}
 
 	_, err = s.aasRegistryBackend.ReplaceAdministrationShellDescriptor(ctx, assetAdministrationShellDescriptor)
@@ -324,8 +357,20 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) GetAllSubmodelDescriptor
 		), err
 	}
 
+	jsonable := make([]map[string]any, 0, len(smds))
+	for _, smd := range smds {
+		j, toJsonErr := smd.ToJsonable()
+		if toJsonErr != nil {
+			log.Printf("🧩 [%s] Error in GetAllSubmodelDescriptorsThroughSuperpath: ToJsonable failed (aasId=%q submodelId=%q): %v", componentName, decodedAAS, smd.Id, toJsonErr)
+			return common.NewErrorResponse(
+				toJsonErr, http.StatusInternalServerError, componentName, "GetAllSubmodelDescriptorsThroughSuperpath", "Unhandled-ToJsonable",
+			), toJsonErr
+		}
+		jsonable = append(jsonable, j)
+	}
+
 	// Paging metadata and response envelope
-	return pagedResponse(smds, nextCursor), nil
+	return pagedResponse(jsonable, nextCursor), nil
 }
 
 // PostSubmodelDescriptorThroughSuperpath - Creates a new Submodel Descriptor, i.e. registers a submodel
@@ -384,7 +429,16 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) PostSubmodelDescriptorTh
 		}
 	}
 
-	return model.Response(http.StatusCreated, result), nil
+	jsonable, toJsonErr := result.ToJsonable()
+	if toJsonErr != nil {
+		log.Printf("🧩 [%s] Error in PostSubmodelDescriptorThroughSuperpath: ToJsonable failed (aasId=%q submodelId=%q): %v", componentName, decodedAAS, result.Id, toJsonErr)
+
+		return common.NewErrorResponse(
+			toJsonErr, http.StatusInternalServerError, componentName, "PostSubmodelDescriptorThroughSuperpath", "Unhandled-ToJsonable",
+		), toJsonErr
+	}
+
+	return model.Response(http.StatusCreated, jsonable), nil
 }
 
 // GetSubmodelDescriptorByIdThroughSuperpath - Returns a specific Submodel Descriptor
@@ -417,7 +471,16 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) GetSubmodelDescriptorByI
 		}
 	}
 
-	return model.Response(http.StatusOK, smd), nil
+	jsonable, toJsonErr := smd.ToJsonable()
+	if toJsonErr != nil {
+		log.Printf("🧩 [%s] Error in GetSubmodelDescriptorByIdThroughSuperpath: ToJsonable failed (aasId=%q submodelId=%q): %v", componentName, decodedAAS, smd.Id, toJsonErr)
+
+		return common.NewErrorResponse(
+			toJsonErr, http.StatusInternalServerError, componentName, "GetSubmodelDescriptorByIdThroughSuperpath", "Unhandled-ToJsonable",
+		), toJsonErr
+	}
+
+	return model.Response(http.StatusOK, jsonable), nil
 }
 
 // PutSubmodelDescriptorByIdThroughSuperpath - Creates or updates an existing Submodel Descriptor
@@ -480,7 +543,15 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) PutSubmodelDescriptorByI
 				), err
 			}
 		}
-		return model.Response(http.StatusCreated, result), nil
+		jsonable, toJsonErr := result.ToJsonable()
+		if toJsonErr != nil {
+			log.Printf("🧩 [%s] Error in PutSubmodelDescriptorByIdThroughSuperpath: ToJsonable failed (aasId=%q submodelId=%q): %v", componentName, decodedAAS, submodelDescriptor.Id, toJsonErr)
+
+			return common.NewErrorResponse(
+				toJsonErr, http.StatusInternalServerError, componentName, "PutSubmodelDescriptorByIdThroughSuperpath", "Unhandled-ToJsonable",
+			), toJsonErr
+		}
+		return model.Response(http.StatusCreated, jsonable), nil
 	}
 
 	// Replace in a single transaction (delete + insert)
@@ -578,6 +649,18 @@ func (s *AssetAdministrationShellRegistryAPIAPIService) QueryAssetAdministration
 		}
 	}
 
-	return pagedResponse(aasds, nextCursor), nil
+	var jsonable []map[string]any
+	for _, aasd := range aasds {
+		j, toJsonErr := aasd.ToJsonable()
+		if toJsonErr != nil {
+			log.Printf("🧩 [%s] Error in QueryAssetAdministrationShellDescriptors: ToJsonable failed (aasId=%q): %v", componentName, aasd.Id, toJsonErr)
+			return common.NewErrorResponse(
+				toJsonErr, http.StatusInternalServerError, componentName, "QueryAssetAdministrationShellDescriptors", "Unhandled-ToJsonable",
+			), toJsonErr
+		}
+		jsonable = append(jsonable, j)
+	}
+
+	return pagedResponse(jsonable, nextCursor), nil
 
 }
