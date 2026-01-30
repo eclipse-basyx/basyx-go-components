@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 
+	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
@@ -63,11 +64,7 @@ func InsertRegistryDescriptorTx(_ context.Context, tx *sql.Tx, regdesc model.Reg
 		return common.NewInternalServerError("Failed to create DisplayName - no changes applied - see console for details")
 	}
 	displayNameID = dnID
-	var convertedDescription []model.LangStringText
-	for _, desc := range regdesc.Description {
-		convertedDescription = append(convertedDescription, desc)
-	}
-	descID, err := persistence_utils.CreateLangStringTextTypes(tx, convertedDescription)
+	descID, err := persistence_utils.CreateLangStringTextTypes(tx, regdesc.Description)
 	if err != nil {
 		return common.NewInternalServerError("Failed to create Description - no changes applied - see console for details")
 	}
@@ -169,9 +166,9 @@ func GetRegistryDescriptorByID(
 	g, ctx := errgroup.WithContext(ctx)
 
 	var (
-		adminInfo   *model.AdministrativeInformation
-		displayName []model.LangStringNameType
-		description []model.LangStringTextType
+		adminInfo   types.IAdministrativeInformation
+		displayName []types.ILangStringNameType
+		description []types.ILangStringTextType
 		endpoints   []model.Endpoint
 	)
 
@@ -185,11 +182,11 @@ func GetRegistryDescriptorByID(
 		}
 		return nil
 	})
-	GoAssign(g, func() ([]model.LangStringNameType, error) {
+	GoAssign(g, func() ([]types.ILangStringNameType, error) {
 		return persistence_utils.GetLangStringNameTypes(db, displayNameID)
 	}, &displayName)
 
-	GoAssign(g, func() ([]model.LangStringTextType, error) {
+	GoAssign(g, func() ([]types.ILangStringTextType, error) {
 		return persistence_utils.GetLangStringTextTypes(db, descriptionID)
 	}, &description)
 
@@ -463,29 +460,29 @@ func ListRegistryDescriptors(
 		}
 	}
 
-	admByID := map[int64]*model.AdministrativeInformation{}
-	dnByID := map[int64][]model.LangStringNameType{}
-	descByID := map[int64][]model.LangStringTextType{}
+	admByID := map[int64]types.IAdministrativeInformation{}
+	dnByID := map[int64][]types.ILangStringNameType{}
+	descByID := map[int64][]types.ILangStringTextType{}
 	endpointsByDesc := map[int64][]model.Endpoint{}
 
 	g, gctx := errgroup.WithContext(ctx)
 
 	if len(adminInfoIDs) > 0 {
 		ids := append([]int64(nil), adminInfoIDs...)
-		GoAssign(g, func() (map[int64]*model.AdministrativeInformation, error) {
+		GoAssign(g, func() (map[int64]types.IAdministrativeInformation, error) {
 			return ReadAdministrativeInformationByIDs(gctx, db, tblRegistryDescriptor, ids)
 		}, &admByID)
 	}
 	if len(displayNameIDs) > 0 {
 		ids := append([]int64(nil), displayNameIDs...)
-		GoAssign(g, func() (map[int64][]model.LangStringNameType, error) {
+		GoAssign(g, func() (map[int64][]types.ILangStringNameType, error) {
 			return GetLangStringNameTypesByIDs(db, ids)
 		}, &dnByID)
 	}
 
 	if len(descriptionIDs) > 0 {
 		ids := append([]int64(nil), descriptionIDs...)
-		GoAssign(g, func() (map[int64][]model.LangStringTextType, error) {
+		GoAssign(g, func() (map[int64][]types.ILangStringTextType, error) {
 			return GetLangStringTextTypesByIDs(db, ids)
 		}, &descByID)
 	}
@@ -503,7 +500,7 @@ func ListRegistryDescriptors(
 
 	out := make([]model.RegistryDescriptor, 0, len(descRows))
 	for _, r := range descRows {
-		var adminInfo *model.AdministrativeInformation
+		var adminInfo types.IAdministrativeInformation
 		if r.AdminInfoID.Valid {
 			if v, ok := admByID[r.AdminInfoID.Int64]; ok {
 				tmp := v
@@ -511,12 +508,12 @@ func ListRegistryDescriptors(
 			}
 		}
 
-		var displayName []model.LangStringNameType
+		var displayName []types.ILangStringNameType
 		if r.DisplayNameID.Valid {
 			displayName = dnByID[r.DisplayNameID.Int64]
 		}
 
-		var description []model.LangStringTextType
+		var description []types.ILangStringTextType
 		if r.DescriptionID.Valid {
 			description = descByID[r.DescriptionID.Int64]
 		}

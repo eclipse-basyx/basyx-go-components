@@ -20,7 +20,8 @@
                                     "value": [
                                         {
                                             "idShort": "6",
-                                            "modelType": "SubmodelElementList",                        "typeValueListElement": "Property",
+                                            "modelType": "SubmodelElementList",                        
+                                            "typeValueListElement": "Property",
                                             "value": [
                                                 {
                                                     "idShort": "1",

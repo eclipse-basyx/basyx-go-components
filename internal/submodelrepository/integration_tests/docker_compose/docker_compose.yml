@@ -30,7 +30,7 @@ services:
       - POSTGRES_MAXIDLECONNECTIONS=500
       - POSTGRES_CONNMAXLIFETIMEMINUTES=5
       - JWS_PRIVATEKEYPATH=/root/rsa-key.pem
-      - SERVER_STRICTVERIFICATION=false
+      - SERVER_STRICTVERIFICATION=true
     volumes:
       - ./rsa-key.pem:/root/rsa-key.pem:ro
     ports:

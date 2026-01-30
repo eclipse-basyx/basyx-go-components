@@ -31,10 +31,10 @@ import (
 	"database/sql"
 	"fmt"
 
+	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
 	"github.com/doug-martin/goqu/v9/exp"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/builder"
-	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/lib/pq"
 )
 
@@ -59,9 +59,9 @@ import (
 // errors, or if the builder returns an error while attaching keys.
 //
 // Note: the function prints the elapsed time to stdout for basic diagnostics.
-func GetReferencesByIDsBatch(db DBQueryer, ids []int64) (map[int64]*model.Reference, error) {
+func GetReferencesByIDsBatch(db DBQueryer, ids []int64) (map[int64]types.IReference, error) {
 	if len(ids) == 0 {
-		return map[int64]*model.Reference{}, nil
+		return map[int64]types.IReference{}, nil
 	}
 
 	d := goqu.Dialect(dialect)
@@ -80,9 +80,9 @@ func GetReferencesByIDsBatch(db DBQueryer, ids []int64) (map[int64]*model.Refere
 
 	type rootRow struct {
 		rootID   int64
-		rootType string
+		rootType int64
 		keyID    sql.NullInt64
-		keyType  sql.NullString
+		keyType  sql.NullInt64
 		keyValue sql.NullString
 	}
 
@@ -94,7 +94,7 @@ func GetReferencesByIDsBatch(db DBQueryer, ids []int64) (map[int64]*model.Refere
 		_ = rows.Close()
 	}()
 
-	refs := make(map[int64]*model.Reference)
+	refs := make(map[int64]types.IReference)
 	builders := make(map[int64]*builder.ReferenceBuilder)
 
 	for rows.Next() {
@@ -106,7 +106,8 @@ func GetReferencesByIDsBatch(db DBQueryer, ids []int64) (map[int64]*model.Refere
 		_, ok := refs[rr.rootID]
 		var b *builder.ReferenceBuilder
 		if !ok {
-			rf, nb := builder.NewReferenceBuilder(rr.rootType, rr.rootID)
+			refType := types.ReferenceTypes(rr.rootType)
+			rf, nb := builder.NewReferenceBuilder(refType, rr.rootID)
 			refs[rr.rootID] = rf
 			builders[rr.rootID] = nb
 			b = nb
@@ -115,7 +116,7 @@ func GetReferencesByIDsBatch(db DBQueryer, ids []int64) (map[int64]*model.Refere
 		}
 
 		if rr.keyID.Valid && rr.keyType.Valid && rr.keyValue.Valid {
-			b.CreateKey(rr.keyID.Int64, rr.keyType.String, rr.keyValue.String)
+			b.CreateKey(rr.keyID.Int64, types.KeyTypes(rr.keyType.Int64), rr.keyValue.String)
 		}
 	}
 	if err := rows.Err(); err != nil {
@@ -123,7 +124,7 @@ func GetReferencesByIDsBatch(db DBQueryer, ids []int64) (map[int64]*model.Refere
 	}
 
 	if len(refs) == 0 {
-		return map[int64]*model.Reference{}, nil
+		return map[int64]types.IReference{}, nil
 	}
 
 	ref := goqu.T(tblReference).As("ref")
@@ -158,11 +159,11 @@ func GetReferencesByIDsBatch(db DBQueryer, ids []int64) (map[int64]*model.Refere
 func processDescendantRows(descRows *sql.Rows, builders map[int64]*builder.ReferenceBuilder) error {
 	type descRow struct {
 		id        int64
-		typ       string
+		typ       int64
 		parentRef sql.NullInt64
 		rootRef   sql.NullInt64
 		keyID     sql.NullInt64
-		keyType   sql.NullString
+		keyType   sql.NullInt64
 		keyValue  sql.NullString
 	}
 
@@ -193,12 +194,12 @@ func processDescendantRows(descRows *sql.Rows, builders map[int64]*builder.Refer
 		}
 
 		if !seenPerRoot[rootID][dr.id] {
-			b.CreateReferredSemanticID(dr.id, parentID, dr.typ)
+			b.CreateReferredSemanticID(dr.id, parentID, types.ReferenceTypes(dr.typ))
 			seenPerRoot[rootID][dr.id] = true
 		}
 
 		if dr.keyID.Valid && dr.keyType.Valid && dr.keyValue.Valid {
-			if err := b.CreateReferredSemanticIDKey(dr.id, dr.keyID.Int64, dr.keyType.String, dr.keyValue.String); err != nil {
+			if err := b.CreateReferredSemanticIDKey(dr.id, dr.keyID.Int64, types.KeyTypes(dr.keyType.Int64), dr.keyValue.String); err != nil {
 				return err
 			}
 		}
@@ -268,8 +269,8 @@ func readEntityReferences1ToMany(
 	relationTable string,
 	entityFKCol string,
 	referenceFKCol string,
-) (map[int64][]model.Reference, error) {
-	out := make(map[int64][]model.Reference, len(entityIDs))
+) (map[int64][]types.IReference, error) {
+	out := make(map[int64][]types.IReference, len(entityIDs))
 	if len(entityIDs) == 0 {
 		return out, nil
 	}
@@ -344,14 +345,14 @@ func readEntityReferences1ToMany(
 			continue
 		}
 		seen := make(map[int64]struct{}, len(refIDs))
-		list := make([]model.Reference, 0, len(refIDs))
+		list := make([]types.IReference, 0, len(refIDs))
 		for _, rid := range refIDs {
 			if _, ok := seen[rid]; ok {
 				continue
 			}
 			seen[rid] = struct{}{}
 			if r := refByID[rid]; r != nil {
-				list = append(list, *r)
+				list = append(list, r)
 			}
 		}
 		out[eID] = list

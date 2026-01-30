@@ -29,12 +29,12 @@ package descriptors
 import (
 	"database/sql"
 
+	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
-	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	persistence_utils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
 )
 
-func createSpecificAssetID(tx *sql.Tx, descriptorID int64, specificAssetIDs []model.SpecificAssetID) error {
+func createSpecificAssetID(tx *sql.Tx, descriptorID int64, specificAssetIDs []types.ISpecificAssetID) error {
 	if specificAssetIDs == nil {
 		return nil
 	}
@@ -43,11 +43,11 @@ func createSpecificAssetID(tx *sql.Tx, descriptorID int64, specificAssetIDs []mo
 		for i, val := range specificAssetIDs {
 			var a sql.NullInt64
 
-			externalSubjectReferenceID, err := persistence_utils.CreateReference(tx, val.ExternalSubjectID, a, a)
+			externalSubjectReferenceID, err := persistence_utils.CreateReference(tx, val.ExternalSubjectID(), a, a)
 			if err != nil {
 				return err
 			}
-			semanticID, err := persistence_utils.CreateReference(tx, val.SemanticID, a, a)
+			semanticID, err := persistence_utils.CreateReference(tx, val.SemanticID(), a, a)
 			if err != nil {
 				return err
 			}
@@ -58,8 +58,8 @@ func createSpecificAssetID(tx *sql.Tx, descriptorID int64, specificAssetIDs []mo
 					colDescriptorID:       descriptorID,
 					colPosition:           i,
 					colSemanticID:         semanticID,
-					colName:               val.Name,
-					colValue:              val.Value,
+					colName:               val.Name(),
+					colValue:              val.Value(),
 					colExternalSubjectRef: externalSubjectReferenceID,
 				}).
 				Returning(tSpecificAssetID.Col(colID)).
@@ -72,7 +72,7 @@ func createSpecificAssetID(tx *sql.Tx, descriptorID int64, specificAssetIDs []mo
 				return err
 			}
 
-			if err = createSpecificAssetIDSupplementalSemantic(tx, id, val.SupplementalSemanticIds); err != nil {
+			if err = createSpecificAssetIDSupplementalSemantic(tx, id, val.SupplementalSemanticIDs()); err != nil {
 				return err
 			}
 		}
@@ -80,7 +80,7 @@ func createSpecificAssetID(tx *sql.Tx, descriptorID int64, specificAssetIDs []mo
 	return nil
 }
 
-func createSpecificAssetIDSupplementalSemantic(tx *sql.Tx, specificAssetID int64, references []model.Reference) error {
+func createSpecificAssetIDSupplementalSemantic(tx *sql.Tx, specificAssetID int64, references []types.IReference) error {
 	if len(references) == 0 {
 		return nil
 	}
@@ -88,7 +88,7 @@ func createSpecificAssetIDSupplementalSemantic(tx *sql.Tx, specificAssetID int64
 	rows := make([]goqu.Record, 0, len(references))
 	for i := range references {
 		var a sql.NullInt64
-		referenceID, err := persistence_utils.CreateReference(tx, &references[i], a, a)
+		referenceID, err := persistence_utils.CreateReference(tx, references[i], a, a)
 		if err != nil {
 			return err
 		}

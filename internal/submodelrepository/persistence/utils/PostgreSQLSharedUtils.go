@@ -658,11 +658,11 @@ func CreateLangStringNameTypes(tx *sql.Tx, nameTypes []types.ILangStringNameType
 // Returns:
 //   - []gen.LangStringNameType: Slice of retrieved LangStringNameType objects, or nil if the ID is invalid
 //   - error: An error if the query fails
-func GetLangStringNameTypes(db *sql.DB, nameTypeID sql.NullInt64) ([]gen.LangStringNameType, error) {
+func GetLangStringNameTypes(db *sql.DB, nameTypeID sql.NullInt64) ([]types.ILangStringNameType, error) {
 	if !nameTypeID.Valid {
 		return nil, nil
 	}
-	var nameTypes []gen.LangStringNameType
+	var nameTypes []types.ILangStringNameType
 	ds := goqu.Dialect("postgres").
 		From("lang_string_name_type").
 		Select("text", "language").
@@ -688,7 +688,8 @@ func GetLangStringNameTypes(db *sql.DB, nameTypeID sql.NullInt64) ([]gen.LangStr
 		if err := rows.Scan(&text, &language); err != nil {
 			return nil, err
 		}
-		nameTypes = append(nameTypes, gen.LangStringNameType{Text: text, Language: language})
+		nameType := types.NewLangStringNameType(language, text)
+		nameTypes = append(nameTypes, nameType)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -742,11 +743,11 @@ func CreateLangStringTextTypes(tx *sql.Tx, textTypes []types.ILangStringTextType
 // Returns:
 //   - []gen.LangStringTextType: Slice of retrieved LangStringTextType objects, or nil if the ID is invalid
 //   - error: An error if the query fails
-func GetLangStringTextTypes(db *sql.DB, textTypeID sql.NullInt64) ([]gen.LangStringTextType, error) {
+func GetLangStringTextTypes(db *sql.DB, textTypeID sql.NullInt64) ([]types.ILangStringTextType, error) {
 	if !textTypeID.Valid {
 		return nil, nil
 	}
-	var textTypes []gen.LangStringTextType
+	var textTypes []types.ILangStringTextType
 	ds := goqu.Dialect("postgres").
 		From("lang_string_text_type").
 		Select("text", "language").
@@ -772,7 +773,8 @@ func GetLangStringTextTypes(db *sql.DB, textTypeID sql.NullInt64) ([]gen.LangStr
 		if err := rows.Scan(&text, &language); err != nil {
 			return nil, err
 		}
-		textTypes = append(textTypes, gen.LangStringTextType{Text: text, Language: language})
+		textType := types.NewLangStringTextType(language, text)
+		textTypes = append(textTypes, textType)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err

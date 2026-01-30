@@ -33,10 +33,10 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	builders "github.com/eclipse-basyx/basyx-go-components/internal/common/builder"
-	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/queries"
 	"github.com/lib/pq"
 )
@@ -66,18 +66,18 @@ func ReadAdministrativeInformationByID(
 	db DBQueryer,
 	tableName string,
 	adminInfoID sql.NullInt64,
-) (*model.AdministrativeInformation, error) {
+) (types.IAdministrativeInformation, error) {
 	if !adminInfoID.Valid {
-		return &model.AdministrativeInformation{}, errors.New("administrative information ID is NULL/invalid")
+		return nil, errors.New("administrative information ID is NULL/invalid")
 	}
 
 	m, err := ReadAdministrativeInformationByIDs(ctx, db, tableName, []int64{adminInfoID.Int64})
 	if err != nil {
-		return &model.AdministrativeInformation{}, err
+		return nil, err
 	}
 	v, ok := m[adminInfoID.Int64]
 	if !ok {
-		return &model.AdministrativeInformation{}, fmt.Errorf("administrative information with id %d not found", adminInfoID.Int64)
+		return nil, fmt.Errorf("administrative information with id %d not found", adminInfoID.Int64)
 	}
 	return v, nil
 }
@@ -96,8 +96,8 @@ func ReadAdministrativeInformationByIDs(
 	db DBQueryer,
 	tableName string,
 	adminInfoIDs []int64,
-) (map[int64]*model.AdministrativeInformation, error) {
-	out := make(map[int64]*model.AdministrativeInformation, len(adminInfoIDs))
+) (map[int64]types.IAdministrativeInformation, error) {
+	out := make(map[int64]types.IAdministrativeInformation, len(adminInfoIDs))
 	if len(adminInfoIDs) == 0 {
 		return out, nil
 	}
@@ -166,13 +166,30 @@ func ReadAdministrativeInformationByIDs(
 			return nil, fmt.Errorf("building administration (id %d) failed: %w", r.ID, err)
 		}
 
-		out[r.ID] = &model.AdministrativeInformation{
-			Version:                    admin.Version,
-			Revision:                   admin.Revision,
-			TemplateID:                 admin.TemplateID,
-			Creator:                    admin.Creator,
-			EmbeddedDataSpecifications: admin.EmbeddedDataSpecifications,
+		// out[r.ID] = &model.AdministrativeInformation{
+		// 	Version:                    admin.Version,
+		// 	Revision:                   admin.Revision,
+		// 	TemplateID:                 admin.TemplateID,
+		// 	Creator:                    admin.Creator,
+		// 	EmbeddedDataSpecifications: admin.EmbeddedDataSpecifications,
+		// }
+		adminInfo := types.NewAdministrativeInformation()
+		if admin.Version != nil {
+			adminInfo.SetVersion(admin.Version())
 		}
+		if admin.Revision != nil {
+			adminInfo.SetRevision(admin.Revision())
+		}
+		if admin.TemplateID != nil {
+			adminInfo.SetTemplateID(admin.TemplateID())
+		}
+		if admin.Creator != nil {
+			adminInfo.SetCreator(admin.Creator())
+		}
+		if admin.EmbeddedDataSpecifications != nil {
+			adminInfo.SetEmbeddedDataSpecifications(admin.EmbeddedDataSpecifications())
+		}
+		out[r.ID] = adminInfo
 	}
 
 	if err := rows.Err(); err != nil {

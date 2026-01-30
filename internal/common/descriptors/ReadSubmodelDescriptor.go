@@ -31,6 +31,7 @@ import (
 	"database/sql"
 	"fmt"
 
+	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
@@ -260,41 +261,41 @@ func ReadSubmodelDescriptorsByAASDescriptorIDs(
 	uniqDescIDs := descIDs
 	uniqDisplayNameIDs := displayNameIDs
 
-	semRefByID := map[int64]*model.Reference{}
-	admByID := map[int64]*model.AdministrativeInformation{}
-	nameByID := map[int64][]model.LangStringNameType{}
-	descByID := map[int64][]model.LangStringTextType{}
-	suppBySmdDesc := map[int64][]model.Reference{}
+	semRefByID := map[int64]types.IReference{}
+	admByID := map[int64]types.IAdministrativeInformation{}
+	nameByID := map[int64][]types.ILangStringNameType{}
+	descByID := map[int64][]types.ILangStringTextType{}
+	suppBySmdDesc := map[int64][]types.IReference{}
 	endpointsByDesc := map[int64][]model.Endpoint{}
-	extensionsByDesc := map[int64][]model.Extension{}
+	extensionsByDesc := map[int64][]types.Extension{}
 
 	if allowParallel {
 		g, gctx := errgroup.WithContext(ctx)
 
 		if len(uniqSemRefIDs) > 0 {
 			ids := uniqSemRefIDs
-			GoAssign(g, func() (map[int64]*model.Reference, error) {
+			GoAssign(g, func() (map[int64]types.IReference, error) {
 				return GetReferencesByIDsBatch(db, ids)
 			}, &semRefByID)
 		}
 
 		if len(uniqAdminInfoIDs) > 0 {
 			ids := uniqAdminInfoIDs
-			GoAssign(g, func() (map[int64]*model.AdministrativeInformation, error) {
+			GoAssign(g, func() (map[int64]types.IAdministrativeInformation, error) {
 				return ReadAdministrativeInformationByIDs(gctx, db, tblSubmodelDescriptor, ids)
 			}, &admByID)
 		}
 
 		if len(uniqDisplayNameIDs) > 0 {
 			ids := uniqDisplayNameIDs
-			GoAssign(g, func() (map[int64][]model.LangStringNameType, error) {
+			GoAssign(g, func() (map[int64][]types.ILangStringNameType, error) {
 				return GetLangStringNameTypesByIDs(db, ids)
 			}, &nameByID)
 		}
 
 		if len(uniqDescIDs) > 0 {
 			ids := uniqDescIDs
-			GoAssign(g, func() (map[int64][]model.LangStringTextType, error) {
+			GoAssign(g, func() (map[int64][]types.ILangStringTextType, error) {
 				return GetLangStringTextTypesByIDs(db, ids)
 			}, &descByID)
 		}
@@ -302,7 +303,7 @@ func ReadSubmodelDescriptorsByAASDescriptorIDs(
 		if len(uniqSmdDescIDs) > 0 {
 			smdIDs := uniqSmdDescIDs
 
-			GoAssign(g, func() (map[int64][]model.Reference, error) {
+			GoAssign(g, func() (map[int64][]types.IReference, error) {
 				return readEntityReferences1ToMany(
 					gctx, db, smdIDs,
 					tblSubmodelDescriptorSuppSemantic,
@@ -317,7 +318,7 @@ func ReadSubmodelDescriptorsByAASDescriptorIDs(
 			}, &endpointsByDesc)
 
 			// Extensions
-			GoAssign(g, func() (map[int64][]model.Extension, error) {
+			GoAssign(g, func() (map[int64][]types.Extension, error) {
 				return ReadExtensionsByDescriptorIDs(gctx, db, smdIDs)
 			}, &extensionsByDesc)
 		}
@@ -375,20 +376,20 @@ func ReadSubmodelDescriptorsByAASDescriptorIDs(
 	// Assemble
 	for aasID, rowsForAAS := range perAAS {
 		for _, r := range rowsForAAS {
-			var semanticRef *model.Reference
+			var semanticRef types.IReference
 			if r.SemanticRefID.Valid {
 				semanticRef = semRefByID[r.SemanticRefID.Int64]
 			}
-			var adminInfo *model.AdministrativeInformation
+			var adminInfo types.IAdministrativeInformation
 			if r.AdminInfoID.Valid {
 				adminInfo = admByID[r.AdminInfoID.Int64]
 			}
 
-			var displayName []model.LangStringNameType
+			var displayName []types.ILangStringNameType
 			if r.DisplayNameID.Valid {
 				displayName = nameByID[r.DisplayNameID.Int64]
 			}
-			var description []model.LangStringTextType
+			var description []types.ILangStringTextType
 			if r.DescriptionID.Valid {
 				description = descByID[r.DescriptionID.Int64]
 			}

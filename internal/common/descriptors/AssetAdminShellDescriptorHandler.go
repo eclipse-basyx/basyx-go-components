@@ -46,8 +46,8 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"fmt"
 
+	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
@@ -125,11 +125,7 @@ func InsertAdministrationShellDescriptorTx(_ context.Context, tx *sql.Tx, aasd m
 		return common.NewInternalServerError("Failed to create DisplayName - no changes applied - see console for details")
 	}
 	displayNameID = dnID
-	var convertedDescription []model.LangStringText
-	for _, desc := range aasd.Description {
-		convertedDescription = append(convertedDescription, desc)
-	}
-	descID, err := persistence_utils.CreateLangStringTextTypes(tx, convertedDescription)
+	descID, err := persistence_utils.CreateLangStringTextTypes(tx, aasd.Description)
 	if err != nil {
 		return common.NewInternalServerError("Failed to create Description - no changes applied - see console for details")
 	}
@@ -555,12 +551,12 @@ func listAssetAdministrationShellDescriptors(
 		}
 	}
 
-	admByID := map[int64]*model.AdministrativeInformation{}
-	dnByID := map[int64][]model.LangStringNameType{}
-	descByID := map[int64][]model.LangStringTextType{}
+	admByID := map[int64]types.IAdministrativeInformation{}
+	dnByID := map[int64][]types.ILangStringNameType{}
+	descByID := map[int64][]types.ILangStringTextType{}
 	endpointsByDesc := map[int64][]model.Endpoint{}
-	specificByDesc := map[int64][]model.SpecificAssetID{}
-	extByDesc := map[int64][]model.Extension{}
+	specificByDesc := map[int64][]types.ISpecificAssetID{}
+	extByDesc := map[int64][]types.Extension{}
 	smdByDesc := map[int64][]model.SubmodelDescriptor{}
 
 	if allowParallel {
@@ -568,20 +564,20 @@ func listAssetAdministrationShellDescriptors(
 
 		if len(adminInfoIDs) > 0 {
 			ids := append([]int64(nil), adminInfoIDs...)
-			GoAssign(g, func() (map[int64]*model.AdministrativeInformation, error) {
+			GoAssign(g, func() (map[int64]types.IAdministrativeInformation, error) {
 				return ReadAdministrativeInformationByIDs(gctx, db, tblAASDescriptor, ids)
 			}, &admByID)
 		}
 		if len(displayNameIDs) > 0 {
 			ids := append([]int64(nil), displayNameIDs...)
-			GoAssign(g, func() (map[int64][]model.LangStringNameType, error) {
+			GoAssign(g, func() (map[int64][]types.ILangStringNameType, error) {
 				return GetLangStringNameTypesByIDs(db, ids)
 			}, &dnByID)
 		}
 
 		if len(descriptionIDs) > 0 {
 			ids := append([]int64(nil), descriptionIDs...)
-			GoAssign(g, func() (map[int64][]model.LangStringTextType, error) {
+			GoAssign(g, func() (map[int64][]types.ILangStringTextType, error) {
 				return GetLangStringTextTypesByIDs(db, ids)
 			}, &descByID)
 		}
@@ -591,10 +587,10 @@ func listAssetAdministrationShellDescriptors(
 			GoAssign(g, func() (map[int64][]model.Endpoint, error) {
 				return ReadEndpointsByDescriptorIDs(gctx, db, ids, true)
 			}, &endpointsByDesc)
-			GoAssign(g, func() (map[int64][]model.SpecificAssetID, error) {
+			GoAssign(g, func() (map[int64][]types.ISpecificAssetID, error) {
 				return ReadSpecificAssetIDsByDescriptorIDs(gctx, db, ids)
 			}, &specificByDesc)
-			GoAssign(g, func() (map[int64][]model.Extension, error) {
+			GoAssign(g, func() (map[int64][]types.Extension, error) {
 				return ReadExtensionsByDescriptorIDs(gctx, db, ids)
 			}, &extByDesc)
 			GoAssign(g, func() (map[int64][]model.SubmodelDescriptor, error) {
@@ -647,16 +643,12 @@ func listAssetAdministrationShellDescriptors(
 
 	out := make([]model.AssetAdministrationShellDescriptor, 0, len(descRows))
 	for _, r := range descRows {
-		var ak *model.AssetKind
-		if r.AssetKindStr.Valid && r.AssetKindStr.String != "" {
-			v, convErr := model.NewAssetKindFromValue(r.AssetKindStr.String)
-			if convErr != nil {
-				return nil, "", fmt.Errorf("invalid AssetKind %q for AAS %s", r.AssetKindStr.String, r.IDStr)
-			}
-			ak = &v
+		var ak types.AssetKind
+		if r.AssetKindStr.Valid {
+			ak = types.AssetKind(r.AssetKindStr.Int64)
 		}
 
-		var adminInfo *model.AdministrativeInformation
+		var adminInfo types.IAdministrativeInformation
 		if r.AdminInfoID.Valid {
 			if v, ok := admByID[r.AdminInfoID.Int64]; ok {
 				tmp := v
@@ -664,12 +656,12 @@ func listAssetAdministrationShellDescriptors(
 			}
 		}
 
-		var displayName []model.LangStringNameType
+		var displayName []types.ILangStringNameType
 		if r.DisplayNameID.Valid {
 			displayName = dnByID[r.DisplayNameID.Int64]
 		}
 
-		var description []model.LangStringTextType
+		var description []types.ILangStringTextType
 		if r.DescriptionID.Valid {
 			description = descByID[r.DescriptionID.Int64]
 		}
