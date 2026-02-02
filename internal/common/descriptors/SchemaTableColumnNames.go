@@ -69,6 +69,8 @@ const (
 	aliasSubmodelDescriptorEndpoint               = "submodel_descriptor_endpoint"
 	aliasSubmodelDescriptorSemanticIDReference    = "aasdesc_submodel_descriptor_semantic_id_reference"
 	aliasSubmodelDescriptorSemanticIDReferenceKey = "aasdesc_submodel_descriptor_semantic_id_reference_key"
+	aliasRegistryDescriptor                       = tblRegistryDescriptor
+	aliasRegistryDescriptorEndpoint               = "registry_descriptor_endpoint"
 )
 
 // Columns holds the column names used by descriptor queries. Centralizing the
@@ -141,4 +143,5 @@ var (
 	tAASDescriptor         = goqu.T(tblAASDescriptor)
 	tAASDescriptorEndpoint = goqu.T(tblAASDescriptorEndpoint)
 	tSpecificAssetID       = goqu.T(tblSpecificAssetID)
+	tRegistryDescriptor    = goqu.T(tblRegistryDescriptor)
 )

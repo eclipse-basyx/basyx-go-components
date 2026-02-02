@@ -313,7 +313,7 @@ func ReadSubmodelDescriptorsByAASDescriptorIDs(
 
 			// Endpoints
 			GoAssign(g, func() (map[int64][]model.Endpoint, error) {
-				return ReadEndpointsByDescriptorIDs(gctx, db, smdIDs, false)
+				return ReadEndpointsByDescriptorIDs(gctx, db, smdIDs, "submodel")
 			}, &endpointsByDesc)
 
 			// Extensions
@@ -361,7 +361,7 @@ func ReadSubmodelDescriptorsByAASDescriptorIDs(
 			if err != nil {
 				return nil, err
 			}
-			endpointsByDesc, err = ReadEndpointsByDescriptorIDs(ctx, db, uniqSmdDescIDs, false)
+			endpointsByDesc, err = ReadEndpointsByDescriptorIDs(ctx, db, uniqSmdDescIDs, "submodel")
 			if err != nil {
 				return nil, err
 			}

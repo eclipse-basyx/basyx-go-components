@@ -194,7 +194,7 @@ func GetRegistryDescriptorByID(
 	}, &description)
 
 	GoAssign(g, func() ([]model.Endpoint, error) {
-		return ReadEndpointsByDescriptorID(ctx, db, descID, true)
+		return ReadEndpointsByDescriptorID(ctx, db, descID, "registry")
 	}, &endpoints)
 
 	if err := g.Wait(); err != nil {
@@ -493,7 +493,7 @@ func ListRegistryDescriptors(
 	if len(descIDs) > 0 {
 		ids := append([]int64(nil), descIDs...)
 		GoAssign(g, func() (map[int64][]model.Endpoint, error) {
-			return ReadEndpointsByDescriptorIDs(gctx, db, ids, true)
+			return ReadEndpointsByDescriptorIDs(gctx, db, ids, "registry")
 		}, &endpointsByDesc)
 	}
 

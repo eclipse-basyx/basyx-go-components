@@ -589,7 +589,7 @@ func listAssetAdministrationShellDescriptors(
 		if len(descIDs) > 0 {
 			ids := append([]int64(nil), descIDs...)
 			GoAssign(g, func() (map[int64][]model.Endpoint, error) {
-				return ReadEndpointsByDescriptorIDs(gctx, db, ids, true)
+				return ReadEndpointsByDescriptorIDs(gctx, db, ids, "aas")
 			}, &endpointsByDesc)
 			GoAssign(g, func() (map[int64][]model.SpecificAssetID, error) {
 				return ReadSpecificAssetIDsByDescriptorIDs(gctx, db, ids)
@@ -626,7 +626,7 @@ func listAssetAdministrationShellDescriptors(
 			}
 		}
 		if len(descIDs) > 0 {
-			endpointsByDesc, err = ReadEndpointsByDescriptorIDs(ctx, db, descIDs, true)
+			endpointsByDesc, err = ReadEndpointsByDescriptorIDs(ctx, db, descIDs, "aas")
 			if err != nil {
 				return nil, "", err
 			}
