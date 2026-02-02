@@ -30,6 +30,9 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 		return err
 	}
 
+	// Digital Twin Registry always enables discovery integration.
+	cfg.General.DiscoveryIntegration = true
+
 	r := chi.NewRouter()
 
 	r.Use(common.ConfigMiddleware(cfg))

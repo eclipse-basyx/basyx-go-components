@@ -167,9 +167,13 @@ func InsertAdministrationShellDescriptorTx(ctx context.Context, tx *sql.Tx, aasd
 		return err
 	}
 
-	aasRef, err := ensureAASIdentifierTx(ctx, tx, aasd.Id)
-	if err != nil {
-		return err
+	var aasRef sql.NullInt64
+	if cfg, ok := common.ConfigFromContext(ctx); ok && cfg.General.DiscoveryIntegration {
+		ref, err := ensureAASIdentifierTx(ctx, tx, aasd.Id)
+		if err != nil {
+			return err
+		}
+		aasRef = sql.NullInt64{Int64: ref, Valid: true}
 	}
 
 	if err = createSpecificAssetID(tx, descriptorID, aasRef, aasd.SpecificAssetIds); err != nil {

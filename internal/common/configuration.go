@@ -20,43 +20,45 @@ import (
 // DefaultConfig holds all default values for configuration options.
 // THESE VALUES ARE NOT USED! THEY VALIDATE IF CONFIGURATION IS DEFAULT IN THE PRINT STATEMENT
 var DefaultConfig = struct {
-	ServerPort           int
-	ServerContextPath    string
-	ServerCacheEnabled   bool
-	PgPort               int
-	PgDBName             string
-	PgMaxOpen            int
-	PgMaxIdle            int
-	PgConnLifetime       int
-	AllowedOrigins       []string
-	AllowedMethods       []string
-	AllowedHeaders       []string
-	AllowCredentials     bool
-	OIDCTrustlistPath    string
-	OIDCJWKSURL          string
-	ABACEnabled          bool
-	ABACModelPath        string
-	GeneralImplicitCasts bool
-	GeneralDescriptorDebug bool
+	ServerPort                  int
+	ServerContextPath           string
+	ServerCacheEnabled          bool
+	PgPort                      int
+	PgDBName                    string
+	PgMaxOpen                   int
+	PgMaxIdle                   int
+	PgConnLifetime              int
+	AllowedOrigins              []string
+	AllowedMethods              []string
+	AllowedHeaders              []string
+	AllowCredentials            bool
+	OIDCTrustlistPath           string
+	OIDCJWKSURL                 string
+	ABACEnabled                 bool
+	ABACModelPath               string
+	GeneralImplicitCasts        bool
+	GeneralDescriptorDebug      bool
+	GeneralDiscoveryIntegration bool
 }{
-	ServerPort:           5004,
-	ServerContextPath:    "",
-	ServerCacheEnabled:   false,
-	PgPort:               5432,
-	PgDBName:             "basyxTestDB",
-	PgMaxOpen:            50,
-	PgMaxIdle:            50,
-	PgConnLifetime:       5,
-	AllowedOrigins:       []string{},
-	AllowedMethods:       []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
-	AllowedHeaders:       []string{},
-	AllowCredentials:     false,
-	OIDCTrustlistPath:    "config/trustlist.json",
-	OIDCJWKSURL:          "",
-	ABACEnabled:          false,
-	ABACModelPath:        "config/access_rules/access-rules.json",
-	GeneralImplicitCasts: true,
-	GeneralDescriptorDebug: false,
+	ServerPort:                  5004,
+	ServerContextPath:           "",
+	ServerCacheEnabled:          false,
+	PgPort:                      5432,
+	PgDBName:                    "basyxTestDB",
+	PgMaxOpen:                   50,
+	PgMaxIdle:                   50,
+	PgConnLifetime:              5,
+	AllowedOrigins:              []string{},
+	AllowedMethods:              []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
+	AllowedHeaders:              []string{},
+	AllowCredentials:            false,
+	OIDCTrustlistPath:           "config/trustlist.json",
+	OIDCJWKSURL:                 "",
+	ABACEnabled:                 false,
+	ABACModelPath:               "config/access_rules/access-rules.json",
+	GeneralImplicitCasts:        true,
+	GeneralDescriptorDebug:      false,
+	GeneralDiscoveryIntegration: false,
 }
 
 // PrintSplash displays the BaSyx Go API ASCII art logo to the console.
@@ -138,8 +140,9 @@ type CorsConfig struct {
 
 // GeneralConfig contains non-domain-specific configuration.
 type GeneralConfig struct {
-	EnableImplicitCasts bool `mapstructure:"enableImplicitCasts" yaml:"enableImplicitCasts" json:"enableImplicitCasts"` // Enable implicit casts during backend simplification
+	EnableImplicitCasts   bool `mapstructure:"enableImplicitCasts" yaml:"enableImplicitCasts" json:"enableImplicitCasts"`       // Enable implicit casts during backend simplification
 	EnableDescriptorDebug bool `mapstructure:"enableDescriptorDebug" yaml:"enableDescriptorDebug" json:"enableDescriptorDebug"` // Enable descriptor query debug output
+	DiscoveryIntegration  bool `mapstructure:"discoveryIntegration" yaml:"discoveryIntegration" json:"discoveryIntegration"`    // Enable integration with discovery aas_identifier linking
 }
 
 // OIDCProviderConfig contains OpenID Connect authentication provider settings.
@@ -209,6 +212,10 @@ func LoadConfig(configPath string) (*Config, error) {
 		return nil, fmt.Errorf("unmarshal config: %w", err)
 	}
 
+	// Force discovery integration off for user configuration. It can only be
+	// enabled programmatically by specific services (e.g., Digital Twin Registry).
+	cfg.General.DiscoveryIntegration = false
+
 	log.Println("✅ Configuration loaded successfully")
 	PrintConfiguration(cfg)
 	return cfg, nil
@@ -254,6 +261,7 @@ func setDefaults(v *viper.Viper) {
 
 	v.SetDefault("general.enableImplicitCasts", true)
 	v.SetDefault("general.enableDescriptorDebug", false)
+	v.SetDefault("general.discoveryIntegration", false)
 
 	v.SetDefault("oidc.trustlistPath", "config/trustlist.json")
 
@@ -343,6 +351,7 @@ func PrintConfiguration(cfg *Config) {
 	lines = append(lines, "🔹 General:")
 	add("Enable Implicit Casts", cfg.General.EnableImplicitCasts, DefaultConfig.GeneralImplicitCasts)
 	add("Enable Descriptor Debug", cfg.General.EnableDescriptorDebug, DefaultConfig.GeneralDescriptorDebug)
+	add("Discovery Integration", cfg.General.DiscoveryIntegration, DefaultConfig.GeneralDiscoveryIntegration)
 
 	lines = append(lines, divider)
 
