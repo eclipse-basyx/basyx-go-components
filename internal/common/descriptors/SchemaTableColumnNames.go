@@ -55,7 +55,7 @@ const (
 	tblLangStringNameType             = "lang_string_name_type"
 	tblReference                      = "reference"
 	tblReferenceKey                   = "reference_key"
-	tblInfrastructureDescriptor             = "infrastructure_descriptor"
+	tblInfrastructureDescriptor       = "infrastructure_descriptor"
 )
 
 // Common table aliases used across descriptor queries. Keeping them here avoids
@@ -69,8 +69,8 @@ const (
 	aliasSubmodelDescriptorEndpoint               = "submodel_descriptor_endpoint"
 	aliasSubmodelDescriptorSemanticIDReference    = "aasdesc_submodel_descriptor_semantic_id_reference"
 	aliasSubmodelDescriptorSemanticIDReferenceKey = "aasdesc_submodel_descriptor_semantic_id_reference_key"
-	aliasInfrastructureDescriptor                       = tblInfrastructureDescriptor
-	aliasInfrastructureDescriptorEndpoint               = "infrastructure_descriptor_endpoint"
+	aliasInfrastructureDescriptor                 = tblInfrastructureDescriptor
+	aliasInfrastructureDescriptorEndpoint         = "infrastructure_descriptor_endpoint"
 )
 
 // Columns holds the column names used by descriptor queries. Centralizing the
@@ -138,9 +138,9 @@ const (
 // Goqu table helpers (convenience for Returning/Col) to avoid repetitively
 // constructing the table builders in call sites.
 var (
-	tDescriptor            = goqu.T(tblDescriptor)
-	tAASDescriptor         = goqu.T(tblAASDescriptor)
-	tAASDescriptorEndpoint = goqu.T(tblAASDescriptorEndpoint)
-	tSpecificAssetID       = goqu.T(tblSpecificAssetID)
-	tInfrastructureDescriptor    = goqu.T(tblInfrastructureDescriptor)
+	tDescriptor               = goqu.T(tblDescriptor)
+	tAASDescriptor            = goqu.T(tblAASDescriptor)
+	tAASDescriptorEndpoint    = goqu.T(tblAASDescriptorEndpoint)
+	tSpecificAssetID          = goqu.T(tblSpecificAssetID)
+	tInfrastructureDescriptor = goqu.T(tblInfrastructureDescriptor)
 )
