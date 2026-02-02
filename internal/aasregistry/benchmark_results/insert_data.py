@@ -29,7 +29,7 @@ else:
 for i in range(total_inserts):
     template = payload_templates[i % len(payload_templates)]
     payload = copy.deepcopy(template)
-    """
+
     # Unique Descriptor ID
     payload["id"] = f"https://example.org/aas/{uuid.uuid4()}"
 
@@ -37,7 +37,7 @@ for i in range(total_inserts):
     for sm in payload.get("submodelDescriptors", []):
         sm["id"] = f"https://example.org/submodel/{uuid.uuid4()}"
         sm.pop("createdAt", None)
-    """
+
     # Remove createdAt fields before POST
     payload.pop("createdAt", None)
 

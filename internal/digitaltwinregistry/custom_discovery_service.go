@@ -76,17 +76,18 @@ func buildEdcBpnClaimEqualsHeaderExpression(ctx context.Context) grammar.Query {
 	createdAfter, _ := CreatedAfterFromContext(ctx)
 	claims := auth.ClaimsFromContext(ctx)
 	bpn, ok := claims.GetString("Edc-Bpn")
+	ModelStringPattern := grammar.ModelStringPattern("$bd#specificAssetIds[].externalSubjectId.keys[].value")
+	var bpnLe grammar.LogicalExpression
 	if !ok || bpn == "" {
 		boolVal := false
-		return grammar.Query{Condition: &grammar.LogicalExpression{Boolean: &boolVal}}
-	}
-	claim := grammar.StandardString(bpn)
-	ModelStringPattern := grammar.ModelStringPattern("$bd#specificAssetIds[].externalSubjectId.keys[].value")
-
-	bpnLe := grammar.LogicalExpression{
-		Eq: grammar.ComparisonItems{
-			{StrVal: &claim}, {Field: &ModelStringPattern},
-		},
+		bpnLe = grammar.LogicalExpression{Boolean: &boolVal}
+	} else {
+		claim := grammar.StandardString(bpn)
+		bpnLe = grammar.LogicalExpression{
+			Eq: grammar.ComparisonItems{
+				{StrVal: &claim}, {Field: &ModelStringPattern},
+			},
+		}
 	}
 
 	publicReadableString := grammar.StandardString("PUBLIC_READABLE")
@@ -125,18 +126,18 @@ func buildEdcBpnClaimEqualsHeaderExpression2(ctx context.Context) grammar.Query 
 	claims := auth.ClaimsFromContext(ctx)
 	bpn, ok := claims.GetString("Edc-Bpn")
 	boolVal := false
-	if !ok || bpn == "" {
-		return grammar.Query{Condition: &grammar.LogicalExpression{Boolean: &boolVal}}
-	}
-	claim := grammar.StandardString(bpn)
 	ModelStringPattern := grammar.ModelStringPattern("$bd#specificAssetIds[].externalSubjectId.keys[].value")
-
-	bpnLe := grammar.LogicalExpression{
-		Eq: grammar.ComparisonItems{
-			{StrVal: &claim}, {Field: &ModelStringPattern},
-		},
+	var bpnLe grammar.LogicalExpression
+	if !ok || bpn == "" {
+		bpnLe = grammar.LogicalExpression{Boolean: &boolVal}
+	} else {
+		claim := grammar.StandardString(bpn)
+		bpnLe = grammar.LogicalExpression{
+			Eq: grammar.ComparisonItems{
+				{StrVal: &claim}, {Field: &ModelStringPattern},
+			},
+		}
 	}
-
 	publicReadableString := grammar.StandardString("PUBLIC_READABLE")
 	publicLe := grammar.LogicalExpression{
 		Eq: grammar.ComparisonItems{
