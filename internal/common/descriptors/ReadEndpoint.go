@@ -209,7 +209,6 @@ func ReadEndpointsByDescriptorIDs(
 	if err != nil {
 		return nil, err
 	}
-	fmt.Println(sqlStr)
 
 	rows, err := db.QueryContext(ctx, sqlStr, args...)
 	if err != nil {
