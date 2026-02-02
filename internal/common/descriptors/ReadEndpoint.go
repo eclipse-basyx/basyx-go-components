@@ -58,7 +58,7 @@ func ReadEndpointsByDescriptorID(
 	ctx context.Context,
 	db DBQueryer,
 	descriptorID int64,
-	joinOnMainTable bool,
+	joinOnMainTable string,
 ) ([]model.Endpoint, error) {
 	v, err := ReadEndpointsByDescriptorIDs(ctx, db, []int64{descriptorID}, joinOnMainTable)
 	return v[descriptorID], err
@@ -89,7 +89,7 @@ func ReadEndpointsByDescriptorIDs(
 	ctx context.Context,
 	db DBQueryer,
 	descriptorIDs []int64,
-	joinOnMainTable bool,
+	joinOnMainTable string,
 ) (map[int64][]model.Endpoint, error) {
 	out := make(map[int64][]model.Endpoint, len(descriptorIDs))
 	if len(descriptorIDs) == 0 {
@@ -102,20 +102,25 @@ func ReadEndpointsByDescriptorIDs(
 	v := goqu.T(tblEndpointProtocolVersion).As("v")
 	s := goqu.T(tblSecurityAttributes).As("s")
 
-	ds := d.From(tDescriptor).
-		InnerJoin(
+	ds := d.From(tDescriptor)
+	var joinOn exp.AliasedExpression
+	switch joinOnMainTable {
+	case "aas":
+		joinOn = aasDescriptorEndpointAlias
+		ds = ds.InnerJoin(
 			tAASDescriptor,
 			goqu.On(tAASDescriptor.Col(colDescriptorID).Eq(tDescriptor.Col(colID))),
 		)
-	var joinOn exp.AliasedExpression
-	if joinOnMainTable {
-		joinOn = aasDescriptorEndpointAlias
 		ds = ds.LeftJoin(
 			aasDescriptorEndpointAlias,
 			goqu.On(aasDescriptorEndpointAlias.Col(colDescriptorID).Eq(tDescriptor.Col(colID))),
 		)
-	} else {
+	case "submodel":
 		joinOn = submodelDescriptorEndpointAlias
+		ds = ds.InnerJoin(
+			tAASDescriptor,
+			goqu.On(tAASDescriptor.Col(colDescriptorID).Eq(tDescriptor.Col(colID))),
+		)
 		ds = ds.LeftJoin(
 			submodelDescriptorAlias,
 			goqu.On(submodelDescriptorAlias.Col(colAASDescriptorID).Eq(tAASDescriptor.Col(colDescriptorID))),
@@ -124,6 +129,16 @@ func ReadEndpointsByDescriptorIDs(
 				submodelDescriptorEndpointAlias,
 				goqu.On(submodelDescriptorEndpointAlias.Col(colDescriptorID).Eq(submodelDescriptorAlias.Col(colDescriptorID))),
 			)
+	case "registry":
+		joinOn = registryDescriptorEndpointAlias
+		ds = ds.InnerJoin(
+			tRegistryDescriptor,
+			goqu.On(tRegistryDescriptor.Col(colDescriptorID).Eq(tDescriptor.Col(colID))),
+		)
+		ds = ds.LeftJoin(
+			registryDescriptorEndpointAlias,
+			goqu.On(registryDescriptorEndpointAlias.Col(colDescriptorID).Eq(registryDescriptorAlias.Col(colDescriptorID))),
+		)
 	}
 
 	ds = ds.LeftJoin(
@@ -194,6 +209,7 @@ func ReadEndpointsByDescriptorIDs(
 	if err != nil {
 		return nil, err
 	}
+	fmt.Println(sqlStr)
 
 	rows, err := db.QueryContext(ctx, sqlStr, args...)
 	if err != nil {
