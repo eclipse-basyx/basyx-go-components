@@ -395,6 +395,16 @@ func joinPlanConfigForBD() JoinPlanConfig {
 					return ds
 				},
 			},
+			"aas_identifier": {
+				Alias: "aas_identifier",
+				Deps:  []string{"specific_asset_id"},
+				Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
+					return ds.Join(
+						goqu.T("aas_identifier"),
+						goqu.On(goqu.I("aas_identifier.id").Eq(goqu.I("specific_asset_id.aasref"))),
+					)
+				},
+			},
 			"external_subject_reference": {
 				Alias: "external_subject_reference",
 				Deps:  []string{"specific_asset_id"},
@@ -1137,6 +1147,8 @@ func existsTableForAlias(alias string) (string, bool) {
 	switch alias {
 	case "aas_descriptor":
 		return "aas_descriptor", true
+	case "aas_identifier":
+		return "aas_identifier", true
 	case "specific_asset_id":
 		return "specific_asset_id", true
 	case "external_subject_reference":

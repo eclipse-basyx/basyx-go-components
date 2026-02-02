@@ -133,6 +133,16 @@ func FromContext(r *http.Request) Claims {
 	return nil
 }
 
+// ClaimsFromContext retrieves Claims from a context.Context.
+func ClaimsFromContext(ctx context.Context) Claims {
+	if v := ctx.Value(claimsKey); v != nil {
+		if c, ok := v.(Claims); ok {
+			return c
+		}
+	}
+	return nil
+}
+
 // Middleware validates a Bearer token (if present) and injects claims.
 //
 // Behavior:

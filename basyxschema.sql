@@ -467,7 +467,8 @@ CREATE TABLE IF NOT EXISTS descriptor_extension (
 
 CREATE TABLE IF NOT EXISTS aas_identifier (
   id          BIGSERIAL PRIMARY KEY,
-  aasId       VARCHAR(2048) UNIQUE NOT NULL
+  aasId       VARCHAR(2048) UNIQUE NOT NULL,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS specific_asset_id (
@@ -490,6 +491,9 @@ CREATE TABLE IF NOT EXISTS specific_asset_id_supplemental_semantic_id (
 
 ALTER TABLE IF EXISTS specific_asset_id
   ADD COLUMN IF NOT EXISTS aasRef BIGINT REFERENCES aas_identifier(id) ON DELETE CASCADE;
+
+ALTER TABLE IF EXISTS aas_identifier
+  ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
 
 ALTER TABLE IF EXISTS specific_asset_id
   ALTER COLUMN descriptor_id DROP NOT NULL;
@@ -705,6 +709,7 @@ CREATE INDEX IF NOT EXISTS ix_descriptor_extension_pair          ON descriptor_e
 -- ==========================================
 
 CREATE UNIQUE INDEX IF NOT EXISTS ix_aas_identifier_aasid ON aas_identifier(aasId);
+CREATE INDEX IF NOT EXISTS ix_aas_identifier_created_at ON aas_identifier(created_at);
 
 CREATE INDEX IF NOT EXISTS ix_specasset_descriptor_id_name ON specific_asset_id (descriptor_id, name);
 CREATE INDEX IF NOT EXISTS ix_specasset_descriptor_id_position ON specific_asset_id (descriptor_id, position);

@@ -31,6 +31,8 @@ import (
 	"context"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
+	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	discoveryapiinternal "github.com/eclipse-basyx/basyx-go-components/internal/discoveryservice/api"
 )
 
@@ -51,8 +53,9 @@ func (s *CustomDiscoveryService) SearchAllAssetAdministrationShellIdsByAssetLink
 	cursor string,
 	assetLink []model.AssetLink,
 ) (model.ImplResponse, error) {
-	createdAfter, _ := CreatedAfterFromContext(ctx)
-	_ = createdAfter // TODO: apply custom filtering logic using createdAfter
+	query := buildEdcBpnClaimEqualsHeaderExpression(ctx)
+	ctx = auth.MergeQueryFilter(ctx, query)
+
 	return s.AssetAdministrationShellBasicDiscoveryAPIAPIService.SearchAllAssetAdministrationShellIdsByAssetLink(ctx, limit, cursor, assetLink)
 }
 
@@ -61,5 +64,94 @@ func (s *CustomDiscoveryService) GetAllAssetLinksByID(
 	ctx context.Context,
 	aasIdentifier string,
 ) (model.ImplResponse, error) {
+	query := buildEdcBpnClaimEqualsHeaderExpression2(ctx)
+	ctx = auth.MergeQueryFilter(ctx, query)
+
 	return s.AssetAdministrationShellBasicDiscoveryAPIAPIService.GetAllAssetLinksByID(ctx, aasIdentifier)
+}
+
+// buildEdcBpnClaimEqualsHeaderExpression creates a logical expression that checks
+// whether the Edc-Bpn claim equals the provided header value.
+func buildEdcBpnClaimEqualsHeaderExpression(ctx context.Context) grammar.Query {
+	createdAfter, _ := CreatedAfterFromContext(ctx)
+	claims := auth.ClaimsFromContext(ctx)
+	bpn, ok := claims.GetString("Edc-Bpn")
+	if !ok || bpn == "" {
+		boolVal := false
+		return grammar.Query{Condition: &grammar.LogicalExpression{Boolean: &boolVal}}
+	}
+	claim := grammar.StandardString(bpn)
+	ModelStringPattern := grammar.ModelStringPattern("$bd#specificAssetIds[].externalSubjectId.keys[].value")
+
+	bpnLe := grammar.LogicalExpression{
+		Eq: grammar.ComparisonItems{
+			{StrVal: &claim}, {Field: &ModelStringPattern},
+		},
+	}
+
+	publicReadableString := grammar.StandardString("PUBLIC_READABLE")
+	publicLe := grammar.LogicalExpression{
+		Eq: grammar.ComparisonItems{
+			{StrVal: &publicReadableString}, {Field: &ModelStringPattern},
+		},
+	}
+	le := grammar.LogicalExpression{
+		Or: []grammar.LogicalExpression{bpnLe, publicLe},
+	}
+
+	if createdAfter == nil {
+		return grammar.Query{Condition: &le}
+	}
+	dt := grammar.DateTimeLiteralPattern(createdAfter.UTC())
+
+	timePattern := grammar.ModelStringPattern("$bd#createdAt")
+	timeLe := grammar.LogicalExpression{
+		Le: grammar.ComparisonItems{
+			{DateTimeVal: &dt},
+			{Field: &timePattern},
+		},
+	}
+
+	combinedLE := &grammar.LogicalExpression{
+		And: []grammar.LogicalExpression{le, timeLe},
+	}
+
+	return grammar.Query{
+		Condition: combinedLE,
+	}
+}
+
+func buildEdcBpnClaimEqualsHeaderExpression2(ctx context.Context) grammar.Query {
+	claims := auth.ClaimsFromContext(ctx)
+	bpn, ok := claims.GetString("Edc-Bpn")
+	boolVal := false
+	if !ok || bpn == "" {
+		return grammar.Query{Condition: &grammar.LogicalExpression{Boolean: &boolVal}}
+	}
+	claim := grammar.StandardString(bpn)
+	ModelStringPattern := grammar.ModelStringPattern("$bd#specificAssetIds[].externalSubjectId.keys[].value")
+
+	bpnLe := grammar.LogicalExpression{
+		Eq: grammar.ComparisonItems{
+			{StrVal: &claim}, {Field: &ModelStringPattern},
+		},
+	}
+
+	publicReadableString := grammar.StandardString("PUBLIC_READABLE")
+	publicLe := grammar.LogicalExpression{
+		Eq: grammar.ComparisonItems{
+			{StrVal: &publicReadableString}, {Field: &ModelStringPattern},
+		},
+	}
+	le := grammar.LogicalExpression{
+		Or: []grammar.LogicalExpression{bpnLe, publicLe},
+	}
+
+	fragment := grammar.FragmentStringPattern("$bd#specificAssetIds[].externalSubjectId")
+	filter := grammar.SubFilter{
+		Fragment:  &fragment,
+		Condition: &grammar.LogicalExpression{Boolean: &boolVal},
+	}
+
+	return grammar.Query{Condition: &le, FilterConditions: []grammar.SubFilter{filter}}
 }

@@ -13,7 +13,7 @@
     ],
 
     "DEFACLS": [
-      { "name": "read_anonymous", "acl": { "USEATTRIBUTES": "anonym_attr", "RIGHTS": ["READ"], "ACCESS": "ALLOW" } },
+      { "name": "read_anonymous", "acl": { "USEATTRIBUTES": "anonym_attr", "RIGHTS": ["ALL"], "ACCESS": "ALLOW" } },
       { "name": "read_role", "acl": { "USEATTRIBUTES": "role_attr", "RIGHTS": ["READ"], "ACCESS": "ALLOW" } },
       { "name": "read_member", "acl": { "USEATTRIBUTES": "member_attr", "RIGHTS": ["READ"], "ACCESS": "ALLOW" } },
       { "name": "write_admin", "acl": { "USEATTRIBUTES": "member_attr", "RIGHTS": ["ALL"], "ACCESS": "ALLOW" } }
@@ -27,7 +27,7 @@
     ],
 
     "rules": [
-      { "USEACL": "read_anonymous", "USEOBJECTS": ["all_shell_descriptors", "all_assetlinks"], "USEFORMULA": "logic" }
+      { "USEACL": "read_anonymous", "USEOBJECTS": ["all_shell_descriptors", "all_assetlinks"], "USEFORMULA": "always_true" }
     ]
   }
 }

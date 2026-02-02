@@ -76,6 +76,7 @@ var terminalColumnMappings = map[string]terminalColumnMapping{
 	"createdAt": {
 		ByContext: map[resolveContext]string{
 			ctxAASDesc:            "aas_descriptor.created_at",
+			ctxBD:                 "aas_identifier.created_at",
 			ctxSMDesc:             "submodel_descriptor.created_at",
 			ctxSubmodelDescriptor: "submodel_descriptor.created_at",
 		},
