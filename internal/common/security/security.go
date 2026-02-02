@@ -135,7 +135,7 @@ func SetupSecurityWithClaimsMiddleware(
 		if err != nil {
 			return err
 		}
-		m, err := ParseAccessModel(data, r)
+		m, err := ParseAccessModel(data, r, cfg.Server.ContextPath)
 		if err != nil {
 			return err
 		}

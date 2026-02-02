@@ -105,7 +105,7 @@ func TestAdaptLEForBackend(t *testing.T) {
 				t.Fatalf("read input: %v", err)
 			}
 
-			model, err := auth.ParseAccessModel(raw, apiRouter)
+			model, err := auth.ParseAccessModel(raw, apiRouter, "")
 			if err != nil {
 				t.Fatalf("model input: %v", err)
 			}

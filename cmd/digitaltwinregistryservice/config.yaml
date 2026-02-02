@@ -1,6 +1,6 @@
 server:
   port: 5004
-  contextPath: ""
+  contextPath: "/test"
   host: 0.0.0.0
 
 postgres:

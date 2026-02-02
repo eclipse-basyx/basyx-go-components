@@ -22,6 +22,7 @@ services:
       dockerfile: ./cmd/aasregistryservice/Dockerfile
     environment:
       - SERVER_PORT=5004
+      - SERVER_CONTEXTPATH=/test
       - POSTGRES_HOST=db
       - POSTGRES_PORT=5432
       - POSTGRES_USER=admin

@@ -43,6 +43,7 @@ type AccessModel struct {
 	apiRouter *api.Mux
 	rctx      *api.Context
 	rules     []materializedRule
+	basePath  string
 }
 
 type materializedRule struct {
@@ -55,7 +56,7 @@ type materializedRule struct {
 
 // ParseAccessModel parses a JSON (or YAML converted to JSON) payload that
 // conforms to the Access Rule Model schema and returns a compiled AccessModel.
-func ParseAccessModel(b []byte, apiRouter *api.Mux) (*AccessModel, error) {
+func ParseAccessModel(b []byte, apiRouter *api.Mux, basePath string) (*AccessModel, error) {
 	var m grammar.AccessRuleModelSchemaJSON
 	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	if err := json.Unmarshal(b, &m); err != nil {
@@ -72,6 +73,7 @@ func ParseAccessModel(b []byte, apiRouter *api.Mux) (*AccessModel, error) {
 		apiRouter: apiRouter,
 		rctx:      api.NewRouteContext(),
 		rules:     rules,
+		basePath:  basePath,
 	}, nil
 }
 
@@ -147,7 +149,7 @@ func (m *AccessModel) AuthorizeWithFilterWithOptions(in EvalInput, opts grammar.
 			continue
 		}
 		// Gate 3: objects
-		accessWithOptinalFilter := matchRouteObjectsObjItem(objs, in.Path)
+		accessWithOptinalFilter := matchRouteObjectsObjItem(objs, in.Path, m.basePath)
 		if !accessWithOptinalFilter.access {
 			continue
 		}
