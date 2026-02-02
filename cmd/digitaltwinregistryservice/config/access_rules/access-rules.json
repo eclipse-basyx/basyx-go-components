@@ -8,7 +8,7 @@
 
     "DEFOBJECTS": [
       { "name": "description", "objects": [ { "ROUTE": "/description" }, { "ROUTE": "/api/v3/description" } ] },
-      { "name": "all_assetlinks", "objects": [ { "ROUTE": "/lookup/shells" }, { "ROUTE": "/lookup/shells/*" }] },
+      { "name": "all_assetlinks", "objects": [ { "ROUTE": "/lookup/*" }] },
       { "name": "all_shell_descriptors", "objects": [ {"DESCRIPTOR": "$aasdesc(\"*\")"}] }
     ],
 
@@ -21,29 +21,13 @@
 
     "DEFFORMULAS": [
       { "name": "always_true", "formula": { "$boolean": true } },
-      { "name": "role_is_admin", "formula": 
-      { "$and": [
-        { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "admin" } ] },
-        { "$ge": [ { "$field": "$aasdesc#createdAt" }, { "$dateTimeVal": "2024-01-01T00:00:00Z" } ] }
-      ]}
+      { "name": "logic", "formula": 
+        { "$eq": [ { "$attribute": { "CLAIM": "Edc-Bpn" } }, { "$strVal": "admin" } ] }
     }
     ],
 
     "rules": [
-      { "USEACL": "read_anonymous", "USEOBJECTS": ["description"], "USEFORMULA": "always_true" },
-      { "USEACL": "write_admin", "USEOBJECTS": ["all_shell_descriptors", "all_assetlinks"], "USEFORMULA": "role_is_admin" },
-      { "USEACL": "read_role", "USEOBJECTS": ["all_shell_descriptors", "all_assetlinks"], "FORMULA": 
-
-            {"$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "viewer" } ] },
-
-        "FILTER": {
-          "FRAGMENT": "$aasdesc#specificAssetIds[].externalSubjectId",
-          "CONDITION": 
-           {
-            "$boolean": false
-          }
-        }
-      }
+      { "USEACL": "read_anonymous", "USEOBJECTS": ["all_shell_descriptors", "all_assetlinks"], "USEFORMULA": "logic" }
     ]
   }
 }

@@ -22,7 +22,7 @@ func EdcBpnHeaderMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		claims["edc_bpn"] = bpn
+		claims["Edc-Bpn"] = bpn
 		ctx := context.WithValue(r.Context(), claimsKey, claims)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
