@@ -35,6 +35,6 @@ var (
 	aasDescriptorEndpointAlias      = goqu.T(tblAASDescriptorEndpoint).As(aliasAASDescriptorEndpoint)
 	submodelDescriptorAlias         = goqu.T(tblSubmodelDescriptor).As(aliasSubmodelDescriptor)
 	submodelDescriptorEndpointAlias = goqu.T(tblAASDescriptorEndpoint).As(aliasSubmodelDescriptorEndpoint)
-	registryDescriptorAlias         = goqu.T(tblRegistryDescriptor).As(aliasRegistryDescriptor)
-	registryDescriptorEndpointAlias = goqu.T(tblAASDescriptorEndpoint).As(aliasRegistryDescriptorEndpoint)
+	infrastructureDescriptorAlias         = goqu.T(tblInfrastructureDescriptor).As(aliasInfrastructureDescriptor)
+	infrastructureDescriptorEndpointAlias = goqu.T(tblAASDescriptorEndpoint).As(aliasInfrastructureDescriptorEndpoint)
 )

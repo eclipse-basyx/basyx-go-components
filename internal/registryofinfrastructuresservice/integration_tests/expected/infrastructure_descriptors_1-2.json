@@ -1,0 +1,85 @@
+{
+    "PagingMetadata": {
+        "cursor": "aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvcm9pL2Q0ZS10ZW5hbnQtMC1hYXMtZGlzY292ZXJ5"
+    },
+    "Result": [
+        {
+            "description": [
+                {
+                    "language": "en",
+                    "text": "Example AAS Discovery"
+                }
+            ],
+            "displayName": [
+                {
+                    "language": "en",
+                    "text": "AAS Discovery 1"
+                }
+            ],
+            "administration": {
+                "version": "1",
+                "revision": "0",
+                "creator": {
+                    "type": "ExternalReference",
+                    "keys": [
+                        {
+                            "type": "GlobalReference",
+                            "value": "https://example.com"
+                        }
+                    ]
+                }
+            },
+            "endpoints": [
+                {
+                    "interface": "AAS-DISCOVERY-3.0",
+                    "protocolInformation": {
+                        "href": "https://example.com/aas-discovery",
+                        "endpointProtocol": "HTTPS"
+                    }
+                }
+            ],
+            "idShort": "ExampleAASDiscovery",
+            "id": "https://example.com/roi/example-aas-discovery",
+            "company": "ExampleCompany"
+        },
+        {
+            "description": [
+                {
+                    "language": "en",
+                    "text": "Example AAS Registry"
+                }
+            ],
+            "displayName": [
+                {
+                    "language": "en",
+                    "text": "AAS Registry 1"
+                }
+            ],
+            "administration": {
+                "version": "1",
+                "revision": "0",
+                "creator": {
+                    "type": "ExternalReference",
+                    "keys": [
+                        {
+                            "type": "GlobalReference",
+                            "value": "https://example.com"
+                        }
+                    ]
+                }
+            },
+            "endpoints": [
+                {
+                    "interface": "AAS-REGISTRY-3.0",
+                    "protocolInformation": {
+                        "href": "https://example.com/aas-registry",
+                        "endpointProtocol": "HTTPS"
+                    }
+                }
+            ],
+            "idShort": "ExampleAASRegistry",
+            "id": "https://example.com/roi/example-aas-registry",
+            "company": "ExampleCompany"
+        }
+    ]
+}

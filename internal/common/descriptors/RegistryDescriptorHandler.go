@@ -12,7 +12,7 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-// InsertRegistryDescriptor creates a new RegistryDescriptor
+// InsertInfrastructureDescriptor creates a new InfrastructureDescriptor
 // and all its related entities (display name, description,
 // administration, and endpoints).
 //
@@ -22,24 +22,24 @@ import (
 // Parameters:
 //   - ctx: request context used for cancellation/deadlines
 //   - db:  open SQL database handle
-//   - registryDescriptor: descriptor to persist
+//   - infrastructureDescriptor: descriptor to persist
 //
 // Returns an error when SQL building/execution fails or when writing any of the
 // dependent rows fails. Errors are wrapped into common errors where relevant.
-func InsertRegistryDescriptor(ctx context.Context, db *sql.DB, registryDescriptor model.RegistryDescriptor) error {
+func InsertInfrastructureDescriptor(ctx context.Context, db *sql.DB, infrastructureDescriptor model.InfrastructureDescriptor) error {
 	return WithTx(ctx, db, func(tx *sql.Tx) error {
-		return InsertRegistryDescriptorTx(ctx, tx, registryDescriptor)
+		return InsertInfrastructureDescriptorTx(ctx, tx, infrastructureDescriptor)
 	})
 }
 
-// InsertRegistryDescriptorTx performs the same insert as
-// InsertRegistryDescriptor but uses the provided transaction. This allows
+// InsertInfrastructureDescriptorTx performs the same insert as
+// InsertInfrastructureDescriptor but uses the provided transaction. This allows
 // callers to compose multiple writes into a single atomic unit.
 //
 // The function inserts the base descriptor row first and then creates related
 // entities (display name/description/admin info/endpoints). If any step fails,
 // the error is returned and the caller is responsible for rolling back the transaction.
-func InsertRegistryDescriptorTx(_ context.Context, tx *sql.Tx, regdesc model.RegistryDescriptor) error {
+func InsertInfrastructureDescriptorTx(_ context.Context, tx *sql.Tx, regdesc model.InfrastructureDescriptor) error {
 	d := goqu.Dialect(dialect)
 
 	descTbl := goqu.T(tblDescriptor)
@@ -80,7 +80,7 @@ func InsertRegistryDescriptorTx(_ context.Context, tx *sql.Tx, regdesc model.Reg
 	administrationID = adminID
 
 	sqlStr, args, buildErr = d.
-		Insert(tblRegistryDescriptor).
+		Insert(tblInfrastructureDescriptor).
 		Rows(goqu.Record{
 			colDescriptorID:  descriptorID,
 			colDescriptionID: descriptionID,
@@ -106,18 +106,18 @@ func InsertRegistryDescriptorTx(_ context.Context, tx *sql.Tx, regdesc model.Reg
 	return nil
 }
 
-// GetRegistryDescriptorByID returns a fully materialized
-// RegistryDescriptor by its Registry Id string.
+// GetInfrastructureDescriptorByID returns a fully materialized
+// InfrastructureDescriptor by its Registry Id string.
 //
 // The function loads optional related entities (administration, display name,
 // description, and endpoints) concurrently to minimize latency. If the
 // Registry does not exist, a NotFound error is returned.
-func GetRegistryDescriptorByID(
-	ctx context.Context, db *sql.DB, registryIdentifier string,
-) (model.RegistryDescriptor, error) {
+func GetInfrastructureDescriptorByID(
+	ctx context.Context, db *sql.DB, infrastructureIdentifier string,
+) (model.InfrastructureDescriptor, error) {
 	d := goqu.Dialect(dialect)
 
-	reg := goqu.T(tblRegistryDescriptor).As("reg")
+	reg := goqu.T(tblInfrastructureDescriptor).As("reg")
 
 	sqlStr, args, buildErr := d.
 		From(reg).
@@ -131,11 +131,11 @@ func GetRegistryDescriptorByID(
 			reg.Col(colDisplayNameID),
 			reg.Col(colDescriptionID),
 		).
-		Where(reg.Col(colRegDescID).Eq(registryIdentifier)).
+		Where(reg.Col(colRegDescID).Eq(infrastructureIdentifier)).
 		Limit(1).
 		ToSQL()
 	if buildErr != nil {
-		return model.RegistryDescriptor{}, buildErr
+		return model.InfrastructureDescriptor{}, buildErr
 	}
 
 	var (
@@ -158,9 +158,9 @@ func GetRegistryDescriptorByID(
 		&descriptionID,
 	); err != nil {
 		if err == sql.ErrNoRows {
-			return model.RegistryDescriptor{}, common.NewErrNotFound("Registry Descriptor not found")
+			return model.InfrastructureDescriptor{}, common.NewErrNotFound("Infrastructure Descriptor not found")
 		}
-		return model.RegistryDescriptor{}, err
+		return model.InfrastructureDescriptor{}, err
 	}
 
 	g, ctx := errgroup.WithContext(ctx)
@@ -174,7 +174,7 @@ func GetRegistryDescriptorByID(
 
 	g.Go(func() error {
 		if adminInfoID.Valid {
-			ai, err := ReadAdministrativeInformationByID(ctx, db, tblRegistryDescriptor, adminInfoID)
+			ai, err := ReadAdministrativeInformationByID(ctx, db, tblInfrastructureDescriptor, adminInfoID)
 			if err != nil {
 				return err
 			}
@@ -195,10 +195,10 @@ func GetRegistryDescriptorByID(
 	}, &endpoints)
 
 	if err := g.Wait(); err != nil {
-		return model.RegistryDescriptor{}, err
+		return model.InfrastructureDescriptor{}, err
 	}
 
-	return model.RegistryDescriptor{
+	return model.InfrastructureDescriptor{
 		GlobalAssetId:  globalAssetID.String,
 		IdShort:        idShort.String,
 		Company:        company.String,
@@ -210,27 +210,27 @@ func GetRegistryDescriptorByID(
 	}, nil
 }
 
-// DeleteRegistryDescriptorByID deletes the descriptor for the
-// given Registry Descriptor Id string. Deletion happens on the base descriptor row with ON
+// DeleteInfrastructureDescriptorByID deletes the descriptor for the
+// given Infrastructure Descriptor Id string. Deletion happens on the base descriptor row with ON
 // DELETE CASCADE removing dependent rows.
 // The delete runs in its own transaction.
-func DeleteRegistryDescriptorByID(ctx context.Context, db *sql.DB, registryIdentifier string) error {
+func DeleteInfrastructureDescriptorByID(ctx context.Context, db *sql.DB, infrastructureIdentifier string) error {
 	return WithTx(ctx, db, func(tx *sql.Tx) error {
-		return DeleteRegistryDescriptorByIDTx(ctx, tx, registryIdentifier)
+		return DeleteInfrastructureDescriptorByIDTx(ctx, tx, infrastructureIdentifier)
 	})
 }
 
-// DeleteRegistryDescriptorByIDTx deletes using the provided
+// DeleteInfrastructureDescriptorByIDTx deletes using the provided
 // transaction. It resolves the internal descriptor id and removes the base
 // descriptor row. Dependent rows are removed via ON DELETE CASCADE.
-func DeleteRegistryDescriptorByIDTx(ctx context.Context, tx *sql.Tx, registryIdentifier string) error {
+func DeleteInfrastructureDescriptorByIDTx(ctx context.Context, tx *sql.Tx, infrastructureIdentifier string) error {
 	d := goqu.Dialect("postgres")
-	reg := goqu.T(tblRegistryDescriptor).As("reg")
+	reg := goqu.T(tblInfrastructureDescriptor).As("reg")
 
 	sqlStr, args, buildErr := d.
 		From(reg).
 		Select(reg.Col(colDescriptorID)).
-		Where(reg.Col(colRegDescID).Eq(registryIdentifier)).
+		Where(reg.Col(colRegDescID).Eq(infrastructureIdentifier)).
 		Limit(1).
 		ToSQL()
 	if buildErr != nil {
@@ -240,7 +240,7 @@ func DeleteRegistryDescriptorByIDTx(ctx context.Context, tx *sql.Tx, registryIde
 	var descID int64
 	if scanErr := tx.QueryRowContext(ctx, sqlStr, args...).Scan(&descID); scanErr != nil {
 		if scanErr == sql.ErrNoRows {
-			return common.NewErrNotFound("Registry Descriptor not found")
+			return common.NewErrNotFound("Infrastructure Descriptor not found")
 		}
 		return scanErr
 	}
@@ -258,20 +258,20 @@ func DeleteRegistryDescriptorByIDTx(ctx context.Context, tx *sql.Tx, registryIde
 	return nil
 }
 
-// ReplaceRegistryDescriptor atomically replaces the descriptor with the same
+// ReplaceInfrastructureDescriptor atomically replaces the descriptor with the same
 // Registry Id: if a descriptor exists it is deleted (base descriptor row), then
 // the provided descriptor is inserted. Related rows are recreated from the input.
 // The returned boolean indicates whether a descriptor existed before the replace.
-func ReplaceRegistryDescriptor(ctx context.Context, db *sql.DB, registryDescriptor model.RegistryDescriptor) (bool, error) {
+func ReplaceInfrastructureDescriptor(ctx context.Context, db *sql.DB, infrastructureDescriptor model.InfrastructureDescriptor) (bool, error) {
 	existed := false
 	err := WithTx(ctx, db, func(tx *sql.Tx) error {
 		d := goqu.Dialect(dialect)
-		reg := goqu.T(tblRegistryDescriptor).As("reg")
+		reg := goqu.T(tblInfrastructureDescriptor).As("reg")
 
 		sqlStr, args, buildErr := d.
 			From(reg).
 			Select(reg.Col(colDescriptorID)).
-			Where(reg.Col(colRegDescID).Eq(registryDescriptor.Id)).
+			Where(reg.Col(colRegDescID).Eq(infrastructureDescriptor.Id)).
 			Limit(1).
 			ToSQL()
 		if buildErr != nil {
@@ -296,12 +296,12 @@ func ReplaceRegistryDescriptor(ctx context.Context, db *sql.DB, registryDescript
 			}
 		}
 
-		return InsertRegistryDescriptorTx(ctx, tx, registryDescriptor)
+		return InsertInfrastructureDescriptorTx(ctx, tx, infrastructureDescriptor)
 	})
 	return existed, err
 }
 
-// ListRegistryDescriptors lists Registry descriptors with optional
+// ListInfrastructureDescriptors lists Infrastructure descriptors with optional
 // filtering by company and endpoint interface. Results are ordered by Registry Id
 // ascending and support cursor‑based pagination where the cursor is the Registry Id
 // of the first element to include (i.e. Id >= cursor).
@@ -311,21 +311,21 @@ func ReplaceRegistryDescriptor(ctx context.Context, db *sql.DB, registryDescript
 // limit <= 0, a conservative large default is applied.
 //
 // nolint:revive // complexity is 31 which is +1 above the allowed threshold of 30
-func ListRegistryDescriptors(
+func ListInfrastructureDescriptors(
 	ctx context.Context,
 	db *sql.DB,
 	limit int32,
 	cursor string,
 	company string,
 	endpointInterface string,
-) ([]model.RegistryDescriptor, string, error) {
+) ([]model.InfrastructureDescriptor, string, error) {
 	if limit <= 0 {
 		limit = 100
 	}
 	peekLimit := int(limit) + 1
 
 	d := goqu.Dialect(dialect)
-	reg := goqu.T(tblRegistryDescriptor).As("reg")
+	reg := goqu.T(tblInfrastructureDescriptor).As("reg")
 	aasdescendp := goqu.T(tblAASDescriptorEndpoint).As("aasdescendp")
 
 	ds := d.
@@ -370,20 +370,20 @@ func ListRegistryDescriptors(
 
 	sqlStr, args, buildErr := ds.ToSQL()
 	if buildErr != nil {
-		return nil, "", common.NewInternalServerError("Failed to build Registry descriptor query. See server logs for details.")
+		return nil, "", common.NewInternalServerError("Failed to build Infrastructure descriptor query. See server logs for details.")
 	}
 
 	rows, err := db.QueryContext(ctx, sqlStr, args...)
 	if err != nil {
-		return nil, "", common.NewInternalServerError("Failed to query Registry descriptors. See server logs for details.")
+		return nil, "", common.NewInternalServerError("Failed to query Infrastructure descriptors. See server logs for details.")
 	}
 	defer func() {
 		_ = rows.Close()
 	}()
 
-	descRows := make([]model.RegistryDescriptorRow, 0, peekLimit)
+	descRows := make([]model.InfrastructureDescriptorRow, 0, peekLimit)
 	for rows.Next() {
-		var r model.RegistryDescriptorRow
+		var r model.InfrastructureDescriptorRow
 		if err := rows.Scan(
 			&r.DescID,
 			&r.GlobalAssetID,
@@ -394,12 +394,12 @@ func ListRegistryDescriptors(
 			&r.DisplayNameID,
 			&r.DescriptionID,
 		); err != nil {
-			return nil, "", common.NewInternalServerError("Failed to scan Registry descriptor row. See server logs for details.")
+			return nil, "", common.NewInternalServerError("Failed to scan RegInfrastructureistry descriptor row. See server logs for details.")
 		}
 		descRows = append(descRows, r)
 	}
 	if rows.Err() != nil {
-		return nil, "", common.NewInternalServerError("Failed to iterate Registry descriptors. See server logs for details.")
+		return nil, "", common.NewInternalServerError("Failed to iterate Infrastructure descriptors. See server logs for details.")
 	}
 
 	var nextCursor string
@@ -409,7 +409,7 @@ func ListRegistryDescriptors(
 	}
 
 	if len(descRows) == 0 {
-		return []model.RegistryDescriptor{}, nextCursor, nil
+		return []model.InfrastructureDescriptor{}, nextCursor, nil
 	}
 
 	descIDs := make([]int64, 0, len(descRows))
@@ -462,7 +462,7 @@ func ListRegistryDescriptors(
 	if len(adminInfoIDs) > 0 {
 		ids := append([]int64(nil), adminInfoIDs...)
 		GoAssign(g, func() (map[int64]*model.AdministrativeInformation, error) {
-			return ReadAdministrativeInformationByIDs(gctx, db, tblRegistryDescriptor, ids)
+			return ReadAdministrativeInformationByIDs(gctx, db, tblInfrastructureDescriptor, ids)
 		}, &admByID)
 	}
 	if len(displayNameIDs) > 0 {
@@ -490,7 +490,7 @@ func ListRegistryDescriptors(
 		return nil, "", err
 	}
 
-	out := make([]model.RegistryDescriptor, 0, len(descRows))
+	out := make([]model.InfrastructureDescriptor, 0, len(descRows))
 	for _, r := range descRows {
 		var adminInfo *model.AdministrativeInformation
 		if r.AdminInfoID.Valid {
@@ -510,7 +510,7 @@ func ListRegistryDescriptors(
 			description = descByID[r.DescriptionID.Int64]
 		}
 
-		out = append(out, model.RegistryDescriptor{
+		out = append(out, model.InfrastructureDescriptor{
 			GlobalAssetId:  r.GlobalAssetID.String,
 			IdShort:        r.IDShort.String,
 			Company:        r.Company.String,

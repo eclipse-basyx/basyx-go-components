@@ -11,7 +11,7 @@
 
 package model
 
-type RegistryDescriptor struct {
+type InfrastructureDescriptor struct {
 	Description []LangStringTextType `json:"description,omitempty"`
 
 	DisplayName []LangStringNameType `json:"displayName,omitempty"`
@@ -29,8 +29,8 @@ type RegistryDescriptor struct {
 	Company string `json:"company,omitempty" validate:"regexp=^[A-Za-z0-9]*$"`
 }
 
-// AssertRegistryDescriptorRequired checks if the required fields are not zero-ed
-func AssertRegistryDescriptorRequired(obj RegistryDescriptor) error {
+// AssertInfrastructureDescriptorRequired checks if the required fields are not zero-ed
+func AssertInfrastructureDescriptorRequired(obj InfrastructureDescriptor) error {
 	elements := map[string]interface{}{
 		"id": obj.Id,
 	}
@@ -64,7 +64,7 @@ func AssertRegistryDescriptorRequired(obj RegistryDescriptor) error {
 }
 
 // AssertRegistryConstraints checks if the values respects the defined constraints
-func AssertRegistryDescriptorConstraints(obj RegistryDescriptor) error {
+func AssertInfrastructureDescriptorConstraints(obj InfrastructureDescriptor) error {
 	for _, el := range obj.Description {
 		if err := AssertLangStringTextTypeConstraints(el); err != nil {
 			return err
