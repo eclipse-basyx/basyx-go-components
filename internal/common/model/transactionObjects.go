@@ -545,7 +545,7 @@ type BlobElementValueRow struct {
 // descriptions.
 type AssetAdministrationShellDescriptorRow struct {
 	DescID        int64
-	AssetKindStr  sql.NullInt64
+	AssetKind     sql.NullInt64
 	AssetType     sql.NullString
 	GlobalAssetID sql.NullString
 	IDShort       sql.NullString

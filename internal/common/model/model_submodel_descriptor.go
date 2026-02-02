@@ -28,8 +28,12 @@
 package model
 
 import (
+	"errors"
+
 	"github.com/FriedJannik/aas-go-sdk/jsonization"
 	"github.com/FriedJannik/aas-go-sdk/types"
+	"github.com/FriedJannik/aas-go-sdk/verification"
+	jsoniter "github.com/json-iterator/go"
 )
 
 type SubmodelDescriptor struct {
@@ -114,6 +118,7 @@ func (obj SubmodelDescriptor) ToJsonable() (map[string]any, error) {
 		}
 	}
 
+	// Supplemental Semantic IDs
 	var supplementalSemanticIDs []map[string]any
 	for _, ssm := range obj.SupplementalSemanticId {
 		ssmMap, err := jsonization.ToJsonable(ssm)
@@ -121,6 +126,16 @@ func (obj SubmodelDescriptor) ToJsonable() (map[string]any, error) {
 			return nil, err
 		}
 		supplementalSemanticIDs = append(supplementalSemanticIDs, ssmMap)
+	}
+
+	// Extensions
+	var extensions []map[string]any
+	for _, ext := range obj.Extensions {
+		extMap, err := jsonization.ToJsonable(&ext)
+		if err != nil {
+			return nil, err
+		}
+		extensions = append(extensions, extMap)
 	}
 
 	// Semantic ID
@@ -139,8 +154,8 @@ func (obj SubmodelDescriptor) ToJsonable() (map[string]any, error) {
 	if len(displayNames) > 0 {
 		ret["displayName"] = displayNames
 	}
-	if len(obj.Extensions) > 0 {
-		ret["extensions"] = obj.Extensions
+	if len(extensions) > 0 {
+		ret["extensions"] = extensions
 	}
 	if administration != nil {
 		ret["administration"] = administration
@@ -161,4 +176,227 @@ func (obj SubmodelDescriptor) ToJsonable() (map[string]any, error) {
 		ret["supplementalSemanticIds"] = supplementalSemanticIDs
 	}
 	return ret, nil
+}
+
+// UnmarshalJSON implements custom unmarshaling for SubmodelDescriptor
+// It handles the FromJsonable Unmarshalling of the aas-go-sdk types
+func (obj *SubmodelDescriptor) UnmarshalJSON(data []byte) error {
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
+	var jsonable map[string]any
+	if err := json.Unmarshal(data, &jsonable); err != nil {
+		return err
+	}
+
+	// Check for unknown fields
+	allowedFields := map[string]bool{
+		"administration":          true,
+		"endpoints":               true,
+		"idShort":                 true,
+		"id":                      true,
+		"semanticId":              true,
+		"supplementalSemanticIds": true,
+		"description":             true,
+		"displayName":             true,
+		"extensions":              true,
+	}
+	for key := range jsonable {
+		if !allowedFields[key] {
+			return errors.New("unknown field: " + key)
+		}
+	}
+
+	// Description
+	if descs, ok := jsonable["description"].([]any); ok {
+		for _, desc := range descs {
+			descMap, ok := desc.(map[string]any)
+			if !ok {
+				return errors.New("SubmodelDescriptor: description is not a map")
+			}
+			var langString types.ILangStringTextType
+			langString, err := jsonization.LangStringTextTypeFromJsonable(descMap)
+			if err != nil {
+				return err
+			}
+			obj.Description = append(obj.Description, langString)
+		}
+	}
+
+	// Display Name
+	if dns, ok := jsonable["displayName"].([]any); ok {
+		for _, dn := range dns {
+			dnMap, ok := dn.(map[string]any)
+			if !ok {
+				return errors.New("SubmodelDescriptor: displayName is not a map")
+			}
+			var langString types.ILangStringNameType
+			langString, err := jsonization.LangStringNameTypeFromJsonable(dnMap)
+			if err != nil {
+				return err
+			}
+			obj.DisplayName = append(obj.DisplayName, langString)
+		}
+	}
+
+	// Extensions
+	if exts, ok := jsonable["extensions"].([]any); ok {
+		for _, ext := range exts {
+			extMap, ok := ext.(map[string]any)
+			if !ok {
+				return errors.New("SubmodelDescriptor: extension is not a map")
+			}
+			var extension types.IExtension
+			extension, err := jsonization.ExtensionFromJsonable(extMap)
+			if err != nil {
+				return err
+			}
+			convExt, ok := extension.(*types.Extension)
+			if !ok {
+				return errors.New("SubmodelDescriptor: extension is not of type Extension")
+			}
+			if convExt == nil {
+				return errors.New("SubmodelDescriptor: extension is nil")
+			}
+			obj.Extensions = append(obj.Extensions, *convExt)
+		}
+	}
+
+	// Endpoints
+	if eps, ok := jsonable["endpoints"].([]any); ok {
+		for _, ep := range eps {
+			epMap, ok := ep.(map[string]any)
+			if !ok {
+				return errors.New("SubmodelDescriptor: endpoint is not a map")
+			}
+			var endpoint Endpoint
+			endpointBytes, err := json.Marshal(epMap)
+			if err != nil {
+				return err
+			}
+			if err := json.Unmarshal(endpointBytes, &endpoint); err != nil {
+				return err
+			}
+			obj.Endpoints = append(obj.Endpoints, endpoint)
+		}
+	}
+
+	// Administration
+	if admin, ok := jsonable["administration"].(map[string]any); ok {
+		var administration types.IAdministrativeInformation
+		administration, err := jsonization.AdministrativeInformationFromJsonable(admin)
+		if err != nil {
+			return err
+		}
+		obj.Administration = administration
+	}
+
+	// Supplemental Semantic IDs
+	if ssids, ok := jsonable["supplementalSemanticIds"].([]any); ok {
+		for _, ssid := range ssids {
+			ssidMap, ok := ssid.(map[string]any)
+			if !ok {
+				return errors.New("SubmodelDescriptor: supplementalSemanticId is not a map")
+			}
+			var reference types.IReference
+			reference, err := jsonization.ReferenceFromJsonable(ssidMap)
+			if err != nil {
+				return err
+			}
+			obj.SupplementalSemanticId = append(obj.SupplementalSemanticId, reference)
+		}
+	}
+
+	// Semantic ID
+	if sid, ok := jsonable["semanticId"].(map[string]any); ok {
+		var reference types.IReference
+		reference, err := jsonization.ReferenceFromJsonable(sid)
+		if err != nil {
+			return err
+		}
+		obj.SemanticId = reference
+	}
+
+	// Handle other simple fields
+	if idShort, ok := jsonable["idShort"].(string); ok {
+		obj.IdShort = idShort
+	}
+	if id, ok := jsonable["id"].(string); ok {
+		obj.Id = id
+	}
+
+	// Verify Description
+	var validationErrors []string
+	for _, el := range obj.Description {
+		verification.Verify(el, func(verErr *verification.VerificationError) bool {
+			validationErrors = append(validationErrors, verErr.Error())
+			return false // Continue collecting all errors
+		})
+
+		if len(validationErrors) > 0 {
+			return errors.New("AssetAdministrationShellDescriptor: Description verification failed: " + validationErrors[0])
+		}
+	}
+
+	// Verify DisplayName
+	validationErrors = []string{}
+	for _, el := range obj.DisplayName {
+		verification.Verify(el, func(verErr *verification.VerificationError) bool {
+			validationErrors = append(validationErrors, verErr.Error())
+			return false // Continue collecting all errors
+		})
+
+		if len(validationErrors) > 0 {
+			return errors.New("AssetAdministrationShellDescriptor: DisplayName verification failed: " + validationErrors[0])
+		}
+	}
+
+	// Verify Extensions
+	validationErrors = []string{}
+	for _, el := range obj.Extensions {
+		verification.Verify(&el, func(verErr *verification.VerificationError) bool {
+			validationErrors = append(validationErrors, verErr.Error())
+			return false // Continue collecting all errors
+		})
+
+		if len(validationErrors) > 0 {
+			return errors.New("AssetAdministrationShellDescriptor: Extensions verification failed: " + validationErrors[0])
+		}
+	}
+
+	// Semantic ID
+	validationErrors = []string{}
+	if obj.SemanticId != nil {
+		verification.Verify(obj.SemanticId, func(verErr *verification.VerificationError) bool {
+			validationErrors = append(validationErrors, verErr.Error())
+			return false // Continue collecting all errors
+		})
+		if len(validationErrors) > 0 {
+			return errors.New("SubmodelDescriptor: SemanticId verification failed: " + validationErrors[0])
+		}
+	}
+
+	// Supplemental Semantic IDs
+	validationErrors = []string{}
+	for _, el := range obj.SupplementalSemanticId {
+		verification.Verify(el, func(verErr *verification.VerificationError) bool {
+			validationErrors = append(validationErrors, verErr.Error())
+			return false // Continue collecting all errors
+		})
+	}
+	if len(validationErrors) > 0 {
+		return errors.New("SubmodelDescriptor: SupplementalSemanticIds verification failed: " + validationErrors[0])
+	}
+
+	// Administration
+	validationErrors = []string{}
+	if obj.Administration != nil {
+		verification.Verify(obj.Administration, func(verErr *verification.VerificationError) bool {
+			validationErrors = append(validationErrors, verErr.Error())
+			return false // Continue collecting all errors
+		})
+		if len(validationErrors) > 0 {
+			return errors.New("SubmodelDescriptor: Administration verification failed: " + validationErrors[0])
+		}
+	}
+
+	return nil
 }

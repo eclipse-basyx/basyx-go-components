@@ -47,6 +47,7 @@ import (
 	"database/sql"
 	"errors"
 
+	"github.com/FriedJannik/aas-go-sdk/stringification"
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
@@ -57,7 +58,7 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-// InsertAdministrationShellDescriptor creates a new AssetAdministrationShellDescriptor
+// InsertAssetAdministrationShellDescriptor creates a new AssetAdministrationShellDescriptor
 // and all its related entities (display name, description, administration,
 // endpoints, specific asset IDs, extensions and submodel descriptors).
 //
@@ -71,7 +72,7 @@ import (
 //
 // Returns an error when SQL building/execution fails or when writing any of the
 // dependent rows fails. Errors are wrapped into common errors where relevant.
-func InsertAdministrationShellDescriptor(ctx context.Context, db *sql.DB, aasd model.AssetAdministrationShellDescriptor) (model.AssetAdministrationShellDescriptor, error) {
+func InsertAssetAdministrationShellDescriptor(ctx context.Context, db *sql.DB, aasd model.AssetAdministrationShellDescriptor) (model.AssetAdministrationShellDescriptor, error) {
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		return model.AssetAdministrationShellDescriptor{}, common.NewInternalServerError("Failed to start postgres transaction. See console for information.")
@@ -408,7 +409,12 @@ func buildListAssetAdministrationShellDescriptorsQuery(
 	}
 
 	if assetKind != "" {
-		ds = ds.Where(tAASDescriptor.Col(colAssetKind).Eq(assetKind))
+		assetKindAsString := model.GetAssetKindString(assetKind)
+		convertedAssetKind, ok := stringification.AssetKindFromString(assetKindAsString)
+		if !ok {
+			return nil, errors.New("Invalid asset kind: " + assetKindAsString)
+		}
+		ds = ds.Where(tAASDescriptor.Col(colAssetKind).Eq(convertedAssetKind))
 	}
 
 	if identifiable != "" {
@@ -484,7 +490,7 @@ func listAssetAdministrationShellDescriptors(
 		var r model.AssetAdministrationShellDescriptorRow
 		if err := rows.Scan(
 			&r.DescID,
-			&r.AssetKindStr,
+			&r.AssetKind,
 			&r.AssetType,
 			&r.GlobalAssetID,
 			&r.IDShort,
@@ -643,9 +649,10 @@ func listAssetAdministrationShellDescriptors(
 
 	out := make([]model.AssetAdministrationShellDescriptor, 0, len(descRows))
 	for _, r := range descRows {
-		var ak types.AssetKind
-		if r.AssetKindStr.Valid {
-			ak = types.AssetKind(r.AssetKindStr.Int64)
+		var ak *types.AssetKind
+		if r.AssetKind.Valid {
+			localAk := types.AssetKind(r.AssetKind.Int64)
+			ak = &localAk
 		}
 
 		var adminInfo types.IAdministrativeInformation

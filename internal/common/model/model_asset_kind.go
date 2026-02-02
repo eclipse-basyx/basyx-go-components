@@ -70,3 +70,8 @@ func AssertAssetKindConstraints(obj AssetKind) error {
 	}
 	return nil
 }
+
+func GetAssetKindString(v AssetKind) string {
+	str := string(v)
+	return str
+}
