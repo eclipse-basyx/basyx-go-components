@@ -272,7 +272,9 @@ func (p *PostgreSQLDiscoveryDatabase) SearchAASIDsByAssetLinks(
 	}
 
 	sqlStr, args, err := ds.ToSQL()
-	fmt.Println(sqlStr)
+	if common.DebugEnabled(ctx) {
+		_, _ = fmt.Println(sqlStr)
+	}
 	if err != nil {
 		_, _ = fmt.Println("SearchAASIDsByAssetLinks: sql build error:", err)
 		return nil, "", common.NewInternalServerError("Failed to query AAS IDs. See server logs for details.")

@@ -31,6 +31,7 @@ package common
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"strings"
 	"time"
@@ -158,4 +159,18 @@ func Unmarshal(value []byte, v any) error {
 		return err
 	}
 	return nil
+}
+
+// DebugEnabled checks whether descriptor debug logging is enabled in the
+// configuration stored in the provided context.
+
+func DebugEnabled(ctx context.Context) bool {
+	if ctx == nil {
+		return false
+	}
+	cfg, ok := ConfigFromContext(ctx)
+	if !ok || cfg == nil {
+		return false
+	}
+	return cfg.General.EnableDescriptorDebug
 }
