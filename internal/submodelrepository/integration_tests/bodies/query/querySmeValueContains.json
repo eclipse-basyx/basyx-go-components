@@ -1,0 +1,12 @@
+{
+    "$condition": {
+        "$contains": [
+            {
+                "$field": "$sme.SerialNumber#value"
+            },
+            {
+                "$strVal": "12345"
+            }
+        ]
+    }
+}

@@ -40,6 +40,16 @@ import (
 	"github.com/doug-martin/goqu/v9/exp"
 )
 
+// columnToExpression converts a column string to a goqu expression.
+// If the column contains parentheses (indicating a SQL expression like COALESCE),
+// it uses goqu.L() for a literal expression. Otherwise, it uses goqu.I() for an identifier.
+func columnToExpression(column string) exp.Expression {
+	if strings.Contains(column, "(") {
+		return goqu.L(column)
+	}
+	return goqu.I(column)
+}
+
 type existsJoinRule struct {
 	Alias string
 	Deps  []string
@@ -150,7 +160,7 @@ func normalizeRoot(root string) string {
 func joinPlanConfigForSM() JoinPlanConfig {
 	return JoinPlanConfig{
 		PreferredBase: "s",
-		BaseAliases:   []string{"s", "semantic_id_reference", "semantic_id_reference_key"},
+		BaseAliases:   []string{"s", "semantic_id_reference", "semantic_id_reference_key", "submodel_element", "property_element", "multilanguage_property", "multilanguage_property_value", "sme_semantic_id_reference", "sme_semantic_id_reference_key"},
 		Rules: map[string]existsJoinRule{
 			"s": {
 				Alias: "s",
@@ -163,7 +173,7 @@ func joinPlanConfigForSM() JoinPlanConfig {
 				Alias: "semantic_id_reference",
 				Deps:  []string{"s"},
 				Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
-					return ds.Join(
+					return ds.LeftJoin(
 						goqu.T("reference").As("semantic_id_reference"),
 						goqu.On(goqu.I("semantic_id_reference.id").Eq(goqu.I("s.semantic_id"))),
 					)
@@ -173,9 +183,69 @@ func joinPlanConfigForSM() JoinPlanConfig {
 				Alias: "semantic_id_reference_key",
 				Deps:  []string{"semantic_id_reference"},
 				Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
-					return ds.Join(
+					return ds.LeftJoin(
 						goqu.T("reference_key").As("semantic_id_reference_key"),
 						goqu.On(goqu.I("semantic_id_reference_key.reference_id").Eq(goqu.I("semantic_id_reference.id"))),
+					)
+				},
+			},
+			"submodel_element": {
+				Alias: "submodel_element",
+				Deps:  []string{"s"},
+				Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
+					return ds.LeftJoin(
+						goqu.T("submodel_element"),
+						goqu.On(goqu.I("submodel_element.submodel_id").Eq(goqu.I("s.id"))),
+					)
+				},
+			},
+			"property_element": {
+				Alias: "property_element",
+				Deps:  []string{"submodel_element"},
+				Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
+					return ds.LeftJoin(
+						goqu.T("property_element"),
+						goqu.On(goqu.I("property_element.id").Eq(goqu.I("submodel_element.id"))),
+					)
+				},
+			},
+			"multilanguage_property": {
+				Alias: "multilanguage_property",
+				Deps:  []string{"submodel_element"},
+				Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
+					return ds.LeftJoin(
+						goqu.T("multilanguage_property"),
+						goqu.On(goqu.I("multilanguage_property.id").Eq(goqu.I("submodel_element.id"))),
+					)
+				},
+			},
+			"multilanguage_property_value": {
+				Alias: "multilanguage_property_value",
+				Deps:  []string{"multilanguage_property"},
+				Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
+					return ds.LeftJoin(
+						goqu.T("multilanguage_property_value"),
+						goqu.On(goqu.I("multilanguage_property_value.mlp_id").Eq(goqu.I("multilanguage_property.id"))),
+					)
+				},
+			},
+			"sme_semantic_id_reference": {
+				Alias: "sme_semantic_id_reference",
+				Deps:  []string{"submodel_element"},
+				Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
+					return ds.LeftJoin(
+						goqu.T("reference").As("sme_semantic_id_reference"),
+						goqu.On(goqu.I("sme_semantic_id_reference.id").Eq(goqu.I("submodel_element.semantic_id"))),
+					)
+				},
+			},
+			"sme_semantic_id_reference_key": {
+				Alias: "sme_semantic_id_reference_key",
+				Deps:  []string{"sme_semantic_id_reference"},
+				Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
+					return ds.LeftJoin(
+						goqu.T("reference_key").As("sme_semantic_id_reference_key"),
+						goqu.On(goqu.I("sme_semantic_id_reference_key.reference_id").Eq(goqu.I("sme_semantic_id_reference.id"))),
 					)
 				},
 			},
@@ -187,6 +257,18 @@ func joinPlanConfigForSM() JoinPlanConfig {
 			case "semantic_id_reference":
 				return "reference", true
 			case "semantic_id_reference_key":
+				return "reference_key", true
+			case "submodel_element":
+				return "submodel_element", true
+			case "property_element":
+				return "property_element", true
+			case "multilanguage_property":
+				return "multilanguage_property", true
+			case "multilanguage_property_value":
+				return "multilanguage_property_value", true
+			case "sme_semantic_id_reference":
+				return "reference", true
+			case "sme_semantic_id_reference_key":
 				return "reference_key", true
 			default:
 				return "", false
@@ -842,7 +924,7 @@ func toSQLResolvedFieldOrValue(operand *Value, explicitCastType string, position
 	if err != nil {
 		return nil, nil, err
 	}
-	ident := goqu.I(resolved.Column)
+	ident := columnToExpression(resolved.Column)
 	if explicitCastType != "" {
 		return safeCastSQLValue(ident, explicitCastType), &resolved, nil
 	}
@@ -1808,7 +1890,7 @@ func toSQLComponent(operand *Value, position string) (interface{}, error) {
 		if err != nil {
 			return nil, err
 		}
-		return goqu.I(resolved.Column), nil
+		return columnToExpression(resolved.Column), nil
 	}
 
 	return goqu.V(normalizeLiteralForSQL(operand.GetValue())), nil

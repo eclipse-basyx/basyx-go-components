@@ -1,0 +1,55 @@
+{
+    "paging_metadata": {},
+    "result": [
+        {
+            "idShort": "Query_Language_Submodel_6",
+            "modelType": "Submodel",
+            "id": "https://example.org/submodel/MultiLanguageTest",
+            "kind": "Instance",
+            "semanticId": {
+                "type": "ExternalReference",
+                "keys": [
+                    {
+                        "type": "GlobalReference",
+                        "value": "urn:example:semanticId:MultiLanguageSubmodel"
+                    }
+                ]
+            },
+            "submodelElements": [
+                {
+                    "idShort": "ProductName",
+                    "modelType": "MultiLanguageProperty",
+                    "value": [
+                        {
+                            "language": "de",
+                            "text": "Industriesensor"
+                        },
+                        {
+                            "language": "en",
+                            "text": "Industrial Sensor"
+                        },
+                        {
+                            "language": "fr",
+                            "text": "Capteur industriel"
+                        }
+                    ]
+                },
+                {
+                    "idShort": "TechnicalSpec",
+                    "modelType": "Property",
+                    "valueType": "xs:string",
+                    "value": "Spec-2024-A",
+                    "semanticId": {
+                        "type": "ExternalReference",
+                        "keys": [
+                            {
+                                "type": "GlobalReference",
+                                "value": "urn:example:sme:semanticId:TechnicalSpecification"
+                            }
+                        ]
+                    }
+                }
+            ]
+        }
+    ]
+}

@@ -1,0 +1,26 @@
+{
+    "$condition": {
+        "$and": [
+            {
+                "$eq": [
+                    {
+                        "$field": "$sme.Status#value"
+                    },
+                    {
+                        "$strVal": "Running"
+                    }
+                ]
+            },
+            {
+                "$contains": [
+                    {
+                        "$field": "$sm#idShort"
+                    },
+                    {
+                        "$strVal": "Device1"
+                    }
+                ]
+            }
+        ]
+    }
+}

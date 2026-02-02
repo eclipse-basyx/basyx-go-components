@@ -1,6 +1,9 @@
+[![Go Report Card](https://goreportcard.com/badge/github.com/eclipse-basyx/basyx-go-components)](https://goreportcard.com/report/github.com/eclipse-basyx/basyx-go-components)
+
 <div align="center">
   <img src="docu/assets/Logo_Go_light.svg" alt="BaSyx Go Logo" width="400"/>
 </div>
+
 
 # BaSyx Go Components
 

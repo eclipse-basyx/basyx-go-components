@@ -1,0 +1,40 @@
+{
+    "paging_metadata": {},
+    "result": [
+        {
+            "id": "https://example.org/submodel/TechnicalData",
+            "idShort": "Query_Language_Submodel_3",
+            "kind": "Instance",
+            "modelType": "Submodel",
+            "semanticId": {
+                "keys": [
+                    {
+                        "type": "GlobalReference",
+                        "value": "urn:example:semanticId:TechnicalData"
+                    }
+                ],
+                "type": "ExternalReference"
+            },
+            "submodelElements": [
+                {
+                    "idShort": "MaxPower",
+                    "modelType": "Property",
+                    "value": "1500",
+                    "valueType": "xs:int"
+                },
+                {
+                    "idShort": "ProductStatus",
+                    "modelType": "Property",
+                    "value": "Active",
+                    "valueType": "xs:string"
+                },
+                {
+                    "idShort": "Voltage",
+                    "modelType": "Property",
+                    "value": "230.0",
+                    "valueType": "xs:double"
+                }
+            ]
+        }
+    ]
+}

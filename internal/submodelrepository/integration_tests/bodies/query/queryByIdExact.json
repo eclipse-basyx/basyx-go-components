@@ -1,0 +1,12 @@
+{
+    "$condition": {
+        "$eq": [
+            {
+                "$field": "$sm#id"
+            },
+            {
+                "$strVal": "https://nuhuh.de/?text=SubmodelAQueryLanguage"
+            }
+        ]
+    }
+}

@@ -18,12 +18,14 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"strings"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	persistencepostgresql "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence"
 	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/submodelrepositoryapi/go"
 )
@@ -1639,4 +1641,54 @@ func (s *SubmodelRepositoryAPIAPIService) GetOperationAsyncResultValueOnly(ctx c
 	// return gen.Response(0, Result{}), nil
 
 	return gen.Response(http.StatusNotImplemented, nil), errors.New("GetOperationAsyncResultValueOnly method not implemented")
+}
+
+const smRepoComponentName = "SubmodelRepository"
+
+// QuerySubmodels returns all Submodels that match the input query.
+// It supports filtering based on the query language and provides pagination through cursor-based navigation.
+//
+// Parameters:
+//   - ctx: Request context for security and cancellation
+//   - limit: Maximum number of submodels to return
+//   - cursor: Pagination cursor for continuing from previous results
+//   - query: Query object containing the filter condition
+//
+// Returns:
+//   - gen.ImplResponse: Response containing paginated submodel results
+//   - error: Error if the operation fails
+func (s *SubmodelRepositoryAPIAPIService) QuerySubmodels(
+	_ context.Context,
+	limit int32,
+	cursor string,
+	query grammar.Query,
+) (gen.ImplResponse, error) {
+	// Convert the grammar.Query to a QueryWrapper for the backend
+	queryWrapper := &grammar.QueryWrapper{
+		Query: query,
+	}
+
+	sms, nextCursor, err := s.submodelBackend.QuerySubmodels(limit, cursor, queryWrapper, false)
+	if err != nil {
+		log.Printf("🧩 [%s] Error in QuerySubmodels: query failed (limit=%d cursor=%q): %v", smRepoComponentName, limit, cursor, err)
+		switch {
+		case common.IsErrBadRequest(err):
+			return common.NewErrorResponse(
+				err, http.StatusBadRequest, smRepoComponentName, "QuerySubmodels", "BadRequest",
+			), nil
+		default:
+			return common.NewErrorResponse(
+				err, http.StatusInternalServerError, smRepoComponentName, "QuerySubmodels", "InternalServerError",
+			), err
+		}
+	}
+
+	// using the openAPI provided response struct to include paging metadata
+	res := gen.GetSubmodelsResult{
+		PagingMetadata: gen.PagedResultPagingMetadata{
+			Cursor: nextCursor,
+		},
+		Result: sms,
+	}
+	return gen.Response(http.StatusOK, res), nil
 }

@@ -1,0 +1,20 @@
+{
+    "idShort": "Query_Language_Submodel_5",
+    "modelType": "Submodel",
+    "id": "https://nuhuh.de/?text=SubmodelFQueryLanguage",
+    "kind": "Instance",
+    "submodelElements": [
+        {
+            "idShort": "Temperature",
+            "modelType": "Property",
+            "valueType": "xs:double",
+            "value": "100.5"
+        },
+        {
+            "idShort": "Status",
+            "modelType": "Property",
+            "valueType": "xs:string",
+            "value": "Running"
+        }
+    ]
+}
