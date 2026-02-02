@@ -27,15 +27,12 @@ package builder
 
 import (
 	"database/sql"
-	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"regexp"
 	"sort"
 	"strings"
 	"sync"
-	"unicode/utf8"
 
 	"github.com/FriedJannik/aas-go-sdk/jsonization"
 	"github.com/FriedJannik/aas-go-sdk/types"
@@ -713,25 +710,6 @@ func buildFile(smeRow model.SubmodelElementRow) (types.ISubmodelElement, error) 
 	return file, nil
 }
 
-var base64Regexp = regexp.MustCompile(`^[A-Za-z0-9+/]+={0,2}$`)
-
-func isLikelyBase64(data []byte) bool {
-	if len(data) == 0 {
-		return false
-	}
-	if len(data)%4 != 0 {
-		return false
-	}
-	if !utf8.Valid(data) {
-		return false
-	}
-	s := strings.TrimSpace(string(data))
-	if s == "" {
-		return false
-	}
-	return base64Regexp.MatchString(s)
-}
-
 // buildBlob creates a new Blob SubmodelElement.
 func buildBlob(smeRow model.SubmodelElementRow) (types.ISubmodelElement, error) {
 	var valueRow model.BlobElementValueRow
@@ -768,13 +746,6 @@ func buildBlob(smeRow model.SubmodelElementRow) (types.ISubmodelElement, error) 
 	if err != nil {
 		decoded = decodedHex // Fallback to hex decoded value
 		_, _ = fmt.Println("WARNING: Error while decoding Base64 - falling back to HEX Decoded Value as a fallback.")
-	}
-
-	// If decoded result is itself base64, decode a second time
-	if isLikelyBase64(decoded) {
-		if second, err2 := base64.StdEncoding.DecodeString(strings.TrimSpace(string(decoded))); err2 == nil {
-			decoded = second
-		}
 	}
 
 	blob := types.NewBlob()
