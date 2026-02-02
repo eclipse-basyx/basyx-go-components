@@ -240,3 +240,24 @@ jobs:
         run: |
           cd internal/aasregistry/query_integration_tests
           go test -v
+
+  registry-of-infrastructures-integration-tests:
+    name: Registry of Infrastructures Integration Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Get dependencies
+        run: go mod download
+
+      - name: Run registry of infrastructures integration tests
+        run: |
+          cd internal/registryofinfrastructuresservice/integration_tests
+          go test -v
