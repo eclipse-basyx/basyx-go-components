@@ -864,6 +864,11 @@ func buildInlineExistsExpression(resolved []ResolvedFieldPath, predicate exp.Exp
 
 	whereExpr := andBindingsForResolvedFieldPaths(resolved, predicate)
 	var correlation exp.Expression = groupKey.Eq(rootKey)
+	if rootAlias, ok := leadingAlias(fmt.Sprint(rootKey)); ok && rootAlias == plan.BaseAlias {
+		if corr := existsCorrelationForAlias(plan.BaseAlias); corr != nil {
+			correlation = corr
+		}
+	}
 	if whereExpr != nil {
 		correlation = goqu.And(correlation, whereExpr)
 	}
