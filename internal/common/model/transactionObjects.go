@@ -580,7 +580,6 @@ type SubmodelDescriptorRow struct {
 // descriptions.
 type RegistryDescriptorRow struct {
 	DescID        int64
-	RegistryType  sql.NullString
 	GlobalAssetID sql.NullString
 	IDShort       sql.NullString
 	Company       sql.NullString

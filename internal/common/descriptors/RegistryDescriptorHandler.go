@@ -86,7 +86,6 @@ func InsertRegistryDescriptorTx(_ context.Context, tx *sql.Tx, regdesc model.Reg
 			colDescriptionID: descriptionID,
 			colDisplayNameID: displayNameID,
 			colAdminInfoID:   administrationID,
-			colRegistryType:  regdesc.RegistryType,
 			colGlobalAssetID: regdesc.GlobalAssetId,
 			colIDShort:       regdesc.IdShort,
 			colRegDescID:     regdesc.Id,
@@ -124,7 +123,6 @@ func GetRegistryDescriptorByID(
 		From(reg).
 		Select(
 			reg.Col(colDescriptorID),
-			reg.Col(colRegistryType),
 			reg.Col(colGlobalAssetID),
 			reg.Col(colIDShort),
 			reg.Col(colCompany),
@@ -141,17 +139,16 @@ func GetRegistryDescriptorByID(
 	}
 
 	var (
-		descID                                        int64
-		registryType, globalAssetID, idShort, company sql.NullString
-		idStr                                         string
-		adminInfoID                                   sql.NullInt64
-		displayNameID                                 sql.NullInt64
-		descriptionID                                 sql.NullInt64
+		descID                          int64
+		globalAssetID, idShort, company sql.NullString
+		idStr                           string
+		adminInfoID                     sql.NullInt64
+		displayNameID                   sql.NullInt64
+		descriptionID                   sql.NullInt64
 	)
 
 	if err := db.QueryRowContext(ctx, sqlStr, args...).Scan(
 		&descID,
-		&registryType,
 		&globalAssetID,
 		&idShort,
 		&company,
@@ -202,7 +199,6 @@ func GetRegistryDescriptorByID(
 	}
 
 	return model.RegistryDescriptor{
-		RegistryType:   registryType.String,
 		GlobalAssetId:  globalAssetID.String,
 		IdShort:        idShort.String,
 		Company:        company.String,
@@ -306,7 +302,7 @@ func ReplaceRegistryDescriptor(ctx context.Context, db *sql.DB, registryDescript
 }
 
 // ListRegistryDescriptors lists Registry descriptors with optional
-// filtering by RegistryType. Results are ordered by Registry Id
+// filtering by company and endpoint interface. Results are ordered by Registry Id
 // ascending and support cursor‑based pagination where the cursor is the Registry Id
 // of the first element to include (i.e. Id >= cursor).
 //
@@ -320,7 +316,6 @@ func ListRegistryDescriptors(
 	db *sql.DB,
 	limit int32,
 	cursor string,
-	registryType string,
 	company string,
 	endpointInterface string,
 ) ([]model.RegistryDescriptor, string, error) {
@@ -337,7 +332,6 @@ func ListRegistryDescriptors(
 		From(reg).
 		Select(
 			reg.Col(colDescriptorID),
-			reg.Col(colRegistryType),
 			reg.Col(colGlobalAssetID),
 			reg.Col(colIDShort),
 			reg.Col(colCompany),
@@ -349,10 +343,6 @@ func ListRegistryDescriptors(
 
 	if cursor != "" {
 		ds = ds.Where(reg.Col(colRegDescID).Gte(cursor))
-	}
-
-	if registryType != "" {
-		ds = ds.Where(reg.Col(colRegistryType).Eq(registryType))
 	}
 
 	if company != "" {
@@ -396,7 +386,6 @@ func ListRegistryDescriptors(
 		var r model.RegistryDescriptorRow
 		if err := rows.Scan(
 			&r.DescID,
-			&r.RegistryType,
 			&r.GlobalAssetID,
 			&r.IDShort,
 			&r.Company,
@@ -522,7 +511,6 @@ func ListRegistryDescriptors(
 		}
 
 		out = append(out, model.RegistryDescriptor{
-			RegistryType:   r.RegistryType.String,
 			GlobalAssetId:  r.GlobalAssetID.String,
 			IdShort:        r.IDShort.String,
 			Company:        r.Company.String,

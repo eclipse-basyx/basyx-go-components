@@ -550,7 +550,6 @@ CREATE TABLE IF NOT EXISTS registry_descriptor (
   description_id BIGINT REFERENCES lang_string_text_type_reference(id),
   displayname_id BIGINT REFERENCES lang_string_name_type_reference(id),
   administrative_information_id BIGINT REFERENCES administrative_information(id),
-  registry_type VARCHAR(2048),
   global_asset_id VARCHAR(2048),
   id_short VARCHAR(128),
   id VARCHAR(2048) NOT NULL UNIQUE,
@@ -777,7 +776,6 @@ CREATE INDEX IF NOT EXISTS ix_regd_description_id          ON registry_descripto
 
 CREATE INDEX IF NOT EXISTS ix_regd_id_short                ON registry_descriptor(id_short);
 CREATE INDEX IF NOT EXISTS ix_regd_global_asset_id         ON registry_descriptor(global_asset_id);
-CREATE INDEX IF NOT EXISTS ix_regd_registry_type           ON registry_descriptor(registry_type);
 CREATE INDEX IF NOT EXISTS ix_regd_company                 ON registry_descriptor(company);
 -- Useful for partial and fuzzy searches on long IDs/GRIDs
 CREATE INDEX IF NOT EXISTS ix_regd_id_trgm                 ON registry_descriptor USING GIN (id gin_trgm_ops);

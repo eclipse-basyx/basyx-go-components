@@ -121,8 +121,7 @@ const (
 
 	colExtensionID = "extension_id"
 
-	colRegistryType = "registry_type"
-	colCompany      = "company"
+	colCompany = "company"
 
 	// Generic/common column names used in descriptor queries
 	colType            = "type"
