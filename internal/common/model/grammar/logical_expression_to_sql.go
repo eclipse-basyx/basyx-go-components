@@ -801,6 +801,78 @@ func buildFlagCTEDataset(plan existsJoinPlan, entries []ResolvedFieldPathFlag, w
 	return ds, nil
 }
 
+func buildInlineExistsExpression(resolved []ResolvedFieldPath, predicate exp.Expression, collector *ResolvedFieldPathCollector) (exp.Expression, error) {
+	cfg := defaultJoinPlanConfig()
+	if collector != nil {
+		cfg = collector.effectiveJoinConfig()
+	}
+	plan, err := buildJoinPlanForResolvedWithConfig(resolved, cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	d := goqu.Dialect("postgres")
+	ds := d.From(goqu.T(plan.BaseTable).As(plan.BaseAlias)).Select(goqu.V(1))
+
+	applied := map[string]struct{}{plan.BaseAlias: {}}
+	visiting := map[string]struct{}{}
+
+	var ensure func(alias string) error
+	ensure = func(alias string) error {
+		if alias == "" {
+			return nil
+		}
+		if alias == plan.BaseAlias {
+			return nil
+		}
+		if _, ok := applied[alias]; ok {
+			return nil
+		}
+		if _, ok := visiting[alias]; ok {
+			return fmt.Errorf("cyclic EXISTS join dependency for alias %q", alias)
+		}
+		rule, ok := plan.Rules[alias]
+		if !ok {
+			return fmt.Errorf("no EXISTS join rule registered for alias %q", alias)
+		}
+		visiting[alias] = struct{}{}
+		for _, dep := range rule.Deps {
+			if err := ensure(dep); err != nil {
+				return err
+			}
+		}
+		delete(visiting, alias)
+		ds = rule.Apply(ds)
+		applied[alias] = struct{}{}
+		return nil
+	}
+
+	for _, alias := range plan.ExpandedAliases {
+		if err := ensure(alias); err != nil {
+			return nil, err
+		}
+	}
+
+	groupKey, err := cfg.GroupKeyForBase(plan.BaseAlias)
+	if err != nil {
+		return nil, err
+	}
+	if cfg.RootJoinKey == nil {
+		return nil, fmt.Errorf("missing root join key for EXISTS")
+	}
+	rootKey := cfg.RootJoinKey()
+
+	whereExpr := andBindingsForResolvedFieldPaths(resolved, predicate)
+	var correlation exp.Expression = groupKey.Eq(rootKey)
+	if whereExpr != nil {
+		correlation = goqu.And(correlation, whereExpr)
+	}
+
+	ds = ds.Where(correlation).Limit(1)
+
+	return goqu.L("EXISTS ?", ds), nil
+}
+
 func defaultJoinPlanConfig() JoinPlanConfig {
 	return JoinPlanConfig{
 		PreferredBase:   "aas_descriptor",
@@ -1442,11 +1514,11 @@ func handleBinaryOperationWithCollector(
 	}
 
 	if collector != nil && resolvedNeedsCTE(resolved) {
-		alias, err := collector.Register(resolved, opExpr)
+		existsExpr, err := buildInlineExistsExpression(resolved, opExpr, collector)
 		if err != nil {
 			return nil, nil, err
 		}
-		return goqu.I(collector.qualifiedAlias(alias)), resolved, nil
+		return existsExpr, resolved, nil
 	}
 	if collector != nil {
 		return opExpr, resolved, nil
@@ -1522,11 +1594,11 @@ func (le *LogicalExpression) EvaluateToExpression(collector *ResolvedFieldPathCo
 			return nil, nil, err
 		}
 		if collector != nil && resolvedNeedsCTE(resolved) {
-			alias, err := collector.RegisterWithAgg(resolved, expr, true)
+			existsExpr, err := buildInlineExistsExpression(resolved, expr, collector)
 			if err != nil {
 				return nil, nil, err
 			}
-			return goqu.I(collector.qualifiedAlias(alias)), resolved, nil
+			return existsExpr, resolved, nil
 		}
 		if collector != nil {
 			return expr, resolved, nil
