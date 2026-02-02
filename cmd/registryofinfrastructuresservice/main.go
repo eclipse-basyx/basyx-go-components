@@ -13,7 +13,7 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/registryofinfrastructuresservice/api"
 	registryofinfrastructurespostgresql "github.com/eclipse-basyx/basyx-go-components/internal/registryofinfrastructuresservice/persistence"
-	registryofinfrastructuresapi "github.com/eclipse-basyx/basyx-go-components/pkg/registryofinfrastructuresapi"
+	"github.com/eclipse-basyx/basyx-go-components/pkg/registryofinfrastructuresapi"
 	"github.com/go-chi/chi/v5"
 )
 
