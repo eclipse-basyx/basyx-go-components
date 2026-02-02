@@ -36,7 +36,6 @@ package submodelelements
 import (
 	"database/sql"
 	"errors"
-	"os"
 	"sort"
 	"strconv"
 	"sync"
@@ -388,11 +387,7 @@ func GetSubmodelElementsForSubmodel(db *sql.DB, submodelID string, idShortPath s
 	if err != nil {
 		return nil, "", err
 	}
-	// write to query.txt
-	err = os.WriteFile("query.txt", []byte(q), 0644)
-	if err != nil {
-		return nil, "", err
-	}
+
 	rows, err := db.Query(q, params...)
 
 	if err != nil {

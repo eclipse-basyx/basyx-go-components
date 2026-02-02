@@ -589,6 +589,9 @@ func (p *PostgreSQLSubmodelDatabase) GetSignedSubmodel(id string, valueOnly bool
 
 	// Marshal submodel to JSON
 	jsonSubmodel, err := jsonization.ToJsonable(&submodel)
+	if err != nil {
+		return "", fmt.Errorf("failed to convert submodel to jsonable: %w", err)
+	}
 	payload, err := json.Marshal(jsonSubmodel)
 	if err != nil {
 		return "", fmt.Errorf("failed to marshal submodel: %w", err)
@@ -747,7 +750,7 @@ func (p *PostgreSQLSubmodelDatabase) CreateSubmodel(smInt types.ISubmodel, optio
 		return err
 	}
 	if exists {
-		return common.NewErrConflict(fmt.Sprintf("Submodel with ID %s already exists", sm.ID))
+		return common.NewErrConflict(fmt.Sprintf("Submodel with ID %s already exists", sm.ID()))
 	}
 	var semanticIDDbID, displayNameID, descriptionID, administrationID sql.NullInt64
 
@@ -1277,7 +1280,11 @@ func (p *PostgreSQLSubmodelDatabase) UpdateSubmodelElement(submodelID string, id
 	// Get the appropriate handler for this model type
 	handler, err := submodelelements.GetSMEHandlerByModelType(*modelType, p.db)
 	if err != nil {
-		return fmt.Errorf("failed to get handler for model type %s: %w", *modelType, err)
+		stringModelType, ok := stringification.ModelTypeToString(*modelType)
+		if !ok {
+			stringModelType = "unknown"
+		}
+		return fmt.Errorf("failed to get handler for model type %s: %w", stringModelType, err)
 	}
 	err = handler.Update(submodelID, idShortPath, submodelElement, nil, isPut)
 
@@ -1343,7 +1350,11 @@ func (p *PostgreSQLSubmodelDatabase) UpdateSubmodelElementValueOnly(submodelID s
 	// Get the appropriate handler for this model type
 	handler, err := submodelelements.GetSMEHandlerByModelType(*modelType, p.db)
 	if err != nil {
-		return fmt.Errorf("failed to get handler for model type %s: %w", modelType, err)
+		stringModelType, ok := stringification.ModelTypeToString(*modelType)
+		if !ok {
+			stringModelType = "unknown"
+		}
+		return fmt.Errorf("failed to get handler for model type %s: %w", stringModelType, err)
 	}
 
 	// Update the value only

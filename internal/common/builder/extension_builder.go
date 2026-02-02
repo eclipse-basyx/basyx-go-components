@@ -32,6 +32,7 @@ import (
 	"fmt"
 	"sort"
 
+	"github.com/FriedJannik/aas-go-sdk/stringification"
 	"github.com/FriedJannik/aas-go-sdk/types"
 )
 
@@ -101,10 +102,12 @@ func (b *ExtensionsBuilder) AddExtension(extensionDbID int64, name string, value
 			extension.SetValue(&value)
 		}
 
-		// Set valueType if provided - SDK handles parsing internally
 		if valueType != "" {
-			// Note: valueType parsing handled by SDK's internal mechanisms
-			// We skip manual conversion to avoid anti-patterns
+			parsedValType, ok := stringification.DataTypeDefXSDFromString(valueType)
+			if !ok {
+				return nil, fmt.Errorf("failed to parse valueType '%s' for Extension '%s' with DB ID '%d'", valueType, name, extensionDbID)
+			}
+			extension.SetValueType(&parsedValType)
 		}
 
 		b.extensions[extensionDbID] = &extensionWithPosition{

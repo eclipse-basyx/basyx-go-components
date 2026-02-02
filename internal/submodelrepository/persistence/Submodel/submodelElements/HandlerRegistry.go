@@ -30,6 +30,7 @@ import (
 	"database/sql"
 	"fmt"
 
+	"github.com/FriedJannik/aas-go-sdk/stringification"
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/logger"
@@ -98,13 +99,21 @@ var handlerRegistry = map[types.ModelType]HandlerFactory{
 func GetHandlerFromRegistry(modelType types.ModelType, db *sql.DB) (PostgreSQLSMECrudInterface, error) {
 	factory, exists := handlerRegistry[modelType]
 	if !exists {
-		return nil, common.NewErrBadRequest(fmt.Sprintf("unknown model type: %s", modelType))
+		stringModelType, ok := stringification.ModelTypeToString(modelType)
+		if !ok {
+			stringModelType = "unknown"
+		}
+		return nil, common.NewErrBadRequest(fmt.Sprintf("unknown model type: %s", stringModelType))
 	}
 
 	handler, err := factory(db)
 	if err != nil {
 		logger.LogHandlerCreationError(modelType, err)
-		return nil, common.NewInternalServerError(fmt.Sprintf("Failed to create %s handler. See console for details.", modelType))
+		stringModelType, ok := stringification.ModelTypeToString(modelType)
+		if !ok {
+			stringModelType = "unknown"
+		}
+		return nil, common.NewInternalServerError(fmt.Sprintf("Failed to create %s handler. See console for details.", stringModelType))
 	}
 	return handler, nil
 }
@@ -121,9 +130,9 @@ func RegisterHandler(modelType types.ModelType, factory HandlerFactory) {
 
 // GetSupportedModelTypes returns a list of all model types supported by the registry.
 func GetSupportedModelTypes() []types.ModelType {
-	types := make([]types.ModelType, 0, len(handlerRegistry))
+	lTypes := make([]types.ModelType, 0, len(handlerRegistry))
 	for t := range handlerRegistry {
-		types = append(types, t)
+		lTypes = append(lTypes, t)
 	}
-	return types
+	return lTypes
 }

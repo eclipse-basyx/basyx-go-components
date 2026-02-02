@@ -30,6 +30,7 @@ import (
 	"log"
 	"os"
 
+	"github.com/FriedJannik/aas-go-sdk/stringification"
 	"github.com/FriedJannik/aas-go-sdk/types"
 )
 
@@ -77,5 +78,9 @@ func LogDebug(message string) {
 //   - handlerType: The type of handler that failed to create
 //   - err: The error that occurred
 func LogHandlerCreationError(handlerType types.ModelType, err error) {
-	logger.Printf("ERROR: creating %s handler: %v", handlerType, err)
+	stringHandlerType, ok := stringification.ModelTypeToString(handlerType)
+	if !ok {
+		stringHandlerType = "unknown"
+	}
+	logger.Printf("ERROR: creating %s handler: %v", stringHandlerType, err)
 }

@@ -227,180 +227,201 @@ func buildSubmodels(submodelRows []model.SubmodelRow, db *sql.DB) ([]*types.Subm
 	return result, submodelMap, nil
 }
 
+// submodelParsedData holds all parsed data for a submodel row.
+type submodelParsedData struct {
+	semanticID              []types.IReference
+	supplementalSemanticIDs []types.IReference
+	embeddedDataSpecs       []types.IEmbeddedDataSpecification
+	qualifiers              []types.IQualifier
+	extensions              []types.IExtension
+	administration          *types.AdministrativeInformation
+	displayNames            []types.ILangStringNameType
+	descriptions            []types.ILangStringTextType
+}
+
 func parseSubmodelRow(row model.SubmodelRow, referenceBuilderRefs map[int64]*builders.ReferenceBuilder, refMutex *sync.RWMutex, db *sql.DB) (*types.Submodel, error) {
-	var json = jsoniter.ConfigCompatibleWithStandardLibrary
-
-	// Create submodel using SDK factory
 	submodel := types.NewSubmodel(row.ID)
+	setSubmodelBasicFields(submodel, row)
 
-	// Set IDShort if present
+	data, err := parseSubmodelRowData(row, referenceBuilderRefs, refMutex, db)
+	if err != nil {
+		return nil, err
+	}
+
+	assignParsedDataToSubmodel(submodel, data)
+	return submodel, nil
+}
+
+func setSubmodelBasicFields(submodel *types.Submodel, row model.SubmodelRow) {
 	if row.IDShort != "" {
 		submodel.SetIDShort(&row.IDShort)
 	}
-
-	// Set Kind
 	if row.Kind.Valid {
 		kind := types.ModellingKind(row.Kind.Int64)
 		submodel.SetKind(&kind)
 	}
-	// Handle nullable Category field
 	if row.Category.Valid {
 		submodel.SetCategory(&row.Category.String)
 	}
+}
 
-	var (
-		semanticID              []types.IReference
-		supplementalSemanticIDs []types.IReference
-		embeddedDataSpecs       []types.IEmbeddedDataSpecification
-		qualifiers              []types.IQualifier
-		extensions              []types.IExtension
-		administration          *types.AdministrativeInformation
-		displayNames            []types.ILangStringNameType
-		descriptions            []types.ILangStringTextType
-	)
-
+func parseSubmodelRowData(row model.SubmodelRow, referenceBuilderRefs map[int64]*builders.ReferenceBuilder, refMutex *sync.RWMutex, db *sql.DB) (*submodelParsedData, error) {
+	data := &submodelParsedData{}
 	localG, _ := errgroup.WithContext(context.Background())
 
 	localG.Go(func() error {
-		if common.IsArrayNotEmpty(row.SemanticID) {
-			var err error
-			semanticID, err = builders.ParseReferences(row.SemanticID, referenceBuilderRefs, refMutex)
-			if err != nil {
-				return fmt.Errorf("error parsing semantic ID: %w", err)
-			}
-			if hasSemanticID(semanticID) {
-				err = builders.ParseReferredReferences(row.ReferredSemanticIDs, referenceBuilderRefs, refMutex)
-				if err != nil {
-					return fmt.Errorf("error parsing referred semantic IDs: %w", err)
-				}
-			}
-		}
-		return nil
+		semanticID, err := parseSemanticID(row, referenceBuilderRefs, refMutex)
+		data.semanticID = semanticID
+		return err
 	})
 
 	localG.Go(func() error {
-		if common.IsArrayNotEmpty(row.SupplementalSemanticIDs) {
-			var jsonable []map[string]any
-			err := json.Unmarshal(row.SupplementalSemanticIDs, &jsonable)
-			if err != nil {
-				return fmt.Errorf("error unmarshaling supplemental semantic IDs for Submodel: %w", err)
-			}
-			var semanticIds []types.IReference
-			for _, item := range jsonable {
-				semanticId, err := jsonization.ReferenceFromJsonable(item)
-				if err != nil {
-					return fmt.Errorf("error converting supplemental semantic ID from jsonable: %w", err)
-				}
-				semanticIds = append(semanticIds, semanticId)
-			}
-			supplementalSemanticIDs = semanticIds
-		}
-		return nil
+		supplementalIDs, err := parseSupplementalSemanticIDs(row.SupplementalSemanticIDs)
+		data.supplementalSemanticIDs = supplementalIDs
+		return err
 	})
 
 	localG.Go(func() error {
 		dn, err := parseDisplayNamesToSDK(row)
-		if err == nil {
-			displayNames = dn
-		}
+		data.displayNames = dn
 		return err
 	})
+
 	localG.Go(func() error {
 		ds, err := parseDescriptionsToSDK(row)
-		if err == nil {
-			descriptions = ds
-		}
+		data.descriptions = ds
 		return err
 	})
 
 	localG.Go(func() error {
-		if common.IsArrayNotEmpty(row.EmbeddedDataSpecification) {
-			var jsonable []map[string]any
-			err := json.Unmarshal(row.EmbeddedDataSpecification, &jsonable)
-			if err != nil {
-				return fmt.Errorf("error unmarshaling embedded data specifications for Submodel: %w", err)
-			}
-			for _, item := range jsonable {
-				eds, err := jsonization.EmbeddedDataSpecificationFromJsonable(item)
-				if err != nil {
-					return fmt.Errorf("error converting embedded data specification from jsonable: %w", err)
-				}
-				embeddedDataSpecs = append(embeddedDataSpecs, eds)
-			}
-			return nil
-
-		}
-		return nil
+		eds, err := parseEmbeddedDataSpecifications(row.EmbeddedDataSpecification)
+		data.embeddedDataSpecs = eds
+		return err
 	})
 
 	localG.Go(func() error {
 		q, err := BuildQualifiers(row, db)
-		if err == nil {
-			qualifiers = q
-		}
+		data.qualifiers = q
 		return err
 	})
 
 	localG.Go(func() error {
-		if common.IsArrayNotEmpty(row.Extensions) {
-			var jsonable []map[string]any
-			err := json.Unmarshal(row.Extensions, &jsonable)
-			if err != nil {
-				return fmt.Errorf("error unmarshaling extensions for Submodel: %w", err)
-			}
-			for _, item := range jsonable {
-				ext, err := jsonization.ExtensionFromJsonable(item)
-				if err != nil {
-					return fmt.Errorf("error converting extension from jsonable: %w", err)
-				}
-				extensions = append(extensions, ext)
-			}
-		}
-		return nil
-	})
-
-	localG.Go(func() error {
-		a, err := BuildAdministration(row)
-		if err == nil {
-			administration = a
-		}
+		ext, err := parseExtensionsFromJSON(row.Extensions)
+		data.extensions = ext
 		return err
 	})
 
-	if err := localG.Wait(); err != nil {
-		return nil, err
+	localG.Go(func() error {
+		admin, err := BuildAdministration(row)
+		data.administration = admin
+		return err
+	})
+
+	return data, localG.Wait()
+}
+
+func parseSemanticID(row model.SubmodelRow, referenceBuilderRefs map[int64]*builders.ReferenceBuilder, refMutex *sync.RWMutex) ([]types.IReference, error) {
+	if !common.IsArrayNotEmpty(row.SemanticID) {
+		return nil, nil
 	}
-
-	// Assign parsed data to submodel using SDK setters
+	semanticID, err := builders.ParseReferences(row.SemanticID, referenceBuilderRefs, refMutex)
+	if err != nil {
+		return nil, fmt.Errorf("error parsing semantic ID: %w", err)
+	}
 	if hasSemanticID(semanticID) {
-		submodel.SetSemanticID(semanticID[0])
+		err = builders.ParseReferredReferences(row.ReferredSemanticIDs, referenceBuilderRefs, refMutex)
+		if err != nil {
+			return nil, fmt.Errorf("error parsing referred semantic IDs: %w", err)
+		}
 	}
-	if len(supplementalSemanticIDs) > 0 {
-		// Convert from []*types.IReference to []types.IReference
-		supplementalRefs := make([]types.IReference, len(supplementalSemanticIDs))
-		copy(supplementalRefs, supplementalSemanticIDs)
-		submodel.SetSupplementalSemanticIDs(supplementalRefs)
-	}
-	if len(embeddedDataSpecs) > 0 {
-		submodel.SetEmbeddedDataSpecifications(embeddedDataSpecs)
-	}
-	if len(qualifiers) > 0 {
-		submodel.SetQualifiers(qualifiers)
-	}
-	if len(extensions) > 0 {
-		submodel.SetExtensions(extensions)
-	}
-	if administration != nil {
-		submodel.SetAdministration(administration)
-	}
-	if len(displayNames) > 0 {
-		submodel.SetDisplayName(displayNames)
-	}
-	if len(descriptions) > 0 {
-		submodel.SetDescription(descriptions)
-	}
+	return semanticID, nil
+}
 
-	return submodel, nil
+func parseSupplementalSemanticIDs(data []byte) ([]types.IReference, error) {
+	if !common.IsArrayNotEmpty(data) {
+		return nil, nil
+	}
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
+	var jsonable []map[string]any
+	if err := json.Unmarshal(data, &jsonable); err != nil {
+		return nil, fmt.Errorf("error unmarshaling supplemental semantic IDs for Submodel: %w", err)
+	}
+	result := make([]types.IReference, 0, len(jsonable))
+	for _, item := range jsonable {
+		semanticID, err := jsonization.ReferenceFromJsonable(item)
+		if err != nil {
+			return nil, fmt.Errorf("error converting supplemental semantic ID from jsonable: %w", err)
+		}
+		result = append(result, semanticID)
+	}
+	return result, nil
+}
+
+func parseEmbeddedDataSpecifications(data []byte) ([]types.IEmbeddedDataSpecification, error) {
+	if !common.IsArrayNotEmpty(data) {
+		return nil, nil
+	}
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
+	var jsonable []map[string]any
+	if err := json.Unmarshal(data, &jsonable); err != nil {
+		return nil, fmt.Errorf("error unmarshaling embedded data specifications for Submodel: %w", err)
+	}
+	result := make([]types.IEmbeddedDataSpecification, 0, len(jsonable))
+	for _, item := range jsonable {
+		eds, err := jsonization.EmbeddedDataSpecificationFromJsonable(item)
+		if err != nil {
+			return nil, fmt.Errorf("error converting embedded data specification from jsonable: %w", err)
+		}
+		result = append(result, eds)
+	}
+	return result, nil
+}
+
+func parseExtensionsFromJSON(data []byte) ([]types.IExtension, error) {
+	if !common.IsArrayNotEmpty(data) {
+		return nil, nil
+	}
+	var json = jsoniter.ConfigCompatibleWithStandardLibrary
+	var jsonable []map[string]any
+	if err := json.Unmarshal(data, &jsonable); err != nil {
+		return nil, fmt.Errorf("error unmarshaling extensions for Submodel: %w", err)
+	}
+	result := make([]types.IExtension, 0, len(jsonable))
+	for _, item := range jsonable {
+		ext, err := jsonization.ExtensionFromJsonable(item)
+		if err != nil {
+			return nil, fmt.Errorf("error converting extension from jsonable: %w", err)
+		}
+		result = append(result, ext)
+	}
+	return result, nil
+}
+
+func assignParsedDataToSubmodel(submodel *types.Submodel, data *submodelParsedData) {
+	if hasSemanticID(data.semanticID) {
+		submodel.SetSemanticID(data.semanticID[0])
+	}
+	if len(data.supplementalSemanticIDs) > 0 {
+		submodel.SetSupplementalSemanticIDs(data.supplementalSemanticIDs)
+	}
+	if len(data.embeddedDataSpecs) > 0 {
+		submodel.SetEmbeddedDataSpecifications(data.embeddedDataSpecs)
+	}
+	if len(data.qualifiers) > 0 {
+		submodel.SetQualifiers(data.qualifiers)
+	}
+	if len(data.extensions) > 0 {
+		submodel.SetExtensions(data.extensions)
+	}
+	if data.administration != nil {
+		submodel.SetAdministration(data.administration)
+	}
+	if len(data.displayNames) > 0 {
+		submodel.SetDisplayName(data.displayNames)
+	}
+	if len(data.descriptions) > 0 {
+		submodel.SetDescription(data.descriptions)
+	}
 }
 
 func buildAllNestedReferences(referenceBuilderRefs map[int64]*builders.ReferenceBuilder) error {

@@ -174,19 +174,19 @@ func ReadAdministrativeInformationByIDs(
 		// 	EmbeddedDataSpecifications: admin.EmbeddedDataSpecifications,
 		// }
 		adminInfo := types.NewAdministrativeInformation()
-		if admin.Version != nil {
+		if admin.Version() != nil {
 			adminInfo.SetVersion(admin.Version())
 		}
-		if admin.Revision != nil {
+		if admin.Revision() != nil {
 			adminInfo.SetRevision(admin.Revision())
 		}
-		if admin.TemplateID != nil {
+		if admin.TemplateID() != nil {
 			adminInfo.SetTemplateID(admin.TemplateID())
 		}
-		if admin.Creator != nil {
+		if admin.Creator() != nil {
 			adminInfo.SetCreator(admin.Creator())
 		}
-		if admin.EmbeddedDataSpecifications != nil {
+		if admin.EmbeddedDataSpecifications() != nil {
 			adminInfo.SetEmbeddedDataSpecifications(admin.EmbeddedDataSpecifications())
 		}
 		out[r.ID] = adminInfo

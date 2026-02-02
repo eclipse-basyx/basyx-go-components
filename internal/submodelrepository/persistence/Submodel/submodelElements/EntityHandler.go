@@ -160,7 +160,7 @@ func (p PostgreSQLEntityHandler) Update(submodelID string, idShortOrPath string,
 	}
 	defer cu(&err)
 	// For PUT operations or when Statements are provided, delete all children
-	if isPut || entity.Statements != nil {
+	if isPut || entity.Statements() != nil {
 		err = DeleteAllChildren(p.db, submodelID, idShortOrPath, tx)
 		if err != nil {
 			return err

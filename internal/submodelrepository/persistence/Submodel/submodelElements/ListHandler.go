@@ -288,10 +288,7 @@ func buildUpdateListRecordObject(smeList types.ISubmodelElementList, isPut bool,
 		}
 		updateRecord["semantic_id_list_element"] = semanticID
 
-		var typeValue sql.NullInt64
-		if smeList.TypeValueListElement != nil {
-			typeValue = sql.NullInt64{Int64: int64(smeList.TypeValueListElement()), Valid: true}
-		}
+		typeValue := sql.NullInt64{Int64: int64(smeList.TypeValueListElement()), Valid: true}
 		updateRecord["type_value_list_element"] = typeValue
 
 		var valueType sql.NullInt64

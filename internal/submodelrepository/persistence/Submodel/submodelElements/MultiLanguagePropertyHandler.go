@@ -178,9 +178,9 @@ func (p PostgreSQLMultiLanguagePropertyHandler) Update(submodelID string, idShor
 	// Handle optional valueId field
 	// For PUT: always update (even if nil, which clears the field)
 	// For PATCH: only update if provided (not nil)
-	if isPut || mlp.ValueID != nil {
+	if isPut || mlp.ValueID() != nil {
 		var valueIdRef sql.NullInt64
-		if mlp.ValueID != nil && !isEmptyReference(mlp.ValueID()) {
+		if mlp.ValueID() != nil && !isEmptyReference(mlp.ValueID()) {
 			// Insert the reference and get the ID
 			refID, err := insertReference(localTx, mlp.ValueID())
 			if err != nil {
@@ -209,7 +209,7 @@ func (p PostgreSQLMultiLanguagePropertyHandler) Update(submodelID string, idShor
 	// Handle Value field - delete existing values and insert new ones
 	// For PUT: always replace (delete all and insert new)
 	// For PATCH: only update if provided (not nil)
-	if isPut || mlp.Value != nil {
+	if isPut || mlp.Value() != nil {
 		deleteQuery, deleteArgs, err := dialect.Delete("multilanguage_property_value").
 			Where(goqu.C("mlp_id").Eq(elementID)).
 			ToSQL()
