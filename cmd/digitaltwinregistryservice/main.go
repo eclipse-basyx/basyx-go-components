@@ -12,19 +12,13 @@ import (
 	registryapiinternal "github.com/eclipse-basyx/basyx-go-components/internal/aasregistry/api"
 	registrydb "github.com/eclipse-basyx/basyx-go-components/internal/aasregistry/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
-	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	"github.com/eclipse-basyx/basyx-go-components/internal/digitaltwinregistry"
 	discoveryapiinternal "github.com/eclipse-basyx/basyx-go-components/internal/discoveryservice/api"
 	discoverydb "github.com/eclipse-basyx/basyx-go-components/internal/discoveryservice/persistence"
 	registryapi "github.com/eclipse-basyx/basyx-go-components/pkg/aasregistryapi"
-	discoveryapi "github.com/eclipse-basyx/basyx-go-components/pkg/discoveryapi"
+	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/discoveryapi"
 	"github.com/go-chi/chi/v5"
-)
-
-const (
-	discoveryProfile = "https://admin-shell.io/aas/API/3/1/DiscoveryServiceSpecification/SSP-001"
-	registryProfile  = "https://admin-shell.io/aas/API/3/1/AssetAdministrationShellRegistryServiceSpecification/SSP-001"
 )
 
 func runServer(ctx context.Context, configPath string, databaseSchema string) error {
@@ -89,7 +83,9 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	)
 
 	registryCtrl := registryapi.NewAssetAdministrationShellRegistryAPIAPIController(registrySvc, cfg.Server.ContextPath)
-	discoveryCtrl := discoveryapi.NewAssetAdministrationShellBasicDiscoveryAPIAPIController(discoverySvc)
+	discoveryCtrl := openapi.NewAssetAdministrationShellBasicDiscoveryAPIAPIController(discoverySvc)
+	descriptionSvc := digitaltwinregistry.NewDescriptionService()
+	descriptionCtrl := openapi.NewDescriptionAPIAPIController(descriptionSvc)
 
 	apiRouter := chi.NewRouter()
 	if err := auth.SetupSecurity(ctx, cfg, apiRouter); err != nil {
@@ -102,15 +98,9 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	for _, rt := range discoveryCtrl.Routes() {
 		apiRouter.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
 	}
-
-	// Single combined /description to avoid conflicts.
-	apiRouter.Get("/description", func(w http.ResponseWriter, r *http.Request) {
-		desc := model.ServiceDescription{
-			Profiles: []string{registryProfile, discoveryProfile},
-		}
-		code := http.StatusOK
-		_ = registryapi.EncodeJSONResponse(desc, &code, w)
-	})
+	for _, rt := range descriptionCtrl.Routes() {
+		apiRouter.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
+	}
 
 	r.Mount(base, apiRouter)
 

@@ -1,3 +1,30 @@
+/*******************************************************************************
+* Copyright (C) 2026 the Eclipse BaSyx Authors and Fraunhofer IESE
+*
+* Permission is hereby granted, free of charge, to any person obtaining
+* a copy of this software and associated documentation files (the
+* "Software"), to deal in the Software without restriction, including
+* without limitation the rights to use, copy, modify, merge, publish,
+* distribute, sublicense, and/or sell copies of the Software, and to
+* permit persons to whom the Software is furnished to do so, subject to
+* the following conditions:
+*
+* The above copyright notice and this permission notice shall be
+* included in all copies or substantial portions of the Software.
+*
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+* NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+* LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+* OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+* WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*
+* SPDX-License-Identifier: MIT
+*******************************************************************************/
+// Author: Martin Stemmer ( Fraunhofer IESE )
+
+// Package digitaltwinregistry package implements a custom discovery service for the Digital Twin Registry.
 package digitaltwinregistry
 
 import (
@@ -17,23 +44,20 @@ func NewCustomDiscoveryService(base *discoveryapiinternal.AssetAdministrationShe
 	return &CustomDiscoveryService{AssetAdministrationShellBasicDiscoveryAPIAPIService: base}
 }
 
-// Example override: add custom logic before delegating.
+// SearchAllAssetAdministrationShellIdsByAssetLink Custom logic for /lookup/shellsbyAssetLink
 func (s *CustomDiscoveryService) SearchAllAssetAdministrationShellIdsByAssetLink(
 	ctx context.Context,
 	limit int32,
 	cursor string,
 	assetLink []model.AssetLink,
 ) (model.ImplResponse, error) {
-	// TODO: add custom logic here for /lookup/shellsByAssetLink (aka shellsByAssetIds)
-	// Example: enforce a max limit, audit, or modify assetLink before delegating.
 	return s.AssetAdministrationShellBasicDiscoveryAPIAPIService.SearchAllAssetAdministrationShellIdsByAssetLink(ctx, limit, cursor, assetLink)
 }
 
-// Custom logic for /lookup/shells/{aasIdentifier}
+// GetAllAssetLinksByID Custom logic for /lookup/shells/{aasIdentifier}
 func (s *CustomDiscoveryService) GetAllAssetLinksByID(
 	ctx context.Context,
 	aasIdentifier string,
 ) (model.ImplResponse, error) {
-	// TODO: add custom logic here (validation, enrichment, access checks, etc.)
 	return s.AssetAdministrationShellBasicDiscoveryAPIAPIService.GetAllAssetLinksByID(ctx, aasIdentifier)
 }
