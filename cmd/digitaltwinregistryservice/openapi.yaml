@@ -23,6 +23,20 @@ servers:
 
 components:
   parameters:
+    aasIdentifier:
+      name: aasIdentifier
+      in: path
+      required: true
+      description: Identifier of the Asset Administration Shell.
+      schema:
+        type: string
+    submodelIdentifier:
+      name: submodelIdentifier
+      in: path
+      required: true
+      description: Identifier of the Submodel.
+      schema:
+        type: string
     EdcBpnHeader:
       name: Edc-Bpn
       in: header
@@ -131,7 +145,7 @@ paths:
         - https://admin-shell.io/aas/API/GetAssetAdministrationShellDescriptorById/3/1
       parameters:
         - $ref: '#/components/parameters/EdcBpnHeader'
-        - $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/parameters/aasIdentifier'
+        - $ref: '#/components/parameters/aasIdentifier'
       responses:
         '200':
           description: Requested Asset Administration Shell Descriptor
@@ -158,7 +172,7 @@ paths:
         - https://admin-shell.io/aas/API/PutAssetAdministrationShellDescriptorById/3/1
       parameters:
         - $ref: '#/components/parameters/EdcBpnHeader'
-        - $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/parameters/aasIdentifier'
+        - $ref: '#/components/parameters/aasIdentifier'
       requestBody:
         description: Asset Administration Shell Descriptor object
         content:
@@ -188,7 +202,7 @@ paths:
         - https://admin-shell.io/aas/API/DeleteAssetAdministrationShellDescriptorById/3/1
       parameters:
         - $ref: '#/components/parameters/EdcBpnHeader'
-        - $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/parameters/aasIdentifier'
+        - $ref: '#/components/parameters/aasIdentifier'
       responses:
         '204':
           description: Asset Administration Shell Descriptor deleted successfully
@@ -211,7 +225,7 @@ paths:
         - https://admin-shell.io/aas/API/GetAllSubmodelDescriptors/3/1
       parameters:
         - $ref: '#/components/parameters/EdcBpnHeader'
-        - $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/parameters/aasIdentifier'
+        - $ref: '#/components/parameters/aasIdentifier'
         - $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/parameters/Limit'
         - $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/parameters/Cursor'
       responses:
@@ -239,7 +253,7 @@ paths:
         - https://admin-shell.io/aas/API/PostSubmodelDescriptor/3/1
       parameters:
         - $ref: '#/components/parameters/EdcBpnHeader'
-        - $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/parameters/aasIdentifier'
+        - $ref: '#/components/parameters/aasIdentifier'
       requestBody:
         description: Submodel Descriptor object
         content:
@@ -272,8 +286,8 @@ paths:
         - https://admin-shell.io/aas/API/GetSubmodelDescriptorById/3/1
       parameters:
         - $ref: '#/components/parameters/EdcBpnHeader'
-        - $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/parameters/aasIdentifier'
-        - $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/parameters/submodelIdentifier'
+        - $ref: '#/components/parameters/aasIdentifier'
+        - $ref: '#/components/parameters/submodelIdentifier'
       responses:
         '200':
           description: Requested Submodel Descriptor
@@ -292,8 +306,8 @@ paths:
         - https://admin-shell.io/aas/API/PutSubmodelDescriptorById/3/1
       parameters:
         - $ref: '#/components/parameters/EdcBpnHeader'
-        - $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/parameters/aasIdentifier'
-        - $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/parameters/submodelIdentifier'
+        - $ref: '#/components/parameters/aasIdentifier'
+        - $ref: '#/components/parameters/submodelIdentifier'
       requestBody:
         description: Submodel Descriptor object
         content:
@@ -315,8 +329,8 @@ paths:
         - https://admin-shell.io/aas/API/DeleteSubmodelDescriptorById/3/1
       parameters:
         - $ref: '#/components/parameters/EdcBpnHeader'
-        - $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/parameters/aasIdentifier'
-        - $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/parameters/submodelIdentifier'
+        - $ref: '#/components/parameters/aasIdentifier'
+        - $ref: '#/components/parameters/submodelIdentifier'
       responses:
         '204':
           description: Submodel Descriptor deleted successfully
@@ -445,7 +459,7 @@ paths:
         - https://admin-shell.io/aas/API/GetAllAssetLinksById/3/1
       parameters:
         - $ref: '#/components/parameters/EdcBpnHeader'
-        - $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/parameters/aasIdentifier'
+        - $ref: '#/components/parameters/aasIdentifier'
       responses:
         '200':
           description: Requested Asset Links
@@ -466,7 +480,7 @@ paths:
         - https://admin-shell.io/aas/API/PostAllAssetLinksById/3/1
       parameters:
         - $ref: '#/components/parameters/EdcBpnHeader'
-        - $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/parameters/aasIdentifier'
+        - $ref: '#/components/parameters/aasIdentifier'
       requestBody:
         description: A list of specific asset identifiers
         content:
@@ -490,7 +504,7 @@ paths:
         - https://admin-shell.io/aas/API/DeleteAllAssetLinksById/3/1
       parameters:
         - $ref: '#/components/parameters/EdcBpnHeader'
-        - $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/parameters/aasIdentifier'
+        - $ref: '#/components/parameters/aasIdentifier'
       responses:
         '204':
           description: Asset Links deleted successfully
