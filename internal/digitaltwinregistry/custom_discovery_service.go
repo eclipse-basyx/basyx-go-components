@@ -51,6 +51,8 @@ func (s *CustomDiscoveryService) SearchAllAssetAdministrationShellIdsByAssetLink
 	cursor string,
 	assetLink []model.AssetLink,
 ) (model.ImplResponse, error) {
+	createdAfter, _ := CreatedAfterFromContext(ctx)
+	_ = createdAfter // TODO: apply custom filtering logic using createdAfter
 	return s.AssetAdministrationShellBasicDiscoveryAPIAPIService.SearchAllAssetAdministrationShellIdsByAssetLink(ctx, limit, cursor, assetLink)
 }
 

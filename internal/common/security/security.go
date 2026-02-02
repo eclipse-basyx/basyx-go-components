@@ -41,6 +41,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
@@ -83,6 +84,17 @@ import (
 //  2. Authenticated requests are then evaluated by ABAC middleware for authorization
 //  3. Only requests that pass both checks are allowed to proceed to handlers
 func SetupSecurity(ctx context.Context, cfg *common.Config, r *api.Mux) error {
+	return SetupSecurityWithClaimsMiddleware(ctx, cfg, r)
+}
+
+// SetupSecurityWithClaimsMiddleware configures security and optionally injects
+// middleware between OIDC and ABAC (e.g., to enrich claims).
+func SetupSecurityWithClaimsMiddleware(
+	ctx context.Context,
+	cfg *common.Config,
+	r *api.Mux,
+	claimsMiddleware ...func(http.Handler) http.Handler,
+) error {
 	if !cfg.ABAC.Enabled {
 		return nil
 	}
@@ -136,7 +148,14 @@ func SetupSecurity(ctx context.Context, cfg *common.Config, r *api.Mux) error {
 		Model:               model,
 	}
 
-	// ✅ Apply both middlewares to the router
+	// ✅ Apply middlewares to the router
+	if len(claimsMiddleware) > 0 {
+		chain := append([]func(http.Handler) http.Handler{oidc.Middleware}, claimsMiddleware...)
+		chain = append(chain, ABACMiddleware(abacSettings))
+		r.Use(chain...)
+		return nil
+	}
+
 	r.Use(
 		oidc.Middleware,
 		ABACMiddleware(abacSettings),

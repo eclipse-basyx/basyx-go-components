@@ -3,6 +3,7 @@ package main
 
 import (
 	"context"
+	"embed"
 	"flag"
 	"fmt"
 	"log"
@@ -21,6 +22,9 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
+//go:embed openapi.yaml
+var openapiSpec embed.FS
+
 func runServer(ctx context.Context, configPath string, databaseSchema string) error {
 	log.Default().Println("Loading Digital Twin Registry Service...")
 	log.Default().Println("Config Path:", configPath)
@@ -38,6 +42,11 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	r.Use(common.ConfigMiddleware(cfg))
 	common.AddCors(r, cfg)
 	common.AddHealthEndpoint(r, cfg)
+
+	// Add Swagger UI
+	if err := common.AddSwaggerUIFromFS(r, openapiSpec, "openapi.yaml", "Digital Twin Registry API", "/swagger", "/api-docs/openapi.yaml", cfg); err != nil {
+		log.Printf("Warning: failed to load OpenAPI spec for Swagger UI: %v", err)
+	}
 
 	base := common.NormalizeBasePath(cfg.Server.ContextPath)
 
@@ -91,7 +100,7 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	descriptionCtrl := openapi.NewDescriptionAPIAPIController(descriptionSvc)
 
 	apiRouter := chi.NewRouter()
-	if err := auth.SetupSecurity(ctx, cfg, apiRouter); err != nil {
+	if err := auth.SetupSecurityWithClaimsMiddleware(ctx, cfg, apiRouter, auth.EdcBpnHeaderMiddleware); err != nil {
 		return err
 	}
 
@@ -99,6 +108,10 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 		apiRouter.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
 	}
 	for _, rt := range discoveryCtrl.Routes() {
+		if rt.Method == "POST" && rt.Pattern == "/lookup/shellsByAssetLink" {
+			apiRouter.With(digitaltwinregistry.CreatedAfterMiddleware).Method(rt.Method, rt.Pattern, rt.HandlerFunc)
+			continue
+		}
 		apiRouter.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
 	}
 	for _, rt := range descriptionCtrl.Routes() {
