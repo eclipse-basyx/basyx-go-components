@@ -55,11 +55,6 @@ func AssertGetSubmodelElementsMetadataResultRequired(obj GetSubmodelElementsMeta
 	if err := AssertPagedResultPagingMetadataRequired(obj.PagingMetadata); err != nil {
 		return err
 	}
-	for _, el := range obj.Result {
-		if err := AssertSubmodelElementMetadataRequired(el); err != nil {
-			return err
-		}
-	}
 	return nil
 }
 
@@ -67,11 +62,6 @@ func AssertGetSubmodelElementsMetadataResultRequired(obj GetSubmodelElementsMeta
 func AssertGetSubmodelElementsMetadataResultConstraints(obj GetSubmodelElementsMetadataResult) error {
 	if err := AssertPagedResultPagingMetadataConstraints(obj.PagingMetadata); err != nil {
 		return err
-	}
-	for _, el := range obj.Result {
-		if err := AssertSubmodelElementMetadataConstraints(el); err != nil {
-			return err
-		}
 	}
 	return nil
 }

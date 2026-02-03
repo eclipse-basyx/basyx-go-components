@@ -32,8 +32,8 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
-	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/testenv"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -49,26 +49,22 @@ func TestDiscovery_Suite_Sophisticated(t *testing.T) {
 	aasB := "urn:aas:test:oil-refinery"
 	aasC := "urn:aas:test:rail-signal"
 
-	linksA1 := []model.SpecificAssetID{
-		{Name: "globalAssetId", Value: "urn:ga:green-circuit"},
-		{Name: "serialNumber", Value: "SN-iron-gear"},
-		{Name: "plant", Value: "NAUVIS"},
-	}
-	linksA2 := []model.SpecificAssetID{
-		{Name: "globalAssetId", Value: linksA1[0].Value},
-		{Name: "serialNumber", Value: "SN-red-circuit"},
-		{Name: "line", Value: "L1"},
-	}
-	linksB := []model.SpecificAssetID{
-		{Name: "serialNumber", Value: "SN-engine-unit"},
-		{Name: "plant", Value: "SPIDERTRON-YARD"},
-	}
-	linksC := []model.SpecificAssetID{
-		{Name: "assetTag", Value: "belt-yellow"},
-	}
+	linksA1 := make([]types.ISpecificAssetID, 3)
+	linksA1[0] = types.NewSpecificAssetID("globalAssetId", "urn:ga:green-circuit")
+	linksA1[1] = types.NewSpecificAssetID("serialNumber", "SN-iron-gear")
+	linksA1[2] = types.NewSpecificAssetID("plant", "NAUVIS")
+	linksA2 := make([]types.ISpecificAssetID, 3)
+	linksA2[0] = types.NewSpecificAssetID("globalAssetId", linksA1[0].Value())
+	linksA2[1] = types.NewSpecificAssetID("serialNumber", "SN-red-circuit")
+	linksA2[2] = types.NewSpecificAssetID("line", "L1")
+	linksB := make([]types.ISpecificAssetID, 2)
+	linksB[0] = types.NewSpecificAssetID("serialNumber", "SN-engine-unit")
+	linksB[1] = types.NewSpecificAssetID("plant", "SPIDERTRON-YARD")
+	linksC := make([]types.ISpecificAssetID, 1)
+	linksC[0] = types.NewSpecificAssetID("assetTag", "belt-yellow")
 
 	t.Run("LookupShellsByAssetLink/Pagination_empty_set_returns_empty_and_no_cursor", func(t *testing.T) {
-		res := rc.LookupShellsByAssetLink(t, []model.SpecificAssetID{}, 5, "", http.StatusOK)
+		res := rc.LookupShellsByAssetLink(t, []types.ISpecificAssetID{}, 5, "", http.StatusOK)
 		assert.Empty(t, res.Result, "empty dataset should yield no AAS IDs; got=%v", res.Result)
 		assert.Empty(t, res.PagingMetadata.Cursor, "empty dataset should not produce a cursor; got=%q", res.PagingMetadata.Cursor)
 	})
@@ -78,8 +74,8 @@ func TestDiscovery_Suite_Sophisticated(t *testing.T) {
 		got := rc.GetLookupShells(t, aasA, http.StatusOK)
 
 		wantMap1 := map[string][]string{
-			"globalAssetId": {linksA1[0].Value},
-			"serialNumber":  {linksA1[1].Value},
+			"globalAssetId": {linksA1[0].Value()},
+			"serialNumber":  {linksA1[1].Value()},
 			"plant":         {"NAUVIS"},
 		}
 		ensureContainsAll(t, got, wantMap1)
@@ -88,8 +84,8 @@ func TestDiscovery_Suite_Sophisticated(t *testing.T) {
 		got2 := rc.GetLookupShells(t, aasA, http.StatusOK)
 
 		wantMap2 := map[string][]string{
-			"globalAssetId": {linksA2[0].Value},
-			"serialNumber":  {linksA2[1].Value},
+			"globalAssetId": {linksA2[0].Value()},
+			"serialNumber":  {linksA2[1].Value()},
 			"line":          {"L1"},
 		}
 		ensureContainsAll(t, got2, wantMap2)
@@ -102,35 +98,36 @@ func TestDiscovery_Suite_Sophisticated(t *testing.T) {
 
 		gotB := rc.GetLookupShells(t, aasB, http.StatusOK)
 		ensureContainsAll(t, gotB, map[string][]string{
-			"serialNumber": {linksB[0].Value},
+			"serialNumber": {linksB[0].Value()},
 			"plant":        {"SPIDERTRON-YARD"},
 		})
 
 		gotC := rc.GetLookupShells(t, aasC, http.StatusOK)
 		ensureContainsAll(t, gotC, map[string][]string{
-			"assetTag": {linksC[0].Value},
+			"assetTag": {linksC[0].Value()},
 		})
 	})
 
 	t.Run("LookupShellsByAssetLink/Search_matrix", func(t *testing.T) {
-		res := rc.LookupShellsByAssetLink(t, []model.SpecificAssetID{{Name: "globalAssetId", Value: linksA2[0].Value}}, 10, "", http.StatusOK)
+		said := types.NewSpecificAssetID("globalAssetId", linksA2[0].Value())
+		res := rc.LookupShellsByAssetLink(t, []types.ISpecificAssetID{said}, 10, "", http.StatusOK)
 		assert.Contains(t, res.Result, aasA)
 		assert.NotContains(t, res.Result, aasB)
 		assert.NotContains(t, res.Result, aasC)
 
-		res = rc.LookupShellsByAssetLink(t, []model.SpecificAssetID{{Name: "serialNumber", Value: linksA2[1].Value}}, 10, "", http.StatusOK)
+		res = rc.LookupShellsByAssetLink(t, []types.ISpecificAssetID{types.NewSpecificAssetID("serialNumber", linksA2[1].Value())}, 10, "", http.StatusOK)
 		assert.Equal(t, []string{aasA}, res.Result)
 
-		res = rc.LookupShellsByAssetLink(t, []model.SpecificAssetID{{Name: "plant", Value: "SPIDERTRON-YARD"}}, 10, "", http.StatusOK)
+		res = rc.LookupShellsByAssetLink(t, []types.ISpecificAssetID{types.NewSpecificAssetID("plant", "SPIDERTRON-YARD")}, 10, "", http.StatusOK)
 		assert.Equal(t, []string{aasB}, res.Result)
 
-		res = rc.LookupShellsByAssetLink(t, []model.SpecificAssetID{
-			{Name: "globalAssetId", Value: linksA2[0].Value},
-			{Name: "serialNumber", Value: linksA2[1].Value},
+		res = rc.LookupShellsByAssetLink(t, []types.ISpecificAssetID{
+			types.NewSpecificAssetID("globalAssetId", linksA2[0].Value()),
+			types.NewSpecificAssetID("serialNumber", linksA2[1].Value()),
 		}, 10, "", http.StatusOK)
 		assert.Equal(t, []string{aasA}, res.Result)
 
-		res = rc.LookupShellsByAssetLink(t, []model.SpecificAssetID{{Name: "serialNumber", Value: "SN-does-not-exist"}}, 10, "", http.StatusOK)
+		res = rc.LookupShellsByAssetLink(t, []types.ISpecificAssetID{types.NewSpecificAssetID("serialNumber", "SN-does-not-exist")}, 10, "", http.StatusOK)
 		assert.Len(t, res.Result, 0)
 	})
 
@@ -140,7 +137,7 @@ func TestDiscovery_Suite_Sophisticated(t *testing.T) {
 		rc.DeleteLookupShells(t, aasA)
 		_ = rc.GetLookupShells(t, aasA, http.StatusNotFound)
 
-		res := rc.LookupShellsByAssetLink(t, []model.SpecificAssetID{{Name: "globalAssetId", Value: linksA2[0].Value}}, 10, "", http.StatusOK)
+		res := rc.LookupShellsByAssetLink(t, []types.ISpecificAssetID{types.NewSpecificAssetID("globalAssetId", linksA2[0].Value())}, 10, "", http.StatusOK)
 		assert.NotContains(t, res.Result, aasA)
 	})
 
@@ -148,34 +145,34 @@ func TestDiscovery_Suite_Sophisticated(t *testing.T) {
 		aasD := "urn:aas:test:copper-plate"
 		aasE := "urn:aas:test:iron-gear"
 
-		shared := model.SpecificAssetID{Name: "sharedTag", Value: "train-signal"}
-		uniqD := model.SpecificAssetID{Name: "uniqueD", Value: "uranium-fuel-cell"}
-		uniqE := model.SpecificAssetID{Name: "uniqueE", Value: "rocket-control-unit"}
+		shared := types.NewSpecificAssetID("sharedTag", "train-signal")
+		uniqD := types.NewSpecificAssetID("uniqueD", "uranium-fuel-cell")
+		uniqE := types.NewSpecificAssetID("uniqueE", "rocket-control-unit")
 
-		rc.PostLookupShells(t, aasD, []model.SpecificAssetID{shared, uniqD})
-		rc.PostLookupShells(t, aasE, []model.SpecificAssetID{shared, uniqE})
+		rc.PostLookupShells(t, aasD, []types.ISpecificAssetID{shared, uniqD})
+		rc.PostLookupShells(t, aasE, []types.ISpecificAssetID{shared, uniqE})
 
-		resShared := rc.LookupShellsByAssetLink(t, []model.SpecificAssetID{{Name: shared.Name, Value: shared.Value}}, 10, "", http.StatusOK)
+		resShared := rc.LookupShellsByAssetLink(t, []types.ISpecificAssetID{types.NewSpecificAssetID(shared.Name(), shared.Value())}, 10, "", http.StatusOK)
 		assert.Contains(t, resShared.Result, aasD)
 		assert.Contains(t, resShared.Result, aasE)
 		assert.Len(t, resShared.Result, 2)
 
-		resUniqD := rc.LookupShellsByAssetLink(t, []model.SpecificAssetID{{Name: uniqD.Name, Value: uniqD.Value}}, 10, "", http.StatusOK)
+		resUniqD := rc.LookupShellsByAssetLink(t, []types.ISpecificAssetID{types.NewSpecificAssetID(uniqD.Name(), uniqD.Value())}, 10, "", http.StatusOK)
 		assert.Equal(t, []string{aasD}, resUniqD.Result)
 
-		resUniqE := rc.LookupShellsByAssetLink(t, []model.SpecificAssetID{{Name: uniqE.Name, Value: uniqE.Value}}, 10, "", http.StatusOK)
+		resUniqE := rc.LookupShellsByAssetLink(t, []types.ISpecificAssetID{types.NewSpecificAssetID(uniqE.Name(), uniqE.Value())}, 10, "", http.StatusOK)
 		assert.Equal(t, []string{aasE}, resUniqE.Result)
 
-		resNone := rc.LookupShellsByAssetLink(t, []model.SpecificAssetID{{Name: "nonexistent", Value: "biters-don't-index"}}, 10, "", http.StatusOK)
+		resNone := rc.LookupShellsByAssetLink(t, []types.ISpecificAssetID{types.NewSpecificAssetID("nonexistent", "biters-don't-index")}, 10, "", http.StatusOK)
 		assert.Empty(t, resNone.Result)
 	})
 
 	t.Run("LookupShells/POST_replace_removes_old_pairs_and_double_delete", func(t *testing.T) {
 		aasX := "urn:aas:test:blue-science"
 
-		pairs1 := []model.SpecificAssetID{
-			{Name: "alpha", Value: "steam-power"},
-			{Name: "beta", Value: "coal-burner"},
+		pairs1 := []types.ISpecificAssetID{
+			types.NewSpecificAssetID("alpha", "steam-power"),
+			types.NewSpecificAssetID("beta", "coal-burner"),
 		}
 		rc.PostLookupShells(t, aasX, pairs1)
 
@@ -185,9 +182,9 @@ func TestDiscovery_Suite_Sophisticated(t *testing.T) {
 			"beta":  {"coal-burner"},
 		})
 
-		pairs2 := []model.SpecificAssetID{
-			{Name: "gamma", Value: "solar-array"},
-			{Name: "delta", Value: "accumulator-bank"},
+		pairs2 := []types.ISpecificAssetID{
+			types.NewSpecificAssetID("gamma", "solar-array"),
+			types.NewSpecificAssetID("delta", "accumulator-bank"),
 		}
 		rc.PostLookupShells(t, aasX, pairs2)
 
@@ -211,7 +208,7 @@ func TestDiscovery_Suite_Sophisticated(t *testing.T) {
 
 		_ = testenv.GetExpect(t, url, http.StatusBadRequest)
 
-		body := []model.SpecificAssetID{{Name: "foo", Value: "barrel"}}
+		body := []types.ISpecificAssetID{types.NewSpecificAssetID("foo", "barrel")}
 		_ = testenv.PostJSONExpect(t, url, body, http.StatusBadRequest)
 
 		_ = testenv.DeleteExpect(t, url, http.StatusBadRequest)
@@ -222,15 +219,15 @@ func TestDiscovery_Suite_Sophisticated(t *testing.T) {
 		aasP2 := "urn:aas:test:iron"
 
 		pageTag := "science-pack-3"
-		sharedPair := model.SpecificAssetID{Name: "pageGroup", Value: pageTag}
+		sharedPair := types.NewSpecificAssetID("pageGroup", pageTag)
 
-		rc.PostLookupShells(t, aasP1, []model.SpecificAssetID{sharedPair})
-		rc.PostLookupShells(t, aasP2, []model.SpecificAssetID{sharedPair})
+		rc.PostLookupShells(t, aasP1, []types.ISpecificAssetID{sharedPair})
+		rc.PostLookupShells(t, aasP2, []types.ISpecificAssetID{sharedPair})
 
 		expected := sortedStrings(aasP1, aasP2)
 		firstID, secondID := expected[0], expected[1]
 
-		res1 := rc.LookupShellsByAssetLink(t, []model.SpecificAssetID{{Name: sharedPair.Name, Value: sharedPair.Value}}, 1, "", http.StatusOK)
+		res1 := rc.LookupShellsByAssetLink(t, []types.ISpecificAssetID{types.NewSpecificAssetID(sharedPair.Name(), sharedPair.Value())}, 1, "", http.StatusOK)
 		require.Len(t, res1.Result, 1)
 		assert.Equal(t, firstID, res1.Result[0])
 		require.NotEmpty(t, res1.PagingMetadata.Cursor)
@@ -239,7 +236,7 @@ func TestDiscovery_Suite_Sophisticated(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, secondID, dec)
 
-		res2 := rc.LookupShellsByAssetLink(t, []model.SpecificAssetID{{Name: sharedPair.Name, Value: sharedPair.Value}}, 1, res1.PagingMetadata.Cursor, http.StatusOK)
+		res2 := rc.LookupShellsByAssetLink(t, []types.ISpecificAssetID{types.NewSpecificAssetID(sharedPair.Name(), sharedPair.Value())}, 1, res1.PagingMetadata.Cursor, http.StatusOK)
 		require.Len(t, res2.Result, 1)
 		assert.Equal(t, secondID, res2.Result[0])
 		assert.Empty(t, res2.PagingMetadata.Cursor)
@@ -370,25 +367,25 @@ func TestDiscovery_Suite_Sophisticated(t *testing.T) {
 	// New tests for GET /lookup/shells (GetAllAssetAdministrationShellIdsByAssetLink)
 	t.Run("LookupShellIdsByAssetLinkGET/Single_pair_returns_expected_AAS", func(t *testing.T) {
 		// Use data created earlier: aasB has plant=SPIDERTRON-YARD
-		res := rc.LookupShellIDsByAssetLinkGET(t, []model.SpecificAssetID{{Name: "plant", Value: "SPIDERTRON-YARD"}}, 10, "", http.StatusOK)
+		res := rc.LookupShellIDsByAssetLinkGET(t, []types.ISpecificAssetID{types.NewSpecificAssetID("plant", "SPIDERTRON-YARD")}, 10, "", http.StatusOK)
 		assert.Contains(t, res.Result, "urn:aas:test:oil-refinery")
 	})
 
 	t.Run("LookupShellIdsByAssetLinkGET/Multiple_pairs_repeated_params", func(t *testing.T) {
-		pairs := []model.SpecificAssetID{{Name: "plant", Value: "SPIDERTRON-YARD"}, {Name: "serialNumber", Value: "SN-engine-unit"}}
+		pairs := []types.ISpecificAssetID{types.NewSpecificAssetID("plant", "SPIDERTRON-YARD"), types.NewSpecificAssetID("serialNumber", "SN-engine-unit")}
 		res := rc.LookupShellIDsByAssetLinkGET(t, pairs, 10, "", http.StatusOK)
 		assert.Equal(t, []string{"urn:aas:test:oil-refinery"}, res.Result)
 	})
 
 	t.Run("LookupShellIdsByAssetLinkGET/Multiple_pairs_single_param_comma_separated", func(t *testing.T) {
-		pairs := []model.SpecificAssetID{{Name: "plant", Value: "SPIDERTRON-YARD"}, {Name: "serialNumber", Value: "SN-engine-unit"}}
+		pairs := []types.ISpecificAssetID{types.NewSpecificAssetID("plant", "SPIDERTRON-YARD"), types.NewSpecificAssetID("serialNumber", "SN-engine-unit")}
 		res := rc.LookupShellIDsByAssetLinkGET(t, pairs, 10, "", http.StatusOK)
 		assert.Equal(t, []string{"urn:aas:test:oil-refinery"}, res.Result)
 	})
 
 	t.Run("LookupShellIdsByAssetLinkGET/Pagination_two_items_limit1_cursor_points_to_next", func(t *testing.T) {
 		// Reuse dataset created in the pagination POST test: two AAS share pageGroup=science-pack-3
-		res1 := rc.LookupShellIDsByAssetLinkGET(t, []model.SpecificAssetID{{Name: "pageGroup", Value: "science-pack-3"}}, 1, "", http.StatusOK)
+		res1 := rc.LookupShellIDsByAssetLinkGET(t, []types.ISpecificAssetID{types.NewSpecificAssetID("pageGroup", "science-pack-3")}, 1, "", http.StatusOK)
 		require.Len(t, res1.Result, 1)
 		require.NotEmpty(t, res1.PagingMetadata.Cursor)
 
@@ -396,7 +393,7 @@ func TestDiscovery_Suite_Sophisticated(t *testing.T) {
 		require.NoError(t, err)
 		assert.NotEqual(t, res1.Result[0], dec)
 
-		res2 := rc.LookupShellIDsByAssetLinkGET(t, []model.SpecificAssetID{{Name: "pageGroup", Value: "science-pack-3"}}, 1, res1.PagingMetadata.Cursor, http.StatusOK)
+		res2 := rc.LookupShellIDsByAssetLinkGET(t, []types.ISpecificAssetID{types.NewSpecificAssetID("pageGroup", "science-pack-3")}, 1, res1.PagingMetadata.Cursor, http.StatusOK)
 		require.Len(t, res2.Result, 1)
 		assert.NotEqual(t, res1.Result[0], res2.Result[0])
 		assert.Empty(t, res2.PagingMetadata.Cursor)
@@ -407,7 +404,7 @@ func TestDiscovery_Suite_Sophisticated(t *testing.T) {
 	})
 
 	t.Run("LookupShellsByAssetLink/BadRequest_when_cursor_not_base64", func(t *testing.T) {
-		_ = rc.LookupShellsByAssetLink(t, []model.SpecificAssetID{{Name: "plant", Value: "SPIDERTRON-YARD"}}, 1, "not-base64!!!", http.StatusBadRequest)
+		_ = rc.LookupShellsByAssetLink(t, []types.ISpecificAssetID{types.NewSpecificAssetID("plant", "SPIDERTRON-YARD")}, 1, "not-base64!!!", http.StatusBadRequest)
 	})
 
 	t.Run("LookupShellIdsByAssetLinkGET/BadRequest_when_assetIds_malformed", func(t *testing.T) {

@@ -34,41 +34,13 @@
 //nolint:all
 package model
 
+import "github.com/FriedJannik/aas-go-sdk/types"
+
 // OperationRequest type of OperationRequest
 type OperationRequest struct {
-	InoutputArguments []OperationVariable `json:"inoutputArguments,omitempty"`
+	InoutputArguments []types.IOperationVariable `json:"inoutputArguments,omitempty"`
 
-	InputArguments []OperationVariable `json:"inputArguments,omitempty"`
+	InputArguments []types.IOperationVariable `json:"inputArguments,omitempty"`
 
 	ClientTimeoutDuration string `json:"clientTimeoutDuration,omitempty" validate:"regexp=^(-?)P(?=.)((\\\\d+)Y)?((\\\\d+)M)?((\\\\d+)D)?(T(?=.)((\\\\d+)H)?((\\\\d+)M)?(\\\\d*(\\\\.\\\\d+)?S)?)?$"`
-}
-
-// AssertOperationRequestRequired checks if the required fields are not zero-ed
-func AssertOperationRequestRequired(obj OperationRequest) error {
-	for _, el := range obj.InoutputArguments {
-		if err := AssertOperationVariableRequired(el); err != nil {
-			return err
-		}
-	}
-	for _, el := range obj.InputArguments {
-		if err := AssertOperationVariableRequired(el); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// AssertOperationRequestConstraints checks if the values respects the defined constraints
-func AssertOperationRequestConstraints(obj OperationRequest) error {
-	for _, el := range obj.InoutputArguments {
-		if err := AssertOperationVariableConstraints(el); err != nil {
-			return err
-		}
-	}
-	for _, el := range obj.InputArguments {
-		if err := AssertOperationVariableConstraints(el); err != nil {
-			return err
-		}
-	}
-	return nil
 }

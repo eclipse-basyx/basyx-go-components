@@ -34,29 +34,11 @@
 //nolint:all
 package model
 
+import "github.com/FriedJannik/aas-go-sdk/types"
+
 // ReferenceValue type of ReferenceValue
 type ReferenceValue struct {
-	Type ReferenceTypes `json:"type,omitempty"`
+	Type types.ReferenceTypes `json:"type,omitempty"`
 
-	Keys []Key `json:"keys,omitempty"`
-}
-
-// AssertReferenceValueRequired checks if the required fields are not zero-ed
-func AssertReferenceValueRequired(obj Reference) error {
-	for _, el := range obj.Keys {
-		if err := AssertKeyRequired(el); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// AssertReferenceValueConstraints checks if the values respects the defined constraints
-func AssertReferenceValueConstraints(obj Reference) error {
-	for _, el := range obj.Keys {
-		if err := AssertKeyConstraints(el); err != nil {
-			return err
-		}
-	}
-	return nil
+	Keys []types.Key `json:"keys,omitempty"`
 }

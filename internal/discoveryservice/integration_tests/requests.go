@@ -9,6 +9,8 @@ import (
 	"sort"
 	"testing"
 
+	"github.com/FriedJannik/aas-go-sdk/jsonization"
+	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/testenv"
@@ -28,36 +30,51 @@ func NewRequestClient() *RequestClient {
 }
 
 // PostLookupShellsExpect sends a POST request to /lookup/shells/{aasId}
-func (c *RequestClient) PostLookupShellsExpect(t testing.TB, aasID string, links []model.SpecificAssetID, expect int) {
+func (c *RequestClient) PostLookupShellsExpect(t testing.TB, aasID string, links []types.ISpecificAssetID, expect int) {
 	t.Helper()
 	url := fmt.Sprintf("%s/lookup/shells/%s", c.BaseURL, common.EncodeString(aasID))
-	_ = testenv.PostJSONExpect(t, url, links, expect)
+	var jsonable []map[string]any
+	for _, l := range links {
+		jl, err := jsonization.ToJsonable(l)
+		require.NoError(t, err)
+		jsonable = append(jsonable, jl)
+	}
+	_ = testenv.PostJSONExpect(t, url, jsonable, expect)
 }
 
 // PostLookupShells sends a POST request to /lookup/shells/{aasId}
-func (c *RequestClient) PostLookupShells(t testing.TB, aasID string, links []model.SpecificAssetID) {
+func (c *RequestClient) PostLookupShells(t testing.TB, aasID string, links []types.ISpecificAssetID) {
 	t.Helper()
 	c.PostLookupShellsExpect(t, aasID, links, http.StatusCreated)
 }
 
 // GetLookupShellsExpect sends a GET request to /lookup/shells/{aasId}
-func (c *RequestClient) GetLookupShellsExpect(t testing.TB, aasID string, expect int) []model.SpecificAssetID {
+func (c *RequestClient) GetLookupShellsExpect(t testing.TB, aasID string, expect int) []types.ISpecificAssetID {
 	t.Helper()
 	url := fmt.Sprintf("%s/lookup/shells/%s", c.BaseURL, common.EncodeString(aasID))
 	raw := testenv.GetExpect(t, url, expect)
 	if expect != http.StatusOK {
 		return nil
 	}
-	var got []model.SpecificAssetID
+	var got []types.ISpecificAssetID
 	var json = jsoniter.ConfigCompatibleWithStandardLibrary
-	if err := json.Unmarshal(raw, &got); err != nil {
+	var jsonable []map[string]any
+	if err := json.Unmarshal(raw, &jsonable); err != nil {
 		t.Fatalf("unmarshal GetLookupShells response: %v", err)
+	}
+
+	for _, j := range jsonable {
+		if said, err := jsonization.SpecificAssetIDFromJsonable(j); err != nil {
+			t.Fatalf("unmarshal SpecificAssetID from jsonable: %v", err)
+		} else {
+			got = append(got, said)
+		}
 	}
 	return got
 }
 
 // GetLookupShells retrieves the lookup shell for the given AAS ID.
-func (c *RequestClient) GetLookupShells(t testing.TB, aasID string, expect int) []model.SpecificAssetID {
+func (c *RequestClient) GetLookupShells(t testing.TB, aasID string, expect int) []types.ISpecificAssetID {
 	t.Helper()
 	return c.GetLookupShellsExpect(t, aasID, expect)
 }
@@ -78,7 +95,7 @@ func (c *RequestClient) DeleteLookupShells(t testing.TB, aasID string) {
 // LookupShellIDsByAssetLinkGET queries GET /lookup/shells?assetIds=...&limit=&cursor=
 func (c *RequestClient) LookupShellIDsByAssetLinkGET(
 	t testing.TB,
-	pairs []model.SpecificAssetID,
+	pairs []types.ISpecificAssetID,
 	limit int,
 	cursor string,
 	expect int,
@@ -87,7 +104,7 @@ func (c *RequestClient) LookupShellIDsByAssetLinkGET(
 	url := fmt.Sprintf("%s/lookup/shells?limit=%d", c.BaseURL, limit)
 	// add each assetIds as base64url-encoded JSON {"name":"...","value":"..."}
 	for _, p := range pairs {
-		obj, err := json.Marshal(map[string]string{"name": p.Name, "value": p.Value})
+		obj, err := json.Marshal(map[string]string{"name": p.Name(), "value": p.Value()})
 		require.NoError(t, err)
 		url += "&assetIds=" + common.EncodeString(string(obj))
 	}
@@ -109,7 +126,7 @@ func (c *RequestClient) LookupShellIDsByAssetLinkGET(
 // LookupShellsByAssetLink sends a POST request to /lookup/shellsByAssetLink?limit=&cursor= (renamed from SearchBy)
 func (c *RequestClient) LookupShellsByAssetLink(
 	t testing.TB,
-	pairs []model.SpecificAssetID,
+	pairs []types.ISpecificAssetID,
 	limit int,
 	cursor string,
 	expect int,
@@ -121,7 +138,7 @@ func (c *RequestClient) LookupShellsByAssetLink(
 	}
 	body := make([]map[string]string, 0, len(pairs))
 	for _, p := range pairs {
-		body = append(body, map[string]string{"name": p.Name, "value": p.Value})
+		body = append(body, map[string]string{"name": p.Name(), "value": p.Value()})
 	}
 	raw := testenv.PostJSONExpect(t, url, body, expect)
 	var out model.GetAllAssetAdministrationShellIdsByAssetLink200Response
@@ -155,7 +172,7 @@ func PostLookupShellsSearchRawExpect(t *testing.T, body any, expect int) {
 	assert.Equalf(t, expect, resp.StatusCode, "search raw post got %d body=%s", resp.StatusCode, string(buf))
 }
 
-func ensureContainsAll(t *testing.T, got []model.SpecificAssetID, want map[string][]string) {
+func ensureContainsAll(t *testing.T, got []types.ISpecificAssetID, want map[string][]string) {
 	actual := testenv.BuildNameValuesMap(got)
 	for k, wantVals := range want {
 		gotVals := actual[k]
@@ -172,11 +189,11 @@ func keys(m map[string][]string) (ks []string) {
 	return
 }
 
-func assertNoNames(t *testing.T, got []model.SpecificAssetID, forbidden ...string) {
+func assertNoNames(t *testing.T, got []types.ISpecificAssetID, forbidden ...string) {
 	t.Helper()
 	set := map[string]struct{}{}
 	for _, s := range got {
-		set[s.Name] = struct{}{}
+		set[s.Name()] = struct{}{}
 	}
 	for _, name := range forbidden {
 		_, exists := set[name]

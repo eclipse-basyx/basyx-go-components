@@ -1673,14 +1673,6 @@ func (c *SubmodelRepositoryAPIAPIController) PatchSubmodelElementByPathMetadataS
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
-	if err := model.AssertSubmodelElementMetadataRequired(submodelElementMetadataParam); err != nil {
-		c.errorHandler(w, r, err, nil)
-		return
-	}
-	if err := model.AssertSubmodelElementMetadataConstraints(submodelElementMetadataParam); err != nil {
-		c.errorHandler(w, r, err, nil)
-		return
-	}
 	result, err := c.service.PatchSubmodelElementByPathMetadataSubmodelRepo(r.Context(), submodelIdentifierParam, idShortPathParam, submodelElementMetadataParam)
 	// If an error occurred, encode the error with the status code
 	if err != nil {
@@ -1948,14 +1940,6 @@ func (c *SubmodelRepositoryAPIAPIController) InvokeOperationSubmodelRepo(w http.
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
-	if err := model.AssertOperationRequestRequired(operationRequestParam); err != nil {
-		c.errorHandler(w, r, err, nil)
-		return
-	}
-	if err := model.AssertOperationRequestConstraints(operationRequestParam); err != nil {
-		c.errorHandler(w, r, err, nil)
-		return
-	}
 	var asyncParam bool
 	if query.Has("async") {
 		param, err := parseBoolParameter(
@@ -2062,14 +2046,6 @@ func (c *SubmodelRepositoryAPIAPIController) InvokeOperationAsync(w http.Respons
 	d.DisallowUnknownFields()
 	if err := d.Decode(&operationRequestParam); err != nil {
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
-		return
-	}
-	if err := model.AssertOperationRequestRequired(operationRequestParam); err != nil {
-		c.errorHandler(w, r, err, nil)
-		return
-	}
-	if err := model.AssertOperationRequestConstraints(operationRequestParam); err != nil {
-		c.errorHandler(w, r, err, nil)
 		return
 	}
 	result, err := c.service.InvokeOperationAsync(r.Context(), submodelIdentifierParam, idShortPathParam, operationRequestParam)

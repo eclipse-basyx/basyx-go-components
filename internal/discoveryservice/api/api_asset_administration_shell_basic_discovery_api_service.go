@@ -18,6 +18,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	persistencepostgresql "github.com/eclipse-basyx/basyx-go-components/internal/discoveryservice/persistence"
@@ -152,7 +153,7 @@ func (s *AssetAdministrationShellBasicDiscoveryAPIAPIService) GetAllAssetLinksBy
 func (s *AssetAdministrationShellBasicDiscoveryAPIAPIService) PostAllAssetLinksByID(
 	ctx context.Context,
 	aasIdentifier string,
-	specificAssetID []model.SpecificAssetID,
+	specificAssetID []types.ISpecificAssetID,
 ) (model.ImplResponse, error) {
 	decodeDiscoveryIdentifier, decodeError := common.DecodeString(aasIdentifier)
 	if decodeError != nil {

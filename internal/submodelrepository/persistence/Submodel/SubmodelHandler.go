@@ -92,7 +92,7 @@ func GetAllSubmodels(db *sql.DB, limit int64, cursor string, query *grammar.Quer
 
 // SubmodelElementSubmodelMetadata holds metadata for a SubmodelElement including its database ID.
 type SubmodelElementSubmodelMetadata struct {
-	SubmodelElement model.SubmodelElement
+	SubmodelElement types.ISubmodelElement
 	DatabaseID      int
 }
 

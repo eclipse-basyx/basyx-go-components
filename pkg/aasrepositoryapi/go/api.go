@@ -16,16 +16,17 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/FriedJannik/aas-go-sdk/types"
 	model "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
 
 type (
-	AssetAdministrationShell  = model.AssetAdministrationShell
-	AssetInformation          = model.AssetInformation
-	Reference                 = model.Reference
-	Submodel                  = model.Submodel
+	AssetAdministrationShell  = types.IAssetAdministrationShell
+	AssetInformation          = types.IAssetInformation
+	Reference                 = types.IReference
+	Submodel                  = types.ISubmodel
 	SubmodelMetadata          = model.SubmodelMetadata
-	SubmodelElement           = model.SubmodelElement
+	SubmodelElement           = types.ISubmodelElement
 	SubmodelElementMetadata   = model.SubmodelElementMetadata
 	SubmodelElementValue      = model.SubmodelElementValue
 	OperationRequest          = model.OperationRequest

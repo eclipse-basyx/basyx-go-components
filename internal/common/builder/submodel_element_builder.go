@@ -30,7 +30,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"sort"
 	"strings"
 	"sync"
 
@@ -653,24 +652,27 @@ func buildMultiLanguageProperty(smeRow model.SubmodelElementRow) (types.ISubmode
 	}
 
 	var valueRow model.MultiLanguagePropertyElementValueRow
+
 	err := json.Unmarshal(*smeRow.Value, &valueRow)
 	if err != nil {
 		return nil, err
 	}
 
 	if valueRow.Value != nil {
-		// Convert model LangStringTextType to SDK LangStringTextType
-		sort.SliceStable(valueRow.Value, func(i, j int) bool {
-			if valueRow.Value[i].Language == valueRow.Value[j].Language {
-				return valueRow.Value[i].Text < valueRow.Value[j].Text
-			}
-			return valueRow.Value[i].Language < valueRow.Value[j].Language
-		})
-		sdkValues := make([]types.ILangStringTextType, len(valueRow.Value))
-		for i, v := range valueRow.Value {
-			sdkValues[i] = types.NewLangStringTextType(v.Language, v.Text)
+		var valueJsonable []map[string]any
+		err = json.Unmarshal(*valueRow.Value, &valueJsonable)
+		if err != nil {
+			return nil, err
 		}
-		mlp.SetValue(sdkValues)
+		var textTypes []types.ILangStringTextType
+		for _, val := range valueJsonable {
+			valueSDK, err := jsonization.LangStringTextTypeFromJsonable(val)
+			if err != nil {
+				return nil, err
+			}
+			textTypes = append(textTypes, valueSDK)
+		}
+		mlp.SetValue(textTypes)
 	}
 
 	// Handle ValueID reference if present

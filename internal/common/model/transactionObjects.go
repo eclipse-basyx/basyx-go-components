@@ -519,7 +519,7 @@ type FileElementValueRow struct {
 // This structure captures the language-text pairs and optional value ID reference.
 type MultiLanguagePropertyElementValueRow struct {
 	// Value contains the array of language-text pairs
-	Value []LangStringTextType `json:"value"`
+	Value *json.RawMessage `json:"value"`
 	// ValueID is a reference to a related concept or value definition (optional)
 	ValueID *json.RawMessage `json:"value_id"`
 	// ValueIDReferred contains the referred semantic ID for the value reference (optional)

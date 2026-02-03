@@ -44,7 +44,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	"github.com/FriedJannik/aas-go-sdk/types"
 )
 
 // LogDetail controls the verbosity level of benchmark logging.
@@ -345,10 +345,10 @@ func WaitHealthy(t testing.TB, url string, maxWait time.Duration) {
 
 // BuildNameValuesMap converts a slice of SpecificAssetID into a map of name to sorted values.
 // Values for each name are sorted alphabetically for consistent comparison.
-func BuildNameValuesMap(in []model.SpecificAssetID) map[string][]string {
+func BuildNameValuesMap(in []types.ISpecificAssetID) map[string][]string {
 	m := map[string][]string{}
 	for _, s := range in {
-		m[s.Name] = append(m[s.Name], s.Value)
+		m[s.Name()] = append(m[s.Name()], s.Value())
 	}
 	for k := range m {
 		sort.Strings(m[k])
