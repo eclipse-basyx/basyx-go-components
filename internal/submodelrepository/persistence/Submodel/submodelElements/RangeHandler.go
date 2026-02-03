@@ -67,75 +67,6 @@ func NewPostgreSQLRangeHandler(db *sql.DB) (*PostgreSQLRangeHandler, error) {
 	return &PostgreSQLRangeHandler{db: db, decorated: decoratedHandler}, nil
 }
 
-// Create persists a new Range submodel element to the database within a transaction.
-// It first creates the base submodel element using the decorated handler, then inserts
-// Range-specific data including min/max values categorized by value type.
-//
-// Parameters:
-//   - tx: The database transaction
-//   - submodelID: The ID of the parent submodel
-//   - submodelElement: The Range element to create (must be of type *gen.Range)
-//
-// Returns:
-//   - int: The database ID of the created element
-//   - error: An error if the element is not a Range type or if database operations fail
-func (p PostgreSQLRangeHandler) Create(tx *sql.Tx, submodelID string, submodelElement types.ISubmodelElement) (int, error) {
-	rangeElem, ok := submodelElement.(*types.Range)
-	if !ok {
-		return 0, common.NewErrBadRequest("submodelElement is not of type Range")
-	}
-
-	// First, perform base SubmodelElement operations within the transaction
-	id, err := p.decorated.Create(tx, submodelID, submodelElement)
-	if err != nil {
-		return 0, err
-	}
-
-	// Range-specific database insertion
-	err = insertRange(rangeElem, tx, id)
-	if err != nil {
-		return 0, err
-	}
-
-	return id, nil
-}
-
-// CreateNested persists a new nested Range submodel element to the database within a transaction.
-// This method is used when creating Range elements within collection-like structures (e.g., SubmodelElementCollection).
-// It creates the base nested element with the provided idShortPath and position, then inserts Range-specific data.
-//
-// Parameters:
-//   - tx: The database transaction
-//   - submodelID: The ID of the parent submodel
-//   - parentID: The database ID of the parent collection element
-//   - idShortPath: The path identifying the element's location within the hierarchy
-//   - submodelElement: The Range element to create (must be of type *gen.Range)
-//   - pos: The position of the element within the parent collection
-//
-// Returns:
-//   - int: The database ID of the created element
-//   - error: An error if the element is not a Range type or if database operations fail
-func (p PostgreSQLRangeHandler) CreateNested(tx *sql.Tx, submodelID string, parentID int, idShortPath string, submodelElement types.ISubmodelElement, pos int, rootSubmodelElementID int) (int, error) {
-	rangeElem, ok := submodelElement.(*types.Range)
-	if !ok {
-		return 0, common.NewErrBadRequest("submodelElement is not of type Range")
-	}
-
-	// Create the nested range with the provided idShortPath using the decorated handler
-	id, err := p.decorated.CreateWithPath(tx, submodelID, parentID, idShortPath, submodelElement, pos, rootSubmodelElementID)
-	if err != nil {
-		return 0, err
-	}
-
-	// Range-specific database insertion for nested element
-	err = insertRange(rangeElem, tx, id)
-	if err != nil {
-		return 0, err
-	}
-
-	return id, nil
-}
-
 // Update modifies an existing Range submodel element identified by its idShort or path.
 // It updates both the common submodel element properties via the decorated handler
 // and the Range-specific fields such as min/max values based on the value type.
@@ -309,31 +240,32 @@ func (p PostgreSQLRangeHandler) Delete(idShortOrPath string) error {
 	return p.decorated.Delete(idShortOrPath)
 }
 
-// insertRange is a helper function that inserts Range-specific data into the range_element table.
-// It categorizes min and max values into appropriate columns based on the valueType:
-//   - Text types (xs:string, xs:anyURI, xs:base64Binary, xs:hexBinary) -> min_text, max_text
-//   - Numeric types (xs:int, xs:decimal, xs:double, xs:float, etc.) -> min_num, max_num
-//   - Time types (xs:time) -> min_time, max_time
-//   - Datetime types (xs:date, xs:dateTime, xs:duration, etc.) -> min_datetime, max_datetime
+// GetInsertQueryPart returns the type-specific insert query part for batch insertion of Range elements.
+// It returns the table name and record for inserting into the range_element table.
 //
 // Parameters:
-//   - rangeElem: The Range element containing the data to insert
-//   - tx: The database transaction
-//   - id: The database ID of the parent submodel element
+//   - tx: Active database transaction (not used for Range)
+//   - id: The database ID of the base submodel_element record
+//   - element: The Range element to insert
 //
 // Returns:
-//   - error: An error if the database insert operation fails
-func insertRange(rangeElem *types.Range, tx *sql.Tx, id int) error {
-	// Use centralized value type mapper for min/max values
-	if rangeElem.Min() == nil || rangeElem.Max() == nil {
-		return common.NewErrBadRequest("Both 'Min' and 'Max' values must be provided for Range element")
+//   - *InsertQueryPart: The table name and record for range_element insert
+//   - error: An error if the element is not of type Range or min/max values are missing
+func (p PostgreSQLRangeHandler) GetInsertQueryPart(_ *sql.Tx, id int, element types.ISubmodelElement) (*InsertQueryPart, error) {
+	rangeElem, ok := element.(*types.Range)
+	if !ok {
+		return nil, common.NewErrBadRequest("submodelElement is not of type Range")
 	}
+
+	if rangeElem.Min() == nil || rangeElem.Max() == nil {
+		return nil, common.NewErrBadRequest("Both 'Min' and 'Max' values must be provided for Range element")
+	}
+
 	typedValue := persistenceutils.MapRangeValueByType(rangeElem.ValueType(), *rangeElem.Min(), *rangeElem.Max())
 
-	// Insert Range-specific data
-	dialect := goqu.Dialect("postgres")
-	insertQuery, insertArgs, err := dialect.Insert("range_element").
-		Rows(goqu.Record{
+	return &InsertQueryPart{
+		TableName: "range_element",
+		Record: goqu.Record{
 			"id":           id,
 			"value_type":   rangeElem.ValueType(),
 			"min_text":     typedValue.MinText,
@@ -344,13 +276,8 @@ func insertRange(rangeElem *types.Range, tx *sql.Tx, id int) error {
 			"max_time":     typedValue.MaxTime,
 			"min_datetime": typedValue.MinDateTime,
 			"max_datetime": typedValue.MaxDateTime,
-		}).
-		ToSQL()
-	if err != nil {
-		return err
-	}
-	_, err = tx.Exec(insertQuery, insertArgs...)
-	return err
+		},
+	}, nil
 }
 
 // getRangeColumnNames returns the appropriate column names for min and max values

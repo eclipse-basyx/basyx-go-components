@@ -35,11 +35,14 @@ package submodelelements
 
 import (
 	"database/sql"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"sort"
 	"strconv"
 	"sync"
 
+	"github.com/FriedJannik/aas-go-sdk/jsonization"
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
 	_ "github.com/doug-martin/goqu/v9/dialect/postgres" // Postgres Driver for Goqu
@@ -49,6 +52,7 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	submodelsubqueries "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/Submodel/queries"
 	persistenceutils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
+	jsoniter "github.com/json-iterator/go"
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 )
 
@@ -617,4 +621,485 @@ type node struct {
 	path     string                 // Full path for navigation
 	position int                    // Position within parent for ordering
 	element  types.ISubmodelElement // The actual submodel element data
+}
+
+// batchInsertElement holds the data needed for batch inserting a single element.
+type batchInsertElement struct {
+	element     types.ISubmodelElement
+	handler     PostgreSQLSMECrudInterface
+	position    int
+	idShort     string
+	idShortPath string
+	isFromList  bool // Indicates if element is from a SubmodelElementList (uses index path)
+}
+
+// BatchInsertContext provides context for batch inserting submodel elements.
+// It specifies where in the hierarchy the elements should be inserted.
+type BatchInsertContext struct {
+	ParentID      int    // Database ID of the parent element (0 for top-level elements)
+	ParentPath    string // Path of the parent element (empty for top-level elements)
+	RootSmeID     int    // Database ID of the root submodel element (0 for top-level elements, will be set to own ID)
+	IsFromList    bool   // Whether elements are being inserted into a SubmodelElementList
+	StartPosition int    // Starting position for elements (used when adding to existing containers)
+}
+
+// BatchInsert inserts multiple submodel elements and their nested children in optimized SQL operations.
+//
+// This function handles both top-level submodel elements (direct children of a Submodel) and
+// nested elements (children of SubmodelElementCollection, SubmodelElementList, Entity, or
+// AnnotatedRelationshipElement). It replaces both Create and CreateNested methods.
+//
+// The function optimizes database operations by:
+// 1. Inserting all elements at the current level in one batch INSERT
+// 2. Grouping type-specific records by table and inserting each group in one batch
+// 3. Recursively processing nested children level by level
+//
+// Parameters:
+//   - db: Database connection
+//   - submodelID: ID of the parent submodel
+//   - elements: Slice of submodel elements to insert
+//   - tx: Transaction context (if nil, a new transaction will be created)
+//   - ctx: Optional context for nested insertion (nil for top-level elements)
+//
+// Returns:
+//   - []int: Database IDs of the inserted elements (in same order as input)
+//   - error: An error if any insertion fails
+//
+//nolint:revive // cognitive-complexity is acceptable here due to the batch operation nature
+func BatchInsert(db *sql.DB, submodelID string, elements []types.ISubmodelElement, tx *sql.Tx, ctx *BatchInsertContext) ([]int, error) {
+	// Handle empty elements slice
+	if len(elements) == 0 {
+		return []int{}, nil
+	}
+
+	// Default context for top-level elements
+	if ctx == nil {
+		ctx = &BatchInsertContext{
+			ParentID:   0,
+			ParentPath: "",
+			RootSmeID:  0,
+			IsFromList: false,
+		}
+	}
+
+	// Manage transaction lifecycle
+	var localTx *sql.Tx
+	var err error
+	ownTransaction := tx == nil
+
+	if ownTransaction {
+		localTx, _, err = common.StartTransaction(db)
+		if err != nil {
+			return nil, common.NewInternalServerError("Failed to start transaction for batch insert: " + err.Error())
+		}
+		defer func() {
+			if err != nil {
+				_ = localTx.Rollback()
+			}
+		}()
+	} else {
+		localTx = tx
+	}
+
+	dialect := goqu.Dialect("postgres")
+	jsonLib := jsoniter.ConfigCompatibleWithStandardLibrary
+
+	// Prepare batch insert elements with their handlers and paths
+	batchElements := make([]batchInsertElement, 0, len(elements))
+	for i, element := range elements {
+		handler, handlerErr := GetSMEHandler(element, db)
+		if handlerErr != nil {
+			err = handlerErr
+			return nil, err
+		}
+		idShort := ""
+		if element.IDShort() != nil {
+			idShort = *element.IDShort()
+		}
+
+		// Calculate position with context offset
+		position := ctx.StartPosition + i
+
+		// Build idShortPath based on context
+		var idShortPath string
+		if ctx.ParentPath == "" {
+			// Top-level element or first level in a container
+			if ctx.IsFromList {
+				idShortPath = "[" + strconv.Itoa(position) + "]"
+			} else {
+				idShortPath = idShort
+			}
+		} else {
+			// Nested element
+			if ctx.IsFromList {
+				idShortPath = ctx.ParentPath + "[" + strconv.Itoa(position) + "]"
+			} else {
+				idShortPath = ctx.ParentPath + "." + idShort
+			}
+		}
+
+		batchElements = append(batchElements, batchInsertElement{
+			element:     element,
+			handler:     handler,
+			position:    position,
+			idShort:     idShort,
+			idShortPath: idShortPath,
+			isFromList:  ctx.IsFromList,
+		})
+	}
+
+	// Build base submodel_element records
+	baseRecords := make([]goqu.Record, 0, len(batchElements))
+	for _, be := range batchElements {
+		record, buildErr := buildBaseSubmodelElementRecord(localTx, submodelID, be.element, be.idShort, be.idShortPath, be.position, ctx.ParentID, ctx.RootSmeID, jsonLib)
+		if buildErr != nil {
+			err = buildErr
+			return nil, err
+		}
+		baseRecords = append(baseRecords, record)
+	}
+
+	// Batch insert all base submodel_element records and get their IDs
+	// Convert baseRecords to []interface{} for variadic Rows() call
+	rowsToInsert := make([]interface{}, len(baseRecords))
+	for i, record := range baseRecords {
+		rowsToInsert[i] = record
+	}
+
+	insertQuery := dialect.Insert("submodel_element").
+		Cols("submodel_id", "parent_sme_id", "position", "id_short", "category", "model_type", "semantic_id", "idshort_path", "description_id", "displayname_id", "root_sme_id", "embedded_data_specification", "supplemental_semantic_ids", "extensions").
+		Rows(rowsToInsert...).
+		Returning("id")
+
+	sqlQuery, args, buildErr := insertQuery.ToSQL()
+	if buildErr != nil {
+		err = buildErr
+		return nil, err
+	}
+
+	rows, execErr := localTx.Query(sqlQuery, args...)
+	if execErr != nil {
+		err = execErr
+		return nil, err
+	}
+
+	// Collect the returned IDs
+	ids := make([]int, 0, len(batchElements))
+	for rows.Next() {
+		var id int
+		if scanErr := rows.Scan(&id); scanErr != nil {
+			_ = rows.Close()
+			err = scanErr
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	if closeErr := rows.Close(); closeErr != nil {
+		err = closeErr
+		return nil, err
+	}
+	if rowErr := rows.Err(); rowErr != nil {
+		err = rowErr
+		return nil, err
+	}
+
+	// Verify we got back the expected number of IDs
+	if len(ids) != len(batchElements) {
+		err = common.NewInternalServerError(fmt.Sprintf("batch insert returned %d IDs but expected %d", len(ids), len(batchElements)))
+		return nil, err
+	}
+
+	// For top-level elements (RootSmeID == 0), update root_sme_id to their own ID
+	if ctx.RootSmeID == 0 && len(ids) > 0 {
+		updateQuery, updateArgs, buildErr := dialect.Update("submodel_element").
+			Set(goqu.Record{"root_sme_id": goqu.L("id")}).
+			Where(goqu.C("id").In(ids)).
+			ToSQL()
+		if buildErr != nil {
+			err = buildErr
+			return nil, err
+		}
+		_, execErr := localTx.Exec(updateQuery, updateArgs...)
+		if execErr != nil {
+			err = execErr
+			return nil, err
+		}
+	}
+
+	// Group type-specific records by table name
+	typeSpecificRecords := make(map[string][]goqu.Record)
+	for i, be := range batchElements {
+		queryPart, partErr := be.handler.GetInsertQueryPart(localTx, ids[i], be.element)
+		if partErr != nil {
+			err = partErr
+			return nil, err
+		}
+		if queryPart != nil {
+			typeSpecificRecords[queryPart.TableName] = append(typeSpecificRecords[queryPart.TableName], queryPart.Record)
+		}
+	}
+
+	// Batch insert each type-specific table
+	for tableName, records := range typeSpecificRecords {
+		if len(records) == 0 {
+			continue
+		}
+		// Convert records to []interface{} for variadic Rows() call
+		typeRows := make([]interface{}, len(records))
+		for i, record := range records {
+			typeRows[i] = record
+		}
+		typeInsertQuery := dialect.Insert(tableName).Rows(typeRows...)
+		typeSQLQuery, typeArgs, buildErr := typeInsertQuery.ToSQL()
+		if buildErr != nil {
+			err = buildErr
+			return nil, err
+		}
+		_, execErr := localTx.Exec(typeSQLQuery, typeArgs...)
+		if execErr != nil {
+			err = execErr
+			return nil, err
+		}
+	}
+
+	// Insert MultiLanguageProperty values (secondary table that requires parent to exist first)
+	for i, be := range batchElements {
+		if be.element.ModelType() == types.ModelTypeMultiLanguageProperty {
+			mlp, ok := be.element.(*types.MultiLanguageProperty)
+			if ok && len(mlp.Value()) > 0 {
+				for _, val := range mlp.Value() {
+					insertQuery, insertArgs, buildErr := dialect.Insert("multilanguage_property_value").
+						Rows(goqu.Record{
+							"mlp_id":   ids[i],
+							"language": val.Language(),
+							"text":     val.Text(),
+						}).
+						ToSQL()
+					if buildErr != nil {
+						err = buildErr
+						return nil, err
+					}
+					_, execErr := localTx.Exec(insertQuery, insertArgs...)
+					if execErr != nil {
+						err = execErr
+						return nil, err
+					}
+				}
+			}
+		}
+	}
+
+	// Insert qualifiers for all elements
+	for i, be := range batchElements {
+		qualifiers := be.element.Qualifiers()
+		if len(qualifiers) > 0 {
+			for qi, qualifier := range qualifiers {
+				qualifierID, qualErr := persistenceutils.CreateQualifier(localTx, qualifier, qi)
+				if qualErr != nil {
+					err = qualErr
+					return nil, err
+				}
+
+				insertQualQuery, insertQualArgs, buildErr := dialect.Insert("submodel_element_qualifier").
+					Rows(goqu.Record{
+						"sme_id":       ids[i],
+						"qualifier_id": qualifierID,
+					}).
+					ToSQL()
+				if buildErr != nil {
+					err = buildErr
+					return nil, err
+				}
+				_, execErr := localTx.Exec(insertQualQuery, insertQualArgs...)
+				if execErr != nil {
+					err = execErr
+					return nil, err
+				}
+			}
+		}
+	}
+
+	// Process nested children for each element
+	for i, be := range batchElements {
+		children := getChildElements(be.element)
+		if len(children) == 0 {
+			continue
+		}
+
+		// Determine the rootSmeID for children
+		childRootSmeID := ctx.RootSmeID
+		if childRootSmeID == 0 {
+			// This is a top-level element, so children inherit this element's ID as root
+			childRootSmeID = ids[i]
+		}
+
+		// Determine if children are from a list
+		isFromList := be.element.ModelType() == types.ModelTypeSubmodelElementList
+
+		childCtx := &BatchInsertContext{
+			ParentID:   ids[i],
+			ParentPath: be.idShortPath,
+			RootSmeID:  childRootSmeID,
+			IsFromList: isFromList,
+		}
+
+		_, childErr := BatchInsert(db, submodelID, children, localTx, childCtx)
+		if childErr != nil {
+			err = childErr
+			return nil, err
+		}
+	}
+
+	// Commit if we own the transaction
+	if ownTransaction {
+		if commitErr := localTx.Commit(); commitErr != nil {
+			err = common.NewInternalServerError("Failed to commit batch insert transaction: " + commitErr.Error())
+			return nil, err
+		}
+	}
+
+	return ids, nil
+}
+
+// getChildElements extracts child elements from container-type submodel elements.
+// Returns an empty slice for element types that don't have children.
+func getChildElements(element types.ISubmodelElement) []types.ISubmodelElement {
+	switch element.ModelType() {
+	case types.ModelTypeSubmodelElementCollection:
+		if coll, ok := element.(*types.SubmodelElementCollection); ok {
+			return coll.Value()
+		}
+	case types.ModelTypeSubmodelElementList:
+		if list, ok := element.(*types.SubmodelElementList); ok {
+			return list.Value()
+		}
+	case types.ModelTypeAnnotatedRelationshipElement:
+		if rel, ok := element.(*types.AnnotatedRelationshipElement); ok {
+			children := make([]types.ISubmodelElement, 0, len(rel.Annotations()))
+			for _, ann := range rel.Annotations() {
+				children = append(children, ann)
+			}
+			return children
+		}
+	case types.ModelTypeEntity:
+		if ent, ok := element.(*types.Entity); ok {
+			return ent.Statements()
+		}
+	}
+	return nil
+}
+
+// buildBaseSubmodelElementRecord builds the base submodel_element record for batch insertion.
+func buildBaseSubmodelElementRecord(tx *sql.Tx, submodelID string, element types.ISubmodelElement, idShort string, idShortPath string, position int, parentID int, rootSmeID int, jsonLib jsoniter.API) (goqu.Record, error) {
+	// Handle SemanticID
+	var referenceID sql.NullInt64
+	var err error
+	if element.SemanticID() != nil {
+		referenceID, err = persistenceutils.CreateReference(tx, element.SemanticID(), sql.NullInt64{}, sql.NullInt64{})
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// Handle Description
+	descriptionID, err := persistenceutils.CreateLangStringTextTypes(tx, element.Description())
+	if err != nil {
+		return nil, common.NewInternalServerError("Failed to create Description: " + err.Error())
+	}
+
+	// Handle DisplayName
+	displayNameID, err := persistenceutils.CreateLangStringNameTypes(tx, element.DisplayName())
+	if err != nil {
+		return nil, common.NewInternalServerError("Failed to create DisplayName: " + err.Error())
+	}
+
+	// Handle EmbeddedDataSpecifications
+	edsJSONString := "[]"
+	eds := element.EmbeddedDataSpecifications()
+	if len(eds) > 0 {
+		var toJson []map[string]any
+		for _, ed := range eds {
+			jsonObj, jsonErr := jsonization.ToJsonable(ed)
+			if jsonErr != nil {
+				return nil, common.NewErrBadRequest("Failed to convert EmbeddedDataSpecification: " + jsonErr.Error())
+			}
+			toJson = append(toJson, jsonObj)
+		}
+		edsBytes, marshalErr := jsonLib.Marshal(toJson)
+		if marshalErr != nil {
+			return nil, marshalErr
+		}
+		edsJSONString = string(edsBytes)
+	}
+
+	// Handle SupplementalSemanticIDs
+	supplementalSemanticIDsJSONString := "[]"
+	supplementalSemanticIDs := element.SupplementalSemanticIDs()
+	if len(supplementalSemanticIDs) > 0 {
+		var toJson []map[string]any
+		for _, ref := range supplementalSemanticIDs {
+			jsonObj, jsonErr := jsonization.ToJsonable(ref)
+			if jsonErr != nil {
+				return nil, common.NewErrBadRequest("Failed to convert SupplementalSemanticID: " + jsonErr.Error())
+			}
+			toJson = append(toJson, jsonObj)
+		}
+		supplBytes, marshalErr := json.Marshal(toJson)
+		if marshalErr != nil {
+			return nil, marshalErr
+		}
+		supplementalSemanticIDsJSONString = string(supplBytes)
+	}
+
+	// Handle Extensions
+	extensionsJSONString := "[]"
+	extensions := element.Extensions()
+	if len(extensions) > 0 {
+		var toJson []map[string]any
+		for _, ext := range extensions {
+			jsonObj, jsonErr := jsonization.ToJsonable(ext)
+			if jsonErr != nil {
+				return nil, common.NewErrBadRequest("Failed to convert Extension: " + jsonErr.Error())
+			}
+			toJson = append(toJson, jsonObj)
+		}
+		extensionsBytes, marshalErr := jsonLib.Marshal(toJson)
+		if marshalErr != nil {
+			return nil, marshalErr
+		}
+		extensionsJSONString = string(extensionsBytes)
+	}
+
+	// Build parent_sme_id (NULL for top-level elements)
+	var parentDBId sql.NullInt64
+	if parentID == 0 {
+		parentDBId = sql.NullInt64{}
+	} else {
+		parentDBId = sql.NullInt64{Int64: int64(parentID), Valid: true}
+	}
+
+	// Build root_sme_id (will be updated later for top-level elements)
+	var rootDbID sql.NullInt64
+	if rootSmeID == 0 {
+		rootDbID = sql.NullInt64{}
+	} else {
+		rootDbID = sql.NullInt64{Int64: int64(rootSmeID), Valid: true}
+	}
+
+	return goqu.Record{
+		"submodel_id":                 submodelID,
+		"parent_sme_id":               parentDBId,
+		"position":                    position,
+		"id_short":                    idShort,
+		"category":                    element.Category(),
+		"model_type":                  element.ModelType(),
+		"semantic_id":                 referenceID,
+		"idshort_path":                idShortPath,
+		"description_id":              descriptionID,
+		"displayname_id":              displayNameID,
+		"root_sme_id":                 rootDbID,
+		"embedded_data_specification": edsJSONString,
+		"supplemental_semantic_ids":   supplementalSemanticIDsJSONString,
+		"extensions":                  extensionsJSONString,
+	}, nil
 }

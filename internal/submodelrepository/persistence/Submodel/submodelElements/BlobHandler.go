@@ -68,120 +68,6 @@ func NewPostgreSQLBlobHandler(db *sql.DB) (*PostgreSQLBlobHandler, error) {
 	return &PostgreSQLBlobHandler{db: db, decorated: decoratedHandler}, nil
 }
 
-// Create inserts a new Blob element into the database as a top-level submodel element.
-// This method handles both the common submodel element properties and the specific blob
-// data including content type and binary value storage.
-//
-// Parameters:
-//   - tx: Active database transaction
-//   - submodelID: ID of the parent submodel
-//   - submodelElement: The Blob element to create
-//
-// Returns:
-//   - int: Database ID of the created element
-//   - error: Error if creation fails or element is not of correct type
-func (p PostgreSQLBlobHandler) Create(tx *sql.Tx, submodelID string, submodelElement types.ISubmodelElement) (int, error) {
-	blob, ok := submodelElement.(*types.Blob)
-	if !ok {
-		return 0, common.NewErrBadRequest("submodelElement is not of type Blob")
-	}
-
-	// First, perform base SubmodelElement operations within the transaction
-	id, err := p.decorated.Create(tx, submodelID, submodelElement)
-	if err != nil {
-		return 0, err
-	}
-
-	// Check if blob value is larger than maximum allowed size
-	value := blob.Value()
-	if len(value) > smrepoconfig.MaxBlobSizeBytes {
-		return 0, smrepoerrors.ErrBlobTooLarge
-	}
-
-	// encode
-	encoded := common.Encode(value)
-
-	contentType := ""
-	if blob.ContentType() != nil {
-		contentType = *blob.ContentType()
-	}
-
-	// Blob-specific database insertion
-	dialect := goqu.Dialect("postgres")
-	insertQuery, insertArgs, err := dialect.Insert("blob_element").
-		Rows(goqu.Record{
-			"id":           id,
-			"content_type": contentType,
-			"value":        encoded,
-		}).
-		ToSQL()
-	if err != nil {
-		return 0, err
-	}
-
-	_, err = tx.Exec(insertQuery, insertArgs...)
-	if err != nil {
-		return 0, err
-	}
-
-	return id, nil
-}
-
-// CreateNested inserts a new Blob element as a nested element within a collection or list.
-// This method creates the element at a specific hierarchical path and position within its parent container.
-// It handles both the parent-child relationship and the specific blob data storage.
-//
-// Parameters:
-//   - tx: Active database transaction
-//   - submodelID: ID of the parent submodel
-//   - parentID: Database ID of the parent element
-//   - idShortPath: Hierarchical path where the element should be created
-//   - submodelElement: The Blob element to create
-//   - pos: Position within the parent container
-//
-// Returns:
-//   - int: Database ID of the created nested element
-//   - error: Error if creation fails or element is not of correct type
-func (p PostgreSQLBlobHandler) CreateNested(tx *sql.Tx, submodelID string, parentID int, idShortPath string, submodelElement types.ISubmodelElement, pos int, rootSubmodelElementID int) (int, error) {
-	blob, ok := submodelElement.(*types.Blob)
-	if !ok {
-		return 0, common.NewErrBadRequest("submodelElement is not of type Blob")
-	}
-
-	// Create the nested blob with the provided idShortPath using the decorated handler
-	id, err := p.decorated.CreateWithPath(tx, submodelID, parentID, idShortPath, submodelElement, pos, rootSubmodelElementID)
-	if err != nil {
-		return 0, err
-	}
-
-	value := blob.Value()
-	encoded := common.Encode(value)
-	contentType := ""
-	if blob.ContentType() != nil {
-		contentType = *blob.ContentType()
-	}
-
-	// Blob-specific database insertion for nested element
-	dialect := goqu.Dialect("postgres")
-	insertQuery, insertArgs, err := dialect.Insert("blob_element").
-		Rows(goqu.Record{
-			"id":           id,
-			"content_type": contentType,
-			"value":        encoded,
-		}).
-		ToSQL()
-	if err != nil {
-		return 0, err
-	}
-
-	_, err = tx.Exec(insertQuery, insertArgs...)
-	if err != nil {
-		return 0, err
-	}
-
-	return id, nil
-}
-
 // Update modifies an existing Blob element identified by its idShort or path.
 // This method handles both the common submodel element properties and the specific blob
 // data including content type and binary value storage.
@@ -339,6 +225,41 @@ func (p PostgreSQLBlobHandler) UpdateValueOnly(submodelID string, idShortOrPath 
 //   - error: Error if deletion fails
 func (p PostgreSQLBlobHandler) Delete(idShortOrPath string) error {
 	return p.decorated.Delete(idShortOrPath)
+}
+
+// GetInsertQueryPart returns the type-specific insert query part for batch insertion of Blob elements.
+// It returns the table name and record for inserting into the blob_element table.
+//
+// Parameters:
+//   - tx: Active database transaction (not used for Blob)
+//   - id: The database ID of the base submodel_element record
+//   - element: The Blob element to insert
+//
+// Returns:
+//   - *InsertQueryPart: The table name and record for blob_element insert
+//   - error: An error if the element is not of type Blob
+func (p PostgreSQLBlobHandler) GetInsertQueryPart(_ *sql.Tx, id int, element types.ISubmodelElement) (*InsertQueryPart, error) {
+	blob, ok := element.(*types.Blob)
+	if !ok {
+		return nil, common.NewErrBadRequest("submodelElement is not of type Blob")
+	}
+
+	contentType := ""
+	if blob.ContentType() != nil {
+		contentType = *blob.ContentType()
+	}
+
+	// encode value to base64
+	encoded := common.Encode(blob.Value())
+
+	return &InsertQueryPart{
+		TableName: "blob_element",
+		Record: goqu.Record{
+			"id":           id,
+			"content_type": contentType,
+			"value":        encoded,
+		},
+	}, nil
 }
 
 func isBlobSizeExceeded(blob *types.Blob) bool {

@@ -967,11 +967,6 @@ func (p *PostgreSQLSubmodelDatabase) GetSubmodelElements(submodelID string, limi
 // Returns:
 //   - error: Error if addition fails or target path is invalid
 func (p *PostgreSQLSubmodelDatabase) AddSubmodelElementWithPath(submodelID string, idShortPath string, submodelElement types.ISubmodelElement) error {
-	handler, err := submodelelements.GetSMEHandler(submodelElement, p.db)
-	if err != nil {
-		return err
-	}
-
 	crud, err := submodelelements.NewPostgreSQLSMECrudHandler(p.db)
 	if err != nil {
 		return err
@@ -1010,8 +1005,10 @@ func (p *PostgreSQLSubmodelDatabase) AddSubmodelElementWithPath(submodelID strin
 		}
 		return common.NewErrBadRequest("cannot add nested element to non-collection/list element. Tried to add to element of type '" + mt + "' at path '" + idShortPath + "'")
 	}
+
+	isFromList := *modelType == types.ModelTypeSubmodelElementList
 	var newIDShortPath string
-	if *modelType == types.ModelTypeSubmodelElementList {
+	if isFromList {
 		newIDShortPath = idShortPath + "[" + strconv.Itoa(nextPosition) + "]"
 		// For lists, check if an element with the same idShort already exists within the list
 		checkQuery, checkArgs, err := goqu.Select(goqu.COUNT("id")).From("submodel_element").
@@ -1056,11 +1053,15 @@ func (p *PostgreSQLSubmodelDatabase) AddSubmodelElementWithPath(submodelID strin
 		return err
 	}
 
-	id, err := handler.CreateNested(tx, submodelID, parentID, newIDShortPath, submodelElement, nextPosition, rootSmeID)
-	if err != nil {
-		return err
+	// Use BatchInsert with proper context for nested insertion
+	ctx := &submodelelements.BatchInsertContext{
+		ParentID:      parentID,
+		ParentPath:    idShortPath,
+		RootSmeID:     rootSmeID,
+		IsFromList:    isFromList,
+		StartPosition: nextPosition,
 	}
-	err = p.AddNestedSubmodelElementsIteratively(tx, submodelID, id, submodelElement, newIDShortPath, rootSmeID)
+	_, err = submodelelements.BatchInsert(p.db, submodelID, []types.ISubmodelElement{submodelElement}, tx, ctx)
 	if err != nil {
 		return err
 	}
@@ -1120,11 +1121,6 @@ func (p *PostgreSQLSubmodelDatabase) AddSubmodelElement(submodelID string, submo
 // Returns:
 //   - error: Error if addition fails
 func (p *PostgreSQLSubmodelDatabase) AddSubmodelElementWithTransaction(tx *sql.Tx, submodelID string, submodelElement types.ISubmodelElement) error {
-	handler, err := submodelelements.GetSMEHandler(submodelElement, p.db)
-	if err != nil {
-		return err
-	}
-
 	exists, err := doesSubmodelElementExist(tx, submodelID, *submodelElement.IDShort())
 	if err != nil {
 		_, _ = fmt.Println(err)
@@ -1134,60 +1130,11 @@ func (p *PostgreSQLSubmodelDatabase) AddSubmodelElementWithTransaction(tx *sql.T
 		return common.NewErrConflict("SubmodelElement with idShort '" + *submodelElement.IDShort() + "' already exists in submodel '" + submodelID + "'")
 	}
 
-	rootID, err := handler.Create(tx, submodelID, submodelElement)
+	// Use BatchInsert with a single element - it handles all nested elements automatically
+	_, err = submodelelements.BatchInsert(p.db, submodelID, []types.ISubmodelElement{submodelElement}, tx, nil)
 	if err != nil {
 		return err
 	}
-
-	err = p.AddNestedSubmodelElementsIteratively(tx, submodelID, rootID, submodelElement, "", rootID)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-// AddNestedSubmodelElementsIteratively processes and creates nested submodel elements using a stack-based approach.
-// This method handles both SubmodelElementCollection and SubmodelElementList types, ensuring proper
-// hierarchical path construction and position management. It invalidates the submodel cache if caching is enabled.
-//
-// Parameters:
-//   - tx: Active database transaction
-//   - submodelID: ID of the parent submodel
-//   - topLevelParentID: Database ID of the top-level parent element
-//   - topLevelElement: The top-level element containing nested elements
-//   - startPath: Starting path for nested element hierarchy (empty for top-level)
-//
-// Returns:
-//   - error: Error if processing fails
-func (p *PostgreSQLSubmodelDatabase) AddNestedSubmodelElementsIteratively(tx *sql.Tx, submodelID string, parentID int, topLevelElement types.ISubmodelElement, startPath string, rootSubmodelElementID int) error {
-	stack, err := getElementsToProcess(topLevelElement, parentID, startPath)
-	if err != nil {
-		return err
-	}
-
-	for len(stack) > 0 {
-		// LIFO Stack
-		current := stack[len(stack)-1]
-		stack = stack[:len(stack)-1]
-
-		handler, err := submodelelements.GetSMEHandler(current.element, p.db)
-		if err != nil {
-			return err
-		}
-
-		// Build the idShortPath for current element
-		idShortPath := buildCurrentIDShortPath(current)
-
-		newParentID, err := handler.CreateNested(tx, submodelID, current.parentID, idShortPath, current.element, current.position, rootSubmodelElementID)
-		if err != nil {
-			return err
-		}
-		stack, err = processByModelType(newParentID, idShortPath, current, stack)
-		if err != nil {
-			return err
-		}
-	}
-
 	return nil
 }
 
@@ -1307,15 +1254,55 @@ func (p *PostgreSQLSubmodelDatabase) UpdateSubmodelElement(submodelID string, id
 }
 
 func handleNestedElementsAfterPut(p *PostgreSQLSubmodelDatabase, idShortPath string, modelType types.ModelType, tx *sql.Tx, submodelID string, submodelElement types.ISubmodelElement) error {
-	var elementID int
+	if !isModelTypeWithNestedElements(modelType) {
+		return nil
+	}
+
 	smeHandler := submodelelements.PostgreSQLSMECrudHandler{Db: p.db}
 	elementID, err := smeHandler.GetDatabaseID(submodelID, idShortPath)
 	if err != nil {
 		return err
 	}
-	if isModelTypeWithNestedElements(modelType) {
-		err = p.AddNestedSubmodelElementsIteratively(tx, submodelID, elementID, submodelElement, idShortPath, elementID)
+
+	// Get child elements based on model type
+	var children []types.ISubmodelElement
+	isFromList := false
+
+	switch modelType {
+	case types.ModelTypeSubmodelElementCollection:
+		if coll, ok := submodelElement.(*types.SubmodelElementCollection); ok {
+			children = coll.Value()
+		}
+	case types.ModelTypeSubmodelElementList:
+		if list, ok := submodelElement.(*types.SubmodelElementList); ok {
+			children = list.Value()
+			isFromList = true
+		}
+	case types.ModelTypeAnnotatedRelationshipElement:
+		if rel, ok := submodelElement.(*types.AnnotatedRelationshipElement); ok {
+			for _, ann := range rel.Annotations() {
+				children = append(children, ann)
+			}
+		}
+	case types.ModelTypeEntity:
+		if ent, ok := submodelElement.(*types.Entity); ok {
+			children = ent.Statements()
+		}
 	}
+
+	if len(children) == 0 {
+		return nil
+	}
+
+	// Use BatchInsert with context for nested elements
+	ctx := &submodelelements.BatchInsertContext{
+		ParentID:   elementID,
+		ParentPath: idShortPath,
+		RootSmeID:  elementID, // For PUT, the updated element is the root
+		IsFromList: isFromList,
+	}
+
+	_, err = submodelelements.BatchInsert(p.db, submodelID, children, tx, ctx)
 	return err
 }
 

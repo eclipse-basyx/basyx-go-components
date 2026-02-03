@@ -65,75 +65,6 @@ func NewPostgreSQLEntityHandler(db *sql.DB) (*PostgreSQLEntityHandler, error) {
 	return &PostgreSQLEntityHandler{db: db, decorated: decoratedHandler}, nil
 }
 
-// Create persists a new Entity submodel element to the database.
-// It first creates the base SubmodelElement data using the decorated handler,
-// then adds Entity-specific data including entity type, global asset ID, and specific asset IDs.
-//
-// Parameters:
-//   - tx: Database transaction to use for the operation
-//   - submodelID: ID of the parent submodel
-//   - submodelElement: The Entity element to create (must be of type *gen.Entity)
-//
-// Returns:
-//   - int: The database ID of the created entity
-//   - error: Error if the element is not an Entity or if database operations fail
-func (p PostgreSQLEntityHandler) Create(tx *sql.Tx, submodelID string, submodelElement types.ISubmodelElement) (int, error) {
-	entity, ok := submodelElement.(*types.Entity)
-	if !ok {
-		return 0, common.NewErrBadRequest("submodelElement is not of type Entity")
-	}
-
-	// First, perform base SubmodelElement operations within the transaction
-	id, err := p.decorated.Create(tx, submodelID, submodelElement)
-	if err != nil {
-		return 0, err
-	}
-
-	// Entity-specific database insertion
-	err = insertEntity(entity, tx, id)
-	if err != nil {
-		return 0, err
-	}
-
-	return id, nil
-}
-
-// CreateNested persists a new nested Entity submodel element to the database.
-// It creates the Entity as a child element of another SubmodelElement with a specific position
-// and idShortPath for hierarchical organization.
-//
-// Parameters:
-//   - tx: Database transaction to use for the operation
-//   - submodelID: ID of the parent submodel
-//   - parentID: Database ID of the parent SubmodelElement
-//   - idShortPath: Path identifier for the nested element
-//   - submodelElement: The Entity element to create (must be of type *gen.Entity)
-//   - pos: Position of the element within its parent
-//
-// Returns:
-//   - int: The database ID of the created nested entity
-//   - error: Error if the element is not an Entity or if database operations fail
-func (p PostgreSQLEntityHandler) CreateNested(tx *sql.Tx, submodelID string, parentID int, idShortPath string, submodelElement types.ISubmodelElement, pos int, rootSubmodelElementID int) (int, error) {
-	entity, ok := submodelElement.(*types.Entity)
-	if !ok {
-		return 0, common.NewErrBadRequest("submodelElement is not of type Entity")
-	}
-
-	// Create the nested entity with the provided idShortPath using the decorated handler
-	id, err := p.decorated.CreateWithPath(tx, submodelID, parentID, idShortPath, submodelElement, pos, rootSubmodelElementID)
-	if err != nil {
-		return 0, err
-	}
-
-	// Entity-specific database insertion for nested element
-	err = insertEntity(entity, tx, id)
-	if err != nil {
-		return 0, err
-	}
-
-	return id, nil
-}
-
 // Update modifies an existing Entity element identified by its idShort or path.
 // This method delegates the update operation to the decorated CRUD handler which handles
 // the common submodel element update logic and additionally manages Entity-specific fields.
@@ -306,7 +237,23 @@ func (p PostgreSQLEntityHandler) Delete(idShortOrPath string) error {
 	return p.decorated.Delete(idShortOrPath)
 }
 
-func insertEntity(entity *types.Entity, tx *sql.Tx, id int) error {
+// GetInsertQueryPart returns the type-specific insert query part for batch insertion of Entity elements.
+// It returns the table name and record for inserting into the entity_element table.
+//
+// Parameters:
+//   - tx: Active database transaction (not used for Entity)
+//   - id: The database ID of the base submodel_element record
+//   - element: The Entity element to insert
+//
+// Returns:
+//   - *InsertQueryPart: The table name and record for entity_element insert
+//   - error: An error if the element is not of type Entity
+func (p PostgreSQLEntityHandler) GetInsertQueryPart(_ *sql.Tx, id int, element types.ISubmodelElement) (*InsertQueryPart, error) {
+	entity, ok := element.(*types.Entity)
+	if !ok {
+		return nil, common.NewErrBadRequest("submodelElement is not of type Entity")
+	}
+
 	json := jsoniter.ConfigCompatibleWithStandardLibrary
 	specificAssetIDs := "[]"
 	if entity.SpecificAssetIDs() != nil {
@@ -314,34 +261,26 @@ func insertEntity(entity *types.Entity, tx *sql.Tx, id int) error {
 		for _, saa := range entity.SpecificAssetIDs() {
 			jsonableSaa, err := jsonization.ToJsonable(saa)
 			if err != nil {
-				return common.NewErrBadRequest("SMREPO-INSENTITY-SAATJSONABLE Failed to convert Specific Asset ID to JSONABLE: " + err.Error())
+				return nil, common.NewErrBadRequest("SMREPO-GIQP-ENTITY-SAATJSONABLE Failed to convert Specific Asset ID to JSONABLE: " + err.Error())
 			}
 			jsonable = append(jsonable, jsonableSaa)
 		}
 		specificAssetIDsBytes, err := json.Marshal(jsonable)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		specificAssetIDs = string(specificAssetIDsBytes)
 	}
 
-	dialect := goqu.Dialect("postgres")
-	insertQuery, insertArgs, err := dialect.Insert("entity_element").
-		Rows(goqu.Record{
+	return &InsertQueryPart{
+		TableName: "entity_element",
+		Record: goqu.Record{
 			"id":                 id,
 			"entity_type":        entity.EntityType(),
 			"global_asset_id":    entity.GlobalAssetID(),
 			"specific_asset_ids": specificAssetIDs,
-		}).
-		ToSQL()
-	if err != nil {
-		return err
-	}
-	_, err = tx.Exec(insertQuery, insertArgs...)
-	if err != nil {
-		return err
-	}
-	return nil
+		},
+	}, nil
 }
 
 func buildUpdateEntityRecordObject(isPut bool, entity *types.Entity) (goqu.Record, error) {

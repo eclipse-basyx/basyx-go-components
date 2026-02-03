@@ -70,77 +70,6 @@ func NewPostgreSQLOperationHandler(db *sql.DB) (*PostgreSQLOperationHandler, err
 	return &PostgreSQLOperationHandler{db: db, decorated: decoratedHandler}, nil
 }
 
-// Create persists a new Operation submodel element to the database within a transaction.
-// It first creates the base submodel element using the decorated handler, then inserts
-// Operation-specific data including all input, output, and in-output variables. Each
-// variable's value (which is itself a submodel element) is recursively persisted.
-//
-// Parameters:
-//   - tx: The database transaction
-//   - submodelID: The ID of the parent submodel
-//   - submodelElement: The Operation element to create (must be of type *gen.Operation)
-//
-// Returns:
-//   - int: The database ID of the created element
-//   - error: An error if the element is not an Operation type or if database operations fail
-func (p PostgreSQLOperationHandler) Create(tx *sql.Tx, submodelID string, submodelElement types.ISubmodelElement) (int, error) {
-	operation, ok := submodelElement.(*types.Operation)
-	if !ok {
-		return 0, common.NewErrBadRequest("submodelElement is not of type Operation")
-	}
-
-	// First, perform base SubmodelElement operations within the transaction
-	id, err := p.decorated.Create(tx, submodelID, submodelElement)
-	if err != nil {
-		return 0, err
-	}
-
-	// Operation-specific database insertion
-	err = insertOperation(operation, tx, id)
-	if err != nil {
-		return 0, err
-	}
-
-	return id, nil
-}
-
-// CreateNested persists a new nested Operation submodel element to the database within a transaction.
-// This method is used when creating Operation elements within collection-like structures (e.g., SubmodelElementCollection).
-// It creates the base nested element with the provided idShortPath and position, then inserts Operation-specific
-// data including all variables.
-//
-// Parameters:
-//   - tx: The database transaction
-//   - submodelID: The ID of the parent submodel
-//   - parentID: The database ID of the parent collection element
-//   - idShortPath: The path identifying the element's location within the hierarchy
-//   - submodelElement: The Operation element to create (must be of type *gen.Operation)
-//   - pos: The position of the element within the parent collection
-//
-// Returns:
-//   - int: The database ID of the created element
-//   - error: An error if the element is not an Operation type or if database operations fail
-func (p PostgreSQLOperationHandler) CreateNested(tx *sql.Tx, submodelID string, parentID int, idShortPath string, submodelElement types.ISubmodelElement, pos int, rootSubmodelElementID int) (int, error) {
-	operation, ok := submodelElement.(*types.Operation)
-	if !ok {
-		return 0, common.NewErrBadRequest("submodelElement is not of type Operation")
-	}
-
-	// Create the nested operation with the provided idShortPath using the decorated handler
-	id, err := p.decorated.CreateWithPath(tx, submodelID, parentID, idShortPath, submodelElement, pos, rootSubmodelElementID)
-	if err != nil {
-		return 0, err
-	}
-
-	// Operation-specific database insertion for nested element
-	err = insertOperation(operation, tx, id)
-	if err != nil {
-		return 0, err
-	}
-
-	return id, nil
-}
-
 // Update modifies an existing Operation submodel element in the database.
 // This method handles both the common submodel element properties and the specific
 // operation data including input, output, and in-output variables.
@@ -236,20 +165,23 @@ func (p PostgreSQLOperationHandler) Delete(idShortOrPath string) error {
 	return p.decorated.Delete(idShortOrPath)
 }
 
-// insertOperation is a helper function that inserts Operation-specific data into the operation_element table.
-// It creates the operation record and then inserts all associated variables (input, output, and in-output).
-// Each variable's value is persisted as a nested submodel element.
+// GetInsertQueryPart returns the type-specific insert query part for batch insertion of Operation elements.
+// It returns the table name and record for inserting into the operation_element table.
 //
 // Parameters:
-//   - operation: The Operation element containing the data to insert
-//   - tx: The database transaction
-//   - id: The database ID of the parent submodel element
-//   - submodelID: The ID of the parent submodel (needed for variable value persistence)
-//   - db: The database connection (needed to get appropriate handlers for variable values)
+//   - tx: Active database transaction (not used for Operation)
+//   - id: The database ID of the base submodel_element record
+//   - element: The Operation element to insert
 //
 // Returns:
-//   - error: An error if the database insert operation fails
-func insertOperation(operation *types.Operation, tx *sql.Tx, id int) error {
+//   - *InsertQueryPart: The table name and record for operation_element insert
+//   - error: An error if the element is not of type Operation
+func (p PostgreSQLOperationHandler) GetInsertQueryPart(_ *sql.Tx, id int, element types.ISubmodelElement) (*InsertQueryPart, error) {
+	operation, ok := element.(*types.Operation)
+	if !ok {
+		return nil, common.NewErrBadRequest("submodelElement is not of type Operation")
+	}
+
 	json := jsoniter.ConfigCompatibleWithStandardLibrary
 
 	var inputVars, outputVars, inoutputVars string
@@ -258,13 +190,13 @@ func insertOperation(operation *types.Operation, tx *sql.Tx, id int) error {
 		for _, v := range operation.InputVariables() {
 			jsonable, err := jsonization.ToJsonable(v)
 			if err != nil {
-				return err
+				return nil, err
 			}
 			jsonables = append(jsonables, jsonable)
 		}
 		inputVarBytes, err := json.Marshal(jsonables)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		inputVars = string(inputVarBytes)
 	} else {
@@ -276,13 +208,13 @@ func insertOperation(operation *types.Operation, tx *sql.Tx, id int) error {
 		for _, v := range operation.OutputVariables() {
 			jsonable, err := jsonization.ToJsonable(v)
 			if err != nil {
-				return err
+				return nil, err
 			}
 			jsonables = append(jsonables, jsonable)
 		}
 		outputVarBytes, err := json.Marshal(jsonables)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		outputVars = string(outputVarBytes)
 	} else {
@@ -294,36 +226,28 @@ func insertOperation(operation *types.Operation, tx *sql.Tx, id int) error {
 		for _, v := range operation.InoutputVariables() {
 			jsonable, err := jsonization.ToJsonable(v)
 			if err != nil {
-				return err
+				return nil, err
 			}
 			jsonables = append(jsonables, jsonable)
 		}
 		inoutputVarBytes, err := json.Marshal(jsonables)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		inoutputVars = string(inoutputVarBytes)
 	} else {
 		inoutputVars = "[]"
 	}
 
-	dialect := goqu.Dialect("postgres")
-	insertQuery, insertArgs, err := dialect.Insert("operation_element").
-		Rows(goqu.Record{
+	return &InsertQueryPart{
+		TableName: "operation_element",
+		Record: goqu.Record{
 			"id":                 id,
 			"input_variables":    inputVars,
 			"output_variables":   outputVars,
 			"inoutput_variables": inoutputVars,
-		}).
-		ToSQL()
-	if err != nil {
-		return err
-	}
-	_, err = tx.Exec(insertQuery, insertArgs...)
-	if err != nil {
-		return err
-	}
-	return nil
+		},
+	}, nil
 }
 
 func buildUpdateOperationRecordObject(isPut bool, operation *types.Operation, json jsoniter.API) (goqu.Record, error) {
