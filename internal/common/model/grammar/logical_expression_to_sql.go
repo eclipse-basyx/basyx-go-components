@@ -32,6 +32,7 @@ package grammar
 import (
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"sort"
 	"strings"
 	"time"
@@ -65,13 +66,15 @@ type existsJoinPlan struct {
 }
 
 type JoinPlanConfig struct {
-	PreferredBase   string
-	BaseAliases     []string
-	Rules           map[string]existsJoinRule
-	TableForAlias   func(string) (string, bool)
-	GroupKeyForBase func(string) (exp.IdentifierExpression, error)
-	RootJoinKey     func() exp.IdentifierExpression
-	Correlatable    func(string) bool
+	PreferredBase     string
+	BaseAliases       []string
+	Rules             map[string]existsJoinRule
+	TableForAlias     func(string) (string, bool)
+	GroupKeyForBase   func(string) (exp.IdentifierExpression, error)
+	RootJoinKey       func() exp.IdentifierExpression
+	RootJoinKeyAlias  func() string
+	RootJoinKeyColumn func() string
+	Correlatable      func(string) bool
 }
 
 // DefaultCollectorCTEAlias is the fixed alias used for all collector-generated CTEs.
@@ -283,6 +286,12 @@ func joinPlanConfigForSM() JoinPlanConfig {
 		RootJoinKey: func() exp.IdentifierExpression {
 			return goqu.I("s.id")
 		},
+		RootJoinKeyAlias: func() string {
+			return "s"
+		},
+		RootJoinKeyColumn: func() string {
+			return "id"
+		},
 		Correlatable: func(alias string) bool {
 			return alias == "s"
 		},
@@ -304,6 +313,12 @@ func joinPlanConfigForSMDesc() JoinPlanConfig {
 		},
 		RootJoinKey: func() exp.IdentifierExpression {
 			return goqu.I("submodel_descriptor.descriptor_id")
+		},
+		RootJoinKeyAlias: func() string {
+			return "submodel_descriptor"
+		},
+		RootJoinKeyColumn: func() string {
+			return "descriptor_id"
 		},
 		Correlatable: func(alias string) bool {
 			return alias == "submodel_descriptor"
@@ -377,6 +392,12 @@ func joinPlanConfigForSME() JoinPlanConfig {
 		RootJoinKey: func() exp.IdentifierExpression {
 			return goqu.I("submodel_element.id")
 		},
+		RootJoinKeyAlias: func() string {
+			return "submodel_element"
+		},
+		RootJoinKeyColumn: func() string {
+			return "id"
+		},
 		Correlatable: func(alias string) bool {
 			return alias == "submodel_element"
 		},
@@ -435,6 +456,12 @@ func joinPlanConfigForBD() JoinPlanConfig {
 		},
 		RootJoinKey: func() exp.IdentifierExpression {
 			return goqu.I("aas_identifier.id")
+		},
+		RootJoinKeyAlias: func() string {
+			return "aas_identifier"
+		},
+		RootJoinKeyColumn: func() string {
+			return "id"
 		},
 		Correlatable: func(alias string) bool {
 			return alias == "specific_asset_id"
@@ -861,19 +888,48 @@ func buildInlineExistsExpression(resolved []ResolvedFieldPath, predicate exp.Exp
 		return nil, fmt.Errorf("missing root join key for EXISTS")
 	}
 	rootKey := cfg.RootJoinKey()
+	rootAlias := ""
+	rootColumn := ""
+	if cfg.RootJoinKeyAlias != nil {
+		rootAlias = strings.TrimSpace(cfg.RootJoinKeyAlias())
+	}
+	if cfg.RootJoinKeyColumn != nil {
+		rootColumn = strings.TrimSpace(cfg.RootJoinKeyColumn())
+	}
+	aliasCollision := false
+	if rootAlias != "" {
+		for _, a := range plan.ExpandedAliases {
+			if a == rootAlias {
+				aliasCollision = true
+				break
+			}
+		}
+	}
 
 	whereExpr := andBindingsForResolvedFieldPaths(resolved, predicate)
 	var correlation exp.Expression = groupKey.Eq(rootKey)
-	if rootAlias, ok := leadingAlias(fmt.Sprint(rootKey)); ok && rootAlias == plan.BaseAlias {
-		if corr := existsCorrelationForAlias(plan.BaseAlias); corr != nil {
-			correlation = corr
-		}
+	if aliasCollision && rootAlias != "" && rootColumn != "" {
+		outerPlaceholder := "__outer__"
+		correlation = groupKey.Eq(goqu.I(outerPlaceholder + "." + rootColumn))
 	}
 	if whereExpr != nil {
 		correlation = goqu.And(correlation, whereExpr)
 	}
 
 	ds = ds.Where(correlation).Limit(1)
+	if aliasCollision && rootAlias != "" && rootColumn != "" {
+		sql, args, err := ds.ToSQL()
+		if err != nil {
+			return nil, err
+		}
+		for _, a := range plan.ExpandedAliases {
+			mapped := a + "__exists"
+			sql = strings.ReplaceAll(sql, "\""+a+"\".", "\""+mapped+"\".")
+			sql = strings.ReplaceAll(sql, " AS \""+a+"\"", " AS \""+mapped+"\"")
+		}
+		sql = strings.ReplaceAll(sql, "\"__outer__\"", "\""+rootAlias+"\"")
+		return goqu.L("EXISTS ("+sql+")", args...), nil
+	}
 
 	return goqu.L("EXISTS ?", ds), nil
 }
@@ -887,6 +943,12 @@ func defaultJoinPlanConfig() JoinPlanConfig {
 		GroupKeyForBase: descriptorIDForBaseAlias,
 		RootJoinKey: func() exp.IdentifierExpression {
 			return goqu.I("descriptor.id")
+		},
+		RootJoinKeyAlias: func() string {
+			return "descriptor"
+		},
+		RootJoinKeyColumn: func() string {
+			return "id"
 		},
 		Correlatable: func(alias string) bool {
 			return existsCorrelationForAlias(alias) != nil
@@ -911,6 +973,16 @@ func (c *ResolvedFieldPathCollector) effectiveJoinConfig() JoinPlanConfig {
 	if cfg.RootJoinKey == nil {
 		cfg.RootJoinKey = func() exp.IdentifierExpression {
 			return goqu.I("descriptor.id")
+		}
+	}
+	if cfg.RootJoinKeyAlias == nil {
+		cfg.RootJoinKeyAlias = func() string {
+			return "descriptor"
+		}
+	}
+	if cfg.RootJoinKeyColumn == nil {
+		cfg.RootJoinKeyColumn = func() string {
+			return "id"
 		}
 	}
 	if cfg.BaseAliases == nil {
@@ -1025,6 +1097,10 @@ func anyResolvedHasBindings(resolved []ResolvedFieldPath) bool {
 		}
 	}
 	return false
+}
+
+func resolvedSlicesEqual(a, b []ResolvedFieldPath) bool {
+	return reflect.DeepEqual(a, b)
 }
 
 func resolvedNeedsCTE(resolved []ResolvedFieldPath) bool {
@@ -1630,6 +1706,36 @@ func (le *LogicalExpression) EvaluateToExpression(collector *ResolvedFieldPathCo
 	}
 
 	if len(le.Or) > 0 {
+		if collector != nil {
+			var combined []exp.Expression
+			var sharedResolved []ResolvedFieldPath
+			canGroup := true
+			for _, nestedExpr := range le.Or {
+				expr, resolved, err := nestedExpr.EvaluateToExpression(nil)
+				if err != nil {
+					canGroup = false
+					break
+				}
+				if len(resolved) == 0 || !resolvedNeedsCTE(resolved) || anyResolvedHasBindings(resolved) {
+					canGroup = false
+					break
+				}
+				if sharedResolved == nil {
+					sharedResolved = resolved
+				} else if !resolvedSlicesEqual(sharedResolved, resolved) {
+					canGroup = false
+					break
+				}
+				combined = append(combined, expr)
+			}
+			if canGroup && len(combined) > 0 {
+				orExpr := goqu.Or(combined...)
+				existsExpr, err := buildInlineExistsExpression(sharedResolved, orExpr, collector)
+				if err == nil {
+					return existsExpr, sharedResolved, nil
+				}
+			}
+		}
 		var expressions []exp.Expression
 		var resolved []ResolvedFieldPath
 		for i, nestedExpr := range le.Or {
