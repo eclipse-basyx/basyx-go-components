@@ -347,10 +347,13 @@ func parseSupplementalSemanticIDs(data []byte) ([]types.IReference, error) {
 		return nil, fmt.Errorf("error unmarshaling supplemental semantic IDs for Submodel: %w", err)
 	}
 	result := make([]types.IReference, 0, len(jsonable))
-	for _, item := range jsonable {
+	for i, item := range jsonable {
 		semanticID, err := jsonization.ReferenceFromJsonable(item)
 		if err != nil {
-			return nil, fmt.Errorf("error converting supplemental semantic ID from jsonable: %w", err)
+			// Log the problematic JSON for debugging
+			jsonBytes, _ := json.Marshal(item)
+			_, _ = fmt.Printf("[DEBUG] parseSupplementalSemanticIDs: Error at index %d, JSON: %s, Error: %v\n", i, string(jsonBytes), err)
+			return nil, fmt.Errorf("error converting supplemental semantic ID from jsonable (index %d, data: %s): %w", i, string(jsonBytes), err)
 		}
 		result = append(result, semanticID)
 	}
@@ -367,10 +370,13 @@ func parseEmbeddedDataSpecifications(data []byte) ([]types.IEmbeddedDataSpecific
 		return nil, fmt.Errorf("error unmarshaling embedded data specifications for Submodel: %w", err)
 	}
 	result := make([]types.IEmbeddedDataSpecification, 0, len(jsonable))
-	for _, item := range jsonable {
+	for i, item := range jsonable {
 		eds, err := jsonization.EmbeddedDataSpecificationFromJsonable(item)
 		if err != nil {
-			return nil, fmt.Errorf("error converting embedded data specification from jsonable: %w", err)
+			// Log the problematic JSON for debugging
+			jsonBytes, _ := json.Marshal(item)
+			_, _ = fmt.Printf("[DEBUG] parseEmbeddedDataSpecifications: Error at index %d, JSON: %s, Error: %v\n", i, string(jsonBytes), err)
+			return nil, fmt.Errorf("error converting embedded data specification from jsonable (index %d, data: %s): %w", i, string(jsonBytes), err)
 		}
 		result = append(result, eds)
 	}
@@ -387,10 +393,13 @@ func parseExtensionsFromJSON(data []byte) ([]types.IExtension, error) {
 		return nil, fmt.Errorf("error unmarshaling extensions for Submodel: %w", err)
 	}
 	result := make([]types.IExtension, 0, len(jsonable))
-	for _, item := range jsonable {
+	for i, item := range jsonable {
 		ext, err := jsonization.ExtensionFromJsonable(item)
 		if err != nil {
-			return nil, fmt.Errorf("error converting extension from jsonable: %w", err)
+			// Log the problematic JSON for debugging
+			jsonBytes, _ := json.Marshal(item)
+			_, _ = fmt.Printf("[DEBUG] parseExtensionsFromJSON: Error at index %d, JSON: %s, Error: %v\n", i, string(jsonBytes), err)
+			return nil, fmt.Errorf("error converting extension from jsonable (index %d, data: %s): %w", i, string(jsonBytes), err)
 		}
 		result = append(result, ext)
 	}

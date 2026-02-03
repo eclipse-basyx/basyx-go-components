@@ -83,6 +83,7 @@ func BuildSubmodelElement(smeRow model.SubmodelElementRow, db *sql.DB) (types.IS
 	var refMutex sync.RWMutex
 	specificSME, err := getSubmodelElementObjectBasedOnModelType(smeRow, refBuilderMap, &refMutex)
 	if err != nil {
+		_, _ = fmt.Printf("[DEBUG] BuildSubmodelElement: Error building SME type, idShort=%s, modelType=%d, error: %v\n", smeRow.IDShort, smeRow.ModelType, err)
 		return nil, nil, err
 	}
 
@@ -144,10 +145,13 @@ func BuildSubmodelElement(smeRow model.SubmodelElementRow, db *sql.DB) (types.IS
 			var json = jsoniter.ConfigCompatibleWithStandardLibrary
 			err := json.Unmarshal(*smeRow.EmbeddedDataSpecifications, &edsJsonable)
 			var specs []types.IEmbeddedDataSpecification
-			for _, jsonable := range edsJsonable {
+			for i, jsonable := range edsJsonable {
 				eds, err := jsonization.EmbeddedDataSpecificationFromJsonable(jsonable)
 				if err != nil {
-					return fmt.Errorf("error converting jsonable to EmbeddedDataSpecification: %w", err)
+					// Log the problematic JSON for debugging
+					jsonBytes, _ := json.Marshal(jsonable)
+					_, _ = fmt.Printf("[DEBUG] SME EmbeddedDataSpec: idShort=%s, index=%d, JSON: %s, Error: %v\n", smeRow.IDShort, i, string(jsonBytes), err)
+					return fmt.Errorf("error converting jsonable to EmbeddedDataSpecification (idShort=%s, index=%d, data: %s): %w", smeRow.IDShort, i, string(jsonBytes), err)
 				}
 				specs = append(specs, eds)
 			}
@@ -171,10 +175,13 @@ func BuildSubmodelElement(smeRow model.SubmodelElementRow, db *sql.DB) (types.IS
 				return fmt.Errorf("error unmarshaling supplemental semantic IDs: %w", err)
 			}
 			var supplementalSemanticIDs []types.Reference
-			for _, jsonable := range supplementalSemanticIDsJsonable {
+			for i, jsonable := range supplementalSemanticIDsJsonable {
 				ref, err := jsonization.ReferenceFromJsonable(jsonable)
 				if err != nil {
-					return fmt.Errorf("error converting jsonable to Reference: %w", err)
+					// Log the problematic JSON for debugging
+					jsonBytes, _ := json.Marshal(jsonable)
+					_, _ = fmt.Printf("[DEBUG] SME SupplementalSemanticIDs: idShort=%s, index=%d, JSON: %s, Error: %v\n", smeRow.IDShort, i, string(jsonBytes), err)
+					return fmt.Errorf("error converting jsonable to Reference (idShort=%s, index=%d, data: %s): %w", smeRow.IDShort, i, string(jsonBytes), err)
 				}
 				supplementalSemanticIDs = append(supplementalSemanticIDs, *ref.(*types.Reference))
 			}
@@ -196,10 +203,13 @@ func BuildSubmodelElement(smeRow model.SubmodelElementRow, db *sql.DB) (types.IS
 			var json = jsoniter.ConfigCompatibleWithStandardLibrary
 			err := json.Unmarshal(*smeRow.Extensions, &extensionsJsonable)
 			var extensions []types.IExtension
-			for _, jsonable := range extensionsJsonable {
+			for i, jsonable := range extensionsJsonable {
 				ext, err := jsonization.ExtensionFromJsonable(jsonable)
 				if err != nil {
-					return fmt.Errorf("error converting jsonable to Extension: %w", err)
+					// Log the problematic JSON for debugging
+					jsonBytes, _ := json.Marshal(jsonable)
+					_, _ = fmt.Printf("[DEBUG] SME Extensions: idShort=%s, index=%d, JSON: %s, Error: %v\n", smeRow.IDShort, i, string(jsonBytes), err)
+					return fmt.Errorf("error converting jsonable to Extension (idShort=%s, index=%d, data: %s): %w", smeRow.IDShort, i, string(jsonBytes), err)
 				}
 				extensions = append(extensions, ext)
 			}
@@ -430,12 +440,14 @@ func buildBasicEventElement(smeRow model.SubmodelElementRow) (types.ISubmodelEle
 	var observedRefs, messageBrokerRefs types.IReference
 	observedRefs, err = jsonization.ReferenceFromJsonable(observedRefsJson)
 	if err != nil {
+		_, _ = fmt.Printf("[DEBUG] buildBasicEventElement Observed: JSON: %v, Error: %v\n", observedRefsJson, err)
 		return nil, err
 	}
 
 	if valueRow.MessageBroker.Valid {
 		messageBrokerRefs, err = jsonization.ReferenceFromJsonable(messageBrokerRefsJson)
 		if err != nil {
+			_, _ = fmt.Printf("[DEBUG] buildBasicEventElement MessageBroker: JSON: %v, Error: %v\n", messageBrokerRefsJson, err)
 			return nil, err
 		}
 	}
@@ -482,9 +494,10 @@ func buildOperation(smeRow model.SubmodelElementRow) (types.ISubmodelElement, er
 		if err != nil {
 			return nil, err
 		}
-		for _, jsonable := range inputVarsJsonable {
+		for i, jsonable := range inputVarsJsonable {
 			varOp, err := jsonization.OperationVariableFromJsonable(jsonable)
 			if err != nil {
+				_, _ = fmt.Printf("[DEBUG] buildOperation InputVariable[%d]: JSON: %v, Error: %v\n", i, jsonable, err)
 				return nil, err
 			}
 			inputVars = append(inputVars, varOp)
@@ -496,9 +509,10 @@ func buildOperation(smeRow model.SubmodelElementRow) (types.ISubmodelElement, er
 		if err != nil {
 			return nil, err
 		}
-		for _, jsonable := range outputVarsJsonable {
+		for i, jsonable := range outputVarsJsonable {
 			varOp, err := jsonization.OperationVariableFromJsonable(jsonable)
 			if err != nil {
+				_, _ = fmt.Printf("[DEBUG] buildOperation OutputVariable[%d]: JSON: %v, Error: %v\n", i, jsonable, err)
 				return nil, err
 			}
 			outputVars = append(outputVars, varOp)
@@ -510,9 +524,10 @@ func buildOperation(smeRow model.SubmodelElementRow) (types.ISubmodelElement, er
 		if err != nil {
 			return nil, err
 		}
-		for _, jsonable := range inoutputVarsJsonable {
+		for i, jsonable := range inoutputVarsJsonable {
 			varOp, err := jsonization.OperationVariableFromJsonable(jsonable)
 			if err != nil {
+				_, _ = fmt.Printf("[DEBUG] buildOperation InoutputVariable[%d]: JSON: %v, Error: %v\n", i, jsonable, err)
 				return nil, err
 			}
 			inoutputVars = append(inoutputVars, varOp)
@@ -582,9 +597,10 @@ func buildEntity(smeRow model.SubmodelElementRow) (types.ISubmodelElement, error
 		if err != nil {
 			return nil, err
 		}
-		for _, j := range jsonable {
+		for i, j := range jsonable {
 			said, err := jsonization.SpecificAssetIDFromJsonable(j)
 			if err != nil {
+				_, _ = fmt.Printf("[DEBUG] buildEntity SpecificAssetID[%d]: JSON: %v, Error: %v\n", i, j, err)
 				return nil, err
 			}
 			specificAssetIDs = append(specificAssetIDs, said)
@@ -630,10 +646,12 @@ func buildAnnotatedRelationshipElement(smeRow model.SubmodelElementRow) (types.I
 
 	firstSDK, err := jsonization.ReferenceFromJsonable(firstJsonable)
 	if err != nil {
+		_, _ = fmt.Printf("[DEBUG] buildAnnotatedRelationshipElement First: JSON: %v, Error: %v\n", firstJsonable, err)
 		return nil, fmt.Errorf("error converting first jsonable to Reference: %w", err)
 	}
 	secondSDK, err := jsonization.ReferenceFromJsonable(secondJsonable)
 	if err != nil {
+		_, _ = fmt.Printf("[DEBUG] buildAnnotatedRelationshipElement Second: JSON: %v, Error: %v\n", secondJsonable, err)
 		return nil, fmt.Errorf("error converting second jsonable to Reference: %w", err)
 	}
 
@@ -666,8 +684,11 @@ func buildMultiLanguageProperty(smeRow model.SubmodelElementRow) (types.ISubmode
 		}
 		var textTypes []types.ILangStringTextType
 		for _, val := range valueJsonable {
+			// Remove internal database 'id' field before SDK parsing
+			delete(val, "id")
 			valueSDK, err := jsonization.LangStringTextTypeFromJsonable(val)
 			if err != nil {
+				_, _ = fmt.Printf("[DEBUG] buildMultiLanguageProperty Value: JSON: %v, Error: %v\n", val, err)
 				return nil, err
 			}
 			textTypes = append(textTypes, valueSDK)
@@ -684,6 +705,7 @@ func buildMultiLanguageProperty(smeRow model.SubmodelElementRow) (types.ISubmode
 		}
 		valueIDSDK, err := jsonization.ReferenceFromJsonable(valueIDJsonable)
 		if err != nil {
+			_, _ = fmt.Printf("[DEBUG] buildMultiLanguageProperty ValueID: JSON: %v, Error: %v\n", valueIDJsonable, err)
 			return nil, fmt.Errorf("error converting valueID jsonable to Reference: %w", err)
 		}
 		mlp.SetValueID(valueIDSDK)
@@ -806,6 +828,7 @@ func buildReferenceElement(smeRow model.SubmodelElementRow) (types.ISubmodelElem
 		}
 		refSDK, err = jsonization.ReferenceFromJsonable(refJsonable)
 		if err != nil {
+			_, _ = fmt.Printf("[DEBUG] buildReferenceElement: JSON: %v, Error: %v\n", refJsonable, err)
 			return nil, fmt.Errorf("error converting reference jsonable to Reference: %w", err)
 		}
 	}
@@ -847,10 +870,12 @@ func buildRelationshipElement(smeRow model.SubmodelElementRow) (types.ISubmodelE
 
 	firstSDK, err := jsonization.ReferenceFromJsonable(firstJsonable)
 	if err != nil {
+		_, _ = fmt.Printf("[DEBUG] buildRelationshipElement First: JSON: %v, Error: %v\n", firstJsonable, err)
 		return nil, fmt.Errorf("error converting first jsonable to Reference: %w", err)
 	}
 	secondSDK, err := jsonization.ReferenceFromJsonable(secondJsonable)
 	if err != nil {
+		_, _ = fmt.Printf("[DEBUG] buildRelationshipElement Second: JSON: %v, Error: %v\n", secondJsonable, err)
 		return nil, fmt.Errorf("error converting second jsonable to Reference: %w", err)
 	}
 

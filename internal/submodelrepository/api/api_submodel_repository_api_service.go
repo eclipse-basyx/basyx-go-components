@@ -126,11 +126,13 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelByID(
 		if common.IsErrNotFound(err) {
 			return gen.Response(404, nil), err
 		}
-		return gen.Response(500, nil), err
+		_, _ = fmt.Printf("[DEBUG] GetSubmodelByID: Error getting submodel '%s': %v\n", string(decodedSubmodelIdentifier), err)
+		return gen.Response(500, err.Error()), err
 	}
 	jsonSubmodel, err := jsonization.ToJsonable(&sm)
 	if err != nil {
-		return gen.Response(500, nil), err
+		_, _ = fmt.Printf("[DEBUG] GetSubmodelByID: Error converting submodel '%s' to JSON: %v\n", string(decodedSubmodelIdentifier), err)
+		return gen.Response(500, err.Error()), err
 	}
 	return gen.Response(200, jsonSubmodel), nil
 }
