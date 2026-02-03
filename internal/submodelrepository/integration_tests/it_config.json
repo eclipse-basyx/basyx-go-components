@@ -163,7 +163,7 @@
         "expectedStatus": 200
     },
     {
-        "context": "25 - GET Get Submodel by Id",
+        "context": "GET Get Submodel by Id",
         "method": "GET",
         "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw",
         "shouldMatch": "expected/expectedGetSubmodelById.json",
