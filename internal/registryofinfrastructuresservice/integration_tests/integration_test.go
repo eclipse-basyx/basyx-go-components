@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/testenv"
 	_ "github.com/lib/pq"
 
 	"github.com/stretchr/testify/assert"
@@ -297,9 +298,15 @@ func TestIntegration(t *testing.T) {
 
 // TestMain handles setup and teardown
 func TestMain(m *testing.M) {
+	executable, _, err := testenv.FindCompose()
+	if err != nil {
+		_, _ = fmt.Println("compose engine not found:", err)
+		os.Exit(m.Run())
+	}
+
 	// Setup: Start Docker Compose
 	_, _ = fmt.Println("Starting Docker Compose...")
-	cmd := exec.Command("podman", "compose", "-f", "docker_compose/docker-compose.yml", "up", "-d", "--build")
+	cmd := exec.Command(executable, "compose", "-f", "docker_compose/docker-compose.yml", "up", "-d", "--build")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
@@ -316,7 +323,7 @@ func TestMain(m *testing.M) {
 
 	// Teardown: Stop Docker Compose
 	_, _ = fmt.Println("Stopping Docker Compose...")
-	cmd = exec.Command("podman", "compose", "-f", "docker_compose/docker-compose.yml", "down")
+	cmd = exec.Command(executable, "compose", "-f", "docker_compose/docker-compose.yml", "down")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
