@@ -17,6 +17,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/FriedJannik/aas-go-sdk/jsonization"
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/FriedJannik/aas-go-sdk/verification"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
@@ -209,7 +210,7 @@ func (c *AssetAdministrationShellBasicDiscoveryAPIAPIController) SearchAllAssetA
 	if err := dec.Decode(&assetLinksParam); err != nil {
 		log.Printf("🧭 [%s] Error in SearchAllAssetAdministrationShellIdsByAssetLink: decode request body failed: %v", componentName, err)
 		result := common.NewErrorResponse(
-			common.NewErrBadRequest("Incorrect RequestBody"),
+			common.NewErrBadRequest("Incorrect RequestBody - 01"),
 			http.StatusBadRequest,
 			componentName,
 			"SearchAllAssetAdministrationShellIdsByAssetLink",
@@ -292,13 +293,13 @@ func (c *AssetAdministrationShellBasicDiscoveryAPIAPIController) PostAllAssetLin
 		return
 	}
 
-	var specificAssetIdParam []types.ISpecificAssetID
+	var specificAssetIdParamAbs []map[string]interface{}
 	d := json.NewDecoder(r.Body)
-	d.DisallowUnknownFields()
-	if err := d.Decode(&specificAssetIdParam); err != nil {
+	if err := d.Decode(&specificAssetIdParamAbs); err != nil {
+		log.Printf("%+v", specificAssetIdParamAbs)
 		log.Printf("🧭 [%s] Error in PostAllAssetLinksById: decode request body failed: %v", componentName, err)
 		result := common.NewErrorResponse(
-			common.NewErrBadRequest("Incorrect RequestBody"),
+			common.NewErrBadRequest("Incorrect RequestBody - 02"),
 			http.StatusBadRequest,
 			componentName,
 			"PostAllAssetLinksById",
@@ -308,7 +309,26 @@ func (c *AssetAdministrationShellBasicDiscoveryAPIAPIController) PostAllAssetLin
 		return
 	}
 
-	for _, el := range specificAssetIdParam {
+	var interfaceSpecificAssetIds []types.ISpecificAssetID
+	for _, item := range specificAssetIdParamAbs {
+		saID, err := jsonization.SpecificAssetIDFromJsonable(item)
+		if err != nil {
+			log.Printf("🧭 [%s] Error in PostAllAssetLinksById: failed to parse specific asset id: %v", componentName, err)
+			result := common.NewErrorResponse(
+				common.NewErrBadRequest("Invalid specific asset id element"),
+				http.StatusBadRequest,
+				componentName,
+				"PostAllAssetLinksById",
+				"specificAssetId",
+			)
+			EncodeJSONResponse(result.Body, &result.Code, w)
+			return
+		}
+		interfaceSpecificAssetIds = append(interfaceSpecificAssetIds, saID)
+	}
+
+	for _, el := range interfaceSpecificAssetIds {
+		hasError := false
 		verification.Verify(el, func(err *verification.VerificationError) bool {
 			log.Printf("🧭 [%s] Error in PostAllAssetLinksById: invalid specific asset id element: %+v err=%v", componentName, el, err)
 			result := common.NewErrorResponse(
@@ -319,11 +339,15 @@ func (c *AssetAdministrationShellBasicDiscoveryAPIAPIController) PostAllAssetLin
 				"specificAssetId",
 			)
 			EncodeJSONResponse(result.Body, &result.Code, w)
+			hasError = true
 			return true
 		})
+		if hasError {
+			return
+		}
 	}
 
-	result, err := c.service.PostAllAssetLinksByID(r.Context(), aasIdentifierParam, specificAssetIdParam)
+	result, err := c.service.PostAllAssetLinksByID(r.Context(), aasIdentifierParam, interfaceSpecificAssetIds)
 	// If an error occurred, encode the error with the status code
 	if err != nil {
 		c.errorHandler(w, r, err, &result)
