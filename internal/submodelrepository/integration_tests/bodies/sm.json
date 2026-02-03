@@ -178,7 +178,6 @@
                         }
                     ],
                     "modelType": "SubmodelElementList",
-                    "orderRelevant": false,
                     "semanticId": {
                         "type": "ExternalReference",
                         "keys": [

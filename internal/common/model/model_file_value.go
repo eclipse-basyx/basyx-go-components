@@ -34,7 +34,11 @@
 //nolint:all
 package model
 
-import "encoding/json"
+import (
+	"encoding/json"
+
+	"github.com/FriedJannik/aas-go-sdk/types"
+)
 
 type FileValue struct {
 	ContentType string `json:"contentType"`
@@ -54,8 +58,8 @@ func (f FileValue) MarshalJSON() ([]byte, error) {
 }
 
 // GetModelType returns the model type name for File
-func (f FileValue) GetModelType() string {
-	return "File"
+func (f FileValue) GetModelType() types.ModelType {
+	return types.ModelTypeFile
 }
 
 // AssertFileValueRequired checks if the required fields are not zero-ed

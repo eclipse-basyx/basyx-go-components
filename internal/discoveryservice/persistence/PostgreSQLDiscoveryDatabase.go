@@ -38,9 +38,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
-	// nolint:revive
-	_ "github.com/doug-martin/goqu/v9/dialect/postgres"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/descriptors"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
@@ -112,7 +111,7 @@ func NewPostgreSQLDiscoveryBackend(
 // The method operates within a transaction to ensure consistency, though it performs
 // read-only operations. If the AAS identifier is not found in the database, an ErrNotFound
 // error is returned.
-func (p *PostgreSQLDiscoveryDatabase) GetAllAssetLinks(ctx context.Context, aasID string) ([]model.SpecificAssetID, error) {
+func (p *PostgreSQLDiscoveryDatabase) GetAllAssetLinks(ctx context.Context, aasID string) ([]types.ISpecificAssetID, error) {
 	links, err := descriptors.ReadSpecificAssetIDsByAASIdentifier(ctx, p.db, aasID)
 	if err != nil {
 		switch {
@@ -178,7 +177,7 @@ func (p *PostgreSQLDiscoveryDatabase) DeleteAllAssetLinks(ctx context.Context, a
 //  3. Bulk insert the new asset links using PostgreSQL's COPY FROM feature for efficiency
 //
 // The use of COPY FROM makes this method highly efficient even for large numbers of asset links.
-func (p *PostgreSQLDiscoveryDatabase) CreateAllAssetLinks(ctx context.Context, aasID string, specificAssetIDs []model.SpecificAssetID) error {
+func (p *PostgreSQLDiscoveryDatabase) CreateAllAssetLinks(ctx context.Context, aasID string, specificAssetIDs []types.ISpecificAssetID) error {
 	if err := descriptors.ReplaceSpecificAssetIDsByAASIdentifier(ctx, p.db, aasID, specificAssetIDs); err != nil {
 		_, _ = fmt.Println(err)
 		return common.NewInternalServerError("Failed to store specific asset IDs. See console for information.")

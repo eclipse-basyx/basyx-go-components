@@ -66,19 +66,44 @@ var DefaultConfig = struct {
 // visual branding and confirm the service is starting.
 func PrintSplash() {
 	log.Printf(`
-	██████╗  █████╗ ███████╗██╗   ██╗██╗  ██╗     ██████╗  ██████╗ 
-	██╔══██╗██╔══██╗██╔════╝╚██╗ ██╔╝╚██╗██╔╝    ██╔════╝ ██╔═══██╗
-	██████╔╝███████║███████╗ ╚████╔╝  ╚███╔╝     ██║  ███╗██║   ██║
-	██╔══██╗██╔══██║╚════██║  ╚██╔╝   ██╔██╗     ██║   ██║██║   ██║
-	██████╔╝██║  ██║███████║   ██║   ██╔╝ ██╗    ╚██████╔╝╚██████╔╝
-	╚═════╝ ╚═╝  ╚═╝╚══════╝   ╚═╝   ╚═╝  ╚═╝     ╚═════╝  ╚═════╝ 
-																
-	█████╗ ██████╗ ██╗                                            
-	██╔══██╗██╔══██╗██║                                            
-	███████║██████╔╝██║                                            
-	██╔══██║██╔═══╝ ██║                                            
-	██║  ██║██║     ██║                                            
-	╚═╝  ╚═╝╚═╝     ╚═╝                                            
+	                                                                                
+                                   ###########                                  
+                               ###################                              
+                           (##########################                          
+                        ##################################                      
+                    #########################################.                  
+                #################################################               
+            (########################################################           
+          #############################################################         
+          #############################################################         
+            #########################################################           
+                #################################################               
+                    ##########################################                  
+                  /((/((##################################/((/(                 
+              /(//((/(((((/###########################(((((((((((((             
+           (//((/((/(((((/((/((###################/((/(((((((/(((/((((          
+          ///((/(((((/((/((//(/((((###########(((((((((((((((((((((((((         
+           /((/((/((/((/((/((/(((((((((((((((((((((/((((((((/((((((/((          
+              ((/(((((//(/(((((((((((((((((((((((((((((((((((((((((             
+                  /((//((((((((((((((((((((((((((((((((((((((((.                
+                    (((((((((((((((((((((((((((((((((((((((((                   
+                (((((((((((((((((((((((((((((((((((((((((((((((((               
+            /((((((((((((((((((((((((((((((((((((((((((((((((((((((((           
+          /((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((         
+          (((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((         
+            (((((((((((((((((((((((((((((((((((((((((((((((((((((((((           
+                (((((((((((((((((((((((((((((((((((((((((((((((((.              
+                    ((((((((((((((((((((((((((((((((((((((((((                  
+                       (((((((((((((((((((((((((((((((((((                      
+                           (((((((((((((((((((((((((((                          
+                               (((((((((((((((((((                              
+                                   (((((((((((                                  
+		██████╗  █████╗ ███████╗██╗   ██╗██╗  ██╗     ██████╗  ██████╗ 
+		██╔══██╗██╔══██╗██╔════╝╚██╗ ██╔╝╚██╗██╔╝    ██╔════╝ ██╔═══██╗
+		██████╔╝███████║███████╗ ╚████╔╝  ╚███╔╝     ██║  ███╗██║   ██║
+		██╔══██╗██╔══██║╚════██║  ╚██╔╝   ██╔██╗     ██║   ██║██║   ██║
+		██████╔╝██║  ██║███████║   ██║   ██╔╝ ██╗    ╚██████╔╝╚██████╔╝
+		╚═════╝ ╚═╝  ╚═╝╚══════╝   ╚═╝   ╚═╝  ╚═╝     ╚═════╝  ╚═════╝                                      
 	`)
 }
 
@@ -111,10 +136,11 @@ type SwaggerConfig struct {
 
 // ServerConfig contains HTTP server configuration parameters.
 type ServerConfig struct {
-	Host         string `mapstructure:"host" yaml:"host"`                 // HTTP server host (default: 0.0.0.0)
-	Port         int    `mapstructure:"port" yaml:"port"`                 // HTTP server port (default: 5004)
-	ContextPath  string `mapstructure:"contextPath" yaml:"contextPath"`   // Base path for all endpoints
-	CacheEnabled bool   `mapstructure:"cacheEnabled" yaml:"cacheEnabled"` // Enable/disable response caching
+	Host               string `mapstructure:"host" yaml:"host"`                             // HTTP server host (default: 0.0.0.0)
+	Port               int    `mapstructure:"port" yaml:"port"`                             // HTTP server port (default: 5004)
+	ContextPath        string `mapstructure:"contextPath" yaml:"contextPath"`               // Base path for all endpoints
+	CacheEnabled       bool   `mapstructure:"cacheEnabled" yaml:"cacheEnabled"`             // Enable/disable response caching
+	StrictVerification bool   `mapstructure:"strictVerification" yaml:"strictVerification"` // Enable/disable strict AAS metamodel verification (default: true)
 }
 
 // PostgresConfig contains PostgreSQL database connection parameters.
@@ -212,10 +238,6 @@ func LoadConfig(configPath string) (*Config, error) {
 		return nil, fmt.Errorf("unmarshal config: %w", err)
 	}
 
-	// Force discovery integration off for user configuration. It can only be
-	// enabled programmatically by specific services (e.g., Digital Twin Registry).
-	cfg.General.DiscoveryIntegration = false
-
 	log.Println("✅ Configuration loaded successfully")
 	PrintConfiguration(cfg)
 	return cfg, nil
@@ -258,10 +280,6 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("cors.allowedMethods", []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"})
 	v.SetDefault("cors.allowedHeaders", []string{})
 	v.SetDefault("cors.allowCredentials", false)
-
-	v.SetDefault("general.enableImplicitCasts", true)
-	v.SetDefault("general.enableDescriptorDebug", false)
-	v.SetDefault("general.discoveryIntegration", false)
 
 	v.SetDefault("oidc.trustlistPath", "config/trustlist.json")
 
@@ -347,19 +365,12 @@ func PrintConfiguration(cfg *Config) {
 
 	lines = append(lines, divider)
 
-	// General
-	lines = append(lines, "🔹 General:")
-	add("Enable Implicit Casts", cfg.General.EnableImplicitCasts, DefaultConfig.GeneralImplicitCasts)
-	add("Enable Descriptor Debug", cfg.General.EnableDescriptorDebug, DefaultConfig.GeneralDescriptorDebug)
-	add("Discovery Integration", cfg.General.DiscoveryIntegration, DefaultConfig.GeneralDiscoveryIntegration)
-
-	lines = append(lines, divider)
-
 	// ABAC
 	lines = append(lines, "🔹 ABAC:")
 	add("Enabled", cfg.ABAC.Enabled, DefaultConfig.ABACEnabled)
 	if cfg.ABAC.Enabled {
 		add("Model Path", cfg.ABAC.ModelPath, DefaultConfig.ABACModelPath)
+
 		lines = append(lines, "🔹 OIDC:")
 		add("Trustlist Path", cfg.OIDC.TrustlistPath, DefaultConfig.OIDCTrustlistPath)
 	}

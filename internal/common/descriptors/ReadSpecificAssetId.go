@@ -32,8 +32,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
-	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	"github.com/lib/pq"
@@ -87,7 +87,7 @@ func ReadSpecificAssetIDsByDescriptorID(
 	ctx context.Context,
 	db DBQueryer,
 	descriptorID int64,
-) ([]model.SpecificAssetID, error) {
+) ([]types.ISpecificAssetID, error) {
 	v, err := ReadSpecificAssetIDsByDescriptorIDs(ctx, db, []int64{descriptorID})
 	return v[descriptorID], err
 }
@@ -112,13 +112,13 @@ func ReadSpecificAssetIDsByDescriptorIDs(
 	ctx context.Context,
 	db DBQueryer,
 	descriptorIDs []int64,
-) (map[int64][]model.SpecificAssetID, error) {
+) (map[int64][]types.ISpecificAssetID, error) {
 	if debugEnabled(ctx) {
 		defer func(start time.Time) {
 			_, _ = fmt.Printf("ReadSpecificAssetIDsByDescriptorIDs took %s\n", time.Since(start))
 		}(time.Now())
 	}
-	out := make(map[int64][]model.SpecificAssetID, len(descriptorIDs))
+	out := make(map[int64][]types.ISpecificAssetID, len(descriptorIDs))
 	if len(descriptorIDs) == 0 {
 		return out, nil
 	}
@@ -232,7 +232,7 @@ func ReadSpecificAssetIDsByDescriptorIDs(
 	}
 
 	allRefIDs := append(append([]int64{}, uniqSem...), uniqExt...)
-	refByID := make(map[int64]*model.Reference)
+	refByID := make(map[int64]types.IReference)
 	if len(allRefIDs) > 0 {
 		refByID, err = GetReferencesByIDsBatch(db, allRefIDs)
 		if err != nil {
@@ -242,22 +242,33 @@ func ReadSpecificAssetIDsByDescriptorIDs(
 
 	for descID, rowsForDesc := range perDesc {
 		for _, r := range rowsForDesc {
-			var semRef *model.Reference
+			var semRef types.IReference
 			if r.semanticRefID.Valid {
 				semRef = refByID[r.semanticRefID.Int64]
 			}
-			var extRef *model.Reference
+			var extRef types.IReference
 			if r.externalSubjectRefID.Valid {
 				extRef = refByID[r.externalSubjectRefID.Int64]
 			}
 
-			out[descID] = append(out[descID], model.SpecificAssetID{
-				Name:                    nvl(r.name),
-				Value:                   nvl(r.value),
-				SemanticID:              semRef,
-				ExternalSubjectID:       extRef,
-				SupplementalSemanticIds: suppBySpecific[r.specificID],
-			})
+			// out[descID] = append(out[descID], model.SpecificAssetID{
+			// 	Name:                    nvl(r.name),
+			// 	Value:                   nvl(r.value),
+			// 	SemanticID:              semRef,
+			// 	ExternalSubjectID:       extRef,
+			// 	SupplementalSemanticIds: suppBySpecific[r.specificID],
+			// })
+			said := types.NewSpecificAssetID(nvl(r.name), nvl(r.value))
+			if semRef != nil {
+				said.SetSemanticID(semRef)
+			}
+			if extRef != nil {
+				said.SetExternalSubjectID(extRef)
+			}
+			if suppRefs, ok := suppBySpecific[r.specificID]; ok {
+				said.SetSupplementalSemanticIDs(suppRefs)
+			}
+			out[descID] = append(out[descID], said)
 		}
 	}
 
@@ -268,8 +279,8 @@ func readSpecificAssetIDSupplementalSemanticBySpecificIDs(
 	ctx context.Context,
 	db DBQueryer,
 	specificAssetIDs []int64,
-) (map[int64][]model.Reference, error) {
-	out := make(map[int64][]model.Reference, len(specificAssetIDs))
+) (map[int64][]types.IReference, error) {
+	out := make(map[int64][]types.IReference, len(specificAssetIDs))
 	if len(specificAssetIDs) == 0 {
 		return out, nil
 	}

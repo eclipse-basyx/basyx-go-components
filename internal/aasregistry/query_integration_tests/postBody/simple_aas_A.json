@@ -34,29 +34,29 @@
         ]
       },
       "semanticId": {
-        "type": "ModelReference",
+        "type": "ExternalReference",
         "keys": [
           {
-            "type": "AnnotatedRelationshipElement",
+            "type": "GlobalReference",
             "value": "ddsfkjn"
           }
         ]
       },
       "supplementalSemanticIds": [
         {
-          "type": "ModelReference",
+          "type": "ExternalReference",
           "keys": [
             {
-              "type": "AnnotatedRelationshipElement",
+              "type": "GlobalReference",
               "value": "sfgjgfd"
             }
           ]
         },
         {
-          "type": "ModelReference",
+          "type": "ExternalReference",
           "keys": [
             {
-              "type": "AnnotatedRelationshipElement",
+              "type": "GlobalReference",
               "value": "aoieurhgf"
             }
           ]

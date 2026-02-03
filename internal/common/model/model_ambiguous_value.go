@@ -27,7 +27,11 @@
 
 package model
 
-import "encoding/json"
+import (
+	"encoding/json"
+
+	"github.com/FriedJannik/aas-go-sdk/types"
+)
 
 // AmbiguousSubmodelElementValue represents a submodel element value that can take multiple forms.
 // It is used to handle cases where the exact type of the submodel element value is not known
@@ -91,6 +95,6 @@ func (s AmbiguousSubmodelElementValue) ConvertToMultiLanguagePropertyValue() (Mu
 }
 
 // GetModelType returns an empty string as AmbiguousSubmodelElementValue does not have a specific model type
-func (s AmbiguousSubmodelElementValue) GetModelType() string {
-	return ""
+func (s AmbiguousSubmodelElementValue) GetModelType() types.ModelType {
+	return 100
 }

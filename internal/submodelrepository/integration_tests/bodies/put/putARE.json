@@ -21,16 +21,10 @@
     },
     "annotations": [
         {
-            "modelType": "SubmodelElementCollection",
-            "idShort": "AnnotationCollection",
-            "value": [
-                {
-                    "modelType": "Property",
-                    "idShort": "AnnotationProperty1",
-                    "valueType": "xs:string",
-                    "value": "AnnotationValue1-Updated"
-                }
-            ]
+            "modelType": "Property",
+            "idShort": "AnnotationProperty1",
+            "valueType": "xs:string",
+            "value": "AnnotationValue1-Updated"
         }
     ]
 }

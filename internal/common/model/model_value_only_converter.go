@@ -12,15 +12,19 @@ package model
 import (
 	"fmt"
 	"sort"
+
+	"github.com/FriedJannik/aas-go-sdk/jsonization"
+	"github.com/FriedJannik/aas-go-sdk/stringification"
+	"github.com/FriedJannik/aas-go-sdk/types"
 )
 
 // ToValueOnly converts a Submodel to its Value-Only representation
-func (s *Submodel) ToValueOnly() (SubmodelValue, error) {
+func SubmodelToValueOnly(s types.ISubmodel) (SubmodelValue, error) {
 	result := make(SubmodelValue)
 
-	for _, element := range s.SubmodelElements {
-		idShort := element.GetIdShort()
-		if idShort == "" {
+	for _, element := range s.SubmodelElements() {
+		idShort := element.IDShort()
+		if idShort == nil || *idShort == "" {
 			continue // Skip elements without idShort
 		}
 
@@ -30,7 +34,7 @@ func (s *Submodel) ToValueOnly() (SubmodelValue, error) {
 		}
 
 		if valueOnly != nil {
-			result[idShort] = valueOnly
+			result[*idShort] = valueOnly
 		}
 	}
 
@@ -38,31 +42,31 @@ func (s *Submodel) ToValueOnly() (SubmodelValue, error) {
 }
 
 // SubmodelElementToValueOnly converts any SubmodelElement to its Value-Only representation
-func SubmodelElementToValueOnly(element SubmodelElement) (SubmodelElementValue, error) {
+func SubmodelElementToValueOnly(element types.ISubmodelElement) (SubmodelElementValue, error) {
 	switch e := element.(type) {
-	case *Property:
+	case *types.Property:
 		return PropertyToValueOnly(e), nil
-	case *MultiLanguageProperty:
+	case *types.MultiLanguageProperty:
 		return MultiLanguagePropertyToValueOnly(e), nil
-	case *Range:
+	case *types.Range:
 		return RangeToValueOnly(e), nil
-	case *File:
+	case *types.File:
 		return FileToValueOnly(e), nil
-	case *Blob:
+	case *types.Blob:
 		return BlobToValueOnly(e), nil
-	case *ReferenceElement:
+	case *types.ReferenceElement:
 		return ReferenceElementToValueOnly(e), nil
-	case *RelationshipElement:
+	case *types.RelationshipElement:
 		return RelationshipElementToValueOnly(e), nil
-	case *AnnotatedRelationshipElement:
+	case *types.AnnotatedRelationshipElement:
 		return AnnotatedRelationshipElementToValueOnly(e), nil
-	case *Entity:
+	case *types.Entity:
 		return EntityToValueOnly(e)
-	case *BasicEventElement:
+	case *types.BasicEventElement:
 		return BasicEventElementToValueOnly(e), nil
-	case *SubmodelElementCollection:
+	case *types.SubmodelElementCollection:
 		return SubmodelElementCollectionToValueOnly(e)
-	case *SubmodelElementList:
+	case *types.SubmodelElementList:
 		return SubmodelElementListToValueOnly(e)
 	default:
 		// Capability and Operation are not serialized in Value-Only format
@@ -71,107 +75,143 @@ func SubmodelElementToValueOnly(element SubmodelElement) (SubmodelElementValue, 
 }
 
 // PropertyToValueOnly converts a Property to PropertyValue
-func PropertyToValueOnly(p *Property) PropertyValue {
-	return PropertyValue{Value: p.Value}
+func PropertyToValueOnly(p *types.Property) PropertyValue {
+	if p.Value() == nil {
+		return PropertyValue{}
+	}
+	return PropertyValue{Value: *p.Value()}
 }
 
 // MultiLanguagePropertyToValueOnly converts a MultiLanguageProperty to MultiLanguagePropertyValue
 // Preserves the original order of language strings from the input
-func MultiLanguagePropertyToValueOnly(mlp *MultiLanguageProperty) MultiLanguagePropertyValue {
+func MultiLanguagePropertyToValueOnly(mlp *types.MultiLanguageProperty) MultiLanguagePropertyValue {
 	// Create a copy to avoid mutating input order
-	vals := make([]LangStringTextType, len(mlp.Value))
-	copy(vals, mlp.Value)
+	vals := make([]types.ILangStringTextType, len(mlp.Value()))
+	copy(vals, mlp.Value())
 
 	// Ensure deterministic order by language code, then text as tie-breaker
 	sort.SliceStable(vals, func(i, j int) bool {
-		if vals[i].Language == vals[j].Language {
-			return vals[i].Text < vals[j].Text
+		if vals[i].Language() == vals[j].Language() {
+			return vals[i].Text() < vals[j].Text()
 		}
-		return vals[i].Language < vals[j].Language
+		return vals[i].Language() < vals[j].Language()
 	})
 
 	result := make(MultiLanguagePropertyValue, 0, len(vals))
 	for i := 0; i < len(vals); i++ {
 		langString := vals[i]
 		langText := make(map[string]string)
-		langText[langString.Language] = langString.Text
+		langText[langString.Language()] = langString.Text()
 		result = append(result, langText)
 	}
 	return result
 }
 
 // RangeToValueOnly converts a Range to RangeValue
-func RangeToValueOnly(r *Range) RangeValue {
+func RangeToValueOnly(r *types.Range) RangeValue {
 	return RangeValue{
-		Min: r.Min,
-		Max: r.Max,
+		Min: r.Min(),
+		Max: r.Max(),
 	}
 }
 
 // FileToValueOnly converts a File to FileValue
-func FileToValueOnly(f *File) FileValue {
-	return FileValue{
-		ContentType: f.ContentType,
-		Value:       f.Value,
+func FileToValueOnly(f *types.File) FileValue {
+	fileValue := FileValue{}
+	if f.ContentType() != nil {
+		fileValue.ContentType = *f.ContentType()
+	} else {
+		fileValue.ContentType = ""
 	}
+	if f.Value() != nil {
+		fileValue.Value = *f.Value()
+	} else {
+		fileValue.Value = ""
+	}
+	return fileValue
 }
 
 // BlobToValueOnly converts a Blob to BlobValue
-func BlobToValueOnly(b *Blob) BlobValue {
-	return BlobValue{
-		ContentType: b.ContentType,
-		Value:       b.Value,
+func BlobToValueOnly(b *types.Blob) BlobValue {
+	blobValue := BlobValue{}
+	if b.ContentType() != nil {
+		blobValue.ContentType = *b.ContentType()
+	} else {
+		blobValue.ContentType = ""
 	}
+	if b.Value() != nil {
+		blobValue.Value = b.Value()
+	} else {
+		blobValue.Value = nil
+	}
+	return blobValue
 }
 
 // ReferenceElementToValueOnly converts a ReferenceElement to ReferenceElementValue
-func ReferenceElementToValueOnly(re *ReferenceElement) ReferenceElementValue {
-	if re.Value == nil {
+func ReferenceElementToValueOnly(re *types.ReferenceElement) ReferenceElementValue {
+	if re.Value() == nil {
 		return ReferenceElementValue{}
 	}
-	return ReferenceElementValue{
-		Type: re.Value.Type,
-		Keys: re.Value.Keys,
+
+	refElemVal := ReferenceElementValue{}
+
+	refType, ok := stringification.ReferenceTypesToString(re.Value().Type())
+	if ok {
+		refElemVal.Type = refType
 	}
+
+	var keys []map[string]any
+	for _, key := range re.Value().Keys() {
+		key, err := jsonization.ToJsonable(key)
+		if err == nil {
+			keys = append(keys, key)
+		}
+		refElemVal.Keys = keys
+	}
+	return refElemVal
 }
 
 // RelationshipElementToValueOnly converts a RelationshipElement to RelationshipElementValue
-func RelationshipElementToValueOnly(re *RelationshipElement) RelationshipElementValue {
+func RelationshipElementToValueOnly(re *types.RelationshipElement) RelationshipElementValue {
 	result := RelationshipElementValue{}
 
-	if re.First != nil {
-		result.First = re.First
+	firstJsonable, err := jsonization.ToJsonable(re.First())
+	if err == nil {
+		result.First = firstJsonable
 	}
 
-	if re.Second != nil {
-		result.Second = re.Second
+	secondJsonable, err := jsonization.ToJsonable(re.Second())
+	if err == nil {
+		result.Second = secondJsonable
 	}
 
 	return result
 }
 
 // AnnotatedRelationshipElementToValueOnly converts an AnnotatedRelationshipElement to AnnotatedRelationshipElementValue
-func AnnotatedRelationshipElementToValueOnly(are *AnnotatedRelationshipElement) AnnotatedRelationshipElementValue {
+func AnnotatedRelationshipElementToValueOnly(are *types.AnnotatedRelationshipElement) AnnotatedRelationshipElementValue {
 	result := AnnotatedRelationshipElementValue{}
 
-	if are.First != nil {
-		result.First = *are.First
+	firstJsonable, err := jsonization.ToJsonable(are.First())
+	if err == nil {
+		result.First = firstJsonable
 	}
 
-	if are.Second != nil {
-		result.Second = *are.Second
+	secondJsonable, err := jsonization.ToJsonable(are.Second())
+	if err == nil {
+		result.Second = secondJsonable
 	}
 
 	// Convert annotations
-	if len(are.Annotations) > 0 {
+	if len(are.Annotations()) > 0 {
 		result.Annotations = make(map[string]SubmodelElementValue)
-		for _, annotation := range are.Annotations {
-			idShort := annotation.GetIdShort()
-			if idShort == "" {
+		for _, annotation := range are.Annotations() {
+			idShort := annotation.IDShort()
+			if idShort == nil || *idShort == "" {
 				continue
 			}
 			if annotationValue, err := SubmodelElementToValueOnly(annotation); err == nil && annotationValue != nil {
-				result.Annotations[idShort] = annotationValue
+				result.Annotations[*idShort] = annotationValue
 			}
 		}
 	}
@@ -180,33 +220,41 @@ func AnnotatedRelationshipElementToValueOnly(are *AnnotatedRelationshipElement) 
 }
 
 // EntityToValueOnly converts an Entity to EntityValue
-func EntityToValueOnly(e *Entity) (EntityValue, error) {
-	result := EntityValue{
-		EntityType:    e.EntityType,
-		GlobalAssetID: e.GlobalAssetID,
+func EntityToValueOnly(e *types.Entity) (EntityValue, error) {
+	result := EntityValue{}
+	if e.EntityType() != nil {
+		entityType, ok := stringification.EntityTypeToString(*e.EntityType())
+		if !ok {
+			return EntityValue{}, fmt.Errorf("unknown entity type: %v", e.EntityType())
+		}
+		result.EntityType = entityType
+	}
+
+	if e.GlobalAssetID() != nil {
+		result.GlobalAssetID = *e.GlobalAssetID()
 	}
 
 	// Convert SpecificAssetIds
-	if len(e.SpecificAssetIds) > 0 {
-		result.SpecificAssetIds = make([]map[string]interface{}, 0, len(e.SpecificAssetIds))
-		for _, assetID := range e.SpecificAssetIds {
-			assetIDMap := map[string]interface{}{
-				"name":  assetID.Name,
-				"value": assetID.Value,
+	if len(e.SpecificAssetIDs()) > 0 {
+		result.SpecificAssetIds = make([]map[string]any, 0, len(e.SpecificAssetIDs()))
+		for _, assetID := range e.SpecificAssetIDs() {
+			assetIDMap := map[string]any{
+				"name":  assetID.Name(),
+				"value": assetID.Value(),
 			}
-			if assetID.ExternalSubjectID != nil {
-				assetIDMap["externalSubjectId"] = assetID.ExternalSubjectID
+			if assetID.ExternalSubjectID() != nil {
+				assetIDMap["externalSubjectId"] = assetID.ExternalSubjectID()
 			}
 			result.SpecificAssetIds = append(result.SpecificAssetIds, assetIDMap)
 		}
 	}
 
 	// Convert Statements
-	if len(e.Statements) > 0 {
+	if len(e.Statements()) > 0 {
 		statementsMap := make(map[string]SubmodelElementValue)
-		for _, statement := range e.Statements {
-			idShort := statement.GetIdShort()
-			if idShort == "" {
+		for _, statement := range e.Statements() {
+			idShort := statement.IDShort()
+			if idShort == nil || *idShort == "" {
 				continue
 			}
 
@@ -216,7 +264,7 @@ func EntityToValueOnly(e *Entity) (EntityValue, error) {
 			}
 
 			if valueOnly != nil {
-				statementsMap[idShort] = valueOnly
+				statementsMap[*idShort] = valueOnly
 			}
 		}
 		result.Statements = statementsMap
@@ -226,23 +274,26 @@ func EntityToValueOnly(e *Entity) (EntityValue, error) {
 }
 
 // BasicEventElementToValueOnly converts a BasicEventElement to BasicEventElementValue
-func BasicEventElementToValueOnly(bee *BasicEventElement) BasicEventElementValue {
+func BasicEventElementToValueOnly(bee *types.BasicEventElement) BasicEventElementValue {
 	result := BasicEventElementValue{}
 
-	if bee.Observed != nil {
-		result.Observed = *bee.Observed
+	if bee.Observed() != nil {
+		observedJsonable, err := jsonization.ToJsonable(bee.Observed())
+		if err == nil {
+			result.Observed = observedJsonable
+		}
 	}
 
 	return result
 }
 
 // SubmodelElementCollectionToValueOnly converts a SubmodelElementCollection to SubmodelElementCollectionValue
-func SubmodelElementCollectionToValueOnly(sec *SubmodelElementCollection) (SubmodelElementCollectionValue, error) {
+func SubmodelElementCollectionToValueOnly(sec *types.SubmodelElementCollection) (SubmodelElementCollectionValue, error) {
 	result := make(SubmodelElementCollectionValue)
 
-	for _, element := range sec.Value {
-		idShort := element.GetIdShort()
-		if idShort == "" {
+	for _, element := range sec.Value() {
+		idShort := element.IDShort()
+		if idShort == nil || *idShort == "" {
 			continue
 		}
 
@@ -252,7 +303,7 @@ func SubmodelElementCollectionToValueOnly(sec *SubmodelElementCollection) (Submo
 		}
 
 		if valueOnly != nil {
-			result[idShort] = valueOnly
+			result[*idShort] = valueOnly
 		}
 	}
 
@@ -260,10 +311,10 @@ func SubmodelElementCollectionToValueOnly(sec *SubmodelElementCollection) (Submo
 }
 
 // SubmodelElementListToValueOnly converts a SubmodelElementList to SubmodelElementListValue
-func SubmodelElementListToValueOnly(sel *SubmodelElementList) (SubmodelElementListValue, error) {
-	result := make(SubmodelElementListValue, 0, len(sel.Value))
+func SubmodelElementListToValueOnly(sel *types.SubmodelElementList) (SubmodelElementListValue, error) {
+	result := make(SubmodelElementListValue, 0, len(sel.Value()))
 
-	for i, element := range sel.Value {
+	for i, element := range sel.Value() {
 		valueOnly, err := SubmodelElementToValueOnly(element)
 		if err != nil {
 			return nil, fmt.Errorf("failed to convert element at index %d: %w", i, err)

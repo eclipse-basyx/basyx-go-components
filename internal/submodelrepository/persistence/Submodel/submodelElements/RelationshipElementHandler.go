@@ -34,6 +34,8 @@ import (
 	"database/sql"
 	"fmt"
 
+	"github.com/FriedJannik/aas-go-sdk/jsonization"
+	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
@@ -111,8 +113,8 @@ func NewPostgreSQLRelationshipElementHandler(db *sql.DB) (*PostgreSQLRelationshi
 //	    Second:  &gen.Reference{...},
 //	}
 //	id, err := handler.Create(tx, "submodel123", relElem)
-func (p PostgreSQLRelationshipElementHandler) Create(tx *sql.Tx, submodelID string, submodelElement gen.SubmodelElement) (int, error) {
-	relElem, ok := submodelElement.(*gen.RelationshipElement)
+func (p PostgreSQLRelationshipElementHandler) Create(tx *sql.Tx, submodelID string, submodelElement types.ISubmodelElement) (int, error) {
+	relElem, ok := submodelElement.(*types.RelationshipElement)
 	if !ok {
 		return 0, common.NewErrBadRequest("submodelElement is not of type RelationshipElement")
 	}
@@ -156,8 +158,8 @@ func (p PostgreSQLRelationshipElementHandler) Create(tx *sql.Tx, submodelID stri
 // Example:
 //
 //	id, err := handler.CreateNested(tx, "submodel123", parentDbID, "relations.dependsOn", relElem, 0)
-func (p PostgreSQLRelationshipElementHandler) CreateNested(tx *sql.Tx, submodelID string, parentID int, idShortPath string, submodelElement gen.SubmodelElement, pos int, rootSubmodelElementID int) (int, error) {
-	relElem, ok := submodelElement.(*gen.RelationshipElement)
+func (p PostgreSQLRelationshipElementHandler) CreateNested(tx *sql.Tx, submodelID string, parentID int, idShortPath string, submodelElement types.ISubmodelElement, pos int, rootSubmodelElementID int) (int, error) {
+	relElem, ok := submodelElement.(*types.RelationshipElement)
 	if !ok {
 		return 0, common.NewErrBadRequest("submodelElement is not of type RelationshipElement")
 	}
@@ -190,8 +192,8 @@ func (p PostgreSQLRelationshipElementHandler) CreateNested(tx *sql.Tx, submodelI
 //
 // Returns:
 //   - error: An error if the decorated update operation fails
-func (p PostgreSQLRelationshipElementHandler) Update(submodelID string, idShortOrPath string, submodelElement gen.SubmodelElement, tx *sql.Tx, isPut bool) error {
-	relElem, ok := submodelElement.(*gen.RelationshipElement)
+func (p PostgreSQLRelationshipElementHandler) Update(submodelID string, idShortOrPath string, submodelElement types.ISubmodelElement, tx *sql.Tx, isPut bool) error {
+	relElem, ok := submodelElement.(*types.RelationshipElement)
 	if !ok {
 		return common.NewErrBadRequest("submodelElement is not of type RelationshipElement")
 	}
@@ -276,7 +278,8 @@ func (p PostgreSQLRelationshipElementHandler) UpdateValueOnly(submodelID string,
 	// Build update record with only the fields that are set
 	updateRecord := goqu.Record{}
 
-	if !isEmptyReference(relElemVal.First) {
+	// check if first is set (it is map[string]interface{} so we check for nil)
+	if relElemVal.First != nil {
 		firstRefByte, err := json.Marshal(relElemVal.First)
 		if err != nil {
 			return err
@@ -284,7 +287,7 @@ func (p PostgreSQLRelationshipElementHandler) UpdateValueOnly(submodelID string,
 		updateRecord["first"] = string(firstRefByte)
 	}
 
-	if !isEmptyReference(relElemVal.Second) {
+	if relElemVal.Second != nil {
 		secondRefByte, err := json.Marshal(relElemVal.Second)
 		if err != nil {
 			return err
@@ -354,20 +357,28 @@ func (p PostgreSQLRelationshipElementHandler) Delete(idShortOrPath string) error
 //
 // Returns:
 //   - error: An error if reference insertion fails or the final relationship_element insert fails
-func insertRelationshipElement(relElem *gen.RelationshipElement, tx *sql.Tx, id int) error {
+func insertRelationshipElement(relElem *types.RelationshipElement, tx *sql.Tx, id int) error {
 	var firstRef, secondRef string
 	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
-	if !isEmptyReference(relElem.First) {
-		ref, err := json.Marshal(relElem.First)
+	if !isEmptyReference(relElem.First()) {
+		jsonable, err := jsonization.ToJsonable(relElem.First())
+		if err != nil {
+			return common.NewErrBadRequest("SMREPO-INSRELEL-FIRSTJSON Failed to convert first reference to jsonable: " + err.Error())
+		}
+		ref, err := json.Marshal(jsonable)
 		if err != nil {
 			return err
 		}
 		firstRef = string(ref)
 	}
 
-	if !isEmptyReference(relElem.Second) {
-		ref, err := json.Marshal(relElem.Second)
+	if !isEmptyReference(relElem.Second()) {
+		jsonable, err := jsonization.ToJsonable(relElem.Second())
+		if err != nil {
+			return common.NewErrBadRequest("SMREPO-INSRELEL-SECONDJSON Failed to convert second reference to jsonable: " + err.Error())
+		}
+		ref, err := json.Marshal(jsonable)
 		if err != nil {
 			return err
 		}
@@ -411,12 +422,12 @@ func insertRelationshipElement(relElem *gen.RelationshipElement, tx *sql.Tx, id 
 //
 // Note: This function is used for both first and second references in relationship elements,
 // as well as any other reference structures that need full persistence with keys.
-func insertReference(tx *sql.Tx, ref gen.Reference) (int, error) {
+func insertReference(tx *sql.Tx, ref types.IReference) (int, error) {
 	dialect := goqu.Dialect("postgres")
 
 	// Insert reference and get ID
 	insertQuery, insertArgs, err := dialect.Insert("reference").
-		Rows(goqu.Record{"type": ref.Type}).
+		Rows(goqu.Record{"type": ref.Type()}).
 		Returning("id").
 		ToSQL()
 	if err != nil {
@@ -430,13 +441,13 @@ func insertReference(tx *sql.Tx, ref gen.Reference) (int, error) {
 	}
 
 	// Insert keys
-	for i, key := range ref.Keys {
+	for i, key := range ref.Keys() {
 		insertKeyQuery, insertKeyArgs, err := dialect.Insert("reference_key").
 			Rows(goqu.Record{
 				"reference_id": refID,
 				"position":     i,
-				"type":         key.Type,
-				"value":        key.Value,
+				"type":         key.Type(),
+				"value":        key.Value(),
 			}).
 			ToSQL()
 		if err != nil {
@@ -450,16 +461,20 @@ func insertReference(tx *sql.Tx, ref gen.Reference) (int, error) {
 	return refID, nil
 }
 
-func buildUpdateRelationshipElementRecordObject(isPut bool, relElem *gen.RelationshipElement, json jsoniter.API) (goqu.Record, error) {
+func buildUpdateRelationshipElementRecordObject(isPut bool, relElem types.IRelationshipElement, json jsoniter.API) (goqu.Record, error) {
 	updateRecord := goqu.Record{}
 
 	// Handle First reference - optional field
 	// For PUT: always update (even if nil, which clears the field)
 	// For PATCH: only update if provided (not nil)
-	if isPut || relElem.First != nil {
+	if isPut || relElem.First() != nil {
 		var firstRef string
-		if relElem.First != nil && !isEmptyReference(relElem.First) {
-			ref, err := json.Marshal(relElem.First)
+		if relElem.First() != nil && !isEmptyReference(relElem.First()) {
+			jsonable, err := jsonization.ToJsonable(relElem.First())
+			if err != nil {
+				return nil, common.NewErrBadRequest("SMREPO-BURERO-FIRSTJSONABLE Failed to convert first reference to jsonable: " + err.Error())
+			}
+			ref, err := json.Marshal(jsonable)
 			if err != nil {
 				return nil, err
 			}
@@ -471,10 +486,14 @@ func buildUpdateRelationshipElementRecordObject(isPut bool, relElem *gen.Relatio
 	// Handle Second reference - optional field
 	// For PUT: always update (even if nil, which clears the field)
 	// For PATCH: only update if provided (not nil)
-	if isPut || relElem.Second != nil {
+	if isPut || relElem.Second() != nil {
 		var secondRef string
-		if relElem.Second != nil && !isEmptyReference(relElem.Second) {
-			ref, err := json.Marshal(relElem.Second)
+		if relElem.Second() != nil && !isEmptyReference(relElem.Second()) {
+			jsonable, err := jsonization.ToJsonable(relElem.Second())
+			if err != nil {
+				return nil, common.NewErrBadRequest("SMREPO-BURERO-SECONDJSONABLE Failed to convert second reference to jsonable: " + err.Error())
+			}
+			ref, err := json.Marshal(jsonable)
 			if err != nil {
 				return nil, err
 			}

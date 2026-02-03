@@ -32,6 +32,7 @@ package submodelelements
 import (
 	"database/sql"
 
+	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	_ "github.com/lib/pq" // PostgreSQL Treiber
@@ -75,8 +76,8 @@ func NewPostgreSQLCapabilityHandler(db *sql.DB) (*PostgreSQLCapabilityHandler, e
 // Returns:
 //   - int: Database ID of the created element
 //   - error: Error if creation fails or element is not of correct type
-func (p PostgreSQLCapabilityHandler) Create(tx *sql.Tx, submodelID string, submodelElement gen.SubmodelElement) (int, error) {
-	_, ok := submodelElement.(*gen.Capability)
+func (p PostgreSQLCapabilityHandler) Create(tx *sql.Tx, submodelID string, submodelElement types.ISubmodelElement) (int, error) {
+	_, ok := submodelElement.(*types.Capability)
 	if !ok {
 		return 0, common.NewErrBadRequest("submodelElement is not of type Capability")
 	}
@@ -105,8 +106,8 @@ func (p PostgreSQLCapabilityHandler) Create(tx *sql.Tx, submodelID string, submo
 // Returns:
 //   - int: Database ID of the created nested element
 //   - error: Error if creation fails or element is not of correct type
-func (p PostgreSQLCapabilityHandler) CreateNested(tx *sql.Tx, submodelID string, parentID int, idShortPath string, submodelElement gen.SubmodelElement, pos int, rootSubmodelElementID int) (int, error) {
-	_, ok := submodelElement.(*gen.Capability)
+func (p PostgreSQLCapabilityHandler) CreateNested(tx *sql.Tx, submodelID string, parentID int, idShortPath string, submodelElement types.ISubmodelElement, pos int, rootSubmodelElementID int) (int, error) {
+	_, ok := submodelElement.(*types.Capability)
 	if !ok {
 		return 0, common.NewErrBadRequest("submodelElement is not of type Capability")
 	}
@@ -130,7 +131,7 @@ func (p PostgreSQLCapabilityHandler) CreateNested(tx *sql.Tx, submodelID string,
 //
 // Returns:
 //   - error: Error if update fails
-func (p PostgreSQLCapabilityHandler) Update(submodelID string, idShortOrPath string, submodelElement gen.SubmodelElement, tx *sql.Tx, isPut bool) error {
+func (p PostgreSQLCapabilityHandler) Update(submodelID string, idShortOrPath string, submodelElement types.ISubmodelElement, tx *sql.Tx, isPut bool) error {
 	return p.decorated.Update(submodelID, idShortOrPath, submodelElement, tx, isPut)
 }
 

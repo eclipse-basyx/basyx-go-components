@@ -69,7 +69,7 @@
                     "type": "ExternalReference"
                 },
                 "dataSpecificationContent": {
-                    "dataType": "RealCount",
+                    "dataType": "REAL_COUNT",
                     "definition": [
                         {
                             "language": "en",
@@ -192,7 +192,7 @@
                     "type": "ExternalReference"
                 },
                 "dataSpecificationContent": {
-                    "dataType": "RealCount",
+                    "dataType": "REAL_COUNT",
                     "definition": [
                         {
                             "language": "en",
@@ -341,7 +341,7 @@
                 "type": "ExternalReference"
             },
             "dataSpecificationContent": {
-                "dataType": "RealCount",
+                "dataType": "REAL_COUNT",
                 "definition": [
                     {
                         "language": "en",
@@ -464,7 +464,7 @@
                 "type": "ExternalReference"
             },
             "dataSpecificationContent": {
-                "dataType": "RealCount",
+                "dataType": "REAL_COUNT",
                 "definition": [
                     {
                         "language": "en",
@@ -1085,7 +1085,7 @@
                         "type": "ExternalReference"
                     },
                     "dataSpecificationContent": {
-                        "dataType": "RealCount",
+                        "dataType": "REAL_COUNT",
                         "definition": [
                             {
                                 "language": "en",
@@ -1208,7 +1208,7 @@
                         "type": "ExternalReference"
                     },
                     "dataSpecificationContent": {
-                        "dataType": "RealCount",
+                        "dataType": "REAL_COUNT",
                         "definition": [
                             {
                                 "language": "en",
@@ -1514,7 +1514,7 @@
                         "type": "ExternalReference"
                     },
                     "dataSpecificationContent": {
-                        "dataType": "RealCount",
+                        "dataType": "REAL_COUNT",
                         "definition": [
                             {
                                 "language": "en",
@@ -1637,7 +1637,7 @@
                         "type": "ExternalReference"
                     },
                     "dataSpecificationContent": {
-                        "dataType": "RealCount",
+                        "dataType": "REAL_COUNT",
                         "definition": [
                             {
                                 "language": "en",

@@ -18,6 +18,8 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/FriedJannik/aas-go-sdk/jsonization"
+	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	persistencepostgresql "github.com/eclipse-basyx/basyx-go-components/internal/discoveryservice/persistence"
@@ -145,14 +147,27 @@ func (s *AssetAdministrationShellBasicDiscoveryAPIAPIService) GetAllAssetLinksBy
 		}
 	}
 
-	return model.Response(http.StatusOK, links), nil
+	// Convert SDK types to jsonable format for proper JSON serialization
+	jsonableLinks := make([]map[string]interface{}, 0, len(links))
+	for _, link := range links {
+		jsonableLink, err := jsonization.ToJsonable(link)
+		if err != nil {
+			log.Printf("🧭 [%s] Error GetAllAssetLinksById: failed to convert link to jsonable (aasId=%q): %v", componentName, string(decoded), err)
+			return common.NewErrorResponse(
+				err, http.StatusInternalServerError, componentName, "GetAllAssetLinksById", "JsonConversion",
+			), err
+		}
+		jsonableLinks = append(jsonableLinks, jsonableLink)
+	}
+
+	return model.Response(http.StatusOK, jsonableLinks), nil
 }
 
 // PostAllAssetLinksByID - Creates or replaces all asset links associated to the Asset Administration Shell.
 func (s *AssetAdministrationShellBasicDiscoveryAPIAPIService) PostAllAssetLinksByID(
 	ctx context.Context,
 	aasIdentifier string,
-	specificAssetID []model.SpecificAssetID,
+	specificAssetID []types.ISpecificAssetID,
 ) (model.ImplResponse, error) {
 	decodeDiscoveryIdentifier, decodeError := common.DecodeString(aasIdentifier)
 	if decodeError != nil {
@@ -178,7 +193,20 @@ func (s *AssetAdministrationShellBasicDiscoveryAPIAPIService) PostAllAssetLinksB
 		}
 	}
 
-	return model.Response(http.StatusCreated, specificAssetID), nil
+	// Convert SDK types to jsonable format for proper JSON serialization
+	jsonableLinks := make([]map[string]interface{}, 0, len(specificAssetID))
+	for _, link := range specificAssetID {
+		jsonableLink, err := jsonization.ToJsonable(link)
+		if err != nil {
+			log.Printf("🧭 [%s] Error PostAllAssetLinksById: failed to convert link to jsonable (aasId=%q): %v", componentName, string(decodeDiscoveryIdentifier), err)
+			return common.NewErrorResponse(
+				err, http.StatusInternalServerError, componentName, "PostAllAssetLinksById", "JsonConversion",
+			), err
+		}
+		jsonableLinks = append(jsonableLinks, jsonableLink)
+	}
+
+	return model.Response(http.StatusCreated, jsonableLinks), nil
 }
 
 // DeleteAllAssetLinksByID - Deletes specified specific asset identifiers linked to an Asset Administration Shell:

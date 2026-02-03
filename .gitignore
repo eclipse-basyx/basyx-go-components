@@ -40,3 +40,5 @@ debug.test.*
 
 # JetBrains IDEs
 .idea
+
+logs/

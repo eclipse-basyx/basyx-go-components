@@ -60,7 +60,7 @@ type QueryWrapper struct {
 
 // UnmarshalJSON implements json.Unmarshaler for QueryWrapper.
 func (j *QueryWrapper) UnmarshalJSON(value []byte) error {
-	var raw map[string]interface{}
+	var raw map[string]any
 	if err := common.UnmarshalAndDisallowUnknownFields(value, &raw); err != nil {
 		return err
 	}
@@ -78,7 +78,7 @@ func (j *QueryWrapper) UnmarshalJSON(value []byte) error {
 
 // AssertQueryRequired checks if the required fields are not zero-ed
 func AssertQueryRequired(obj Query) error {
-	elements := map[string]interface{}{
+	elements := map[string]any{
 		"$condition": obj.Condition,
 	}
 	for name, el := range elements {

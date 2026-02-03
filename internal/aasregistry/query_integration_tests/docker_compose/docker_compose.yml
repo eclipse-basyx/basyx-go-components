@@ -1,6 +1,6 @@
 services:
   db-query:
-    image: postgres:15
+    image: postgres:18
     container_name: postgres_query_db
     environment:
       POSTGRES_USER: admin

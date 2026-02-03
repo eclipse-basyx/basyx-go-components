@@ -26,7 +26,11 @@
 // Package persistenceutils provides utility functions for persisting AAS entities
 package persistenceutils
 
-import "database/sql"
+import (
+	"database/sql"
+
+	"github.com/FriedJannik/aas-go-sdk/types"
+)
 
 // TypedValue represents a value categorized by its XS datatype for database storage.
 // Each field corresponds to a different column type in the database schema,
@@ -49,24 +53,27 @@ type TypedValue struct {
 //
 // Returns:
 //   - TypedValue: A struct with the value placed in the appropriate field based on type
-func MapValueByType(valueType string, value string) TypedValue {
+func MapValueByType(valueType types.DataTypeDefXSD, value *string) TypedValue {
 	tv := TypedValue{}
-	valid := value != ""
-
+	valid := value != nil && *value != ""
+	actualValue := ""
+	if valid {
+		actualValue = *value
+	}
 	switch {
 	case IsTextType(valueType):
-		tv.Text = sql.NullString{String: value, Valid: valid}
+		tv.Text = sql.NullString{String: actualValue, Valid: valid}
 	case IsNumericType(valueType):
-		tv.Numeric = sql.NullString{String: value, Valid: valid}
-	case valueType == "xs:boolean":
-		tv.Boolean = sql.NullString{String: value, Valid: valid}
-	case valueType == "xs:time":
-		tv.Time = sql.NullString{String: value, Valid: valid}
+		tv.Numeric = sql.NullString{String: actualValue, Valid: valid}
+	case valueType == types.DataTypeDefXSDBoolean:
+		tv.Boolean = sql.NullString{String: actualValue, Valid: valid}
+	case valueType == types.DataTypeDefXSDTime:
+		tv.Time = sql.NullString{String: actualValue, Valid: valid}
 	case IsDateTimeType(valueType):
-		tv.DateTime = sql.NullString{String: value, Valid: valid}
+		tv.DateTime = sql.NullString{String: actualValue, Valid: valid}
 	default:
 		// Fallback to text for unknown types
-		tv.Text = sql.NullString{String: value, Valid: valid}
+		tv.Text = sql.NullString{String: actualValue, Valid: valid}
 	}
 	return tv
 }
@@ -78,9 +85,9 @@ func MapValueByType(valueType string, value string) TypedValue {
 //
 // Returns:
 //   - bool: true if the type is a text type, false otherwise
-func IsTextType(valueType string) bool {
+func IsTextType(valueType types.DataTypeDefXSD) bool {
 	switch valueType {
-	case "xs:string", "xs:anyURI", "xs:base64Binary", "xs:hexBinary":
+	case types.DataTypeDefXSDString, types.DataTypeDefXSDAnyURI, types.DataTypeDefXSDBase64Binary, types.DataTypeDefXSDHexBinary:
 		return true
 	default:
 		return false
@@ -94,12 +101,12 @@ func IsTextType(valueType string) bool {
 //
 // Returns:
 //   - bool: true if the type is a numeric type, false otherwise
-func IsNumericType(valueType string) bool {
+func IsNumericType(valueType types.DataTypeDefXSD) bool {
 	switch valueType {
-	case "xs:int", "xs:integer", "xs:long", "xs:short", "xs:byte",
-		"xs:unsignedInt", "xs:unsignedLong", "xs:unsignedShort", "xs:unsignedByte",
-		"xs:positiveInteger", "xs:negativeInteger", "xs:nonNegativeInteger", "xs:nonPositiveInteger",
-		"xs:decimal", "xs:double", "xs:float":
+	case types.DataTypeDefXSDInt, types.DataTypeDefXSDInteger, types.DataTypeDefXSDLong, types.DataTypeDefXSDShort, types.DataTypeDefXSDByte,
+		types.DataTypeDefXSDUnsignedInt, types.DataTypeDefXSDUnsignedLong, types.DataTypeDefXSDUnsignedShort, types.DataTypeDefXSDUnsignedByte,
+		types.DataTypeDefXSDPositiveInteger, types.DataTypeDefXSDNegativeInteger, types.DataTypeDefXSDNonNegativeInteger, types.DataTypeDefXSDNonPositiveInteger,
+		types.DataTypeDefXSDDecimal, types.DataTypeDefXSDDouble, types.DataTypeDefXSDFloat:
 		return true
 	default:
 		return false
@@ -113,10 +120,10 @@ func IsNumericType(valueType string) bool {
 //
 // Returns:
 //   - bool: true if the type is a date/time type, false otherwise
-func IsDateTimeType(valueType string) bool {
+func IsDateTimeType(valueType types.DataTypeDefXSD) bool {
 	switch valueType {
-	case "xs:date", "xs:dateTime", "xs:duration", "xs:gDay", "xs:gMonth",
-		"xs:gMonthDay", "xs:gYear", "xs:gYearMonth":
+	case types.DataTypeDefXSDDate, types.DataTypeDefXSDDateTime, types.DataTypeDefXSDDuration, types.DataTypeDefXSDGDay, types.DataTypeDefXSDGMonth,
+		types.DataTypeDefXSDGMonthDay, types.DataTypeDefXSDGYear, types.DataTypeDefXSDGYearMonth:
 		return true
 	default:
 		return false
@@ -145,7 +152,7 @@ type TypedRangeValue struct {
 //
 // Returns:
 //   - TypedRangeValue: A struct with the values placed in the appropriate fields based on type
-func MapRangeValueByType(valueType string, minValue string, maxValue string) TypedRangeValue {
+func MapRangeValueByType(valueType types.DataTypeDefXSD, minValue string, maxValue string) TypedRangeValue {
 	tv := TypedRangeValue{}
 	minValid := minValue != ""
 	maxValid := maxValue != ""
@@ -157,7 +164,7 @@ func MapRangeValueByType(valueType string, minValue string, maxValue string) Typ
 	case IsNumericType(valueType):
 		tv.MinNumeric = sql.NullString{String: minValue, Valid: minValid}
 		tv.MaxNumeric = sql.NullString{String: maxValue, Valid: maxValid}
-	case valueType == "xs:time":
+	case valueType == types.DataTypeDefXSDTime:
 		tv.MinTime = sql.NullString{String: minValue, Valid: minValid}
 		tv.MaxTime = sql.NullString{String: maxValue, Valid: maxValid}
 	case IsDateTimeType(valueType):
@@ -180,13 +187,13 @@ func MapRangeValueByType(valueType string, minValue string, maxValue string) Typ
 // Returns:
 //   - minCol: The column name for the minimum value
 //   - maxCol: The column name for the maximum value
-func GetRangeColumnNames(valueType string) (minCol, maxCol string) {
+func GetRangeColumnNames(valueType types.DataTypeDefXSD) (minCol, maxCol string) {
 	switch {
 	case IsTextType(valueType):
 		return "min_text", "max_text"
 	case IsNumericType(valueType):
 		return "min_num", "max_num"
-	case valueType == "xs:time":
+	case valueType == types.DataTypeDefXSDTime:
 		return "min_time", "max_time"
 	case IsDateTimeType(valueType):
 		return "min_datetime", "max_datetime"

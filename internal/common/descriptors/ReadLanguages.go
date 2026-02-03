@@ -29,8 +29,8 @@ package descriptors
 import (
 	"fmt"
 
+	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
-	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/lib/pq"
 )
 
@@ -40,8 +40,8 @@ import (
 func GetLangStringTextTypesByIDs(
 	db DBQueryer,
 	textTypeIDs []int64,
-) (map[int64][]model.LangStringTextType, error) {
-	out := make(map[int64][]model.LangStringTextType, len(textTypeIDs))
+) (map[int64][]types.ILangStringTextType, error) {
+	out := make(map[int64][]types.ILangStringTextType, len(textTypeIDs))
 	if len(textTypeIDs) == 0 {
 		return out, nil
 	}
@@ -73,10 +73,8 @@ func GetLangStringTextTypesByIDs(
 		if err := rows.Scan(&refID, &text, &language); err != nil {
 			return nil, err
 		}
-		out[refID] = append(out[refID], model.LangStringTextType{
-			Text:     text,
-			Language: language,
-		})
+		langStringTextType := types.NewLangStringTextType(language, text)
+		out[refID] = append(out[refID], langStringTextType)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -91,8 +89,8 @@ func GetLangStringTextTypesByIDs(
 func GetLangStringNameTypesByIDs(
 	db DBQueryer,
 	nameTypeIDs []int64,
-) (map[int64][]model.LangStringNameType, error) {
-	out := make(map[int64][]model.LangStringNameType, len(nameTypeIDs))
+) (map[int64][]types.ILangStringNameType, error) {
+	out := make(map[int64][]types.ILangStringNameType, len(nameTypeIDs))
 	if len(nameTypeIDs) == 0 {
 		return out, nil
 	}
@@ -125,10 +123,8 @@ func GetLangStringNameTypesByIDs(
 		if err := rows.Scan(&refID, &text, &language); err != nil {
 			return nil, err
 		}
-		out[refID] = append(out[refID], model.LangStringNameType{
-			Text:     text,
-			Language: language,
-		})
+		langStringNameType := types.NewLangStringNameType(language, text)
+		out[refID] = append(out[refID], langStringNameType)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err

@@ -67,7 +67,7 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	}
 
 	smSvc := api.NewSubmodelRepositoryAPIAPIService(*smDatabase)
-	smCtrl := openapi.NewSubmodelRepositoryAPIAPIController(smSvc, config.Server.ContextPath)
+	smCtrl := openapi.NewSubmodelRepositoryAPIAPIController(smSvc, config.Server.ContextPath, config.Server.StrictVerification)
 	for _, rt := range smCtrl.Routes() {
 		r.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
 	}

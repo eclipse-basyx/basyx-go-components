@@ -36,8 +36,7 @@
                                             "value": [
                                                 {
                                                     "idShort": "6",
-                                                    "modelType": "SubmodelElementList",
-                                                    "orderRelevant": false,
+                                                    "modelType": "SubmodelElementList",                                
                                                     "typeValueListElement": "Property",
                                                     "value": [
                                                         {
@@ -414,8 +413,7 @@
                             "text": "Beispiel SubmodelElementListOrdered Element"
                         }
                     ],
-                    "modelType": "SubmodelElementList",
-                    "semanticId": {
+                    "modelType": "SubmodelElementList","semanticId": {
                         "type": "ExternalReference",
                         "keys": [
                             {
@@ -569,7 +567,7 @@
                                     }
                                 ]
                             },
-                            "value": "hallo2",
+                            "value": "AQIDBAU=",
                             "contentType": "application/json"
                         },
                         {

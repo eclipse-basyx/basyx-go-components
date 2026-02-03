@@ -31,8 +31,8 @@ import (
 	"database/sql"
 	"fmt"
 
+	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
-	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/lib/pq"
 )
 
@@ -53,7 +53,7 @@ func ReadExtensionsByDescriptorID(
 	ctx context.Context,
 	db *sql.DB,
 	descriptorID int64,
-) ([]model.Extension, error) {
+) ([]types.Extension, error) {
 	v, err := ReadExtensionsByDescriptorIDs(ctx, db, []int64{descriptorID})
 	return v[descriptorID], err
 }
@@ -87,8 +87,8 @@ func ReadExtensionsByDescriptorIDs(
 	ctx context.Context,
 	db DBQueryer,
 	descriptorIDs []int64,
-) (map[int64][]model.Extension, error) {
-	out := make(map[int64][]model.Extension, len(descriptorIDs))
+) (map[int64][]types.Extension, error) {
+	out := make(map[int64][]types.Extension, len(descriptorIDs))
 	if len(descriptorIDs) == 0 {
 		return out, nil
 	}
@@ -126,7 +126,7 @@ func ReadExtensionsByDescriptorIDs(
 		extID    int64
 		semRefID sql.NullInt64
 		name     sql.NullString
-		vType    sql.NullString
+		vType    sql.NullInt64
 		vText    sql.NullString
 		vNum     sql.NullString
 		vBool    sql.NullString
@@ -195,7 +195,7 @@ func ReadExtensionsByDescriptorIDs(
 		return nil, err
 	}
 
-	semRefByID := make(map[int64]*model.Reference)
+	semRefByID := make(map[int64]types.IReference)
 	if len(uniqSemRefIDs) > 0 {
 		var err error
 		semRefByID, err = GetReferencesByIDsBatch(db, uniqSemRefIDs)
@@ -206,26 +206,26 @@ func ReadExtensionsByDescriptorIDs(
 
 	for descID, rowsForDesc := range perDesc {
 		for _, r := range rowsForDesc {
-			var semanticRef *model.Reference
+			var semanticRef types.IReference
 			if r.semRefID.Valid {
 				semanticRef = semRefByID[r.semRefID.Int64]
 			}
 
 			val := ""
-			switch r.vType.String {
-			case "xs:string", "xs:anyURI", "xs:base64Binary", "xs:hexBinary":
+			switch types.DataTypeDefXSD(r.vType.Int64) {
+			case types.DataTypeDefXSDString, types.DataTypeDefXSDAnyURI, types.DataTypeDefXSDBase64Binary, types.DataTypeDefXSDHexBinary:
 				val = r.vText.String
-			case "xs:int", "xs:integer", "xs:long", "xs:short", "xs:byte",
-				"xs:unsignedInt", "xs:unsignedLong", "xs:unsignedShort", "xs:unsignedByte",
-				"xs:positiveInteger", "xs:negativeInteger", "xs:nonNegativeInteger", "xs:nonPositiveInteger",
-				"xs:decimal", "xs:double", "xs:float":
+			case types.DataTypeDefXSDInt, types.DataTypeDefXSDInteger, types.DataTypeDefXSDLong, types.DataTypeDefXSDShort, types.DataTypeDefXSDByte,
+				types.DataTypeDefXSDUnsignedInt, types.DataTypeDefXSDUnsignedLong, types.DataTypeDefXSDUnsignedShort, types.DataTypeDefXSDUnsignedByte,
+				types.DataTypeDefXSDPositiveInteger, types.DataTypeDefXSDNegativeInteger, types.DataTypeDefXSDNonNegativeInteger, types.DataTypeDefXSDNonPositiveInteger,
+				types.DataTypeDefXSDDecimal, types.DataTypeDefXSDDouble, types.DataTypeDefXSDFloat:
 				val = r.vNum.String
-			case "xs:boolean":
+			case types.DataTypeDefXSDBoolean:
 				val = r.vBool.String
-			case "xs:time":
+			case types.DataTypeDefXSDTime:
 				val = r.vTime.String
-			case "xs:date", "xs:dateTime", "xs:duration", "xs:gDay", "xs:gMonth",
-				"xs:gMonthDay", "xs:gYear", "xs:gYearMonth":
+			case types.DataTypeDefXSDDate, types.DataTypeDefXSDDateTime, types.DataTypeDefXSDDuration, types.DataTypeDefXSDGDay, types.DataTypeDefXSDGMonth,
+				types.DataTypeDefXSDGMonthDay, types.DataTypeDefXSDGYear, types.DataTypeDefXSDGYearMonth:
 				val = r.vDT.String
 			default:
 				if r.vText.Valid {
@@ -233,21 +233,26 @@ func ReadExtensionsByDescriptorIDs(
 				}
 			}
 
-			vType, err := model.NewDataTypeDefXsdFromValue(r.vType.String)
-			if err != nil {
-				return nil, err
-			}
-
 			suppRefs := suppByExt[r.extID]
 			referRefs := refersByExt[r.extID]
-			out[descID] = append(out[descID], model.Extension{
-				SemanticID:              semanticRef,
-				Name:                    r.name.String,
-				ValueType:               vType,
-				Value:                   val,
-				SupplementalSemanticIds: suppRefs,
-				RefersTo:                referRefs,
-			})
+
+			ext := types.NewExtension(r.name.String)
+			if semanticRef != nil {
+				ext.SetSemanticID(semanticRef)
+			}
+
+			if r.vType.Valid {
+				valueType := types.DataTypeDefXSD(r.vType.Int64)
+				ext.SetValueType(&valueType)
+			}
+			ext.SetValue(&val)
+			if len(suppRefs) > 0 {
+				ext.SetSupplementalSemanticIDs(suppRefs)
+			}
+			if len(referRefs) > 0 {
+				ext.SetRefersTo(referRefs)
+			}
+			out[descID] = append(out[descID], *ext)
 		}
 	}
 
