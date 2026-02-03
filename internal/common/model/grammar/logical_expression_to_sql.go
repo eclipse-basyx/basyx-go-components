@@ -33,6 +33,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -926,6 +927,18 @@ func buildInlineExistsExpression(resolved []ResolvedFieldPath, predicate exp.Exp
 			mapped := a + "__exists"
 			sql = strings.ReplaceAll(sql, "\""+a+"\".", "\""+mapped+"\".")
 			sql = strings.ReplaceAll(sql, " AS \""+a+"\"", " AS \""+mapped+"\"")
+
+			fromAsRe := regexp.MustCompile(`(?i)FROM\s+"` + regexp.QuoteMeta(a) + `"\s+AS\s+"`)
+			if !fromAsRe.MatchString(sql) {
+				fromRe := regexp.MustCompile(`(?i)FROM\s+"` + regexp.QuoteMeta(a) + `"`)
+				sql = fromRe.ReplaceAllString(sql, `FROM "`+a+`" AS "`+mapped+`"`)
+			}
+
+			joinAsRe := regexp.MustCompile(`(?i)JOIN\s+"` + regexp.QuoteMeta(a) + `"\s+AS\s+"`)
+			if !joinAsRe.MatchString(sql) {
+				joinRe := regexp.MustCompile(`(?i)JOIN\s+"` + regexp.QuoteMeta(a) + `"`)
+				sql = joinRe.ReplaceAllString(sql, `JOIN "`+a+`" AS "`+mapped+`"`)
+			}
 		}
 		sql = strings.ReplaceAll(sql, "\"__outer__\"", "\""+rootAlias+"\"")
 		return goqu.L("EXISTS ("+sql+")", args...), nil
