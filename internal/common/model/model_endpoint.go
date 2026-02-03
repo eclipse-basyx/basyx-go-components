@@ -19,7 +19,7 @@ type Endpoint struct {
 
 // AssertEndpointRequired checks if the required fields are not zero-ed
 func AssertEndpointRequired(obj Endpoint) error {
-	elements := map[string]interface{}{
+	elements := map[string]any{
 		"interface":           obj.Interface,
 		"protocolInformation": obj.ProtocolInformation,
 	}

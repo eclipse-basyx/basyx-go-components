@@ -34,12 +34,16 @@
 //nolint:all
 package model
 
-import "encoding/json"
+import (
+	"encoding/json"
+
+	"github.com/FriedJannik/aas-go-sdk/types"
+)
 
 type RangeValue struct {
-	Max string `json:"max"`
+	Max *string `json:"max"`
 
-	Min string `json:"min"`
+	Min *string `json:"min"`
 }
 
 // MarshalValueOnly serializes RangeValue in Value-Only format
@@ -54,13 +58,13 @@ func (r RangeValue) MarshalJSON() ([]byte, error) {
 }
 
 // GetModelType returns the model type name for Range
-func (r RangeValue) GetModelType() string {
-	return "Range"
+func (r RangeValue) GetModelType() types.ModelType {
+	return types.ModelTypeRange
 }
 
 // AssertRangeValueRequired checks if the required fields are not zero-ed
 func AssertRangeValueRequired(obj RangeValue) error {
-	elements := map[string]interface{}{
+	elements := map[string]any{
 		"max": obj.Max,
 		"min": obj.Min,
 	}

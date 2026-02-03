@@ -30,6 +30,7 @@ import (
 	"database/sql"
 	"fmt"
 
+	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
@@ -56,12 +57,8 @@ func createSubModelDescriptors(tx *sql.Tx, aasDescriptorID int64, submodelDescri
 				_, _ = fmt.Println(err)
 				return common.NewInternalServerError("Failed to create DisplayName - no changes applied - see console for details")
 			}
-			var convertedDescription []model.LangStringText
-			for _, desc := range val.Description {
-				convertedDescription = append(convertedDescription, desc)
-			}
 
-			descriptionID, err = persistence_utils.CreateLangStringTextTypes(tx, convertedDescription)
+			descriptionID, err = persistence_utils.CreateLangStringTextTypes(tx, val.Description)
 			if err != nil {
 				_, _ = fmt.Println(err)
 				return common.NewInternalServerError("Failed to create Description - no changes applied - see console for details")
@@ -131,7 +128,7 @@ func createSubModelDescriptors(tx *sql.Tx, aasDescriptorID int64, submodelDescri
 	return nil
 }
 
-func createsubModelDescriptorSupplementalSemantic(tx *sql.Tx, subModelDescriptorID int64, references []model.Reference) error {
+func createsubModelDescriptorSupplementalSemantic(tx *sql.Tx, subModelDescriptorID int64, references []types.IReference) error {
 	if len(references) == 0 {
 		return nil
 	}
@@ -139,7 +136,7 @@ func createsubModelDescriptorSupplementalSemantic(tx *sql.Tx, subModelDescriptor
 	rows := make([]goqu.Record, 0, len(references))
 	for i := range references {
 		var a sql.NullInt64
-		referenceID, err := persistence_utils.CreateReference(tx, &references[i], a, a)
+		referenceID, err := persistence_utils.CreateReference(tx, references[i], a, a)
 		if err != nil {
 			return err
 		}

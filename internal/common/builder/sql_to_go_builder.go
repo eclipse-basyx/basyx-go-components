@@ -36,6 +36,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -91,8 +92,10 @@ func ParseReferredReferencesFromRows(semanticIDData []model.ReferredReferenceRow
 			_, _ = fmt.Println("[WARNING - ParseReferredReferencesFromRows] KeyID, KeyType or KeyValue was nil - skipping Reference Creation for Reference with Reference ID", *ref.ReferenceID)
 			continue
 		}
-		builder.CreateReferredSemanticID(*ref.ReferenceID, *ref.ParentReference, *ref.ReferenceType)
-		err := builder.CreateReferredSemanticIDKey(*ref.ReferenceID, *ref.KeyID, *ref.KeyType, *ref.KeyValue)
+		referenceType := types.ReferenceTypes(*ref.ReferenceType)
+		builder.CreateReferredSemanticID(*ref.ReferenceID, *ref.ParentReference, referenceType)
+		keyType := types.KeyTypes(*ref.KeyType)
+		err := builder.CreateReferredSemanticIDKey(*ref.ReferenceID, *ref.KeyID, keyType, *ref.KeyValue)
 
 		if err != nil {
 			return fmt.Errorf("error creating key for referred reference with id %d: %w", *ref.ReferenceID, err)
@@ -149,11 +152,11 @@ func ParseReferredReferences(row json.RawMessage, referenceBuilderRefs map[int64
 //   - Creates new ReferenceBuilder instances for each unique ReferenceId
 //   - Validates key data completeness (KeyID, KeyType, KeyValue)
 //   - Returns only the unique references (one per ReferenceID)
-func ParseReferencesFromRows(semanticIDData []model.ReferenceRow, referenceBuilderRefs map[int64]*ReferenceBuilder, mu *sync.RWMutex) []*model.Reference {
-	resultArray := make([]*model.Reference, 0)
+func ParseReferencesFromRows(semanticIDData []model.ReferenceRow, referenceBuilderRefs map[int64]*ReferenceBuilder, mu *sync.RWMutex) []types.IReference {
+	resultArray := make([]types.IReference, 0)
 
 	for _, ref := range semanticIDData {
-		var semanticID *model.Reference
+		var semanticIDInterface types.IReference
 		var semanticIDBuilder *ReferenceBuilder
 
 		// Check if reference already exists
@@ -166,7 +169,8 @@ func ParseReferencesFromRows(semanticIDData []model.ReferenceRow, referenceBuild
 		}
 
 		if !semanticIDCreated {
-			semanticID, semanticIDBuilder = NewReferenceBuilder(ref.ReferenceType, ref.ReferenceID)
+			referenceType := types.ReferenceTypes(ref.ReferenceType)
+			semanticIDInterface, semanticIDBuilder = NewReferenceBuilder(referenceType, ref.ReferenceID)
 
 			// Write lock to add to map
 			if mu != nil {
@@ -177,7 +181,7 @@ func ParseReferencesFromRows(semanticIDData []model.ReferenceRow, referenceBuild
 				mu.Unlock()
 			}
 
-			resultArray = append(resultArray, semanticID)
+			resultArray = append(resultArray, semanticIDInterface)
 		} else {
 			// Read lock to get from map
 			if mu != nil {
@@ -193,7 +197,8 @@ func ParseReferencesFromRows(semanticIDData []model.ReferenceRow, referenceBuild
 			_, _ = fmt.Println("[WARNING - ParseReferencesFromRows] KeyID, KeyType or KeyValue was nil - skipping Key Creation for Reference with Reference ID", ref.ReferenceID)
 			continue
 		}
-		semanticIDBuilder.CreateKey(*ref.KeyID, *ref.KeyType, *ref.KeyValue)
+		keyType := types.KeyTypes(*ref.KeyType)
+		semanticIDBuilder.CreateKey(*ref.KeyID, keyType, *ref.KeyValue)
 	}
 
 	return resultArray
@@ -214,9 +219,9 @@ func ParseReferencesFromRows(semanticIDData []model.ReferenceRow, referenceBuild
 // Returns:
 //   - []*model.Reference: Slice of parsed Reference objects. Each Reference contains all its associated Keys.
 //   - error: An error if JSON unmarshalling fails. Nil key data is logged as warnings but does not cause failure.
-func ParseReferences(row json.RawMessage, referenceBuilderRefs map[int64]*ReferenceBuilder, mu *sync.RWMutex) ([]*model.Reference, error) {
+func ParseReferences(row json.RawMessage, referenceBuilderRefs map[int64]*ReferenceBuilder, mu *sync.RWMutex) ([]types.IReference, error) {
 	if len(row) == 0 {
-		return make([]*model.Reference, 0), nil
+		return make([]types.IReference, 0), nil
 	}
 
 	var semanticIDData []model.ReferenceRow
@@ -248,10 +253,10 @@ func ParseReferences(row json.RawMessage, referenceBuilderRefs map[int64]*Refere
 //   - Uses panic recovery to handle runtime errors during type assertions
 //
 // Note: Only objects with an 'id' field are processed to ensure data integrity.
-func ParseLangStringNameType(displayNames json.RawMessage) ([]model.LangStringNameType, error) {
-	var names []model.LangStringNameType
+func ParseLangStringNameType(displayNames json.RawMessage) ([]types.ILangStringNameType, error) {
+	var names []types.ILangStringNameType
 	// remove id field from json
-	var temp []map[string]interface{}
+	var temp []map[string]any
 	var jsonMarshaller = jsoniter.ConfigCompatibleWithStandardLibrary
 	if err := jsonMarshaller.Unmarshal(displayNames, &temp); err != nil {
 		_, _ = fmt.Printf("Error unmarshalling display names: %v\n", err)
@@ -266,10 +271,10 @@ func ParseLangStringNameType(displayNames json.RawMessage) ([]model.LangStringNa
 	for _, item := range temp {
 		if _, ok := item["id"]; ok {
 			delete(item, "id")
-			names = append(names, model.LangStringNameType{
-				Text:     item["text"].(string),
-				Language: item["language"].(string),
-			})
+			var name types.LangStringNameType
+			name.SetLanguage(item["language"].(string))
+			name.SetText(item["text"].(string))
+			names = append(names, &name)
 		}
 	}
 
@@ -298,10 +303,10 @@ func ParseLangStringNameType(displayNames json.RawMessage) ([]model.LangStringNa
 // Note: Only objects with an 'id' field are processed to ensure data integrity.
 // This function is similar to ParseLangStringNameType but produces LangStringTextType
 // objects which may have different validation rules or usage contexts.
-func ParseLangStringTextType(descriptions json.RawMessage) ([]model.LangStringTextType, error) {
-	var texts []model.LangStringTextType
+func ParseLangStringTextType(descriptions json.RawMessage) ([]types.ILangStringTextType, error) {
+	var texts []types.ILangStringTextType
 	// remove id field from json
-	var temp []map[string]interface{}
+	var temp []map[string]any
 	if len(descriptions) == 0 {
 		return texts, nil
 	}
@@ -319,10 +324,10 @@ func ParseLangStringTextType(descriptions json.RawMessage) ([]model.LangStringTe
 	for _, item := range temp {
 		if _, ok := item["id"]; ok {
 			delete(item, "id")
-			texts = append(texts, model.LangStringTextType{
-				Text:     item["text"].(string),
-				Language: item["language"].(string),
-			})
+			var text types.LangStringTextType
+			text.SetLanguage(item["language"].(string))
+			text.SetText(item["text"].(string))
+			texts = append(texts, &text)
 		}
 	}
 
@@ -345,10 +350,10 @@ func ParseLangStringTextType(descriptions json.RawMessage) ([]model.LangStringTe
 // The function handles empty input by returning an empty slice. It uses panic recovery to
 // handle runtime errors during type assertions. Only objects with an 'id' field are processed
 // to ensure data integrity.
-func ParseLangStringPreferredNameTypeIec61360(descriptions json.RawMessage) ([]model.LangStringPreferredNameTypeIec61360, error) {
-	var texts []model.LangStringPreferredNameTypeIec61360
+func ParseLangStringPreferredNameTypeIec61360(descriptions json.RawMessage) ([]types.ILangStringPreferredNameTypeIEC61360, error) {
+	var texts []types.ILangStringPreferredNameTypeIEC61360
 	// remove id field from json
-	var temp []map[string]interface{}
+	var temp []map[string]any
 	if len(descriptions) == 0 {
 		return texts, nil
 	}
@@ -366,10 +371,11 @@ func ParseLangStringPreferredNameTypeIec61360(descriptions json.RawMessage) ([]m
 	for _, item := range temp {
 		if _, ok := item["id"]; ok {
 			delete(item, "id")
-			texts = append(texts, model.LangStringPreferredNameTypeIec61360{
-				Text:     item["text"].(string),
-				Language: item["language"].(string),
-			})
+			text := types.NewLangStringPreferredNameTypeIEC61360(
+				item["language"].(string),
+				item["text"].(string),
+			)
+			texts = append(texts, text)
 		}
 	}
 
@@ -392,10 +398,10 @@ func ParseLangStringPreferredNameTypeIec61360(descriptions json.RawMessage) ([]m
 // The function handles empty input by returning an empty slice. It uses panic recovery to
 // handle runtime errors during type assertions. Only objects with an 'id' field are processed
 // to ensure data integrity.
-func ParseLangStringShortNameTypeIec61360(descriptions json.RawMessage) ([]model.LangStringShortNameTypeIec61360, error) {
-	var texts []model.LangStringShortNameTypeIec61360
+func ParseLangStringShortNameTypeIec61360(descriptions json.RawMessage) ([]types.ILangStringShortNameTypeIEC61360, error) {
+	var texts []types.ILangStringShortNameTypeIEC61360
 	// remove id field from json
-	var temp []map[string]interface{}
+	var temp []map[string]any
 	if len(descriptions) == 0 {
 		return texts, nil
 	}
@@ -413,10 +419,11 @@ func ParseLangStringShortNameTypeIec61360(descriptions json.RawMessage) ([]model
 	for _, item := range temp {
 		if _, ok := item["id"]; ok {
 			delete(item, "id")
-			texts = append(texts, model.LangStringShortNameTypeIec61360{
-				Text:     item["text"].(string),
-				Language: item["language"].(string),
-			})
+			text := types.NewLangStringShortNameTypeIEC61360(
+				item["language"].(string),
+				item["text"].(string),
+			)
+			texts = append(texts, text)
 		}
 	}
 
@@ -439,10 +446,10 @@ func ParseLangStringShortNameTypeIec61360(descriptions json.RawMessage) ([]model
 // The function handles empty input by returning an empty slice. It uses panic recovery to
 // handle runtime errors during type assertions. Only objects with an 'id' field are processed
 // to ensure data integrity.
-func ParseLangStringDefinitionTypeIec61360(descriptions json.RawMessage) ([]model.LangStringDefinitionTypeIec61360, error) {
-	var texts []model.LangStringDefinitionTypeIec61360
+func ParseLangStringDefinitionTypeIec61360(descriptions json.RawMessage) ([]types.ILangStringDefinitionTypeIEC61360, error) {
+	var texts []types.ILangStringDefinitionTypeIEC61360
 	// remove id field from json
-	var temp []map[string]interface{}
+	var temp []map[string]any
 	if len(descriptions) == 0 {
 		return texts, nil
 	}
@@ -460,10 +467,11 @@ func ParseLangStringDefinitionTypeIec61360(descriptions json.RawMessage) ([]mode
 	for _, item := range temp {
 		if _, ok := item["id"]; ok {
 			delete(item, "id")
-			texts = append(texts, model.LangStringDefinitionTypeIec61360{
-				Text:     item["text"].(string),
-				Language: item["language"].(string),
-			})
+			text := types.NewLangStringDefinitionTypeIEC61360(
+				item["language"].(string),
+				item["text"].(string),
+			)
+			texts = append(texts, text)
 		}
 	}
 

@@ -86,7 +86,7 @@ type AccessRuleModelSchemaJSONAllAccessPermissionRulesDEFOBJECTSElem struct {
 //   - error: An error if the JSON is invalid or if the required "name" field is missing.
 //     Returns nil on successful unmarshaling and validation.
 func (j *AccessRuleModelSchemaJSONAllAccessPermissionRulesDEFOBJECTSElem) UnmarshalJSON(value []byte) error {
-	var raw map[string]interface{}
+	var raw map[string]any
 	if err := common.UnmarshalAndDisallowUnknownFields(value, &raw); err != nil {
 		return err
 	}
@@ -115,7 +115,7 @@ func (j *AccessRuleModelSchemaJSONAllAccessPermissionRulesDEFOBJECTSElem) Unmars
 //   - error: An error if the JSON is invalid or if the required "rules" field is missing.
 //     Returns nil on successful unmarshaling and validation.
 func (j *AccessRuleModelSchemaJSONAllAccessPermissionRules) UnmarshalJSON(value []byte) error {
-	var raw map[string]interface{}
+	var raw map[string]any
 	if err := common.UnmarshalAndDisallowUnknownFields(value, &raw); err != nil {
 		return err
 	}
@@ -144,7 +144,7 @@ func (j *AccessRuleModelSchemaJSONAllAccessPermissionRules) UnmarshalJSON(value 
 //   - error: An error if the JSON is invalid or if the required "AllAccessPermissionRules" field is missing.
 //     Returns nil on successful unmarshaling and validation.
 func (j *AccessRuleModelSchemaJSON) UnmarshalJSON(value []byte) error {
-	var raw map[string]interface{}
+	var raw map[string]any
 	if err := common.UnmarshalAndDisallowUnknownFields(value, &raw); err != nil {
 		return err
 	}

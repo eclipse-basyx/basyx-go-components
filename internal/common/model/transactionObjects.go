@@ -48,7 +48,7 @@ type SubmodelRow struct {
 	// Category defines the category classification of the submodel
 	Category sql.NullString
 	// Kind specifies whether the submodel is a Template or Instance
-	Kind string
+	Kind sql.NullInt64
 	// EmbeddedDataSpecification contains embedded data specifications as JSON data
 	EmbeddedDataSpecification json.RawMessage
 	// SupplementalSemanticIDs contains supplemental semantic identifiers as JSON data
@@ -88,11 +88,11 @@ type ReferenceRow struct {
 	// ReferenceID is the unique identifier of the reference in the database
 	ReferenceID int64 `json:"reference_id"`
 	// ReferenceType specifies the type of reference (e.g., ExternalReference, ModelReference)
-	ReferenceType string `json:"reference_type"`
+	ReferenceType int64 `json:"reference_type"`
 	// KeyID is the unique identifier of the key in the database (nullable)
 	KeyID *int64 `json:"key_id"`
 	// KeyType specifies the type of the key (e.g., Submodel, Property) (nullable)
-	KeyType *string `json:"key_type"`
+	KeyType *int64 `json:"key_type"`
 	// KeyValue contains the actual value of the key (nullable)
 	KeyValue *string `json:"key_value"`
 }
@@ -109,11 +109,11 @@ type EdsReferenceRow struct {
 	// ReferenceID is the unique identifier of the reference in the database
 	ReferenceID int64 `json:"reference_id"`
 	// ReferenceType specifies the type of reference (nullable)
-	ReferenceType *string `json:"reference_type"`
+	ReferenceType *int64 `json:"reference_type"`
 	// KeyID is the unique identifier of the key in the database (nullable)
 	KeyID *int64 `json:"key_id"`
 	// KeyType specifies the type of the key (nullable)
-	KeyType *string `json:"key_type"`
+	KeyType *int64 `json:"key_type"`
 	// KeyValue contains the actual value of the key (nullable)
 	KeyValue *string `json:"key_value"`
 }
@@ -134,7 +134,7 @@ type ReferredReferenceRow struct {
 	// ReferenceID is the unique identifier of this reference in the database (nullable)
 	ReferenceID *int64 `json:"reference_id"`
 	// ReferenceType specifies the type of reference (nullable)
-	ReferenceType *string `json:"reference_type"`
+	ReferenceType *int64 `json:"reference_type"`
 	// ParentReference identifies the parent reference in the hierarchy (nullable)
 	ParentReference *int64 `json:"parentReference"`
 	// RootReference identifies the root reference in the hierarchy (nullable)
@@ -142,7 +142,7 @@ type ReferredReferenceRow struct {
 	// KeyID is the unique identifier of the key in the database (nullable)
 	KeyID *int64 `json:"key_id"`
 	// KeyType specifies the type of the key (nullable)
-	KeyType *string `json:"key_type"`
+	KeyType *int64 `json:"key_type"`
 	// KeyValue contains the actual value of the key (nullable)
 	KeyValue *string `json:"key_value"`
 }
@@ -214,14 +214,12 @@ type ValueListRow struct {
 type QualifierRow struct {
 	// DbID is the unique identifier of the qualifier in the database
 	DbID int64 `json:"dbId"`
-	// Kind specifies the kind of qualifier (e.g., ConceptQualifier, ValueQualifier)
-	Kind string `json:"kind"`
 	// Type is the type/name of the qualifier
 	Type string `json:"type"`
 	// Position specifies the position of the qualifier
 	Position int `json:"position"`
 	// ValueType specifies the data type of the qualifier value
-	ValueType string `json:"value_type"`
+	ValueType int64 `json:"value_type"`
 	// Value is the actual value of the qualifier
 	Value string `json:"value"`
 	// SemanticID contains semantic ID reference data as JSON data
@@ -317,7 +315,7 @@ type SubmodelElementRow struct {
 	// Category defines the category classification of the submodel element
 	Category sql.NullString `json:"category"`
 	// ModelType specifies the concrete type of the submodel element (e.g., Property, Operation, SubmodelElementCollection)
-	ModelType string `json:"model_type"`
+	ModelType int64 `json:"model_type"`
 	// Value contains the actual value data of the submodel element as JSON data
 	Value *json.RawMessage `json:"value"`
 	// SemanticID is a reference to a semantic definition as JSON data
@@ -352,7 +350,7 @@ type PropertyValueRow struct {
 	// ValueType specifies the XSD data type of the value.
 	// This determines how the Value string should be parsed and interpreted
 	// (e.g., xs:string, xs:int, xs:boolean, xs:dateTime, etc.).
-	ValueType DataTypeDefXsd `json:"value_type"`
+	ValueType int64 `json:"value_type"`
 
 	// ValueID contains value ID reference data as JSON data
 	ValueID json.RawMessage `json:"value_id"`
@@ -368,9 +366,9 @@ type PropertyValueRow struct {
 // to observed elements that trigger the events.
 type BasicEventElementValueRow struct {
 	// Direction specifies the direction of the event (e.g., input, output)
-	Direction string `json:"direction"`
+	Direction int64 `json:"direction"`
 	// State represents the current state of the event element
-	State string `json:"state"`
+	State int64 `json:"state"`
 	// MessageTopic is the topic used for event message communication
 	MessageTopic string `json:"message_topic"`
 	// LastUpdate contains the timestamp of the last event update
@@ -382,7 +380,7 @@ type BasicEventElementValueRow struct {
 	// Observed contains reference data to the observed element as JSON data
 	Observed json.RawMessage `json:"observed"`
 	// Observed contains reference data to the observed element as JSON data
-	MessageBroker json.RawMessage `json:"message_broker"`
+	MessageBroker sql.NullString `json:"message_broker"`
 }
 
 // SubmodelElementListRow represents a data row for a SubmodelElementList entity in the database.
@@ -395,9 +393,9 @@ type SubmodelElementListRow struct {
 	// OrderRelevant indicates whether the order of elements in the list is significant
 	OrderRelevant bool `json:"order_relevant"`
 	// TypeValueListElement specifies the required type for elements in the list
-	TypeValueListElement string `json:"type_value_list_element"`
+	TypeValueListElement int64 `json:"type_value_list_element"`
 	// ValueTypeListElement specifies the required value type for elements in the list
-	ValueTypeListElement string `json:"value_type_list_element"`
+	ValueTypeListElement sql.NullInt64 `json:"value_type_list_element"`
 	// SemanticIDListElement contains semantic ID reference data for list elements as JSON data
 	SemanticIDListElement json.RawMessage `json:"semantic_id_list_element"`
 	// SemanticIDListElementReferred contains referred semantic ID reference data for list elements as JSON data
@@ -435,7 +433,7 @@ type RangeValueRow struct {
 	// ValueType specifies the XSD data type of both the Min and Max values.
 	// This determines how the Min and Max strings should be parsed and interpreted
 	// (e.g., xs:string, xs:int, xs:boolean, xs:dateTime, etc.).
-	ValueType string `json:"value_type"`
+	ValueType int64 `json:"value_type"`
 }
 
 // OperationValueRow represents a data row for an Operation element's variables in the database.
@@ -461,7 +459,7 @@ type OperationValueRow struct {
 // The statements are stored as JSON to accommodate complex structures.
 type EntityValueRow struct {
 	// EntityType specifies the type of the entity.
-	EntityType string `json:"entity_type"`
+	EntityType int64 `json:"entity_type"`
 	// GlobalAssetID specifies the global asset identifier of the entity.
 	GlobalAssetID string `json:"global_asset_id"`
 	// SpecificAssetIDs contains specific asset ID references as JSON data
@@ -521,7 +519,7 @@ type FileElementValueRow struct {
 // This structure captures the language-text pairs and optional value ID reference.
 type MultiLanguagePropertyElementValueRow struct {
 	// Value contains the array of language-text pairs
-	Value []LangStringTextType `json:"value"`
+	Value *json.RawMessage `json:"value"`
 	// ValueID is a reference to a related concept or value definition (optional)
 	ValueID *json.RawMessage `json:"value_id"`
 	// ValueIDReferred contains the referred semantic ID for the value reference (optional)
@@ -547,7 +545,7 @@ type BlobElementValueRow struct {
 // descriptions.
 type AssetAdministrationShellDescriptorRow struct {
 	DescID        int64
-	AssetKindStr  sql.NullString
+	AssetKind     sql.NullInt64
 	AssetType     sql.NullString
 	GlobalAssetID sql.NullString
 	IDShort       sql.NullString

@@ -39,6 +39,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/jackc/pgx/v5"
@@ -116,7 +117,7 @@ func NewPostgreSQLDiscoveryBackend(dsn string, maxConns int32) (*PostgreSQLDisco
 // The method operates within a transaction to ensure consistency, though it performs
 // read-only operations. If the AAS identifier is not found in the database, an ErrNotFound
 // error is returned.
-func (p *PostgreSQLDiscoveryDatabase) GetAllAssetLinks(aasID string) ([]model.SpecificAssetID, error) {
+func (p *PostgreSQLDiscoveryDatabase) GetAllAssetLinks(aasID string) ([]types.ISpecificAssetID, error) {
 	ctx := context.Background()
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
@@ -141,17 +142,15 @@ func (p *PostgreSQLDiscoveryDatabase) GetAllAssetLinks(aasID string) ([]model.Sp
 	}
 	defer rows.Close()
 
-	var result []model.SpecificAssetID
+	var result []types.ISpecificAssetID
 	for rows.Next() {
 		var name, value string
 		if err := rows.Scan(&name, &value); err != nil {
 			_, _ = fmt.Println(err)
 			return nil, common.NewInternalServerError("Failed to scan asset link. See console for information.")
 		}
-		result = append(result, model.SpecificAssetID{
-			Name:  name,
-			Value: value,
-		})
+		said := types.NewSpecificAssetID(name, value)
+		result = append(result, said)
 	}
 	if rows.Err() != nil {
 		_, _ = fmt.Println(rows.Err())
@@ -212,7 +211,7 @@ func (p *PostgreSQLDiscoveryDatabase) DeleteAllAssetLinks(aasID string) error {
 //  3. Bulk insert the new asset links using PostgreSQL's COPY FROM feature for efficiency
 //
 // The use of COPY FROM makes this method highly efficient even for large numbers of asset links.
-func (p *PostgreSQLDiscoveryDatabase) CreateAllAssetLinks(aasID string, specificAssetIDs []model.SpecificAssetID) error {
+func (p *PostgreSQLDiscoveryDatabase) CreateAllAssetLinks(aasID string, specificAssetIDs []types.ISpecificAssetID) error {
 	ctx := context.Background()
 	tx, err := p.pool.Begin(ctx)
 	if err != nil {
@@ -236,7 +235,7 @@ func (p *PostgreSQLDiscoveryDatabase) CreateAllAssetLinks(aasID string, specific
 
 	rows := make([][]any, len(specificAssetIDs))
 	for i, v := range specificAssetIDs {
-		rows[i] = []any{v.Name, v.Value, referenceID}
+		rows[i] = []any{v.Name(), v.Value(), referenceID}
 	}
 
 	_, err = tx.CopyFrom(

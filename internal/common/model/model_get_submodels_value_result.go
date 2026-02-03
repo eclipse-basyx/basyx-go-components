@@ -39,12 +39,12 @@ type GetSubmodelsValueResult struct {
 	PagingMetadata PagedResultPagingMetadata `json:"paging_metadata"`
 
 	// The ValueOnly serialization (patternProperties and propertyNames will probably be supported with OpenApi 3.1). For the full description of the generic JSON validation schema see the ValueOnly-Serialization as defined in the 'Specification of the Asset Administration Shell - Part 2'.
-	Result []map[string]interface{} `json:"result,omitempty"`
+	Result []map[string]any `json:"result,omitempty"`
 }
 
 // AssertGetSubmodelsValueResultRequired checks if the required fields are not zero-ed
 func AssertGetSubmodelsValueResultRequired(obj GetSubmodelsValueResult) error {
-	elements := map[string]interface{}{
+	elements := map[string]any{
 		"paging_metadata": obj.PagingMetadata,
 	}
 	for name, el := range elements {

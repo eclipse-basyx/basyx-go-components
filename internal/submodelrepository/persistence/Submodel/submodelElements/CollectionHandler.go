@@ -32,6 +32,7 @@ package submodelelements
 import (
 	"database/sql"
 
+	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
@@ -77,8 +78,8 @@ func NewPostgreSQLSubmodelElementCollectionHandler(db *sql.DB) (*PostgreSQLSubmo
 // Returns:
 //   - int: Database ID of the created collection element
 //   - error: Error if creation fails or element is not of correct type
-func (p PostgreSQLSubmodelElementCollectionHandler) Create(tx *sql.Tx, submodelID string, submodelElement gen.SubmodelElement) (int, error) {
-	_, ok := submodelElement.(*gen.SubmodelElementCollection)
+func (p PostgreSQLSubmodelElementCollectionHandler) Create(tx *sql.Tx, submodelID string, submodelElement types.ISubmodelElement) (int, error) {
+	_, ok := submodelElement.(*types.SubmodelElementCollection)
 	if !ok {
 		return 0, common.NewErrBadRequest("submodelElement is not of type SubmodelElementCollection")
 	}
@@ -120,8 +121,8 @@ func (p PostgreSQLSubmodelElementCollectionHandler) Create(tx *sql.Tx, submodelI
 // Returns:
 //   - int: Database ID of the created nested collection
 //   - error: Error if creation fails or element is not of correct type
-func (p PostgreSQLSubmodelElementCollectionHandler) CreateNested(tx *sql.Tx, submodelID string, parentID int, idShortPath string, submodelElement gen.SubmodelElement, pos int, rootSubmodelElementID int) (int, error) {
-	_, ok := submodelElement.(*gen.SubmodelElementCollection)
+func (p PostgreSQLSubmodelElementCollectionHandler) CreateNested(tx *sql.Tx, submodelID string, parentID int, idShortPath string, submodelElement types.ISubmodelElement, pos int, rootSubmodelElementID int) (int, error) {
+	_, ok := submodelElement.(*types.SubmodelElementCollection)
 	if !ok {
 		return 0, common.NewErrBadRequest("submodelElement is not of type SubmodelElementCollection")
 	}
@@ -161,8 +162,8 @@ func (p PostgreSQLSubmodelElementCollectionHandler) CreateNested(tx *sql.Tx, sub
 //
 // Returns:
 //   - error: Error if update fails or element is not of correct type
-func (p PostgreSQLSubmodelElementCollectionHandler) Update(submodelID string, idShortOrPath string, submodelElement gen.SubmodelElement, tx *sql.Tx, isPut bool) error {
-	_, ok := submodelElement.(*gen.SubmodelElementCollection)
+func (p PostgreSQLSubmodelElementCollectionHandler) Update(submodelID string, idShortOrPath string, submodelElement types.ISubmodelElement, tx *sql.Tx, isPut bool) error {
+	_, ok := submodelElement.(*types.SubmodelElementCollection)
 	if !ok {
 		return common.NewErrBadRequest("submodelElement is not of type SubmodelElementCollection")
 	}

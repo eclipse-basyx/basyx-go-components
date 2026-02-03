@@ -190,7 +190,7 @@ services:
   # PostgreSQL database
   db:
     container_name: postgres_db
-    image: postgres:15
+    image: postgres:18
     environment:
       POSTGRES_USER: admin
       POSTGRES_PASSWORD: admin123

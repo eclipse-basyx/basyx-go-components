@@ -47,7 +47,7 @@ func loadTestConfig(filename string) ([]TestConfig, error) {
 }
 
 // makeRequest performs an HTTP request based on the test config
-func makeRequest(config TestConfig) (string, error) {
+func makeRequest(config TestConfig, stepNumber int) (string, error) {
 	var req *http.Request
 	var err error
 
@@ -113,6 +113,14 @@ func makeRequest(config TestConfig) (string, error) {
 	}()
 
 	if resp.StatusCode != config.ExpectedStatus {
+		logFile := fmt.Sprintf("logs/STEP_%d.log", stepNumber)
+		f, err := os.OpenFile(logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+		if err == nil {
+			fmt.Fprintf(f, "Expected status %d but got %d\n", config.ExpectedStatus, resp.StatusCode) //nolint:errcheck
+			body, _ := io.ReadAll(resp.Body)
+			fmt.Fprintf(f, "Response body: %s\n", body) //nolint:errcheck
+			_ = f.Close()
+		}
 		_, _ = fmt.Printf("Response status code: %d\n", resp.StatusCode)
 		body, _ := io.ReadAll(resp.Body)
 		_, _ = fmt.Printf("Response body: %s\n", body)
@@ -133,6 +141,12 @@ func TestIntegration(t *testing.T) {
 	configs, err := loadTestConfig("it_config.json")
 
 	require.NoError(t, err, "Failed to load test config")
+
+	// Ensure logs directory exists
+	if err := os.Mkdir("logs", 0755); err != nil && !os.IsExist(err) {
+		t.Fatalf("Failed to create logs directory: %v", err)
+	}
+
 	// Wait for services to be ready (adjust as needed)
 	time.Sleep(15 * time.Second) // Wait for Docker Compose services
 
@@ -145,7 +159,7 @@ func TestIntegration(t *testing.T) {
 			// Handle special actions from config
 			if config.Action == "DELETE_ALL_AAS_DESCRIPTORS" {
 				// Fetch current descriptors
-				body, err := makeRequest(TestConfig{Method: "GET", Endpoint: "http://127.0.0.1:6004/shell-descriptors", ExpectedStatus: 200})
+				body, err := makeRequest(TestConfig{Method: "GET", Endpoint: "http://127.0.0.1:6004/shell-descriptors", ExpectedStatus: 200}, i+1)
 				require.NoError(t, err)
 
 				var list struct {
@@ -159,13 +173,13 @@ func TestIntegration(t *testing.T) {
 				// Delete each descriptor by base64url-encoded id
 				for _, item := range list.Result {
 					enc := base64.RawURLEncoding.EncodeToString([]byte(item.ID))
-					_, err := makeRequest(TestConfig{Method: "DELETE", Endpoint: fmt.Sprintf("http://127.0.0.1:6004/shell-descriptors/%s", enc), ExpectedStatus: 204})
+					_, err := makeRequest(TestConfig{Method: "DELETE", Endpoint: fmt.Sprintf("http://127.0.0.1:6004/shell-descriptors/%s", enc), ExpectedStatus: 204}, i+1)
 					require.NoError(t, err)
 				}
 				return
 			}
 
-			response, err := makeRequest(config)
+			response, err := makeRequest(config, i+1)
 			require.NoError(t, err, "Request failed")
 
 			if config.Method == "GET" && config.ShouldMatch != "" {
@@ -180,7 +194,22 @@ func TestIntegration(t *testing.T) {
 				err = json.Unmarshal([]byte(response), &responseJSON)
 				require.NoError(t, err, "Failed to parse response JSON")
 
-				assert.Equal(t, expectedJSON, responseJSON, "Response does not match expected")
+				// Re-marshal and compare as JSON strings for consistent comparison
+				expectedBytes, _ := json.Marshal(expectedJSON)
+				responseBytes, _ := json.Marshal(responseJSON)
+				expectedStr := string(expectedBytes)
+				responseStr := string(responseBytes)
+
+				if expectedStr != responseStr {
+					logFile := fmt.Sprintf("logs/STEP_%d.log", i+1)
+					f, err := os.OpenFile(logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+					if err == nil {
+						fmt.Fprintf(f, "JSON mismatch:\nExpected: %s\nActual: %s\n", expectedStr, responseStr) //nolint:errcheck
+						_ = f.Close()
+					}
+				}
+
+				assert.JSONEq(t, expectedStr, responseStr, "Response does not match expected")
 			}
 
 			t.Logf("Response: %s", response)

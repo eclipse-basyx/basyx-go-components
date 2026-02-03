@@ -34,14 +34,18 @@
 //nolint:all
 package model
 
-import "encoding/json"
+import (
+	"encoding/json"
+
+	"github.com/FriedJannik/aas-go-sdk/types"
+)
 
 type EntityValue struct {
-	EntityType EntityType `json:"entityType,omitempty"`
+	EntityType string `json:"entityType,omitempty"`
 
 	GlobalAssetID string `json:"globalAssetId,omitempty" validate:"regexp=^([\\\\\\\\x09\\\\\\\\x0a\\\\\\\\x0d\\\\\\\\x20-\\\\\\\\ud7ff\\\\\\\\ue000-\\\\\\\\ufffd]|\\\\\\\\ud800[\\\\\\\\udc00-\\\\\\\\udfff]|[\\\\\\\\ud801-\\\\\\\\udbfe][\\\\\\\\udc00-\\\\\\\\udfff]|\\\\\\\\udbff[\\\\\\\\udc00-\\\\\\\\udfff])*$"`
 
-	SpecificAssetIds []map[string]interface{} `json:"specificAssetIds,omitempty"`
+	SpecificAssetIds []map[string]any `json:"specificAssetIds,omitempty"`
 
 	// The ValueOnly serialization (patternProperties and propertyNames will probably be supported with OpenApi 3.1). For the full description of the generic JSON validation schema see the ValueOnly-Serialization as defined in the 'Specification of the Asset Administration Shell - Part 2'.
 	Statements map[string]SubmodelElementValue `json:"statements,omitempty"`
@@ -90,8 +94,8 @@ func (e *EntityValue) UnmarshalJSON(data []byte) error {
 }
 
 // GetModelType returns the model type name for Entity
-func (e EntityValue) GetModelType() string {
-	return "Entity"
+func (e EntityValue) GetModelType() types.ModelType {
+	return types.ModelTypeEntity
 }
 
 // AssertEntityValueRequired checks if the required fields are not zero-ed

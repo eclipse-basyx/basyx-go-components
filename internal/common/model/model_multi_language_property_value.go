@@ -9,7 +9,11 @@
 //nolint:all
 package model
 
-import "encoding/json"
+import (
+	"encoding/json"
+
+	"github.com/FriedJannik/aas-go-sdk/types"
+)
 
 // MultiLanguagePropertyValue represents the Value-Only serialization of a MultiLanguageProperty.
 // According to spec: Serialized as array of JSON objects with language and localized string.
@@ -29,6 +33,6 @@ func (m MultiLanguagePropertyValue) MarshalJSON() ([]byte, error) {
 }
 
 // GetModelType returns the model type name for MultiLanguageProperty
-func (m MultiLanguagePropertyValue) GetModelType() string {
-	return "MultiLanguageProperty"
+func (m MultiLanguagePropertyValue) GetModelType() types.ModelType {
+	return types.ModelTypeMultiLanguageProperty
 }

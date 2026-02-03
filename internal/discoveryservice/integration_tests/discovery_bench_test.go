@@ -37,8 +37,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
-	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	testenv "github.com/eclipse-basyx/basyx-go-components/internal/common/testenv"
 )
 
@@ -46,18 +46,18 @@ var seedFlag = flag.Int64("seed", 1, "rng seed for discovery bench determinism")
 
 type discoveryState struct {
 	rng         *mrand.Rand
-	aasToLinks  map[string][]model.SpecificAssetID
+	aasToLinks  map[string][]types.ISpecificAssetID
 	aasList     []string
 	cursorByAAS map[string]string
-	reusePool   []model.SpecificAssetID // reused name/value pairs to simulate overlap
+	reusePool   []types.ISpecificAssetID // reused name/value pairs to simulate overlap
 }
 
 func newDiscoveryState(seed int64) *discoveryState {
 	return &discoveryState{
 		rng:         mrand.New(mrand.NewSource(seed)),
-		aasToLinks:  make(map[string][]model.SpecificAssetID),
+		aasToLinks:  make(map[string][]types.ISpecificAssetID),
 		cursorByAAS: make(map[string]string),
-		reusePool:   make([]model.SpecificAssetID, 0, 512),
+		reusePool:   make([]types.ISpecificAssetID, 0, 512),
 	}
 }
 
@@ -108,7 +108,7 @@ func (s *discoveryState) pickWeightedOp() string {
 	return "search"
 }
 
-func (s *discoveryState) add(aasID string, links []model.SpecificAssetID) {
+func (s *discoveryState) add(aasID string, links []types.ISpecificAssetID) {
 	if _, ok := s.aasToLinks[aasID]; ok {
 		return
 	}
@@ -142,17 +142,13 @@ func (s *discoveryState) randomAAS() (string, bool) {
 	return s.aasList[s.rng.Intn(len(s.aasList))], true
 }
 
-func (s *discoveryState) randomLinks(n int) []model.SpecificAssetID {
-	out := make([]model.SpecificAssetID, n)
+func (s *discoveryState) randomLinks(n int) []types.ISpecificAssetID {
+	out := make([]types.ISpecificAssetID, n)
 	for i := 0; i < n; i++ {
 		if len(s.reusePool) > 0 && s.pct(reusePctPost) {
 			out[i] = s.reusePool[s.rng.Intn(len(s.reusePool))]
 		} else {
-			out[i] = model.SpecificAssetID{
-
-				Name:  "n_" + s.randHex(6),
-				Value: "v_" + s.randHex(6),
-			}
+			out[i] = types.NewSpecificAssetID("n_"+s.randHex(6), "v_"+s.randHex(6))
 		}
 	}
 	return out
@@ -293,7 +289,7 @@ func (d *DiscoveryBench) DoOne(iter int) testenv.ComponentResult {
 				},
 			}
 		}
-		pairs := make([]model.SpecificAssetID, k)
+		pairs := make([]types.ISpecificAssetID, k)
 		for i := 0; i < k; i++ {
 			if len(st.aasList) == 0 {
 				break
@@ -309,7 +305,7 @@ func (d *DiscoveryBench) DoOne(iter int) testenv.ComponentResult {
 		url := fmt.Sprintf("%s/lookup/shellsByAssetLink?limit=%d", testenv.BaseURL, searchLimit)
 		body := make([]map[string]string, 0, len(pairs))
 		for _, p := range pairs {
-			body = append(body, map[string]string{"name": p.Name, "value": p.Value})
+			body = append(body, map[string]string{"name": p.Name(), "value": p.Value()})
 		}
 		reqBody, _ := json.Marshal(map[string]any{"body": body, "limit": searchLimit})
 

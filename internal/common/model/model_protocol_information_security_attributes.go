@@ -25,7 +25,7 @@ type ProtocolInformationSecurityAttributes struct {
 
 // AssertProtocolInformationSecurityAttributesRequired checks if the required fields are not zero-ed
 func AssertProtocolInformationSecurityAttributesRequired(obj ProtocolInformationSecurityAttributes) error {
-	elements := map[string]interface{}{
+	elements := map[string]any{
 		"type":  obj.Type,
 		"key":   obj.Key,
 		"value": obj.Value,

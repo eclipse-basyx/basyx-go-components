@@ -1017,7 +1017,7 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) PatchSubmodelByIdVa
 		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
 		return
 	}
-	var bodyParam map[string]interface{}
+	var bodyParam map[string]any
 	d := json.NewDecoder(r.Body)
 	d.DisallowUnknownFields()
 	if err := d.Decode(&bodyParam); err != nil {

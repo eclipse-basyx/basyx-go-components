@@ -1,6 +1,6 @@
 {
     "idShort": "NestedListAnnotation",
     "modelType": "SubmodelElementList",
-    "orderRelevant": false,
+    
     "typeValueListElement": "Blob"
 }

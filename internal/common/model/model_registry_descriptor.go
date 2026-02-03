@@ -11,12 +11,14 @@
 
 package model
 
+import "github.com/FriedJannik/aas-go-sdk/types"
+
 type RegistryDescriptor struct {
-	Description []LangStringTextType `json:"description,omitempty"`
+	Description []types.ILangStringTextType `json:"description,omitempty"`
 
-	DisplayName []LangStringNameType `json:"displayName,omitempty"`
+	DisplayName []types.ILangStringNameType `json:"displayName,omitempty"`
 
-	Administration *AdministrativeInformation `json:"administration,omitempty"`
+	Administration types.IAdministrativeInformation `json:"administration,omitempty"`
 
 	RegistryType string `json:"registryType,omitempty" validate:"regexp=^([\\\\x09\\\\x0a\\\\x0d\\\\x20-\\\\ud7ff\\\\ue000-\\\\ufffd]|\\\\ud800[\\\\udc00-\\\\udfff]|[\\\\ud801-\\\\udbfe][\\\\udc00-\\\\udfff]|\\\\udbff[\\\\udc00-\\\\udfff])*$"`
 
@@ -33,28 +35,12 @@ type RegistryDescriptor struct {
 
 // AssertRegistryDescriptorRequired checks if the required fields are not zero-ed
 func AssertRegistryDescriptorRequired(obj RegistryDescriptor) error {
-	elements := map[string]interface{}{
+	elements := map[string]any{
 		"id": obj.Id,
 	}
 	for name, el := range elements {
 		if isZero := IsZeroValue(el); isZero {
 			return &RequiredError{Field: name}
-		}
-	}
-
-	for _, el := range obj.Description {
-		if err := AssertLangStringTextTypeRequired(el); err != nil {
-			return err
-		}
-	}
-	for _, el := range obj.DisplayName {
-		if err := AssertLangStringNameTypeRequired(el); err != nil {
-			return err
-		}
-	}
-	if obj.Administration != nil {
-		if err := AssertAdministrativeInformationRequired(*obj.Administration); err != nil {
-			return err
 		}
 	}
 	for _, el := range obj.Endpoints {
@@ -67,22 +53,6 @@ func AssertRegistryDescriptorRequired(obj RegistryDescriptor) error {
 
 // AssertRegistryConstraints checks if the values respects the defined constraints
 func AssertRegistryDescriptorConstraints(obj RegistryDescriptor) error {
-	for _, el := range obj.Description {
-		if err := AssertLangStringTextTypeConstraints(el); err != nil {
-			return err
-		}
-	}
-	for _, el := range obj.DisplayName {
-		if err := AssertLangStringNameTypeConstraints(el); err != nil {
-			return err
-		}
-	}
-
-	if obj.Administration != nil {
-		if err := AssertAdministrativeInformationConstraints(*obj.Administration); err != nil {
-			return err
-		}
-	}
 	for _, el := range obj.Endpoints {
 		if err := AssertEndpointConstraints(el); err != nil {
 			return err

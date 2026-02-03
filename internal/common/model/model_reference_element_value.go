@@ -34,13 +34,17 @@
 //nolint:all
 package model
 
-import "encoding/json"
+import (
+	"encoding/json"
+
+	"github.com/FriedJannik/aas-go-sdk/types"
+)
 
 // ReferenceElementValue type of ReferenceElementValue
 type ReferenceElementValue struct {
-	Type ReferenceTypes `json:"type,omitempty"`
+	Type string `json:"type,omitempty"`
 
-	Keys []Key `json:"keys,omitempty"`
+	Keys []map[string]any `json:"keys,omitempty"`
 }
 
 // MarshalValueOnly serializes ReferenceElementValue in Value-Only format
@@ -55,26 +59,6 @@ func (r ReferenceElementValue) MarshalJSON() ([]byte, error) {
 }
 
 // GetModelType returns the model type name for ReferenceElement
-func (r ReferenceElementValue) GetModelType() string {
-	return "ReferenceElement"
-}
-
-// AssertReferenceElementValueRequired checks if the required fields are not zero-ed
-func AssertReferenceElementValueRequired(obj ReferenceElementValue) error {
-	for _, el := range obj.Keys {
-		if err := AssertKeyRequired(el); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// AssertReferenceElementValueConstraints checks if the values respects the defined constraints
-func AssertReferenceElementValueConstraints(obj ReferenceElementValue) error {
-	for _, el := range obj.Keys {
-		if err := AssertKeyConstraints(el); err != nil {
-			return err
-		}
-	}
-	return nil
+func (r ReferenceElementValue) GetModelType() types.ModelType {
+	return types.ModelTypeReferenceElement
 }

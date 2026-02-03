@@ -18,7 +18,7 @@ import (
 // The function inspects the JSON structure to determine the correct concrete type.
 func UnmarshalSubmodelElementValue(data []byte) (SubmodelElementValue, error) {
 	// First, try to unmarshal into a generic map to inspect the structure
-	var raw map[string]interface{}
+	var raw map[string]any
 	if err := json.Unmarshal(data, &raw); err != nil {
 		// If it's not an object, it might be a simple PropertyValue (just a string)
 		var strVal string
@@ -41,7 +41,7 @@ func UnmarshalSubmodelElementValue(data []byte) (SubmodelElementValue, error) {
 	// Detect type based on structure
 	if observed, hasObserved := raw["observed"]; hasObserved {
 		// BasicEventElementValue
-		if obsMap, ok := observed.(map[string]interface{}); ok {
+		if obsMap, ok := observed.(map[string]any); ok {
 			if _, hasType := obsMap["type"]; hasType {
 				var val BasicEventElementValue
 				if err := json.Unmarshal(data, &val); err != nil {

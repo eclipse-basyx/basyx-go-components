@@ -32,12 +32,14 @@ package submodelelements
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"reflect"
 
+	"github.com/FriedJannik/aas-go-sdk/jsonization"
+	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
-	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	persistenceutils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
 	jsoniter "github.com/json-iterator/go"
 	_ "github.com/lib/pq" // PostgreSQL Treiber
@@ -66,11 +68,11 @@ type PostgreSQLSMECrudHandler struct {
 //
 // Returns:
 //   - bool: true if the reference is nil or contains only zero values, false otherwise
-func isEmptyReference(ref *gen.Reference) bool {
+func isEmptyReference(ref types.IReference) bool {
 	if ref == nil {
 		return true
 	}
-	return reflect.DeepEqual(ref, gen.Reference{})
+	return reflect.DeepEqual(ref, types.Reference{})
 }
 
 // NewPostgreSQLSMECrudHandler creates a new PostgreSQL submodel element CRUD handler.
@@ -119,29 +121,25 @@ func NewPostgreSQLSMECrudHandler(db *sql.DB) (*PostgreSQLSMECrudHandler, error) 
 //	id, err := handler.CreateWithPath(tx, "submodel123", parentDbID, "sensors.temperature", tempProp, 0)
 //
 //nolint:revive // cyclomatic-complexity is acceptable here due to the multiple steps involved in creation
-func (p *PostgreSQLSMECrudHandler) CreateWithPath(tx *sql.Tx, submodelID string, parentID int, idShortPath string, submodelElement gen.SubmodelElement, position int, rootSubmodelElementID int) (int, error) {
+func (p *PostgreSQLSMECrudHandler) CreateWithPath(tx *sql.Tx, submodelID string, parentID int, idShortPath string, submodelElement types.ISubmodelElement, position int, rootSubmodelElementID int) (int, error) {
 	var referenceID sql.NullInt64
 	var err error
-	if submodelElement.GetSemanticID() != nil {
-		referenceID, err = persistenceutils.CreateReference(tx, submodelElement.GetSemanticID(), sql.NullInt64{}, sql.NullInt64{})
+	if submodelElement.SemanticID() != nil {
+		referenceID, err = persistenceutils.CreateReference(tx, submodelElement.SemanticID(), sql.NullInt64{}, sql.NullInt64{})
 		if err != nil {
 			return 0, err
 		}
 	}
 
-	var convertedDescription []gen.LangStringText
-	for _, desc := range submodelElement.GetDescription() {
-		convertedDescription = append(convertedDescription, desc)
-	}
-	descriptionID, err := persistenceutils.CreateLangStringTextTypes(tx, convertedDescription)
+	descriptionID, err := persistenceutils.CreateLangStringTextTypes(tx, submodelElement.Description())
 	if err != nil {
-		_, _ = fmt.Println(err)
+		_, _ = fmt.Println("SMREPO-CRWP-CRDESC " + err.Error())
 		return 0, common.NewInternalServerError("Failed to create Description - no changes applied - see console for details")
 	}
 
-	displayNameID, err := persistenceutils.CreateLangStringNameTypes(tx, submodelElement.GetDisplayName())
+	displayNameID, err := persistenceutils.CreateLangStringNameTypes(tx, submodelElement.DisplayName())
 	if err != nil {
-		_, _ = fmt.Println(err)
+		_, _ = fmt.Println("SMREPO-CRWP-CRDISP " + err.Error())
 		return 0, common.NewInternalServerError("Failed to create DisplayName - no changes applied - see console for details")
 	}
 
@@ -160,9 +158,18 @@ func (p *PostgreSQLSMECrudHandler) CreateWithPath(tx *sql.Tx, submodelID string,
 	}
 
 	edsJSONString := "[]"
-	if len(submodelElement.GetEmbeddedDataSpecifications()) > 0 {
+	eds := submodelElement.EmbeddedDataSpecifications()
+	if len(eds) > 0 {
 		var json = jsoniter.ConfigCompatibleWithStandardLibrary
-		edsBytes, err := json.Marshal(submodelElement.GetEmbeddedDataSpecifications())
+		var toJson []map[string]any
+		for _, ed := range eds {
+			jsonObj, err := jsonization.ToJsonable(ed)
+			if err != nil {
+				return 0, common.NewErrBadRequest("SMREPO-SMECRUD-CREATE-EDSJSON Failed to convert EmbeddedDataSpecification to jsonable: " + err.Error())
+			}
+			toJson = append(toJson, jsonObj)
+		}
+		edsBytes, err := json.Marshal(toJson)
 		if err != nil {
 			return 0, err
 		}
@@ -170,19 +177,36 @@ func (p *PostgreSQLSMECrudHandler) CreateWithPath(tx *sql.Tx, submodelID string,
 	}
 
 	supplementalSemanticIDsJSONString := "[]"
-	if len(submodelElement.GetSupplementalSemanticIds()) > 0 {
-		var json = jsoniter.ConfigCompatibleWithStandardLibrary
-		supplementalSemanticIDsBytes, err := json.Marshal(submodelElement.GetSupplementalSemanticIds())
+	supplementalSemanticIDs := submodelElement.SupplementalSemanticIDs()
+	if len(supplementalSemanticIDs) > 0 {
+		var toJson []map[string]any
+		for _, ref := range submodelElement.SupplementalSemanticIDs() {
+			jsonObj, err := jsonization.ToJsonable(ref)
+			if err != nil {
+				return 0, common.NewErrBadRequest("Failed to convert Reference to jsonable object - no changes applied")
+			}
+			toJson = append(toJson, jsonObj)
+		}
+		supplBytes, err := json.Marshal(toJson)
 		if err != nil {
 			return 0, err
 		}
-		supplementalSemanticIDsJSONString = string(supplementalSemanticIDsBytes)
+		supplementalSemanticIDsJSONString = string(supplBytes)
 	}
 
 	extensionsJSONString := "[]"
-	if len(submodelElement.GetExtensions()) > 0 {
+	extension := submodelElement.Extensions()
+	if len(extension) > 0 {
 		var json = jsoniter.ConfigCompatibleWithStandardLibrary
-		extensionsBytes, err := json.Marshal(submodelElement.GetExtensions())
+		var toJson []map[string]any
+		for _, ext := range extension {
+			jsonObj, err := jsonization.ToJsonable(ext)
+			if err != nil {
+				return 0, common.NewErrBadRequest("SMREPO-SMECRUD-CREATE-EXTJSON Failed to convert Extension to jsonable: " + err.Error())
+			}
+			toJson = append(toJson, jsonObj)
+		}
+		extensionsBytes, err := json.Marshal(toJson)
 		if err != nil {
 			return 0, err
 		}
@@ -196,9 +220,9 @@ func (p *PostgreSQLSMECrudHandler) CreateWithPath(tx *sql.Tx, submodelID string,
 		submodelID,
 		parentDBId,
 		position,
-		submodelElement.GetIdShort(),
-		submodelElement.GetCategory(),
-		submodelElement.GetModelType(),
+		submodelElement.IDShort(),
+		submodelElement.Category(),
+		submodelElement.ModelType(),
 		referenceID, // This will be NULL if no semantic ID was provided
 		idShortPath, // Use the provided idShortPath instead of just GetIdShort()
 		descriptionID,
@@ -228,7 +252,7 @@ func (p *PostgreSQLSMECrudHandler) CreateWithPath(tx *sql.Tx, submodelID string,
 		}
 	}
 
-	qualifiers := submodelElement.GetQualifiers()
+	qualifiers := submodelElement.Qualifiers()
 	if len(qualifiers) > 0 {
 		for i, qualifier := range qualifiers {
 			qualifierID, err := persistenceutils.CreateQualifier(tx, qualifier, i)
@@ -248,7 +272,7 @@ func (p *PostgreSQLSMECrudHandler) CreateWithPath(tx *sql.Tx, submodelID string,
 			}
 			_, err = tx.Exec(insertQuery, insertArgs...)
 			if err != nil {
-				_, _ = fmt.Println(err)
+				_, _ = fmt.Println("SMREPO-CRWP-INSQUAL " + err.Error())
 				return 0, common.NewInternalServerError("Failed to Create Qualifier for Submodel Element with ID '" + fmt.Sprintf("%d", id) + "'. See console for details.")
 			}
 		}
@@ -284,8 +308,8 @@ func (p *PostgreSQLSMECrudHandler) CreateWithPath(tx *sql.Tx, submodelID string,
 // Example:
 //
 //	id, err := handler.Create(tx, "submodel123", propertyElement)
-func (p *PostgreSQLSMECrudHandler) Create(tx *sql.Tx, submodelID string, submodelElement gen.SubmodelElement) (int, error) {
-	return p.CreateWithPath(tx, submodelID, 0, submodelElement.GetIdShort(), submodelElement, 0, 0)
+func (p *PostgreSQLSMECrudHandler) Create(tx *sql.Tx, submodelID string, submodelElement types.ISubmodelElement) (int, error) {
+	return p.CreateWithPath(tx, submodelID, 0, *submodelElement.IDShort(), submodelElement, 0, 0)
 }
 
 // Update updates an existing SubmodelElement identified by its idShort or path.
@@ -326,7 +350,7 @@ func (p *PostgreSQLSMECrudHandler) Create(tx *sql.Tx, submodelID string, submode
 //	err := handler.Update(tx, "submodel123", "sensors.temperature", updatedProperty)
 //
 //nolint:revive // cyclomatic-complexity is acceptable here due to the multiple update steps
-func (p *PostgreSQLSMECrudHandler) Update(submodelID string, idShortOrPath string, submodelElement gen.SubmodelElement, tx *sql.Tx, isPut bool) error {
+func (p *PostgreSQLSMECrudHandler) Update(submodelID string, idShortOrPath string, submodelElement types.ISubmodelElement, tx *sql.Tx, isPut bool) error {
 	// Handle transaction creation if tx is nil
 	var localTx *sql.Tx
 	var err error
@@ -386,36 +410,41 @@ func (p *PostgreSQLSMECrudHandler) Update(submodelID string, idShortOrPath strin
 
 	// Handle semantic ID update
 	var newSemanticID sql.NullInt64
-	if submodelElement.GetSemanticID() != nil {
-		newSemanticID, err = persistenceutils.CreateReference(localTx, submodelElement.GetSemanticID(), sql.NullInt64{}, sql.NullInt64{})
+	semanticID := submodelElement.SemanticID()
+	if semanticID != nil {
+		newSemanticID, err = persistenceutils.CreateReference(localTx, semanticID, sql.NullInt64{}, sql.NullInt64{})
 		if err != nil {
 			return err
 		}
 	}
 
 	// Handle description update
-	var convertedDescription []gen.LangStringText
-	for _, desc := range submodelElement.GetDescription() {
-		convertedDescription = append(convertedDescription, desc)
-	}
-	newDescriptionID, err := persistenceutils.CreateLangStringTextTypes(localTx, convertedDescription)
+	newDescriptionID, err := persistenceutils.CreateLangStringTextTypes(localTx, submodelElement.Description())
 	if err != nil {
-		_, _ = fmt.Println(err)
+		_, _ = fmt.Println("SMREPO-UPD-CRDESC " + err.Error())
 		return common.NewInternalServerError("Failed to update Description - see console for details")
 	}
 
 	// Handle display name update
-	newDisplayNameID, err := persistenceutils.CreateLangStringNameTypes(localTx, submodelElement.GetDisplayName())
+	newDisplayNameID, err := persistenceutils.CreateLangStringNameTypes(localTx, submodelElement.DisplayName())
 	if err != nil {
-		_, _ = fmt.Println(err)
+		_, _ = fmt.Println("SMREPO-UPD-CRDISP " + err.Error())
 		return common.NewInternalServerError("Failed to update DisplayName - see console for details")
 	}
 
 	// Handle embedded data specifications
 	edsJSONString := "[]"
-	if len(submodelElement.GetEmbeddedDataSpecifications()) > 0 {
+	if len(submodelElement.EmbeddedDataSpecifications()) > 0 {
 		var json = jsoniter.ConfigCompatibleWithStandardLibrary
-		edsBytes, err := json.Marshal(submodelElement.GetEmbeddedDataSpecifications())
+		var toJson []map[string]any
+		for _, eds := range submodelElement.EmbeddedDataSpecifications() {
+			jsonObj, err := jsonization.ToJsonable(eds)
+			if err != nil {
+				return common.NewErrBadRequest("Failed to convert EmbeddedDataSpecification to jsonable object - no changes applied - SMREPO-SME-UPDATE-EDSJSONIZATION")
+			}
+			toJson = append(toJson, jsonObj)
+		}
+		edsBytes, err := json.Marshal(toJson)
 		if err != nil {
 			return err
 		}
@@ -424,20 +453,35 @@ func (p *PostgreSQLSMECrudHandler) Update(submodelID string, idShortOrPath strin
 
 	// Handle supplemental semantic IDs
 	supplementalSemanticIDsJSONString := "[]"
-	if len(submodelElement.GetSupplementalSemanticIds()) > 0 {
-		var json = jsoniter.ConfigCompatibleWithStandardLibrary
-		supplementalSemanticIDsBytes, err := json.Marshal(submodelElement.GetSupplementalSemanticIds())
+	if len(submodelElement.SupplementalSemanticIDs()) > 0 {
+		var toJson []map[string]any
+		for _, ref := range submodelElement.SupplementalSemanticIDs() {
+			jsonObj, err := jsonization.ToJsonable(ref)
+			if err != nil {
+				return common.NewErrBadRequest("Failed to convert Reference to jsonable object - no changes applied - SMREPO-SME-UPDATE-SUPPLJSONIZATION")
+			}
+			toJson = append(toJson, jsonObj)
+		}
+		supplBytes, err := json.Marshal(toJson)
 		if err != nil {
 			return err
 		}
-		supplementalSemanticIDsJSONString = string(supplementalSemanticIDsBytes)
+		supplementalSemanticIDsJSONString = string(supplBytes)
 	}
 
 	// Handle extensions
 	extensionsJSONString := "[]"
-	if len(submodelElement.GetExtensions()) > 0 {
+	if len(submodelElement.Extensions()) > 0 {
 		var json = jsoniter.ConfigCompatibleWithStandardLibrary
-		extensionsBytes, err := json.Marshal(submodelElement.GetExtensions())
+		var toJson []map[string]any
+		for _, ext := range submodelElement.Extensions() {
+			jsonObj, err := jsonization.ToJsonable(ext)
+			if err != nil {
+				return common.NewErrBadRequest("Failed to convert Extension to jsonable object - no changes applied - SMREPO-SME-UPDATE-EXTJSONIZATION")
+			}
+			toJson = append(toJson, jsonObj)
+		}
+		extensionsBytes, err := json.Marshal(toJson)
 		if err != nil {
 			return err
 		}
@@ -447,7 +491,7 @@ func (p *PostgreSQLSMECrudHandler) Update(submodelID string, idShortOrPath strin
 	// Update the main submodel_element record FIRST to release foreign key constraints
 	updateQuery := dialect.Update(goqu.T("submodel_element")).
 		Set(goqu.Record{
-			"category":                    submodelElement.GetCategory(),
+			"category":                    submodelElement.Category(),
 			"semantic_id":                 newSemanticID,
 			"description_id":              newDescriptionID,
 			"displayname_id":              newDisplayNameID,
@@ -471,7 +515,7 @@ func (p *PostgreSQLSMECrudHandler) Update(submodelID string, idShortOrPath strin
 	if oldSemanticID.Valid {
 		err = persistenceutils.DeleteReference(localTx, int(oldSemanticID.Int64))
 		if err != nil {
-			_, _ = fmt.Println(err)
+			_, _ = fmt.Println("SMREPO-UPD-DELSEMID " + err.Error())
 			return common.NewInternalServerError("Failed to delete old semantic ID - see console for details")
 		}
 	}
@@ -479,7 +523,7 @@ func (p *PostgreSQLSMECrudHandler) Update(submodelID string, idShortOrPath strin
 	if oldDescriptionID.Valid {
 		err = persistenceutils.DeleteLangStringTextTypes(localTx, int(oldDescriptionID.Int64))
 		if err != nil {
-			_, _ = fmt.Println(err)
+			_, _ = fmt.Println("SMREPO-UPD-DELDESC " + err.Error())
 			return common.NewInternalServerError("Failed to delete old description - see console for details")
 		}
 	}
@@ -487,7 +531,7 @@ func (p *PostgreSQLSMECrudHandler) Update(submodelID string, idShortOrPath strin
 	if oldDisplayNameID.Valid {
 		err = persistenceutils.DeleteLangStringNameTypes(localTx, int(oldDisplayNameID.Int64))
 		if err != nil {
-			_, _ = fmt.Println(err)
+			_, _ = fmt.Println("SMREPO-UPD-DELDISP " + err.Error())
 			return common.NewInternalServerError("Failed to delete old display name - see console for details")
 		}
 	}
@@ -504,7 +548,7 @@ func (p *PostgreSQLSMECrudHandler) Update(submodelID string, idShortOrPath strin
 
 	rows, err := localTx.Query(selectQualifiersSQL, selectQualifiersArgs...)
 	if err != nil {
-		_, _ = fmt.Println(err)
+		_, _ = fmt.Println("SMREPO-UPD-SELQUAL " + err.Error())
 		return common.NewInternalServerError("Failed to retrieve old qualifiers - see console for details")
 	}
 
@@ -533,20 +577,20 @@ func (p *PostgreSQLSMECrudHandler) Update(submodelID string, idShortOrPath strin
 
 	_, err = localTx.Exec(deleteSQL, deleteArgs...)
 	if err != nil {
-		_, _ = fmt.Println(err)
+		_, _ = fmt.Println("SMREPO-UPD-DELQUALASSOC " + err.Error())
 		return common.NewInternalServerError("Failed to delete old qualifier associations - see console for details")
 	}
 
 	// Delete the actual qualifier records and their associated data
 	for _, qualifierID := range oldQualifierIDs {
 		if err := persistenceutils.DeleteQualifier(localTx, qualifierID); err != nil {
-			_, _ = fmt.Println(err)
+			_, _ = fmt.Println("SMREPO-UPD-DELQUAL " + err.Error())
 			return common.NewInternalServerError("Failed to delete old qualifier - see console for details")
 		}
 	}
 
 	// Create new qualifiers
-	qualifiers := submodelElement.GetQualifiers()
+	qualifiers := submodelElement.Qualifiers()
 	if len(qualifiers) > 0 {
 		for i, qualifier := range qualifiers {
 			qualifierID, err := persistenceutils.CreateQualifier(localTx, qualifier, i)
@@ -565,7 +609,7 @@ func (p *PostgreSQLSMECrudHandler) Update(submodelID string, idShortOrPath strin
 
 			_, err = localTx.Exec(insertSQL, insertArgs...)
 			if err != nil {
-				_, _ = fmt.Println(err)
+				_, _ = fmt.Println("SMREPO-UPD-CRQUAL " + err.Error())
 				return common.NewInternalServerError("Failed to create qualifier for Submodel Element with ID Short'" + idShortOrPath + "'. See console for details.")
 			}
 		}
@@ -700,20 +744,21 @@ func (p *PostgreSQLSMECrudHandler) GetNextPosition(parentID int) (int, error) {
 //
 //	modelType, err := handler.GetSubmodelElementType("sensors.temperature")
 //	// Use modelType to get the appropriate handler via GetSMEHandlerByModelType
-func (p *PostgreSQLSMECrudHandler) GetSubmodelElementType(idShortPath string) (string, error) {
+func (p *PostgreSQLSMECrudHandler) GetSubmodelElementType(idShortPath string) (*types.ModelType, error) {
 	dialect := goqu.Dialect("postgres")
 	selectQuery, selectArgs, err := dialect.From("submodel_element").
 		Select("model_type").
 		Where(goqu.C("idshort_path").Eq(idShortPath)).
 		ToSQL()
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
-	var modelType string
+	var modelType int64
 	err = p.Db.QueryRow(selectQuery, selectArgs...).Scan(&modelType)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	return modelType, nil
+	modelTypeInstance := types.ModelType(modelType)
+	return &modelTypeInstance, nil
 }

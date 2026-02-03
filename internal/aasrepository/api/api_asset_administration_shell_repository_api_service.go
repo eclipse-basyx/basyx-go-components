@@ -18,6 +18,7 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/FriedJannik/aas-go-sdk/types"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
 
@@ -38,51 +39,51 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllAssetAdministrat
 	// Add api_asset_administration_shell_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
 
 	// TODO: Uncomment the next line to return response gen.Response(200, GetAssetAdministrationShellsResult{}) or use other options such as http.Ok ...
-	// return gen.Response(200, GetAssetAdministrationShellsResult{}), nil
+	// return types.Response(200, GetAssetAdministrationShellsResult{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(400, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(400, Result{}), nil
+	// return types.Response(400, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(401, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(401, Result{}), nil
+	// return types.Response(401, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(403, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(403, Result{}), nil
+	// return types.Response(403, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(500, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(500, Result{}), nil
+	// return types.Response(500, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(0, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(0, Result{}), nil
+	// return types.Response(0, Result{}), nil
 
 	return gen.Response(http.StatusNotImplemented, nil), errors.New("GetAllAssetAdministrationShells method not implemented")
 }
 
 // PostAssetAdministrationShell - Creates a new Asset Administration Shell
-func (s *AssetAdministrationShellRepositoryAPIAPIService) PostAssetAdministrationShell(ctx context.Context, assetAdministrationShell gen.AssetAdministrationShell) (gen.ImplResponse, error) {
+func (s *AssetAdministrationShellRepositoryAPIAPIService) PostAssetAdministrationShell(ctx context.Context, assetAdministrationShell types.IAssetAdministrationShell) (gen.ImplResponse, error) {
 	// TODO - update PostAssetAdministrationShell with the required logic for this service method.
 	// Add api_asset_administration_shell_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
 
 	// TODO: Uncomment the next line to return response gen.Response(201, AssetAdministrationShell{}) or use other options such as http.Ok ...
-	// return gen.Response(201, AssetAdministrationShell{}), nil
+	// return types.Response(201, AssetAdministrationShell{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(400, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(400, Result{}), nil
+	// return types.Response(400, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(401, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(401, Result{}), nil
+	// return types.Response(401, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(403, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(403, Result{}), nil
+	// return types.Response(403, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(409, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(409, Result{}), nil
+	// return types.Response(409, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(500, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(500, Result{}), nil
+	// return types.Response(500, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(0, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(0, Result{}), nil
+	// return types.Response(0, Result{}), nil
 
 	return gen.Response(http.StatusNotImplemented, nil), errors.New("PostAssetAdministrationShell method not implemented")
 }
@@ -93,22 +94,22 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllAssetAdministrat
 	// Add api_asset_administration_shell_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
 
 	// TODO: Uncomment the next line to return response gen.Response(200, GetReferencesResult{}) or use other options such as http.Ok ...
-	// return gen.Response(200, GetReferencesResult{}), nil
+	// return types.Response(200, GetReferencesResult{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(400, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(400, Result{}), nil
+	// return types.Response(400, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(401, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(401, Result{}), nil
+	// return types.Response(401, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(403, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(403, Result{}), nil
+	// return types.Response(403, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(500, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(500, Result{}), nil
+	// return types.Response(500, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(0, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(0, Result{}), nil
+	// return types.Response(0, Result{}), nil
 
 	return gen.Response(http.StatusNotImplemented, nil), errors.New("GetAllAssetAdministrationShellsReference method not implemented")
 }
@@ -119,54 +120,54 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAssetAdministration
 	// Add api_asset_administration_shell_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
 
 	// TODO: Uncomment the next line to return response gen.Response(200, AssetAdministrationShell{}) or use other options such as http.Ok ...
-	// return gen.Response(200, AssetAdministrationShell{}), nil
+	// return types.Response(200, AssetAdministrationShell{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(400, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(400, Result{}), nil
+	// return types.Response(400, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(401, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(401, Result{}), nil
+	// return types.Response(401, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(403, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(403, Result{}), nil
+	// return types.Response(403, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(404, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(404, Result{}), nil
+	// return types.Response(404, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(500, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(500, Result{}), nil
+	// return types.Response(500, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(0, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(0, Result{}), nil
+	// return types.Response(0, Result{}), nil
 
 	return gen.Response(http.StatusNotImplemented, nil), errors.New("GetAssetAdministrationShellById method not implemented")
 }
 
 // PutAssetAdministrationShellById - Creates or updates an existing Asset Administration Shell
-func (s *AssetAdministrationShellRepositoryAPIAPIService) PutAssetAdministrationShellById(ctx context.Context, aasIdentifier string, assetAdministrationShell gen.AssetAdministrationShell) (gen.ImplResponse, error) {
+func (s *AssetAdministrationShellRepositoryAPIAPIService) PutAssetAdministrationShellById(ctx context.Context, aasIdentifier string, assetAdministrationShell types.IAssetAdministrationShell) (gen.ImplResponse, error) {
 	// TODO - update PutAssetAdministrationShellById with the required logic for this service method.
 	// Add api_asset_administration_shell_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
 
 	// TODO: Uncomment the next line to return response gen.Response(201, AssetAdministrationShell{}) or use other options such as http.Ok ...
-	// return gen.Response(201, AssetAdministrationShell{}), nil
+	// return types.Response(201, AssetAdministrationShell{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(204, {}) or use other options such as http.Ok ...
-	// return gen.Response(204, nil),nil
+	// return types.Response(204, nil),nil
 
 	// TODO: Uncomment the next line to return response gen.Response(400, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(400, Result{}), nil
+	// return types.Response(400, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(401, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(401, Result{}), nil
+	// return types.Response(401, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(403, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(403, Result{}), nil
+	// return types.Response(403, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(500, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(500, Result{}), nil
+	// return types.Response(500, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(0, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(0, Result{}), nil
+	// return types.Response(0, Result{}), nil
 
 	return gen.Response(http.StatusNotImplemented, nil), errors.New("PutAssetAdministrationShellById method not implemented")
 }
@@ -177,22 +178,22 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) DeleteAssetAdministrat
 	// Add api_asset_administration_shell_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
 
 	// TODO: Uncomment the next line to return response gen.Response(204, {}) or use other options such as http.Ok ...
-	// return gen.Response(204, nil),nil
+	// return types.Response(204, nil),nil
 
 	// TODO: Uncomment the next line to return response gen.Response(401, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(401, Result{}), nil
+	// return types.Response(401, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(403, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(403, Result{}), nil
+	// return types.Response(403, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(404, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(404, Result{}), nil
+	// return types.Response(404, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(500, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(500, Result{}), nil
+	// return types.Response(500, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(0, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(0, Result{}), nil
+	// return types.Response(0, Result{}), nil
 
 	return gen.Response(http.StatusNotImplemented, nil), errors.New("DeleteAssetAdministrationShellById method not implemented")
 }
@@ -203,25 +204,25 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAssetAdministration
 	// Add api_asset_administration_shell_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
 
 	// TODO: Uncomment the next line to return response gen.Response(200, Reference{}) or use other options such as http.Ok ...
-	// return gen.Response(200, Reference{}), nil
+	// return types.Response(200, Reference{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(400, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(400, Result{}), nil
+	// return types.Response(400, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(401, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(401, Result{}), nil
+	// return types.Response(401, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(403, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(403, Result{}), nil
+	// return types.Response(403, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(404, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(404, Result{}), nil
+	// return types.Response(404, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(500, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(500, Result{}), nil
+	// return types.Response(500, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(0, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(0, Result{}), nil
+	// return types.Response(0, Result{}), nil
 
 	return gen.Response(http.StatusNotImplemented, nil), errors.New("GetAssetAdministrationShellByIdReferenceAasRepository method not implemented")
 }
@@ -232,54 +233,54 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAssetInformationAas
 	// Add api_asset_administration_shell_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
 
 	// TODO: Uncomment the next line to return response gen.Response(200, AssetInformation{}) or use other options such as http.Ok ...
-	// return gen.Response(200, AssetInformation{}), nil
+	// return types.Response(200, AssetInformation{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(400, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(400, Result{}), nil
+	// return types.Response(400, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(401, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(401, Result{}), nil
+	// return types.Response(401, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(403, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(403, Result{}), nil
+	// return types.Response(403, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(404, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(404, Result{}), nil
+	// return types.Response(404, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(500, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(500, Result{}), nil
+	// return types.Response(500, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(0, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(0, Result{}), nil
+	// return types.Response(0, Result{}), nil
 
 	return gen.Response(http.StatusNotImplemented, nil), errors.New("GetAssetInformationAasRepository method not implemented")
 }
 
 // PutAssetInformationAasRepository - Updates the Asset Information
-func (s *AssetAdministrationShellRepositoryAPIAPIService) PutAssetInformationAasRepository(ctx context.Context, aasIdentifier string, assetInformation gen.AssetInformation) (gen.ImplResponse, error) {
+func (s *AssetAdministrationShellRepositoryAPIAPIService) PutAssetInformationAasRepository(ctx context.Context, aasIdentifier string, assetInformation types.IAssetInformation) (gen.ImplResponse, error) {
 	// TODO - update PutAssetInformationAasRepository with the required logic for this service method.
 	// Add api_asset_administration_shell_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
 
 	// TODO: Uncomment the next line to return response gen.Response(204, {}) or use other options such as http.Ok ...
-	// return gen.Response(204, nil),nil
+	// return types.Response(204, nil),nil
 
 	// TODO: Uncomment the next line to return response gen.Response(400, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(400, Result{}), nil
+	// return types.Response(400, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(401, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(401, Result{}), nil
+	// return types.Response(401, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(403, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(403, Result{}), nil
+	// return types.Response(403, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(404, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(404, Result{}), nil
+	// return types.Response(404, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(500, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(500, Result{}), nil
+	// return types.Response(500, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(0, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(0, Result{}), nil
+	// return types.Response(0, Result{}), nil
 
 	return gen.Response(http.StatusNotImplemented, nil), errors.New("PutAssetInformationAasRepository method not implemented")
 }
@@ -290,25 +291,25 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetThumbnailAasReposit
 	// Add api_asset_administration_shell_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
 
 	// TODO: Uncomment the next line to return response gen.Response(200, *os.File{}) or use other options such as http.Ok ...
-	// return gen.Response(200, *os.File{}), nil
+	// return types.Response(200, *os.File{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(400, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(400, Result{}), nil
+	// return types.Response(400, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(401, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(401, Result{}), nil
+	// return types.Response(401, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(403, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(403, Result{}), nil
+	// return types.Response(403, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(404, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(404, Result{}), nil
+	// return types.Response(404, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(500, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(500, Result{}), nil
+	// return types.Response(500, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(0, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(0, Result{}), nil
+	// return types.Response(0, Result{}), nil
 
 	return gen.Response(http.StatusNotImplemented, nil), errors.New("GetThumbnailAasRepository method not implemented")
 }
@@ -319,25 +320,25 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) PutThumbnailAasReposit
 	// Add api_asset_administration_shell_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
 
 	// TODO: Uncomment the next line to return response gen.Response(204, {}) or use other options such as http.Ok ...
-	// return gen.Response(204, nil),nil
+	// return types.Response(204, nil),nil
 
 	// TODO: Uncomment the next line to return response gen.Response(400, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(400, Result{}), nil
+	// return types.Response(400, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(401, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(401, Result{}), nil
+	// return types.Response(401, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(403, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(403, Result{}), nil
+	// return types.Response(403, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(404, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(404, Result{}), nil
+	// return types.Response(404, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(500, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(500, Result{}), nil
+	// return types.Response(500, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(0, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(0, Result{}), nil
+	// return types.Response(0, Result{}), nil
 
 	return gen.Response(http.StatusNotImplemented, nil), errors.New("PutThumbnailAasRepository method not implemented")
 }
@@ -348,28 +349,28 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) DeleteThumbnailAasRepo
 	// Add api_asset_administration_shell_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
 
 	// TODO: Uncomment the next line to return response gen.Response(200, {}) or use other options such as http.Ok ...
-	// return gen.Response(200, nil),nil
+	// return types.Response(200, nil),nil
 
 	// TODO: Uncomment the next line to return response gen.Response(204, AssetAdministrationShell{}) or use other options such as http.Ok ...
-	// return gen.Response(204, AssetAdministrationShell{}), nil
+	// return types.Response(204, AssetAdministrationShell{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(400, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(400, Result{}), nil
+	// return types.Response(400, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(401, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(401, Result{}), nil
+	// return types.Response(401, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(403, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(403, Result{}), nil
+	// return types.Response(403, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(404, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(404, Result{}), nil
+	// return types.Response(404, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(500, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(500, Result{}), nil
+	// return types.Response(500, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(0, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(0, Result{}), nil
+	// return types.Response(0, Result{}), nil
 
 	return gen.Response(http.StatusNotImplemented, nil), errors.New("DeleteThumbnailAasRepository method not implemented")
 }
@@ -380,57 +381,57 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllSubmodelReferenc
 	// Add api_asset_administration_shell_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
 
 	// TODO: Uncomment the next line to return response gen.Response(200, GetReferencesResult{}) or use other options such as http.Ok ...
-	// return gen.Response(200, GetReferencesResult{}), nil
+	// return types.Response(200, GetReferencesResult{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(400, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(400, Result{}), nil
+	// return types.Response(400, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(401, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(401, Result{}), nil
+	// return types.Response(401, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(403, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(403, Result{}), nil
+	// return types.Response(403, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(404, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(404, Result{}), nil
+	// return types.Response(404, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(500, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(500, Result{}), nil
+	// return types.Response(500, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(0, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(0, Result{}), nil
+	// return types.Response(0, Result{}), nil
 
 	return gen.Response(http.StatusNotImplemented, nil), errors.New("GetAllSubmodelReferencesAasRepository method not implemented")
 }
 
 // PostSubmodelReferenceAasRepository - Creates a submodel reference at the Asset Administration Shell
-func (s *AssetAdministrationShellRepositoryAPIAPIService) PostSubmodelReferenceAasRepository(ctx context.Context, aasIdentifier string, reference gen.Reference) (gen.ImplResponse, error) {
+func (s *AssetAdministrationShellRepositoryAPIAPIService) PostSubmodelReferenceAasRepository(ctx context.Context, aasIdentifier string, reference types.IReference) (gen.ImplResponse, error) {
 	// TODO - update PostSubmodelReferenceAasRepository with the required logic for this service method.
 	// Add api_asset_administration_shell_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
 
 	// TODO: Uncomment the next line to return response gen.Response(201, Reference{}) or use other options such as http.Ok ...
-	// return gen.Response(201, Reference{}), nil
+	// return types.Response(201, Reference{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(400, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(400, Result{}), nil
+	// return types.Response(400, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(401, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(401, Result{}), nil
+	// return types.Response(401, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(403, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(403, Result{}), nil
+	// return types.Response(403, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(404, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(404, Result{}), nil
+	// return types.Response(404, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(409, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(409, Result{}), nil
+	// return types.Response(409, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(500, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(500, Result{}), nil
+	// return types.Response(500, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(0, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(0, Result{}), nil
+	// return types.Response(0, Result{}), nil
 
 	return gen.Response(http.StatusNotImplemented, nil), errors.New("PostSubmodelReferenceAasRepository method not implemented")
 }
@@ -441,25 +442,25 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) DeleteSubmodelReferenc
 	// Add api_asset_administration_shell_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
 
 	// TODO: Uncomment the next line to return response gen.Response(204, {}) or use other options such as http.Ok ...
-	// return gen.Response(204, nil),nil
+	// return types.Response(204, nil),nil
 
 	// TODO: Uncomment the next line to return response gen.Response(400, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(400, Result{}), nil
+	// return types.Response(400, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(401, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(401, Result{}), nil
+	// return types.Response(401, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(403, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(403, Result{}), nil
+	// return types.Response(403, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(404, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(404, Result{}), nil
+	// return types.Response(404, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(500, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(500, Result{}), nil
+	// return types.Response(500, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(0, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(0, Result{}), nil
+	// return types.Response(0, Result{}), nil
 
 	return gen.Response(http.StatusNotImplemented, nil), errors.New("DeleteSubmodelReferenceAasRepository method not implemented")
 }
@@ -470,57 +471,57 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetSubmodelByIdAasRepo
 	// Add api_asset_administration_shell_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
 
 	// TODO: Uncomment the next line to return response gen.Response(200, Submodel{}) or use other options such as http.Ok ...
-	// return gen.Response(200, Submodel{}), nil
+	// return types.Response(200, Submodel{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(400, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(400, Result{}), nil
+	// return types.Response(400, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(401, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(401, Result{}), nil
+	// return types.Response(401, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(403, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(403, Result{}), nil
+	// return types.Response(403, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(404, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(404, Result{}), nil
+	// return types.Response(404, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(500, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(500, Result{}), nil
+	// return types.Response(500, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(0, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(0, Result{}), nil
+	// return types.Response(0, Result{}), nil
 
 	return gen.Response(http.StatusNotImplemented, nil), errors.New("GetSubmodelByIdAasRepository method not implemented")
 }
 
 // PutSubmodelByIdAasRepository - Creates or updates the Submodel
-func (s *AssetAdministrationShellRepositoryAPIAPIService) PutSubmodelByIdAasRepository(ctx context.Context, aasIdentifier string, submodelIdentifier string, submodel gen.Submodel) (gen.ImplResponse, error) {
+func (s *AssetAdministrationShellRepositoryAPIAPIService) PutSubmodelByIdAasRepository(ctx context.Context, aasIdentifier string, submodelIdentifier string, submodel types.ISubmodel) (gen.ImplResponse, error) {
 	// TODO - update PutSubmodelByIdAasRepository with the required logic for this service method.
 	// Add api_asset_administration_shell_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
 
 	// TODO: Uncomment the next line to return response gen.Response(201, Reference{}) or use other options such as http.Ok ...
-	// return gen.Response(201, Reference{}), nil
+	// return types.Response(201, Reference{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(204, {}) or use other options such as http.Ok ...
-	// return gen.Response(204, nil),nil
+	// return types.Response(204, nil),nil
 
 	// TODO: Uncomment the next line to return response gen.Response(400, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(400, Result{}), nil
+	// return types.Response(400, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(401, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(401, Result{}), nil
+	// return types.Response(401, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(403, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(403, Result{}), nil
+	// return types.Response(403, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(404, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(404, Result{}), nil
+	// return types.Response(404, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(500, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(500, Result{}), nil
+	// return types.Response(500, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(0, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(0, Result{}), nil
+	// return types.Response(0, Result{}), nil
 
 	return gen.Response(http.StatusNotImplemented, nil), errors.New("PutSubmodelByIdAasRepository method not implemented")
 }
@@ -531,54 +532,54 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) DeleteSubmodelByIdAasR
 	// Add api_asset_administration_shell_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
 
 	// TODO: Uncomment the next line to return response gen.Response(204, {}) or use other options such as http.Ok ...
-	// return gen.Response(204, nil),nil
+	// return types.Response(204, nil),nil
 
 	// TODO: Uncomment the next line to return response gen.Response(400, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(400, Result{}), nil
+	// return types.Response(400, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(401, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(401, Result{}), nil
+	// return types.Response(401, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(403, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(403, Result{}), nil
+	// return types.Response(403, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(404, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(404, Result{}), nil
+	// return types.Response(404, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(500, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(500, Result{}), nil
+	// return types.Response(500, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(0, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(0, Result{}), nil
+	// return types.Response(0, Result{}), nil
 
 	return gen.Response(http.StatusNotImplemented, nil), errors.New("DeleteSubmodelByIdAasRepository method not implemented")
 }
 
 // PatchSubmodelAasRepository - Updates the Submodel
-func (s *AssetAdministrationShellRepositoryAPIAPIService) PatchSubmodelAasRepository(ctx context.Context, aasIdentifier string, submodelIdentifier string, submodel gen.Submodel, level string) (gen.ImplResponse, error) {
+func (s *AssetAdministrationShellRepositoryAPIAPIService) PatchSubmodelAasRepository(ctx context.Context, aasIdentifier string, submodelIdentifier string, submodel types.ISubmodel, level string) (gen.ImplResponse, error) {
 	// TODO - update PatchSubmodelAasRepository with the required logic for this service method.
 	// Add api_asset_administration_shell_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
 
 	// TODO: Uncomment the next line to return response gen.Response(204, {}) or use other options such as http.Ok ...
-	// return gen.Response(204, nil),nil
+	// return types.Response(204, nil),nil
 
 	// TODO: Uncomment the next line to return response gen.Response(400, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(400, Result{}), nil
+	// return types.Response(400, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(401, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(401, Result{}), nil
+	// return types.Response(401, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(403, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(403, Result{}), nil
+	// return types.Response(403, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(404, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(404, Result{}), nil
+	// return types.Response(404, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(500, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(500, Result{}), nil
+	// return types.Response(500, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(0, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(0, Result{}), nil
+	// return types.Response(0, Result{}), nil
 
 	return gen.Response(http.StatusNotImplemented, nil), errors.New("PatchSubmodelAasRepository method not implemented")
 }
@@ -589,25 +590,25 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetSubmodelByIdMetadat
 	// Add api_asset_administration_shell_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
 
 	// TODO: Uncomment the next line to return response gen.Response(200, SubmodelMetadata{}) or use other options such as http.Ok ...
-	// return gen.Response(200, SubmodelMetadata{}), nil
+	// return types.Response(200, SubmodelMetadata{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(400, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(400, Result{}), nil
+	// return types.Response(400, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(401, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(401, Result{}), nil
+	// return types.Response(401, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(403, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(403, Result{}), nil
+	// return types.Response(403, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(404, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(404, Result{}), nil
+	// return types.Response(404, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(500, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(500, Result{}), nil
+	// return types.Response(500, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(0, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(0, Result{}), nil
+	// return types.Response(0, Result{}), nil
 
 	return gen.Response(http.StatusNotImplemented, nil), errors.New("GetSubmodelByIdMetadataAasRepository method not implemented")
 }
@@ -618,25 +619,25 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) PatchSubmodelByIdMetad
 	// Add api_asset_administration_shell_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
 
 	// TODO: Uncomment the next line to return response gen.Response(204, {}) or use other options such as http.Ok ...
-	// return gen.Response(204, nil),nil
+	// return types.Response(204, nil),nil
 
 	// TODO: Uncomment the next line to return response gen.Response(400, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(400, Result{}), nil
+	// return types.Response(400, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(401, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(401, Result{}), nil
+	// return types.Response(401, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(403, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(403, Result{}), nil
+	// return types.Response(403, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(404, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(404, Result{}), nil
+	// return types.Response(404, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(500, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(500, Result{}), nil
+	// return types.Response(500, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(0, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(0, Result{}), nil
+	// return types.Response(0, Result{}), nil
 
 	return gen.Response(http.StatusNotImplemented, nil), errors.New("PatchSubmodelByIdMetadataAasRepository method not implemented")
 }
@@ -646,55 +647,55 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetSubmodelByIdValueOn
 	// TODO - update GetSubmodelByIdValueOnlyAasRepository with the required logic for this service method.
 	// Add api_asset_administration_shell_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
 
-	// TODO: Uncomment the next line to return response gen.Response(200, map[string]interface{}{}) or use other options such as http.Ok ...
-	// return gen.Response(200, map[string]interface{}{}), nil
+	// TODO: Uncomment the next line to return response gen.Response(200, map[string]any{}) or use other options such as http.Ok ...
+	// return types.Response(200, map[string]any{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(400, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(400, Result{}), nil
+	// return types.Response(400, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(401, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(401, Result{}), nil
+	// return types.Response(401, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(403, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(403, Result{}), nil
+	// return types.Response(403, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(404, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(404, Result{}), nil
+	// return types.Response(404, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(500, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(500, Result{}), nil
+	// return types.Response(500, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(0, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(0, Result{}), nil
+	// return types.Response(0, Result{}), nil
 
 	return gen.Response(http.StatusNotImplemented, nil), errors.New("GetSubmodelByIdValueOnlyAasRepository method not implemented")
 }
 
 // PatchSubmodelByIdValueOnlyAasRepository - Updates the values of the Submodel
-func (s *AssetAdministrationShellRepositoryAPIAPIService) PatchSubmodelByIdValueOnlyAasRepository(ctx context.Context, aasIdentifier string, submodelIdentifier string, body map[string]interface{}, level string) (gen.ImplResponse, error) {
+func (s *AssetAdministrationShellRepositoryAPIAPIService) PatchSubmodelByIdValueOnlyAasRepository(ctx context.Context, aasIdentifier string, submodelIdentifier string, body map[string]any, level string) (gen.ImplResponse, error) {
 	// TODO - update PatchSubmodelByIdValueOnlyAasRepository with the required logic for this service method.
 	// Add api_asset_administration_shell_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
 
 	// TODO: Uncomment the next line to return response gen.Response(204, {}) or use other options such as http.Ok ...
-	// return gen.Response(204, nil),nil
+	// return types.Response(204, nil),nil
 
 	// TODO: Uncomment the next line to return response gen.Response(400, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(400, Result{}), nil
+	// return types.Response(400, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(401, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(401, Result{}), nil
+	// return types.Response(401, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(403, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(403, Result{}), nil
+	// return types.Response(403, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(404, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(404, Result{}), nil
+	// return types.Response(404, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(500, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(500, Result{}), nil
+	// return types.Response(500, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(0, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(0, Result{}), nil
+	// return types.Response(0, Result{}), nil
 
 	return gen.Response(http.StatusNotImplemented, nil), errors.New("PatchSubmodelByIdValueOnlyAasRepository method not implemented")
 }
@@ -705,25 +706,25 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetSubmodelByIdReferen
 	// Add api_asset_administration_shell_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
 
 	// TODO: Uncomment the next line to return response gen.Response(200, Reference{}) or use other options such as http.Ok ...
-	// return gen.Response(200, Reference{}), nil
+	// return types.Response(200, Reference{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(400, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(400, Result{}), nil
+	// return types.Response(400, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(401, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(401, Result{}), nil
+	// return types.Response(401, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(403, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(403, Result{}), nil
+	// return types.Response(403, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(404, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(404, Result{}), nil
+	// return types.Response(404, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(500, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(500, Result{}), nil
+	// return types.Response(500, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(0, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(0, Result{}), nil
+	// return types.Response(0, Result{}), nil
 
 	return gen.Response(http.StatusNotImplemented, nil), errors.New("GetSubmodelByIdReferenceAasRepository method not implemented")
 }
@@ -734,25 +735,25 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetSubmodelByIdPathAas
 	// Add api_asset_administration_shell_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
 
 	// TODO: Uncomment the next line to return response gen.Response(200, []string{}) or use other options such as http.Ok ...
-	// return gen.Response(200, []string{}), nil
+	// return types.Response(200, []string{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(400, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(400, Result{}), nil
+	// return types.Response(400, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(401, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(401, Result{}), nil
+	// return types.Response(401, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(403, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(403, Result{}), nil
+	// return types.Response(403, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(404, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(404, Result{}), nil
+	// return types.Response(404, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(500, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(500, Result{}), nil
+	// return types.Response(500, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(0, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(0, Result{}), nil
+	// return types.Response(0, Result{}), nil
 
 	return gen.Response(http.StatusNotImplemented, nil), errors.New("GetSubmodelByIdPathAasRepository method not implemented")
 }
@@ -763,57 +764,57 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllSubmodelElements
 	// Add api_asset_administration_shell_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
 
 	// TODO: Uncomment the next line to return response gen.Response(200, GetSubmodelElementsResult{}) or use other options such as http.Ok ...
-	// return gen.Response(200, GetSubmodelElementsResult{}), nil
+	// return types.Response(200, GetSubmodelElementsResult{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(400, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(400, Result{}), nil
+	// return types.Response(400, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(401, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(401, Result{}), nil
+	// return types.Response(401, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(403, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(403, Result{}), nil
+	// return types.Response(403, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(404, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(404, Result{}), nil
+	// return types.Response(404, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(500, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(500, Result{}), nil
+	// return types.Response(500, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(0, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(0, Result{}), nil
+	// return types.Response(0, Result{}), nil
 
 	return gen.Response(http.StatusNotImplemented, nil), errors.New("GetAllSubmodelElementsAasRepository method not implemented")
 }
 
 // PostSubmodelElementAasRepository - Creates a new submodel element
-func (s *AssetAdministrationShellRepositoryAPIAPIService) PostSubmodelElementAasRepository(ctx context.Context, aasIdentifier string, submodelIdentifier string, submodelElement gen.SubmodelElement) (gen.ImplResponse, error) {
+func (s *AssetAdministrationShellRepositoryAPIAPIService) PostSubmodelElementAasRepository(ctx context.Context, aasIdentifier string, submodelIdentifier string, submodelElement types.ISubmodelElement) (gen.ImplResponse, error) {
 	// TODO - update PostSubmodelElementAasRepository with the required logic for this service method.
 	// Add api_asset_administration_shell_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
 
 	// TODO: Uncomment the next line to return response gen.Response(201, SubmodelElement{}) or use other options such as http.Ok ...
-	// return gen.Response(201, SubmodelElement{}), nil
+	// return types.Response(201, SubmodelElement{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(400, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(400, Result{}), nil
+	// return types.Response(400, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(401, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(401, Result{}), nil
+	// return types.Response(401, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(403, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(403, Result{}), nil
+	// return types.Response(403, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(404, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(404, Result{}), nil
+	// return types.Response(404, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(409, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(409, Result{}), nil
+	// return types.Response(409, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(500, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(500, Result{}), nil
+	// return types.Response(500, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(0, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(0, Result{}), nil
+	// return types.Response(0, Result{}), nil
 
 	return gen.Response(http.StatusNotImplemented, nil), errors.New("PostSubmodelElementAasRepository method not implemented")
 }
@@ -824,25 +825,25 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllSubmodelElements
 	// Add api_asset_administration_shell_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
 
 	// TODO: Uncomment the next line to return response gen.Response(200, GetSubmodelElementsMetadataResult{}) or use other options such as http.Ok ...
-	// return gen.Response(200, GetSubmodelElementsMetadataResult{}), nil
+	// return types.Response(200, GetSubmodelElementsMetadataResult{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(400, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(400, Result{}), nil
+	// return types.Response(400, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(401, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(401, Result{}), nil
+	// return types.Response(401, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(403, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(403, Result{}), nil
+	// return types.Response(403, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(404, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(404, Result{}), nil
+	// return types.Response(404, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(500, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(500, Result{}), nil
+	// return types.Response(500, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(0, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(0, Result{}), nil
+	// return types.Response(0, Result{}), nil
 
 	return gen.Response(http.StatusNotImplemented, nil), errors.New("GetAllSubmodelElementsMetadataAasRepository method not implemented")
 }
@@ -853,25 +854,25 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllSubmodelElements
 	// Add api_asset_administration_shell_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
 
 	// TODO: Uncomment the next line to return response gen.Response(200, GetSubmodelElementsValueResult{}) or use other options such as http.Ok ...
-	// return gen.Response(200, GetSubmodelElementsValueResult{}), nil
+	// return types.Response(200, GetSubmodelElementsValueResult{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(400, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(400, Result{}), nil
+	// return types.Response(400, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(401, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(401, Result{}), nil
+	// return types.Response(401, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(403, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(403, Result{}), nil
+	// return types.Response(403, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(404, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(404, Result{}), nil
+	// return types.Response(404, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(500, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(500, Result{}), nil
+	// return types.Response(500, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(0, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(0, Result{}), nil
+	// return types.Response(0, Result{}), nil
 
 	return gen.Response(http.StatusNotImplemented, nil), errors.New("GetAllSubmodelElementsValueOnlyAasRepository method not implemented")
 }
@@ -882,25 +883,25 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllSubmodelElements
 	// Add api_asset_administration_shell_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
 
 	// TODO: Uncomment the next line to return response gen.Response(200, GetReferencesResult{}) or use other options such as http.Ok ...
-	// return gen.Response(200, GetReferencesResult{}), nil
+	// return types.Response(200, GetReferencesResult{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(400, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(400, Result{}), nil
+	// return types.Response(400, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(401, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(401, Result{}), nil
+	// return types.Response(401, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(403, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(403, Result{}), nil
+	// return types.Response(403, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(404, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(404, Result{}), nil
+	// return types.Response(404, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(500, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(500, Result{}), nil
+	// return types.Response(500, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(0, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(0, Result{}), nil
+	// return types.Response(0, Result{}), nil
 
 	return gen.Response(http.StatusNotImplemented, nil), errors.New("GetAllSubmodelElementsReferenceAasRepository method not implemented")
 }
@@ -911,25 +912,25 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllSubmodelElements
 	// Add api_asset_administration_shell_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
 
 	// TODO: Uncomment the next line to return response gen.Response(200, GetPathItemsResult{}) or use other options such as http.Ok ...
-	// return gen.Response(200, GetPathItemsResult{}), nil
+	// return types.Response(200, GetPathItemsResult{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(400, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(400, Result{}), nil
+	// return types.Response(400, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(401, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(401, Result{}), nil
+	// return types.Response(401, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(403, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(403, Result{}), nil
+	// return types.Response(403, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(404, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(404, Result{}), nil
+	// return types.Response(404, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(500, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(500, Result{}), nil
+	// return types.Response(500, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(0, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(0, Result{}), nil
+	// return types.Response(0, Result{}), nil
 
 	return gen.Response(http.StatusNotImplemented, nil), errors.New("GetAllSubmodelElementsPathAasRepository method not implemented")
 }
@@ -940,89 +941,89 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetSubmodelElementByPa
 	// Add api_asset_administration_shell_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
 
 	// TODO: Uncomment the next line to return response gen.Response(200, SubmodelElement{}) or use other options such as http.Ok ...
-	// return gen.Response(200, SubmodelElement{}), nil
+	// return types.Response(200, SubmodelElement{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(400, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(400, Result{}), nil
+	// return types.Response(400, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(401, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(401, Result{}), nil
+	// return types.Response(401, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(403, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(403, Result{}), nil
+	// return types.Response(403, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(404, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(404, Result{}), nil
+	// return types.Response(404, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(500, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(500, Result{}), nil
+	// return types.Response(500, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(0, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(0, Result{}), nil
+	// return types.Response(0, Result{}), nil
 
 	return gen.Response(http.StatusNotImplemented, nil), errors.New("GetSubmodelElementByPathAasRepository method not implemented")
 }
 
 // PutSubmodelElementByPathAasRepository - Creates or updates an existing submodel element at a specified path within submodel elements hierarchy
-func (s *AssetAdministrationShellRepositoryAPIAPIService) PutSubmodelElementByPathAasRepository(ctx context.Context, aasIdentifier string, submodelIdentifier string, idShortPath string, submodelElement gen.SubmodelElement) (gen.ImplResponse, error) {
+func (s *AssetAdministrationShellRepositoryAPIAPIService) PutSubmodelElementByPathAasRepository(ctx context.Context, aasIdentifier string, submodelIdentifier string, idShortPath string, submodelElement types.ISubmodelElement) (gen.ImplResponse, error) {
 	// TODO - update PutSubmodelElementByPathAasRepository with the required logic for this service method.
 	// Add api_asset_administration_shell_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
 
 	// TODO: Uncomment the next line to return response gen.Response(201, SubmodelElement{}) or use other options such as http.Ok ...
-	// return gen.Response(201, SubmodelElement{}), nil
+	// return types.Response(201, SubmodelElement{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(204, {}) or use other options such as http.Ok ...
-	// return gen.Response(204, nil),nil
+	// return types.Response(204, nil),nil
 
 	// TODO: Uncomment the next line to return response gen.Response(400, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(400, Result{}), nil
+	// return types.Response(400, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(401, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(401, Result{}), nil
+	// return types.Response(401, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(403, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(403, Result{}), nil
+	// return types.Response(403, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(404, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(404, Result{}), nil
+	// return types.Response(404, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(500, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(500, Result{}), nil
+	// return types.Response(500, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(0, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(0, Result{}), nil
+	// return types.Response(0, Result{}), nil
 
 	return gen.Response(http.StatusNotImplemented, nil), errors.New("PutSubmodelElementByPathAasRepository method not implemented")
 }
 
 // PostSubmodelElementByPathAasRepository - Creates a new submodel element at a specified path within submodel elements hierarchy
-func (s *AssetAdministrationShellRepositoryAPIAPIService) PostSubmodelElementByPathAasRepository(ctx context.Context, aasIdentifier string, submodelIdentifier string, idShortPath string, submodelElement gen.SubmodelElement) (gen.ImplResponse, error) {
+func (s *AssetAdministrationShellRepositoryAPIAPIService) PostSubmodelElementByPathAasRepository(ctx context.Context, aasIdentifier string, submodelIdentifier string, idShortPath string, submodelElement types.ISubmodelElement) (gen.ImplResponse, error) {
 	// TODO - update PostSubmodelElementByPathAasRepository with the required logic for this service method.
 	// Add api_asset_administration_shell_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
 
 	// TODO: Uncomment the next line to return response gen.Response(201, SubmodelElement{}) or use other options such as http.Ok ...
-	// return gen.Response(201, SubmodelElement{}), nil
+	// return types.Response(201, SubmodelElement{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(400, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(400, Result{}), nil
+	// return types.Response(400, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(401, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(401, Result{}), nil
+	// return types.Response(401, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(403, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(403, Result{}), nil
+	// return types.Response(403, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(404, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(404, Result{}), nil
+	// return types.Response(404, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(409, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(409, Result{}), nil
+	// return types.Response(409, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(500, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(500, Result{}), nil
+	// return types.Response(500, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(0, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(0, Result{}), nil
+	// return types.Response(0, Result{}), nil
 
 	return gen.Response(http.StatusNotImplemented, nil), errors.New("PostSubmodelElementByPathAasRepository method not implemented")
 }
@@ -1033,54 +1034,54 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) DeleteSubmodelElementB
 	// Add api_asset_administration_shell_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
 
 	// TODO: Uncomment the next line to return response gen.Response(204, {}) or use other options such as http.Ok ...
-	// return gen.Response(204, nil),nil
+	// return types.Response(204, nil),nil
 
 	// TODO: Uncomment the next line to return response gen.Response(400, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(400, Result{}), nil
+	// return types.Response(400, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(401, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(401, Result{}), nil
+	// return types.Response(401, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(403, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(403, Result{}), nil
+	// return types.Response(403, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(404, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(404, Result{}), nil
+	// return types.Response(404, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(500, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(500, Result{}), nil
+	// return types.Response(500, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(0, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(0, Result{}), nil
+	// return types.Response(0, Result{}), nil
 
 	return gen.Response(http.StatusNotImplemented, nil), errors.New("DeleteSubmodelElementByPathAasRepository method not implemented")
 }
 
 // PatchSubmodelElementValueByPathAasRepository - Updates an existing submodel element value at a specified path within submodel elements hierarchy
-func (s *AssetAdministrationShellRepositoryAPIAPIService) PatchSubmodelElementValueByPathAasRepository(ctx context.Context, aasIdentifier string, submodelIdentifier string, idShortPath string, submodelElement gen.SubmodelElement, level string) (gen.ImplResponse, error) {
+func (s *AssetAdministrationShellRepositoryAPIAPIService) PatchSubmodelElementValueByPathAasRepository(ctx context.Context, aasIdentifier string, submodelIdentifier string, idShortPath string, submodelElement types.ISubmodelElement, level string) (gen.ImplResponse, error) {
 	// TODO - update PatchSubmodelElementValueByPathAasRepository with the required logic for this service method.
 	// Add api_asset_administration_shell_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
 
 	// TODO: Uncomment the next line to return response gen.Response(204, {}) or use other options such as http.Ok ...
-	// return gen.Response(204, nil),nil
+	// return types.Response(204, nil),nil
 
 	// TODO: Uncomment the next line to return response gen.Response(400, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(400, Result{}), nil
+	// return types.Response(400, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(401, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(401, Result{}), nil
+	// return types.Response(401, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(403, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(403, Result{}), nil
+	// return types.Response(403, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(404, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(404, Result{}), nil
+	// return types.Response(404, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(500, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(500, Result{}), nil
+	// return types.Response(500, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(0, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(0, Result{}), nil
+	// return types.Response(0, Result{}), nil
 
 	return gen.Response(http.StatusNotImplemented, nil), errors.New("PatchSubmodelElementValueByPathAasRepository method not implemented")
 }
@@ -1091,25 +1092,25 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetSubmodelElementByPa
 	// Add api_asset_administration_shell_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
 
 	// TODO: Uncomment the next line to return response gen.Response(200, SubmodelElementMetadata{}) or use other options such as http.Ok ...
-	// return gen.Response(200, SubmodelElementMetadata{}), nil
+	// return types.Response(200, SubmodelElementMetadata{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(400, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(400, Result{}), nil
+	// return types.Response(400, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(401, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(401, Result{}), nil
+	// return types.Response(401, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(403, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(403, Result{}), nil
+	// return types.Response(403, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(404, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(404, Result{}), nil
+	// return types.Response(404, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(500, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(500, Result{}), nil
+	// return types.Response(500, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(0, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(0, Result{}), nil
+	// return types.Response(0, Result{}), nil
 
 	return gen.Response(http.StatusNotImplemented, nil), errors.New("GetSubmodelElementByPathMetadataAasRepository method not implemented")
 }
@@ -1120,25 +1121,25 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) PatchSubmodelElementVa
 	// Add api_asset_administration_shell_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
 
 	// TODO: Uncomment the next line to return response gen.Response(204, {}) or use other options such as http.Ok ...
-	// return gen.Response(204, nil),nil
+	// return types.Response(204, nil),nil
 
 	// TODO: Uncomment the next line to return response gen.Response(400, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(400, Result{}), nil
+	// return types.Response(400, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(401, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(401, Result{}), nil
+	// return types.Response(401, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(403, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(403, Result{}), nil
+	// return types.Response(403, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(404, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(404, Result{}), nil
+	// return types.Response(404, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(500, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(500, Result{}), nil
+	// return types.Response(500, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(0, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(0, Result{}), nil
+	// return types.Response(0, Result{}), nil
 
 	return gen.Response(http.StatusNotImplemented, nil), errors.New("PatchSubmodelElementValueByPathMetadata method not implemented")
 }
@@ -1149,25 +1150,25 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetSubmodelElementByPa
 	// Add api_asset_administration_shell_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
 
 	// TODO: Uncomment the next line to return response gen.Response(200, SubmodelElementValue{}) or use other options such as http.Ok ...
-	// return gen.Response(200, SubmodelElementValue{}), nil
+	// return types.Response(200, SubmodelElementValue{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(400, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(400, Result{}), nil
+	// return types.Response(400, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(401, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(401, Result{}), nil
+	// return types.Response(401, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(403, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(403, Result{}), nil
+	// return types.Response(403, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(404, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(404, Result{}), nil
+	// return types.Response(404, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(500, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(500, Result{}), nil
+	// return types.Response(500, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(0, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(0, Result{}), nil
+	// return types.Response(0, Result{}), nil
 
 	return gen.Response(http.StatusNotImplemented, nil), errors.New("GetSubmodelElementByPathValueOnlyAasRepository method not implemented")
 }
@@ -1178,25 +1179,25 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) PatchSubmodelElementVa
 	// Add api_asset_administration_shell_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
 
 	// TODO: Uncomment the next line to return response gen.Response(204, {}) or use other options such as http.Ok ...
-	// return gen.Response(204, nil),nil
+	// return types.Response(204, nil),nil
 
 	// TODO: Uncomment the next line to return response gen.Response(400, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(400, Result{}), nil
+	// return types.Response(400, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(401, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(401, Result{}), nil
+	// return types.Response(401, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(403, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(403, Result{}), nil
+	// return types.Response(403, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(404, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(404, Result{}), nil
+	// return types.Response(404, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(500, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(500, Result{}), nil
+	// return types.Response(500, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(0, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(0, Result{}), nil
+	// return types.Response(0, Result{}), nil
 
 	return gen.Response(http.StatusNotImplemented, nil), errors.New("PatchSubmodelElementValueByPathValueOnly method not implemented")
 }
@@ -1207,25 +1208,25 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetSubmodelElementByPa
 	// Add api_asset_administration_shell_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
 
 	// TODO: Uncomment the next line to return response gen.Response(200, Reference{}) or use other options such as http.Ok ...
-	// return gen.Response(200, Reference{}), nil
+	// return types.Response(200, Reference{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(400, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(400, Result{}), nil
+	// return types.Response(400, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(401, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(401, Result{}), nil
+	// return types.Response(401, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(403, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(403, Result{}), nil
+	// return types.Response(403, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(404, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(404, Result{}), nil
+	// return types.Response(404, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(500, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(500, Result{}), nil
+	// return types.Response(500, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(0, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(0, Result{}), nil
+	// return types.Response(0, Result{}), nil
 
 	return gen.Response(http.StatusNotImplemented, nil), errors.New("GetSubmodelElementByPathReferenceAasRepository method not implemented")
 }
@@ -1236,25 +1237,25 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetSubmodelElementByPa
 	// Add api_asset_administration_shell_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
 
 	// TODO: Uncomment the next line to return response gen.Response(200, []string{}) or use other options such as http.Ok ...
-	// return gen.Response(200, []string{}), nil
+	// return types.Response(200, []string{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(400, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(400, Result{}), nil
+	// return types.Response(400, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(401, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(401, Result{}), nil
+	// return types.Response(401, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(403, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(403, Result{}), nil
+	// return types.Response(403, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(404, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(404, Result{}), nil
+	// return types.Response(404, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(500, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(500, Result{}), nil
+	// return types.Response(500, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(0, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(0, Result{}), nil
+	// return types.Response(0, Result{}), nil
 
 	return gen.Response(http.StatusNotImplemented, nil), errors.New("GetSubmodelElementByPathPathAasRepository method not implemented")
 }
@@ -1265,25 +1266,25 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetFileByPathAasReposi
 	// Add api_asset_administration_shell_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
 
 	// TODO: Uncomment the next line to return response gen.Response(200, *os.File{}) or use other options such as http.Ok ...
-	// return gen.Response(200, *os.File{}), nil
+	// return types.Response(200, *os.File{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(400, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(400, Result{}), nil
+	// return types.Response(400, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(401, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(401, Result{}), nil
+	// return types.Response(401, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(403, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(403, Result{}), nil
+	// return types.Response(403, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(404, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(404, Result{}), nil
+	// return types.Response(404, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(500, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(500, Result{}), nil
+	// return types.Response(500, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(0, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(0, Result{}), nil
+	// return types.Response(0, Result{}), nil
 
 	return gen.Response(http.StatusNotImplemented, nil), errors.New("GetFileByPathAasRepository method not implemented")
 }
@@ -1294,25 +1295,25 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) PutFileByPathAasReposi
 	// Add api_asset_administration_shell_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
 
 	// TODO: Uncomment the next line to return response gen.Response(204, {}) or use other options such as http.Ok ...
-	// return gen.Response(204, nil),nil
+	// return types.Response(204, nil),nil
 
 	// TODO: Uncomment the next line to return response gen.Response(400, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(400, Result{}), nil
+	// return types.Response(400, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(401, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(401, Result{}), nil
+	// return types.Response(401, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(403, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(403, Result{}), nil
+	// return types.Response(403, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(404, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(404, Result{}), nil
+	// return types.Response(404, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(500, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(500, Result{}), nil
+	// return types.Response(500, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(0, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(0, Result{}), nil
+	// return types.Response(0, Result{}), nil
 
 	return gen.Response(http.StatusNotImplemented, nil), errors.New("PutFileByPathAasRepository method not implemented")
 }
@@ -1323,25 +1324,25 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) DeleteFileByPathAasRep
 	// Add api_asset_administration_shell_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
 
 	// TODO: Uncomment the next line to return response gen.Response(200, {}) or use other options such as http.Ok ...
-	// return gen.Response(200, nil),nil
+	// return types.Response(200, nil),nil
 
 	// TODO: Uncomment the next line to return response gen.Response(400, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(400, Result{}), nil
+	// return types.Response(400, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(401, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(401, Result{}), nil
+	// return types.Response(401, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(403, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(403, Result{}), nil
+	// return types.Response(403, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(404, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(404, Result{}), nil
+	// return types.Response(404, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(500, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(500, Result{}), nil
+	// return types.Response(500, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(0, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(0, Result{}), nil
+	// return types.Response(0, Result{}), nil
 
 	return gen.Response(http.StatusNotImplemented, nil), errors.New("DeleteFileByPathAasRepository method not implemented")
 }
@@ -1352,25 +1353,25 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) InvokeOperationAasRepo
 	// Add api_asset_administration_shell_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
 
 	// TODO: Uncomment the next line to return response gen.Response(200, OperationResult{}) or use other options such as http.Ok ...
-	// return gen.Response(200, OperationResult{}), nil
+	// return types.Response(200, OperationResult{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(400, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(400, Result{}), nil
+	// return types.Response(400, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(401, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(401, Result{}), nil
+	// return types.Response(401, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(403, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(403, Result{}), nil
+	// return types.Response(403, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(404, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(404, Result{}), nil
+	// return types.Response(404, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(500, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(500, Result{}), nil
+	// return types.Response(500, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(0, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(0, Result{}), nil
+	// return types.Response(0, Result{}), nil
 
 	return gen.Response(http.StatusNotImplemented, nil), errors.New("InvokeOperationAasRepository method not implemented")
 }
@@ -1381,25 +1382,25 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) InvokeOperationValueOn
 	// Add api_asset_administration_shell_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
 
 	// TODO: Uncomment the next line to return response gen.Response(200, OperationResultValueOnly{}) or use other options such as http.Ok ...
-	// return gen.Response(200, OperationResultValueOnly{}), nil
+	// return types.Response(200, OperationResultValueOnly{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(400, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(400, Result{}), nil
+	// return types.Response(400, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(401, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(401, Result{}), nil
+	// return types.Response(401, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(403, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(403, Result{}), nil
+	// return types.Response(403, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(404, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(404, Result{}), nil
+	// return types.Response(404, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(500, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(500, Result{}), nil
+	// return types.Response(500, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(0, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(0, Result{}), nil
+	// return types.Response(0, Result{}), nil
 
 	return gen.Response(http.StatusNotImplemented, nil), errors.New("InvokeOperationValueOnlyAasRepository method not implemented")
 }
@@ -1410,25 +1411,25 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) InvokeOperationAsyncAa
 	// Add api_asset_administration_shell_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
 
 	// TODO: Uncomment the next line to return response gen.Response(202, {}) or use other options such as http.Ok ...
-	// return gen.Response(202, nil),nil
+	// return types.Response(202, nil),nil
 
 	// TODO: Uncomment the next line to return response gen.Response(400, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(400, Result{}), nil
+	// return types.Response(400, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(401, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(401, Result{}), nil
+	// return types.Response(401, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(403, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(403, Result{}), nil
+	// return types.Response(403, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(404, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(404, Result{}), nil
+	// return types.Response(404, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(500, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(500, Result{}), nil
+	// return types.Response(500, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(0, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(0, Result{}), nil
+	// return types.Response(0, Result{}), nil
 
 	return gen.Response(http.StatusNotImplemented, nil), errors.New("InvokeOperationAsyncAasRepository method not implemented")
 }
@@ -1439,25 +1440,25 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) InvokeOperationAsyncVa
 	// Add api_asset_administration_shell_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
 
 	// TODO: Uncomment the next line to return response gen.Response(202, {}) or use other options such as http.Ok ...
-	// return gen.Response(202, nil),nil
+	// return types.Response(202, nil),nil
 
 	// TODO: Uncomment the next line to return response gen.Response(400, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(400, Result{}), nil
+	// return types.Response(400, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(401, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(401, Result{}), nil
+	// return types.Response(401, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(403, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(403, Result{}), nil
+	// return types.Response(403, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(404, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(404, Result{}), nil
+	// return types.Response(404, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(500, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(500, Result{}), nil
+	// return types.Response(500, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(0, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(0, Result{}), nil
+	// return types.Response(0, Result{}), nil
 
 	return gen.Response(http.StatusNotImplemented, nil), errors.New("InvokeOperationAsyncValueOnlyAasRepository method not implemented")
 }
@@ -1468,28 +1469,28 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetOperationAsyncStatu
 	// Add api_asset_administration_shell_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
 
 	// TODO: Uncomment the next line to return response gen.Response(200, BaseOperationResult{}) or use other options such as http.Ok ...
-	// return gen.Response(200, BaseOperationResult{}), nil
+	// return types.Response(200, BaseOperationResult{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(302, {}) or use other options such as http.Ok ...
-	// return gen.Response(302, nil),nil
+	// return types.Response(302, nil),nil
 
 	// TODO: Uncomment the next line to return response gen.Response(400, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(400, Result{}), nil
+	// return types.Response(400, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(401, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(401, Result{}), nil
+	// return types.Response(401, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(403, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(403, Result{}), nil
+	// return types.Response(403, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(404, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(404, Result{}), nil
+	// return types.Response(404, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(500, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(500, Result{}), nil
+	// return types.Response(500, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(0, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(0, Result{}), nil
+	// return types.Response(0, Result{}), nil
 
 	return gen.Response(http.StatusNotImplemented, nil), errors.New("GetOperationAsyncStatusAasRepository method not implemented")
 }
@@ -1500,25 +1501,25 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetOperationAsyncResul
 	// Add api_asset_administration_shell_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
 
 	// TODO: Uncomment the next line to return response gen.Response(200, OperationResult{}) or use other options such as http.Ok ...
-	// return gen.Response(200, OperationResult{}), nil
+	// return types.Response(200, OperationResult{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(400, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(400, Result{}), nil
+	// return types.Response(400, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(401, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(401, Result{}), nil
+	// return types.Response(401, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(403, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(403, Result{}), nil
+	// return types.Response(403, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(404, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(404, Result{}), nil
+	// return types.Response(404, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(500, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(500, Result{}), nil
+	// return types.Response(500, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(0, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(0, Result{}), nil
+	// return types.Response(0, Result{}), nil
 
 	return gen.Response(http.StatusNotImplemented, nil), errors.New("GetOperationAsyncResultAasRepository method not implemented")
 }
@@ -1529,25 +1530,25 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetOperationAsyncResul
 	// Add api_asset_administration_shell_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
 
 	// TODO: Uncomment the next line to return response gen.Response(200, OperationResultValueOnly{}) or use other options such as http.Ok ...
-	// return gen.Response(200, OperationResultValueOnly{}), nil
+	// return types.Response(200, OperationResultValueOnly{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(400, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(400, Result{}), nil
+	// return types.Response(400, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(401, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(401, Result{}), nil
+	// return types.Response(401, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(403, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(403, Result{}), nil
+	// return types.Response(403, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(404, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(404, Result{}), nil
+	// return types.Response(404, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(500, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(500, Result{}), nil
+	// return types.Response(500, Result{}), nil
 
 	// TODO: Uncomment the next line to return response gen.Response(0, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(0, Result{}), nil
+	// return types.Response(0, Result{}), nil
 
 	return gen.Response(http.StatusNotImplemented, nil), errors.New("GetOperationAsyncResultValueOnlyAasRepository method not implemented")
 }

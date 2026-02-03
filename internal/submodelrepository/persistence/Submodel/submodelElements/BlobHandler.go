@@ -32,6 +32,7 @@ package submodelelements
 import (
 	"database/sql"
 
+	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
@@ -79,8 +80,8 @@ func NewPostgreSQLBlobHandler(db *sql.DB) (*PostgreSQLBlobHandler, error) {
 // Returns:
 //   - int: Database ID of the created element
 //   - error: Error if creation fails or element is not of correct type
-func (p PostgreSQLBlobHandler) Create(tx *sql.Tx, submodelID string, submodelElement gen.SubmodelElement) (int, error) {
-	blob, ok := submodelElement.(*gen.Blob)
+func (p PostgreSQLBlobHandler) Create(tx *sql.Tx, submodelID string, submodelElement types.ISubmodelElement) (int, error) {
+	blob, ok := submodelElement.(*types.Blob)
 	if !ok {
 		return 0, common.NewErrBadRequest("submodelElement is not of type Blob")
 	}
@@ -92,8 +93,17 @@ func (p PostgreSQLBlobHandler) Create(tx *sql.Tx, submodelID string, submodelEle
 	}
 
 	// Check if blob value is larger than maximum allowed size
-	if len(blob.Value) > smrepoconfig.MaxBlobSizeBytes {
+	value := blob.Value()
+	if len(value) > smrepoconfig.MaxBlobSizeBytes {
 		return 0, smrepoerrors.ErrBlobTooLarge
+	}
+
+	// encode
+	encoded := common.Encode(value)
+
+	contentType := ""
+	if blob.ContentType() != nil {
+		contentType = *blob.ContentType()
 	}
 
 	// Blob-specific database insertion
@@ -101,8 +111,8 @@ func (p PostgreSQLBlobHandler) Create(tx *sql.Tx, submodelID string, submodelEle
 	insertQuery, insertArgs, err := dialect.Insert("blob_element").
 		Rows(goqu.Record{
 			"id":           id,
-			"content_type": blob.ContentType,
-			"value":        []byte(blob.Value),
+			"content_type": contentType,
+			"value":        encoded,
 		}).
 		ToSQL()
 	if err != nil {
@@ -132,8 +142,8 @@ func (p PostgreSQLBlobHandler) Create(tx *sql.Tx, submodelID string, submodelEle
 // Returns:
 //   - int: Database ID of the created nested element
 //   - error: Error if creation fails or element is not of correct type
-func (p PostgreSQLBlobHandler) CreateNested(tx *sql.Tx, submodelID string, parentID int, idShortPath string, submodelElement gen.SubmodelElement, pos int, rootSubmodelElementID int) (int, error) {
-	blob, ok := submodelElement.(*gen.Blob)
+func (p PostgreSQLBlobHandler) CreateNested(tx *sql.Tx, submodelID string, parentID int, idShortPath string, submodelElement types.ISubmodelElement, pos int, rootSubmodelElementID int) (int, error) {
+	blob, ok := submodelElement.(*types.Blob)
 	if !ok {
 		return 0, common.NewErrBadRequest("submodelElement is not of type Blob")
 	}
@@ -144,13 +154,20 @@ func (p PostgreSQLBlobHandler) CreateNested(tx *sql.Tx, submodelID string, paren
 		return 0, err
 	}
 
+	value := blob.Value()
+	encoded := common.Encode(value)
+	contentType := ""
+	if blob.ContentType() != nil {
+		contentType = *blob.ContentType()
+	}
+
 	// Blob-specific database insertion for nested element
 	dialect := goqu.Dialect("postgres")
 	insertQuery, insertArgs, err := dialect.Insert("blob_element").
 		Rows(goqu.Record{
 			"id":           id,
-			"content_type": blob.ContentType,
-			"value":        []byte(blob.Value),
+			"content_type": contentType,
+			"value":        encoded,
 		}).
 		ToSQL()
 	if err != nil {
@@ -178,8 +195,8 @@ func (p PostgreSQLBlobHandler) CreateNested(tx *sql.Tx, submodelID string, paren
 //
 // Returns:
 //   - error: Error if update fails
-func (p PostgreSQLBlobHandler) Update(submodelID string, idShortOrPath string, submodelElement gen.SubmodelElement, tx *sql.Tx, isPut bool) error {
-	blob, ok := submodelElement.(*gen.Blob)
+func (p PostgreSQLBlobHandler) Update(submodelID string, idShortOrPath string, submodelElement types.ISubmodelElement, tx *sql.Tx, isPut bool) error {
+	blob, ok := submodelElement.(*types.Blob)
 	if !ok {
 		return common.NewErrBadRequest("submodelElement is not of type Blob")
 	}
@@ -247,7 +264,13 @@ func (p PostgreSQLBlobHandler) UpdateValueOnly(submodelID string, idShortOrPath 
 		if fileValueOnly, isMistakenAsFileValue = valueOnly.(gen.FileValue); !isMistakenAsFileValue {
 			return common.NewErrBadRequest("valueOnly is not of type BlobValue")
 		}
-		blobValueOnly = gen.BlobValue(fileValueOnly)
+
+		bytea := []byte(fileValueOnly.Value)
+
+		blobValueOnly = gen.BlobValue{
+			ContentType: fileValueOnly.ContentType,
+			Value:       bytea,
+		}
 	}
 
 	// Check if blob value is larger than 1GB
@@ -318,26 +341,27 @@ func (p PostgreSQLBlobHandler) Delete(idShortOrPath string) error {
 	return p.decorated.Delete(idShortOrPath)
 }
 
-func isBlobSizeExceeded(blob *gen.Blob) bool {
-	return len(blob.Value) > smrepoconfig.MaxBlobSizeBytes
+func isBlobSizeExceeded(blob *types.Blob) bool {
+	return len(blob.Value()) > smrepoconfig.MaxBlobSizeBytes
 }
 
-func buildUpdateBlobRecordObject(isPut bool, blob *gen.Blob) goqu.Record {
+func buildUpdateBlobRecordObject(isPut bool, blob *types.Blob) goqu.Record {
 	updateRecord := goqu.Record{}
 
-	if isPut || blob.ContentType != "" {
-		var contentType sql.NullString
-		if blob.ContentType != "" {
-			contentType = sql.NullString{String: blob.ContentType, Valid: true}
+	contentType := ""
+	if blob.ContentType() != nil {
+		contentType = *blob.ContentType()
+	}
+	if isPut || contentType != "" {
+		var contentTypeNull sql.NullString
+		if contentType != "" {
+			contentTypeNull = sql.NullString{String: contentType, Valid: true}
 		}
-		updateRecord["content_type"] = contentType
+		updateRecord["content_type"] = contentTypeNull
 	}
 
-	if isPut || blob.Value != "" {
-		var value []byte
-		if blob.Value != "" {
-			value = []byte(blob.Value)
-		}
+	value := blob.Value()
+	if isPut || len(value) > 0 {
 		updateRecord["value"] = value
 	}
 	return updateRecord

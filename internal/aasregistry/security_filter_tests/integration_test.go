@@ -112,7 +112,7 @@ func getAccessToken(creds *TokenCredentials) (string, error) {
 	return tokenResp.AccessToken, nil
 }
 
-func makeRequest(config TestConfig) (string, error) {
+func makeRequest(config TestConfig, stepNumber int) (string, error) {
 	var req *http.Request
 	var err error
 
@@ -191,8 +191,15 @@ func makeRequest(config TestConfig) (string, error) {
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != expectedStatus {
-		fmt.Printf("Response status code: %d\n", resp.StatusCode)
 		body, _ := io.ReadAll(resp.Body)
+		logFile := fmt.Sprintf("logs/STEP_%d.log", stepNumber)
+		f, err := os.OpenFile(logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+		if err == nil {
+			fmt.Fprintf(f, "Expected status %d but got %d\n", expectedStatus, resp.StatusCode)
+			fmt.Fprintf(f, "Response body: %s\n", body)
+			_ = f.Close()
+		}
+		fmt.Printf("Response status code: %d\n", resp.StatusCode)
 		fmt.Printf("Response body: %s\n", body)
 		return "", fmt.Errorf("expected status %d but got %d", expectedStatus, resp.StatusCode)
 	}
@@ -209,6 +216,11 @@ func TestIntegration(t *testing.T) {
 	configs, err := loadTestConfig("it_config.json")
 	require.NoError(t, err, "Failed to load test config")
 
+	// Ensure logs directory exists
+	if err := os.Mkdir("logs", 0755); err != nil && !os.IsExist(err) {
+		t.Fatalf("Failed to create logs directory: %v", err)
+	}
+
 	time.Sleep(15 * time.Second)
 
 	for i, config := range configs {
@@ -218,7 +230,7 @@ func TestIntegration(t *testing.T) {
 		}
 
 		t.Run(name, func(t *testing.T) {
-			response, err := makeRequest(config)
+			response, err := makeRequest(config, i+1)
 			require.NoError(t, err, "Request failed")
 
 			if strings.ToUpper(config.Method) == "GET" && config.ShouldMatch != "" {
@@ -232,7 +244,22 @@ func TestIntegration(t *testing.T) {
 				err = json.Unmarshal([]byte(response), &responseJSON)
 				require.NoError(t, err, "Failed to parse response JSON")
 
-				assert.Equal(t, expectedJSON, responseJSON, "Response does not match expected")
+				// Re-marshal and compare as JSON strings for consistent comparison
+				expectedBytes, _ := json.Marshal(expectedJSON)
+				responseBytes, _ := json.Marshal(responseJSON)
+				expectedStr := string(expectedBytes)
+				responseStr := string(responseBytes)
+
+				if expectedStr != responseStr {
+					logFile := fmt.Sprintf("logs/STEP_%d.log", i+1)
+					f, err := os.OpenFile(logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+					if err == nil {
+						fmt.Fprintf(f, "JSON mismatch:\nExpected: %s\nActual: %s\n", expectedStr, responseStr)
+						_ = f.Close()
+					}
+				}
+
+				assert.JSONEq(t, expectedStr, responseStr, "Response does not match expected")
 			}
 
 			t.Logf("Response: %s", response)

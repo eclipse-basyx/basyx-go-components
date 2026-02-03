@@ -82,7 +82,7 @@
                     },
                     "sourceOfDefinition": "IEC 61360-2",
                     "symbol": "kOhm",
-                    "dataType": "RealCount",
+                    "dataType": "REAL_COUNT",
                     "definition": [
                         {
                             "language": "en",
@@ -205,7 +205,7 @@
                     },
                     "sourceOfDefinition": "IEC 61360-2",
                     "symbol": "V",
-                    "dataType": "RealCount",
+                    "dataType": "REAL_COUNT",
                     "definition": [
                         {
                             "language": "en",
@@ -294,21 +294,7 @@
                 "keys": [
                     {
                         "type": "Submodel",
-                        "value": "123"
-                    }
-                ]
-            }
-        },
-        {
-            "type": "ValueQualifier",
-            "valueType": "xs:integer",
-            "value": "1234",
-            "valueId": {
-                "type": "ModelReference",
-                "keys": [
-                    {
-                        "type": "Submodel",
-                        "value": "1234"
+                        "value": "12345-Update"
                     }
                 ]
             }

@@ -362,7 +362,6 @@
                             ],
                             "idShort": "ExampleSubmodelElementListOrdered",
                             "modelType": "SubmodelElementList",
-                            "orderRelevant": false,
                             "semanticId": {
                                 "keys": [
                                     {
@@ -518,7 +517,7 @@
                                         ],
                                         "type": "ExternalReference"
                                     },
-                                    "value": "hallo2"
+                                    "value": "AQIDBAU="
                                 },
                                 {
                                     "category": "PARAMETER",
@@ -614,7 +613,6 @@
                                                         {
                                                             "idShort": "6",
                                                             "modelType": "SubmodelElementList",
-                                                            "orderRelevant": false,
                                                             "typeValueListElement": "Property",
                                                             "value": [
                                                                 {
@@ -859,7 +857,7 @@
                                         ],
                                         "type": "ExternalReference"
                                     },
-                                    "value": "hallo-neu"
+                                    "value": "AQIDBAU="
                                 },
                                 {
                                     "category": "PARAMETER",
@@ -976,7 +974,7 @@
                                 "type": "ExternalReference"
                             },
                             "dataSpecificationContent": {
-                                "dataType": "RealCount",
+                                "dataType": "REAL_COUNT",
                                 "definition": [
                                     {
                                         "language": "en",
@@ -1133,7 +1131,6 @@
                                                         {
                                                             "idShort": "6",
                                                             "modelType": "SubmodelElementList",
-                                                            "orderRelevant": false,
                                                             "typeValueListElement": "Property",
                                                             "value": [
                                                                 {
@@ -1977,7 +1974,6 @@
                                 {
                                     "idShort": "NestedListAnnotation",
                                     "modelType": "SubmodelElementList",
-                                    "orderRelevant": false,
                                     "typeValueListElement": "Blob"
                                 },
                                 {
@@ -2136,7 +2132,6 @@
                         {
                             "idShort": "NestedList",
                             "modelType": "SubmodelElementList",
-                            "orderRelevant": false,
                             "typeValueListElement": "Property"
                         },
                         {
@@ -2394,7 +2389,7 @@
                             "type": "ExternalReference"
                         },
                         "dataSpecificationContent": {
-                            "dataType": "RealCount",
+                            "dataType": "REAL_COUNT",
                             "definition": [
                                 {
                                     "language": "en",
@@ -2517,7 +2512,7 @@
                             "type": "ExternalReference"
                         },
                         "dataSpecificationContent": {
-                            "dataType": "RealCount",
+                            "dataType": "REAL_COUNT",
                             "definition": [
                                 {
                                     "language": "en",
@@ -2666,7 +2661,7 @@
                         "type": "ExternalReference"
                     },
                     "dataSpecificationContent": {
-                        "dataType": "RealCount",
+                        "dataType": "REAL_COUNT",
                         "definition": [
                             {
                                 "language": "en",
@@ -2789,7 +2784,7 @@
                         "type": "ExternalReference"
                     },
                     "dataSpecificationContent": {
-                        "dataType": "RealCount",
+                        "dataType": "REAL_COUNT",
                         "definition": [
                             {
                                 "language": "en",
@@ -3410,7 +3405,7 @@
                                 "type": "ExternalReference"
                             },
                             "dataSpecificationContent": {
-                                "dataType": "RealCount",
+                                "dataType": "REAL_COUNT",
                                 "definition": [
                                     {
                                         "language": "en",
@@ -3533,7 +3528,7 @@
                                 "type": "ExternalReference"
                             },
                             "dataSpecificationContent": {
-                                "dataType": "RealCount",
+                                "dataType": "REAL_COUNT",
                                 "definition": [
                                     {
                                         "language": "en",
@@ -3839,7 +3834,7 @@
                                 "type": "ExternalReference"
                             },
                             "dataSpecificationContent": {
-                                "dataType": "RealCount",
+                                "dataType": "REAL_COUNT",
                                 "definition": [
                                     {
                                         "language": "en",
@@ -3962,7 +3957,7 @@
                                 "type": "ExternalReference"
                             },
                             "dataSpecificationContent": {
-                                "dataType": "RealCount",
+                                "dataType": "REAL_COUNT",
                                 "definition": [
                                     {
                                         "language": "en",
@@ -4390,7 +4385,8 @@
             "id": "MarcusThisIsAMinimalAdministrationSubmodel",
             "idShort": "Identification",
             "kind": "Instance",
-            "modelType": "Submodel"
+            "modelType": "Submodel",
+            "submodelElements": []
         },
         {
             "administration": {
@@ -4405,16 +4401,10 @@
                 {
                     "annotations": [
                         {
-                            "idShort": "AnnotationCollection",
-                            "modelType": "SubmodelElementCollection",
-                            "value": [
-                                {
-                                    "idShort": "AnnotationProperty1",
-                                    "modelType": "Property",
-                                    "value": "AnnotationValue1-Updated",
-                                    "valueType": "xs:string"
-                                }
-                            ]
+                            "idShort": "AnnotationProperty1",
+                            "modelType": "Property",
+                            "value": "AnnotationValue1-Updated",
+                            "valueType": "xs:string"
                         }
                     ],
                     "first": {

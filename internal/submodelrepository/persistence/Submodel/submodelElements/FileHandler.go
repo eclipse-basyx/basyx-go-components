@@ -35,6 +35,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
@@ -80,8 +81,8 @@ func NewPostgreSQLFileHandler(db *sql.DB) (*PostgreSQLFileHandler, error) {
 // Returns:
 //   - int: The database ID of the created file element
 //   - error: Error if the element is not a File or if database operations fail
-func (p PostgreSQLFileHandler) Create(tx *sql.Tx, submodelID string, submodelElement gen.SubmodelElement) (int, error) {
-	file, ok := submodelElement.(*gen.File)
+func (p PostgreSQLFileHandler) Create(tx *sql.Tx, submodelID string, submodelElement types.ISubmodelElement) (int, error) {
+	file, ok := submodelElement.(*types.File)
 	if !ok {
 		return 0, common.NewErrBadRequest("submodelElement is not of type File")
 	}
@@ -96,8 +97,8 @@ func (p PostgreSQLFileHandler) Create(tx *sql.Tx, submodelID string, submodelEle
 	insertQuery, insertArgs, err := dialect.Insert("file_element").
 		Rows(goqu.Record{
 			"id":           id,
-			"content_type": file.ContentType,
-			"value":        file.Value,
+			"content_type": file.ContentType(),
+			"value":        file.Value(),
 		}).
 		ToSQL()
 	if err != nil {
@@ -126,8 +127,8 @@ func (p PostgreSQLFileHandler) Create(tx *sql.Tx, submodelID string, submodelEle
 // Returns:
 //   - int: The database ID of the created nested file element
 //   - error: Error if the element is not a File or if database operations fail
-func (p PostgreSQLFileHandler) CreateNested(tx *sql.Tx, submodelID string, parentID int, idShortPath string, submodelElement gen.SubmodelElement, pos int, rootSubmodelElementID int) (int, error) {
-	file, ok := submodelElement.(*gen.File)
+func (p PostgreSQLFileHandler) CreateNested(tx *sql.Tx, submodelID string, parentID int, idShortPath string, submodelElement types.ISubmodelElement, pos int, rootSubmodelElementID int) (int, error) {
+	file, ok := submodelElement.(*types.File)
 	if !ok {
 		return 0, common.NewErrBadRequest("submodelElement is not of type File")
 	}
@@ -143,8 +144,8 @@ func (p PostgreSQLFileHandler) CreateNested(tx *sql.Tx, submodelID string, paren
 	insertQuery, insertArgs, err := dialect.Insert("file_element").
 		Rows(goqu.Record{
 			"id":           id,
-			"content_type": file.ContentType,
-			"value":        file.Value,
+			"content_type": file.ContentType(),
+			"value":        file.Value(),
 		}).
 		ToSQL()
 	if err != nil {
@@ -167,8 +168,8 @@ func (p PostgreSQLFileHandler) CreateNested(tx *sql.Tx, submodelID string, paren
 //
 // Returns:
 //   - error: Error if the update operation fails
-func (p PostgreSQLFileHandler) Update(submodelID string, idShortOrPath string, submodelElement gen.SubmodelElement, tx *sql.Tx, isPut bool) error {
-	file, ok := submodelElement.(*gen.File)
+func (p PostgreSQLFileHandler) Update(submodelID string, idShortOrPath string, submodelElement types.ISubmodelElement, tx *sql.Tx, isPut bool) error {
+	file, ok := submodelElement.(*types.File)
 	if !ok {
 		return common.NewErrBadRequest("submodelElement is not of type File")
 	}
@@ -210,7 +211,7 @@ func (p PostgreSQLFileHandler) Update(submodelID string, idShortOrPath string, s
 		return fmt.Errorf("failed to get current file element: %w", err)
 	}
 
-	hasFileValueChanged := currentValue != file.Value
+	hasFileValueChanged := currentValue != *file.Value()
 	if hasFileValueChanged {
 		// Check if there's an OID in file_data for this element
 		var oldOID sql.NullInt64
@@ -238,8 +239,8 @@ func (p PostgreSQLFileHandler) Update(submodelID string, idShortOrPath string, s
 		// Update the file_element with the new value and content type
 		updateQuery, updateArgs, err := dialect.Update("file_element").
 			Set(goqu.Record{
-				"value":        file.Value,
-				"content_type": file.ContentType,
+				"value":        file.Value(),
+				"content_type": file.ContentType(),
 			}).
 			Where(goqu.C("id").Eq(elementID)).
 			ToSQL()
@@ -255,7 +256,7 @@ func (p PostgreSQLFileHandler) Update(submodelID string, idShortOrPath string, s
 		// Only Update content type if value hasn't changed
 		updateQuery, updateArgs, err := dialect.Update("file_element").
 			Set(goqu.Record{
-				"content_type": file.ContentType,
+				"content_type": file.ContentType(),
 			}).
 			Where(goqu.C("id").Eq(elementID)).
 			ToSQL()
