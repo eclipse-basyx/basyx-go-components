@@ -32,9 +32,9 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
-	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	persistence_utils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
@@ -67,7 +67,7 @@ func ReadSpecificAssetIDsByAASIdentifier(
 	ctx context.Context,
 	db *sql.DB,
 	aasID string,
-) ([]model.SpecificAssetID, error) {
+) ([]types.ISpecificAssetID, error) {
 	var aasRef int64
 	d := goqu.Dialect(dialect)
 	tAASIdentifier := goqu.T(tblAASIdentifier)
@@ -93,7 +93,7 @@ func ReadSpecificAssetIDsByAASRef(
 	ctx context.Context,
 	db DBQueryer,
 	aasRef int64,
-) ([]model.SpecificAssetID, error) {
+) ([]types.ISpecificAssetID, error) {
 	if debugEnabled(ctx) {
 		defer func(start time.Time) {
 			_, _ = fmt.Printf("ReadSpecificAssetIDsByAASRef took %s\n", time.Since(start))
@@ -197,7 +197,7 @@ func ReadSpecificAssetIDsByAASRef(
 	}
 
 	if len(allSpecificIDs) == 0 {
-		return []model.SpecificAssetID{}, nil
+		return []types.ISpecificAssetID{}, nil
 	}
 
 	suppBySpecific, err := readSpecificAssetIDSupplementalSemanticBySpecificIDs(ctx, db, allSpecificIDs)
@@ -206,7 +206,7 @@ func ReadSpecificAssetIDsByAASRef(
 	}
 
 	allRefIDs := append(append([]int64{}, semRefIDs...), extRefIDs...)
-	refByID := make(map[int64]*model.Reference)
+	refByID := make(map[int64]types.IReference)
 	if len(allRefIDs) > 0 {
 		refByID, err = GetReferencesByIDsBatch(db, allRefIDs)
 		if err != nil {
@@ -214,24 +214,22 @@ func ReadSpecificAssetIDsByAASRef(
 		}
 	}
 
-	out := make([]model.SpecificAssetID, 0, len(perRef))
+	out := make([]types.ISpecificAssetID, 0, len(perRef))
 	for _, r := range perRef {
-		var semRef *model.Reference
+		var semRef types.IReference
 		if r.semanticRefID.Valid {
 			semRef = refByID[r.semanticRefID.Int64]
 		}
-		var extRef *model.Reference
+		var extRef types.IReference
 		if r.externalSubjectRefID.Valid {
 			extRef = refByID[r.externalSubjectRefID.Int64]
 		}
 
-		out = append(out, model.SpecificAssetID{
-			Name:                    nvl(r.name),
-			Value:                   nvl(r.value),
-			SemanticID:              semRef,
-			ExternalSubjectID:       extRef,
-			SupplementalSemanticIds: suppBySpecific[r.specificID],
-		})
+		said := types.NewSpecificAssetID(nvl(r.name), nvl(r.value))
+		said.SetSemanticID(semRef)
+		said.SetExternalSubjectID(extRef)
+		said.SetSupplementalSemanticIDs(suppBySpecific[r.specificID])
+		out = append(out, said)
 	}
 
 	return out, nil
@@ -243,7 +241,7 @@ func ReplaceSpecificAssetIDsByAASIdentifier(
 	ctx context.Context,
 	db *sql.DB,
 	aasID string,
-	specificAssetIDs []model.SpecificAssetID,
+	specificAssetIDs []types.ISpecificAssetID,
 ) error {
 	return WithTx(ctx, db, func(tx *sql.Tx) error {
 		aasRef, err := ensureAASIdentifierTx(ctx, tx, aasID)
@@ -262,11 +260,11 @@ func ReplaceSpecificAssetIDsByAASIdentifier(
 		for i, val := range specificAssetIDs {
 			var a sql.NullInt64
 
-			externalSubjectReferenceID, err := persistence_utils.CreateReference(tx, val.ExternalSubjectID, a, a)
+			externalSubjectReferenceID, err := persistence_utils.CreateReference(tx, val.ExternalSubjectID(), a, a)
 			if err != nil {
 				return err
 			}
-			semanticID, err := persistence_utils.CreateReference(tx, val.SemanticID, a, a)
+			semanticID, err := persistence_utils.CreateReference(tx, val.SemanticID(), a, a)
 			if err != nil {
 				return err
 			}
@@ -292,7 +290,7 @@ func ReplaceSpecificAssetIDsByAASIdentifier(
 				return err
 			}
 
-			if err = createSpecificAssetIDSupplementalSemantic(tx, id, val.SupplementalSemanticIds); err != nil {
+			if err = createSpecificAssetIDSupplementalSemantic(tx, id, val.SupplementalSemanticIDs()); err != nil {
 				return err
 			}
 		}
