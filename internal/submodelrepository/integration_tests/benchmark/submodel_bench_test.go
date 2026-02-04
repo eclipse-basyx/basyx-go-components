@@ -150,7 +150,7 @@ func generateSubmodel(smID string) map[string]any {
 func executePostRequest(index int, stats *benchmarkStats) {
 	submodelID := generateSubmodelID(index)
 	submodel := generateSubmodel(submodelID)
-	
+
 	baseURL := *baseURLFlag
 	if !strings.HasSuffix(baseURL, "/submodels") {
 		baseURL = baseURL + "/submodels"
@@ -163,7 +163,7 @@ func executePostRequest(index int, stats *benchmarkStats) {
 	var code int
 	var err error
 	var duration time.Duration
-	
+
 	for attempt := 0; attempt <= *maxRetriesFlag; attempt++ {
 		if attempt > 0 {
 			time.Sleep(*retryDelayFlag)
@@ -171,7 +171,7 @@ func executePostRequest(index int, stats *benchmarkStats) {
 				log.Printf("[RETRY] POST #%d | Attempt %d/%d | ID: %s", index, attempt, *maxRetriesFlag, submodelID)
 			}
 		}
-		
+
 		start := time.Now()
 		respBody, code, err = postJSON(url, submodel)
 		duration = time.Since(start)
@@ -179,7 +179,7 @@ func executePostRequest(index int, stats *benchmarkStats) {
 		if code == 201 && err == nil {
 			break
 		}
-		
+
 		if attempt < *maxRetriesFlag && (err != nil || code >= 500) {
 			continue
 		}
@@ -194,10 +194,10 @@ func executePostRequest(index int, stats *benchmarkStats) {
 		if *logFailuresFlag {
 			reqJSON, _ := json.MarshalIndent(submodel, "", "  ")
 			if err != nil {
-				log.Printf("[FAILED] POST #%d | URL: %s | ID: %s | Error: %v | Duration: %v\nRequest:\n%s", 
+				log.Printf("[FAILED] POST #%d | URL: %s | ID: %s | Error: %v | Duration: %v\nRequest:\n%s",
 					index, url, submodelID, err, duration, string(reqJSON))
 			} else {
-				log.Printf("[FAILED] POST #%d | URL: %s | ID: %s | Status: %d | Duration: %v\nRequest:\n%s\nResponse:\n%s", 
+				log.Printf("[FAILED] POST #%d | URL: %s | ID: %s | Status: %d | Duration: %v\nRequest:\n%s\nResponse:\n%s",
 					index, url, submodelID, code, duration, string(reqJSON), string(respBody))
 			}
 		}
@@ -207,7 +207,7 @@ func executePostRequest(index int, stats *benchmarkStats) {
 func executeGetRequest(index int, stats *benchmarkStats) {
 	submodelID := generateSubmodelID(index)
 	encodedID := common.EncodeString(submodelID)
-	
+
 	baseURL := *baseURLFlag
 	if !strings.HasSuffix(baseURL, "/submodels") {
 		baseURL = baseURL + "/submodels"
@@ -252,7 +252,7 @@ func executeGetRequest(index int, stats *benchmarkStats) {
 			if err != nil {
 				log.Printf("[FAILED] GET #%d | URL: %s | ID: %s | Error: %v | Duration: %v", index, url, submodelID, err, duration)
 			} else {
-				log.Printf("[FAILED] GET #%d | URL: %s | ID: %s | Status: %d | Duration: %v\nResponse:\n%s", 
+				log.Printf("[FAILED] GET #%d | URL: %s | ID: %s | Status: %d | Duration: %v\nResponse:\n%s",
 					index, url, submodelID, code, duration, string(respBody))
 			}
 		}
