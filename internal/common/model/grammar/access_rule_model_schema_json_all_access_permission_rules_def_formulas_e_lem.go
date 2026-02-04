@@ -84,7 +84,7 @@ type AccessRuleModelSchemaJSONAllAccessPermissionRulesDEFFORMULASElem struct {
 //   - error: An error if the JSON is invalid or if either of the required fields ("formula" or "name")
 //     is missing. Returns nil on successful unmarshaling and validation.
 func (j *AccessRuleModelSchemaJSONAllAccessPermissionRulesDEFFORMULASElem) UnmarshalJSON(value []byte) error {
-	var raw map[string]interface{}
+	var raw map[string]any
 	if err := common.UnmarshalAndDisallowUnknownFields(value, &raw); err != nil {
 		return err
 	}

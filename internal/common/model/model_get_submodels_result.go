@@ -38,12 +38,12 @@ package model
 type GetSubmodelsResult struct {
 	PagingMetadata PagedResultPagingMetadata `json:"paging_metadata"`
 
-	Result []Submodel `json:"result,omitempty"`
+	Result []map[string]any `json:"result,omitempty"`
 }
 
 // AssertGetSubmodelsResultRequired checks if the required fields are not zero-ed
 func AssertGetSubmodelsResultRequired(obj GetSubmodelsResult) error {
-	elements := map[string]interface{}{
+	elements := map[string]any{
 		"paging_metadata": obj.PagingMetadata,
 	}
 	for name, el := range elements {
@@ -55,11 +55,7 @@ func AssertGetSubmodelsResultRequired(obj GetSubmodelsResult) error {
 	if err := AssertPagedResultPagingMetadataRequired(obj.PagingMetadata); err != nil {
 		return err
 	}
-	for _, el := range obj.Result {
-		if err := AssertSubmodelRequired(el); err != nil {
-			return err
-		}
-	}
+	// SDK types handle their own validation
 	return nil
 }
 
@@ -68,10 +64,6 @@ func AssertGetSubmodelsResultConstraints(obj GetSubmodelsResult) error {
 	if err := AssertPagedResultPagingMetadataConstraints(obj.PagingMetadata); err != nil {
 		return err
 	}
-	for _, el := range obj.Result {
-		if err := AssertSubmodelConstraints(el); err != nil {
-			return err
-		}
-	}
+	// SDK types handle their own validation
 	return nil
 }

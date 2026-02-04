@@ -43,10 +43,10 @@ type OperationResultValueOnly struct {
 	Success bool `json:"success,omitempty"`
 
 	// The ValueOnly serialization (patternProperties and propertyNames will probably be supported with OpenApi 3.1). For the full description of the generic JSON validation schema see the ValueOnly-Serialization as defined in the 'Specification of the Asset Administration Shell - Part 2'.
-	InoutputArguments map[string]interface{} `json:"inoutputArguments,omitempty"`
+	InoutputArguments map[string]any `json:"inoutputArguments,omitempty"`
 
 	// The ValueOnly serialization (patternProperties and propertyNames will probably be supported with OpenApi 3.1). For the full description of the generic JSON validation schema see the ValueOnly-Serialization as defined in the 'Specification of the Asset Administration Shell - Part 2'.
-	OutputArguments map[string]interface{} `json:"outputArguments,omitempty"`
+	OutputArguments map[string]any `json:"outputArguments,omitempty"`
 }
 
 // AssertOperationResultValueOnlyRequired checks if the required fields are not zero-ed

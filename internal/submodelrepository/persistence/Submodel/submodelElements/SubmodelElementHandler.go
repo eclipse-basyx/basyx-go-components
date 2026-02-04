@@ -40,6 +40,7 @@ import (
 	"strconv"
 	"sync"
 
+	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
 	_ "github.com/doug-martin/goqu/v9/dialect/postgres" // Postgres Driver for Goqu
 
@@ -64,8 +65,8 @@ import (
 // Returns:
 //   - PostgreSQLSMECrudInterface: Type-specific handler implementing CRUD operations
 //   - error: An error if the model type is unsupported or handler creation fails
-func GetSMEHandler(submodelElement model.SubmodelElement, db *sql.DB) (PostgreSQLSMECrudInterface, error) {
-	return GetSMEHandlerByModelType(string(submodelElement.GetModelType()), db)
+func GetSMEHandler(submodelElement types.ISubmodelElement, db *sql.DB) (PostgreSQLSMECrudInterface, error) {
+	return GetSMEHandlerByModelType(submodelElement.ModelType(), db)
 }
 
 // GetSMEHandlerByModelType creates a handler by model type string.
@@ -97,7 +98,7 @@ func GetSMEHandler(submodelElement model.SubmodelElement, db *sql.DB) (PostgreSQ
 // Returns:
 //   - PostgreSQLSMECrudInterface: Type-specific handler implementing CRUD operations
 //   - error: An error if the model type is unsupported or handler creation fails
-func GetSMEHandlerByModelType(modelType string, db *sql.DB) (PostgreSQLSMECrudInterface, error) {
+func GetSMEHandlerByModelType(modelType types.ModelType, db *sql.DB) (PostgreSQLSMECrudInterface, error) {
 	// Use the centralized handler registry for cleaner factory pattern
 	return GetHandlerFromRegistry(modelType, db)
 }
@@ -118,13 +119,17 @@ func UpdateNestedElementsValueOnly(db *sql.DB, elems []persistenceutils.ValueOnl
 			continue // Skip the root element as it's already processed
 		}
 		modelType := elem.Element.GetModelType()
-		if modelType == "File" {
+		if modelType == types.ModelTypeFile {
 			// We have to check the database because File could be ambiguous between File and Blob
 			actual, err := GetModelTypeByIdShortPathAndSubmodelID(db, submodelID, elem.IdShortPath)
 			if err != nil {
 				return err
 			}
-			modelType = actual
+			if actual == nil {
+				return common.NewErrNotFound("Submodel-Element ID-Short: " + elem.IdShortPath)
+			}
+
+			modelType = *actual
 		}
 		handler, err := GetSMEHandlerByModelType(modelType, db)
 		if err != nil {
@@ -164,14 +169,18 @@ func UpdateNestedElements(db *sql.DB, elems []persistenceutils.SubmodelElementTo
 		if elem.IdShortPath == idShortOrPath {
 			continue // Skip the root element as it's already processed
 		}
-		modelType := elem.Element.GetModelType()
-		if modelType == "File" {
+		modelType := elem.Element.ModelType()
+		if modelType == types.ModelTypeFile {
 			// We have to check the database because File could be ambiguous between File and Blob
 			actual, err := GetModelTypeByIdShortPathAndSubmodelID(db, submodelID, elem.IdShortPath)
 			if err != nil {
 				return err
 			}
-			modelType = actual
+			if actual == nil {
+				return common.NewErrNotFound("SMREPO-UPDNESTED-NOTFOUND Submodel-Element ID-Short: " + elem.IdShortPath)
+			}
+
+			modelType = *actual
 		}
 		handler, err := GetSMEHandlerByModelType(modelType, db)
 		if err != nil {
@@ -201,7 +210,7 @@ func UpdateNestedElements(db *sql.DB, elems []persistenceutils.SubmodelElementTo
 // Returns:
 // - string: Model type of the submodel element
 // - error: Error if retrieval fails or element is not found
-func GetModelTypeByIdShortPathAndSubmodelID(db *sql.DB, submodelID string, idShortOrPath string) (string, error) {
+func GetModelTypeByIdShortPathAndSubmodelID(db *sql.DB, submodelID string, idShortOrPath string) (*types.ModelType, error) {
 	dialect := goqu.Dialect("postgres")
 
 	query, args, err := dialect.From("submodel_element").
@@ -212,18 +221,18 @@ func GetModelTypeByIdShortPathAndSubmodelID(db *sql.DB, submodelID string, idSho
 		).
 		ToSQL()
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
-	var modelType string
+	var modelType types.ModelType
 	err = db.QueryRow(query, args...).Scan(&modelType)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return "", common.NewErrNotFound("Submodel-Element ID-Short: " + idShortOrPath)
+			return nil, common.NewErrNotFound("SMREPO-GETMODELTYPE-NOTFOUND Submodel-Element ID-Short: " + idShortOrPath)
 		}
-		return "", err
+		return nil, err
 	}
-	return modelType, nil
+	return &modelType, nil
 }
 
 // DeleteSubmodelElementByPath removes a submodel element by its idShort or path including all nested elements.
@@ -268,15 +277,15 @@ func DeleteSubmodelElementByPath(tx *sql.Tx, submodelID string, idShortOrPath st
 	)
 	sqlQuery, args, err := del.ToSQL()
 	if err != nil {
-		return err
+		return common.NewInternalServerError("SMREPO-DELSMEBPATH-TOSQL Failed to build delete query: " + err.Error())
 	}
 	result, err := tx.Exec(sqlQuery, args...)
 	if err != nil {
-		return err
+		return common.NewInternalServerError("SMREPO-DELSMEBPATH-EXEC Failed to execute delete query: " + err.Error())
 	}
 	affectedRows, err := result.RowsAffected()
 	if err != nil {
-		return err
+		return common.NewInternalServerError("SMREPO-DELSMEBPATH-ROWSAFFECTED Failed to get affected rows: " + err.Error())
 	}
 	// if idShortPath ends with ] it is part of a SubmodelElementList and we need to update the indices of the remaining elements
 	if idShortOrPath[len(idShortOrPath)-1] == ']' {
@@ -290,7 +299,7 @@ func DeleteSubmodelElementByPath(tx *sql.Tx, submodelID string, idShortOrPath st
 				var err error
 				deletedIndex, err = strconv.Atoi(indexStr)
 				if err != nil {
-					return err
+					return common.NewInternalServerError("SMREPO-DELSMEBPATH-PARSEINDEX Failed to parse index: " + err.Error())
 				}
 				break
 			}
@@ -306,13 +315,16 @@ func DeleteSubmodelElementByPath(tx *sql.Tx, submodelID string, idShortOrPath st
 			)).
 			ToSQL()
 		if err != nil {
-			return err
+			return common.NewInternalServerError("SMREPO-DELSMEBPATH-SELECTPARENT-TOSQL Failed to build select query: " + err.Error())
 		}
 
 		var parentID int
 		err = tx.QueryRow(selectQuery, selectArgs...).Scan(&parentID)
 		if err != nil {
-			return err
+			if errors.Is(err, sql.ErrNoRows) {
+				return common.NewErrNotFound("SMREPO-DELSMEBPATH-SELECTPARENT-NOTFOUND Parent ID-Short: " + parentPath)
+			}
+			return common.NewInternalServerError("SMREPO-DELSMEBPATH-SELECTPARENT-EXEC Failed to execute select query: " + err.Error())
 		}
 
 		// update the indices of the remaining elements in the SubmodelElementList
@@ -324,11 +336,11 @@ func DeleteSubmodelElementByPath(tx *sql.Tx, submodelID string, idShortOrPath st
 			)).
 			ToSQL()
 		if err != nil {
-			return err
+			return common.NewInternalServerError("SMREPO-DELSMEBPATH-UPDATEINDICES-TOSQL Failed to build update query: " + err.Error())
 		}
 		_, err = tx.Exec(updateQuery, updateArgs...)
 		if err != nil {
-			return err
+			return common.NewInternalServerError("SMREPO-DELSMEBPATH-UPDATEINDICES-EXEC Failed to execute update query: " + err.Error())
 		}
 		// update their idshort_path as well
 		updatePathQuery, updatePathArgs, err := dialect.Update("submodel_element").
@@ -339,21 +351,21 @@ func DeleteSubmodelElementByPath(tx *sql.Tx, submodelID string, idShortOrPath st
 			)).
 			ToSQL()
 		if err != nil {
-			return err
+			return common.NewInternalServerError("SMREPO-DELSMEBPATH-UPDATEPATH-TOSQL Failed to build update path query: " + err.Error())
 		}
 		_, err = tx.Exec(updatePathQuery, updatePathArgs...)
 		if err != nil {
-			return err
+			return common.NewInternalServerError("SMREPO-DELSMEBPATH-UPDATEPATH-EXEC Failed to execute update path query: " + err.Error())
 		}
 	}
 	if affectedRows == 0 {
-		return common.NewErrNotFound("Submodel-Element ID-Short: " + idShortOrPath)
+		return common.NewErrNotFound("SMREPO-DELSMEBPATH-NOTFOUND Submodel-Element ID-Short: " + idShortOrPath)
 	}
 	return nil
 }
 
 // GetSubmodelElementsForSubmodel retrieves all submodel elements for a given submodel ID.
-func GetSubmodelElementsForSubmodel(db *sql.DB, submodelID string, idShortPath string, cursor string, limit int, valueOnly bool) ([]model.SubmodelElement, string, error) {
+func GetSubmodelElementsForSubmodel(db *sql.DB, submodelID string, idShortPath string, cursor string, limit int, valueOnly bool) ([]types.ISubmodelElement, string, error) {
 	filter := submodelsubqueries.SubmodelElementFilter{
 		SubmodelFilter: &submodelsubqueries.SubmodelElementSubmodelFilter{
 			SubmodelIDFilter: submodelID,
@@ -371,10 +383,13 @@ func GetSubmodelElementsForSubmodel(db *sql.DB, submodelID string, idShortPath s
 		return nil, "", err
 	}
 	q, params, err := submodelElementQuery.ToSQL()
+
 	if err != nil {
 		return nil, "", err
 	}
+
 	rows, err := db.Query(q, params...)
+
 	if err != nil {
 		return nil, "", err
 	}
@@ -421,7 +436,7 @@ func GetSubmodelElementsForSubmodel(db *sql.DB, submodelID string, idShortPath s
 			_, exists := smeBuilderMap[smeRow.DbID.Int64]
 			mu.Unlock()
 			if !exists {
-				sme, builder, err := builder.BuildSubmodelElement(smeRow)
+				sme, builder, err := builder.BuildSubmodelElement(smeRow, db)
 				if err != nil {
 					buildError = err
 					return
@@ -434,7 +449,7 @@ func GetSubmodelElementsForSubmodel(db *sql.DB, submodelID string, idShortPath s
 					parentID: smeRow.ParentID.Int64,
 					path:     smeRow.IDShortPath,
 					position: smeRow.Position,
-					element:  *sme,
+					element:  sme,
 				}
 				mu.Lock()
 				nodes[smeRow.DbID.Int64] = n
@@ -463,14 +478,14 @@ func GetSubmodelElementsForSubmodel(db *sql.DB, submodelID string, idShortPath s
 		return a.path < b.path
 	})
 
-	res := make([]model.SubmodelElement, 0, len(roots))
+	res := make([]types.ISubmodelElement, 0, len(roots))
 	for _, r := range roots {
 		res = append(res, r.element)
 	}
 
 	var nextCursor string
 	if (len(res) > limit) && limit != -1 {
-		nextCursor = res[limit].GetIdShort()
+		nextCursor = *res[limit].IDShort()
 		res = res[:limit]
 	}
 
@@ -554,22 +569,38 @@ func attachChildrenToSubmodelElements(nodes map[int64]*node, children map[int64]
 			return a.position < b.position
 		})
 
-		switch p := parent.element.(type) {
-		case *model.SubmodelElementCollection:
-			for _, ch := range kids {
-				p.Value = append(p.Value, ch.element)
+		switch parent.element.ModelType() {
+		case types.ModelTypeSubmodelElementCollection:
+			if p, ok := parent.element.(types.ISubmodelElementCollection); ok {
+				value := p.Value()
+				for _, ch := range kids {
+					value = append(value, ch.element)
+				}
+				p.SetValue(value)
 			}
-		case *model.SubmodelElementList:
-			for _, ch := range kids {
-				p.Value = append(p.Value, ch.element)
+		case types.ModelTypeSubmodelElementList:
+			if p, ok := parent.element.(types.ISubmodelElementList); ok {
+				value := p.Value()
+				for _, ch := range kids {
+					value = append(value, ch.element)
+				}
+				p.SetValue(value)
 			}
-		case *model.AnnotatedRelationshipElement:
-			for _, ch := range kids {
-				p.Annotations = append(p.Annotations, ch.element)
+		case types.ModelTypeAnnotatedRelationshipElement:
+			if p, ok := parent.element.(types.IAnnotatedRelationshipElement); ok {
+				annotations := p.Annotations()
+				for _, ch := range kids {
+					annotations = append(annotations, ch.element)
+				}
+				p.SetAnnotations(annotations)
 			}
-		case *model.Entity:
-			for _, ch := range kids {
-				p.Statements = append(p.Statements, ch.element)
+		case types.ModelTypeEntity:
+			if p, ok := parent.element.(types.IEntity); ok {
+				statements := p.Statements()
+				for _, ch := range kids {
+					statements = append(statements, ch.element)
+				}
+				p.SetStatements(statements)
 			}
 		}
 	}
@@ -581,9 +612,9 @@ func attachChildrenToSubmodelElements(nodes map[int64]*node, children map[int64]
 // SubmodelElement data. This struct is used during the reconstruction of the
 // nested structure of submodel elements from flat database rows.
 type node struct {
-	id       int64                 // Database ID of the element
-	parentID int64                 // Parent element ID for hierarchy
-	path     string                // Full path for navigation
-	position int                   // Position within parent for ordering
-	element  model.SubmodelElement // The actual submodel element data
+	id       int64                  // Database ID of the element
+	parentID int64                  // Parent element ID for hierarchy
+	path     string                 // Full path for navigation
+	position int                    // Position within parent for ordering
+	element  types.ISubmodelElement // The actual submodel element data
 }

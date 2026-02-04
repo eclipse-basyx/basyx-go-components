@@ -19,7 +19,7 @@ type AssetLink struct {
 
 // AssertAssetLinkRequired checks if the required fields are not zero-ed
 func AssertAssetLinkRequired(obj AssetLink) error {
-	elements := map[string]interface{}{
+	elements := map[string]any{
 		"name":  obj.Name,
 		"value": obj.Value,
 	}

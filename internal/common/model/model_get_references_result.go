@@ -34,16 +34,18 @@
 //nolint:all
 package model
 
+import "github.com/FriedJannik/aas-go-sdk/types"
+
 // GetReferencesResult type of GetReferencesResult
 type GetReferencesResult struct {
 	PagingMetadata PagedResultPagingMetadata `json:"paging_metadata"`
 
-	Result []Reference `json:"result,omitempty"`
+	Result []types.IReference `json:"result,omitempty"`
 }
 
 // AssertGetReferencesResultRequired checks if the required fields are not zero-ed
 func AssertGetReferencesResultRequired(obj GetReferencesResult) error {
-	elements := map[string]interface{}{
+	elements := map[string]any{
 		"paging_metadata": obj.PagingMetadata,
 	}
 	for name, el := range elements {
@@ -55,11 +57,6 @@ func AssertGetReferencesResultRequired(obj GetReferencesResult) error {
 	if err := AssertPagedResultPagingMetadataRequired(obj.PagingMetadata); err != nil {
 		return err
 	}
-	for _, el := range obj.Result {
-		if err := AssertReferenceRequired(el); err != nil {
-			return err
-		}
-	}
 	return nil
 }
 
@@ -67,11 +64,6 @@ func AssertGetReferencesResultRequired(obj GetReferencesResult) error {
 func AssertGetReferencesResultConstraints(obj GetReferencesResult) error {
 	if err := AssertPagedResultPagingMetadataConstraints(obj.PagingMetadata); err != nil {
 		return err
-	}
-	for _, el := range obj.Result {
-		if err := AssertReferenceConstraints(el); err != nil {
-			return err
-		}
 	}
 	return nil
 }

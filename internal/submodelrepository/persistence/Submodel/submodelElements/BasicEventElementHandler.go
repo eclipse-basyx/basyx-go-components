@@ -34,6 +34,8 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/FriedJannik/aas-go-sdk/jsonization"
+	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
@@ -79,8 +81,8 @@ func NewPostgreSQLBasicEventElementHandler(db *sql.DB) (*PostgreSQLBasicEventEle
 // Returns:
 //   - int: Database ID of the created element
 //   - error: Error if creation fails or element is not of correct type
-func (p PostgreSQLBasicEventElementHandler) Create(tx *sql.Tx, submodelID string, submodelElement gen.SubmodelElement) (int, error) {
-	basicEvent, ok := submodelElement.(*gen.BasicEventElement)
+func (p PostgreSQLBasicEventElementHandler) Create(tx *sql.Tx, submodelID string, submodelElement types.ISubmodelElement) (int, error) {
+	basicEvent, ok := submodelElement.(*types.BasicEventElement)
 	if !ok {
 		return 0, common.NewErrBadRequest("submodelElement is not of type BasicEventElement")
 	}
@@ -115,8 +117,8 @@ func (p PostgreSQLBasicEventElementHandler) Create(tx *sql.Tx, submodelID string
 // Returns:
 //   - int: Database ID of the created nested element
 //   - error: Error if creation fails or element is not of correct type
-func (p PostgreSQLBasicEventElementHandler) CreateNested(tx *sql.Tx, submodelID string, parentID int, idShortPath string, submodelElement gen.SubmodelElement, pos int, rootSubmodelElementID int) (int, error) {
-	basicEvent, ok := submodelElement.(*gen.BasicEventElement)
+func (p PostgreSQLBasicEventElementHandler) CreateNested(tx *sql.Tx, submodelID string, parentID int, idShortPath string, submodelElement types.ISubmodelElement, pos int, rootSubmodelElementID int) (int, error) {
+	basicEvent, ok := submodelElement.(*types.BasicEventElement)
 	if !ok {
 		return 0, common.NewErrBadRequest("submodelElement is not of type BasicEventElement")
 	}
@@ -149,8 +151,8 @@ func (p PostgreSQLBasicEventElementHandler) CreateNested(tx *sql.Tx, submodelID 
 //
 // Returns:
 //   - error: Error if update fails
-func (p PostgreSQLBasicEventElementHandler) Update(submodelID string, idShortOrPath string, submodelElement gen.SubmodelElement, tx *sql.Tx, isPut bool) error {
-	basicEvent, ok := submodelElement.(*gen.BasicEventElement)
+func (p PostgreSQLBasicEventElementHandler) Update(submodelID string, idShortOrPath string, submodelElement types.ISubmodelElement, tx *sql.Tx, isPut bool) error {
+	basicEvent, ok := submodelElement.(*types.BasicEventElement)
 	if !ok {
 		return common.NewErrBadRequest("submodelElement is not of type BasicEventElement")
 	}
@@ -172,13 +174,13 @@ func (p PostgreSQLBasicEventElementHandler) Update(submodelID string, idShortOrP
 	}
 
 	// Validate required fields
-	if basicEvent.Observed == nil {
+	if basicEvent.Observed() == nil {
 		return common.NewErrBadRequest(fmt.Sprintf("Missing Field 'Observed' for BasicEventElement with idShortPath '%s'", idShortOrPath))
 	}
-	if basicEvent.Direction == "" {
+	if basicEvent.Direction() == 0 {
 		return common.NewErrBadRequest(fmt.Sprintf("Missing Field 'Direction' for BasicEventElement with idShortPath '%s'", idShortOrPath))
 	}
-	if basicEvent.State == "" {
+	if basicEvent.State() == 0 {
 		return common.NewErrBadRequest(fmt.Sprintf("Missing Field 'State' for BasicEventElement with idShortPath '%s'", idShortOrPath))
 	}
 
@@ -207,29 +209,37 @@ func (p PostgreSQLBasicEventElementHandler) Update(submodelID string, idShortOrP
 	return persistenceutils.CommitTransactionIfNeeded(tx, localTx)
 }
 
-func buildUpdateBasicEventElementRecordObject(basicEvent *gen.BasicEventElement, isPut bool) (goqu.Record, error) {
+func buildUpdateBasicEventElementRecordObject(basicEvent *types.BasicEventElement, isPut bool) (goqu.Record, error) {
 	updateRecord := goqu.Record{}
 
 	// Required fields - always update
 	var observedRefJson sql.NullString
-	if !isEmptyReference(basicEvent.Observed) {
-		observedBytes, err := json.Marshal(basicEvent.Observed)
+	if !isEmptyReference(basicEvent.Observed()) {
+		jsonable, err := jsonization.ToJsonable(basicEvent.Observed())
+		if err != nil {
+			return nil, common.NewErrBadRequest("SMREPO-BUBEERO-OBSJSONABLE Failed to convert observed to jsonable: " + err.Error())
+		}
+		observedBytes, err := json.Marshal(jsonable)
 		if err != nil {
 			return nil, err
 		}
 		observedRefJson = sql.NullString{String: string(observedBytes), Valid: true}
 	}
 	updateRecord["observed"] = observedRefJson
-	updateRecord["direction"] = basicEvent.Direction
-	updateRecord["state"] = basicEvent.State
+	updateRecord["direction"] = basicEvent.Direction()
+	updateRecord["state"] = basicEvent.State()
 
 	// Optional fields - update based on isPut flag
 	// For PUT: always update (even if empty, which clears the field)
 	// For PATCH: only update if provided (not empty)
-	if isPut || !isEmptyReference(basicEvent.MessageBroker) {
+	if isPut || !isEmptyReference(basicEvent.MessageBroker()) {
 		var messageBrokerRefJson sql.NullString
-		if !isEmptyReference(basicEvent.MessageBroker) {
-			messageBrokerBytes, err := json.Marshal(basicEvent.MessageBroker)
+		if !isEmptyReference(basicEvent.MessageBroker()) {
+			jsonable, err := jsonization.ToJsonable(basicEvent.MessageBroker())
+			if err != nil {
+				return nil, common.NewErrBadRequest("SMREPO-BUBEERO-MBJSONABLE Failed to convert message broker to jsonable: " + err.Error())
+			}
+			messageBrokerBytes, err := json.Marshal(jsonable)
 			if err != nil {
 				return nil, err
 			}
@@ -238,34 +248,34 @@ func buildUpdateBasicEventElementRecordObject(basicEvent *gen.BasicEventElement,
 		updateRecord["message_broker"] = messageBrokerRefJson
 	}
 
-	if isPut || basicEvent.LastUpdate != "" {
+	if isPut || (basicEvent.LastUpdate() != nil && *basicEvent.LastUpdate() != "") {
 		var lastUpdate sql.NullString
-		if basicEvent.LastUpdate != "" {
-			lastUpdate = sql.NullString{String: basicEvent.LastUpdate, Valid: true}
+		if basicEvent.LastUpdate() != nil && *basicEvent.LastUpdate() != "" {
+			lastUpdate = sql.NullString{String: *basicEvent.LastUpdate(), Valid: true}
 		}
 		updateRecord["last_update"] = lastUpdate
 	}
 
-	if isPut || basicEvent.MinInterval != "" {
+	if isPut || (basicEvent.MinInterval() != nil && *basicEvent.MinInterval() != "") {
 		var minInterval sql.NullString
-		if basicEvent.MinInterval != "" {
-			minInterval = sql.NullString{String: basicEvent.MinInterval, Valid: true}
+		if basicEvent.MinInterval() != nil && *basicEvent.MinInterval() != "" {
+			minInterval = sql.NullString{String: *basicEvent.MinInterval(), Valid: true}
 		}
 		updateRecord["min_interval"] = minInterval
 	}
 
-	if isPut || basicEvent.MaxInterval != "" {
+	if isPut || (basicEvent.MaxInterval() != nil && *basicEvent.MaxInterval() != "") {
 		var maxInterval sql.NullString
-		if basicEvent.MaxInterval != "" {
-			maxInterval = sql.NullString{String: basicEvent.MaxInterval, Valid: true}
+		if basicEvent.MaxInterval() != nil && *basicEvent.MaxInterval() != "" {
+			maxInterval = sql.NullString{String: *basicEvent.MaxInterval(), Valid: true}
 		}
 		updateRecord["max_interval"] = maxInterval
 	}
 
-	if isPut || basicEvent.MessageTopic != "" {
+	if isPut || (basicEvent.MessageTopic() != nil && *basicEvent.MessageTopic() != "") {
 		var messageTopic sql.NullString
-		if basicEvent.MessageTopic != "" {
-			messageTopic = sql.NullString{String: basicEvent.MessageTopic, Valid: true}
+		if basicEvent.MessageTopic() != nil && *basicEvent.MessageTopic() != "" {
+			messageTopic = sql.NullString{String: *basicEvent.MessageTopic(), Valid: true}
 		}
 		updateRecord["message_topic"] = messageTopic
 	}
@@ -360,10 +370,14 @@ func (p PostgreSQLBasicEventElementHandler) Delete(idShortOrPath string) error {
 	return p.decorated.Delete(idShortOrPath)
 }
 
-func insertBasicEventElement(basicEvent *gen.BasicEventElement, tx *sql.Tx, id int) error {
+func insertBasicEventElement(basicEvent *types.BasicEventElement, tx *sql.Tx, id int) error {
 	var observedRefJson sql.NullString
-	if !isEmptyReference(basicEvent.Observed) {
-		observedBytes, err := json.Marshal(basicEvent.Observed)
+	if !isEmptyReference(basicEvent.Observed()) {
+		jsonable, err := jsonization.ToJsonable(basicEvent.Observed())
+		if err != nil {
+			return common.NewErrBadRequest("SMREPO-IBEE-OBSJSONABLE")
+		}
+		observedBytes, err := json.Marshal(jsonable)
 		if err != nil {
 			return err
 		}
@@ -371,8 +385,12 @@ func insertBasicEventElement(basicEvent *gen.BasicEventElement, tx *sql.Tx, id i
 	}
 
 	var messageBrokerRefJson sql.NullString
-	if !isEmptyReference(basicEvent.MessageBroker) {
-		messageBrokerBytes, err := json.Marshal(basicEvent.MessageBroker)
+	if !isEmptyReference(basicEvent.MessageBroker()) {
+		jsonable, err := jsonization.ToJsonable(basicEvent.MessageBroker())
+		if err != nil {
+			return common.NewErrBadRequest("SMREPO-IBEE-MBJSONABLE")
+		}
+		messageBrokerBytes, err := json.Marshal(jsonable)
 		if err != nil {
 			return err
 		}
@@ -381,23 +399,23 @@ func insertBasicEventElement(basicEvent *gen.BasicEventElement, tx *sql.Tx, id i
 
 	// Handle nullable fields
 	var lastUpdate sql.NullString
-	if basicEvent.LastUpdate != "" {
-		lastUpdate = sql.NullString{String: basicEvent.LastUpdate, Valid: true}
+	if basicEvent.LastUpdate() != nil && *basicEvent.LastUpdate() != "" {
+		lastUpdate = sql.NullString{String: *basicEvent.LastUpdate(), Valid: true}
 	}
 
 	var minInterval sql.NullString
-	if basicEvent.MinInterval != "" {
-		minInterval = sql.NullString{String: basicEvent.MinInterval, Valid: true}
+	if basicEvent.MinInterval() != nil && *basicEvent.MinInterval() != "" {
+		minInterval = sql.NullString{String: *basicEvent.MinInterval(), Valid: true}
 	}
 
 	var maxInterval sql.NullString
-	if basicEvent.MaxInterval != "" {
-		maxInterval = sql.NullString{String: basicEvent.MaxInterval, Valid: true}
+	if basicEvent.MaxInterval() != nil && *basicEvent.MaxInterval() != "" {
+		maxInterval = sql.NullString{String: *basicEvent.MaxInterval(), Valid: true}
 	}
 
 	var messageTopic sql.NullString
-	if basicEvent.MessageTopic != "" {
-		messageTopic = sql.NullString{String: basicEvent.MessageTopic, Valid: true}
+	if basicEvent.MessageTopic() != nil && *basicEvent.MessageTopic() != "" {
+		messageTopic = sql.NullString{String: *basicEvent.MessageTopic(), Valid: true}
 	}
 
 	dialect := goqu.Dialect("postgres")
@@ -405,8 +423,8 @@ func insertBasicEventElement(basicEvent *gen.BasicEventElement, tx *sql.Tx, id i
 		Rows(goqu.Record{
 			"id":             id,
 			"observed":       observedRefJson,
-			"direction":      basicEvent.Direction,
-			"state":          basicEvent.State,
+			"direction":      basicEvent.Direction(),
+			"state":          basicEvent.State(),
 			"message_topic":  messageTopic,
 			"message_broker": messageBrokerRefJson,
 			"last_update":    lastUpdate,

@@ -9,7 +9,11 @@
 //nolint:all
 package model
 
-import "encoding/json"
+import (
+	"encoding/json"
+
+	"github.com/FriedJannik/aas-go-sdk/types"
+)
 
 // SubmodelElementListValue represents the Value-Only serialization of a SubmodelElementList.
 // According to spec: Serialized as a named JSON array with ${SubmodelElementList/idShort} as the name.
@@ -37,8 +41,8 @@ func (s SubmodelElementListValue) MarshalJSON() ([]byte, error) {
 }
 
 // GetModelType returns the model type name for SubmodelElementList
-func (s SubmodelElementListValue) GetModelType() string {
-	return "SubmodelElementList"
+func (s SubmodelElementListValue) GetModelType() types.ModelType {
+	return types.ModelTypeSubmodelElementList
 }
 
 // AssertSubmodelElementListValueRequired checks if the required fields are not zero-ed

@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 )
@@ -106,7 +107,7 @@ type SerializationAPIAPIServicer interface {
 type SubmodelRepositoryAPIAPIServicer interface {
 	QuerySubmodels(context.Context, int32, string, grammar.Query) (model.ImplResponse, error)
 	GetAllSubmodels(context.Context, string, string, int32, string, string, string) (model.ImplResponse, error)
-	PostSubmodel(context.Context, model.Submodel) (model.ImplResponse, error)
+	PostSubmodel(context.Context, types.ISubmodel) (model.ImplResponse, error)
 	GetAllSubmodelsMetadata(context.Context, string, string, int32, string) (model.ImplResponse, error)
 	GetAllSubmodelsValueOnly(context.Context, string, string, int32, string, string, string) (model.ImplResponse, error)
 	GetAllSubmodelsReference(context.Context, string, string, int32, string, string) (model.ImplResponse, error)
@@ -114,9 +115,9 @@ type SubmodelRepositoryAPIAPIServicer interface {
 	GetSubmodelByID(context.Context, string, string, string) (model.ImplResponse, error)
 	GetSignedSubmodelByID(context.Context, string, string, string) (model.ImplResponse, error)
 	GetSignedSubmodelByIDValueOnly(context.Context, string, string, string) (model.ImplResponse, error)
-	PutSubmodelByID(context.Context, string, model.Submodel) (model.ImplResponse, error)
+	PutSubmodelByID(context.Context, string, types.ISubmodel) (model.ImplResponse, error)
 	DeleteSubmodelByID(context.Context, string) (model.ImplResponse, error)
-	PatchSubmodelByID(context.Context, string, model.Submodel, string) (model.ImplResponse, error)
+	PatchSubmodelByID(context.Context, string, types.ISubmodel, string) (model.ImplResponse, error)
 	GetSubmodelByIDMetadata(context.Context, string) (model.ImplResponse, error)
 	PatchSubmodelByIDMetadata(context.Context, string, model.SubmodelMetadata) (model.ImplResponse, error)
 	GetSubmodelByIDValueOnly(context.Context, string, string, string) (model.ImplResponse, error)
@@ -124,16 +125,16 @@ type SubmodelRepositoryAPIAPIServicer interface {
 	GetSubmodelByIDReference(context.Context, string) (model.ImplResponse, error)
 	GetSubmodelByIDPath(context.Context, string, string) (model.ImplResponse, error)
 	GetAllSubmodelElements(context.Context, string, int32, string, string, string) (model.ImplResponse, error)
-	PostSubmodelElementSubmodelRepo(context.Context, string, model.SubmodelElement) (model.ImplResponse, error)
+	PostSubmodelElementSubmodelRepo(context.Context, string, types.ISubmodelElement) (model.ImplResponse, error)
 	GetAllSubmodelElementsMetadataSubmodelRepo(context.Context, string, int32, string) (model.ImplResponse, error)
 	GetAllSubmodelElementsValueOnlySubmodelRepo(context.Context, string, int32, string, string, string) (model.ImplResponse, error)
 	GetAllSubmodelElementsReferenceSubmodelRepo(context.Context, string, int32, string, string) (model.ImplResponse, error)
 	GetAllSubmodelElementsPathSubmodelRepo(context.Context, string, int32, string, string) (model.ImplResponse, error)
 	GetSubmodelElementByPathSubmodelRepo(context.Context, string, string, string, string) (model.ImplResponse, error)
-	PutSubmodelElementByPathSubmodelRepo(context.Context, string, string, model.SubmodelElement, string) (model.ImplResponse, error)
-	PostSubmodelElementByPathSubmodelRepo(context.Context, string, string, model.SubmodelElement) (model.ImplResponse, error)
+	PutSubmodelElementByPathSubmodelRepo(context.Context, string, string, types.ISubmodelElement, string) (model.ImplResponse, error)
+	PostSubmodelElementByPathSubmodelRepo(context.Context, string, string, types.ISubmodelElement) (model.ImplResponse, error)
 	DeleteSubmodelElementByPathSubmodelRepo(context.Context, string, string) (model.ImplResponse, error)
-	PatchSubmodelElementByPathSubmodelRepo(context.Context, string, string, model.SubmodelElement, string) (model.ImplResponse, error)
+	PatchSubmodelElementByPathSubmodelRepo(context.Context, string, string, types.ISubmodelElement, string) (model.ImplResponse, error)
 	GetSubmodelElementByPathMetadataSubmodelRepo(context.Context, string, string) (model.ImplResponse, error)
 	PatchSubmodelElementByPathMetadataSubmodelRepo(context.Context, string, string, model.SubmodelElementMetadata) (model.ImplResponse, error)
 	GetSubmodelElementByPathValueOnlySubmodelRepo(context.Context, string, string, string, string) (model.ImplResponse, error)

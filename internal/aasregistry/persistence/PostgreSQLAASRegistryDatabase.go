@@ -89,7 +89,7 @@ func (p *PostgreSQLAASRegistryDatabase) InsertAdministrationShellDescriptor(
 	ctx context.Context,
 	aasd model.AssetAdministrationShellDescriptor,
 ) (model.AssetAdministrationShellDescriptor, error) {
-	return descriptors.InsertAdministrationShellDescriptor(ctx, p.db, aasd)
+	return descriptors.InsertAssetAdministrationShellDescriptor(ctx, p.db, aasd)
 }
 
 // GetAssetAdministrationShellDescriptorByID returns the AAS descriptor

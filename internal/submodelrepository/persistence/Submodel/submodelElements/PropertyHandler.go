@@ -35,6 +35,7 @@ import (
 	"database/sql"
 	"fmt"
 
+	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
@@ -81,8 +82,8 @@ func NewPostgreSQLPropertyHandler(db *sql.DB) (*PostgreSQLPropertyHandler, error
 // Returns:
 //   - int: The database ID of the created element
 //   - error: An error if the element is not a Property type or if database operations fail
-func (p PostgreSQLPropertyHandler) Create(tx *sql.Tx, submodelID string, submodelElement gen.SubmodelElement) (int, error) {
-	property, ok := submodelElement.(*gen.Property)
+func (p PostgreSQLPropertyHandler) Create(tx *sql.Tx, submodelID string, submodelElement types.ISubmodelElement) (int, error) {
+	property, ok := submodelElement.(*types.Property)
 	if !ok {
 		return 0, common.NewErrBadRequest("submodelElement is not of type Property")
 	}
@@ -118,8 +119,8 @@ func (p PostgreSQLPropertyHandler) Create(tx *sql.Tx, submodelID string, submode
 // Returns:
 //   - int: The database ID of the created element
 //   - error: An error if the element is not a Property type or if database operations fail
-func (p PostgreSQLPropertyHandler) CreateNested(tx *sql.Tx, submodelID string, parentID int, idShortPath string, submodelElement gen.SubmodelElement, pos int, rootSubmodelElementID int) (int, error) {
-	property, ok := submodelElement.(*gen.Property)
+func (p PostgreSQLPropertyHandler) CreateNested(tx *sql.Tx, submodelID string, parentID int, idShortPath string, submodelElement types.ISubmodelElement, pos int, rootSubmodelElementID int) (int, error) {
+	property, ok := submodelElement.(*types.Property)
 	if !ok {
 		return 0, common.NewErrBadRequest("submodelElement is not of type Property")
 	}
@@ -152,8 +153,8 @@ func (p PostgreSQLPropertyHandler) CreateNested(tx *sql.Tx, submodelID string, p
 //
 // Returns:
 //   - error: An error if the update operation fails
-func (p PostgreSQLPropertyHandler) Update(submodelID string, idShortOrPath string, submodelElement gen.SubmodelElement, tx *sql.Tx, isPut bool) error {
-	property, ok := submodelElement.(*gen.Property)
+func (p PostgreSQLPropertyHandler) Update(submodelID string, idShortOrPath string, submodelElement types.ISubmodelElement, tx *sql.Tx, isPut bool) error {
+	property, ok := submodelElement.(*types.Property)
 	if !ok {
 		return common.NewErrBadRequest("submodelElement is not of type Property")
 	}
@@ -167,11 +168,6 @@ func (p PostgreSQLPropertyHandler) Update(submodelID string, idShortOrPath strin
 	err = p.decorated.Update(submodelID, idShortOrPath, submodelElement, localTx, isPut)
 	if err != nil {
 		return err
-	}
-
-	// Validate required field
-	if property.ValueType == "" {
-		return common.NewErrBadRequest(fmt.Sprintf("Missing Field 'ValueType' for Property with idShortPath '%s'", idShortOrPath))
 	}
 
 	// Get the element ID
@@ -239,7 +235,7 @@ func (p PostgreSQLPropertyHandler) UpdateValueOnly(submodelID string, idShortOrP
 	if err != nil {
 		return err
 	}
-	var valueType string
+	var valueType types.DataTypeDefXSD
 	row = p.db.QueryRow(goquQuery, args...)
 	err = row.Scan(&valueType)
 	if err != nil {
@@ -254,7 +250,7 @@ func (p PostgreSQLPropertyHandler) UpdateValueOnly(submodelID string, idShortOrP
 		return common.NewErrBadRequest("valueOnly is not of type PropertyValue")
 	}
 
-	typedValue := persistenceutils.MapValueByType(valueType, propertyValue.Value)
+	typedValue := persistenceutils.MapValueByType(valueType, &propertyValue.Value)
 
 	dialect := goqu.Dialect("postgres")
 	updateQuery, updateArgs, err := dialect.Update("property_element").
@@ -310,14 +306,14 @@ func (p PostgreSQLPropertyHandler) Delete(idShortOrPath string) error {
 //
 // Returns:
 //   - error: An error if the database insert operation fails
-func insertProperty(property *gen.Property, tx *sql.Tx, id int) error {
+func insertProperty(property *types.Property, tx *sql.Tx, id int) error {
 	// Use centralized value type mapper
-	typedValue := persistenceutils.MapValueByType(string(property.ValueType), property.Value)
+	typedValue := persistenceutils.MapValueByType(property.ValueType(), property.Value())
 
 	// Handle valueID if present
-	valueIDDbID, err := persistenceutils.CreateReference(tx, property.ValueID, sql.NullInt64{}, sql.NullInt64{})
+	valueIDDbID, err := persistenceutils.CreateReference(tx, property.ValueID(), sql.NullInt64{}, sql.NullInt64{})
 	if err != nil {
-		_, _ = fmt.Println(err)
+		_, _ = fmt.Println("SMREPO-INSPROP-CRVALID " + err.Error())
 		return common.NewInternalServerError("Failed to create SemanticID - no changes applied - see console for details")
 	}
 
@@ -326,7 +322,7 @@ func insertProperty(property *gen.Property, tx *sql.Tx, id int) error {
 	insertQuery, insertArgs, err := dialect.Insert("property_element").
 		Rows(goqu.Record{
 			"id":             id,
-			"value_type":     property.ValueType,
+			"value_type":     property.ValueType(),
 			"value_text":     typedValue.Text,
 			"value_num":      typedValue.Numeric,
 			"value_bool":     typedValue.Boolean,
@@ -346,15 +342,15 @@ func insertProperty(property *gen.Property, tx *sql.Tx, id int) error {
 	return nil
 }
 
-func buildUpdatePropertyRecordObject(property *gen.Property, isPut bool, localTx *sql.Tx) (goqu.Record, error) {
+func buildUpdatePropertyRecordObject(property *types.Property, isPut bool, localTx *sql.Tx) (goqu.Record, error) {
 	updateRecord := goqu.Record{}
 
 	// Required field - always update
-	updateRecord["value_type"] = property.ValueType
+	updateRecord["value_type"] = property.ValueType()
 
 	// Map value by type - always update based on isPut or if value is provided
-	if isPut || property.Value != "" {
-		typedValue := persistenceutils.MapValueByType(string(property.ValueType), property.Value)
+	if isPut || property.Value() != nil {
+		typedValue := persistenceutils.MapValueByType(property.ValueType(), property.Value())
 		updateRecord["value_text"] = typedValue.Text
 		updateRecord["value_num"] = typedValue.Numeric
 		updateRecord["value_bool"] = typedValue.Boolean
@@ -365,8 +361,8 @@ func buildUpdatePropertyRecordObject(property *gen.Property, isPut bool, localTx
 	// Handle optional ValueID field
 	// For PUT: always update (even if nil, which clears the field)
 	// For PATCH: only update if provided (not nil)
-	if isPut || property.ValueID != nil {
-		valueIDDbID, err := persistenceutils.CreateReference(localTx, property.ValueID, sql.NullInt64{}, sql.NullInt64{})
+	if isPut || property.ValueID() != nil {
+		valueIDDbID, err := persistenceutils.CreateReference(localTx, property.ValueID(), sql.NullInt64{}, sql.NullInt64{})
 		if err != nil {
 			return nil, fmt.Errorf("failed to update ValueID: %w", err)
 		}

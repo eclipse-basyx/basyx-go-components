@@ -33,6 +33,7 @@ package submodelelements
 import (
 	"database/sql"
 
+	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
@@ -78,8 +79,8 @@ func NewPostgreSQLRangeHandler(db *sql.DB) (*PostgreSQLRangeHandler, error) {
 // Returns:
 //   - int: The database ID of the created element
 //   - error: An error if the element is not a Range type or if database operations fail
-func (p PostgreSQLRangeHandler) Create(tx *sql.Tx, submodelID string, submodelElement gen.SubmodelElement) (int, error) {
-	rangeElem, ok := submodelElement.(*gen.Range)
+func (p PostgreSQLRangeHandler) Create(tx *sql.Tx, submodelID string, submodelElement types.ISubmodelElement) (int, error) {
+	rangeElem, ok := submodelElement.(*types.Range)
 	if !ok {
 		return 0, common.NewErrBadRequest("submodelElement is not of type Range")
 	}
@@ -114,8 +115,8 @@ func (p PostgreSQLRangeHandler) Create(tx *sql.Tx, submodelID string, submodelEl
 // Returns:
 //   - int: The database ID of the created element
 //   - error: An error if the element is not a Range type or if database operations fail
-func (p PostgreSQLRangeHandler) CreateNested(tx *sql.Tx, submodelID string, parentID int, idShortPath string, submodelElement gen.SubmodelElement, pos int, rootSubmodelElementID int) (int, error) {
-	rangeElem, ok := submodelElement.(*gen.Range)
+func (p PostgreSQLRangeHandler) CreateNested(tx *sql.Tx, submodelID string, parentID int, idShortPath string, submodelElement types.ISubmodelElement, pos int, rootSubmodelElementID int) (int, error) {
+	rangeElem, ok := submodelElement.(*types.Range)
 	if !ok {
 		return 0, common.NewErrBadRequest("submodelElement is not of type Range")
 	}
@@ -148,8 +149,8 @@ func (p PostgreSQLRangeHandler) CreateNested(tx *sql.Tx, submodelID string, pare
 //
 // Returns:
 //   - error: An error if the update operation fails or if the element is not a Range type
-func (p PostgreSQLRangeHandler) Update(submodelID string, idShortOrPath string, submodelElement gen.SubmodelElement, tx *sql.Tx, isPut bool) error {
-	rangeElem, ok := submodelElement.(*gen.Range)
+func (p PostgreSQLRangeHandler) Update(submodelID string, idShortOrPath string, submodelElement types.ISubmodelElement, tx *sql.Tx, isPut bool) error {
+	rangeElem, ok := submodelElement.(*types.Range)
 	if !ok {
 		return common.NewErrBadRequest("submodelElement is not of type Range")
 	}
@@ -237,7 +238,7 @@ func (p PostgreSQLRangeHandler) UpdateValueOnly(submodelID string, idShortOrPath
 		return err
 	}
 
-	var valueType string
+	var valueType types.DataTypeDefXSD
 	err = p.db.QueryRow(selectQuery, selectArgs...).Scan(&valueType)
 	if err != nil {
 		return err
@@ -322,16 +323,19 @@ func (p PostgreSQLRangeHandler) Delete(idShortOrPath string) error {
 //
 // Returns:
 //   - error: An error if the database insert operation fails
-func insertRange(rangeElem *gen.Range, tx *sql.Tx, id int) error {
+func insertRange(rangeElem *types.Range, tx *sql.Tx, id int) error {
 	// Use centralized value type mapper for min/max values
-	typedValue := persistenceutils.MapRangeValueByType(string(rangeElem.ValueType), rangeElem.Min, rangeElem.Max)
+	if rangeElem.Min() == nil || rangeElem.Max() == nil {
+		return common.NewErrBadRequest("Both 'Min' and 'Max' values must be provided for Range element")
+	}
+	typedValue := persistenceutils.MapRangeValueByType(rangeElem.ValueType(), *rangeElem.Min(), *rangeElem.Max())
 
 	// Insert Range-specific data
 	dialect := goqu.Dialect("postgres")
 	insertQuery, insertArgs, err := dialect.Insert("range_element").
 		Rows(goqu.Record{
 			"id":           id,
-			"value_type":   rangeElem.ValueType,
+			"value_type":   rangeElem.ValueType(),
 			"min_text":     typedValue.MinText,
 			"max_text":     typedValue.MaxText,
 			"min_num":      typedValue.MinNumeric,
@@ -351,20 +355,24 @@ func insertRange(rangeElem *gen.Range, tx *sql.Tx, id int) error {
 
 // getRangeColumnNames returns the appropriate column names for min and max values
 // based on the XML Schema datatype of the Range element.
-func getRangeColumnNames(valueType string) (minCol, maxCol string) {
+func getRangeColumnNames(valueType types.DataTypeDefXSD) (minCol, maxCol string) {
 	return persistenceutils.GetRangeColumnNames(valueType)
 }
 
-func buildUpdateRangeRecordObject(rangeElem *gen.Range, isPut bool) goqu.Record {
+func buildUpdateRangeRecordObject(rangeElem *types.Range, isPut bool) goqu.Record {
 	updateRecord := goqu.Record{}
 
 	// ValueType is always updated (required field)
-	updateRecord["value_type"] = rangeElem.ValueType
+	updateRecord["value_type"] = rangeElem.ValueType()
 
 	// Handle min and max based on isPut flag
 	if isPut {
 		// PUT: Always replace min/max values
-		typedValue := persistenceutils.MapRangeValueByType(string(rangeElem.ValueType), rangeElem.Min, rangeElem.Max)
+		if rangeElem.Min() == nil || rangeElem.Max() == nil {
+			// For PUT, both min and max must be provided
+			panic("Both 'Min' and 'Max' values must be provided for Range element in PUT operation")
+		}
+		typedValue := persistenceutils.MapRangeValueByType(rangeElem.ValueType(), *rangeElem.Min(), *rangeElem.Max())
 		updateRecord["min_text"] = typedValue.MinText
 		updateRecord["max_text"] = typedValue.MaxText
 		updateRecord["min_num"] = typedValue.MinNumeric
@@ -374,15 +382,23 @@ func buildUpdateRangeRecordObject(rangeElem *gen.Range, isPut bool) goqu.Record 
 		updateRecord["min_datetime"] = typedValue.MinDateTime
 		updateRecord["max_datetime"] = typedValue.MaxDateTime
 	} else { //nolint:all - elseif: can replace 'else {if cond {}}' with 'else if cond {}' -> this would make the code less readable and has differing semantics
-		// PATCH: Only update if min/max are provided
-		typedValue := persistenceutils.MapRangeValueByType(string(rangeElem.ValueType), rangeElem.Min, rangeElem.Max)
-		if rangeElem.Min != "" {
+		// PATCH: Only update if minVal/max are provided
+		minVal := ""
+		if rangeElem.Min() != nil {
+			minVal = *rangeElem.Min()
+		}
+		maxVal := ""
+		if rangeElem.Max() != nil {
+			maxVal = *rangeElem.Max()
+		}
+		typedValue := persistenceutils.MapRangeValueByType(rangeElem.ValueType(), minVal, maxVal)
+		if minVal != "" {
 			updateRecord["min_text"] = typedValue.MinText
 			updateRecord["min_num"] = typedValue.MinNumeric
 			updateRecord["min_time"] = typedValue.MinTime
 			updateRecord["min_datetime"] = typedValue.MinDateTime
 		}
-		if rangeElem.Max != "" {
+		if maxVal != "" {
 			updateRecord["max_text"] = typedValue.MaxText
 			updateRecord["max_num"] = typedValue.MaxNumeric
 			updateRecord["max_time"] = typedValue.MaxTime

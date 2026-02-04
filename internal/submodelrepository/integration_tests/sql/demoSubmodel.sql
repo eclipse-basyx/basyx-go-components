@@ -1,19 +1,30 @@
-INSERT INTO reference (type)
-VALUES ('ModelReference');
--- -- Second Create the Key Entry for the Reference (Here: A Submodel Key)
-INSERT INTO reference_key (reference_id, position, type, value)
-VALUES (1, 0, 'Submodel', 'http://example.com/keys/123');
--- -- Finally Create the Submodel itself, linking to the Reference created above
-INSERT INTO submodel (id, id_short, category, kind, semantic_id, model_type)
-VALUES ('http://iese.fraunhofer.de/id/sm/DemoSubmodel', 'DemoSubmodel', 'DemoCategory', 'Instance', 1, 'Submodel');
 
--- Create OnlyFileSubmodel for file attachment tests
+-- Create the reference and key, capturing the reference id
+WITH ref AS (
+	INSERT INTO reference (type) VALUES (1) RETURNING id
+), key_insert AS (
+	INSERT INTO reference_key (reference_id, position, type, value)
+	SELECT id, 0, 20, 'http://example.com/keys/123' FROM ref
+)
+INSERT INTO submodel (id, id_short, category, kind, semantic_id, model_type)
+SELECT
+	'http://iese.fraunhofer.de/id/sm/DemoSubmodel',
+	'DemoSubmodel',
+	'DemoCategory',
+	1,
+	id,
+	7
+FROM ref;
+
+
+
+-- Create OnlyFileSubmodel for file attachment tests (no semantic_id, so no reference needed)
 INSERT INTO submodel (id, id_short, kind, model_type)
-VALUES ('http://iese.fraunhofer.de/id/sm/OnlyFileSubmodel', 'OnlyFileSubmodel', 'Instance', 'Submodel');
+VALUES ('http://iese.fraunhofer.de/id/sm/OnlyFileSubmodel', 'OnlyFileSubmodel', 1, 7);
 
 -- Create DemoFile element in OnlyFileSubmodel
 INSERT INTO submodel_element (submodel_id, id_short, idshort_path, model_type, position)
-VALUES ('http://iese.fraunhofer.de/id/sm/OnlyFileSubmodel', 'DemoFile', 'DemoFile', 'File', 0);
+VALUES ('http://iese.fraunhofer.de/id/sm/OnlyFileSubmodel', 'DemoFile', 'DemoFile', 16, 0);
 
 -- Create file_element entry for DemoFile
 INSERT INTO file_element (id, content_type, value)

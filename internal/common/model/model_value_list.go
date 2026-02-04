@@ -41,7 +41,7 @@ type ValueList struct {
 
 // AssertValueListRequired checks if the required fields are not zero-ed
 func AssertValueListRequired(obj ValueList) error {
-	elements := map[string]interface{}{
+	elements := map[string]any{
 		"valueReferencePairs": obj.ValueReferencePairs,
 	}
 	for name, el := range elements {

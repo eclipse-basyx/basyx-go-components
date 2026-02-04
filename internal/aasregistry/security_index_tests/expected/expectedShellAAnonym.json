@@ -33,15 +33,15 @@
           }
         ]
       },
-      "semanticId": {"type": "ModelReference", "keys": [{"type": "AnnotatedRelationshipElement", "value": "ddsfkjn"}]},
+      "semanticId": {"type": "ExternalReference", "keys": [{"type": "GlobalReference", "value": "ddsfkjn"}]},
       "supplementalSemanticIds": [
           {
-              "type": "ModelReference",
-              "keys": [{"type": "AnnotatedRelationshipElement", "value": "sfgjgfd"}]
+              "type": "ExternalReference",
+              "keys": [{"type": "GlobalReference", "value": "sfgjgfd"}]
           },
           {
-              "type": "ModelReference",
-              "keys": [{"type": "AnnotatedRelationshipElement", "value": "aoieurhgf"}]
+              "type": "ExternalReference",
+              "keys": [{"type": "GlobalReference", "value": "aoieurhgf"}]
           }
       ]
     }

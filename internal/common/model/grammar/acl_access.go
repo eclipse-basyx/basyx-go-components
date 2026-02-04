@@ -106,7 +106,7 @@ func (j *ACLACCESS) UnmarshalJSON(value []byte) error {
 //   - error: An error if the JSON is invalid or if required fields (ACCESS or RIGHTS) are missing.
 //     Returns nil on successful unmarshaling and validation.
 func (j *ACL) UnmarshalJSON(value []byte) error {
-	var raw map[string]interface{}
+	var raw map[string]any
 	if err := common.UnmarshalAndDisallowUnknownFields(value, &raw); err != nil {
 		return err
 	}

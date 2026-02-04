@@ -37,17 +37,17 @@ package model
 // OperationRequestValueOnly type of OperationRequestValueOnly
 type OperationRequestValueOnly struct {
 	// The ValueOnly serialization (patternProperties and propertyNames will probably be supported with OpenApi 3.1). For the full description of the generic JSON validation schema see the ValueOnly-Serialization as defined in the 'Specification of the Asset Administration Shell - Part 2'.
-	InoutputArguments map[string]interface{} `json:"inoutputArguments,omitempty"`
+	InoutputArguments map[string]any `json:"inoutputArguments,omitempty"`
 
 	// The ValueOnly serialization (patternProperties and propertyNames will probably be supported with OpenApi 3.1). For the full description of the generic JSON validation schema see the ValueOnly-Serialization as defined in the 'Specification of the Asset Administration Shell - Part 2'.
-	InputArguments map[string]interface{} `json:"inputArguments,omitempty"`
+	InputArguments map[string]any `json:"inputArguments,omitempty"`
 
 	ClientTimeoutDuration string `json:"clientTimeoutDuration" validate:"regexp=^(-?)P(?=.)((\\\\d+)Y)?((\\\\d+)M)?((\\\\d+)D)?(T(?=.)((\\\\d+)H)?((\\\\d+)M)?(\\\\d*(\\\\.\\\\d+)?S)?)?$"`
 }
 
 // AssertOperationRequestValueOnlyRequired checks if the required fields are not zero-ed
 func AssertOperationRequestValueOnlyRequired(obj OperationRequestValueOnly) error {
-	elements := map[string]interface{}{
+	elements := map[string]any{
 		"clientTimeoutDuration": obj.ClientTimeoutDuration,
 	}
 	for name, el := range elements {

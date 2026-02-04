@@ -51,12 +51,12 @@ func EncodeString(data string) string {
 func DecodeString(encoded string) (string, error) {
 	bytes, err := Decode(encoded)
 	if err != nil {
-		return "", fmt.Errorf("invalid cursor: not base64 (%w)", err)
+		return "", fmt.Errorf("not base64url encoded (%w)", err)
 	}
 
 	// Validate UTF-8
 	if !utf8.Valid(bytes) {
-		return "", fmt.Errorf("invalid cursor: non-UTF8 bytes")
+		return "", fmt.Errorf("decoded value contains non-UTF8 bytes")
 	}
 	return string(bytes), nil
 }

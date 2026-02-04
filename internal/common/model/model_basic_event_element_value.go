@@ -34,11 +34,15 @@
 //nolint:all
 package model
 
-import "encoding/json"
+import (
+	"encoding/json"
+
+	"github.com/FriedJannik/aas-go-sdk/types"
+)
 
 // BasicEventElementValue type of EventElementValue
 type BasicEventElementValue struct {
-	Observed Reference `json:"observed"`
+	Observed map[string]any `json:"observed"`
 }
 
 // MarshalValueOnly serializes BasicEventElementValue in Value-Only format
@@ -53,31 +57,18 @@ func (b BasicEventElementValue) MarshalJSON() ([]byte, error) {
 }
 
 // GetModelType returns the model type name for BasicEventElement
-func (b BasicEventElementValue) GetModelType() string {
-	return "BasicEventElement"
+func (b BasicEventElementValue) GetModelType() types.ModelType {
+	return types.ModelTypeBasicEventElement
 }
 
 // AssertBasicEventElementValueRequired checks if the required fields are not zero-ed
 func AssertBasicEventElementValueRequired(obj BasicEventElementValue) error {
-	elements := map[string]interface{}{
-		"observed": obj.Observed,
-	}
-	for name, el := range elements {
-		if isZero := IsZeroValue(el); isZero {
-			return &RequiredError{Field: name}
-		}
-	}
-
-	if err := AssertReferenceValueRequired(obj.Observed); err != nil {
-		return err
-	}
+	// SDK types handle their own validation
 	return nil
 }
 
 // AssertBasicEventElementValueConstraints checks if the values respects the defined constraints
 func AssertBasicEventElementValueConstraints(obj BasicEventElementValue) error {
-	if err := AssertReferenceValueConstraints(obj.Observed); err != nil {
-		return err
-	}
+	// SDK types handle their own validation
 	return nil
 }

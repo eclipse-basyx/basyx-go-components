@@ -93,7 +93,7 @@ var allowedGlobalVals = map[string]struct{}{
 //   - error: An error if the JSON is invalid, has multiple keys, uses an invalid
 //     key or global value, or if the value is not a string. Returns nil on success.
 func (a *AttributeItem) UnmarshalJSON(b []byte) error {
-	var raw map[string]interface{}
+	var raw map[string]any
 	if err := common.UnmarshalAndDisallowUnknownFields(b, &raw); err != nil {
 		return err
 	}

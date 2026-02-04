@@ -34,12 +34,16 @@
 //nolint:all
 package model
 
-import "encoding/json"
+import (
+	"encoding/json"
+
+	"github.com/FriedJannik/aas-go-sdk/types"
+)
 
 type AnnotatedRelationshipElementValue struct {
-	First Reference `json:"first,omitempty"`
+	First map[string]any `json:"first,omitempty"`
 
-	Second Reference `json:"second,omitempty"`
+	Second map[string]any `json:"second,omitempty"`
 
 	// The ValueOnly serialization (patternProperties and propertyNames will probably be supported with OpenApi 3.1). For the full description of the generic JSON validation schema see the ValueOnly-Serialization as defined in the 'Specification of the Asset Administration Shell - Part 2'.
 	Annotations map[string]SubmodelElementValue `json:"annotations,omitempty"`
@@ -57,28 +61,18 @@ func (a AnnotatedRelationshipElementValue) MarshalJSON() ([]byte, error) {
 }
 
 // GetModelType returns the model type name for AnnotatedRelationshipElement
-func (a AnnotatedRelationshipElementValue) GetModelType() string {
-	return "AnnotatedRelationshipElement"
+func (a AnnotatedRelationshipElementValue) GetModelType() types.ModelType {
+	return types.ModelTypeAnnotatedRelationshipElement
 }
 
 // AssertAnnotatedRelationshipElementValueRequired checks if the required fields are not zero-ed
 func AssertAnnotatedRelationshipElementValueRequired(obj AnnotatedRelationshipElementValue) error {
-	if err := AssertReferenceValueRequired(obj.First); err != nil {
-		return err
-	}
-	if err := AssertReferenceValueRequired(obj.Second); err != nil {
-		return err
-	}
+	// SDK types handle their own validation
 	return nil
 }
 
 // AssertAnnotatedRelationshipElementValueConstraints checks if the values respects the defined constraints
 func AssertAnnotatedRelationshipElementValueConstraints(obj AnnotatedRelationshipElementValue) error {
-	if err := AssertReferenceValueConstraints(obj.First); err != nil {
-		return err
-	}
-	if err := AssertReferenceValueConstraints(obj.Second); err != nil {
-		return err
-	}
+	// SDK types handle their own validation
 	return nil
 }

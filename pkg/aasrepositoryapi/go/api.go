@@ -16,16 +16,17 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/FriedJannik/aas-go-sdk/types"
 	model "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
 
 type (
-	AssetAdministrationShell  = model.AssetAdministrationShell
-	AssetInformation          = model.AssetInformation
-	Reference                 = model.Reference
-	Submodel                  = model.Submodel
+	AssetAdministrationShell  = types.IAssetAdministrationShell
+	AssetInformation          = types.IAssetInformation
+	Reference                 = types.IReference
+	Submodel                  = types.ISubmodel
 	SubmodelMetadata          = model.SubmodelMetadata
-	SubmodelElement           = model.SubmodelElement
+	SubmodelElement           = types.ISubmodelElement
 	SubmodelElementMetadata   = model.SubmodelElementMetadata
 	SubmodelElementValue      = model.SubmodelElementValue
 	OperationRequest          = model.OperationRequest
@@ -125,26 +126,26 @@ type AssetAdministrationShellRepositoryAPIAPIServicer interface {
 	PostSubmodelReferenceAasRepository(context.Context, string, Reference) (model.ImplResponse, error)
 	DeleteSubmodelReferenceAasRepository(context.Context, string, string) (model.ImplResponse, error)
 	GetSubmodelByIdAasRepository(context.Context, string, string, string, string) (model.ImplResponse, error)
-	PutSubmodelByIdAasRepository(context.Context, string, string, Submodel) (model.ImplResponse, error)
+	PutSubmodelByIdAasRepository(context.Context, string, string, types.ISubmodel) (model.ImplResponse, error)
 	DeleteSubmodelByIdAasRepository(context.Context, string, string) (model.ImplResponse, error)
-	PatchSubmodelAasRepository(context.Context, string, string, Submodel, string) (model.ImplResponse, error)
+	PatchSubmodelAasRepository(context.Context, string, string, types.ISubmodel, string) (model.ImplResponse, error)
 	GetSubmodelByIdMetadataAasRepository(context.Context, string, string) (model.ImplResponse, error)
 	PatchSubmodelByIdMetadataAasRepository(context.Context, string, string, SubmodelMetadata) (model.ImplResponse, error)
 	GetSubmodelByIdValueOnlyAasRepository(context.Context, string, string, string, string) (model.ImplResponse, error)
-	PatchSubmodelByIdValueOnlyAasRepository(context.Context, string, string, map[string]interface{}, string) (model.ImplResponse, error)
+	PatchSubmodelByIdValueOnlyAasRepository(context.Context, string, string, map[string]any, string) (model.ImplResponse, error)
 	GetSubmodelByIdReferenceAasRepository(context.Context, string, string) (model.ImplResponse, error)
 	GetSubmodelByIdPathAasRepository(context.Context, string, string, string) (model.ImplResponse, error)
 	GetAllSubmodelElementsAasRepository(context.Context, string, string, int32, string, string, string) (model.ImplResponse, error)
-	PostSubmodelElementAasRepository(context.Context, string, string, SubmodelElement) (model.ImplResponse, error)
+	PostSubmodelElementAasRepository(context.Context, string, string, types.ISubmodelElement) (model.ImplResponse, error)
 	GetAllSubmodelElementsMetadataAasRepository(context.Context, string, string, int32, string) (model.ImplResponse, error)
 	GetAllSubmodelElementsValueOnlyAasRepository(context.Context, string, string, int32, string, string) (model.ImplResponse, error)
 	GetAllSubmodelElementsReferenceAasRepository(context.Context, string, string, int32, string, string) (model.ImplResponse, error)
 	GetAllSubmodelElementsPathAasRepository(context.Context, string, string, int32, string, string, string) (model.ImplResponse, error)
 	GetSubmodelElementByPathAasRepository(context.Context, string, string, string, string, string) (model.ImplResponse, error)
-	PutSubmodelElementByPathAasRepository(context.Context, string, string, string, SubmodelElement) (model.ImplResponse, error)
-	PostSubmodelElementByPathAasRepository(context.Context, string, string, string, SubmodelElement) (model.ImplResponse, error)
+	PutSubmodelElementByPathAasRepository(context.Context, string, string, string, types.ISubmodelElement) (model.ImplResponse, error)
+	PostSubmodelElementByPathAasRepository(context.Context, string, string, string, types.ISubmodelElement) (model.ImplResponse, error)
 	DeleteSubmodelElementByPathAasRepository(context.Context, string, string, string) (model.ImplResponse, error)
-	PatchSubmodelElementValueByPathAasRepository(context.Context, string, string, string, SubmodelElement, string) (model.ImplResponse, error)
+	PatchSubmodelElementValueByPathAasRepository(context.Context, string, string, string, types.ISubmodelElement, string) (model.ImplResponse, error)
 	GetSubmodelElementByPathMetadataAasRepository(context.Context, string, string, string) (model.ImplResponse, error)
 	PatchSubmodelElementValueByPathMetadata(context.Context, string, string, string, SubmodelElementMetadata) (model.ImplResponse, error)
 	GetSubmodelElementByPathValueOnlyAasRepository(context.Context, string, string, string, string, string) (model.ImplResponse, error)

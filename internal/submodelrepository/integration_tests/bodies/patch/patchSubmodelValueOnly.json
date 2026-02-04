@@ -112,7 +112,7 @@
         "ExampleSubmodelElementCollection": {
             "ExampleBlob": {
                 "contentType": "application/json",
-                "value": "hallo2"
+                "value": "aGFsbG8y"
             },
             "ExampleFile": {
                 "contentType": "application/pdf",

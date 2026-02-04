@@ -31,8 +31,8 @@ import (
 	"fmt"
 	"slices"
 
+	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
-	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 )
 
@@ -43,7 +43,7 @@ import (
 // The builder tracks database IDs to avoid duplicate entries and maintains relationships
 // between parent and child references in the hierarchy.
 type ReferenceBuilder struct {
-	reference                  *gen.Reference               // The root reference being built
+	reference                  types.IReference             // The root reference being built
 	keyIDs                     []int64                      // Database IDs of keys already added to the root reference
 	childKeyIDs                []int64                      // Database IDs of keys in child references
 	referredSemanticIDMap      map[int64]*ReferenceMetadata // Maps database IDs to reference metadata for hierarchy building
@@ -54,8 +54,8 @@ type ReferenceBuilder struct {
 // ReferenceMetadata holds metadata about a reference in the hierarchy, including
 // its parent reference database ID and the reference object itself.
 type ReferenceMetadata struct {
-	parent    int64          // Database ID of the parent reference
-	reference *gen.Reference // The reference object
+	parent    int64            // Database ID of the parent reference
+	reference types.IReference // The reference object
 }
 
 // NewReferenceBuilder creates a new ReferenceBuilder instance and initializes a Reference
@@ -73,11 +73,9 @@ type ReferenceMetadata struct {
 //
 //	ref, builder := NewReferenceBuilder("ExternalReference", 123)
 //	builder.CreateKey(1, "GlobalReference", "https://example.com/concept")
-func NewReferenceBuilder(referenceType string, dbID int64) (*gen.Reference, *ReferenceBuilder) {
-	ref := &gen.Reference{
-		Type: gen.ReferenceTypes(referenceType),
-		Keys: []gen.Key{},
-	}
+func NewReferenceBuilder(referenceType types.ReferenceTypes, dbID int64) (types.IReference, *ReferenceBuilder) {
+	ref := &types.Reference{}
+	ref.SetType(referenceType)
 	return ref, &ReferenceBuilder{keyIDs: []int64{}, reference: ref, childKeyIDs: []int64{}, databaseID: dbID, referredSemanticIDBuilders: make(map[int64]*ReferenceBuilder), referredSemanticIDMap: make(map[int64]*ReferenceMetadata)}
 }
 
@@ -94,14 +92,16 @@ func NewReferenceBuilder(referenceType string, dbID int64) (*gen.Reference, *Ref
 //
 //	builder.CreateKey(1, "Submodel", "https://example.com/submodel/123")
 //	builder.CreateKey(2, "SubmodelElementCollection", "MyCollection")
-func (rb *ReferenceBuilder) CreateKey(keyID int64, keyType string, keyValue string) {
+func (rb *ReferenceBuilder) CreateKey(keyID int64, keyType types.KeyTypes, keyValue string) {
 	skip := slices.Contains(rb.keyIDs, keyID)
 	if !skip {
 		rb.keyIDs = append(rb.keyIDs, keyID)
-		rb.reference.Keys = append(rb.reference.Keys, gen.Key{
-			Type:  gen.KeyTypes(keyType),
-			Value: keyValue,
-		})
+
+		newKey := types.Key{}
+		newKey.SetType(keyType)
+		newKey.SetValue(keyValue)
+
+		rb.reference.SetKeys(append(rb.reference.Keys(), &newKey))
 	}
 }
 
@@ -114,8 +114,8 @@ func (rb *ReferenceBuilder) CreateKey(keyID int64, keyType string, keyValue stri
 //
 // Note: This method is typically used after the referred semantic ID has been fully
 // constructed with all its keys and nested structure.
-func (rb *ReferenceBuilder) SetReferredSemanticID(referredSemanticID *gen.Reference) {
-	rb.reference.ReferredSemanticID = referredSemanticID
+func (rb *ReferenceBuilder) SetReferredSemanticID(referredSemanticID types.IReference) {
+	rb.reference.SetReferredSemanticID(referredSemanticID)
 }
 
 // CreateReferredSemanticID creates a new ReferredSemanticID reference within the hierarchy.
@@ -141,7 +141,7 @@ func (rb *ReferenceBuilder) SetReferredSemanticID(referredSemanticID *gen.Refere
 //	builder.CreateReferredSemanticID(456, 123, "ExternalReference")
 //	// Create a nested ReferredSemanticID under another ReferredSemanticId
 //	builder.CreateReferredSemanticID(789, 456, "ModelReference")
-func (rb *ReferenceBuilder) CreateReferredSemanticID(referredSemanticIDDbID int64, parentID int64, referenceType string) *ReferenceBuilder {
+func (rb *ReferenceBuilder) CreateReferredSemanticID(referredSemanticIDDbID int64, parentID int64, referenceType types.ReferenceTypes) *ReferenceBuilder {
 	_, exists := rb.referredSemanticIDMap[referredSemanticIDDbID]
 	if !exists {
 		referredSemanticID, newBuilder := NewReferenceBuilder(referenceType, referredSemanticIDDbID)
@@ -151,7 +151,7 @@ func (rb *ReferenceBuilder) CreateReferredSemanticID(referredSemanticIDDbID int6
 			reference: referredSemanticID,
 		}
 		if parentID == rb.databaseID {
-			rb.reference.ReferredSemanticID = referredSemanticID
+			rb.reference.SetReferredSemanticID(referredSemanticID)
 		}
 	}
 	return rb
@@ -179,7 +179,7 @@ func (rb *ReferenceBuilder) CreateReferredSemanticID(referredSemanticIDDbID int6
 //	if err != nil {
 //	    // Handle error
 //	}
-func (rb *ReferenceBuilder) CreateReferredSemanticIDKey(referredSemanticIDDbID int64, keyID int64, keyType string, keyValue string) error {
+func (rb *ReferenceBuilder) CreateReferredSemanticIDKey(referredSemanticIDDbID int64, keyID int64, keyType types.KeyTypes, keyValue string) error {
 	builder, exists := rb.referredSemanticIDBuilders[referredSemanticIDDbID]
 	if !exists {
 		_, _ = fmt.Printf("[ReferenceBuilder:CreateReferredSemanticIDKey] Failed to find Referred SemanticID Builder for Referred SemanticID with Database ID '%d' and Key Database id '%d'", referredSemanticIDDbID, keyID)
@@ -223,6 +223,6 @@ func (rb *ReferenceBuilder) BuildNestedStructure() {
 		parentID := refMetadata.parent
 		reference := refMetadata.reference
 		parentObj := rb.referredSemanticIDMap[parentID].reference
-		parentObj.ReferredSemanticID = reference
+		parentObj.SetReferredSemanticID(reference)
 	}
 }

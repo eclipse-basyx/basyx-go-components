@@ -1,21 +1,46 @@
 {
     "description": [
-        {"language": "en", "text": "Machine consisting of multiple parts which are assets provided by different companies"},
-        {"language": "de", "text": "Maschine bestehend aus mehreren Assets, welche von verschiedenen anderen Firmen bereitgestellt werden"}
+        {
+            "language": "en",
+            "text": "Machine consisting of multiple parts which are assets provided by different companies"
+        },
+        {
+            "language": "de",
+            "text": "Maschine bestehend aus mehreren Assets, welche von verschiedenen anderen Firmen bereitgestellt werden"
+        }
     ],
     "displayName": [
-        {"language": "en", "text": "Composite Machine"},
-        {"language": "de", "text": "Verbundmaschine"}
+        {
+            "language": "en",
+            "text": "Composite Machine"
+        },
+        {
+            "language": "de",
+            "text": "Verbundmaschine"
+        }
     ],
     "specificAssetIds": [
         {
             "name": "h1",
             "value": "value",
-            "semanticId": {"type": "ModelReference", "keys": [{"type": "AnnotatedRelationshipElement", "value": "ddsfkjn"}]},
+            "semanticId": {
+                "type": "ModelReference",
+                "keys": [
+                    {
+                        "type": "AssetAdministrationShell",
+                        "value": "ddsfkjn"
+                    }
+                ]
+            },
             "supplementalSemanticIds": [
                 {
                     "type": "ModelReference",
-                    "keys": [{"type": "AnnotatedRelationshipElement", "value": "ddsfkjn"}]
+                    "keys": [
+                        {
+                            "type": "AssetAdministrationShell",
+                            "value": "ddsfkjn"
+                        }
+                    ]
                 }
             ]
         }
@@ -38,11 +63,11 @@
             "referredSemanticId": {
                 "keys": [
                     {
-                        "type": "Submodel",
+                        "type": "GlobalReference",
                         "value": "FirstReferredSemanticId_Key1"
                     },
                     {
-                        "type": "Submodel",
+                        "type": "GlobalReference",
                         "value": "FirstReferredSemanticId_Key2"
                     }
                 ],
@@ -50,11 +75,11 @@
                 "referredSemanticId": {
                     "keys": [
                         {
-                            "type": "Submodel",
+                            "type": "GlobalReference",
                             "value": "SecondReferredSemanticId_Nested_Key1"
                         },
                         {
-                            "type": "Submodel",
+                            "type": "GlobalReference",
                             "value": "SecondReferredSemanticId_Nested_Key2"
                         }
                     ],
@@ -92,7 +117,7 @@
                             "type": "ExternalReference",
                             "keys": [
                                 {
-                                    "type": "Submodel",
+                                    "type": "GlobalReference",
                                     "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental2"
                                 }
                             ],
@@ -100,7 +125,7 @@
                                 "type": "ExternalReference",
                                 "keys": [
                                     {
-                                        "type": "Submodel",
+                                        "type": "GlobalReference",
                                         "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental3"
                                     }
                                 ]
@@ -109,7 +134,7 @@
                     },
                     "sourceOfDefinition": "IEC 61360-2",
                     "symbol": "kOhm",
-                    "dataType": "RealCount",
+                    "dataType": "REAL_COUNT",
                     "definition": [
                         {
                             "language": "en",
@@ -133,7 +158,7 @@
                                         "type": "ExternalReference",
                                         "keys": [
                                             {
-                                                "type": "Submodel",
+                                                "type": "GlobalReference",
                                                 "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental2"
                                             }
                                         ],
@@ -141,7 +166,7 @@
                                             "type": "ExternalReference",
                                             "keys": [
                                                 {
-                                                    "type": "Submodel",
+                                                    "type": "GlobalReference",
                                                     "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental3"
                                                 }
                                             ]
@@ -151,7 +176,6 @@
                             }
                         ]
                     },
-                    "value": "100",
                     "levelType": {
                         "min": true,
                         "nom": true,
@@ -171,7 +195,7 @@
                         "type": "ExternalReference",
                         "keys": [
                             {
-                                "type": "Submodel",
+                                "type": "GlobalReference",
                                 "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental2"
                             }
                         ],
@@ -179,7 +203,7 @@
                             "type": "ExternalReference",
                             "keys": [
                                 {
-                                    "type": "Submodel",
+                                    "type": "GlobalReference",
                                     "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental3"
                                 }
                             ]
@@ -215,7 +239,7 @@
                             "type": "ExternalReference",
                             "keys": [
                                 {
-                                    "type": "Submodel",
+                                    "type": "GlobalReference",
                                     "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental2"
                                 }
                             ],
@@ -223,7 +247,7 @@
                                 "type": "ExternalReference",
                                 "keys": [
                                     {
-                                        "type": "Submodel",
+                                        "type": "GlobalReference",
                                         "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental3"
                                     }
                                 ]
@@ -232,7 +256,7 @@
                     },
                     "sourceOfDefinition": "IEC 61360-2",
                     "symbol": "V",
-                    "dataType": "RealCount",
+                    "dataType": "REAL_COUNT",
                     "definition": [
                         {
                             "language": "en",
@@ -240,40 +264,6 @@
                         }
                     ],
                     "valueFormat": "##.##",
-                    "valueList": {
-                        "valueReferencePairs": [
-                            {
-                                "value": "10",
-                                "valueId": {
-                                    "keys": [
-                                        {
-                                            "type": "GlobalReference",
-                                            "value": "10"
-                                        }
-                                    ],
-                                    "type": "ExternalReference",
-                                    "referredSemanticId": {
-                                        "type": "ExternalReference",
-                                        "keys": [
-                                            {
-                                                "type": "Submodel",
-                                                "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental2"
-                                            }
-                                        ],
-                                        "referredSemanticId": {
-                                            "type": "ExternalReference",
-                                            "keys": [
-                                                {
-                                                    "type": "Submodel",
-                                                    "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental3"
-                                                }
-                                            ]
-                                        }
-                                    }
-                                }
-                            }
-                        ]
-                    },
                     "value": "10",
                     "levelType": {
                         "min": false,
@@ -294,7 +284,7 @@
                         "type": "ExternalReference",
                         "keys": [
                             {
-                                "type": "Submodel",
+                                "type": "GlobalReference",
                                 "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental2"
                             }
                         ],
@@ -302,7 +292,7 @@
                             "type": "ExternalReference",
                             "keys": [
                                 {
-                                    "type": "Submodel",
+                                    "type": "GlobalReference",
                                     "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental3"
                                 }
                             ]
@@ -316,11 +306,24 @@
     "assetType": "machine",
     "endpoints": [
         {
-            "interface": "AAS-3.0",
-            "protocolInformation": {
-                "href": "https://demo3.digital-twin.host/aas-environment/...",
-                "endpointProtocol": "https"
+        "interface": "SUBMODEL-3.0",
+        "protocolInformation": {
+            "href": "https://dataplane-trace.edc.aws.bmw.cloud/public/urn:uuid:1941afc7-e75d-439a-a690-b4a8c09f7076/submodel",
+            "endpointProtocol": "HTTP",
+            "endpointProtocolVersion": [
+            "1.1"
+            ],
+            "subprotocol": "DSP",
+            "subprotocolBody": "id=modul_bundle_sp;dspEndpoint=https://connector-trace.edc.aws.bmw.cloud/api/v1/dsp",
+            "subprotocolBodyEncoding": "plain",
+            "securityAttributes": [
+            {
+                "type": "NONE",
+                "key": "NONE",
+                "value": "NONE"
             }
+            ]
+        }
         }
     ],
     "globalAssetId": "https://iese.fraunhofer.de/ids/asset/5079_8944_8914_9414",
@@ -330,7 +333,16 @@
         {
             "name": "help",
             "valueType": "xs:string",
-            "value": "test"
+            "value": "test",
+            "refersTo": [{
+                "type": "ExternalReference",
+                "keys": [
+                    {
+                        "type": "GlobalReference",
+                        "value": "https://iese.fraunhofer.de/ids/aas/asdb"
+                    }
+                ]
+            }]
         }
     ],
     "submodelDescriptors": [
