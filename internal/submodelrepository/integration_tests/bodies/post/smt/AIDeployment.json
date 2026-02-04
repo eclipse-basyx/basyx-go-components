@@ -1,0 +1,1137 @@
+{
+  "modelType": "Submodel",
+  "kind": "Template",
+  "semanticId": {
+    "keys": [
+      {
+        "type": "GlobalReference",
+        "value": "https://admin-shell.io/idta/SubmodelTemplate/AIDeployment/1/0"
+      }
+    ],
+    "type": "ExternalReference"
+  },
+  "administration": {
+    "revision": "0",
+    "templateId": "https://admin-shell.io/idta-02059-1-0",
+    "version": "1"
+  },
+  "id": "https://admin-shell.io/idta/SubmodelTemplate/AIDeployment/1/0",
+  "description": [
+    {
+      "language": "en",
+      "text": "This Submodel template aims at interoperable provision of information describing deployment of Artificial Intelligence (AI) models in regard to the asset of the respective Asset Administration Shell."
+    }
+  ],
+  "idShort": "AIDeployment",
+  "submodelElements": [
+    {
+      "modelType": "Property",
+      "semanticId": {
+        "keys": [
+          {
+            "type": "GlobalReference",
+            "value": "0112/2///61987#ABN590#002 "
+          }
+        ],
+        "type": "ExternalReference"
+      },
+      "valueType": "xs:string",
+      "qualifiers": [
+        {
+          "kind": "ConceptQualifier",
+          "type": "SMT/Cardinality",
+          "value": "One",
+          "valueType": "xs:string"
+        }
+      ],
+      "category": "PARAMETER",
+      "description": [
+        {
+          "language": "de",
+          "text": "eindeutige globale Identifizierung der Produktinstanz unter Verwendung eines universellen Ressourcenbezeichners (URI)"
+        },
+        {
+          "language": "en",
+          "text": "unique global identification of the product instance using an universal resource identifier (URI)"
+        }
+      ],
+      "idShort": "URIOfTheProduct"
+    },
+    {
+      "modelType": "Property",
+      "semanticId": {
+        "keys": [
+          {
+            "type": "GlobalReference",
+            "value": "0173-1#02-AAS354#002"
+          }
+        ],
+        "type": "ExternalReference"
+      },
+      "valueType": "xs:string",
+      "qualifiers": [
+        {
+          "kind": "ConceptQualifier",
+          "type": "SMT/Cardinality",
+          "value": "One",
+          "valueType": "xs:string"
+        }
+      ],
+      "category": "PARAMETER",
+      "description": [
+        {
+          "language": "de",
+          "text": "Version of the deployment "
+        },
+        {
+          "language": "en",
+          "text": "Version des Deployments"
+        }
+      ],
+      "idShort": "Version"
+    },
+    {
+      "modelType": "ReferenceElement",
+      "semanticId": {
+        "keys": [
+          {
+            "type": "GlobalReference",
+            "value": "https://admin-shell.io/idta/AIDeployment/Contactinformation/1/0"
+          }
+        ],
+        "type": "ExternalReference"
+      },
+      "qualifiers": [
+        {
+          "kind": "ConceptQualifier",
+          "type": "SMT/Cardinality",
+          "value": "One",
+          "valueType": "xs:string"
+        }
+      ],
+      "category": "PARAMETER",
+      "description": [
+        {
+          "language": "en",
+          "text": "Reference to the Contact Information IDTA Submodel to describe the responsible person for the Submodel."
+        }
+      ],
+      "idShort": "ContactInformation"
+    },
+    {
+      "modelType": "ReferenceElement",
+      "semanticId": {
+        "keys": [
+          {
+            "type": "GlobalReference",
+            "value": "https://admin-shell.io/idta/AIDeployment/ModelNameplateRef/1/0"
+          }
+        ],
+        "type": "ExternalReference"
+      },
+      "qualifiers": [
+        {
+          "kind": "ConceptQualifier",
+          "type": "SMT/Cardinality",
+          "value": "One",
+          "valueType": "xs:string"
+        }
+      ],
+      "category": "PARAMETER",
+      "description": [
+        {
+          "language": "en",
+          "text": "Reference to the ModelNameplate-Submodel of the deployed model"
+        }
+      ],
+      "idShort": "ModelNameplateRef"
+    },
+    {
+      "modelType": "SubmodelElementCollection",
+      "semanticId": {
+        "keys": [
+          {
+            "type": "GlobalReference",
+            "value": "https://admin-shell.io/idta/AIDeployment/Storage/1/0"
+          }
+        ],
+        "type": "ExternalReference"
+      },
+      "qualifiers": [
+        {
+          "kind": "ConceptQualifier",
+          "type": "SMT/Cardinality",
+          "value": "One",
+          "valueType": "xs:string"
+        }
+      ],
+      "description": [
+        {
+          "language": "en",
+          "text": "Collection of storage information about the deployable AI-model"
+        }
+      ],
+      "idShort": "Storage",
+      "value": [
+        {
+          "modelType": "Property",
+          "semanticId": {
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "https://admin-shell.io/idta/AIDeployment/Storage/Format/1/0"
+              }
+            ],
+            "type": "ExternalReference"
+          },
+          "valueType": "xs:string",
+          "qualifiers": [
+            {
+              "kind": "ConceptQualifier",
+              "type": "SMT/Cardinality",
+              "value": "One",
+              "valueType": "xs:string"
+            }
+          ],
+          "category": "PARAMETER",
+          "description": [
+            {
+              "language": "en",
+              "text": "Data format of the deployable model (e.g. onnx, docker-image ,...)"
+            }
+          ],
+          "idShort": "Format"
+        },
+        {
+          "modelType": "File",
+          "contentType": "application/json",
+          "semanticId": {
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "https://admin-shell.io/idta/AIDeployment/Storage/DeployedModel/1/0"
+              }
+            ],
+            "type": "ExternalReference"
+          },
+          "qualifiers": [
+            {
+              "kind": "ConceptQualifier",
+              "type": "SMT/Cardinality",
+              "value": "ZeroToOne",
+              "valueType": "xs:string"
+            }
+          ],
+          "description": [
+            {
+              "language": "en",
+              "text": "The deployable model"
+            }
+          ],
+          "idShort": "DeployedModel"
+        }
+      ]
+    },
+    {
+      "modelType": "SubmodelElementCollection",
+      "semanticId": {
+        "keys": [
+          {
+            "type": "GlobalReference",
+            "value": "https://admin-shell.io/idta/AIDeployment/Input/1/0"
+          }
+        ],
+        "type": "ExternalReference"
+      },
+      "qualifiers": [
+        {
+          "kind": "ConceptQualifier",
+          "type": "SMT/Cardinality",
+          "value": "One",
+          "valueType": "xs:string"
+        }
+      ],
+      "description": [
+        {
+          "language": "en",
+          "text": "Collection of information about the input data for deployment"
+        }
+      ],
+      "idShort": "Input",
+      "value": [
+        {
+          "modelType": "Property",
+          "semanticId": {
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "https://admin-shell.io/idta/AIDeployment/Input/InputProperty/1/0"
+              }
+            ],
+            "type": "ExternalReference"
+          },
+          "valueType": "xs:string",
+          "qualifiers": [
+            {
+              "kind": "ConceptQualifier",
+              "type": "SMT/Cardinality",
+              "value": "OneToMany",
+              "valueType": "xs:string"
+            }
+          ],
+          "category": "PARAMETER",
+          "description": [
+            {
+              "language": "en",
+              "text": "This is an example inputinformation placeholder"
+            }
+          ],
+          "idShort": "ExampleInput"
+        }
+      ]
+    },
+    {
+      "modelType": "SubmodelElementCollection",
+      "semanticId": {
+        "keys": [
+          {
+            "type": "GlobalReference",
+            "value": "https://admin-shell.io/idta/AIDeployment/Output/1/0"
+          }
+        ],
+        "type": "ExternalReference"
+      },
+      "qualifiers": [
+        {
+          "kind": "ConceptQualifier",
+          "type": "SMT/Cardinality",
+          "value": "One",
+          "valueType": "xs:string"
+        }
+      ],
+      "description": [
+        {
+          "language": "en",
+          "text": "Collection of information about the output data for deployment"
+        }
+      ],
+      "idShort": "Output",
+      "value": [
+        {
+          "modelType": "Property",
+          "semanticId": {
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "https://admin-shell.io/idta/AIDeployment/Output/OutputProperty/1/0"
+              }
+            ],
+            "type": "ExternalReference"
+          },
+          "valueType": "xs:string",
+          "qualifiers": [
+            {
+              "kind": "ConceptQualifier",
+              "type": "SMT/Cardinality",
+              "value": "OneToMany",
+              "valueType": "xs:string"
+            }
+          ],
+          "category": "PARAMETER",
+          "description": [
+            {
+              "language": "en",
+              "text": "This is an example inputinformation placeholder"
+            }
+          ],
+          "idShort": "ExampleOutput"
+        }
+      ]
+    },
+    {
+      "modelType": "SubmodelElementCollection",
+      "semanticId": {
+        "keys": [
+          {
+            "type": "GlobalReference",
+            "value": "https://admin-shell.io/idta/AIDeployment/SoftwareRequirements/1/0"
+          }
+        ],
+        "type": "ExternalReference"
+      },
+      "qualifiers": [
+        {
+          "kind": "ConceptQualifier",
+          "type": "SMT/Cardinality",
+          "value": "ZeroToOne",
+          "valueType": "xs:string"
+        }
+      ],
+      "description": [
+        {
+          "language": "en",
+          "text": "Collection about required software for deployment"
+        }
+      ],
+      "idShort": "SoftwareRequirements",
+      "value": [
+        {
+          "modelType": "File",
+          "contentType": "text/plain",
+          "semanticId": {
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "https://admin-shell.io/idta/AIDeployment/SoftwareRequirements/RequirementsFile/1/0"
+              }
+            ],
+            "type": "ExternalReference"
+          },
+          "qualifiers": [
+            {
+              "kind": "ConceptQualifier",
+              "type": "SMT/Cardinality",
+              "value": "ZeroToOne",
+              "valueType": "xs:string"
+            }
+          ],
+          "category": "PARAMETER",
+          "description": [
+            {
+              "language": "en",
+              "text": "Requirement file for software requirements"
+            }
+          ],
+          "idShort": "ExampleFile"
+        }
+      ]
+    },
+    {
+      "modelType": "SubmodelElementCollection",
+      "semanticId": {
+        "keys": [
+          {
+            "type": "GlobalReference",
+            "value": "https://admin-shell.io/idta/AIDeployment/HardwareRequirements/1/0"
+          }
+        ],
+        "type": "ExternalReference"
+      },
+      "qualifiers": [
+        {
+          "kind": "ConceptQualifier",
+          "type": "SMT/Cardinality",
+          "value": "ZeroToOne",
+          "valueType": "xs:string"
+        }
+      ],
+      "description": [
+        {
+          "language": "en",
+          "text": "Collection about required hardware for deployment"
+        }
+      ],
+      "idShort": "HardwareRequirements",
+      "value": [
+        {
+          "modelType": "File",
+          "contentType": "text/plain",
+          "semanticId": {
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "https://admin-shell.io/idta/AIDeployment/HardwareRequirements/HardwareDescription/1/0"
+              }
+            ],
+            "type": "ExternalReference"
+          },
+          "qualifiers": [
+            {
+              "kind": "ConceptQualifier",
+              "type": "SMT/Cardinality",
+              "value": "ZeroToOne",
+              "valueType": "xs:string"
+            }
+          ],
+          "category": "PARAMETER",
+          "description": [
+            {
+              "language": "en",
+              "text": "This is an example requirement placeholder"
+            }
+          ],
+          "idShort": "ExampleHardware"
+        }
+      ]
+    },
+    {
+      "modelType": "SubmodelElementCollection",
+      "semanticId": {
+        "keys": [
+          {
+            "type": "GlobalReference",
+            "value": "https://admin-shell.io/idta/AIDeployment/PerformanceInformation/1/0"
+          }
+        ],
+        "type": "ExternalReference"
+      },
+      "qualifiers": [
+        {
+          "kind": "ConceptQualifier",
+          "type": "SMT/Cardinality",
+          "value": "ZeroToOne",
+          "valueType": "xs:string"
+        }
+      ],
+      "category": "PARAMETER",
+      "description": [
+        {
+          "language": "en",
+          "text": "Collection of performance measurements"
+        }
+      ],
+      "idShort": "PerformanceInformation",
+      "value": [
+        {
+          "modelType": "SubmodelElementCollection",
+          "semanticId": {
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "https://admin-shell.io/idta/AIDeployment/PerformanceInformation/InferenceTime/1/0"
+              }
+            ],
+            "type": "ExternalReference"
+          },
+          "qualifiers": [
+            {
+              "kind": "ConceptQualifier",
+              "type": "SMT/Cardinality",
+              "value": "ZeroToMany",
+              "valueType": "xs:string"
+            }
+          ],
+          "description": [
+            {
+              "language": "en",
+              "text": "Collection of information about the measured inference time and the used equipment to achieve it"
+            }
+          ],
+          "idShort": "InferenceTime",
+          "value": [
+            {
+              "modelType": "MultiLanguageProperty",
+              "semanticId": {
+                "keys": [
+                  {
+                    "type": "GlobalReference",
+                    "value": "https://admin-shell.io/idta/AIDeployment/PerformanceInformation/InferenceTime/Time/1/0"
+                  }
+                ],
+                "type": "ExternalReference"
+              },
+              "qualifiers": [
+                {
+                  "kind": "ConceptQualifier",
+                  "type": "SMT/Cardinality",
+                  "value": "One",
+                  "valueType": "xs:string"
+                }
+              ],
+              "category": "PARAMETER",
+              "description": [
+                {
+                  "language": "en",
+                  "text": "Measured inference time"
+                }
+              ],
+              "idShort": "Time"
+            },
+            {
+              "modelType": "SubmodelElementCollection",
+              "semanticId": {
+                "keys": [
+                  {
+                    "type": "GlobalReference",
+                    "value": "https://admin-shell.io/idta/AIDeployment/PerformanceInformation/InferenceTime/Hardware/1/0"
+                  }
+                ],
+                "type": "ExternalReference"
+              },
+              "qualifiers": [
+                {
+                  "kind": "ConceptQualifier",
+                  "type": "SMT/Cardinality",
+                  "value": "One",
+                  "valueType": "xs:string"
+                }
+              ],
+              "description": [
+                {
+                  "language": "en",
+                  "text": "Collection of hardware used for the measurement"
+                }
+              ],
+              "idShort": "Hardware",
+              "value": [
+                {
+                  "modelType": "Property",
+                  "semanticId": {
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "0173-1#01-ACL481#008"
+                      }
+                    ],
+                    "type": "ExternalReference"
+                  },
+                  "valueType": "xs:string",
+                  "qualifiers": [
+                    {
+                      "kind": "ConceptQualifier",
+                      "type": "SMT/Cardinality",
+                      "value": "ZeroToOne",
+                      "valueType": "xs:string"
+                    }
+                  ],
+                  "category": "PARAMETER",
+                  "description": [
+                    {
+                      "language": "en",
+                      "text": "Information about the CPU."
+                    }
+                  ],
+                  "idShort": "CPU"
+                },
+                {
+                  "modelType": "Property",
+                  "semanticId": {
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "0173-1#01-ACL476#008"
+                      }
+                    ],
+                    "type": "ExternalReference"
+                  },
+                  "valueType": "xs:string",
+                  "qualifiers": [
+                    {
+                      "kind": "ConceptQualifier",
+                      "type": "SMT/Cardinality",
+                      "value": "ZeroToOne",
+                      "valueType": "xs:string"
+                    }
+                  ],
+                  "category": "PARAMETER",
+                  "description": [
+                    {
+                      "language": "en",
+                      "text": "Information about the GPU."
+                    }
+                  ],
+                  "idShort": "GPU"
+                },
+                {
+                  "modelType": "Property",
+                  "semanticId": {
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/idta/AIDeployment/PerformanceInformation/InferenceTime/Hardware/TPU/1/0"
+                      }
+                    ],
+                    "type": "ExternalReference"
+                  },
+                  "valueType": "xs:string",
+                  "qualifiers": [
+                    {
+                      "kind": "ConceptQualifier",
+                      "type": "SMT/Cardinality",
+                      "value": "ZeroToOne",
+                      "valueType": "xs:string"
+                    }
+                  ],
+                  "category": "PARAMETER",
+                  "description": [
+                    {
+                      "language": "en",
+                      "text": "Information about the TPU."
+                    }
+                  ],
+                  "idShort": "TPU"
+                },
+                {
+                  "modelType": "Property",
+                  "semanticId": {
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "0173-1#01-ACL340#008"
+                      }
+                    ],
+                    "type": "ExternalReference"
+                  },
+                  "valueType": "xs:string",
+                  "qualifiers": [
+                    {
+                      "kind": "ConceptQualifier",
+                      "type": "SMT/Cardinality",
+                      "value": "ZeroToOne",
+                      "valueType": "xs:string"
+                    }
+                  ],
+                  "category": "PARAMETER",
+                  "description": [
+                    {
+                      "language": "en",
+                      "text": "Information about the RAM."
+                    }
+                  ],
+                  "idShort": "RAM"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "modelType": "SubmodelElementCollection",
+      "semanticId": {
+        "keys": [
+          {
+            "type": "GlobalReference",
+            "value": "https://admin-shell.io/idta/AIDeployment/LiveMonitoring/1/0"
+          }
+        ],
+        "type": "ExternalReference"
+      },
+      "qualifiers": [
+        {
+          "kind": "ConceptQualifier",
+          "type": "SMT/Cardinality",
+          "value": "ZeroToOne",
+          "valueType": "xs:string"
+        }
+      ],
+      "description": [
+        {
+          "language": "en",
+          "text": "Collection containing live values for monitoring"
+        }
+      ],
+      "idShort": "LiveMonitoring",
+      "value": [
+        {
+          "modelType": "Property",
+          "semanticId": {
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "https://admin-shell.io/idta/AIDeployment/LiveMonitoring/Confidence/1/0"
+              }
+            ],
+            "type": "ExternalReference"
+          },
+          "valueType": "xs:string",
+          "qualifiers": [
+            {
+              "kind": "ConceptQualifier",
+              "type": "SMT/Cardinality",
+              "value": "ZeroToOne",
+              "valueType": "xs:string"
+            }
+          ],
+          "category": "PARAMETER",
+          "description": [
+            {
+              "language": "en",
+              "text": "Live confidence"
+            }
+          ],
+          "idShort": "Confidence"
+        },
+        {
+          "modelType": "Range",
+          "semanticId": {
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "https://admin-shell.io/idta/AIDeployment/LiveMonitoring/TimeIntervall/1/0"
+              }
+            ],
+            "type": "ExternalReference"
+          },
+          "qualifiers": [
+            {
+              "kind": "ConceptQualifier",
+              "type": "SMT/Cardinality",
+              "value": "ZeroToOne",
+              "valueType": "xs:string"
+            }
+          ],
+          "valueType": "xs:string",
+          "category": "PARAMETER",
+          "description": [
+            {
+              "language": "en",
+              "text": "Time intervall for calculating the average confidence"
+            }
+          ],
+          "idShort": "TimeIntervall"
+        },
+        {
+          "modelType": "Property",
+          "semanticId": {
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "https://admin-shell.io/idta/AIDeployment/LiveMonitoring/AverageConfidence/1/0"
+              }
+            ],
+            "type": "ExternalReference"
+          },
+          "valueType": "xs:string",
+          "qualifiers": [
+            {
+              "kind": "ConceptQualifier",
+              "type": "SMT/Cardinality",
+              "value": "ZeroToOne",
+              "valueType": "xs:string"
+            }
+          ],
+          "category": "PARAMETER",
+          "description": [
+            {
+              "language": "en",
+              "text": "confidence over a definded time intervall"
+            }
+          ],
+          "idShort": "AverageConfidenceOverTime"
+        },
+        {
+          "modelType": "Property",
+          "semanticId": {
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "https://admin-shell.io/idta/AIDeployment/LiveMonitoring/RunTime/1/0"
+              }
+            ],
+            "type": "ExternalReference"
+          },
+          "valueType": "xs:string",
+          "qualifiers": [
+            {
+              "kind": "ConceptQualifier",
+              "type": "SMT/Cardinality",
+              "value": "ZeroToOne",
+              "valueType": "xs:string"
+            }
+          ],
+          "category": "PARAMETER",
+          "description": [
+            {
+              "language": "en",
+              "text": "Time the deployed model is running without a break or downtime"
+            }
+          ],
+          "idShort": "RunTime"
+        },
+        {
+          "modelType": "SubmodelElementCollection",
+          "semanticId": {
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "https://admin-shell.io/idta/AIDeployment/LiveMonitoring/HardwareWorkload/1/0"
+              }
+            ],
+            "type": "ExternalReference"
+          },
+          "qualifiers": [
+            {
+              "kind": "ConceptQualifier",
+              "type": "SMT/Cardinality",
+              "value": "ZeroToOne",
+              "valueType": "xs:string"
+            }
+          ],
+          "description": [
+            {
+              "language": "en",
+              "text": "Collection containing the live hardware workload"
+            }
+          ],
+          "idShort": "HardwareWorkload",
+          "value": [
+            {
+              "modelType": "Property",
+              "semanticId": {
+                "keys": [
+                  {
+                    "type": "GlobalReference",
+                    "value": "https://admin-shell.io/idta/AIDeployment/LiveMonitoring/HardwareWorkload/GPUWorkload/1/0"
+                  }
+                ],
+                "type": "ExternalReference"
+              },
+              "valueType": "xs:string",
+              "qualifiers": [
+                {
+                  "kind": "ConceptQualifier",
+                  "type": "SMT/Cardinality",
+                  "value": "ZeroToOne",
+                  "valueType": "xs:string"
+                }
+              ],
+              "category": "PARAMETER",
+              "description": [
+                {
+                  "language": "en",
+                  "text": "Live GPU workload."
+                }
+              ],
+              "idShort": "GPUWorkload"
+            },
+            {
+              "modelType": "Property",
+              "semanticId": {
+                "keys": [
+                  {
+                    "type": "GlobalReference",
+                    "value": "https://admin-shell.io/idta/AIDeployment/LiveMonitoring/HardwareWorkload/CPUWorkload/1/0"
+                  }
+                ],
+                "type": "ExternalReference"
+              },
+              "valueType": "xs:string",
+              "qualifiers": [
+                {
+                  "kind": "ConceptQualifier",
+                  "type": "SMT/Cardinality",
+                  "value": "ZeroToOne",
+                  "valueType": "xs:string"
+                }
+              ],
+              "category": "PARAMETER",
+              "description": [
+                {
+                  "language": "en",
+                  "text": "Llive CPU workload."
+                }
+              ],
+              "idShort": "CPUWorkload"
+            },
+            {
+              "modelType": "Property",
+              "semanticId": {
+                "keys": [
+                  {
+                    "type": "GlobalReference",
+                    "value": "https://admin-shell.io/idta/AIDeployment/LiveMonitoring/HardwareWorkload/TPUWorkload/1/0"
+                  }
+                ],
+                "type": "ExternalReference"
+              },
+              "valueType": "xs:string",
+              "qualifiers": [
+                {
+                  "kind": "ConceptQualifier",
+                  "type": "SMT/Cardinality",
+                  "value": "ZeroToOne",
+                  "valueType": "xs:string"
+                }
+              ],
+              "category": "PARAMETER",
+              "description": [
+                {
+                  "language": "en",
+                  "text": "Live TPU workload."
+                }
+              ],
+              "idShort": "TPUWorkload"
+            },
+            {
+              "modelType": "Property",
+              "semanticId": {
+                "keys": [
+                  {
+                    "type": "GlobalReference",
+                    "value": "https://admin-shell.io/idta/AIDeployment/LiveMonitoring/HardwareWorkload/RAMWorkload/1/0"
+                  }
+                ],
+                "type": "ExternalReference"
+              },
+              "valueType": "xs:string",
+              "qualifiers": [
+                {
+                  "kind": "ConceptQualifier",
+                  "type": "SMT/Cardinality",
+                  "value": "ZeroToOne",
+                  "valueType": "xs:string"
+                }
+              ],
+              "category": "PARAMETER",
+              "description": [
+                {
+                  "language": "en",
+                  "text": "Live RAM workload."
+                }
+              ],
+              "idShort": "RAMWorkload"
+            }
+          ]
+        },
+        {
+          "modelType": "SubmodelElementCollection",
+          "semanticId": {
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "https://admin-shell.io/idta/AIDeployment/LiveMonitoring/DriftMetrics/1/0"
+              }
+            ],
+            "type": "ExternalReference"
+          },
+          "qualifiers": [
+            {
+              "kind": "ConceptQualifier",
+              "type": "SMT/Cardinality",
+              "value": "ZeroToOne",
+              "valueType": "xs:string"
+            }
+          ],
+          "description": [
+            {
+              "language": "en",
+              "text": "Collection of live monitoring of different drift metrics"
+            }
+          ],
+          "idShort": "DriftMetrics",
+          "value": [
+            {
+              "modelType": "Property",
+              "semanticId": {
+                "keys": [
+                  {
+                    "type": "GlobalReference",
+                    "value": "https://admin-shell.io/idta/AIDeployment/LiveMonitoring/DriftMetrics/DataDrift/1/0"
+                  }
+                ],
+                "type": "ExternalReference"
+              },
+              "valueType": "xs:string",
+              "qualifiers": [
+                {
+                  "kind": "ConceptQualifier",
+                  "type": "SMT/Cardinality",
+                  "value": "ZeroToOne",
+                  "valueType": "xs:string"
+                }
+              ],
+              "category": "PARAMETER",
+              "description": [
+                {
+                  "language": "en",
+                  "text": "Live data drift"
+                }
+              ],
+              "idShort": "DataDrift"
+            },
+            {
+              "modelType": "Property",
+              "semanticId": {
+                "keys": [
+                  {
+                    "type": "GlobalReference",
+                    "value": "https://admin-shell.io/idta/AIDeployment/LiveMonitoring/DriftMetrics/ConceptDrift/1/0"
+                  }
+                ],
+                "type": "ExternalReference"
+              },
+              "valueType": "xs:string",
+              "qualifiers": [
+                {
+                  "kind": "ConceptQualifier",
+                  "type": "SMT/Cardinality",
+                  "value": "ZeroToOne",
+                  "valueType": "xs:string"
+                }
+              ],
+              "category": "PARAMETER",
+              "description": [
+                {
+                  "language": "en",
+                  "text": "Live concept drift"
+                }
+              ],
+              "idShort": "ConceptDrift"
+            },
+            {
+              "modelType": "Property",
+              "semanticId": {
+                "keys": [
+                  {
+                    "type": "GlobalReference",
+                    "value": "https://admin-shell.io/idta/AIDeployment/LiveMonitoring/DriftMetrics/PerformanceDrift/1/0"
+                  }
+                ],
+                "type": "ExternalReference"
+              },
+              "valueType": "xs:string",
+              "qualifiers": [
+                {
+                  "kind": "ConceptQualifier",
+                  "type": "SMT/Cardinality",
+                  "value": "ZeroToOne",
+                  "valueType": "xs:string"
+                }
+              ],
+              "category": "PARAMETER",
+              "description": [
+                {
+                  "language": "en",
+                  "text": "Live performance drift"
+                }
+              ],
+              "idShort": "PerformanceDrift"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "modelType": "ReferenceElement",
+      "semanticId": {
+        "keys": [
+          {
+            "type": "GlobalReference",
+            "value": "https://admin-shell.io/idta/AIDeployment/RiskAssessment/1/0"
+          }
+        ],
+        "type": "ExternalReference"
+      },
+      "qualifiers": [
+        {
+          "kind": "TemplateQualifier",
+          "type": "SMT/Cardinality",
+          "value": "ZeroToOne",
+          "valueType": "xs:string"
+        }
+      ],
+      "description": [
+        {
+          "language": "en",
+          "text": "risk assessment based on regulation(EU) 2024/1689 of the european parliament and of the council"
+        },
+        {
+          "language": "de",
+          "text": "Risikobewertung auf der Grundlage der Verordnung (EU) 2024/1689 des Europäischen Parlaments und des Rates"
+        }
+      ],
+      "idShort": "RiskAssessment"
+    }
+  ]
+}

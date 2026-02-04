@@ -182,7 +182,7 @@ CREATE TABLE IF NOT EXISTS submodel_element (
   root_sme_id  BIGINT REFERENCES submodel_element(id) ON DELETE CASCADE,
   parent_sme_id  BIGINT REFERENCES submodel_element(id) ON DELETE CASCADE,
   position       INTEGER,                                   -- for ordering in lists
-  id_short       varchar(128) NOT NULL,
+  id_short       varchar(128),
   category       varchar(128),
   model_type     int NOT NULL,
   embedded_data_specification JSONB DEFAULT '[]',

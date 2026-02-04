@@ -1,0 +1,4808 @@
+{
+  "modelType": "Submodel",
+  "kind": "Template",
+  "semanticId": {
+    "keys": [
+      {
+        "type": "Submodel",
+        "value": "https://admin-shell.io/idta/SubmodelTemplate/technicaldataagv/1/0"
+      }
+    ],
+    "type": "ModelReference"
+  },
+  "administration": {
+    "revision": "0",
+    "templateId": "https://admin-shell.io/idta-02047-1-0",
+    "version": "1"
+  },
+  "id": "https://admin-shell.io/idta/SubmodelTemplate/technicaldataagv/1/0",
+  "description": [
+    {
+      "language": "en",
+      "text": "Submodel containing technical data for AGV in intralogistcis"
+    },
+    {
+      "language": "de",
+      "text": "Teilmodell, das die technischen Daten von AGV (Fahrerlose Transportfahrzeuge) enthält"
+    }
+  ],
+  "displayName": [
+    {
+      "language": "en",
+      "text": "Technical Data for AGV in Intralogistics"
+    },
+    {
+      "language": "de",
+      "text": "Technische Daten für AGV in der Intralogistik"
+    }
+  ],
+  "idShort": "TechnicalDataAGV",
+  "submodelElements": [
+    {
+      "modelType": "SubmodelElementCollection",
+      "semanticId": {
+        "keys": [
+          {
+            "type": "GlobalReference",
+            "value": "0173-1#02-ABK161#002/0173-1#01-AHX838#002"
+          }
+        ],
+        "type": "ExternalReference"
+      },
+      "supplementalSemanticIds": [
+        {
+          "keys": [
+            {
+              "type": "GlobalReference",
+              "value": "https://api.eclass-cdp.com/ 0173-1-02-ABK161-002/0173-1-01-AHX838-002"
+            }
+          ],
+          "type": "ExternalReference"
+        }
+      ],
+      "qualifiers": [
+        {
+          "semanticId": {
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+              }
+            ],
+            "type": "ExternalReference"
+          },
+          "kind": "ConceptQualifier",
+          "type": "SMT/Cardinality",
+          "value": "One",
+          "valueType": "xs:string"
+        }
+      ],
+      "description": [
+        {
+          "language": "en",
+          "text": "General information, for example ordering and manufacturer information."
+        }
+      ],
+      "displayName": [
+        {
+          "language": "en",
+          "text": "General information"
+        },
+        {
+          "language": "de",
+          "text": "Allgemeine Informationen"
+        }
+      ],
+      "idShort": "GeneralInformation",
+      "value": [
+        {
+          "modelType": "Property",
+          "semanticId": {
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "0173-1#02-AAO677#004"
+              }
+            ],
+            "type": "ExternalReference"
+          },
+          "supplementalSemanticIds": [
+            {
+              "keys": [
+                {
+                  "type": "GlobalReference",
+                  "value": "https://api.eclass-cdp.com/0173-1-02-AAO677-004"
+                }
+              ],
+              "type": "ExternalReference"
+            }
+          ],
+          "value": "AGV Company",
+          "valueType": "xs:string",
+          "qualifiers": [
+            {
+              "semanticId": {
+                "keys": [
+                  {
+                    "type": "GlobalReference",
+                    "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                  }
+                ],
+                "type": "ExternalReference"
+              },
+              "kind": "ConceptQualifier",
+              "type": "SMT/Cardinality",
+              "value": "One",
+              "valueType": "xs:string"
+            }
+          ],
+          "category": "PARAMETER",
+          "description": [
+            {
+              "language": "en",
+              "text": "Legally valid designation of the natural or judicial body which is directly responsible for the design, production, packaging and labeling of a product in respect to its being brought into the market."
+            }
+          ],
+          "idShort": "ManufacturerName"
+        },
+        {
+          "modelType": "File",
+          "contentType": "image/png",
+          "semanticId": {
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "0173-1#02-ABI776#002"
+              }
+            ],
+            "type": "ExternalReference"
+          },
+          "supplementalSemanticIds": [
+            {
+              "keys": [
+                {
+                  "type": "GlobalReference",
+                  "value": "https://api.eclass-cdp.com/0173-1-02-ABI776-002"
+                }
+              ],
+              "type": "ExternalReference"
+            }
+          ],
+          "qualifiers": [
+            {
+              "semanticId": {
+                "keys": [
+                  {
+                    "type": "GlobalReference",
+                    "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                  }
+                ],
+                "type": "ExternalReference"
+              },
+              "kind": "ConceptQualifier",
+              "type": "SMT/Cardinality",
+              "value": "ZeroToOne",
+              "valueType": "xs:string"
+            }
+          ],
+          "description": [
+            {
+              "language": "en",
+              "text": "Imagefile for logo of manufacturer provided in common format (.png, .jpg)."
+            }
+          ],
+          "idShort": "CompanyLogo"
+        },
+        {
+          "modelType": "MultiLanguageProperty",
+          "semanticId": {
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "0173-1#02-AAW338#003"
+              }
+            ],
+            "type": "ExternalReference"
+          },
+          "supplementalSemanticIds": [
+            {
+              "keys": [
+                {
+                  "type": "GlobalReference",
+                  "value": "https://api.eclass-cdp.com/0173-1-02-AAW338-003"
+                }
+              ],
+              "type": "ExternalReference"
+            }
+          ],
+          "value": [
+            {
+              "language": "en",
+              "text": "AGV product"
+            },
+            {
+              "language": "de",
+              "text": "AGV Produkt"
+            }
+          ],
+          "qualifiers": [
+            {
+              "semanticId": {
+                "keys": [
+                  {
+                    "type": "GlobalReference",
+                    "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                  }
+                ],
+                "type": "ExternalReference"
+              },
+              "kind": "ConceptQualifier",
+              "type": "SMT/Cardinality",
+              "value": "One",
+              "valueType": "xs:string"
+            }
+          ],
+          "category": "PARAMETER",
+          "description": [
+            {
+              "language": "en",
+              "text": "Product designation as given by the mnaufacturer. Short description of the product, product group or function (short text) in common language."
+            }
+          ],
+          "idShort": "ManufacturerProductDesignation"
+        },
+        {
+          "modelType": "Property",
+          "semanticId": {
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "0173-1#02-AAO054#003"
+              }
+            ],
+            "type": "ExternalReference"
+          },
+          "supplementalSemanticIds": [
+            {
+              "keys": [
+                {
+                  "type": "GlobalReference",
+                  "value": "https://api.eclass-cdp.com/0173-1-02-AAO054-003"
+                }
+              ],
+              "type": "ExternalReference"
+            }
+          ],
+          "value": "AGV XYZ",
+          "valueType": "xs:string",
+          "qualifiers": [
+            {
+              "semanticId": {
+                "keys": [
+                  {
+                    "type": "GlobalReference",
+                    "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                  }
+                ],
+                "type": "ExternalReference"
+              },
+              "kind": "ConceptQualifier",
+              "type": "SMT/Cardinality",
+              "value": "One",
+              "valueType": "xs:string"
+            }
+          ],
+          "category": "PARAMETER",
+          "description": [
+            {
+              "language": "en",
+              "text": "unique product identifier of the manufacturer "
+            }
+          ],
+          "idShort": "ProductArticleNumberOfManufacturer"
+        },
+        {
+          "modelType": "Property",
+          "semanticId": {
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "0173-1#02-AAO227#004"
+              }
+            ],
+            "type": "ExternalReference"
+          },
+          "supplementalSemanticIds": [
+            {
+              "keys": [
+                {
+                  "type": "GlobalReference",
+                  "value": "https://api.eclass-cdp.com/0173-1-02-AAO227-004"
+                }
+              ],
+              "type": "ExternalReference"
+            }
+          ],
+          "value": "AGV XYZ",
+          "valueType": "xs:string",
+          "qualifiers": [
+            {
+              "semanticId": {
+                "keys": [
+                  {
+                    "type": "GlobalReference",
+                    "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                  }
+                ],
+                "type": "ExternalReference"
+              },
+              "kind": "ConceptQualifier",
+              "type": "SMT/Cardinality",
+              "value": "One",
+              "valueType": "xs:string"
+            }
+          ],
+          "category": "PARAMETER",
+          "description": [
+            {
+              "language": "en",
+              "text": "By manufactures issued unique combination of numbers and letters used to identify the device for ordering"
+            }
+          ],
+          "idShort": "ManufacturerOrderCode"
+        },
+        {
+          "modelType": "SubmodelElementList",
+          "semanticId": {
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "0173-1#02-ABM220#001"
+              }
+            ],
+            "type": "ExternalReference"
+          },
+          "supplementalSemanticIds": [
+            {
+              "keys": [
+                {
+                  "type": "GlobalReference",
+                  "value": "https://api.eclass-cdp.com/0173-1-02-ABM220-001"
+                }
+              ],
+              "type": "ExternalReference"
+            }
+          ],
+          "qualifiers": [
+            {
+              "semanticId": {
+                "keys": [
+                  {
+                    "type": "GlobalReference",
+                    "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                  }
+                ],
+                "type": "ExternalReference"
+              },
+              "kind": "TemplateQualifier",
+              "type": "SMT/Cardinality",
+              "value": "ZeroToMany",
+              "valueType": "xs:string"
+            }
+          ],
+          "description": [
+            {
+              "language": "en",
+              "text": "Image file for associated product provided in common format (.png, .jpg)"
+            }
+          ],
+          "displayName": [
+            {
+              "language": "en",
+              "text": "Product images"
+            },
+            {
+              "language": "de",
+              "text": "Produktbilder"
+            }
+          ],
+          "idShort": "ProductImages",
+          "orderRelevant": true,
+          "semanticIdListElement": {
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "0173-1#02-ABM220#001/0173-1#01-AHY911#001"
+              }
+            ],
+            "type": "ExternalReference"
+          },
+          "typeValueListElement": "SubmodelElementCollection",
+          "value": [
+            {
+              "modelType": "SubmodelElementCollection",
+              "semanticId": {
+                "keys": [
+                  {
+                    "type": "GlobalReference",
+                    "value": "0173-1#02-ABM220#001/0173-1#01-AHY911#001"
+                  }
+                ],
+                "type": "ExternalReference"
+              },
+              "supplementalSemanticIds": [
+                {
+                  "keys": [
+                    {
+                      "type": "GlobalReference",
+                      "value": "0173-1#02-ABM220#001~0/0173-1#01-AHY911#001"
+                    },
+                    {
+                      "type": "GlobalReference",
+                      "value": "https://api.eclass-cdp.com/0173-1-02-ABM220-001/0173-1-01-AHY911-001"
+                    }
+                  ],
+                  "type": "ExternalReference"
+                }
+              ],
+              "displayName": [
+                {
+                  "language": "en",
+                  "text": "Product image"
+                },
+                {
+                  "language": "de",
+                  "text": "Produktbild"
+                }
+              ],
+              "value": [
+                {
+                  "modelType": "File",
+                  "contentType": "image/jpeg",
+                  "value": "/aasx/files/agv1.jpg",
+                  "semanticId": {
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "0173-1#02-ABK291#002"
+                      }
+                    ],
+                    "type": "ExternalReference"
+                  },
+                  "qualifiers": [
+                    {
+                      "semanticId": {
+                        "keys": [
+                          {
+                            "type": "GlobalReference",
+                            "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                          }
+                        ],
+                        "type": "ExternalReference"
+                      },
+                      "kind": "ConceptQualifier",
+                      "type": "SMT/Cardinality",
+                      "value": "One",
+                      "valueType": "xs:string"
+                    }
+                  ],
+                  "idShort": "ImageFile"
+                },
+                {
+                  "modelType": "MultiLanguageProperty",
+                  "semanticId": {
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "0173-1#02-ABL423#001"
+                      }
+                    ],
+                    "type": "ExternalReference"
+                  },
+                  "supplementalSemanticIds": [
+                    {
+                      "keys": [
+                        {
+                          "type": "GlobalReference",
+                          "value": "https://api.eclass-cdp.com/0173-1-02-ABL423-001"
+                        }
+                      ],
+                      "type": "ExternalReference"
+                    }
+                  ],
+                  "value": [
+                    {
+                      "language": "en",
+                      "text": "example image"
+                    },
+                    {
+                      "language": "de",
+                      "text": "Beispielbild"
+                    }
+                  ],
+                  "qualifiers": [
+                    {
+                      "semanticId": {
+                        "keys": [
+                          {
+                            "type": "GlobalReference",
+                            "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                          }
+                        ],
+                        "type": "ExternalReference"
+                      },
+                      "kind": "ConceptQualifier",
+                      "type": "SMT/Cardinality",
+                      "value": "ZeroToOne",
+                      "valueType": "xs:string"
+                    }
+                  ],
+                  "idShort": "ImageNote"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "modelType": "SubmodelElementList",
+      "semanticId": {
+        "keys": [
+          {
+            "type": "GlobalReference",
+            "value": "0173-1#02-ABM221#001"
+          }
+        ],
+        "type": "ExternalReference"
+      },
+      "supplementalSemanticIds": [
+        {
+          "keys": [
+            {
+              "type": "GlobalReference",
+              "value": "https://api.eclass-cdp.com/0173-1-02-ABM221-001"
+            }
+          ],
+          "type": "ExternalReference"
+        }
+      ],
+      "qualifiers": [
+        {
+          "semanticId": {
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+              }
+            ],
+            "type": "ExternalReference"
+          },
+          "kind": "ConceptQualifier",
+          "type": "SMT/Cardinality",
+          "value": "ZeroToMany",
+          "valueType": "xs:string"
+        }
+      ],
+      "description": [
+        {
+          "language": "en",
+          "text": "Specific description for a use case or area of application"
+        }
+      ],
+      "idShort": "SpecificDescriptions",
+      "orderRelevant": true,
+      "semanticIdListElement": {
+        "keys": [
+          {
+            "type": "GlobalReference",
+            "value": "0173-1#02-ABM221#001/0173-1#01-AHY912#001"
+          }
+        ],
+        "type": "ExternalReference"
+      },
+      "typeValueListElement": "SubmodelElementCollection",
+      "value": [
+        {
+          "modelType": "SubmodelElementCollection",
+          "semanticId": {
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "0173-1#02-ABM221#001/0173-1#01-AHY912#001"
+              }
+            ],
+            "type": "ExternalReference"
+          },
+          "supplementalSemanticIds": [
+            {
+              "keys": [
+                {
+                  "type": "GlobalReference",
+                  "value": "0173-1#02-ABM221#001~0/0173-1#01-AHY912#001"
+                },
+                {
+                  "type": "GlobalReference",
+                  "value": "https://api.eclass-cdp.com/0173-1-02-ABM221-001/0173-1-01-AHY912-001"
+                }
+              ],
+              "type": "ExternalReference"
+            }
+          ],
+          "qualifiers": [
+            {
+              "semanticId": {
+                "keys": [
+                  {
+                    "type": "GlobalReference",
+                    "value": "https://admin-shell.io/SubmodelTemplates/Naming/1/0"
+                  }
+                ],
+                "type": "ExternalReference"
+              },
+              "kind": "ConceptQualifier",
+              "type": "Naming",
+              "value": "Name of SMC is use case or application",
+              "valueType": "xs:string"
+            }
+          ],
+          "displayName": [
+            {
+              "language": "en",
+              "text": "Specific description for a use case or area of ​​application"
+            },
+            {
+              "language": "de",
+              "text": "Spezifische Beschreibung für einen Anwendungsfall oder ein Einsatzgebiet"
+            }
+          ],
+          "value": [
+            {
+              "modelType": "File",
+              "contentType": "application/pdf",
+              "value": "/aasx/files/ABB_Datasheet_AMR_T701_GR_digital.pdf",
+              "semanticId": {
+                "keys": [
+                  {
+                    "type": "GlobalReference",
+                    "value": "https://admin-shell.io/idta/technicaldataagv/datasheet/1/0"
+                  }
+                ],
+                "type": "ExternalReference"
+              },
+              "qualifiers": [
+                {
+                  "semanticId": {
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                      }
+                    ],
+                    "type": "ExternalReference"
+                  },
+                  "kind": "TemplateQualifier",
+                  "type": "SMT/Cardinality",
+                  "value": "ZeroToOne",
+                  "valueType": "xs:string"
+                }
+              ],
+              "description": [
+                {
+                  "language": "en",
+                  "text": "Document with technical product data of the AGV provided by the manufacturer"
+                },
+                {
+                  "language": "de",
+                  "text": "Dokument mit technischen Produktdaten, das vom Hersteller bereitgestellt wird"
+                }
+              ],
+              "displayName": [
+                {
+                  "language": "en",
+                  "text": "Product datasheet"
+                },
+                {
+                  "language": "de",
+                  "text": "Produktdatenblatt"
+                }
+              ],
+              "idShort": "DataSheet"
+            },
+            {
+              "modelType": "SubmodelElementCollection",
+              "semanticId": {
+                "keys": [
+                  {
+                    "type": "GlobalReference",
+                    "value": "https://admin-shell.io/idta/technicaldataagv/typeandapplicationinformation/1/0"
+                  }
+                ],
+                "type": "ExternalReference"
+              },
+              "qualifiers": [
+                {
+                  "semanticId": {
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                      }
+                    ],
+                    "type": "ExternalReference"
+                  },
+                  "kind": "ConceptQualifier",
+                  "type": "SMT/Cardinality",
+                  "value": "ZeroToOne",
+                  "valueType": "xs:string"
+                }
+              ],
+              "description": [
+                {
+                  "language": "en",
+                  "text": "Information about the AGV type and the vehicle's applications"
+                }
+              ],
+              "displayName": [
+                {
+                  "language": "en",
+                  "text": "Type and application information"
+                },
+                {
+                  "language": "de",
+                  "text": "Typ- und Anwendungsinformationen"
+                }
+              ],
+              "idShort": "TypeAndApplicationInformation",
+              "value": [
+                {
+                  "modelType": "Property",
+                  "semanticId": {
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/idta/technicaldataagv/agvkinematic/1/0"
+                      }
+                    ],
+                    "type": "ExternalReference"
+                  },
+                  "value": "OMNI",
+                  "valueType": "xs:string",
+                  "qualifiers": [
+                    {
+                      "semanticId": {
+                        "keys": [
+                          {
+                            "type": "GlobalReference",
+                            "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                          }
+                        ],
+                        "type": "ExternalReference"
+                      },
+                      "kind": "TemplateQualifier",
+                      "type": "SMT/Cardinality",
+                      "value": "ZeroToOne",
+                      "valueType": "xs:string"
+                    }
+                  ],
+                  "description": [
+                    {
+                      "language": "en",
+                      "text": "Type of Kinematic of the AGV. The enumerations according VDA5050 \"DIFF\", \"OMNI\", \"THREEWHEEL\", \"OTHER\" can be used."
+                    }
+                  ],
+                  "displayName": [
+                    {
+                      "language": "en",
+                      "text": "Kinematic of the AGV"
+                    },
+                    {
+                      "language": "de",
+                      "text": "Kinematik des AGV"
+                    }
+                  ],
+                  "idShort": "AgvKinematic"
+                },
+                {
+                  "modelType": "Property",
+                  "semanticId": {
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/idta/technicaldataagv/agvclass/1/0"
+                      }
+                    ],
+                    "type": "ExternalReference"
+                  },
+                  "value": "TUGGER",
+                  "valueType": "xs:string",
+                  "qualifiers": [
+                    {
+                      "semanticId": {
+                        "keys": [
+                          {
+                            "type": "GlobalReference",
+                            "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                          }
+                        ],
+                        "type": "ExternalReference"
+                      },
+                      "kind": "TemplateQualifier",
+                      "type": "SMT/Cardinality",
+                      "value": "ZeroToOne",
+                      "valueType": "xs:string"
+                    }
+                  ],
+                  "description": [
+                    {
+                      "language": "en",
+                      "text": "Class of the AGV. The enumeration according VDA5050 with \"FORKLIFT\", \"CONVEYER\", \"TUGGER\", \"CARRIER\", \"OTHER\" can be used."
+                    }
+                  ],
+                  "displayName": [
+                    {
+                      "language": "en",
+                      "text": "Class of the AGV"
+                    },
+                    {
+                      "language": "de",
+                      "text": "Klasse des AGV"
+                    }
+                  ],
+                  "idShort": "AgvClass"
+                },
+                {
+                  "modelType": "Property",
+                  "semanticId": {
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/idta/technicaldataagv/traveldirection/1/0"
+                      }
+                    ],
+                    "type": "ExternalReference"
+                  },
+                  "valueType": "xs:string",
+                  "qualifiers": [
+                    {
+                      "semanticId": {
+                        "keys": [
+                          {
+                            "type": "GlobalReference",
+                            "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                          }
+                        ],
+                        "type": "ExternalReference"
+                      },
+                      "kind": "TemplateQualifier",
+                      "type": "SMT/Cardinality",
+                      "value": "ZeroToOne",
+                      "valueType": "xs:string"
+                    }
+                  ],
+                  "description": [
+                    {
+                      "language": "en",
+                      "text": "Direction of traveling of the AGV, the enumeration \"FORWARD\", \"BACKWARD\", \"OMNI-DIRECTIONAL\" can be used."
+                    }
+                  ],
+                  "displayName": [
+                    {
+                      "language": "en",
+                      "text": "Travel direction"
+                    },
+                    {
+                      "language": "de",
+                      "text": "Fahrtrichtung"
+                    }
+                  ],
+                  "idShort": "TravelDirection"
+                },
+                {
+                  "modelType": "Property",
+                  "semanticId": {
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/idta/technicaldataagv/transportprinciple/1/0"
+                      }
+                    ],
+                    "type": "ExternalReference"
+                  },
+                  "valueType": "xs:string",
+                  "qualifiers": [
+                    {
+                      "semanticId": {
+                        "keys": [
+                          {
+                            "type": "GlobalReference",
+                            "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                          }
+                        ],
+                        "type": "ExternalReference"
+                      },
+                      "kind": "TemplateQualifier",
+                      "type": "SMT/Cardinality",
+                      "value": "ZeroToOne",
+                      "valueType": "xs:string"
+                    }
+                  ],
+                  "description": [
+                    {
+                      "language": "en",
+                      "text": "Transportation pinciple of the AGV. The enumeration \"LOADPULLING\", \"LOADCARRYING\", \"MIXED\" can be used."
+                    }
+                  ],
+                  "displayName": [
+                    {
+                      "language": "en",
+                      "text": "Transportation principle"
+                    },
+                    {
+                      "language": "de",
+                      "text": "Transportprinzip"
+                    }
+                  ],
+                  "idShort": "TransportPrinciple"
+                },
+                {
+                  "modelType": "Property",
+                  "semanticId": {
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/idta/technicaldataagv/localizationtype/1/0"
+                      }
+                    ],
+                    "type": "ExternalReference"
+                  },
+                  "valueType": "xs:string",
+                  "qualifiers": [
+                    {
+                      "semanticId": {
+                        "keys": [
+                          {
+                            "type": "GlobalReference",
+                            "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                          }
+                        ],
+                        "type": "ExternalReference"
+                      },
+                      "kind": "TemplateQualifier",
+                      "type": "SMT/Cardinality",
+                      "value": "ZeroToOne",
+                      "valueType": "xs:string"
+                    }
+                  ],
+                  "description": [
+                    {
+                      "language": "en",
+                      "text": "Type of the localization the AGV is using. The enumeration according VDA5050 with \"NATURAL\", \"REFLECTOR\", \"RFID\", \"DMC\", \"SPOT\", \"GRID\", \"OTHER\" can be used."
+                    }
+                  ],
+                  "displayName": [
+                    {
+                      "language": "en",
+                      "text": "Type of localization"
+                    },
+                    {
+                      "language": "de",
+                      "text": "Lokalisierungsart"
+                    }
+                  ],
+                  "idShort": "LocalizationType"
+                },
+                {
+                  "modelType": "Property",
+                  "semanticId": {
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/idta/technicaldataagv/navigationtype/1/0"
+                      }
+                    ],
+                    "type": "ExternalReference"
+                  },
+                  "valueType": "xs:string",
+                  "qualifiers": [
+                    {
+                      "semanticId": {
+                        "keys": [
+                          {
+                            "type": "GlobalReference",
+                            "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                          }
+                        ],
+                        "type": "ExternalReference"
+                      },
+                      "kind": "TemplateQualifier",
+                      "type": "SMT/Cardinality",
+                      "value": "ZeroToOne",
+                      "valueType": "xs:string"
+                    }
+                  ],
+                  "description": [
+                    {
+                      "language": "en",
+                      "text": "Type of navigation the AGV uses. The enumeration according VDA5050 with \"PHYSICAL_LINE_GUIDED\", \"VIRTUAL_LINE_GUIDED\", \"AUTONOMOUS\" can be used."
+                    }
+                  ],
+                  "displayName": [
+                    {
+                      "language": "en",
+                      "text": "Type of navigation"
+                    },
+                    {
+                      "language": "de",
+                      "text": "Navigationsart"
+                    }
+                  ],
+                  "idShort": "NavigationType"
+                },
+                {
+                  "modelType": "MultiLanguageProperty",
+                  "semanticId": {
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/idta/technicaldataagv/specialapplications/1/0"
+                      }
+                    ],
+                    "type": "ExternalReference"
+                  },
+                  "qualifiers": [
+                    {
+                      "semanticId": {
+                        "keys": [
+                          {
+                            "type": "GlobalReference",
+                            "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                          }
+                        ],
+                        "type": "ExternalReference"
+                      },
+                      "kind": "TemplateQualifier",
+                      "type": "SMT/Cardinality",
+                      "value": "ZeroToOne",
+                      "valueType": "xs:string"
+                    }
+                  ],
+                  "description": [
+                    {
+                      "language": "en",
+                      "text": "Special applications and usage sectors of the AGV, e.g. EMC environment, chemical industry, mining, clean rooms, refrigerated rooms, areas with explosion risk"
+                    }
+                  ],
+                  "displayName": [
+                    {
+                      "language": "en",
+                      "text": "Special applications"
+                    },
+                    {
+                      "language": "de",
+                      "text": "Besondere Anwendungsbereiche"
+                    }
+                  ],
+                  "idShort": "SpecialApplications"
+                },
+                {
+                  "modelType": "MultiLanguageProperty",
+                  "semanticId": {
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/idta/technicaldataagv/specialcapabilities/1/0"
+                      }
+                    ],
+                    "type": "ExternalReference"
+                  },
+                  "qualifiers": [
+                    {
+                      "semanticId": {
+                        "keys": [
+                          {
+                            "type": "GlobalReference",
+                            "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                          }
+                        ],
+                        "type": "ExternalReference"
+                      },
+                      "kind": "TemplateQualifier",
+                      "type": "SMT/Cardinality",
+                      "value": "ZeroToOne",
+                      "valueType": "xs:string"
+                    }
+                  ],
+                  "description": [
+                    {
+                      "language": "en",
+                      "text": "Special capabilities and functions of the AGV"
+                    }
+                  ],
+                  "displayName": [
+                    {
+                      "language": "en",
+                      "text": "Special capabilities"
+                    },
+                    {
+                      "language": "de",
+                      "text": "Besondere Fähigkeiten"
+                    }
+                  ],
+                  "idShort": "SpecialCapabilities"
+                },
+                {
+                  "modelType": "Property",
+                  "semanticId": {
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "0173-1#02-AAV695#003"
+                      }
+                    ],
+                    "type": "ExternalReference"
+                  },
+                  "valueType": "xs:string",
+                  "qualifiers": [
+                    {
+                      "semanticId": {
+                        "keys": [
+                          {
+                            "type": "GlobalReference",
+                            "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                          }
+                        ],
+                        "type": "ExternalReference"
+                      },
+                      "kind": "TemplateQualifier",
+                      "type": "SMT/Cardinality",
+                      "value": "ZeroToOne",
+                      "valueType": "xs:string"
+                    }
+                  ],
+                  "description": [
+                    {
+                      "language": "en",
+                      "text": "Extent of protection provided by an enclosure against access to hazardous parts, against ingress of solid foreign objects and against ingress of water"
+                    }
+                  ],
+                  "displayName": [
+                    {
+                      "language": "en",
+                      "text": "IP Protection Class"
+                    },
+                    {
+                      "language": "de",
+                      "text": "IP Schutzklasse"
+                    }
+                  ],
+                  "idShort": "ProtectionClassIP"
+                },
+                {
+                  "modelType": "Property",
+                  "semanticId": {
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "0173-1#02-BAD676#009"
+                      }
+                    ],
+                    "type": "ExternalReference"
+                  },
+                  "valueType": "xs:boolean",
+                  "qualifiers": [
+                    {
+                      "semanticId": {
+                        "keys": [
+                          {
+                            "type": "GlobalReference",
+                            "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                          }
+                        ],
+                        "type": "ExternalReference"
+                      },
+                      "kind": "TemplateQualifier",
+                      "type": "SMT/Cardinality",
+                      "value": "ZeroToOne",
+                      "valueType": "xs:string"
+                    }
+                  ],
+                  "description": [
+                    {
+                      "language": "en",
+                      "text": "Indicates wether the AGV can be used outdoors (true) or not (false)"
+                    },
+                    {
+                      "language": "de",
+                      "text": "Gib an, ob das AGV im Außenbereich (Outdoor) genutzt werden kann (true) oder nicht (false)"
+                    }
+                  ],
+                  "idShort": "SuitableForOutdoorUse"
+                },
+                {
+                  "modelType": "MultiLanguageProperty",
+                  "semanticId": {
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/idta/technicaldataagv/requiredenvironmentalconditions/1/0"
+                      }
+                    ],
+                    "type": "ExternalReference"
+                  },
+                  "qualifiers": [
+                    {
+                      "semanticId": {
+                        "keys": [
+                          {
+                            "type": "GlobalReference",
+                            "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                          }
+                        ],
+                        "type": "ExternalReference"
+                      },
+                      "kind": "TemplateQualifier",
+                      "type": "SMT/Cardinality",
+                      "value": "ZeroToOne",
+                      "valueType": "xs:string"
+                    }
+                  ],
+                  "description": [
+                    {
+                      "language": "en",
+                      "text": "Description of required environmental conditions that have to be fulfilled to use the AGV, e.g., floor condition or ambient temperature (min./max.)"
+                    }
+                  ],
+                  "displayName": [
+                    {
+                      "language": "en",
+                      "text": "Required environmental conditions"
+                    },
+                    {
+                      "language": "de",
+                      "text": "Erforderliche Umweltbedingungen"
+                    }
+                  ],
+                  "idShort": "RequiredEnvironmentalConditions"
+                },
+                {
+                  "modelType": "MultiLanguageProperty",
+                  "semanticId": {
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/idta/technicaldataagv/specialqualificationdemand/1/0"
+                      }
+                    ],
+                    "type": "ExternalReference"
+                  },
+                  "qualifiers": [
+                    {
+                      "semanticId": {
+                        "keys": [
+                          {
+                            "type": "GlobalReference",
+                            "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                          }
+                        ],
+                        "type": "ExternalReference"
+                      },
+                      "kind": "TemplateQualifier",
+                      "type": "SMT/Cardinality",
+                      "value": "ZeroToOne",
+                      "valueType": "xs:string"
+                    }
+                  ],
+                  "description": [
+                    {
+                      "language": "en",
+                      "text": "Demand for the special qualification required"
+                    }
+                  ],
+                  "displayName": [
+                    {
+                      "language": "en",
+                      "text": "Special qualification demand"
+                    },
+                    {
+                      "language": "de",
+                      "text": "Besonderer Qualifikationsbedarf"
+                    }
+                  ],
+                  "idShort": "SpecialQualificationDemand"
+                }
+              ]
+            },
+            {
+              "modelType": "SubmodelElementCollection",
+              "semanticId": {
+                "keys": [
+                  {
+                    "type": "GlobalReference",
+                    "value": "https://admin-shell.io/idta/technicaldataagv/technicalparameters/1/0"
+                  }
+                ],
+                "type": "ExternalReference"
+              },
+              "qualifiers": [
+                {
+                  "semanticId": {
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                      }
+                    ],
+                    "type": "ExternalReference"
+                  },
+                  "kind": "ConceptQualifier",
+                  "type": "SMT/Cardinality",
+                  "value": "ZeroToOne",
+                  "valueType": "xs:string"
+                }
+              ],
+              "description": [
+                {
+                  "language": "en",
+                  "text": "Technical parameters/properties of the AGV"
+                }
+              ],
+              "displayName": [
+                {
+                  "language": "en",
+                  "text": "Technical parameters"
+                },
+                {
+                  "language": "de",
+                  "text": "Technische Parameter"
+                }
+              ],
+              "idShort": "TechnicalParameters",
+              "value": [
+                {
+                  "modelType": "Property",
+                  "semanticId": {
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/idta/technicaldataagv/maxlateralinclination/1/0"
+                      }
+                    ],
+                    "type": "ExternalReference"
+                  },
+                  "valueType": "xs:integer",
+                  "qualifiers": [
+                    {
+                      "kind": "ConceptQualifier",
+                      "type": "LoadStatus",
+                      "value": "with max. load",
+                      "valueType": "xs:string"
+                    },
+                    {
+                      "semanticId": {
+                        "keys": [
+                          {
+                            "type": "GlobalReference",
+                            "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                          }
+                        ],
+                        "type": "ExternalReference"
+                      },
+                      "kind": "TemplateQualifier",
+                      "type": "SMT/Cardinality",
+                      "value": "ZeroToOne",
+                      "valueType": "xs:string"
+                    }
+                  ],
+                  "description": [
+                    {
+                      "language": "en",
+                      "text": "Maximal lateral inclination of the AGV when loaded with the maximum weight"
+                    },
+                    {
+                      "language": "de",
+                      "text": "Maximale Querneigung des AGV bei Beladung mit maximaler Last"
+                    }
+                  ],
+                  "displayName": [
+                    {
+                      "language": "en",
+                      "text": "Lateral inclination (max.)"
+                    },
+                    {
+                      "language": "de",
+                      "text": "Querneigung (max.)"
+                    }
+                  ],
+                  "idShort": "MaxLateralInclinationMaxLoad"
+                },
+                {
+                  "modelType": "Property",
+                  "semanticId": {
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/idta/technicaldataagv/maxlateralinclination/1/0"
+                      }
+                    ],
+                    "type": "ExternalReference"
+                  },
+                  "valueType": "xs:integer",
+                  "qualifiers": [
+                    {
+                      "kind": "ConceptQualifier",
+                      "type": "LoadStatus",
+                      "value": "without load",
+                      "valueType": "xs:string"
+                    },
+                    {
+                      "semanticId": {
+                        "keys": [
+                          {
+                            "type": "GlobalReference",
+                            "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                          }
+                        ],
+                        "type": "ExternalReference"
+                      },
+                      "kind": "TemplateQualifier",
+                      "type": "SMT/Cardinality",
+                      "value": "ZeroToOne",
+                      "valueType": "xs:string"
+                    }
+                  ],
+                  "description": [
+                    {
+                      "language": "en",
+                      "text": "Maximal lateral inclination of the AGV when unloaded"
+                    },
+                    {
+                      "language": "de",
+                      "text": "Maximale Querneigung des AGV wenn ohne Last"
+                    }
+                  ],
+                  "displayName": [
+                    {
+                      "language": "en",
+                      "text": "Lateral inclination (max.)"
+                    },
+                    {
+                      "language": "de",
+                      "text": "Querneigung (max.)"
+                    }
+                  ],
+                  "idShort": "MaxLateralInclinationWithoutLoad"
+                },
+                {
+                  "modelType": "Property",
+                  "semanticId": {
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/idta/technicaldataagv/maxclimbinginclination/1/0"
+                      }
+                    ],
+                    "type": "ExternalReference"
+                  },
+                  "valueType": "xs:integer",
+                  "qualifiers": [
+                    {
+                      "kind": "ConceptQualifier",
+                      "type": "LoadStatus",
+                      "value": "with max. load",
+                      "valueType": "xs:string"
+                    },
+                    {
+                      "semanticId": {
+                        "keys": [
+                          {
+                            "type": "GlobalReference",
+                            "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                          }
+                        ],
+                        "type": "ExternalReference"
+                      },
+                      "kind": "TemplateQualifier",
+                      "type": "SMT/Cardinality",
+                      "value": "ZeroToOne",
+                      "valueType": "xs:string"
+                    }
+                  ],
+                  "description": [
+                    {
+                      "language": "en",
+                      "text": "Maximal climbing inclination of the AGV when loaded with the maximum weight"
+                    },
+                    {
+                      "language": "de",
+                      "text": "Maximale Längsneigung des AGV bei maximaler Last"
+                    }
+                  ],
+                  "displayName": [
+                    {
+                      "language": "en",
+                      "text": "Climbing inclination (max.)"
+                    },
+                    {
+                      "language": "de",
+                      "text": "Längsneigung (max.)"
+                    }
+                  ],
+                  "idShort": "MaxClimbingInclinationMaxLoad"
+                },
+                {
+                  "modelType": "Property",
+                  "semanticId": {
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/idta/technicaldataagv/maxclimbinginclination/1/0"
+                      }
+                    ],
+                    "type": "ExternalReference"
+                  },
+                  "valueType": "xs:integer",
+                  "qualifiers": [
+                    {
+                      "kind": "ConceptQualifier",
+                      "type": "LoadStatus",
+                      "value": "without load",
+                      "valueType": "xs:string"
+                    },
+                    {
+                      "semanticId": {
+                        "keys": [
+                          {
+                            "type": "GlobalReference",
+                            "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                          }
+                        ],
+                        "type": "ExternalReference"
+                      },
+                      "kind": "TemplateQualifier",
+                      "type": "SMT/Cardinality",
+                      "value": "ZeroToOne",
+                      "valueType": "xs:string"
+                    }
+                  ],
+                  "description": [
+                    {
+                      "language": "en",
+                      "text": "Maximal climbing inclination of the AGV when unloaded"
+                    },
+                    {
+                      "language": "de",
+                      "text": "Maximale Längsneigung des AGV wenn ohne Last"
+                    }
+                  ],
+                  "displayName": [
+                    {
+                      "language": "en",
+                      "text": "Climbing inclination (max.)"
+                    },
+                    {
+                      "language": "de",
+                      "text": "Längsneigung (max.)"
+                    }
+                  ],
+                  "idShort": "MaxClimbingInclinationWithoutLoad"
+                },
+                {
+                  "modelType": "MultiLanguageProperty",
+                  "semanticId": {
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/idta/technicaldataagv/localizationsensordetails/1/0"
+                      }
+                    ],
+                    "type": "ExternalReference"
+                  },
+                  "qualifiers": [
+                    {
+                      "semanticId": {
+                        "keys": [
+                          {
+                            "type": "GlobalReference",
+                            "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                          }
+                        ],
+                        "type": "ExternalReference"
+                      },
+                      "kind": "TemplateQualifier",
+                      "type": "SMT/Cardinality",
+                      "value": "ZeroToOne",
+                      "valueType": "xs:string"
+                    }
+                  ],
+                  "category": "CONSTANT",
+                  "description": [
+                    {
+                      "language": "en",
+                      "text": "Information about used localization sensors by the AGV"
+                    }
+                  ],
+                  "displayName": [
+                    {
+                      "language": "en",
+                      "text": "Localization sensor details"
+                    },
+                    {
+                      "language": "de",
+                      "text": "Details zur Lokalisierungssensorik"
+                    }
+                  ],
+                  "idShort": "LocalizationSensorDetails"
+                },
+                {
+                  "modelType": "Property",
+                  "semanticId": {
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/idta/technicaldataagv/localizationaccuracy/1/0"
+                      }
+                    ],
+                    "type": "ExternalReference"
+                  },
+                  "valueType": "xs:float",
+                  "qualifiers": [
+                    {
+                      "semanticId": {
+                        "keys": [
+                          {
+                            "type": "GlobalReference",
+                            "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                          }
+                        ],
+                        "type": "ExternalReference"
+                      },
+                      "kind": "TemplateQualifier",
+                      "type": "SMT/Cardinality",
+                      "value": "ZeroToOne",
+                      "valueType": "xs:string"
+                    }
+                  ],
+                  "description": [
+                    {
+                      "language": "en",
+                      "text": "Accuracy of the determination of the current location of the AGV"
+                    }
+                  ],
+                  "displayName": [
+                    {
+                      "language": "en",
+                      "text": "Localization accuracy"
+                    },
+                    {
+                      "language": "de",
+                      "text": "Lokalisierungsgenauigkeit"
+                    }
+                  ],
+                  "idShort": "LocalizationAccuracy"
+                },
+                {
+                  "modelType": "Property",
+                  "semanticId": {
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/idta/technicaldataagv/positioningaccuracy/1/0"
+                      }
+                    ],
+                    "type": "ExternalReference"
+                  },
+                  "valueType": "xs:float",
+                  "qualifiers": [
+                    {
+                      "semanticId": {
+                        "keys": [
+                          {
+                            "type": "GlobalReference",
+                            "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                          }
+                        ],
+                        "type": "ExternalReference"
+                      },
+                      "kind": "TemplateQualifier",
+                      "type": "SMT/Cardinality",
+                      "value": "ZeroToOne",
+                      "valueType": "xs:string"
+                    }
+                  ],
+                  "description": [
+                    {
+                      "language": "en",
+                      "text": "Positioning accuracy of the AGV"
+                    }
+                  ],
+                  "displayName": [
+                    {
+                      "language": "en",
+                      "text": "Positioning accuracy"
+                    },
+                    {
+                      "language": "de",
+                      "text": "Positionierungsgenauigkeit"
+                    }
+                  ],
+                  "idShort": "PositioningAccuracy"
+                },
+                {
+                  "modelType": "Property",
+                  "semanticId": {
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "0173-1#02-ABJ258#001"
+                      }
+                    ],
+                    "type": "ExternalReference"
+                  },
+                  "valueType": "xs:float",
+                  "qualifiers": [
+                    {
+                      "semanticId": {
+                        "keys": [
+                          {
+                            "type": "GlobalReference",
+                            "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                          }
+                        ],
+                        "type": "ExternalReference"
+                      },
+                      "kind": "TemplateQualifier",
+                      "type": "SMT/Cardinality",
+                      "value": "ZeroToOne",
+                      "valueType": "xs:string"
+                    }
+                  ],
+                  "description": [
+                    {
+                      "language": "en",
+                      "text": "Maximal load on the AGV including attachments and load"
+                    }
+                  ],
+                  "idShort": "MaxLoadMass"
+                },
+                {
+                  "modelType": "MultiLanguageProperty",
+                  "semanticId": {
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/idta/technicaldataagv/interfacesforattachments/1/0"
+                      }
+                    ],
+                    "type": "ExternalReference"
+                  },
+                  "qualifiers": [
+                    {
+                      "semanticId": {
+                        "keys": [
+                          {
+                            "type": "GlobalReference",
+                            "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                          }
+                        ],
+                        "type": "ExternalReference"
+                      },
+                      "kind": "TemplateQualifier",
+                      "type": "SMT/Cardinality",
+                      "value": "ZeroToOne",
+                      "valueType": "xs:string"
+                    }
+                  ],
+                  "description": [
+                    {
+                      "language": "en",
+                      "text": "Description of the mechanical and electrical interfaces for load handling attachments and other attachments"
+                    }
+                  ],
+                  "displayName": [
+                    {
+                      "language": "en",
+                      "text": "Interfaces for attachments"
+                    },
+                    {
+                      "language": "de",
+                      "text": "Schnittstellen für Anbauten"
+                    }
+                  ],
+                  "idShort": "InterfacesForAttachments"
+                },
+                {
+                  "modelType": "Property",
+                  "semanticId": {
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "0173-1#02-ABA730#002"
+                      }
+                    ],
+                    "type": "ExternalReference"
+                  },
+                  "valueType": "xs:float",
+                  "qualifiers": [
+                    {
+                      "semanticId": {
+                        "keys": [
+                          {
+                            "type": "GlobalReference",
+                            "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                          }
+                        ],
+                        "type": "ExternalReference"
+                      },
+                      "kind": "TemplateQualifier",
+                      "type": "SMT/Cardinality",
+                      "value": "ZeroToOne",
+                      "valueType": "xs:string"
+                    }
+                  ],
+                  "description": [
+                    {
+                      "language": "en",
+                      "text": "System availability of the AGV "
+                    },
+                    {
+                      "language": "de",
+                      "text": "Systemverfügbarkeit des AGV "
+                    }
+                  ],
+                  "displayName": [
+                    {
+                      "language": "en",
+                      "text": "System availability"
+                    },
+                    {
+                      "language": "de",
+                      "text": "Systemverfügbarkeit"
+                    }
+                  ],
+                  "idShort": "SystemAvailability"
+                },
+                {
+                  "modelType": "Property",
+                  "semanticId": {
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "0173-1#02-AAJ479#004"
+                      }
+                    ],
+                    "type": "ExternalReference"
+                  },
+                  "valueType": "xs:integer",
+                  "qualifiers": [
+                    {
+                      "semanticId": {
+                        "keys": [
+                          {
+                            "type": "GlobalReference",
+                            "value": "0112/2///61360_4#AAF575"
+                          }
+                        ],
+                        "type": "ExternalReference"
+                      },
+                      "kind": "ConceptQualifier",
+                      "type": "LifeCycleQual",
+                      "value": "SPEC",
+                      "valueId": {
+                        "keys": [
+                          {
+                            "type": "GlobalReference",
+                            "value": "0112/2///61360_4#AAF579"
+                          }
+                        ],
+                        "type": "ExternalReference"
+                      },
+                      "valueType": "xs:string"
+                    },
+                    {
+                      "semanticId": {
+                        "keys": [
+                          {
+                            "type": "GlobalReference",
+                            "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                          }
+                        ],
+                        "type": "ExternalReference"
+                      },
+                      "kind": "TemplateQualifier",
+                      "type": "SMT/Cardinality",
+                      "value": "ZeroToOne",
+                      "valueType": "xs:string"
+                    }
+                  ],
+                  "description": [
+                    {
+                      "language": "en",
+                      "text": "Max runtime as stated in the specification sheet of the AGV"
+                    },
+                    {
+                      "language": "de",
+                      "text": "Maximale Laufzeit wie für das AGV vom Hersteller spezifiziert"
+                    }
+                  ],
+                  "displayName": [
+                    {
+                      "language": "en",
+                      "text": "Run time (max.)"
+                    },
+                    {
+                      "language": "de",
+                      "text": "Run time (max.)"
+                    }
+                  ],
+                  "idShort": "MaxRunTimeAsSpecified"
+                },
+                {
+                  "modelType": "Property",
+                  "semanticId": {
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "0173-1#02-AAJ479#004"
+                      }
+                    ],
+                    "type": "ExternalReference"
+                  },
+                  "valueType": "xs:integer",
+                  "qualifiers": [
+                    {
+                      "semanticId": {
+                        "keys": [
+                          {
+                            "type": "GlobalReference",
+                            "value": "0112/2///61360_4#AAF575"
+                          }
+                        ],
+                        "type": "ExternalReference"
+                      },
+                      "kind": "ConceptQualifier",
+                      "type": "LifeCycleQual",
+                      "value": "OP",
+                      "valueId": {
+                        "keys": [
+                          {
+                            "type": "GlobalReference",
+                            "value": "0112/2///61360_4#AAF578"
+                          }
+                        ],
+                        "type": "ExternalReference"
+                      },
+                      "valueType": "xs:string"
+                    },
+                    {
+                      "semanticId": {
+                        "keys": [
+                          {
+                            "type": "GlobalReference",
+                            "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                          }
+                        ],
+                        "type": "ExternalReference"
+                      },
+                      "kind": "TemplateQualifier",
+                      "type": "SMT/Cardinality",
+                      "value": "ZeroToOne",
+                      "valueType": "xs:string"
+                    }
+                  ],
+                  "description": [
+                    {
+                      "language": "en",
+                      "text": "Max runtime as the AGV is operated in the current environment"
+                    },
+                    {
+                      "language": "de",
+                      "text": "Maximale Laufzeit des AGV wie aktuell im Gesamtsystem implementiert"
+                    }
+                  ],
+                  "displayName": [
+                    {
+                      "language": "en",
+                      "text": "Run time (max.)"
+                    },
+                    {
+                      "language": "de",
+                      "text": "Laufzeit (max.)"
+                    }
+                  ],
+                  "idShort": "MaxRunTimeAsOperated"
+                },
+                {
+                  "modelType": "Property",
+                  "semanticId": {
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/idta/technicaldataagv/speedmin/1/0"
+                      }
+                    ],
+                    "type": "ExternalReference"
+                  },
+                  "valueType": "xs:float",
+                  "qualifiers": [
+                    {
+                      "semanticId": {
+                        "keys": [
+                          {
+                            "type": "GlobalReference",
+                            "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                          }
+                        ],
+                        "type": "ExternalReference"
+                      },
+                      "kind": "TemplateQualifier",
+                      "type": "SMT/Cardinality",
+                      "value": "ZeroToOne",
+                      "valueType": "xs:string"
+                    }
+                  ],
+                  "description": [
+                    {
+                      "language": "en",
+                      "text": "Minimum controlled continuous speed"
+                    }
+                  ],
+                  "displayName": [
+                    {
+                      "language": "en",
+                      "text": "Speed (min.)"
+                    },
+                    {
+                      "language": "de",
+                      "text": "Geschwindigkeit (min.)"
+                    }
+                  ],
+                  "idShort": "SpeedMin"
+                },
+                {
+                  "modelType": "Property",
+                  "semanticId": {
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/idta/technicaldataagv/speedmaxempty/1/0"
+                      }
+                    ],
+                    "type": "ExternalReference"
+                  },
+                  "valueType": "xs:float",
+                  "qualifiers": [
+                    {
+                      "semanticId": {
+                        "keys": [
+                          {
+                            "type": "GlobalReference",
+                            "value": "0112/2///61360_4#AAF575"
+                          }
+                        ],
+                        "type": "ExternalReference"
+                      },
+                      "kind": "ConceptQualifier",
+                      "type": "LifeCycleQual",
+                      "value": "SPEC",
+                      "valueId": {
+                        "keys": [
+                          {
+                            "type": "GlobalReference",
+                            "value": "0112/2///61360_4#AAF573"
+                          }
+                        ],
+                        "type": "ExternalReference"
+                      },
+                      "valueType": "xs:string"
+                    },
+                    {
+                      "semanticId": {
+                        "keys": [
+                          {
+                            "type": "GlobalReference",
+                            "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                          }
+                        ],
+                        "type": "ExternalReference"
+                      },
+                      "kind": "TemplateQualifier",
+                      "type": "SMT/Cardinality",
+                      "value": "ZeroToOne",
+                      "valueType": "xs:string"
+                    }
+                  ],
+                  "description": [
+                    {
+                      "language": "en",
+                      "text": "Maximum speed without load as specified by the manufacturer"
+                    },
+                    {
+                      "language": "de",
+                      "text": "Maximale Geschwindigkeit ohne Beladung wie durch den Hersteller spezifiziert"
+                    }
+                  ],
+                  "displayName": [
+                    {
+                      "language": "en",
+                      "text": "Speed without load (max.)"
+                    },
+                    {
+                      "language": "de",
+                      "text": "Geschwindigkeit ohne Ladung (max.)"
+                    }
+                  ],
+                  "idShort": "SpeedMaxEmptyAsSpecified"
+                },
+                {
+                  "modelType": "Property",
+                  "semanticId": {
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/idta/technicaldataagv/speedmaxempty/1/0"
+                      }
+                    ],
+                    "type": "ExternalReference"
+                  },
+                  "valueType": "xs:float",
+                  "qualifiers": [
+                    {
+                      "semanticId": {
+                        "keys": [
+                          {
+                            "type": "GlobalReference",
+                            "value": "0112/2///61360_4#AAF575"
+                          }
+                        ],
+                        "type": "ExternalReference"
+                      },
+                      "kind": "ConceptQualifier",
+                      "type": "LifeCycleQual",
+                      "value": "OP",
+                      "valueId": {
+                        "keys": [
+                          {
+                            "type": "GlobalReference",
+                            "value": "0112/2///61360_4#AAF578"
+                          }
+                        ],
+                        "type": "ExternalReference"
+                      },
+                      "valueType": "xs:string"
+                    },
+                    {
+                      "semanticId": {
+                        "keys": [
+                          {
+                            "type": "GlobalReference",
+                            "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                          }
+                        ],
+                        "type": "ExternalReference"
+                      },
+                      "kind": "TemplateQualifier",
+                      "type": "SMT/Cardinality",
+                      "value": "ZeroToOne",
+                      "valueType": "xs:string"
+                    }
+                  ],
+                  "description": [
+                    {
+                      "language": "en",
+                      "text": "Maximum speed without load as in the current system operated"
+                    },
+                    {
+                      "language": "de",
+                      "text": "Maximale Geschwindigkeit ohne Beladung wie im aktuellen System betrieben"
+                    }
+                  ],
+                  "idShort": "SpeedMaxEmptyAsOperated"
+                },
+                {
+                  "modelType": "Property",
+                  "semanticId": {
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/idta/technicaldataagv/speedmaxwithmaxload/1/0"
+                      }
+                    ],
+                    "type": "ExternalReference"
+                  },
+                  "valueType": "xs:float",
+                  "qualifiers": [
+                    {
+                      "semanticId": {
+                        "keys": [
+                          {
+                            "type": "GlobalReference",
+                            "value": "0112/2///61360_4#AAF575"
+                          }
+                        ],
+                        "type": "ExternalReference"
+                      },
+                      "kind": "ConceptQualifier",
+                      "type": "LifeCycleQual",
+                      "value": "SPEC",
+                      "valueId": {
+                        "keys": [
+                          {
+                            "type": "GlobalReference",
+                            "value": "0112/2///61360_4#AAF579"
+                          }
+                        ],
+                        "type": "ExternalReference"
+                      },
+                      "valueType": "xs:string"
+                    },
+                    {
+                      "semanticId": {
+                        "keys": [
+                          {
+                            "type": "GlobalReference",
+                            "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                          }
+                        ],
+                        "type": "ExternalReference"
+                      },
+                      "kind": "TemplateQualifier",
+                      "type": "SMT/Cardinality",
+                      "value": "ZeroToOne",
+                      "valueType": "xs:string"
+                    }
+                  ],
+                  "description": [
+                    {
+                      "language": "en",
+                      "text": "Maximum speed with maximal load as specified by the manufacturer"
+                    },
+                    {
+                      "language": "de",
+                      "text": "Maximale Geschwindigkeit bei maximal zulässiger Beladung wie durch den Hersteller vorgegeben"
+                    }
+                  ],
+                  "displayName": [
+                    {
+                      "language": "en",
+                      "text": "Speed with maximum load (max.)"
+                    },
+                    {
+                      "language": "de",
+                      "text": "Geschwindigkeit mit maximaler Ladung (max.)"
+                    }
+                  ],
+                  "idShort": "SpeedMaxWithMaxLoadAsSpecified"
+                },
+                {
+                  "modelType": "Property",
+                  "semanticId": {
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/idta/technicaldataagv/speedmaxwithmaxload/1/0"
+                      }
+                    ],
+                    "type": "ExternalReference"
+                  },
+                  "valueType": "xs:float",
+                  "qualifiers": [
+                    {
+                      "semanticId": {
+                        "keys": [
+                          {
+                            "type": "GlobalReference",
+                            "value": "0112/2///61360_4#AAF575"
+                          }
+                        ],
+                        "type": "ExternalReference"
+                      },
+                      "kind": "ConceptQualifier",
+                      "type": "LifeCycleQual",
+                      "value": "OP",
+                      "valueId": {
+                        "keys": [
+                          {
+                            "type": "GlobalReference",
+                            "value": "0112/2///61360_4#AAF579"
+                          }
+                        ],
+                        "type": "ExternalReference"
+                      },
+                      "valueType": "xs:string"
+                    },
+                    {
+                      "semanticId": {
+                        "keys": [
+                          {
+                            "type": "GlobalReference",
+                            "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                          }
+                        ],
+                        "type": "ExternalReference"
+                      },
+                      "kind": "TemplateQualifier",
+                      "type": "SMT/Cardinality",
+                      "value": "ZeroToOne",
+                      "valueType": "xs:string"
+                    }
+                  ],
+                  "description": [
+                    {
+                      "language": "en",
+                      "text": "Maximum speed with maximal load as operated in the current system"
+                    },
+                    {
+                      "language": "de",
+                      "text": "Maximale Geschwindigkeit bei maximal zulässiger Beladung wie im aktuellen System betrieben"
+                    }
+                  ],
+                  "displayName": [
+                    {
+                      "language": "en",
+                      "text": "Speed with maximum load (max.)"
+                    },
+                    {
+                      "language": "de",
+                      "text": "Geschwindigkeit mit maximaler Ladung (max.)"
+                    }
+                  ],
+                  "idShort": "SpeedMaxWithMaxLoadAsOperated"
+                },
+                {
+                  "modelType": "Property",
+                  "semanticId": {
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "0173-1#02-ABG746#002"
+                      }
+                    ],
+                    "type": "ExternalReference"
+                  },
+                  "valueType": "xs:float",
+                  "qualifiers": [
+                    {
+                      "semanticId": {
+                        "keys": [
+                          {
+                            "type": "GlobalReference",
+                            "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                          }
+                        ],
+                        "type": "ExternalReference"
+                      },
+                      "kind": "TemplateQualifier",
+                      "type": "SMT/Cardinality",
+                      "value": "ZeroToOne",
+                      "valueType": "xs:string"
+                    }
+                  ],
+                  "description": [
+                    {
+                      "language": "en",
+                      "text": "Maximum acceleration of the AGV with maximum load"
+                    },
+                    {
+                      "language": "de",
+                      "text": "Maximale Beschleunigung des AGV mit maximaler Last"
+                    }
+                  ],
+                  "displayName": [
+                    {
+                      "language": "en",
+                      "text": "Acceleration (max.)"
+                    },
+                    {
+                      "language": "de",
+                      "text": "Beschleuniging (max.)"
+                    }
+                  ],
+                  "idShort": "AccelerationMax"
+                },
+                {
+                  "modelType": "Property",
+                  "semanticId": {
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/idta/technicaldataagv/decelerationmax/1/0"
+                      }
+                    ],
+                    "type": "ExternalReference"
+                  },
+                  "valueType": "xs:float",
+                  "qualifiers": [
+                    {
+                      "semanticId": {
+                        "keys": [
+                          {
+                            "type": "GlobalReference",
+                            "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                          }
+                        ],
+                        "type": "ExternalReference"
+                      },
+                      "kind": "TemplateQualifier",
+                      "type": "SMT/Cardinality",
+                      "value": "ZeroToOne",
+                      "valueType": "xs:string"
+                    }
+                  ],
+                  "description": [
+                    {
+                      "language": "en",
+                      "text": "Maximum deceleration of the AGV with maximum load"
+                    },
+                    {
+                      "language": "de",
+                      "text": "Maximale Verzögerung des AGV mit maximaler Last"
+                    }
+                  ],
+                  "displayName": [
+                    {
+                      "language": "en",
+                      "text": "Maximum deceleration"
+                    },
+                    {
+                      "language": "de",
+                      "text": "Maximale Verzögerung"
+                    }
+                  ],
+                  "idShort": "DecelerationMax"
+                },
+                {
+                  "modelType": "Property",
+                  "semanticId": {
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "0173-1#02-BAE355#006"
+                      }
+                    ],
+                    "type": "ExternalReference"
+                  },
+                  "valueType": "xs:float",
+                  "qualifiers": [
+                    {
+                      "semanticId": {
+                        "keys": [
+                          {
+                            "type": "GlobalReference",
+                            "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                          }
+                        ],
+                        "type": "ExternalReference"
+                      },
+                      "kind": "TemplateQualifier",
+                      "type": "SMT/Cardinality",
+                      "value": "ZeroToOne",
+                      "valueType": "xs:string"
+                    }
+                  ],
+                  "description": [
+                    {
+                      "language": "en",
+                      "text": "Maximum height of the AGV without attachments"
+                    },
+                    {
+                      "language": "de",
+                      "text": "Maximale Höhe des AGV ohne Anbauten"
+                    }
+                  ],
+                  "displayName": [
+                    {
+                      "language": "en",
+                      "text": "Vehicle height (max.)"
+                    },
+                    {
+                      "language": "de",
+                      "text": "Fahrzeughöhe (max.)"
+                    }
+                  ],
+                  "idShort": "VehicleHeightMax"
+                },
+                {
+                  "modelType": "Property",
+                  "semanticId": {
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "0173-1#02-AAG933#004"
+                      }
+                    ],
+                    "type": "ExternalReference"
+                  },
+                  "valueType": "xs:string",
+                  "qualifiers": [
+                    {
+                      "semanticId": {
+                        "keys": [
+                          {
+                            "type": "GlobalReference",
+                            "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                          }
+                        ],
+                        "type": "ExternalReference"
+                      },
+                      "kind": "TemplateQualifier",
+                      "type": "SMT/Cardinality",
+                      "value": "ZeroToOne",
+                      "valueType": "xs:string"
+                    }
+                  ],
+                  "description": [
+                    {
+                      "language": "en",
+                      "text": "Maximum vehicle width"
+                    },
+                    {
+                      "language": "de",
+                      "text": "Maximale Fahrzeugbreite"
+                    }
+                  ],
+                  "displayName": [
+                    {
+                      "language": "en",
+                      "text": "Vehicle width (max.)"
+                    },
+                    {
+                      "language": "de",
+                      "text": "Fahrzeugbreite (max.)"
+                    }
+                  ],
+                  "idShort": "VehicleWidth"
+                },
+                {
+                  "modelType": "Property",
+                  "semanticId": {
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "0173-1#02-ABE774#002"
+                      }
+                    ],
+                    "type": "ExternalReference"
+                  },
+                  "valueType": "xs:string",
+                  "qualifiers": [
+                    {
+                      "semanticId": {
+                        "keys": [
+                          {
+                            "type": "GlobalReference",
+                            "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                          }
+                        ],
+                        "type": "ExternalReference"
+                      },
+                      "kind": "TemplateQualifier",
+                      "type": "SMT/Cardinality",
+                      "value": "ZeroToOne",
+                      "valueType": "xs:string"
+                    }
+                  ],
+                  "description": [
+                    {
+                      "language": "en",
+                      "text": "Maximum lengths of the AGV including outstanding components"
+                    },
+                    {
+                      "language": "de",
+                      "text": "Maximale Länge des AGV einschließlich überstehender Komponenten"
+                    }
+                  ],
+                  "displayName": [
+                    {
+                      "language": "en",
+                      "text": "Vehicle length (max.)"
+                    },
+                    {
+                      "language": "de",
+                      "text": "Fahrzeuglänge (max.)"
+                    }
+                  ],
+                  "idShort": "VehicleLength"
+                },
+                {
+                  "modelType": "Property",
+                  "semanticId": {
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "0173-1#02-ABD800#002"
+                      }
+                    ],
+                    "type": "ExternalReference"
+                  },
+                  "valueType": "xs:string",
+                  "qualifiers": [
+                    {
+                      "semanticId": {
+                        "keys": [
+                          {
+                            "type": "GlobalReference",
+                            "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                          }
+                        ],
+                        "type": "ExternalReference"
+                      },
+                      "kind": "TemplateQualifier",
+                      "type": "SMT/Cardinality",
+                      "value": "ZeroToOne",
+                      "valueType": "xs:string"
+                    }
+                  ],
+                  "description": [
+                    {
+                      "language": "en",
+                      "text": "Maximum weight of the AGV without necessary weights"
+                    },
+                    {
+                      "language": "de",
+                      "text": "Maximales Gewicht des AGV ohne Gegengewichte"
+                    }
+                  ],
+                  "displayName": [
+                    {
+                      "language": "en",
+                      "text": "Vehicle weight (max.)"
+                    },
+                    {
+                      "language": "de",
+                      "text": "Fahrzeuggewicht (max.)"
+                    }
+                  ],
+                  "idShort": "VehicleWeight"
+                },
+                {
+                  "modelType": "MultiLanguageProperty",
+                  "semanticId": {
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/idta/technicaldataagv/emissions/1/0"
+                      }
+                    ],
+                    "type": "ExternalReference"
+                  },
+                  "qualifiers": [
+                    {
+                      "semanticId": {
+                        "keys": [
+                          {
+                            "type": "GlobalReference",
+                            "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                          }
+                        ],
+                        "type": "ExternalReference"
+                      },
+                      "kind": "TemplateQualifier",
+                      "type": "SMT/Cardinality",
+                      "value": "ZeroToOne",
+                      "valueType": "xs:string"
+                    }
+                  ],
+                  "description": [
+                    {
+                      "language": "en",
+                      "text": "Description of emissions of the AGV during operation, e.g. noise or exhaust"
+                    }
+                  ],
+                  "displayName": [
+                    {
+                      "language": "en",
+                      "text": "emissions"
+                    },
+                    {
+                      "language": "de",
+                      "text": "Emissionen"
+                    }
+                  ],
+                  "idShort": "Emissions"
+                },
+                {
+                  "modelType": "MultiLanguageProperty",
+                  "semanticId": {
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/idta/technicaldataagv/mapprocessinginformation/1/0"
+                      }
+                    ],
+                    "type": "ExternalReference"
+                  },
+                  "qualifiers": [
+                    {
+                      "semanticId": {
+                        "keys": [
+                          {
+                            "type": "GlobalReference",
+                            "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                          }
+                        ],
+                        "type": "ExternalReference"
+                      },
+                      "kind": "TemplateQualifier",
+                      "type": "SMT/Cardinality",
+                      "value": "ZeroToOne",
+                      "valueType": "xs:string"
+                    }
+                  ],
+                  "description": [
+                    {
+                      "language": "en",
+                      "text": "Information about how the digital map is generated and processed by the AGV"
+                    }
+                  ],
+                  "displayName": [
+                    {
+                      "language": "en",
+                      "text": "Map processing information"
+                    },
+                    {
+                      "language": "de",
+                      "text": "Informationen zur Kartenverarbeitung"
+                    }
+                  ],
+                  "idShort": "MapProcessingInformation"
+                },
+                {
+                  "modelType": "MultiLanguageProperty",
+                  "semanticId": {
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/idta/technicaldataagv/manualcontrollerinformation/1/0"
+                      }
+                    ],
+                    "type": "ExternalReference"
+                  },
+                  "qualifiers": [
+                    {
+                      "semanticId": {
+                        "keys": [
+                          {
+                            "type": "GlobalReference",
+                            "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                          }
+                        ],
+                        "type": "ExternalReference"
+                      },
+                      "kind": "TemplateQualifier",
+                      "type": "SMT/Cardinality",
+                      "value": "ZeroToOne",
+                      "valueType": "xs:string"
+                    }
+                  ],
+                  "description": [
+                    {
+                      "language": "en",
+                      "text": "Information about the manual controllers of the AGV"
+                    }
+                  ],
+                  "displayName": [
+                    {
+                      "language": "en",
+                      "text": "Manual controller information"
+                    },
+                    {
+                      "language": "de",
+                      "text": "Informationen zur manuellen Steuerung"
+                    }
+                  ],
+                  "idShort": "ManualControllerInformation"
+                },
+                {
+                  "modelType": "MultiLanguageProperty",
+                  "semanticId": {
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/idta/technicaldataagv/digitalanaloginterfaces/1/0"
+                      }
+                    ],
+                    "type": "ExternalReference"
+                  },
+                  "qualifiers": [
+                    {
+                      "semanticId": {
+                        "keys": [
+                          {
+                            "type": "GlobalReference",
+                            "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                          }
+                        ],
+                        "type": "ExternalReference"
+                      },
+                      "kind": "TemplateQualifier",
+                      "type": "SMT/Cardinality",
+                      "value": "ZeroToOne",
+                      "valueType": "xs:string"
+                    }
+                  ],
+                  "description": [
+                    {
+                      "language": "en",
+                      "text": "Information about digital and analog interfaces of the AGV"
+                    }
+                  ],
+                  "displayName": [
+                    {
+                      "language": "en",
+                      "text": "Digital and analog interfaces"
+                    },
+                    {
+                      "language": "de",
+                      "text": "Digitale und analoge Schnittstellen"
+                    }
+                  ],
+                  "idShort": "DigitalAnalogInterfaces"
+                }
+              ]
+            },
+            {
+              "modelType": "SubmodelElementCollection",
+              "semanticId": {
+                "keys": [
+                  {
+                    "type": "GlobalReference",
+                    "value": "https://admin-shell.io/idta/technicaldataagv/vda5050factsheet/1/0"
+                  }
+                ],
+                "type": "ExternalReference"
+              },
+              "qualifiers": [
+                {
+                  "semanticId": {
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                      }
+                    ],
+                    "type": "ExternalReference"
+                  },
+                  "kind": "TemplateQualifier",
+                  "type": "SMT/Cardinality",
+                  "value": "ZeroToOne",
+                  "valueType": "xs:string"
+                }
+              ],
+              "description": [
+                {
+                  "language": "en",
+                  "text": "Factsheet data according VDA 5050 MQTT communication protocol"
+                }
+              ],
+              "idShort": "VDA5050Factsheet",
+              "value": [
+                {
+                  "modelType": "Blob",
+                  "contentType": "application/json",
+                  "semanticId": {
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/idta/technicaldataagv/typespecification/1/0"
+                      }
+                    ],
+                    "type": "ExternalReference"
+                  },
+                  "qualifiers": [
+                    {
+                      "semanticId": {
+                        "keys": [
+                          {
+                            "type": "GlobalReference",
+                            "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                          }
+                        ],
+                        "type": "ExternalReference"
+                      },
+                      "kind": "TemplateQualifier",
+                      "type": "SMT/Cardinality",
+                      "value": "ZeroToOne",
+                      "valueType": "xs:string"
+                    }
+                  ],
+                  "description": [
+                    {
+                      "language": "en",
+                      "text": "JSON-object \"typeSpecification\" according VDA5050 Factsheet, Version 2.0.0, January 2022 "
+                    },
+                    {
+                      "language": "de",
+                      "text": "JSON-Objekt \"typeSpecification\" entsprechend VDA5050 Factsheet, Version 2.0.0, January 2022 "
+                    }
+                  ],
+                  "displayName": [
+                    {
+                      "language": "en",
+                      "text": "typeSpecification (JSON-object)"
+                    },
+                    {
+                      "language": "de",
+                      "text": "typeSpecification (JSON-Objekt)"
+                    }
+                  ],
+                  "idShort": "TypeSpecification"
+                },
+                {
+                  "modelType": "Blob",
+                  "contentType": "application/json",
+                  "semanticId": {
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/idta/technicaldataagv/pysicalparameters/1/0"
+                      }
+                    ],
+                    "type": "ExternalReference"
+                  },
+                  "qualifiers": [
+                    {
+                      "semanticId": {
+                        "keys": [
+                          {
+                            "type": "GlobalReference",
+                            "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                          }
+                        ],
+                        "type": "ExternalReference"
+                      },
+                      "kind": "TemplateQualifier",
+                      "type": "SMT/Cardinality",
+                      "value": "ZeroToOne",
+                      "valueType": "xs:string"
+                    }
+                  ],
+                  "description": [
+                    {
+                      "language": "en",
+                      "text": "JSON-object \"physicalParameters\" according VDA5050 Factsheet, Version 2.0.0, January 2022 "
+                    },
+                    {
+                      "language": "de",
+                      "text": "JSON-Objekt \"physicalParameters\" entsprechend VDA5050 Factsheet, Version 2.0.0, January 2022 "
+                    }
+                  ],
+                  "displayName": [
+                    {
+                      "language": "en",
+                      "text": "physicalParameters (JSON-object)"
+                    },
+                    {
+                      "language": "de",
+                      "text": "physicalParameters (JSON-Objekt)"
+                    }
+                  ],
+                  "idShort": "PhysicalParameters"
+                },
+                {
+                  "modelType": "Blob",
+                  "contentType": "application/json",
+                  "semanticId": {
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/idta/technicaldataagv/protocollimits/1/0"
+                      }
+                    ],
+                    "type": "ExternalReference"
+                  },
+                  "qualifiers": [
+                    {
+                      "semanticId": {
+                        "keys": [
+                          {
+                            "type": "GlobalReference",
+                            "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                          }
+                        ],
+                        "type": "ExternalReference"
+                      },
+                      "kind": "TemplateQualifier",
+                      "type": "SMT/Cardinality",
+                      "value": "ZeroToOne",
+                      "valueType": "xs:string"
+                    }
+                  ],
+                  "description": [
+                    {
+                      "language": "en",
+                      "text": "JSON-object \"protocolLimits\" according VDA5050 Factsheet, Version 2.0.0, January 2022 "
+                    },
+                    {
+                      "language": "de",
+                      "text": "JSON-Objekt \"protocolLimits\" entsprechend VDA5050 Factsheet, Version 2.0.0, January 2022 "
+                    }
+                  ],
+                  "displayName": [
+                    {
+                      "language": "en",
+                      "text": "protocolLimits (JSON-object)"
+                    },
+                    {
+                      "language": "de",
+                      "text": "protocolLimits (JSON-Objekt)"
+                    }
+                  ],
+                  "idShort": "ProtocolLimits"
+                },
+                {
+                  "modelType": "Blob",
+                  "contentType": "application/json",
+                  "semanticId": {
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/idta/technicaldataagv/protocolfeatures/1/0"
+                      }
+                    ],
+                    "type": "ExternalReference"
+                  },
+                  "qualifiers": [
+                    {
+                      "semanticId": {
+                        "keys": [
+                          {
+                            "type": "GlobalReference",
+                            "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                          }
+                        ],
+                        "type": "ExternalReference"
+                      },
+                      "kind": "TemplateQualifier",
+                      "type": "SMT/Cardinality",
+                      "value": "ZeroToOne",
+                      "valueType": "xs:string"
+                    }
+                  ],
+                  "description": [
+                    {
+                      "language": "en",
+                      "text": "JSON-object \"protocolFeatures\" according VDA5050 Factsheet, Version 2.0.0, January 2022 "
+                    },
+                    {
+                      "language": "de",
+                      "text": "JSON-Objekt \"protocolFeatures\" entsprechend VDA5050 Factsheet, Version 2.0.0, January 2022 "
+                    }
+                  ],
+                  "displayName": [
+                    {
+                      "language": "en",
+                      "text": "protocolFeatures (JSON-object)"
+                    },
+                    {
+                      "language": "de",
+                      "text": "protocolFeatures (JSON-Objekt)"
+                    }
+                  ],
+                  "idShort": "ProtocolFeatures"
+                },
+                {
+                  "modelType": "Blob",
+                  "contentType": "application/json",
+                  "semanticId": {
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/idta/technicaldataagv/agvgeometry/1/0"
+                      }
+                    ],
+                    "type": "ExternalReference"
+                  },
+                  "qualifiers": [
+                    {
+                      "semanticId": {
+                        "keys": [
+                          {
+                            "type": "GlobalReference",
+                            "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                          }
+                        ],
+                        "type": "ExternalReference"
+                      },
+                      "kind": "TemplateQualifier",
+                      "type": "SMT/Cardinality",
+                      "value": "ZeroToOne",
+                      "valueType": "xs:string"
+                    }
+                  ],
+                  "description": [
+                    {
+                      "language": "en",
+                      "text": "JSON-object \"agvGeometry\" according VDA5050 Factsheet, Version 2.0.0, January 2022 "
+                    },
+                    {
+                      "language": "de",
+                      "text": "JSON-Objekt \"agvGeometry\" entsprechend VDA5050 Factsheet, Version 2.0.0, January 2022 "
+                    }
+                  ],
+                  "displayName": [
+                    {
+                      "language": "en",
+                      "text": "agvGeometry (JSON-object)"
+                    },
+                    {
+                      "language": "de",
+                      "text": "agvGeometry (JSON-Objekt)"
+                    }
+                  ],
+                  "idShort": "AgvGeometry"
+                },
+                {
+                  "modelType": "Blob",
+                  "contentType": "application/json",
+                  "semanticId": {
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/idta/technicaldataagv/loadspecification/1/0"
+                      }
+                    ],
+                    "type": "ExternalReference"
+                  },
+                  "qualifiers": [
+                    {
+                      "semanticId": {
+                        "keys": [
+                          {
+                            "type": "GlobalReference",
+                            "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                          }
+                        ],
+                        "type": "ExternalReference"
+                      },
+                      "kind": "TemplateQualifier",
+                      "type": "SMT/Cardinality",
+                      "value": "ZeroToOne",
+                      "valueType": "xs:string"
+                    }
+                  ],
+                  "description": [
+                    {
+                      "language": "en",
+                      "text": "JSON-object \"loadSpecification\" according VDA5050 Factsheet, Version 2.0.0, January 2022 "
+                    },
+                    {
+                      "language": "de",
+                      "text": "JSON-Objekt \"loadSpecification\" entsprechend VDA5050 Factsheet, Version 2.0.0, January 2022 "
+                    }
+                  ],
+                  "displayName": [
+                    {
+                      "language": "en",
+                      "text": "loadSpecification (JSON-object)"
+                    },
+                    {
+                      "language": "de",
+                      "text": "loadSpecification (JSON-Objekt)"
+                    }
+                  ],
+                  "idShort": "LoadSpecification"
+                },
+                {
+                  "modelType": "Blob",
+                  "contentType": "application/json",
+                  "semanticId": {
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/idta/technicaldataagv/localizationparameters/1/0"
+                      }
+                    ],
+                    "type": "ExternalReference"
+                  },
+                  "qualifiers": [
+                    {
+                      "semanticId": {
+                        "keys": [
+                          {
+                            "type": "GlobalReference",
+                            "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                          }
+                        ],
+                        "type": "ExternalReference"
+                      },
+                      "kind": "TemplateQualifier",
+                      "type": "SMT/Cardinality",
+                      "value": "ZeroToOne",
+                      "valueType": "xs:string"
+                    }
+                  ],
+                  "description": [
+                    {
+                      "language": "en",
+                      "text": "JSON-object \"localizationParameters\" according VDA5050 Factsheet, Version 2.0.0, January 2022 "
+                    },
+                    {
+                      "language": "de",
+                      "text": "JSON-Objekt \"localizationParameters\" entsprechend VDA5050 Factsheet, Version 2.0.0, January 2022 "
+                    }
+                  ],
+                  "displayName": [
+                    {
+                      "language": "en",
+                      "text": "localizationParameters (JSON-object)"
+                    },
+                    {
+                      "language": "de",
+                      "text": "localizationParameters (JSON-Objekt)"
+                    }
+                  ],
+                  "idShort": "LocalizationParameters"
+                }
+              ]
+            },
+            {
+              "modelType": "SubmodelElementCollection",
+              "semanticId": {
+                "keys": [
+                  {
+                    "type": "GlobalReference",
+                    "value": "https://admin-shell.io/idta/technicaldataagv/energy/1/0"
+                  }
+                ],
+                "type": "ExternalReference"
+              },
+              "qualifiers": [
+                {
+                  "semanticId": {
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                      }
+                    ],
+                    "type": "ExternalReference"
+                  },
+                  "kind": "TemplateQualifier",
+                  "type": "SMT/Cardinality",
+                  "value": "ZeroToOne",
+                  "valueType": "xs:string"
+                }
+              ],
+              "description": [
+                {
+                  "language": "en",
+                  "text": "Technical properties related to the energy supply of the AGV"
+                }
+              ],
+              "idShort": "Energy",
+              "value": [
+                {
+                  "modelType": "Property",
+                  "semanticId": {
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/idta/technicaldataagv/energysource/1/0"
+                      }
+                    ],
+                    "type": "ExternalReference"
+                  },
+                  "valueType": "xs:string",
+                  "qualifiers": [
+                    {
+                      "semanticId": {
+                        "keys": [
+                          {
+                            "type": "GlobalReference",
+                            "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                          }
+                        ],
+                        "type": "ExternalReference"
+                      },
+                      "kind": "TemplateQualifier",
+                      "type": "SMT/Cardinality",
+                      "value": "ZeroToOne",
+                      "valueType": "xs:string"
+                    }
+                  ],
+                  "description": [
+                    {
+                      "language": "en",
+                      "text": "Type of auxiliary energy the AGV is consuming, the enumeration \"POWER\", \"DIESEL\", \"GAS\", \"HYDROGEN\", \"HYBRID\", \"SOLAR\", \"OTHER\" can be used"
+                    }
+                  ],
+                  "displayName": [
+                    {
+                      "language": "en",
+                      "text": "Energy source"
+                    },
+                    {
+                      "language": "de",
+                      "text": "Energiequelle"
+                    }
+                  ],
+                  "idShort": "EnergySource"
+                },
+                {
+                  "modelType": "Property",
+                  "semanticId": {
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/idta/technicaldataagv/energyabsorption/1/0"
+                      }
+                    ],
+                    "type": "ExternalReference"
+                  },
+                  "valueType": "xs:string",
+                  "qualifiers": [
+                    {
+                      "semanticId": {
+                        "keys": [
+                          {
+                            "type": "GlobalReference",
+                            "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                          }
+                        ],
+                        "type": "ExternalReference"
+                      },
+                      "kind": "TemplateQualifier",
+                      "type": "SMT/Cardinality",
+                      "value": "ZeroToOne",
+                      "valueType": "xs:string"
+                    }
+                  ],
+                  "description": [
+                    {
+                      "language": "en",
+                      "text": "Way to absorb auxiliary energy. The enumeration \"INDUCTION\", \"CONDUCTORRAIL\", \"FLEXIBLECABLE\", \"CHARGINGCABLE\", \"FILLER\", \"OTHER\" can be used"
+                    }
+                  ],
+                  "displayName": [
+                    {
+                      "language": "en",
+                      "text": "Energy absorption"
+                    },
+                    {
+                      "language": "de",
+                      "text": "Energieaufnahme"
+                    }
+                  ],
+                  "idShort": "EnergyAbsorption"
+                },
+                {
+                  "modelType": "Property",
+                  "semanticId": {
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/idta/technicaldataagv/energystorage/1/0"
+                      }
+                    ],
+                    "type": "ExternalReference"
+                  },
+                  "valueType": "xs:string",
+                  "qualifiers": [
+                    {
+                      "semanticId": {
+                        "keys": [
+                          {
+                            "type": "GlobalReference",
+                            "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                          }
+                        ],
+                        "type": "ExternalReference"
+                      },
+                      "kind": "TemplateQualifier",
+                      "type": "SMT/Cardinality",
+                      "value": "ZeroToOne",
+                      "valueType": "xs:string"
+                    }
+                  ],
+                  "description": [
+                    {
+                      "language": "en",
+                      "text": "Type of storage the AGV is using. The enumeration \"BATTERY\", \"TANK\", \"CARTRIDGE\", \"CAPACITOR\", \"OTHER\" can be used."
+                    }
+                  ],
+                  "displayName": [
+                    {
+                      "language": "en",
+                      "text": "Energy storage"
+                    },
+                    {
+                      "language": "de",
+                      "text": "Energiespeicher"
+                    }
+                  ],
+                  "idShort": "EnergyStorage"
+                },
+                {
+                  "modelType": "SubmodelElementCollection",
+                  "semanticId": {
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/idta/technicaldataagv/battery/1/0"
+                      }
+                    ],
+                    "type": "ExternalReference"
+                  },
+                  "description": [
+                    {
+                      "language": "en",
+                      "text": "Information about the battery of the AGV"
+                    }
+                  ],
+                  "idShort": "Battery",
+                  "value": [
+                    {
+                      "modelType": "MultiLanguageProperty",
+                      "semanticId": {
+                        "keys": [
+                          {
+                            "type": "GlobalReference",
+                            "value": "https://admin-shell.io/idta/technicaldataagv/chargingdevicerequirements/1/0"
+                          }
+                        ],
+                        "type": "ExternalReference"
+                      },
+                      "qualifiers": [
+                        {
+                          "semanticId": {
+                            "keys": [
+                              {
+                                "type": "GlobalReference",
+                                "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                              }
+                            ],
+                            "type": "ExternalReference"
+                          },
+                          "kind": "TemplateQualifier",
+                          "type": "SMT/Cardinality",
+                          "value": "ZeroToOne",
+                          "valueType": "xs:string"
+                        }
+                      ],
+                      "description": [
+                        {
+                          "language": "en",
+                          "text": "Requirements of the AGV for the charging station and infrastructure, e.g., voltage range or max. current"
+                        }
+                      ],
+                      "displayName": [
+                        {
+                          "language": "en",
+                          "text": "Charging device requirements"
+                        },
+                        {
+                          "language": "de",
+                          "text": "Anforderungen an die Ladestation"
+                        }
+                      ],
+                      "idShort": "ChargingDeviceRequirements"
+                    },
+                    {
+                      "modelType": "MultiLanguageProperty",
+                      "semanticId": {
+                        "keys": [
+                          {
+                            "type": "GlobalReference",
+                            "value": "https://admin-shell.io/idta/technicaldataagv/batteryinformation/1/0"
+                          }
+                        ],
+                        "type": "ExternalReference"
+                      },
+                      "qualifiers": [
+                        {
+                          "semanticId": {
+                            "keys": [
+                              {
+                                "type": "GlobalReference",
+                                "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                              }
+                            ],
+                            "type": "ExternalReference"
+                          },
+                          "kind": "TemplateQualifier",
+                          "type": "SMT/Cardinality",
+                          "value": "ZeroToOne",
+                          "valueType": "xs:string"
+                        }
+                      ],
+                      "description": [
+                        {
+                          "language": "en",
+                          "text": "Information about the used battery of the AGV, for example type of battery (e.g., NiCd), capacity and max. charge cycles"
+                        }
+                      ],
+                      "displayName": [
+                        {
+                          "language": "en",
+                          "text": "Battery information"
+                        },
+                        {
+                          "language": "de",
+                          "text": "Informationen zur Batterie"
+                        }
+                      ],
+                      "idShort": "BatteryInformation"
+                    },
+                    {
+                      "modelType": "Property",
+                      "semanticId": {
+                        "keys": [
+                          {
+                            "type": "GlobalReference",
+                            "value": "0173-1#02-AAF391#006"
+                          }
+                        ],
+                        "type": "ExternalReference"
+                      },
+                      "valueType": "xs:float",
+                      "qualifiers": [
+                        {
+                          "semanticId": {
+                            "keys": [
+                              {
+                                "type": "GlobalReference",
+                                "value": "0112/2///61360_4#AAF575"
+                              }
+                            ],
+                            "type": "ExternalReference"
+                          },
+                          "kind": "ConceptQualifier",
+                          "type": "LifeCycleQual",
+                          "value": "SPEC",
+                          "valueId": {
+                            "keys": [
+                              {
+                                "type": "GlobalReference",
+                                "value": "0112/2///61360_4#AAF579"
+                              }
+                            ],
+                            "type": "ExternalReference"
+                          },
+                          "valueType": "xs:string"
+                        },
+                        {
+                          "semanticId": {
+                            "keys": [
+                              {
+                                "type": "GlobalReference",
+                                "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                              }
+                            ],
+                            "type": "ExternalReference"
+                          },
+                          "kind": "TemplateQualifier",
+                          "type": "SMT/Cardinality",
+                          "value": "ZeroToOne",
+                          "valueType": "xs:string"
+                        }
+                      ],
+                      "description": [
+                        {
+                          "language": "en",
+                          "text": "Charging time of the AGV from empty to full capacity as specified by the manufacturer"
+                        },
+                        {
+                          "language": "de",
+                          "text": "Ladedauer des AGV von leer nach voll wie vom Hersteller spezifiziert"
+                        }
+                      ],
+                      "displayName": [
+                        {
+                          "language": "en",
+                          "text": "Charging time"
+                        },
+                        {
+                          "language": "de",
+                          "text": "Ladedauer"
+                        }
+                      ],
+                      "idShort": "ChargingTimeAsSpecified"
+                    },
+                    {
+                      "modelType": "Property",
+                      "semanticId": {
+                        "keys": [
+                          {
+                            "type": "GlobalReference",
+                            "value": "0173-1#02-AAF391#006"
+                          }
+                        ],
+                        "type": "ExternalReference"
+                      },
+                      "valueType": "xs:float",
+                      "qualifiers": [
+                        {
+                          "semanticId": {
+                            "keys": [
+                              {
+                                "type": "GlobalReference",
+                                "value": "0112/2///61360_4#AAF575"
+                              }
+                            ],
+                            "type": "ExternalReference"
+                          },
+                          "kind": "ConceptQualifier",
+                          "type": "LifeCycleQual",
+                          "value": "OP",
+                          "valueId": {
+                            "keys": [
+                              {
+                                "type": "GlobalReference",
+                                "value": "0112/2///61360_4#AAF579"
+                              }
+                            ],
+                            "type": "ExternalReference"
+                          },
+                          "valueType": "xs:string"
+                        },
+                        {
+                          "semanticId": {
+                            "keys": [
+                              {
+                                "type": "GlobalReference",
+                                "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                              }
+                            ],
+                            "type": "ExternalReference"
+                          },
+                          "kind": "TemplateQualifier",
+                          "type": "SMT/Cardinality",
+                          "value": "ZeroToOne",
+                          "valueType": "xs:string"
+                        }
+                      ],
+                      "description": [
+                        {
+                          "language": "en",
+                          "text": "Charging time of the AGV from empty to full capacity as implemented in the current system"
+                        },
+                        {
+                          "language": "de",
+                          "text": "Ladedauer des AGV von leer nach voll, wie im aktuellen System implementiert"
+                        }
+                      ],
+                      "displayName": [
+                        {
+                          "language": "en",
+                          "text": "Charging time"
+                        },
+                        {
+                          "language": "de",
+                          "text": "Ladedauer"
+                        }
+                      ],
+                      "idShort": "ChargingTimeAsOperated"
+                    },
+                    {
+                      "modelType": "Property",
+                      "semanticId": {
+                        "keys": [
+                          {
+                            "type": "GlobalReference",
+                            "value": "https://admin-shell.io/idta/technicaldataagv/remainingchargecycles/1/0"
+                          }
+                        ],
+                        "type": "ExternalReference"
+                      },
+                      "valueType": "xs:integer",
+                      "qualifiers": [
+                        {
+                          "semanticId": {
+                            "keys": [
+                              {
+                                "type": "GlobalReference",
+                                "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                              }
+                            ],
+                            "type": "ExternalReference"
+                          },
+                          "kind": "TemplateQualifier",
+                          "type": "SMT/Cardinality",
+                          "value": "ZeroToOne",
+                          "valueType": "xs:string"
+                        }
+                      ],
+                      "description": [
+                        {
+                          "language": "en",
+                          "text": "Assumed remaining charge cycles of the battery"
+                        }
+                      ],
+                      "displayName": [
+                        {
+                          "language": "en",
+                          "text": "Remaining charge cycles"
+                        },
+                        {
+                          "language": "de",
+                          "text": "Verbleibende Ladezyklen"
+                        }
+                      ],
+                      "idShort": "RemainingChargeCycles"
+                    }
+                  ]
+                },
+                {
+                  "modelType": "MultiLanguageProperty",
+                  "semanticId": {
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/idta/technicaldataagv/powertransmissionexternal/1/0"
+                      }
+                    ],
+                    "type": "ExternalReference"
+                  },
+                  "qualifiers": [
+                    {
+                      "semanticId": {
+                        "keys": [
+                          {
+                            "type": "GlobalReference",
+                            "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                          }
+                        ],
+                        "type": "ExternalReference"
+                      },
+                      "kind": "TemplateQualifier",
+                      "type": "SMT/Cardinality",
+                      "value": "ZeroToOne",
+                      "valueType": "xs:string"
+                    }
+                  ],
+                  "description": [
+                    {
+                      "language": "en",
+                      "text": "Information about mechanical or electrical power transmission capabilities from the AGV to external devices"
+                    }
+                  ],
+                  "displayName": [
+                    {
+                      "language": "en",
+                      "text": "Power transmission to external"
+                    },
+                    {
+                      "language": "de",
+                      "text": "Energieübertragung nach extern"
+                    }
+                  ],
+                  "idShort": "PowerTransmissionToExternal"
+                }
+              ]
+            },
+            {
+              "modelType": "SubmodelElementCollection",
+              "semanticId": {
+                "keys": [
+                  {
+                    "type": "GlobalReference",
+                    "value": "https://admin-shell.io/idta/technicaldataagv/communicationandcontrol/1/0"
+                  }
+                ],
+                "type": "ExternalReference"
+              },
+              "qualifiers": [
+                {
+                  "semanticId": {
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                      }
+                    ],
+                    "type": "ExternalReference"
+                  },
+                  "kind": "TemplateQualifier",
+                  "type": "SMT/Cardinality",
+                  "value": "ZeroToOne",
+                  "valueType": "xs:string"
+                }
+              ],
+              "description": [
+                {
+                  "language": "en",
+                  "text": "Technical properties related to the communication and control of the AGV"
+                }
+              ],
+              "idShort": "CommunicationAndControl",
+              "value": [
+                {
+                  "modelType": "MultiLanguageProperty",
+                  "semanticId": {
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/idta/technicaldataagv/communicationprotocol/1/0"
+                      }
+                    ],
+                    "type": "ExternalReference"
+                  },
+                  "qualifiers": [
+                    {
+                      "semanticId": {
+                        "keys": [
+                          {
+                            "type": "GlobalReference",
+                            "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                          }
+                        ],
+                        "type": "ExternalReference"
+                      },
+                      "kind": "TemplateQualifier",
+                      "type": "SMT/Cardinality",
+                      "value": "ZeroToOne",
+                      "valueType": "xs:string"
+                    }
+                  ],
+                  "description": [
+                    {
+                      "language": "en",
+                      "text": "Information regarding the supported communication protocols, like MQTT, HTTP, OPC UA or ROS2"
+                    }
+                  ],
+                  "displayName": [
+                    {
+                      "language": "en",
+                      "text": "Communication protocol"
+                    },
+                    {
+                      "language": "de",
+                      "text": "Kommunikationsprotokoll"
+                    }
+                  ],
+                  "idShort": "CommunicationProtocol"
+                },
+                {
+                  "modelType": "MultiLanguageProperty",
+                  "semanticId": {
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/idta/technicaldataagv/communicationnetwork/1/0"
+                      }
+                    ],
+                    "type": "ExternalReference"
+                  },
+                  "qualifiers": [
+                    {
+                      "semanticId": {
+                        "keys": [
+                          {
+                            "type": "GlobalReference",
+                            "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                          }
+                        ],
+                        "type": "ExternalReference"
+                      },
+                      "kind": "TemplateQualifier",
+                      "type": "SMT/Cardinality",
+                      "value": "ZeroToOne",
+                      "valueType": "xs:string"
+                    }
+                  ],
+                  "description": [
+                    {
+                      "language": "en",
+                      "text": "Information regarding the supported communication networks, like WLAN, 5G or IrDA"
+                    }
+                  ],
+                  "displayName": [
+                    {
+                      "language": "en",
+                      "text": "Communication network"
+                    },
+                    {
+                      "language": "de",
+                      "text": "Kommunikationsnetzwerk"
+                    }
+                  ],
+                  "idShort": "CommunicationNetwork"
+                },
+                {
+                  "modelType": "MultiLanguageProperty",
+                  "semanticId": {
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/idta/technicaldataagv/vda5050interfacedescription/1/0"
+                      }
+                    ],
+                    "type": "ExternalReference"
+                  },
+                  "qualifiers": [
+                    {
+                      "semanticId": {
+                        "keys": [
+                          {
+                            "type": "GlobalReference",
+                            "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                          }
+                        ],
+                        "type": "ExternalReference"
+                      },
+                      "kind": "TemplateQualifier",
+                      "type": "SMT/Cardinality",
+                      "value": "ZeroToOne",
+                      "valueType": "xs:string"
+                    }
+                  ],
+                  "description": [
+                    {
+                      "language": "en",
+                      "text": "Information about the MQTT communication according VDA 5050"
+                    }
+                  ],
+                  "displayName": [
+                    {
+                      "language": "en",
+                      "text": "VDA5050 Interface Description"
+                    },
+                    {
+                      "language": "de",
+                      "text": "VDA5050 Schnittstellenbeschreibung"
+                    }
+                  ],
+                  "idShort": "VDA5050InterfaceDescription"
+                },
+                {
+                  "modelType": "MultiLanguageProperty",
+                  "semanticId": {
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/idta/technicaldataagv/automationinterface/1/0"
+                      }
+                    ],
+                    "type": "ExternalReference"
+                  },
+                  "qualifiers": [
+                    {
+                      "semanticId": {
+                        "keys": [
+                          {
+                            "type": "GlobalReference",
+                            "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                          }
+                        ],
+                        "type": "ExternalReference"
+                      },
+                      "kind": "TemplateQualifier",
+                      "type": "SMT/Cardinality",
+                      "value": "ZeroToOne",
+                      "valueType": "xs:string"
+                    }
+                  ],
+                  "description": [
+                    {
+                      "language": "en",
+                      "text": "Information about the supported automation interfaces and standards, like ROS1, ROS2, IO-Link or OPC UA"
+                    }
+                  ],
+                  "displayName": [
+                    {
+                      "language": "en",
+                      "text": "Automation interface"
+                    },
+                    {
+                      "language": "de",
+                      "text": "Automatisierungsschnittstellen"
+                    }
+                  ],
+                  "idShort": "AutomationInterface"
+                },
+                {
+                  "modelType": "MultiLanguageProperty",
+                  "semanticId": {
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/idta/technicaldataagv/controlsysteminformation/1/0"
+                      }
+                    ],
+                    "type": "ExternalReference"
+                  },
+                  "qualifiers": [
+                    {
+                      "semanticId": {
+                        "keys": [
+                          {
+                            "type": "GlobalReference",
+                            "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                          }
+                        ],
+                        "type": "ExternalReference"
+                      },
+                      "kind": "TemplateQualifier",
+                      "type": "SMT/Cardinality",
+                      "value": "ZeroToOne",
+                      "valueType": "xs:string"
+                    }
+                  ],
+                  "description": [
+                    {
+                      "language": "en",
+                      "text": "Information regarding the used control system for the vehicle, e.g., SPS"
+                    }
+                  ],
+                  "displayName": [
+                    {
+                      "language": "en",
+                      "text": "Control system information"
+                    },
+                    {
+                      "language": "de",
+                      "text": "Informationen zur Steuerung"
+                    }
+                  ],
+                  "idShort": "ControlSystemInformation"
+                }
+              ]
+            },
+            {
+              "modelType": "SubmodelElementCollection",
+              "semanticId": {
+                "keys": [
+                  {
+                    "type": "GlobalReference",
+                    "value": "https://admin-shell.io/idta/technicaldataagv/safety/1/0"
+                  }
+                ],
+                "type": "ExternalReference"
+              },
+              "qualifiers": [
+                {
+                  "semanticId": {
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                      }
+                    ],
+                    "type": "ExternalReference"
+                  },
+                  "kind": "TemplateQualifier",
+                  "type": "SMT/Cardinality",
+                  "value": "ZeroToOne",
+                  "valueType": "xs:string"
+                }
+              ],
+              "description": [
+                {
+                  "language": "en",
+                  "text": "Technical properties related to the safety of the AGV"
+                }
+              ],
+              "idShort": "Safety",
+              "value": [
+                {
+                  "modelType": "MultiLanguageProperty",
+                  "semanticId": {
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/idta/technicaldataagv/conformitytosafetystandards/1/0"
+                      }
+                    ],
+                    "type": "ExternalReference"
+                  },
+                  "qualifiers": [
+                    {
+                      "semanticId": {
+                        "keys": [
+                          {
+                            "type": "GlobalReference",
+                            "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                          }
+                        ],
+                        "type": "ExternalReference"
+                      },
+                      "kind": "TemplateQualifier",
+                      "type": "SMT/Cardinality",
+                      "value": "ZeroToOne",
+                      "valueType": "xs:string"
+                    }
+                  ],
+                  "description": [
+                    {
+                      "language": "en",
+                      "text": "Information regarding the safety standards that are met by the vehicle and certifications"
+                    }
+                  ],
+                  "displayName": [
+                    {
+                      "language": "en",
+                      "text": "Conformity to safety standards"
+                    },
+                    {
+                      "language": "de",
+                      "text": "Konformität zu Sicherheitsstandards"
+                    }
+                  ],
+                  "idShort": "ConformityToSafetyStandards"
+                },
+                {
+                  "modelType": "MultiLanguageProperty",
+                  "semanticId": {
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/idta/technicaldataagv/manualcontrolinformation/1/0"
+                      }
+                    ],
+                    "type": "ExternalReference"
+                  },
+                  "qualifiers": [
+                    {
+                      "semanticId": {
+                        "keys": [
+                          {
+                            "type": "GlobalReference",
+                            "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                          }
+                        ],
+                        "type": "ExternalReference"
+                      },
+                      "kind": "TemplateQualifier",
+                      "type": "SMT/Cardinality",
+                      "value": "ZeroToOne",
+                      "valueType": "xs:string"
+                    }
+                  ],
+                  "description": [
+                    {
+                      "language": "en",
+                      "text": "Safety information for manual control of the vehicle"
+                    }
+                  ],
+                  "displayName": [
+                    {
+                      "language": "en",
+                      "text": "Manual control information"
+                    },
+                    {
+                      "language": "de",
+                      "text": "Informationen zur manuellen Steuerung"
+                    }
+                  ],
+                  "idShort": "ManualControlInformation"
+                },
+                {
+                  "modelType": "MultiLanguageProperty",
+                  "semanticId": {
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/idta/technicaldataagv/safetysensortechnology/1/0"
+                      }
+                    ],
+                    "type": "ExternalReference"
+                  },
+                  "qualifiers": [
+                    {
+                      "semanticId": {
+                        "keys": [
+                          {
+                            "type": "GlobalReference",
+                            "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                          }
+                        ],
+                        "type": "ExternalReference"
+                      },
+                      "kind": "TemplateQualifier",
+                      "type": "SMT/Cardinality",
+                      "value": "ZeroToOne",
+                      "valueType": "xs:string"
+                    }
+                  ],
+                  "description": [
+                    {
+                      "language": "en",
+                      "text": "Information about the sensor technology implemented to ensure vehicle safety"
+                    }
+                  ],
+                  "displayName": [
+                    {
+                      "language": "en",
+                      "text": "Safety sensor technology"
+                    },
+                    {
+                      "language": "de",
+                      "text": "Sicherheitssensorik"
+                    }
+                  ],
+                  "idShort": "SafetySensorTechnology"
+                },
+                {
+                  "modelType": "MultiLanguageProperty",
+                  "semanticId": {
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/idta/technicaldataagv/safetymechanics/1/0"
+                      }
+                    ],
+                    "type": "ExternalReference"
+                  },
+                  "qualifiers": [
+                    {
+                      "semanticId": {
+                        "keys": [
+                          {
+                            "type": "GlobalReference",
+                            "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                          }
+                        ],
+                        "type": "ExternalReference"
+                      },
+                      "kind": "TemplateQualifier",
+                      "type": "SMT/Cardinality",
+                      "value": "ZeroToOne",
+                      "valueType": "xs:string"
+                    }
+                  ],
+                  "description": [
+                    {
+                      "language": "en",
+                      "text": "Information regarding implemented mechanical measures to ensure safety"
+                    }
+                  ],
+                  "displayName": [
+                    {
+                      "language": "en",
+                      "text": "Safety mechanics"
+                    },
+                    {
+                      "language": "de",
+                      "text": "Mechanische Sicherheitseinrichtungen"
+                    }
+                  ],
+                  "idShort": "SafetyMechanics"
+                }
+              ]
+            },
+            {
+              "modelType": "SubmodelElementCollection",
+              "semanticId": {
+                "keys": [
+                  {
+                    "type": "GlobalReference",
+                    "value": "https://admin-shell.io/idta/technicaldataagv/temporarytechnicaldata/1/0"
+                  }
+                ],
+                "type": "ExternalReference"
+              },
+              "qualifiers": [
+                {
+                  "semanticId": {
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                      }
+                    ],
+                    "type": "ExternalReference"
+                  },
+                  "kind": "TemplateQualifier",
+                  "type": "SMT/Cardinality",
+                  "value": "ZeroToOne",
+                  "valueType": "xs:string"
+                }
+              ],
+              "displayName": [
+                {
+                  "language": "en",
+                  "text": "Temporary technical data depending on the implementation at the operator and current configuration"
+                }
+              ],
+              "idShort": "TemporaryTechnicalData",
+              "value": [
+                {
+                  "modelType": "Property",
+                  "semanticId": {
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/idta/technicaldataagv/currentworkingsetup/1/0"
+                      }
+                    ],
+                    "type": "ExternalReference"
+                  },
+                  "valueType": "xs:string",
+                  "qualifiers": [
+                    {
+                      "semanticId": {
+                        "keys": [
+                          {
+                            "type": "GlobalReference",
+                            "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                          }
+                        ],
+                        "type": "ExternalReference"
+                      },
+                      "kind": "TemplateQualifier",
+                      "type": "SMT/Cardinality",
+                      "value": "ZeroToOne",
+                      "valueType": "xs:string"
+                    }
+                  ],
+                  "description": [
+                    {
+                      "language": "en",
+                      "text": "Name of the current working setup"
+                    }
+                  ],
+                  "displayName": [
+                    {
+                      "language": "en",
+                      "text": "Current working setup "
+                    },
+                    {
+                      "language": "de",
+                      "text": "Aktuelle Arbeitskonfiguration"
+                    }
+                  ],
+                  "idShort": "CurrentWorkingSetupName"
+                },
+                {
+                  "modelType": "Property",
+                  "semanticId": {
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/idta/technicaldataagv/activeloading/1/0"
+                      }
+                    ],
+                    "type": "ExternalReference"
+                  },
+                  "valueType": "xs:boolean",
+                  "qualifiers": [
+                    {
+                      "semanticId": {
+                        "keys": [
+                          {
+                            "type": "GlobalReference",
+                            "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                          }
+                        ],
+                        "type": "ExternalReference"
+                      },
+                      "kind": "TemplateQualifier",
+                      "type": "SMT/Cardinality",
+                      "value": "ZeroToOne",
+                      "valueType": "xs:string"
+                    }
+                  ],
+                  "description": [
+                    {
+                      "language": "en",
+                      "text": "Describes whether the AGV is currently able to load itself (true)"
+                    }
+                  ],
+                  "displayName": [
+                    {
+                      "language": "en",
+                      "text": "Active loading"
+                    },
+                    {
+                      "language": "de",
+                      "text": "Aktive Beladung"
+                    }
+                  ],
+                  "idShort": "ActiveLoading"
+                },
+                {
+                  "modelType": "Property",
+                  "semanticId": {
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/idta/technicaldataagv/loadingtype/1/0"
+                      }
+                    ],
+                    "type": "ExternalReference"
+                  },
+                  "valueType": "xs:string",
+                  "qualifiers": [
+                    {
+                      "semanticId": {
+                        "keys": [
+                          {
+                            "type": "GlobalReference",
+                            "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                          }
+                        ],
+                        "type": "ExternalReference"
+                      },
+                      "kind": "TemplateQualifier",
+                      "type": "SMT/Cardinality",
+                      "value": "ZeroToOne",
+                      "valueType": "xs:string"
+                    }
+                  ],
+                  "description": [
+                    {
+                      "language": "en",
+                      "text": "Way of loading of the AGV, the enumeration acc. VDI 2510 can be used"
+                    }
+                  ],
+                  "displayName": [
+                    {
+                      "language": "en",
+                      "text": "Loading type"
+                    },
+                    {
+                      "language": "de",
+                      "text": "Beladungsart"
+                    }
+                  ],
+                  "idShort": "LoadingType"
+                },
+                {
+                  "modelType": "MultiLanguageProperty",
+                  "semanticId": {
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/idta/technicaldataagv/loadingrequirements/1/0"
+                      }
+                    ],
+                    "type": "ExternalReference"
+                  },
+                  "qualifiers": [
+                    {
+                      "semanticId": {
+                        "keys": [
+                          {
+                            "type": "GlobalReference",
+                            "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                          }
+                        ],
+                        "type": "ExternalReference"
+                      },
+                      "kind": "TemplateQualifier",
+                      "type": "SMT/Cardinality",
+                      "value": "ZeroToOne",
+                      "valueType": "xs:string"
+                    }
+                  ],
+                  "description": [
+                    {
+                      "language": "en",
+                      "text": "Requirements and instructions when loading with the current setup, e.g., load floor to floor vs. height difference"
+                    }
+                  ],
+                  "displayName": [
+                    {
+                      "language": "en",
+                      "text": "Loading requirements"
+                    },
+                    {
+                      "language": "de",
+                      "text": "Beladungsanforderungen"
+                    }
+                  ],
+                  "idShort": "LoadingRequirements"
+                },
+                {
+                  "modelType": "SubmodelElementList",
+                  "semanticId": {
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/idta/technicaldataagv/currentattachments/1/0"
+                      }
+                    ],
+                    "type": "ExternalReference"
+                  },
+                  "qualifiers": [
+                    {
+                      "semanticId": {
+                        "keys": [
+                          {
+                            "type": "GlobalReference",
+                            "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                          }
+                        ],
+                        "type": "ExternalReference"
+                      },
+                      "kind": "TemplateQualifier",
+                      "type": "SMT/Cardinality",
+                      "value": "ZeroToOne",
+                      "valueType": "xs:string"
+                    }
+                  ],
+                  "description": [
+                    {
+                      "language": "en",
+                      "text": "List with the identification of current attachments on the AGV, e.g., for load handling"
+                    },
+                    {
+                      "language": "de",
+                      "text": "Liste mit Idents der aktuellen Anbauten am AGV, z.B. für die Ladungshandhabung"
+                    }
+                  ],
+                  "displayName": [
+                    {
+                      "language": "en",
+                      "text": "Current attachments"
+                    },
+                    {
+                      "language": "de",
+                      "text": "Aktuelle Anbauten "
+                    }
+                  ],
+                  "idShort": "CurrentAttachments",
+                  "orderRelevant": true,
+                  "semanticIdListElement": {
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/idta/technicaldataagv/attachmentid/1/0"
+                      }
+                    ],
+                    "type": "ExternalReference"
+                  },
+                  "typeValueListElement": "Property",
+                  "value": [
+                    {
+                      "modelType": "Property",
+                      "semanticId": {
+                        "keys": [
+                          {
+                            "type": "GlobalReference",
+                            "value": "https://admin-shell.io/idta/technicaldataagv/attachmentid/1/0"
+                          }
+                        ],
+                        "type": "ExternalReference"
+                      },
+                      "valueType": "xs:string",
+                      "qualifiers": [
+                        {
+                          "semanticId": {
+                            "keys": [
+                              {
+                                "type": "GlobalReference",
+                                "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                              }
+                            ],
+                            "type": "ExternalReference"
+                          },
+                          "kind": "TemplateQualifier",
+                          "type": "SMT/Cardinality",
+                          "value": "ZeroToMany",
+                          "valueType": "xs:string"
+                        }
+                      ],
+                      "description": [
+                        {
+                          "language": "en",
+                          "text": "Order not relevant"
+                        }
+                      ],
+                      "displayName": [
+                        {
+                          "language": "en",
+                          "text": "Attachment (ID)"
+                        },
+                        {
+                          "language": "de",
+                          "text": "Anbau (ID)"
+                        }
+                      ]
+                    }
+                  ],
+                  "valueTypeListElement": "xs:string"
+                },
+                {
+                  "modelType": "SubmodelElementList",
+                  "semanticId": {
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/idta/technicaldataagv/proprietaryconfigurationoptions/1/0"
+                      }
+                    ],
+                    "type": "ExternalReference"
+                  },
+                  "qualifiers": [
+                    {
+                      "semanticId": {
+                        "keys": [
+                          {
+                            "type": "GlobalReference",
+                            "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                          }
+                        ],
+                        "type": "ExternalReference"
+                      },
+                      "kind": "TemplateQualifier",
+                      "type": "SMT/Cardinality",
+                      "value": "ZeroToOne",
+                      "valueType": "xs:string"
+                    }
+                  ],
+                  "description": [
+                    {
+                      "language": "en",
+                      "text": "List with proprietary vehicle configuration settings"
+                    },
+                    {
+                      "language": "de",
+                      "text": "Liste der herstellerspezifischen Konfigurationseinstellungen des Fahrzeugs"
+                    }
+                  ],
+                  "displayName": [
+                    {
+                      "language": "en",
+                      "text": "Proprietary configuration options"
+                    },
+                    {
+                      "language": "de",
+                      "text": "Herstellerspezifische Konfigurationsoptionen"
+                    }
+                  ],
+                  "idShort": "ProprietaryConfigurationOptions",
+                  "orderRelevant": true,
+                  "semanticIdListElement": {
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/idta/technicaldataagv/proprietaryconfigurationoptionsrecord/1/0"
+                      }
+                    ],
+                    "type": "ExternalReference"
+                  },
+                  "typeValueListElement": "SubmodelElementCollection",
+                  "value": [
+                    {
+                      "modelType": "SubmodelElementCollection",
+                      "semanticId": {
+                        "keys": [
+                          {
+                            "type": "GlobalReference",
+                            "value": "https://admin-shell.io/idta/technicaldataagv/proprietaryconfigurationoptionsrecord/1/0"
+                          }
+                        ],
+                        "type": "ExternalReference"
+                      },
+                      "qualifiers": [
+                        {
+                          "semanticId": {
+                            "keys": [
+                              {
+                                "type": "GlobalReference",
+                                "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                              }
+                            ],
+                            "type": "ExternalReference"
+                          },
+                          "kind": "TemplateQualifier",
+                          "type": "SMT/Cardinality",
+                          "value": "ZeroToMany",
+                          "valueType": "xs:string"
+                        }
+                      ],
+                      "description": [
+                        {
+                          "language": "en",
+                          "text": "Proprietary vehicle configuration setting"
+                        }
+                      ],
+                      "displayName": [
+                        {
+                          "language": "en",
+                          "text": "Configuration option"
+                        },
+                        {
+                          "language": "de",
+                          "text": "Konfigurationsoption"
+                        }
+                      ],
+                      "value": [
+                        {
+                          "modelType": "Property",
+                          "semanticId": {
+                            "keys": [
+                              {
+                                "type": "GlobalReference",
+                                "value": "https://admin-shell.io/idta/technicaldataagv/optionname/1/0"
+                              }
+                            ],
+                            "type": "ExternalReference"
+                          },
+                          "valueType": "xs:string",
+                          "qualifiers": [
+                            {
+                              "semanticId": {
+                                "keys": [
+                                  {
+                                    "type": "GlobalReference",
+                                    "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                                  }
+                                ],
+                                "type": "ExternalReference"
+                              },
+                              "kind": "TemplateQualifier",
+                              "type": "SMT/Cardinality",
+                              "value": "One",
+                              "valueType": "xs:string"
+                            }
+                          ],
+                          "description": [
+                            {
+                              "language": "en",
+                              "text": "Name of the proprietary configuration option"
+                            }
+                          ],
+                          "displayName": [
+                            {
+                              "language": "en",
+                              "text": "Option name"
+                            },
+                            {
+                              "language": "de",
+                              "text": "Optionsname"
+                            }
+                          ],
+                          "idShort": "OptionName"
+                        },
+                        {
+                          "modelType": "Property",
+                          "semanticId": {
+                            "keys": [
+                              {
+                                "type": "GlobalReference",
+                                "value": "https://admin-shell.io/idta/technicaldataagv/optionvalue/1/0"
+                              }
+                            ],
+                            "type": "ExternalReference"
+                          },
+                          "valueType": "xs:string",
+                          "qualifiers": [
+                            {
+                              "semanticId": {
+                                "keys": [
+                                  {
+                                    "type": "GlobalReference",
+                                    "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                                  }
+                                ],
+                                "type": "ExternalReference"
+                              },
+                              "kind": "TemplateQualifier",
+                              "type": "SMT/Cardinality",
+                              "value": "One",
+                              "valueType": "xs:string"
+                            }
+                          ],
+                          "description": [
+                            {
+                              "language": "en",
+                              "text": "Value of the proprietary option"
+                            }
+                          ],
+                          "displayName": [
+                            {
+                              "language": "en",
+                              "text": "Option value"
+                            },
+                            {
+                              "language": "de",
+                              "text": "Optionswert"
+                            }
+                          ],
+                          "idShort": "OptionValue"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

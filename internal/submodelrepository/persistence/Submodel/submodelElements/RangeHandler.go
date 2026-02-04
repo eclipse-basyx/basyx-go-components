@@ -324,7 +324,19 @@ func (p PostgreSQLRangeHandler) Delete(idShortOrPath string) error {
 // Returns:
 //   - error: An error if the database insert operation fails
 func insertRange(rangeElem *types.Range, tx *sql.Tx, id int) error {
-	typedValue := persistenceutils.MapRangeValueByType(rangeElem.ValueType(), *rangeElem.Min(), *rangeElem.Max())
+
+	minVal := ""
+	maxVal := ""
+
+	if rangeElem.Min() != nil {
+		minVal = *rangeElem.Min()
+	}
+	if rangeElem.Max() != nil {
+		maxVal = *rangeElem.Max()
+	}
+
+	// Map min and max to typed values based on ValueType
+	typedValue := persistenceutils.MapRangeValueByType(rangeElem.ValueType(), minVal, maxVal)
 
 	// Insert Range-specific data
 	dialect := goqu.Dialect("postgres")

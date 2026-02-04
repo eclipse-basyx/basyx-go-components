@@ -1,0 +1,183 @@
+{
+  "modelType": "Submodel",
+  "kind": "Template",
+  "semanticId": {
+    "keys": [
+      {
+        "type": "Submodel",
+        "value": "https://admin-shell.io/vdi/2658/1/0/MTPSubmodel"
+      }
+    ],
+    "type": "ModelReference"
+  },
+  "administration": {
+    "revision": "0",
+    "version": "1"
+  },
+  "id": "https://admin-shell.io/idta/SubmodelTemplate/ModuleTypePackage/1/0",
+  "description": [
+    {
+      "language": "en",
+      "text": "The submodels defined in this document describe the integration of PEA (instance) and MTP (type) information into an AAS."
+    }
+  ],
+  "idShort": "ModuleTypePackage",
+  "submodelElements": [
+    {
+      "modelType": "File",
+      "contentType": "application/mtp",
+      "value": "/aasx/Example.aml",
+      "semanticId": {
+        "keys": [
+          {
+            "type": "GlobalReference",
+            "value": "https://admin-shell.io/vdi/2658/1/0/MTPSUCLib/ModuleTypePackage"
+          }
+        ],
+        "type": "ExternalReference"
+      },
+      "qualifiers": [
+        {
+          "semanticId": {
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "https://admin-shell.io/SubmodelTemplates/Cardinality/1/0"
+              }
+            ],
+            "type": "ExternalReference"
+          },
+          "kind": "ConceptQualifier",
+          "type": "Cardinality",
+          "value": "One",
+          "valueType": "xs:string"
+        }
+      ],
+      "category": "CONSTANT",
+      "idShort": "MTPFile"
+    },
+    {
+      "modelType": "SubmodelElementCollection",
+      "semanticId": {
+        "keys": [
+          {
+            "type": "GlobalReference",
+            "value": "https://admin-shell.io/vdi/2658/1/0/MTPReferences"
+          }
+        ],
+        "type": "ExternalReference"
+      },
+      "qualifiers": [
+        {
+          "semanticId": {
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "https://admin-shell.io/SubmodelTemplates/Cardinality/1/0"
+              }
+            ],
+            "type": "ExternalReference"
+          },
+          "kind": "ConceptQualifier",
+          "type": "Cardinality",
+          "value": "ZeroToMany",
+          "valueType": "xs:string"
+        }
+      ],
+      "idShort": "DocumentationReferences",
+      "value": [
+        {
+          "modelType": "RelationshipElement",
+          "semanticId": {
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "https://admin-shell.io/vdi/2658/1/0/MTPReference"
+              }
+            ],
+            "type": "ExternalReference"
+          },
+          "qualifiers": [
+            {
+              "semanticId": {
+                "keys": [
+                  {
+                    "type": "GlobalReference",
+                    "value": "https://admin-shell.io/SubmodelTemplates/Cardinality/1/0"
+                  }
+                ],
+                "type": "ExternalReference"
+              },
+              "kind": "ConceptQualifier",
+              "type": "Cardinality",
+              "value": "OneToMany",
+              "valueType": "xs:string"
+            }
+          ],
+          "category": "CONSTANT",
+          "idShort": "M0013_Datasheet",
+          "first": {
+            "keys": [
+              {
+                "type": "Submodel",
+                "value": "www.vendor.com/ids/sm/6233_9041_1002_7102"
+              },
+              {
+                "type": "File",
+                "value": "MTPFile"
+              },
+              {
+                "type": "FragmentReference",
+                "value": "CAEX@ModuleTypePackage/BPXX_Freelance/CommunicationSet/InstanceList/M0013"
+              }
+            ],
+            "type": "ModelReference"
+          },
+          "second": {
+            "keys": [
+              {
+                "type": "Submodel",
+                "value": "http://example.com/id/instance/99920200206160529000012810"
+              },
+              {
+                "type": "SubmodelElementCollection",
+                "value": "Document01"
+              }
+            ],
+            "type": "ModelReference"
+          }
+        }
+      ]
+    },
+    {
+      "modelType": "SubmodelElementCollection",
+      "semanticId": {
+        "keys": [
+          {
+            "type": "GlobalReference",
+            "value": "https://admin-shell.io/vdi/2658/1/0/MTPReferences"
+          }
+        ],
+        "type": "ExternalReference"
+      },
+      "qualifiers": [
+        {
+          "semanticId": {
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "https://admin-shell.io/SubmodelTemplates/Cardinality/1/0"
+              }
+            ],
+            "type": "ExternalReference"
+          },
+          "kind": "ConceptQualifier",
+          "type": "Cardinality",
+          "value": "ZeroToMany",
+          "valueType": "xs:string"
+        }
+      ],
+      "idShort": "BOMReferences"
+    }
+  ]
+}
