@@ -748,10 +748,53 @@ func BatchInsert(db *sql.DB, submodelID string, elements []types.ISubmodelElemen
 		})
 	}
 
-	// Build base submodel_element records
+	// Collect all SemanticIDs, Descriptions, and DisplayNames for batch insertion
+	semanticIDs := make([]types.IReference, len(batchElements))
+	descriptions := make([][]types.ILangStringTextType, len(batchElements))
+	displayNames := make([][]types.ILangStringNameType, len(batchElements))
+	for i, be := range batchElements {
+		semanticIDs[i] = be.element.SemanticID()
+		descriptions[i] = be.element.Description()
+		displayNames[i] = be.element.DisplayName()
+	}
+
+	// Batch insert all SemanticIDs
+	semanticIDResults, semErr := persistenceutils.BatchCreateReferences(localTx, semanticIDs)
+	if semErr != nil {
+		err = common.NewInternalServerError("Failed to batch create SemanticIDs: " + semErr.Error())
+		return nil, err
+	}
+
+	// Batch insert all Descriptions
+	descriptionIDResults, descErr := persistenceutils.BatchCreateLangStringTextTypes(localTx, descriptions)
+	if descErr != nil {
+		err = common.NewInternalServerError("Failed to batch create Descriptions: " + descErr.Error())
+		return nil, err
+	}
+
+	// Batch insert all DisplayNames
+	displayNameIDResults, dispErr := persistenceutils.BatchCreateLangStringNameTypes(localTx, displayNames)
+	if dispErr != nil {
+		err = common.NewInternalServerError("Failed to batch create DisplayNames: " + dispErr.Error())
+		return nil, err
+	}
+
+	// Build base submodel_element records using pre-computed IDs
 	baseRecords := make([]goqu.Record, 0, len(batchElements))
-	for _, be := range batchElements {
-		record, buildErr := buildBaseSubmodelElementRecord(localTx, submodelID, be.element, be.idShort, be.idShortPath, be.position, ctx.ParentID, ctx.RootSmeID, jsonLib)
+	for i, be := range batchElements {
+		params := baseRecordParams{
+			SubmodelID:    submodelID,
+			Element:       be.element,
+			IDShort:       be.idShort,
+			IDShortPath:   be.idShortPath,
+			Position:      be.position,
+			ParentID:      ctx.ParentID,
+			RootSmeID:     ctx.RootSmeID,
+			SemanticID:    semanticIDResults[i],
+			DescriptionID: descriptionIDResults[i],
+			DisplayNameID: displayNameIDResults[i],
+		}
+		record, buildErr := buildBaseSubmodelElementRecord(params, jsonLib)
 		if buildErr != nil {
 			err = buildErr
 			return nil, err
@@ -862,30 +905,35 @@ func BatchInsert(db *sql.DB, submodelID string, elements []types.ISubmodelElemen
 		}
 	}
 
-	// Insert MultiLanguageProperty values (secondary table that requires parent to exist first)
+	// Batch insert MultiLanguageProperty values (secondary table that requires parent to exist first)
+	mlpValueRows := make([]interface{}, 0)
 	for i, be := range batchElements {
 		if be.element.ModelType() == types.ModelTypeMultiLanguageProperty {
 			mlp, ok := be.element.(*types.MultiLanguageProperty)
 			if ok && len(mlp.Value()) > 0 {
 				for _, val := range mlp.Value() {
-					insertQuery, insertArgs, buildErr := dialect.Insert("multilanguage_property_value").
-						Rows(goqu.Record{
-							"mlp_id":   ids[i],
-							"language": val.Language(),
-							"text":     val.Text(),
-						}).
-						ToSQL()
-					if buildErr != nil {
-						err = buildErr
-						return nil, err
-					}
-					_, execErr := localTx.Exec(insertQuery, insertArgs...)
-					if execErr != nil {
-						err = execErr
-						return nil, err
-					}
+					mlpValueRows = append(mlpValueRows, goqu.Record{
+						"mlp_id":   ids[i],
+						"language": val.Language(),
+						"text":     val.Text(),
+					})
 				}
 			}
+		}
+	}
+	if len(mlpValueRows) > 0 {
+		mlpInsertQuery := dialect.Insert("multilanguage_property_value").
+			Cols("mlp_id", "language", "text").
+			Rows(mlpValueRows...)
+		mlpSQLQuery, mlpArgs, buildErr := mlpInsertQuery.ToSQL()
+		if buildErr != nil {
+			err = buildErr
+			return nil, err
+		}
+		_, execErr := localTx.Exec(mlpSQLQuery, mlpArgs...)
+		if execErr != nil {
+			err = execErr
+			return nil, err
 		}
 	}
 
@@ -989,33 +1037,27 @@ func getChildElements(element types.ISubmodelElement) []types.ISubmodelElement {
 	return nil
 }
 
-// buildBaseSubmodelElementRecord builds the base submodel_element record for batch insertion.
-func buildBaseSubmodelElementRecord(tx *sql.Tx, submodelID string, element types.ISubmodelElement, idShort string, idShortPath string, position int, parentID int, rootSmeID int, jsonLib jsoniter.API) (goqu.Record, error) {
-	// Handle SemanticID
-	var referenceID sql.NullInt64
-	var err error
-	if element.SemanticID() != nil {
-		referenceID, err = persistenceutils.CreateReference(tx, element.SemanticID(), sql.NullInt64{}, sql.NullInt64{})
-		if err != nil {
-			return nil, err
-		}
-	}
+// baseRecordParams contains all parameters needed to build a base submodel_element record.
+type baseRecordParams struct {
+	SubmodelID    string
+	Element       types.ISubmodelElement
+	IDShort       string
+	IDShortPath   string
+	Position      int
+	ParentID      int
+	RootSmeID     int
+	SemanticID    sql.NullInt64
+	DescriptionID sql.NullInt64
+	DisplayNameID sql.NullInt64
+}
 
-	// Handle Description
-	descriptionID, err := persistenceutils.CreateLangStringTextTypes(tx, element.Description())
-	if err != nil {
-		return nil, common.NewInternalServerError("Failed to create Description: " + err.Error())
-	}
-
-	// Handle DisplayName
-	displayNameID, err := persistenceutils.CreateLangStringNameTypes(tx, element.DisplayName())
-	if err != nil {
-		return nil, common.NewInternalServerError("Failed to create DisplayName: " + err.Error())
-	}
-
+// buildBaseSubmodelElementRecord builds the base submodel_element record using pre-computed reference IDs.
+// This is used for optimized batch insertion where SemanticID, Description, and DisplayName IDs
+// have already been created in batch operations.
+func buildBaseSubmodelElementRecord(params baseRecordParams, jsonLib jsoniter.API) (goqu.Record, error) {
 	// Handle EmbeddedDataSpecifications
 	edsJSONString := "[]"
-	eds := element.EmbeddedDataSpecifications()
+	eds := params.Element.EmbeddedDataSpecifications()
 	if len(eds) > 0 {
 		var toJson []map[string]any
 		for _, ed := range eds {
@@ -1034,7 +1076,7 @@ func buildBaseSubmodelElementRecord(tx *sql.Tx, submodelID string, element types
 
 	// Handle SupplementalSemanticIDs
 	supplementalSemanticIDsJSONString := "[]"
-	supplementalSemanticIDs := element.SupplementalSemanticIDs()
+	supplementalSemanticIDs := params.Element.SupplementalSemanticIDs()
 	if len(supplementalSemanticIDs) > 0 {
 		var toJson []map[string]any
 		for _, ref := range supplementalSemanticIDs {
@@ -1053,7 +1095,7 @@ func buildBaseSubmodelElementRecord(tx *sql.Tx, submodelID string, element types
 
 	// Handle Extensions
 	extensionsJSONString := "[]"
-	extensions := element.Extensions()
+	extensions := params.Element.Extensions()
 	if len(extensions) > 0 {
 		var toJson []map[string]any
 		for _, ext := range extensions {
@@ -1072,31 +1114,31 @@ func buildBaseSubmodelElementRecord(tx *sql.Tx, submodelID string, element types
 
 	// Build parent_sme_id (NULL for top-level elements)
 	var parentDBId sql.NullInt64
-	if parentID == 0 {
+	if params.ParentID == 0 {
 		parentDBId = sql.NullInt64{}
 	} else {
-		parentDBId = sql.NullInt64{Int64: int64(parentID), Valid: true}
+		parentDBId = sql.NullInt64{Int64: int64(params.ParentID), Valid: true}
 	}
 
 	// Build root_sme_id (will be updated later for top-level elements)
 	var rootDbID sql.NullInt64
-	if rootSmeID == 0 {
+	if params.RootSmeID == 0 {
 		rootDbID = sql.NullInt64{}
 	} else {
-		rootDbID = sql.NullInt64{Int64: int64(rootSmeID), Valid: true}
+		rootDbID = sql.NullInt64{Int64: int64(params.RootSmeID), Valid: true}
 	}
 
 	return goqu.Record{
-		"submodel_id":                 submodelID,
+		"submodel_id":                 params.SubmodelID,
 		"parent_sme_id":               parentDBId,
-		"position":                    position,
-		"id_short":                    idShort,
-		"category":                    element.Category(),
-		"model_type":                  element.ModelType(),
-		"semantic_id":                 referenceID,
-		"idshort_path":                idShortPath,
-		"description_id":              descriptionID,
-		"displayname_id":              displayNameID,
+		"position":                    params.Position,
+		"id_short":                    params.IDShort,
+		"category":                    params.Element.Category(),
+		"model_type":                  params.Element.ModelType(),
+		"semantic_id":                 params.SemanticID,
+		"idshort_path":                params.IDShortPath,
+		"description_id":              params.DescriptionID,
+		"displayname_id":              params.DisplayNameID,
 		"root_sme_id":                 rootDbID,
 		"embedded_data_specification": edsJSONString,
 		"supplemental_semantic_ids":   supplementalSemanticIDsJSONString,

@@ -257,11 +257,15 @@ func (p PostgreSQLRangeHandler) GetInsertQueryPart(_ *sql.Tx, id int, element ty
 		return nil, common.NewErrBadRequest("submodelElement is not of type Range")
 	}
 
-	if rangeElem.Min() == nil || rangeElem.Max() == nil {
-		return nil, common.NewErrBadRequest("Both 'Min' and 'Max' values must be provided for Range element")
+	minVal := ""
+	maxVal := ""
+	if rangeElem.Min() != nil {
+		minVal = *rangeElem.Min()
 	}
-
-	typedValue := persistenceutils.MapRangeValueByType(rangeElem.ValueType(), *rangeElem.Min(), *rangeElem.Max())
+	if rangeElem.Max() != nil {
+		maxVal = *rangeElem.Max()
+	}
+	typedValue := persistenceutils.MapRangeValueByType(rangeElem.ValueType(), minVal, maxVal)
 
 	return &InsertQueryPart{
 		TableName: "range_element",

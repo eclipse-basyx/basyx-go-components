@@ -39,6 +39,7 @@ import (
 	"os"
 	"strconv"
 	"sync"
+	"time"
 
 	"github.com/FriedJannik/aas-go-sdk/jsonization"
 	"github.com/FriedJannik/aas-go-sdk/stringification"
@@ -85,11 +86,22 @@ var beginTransactionErrorSubmodelRepo = smrepoerrors.ErrTransactionBeginFailed
 // Returns:
 //   - *PostgreSQLSubmodelDatabase: Configured database instance
 //   - error: Error if database initialization fails
-func NewPostgreSQLSubmodelBackend(dsn string, _ int32 /* maxOpenConns */, _ /* maxIdleConns */ int, _ /* connMaxLifetimeMinutes */ int, databaseSchema string, privateKey *rsa.PrivateKey) (*PostgreSQLSubmodelDatabase, error) {
+func NewPostgreSQLSubmodelBackend(dsn string, maxOpenConns int32, maxIdleConns int, connMaxLifetimeMinutes int, databaseSchema string, privateKey *rsa.PrivateKey) (*PostgreSQLSubmodelDatabase, error) {
 	db, err := common.InitializeDatabase(dsn, databaseSchema)
 	if err != nil {
 		return nil, err
 	}
+
+	if maxOpenConns > 0 {
+		db.SetMaxOpenConns(int(maxOpenConns))
+	}
+	if maxIdleConns > 0 {
+		db.SetMaxIdleConns(maxIdleConns)
+	}
+	if connMaxLifetimeMinutes > 0 {
+		db.SetConnMaxLifetime(time.Duration(connMaxLifetimeMinutes) * time.Minute)
+	}
+
 	return &PostgreSQLSubmodelDatabase{db: db, privateKey: privateKey}, nil
 }
 

@@ -1304,3 +1304,343 @@ func CommitTransactionIfNeeded(tx *sql.Tx, localTx *sql.Tx) error {
 	}
 	return nil
 }
+
+// BatchCreateReferences inserts multiple references and their keys in optimized batch operations.
+//
+// This function is optimized for bulk inserting references. It inserts all references in one batch
+// and collects their IDs, then inserts all reference keys in another batch. For simple references
+// without ReferredSemanticIDs, this significantly reduces the number of SQL round trips.
+//
+// Parameters:
+//   - tx: Active database transaction
+//   - references: Slice of IReference objects to be created
+//
+// Returns:
+//   - []sql.NullInt64: Database IDs of the created references (in same order as input)
+//   - error: An error if the insertion fails
+func BatchCreateReferences(tx *sql.Tx, references []types.IReference) ([]sql.NullInt64, error) {
+	dialect := goqu.Dialect("postgres")
+	results := make([]sql.NullInt64, len(references))
+
+	// Identify non-empty references and their indices
+	type refWithIndex struct {
+		ref   types.IReference
+		index int
+	}
+	nonEmptyRefs := make([]refWithIndex, 0, len(references))
+	for i, ref := range references {
+		if ref != nil && !isEmptyReference(ref) {
+			nonEmptyRefs = append(nonEmptyRefs, refWithIndex{ref: ref, index: i})
+		}
+	}
+
+	if len(nonEmptyRefs) == 0 {
+		return results, nil
+	}
+
+	// Build batch insert for references
+	refRows := make([]interface{}, len(nonEmptyRefs))
+	for i, r := range nonEmptyRefs {
+		refRows[i] = goqu.Record{
+			"type":            r.ref.Type(),
+			"parentreference": sql.NullInt64{},
+			"rootreference":   sql.NullInt64{},
+		}
+	}
+
+	insertQuery := dialect.Insert("reference").
+		Cols("type", "parentreference", "rootreference").
+		Rows(refRows...).
+		Returning("id")
+
+	sqlQuery, args, err := insertQuery.ToSQL()
+	if err != nil {
+		return nil, err
+	}
+
+	rows, err := tx.Query(sqlQuery, args...)
+	if err != nil {
+		return nil, err
+	}
+
+	// Collect returned IDs
+	refIDs := make([]int64, 0, len(nonEmptyRefs))
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			_ = rows.Close()
+			return nil, err
+		}
+		refIDs = append(refIDs, id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	if len(refIDs) != len(nonEmptyRefs) {
+		return nil, fmt.Errorf("batch insert returned %d IDs but expected %d", len(refIDs), len(nonEmptyRefs))
+	}
+
+	// Map IDs back to original positions and collect all reference keys
+	keyRows := make([]interface{}, 0)
+	for i, r := range nonEmptyRefs {
+		refID := refIDs[i]
+		results[r.index] = sql.NullInt64{Int64: refID, Valid: true}
+
+		// Collect keys for this reference
+		for pos, key := range r.ref.Keys() {
+			keyRows = append(keyRows, goqu.Record{
+				"reference_id": refID,
+				"position":     pos,
+				"type":         key.Type(),
+				"value":        key.Value(),
+			})
+		}
+	}
+
+	// Batch insert all reference keys
+	if len(keyRows) > 0 {
+		keyInsertQuery := dialect.Insert("reference_key").
+			Cols("reference_id", "position", "type", "value").
+			Rows(keyRows...)
+
+		keySQLQuery, keyArgs, err := keyInsertQuery.ToSQL()
+		if err != nil {
+			return nil, err
+		}
+
+		_, err = tx.Exec(keySQLQuery, keyArgs...)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// Handle ReferredSemanticIDs for each reference (nested references)
+	// These require the parent reference to exist first, so we handle them after the main batch
+	for i, r := range nonEmptyRefs {
+		if r.ref.ReferredSemanticID() != nil && !isEmptyReference(r.ref.ReferredSemanticID()) {
+			rootID := sql.NullInt64{Int64: refIDs[i], Valid: true}
+			_, err := insertNestedRefferedSemanticIDs(r.ref, tx, rootID, `INSERT INTO reference_key (reference_id, position, type, value) VALUES ($1, $2, $3, $4)`)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	return results, nil
+}
+
+// BatchCreateLangStringTextTypes inserts multiple description records in optimized batch operations.
+//
+// This function creates reference records for each non-empty description slice, then bulk inserts
+// all individual language strings.
+//
+// Parameters:
+//   - tx: Active database transaction
+//   - descriptions: Slice of description slices (each element is a []ILangStringTextType)
+//
+// Returns:
+//   - []sql.NullInt64: Database IDs of the created references (in same order as input)
+//   - error: An error if the insertion fails
+func BatchCreateLangStringTextTypes(tx *sql.Tx, descriptions [][]types.ILangStringTextType) ([]sql.NullInt64, error) {
+	dialect := goqu.Dialect("postgres")
+	results := make([]sql.NullInt64, len(descriptions))
+
+	// Identify non-empty descriptions and their indices
+	type descWithIndex struct {
+		desc  []types.ILangStringTextType
+		index int
+	}
+	nonEmptyDescs := make([]descWithIndex, 0, len(descriptions))
+	for i, desc := range descriptions {
+		if len(desc) > 0 {
+			nonEmptyDescs = append(nonEmptyDescs, descWithIndex{desc: desc, index: i})
+		}
+	}
+
+	if len(nonEmptyDescs) == 0 {
+		return results, nil
+	}
+
+	// Batch insert reference records
+	refRows := make([]interface{}, len(nonEmptyDescs))
+	for i := range nonEmptyDescs {
+		refRows[i] = goqu.Record{} // DEFAULT VALUES
+	}
+
+	// For DEFAULT VALUES inserts, we need raw SQL
+	placeholders := ""
+	for i := range nonEmptyDescs {
+		if i > 0 {
+			placeholders += ", "
+		}
+		placeholders += "(DEFAULT)"
+	}
+
+	rows, err := tx.Query(fmt.Sprintf("INSERT INTO lang_string_text_type_reference VALUES %s RETURNING id", placeholders))
+	if err != nil {
+		return nil, err
+	}
+
+	// Collect returned IDs
+	refIDs := make([]int64, 0, len(nonEmptyDescs))
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			_ = rows.Close()
+			return nil, err
+		}
+		refIDs = append(refIDs, id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	if len(refIDs) != len(nonEmptyDescs) {
+		return nil, fmt.Errorf("batch insert returned %d IDs but expected %d", len(refIDs), len(nonEmptyDescs))
+	}
+
+	// Map IDs back to original positions and collect all text entries
+	textRows := make([]interface{}, 0)
+	for i, d := range nonEmptyDescs {
+		refID := refIDs[i]
+		results[d.index] = sql.NullInt64{Int64: refID, Valid: true}
+
+		// Collect text entries for this description
+		for _, langString := range d.desc {
+			textRows = append(textRows, goqu.Record{
+				"lang_string_text_type_reference_id": refID,
+				"language":                           langString.Language(),
+				"text":                               langString.Text(),
+			})
+		}
+	}
+
+	// Batch insert all text entries
+	if len(textRows) > 0 {
+		textInsertQuery := dialect.Insert("lang_string_text_type").
+			Cols("lang_string_text_type_reference_id", "language", "text").
+			Rows(textRows...)
+
+		textSQLQuery, textArgs, err := textInsertQuery.ToSQL()
+		if err != nil {
+			return nil, err
+		}
+
+		_, err = tx.Exec(textSQLQuery, textArgs...)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return results, nil
+}
+
+// BatchCreateLangStringNameTypes inserts multiple display name records in optimized batch operations.
+//
+// This function creates reference records for each non-empty display name slice, then bulk inserts
+// all individual language strings.
+//
+// Parameters:
+//   - tx: Active database transaction
+//   - displayNames: Slice of display name slices (each element is a []ILangStringNameType)
+//
+// Returns:
+//   - []sql.NullInt64: Database IDs of the created references (in same order as input)
+//   - error: An error if the insertion fails
+func BatchCreateLangStringNameTypes(tx *sql.Tx, displayNames [][]types.ILangStringNameType) ([]sql.NullInt64, error) {
+	dialect := goqu.Dialect("postgres")
+	results := make([]sql.NullInt64, len(displayNames))
+
+	// Identify non-empty display names and their indices
+	type nameWithIndex struct {
+		name  []types.ILangStringNameType
+		index int
+	}
+	nonEmptyNames := make([]nameWithIndex, 0, len(displayNames))
+	for i, name := range displayNames {
+		if len(name) > 0 {
+			nonEmptyNames = append(nonEmptyNames, nameWithIndex{name: name, index: i})
+		}
+	}
+
+	if len(nonEmptyNames) == 0 {
+		return results, nil
+	}
+
+	// For DEFAULT VALUES inserts, we need raw SQL
+	placeholders := ""
+	for i := range nonEmptyNames {
+		if i > 0 {
+			placeholders += ", "
+		}
+		placeholders += "(DEFAULT)"
+	}
+
+	rows, err := tx.Query(fmt.Sprintf("INSERT INTO lang_string_name_type_reference VALUES %s RETURNING id", placeholders))
+	if err != nil {
+		return nil, err
+	}
+
+	// Collect returned IDs
+	refIDs := make([]int64, 0, len(nonEmptyNames))
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			_ = rows.Close()
+			return nil, err
+		}
+		refIDs = append(refIDs, id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	if len(refIDs) != len(nonEmptyNames) {
+		return nil, fmt.Errorf("batch insert returned %d IDs but expected %d", len(refIDs), len(nonEmptyNames))
+	}
+
+	// Map IDs back to original positions and collect all name entries
+	nameRows := make([]interface{}, 0)
+	for i, n := range nonEmptyNames {
+		refID := refIDs[i]
+		results[n.index] = sql.NullInt64{Int64: refID, Valid: true}
+
+		// Collect name entries for this display name
+		for _, langString := range n.name {
+			nameRows = append(nameRows, goqu.Record{
+				"lang_string_name_type_reference_id": refID,
+				"language":                           langString.Language(),
+				"text":                               langString.Text(),
+			})
+		}
+	}
+
+	// Batch insert all name entries
+	if len(nameRows) > 0 {
+		nameInsertQuery := dialect.Insert("lang_string_name_type").
+			Cols("lang_string_name_type_reference_id", "language", "text").
+			Rows(nameRows...)
+
+		nameSQLQuery, nameArgs, err := nameInsertQuery.ToSQL()
+		if err != nil {
+			return nil, err
+		}
+
+		_, err = tx.Exec(nameSQLQuery, nameArgs...)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return results, nil
+}
