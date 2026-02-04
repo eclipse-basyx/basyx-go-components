@@ -1294,7 +1294,7 @@ func StartTXIfNeeded(tx *sql.Tx, err error, db *sql.DB) (func(*error), *sql.Tx, 
 	return cu, localTx, err
 }
 
-// CommitTransactionIfNeeded commits the database transaction if it was started locally.
+// CommitTransactionIfNeeded commits the database transaction if it was started locally .
 func CommitTransactionIfNeeded(tx *sql.Tx, localTx *sql.Tx) error {
 	if !IsTransactionAlreadyInProgress(tx) {
 		err := localTx.Commit()
