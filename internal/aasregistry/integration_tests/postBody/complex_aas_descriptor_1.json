@@ -306,11 +306,24 @@
     "assetType": "machine",
     "endpoints": [
         {
-            "interface": "AAS-3.0",
-            "protocolInformation": {
-                "href": "https://demo3.digital-twin.host/aas-environment/...",
-                "endpointProtocol": "https"
+        "interface": "SUBMODEL-3.0",
+        "protocolInformation": {
+            "href": "https://dataplane-trace.edc.aws.bmw.cloud/public/urn:uuid:1941afc7-e75d-439a-a690-b4a8c09f7076/submodel",
+            "endpointProtocol": "HTTP",
+            "endpointProtocolVersion": [
+            "1.1"
+            ],
+            "subprotocol": "DSP",
+            "subprotocolBody": "id=modul_bundle_sp;dspEndpoint=https://connector-trace.edc.aws.bmw.cloud/api/v1/dsp",
+            "subprotocolBodyEncoding": "plain",
+            "securityAttributes": [
+            {
+                "type": "NONE",
+                "key": "NONE",
+                "value": "NONE"
             }
+            ]
+        }
         }
     ],
     "globalAssetId": "https://iese.fraunhofer.de/ids/asset/5079_8944_8914_9414",
@@ -320,7 +333,16 @@
         {
             "name": "help",
             "valueType": "xs:string",
-            "value": "test"
+            "value": "test",
+            "refersTo": [{
+                "type": "ExternalReference",
+                "keys": [
+                    {
+                        "type": "GlobalReference",
+                        "value": "https://iese.fraunhofer.de/ids/aas/asdb"
+                    }
+                ]
+            }]
         }
     ],
     "submodelDescriptors": [

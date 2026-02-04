@@ -29,6 +29,16 @@
 CREATE EXTENSION IF NOT EXISTS ltree;
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
 
+
+-- ------------------------------------------
+-- Enums
+-- ------------------------------------------
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'security_type') THEN
+    CREATE TYPE security_type AS ENUM ('NONE', 'RFC_TLSA', 'W3C_DID');
+  END IF;
+END $$;
+
 -- ------------------------------------------
 -- Tables
 -- ------------------------------------------
@@ -397,7 +407,7 @@ CREATE TABLE IF NOT EXISTS aas_descriptor_endpoint (
 CREATE TABLE IF NOT EXISTS security_attributes (
   id BIGSERIAL NOT NULL PRIMARY KEY,
   endpoint_id BIGINT NOT NULL REFERENCES aas_descriptor_endpoint(id) ON DELETE CASCADE,
-  security_type int NOT NULL,
+  security_type security_type NOT NULL,
   security_key TEXT NOT NULL,
   security_value TEXT NOT NULL
 );
