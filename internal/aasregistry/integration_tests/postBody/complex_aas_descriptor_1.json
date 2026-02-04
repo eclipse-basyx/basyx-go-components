@@ -333,7 +333,16 @@
         {
             "name": "help",
             "valueType": "xs:string",
-            "value": "test"
+            "value": "test",
+            "refersTo": [{
+                "type": "ExternalReference",
+                "keys": [
+                    {
+                        "type": "GlobalReference",
+                        "value": "https://iese.fraunhofer.de/ids/aas/asdb"
+                    }
+                ]
+            }]
         }
     ],
     "submodelDescriptors": [

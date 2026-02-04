@@ -307,7 +307,16 @@
                 {
                     "name": "help",
                     "value": "test",
-                    "valueType": "xs:string"
+                    "valueType": "xs:string",
+                    "refersTo": [{
+                        "type": "ExternalReference",
+                        "keys": [
+                            {
+                                "type": "GlobalReference",
+                                "value": "https://iese.fraunhofer.de/ids/aas/asdb"
+                            }
+                        ]
+                    }]
                 }
             ],
             "globalAssetId": "https://iese.fraunhofer.de/ids/asset/5079_8944_8914_9414",
