@@ -22,12 +22,23 @@ services:
       dockerfile: ./cmd/digitaltwinregistryservice/Dockerfile
     environment:
       - SERVER_PORT=5004
+      - POSTGRES_HOST=db
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=admin123
+      - POSTGRES_DBNAME=basyxTestDB
+      - POSTGRES_MAXOPENCONNECTIONS=500
+      - POSTGRES_MAXIDLECONNECTIONS=500
+      - POSTGRES_CONNMAXLIFETIMEMINUTES=5
+      - ABAC_ENABLED=true
+      - ABAC_MODELPATH=/security_env/access-rules.json
+      - OIDC_TRUSTLISTPATH=/security_env/trustlist.json
     ports:
       - "5004:5004"
     depends_on:
       db:
         condition: service_healthy
     volumes:
-      - ./config:/config:ro
+      - ./security_env:/security_env:ro
     extra_hosts:
       - "localhost:host-gateway"

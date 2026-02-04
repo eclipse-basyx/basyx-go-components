@@ -108,9 +108,6 @@ func SetupSecurityWithClaimsMiddleware(
 	if err := json.Unmarshal(trustlistData, &trustlist); err != nil {
 		return fmt.Errorf("parse OIDC trustlist: %w", err)
 	}
-	if len(trustlist) == 0 {
-		return fmt.Errorf("OIDC trustlist is empty")
-	}
 
 	oidcProviders := make([]OIDCProviderSettings, 0, len(trustlist))
 	for _, p := range trustlist {

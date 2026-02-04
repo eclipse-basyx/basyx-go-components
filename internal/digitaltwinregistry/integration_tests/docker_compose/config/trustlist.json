@@ -1,7 +1,0 @@
-[
-  {
-    "issuer": "http://localhost:8080/realms/basyx",
-    "audience": "discovery-service",
-    "scopes": ["email", "profile"]
-  }
-]

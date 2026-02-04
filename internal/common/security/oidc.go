@@ -77,10 +77,6 @@ type OIDCProviderSettings struct {
 func NewOIDC(ctx context.Context, s OIDCSettings) (*OIDC, error) {
 	log.Printf("🔐 Initializing OIDC verifier…")
 
-	if len(s.Providers) == 0 {
-		return nil, fmt.Errorf("at least one OIDC provider must be configured")
-	}
-
 	verifiers := make(map[string]issuerVerifier, len(s.Providers))
 	for _, p := range s.Providers {
 		issuer := strings.TrimSpace(p.Issuer)
