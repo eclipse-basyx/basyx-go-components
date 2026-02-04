@@ -167,11 +167,6 @@ func ReadSpecificAssetIDsByDescriptorIDs(
 	if err != nil {
 		return nil, err
 	}
-	cteWhere := goqu.L(fmt.Sprintf("%s.%s = ANY(?::bigint[])", aliasSpecificAssetID, colDescriptorID), arr)
-	base, err = auth.ApplyResolvedFieldPathCTEs(base, collector, cteWhere)
-	if err != nil {
-		return nil, err
-	}
 
 	sqlStr, args, err := base.ToSQL()
 	if err != nil {

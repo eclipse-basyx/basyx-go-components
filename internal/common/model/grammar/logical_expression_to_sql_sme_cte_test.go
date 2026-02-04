@@ -1,3 +1,6 @@
+//go:build cte
+// +build cte
+
 package grammar
 
 import (
@@ -59,10 +62,10 @@ func TestLogicalExpression_SME_WithCollector_BuildsCTE(t *testing.T) {
 	if strings.Contains(sql, "EXISTS") {
 		t.Fatalf("did not expect EXISTS in SQL, got: %s", sql)
 	}
-		if !strings.Contains(sql, "WITH flagtable_1") {
-			t.Fatalf("expected flagtable_1 CTE in SQL, got: %s", sql)
+	if !strings.Contains(sql, "WITH flagtable_1") {
+		t.Fatalf("expected flagtable_1 CTE in SQL, got: %s", sql)
 	}
-		if !strings.Contains(sql, "\"flagtable_1\".\"rfp_1\"") {
+	if !strings.Contains(sql, "\"flagtable_1\".\"rfp_1\"") {
 		t.Fatalf("expected SME flag alias in SQL, got: %s", sql)
 	}
 	if !strings.Contains(sql, "\"submodel_element\".\"idshort_path\"") {

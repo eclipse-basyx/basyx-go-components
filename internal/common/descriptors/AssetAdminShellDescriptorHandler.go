@@ -406,10 +406,6 @@ func buildListAssetAdministrationShellDescriptorsQuery(
 	if err != nil {
 		return nil, err
 	}
-	ds, err = auth.ApplyResolvedFieldPathCTEs(ds, collector, nil)
-	if err != nil {
-		return nil, err
-	}
 
 	if cursor != "" {
 		ds = ds.Where(tAASDescriptor.Col(colAASID).Gte(cursor))

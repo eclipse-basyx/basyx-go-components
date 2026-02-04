@@ -264,11 +264,6 @@ func (p *PostgreSQLDiscoveryDatabase) SearchAASIDsByAssetLinks(
 		_, _ = fmt.Println("SearchAASIDsByAssetLinks: filter error:", err)
 		return nil, "", common.NewInternalServerError("Failed to build query filters. See server logs for details.")
 	}
-	ds, err = auth.ApplyResolvedFieldPathCTEs(ds, collector, nil)
-	if err != nil {
-		_, _ = fmt.Println("SearchAASIDsByAssetLinks: cte error:", err)
-		return nil, "", common.NewInternalServerError("Failed to build query filters. See server logs for details.")
-	}
 
 	sqlStr, args, err := ds.ToSQL()
 	if common.DebugEnabled(ctx) {

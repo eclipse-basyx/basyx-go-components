@@ -1,3 +1,6 @@
+//go:build cte
+// +build cte
+
 package grammar
 
 import (

@@ -194,11 +194,6 @@ func ReadSubmodelDescriptorsByAASDescriptorIDs(
 			return nil, err
 		}
 	}
-	cteWhere := goqu.L(fmt.Sprintf("%s.%s = ANY(?::bigint[])", aliasSubmodelDescriptor, colAASDescriptorID), arr)
-	ds, err = auth.ApplyResolvedFieldPathCTEs(ds, collector, cteWhere)
-	if err != nil {
-		return nil, err
-	}
 
 	sqlStr, args, err := ds.ToSQL()
 

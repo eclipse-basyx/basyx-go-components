@@ -138,11 +138,6 @@ func ReadSpecificAssetIDsByAASRef(
 	if err != nil {
 		return nil, err
 	}
-	cteWhere := tSpecificAssetID.Col(colAASRef).Eq(aasRef)
-	ds, err = auth.ApplyResolvedFieldPathCTEs(ds, collector, cteWhere)
-	if err != nil {
-		return nil, err
-	}
 
 	sqlStr, args, err := ds.ToSQL()
 	if err != nil {

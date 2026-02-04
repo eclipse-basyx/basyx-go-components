@@ -26,17 +26,6 @@ func toPreparedSQLForDescriptor(t *testing.T, le LogicalExpression) (string, []i
 		Select(goqu.V(1)).
 		Where(whereExpr)
 
-	ctes, err := BuildResolvedFieldPathFlagCTEsWithCollector(collector, collector.Entries(), nil)
-	if err != nil {
-		t.Fatalf("BuildResolvedFieldPathFlagCTEsWithCollector returned error: %v", err)
-	}
-	for _, cte := range ctes {
-		ds = ds.With(cte.Alias, cte.Dataset).
-			LeftJoin(
-				goqu.T(cte.Alias),
-				goqu.On(goqu.I(cte.Alias+".root_id").Eq(goqu.I("descriptor.id"))),
-			)
-	}
 	ds = ds.Prepared(true)
 	sql, args, err := ds.ToSQL()
 	if err != nil {
@@ -132,22 +121,22 @@ func TestLogicalExpression_ToSQL_ComplexCases(t *testing.T) {
 			noExists: true,
 		},
 		{
-			name: "or mixes value-to-value with flag CTE",
+			name: "or mixes value-to-value with exists",
 			expr: LogicalExpression{Or: []LogicalExpression{
 				{Eq: ComparisonItems{strVal("same"), strVal("same")}},
 				{Eq: ComparisonItems{field("$aasdesc#specificAssetIds[0].externalSubjectId.keys[1].value"), strVal("WRITTEN_BY_X")}},
 			}},
-			wantSQL: []string{" OR ", "flagtable_1"},
+			wantSQL: []string{" OR ", "EXISTS", "specific_asset_id", "external_subject_reference_key"},
 			wantArgs: []interface{}{
 				"same",
 				"WRITTEN_BY_X",
 				0,
 				1,
 			},
-			noExists: true,
+			noExists: false,
 		},
 		{
-			name: "nested JSON with indexed submodelDescriptors uses flag CTE",
+			name: "nested JSON with indexed submodelDescriptors uses exists",
 			jsonInput: `{
 				"$and": [
 					{"$ne": [
@@ -160,14 +149,14 @@ func TestLogicalExpression_ToSQL_ComplexCases(t *testing.T) {
 					]}
 				]
 			}`,
-			wantSQL: []string{"flagtable_1"},
+			wantSQL: []string{"EXISTS", "submodel_descriptor", "semantic_id_reference_key"},
 			wantArgs: []interface{}{
 				2,
 				0,
 				"GlobalReference",
 				"urn:example",
 			},
-			noExists: true,
+			noExists: false,
 		},
 	}
 

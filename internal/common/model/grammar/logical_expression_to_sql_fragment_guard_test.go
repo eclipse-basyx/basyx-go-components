@@ -151,7 +151,4 @@ func TestLogicalExpression_EvaluateToExpressionWithNegatedFragments_WithCollecto
 	if !strings.Contains(sqlStr, "\"aas_descriptor_endpoint\".\"position\"") {
 		t.Fatalf("expected endpoint position binding in SQL, got: %s", sqlStr)
 	}
-	if len(collector.Entries()) != 0 {
-		t.Fatalf("expected collector to stay empty for fragments, got %d entries", len(collector.Entries()))
-	}
 }

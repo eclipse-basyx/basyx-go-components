@@ -172,10 +172,6 @@ func TestLogicalExpression_evaluateFragmentToExpression_WithCollector_UsesFlagAl
 	if whereExpr == nil {
 		t.Fatalf("expected whereExpr to be non-nil")
 	}
-	entries := collector.Entries()
-	if len(entries) != 0 {
-		t.Fatalf("expected no collected entries for fragment anymore, got %d", len(entries))
-	}
 
 	d := goqu.Dialect("postgres")
 	ds := d.From(goqu.T("descriptor").As("descriptor")).Select(goqu.V(1)).Where(whereExpr).Prepared(true)

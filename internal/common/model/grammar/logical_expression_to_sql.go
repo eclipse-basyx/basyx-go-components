@@ -30,7 +30,6 @@
 package grammar
 
 import (
-	"encoding/json"
 	"fmt"
 	"reflect"
 	"regexp"
@@ -78,9 +77,6 @@ type JoinPlanConfig struct {
 	RootJoinKeyColumn func() string
 	Correlatable      func(string) bool
 }
-
-// DefaultCollectorCTEAlias is the fixed alias used for all collector-generated CTEs.
-const DefaultCollectorCTEAlias = "flagtable"
 
 // CollectorRoot defines the supported collector roots.
 //
@@ -131,7 +127,7 @@ func NewResolvedFieldPathCollectorForRoot(root CollectorRoot) (*ResolvedFieldPat
 	if err != nil {
 		return nil, err
 	}
-	return NewResolvedFieldPathCollectorWithConfig(DefaultCollectorCTEAlias, &cfg), nil
+	return NewResolvedFieldPathCollectorWithConfig(&cfg), nil
 }
 
 func joinPlanConfigForRoot(root CollectorRoot) (JoinPlanConfig, error) {
@@ -471,211 +467,14 @@ func joinPlanConfigForBD() JoinPlanConfig {
 	}
 }
 
-// ResolvedFieldPathFlag ties a resolved field path set to the boolean flag alias that
-// will be emitted in a precomputed CTE.
-type ResolvedFieldPathFlag struct {
-	Alias     string
-	Resolved  []ResolvedFieldPath
-	Predicate exp.Expression
-	UseAnd    bool
-}
-
-// ResolvedFieldPathCollector collects resolved field path predicates and assigns
-// unique flag aliases that can be referenced in WHERE clauses.
+// ResolvedFieldPathCollector carries join configuration for inline EXISTS evaluation.
 type ResolvedFieldPathCollector struct {
-	CTEAlias              string
-	nextID                int
-	nextGroupID           int
-	keyToAlias            map[string]string
-	groupKeyToAlias       map[string]string
-	flagAliasToGroupAlias map[string]string
-	entries               []ResolvedFieldPathFlag
-	joinConfig            *JoinPlanConfig
+	joinConfig *JoinPlanConfig
 }
 
-// NewResolvedFieldPathCollector creates a collector with the provided CTE alias.
-// When cteAlias is empty, DefaultCollectorCTEAlias is used.
-func NewResolvedFieldPathCollectorWithConfig(cteAlias string, config *JoinPlanConfig) *ResolvedFieldPathCollector {
-	if strings.TrimSpace(cteAlias) == "" {
-		cteAlias = DefaultCollectorCTEAlias
-	}
-	return &ResolvedFieldPathCollector{
-		CTEAlias:              cteAlias,
-		keyToAlias:            map[string]string{},
-		groupKeyToAlias:       map[string]string{},
-		flagAliasToGroupAlias: map[string]string{},
-		joinConfig:            config,
-	}
-}
-
-// Entries returns a shallow copy of the collected flag definitions.
-func (c *ResolvedFieldPathCollector) Entries() []ResolvedFieldPathFlag {
-	if c == nil {
-		return nil
-	}
-	out := make([]ResolvedFieldPathFlag, len(c.entries))
-	copy(out, c.entries)
-	return out
-}
-
-// Register adds a new resolved predicate or returns the existing alias if it was already registered.
-func (c *ResolvedFieldPathCollector) Register(resolved []ResolvedFieldPath, predicate exp.Expression) (string, error) {
-	return c.RegisterWithAgg(resolved, predicate, false)
-}
-
-// RegisterWithAgg adds a new resolved predicate or returns the existing alias if it was already registered.
-// When useAnd is true, the generated CTE uses BOOL_AND instead of BOOL_OR.
-func (c *ResolvedFieldPathCollector) RegisterWithAgg(resolved []ResolvedFieldPath, predicate exp.Expression, useAnd bool) (string, error) {
-	if c == nil {
-		return "", fmt.Errorf("resolved field path collector is nil")
-	}
-	key, err := c.signatureWithAgg(resolved, predicate, useAnd)
-	if err != nil {
-		return "", err
-	}
-	if alias, ok := c.keyToAlias[key]; ok {
-		return alias, nil
-	}
-
-	c.nextID++
-	alias := fmt.Sprintf("rfp_%d", c.nextID)
-	c.keyToAlias[key] = alias
-	c.entries = append(c.entries, ResolvedFieldPathFlag{
-		Alias:     alias,
-		Resolved:  resolved,
-		Predicate: predicate,
-		UseAnd:    useAnd,
-	})
-	groupAlias, err := c.groupAliasForResolved(resolved)
-	if err != nil {
-		return "", err
-	}
-	c.flagAliasToGroupAlias[alias] = groupAlias
-	return alias, nil
-}
-
-func (c *ResolvedFieldPathCollector) signature(resolved []ResolvedFieldPath, predicate exp.Expression) (string, error) {
-	return c.signatureWithAgg(resolved, predicate, false)
-}
-
-func (c *ResolvedFieldPathCollector) signatureWithAgg(resolved []ResolvedFieldPath, predicate exp.Expression, useAnd bool) (string, error) {
-	resolvedJSON, err := json.Marshal(resolved)
-	if err != nil {
-		return "", err
-	}
-	predicateJSON, err := predicateSignature(predicate)
-	if err != nil {
-		return "", err
-	}
-	return fmt.Sprintf("%t|%s|%s", useAnd, string(resolvedJSON), predicateJSON), nil
-}
-
-func predicateSignature(expr exp.Expression) (string, error) {
-	d := goqu.Dialect("postgres")
-	ds := d.From(goqu.T("descriptor").As("descriptor")).Select(goqu.V(1))
-	if expr != nil {
-		ds = ds.Where(expr)
-	}
-	ds = ds.Prepared(true)
-	sql, args, err := ds.ToSQL()
-	if err != nil {
-		return "", err
-	}
-	payload := struct {
-		SQL  string        `json:"sql"`
-		Args []interface{} `json:"args"`
-	}{
-		SQL:  sql,
-		Args: args,
-	}
-	b, err := json.Marshal(payload)
-	if err != nil {
-		return "", err
-	}
-	return string(b), nil
-}
-
-func (c *ResolvedFieldPathCollector) qualifiedAlias(alias string) string {
-	if c == nil {
-		return alias
-	}
-	if groupAlias, ok := c.flagAliasToGroupAlias[alias]; ok && strings.TrimSpace(groupAlias) != "" {
-		return groupAlias + "." + alias
-	}
-	if strings.TrimSpace(c.CTEAlias) == "" {
-		return alias
-	}
-	return c.CTEAlias + "." + alias
-}
-
-func (c *ResolvedFieldPathCollector) groupAliasForResolved(resolved []ResolvedFieldPath) (string, error) {
-	if c == nil {
-		return "", fmt.Errorf("resolved field path collector is nil")
-	}
-	plan, err := buildJoinPlanForResolvedWithConfig(resolved, c.effectiveJoinConfig())
-	if err != nil {
-		return "", err
-	}
-	key := joinPlanSignature(plan)
-	if alias, ok := c.groupKeyToAlias[key]; ok {
-		return alias, nil
-	}
-	c.nextGroupID++
-	alias := fmt.Sprintf("%s_%d", c.CTEAlias, c.nextGroupID)
-	c.groupKeyToAlias[key] = alias
-	return alias, nil
-}
-
-// ResolvedFieldPathFlagCTE groups multiple flag expressions that share the same join graph.
-type ResolvedFieldPathFlagCTE struct {
-	Alias   string
-	Dataset *goqu.SelectDataset
-	Flags   []ResolvedFieldPathFlag
-}
-
-// BuildResolvedFieldPathFlagCTEs builds one or more CTE datasets for the provided entries.
-// Entries that share the same join graph are grouped into a single CTE with multiple flag columns.
-//
-// Join planning is root-specific via JoinPlanConfig; use NewResolvedFieldPathCollectorForRoot
-// (or a custom config) to target $sm/$sme/$smdesc.
-func BuildResolvedFieldPathFlagCTEs(cteAlias string, entries []ResolvedFieldPathFlag) ([]ResolvedFieldPathFlagCTE, error) {
-	return BuildResolvedFieldPathFlagCTEsWithWhere(cteAlias, entries, nil)
-}
-
-// BuildResolvedFieldPathFlagCTEsWithWhere builds one or more CTE datasets for the provided entries
-// and applies an optional WHERE clause to each CTE (e.g., root key filters).
-func BuildResolvedFieldPathFlagCTEsWithWhere(cteAlias string, entries []ResolvedFieldPathFlag, where exp.Expression) ([]ResolvedFieldPathFlagCTE, error) {
-	if len(entries) == 0 {
-		return nil, nil
-	}
-	if strings.TrimSpace(cteAlias) == "" {
-		cteAlias = DefaultCollectorCTEAlias
-	}
-
-	order, grouped, err := groupFlagsByJoinPlan(entries, defaultJoinPlanConfig(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	ctes := make([]ResolvedFieldPathFlagCTE, 0, len(grouped))
-	for idx, key := range order {
-		group := grouped[key]
-		alias := cteAlias
-		if len(grouped) > 1 {
-			alias = fmt.Sprintf("%s_%d", cteAlias, idx+1)
-		}
-		ds, err := buildFlagCTEDataset(group.plan, group.entries, where, defaultJoinPlanConfig())
-		if err != nil {
-			return nil, err
-		}
-		ctes = append(ctes, ResolvedFieldPathFlagCTE{
-			Alias:   alias,
-			Dataset: ds,
-			Flags:   group.entries,
-		})
-	}
-
-	return ctes, nil
+// NewResolvedFieldPathCollectorWithConfig creates a collector with the provided join config.
+func NewResolvedFieldPathCollectorWithConfig(config *JoinPlanConfig) *ResolvedFieldPathCollector {
+	return &ResolvedFieldPathCollector{joinConfig: config}
 }
 
 func buildInlineNotExistsExpression(resolved []ResolvedFieldPath, predicate exp.Expression, collector *ResolvedFieldPathCollector) (exp.Expression, error) {
@@ -685,158 +484,6 @@ func buildInlineNotExistsExpression(resolved []ResolvedFieldPath, predicate exp.
 		return nil, err
 	}
 	return goqu.L("NOT (?)", existsExpr), nil
-}
-
-// BuildResolvedFieldPathFlagCTEsWithCollector builds one or more CTE datasets for the provided entries
-// and uses the collector's join-group aliases to name the CTEs.
-func BuildResolvedFieldPathFlagCTEsWithCollector(collector *ResolvedFieldPathCollector, entries []ResolvedFieldPathFlag, where exp.Expression) ([]ResolvedFieldPathFlagCTE, error) {
-	if collector == nil {
-		return nil, fmt.Errorf("resolved field path collector is nil")
-	}
-	if len(entries) == 0 {
-		return nil, nil
-	}
-
-	aliasForResolved := func(resolved []ResolvedFieldPath) (string, error) {
-		return collector.groupAliasForResolved(resolved)
-	}
-	order, grouped, err := groupFlagsByJoinPlan(entries, collector.effectiveJoinConfig(), aliasForResolved)
-	if err != nil {
-		return nil, err
-	}
-
-	ctes := make([]ResolvedFieldPathFlagCTE, 0, len(grouped))
-	for _, key := range order {
-		group := grouped[key]
-		ds, err := buildFlagCTEDataset(group.plan, group.entries, where, collector.effectiveJoinConfig())
-		if err != nil {
-			return nil, err
-		}
-		ctes = append(ctes, ResolvedFieldPathFlagCTE{
-			Alias:   group.alias,
-			Dataset: ds,
-			Flags:   group.entries,
-		})
-	}
-
-	return ctes, nil
-}
-
-type cteGroup struct {
-	plan    existsJoinPlan
-	entries []ResolvedFieldPathFlag
-	alias   string
-}
-
-func groupFlagsByJoinPlan(
-	entries []ResolvedFieldPathFlag,
-	config JoinPlanConfig,
-	aliasForResolved func([]ResolvedFieldPath) (string, error),
-) ([]string, map[string]*cteGroup, error) {
-	grouped := map[string]*cteGroup{}
-	order := make([]string, 0, len(entries))
-
-	for _, entry := range entries {
-		plan, err := buildJoinPlanForResolvedWithConfig(entry.Resolved, config)
-		if err != nil {
-			return nil, nil, err
-		}
-		key := joinPlanSignature(plan)
-
-		group, ok := grouped[key]
-		if !ok {
-			alias := ""
-			if aliasForResolved != nil {
-				alias, err = aliasForResolved(entry.Resolved)
-				if err != nil {
-					return nil, nil, err
-				}
-			}
-			group = &cteGroup{plan: plan, alias: alias}
-			grouped[key] = group
-			order = append(order, key)
-		}
-		group.entries = append(group.entries, entry)
-	}
-
-	return order, grouped, nil
-}
-
-func joinPlanSignature(plan existsJoinPlan) string {
-	aliases := make([]string, 0, len(plan.ExpandedAliases))
-	aliases = append(aliases, plan.ExpandedAliases...)
-	sort.Strings(aliases)
-	return plan.BaseAlias + "|" + strings.Join(aliases, ",")
-}
-
-func buildFlagCTEDataset(plan existsJoinPlan, entries []ResolvedFieldPathFlag, where exp.Expression, config JoinPlanConfig) (*goqu.SelectDataset, error) {
-	if len(entries) == 0 {
-		return nil, fmt.Errorf("cannot build flag CTE dataset with no entries")
-	}
-
-	d := goqu.Dialect("postgres")
-	ds := d.From(goqu.T(plan.BaseTable).As(plan.BaseAlias))
-
-	applied := map[string]struct{}{plan.BaseAlias: {}}
-	visiting := map[string]struct{}{}
-
-	var ensure func(alias string) error
-	ensure = func(alias string) error {
-		if alias == "" {
-			return nil
-		}
-		if alias == plan.BaseAlias {
-			return nil
-		}
-		if _, ok := applied[alias]; ok {
-			return nil
-		}
-		if _, ok := visiting[alias]; ok {
-			return fmt.Errorf("cyclic CTE join dependency for alias %q", alias)
-		}
-		rule, ok := plan.Rules[alias]
-		if !ok {
-			return fmt.Errorf("no CTE join rule registered for alias %q", alias)
-		}
-		visiting[alias] = struct{}{}
-		for _, dep := range rule.Deps {
-			if err := ensure(dep); err != nil {
-				return err
-			}
-		}
-		delete(visiting, alias)
-		ds = rule.Apply(ds)
-		applied[alias] = struct{}{}
-		return nil
-	}
-
-	for _, alias := range plan.ExpandedAliases {
-		if err := ensure(alias); err != nil {
-			return nil, err
-		}
-	}
-
-	descriptorExpr, err := config.GroupKeyForBase(plan.BaseAlias)
-	if err != nil {
-		return nil, err
-	}
-
-	// Keep a stable column name; this is the root key used by ApplyResolvedFieldPathCTEs.
-	selects := []interface{}{descriptorExpr.As("root_id")}
-	for _, entry := range entries {
-		flagExpr := andBindingsForResolvedFieldPaths(entry.Resolved, entry.Predicate)
-		agg := "BOOL_OR"
-		if entry.UseAnd {
-			agg = "BOOL_AND"
-		}
-		selects = append(selects, goqu.L("COALESCE("+agg+"(?), false)", flagExpr).As(entry.Alias))
-	}
-
-	ds = ds.Select(selects...).GroupBy(descriptorExpr)
-	if where != nil {
-		ds = ds.Where(where)
-	}
-	return ds, nil
 }
 
 func buildInlineExistsExpression(resolved []ResolvedFieldPath, predicate exp.Expression, collector *ResolvedFieldPathCollector) (exp.Expression, error) {
@@ -1020,16 +667,6 @@ func (c *ResolvedFieldPathCollector) effectiveJoinConfig() JoinPlanConfig {
 		}
 	}
 	return cfg
-}
-
-// EffectiveRootJoinKey returns the outer-root join key expression that should be used
-// to connect flag CTEs back to the main query.
-func (c *ResolvedFieldPathCollector) EffectiveRootJoinKey() exp.IdentifierExpression {
-	cfg := c.effectiveJoinConfig()
-	if cfg.RootJoinKey != nil {
-		return cfg.RootJoinKey()
-	}
-	return goqu.I("descriptor.id")
 }
 
 func descriptorIDForBaseAlias(base string) (exp.IdentifierExpression, error) {

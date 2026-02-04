@@ -44,17 +44,6 @@ func TestLogicalExpression_EvaluateToExpression_NestedTree_WithExistsAndNot(t *t
 		).
 		Select(goqu.V(1)).
 		Where(whereExpr)
-	ctes, err := BuildResolvedFieldPathFlagCTEsWithCollector(collector, collector.Entries(), nil)
-	if err != nil {
-		t.Fatalf("BuildResolvedFieldPathFlagCTEsWithCollector returned error: %v", err)
-	}
-	for _, cte := range ctes {
-		ds = ds.With(cte.Alias, cte.Dataset).
-			LeftJoin(
-				goqu.T(cte.Alias),
-				goqu.On(goqu.I(cte.Alias+".root_id").Eq(goqu.I("descriptor.id"))),
-			)
-	}
 	ds = ds.Prepared(true)
 
 	sql, args, err := ds.ToSQL()
@@ -62,8 +51,8 @@ func TestLogicalExpression_EvaluateToExpression_NestedTree_WithExistsAndNot(t *t
 		t.Fatalf("ToSQL returned error: %v", err)
 	}
 
-	if strings.Contains(sql, "EXISTS") {
-		t.Fatalf("did not expect EXISTS in SQL, got: %s", sql)
+	if !strings.Contains(sql, "EXISTS") {
+		t.Fatalf("expected EXISTS in SQL, got: %s", sql)
 	}
 	if !strings.Contains(sql, " OR ") {
 		t.Fatalf("expected OR in SQL, got: %s", sql)
@@ -73,9 +62,6 @@ func TestLogicalExpression_EvaluateToExpression_NestedTree_WithExistsAndNot(t *t
 	}
 	if !strings.Contains(sql, "LIKE") {
 		t.Fatalf("expected LIKE for $contains in SQL, got: %s", sql)
-	}
-	if !strings.Contains(sql, "flagtable_1") {
-		t.Fatalf("expected flagtable_1 in SQL, got: %s", sql)
 	}
 
 	// Ensure important bindings/values are present in args.
@@ -137,17 +123,6 @@ func TestLogicalExpression_EvaluateToExpression_NestedJSON_UnmarshalAndGenerateS
 		).
 		Select(goqu.V(1)).
 		Where(whereExpr)
-	ctes, err := BuildResolvedFieldPathFlagCTEsWithCollector(collector, collector.Entries(), nil)
-	if err != nil {
-		t.Fatalf("BuildResolvedFieldPathFlagCTEsWithCollector returned error: %v", err)
-	}
-	for _, cte := range ctes {
-		ds = ds.With(cte.Alias, cte.Dataset).
-			LeftJoin(
-				goqu.T(cte.Alias),
-				goqu.On(goqu.I(cte.Alias+".root_id").Eq(goqu.I("descriptor.id"))),
-			)
-	}
 	ds = ds.Prepared(true)
 
 	sql, args, err := ds.ToSQL()
@@ -155,17 +130,14 @@ func TestLogicalExpression_EvaluateToExpression_NestedJSON_UnmarshalAndGenerateS
 		t.Fatalf("ToSQL returned error: %v", err)
 	}
 
-	if strings.Contains(sql, "EXISTS") {
-		t.Fatalf("did not expect EXISTS in SQL, got: %s", sql)
+	if !strings.Contains(sql, "EXISTS") {
+		t.Fatalf("expected EXISTS in SQL, got: %s", sql)
 	}
 	if !strings.Contains(sql, " OR ") {
 		t.Fatalf("expected OR in SQL, got: %s", sql)
 	}
 	if !strings.Contains(sql, "NOT") {
 		t.Fatalf("expected NOT in SQL, got: %s", sql)
-	}
-	if !strings.Contains(sql, "flagtable_1") {
-		t.Fatalf("expected flagtable_1 in SQL, got: %s", sql)
 	}
 	if !argListContains(args, "WRITTEN_BY_X") {
 		t.Fatalf("expected args to contain %q, got %#v", "WRITTEN_BY_X", args)

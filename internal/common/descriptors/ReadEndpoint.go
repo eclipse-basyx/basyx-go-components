@@ -206,10 +206,6 @@ func ReadEndpointsByDescriptorIDs(
 	if err != nil {
 		return nil, err
 	}
-	ds, err = auth.ApplyResolvedFieldPathCTEs(ds, collector, nil)
-	if err != nil {
-		return nil, err
-	}
 
 	sqlStr, args, err := ds.ToSQL()
 	if err != nil {
