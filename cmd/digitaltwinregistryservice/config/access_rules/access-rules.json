@@ -8,8 +8,8 @@
 
     "DEFOBJECTS": [
       { "name": "description", "objects": [ { "ROUTE": "/description" }, { "ROUTE": "/api/v3/description" } ] },
-      { "name": "all_assetlinks", "objects": [ { "ROUTE": "/lookup/*" }] },
-      { "name": "all_shell_descriptors", "objects": [ {"DESCRIPTOR": "$aasdesc(\"*\")"}] }
+      { "name": "all_assetlinks", "objects": [ { "ROUTE": "/lookup/*" } ] },
+      { "name": "all_shell_descriptors", "objects": [ { "DESCRIPTOR": "$aasdesc(\"*\")" } ] }
     ],
 
     "DEFACLS": [
@@ -21,9 +21,7 @@
 
     "DEFFORMULAS": [
       { "name": "always_true", "formula": { "$boolean": true } },
-      { "name": "logic", "formula": 
-        { "$eq": [ { "$attribute": { "CLAIM": "Edc-Bpn" } }, { "$strVal": "admin" } ] }
-    }
+      { "name": "logic", "formula": { "$eq": [ { "$attribute": { "CLAIM": "Edc-Bpn" } }, { "$strVal": "admin" } ] } }
     ],
 
     "rules": [

@@ -1,0 +1,169 @@
+[
+  {
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:5004/shell-descriptors",
+    "data": "postBody/descriptor_public.json",
+    "expectedStatus": 201,
+    "headers": {
+      "Edc-Bpn": "BPNL00000000015G"
+    }
+  },
+  {
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:5004/shell-descriptors",
+    "data": "postBody/descriptor_bpn.json",
+    "expectedStatus": 201,
+    "headers": {
+      "Edc-Bpn": "BPNL00000000015G"
+    }
+  },
+  {
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:5004/shell-descriptors",
+    "data": "postBody/descriptor_public_bpn.json",
+    "expectedStatus": 201,
+    "headers": {
+      "Edc-Bpn": "BPNL00000000015G"
+    }
+  },
+  {
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:5004/shell-descriptors",
+    "data": "postBody/descriptor_other_bpn.json",
+    "expectedStatus": 201,
+    "headers": {
+      "Edc-Bpn": "BPNL00000000015G"
+    }
+  },
+  {
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:5004/shell-descriptors",
+    "data": "postBody/descriptor_none.json",
+    "expectedStatus": 201,
+    "headers": {
+      "Edc-Bpn": "BPNL00000000015G"
+    }
+  },
+  {
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:5004/shell-descriptors",
+    "expectedStatus": 200,
+    "shouldMatch": "expected/shell_descriptors_all.json",
+    "headers": {
+      "Edc-Bpn": "BPNL00000000015G"
+    }
+  },
+  {
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:5004/lookup/shellsByAssetLink",
+    "data": "postBody/descriptor_public_bpn_lookup.json",
+    "expectedStatus": 200,
+    "shouldMatch": "expected/lookup_shells_by_assetlink.json",
+    "headers": {
+      "Edc-Bpn": "BPNL00000000015G"
+    }
+  },
+  {
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:5004/lookup/shellsByAssetLink",
+    "data": "postBody/descriptor_public_bpn_lookup.json",
+    "expectedStatus": 200,
+    "headers": {
+      "Edc-Bpn": "BPNL00000000015G"
+    }
+  },
+  {
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:5004/lookup/shellsByAssetLink",
+    "data": "postBody/descriptor_public_bpn_lookup.json",
+    "expectedStatus": 200,
+    "headers": {
+      "Edc-Bpn": "BPNL999999999999"
+    }
+  },
+  {
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:5004/lookup/shellsByAssetLink",
+    "data": "postBody/descriptor_public_bpn_lookup.json",
+    "expectedStatus": 200
+  },
+  {
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:5004/lookup/shellsByAssetLink",
+    "data": "postBody/assetlink_empty.json",
+    "expectedStatus": 200,
+    "headers": {
+      "Edc-Bpn": "BPNL00000000015G"
+    }
+  },
+  {
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:5004/lookup/shellsByAssetLink",
+    "data": "postBody/assetlink_empty.json",
+    "expectedStatus": 200,
+    "headers": {
+      "Edc-Bpn": "BPNL999999999999"
+    }
+  },
+  {
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:5004/lookup/shellsByAssetLink",
+    "data": "postBody/assetlink_empty.json",
+    "expectedStatus": 200
+  },
+  {
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:5004/lookup/shellsByAssetLink?createdAfter=2999-01-01T00:00:00Z",
+    "data": "postBody/descriptor_public_bpn_lookup.json",
+    "expectedStatus": 200,
+    "shouldMatch": "expected/lookup_shells_by_assetlink_empty.json",
+    "headers": {
+      "Edc-Bpn": "BPNL00000000015G"
+    }
+  },
+  {
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:5004/lookup/shells/dXJuOnV1aWQ6MDE5YzAwMDUtYjJiNy03YjFkLThjYzctYmI2ZmUzZTVhNWZh",
+    "expectedStatus": 200,
+    "shouldMatch": "expected/asset_ids_public.json",
+    "headers": {
+      "Edc-Bpn": "BPNL00000000015G"
+    }
+  },
+  {
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:5004/lookup/shells/dXJuOnV1aWQ6MDE5YzAwMDUtYjJiNy03YjFkLThjYzctYmI2ZmUzZTVhNWZi",
+    "expectedStatus": 200,
+    "shouldMatch": "expected/asset_ids_bpn.json",
+    "headers": {
+      "Edc-Bpn": "BPNL00000000015G"
+    }
+  },
+  {
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:5004/lookup/shells/dXJuOnV1aWQ6MDE5YzAwMDUtYjJiNy03YjFkLThjYzctYmI2ZmUzZTVhNWZj",
+    "expectedStatus": 200,
+    "shouldMatch": "expected/asset_ids_public_bpn.json",
+    "headers": {
+      "Edc-Bpn": "BPNL00000000015G"
+    }
+  },
+  {
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:5004/lookup/shells/dXJuOnV1aWQ6MDE5YzAwMDUtYjJiNy03YjFkLThjYzctYmI2ZmUzZTVhNWZk",
+    "expectedStatus": 200,
+    "shouldMatch": "expected/asset_ids_other_bpn.json",
+    "headers": {
+      "Edc-Bpn": "BPNL00000000015G"
+    }
+  },
+  {
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:5004/lookup/shells/dXJuOnV1aWQ6MDE5YzAwMDUtYjJiNy03YjFkLThjYzctYmI2ZmUzZTVhNWZl",
+    "expectedStatus": 200,
+    "shouldMatch": "expected/asset_ids_none.json",
+    "headers": {
+      "Edc-Bpn": "BPNL00000000015G"
+    }
+  }
+]
