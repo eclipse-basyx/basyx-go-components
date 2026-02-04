@@ -678,6 +678,15 @@ func BuildResolvedFieldPathFlagCTEsWithWhere(cteAlias string, entries []Resolved
 	return ctes, nil
 }
 
+func buildInlineNotExistsExpression(resolved []ResolvedFieldPath, predicate exp.Expression, collector *ResolvedFieldPathCollector) (exp.Expression, error) {
+	negated := goqu.L("NOT (?)", predicate)
+	existsExpr, err := buildInlineExistsExpression(resolved, negated, collector)
+	if err != nil {
+		return nil, err
+	}
+	return goqu.L("NOT (?)", existsExpr), nil
+}
+
 // BuildResolvedFieldPathFlagCTEsWithCollector builds one or more CTE datasets for the provided entries
 // and uses the collector's join-group aliases to name the CTEs.
 func BuildResolvedFieldPathFlagCTEsWithCollector(collector *ResolvedFieldPathCollector, entries []ResolvedFieldPathFlag, where exp.Expression) ([]ResolvedFieldPathFlagCTE, error) {
@@ -1769,11 +1778,11 @@ func (le *LogicalExpression) EvaluateToExpression(collector *ResolvedFieldPathCo
 			return nil, nil, err
 		}
 		if collector != nil && resolvedNeedsCTE(resolved) {
-			existsExpr, err := buildInlineExistsExpression(resolved, expr, collector)
+			notExistsExpr, err := buildInlineNotExistsExpression(resolved, expr, collector)
 			if err != nil {
 				return nil, nil, err
 			}
-			return existsExpr, resolved, nil
+			return notExistsExpr, resolved, nil
 		}
 		if collector != nil {
 			return expr, resolved, nil
