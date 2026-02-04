@@ -324,10 +324,6 @@ func (p PostgreSQLRangeHandler) Delete(idShortOrPath string) error {
 // Returns:
 //   - error: An error if the database insert operation fails
 func insertRange(rangeElem *types.Range, tx *sql.Tx, id int) error {
-	// Use centralized value type mapper for min/max values
-	if rangeElem.Min() == nil || rangeElem.Max() == nil {
-		return common.NewErrBadRequest("Both 'Min' and 'Max' values must be provided for Range element")
-	}
 	typedValue := persistenceutils.MapRangeValueByType(rangeElem.ValueType(), *rangeElem.Min(), *rangeElem.Max())
 
 	// Insert Range-specific data
