@@ -275,8 +275,8 @@ func ReplaceSpecificAssetIDsByAASIdentifier(
 					colDescriptorID:       nil,
 					colPosition:           i,
 					colSemanticID:         semanticID,
-					colName:               val.Name,
-					colValue:              val.Value,
+					colName:               val.Name(),
+					colValue:              val.Value(),
 					colExternalSubjectRef: externalSubjectReferenceID,
 					colAASRef:             aasRef,
 				}).
