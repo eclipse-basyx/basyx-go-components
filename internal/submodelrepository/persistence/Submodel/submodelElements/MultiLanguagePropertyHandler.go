@@ -267,23 +267,29 @@ func (p PostgreSQLMultiLanguagePropertyHandler) Delete(idShortOrPath string) err
 // after the main table insert, because they require the multilanguage_property record to exist first.
 //
 // Parameters:
-//   - tx: Active database transaction (not used for MultiLanguageProperty)
+//   - tx: Active database transaction (needed for creating value references)
 //   - id: The database ID of the base submodel_element record
 //   - element: The MultiLanguageProperty element to insert
 //
 // Returns:
 //   - *InsertQueryPart: The table name and record for multilanguage_property insert
 //   - error: An error if the element is not of type MultiLanguageProperty
-func (p PostgreSQLMultiLanguagePropertyHandler) GetInsertQueryPart(_ *sql.Tx, id int, element types.ISubmodelElement) (*InsertQueryPart, error) {
-	_, ok := element.(*types.MultiLanguageProperty)
+func (p PostgreSQLMultiLanguagePropertyHandler) GetInsertQueryPart(tx *sql.Tx, id int, element types.ISubmodelElement) (*InsertQueryPart, error) {
+	mlp, ok := element.(*types.MultiLanguageProperty)
 	if !ok {
 		return nil, common.NewErrBadRequest("submodelElement is not of type MultiLanguageProperty")
+	}
+
+	valueIDDbID, err := persistenceutils.CreateReference(tx, mlp.ValueID(), sql.NullInt64{}, sql.NullInt64{})
+	if err != nil {
+		return nil, common.NewInternalServerError("Failed to create ValueID reference: " + err.Error())
 	}
 
 	return &InsertQueryPart{
 		TableName: "multilanguage_property",
 		Record: goqu.Record{
-			"id": id,
+			"id":       id,
+			"value_id": valueIDDbID,
 		},
 	}, nil
 }

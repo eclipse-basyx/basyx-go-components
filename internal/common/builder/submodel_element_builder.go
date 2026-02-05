@@ -87,7 +87,9 @@ func BuildSubmodelElement(smeRow model.SubmodelElementRow, db *sql.DB) (types.IS
 		return nil, nil, err
 	}
 	if smeRow.IDShort.Valid {
-		specificSME.SetIDShort(&smeRow.IDShort.String)
+		if smeRow.IDShort.String != "" {
+			specificSME.SetIDShort(&smeRow.IDShort.String)
+		}
 	}
 	if smeRow.Category.Valid {
 		specificSME.SetCategory(&smeRow.Category.String)

@@ -29,3 +29,7 @@
 
 ## Post-Task Steps:
 - Run linter and formatter on the modified files to ensure code quality and consistency.
+
+## Run Integration Tests
+- go test -v ./internal/submodelrepository/integration_tests 
+- NEVER USE ADDITIONAL FLAGS (e.g. -run) UNLESS SPECIFICALLY REQUESTED IN THE TASK. ALL TESTS MUST BE RUN TO ENSURE CODE QUALITY AND INTEGRITY.
