@@ -29,6 +29,16 @@
 CREATE EXTENSION IF NOT EXISTS ltree;
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
 
+
+-- ------------------------------------------
+-- Enums
+-- ------------------------------------------
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'security_type') THEN
+    CREATE TYPE security_type AS ENUM ('NONE', 'RFC_TLSA', 'W3C_DID');
+  END IF;
+END $$;
+
 -- ------------------------------------------
 -- Tables
 -- ------------------------------------------
@@ -148,6 +158,7 @@ CREATE TABLE IF NOT EXISTS extension (
   value_num     NUMERIC,
   value_bool    BOOLEAN,
   value_time    TIME,
+  value_date    DATE,
   value_datetime TIMESTAMPTZ
 );
 CREATE TABLE IF NOT EXISTS submodel_extension (
@@ -172,7 +183,7 @@ CREATE TABLE IF NOT EXISTS submodel_element (
   root_sme_id  BIGINT REFERENCES submodel_element(id) ON DELETE CASCADE,
   parent_sme_id  BIGINT REFERENCES submodel_element(id) ON DELETE CASCADE,
   position       INTEGER,                                   -- for ordering in lists
-  id_short       varchar(128) NOT NULL,
+  id_short       varchar(128),
   category       varchar(128),
   model_type     int NOT NULL,
   embedded_data_specification JSONB DEFAULT '[]',
@@ -208,6 +219,7 @@ CREATE TABLE IF NOT EXISTS property_element (
   value_num     NUMERIC,
   value_bool    BOOLEAN,
   value_time    TIME,
+  value_date    DATE,
   value_datetime TIMESTAMPTZ,
   value_id      BIGINT REFERENCES reference(id)
 );
@@ -243,6 +255,7 @@ CREATE TABLE IF NOT EXISTS range_element (
   min_text      TEXT,  max_text      TEXT,
   min_num       NUMERIC, max_num     NUMERIC,
   min_time      TIME,   max_time     TIME,
+  min_date      DATE,   max_date     DATE,
   min_datetime  TIMESTAMPTZ, max_datetime TIMESTAMPTZ
 );
 CREATE TABLE IF NOT EXISTS reference_element (
@@ -265,7 +278,7 @@ CREATE TABLE IF NOT EXISTS submodel_element_collection (
 CREATE TABLE IF NOT EXISTS submodel_element_list (
   id                         BIGINT PRIMARY KEY REFERENCES submodel_element(id) ON DELETE CASCADE,
   order_relevant             BOOLEAN,
-  semantic_id_list_element   BIGINT REFERENCES reference(id),
+  semantic_id_list_element   JSONB,
   type_value_list_element    int NOT NULL,
   value_type_list_element    int
 );
@@ -320,6 +333,7 @@ CREATE TABLE IF NOT EXISTS qualifier (
   value_num         NUMERIC,
   value_bool        BOOLEAN,
   value_time        TIME,
+  value_date        DATE,
   value_datetime    TIMESTAMPTZ,
   value_id          BIGINT REFERENCES reference(id),
   semantic_id       BIGINT REFERENCES reference(id)
@@ -381,7 +395,7 @@ CREATE TABLE IF NOT EXISTS aas_descriptor_endpoint (
 CREATE TABLE IF NOT EXISTS security_attributes (
   id BIGSERIAL NOT NULL PRIMARY KEY,
   endpoint_id BIGINT NOT NULL REFERENCES aas_descriptor_endpoint(id) ON DELETE CASCADE,
-  security_type int NOT NULL,
+  security_type security_type NOT NULL,
   security_key TEXT NOT NULL,
   security_value TEXT NOT NULL
 );

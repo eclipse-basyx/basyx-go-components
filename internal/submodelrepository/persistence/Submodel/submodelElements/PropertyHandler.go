@@ -188,6 +188,7 @@ func (p PostgreSQLPropertyHandler) UpdateValueOnly(submodelID string, idShortOrP
 			"value_num":      typedValue.Numeric,
 			"value_bool":     typedValue.Boolean,
 			"value_time":     typedValue.Time,
+			"value_date":     typedValue.Date,
 			"value_datetime": typedValue.DateTime,
 		}).
 		Where(goqu.C("id").Eq(elementID)).
@@ -251,6 +252,7 @@ func (p PostgreSQLPropertyHandler) GetInsertQueryPart(tx *sql.Tx, id int, elemen
 			"value_num":      typedValue.Numeric,
 			"value_bool":     typedValue.Boolean,
 			"value_time":     typedValue.Time,
+			"value_date":     typedValue.Date,
 			"value_datetime": typedValue.DateTime,
 			"value_id":       valueIDDbID,
 		},
