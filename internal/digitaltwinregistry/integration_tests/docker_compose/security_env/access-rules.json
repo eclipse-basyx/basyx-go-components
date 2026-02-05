@@ -28,20 +28,27 @@
             {
               "$match": 
               [
-                { 
-                  "$or": [
-                    {
-                      "$eq": [
-                        { "$field": "$aasdesc#specificAssetIds[].name" },
-                        { "$strVal": "assetLifecyclePhase" }
-                      ]
-                    },
-                    {
-                      "$eq": [
-                        { "$field": "$aasdesc#specificAssetIds[].name" },
-                        { "$strVal": "manufacturerPartId" }
-                      ]
-                    }
+                {
+                  "$eq": [
+                    { "$field": "$aasdesc#specificAssetIds[].name" },
+                    { "$strVal": "assetLifecyclePhase" }
+                  ]
+                },
+                {
+                  "$eq": [
+                    { "$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value" },
+                    { "$strVal": "PUBLIC_READABLE" }
+                  ]
+                }
+              ]
+            },
+            {
+              "$match": 
+              [
+                {
+                  "$eq": [
+                    { "$field": "$aasdesc#specificAssetIds[].name" },
+                    { "$strVal": "manufacturerPartId" }
                   ]
                 },
                 {
