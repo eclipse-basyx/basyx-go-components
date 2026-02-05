@@ -1,0 +1,1606 @@
+{
+    "administration": {
+        "revision": "0",
+        "templateId": "https://admin-shell.io/idta-02060-1-0",
+        "version": "1"
+    },
+    "description": [
+        {
+            "language": "en",
+            "text": "This Submodel template aims at interoperable provision of information describing Artificial Intelligence (AI) model information in regard to the asset of the respective Asset Administration Shell."
+        }
+    ],
+    "id": "https://admin-shell.io/idta/SubmodelTemplate/AIModelNameplate/1/0",
+    "idShort": "AIModelNameplate",
+    "kind": "Template",
+    "modelType": "Submodel",
+    "semanticId": {
+        "keys": [
+            {
+                "type": "Submodel",
+                "value": "https://admin-shell.io/idta/SubmodelTemplate/AIModelNameplate/1/0"
+            }
+        ],
+        "type": "ModelReference"
+    },
+    "submodelElements": [
+        {
+            "description": [
+                {
+                    "language": "en",
+                    "text": "Collection of additional details about the model"
+                }
+            ],
+            "idShort": "AIDataset",
+            "modelType": "SubmodelElementCollection",
+            "qualifiers": [
+                {
+                    "kind": "TemplateQualifier",
+                    "semanticId": {
+                        "keys": [
+                            {
+                                "type": "GlobalReference",
+                                "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                            }
+                        ],
+                        "type": "ExternalReference"
+                    },
+                    "type": "SMT/Cardinality",
+                    "value": "ZeroToMany",
+                    "valueType": "xs:string"
+                }
+            ],
+            "semanticId": {
+                "keys": [
+                    {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/idta/AIModelNameplate/AIDataset/1/0"
+                    }
+                ],
+                "type": "ExternalReference"
+            },
+            "value": [
+                {
+                    "category": "CONSTANT",
+                    "description": [
+                        {
+                            "language": "en",
+                            "text": "Reference to the used AIDataset-Submodel"
+                        }
+                    ],
+                    "idShort": "AIDatasetReference",
+                    "modelType": "ReferenceElement",
+                    "qualifiers": [
+                        {
+                            "kind": "TemplateQualifier",
+                            "semanticId": {
+                                "keys": [
+                                    {
+                                        "type": "GlobalReference",
+                                        "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                                    }
+                                ],
+                                "type": "ExternalReference"
+                            },
+                            "type": "SMT/Cardinality",
+                            "value": "One",
+                            "valueType": "xs:string"
+                        }
+                    ],
+                    "semanticId": {
+                        "keys": [
+                            {
+                                "type": "GlobalReference",
+                                "value": "https://admin-shell.io/idta/AIModelNameplate/AIDataset/DatasetReference/1/0"
+                            }
+                        ],
+                        "type": "ExternalReference"
+                    }
+                },
+                {
+                    "category": "PARAMETER",
+                    "description": [
+                        {
+                            "language": "en",
+                            "text": "Determining the used data, when dataset differs over time"
+                        }
+                    ],
+                    "idShort": "TimeStamp",
+                    "modelType": "Range",
+                    "qualifiers": [
+                        {
+                            "kind": "TemplateQualifier",
+                            "semanticId": {
+                                "keys": [
+                                    {
+                                        "type": "GlobalReference",
+                                        "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                                    }
+                                ],
+                                "type": "ExternalReference"
+                            },
+                            "type": "SMT/Cardinality",
+                            "value": "ZeroToOne",
+                            "valueType": "xs:string"
+                        }
+                    ],
+                    "semanticId": {
+                        "keys": [
+                            {
+                                "type": "GlobalReference",
+                                "value": "https://admin-shell.io/idta/AIModelNameplate/AIDataset/TimeStamp/1/0"
+                            }
+                        ],
+                        "type": "ExternalReference"
+                    },
+                    "valueType": "xs:dateTime"
+                }
+            ]
+        },
+        {
+            "description": [
+                {
+                    "language": "en",
+                    "text": "Collection containing different kinds of AI method specific parameters"
+                }
+            ],
+            "idShort": "AITypeSpecificInformation",
+            "modelType": "SubmodelElementCollection",
+            "qualifiers": [
+                {
+                    "kind": "TemplateQualifier",
+                    "semanticId": {
+                        "keys": [
+                            {
+                                "type": "GlobalReference",
+                                "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                            }
+                        ],
+                        "type": "ExternalReference"
+                    },
+                    "type": "SMT/Cardinality",
+                    "value": "One",
+                    "valueType": "xs:string"
+                }
+            ],
+            "semanticId": {
+                "keys": [
+                    {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/idta/AIModelNameplate/AITypeSpecificInformation/1/0"
+                    }
+                ],
+                "type": "ExternalReference"
+            },
+            "value": [
+                {
+                    "description": [
+                        {
+                            "language": "en",
+                            "text": "Collection containing information of the origin model, if the model is a result of transfer learning"
+                        }
+                    ],
+                    "idShort": "TransferLearning",
+                    "modelType": "SubmodelElementCollection",
+                    "qualifiers": [
+                        {
+                            "kind": "TemplateQualifier",
+                            "semanticId": {
+                                "keys": [
+                                    {
+                                        "type": "GlobalReference",
+                                        "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                                    }
+                                ],
+                                "type": "ExternalReference"
+                            },
+                            "type": "SMT/Cardinality",
+                            "value": "ZeroToOne",
+                            "valueType": "xs:string"
+                        }
+                    ],
+                    "semanticId": {
+                        "keys": [
+                            {
+                                "type": "GlobalReference",
+                                "value": "https://admin-shell.io/idta/AIModelNameplate/AITypeSpecificInformation/TransferLearning/1/0"
+                            }
+                        ],
+                        "type": "ExternalReference"
+                    },
+                    "value": [
+                        {
+                            "category": "PARAMETER",
+                            "description": [
+                                {
+                                    "language": "en",
+                                    "text": "Name of the origin neural network (e.g. resnet18)"
+                                }
+                            ],
+                            "idShort": "Name",
+                            "modelType": "Property",
+                            "qualifiers": [
+                                {
+                                    "kind": "TemplateQualifier",
+                                    "semanticId": {
+                                        "keys": [
+                                            {
+                                                "type": "GlobalReference",
+                                                "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                                            }
+                                        ],
+                                        "type": "ExternalReference"
+                                    },
+                                    "type": "SMT/Cardinality",
+                                    "value": "ZeroToOne",
+                                    "valueType": "xs:string"
+                                }
+                            ],
+                            "semanticId": {
+                                "keys": [
+                                    {
+                                        "type": "GlobalReference",
+                                        "value": "https://admin-shell.io/idta/AIModelNameplate/AITypeSpecificInformation/NeuralNetwork/TransferLearning/Name/1/0"
+                                    }
+                                ],
+                                "type": "ExternalReference"
+                            },
+                            "valueType": "xs:string"
+                        },
+                        {
+                            "category": "PARAMETER",
+                            "description": [
+                                {
+                                    "language": "en",
+                                    "text": "Date of access of the origin neural network"
+                                }
+                            ],
+                            "idShort": "TimeStamp",
+                            "modelType": "Property",
+                            "qualifiers": [
+                                {
+                                    "kind": "TemplateQualifier",
+                                    "semanticId": {
+                                        "keys": [
+                                            {
+                                                "type": "GlobalReference",
+                                                "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                                            }
+                                        ],
+                                        "type": "ExternalReference"
+                                    },
+                                    "type": "SMT/Cardinality",
+                                    "value": "ZeroToOne",
+                                    "valueType": "xs:string"
+                                }
+                            ],
+                            "semanticId": {
+                                "keys": [
+                                    {
+                                        "type": "GlobalReference",
+                                        "value": "https://admin-shell.io/idta/AIModelNameplate/AITypeSpecificInformation/NeuralNetwork/TransferLearning/TimeStamp/1/0"
+                                    }
+                                ],
+                                "type": "ExternalReference"
+                            },
+                            "valueType": "xs:dateTime"
+                        },
+                        {
+                            "category": "CONSTANT",
+                            "contentType": "text/plain",
+                            "description": [
+                                {
+                                    "language": "en",
+                                    "text": "File containing the weights of the origin model (e.g. .txt)"
+                                }
+                            ],
+                            "idShort": "Weights",
+                            "modelType": "File",
+                            "qualifiers": [
+                                {
+                                    "kind": "TemplateQualifier",
+                                    "semanticId": {
+                                        "keys": [
+                                            {
+                                                "type": "GlobalReference",
+                                                "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                                            }
+                                        ],
+                                        "type": "ExternalReference"
+                                    },
+                                    "type": "SMT/Cardinality",
+                                    "value": "ZeroToOne",
+                                    "valueType": "xs:string"
+                                }
+                            ],
+                            "semanticId": {
+                                "keys": [
+                                    {
+                                        "type": "GlobalReference",
+                                        "value": "https://admin-shell.io/idta/AIModelNameplate/AITypeSpecificInformation/NeuralNetwork/TransferLearning/Weights/1/0"
+                                    }
+                                ],
+                                "type": "ExternalReference"
+                            }
+                        },
+                        {
+                            "category": "PARAMETER",
+                            "description": [
+                                {
+                                    "language": "en",
+                                    "text": "Reference to the AI Modelnameplate submodel of the origin neural network"
+                                }
+                            ],
+                            "idShort": "AIModelNameplate",
+                            "modelType": "ReferenceElement",
+                            "qualifiers": [
+                                {
+                                    "kind": "TemplateQualifier",
+                                    "semanticId": {
+                                        "keys": [
+                                            {
+                                                "type": "GlobalReference",
+                                                "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                                            }
+                                        ],
+                                        "type": "ExternalReference"
+                                    },
+                                    "type": "SMT/Cardinality",
+                                    "value": "ZeroToOne",
+                                    "valueType": "xs:string"
+                                }
+                            ],
+                            "semanticId": {
+                                "keys": [
+                                    {
+                                        "type": "GlobalReference",
+                                        "value": "https://admin-shell.io/idta/AIModelNameplate/AITypeSpecificInformation/NeuralNetwork/TransferLearning/ModelnameplateRef/1/0"
+                                    }
+                                ],
+                                "type": "ExternalReference"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "description": [
+                        {
+                            "language": "en",
+                            "text": "Collection containing relevant hyperparamter"
+                        }
+                    ],
+                    "idShort": "Hyperparameter",
+                    "modelType": "SubmodelElementCollection",
+                    "qualifiers": [
+                        {
+                            "kind": "TemplateQualifier",
+                            "semanticId": {
+                                "keys": [
+                                    {
+                                        "type": "GlobalReference",
+                                        "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                                    }
+                                ],
+                                "type": "ExternalReference"
+                            },
+                            "type": "SMT/Cardinality",
+                            "value": "ZeroToOne",
+                            "valueType": "xs:string"
+                        }
+                    ],
+                    "semanticId": {
+                        "keys": [
+                            {
+                                "type": "GlobalReference",
+                                "value": "https://admin-shell.io/idta/AIModelNameplate/AITypeSpecificInformation/Hyperparameter/1/0"
+                            }
+                        ],
+                        "type": "ExternalReference"
+                    },
+                    "value": [
+                        {
+                            "category": "PARAMETER",
+                            "description": [
+                                {
+                                    "language": "en",
+                                    "text": "Example hyperparameter (e.g. learning rate of the model)"
+                                }
+                            ],
+                            "idShort": "Example",
+                            "modelType": "Property",
+                            "qualifiers": [
+                                {
+                                    "kind": "TemplateQualifier",
+                                    "semanticId": {
+                                        "keys": [
+                                            {
+                                                "type": "GlobalReference",
+                                                "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                                            }
+                                        ],
+                                        "type": "ExternalReference"
+                                    },
+                                    "type": "SMT/Cardinality",
+                                    "value": "ZeroToOne",
+                                    "valueType": "xs:string"
+                                }
+                            ],
+                            "semanticId": {
+                                "keys": [
+                                    {
+                                        "type": "GlobalReference",
+                                        "value": "https://admin-shell.io/idta/AIModelNameplate/AITypeSpecificInformation/Hyperparameter/LearningRate/1/0"
+                                    }
+                                ],
+                                "type": "ExternalReference"
+                            },
+                            "valueType": "xs:string"
+                        }
+                    ]
+                },
+                {
+                    "category": "CONSTANT",
+                    "description": [
+                        {
+                            "language": "en",
+                            "text": "Type of  the AI(e.g. CNN, RNN, LSTM, ...)"
+                        }
+                    ],
+                    "idShort": "Type",
+                    "modelType": "MultiLanguageProperty",
+                    "qualifiers": [
+                        {
+                            "kind": "TemplateQualifier",
+                            "semanticId": {
+                                "keys": [
+                                    {
+                                        "type": "GlobalReference",
+                                        "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                                    }
+                                ],
+                                "type": "ExternalReference"
+                            },
+                            "type": "SMT/Cardinality",
+                            "value": "One",
+                            "valueType": "xs:string"
+                        }
+                    ],
+                    "semanticId": {
+                        "keys": [
+                            {
+                                "type": "GlobalReference",
+                                "value": "https://admin-shell.io/idta/AIModelNameplate/AITypeSpecificInformation/Type/1/0"
+                            }
+                        ],
+                        "type": "ExternalReference"
+                    },
+                    "value": [
+                        {
+                            "language": "en",
+                            "text": "Type of  the AI(e.g. CNN, RNN, LSTM, ...)"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "category": "PARAMETER",
+            "description": [
+                {
+                    "language": "en",
+                    "text": "Reference to the Contact Information IDTA Submodel to describe the responsible person for the Submodel"
+                }
+            ],
+            "idShort": "ContactInformation",
+            "modelType": "ReferenceElement",
+            "qualifiers": [
+                {
+                    "kind": "TemplateQualifier",
+                    "semanticId": {
+                        "keys": [
+                            {
+                                "type": "GlobalReference",
+                                "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                            }
+                        ],
+                        "type": "ExternalReference"
+                    },
+                    "type": "SMT/Cardinality",
+                    "value": "One",
+                    "valueType": "xs:string"
+                }
+            ],
+            "semanticId": {
+                "keys": [
+                    {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/idta/AIModelNameplate/Contactinformation/1/0"
+                    }
+                ],
+                "type": "ExternalReference"
+            }
+        },
+        {
+            "description": [
+                {
+                    "language": "en",
+                    "text": "Collection of additional details about the model"
+                }
+            ],
+            "idShort": "Details",
+            "modelType": "SubmodelElementCollection",
+            "qualifiers": [
+                {
+                    "kind": "TemplateQualifier",
+                    "semanticId": {
+                        "keys": [
+                            {
+                                "type": "GlobalReference",
+                                "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                            }
+                        ],
+                        "type": "ExternalReference"
+                    },
+                    "type": "SMT/Cardinality",
+                    "value": "One",
+                    "valueType": "xs:string"
+                }
+            ],
+            "semanticId": {
+                "keys": [
+                    {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/idta/AIModelNameplate/Details/1/0"
+                    }
+                ],
+                "type": "ExternalReference"
+            },
+            "value": [
+                {
+                    "category": "PARAMETER",
+                    "description": [
+                        {
+                            "language": "en",
+                            "text": "File extension of the model (e.g. .pth)"
+                        }
+                    ],
+                    "idShort": "FileExtension",
+                    "modelType": "Property",
+                    "qualifiers": [
+                        {
+                            "kind": "TemplateQualifier",
+                            "semanticId": {
+                                "keys": [
+                                    {
+                                        "type": "GlobalReference",
+                                        "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                                    }
+                                ],
+                                "type": "ExternalReference"
+                            },
+                            "type": "SMT/Cardinality",
+                            "value": "One",
+                            "valueType": "xs:string"
+                        }
+                    ],
+                    "semanticId": {
+                        "keys": [
+                            {
+                                "type": "GlobalReference",
+                                "value": "https://admin-shell.io/idta/AIModelNameplate/Details/DataEnding/1/0"
+                            }
+                        ],
+                        "type": "ExternalReference"
+                    },
+                    "valueType": "xs:string"
+                },
+                {
+                    "category": "PARAMETER",
+                    "description": [
+                        {
+                            "language": "en",
+                            "text": "AI framework and its version (e.g. pytorch 11.3)"
+                        }
+                    ],
+                    "idShort": "AIFramework",
+                    "modelType": "Property",
+                    "qualifiers": [
+                        {
+                            "kind": "TemplateQualifier",
+                            "semanticId": {
+                                "keys": [
+                                    {
+                                        "type": "GlobalReference",
+                                        "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                                    }
+                                ],
+                                "type": "ExternalReference"
+                            },
+                            "type": "SMT/Cardinality",
+                            "value": "One",
+                            "valueType": "xs:string"
+                        }
+                    ],
+                    "semanticId": {
+                        "keys": [
+                            {
+                                "type": "GlobalReference",
+                                "value": "https://admin-shell.io/idta/AIModelNameplate/Details/AIFramework/1/0"
+                            }
+                        ],
+                        "type": "ExternalReference"
+                    },
+                    "valueType": "xs:string"
+                },
+                {
+                    "category": "PARAMETER",
+                    "description": [
+                        {
+                            "language": "en",
+                            "text": "Programming language and version (e.g. python 3.9)"
+                        }
+                    ],
+                    "idShort": "ProgramLanguage",
+                    "modelType": "Property",
+                    "qualifiers": [
+                        {
+                            "kind": "TemplateQualifier",
+                            "semanticId": {
+                                "keys": [
+                                    {
+                                        "type": "GlobalReference",
+                                        "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                                    }
+                                ],
+                                "type": "ExternalReference"
+                            },
+                            "type": "SMT/Cardinality",
+                            "value": "One",
+                            "valueType": "xs:string"
+                        }
+                    ],
+                    "semanticId": {
+                        "keys": [
+                            {
+                                "type": "GlobalReference",
+                                "value": "https://admin-shell.io/idta/AIModelNameplate/Details/ProgramLanguage/1/0"
+                            }
+                        ],
+                        "type": "ExternalReference"
+                    },
+                    "valueType": "xs:string"
+                },
+                {
+                    "category": "PARAMETER",
+                    "contentType": "text/plain",
+                    "description": [
+                        {
+                            "language": "en",
+                            "text": "Requirements file containing the required software dependencies (e.g. Python Requirements.txt file)"
+                        }
+                    ],
+                    "idShort": "Requirements",
+                    "modelType": "File",
+                    "qualifiers": [
+                        {
+                            "kind": "TemplateQualifier",
+                            "semanticId": {
+                                "keys": [
+                                    {
+                                        "type": "GlobalReference",
+                                        "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                                    }
+                                ],
+                                "type": "ExternalReference"
+                            },
+                            "type": "SMT/Cardinality",
+                            "value": "ZeroToOne",
+                            "valueType": "xs:string"
+                        }
+                    ],
+                    "semanticId": {
+                        "keys": [
+                            {
+                                "type": "GlobalReference",
+                                "value": "https://admin-shell.io/idta/AIModelNameplate/Details/Requirements/1/0"
+                            }
+                        ],
+                        "type": "ExternalReference"
+                    }
+                }
+            ]
+        },
+        {
+            "description": [
+                {
+                    "language": "en",
+                    "text": "Collection of necessary information about the model input"
+                }
+            ],
+            "idShort": "Inputs",
+            "modelType": "SubmodelElementCollection",
+            "qualifiers": [
+                {
+                    "kind": "TemplateQualifier",
+                    "semanticId": {
+                        "keys": [
+                            {
+                                "type": "GlobalReference",
+                                "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                            }
+                        ],
+                        "type": "ExternalReference"
+                    },
+                    "type": "SMT/Cardinality",
+                    "value": "One",
+                    "valueType": "xs:string"
+                }
+            ],
+            "semanticId": {
+                "keys": [
+                    {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/idta/AIModelNameplate/Inputs/1/0"
+                    }
+                ],
+                "type": "ExternalReference"
+            },
+            "value": [
+                {
+                    "category": "PARAMETER",
+                    "description": [
+                        {
+                            "language": "en",
+                            "text": "Type of data (e.g. Images, Audio)"
+                        }
+                    ],
+                    "idShort": "KindOfInput",
+                    "modelType": "Property",
+                    "qualifiers": [
+                        {
+                            "kind": "TemplateQualifier",
+                            "semanticId": {
+                                "keys": [
+                                    {
+                                        "type": "GlobalReference",
+                                        "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                                    }
+                                ],
+                                "type": "ExternalReference"
+                            },
+                            "type": "SMT/Cardinality",
+                            "value": "One",
+                            "valueType": "xs:string"
+                        }
+                    ],
+                    "semanticId": {
+                        "keys": [
+                            {
+                                "type": "GlobalReference",
+                                "value": "https://admin-shell.io/idta/AIModelNameplate/Inputs/KindOfInput/1/0"
+                            }
+                        ],
+                        "type": "ExternalReference"
+                    },
+                    "valueType": "xs:string"
+                },
+                {
+                    "description": [
+                        {
+                            "language": "en",
+                            "text": "Collection of information about a single input dimension"
+                        }
+                    ],
+                    "idShort": "DimensionN",
+                    "modelType": "SubmodelElementCollection",
+                    "qualifiers": [
+                        {
+                            "kind": "TemplateQualifier",
+                            "semanticId": {
+                                "keys": [
+                                    {
+                                        "type": "GlobalReference",
+                                        "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                                    }
+                                ],
+                                "type": "ExternalReference"
+                            },
+                            "type": "SMT/Cardinality",
+                            "value": "ZeroToMany",
+                            "valueType": "xs:string"
+                        }
+                    ],
+                    "semanticId": {
+                        "keys": [
+                            {
+                                "type": "GlobalReference",
+                                "value": "https://admin-shell.io/idta/AIModelNameplate/Inputs/DimensionN/1/0"
+                            }
+                        ],
+                        "type": "ExternalReference"
+                    },
+                    "value": [
+                        {
+                            "category": "PARAMETER",
+                            "description": [
+                                {
+                                    "language": "en",
+                                    "text": "Size of the output dimension"
+                                }
+                            ],
+                            "idShort": "Size",
+                            "modelType": "Property",
+                            "qualifiers": [
+                                {
+                                    "kind": "TemplateQualifier",
+                                    "semanticId": {
+                                        "keys": [
+                                            {
+                                                "type": "GlobalReference",
+                                                "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                                            }
+                                        ],
+                                        "type": "ExternalReference"
+                                    },
+                                    "type": "SMT/Cardinality",
+                                    "value": "One",
+                                    "valueType": "xs:string"
+                                }
+                            ],
+                            "semanticId": {
+                                "keys": [
+                                    {
+                                        "type": "GlobalReference",
+                                        "value": "https://admin-shell.io/idta/AIModelNameplate/Inputs/DimensionN/Size/1/0"
+                                    }
+                                ],
+                                "type": "ExternalReference"
+                            },
+                            "valueType": "xs:string"
+                        },
+                        {
+                            "category": "PARAMETER",
+                            "description": [
+                                {
+                                    "language": "en",
+                                    "text": "Information about the usage of this dimension"
+                                }
+                            ],
+                            "idShort": "Information",
+                            "modelType": "Property",
+                            "qualifiers": [
+                                {
+                                    "kind": "TemplateQualifier",
+                                    "semanticId": {
+                                        "keys": [
+                                            {
+                                                "type": "GlobalReference",
+                                                "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                                            }
+                                        ],
+                                        "type": "ExternalReference"
+                                    },
+                                    "type": "SMT/Cardinality",
+                                    "value": "ZeroToOne",
+                                    "valueType": "xs:string"
+                                }
+                            ],
+                            "semanticId": {
+                                "keys": [
+                                    {
+                                        "type": "GlobalReference",
+                                        "value": "https://admin-shell.io/idta/AIModelNameplate/Inputs/DimensionN/Information/1/0"
+                                    }
+                                ],
+                                "type": "ExternalReference"
+                            },
+                            "valueType": "xs:string"
+                        }
+                    ]
+                },
+                {
+                    "category": "PARAMETER",
+                    "contentType": "text/plain",
+                    "description": [
+                        {
+                            "language": "en",
+                            "text": "Preprocessing pipeline as a file"
+                        }
+                    ],
+                    "idShort": "Preprocessing",
+                    "modelType": "File",
+                    "qualifiers": [
+                        {
+                            "kind": "TemplateQualifier",
+                            "semanticId": {
+                                "keys": [
+                                    {
+                                        "type": "GlobalReference",
+                                        "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                                    }
+                                ],
+                                "type": "ExternalReference"
+                            },
+                            "type": "SMT/Cardinality",
+                            "value": "ZeroToOne",
+                            "valueType": "xs:string"
+                        }
+                    ],
+                    "semanticId": {
+                        "keys": [
+                            {
+                                "type": "GlobalReference",
+                                "value": "https://admin-shell.io/idta/AIModelNameplate/Inputs/Preprocessing/1/0"
+                            }
+                        ],
+                        "type": "ExternalReference"
+                    }
+                }
+            ]
+        },
+        {
+            "category": "CONSTANT",
+            "description": [
+                {
+                    "language": "en",
+                    "text": "This property describes the learningmethod of the model (supervised, unsupervised, reinforcement, ....)"
+                }
+            ],
+            "idShort": "KindOfLearning",
+            "modelType": "MultiLanguageProperty",
+            "qualifiers": [
+                {
+                    "kind": "TemplateQualifier",
+                    "semanticId": {
+                        "keys": [
+                            {
+                                "type": "GlobalReference",
+                                "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                            }
+                        ],
+                        "type": "ExternalReference"
+                    },
+                    "type": "SMT/Cardinality",
+                    "value": "One",
+                    "valueType": "xs:string"
+                }
+            ],
+            "semanticId": {
+                "keys": [
+                    {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/idta/AIModelNameplate/KindOfLearning/1/0"
+                    }
+                ],
+                "type": "ExternalReference"
+            },
+            "value": [
+                {
+                    "language": "en",
+                    "text": "Learning method of the model (supervised, unsupervised, reinforcement, ....)"
+                }
+            ]
+        },
+        {
+            "description": [
+                {
+                    "language": "en",
+                    "text": "Collection of necessary information about the model output"
+                }
+            ],
+            "idShort": "Outputs",
+            "modelType": "SubmodelElementCollection",
+            "qualifiers": [
+                {
+                    "kind": "TemplateQualifier",
+                    "semanticId": {
+                        "keys": [
+                            {
+                                "type": "GlobalReference",
+                                "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                            }
+                        ],
+                        "type": "ExternalReference"
+                    },
+                    "type": "SMT/Cardinality",
+                    "value": "One",
+                    "valueType": "xs:string"
+                }
+            ],
+            "semanticId": {
+                "keys": [
+                    {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/idta/AIModelNameplate/Outputs/1/0"
+                    }
+                ],
+                "type": "ExternalReference"
+            },
+            "value": [
+                {
+                    "description": [
+                        {
+                            "language": "en",
+                            "text": "Collection of information about a single output dimension"
+                        }
+                    ],
+                    "idShort": "DimensionN",
+                    "modelType": "SubmodelElementCollection",
+                    "qualifiers": [
+                        {
+                            "kind": "TemplateQualifier",
+                            "semanticId": {
+                                "keys": [
+                                    {
+                                        "type": "GlobalReference",
+                                        "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                                    }
+                                ],
+                                "type": "ExternalReference"
+                            },
+                            "type": "SMT/Cardinality",
+                            "value": "OneToMany",
+                            "valueType": "xs:string"
+                        }
+                    ],
+                    "semanticId": {
+                        "keys": [
+                            {
+                                "type": "GlobalReference",
+                                "value": "https://admin-shell.io/idta/AIModelNameplate/Outputs/DimensionN/1/0"
+                            }
+                        ],
+                        "type": "ExternalReference"
+                    },
+                    "value": [
+                        {
+                            "category": "PARAMETER",
+                            "description": [
+                                {
+                                    "language": "en",
+                                    "text": "Size of the output dimension"
+                                }
+                            ],
+                            "idShort": "Size",
+                            "modelType": "Property",
+                            "qualifiers": [
+                                {
+                                    "kind": "TemplateQualifier",
+                                    "semanticId": {
+                                        "keys": [
+                                            {
+                                                "type": "GlobalReference",
+                                                "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                                            }
+                                        ],
+                                        "type": "ExternalReference"
+                                    },
+                                    "type": "SMT/Cardinality",
+                                    "value": "One",
+                                    "valueType": "xs:string"
+                                }
+                            ],
+                            "semanticId": {
+                                "keys": [
+                                    {
+                                        "type": "GlobalReference",
+                                        "value": "https://admin-shell.io/idta/AIModelNameplate/Outputs/DimensionN/Size/1/0"
+                                    }
+                                ],
+                                "type": "ExternalReference"
+                            },
+                            "valueType": "xs:string"
+                        },
+                        {
+                            "category": "PARAMETER",
+                            "description": [
+                                {
+                                    "language": "en",
+                                    "text": "Meaning of the output dimension (e.g. class)"
+                                }
+                            ],
+                            "idShort": "Result",
+                            "modelType": "MultiLanguageProperty",
+                            "qualifiers": [
+                                {
+                                    "kind": "TemplateQualifier",
+                                    "semanticId": {
+                                        "keys": [
+                                            {
+                                                "type": "GlobalReference",
+                                                "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                                            }
+                                        ],
+                                        "type": "ExternalReference"
+                                    },
+                                    "type": "SMT/Cardinality",
+                                    "value": "One",
+                                    "valueType": "xs:string"
+                                }
+                            ],
+                            "semanticId": {
+                                "keys": [
+                                    {
+                                        "type": "GlobalReference",
+                                        "value": "https://admin-shell.io/idta/AIModelNameplate/Outputs/DimensionN/Result/1/0"
+                                    }
+                                ],
+                                "type": "ExternalReference"
+                            },
+                            "value": [
+                                {
+                                    "language": "en",
+                                    "text": "This property describes the meaning of this outputdimension (e.g. class)."
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "description": [
+                {
+                    "language": "en",
+                    "text": "Collection of different plots "
+                }
+            ],
+            "idShort": "Plots",
+            "modelType": "SubmodelElementCollection",
+            "qualifiers": [
+                {
+                    "kind": "TemplateQualifier",
+                    "semanticId": {
+                        "keys": [
+                            {
+                                "type": "GlobalReference",
+                                "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                            }
+                        ],
+                        "type": "ExternalReference"
+                    },
+                    "type": "SMT/Cardinality",
+                    "value": "ZeroToOne",
+                    "valueType": "xs:string"
+                }
+            ],
+            "semanticId": {
+                "keys": [
+                    {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/idta/AIModelNameplate/Plots/1/0"
+                    }
+                ],
+                "type": "ExternalReference"
+            },
+            "value": [
+                {
+                    "description": [
+                        {
+                            "language": "en",
+                            "text": "Collection of plots about training results and test results"
+                        }
+                    ],
+                    "idShort": "TrainingTesting",
+                    "modelType": "SubmodelElementCollection",
+                    "qualifiers": [
+                        {
+                            "kind": "TemplateQualifier",
+                            "semanticId": {
+                                "keys": [
+                                    {
+                                        "type": "GlobalReference",
+                                        "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                                    }
+                                ],
+                                "type": "ExternalReference"
+                            },
+                            "type": "SMT/Cardinality",
+                            "value": "ZeroToOne",
+                            "valueType": "xs:string"
+                        }
+                    ],
+                    "semanticId": {
+                        "keys": [
+                            {
+                                "type": "GlobalReference",
+                                "value": "https://admin-shell.io/idta/AIModelNameplate/Plots/TrainingTesting/1/0"
+                            }
+                        ],
+                        "type": "ExternalReference"
+                    },
+                    "value": [
+                        {
+                            "category": "PARAMETER",
+                            "contentType": "image/jpeg",
+                            "description": [
+                                {
+                                    "language": "en",
+                                    "text": "Training or test result plot"
+                                }
+                            ],
+                            "idShort": "ExamplePlot",
+                            "modelType": "File",
+                            "qualifiers": [
+                                {
+                                    "kind": "TemplateQualifier",
+                                    "semanticId": {
+                                        "keys": [
+                                            {
+                                                "type": "GlobalReference",
+                                                "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                                            }
+                                        ],
+                                        "type": "ExternalReference"
+                                    },
+                                    "type": "SMT/Cardinality",
+                                    "value": "OneToMany",
+                                    "valueType": "xs:string"
+                                }
+                            ],
+                            "semanticId": {
+                                "keys": [
+                                    {
+                                        "type": "GlobalReference",
+                                        "value": "https://admin-shell.io/idta/AIModelNameplate/Plots/TrainingTesting/Plot/1/0"
+                                    }
+                                ],
+                                "type": "ExternalReference"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "description": [
+                        {
+                            "language": "en",
+                            "text": "Collection describing the model architecture (e.g. of a neural net)"
+                        }
+                    ],
+                    "idShort": "Structure",
+                    "modelType": "SubmodelElementCollection",
+                    "qualifiers": [
+                        {
+                            "kind": "TemplateQualifier",
+                            "semanticId": {
+                                "keys": [
+                                    {
+                                        "type": "GlobalReference",
+                                        "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                                    }
+                                ],
+                                "type": "ExternalReference"
+                            },
+                            "type": "SMT/Cardinality",
+                            "value": "ZeroToOne",
+                            "valueType": "xs:string"
+                        }
+                    ],
+                    "semanticId": {
+                        "keys": [
+                            {
+                                "type": "GlobalReference",
+                                "value": "https://admin-shell.io/idta/AIModelNameplate/Plots/Structure/1/0"
+                            }
+                        ],
+                        "type": "ExternalReference"
+                    },
+                    "value": [
+                        {
+                            "category": "PARAMETER",
+                            "contentType": "image/jpeg",
+                            "description": [
+                                {
+                                    "language": "en",
+                                    "text": "Image of a model architecture"
+                                }
+                            ],
+                            "idShort": "ExampleStructurePlot",
+                            "modelType": "File",
+                            "qualifiers": [
+                                {
+                                    "kind": "TemplateQualifier",
+                                    "semanticId": {
+                                        "keys": [
+                                            {
+                                                "type": "GlobalReference",
+                                                "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                                            }
+                                        ],
+                                        "type": "ExternalReference"
+                                    },
+                                    "type": "SMT/Cardinality",
+                                    "value": "OneToMany",
+                                    "valueType": "xs:string"
+                                }
+                            ],
+                            "semanticId": {
+                                "keys": [
+                                    {
+                                        "type": "GlobalReference",
+                                        "value": "https://admin-shell.io/idta/AIModelNameplate/Plots/Structure/StructurePlot/1/0"
+                                    }
+                                ],
+                                "type": "ExternalReference"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "description": [
+                        {
+                            "language": "en",
+                            "text": "Collection of plots not fitting in existing collections"
+                        }
+                    ],
+                    "idShort": "GeneralPlots",
+                    "modelType": "SubmodelElementCollection",
+                    "qualifiers": [
+                        {
+                            "kind": "TemplateQualifier",
+                            "semanticId": {
+                                "keys": [
+                                    {
+                                        "type": "GlobalReference",
+                                        "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                                    }
+                                ],
+                                "type": "ExternalReference"
+                            },
+                            "type": "SMT/Cardinality",
+                            "value": "ZeroToOne",
+                            "valueType": "xs:string"
+                        }
+                    ],
+                    "semanticId": {
+                        "keys": [
+                            {
+                                "type": "GlobalReference",
+                                "value": "https://admin-shell.io/idta/AIModelNameplate/Plots/GeneralPlots/1/0"
+                            }
+                        ],
+                        "type": "ExternalReference"
+                    },
+                    "value": [
+                        {
+                            "category": "PARAMETER",
+                            "contentType": "image/jpeg",
+                            "description": [
+                                {
+                                    "language": "en",
+                                    "text": "Image of an model related plot"
+                                }
+                            ],
+                            "idShort": "ExamplePlot",
+                            "modelType": "File",
+                            "qualifiers": [
+                                {
+                                    "kind": "TemplateQualifier",
+                                    "semanticId": {
+                                        "keys": [
+                                            {
+                                                "type": "GlobalReference",
+                                                "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                                            }
+                                        ],
+                                        "type": "ExternalReference"
+                                    },
+                                    "type": "SMT/Cardinality",
+                                    "value": "OneToMany",
+                                    "valueType": "xs:string"
+                                }
+                            ],
+                            "semanticId": {
+                                "keys": [
+                                    {
+                                        "type": "GlobalReference",
+                                        "value": "https://admin-shell.io/idta/AIModelNameplate/Plots/GeneralPlots/Plot/1/0"
+                                    }
+                                ],
+                                "type": "ExternalReference"
+                            }
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "category": "PARAMETER",
+            "description": [
+                {
+                    "language": "en",
+                    "text": "Path to the model (e.g. local path, serverpath,...)"
+                }
+            ],
+            "idShort": "Storage",
+            "modelType": "Property",
+            "qualifiers": [
+                {
+                    "kind": "TemplateQualifier",
+                    "semanticId": {
+                        "keys": [
+                            {
+                                "type": "GlobalReference",
+                                "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                            }
+                        ],
+                        "type": "ExternalReference"
+                    },
+                    "type": "SMT/Cardinality",
+                    "value": "One",
+                    "valueType": "xs:string"
+                }
+            ],
+            "semanticId": {
+                "keys": [
+                    {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/idta/AIModelNameplate/Storage/1/0"
+                    }
+                ],
+                "type": "ExternalReference"
+            },
+            "valueType": "xs:string"
+        },
+        {
+            "description": [
+                {
+                    "language": "en",
+                    "text": "Collection of different training results of the model"
+                }
+            ],
+            "idShort": "TrainingResults",
+            "modelType": "SubmodelElementCollection",
+            "qualifiers": [
+                {
+                    "kind": "TemplateQualifier",
+                    "semanticId": {
+                        "keys": [
+                            {
+                                "type": "GlobalReference",
+                                "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                            }
+                        ],
+                        "type": "ExternalReference"
+                    },
+                    "type": "SMT/Cardinality",
+                    "value": "One",
+                    "valueType": "xs:string"
+                }
+            ],
+            "semanticId": {
+                "keys": [
+                    {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/idta/AIModelNameplate/TrainingResults/1/0"
+                    }
+                ],
+                "type": "ExternalReference"
+            },
+            "value": [
+                {
+                    "category": "PARAMETER",
+                    "description": [
+                        {
+                            "language": "en",
+                            "text": "Result of the trained AI"
+                        }
+                    ],
+                    "idShort": "ExampleResult",
+                    "modelType": "Property",
+                    "qualifiers": [
+                        {
+                            "kind": "TemplateQualifier",
+                            "semanticId": {
+                                "keys": [
+                                    {
+                                        "type": "GlobalReference",
+                                        "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                                    }
+                                ],
+                                "type": "ExternalReference"
+                            },
+                            "type": "SMT/Cardinality",
+                            "value": "ZeroToOne",
+                            "valueType": "xs:string"
+                        }
+                    ],
+                    "semanticId": {
+                        "keys": [
+                            {
+                                "type": "GlobalReference",
+                                "value": "https://admin-shell.io/idta/AIModelNameplate/TrainingResults/Result/1/0"
+                            }
+                        ],
+                        "type": "ExternalReference"
+                    },
+                    "valueType": "xs:string"
+                }
+            ]
+        },
+        {
+            "category": "PARAMETER",
+            "description": [
+                {
+                    "language": "de",
+                    "text": "eindeutige globale Identifizierung der Produktinstanz unter Verwendung eines universellen Ressourcenbezeichners (URI)"
+                },
+                {
+                    "language": "en",
+                    "text": "unique global identification of the product instance using an universal resource identifier (URI)"
+                }
+            ],
+            "idShort": "URIOfTheProduct",
+            "modelType": "Property",
+            "qualifiers": [
+                {
+                    "kind": "TemplateQualifier",
+                    "semanticId": {
+                        "keys": [
+                            {
+                                "type": "GlobalReference",
+                                "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                            }
+                        ],
+                        "type": "ExternalReference"
+                    },
+                    "type": "SMT/Cardinality",
+                    "value": "One",
+                    "valueType": "xs:string"
+                }
+            ],
+            "semanticId": {
+                "keys": [
+                    {
+                        "type": "GlobalReference",
+                        "value": "0112/2///61987#ABN590#002 "
+                    }
+                ],
+                "type": "ExternalReference"
+            },
+            "valueType": "xs:string"
+        },
+        {
+            "category": "PARAMETER",
+            "description": [
+                {
+                    "language": "de",
+                    "text": "Version des Nameplates"
+                },
+                {
+                    "language": "en",
+                    "text": "Version of the nameplate"
+                }
+            ],
+            "idShort": "Version",
+            "modelType": "Property",
+            "qualifiers": [
+                {
+                    "kind": "TemplateQualifier",
+                    "semanticId": {
+                        "keys": [
+                            {
+                                "type": "GlobalReference",
+                                "value": "https://admin-shell.io/SubmodelTemplates/SMT/Cardinality/1/0"
+                            }
+                        ],
+                        "type": "ExternalReference"
+                    },
+                    "type": "SMT/Cardinality",
+                    "value": "One",
+                    "valueType": "xs:string"
+                }
+            ],
+            "semanticId": {
+                "keys": [
+                    {
+                        "type": "GlobalReference",
+                        "value": "0173-1#02-AAS354#002"
+                    }
+                ],
+                "type": "ExternalReference"
+            },
+            "valueType": "xs:string"
+        }
+    ]
+}

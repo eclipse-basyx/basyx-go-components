@@ -28,7 +28,9 @@ package submodelelements
 
 import (
 	"database/sql"
+	"encoding/json"
 
+	"github.com/FriedJannik/aas-go-sdk/jsonization"
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
@@ -178,7 +180,7 @@ func (p PostgreSQLSubmodelElementListHandler) Update(submodelID string, idShortO
 	}
 
 	// Build update record for SubmodelElementList-specific fields
-	updateRecord, err := buildUpdateListRecordObject(smeList, isPut, localTx)
+	updateRecord, err := buildUpdateListRecordObject(smeList, isPut)
 	if err != nil {
 		return err
 	}
@@ -238,13 +240,20 @@ func (p PostgreSQLSubmodelElementListHandler) Delete(idShortOrPath string) error
 }
 
 func insertSubmodelElementList(smeList *types.SubmodelElementList, tx *sql.Tx, id int) error {
-	var semanticID sql.NullInt64
+	var semanticID sql.NullString
 	if smeList.SemanticIDListElement() != nil && !isEmptyReference(smeList.SemanticIDListElement()) {
-		refID, err := insertReference(tx, smeList.SemanticIDListElement())
+		var jsonable map[string]any
+		jsonable, err := jsonization.ToJsonable(smeList.SemanticIDListElement())
 		if err != nil {
 			return err
 		}
-		semanticID = sql.NullInt64{Int64: int64(refID), Valid: true}
+		semanticIDListElementJSONString, err := json.Marshal(jsonable)
+		if err != nil {
+			return err
+		}
+		semanticID = sql.NullString{String: string(semanticIDListElementJSONString), Valid: true}
+	} else {
+		semanticID = sql.NullString{Valid: true, String: "{}"}
 	}
 
 	var typeValue, valueType sql.NullInt64
@@ -270,24 +279,28 @@ func insertSubmodelElementList(smeList *types.SubmodelElementList, tx *sql.Tx, i
 	return err
 }
 
-func buildUpdateListRecordObject(smeList types.ISubmodelElementList, isPut bool, tx *sql.Tx) (goqu.Record, error) {
+func buildUpdateListRecordObject(smeList types.ISubmodelElementList, isPut bool) (goqu.Record, error) {
 	updateRecord := goqu.Record{}
 
 	// OrderRelevant is always updated
 	updateRecord["order_relevant"] = smeList.OrderRelevant()
 
 	if isPut {
-		// PUT: Always update all fields
-		var semanticID sql.NullInt64
 		if smeList.SemanticIDListElement() != nil && !isEmptyReference(smeList.SemanticIDListElement()) {
-			refID, err := insertReference(tx, smeList.SemanticIDListElement())
+			var jsonable map[string]any
+			jsonable, err := jsonization.ToJsonable(smeList.SemanticIDListElement())
 			if err != nil {
 				return nil, err
 			}
-			semanticID = sql.NullInt64{Int64: int64(refID), Valid: true}
+			semanticIDListElementJSONString, err := json.Marshal(jsonable)
+			if err != nil {
+				return nil, err
+			}
+			semanticID := sql.NullString{String: string(semanticIDListElementJSONString), Valid: true}
+			updateRecord["semantic_id_list_element"] = semanticID
+		} else {
+			updateRecord["semantic_id_list_element"] = sql.NullString{Valid: true, String: "{}"}
 		}
-		updateRecord["semantic_id_list_element"] = semanticID
-
 		typeValue := sql.NullInt64{Int64: int64(smeList.TypeValueListElement()), Valid: true}
 		updateRecord["type_value_list_element"] = typeValue
 
@@ -300,11 +313,16 @@ func buildUpdateListRecordObject(smeList types.ISubmodelElementList, isPut bool,
 		// PATCH: Only update provided fields
 		if smeList.SemanticIDListElement() != nil {
 			if !isEmptyReference(smeList.SemanticIDListElement()) {
-				refID, err := insertReference(tx, smeList.SemanticIDListElement())
+				var jsonable map[string]any
+				jsonable, err := jsonization.ToJsonable(smeList.SemanticIDListElement())
 				if err != nil {
 					return nil, err
 				}
-				updateRecord["semantic_id_list_element"] = sql.NullInt64{Int64: int64(refID), Valid: true}
+				semanticIDListElementJSONString, err := json.Marshal(jsonable)
+				if err != nil {
+					return nil, err
+				}
+				updateRecord["semantic_id_list_element"] = sql.NullString{String: string(semanticIDListElementJSONString), Valid: true}
 			}
 		}
 

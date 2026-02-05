@@ -28,6 +28,7 @@ package persistenceutils
 
 import (
 	"database/sql"
+	"strconv"
 
 	"github.com/FriedJannik/aas-go-sdk/types"
 )
@@ -40,7 +41,8 @@ type TypedValue struct {
 	Numeric  sql.NullString // For numeric types: xs:int, xs:integer, xs:decimal, xs:double, xs:float, etc.
 	Boolean  sql.NullString // For xs:boolean type
 	Time     sql.NullString // For xs:time type
-	DateTime sql.NullString // For date/time types: xs:date, xs:dateTime, xs:duration, xs:gDay, etc.
+	Date     sql.NullString // For xs:date type
+	DateTime sql.NullString // For date/time types: xs:dateTime, xs:duration, xs:gDay, etc.
 }
 
 // MapValueByType categorizes a value into the appropriate TypedValue field based on its XS datatype.
@@ -64,11 +66,17 @@ func MapValueByType(valueType types.DataTypeDefXSD, value *string) TypedValue {
 	case IsTextType(valueType):
 		tv.Text = sql.NullString{String: actualValue, Valid: valid}
 	case IsNumericType(valueType):
-		tv.Numeric = sql.NullString{String: actualValue, Valid: valid}
+		if valid && !isValidNumeric(actualValue) {
+			tv.Text = sql.NullString{String: actualValue, Valid: valid}
+		} else {
+			tv.Numeric = sql.NullString{String: actualValue, Valid: valid}
+		}
 	case valueType == types.DataTypeDefXSDBoolean:
 		tv.Boolean = sql.NullString{String: actualValue, Valid: valid}
 	case valueType == types.DataTypeDefXSDTime:
 		tv.Time = sql.NullString{String: actualValue, Valid: valid}
+	case valueType == types.DataTypeDefXSDDate:
+		tv.Date = sql.NullString{String: actualValue, Valid: valid}
 	case IsDateTimeType(valueType):
 		tv.DateTime = sql.NullString{String: actualValue, Valid: valid}
 	default:
@@ -113,7 +121,12 @@ func IsNumericType(valueType types.DataTypeDefXSD) bool {
 	}
 }
 
-// IsDateTimeType checks if the given XS datatype is a date/time type.
+func isValidNumeric(value string) bool {
+	_, err := strconv.ParseFloat(value, 64)
+	return err == nil
+}
+
+// IsDateTimeType checks if the given XS datatype is a date/time type (excluding xs:date).
 //
 // Parameters:
 //   - valueType: The XS datatype string to check
@@ -122,7 +135,7 @@ func IsNumericType(valueType types.DataTypeDefXSD) bool {
 //   - bool: true if the type is a date/time type, false otherwise
 func IsDateTimeType(valueType types.DataTypeDefXSD) bool {
 	switch valueType {
-	case types.DataTypeDefXSDDate, types.DataTypeDefXSDDateTime, types.DataTypeDefXSDDuration, types.DataTypeDefXSDGDay, types.DataTypeDefXSDGMonth,
+	case types.DataTypeDefXSDDateTime, types.DataTypeDefXSDDuration, types.DataTypeDefXSDGDay, types.DataTypeDefXSDGMonth,
 		types.DataTypeDefXSDGMonthDay, types.DataTypeDefXSDGYear, types.DataTypeDefXSDGYearMonth:
 		return true
 	default:
@@ -139,6 +152,8 @@ type TypedRangeValue struct {
 	MaxNumeric  sql.NullString
 	MinTime     sql.NullString
 	MaxTime     sql.NullString
+	MinDate     sql.NullString
+	MaxDate     sql.NullString
 	MinDateTime sql.NullString
 	MaxDateTime sql.NullString
 }
@@ -162,11 +177,21 @@ func MapRangeValueByType(valueType types.DataTypeDefXSD, minValue string, maxVal
 		tv.MinText = sql.NullString{String: minValue, Valid: minValid}
 		tv.MaxText = sql.NullString{String: maxValue, Valid: maxValid}
 	case IsNumericType(valueType):
-		tv.MinNumeric = sql.NullString{String: minValue, Valid: minValid}
-		tv.MaxNumeric = sql.NullString{String: maxValue, Valid: maxValid}
+		minIsNumeric := !minValid || isValidNumeric(minValue)
+		maxIsNumeric := !maxValid || isValidNumeric(maxValue)
+		if minIsNumeric && maxIsNumeric {
+			tv.MinNumeric = sql.NullString{String: minValue, Valid: minValid}
+			tv.MaxNumeric = sql.NullString{String: maxValue, Valid: maxValid}
+		} else {
+			tv.MinText = sql.NullString{String: minValue, Valid: minValid}
+			tv.MaxText = sql.NullString{String: maxValue, Valid: maxValid}
+		}
 	case valueType == types.DataTypeDefXSDTime:
 		tv.MinTime = sql.NullString{String: minValue, Valid: minValid}
 		tv.MaxTime = sql.NullString{String: maxValue, Valid: maxValid}
+	case valueType == types.DataTypeDefXSDDate:
+		tv.MinDate = sql.NullString{String: minValue, Valid: minValid}
+		tv.MaxDate = sql.NullString{String: maxValue, Valid: maxValid}
 	case IsDateTimeType(valueType):
 		tv.MinDateTime = sql.NullString{String: minValue, Valid: minValid}
 		tv.MaxDateTime = sql.NullString{String: maxValue, Valid: maxValid}
@@ -195,6 +220,8 @@ func GetRangeColumnNames(valueType types.DataTypeDefXSD) (minCol, maxCol string)
 		return "min_num", "max_num"
 	case valueType == types.DataTypeDefXSDTime:
 		return "min_time", "max_time"
+	case valueType == types.DataTypeDefXSDDate:
+		return "min_date", "max_date"
 	case IsDateTimeType(valueType):
 		return "min_datetime", "max_datetime"
 	default:

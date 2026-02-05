@@ -112,7 +112,8 @@ func ReadExtensionsByDescriptorIDs(
 			e.Col(colValueNum),      // 6
 			e.Col(colValueBool),     // 7
 			e.Col(colValueTime),     // 8
-			e.Col(colValueDatetime), // 9
+			e.Col(colValueDate),     // 9
+			e.Col(colValueDatetime), // 10
 		).
 		Where(goqu.L("de.descriptor_id = ANY(?::bigint[])", arr)).
 		Order(de.Col(colDescriptorID).Asc(), e.Col(colID).Asc()).
@@ -131,6 +132,7 @@ func ReadExtensionsByDescriptorIDs(
 		vNum     sql.NullString
 		vBool    sql.NullString
 		vTime    sql.NullString
+		vDate    sql.NullString
 		vDT      sql.NullString
 	}
 
@@ -158,6 +160,7 @@ func ReadExtensionsByDescriptorIDs(
 			&r.vNum,
 			&r.vBool,
 			&r.vTime,
+			&r.vDate,
 			&r.vDT,
 		); err != nil {
 			return nil, err
@@ -224,7 +227,9 @@ func ReadExtensionsByDescriptorIDs(
 				val = r.vBool.String
 			case types.DataTypeDefXSDTime:
 				val = r.vTime.String
-			case types.DataTypeDefXSDDate, types.DataTypeDefXSDDateTime, types.DataTypeDefXSDDuration, types.DataTypeDefXSDGDay, types.DataTypeDefXSDGMonth,
+			case types.DataTypeDefXSDDate:
+				val = r.vDate.String
+			case types.DataTypeDefXSDDateTime, types.DataTypeDefXSDDuration, types.DataTypeDefXSDGDay, types.DataTypeDefXSDGMonth,
 				types.DataTypeDefXSDGMonthDay, types.DataTypeDefXSDGYear, types.DataTypeDefXSDGYearMonth:
 				val = r.vDT.String
 			default:

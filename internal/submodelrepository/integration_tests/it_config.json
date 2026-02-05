@@ -2152,5 +2152,551 @@
         "data":"bodies/query/querySmeDeepNestedValueExact.json",
         "shouldMatch":"expected/query/paginatedSubmodelH.json",
         "expectedStatus": 200
+    },
+    {
+        "context": "Post TechnicalData",
+        "method": "POST",
+        "endpoint": "http://localhost:6004/submodels",
+        "data":"bodies/post/smt/TechnicalData.json",
+        "expectedStatus": 201
+    },
+    {
+        "context": "GET TechnicalData Submodel",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/aHR0cHM6Ly9iYXN5eC5kZXYvY29tcG9uZW50cy9zdWJtb2RlbC1yZXBvc2l0b3J5L1RlY2huaWNhbERhdGEvMjAyNi0wNC0wMlQxMTowNzowMFo",
+        "shouldMatch":"bodies/post/smt/TechnicalData.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "Post AID (AssetInterfacesDescription)",
+        "method": "POST",
+        "endpoint": "http://localhost:6004/submodels",
+        "data":"bodies/post/smt/AID.json",
+        "expectedStatus": 201
+    },
+    {
+        "context": "GET AID Submodel",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvQXNzZXRJbnRlcmZhY2VzRGVzY3JpcHRpb24",
+        "shouldMatch":"bodies/post/smt/AID.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "Post AIDataset",
+        "method": "POST",
+        "endpoint": "http://localhost:6004/submodels",
+        "data":"bodies/post/smt/AIDataset.json",
+        "expectedStatus": 201
+    },
+    {
+        "context": "GET AIDataset Submodel",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvQUlEYXRhc2V0LzEvMA",
+        "shouldMatch":"bodies/post/smt/AIDataset.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "Post AIDeployment",
+        "method": "POST",
+        "endpoint": "http://localhost:6004/submodels",
+        "data":"bodies/post/smt/AIDeployment.json",
+        "expectedStatus": 201
+    },
+    {
+        "context": "GET AIDeployment Submodel",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvQUlEZXBsb3ltZW50LzEvMA",
+        "shouldMatch":"bodies/post/smt/AIDeployment.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "Post AIMC (AssetInterfacesMappingConfiguration)",
+        "method": "POST",
+        "endpoint": "http://localhost:6004/submodels",
+        "data":"bodies/post/smt/AIMC.json",
+        "expectedStatus": 201
+    },
+    {
+        "context": "GET AIMC Submodel",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvQXNzZXRJbnRlcmZhY2VzTWFwcGluZ0NvbmZpZ3VyYXRpb24vMS8wLw",
+        "shouldMatch":"bodies/post/smt/AIMC.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "Post AIModelNameplate",
+        "method": "POST",
+        "endpoint": "http://localhost:6004/submodels",
+        "data":"bodies/post/smt/AIModelNameplate.json",
+        "expectedStatus": 201
+    },
+    {
+        "context": "GET AIModelNameplate Submodel",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvQUlNb2RlbE5hbWVwbGF0ZS8xLzA",
+        "shouldMatch":"bodies/post/smt/AIModelNameplate.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "Post AssetLctn (AssetLocation)",
+        "method": "POST",
+        "endpoint": "http://localhost:6004/submodels",
+        "data":"bodies/post/smt/AssetLctn.json",
+        "expectedStatus": 201
+    },
+    {
+        "context": "GET AssetLctn Submodel",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvRGF0YU1vZGVsZm9yQXNzZXRMb2NhdGlvbi8xLzA",
+        "shouldMatch":"bodies/post/smt/AssetLctn.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "Post BOM (HierarchicalStructures)",
+        "method": "POST",
+        "endpoint": "http://localhost:6004/submodels",
+        "data":"bodies/post/smt/BOM.json",
+        "expectedStatus": 201
+    },
+    {
+        "context": "GET BOM Submodel",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvSGllcmFyY2hpY2FsU3RydWN0dXJlc0JvTS8xLzE",
+        "shouldMatch":"bodies/post/smt/BOM.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "Post BackendSpecificMatInf",
+        "method": "POST",
+        "endpoint": "http://localhost:6004/submodels",
+        "data":"bodies/post/smt/BackendSpecificMatInf.json",
+        "expectedStatus": 201
+    },
+    {
+        "context": "GET BackendSpecificMatInf Submodel",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL0JhY2tlbmRTcGVjaWZpY01hdGVyaWFsSW5mb3JtYXRpb24vMS8wLw",
+        "shouldMatch":"bodies/post/smt/BackendSpecificMatInf.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "Post CarbFtprnt (CarbonFootprint)",
+        "method": "POST",
+        "endpoint": "http://localhost:6004/submodels",
+        "data":"bodies/post/smt/CarbFtprnt.json",
+        "expectedStatus": 201
+    },
+    {
+        "context": "GET CarbFtprnt Submodel",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvQ2FyYm9uRm9vdHByaW50LzEvMA",
+        "shouldMatch":"bodies/post/smt/CarbFtprnt.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "Post CntrlCnfgCNC (ControlConfigurationofCNCMachines)",
+        "method": "POST",
+        "endpoint": "http://localhost:6004/submodels",
+        "data":"bodies/post/smt/CntrlCnfgCNC.json",
+        "expectedStatus": 201
+    },
+    {
+        "context": "GET CntrlCnfgCNC Submodel",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvQ29udHJvbENvbmZpZ3VyYXRpb25vZkNOQ01hY2hpbmVzLzEvMA",
+        "shouldMatch":"bodies/post/smt/CntrlCnfgCNC.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "Post ContactInfo (ContactInformation)",
+        "method": "POST",
+        "endpoint": "http://localhost:6004/submodels",
+        "data":"bodies/post/smt/ContactInfo.json",
+        "expectedStatus": 201
+    },
+    {
+        "context": "GET ContactInfo Submodel",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvQ29udGFjdEluZm9ybWF0aW9uLzEvMA",
+        "shouldMatch":"bodies/post/smt/ContactInfo.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "Post ControlComponent (ControlComponentType)",
+        "method": "POST",
+        "endpoint": "http://localhost:6004/submodels",
+        "data":"bodies/post/smt/ControlComponent.json",
+        "expectedStatus": 201
+    },
+    {
+        "context": "GET ControlComponent Submodel",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvQ29udHJvbENvbXBvbmVudFR5cGUvMi8w",
+        "shouldMatch":"bodies/post/smt/ControlComponent.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "Post ControlComponent2 (ControlComponentInstance)",
+        "method": "POST",
+        "endpoint": "http://localhost:6004/submodels",
+        "data":"bodies/post/smt/ControlComponent2.json",
+        "expectedStatus": 201
+    },
+    {
+        "context": "GET ControlComponent2 Submodel",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvQ29udHJvbENvbXBvbmVudC9JbnN0YW5jZS8yLzA",
+        "shouldMatch":"bodies/post/smt/ControlComponent2.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "Post DEXPI",
+        "method": "POST",
+        "endpoint": "http://localhost:6004/submodels",
+        "data":"bodies/post/smt/DEXPI.json",
+        "expectedStatus": 201
+    },
+    {
+        "context": "GET DEXPI Submodel",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvREVYUEkvMS8w",
+        "shouldMatch":"bodies/post/smt/DEXPI.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "Post DataRetPol (DataRetentionPolicies)",
+        "method": "POST",
+        "endpoint": "http://localhost:6004/submodels",
+        "data":"bodies/post/smt/DataRetPol.json",
+        "expectedStatus": 201
+    },
+    {
+        "context": "GET DataRetPol Submodel",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvRGF0YVJldGVudGlvblBvbGljaWVzLzEvMA",
+        "shouldMatch":"bodies/post/smt/DataRetPol.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "Post ExecutedProcesses",
+        "method": "POST",
+        "endpoint": "http://localhost:6004/submodels",
+        "data":"bodies/post/smt/ExecutedProcesses.json",
+        "expectedStatus": 201
+    },
+    {
+        "context": "GET ExecutedProcesses Submodel",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL0V4ZWN1dGVkUHJvY2Vzc2VzLzEvMA",
+        "shouldMatch":"bodies/post/smt/ExecutedProcesses.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "Post FuncSaf (FunctionalSafety)",
+        "method": "POST",
+        "endpoint": "http://localhost:6004/submodels",
+        "data":"bodies/post/smt/FuncSaf.json",
+        "expectedStatus": 201
+    },
+    {
+        "context": "GET FuncSaf Submodel",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvRnVuY3Rpb25hbFNhZmV0eS8xLzA",
+        "shouldMatch":"bodies/post/smt/FuncSaf.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "Post HandoverDoc (HandoverDocumentation)",
+        "method": "POST",
+        "endpoint": "http://localhost:6004/submodels",
+        "data":"bodies/post/smt/HandoverDoc.json",
+        "expectedStatus": 201
+    },
+    {
+        "context": "GET HandoverDoc Submodel",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvSGFuZG92ZXJEb2N1bWVudGF0aW9uLzIvMA",
+        "shouldMatch":"bodies/post/smt/HandoverDoc.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "Post Identification (PlasticsAndRubberMouldsIdentification)",
+        "method": "POST",
+        "endpoint": "http://localhost:6004/submodels",
+        "data":"bodies/post/smt/Identification.json",
+        "expectedStatus": 201
+    },
+    {
+        "context": "GET Identification Submodel",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL2V1cm9tYXAvTW91bGRzL0lkZW50aWZpY2F0aW9uLzEvMA",
+        "shouldMatch":"bodies/post/smt/Identification.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "Post InspDocOfSteelProd (InspectionDocumentsOfSteelProducts)",
+        "method": "POST",
+        "endpoint": "http://localhost:6004/submodels",
+        "data":"bodies/post/smt/InspDocOfSteelProd.json",
+        "expectedStatus": 201
+    },
+    {
+        "context": "GET InspDocOfSteelProd Submodel",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvSW5zcGVjdGlvbkRvY3VtZW50c09mU3RlZWxQcm9kdWN0cy8xLzA",
+        "shouldMatch":"bodies/post/smt/InspDocOfSteelProd.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "Post IntInfForUse (IntelligentInformationForUse)",
+        "method": "POST",
+        "endpoint": "http://localhost:6004/submodels",
+        "data":"bodies/post/smt/IntInfForUse.json",
+        "expectedStatus": 201
+    },
+    {
+        "context": "GET IntInfForUse Submodel",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvSW50ZWxsaWdlbnRJbmZvcm1hdGlvbkZvclVzZS8xLzA",
+        "shouldMatch":"bodies/post/smt/IntInfForUse.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "Post M3D (ProvisionOf3DModels)",
+        "method": "POST",
+        "endpoint": "http://localhost:6004/submodels",
+        "data":"bodies/post/smt/M3D.json",
+        "expectedStatus": 201
+    },
+    {
+        "context": "GET M3D Submodel",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvUHJvdmlzaW9uT2YzRE1vZGVscy8xLzA",
+        "shouldMatch":"bodies/post/smt/M3D.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "Post MTP (ModuleTypePackage)",
+        "method": "POST",
+        "endpoint": "http://localhost:6004/submodels",
+        "data":"bodies/post/smt/MTP.json",
+        "expectedStatus": 201
+    },
+    {
+        "context": "GET MTP Submodel",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvTW9kdWxlVHlwZVBhY2thZ2UvMS8w",
+        "shouldMatch":"bodies/post/smt/MTP.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "Post Nameplate (DigitalNameplate)",
+        "method": "POST",
+        "endpoint": "http://localhost:6004/submodels",
+        "data":"bodies/post/smt/Nameplate.json",
+        "expectedStatus": 201
+    },
+    {
+        "context": "GET Nameplate Submodel",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvRGlnaXRhbE5hbWVwbGF0ZS8zLzA",
+        "shouldMatch":"bodies/post/smt/Nameplate.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "Post PAMSpecSheet (PAMSpecificationSheet)",
+        "method": "POST",
+        "endpoint": "http://localhost:6004/submodels",
+        "data":"bodies/post/smt/PAMSpecSheet.json",
+        "expectedStatus": 201
+    },
+    {
+        "context": "GET PAMSpecSheet Submodel",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvUEFNU3BlY2lmaWNhdGlvblNoZWV0LzEvMA",
+        "shouldMatch":"bodies/post/smt/PAMSpecSheet.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "Post PredictiveMaintenance",
+        "method": "POST",
+        "endpoint": "http://localhost:6004/submodels",
+        "data":"bodies/post/smt/PredictiveMaintenance.json",
+        "expectedStatus": 201
+    },
+    {
+        "context": "GET PredictiveMaintenance Submodel",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvUHJlZGljdGl2ZU1haW50ZW5hbmNlLzEvMA",
+        "shouldMatch":"bodies/post/smt/PredictiveMaintenance.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "Post ProcessParameters",
+        "method": "POST",
+        "endpoint": "http://localhost:6004/submodels",
+        "data":"bodies/post/smt/ProcessParameters.json",
+        "expectedStatus": 201
+    },
+    {
+        "context": "GET ProcessParameters Submodel",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC1pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvUHJvY2Vzc1BhcmFtZXRlcnMvMS8w",
+        "shouldMatch":"bodies/post/smt/ProcessParameters.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "Post ProductionCalendar",
+        "method": "POST",
+        "endpoint": "http://localhost:6004/submodels",
+        "data":"bodies/post/smt/ProductionCalendar.json",
+        "expectedStatus": 201
+    },
+    {
+        "context": "GET ProductionCalendar Submodel",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvUHJvZHVjdGlvbkNhbGVuZGFyLzEvMA",
+        "shouldMatch":"bodies/post/smt/ProductionCalendar.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "Post PwrDrvTrainSize (SizingofPowerDriveTrains)",
+        "method": "POST",
+        "endpoint": "http://localhost:6004/submodels",
+        "data":"bodies/post/smt/PwrDrvTrainSize.json",
+        "expectedStatus": 201
+    },
+    {
+        "context": "GET PwrDrvTrainSize Submodel",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvU2l6aW5nb2ZQb3dlckRyaXZlVHJhaW5zLzEvMA",
+        "shouldMatch":"bodies/post/smt/PwrDrvTrainSize.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "Post Reliability",
+        "method": "POST",
+        "endpoint": "http://localhost:6004/submodels",
+        "data":"bodies/post/smt/Reliability.json",
+        "expectedStatus": 201
+    },
+    {
+        "context": "GET Reliability Submodel",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvUmVsaWFiaWxpdHkvMS8w",
+        "shouldMatch":"bodies/post/smt/Reliability.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "Post SftwrNameplate (SoftwareNameplate)",
+        "method": "POST",
+        "endpoint": "http://localhost:6004/submodels",
+        "data":"bodies/post/smt/SftwrNameplate.json",
+        "expectedStatus": 201
+    },
+    {
+        "context": "GET SftwrNameplate Submodel",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvU29mdHdhcmVOYW1lcGxhdGUvMS8w",
+        "shouldMatch":"bodies/post/smt/SftwrNameplate.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "Post SimModels (SimulationModels)",
+        "method": "POST",
+        "endpoint": "http://localhost:6004/submodels",
+        "data":"bodies/post/smt/SimModels.json",
+        "expectedStatus": 201
+    },
+    {
+        "context": "GET SimModels Submodel",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvU2ltdWxhdGlvbk1vZGVscy8xLzA",
+        "shouldMatch":"bodies/post/smt/SimModels.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "Post SrvcReqNot (ServiceRequestNotification)",
+        "method": "POST",
+        "endpoint": "http://localhost:6004/submodels",
+        "data":"bodies/post/smt/SrvcReqNot.json",
+        "expectedStatus": 201
+    },
+    {
+        "context": "GET SrvcReqNot Submodel",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvU2VydmljZVJlcXVlc3ROb3RpZmljYXRpb24vMS8w",
+        "shouldMatch":"bodies/post/smt/SrvcReqNot.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "Post TechnicalDataAGV",
+        "method": "POST",
+        "endpoint": "http://localhost:6004/submodels",
+        "data":"bodies/post/smt/TechnicalDataAGV.json",
+        "expectedStatus": 201
+    },
+    {
+        "context": "GET TechnicalDataAGV Submodel",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvdGVjaG5pY2FsZGF0YWFndi8xLzA",
+        "shouldMatch":"bodies/post/smt/TechnicalDataAGV.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "Post TimeSeries",
+        "method": "POST",
+        "endpoint": "http://localhost:6004/submodels",
+        "data":"bodies/post/smt/TimeSeries.json",
+        "expectedStatus": 201
+    },
+    {
+        "context": "GET TimeSeries Submodel",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvVGltZVNlcmllcy8xLzE",
+        "shouldMatch":"bodies/post/smt/TimeSeries.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "Post TimeSrsWOP (TimeSeriesWithOperations)",
+        "method": "POST",
+        "endpoint": "http://localhost:6004/submodels",
+        "data":"bodies/post/smt/TimeSrsWOP.json",
+        "expectedStatus": 201
+    },
+    {
+        "context": "GET TimeSrsWOP Submodel",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvVGltZVNlcmllc1dpdGhPcGVyYXRpb25zLzEvMQ",
+        "shouldMatch":"bodies/post/smt/TimeSrsWOP.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "Post WorkstMachine (WorkstationWorkerMatchingData)",
+        "method": "POST",
+        "endpoint": "http://localhost:6004/submodels",
+        "data":"bodies/post/smt/WorkstMachine.json",
+        "expectedStatus": 201
+    },
+    {
+        "context": "GET WorkstMachine Submodel",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvd29ya3N0YXRpb25NYXRjaGluZy8xLzA",
+        "shouldMatch":"bodies/post/smt/WorkstMachine.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "Post WrlsComm (WirelessCommunication)",
+        "method": "POST",
+        "endpoint": "http://localhost:6004/submodels",
+        "data":"bodies/post/smt/WrlsComm.json",
+        "expectedStatus": 201
+    },
+    {
+        "context": "GET WrlsComm Submodel",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvV2lyZWxlc3NDb21tdW5pY2F0aW9uLzEvMA",
+        "shouldMatch":"bodies/post/smt/WrlsComm.json",
+        "expectedStatus": 200
     }
 ]
