@@ -181,7 +181,7 @@ func (p PostgreSQLSubmodelElementListHandler) Delete(idShortOrPath string) error
 // Returns:
 //   - *InsertQueryPart: The table name and record for submodel_element_list insert
 //   - error: An error if the element is not of type SubmodelElementList
-func (p PostgreSQLSubmodelElementListHandler) GetInsertQueryPart(tx *sql.Tx, id int, element types.ISubmodelElement) (*InsertQueryPart, error) {
+func (p PostgreSQLSubmodelElementListHandler) GetInsertQueryPart(_ *sql.Tx, id int, element types.ISubmodelElement) (*InsertQueryPart, error) {
 	smeList, ok := element.(*types.SubmodelElementList)
 	if !ok {
 		return nil, common.NewErrBadRequest("submodelElement is not of type SubmodelElementList")
