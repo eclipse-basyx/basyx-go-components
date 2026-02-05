@@ -180,7 +180,7 @@ func (p PostgreSQLSubmodelElementListHandler) Update(submodelID string, idShortO
 	}
 
 	// Build update record for SubmodelElementList-specific fields
-	updateRecord, err := buildUpdateListRecordObject(smeList, isPut, localTx)
+	updateRecord, err := buildUpdateListRecordObject(smeList, isPut)
 	if err != nil {
 		return err
 	}
@@ -279,7 +279,7 @@ func insertSubmodelElementList(smeList *types.SubmodelElementList, tx *sql.Tx, i
 	return err
 }
 
-func buildUpdateListRecordObject(smeList types.ISubmodelElementList, isPut bool, tx *sql.Tx) (goqu.Record, error) {
+func buildUpdateListRecordObject(smeList types.ISubmodelElementList, isPut bool) (goqu.Record, error) {
 	updateRecord := goqu.Record{}
 
 	// OrderRelevant is always updated

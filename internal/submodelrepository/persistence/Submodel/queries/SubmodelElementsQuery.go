@@ -285,7 +285,6 @@ func getFileSubquery(dialect goqu.DialectWrapper) *goqu.SelectDataset {
 }
 
 func getSubmodelElementListSubquery(dialect goqu.DialectWrapper) *goqu.SelectDataset {
-
 	return dialect.From(goqu.T("submodel_element_list").As("list")).
 		Select(
 			goqu.Func("jsonb_build_object",

@@ -81,9 +81,9 @@ func BuildSubmodelElement(smeRow model.SubmodelElementRow, db *sql.DB) (types.IS
 	var g errgroup.Group
 	refBuilderMap := make(map[int64]*ReferenceBuilder)
 	var refMutex sync.RWMutex
-	specificSME, err := getSubmodelElementObjectBasedOnModelType(smeRow, refBuilderMap, &refMutex, db)
+	specificSME, err := getSubmodelElementObjectBasedOnModelType(smeRow, refBuilderMap, &refMutex)
 	if err != nil {
-		_, _ = fmt.Printf("[DEBUG] BuildSubmodelElement: Error building SME type, idShort=%s, modelType=%d, error: %v\n", smeRow.IDShort, smeRow.ModelType, err)
+		_, _ = fmt.Printf("[DEBUG] BuildSubmodelElement: Error building SME type, idShort=%s, modelType=%d, error: %v\n", smeRow.IDShort.String, smeRow.ModelType, err)
 		return nil, nil, err
 	}
 	if smeRow.IDShort.Valid {
@@ -151,8 +151,8 @@ func BuildSubmodelElement(smeRow model.SubmodelElementRow, db *sql.DB) (types.IS
 				if err != nil {
 					// Log the problematic JSON for debugging
 					jsonBytes, _ := json.Marshal(jsonable)
-					_, _ = fmt.Printf("[DEBUG] SME EmbeddedDataSpec: idShort=%s, index=%d, JSON: %s, Error: %v\n", smeRow.IDShort, i, string(jsonBytes), err)
-					return fmt.Errorf("error converting jsonable to EmbeddedDataSpecification (idShort=%s, index=%d, data: %s): %w", smeRow.IDShort, i, string(jsonBytes), err)
+					_, _ = fmt.Printf("[DEBUG] SME EmbeddedDataSpec: idShort=%s, index=%d, JSON: %s, Error: %v\n", smeRow.IDShort.String, i, string(jsonBytes), err)
+					return fmt.Errorf("error converting jsonable to EmbeddedDataSpecification (idShort=%s, index=%d, data: %s): %w", smeRow.IDShort.String, i, string(jsonBytes), err)
 				}
 				specs = append(specs, eds)
 			}
@@ -181,8 +181,8 @@ func BuildSubmodelElement(smeRow model.SubmodelElementRow, db *sql.DB) (types.IS
 				if err != nil {
 					// Log the problematic JSON for debugging
 					jsonBytes, _ := json.Marshal(jsonable)
-					_, _ = fmt.Printf("[DEBUG] SME SupplementalSemanticIDs: idShort=%s, index=%d, JSON: %s, Error: %v\n", smeRow.IDShort, i, string(jsonBytes), err)
-					return fmt.Errorf("error converting jsonable to Reference (idShort=%s, index=%d, data: %s): %w", smeRow.IDShort, i, string(jsonBytes), err)
+					_, _ = fmt.Printf("[DEBUG] SME SupplementalSemanticIDs: idShort=%s, index=%d, JSON: %s, Error: %v\n", smeRow.IDShort.String, i, string(jsonBytes), err)
+					return fmt.Errorf("error converting jsonable to Reference (idShort=%s, index=%d, data: %s): %w", smeRow.IDShort.String, i, string(jsonBytes), err)
 				}
 				supplementalSemanticIDs = append(supplementalSemanticIDs, *ref.(*types.Reference))
 			}
@@ -209,8 +209,8 @@ func BuildSubmodelElement(smeRow model.SubmodelElementRow, db *sql.DB) (types.IS
 				if err != nil {
 					// Log the problematic JSON for debugging
 					jsonBytes, _ := json.Marshal(jsonable)
-					_, _ = fmt.Printf("[DEBUG] SME Extensions: idShort=%s, index=%d, JSON: %s, Error: %v\n", smeRow.IDShort, i, string(jsonBytes), err)
-					return fmt.Errorf("error converting jsonable to Extension (idShort=%s, index=%d, data: %s): %w", smeRow.IDShort, i, string(jsonBytes), err)
+					_, _ = fmt.Printf("[DEBUG] SME Extensions: idShort=%s, index=%d, JSON: %s, Error: %v\n", smeRow.IDShort.String, i, string(jsonBytes), err)
+					return fmt.Errorf("error converting jsonable to Extension (idShort=%s, index=%d, data: %s): %w", smeRow.IDShort.String, i, string(jsonBytes), err)
 				}
 				extensions = append(extensions, ext)
 			}
@@ -314,7 +314,7 @@ func BuildSubmodelElement(smeRow model.SubmodelElementRow, db *sql.DB) (types.IS
 // getSubmodelElementObjectBasedOnModelType determines the specific SubmodelElement type
 // based on the ModelType field in the row and delegates to the appropriate build function.
 // It handles reference building for types that require it.
-func getSubmodelElementObjectBasedOnModelType(smeRow model.SubmodelElementRow, refBuilderMap map[int64]*ReferenceBuilder, refMutex *sync.RWMutex, db *sql.DB) (types.ISubmodelElement, error) {
+func getSubmodelElementObjectBasedOnModelType(smeRow model.SubmodelElementRow, refBuilderMap map[int64]*ReferenceBuilder, refMutex *sync.RWMutex) (types.ISubmodelElement, error) {
 	switch smeRow.ModelType {
 	case int64(types.ModelTypeProperty):
 		prop, err := buildProperty(smeRow, refBuilderMap, refMutex)
