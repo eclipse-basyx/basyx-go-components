@@ -1,6 +1,19 @@
 {
-  "modelType": "Submodel",
+  "administration": {
+    "revision": "0",
+    "templateId": "https://admin-shell-io/IDTA-02038-1",
+    "version": "1"
+  },
+  "description": [
+    {
+      "language": "en",
+      "text": "The Submodel defines Identification parameters to be used in addition to the Digital Nameplate Submodel."
+    }
+  ],
+  "id": "https://admin-shell.io/idta/euromap/Moulds/Identification/1/0",
+  "idShort": "PlasticsAndRubberMouldsIdentification",
   "kind": "Template",
+  "modelType": "Submodel",
   "semanticId": {
     "keys": [
       {
@@ -10,283 +23,24 @@
     ],
     "type": "ExternalReference"
   },
-  "administration": {
-    "revision": "0",
-    "templateId": "https://admin-shell-io/IDTA-02038-1",
-    "version": "1"
-  },
-  "id": "https://admin-shell.io/idta/euromap/Moulds/Identification/1/0",
-  "description": [
-    {
-      "language": "en",
-      "text": "The Submodel defines Identification parameters to be used in addition to the Digital Nameplate Submodel."
-    }
-  ],
-  "idShort": "PlasticsAndRubberMouldsIdentification",
   "submodelElements": [
     {
-      "modelType": "Property",
-      "semanticId": {
-        "keys": [
-          {
-            "type": "GlobalReference",
-            "value": "0173-1#02-ABA682#001"
-          }
-        ],
-        "type": "ExternalReference"
-      },
-      "value": "12",
-      "valueType": "xs:int",
-      "qualifiers": [
-        {
-          "kind": "ConceptQualifier",
-          "type": "Multiplicity",
-          "value": "ZeroToOne",
-          "valueType": "xs:string"
-        }
-      ],
       "description": [
         {
           "language": "en",
-          "text": "The month in which the manufacturing process of the machine has been completed"
+          "text": "The SMC \"Affiliation\" provides information about the owner of the mould. It has the same CD as \"ContactInformation\""
         }
       ],
-      "idShort": "MonthOfConstruction"
-    },
-    {
-      "modelType": "Property",
-      "semanticId": {
-        "keys": [
-          {
-            "type": "GlobalReference",
-            "value": "0173-1#02-ABA683#001"
-          }
-        ],
-        "type": "ExternalReference"
-      },
-      "value": "2022-01-15",
-      "valueType": "xs:date",
-      "qualifiers": [
-        {
-          "kind": "ConceptQualifier",
-          "type": "Multiplicity",
-          "value": "ZeroToOne",
-          "valueType": "xs:string"
-        }
-      ],
-      "description": [
-        {
-          "language": "en",
-          "text": "The first time, the mould gets on the machine and switched on (dry cycle)"
-        }
-      ],
-      "idShort": "InitialOperationDate"
-    },
-    {
-      "modelType": "Property",
-      "semanticId": {
-        "keys": [
-          {
-            "type": "GlobalReference",
-            "value": "https://admin-shell.io/idta/euromap/Moulds/Identification/InitialSamplingDate/1/0"
-          }
-        ],
-        "type": "ExternalReference"
-      },
-      "value": "2023-01-01",
-      "valueType": "xs:date",
-      "qualifiers": [
-        {
-          "kind": "ConceptQualifier",
-          "type": "Multiplicity",
-          "value": "ZeroToOne",
-          "valueType": "xs:string"
-        }
-      ],
-      "description": [
-        {
-          "language": "en",
-          "text": "The date, when the MouldItem was used in an IMM for the first time (FOT - first part out of tool)"
-        }
-      ],
-      "idShort": "InitialSamplingDate"
-    },
-    {
-      "modelType": "Property",
-      "semanticId": {
-        "keys": [
-          {
-            "type": "GlobalReference",
-            "value": "https://admin-shell.io/idta/euromap/Moulds/Identification/InitialProductionDate/1/0"
-          }
-        ],
-        "type": "ExternalReference"
-      },
-      "value": "2023-01-01",
-      "valueType": "xs:date",
-      "qualifiers": [
-        {
-          "kind": "ConceptQualifier",
-          "type": "Multiplicity",
-          "value": "ZeroToOne",
-          "valueType": "xs:string"
-        }
-      ],
-      "description": [
-        {
-          "language": "en",
-          "text": "The date, when the MouldItem was transfered to series production the first time"
-        }
-      ],
-      "idShort": "InitialProductionDate"
-    },
-    {
-      "modelType": "Property",
-      "semanticId": {
-        "keys": [
-          {
-            "type": "GlobalReference",
-            "value": "https://admin-shell.io/idta/euromap/Moulds/Identification/ManufacturerURI/1/0 "
-          }
-        ],
-        "type": "ExternalReference"
-      },
-      "value": "https://www.example-company.com/URI",
-      "valueType": "xs:string",
-      "qualifiers": [
-        {
-          "kind": "ConceptQualifier",
-          "type": "Multiplicity",
-          "value": "ZeroToOne",
-          "valueType": "xs:string"
-        }
-      ],
-      "description": [
-        {
-          "language": "en",
-          "text": "A globally unique identifier of the manufacturer of the MachineryItem."
-        }
-      ],
-      "idShort": "ManufacturerURI"
-    },
-    {
-      "modelType": "Property",
-      "semanticId": {
-        "keys": [
-          {
-            "type": "GlobalReference",
-            "value": " 0173-1#02-ABA684#001"
-          }
-        ],
-        "type": "ExternalReference"
-      },
-      "value": "12345ab-c",
-      "valueType": "xs:string",
-      "qualifiers": [
-        {
-          "kind": "ConceptQualifier",
-          "type": "Multiplicity",
-          "value": "ZeroToOne",
-          "valueType": "xs:string"
-        }
-      ],
-      "description": [
-        {
-          "language": "en",
-          "text": "To be used by end users to store a unique identification in the context of their overall application."
-        }
-      ],
-      "idShort": "AssetID"
-    },
-    {
-      "modelType": "Property",
-      "semanticId": {
-        "keys": [
-          {
-            "type": "GlobalReference",
-            "value": "https://admin-shell.io/idta/euromap/Moulds/Identification/ControllerName/1/0 "
-          }
-        ],
-        "type": "ExternalReference"
-      },
-      "value": "Example-Company FM-ABC 1234",
-      "valueType": "xs:string",
-      "qualifiers": [
-        {
-          "kind": "ConceptQualifier",
-          "type": "Multiplicity",
-          "value": "ZeroToOne",
-          "valueType": "xs:string"
-        }
-      ],
-      "description": [
-        {
-          "language": "en",
-          "text": "name of the machine controller as used in OPC 40083"
-        }
-      ],
-      "idShort": "ControllerName"
-    },
-    {
-      "modelType": "Property",
-      "semanticId": {
-        "keys": [
-          {
-            "type": "GlobalReference",
-            "value": "https://admin-shell.io/idta/euromap/Moulds/Identification/ArticleID/1/0 "
-          }
-        ],
-        "type": "ExternalReference"
-      },
-      "value": "5A",
-      "valueType": "xs:string",
-      "qualifiers": [
-        {
-          "kind": "ConceptQualifier",
-          "type": "Multiplicity",
-          "value": "ZeroToMany",
-          "valueType": "xs:string"
-        }
-      ],
-      "description": [
-        {
-          "language": "en",
-          "text": "ID of the article (plastic part), which is produced with the mould. Given by the end user"
-        }
-      ],
-      "idShort": "ArticleID"
-    },
-    {
-      "modelType": "Property",
-      "semanticId": {
-        "keys": [
-          {
-            "type": "GlobalReference",
-            "value": "https://admin-shell.io/idta/euromap/Moulds/Identification/ArticleName/1/0 "
-          }
-        ],
-        "type": "ExternalReference"
-      },
-      "value": "Plastic Part 05",
-      "valueType": "xs:string",
-      "qualifiers": [
-        {
-          "kind": "ConceptQualifier",
-          "type": "Multiplicity",
-          "value": "ZeroToMany",
-          "valueType": "xs:string"
-        }
-      ],
-      "description": [
-        {
-          "language": "en",
-          "text": "Name of the plastic part, which is produced with the mould"
-        }
-      ],
-      "idShort": "ArticleName"
-    },
-    {
+      "idShort": "Affiliation",
       "modelType": "SubmodelElementCollection",
+      "qualifiers": [
+        {
+          "kind": "ConceptQualifier",
+          "type": "Multiplicity",
+          "value": "ZeroToOne",
+          "valueType": "xs:string"
+        }
+      ],
       "semanticId": {
         "keys": [
           {
@@ -296,24 +50,24 @@
         ],
         "type": "ExternalReference"
       },
-      "qualifiers": [
-        {
-          "kind": "ConceptQualifier",
-          "type": "Multiplicity",
-          "value": "ZeroToOne",
-          "valueType": "xs:string"
-        }
-      ],
-      "description": [
-        {
-          "language": "en",
-          "text": "The SMC \"Affiliation\" provides information about the owner of the mould. It has the same CD as \"ContactInformation\""
-        }
-      ],
-      "idShort": "Affiliation",
       "value": [
         {
+          "description": [
+            {
+              "language": "en",
+              "text": "enumeration: 0173-1#07-AAS927#001 (administrativ contact), 0173-1#07-AAS928#001 (commercial contact), 0173-1#07-AAS929#001 (other contact), 0173-1#07-AAS930#001 (hazardous goods contact), 0173-1#07-AAS931#001 (technical contact). Note: the above mentioned ECLASS enumeration should be declared as “open” for further addition. ECLASS enumeration IRDI is preferable. If no IRDI available, custom input as String may also be accepted."
+            }
+          ],
+          "idShort": "RoleOfContactPerson",
           "modelType": "Property",
+          "qualifiers": [
+            {
+              "kind": "ConceptQualifier",
+              "type": "Multiplicity",
+              "value": "ZeroToOne",
+              "valueType": "xs:string"
+            }
+          ],
           "semanticId": {
             "keys": [
               {
@@ -324,25 +78,25 @@
             "type": "ExternalReference"
           },
           "value": "0173-1#07-AAS931#001",
-          "valueType": "xs:string",
+          "valueType": "xs:string"
+        },
+        {
+          "description": [
+            {
+              "language": "en",
+              "text": "Note: see also [IRDI] 0112/2///61360_4#ADA005#001 country code. country codes defined accord. to DIN EN ISO 3166-1 alpha-2 codes. Mandatory property according to EU Machine Directive 2006/42/EC. Recommendation: property declaration as MLP is required by its semantic definition. As the property value is language independent, users are recommended to provide maximal 1 string in any language of the user’s choice."
+            }
+          ],
+          "idShort": "NationalCode",
+          "modelType": "MultiLanguageProperty",
           "qualifiers": [
             {
               "kind": "ConceptQualifier",
               "type": "Multiplicity",
-              "value": "ZeroToOne",
+              "value": "One",
               "valueType": "xs:string"
             }
           ],
-          "description": [
-            {
-              "language": "en",
-              "text": "enumeration: 0173-1#07-AAS927#001 (administrativ contact), 0173-1#07-AAS928#001 (commercial contact), 0173-1#07-AAS929#001 (other contact), 0173-1#07-AAS930#001 (hazardous goods contact), 0173-1#07-AAS931#001 (technical contact). Note: the above mentioned ECLASS enumeration should be declared as “open” for further addition. ECLASS enumeration IRDI is preferable. If no IRDI available, custom input as String may also be accepted."
-            }
-          ],
-          "idShort": "RoleOfContactPerson"
-        },
-        {
-          "modelType": "MultiLanguageProperty",
           "semanticId": {
             "keys": [
               {
@@ -357,25 +111,25 @@
               "language": "en",
               "text": "DE"
             }
+          ]
+        },
+        {
+          "description": [
+            {
+              "language": "en",
+              "text": "Note: language codes defined accord. to ISO 639-1. Note: as per ECLASS definition, Expression and representation of thoughts, information, feelings, ideas through characters."
+            }
           ],
+          "idShort": "Language",
+          "modelType": "Property",
           "qualifiers": [
             {
               "kind": "ConceptQualifier",
               "type": "Multiplicity",
-              "value": "One",
+              "value": "ZeroToMany",
               "valueType": "xs:string"
             }
           ],
-          "description": [
-            {
-              "language": "en",
-              "text": "Note: see also [IRDI] 0112/2///61360_4#ADA005#001 country code. country codes defined accord. to DIN EN ISO 3166-1 alpha-2 codes. Mandatory property according to EU Machine Directive 2006/42/EC. Recommendation: property declaration as MLP is required by its semantic definition. As the property value is language independent, users are recommended to provide maximal 1 string in any language of the user’s choice."
-            }
-          ],
-          "idShort": "NationalCode"
-        },
-        {
-          "modelType": "Property",
           "semanticId": {
             "keys": [
               {
@@ -386,25 +140,25 @@
             "type": "ExternalReference"
           },
           "value": "de",
-          "valueType": "xs:string",
+          "valueType": "xs:string"
+        },
+        {
+          "description": [
+            {
+              "language": "en",
+              "text": "Note: notation accord. to ISO 8601 Note: for time in UTC the zone designator “Z” is to be used"
+            }
+          ],
+          "idShort": "TimeZone",
+          "modelType": "Property",
           "qualifiers": [
             {
               "kind": "ConceptQualifier",
               "type": "Multiplicity",
-              "value": "ZeroToMany",
+              "value": "ZeroToOne",
               "valueType": "xs:string"
             }
           ],
-          "description": [
-            {
-              "language": "en",
-              "text": "Note: language codes defined accord. to ISO 639-1. Note: as per ECLASS definition, Expression and representation of thoughts, information, feelings, ideas through characters."
-            }
-          ],
-          "idShort": "Language"
-        },
-        {
-          "modelType": "Property",
           "semanticId": {
             "keys": [
               {
@@ -415,25 +169,25 @@
             "type": "ExternalReference"
           },
           "value": "Z",
-          "valueType": "xs:string",
+          "valueType": "xs:string"
+        },
+        {
+          "description": [
+            {
+              "language": "en",
+              "text": "Note: see also [IRDI] 0112/2///61987#ABA129#001 city/town. Mandatory property according to EU Machine Directive 2006/42/EC."
+            }
+          ],
+          "idShort": "CityTown",
+          "modelType": "MultiLanguageProperty",
           "qualifiers": [
             {
               "kind": "ConceptQualifier",
               "type": "Multiplicity",
-              "value": "ZeroToOne",
+              "value": "One",
               "valueType": "xs:string"
             }
           ],
-          "description": [
-            {
-              "language": "en",
-              "text": "Note: notation accord. to ISO 8601 Note: for time in UTC the zone designator “Z” is to be used"
-            }
-          ],
-          "idShort": "TimeZone"
-        },
-        {
-          "modelType": "MultiLanguageProperty",
           "semanticId": {
             "keys": [
               {
@@ -448,25 +202,19 @@
               "language": "de",
               "text": "Musterstadt"
             }
-          ],
+          ]
+        },
+        {
+          "idShort": "Company",
+          "modelType": "MultiLanguageProperty",
           "qualifiers": [
             {
               "kind": "ConceptQualifier",
               "type": "Multiplicity",
-              "value": "One",
+              "value": "ZeroToOne",
               "valueType": "xs:string"
             }
           ],
-          "description": [
-            {
-              "language": "en",
-              "text": "Note: see also [IRDI] 0112/2///61987#ABA129#001 city/town. Mandatory property according to EU Machine Directive 2006/42/EC."
-            }
-          ],
-          "idShort": "CityTown"
-        },
-        {
-          "modelType": "MultiLanguageProperty",
           "semanticId": {
             "keys": [
               {
@@ -481,7 +229,11 @@
               "language": "en",
               "text": "ABC Company"
             }
-          ],
+          ]
+        },
+        {
+          "idShort": "Department",
+          "modelType": "MultiLanguageProperty",
           "qualifiers": [
             {
               "kind": "ConceptQualifier",
@@ -490,10 +242,6 @@
               "valueType": "xs:string"
             }
           ],
-          "idShort": "Company"
-        },
-        {
-          "modelType": "MultiLanguageProperty",
           "semanticId": {
             "keys": [
               {
@@ -508,7 +256,11 @@
               "language": "de",
               "text": "Vertrieb"
             }
-          ],
+          ]
+        },
+        {
+          "idShort": "Phone",
+          "modelType": "SubmodelElementCollection",
           "qualifiers": [
             {
               "kind": "ConceptQualifier",
@@ -517,10 +269,6 @@
               "valueType": "xs:string"
             }
           ],
-          "idShort": "Department"
-        },
-        {
-          "modelType": "SubmodelElementCollection",
           "semanticId": {
             "keys": [
               {
@@ -530,18 +278,24 @@
             ],
             "type": "ExternalReference"
           },
-          "qualifiers": [
-            {
-              "kind": "ConceptQualifier",
-              "type": "Multiplicity",
-              "value": "ZeroToOne",
-              "valueType": "xs:string"
-            }
-          ],
-          "idShort": "Phone",
           "value": [
             {
+              "description": [
+                {
+                  "language": "en",
+                  "text": "Recommendation: property declaration as MLP is required by its semantic definition. As the property value is language independent, users are recommended to provide maximal 1 string in any language of the user’s choice."
+                }
+              ],
+              "idShort": "TelephoneNumber",
               "modelType": "MultiLanguageProperty",
+              "qualifiers": [
+                {
+                  "kind": "ConceptQualifier",
+                  "type": "Multiplicity",
+                  "value": "One",
+                  "valueType": "xs:string"
+                }
+              ],
               "semanticId": {
                 "keys": [
                   {
@@ -556,25 +310,25 @@
                   "language": "en",
                   "text": "+491234567890"
                 }
+              ]
+            },
+            {
+              "description": [
+                {
+                  "language": "en",
+                  "text": " enumeration: 0173-1#07-AAS754#001 (office), 0173-1#07-AAS755#001 (office mobile), 0173-1#07-AAS756#001 (secretary), 0173-1#07-AAS757#001 (substitute), 0173-1#07-AAS758#001 (home), 0173-1#07-AAS759#001 (private mobile)"
+                }
               ],
+              "idShort": "TypeOfTelephone",
+              "modelType": "Property",
               "qualifiers": [
                 {
                   "kind": "ConceptQualifier",
                   "type": "Multiplicity",
-                  "value": "One",
+                  "value": "ZeroToOne",
                   "valueType": "xs:string"
                 }
               ],
-              "description": [
-                {
-                  "language": "en",
-                  "text": "Recommendation: property declaration as MLP is required by its semantic definition. As the property value is language independent, users are recommended to provide maximal 1 string in any language of the user’s choice."
-                }
-              ],
-              "idShort": "TelephoneNumber"
-            },
-            {
-              "modelType": "Property",
               "semanticId": {
                 "keys": [
                   {
@@ -585,7 +339,11 @@
                 "type": "ExternalReference"
               },
               "value": "0173-1#07-AAS754#001",
-              "valueType": "xs:string",
+              "valueType": "xs:string"
+            },
+            {
+              "idShort": "AvailableTime",
+              "modelType": "MultiLanguageProperty",
               "qualifiers": [
                 {
                   "kind": "ConceptQualifier",
@@ -594,16 +352,6 @@
                   "valueType": "xs:string"
                 }
               ],
-              "description": [
-                {
-                  "language": "en",
-                  "text": " enumeration: 0173-1#07-AAS754#001 (office), 0173-1#07-AAS755#001 (office mobile), 0173-1#07-AAS756#001 (secretary), 0173-1#07-AAS757#001 (substitute), 0173-1#07-AAS758#001 (home), 0173-1#07-AAS759#001 (private mobile)"
-                }
-              ],
-              "idShort": "TypeOfTelephone"
-            },
-            {
-              "modelType": "MultiLanguageProperty",
               "semanticId": {
                 "keys": [
                   {
@@ -618,21 +366,21 @@
                   "language": "de",
                   "text": "Montag – Freitag 08:00 bis 16:00"
                 }
-              ],
-              "qualifiers": [
-                {
-                  "kind": "ConceptQualifier",
-                  "type": "Multiplicity",
-                  "value": "ZeroToOne",
-                  "valueType": "xs:string"
-                }
-              ],
-              "idShort": "AvailableTime"
+              ]
             }
           ]
         },
         {
+          "idShort": "Fax",
           "modelType": "SubmodelElementCollection",
+          "qualifiers": [
+            {
+              "kind": "ConceptQualifier",
+              "type": "Multiplicity",
+              "value": "ZeroToOne",
+              "valueType": "xs:string"
+            }
+          ],
           "semanticId": {
             "keys": [
               {
@@ -642,18 +390,24 @@
             ],
             "type": "ExternalReference"
           },
-          "qualifiers": [
-            {
-              "kind": "ConceptQualifier",
-              "type": "Multiplicity",
-              "value": "ZeroToOne",
-              "valueType": "xs:string"
-            }
-          ],
-          "idShort": "Fax",
           "value": [
             {
+              "description": [
+                {
+                  "language": "en",
+                  "text": "Recommendation: property declaration as MLP is required by its semantic definition. As the property value is language independent, users are recommended to provide maximal 1 string in any language of the user’s choice."
+                }
+              ],
+              "idShort": "FaxNumber",
               "modelType": "MultiLanguageProperty",
+              "qualifiers": [
+                {
+                  "kind": "ConceptQualifier",
+                  "type": "Multiplicity",
+                  "value": "One",
+                  "valueType": "xs:string"
+                }
+              ],
               "semanticId": {
                 "keys": [
                   {
@@ -668,25 +422,25 @@
                   "language": "en",
                   "text": "+491234567890"
                 }
+              ]
+            },
+            {
+              "description": [
+                {
+                  "language": "en",
+                  "text": "enumeration: 0173-1#07-AAS754#001 (office), 0173-1#07-AAS756#001 (secretary), 0173-1#07-AAS758#001 (home)"
+                }
               ],
+              "idShort": "TypeOfFaxNumber",
+              "modelType": "Property",
               "qualifiers": [
                 {
                   "kind": "ConceptQualifier",
                   "type": "Multiplicity",
-                  "value": "One",
+                  "value": "ZeroToOne",
                   "valueType": "xs:string"
                 }
               ],
-              "description": [
-                {
-                  "language": "en",
-                  "text": "Recommendation: property declaration as MLP is required by its semantic definition. As the property value is language independent, users are recommended to provide maximal 1 string in any language of the user’s choice."
-                }
-              ],
-              "idShort": "FaxNumber"
-            },
-            {
-              "modelType": "Property",
               "semanticId": {
                 "keys": [
                   {
@@ -697,27 +451,21 @@
                 "type": "ExternalReference"
               },
               "value": " 0173-1#07-AAS754#001",
-              "valueType": "xs:string",
-              "qualifiers": [
-                {
-                  "kind": "ConceptQualifier",
-                  "type": "Multiplicity",
-                  "value": "ZeroToOne",
-                  "valueType": "xs:string"
-                }
-              ],
-              "description": [
-                {
-                  "language": "en",
-                  "text": "enumeration: 0173-1#07-AAS754#001 (office), 0173-1#07-AAS756#001 (secretary), 0173-1#07-AAS758#001 (home)"
-                }
-              ],
-              "idShort": "TypeOfFaxNumber"
+              "valueType": "xs:string"
             }
           ]
         },
         {
+          "idShort": "Email",
           "modelType": "SubmodelElementCollection",
+          "qualifiers": [
+            {
+              "kind": "ConceptQualifier",
+              "type": "Multiplicity",
+              "value": "ZeroToOne",
+              "valueType": "xs:string"
+            }
+          ],
           "semanticId": {
             "keys": [
               {
@@ -727,18 +475,18 @@
             ],
             "type": "ExternalReference"
           },
-          "qualifiers": [
-            {
-              "kind": "ConceptQualifier",
-              "type": "Multiplicity",
-              "value": "ZeroToOne",
-              "valueType": "xs:string"
-            }
-          ],
-          "idShort": "Email",
           "value": [
             {
+              "idShort": "EmailAddress",
               "modelType": "Property",
+              "qualifiers": [
+                {
+                  "kind": "ConceptQualifier",
+                  "type": "Multiplicity",
+                  "value": "One",
+                  "valueType": "xs:string"
+                }
+              ],
               "semanticId": {
                 "keys": [
                   {
@@ -749,28 +497,17 @@
                 "type": "ExternalReference"
               },
               "value": "email@muster-ag.de",
-              "valueType": "xs:string",
-              "qualifiers": [
-                {
-                  "kind": "ConceptQualifier",
-                  "type": "Multiplicity",
-                  "value": "One",
-                  "valueType": "xs:string"
-                }
-              ],
-              "idShort": "EmailAddress"
+              "valueType": "xs:string"
             },
             {
+              "description": [
+                {
+                  "language": "en",
+                  "text": "Recommendation: property declaration as MLP is required by its semantic definition. As the property value is language independent, users are recommended to provide maximal 1 string in any language of the user’s choice."
+                }
+              ],
+              "idShort": "PublicKey",
               "modelType": "MultiLanguageProperty",
-              "semanticId": {
-                "keys": [
-                  {
-                    "type": "GlobalReference",
-                    "value": "0173-1#02-AAO200#002"
-                  }
-                ],
-                "type": "ExternalReference"
-              },
               "qualifiers": [
                 {
                   "kind": "ConceptQualifier",
@@ -779,16 +516,33 @@
                   "valueType": "xs:string"
                 }
               ],
+              "semanticId": {
+                "keys": [
+                  {
+                    "type": "GlobalReference",
+                    "value": "0173-1#02-AAO200#002"
+                  }
+                ],
+                "type": "ExternalReference"
+              }
+            },
+            {
               "description": [
                 {
                   "language": "en",
-                  "text": "Recommendation: property declaration as MLP is required by its semantic definition. As the property value is language independent, users are recommended to provide maximal 1 string in any language of the user’s choice."
+                  "text": "enumeration: 0173-1#07-AAS754#001 (office), 0173-1#07-AAS756#001 (secretary), 0173-1#07-AAS757#001 (substitute), 0173-1#07-AAS758#001 (home)"
                 }
               ],
-              "idShort": "PublicKey"
-            },
-            {
+              "idShort": "TypeOfEmailAddress",
               "modelType": "Property",
+              "qualifiers": [
+                {
+                  "kind": "ConceptQualifier",
+                  "type": "Multiplicity",
+                  "value": "ZeroToOne",
+                  "valueType": "xs:string"
+                }
+              ],
               "semanticId": {
                 "keys": [
                   {
@@ -799,7 +553,11 @@
                 "type": "ExternalReference"
               },
               "value": "0173-1#07-AAS754#001",
-              "valueType": "xs:string",
+              "valueType": "xs:string"
+            },
+            {
+              "idShort": "TypeOfPublicKey",
+              "modelType": "MultiLanguageProperty",
               "qualifiers": [
                 {
                   "kind": "ConceptQualifier",
@@ -808,16 +566,6 @@
                   "valueType": "xs:string"
                 }
               ],
-              "description": [
-                {
-                  "language": "en",
-                  "text": "enumeration: 0173-1#07-AAS754#001 (office), 0173-1#07-AAS756#001 (secretary), 0173-1#07-AAS757#001 (substitute), 0173-1#07-AAS758#001 (home)"
-                }
-              ],
-              "idShort": "TypeOfEmailAddress"
-            },
-            {
-              "modelType": "MultiLanguageProperty",
               "semanticId": {
                 "keys": [
                   {
@@ -826,21 +574,21 @@
                   }
                 ],
                 "type": "ExternalReference"
-              },
-              "qualifiers": [
-                {
-                  "kind": "ConceptQualifier",
-                  "type": "Multiplicity",
-                  "value": "ZeroToOne",
-                  "valueType": "xs:string"
-                }
-              ],
-              "idShort": "TypeOfPublicKey"
+              }
             }
           ]
         },
         {
+          "idShort": "IPCommunication__00__",
           "modelType": "SubmodelElementCollection",
+          "qualifiers": [
+            {
+              "kind": "ConceptQualifier",
+              "type": "Multiplicity",
+              "value": "ZeroToMany",
+              "valueType": "xs:string"
+            }
+          ],
           "semanticId": {
             "keys": [
               {
@@ -850,18 +598,18 @@
             ],
             "type": "ExternalReference"
           },
-          "qualifiers": [
-            {
-              "kind": "ConceptQualifier",
-              "type": "Multiplicity",
-              "value": "ZeroToMany",
-              "valueType": "xs:string"
-            }
-          ],
-          "idShort": "IPCommunication__00__",
           "value": [
             {
+              "idShort": "AddressOfAdditionalLink",
               "modelType": "Property",
+              "qualifiers": [
+                {
+                  "kind": "ConceptQualifier",
+                  "type": "Multiplicity",
+                  "value": "One",
+                  "valueType": "xs:string"
+                }
+              ],
               "semanticId": {
                 "keys": [
                   {
@@ -871,19 +619,19 @@
                 ],
                 "type": "ExternalReference"
               },
-              "valueType": "xs:string",
+              "valueType": "xs:string"
+            },
+            {
+              "idShort": "TypeOfCommunication",
+              "modelType": "Property",
               "qualifiers": [
                 {
                   "kind": "ConceptQualifier",
                   "type": "Multiplicity",
-                  "value": "One",
+                  "value": "ZeroToOne",
                   "valueType": "xs:string"
                 }
               ],
-              "idShort": "AddressOfAdditionalLink"
-            },
-            {
-              "modelType": "Property",
               "semanticId": {
                 "keys": [
                   {
@@ -894,7 +642,11 @@
                 "type": "ExternalReference"
               },
               "value": "Chat",
-              "valueType": "xs:string",
+              "valueType": "xs:string"
+            },
+            {
+              "idShort": "AvailableTime",
+              "modelType": "MultiLanguageProperty",
               "qualifiers": [
                 {
                   "kind": "ConceptQualifier",
@@ -903,10 +655,6 @@
                   "valueType": "xs:string"
                 }
               ],
-              "idShort": "TypeOfCommunication"
-            },
-            {
-              "modelType": "MultiLanguageProperty",
               "semanticId": {
                 "keys": [
                   {
@@ -921,21 +669,27 @@
                   "language": "de",
                   "text": "Montag – Freitag 08:00 bis 16:00"
                 }
-              ],
-              "qualifiers": [
-                {
-                  "kind": "ConceptQualifier",
-                  "type": "Multiplicity",
-                  "value": "ZeroToOne",
-                  "valueType": "xs:string"
-                }
-              ],
-              "idShort": "AvailableTime"
+              ]
             }
           ]
         },
         {
+          "description": [
+            {
+              "language": "en",
+              "text": "Note: see also [IRDI] 0112/2///61987#ABA286#001 street. Mandatory property according to EU Machine Directive 2006/42/EC"
+            }
+          ],
+          "idShort": "Street",
           "modelType": "MultiLanguageProperty",
+          "qualifiers": [
+            {
+              "kind": "ConceptQualifier",
+              "type": "Multiplicity",
+              "value": "One",
+              "valueType": "xs:string"
+            }
+          ],
           "semanticId": {
             "keys": [
               {
@@ -950,7 +704,17 @@
               "language": "de",
               "text": "Musterstraße 1"
             }
+          ]
+        },
+        {
+          "description": [
+            {
+              "language": "en",
+              "text": "Note: see also [IRDI] 0112/2///61987#ABA281#001 ZIP/Postal code. Mandatory property according to EU Machine Directive 2006/42/EC. Recommendation: property declaration as MLP is required by its semantic definition. As the property value is language independent, users are recommended to provide maximal 1 string in any language of the user’s choice."
+            }
           ],
+          "idShort": "Zipcode",
+          "modelType": "MultiLanguageProperty",
           "qualifiers": [
             {
               "kind": "ConceptQualifier",
@@ -959,16 +723,6 @@
               "valueType": "xs:string"
             }
           ],
-          "description": [
-            {
-              "language": "en",
-              "text": "Note: see also [IRDI] 0112/2///61987#ABA286#001 street. Mandatory property according to EU Machine Directive 2006/42/EC"
-            }
-          ],
-          "idShort": "Street"
-        },
-        {
-          "modelType": "MultiLanguageProperty",
           "semanticId": {
             "keys": [
               {
@@ -983,25 +737,19 @@
               "language": "de",
               "text": "12345"
             }
-          ],
+          ]
+        },
+        {
+          "idShort": "POBox",
+          "modelType": "MultiLanguageProperty",
           "qualifiers": [
             {
               "kind": "ConceptQualifier",
               "type": "Multiplicity",
-              "value": "One",
+              "value": "ZeroToOne",
               "valueType": "xs:string"
             }
           ],
-          "description": [
-            {
-              "language": "en",
-              "text": "Note: see also [IRDI] 0112/2///61987#ABA281#001 ZIP/Postal code. Mandatory property according to EU Machine Directive 2006/42/EC. Recommendation: property declaration as MLP is required by its semantic definition. As the property value is language independent, users are recommended to provide maximal 1 string in any language of the user’s choice."
-            }
-          ],
-          "idShort": "Zipcode"
-        },
-        {
-          "modelType": "MultiLanguageProperty",
           "semanticId": {
             "keys": [
               {
@@ -1016,7 +764,17 @@
               "language": "en",
               "text": "PF 1234"
             }
+          ]
+        },
+        {
+          "description": [
+            {
+              "language": "en",
+              "text": "Recommendation: property declaration as MLP is required by its semantic definition. As the property value is language independent, users are recommended to provide maximal 1 string in any language of the user’s choice."
+            }
           ],
+          "idShort": "ZipCodeOfPOBox",
+          "modelType": "MultiLanguageProperty",
           "qualifiers": [
             {
               "kind": "ConceptQualifier",
@@ -1025,10 +783,6 @@
               "valueType": "xs:string"
             }
           ],
-          "idShort": "POBox"
-        },
-        {
-          "modelType": "MultiLanguageProperty",
           "semanticId": {
             "keys": [
               {
@@ -1043,7 +797,11 @@
               "language": "en",
               "text": "12345"
             }
-          ],
+          ]
+        },
+        {
+          "idShort": "StateCounty",
+          "modelType": "MultiLanguageProperty",
           "qualifiers": [
             {
               "kind": "ConceptQualifier",
@@ -1052,16 +810,6 @@
               "valueType": "xs:string"
             }
           ],
-          "description": [
-            {
-              "language": "en",
-              "text": "Recommendation: property declaration as MLP is required by its semantic definition. As the property value is language independent, users are recommended to provide maximal 1 string in any language of the user’s choice."
-            }
-          ],
-          "idShort": "ZipCodeOfPOBox"
-        },
-        {
-          "modelType": "MultiLanguageProperty",
           "semanticId": {
             "keys": [
               {
@@ -1076,7 +824,11 @@
               "language": "de",
               "text": "Muster-Bundesland"
             }
-          ],
+          ]
+        },
+        {
+          "idShort": "NameOfContact",
+          "modelType": "MultiLanguageProperty",
           "qualifiers": [
             {
               "kind": "ConceptQualifier",
@@ -1085,10 +837,6 @@
               "valueType": "xs:string"
             }
           ],
-          "idShort": "StateCounty"
-        },
-        {
-          "modelType": "MultiLanguageProperty",
           "semanticId": {
             "keys": [
               {
@@ -1097,7 +845,11 @@
               }
             ],
             "type": "ExternalReference"
-          },
+          }
+        },
+        {
+          "idShort": "FirstName",
+          "modelType": "MultiLanguageProperty",
           "qualifiers": [
             {
               "kind": "ConceptQualifier",
@@ -1106,10 +858,6 @@
               "valueType": "xs:string"
             }
           ],
-          "idShort": "NameOfContact"
-        },
-        {
-          "modelType": "MultiLanguageProperty",
           "semanticId": {
             "keys": [
               {
@@ -1118,7 +866,11 @@
               }
             ],
             "type": "ExternalReference"
-          },
+          }
+        },
+        {
+          "idShort": "MiddleNames",
+          "modelType": "MultiLanguageProperty",
           "qualifiers": [
             {
               "kind": "ConceptQualifier",
@@ -1127,10 +879,6 @@
               "valueType": "xs:string"
             }
           ],
-          "idShort": "FirstName"
-        },
-        {
-          "modelType": "MultiLanguageProperty",
           "semanticId": {
             "keys": [
               {
@@ -1139,7 +887,11 @@
               }
             ],
             "type": "ExternalReference"
-          },
+          }
+        },
+        {
+          "idShort": "Title",
+          "modelType": "MultiLanguageProperty",
           "qualifiers": [
             {
               "kind": "ConceptQualifier",
@@ -1148,10 +900,6 @@
               "valueType": "xs:string"
             }
           ],
-          "idShort": "MiddleNames"
-        },
-        {
-          "modelType": "MultiLanguageProperty",
           "semanticId": {
             "keys": [
               {
@@ -1160,7 +908,11 @@
               }
             ],
             "type": "ExternalReference"
-          },
+          }
+        },
+        {
+          "idShort": "AcademicTitle",
+          "modelType": "MultiLanguageProperty",
           "qualifiers": [
             {
               "kind": "ConceptQualifier",
@@ -1169,10 +921,6 @@
               "valueType": "xs:string"
             }
           ],
-          "idShort": "Title"
-        },
-        {
-          "modelType": "MultiLanguageProperty",
           "semanticId": {
             "keys": [
               {
@@ -1181,7 +929,11 @@
               }
             ],
             "type": "ExternalReference"
-          },
+          }
+        },
+        {
+          "idShort": "FurtherDetailsOfContact",
+          "modelType": "MultiLanguageProperty",
           "qualifiers": [
             {
               "kind": "ConceptQualifier",
@@ -1190,10 +942,6 @@
               "valueType": "xs:string"
             }
           ],
-          "idShort": "AcademicTitle"
-        },
-        {
-          "modelType": "MultiLanguageProperty",
           "semanticId": {
             "keys": [
               {
@@ -1202,7 +950,11 @@
               }
             ],
             "type": "ExternalReference"
-          },
+          }
+        },
+        {
+          "idShort": "AddressOfAdditionalLink",
+          "modelType": "Property",
           "qualifiers": [
             {
               "kind": "ConceptQualifier",
@@ -1211,10 +963,6 @@
               "valueType": "xs:string"
             }
           ],
-          "idShort": "FurtherDetailsOfContact"
-        },
-        {
-          "modelType": "Property",
           "semanticId": {
             "keys": [
               {
@@ -1224,36 +972,77 @@
             ],
             "type": "ExternalReference"
           },
-          "valueType": "xs:string",
-          "qualifiers": [
-            {
-              "kind": "ConceptQualifier",
-              "type": "Multiplicity",
-              "value": "ZeroToOne",
-              "valueType": "xs:string"
-            }
-          ],
-          "idShort": "AddressOfAdditionalLink"
+          "valueType": "xs:string"
         }
       ]
     },
     {
-      "modelType": "MultiLanguageProperty",
+      "description": [
+        {
+          "language": "en",
+          "text": "ID of the article (plastic part), which is produced with the mould. Given by the end user"
+        }
+      ],
+      "idShort": "ArticleID",
+      "modelType": "Property",
+      "qualifiers": [
+        {
+          "kind": "ConceptQualifier",
+          "type": "Multiplicity",
+          "value": "ZeroToMany",
+          "valueType": "xs:string"
+        }
+      ],
       "semanticId": {
         "keys": [
           {
             "type": "GlobalReference",
-            "value": "0173-1#02-ABA685#001"
+            "value": "https://admin-shell.io/idta/euromap/Moulds/Identification/ArticleID/1/0 "
           }
         ],
         "type": "ExternalReference"
       },
-      "value": [
+      "value": "5A",
+      "valueType": "xs:string"
+    },
+    {
+      "description": [
         {
           "language": "en",
-          "text": "Mould #5"
+          "text": "Name of the plastic part, which is produced with the mould"
         }
       ],
+      "idShort": "ArticleName",
+      "modelType": "Property",
+      "qualifiers": [
+        {
+          "kind": "ConceptQualifier",
+          "type": "Multiplicity",
+          "value": "ZeroToMany",
+          "valueType": "xs:string"
+        }
+      ],
+      "semanticId": {
+        "keys": [
+          {
+            "type": "GlobalReference",
+            "value": "https://admin-shell.io/idta/euromap/Moulds/Identification/ArticleName/1/0 "
+          }
+        ],
+        "type": "ExternalReference"
+      },
+      "value": "Plastic Part 05",
+      "valueType": "xs:string"
+    },
+    {
+      "description": [
+        {
+          "language": "en",
+          "text": "To be used by end users to store a unique identification in the context of their overall application."
+        }
+      ],
+      "idShort": "AssetID",
+      "modelType": "Property",
       "qualifiers": [
         {
           "kind": "ConceptQualifier",
@@ -1262,16 +1051,35 @@
           "valueType": "xs:string"
         }
       ],
+      "semanticId": {
+        "keys": [
+          {
+            "type": "GlobalReference",
+            "value": " 0173-1#02-ABA684#001"
+          }
+        ],
+        "type": "ExternalReference"
+      },
+      "value": "12345ab-c",
+      "valueType": "xs:string"
+    },
+    {
       "description": [
         {
           "language": "en",
-          "text": "To be used by end users to store a human-readable localized text for the MachineryItem. The minimum number of locales supported for this property shall be two."
+          "text": "To be used by end users to store comments in a scheme specific to the end user."
         }
       ],
-      "idShort": "ComponentName"
-    },
-    {
+      "idShort": "Comments",
       "modelType": "MultiLanguageProperty",
+      "qualifiers": [
+        {
+          "kind": "ConceptQualifier",
+          "type": "Multiplicity",
+          "value": "ZeroToMany",
+          "valueType": "xs:string"
+        }
+      ],
       "semanticId": {
         "keys": [
           {
@@ -1286,25 +1094,174 @@
           "language": "en",
           "text": "Comment 1, Comment 2 etc."
         }
+      ]
+    },
+    {
+      "description": [
+        {
+          "language": "en",
+          "text": "To be used by end users to store a human-readable localized text for the MachineryItem. The minimum number of locales supported for this property shall be two."
+        }
       ],
+      "idShort": "ComponentName",
+      "modelType": "MultiLanguageProperty",
       "qualifiers": [
         {
           "kind": "ConceptQualifier",
           "type": "Multiplicity",
-          "value": "ZeroToMany",
+          "value": "ZeroToOne",
           "valueType": "xs:string"
         }
       ],
+      "semanticId": {
+        "keys": [
+          {
+            "type": "GlobalReference",
+            "value": "0173-1#02-ABA685#001"
+          }
+        ],
+        "type": "ExternalReference"
+      },
+      "value": [
+        {
+          "language": "en",
+          "text": "Mould #5"
+        }
+      ]
+    },
+    {
       "description": [
         {
           "language": "en",
-          "text": "To be used by end users to store comments in a scheme specific to the end user."
+          "text": "name of the machine controller as used in OPC 40083"
         }
       ],
-      "idShort": "Comments"
+      "idShort": "ControllerName",
+      "modelType": "Property",
+      "qualifiers": [
+        {
+          "kind": "ConceptQualifier",
+          "type": "Multiplicity",
+          "value": "ZeroToOne",
+          "valueType": "xs:string"
+        }
+      ],
+      "semanticId": {
+        "keys": [
+          {
+            "type": "GlobalReference",
+            "value": "https://admin-shell.io/idta/euromap/Moulds/Identification/ControllerName/1/0 "
+          }
+        ],
+        "type": "ExternalReference"
+      },
+      "value": "Example-Company FM-ABC 1234",
+      "valueType": "xs:string"
     },
     {
+      "description": [
+        {
+          "language": "en",
+          "text": "The first time, the mould gets on the machine and switched on (dry cycle)"
+        }
+      ],
+      "idShort": "InitialOperationDate",
+      "modelType": "Property",
+      "qualifiers": [
+        {
+          "kind": "ConceptQualifier",
+          "type": "Multiplicity",
+          "value": "ZeroToOne",
+          "valueType": "xs:string"
+        }
+      ],
+      "semanticId": {
+        "keys": [
+          {
+            "type": "GlobalReference",
+            "value": "0173-1#02-ABA683#001"
+          }
+        ],
+        "type": "ExternalReference"
+      },
+      "value": "2022-01-15",
+      "valueType": "xs:date"
+    },
+    {
+      "description": [
+        {
+          "language": "en",
+          "text": "The date, when the MouldItem was transfered to series production the first time"
+        }
+      ],
+      "idShort": "InitialProductionDate",
+      "modelType": "Property",
+      "qualifiers": [
+        {
+          "kind": "ConceptQualifier",
+          "type": "Multiplicity",
+          "value": "ZeroToOne",
+          "valueType": "xs:string"
+        }
+      ],
+      "semanticId": {
+        "keys": [
+          {
+            "type": "GlobalReference",
+            "value": "https://admin-shell.io/idta/euromap/Moulds/Identification/InitialProductionDate/1/0"
+          }
+        ],
+        "type": "ExternalReference"
+      },
+      "value": "2023-01-01",
+      "valueType": "xs:date"
+    },
+    {
+      "description": [
+        {
+          "language": "en",
+          "text": "The date, when the MouldItem was used in an IMM for the first time (FOT - first part out of tool)"
+        }
+      ],
+      "idShort": "InitialSamplingDate",
+      "modelType": "Property",
+      "qualifiers": [
+        {
+          "kind": "ConceptQualifier",
+          "type": "Multiplicity",
+          "value": "ZeroToOne",
+          "valueType": "xs:string"
+        }
+      ],
+      "semanticId": {
+        "keys": [
+          {
+            "type": "GlobalReference",
+            "value": "https://admin-shell.io/idta/euromap/Moulds/Identification/InitialSamplingDate/1/0"
+          }
+        ],
+        "type": "ExternalReference"
+      },
+      "value": "2023-01-01",
+      "valueType": "xs:date"
+    },
+    {
+      "description": [
+        {
+          "language": "en",
+          "text": "To be used by end users to store the location of the machine in a scheme specific to the end user."
+        }
+      ],
+      "idShort": "Location",
       "modelType": "MultiLanguageProperty",
+      "qualifiers": [
+        {
+          "kind": "ConceptQualifier",
+          "type": "Multiplicity",
+          "value": "ZeroToOne",
+          "valueType": "xs:string"
+        }
+      ],
       "semanticId": {
         "keys": [
           {
@@ -1319,7 +1276,17 @@
           "language": "en",
           "text": "Area 51"
         }
+      ]
+    },
+    {
+      "description": [
+        {
+          "language": "en",
+          "text": "A globally unique identifier of the manufacturer of the MachineryItem."
+        }
       ],
+      "idShort": "ManufacturerURI",
+      "modelType": "Property",
       "qualifiers": [
         {
           "kind": "ConceptQualifier",
@@ -1328,13 +1295,46 @@
           "valueType": "xs:string"
         }
       ],
+      "semanticId": {
+        "keys": [
+          {
+            "type": "GlobalReference",
+            "value": "https://admin-shell.io/idta/euromap/Moulds/Identification/ManufacturerURI/1/0 "
+          }
+        ],
+        "type": "ExternalReference"
+      },
+      "value": "https://www.example-company.com/URI",
+      "valueType": "xs:string"
+    },
+    {
       "description": [
         {
           "language": "en",
-          "text": "To be used by end users to store the location of the machine in a scheme specific to the end user."
+          "text": "The month in which the manufacturing process of the machine has been completed"
         }
       ],
-      "idShort": "Location"
+      "idShort": "MonthOfConstruction",
+      "modelType": "Property",
+      "qualifiers": [
+        {
+          "kind": "ConceptQualifier",
+          "type": "Multiplicity",
+          "value": "ZeroToOne",
+          "valueType": "xs:string"
+        }
+      ],
+      "semanticId": {
+        "keys": [
+          {
+            "type": "GlobalReference",
+            "value": "0173-1#02-ABA682#001"
+          }
+        ],
+        "type": "ExternalReference"
+      },
+      "value": "12",
+      "valueType": "xs:int"
     }
   ]
 }

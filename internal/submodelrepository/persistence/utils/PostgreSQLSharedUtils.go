@@ -89,9 +89,9 @@ func CreateExtension(tx *sql.Tx, extension types.Extension, position int) (sql.N
 
 	err := tx.QueryRow(`
 	INSERT INTO
-	extension (name, position, value_type, value_text, value_num, value_bool, value_time, value_datetime, semantic_id)
-	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-	RETURNING id`, extension.Name(), position, valueType, typedValue.Text, typedValue.Numeric, typedValue.Boolean, typedValue.Time, typedValue.DateTime, semanticIDRefDbID).Scan(&extensionDbID)
+	extension (name, position, value_type, value_text, value_num, value_bool, value_time, value_date, value_datetime, semantic_id)
+	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+	RETURNING id`, extension.Name(), position, valueType, typedValue.Text, typedValue.Numeric, typedValue.Boolean, typedValue.Time, typedValue.Date, typedValue.DateTime, semanticIDRefDbID).Scan(&extensionDbID)
 
 	if err != nil {
 		_, _ = fmt.Println("SMREPO-CREXT-INS " + err.Error())
@@ -186,9 +186,9 @@ func CreateQualifier(tx *sql.Tx, qualifier types.IQualifier, position int) (sql.
 
 	err := tx.QueryRow(`
 	INSERT INTO
-	qualifier (kind, position, type, value_type, value_text, value_num, value_bool, value_time, value_datetime, value_id, semantic_id)
-	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-	RETURNING id`, kind, position, qualifier.Type(), qualifier.ValueType(), typedValue.Text, typedValue.Numeric, typedValue.Boolean, typedValue.Time, typedValue.DateTime, valueIDRefDbID, semanticIDRefDbID).Scan(&qualifierDbID)
+	qualifier (kind, position, type, value_type, value_text, value_num, value_bool, value_time, value_date, value_datetime, value_id, semantic_id)
+	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+	RETURNING id`, kind, position, qualifier.Type(), qualifier.ValueType(), typedValue.Text, typedValue.Numeric, typedValue.Boolean, typedValue.Time, typedValue.Date, typedValue.DateTime, valueIDRefDbID, semanticIDRefDbID).Scan(&qualifierDbID)
 
 	if err != nil {
 		_, _ = fmt.Println("SMREPO-CRQUAL-INS " + err.Error())
@@ -744,8 +744,8 @@ func CreateExtensionForSubmodel(tx *sql.Tx, submodelID string, extension types.E
 
 func insertExtension(extension types.Extension, semanticIDDbID sql.NullInt64, tx *sql.Tx) (sql.NullInt64, error) {
 	var extensionDbID sql.NullInt64
-	var valueText, valueNum, valueBool, valueTime, valueDatetime sql.NullString
-	fillValueBasedOnType(extension, &valueText, &valueNum, &valueBool, &valueTime, &valueDatetime)
+	var valueText, valueNum, valueBool, valueTime, valueDate, valueDatetime sql.NullString
+	fillValueBasedOnType(extension, &valueText, &valueNum, &valueBool, &valueTime, &valueDate, &valueDatetime)
 	ds := goqu.Dialect("postgres").
 		Insert("extension").
 		Cols(
@@ -756,6 +756,7 @@ func insertExtension(extension types.Extension, semanticIDDbID sql.NullInt64, tx
 			"value_num",
 			"value_bool",
 			"value_time",
+			"value_date",
 			"value_datetime",
 		).
 		Vals(goqu.Vals{
@@ -766,6 +767,7 @@ func insertExtension(extension types.Extension, semanticIDDbID sql.NullInt64, tx
 			valueNum,
 			valueBool,
 			valueTime,
+			valueDate,
 			valueDatetime,
 		}).
 		Returning("id")
@@ -782,7 +784,7 @@ func insertExtension(extension types.Extension, semanticIDDbID sql.NullInt64, tx
 	return extensionDbID, nil
 }
 
-func fillValueBasedOnType(extension types.Extension, valueText *sql.NullString, valueNum *sql.NullString, valueBool *sql.NullString, valueTime *sql.NullString, valueDatetime *sql.NullString) {
+func fillValueBasedOnType(extension types.Extension, valueText *sql.NullString, valueNum *sql.NullString, valueBool *sql.NullString, valueTime *sql.NullString, valueDate *sql.NullString, valueDatetime *sql.NullString) {
 	valuePtr := extension.Value()
 	value := ""
 	if valuePtr != nil {
@@ -806,6 +808,8 @@ func fillValueBasedOnType(extension types.Extension, valueText *sql.NullString, 
 		*valueBool = sql.NullString{String: value, Valid: valid}
 	case *valueType == types.DataTypeDefXSDTime:
 		*valueTime = sql.NullString{String: value, Valid: valid}
+	case *valueType == types.DataTypeDefXSDDate:
+		*valueDate = sql.NullString{String: value, Valid: valid}
 	case IsDateTimeType(*valueType):
 		*valueDatetime = sql.NullString{String: value, Valid: valid}
 	default:

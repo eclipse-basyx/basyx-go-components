@@ -1,185 +1,185 @@
 {
-  "modelType": "Submodel",
-  "kind": "Template",
-  "semanticId": {
-    "keys": [
-      {
-        "type": "Submodel",
-        "value": "https://admin-shell.io/idta/AssetInterfacesMappingConfiguration/1/0/Submodel"
-      }
+    "modelType": "Submodel",
+    "kind": "Template",
+    "semanticId": {
+        "keys": [
+            {
+                "type": "Submodel",
+                "value": "https://admin-shell.io/idta/AssetInterfacesMappingConfiguration/1/0/Submodel"
+            }
+        ],
+        "type": "ModelReference"
+    },
+    "administration": {
+        "revision": "0",
+        "version": "1"
+    },
+    "id": "https://admin-shell.io/idta/SubmodelTemplate/AssetInterfacesMappingConfiguration/1/0/",
+    "description": [
+        {
+            "language": "en",
+            "text": "This Submodel specifies an information model for describing the mapping of interface(s) of an asset service or asset-related service already described in an Asset Interfaces Description (AID) Submodel."
+        }
     ],
-    "type": "ModelReference"
-  },
-  "administration": {
-    "revision": "0",
-    "version": "1"
-  },
-  "id": "https://admin-shell.io/idta/SubmodelTemplate/AssetInterfacesMappingConfiguration/1/0/",
-  "description": [
-    {
-      "language": "en",
-      "text": "This Submodel specifies an information model for describing the mapping of interface(s) of an asset service or asset-related service already described in an Asset Interfaces Description (AID) Submodel."
-    }
-  ],
-  "idShort": "AIMC",
-  "submodelElements": [
-    {
-      "modelType": "SubmodelElementList",
-      "semanticId": {
-        "keys": [
-          {
-            "type": "GlobalReference",
-            "value": "https://admin-shell.io/idta/AssetInterfacesMappingConfiguration/1/0/MappingConfigurations"
-          }
-        ],
-        "type": "ExternalReference"
-      },
-      "qualifiers": [
+    "idShort": "AIMC",
+    "submodelElements": [
         {
-          "kind": "ConceptQualifier",
-          "type": "SMT/Cardinality",
-          "value": "One",
-          "valueType": "xs:string"
-        }
-      ],
-      "idShort": "MappingConfigurations",
-      "orderRelevant": true,
-      "semanticIdListElement": {
-        "keys": [
-          {
-            "type": "GlobalReference",
-            "value": "https://admin-shell.io/idta/AssetInterfacesMappingConfiguration/1/0/MappingConfiguration"
-          }
-        ],
-        "type": "ExternalReference"
-      },
-      "typeValueListElement": "SubmodelElementCollection",
-      "value": [
-        {
-          "modelType": "SubmodelElementCollection",
-          "semanticId": {
-            "keys": [
-              {
-                "type": "GlobalReference",
-                "value": "https://admin-shell.io/idta/AssetInterfacesMappingConfiguration/1/0/MappingConfiguration"
-              }
-            ],
-            "type": "ExternalReference"
-          },
-          "qualifiers": [
-            {
-              "kind": "ConceptQualifier",
-              "type": "SMT/Cardinality",
-              "value": "ZeroToMany",
-              "valueType": "xs:string"
-            }
-          ],
-          "value": [
-            {
-              "modelType": "ReferenceElement",
-              "semanticId": {
+            "modelType": "SubmodelElementList",
+            "semanticId": {
                 "keys": [
-                  {
-                    "type": "GlobalReference",
-                    "value": "https://admin-shell.io/idta/AssetInterfacesMappingConfiguration/1/0/InterfaceReference"
-                  }
-                ],
-                "type": "ExternalReference"
-              },
-              "qualifiers": [
-                {
-                  "kind": "ConceptQualifier",
-                  "type": "SMT/Cardinality",
-                  "value": "One",
-                  "valueType": "xs:string"
-                }
-              ],
-              "idShort": "InterfaceReference",
-              "value": {
-                "keys": [
-                  {
-                    "type": "GlobalReference",
-                    "value": "https://admin-shell.io/idta/AssetInterfacesMappingConfiguration/1/0/InterfaceReference"
-                  }
-                ],
-                "type": "ExternalReference"
-              }
-            },
-            {
-              "modelType": "SubmodelElementList",
-              "semanticId": {
-                "keys": [
-                  {
-                    "type": "GlobalReference",
-                    "value": "https://admin-shell.io/idta/AssetInterfacesMappingConfiguration/1/0/MappingSourceSinkRelations"
-                  }
-                ],
-                "type": "ExternalReference"
-              },
-              "qualifiers": [
-                {
-                  "kind": "ConceptQualifier",
-                  "type": "SMT/Cardinality",
-                  "value": "One",
-                  "valueType": "xs:string"
-                }
-              ],
-              "idShort": "MappingSourceSinkRelations",
-              "orderRelevant": true,
-              "semanticIdListElement": {
-                "keys": [
-                  {
-                    "type": "GlobalReference",
-                    "value": "https://admin-shell.io/idta/AssetInterfacesMappingConfiguration/1/0/MappingSourceSinkRelation"
-                  }
-                ],
-                "type": "ExternalReference"
-              },
-              "typeValueListElement": "RelationshipElement",
-              "value": [
-                {
-                  "modelType": "RelationshipElement",
-                  "semanticId": {
-                    "keys": [
-                      {
-                        "type": "GlobalReference",
-                        "value": "https://admin-shell.io/idta/AssetInterfacesMappingConfiguration/1/0/MappingSourceSinkRelation"
-                      }
-                    ],
-                    "type": "ExternalReference"
-                  },
-                  "qualifiers": [
                     {
-                      "kind": "ConceptQualifier",
-                      "type": "SMT/Cardinality",
-                      "value": "ZeroToMany",
-                      "valueType": "xs:string"
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/idta/AssetInterfacesMappingConfiguration/1/0/MappingConfigurations"
                     }
-                  ],
-                  "first": {
-                    "keys": [
-                      {
-                        "type": "GlobalReference",
-                        "value": "https://admin-shell.io/idta/AssetInterfacesMappingConfiguration/1/0/MappingSourceSinkRelation"
-                      }
-                    ],
-                    "type": "ExternalReference"
-                  },
-                  "second": {
-                    "keys": [
-                      {
-                        "type": "GlobalReference",
-                        "value": "https://admin-shell.io/idta/AssetInterfacesMappingConfiguration/1/0/MappingSourceSinkRelation"
-                      }
-                    ],
-                    "type": "ExternalReference"
-                  }
+                ],
+                "type": "ExternalReference"
+            },
+            "qualifiers": [
+                {
+                    "kind": "ConceptQualifier",
+                    "type": "SMT/Cardinality",
+                    "value": "One",
+                    "valueType": "xs:string"
                 }
-              ]
-            }
-          ]
+            ],
+            "idShort": "MappingConfigurations",
+            "orderRelevant": true,
+            "semanticIdListElement": {
+                "keys": [
+                    {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/idta/AssetInterfacesMappingConfiguration/1/0/MappingConfiguration"
+                    }
+                ],
+                "type": "ExternalReference"
+            },
+            "typeValueListElement": "SubmodelElementCollection",
+            "value": [
+                {
+                    "modelType": "SubmodelElementCollection",
+                    "semanticId": {
+                        "keys": [
+                            {
+                                "type": "GlobalReference",
+                                "value": "https://admin-shell.io/idta/AssetInterfacesMappingConfiguration/1/0/MappingConfiguration"
+                            }
+                        ],
+                        "type": "ExternalReference"
+                    },
+                    "qualifiers": [
+                        {
+                            "kind": "ConceptQualifier",
+                            "type": "SMT/Cardinality",
+                            "value": "ZeroToMany",
+                            "valueType": "xs:string"
+                        }
+                    ],
+                    "value": [
+                        {
+                            "modelType": "ReferenceElement",
+                            "semanticId": {
+                                "keys": [
+                                    {
+                                        "type": "GlobalReference",
+                                        "value": "https://admin-shell.io/idta/AssetInterfacesMappingConfiguration/1/0/InterfaceReference"
+                                    }
+                                ],
+                                "type": "ExternalReference"
+                            },
+                            "qualifiers": [
+                                {
+                                    "kind": "ConceptQualifier",
+                                    "type": "SMT/Cardinality",
+                                    "value": "One",
+                                    "valueType": "xs:string"
+                                }
+                            ],
+                            "idShort": "InterfaceReference",
+                            "value": {
+                                "keys": [
+                                    {
+                                        "type": "GlobalReference",
+                                        "value": "https://admin-shell.io/idta/AssetInterfacesMappingConfiguration/1/0/InterfaceReference"
+                                    }
+                                ],
+                                "type": "ExternalReference"
+                            }
+                        },
+                        {
+                            "modelType": "SubmodelElementList",
+                            "semanticId": {
+                                "keys": [
+                                    {
+                                        "type": "GlobalReference",
+                                        "value": "https://admin-shell.io/idta/AssetInterfacesMappingConfiguration/1/0/MappingSourceSinkRelations"
+                                    }
+                                ],
+                                "type": "ExternalReference"
+                            },
+                            "qualifiers": [
+                                {
+                                    "kind": "ConceptQualifier",
+                                    "type": "SMT/Cardinality",
+                                    "value": "One",
+                                    "valueType": "xs:string"
+                                }
+                            ],
+                            "idShort": "MappingSourceSinkRelations",
+                            "orderRelevant": true,
+                            "semanticIdListElement": {
+                                "keys": [
+                                    {
+                                        "type": "GlobalReference",
+                                        "value": "https://admin-shell.io/idta/AssetInterfacesMappingConfiguration/1/0/MappingSourceSinkRelation"
+                                    }
+                                ],
+                                "type": "ExternalReference"
+                            },
+                            "typeValueListElement": "RelationshipElement",
+                            "value": [
+                                {
+                                    "modelType": "RelationshipElement",
+                                    "semanticId": {
+                                        "keys": [
+                                            {
+                                                "type": "GlobalReference",
+                                                "value": "https://admin-shell.io/idta/AssetInterfacesMappingConfiguration/1/0/MappingSourceSinkRelation"
+                                            }
+                                        ],
+                                        "type": "ExternalReference"
+                                    },
+                                    "qualifiers": [
+                                        {
+                                            "kind": "ConceptQualifier",
+                                            "type": "SMT/Cardinality",
+                                            "value": "ZeroToMany",
+                                            "valueType": "xs:string"
+                                        }
+                                    ],
+                                    "first": {
+                                        "keys": [
+                                            {
+                                                "type": "GlobalReference",
+                                                "value": "https://admin-shell.io/idta/AssetInterfacesMappingConfiguration/1/0/MappingSourceSinkRelation"
+                                            }
+                                        ],
+                                        "type": "ExternalReference"
+                                    },
+                                    "second": {
+                                        "keys": [
+                                            {
+                                                "type": "GlobalReference",
+                                                "value": "https://admin-shell.io/idta/AssetInterfacesMappingConfiguration/1/0/MappingSourceSinkRelation"
+                                            }
+                                        ],
+                                        "type": "ExternalReference"
+                                    }
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
         }
-      ]
-    }
-  ]
+    ]
 }

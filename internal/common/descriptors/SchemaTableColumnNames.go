@@ -117,6 +117,7 @@ const (
 	colValueNum      = "value_num"
 	colValueBool     = "value_bool"
 	colValueTime     = "value_time"
+	colValueDate     = "value_date"
 	colValueDatetime = "value_datetime"
 
 	colExtensionID = "extension_id"

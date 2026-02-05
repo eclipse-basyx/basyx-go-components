@@ -324,7 +324,6 @@ func (p PostgreSQLRangeHandler) Delete(idShortOrPath string) error {
 // Returns:
 //   - error: An error if the database insert operation fails
 func insertRange(rangeElem *types.Range, tx *sql.Tx, id int) error {
-
 	minVal := ""
 	maxVal := ""
 
@@ -350,6 +349,8 @@ func insertRange(rangeElem *types.Range, tx *sql.Tx, id int) error {
 			"max_num":      typedValue.MaxNumeric,
 			"min_time":     typedValue.MinTime,
 			"max_time":     typedValue.MaxTime,
+			"min_date":     typedValue.MinDate,
+			"max_date":     typedValue.MaxDate,
 			"min_datetime": typedValue.MinDateTime,
 			"max_datetime": typedValue.MaxDateTime,
 		}).
@@ -387,6 +388,8 @@ func buildUpdateRangeRecordObject(rangeElem *types.Range, isPut bool) goqu.Recor
 		updateRecord["max_num"] = typedValue.MaxNumeric
 		updateRecord["min_time"] = typedValue.MinTime
 		updateRecord["max_time"] = typedValue.MaxTime
+		updateRecord["min_date"] = typedValue.MinDate
+		updateRecord["max_date"] = typedValue.MaxDate
 		updateRecord["min_datetime"] = typedValue.MinDateTime
 		updateRecord["max_datetime"] = typedValue.MaxDateTime
 	} else { //nolint:all - elseif: can replace 'else {if cond {}}' with 'else if cond {}' -> this would make the code less readable and has differing semantics
@@ -404,12 +407,14 @@ func buildUpdateRangeRecordObject(rangeElem *types.Range, isPut bool) goqu.Recor
 			updateRecord["min_text"] = typedValue.MinText
 			updateRecord["min_num"] = typedValue.MinNumeric
 			updateRecord["min_time"] = typedValue.MinTime
+			updateRecord["min_date"] = typedValue.MinDate
 			updateRecord["min_datetime"] = typedValue.MinDateTime
 		}
 		if maxVal != "" {
 			updateRecord["max_text"] = typedValue.MaxText
 			updateRecord["max_num"] = typedValue.MaxNumeric
 			updateRecord["max_time"] = typedValue.MaxTime
+			updateRecord["max_date"] = typedValue.MaxDate
 			updateRecord["max_datetime"] = typedValue.MaxDateTime
 		}
 

@@ -243,6 +243,7 @@ func GetQualifierSubquery(dialect goqu.DialectWrapper, joinTable exp.IdentifierE
 			goqu.L("?::text", goqu.I("q.value_num")),
 			goqu.L("?::text", goqu.I("q.value_bool")),
 			goqu.L("?::text", goqu.I("q.value_time")),
+			goqu.L("?::text", goqu.I("q.value_date")),
 			goqu.L("?::text", goqu.I("q.value_datetime")),
 		),
 		goqu.V("semanticIdReferenceRows"), qualifierSemanticIDSubquery,

@@ -1,2178 +1,2178 @@
 {
-  "modelType": "Submodel",
-  "kind": "Template",
-  "semanticId": {
-    "keys": [
-      {
-        "type": "Submodel",
-        "value": "https://admin-shell.io/idta/ControlConfig/1/0"
-      }
+    "administration": {
+        "revision": "0",
+        "templateId": "https://admin-shell.io/idta-02053-1-0",
+        "version": "1"
+    },
+    "description": [
+        {
+            "language": "en",
+            "text": "The Submodel “ControlConfig” is the collection for various parametrizations for the control of CNC machines "
+        }
     ],
-    "type": "ModelReference"
-  },
-  "administration": {
-    "revision": "0",
-    "templateId": "https://admin-shell.io/idta-02053-1-0",
-    "version": "1"
-  },
-  "id": "https://admin-shell.io/idta/SubmodelTemplate/ControlConfigurationofCNCMachines/1/0",
-  "description": [
-    {
-      "language": "en",
-      "text": "The Submodel “ControlConfig” is the collection for various parametrizations for the control of CNC machines "
-    }
-  ],
-  "idShort": "ControlConfig__00__",
-  "submodelElements": [
-    {
-      "modelType": "ReferenceElement",
-      "semanticId": {
+    "id": "https://admin-shell.io/idta/SubmodelTemplate/ControlConfigurationofCNCMachines/1/0",
+    "idShort": "ControlConfig__00__",
+    "kind": "Template",
+    "modelType": "Submodel",
+    "semanticId": {
         "keys": [
-          {
-            "type": "GlobalReference",
-            "value": "https://admin-shell.io/idta/nameplate/3/0/Nameplate"
-          }
+            {
+                "type": "Submodel",
+                "value": "https://admin-shell.io/idta/ControlConfig/1/0"
+            }
         ],
-        "type": "ExternalReference"
-      },
-      "qualifiers": [
-        {
-          "kind": "ConceptQualifier",
-          "type": "FormTitle",
-          "value": "DigitalNameplate",
-          "valueType": "xs:string"
-        },
-        {
-          "kind": "ConceptQualifier",
-          "type": "FormInfo",
-          "value": "Submodel Element reference to the digital nameplate of the control.",
-          "valueType": "xs:string"
-        },
-        {
-          "kind": "ConceptQualifier",
-          "type": "SMT/Cardinality",
-          "value": "One",
-          "valueType": "xs:string"
-        }
-      ],
-      "category": "CONSTANT",
-      "description": [
-        {
-          "language": "en",
-          "text": "Reference to the digital nameplate of the controller."
-        }
-      ],
-      "idShort": "DigitalNameplate"
+        "type": "ModelReference"
     },
-    {
-      "modelType": "Property",
-      "semanticId": {
-        "keys": [
-          {
-            "type": "GlobalReference",
-            "value": "https://admin-shell.io/idta/ControlConfig/ControllerType/1/0"
-          }
-        ],
-        "type": "ExternalReference"
-      },
-      "valueType": "xs:string",
-      "qualifiers": [
+    "submodelElements": [
         {
-          "kind": "ConceptQualifier",
-          "type": "FormTitle",
-          "value": "ControllerType",
-          "valueType": "xs:string"
-        },
-        {
-          "kind": "ConceptQualifier",
-          "type": "FormInfo",
-          "value": "List of controller types.",
-          "valueType": "xs:string"
-        },
-        {
-          "kind": "ConceptQualifier",
-          "type": "SMT/Cardinality",
-          "value": "One",
-          "valueType": "xs:string"
-        },
-        {
-          "kind": "ConceptQualifier",
-          "type": "FormChoices",
-          "value": "Path controlled; Point controlled, Track controlled",
-          "valueType": "xs:string"
-        }
-      ],
-      "category": "PARAMETER",
-      "description": [
-        {
-          "language": "en",
-          "text": "The Controller Type describes the type of controller"
-        }
-      ],
-      "idShort": "ControllerType"
-    },
-    {
-      "modelType": "Property",
-      "semanticId": {
-        "keys": [
-          {
-            "type": "GlobalReference",
-            "value": "https://admin-shell.io/idta/ControlConfig/TimeUnit/1/0"
-          }
-        ],
-        "type": "ExternalReference"
-      },
-      "valueType": "xs:float",
-      "qualifiers": [
-        {
-          "kind": "ConceptQualifier",
-          "type": "FormTitle",
-          "value": "TimeUnit",
-          "valueType": "xs:string"
-        },
-        {
-          "kind": "ConceptQualifier",
-          "type": "FormInfo",
-          "value": "Time unit (s, ms, us)",
-          "valueType": "xs:string"
-        },
-        {
-          "kind": "ConceptQualifier",
-          "type": "SMT/Cardinality",
-          "value": "One",
-          "valueType": "xs:string"
-        }
-      ],
-      "category": "VARIABLE",
-      "description": [
-        {
-          "language": "en",
-          "text": "Time unit of the control"
-        }
-      ],
-      "idShort": "TimeUnit"
-    },
-    {
-      "modelType": "Property",
-      "semanticId": {
-        "keys": [
-          {
-            "type": "GlobalReference",
-            "value": "https://admin-shell.io/idta/ControlConfig/LengthUnit/1/0"
-          }
-        ],
-        "type": "ExternalReference"
-      },
-      "valueType": "xs:double",
-      "qualifiers": [
-        {
-          "kind": "ConceptQualifier",
-          "type": "FormTitle",
-          "value": "LengthType",
-          "valueType": "xs:string"
-        },
-        {
-          "kind": "ConceptQualifier",
-          "type": "FormInfo",
-          "value": "Length type of the CNC",
-          "valueType": "xs:string"
-        },
-        {
-          "kind": "ConceptQualifier",
-          "type": "SMT/Cardinality",
-          "value": "ZeroToOne",
-          "valueType": "xs:string"
-        }
-      ],
-      "category": "CONSTANT",
-      "description": [
-        {
-          "language": "en",
-          "text": "Length Unit of the control"
-        }
-      ],
-      "idShort": "LengthUnit"
-    },
-    {
-      "modelType": "Property",
-      "semanticId": {
-        "keys": [
-          {
-            "type": "GlobalReference",
-            "value": "https://admin-shell.io/idta/ControlConfig/FieldbusType/1/0"
-          }
-        ],
-        "type": "ExternalReference"
-      },
-      "valueType": "xs:string",
-      "qualifiers": [
-        {
-          "kind": "ConceptQualifier",
-          "type": "FormTitle",
-          "value": "FieldbusType",
-          "valueType": "xs:string"
-        },
-        {
-          "kind": "ConceptQualifier",
-          "type": "FormInfo",
-          "value": "Fieldbus type of the CNC",
-          "valueType": "xs:string"
-        },
-        {
-          "kind": "ConceptQualifier",
-          "type": "SMT/Cardinality",
-          "value": "ZeroToOne",
-          "valueType": "xs:string"
-        }
-      ],
-      "category": "CONSTANT",
-      "description": [
-        {
-          "language": "en",
-          "text": "Fieldbus Type of the control"
-        }
-      ],
-      "idShort": "FieldbusType"
-    },
-    {
-      "modelType": "Property",
-      "semanticId": {
-        "keys": [
-          {
-            "type": "GlobalReference",
-            "value": "https://admin-shell.io/idta/ControlConfig/CNCCycleTime/1/0"
-          }
-        ],
-        "type": "ExternalReference"
-      },
-      "valueType": "xs:double",
-      "qualifiers": [
-        {
-          "kind": "ConceptQualifier",
-          "type": "FormTitle",
-          "value": "CNCCycleTime",
-          "valueType": "xs:string"
-        },
-        {
-          "kind": "ConceptQualifier",
-          "type": "FormInfo",
-          "value": "Cycle time of the CNC",
-          "valueType": "xs:string"
-        },
-        {
-          "kind": "ConceptQualifier",
-          "type": "SMT/Cardinality",
-          "value": "ZeroToOne",
-          "valueType": "xs:string"
-        }
-      ],
-      "category": "VARIABLE",
-      "description": [
-        {
-          "language": "en",
-          "text": "Defines the cycle time of the CNC control"
-        }
-      ],
-      "idShort": "CNCCycleTime"
-    },
-    {
-      "modelType": "Property",
-      "semanticId": {
-        "keys": [
-          {
-            "type": "GlobalReference",
-            "value": "https://admin-shell.io/idta/ControlConfig/PLCCycleTime/1/0"
-          }
-        ],
-        "type": "ExternalReference"
-      },
-      "valueType": "xs:double",
-      "qualifiers": [
-        {
-          "kind": "ConceptQualifier",
-          "type": "FormTitle",
-          "value": "PLCCycleTime",
-          "valueType": "xs:string"
-        },
-        {
-          "kind": "ConceptQualifier",
-          "type": "FormInfo",
-          "value": "Cycle time of the PLC",
-          "valueType": "xs:string"
-        },
-        {
-          "kind": "ConceptQualifier",
-          "type": "SMT/Cardinality",
-          "value": "ZeroToOne",
-          "valueType": "xs:string"
-        }
-      ],
-      "category": "VARIABLE",
-      "description": [
-        {
-          "language": "en",
-          "text": "Defines the cycle time of the PLC control"
-        }
-      ],
-      "idShort": "PLCCycleTime"
-    },
-    {
-      "modelType": "Property",
-      "semanticId": {
-        "keys": [
-          {
-            "type": "GlobalReference",
-            "value": "https://admin-shell.io/idta/ControlConfig/FieldbusCycleTime/1/0"
-          }
-        ],
-        "type": "ExternalReference"
-      },
-      "valueType": "xs:double",
-      "qualifiers": [
-        {
-          "kind": "ConceptQualifier",
-          "type": "FormTitle",
-          "value": "FieldbusCycleTime",
-          "valueType": "xs:string"
-        },
-        {
-          "kind": "ConceptQualifier",
-          "type": "FormInfo",
-          "value": "Cycle time of the fieldbus",
-          "valueType": "xs:string"
-        },
-        {
-          "kind": "ConceptQualifier",
-          "type": "SMT/Cardinality",
-          "value": "ZeroToOne",
-          "valueType": "xs:string"
-        }
-      ],
-      "category": "VARIABLE",
-      "description": [
-        {
-          "language": "en",
-          "text": "Defines the cycle time of the fieldbus control"
-        }
-      ],
-      "idShort": "FieldbusCycleTime"
-    },
-    {
-      "modelType": "Property",
-      "semanticId": {
-        "keys": [
-          {
-            "type": "GlobalReference",
-            "value": "https://admin-shell.io/idta/ControlConfig/VelocityType/1/0"
-          }
-        ],
-        "type": "ExternalReference"
-      },
-      "valueType": "xs:string",
-      "qualifiers": [
-        {
-          "kind": "ConceptQualifier",
-          "type": "FormTitle",
-          "value": "Velocity unit",
-          "valueType": "xs:string"
-        },
-        {
-          "kind": "ConceptQualifier",
-          "type": "FormInfo",
-          "value": "Velocity unit of the CNC",
-          "valueType": "xs:string"
-        },
-        {
-          "kind": "ConceptQualifier",
-          "type": "SMT/Cardinality",
-          "value": "ZeroToOne",
-          "valueType": "xs:string"
-        }
-      ],
-      "category": "CONSTANT",
-      "description": [
-        {
-          "language": "en",
-          "text": "Defines the velocity unit of the CNC control "
-        }
-      ],
-      "idShort": "VelocityUnit"
-    },
-    {
-      "modelType": "Property",
-      "semanticId": {
-        "keys": [
-          {
-            "type": "GlobalReference",
-            "value": "https://admin-shell.io/idta/ControlConfig/ AccelerationUnit /1/0"
-          }
-        ],
-        "type": "ExternalReference"
-      },
-      "valueType": "xs:string",
-      "qualifiers": [
-        {
-          "kind": "ConceptQualifier",
-          "type": "FormTitle",
-          "value": "Acceleration unit",
-          "valueType": "xs:string"
-        },
-        {
-          "kind": "ConceptQualifier",
-          "type": "FormInfo",
-          "value": "Acceleration unit of the CNC",
-          "valueType": "xs:string"
-        },
-        {
-          "kind": "ConceptQualifier",
-          "type": "SMT/Cardinality",
-          "value": "ZeroToOne",
-          "valueType": "xs:string"
-        }
-      ],
-      "category": "CONSTANT",
-      "description": [
-        {
-          "language": "en",
-          "text": "Defines the acceleration unit unit of the CNC control"
-        }
-      ],
-      "idShort": "AccelerationUnit"
-    },
-    {
-      "modelType": "Property",
-      "semanticId": {
-        "keys": [
-          {
-            "type": "GlobalReference",
-            "value": "https://admin-shell.io/idta/ControlConfig/JerkUnit/1/0"
-          }
-        ],
-        "type": "ExternalReference"
-      },
-      "valueType": "xs:string",
-      "qualifiers": [
-        {
-          "kind": "ConceptQualifier",
-          "type": "FormTitle",
-          "value": "Jerk unit",
-          "valueType": "xs:string"
-        },
-        {
-          "kind": "ConceptQualifier",
-          "type": "FormInfo",
-          "value": "Jerk unit of the CNC",
-          "valueType": "xs:string"
-        },
-        {
-          "kind": "ConceptQualifier",
-          "type": "SMT/Cardinality",
-          "value": "ZeroToOne",
-          "valueType": "xs:string"
-        }
-      ],
-      "category": "CONSTANT",
-      "description": [
-        {
-          "language": "en",
-          "text": "Defines the jerk unit of the CNC control "
-        }
-      ],
-      "idShort": "JerkUnit"
-    },
-    {
-      "modelType": "SubmodelElementCollection",
-      "semanticId": {
-        "keys": [
-          {
-            "type": "GlobalReference",
-            "value": "https://admin-shell.io/idta/ControlConfig/ControlConfigData/1/0"
-          }
-        ],
-        "type": "ExternalReference"
-      },
-      "qualifiers": [
-        {
-          "kind": "ConceptQualifier",
-          "type": "FormTitle",
-          "value": "ControlerConfigData",
-          "valueType": "xs:string"
-        },
-        {
-          "kind": "ConceptQualifier",
-          "type": "FormInfo",
-          "value": "Provide the configuration data for the controler.",
-          "valueType": "xs:string"
-        },
-        {
-          "kind": "ConceptQualifier",
-          "type": "SMT/Cardinality",
-          "value": "ZeroToMany",
-          "valueType": "xs:string"
-        }
-      ],
-      "category": "CONSTANT",
-      "description": [
-        {
-          "language": "en",
-          "text": "Control configuration data"
-        },
-        {
-          "language": "de",
-          "text": "Steuerungskonfigurationsdaten"
-        }
-      ],
-      "idShort": "ControlConfigData__00__",
-      "value": [
-        {
-          "modelType": "Property",
-          "semanticId": {
-            "keys": [
-              {
-                "type": "GlobalReference",
-                "value": "https://admin-shell.io/idta/ControlConfig/ControlConfigFileName /1/0"
-              }
+            "category": "CONSTANT",
+            "description": [
+                {
+                    "language": "en",
+                    "text": "Defines the acceleration unit unit of the CNC control"
+                }
             ],
-            "type": "ExternalReference"
-          },
-          "valueType": "xs:string",
-          "qualifiers": [
-            {
-              "kind": "ConceptQualifier",
-              "type": "FormTitle",
-              "value": "ControlConfigFileName",
-              "valueType": "xs:string"
-            },
-            {
-              "kind": "ConceptQualifier",
-              "type": "FormInfo",
-              "value": "Filename of the configuration file.",
-              "valueType": "xs:string"
-            },
-            {
-              "kind": "ConceptQualifier",
-              "type": "SMT/Cardinality",
-              "value": "One",
-              "valueType": "xs:string"
-            }
-          ],
-          "category": "PARAMETER",
-          "description": [
-            {
-              "language": "en",
-              "text": "Name of the control configuration file"
-            }
-          ],
-          "idShort": "ControlConfigFileName"
-        },
-        {
-          "modelType": "File",
-          "contentType": "application/json",
-          "semanticId": {
-            "keys": [
-              {
-                "type": "GlobalReference",
-                "value": "https://admin-shell.io/idta/ControlConfig/ControlConfigFile/1/0"
-              }
+            "idShort": "AccelerationUnit",
+            "modelType": "Property",
+            "qualifiers": [
+                {
+                    "kind": "ConceptQualifier",
+                    "type": "FormTitle",
+                    "value": "Acceleration unit",
+                    "valueType": "xs:string"
+                },
+                {
+                    "kind": "ConceptQualifier",
+                    "type": "FormInfo",
+                    "value": "Acceleration unit of the CNC",
+                    "valueType": "xs:string"
+                },
+                {
+                    "kind": "ConceptQualifier",
+                    "type": "SMT/Cardinality",
+                    "value": "ZeroToOne",
+                    "valueType": "xs:string"
+                }
             ],
-            "type": "ExternalReference"
-          },
-          "qualifiers": [
-            {
-              "kind": "ConceptQualifier",
-              "type": "FormTitle",
-              "value": "ConfigurationFile",
-              "valueType": "xs:string"
+            "semanticId": {
+                "keys": [
+                    {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/idta/ControlConfig/ AccelerationUnit /1/0"
+                    }
+                ],
+                "type": "ExternalReference"
             },
-            {
-              "kind": "ConceptQualifier",
-              "type": "FormInfo",
-              "value": "Configuration file of the controler.",
-              "valueType": "xs:string"
-            },
-            {
-              "kind": "ConceptQualifier",
-              "type": "SMT/Cardinality",
-              "value": "One",
-              "valueType": "xs:string"
-            }
-          ],
-          "category": "CONSTANT",
-          "description": [
-            {
-              "language": "en",
-              "text": "File to configure the control"
-            }
-          ],
-          "idShort": "ControlConfigFile"
-        }
-      ]
-    },
-    {
-      "modelType": "SubmodelElementCollection",
-      "semanticId": {
-        "keys": [
-          {
-            "type": "GlobalReference",
-            "value": "https://admin-shell.io/idta/ControlConfig/Channels/1/0"
-          }
-        ],
-        "type": "ExternalReference"
-      },
-      "qualifiers": [
-        {
-          "kind": "ConceptQualifier",
-          "type": "FormTitle",
-          "value": "Channels",
-          "valueType": "xs:string"
+            "valueType": "xs:string"
         },
         {
-          "kind": "ConceptQualifier",
-          "type": "FormInfo",
-          "value": "Provides access to the paramtization of the channels/axes/drives",
-          "valueType": "xs:string"
-        },
-        {
-          "kind": "ConceptQualifier",
-          "type": "SMT/Cardinality",
-          "value": "ZeroToMany",
-          "valueType": "xs:string"
-        }
-      ],
-      "category": "CONSTANT",
-      "description": [
-        {
-          "language": "en",
-          "text": "Collection of channels of the control"
-        }
-      ],
-      "idShort": "Channels__00__",
-      "value": [
-        {
-          "modelType": "SubmodelElementCollection",
-          "semanticId": {
-            "keys": [
-              {
-                "type": "GlobalReference",
-                "value": "https://admin-shell.io/idta/ControlConfig/Channel/1/0"
-              }
+            "category": "CONSTANT",
+            "description": [
+                {
+                    "language": "en",
+                    "text": "The SMC “Axes” is a collection of axes of the CNC controller."
+                }
             ],
-            "type": "ExternalReference"
-          },
-          "qualifiers": [
-            {
-              "kind": "ConceptQualifier",
-              "type": "FormTitle",
-              "value": "Channel",
-              "valueType": "xs:string"
-            },
-            {
-              "kind": "ConceptQualifier",
-              "type": "FormInfo",
-              "value": "Channel",
-              "valueType": "xs:string"
-            },
-            {
-              "kind": "ConceptQualifier",
-              "type": "SMT/Cardinality",
-              "value": "One",
-              "valueType": "xs:string"
-            }
-          ],
-          "category": "CONSTANT",
-          "description": [
-            {
-              "language": "en",
-              "text": "Configuration information of a specific channel"
-            }
-          ],
-          "idShort": "Channel__00__",
-          "value": [
-            {
-              "modelType": "Property",
-              "semanticId": {
-                "keys": [
-                  {
-                    "type": "GlobalReference",
-                    "value": "https://admin-shell.io/idta/ControlConfig/Channels/ChannelIdentification/1/0"
-                  }
-                ],
-                "type": "ExternalReference"
-              },
-              "valueType": "xs:string",
-              "qualifiers": [
+            "idShort": "Axes__00__",
+            "modelType": "SubmodelElementCollection",
+            "qualifiers": [
                 {
-                  "kind": "ConceptQualifier",
-                  "type": "FormTitle",
-                  "value": "ChannelIdentification",
-                  "valueType": "xs:string"
+                    "kind": "ConceptQualifier",
+                    "type": "FormTitle",
+                    "value": "Axes",
+                    "valueType": "xs:string"
                 },
                 {
-                  "kind": "ConceptQualifier",
-                  "type": "FormInfo",
-                  "value": "Identification number of the channel",
-                  "valueType": "xs:string"
+                    "kind": "ConceptQualifier",
+                    "type": "FormInfo",
+                    "value": "List of axes of the specific channel",
+                    "valueType": "xs:string"
                 },
                 {
-                  "kind": "ConceptQualifier",
-                  "type": "SMT/Cardinality",
-                  "value": "One",
-                  "valueType": "xs:string"
+                    "kind": "ConceptQualifier",
+                    "type": "SMT/Cardinality",
+                    "value": "OneToMany",
+                    "valueType": "xs:string"
                 }
-              ],
-              "category": "VARIABLE",
-              "description": [
-                {
-                  "language": "en",
-                  "text": "This describes the unique channel identification of the specific channel"
-                }
-              ],
-              "idShort": "ChannelIdentification"
-            },
-            {
-              "modelType": "SubmodelElementCollection",
-              "semanticId": {
-                "keys": [
-                  {
-                    "type": "GlobalReference",
-                    "value": "https://admin-shell.io/idta/ControlConfig/Channels/AxesReference/1/0"
-                  }
-                ],
-                "type": "ExternalReference"
-              },
-              "qualifiers": [
-                {
-                  "kind": "TemplateQualifier",
-                  "type": "FormTitle",
-                  "value": "AxesReference",
-                  "valueType": "xs:string"
-                },
-                {
-                  "kind": "TemplateQualifier",
-                  "type": "FormInfo",
-                  "value": "Collection of referenced axes for the specific channel",
-                  "valueType": "xs:string"
-                },
-                {
-                  "semanticId": {
-                    "keys": [
-                      {
-                        "type": "GlobalReference",
-                        "value": "https://admin-shell.io/SubmodelTemplates/Cardinality/1/0"
-                      }
-                    ],
-                    "type": "ExternalReference"
-                  },
-                  "kind": "TemplateQualifier",
-                  "type": "SMT/Cardinality",
-                  "value": "ZeroToMany",
-                  "valueType": "xs:string"
-                }
-              ],
-              "category": "CONSTANT",
-              "description": [
-                {
-                  "language": "en",
-                  "text": "The SMC “AxesReference” is a collection of referenced axes for the specific channel."
-                }
-              ],
-              "idShort": "AxesReference__00__",
-              "value": [
-                {
-                  "modelType": "Property",
-                  "semanticId": {
-                    "keys": [
-                      {
-                        "type": "GlobalReference",
-                        "value": "https://admin-shell.io/idta/ControlConfig/Channels/AxesReference/1/0"
-                      }
-                    ],
-                    "type": "ExternalReference"
-                  },
-                  "valueType": "xs:string",
-                  "qualifiers": [
-                    {
-                      "kind": "TemplateQualifier",
-                      "type": "FormTitle",
-                      "value": "AxisName",
-                      "valueType": "xs:string"
-                    },
-                    {
-                      "kind": "TemplateQualifier",
-                      "type": "FormInfo",
-                      "value": "Unique axis name",
-                      "valueType": "xs:string"
-                    },
-                    {
-                      "semanticId": {
-                        "keys": [
-                          {
-                            "type": "GlobalReference",
-                            "value": "https://admin-shell.io/SubmodelTemplates/Cardinality/1/0"
-                          }
-                        ],
-                        "type": "ExternalReference"
-                      },
-                      "kind": "TemplateQualifier",
-                      "type": "SMT/Cardinality",
-                      "value": "One",
-                      "valueType": "xs:string"
-                    }
-                  ],
-                  "category": "CONSTANT",
-                  "description": [
-                    {
-                      "language": "en",
-                      "text": "Unique axis name"
-                    }
-                  ],
-                  "idShort": "AxisName"
-                },
-                {
-                  "modelType": "ReferenceElement",
-                  "semanticId": {
-                    "keys": [
-                      {
-                        "type": "GlobalReference",
-                        "value": "https://admin-shell.io/idta/ControlConfig/Channels/ReferenceToAxis/1/0"
-                      }
-                    ],
-                    "type": "ExternalReference"
-                  },
-                  "qualifiers": [
-                    {
-                      "kind": "TemplateQualifier",
-                      "type": "FormTitle",
-                      "value": "ReferenceToAxis",
-                      "valueType": "xs:string"
-                    },
-                    {
-                      "kind": "TemplateQualifier",
-                      "type": "FormInfo",
-                      "value": "Reference to the axis",
-                      "valueType": "xs:string"
-                    },
-                    {
-                      "semanticId": {
-                        "keys": [
-                          {
-                            "type": "GlobalReference",
-                            "value": "https://admin-shell.io/SubmodelTemplates/Cardinality/1/0"
-                          }
-                        ],
-                        "type": "ExternalReference"
-                      },
-                      "kind": "TemplateQualifier",
-                      "type": "SMT/Cardinality",
-                      "value": "One",
-                      "valueType": "xs:string"
-                    }
-                  ],
-                  "category": "CONSTANT",
-                  "description": [
-                    {
-                      "language": "en",
-                      "text": "Reference to the axis"
-                    }
-                  ],
-                  "idShort": "ReferenceToAxis"
-                }
-              ]
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "modelType": "SubmodelElementCollection",
-      "semanticId": {
-        "keys": [
-          {
-            "type": "GlobalReference",
-            "value": "https://admin-shell.io/idta/ControlConfig/Axes/1/0"
-          }
-        ],
-        "type": "ExternalReference"
-      },
-      "qualifiers": [
-        {
-          "kind": "ConceptQualifier",
-          "type": "FormTitle",
-          "value": "Axes",
-          "valueType": "xs:string"
-        },
-        {
-          "kind": "ConceptQualifier",
-          "type": "FormInfo",
-          "value": "List of axes of the specific channel",
-          "valueType": "xs:string"
-        },
-        {
-          "kind": "ConceptQualifier",
-          "type": "SMT/Cardinality",
-          "value": "OneToMany",
-          "valueType": "xs:string"
-        }
-      ],
-      "category": "CONSTANT",
-      "description": [
-        {
-          "language": "en",
-          "text": "The SMC “Axes” is a collection of axes of the CNC controller."
-        }
-      ],
-      "idShort": "Axes__00__",
-      "value": [
-        {
-          "modelType": "SubmodelElementCollection",
-          "semanticId": {
-            "keys": [
-              {
-                "type": "GlobalReference",
-                "value": "https://admin-shell.io/idta/ControlConfig/Channel/Axis/1/0"
-              }
             ],
-            "type": "ExternalReference"
-          },
-          "qualifiers": [
-            {
-              "kind": "ConceptQualifier",
-              "type": "FormTitle",
-              "value": "Axis",
-              "valueType": "xs:string"
-            },
-            {
-              "kind": "ConceptQualifier",
-              "type": "FormInfo",
-              "value": "List of axis specific configuration data",
-              "valueType": "xs:string"
-            },
-            {
-              "kind": "ConceptQualifier",
-              "type": "SMT/Cardinality",
-              "value": "ZeroToOne",
-              "valueType": "xs:string"
-            }
-          ],
-          "category": "CONSTANT",
-          "description": [
-            {
-              "language": "en",
-              "text": "The SMC “Axis” is a collection of axis configuration information."
-            }
-          ],
-          "idShort": "Axis__00__",
-          "value": [
-            {
-              "modelType": "Property",
-              "semanticId": {
+            "semanticId": {
                 "keys": [
-                  {
-                    "type": "GlobalReference",
-                    "value": "https://admin-shell.io/idta/ControlConfig/Axes/AxisName/1/0"
-                  }
-                ],
-                "type": "ExternalReference"
-              },
-              "valueType": "xs:string",
-              "qualifiers": [
-                {
-                  "kind": "ConceptQualifier",
-                  "type": "FormTitle",
-                  "value": "AxisName",
-                  "valueType": "xs:string"
-                },
-                {
-                  "kind": "ConceptQualifier",
-                  "type": "FormInfo",
-                  "value": "Name of the specific axis",
-                  "valueType": "xs:string"
-                },
-                {
-                  "kind": "ConceptQualifier",
-                  "type": "SMT/Cardinality",
-                  "value": "ZeroToOne",
-                  "valueType": "xs:string"
-                }
-              ],
-              "category": "CONSTANT",
-              "description": [
-                {
-                  "language": "en",
-                  "text": "Name of the axis"
-                }
-              ],
-              "idShort": "AxisName"
-            },
-            {
-              "modelType": "Property",
-              "semanticId": {
-                "keys": [
-                  {
-                    "type": "GlobalReference",
-                    "value": "https://admin-shell.io/idta/ControlConfig/Axes/AxisType/1/0"
-                  }
-                ],
-                "type": "ExternalReference"
-              },
-              "valueType": "xs:string",
-              "qualifiers": [
-                {
-                  "kind": "ConceptQualifier",
-                  "type": "FormTitle",
-                  "value": "AxisType",
-                  "valueType": "xs:string"
-                },
-                {
-                  "kind": "ConceptQualifier",
-                  "type": "FormInfo",
-                  "value": "Type of the specific axis",
-                  "valueType": "xs:string"
-                },
-                {
-                  "kind": "ConceptQualifier",
-                  "type": "SMT/Cardinality",
-                  "value": "ZeroToOne",
-                  "valueType": "xs:string"
-                }
-              ],
-              "category": "CONSTANT",
-              "description": [
-                {
-                  "language": "en",
-                  "text": "Type of the axis"
-                }
-              ],
-              "idShort": "AxisType"
-            },
-            {
-              "modelType": "Property",
-              "semanticId": {
-                "keys": [
-                  {
-                    "type": "GlobalReference",
-                    "value": "https://admin-shell.io/idta/ControlConfig/Axes/SwLimitSwitchPos/1/0"
-                  }
-                ],
-                "type": "ExternalReference"
-              },
-              "valueType": "xs:string",
-              "qualifiers": [
-                {
-                  "kind": "ConceptQualifier",
-                  "type": "FormTitle",
-                  "value": "SimulationAxis",
-                  "valueType": "xs:string"
-                },
-                {
-                  "kind": "ConceptQualifier",
-                  "type": "FormInfo",
-                  "value": "Axis is a simulated or real one",
-                  "valueType": "xs:string"
-                },
-                {
-                  "kind": "ConceptQualifier",
-                  "type": "SMT/Cardinality",
-                  "value": "ZeroToOne",
-                  "valueType": "xs:string"
-                }
-              ],
-              "category": "CONSTANT",
-              "description": [
-                {
-                  "language": "en",
-                  "text": "Axis is a simulated or real one"
-                }
-              ],
-              "idShort": "SimulationAxis"
-            },
-            {
-              "modelType": "Property",
-              "semanticId": {
-                "keys": [
-                  {
-                    "type": "GlobalReference",
-                    "value": "https://admin-shell.io/idta/ControlConfig/Axes/SwLimitSwitchNeg/1/0"
-                  }
-                ],
-                "type": "ExternalReference"
-              },
-              "valueType": "xs:double",
-              "qualifiers": [
-                {
-                  "kind": "ConceptQualifier",
-                  "type": "FormTitle",
-                  "value": "SwLimitSwitchNeg",
-                  "valueType": "xs:string"
-                },
-                {
-                  "kind": "ConceptQualifier",
-                  "type": "FormInfo",
-                  "value": "Software limit switch negative",
-                  "valueType": "xs:string"
-                },
-                {
-                  "kind": "ConceptQualifier",
-                  "type": "SMT/Cardinality",
-                  "value": "ZeroToOne",
-                  "valueType": "xs:string"
-                }
-              ],
-              "category": "CONSTANT",
-              "description": [
-                {
-                  "language": "en",
-                  "text": "Positive software limit switch"
-                }
-              ],
-              "idShort": "SwLimitSwitchNeg"
-            },
-            {
-              "modelType": "Property",
-              "semanticId": {
-                "keys": [
-                  {
-                    "type": "GlobalReference",
-                    "value": "https://admin-shell.io/idta/ControlConfig/Axes/SwLimitSwitchPos/1/0"
-                  }
-                ],
-                "type": "ExternalReference"
-              },
-              "valueType": "xs:string",
-              "qualifiers": [
-                {
-                  "kind": "ConceptQualifier",
-                  "type": "FormTitle",
-                  "value": "SwLimitSwitchPos",
-                  "valueType": "xs:string"
-                },
-                {
-                  "kind": "ConceptQualifier",
-                  "type": "FormInfo",
-                  "value": "Software limit switch positive",
-                  "valueType": "xs:string"
-                },
-                {
-                  "kind": "ConceptQualifier",
-                  "type": "SMT/Cardinality",
-                  "value": "ZeroToOne",
-                  "valueType": "xs:string"
-                }
-              ],
-              "category": "CONSTANT",
-              "description": [
-                {
-                  "language": "en",
-                  "text": "Negative software limit switch"
-                }
-              ],
-              "idShort": "SwLimitSwitchPos"
-            },
-            {
-              "modelType": "Property",
-              "semanticId": {
-                "keys": [
-                  {
-                    "type": "GlobalReference",
-                    "value": "https://admin-shell.io/idta/ControlConfig/Axes/VelocityLimit/1/0"
-                  }
-                ],
-                "type": "ExternalReference"
-              },
-              "valueType": "xs:long",
-              "qualifiers": [
-                {
-                  "kind": "ConceptQualifier",
-                  "type": "FormTitle",
-                  "value": "VelocityLimit",
-                  "valueType": "xs:string"
-                },
-                {
-                  "kind": "ConceptQualifier",
-                  "type": "FormInfo",
-                  "value": "Velocity limit of the axis",
-                  "valueType": "xs:string"
-                },
-                {
-                  "kind": "ConceptQualifier",
-                  "type": "SMT/Cardinality",
-                  "value": "ZeroToOne",
-                  "valueType": "xs:string"
-                }
-              ],
-              "description": [
-                {
-                  "language": "en",
-                  "text": "Velocity limit of the axis"
-                }
-              ],
-              "idShort": "VelocityLimit"
-            },
-            {
-              "modelType": "Property",
-              "semanticId": {
-                "keys": [
-                  {
-                    "type": "GlobalReference",
-                    "value": "https://admin-shell.io/idta/ControlConfig/Axes/AccelerationLimit /1/0"
-                  }
-                ],
-                "type": "ExternalReference"
-              },
-              "valueType": "xs:long",
-              "qualifiers": [
-                {
-                  "kind": "ConceptQualifier",
-                  "type": "FormTitle",
-                  "value": "AccelerationLimit",
-                  "valueType": "xs:string"
-                },
-                {
-                  "kind": "ConceptQualifier",
-                  "type": "FormInfo",
-                  "value": "Acceleration limit of the axis",
-                  "valueType": "xs:string"
-                },
-                {
-                  "kind": "ConceptQualifier",
-                  "type": "SMT/Cardinality",
-                  "value": "ZeroToOne",
-                  "valueType": "xs:string"
-                }
-              ],
-              "category": "CONSTANT",
-              "description": [
-                {
-                  "language": "en",
-                  "text": "Accelerationlimit of the axis"
-                }
-              ],
-              "idShort": "AccelerationLimit"
-            },
-            {
-              "modelType": "Property",
-              "semanticId": {
-                "keys": [
-                  {
-                    "type": "GlobalReference",
-                    "value": "https://admin-shell.io/idta/ControlConfig/Axes/JerkLimit/1/0"
-                  }
-                ],
-                "type": "ExternalReference"
-              },
-              "valueType": "xs:long",
-              "qualifiers": [
-                {
-                  "kind": "ConceptQualifier",
-                  "type": "FormTitle",
-                  "value": "JerkLimit",
-                  "valueType": "xs:string"
-                },
-                {
-                  "kind": "ConceptQualifier",
-                  "type": "FormInfo",
-                  "value": "Jerk limit of the axis",
-                  "valueType": "xs:string"
-                },
-                {
-                  "kind": "ConceptQualifier",
-                  "type": "SMT/Cardinality",
-                  "value": "ZeroToOne",
-                  "valueType": "xs:string"
-                }
-              ],
-              "category": "CONSTANT",
-              "description": [
-                {
-                  "language": "en",
-                  "text": "Jerk limit of the axis"
-                }
-              ],
-              "idShort": "JerkLimit"
-            },
-            {
-              "modelType": "SubmodelElementCollection",
-              "semanticId": {
-                "keys": [
-                  {
-                    "type": "GlobalReference",
-                    "value": "https://admin-shell.io/idta/ControlConfig/Channels/Axes/AxisConfigData/1/0"
-                  }
-                ],
-                "type": "ExternalReference"
-              },
-              "qualifiers": [
-                {
-                  "kind": "ConceptQualifier",
-                  "type": "FormTitle",
-                  "value": "AxisConfigData",
-                  "valueType": "xs:string"
-                },
-                {
-                  "kind": "ConceptQualifier",
-                  "type": "FormInfo",
-                  "value": "Collection of axis configuration data",
-                  "valueType": "xs:string"
-                },
-                {
-                  "kind": "ConceptQualifier",
-                  "type": "SMT/Cardinality",
-                  "value": "ZeroToOne",
-                  "valueType": "xs:string"
-                }
-              ],
-              "category": "CONSTANT",
-              "description": [
-                {
-                  "language": "en",
-                  "text": "The SMC “AxisConfigData” is a collection of axis configuration data."
-                }
-              ],
-              "idShort": "AxisConfigData__00__",
-              "value": [
-                {
-                  "modelType": "Property",
-                  "semanticId": {
-                    "keys": [
-                      {
+                    {
                         "type": "GlobalReference",
-                        "value": "https://admin-shell.io/idta/ControlConfig/Channels/Axes/AxisConfigFileName/1/0"
-                      }
-                    ],
-                    "type": "ExternalReference"
-                  },
-                  "valueType": "xs:string",
-                  "qualifiers": [
-                    {
-                      "kind": "ConceptQualifier",
-                      "type": "FormTitle",
-                      "value": "AxisConfigFilename",
-                      "valueType": "xs:string"
-                    },
-                    {
-                      "kind": "ConceptQualifier",
-                      "type": "FormInfo",
-                      "value": "Configuration filename of the axis",
-                      "valueType": "xs:string"
-                    },
-                    {
-                      "kind": "ConceptQualifier",
-                      "type": "SMT/Cardinality",
-                      "value": "ZeroToOne",
-                      "valueType": "xs:string"
+                        "value": "https://admin-shell.io/idta/ControlConfig/Axes/1/0"
                     }
-                  ],
-                  "category": "PARAMETER",
-                  "description": [
-                    {
-                      "language": "en",
-                      "text": "Axis configuration file name"
-                    }
-                  ],
-                  "idShort": "AxisConfigFileName"
-                },
-                {
-                  "modelType": "File",
-                  "contentType": "application/json",
-                  "semanticId": {
-                    "keys": [
-                      {
-                        "type": "GlobalReference",
-                        "value": "https://admin-shell.io/idta/ControlConfig/Channels/Axes/AxisConfigFile/1/0"
-                      }
-                    ],
-                    "type": "ExternalReference"
-                  },
-                  "qualifiers": [
-                    {
-                      "kind": "ConceptQualifier",
-                      "type": "FormTitle",
-                      "value": "AxisConfigFile",
-                      "valueType": "xs:string"
-                    },
-                    {
-                      "kind": "ConceptQualifier",
-                      "type": "FormInfo",
-                      "value": "Axis configuration file",
-                      "valueType": "xs:string"
-                    },
-                    {
-                      "kind": "ConceptQualifier",
-                      "type": "SMT/Cardinality",
-                      "value": "ZeroToOne",
-                      "valueType": "xs:string"
-                    }
-                  ],
-                  "description": [
-                    {
-                      "language": "en",
-                      "text": "Configuration file of the axis"
-                    }
-                  ],
-                  "idShort": "AxisConfigFile"
-                }
-              ]
-            },
-            {
-              "modelType": "SubmodelElementCollection",
-              "semanticId": {
-                "keys": [
-                  {
-                    "type": "GlobalReference",
-                    "value": "https://admin-shell.io/idta/ControlConfig/Axes/Axis/Drive/1/0"
-                  }
                 ],
                 "type": "ExternalReference"
-              },
-              "qualifiers": [
+            },
+            "value": [
                 {
-                  "kind": "ConceptQualifier",
-                  "type": "FormTitle",
-                  "value": "Drive",
-                  "valueType": "xs:string"
-                },
-                {
-                  "kind": "ConceptQualifier",
-                  "type": "FormInfo",
-                  "value": "To be filled; longer explanation",
-                  "valueType": "xs:string"
-                },
-                {
-                  "kind": "ConceptQualifier",
-                  "type": "SMT/Cardinality",
-                  "value": "ZeroToOne",
-                  "valueType": "xs:string"
-                }
-              ],
-              "category": "CONSTANT",
-              "description": [
-                {
-                  "language": "en",
-                  "text": "The SMC “Drive” is a collection of drive configuration information."
-                }
-              ],
-              "idShort": "Drive__00__",
-              "value": [
-                {
-                  "modelType": "File",
-                  "contentType": "application/json",
-                  "semanticId": {
-                    "keys": [
-                      {
-                        "type": "GlobalReference",
-                        "value": "https://admin-shell.io/idta/ControlConfig/Axes/Axis/Manual/1/0"
-                      }
-                    ],
-                    "type": "ExternalReference"
-                  },
-                  "qualifiers": [
-                    {
-                      "kind": "ConceptQualifier",
-                      "type": "FormTitle",
-                      "value": "DriveManual",
-                      "valueType": "xs:string"
-                    },
-                    {
-                      "kind": "ConceptQualifier",
-                      "type": "FormInfo",
-                      "value": "Manual file of the drive",
-                      "valueType": "xs:string"
-                    },
-                    {
-                      "kind": "ConceptQualifier",
-                      "type": "SMT/Cardinality",
-                      "value": "ZeroToOne",
-                      "valueType": "xs:string"
-                    }
-                  ],
-                  "category": "CONSTANT",
-                  "description": [
-                    {
-                      "language": "en",
-                      "text": "The manual file of the drive "
-                    }
-                  ],
-                  "idShort": "Manual"
-                },
-                {
-                  "modelType": "ReferenceElement",
-                  "semanticId": {
-                    "keys": [
-                      {
-                        "type": "GlobalReference",
-                        "value": "https://admin-shell.io/IDTA/TechnicalData/Submodel/2/0"
-                      }
-                    ],
-                    "type": "ExternalReference"
-                  },
-                  "qualifiers": [
-                    {
-                      "kind": "ConceptQualifier",
-                      "type": "FormTitle",
-                      "value": "TechnicalData",
-                      "valueType": "xs:string"
-                    },
-                    {
-                      "kind": "ConceptQualifier",
-                      "type": "FormInfo",
-                      "value": "Reference to the technical Data of the drive",
-                      "valueType": "xs:string"
-                    },
-                    {
-                      "kind": "ConceptQualifier",
-                      "type": "SMT/Cardinality",
-                      "value": "ZeroToOne",
-                      "valueType": "xs:string"
-                    }
-                  ],
-                  "category": "CONSTANT",
-                  "description": [
-                    {
-                      "language": "en",
-                      "text": "Reference to the Submodel Technical Specification of the axis to gather more information"
-                    }
-                  ],
-                  "idShort": "TechnicalData"
-                },
-                {
-                  "modelType": "SubmodelElementCollection",
-                  "semanticId": {
-                    "keys": [
-                      {
-                        "type": "GlobalReference",
-                        "value": "https://admin-shell.io/idta/ControlConfig/Axes/Axis/DriveConfigData/1/0"
-                      }
-                    ],
-                    "type": "ExternalReference"
-                  },
-                  "qualifiers": [
-                    {
-                      "kind": "ConceptQualifier",
-                      "type": "FormTitle",
-                      "value": "DriveConfigData",
-                      "valueType": "xs:string"
-                    },
-                    {
-                      "kind": "ConceptQualifier",
-                      "type": "FormInfo",
-                      "value": "Drive configuration data",
-                      "valueType": "xs:string"
-                    },
-                    {
-                      "kind": "ConceptQualifier",
-                      "type": "SMT/Cardinality",
-                      "value": "ZeroToOne",
-                      "valueType": "xs:string"
-                    }
-                  ],
-                  "category": "CONSTANT",
-                  "description": [
-                    {
-                      "language": "en",
-                      "text": "The SMC “DriveConfigData” is a collection of drive configuration data."
-                    }
-                  ],
-                  "idShort": "DriveConfigData__00__",
-                  "value": [
-                    {
-                      "modelType": "Property",
-                      "semanticId": {
-                        "keys": [
-                          {
-                            "type": "GlobalReference",
-                            "value": "https://admin-shell.io/idta/ControlConfig/Axes/Axis/Drive/DriveConfigFileName/1/0"
-                          }
-                        ],
-                        "type": "ExternalReference"
-                      },
-                      "valueType": "xs:string",
-                      "qualifiers": [
+                    "category": "CONSTANT",
+                    "description": [
                         {
-                          "kind": "ConceptQualifier",
-                          "type": "FormTitle",
-                          "value": "DriveConfigFileName",
-                          "valueType": "xs:string"
+                            "language": "en",
+                            "text": "The SMC “Axis” is a collection of axis configuration information."
+                        }
+                    ],
+                    "idShort": "Axis__00__",
+                    "modelType": "SubmodelElementCollection",
+                    "qualifiers": [
+                        {
+                            "kind": "ConceptQualifier",
+                            "type": "FormTitle",
+                            "value": "Axis",
+                            "valueType": "xs:string"
                         },
                         {
-                          "kind": "ConceptQualifier",
-                          "type": "FormInfo",
-                          "value": "Filename of of the configuration file",
-                          "valueType": "xs:string"
+                            "kind": "ConceptQualifier",
+                            "type": "FormInfo",
+                            "value": "List of axis specific configuration data",
+                            "valueType": "xs:string"
                         },
                         {
-                          "kind": "ConceptQualifier",
-                          "type": "SMT/Cardinality",
-                          "value": "ZeroToOne",
-                          "valueType": "xs:string"
+                            "kind": "ConceptQualifier",
+                            "type": "SMT/Cardinality",
+                            "value": "ZeroToOne",
+                            "valueType": "xs:string"
                         }
-                      ],
-                      "category": "CONSTANT",
-                      "description": [
-                        {
-                          "language": "en",
-                          "text": "Name of the configuration file of the drive "
-                        }
-                      ],
-                      "idShort": "DriveConfigFileName"
-                    },
-                    {
-                      "modelType": "File",
-                      "contentType": "application/json",
-                      "semanticId": {
+                    ],
+                    "semanticId": {
                         "keys": [
-                          {
-                            "type": "GlobalReference",
-                            "value": "https://admin-shell.io/idta/ControlConfig/Axes/Axis/Drive/DriveConfigFile/1/0"
-                          }
+                            {
+                                "type": "GlobalReference",
+                                "value": "https://admin-shell.io/idta/ControlConfig/Channel/Axis/1/0"
+                            }
                         ],
                         "type": "ExternalReference"
-                      },
-                      "qualifiers": [
+                    },
+                    "value": [
                         {
-                          "kind": "ConceptQualifier",
-                          "type": "FormTitle",
-                          "value": "DriveConfigFile",
-                          "valueType": "xs:string"
+                            "category": "CONSTANT",
+                            "description": [
+                                {
+                                    "language": "en",
+                                    "text": "Name of the axis"
+                                }
+                            ],
+                            "idShort": "AxisName",
+                            "modelType": "Property",
+                            "qualifiers": [
+                                {
+                                    "kind": "ConceptQualifier",
+                                    "type": "FormTitle",
+                                    "value": "AxisName",
+                                    "valueType": "xs:string"
+                                },
+                                {
+                                    "kind": "ConceptQualifier",
+                                    "type": "FormInfo",
+                                    "value": "Name of the specific axis",
+                                    "valueType": "xs:string"
+                                },
+                                {
+                                    "kind": "ConceptQualifier",
+                                    "type": "SMT/Cardinality",
+                                    "value": "ZeroToOne",
+                                    "valueType": "xs:string"
+                                }
+                            ],
+                            "semanticId": {
+                                "keys": [
+                                    {
+                                        "type": "GlobalReference",
+                                        "value": "https://admin-shell.io/idta/ControlConfig/Axes/AxisName/1/0"
+                                    }
+                                ],
+                                "type": "ExternalReference"
+                            },
+                            "valueType": "xs:string"
                         },
                         {
-                          "kind": "ConceptQualifier",
-                          "type": "FormInfo",
-                          "value": "Drive configuration file",
-                          "valueType": "xs:string"
+                            "category": "CONSTANT",
+                            "description": [
+                                {
+                                    "language": "en",
+                                    "text": "Type of the axis"
+                                }
+                            ],
+                            "idShort": "AxisType",
+                            "modelType": "Property",
+                            "qualifiers": [
+                                {
+                                    "kind": "ConceptQualifier",
+                                    "type": "FormTitle",
+                                    "value": "AxisType",
+                                    "valueType": "xs:string"
+                                },
+                                {
+                                    "kind": "ConceptQualifier",
+                                    "type": "FormInfo",
+                                    "value": "Type of the specific axis",
+                                    "valueType": "xs:string"
+                                },
+                                {
+                                    "kind": "ConceptQualifier",
+                                    "type": "SMT/Cardinality",
+                                    "value": "ZeroToOne",
+                                    "valueType": "xs:string"
+                                }
+                            ],
+                            "semanticId": {
+                                "keys": [
+                                    {
+                                        "type": "GlobalReference",
+                                        "value": "https://admin-shell.io/idta/ControlConfig/Axes/AxisType/1/0"
+                                    }
+                                ],
+                                "type": "ExternalReference"
+                            },
+                            "valueType": "xs:string"
                         },
                         {
-                          "kind": "ConceptQualifier",
-                          "type": "SMT/Cardinality",
-                          "value": "ZeroToOne",
-                          "valueType": "xs:string"
-                        }
-                      ],
-                      "description": [
+                            "category": "CONSTANT",
+                            "description": [
+                                {
+                                    "language": "en",
+                                    "text": "Axis is a simulated or real one"
+                                }
+                            ],
+                            "idShort": "SimulationAxis",
+                            "modelType": "Property",
+                            "qualifiers": [
+                                {
+                                    "kind": "ConceptQualifier",
+                                    "type": "FormTitle",
+                                    "value": "SimulationAxis",
+                                    "valueType": "xs:string"
+                                },
+                                {
+                                    "kind": "ConceptQualifier",
+                                    "type": "FormInfo",
+                                    "value": "Axis is a simulated or real one",
+                                    "valueType": "xs:string"
+                                },
+                                {
+                                    "kind": "ConceptQualifier",
+                                    "type": "SMT/Cardinality",
+                                    "value": "ZeroToOne",
+                                    "valueType": "xs:string"
+                                }
+                            ],
+                            "semanticId": {
+                                "keys": [
+                                    {
+                                        "type": "GlobalReference",
+                                        "value": "https://admin-shell.io/idta/ControlConfig/Axes/SwLimitSwitchPos/1/0"
+                                    }
+                                ],
+                                "type": "ExternalReference"
+                            },
+                            "valueType": "xs:string"
+                        },
                         {
-                          "language": "en",
-                          "text": "Configuration File of the drive"
+                            "category": "CONSTANT",
+                            "description": [
+                                {
+                                    "language": "en",
+                                    "text": "Positive software limit switch"
+                                }
+                            ],
+                            "idShort": "SwLimitSwitchNeg",
+                            "modelType": "Property",
+                            "qualifiers": [
+                                {
+                                    "kind": "ConceptQualifier",
+                                    "type": "FormTitle",
+                                    "value": "SwLimitSwitchNeg",
+                                    "valueType": "xs:string"
+                                },
+                                {
+                                    "kind": "ConceptQualifier",
+                                    "type": "FormInfo",
+                                    "value": "Software limit switch negative",
+                                    "valueType": "xs:string"
+                                },
+                                {
+                                    "kind": "ConceptQualifier",
+                                    "type": "SMT/Cardinality",
+                                    "value": "ZeroToOne",
+                                    "valueType": "xs:string"
+                                }
+                            ],
+                            "semanticId": {
+                                "keys": [
+                                    {
+                                        "type": "GlobalReference",
+                                        "value": "https://admin-shell.io/idta/ControlConfig/Axes/SwLimitSwitchNeg/1/0"
+                                    }
+                                ],
+                                "type": "ExternalReference"
+                            },
+                            "valueType": "xs:double"
+                        },
+                        {
+                            "category": "CONSTANT",
+                            "description": [
+                                {
+                                    "language": "en",
+                                    "text": "Negative software limit switch"
+                                }
+                            ],
+                            "idShort": "SwLimitSwitchPos",
+                            "modelType": "Property",
+                            "qualifiers": [
+                                {
+                                    "kind": "ConceptQualifier",
+                                    "type": "FormTitle",
+                                    "value": "SwLimitSwitchPos",
+                                    "valueType": "xs:string"
+                                },
+                                {
+                                    "kind": "ConceptQualifier",
+                                    "type": "FormInfo",
+                                    "value": "Software limit switch positive",
+                                    "valueType": "xs:string"
+                                },
+                                {
+                                    "kind": "ConceptQualifier",
+                                    "type": "SMT/Cardinality",
+                                    "value": "ZeroToOne",
+                                    "valueType": "xs:string"
+                                }
+                            ],
+                            "semanticId": {
+                                "keys": [
+                                    {
+                                        "type": "GlobalReference",
+                                        "value": "https://admin-shell.io/idta/ControlConfig/Axes/SwLimitSwitchPos/1/0"
+                                    }
+                                ],
+                                "type": "ExternalReference"
+                            },
+                            "valueType": "xs:string"
+                        },
+                        {
+                            "description": [
+                                {
+                                    "language": "en",
+                                    "text": "Velocity limit of the axis"
+                                }
+                            ],
+                            "idShort": "VelocityLimit",
+                            "modelType": "Property",
+                            "qualifiers": [
+                                {
+                                    "kind": "ConceptQualifier",
+                                    "type": "FormTitle",
+                                    "value": "VelocityLimit",
+                                    "valueType": "xs:string"
+                                },
+                                {
+                                    "kind": "ConceptQualifier",
+                                    "type": "FormInfo",
+                                    "value": "Velocity limit of the axis",
+                                    "valueType": "xs:string"
+                                },
+                                {
+                                    "kind": "ConceptQualifier",
+                                    "type": "SMT/Cardinality",
+                                    "value": "ZeroToOne",
+                                    "valueType": "xs:string"
+                                }
+                            ],
+                            "semanticId": {
+                                "keys": [
+                                    {
+                                        "type": "GlobalReference",
+                                        "value": "https://admin-shell.io/idta/ControlConfig/Axes/VelocityLimit/1/0"
+                                    }
+                                ],
+                                "type": "ExternalReference"
+                            },
+                            "valueType": "xs:long"
+                        },
+                        {
+                            "category": "CONSTANT",
+                            "description": [
+                                {
+                                    "language": "en",
+                                    "text": "Accelerationlimit of the axis"
+                                }
+                            ],
+                            "idShort": "AccelerationLimit",
+                            "modelType": "Property",
+                            "qualifiers": [
+                                {
+                                    "kind": "ConceptQualifier",
+                                    "type": "FormTitle",
+                                    "value": "AccelerationLimit",
+                                    "valueType": "xs:string"
+                                },
+                                {
+                                    "kind": "ConceptQualifier",
+                                    "type": "FormInfo",
+                                    "value": "Acceleration limit of the axis",
+                                    "valueType": "xs:string"
+                                },
+                                {
+                                    "kind": "ConceptQualifier",
+                                    "type": "SMT/Cardinality",
+                                    "value": "ZeroToOne",
+                                    "valueType": "xs:string"
+                                }
+                            ],
+                            "semanticId": {
+                                "keys": [
+                                    {
+                                        "type": "GlobalReference",
+                                        "value": "https://admin-shell.io/idta/ControlConfig/Axes/AccelerationLimit /1/0"
+                                    }
+                                ],
+                                "type": "ExternalReference"
+                            },
+                            "valueType": "xs:long"
+                        },
+                        {
+                            "category": "CONSTANT",
+                            "description": [
+                                {
+                                    "language": "en",
+                                    "text": "Jerk limit of the axis"
+                                }
+                            ],
+                            "idShort": "JerkLimit",
+                            "modelType": "Property",
+                            "qualifiers": [
+                                {
+                                    "kind": "ConceptQualifier",
+                                    "type": "FormTitle",
+                                    "value": "JerkLimit",
+                                    "valueType": "xs:string"
+                                },
+                                {
+                                    "kind": "ConceptQualifier",
+                                    "type": "FormInfo",
+                                    "value": "Jerk limit of the axis",
+                                    "valueType": "xs:string"
+                                },
+                                {
+                                    "kind": "ConceptQualifier",
+                                    "type": "SMT/Cardinality",
+                                    "value": "ZeroToOne",
+                                    "valueType": "xs:string"
+                                }
+                            ],
+                            "semanticId": {
+                                "keys": [
+                                    {
+                                        "type": "GlobalReference",
+                                        "value": "https://admin-shell.io/idta/ControlConfig/Axes/JerkLimit/1/0"
+                                    }
+                                ],
+                                "type": "ExternalReference"
+                            },
+                            "valueType": "xs:long"
+                        },
+                        {
+                            "category": "CONSTANT",
+                            "description": [
+                                {
+                                    "language": "en",
+                                    "text": "The SMC “AxisConfigData” is a collection of axis configuration data."
+                                }
+                            ],
+                            "idShort": "AxisConfigData__00__",
+                            "modelType": "SubmodelElementCollection",
+                            "qualifiers": [
+                                {
+                                    "kind": "ConceptQualifier",
+                                    "type": "FormTitle",
+                                    "value": "AxisConfigData",
+                                    "valueType": "xs:string"
+                                },
+                                {
+                                    "kind": "ConceptQualifier",
+                                    "type": "FormInfo",
+                                    "value": "Collection of axis configuration data",
+                                    "valueType": "xs:string"
+                                },
+                                {
+                                    "kind": "ConceptQualifier",
+                                    "type": "SMT/Cardinality",
+                                    "value": "ZeroToOne",
+                                    "valueType": "xs:string"
+                                }
+                            ],
+                            "semanticId": {
+                                "keys": [
+                                    {
+                                        "type": "GlobalReference",
+                                        "value": "https://admin-shell.io/idta/ControlConfig/Channels/Axes/AxisConfigData/1/0"
+                                    }
+                                ],
+                                "type": "ExternalReference"
+                            },
+                            "value": [
+                                {
+                                    "category": "PARAMETER",
+                                    "description": [
+                                        {
+                                            "language": "en",
+                                            "text": "Axis configuration file name"
+                                        }
+                                    ],
+                                    "idShort": "AxisConfigFileName",
+                                    "modelType": "Property",
+                                    "qualifiers": [
+                                        {
+                                            "kind": "ConceptQualifier",
+                                            "type": "FormTitle",
+                                            "value": "AxisConfigFilename",
+                                            "valueType": "xs:string"
+                                        },
+                                        {
+                                            "kind": "ConceptQualifier",
+                                            "type": "FormInfo",
+                                            "value": "Configuration filename of the axis",
+                                            "valueType": "xs:string"
+                                        },
+                                        {
+                                            "kind": "ConceptQualifier",
+                                            "type": "SMT/Cardinality",
+                                            "value": "ZeroToOne",
+                                            "valueType": "xs:string"
+                                        }
+                                    ],
+                                    "semanticId": {
+                                        "keys": [
+                                            {
+                                                "type": "GlobalReference",
+                                                "value": "https://admin-shell.io/idta/ControlConfig/Channels/Axes/AxisConfigFileName/1/0"
+                                            }
+                                        ],
+                                        "type": "ExternalReference"
+                                    },
+                                    "valueType": "xs:string"
+                                },
+                                {
+                                    "contentType": "application/json",
+                                    "description": [
+                                        {
+                                            "language": "en",
+                                            "text": "Configuration file of the axis"
+                                        }
+                                    ],
+                                    "idShort": "AxisConfigFile",
+                                    "modelType": "File",
+                                    "qualifiers": [
+                                        {
+                                            "kind": "ConceptQualifier",
+                                            "type": "FormTitle",
+                                            "value": "AxisConfigFile",
+                                            "valueType": "xs:string"
+                                        },
+                                        {
+                                            "kind": "ConceptQualifier",
+                                            "type": "FormInfo",
+                                            "value": "Axis configuration file",
+                                            "valueType": "xs:string"
+                                        },
+                                        {
+                                            "kind": "ConceptQualifier",
+                                            "type": "SMT/Cardinality",
+                                            "value": "ZeroToOne",
+                                            "valueType": "xs:string"
+                                        }
+                                    ],
+                                    "semanticId": {
+                                        "keys": [
+                                            {
+                                                "type": "GlobalReference",
+                                                "value": "https://admin-shell.io/idta/ControlConfig/Channels/Axes/AxisConfigFile/1/0"
+                                            }
+                                        ],
+                                        "type": "ExternalReference"
+                                    }
+                                }
+                            ]
+                        },
+                        {
+                            "category": "CONSTANT",
+                            "description": [
+                                {
+                                    "language": "en",
+                                    "text": "The SMC “Drive” is a collection of drive configuration information."
+                                }
+                            ],
+                            "idShort": "Drive__00__",
+                            "modelType": "SubmodelElementCollection",
+                            "qualifiers": [
+                                {
+                                    "kind": "ConceptQualifier",
+                                    "type": "FormTitle",
+                                    "value": "Drive",
+                                    "valueType": "xs:string"
+                                },
+                                {
+                                    "kind": "ConceptQualifier",
+                                    "type": "FormInfo",
+                                    "value": "To be filled; longer explanation",
+                                    "valueType": "xs:string"
+                                },
+                                {
+                                    "kind": "ConceptQualifier",
+                                    "type": "SMT/Cardinality",
+                                    "value": "ZeroToOne",
+                                    "valueType": "xs:string"
+                                }
+                            ],
+                            "semanticId": {
+                                "keys": [
+                                    {
+                                        "type": "GlobalReference",
+                                        "value": "https://admin-shell.io/idta/ControlConfig/Axes/Axis/Drive/1/0"
+                                    }
+                                ],
+                                "type": "ExternalReference"
+                            },
+                            "value": [
+                                {
+                                    "category": "CONSTANT",
+                                    "contentType": "application/json",
+                                    "description": [
+                                        {
+                                            "language": "en",
+                                            "text": "The manual file of the drive "
+                                        }
+                                    ],
+                                    "idShort": "Manual",
+                                    "modelType": "File",
+                                    "qualifiers": [
+                                        {
+                                            "kind": "ConceptQualifier",
+                                            "type": "FormTitle",
+                                            "value": "DriveManual",
+                                            "valueType": "xs:string"
+                                        },
+                                        {
+                                            "kind": "ConceptQualifier",
+                                            "type": "FormInfo",
+                                            "value": "Manual file of the drive",
+                                            "valueType": "xs:string"
+                                        },
+                                        {
+                                            "kind": "ConceptQualifier",
+                                            "type": "SMT/Cardinality",
+                                            "value": "ZeroToOne",
+                                            "valueType": "xs:string"
+                                        }
+                                    ],
+                                    "semanticId": {
+                                        "keys": [
+                                            {
+                                                "type": "GlobalReference",
+                                                "value": "https://admin-shell.io/idta/ControlConfig/Axes/Axis/Manual/1/0"
+                                            }
+                                        ],
+                                        "type": "ExternalReference"
+                                    }
+                                },
+                                {
+                                    "category": "CONSTANT",
+                                    "description": [
+                                        {
+                                            "language": "en",
+                                            "text": "Reference to the Submodel Technical Specification of the axis to gather more information"
+                                        }
+                                    ],
+                                    "idShort": "TechnicalData",
+                                    "modelType": "ReferenceElement",
+                                    "qualifiers": [
+                                        {
+                                            "kind": "ConceptQualifier",
+                                            "type": "FormTitle",
+                                            "value": "TechnicalData",
+                                            "valueType": "xs:string"
+                                        },
+                                        {
+                                            "kind": "ConceptQualifier",
+                                            "type": "FormInfo",
+                                            "value": "Reference to the technical Data of the drive",
+                                            "valueType": "xs:string"
+                                        },
+                                        {
+                                            "kind": "ConceptQualifier",
+                                            "type": "SMT/Cardinality",
+                                            "value": "ZeroToOne",
+                                            "valueType": "xs:string"
+                                        }
+                                    ],
+                                    "semanticId": {
+                                        "keys": [
+                                            {
+                                                "type": "GlobalReference",
+                                                "value": "https://admin-shell.io/IDTA/TechnicalData/Submodel/2/0"
+                                            }
+                                        ],
+                                        "type": "ExternalReference"
+                                    }
+                                },
+                                {
+                                    "category": "CONSTANT",
+                                    "description": [
+                                        {
+                                            "language": "en",
+                                            "text": "The SMC “DriveConfigData” is a collection of drive configuration data."
+                                        }
+                                    ],
+                                    "idShort": "DriveConfigData__00__",
+                                    "modelType": "SubmodelElementCollection",
+                                    "qualifiers": [
+                                        {
+                                            "kind": "ConceptQualifier",
+                                            "type": "FormTitle",
+                                            "value": "DriveConfigData",
+                                            "valueType": "xs:string"
+                                        },
+                                        {
+                                            "kind": "ConceptQualifier",
+                                            "type": "FormInfo",
+                                            "value": "Drive configuration data",
+                                            "valueType": "xs:string"
+                                        },
+                                        {
+                                            "kind": "ConceptQualifier",
+                                            "type": "SMT/Cardinality",
+                                            "value": "ZeroToOne",
+                                            "valueType": "xs:string"
+                                        }
+                                    ],
+                                    "semanticId": {
+                                        "keys": [
+                                            {
+                                                "type": "GlobalReference",
+                                                "value": "https://admin-shell.io/idta/ControlConfig/Axes/Axis/DriveConfigData/1/0"
+                                            }
+                                        ],
+                                        "type": "ExternalReference"
+                                    },
+                                    "value": [
+                                        {
+                                            "category": "CONSTANT",
+                                            "description": [
+                                                {
+                                                    "language": "en",
+                                                    "text": "Name of the configuration file of the drive "
+                                                }
+                                            ],
+                                            "idShort": "DriveConfigFileName",
+                                            "modelType": "Property",
+                                            "qualifiers": [
+                                                {
+                                                    "kind": "ConceptQualifier",
+                                                    "type": "FormTitle",
+                                                    "value": "DriveConfigFileName",
+                                                    "valueType": "xs:string"
+                                                },
+                                                {
+                                                    "kind": "ConceptQualifier",
+                                                    "type": "FormInfo",
+                                                    "value": "Filename of of the configuration file",
+                                                    "valueType": "xs:string"
+                                                },
+                                                {
+                                                    "kind": "ConceptQualifier",
+                                                    "type": "SMT/Cardinality",
+                                                    "value": "ZeroToOne",
+                                                    "valueType": "xs:string"
+                                                }
+                                            ],
+                                            "semanticId": {
+                                                "keys": [
+                                                    {
+                                                        "type": "GlobalReference",
+                                                        "value": "https://admin-shell.io/idta/ControlConfig/Axes/Axis/Drive/DriveConfigFileName/1/0"
+                                                    }
+                                                ],
+                                                "type": "ExternalReference"
+                                            },
+                                            "valueType": "xs:string"
+                                        },
+                                        {
+                                            "contentType": "application/json",
+                                            "description": [
+                                                {
+                                                    "language": "en",
+                                                    "text": "Configuration File of the drive"
+                                                }
+                                            ],
+                                            "idShort": "DriveConfigFile",
+                                            "modelType": "File",
+                                            "qualifiers": [
+                                                {
+                                                    "kind": "ConceptQualifier",
+                                                    "type": "FormTitle",
+                                                    "value": "DriveConfigFile",
+                                                    "valueType": "xs:string"
+                                                },
+                                                {
+                                                    "kind": "ConceptQualifier",
+                                                    "type": "FormInfo",
+                                                    "value": "Drive configuration file",
+                                                    "valueType": "xs:string"
+                                                },
+                                                {
+                                                    "kind": "ConceptQualifier",
+                                                    "type": "SMT/Cardinality",
+                                                    "value": "ZeroToOne",
+                                                    "valueType": "xs:string"
+                                                }
+                                            ],
+                                            "semanticId": {
+                                                "keys": [
+                                                    {
+                                                        "type": "GlobalReference",
+                                                        "value": "https://admin-shell.io/idta/ControlConfig/Axes/Axis/Drive/DriveConfigFile/1/0"
+                                                    }
+                                                ],
+                                                "type": "ExternalReference"
+                                            }
+                                        }
+                                    ]
+                                }
+                            ]
                         }
-                      ],
-                      "idShort": "DriveConfigFile"
-                    }
-                  ]
+                    ]
                 }
-              ]
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "modelType": "SubmodelElementCollection",
-      "semanticId": {
-        "keys": [
-          {
-            "type": "GlobalReference",
-            "value": "https://admin-shell.io/idta/ControlConfig/NCProgramConfig/1/0"
-          }
-        ],
-        "type": "ExternalReference"
-      },
-      "qualifiers": [
-        {
-          "kind": "ConceptQualifier",
-          "type": "FormTitle",
-          "value": "NCProgramConfig",
-          "valueType": "xs:string"
+            ]
         },
         {
-          "kind": "ConceptQualifier",
-          "type": "FormInfo",
-          "value": "Provides NC program informations",
-          "valueType": "xs:string"
-        },
-        {
-          "kind": "ConceptQualifier",
-          "type": "SMT/Cardinality",
-          "value": "ZeroToOne",
-          "valueType": "xs:string"
-        }
-      ],
-      "category": "CONSTANT",
-      "description": [
-        {
-          "language": "en",
-          "text": "The SMC “NCProgramConfig” is a collection of NC program configuration information."
-        }
-      ],
-      "idShort": "NCProgramConfig__00__",
-      "value": [
-        {
-          "modelType": "Property",
-          "semanticId": {
-            "keys": [
-              {
-                "type": "GlobalReference",
-                "value": "https://admin-shell.io/idta/ControlConfig/NCProgramFileType/1/0"
-              }
-            ],
-            "type": "ExternalReference"
-          },
-          "valueType": "xs:string",
-          "qualifiers": [
-            {
-              "kind": "ConceptQualifier",
-              "type": "FormTitle",
-              "value": "NCProgramFileType",
-              "valueType": "xs:string"
-            },
-            {
-              "kind": "ConceptQualifier",
-              "type": "FormInfo",
-              "value": "File type (extension) of the NC program file",
-              "valueType": "xs:string"
-            },
-            {
-              "kind": "ConceptQualifier",
-              "type": "SMT/Cardinality",
-              "value": "ZeroToOne",
-              "valueType": "xs:string"
-            }
-          ],
-          "category": "CONSTANT",
-          "description": [
-            {
-              "language": "en",
-              "text": "NC program file type, which the CNC control can work with"
-            }
-          ],
-          "idShort": "NCProgramFileType"
-        },
-        {
-          "modelType": "Property",
-          "semanticId": {
-            "keys": [
-              {
-                "type": "GlobalReference",
-                "value": "https://admin-shell.io/idta/ControlConfig/NCProgramSyntaxType/1/0"
-              }
-            ],
-            "type": "ExternalReference"
-          },
-          "valueType": "xs:string",
-          "qualifiers": [
-            {
-              "kind": "ConceptQualifier",
-              "type": "FormTitle",
-              "value": "NCProgramSyntax",
-              "valueType": "xs:string"
-            },
-            {
-              "kind": "ConceptQualifier",
-              "type": "FormInfo",
-              "value": "Syntax of the NC program",
-              "valueType": "xs:string"
-            },
-            {
-              "kind": "ConceptQualifier",
-              "type": "SMT/Cardinality",
-              "value": "ZeroToOne",
-              "valueType": "xs:string"
-            }
-          ],
-          "category": "CONSTANT",
-          "description": [
-            {
-              "language": "en",
-              "text": "NC program syntax type"
-            }
-          ],
-          "idShort": "NCProgramSyntaxType"
-        },
-        {
-          "modelType": "File",
-          "contentType": "application/json",
-          "semanticId": {
-            "keys": [
-              {
-                "type": "GlobalReference",
-                "value": "https://admin-shell.io/idta/ControlConfig/NCProgramSyntaxManual/1/0"
-              }
-            ],
-            "type": "ExternalReference"
-          },
-          "qualifiers": [
-            {
-              "kind": "ConceptQualifier",
-              "type": "FormTitle",
-              "value": "Machine code syntax manual file",
-              "valueType": "xs:string"
-            },
-            {
-              "kind": "ConceptQualifier",
-              "type": "FormInfo",
-              "value": "The description of the synatx of the machine code implementation of the cnc machine",
-              "valueType": "xs:string"
-            },
-            {
-              "kind": "ConceptQualifier",
-              "type": "SMT/Cardinality",
-              "value": "ZeroToMany",
-              "valueType": "xs:string"
-            }
-          ],
-          "category": "CONSTANT",
-          "description": [
-            {
-              "language": "en",
-              "text": "Manual file of the syntax of the NC program"
-            }
-          ],
-          "idShort": "NCProgramSyntaxManual"
-        }
-      ]
-    },
-    {
-      "modelType": "SubmodelElementCollection",
-      "semanticId": {
-        "keys": [
-          {
-            "type": "GlobalReference",
-            "value": "https://admin-shell.io/idta/ControlConfig/CommunicationConfig/1/0"
-          }
-        ],
-        "type": "ExternalReference"
-      },
-      "qualifiers": [
-        {
-          "kind": "ConceptQualifier",
-          "type": "FormTitle",
-          "value": "CommunicationConfig",
-          "valueType": "xs:string"
-        },
-        {
-          "kind": "ConceptQualifier",
-          "type": "FormInfo",
-          "value": "Provides the communication information to access the CNC.",
-          "valueType": "xs:string"
-        },
-        {
-          "kind": "ConceptQualifier",
-          "type": "SMT/Cardinality",
-          "value": "ZeroToOne",
-          "valueType": "xs:string"
-        }
-      ],
-      "category": "CONSTANT",
-      "description": [
-        {
-          "language": "en",
-          "text": "The SMC “CommunicationConfig” is a collection of communication configuration information."
-        }
-      ],
-      "idShort": "CommunicationConfig__00__",
-      "value": [
-        {
-          "modelType": "Property",
-          "semanticId": {
-            "keys": [
-              {
-                "type": "GlobalReference",
-                "value": "https://admin-shell.io/idta/ControlConfig/CommunicationType/1/0"
-              }
-            ],
-            "type": "ExternalReference"
-          },
-          "valueType": "xs:string",
-          "qualifiers": [
-            {
-              "kind": "ConceptQualifier",
-              "type": "FormTitle",
-              "value": "CommunicationType",
-              "valueType": "xs:string"
-            },
-            {
-              "kind": "ConceptQualifier",
-              "type": "FormInfo",
-              "value": "Type of the communication access to the CNC.",
-              "valueType": "xs:string"
-            },
-            {
-              "kind": "ConceptQualifier",
-              "type": "SMT/Cardinality",
-              "value": "ZeroToOne",
-              "valueType": "xs:string"
-            }
-          ],
-          "category": "CONSTANT",
-          "description": [
-            {
-              "language": "en",
-              "text": "Type of communication to the control"
-            }
-          ],
-          "idShort": "CommunicationType"
-        },
-        {
-          "modelType": "Property",
-          "semanticId": {
-            "keys": [
-              {
-                "type": "GlobalReference",
-                "value": "https://admin-shell.io/idta/ControlConfig/CommunicationAdress/1/0"
-              }
-            ],
-            "type": "ExternalReference"
-          },
-          "valueType": "xs:string",
-          "qualifiers": [
-            {
-              "kind": "ConceptQualifier",
-              "type": "FormTitle",
-              "value": "CommunicationAdress",
-              "valueType": "xs:string"
-            },
-            {
-              "kind": "ConceptQualifier",
-              "type": "FormInfo",
-              "value": "Type of the communication access to the CNC.",
-              "valueType": "xs:string"
-            },
-            {
-              "kind": "ConceptQualifier",
-              "type": "SMT/Cardinality",
-              "value": "ZeroToOne",
-              "valueType": "xs:string"
-            }
-          ],
-          "category": "CONSTANT",
-          "description": [
-            {
-              "language": "en",
-              "text": "Communication address into the control"
-            }
-          ],
-          "idShort": "CommunicationAdress"
-        },
-        {
-          "modelType": "Property",
-          "semanticId": {
-            "keys": [
-              {
-                "type": "GlobalReference",
-                "value": "https://admin-shell.io/idta/ControlConfig/CommunicationInformationModel/1/0"
-              }
-            ],
-            "type": "ExternalReference"
-          },
-          "valueType": "xs:string",
-          "qualifiers": [
-            {
-              "kind": "ConceptQualifier",
-              "type": "FormTitle",
-              "value": "CommunicationInformationModel",
-              "valueType": "xs:string"
-            },
-            {
-              "kind": "ConceptQualifier",
-              "type": "FormInfo",
-              "value": "Information model of the communication configuration",
-              "valueType": "xs:string"
-            },
-            {
-              "kind": "ConceptQualifier",
-              "type": "SMT/Cardinality",
-              "value": "ZeroToOne",
-              "valueType": "xs:string"
-            }
-          ],
-          "category": "CONSTANT",
-          "description": [
-            {
-              "language": "en",
-              "text": "Communication information model if ones exist like OPCUA"
-            }
-          ],
-          "idShort": "CommunicationInformationModel"
-        },
-        {
-          "modelType": "ReferenceElement",
-          "semanticId": {
-            "keys": [
-              {
-                "type": "GlobalReference",
-                "value": "https://admin-shell.io/idta/opcua-server-datasheet/1/0"
-              }
-            ],
-            "type": "ExternalReference"
-          },
-          "qualifiers": [
-            {
-              "kind": "TemplateQualifier",
-              "type": "FormTitle",
-              "value": "OPCUAServerDataSheet",
-              "valueType": "xs:string"
-            },
-            {
-              "kind": "TemplateQualifier",
-              "type": "FormInfo",
-              "value": "Reference to the OPCUA server datasheet Submodel",
-              "valueType": "xs:string"
-            },
-            {
-              "semanticId": {
-                "keys": [
-                  {
-                    "type": "GlobalReference",
-                    "value": "https://admin-shell.io/SubmodelTemplates/Cardinality/1/0"
-                  }
-                ],
-                "type": "ExternalReference"
-              },
-              "kind": "TemplateQualifier",
-              "type": "SMT/Cardinality",
-              "value": "ZeroToOne",
-              "valueType": "xs:string"
-            }
-          ],
-          "description": [
-            {
-              "language": "en",
-              "text": "Reference to the OPCUA server datasheet Submodel"
-            }
-          ],
-          "idShort": "OPCUAServerDataSheet"
-        }
-      ]
-    },
-    {
-      "modelType": "SubmodelElementCollection",
-      "semanticId": {
-        "keys": [
-          {
-            "type": "GlobalReference",
-            "value": "https://admin-shell.io/idta/ControlConfig/Tools/1/0"
-          }
-        ],
-        "type": "ExternalReference"
-      },
-      "qualifiers": [
-        {
-          "kind": "ConceptQualifier",
-          "type": "FormTitle",
-          "value": "Tools",
-          "valueType": "xs:string"
-        },
-        {
-          "kind": "ConceptQualifier",
-          "type": "FormInfo",
-          "value": "List of tools",
-          "valueType": "xs:string"
-        },
-        {
-          "kind": "ConceptQualifier",
-          "type": "SMT/Cardinality",
-          "value": "OneToMany",
-          "valueType": "xs:string"
-        }
-      ],
-      "category": "CONSTANT",
-      "description": [
-        {
-          "language": "en",
-          "text": "Explanation: The SMC “Tools” is a collection of tools of the CNC controller."
-        }
-      ],
-      "idShort": "Tools__00__",
-      "value": [
-        {
-          "modelType": "SubmodelElementCollection",
-          "semanticId": {
-            "keys": [
-              {
-                "type": "GlobalReference",
-                "value": "https://admin-shell.io/idta/ControlConfig/Tool/1/0"
-              }
-            ],
-            "type": "ExternalReference"
-          },
-          "qualifiers": [
-            {
-              "kind": "ConceptQualifier",
-              "type": "FormTitle",
-              "value": "Tool",
-              "valueType": "xs:string"
-            },
-            {
-              "kind": "ConceptQualifier",
-              "type": "FormInfo",
-              "value": "One tool of the CNC",
-              "valueType": "xs:string"
-            },
-            {
-              "kind": "ConceptQualifier",
-              "type": "SMT/Cardinality",
-              "value": "ZeroToMany",
-              "valueType": "xs:string"
-            }
-          ],
-          "category": "CONSTANT",
-          "description": [
-            {
-              "language": "en",
-              "text": "The SMC “Tool” is a collection of tool configuration information."
-            }
-          ],
-          "idShort": "Tool__00__",
-          "value": [
-            {
-              "modelType": "ReferenceElement",
-              "semanticId": {
-                "keys": [
-                  {
-                    "type": "GlobalReference",
-                    "value": "https://admin-shell.io/idta/ToolDescription/1/0"
-                  }
-                ],
-                "type": "ExternalReference"
-              },
-              "qualifiers": [
+            "category": "VARIABLE",
+            "description": [
                 {
-                  "kind": "TemplateQualifier",
-                  "type": "FormTitle",
-                  "value": "ToolDescription",
-                  "valueType": "xs:string"
+                    "language": "en",
+                    "text": "Defines the cycle time of the CNC control"
+                }
+            ],
+            "idShort": "CNCCycleTime",
+            "modelType": "Property",
+            "qualifiers": [
+                {
+                    "kind": "ConceptQualifier",
+                    "type": "FormTitle",
+                    "value": "CNCCycleTime",
+                    "valueType": "xs:string"
                 },
                 {
-                  "kind": "TemplateQualifier",
-                  "type": "FormInfo",
-                  "value": "Reference to the tool description Submodel of the specific tool.",
-                  "valueType": "xs:string"
+                    "kind": "ConceptQualifier",
+                    "type": "FormInfo",
+                    "value": "Cycle time of the CNC",
+                    "valueType": "xs:string"
                 },
                 {
-                  "semanticId": {
-                    "keys": [
-                      {
+                    "kind": "ConceptQualifier",
+                    "type": "SMT/Cardinality",
+                    "value": "ZeroToOne",
+                    "valueType": "xs:string"
+                }
+            ],
+            "semanticId": {
+                "keys": [
+                    {
                         "type": "GlobalReference",
-                        "value": "https://admin-shell.io/SubmodelTemplates/Cardinality/1/0"
-                      }
-                    ],
-                    "type": "ExternalReference"
-                  },
-                  "kind": "TemplateQualifier",
-                  "type": "SMT/Cardinality",
-                  "value": "ZeroToOne",
-                  "valueType": "xs:string"
-                }
-              ],
-              "category": "CONSTANT",
-              "description": [
+                        "value": "https://admin-shell.io/idta/ControlConfig/CNCCycleTime/1/0"
+                    }
+                ],
+                "type": "ExternalReference"
+            },
+            "valueType": "xs:double"
+        },
+        {
+            "category": "CONSTANT",
+            "description": [
                 {
-                  "language": "en",
-                  "text": "Reference to the tool description Submodel of the specific tool."
+                    "language": "en",
+                    "text": "Collection of channels of the control"
                 }
-              ],
-              "idShort": "ToolDescription"
+            ],
+            "idShort": "Channels__00__",
+            "modelType": "SubmodelElementCollection",
+            "qualifiers": [
+                {
+                    "kind": "ConceptQualifier",
+                    "type": "FormTitle",
+                    "value": "Channels",
+                    "valueType": "xs:string"
+                },
+                {
+                    "kind": "ConceptQualifier",
+                    "type": "FormInfo",
+                    "value": "Provides access to the paramtization of the channels/axes/drives",
+                    "valueType": "xs:string"
+                },
+                {
+                    "kind": "ConceptQualifier",
+                    "type": "SMT/Cardinality",
+                    "value": "ZeroToMany",
+                    "valueType": "xs:string"
+                }
+            ],
+            "semanticId": {
+                "keys": [
+                    {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/idta/ControlConfig/Channels/1/0"
+                    }
+                ],
+                "type": "ExternalReference"
+            },
+            "value": [
+                {
+                    "category": "CONSTANT",
+                    "description": [
+                        {
+                            "language": "en",
+                            "text": "Configuration information of a specific channel"
+                        }
+                    ],
+                    "idShort": "Channel__00__",
+                    "modelType": "SubmodelElementCollection",
+                    "qualifiers": [
+                        {
+                            "kind": "ConceptQualifier",
+                            "type": "FormTitle",
+                            "value": "Channel",
+                            "valueType": "xs:string"
+                        },
+                        {
+                            "kind": "ConceptQualifier",
+                            "type": "FormInfo",
+                            "value": "Channel",
+                            "valueType": "xs:string"
+                        },
+                        {
+                            "kind": "ConceptQualifier",
+                            "type": "SMT/Cardinality",
+                            "value": "One",
+                            "valueType": "xs:string"
+                        }
+                    ],
+                    "semanticId": {
+                        "keys": [
+                            {
+                                "type": "GlobalReference",
+                                "value": "https://admin-shell.io/idta/ControlConfig/Channel/1/0"
+                            }
+                        ],
+                        "type": "ExternalReference"
+                    },
+                    "value": [
+                        {
+                            "category": "VARIABLE",
+                            "description": [
+                                {
+                                    "language": "en",
+                                    "text": "This describes the unique channel identification of the specific channel"
+                                }
+                            ],
+                            "idShort": "ChannelIdentification",
+                            "modelType": "Property",
+                            "qualifiers": [
+                                {
+                                    "kind": "ConceptQualifier",
+                                    "type": "FormTitle",
+                                    "value": "ChannelIdentification",
+                                    "valueType": "xs:string"
+                                },
+                                {
+                                    "kind": "ConceptQualifier",
+                                    "type": "FormInfo",
+                                    "value": "Identification number of the channel",
+                                    "valueType": "xs:string"
+                                },
+                                {
+                                    "kind": "ConceptQualifier",
+                                    "type": "SMT/Cardinality",
+                                    "value": "One",
+                                    "valueType": "xs:string"
+                                }
+                            ],
+                            "semanticId": {
+                                "keys": [
+                                    {
+                                        "type": "GlobalReference",
+                                        "value": "https://admin-shell.io/idta/ControlConfig/Channels/ChannelIdentification/1/0"
+                                    }
+                                ],
+                                "type": "ExternalReference"
+                            },
+                            "valueType": "xs:string"
+                        },
+                        {
+                            "category": "CONSTANT",
+                            "description": [
+                                {
+                                    "language": "en",
+                                    "text": "The SMC “AxesReference” is a collection of referenced axes for the specific channel."
+                                }
+                            ],
+                            "idShort": "AxesReference__00__",
+                            "modelType": "SubmodelElementCollection",
+                            "qualifiers": [
+                                {
+                                    "kind": "TemplateQualifier",
+                                    "type": "FormTitle",
+                                    "value": "AxesReference",
+                                    "valueType": "xs:string"
+                                },
+                                {
+                                    "kind": "TemplateQualifier",
+                                    "type": "FormInfo",
+                                    "value": "Collection of referenced axes for the specific channel",
+                                    "valueType": "xs:string"
+                                },
+                                {
+                                    "kind": "TemplateQualifier",
+                                    "semanticId": {
+                                        "keys": [
+                                            {
+                                                "type": "GlobalReference",
+                                                "value": "https://admin-shell.io/SubmodelTemplates/Cardinality/1/0"
+                                            }
+                                        ],
+                                        "type": "ExternalReference"
+                                    },
+                                    "type": "SMT/Cardinality",
+                                    "value": "ZeroToMany",
+                                    "valueType": "xs:string"
+                                }
+                            ],
+                            "semanticId": {
+                                "keys": [
+                                    {
+                                        "type": "GlobalReference",
+                                        "value": "https://admin-shell.io/idta/ControlConfig/Channels/AxesReference/1/0"
+                                    }
+                                ],
+                                "type": "ExternalReference"
+                            },
+                            "value": [
+                                {
+                                    "category": "CONSTANT",
+                                    "description": [
+                                        {
+                                            "language": "en",
+                                            "text": "Unique axis name"
+                                        }
+                                    ],
+                                    "idShort": "AxisName",
+                                    "modelType": "Property",
+                                    "qualifiers": [
+                                        {
+                                            "kind": "TemplateQualifier",
+                                            "type": "FormTitle",
+                                            "value": "AxisName",
+                                            "valueType": "xs:string"
+                                        },
+                                        {
+                                            "kind": "TemplateQualifier",
+                                            "type": "FormInfo",
+                                            "value": "Unique axis name",
+                                            "valueType": "xs:string"
+                                        },
+                                        {
+                                            "kind": "TemplateQualifier",
+                                            "semanticId": {
+                                                "keys": [
+                                                    {
+                                                        "type": "GlobalReference",
+                                                        "value": "https://admin-shell.io/SubmodelTemplates/Cardinality/1/0"
+                                                    }
+                                                ],
+                                                "type": "ExternalReference"
+                                            },
+                                            "type": "SMT/Cardinality",
+                                            "value": "One",
+                                            "valueType": "xs:string"
+                                        }
+                                    ],
+                                    "semanticId": {
+                                        "keys": [
+                                            {
+                                                "type": "GlobalReference",
+                                                "value": "https://admin-shell.io/idta/ControlConfig/Channels/AxesReference/1/0"
+                                            }
+                                        ],
+                                        "type": "ExternalReference"
+                                    },
+                                    "valueType": "xs:string"
+                                },
+                                {
+                                    "category": "CONSTANT",
+                                    "description": [
+                                        {
+                                            "language": "en",
+                                            "text": "Reference to the axis"
+                                        }
+                                    ],
+                                    "idShort": "ReferenceToAxis",
+                                    "modelType": "ReferenceElement",
+                                    "qualifiers": [
+                                        {
+                                            "kind": "TemplateQualifier",
+                                            "type": "FormTitle",
+                                            "value": "ReferenceToAxis",
+                                            "valueType": "xs:string"
+                                        },
+                                        {
+                                            "kind": "TemplateQualifier",
+                                            "type": "FormInfo",
+                                            "value": "Reference to the axis",
+                                            "valueType": "xs:string"
+                                        },
+                                        {
+                                            "kind": "TemplateQualifier",
+                                            "semanticId": {
+                                                "keys": [
+                                                    {
+                                                        "type": "GlobalReference",
+                                                        "value": "https://admin-shell.io/SubmodelTemplates/Cardinality/1/0"
+                                                    }
+                                                ],
+                                                "type": "ExternalReference"
+                                            },
+                                            "type": "SMT/Cardinality",
+                                            "value": "One",
+                                            "valueType": "xs:string"
+                                        }
+                                    ],
+                                    "semanticId": {
+                                        "keys": [
+                                            {
+                                                "type": "GlobalReference",
+                                                "value": "https://admin-shell.io/idta/ControlConfig/Channels/ReferenceToAxis/1/0"
+                                            }
+                                        ],
+                                        "type": "ExternalReference"
+                                    }
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "category": "CONSTANT",
+            "description": [
+                {
+                    "language": "en",
+                    "text": "The SMC “CommunicationConfig” is a collection of communication configuration information."
+                }
+            ],
+            "idShort": "CommunicationConfig__00__",
+            "modelType": "SubmodelElementCollection",
+            "qualifiers": [
+                {
+                    "kind": "ConceptQualifier",
+                    "type": "FormTitle",
+                    "value": "CommunicationConfig",
+                    "valueType": "xs:string"
+                },
+                {
+                    "kind": "ConceptQualifier",
+                    "type": "FormInfo",
+                    "value": "Provides the communication information to access the CNC.",
+                    "valueType": "xs:string"
+                },
+                {
+                    "kind": "ConceptQualifier",
+                    "type": "SMT/Cardinality",
+                    "value": "ZeroToOne",
+                    "valueType": "xs:string"
+                }
+            ],
+            "semanticId": {
+                "keys": [
+                    {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/idta/ControlConfig/CommunicationConfig/1/0"
+                    }
+                ],
+                "type": "ExternalReference"
+            },
+            "value": [
+                {
+                    "category": "CONSTANT",
+                    "description": [
+                        {
+                            "language": "en",
+                            "text": "Type of communication to the control"
+                        }
+                    ],
+                    "idShort": "CommunicationType",
+                    "modelType": "Property",
+                    "qualifiers": [
+                        {
+                            "kind": "ConceptQualifier",
+                            "type": "FormTitle",
+                            "value": "CommunicationType",
+                            "valueType": "xs:string"
+                        },
+                        {
+                            "kind": "ConceptQualifier",
+                            "type": "FormInfo",
+                            "value": "Type of the communication access to the CNC.",
+                            "valueType": "xs:string"
+                        },
+                        {
+                            "kind": "ConceptQualifier",
+                            "type": "SMT/Cardinality",
+                            "value": "ZeroToOne",
+                            "valueType": "xs:string"
+                        }
+                    ],
+                    "semanticId": {
+                        "keys": [
+                            {
+                                "type": "GlobalReference",
+                                "value": "https://admin-shell.io/idta/ControlConfig/CommunicationType/1/0"
+                            }
+                        ],
+                        "type": "ExternalReference"
+                    },
+                    "valueType": "xs:string"
+                },
+                {
+                    "category": "CONSTANT",
+                    "description": [
+                        {
+                            "language": "en",
+                            "text": "Communication address into the control"
+                        }
+                    ],
+                    "idShort": "CommunicationAdress",
+                    "modelType": "Property",
+                    "qualifiers": [
+                        {
+                            "kind": "ConceptQualifier",
+                            "type": "FormTitle",
+                            "value": "CommunicationAdress",
+                            "valueType": "xs:string"
+                        },
+                        {
+                            "kind": "ConceptQualifier",
+                            "type": "FormInfo",
+                            "value": "Type of the communication access to the CNC.",
+                            "valueType": "xs:string"
+                        },
+                        {
+                            "kind": "ConceptQualifier",
+                            "type": "SMT/Cardinality",
+                            "value": "ZeroToOne",
+                            "valueType": "xs:string"
+                        }
+                    ],
+                    "semanticId": {
+                        "keys": [
+                            {
+                                "type": "GlobalReference",
+                                "value": "https://admin-shell.io/idta/ControlConfig/CommunicationAdress/1/0"
+                            }
+                        ],
+                        "type": "ExternalReference"
+                    },
+                    "valueType": "xs:string"
+                },
+                {
+                    "category": "CONSTANT",
+                    "description": [
+                        {
+                            "language": "en",
+                            "text": "Communication information model if ones exist like OPCUA"
+                        }
+                    ],
+                    "idShort": "CommunicationInformationModel",
+                    "modelType": "Property",
+                    "qualifiers": [
+                        {
+                            "kind": "ConceptQualifier",
+                            "type": "FormTitle",
+                            "value": "CommunicationInformationModel",
+                            "valueType": "xs:string"
+                        },
+                        {
+                            "kind": "ConceptQualifier",
+                            "type": "FormInfo",
+                            "value": "Information model of the communication configuration",
+                            "valueType": "xs:string"
+                        },
+                        {
+                            "kind": "ConceptQualifier",
+                            "type": "SMT/Cardinality",
+                            "value": "ZeroToOne",
+                            "valueType": "xs:string"
+                        }
+                    ],
+                    "semanticId": {
+                        "keys": [
+                            {
+                                "type": "GlobalReference",
+                                "value": "https://admin-shell.io/idta/ControlConfig/CommunicationInformationModel/1/0"
+                            }
+                        ],
+                        "type": "ExternalReference"
+                    },
+                    "valueType": "xs:string"
+                },
+                {
+                    "description": [
+                        {
+                            "language": "en",
+                            "text": "Reference to the OPCUA server datasheet Submodel"
+                        }
+                    ],
+                    "idShort": "OPCUAServerDataSheet",
+                    "modelType": "ReferenceElement",
+                    "qualifiers": [
+                        {
+                            "kind": "TemplateQualifier",
+                            "type": "FormTitle",
+                            "value": "OPCUAServerDataSheet",
+                            "valueType": "xs:string"
+                        },
+                        {
+                            "kind": "TemplateQualifier",
+                            "type": "FormInfo",
+                            "value": "Reference to the OPCUA server datasheet Submodel",
+                            "valueType": "xs:string"
+                        },
+                        {
+                            "kind": "TemplateQualifier",
+                            "semanticId": {
+                                "keys": [
+                                    {
+                                        "type": "GlobalReference",
+                                        "value": "https://admin-shell.io/SubmodelTemplates/Cardinality/1/0"
+                                    }
+                                ],
+                                "type": "ExternalReference"
+                            },
+                            "type": "SMT/Cardinality",
+                            "value": "ZeroToOne",
+                            "valueType": "xs:string"
+                        }
+                    ],
+                    "semanticId": {
+                        "keys": [
+                            {
+                                "type": "GlobalReference",
+                                "value": "https://admin-shell.io/idta/opcua-server-datasheet/1/0"
+                            }
+                        ],
+                        "type": "ExternalReference"
+                    }
+                }
+            ]
+        },
+        {
+            "category": "CONSTANT",
+            "description": [
+                {
+                    "language": "en",
+                    "text": "Control configuration data"
+                },
+                {
+                    "language": "de",
+                    "text": "Steuerungskonfigurationsdaten"
+                }
+            ],
+            "idShort": "ControlConfigData__00__",
+            "modelType": "SubmodelElementCollection",
+            "qualifiers": [
+                {
+                    "kind": "ConceptQualifier",
+                    "type": "FormTitle",
+                    "value": "ControlerConfigData",
+                    "valueType": "xs:string"
+                },
+                {
+                    "kind": "ConceptQualifier",
+                    "type": "FormInfo",
+                    "value": "Provide the configuration data for the controler.",
+                    "valueType": "xs:string"
+                },
+                {
+                    "kind": "ConceptQualifier",
+                    "type": "SMT/Cardinality",
+                    "value": "ZeroToMany",
+                    "valueType": "xs:string"
+                }
+            ],
+            "semanticId": {
+                "keys": [
+                    {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/idta/ControlConfig/ControlConfigData/1/0"
+                    }
+                ],
+                "type": "ExternalReference"
+            },
+            "value": [
+                {
+                    "category": "PARAMETER",
+                    "description": [
+                        {
+                            "language": "en",
+                            "text": "Name of the control configuration file"
+                        }
+                    ],
+                    "idShort": "ControlConfigFileName",
+                    "modelType": "Property",
+                    "qualifiers": [
+                        {
+                            "kind": "ConceptQualifier",
+                            "type": "FormTitle",
+                            "value": "ControlConfigFileName",
+                            "valueType": "xs:string"
+                        },
+                        {
+                            "kind": "ConceptQualifier",
+                            "type": "FormInfo",
+                            "value": "Filename of the configuration file.",
+                            "valueType": "xs:string"
+                        },
+                        {
+                            "kind": "ConceptQualifier",
+                            "type": "SMT/Cardinality",
+                            "value": "One",
+                            "valueType": "xs:string"
+                        }
+                    ],
+                    "semanticId": {
+                        "keys": [
+                            {
+                                "type": "GlobalReference",
+                                "value": "https://admin-shell.io/idta/ControlConfig/ControlConfigFileName /1/0"
+                            }
+                        ],
+                        "type": "ExternalReference"
+                    },
+                    "valueType": "xs:string"
+                },
+                {
+                    "category": "CONSTANT",
+                    "contentType": "application/json",
+                    "description": [
+                        {
+                            "language": "en",
+                            "text": "File to configure the control"
+                        }
+                    ],
+                    "idShort": "ControlConfigFile",
+                    "modelType": "File",
+                    "qualifiers": [
+                        {
+                            "kind": "ConceptQualifier",
+                            "type": "FormTitle",
+                            "value": "ConfigurationFile",
+                            "valueType": "xs:string"
+                        },
+                        {
+                            "kind": "ConceptQualifier",
+                            "type": "FormInfo",
+                            "value": "Configuration file of the controler.",
+                            "valueType": "xs:string"
+                        },
+                        {
+                            "kind": "ConceptQualifier",
+                            "type": "SMT/Cardinality",
+                            "value": "One",
+                            "valueType": "xs:string"
+                        }
+                    ],
+                    "semanticId": {
+                        "keys": [
+                            {
+                                "type": "GlobalReference",
+                                "value": "https://admin-shell.io/idta/ControlConfig/ControlConfigFile/1/0"
+                            }
+                        ],
+                        "type": "ExternalReference"
+                    }
+                }
+            ]
+        },
+        {
+            "category": "PARAMETER",
+            "description": [
+                {
+                    "language": "en",
+                    "text": "The Controller Type describes the type of controller"
+                }
+            ],
+            "idShort": "ControllerType",
+            "modelType": "Property",
+            "qualifiers": [
+                {
+                    "kind": "ConceptQualifier",
+                    "type": "FormTitle",
+                    "value": "ControllerType",
+                    "valueType": "xs:string"
+                },
+                {
+                    "kind": "ConceptQualifier",
+                    "type": "FormInfo",
+                    "value": "List of controller types.",
+                    "valueType": "xs:string"
+                },
+                {
+                    "kind": "ConceptQualifier",
+                    "type": "SMT/Cardinality",
+                    "value": "One",
+                    "valueType": "xs:string"
+                },
+                {
+                    "kind": "ConceptQualifier",
+                    "type": "FormChoices",
+                    "value": "Path controlled; Point controlled, Track controlled",
+                    "valueType": "xs:string"
+                }
+            ],
+            "semanticId": {
+                "keys": [
+                    {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/idta/ControlConfig/ControllerType/1/0"
+                    }
+                ],
+                "type": "ExternalReference"
+            },
+            "valueType": "xs:string"
+        },
+        {
+            "category": "CONSTANT",
+            "description": [
+                {
+                    "language": "en",
+                    "text": "Reference to the digital nameplate of the controller."
+                }
+            ],
+            "idShort": "DigitalNameplate",
+            "modelType": "ReferenceElement",
+            "qualifiers": [
+                {
+                    "kind": "ConceptQualifier",
+                    "type": "FormTitle",
+                    "value": "DigitalNameplate",
+                    "valueType": "xs:string"
+                },
+                {
+                    "kind": "ConceptQualifier",
+                    "type": "FormInfo",
+                    "value": "Submodel Element reference to the digital nameplate of the control.",
+                    "valueType": "xs:string"
+                },
+                {
+                    "kind": "ConceptQualifier",
+                    "type": "SMT/Cardinality",
+                    "value": "One",
+                    "valueType": "xs:string"
+                }
+            ],
+            "semanticId": {
+                "keys": [
+                    {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/idta/nameplate/3/0/Nameplate"
+                    }
+                ],
+                "type": "ExternalReference"
             }
-          ]
+        },
+        {
+            "category": "VARIABLE",
+            "description": [
+                {
+                    "language": "en",
+                    "text": "Defines the cycle time of the fieldbus control"
+                }
+            ],
+            "idShort": "FieldbusCycleTime",
+            "modelType": "Property",
+            "qualifiers": [
+                {
+                    "kind": "ConceptQualifier",
+                    "type": "FormTitle",
+                    "value": "FieldbusCycleTime",
+                    "valueType": "xs:string"
+                },
+                {
+                    "kind": "ConceptQualifier",
+                    "type": "FormInfo",
+                    "value": "Cycle time of the fieldbus",
+                    "valueType": "xs:string"
+                },
+                {
+                    "kind": "ConceptQualifier",
+                    "type": "SMT/Cardinality",
+                    "value": "ZeroToOne",
+                    "valueType": "xs:string"
+                }
+            ],
+            "semanticId": {
+                "keys": [
+                    {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/idta/ControlConfig/FieldbusCycleTime/1/0"
+                    }
+                ],
+                "type": "ExternalReference"
+            },
+            "valueType": "xs:double"
+        },
+        {
+            "category": "CONSTANT",
+            "description": [
+                {
+                    "language": "en",
+                    "text": "Fieldbus Type of the control"
+                }
+            ],
+            "idShort": "FieldbusType",
+            "modelType": "Property",
+            "qualifiers": [
+                {
+                    "kind": "ConceptQualifier",
+                    "type": "FormTitle",
+                    "value": "FieldbusType",
+                    "valueType": "xs:string"
+                },
+                {
+                    "kind": "ConceptQualifier",
+                    "type": "FormInfo",
+                    "value": "Fieldbus type of the CNC",
+                    "valueType": "xs:string"
+                },
+                {
+                    "kind": "ConceptQualifier",
+                    "type": "SMT/Cardinality",
+                    "value": "ZeroToOne",
+                    "valueType": "xs:string"
+                }
+            ],
+            "semanticId": {
+                "keys": [
+                    {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/idta/ControlConfig/FieldbusType/1/0"
+                    }
+                ],
+                "type": "ExternalReference"
+            },
+            "valueType": "xs:string"
+        },
+        {
+            "category": "CONSTANT",
+            "description": [
+                {
+                    "language": "en",
+                    "text": "Defines the jerk unit of the CNC control "
+                }
+            ],
+            "idShort": "JerkUnit",
+            "modelType": "Property",
+            "qualifiers": [
+                {
+                    "kind": "ConceptQualifier",
+                    "type": "FormTitle",
+                    "value": "Jerk unit",
+                    "valueType": "xs:string"
+                },
+                {
+                    "kind": "ConceptQualifier",
+                    "type": "FormInfo",
+                    "value": "Jerk unit of the CNC",
+                    "valueType": "xs:string"
+                },
+                {
+                    "kind": "ConceptQualifier",
+                    "type": "SMT/Cardinality",
+                    "value": "ZeroToOne",
+                    "valueType": "xs:string"
+                }
+            ],
+            "semanticId": {
+                "keys": [
+                    {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/idta/ControlConfig/JerkUnit/1/0"
+                    }
+                ],
+                "type": "ExternalReference"
+            },
+            "valueType": "xs:string"
+        },
+        {
+            "category": "CONSTANT",
+            "description": [
+                {
+                    "language": "en",
+                    "text": "Length Unit of the control"
+                }
+            ],
+            "idShort": "LengthUnit",
+            "modelType": "Property",
+            "qualifiers": [
+                {
+                    "kind": "ConceptQualifier",
+                    "type": "FormTitle",
+                    "value": "LengthType",
+                    "valueType": "xs:string"
+                },
+                {
+                    "kind": "ConceptQualifier",
+                    "type": "FormInfo",
+                    "value": "Length type of the CNC",
+                    "valueType": "xs:string"
+                },
+                {
+                    "kind": "ConceptQualifier",
+                    "type": "SMT/Cardinality",
+                    "value": "ZeroToOne",
+                    "valueType": "xs:string"
+                }
+            ],
+            "semanticId": {
+                "keys": [
+                    {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/idta/ControlConfig/LengthUnit/1/0"
+                    }
+                ],
+                "type": "ExternalReference"
+            },
+            "valueType": "xs:double"
+        },
+        {
+            "category": "CONSTANT",
+            "description": [
+                {
+                    "language": "en",
+                    "text": "The SMC “NCProgramConfig” is a collection of NC program configuration information."
+                }
+            ],
+            "idShort": "NCProgramConfig__00__",
+            "modelType": "SubmodelElementCollection",
+            "qualifiers": [
+                {
+                    "kind": "ConceptQualifier",
+                    "type": "FormTitle",
+                    "value": "NCProgramConfig",
+                    "valueType": "xs:string"
+                },
+                {
+                    "kind": "ConceptQualifier",
+                    "type": "FormInfo",
+                    "value": "Provides NC program informations",
+                    "valueType": "xs:string"
+                },
+                {
+                    "kind": "ConceptQualifier",
+                    "type": "SMT/Cardinality",
+                    "value": "ZeroToOne",
+                    "valueType": "xs:string"
+                }
+            ],
+            "semanticId": {
+                "keys": [
+                    {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/idta/ControlConfig/NCProgramConfig/1/0"
+                    }
+                ],
+                "type": "ExternalReference"
+            },
+            "value": [
+                {
+                    "category": "CONSTANT",
+                    "description": [
+                        {
+                            "language": "en",
+                            "text": "NC program file type, which the CNC control can work with"
+                        }
+                    ],
+                    "idShort": "NCProgramFileType",
+                    "modelType": "Property",
+                    "qualifiers": [
+                        {
+                            "kind": "ConceptQualifier",
+                            "type": "FormTitle",
+                            "value": "NCProgramFileType",
+                            "valueType": "xs:string"
+                        },
+                        {
+                            "kind": "ConceptQualifier",
+                            "type": "FormInfo",
+                            "value": "File type (extension) of the NC program file",
+                            "valueType": "xs:string"
+                        },
+                        {
+                            "kind": "ConceptQualifier",
+                            "type": "SMT/Cardinality",
+                            "value": "ZeroToOne",
+                            "valueType": "xs:string"
+                        }
+                    ],
+                    "semanticId": {
+                        "keys": [
+                            {
+                                "type": "GlobalReference",
+                                "value": "https://admin-shell.io/idta/ControlConfig/NCProgramFileType/1/0"
+                            }
+                        ],
+                        "type": "ExternalReference"
+                    },
+                    "valueType": "xs:string"
+                },
+                {
+                    "category": "CONSTANT",
+                    "description": [
+                        {
+                            "language": "en",
+                            "text": "NC program syntax type"
+                        }
+                    ],
+                    "idShort": "NCProgramSyntaxType",
+                    "modelType": "Property",
+                    "qualifiers": [
+                        {
+                            "kind": "ConceptQualifier",
+                            "type": "FormTitle",
+                            "value": "NCProgramSyntax",
+                            "valueType": "xs:string"
+                        },
+                        {
+                            "kind": "ConceptQualifier",
+                            "type": "FormInfo",
+                            "value": "Syntax of the NC program",
+                            "valueType": "xs:string"
+                        },
+                        {
+                            "kind": "ConceptQualifier",
+                            "type": "SMT/Cardinality",
+                            "value": "ZeroToOne",
+                            "valueType": "xs:string"
+                        }
+                    ],
+                    "semanticId": {
+                        "keys": [
+                            {
+                                "type": "GlobalReference",
+                                "value": "https://admin-shell.io/idta/ControlConfig/NCProgramSyntaxType/1/0"
+                            }
+                        ],
+                        "type": "ExternalReference"
+                    },
+                    "valueType": "xs:string"
+                },
+                {
+                    "category": "CONSTANT",
+                    "contentType": "application/json",
+                    "description": [
+                        {
+                            "language": "en",
+                            "text": "Manual file of the syntax of the NC program"
+                        }
+                    ],
+                    "idShort": "NCProgramSyntaxManual",
+                    "modelType": "File",
+                    "qualifiers": [
+                        {
+                            "kind": "ConceptQualifier",
+                            "type": "FormTitle",
+                            "value": "Machine code syntax manual file",
+                            "valueType": "xs:string"
+                        },
+                        {
+                            "kind": "ConceptQualifier",
+                            "type": "FormInfo",
+                            "value": "The description of the synatx of the machine code implementation of the cnc machine",
+                            "valueType": "xs:string"
+                        },
+                        {
+                            "kind": "ConceptQualifier",
+                            "type": "SMT/Cardinality",
+                            "value": "ZeroToMany",
+                            "valueType": "xs:string"
+                        }
+                    ],
+                    "semanticId": {
+                        "keys": [
+                            {
+                                "type": "GlobalReference",
+                                "value": "https://admin-shell.io/idta/ControlConfig/NCProgramSyntaxManual/1/0"
+                            }
+                        ],
+                        "type": "ExternalReference"
+                    }
+                }
+            ]
+        },
+        {
+            "category": "VARIABLE",
+            "description": [
+                {
+                    "language": "en",
+                    "text": "Defines the cycle time of the PLC control"
+                }
+            ],
+            "idShort": "PLCCycleTime",
+            "modelType": "Property",
+            "qualifiers": [
+                {
+                    "kind": "ConceptQualifier",
+                    "type": "FormTitle",
+                    "value": "PLCCycleTime",
+                    "valueType": "xs:string"
+                },
+                {
+                    "kind": "ConceptQualifier",
+                    "type": "FormInfo",
+                    "value": "Cycle time of the PLC",
+                    "valueType": "xs:string"
+                },
+                {
+                    "kind": "ConceptQualifier",
+                    "type": "SMT/Cardinality",
+                    "value": "ZeroToOne",
+                    "valueType": "xs:string"
+                }
+            ],
+            "semanticId": {
+                "keys": [
+                    {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/idta/ControlConfig/PLCCycleTime/1/0"
+                    }
+                ],
+                "type": "ExternalReference"
+            },
+            "valueType": "xs:double"
+        },
+        {
+            "category": "VARIABLE",
+            "description": [
+                {
+                    "language": "en",
+                    "text": "Time unit of the control"
+                }
+            ],
+            "idShort": "TimeUnit",
+            "modelType": "Property",
+            "qualifiers": [
+                {
+                    "kind": "ConceptQualifier",
+                    "type": "FormTitle",
+                    "value": "TimeUnit",
+                    "valueType": "xs:string"
+                },
+                {
+                    "kind": "ConceptQualifier",
+                    "type": "FormInfo",
+                    "value": "Time unit (s, ms, us)",
+                    "valueType": "xs:string"
+                },
+                {
+                    "kind": "ConceptQualifier",
+                    "type": "SMT/Cardinality",
+                    "value": "One",
+                    "valueType": "xs:string"
+                }
+            ],
+            "semanticId": {
+                "keys": [
+                    {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/idta/ControlConfig/TimeUnit/1/0"
+                    }
+                ],
+                "type": "ExternalReference"
+            },
+            "valueType": "xs:float"
+        },
+        {
+            "category": "CONSTANT",
+            "description": [
+                {
+                    "language": "en",
+                    "text": "Explanation: The SMC “Tools” is a collection of tools of the CNC controller."
+                }
+            ],
+            "idShort": "Tools__00__",
+            "modelType": "SubmodelElementCollection",
+            "qualifiers": [
+                {
+                    "kind": "ConceptQualifier",
+                    "type": "FormTitle",
+                    "value": "Tools",
+                    "valueType": "xs:string"
+                },
+                {
+                    "kind": "ConceptQualifier",
+                    "type": "FormInfo",
+                    "value": "List of tools",
+                    "valueType": "xs:string"
+                },
+                {
+                    "kind": "ConceptQualifier",
+                    "type": "SMT/Cardinality",
+                    "value": "OneToMany",
+                    "valueType": "xs:string"
+                }
+            ],
+            "semanticId": {
+                "keys": [
+                    {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/idta/ControlConfig/Tools/1/0"
+                    }
+                ],
+                "type": "ExternalReference"
+            },
+            "value": [
+                {
+                    "category": "CONSTANT",
+                    "description": [
+                        {
+                            "language": "en",
+                            "text": "The SMC “Tool” is a collection of tool configuration information."
+                        }
+                    ],
+                    "idShort": "Tool__00__",
+                    "modelType": "SubmodelElementCollection",
+                    "qualifiers": [
+                        {
+                            "kind": "ConceptQualifier",
+                            "type": "FormTitle",
+                            "value": "Tool",
+                            "valueType": "xs:string"
+                        },
+                        {
+                            "kind": "ConceptQualifier",
+                            "type": "FormInfo",
+                            "value": "One tool of the CNC",
+                            "valueType": "xs:string"
+                        },
+                        {
+                            "kind": "ConceptQualifier",
+                            "type": "SMT/Cardinality",
+                            "value": "ZeroToMany",
+                            "valueType": "xs:string"
+                        }
+                    ],
+                    "semanticId": {
+                        "keys": [
+                            {
+                                "type": "GlobalReference",
+                                "value": "https://admin-shell.io/idta/ControlConfig/Tool/1/0"
+                            }
+                        ],
+                        "type": "ExternalReference"
+                    },
+                    "value": [
+                        {
+                            "category": "CONSTANT",
+                            "description": [
+                                {
+                                    "language": "en",
+                                    "text": "Reference to the tool description Submodel of the specific tool."
+                                }
+                            ],
+                            "idShort": "ToolDescription",
+                            "modelType": "ReferenceElement",
+                            "qualifiers": [
+                                {
+                                    "kind": "TemplateQualifier",
+                                    "type": "FormTitle",
+                                    "value": "ToolDescription",
+                                    "valueType": "xs:string"
+                                },
+                                {
+                                    "kind": "TemplateQualifier",
+                                    "type": "FormInfo",
+                                    "value": "Reference to the tool description Submodel of the specific tool.",
+                                    "valueType": "xs:string"
+                                },
+                                {
+                                    "kind": "TemplateQualifier",
+                                    "semanticId": {
+                                        "keys": [
+                                            {
+                                                "type": "GlobalReference",
+                                                "value": "https://admin-shell.io/SubmodelTemplates/Cardinality/1/0"
+                                            }
+                                        ],
+                                        "type": "ExternalReference"
+                                    },
+                                    "type": "SMT/Cardinality",
+                                    "value": "ZeroToOne",
+                                    "valueType": "xs:string"
+                                }
+                            ],
+                            "semanticId": {
+                                "keys": [
+                                    {
+                                        "type": "GlobalReference",
+                                        "value": "https://admin-shell.io/idta/ToolDescription/1/0"
+                                    }
+                                ],
+                                "type": "ExternalReference"
+                            }
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "category": "CONSTANT",
+            "description": [
+                {
+                    "language": "en",
+                    "text": "Defines the velocity unit of the CNC control "
+                }
+            ],
+            "idShort": "VelocityUnit",
+            "modelType": "Property",
+            "qualifiers": [
+                {
+                    "kind": "ConceptQualifier",
+                    "type": "FormTitle",
+                    "value": "Velocity unit",
+                    "valueType": "xs:string"
+                },
+                {
+                    "kind": "ConceptQualifier",
+                    "type": "FormInfo",
+                    "value": "Velocity unit of the CNC",
+                    "valueType": "xs:string"
+                },
+                {
+                    "kind": "ConceptQualifier",
+                    "type": "SMT/Cardinality",
+                    "value": "ZeroToOne",
+                    "valueType": "xs:string"
+                }
+            ],
+            "semanticId": {
+                "keys": [
+                    {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/idta/ControlConfig/VelocityType/1/0"
+                    }
+                ],
+                "type": "ExternalReference"
+            },
+            "valueType": "xs:string"
         }
-      ]
-    }
-  ]
+    ]
 }

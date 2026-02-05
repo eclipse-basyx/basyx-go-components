@@ -464,7 +464,7 @@ func BuildQualifiers(row model.SubmodelRow, db *sql.DB) ([]types.IQualifier, err
 		for _, qualifierRow := range qualifierRows {
 			// Convert string enums to SDK enums
 			valueTypeEnum := types.DataTypeDefXSD(qualifierRow.ValueType)
-			_, err = builder.AddQualifier(qualifierRow.DbID, qualifierRow.Type, int64(valueTypeEnum), qualifierRow.Value, qualifierRow.Position, db)
+			_, err = builder.AddQualifier(qualifierRow.DbID, qualifierRow.Type, int64(valueTypeEnum), qualifierRow.Value, qualifierRow.Position, qualifierRow.Kind)
 			if err != nil {
 				return nil, err
 			}
