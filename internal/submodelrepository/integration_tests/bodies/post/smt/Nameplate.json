@@ -292,7 +292,6 @@
           "typeValueListElement": "SubmodelElementCollection",
           "value": [
             {
-              "idShort": "",
               "modelType": "SubmodelElementCollection",
               "qualifiers": [
                 {
@@ -1005,7 +1004,6 @@
               "text": "Note: CE marking is declared as mandatory according to the Blue Guide of the EU-Commission"
             }
           ],
-          "idShort": "",
           "modelType": "SubmodelElementCollection",
           "qualifiers": [
             {

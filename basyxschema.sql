@@ -194,7 +194,7 @@ CREATE TABLE IF NOT EXISTS submodel_element (
   displayname_id BIGINT REFERENCES lang_string_name_type_reference(id) ON DELETE CASCADE,
   idshort_path   TEXT NOT NULL,                            -- e.g. sm_abc.sensors[2].temperature
   depth	BIGINT,
-  CONSTRAINT uq_sibling_idshort UNIQUE (submodel_id, parent_sme_id, id_short),
+  CONSTRAINT uq_sibling_idshort UNIQUE (submodel_id, parent_sme_id, idshort_path),
   CONSTRAINT uq_sibling_pos     UNIQUE (submodel_id, parent_sme_id, position)
 );
 CREATE TABLE IF NOT EXISTS submodel_element_supplemental_semantic_id (

@@ -86,7 +86,7 @@ func BuildSubmodelElement(smeRow model.SubmodelElementRow, db *sql.DB) (types.IS
 		_, _ = fmt.Printf("[DEBUG] BuildSubmodelElement: Error building SME type, idShort=%s, modelType=%d, error: %v\n", smeRow.IDShort.String, smeRow.ModelType, err)
 		return nil, nil, err
 	}
-	if smeRow.IDShort.Valid {
+	if smeRow.IDShort.Valid && smeRow.IDShort.String != "" {
 		specificSME.SetIDShort(&smeRow.IDShort.String)
 	}
 	if smeRow.Category.Valid {

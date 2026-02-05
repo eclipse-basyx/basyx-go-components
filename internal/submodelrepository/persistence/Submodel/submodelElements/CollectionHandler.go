@@ -66,89 +66,6 @@ func NewPostgreSQLSubmodelElementCollectionHandler(db *sql.DB) (*PostgreSQLSubmo
 	return &PostgreSQLSubmodelElementCollectionHandler{db: db, decorated: decoratedHandler}, nil
 }
 
-// Create inserts a new SubmodelElementCollection into the database as a top-level submodel element.
-// This method handles both the common submodel element properties and creates the collection
-// container that can hold other submodel elements in a hierarchical structure.
-//
-// Parameters:
-//   - tx: Active database transaction
-//   - submodelID: ID of the parent submodel
-//   - submodelElement: The SubmodelElementCollection to create
-//
-// Returns:
-//   - int: Database ID of the created collection element
-//   - error: Error if creation fails or element is not of correct type
-func (p PostgreSQLSubmodelElementCollectionHandler) Create(tx *sql.Tx, submodelID string, submodelElement types.ISubmodelElement) (int, error) {
-	_, ok := submodelElement.(*types.SubmodelElementCollection)
-	if !ok {
-		return 0, common.NewErrBadRequest("submodelElement is not of type SubmodelElementCollection")
-	}
-
-	// First, perform base SubmodelElement operations within the transaction
-	id, err := p.decorated.Create(tx, submodelID, submodelElement)
-	if err != nil {
-		return 0, err
-	}
-
-	// SubmodelElementCollection-specific database insertion
-	dialect := goqu.Dialect("postgres")
-	insertQuery, insertArgs, err := dialect.Insert("submodel_element_collection").
-		Rows(goqu.Record{"id": id}).
-		ToSQL()
-	if err != nil {
-		return 0, err
-	}
-	_, err = tx.Exec(insertQuery, insertArgs...)
-	if err != nil {
-		return 0, err
-	}
-
-	return id, nil
-}
-
-// CreateNested inserts a new SubmodelElementCollection as a nested element within another collection or list.
-// This method creates the collection at a specific hierarchical path and position within its parent container.
-// It allows for deep nesting of collections to create complex hierarchical data structures.
-//
-// Parameters:
-//   - tx: Active database transaction
-//   - submodelID: ID of the parent submodel
-//   - parentID: Database ID of the parent element
-//   - idShortPath: Hierarchical path where the collection should be created
-//   - submodelElement: The SubmodelElementCollection to create
-//   - pos: Position within the parent container
-//
-// Returns:
-//   - int: Database ID of the created nested collection
-//   - error: Error if creation fails or element is not of correct type
-func (p PostgreSQLSubmodelElementCollectionHandler) CreateNested(tx *sql.Tx, submodelID string, parentID int, idShortPath string, submodelElement types.ISubmodelElement, pos int, rootSubmodelElementID int) (int, error) {
-	_, ok := submodelElement.(*types.SubmodelElementCollection)
-	if !ok {
-		return 0, common.NewErrBadRequest("submodelElement is not of type SubmodelElementCollection")
-	}
-
-	// First, perform base SubmodelElement operations within the transaction
-	id, err := p.decorated.CreateWithPath(tx, submodelID, parentID, idShortPath, submodelElement, pos, rootSubmodelElementID)
-	if err != nil {
-		return 0, err
-	}
-
-	// SubmodelElementCollection-specific database insertion
-	dialect := goqu.Dialect("postgres")
-	insertQuery, insertArgs, err := dialect.Insert("submodel_element_collection").
-		Rows(goqu.Record{"id": id}).
-		ToSQL()
-	if err != nil {
-		return 0, err
-	}
-	_, err = tx.Exec(insertQuery, insertArgs...)
-	if err != nil {
-		return 0, err
-	}
-
-	return id, nil
-}
-
 // Update modifies an existing SubmodelElementCollection element identified by its idShort or path.
 // This method delegates the update operation to the decorated CRUD handler which handles
 // the common submodel element update logic.
@@ -226,4 +143,29 @@ func (p PostgreSQLSubmodelElementCollectionHandler) UpdateValueOnly(submodelID s
 //   - error: Error if deletion fails
 func (p PostgreSQLSubmodelElementCollectionHandler) Delete(idShortOrPath string) error {
 	return p.decorated.Delete(idShortOrPath)
+}
+
+// GetInsertQueryPart returns the type-specific insert query part for batch insertion of SubmodelElementCollection elements.
+// It returns the table name and record for inserting into the submodel_element_collection table.
+//
+// Parameters:
+//   - tx: Active database transaction (not used for Collection)
+//   - id: The database ID of the base submodel_element record
+//   - element: The SubmodelElementCollection element to insert
+//
+// Returns:
+//   - *InsertQueryPart: The table name and record for submodel_element_collection insert
+//   - error: An error if the element is not of type SubmodelElementCollection
+func (p PostgreSQLSubmodelElementCollectionHandler) GetInsertQueryPart(_ *sql.Tx, id int, element types.ISubmodelElement) (*InsertQueryPart, error) {
+	_, ok := element.(*types.SubmodelElementCollection)
+	if !ok {
+		return nil, common.NewErrBadRequest("submodelElement is not of type SubmodelElementCollection")
+	}
+
+	return &InsertQueryPart{
+		TableName: "submodel_element_collection",
+		Record: goqu.Record{
+			"id": id,
+		},
+	}, nil
 }
