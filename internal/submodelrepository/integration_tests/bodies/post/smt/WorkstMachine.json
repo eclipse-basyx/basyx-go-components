@@ -1821,12 +1821,12 @@
                                         {
                                             "displayName": [
                                                 {
-                                                    "language": "en",
-                                                    "text": "Demand kind"
-                                                },
-                                                {
                                                     "language": "de",
                                                     "text": "Bedarfsquelle"
+                                                },
+                                                {
+                                                    "language": "en",
+                                                    "text": "Demand kind"
                                                 }
                                             ],
                                             "idShort": "DemandKind",

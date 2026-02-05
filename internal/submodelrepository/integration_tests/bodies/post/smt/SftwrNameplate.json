@@ -1,20 +1,18 @@
 {
-  "modelType": "Submodel",
-  "kind": "Template",
-  "semanticId": {
-    "keys": [
-      {
-        "type": "Submodel",
-        "value": "https://admin-shell.io/idta/SoftwareNameplate/1/0"
-      }
-    ],
-    "type": "ModelReference"
-  },
   "administration": {
     "revision": "0",
     "version": "1"
   },
+  "description": [
+    {
+      "language": "en",
+      "text": "Contains the nameplate information attached to the software product"
+    }
+  ],
   "id": "https://admin-shell.io/idta/SubmodelTemplate/SoftwareNameplate/1/0",
+  "idShort": "SoftwareNameplate",
+  "kind": "Template",
+  "modelType": "Submodel",
   "qualifiers": [
     {
       "kind": "ConceptQualifier",
@@ -35,25 +33,19 @@
       "valueType": "xs:string"
     }
   ],
-  "description": [
-    {
-      "language": "en",
-      "text": "Contains the nameplate information attached to the software product"
-    }
-  ],
-  "idShort": "SoftwareNameplate",
+  "semanticId": {
+    "keys": [
+      {
+        "type": "Submodel",
+        "value": "https://admin-shell.io/idta/SoftwareNameplate/1/0"
+      }
+    ],
+    "type": "ModelReference"
+  },
   "submodelElements": [
     {
+      "idShort": "SoftwareNameplateInstance",
       "modelType": "SubmodelElementCollection",
-      "semanticId": {
-        "keys": [
-          {
-            "type": "GlobalReference",
-            "value": "https://admin-shell.io/idta/SoftwareNameplate/1/0/SoftwareNameplate/SoftwareNameplateType"
-          }
-        ],
-        "type": "ExternalReference"
-      },
       "qualifiers": [
         {
           "kind": "ConceptQualifier",
@@ -62,523 +54,6 @@
           "valueType": "xs:string"
         }
       ],
-      "idShort": "SoftwareNameplateType",
-      "value": [
-        {
-          "modelType": "Property",
-          "semanticId": {
-            "keys": [
-              {
-                "type": "GlobalReference",
-                "value": "0173-1#02-AAY811#001"
-              }
-            ],
-            "type": "ExternalReference"
-          },
-          "valueType": "xs:string",
-          "qualifiers": [
-            {
-              "kind": "ConceptQualifier",
-              "type": "Multiplicity",
-              "value": "One",
-              "valueType": "xs:string"
-            }
-          ],
-          "category": "CONSTANT",
-          "idShort": "URIOfTheProduct"
-        },
-        {
-          "modelType": "MultiLanguageProperty",
-          "semanticId": {
-            "keys": [
-              {
-                "type": "GlobalReference",
-                "value": "0173-1#02-AAO677#002"
-              }
-            ],
-            "type": "ExternalReference"
-          },
-          "qualifiers": [
-            {
-              "kind": "ConceptQualifier",
-              "type": "Multiplicity",
-              "value": "One",
-              "valueType": "xs:string"
-            }
-          ],
-          "category": "PARAMETER",
-          "idShort": "ManufacturerName"
-        },
-        {
-          "modelType": "MultiLanguageProperty",
-          "semanticId": {
-            "keys": [
-              {
-                "type": "GlobalReference",
-                "value": "0173-1#02-AAW338#001"
-              }
-            ],
-            "type": "ExternalReference"
-          },
-          "qualifiers": [
-            {
-              "kind": "ConceptQualifier",
-              "type": "Multiplicity",
-              "value": "One",
-              "valueType": "xs:string"
-            }
-          ],
-          "category": "PARAMETER",
-          "idShort": "ManufacturerProductDesignation"
-        },
-        {
-          "modelType": "MultiLanguageProperty",
-          "semanticId": {
-            "keys": [
-              {
-                "type": "GlobalReference",
-                "value": "https://admin-shell.io/idta/SoftwareNameplate/1/0/SoftwareNameplate/SoftwareNameplateType/ManufacturerProductDescription"
-              }
-            ],
-            "type": "ExternalReference"
-          },
-          "qualifiers": [
-            {
-              "kind": "ConceptQualifier",
-              "type": "Multiplicity",
-              "value": "ZeroToOne",
-              "valueType": "xs:string"
-            }
-          ],
-          "category": "CONSTANT",
-          "idShort": "ManufacturerProductDescription"
-        },
-        {
-          "modelType": "MultiLanguageProperty",
-          "semanticId": {
-            "keys": [
-              {
-                "type": "GlobalReference",
-                "value": "0173-1#02-AAU731#001"
-              }
-            ],
-            "type": "ExternalReference"
-          },
-          "qualifiers": [
-            {
-              "kind": "ConceptQualifier",
-              "type": "Multiplicity",
-              "value": "ZeroToOne",
-              "valueType": "xs:string"
-            }
-          ],
-          "category": "PARAMETER",
-          "idShort": "ManufacturerProductFamily"
-        },
-        {
-          "modelType": "MultiLanguageProperty",
-          "semanticId": {
-            "keys": [
-              {
-                "type": "GlobalReference",
-                "value": "0173-1#02-AAO057#002"
-              }
-            ],
-            "type": "ExternalReference"
-          },
-          "qualifiers": [
-            {
-              "kind": "ConceptQualifier",
-              "type": "Multiplicity",
-              "value": "ZeroToOne",
-              "valueType": "xs:string"
-            }
-          ],
-          "idShort": "ManufacturerProductType"
-        },
-        {
-          "modelType": "Property",
-          "semanticId": {
-            "keys": [
-              {
-                "type": "GlobalReference",
-                "value": "https://admin-shell.io/idta/SoftwareNameplate/1/0/SoftwareNameplate/SoftwareNameplateType/SoftwareType"
-              }
-            ],
-            "type": "ExternalReference"
-          },
-          "value": "PLC Runtime",
-          "valueType": "xs:string",
-          "qualifiers": [
-            {
-              "kind": "ConceptQualifier",
-              "type": "Multiplicity",
-              "value": "ZeroToOne",
-              "valueType": "xs:string"
-            }
-          ],
-          "category": "CONSTANT",
-          "idShort": "SoftwareType"
-        },
-        {
-          "modelType": "Property",
-          "semanticId": {
-            "keys": [
-              {
-                "type": "GlobalReference",
-                "value": "https://admin-shell.io/idta/SoftwareNameplate/1/0/SoftwareNameplate/SoftwareNameplateType/Version"
-              }
-            ],
-            "type": "ExternalReference"
-          },
-          "value": "0.9.1.0",
-          "valueType": "xs:string",
-          "qualifiers": [
-            {
-              "kind": "ConceptQualifier",
-              "type": "Multiplicity",
-              "value": "One",
-              "valueType": "xs:string"
-            }
-          ],
-          "category": "PARAMETER",
-          "idShort": "Version"
-        },
-        {
-          "modelType": "MultiLanguageProperty",
-          "semanticId": {
-            "keys": [
-              {
-                "type": "GlobalReference",
-                "value": "https://admin-shell.io/idta/SoftwareNameplate/1/0/SoftwareNameplate/SoftwareNameplateType/VersionName"
-              }
-            ],
-            "type": "ExternalReference"
-          },
-          "value": [
-            {
-              "language": "en",
-              "text": "R2021 beta"
-            },
-            {
-              "language": "de",
-              "text": "Stand 2021 beta"
-            }
-          ],
-          "qualifiers": [
-            {
-              "kind": "ConceptQualifier",
-              "type": "Multiplicity",
-              "value": "ZeroToOne",
-              "valueType": "xs:string"
-            }
-          ],
-          "category": "CONSTANT",
-          "description": [
-            {
-              "language": "de",
-              "text": "Name der Version"
-            },
-            {
-              "language": "en",
-              "text": "the name this particular version is given"
-            }
-          ],
-          "idShort": "VersionName"
-        },
-        {
-          "modelType": "MultiLanguageProperty",
-          "semanticId": {
-            "keys": [
-              {
-                "type": "GlobalReference",
-                "value": "https://admin-shell.io/idta/SoftwareNameplate/1/0/SoftwareNameplate/SoftwareNameplateType/VersionInfo"
-              }
-            ],
-            "type": "ExternalReference"
-          },
-          "value": [
-            {
-              "language": "en",
-              "text": "Please do not install in productive environments!"
-            },
-            {
-              "language": "de",
-              "text": "Bitte nicht im Produktivsystem installieren!"
-            }
-          ],
-          "valueId": {
-            "keys": [
-              {
-                "type": "GlobalReference",
-                "value": "https://admin-shell.io/ZVEI/AkItInAutomation/NameplateSoftware/ReleaseNotes/1/0//example.com/ids/cd/8500_7052_2012_2916"
-              }
-            ],
-            "type": "ExternalReference"
-          },
-          "qualifiers": [
-            {
-              "kind": "ConceptQualifier",
-              "type": "Multiplicity",
-              "value": "ZeroToOne",
-              "valueType": "xs:string"
-            }
-          ],
-          "category": "CONSTANT",
-          "description": [
-            {
-              "language": "en",
-              "text": "Provides a textual description of most relevant characteristics of the version of the software"
-            }
-          ],
-          "idShort": "VersionInfo"
-        },
-        {
-          "modelType": "Property",
-          "semanticId": {
-            "keys": [
-              {
-                "type": "GlobalReference",
-                "value": "https://admin-shell.io/idta/SoftwareNameplate/1/0/SoftwareNameplate/SoftwareNameplateType/ReleaseDate"
-              }
-            ],
-            "type": "ExternalReference"
-          },
-          "value": "2022-02-07",
-          "valueType": "xs:date",
-          "qualifiers": [
-            {
-              "kind": "ConceptQualifier",
-              "type": "Multiplicity",
-              "value": "One",
-              "valueType": "xs:string"
-            }
-          ],
-          "category": "CONSTANT",
-          "idShort": "ReleaseDate"
-        },
-        {
-          "modelType": "MultiLanguageProperty",
-          "semanticId": {
-            "keys": [
-              {
-                "type": "GlobalReference",
-                "value": "https://admin-shell.io/idta/SoftwareNameplate/1/0/SoftwareNameplate/SoftwareNameplateType/ReleaseNotes"
-              }
-            ],
-            "type": "ExternalReference"
-          },
-          "value": [
-            {
-              "language": "en",
-              "text": "This release requires special configuration."
-            }
-          ],
-          "qualifiers": [
-            {
-              "kind": "ConceptQualifier",
-              "type": "Multiplicity",
-              "value": "ZeroToOne",
-              "valueType": "xs:string"
-            }
-          ],
-          "category": "CONSTANT",
-          "description": [
-            {
-              "language": "en",
-              "text": "Provides a textual description of most relevant characteristics of the version of the software"
-            }
-          ],
-          "idShort": "ReleaseNotes"
-        },
-        {
-          "modelType": "Property",
-          "semanticId": {
-            "keys": [
-              {
-                "type": "GlobalReference",
-                "value": "https://admin-shell.io/idta/SoftwareNameplate/1/0/SoftwareNameplate/SoftwareNameplateType/ReleaseInformation"
-              }
-            ],
-            "type": "ExternalReference"
-          },
-          "valueType": "xs:string",
-          "qualifiers": [
-            {
-              "kind": "ConceptQualifier",
-              "type": "Multiplicity",
-              "value": "ZeroToOne",
-              "valueType": "xs:string"
-            }
-          ],
-          "category": "CONSTANT",
-          "description": [
-            {
-              "language": "en",
-              "text": "EMPTY"
-            },
-            {
-              "language": "de",
-              "text": "EMPTY"
-            }
-          ],
-          "idShort": "ReleaseInformation"
-        },
-        {
-          "modelType": "Property",
-          "semanticId": {
-            "keys": [
-              {
-                "type": "GlobalReference",
-                "value": "https://admin-shell.io/idta/SoftwareNameplate/1/0/SoftwareNameplate/SoftwareNameplateType/BuildDate"
-              }
-            ],
-            "type": "ExternalReference"
-          },
-          "value": "2020-11-19",
-          "valueType": "xs:date",
-          "qualifiers": [
-            {
-              "kind": "ConceptQualifier",
-              "type": "Multiplicity",
-              "value": "One",
-              "valueType": "xs:string"
-            }
-          ],
-          "category": "CONSTANT",
-          "idShort": "BuildDate"
-        },
-        {
-          "modelType": "Property",
-          "semanticId": {
-            "keys": [
-              {
-                "type": "GlobalReference",
-                "value": "https://admin-shell.io/idta/SoftwareNameplate/1/0/SoftwareNameplate/SoftwareNameplateType/InstallationURI"
-              }
-            ],
-            "type": "ExternalReference"
-          },
-          "value": "https://tud.de/inf/pk/demo-sw/download/DemoFirmware_09.zip",
-          "valueType": "xs:anyURI",
-          "qualifiers": [
-            {
-              "kind": "ConceptQualifier",
-              "type": "Multiplicity",
-              "value": "ZeroToOne",
-              "valueType": "xs:string"
-            }
-          ],
-          "category": "PARAMETER",
-          "description": [
-            {
-              "language": "en",
-              "text": "Indicates the resource, where the software is being provided by the manufacturer."
-            }
-          ],
-          "idShort": "InstallationURI"
-        },
-        {
-          "modelType": "Property",
-          "semanticId": {
-            "keys": [
-              {
-                "type": "GlobalReference",
-                "value": "https://admin-shell.io/idta/SoftwareNameplate/1/0/SoftwareNameplate/SoftwareNameplateType/InstallationFile"
-              }
-            ],
-            "type": "ExternalReference"
-          },
-          "valueType": "xs:string",
-          "qualifiers": [
-            {
-              "kind": "ConceptQualifier",
-              "type": "Multiplicity",
-              "value": "ZeroToOne",
-              "valueType": "xs:string"
-            }
-          ],
-          "category": "CONSTANT",
-          "description": [
-            {
-              "language": "en",
-              "text": "EMPTY"
-            },
-            {
-              "language": "de",
-              "text": "EMPTY"
-            }
-          ],
-          "idShort": "InstallationFile"
-        },
-        {
-          "modelType": "Property",
-          "semanticId": {
-            "keys": [
-              {
-                "type": "GlobalReference",
-                "value": "https://admin-shell.io/idta/SoftwareNameplate/1/0/SoftwareNameplate/SoftwareNameplateType/InstallerType"
-              }
-            ],
-            "type": "ExternalReference"
-          },
-          "value": "1",
-          "valueType": "xs:string",
-          "qualifiers": [
-            {
-              "kind": "ConceptQualifier",
-              "type": "Multiplicity",
-              "value": "ZeroToOne",
-              "valueType": "xs:string"
-            }
-          ],
-          "category": "CONSTANT",
-          "description": [
-            {
-              "language": "en",
-              "text": "Indicates the type of installation package."
-            }
-          ],
-          "idShort": "InstallerType"
-        },
-        {
-          "modelType": "Property",
-          "semanticId": {
-            "keys": [
-              {
-                "type": "GlobalReference",
-                "value": "https://admin-shell.io/idta/SoftwareNameplate/1/0/SoftwareNameplate/SoftwareNameplateType/InstallationChecksum"
-              }
-            ],
-            "type": "ExternalReference"
-          },
-          "value": "0x2783",
-          "valueType": "xs:string",
-          "qualifiers": [
-            {
-              "kind": "ConceptQualifier",
-              "type": "Multiplicity",
-              "value": "ZeroToOne",
-              "valueType": "xs:string"
-            }
-          ],
-          "category": "CONSTANT",
-          "description": [
-            {
-              "language": "en",
-              "text": "provides the checksum for the software available at InstallationURI"
-            },
-            {
-              "language": "de",
-              "text": "beinhaltet die Prüfsumme für die Software, die über InstallationURI angegeben ist"
-            }
-          ],
-          "idShort": "InstallationChecksum"
-        }
-      ]
-    },
-    {
-      "modelType": "SubmodelElementCollection",
       "semanticId": {
         "keys": [
           {
@@ -588,18 +63,19 @@
         ],
         "type": "ExternalReference"
       },
-      "qualifiers": [
-        {
-          "kind": "ConceptQualifier",
-          "type": "Multiplicity",
-          "value": "ZeroToOne",
-          "valueType": "xs:string"
-        }
-      ],
-      "idShort": "SoftwareNameplateInstance",
       "value": [
         {
+          "category": "CONSTANT",
+          "idShort": "SerialNumber",
           "modelType": "Property",
+          "qualifiers": [
+            {
+              "kind": "ConceptQualifier",
+              "type": "Multiplicity",
+              "value": "ZeroToOne",
+              "valueType": "xs:string"
+            }
+          ],
           "semanticId": {
             "keys": [
               {
@@ -610,7 +86,18 @@
             "type": "ExternalReference"
           },
           "value": "123456",
-          "valueType": "xs:string",
+          "valueType": "xs:string"
+        },
+        {
+          "category": "PARAMETER",
+          "description": [
+            {
+              "language": "en",
+              "text": "contains inventory information of the user"
+            }
+          ],
+          "idShort": "InventoryTag",
+          "modelType": "Property",
           "qualifiers": [
             {
               "kind": "ConceptQualifier",
@@ -619,11 +106,6 @@
               "valueType": "xs:string"
             }
           ],
-          "category": "CONSTANT",
-          "idShort": "SerialNumber"
-        },
-        {
-          "modelType": "Property",
           "semanticId": {
             "keys": [
               {
@@ -634,7 +116,18 @@
             "type": "ExternalReference"
           },
           "value": "TU3-88D5",
-          "valueType": "xs:string",
+          "valueType": "xs:string"
+        },
+        {
+          "category": "PARAMETER",
+          "description": [
+            {
+              "language": "de",
+              "text": "Der Name der konkreten Instanz"
+            }
+          ],
+          "idShort": "InstanceName",
+          "modelType": "Property",
           "qualifiers": [
             {
               "kind": "ConceptQualifier",
@@ -643,17 +136,6 @@
               "valueType": "xs:string"
             }
           ],
-          "category": "PARAMETER",
-          "description": [
-            {
-              "language": "en",
-              "text": "contains inventory information of the user"
-            }
-          ],
-          "idShort": "InventoryTag"
-        },
-        {
-          "modelType": "Property",
           "semanticId": {
             "keys": [
               {
@@ -664,7 +146,18 @@
             "type": "ExternalReference"
           },
           "value": "My Software Instance",
-          "valueType": "xs:string",
+          "valueType": "xs:string"
+        },
+        {
+          "category": "PARAMETER",
+          "description": [
+            {
+              "language": "en",
+              "text": "indicates the actual version of the instance"
+            }
+          ],
+          "idShort": "InstalledVersion",
+          "modelType": "Property",
           "qualifiers": [
             {
               "kind": "ConceptQualifier",
@@ -673,17 +166,6 @@
               "valueType": "xs:string"
             }
           ],
-          "category": "PARAMETER",
-          "description": [
-            {
-              "language": "de",
-              "text": "Der Name der konkreten Instanz"
-            }
-          ],
-          "idShort": "InstanceName"
-        },
-        {
-          "modelType": "Property",
           "semanticId": {
             "keys": [
               {
@@ -694,26 +176,26 @@
             "type": "ExternalReference"
           },
           "value": "0.9.1.0",
-          "valueType": "xs:string",
+          "valueType": "xs:string"
+        },
+        {
+          "category": "CONSTANT",
+          "description": [
+            {
+              "language": "en",
+              "text": "containes the time of installation of this instance"
+            }
+          ],
+          "idShort": "InstallationDate",
+          "modelType": "Property",
           "qualifiers": [
             {
               "kind": "ConceptQualifier",
               "type": "Multiplicity",
-              "value": "ZeroToOne",
+              "value": "One",
               "valueType": "xs:string"
             }
           ],
-          "category": "PARAMETER",
-          "description": [
-            {
-              "language": "en",
-              "text": "indicates the actual version of the instance"
-            }
-          ],
-          "idShort": "InstalledVersion"
-        },
-        {
-          "modelType": "Property",
           "semanticId": {
             "keys": [
               {
@@ -724,45 +206,9 @@
             "type": "ExternalReference"
           },
           "value": "2020-11-19",
-          "valueType": "xs:date",
-          "qualifiers": [
-            {
-              "kind": "ConceptQualifier",
-              "type": "Multiplicity",
-              "value": "One",
-              "valueType": "xs:string"
-            }
-          ],
-          "category": "CONSTANT",
-          "description": [
-            {
-              "language": "en",
-              "text": "containes the time of installation of this instance"
-            }
-          ],
-          "idShort": "InstallationDate"
+          "valueType": "xs:date"
         },
         {
-          "modelType": "Property",
-          "semanticId": {
-            "keys": [
-              {
-                "type": "GlobalReference",
-                "value": "https://admin-shell.io/idta/SoftwareNameplate/1/0/SoftwareNameplate/SoftwareNameplateInstance/InstallationPath"
-              }
-            ],
-            "type": "ExternalReference"
-          },
-          "value": "C:\\Windows\\Program Files\\Demo\\Firmware",
-          "valueType": "xs:anyURI",
-          "qualifiers": [
-            {
-              "kind": "ConceptQualifier",
-              "type": "Multiplicity",
-              "value": "ZeroToOne",
-              "valueType": "xs:string"
-            }
-          ],
           "category": "PARAMETER",
           "description": [
             {
@@ -774,10 +220,40 @@
               "text": "gibt den Pfad an, an dem diese Instanz der Software installiert wurde."
             }
           ],
-          "idShort": "InstallationPath"
+          "idShort": "InstallationPath",
+          "modelType": "Property",
+          "qualifiers": [
+            {
+              "kind": "ConceptQualifier",
+              "type": "Multiplicity",
+              "value": "ZeroToOne",
+              "valueType": "xs:string"
+            }
+          ],
+          "semanticId": {
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "https://admin-shell.io/idta/SoftwareNameplate/1/0/SoftwareNameplate/SoftwareNameplateInstance/InstallationPath"
+              }
+            ],
+            "type": "ExternalReference"
+          },
+          "value": "C:\\Windows\\Program Files\\Demo\\Firmware",
+          "valueType": "xs:anyURI"
         },
         {
+          "category": "PARAMETER",
+          "idShort": "InstallationSource",
           "modelType": "Property",
+          "qualifiers": [
+            {
+              "kind": "ConceptQualifier",
+              "type": "Multiplicity",
+              "value": "ZeroToOne",
+              "valueType": "xs:string"
+            }
+          ],
           "semanticId": {
             "keys": [
               {
@@ -788,7 +264,12 @@
             "type": "ExternalReference"
           },
           "value": "https://tud.de/inf/pk/installation/firmware/src",
-          "valueType": "xs:anyURI",
+          "valueType": "xs:anyURI"
+        },
+        {
+          "category": "PARAMETER",
+          "idShort": "InstalledOnArchitecture",
+          "modelType": "Property",
           "qualifiers": [
             {
               "kind": "ConceptQualifier",
@@ -797,11 +278,6 @@
               "valueType": "xs:string"
             }
           ],
-          "category": "PARAMETER",
-          "idShort": "InstallationSource"
-        },
-        {
-          "modelType": "Property",
           "semanticId": {
             "keys": [
               {
@@ -812,7 +288,12 @@
             "type": "ExternalReference"
           },
           "value": "x64",
-          "valueType": "xs:string",
+          "valueType": "xs:string"
+        },
+        {
+          "category": "PARAMETER",
+          "idShort": "InstalledOnOS",
+          "modelType": "Property",
           "qualifiers": [
             {
               "kind": "ConceptQualifier",
@@ -821,11 +302,6 @@
               "valueType": "xs:string"
             }
           ],
-          "category": "PARAMETER",
-          "idShort": "InstalledOnArchitecture"
-        },
-        {
-          "modelType": "Property",
           "semanticId": {
             "keys": [
               {
@@ -836,7 +312,12 @@
             "type": "ExternalReference"
           },
           "value": "Windows 10",
-          "valueType": "xs:string",
+          "valueType": "xs:string"
+        },
+        {
+          "category": "PARAMETER",
+          "idShort": "InstalledOnHost",
+          "modelType": "Property",
           "qualifiers": [
             {
               "kind": "ConceptQualifier",
@@ -845,11 +326,6 @@
               "valueType": "xs:string"
             }
           ],
-          "category": "PARAMETER",
-          "idShort": "InstalledOnOS"
-        },
-        {
-          "modelType": "Property",
           "semanticId": {
             "keys": [
               {
@@ -860,7 +336,11 @@
             "type": "ExternalReference"
           },
           "value": "Feldgerät",
-          "valueType": "xs:string",
+          "valueType": "xs:string"
+        },
+        {
+          "idShort": "InstalledModules",
+          "modelType": "SubmodelElementCollection",
           "qualifiers": [
             {
               "kind": "ConceptQualifier",
@@ -869,11 +349,6 @@
               "valueType": "xs:string"
             }
           ],
-          "category": "PARAMETER",
-          "idShort": "InstalledOnHost"
-        },
-        {
-          "modelType": "SubmodelElementCollection",
           "semanticId": {
             "keys": [
               {
@@ -883,18 +358,19 @@
             ],
             "type": "ExternalReference"
           },
-          "qualifiers": [
-            {
-              "kind": "ConceptQualifier",
-              "type": "Multiplicity",
-              "value": "ZeroToOne",
-              "valueType": "xs:string"
-            }
-          ],
-          "idShort": "InstalledModules",
           "value": [
             {
+              "category": "PARAMETER",
+              "idShort": "InstalledModule",
               "modelType": "Property",
+              "qualifiers": [
+                {
+                  "kind": "ConceptQualifier",
+                  "type": "Multiplicity",
+                  "value": "OneToMany",
+                  "valueType": "xs:string"
+                }
+              ],
               "semanticId": {
                 "keys": [
                   {
@@ -905,22 +381,22 @@
                 "type": "ExternalReference"
               },
               "value": "main",
-              "valueType": "xs:string",
-              "qualifiers": [
-                {
-                  "kind": "ConceptQualifier",
-                  "type": "Multiplicity",
-                  "value": "OneToMany",
-                  "valueType": "xs:string"
-                }
-              ],
-              "category": "PARAMETER",
-              "idShort": "InstalledModule"
+              "valueType": "xs:string"
             }
           ]
         },
         {
+          "category": "PARAMETER",
+          "idShort": "ConfigurationPaths",
           "modelType": "SubmodelElementCollection",
+          "qualifiers": [
+            {
+              "kind": "ConceptQualifier",
+              "type": "Multiplicity",
+              "value": "ZeroToOne",
+              "valueType": "xs:string"
+            }
+          ],
           "semanticId": {
             "keys": [
               {
@@ -930,19 +406,19 @@
             ],
             "type": "ExternalReference"
           },
-          "qualifiers": [
-            {
-              "kind": "ConceptQualifier",
-              "type": "Multiplicity",
-              "value": "ZeroToOne",
-              "valueType": "xs:string"
-            }
-          ],
-          "category": "PARAMETER",
-          "idShort": "ConfigurationPaths",
           "value": [
             {
+              "category": "VARIABLE",
+              "idShort": "ConfigurationPath",
               "modelType": "SubmodelElementCollection",
+              "qualifiers": [
+                {
+                  "kind": "ConceptQualifier",
+                  "type": "Multiplicity",
+                  "value": "OneToMany",
+                  "valueType": "xs:string"
+                }
+              ],
               "semanticId": {
                 "keys": [
                   {
@@ -952,19 +428,19 @@
                 ],
                 "type": "ExternalReference"
               },
-              "qualifiers": [
-                {
-                  "kind": "ConceptQualifier",
-                  "type": "Multiplicity",
-                  "value": "OneToMany",
-                  "valueType": "xs:string"
-                }
-              ],
-              "category": "VARIABLE",
-              "idShort": "ConfigurationPath",
               "value": [
                 {
+                  "category": "VARIABLE",
+                  "idShort": "ConfigurationURI",
                   "modelType": "Property",
+                  "qualifiers": [
+                    {
+                      "kind": "ConceptQualifier",
+                      "type": "Multiplicity",
+                      "value": "One",
+                      "valueType": "xs:string"
+                    }
+                  ],
                   "semanticId": {
                     "keys": [
                       {
@@ -975,20 +451,20 @@
                     "type": "ExternalReference"
                   },
                   "value": "C:\\Users\\mw30\\Documents\\ZVEI\\AKITinAutomation\\20210113",
-                  "valueType": "xs:anyURI",
+                  "valueType": "xs:anyURI"
+                },
+                {
+                  "category": "VARIABLE",
+                  "idShort": "ConfigurationType",
+                  "modelType": "Property",
                   "qualifiers": [
                     {
                       "kind": "ConceptQualifier",
                       "type": "Multiplicity",
-                      "value": "One",
+                      "value": "ZeroToOne",
                       "valueType": "xs:string"
                     }
                   ],
-                  "category": "VARIABLE",
-                  "idShort": "ConfigurationURI"
-                },
-                {
-                  "modelType": "Property",
                   "semanticId": {
                     "keys": [
                       {
@@ -999,24 +475,24 @@
                     "type": "ExternalReference"
                   },
                   "value": "1",
-                  "valueType": "xs:integer",
-                  "qualifiers": [
-                    {
-                      "kind": "ConceptQualifier",
-                      "type": "Multiplicity",
-                      "value": "ZeroToOne",
-                      "valueType": "xs:string"
-                    }
-                  ],
-                  "category": "VARIABLE",
-                  "idShort": "ConfigurationType"
+                  "valueType": "xs:integer"
                 }
               ]
             }
           ]
         },
         {
+          "category": "PARAMETER",
+          "idShort": "SLAInformation",
           "modelType": "Property",
+          "qualifiers": [
+            {
+              "kind": "ConceptQualifier",
+              "type": "Multiplicity",
+              "value": "ZeroToOne",
+              "valueType": "xs:string"
+            }
+          ],
           "semanticId": {
             "keys": [
               {
@@ -1027,20 +503,26 @@
             "type": "ExternalReference"
           },
           "value": "Service level GOLD USER.",
-          "valueType": "xs:string",
+          "valueType": "xs:string"
+        },
+        {
+          "category": "PARAMETER",
+          "description": [
+            {
+              "language": "en",
+              "text": "The SMC “ContactInformation” contains information on how to contact the manufacturer or an authorised service provider, e.g. when a maintenance service is required"
+            }
+          ],
+          "idShort": "Contact",
+          "modelType": "SubmodelElementCollection",
           "qualifiers": [
             {
               "kind": "ConceptQualifier",
               "type": "Multiplicity",
-              "value": "ZeroToOne",
+              "value": "ZeroToMany",
               "valueType": "xs:string"
             }
           ],
-          "category": "PARAMETER",
-          "idShort": "SLAInformation"
-        },
-        {
-          "modelType": "SubmodelElementCollection",
           "semanticId": {
             "keys": [
               {
@@ -1050,25 +532,24 @@
             ],
             "type": "ExternalReference"
           },
-          "qualifiers": [
-            {
-              "kind": "ConceptQualifier",
-              "type": "Multiplicity",
-              "value": "ZeroToMany",
-              "valueType": "xs:string"
-            }
-          ],
-          "category": "PARAMETER",
-          "description": [
-            {
-              "language": "en",
-              "text": "The SMC “ContactInformation” contains information on how to contact the manufacturer or an authorised service provider, e.g. when a maintenance service is required"
-            }
-          ],
-          "idShort": "Contact",
           "value": [
             {
+              "description": [
+                {
+                  "language": "en",
+                  "text": "enumeration: 0173-1#07-AAS927#001 (administrativ contact), 0173-1#07-AAS928#001 (commercial contact), 0173-1#07-AAS929#001 (other contact), 0173-1#07-AAS930#001 (hazardous goods contact), 0173-1#07-AAS931#001 (technical contact). Note: the above mentioned ECLASS enumeration should be declared as “open” for further addition. ECLASS enumeration IRDI is preferable. If no IRDI available, custom input as String may also be accepted."
+                }
+              ],
+              "idShort": "RoleOfContactPerson",
               "modelType": "Property",
+              "qualifiers": [
+                {
+                  "kind": "ConceptQualifier",
+                  "type": "Multiplicity",
+                  "value": "ZeroToOne",
+                  "valueType": "xs:string"
+                }
+              ],
               "semanticId": {
                 "keys": [
                   {
@@ -1079,7 +560,17 @@
                 "type": "ExternalReference"
               },
               "value": "0173-1#07-AAS931#001",
-              "valueType": "xs:string",
+              "valueType": "xs:string"
+            },
+            {
+              "description": [
+                {
+                  "language": "en",
+                  "text": " Note: country codes defined accord. to ISO 3166-1. Recommendation: property declaration as MLP is required by its semantic definition. As the property value is language independent, users are recommended to provide maximal 1 string in any language of the user’s choice."
+                }
+              ],
+              "idShort": "NationalCode",
+              "modelType": "MultiLanguageProperty",
               "qualifiers": [
                 {
                   "kind": "ConceptQualifier",
@@ -1088,16 +579,6 @@
                   "valueType": "xs:string"
                 }
               ],
-              "description": [
-                {
-                  "language": "en",
-                  "text": "enumeration: 0173-1#07-AAS927#001 (administrativ contact), 0173-1#07-AAS928#001 (commercial contact), 0173-1#07-AAS929#001 (other contact), 0173-1#07-AAS930#001 (hazardous goods contact), 0173-1#07-AAS931#001 (technical contact). Note: the above mentioned ECLASS enumeration should be declared as “open” for further addition. ECLASS enumeration IRDI is preferable. If no IRDI available, custom input as String may also be accepted."
-                }
-              ],
-              "idShort": "RoleOfContactPerson"
-            },
-            {
-              "modelType": "MultiLanguageProperty",
               "semanticId": {
                 "keys": [
                   {
@@ -1112,25 +593,25 @@
                   "language": "en",
                   "text": "DE"
                 }
+              ]
+            },
+            {
+              "description": [
+                {
+                  "language": "en",
+                  "text": "Note: language codes defined accord. to ISO 639-1. Note: as per ECLASS definition, Expression and representation of thoughts, information, feelings, ideas through characters."
+                }
               ],
+              "idShort": "Language",
+              "modelType": "Property",
               "qualifiers": [
                 {
                   "kind": "ConceptQualifier",
                   "type": "Multiplicity",
-                  "value": "ZeroToOne",
+                  "value": "ZeroToMany",
                   "valueType": "xs:string"
                 }
               ],
-              "description": [
-                {
-                  "language": "en",
-                  "text": " Note: country codes defined accord. to ISO 3166-1. Recommendation: property declaration as MLP is required by its semantic definition. As the property value is language independent, users are recommended to provide maximal 1 string in any language of the user’s choice."
-                }
-              ],
-              "idShort": "NationalCode"
-            },
-            {
-              "modelType": "Property",
               "semanticId": {
                 "keys": [
                   {
@@ -1141,25 +622,25 @@
                 "type": "ExternalReference"
               },
               "value": "de",
-              "valueType": "xs:string",
+              "valueType": "xs:string"
+            },
+            {
+              "description": [
+                {
+                  "language": "en",
+                  "text": "Note: notation accord. to ISO 8601 Note: for time in UTC the zone designator “Z” is to be used"
+                }
+              ],
+              "idShort": "TimeZone",
+              "modelType": "Property",
               "qualifiers": [
                 {
                   "kind": "ConceptQualifier",
                   "type": "Multiplicity",
-                  "value": "ZeroToMany",
+                  "value": "ZeroToOne",
                   "valueType": "xs:string"
                 }
               ],
-              "description": [
-                {
-                  "language": "en",
-                  "text": "Note: language codes defined accord. to ISO 639-1. Note: as per ECLASS definition, Expression and representation of thoughts, information, feelings, ideas through characters."
-                }
-              ],
-              "idShort": "Language"
-            },
-            {
-              "modelType": "Property",
               "semanticId": {
                 "keys": [
                   {
@@ -1170,7 +651,11 @@
                 "type": "ExternalReference"
               },
               "value": "Z",
-              "valueType": "xs:string",
+              "valueType": "xs:string"
+            },
+            {
+              "idShort": "CityTown",
+              "modelType": "MultiLanguageProperty",
               "qualifiers": [
                 {
                   "kind": "ConceptQualifier",
@@ -1179,16 +664,6 @@
                   "valueType": "xs:string"
                 }
               ],
-              "description": [
-                {
-                  "language": "en",
-                  "text": "Note: notation accord. to ISO 8601 Note: for time in UTC the zone designator “Z” is to be used"
-                }
-              ],
-              "idShort": "TimeZone"
-            },
-            {
-              "modelType": "MultiLanguageProperty",
               "semanticId": {
                 "keys": [
                   {
@@ -1203,7 +678,11 @@
                   "language": "de",
                   "text": "Musterstadt"
                 }
-              ],
+              ]
+            },
+            {
+              "idShort": "Company",
+              "modelType": "MultiLanguageProperty",
               "qualifiers": [
                 {
                   "kind": "ConceptQualifier",
@@ -1212,10 +691,6 @@
                   "valueType": "xs:string"
                 }
               ],
-              "idShort": "CityTown"
-            },
-            {
-              "modelType": "MultiLanguageProperty",
               "semanticId": {
                 "keys": [
                   {
@@ -1230,7 +705,11 @@
                   "language": "en",
                   "text": "ABC Company"
                 }
-              ],
+              ]
+            },
+            {
+              "idShort": "Department",
+              "modelType": "MultiLanguageProperty",
               "qualifiers": [
                 {
                   "kind": "ConceptQualifier",
@@ -1239,10 +718,6 @@
                   "valueType": "xs:string"
                 }
               ],
-              "idShort": "Company"
-            },
-            {
-              "modelType": "MultiLanguageProperty",
               "semanticId": {
                 "keys": [
                   {
@@ -1257,7 +732,11 @@
                   "language": "de",
                   "text": "Vertrieb"
                 }
-              ],
+              ]
+            },
+            {
+              "idShort": "Phone",
+              "modelType": "SubmodelElementCollection",
               "qualifiers": [
                 {
                   "kind": "ConceptQualifier",
@@ -1266,10 +745,6 @@
                   "valueType": "xs:string"
                 }
               ],
-              "idShort": "Department"
-            },
-            {
-              "modelType": "SubmodelElementCollection",
               "semanticId": {
                 "keys": [
                   {
@@ -1279,18 +754,24 @@
                 ],
                 "type": "ExternalReference"
               },
-              "qualifiers": [
-                {
-                  "kind": "ConceptQualifier",
-                  "type": "Multiplicity",
-                  "value": "ZeroToOne",
-                  "valueType": "xs:string"
-                }
-              ],
-              "idShort": "Phone",
               "value": [
                 {
+                  "description": [
+                    {
+                      "language": "en",
+                      "text": "Recommendation: property declaration as MLP is required by its semantic definition. As the property value is language independent, users are recommended to provide maximal 1 string in any language of the user’s choice."
+                    }
+                  ],
+                  "idShort": "TelephoneNumber",
                   "modelType": "MultiLanguageProperty",
+                  "qualifiers": [
+                    {
+                      "kind": "ConceptQualifier",
+                      "type": "Multiplicity",
+                      "value": "One",
+                      "valueType": "xs:string"
+                    }
+                  ],
                   "semanticId": {
                     "keys": [
                       {
@@ -1305,25 +786,25 @@
                       "language": "en",
                       "text": "+491234567890"
                     }
+                  ]
+                },
+                {
+                  "description": [
+                    {
+                      "language": "en",
+                      "text": " enumeration: 0173-1#07-AAS754#001 (office), 0173-1#07-AAS755#001 (office mobile), 0173-1#07-AAS756#001 (secretary), 0173-1#07-AAS757#001 (substitute), 0173-1#07-AAS758#001 (home), 0173-1#07-AAS759#001 (private mobile)"
+                    }
                   ],
+                  "idShort": "TypeOfTelephone",
+                  "modelType": "Property",
                   "qualifiers": [
                     {
                       "kind": "ConceptQualifier",
                       "type": "Multiplicity",
-                      "value": "One",
+                      "value": "ZeroToOne",
                       "valueType": "xs:string"
                     }
                   ],
-                  "description": [
-                    {
-                      "language": "en",
-                      "text": "Recommendation: property declaration as MLP is required by its semantic definition. As the property value is language independent, users are recommended to provide maximal 1 string in any language of the user’s choice."
-                    }
-                  ],
-                  "idShort": "TelephoneNumber"
-                },
-                {
-                  "modelType": "Property",
                   "semanticId": {
                     "keys": [
                       {
@@ -1334,7 +815,11 @@
                     "type": "ExternalReference"
                   },
                   "value": "0173-1#07-AAS754#001",
-                  "valueType": "xs:string",
+                  "valueType": "xs:string"
+                },
+                {
+                  "idShort": "AvailableTime",
+                  "modelType": "MultiLanguageProperty",
                   "qualifiers": [
                     {
                       "kind": "ConceptQualifier",
@@ -1343,16 +828,6 @@
                       "valueType": "xs:string"
                     }
                   ],
-                  "description": [
-                    {
-                      "language": "en",
-                      "text": " enumeration: 0173-1#07-AAS754#001 (office), 0173-1#07-AAS755#001 (office mobile), 0173-1#07-AAS756#001 (secretary), 0173-1#07-AAS757#001 (substitute), 0173-1#07-AAS758#001 (home), 0173-1#07-AAS759#001 (private mobile)"
-                    }
-                  ],
-                  "idShort": "TypeOfTelephone"
-                },
-                {
-                  "modelType": "MultiLanguageProperty",
                   "semanticId": {
                     "keys": [
                       {
@@ -1367,21 +842,21 @@
                       "language": "de",
                       "text": "Montag – Freitag 08:00 bis 16:00"
                     }
-                  ],
-                  "qualifiers": [
-                    {
-                      "kind": "ConceptQualifier",
-                      "type": "Multiplicity",
-                      "value": "ZeroToOne",
-                      "valueType": "xs:string"
-                    }
-                  ],
-                  "idShort": "AvailableTime"
+                  ]
                 }
               ]
             },
             {
+              "idShort": "Fax",
               "modelType": "SubmodelElementCollection",
+              "qualifiers": [
+                {
+                  "kind": "ConceptQualifier",
+                  "type": "Multiplicity",
+                  "value": "ZeroToOne",
+                  "valueType": "xs:string"
+                }
+              ],
               "semanticId": {
                 "keys": [
                   {
@@ -1391,18 +866,24 @@
                 ],
                 "type": "ExternalReference"
               },
-              "qualifiers": [
-                {
-                  "kind": "ConceptQualifier",
-                  "type": "Multiplicity",
-                  "value": "ZeroToOne",
-                  "valueType": "xs:string"
-                }
-              ],
-              "idShort": "Fax",
               "value": [
                 {
+                  "description": [
+                    {
+                      "language": "en",
+                      "text": "Recommendation: property declaration as MLP is required by its semantic definition. As the property value is language independent, users are recommended to provide maximal 1 string in any language of the user’s choice."
+                    }
+                  ],
+                  "idShort": "FaxNumber",
                   "modelType": "MultiLanguageProperty",
+                  "qualifiers": [
+                    {
+                      "kind": "ConceptQualifier",
+                      "type": "Multiplicity",
+                      "value": "One",
+                      "valueType": "xs:string"
+                    }
+                  ],
                   "semanticId": {
                     "keys": [
                       {
@@ -1417,25 +898,25 @@
                       "language": "en",
                       "text": "+491234567890"
                     }
+                  ]
+                },
+                {
+                  "description": [
+                    {
+                      "language": "en",
+                      "text": "enumeration: 0173-1#07-AAS754#001 (office), 0173-1#07-AAS756#001 (secretary), 0173-1#07-AAS758#001 (home)"
+                    }
                   ],
+                  "idShort": "TypeOfFaxNumber",
+                  "modelType": "Property",
                   "qualifiers": [
                     {
                       "kind": "ConceptQualifier",
                       "type": "Multiplicity",
-                      "value": "One",
+                      "value": "ZeroToOne",
                       "valueType": "xs:string"
                     }
                   ],
-                  "description": [
-                    {
-                      "language": "en",
-                      "text": "Recommendation: property declaration as MLP is required by its semantic definition. As the property value is language independent, users are recommended to provide maximal 1 string in any language of the user’s choice."
-                    }
-                  ],
-                  "idShort": "FaxNumber"
-                },
-                {
-                  "modelType": "Property",
                   "semanticId": {
                     "keys": [
                       {
@@ -1446,27 +927,21 @@
                     "type": "ExternalReference"
                   },
                   "value": " 0173-1#07-AAS754#001",
-                  "valueType": "xs:string",
-                  "qualifiers": [
-                    {
-                      "kind": "ConceptQualifier",
-                      "type": "Multiplicity",
-                      "value": "ZeroToOne",
-                      "valueType": "xs:string"
-                    }
-                  ],
-                  "description": [
-                    {
-                      "language": "en",
-                      "text": "enumeration: 0173-1#07-AAS754#001 (office), 0173-1#07-AAS756#001 (secretary), 0173-1#07-AAS758#001 (home)"
-                    }
-                  ],
-                  "idShort": "TypeOfFaxNumber"
+                  "valueType": "xs:string"
                 }
               ]
             },
             {
+              "idShort": "Email",
               "modelType": "SubmodelElementCollection",
+              "qualifiers": [
+                {
+                  "kind": "ConceptQualifier",
+                  "type": "Multiplicity",
+                  "value": "ZeroToOne",
+                  "valueType": "xs:string"
+                }
+              ],
               "semanticId": {
                 "keys": [
                   {
@@ -1476,18 +951,18 @@
                 ],
                 "type": "ExternalReference"
               },
-              "qualifiers": [
-                {
-                  "kind": "ConceptQualifier",
-                  "type": "Multiplicity",
-                  "value": "ZeroToOne",
-                  "valueType": "xs:string"
-                }
-              ],
-              "idShort": "Email",
               "value": [
                 {
+                  "idShort": "EmailAddress",
                   "modelType": "Property",
+                  "qualifiers": [
+                    {
+                      "kind": "ConceptQualifier",
+                      "type": "Multiplicity",
+                      "value": "One",
+                      "valueType": "xs:string"
+                    }
+                  ],
                   "semanticId": {
                     "keys": [
                       {
@@ -1498,28 +973,17 @@
                     "type": "ExternalReference"
                   },
                   "value": "email@muster-ag.de",
-                  "valueType": "xs:string",
-                  "qualifiers": [
-                    {
-                      "kind": "ConceptQualifier",
-                      "type": "Multiplicity",
-                      "value": "One",
-                      "valueType": "xs:string"
-                    }
-                  ],
-                  "idShort": "EmailAddress"
+                  "valueType": "xs:string"
                 },
                 {
+                  "description": [
+                    {
+                      "language": "en",
+                      "text": "Recommendation: property declaration as MLP is required by its semantic definition. As the property value is language independent, users are recommended to provide maximal 1 string in any language of the user’s choice."
+                    }
+                  ],
+                  "idShort": "PublicKey",
                   "modelType": "MultiLanguageProperty",
-                  "semanticId": {
-                    "keys": [
-                      {
-                        "type": "GlobalReference",
-                        "value": "0173-1#02-AAO200#002"
-                      }
-                    ],
-                    "type": "ExternalReference"
-                  },
                   "qualifiers": [
                     {
                       "kind": "ConceptQualifier",
@@ -1528,16 +992,33 @@
                       "valueType": "xs:string"
                     }
                   ],
+                  "semanticId": {
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "0173-1#02-AAO200#002"
+                      }
+                    ],
+                    "type": "ExternalReference"
+                  }
+                },
+                {
                   "description": [
                     {
                       "language": "en",
-                      "text": "Recommendation: property declaration as MLP is required by its semantic definition. As the property value is language independent, users are recommended to provide maximal 1 string in any language of the user’s choice."
+                      "text": "enumeration: 0173-1#07-AAS754#001 (office), 0173-1#07-AAS756#001 (secretary), 0173-1#07-AAS757#001 (substitute), 0173-1#07-AAS758#001 (home)"
                     }
                   ],
-                  "idShort": "PublicKey"
-                },
-                {
+                  "idShort": "TypeOfEmailAddress",
                   "modelType": "Property",
+                  "qualifiers": [
+                    {
+                      "kind": "ConceptQualifier",
+                      "type": "Multiplicity",
+                      "value": "ZeroToOne",
+                      "valueType": "xs:string"
+                    }
+                  ],
                   "semanticId": {
                     "keys": [
                       {
@@ -1548,7 +1029,11 @@
                     "type": "ExternalReference"
                   },
                   "value": "0173-1#07-AAS754#001",
-                  "valueType": "xs:string",
+                  "valueType": "xs:string"
+                },
+                {
+                  "idShort": "TypeOfPublicKey",
+                  "modelType": "MultiLanguageProperty",
                   "qualifiers": [
                     {
                       "kind": "ConceptQualifier",
@@ -1557,16 +1042,6 @@
                       "valueType": "xs:string"
                     }
                   ],
-                  "description": [
-                    {
-                      "language": "en",
-                      "text": "enumeration: 0173-1#07-AAS754#001 (office), 0173-1#07-AAS756#001 (secretary), 0173-1#07-AAS757#001 (substitute), 0173-1#07-AAS758#001 (home)"
-                    }
-                  ],
-                  "idShort": "TypeOfEmailAddress"
-                },
-                {
-                  "modelType": "MultiLanguageProperty",
                   "semanticId": {
                     "keys": [
                       {
@@ -1575,21 +1050,21 @@
                       }
                     ],
                     "type": "ExternalReference"
-                  },
-                  "qualifiers": [
-                    {
-                      "kind": "ConceptQualifier",
-                      "type": "Multiplicity",
-                      "value": "ZeroToOne",
-                      "valueType": "xs:string"
-                    }
-                  ],
-                  "idShort": "TypeOfPublicKey"
+                  }
                 }
               ]
             },
             {
+              "idShort": "IPCommunication__00__",
               "modelType": "SubmodelElementCollection",
+              "qualifiers": [
+                {
+                  "kind": "ConceptQualifier",
+                  "type": "Multiplicity",
+                  "value": "ZeroToMany",
+                  "valueType": "xs:string"
+                }
+              ],
               "semanticId": {
                 "keys": [
                   {
@@ -1599,18 +1074,18 @@
                 ],
                 "type": "ExternalReference"
               },
-              "qualifiers": [
-                {
-                  "kind": "ConceptQualifier",
-                  "type": "Multiplicity",
-                  "value": "ZeroToMany",
-                  "valueType": "xs:string"
-                }
-              ],
-              "idShort": "IPCommunication__00__",
               "value": [
                 {
+                  "idShort": "AddressOfAdditionalLink",
                   "modelType": "Property",
+                  "qualifiers": [
+                    {
+                      "kind": "ConceptQualifier",
+                      "type": "Multiplicity",
+                      "value": "One",
+                      "valueType": "xs:string"
+                    }
+                  ],
                   "semanticId": {
                     "keys": [
                       {
@@ -1620,19 +1095,19 @@
                     ],
                     "type": "ExternalReference"
                   },
-                  "valueType": "xs:string",
+                  "valueType": "xs:string"
+                },
+                {
+                  "idShort": "TypeOfCommunication",
+                  "modelType": "Property",
                   "qualifiers": [
                     {
                       "kind": "ConceptQualifier",
                       "type": "Multiplicity",
-                      "value": "One",
+                      "value": "ZeroToOne",
                       "valueType": "xs:string"
                     }
                   ],
-                  "idShort": "AddressOfAdditionalLink"
-                },
-                {
-                  "modelType": "Property",
                   "semanticId": {
                     "keys": [
                       {
@@ -1643,7 +1118,11 @@
                     "type": "ExternalReference"
                   },
                   "value": "Chat",
-                  "valueType": "xs:string",
+                  "valueType": "xs:string"
+                },
+                {
+                  "idShort": "AvailableTime",
+                  "modelType": "MultiLanguageProperty",
                   "qualifiers": [
                     {
                       "kind": "ConceptQualifier",
@@ -1652,10 +1131,6 @@
                       "valueType": "xs:string"
                     }
                   ],
-                  "idShort": "TypeOfCommunication"
-                },
-                {
-                  "modelType": "MultiLanguageProperty",
                   "semanticId": {
                     "keys": [
                       {
@@ -1670,21 +1145,21 @@
                       "language": "de",
                       "text": "Montag – Freitag 08:00 bis 16:00"
                     }
-                  ],
-                  "qualifiers": [
-                    {
-                      "kind": "ConceptQualifier",
-                      "type": "Multiplicity",
-                      "value": "ZeroToOne",
-                      "valueType": "xs:string"
-                    }
-                  ],
-                  "idShort": "AvailableTime"
+                  ]
                 }
               ]
             },
             {
+              "idShort": "Street",
               "modelType": "MultiLanguageProperty",
+              "qualifiers": [
+                {
+                  "kind": "ConceptQualifier",
+                  "type": "Multiplicity",
+                  "value": "ZeroToOne",
+                  "valueType": "xs:string"
+                }
+              ],
               "semanticId": {
                 "keys": [
                   {
@@ -1699,7 +1174,17 @@
                   "language": "de",
                   "text": "Musterstraße 1"
                 }
+              ]
+            },
+            {
+              "description": [
+                {
+                  "language": "en",
+                  "text": "Recommendation: property declaration as MLP is required by its semantic definition. As the property value is language independent, users are recommended to provide maximal 1 string in any language of the user’s choice."
+                }
               ],
+              "idShort": "Zipcode",
+              "modelType": "MultiLanguageProperty",
               "qualifiers": [
                 {
                   "kind": "ConceptQualifier",
@@ -1708,10 +1193,6 @@
                   "valueType": "xs:string"
                 }
               ],
-              "idShort": "Street"
-            },
-            {
-              "modelType": "MultiLanguageProperty",
               "semanticId": {
                 "keys": [
                   {
@@ -1726,7 +1207,11 @@
                   "language": "de",
                   "text": "12345"
                 }
-              ],
+              ]
+            },
+            {
+              "idShort": "POBox",
+              "modelType": "MultiLanguageProperty",
               "qualifiers": [
                 {
                   "kind": "ConceptQualifier",
@@ -1735,16 +1220,6 @@
                   "valueType": "xs:string"
                 }
               ],
-              "description": [
-                {
-                  "language": "en",
-                  "text": "Recommendation: property declaration as MLP is required by its semantic definition. As the property value is language independent, users are recommended to provide maximal 1 string in any language of the user’s choice."
-                }
-              ],
-              "idShort": "Zipcode"
-            },
-            {
-              "modelType": "MultiLanguageProperty",
               "semanticId": {
                 "keys": [
                   {
@@ -1759,7 +1234,17 @@
                   "language": "en",
                   "text": "PF 1234"
                 }
+              ]
+            },
+            {
+              "description": [
+                {
+                  "language": "en",
+                  "text": "Recommendation: property declaration as MLP is required by its semantic definition. As the property value is language independent, users are recommended to provide maximal 1 string in any language of the user’s choice."
+                }
               ],
+              "idShort": "ZipCodeOfPOBox",
+              "modelType": "MultiLanguageProperty",
               "qualifiers": [
                 {
                   "kind": "ConceptQualifier",
@@ -1768,10 +1253,6 @@
                   "valueType": "xs:string"
                 }
               ],
-              "idShort": "POBox"
-            },
-            {
-              "modelType": "MultiLanguageProperty",
               "semanticId": {
                 "keys": [
                   {
@@ -1786,7 +1267,11 @@
                   "language": "en",
                   "text": "12345"
                 }
-              ],
+              ]
+            },
+            {
+              "idShort": "StateCounty",
+              "modelType": "MultiLanguageProperty",
               "qualifiers": [
                 {
                   "kind": "ConceptQualifier",
@@ -1795,16 +1280,6 @@
                   "valueType": "xs:string"
                 }
               ],
-              "description": [
-                {
-                  "language": "en",
-                  "text": "Recommendation: property declaration as MLP is required by its semantic definition. As the property value is language independent, users are recommended to provide maximal 1 string in any language of the user’s choice."
-                }
-              ],
-              "idShort": "ZipCodeOfPOBox"
-            },
-            {
-              "modelType": "MultiLanguageProperty",
               "semanticId": {
                 "keys": [
                   {
@@ -1819,7 +1294,11 @@
                   "language": "de",
                   "text": "Muster-Bundesland"
                 }
-              ],
+              ]
+            },
+            {
+              "idShort": "NameOfContact",
+              "modelType": "MultiLanguageProperty",
               "qualifiers": [
                 {
                   "kind": "ConceptQualifier",
@@ -1828,10 +1307,6 @@
                   "valueType": "xs:string"
                 }
               ],
-              "idShort": "StateCounty"
-            },
-            {
-              "modelType": "MultiLanguageProperty",
               "semanticId": {
                 "keys": [
                   {
@@ -1840,7 +1315,11 @@
                   }
                 ],
                 "type": "ExternalReference"
-              },
+              }
+            },
+            {
+              "idShort": "FirstName",
+              "modelType": "MultiLanguageProperty",
               "qualifiers": [
                 {
                   "kind": "ConceptQualifier",
@@ -1849,10 +1328,6 @@
                   "valueType": "xs:string"
                 }
               ],
-              "idShort": "NameOfContact"
-            },
-            {
-              "modelType": "MultiLanguageProperty",
               "semanticId": {
                 "keys": [
                   {
@@ -1861,7 +1336,11 @@
                   }
                 ],
                 "type": "ExternalReference"
-              },
+              }
+            },
+            {
+              "idShort": "MiddleNames",
+              "modelType": "MultiLanguageProperty",
               "qualifiers": [
                 {
                   "kind": "ConceptQualifier",
@@ -1870,10 +1349,6 @@
                   "valueType": "xs:string"
                 }
               ],
-              "idShort": "FirstName"
-            },
-            {
-              "modelType": "MultiLanguageProperty",
               "semanticId": {
                 "keys": [
                   {
@@ -1882,7 +1357,11 @@
                   }
                 ],
                 "type": "ExternalReference"
-              },
+              }
+            },
+            {
+              "idShort": "Title",
+              "modelType": "MultiLanguageProperty",
               "qualifiers": [
                 {
                   "kind": "ConceptQualifier",
@@ -1891,10 +1370,6 @@
                   "valueType": "xs:string"
                 }
               ],
-              "idShort": "MiddleNames"
-            },
-            {
-              "modelType": "MultiLanguageProperty",
               "semanticId": {
                 "keys": [
                   {
@@ -1903,7 +1378,11 @@
                   }
                 ],
                 "type": "ExternalReference"
-              },
+              }
+            },
+            {
+              "idShort": "AcademicTitle",
+              "modelType": "MultiLanguageProperty",
               "qualifiers": [
                 {
                   "kind": "ConceptQualifier",
@@ -1912,10 +1391,6 @@
                   "valueType": "xs:string"
                 }
               ],
-              "idShort": "Title"
-            },
-            {
-              "modelType": "MultiLanguageProperty",
               "semanticId": {
                 "keys": [
                   {
@@ -1924,7 +1399,11 @@
                   }
                 ],
                 "type": "ExternalReference"
-              },
+              }
+            },
+            {
+              "idShort": "FurtherDetailsOfContact",
+              "modelType": "MultiLanguageProperty",
               "qualifiers": [
                 {
                   "kind": "ConceptQualifier",
@@ -1933,10 +1412,6 @@
                   "valueType": "xs:string"
                 }
               ],
-              "idShort": "AcademicTitle"
-            },
-            {
-              "modelType": "MultiLanguageProperty",
               "semanticId": {
                 "keys": [
                   {
@@ -1945,7 +1420,11 @@
                   }
                 ],
                 "type": "ExternalReference"
-              },
+              }
+            },
+            {
+              "idShort": "AddressOfAdditionalLink",
+              "modelType": "Property",
               "qualifiers": [
                 {
                   "kind": "ConceptQualifier",
@@ -1954,10 +1433,6 @@
                   "valueType": "xs:string"
                 }
               ],
-              "idShort": "FurtherDetailsOfContact"
-            },
-            {
-              "modelType": "Property",
               "semanticId": {
                 "keys": [
                   {
@@ -1967,18 +1442,543 @@
                 ],
                 "type": "ExternalReference"
               },
-              "valueType": "xs:string",
-              "qualifiers": [
-                {
-                  "kind": "ConceptQualifier",
-                  "type": "Multiplicity",
-                  "value": "ZeroToOne",
-                  "valueType": "xs:string"
-                }
-              ],
-              "idShort": "AddressOfAdditionalLink"
+              "valueType": "xs:string"
             }
           ]
+        }
+      ]
+    },
+    {
+      "idShort": "SoftwareNameplateType",
+      "modelType": "SubmodelElementCollection",
+      "qualifiers": [
+        {
+          "kind": "ConceptQualifier",
+          "type": "Multiplicity",
+          "value": "ZeroToOne",
+          "valueType": "xs:string"
+        }
+      ],
+      "semanticId": {
+        "keys": [
+          {
+            "type": "GlobalReference",
+            "value": "https://admin-shell.io/idta/SoftwareNameplate/1/0/SoftwareNameplate/SoftwareNameplateType"
+          }
+        ],
+        "type": "ExternalReference"
+      },
+      "value": [
+        {
+          "category": "CONSTANT",
+          "idShort": "URIOfTheProduct",
+          "modelType": "Property",
+          "qualifiers": [
+            {
+              "kind": "ConceptQualifier",
+              "type": "Multiplicity",
+              "value": "One",
+              "valueType": "xs:string"
+            }
+          ],
+          "semanticId": {
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "0173-1#02-AAY811#001"
+              }
+            ],
+            "type": "ExternalReference"
+          },
+          "valueType": "xs:string"
+        },
+        {
+          "category": "PARAMETER",
+          "idShort": "ManufacturerName",
+          "modelType": "MultiLanguageProperty",
+          "qualifiers": [
+            {
+              "kind": "ConceptQualifier",
+              "type": "Multiplicity",
+              "value": "One",
+              "valueType": "xs:string"
+            }
+          ],
+          "semanticId": {
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "0173-1#02-AAO677#002"
+              }
+            ],
+            "type": "ExternalReference"
+          }
+        },
+        {
+          "category": "PARAMETER",
+          "idShort": "ManufacturerProductDesignation",
+          "modelType": "MultiLanguageProperty",
+          "qualifiers": [
+            {
+              "kind": "ConceptQualifier",
+              "type": "Multiplicity",
+              "value": "One",
+              "valueType": "xs:string"
+            }
+          ],
+          "semanticId": {
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "0173-1#02-AAW338#001"
+              }
+            ],
+            "type": "ExternalReference"
+          }
+        },
+        {
+          "category": "CONSTANT",
+          "idShort": "ManufacturerProductDescription",
+          "modelType": "MultiLanguageProperty",
+          "qualifiers": [
+            {
+              "kind": "ConceptQualifier",
+              "type": "Multiplicity",
+              "value": "ZeroToOne",
+              "valueType": "xs:string"
+            }
+          ],
+          "semanticId": {
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "https://admin-shell.io/idta/SoftwareNameplate/1/0/SoftwareNameplate/SoftwareNameplateType/ManufacturerProductDescription"
+              }
+            ],
+            "type": "ExternalReference"
+          }
+        },
+        {
+          "category": "PARAMETER",
+          "idShort": "ManufacturerProductFamily",
+          "modelType": "MultiLanguageProperty",
+          "qualifiers": [
+            {
+              "kind": "ConceptQualifier",
+              "type": "Multiplicity",
+              "value": "ZeroToOne",
+              "valueType": "xs:string"
+            }
+          ],
+          "semanticId": {
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "0173-1#02-AAU731#001"
+              }
+            ],
+            "type": "ExternalReference"
+          }
+        },
+        {
+          "idShort": "ManufacturerProductType",
+          "modelType": "MultiLanguageProperty",
+          "qualifiers": [
+            {
+              "kind": "ConceptQualifier",
+              "type": "Multiplicity",
+              "value": "ZeroToOne",
+              "valueType": "xs:string"
+            }
+          ],
+          "semanticId": {
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "0173-1#02-AAO057#002"
+              }
+            ],
+            "type": "ExternalReference"
+          }
+        },
+        {
+          "category": "CONSTANT",
+          "idShort": "SoftwareType",
+          "modelType": "Property",
+          "qualifiers": [
+            {
+              "kind": "ConceptQualifier",
+              "type": "Multiplicity",
+              "value": "ZeroToOne",
+              "valueType": "xs:string"
+            }
+          ],
+          "semanticId": {
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "https://admin-shell.io/idta/SoftwareNameplate/1/0/SoftwareNameplate/SoftwareNameplateType/SoftwareType"
+              }
+            ],
+            "type": "ExternalReference"
+          },
+          "value": "PLC Runtime",
+          "valueType": "xs:string"
+        },
+        {
+          "category": "PARAMETER",
+          "idShort": "Version",
+          "modelType": "Property",
+          "qualifiers": [
+            {
+              "kind": "ConceptQualifier",
+              "type": "Multiplicity",
+              "value": "One",
+              "valueType": "xs:string"
+            }
+          ],
+          "semanticId": {
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "https://admin-shell.io/idta/SoftwareNameplate/1/0/SoftwareNameplate/SoftwareNameplateType/Version"
+              }
+            ],
+            "type": "ExternalReference"
+          },
+          "value": "0.9.1.0",
+          "valueType": "xs:string"
+        },
+        {
+          "category": "CONSTANT",
+          "description": [
+            {
+              "language": "de",
+              "text": "Name der Version"
+            },
+            {
+              "language": "en",
+              "text": "the name this particular version is given"
+            }
+          ],
+          "idShort": "VersionName",
+          "modelType": "MultiLanguageProperty",
+          "qualifiers": [
+            {
+              "kind": "ConceptQualifier",
+              "type": "Multiplicity",
+              "value": "ZeroToOne",
+              "valueType": "xs:string"
+            }
+          ],
+          "semanticId": {
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "https://admin-shell.io/idta/SoftwareNameplate/1/0/SoftwareNameplate/SoftwareNameplateType/VersionName"
+              }
+            ],
+            "type": "ExternalReference"
+          },
+          "value": [
+            {
+              "language": "de",
+              "text": "Stand 2021 beta"
+            },
+            {
+              "language": "en",
+              "text": "R2021 beta"
+            }
+          ]
+        },
+        {
+          "category": "CONSTANT",
+          "description": [
+            {
+              "language": "en",
+              "text": "Provides a textual description of most relevant characteristics of the version of the software"
+            }
+          ],
+          "idShort": "VersionInfo",
+          "modelType": "MultiLanguageProperty",
+          "qualifiers": [
+            {
+              "kind": "ConceptQualifier",
+              "type": "Multiplicity",
+              "value": "ZeroToOne",
+              "valueType": "xs:string"
+            }
+          ],
+          "semanticId": {
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "https://admin-shell.io/idta/SoftwareNameplate/1/0/SoftwareNameplate/SoftwareNameplateType/VersionInfo"
+              }
+            ],
+            "type": "ExternalReference"
+          },
+          "value": [
+            {
+              "language": "de",
+              "text": "Bitte nicht im Produktivsystem installieren!"
+            },
+            {
+              "language": "en",
+              "text": "Please do not install in productive environments!"
+            }
+          ],
+          "valueId": {
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "https://admin-shell.io/ZVEI/AkItInAutomation/NameplateSoftware/ReleaseNotes/1/0//example.com/ids/cd/8500_7052_2012_2916"
+              }
+            ],
+            "type": "ExternalReference"
+          }
+        },
+        {
+          "category": "CONSTANT",
+          "idShort": "ReleaseDate",
+          "modelType": "Property",
+          "qualifiers": [
+            {
+              "kind": "ConceptQualifier",
+              "type": "Multiplicity",
+              "value": "One",
+              "valueType": "xs:string"
+            }
+          ],
+          "semanticId": {
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "https://admin-shell.io/idta/SoftwareNameplate/1/0/SoftwareNameplate/SoftwareNameplateType/ReleaseDate"
+              }
+            ],
+            "type": "ExternalReference"
+          },
+          "value": "2022-02-07",
+          "valueType": "xs:date"
+        },
+        {
+          "category": "CONSTANT",
+          "description": [
+            {
+              "language": "en",
+              "text": "Provides a textual description of most relevant characteristics of the version of the software"
+            }
+          ],
+          "idShort": "ReleaseNotes",
+          "modelType": "MultiLanguageProperty",
+          "qualifiers": [
+            {
+              "kind": "ConceptQualifier",
+              "type": "Multiplicity",
+              "value": "ZeroToOne",
+              "valueType": "xs:string"
+            }
+          ],
+          "semanticId": {
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "https://admin-shell.io/idta/SoftwareNameplate/1/0/SoftwareNameplate/SoftwareNameplateType/ReleaseNotes"
+              }
+            ],
+            "type": "ExternalReference"
+          },
+          "value": [
+            {
+              "language": "en",
+              "text": "This release requires special configuration."
+            }
+          ]
+        },
+        {
+          "category": "CONSTANT",
+          "description": [
+            {
+              "language": "en",
+              "text": "EMPTY"
+            },
+            {
+              "language": "de",
+              "text": "EMPTY"
+            }
+          ],
+          "idShort": "ReleaseInformation",
+          "modelType": "Property",
+          "qualifiers": [
+            {
+              "kind": "ConceptQualifier",
+              "type": "Multiplicity",
+              "value": "ZeroToOne",
+              "valueType": "xs:string"
+            }
+          ],
+          "semanticId": {
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "https://admin-shell.io/idta/SoftwareNameplate/1/0/SoftwareNameplate/SoftwareNameplateType/ReleaseInformation"
+              }
+            ],
+            "type": "ExternalReference"
+          },
+          "valueType": "xs:string"
+        },
+        {
+          "category": "CONSTANT",
+          "idShort": "BuildDate",
+          "modelType": "Property",
+          "qualifiers": [
+            {
+              "kind": "ConceptQualifier",
+              "type": "Multiplicity",
+              "value": "One",
+              "valueType": "xs:string"
+            }
+          ],
+          "semanticId": {
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "https://admin-shell.io/idta/SoftwareNameplate/1/0/SoftwareNameplate/SoftwareNameplateType/BuildDate"
+              }
+            ],
+            "type": "ExternalReference"
+          },
+          "value": "2020-11-19",
+          "valueType": "xs:date"
+        },
+        {
+          "category": "PARAMETER",
+          "description": [
+            {
+              "language": "en",
+              "text": "Indicates the resource, where the software is being provided by the manufacturer."
+            }
+          ],
+          "idShort": "InstallationURI",
+          "modelType": "Property",
+          "qualifiers": [
+            {
+              "kind": "ConceptQualifier",
+              "type": "Multiplicity",
+              "value": "ZeroToOne",
+              "valueType": "xs:string"
+            }
+          ],
+          "semanticId": {
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "https://admin-shell.io/idta/SoftwareNameplate/1/0/SoftwareNameplate/SoftwareNameplateType/InstallationURI"
+              }
+            ],
+            "type": "ExternalReference"
+          },
+          "value": "https://tud.de/inf/pk/demo-sw/download/DemoFirmware_09.zip",
+          "valueType": "xs:anyURI"
+        },
+        {
+          "category": "CONSTANT",
+          "description": [
+            {
+              "language": "en",
+              "text": "EMPTY"
+            },
+            {
+              "language": "de",
+              "text": "EMPTY"
+            }
+          ],
+          "idShort": "InstallationFile",
+          "modelType": "Property",
+          "qualifiers": [
+            {
+              "kind": "ConceptQualifier",
+              "type": "Multiplicity",
+              "value": "ZeroToOne",
+              "valueType": "xs:string"
+            }
+          ],
+          "semanticId": {
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "https://admin-shell.io/idta/SoftwareNameplate/1/0/SoftwareNameplate/SoftwareNameplateType/InstallationFile"
+              }
+            ],
+            "type": "ExternalReference"
+          },
+          "valueType": "xs:string"
+        },
+        {
+          "category": "CONSTANT",
+          "description": [
+            {
+              "language": "en",
+              "text": "Indicates the type of installation package."
+            }
+          ],
+          "idShort": "InstallerType",
+          "modelType": "Property",
+          "qualifiers": [
+            {
+              "kind": "ConceptQualifier",
+              "type": "Multiplicity",
+              "value": "ZeroToOne",
+              "valueType": "xs:string"
+            }
+          ],
+          "semanticId": {
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "https://admin-shell.io/idta/SoftwareNameplate/1/0/SoftwareNameplate/SoftwareNameplateType/InstallerType"
+              }
+            ],
+            "type": "ExternalReference"
+          },
+          "value": "1",
+          "valueType": "xs:string"
+        },
+        {
+          "category": "CONSTANT",
+          "description": [
+            {
+              "language": "en",
+              "text": "provides the checksum for the software available at InstallationURI"
+            },
+            {
+              "language": "de",
+              "text": "beinhaltet die Prüfsumme für die Software, die über InstallationURI angegeben ist"
+            }
+          ],
+          "idShort": "InstallationChecksum",
+          "modelType": "Property",
+          "qualifiers": [
+            {
+              "kind": "ConceptQualifier",
+              "type": "Multiplicity",
+              "value": "ZeroToOne",
+              "valueType": "xs:string"
+            }
+          ],
+          "semanticId": {
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "https://admin-shell.io/idta/SoftwareNameplate/1/0/SoftwareNameplate/SoftwareNameplateType/InstallationChecksum"
+              }
+            ],
+            "type": "ExternalReference"
+          },
+          "value": "0x2783",
+          "valueType": "xs:string"
         }
       ]
     }

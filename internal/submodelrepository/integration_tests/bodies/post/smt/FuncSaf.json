@@ -864,12 +864,12 @@
                         {
                             "description": [
                                 {
-                                    "language": "en",
-                                    "text": "proof test interval"
-                                },
-                                {
                                     "language": "fr",
                                     "text": "intervalle entre essai périodique"
+                                },
+                                {
+                                    "language": "en",
+                                    "text": "proof test interval"
                                 }
                             ],
                             "idShort": "ProofTestInterval",

@@ -331,7 +331,7 @@ func getSubmodelElementObjectBasedOnModelType(smeRow model.SubmodelElementRow, r
 	case int64(types.ModelTypeAnnotatedRelationshipElement):
 		return buildAnnotatedRelationshipElement(smeRow)
 	case int64(types.ModelTypeMultiLanguageProperty):
-		mlProp, err := buildMultiLanguageProperty(smeRow)
+		mlProp, err := buildMultiLanguageProperty(smeRow, refBuilderMap, refMutex)
 		if err != nil {
 			return nil, err
 		}
@@ -663,7 +663,7 @@ func buildAnnotatedRelationshipElement(smeRow model.SubmodelElementRow) (types.I
 }
 
 // buildMultiLanguageProperty creates a new MultiLanguageProperty SubmodelElement.
-func buildMultiLanguageProperty(smeRow model.SubmodelElementRow) (types.ISubmodelElement, error) {
+func buildMultiLanguageProperty(smeRow model.SubmodelElementRow, refBuilderMap map[int64]*ReferenceBuilder, refMutex *sync.RWMutex) (types.ISubmodelElement, error) {
 	mlp := types.NewMultiLanguageProperty()
 
 	if smeRow.Value == nil {
@@ -697,19 +697,13 @@ func buildMultiLanguageProperty(smeRow model.SubmodelElementRow) (types.ISubmode
 		mlp.SetValue(textTypes)
 	}
 
-	// Handle ValueID reference if present
-	if valueRow.ValueID != nil {
-		var valueIDJsonable map[string]any
-		err = json.Unmarshal(*valueRow.ValueID, &valueIDJsonable)
-		if err != nil {
-			return nil, err
-		}
-		valueIDSDK, err := jsonization.ReferenceFromJsonable(valueIDJsonable)
-		if err != nil {
-			_, _ = fmt.Printf("[DEBUG] buildMultiLanguageProperty ValueID: JSON: %v, Error: %v\n", valueIDJsonable, err)
-			return nil, fmt.Errorf("error converting valueID jsonable to Reference: %w", err)
-		}
-		mlp.SetValueID(valueIDSDK)
+	// Handle ValueID reference if present (same as Property)
+	valueID, err := getSingleReference(valueRow.ValueID, valueRow.ValueIDReferred, refBuilderMap, refMutex)
+	if err != nil {
+		return nil, err
+	}
+	if valueID != nil {
+		mlp.SetValueID(valueID)
 	}
 
 	return mlp, nil
