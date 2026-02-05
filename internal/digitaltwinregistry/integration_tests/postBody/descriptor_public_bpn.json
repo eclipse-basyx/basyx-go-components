@@ -38,6 +38,10 @@
       "value": "T588756070325B20950022162515271"
     },
     {
+      "name": "funnytest",
+      "value": "verfunny"
+    },
+    {
       "name": "digitalTwinType",
       "value": "PartInstance",
       "externalSubjectId": {

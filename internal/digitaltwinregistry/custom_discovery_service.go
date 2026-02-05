@@ -29,6 +29,7 @@ package digitaltwinregistry
 
 import (
 	"context"
+	"time"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
@@ -53,57 +54,21 @@ func (s *CustomDiscoveryService) SearchAllAssetAdministrationShellIdsByAssetLink
 	cursor string,
 	assetLink []model.AssetLink,
 ) (model.ImplResponse, error) {
-	query := buildEdcBpnClaimEqualsHeaderExpression(ctx)
-	ctx = auth.MergeQueryFilter(ctx, query)
+	createdAfter, _ := CreatedAfterFromContext(ctx)
+	if createdAfter != nil {
+		query := buildEdcBpnClaimEqualsHeaderExpression(createdAfter)
+		ctx = auth.MergeQueryFilter(ctx, query)
+	}
 
 	return s.AssetAdministrationShellBasicDiscoveryAPIAPIService.SearchAllAssetAdministrationShellIdsByAssetLink(ctx, limit, cursor, assetLink)
 }
 
 // GetAllAssetLinksByID Custom logic for /lookup/shells/{aasIdentifier}
-func (s *CustomDiscoveryService) GetAllAssetLinksByID(
-	ctx context.Context,
-	aasIdentifier string,
-) (model.ImplResponse, error) {
-	query := buildEdcBpnClaimEqualsHeaderExpression2(ctx)
-	ctx = auth.MergeQueryFilter(ctx, query)
-
-	return s.AssetAdministrationShellBasicDiscoveryAPIAPIService.GetAllAssetLinksByID(ctx, aasIdentifier)
-}
-
 // buildEdcBpnClaimEqualsHeaderExpression creates a logical expression that checks
 // whether the Edc-Bpn claim equals the provided header value.
-func buildEdcBpnClaimEqualsHeaderExpression(ctx context.Context) grammar.Query {
-	createdAfter, _ := CreatedAfterFromContext(ctx)
-	claims := auth.ClaimsFromContext(ctx)
-	bpn, ok := claims.GetString("Edc-Bpn")
-	ModelStringPattern := grammar.ModelStringPattern("$bd#specificAssetIds[].externalSubjectId.keys[].value")
-	var bpnLe grammar.LogicalExpression
-	if !ok || bpn == "" {
-		boolVal := false
-		bpnLe = grammar.LogicalExpression{Boolean: &boolVal}
-	} else {
-		claim := grammar.StandardString(bpn)
-		bpnLe = grammar.LogicalExpression{
-			Eq: grammar.ComparisonItems{
-				{StrVal: &claim}, {Field: &ModelStringPattern},
-			},
-		}
-	}
+func buildEdcBpnClaimEqualsHeaderExpression(t *time.Time) grammar.Query {
 
-	publicReadableString := grammar.StandardString("PUBLIC_READABLE")
-	publicLe := grammar.LogicalExpression{
-		Eq: grammar.ComparisonItems{
-			{StrVal: &publicReadableString}, {Field: &ModelStringPattern},
-		},
-	}
-	le := grammar.LogicalExpression{
-		Or: []grammar.LogicalExpression{bpnLe, publicLe},
-	}
-
-	if createdAfter == nil {
-		return grammar.Query{Condition: &le}
-	}
-	dt := grammar.DateTimeLiteralPattern(createdAfter.UTC())
+	dt := grammar.DateTimeLiteralPattern(t.UTC())
 
 	timePattern := grammar.ModelStringPattern("$bd#createdAt")
 	timeLe := grammar.LogicalExpression{
@@ -113,46 +78,7 @@ func buildEdcBpnClaimEqualsHeaderExpression(ctx context.Context) grammar.Query {
 		},
 	}
 
-	combinedLE := &grammar.LogicalExpression{
-		And: []grammar.LogicalExpression{le, timeLe},
-	}
-
 	return grammar.Query{
-		Condition: combinedLE,
+		Condition: &timeLe,
 	}
-}
-
-func buildEdcBpnClaimEqualsHeaderExpression2(ctx context.Context) grammar.Query {
-	claims := auth.ClaimsFromContext(ctx)
-	bpn, ok := claims.GetString("Edc-Bpn")
-	boolVal := false
-	ModelStringPattern := grammar.ModelStringPattern("$bd#specificAssetIds[].externalSubjectId.keys[].value")
-	var bpnLe grammar.LogicalExpression
-	if !ok || bpn == "" {
-		bpnLe = grammar.LogicalExpression{Boolean: &boolVal}
-	} else {
-		claim := grammar.StandardString(bpn)
-		bpnLe = grammar.LogicalExpression{
-			Eq: grammar.ComparisonItems{
-				{StrVal: &claim}, {Field: &ModelStringPattern},
-			},
-		}
-	}
-	publicReadableString := grammar.StandardString("PUBLIC_READABLE")
-	publicLe := grammar.LogicalExpression{
-		Eq: grammar.ComparisonItems{
-			{StrVal: &publicReadableString}, {Field: &ModelStringPattern},
-		},
-	}
-	le := grammar.LogicalExpression{
-		Or: []grammar.LogicalExpression{bpnLe, publicLe},
-	}
-
-	fragment := grammar.FragmentStringPattern("$bd#specificAssetIds[].externalSubjectId")
-	filter := grammar.SubFilter{
-		Fragment:  &fragment,
-		Condition: &grammar.LogicalExpression{Boolean: &boolVal},
-	}
-
-	return grammar.Query{Condition: &le, FilterConditions: []grammar.SubFilter{filter}}
 }
