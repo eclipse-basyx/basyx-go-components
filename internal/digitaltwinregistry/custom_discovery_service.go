@@ -67,7 +67,6 @@ func (s *CustomDiscoveryService) SearchAllAssetAdministrationShellIdsByAssetLink
 // buildEdcBpnClaimEqualsHeaderExpression creates a logical expression that checks
 // whether the Edc-Bpn claim equals the provided header value.
 func buildEdcBpnClaimEqualsHeaderExpression(t *time.Time) grammar.Query {
-
 	dt := grammar.DateTimeLiteralPattern(t.UTC())
 
 	timePattern := grammar.ModelStringPattern("$bd#createdAt")
