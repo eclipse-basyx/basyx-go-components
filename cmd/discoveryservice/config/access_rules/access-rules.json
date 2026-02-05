@@ -8,8 +8,7 @@
 
     "DEFOBJECTS": [
       { "name": "description", "objects": [ { "ROUTE": "/description" }, { "ROUTE": "/api/v3/description" } ] },
-      { "name": "all_assetlinks", "objects": [ { "ROUTE": "/lookup/shells" }, { "ROUTE": "/lookup/shells/*" }] },
-      { "name": "all_shell_descriptors", "objects": [ {"DESCRIPTOR": "$aasdesc(\"*\")"}] }
+      { "name": "all_assetlinks", "objects": [ { "ROUTE": "/lookup/shells" }, { "ROUTE": "/lookup/shells/*" }] }
     ],
 
     "DEFACLS": [
@@ -31,8 +30,8 @@
 
     "rules": [
       { "USEACL": "read_anonymous", "USEOBJECTS": ["description"], "USEFORMULA": "always_true" },
-      { "USEACL": "write_admin", "USEOBJECTS": ["all_shell_descriptors", "all_assetlinks"], "USEFORMULA": "role_is_admin" },
-      { "USEACL": "read_role", "USEOBJECTS": ["all_shell_descriptors", "all_assetlinks"], "FORMULA": 
+      { "USEACL": "write_admin", "USEOBJECTS": ["all_assetlinks"], "USEFORMULA": "role_is_admin" },
+      { "USEACL": "read_role", "USEOBJECTS": ["all_assetlinks"], "FORMULA": 
 
             {"$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "viewer" } ] },
 
