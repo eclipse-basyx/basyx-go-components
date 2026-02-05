@@ -158,6 +158,7 @@ CREATE TABLE IF NOT EXISTS extension (
   value_num     NUMERIC,
   value_bool    BOOLEAN,
   value_time    TIME,
+  value_date    DATE,
   value_datetime TIMESTAMPTZ
 );
 CREATE TABLE IF NOT EXISTS submodel_extension (
@@ -182,7 +183,7 @@ CREATE TABLE IF NOT EXISTS submodel_element (
   root_sme_id  BIGINT REFERENCES submodel_element(id) ON DELETE CASCADE,
   parent_sme_id  BIGINT REFERENCES submodel_element(id) ON DELETE CASCADE,
   position       INTEGER,                                   -- for ordering in lists
-  id_short       varchar(128) NOT NULL,
+  id_short       varchar(128),
   category       varchar(128),
   model_type     int NOT NULL,
   embedded_data_specification JSONB DEFAULT '[]',
@@ -193,7 +194,7 @@ CREATE TABLE IF NOT EXISTS submodel_element (
   displayname_id BIGINT REFERENCES lang_string_name_type_reference(id) ON DELETE CASCADE,
   idshort_path   TEXT NOT NULL,                            -- e.g. sm_abc.sensors[2].temperature
   depth	BIGINT,
-  CONSTRAINT uq_sibling_idshort UNIQUE (submodel_id, parent_sme_id, id_short),
+  CONSTRAINT uq_sibling_idshort UNIQUE (submodel_id, parent_sme_id, idshort_path),
   CONSTRAINT uq_sibling_pos     UNIQUE (submodel_id, parent_sme_id, position)
 );
 CREATE TABLE IF NOT EXISTS submodel_element_supplemental_semantic_id (
@@ -218,6 +219,7 @@ CREATE TABLE IF NOT EXISTS property_element (
   value_num     NUMERIC,
   value_bool    BOOLEAN,
   value_time    TIME,
+  value_date    DATE,
   value_datetime TIMESTAMPTZ,
   value_id      BIGINT REFERENCES reference(id)
 );
@@ -253,6 +255,7 @@ CREATE TABLE IF NOT EXISTS range_element (
   min_text      TEXT,  max_text      TEXT,
   min_num       NUMERIC, max_num     NUMERIC,
   min_time      TIME,   max_time     TIME,
+  min_date      DATE,   max_date     DATE,
   min_datetime  TIMESTAMPTZ, max_datetime TIMESTAMPTZ
 );
 CREATE TABLE IF NOT EXISTS reference_element (
@@ -275,7 +278,7 @@ CREATE TABLE IF NOT EXISTS submodel_element_collection (
 CREATE TABLE IF NOT EXISTS submodel_element_list (
   id                         BIGINT PRIMARY KEY REFERENCES submodel_element(id) ON DELETE CASCADE,
   order_relevant             BOOLEAN,
-  semantic_id_list_element   BIGINT REFERENCES reference(id),
+  semantic_id_list_element   JSONB,
   type_value_list_element    int NOT NULL,
   value_type_list_element    int
 );
@@ -330,6 +333,7 @@ CREATE TABLE IF NOT EXISTS qualifier (
   value_num         NUMERIC,
   value_bool        BOOLEAN,
   value_time        TIME,
+  value_date        DATE,
   value_datetime    TIMESTAMPTZ,
   value_id          BIGINT REFERENCES reference(id),
   semantic_id       BIGINT REFERENCES reference(id)

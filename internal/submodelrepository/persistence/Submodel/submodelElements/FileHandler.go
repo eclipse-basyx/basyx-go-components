@@ -69,96 +69,6 @@ func NewPostgreSQLFileHandler(db *sql.DB) (*PostgreSQLFileHandler, error) {
 	return &PostgreSQLFileHandler{db: db, decorated: decoratedHandler}, nil
 }
 
-// Create persists a new File submodel element to the database.
-// It first creates the base SubmodelElement data using the decorated handler,
-// then adds File-specific data including content type and value.
-//
-// Parameters:
-//   - tx: Database transaction to use for the operation
-//   - submodelID: ID of the parent submodel
-//   - submodelElement: The File element to create (must be of type *gen.File)
-//
-// Returns:
-//   - int: The database ID of the created file element
-//   - error: Error if the element is not a File or if database operations fail
-func (p PostgreSQLFileHandler) Create(tx *sql.Tx, submodelID string, submodelElement types.ISubmodelElement) (int, error) {
-	file, ok := submodelElement.(*types.File)
-	if !ok {
-		return 0, common.NewErrBadRequest("submodelElement is not of type File")
-	}
-	// First, perform base SubmodelElement operations within the transaction
-	id, err := p.decorated.Create(tx, submodelID, submodelElement)
-	if err != nil {
-		return 0, err
-	}
-
-	// File-specific database insertion
-	dialect := goqu.Dialect("postgres")
-	insertQuery, insertArgs, err := dialect.Insert("file_element").
-		Rows(goqu.Record{
-			"id":           id,
-			"content_type": file.ContentType(),
-			"value":        file.Value(),
-		}).
-		ToSQL()
-	if err != nil {
-		return 0, err
-	}
-	_, err = tx.Exec(insertQuery, insertArgs...)
-	if err != nil {
-		return 0, err
-	}
-
-	return id, nil
-}
-
-// CreateNested persists a new nested File submodel element to the database.
-// It creates the File as a child element of another SubmodelElement with a specific position
-// and idShortPath for hierarchical organization.
-//
-// Parameters:
-//   - tx: Database transaction to use for the operation
-//   - submodelID: ID of the parent submodel
-//   - parentID: Database ID of the parent SubmodelElement
-//   - idShortPath: Path identifier for the nested element
-//   - submodelElement: The File element to create (must be of type *gen.File)
-//   - pos: Position of the element within its parent
-//
-// Returns:
-//   - int: The database ID of the created nested file element
-//   - error: Error if the element is not a File or if database operations fail
-func (p PostgreSQLFileHandler) CreateNested(tx *sql.Tx, submodelID string, parentID int, idShortPath string, submodelElement types.ISubmodelElement, pos int, rootSubmodelElementID int) (int, error) {
-	file, ok := submodelElement.(*types.File)
-	if !ok {
-		return 0, common.NewErrBadRequest("submodelElement is not of type File")
-	}
-
-	// Create the nested file with the provided idShortPath using the decorated handler
-	id, err := p.decorated.CreateWithPath(tx, submodelID, parentID, idShortPath, submodelElement, pos, rootSubmodelElementID)
-	if err != nil {
-		return 0, err
-	}
-
-	// File-specific database insertion for nested element
-	dialect := goqu.Dialect("postgres")
-	insertQuery, insertArgs, err := dialect.Insert("file_element").
-		Rows(goqu.Record{
-			"id":           id,
-			"content_type": file.ContentType(),
-			"value":        file.Value(),
-		}).
-		ToSQL()
-	if err != nil {
-		return 0, err
-	}
-	_, err = tx.Exec(insertQuery, insertArgs...)
-	if err != nil {
-		return 0, err
-	}
-
-	return id, nil
-}
-
 // Update modifies an existing File submodel element in the database.
 // If the file value is changed and an OID exists, the old Large Object is deleted.
 //
@@ -380,6 +290,33 @@ func (p PostgreSQLFileHandler) UpdateValueOnly(submodelID string, idShortOrPath 
 //   - error: Error if the delete operation fails
 func (p PostgreSQLFileHandler) Delete(idShortOrPath string) error {
 	return p.decorated.Delete(idShortOrPath)
+}
+
+// GetInsertQueryPart returns the type-specific insert query part for batch insertion of File elements.
+// It returns the table name and record for inserting into the file_element table.
+//
+// Parameters:
+//   - tx: Active database transaction (not used for File)
+//   - id: The database ID of the base submodel_element record
+//   - element: The File element to insert
+//
+// Returns:
+//   - *InsertQueryPart: The table name and record for file_element insert
+//   - error: An error if the element is not of type File
+func (p PostgreSQLFileHandler) GetInsertQueryPart(_ *sql.Tx, id int, element types.ISubmodelElement) (*InsertQueryPart, error) {
+	file, ok := element.(*types.File)
+	if !ok {
+		return nil, common.NewErrBadRequest("submodelElement is not of type File")
+	}
+
+	return &InsertQueryPart{
+		TableName: "file_element",
+		Record: goqu.Record{
+			"id":           id,
+			"content_type": file.ContentType(),
+			"value":        file.Value(),
+		},
+	}, nil
 }
 
 // UploadFileAttachment uploads a file to PostgreSQL's Large Object system and stores the OID reference.

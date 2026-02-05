@@ -62,7 +62,7 @@ func GetDescriptionQuery(dialect goqu.DialectWrapper, joinConditionColumn string
 	)
 
 	descriptionsSubquery := dialect.From(goqu.T("lang_string_text_type_reference").As("dr")).
-		Select(goqu.Func("jsonb_agg", goqu.L("?", descriptionObj))).
+		Select(goqu.Func("jsonb_agg", goqu.L("? ORDER BY d.id", descriptionObj))).
 		Join(
 			goqu.T("lang_string_text_type").As("d"),
 			goqu.On(goqu.I("d.lang_string_text_type_reference_id").Eq(goqu.I("dr.id"))),

@@ -148,7 +148,7 @@ func GetEmbeddedDataSpecificationSubqueries(dialect goqu.DialectWrapper, joinTab
 	)
 
 	preferredNameSubquery := dialect.From(goqu.T("lang_string_text_type_reference").As("pn_ref")).
-		Select(goqu.Func("jsonb_agg", goqu.L("?", preferredNameObj))).
+		Select(goqu.Func("jsonb_agg", goqu.L("? ORDER BY pn.id", preferredNameObj))).
 		Join(
 			goqu.T("lang_string_text_type").As("pn"),
 			goqu.On(goqu.I("pn.lang_string_text_type_reference_id").Eq(goqu.I("pn_ref.id"))),
@@ -163,7 +163,7 @@ func GetEmbeddedDataSpecificationSubqueries(dialect goqu.DialectWrapper, joinTab
 	)
 
 	shortNameSubquery := dialect.From(goqu.T("lang_string_text_type_reference").As("sn_ref")).
-		Select(goqu.Func("jsonb_agg", goqu.L("?", shortNameObj))).
+		Select(goqu.Func("jsonb_agg", goqu.L("? ORDER BY sn.id", shortNameObj))).
 		Join(
 			goqu.T("lang_string_text_type").As("sn"),
 			goqu.On(goqu.I("sn.lang_string_text_type_reference_id").Eq(goqu.I("sn_ref.id"))),
@@ -178,7 +178,7 @@ func GetEmbeddedDataSpecificationSubqueries(dialect goqu.DialectWrapper, joinTab
 	)
 
 	definitionSubquery := dialect.From(goqu.T("lang_string_text_type_reference").As("df_ref")).
-		Select(goqu.Func("jsonb_agg", goqu.L("?", definitionObj))).
+		Select(goqu.Func("jsonb_agg", goqu.L("? ORDER BY df.id", definitionObj))).
 		Join(
 			goqu.T("lang_string_text_type").As("df"),
 			goqu.On(goqu.I("df.lang_string_text_type_reference_id").Eq(goqu.I("df_ref.id"))),

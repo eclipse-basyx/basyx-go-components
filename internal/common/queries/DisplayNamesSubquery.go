@@ -62,7 +62,7 @@ func GetDisplayNamesQuery(dialect goqu.DialectWrapper, joinConditionColumn strin
 	)
 
 	displayNamesSubquery := dialect.From(goqu.T("lang_string_name_type_reference").As("dn_ref")).
-		Select(goqu.Func("jsonb_agg", goqu.L("?", displayNameObj))).
+		Select(goqu.Func("jsonb_agg", goqu.L("? ORDER BY dn.id", displayNameObj))).
 		Join(
 			goqu.T("lang_string_name_type").As("dn"),
 			goqu.On(goqu.I("dn.lang_string_name_type_reference_id").Eq(goqu.I("dn_ref.id"))),

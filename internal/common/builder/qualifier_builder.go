@@ -28,13 +28,11 @@
 package builder
 
 import (
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"sort"
 
 	"github.com/FriedJannik/aas-go-sdk/types"
-	"github.com/doug-martin/goqu/v9"
 )
 
 // QualifiersBuilder constructs Qualifier objects with their associated references
@@ -94,7 +92,7 @@ func NewQualifiersBuilder() *QualifiersBuilder {
 //	builder := NewQualifiersBuilder()
 //	builder.AddQualifier(1, "ConceptQualifier", "ExpressionSemantic", "xs:string", "example value")
 //	builder.AddQualifier(2, "ValueQualifier", "ExpressionLogic", "xs:boolean", "true")
-func (b *QualifiersBuilder) AddQualifier(qualifierDbID int64, qType string, valueType int64, value string, position int, db *sql.DB) (*QualifiersBuilder, error) {
+func (b *QualifiersBuilder) AddQualifier(qualifierDbID int64, qType string, valueType int64, value string, position int, kind *int64) (*QualifiersBuilder, error) {
 	_, exists := b.qualifiers[qualifierDbID]
 	if !exists {
 		qualifier := types.Qualifier{}
@@ -108,23 +106,8 @@ func (b *QualifiersBuilder) AddQualifier(qualifierDbID int64, qType string, valu
 			position:  position,
 		}
 
-		// Get KIND as sql.NullInt64 from Database with goqu
-		dialect := goqu.Dialect("postgres")
-		var kind sql.NullInt64
-		query := dialect.From("qualifier").Select("kind").Where(goqu.Ex{"id": qualifierDbID})
-		sqlStr, args, err := query.ToSQL()
-		if err != nil {
-			return nil, fmt.Errorf("failed to build SQL query for qualifier kind: %v", err)
-		}
-
-		row := db.QueryRow(sqlStr, args...)
-		err = row.Scan(&kind)
-		if err != nil {
-			return nil, fmt.Errorf("failed to scan qualifier kind from database: %v", err)
-		}
-
-		if kind.Valid {
-			qKind := types.QualifierKind(kind.Int64)
+		if kind != nil {
+			qKind := types.QualifierKind(*kind)
 			b.qualifiers[qualifierDbID].qualifier.SetKind(&qKind)
 		}
 	} else {

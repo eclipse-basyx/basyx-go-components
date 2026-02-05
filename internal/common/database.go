@@ -38,14 +38,13 @@ import (
 //	defer db.Close()
 func InitializeDatabase(dsn string, schemaFilePath string) (*sql.DB, error) {
 	db, err := sql.Open("postgres", dsn)
-	// Set Max Connection
-	db.SetMaxOpenConns(500)
-	db.SetMaxIdleConns(500)
-	db.SetConnMaxLifetime(time.Minute * 5)
-
 	if err != nil {
 		return nil, err
 	}
+
+	db.SetMaxOpenConns(50)
+	db.SetMaxIdleConns(25)
+	db.SetConnMaxLifetime(time.Minute * 5)
 	if err := db.Ping(); err != nil {
 		return nil, err
 	}

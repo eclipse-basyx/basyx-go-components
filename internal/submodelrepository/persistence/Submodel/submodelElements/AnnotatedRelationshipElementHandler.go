@@ -68,75 +68,6 @@ func NewPostgreSQLAnnotatedRelationshipElementHandler(db *sql.DB) (*PostgreSQLAn
 	return &PostgreSQLAnnotatedRelationshipElementHandler{db: db, decorated: decoratedHandler}, nil
 }
 
-// Create inserts a new AnnotatedRelationshipElement into the database as a top-level submodel element.
-// This method handles both the common submodel element properties and the specific relationship
-// and annotation data associated with annotated relationship elements.
-//
-// Parameters:
-//   - tx: Active database transaction
-//   - submodelID: ID of the parent submodel
-//   - submodelElement: The AnnotatedRelationshipElement to create
-//
-// Returns:
-//   - int: Database ID of the created element
-//   - error: Error if creation fails or element is not of correct type
-func (p PostgreSQLAnnotatedRelationshipElementHandler) Create(tx *sql.Tx, submodelID string, submodelElement types.ISubmodelElement) (int, error) {
-	areElem, ok := submodelElement.(*types.AnnotatedRelationshipElement)
-	if !ok {
-		return 0, common.NewErrBadRequest("submodelElement is not of type AnnotatedRelationshipElement")
-	}
-
-	// First, perform base SubmodelElement operations within the transaction
-	id, err := p.decorated.Create(tx, submodelID, submodelElement)
-	if err != nil {
-		return 0, err
-	}
-
-	// AnnotatedRelationshipElement-specific database insertion
-	err = insertAnnotatedRelationshipElement(areElem, tx, id)
-	if err != nil {
-		return 0, err
-	}
-
-	return id, nil
-}
-
-// CreateNested inserts a new AnnotatedRelationshipElement as a nested element within a collection or list.
-// This method creates the element at a specific hierarchical path and position within its parent container.
-// It handles both the parent-child relationship and the specific annotated relationship element data.
-//
-// Parameters:
-//   - tx: Active database transaction
-//   - submodelID: ID of the parent submodel
-//   - parentID: Database ID of the parent element
-//   - idShortPath: Hierarchical path where the element should be created
-//   - submodelElement: The AnnotatedRelationshipElement to create
-//   - pos: Position within the parent container
-//
-// Returns:
-//   - int: Database ID of the created nested element
-//   - error: Error if creation fails or element is not of correct type
-func (p PostgreSQLAnnotatedRelationshipElementHandler) CreateNested(tx *sql.Tx, submodelID string, parentID int, idShortPath string, submodelElement types.ISubmodelElement, pos int, rootSubmodelElementID int) (int, error) {
-	areElem, ok := submodelElement.(*types.AnnotatedRelationshipElement)
-	if !ok {
-		return 0, common.NewErrBadRequest("submodelElement is not of type AnnotatedRelationshipElement")
-	}
-
-	// Create the nested areElem with the provided idShortPath using the decorated handler
-	id, err := p.decorated.CreateWithPath(tx, submodelID, parentID, idShortPath, submodelElement, pos, rootSubmodelElementID)
-	if err != nil {
-		return 0, err
-	}
-
-	// AnnotatedRelationshipElement-specific database insertion for nested element
-	err = insertAnnotatedRelationshipElement(areElem, tx, id)
-	if err != nil {
-		return 0, err
-	}
-
-	return id, nil
-}
-
 // Update modifies an existing AnnotatedRelationshipElement identified by its idShort or path.
 // This method handles both the common submodel element properties and the specific annotated
 // relationship data such as the 'first' and 'second' references and annotations.
@@ -320,39 +251,43 @@ func (p PostgreSQLAnnotatedRelationshipElementHandler) Delete(idShortOrPath stri
 	return p.decorated.Delete(idShortOrPath)
 }
 
-func insertAnnotatedRelationshipElement(areElem *types.AnnotatedRelationshipElement, tx *sql.Tx, id int) error {
-	// Insert into relationship_element
-	var firstRef, secondRef string
+// GetInsertQueryPart returns the type-specific insert query part for batch insertion of AnnotatedRelationshipElement elements.
+// It returns the table name and record for inserting into the annotated_relationship_element table.
+//
+// Parameters:
+//   - tx: Active database transaction (not used for AnnotatedRelationshipElement)
+//   - id: The database ID of the base submodel_element record
+//   - element: The AnnotatedRelationshipElement element to insert
+//
+// Returns:
+//   - *InsertQueryPart: The table name and record for annotated_relationship_element insert
+//   - error: An error if the element is not of type AnnotatedRelationshipElement
+func (p PostgreSQLAnnotatedRelationshipElementHandler) GetInsertQueryPart(_ *sql.Tx, id int, element types.ISubmodelElement) (*InsertQueryPart, error) {
+	areElem, ok := element.(*types.AnnotatedRelationshipElement)
+	if !ok {
+		return nil, common.NewErrBadRequest("submodelElement is not of type AnnotatedRelationshipElement")
+	}
+
 	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
 	firstRef, err := serializeReference(areElem.First(), json)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	secondRef, err = serializeReference(areElem.Second(), json)
+	secondRef, err := serializeReference(areElem.Second(), json)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	dialect := goqu.Dialect("postgres")
-	insertQuery, insertArgs, err := dialect.Insert("annotated_relationship_element").
-		Rows(goqu.Record{
+	return &InsertQueryPart{
+		TableName: "annotated_relationship_element",
+		Record: goqu.Record{
 			"id":     id,
 			"first":  firstRef,
 			"second": secondRef,
-		}).
-		ToSQL()
-	if err != nil {
-		return err
-	}
-
-	_, err = tx.Exec(insertQuery, insertArgs...)
-	if err != nil {
-		return err
-	}
-
-	return nil
+		},
+	}, nil
 }
 
 func serializeReference(ref types.IReference, json jsoniter.API) (string, error) {

@@ -285,16 +285,13 @@ func getFileSubquery(dialect goqu.DialectWrapper) *goqu.SelectDataset {
 }
 
 func getSubmodelElementListSubquery(dialect goqu.DialectWrapper) *goqu.SelectDataset {
-	semanticIDListElement, semanticIDListElementReferred := queries.GetReferenceQueries(dialect, goqu.I("list.semantic_id_list_element"))
-
 	return dialect.From(goqu.T("submodel_element_list").As("list")).
 		Select(
 			goqu.Func("jsonb_build_object",
 				goqu.V("order_relevant"), goqu.I("list.order_relevant"),
 				goqu.V("type_value_list_element"), goqu.I("list.type_value_list_element"),
 				goqu.V("value_type_list_element"), goqu.I("list.value_type_list_element"),
-				goqu.V("semantic_id_list_element"), semanticIDListElement,
-				goqu.V("semantic_id_list_element_referred"), semanticIDListElementReferred,
+				goqu.V("semantic_id_list_element"), goqu.I("list.semantic_id_list_element"),
 			),
 		).
 		Where(goqu.I("list.id").Eq(goqu.I("sme.id"))).
@@ -311,7 +308,7 @@ func getMultiLanguagePropertySubquery(dialect goqu.DialectWrapper) *goqu.SelectD
 	)
 
 	mlpValueSubquery := dialect.From(goqu.T("multilanguage_property_value").As("mlpval")).
-		Select(goqu.Func("jsonb_agg", goqu.L("? ORDER BY mlpval.language, mlpval.text, mlpval.id", mlpValueObject))).
+		Select(goqu.Func("jsonb_agg", goqu.L("? ORDER BY mlpval.language", mlpValueObject))).
 		Where(goqu.I("mlpval.mlp_id").Eq(goqu.I("sme.id")))
 
 	return dialect.From(goqu.T("multilanguage_property").As("mlp")).
@@ -350,6 +347,7 @@ func getPropertySubquery(dialect goqu.DialectWrapper) *goqu.SelectDataset {
 					goqu.L("?::text", goqu.I("pr.value_num")),
 					goqu.L("?::text", goqu.I("pr.value_bool")),
 					goqu.L("?::text", goqu.I("pr.value_time")),
+					goqu.L("?::text", goqu.I("pr.value_date")),
 					goqu.L("?::text", goqu.I("pr.value_datetime")),
 				),
 				goqu.V("value_type"), goqu.I("pr.value_type"),
@@ -370,12 +368,14 @@ func getRangeSubquery(dialect goqu.DialectWrapper) *goqu.SelectDataset {
 					goqu.I("range.min_text"),
 					goqu.L("?::text", goqu.I("range.min_num")),
 					goqu.L("?::text", goqu.I("range.min_time")),
+					goqu.L("?::text", goqu.I("range.min_date")),
 					goqu.L("?::text", goqu.I("range.min_datetime")),
 				),
 				goqu.V("max"), goqu.COALESCE(
 					goqu.I("range.max_text"),
 					goqu.L("?::text", goqu.I("range.max_num")),
 					goqu.L("?::text", goqu.I("range.max_time")),
+					goqu.L("?::text", goqu.I("range.max_date")),
 					goqu.L("?::text", goqu.I("range.max_datetime")),
 				),
 			),

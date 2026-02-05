@@ -64,63 +64,6 @@ func NewPostgreSQLCapabilityHandler(db *sql.DB) (*PostgreSQLCapabilityHandler, e
 	return &PostgreSQLCapabilityHandler{db: db, decorated: decoratedHandler}, nil
 }
 
-// Create inserts a new Capability element into the database as a top-level submodel element.
-// This method handles both the common submodel element properties and the specific capability
-// element data. Capabilities represent functional services or abilities of an asset.
-//
-// Parameters:
-//   - tx: Active database transaction
-//   - submodelID: ID of the parent submodel
-//   - submodelElement: The Capability element to create
-//
-// Returns:
-//   - int: Database ID of the created element
-//   - error: Error if creation fails or element is not of correct type
-func (p PostgreSQLCapabilityHandler) Create(tx *sql.Tx, submodelID string, submodelElement types.ISubmodelElement) (int, error) {
-	_, ok := submodelElement.(*types.Capability)
-	if !ok {
-		return 0, common.NewErrBadRequest("submodelElement is not of type Capability")
-	}
-
-	// First, perform base SubmodelElement operations within the transaction
-	id, err := p.decorated.Create(tx, submodelID, submodelElement)
-	if err != nil {
-		return 0, err
-	}
-
-	return id, nil
-}
-
-// CreateNested inserts a new Capability element as a nested element within a collection or list.
-// This method creates the element at a specific hierarchical path and position within its parent container.
-// It handles both the parent-child relationship and the specific capability element data.
-//
-// Parameters:
-//   - tx: Active database transaction
-//   - submodelID: ID of the parent submodel
-//   - parentID: Database ID of the parent element
-//   - idShortPath: Hierarchical path where the element should be created
-//   - submodelElement: The Capability element to create
-//   - pos: Position within the parent container
-//
-// Returns:
-//   - int: Database ID of the created nested element
-//   - error: Error if creation fails or element is not of correct type
-func (p PostgreSQLCapabilityHandler) CreateNested(tx *sql.Tx, submodelID string, parentID int, idShortPath string, submodelElement types.ISubmodelElement, pos int, rootSubmodelElementID int) (int, error) {
-	_, ok := submodelElement.(*types.Capability)
-	if !ok {
-		return 0, common.NewErrBadRequest("submodelElement is not of type Capability")
-	}
-
-	// Create the nested capability with the provided idShortPath using the decorated handler
-	id, err := p.decorated.CreateWithPath(tx, submodelID, parentID, idShortPath, submodelElement, pos, rootSubmodelElementID)
-	if err != nil {
-		return 0, err
-	}
-
-	return id, nil
-}
-
 // Update modifies an existing Capability element identified by its idShort or path.
 // This method delegates the update operation to the decorated CRUD handler which handles
 // the common submodel element update logic.
@@ -160,4 +103,25 @@ func (p PostgreSQLCapabilityHandler) UpdateValueOnly(_ string, _ string, _ gen.S
 //   - error: Error if deletion fails
 func (p PostgreSQLCapabilityHandler) Delete(idShortOrPath string) error {
 	return p.decorated.Delete(idShortOrPath)
+}
+
+// GetInsertQueryPart returns the type-specific insert query part for batch insertion of Capability elements.
+// Capability elements have no type-specific table, so this method returns nil.
+//
+// Parameters:
+//   - tx: Active database transaction (not used)
+//   - id: The database ID of the base submodel_element record (not used)
+//   - element: The Capability element to insert
+//
+// Returns:
+//   - *InsertQueryPart: Always nil as Capability has no type-specific table
+//   - error: An error if the element is not of type Capability
+func (p PostgreSQLCapabilityHandler) GetInsertQueryPart(_ *sql.Tx, _ int, element types.ISubmodelElement) (*InsertQueryPart, error) {
+	_, ok := element.(*types.Capability)
+	if !ok {
+		return nil, common.NewErrBadRequest("submodelElement is not of type Capability")
+	}
+
+	// Capability has no type-specific table
+	return nil, nil
 }

@@ -138,7 +138,7 @@ func getSubmodels(db *sql.DB, submodelIDFilter string, limit int64, cursor strin
 		return nil, nil, "", err
 	}
 
-	result, submodelMap, err := buildSubmodels(submodelRows, db)
+	result, submodelMap, err := buildSubmodels(submodelRows)
 	if err != nil {
 		return nil, nil, "", err
 	}
@@ -173,7 +173,7 @@ func scanSubmodelRows(rows *sql.Rows) ([]model.SubmodelRow, error) {
 	return submodelRows, nil
 }
 
-func buildSubmodels(submodelRows []model.SubmodelRow, db *sql.DB) ([]*types.Submodel, map[string]*types.Submodel, error) {
+func buildSubmodels(submodelRows []model.SubmodelRow) ([]*types.Submodel, map[string]*types.Submodel, error) {
 	referenceBuilderRefs := make(map[int64]*builders.ReferenceBuilder)
 	var refMutex sync.RWMutex
 
@@ -196,7 +196,7 @@ func buildSubmodels(submodelRows []model.SubmodelRow, db *sql.DB) ([]*types.Subm
 	for i := 0; i < numWorkers; i++ {
 		go func() {
 			for job := range jobs {
-				submodel, err := parseSubmodelRow(job.row, referenceBuilderRefs, &refMutex, db)
+				submodel, err := parseSubmodelRow(job.row, referenceBuilderRefs, &refMutex)
 				results <- parseResult{submodel: submodel, index: job.index, err: err}
 			}
 		}()
@@ -239,11 +239,11 @@ type submodelParsedData struct {
 	descriptions            []types.ILangStringTextType
 }
 
-func parseSubmodelRow(row model.SubmodelRow, referenceBuilderRefs map[int64]*builders.ReferenceBuilder, refMutex *sync.RWMutex, db *sql.DB) (*types.Submodel, error) {
+func parseSubmodelRow(row model.SubmodelRow, referenceBuilderRefs map[int64]*builders.ReferenceBuilder, refMutex *sync.RWMutex) (*types.Submodel, error) {
 	submodel := types.NewSubmodel(row.ID)
 	setSubmodelBasicFields(submodel, row)
 
-	data, err := parseSubmodelRowData(row, referenceBuilderRefs, refMutex, db)
+	data, err := parseSubmodelRowData(row, referenceBuilderRefs, refMutex)
 	if err != nil {
 		return nil, err
 	}
@@ -265,7 +265,7 @@ func setSubmodelBasicFields(submodel *types.Submodel, row model.SubmodelRow) {
 	}
 }
 
-func parseSubmodelRowData(row model.SubmodelRow, referenceBuilderRefs map[int64]*builders.ReferenceBuilder, refMutex *sync.RWMutex, db *sql.DB) (*submodelParsedData, error) {
+func parseSubmodelRowData(row model.SubmodelRow, referenceBuilderRefs map[int64]*builders.ReferenceBuilder, refMutex *sync.RWMutex) (*submodelParsedData, error) {
 	data := &submodelParsedData{}
 	localG, _ := errgroup.WithContext(context.Background())
 
@@ -300,7 +300,7 @@ func parseSubmodelRowData(row model.SubmodelRow, referenceBuilderRefs map[int64]
 	})
 
 	localG.Go(func() error {
-		q, err := BuildQualifiers(row, db)
+		q, err := BuildQualifiers(row)
 		data.qualifiers = q
 		return err
 	})
@@ -454,7 +454,7 @@ func calculateNextCursor(result []*types.Submodel, limit int64) string {
 }
 
 // BuildQualifiers builds qualifiers from the database row.
-func BuildQualifiers(row model.SubmodelRow, db *sql.DB) ([]types.IQualifier, error) {
+func BuildQualifiers(row model.SubmodelRow) ([]types.IQualifier, error) {
 	if common.IsArrayNotEmpty(row.Qualifiers) {
 		builder := builders.NewQualifiersBuilder()
 		qualifierRows, err := builders.ParseQualifiersRow(row.Qualifiers)
@@ -464,7 +464,7 @@ func BuildQualifiers(row model.SubmodelRow, db *sql.DB) ([]types.IQualifier, err
 		for _, qualifierRow := range qualifierRows {
 			// Convert string enums to SDK enums
 			valueTypeEnum := types.DataTypeDefXSD(qualifierRow.ValueType)
-			_, err = builder.AddQualifier(qualifierRow.DbID, qualifierRow.Type, int64(valueTypeEnum), qualifierRow.Value, qualifierRow.Position, db)
+			_, err = builder.AddQualifier(qualifierRow.DbID, qualifierRow.Type, int64(valueTypeEnum), qualifierRow.Value, qualifierRow.Position, qualifierRow.Kind)
 			if err != nil {
 				return nil, err
 			}
