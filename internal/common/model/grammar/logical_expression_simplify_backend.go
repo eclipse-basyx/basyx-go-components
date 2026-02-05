@@ -30,6 +30,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/big"
+	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
@@ -590,12 +591,18 @@ func convertEnumLiteralForField(field Value, lit Value) (Value, bool) {
 }
 
 func enumValueToValue(enumVal interface{}) (Value, bool) {
-	v, ok := enumVal.(int)
-	if !ok {
-		return Value{}, false
+	switch v := enumVal.(type) {
+	case int:
+		f := float64(v)
+		return Value{NumVal: &f}, true
+	default:
+		rv := reflect.ValueOf(enumVal)
+		if rv.Kind() != reflect.Int {
+			return Value{}, false
+		}
+		f := float64(rv.Int())
+		return Value{NumVal: &f}, true
 	}
-	f := float64(v)
-	return Value{NumVal: &f}, true
 }
 
 func replaceAttribute(v Value, resolve AttributeResolver) Value {
