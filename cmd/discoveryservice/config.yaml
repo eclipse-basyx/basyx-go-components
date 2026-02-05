@@ -22,5 +22,5 @@ abac:
   modelPath: "config/access_rules/access-rules.json"
 
 general:
-  enableImplicitCasts: false
-  enableDescriptorDebug: true
+  enableImplicitCasts: true
+  enableDescriptorDebug: false
