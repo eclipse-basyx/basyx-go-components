@@ -362,13 +362,16 @@ func buildListAssetAdministrationShellDescriptorsQuery(
 			Exp: tAASDescriptor.Col(colAASID),
 		},
 		{
-			Exp: tAASDescriptor.Col(colAdminInfoID),
+			Exp:      tAASDescriptor.Col(colAdminInfoID),
+			Fragment: fragPtr("$aasdesc#administration"),
 		},
 		{
-			Exp: tAASDescriptor.Col(colDisplayNameID),
+			Exp:      tAASDescriptor.Col(colDisplayNameID),
+			Fragment: fragPtr("$aasdesc#displayName"),
 		},
 		{
-			Exp: tAASDescriptor.Col(colDescriptionID),
+			Exp:      tAASDescriptor.Col(colDescriptionID),
+			Fragment: fragPtr("$aasdesc#description"),
 		},
 	}
 

@@ -1,7 +1,16 @@
 {
   "id": "urn:uuid:019c0005-b2b7-7b1d-8cc7-bb6fe3e5a5fb",
   "globalAssetId": "urn:uuid:019c0005-b2b7-7eec-85e4-f02cd0406de4",
-  "description": [],
+  "description": [
+    {
+      "language": "en",
+      "text": "hello"
+    },
+    {
+      "language": "de",
+      "text": "hallo"
+    }
+  ],
   "displayName": [],
   "specificAssetIds": [
     {
