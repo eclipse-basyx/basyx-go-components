@@ -19,7 +19,7 @@ oidc:
 
 abac:
   enabled: true
-  enableDebugErrorResponses: true
+  enableDebugErrorResponses: false
   modelPath: "config/access_rules/access-rules.json"
 
 general:

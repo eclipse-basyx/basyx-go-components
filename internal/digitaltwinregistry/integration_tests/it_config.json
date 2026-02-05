@@ -122,6 +122,35 @@
     }
   },
   {
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:5004/lookup/shellsByAssetLink?createdAfter=2000-01-01T00:00:00Z",
+    "data": "postBody/descriptor_public_bpn_lookup.json",
+    "expectedStatus": 200,
+    "shouldMatch": "expected/lookup_shells_by_assetlink.json",
+    "headers": {
+      "Edc-Bpn": "BPNL00000000015G"
+    }
+  },
+  {
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:5004/lookup/shellsByAssetLink?createdAfter=",
+    "data": "postBody/descriptor_public_bpn_lookup.json",
+    "expectedStatus": 200,
+    "headers": {
+      "Edc-Bpn": "BPNL00000000015G"
+    }
+  },
+  {
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:5004/lookup/shellsByAssetLink?createdAfter=3026-01-01T00:00:00Z",
+    "data": "postBody/descriptor_public_bpn_lookup.json",
+    "expectedStatus": 200,
+    "shouldMatch": "expected/lookup_shells_by_assetlink_empty.json",
+    "headers": {
+      "Edc-Bpn": "BPNL00000000015G"
+    }
+  },
+  {
     "method": "GET",
     "endpoint": "http://127.0.0.1:5004/lookup/shells/dXJuOnV1aWQ6MDE5YzAwMDUtYjJiNy03YjFkLThjYzctYmI2ZmUzZTVhNWZh",
     "expectedStatus": 200,
