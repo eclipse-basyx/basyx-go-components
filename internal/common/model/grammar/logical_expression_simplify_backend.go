@@ -34,6 +34,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/FriedJannik/aas-go-sdk/stringification"
 )
 
 // AttributeResolver resolves an AttributeValue to a concrete scalar value.
@@ -378,6 +380,9 @@ func reduceMatchCmp(me MatchExpression, resolve AttributeResolver, items []Value
 	left := replaceAttribute(items[0], resolve)
 	right := replaceAttribute(items[1], resolve)
 	isStringOp := op == "$regex" || op == "$contains" || op == "$starts-with" || op == "$ends-with"
+	if !isStringOp {
+		left, right = convertEnumLiteralIfNeeded(left, right)
+	}
 	var comparisonType ComparisonKind
 	if isStringOp {
 		comparisonType = KindString
@@ -445,6 +450,9 @@ func reduceCmp(le LogicalExpression, resolve AttributeResolver, items []Value, o
 	left := replaceAttribute(items[0], resolve)
 	right := replaceAttribute(items[1], resolve)
 	isStringOp := op == "$regex" || op == "$contains" || op == "$starts-with" || op == "$ends-with"
+	if !isStringOp {
+		left, right = convertEnumLiteralIfNeeded(left, right)
+	}
 	var comparisonType ComparisonKind
 	if isStringOp {
 		comparisonType = KindString
@@ -543,6 +551,51 @@ func evalComparisonOnly(le LogicalExpression, resolve AttributeResolver) bool {
 	}
 
 	return false
+}
+
+func convertEnumLiteralIfNeeded(left, right Value) (Value, Value) {
+	if field, _ := extractFieldOperandAndCast(&left); field != nil && right.StrVal != nil {
+		if converted, ok := convertEnumLiteralForField(*field, right); ok {
+			right = converted
+		}
+		return left, right
+	}
+	if field, _ := extractFieldOperandAndCast(&right); field != nil && left.StrVal != nil {
+		if converted, ok := convertEnumLiteralForField(*field, left); ok {
+			left = converted
+		}
+	}
+	return left, right
+}
+
+func convertEnumLiteralForField(field Value, lit Value) (Value, bool) {
+	if field.Field == nil || lit.StrVal == nil {
+		return Value{}, false
+	}
+	fieldName := string(*field.Field)
+	f := ModelStringPattern(fieldName)
+	resolved, err := ResolveScalarFieldToSQL(&f)
+	if err != nil {
+		return Value{}, false
+	}
+	if !strings.Contains(strings.ToLower(resolved.Column), "value_type") {
+		return Value{}, false
+	}
+	if enumVal, ok := stringification.DataTypeDefXSDFromString(string(*lit.StrVal)); ok {
+		if converted, ok := enumValueToValue(enumVal); ok {
+			return converted, true
+		}
+	}
+	return Value{}, false
+}
+
+func enumValueToValue(enumVal interface{}) (Value, bool) {
+	v, ok := enumVal.(int)
+	if !ok {
+		return Value{}, false
+	}
+	f := float64(v)
+	return Value{NumVal: &f}, true
 }
 
 func replaceAttribute(v Value, resolve AttributeResolver) Value {
