@@ -73,14 +73,14 @@ func ReadEndpointsByDescriptorID(
 // without querying the database.
 //
 // Result semantics and ordering:
-// - Endpoints are ordered by descriptor_id ASC, then position ASC, then endpoint id ASC.
-// - Protocol versions are aggregated per-endpoint and ordered by version row id.
-// - Security attributes are aggregated per-endpoint and ordered by attribute row id.
-// - Nullable text columns are COALESCE'd to empty strings; arrays default to empty.
+//   - Endpoints are ordered by position ASC.
+//   - Protocol versions and security attributes are stored as JSONB arrays on the
+//     endpoint row and are decoded per endpoint.
+//   - Nullable text columns are COALESCE'd to empty strings; JSON arrays default to empty.
 //
 // Implementation notes:
 // - Uses pq.Array with SQL ANY for efficient multi-key filtering.
-// - Uses LEFT JOINs so endpoints without versions or security attributes are still returned.
+// - Uses LEFT JOINs so descriptors without endpoints are still handled.
 // - Prepared statements are enabled via goqu to allow DB plan caching.
 //
 // Errors may occur while building the SQL statement, executing the query,
@@ -105,9 +105,6 @@ func ReadEndpointsByDescriptorIDs(
 	d := goqu.Dialect(dialect)
 	arr := pq.Array(descriptorIDs)
 
-	v := goqu.T(tblEndpointProtocolVersion).As("v")
-	s := goqu.T(tblSecurityAttributes).As("s")
-
 	ds := d.From(tDescriptor)
 	var joinOn exp.AliasedExpression
 	switch joinOnMainTable {
@@ -124,17 +121,12 @@ func ReadEndpointsByDescriptorIDs(
 	case "submodel":
 		joinOn = submodelDescriptorEndpointAlias
 		ds = ds.InnerJoin(
-			tAASDescriptor,
-			goqu.On(tAASDescriptor.Col(colDescriptorID).Eq(tDescriptor.Col(colID))),
-		)
-		ds = ds.LeftJoin(
 			submodelDescriptorAlias,
-			goqu.On(submodelDescriptorAlias.Col(colAASDescriptorID).Eq(tAASDescriptor.Col(colDescriptorID))),
-		).
-			LeftJoin(
-				submodelDescriptorEndpointAlias,
-				goqu.On(submodelDescriptorEndpointAlias.Col(colDescriptorID).Eq(submodelDescriptorAlias.Col(colDescriptorID))),
-			)
+			goqu.On(submodelDescriptorAlias.Col(colDescriptorID).Eq(tDescriptor.Col(colID))),
+		).LeftJoin(
+			submodelDescriptorEndpointAlias,
+			goqu.On(submodelDescriptorEndpointAlias.Col(colDescriptorID).Eq(submodelDescriptorAlias.Col(colDescriptorID))),
+		)
 	case "registry":
 		joinOn = registryDescriptorEndpointAlias
 		ds = ds.InnerJoin(
@@ -147,14 +139,7 @@ func ReadEndpointsByDescriptorIDs(
 		)
 	}
 
-	ds = ds.LeftJoin(
-		v,
-		goqu.On(v.Col(colEndpointID).Eq(joinOn.Col(colID))),
-	).
-		LeftJoin(
-			s,
-			goqu.On(s.Col(colEndpointID).Eq(joinOn.Col(colID))),
-		).
+	ds = ds.
 		Where(goqu.L("? = ANY(?::bigint[])", joinOn.Col(colDescriptorID), arr)).
 		Select(
 			joinOn.Col(colDescriptorID),
@@ -165,33 +150,8 @@ func ReadEndpointsByDescriptorIDs(
 			goqu.Func("COALESCE", joinOn.Col(colSubProtocolBody), "").As(colSubProtocolBody),
 			goqu.Func("COALESCE", joinOn.Col(colSubProtocolBodyEncoding), "").As(colSubProtocolBodyEncoding),
 			goqu.Func("COALESCE", joinOn.Col(colInterface), "").As(colInterface),
-
-			// versions
-			goqu.L(
-				fmt.Sprintf(
-					"COALESCE(ARRAY_AGG(v.%s ORDER BY v.%s)\n                  FILTER (WHERE v.%s IS NOT NULL), '{}')",
-					colEndpointProtocolVersion, colID, colEndpointProtocolVersion,
-				),
-			).As("versions"),
-
-			// sec_attrs
-			goqu.L(
-				fmt.Sprintf(
-					"COALESCE(JSON_AGG(JSON_BUILD_OBJECT(\n                    'type', s.%s,\n                    'key', s.%s,\n                    'value', s.%s\n                  ) ORDER BY s.%s)\n                  FILTER (WHERE s.%s IS NOT NULL), '[]')",
-					colSecurityType, colSecurityKey, colSecurityValue, colID, colSecurityType,
-				),
-			).As("sec_attrs"),
-		).
-		GroupBy(
-			joinOn.Col(colDescriptorID),
-			joinOn.Col(colPosition),
-			joinOn.Col(colID),
-			joinOn.Col(colHref),
-			joinOn.Col(colEndpointProtocol),
-			joinOn.Col(colSubProtocol),
-			joinOn.Col(colSubProtocolBody),
-			joinOn.Col(colSubProtocolBodyEncoding),
-			joinOn.Col(colInterface),
+			goqu.Func("COALESCE", joinOn.Col(colEndpointProtocolVersion), goqu.L("'[]'::jsonb")).As("versions"),
+			goqu.Func("COALESCE", joinOn.Col(colSecurityAttributes), goqu.L("'[]'::jsonb")).As("sec_attrs"),
 		).
 		Order(
 			joinOn.Col(colPosition).Asc(),
@@ -218,39 +178,29 @@ func ReadEndpointsByDescriptorIDs(
 	}
 	defer func() { _ = rows.Close() }()
 
-	type secAttr struct {
-		Type  string `json:"type"`
-		Key   string `json:"key"`
-		Value string `json:"value"`
-	}
-
 	for rows.Next() {
 		var (
 			descID, endpointID                                int64
 			href, proto, subProto, subBody, subBodyEnc, iface string
-			versions                                          pq.StringArray
+			versionsJSON                                      []byte
 			secJSON                                           []byte
 		)
 		if err := rows.Scan(
 			&descID, &endpointID,
 			&href, &proto, &subProto, &subBody, &subBodyEnc, &iface,
-			&versions, &secJSON,
+			&versionsJSON, &secJSON,
 		); err != nil {
 			return nil, err
 		}
 
-		var secAttrs []secAttr
-		if err := json.Unmarshal(secJSON, &secAttrs); err != nil {
+		var versions []string
+		if err := json.Unmarshal(versionsJSON, &versions); err != nil {
 			return nil, err
 		}
 
-		converted := make([]model.ProtocolInformationSecurityAttributes, len(secAttrs))
-		for i, a := range secAttrs {
-			converted[i] = model.ProtocolInformationSecurityAttributes{
-				Type:  a.Type,
-				Key:   a.Key,
-				Value: a.Value,
-			}
+		var secAttrs []model.ProtocolInformationSecurityAttributes
+		if err := json.Unmarshal(secJSON, &secAttrs); err != nil {
+			return nil, err
 		}
 
 		out[descID] = append(out[descID], model.Endpoint{
@@ -261,8 +211,8 @@ func ReadEndpointsByDescriptorIDs(
 				Subprotocol:             subProto,
 				SubprotocolBody:         subBody,
 				SubprotocolBodyEncoding: subBodyEnc,
-				EndpointProtocolVersion: []string(versions),
-				SecurityAttributes:      converted,
+				EndpointProtocolVersion: versions,
+				SecurityAttributes:      secAttrs,
 			},
 		})
 	}

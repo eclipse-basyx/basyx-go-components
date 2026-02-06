@@ -52,7 +52,7 @@ func (c *DescriptionAPIAPIController) Routes() Routes {
 		"GetSelfDescription": Route{
 			"GetSelfDescription",
 			strings.ToUpper("Get"),
-			"/api/v3/description",
+			"/description",
 			c.GetSelfDescription,
 		},
 	}
@@ -64,7 +64,7 @@ func (c *DescriptionAPIAPIController) OrderedRoutes() []Route {
 		Route{
 			"GetSelfDescription",
 			strings.ToUpper("Get"),
-			"/api/v3/description",
+			"/description",
 			c.GetSelfDescription,
 		},
 	}

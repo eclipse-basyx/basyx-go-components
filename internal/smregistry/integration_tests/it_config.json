@@ -1,0 +1,139 @@
+[
+  {
+    "context": "001 - Health Check - GET /health",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:6005/health",
+    "shouldMatch": "expected/expectedHealthEndpoint.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "002 - List Submodel Descriptors (Empty) - GET /submodel-descriptors",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:6005/submodel-descriptors",
+    "shouldMatch": "expected/empty_paged_result.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "003 - Get Submodel Descriptor by ID (Not Found) - GET /submodel-descriptors/{submodelId}",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:6005/submodel-descriptors/dXJuOmV4YW1wbGU6c206MDAx",
+    "expectedStatus": 404
+  },
+  {
+    "context": "004 - Get Submodel Descriptor by ID (Bad Encoded URL) - GET /submodel-descriptors/{badId}",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:6005/submodel-descriptors/HELLOWRONGENCODEDURL",
+    "expectedStatus": 400
+  },
+  {
+    "context": "005 - Replace Submodel Descriptor (ID Mismatch) - PUT /submodel-descriptors/{submodelId}",
+    "method": "PUT",
+    "endpoint": "http://127.0.0.1:6005/submodel-descriptors/dXJuOmV4YW1wbGU6c206MDAx",
+    "data": "postBody/simple_submodel_descriptor_2.json",
+    "expectedStatus": 400
+  },
+  {
+    "context": "006 - Create Submodel Descriptor (Missing Endpoints) - POST /submodel-descriptors",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6005/submodel-descriptors",
+    "data": "postBody/simple_submodel_descriptor_malformed.json",
+    "expectedStatus": 400
+  },
+  {
+    "context": "007 - Create Submodel Descriptor #1 - POST /submodel-descriptors",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6005/submodel-descriptors",
+    "data": "postBody/simple_submodel_descriptor_1.json",
+    "shouldMatch": "postBody/simple_submodel_descriptor_1.json",
+    "expectedStatus": 201
+  },
+  {
+    "context": "008 - Create Submodel Descriptor #2 - POST /submodel-descriptors",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6005/submodel-descriptors",
+    "data": "postBody/simple_submodel_descriptor_2.json",
+    "shouldMatch": "postBody/simple_submodel_descriptor_2.json",
+    "expectedStatus": 201
+  },
+  {
+    "context": "009 - Create Submodel Descriptor #3 - POST /submodel-descriptors",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6005/submodel-descriptors",
+    "data": "postBody/simple_submodel_descriptor_3.json",
+    "shouldMatch": "postBody/simple_submodel_descriptor_3.json",
+    "expectedStatus": 201
+  },
+  {
+    "context": "010 - Create Submodel Descriptor Duplicate (Conflict) - POST /submodel-descriptors",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:6005/submodel-descriptors",
+    "data": "postBody/simple_submodel_descriptor_1.json",
+    "expectedStatus": 409
+  },
+  {
+    "context": "011 - List Submodel Descriptors (All) - GET /submodel-descriptors",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:6005/submodel-descriptors",
+    "shouldMatch": "expected/submodel_paged_all.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "012 - List Submodel Descriptors (limit=2) - GET /submodel-descriptors?limit=2",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:6005/submodel-descriptors?limit=2",
+    "shouldMatch": "expected/submodel_paged_limit2.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "013 - List Submodel Descriptors (cursor=...) - GET /submodel-descriptors?cursor=...",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:6005/submodel-descriptors?cursor=dXJuOmV4YW1wbGU6c206MDAy",
+    "shouldMatch": "expected/submodel_paged_cursor_002.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "014 - Get Submodel Descriptor by ID - GET /submodel-descriptors/{submodelId}",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:6005/submodel-descriptors/dXJuOmV4YW1wbGU6c206MDAy",
+    "shouldMatch": "postBody/simple_submodel_descriptor_2.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "015 - Replace Submodel Descriptor (204 No Content) - PUT /submodel-descriptors/{submodelId}",
+    "method": "PUT",
+    "endpoint": "http://127.0.0.1:6005/submodel-descriptors/dXJuOmV4YW1wbGU6c206MDAy",
+    "data": "postBody/simple_submodel_descriptor_2_updated.json",
+    "expectedStatus": 204
+  },
+  {
+    "context": "016 - Get Submodel Descriptor by ID (Updated) - GET /submodel-descriptors/{submodelId}",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:6005/submodel-descriptors/dXJuOmV4YW1wbGU6c206MDAy",
+    "shouldMatch": "postBody/simple_submodel_descriptor_2_updated.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "017 - Delete Submodel Descriptor #1 - DELETE /submodel-descriptors/{submodelId}",
+    "method": "DELETE",
+    "endpoint": "http://127.0.0.1:6005/submodel-descriptors/dXJuOmV4YW1wbGU6c206MDAx",
+    "expectedStatus": 204
+  },
+  {
+    "context": "018 - List Submodel Descriptors (After Delete) - GET /submodel-descriptors",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:6005/submodel-descriptors",
+    "shouldMatch": "expected/submodel_paged_after_delete.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "019 - Cleanup: Delete All Submodel Descriptors - ACTION DELETE_ALL_SUBMODEL_DESCRIPTORS",
+    "action": "DELETE_ALL_SUBMODEL_DESCRIPTORS"
+  },
+  {
+    "context": "020 - Verify Submodel Descriptors Empty - GET /submodel-descriptors",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:6005/submodel-descriptors",
+    "shouldMatch": "expected/empty_paged_result.json",
+    "expectedStatus": 200
+  }
+]

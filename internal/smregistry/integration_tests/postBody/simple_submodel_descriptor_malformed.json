@@ -1,0 +1,11 @@
+{
+  "id": "urn:example:sm:bad",
+  "endpoints": [],
+  "extensions": [
+    {
+      "name": "tag",
+      "valueType": "xs:string",
+      "value": "bad"
+    }
+  ]
+}

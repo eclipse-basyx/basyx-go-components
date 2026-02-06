@@ -66,31 +66,31 @@ func (c *SubmodelRegistryAPIAPIController) Routes() Routes {
 		"GetAllSubmodelDescriptors": Route{
 			"GetAllSubmodelDescriptors",
 			strings.ToUpper("Get"),
-			"/api/v3/submodel-descriptors",
+			"/submodel-descriptors",
 			c.GetAllSubmodelDescriptors,
 		},
 		"PostSubmodelDescriptor": Route{
 			"PostSubmodelDescriptor",
 			strings.ToUpper("Post"),
-			"/api/v3/submodel-descriptors",
+			"/submodel-descriptors",
 			c.PostSubmodelDescriptor,
 		},
 		"GetSubmodelDescriptorById": Route{
 			"GetSubmodelDescriptorById",
 			strings.ToUpper("Get"),
-			"/api/v3/submodel-descriptors/{submodelIdentifier}",
+			"/submodel-descriptors/{submodelIdentifier}",
 			c.GetSubmodelDescriptorById,
 		},
 		"PutSubmodelDescriptorById": Route{
 			"PutSubmodelDescriptorById",
 			strings.ToUpper("Put"),
-			"/api/v3/submodel-descriptors/{submodelIdentifier}",
+			"/submodel-descriptors/{submodelIdentifier}",
 			c.PutSubmodelDescriptorById,
 		},
 		"DeleteSubmodelDescriptorById": Route{
 			"DeleteSubmodelDescriptorById",
 			strings.ToUpper("Delete"),
-			"/api/v3/submodel-descriptors/{submodelIdentifier}",
+			"/submodel-descriptors/{submodelIdentifier}",
 			c.DeleteSubmodelDescriptorById,
 		},
 	}
@@ -102,31 +102,31 @@ func (c *SubmodelRegistryAPIAPIController) OrderedRoutes() []Route {
 		Route{
 			"GetAllSubmodelDescriptors",
 			strings.ToUpper("Get"),
-			"/api/v3/submodel-descriptors",
+			"/submodel-descriptors",
 			c.GetAllSubmodelDescriptors,
 		},
 		Route{
 			"PostSubmodelDescriptor",
 			strings.ToUpper("Post"),
-			"/api/v3/submodel-descriptors",
+			"/submodel-descriptors",
 			c.PostSubmodelDescriptor,
 		},
 		Route{
 			"GetSubmodelDescriptorById",
 			strings.ToUpper("Get"),
-			"/api/v3/submodel-descriptors/{submodelIdentifier}",
+			"/submodel-descriptors/{submodelIdentifier}",
 			c.GetSubmodelDescriptorById,
 		},
 		Route{
 			"PutSubmodelDescriptorById",
 			strings.ToUpper("Put"),
-			"/api/v3/submodel-descriptors/{submodelIdentifier}",
+			"/submodel-descriptors/{submodelIdentifier}",
 			c.PutSubmodelDescriptorById,
 		},
 		Route{
 			"DeleteSubmodelDescriptorById",
 			strings.ToUpper("Delete"),
-			"/api/v3/submodel-descriptors/{submodelIdentifier}",
+			"/submodel-descriptors/{submodelIdentifier}",
 			c.DeleteSubmodelDescriptorById,
 		},
 	}
