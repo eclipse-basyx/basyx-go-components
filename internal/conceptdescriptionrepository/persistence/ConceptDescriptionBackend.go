@@ -31,10 +31,11 @@ package persistence
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
-	"strings"
 	"time"
 
+	"github.com/FriedJannik/aas-go-sdk/jsonization"
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
 	_ "github.com/doug-martin/goqu/v9/dialect/postgres" // Postgres Driver for Goqu
@@ -94,80 +95,45 @@ func testDBConnection(db *sql.DB) (bool, error) {
 
 // CreateConceptDescription inserts a new concept description into the database.
 func (b *ConceptDescriptionBackend) CreateConceptDescription(cd types.IConceptDescription) error {
-	if cd == nil {
-		return common.NewErrBadRequest("ConceptDescription is nil")
-	}
-	if strings.TrimSpace(cd.ID()) == "" {
-		return common.NewErrBadRequest("ConceptDescription id is required")
-	}
+	var jsonable map[string]any
+	var err error
 
-	tx, err := b.db.Begin()
+	exists, err := doesConceptDescriptionExist(b.db, cd.ID())
 	if err != nil {
-		return common.NewInternalServerError("CDREPO-CRCD-BEGIN " + err.Error())
-	}
-	defer func() {
-		if err != nil {
-			_ = tx.Rollback()
-		}
-	}()
-
-	exists, err := conceptDescriptionExists(tx, cd.ID())
-	if err != nil {
-		return err
+		return common.NewInternalServerError("Failed to check of CD Existence CDREPO-CCD-ERREXIST")
 	}
 	if exists {
-		return common.NewErrConflict("ConceptDescription with id '" + cd.ID() + "' already exists")
+		return common.NewErrConflict("Concept description with the given ID already exists - use PUT for Replacement")
 	}
 
-	adminID, err := createAdministrativeInformation(tx, cd.Administration())
+	jsonable, err = jsonization.ToJsonable(cd)
 	if err != nil {
-		return err
+		return common.NewErrBadRequest("Failed to convert concept description to jsonable CDREPO-CCD-TOJSONABLE")
 	}
 
-	descriptionID, err := createLangStringTextTypes(tx, cd.Description())
+	var conceptDescriptionString string
+	bytes, err := json.Marshal(jsonable)
 	if err != nil {
-		return err
+		return common.NewErrBadRequest("Failed to jsonify concept description CDREPO-CCD-TOJSONSTRING")
 	}
 
-	displayNameID, err := createLangStringNameTypes(tx, cd.DisplayName())
+	conceptDescriptionString = string(bytes)
+
+	// Insert the concept description into the database with goqu
+	goquQuery, args, err := goqu.Insert("concept_description").Rows(
+		goqu.Record{
+			"id":       cd.ID(),
+			"id_short": cd.IDShort(),
+			"data":     conceptDescriptionString,
+		},
+	).ToSQL()
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to build SQL query: %w", err)
 	}
 
-	modelType := int(types.ModelTypeConceptDescription)
-
-	insert := goqu.Insert("concept_description").Rows(goqu.Record{
-		"id":                cd.ID(),
-		"id_short":          cd.IDShort(),
-		"category":          cd.Category(),
-		"administration_id": adminID,
-		"description_id":    descriptionID,
-		"displayname_id":    displayNameID,
-		"model_type":        modelType,
-	})
-	sqlQuery, args, err := insert.ToSQL()
+	_, err = b.db.Exec(goquQuery, args...)
 	if err != nil {
-		return common.NewInternalServerError("CDREPO-CRCD-TOSQL " + err.Error())
-	}
-	_, err = tx.Exec(sqlQuery, args...)
-	if err != nil {
-		return common.NewInternalServerError("CDREPO-CRCD-INSERT " + err.Error())
-	}
-
-	if err = insertConceptDescriptionEmbeddedDataSpecifications(tx, cd.ID(), cd.EmbeddedDataSpecifications()); err != nil {
-		return err
-	}
-
-	if err = insertConceptDescriptionIsCaseOf(tx, cd.ID(), cd.IsCaseOf()); err != nil {
-		return err
-	}
-
-	if err = insertConceptDescriptionExtensions(tx, cd.ID(), cd.Extensions()); err != nil {
-		return err
-	}
-
-	if err = tx.Commit(); err != nil {
-		return common.NewInternalServerError("CDREPO-CRCD-COMMIT " + err.Error())
+		return fmt.Errorf("failed to execute SQL query: %w", err)
 	}
 
 	return nil
@@ -175,20 +141,145 @@ func (b *ConceptDescriptionBackend) CreateConceptDescription(cd types.IConceptDe
 
 // GetConceptDescriptions retrieves a paginated list of concept descriptions with optional filters.
 func (b *ConceptDescriptionBackend) GetConceptDescriptions(idShort *string, isCaseOf *string, dataSpecificationRef *string, limit int, cursor *string) ([]types.IConceptDescription, error) {
-	return nil, nil
+	var conceptDescriptions []types.IConceptDescription
+
+	query := goqu.From("concept_description").Select(goqu.C("id"), goqu.C("id_short"), goqu.C("data"))
+
+	// if idShort != nil {
+	// 	query = query.Where(goqu.Ex{"id_short": *idShort})
+	// }
+	// if isCaseOf != nil {
+	// 	query = query.Where(goqu.Ex{"data->>'isCaseOf'": *isCaseOf})
+	// }
+	// if dataSpecificationRef != nil {
+	// 	query = query.Where(goqu.Ex{"data->>'dataSpecificationRef'": *dataSpecificationRef})
+	// }
+
+	if limit > 0 {
+		query = query.Limit(uint(limit))
+	}
+
+	sqlQuery, args, err := query.ToSQL()
+	if err != nil {
+	}
+
+	rows, err := b.db.Query(sqlQuery, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute SQL query: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var id string
+		var idShort string
+		var data string
+		if err := rows.Scan(&id, &idShort, &data); err != nil {
+			return nil, fmt.Errorf("failed to scan row: %w", err)
+		}
+
+		var jsonable map[string]any
+		if err := json.Unmarshal([]byte(data), &jsonable); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal JSON data: %w", err)
+		}
+
+		cd, err := jsonization.ConceptDescriptionFromJsonable(jsonable)
+		if err != nil {
+			return nil, fmt.Errorf("failed to convert jsonable to concept description: %w", err)
+		}
+
+		conceptDescriptions = append(conceptDescriptions, cd)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating over rows: %w", err)
+	}
+
+	return conceptDescriptions, nil
 }
 
 // GetConceptDescriptionByID retrieves a concept description by its identifier.
 func (b *ConceptDescriptionBackend) GetConceptDescriptionByID(id string) (types.IConceptDescription, error) {
-	return nil, nil
+	exists, err := doesConceptDescriptionExist(b.db, id)
+	if err != nil {
+		return nil, common.NewInternalServerError("Failed to check of CD Existence CDREPO-GCDBID-ERREXIST")
+	}
+	if !exists {
+		return nil, common.NewErrNotFound("Concept description with the given ID does not exist")
+	}
+
+	var data string
+	query, args, err := goqu.From("concept_description").
+		Select("data").
+		Where(goqu.Ex{"id": id}).
+		Limit(1).
+		ToSQL()
+	if err != nil {
+		return nil, fmt.Errorf("failed to build SQL query: %w", err)
+	}
+
+	err = b.db.QueryRow(query, args...).Scan(&data)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute SQL query: %w", err)
+	}
+
+	var jsonable map[string]any
+	if err := json.Unmarshal([]byte(data), &jsonable); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal JSON data: %w", err)
+	}
+
+	cd, err := jsonization.ConceptDescriptionFromJsonable(jsonable)
+	if err != nil {
+		return nil, fmt.Errorf("failed to convert jsonable to concept description: %w", err)
+	}
+
+	return cd.(types.IConceptDescription), nil
 }
 
 // PutConceptDescription updates or replaces the concept description with the given identifier.
 func (b *ConceptDescriptionBackend) PutConceptDescription(id string, cd types.IConceptDescription) error {
-	return nil
+	exists, err := doesConceptDescriptionExist(b.db, id)
+	if err != nil {
+		return err
+	}
+
+	if exists {
+		err = b.DeleteConceptDescription(id)
+		if err != nil {
+			return err
+		}
+	}
+
+	err = b.CreateConceptDescription(cd)
+	return err
 }
 
 // DeleteConceptDescription removes a concept description by its identifier.
 func (b *ConceptDescriptionBackend) DeleteConceptDescription(id string) error {
-	return nil
+	delQuery, args, err := goqu.Delete("concept_description").Where(
+		goqu.Ex{"id": id},
+	).ToSQL()
+	if err != nil {
+		return err
+	}
+	_, err = b.db.Exec(delQuery, args...)
+	return err
+}
+
+func doesConceptDescriptionExist(db *sql.DB, id string) (bool, error) {
+	query, args, err := goqu.From("concept_description").
+		Select(goqu.L("1")).
+		Where(goqu.Ex{"id": id}).
+		Limit(1).
+		ToSQL()
+	if err != nil {
+		return false, fmt.Errorf("CDREPO-CDEXIST-BUILDSQL failed to build SQL query: %w", err)
+	}
+
+	rows, err := db.Query(query, args...)
+	if err != nil {
+		return false, fmt.Errorf("CDREPO-CDEXIST-EXEC failed to execute SQL query: %w", err)
+	}
+	defer rows.Close()
+
+	return rows.Next(), nil
 }

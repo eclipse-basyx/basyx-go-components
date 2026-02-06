@@ -36,7 +36,6 @@ package api
 
 import (
 	"context"
-	"errors"
 	"net/http"
 
 	"github.com/FriedJannik/aas-go-sdk/jsonization"
@@ -64,25 +63,28 @@ func NewConceptDescriptionRepositoryAPIAPIService(database *persistence.ConceptD
 
 // GetAllConceptDescriptions - Returns all Concept Descriptions
 func (s *ConceptDescriptionRepositoryAPIAPIService) GetAllConceptDescriptions(ctx context.Context, idShort string, isCaseOf string, dataSpecificationRef string, limit int32, cursor string) (model.ImplResponse, error) {
-	// TODO - update GetAllConceptDescriptions with the required logic for this service method.
-	// Add api_concept_description_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
+	cds, err := s.d.GetConceptDescriptions(&idShort, &isCaseOf, &dataSpecificationRef, int(limit), &cursor)
+	if err != nil {
+		switch {
+		case common.IsErrBadRequest(err):
+			return common.NewErrorResponse(err, http.StatusBadRequest, componentName, "GetAllConceptDescriptions", "BadRequest"), nil
+		case common.IsErrDenied(err):
+			return common.NewErrorResponse(err, http.StatusForbidden, componentName, "GetAllConceptDescriptions", "Denied"), nil
+		default:
+			return common.NewErrorResponse(err, http.StatusInternalServerError, componentName, "GetAllConceptDescriptions", "Unhandled"), err
+		}
+	}
 
-	// TODO: Uncomment the next line to return model.Response Response(200, GetConceptDescriptionsResult{}) or use other options such as http.Ok ...
-	// return model.Response(200, GetConceptDescriptionsResult{}), nil
+	var jsonable []map[string]any
+	for _, cd := range cds {
+		jsonObj, err := jsonization.ToJsonable(cd)
+		if err != nil {
+			return common.NewErrorResponse(err, http.StatusInternalServerError, componentName, "GetAllConceptDescriptions", "ToJsonable"), err
+		}
+		jsonable = append(jsonable, jsonObj)
+	}
 
-	// TODO: Uncomment the next line to return model.Response Response(400, Result{}) or use other options such as http.Ok ...
-	// return model.Response(400, Result{}), nil
-
-	// TODO: Uncomment the next line to return model.Response Response(403, Result{}) or use other options such as http.Ok ...
-	// return model.Response(403, Result{}), nil
-
-	// TODO: Uncomment the next line to return model.Response Response(500, Result{}) or use other options such as http.Ok ...
-	// return model.Response(500, Result{}), nil
-
-	// TODO: Uncomment the next line to return model.Response Response(0, Result{}) or use other options such as http.Ok ...
-	// return model.Response(0, Result{}), nil
-
-	return model.Response(http.StatusNotImplemented, nil), errors.New("GetAllConceptDescriptions method not implemented")
+	return model.Response(http.StatusOK, jsonable), nil
 }
 
 // PostConceptDescription - Creates a new Concept Description
@@ -111,78 +113,76 @@ func (s *ConceptDescriptionRepositoryAPIAPIService) PostConceptDescription(ctx c
 
 // GetConceptDescriptionById - Returns a specific Concept Description
 func (s *ConceptDescriptionRepositoryAPIAPIService) GetConceptDescriptionById(ctx context.Context, cdIdentifier string) (model.ImplResponse, error) {
-	// TODO - update GetConceptDescriptionById with the required logic for this service method.
-	// Add api_concept_description_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
+	decodedIdentifier, err := common.Decode(cdIdentifier)
+	if err != nil {
+		return common.NewErrorResponse(err, http.StatusBadRequest, componentName, "GetConceptDescriptionById", "URLDecode"), nil
+	}
+	cd, err := s.d.GetConceptDescriptionByID(string(decodedIdentifier))
+	if err != nil {
+		switch {
+		case common.IsErrBadRequest(err):
+			return common.NewErrorResponse(err, http.StatusBadRequest, componentName, "GetConceptDescriptionById", "BadRequest"), nil
+		case common.IsErrDenied(err):
+			return common.NewErrorResponse(err, http.StatusForbidden, componentName, "GetConceptDescriptionById", "Denied"), nil
+		case common.IsErrNotFound(err):
+			return common.NewErrorResponse(err, http.StatusNotFound, componentName, "GetConceptDescriptionById", "NotFound"), nil
+		default:
+			return common.NewErrorResponse(err, http.StatusInternalServerError, componentName, "GetConceptDescriptionById", "Unhandled"), err
+		}
+	}
 
-	// TODO: Uncomment the next line to return model.Response Response(200, ConceptDescription{}) or use other options such as http.Ok ...
-	// return model.Response(200, ConceptDescription{}), nil
+	var jsonable map[string]any
+	jsonable, err = jsonization.ToJsonable(cd)
+	if err != nil {
+		return common.NewErrorResponse(err, http.StatusInternalServerError, componentName, "GetConceptDescriptionById", "ToJsonable"), err
+	}
 
-	// TODO: Uncomment the next line to return model.Response Response(400, Result{}) or use other options such as http.Ok ...
-	// return model.Response(400, Result{}), nil
-
-	// TODO: Uncomment the next line to return model.Response Response(403, Result{}) or use other options such as http.Ok ...
-	// return model.Response(403, Result{}), nil
-
-	// TODO: Uncomment the next line to return model.Response Response(404, Result{}) or use other options such as http.Ok ...
-	// return model.Response(404, Result{}), nil
-
-	// TODO: Uncomment the next line to return model.Response Response(500, Result{}) or use other options such as http.Ok ...
-	// return model.Response(500, Result{}), nil
-
-	// TODO: Uncomment the next line to return model.Response Response(0, Result{}) or use other options such as http.Ok ...
-	// return model.Response(0, Result{}), nil
-
-	return model.Response(http.StatusNotImplemented, nil), errors.New("GetConceptDescriptionById method not implemented")
+	return model.Response(http.StatusOK, jsonable), nil
 }
 
 // PutConceptDescriptionById - Creates or updates an existing Concept Description
 func (s *ConceptDescriptionRepositoryAPIAPIService) PutConceptDescriptionById(ctx context.Context, cdIdentifier string, conceptDescription types.IConceptDescription) (model.ImplResponse, error) {
-	// TODO - update PutConceptDescriptionById with the required logic for this service method.
-	// Add api_concept_description_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
+	decodedIdentifier, err := common.Decode(cdIdentifier)
+	if err != nil {
+		return common.NewErrorResponse(err, http.StatusBadRequest, componentName, "PutConceptDescriptionById", "URLDecode"), nil
+	}
+	err = s.d.PutConceptDescription(string(decodedIdentifier), conceptDescription)
+	if err != nil {
+		switch {
+		case common.IsErrBadRequest(err):
+			return common.NewErrorResponse(err, http.StatusBadRequest, componentName, "PutConceptDescriptionById", "BadRequest"), nil
+		case common.IsErrDenied(err):
+			return common.NewErrorResponse(err, http.StatusForbidden, componentName, "PutConceptDescriptionById", "Denied"), nil
+		default:
+			return common.NewErrorResponse(err, http.StatusInternalServerError, componentName, "PutConceptDescriptionById", "Unhandled"), err
+		}
+	}
 
-	// TODO: Uncomment the next line to return model.Response Response(201, ConceptDescription{}) or use other options such as http.Ok ...
-	// return model.Response(201, ConceptDescription{}), nil
+	jsonable, toJsonErr := jsonization.ToJsonable(conceptDescription)
+	if toJsonErr != nil {
+		return common.NewErrorResponse(toJsonErr, http.StatusInternalServerError, componentName, "PutConceptDescriptionById", "ToJsonable"), toJsonErr
+	}
 
-	// TODO: Uncomment the next line to return model.Response Response(204, {}) or use other options such as http.Ok ...
-	// return model.Response(204, nil),nil
-
-	// TODO: Uncomment the next line to return model.Response Response(400, Result{}) or use other options such as http.Ok ...
-	// return model.Response(400, Result{}), nil
-
-	// TODO: Uncomment the next line to return model.Response Response(403, Result{}) or use other options such as http.Ok ...
-	// return model.Response(403, Result{}), nil
-
-	// TODO: Uncomment the next line to return model.Response Response(500, Result{}) or use other options such as http.Ok ...
-	// return model.Response(500, Result{}), nil
-
-	// TODO: Uncomment the next line to return model.Response Response(0, Result{}) or use other options such as http.Ok ...
-	// return model.Response(0, Result{}), nil
-
-	return model.Response(http.StatusNotImplemented, nil), errors.New("PutConceptDescriptionById method not implemented")
+	return model.Response(http.StatusOK, jsonable), nil
 }
 
 // DeleteConceptDescriptionById - Deletes a Concept Description
 func (s *ConceptDescriptionRepositoryAPIAPIService) DeleteConceptDescriptionById(ctx context.Context, cdIdentifier string) (model.ImplResponse, error) {
-	// TODO - update DeleteConceptDescriptionById with the required logic for this service method.
-	// Add api_concept_description_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
+	decodedIdentifier, err := common.Decode(cdIdentifier)
+	if err != nil {
+		return common.NewErrorResponse(err, http.StatusBadRequest, componentName, "DeleteConceptDescriptionById", "URLDecode"), nil
+	}
+	err = s.d.DeleteConceptDescription(string(decodedIdentifier))
+	if err != nil {
+		switch {
+		case common.IsErrBadRequest(err):
+			return common.NewErrorResponse(err, http.StatusBadRequest, componentName, "DeleteConceptDescriptionById", "BadRequest"), nil
+		case common.IsErrDenied(err):
+			return common.NewErrorResponse(err, http.StatusForbidden, componentName, "DeleteConceptDescriptionById", "Denied"), nil
+		default:
+			return common.NewErrorResponse(err, http.StatusInternalServerError, componentName, "DeleteConceptDescriptionById", "Unhandled"), err
+		}
+	}
 
-	// TODO: Uncomment the next line to return model.Response Response(204, {}) or use other options such as http.Ok ...
-	// return model.Response(204, nil),nil
-
-	// TODO: Uncomment the next line to return model.Response Response(400, Result{}) or use other options such as http.Ok ...
-	// return model.Response(400, Result{}), nil
-
-	// TODO: Uncomment the next line to return model.Response Response(403, Result{}) or use other options such as http.Ok ...
-	// return model.Response(403, Result{}), nil
-
-	// TODO: Uncomment the next line to return model.Response Response(404, Result{}) or use other options such as http.Ok ...
-	// return model.Response(404, Result{}), nil
-
-	// TODO: Uncomment the next line to return model.Response Response(500, Result{}) or use other options such as http.Ok ...
-	// return model.Response(500, Result{}), nil
-
-	// TODO: Uncomment the next line to return model.Response Response(0, Result{}) or use other options such as http.Ok ...
-	// return model.Response(0, Result{}), nil
-
-	return model.Response(http.StatusNotImplemented, nil), errors.New("DeleteConceptDescriptionById method not implemented")
+	return model.Response(http.StatusNoContent, nil), nil
 }
