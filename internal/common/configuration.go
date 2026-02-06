@@ -1,3 +1,29 @@
+/*******************************************************************************
+* Copyright (C) 2026 the Eclipse BaSyx Authors and Fraunhofer IESE
+*
+* Permission is hereby granted, free of charge, to any person obtaining
+* a copy of this software and associated documentation files (the
+* "Software"), to deal in the Software without restriction, including
+* without limitation the rights to use, copy, modify, merge, publish,
+* distribute, sublicense, and/or sell copies of the Software, and to
+* permit persons to whom the Software is furnished to do so, subject to
+* the following conditions:
+*
+* The above copyright notice and this permission notice shall be
+* included in all copies or substantial portions of the Software.
+*
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+* NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+* LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+* OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+* WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*
+* SPDX-License-Identifier: MIT
+******************************************************************************/
+// Author: Jannik Fried ( Fraunhofer IESE ), Martin Stemmer ( Fraunhofer IESE )
+
 // Package common provides configuration management, database initialization,
 // and HTTP endpoint utilities for BaSyx Go components. It includes support
 // for YAML configuration files, environment variable overrides, CORS setup,
@@ -20,39 +46,45 @@ import (
 // DefaultConfig holds all default values for configuration options.
 // THESE VALUES ARE NOT USED! THEY VALIDATE IF CONFIGURATION IS DEFAULT IN THE PRINT STATEMENT
 var DefaultConfig = struct {
-	ServerPort         int
-	ServerContextPath  string
-	ServerCacheEnabled bool
-	PgPort             int
-	PgDBName           string
-	PgMaxOpen          int
-	PgMaxIdle          int
-	PgConnLifetime     int
-	AllowedOrigins     []string
-	AllowedMethods     []string
-	AllowedHeaders     []string
-	AllowCredentials   bool
-	OIDCTrustlistPath  string
-	OIDCJWKSURL        string
-	ABACEnabled        bool
-	ABACModelPath      string
+	ServerPort                  int
+	ServerContextPath           string
+	ServerCacheEnabled          bool
+	PgPort                      int
+	PgDBName                    string
+	PgMaxOpen                   int
+	PgMaxIdle                   int
+	PgConnLifetime              int
+	AllowedOrigins              []string
+	AllowedMethods              []string
+	AllowedHeaders              []string
+	AllowCredentials            bool
+	OIDCTrustlistPath           string
+	OIDCJWKSURL                 string
+	ABACEnabled                 bool
+	ABACModelPath               string
+	GeneralImplicitCasts        bool
+	GeneralDescriptorDebug      bool
+	GeneralDiscoveryIntegration bool
 }{
-	ServerPort:         5004,
-	ServerContextPath:  "",
-	ServerCacheEnabled: false,
-	PgPort:             5432,
-	PgDBName:           "basyxTestDB",
-	PgMaxOpen:          50,
-	PgMaxIdle:          50,
-	PgConnLifetime:     5,
-	AllowedOrigins:     []string{},
-	AllowedMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
-	AllowedHeaders:     []string{},
-	AllowCredentials:   false,
-	OIDCTrustlistPath:  "config/trustlist.json",
-	OIDCJWKSURL:        "",
-	ABACEnabled:        false,
-	ABACModelPath:      "config/access_rules/access-rules.json",
+	ServerPort:                  5004,
+	ServerContextPath:           "",
+	ServerCacheEnabled:          false,
+	PgPort:                      5432,
+	PgDBName:                    "basyxTestDB",
+	PgMaxOpen:                   50,
+	PgMaxIdle:                   50,
+	PgConnLifetime:              5,
+	AllowedOrigins:              []string{},
+	AllowedMethods:              []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
+	AllowedHeaders:              []string{},
+	AllowCredentials:            false,
+	OIDCTrustlistPath:           "config/trustlist.json",
+	OIDCJWKSURL:                 "",
+	ABACEnabled:                 false,
+	ABACModelPath:               "config/access_rules/access-rules.json",
+	GeneralImplicitCasts:        true,
+	GeneralDescriptorDebug:      false,
+	GeneralDiscoveryIntegration: false,
 }
 
 // PrintSplash displays the BaSyx Go API ASCII art logo to the console.
@@ -109,6 +141,7 @@ type Config struct {
 	Postgres   PostgresConfig `mapstructure:"postgres" yaml:"postgres"` // PostgreSQL database settings
 	CorsConfig CorsConfig     `mapstructure:"cors" yaml:"cors"`         // CORS policy configuration
 
+	General GeneralConfig `mapstructure:"general" yaml:"general"` // General configuration
 	OIDC    OIDCConfig    `mapstructure:"oidc" yaml:"oidc"`       // OpenID Connect authentication
 	ABAC    ABACConfig    `mapstructure:"abac" yaml:"abac"`       // Attribute-Based Access Control
 	JWS     JWSConfig     `mapstructure:"jws" yaml:"jws"`         // JWS signing configuration
@@ -155,6 +188,13 @@ type CorsConfig struct {
 	AllowedMethods   []string `mapstructure:"allowedMethods" yaml:"allowedMethods"`     // Allowed HTTP methods
 	AllowedHeaders   []string `mapstructure:"allowedHeaders" yaml:"allowedHeaders"`     // Allowed request headers
 	AllowCredentials bool     `mapstructure:"allowCredentials" yaml:"allowCredentials"` // Allow credentials in requests
+}
+
+// GeneralConfig contains non-domain-specific configuration.
+type GeneralConfig struct {
+	EnableImplicitCasts   bool `mapstructure:"enableImplicitCasts" yaml:"enableImplicitCasts" json:"enableImplicitCasts"`       // Enable implicit casts during backend simplification
+	EnableDescriptorDebug bool `mapstructure:"enableDescriptorDebug" yaml:"enableDescriptorDebug" json:"enableDescriptorDebug"` // Enable descriptor query debug output
+	DiscoveryIntegration  bool `mapstructure:"discoveryIntegration" yaml:"discoveryIntegration" json:"discoveryIntegration"`    // Enable integration with discovery aas_identifier linking
 }
 
 // OIDCProviderConfig contains OpenID Connect authentication provider settings.

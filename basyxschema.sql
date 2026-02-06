@@ -363,10 +363,17 @@ CREATE TABLE IF NOT EXISTS descriptor_extension (
   extension_id BIGINT NOT NULL REFERENCES extension(id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS aas_identifier (
+  id          BIGSERIAL PRIMARY KEY,
+  aasId       VARCHAR(2048) UNIQUE NOT NULL,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS specific_asset_id (
   id BIGSERIAL PRIMARY KEY,
   position     INTEGER NOT NULL,                -- <- Array-Index
-  descriptor_id BIGINT NOT NULL REFERENCES descriptor(id) ON DELETE CASCADE,
+  descriptor_id BIGINT REFERENCES descriptor(id) ON DELETE CASCADE,
+  aasRef BIGINT REFERENCES aas_identifier(id) ON DELETE CASCADE,
   semantic_id BIGINT REFERENCES reference(id),
   name VARCHAR(64) NOT NULL,
   value VARCHAR(2048) NOT NULL,
@@ -379,6 +386,15 @@ CREATE TABLE IF NOT EXISTS specific_asset_id_supplemental_semantic_id (
   specific_asset_id_id BIGINT NOT NULL REFERENCES specific_asset_id(id) ON DELETE CASCADE,
   reference_id BIGINT NOT NULL REFERENCES reference(id) ON DELETE CASCADE
 );
+
+ALTER TABLE IF EXISTS specific_asset_id
+  ADD COLUMN IF NOT EXISTS aasRef BIGINT REFERENCES aas_identifier(id) ON DELETE CASCADE;
+
+ALTER TABLE IF EXISTS aas_identifier
+  ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+
+ALTER TABLE IF EXISTS specific_asset_id
+  ALTER COLUMN descriptor_id DROP NOT NULL;
 
 CREATE TABLE IF NOT EXISTS aas_descriptor_endpoint (
   id BIGSERIAL PRIMARY KEY,
@@ -410,6 +426,7 @@ CREATE TABLE IF NOT EXISTS endpoint_protocol_version (
 
 CREATE TABLE IF NOT EXISTS aas_descriptor (
   descriptor_id BIGINT PRIMARY KEY REFERENCES descriptor(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   description_id BIGINT REFERENCES lang_string_text_type_reference(id) ON DELETE SET NULL,
   displayname_id BIGINT REFERENCES lang_string_name_type_reference(id) ON DELETE SET NULL,
   administrative_information_id BIGINT REFERENCES administrative_information(id) ON DELETE CASCADE,
@@ -422,6 +439,7 @@ CREATE TABLE IF NOT EXISTS aas_descriptor (
 
 CREATE TABLE IF NOT EXISTS submodel_descriptor (
   descriptor_id BIGINT PRIMARY KEY REFERENCES descriptor(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   position     INTEGER NOT NULL,                -- <- Array-Index
   aas_descriptor_id BIGINT REFERENCES aas_descriptor(descriptor_id) ON DELETE CASCADE,
   description_id BIGINT REFERENCES lang_string_text_type_reference(id) ON DELETE SET NULL,
@@ -562,10 +580,15 @@ CREATE INDEX IF NOT EXISTS ix_descriptor_extension_pair          ON descriptor_e
 -- Specific Asset IDs
 -- ==========================================
 
+CREATE UNIQUE INDEX IF NOT EXISTS ix_aas_identifier_aasid ON aas_identifier(aasId);
+CREATE INDEX IF NOT EXISTS ix_aas_identifier_created_at ON aas_identifier(created_at);
 
 CREATE INDEX IF NOT EXISTS ix_specasset_descriptor_id_name ON specific_asset_id (descriptor_id, name);
 CREATE INDEX IF NOT EXISTS ix_specasset_descriptor_id_position ON specific_asset_id (descriptor_id, position);
 CREATE INDEX IF NOT EXISTS ix_specasset_descriptor_id_external_subject_ref ON specific_asset_id (descriptor_id, external_subject_ref);
+
+CREATE INDEX IF NOT EXISTS ix_specasset_aasref ON specific_asset_id (aasRef);
+CREATE INDEX IF NOT EXISTS ix_specasset_name_value_aasref ON specific_asset_id (name, value, aasRef);
 
 CREATE INDEX IF NOT EXISTS ix_specasset_descriptor_id ON specific_asset_id(descriptor_id);
 CREATE INDEX IF NOT EXISTS ix_specasset_semantic_id   ON specific_asset_id(semantic_id);
@@ -610,6 +633,7 @@ CREATE INDEX IF NOT EXISTS ix_epv_version                  ON endpoint_protocol_
 CREATE INDEX IF NOT EXISTS ix_aasd_admininfo_id            ON aas_descriptor(administrative_information_id);
 CREATE INDEX IF NOT EXISTS ix_aasd_displayname_id          ON aas_descriptor(displayname_id);
 CREATE INDEX IF NOT EXISTS ix_aasd_description_id          ON aas_descriptor(description_id);
+CREATE INDEX IF NOT EXISTS ix_aasd_created_at              ON aas_descriptor(created_at);
 
 CREATE INDEX IF NOT EXISTS ix_aasd_id_short                ON aas_descriptor(id_short);
 CREATE INDEX IF NOT EXISTS ix_aasd_global_asset_id         ON aas_descriptor(global_asset_id);
@@ -627,6 +651,7 @@ CREATE INDEX IF NOT EXISTS ix_smd_admininfo_id             ON submodel_descripto
 CREATE INDEX IF NOT EXISTS ix_smd_semantic_id              ON submodel_descriptor(semantic_id);
 CREATE INDEX IF NOT EXISTS ix_smd_displayname_id           ON submodel_descriptor(displayname_id);
 CREATE INDEX IF NOT EXISTS ix_smd_description_id           ON submodel_descriptor(description_id);
+CREATE INDEX IF NOT EXISTS ix_smd_created_at               ON submodel_descriptor(created_at);
 CREATE INDEX IF NOT EXISTS ix_smd_id_short                 ON submodel_descriptor(id_short);
 -- unique(id) already present; add trigram for partial/fuzzy
 CREATE INDEX IF NOT EXISTS ix_smd_id_trgm                  ON submodel_descriptor USING GIN (id gin_trgm_ops);

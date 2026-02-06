@@ -43,6 +43,7 @@ type AccessModel struct {
 	apiRouter *api.Mux
 	rctx      *api.Context
 	rules     []materializedRule
+	basePath  string
 }
 
 type materializedRule struct {
@@ -55,7 +56,7 @@ type materializedRule struct {
 
 // ParseAccessModel parses a JSON (or YAML converted to JSON) payload that
 // conforms to the Access Rule Model schema and returns a compiled AccessModel.
-func ParseAccessModel(b []byte, apiRouter *api.Mux) (*AccessModel, error) {
+func ParseAccessModel(b []byte, apiRouter *api.Mux, basePath string) (*AccessModel, error) {
 	var m grammar.AccessRuleModelSchemaJSON
 	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	if err := json.Unmarshal(b, &m); err != nil {
@@ -72,6 +73,7 @@ func ParseAccessModel(b []byte, apiRouter *api.Mux) (*AccessModel, error) {
 		apiRouter: apiRouter,
 		rctx:      api.NewRouteContext(),
 		rules:     rules,
+		basePath:  basePath,
 	}, nil
 }
 
@@ -118,6 +120,12 @@ const (
 //
 //nolint:revive // i will refactor this function at some point
 func (m *AccessModel) AuthorizeWithFilter(in EvalInput) (bool, DecisionCode, *QueryFilter) {
+	return m.AuthorizeWithFilterWithOptions(in, grammar.DefaultSimplifyOptions())
+}
+
+// AuthorizeWithFilterWithOptions behaves like AuthorizeWithFilter but allows callers
+// to control backend simplification behavior (e.g., implicit casts).
+func (m *AccessModel) AuthorizeWithFilterWithOptions(in EvalInput, opts grammar.SimplifyOptions) (bool, DecisionCode, *QueryFilter) {
 	rights, mapped := m.mapMethodAndPathToRights(in)
 	if !mapped {
 		return false, DecisionNoMatch, nil
@@ -141,7 +149,7 @@ func (m *AccessModel) AuthorizeWithFilter(in EvalInput) (bool, DecisionCode, *Qu
 			continue
 		}
 		// Gate 3: objects
-		accessWithOptinalFilter := matchRouteObjectsObjItem(objs, in.Path)
+		accessWithOptinalFilter := matchRouteObjectsObjItem(objs, in.Path, m.basePath)
 		if !accessWithOptinalFilter.access {
 			continue
 		}
@@ -172,7 +180,7 @@ func (m *AccessModel) AuthorizeWithFilter(in EvalInput) (bool, DecisionCode, *Qu
 		resolver := func(attr grammar.AttributeValue) any {
 			return resolveAttributeValue(attr, in.Claims)
 		}
-		adapted, decision := combinedLE.SimplifyForBackendFilter(resolver)
+		adapted, decision := combinedLE.SimplifyForBackendFilterWithOptions(resolver, opts)
 		if decision == grammar.SimplifyFalse {
 			continue
 		}
@@ -202,7 +210,6 @@ func (m *AccessModel) AuthorizeWithFilter(in EvalInput) (bool, DecisionCode, *Qu
 		}
 
 		ruleExprs = append(ruleExprs, QueryFilter{&adapted, fragments})
-
 	}
 
 	if len(ruleExprs) == 0 {
@@ -219,7 +226,6 @@ func (m *AccessModel) AuthorizeWithFilter(in EvalInput) (bool, DecisionCode, *Qu
 			cur := combinedFragments[fragment]
 			if existing, ok := qfr.Filters[fragment]; ok {
 				cur.Or = append(cur.Or, existing)
-
 			} else {
 				cur.Or = append(cur.Or, *qfr.Formula)
 			}
@@ -237,15 +243,14 @@ func (m *AccessModel) AuthorizeWithFilter(in EvalInput) (bool, DecisionCode, *Qu
 		resolver := func(attr grammar.AttributeValue) any {
 			return resolveAttributeValue(attr, in.Claims)
 		}
-		simpleFilter, _ := le.SimplifyForBackendFilter(resolver)
+		simpleFilter, _ := le.SimplifyForBackendFilterWithOptions(resolver, opts)
 		combinedFragments[fragment] = simpleFilter
-
 	}
 
 	resolver := func(attr grammar.AttributeValue) any {
 		return resolveAttributeValue(attr, in.Claims)
 	}
-	simplified, decision := combined.SimplifyForBackendFilter(resolver)
+	simplified, decision := combined.SimplifyForBackendFilterWithOptions(resolver, opts)
 
 	hasFormula := true
 	switch decision {

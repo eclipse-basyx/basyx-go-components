@@ -126,7 +126,7 @@ func (s *AssetAdministrationShellBasicDiscoveryAPIAPIService) GetAllAssetLinksBy
 		), nil
 	}
 
-	links, err := s.discoveryBackend.GetAllAssetLinks(string(decoded))
+	links, err := s.discoveryBackend.GetAllAssetLinks(ctx, string(decoded))
 	if err != nil {
 		switch {
 		case common.IsErrNotFound(err):
@@ -177,7 +177,7 @@ func (s *AssetAdministrationShellBasicDiscoveryAPIAPIService) PostAllAssetLinksB
 		), nil
 	}
 
-	err := s.discoveryBackend.CreateAllAssetLinks(string(decodeDiscoveryIdentifier), specificAssetID)
+	err := s.discoveryBackend.CreateAllAssetLinks(ctx, string(decodeDiscoveryIdentifier), specificAssetID)
 	if err != nil {
 		switch {
 		case common.IsErrBadRequest(err):
@@ -223,7 +223,7 @@ func (s *AssetAdministrationShellBasicDiscoveryAPIAPIService) DeleteAllAssetLink
 		), nil
 	}
 
-	err := s.discoveryBackend.DeleteAllAssetLinks(string(decoded))
+	err := s.discoveryBackend.DeleteAllAssetLinks(ctx, string(decoded))
 	if err != nil {
 		switch {
 		case common.IsErrNotFound(err):

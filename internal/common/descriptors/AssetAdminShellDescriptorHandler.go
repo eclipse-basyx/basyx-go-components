@@ -46,6 +46,8 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
+	"time"
 
 	"github.com/FriedJannik/aas-go-sdk/stringification"
 	"github.com/FriedJannik/aas-go-sdk/types"
@@ -102,7 +104,7 @@ func InsertAssetAdministrationShellDescriptor(ctx context.Context, db *sql.DB, a
 // entities (display name/description/admin info/endpoints/specific IDs/extensions
 // and submodel descriptors). If any step fails, the error is returned and the
 // caller is responsible for rolling back the transaction.
-func InsertAdministrationShellDescriptorTx(_ context.Context, tx *sql.Tx, aasd model.AssetAdministrationShellDescriptor) error {
+func InsertAdministrationShellDescriptorTx(ctx context.Context, tx *sql.Tx, aasd model.AssetAdministrationShellDescriptor) error {
 	d := goqu.Dialect(dialect)
 
 	descTbl := goqu.T(tblDescriptor)
@@ -163,7 +165,16 @@ func InsertAdministrationShellDescriptorTx(_ context.Context, tx *sql.Tx, aasd m
 		return err
 	}
 
-	if err = createSpecificAssetID(tx, descriptorID, aasd.SpecificAssetIds); err != nil {
+	var aasRef sql.NullInt64
+	if cfg, ok := common.ConfigFromContext(ctx); ok && cfg.General.DiscoveryIntegration {
+		ref, err := ensureAASIdentifierTx(ctx, tx, aasd.Id)
+		if err != nil {
+			return err
+		}
+		aasRef = sql.NullInt64{Int64: ref, Valid: true}
+	}
+
+	if err = createSpecificAssetID(tx, descriptorID, aasRef, aasd.SpecificAssetIds); err != nil {
 		return err
 	}
 
@@ -351,13 +362,16 @@ func buildListAssetAdministrationShellDescriptorsQuery(
 			Exp: tAASDescriptor.Col(colAASID),
 		},
 		{
-			Exp: tAASDescriptor.Col(colAdminInfoID),
+			Exp:      tAASDescriptor.Col(colAdminInfoID),
+			Fragment: fragPtr("$aasdesc#administration"),
 		},
 		{
-			Exp: tAASDescriptor.Col(colDisplayNameID),
+			Exp:      tAASDescriptor.Col(colDisplayNameID),
+			Fragment: fragPtr("$aasdesc#displayName"),
 		},
 		{
-			Exp: tAASDescriptor.Col(colDescriptionID),
+			Exp:      tAASDescriptor.Col(colDescriptionID),
+			Fragment: fragPtr("$aasdesc#description"),
 		},
 	}
 
@@ -392,10 +406,6 @@ func buildListAssetAdministrationShellDescriptorsQuery(
 		)
 	}
 	ds, err = auth.AddFormulaQueryFromContext(ctx, ds, collector)
-	if err != nil {
-		return nil, err
-	}
-	ds, err = auth.ApplyResolvedFieldPathCTEs(ds, collector, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -449,6 +459,11 @@ func ListAssetAdministrationShellDescriptors(
 	assetType string,
 	identifiable string,
 ) ([]model.AssetAdministrationShellDescriptor, string, error) {
+	if debugEnabled(ctx) {
+		defer func(start time.Time) {
+			_, _ = fmt.Printf("ListAssetAdministrationShellDescriptors took %s\n", time.Since(start))
+		}(time.Now())
+	}
 	return listAssetAdministrationShellDescriptors(ctx, db, limit, cursor, assetKind, assetType, identifiable, true)
 }
 
@@ -472,6 +487,9 @@ func listAssetAdministrationShellDescriptors(
 		return nil, "", err
 	}
 	sqlStr, args, err := ds.ToSQL()
+	if debugEnabled(ctx) {
+		_, _ = fmt.Println(sqlStr)
+	}
 
 	if err != nil {
 		return nil, "", err

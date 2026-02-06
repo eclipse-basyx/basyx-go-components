@@ -77,10 +77,6 @@ type OIDCProviderSettings struct {
 func NewOIDC(ctx context.Context, s OIDCSettings) (*OIDC, error) {
 	log.Printf("🔐 Initializing OIDC verifier…")
 
-	if len(s.Providers) == 0 {
-		return nil, fmt.Errorf("at least one OIDC provider must be configured")
-	}
-
 	verifiers := make(map[string]issuerVerifier, len(s.Providers))
 	for _, p := range s.Providers {
 		issuer := strings.TrimSpace(p.Issuer)
@@ -126,6 +122,16 @@ const (
 // FromContext retrieves Claims previously stored by the middleware.
 func FromContext(r *http.Request) Claims {
 	if v := r.Context().Value(claimsKey); v != nil {
+		if c, ok := v.(Claims); ok {
+			return c
+		}
+	}
+	return nil
+}
+
+// ClaimsFromContext retrieves Claims from a context.Context.
+func ClaimsFromContext(ctx context.Context) Claims {
+	if v := ctx.Value(claimsKey); v != nil {
 		if c, ok := v.(Claims); ok {
 			return c
 		}

@@ -30,6 +30,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"time"
 
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
@@ -112,6 +113,11 @@ func ReadSpecificAssetIDsByDescriptorIDs(
 	db DBQueryer,
 	descriptorIDs []int64,
 ) (map[int64][]types.ISpecificAssetID, error) {
+	if debugEnabled(ctx) {
+		defer func(start time.Time) {
+			_, _ = fmt.Printf("ReadSpecificAssetIDsByDescriptorIDs took %s\n", time.Since(start))
+		}(time.Now())
+	}
 	out := make(map[int64][]types.ISpecificAssetID, len(descriptorIDs))
 	if len(descriptorIDs) == 0 {
 		return out, nil
@@ -161,15 +167,13 @@ func ReadSpecificAssetIDsByDescriptorIDs(
 	if err != nil {
 		return nil, err
 	}
-	cteWhere := goqu.L(fmt.Sprintf("%s.%s = ANY(?::bigint[])", aliasSpecificAssetID, colDescriptorID), arr)
-	base, err = auth.ApplyResolvedFieldPathCTEs(base, collector, cteWhere)
-	if err != nil {
-		return nil, err
-	}
 
 	sqlStr, args, err := base.ToSQL()
 	if err != nil {
 		return nil, err
+	}
+	if debugEnabled(ctx) {
+		_, _ = fmt.Println(sqlStr)
 	}
 
 	rows, err := db.QueryContext(ctx, sqlStr, args...)

@@ -1,3 +1,29 @@
+/*******************************************************************************
+* Copyright (C) 2026 the Eclipse BaSyx Authors and Fraunhofer IESE
+*
+* Permission is hereby granted, free of charge, to any person obtaining
+* a copy of this software and associated documentation files (the
+* "Software"), to deal in the Software without restriction, including
+* without limitation the rights to use, copy, modify, merge, publish,
+* distribute, sublicense, and/or sell copies of the Software, and to
+* permit persons to whom the Software is furnished to do so, subject to
+* the following conditions:
+*
+* The above copyright notice and this permission notice shall be
+* included in all copies or substantial portions of the Software.
+*
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+* NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+* LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+* OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+* WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*
+* SPDX-License-Identifier: MIT
+******************************************************************************/
+// Author: Martin Stemmer ( Fraunhofer IESE )
+
 package grammar
 
 import (
@@ -44,17 +70,6 @@ func TestLogicalExpression_EvaluateToExpression_NestedTree_WithExistsAndNot(t *t
 		).
 		Select(goqu.V(1)).
 		Where(whereExpr)
-	ctes, err := BuildResolvedFieldPathFlagCTEsWithCollector(collector, collector.Entries(), nil)
-	if err != nil {
-		t.Fatalf("BuildResolvedFieldPathFlagCTEsWithCollector returned error: %v", err)
-	}
-	for _, cte := range ctes {
-		ds = ds.With(cte.Alias, cte.Dataset).
-			LeftJoin(
-				goqu.T(cte.Alias),
-				goqu.On(goqu.I(cte.Alias+".root_id").Eq(goqu.I("descriptor.id"))),
-			)
-	}
 	ds = ds.Prepared(true)
 
 	sql, args, err := ds.ToSQL()
@@ -62,8 +77,8 @@ func TestLogicalExpression_EvaluateToExpression_NestedTree_WithExistsAndNot(t *t
 		t.Fatalf("ToSQL returned error: %v", err)
 	}
 
-	if strings.Contains(sql, "EXISTS") {
-		t.Fatalf("did not expect EXISTS in SQL, got: %s", sql)
+	if !strings.Contains(sql, "EXISTS") {
+		t.Fatalf("expected EXISTS in SQL, got: %s", sql)
 	}
 	if !strings.Contains(sql, " OR ") {
 		t.Fatalf("expected OR in SQL, got: %s", sql)
@@ -73,9 +88,6 @@ func TestLogicalExpression_EvaluateToExpression_NestedTree_WithExistsAndNot(t *t
 	}
 	if !strings.Contains(sql, "LIKE") {
 		t.Fatalf("expected LIKE for $contains in SQL, got: %s", sql)
-	}
-	if !strings.Contains(sql, "flagtable_1") {
-		t.Fatalf("expected flagtable_1 in SQL, got: %s", sql)
 	}
 
 	// Ensure important bindings/values are present in args.
@@ -137,17 +149,6 @@ func TestLogicalExpression_EvaluateToExpression_NestedJSON_UnmarshalAndGenerateS
 		).
 		Select(goqu.V(1)).
 		Where(whereExpr)
-	ctes, err := BuildResolvedFieldPathFlagCTEsWithCollector(collector, collector.Entries(), nil)
-	if err != nil {
-		t.Fatalf("BuildResolvedFieldPathFlagCTEsWithCollector returned error: %v", err)
-	}
-	for _, cte := range ctes {
-		ds = ds.With(cte.Alias, cte.Dataset).
-			LeftJoin(
-				goqu.T(cte.Alias),
-				goqu.On(goqu.I(cte.Alias+".root_id").Eq(goqu.I("descriptor.id"))),
-			)
-	}
 	ds = ds.Prepared(true)
 
 	sql, args, err := ds.ToSQL()
@@ -155,17 +156,14 @@ func TestLogicalExpression_EvaluateToExpression_NestedJSON_UnmarshalAndGenerateS
 		t.Fatalf("ToSQL returned error: %v", err)
 	}
 
-	if strings.Contains(sql, "EXISTS") {
-		t.Fatalf("did not expect EXISTS in SQL, got: %s", sql)
+	if !strings.Contains(sql, "EXISTS") {
+		t.Fatalf("expected EXISTS in SQL, got: %s", sql)
 	}
 	if !strings.Contains(sql, " OR ") {
 		t.Fatalf("expected OR in SQL, got: %s", sql)
 	}
 	if !strings.Contains(sql, "NOT") {
 		t.Fatalf("expected NOT in SQL, got: %s", sql)
-	}
-	if !strings.Contains(sql, "flagtable_1") {
-		t.Fatalf("expected flagtable_1 in SQL, got: %s", sql)
 	}
 	if !argListContains(args, "WRITTEN_BY_X") {
 		t.Fatalf("expected args to contain %q, got %#v", "WRITTEN_BY_X", args)
