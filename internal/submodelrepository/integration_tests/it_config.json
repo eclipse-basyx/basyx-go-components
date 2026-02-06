@@ -2698,5 +2698,81 @@
         "endpoint": "http://localhost:6004/submodels/aHR0cHM6Ly9hZG1pbi1zaGVsbC5pby9pZHRhL1N1Ym1vZGVsVGVtcGxhdGUvV2lyZWxlc3NDb21tdW5pY2F0aW9uLzEvMA",
         "shouldMatch":"bodies/post/smt/WrlsComm.json",
         "expectedStatus": 200
+    },
+
+    {
+        "context": "PUT (Rename idShort) - Rename Top Level Property",
+        "method": "PUT",
+        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/NewTestProperty",
+        "data": "bodies/put/putPropertyRenameIdShort.json",
+        "expectedStatus": 204
+    },
+    {
+        "context": "GET (Rename idShort) - Verify Renamed Top Level Property at New Path",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/RenamedTestProperty",
+        "shouldMatch": "bodies/put/putPropertyRenameIdShort.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "GET (Rename idShort) - Verify Old Path Returns 404",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/NewTestProperty",
+        "expectedStatus": 404
+    },
+    {
+        "context": "PUT (Rename idShort) - Revert Top Level Property",
+        "method": "PUT",
+        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/RenamedTestProperty",
+        "data": "bodies/post/postNewProperty.json",
+        "expectedStatus": 204
+    },
+    {
+        "context": "GET (Rename idShort) - Verify Reverted Top Level Property",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/NewTestProperty",
+        "shouldMatch": "bodies/post/postNewProperty.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "PUT (Rename idShort) - Rename Nested Property in Collection",
+        "method": "PUT",
+        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.NestedProperty",
+        "data": "bodies/put/putNestedPropertyRenameIdShort.json",
+        "expectedStatus": 204
+    },
+    {
+        "context": "GET (Rename idShort) - Verify Renamed Nested Property at New Path",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.RenamedNestedProperty",
+        "shouldMatch": "bodies/put/putNestedPropertyRenameIdShort.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "GET (Rename idShort) - Verify Old Nested Path Returns 404",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.NestedProperty",
+        "expectedStatus": 404
+    },
+    {
+        "context": "PUT (Rename idShort) - Revert Nested Property",
+        "method": "PUT",
+        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.RenamedNestedProperty",
+        "data": "bodies/post/nested/postPropertyInCollection.json",
+        "expectedStatus": 204
+    },
+    {
+        "context": "GET (Rename idShort) - Verify Reverted Nested Property",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.NestedProperty",
+        "shouldMatch": "bodies/post/nested/postPropertyInCollection.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "PUT (Rename idShort Conflict) - Rename to Existing idShort - Expected 409",
+        "method": "PUT",
+        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/NewTestProperty",
+        "data": "bodies/put/putPropertyRenameConflict.json",
+        "expectedStatus": 409
     }
 ]
