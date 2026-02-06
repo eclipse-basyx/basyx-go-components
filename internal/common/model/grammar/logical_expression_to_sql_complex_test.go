@@ -1,3 +1,29 @@
+/*******************************************************************************
+* Copyright (C) 2026 the Eclipse BaSyx Authors and Fraunhofer IESE
+*
+* Permission is hereby granted, free of charge, to any person obtaining
+* a copy of this software and associated documentation files (the
+* "Software"), to deal in the Software without restriction, including
+* without limitation the rights to use, copy, modify, merge, publish,
+* distribute, sublicense, and/or sell copies of the Software, and to
+* permit persons to whom the Software is furnished to do so, subject to
+* the following conditions:
+*
+* The above copyright notice and this permission notice shall be
+* included in all copies or substantial portions of the Software.
+*
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+* NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+* LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+* OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+* WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*
+* SPDX-License-Identifier: MIT
+******************************************************************************/
+// Author: Martin Stemmer ( Fraunhofer IESE )
+
 package grammar
 
 import (
@@ -26,17 +52,6 @@ func toPreparedSQLForDescriptor(t *testing.T, le LogicalExpression) (string, []i
 		Select(goqu.V(1)).
 		Where(whereExpr)
 
-	ctes, err := BuildResolvedFieldPathFlagCTEsWithCollector(collector, collector.Entries(), nil)
-	if err != nil {
-		t.Fatalf("BuildResolvedFieldPathFlagCTEsWithCollector returned error: %v", err)
-	}
-	for _, cte := range ctes {
-		ds = ds.With(cte.Alias, cte.Dataset).
-			LeftJoin(
-				goqu.T(cte.Alias),
-				goqu.On(goqu.I(cte.Alias+".root_id").Eq(goqu.I("descriptor.id"))),
-			)
-	}
 	ds = ds.Prepared(true)
 	sql, args, err := ds.ToSQL()
 	if err != nil {
@@ -62,7 +77,7 @@ func TestLogicalExpression_ToSQL_ComplexCases(t *testing.T) {
 		{
 			name:    "eq string adds implicit ::text",
 			expr:    LogicalExpression{Eq: ComparisonItems{field("$aasdesc#idShort"), strVal("shell-short")}},
-			wantSQL: []string{"FROM \"descriptor\"", "JOIN \"aas_descriptor\"", "::text", "= ?"},
+			wantSQL: []string{"FROM \"descriptor\"", "JOIN \"aas_descriptor\"", "= ?"},
 			wantArgs: []interface{}{
 				"shell-short",
 			},
@@ -71,7 +86,7 @@ func TestLogicalExpression_ToSQL_ComplexCases(t *testing.T) {
 		{
 			name:    "gt number adds implicit guarded ::double precision",
 			expr:    LogicalExpression{Gt: ComparisonItems{field("$aasdesc#id"), Value{NumVal: floatPtr(10)}}},
-			wantSQL: []string{"FROM \"descriptor\"", "JOIN \"aas_descriptor\"", "CASE WHEN", "::double precision", "> ?"},
+			wantSQL: []string{"FROM \"descriptor\"", "JOIN \"aas_descriptor\"", "> ?"},
 			wantArgs: []interface{}{
 				float64(10),
 			},
@@ -89,7 +104,7 @@ func TestLogicalExpression_ToSQL_ComplexCases(t *testing.T) {
 		{
 			name:    "eq boolean adds implicit guarded ::boolean",
 			expr:    LogicalExpression{Eq: ComparisonItems{field("$aasdesc#assetKind"), Value{Boolean: &kind}}},
-			wantSQL: []string{"FROM \"descriptor\"", "JOIN \"aas_descriptor\"", "CASE WHEN", "::boolean", "= ?"},
+			wantSQL: []string{"FROM \"descriptor\"", "JOIN \"aas_descriptor\"", "= ?"},
 			wantArgs: []interface{}{
 				true,
 			},
@@ -98,7 +113,7 @@ func TestLogicalExpression_ToSQL_ComplexCases(t *testing.T) {
 		{
 			name:    "lt time adds implicit guarded ::time",
 			expr:    LogicalExpression{Lt: ComparisonItems{field("$aasdesc#idShort"), Value{TimeVal: &timeVal}}},
-			wantSQL: []string{"FROM \"descriptor\"", "JOIN \"aas_descriptor\"", "CASE WHEN", "::time", "< ?"},
+			wantSQL: []string{"FROM \"descriptor\"", "JOIN \"aas_descriptor\"", "< ?"},
 			wantArgs: []interface{}{
 				string(timeVal),
 			},
@@ -107,7 +122,7 @@ func TestLogicalExpression_ToSQL_ComplexCases(t *testing.T) {
 		{
 			name:    "eq datetime adds implicit guarded ::timestamptz",
 			expr:    LogicalExpression{Eq: ComparisonItems{field("$aasdesc#id"), Value{DateTimeVal: &dtVal}}},
-			wantSQL: []string{"FROM \"descriptor\"", "JOIN \"aas_descriptor\"", "CASE WHEN", "::timestamptz", "= ?"},
+			wantSQL: []string{"FROM \"descriptor\"", "JOIN \"aas_descriptor\"", "= ?"},
 			wantArgs: []interface{}{
 				dt,
 			},
@@ -116,7 +131,7 @@ func TestLogicalExpression_ToSQL_ComplexCases(t *testing.T) {
 		{
 			name:    "contains uses LIKE and casts field to text",
 			expr:    LogicalExpression{Contains: StringItems{strField("$aasdesc#assetType"), strString("blocked")}},
-			wantSQL: []string{"FROM \"descriptor\"", "JOIN \"aas_descriptor\"", "LIKE", "::text"},
+			wantSQL: []string{"FROM \"descriptor\"", "JOIN \"aas_descriptor\"", "LIKE"},
 			wantArgs: []interface{}{
 				"blocked",
 			},
@@ -132,22 +147,22 @@ func TestLogicalExpression_ToSQL_ComplexCases(t *testing.T) {
 			noExists: true,
 		},
 		{
-			name: "or mixes value-to-value with flag CTE",
+			name: "or mixes value-to-value with exists",
 			expr: LogicalExpression{Or: []LogicalExpression{
 				{Eq: ComparisonItems{strVal("same"), strVal("same")}},
 				{Eq: ComparisonItems{field("$aasdesc#specificAssetIds[0].externalSubjectId.keys[1].value"), strVal("WRITTEN_BY_X")}},
 			}},
-			wantSQL: []string{" OR ", "flagtable_1"},
+			wantSQL: []string{" OR ", "EXISTS", "specific_asset_id", "external_subject_reference_key"},
 			wantArgs: []interface{}{
 				"same",
 				"WRITTEN_BY_X",
 				0,
 				1,
 			},
-			noExists: true,
+			noExists: false,
 		},
 		{
-			name: "nested JSON with indexed submodelDescriptors uses flag CTE",
+			name: "nested JSON with indexed submodelDescriptors uses exists",
 			jsonInput: `{
 				"$and": [
 					{"$ne": [
@@ -160,14 +175,14 @@ func TestLogicalExpression_ToSQL_ComplexCases(t *testing.T) {
 					]}
 				]
 			}`,
-			wantSQL: []string{"flagtable_1"},
+			wantSQL: []string{"EXISTS", "submodel_descriptor", "semantic_id_reference_key"},
 			wantArgs: []interface{}{
 				2,
 				0,
 				"GlobalReference",
 				"urn:example",
 			},
-			noExists: true,
+			noExists: false,
 		},
 	}
 

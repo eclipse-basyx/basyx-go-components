@@ -1,3 +1,29 @@
+/*******************************************************************************
+* Copyright (C) 2026 the Eclipse BaSyx Authors and Fraunhofer IESE
+*
+* Permission is hereby granted, free of charge, to any person obtaining
+* a copy of this software and associated documentation files (the
+* "Software"), to deal in the Software without restriction, including
+* without limitation the rights to use, copy, modify, merge, publish,
+* distribute, sublicense, and/or sell copies of the Software, and to
+* permit persons to whom the Software is furnished to do so, subject to
+* the following conditions:
+*
+* The above copyright notice and this permission notice shall be
+* included in all copies or substantial portions of the Software.
+*
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+* NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+* LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+* OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+* WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*
+* SPDX-License-Identifier: MIT
+******************************************************************************/
+// Author: Martin Stemmer ( Fraunhofer IESE )
+
 package grammar
 
 import (
@@ -93,17 +119,6 @@ func TestHandleComparison_BuildsExistsForSpecificAssetExternalSubjectKeyValue(t 
 		).
 		Select(goqu.V(1)).
 		Where(expr)
-	ctes, err := BuildResolvedFieldPathFlagCTEsWithCollector(collector, collector.Entries(), nil)
-	if err != nil {
-		t.Fatalf("BuildResolvedFieldPathFlagCTEsWithCollector returned error: %v", err)
-	}
-	for _, cte := range ctes {
-		ds = ds.With(cte.Alias, cte.Dataset).
-			LeftJoin(
-				goqu.T(cte.Alias),
-				goqu.On(goqu.I(cte.Alias+".root_id").Eq(goqu.I("descriptor.id"))),
-			)
-	}
 	ds = ds.Prepared(true)
 
 	sql, args, err := ds.ToSQL()
@@ -111,9 +126,9 @@ func TestHandleComparison_BuildsExistsForSpecificAssetExternalSubjectKeyValue(t 
 		t.Fatalf("ToSQL returned error: %v", err)
 	}
 
-	// Ensure the CTE includes the right joins.
-	if !strings.Contains(sql, "WITH flagtable_1") {
-		t.Fatalf("expected flagtable_1 CTE in SQL, got: %s", sql)
+	// Ensure the EXISTS subquery includes the right joins.
+	if !strings.Contains(sql, "EXISTS") {
+		t.Fatalf("expected EXISTS in SQL, got: %s", sql)
 	}
 	if !strings.Contains(sql, "JOIN \"reference\" AS \"external_subject_reference\"") {
 		t.Fatalf("expected join to external_subject_reference in SQL, got: %s", sql)
@@ -166,17 +181,6 @@ func TestHandleComparison_BuildsExistsForSpecificAssetExternalSubjectKeyValue_Wi
 		).
 		Select(goqu.V(1)).
 		Where(expr)
-	ctes, err := BuildResolvedFieldPathFlagCTEsWithCollector(collector, collector.Entries(), nil)
-	if err != nil {
-		t.Fatalf("BuildResolvedFieldPathFlagCTEsWithCollector returned error: %v", err)
-	}
-	for _, cte := range ctes {
-		ds = ds.With(cte.Alias, cte.Dataset).
-			LeftJoin(
-				goqu.T(cte.Alias),
-				goqu.On(goqu.I(cte.Alias+".root_id").Eq(goqu.I("descriptor.id"))),
-			)
-	}
 	ds = ds.Prepared(true)
 
 	sql, args, err := ds.ToSQL()
@@ -184,9 +188,9 @@ func TestHandleComparison_BuildsExistsForSpecificAssetExternalSubjectKeyValue_Wi
 		t.Fatalf("ToSQL returned error: %v", err)
 	}
 
-	// Ensure the CTE includes the right joins, even without any index bindings.
-	if !strings.Contains(sql, "WITH flagtable_1") {
-		t.Fatalf("expected flagtable_1 CTE in SQL, got: %s", sql)
+	// Ensure the EXISTS subquery includes the right joins, even without any index bindings.
+	if !strings.Contains(sql, "EXISTS") {
+		t.Fatalf("expected EXISTS in SQL, got: %s", sql)
 	}
 	if !strings.Contains(sql, "JOIN \"reference\" AS \"external_subject_reference\"") {
 		t.Fatalf("expected join to external_subject_reference in SQL, got: %s", sql)

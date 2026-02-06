@@ -67,8 +67,14 @@ var mapMethodAndPatternToRightsData = []mapMethodAndPatternToRights{
 func (m *AccessModel) mapMethodAndPathToRights(in EvalInput) ([]grammar.RightsEnum, bool) {
 	for _, mapping := range mapMethodAndPatternToRightsData {
 		if mapping.Method == in.Method {
-			pattern := m.apiRouter.Find(m.rctx, in.Method, in.Path)
-			if mapping.Pattern == pattern {
+			matchPath := stripBasePath(m.basePath, in.Path)
+			pattern := m.apiRouter.Find(m.rctx, in.Method, matchPath)
+			if pattern == "" {
+				continue
+			}
+			patternWithBase := joinBasePath(m.basePath, pattern)
+			mappingWithBase := joinBasePath(m.basePath, mapping.Pattern)
+			if mappingWithBase == patternWithBase {
 				return mapping.Rights, true
 			}
 		}

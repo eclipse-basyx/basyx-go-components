@@ -30,13 +30,13 @@
 package grammar
 
 import (
-	"encoding/json"
 	"fmt"
+	"reflect"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
 
-	"github.com/FriedJannik/aas-go-sdk/stringification"
 	"github.com/doug-martin/goqu/v9"
 	"github.com/doug-martin/goqu/v9/exp"
 )
@@ -66,17 +66,16 @@ type existsJoinPlan struct {
 }
 
 type JoinPlanConfig struct {
-	PreferredBase   string
-	BaseAliases     []string
-	Rules           map[string]existsJoinRule
-	TableForAlias   func(string) (string, bool)
-	GroupKeyForBase func(string) (exp.IdentifierExpression, error)
-	RootJoinKey     func() exp.IdentifierExpression
-	Correlatable    func(string) bool
+	PreferredBase     string
+	BaseAliases       []string
+	Rules             map[string]existsJoinRule
+	TableForAlias     func(string) (string, bool)
+	GroupKeyForBase   func(string) (exp.IdentifierExpression, error)
+	RootJoinKey       func() exp.IdentifierExpression
+	RootJoinKeyAlias  func() string
+	RootJoinKeyColumn func() string
+	Correlatable      func(string) bool
 }
-
-// DefaultCollectorCTEAlias is the fixed alias used for all collector-generated CTEs.
-const DefaultCollectorCTEAlias = "flagtable"
 
 // CollectorRoot defines the supported collector roots.
 //
@@ -89,6 +88,7 @@ const (
 	CollectorRootSMDesc  CollectorRoot = "smdesc"
 	CollectorRootSM      CollectorRoot = "sm"
 	CollectorRootSME     CollectorRoot = "sme"
+	CollectorRootBD      CollectorRoot = "bd"
 )
 
 // ParseCollectorRoot converts roots like "$aasdesc" or "aasdesc" into a CollectorRoot.
@@ -102,6 +102,8 @@ func ParseCollectorRoot(root string) (CollectorRoot, error) {
 		return CollectorRootSM, nil
 	case string(CollectorRootSME):
 		return CollectorRootSME, nil
+	case string(CollectorRootBD):
+		return CollectorRootBD, nil
 	default:
 		return "", fmt.Errorf("unsupported collector root %q", root)
 	}
@@ -109,7 +111,7 @@ func ParseCollectorRoot(root string) (CollectorRoot, error) {
 
 func (r CollectorRoot) isValid() bool {
 	switch r {
-	case CollectorRootAASDesc, CollectorRootSMDesc, CollectorRootSM, CollectorRootSME:
+	case CollectorRootAASDesc, CollectorRootSMDesc, CollectorRootSM, CollectorRootSME, CollectorRootBD:
 		return true
 	default:
 		return false
@@ -124,7 +126,7 @@ func NewResolvedFieldPathCollectorForRoot(root CollectorRoot) (*ResolvedFieldPat
 	if err != nil {
 		return nil, err
 	}
-	return NewResolvedFieldPathCollectorWithConfig(DefaultCollectorCTEAlias, &cfg), nil
+	return NewResolvedFieldPathCollectorWithConfig(&cfg), nil
 }
 
 func joinPlanConfigForRoot(root CollectorRoot) (JoinPlanConfig, error) {
@@ -137,6 +139,8 @@ func joinPlanConfigForRoot(root CollectorRoot) (JoinPlanConfig, error) {
 		return joinPlanConfigForSM(), nil
 	case CollectorRootSME:
 		return joinPlanConfigForSME(), nil
+	case CollectorRootBD:
+		return joinPlanConfigForBD(), nil
 	default:
 		return JoinPlanConfig{}, fmt.Errorf("unsupported collector root %q", root)
 	}
@@ -279,6 +283,12 @@ func joinPlanConfigForSM() JoinPlanConfig {
 		RootJoinKey: func() exp.IdentifierExpression {
 			return goqu.I("s.id")
 		},
+		RootJoinKeyAlias: func() string {
+			return "s"
+		},
+		RootJoinKeyColumn: func() string {
+			return "id"
+		},
 		Correlatable: func(alias string) bool {
 			return alias == "s"
 		},
@@ -300,6 +310,12 @@ func joinPlanConfigForSMDesc() JoinPlanConfig {
 		},
 		RootJoinKey: func() exp.IdentifierExpression {
 			return goqu.I("submodel_descriptor.descriptor_id")
+		},
+		RootJoinKeyAlias: func() string {
+			return "submodel_descriptor"
+		},
+		RootJoinKeyColumn: func() string {
+			return "descriptor_id"
 		},
 		Correlatable: func(alias string) bool {
 			return alias == "submodel_descriptor"
@@ -373,308 +389,114 @@ func joinPlanConfigForSME() JoinPlanConfig {
 		RootJoinKey: func() exp.IdentifierExpression {
 			return goqu.I("submodel_element.id")
 		},
+		RootJoinKeyAlias: func() string {
+			return "submodel_element"
+		},
+		RootJoinKeyColumn: func() string {
+			return "id"
+		},
 		Correlatable: func(alias string) bool {
 			return alias == "submodel_element"
 		},
 	}
 }
 
-// ResolvedFieldPathFlag ties a resolved field path set to the boolean flag alias that
-// will be emitted in a precomputed CTE.
-type ResolvedFieldPathFlag struct {
-	Alias     string
-	Resolved  []ResolvedFieldPath
-	Predicate exp.Expression
-	UseAnd    bool
-}
-
-// ResolvedFieldPathCollector collects resolved field path predicates and assigns
-// unique flag aliases that can be referenced in WHERE clauses.
-type ResolvedFieldPathCollector struct {
-	CTEAlias              string
-	nextID                int
-	nextGroupID           int
-	keyToAlias            map[string]string
-	groupKeyToAlias       map[string]string
-	flagAliasToGroupAlias map[string]string
-	entries               []ResolvedFieldPathFlag
-	joinConfig            *JoinPlanConfig
-}
-
-// NewResolvedFieldPathCollector creates a collector with the provided CTE alias.
-// When cteAlias is empty, DefaultCollectorCTEAlias is used.
-func NewResolvedFieldPathCollectorWithConfig(cteAlias string, config *JoinPlanConfig) *ResolvedFieldPathCollector {
-	if strings.TrimSpace(cteAlias) == "" {
-		cteAlias = DefaultCollectorCTEAlias
-	}
-	return &ResolvedFieldPathCollector{
-		CTEAlias:              cteAlias,
-		keyToAlias:            map[string]string{},
-		groupKeyToAlias:       map[string]string{},
-		flagAliasToGroupAlias: map[string]string{},
-		joinConfig:            config,
-	}
-}
-
-// Entries returns a shallow copy of the collected flag definitions.
-func (c *ResolvedFieldPathCollector) Entries() []ResolvedFieldPathFlag {
-	if c == nil {
-		return nil
-	}
-	out := make([]ResolvedFieldPathFlag, len(c.entries))
-	copy(out, c.entries)
-	return out
-}
-
-// Register adds a new resolved predicate or returns the existing alias if it was already registered.
-func (c *ResolvedFieldPathCollector) Register(resolved []ResolvedFieldPath, predicate exp.Expression) (string, error) {
-	return c.RegisterWithAgg(resolved, predicate, false)
-}
-
-// RegisterWithAgg adds a new resolved predicate or returns the existing alias if it was already registered.
-// When useAnd is true, the generated CTE uses BOOL_AND instead of BOOL_OR.
-func (c *ResolvedFieldPathCollector) RegisterWithAgg(resolved []ResolvedFieldPath, predicate exp.Expression, useAnd bool) (string, error) {
-	if c == nil {
-		return "", fmt.Errorf("resolved field path collector is nil")
-	}
-	key, err := c.signatureWithAgg(resolved, predicate, useAnd)
-	if err != nil {
-		return "", err
-	}
-	if alias, ok := c.keyToAlias[key]; ok {
-		return alias, nil
-	}
-
-	c.nextID++
-	alias := fmt.Sprintf("rfp_%d", c.nextID)
-	c.keyToAlias[key] = alias
-	c.entries = append(c.entries, ResolvedFieldPathFlag{
-		Alias:     alias,
-		Resolved:  resolved,
-		Predicate: predicate,
-		UseAnd:    useAnd,
-	})
-	groupAlias, err := c.groupAliasForResolved(resolved)
-	if err != nil {
-		return "", err
-	}
-	c.flagAliasToGroupAlias[alias] = groupAlias
-	return alias, nil
-}
-
-func (c *ResolvedFieldPathCollector) signature(resolved []ResolvedFieldPath, predicate exp.Expression) (string, error) {
-	return c.signatureWithAgg(resolved, predicate, false)
-}
-
-func (c *ResolvedFieldPathCollector) signatureWithAgg(resolved []ResolvedFieldPath, predicate exp.Expression, useAnd bool) (string, error) {
-	resolvedJSON, err := json.Marshal(resolved)
-	if err != nil {
-		return "", err
-	}
-	predicateJSON, err := predicateSignature(predicate)
-	if err != nil {
-		return "", err
-	}
-	return fmt.Sprintf("%t|%s|%s", useAnd, string(resolvedJSON), predicateJSON), nil
-}
-
-func predicateSignature(expr exp.Expression) (string, error) {
-	d := goqu.Dialect("postgres")
-	ds := d.From(goqu.T("descriptor").As("descriptor")).Select(goqu.V(1))
-	if expr != nil {
-		ds = ds.Where(expr)
-	}
-	ds = ds.Prepared(true)
-	sql, args, err := ds.ToSQL()
-	if err != nil {
-		return "", err
-	}
-	payload := struct {
-		SQL  string        `json:"sql"`
-		Args []interface{} `json:"args"`
-	}{
-		SQL:  sql,
-		Args: args,
-	}
-	b, err := json.Marshal(payload)
-	if err != nil {
-		return "", err
-	}
-	return string(b), nil
-}
-
-func (c *ResolvedFieldPathCollector) qualifiedAlias(alias string) string {
-	if c == nil {
-		return alias
-	}
-	if groupAlias, ok := c.flagAliasToGroupAlias[alias]; ok && strings.TrimSpace(groupAlias) != "" {
-		return groupAlias + "." + alias
-	}
-	if strings.TrimSpace(c.CTEAlias) == "" {
-		return alias
-	}
-	return c.CTEAlias + "." + alias
-}
-
-func (c *ResolvedFieldPathCollector) groupAliasForResolved(resolved []ResolvedFieldPath) (string, error) {
-	if c == nil {
-		return "", fmt.Errorf("resolved field path collector is nil")
-	}
-	plan, err := buildJoinPlanForResolvedWithConfig(resolved, c.effectiveJoinConfig())
-	if err != nil {
-		return "", err
-	}
-	key := joinPlanSignature(plan)
-	if alias, ok := c.groupKeyToAlias[key]; ok {
-		return alias, nil
-	}
-	c.nextGroupID++
-	alias := fmt.Sprintf("%s_%d", c.CTEAlias, c.nextGroupID)
-	c.groupKeyToAlias[key] = alias
-	return alias, nil
-}
-
-// ResolvedFieldPathFlagCTE groups multiple flag expressions that share the same join graph.
-type ResolvedFieldPathFlagCTE struct {
-	Alias   string
-	Dataset *goqu.SelectDataset
-	Flags   []ResolvedFieldPathFlag
-}
-
-// BuildResolvedFieldPathFlagCTEs builds one or more CTE datasets for the provided entries.
-// Entries that share the same join graph are grouped into a single CTE with multiple flag columns.
-//
-// Join planning is root-specific via JoinPlanConfig; use NewResolvedFieldPathCollectorForRoot
-// (or a custom config) to target $sm/$sme/$smdesc.
-func BuildResolvedFieldPathFlagCTEs(cteAlias string, entries []ResolvedFieldPathFlag) ([]ResolvedFieldPathFlagCTE, error) {
-	return BuildResolvedFieldPathFlagCTEsWithWhere(cteAlias, entries, nil)
-}
-
-// BuildResolvedFieldPathFlagCTEsWithWhere builds one or more CTE datasets for the provided entries
-// and applies an optional WHERE clause to each CTE (e.g., root key filters).
-func BuildResolvedFieldPathFlagCTEsWithWhere(cteAlias string, entries []ResolvedFieldPathFlag, where exp.Expression) ([]ResolvedFieldPathFlagCTE, error) {
-	if len(entries) == 0 {
-		return nil, nil
-	}
-	if strings.TrimSpace(cteAlias) == "" {
-		cteAlias = DefaultCollectorCTEAlias
-	}
-
-	order, grouped, err := groupFlagsByJoinPlan(entries, defaultJoinPlanConfig(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	ctes := make([]ResolvedFieldPathFlagCTE, 0, len(grouped))
-	for idx, key := range order {
-		group := grouped[key]
-		alias := cteAlias
-		if len(grouped) > 1 {
-			alias = fmt.Sprintf("%s_%d", cteAlias, idx+1)
-		}
-		ds, err := buildFlagCTEDataset(group.plan, group.entries, where, defaultJoinPlanConfig())
-		if err != nil {
-			return nil, err
-		}
-		ctes = append(ctes, ResolvedFieldPathFlagCTE{
-			Alias:   alias,
-			Dataset: ds,
-			Flags:   group.entries,
-		})
-	}
-
-	return ctes, nil
-}
-
-// BuildResolvedFieldPathFlagCTEsWithCollector builds one or more CTE datasets for the provided entries
-// and uses the collector's join-group aliases to name the CTEs.
-func BuildResolvedFieldPathFlagCTEsWithCollector(collector *ResolvedFieldPathCollector, entries []ResolvedFieldPathFlag, where exp.Expression) ([]ResolvedFieldPathFlagCTE, error) {
-	if collector == nil {
-		return nil, fmt.Errorf("resolved field path collector is nil")
-	}
-	if len(entries) == 0 {
-		return nil, nil
-	}
-
-	aliasForResolved := func(resolved []ResolvedFieldPath) (string, error) {
-		return collector.groupAliasForResolved(resolved)
-	}
-	order, grouped, err := groupFlagsByJoinPlan(entries, collector.effectiveJoinConfig(), aliasForResolved)
-	if err != nil {
-		return nil, err
-	}
-
-	ctes := make([]ResolvedFieldPathFlagCTE, 0, len(grouped))
-	for _, key := range order {
-		group := grouped[key]
-		ds, err := buildFlagCTEDataset(group.plan, group.entries, where, collector.effectiveJoinConfig())
-		if err != nil {
-			return nil, err
-		}
-		ctes = append(ctes, ResolvedFieldPathFlagCTE{
-			Alias:   group.alias,
-			Dataset: ds,
-			Flags:   group.entries,
-		})
-	}
-
-	return ctes, nil
-}
-
-type cteGroup struct {
-	plan    existsJoinPlan
-	entries []ResolvedFieldPathFlag
-	alias   string
-}
-
-func groupFlagsByJoinPlan(
-	entries []ResolvedFieldPathFlag,
-	config JoinPlanConfig,
-	aliasForResolved func([]ResolvedFieldPath) (string, error),
-) ([]string, map[string]*cteGroup, error) {
-	grouped := map[string]*cteGroup{}
-	order := make([]string, 0, len(entries))
-
-	for _, entry := range entries {
-		plan, err := buildJoinPlanForResolvedWithConfig(entry.Resolved, config)
-		if err != nil {
-			return nil, nil, err
-		}
-		key := joinPlanSignature(plan)
-
-		group, ok := grouped[key]
-		if !ok {
-			alias := ""
-			if aliasForResolved != nil {
-				alias, err = aliasForResolved(entry.Resolved)
-				if err != nil {
-					return nil, nil, err
-				}
+func joinPlanConfigForBD() JoinPlanConfig {
+	return JoinPlanConfig{
+		PreferredBase: "specific_asset_id",
+		BaseAliases:   []string{"specific_asset_id"},
+		Rules: map[string]existsJoinRule{
+			"specific_asset_id": {
+				Alias: "specific_asset_id",
+				Deps:  nil,
+				Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
+					return ds
+				},
+			},
+			"aas_identifier": {
+				Alias: "aas_identifier",
+				Deps:  []string{"specific_asset_id"},
+				Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
+					return ds.Join(
+						goqu.T("aas_identifier"),
+						goqu.On(goqu.I("aas_identifier.id").Eq(goqu.I("specific_asset_id.aasref"))),
+					)
+				},
+			},
+			"external_subject_reference": {
+				Alias: "external_subject_reference",
+				Deps:  []string{"specific_asset_id"},
+				Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
+					return ds.Join(
+						goqu.T("reference").As("external_subject_reference"),
+						goqu.On(goqu.I("external_subject_reference.id").Eq(goqu.I("specific_asset_id.external_subject_ref"))),
+					)
+				},
+			},
+			"external_subject_reference_key": {
+				Alias: "external_subject_reference_key",
+				Deps:  []string{"external_subject_reference"},
+				Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
+					return ds.Join(
+						goqu.T("reference_key").As("external_subject_reference_key"),
+						goqu.On(goqu.I("external_subject_reference_key.reference_id").Eq(goqu.I("external_subject_reference.id"))),
+					)
+				},
+			},
+		},
+		TableForAlias: existsTableForAlias,
+		GroupKeyForBase: func(base string) (exp.IdentifierExpression, error) {
+			if base == "specific_asset_id" {
+				return goqu.I("specific_asset_id.aasref"), nil
 			}
-			group = &cteGroup{plan: plan, alias: alias}
-			grouped[key] = group
-			order = append(order, key)
-		}
-		group.entries = append(group.entries, entry)
+			return nil, fmt.Errorf("unsupported BD base alias %q", base)
+		},
+		RootJoinKey: func() exp.IdentifierExpression {
+			return goqu.I("aas_identifier.id")
+		},
+		RootJoinKeyAlias: func() string {
+			return "aas_identifier"
+		},
+		RootJoinKeyColumn: func() string {
+			return "id"
+		},
+		Correlatable: func(alias string) bool {
+			return alias == "specific_asset_id"
+		},
 	}
-
-	return order, grouped, nil
 }
 
-func joinPlanSignature(plan existsJoinPlan) string {
-	aliases := make([]string, 0, len(plan.ExpandedAliases))
-	aliases = append(aliases, plan.ExpandedAliases...)
-	sort.Strings(aliases)
-	return plan.BaseAlias + "|" + strings.Join(aliases, ",")
+// ResolvedFieldPathCollector carries join configuration for inline EXISTS evaluation.
+type ResolvedFieldPathCollector struct {
+	joinConfig *JoinPlanConfig
 }
 
-func buildFlagCTEDataset(plan existsJoinPlan, entries []ResolvedFieldPathFlag, where exp.Expression, config JoinPlanConfig) (*goqu.SelectDataset, error) {
-	if len(entries) == 0 {
-		return nil, fmt.Errorf("cannot build flag CTE dataset with no entries")
+// NewResolvedFieldPathCollectorWithConfig creates a collector with the provided join config.
+func NewResolvedFieldPathCollectorWithConfig(config *JoinPlanConfig) *ResolvedFieldPathCollector {
+	return &ResolvedFieldPathCollector{joinConfig: config}
+}
+
+func buildInlineNotExistsExpression(resolved []ResolvedFieldPath, predicate exp.Expression, collector *ResolvedFieldPathCollector) (exp.Expression, error) {
+	negated := goqu.L("NOT (?)", predicate)
+	existsExpr, err := buildInlineExistsExpression(resolved, negated, collector)
+	if err != nil {
+		return nil, err
+	}
+	return goqu.L("NOT (?)", existsExpr), nil
+}
+
+func buildInlineExistsExpression(resolved []ResolvedFieldPath, predicate exp.Expression, collector *ResolvedFieldPathCollector) (exp.Expression, error) {
+	cfg := defaultJoinPlanConfig()
+	if collector != nil {
+		cfg = collector.effectiveJoinConfig()
+	}
+	plan, err := buildJoinPlanForResolvedWithConfig(resolved, cfg)
+	if err != nil {
+		return nil, err
 	}
 
 	d := goqu.Dialect("postgres")
-	ds := d.From(goqu.T(plan.BaseTable).As(plan.BaseAlias))
+	ds := d.From(goqu.T(plan.BaseTable).As(plan.BaseAlias)).Select(goqu.V(1))
 
 	applied := map[string]struct{}{plan.BaseAlias: {}}
 	visiting := map[string]struct{}{}
@@ -691,11 +513,11 @@ func buildFlagCTEDataset(plan existsJoinPlan, entries []ResolvedFieldPathFlag, w
 			return nil
 		}
 		if _, ok := visiting[alias]; ok {
-			return fmt.Errorf("cyclic CTE join dependency for alias %q", alias)
+			return fmt.Errorf("cyclic EXISTS join dependency for alias %q", alias)
 		}
 		rule, ok := plan.Rules[alias]
 		if !ok {
-			return fmt.Errorf("no CTE join rule registered for alias %q", alias)
+			return fmt.Errorf("no EXISTS join rule registered for alias %q", alias)
 		}
 		visiting[alias] = struct{}{}
 		for _, dep := range rule.Deps {
@@ -715,27 +537,70 @@ func buildFlagCTEDataset(plan existsJoinPlan, entries []ResolvedFieldPathFlag, w
 		}
 	}
 
-	descriptorExpr, err := config.GroupKeyForBase(plan.BaseAlias)
+	groupKey, err := cfg.GroupKeyForBase(plan.BaseAlias)
 	if err != nil {
 		return nil, err
 	}
-
-	// Keep a stable column name; this is the root key used by ApplyResolvedFieldPathCTEs.
-	selects := []interface{}{descriptorExpr.As("root_id")}
-	for _, entry := range entries {
-		flagExpr := andBindingsForResolvedFieldPaths(entry.Resolved, entry.Predicate)
-		agg := "BOOL_OR"
-		if entry.UseAnd {
-			agg = "BOOL_AND"
+	if cfg.RootJoinKey == nil {
+		return nil, fmt.Errorf("missing root join key for EXISTS")
+	}
+	rootKey := cfg.RootJoinKey()
+	rootAlias := ""
+	rootColumn := ""
+	if cfg.RootJoinKeyAlias != nil {
+		rootAlias = strings.TrimSpace(cfg.RootJoinKeyAlias())
+	}
+	if cfg.RootJoinKeyColumn != nil {
+		rootColumn = strings.TrimSpace(cfg.RootJoinKeyColumn())
+	}
+	aliasCollision := false
+	if rootAlias != "" {
+		for _, a := range plan.ExpandedAliases {
+			if a == rootAlias {
+				aliasCollision = true
+				break
+			}
 		}
-		selects = append(selects, goqu.L("COALESCE("+agg+"(?), false)", flagExpr).As(entry.Alias))
 	}
 
-	ds = ds.Select(selects...).GroupBy(descriptorExpr)
-	if where != nil {
-		ds = ds.Where(where)
+	whereExpr := andBindingsForResolvedFieldPaths(resolved, predicate)
+	var correlation exp.Expression = groupKey.Eq(rootKey)
+	if aliasCollision && rootAlias != "" && rootColumn != "" {
+		outerPlaceholder := "__outer__"
+		correlation = groupKey.Eq(goqu.I(outerPlaceholder + "." + rootColumn))
 	}
-	return ds, nil
+	if whereExpr != nil {
+		correlation = goqu.And(correlation, whereExpr)
+	}
+
+	ds = ds.Where(correlation).Limit(1)
+	if aliasCollision && rootAlias != "" && rootColumn != "" {
+		sql, args, err := ds.ToSQL()
+		if err != nil {
+			return nil, err
+		}
+		for _, a := range plan.ExpandedAliases {
+			mapped := a + "__exists"
+			sql = strings.ReplaceAll(sql, "\""+a+"\".", "\""+mapped+"\".")
+			sql = strings.ReplaceAll(sql, " AS \""+a+"\"", " AS \""+mapped+"\"")
+
+			fromAsRe := regexp.MustCompile(`(?i)FROM\s+"` + regexp.QuoteMeta(a) + `"\s+AS\s+"`)
+			if !fromAsRe.MatchString(sql) {
+				fromRe := regexp.MustCompile(`(?i)FROM\s+"` + regexp.QuoteMeta(a) + `"`)
+				sql = fromRe.ReplaceAllString(sql, `FROM "`+a+`" AS "`+mapped+`"`)
+			}
+
+			joinAsRe := regexp.MustCompile(`(?i)JOIN\s+"` + regexp.QuoteMeta(a) + `"\s+AS\s+"`)
+			if !joinAsRe.MatchString(sql) {
+				joinRe := regexp.MustCompile(`(?i)JOIN\s+"` + regexp.QuoteMeta(a) + `"`)
+				sql = joinRe.ReplaceAllString(sql, `JOIN "`+a+`" AS "`+mapped+`"`)
+			}
+		}
+		sql = strings.ReplaceAll(sql, "\"__outer__\"", "\""+rootAlias+"\"")
+		return goqu.L("EXISTS ("+sql+")", args...), nil
+	}
+
+	return goqu.L("EXISTS ?", ds), nil
 }
 
 func defaultJoinPlanConfig() JoinPlanConfig {
@@ -747,6 +612,12 @@ func defaultJoinPlanConfig() JoinPlanConfig {
 		GroupKeyForBase: descriptorIDForBaseAlias,
 		RootJoinKey: func() exp.IdentifierExpression {
 			return goqu.I("descriptor.id")
+		},
+		RootJoinKeyAlias: func() string {
+			return "descriptor"
+		},
+		RootJoinKeyColumn: func() string {
+			return "id"
 		},
 		Correlatable: func(alias string) bool {
 			return existsCorrelationForAlias(alias) != nil
@@ -773,6 +644,16 @@ func (c *ResolvedFieldPathCollector) effectiveJoinConfig() JoinPlanConfig {
 			return goqu.I("descriptor.id")
 		}
 	}
+	if cfg.RootJoinKeyAlias == nil {
+		cfg.RootJoinKeyAlias = func() string {
+			return "descriptor"
+		}
+	}
+	if cfg.RootJoinKeyColumn == nil {
+		cfg.RootJoinKeyColumn = func() string {
+			return "id"
+		}
+	}
 	if cfg.BaseAliases == nil {
 		cfg.BaseAliases = []string{"specific_asset_id", "aas_descriptor_endpoint", "submodel_descriptor", "aas_descriptor"}
 	}
@@ -785,16 +666,6 @@ func (c *ResolvedFieldPathCollector) effectiveJoinConfig() JoinPlanConfig {
 		}
 	}
 	return cfg
-}
-
-// EffectiveRootJoinKey returns the outer-root join key expression that should be used
-// to connect flag CTEs back to the main query.
-func (c *ResolvedFieldPathCollector) EffectiveRootJoinKey() exp.IdentifierExpression {
-	cfg := c.effectiveJoinConfig()
-	if cfg.RootJoinKey != nil {
-		return cfg.RootJoinKey()
-	}
-	return goqu.I("descriptor.id")
 }
 
 func descriptorIDForBaseAlias(base string) (exp.IdentifierExpression, error) {
@@ -810,53 +681,6 @@ func descriptorIDForBaseAlias(base string) (exp.IdentifierExpression, error) {
 	default:
 		return nil, fmt.Errorf("unsupported base alias for descriptor id selection: %q", base)
 	}
-}
-
-// extractFieldOperandAndCast walks through cast wrappers to find the underlying field operand
-// and returns the outermost cast target type (if any).
-func extractFieldOperandAndCast(v *Value) (*Value, string) {
-	cur := v
-	castType := ""
-	for cur != nil {
-		// Record only the outermost cast.
-		if castType == "" {
-			switch {
-			case cur.StrCast != nil:
-				castType = "text"
-			case cur.NumCast != nil:
-				castType = "double precision"
-			case cur.BoolCast != nil:
-				castType = "boolean"
-			case cur.TimeCast != nil:
-				castType = "time"
-			case cur.DateTimeCast != nil:
-				castType = "timestamptz"
-			case cur.HexCast != nil:
-				castType = "text"
-			}
-		}
-
-		if cur.Field != nil {
-			return cur, castType
-		}
-		switch {
-		case cur.StrCast != nil:
-			cur = cur.StrCast
-		case cur.NumCast != nil:
-			cur = cur.NumCast
-		case cur.BoolCast != nil:
-			cur = cur.BoolCast
-		case cur.TimeCast != nil:
-			cur = cur.TimeCast
-		case cur.DateTimeCast != nil:
-			cur = cur.DateTimeCast
-		case cur.HexCast != nil:
-			cur = cur.HexCast
-		default:
-			return nil, ""
-		}
-	}
-	return nil, ""
 }
 
 func toSQLResolvedFieldOrValue(operand *Value, explicitCastType string, position string) (interface{}, *ResolvedFieldPath, error) {
@@ -887,6 +711,10 @@ func anyResolvedHasBindings(resolved []ResolvedFieldPath) bool {
 	return false
 }
 
+func resolvedSlicesEqual(a, b []ResolvedFieldPath) bool {
+	return reflect.DeepEqual(a, b)
+}
+
 func resolvedNeedsCTE(resolved []ResolvedFieldPath) bool {
 	if anyResolvedHasBindings(resolved) {
 		return true
@@ -915,26 +743,6 @@ func collectResolvedFieldPaths(a, b *ResolvedFieldPath) []ResolvedFieldPath {
 		out = append(out, *b)
 	}
 	return out
-}
-
-func sqlTypeForOperand(v *Value) string {
-	if v == nil {
-		return ""
-	}
-	switch {
-	case v.StrVal != nil:
-		return "text"
-	case v.NumVal != nil:
-		return "double precision"
-	case v.Boolean != nil:
-		return "boolean"
-	case v.TimeVal != nil:
-		return "time"
-	case v.DateTimeVal != nil:
-		return "timestamptz"
-	default:
-		return ""
-	}
 }
 
 func leadingAlias(expr string) (string, bool) {
@@ -1104,6 +912,8 @@ func existsTableForAlias(alias string) (string, bool) {
 	switch alias {
 	case "aas_descriptor":
 		return "aas_descriptor", true
+	case "aas_identifier":
+		return "aas_identifier", true
 	case "specific_asset_id":
 		return "specific_asset_id", true
 	case "external_subject_reference":
@@ -1312,46 +1122,6 @@ func handleBinaryOperationWithoutCollector(
 		return nil, nil, err
 	}
 
-	// If one side is a resolved field and the other a literal/value, convert the literal
-	// to the field's enum representation before casting/building the SQL expression.
-	var convertedRight, convertedLeft bool
-	if leftResolved != nil && rightResolved == nil {
-		if v, ok := convertLiteralToEnumIfNeeded(*leftResolved, rightOperand); ok {
-			rightSQL = goqu.V(v)
-			convertedRight = true
-		}
-	}
-	if rightResolved != nil && leftResolved == nil {
-		if v, ok := convertLiteralToEnumIfNeeded(*rightResolved, leftOperand); ok {
-			leftSQL = goqu.V(v)
-			convertedLeft = true
-		}
-	}
-
-	// Cast the field side to the non-field operand's type (unless already explicitly casted).
-	if leftResolved != nil && rightResolved == nil && leftCastType == "" {
-		t := ""
-		if convertedRight {
-			t = "integer" // Assume enum is integer
-		} else if t2 := sqlTypeForOperand(rightOperand); t2 != "" {
-			t = t2
-		}
-		if t != "" {
-			leftSQL = safeCastSQLValue(columnToExpression(leftResolved.Column), t)
-		}
-	}
-	if rightResolved != nil && leftResolved == nil && rightCastType == "" {
-		t := ""
-		if convertedLeft {
-			t = "integer" // Assume enum is integer
-		} else if t2 := sqlTypeForOperand(leftOperand); t2 != "" {
-			t = t2
-		}
-		if t != "" {
-			rightSQL = safeCastSQLValue(columnToExpression(rightResolved.Column), t)
-		}
-	}
-
 	if validate != nil {
 		if err := validate(leftOperand, rightOperand); err != nil {
 			return nil, nil, err
@@ -1419,46 +1189,6 @@ func handleBinaryOperationWithCollector(
 		return nil, nil, err
 	}
 
-	// If one side is a resolved field and the other a literal/value, convert the literal
-	// to the field's enum representation before casting/building the SQL expression.
-	var convertedRight, convertedLeft bool
-	if leftResolved != nil && rightResolved == nil {
-		if v, ok := convertLiteralToEnumIfNeeded(*leftResolved, rightOperand); ok {
-			rightSQL = goqu.V(v)
-			convertedRight = true
-		}
-	}
-	if rightResolved != nil && leftResolved == nil {
-		if v, ok := convertLiteralToEnumIfNeeded(*rightResolved, leftOperand); ok {
-			leftSQL = goqu.V(v)
-			convertedLeft = true
-		}
-	}
-
-	// Cast the field side to the non-field operand's type (unless already explicitly casted).
-	if leftResolved != nil && rightResolved == nil && leftCastType == "" {
-		t := ""
-		if convertedRight {
-			t = "integer" // Assume enum is integer
-		} else if t2 := sqlTypeForOperand(rightOperand); t2 != "" {
-			t = t2
-		}
-		if t != "" {
-			leftSQL = safeCastSQLValue(columnToExpression(leftResolved.Column), t)
-		}
-	}
-	if rightResolved != nil && leftResolved == nil && rightCastType == "" {
-		t := ""
-		if convertedLeft {
-			t = "integer" // Assume enum is integer
-		} else if t2 := sqlTypeForOperand(leftOperand); t2 != "" {
-			t = t2
-		}
-		if t != "" {
-			rightSQL = safeCastSQLValue(columnToExpression(rightResolved.Column), t)
-		}
-	}
-
 	if validate != nil {
 		if err := validate(leftOperand, rightOperand); err != nil {
 			return nil, nil, err
@@ -1477,11 +1207,11 @@ func handleBinaryOperationWithCollector(
 	}
 
 	if collector != nil && resolvedNeedsCTE(resolved) {
-		alias, err := collector.Register(resolved, opExpr)
+		existsExpr, err := buildInlineExistsExpression(resolved, opExpr, collector)
 		if err != nil {
 			return nil, nil, err
 		}
-		return goqu.I(collector.qualifiedAlias(alias)), resolved, nil
+		return existsExpr, resolved, nil
 	}
 	if collector != nil {
 		return opExpr, resolved, nil
@@ -1557,11 +1287,11 @@ func (le *LogicalExpression) EvaluateToExpression(collector *ResolvedFieldPathCo
 			return nil, nil, err
 		}
 		if collector != nil && resolvedNeedsCTE(resolved) {
-			alias, err := collector.RegisterWithAgg(resolved, expr, true)
+			notExistsExpr, err := buildInlineNotExistsExpression(resolved, expr, collector)
 			if err != nil {
 				return nil, nil, err
 			}
-			return goqu.I(collector.qualifiedAlias(alias)), resolved, nil
+			return notExistsExpr, resolved, nil
 		}
 		if collector != nil {
 			return expr, resolved, nil
@@ -1588,6 +1318,36 @@ func (le *LogicalExpression) EvaluateToExpression(collector *ResolvedFieldPathCo
 	}
 
 	if len(le.Or) > 0 {
+		if collector != nil {
+			var combined []exp.Expression
+			var sharedResolved []ResolvedFieldPath
+			canGroup := true
+			for _, nestedExpr := range le.Or {
+				expr, resolved, err := nestedExpr.EvaluateToExpression(nil)
+				if err != nil {
+					canGroup = false
+					break
+				}
+				if len(resolved) == 0 || !resolvedNeedsCTE(resolved) || anyResolvedHasBindings(resolved) {
+					canGroup = false
+					break
+				}
+				if sharedResolved == nil {
+					sharedResolved = resolved
+				} else if !resolvedSlicesEqual(sharedResolved, resolved) {
+					canGroup = false
+					break
+				}
+				combined = append(combined, expr)
+			}
+			if canGroup && len(combined) > 0 {
+				orExpr := goqu.Or(combined...)
+				existsExpr, err := buildInlineExistsExpression(sharedResolved, orExpr, collector)
+				if err == nil {
+					return existsExpr, sharedResolved, nil
+				}
+			}
+		}
 		var expressions []exp.Expression
 		var resolved []ResolvedFieldPath
 		for i, nestedExpr := range le.Or {
@@ -2011,18 +1771,4 @@ func normalizeTime(t time.Time) time.Time {
 		return time.Unix(0, t.UnixNano()).UTC()
 	}
 	return t.UTC()
-}
-
-// convertLiteralToEnumIfNeeded converts a literal string Value to the enum representation
-// expected by the resolved field. Returns (convertedValue, true) if conversion applied.
-func convertLiteralToEnumIfNeeded(resolved ResolvedFieldPath, lit *Value) (interface{}, bool) {
-	// Check if the field is an enum type (e.g., valueType for DataTypeDefXSD).
-	// Heuristic: inspect column name for "value_type" (refine based on ResolveScalarFieldToSQL metadata).
-	if strings.Contains(strings.ToLower(resolved.Column), "value_type") && lit.StrVal != nil {
-		// Attempt conversion using DataTypeDefXSDFromString.
-		if enumVal, ok := stringification.DataTypeDefXSDFromString(string(*lit.StrVal)); ok {
-			return enumVal, true // enumVal is likely an int or string representing the enum.
-		}
-	}
-	return nil, false
 }

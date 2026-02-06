@@ -1,0 +1,699 @@
+{
+  "pagingMetadata": {},
+  "result": [
+    {
+      "id": "urn:uuid:019c0005-b2b7-7b1d-8cc7-bb6fe3e5a5fa",
+      "globalAssetId": "urn:uuid:019c0005-b2b7-7eec-85e4-f02cd0406de3",
+      "specificAssetIds": [
+        {
+          "name": "manufacturerId",
+          "value": "BPNL00000000015G"
+        },
+        {
+          "name": "manufacturerPartId",
+          "value": "8875607",
+          "externalSubjectId": {
+            "type": "ExternalReference",
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "PUBLIC_READABLE"
+              }
+            ]
+          }
+        },
+        {
+          "name": "partInstanceId",
+          "value": "T588756070325B20950022162515271"
+        },
+        {
+          "name": "customerPartId",
+          "value": "8875607"
+        },
+        {
+          "name": "intrinsicId",
+          "value": "T588756070325B20950022162515271"
+        },
+        {
+          "name": "digitalTwinType",
+          "value": "PartInstance",
+          "externalSubjectId": {
+            "type": "ExternalReference",
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "PUBLIC_READABLE"
+              }
+            ]
+          }
+        }
+      ],
+      "submodelDescriptors": [
+        {
+          "endpoints": [
+            {
+              "interface": "SUBMODEL-3.0",
+              "protocolInformation": {
+                "href": "https://dataplane-trace.edc.aws.bmw.cloud/public/urn:uuid:7dc86f63-b4b8-4e24-89f5-bf34e045ebe4/submodel",
+                "endpointProtocol": "HTTP",
+                "endpointProtocolVersion": [
+                  "1.1"
+                ],
+                "subprotocol": "DSP",
+                "subprotocolBody": "id=modul_bundle_slbb;dspEndpoint=https://connector-trace.edc.aws.bmw.cloud/api/v1/dsp",
+                "subprotocolBodyEncoding": "plain",
+                "securityAttributes": [
+                  {
+                    "type": "NONE",
+                    "key": "NONE",
+                    "value": "NONE"
+                  }
+                ]
+              }
+            }
+          ],
+          "idShort": "singleLevelBoMAsBuilt",
+          "id": "urn:uuid:019c0005-b2b7-7d2d-bfc1-622e024ad384",
+          "semanticId": {
+            "type": "ExternalReference",
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "urn:samm:io.catenax.single_level_bom_as_built:3.0.0#SingleLevelBomAsBuilt"
+              }
+            ]
+          },
+          "description": [
+            {
+              "language": "en",
+              "text": "hello"
+            },
+            {
+              "language": "de",
+              "text": "hallo"
+            }
+          ]
+        },
+        {
+          "endpoints": [
+            {
+              "interface": "SUBMODEL-3.0",
+              "protocolInformation": {
+                "href": "https://dataplane-trace.edc.aws.bmw.cloud/public/urn:uuid:1941afc7-e75d-439a-a690-b4a8c09f7076/submodel",
+                "endpointProtocol": "HTTP",
+                "endpointProtocolVersion": [
+                  "1.1"
+                ],
+                "subprotocol": "DSP",
+                "subprotocolBody": "id=modul_bundle_sp;dspEndpoint=https://connector-trace.edc.aws.bmw.cloud/api/v1/dsp",
+                "subprotocolBodyEncoding": "plain",
+                "securityAttributes": [
+                  {
+                    "type": "NONE",
+                    "key": "NONE",
+                    "value": "NONE"
+                  }
+                ]
+              }
+            }
+          ],
+          "idShort": "serialPart",
+          "id": "urn:uuid:019c0005-b2b7-7256-b9e3-3fc367b05257",
+          "semanticId": {
+            "type": "ExternalReference",
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "urn:samm:io.catenax.serial_part:3.0.0#SerialPart"
+              }
+            ]
+          },
+          "description": [
+            {
+              "language": "de",
+              "text": "hallo"
+            },
+            {
+              "language": "en",
+              "text": "hello"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "urn:uuid:019c0005-b2b7-7b1d-8cc7-bb6fe3e5a5fb",
+      "globalAssetId": "urn:uuid:019c0005-b2b7-7eec-85e4-f02cd0406de4",
+      "specificAssetIds": [
+        {
+          "name": "manufacturerId",
+          "value": "BPNL00000000015G"
+        },
+        {
+          "name": "manufacturerPartId",
+          "value": "8875607",
+          "externalSubjectId": {
+            "type": "ExternalReference",
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "BPNL00000000015G"
+              }
+            ]
+          }
+        },
+        {
+          "name": "partInstanceId",
+          "value": "T588756070325B20950022162515271"
+        },
+        {
+          "name": "customerPartId",
+          "value": "8875607"
+        },
+        {
+          "name": "intrinsicId",
+          "value": "T588756070325B20950022162515271"
+        },
+        {
+          "name": "digitalTwinType",
+          "value": "PartInstance",
+          "externalSubjectId": {
+            "type": "ExternalReference",
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "BPNL00000000015G"
+              }
+            ]
+          }
+        }
+      ],
+      "submodelDescriptors": [
+        {
+          "endpoints": [
+            {
+              "interface": "SUBMODEL-3.0",
+              "protocolInformation": {
+                "href": "https://dataplane-trace.edc.aws.bmw.cloud/public/urn:uuid:7dc86f63-b4b8-4e24-89f5-bf34e045ebe4/submodel",
+                "endpointProtocol": "HTTP",
+                "endpointProtocolVersion": [
+                  "1.1"
+                ],
+                "subprotocol": "DSP",
+                "subprotocolBody": "id=modul_bundle_slbb;dspEndpoint=https://connector-trace.edc.aws.bmw.cloud/api/v1/dsp",
+                "subprotocolBodyEncoding": "plain",
+                "securityAttributes": [
+                  {
+                    "type": "NONE",
+                    "key": "NONE",
+                    "value": "NONE"
+                  }
+                ]
+              }
+            }
+          ],
+          "idShort": "singleLevelBoMAsBuilt",
+          "id": "urn:uuid:019c0005-b2b7-7d2d-bfc1-622e024ad384",
+          "semanticId": {
+            "type": "ExternalReference",
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "urn:samm:io.catenax.single_level_bom_as_built:3.0.0#SingleLevelBomAsBuilt"
+              }
+            ]
+          },
+          "description": [
+            {
+              "language": "en",
+              "text": "hello"
+            },
+            {
+              "language": "de",
+              "text": "hallo"
+            }
+          ]
+        },
+        {
+          "endpoints": [
+            {
+              "interface": "SUBMODEL-3.0",
+              "protocolInformation": {
+                "href": "https://dataplane-trace.edc.aws.bmw.cloud/public/urn:uuid:1941afc7-e75d-439a-a690-b4a8c09f7076/submodel",
+                "endpointProtocol": "HTTP",
+                "endpointProtocolVersion": [
+                  "1.1"
+                ],
+                "subprotocol": "DSP",
+                "subprotocolBody": "id=modul_bundle_sp;dspEndpoint=https://connector-trace.edc.aws.bmw.cloud/api/v1/dsp",
+                "subprotocolBodyEncoding": "plain",
+                "securityAttributes": [
+                  {
+                    "type": "NONE",
+                    "key": "NONE",
+                    "value": "NONE"
+                  }
+                ]
+              }
+            }
+          ],
+          "idShort": "serialPart",
+          "id": "urn:uuid:019c0005-b2b7-7256-b9e3-3fc367b05257",
+          "semanticId": {
+            "type": "ExternalReference",
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "urn:samm:io.catenax.serial_part:3.0.0#SerialPart"
+              }
+            ]
+          },
+          "description": [
+            {
+              "language": "de",
+              "text": "hallo"
+            },
+            {
+              "language": "en",
+              "text": "hello"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "urn:uuid:019c0005-b2b7-7b1d-8cc7-bb6fe3e5a5fc",
+      "globalAssetId": "urn:uuid:019c0005-b2b7-7eec-85e4-f02cd0406de5",
+      "specificAssetIds": [
+        {
+          "name": "manufacturerId",
+          "value": "BPNL00000000015G"
+        },
+        {
+          "name": "manufacturerPartId",
+          "value": "8875607",
+          "externalSubjectId": {
+            "type": "ExternalReference",
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "PUBLIC_READABLE"
+              },
+              {
+                "type": "GlobalReference",
+                "value": "BPNL00000000015G"
+              }
+            ]
+          }
+        },
+        {
+          "name": "partInstanceId",
+          "value": "T588756070325B20950022162515271"
+        },
+        {
+          "name": "customerPartId",
+          "value": "8875607"
+        },
+        {
+          "name": "intrinsicId",
+          "value": "T588756070325B20950022162515271"
+        },
+        {
+          "name": "funnytest",
+          "value": "verfunny"
+        },
+        {
+          "name": "digitalTwinType",
+          "value": "PartInstance",
+          "externalSubjectId": {
+            "type": "ExternalReference",
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "PUBLIC_READABLE"
+              },
+              {
+                "type": "GlobalReference",
+                "value": "BPNL00000000015G"
+              }
+            ]
+          }
+        }
+      ],
+      "submodelDescriptors": [
+        {
+          "endpoints": [
+            {
+              "interface": "SUBMODEL-3.0",
+              "protocolInformation": {
+                "href": "https://dataplane-trace.edc.aws.bmw.cloud/public/urn:uuid:7dc86f63-b4b8-4e24-89f5-bf34e045ebe4/submodel",
+                "endpointProtocol": "HTTP",
+                "endpointProtocolVersion": [
+                  "1.1"
+                ],
+                "subprotocol": "DSP",
+                "subprotocolBody": "id=modul_bundle_slbb;dspEndpoint=https://connector-trace.edc.aws.bmw.cloud/api/v1/dsp",
+                "subprotocolBodyEncoding": "plain",
+                "securityAttributes": [
+                  {
+                    "type": "NONE",
+                    "key": "NONE",
+                    "value": "NONE"
+                  }
+                ]
+              }
+            }
+          ],
+          "idShort": "singleLevelBoMAsBuilt",
+          "id": "urn:uuid:019c0005-b2b7-7d2d-bfc1-622e024ad384",
+          "semanticId": {
+            "type": "ExternalReference",
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "urn:samm:io.catenax.single_level_bom_as_built:3.0.0#SingleLevelBomAsBuilt"
+              }
+            ]
+          },
+          "description": [
+            {
+              "language": "en",
+              "text": "hello"
+            },
+            {
+              "language": "de",
+              "text": "hallo"
+            }
+          ]
+        },
+        {
+          "endpoints": [
+            {
+              "interface": "SUBMODEL-3.0",
+              "protocolInformation": {
+                "href": "https://dataplane-trace.edc.aws.bmw.cloud/public/urn:uuid:1941afc7-e75d-439a-a690-b4a8c09f7076/submodel",
+                "endpointProtocol": "HTTP",
+                "endpointProtocolVersion": [
+                  "1.1"
+                ],
+                "subprotocol": "DSP",
+                "subprotocolBody": "id=modul_bundle_sp;dspEndpoint=https://connector-trace.edc.aws.bmw.cloud/api/v1/dsp",
+                "subprotocolBodyEncoding": "plain",
+                "securityAttributes": [
+                  {
+                    "type": "NONE",
+                    "key": "NONE",
+                    "value": "NONE"
+                  }
+                ]
+              }
+            }
+          ],
+          "idShort": "serialPart",
+          "id": "urn:uuid:019c0005-b2b7-7256-b9e3-3fc367b05257",
+          "semanticId": {
+            "type": "ExternalReference",
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "urn:samm:io.catenax.serial_part:3.0.0#SerialPart"
+              }
+            ]
+          },
+          "description": [
+            {
+              "language": "de",
+              "text": "hallo"
+            },
+            {
+              "language": "en",
+              "text": "hello"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "urn:uuid:019c0005-b2b7-7b1d-8cc7-bb6fe3e5a5fd",
+      "globalAssetId": "urn:uuid:019c0005-b2b7-7eec-85e4-f02cd0406de6",
+      "specificAssetIds": [
+        {
+          "name": "manufacturerId",
+          "value": "BPNL00000000015G"
+        },
+        {
+          "name": "manufacturerPartId",
+          "value": "8875607",
+          "externalSubjectId": {
+            "type": "ExternalReference",
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "BPNL999999999999"
+              }
+            ]
+          }
+        },
+        {
+          "name": "partInstanceId",
+          "value": "T588756070325B20950022162515271"
+        },
+        {
+          "name": "customerPartId",
+          "value": "8875607"
+        },
+        {
+          "name": "intrinsicId",
+          "value": "T588756070325B20950022162515271"
+        },
+        {
+          "name": "digitalTwinType",
+          "value": "PartInstance",
+          "externalSubjectId": {
+            "type": "ExternalReference",
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "BPNL999999999999"
+              }
+            ]
+          }
+        }
+      ],
+      "submodelDescriptors": [
+        {
+          "endpoints": [
+            {
+              "interface": "SUBMODEL-3.0",
+              "protocolInformation": {
+                "href": "https://dataplane-trace.edc.aws.bmw.cloud/public/urn:uuid:7dc86f63-b4b8-4e24-89f5-bf34e045ebe4/submodel",
+                "endpointProtocol": "HTTP",
+                "endpointProtocolVersion": [
+                  "1.1"
+                ],
+                "subprotocol": "DSP",
+                "subprotocolBody": "id=modul_bundle_slbb;dspEndpoint=https://connector-trace.edc.aws.bmw.cloud/api/v1/dsp",
+                "subprotocolBodyEncoding": "plain",
+                "securityAttributes": [
+                  {
+                    "type": "NONE",
+                    "key": "NONE",
+                    "value": "NONE"
+                  }
+                ]
+              }
+            }
+          ],
+          "idShort": "singleLevelBoMAsBuilt",
+          "id": "urn:uuid:019c0005-b2b7-7d2d-bfc1-622e024ad384",
+          "semanticId": {
+            "type": "ExternalReference",
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "urn:samm:io.catenax.single_level_bom_as_built:3.0.0#SingleLevelBomAsBuilt"
+              }
+            ]
+          },
+          "description": [
+            {
+              "language": "en",
+              "text": "hello"
+            },
+            {
+              "language": "de",
+              "text": "hallo"
+            }
+          ]
+        },
+        {
+          "endpoints": [
+            {
+              "interface": "SUBMODEL-3.0",
+              "protocolInformation": {
+                "href": "https://dataplane-trace.edc.aws.bmw.cloud/public/urn:uuid:1941afc7-e75d-439a-a690-b4a8c09f7076/submodel",
+                "endpointProtocol": "HTTP",
+                "endpointProtocolVersion": [
+                  "1.1"
+                ],
+                "subprotocol": "DSP",
+                "subprotocolBody": "id=modul_bundle_sp;dspEndpoint=https://connector-trace.edc.aws.bmw.cloud/api/v1/dsp",
+                "subprotocolBodyEncoding": "plain",
+                "securityAttributes": [
+                  {
+                    "type": "NONE",
+                    "key": "NONE",
+                    "value": "NONE"
+                  }
+                ]
+              }
+            }
+          ],
+          "idShort": "serialPart",
+          "id": "urn:uuid:019c0005-b2b7-7256-b9e3-3fc367b05257",
+          "semanticId": {
+            "type": "ExternalReference",
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "urn:samm:io.catenax.serial_part:3.0.0#SerialPart"
+              }
+            ]
+          },
+          "description": [
+            {
+              "language": "de",
+              "text": "hallo"
+            },
+            {
+              "language": "en",
+              "text": "hello"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "urn:uuid:019c0005-b2b7-7b1d-8cc7-bb6fe3e5a5fe",
+      "globalAssetId": "urn:uuid:019c0005-b2b7-7eec-85e4-f02cd0406de7",
+      "specificAssetIds": [
+        {
+          "name": "manufacturerId",
+          "value": "BPNL00000000015G"
+        },
+        {
+          "name": "manufacturerPartId",
+          "value": "8875607"
+        },
+        {
+          "name": "partInstanceId",
+          "value": "T588756070325B20950022162515271"
+        },
+        {
+          "name": "customerPartId",
+          "value": "8875607"
+        },
+        {
+          "name": "intrinsicId",
+          "value": "T588756070325B20950022162515271"
+        },
+        {
+          "name": "digitalTwinType",
+          "value": "PartInstance"
+        }
+      ],
+      "submodelDescriptors": [
+        {
+          "endpoints": [
+            {
+              "interface": "SUBMODEL-3.0",
+              "protocolInformation": {
+                "href": "https://dataplane-trace.edc.aws.bmw.cloud/public/urn:uuid:7dc86f63-b4b8-4e24-89f5-bf34e045ebe4/submodel",
+                "endpointProtocol": "HTTP",
+                "endpointProtocolVersion": [
+                  "1.1"
+                ],
+                "subprotocol": "DSP",
+                "subprotocolBody": "id=modul_bundle_slbb;dspEndpoint=https://connector-trace.edc.aws.bmw.cloud/api/v1/dsp",
+                "subprotocolBodyEncoding": "plain",
+                "securityAttributes": [
+                  {
+                    "type": "NONE",
+                    "key": "NONE",
+                    "value": "NONE"
+                  }
+                ]
+              }
+            }
+          ],
+          "idShort": "singleLevelBoMAsBuilt",
+          "id": "urn:uuid:019c0005-b2b7-7d2d-bfc1-622e024ad384",
+          "semanticId": {
+            "type": "ExternalReference",
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "urn:samm:io.catenax.single_level_bom_as_built:3.0.0#SingleLevelBomAsBuilt"
+              }
+            ]
+          },
+          "description": [
+            {
+              "language": "en",
+              "text": "hello"
+            },
+            {
+              "language": "de",
+              "text": "hallo"
+            }
+          ]
+        },
+        {
+          "endpoints": [
+            {
+              "interface": "SUBMODEL-3.0",
+              "protocolInformation": {
+                "href": "https://dataplane-trace.edc.aws.bmw.cloud/public/urn:uuid:1941afc7-e75d-439a-a690-b4a8c09f7076/submodel",
+                "endpointProtocol": "HTTP",
+                "endpointProtocolVersion": [
+                  "1.1"
+                ],
+                "subprotocol": "DSP",
+                "subprotocolBody": "id=modul_bundle_sp;dspEndpoint=https://connector-trace.edc.aws.bmw.cloud/api/v1/dsp",
+                "subprotocolBodyEncoding": "plain",
+                "securityAttributes": [
+                  {
+                    "type": "NONE",
+                    "key": "NONE",
+                    "value": "NONE"
+                  }
+                ]
+              }
+            }
+          ],
+          "idShort": "serialPart",
+          "id": "urn:uuid:019c0005-b2b7-7256-b9e3-3fc367b05257",
+          "semanticId": {
+            "type": "ExternalReference",
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "urn:samm:io.catenax.serial_part:3.0.0#SerialPart"
+              }
+            ]
+          },
+          "description": [
+            {
+              "language": "de",
+              "text": "hallo"
+            },
+            {
+              "language": "en",
+              "text": "hello"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

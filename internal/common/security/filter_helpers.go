@@ -28,8 +28,6 @@ package auth
 
 import (
 	"context"
-	"fmt"
-	"strings"
 
 	"github.com/doug-martin/goqu/v9"
 	"github.com/doug-martin/goqu/v9/exp"
@@ -179,43 +177,5 @@ func AddFormulaQueryFromContext(ctx context.Context, ds *goqu.SelectDataset, col
 			wc,
 		)
 	}
-	return ds, nil
-}
-
-// ApplyResolvedFieldPathCTEs attaches the collected flag CTE to the dataset and joins it
-// on the configured root join key so flag expressions referenced in WHERE/CASE clauses are available.
-func ApplyResolvedFieldPathCTEs(
-	ds *goqu.SelectDataset,
-	collector *grammar.ResolvedFieldPathCollector,
-	cteWhere exp.Expression,
-) (*goqu.SelectDataset, error) {
-	if collector == nil {
-		return ds, nil
-	}
-	entries := collector.Entries()
-	if len(entries) == 0 {
-		return ds, nil
-	}
-
-	ctes, err := grammar.BuildResolvedFieldPathFlagCTEsWithCollector(collector, entries, cteWhere)
-	if err != nil {
-		return nil, err
-	}
-	if len(ctes) == 0 {
-		return ds, nil
-	}
-
-	rootJoinKey := collector.EffectiveRootJoinKey()
-	for _, cte := range ctes {
-		if strings.TrimSpace(cte.Alias) == "" {
-			return nil, fmt.Errorf("CTE alias is empty")
-		}
-		ds = ds.With(cte.Alias, cte.Dataset).
-			LeftJoin(
-				goqu.T(cte.Alias),
-				goqu.On(goqu.I(cte.Alias+".root_id").Eq(rootJoinKey)),
-			)
-	}
-
 	return ds, nil
 }

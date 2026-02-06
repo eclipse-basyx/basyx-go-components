@@ -43,6 +43,7 @@ const (
 	tblAASDescriptorEndpoint          = "aas_descriptor_endpoint"
 	tblSecurityAttributes             = "security_attributes"
 	tblEndpointProtocolVersion        = "endpoint_protocol_version"
+	tblAASIdentifier                  = "aas_identifier"
 	tblSpecificAssetID                = "specific_asset_id"
 	tblSpecificAssetIDSuppSemantic    = "specific_asset_id_supplemental_semantic_id"
 	tblSubmodelDescriptor             = "submodel_descriptor"
@@ -88,6 +89,7 @@ const (
 	colAssetType               = "asset_type"
 	colGlobalAssetID           = "global_asset_id"
 	colIDShort                 = "id_short"
+	colCreatedAt               = "created_at"
 	colAASID                   = "id"
 	colRegDescID               = "id"
 	colHref                    = "href"
@@ -108,6 +110,7 @@ const (
 	colName                    = "name"
 	colValue                   = "value"
 	colExternalSubjectRef      = "external_subject_ref"
+	colAASRef                  = "aasref"
 
 	colSpecificAssetIDID = "specific_asset_id_id"
 	colReferenceID       = "reference_id"

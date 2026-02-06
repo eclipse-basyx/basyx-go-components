@@ -1,0 +1,60 @@
+{
+  "AllAccessPermissionRules": {
+    "DEFATTRIBUTES": [
+      { "name": "anonym_attr", "attributes": [ { "GLOBAL": "ANONYMOUS" } ] },
+      { "name": "role_attr", "attributes": [ { "CLAIM": "role" } ] },
+      { "name": "member_attr", "attributes": [ { "CLAIM": "role" }, { "CLAIM": "clear" } ] }
+    ],
+
+    "DEFOBJECTS": [
+      { "name": "description", "objects": [ { "ROUTE": "/description" }, { "ROUTE": "/api/v3/description" } ] },
+      { "name": "assetlinks", "objects": [ { "ROUTE": "/lookup/shells" }, { "ROUTE": "/lookup/shellsByAssetLink" } ] },
+      { "name": "shells", "objects": [ { "ROUTE": "/lookup/shells/*" } ] },
+      { "name": "all_shell_descriptors", "objects": [ { "DESCRIPTOR": "$aasdesc(\"*\")" } ] }
+    ],
+
+    "DEFACLS": [
+      { "name": "read_anonymous", "acl": { "USEATTRIBUTES": "anonym_attr", "RIGHTS": ["READ"], "ACCESS": "ALLOW" } },
+      { "name": "write_anonymous", "acl": { "USEATTRIBUTES": "anonym_attr", "RIGHTS": ["CREATE"], "ACCESS": "ALLOW" } }
+    ],
+
+    "DEFFORMULAS": [
+      { "name": "always_true", "formula": { "$boolean": true } },
+      { "name": "always_false", "formula": { "$boolean": false } },
+      { "name": "logic", "formula":
+       { "$or": [
+          { "$eq": [ { "$attribute": { "CLAIM": "Edc-Bpn" } }, { "$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value" } ] },
+          { "$eq": [ { "$strVal": "PUBLIC_READABLE" }, { "$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value" } ] } 
+        ]
+       }
+      },
+      { "name": "bpn_match", 
+        "formula":
+          { "$eq": [ { "$attribute": { "CLAIM": "Edc-Bpn" } }, { "$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value" } ] }
+      }
+    ],
+
+    "rules": [
+      { "USEACL": "read_anonymous", "USEOBJECTS": ["all_shell_descriptors"], "USEFORMULA": "logic", 
+        "FILTERLIST": 
+        [
+          {
+            "FRAGMENT": "$aasdesc#globalAssetId",
+            "USEFORMULA": "bpn_match"
+          }
+        ] 
+      },
+      { "USEACL": "read_anonymous", "USEOBJECTS": ["shells"], "USEFORMULA": "logic", 
+        "FILTERLIST": 
+        [
+          {
+            "FRAGMENT": "$aasdesc#specificAssetIds[].externalSubjectId",
+            "USEFORMULA": "always_false"
+          }
+        ] 
+      },
+      { "USEACL": "read_anonymous", "USEOBJECTS": ["assetlinks"], "USEFORMULA": "logic"},
+      { "USEACL": "write_anonymous", "USEOBJECTS": ["all_shell_descriptors", "assetlinks", "shells"], "USEFORMULA": "always_true" }
+    ]
+  }
+}

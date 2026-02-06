@@ -43,8 +43,9 @@ import (
 // Enabled: toggles ABAC enforcement.
 // Model: provides the AccessModel that evaluates authorization rules.
 type ABACSettings struct {
-	Enabled bool
-	Model   *AccessModel
+	Enabled             bool
+	EnableImplicitCasts bool
+	Model               *AccessModel
 }
 
 // Resource represents the target object of an authorization request.
@@ -87,11 +88,13 @@ func ABACMiddleware(settings ABACSettings) func(http.Handler) http.Handler {
 			}
 
 			if settings.Model != nil {
-				ok, reason, qf := settings.Model.AuthorizeWithFilter(EvalInput{
+				opts := grammar.DefaultSimplifyOptions()
+				opts.EnableImplicitCasts = settings.EnableImplicitCasts
+				ok, reason, qf := settings.Model.AuthorizeWithFilterWithOptions(EvalInput{
 					Method: r.Method,
 					Path:   r.URL.Path,
 					Claims: claims,
-				})
+				}, opts)
 				if !ok {
 					log.Printf("❌ ABAC(model): %s", reason)
 
@@ -142,13 +145,19 @@ func MergeQueryFilter(ctx context.Context, query grammar.Query) context.Context 
 		qf = &QueryFilter{}
 	}
 
+	resolver := func(grammar.AttributeValue) any { return nil }
+	opts := grammar.DefaultSimplifyOptions()
+	if cfg, ok := common.ConfigFromContext(ctx); ok {
+		opts.EnableImplicitCasts = cfg.General.EnableImplicitCasts
+	}
+
 	if query.Condition != nil {
 		if qf.Formula != nil {
 			combinedQuery := grammar.LogicalExpression{And: []grammar.LogicalExpression{*qf.Formula, *query.Condition}}
-			combinedQuery, _ = combinedQuery.SimplifyForBackendFilterNoResolver()
+			combinedQuery, _ = combinedQuery.SimplifyForBackendFilterWithOptions(resolver, opts)
 			qf.Formula = &combinedQuery
 		} else {
-			simplifiedQuery, _ := query.Condition.SimplifyForBackendFilterNoResolver()
+			simplifiedQuery, _ := query.Condition.SimplifyForBackendFilterWithOptions(resolver, opts)
 			qf.Formula = &simplifiedQuery
 		}
 	}
@@ -162,10 +171,10 @@ func MergeQueryFilter(ctx context.Context, query grammar.Query) context.Context 
 		}
 		if existing, ok := qf.Filters[*filterCond.Fragment]; ok {
 			combinedQuery := grammar.LogicalExpression{And: []grammar.LogicalExpression{existing, *filterCond.Condition}}
-			combinedQuery, _ = combinedQuery.SimplifyForBackendFilterNoResolver()
+			combinedQuery, _ = combinedQuery.SimplifyForBackendFilterWithOptions(resolver, opts)
 			qf.Filters[*filterCond.Fragment] = combinedQuery
 		} else {
-			simplifiedQuery, _ := filterCond.Condition.SimplifyForBackendFilterNoResolver()
+			simplifiedQuery, _ := filterCond.Condition.SimplifyForBackendFilterWithOptions(resolver, opts)
 			qf.Filters[*filterCond.Fragment] = simplifiedQuery
 		}
 	}

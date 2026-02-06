@@ -133,7 +133,38 @@ func materializeRule(index definitionIndex, r grammar.AccessPermissionRule) (mat
 	if r.FILTER != nil {
 		filterList = append(filterList, *r.FILTER)
 	}
-	mr := materializedRule{filterList: filterList}
+	resolvedFilters := make([]grammar.AccessPermissionRuleFILTER, 0, len(filterList))
+	for i, filter := range filterList {
+		if filter.FRAGMENT == nil {
+			return materializedRule{}, fmt.Errorf("FILTERLIST[%d]: FRAGMENT is required", i+1)
+		}
+
+		useFormulaName := ""
+		if filter.USEFORMULA != nil {
+			useFormulaName = strings.TrimSpace(*filter.USEFORMULA)
+		}
+
+		if filter.CONDITION != nil && useFormulaName != "" {
+			return materializedRule{}, fmt.Errorf("FILTERLIST[%d]: only one of CONDITION or USEFORMULA may be defined", i+1)
+		}
+
+		if filter.CONDITION == nil {
+			if useFormulaName == "" {
+				return materializedRule{}, fmt.Errorf("FILTERLIST[%d]: CONDITION or USEFORMULA is required", i+1)
+			}
+			f, ok := index.formulas[useFormulaName]
+			if !ok {
+				return materializedRule{}, fmt.Errorf("FILTERLIST[%d]: USEFORMULA %q not found", i+1, useFormulaName)
+			}
+			tmp := f
+			filter.CONDITION = &tmp
+		}
+
+		filter.USEFORMULA = nil
+		resolvedFilters = append(resolvedFilters, filter)
+	}
+
+	mr := materializedRule{filterList: resolvedFilters}
 
 	// ACL / USEACL
 	switch {

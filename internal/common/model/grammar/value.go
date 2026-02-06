@@ -272,6 +272,53 @@ func (v *Value) IsComparableTo(in Value) (ComparisonKind, error) {
 	return ltype, nil
 }
 
+// extractFieldOperandAndCast walks through cast wrappers to find the underlying field operand
+// and returns the outermost cast target type (if any).
+func extractFieldOperandAndCast(v *Value) (*Value, string) {
+	cur := v
+	castType := ""
+	for cur != nil {
+		// Record only the outermost cast.
+		if castType == "" {
+			switch {
+			case cur.StrCast != nil:
+				castType = "text"
+			case cur.NumCast != nil:
+				castType = "double precision"
+			case cur.BoolCast != nil:
+				castType = "boolean"
+			case cur.TimeCast != nil:
+				castType = "time"
+			case cur.DateTimeCast != nil:
+				castType = "timestamptz"
+			case cur.HexCast != nil:
+				castType = "text"
+			}
+		}
+
+		if cur.Field != nil {
+			return cur, castType
+		}
+		switch {
+		case cur.StrCast != nil:
+			cur = cur.StrCast
+		case cur.NumCast != nil:
+			cur = cur.NumCast
+		case cur.BoolCast != nil:
+			cur = cur.BoolCast
+		case cur.TimeCast != nil:
+			cur = cur.TimeCast
+		case cur.DateTimeCast != nil:
+			cur = cur.DateTimeCast
+		case cur.HexCast != nil:
+			cur = cur.HexCast
+		default:
+			return nil, ""
+		}
+	}
+	return nil, ""
+}
+
 // WrapCastAroundField wraps a field value in an explicit cast to align both operands' types.
 func WrapCastAroundField(v Value, kind ComparisonKind) Value {
 	if v.EffectiveType() != KindField {

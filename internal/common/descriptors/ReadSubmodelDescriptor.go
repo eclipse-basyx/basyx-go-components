@@ -30,6 +30,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"time"
 
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
@@ -97,6 +98,12 @@ func ReadSubmodelDescriptorsByAASDescriptorIDs(
 	aasDescriptorIDs []int64,
 	isMain bool,
 ) (map[int64][]model.SubmodelDescriptor, error) {
+
+	if debugEnabled(ctx) {
+		defer func(start time.Time) {
+			_, _ = fmt.Printf("ReadSubmodelDescriptorsByAASDescriptorIDs took %s\n", time.Since(start))
+		}(time.Now())
+	}
 	out := make(map[int64][]model.SubmodelDescriptor, len(aasDescriptorIDs))
 	if len(aasDescriptorIDs) == 0 {
 		return out, nil
@@ -187,16 +194,14 @@ func ReadSubmodelDescriptorsByAASDescriptorIDs(
 			return nil, err
 		}
 	}
-	cteWhere := goqu.L(fmt.Sprintf("%s.%s = ANY(?::bigint[])", aliasSubmodelDescriptor, colAASDescriptorID), arr)
-	ds, err = auth.ApplyResolvedFieldPathCTEs(ds, collector, cteWhere)
-	if err != nil {
-		return nil, err
-	}
 
 	sqlStr, args, err := ds.ToSQL()
 
 	if err != nil {
 		return nil, err
+	}
+	if debugEnabled(ctx) {
+		_, _ = fmt.Println(sqlStr)
 	}
 	rows, err := db.QueryContext(ctx, sqlStr, args...)
 	if err != nil {

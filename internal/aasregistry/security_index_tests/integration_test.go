@@ -115,6 +115,7 @@ func getAccessToken(creds *TokenCredentials) (string, error) {
 func makeRequest(config TestConfig, stepNumber int) (string, error) {
 	var req *http.Request
 	var err error
+	endpoint := addTestPrefix(config.Endpoint)
 
 	expectedStatus := config.ExpectedStatus
 	if expectedStatus == 0 {
@@ -131,26 +132,26 @@ func makeRequest(config TestConfig, stepNumber int) (string, error) {
 
 	switch strings.ToUpper(config.Method) {
 	case "GET":
-		req, err = http.NewRequest("GET", config.Endpoint, nil)
+		req, err = http.NewRequest("GET", endpoint, nil)
 	case "POST":
 		if config.Data != "" {
 			data, err := os.ReadFile(config.Data)
 			if err != nil {
 				return "", fmt.Errorf("failed to read data file: %v", err)
 			}
-			req, err = http.NewRequest("POST", config.Endpoint, bytes.NewBuffer(data))
+			req, err = http.NewRequest("POST", endpoint, bytes.NewBuffer(data))
 			if err != nil {
 				return "", err
 			}
 			req.Header.Set("Content-Type", "application/json")
 		} else {
-			req, err = http.NewRequest("POST", config.Endpoint, nil)
+			req, err = http.NewRequest("POST", endpoint, nil)
 			if err != nil {
 				return "", err
 			}
 		}
 	case "DELETE":
-		req, err = http.NewRequest("DELETE", config.Endpoint, nil)
+		req, err = http.NewRequest("DELETE", endpoint, nil)
 		if err != nil {
 			return "", err
 		}
@@ -193,6 +194,34 @@ func makeRequest(config TestConfig, stepNumber int) (string, error) {
 	}
 
 	return string(body), nil
+}
+
+func addTestPrefix(rawURL string) string {
+	if rawURL == "" {
+		return rawURL
+	}
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		if strings.HasPrefix(rawURL, "/test") {
+			return rawURL
+		}
+		return "/test" + ensureLeadingSlash(rawURL)
+	}
+	if strings.HasPrefix(parsed.Path, "/test") {
+		return parsed.String()
+	}
+	parsed.Path = "/test" + ensureLeadingSlash(parsed.Path)
+	return parsed.String()
+}
+
+func ensureLeadingSlash(p string) string {
+	if p == "" {
+		return "/"
+	}
+	if strings.HasPrefix(p, "/") {
+		return p
+	}
+	return "/" + p
 }
 
 func TestIntegration(t *testing.T) {
