@@ -101,7 +101,7 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	descCtrl := smregistryopenapi.NewDescriptionAPIAPIController(descSvc)
 
 	base := common.NormalizeBasePath(cfg.Server.ContextPath)
-
+	// luk
 	// === Protected API Subrouter ===
 	apiRouter := chi.NewRouter()
 
