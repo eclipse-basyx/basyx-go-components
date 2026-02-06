@@ -37,6 +37,8 @@ jobs:
             image: eclipsebasyx/registryofregistries-go
           - name: submodelrepositoryservice
             image: eclipsebasyx/submodelrepository-go
+          - name: submodelregistryservice
+            image: eclipsebasyx/submodelregistry-go
     
     steps:
       - name: Checkout code

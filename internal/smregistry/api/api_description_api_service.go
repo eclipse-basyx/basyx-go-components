@@ -39,8 +39,6 @@ package openapi
 
 import (
 	"context"
-	"errors"
-	"net/http"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
@@ -70,5 +68,9 @@ func (s *DescriptionAPIAPIService) GetSelfDescription(ctx context.Context) (mode
 	// TODO: Uncomment the next line to return response Response(0, Result{}) or use other options such as http.Ok ...
 	// return Response(0, Result{}), nil
 
-	return model.Response(http.StatusNotImplemented, nil), errors.New("GetSelfDescription method not implemented")
+	return model.Response(200, model.ServiceDescription{
+		Profiles: []string{
+			"https://app.swaggerhub.com/apis/Plattform_i40/SubmodelRegistryServiceSpecification/V3.1.1_SSP-001",
+		},
+	}), nil
 }
