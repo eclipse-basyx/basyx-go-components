@@ -655,6 +655,7 @@ CREATE INDEX IF NOT EXISTS ix_smd_created_at               ON submodel_descripto
 CREATE INDEX IF NOT EXISTS ix_smd_id_short                 ON submodel_descriptor(id_short);
 -- unique(id) already present; add trigram for partial/fuzzy
 CREATE INDEX IF NOT EXISTS ix_smd_id_trgm                  ON submodel_descriptor USING GIN (id gin_trgm_ops);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_smd_id_null_aas       ON submodel_descriptor(id) WHERE aas_descriptor_id IS NULL;
 CREATE INDEX IF NOT EXISTS ix_smd_aas_descriptor_position  ON submodel_descriptor(aas_descriptor_id, position);
 CREATE INDEX IF NOT EXISTS ix_smd_position                  ON submodel_descriptor(position);
 CREATE INDEX IF NOT EXISTS ix_specific_asset_id_position   ON specific_asset_id(descriptor_id, position);

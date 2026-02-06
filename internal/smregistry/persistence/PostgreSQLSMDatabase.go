@@ -28,10 +28,13 @@
 package smregistrypostgresql
 
 import (
+	"context"
 	"database/sql"
 	"time"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/descriptors"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
 
 // PostgreSQLSMDatabase provides PostgreSQL-based persistence for the Submodel Registry Service.
@@ -64,4 +67,53 @@ func NewPostgreSQLSMBackend(
 	}
 
 	return &PostgreSQLSMDatabase{db: db}, nil
+}
+
+// ListSubmodelDescriptors lists global Submodel Descriptors (no AAS association).
+func (p *PostgreSQLSMDatabase) ListSubmodelDescriptors(
+	ctx context.Context,
+	limit int32,
+	cursor string,
+) ([]model.SubmodelDescriptor, string, error) {
+	return descriptors.ListSubmodelDescriptors(ctx, p.db, limit, cursor)
+}
+
+// InsertSubmodelDescriptor inserts a global Submodel Descriptor (no AAS association).
+func (p *PostgreSQLSMDatabase) InsertSubmodelDescriptor(
+	ctx context.Context,
+	submodel model.SubmodelDescriptor,
+) (model.SubmodelDescriptor, error) {
+	return descriptors.InsertSubmodelDescriptor(ctx, p.db, submodel)
+}
+
+// ReplaceSubmodelDescriptor replaces a global Submodel Descriptor (no AAS association).
+func (p *PostgreSQLSMDatabase) ReplaceSubmodelDescriptor(
+	ctx context.Context,
+	submodel model.SubmodelDescriptor,
+) (model.SubmodelDescriptor, error) {
+	return descriptors.ReplaceSubmodelDescriptor(ctx, p.db, submodel)
+}
+
+// GetSubmodelDescriptorByID returns a global Submodel Descriptor by its id.
+func (p *PostgreSQLSMDatabase) GetSubmodelDescriptorByID(
+	ctx context.Context,
+	submodelID string,
+) (model.SubmodelDescriptor, error) {
+	return descriptors.GetSubmodelDescriptorByID(ctx, p.db, submodelID)
+}
+
+// DeleteSubmodelDescriptorByID deletes a global Submodel Descriptor by its id.
+func (p *PostgreSQLSMDatabase) DeleteSubmodelDescriptorByID(
+	ctx context.Context,
+	submodelID string,
+) error {
+	return descriptors.DeleteSubmodelDescriptorByID(ctx, p.db, submodelID)
+}
+
+// ExistsSubmodelByID reports whether a global Submodel Descriptor exists by its id.
+func (p *PostgreSQLSMDatabase) ExistsSubmodelByID(
+	ctx context.Context,
+	submodelID string,
+) (bool, error) {
+	return descriptors.ExistsSubmodelByID(ctx, p.db, submodelID)
 }

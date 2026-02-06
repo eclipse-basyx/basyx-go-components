@@ -204,7 +204,7 @@ func insertSubmodelDescriptorForAASTx(
 		return model.SubmodelDescriptor{}, common.NewInternalServerError("Failed to query AAS descriptor id. See server logs for details.")
 	}
 
-	err := createSubModelDescriptors(tx, aasDescID, []model.SubmodelDescriptor{submodel})
+	err := createSubModelDescriptors(tx, sql.NullInt64{Int64: aasDescID, Valid: true}, []model.SubmodelDescriptor{submodel})
 
 	if err != nil {
 		return model.SubmodelDescriptor{}, err
@@ -403,4 +403,342 @@ func ExistsSubmodelForAAS(ctx context.Context, db *sql.DB, aasID, submodelID str
 		return false, scanErr
 	}
 	return true, nil
+}
+
+// ListSubmodelDescriptors lists SubmodelDescriptors that are not associated
+// with any AAS (aas_descriptor_id IS NULL). Results are ordered by Submodel Id
+// ascending and support cursor-based pagination.
+func ListSubmodelDescriptors(
+	ctx context.Context,
+	db DBQueryer,
+	limit int32,
+	cursor string,
+) ([]model.SubmodelDescriptor, string, error) {
+	if limit <= 0 {
+		limit = 10000000
+	}
+	peekLimit := int(limit) + 1
+
+	descIDs, err := listSubmodelDescriptorIDsWithoutAAS(ctx, db)
+	if err != nil {
+		return nil, "", err
+	}
+	if len(descIDs) == 0 {
+		return []model.SubmodelDescriptor{}, "", nil
+	}
+
+	byDesc, err := ReadSubmodelDescriptorsByDescriptorIDs(ctx, db, descIDs)
+	if err != nil {
+		return nil, "", err
+	}
+
+	list := make([]model.SubmodelDescriptor, 0, len(descIDs))
+	for _, rows := range byDesc {
+		list = append(list, rows...)
+	}
+
+	sort.Slice(list, func(i, j int) bool {
+		return list[i].Id < list[j].Id
+	})
+
+	if cursor != "" {
+		lo, hi := 0, len(list)
+		for lo < hi {
+			mid := (lo + hi) / 2
+			if list[mid].Id < cursor {
+				lo = mid + 1
+			} else {
+				hi = mid
+			}
+		}
+		list = list[lo:]
+	}
+
+	var nextCursor string
+	switch {
+	case len(list) > peekLimit:
+		nextCursor = list[peekLimit-1].Id
+		list = list[:peekLimit-1]
+
+	case len(list) == peekLimit:
+		nextCursor = list[limit].Id
+		list = list[:limit]
+
+	case len(list) > int(limit):
+		nextCursor = list[limit].Id
+		list = list[:limit]
+	}
+
+	return list, nextCursor, nil
+}
+
+// InsertSubmodelDescriptor inserts a single SubmodelDescriptor that is not
+// associated with an AAS (aas_descriptor_id IS NULL).
+func InsertSubmodelDescriptor(
+	ctx context.Context,
+	db *sql.DB,
+	submodel model.SubmodelDescriptor,
+) (model.SubmodelDescriptor, error) {
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return model.SubmodelDescriptor{}, common.NewInternalServerError("Failed to start postgres transaction. See console for information.")
+	}
+	defer func() {
+		if rec := recover(); rec != nil {
+			_ = tx.Rollback()
+		}
+	}()
+	result, err := insertSubmodelDescriptorTx(ctx, tx, submodel)
+	if err != nil {
+		_ = tx.Rollback()
+		return model.SubmodelDescriptor{}, err
+	}
+	return result, tx.Commit()
+}
+
+// ReplaceSubmodelDescriptor atomically replaces a SubmodelDescriptor (global,
+// non-AAS) by deleting the existing descriptor and inserting the new one.
+func ReplaceSubmodelDescriptor(
+	ctx context.Context,
+	db *sql.DB,
+	submodel model.SubmodelDescriptor,
+) (model.SubmodelDescriptor, error) {
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return model.SubmodelDescriptor{}, common.NewInternalServerError("Failed to start postgres transaction. See console for information.")
+	}
+	defer func() {
+		if rec := recover(); rec != nil {
+			_ = tx.Rollback()
+		}
+	}()
+
+	if err = deleteSubmodelDescriptorByIDTx(ctx, tx, submodel.Id); err != nil {
+		_ = tx.Rollback()
+		return model.SubmodelDescriptor{}, err
+	}
+	result, err := insertSubmodelDescriptorTx(ctx, tx, submodel)
+	if err != nil {
+		_ = tx.Rollback()
+		return model.SubmodelDescriptor{}, err
+	}
+
+	return result, tx.Commit()
+}
+
+// GetSubmodelDescriptorByID returns a single SubmodelDescriptor that is not
+// associated with any AAS (aas_descriptor_id IS NULL).
+func GetSubmodelDescriptorByID(
+	ctx context.Context,
+	db DBQueryer,
+	submodelID string,
+) (model.SubmodelDescriptor, error) {
+	descID, err := lookupSubmodelDescriptorID(ctx, db, submodelID)
+	if err != nil {
+		return model.SubmodelDescriptor{}, err
+	}
+
+	smdescs, err := ReadSubmodelDescriptorsByDescriptorIDs(ctx, db, []int64{descID})
+	if err != nil {
+		return model.SubmodelDescriptor{}, err
+	}
+
+	list := smdescs[descID]
+	if len(list) == 0 {
+		return model.SubmodelDescriptor{}, common.NewErrNotFound("Submodel Descriptor not found")
+	}
+	return list[0], nil
+}
+
+// getSubmodelDescriptorByIDOrDenied returns 403 when the descriptor exists but
+// is not accessible under the current policy.
+func getSubmodelDescriptorByIDOrDenied(
+	ctx context.Context,
+	db DBQueryer,
+	submodelID string,
+) (model.SubmodelDescriptor, error) {
+	smd, err := GetSubmodelDescriptorByID(ctx, db, submodelID)
+	if err != nil {
+		if common.IsErrNotFound(err) {
+			return model.SubmodelDescriptor{}, common.NewErrDenied("Submodel Descriptor access not allowed")
+		}
+		return model.SubmodelDescriptor{}, err
+	}
+	return smd, nil
+}
+
+// DeleteSubmodelDescriptorByID deletes the submodel descriptor that is not
+// associated with any AAS (aas_descriptor_id IS NULL).
+func DeleteSubmodelDescriptorByID(
+	ctx context.Context,
+	db *sql.DB,
+	submodelID string,
+) error {
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return common.NewInternalServerError("Failed to start postgres transaction. See console for information.")
+	}
+	defer func() {
+		if rec := recover(); rec != nil {
+			_ = tx.Rollback()
+		}
+	}()
+
+	_, err = GetSubmodelDescriptorByID(ctx, db, submodelID)
+	if err != nil {
+		return err
+	}
+	if err = deleteSubmodelDescriptorByIDTx(ctx, tx, submodelID); err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+	return tx.Commit()
+}
+
+// ExistsSubmodelByID performs a lightweight existence check for a submodel
+// descriptor without an AAS association.
+func ExistsSubmodelByID(ctx context.Context, db *sql.DB, submodelID string) (bool, error) {
+	d := goqu.Dialect(dialect)
+	smd := goqu.T(tblSubmodelDescriptor).As("smd")
+
+	ds := d.
+		From(smd).
+		Select(goqu.L("1")).
+		Where(
+			goqu.And(
+				smd.Col(colAASID).Eq(submodelID),
+				smd.Col(colAASDescriptorID).IsNull(),
+			),
+		).
+		Limit(1)
+	sqlStr, args, err := ds.ToSQL()
+	if err != nil {
+		return false, err
+	}
+	var one int
+	if scanErr := db.QueryRowContext(ctx, sqlStr, args...).Scan(&one); scanErr != nil {
+		if errors.Is(scanErr, sql.ErrNoRows) {
+			return false, nil
+		}
+		return false, scanErr
+	}
+	return true, nil
+}
+
+func listSubmodelDescriptorIDsWithoutAAS(ctx context.Context, db DBQueryer) ([]int64, error) {
+	d := goqu.Dialect(dialect)
+	smd := goqu.T(tblSubmodelDescriptor).As("smd")
+
+	ds := d.
+		From(smd).
+		Select(smd.Col(colDescriptorID)).
+		Where(smd.Col(colAASDescriptorID).IsNull())
+
+	sqlStr, args, buildErr := ds.ToSQL()
+	if buildErr != nil {
+		return nil, common.NewInternalServerError("Failed to build submodel descriptor lookup query. See server logs for details.")
+	}
+
+	rows, err := db.QueryContext(ctx, sqlStr, args...)
+	if err != nil {
+		return nil, common.NewInternalServerError("Failed to query submodel descriptor ids. See server logs for details.")
+	}
+	defer func() {
+		_ = rows.Close()
+	}()
+
+	ids := make([]int64, 0, 128)
+	for rows.Next() {
+		var id int64
+		if scanErr := rows.Scan(&id); scanErr != nil {
+			return nil, common.NewInternalServerError("Failed to scan submodel descriptor ids. See server logs for details.")
+		}
+		ids = append(ids, id)
+	}
+	if rows.Err() != nil {
+		return nil, common.NewInternalServerError("Failed to iterate submodel descriptor ids. See server logs for details.")
+	}
+
+	return ids, nil
+}
+
+func lookupSubmodelDescriptorID(ctx context.Context, db DBQueryer, submodelID string) (int64, error) {
+	d := goqu.Dialect(dialect)
+	smd := goqu.T(tblSubmodelDescriptor).As("smd")
+
+	ds := d.
+		From(smd).
+		Select(smd.Col(colDescriptorID)).
+		Where(
+			goqu.And(
+				smd.Col(colAASID).Eq(submodelID),
+				smd.Col(colAASDescriptorID).IsNull(),
+			),
+		).
+		Limit(1)
+	sqlStr, args, buildErr := ds.ToSQL()
+	if buildErr != nil {
+		return 0, common.NewInternalServerError("Failed to build submodel lookup query. See server logs for details.")
+	}
+
+	var descID int64
+	if err := db.QueryRowContext(ctx, sqlStr, args...).Scan(&descID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return 0, common.NewErrNotFound("Submodel Descriptor not found")
+		}
+		return 0, common.NewInternalServerError("Failed to query submodel descriptor id. See server logs for details.")
+	}
+	return descID, nil
+}
+
+func insertSubmodelDescriptorTx(
+	ctx context.Context,
+	tx *sql.Tx,
+	submodel model.SubmodelDescriptor,
+) (model.SubmodelDescriptor, error) {
+	err := createSubModelDescriptors(tx, sql.NullInt64{}, []model.SubmodelDescriptor{submodel})
+	if err != nil {
+		return model.SubmodelDescriptor{}, err
+	}
+
+	return getSubmodelDescriptorByIDOrDenied(ctx, tx, submodel.Id)
+}
+
+func deleteSubmodelDescriptorByIDTx(
+	ctx context.Context,
+	tx *sql.Tx,
+	submodelID string,
+) error {
+	d := goqu.Dialect(dialect)
+	smd := goqu.T(tblSubmodelDescriptor).As("smd")
+
+	ds := d.
+		From(smd).
+		Select(smd.Col(colDescriptorID)).
+		Where(
+			goqu.And(
+				smd.Col(colAASID).Eq(submodelID),
+				smd.Col(colAASDescriptorID).IsNull(),
+			),
+		).
+		Limit(1)
+
+	sqlStr, args, buildErr := ds.ToSQL()
+	if buildErr != nil {
+		return common.NewInternalServerError("Failed to build submodel lookup query. See server logs for details.")
+	}
+	var descID int64
+	if err := tx.QueryRowContext(ctx, sqlStr, args...).Scan(&descID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return common.NewErrNotFound("Submodel Descriptor not found")
+		}
+		return common.NewInternalServerError("Failed to query submodel descriptor id. See server logs for details.")
+	}
+
+	delSQL, delArgs, delErr := d.Delete(tblDescriptor).Where(goqu.C(colID).Eq(descID)).ToSQL()
+	if delErr != nil {
+		return delErr
+	}
+	_, err := tx.Exec(delSQL, delArgs...)
+	return err
 }

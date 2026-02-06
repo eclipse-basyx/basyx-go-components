@@ -182,7 +182,7 @@ func InsertAdministrationShellDescriptorTx(ctx context.Context, tx *sql.Tx, aasd
 		return err
 	}
 
-	return createSubModelDescriptors(tx, descriptorID, aasd.SubmodelDescriptors)
+	return createSubModelDescriptors(tx, sql.NullInt64{Int64: descriptorID, Valid: true}, aasd.SubmodelDescriptors)
 }
 
 // GetAssetAdministrationShellDescriptorByID returns a fully materialized

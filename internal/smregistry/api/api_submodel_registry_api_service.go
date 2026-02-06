@@ -38,10 +38,17 @@ package openapi
 import (
 	"context"
 	"errors"
+	"log"
 	"net/http"
+	"strings"
 
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	smregistrypostgresql "github.com/eclipse-basyx/basyx-go-components/internal/smregistry/persistence"
+)
+
+const (
+	componentName = "SMR"
 )
 
 // SubmodelRegistryAPIAPIService is a service that implements the logic for the SubmodelRegistryAPIAPIServicer
@@ -60,124 +67,254 @@ func NewSubmodelRegistryAPIAPIService(databaseBackend smregistrypostgresql.Postg
 
 // GetAllSubmodelDescriptors - Returns all Submodel Descriptors
 func (s *SubmodelRegistryAPIAPIService) GetAllSubmodelDescriptors(ctx context.Context, limit int32, cursor string) (model.ImplResponse, error) {
-	// TODO - update GetAllSubmodelDescriptors with the required logic for this service method.
-	// Add api_submodel_registry_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
+	internalCursor, resp, err := decodeCursor(strings.TrimSpace(cursor), "GetAllSubmodelDescriptors")
+	if resp != nil || err != nil {
+		return *resp, err
+	}
 
-	// TODO: Uncomment the next line to return response Response(200, GetSubmodelDescriptorsResult{}) or use other options such as http.Ok ...
-	// return Response(200, GetSubmodelDescriptorsResult{}), nil
+	smds, nextCursor, err := s.smRegistryBackend.ListSubmodelDescriptors(ctx, limit, internalCursor)
+	if err != nil {
+		log.Printf("[ERROR] [%s] Error in GetAllSubmodelDescriptors: list failed (limit=%d cursor=%q): %v", componentName, limit, internalCursor, err)
+		switch {
+		case common.IsErrBadRequest(err):
+			return common.NewErrorResponse(
+				err, http.StatusBadRequest, componentName, "GetAllSubmodelDescriptors", "BadRequest",
+			), nil
+		default:
+			return common.NewErrorResponse(
+				err, http.StatusInternalServerError, componentName, "GetAllSubmodelDescriptors", "InternalServerError",
+			), err
+		}
+	}
 
-	// TODO: Uncomment the next line to return response Response(400, Result{}) or use other options such as http.Ok ...
-	// return Response(400, Result{}), nil
+	jsonable := make([]map[string]any, 0, len(smds))
+	for _, smd := range smds {
+		j, toJsonErr := smd.ToJsonable()
+		if toJsonErr != nil {
+			log.Printf("[ERROR] [%s] Error in GetAllSubmodelDescriptors: ToJsonable failed (submodelId=%q): %v", componentName, smd.Id, toJsonErr)
+			return common.NewErrorResponse(
+				toJsonErr, http.StatusInternalServerError, componentName, "GetAllSubmodelDescriptors", "Unhandled-ToJsonable",
+			), toJsonErr
+		}
+		jsonable = append(jsonable, j)
+	}
 
-	// TODO: Uncomment the next line to return response Response(403, Result{}) or use other options such as http.Ok ...
-	// return Response(403, Result{}), nil
-
-	// TODO: Uncomment the next line to return response Response(404, Result{}) or use other options such as http.Ok ...
-	// return Response(404, Result{}), nil
-
-	// TODO: Uncomment the next line to return response Response(500, Result{}) or use other options such as http.Ok ...
-	// return Response(500, Result{}), nil
-
-	// TODO: Uncomment the next line to return response Response(0, Result{}) or use other options such as http.Ok ...
-	// return Response(0, Result{}), nil
-
-	return model.Response(http.StatusNotImplemented, nil), errors.New("GetAllSubmodelDescriptors method not implemented")
+	return pagedResponse(jsonable, nextCursor), nil
 }
 
 // PostSubmodelDescriptor - Creates a new Submodel Descriptor, i.e. registers a submodel
 func (s *SubmodelRegistryAPIAPIService) PostSubmodelDescriptor(ctx context.Context, submodelDescriptor model.SubmodelDescriptor) (model.ImplResponse, error) {
-	// TODO - update PostSubmodelDescriptor with the required logic for this service method.
-	// Add api_submodel_registry_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
+	if strings.TrimSpace(submodelDescriptor.Id) != "" {
+		if exists, chkErr := s.smRegistryBackend.ExistsSubmodelByID(ctx, submodelDescriptor.Id); chkErr != nil {
+			log.Printf("[ERROR] [%s] Error in PostSubmodelDescriptor: existence check failed (submodelId=%q): %v", componentName, submodelDescriptor.Id, chkErr)
+			return common.NewErrorResponse(
+				chkErr, http.StatusInternalServerError, componentName, "PostSubmodelDescriptor", "Unhandled-Precheck",
+			), chkErr
+		} else if exists {
+			e := common.NewErrConflict("Submodel with given id already exists")
+			log.Printf("[ERROR] [%s] Error in PostSubmodelDescriptor: conflict (submodelId=%q): %v", componentName, submodelDescriptor.Id, e)
+			return common.NewErrorResponse(
+				e, http.StatusConflict, componentName, "PostSubmodelDescriptor", "Conflict-Exists",
+			), nil
+		}
+	}
 
-	// TODO: Uncomment the next line to return response Response(201, SubmodelDescriptor{}) or use other options such as http.Ok ...
-	// return Response(201, SubmodelDescriptor{}), nil
+	result, err := s.smRegistryBackend.InsertSubmodelDescriptor(ctx, submodelDescriptor)
+	if err != nil {
+		switch {
+		case common.IsErrBadRequest(err):
+			log.Printf("[ERROR] [%s] Error in InsertSubmodelDescriptor: bad request (submodelId=%q): %v", componentName, submodelDescriptor.Id, err)
+			return common.NewErrorResponse(
+				err, http.StatusBadRequest, componentName, "InsertSubmodelDescriptor", "BadRequest",
+			), nil
+		case common.IsErrConflict(err):
+			log.Printf("[ERROR] [%s] Error in InsertSubmodelDescriptor: conflict (submodelId=%q): %v", componentName, submodelDescriptor.Id, err)
+			return common.NewErrorResponse(
+				err, http.StatusConflict, componentName, "InsertSubmodelDescriptor", "Conflict",
+			), nil
+		case common.IsErrDenied(err):
+			log.Printf("[ERROR] [%s] Error in InsertSubmodelDescriptor: denied (submodelId=%q): %v", componentName, submodelDescriptor.Id, err)
+			return common.NewErrorResponse(
+				err, http.StatusForbidden, componentName, "InsertSubmodelDescriptor", "Denied",
+			), nil
+		default:
+			log.Printf("[ERROR] [%s] Error in InsertSubmodelDescriptor: internal (submodelId=%q): %v", componentName, submodelDescriptor.Id, err)
+			return common.NewErrorResponse(
+				err, http.StatusInternalServerError, componentName, "InsertSubmodelDescriptor", "Unhandled",
+			), err
+		}
+	}
 
-	// TODO: Uncomment the next line to return response Response(400, Result{}) or use other options such as http.Ok ...
-	// return Response(400, Result{}), nil
+	j, toJsonErr := result.ToJsonable()
+	if toJsonErr != nil {
+		log.Printf("[ERROR] [%s] Error in PostSubmodelDescriptor: ToJsonable failed (submodelId=%q): %v", componentName, result.Id, toJsonErr)
+		return common.NewErrorResponse(
+			toJsonErr, http.StatusInternalServerError, componentName, "PostSubmodelDescriptor", "Unhandled-ToJsonable",
+		), toJsonErr
+	}
 
-	// TODO: Uncomment the next line to return response Response(403, Result{}) or use other options such as http.Ok ...
-	// return Response(403, Result{}), nil
-
-	// TODO: Uncomment the next line to return response Response(409, Result{}) or use other options such as http.Ok ...
-	// return Response(409, Result{}), nil
-
-	// TODO: Uncomment the next line to return response Response(0, Result{}) or use other options such as http.Ok ...
-	// return Response(0, Result{}), nil
-
-	return model.Response(http.StatusNotImplemented, nil), errors.New("PostSubmodevlDescriptor method not implemented")
+	return model.Response(http.StatusCreated, j), nil
 }
 
 // GetSubmodelDescriptorById - Returns a specific Submodel Descriptor
 func (s *SubmodelRegistryAPIAPIService) GetSubmodelDescriptorById(ctx context.Context, submodelIdentifier string) (model.ImplResponse, error) {
-	// TODO - update GetSubmodelDescriptorById with the required logic for this service method.
-	// Add api_submodel_registry_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
+	decoded, resp, err := decodePathParam(submodelIdentifier, "submodelIdentifier", "GetSubmodelDescriptorById", "BadRequest-Decode")
+	if resp != nil || err != nil {
+		return *resp, err
+	}
 
-	// TODO: Uncomment the next line to return response Response(200, SubmodelDescriptor{}) or use other options such as http.Ok ...
-	// return Response(200, SubmodelDescriptor{}), nil
+	result, err := s.smRegistryBackend.GetSubmodelDescriptorByID(ctx, decoded)
+	if err != nil {
+		switch {
+		case common.IsErrBadRequest(err):
+			log.Printf("[ERROR] [%s] Error in GetSubmodelDescriptorById: bad request (submodelId=%q): %v", componentName, decoded, err)
+			return common.NewErrorResponse(
+				err, http.StatusBadRequest, componentName, "GetSubmodelDescriptorById", "BadRequest",
+			), nil
+		case common.IsErrNotFound(err):
+			log.Printf("[ERROR] [%s] Error in GetSubmodelDescriptorById: not found (submodelId=%q): %v", componentName, decoded, err)
+			return common.NewErrorResponse(
+				err, http.StatusNotFound, componentName, "GetSubmodelDescriptorById", "NotFound",
+			), nil
+		default:
+			log.Printf("[ERROR] [%s] Error in GetSubmodelDescriptorById: internal (submodelId=%q): %v", componentName, decoded, err)
+			return common.NewErrorResponse(
+				err, http.StatusInternalServerError, componentName, "GetSubmodelDescriptorById", "Unhandled",
+			), err
+		}
+	}
 
-	// TODO: Uncomment the next line to return response Response(400, Result{}) or use other options such as http.Ok ...
-	// return Response(400, Result{}), nil
+	jsonable, toJsonErr := result.ToJsonable()
+	if toJsonErr != nil {
+		return common.NewErrorResponse(
+			toJsonErr, http.StatusInternalServerError, componentName, "GetSubmodelDescriptorById", "Unhandled-ToJsonable",
+		), toJsonErr
+	}
 
-	// TODO: Uncomment the next line to return response Response(403, Result{}) or use other options such as http.Ok ...
-	// return Response(403, Result{}), nil
-
-	// TODO: Uncomment the next line to return response Response(404, Result{}) or use other options such as http.Ok ...
-	// return Response(404, Result{}), nil
-
-	// TODO: Uncomment the next line to return response Response(500, Result{}) or use other options such as http.Ok ...
-	// return Response(500, Result{}), nil
-
-	// TODO: Uncomment the next line to return response Response(0, Result{}) or use other options such as http.Ok ...
-	// return Response(0, Result{}), nil
-
-	return model.Response(http.StatusNotImplemented, nil), errors.New("GetSubmodelDescriptorById method not implemented")
+	return model.Response(http.StatusOK, jsonable), nil
 }
 
 // PutSubmodelDescriptorById - Creates or updates an existing Submodel Descriptor
 func (s *SubmodelRegistryAPIAPIService) PutSubmodelDescriptorById(ctx context.Context, submodelIdentifier string, submodelDescriptor model.SubmodelDescriptor) (model.ImplResponse, error) {
-	// TODO - update PutSubmodelDescriptorById with the required logic for this service method.
-	// Add api_submodel_registry_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
+	decoded, resp, err := decodePathParam(submodelIdentifier, "submodelIdentifier", "PutSubmodelDescriptorById", "BadRequest-Decode")
+	if resp != nil || err != nil {
+		return *resp, err
+	}
 
-	// TODO: Uncomment the next line to return response Response(201, SubmodelDescriptor{}) or use other options such as http.Ok ...
-	// return Response(201, SubmodelDescriptor{}), nil
+	if strings.TrimSpace(submodelDescriptor.Id) != "" && submodelDescriptor.Id != decoded {
+		log.Printf("[ERROR] [%s] Error in PutSubmodelDescriptorById: body id does not match path id (body=%q path=%q)", componentName, submodelDescriptor.Id, decoded)
+		return common.NewErrorResponse(
+			errors.New("body id does not match path id"), http.StatusBadRequest, componentName, "PutSubmodelDescriptorById", "BadRequest-IdMismatch",
+		), nil
+	}
+	submodelDescriptor.Id = decoded
 
-	// TODO: Uncomment the next line to return response Response(204, {}) or use other options such as http.Ok ...
-	// return Response(204, nil),nil
+	if exists, chkErr := s.smRegistryBackend.ExistsSubmodelByID(ctx, submodelDescriptor.Id); chkErr != nil {
+		log.Printf("[ERROR] [%s] Error in PutSubmodelDescriptorById: existence check failed (submodelId=%q): %v", componentName, submodelDescriptor.Id, chkErr)
+		return common.NewErrorResponse(
+			chkErr, http.StatusInternalServerError, componentName, "PutSubmodelDescriptorById", "Unhandled-Precheck",
+		), chkErr
+	} else if !exists {
+		result, err := s.smRegistryBackend.InsertSubmodelDescriptor(ctx, submodelDescriptor)
+		if err != nil {
+			switch {
+			case common.IsErrBadRequest(err):
+				log.Printf("[ERROR] [%s] Error in InsertSubmodelDescriptor: bad request (submodelId=%q): %v", componentName, submodelDescriptor.Id, err)
+				return common.NewErrorResponse(
+					err, http.StatusBadRequest, componentName, "InsertSubmodelDescriptor", "BadRequest",
+				), nil
+			case common.IsErrConflict(err):
+				log.Printf("[ERROR] [%s] Error in InsertSubmodelDescriptor: conflict (submodelId=%q): %v", componentName, submodelDescriptor.Id, err)
+				return common.NewErrorResponse(
+					err, http.StatusConflict, componentName, "InsertSubmodelDescriptor", "Conflict",
+				), nil
+			case common.IsErrDenied(err):
+				log.Printf("[ERROR] [%s] Error in InsertSubmodelDescriptor: denied (submodelId=%q): %v", componentName, submodelDescriptor.Id, err)
+				return common.NewErrorResponse(
+					err, http.StatusForbidden, componentName, "InsertSubmodelDescriptor", "Denied",
+				), nil
+			default:
+				log.Printf("[ERROR] [%s] Error in InsertSubmodelDescriptor: internal (submodelId=%q): %v", componentName, submodelDescriptor.Id, err)
+				return common.NewErrorResponse(
+					err, http.StatusInternalServerError, componentName, "InsertSubmodelDescriptor", "Unhandled",
+				), err
+			}
+		}
+		j, toJsonErr := result.ToJsonable()
+		if toJsonErr != nil {
+			log.Printf("[ERROR] [%s] Error in PutSubmodelDescriptorById: ToJsonable failed (submodelId=%q): %v", componentName, result.Id, toJsonErr)
+			return common.NewErrorResponse(
+				toJsonErr, http.StatusInternalServerError, componentName, "PutSubmodelDescriptorById", "Unhandled-ToJsonable",
+			), toJsonErr
+		}
+		return model.Response(http.StatusCreated, j), nil
+	}
 
-	// TODO: Uncomment the next line to return response Response(400, Result{}) or use other options such as http.Ok ...
-	// return Response(400, Result{}), nil
+	_, err = s.smRegistryBackend.ReplaceSubmodelDescriptor(ctx, submodelDescriptor)
+	if err != nil {
+		switch {
+		case common.IsErrBadRequest(err):
+			log.Printf("[ERROR] [%s] Error in PutSubmodelDescriptorById: bad request (submodelId=%q): %v", componentName, decoded, err)
+			return common.NewErrorResponse(
+				err, http.StatusBadRequest, componentName, "PutSubmodelDescriptorById", "BadRequest",
+			), nil
+		case common.IsErrConflict(err):
+			log.Printf("[ERROR] [%s] Error in PutSubmodelDescriptorById: conflict (submodelId=%q): %v", componentName, decoded, err)
+			return common.NewErrorResponse(
+				err, http.StatusConflict, componentName, "PutSubmodelDescriptorById", "Conflict",
+			), nil
+		case common.IsErrDenied(err):
+			log.Printf("[ERROR] [%s] Error in PutSubmodelDescriptorById: denied (submodelId=%q): %v", componentName, decoded, err)
+			return common.NewErrorResponse(
+				err, http.StatusForbidden, componentName, "PutSubmodelDescriptorById", "Denied",
+			), nil
+		case common.IsErrNotFound(err):
+			log.Printf("[ERROR] [%s] Error in PutSubmodelDescriptorById: not found (submodelId=%q): %v", componentName, decoded, err)
+			return common.NewErrorResponse(
+				err, http.StatusNotFound, componentName, "PutSubmodelDescriptorById", "NotFound",
+			), nil
+		default:
+			log.Printf("[ERROR] [%s] Error in PutSubmodelDescriptorById: internal (submodelId=%q): %v", componentName, decoded, err)
+			return common.NewErrorResponse(
+				err, http.StatusInternalServerError, componentName, "PutSubmodelDescriptorById", "Unhandled-Replace",
+			), err
+		}
+	}
 
-	// TODO: Uncomment the next line to return response Response(403, Result{}) or use other options such as http.Ok ...
-	// return Response(403, Result{}), nil
-
-	// TODO: Uncomment the next line to return response Response(500, Result{}) or use other options such as http.Ok ...
-	// return Response(500, Result{}), nil
-
-	// TODO: Uncomment the next line to return response Response(0, Result{}) or use other options such as http.Ok ...
-	// return Response(0, Result{}), nil
-
-	return model.Response(http.StatusNotImplemented, nil), errors.New("PutSubmodelDescriptorById method not implemented")
+	return model.Response(http.StatusNoContent, nil), nil
 }
 
 // DeleteSubmodelDescriptorById - Deletes a Submodel Descriptor, i.e. de-registers a submodel
 func (s *SubmodelRegistryAPIAPIService) DeleteSubmodelDescriptorById(ctx context.Context, submodelIdentifier string) (model.ImplResponse, error) {
-	// TODO - update DeleteSubmodelDescriptorById with the required logic for this service method.
-	// Add api_submodel_registry_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
+	decoded, resp, err := decodePathParam(submodelIdentifier, "submodelIdentifier", "DeleteSubmodelDescriptorById", "BadRequest-Decode")
+	if resp != nil || err != nil {
+		return *resp, err
+	}
 
-	// TODO: Uncomment the next line to return response Response(204, {}) or use other options such as http.Ok ...
-	// return Response(204, nil),nil
+	if err := s.smRegistryBackend.DeleteSubmodelDescriptorByID(ctx, decoded); err != nil {
+		switch {
+		case common.IsErrNotFound(err):
+			log.Printf("[ERROR] [%s] Error in DeleteSubmodelDescriptorById: not found (submodelId=%q): %v", componentName, decoded, err)
+			return common.NewErrorResponse(
+				err, http.StatusNotFound, componentName, "DeleteSubmodelDescriptorById", "NotFound",
+			), nil
+		case common.IsErrDenied(err):
+			log.Printf("[ERROR] [%s] Error in DeleteSubmodelDescriptorById: denied (submodelId=%q): %v", componentName, decoded, err)
+			return common.NewErrorResponse(
+				err, http.StatusForbidden, componentName, "DeleteSubmodelDescriptorById", "Denied",
+			), nil
+		case common.IsErrBadRequest(err):
+			log.Printf("[ERROR] [%s] Error in DeleteSubmodelDescriptorById: bad request (submodelId=%q): %v", componentName, decoded, err)
+			return common.NewErrorResponse(
+				err, http.StatusBadRequest, componentName, "DeleteSubmodelDescriptorById", "BadRequest",
+			), nil
+		default:
+			log.Printf("[ERROR] [%s] Error in DeleteSubmodelDescriptorById: internal (submodelId=%q): %v", componentName, decoded, err)
+			return common.NewErrorResponse(
+				err, http.StatusInternalServerError, componentName, "DeleteSubmodelDescriptorById", "Unhandled",
+			), err
+		}
+	}
 
-	// TODO: Uncomment the next line to return response Response(400, Result{}) or use other options such as http.Ok ...
-	// return Response(400, Result{}), nil
-
-	// TODO: Uncomment the next line to return response Response(403, Result{}) or use other options such as http.Ok ...
-	// return Response(403, Result{}), nil
-
-	// TODO: Uncomment the next line to return response Response(404, Result{}) or use other options such as http.Ok ...
-	// return Response(404, Result{}), nil
-
-	// TODO: Uncomment the next line to return response Response(500, Result{}) or use other options such as http.Ok ...
-	// return Response(500, Result{}), nil
-
-	return model.Response(http.StatusNotImplemented, nil), errors.New("DeleteSubmodelDescriptorById method not implemented")
+	return model.Response(http.StatusNoContent, nil), nil
 }
