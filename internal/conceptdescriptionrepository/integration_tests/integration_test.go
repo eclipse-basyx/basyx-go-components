@@ -3,7 +3,6 @@ package main
 
 import (
 	"bytes"
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -301,107 +300,6 @@ func TestIntegration(t *testing.T) {
 	}
 }
 
-// TestFileAttachmentOperations tests file upload, download, and deletion for File SME
-func TestFileAttachmentOperations(t *testing.T) {
-	baseURL := "http://localhost:6004"
-	submodelID := "aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9Pbmx5RmlsZVN1Ym1vZGVs" // base64 encoded: http://iese.fraunhofer.de/id/sm/OnlyFileSubmodel
-	testFilePath := "testFiles/marcus.gif"
-
-	// Read the test file content for later comparison
-	originalFileContent, err := os.ReadFile(testFilePath)
-	require.NoError(t, err, "Failed to read test file")
-
-	t.Run("1_Upload_File_Attachment", func(t *testing.T) {
-		endpoint := fmt.Sprintf("%s/submodels/%s/submodel-elements/DemoFile/attachment", baseURL, submodelID)
-		statusCode, err := uploadFileAttachment(endpoint, testFilePath, "marcus.gif")
-		require.NoError(t, err, "File upload failed")
-		assert.Equal(t, http.StatusNoContent, statusCode, "Expected 204 No Content for file upload")
-	})
-
-	t.Run("2_Download_File_Attachment_And_Verify", func(t *testing.T) {
-		// Wait a moment to ensure the file is available
-		time.Sleep(2 * time.Second)
-		endpoint := fmt.Sprintf("%s/submodels/%s/submodel-elements/DemoFile/attachment", baseURL, submodelID)
-		content, contentType, statusCode, err := downloadFileAttachment(endpoint)
-		require.NoError(t, err, "File download failed")
-		assert.Equal(t, http.StatusOK, statusCode, "Expected 200 OK for file download")
-
-		// Verify Content-Type is set (should be auto-detected as image/png)
-		assert.NotEmpty(t, contentType, "Content-Type should be set")
-		t.Logf("Downloaded file Content-Type: %s", contentType)
-
-		// Verify file content matches uploaded file byte-by-byte
-		assert.Equal(t, originalFileContent, content, "Downloaded file content should match uploaded file")
-		t.Logf("File content verified: %d bytes", len(content))
-	})
-
-	t.Run("3_Update_File_Element_Value_Should_Delete_LargeObject", func(t *testing.T) {
-		// Update the File SME value to an external URL (should trigger LO cleanup)
-		endpoint := fmt.Sprintf("%s/submodels/%s/submodel-elements/DemoFile", baseURL, submodelID)
-		updateData, err := os.ReadFile("bodies/updateFileElement.json")
-		require.NoError(t, err, "Failed to read update data")
-
-		req, err := http.NewRequest("PUT", endpoint, bytes.NewBuffer(updateData))
-		require.NoError(t, err, "Failed to create PUT request")
-		req.Header.Set("Content-Type", "application/json")
-
-		client := &http.Client{Timeout: 10 * time.Second}
-		resp, err := client.Do(req)
-		require.NoError(t, err, "PUT request failed")
-		defer func() { _ = resp.Body.Close() }()
-
-		assert.Equal(t, http.StatusNoContent, resp.StatusCode, "Expected 204 No Content for File SME update")
-	})
-
-	t.Run("4_Verify_File_Attachment_Removed_After_Value_Update", func(t *testing.T) {
-		// Try to download - should fail since value is now an external URL
-		endpoint := fmt.Sprintf("%s/submodels/%s/submodel-elements/DemoFile/attachment", baseURL, submodelID)
-		_, _, statusCode, _ := downloadFileAttachment(endpoint)
-
-		// Should return 404 or redirect to external URL (302)
-		// Since value is now http://example.com/updated-file.png, it should redirect
-		assert.Contains(t, []int{http.StatusFound, http.StatusNotFound}, statusCode,
-			"Should redirect to external URL or return 404 after value update")
-	})
-
-	t.Run("5_Reupload_File_Attachment", func(t *testing.T) {
-		endpoint := fmt.Sprintf("%s/submodels/%s/submodel-elements/DemoFile/attachment", baseURL, submodelID)
-		statusCode, err := uploadFileAttachment(endpoint, testFilePath, "test-image-reupload.png")
-		require.NoError(t, err, "File reupload failed")
-		assert.Equal(t, http.StatusNoContent, statusCode, "Expected 204 No Content for file reupload")
-	})
-
-	t.Run("6_Verify_Reuploaded_File", func(t *testing.T) {
-		// Wait a moment to ensure the file is available
-		time.Sleep(2 * time.Second)
-		endpoint := fmt.Sprintf("%s/submodels/%s/submodel-elements/DemoFile/attachment", baseURL, submodelID)
-		content, contentType, statusCode, err := downloadFileAttachment(endpoint)
-		require.NoError(t, err, "File download failed")
-		assert.Equal(t, http.StatusOK, statusCode, "Expected 200 OK for file download")
-		assert.NotEmpty(t, contentType, "Content-Type should be set")
-		assert.Equal(t, originalFileContent, content, "Reuploaded file content should match original")
-	})
-
-	t.Run("7_Delete_File_Attachment", func(t *testing.T) {
-		endpoint := fmt.Sprintf("%s/submodels/%s/submodel-elements/DemoFile/attachment", baseURL, submodelID)
-		req, err := http.NewRequest("DELETE", endpoint, nil)
-		require.NoError(t, err, "Failed to create DELETE request")
-
-		client := &http.Client{Timeout: 10 * time.Second}
-		resp, err := client.Do(req)
-		require.NoError(t, err, "DELETE request failed")
-		defer func() { _ = resp.Body.Close() }()
-
-		assert.Equal(t, http.StatusOK, resp.StatusCode, "Expected 200 OK for file deletion")
-	})
-
-	t.Run("8_Verify_File_Deleted", func(t *testing.T) {
-		endpoint := fmt.Sprintf("%s/submodels/%s/submodel-elements/DemoFile/attachment", baseURL, submodelID)
-		_, _, statusCode, _ := downloadFileAttachment(endpoint)
-		assert.Equal(t, http.StatusNotFound, statusCode, "Expected 404 Not Found after file deletion")
-	})
-}
-
 // TestMain handles setup and teardown
 func TestMain(m *testing.M) {
 	// Teardown: Stop Docker Compose
@@ -415,7 +313,7 @@ func TestMain(m *testing.M) {
 
 	// Setup: Start Docker Compose
 	_, _ = fmt.Println("Starting Docker Compose...")
-	cmd = exec.Command("docker", "compose", "-f", "docker_compose/docker_compose.yml", "up", "-d", "--build")
+	cmd = exec.Command("docker", "compose", "-f", "docker_compose/docker_compose.yml", "up", "-d", "--build", "--remove-orphans")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
@@ -430,39 +328,39 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 
-	// Create DB Connection here
-	sqlQuery, err := sql.Open("postgres", "postgres://admin:admin123@127.0.0.1:6432/basyxTestDB?sslmode=disable")
+	// // Create DB Connection here
+	// sqlQuery, err := sql.Open("postgres", "postgres://admin:admin123@127.0.0.1:6432/basyxTestDB?sslmode=disable")
 
-	if err != nil {
-		_, _ = fmt.Printf("Failed to connect to database: %v\n", err)
-		os.Exit(1)
-	}
+	// if err != nil {
+	// 	_, _ = fmt.Printf("Failed to connect to database: %v\n", err)
+	// 	os.Exit(1)
+	// }
 
-	// wait for 5sec to ensure that the DB is ready
-	time.Sleep(5 * time.Second)
+	// // wait for 5sec to ensure that the DB is ready
+	// time.Sleep(5 * time.Second)
 
-	dir, osErr := os.Getwd()
+	// dir, osErr := os.Getwd()
 
-	if osErr != nil {
-		_, _ = fmt.Printf("Failed to get working directory: %v\n", osErr)
-		os.Exit(1)
-	}
+	// if osErr != nil {
+	// 	_, _ = fmt.Printf("Failed to get working directory: %v\n", osErr)
+	// 	os.Exit(1)
+	// }
 
-	queryString, fileError := os.ReadFile(dir + "/sql/demoSubmodel.sql")
+	// queryString, fileError := os.ReadFile(dir + "/sql/demoSubmodel.sql")
 
-	if fileError != nil {
-		_, _ = fmt.Printf("Failed to read SQL file: %v\n", fileError)
-		os.Exit(1)
-	}
+	// if fileError != nil {
+	// 	_, _ = fmt.Printf("Failed to read SQL file: %v\n", fileError)
+	// 	os.Exit(1)
+	// }
 
-	_, err = sqlQuery.Exec(string(queryString))
+	// _, err = sqlQuery.Exec(string(queryString))
 
-	if err != nil {
-		_, _ = fmt.Printf("Failed to execute SQL script: %v\n", err)
-		os.Exit(1)
-	}
+	// if err != nil {
+	// 	_, _ = fmt.Printf("Failed to execute SQL script: %v\n", err)
+	// 	os.Exit(1)
+	// }
 
-	_, _ = fmt.Println("Database initialized successfully.")
+	// _, _ = fmt.Println("Database initialized successfully.")
 
 	// Run tests
 	code := m.Run()

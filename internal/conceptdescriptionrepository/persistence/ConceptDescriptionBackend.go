@@ -32,9 +32,12 @@ package persistence
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/FriedJannik/aas-go-sdk/types"
+	"github.com/doug-martin/goqu/v9"
+	_ "github.com/doug-martin/goqu/v9/dialect/postgres" // Postgres Driver for Goqu
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 )
@@ -89,22 +92,103 @@ func testDBConnection(db *sql.DB) (bool, error) {
 	return true, nil
 }
 
+// CreateConceptDescription inserts a new concept description into the database.
 func (b *ConceptDescriptionBackend) CreateConceptDescription(cd types.IConceptDescription) error {
+	if cd == nil {
+		return common.NewErrBadRequest("ConceptDescription is nil")
+	}
+	if strings.TrimSpace(cd.ID()) == "" {
+		return common.NewErrBadRequest("ConceptDescription id is required")
+	}
+
+	tx, err := b.db.Begin()
+	if err != nil {
+		return common.NewInternalServerError("CDREPO-CRCD-BEGIN " + err.Error())
+	}
+	defer func() {
+		if err != nil {
+			_ = tx.Rollback()
+		}
+	}()
+
+	exists, err := conceptDescriptionExists(tx, cd.ID())
+	if err != nil {
+		return err
+	}
+	if exists {
+		return common.NewErrConflict("ConceptDescription with id '" + cd.ID() + "' already exists")
+	}
+
+	adminID, err := createAdministrativeInformation(tx, cd.Administration())
+	if err != nil {
+		return err
+	}
+
+	descriptionID, err := createLangStringTextTypes(tx, cd.Description())
+	if err != nil {
+		return err
+	}
+
+	displayNameID, err := createLangStringNameTypes(tx, cd.DisplayName())
+	if err != nil {
+		return err
+	}
+
+	modelType := int(types.ModelTypeConceptDescription)
+
+	insert := goqu.Insert("concept_description").Rows(goqu.Record{
+		"id":                cd.ID(),
+		"id_short":          cd.IDShort(),
+		"category":          cd.Category(),
+		"administration_id": adminID,
+		"description_id":    descriptionID,
+		"displayname_id":    displayNameID,
+		"model_type":        modelType,
+	})
+	sqlQuery, args, err := insert.ToSQL()
+	if err != nil {
+		return common.NewInternalServerError("CDREPO-CRCD-TOSQL " + err.Error())
+	}
+	_, err = tx.Exec(sqlQuery, args...)
+	if err != nil {
+		return common.NewInternalServerError("CDREPO-CRCD-INSERT " + err.Error())
+	}
+
+	if err = insertConceptDescriptionEmbeddedDataSpecifications(tx, cd.ID(), cd.EmbeddedDataSpecifications()); err != nil {
+		return err
+	}
+
+	if err = insertConceptDescriptionIsCaseOf(tx, cd.ID(), cd.IsCaseOf()); err != nil {
+		return err
+	}
+
+	if err = insertConceptDescriptionExtensions(tx, cd.ID(), cd.Extensions()); err != nil {
+		return err
+	}
+
+	if err = tx.Commit(); err != nil {
+		return common.NewInternalServerError("CDREPO-CRCD-COMMIT " + err.Error())
+	}
+
 	return nil
 }
 
+// GetConceptDescriptions retrieves a paginated list of concept descriptions with optional filters.
 func (b *ConceptDescriptionBackend) GetConceptDescriptions(idShort *string, isCaseOf *string, dataSpecificationRef *string, limit int, cursor *string) ([]types.IConceptDescription, error) {
 	return nil, nil
 }
 
+// GetConceptDescriptionByID retrieves a concept description by its identifier.
 func (b *ConceptDescriptionBackend) GetConceptDescriptionByID(id string) (types.IConceptDescription, error) {
 	return nil, nil
 }
 
+// PutConceptDescription updates or replaces the concept description with the given identifier.
 func (b *ConceptDescriptionBackend) PutConceptDescription(id string, cd types.IConceptDescription) error {
 	return nil
 }
 
+// DeleteConceptDescription removes a concept description by its identifier.
 func (b *ConceptDescriptionBackend) DeleteConceptDescription(id string) error {
 	return nil
 }

@@ -1,1 +1,10 @@
-[]
+[
+    {
+        "context": "Create Full Concept Description",
+        "method": "POST",
+        "endpoint": "http://localhost:6004/concept-descriptions",
+        "expectedStatus": 201,
+        "data": "bodies/ConceptDescriptionFull.json",
+        "shouldMatch": "bodies/ConceptDescriptionFull.json"
+    }
+]

@@ -454,6 +454,33 @@ CREATE TABLE IF NOT EXISTS registry_descriptor (
   id VARCHAR(2048) NOT NULL UNIQUE,
   company VARCHAR(2048)
 );
+CREATE TABLE IF NOT EXISTS concept_description (
+  id          varchar(2048) PRIMARY KEY,                 -- Identifiable.id
+  id_short    varchar(128),
+  category    varchar(128),
+  administration_id BIGINT REFERENCES administrative_information(id) ON DELETE CASCADE,
+  description_id BIGINT REFERENCES lang_string_text_type_reference(id) ON DELETE CASCADE,
+  displayname_id  BIGINT REFERENCES lang_string_name_type_reference(id) ON DELETE CASCADE,
+  model_type  int NOT NULL
+);
+CREATE TABLE IF NOT EXISTS concept_description_is_case_of (
+  concept_description_id VARCHAR(2048) NOT NULL REFERENCES concept_description(id) ON DELETE CASCADE,
+  position INTEGER NOT NULL,
+  reference_id BIGINT NOT NULL REFERENCES reference(id) ON DELETE CASCADE,
+  PRIMARY KEY (concept_description_id, position)
+);
+CREATE TABLE IF NOT EXISTS concept_description_embedded_data_specification (
+  concept_description_id VARCHAR(2048) NOT NULL REFERENCES concept_description(id) ON DELETE CASCADE,
+  position INTEGER NOT NULL,
+  embedded_data_specification_id BIGINT NOT NULL REFERENCES data_specification(id) ON DELETE CASCADE,
+  PRIMARY KEY (concept_description_id, position)
+);
+CREATE TABLE IF NOT EXISTS concept_description_extension (
+  concept_description_id VARCHAR(2048) NOT NULL REFERENCES concept_description(id) ON DELETE CASCADE,
+  position INTEGER NOT NULL,
+  extension_id BIGINT NOT NULL REFERENCES extension(id) ON DELETE CASCADE,
+  PRIMARY KEY (concept_description_id, position)
+);
 -- ------------------------------------------
 -- Indexes
 -- ------------------------------------------
@@ -493,6 +520,15 @@ CREATE INDEX IF NOT EXISTS ix_sm_admin_id ON submodel(administration_id);
 CREATE INDEX IF NOT EXISTS ix_sm_semantic_id ON submodel(semantic_id);
 CREATE INDEX IF NOT EXISTS ix_sm_desc_id ON submodel(description_id);
 CREATE INDEX IF NOT EXISTS ix_sm_displayname_id ON submodel(displayname_id);
+CREATE INDEX IF NOT EXISTS ix_cd_idshort ON concept_description(id_short);
+CREATE INDEX IF NOT EXISTS ix_cd_admin_id ON concept_description(administration_id);
+CREATE INDEX IF NOT EXISTS ix_cd_desc_id ON concept_description(description_id);
+CREATE INDEX IF NOT EXISTS ix_cd_displayname_id ON concept_description(displayname_id);
+CREATE INDEX IF NOT EXISTS ix_cd_is_case_of_ref ON concept_description_is_case_of(reference_id);
+CREATE INDEX IF NOT EXISTS ix_cd_eds_cd_id ON concept_description_embedded_data_specification(concept_description_id);
+CREATE INDEX IF NOT EXISTS ix_cd_eds_id ON concept_description_embedded_data_specification(embedded_data_specification_id);
+CREATE INDEX IF NOT EXISTS ix_cd_ext_cd_id ON concept_description_extension(concept_description_id);
+CREATE INDEX IF NOT EXISTS ix_cd_ext_id ON concept_description_extension(extension_id);
 CREATE INDEX IF NOT EXISTS ix_smssi_submodel_id ON submodel_supplemental_semantic_id(submodel_id);
 CREATE INDEX IF NOT EXISTS ix_smssi_reference_id ON submodel_supplemental_semantic_id(reference_id);
 CREATE INDEX IF NOT EXISTS ix_smsup_id ON submodel_supplemental_semantic_id(id);

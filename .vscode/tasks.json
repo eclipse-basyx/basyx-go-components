@@ -113,6 +113,22 @@
                 "panel": "shared"
             },
             "problemMatcher": "$go"
+        },
+        {
+            "label": "Run Concept Description Repository Integration Tests",
+            "type": "shell",
+            "command": "go test -v ./internal/conceptdescriptionrepository/integration_tests",
+            "group": {
+                "kind": "test",
+                "isDefault": true
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            },
+            "problemMatcher": "$go"
         }
     ]
 }

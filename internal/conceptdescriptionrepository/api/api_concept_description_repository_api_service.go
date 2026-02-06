@@ -39,7 +39,9 @@ import (
 	"errors"
 	"net/http"
 
+	"github.com/FriedJannik/aas-go-sdk/jsonization"
 	"github.com/FriedJannik/aas-go-sdk/types"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/conceptdescriptionrepository/persistence"
 )
@@ -50,6 +52,8 @@ import (
 type ConceptDescriptionRepositoryAPIAPIService struct {
 	d *persistence.ConceptDescriptionBackend
 }
+
+const componentName = "CDREPO"
 
 // NewConceptDescriptionRepositoryAPIAPIService creates a default api service
 func NewConceptDescriptionRepositoryAPIAPIService(database *persistence.ConceptDescriptionBackend) *ConceptDescriptionRepositoryAPIAPIService {
@@ -83,28 +87,26 @@ func (s *ConceptDescriptionRepositoryAPIAPIService) GetAllConceptDescriptions(ct
 
 // PostConceptDescription - Creates a new Concept Description
 func (s *ConceptDescriptionRepositoryAPIAPIService) PostConceptDescription(ctx context.Context, conceptDescription types.IConceptDescription) (model.ImplResponse, error) {
-	// TODO - update PostConceptDescription with the required logic for this service method.
-	// Add api_concept_description_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
+	err := s.d.CreateConceptDescription(conceptDescription)
+	if err != nil {
+		switch {
+		case common.IsErrBadRequest(err):
+			return common.NewErrorResponse(err, http.StatusBadRequest, componentName, "PostConceptDescription", "BadRequest"), nil
+		case common.IsErrConflict(err):
+			return common.NewErrorResponse(err, http.StatusConflict, componentName, "PostConceptDescription", "Conflict"), nil
+		case common.IsErrDenied(err):
+			return common.NewErrorResponse(err, http.StatusForbidden, componentName, "PostConceptDescription", "Denied"), nil
+		default:
+			return common.NewErrorResponse(err, http.StatusInternalServerError, componentName, "PostConceptDescription", "Unhandled"), err
+		}
+	}
 
-	// TODO: Uncomment the next line to return model.Response Response(201, ConceptDescription{}) or use other options such as http.Ok ...
-	// return model.Response(201, ConceptDescription{}), nil
+	jsonable, toJsonErr := jsonization.ToJsonable(conceptDescription)
+	if toJsonErr != nil {
+		return common.NewErrorResponse(toJsonErr, http.StatusInternalServerError, componentName, "PostConceptDescription", "ToJsonable"), toJsonErr
+	}
 
-	// TODO: Uncomment the next line to return model.Response Response(400, Result{}) or use other options such as http.Ok ...
-	// return model.Response(400, Result{}), nil
-
-	// TODO: Uncomment the next line to return model.Response Response(403, Result{}) or use other options such as http.Ok ...
-	// return model.Response(403, Result{}), nil
-
-	// TODO: Uncomment the next line to return model.Response Response(409, Result{}) or use other options such as http.Ok ...
-	// return model.Response(409, Result{}), nil
-
-	// TODO: Uncomment the next line to return model.Response Response(500, Result{}) or use other options such as http.Ok ...
-	// return model.Response(500, Result{}), nil
-
-	// TODO: Uncomment the next line to return model.Response Response(0, Result{}) or use other options such as http.Ok ...
-	// return model.Response(0, Result{}), nil
-
-	return model.Response(http.StatusNotImplemented, nil), errors.New("PostConceptDescription method not implemented")
+	return model.Response(http.StatusCreated, jsonable), nil
 }
 
 // GetConceptDescriptionById - Returns a specific Concept Description
