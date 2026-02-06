@@ -1,0 +1,23 @@
+server:
+  port: 5004
+  contextPath: ""
+  host: 0.0.0.0
+  strictVerification: true  # Set to false to disable strict AAS metamodel verification
+
+postgres:
+  host: localhost
+  port: 5432
+  user: postgres
+  password: snoopy2002
+  dbname: basyx
+  maxOpenConnections: 500
+  maxIdleConnections: 500
+  connMaxLifetimeMinutes: 5
+
+# jws:
+#   privateKeyPath: "./rsa-key.pem"
+
+# swagger:
+#   contactName: "Eclipse BaSyx"
+#   contactEmail: "basyx-dev@eclipse.org"
+#   contactUrl: "https://basyx.org"
