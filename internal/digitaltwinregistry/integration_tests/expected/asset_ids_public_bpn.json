@@ -1,0 +1,30 @@
+[
+  {
+    "name": "manufacturerId",
+    "value": "BPNL00000000015G"
+  },
+  {
+    "name": "manufacturerPartId",
+    "value": "8875607"
+  },
+  {
+    "name": "partInstanceId",
+    "value": "T588756070325B20950022162515271"
+  },
+  {
+    "name": "customerPartId",
+    "value": "8875607"
+  },
+  {
+    "name": "intrinsicId",
+    "value": "T588756070325B20950022162515271"
+  },
+  {
+    "name": "funnytest",
+    "value": "verfunny"
+  },
+  {
+    "name": "digitalTwinType",
+    "value": "PartInstance"
+  }
+]

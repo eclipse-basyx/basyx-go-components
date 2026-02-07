@@ -1,0 +1,2917 @@
+{
+  "modelType": "Submodel",
+  "kind": "Template",
+  "semanticId": {
+    "keys": [
+      {
+        "type": "Submodel",
+        "value": "https://admin-shell.io/idta/SimulationModels/SimulationModels/1/0"
+      }
+    ],
+    "type": "ModelReference"
+  },
+  "administration": {
+    "revision": "0",
+    "version": "1"
+  },
+  "id": "https://admin-shell.io/idta/SubmodelTemplate/SimulationModels/1/0",
+  "qualifiers": [
+    {
+      "kind": "ConceptQualifier",
+      "type": "FormTitle",
+      "value": "Simulation Submodel v008",
+      "valueType": "xs:string"
+    },
+    {
+      "kind": "ConceptQualifier",
+      "type": "FormInfo",
+      "value": "Das Submodel kann ein oder meherer Simulationsmodelle bereitstellen, einen Service zur Generierung eines spezifischen Modells oder einen Zugang zu einer offenen oder spezifischen Anfrage.",
+      "valueType": "xs:string"
+    }
+  ],
+  "description": [
+    {
+      "language": "en",
+      "text": "The Submodel may provide one or more simulation models, a service to generate a specific model, or access to an open or specific query."
+    }
+  ],
+  "idShort": "ProvisionofSimulationModels",
+  "submodelElements": [
+    {
+      "modelType": "SubmodelElementCollection",
+      "semanticId": {
+        "keys": [
+          {
+            "type": "GlobalReference",
+            "value": "https://admin-shell.io/idta/SimulationModels/SimulationModel/1/0"
+          }
+        ],
+        "type": "ExternalReference"
+      },
+      "qualifiers": [
+        {
+          "kind": "ConceptQualifier",
+          "type": "FormTitle",
+          "value": "SimulationModel",
+          "valueType": "xs:string"
+        },
+        {
+          "kind": "ConceptQualifier",
+          "type": "FormInfo",
+          "value": "Merkmalssammlung zur Bereitstellung oder Anfrage von Simulationsmodellen. Die Modelle können von der Zielstellung und inhaltlich beschrieben werden.",
+          "valueType": "xs:string"
+        },
+        {
+          "kind": "ConceptQualifier",
+          "type": "PresetIdShort",
+          "value": "To be filleSimulationModel'{0:00}'",
+          "valueType": "xs:string"
+        },
+        {
+          "kind": "ConceptQualifier",
+          "type": "Multiplicity",
+          "value": "ZeroToMany",
+          "valueType": "xs:string"
+        }
+      ],
+      "category": "CONSTANT",
+      "idShort": "SimulationModel",
+      "value": [
+        {
+          "modelType": "MultiLanguageProperty",
+          "semanticId": {
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "https://admin-shell.io/idta/SimulationModels/Summary/1/0"
+              }
+            ],
+            "type": "ExternalReference"
+          },
+          "qualifiers": [
+            {
+              "kind": "ConceptQualifier",
+              "type": "FormTitle",
+              "value": "summary",
+              "valueType": "xs:string"
+            },
+            {
+              "kind": "ConceptQualifier",
+              "type": "FormInfo",
+              "value": "Summary of the contents of the simulation model in text form. ",
+              "valueType": "xs:string"
+            },
+            {
+              "kind": "ConceptQualifier",
+              "type": "PresetIdShort",
+              "value": "summary",
+              "valueType": "xs:string"
+            },
+            {
+              "kind": "ConceptQualifier",
+              "type": "Multiplicity",
+              "value": "ZeroToOne",
+              "valueType": "xs:string"
+            }
+          ],
+          "category": "CONSTANT",
+          "idShort": "Summary"
+        },
+        {
+          "modelType": "SubmodelElementCollection",
+          "semanticId": {
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "https://admin-shell.io/idta/SimulationModels/SimPurpose/1/0"
+              }
+            ],
+            "type": "ExternalReference"
+          },
+          "qualifiers": [
+            {
+              "kind": "ConceptQualifier",
+              "type": "FormTitle",
+              "value": "simPurpose",
+              "valueType": "xs:string"
+            },
+            {
+              "kind": "ConceptQualifier",
+              "type": "FormInfo",
+              "value": "This characteristic describes the simulation purpose or suitability for different simulation goals.",
+              "valueType": "xs:string"
+            },
+            {
+              "kind": "ConceptQualifier",
+              "type": "PresetIdShort",
+              "value": "simPurpose",
+              "valueType": "xs:string"
+            },
+            {
+              "kind": "ConceptQualifier",
+              "type": "Multiplicity",
+              "value": "One",
+              "valueType": "xs:string"
+            }
+          ],
+          "idShort": "SimPurpose",
+          "value": [
+            {
+              "modelType": "Property",
+              "semanticId": {
+                "keys": [
+                  {
+                    "type": "GlobalReference",
+                    "value": "https://admin-shell.io/idta/SimulationModels/PosSimPurpose/1/0"
+                  }
+                ],
+                "type": "ExternalReference"
+              },
+              "valueType": "xs:string",
+              "qualifiers": [
+                {
+                  "kind": "ConceptQualifier",
+                  "type": "FormTitle",
+                  "value": "posSimPurpose",
+                  "valueType": "xs:string"
+                },
+                {
+                  "kind": "ConceptQualifier",
+                  "type": "FormInfo",
+                  "value": "List of simulation purposes for which the model is intended.",
+                  "valueType": "xs:string"
+                },
+                {
+                  "kind": "ConceptQualifier",
+                  "type": "PresetIdShort",
+                  "value": "posSimPurpose'{0:00}'",
+                  "valueType": "xs:string"
+                },
+                {
+                  "kind": "ConceptQualifier",
+                  "type": "Multiplicity",
+                  "value": "OneToMany",
+                  "valueType": "xs:string"
+                },
+                {
+                  "kind": "ConceptQualifier",
+                  "type": "FormChoices",
+                  "value": "Concept evaluation; Sizing; Energy consumption; Control design; Behaviour in fault condition; Validation and testing; Virtual commissioning; Condition monitoring; Predictive maintenance; Operator Training; Teaching",
+                  "valueType": "xs:string"
+                }
+              ],
+              "idShort": "PosSimPurpose"
+            },
+            {
+              "modelType": "Property",
+              "semanticId": {
+                "keys": [
+                  {
+                    "type": "GlobalReference",
+                    "value": "https://admin-shell.io/idta/SimulationModels/NegSimPurpose/1/0"
+                  }
+                ],
+                "type": "ExternalReference"
+              },
+              "valueType": "xs:string",
+              "qualifiers": [
+                {
+                  "kind": "ConceptQualifier",
+                  "type": "FormTitle",
+                  "value": "negSimPurpose",
+                  "valueType": "xs:string"
+                },
+                {
+                  "kind": "ConceptQualifier",
+                  "type": "FormInfo",
+                  "value": "List of simulation purposes for which the model is explicitly not suitable. ",
+                  "valueType": "xs:string"
+                },
+                {
+                  "kind": "ConceptQualifier",
+                  "type": "PresetIdShort",
+                  "value": "negSimPurpose'{0:00}'",
+                  "valueType": "xs:string"
+                },
+                {
+                  "kind": "ConceptQualifier",
+                  "type": "Multiplicity",
+                  "value": "ZeroToMany",
+                  "valueType": "xs:string"
+                },
+                {
+                  "kind": "ConceptQualifier",
+                  "type": "FormChoices",
+                  "value": "Concept evaluation; Sizing; Energy consumption; Control design; Behaviour in fault condition; Validation and testing; Virtual commissioning; Condition monitoring; Predictive maintenance; Operator Training; Teaching",
+                  "valueType": "xs:string"
+                }
+              ],
+              "idShort": "NegSimPurpose"
+            }
+          ]
+        },
+        {
+          "modelType": "Property",
+          "semanticId": {
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "https://admin-shell.io/idta/SimulationModels/TypeOfModel/1/0"
+              }
+            ],
+            "type": "ExternalReference"
+          },
+          "valueType": "xs:string",
+          "qualifiers": [
+            {
+              "kind": "ConceptQualifier",
+              "type": "FormTitle",
+              "value": "typeOfModel",
+              "valueType": "xs:string"
+            },
+            {
+              "kind": "ConceptQualifier",
+              "type": "FormInfo",
+              "value": "List of modeling approaches used for the model.",
+              "valueType": "xs:string"
+            },
+            {
+              "kind": "ConceptQualifier",
+              "type": "PresetIdShort",
+              "value": "typeOfModelDesc",
+              "valueType": "xs:string"
+            },
+            {
+              "kind": "ConceptQualifier",
+              "type": "Multiplicity",
+              "value": "ZeroToMany",
+              "valueType": "xs:string"
+            },
+            {
+              "kind": "ConceptQualifier",
+              "type": "FormChoices",
+              "value": "Linear model; Nonlinear model; Data-driven model; Lumped element model; Fixed causality model; Acausal model ",
+              "valueType": "xs:string"
+            }
+          ],
+          "idShort": "TypeOfModel"
+        },
+        {
+          "modelType": "Property",
+          "semanticId": {
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "https://admin-shell.io/idta/SimulationModels/ScopeOfModel/1/0"
+              }
+            ],
+            "type": "ExternalReference"
+          },
+          "valueType": "xs:string",
+          "qualifiers": [
+            {
+              "kind": "ConceptQualifier",
+              "type": "FormTitle",
+              "value": "scopeOfModel",
+              "valueType": "xs:string"
+            },
+            {
+              "kind": "ConceptQualifier",
+              "type": "FormInfo",
+              "value": "List of basic physical characteristics which are represented by the model.",
+              "valueType": "xs:string"
+            },
+            {
+              "kind": "ConceptQualifier",
+              "type": "PresetIdShort",
+              "value": "scopeOfModel",
+              "valueType": "xs:string"
+            },
+            {
+              "kind": "ConceptQualifier",
+              "type": "Multiplicity",
+              "value": "OneToMany",
+              "valueType": "xs:string"
+            },
+            {
+              "kind": "ConceptQualifier",
+              "type": "FormChoices",
+              "value": "Logic and timing behaviour; Geometry; Kinematics; Dynamics; Distribution networks; Network communication; Visualization",
+              "valueType": "xs:string"
+            }
+          ],
+          "idShort": "ScopeOfModel"
+        },
+        {
+          "modelType": "Property",
+          "semanticId": {
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "https://admin-shell.io/idta/SimulationModels/LicenseModel/1/0"
+              }
+            ],
+            "type": "ExternalReference"
+          },
+          "valueType": "xs:string",
+          "qualifiers": [
+            {
+              "kind": "ConceptQualifier",
+              "type": "FormTitle",
+              "value": "licenseModel",
+              "valueType": "xs:string"
+            },
+            {
+              "kind": "ConceptQualifier",
+              "type": "FormInfo",
+              "value": "If a simulation model usage will be charged and how it will be charged.",
+              "valueType": "xs:string"
+            },
+            {
+              "kind": "ConceptQualifier",
+              "type": "PresetIdShort",
+              "value": "licenseModel",
+              "valueType": "xs:string"
+            },
+            {
+              "kind": "ConceptQualifier",
+              "type": "Multiplicity",
+              "value": "ZeroToOne",
+              "valueType": "xs:string"
+            },
+            {
+              "kind": "ConceptQualifier",
+              "type": "FormChoices",
+              "value": "free; perpetual; subscription; volume-based",
+              "valueType": "xs:string"
+            }
+          ],
+          "idShort": "LicenseModel"
+        },
+        {
+          "modelType": "Property",
+          "semanticId": {
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "https://admin-shell.io/idta/SimulationModels/EngineeringDomain/1/0"
+              }
+            ],
+            "type": "ExternalReference"
+          },
+          "valueType": "xs:string",
+          "qualifiers": [
+            {
+              "kind": "ConceptQualifier",
+              "type": "FormTitle",
+              "value": "engineeringDomainList",
+              "valueType": "xs:string"
+            },
+            {
+              "kind": "ConceptQualifier",
+              "type": "FormInfo",
+              "value": "List of engineering disciplines supported or mapped with the model. ",
+              "valueType": "xs:string"
+            },
+            {
+              "kind": "ConceptQualifier",
+              "type": "PresetIdShort",
+              "value": "engineeringDomainList'{0:00}'",
+              "valueType": "xs:string"
+            },
+            {
+              "kind": "ConceptQualifier",
+              "type": "Multiplicity",
+              "value": "ZeroToMany",
+              "valueType": "xs:string"
+            },
+            {
+              "kind": "ConceptQualifier",
+              "type": "FormChoices",
+              "value": "Hydraulic Engineering; Electrical Engineering; Pneumatic Engineering; Mechanical Engineering; Material Flow; Robotics; Image Processing; Data Engineering; Process Engineering; Workflow Engineering; HMI Engineering; Control Engineering",
+              "valueType": "xs:string"
+            }
+          ],
+          "idShort": "EngineeringDomain"
+        },
+        {
+          "modelType": "SubmodelElementCollection",
+          "semanticId": {
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "https://admin-shell.io/idta/SimulationModels/Environment/1/0"
+              }
+            ],
+            "type": "ExternalReference"
+          },
+          "qualifiers": [
+            {
+              "kind": "ConceptQualifier",
+              "type": "FormTitle",
+              "value": "environment",
+              "valueType": "xs:string"
+            },
+            {
+              "kind": "ConceptQualifier",
+              "type": "FormInfo",
+              "value": "Information about prerequisite environments or dependencies of underlying components on the target system.",
+              "valueType": "xs:string"
+            },
+            {
+              "kind": "ConceptQualifier",
+              "type": "PresetIdShort",
+              "value": "environment",
+              "valueType": "xs:string"
+            },
+            {
+              "kind": "ConceptQualifier",
+              "type": "Multiplicity",
+              "value": "ZeroToMany",
+              "valueType": "xs:string"
+            }
+          ],
+          "idShort": "Environment",
+          "value": [
+            {
+              "modelType": "Property",
+              "semanticId": {
+                "keys": [
+                  {
+                    "type": "GlobalReference",
+                    "value": "https://admin-shell.io/idta/SimulationModels/OperatingSystem/1/0"
+                  }
+                ],
+                "type": "ExternalReference"
+              },
+              "valueType": "xs:string",
+              "qualifiers": [
+                {
+                  "kind": "ConceptQualifier",
+                  "type": "FormTitle",
+                  "value": "operatingSystem",
+                  "valueType": "xs:string"
+                },
+                {
+                  "kind": "ConceptQualifier",
+                  "type": "FormInfo",
+                  "value": "Name of the operating system including version and architecture (e.g. Windows 10 64bit)",
+                  "valueType": "xs:string"
+                },
+                {
+                  "kind": "ConceptQualifier",
+                  "type": "PresetIdShort",
+                  "value": "operatingSystem'{0:00}'",
+                  "valueType": "xs:string"
+                },
+                {
+                  "kind": "ConceptQualifier",
+                  "type": "Multiplicity",
+                  "value": "One",
+                  "valueType": "xs:string"
+                }
+              ],
+              "idShort": "OperatingSystem"
+            },
+            {
+              "modelType": "Property",
+              "semanticId": {
+                "keys": [
+                  {
+                    "type": "GlobalReference",
+                    "value": "https://admin-shell.io/idta/SimulationModels/ToolEnvironment/1/0"
+                  }
+                ],
+                "type": "ExternalReference"
+              },
+              "valueType": "xs:string",
+              "qualifiers": [
+                {
+                  "kind": "ConceptQualifier",
+                  "type": "FormTitle",
+                  "value": "toolEnvironment",
+                  "valueType": "xs:string"
+                },
+                {
+                  "kind": "ConceptQualifier",
+                  "type": "FormInfo",
+                  "value": "List with required simulation tools, interpreters, model libraries or runtime libraries. In each case the exact designation of the software producer is given as free text.",
+                  "valueType": "xs:string"
+                },
+                {
+                  "kind": "ConceptQualifier",
+                  "type": "PresetIdShort",
+                  "value": "toolEnvironment'{0:00}'",
+                  "valueType": "xs:string"
+                },
+                {
+                  "kind": "ConceptQualifier",
+                  "type": "Multiplicity",
+                  "value": "ZeroToMany",
+                  "valueType": "xs:string"
+                }
+              ],
+              "idShort": "ToolEnvironment"
+            },
+            {
+              "modelType": "MultiLanguageProperty",
+              "semanticId": {
+                "keys": [
+                  {
+                    "type": "GlobalReference",
+                    "value": "https://admin-shell.io/idta/SimulationModels/DependencyEnvironment/1/0"
+                  }
+                ],
+                "type": "ExternalReference"
+              },
+              "qualifiers": [
+                {
+                  "kind": "ConceptQualifier",
+                  "type": "FormTitle",
+                  "value": "dependencyEnvironment",
+                  "valueType": "xs:string"
+                },
+                {
+                  "kind": "ConceptQualifier",
+                  "type": "FormInfo",
+                  "value": "Description of dependencies to associated hardware and software. ",
+                  "valueType": "xs:string"
+                },
+                {
+                  "kind": "ConceptQualifier",
+                  "type": "PresetIdShort",
+                  "value": "dependencyEnvironment",
+                  "valueType": "xs:string"
+                },
+                {
+                  "kind": "ConceptQualifier",
+                  "type": "Multiplicity",
+                  "value": "ZeroToOne",
+                  "valueType": "xs:string"
+                }
+              ],
+              "category": "CONSTANT",
+              "idShort": "DependencyEnvironment"
+            },
+            {
+              "modelType": "Property",
+              "semanticId": {
+                "keys": [
+                  {
+                    "type": "GlobalReference",
+                    "value": "https://admin-shell.io/idta/SimulationModels/VisualizationInformation/1/0"
+                  }
+                ],
+                "type": "ExternalReference"
+              },
+              "valueType": "xs:string",
+              "qualifiers": [
+                {
+                  "kind": "ConceptQualifier",
+                  "type": "FormTitle",
+                  "value": "visualizationInformation",
+                  "valueType": "xs:string"
+                },
+                {
+                  "kind": "ConceptQualifier",
+                  "type": "FormInfo",
+                  "value": "Ability to use a visualization. This can be integrated in a model or the model offers capabilities for connection. The connection can be described in more detail under ports.",
+                  "valueType": "xs:string"
+                },
+                {
+                  "kind": "ConceptQualifier",
+                  "type": "PresetIdShort",
+                  "value": "visualizationInformation",
+                  "valueType": "xs:string"
+                },
+                {
+                  "kind": "ConceptQualifier",
+                  "type": "Multiplicity",
+                  "value": "ZeroToOne",
+                  "valueType": "xs:string"
+                },
+                {
+                  "kind": "ConceptQualifier",
+                  "type": "FormChoices",
+                  "value": "separately; integrated; none",
+                  "valueType": "xs:string"
+                }
+              ],
+              "idShort": "VisualizationInformation"
+            },
+            {
+              "modelType": "SubmodelElementCollection",
+              "semanticId": {
+                "keys": [
+                  {
+                    "type": "GlobalReference",
+                    "value": "https://admin-shell.io/idta/SimulationModels/SimulationTool/1/0"
+                  }
+                ],
+                "type": "ExternalReference"
+              },
+              "qualifiers": [
+                {
+                  "kind": "ConceptQualifier",
+                  "type": "FormTitle",
+                  "value": "simulationTool",
+                  "valueType": "xs:string"
+                },
+                {
+                  "kind": "ConceptQualifier",
+                  "type": "FormInfo",
+                  "value": "Eigenschaften des Modells bezüglich konkreter Simulationswerkzeuge.",
+                  "valueType": "xs:string"
+                },
+                {
+                  "kind": "ConceptQualifier",
+                  "type": "PresetIdShort",
+                  "value": "simulationTool'{0:00}'",
+                  "valueType": "xs:string"
+                },
+                {
+                  "kind": "ConceptQualifier",
+                  "type": "Multiplicity",
+                  "value": "OneToMany",
+                  "valueType": "xs:string"
+                }
+              ],
+              "category": "CONSTANT",
+              "idShort": "SimulationTool",
+              "value": [
+                {
+                  "modelType": "Property",
+                  "semanticId": {
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/idta/SimulationModel/SimToolName/1/0"
+                      }
+                    ],
+                    "type": "ExternalReference"
+                  },
+                  "valueType": "xs:string",
+                  "qualifiers": [
+                    {
+                      "kind": "ConceptQualifier",
+                      "type": "FormTitle",
+                      "value": "simToolName",
+                      "valueType": "xs:string"
+                    },
+                    {
+                      "kind": "ConceptQualifier",
+                      "type": "FormInfo",
+                      "value": "Name of the simulation tool including version.",
+                      "valueType": "xs:string"
+                    },
+                    {
+                      "kind": "ConceptQualifier",
+                      "type": "PresetIdShort",
+                      "value": "simToolName",
+                      "valueType": "xs:string"
+                    },
+                    {
+                      "kind": "ConceptQualifier",
+                      "type": "Multiplicity",
+                      "value": "One",
+                      "valueType": "xs:string"
+                    }
+                  ],
+                  "category": "CONSTANT",
+                  "idShort": "SimToolName"
+                },
+                {
+                  "modelType": "Property",
+                  "semanticId": {
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/idta/SimulationModels/DependencySimTool/1/0"
+                      }
+                    ],
+                    "type": "ExternalReference"
+                  },
+                  "valueType": "xs:string",
+                  "qualifiers": [
+                    {
+                      "kind": "ConceptQualifier",
+                      "type": "FormTitle",
+                      "value": "dependencySimTool",
+                      "valueType": "xs:string"
+                    },
+                    {
+                      "kind": "ConceptQualifier",
+                      "type": "FormInfo",
+                      "value": "Dependencies of Simulation Tools",
+                      "valueType": "xs:string"
+                    },
+                    {
+                      "kind": "ConceptQualifier",
+                      "type": "PresetIdShort",
+                      "value": "dependencySimTool'{0:00}'",
+                      "valueType": "xs:string"
+                    },
+                    {
+                      "kind": "ConceptQualifier",
+                      "type": "Multiplicity",
+                      "value": "ZeroToMany",
+                      "valueType": "xs:string"
+                    }
+                  ],
+                  "category": "CONSTANT",
+                  "idShort": "DependencySimTool"
+                },
+                {
+                  "modelType": "Property",
+                  "semanticId": {
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/idta/SimulationModels/Compiler/1/0"
+                      }
+                    ],
+                    "type": "ExternalReference"
+                  },
+                  "valueType": "xs:string",
+                  "qualifiers": [
+                    {
+                      "kind": "ConceptQualifier",
+                      "type": "FormTitle",
+                      "value": "compiler",
+                      "valueType": "xs:string"
+                    },
+                    {
+                      "kind": "ConceptQualifier",
+                      "type": "FormInfo",
+                      "value": "Name of necessary compiler including version",
+                      "valueType": "xs:string"
+                    },
+                    {
+                      "kind": "ConceptQualifier",
+                      "type": "PresetIdShort",
+                      "value": "compiler'{0:00}'",
+                      "valueType": "xs:string"
+                    },
+                    {
+                      "kind": "ConceptQualifier",
+                      "type": "Multiplicity",
+                      "value": "ZeroToMany",
+                      "valueType": "xs:string"
+                    }
+                  ],
+                  "category": "CONSTANT",
+                  "idShort": "Compiler"
+                },
+                {
+                  "modelType": "SubmodelElementCollection",
+                  "semanticId": {
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/idta/SimulationModels/SolverAndTolerances/1/0"
+                      }
+                    ],
+                    "type": "ExternalReference"
+                  },
+                  "qualifiers": [
+                    {
+                      "kind": "ConceptQualifier",
+                      "type": "FormTitle",
+                      "value": "solverAndTolerances",
+                      "valueType": "xs:string"
+                    },
+                    {
+                      "kind": "ConceptQualifier",
+                      "type": "FormInfo",
+                      "value": "Useful settings of the simulation environment. Includes e.g. solver settings. ",
+                      "valueType": "xs:string"
+                    },
+                    {
+                      "kind": "ConceptQualifier",
+                      "type": "PresetIdShort",
+                      "value": "solverAndTolerances",
+                      "valueType": "xs:string"
+                    },
+                    {
+                      "kind": "ConceptQualifier",
+                      "type": "Multiplicity",
+                      "value": "One",
+                      "valueType": "xs:string"
+                    }
+                  ],
+                  "idShort": "SolverAndTolerances",
+                  "value": [
+                    {
+                      "modelType": "Property",
+                      "semanticId": {
+                        "keys": [
+                          {
+                            "type": "GlobalReference",
+                            "value": "https://admin-shell.io/idta/SimulationModels/StepSizeControlNeeded/1/0"
+                          }
+                        ],
+                        "type": "ExternalReference"
+                      },
+                      "valueType": "xs:boolean",
+                      "qualifiers": [
+                        {
+                          "kind": "ConceptQualifier",
+                          "type": "FormTitle",
+                          "value": "stepSizeControlNeeded",
+                          "valueType": "xs:string"
+                        },
+                        {
+                          "kind": "ConceptQualifier",
+                          "type": "FormInfo",
+                          "value": "Solver with step size control recommended.",
+                          "valueType": "xs:string"
+                        },
+                        {
+                          "kind": "ConceptQualifier",
+                          "type": "PresetIdShort",
+                          "value": "stepSizeControlNeeded",
+                          "valueType": "xs:string"
+                        },
+                        {
+                          "kind": "ConceptQualifier",
+                          "type": "Multiplicity",
+                          "value": "One",
+                          "valueType": "xs:string"
+                        },
+                        {
+                          "kind": "ConceptQualifier",
+                          "type": "FormChoices",
+                          "value": "True; False",
+                          "valueType": "xs:string"
+                        }
+                      ],
+                      "idShort": "StepSizeControlNeeded"
+                    },
+                    {
+                      "modelType": "Property",
+                      "semanticId": {
+                        "keys": [
+                          {
+                            "type": "GlobalReference",
+                            "value": "https://admin-shell.io/idta/SimulationModels/FixedStepSize/1/0"
+                          }
+                        ],
+                        "type": "ExternalReference"
+                      },
+                      "valueType": "xs:float",
+                      "qualifiers": [
+                        {
+                          "kind": "ConceptQualifier",
+                          "type": "FormTitle",
+                          "value": "fixedStepSize",
+                          "valueType": "xs:string"
+                        },
+                        {
+                          "kind": "ConceptQualifier",
+                          "type": "FormInfo",
+                          "value": "Fixed integration step size, if there is no adaptive step size ",
+                          "valueType": "xs:string"
+                        },
+                        {
+                          "kind": "ConceptQualifier",
+                          "type": "PresetIdShort",
+                          "value": "fixedStepSize",
+                          "valueType": "xs:string"
+                        },
+                        {
+                          "kind": "ConceptQualifier",
+                          "type": "Multiplicity",
+                          "value": "ZeroToOne",
+                          "valueType": "xs:string"
+                        }
+                      ],
+                      "idShort": "FixedStepSize"
+                    },
+                    {
+                      "modelType": "Property",
+                      "semanticId": {
+                        "keys": [
+                          {
+                            "type": "GlobalReference",
+                            "value": "https://admin-shell.io/idta/SimulationModels/StiffSolverNeeded/1/0"
+                          }
+                        ],
+                        "type": "ExternalReference"
+                      },
+                      "valueType": "xs:boolean",
+                      "qualifiers": [
+                        {
+                          "kind": "ConceptQualifier",
+                          "type": "FormTitle",
+                          "value": "stiffSolverNeeded",
+                          "valueType": "xs:string"
+                        },
+                        {
+                          "kind": "ConceptQualifier",
+                          "type": "FormInfo",
+                          "value": "Stiff solver needed.",
+                          "valueType": "xs:string"
+                        },
+                        {
+                          "kind": "ConceptQualifier",
+                          "type": "PresetIdShort",
+                          "value": "stiffSolverNeeded",
+                          "valueType": "xs:string"
+                        },
+                        {
+                          "kind": "ConceptQualifier",
+                          "type": "Multiplicity",
+                          "value": "One",
+                          "valueType": "xs:string"
+                        },
+                        {
+                          "kind": "ConceptQualifier",
+                          "type": "FormChoices",
+                          "value": "True; False",
+                          "valueType": "xs:string"
+                        }
+                      ],
+                      "idShort": "StiffSolverNeeded"
+                    },
+                    {
+                      "modelType": "Property",
+                      "semanticId": {
+                        "keys": [
+                          {
+                            "type": "GlobalReference",
+                            "value": "https://admin-shell.io/idta/SimulationModels/SolverIncluded/1/0"
+                          }
+                        ],
+                        "type": "ExternalReference"
+                      },
+                      "valueType": "xs:boolean",
+                      "qualifiers": [
+                        {
+                          "kind": "ConceptQualifier",
+                          "type": "FormTitle",
+                          "value": "solverIncluded",
+                          "valueType": "xs:string"
+                        },
+                        {
+                          "kind": "ConceptQualifier",
+                          "type": "FormInfo",
+                          "value": "Solver is integrated in the model (e.g. FMU for co-simulation)",
+                          "valueType": "xs:string"
+                        },
+                        {
+                          "kind": "ConceptQualifier",
+                          "type": "PresetIdShort",
+                          "value": "solverIncluded",
+                          "valueType": "xs:string"
+                        },
+                        {
+                          "kind": "ConceptQualifier",
+                          "type": "Multiplicity",
+                          "value": "One",
+                          "valueType": "xs:string"
+                        },
+                        {
+                          "kind": "ConceptQualifier",
+                          "type": "FormChoices",
+                          "value": "True; False",
+                          "valueType": "xs:string"
+                        }
+                      ],
+                      "idShort": "SolverIncluded"
+                    },
+                    {
+                      "modelType": "SubmodelElementCollection",
+                      "semanticId": {
+                        "keys": [
+                          {
+                            "type": "GlobalReference",
+                            "value": "https://admin-shell.io/idta/SimulationModels/TestedToolSolverAlgorithm/1/0"
+                          }
+                        ],
+                        "type": "ExternalReference"
+                      },
+                      "qualifiers": [
+                        {
+                          "kind": "ConceptQualifier",
+                          "type": "FormTitle",
+                          "value": "testedToolSolverAlgorithm",
+                          "valueType": "xs:string"
+                        },
+                        {
+                          "kind": "ConceptQualifier",
+                          "type": "FormInfo",
+                          "value": "List of validated tool-solver combinations",
+                          "valueType": "xs:string"
+                        },
+                        {
+                          "kind": "ConceptQualifier",
+                          "type": "PresetIdShort",
+                          "value": "testedToolSolverAlgorithm'{0:00}'",
+                          "valueType": "xs:string"
+                        },
+                        {
+                          "kind": "ConceptQualifier",
+                          "type": "Multiplicity",
+                          "value": "ZeroToMany",
+                          "valueType": "xs:string"
+                        }
+                      ],
+                      "idShort": "TestedToolSolverAlgorithm",
+                      "value": [
+                        {
+                          "modelType": "Property",
+                          "semanticId": {
+                            "keys": [
+                              {
+                                "type": "GlobalReference",
+                                "value": "https://admin-shell.io/idta/SimulationModels/SolverAlgorithm/1/0"
+                              }
+                            ],
+                            "type": "ExternalReference"
+                          },
+                          "valueType": "xs:string",
+                          "qualifiers": [
+                            {
+                              "kind": "ConceptQualifier",
+                              "type": "FormTitle",
+                              "value": "solverAlgorithm",
+                              "valueType": "xs:string"
+                            },
+                            {
+                              "kind": "ConceptQualifier",
+                              "type": "FormInfo",
+                              "value": "validated solver",
+                              "valueType": "xs:string"
+                            },
+                            {
+                              "kind": "ConceptQualifier",
+                              "type": "PresetIdShort",
+                              "value": "solverAlgorithm",
+                              "valueType": "xs:string"
+                            },
+                            {
+                              "kind": "ConceptQualifier",
+                              "type": "Multiplicity",
+                              "value": "One",
+                              "valueType": "xs:string"
+                            }
+                          ],
+                          "idShort": "SolverAlgorithm"
+                        },
+                        {
+                          "modelType": "Property",
+                          "semanticId": {
+                            "keys": [
+                              {
+                                "type": "GlobalReference",
+                                "value": "https://admin-shell.io/idta/SimulationModels/ToolSolverFurtherDescription/1/0"
+                              }
+                            ],
+                            "type": "ExternalReference"
+                          },
+                          "valueType": "xs:string",
+                          "qualifiers": [
+                            {
+                              "kind": "ConceptQualifier",
+                              "type": "FormTitle",
+                              "value": "toolSolverFurtherDescription",
+                              "valueType": "xs:string"
+                            },
+                            {
+                              "kind": "ConceptQualifier",
+                              "type": "FormInfo",
+                              "value": "Further tool- and solver-specific information",
+                              "valueType": "xs:string"
+                            },
+                            {
+                              "kind": "ConceptQualifier",
+                              "type": "PresetIdShort",
+                              "value": "toolSolverFurtherDescription",
+                              "valueType": "xs:string"
+                            },
+                            {
+                              "kind": "ConceptQualifier",
+                              "type": "Multiplicity",
+                              "value": "ZeroToOne",
+                              "valueType": "xs:string"
+                            }
+                          ],
+                          "idShort": "ToolSolverFurtherDescription"
+                        },
+                        {
+                          "modelType": "Property",
+                          "semanticId": {
+                            "keys": [
+                              {
+                                "type": "GlobalReference",
+                                "value": "https://admin-shell.io/idta/SimulationModels/Tolerance/1/0"
+                              }
+                            ],
+                            "type": "ExternalReference"
+                          },
+                          "valueType": "xs:float",
+                          "qualifiers": [
+                            {
+                              "kind": "ConceptQualifier",
+                              "type": "FormTitle",
+                              "value": "tolerance",
+                              "valueType": "xs:string"
+                            },
+                            {
+                              "kind": "ConceptQualifier",
+                              "type": "FormInfo",
+                              "value": "(relative) tolerance for theadaptive step size ",
+                              "valueType": "xs:string"
+                            },
+                            {
+                              "kind": "ConceptQualifier",
+                              "type": "PresetIdShort",
+                              "value": "tolerance",
+                              "valueType": "xs:string"
+                            },
+                            {
+                              "kind": "ConceptQualifier",
+                              "type": "Multiplicity",
+                              "value": "ZeroToOne",
+                              "valueType": "xs:string"
+                            }
+                          ],
+                          "idShort": "Tolerance"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "modelType": "File",
+          "contentType": "image/png",
+          "semanticId": {
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "https://admin-shell.io/idta/SimulationModels/RefSimDocumentation/1/0"
+              }
+            ],
+            "type": "ExternalReference"
+          },
+          "qualifiers": [
+            {
+              "kind": "ConceptQualifier",
+              "type": "FormTitle",
+              "value": "refSimDocumentation",
+              "valueType": "xs:string"
+            },
+            {
+              "kind": "ConceptQualifier",
+              "type": "FormInfo",
+              "value": "Documentation of example simulations of the model can be supplied. This includes a solver setup and sample circuit and sample results. e.g. zip file, PDF, html, ...",
+              "valueType": "xs:string"
+            },
+            {
+              "kind": "ConceptQualifier",
+              "type": "PresetIdShort",
+              "value": "refSimDocumentation'{0:00}'",
+              "valueType": "xs:string"
+            },
+            {
+              "kind": "ConceptQualifier",
+              "type": "Multiplicity",
+              "value": "ZeroToMany",
+              "valueType": "xs:string"
+            }
+          ],
+          "idShort": "RefSimDocumentation"
+        },
+        {
+          "modelType": "SubmodelElementCollection",
+          "semanticId": {
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "https://admin-shell.io/idta/SimulationModels/ModelFile/1/0"
+              }
+            ],
+            "type": "ExternalReference"
+          },
+          "qualifiers": [
+            {
+              "kind": "ConceptQualifier",
+              "type": "FormTitle",
+              "value": "modelFile",
+              "valueType": "xs:string"
+            },
+            {
+              "kind": "ConceptQualifier",
+              "type": "FormInfo",
+              "value": "Providing versions of the simulation model and with characteristics to distinguish them.",
+              "valueType": "xs:string"
+            },
+            {
+              "kind": "ConceptQualifier",
+              "type": "PresetIdShort",
+              "value": "modelFile",
+              "valueType": "xs:string"
+            },
+            {
+              "kind": "ConceptQualifier",
+              "type": "Multiplicity",
+              "value": "One",
+              "valueType": "xs:string"
+            }
+          ],
+          "category": "CONSTANT",
+          "idShort": "ModelFile",
+          "value": [
+            {
+              "modelType": "Property",
+              "semanticId": {
+                "keys": [
+                  {
+                    "type": "GlobalReference",
+                    "value": "https://admin-shell.io/idta/SimulationModels/ModelFileType/1/0"
+                  }
+                ],
+                "type": "ExternalReference"
+              },
+              "valueType": "xs:string",
+              "qualifiers": [
+                {
+                  "kind": "ConceptQualifier",
+                  "type": "FormTitle",
+                  "value": "modelFileType",
+                  "valueType": "xs:string"
+                },
+                {
+                  "kind": "ConceptQualifier",
+                  "type": "FormInfo",
+                  "value": "\"Designation of the exchange format of the model. E.G.: FMI 1.0, Co-Simulation, Platform / Source - Code. FMI 2.0.2, Model Exchange, Source - Code. S-function, Version 2, 64bit, mex - Format / or C-Code. Modelica 3, encoded. VHDL",
+                  "valueType": "xs:string"
+                },
+                {
+                  "kind": "ConceptQualifier",
+                  "type": "PresetIdShort",
+                  "value": "modelFileType",
+                  "valueType": "xs:string"
+                },
+                {
+                  "kind": "ConceptQualifier",
+                  "type": "Multiplicity",
+                  "value": "ZeroToOne",
+                  "valueType": "xs:string"
+                }
+              ],
+              "idShort": "ModelFileType"
+            },
+            {
+              "modelType": "SubmodelElementCollection",
+              "semanticId": {
+                "keys": [
+                  {
+                    "type": "GlobalReference",
+                    "value": "https://admin-shell.io/idta/SimulationModels/ModelFileVersion/1/0"
+                  }
+                ],
+                "type": "ExternalReference"
+              },
+              "qualifiers": [
+                {
+                  "kind": "ConceptQualifier",
+                  "type": "FormTitle",
+                  "value": "modelFileVersion",
+                  "valueType": "xs:string"
+                },
+                {
+                  "kind": "ConceptQualifier",
+                  "type": "FormInfo",
+                  "value": "Provision of a version of the simulation model with information to distinguish the versions. The versions are primarily intended for bug fixes without content changes.",
+                  "valueType": "xs:string"
+                },
+                {
+                  "kind": "ConceptQualifier",
+                  "type": "PresetIdShort",
+                  "value": "modelFileVersion'{0:00}'",
+                  "valueType": "xs:string"
+                },
+                {
+                  "kind": "ConceptQualifier",
+                  "type": "Multiplicity",
+                  "value": "OneToMany",
+                  "valueType": "xs:string"
+                }
+              ],
+              "category": "CONSTANT",
+              "idShort": "ModelFileVersion",
+              "value": [
+                {
+                  "modelType": "Property",
+                  "semanticId": {
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/idta/SimulationModels/ModelVersionId/1/0"
+                      }
+                    ],
+                    "type": "ExternalReference"
+                  },
+                  "valueType": "xs:string",
+                  "qualifiers": [
+                    {
+                      "kind": "ConceptQualifier",
+                      "type": "FormTitle",
+                      "value": "modelVersionId",
+                      "valueType": "xs:string"
+                    },
+                    {
+                      "kind": "ConceptQualifier",
+                      "type": "FormInfo",
+                      "value": "Version number of the model from the vendor.",
+                      "valueType": "xs:string"
+                    },
+                    {
+                      "kind": "ConceptQualifier",
+                      "type": "PresetIdShort",
+                      "value": "modelVersionId",
+                      "valueType": "xs:string"
+                    },
+                    {
+                      "kind": "ConceptQualifier",
+                      "type": "Multiplicity",
+                      "value": "One",
+                      "valueType": "xs:string"
+                    }
+                  ],
+                  "idShort": "ModelVersionId"
+                },
+                {
+                  "modelType": "File",
+                  "contentType": "image/png",
+                  "semanticId": {
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/idta/SimulationModels/ModelPreviewImage/1/0"
+                      }
+                    ],
+                    "type": "ExternalReference"
+                  },
+                  "qualifiers": [
+                    {
+                      "kind": "ConceptQualifier",
+                      "type": "FormTitle",
+                      "value": "modelPreviewImage",
+                      "valueType": "xs:string"
+                    },
+                    {
+                      "kind": "ConceptQualifier",
+                      "type": "FormInfo",
+                      "value": "Image file to represent the model in user interfaces, e.g. in a search.",
+                      "valueType": "xs:string"
+                    },
+                    {
+                      "kind": "ConceptQualifier",
+                      "type": "PresetIdShort",
+                      "value": "modelPreviewImage",
+                      "valueType": "xs:string"
+                    },
+                    {
+                      "kind": "ConceptQualifier",
+                      "type": "Multiplicity",
+                      "value": "ZeroToOne",
+                      "valueType": "xs:string"
+                    }
+                  ],
+                  "category": "CONSTANT",
+                  "idShort": "ModelPreviewImage"
+                },
+                {
+                  "modelType": "File",
+                  "contentType": "image/png",
+                  "semanticId": {
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/idta/SimulationModels/DigitalFile/1/0"
+                      }
+                    ],
+                    "type": "ExternalReference"
+                  },
+                  "qualifiers": [
+                    {
+                      "kind": "ConceptQualifier",
+                      "type": "FormTitle",
+                      "value": "digitalFile",
+                      "valueType": "xs:string"
+                    },
+                    {
+                      "kind": "ConceptQualifier",
+                      "type": "FormInfo",
+                      "value": "Deployment of the model file.",
+                      "valueType": "xs:string"
+                    },
+                    {
+                      "kind": "ConceptQualifier",
+                      "type": "PresetIdShort",
+                      "value": "digitalFile",
+                      "valueType": "xs:string"
+                    },
+                    {
+                      "kind": "ConceptQualifier",
+                      "type": "Multiplicity",
+                      "value": "One",
+                      "valueType": "xs:string"
+                    }
+                  ],
+                  "category": "CONSTANT",
+                  "idShort": "DigitalFile"
+                },
+                {
+                  "modelType": "MultiLanguageProperty",
+                  "semanticId": {
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/idta/SimulationModels/ModelFileReleaseNotesTxt/1/0"
+                      }
+                    ],
+                    "type": "ExternalReference"
+                  },
+                  "qualifiers": [
+                    {
+                      "kind": "ConceptQualifier",
+                      "type": "FormTitle",
+                      "value": "modelFileReleaseNotesTxt",
+                      "valueType": "xs:string"
+                    },
+                    {
+                      "kind": "ConceptQualifier",
+                      "type": "FormInfo",
+                      "value": "contains information about this release",
+                      "valueType": "xs:string"
+                    },
+                    {
+                      "kind": "ConceptQualifier",
+                      "type": "PresetIdShort",
+                      "value": "modelFileReleaseNotesTxt",
+                      "valueType": "xs:string"
+                    },
+                    {
+                      "kind": "ConceptQualifier",
+                      "type": "Multiplicity",
+                      "value": "ZeroToOne",
+                      "valueType": "xs:string"
+                    }
+                  ],
+                  "idShort": "ModelFileReleaseNotesTxt"
+                },
+                {
+                  "modelType": "File",
+                  "contentType": "image/png",
+                  "semanticId": {
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/idta/SimulationModels/ModelFileReleaseNotesFile/1/0"
+                      }
+                    ],
+                    "type": "ExternalReference"
+                  },
+                  "qualifiers": [
+                    {
+                      "kind": "ConceptQualifier",
+                      "type": "FormTitle",
+                      "value": "modelFileReleaseNotesFile",
+                      "valueType": "xs:string"
+                    },
+                    {
+                      "kind": "ConceptQualifier",
+                      "type": "FormInfo",
+                      "value": "release notes link or file",
+                      "valueType": "xs:string"
+                    },
+                    {
+                      "kind": "ConceptQualifier",
+                      "type": "PresetIdShort",
+                      "value": "modelFileReleaseNotesFile",
+                      "valueType": "xs:string"
+                    },
+                    {
+                      "kind": "ConceptQualifier",
+                      "type": "Multiplicity",
+                      "value": "ZeroToOne",
+                      "valueType": "xs:string"
+                    }
+                  ],
+                  "idShort": "ModelFileReleaseNotesFile"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "modelType": "Property",
+          "semanticId": {
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "https://admin-shell.io/idta/SimulationModels/ParamMethod/1/0"
+              }
+            ],
+            "type": "ExternalReference"
+          },
+          "valueType": "xs:string",
+          "qualifiers": [
+            {
+              "kind": "ConceptQualifier",
+              "type": "FormTitle",
+              "value": "paramMethod",
+              "valueType": "xs:string"
+            },
+            {
+              "kind": "ConceptQualifier",
+              "type": "FormInfo",
+              "value": "Indicates whether the model must be parameterized and if so, which method is required.",
+              "valueType": "xs:string"
+            },
+            {
+              "kind": "ConceptQualifier",
+              "type": "PresetIdShort",
+              "value": "paramMethod",
+              "valueType": "xs:string"
+            },
+            {
+              "kind": "ConceptQualifier",
+              "type": "Multiplicity",
+              "value": "One",
+              "valueType": "xs:string"
+            },
+            {
+              "kind": "ConceptQualifier",
+              "type": "FormChoices",
+              "value": "by using \"technical data\" of asset; by using \"technical data\" and user; by user interface; by setting file; not necessary; by documentation file; pre-parametrized",
+              "valueType": "xs:string"
+            }
+          ],
+          "idShort": "ParamMethod"
+        },
+        {
+          "modelType": "File",
+          "contentType": "image/png",
+          "semanticId": {
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "https://admin-shell.io/idta/SimulationModels/ParamFile/1/0"
+              }
+            ],
+            "type": "ExternalReference"
+          },
+          "qualifiers": [
+            {
+              "kind": "ConceptQualifier",
+              "type": "FormTitle",
+              "value": "paramFile",
+              "valueType": "xs:string"
+            },
+            {
+              "kind": "ConceptQualifier",
+              "type": "FormInfo",
+              "value": "File for parameterization of the model. As parameter file or parameter documentation (e.g. pdf). ",
+              "valueType": "xs:string"
+            },
+            {
+              "kind": "ConceptQualifier",
+              "type": "PresetIdShort",
+              "value": "paramFile",
+              "valueType": "xs:string"
+            },
+            {
+              "kind": "ConceptQualifier",
+              "type": "Multiplicity",
+              "value": "ZeroToOne",
+              "valueType": "xs:string"
+            }
+          ],
+          "idShort": "ParamFile"
+        },
+        {
+          "modelType": "Property",
+          "semanticId": {
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "https://admin-shell.io/idta/SimulationModels/InitStateMethod/1/0"
+              }
+            ],
+            "type": "ExternalReference"
+          },
+          "valueType": "xs:string",
+          "qualifiers": [
+            {
+              "kind": "ConceptQualifier",
+              "type": "FormTitle",
+              "value": "initStateMethod",
+              "valueType": "xs:string"
+            },
+            {
+              "kind": "ConceptQualifier",
+              "type": "FormInfo",
+              "value": "\" Describes the state variables of the simulation model that must be initialized to start the simulation. For initial value problems, these quantities describe the system state at the start of the simulation. In this case, the system is in a state of equilibrium. Alternatively, a simulation model may include a method to determine consistent initial values at this step, e.g., at an operating point. ",
+              "valueType": "xs:string"
+            },
+            {
+              "kind": "ConceptQualifier",
+              "type": "PresetIdShort",
+              "value": "initStateMethod",
+              "valueType": "xs:string"
+            },
+            {
+              "kind": "ConceptQualifier",
+              "type": "Multiplicity",
+              "value": "One",
+              "valueType": "xs:string"
+            },
+            {
+              "kind": "ConceptQualifier",
+              "type": "FormChoices",
+              "value": "not necessary, by user interface; by setting file; set states within simulation environment; integrated in model; by documentation file",
+              "valueType": "xs:string"
+            }
+          ],
+          "idShort": "InitStateMethod"
+        },
+        {
+          "modelType": "File",
+          "contentType": "image/png",
+          "semanticId": {
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "https://admin-shell.io/idta/SimulationModels/InitStateFile/1/0"
+              }
+            ],
+            "type": "ExternalReference"
+          },
+          "qualifiers": [
+            {
+              "kind": "ConceptQualifier",
+              "type": "FormTitle",
+              "value": "initStateFile",
+              "valueType": "xs:string"
+            },
+            {
+              "kind": "ConceptQualifier",
+              "type": "FormInfo",
+              "value": "File for parameterizing the initial states of the model. As parameter file or parameter documentation (e.g. pdf). ",
+              "valueType": "xs:string"
+            },
+            {
+              "kind": "ConceptQualifier",
+              "type": "PresetIdShort",
+              "value": "initStateFile",
+              "valueType": "xs:string"
+            },
+            {
+              "kind": "ConceptQualifier",
+              "type": "Multiplicity",
+              "value": "ZeroToOne",
+              "valueType": "xs:string"
+            }
+          ],
+          "idShort": "InitStateFile"
+        },
+        {
+          "modelType": "Property",
+          "semanticId": {
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "https://admin-shell.io/idta/SimulationModels/DefaultSimTime/1/0"
+              }
+            ],
+            "type": "ExternalReference"
+          },
+          "valueType": "xs:float",
+          "qualifiers": [
+            {
+              "kind": "ConceptQualifier",
+              "type": "FormTitle",
+              "value": "defaultSimTime",
+              "valueType": "xs:string"
+            },
+            {
+              "kind": "ConceptQualifier",
+              "type": "FormInfo",
+              "value": "Predefined simulation period in seconds ",
+              "valueType": "xs:string"
+            },
+            {
+              "kind": "ConceptQualifier",
+              "type": "PresetIdShort",
+              "value": "defaultSimTime",
+              "valueType": "xs:string"
+            },
+            {
+              "kind": "ConceptQualifier",
+              "type": "Multiplicity",
+              "value": "ZeroToOne",
+              "valueType": "xs:string"
+            }
+          ],
+          "idShort": "DefaultSimTime"
+        },
+        {
+          "modelType": "SubmodelElementCollection",
+          "semanticId": {
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "https://admin-shell.io/idta/SimulationModels/SimModManufacturerInformation/1/0"
+              }
+            ],
+            "type": "ExternalReference"
+          },
+          "qualifiers": [
+            {
+              "kind": "ConceptQualifier",
+              "type": "FormTitle",
+              "value": "simModManufacturerInformation",
+              "valueType": "xs:string"
+            },
+            {
+              "kind": "ConceptQualifier",
+              "type": "FormInfo",
+              "value": "Provide access to  simulation support service provided by the distributor via mail or phone",
+              "valueType": "xs:string"
+            },
+            {
+              "kind": "ConceptQualifier",
+              "type": "PresetIdShort",
+              "value": "simModManufacturerInformation'{0:00}'",
+              "valueType": "xs:string"
+            },
+            {
+              "kind": "ConceptQualifier",
+              "type": "Multiplicity",
+              "value": "ZeroToMany",
+              "valueType": "xs:string"
+            }
+          ],
+          "category": "CONSTANT",
+          "idShort": "SimModManufacturerInformation",
+          "value": [
+            {
+              "modelType": "Property",
+              "semanticId": {
+                "keys": [
+                  {
+                    "type": "GlobalReference",
+                    "value": "0173-1#02-AAW001#001"
+                  }
+                ],
+                "type": "ExternalReference"
+              },
+              "valueType": "xs:string",
+              "qualifiers": [
+                {
+                  "kind": "ConceptQualifier",
+                  "type": "FormTitle",
+                  "value": "company",
+                  "valueType": "xs:string"
+                },
+                {
+                  "kind": "ConceptQualifier",
+                  "type": "FormInfo",
+                  "value": "name of the company",
+                  "valueType": "xs:string"
+                },
+                {
+                  "kind": "ConceptQualifier",
+                  "type": "PresetIdShort",
+                  "value": "company",
+                  "valueType": "xs:string"
+                },
+                {
+                  "kind": "ConceptQualifier",
+                  "type": "Multiplicity",
+                  "value": "One",
+                  "valueType": "xs:string"
+                }
+              ],
+              "idShort": "Company"
+            },
+            {
+              "modelType": "Property",
+              "semanticId": {
+                "keys": [
+                  {
+                    "type": "GlobalReference",
+                    "value": "0173-1#02-AAO895#003"
+                  }
+                ],
+                "type": "ExternalReference"
+              },
+              "valueType": "xs:string",
+              "qualifiers": [
+                {
+                  "kind": "ConceptQualifier",
+                  "type": "FormTitle",
+                  "value": "language",
+                  "valueType": "xs:string"
+                },
+                {
+                  "kind": "ConceptQualifier",
+                  "type": "FormInfo",
+                  "value": "available language",
+                  "valueType": "xs:string"
+                },
+                {
+                  "kind": "ConceptQualifier",
+                  "type": "PresetIdShort",
+                  "value": "language'{0:00}'",
+                  "valueType": "xs:string"
+                },
+                {
+                  "kind": "ConceptQualifier",
+                  "type": "Multiplicity",
+                  "value": "OneToMany",
+                  "valueType": "xs:string"
+                }
+              ],
+              "idShort": "Language"
+            },
+            {
+              "modelType": "SubmodelElementCollection",
+              "semanticId": {
+                "keys": [
+                  {
+                    "type": "GlobalReference",
+                    "value": "0173-1#02-AAQ836#005"
+                  }
+                ],
+                "type": "ExternalReference"
+              },
+              "qualifiers": [
+                {
+                  "kind": "ConceptQualifier",
+                  "type": "FormTitle",
+                  "value": "email",
+                  "valueType": "xs:string"
+                },
+                {
+                  "kind": "ConceptQualifier",
+                  "type": "FormInfo",
+                  "value": "E-mail address and encryption method",
+                  "valueType": "xs:string"
+                },
+                {
+                  "kind": "ConceptQualifier",
+                  "type": "PresetIdShort",
+                  "value": "email",
+                  "valueType": "xs:string"
+                },
+                {
+                  "kind": "ConceptQualifier",
+                  "type": "Multiplicity",
+                  "value": "ZeroToOne",
+                  "valueType": "xs:string"
+                }
+              ],
+              "idShort": "Email",
+              "value": [
+                {
+                  "modelType": "Property",
+                  "semanticId": {
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "0173-1#02-AAO199#003"
+                      }
+                    ],
+                    "type": "ExternalReference"
+                  },
+                  "valueType": "xs:string",
+                  "qualifiers": [
+                    {
+                      "kind": "ConceptQualifier",
+                      "type": "FormTitle",
+                      "value": "typeOfEmailAddress",
+                      "valueType": "xs:string"
+                    },
+                    {
+                      "kind": "ConceptQualifier",
+                      "type": "FormInfo",
+                      "value": "characterization of an e-mail address according to its location or usage",
+                      "valueType": "xs:string"
+                    },
+                    {
+                      "kind": "ConceptQualifier",
+                      "type": "PresetIdShort",
+                      "value": "typeOfEmailAddress",
+                      "valueType": "xs:string"
+                    },
+                    {
+                      "kind": "ConceptQualifier",
+                      "type": "Multiplicity",
+                      "value": "ZeroToOne",
+                      "valueType": "xs:string"
+                    }
+                  ],
+                  "idShort": "TypeOfEmailAddress"
+                },
+                {
+                  "modelType": "Property",
+                  "semanticId": {
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "0173-1#02-AAO198#002"
+                      }
+                    ],
+                    "type": "ExternalReference"
+                  },
+                  "valueType": "xs:string",
+                  "qualifiers": [
+                    {
+                      "kind": "ConceptQualifier",
+                      "type": "FormTitle",
+                      "value": "emailAddress",
+                      "valueType": "xs:string"
+                    },
+                    {
+                      "kind": "ConceptQualifier",
+                      "type": "FormInfo",
+                      "value": "electronic mail address of a business partner",
+                      "valueType": "xs:string"
+                    },
+                    {
+                      "kind": "ConceptQualifier",
+                      "type": "PresetIdShort",
+                      "value": "emailAddress",
+                      "valueType": "xs:string"
+                    },
+                    {
+                      "kind": "ConceptQualifier",
+                      "type": "Multiplicity",
+                      "value": "One",
+                      "valueType": "xs:string"
+                    }
+                  ],
+                  "idShort": "EmailAddress"
+                },
+                {
+                  "modelType": "Property",
+                  "semanticId": {
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "0173-1#02-AAO201#002"
+                      }
+                    ],
+                    "type": "ExternalReference"
+                  },
+                  "valueType": "xs:string",
+                  "qualifiers": [
+                    {
+                      "kind": "ConceptQualifier",
+                      "type": "FormTitle",
+                      "value": "typeOfPublicKey",
+                      "valueType": "xs:string"
+                    },
+                    {
+                      "kind": "ConceptQualifier",
+                      "type": "FormInfo",
+                      "value": "characterization of a public key according to its encryption process",
+                      "valueType": "xs:string"
+                    },
+                    {
+                      "kind": "ConceptQualifier",
+                      "type": "PresetIdShort",
+                      "value": "typeOfPublicKey",
+                      "valueType": "xs:string"
+                    },
+                    {
+                      "kind": "ConceptQualifier",
+                      "type": "Multiplicity",
+                      "value": "ZeroToOne",
+                      "valueType": "xs:string"
+                    }
+                  ],
+                  "idShort": "TypeOfPublicKey"
+                },
+                {
+                  "modelType": "Property",
+                  "semanticId": {
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "0173-1#02-AAO200#002"
+                      }
+                    ],
+                    "type": "ExternalReference"
+                  },
+                  "valueType": "xs:string",
+                  "qualifiers": [
+                    {
+                      "kind": "ConceptQualifier",
+                      "type": "FormTitle",
+                      "value": "publicKey",
+                      "valueType": "xs:string"
+                    },
+                    {
+                      "kind": "ConceptQualifier",
+                      "type": "FormInfo",
+                      "value": "public part of an unsymmetrical key pair to sign or encrypt text or messages",
+                      "valueType": "xs:string"
+                    },
+                    {
+                      "kind": "ConceptQualifier",
+                      "type": "PresetIdShort",
+                      "value": "publicKey",
+                      "valueType": "xs:string"
+                    },
+                    {
+                      "kind": "ConceptQualifier",
+                      "type": "Multiplicity",
+                      "value": "ZeroToOne",
+                      "valueType": "xs:string"
+                    }
+                  ],
+                  "idShort": "PublicKey"
+                }
+              ]
+            },
+            {
+              "modelType": "SubmodelElementCollection",
+              "semanticId": {
+                "keys": [
+                  {
+                    "type": "GlobalReference",
+                    "value": "https://admin-shell.io/zvei/nameplate/1/0/ContactInformations/ContactInformation/Phone"
+                  }
+                ],
+                "type": "ExternalReference"
+              },
+              "qualifiers": [
+                {
+                  "kind": "ConceptQualifier",
+                  "type": "FormTitle",
+                  "value": "phone",
+                  "valueType": "xs:string"
+                },
+                {
+                  "kind": "ConceptQualifier",
+                  "type": "FormInfo",
+                  "value": "Phone number including type",
+                  "valueType": "xs:string"
+                },
+                {
+                  "kind": "ConceptQualifier",
+                  "type": "PresetIdShort",
+                  "value": "phone",
+                  "valueType": "xs:string"
+                },
+                {
+                  "kind": "ConceptQualifier",
+                  "type": "Multiplicity",
+                  "value": "ZeroToOne",
+                  "valueType": "xs:string"
+                }
+              ],
+              "idShort": "Phone",
+              "value": [
+                {
+                  "modelType": "Property",
+                  "semanticId": {
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "0173-1#02-AAO137#003"
+                      }
+                    ],
+                    "type": "ExternalReference"
+                  },
+                  "valueType": "xs:string",
+                  "qualifiers": [
+                    {
+                      "kind": "ConceptQualifier",
+                      "type": "FormTitle",
+                      "value": "typeOfTelephone",
+                      "valueType": "xs:string"
+                    },
+                    {
+                      "kind": "ConceptQualifier",
+                      "type": "FormInfo",
+                      "value": "characterization of a telephone according to its location or usage",
+                      "valueType": "xs:string"
+                    },
+                    {
+                      "kind": "ConceptQualifier",
+                      "type": "PresetIdShort",
+                      "value": "typeOfTelephone",
+                      "valueType": "xs:string"
+                    },
+                    {
+                      "kind": "ConceptQualifier",
+                      "type": "Multiplicity",
+                      "value": "ZeroToOne",
+                      "valueType": "xs:string"
+                    }
+                  ],
+                  "idShort": "TypeOfTelephone"
+                },
+                {
+                  "modelType": "Property",
+                  "semanticId": {
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "0173-1#02-AAO136#002"
+                      }
+                    ],
+                    "type": "ExternalReference"
+                  },
+                  "valueType": "xs:string",
+                  "qualifiers": [
+                    {
+                      "kind": "ConceptQualifier",
+                      "type": "FormTitle",
+                      "value": "telephoneNumber",
+                      "valueType": "xs:string"
+                    },
+                    {
+                      "kind": "ConceptQualifier",
+                      "type": "FormInfo",
+                      "value": "complete telephone number to be called to reach a business partner",
+                      "valueType": "xs:string"
+                    },
+                    {
+                      "kind": "ConceptQualifier",
+                      "type": "PresetIdShort",
+                      "value": "telephoneNumber",
+                      "valueType": "xs:string"
+                    },
+                    {
+                      "kind": "ConceptQualifier",
+                      "type": "Multiplicity",
+                      "value": "One",
+                      "valueType": "xs:string"
+                    }
+                  ],
+                  "idShort": "TelephoneNumber"
+                },
+                {
+                  "modelType": "Property",
+                  "semanticId": {
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/zvei/nameplate/1/0/ContactInformations/ContactInformation/AvailableTime/"
+                      }
+                    ],
+                    "type": "ExternalReference"
+                  },
+                  "valueType": "xs:string",
+                  "qualifiers": [
+                    {
+                      "kind": "ConceptQualifier",
+                      "type": "FormTitle",
+                      "value": "availableTime",
+                      "valueType": "xs:string"
+                    },
+                    {
+                      "kind": "ConceptQualifier",
+                      "type": "FormInfo",
+                      "value": "Specification of the available time window",
+                      "valueType": "xs:string"
+                    },
+                    {
+                      "kind": "ConceptQualifier",
+                      "type": "PresetIdShort",
+                      "value": "availableTime",
+                      "valueType": "xs:string"
+                    },
+                    {
+                      "kind": "ConceptQualifier",
+                      "type": "Multiplicity",
+                      "value": "ZeroToOne",
+                      "valueType": "xs:string"
+                    }
+                  ],
+                  "idShort": "AvailableTime"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "modelType": "SubmodelElementCollection",
+          "semanticId": {
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "https://admin-shell.io/idta/SimulationModels/Ports/1/0"
+              }
+            ],
+            "type": "ExternalReference"
+          },
+          "qualifiers": [
+            {
+              "kind": "ConceptQualifier",
+              "type": "FormTitle",
+              "value": "ports",
+              "valueType": "xs:string"
+            },
+            {
+              "kind": "ConceptQualifier",
+              "type": "FormInfo",
+              "value": "Interfaces of the model. This includes inputs, outputs as well as acausal connections (e.g. mechanical connections). In addition, it is specified here whether the model provides binary interfaces (e.g. for visualization).",
+              "valueType": "xs:string"
+            },
+            {
+              "kind": "ConceptQualifier",
+              "type": "PresetIdShort",
+              "value": "ports",
+              "valueType": "xs:string"
+            },
+            {
+              "kind": "ConceptQualifier",
+              "type": "Multiplicity",
+              "value": "ZeroToOne",
+              "valueType": "xs:string"
+            }
+          ],
+          "idShort": "Ports",
+          "value": [
+            {
+              "modelType": "SubmodelElementCollection",
+              "semanticId": {
+                "keys": [
+                  {
+                    "type": "GlobalReference",
+                    "value": "https://admin-shell.io/idta/SimulationModels/PortsConnector/1/0"
+                  }
+                ],
+                "type": "ExternalReference"
+              },
+              "qualifiers": [
+                {
+                  "kind": "ConceptQualifier",
+                  "type": "FormTitle",
+                  "value": "portsConnector",
+                  "valueType": "xs:string"
+                },
+                {
+                  "kind": "ConceptQualifier",
+                  "type": "FormInfo",
+                  "value": "List of ports of the model. These include a name, a description, a list of variables, and a list of ports.",
+                  "valueType": "xs:string"
+                },
+                {
+                  "kind": "ConceptQualifier",
+                  "type": "PresetIdShort",
+                  "value": "portsConnector'{0:00}'",
+                  "valueType": "xs:string"
+                },
+                {
+                  "kind": "ConceptQualifier",
+                  "type": "Multiplicity",
+                  "value": "ZeroToMany",
+                  "valueType": "xs:string"
+                }
+              ],
+              "idShort": "PortsConnector",
+              "value": [
+                {
+                  "modelType": "Property",
+                  "semanticId": {
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/idta/SimulationModels/PortsConnectorName/1/0"
+                      }
+                    ],
+                    "type": "ExternalReference"
+                  },
+                  "valueType": "xs:string",
+                  "qualifiers": [
+                    {
+                      "kind": "ConceptQualifier",
+                      "type": "FormTitle",
+                      "value": "portConnectorName",
+                      "valueType": "xs:string"
+                    },
+                    {
+                      "kind": "ConceptQualifier",
+                      "type": "FormInfo",
+                      "value": "Name of the Connector Port.",
+                      "valueType": "xs:string"
+                    },
+                    {
+                      "kind": "ConceptQualifier",
+                      "type": "PresetIdShort",
+                      "value": "portConnectorName",
+                      "valueType": "xs:string"
+                    },
+                    {
+                      "kind": "ConceptQualifier",
+                      "type": "Multiplicity",
+                      "value": "One",
+                      "valueType": "xs:string"
+                    }
+                  ],
+                  "idShort": "PortConnectorName"
+                },
+                {
+                  "modelType": "MultiLanguageProperty",
+                  "semanticId": {
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/idta/SimulationModel/portConDescription/1/0"
+                      }
+                    ],
+                    "type": "ExternalReference"
+                  },
+                  "qualifiers": [
+                    {
+                      "kind": "ConceptQualifier",
+                      "type": "FormTitle",
+                      "value": "portConDescription",
+                      "valueType": "xs:string"
+                    },
+                    {
+                      "kind": "ConceptQualifier",
+                      "type": "FormInfo",
+                      "value": "Description of the Connector Port.",
+                      "valueType": "xs:string"
+                    },
+                    {
+                      "kind": "ConceptQualifier",
+                      "type": "PresetIdShort",
+                      "value": "portConDescription",
+                      "valueType": "xs:string"
+                    },
+                    {
+                      "kind": "ConceptQualifier",
+                      "type": "Multiplicity",
+                      "value": "ZeroToOne",
+                      "valueType": "xs:string"
+                    }
+                  ],
+                  "idShort": "PortConDescription"
+                },
+                {
+                  "modelType": "SubmodelElementCollection",
+                  "semanticId": {
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/idta/SimulationModels/Variable/1/0"
+                      }
+                    ],
+                    "type": "ExternalReference"
+                  },
+                  "qualifiers": [
+                    {
+                      "kind": "ConceptQualifier",
+                      "type": "FormTitle",
+                      "value": "variable",
+                      "valueType": "xs:string"
+                    },
+                    {
+                      "kind": "ConceptQualifier",
+                      "type": "FormInfo",
+                      "value": "List of variables of the port.",
+                      "valueType": "xs:string"
+                    },
+                    {
+                      "kind": "ConceptQualifier",
+                      "type": "PresetIdShort",
+                      "value": "variable{0:00}",
+                      "valueType": "xs:string"
+                    },
+                    {
+                      "kind": "ConceptQualifier",
+                      "type": "Multiplicity",
+                      "value": "ZeroToMany",
+                      "valueType": "xs:string"
+                    }
+                  ],
+                  "idShort": "Variable",
+                  "value": [
+                    {
+                      "modelType": "Property",
+                      "semanticId": {
+                        "keys": [
+                          {
+                            "type": "GlobalReference",
+                            "value": "https://admin-shell.io/idta/SimulationModels/VariableName/1/0"
+                          }
+                        ],
+                        "type": "ExternalReference"
+                      },
+                      "valueType": "xs:string",
+                      "qualifiers": [
+                        {
+                          "kind": "ConceptQualifier",
+                          "type": "FormTitle",
+                          "value": "variableName",
+                          "valueType": "xs:string"
+                        },
+                        {
+                          "kind": "ConceptQualifier",
+                          "type": "FormInfo",
+                          "value": "Name of the variable.",
+                          "valueType": "xs:string"
+                        },
+                        {
+                          "kind": "ConceptQualifier",
+                          "type": "PresetIdShort",
+                          "value": "variableName",
+                          "valueType": "xs:string"
+                        },
+                        {
+                          "kind": "ConceptQualifier",
+                          "type": "Multiplicity",
+                          "value": "One",
+                          "valueType": "xs:string"
+                        }
+                      ],
+                      "idShort": "VariableName"
+                    },
+                    {
+                      "modelType": "Property",
+                      "semanticId": {
+                        "keys": [
+                          {
+                            "type": "GlobalReference",
+                            "value": "https://admin-shell.io/idta/SimulationModels/Range/1/0"
+                          }
+                        ],
+                        "type": "ExternalReference"
+                      },
+                      "valueType": "xs:string",
+                      "qualifiers": [
+                        {
+                          "kind": "ConceptQualifier",
+                          "type": "FormTitle",
+                          "value": "range",
+                          "valueType": "xs:string"
+                        },
+                        {
+                          "kind": "ConceptQualifier",
+                          "type": "FormInfo",
+                          "value": "Range of values for the variable (e.g. [min, max], [min, max[, ]min, max], ]min, max[, {val1, val2, ...}).",
+                          "valueType": "xs:string"
+                        },
+                        {
+                          "kind": "ConceptQualifier",
+                          "type": "PresetIdShort",
+                          "value": "range",
+                          "valueType": "xs:string"
+                        },
+                        {
+                          "kind": "ConceptQualifier",
+                          "type": "Multiplicity",
+                          "value": "ZeroToOne",
+                          "valueType": "xs:string"
+                        }
+                      ],
+                      "idShort": "Range"
+                    },
+                    {
+                      "modelType": "Property",
+                      "semanticId": {
+                        "keys": [
+                          {
+                            "type": "GlobalReference",
+                            "value": "https://admin-shell.io/idta/SimulationModels/VariableType/1/0"
+                          }
+                        ],
+                        "type": "ExternalReference"
+                      },
+                      "valueType": "xs:string",
+                      "qualifiers": [
+                        {
+                          "kind": "ConceptQualifier",
+                          "type": "FormTitle",
+                          "value": "variableType",
+                          "valueType": "xs:string"
+                        },
+                        {
+                          "kind": "ConceptQualifier",
+                          "type": "FormInfo",
+                          "value": "Type of the variable (e.g. Real, Integer, Boolean, String or Enum).",
+                          "valueType": "xs:string"
+                        },
+                        {
+                          "kind": "ConceptQualifier",
+                          "type": "PresetIdShort",
+                          "value": "variableType",
+                          "valueType": "xs:string"
+                        },
+                        {
+                          "kind": "ConceptQualifier",
+                          "type": "Multiplicity",
+                          "value": "One",
+                          "valueType": "xs:string"
+                        },
+                        {
+                          "kind": "ConceptQualifier",
+                          "type": "FormChoices",
+                          "value": "Real; Integer; Boolean; String; ENUM",
+                          "valueType": "xs:string"
+                        }
+                      ],
+                      "idShort": "VariableType"
+                    },
+                    {
+                      "modelType": "MultiLanguageProperty",
+                      "semanticId": {
+                        "keys": [
+                          {
+                            "type": "GlobalReference",
+                            "value": "https://admin-shell.io/idta/SimulationModels/VariableDescription/1/0"
+                          }
+                        ],
+                        "type": "ExternalReference"
+                      },
+                      "qualifiers": [
+                        {
+                          "kind": "ConceptQualifier",
+                          "type": "FormTitle",
+                          "value": "variableDescription",
+                          "valueType": "xs:string"
+                        },
+                        {
+                          "kind": "ConceptQualifier",
+                          "type": "FormInfo",
+                          "value": "Description of the variable.",
+                          "valueType": "xs:string"
+                        },
+                        {
+                          "kind": "ConceptQualifier",
+                          "type": "PresetIdShort",
+                          "value": "variableDescription",
+                          "valueType": "xs:string"
+                        },
+                        {
+                          "kind": "ConceptQualifier",
+                          "type": "Multiplicity",
+                          "value": "ZeroToOne",
+                          "valueType": "xs:string"
+                        }
+                      ],
+                      "idShort": "VariableDescription"
+                    },
+                    {
+                      "modelType": "Property",
+                      "semanticId": {
+                        "keys": [
+                          {
+                            "type": "GlobalReference",
+                            "value": "https://admin-shell.io/idta/SimulationModels/UnitList/1/0"
+                          }
+                        ],
+                        "type": "ExternalReference"
+                      },
+                      "valueType": "xs:string",
+                      "qualifiers": [
+                        {
+                          "kind": "ConceptQualifier",
+                          "type": "FormTitle",
+                          "value": "unitList",
+                          "valueType": "xs:string"
+                        },
+                        {
+                          "kind": "ConceptQualifier",
+                          "type": "FormInfo",
+                          "value": "The most common units can be selected here. .. If \"others\" is selected, a free text can be entered.",
+                          "valueType": "xs:string"
+                        },
+                        {
+                          "kind": "ConceptQualifier",
+                          "type": "PresetIdShort",
+                          "value": "unitList",
+                          "valueType": "xs:string"
+                        },
+                        {
+                          "kind": "ConceptQualifier",
+                          "type": "Multiplicity",
+                          "value": "One",
+                          "valueType": "xs:string"
+                        },
+                        {
+                          "kind": "ConceptQualifier",
+                          "type": "FormChoices",
+                          "value": "s; m; kg; N; m/s; m/s^2; V; A; K; none",
+                          "valueType": "xs:string"
+                        }
+                      ],
+                      "idShort": "UnitList"
+                    },
+                    {
+                      "modelType": "MultiLanguageProperty",
+                      "semanticId": {
+                        "keys": [
+                          {
+                            "type": "GlobalReference",
+                            "value": "https://admin-shell.io/idta/SimulationModels/UnitDescription/1/0"
+                          }
+                        ],
+                        "type": "ExternalReference"
+                      },
+                      "qualifiers": [
+                        {
+                          "kind": "ConceptQualifier",
+                          "type": "FormTitle",
+                          "value": "unitDescription",
+                          "valueType": "xs:string"
+                        },
+                        {
+                          "kind": "ConceptQualifier",
+                          "type": "FormInfo",
+                          "value": "Text field for missing units of the list.",
+                          "valueType": "xs:string"
+                        },
+                        {
+                          "kind": "ConceptQualifier",
+                          "type": "PresetIdShort",
+                          "value": "unitDescription",
+                          "valueType": "xs:string"
+                        },
+                        {
+                          "kind": "ConceptQualifier",
+                          "type": "Multiplicity",
+                          "value": "ZeroToOne",
+                          "valueType": "xs:string"
+                        }
+                      ],
+                      "idShort": "UnitDescription"
+                    },
+                    {
+                      "modelType": "Property",
+                      "semanticId": {
+                        "keys": [
+                          {
+                            "type": "GlobalReference",
+                            "value": "https://admin-shell.io/idta/SimulationModels/VariableCausality/1/0"
+                          }
+                        ],
+                        "type": "ExternalReference"
+                      },
+                      "valueType": "xs:string",
+                      "qualifiers": [
+                        {
+                          "kind": "ConceptQualifier",
+                          "type": "FormTitle",
+                          "value": "variableCausality",
+                          "valueType": "xs:string"
+                        },
+                        {
+                          "kind": "ConceptQualifier",
+                          "type": "FormInfo",
+                          "value": "The causality of the variable: input to inputs, output to ouputs, acausal connections (e.g. mechanical connection) do not have causality.",
+                          "valueType": "xs:string"
+                        },
+                        {
+                          "kind": "ConceptQualifier",
+                          "type": "PresetIdShort",
+                          "value": "variableCausality",
+                          "valueType": "xs:string"
+                        },
+                        {
+                          "kind": "ConceptQualifier",
+                          "type": "Multiplicity",
+                          "value": "One",
+                          "valueType": "xs:string"
+                        },
+                        {
+                          "kind": "ConceptQualifier",
+                          "type": "FormChoices",
+                          "value": "input; output; acausal",
+                          "valueType": "xs:string"
+                        }
+                      ],
+                      "idShort": "VariableCausality"
+                    },
+                    {
+                      "modelType": "Property",
+                      "semanticId": {
+                        "keys": [
+                          {
+                            "type": "GlobalReference",
+                            "value": "https://admin-shell.io/idta/SimulationModels/VariablePrefix/1/0"
+                          }
+                        ],
+                        "type": "ExternalReference"
+                      },
+                      "valueType": "xs:string",
+                      "qualifiers": [
+                        {
+                          "kind": "ConceptQualifier",
+                          "type": "FormTitle",
+                          "value": "variablePrefix",
+                          "valueType": "xs:string"
+                        },
+                        {
+                          "kind": "ConceptQualifier",
+                          "type": "FormInfo",
+                          "value": "Prefix for acausal variable. Potential variables are set equal when connecting (no prefix). Stream variables are connected according to Kirchhoff's law, i.e. the sum of the variables equals zero. The bi-directional flow of matter is described with \"stream\" (e.g. for enthalpy).",
+                          "valueType": "xs:string"
+                        },
+                        {
+                          "kind": "ConceptQualifier",
+                          "type": "PresetIdShort",
+                          "value": "variablePrefix",
+                          "valueType": "xs:string"
+                        },
+                        {
+                          "kind": "ConceptQualifier",
+                          "type": "Multiplicity",
+                          "value": "ZeroToOne",
+                          "valueType": "xs:string"
+                        },
+                        {
+                          "kind": "ConceptQualifier",
+                          "type": "FormChoices",
+                          "value": "Flow; Stream",
+                          "valueType": "xs:string"
+                        }
+                      ],
+                      "idShort": "VariablePrefix"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "modelType": "SubmodelElementCollection",
+              "semanticId": {
+                "keys": [
+                  {
+                    "type": "GlobalReference",
+                    "value": "https://admin-shell.io/idta/SimulationModels/BinaryConnector/1/0"
+                  }
+                ],
+                "type": "ExternalReference"
+              },
+              "qualifiers": [
+                {
+                  "kind": "ConceptQualifier",
+                  "type": "FormTitle",
+                  "value": "binaryConnector",
+                  "valueType": "xs:string"
+                },
+                {
+                  "kind": "ConceptQualifier",
+                  "type": "FormInfo",
+                  "value": "Binary interfaces (binaryType) based on the FMI 3.0 standard (https://fmi-standard.org/docs/3.0-dev/#definition-of-types). At this point the name (e.g. \"Binary interface visualization\") and the description (e.g. \"Interface for binary transfer of visualization information\") are specified.",
+                  "valueType": "xs:string"
+                },
+                {
+                  "kind": "ConceptQualifier",
+                  "type": "PresetIdShort",
+                  "value": "binaryConnector'{0:00}'",
+                  "valueType": "xs:string"
+                },
+                {
+                  "kind": "ConceptQualifier",
+                  "type": "Multiplicity",
+                  "value": "ZeroToMany",
+                  "valueType": "xs:string"
+                }
+              ],
+              "idShort": "BinaryConnector",
+              "value": [
+                {
+                  "modelType": "Property",
+                  "semanticId": {
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/idta/SimulationModels/BinaryConnectorName/1/0"
+                      }
+                    ],
+                    "type": "ExternalReference"
+                  },
+                  "valueType": "xs:string",
+                  "qualifiers": [
+                    {
+                      "kind": "ConceptQualifier",
+                      "type": "FormTitle",
+                      "value": "binaryConName",
+                      "valueType": "xs:string"
+                    },
+                    {
+                      "kind": "ConceptQualifier",
+                      "type": "FormInfo",
+                      "value": "Binary interface name.",
+                      "valueType": "xs:string"
+                    },
+                    {
+                      "kind": "ConceptQualifier",
+                      "type": "PresetIdShort",
+                      "value": "binConName",
+                      "valueType": "xs:string"
+                    },
+                    {
+                      "kind": "ConceptQualifier",
+                      "type": "Multiplicity",
+                      "value": "One",
+                      "valueType": "xs:string"
+                    }
+                  ],
+                  "idShort": "BinaryConName"
+                },
+                {
+                  "modelType": "MultiLanguageProperty",
+                  "semanticId": {
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "https://admin-shell.io/idta/SimulationModels/BinaryConDescription/1/0"
+                      }
+                    ],
+                    "type": "ExternalReference"
+                  },
+                  "qualifiers": [
+                    {
+                      "kind": "ConceptQualifier",
+                      "type": "FormTitle",
+                      "value": "binaryConDescription",
+                      "valueType": "xs:string"
+                    },
+                    {
+                      "kind": "ConceptQualifier",
+                      "type": "FormInfo",
+                      "value": "Binary interface description.",
+                      "valueType": "xs:string"
+                    },
+                    {
+                      "kind": "ConceptQualifier",
+                      "type": "PresetIdShort",
+                      "value": "binaryConDescription",
+                      "valueType": "xs:string"
+                    },
+                    {
+                      "kind": "ConceptQualifier",
+                      "type": "Multiplicity",
+                      "value": "ZeroToOne",
+                      "valueType": "xs:string"
+                    }
+                  ],
+                  "idShort": "BinaryConDescription"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

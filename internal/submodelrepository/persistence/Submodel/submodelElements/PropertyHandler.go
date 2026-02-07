@@ -69,77 +69,6 @@ func NewPostgreSQLPropertyHandler(db *sql.DB) (*PostgreSQLPropertyHandler, error
 	return &PostgreSQLPropertyHandler{db: db, decorated: decoratedHandler}, nil
 }
 
-// Create persists a new Property submodel element to the database within a transaction.
-// It first creates the base submodel element using the decorated handler, then inserts
-// Property-specific data including the value categorized by its value type (text, numeric,
-// boolean, time, or datetime).
-//
-// Parameters:
-//   - tx: The database transaction
-//   - submodelID: The ID of the parent submodel
-//   - submodelElement: The Property element to create (must be of type *gen.Property)
-//
-// Returns:
-//   - int: The database ID of the created element
-//   - error: An error if the element is not a Property type or if database operations fail
-func (p PostgreSQLPropertyHandler) Create(tx *sql.Tx, submodelID string, submodelElement types.ISubmodelElement) (int, error) {
-	property, ok := submodelElement.(*types.Property)
-	if !ok {
-		return 0, common.NewErrBadRequest("submodelElement is not of type Property")
-	}
-
-	// First, perform base SubmodelElement operations within the transaction
-	id, err := p.decorated.Create(tx, submodelID, submodelElement)
-	if err != nil {
-		return 0, err
-	}
-
-	// Property-specific database insertion
-	// Determine which column to use based on valueType
-	err = insertProperty(property, tx, id)
-	if err != nil {
-		return 0, err
-	}
-
-	return id, nil
-}
-
-// CreateNested persists a new nested Property submodel element to the database within a transaction.
-// This method is used when creating Property elements within collection-like structures (e.g., SubmodelElementCollection).
-// It creates the base nested element with the provided idShortPath and position, then inserts Property-specific data.
-//
-// Parameters:
-//   - tx: The database transaction
-//   - submodelID: The ID of the parent submodel
-//   - parentID: The database ID of the parent collection element
-//   - idShortPath: The path identifying the element's location within the hierarchy
-//   - submodelElement: The Property element to create (must be of type *gen.Property)
-//   - pos: The position of the element within the parent collection
-//
-// Returns:
-//   - int: The database ID of the created element
-//   - error: An error if the element is not a Property type or if database operations fail
-func (p PostgreSQLPropertyHandler) CreateNested(tx *sql.Tx, submodelID string, parentID int, idShortPath string, submodelElement types.ISubmodelElement, pos int, rootSubmodelElementID int) (int, error) {
-	property, ok := submodelElement.(*types.Property)
-	if !ok {
-		return 0, common.NewErrBadRequest("submodelElement is not of type Property")
-	}
-
-	// Create the nested property with the provided idShortPath using the decorated handler
-	id, err := p.decorated.CreateWithPath(tx, submodelID, parentID, idShortPath, submodelElement, pos, rootSubmodelElementID)
-	if err != nil {
-		return 0, err
-	}
-
-	// Property-specific database insertion for nested element
-	err = insertProperty(property, tx, id)
-	if err != nil {
-		return 0, err
-	}
-
-	return id, nil
-}
-
 // Update modifies an existing Property submodel element in the database.
 // This method handles both the common submodel element properties and the specific
 // property data including value type, value, and value ID reference.
@@ -259,6 +188,7 @@ func (p PostgreSQLPropertyHandler) UpdateValueOnly(submodelID string, idShortOrP
 			"value_num":      typedValue.Numeric,
 			"value_bool":     typedValue.Boolean,
 			"value_time":     typedValue.Time,
+			"value_date":     typedValue.Date,
 			"value_datetime": typedValue.DateTime,
 		}).
 		Where(goqu.C("id").Eq(elementID)).
@@ -288,58 +218,45 @@ func (p PostgreSQLPropertyHandler) Delete(idShortOrPath string) error {
 	return p.decorated.Delete(idShortOrPath)
 }
 
-// insertProperty is a helper function that inserts Property-specific data into the property_element table.
-// It categorizes the property value into appropriate columns based on the valueType:
-//   - Text types (xs:string, xs:anyURI, xs:base64Binary, xs:hexBinary) -> value_text
-//   - Numeric types (xs:int, xs:decimal, xs:double, xs:float, etc.) -> value_num
-//   - Boolean types (xs:boolean) -> value_bool
-//   - Time types (xs:time) -> value_time
-//   - Datetime types (xs:date, xs:dateTime, xs:duration, etc.) -> value_datetime
-//
-// The valueID field is reserved for potential future use to reference other elements,
-// but is currently not fully implemented.
+// GetInsertQueryPart returns the type-specific insert query part for batch insertion of Property elements.
 //
 // Parameters:
-//   - property: The Property element containing the data to insert
-//   - tx: The database transaction
-//   - id: The database ID of the parent submodel element
+//   - tx: Active database transaction (needed for creating value references)
+//   - id: The database ID of the base submodel_element record
+//   - element: The submodel element to insert (must be of type *types.Property)
 //
 // Returns:
-//   - error: An error if the database insert operation fails
-func insertProperty(property *types.Property, tx *sql.Tx, id int) error {
+//   - *InsertQueryPart: The table name and record for property_element table insert
+//   - error: An error if the element is not a Property or value reference creation fails
+func (p PostgreSQLPropertyHandler) GetInsertQueryPart(tx *sql.Tx, id int, element types.ISubmodelElement) (*InsertQueryPart, error) {
+	property, ok := element.(*types.Property)
+	if !ok {
+		return nil, common.NewErrBadRequest("element is not of type Property")
+	}
+
 	// Use centralized value type mapper
 	typedValue := persistenceutils.MapValueByType(property.ValueType(), property.Value())
 
 	// Handle valueID if present
 	valueIDDbID, err := persistenceutils.CreateReference(tx, property.ValueID(), sql.NullInt64{}, sql.NullInt64{})
 	if err != nil {
-		_, _ = fmt.Println("SMREPO-INSPROP-CRVALID " + err.Error())
-		return common.NewInternalServerError("Failed to create SemanticID - no changes applied - see console for details")
+		return nil, common.NewInternalServerError("Failed to create ValueID reference: " + err.Error())
 	}
 
-	// Insert Property-specific data
-	dialect := goqu.Dialect("postgres")
-	insertQuery, insertArgs, err := dialect.Insert("property_element").
-		Rows(goqu.Record{
+	return &InsertQueryPart{
+		TableName: "property_element",
+		Record: goqu.Record{
 			"id":             id,
 			"value_type":     property.ValueType(),
 			"value_text":     typedValue.Text,
 			"value_num":      typedValue.Numeric,
 			"value_bool":     typedValue.Boolean,
 			"value_time":     typedValue.Time,
+			"value_date":     typedValue.Date,
 			"value_datetime": typedValue.DateTime,
 			"value_id":       valueIDDbID,
-		}).
-		ToSQL()
-	if err != nil {
-		return err
-	}
-	_, err = tx.Exec(insertQuery, insertArgs...)
-	if err != nil {
-		return err
-	}
-
-	return nil
+		},
+	}, nil
 }
 
 func buildUpdatePropertyRecordObject(property *types.Property, isPut bool, localTx *sql.Tx) (goqu.Record, error) {

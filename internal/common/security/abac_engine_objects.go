@@ -78,7 +78,7 @@ type RouteWithFilter struct {
 	le    *grammar.LogicalExpression
 }
 
-func mapDescriptorValueToRoute(descriptorValue grammar.DescriptorValue) []RouteWithFilter {
+func mapDescriptorValueToRoute(descriptorValue grammar.DescriptorValue, basePath string) []RouteWithFilter {
 	var routes = []RouteWithFilter{}
 
 	for _, mapping := range descriptorRouteMappings {
@@ -89,12 +89,12 @@ func mapDescriptorValueToRoute(descriptorValue grammar.DescriptorValue) []RouteW
 		if descriptorValue.ID.IsAll {
 			if !mapping.hasWildcard {
 				routes = append(routes,
-					RouteWithFilter{route: mapping.route},
+					RouteWithFilter{route: joinBasePath(basePath, mapping.route)},
 				)
 				continue
 			}
 			routes = append(routes,
-				RouteWithFilter{route: fmt.Sprintf(mapping.route, "*")},
+				RouteWithFilter{route: joinBasePath(basePath, fmt.Sprintf(mapping.route, "*"))},
 			)
 			continue
 		}
@@ -114,11 +114,11 @@ func mapDescriptorValueToRoute(descriptorValue grammar.DescriptorValue) []RouteW
 
 		if !mapping.hasWildcard {
 			routes = append(routes,
-				RouteWithFilter{route: mapping.route, le: &extraFilter},
+				RouteWithFilter{route: joinBasePath(basePath, mapping.route), le: &extraFilter},
 			)
 		}
 		routes = append(routes,
-			RouteWithFilter{route: fmt.Sprintf(mapping.route, encodedID)},
+			RouteWithFilter{route: joinBasePath(basePath, fmt.Sprintf(mapping.route, encodedID))},
 		)
 	}
 	return routes
@@ -135,19 +135,19 @@ type AccessWithLE struct {
 
 // matchRouteObjectsObjItem returns true if any ROUTE object matches the request
 // path. Supports exact match, prefix match using "/*", and global wildcards.
-func matchRouteObjectsObjItem(objs []grammar.ObjectItem, reqPath string) AccessWithLE {
+func matchRouteObjectsObjItem(objs []grammar.ObjectItem, reqPath string, basePath string) AccessWithLE {
 	var locialExpressions []grammar.LogicalExpression
 	access := false
 	for _, oi := range objs {
 		switch oi.Kind {
 		case grammar.Route:
-			if matchRouteACL(oi.Route.Route, reqPath) {
+			if matchRouteACL(joinBasePath(basePath, oi.Route.Route), reqPath) {
 				return AccessWithLE{access: true}
 			}
 		case grammar.Descriptor:
 			desc := oi.Descriptor
 			if desc != nil {
-				for _, routeWithFilter := range mapDescriptorValueToRoute(*desc) {
+				for _, routeWithFilter := range mapDescriptorValueToRoute(*desc, basePath) {
 					if matchRouteANT(routeWithFilter.route, reqPath) {
 						if routeWithFilter.le == nil {
 							return AccessWithLE{access: true}

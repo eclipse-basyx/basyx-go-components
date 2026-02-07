@@ -73,6 +73,15 @@ var terminalColumnMappings = map[string]terminalColumnMapping{
 		},
 	},
 
+	"createdAt": {
+		ByContext: map[resolveContext]string{
+			ctxAASDesc:            "aas_descriptor.created_at",
+			ctxBD:                 "aas_identifier.created_at",
+			ctxSMDesc:             "submodel_descriptor.created_at",
+			ctxSubmodelDescriptor: "submodel_descriptor.created_at",
+		},
+	},
+
 	"assetKind": {
 		ByContext: map[resolveContext]string{
 			ctxAASDesc: "aas_descriptor.asset_kind",
@@ -184,7 +193,7 @@ var terminalColumnMappings = map[string]terminalColumnMapping{
 func ResolveAASQLFieldToSQLColumn(fieldStr string) (string, error) {
 	ctx := contextFromFieldPrefix(fieldStr)
 	if ctx == ctxUnknown {
-		return "", fmt.Errorf("unsupported field root (expected $aasdesc#, $smdesc#, $sm#, or $sme...#): %q", fieldStr)
+		return "", fmt.Errorf("unsupported field root (expected $aasdesc#, $smdesc#, $sm#, $sme...#, or $bd#): %q", fieldStr)
 	}
 
 	tokens := builder.TokenizeField(fieldStr)

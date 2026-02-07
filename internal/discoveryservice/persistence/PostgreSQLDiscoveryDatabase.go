@@ -34,72 +34,66 @@ package persistencepostgresql
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
-	"os"
-	"strings"
 	"time"
 
 	"github.com/FriedJannik/aas-go-sdk/types"
+	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/descriptors"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
+	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 )
 
 // PostgreSQLDiscoveryDatabase provides PostgreSQL-based persistence for the Discovery Service.
 //
-// It manages AAS identifiers and their associated asset links in a PostgreSQL database,
-// using connection pooling for efficient database access. The database schema is automatically
-// initialized on startup from the discoveryschema.sql file.
+// It manages AAS identifiers and their associated specific asset IDs in a PostgreSQL database,
+// using connection pooling for efficient database access. The database schema can be initialized
+// on startup via the provided schema path.
 type PostgreSQLDiscoveryDatabase struct {
-	pool *pgxpool.Pool
+	db *sql.DB
 }
 
 // NewPostgreSQLDiscoveryBackend creates and initializes a new PostgreSQL discovery database backend.
 //
 // This function establishes a connection pool to the PostgreSQL database using the provided DSN
-// (Data Source Name), configures connection pool settings, and initializes the database schema
-// by executing the discoveryschema.sql file from the resources/sql directory.
+// (Data Source Name), configures connection pool settings, and optionally initializes the database
+// schema using the provided schema file path.
 //
 // Parameters:
 //   - dsn: PostgreSQL connection string (e.g., "postgres://user:pass@localhost:5432/dbname")
-//   - maxConns: Maximum number of connections in the pool
+//   - maxOpenConns: Maximum number of open connections in the pool
+//   - maxIdleConns: Maximum number of idle connections in the pool
+//   - connMaxLifetimeMinutes: Maximum connection lifetime in minutes
+//   - databaseSchema: SQL schema file path for initialization (empty to skip)
 //
 // Returns:
 //   - *PostgreSQLDiscoveryDatabase: Initialized database instance
 //   - error: Configuration, connection, or schema initialization error
-//
-// The connection pool is configured with:
-//   - MaxConns: Set to the provided maxConns parameter
-//   - MaxConnLifetime: 5 minutes to ensure connection freshness
-//
-// The function reads and executes discoveryschema.sql from the current working directory's
-// resources/sql subdirectory to set up the required database tables.
-func NewPostgreSQLDiscoveryBackend(dsn string, maxConns int32) (*PostgreSQLDiscoveryDatabase, error) {
-	cfg, err := pgxpool.ParseConfig(dsn)
+func NewPostgreSQLDiscoveryBackend(
+	dsn string,
+	maxOpenConns int32,
+	maxIdleConns int,
+	connMaxLifetimeMinutes int,
+	databaseSchema string,
+) (*PostgreSQLDiscoveryDatabase, error) {
+	db, err := common.InitializeDatabase(dsn, databaseSchema)
 	if err != nil {
 		return nil, err
 	}
-
-	cfg.MaxConns = maxConns
-	cfg.MaxConnLifetime = 5 * time.Minute
-
-	pool, err := pgxpool.NewWithConfig(context.Background(), cfg)
-	if err != nil {
-		return nil, err
+	if maxOpenConns > 0 {
+		db.SetMaxOpenConns(int(maxOpenConns))
+	}
+	if maxIdleConns > 0 {
+		db.SetMaxIdleConns(maxIdleConns)
+	}
+	if connMaxLifetimeMinutes > 0 {
+		db.SetConnMaxLifetime(time.Duration(connMaxLifetimeMinutes) * time.Minute)
 	}
 
-	dir, _ := os.Getwd()
-	//nolint:gosec // it is not really a variable here
-	schema, err := os.ReadFile(dir + "/resources/sql/discoveryschema.sql")
-	if err != nil {
-		return nil, err
-	}
-	if _, err := pool.Exec(context.Background(), string(schema)); err != nil {
-		return nil, err
-	}
-
-	return &PostgreSQLDiscoveryDatabase{pool: pool}, nil
+	return &PostgreSQLDiscoveryDatabase{db: db}, nil
 }
 
 // GetAllAssetLinks retrieves all asset links associated with a specific AAS identifier.
@@ -117,52 +111,18 @@ func NewPostgreSQLDiscoveryBackend(dsn string, maxConns int32) (*PostgreSQLDisco
 // The method operates within a transaction to ensure consistency, though it performs
 // read-only operations. If the AAS identifier is not found in the database, an ErrNotFound
 // error is returned.
-func (p *PostgreSQLDiscoveryDatabase) GetAllAssetLinks(aasID string) ([]types.ISpecificAssetID, error) {
-	ctx := context.Background()
-	tx, err := p.pool.Begin(ctx)
+func (p *PostgreSQLDiscoveryDatabase) GetAllAssetLinks(ctx context.Context, aasID string) ([]types.ISpecificAssetID, error) {
+	links, err := descriptors.ReadSpecificAssetIDsByAASIdentifier(ctx, p.db, aasID)
 	if err != nil {
-		_, _ = fmt.Println(err)
-		return nil, common.NewInternalServerError("Failed to start postgres transaction. See console for information.")
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-
-	var referenceID int64
-	if err := tx.QueryRow(ctx, `SELECT id FROM aas_identifier WHERE aasID = $1`, aasID).Scan(&referenceID); err != nil {
-		if err == pgx.ErrNoRows {
-			return nil, common.NewErrNotFound("AAS identifier '" + aasID + "'")
-		}
-		_, _ = fmt.Println(err)
-		return nil, common.NewInternalServerError("Failed to fetch aas identifier. See console for information.")
-	}
-
-	rows, err := tx.Query(ctx, `SELECT name, value FROM asset_link WHERE aasRef = $1 ORDER BY id`, referenceID)
-	if err != nil {
-		_, _ = fmt.Println(err)
-		return nil, common.NewInternalServerError("Failed to query asset links. See console for information.")
-	}
-	defer rows.Close()
-
-	var result []types.ISpecificAssetID
-	for rows.Next() {
-		var name, value string
-		if err := rows.Scan(&name, &value); err != nil {
+		switch {
+		case common.IsErrNotFound(err):
+			return nil, err
+		default:
 			_, _ = fmt.Println(err)
-			return nil, common.NewInternalServerError("Failed to scan asset link. See console for information.")
+			return nil, common.NewInternalServerError("Failed to query specific asset IDs. See console for information.")
 		}
-		said := types.NewSpecificAssetID(name, value)
-		result = append(result, said)
 	}
-	if rows.Err() != nil {
-		_, _ = fmt.Println(rows.Err())
-		return nil, common.NewInternalServerError("Failed to iterate asset links. See console for information.")
-	}
-
-	if err := tx.Commit(ctx); err != nil {
-		_, _ = fmt.Println(err)
-		return nil, common.NewInternalServerError("Failed to commit postgres transaction. See console for information.")
-	}
-
-	return result, nil
+	return links, nil
 }
 
 // DeleteAllAssetLinks deletes an AAS identifier and all its associated asset links.
@@ -178,15 +138,21 @@ func (p *PostgreSQLDiscoveryDatabase) GetAllAssetLinks(aasID string) ([]types.IS
 //
 // The deletion is performed atomically. If the AAS identifier is not found (no rows affected),
 // an ErrNotFound error is returned.
-func (p *PostgreSQLDiscoveryDatabase) DeleteAllAssetLinks(aasID string) error {
-	ctx := context.Background()
-
-	tag, err := p.pool.Exec(ctx, `DELETE FROM aas_identifier WHERE aasID = $1`, aasID)
+func (p *PostgreSQLDiscoveryDatabase) DeleteAllAssetLinks(ctx context.Context, aasID string) error {
+	d := goqu.Dialect("postgres")
+	sqlStr, args, err := d.Delete("aas_identifier").
+		Where(goqu.C("aasid").Eq(aasID)).
+		ToSQL()
+	if err != nil {
+		_, _ = fmt.Println("DeleteAllAssetLinks: build error:", err)
+		return common.NewInternalServerError("Failed to delete AAS identifier. See console for information.")
+	}
+	result, err := p.db.ExecContext(ctx, sqlStr, args...)
 	if err != nil {
 		_, _ = fmt.Println(err)
 		return common.NewInternalServerError("Failed to delete AAS identifier. See console for information.")
 	}
-	if tag.RowsAffected() == 0 {
+	if rows, _ := result.RowsAffected(); rows == 0 {
 		return common.NewErrNotFound(fmt.Sprintf("AAS identifier %s not found. See console for information.", aasID))
 	}
 	return nil
@@ -211,47 +177,10 @@ func (p *PostgreSQLDiscoveryDatabase) DeleteAllAssetLinks(aasID string) error {
 //  3. Bulk insert the new asset links using PostgreSQL's COPY FROM feature for efficiency
 //
 // The use of COPY FROM makes this method highly efficient even for large numbers of asset links.
-func (p *PostgreSQLDiscoveryDatabase) CreateAllAssetLinks(aasID string, specificAssetIDs []types.ISpecificAssetID) error {
-	ctx := context.Background()
-	tx, err := p.pool.Begin(ctx)
-	if err != nil {
+func (p *PostgreSQLDiscoveryDatabase) CreateAllAssetLinks(ctx context.Context, aasID string, specificAssetIDs []types.ISpecificAssetID) error {
+	if err := descriptors.ReplaceSpecificAssetIDsByAASIdentifier(ctx, p.db, aasID, specificAssetIDs); err != nil {
 		_, _ = fmt.Println(err)
-		return common.NewInternalServerError("Failed to start postgres transaction. See console for information.")
-	}
-	defer func() {
-		_ = tx.Rollback(ctx)
-	}()
-
-	var referenceID int64
-	err = tx.QueryRow(ctx, "INSERT INTO aas_identifier (aasID) VALUES ($1) ON CONFLICT (aasID) DO UPDATE SET aasID = EXCLUDED.aasID RETURNING id", aasID).Scan(&referenceID)
-	if err != nil {
-		_, _ = fmt.Println(err)
-		return common.NewInternalServerError("Failed to insert aas identifier. See console for information.")
-	}
-
-	if _, err := tx.Exec(ctx, `DELETE FROM asset_link WHERE aasRef = $1`, referenceID); err != nil {
-		return common.NewInternalServerError("Failed to remove old asset links.")
-	}
-
-	rows := make([][]any, len(specificAssetIDs))
-	for i, v := range specificAssetIDs {
-		rows[i] = []any{v.Name(), v.Value(), referenceID}
-	}
-
-	_, err = tx.CopyFrom(
-		ctx,
-		pgx.Identifier{"asset_link"},
-		[]string{"name", "value", "aasref"},
-		pgx.CopyFromRows(rows),
-	)
-	if err != nil {
-		_, _ = fmt.Println(err)
-		return common.NewInternalServerError("Failed to insert asset link. See console for information.")
-	}
-
-	if err := tx.Commit(ctx); err != nil {
-		_, _ = fmt.Println(err)
-		return common.NewInternalServerError("Failed to commit postgres transaction. See console for information.")
+		return common.NewInternalServerError("Failed to store specific asset IDs. See console for information.")
 	}
 	return nil
 }
@@ -283,9 +212,7 @@ func (p *PostgreSQLDiscoveryDatabase) CreateAllAssetLinks(aasID string, specific
 // Search Logic:
 //   - Empty links: Returns all AAS IDs (paginated)
 //   - With links: Returns AAS IDs that have ALL specified asset links (exact name-value matches)
-//     Uses a GROUP BY with HAVING COUNT to ensure all links are present
-//
-// The query uses a Common Table Expression (CTE) to efficiently match asset links when provided.
+//     Uses EXISTS subqueries to enforce the AND semantics
 func (p *PostgreSQLDiscoveryDatabase) SearchAASIDsByAssetLinks(
 	ctx context.Context,
 	links []model.AssetLink,
@@ -293,59 +220,70 @@ func (p *PostgreSQLDiscoveryDatabase) SearchAASIDsByAssetLinks(
 	cursor string,
 ) ([]string, string, error) {
 	if limit <= 0 {
-		limit = 100
+		limit = 100000
 	}
 
 	peekLimit := int(limit) + 1
-
-	args := []any{}
-	argPos := 1
-	whereCursor := fmt.Sprintf("( $%d = '' OR ai.aasID >= $%d )", argPos, argPos)
-	args = append(args, cursor)
-	argPos++
-
-	var sqlStr string
-	if len(links) == 0 {
-		sqlStr = fmt.Sprintf(`
-			SELECT ai.aasId
-			FROM aas_identifier ai
-			WHERE %s
-			ORDER BY ai.aasID ASC
-			LIMIT $%d
-		`, whereCursor, argPos)
-		args = append(args, peekLimit)
-	} else {
-		var valuesSQL strings.Builder
-		for i, l := range links {
-			if i > 0 {
-				_, _ = valuesSQL.WriteString(", ")
-			}
-			_, _ = valuesSQL.WriteString(fmt.Sprintf("($%d, $%d)", argPos, argPos+1))
-			args = append(args, l.Name, l.Value)
-			argPos += 2
-		}
-
-		sqlStr = fmt.Sprintf(`
-			WITH v(name, value) AS (VALUES %s)
-			SELECT ai.aasId
-			FROM aas_identifier ai
-			JOIN asset_link al ON al.aasRef = ai.id
-			JOIN v ON v.name = al.name AND v.value = al.value
-			WHERE %s
-			GROUP BY ai.aasId
-			HAVING COUNT(DISTINCT (al.name, al.value)) = (SELECT COUNT(*) FROM v)
-			ORDER BY ai.aasID ASC
-			LIMIT $%d
-		`, valuesSQL.String(), whereCursor, argPos)
-		args = append(args, peekLimit)
+	if peekLimit < 0 {
+		return nil, "", common.NewErrBadRequest("Limit has to be higher than 0")
 	}
 
-	rows, err := p.pool.Query(ctx, sqlStr, args...)
+	d := goqu.Dialect("postgres")
+	ai := goqu.T("aas_identifier")
+	sai := goqu.T("specific_asset_id").As("sai")
+
+	ds := d.From(ai).
+		Select(ai.Col("aasid")).
+		Where(
+			goqu.Or(
+				goqu.V(cursor).Eq(""),
+				ai.Col("aasid").Gte(cursor),
+			),
+		)
+
+	for _, link := range links {
+		sub := d.From(sai).
+			Select(goqu.V(1)).
+			Where(sai.Col("aasref").Eq(ai.Col("id"))).
+			Where(sai.Col("name").Eq(link.Name)).
+			Where(sai.Col("value").Eq(link.Value))
+		ds = ds.Where(goqu.L("EXISTS ?", sub))
+	}
+
+	ds = ds.
+		Order(ai.Col("aasid").Asc()).
+		Limit(uint(peekLimit))
+
+	collector, err := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootBD)
+	if err != nil {
+		_, _ = fmt.Println("SearchAASIDsByAssetLinks: collector error:", err)
+		return nil, "", common.NewInternalServerError("Failed to build query filters. See server logs for details.")
+	}
+	ds, err = auth.AddFormulaQueryFromContext(ctx, ds, collector)
+	if err != nil {
+		_, _ = fmt.Println("SearchAASIDsByAssetLinks: filter error:", err)
+		return nil, "", common.NewInternalServerError("Failed to build query filters. See server logs for details.")
+	}
+
+	sqlStr, args, err := ds.ToSQL()
+	if common.DebugEnabled(ctx) {
+		_, _ = fmt.Println(sqlStr)
+	}
+	if err != nil {
+		_, _ = fmt.Println("SearchAASIDsByAssetLinks: sql build error:", err)
+		return nil, "", common.NewInternalServerError("Failed to query AAS IDs. See server logs for details.")
+	}
+
+	rows, err := p.db.QueryContext(ctx, sqlStr, args...)
 	if err != nil {
 		_, _ = fmt.Println("SearchAASIDsByAssetLinks: query error:", err)
 		return nil, "", common.NewInternalServerError("Failed to query AAS IDs. See server logs for details.")
 	}
-	defer rows.Close()
+	defer func() {
+		if closeErr := rows.Close(); closeErr != nil {
+			_, _ = fmt.Println("SearchAASIDsByAssetLinks: rows close error:", closeErr)
+		}
+	}()
 
 	buf := make([]string, 0, peekLimit)
 	for rows.Next() {

@@ -69,75 +69,6 @@ func NewPostgreSQLMultiLanguagePropertyHandler(db *sql.DB) (*PostgreSQLMultiLang
 	return &PostgreSQLMultiLanguagePropertyHandler{db: db, decorated: decoratedHandler}, nil
 }
 
-// Create persists a new MultiLanguageProperty submodel element to the database within a transaction.
-// It first creates the base submodel element using the decorated handler, then inserts
-// MultiLanguageProperty-specific data including all language-text pairs as separate value entries.
-//
-// Parameters:
-//   - tx: The database transaction
-//   - submodelID: The ID of the parent submodel
-//   - submodelElement: The MultiLanguageProperty element to create (must be of type *gen.MultiLanguageProperty)
-//
-// Returns:
-//   - int: The database ID of the created element
-//   - error: An error if the element is not a MultiLanguageProperty type or if database operations fail
-func (p PostgreSQLMultiLanguagePropertyHandler) Create(tx *sql.Tx, submodelID string, submodelElement types.ISubmodelElement) (int, error) {
-	mlp, ok := submodelElement.(*types.MultiLanguageProperty)
-	if !ok {
-		return 0, common.NewErrBadRequest("submodelElement is not of type MultiLanguageProperty")
-	}
-	// First, perform base SubmodelElement operations within the transaction
-	id, err := p.decorated.Create(tx, submodelID, submodelElement)
-	if err != nil {
-		return 0, err
-	}
-
-	// MultiLanguageProperty-specific database insertion
-	err = insertMultiLanguageProperty(mlp, tx, id)
-	if err != nil {
-		return 0, err
-	}
-
-	return id, nil
-}
-
-// CreateNested persists a new nested MultiLanguageProperty submodel element to the database within a transaction.
-// This method is used when creating MultiLanguageProperty elements within collection-like structures
-// (e.g., SubmodelElementCollection). It creates the base nested element with the provided idShortPath
-// and position, then inserts MultiLanguageProperty-specific data including all language values.
-//
-// Parameters:
-//   - tx: The database transaction
-//   - submodelID: The ID of the parent submodel
-//   - parentID: The database ID of the parent collection element
-//   - idShortPath: The path identifying the element's location within the hierarchy
-//   - submodelElement: The MultiLanguageProperty element to create (must be of type *gen.MultiLanguageProperty)
-//   - pos: The position of the element within the parent collection
-//
-// Returns:
-//   - int: The database ID of the created element
-//   - error: An error if the element is not a MultiLanguageProperty type or if database operations fail
-func (p PostgreSQLMultiLanguagePropertyHandler) CreateNested(tx *sql.Tx, submodelID string, parentID int, idShortPath string, submodelElement types.ISubmodelElement, pos int, rootSubmodelElementID int) (int, error) {
-	mlp, ok := submodelElement.(*types.MultiLanguageProperty)
-	if !ok {
-		return 0, common.NewErrBadRequest("submodelElement is not of type MultiLanguageProperty")
-	}
-
-	// Create the nested mlp with the provided idShortPath using the decorated handler
-	id, err := p.decorated.CreateWithPath(tx, submodelID, parentID, idShortPath, submodelElement, pos, rootSubmodelElementID)
-	if err != nil {
-		return 0, err
-	}
-
-	// MultiLanguageProperty-specific database insertion for nested element
-	err = insertMultiLanguageProperty(mlp, tx, id)
-	if err != nil {
-		return 0, err
-	}
-
-	return id, nil
-}
-
 // Update modifies an existing MultiLanguageProperty submodel element in the database.
 // This method handles both the common submodel element properties and the specific
 // multi-language property data including language-text pairs and valueId reference.
@@ -330,49 +261,35 @@ func (p PostgreSQLMultiLanguagePropertyHandler) Delete(idShortOrPath string) err
 	return p.decorated.Delete(idShortOrPath)
 }
 
-// insertMultiLanguageProperty is a helper function that inserts MultiLanguageProperty-specific data
-// into the multilanguage_property and multilanguage_property_value tables. It creates the parent
-// multilanguage_property record, then inserts each language-text pair as a separate value record.
+// GetInsertQueryPart returns the type-specific insert query part for batch insertion of MultiLanguageProperty elements.
+// It returns the table name and record for inserting into the multilanguage_property table.
+// Note: The language values in multilanguage_property_value are inserted separately by BatchInsert
+// after the main table insert, because they require the multilanguage_property record to exist first.
 //
 // Parameters:
-//   - mlp: The MultiLanguageProperty element containing the data to insert
-//   - tx: The database transaction
-//   - id: The database ID of the parent submodel element
+//   - tx: Active database transaction (needed for creating value references)
+//   - id: The database ID of the base submodel_element record
+//   - element: The MultiLanguageProperty element to insert
 //
 // Returns:
-//   - error: An error if the database insert operation fails
-func insertMultiLanguageProperty(mlp *types.MultiLanguageProperty, tx *sql.Tx, id int) error {
-	// Insert into multilanguage_property
-	dialect := goqu.Dialect("postgres")
-	insertQuery, insertArgs, err := dialect.Insert("multilanguage_property").
-		Rows(goqu.Record{"id": id}).
-		ToSQL()
+//   - *InsertQueryPart: The table name and record for multilanguage_property insert
+//   - error: An error if the element is not of type MultiLanguageProperty
+func (p PostgreSQLMultiLanguagePropertyHandler) GetInsertQueryPart(tx *sql.Tx, id int, element types.ISubmodelElement) (*InsertQueryPart, error) {
+	mlp, ok := element.(*types.MultiLanguageProperty)
+	if !ok {
+		return nil, common.NewErrBadRequest("submodelElement is not of type MultiLanguageProperty")
+	}
+
+	valueIDDbID, err := persistenceutils.CreateReference(tx, mlp.ValueID(), sql.NullInt64{}, sql.NullInt64{})
 	if err != nil {
-		return err
+		return nil, common.NewInternalServerError("Failed to create ValueID reference: " + err.Error())
 	}
 
-	_, err = tx.Exec(insertQuery, insertArgs...)
-	if err != nil {
-		return err
-	}
-
-	// Insert values
-	for _, val := range mlp.Value() {
-		insertQuery, insertArgs, err := dialect.Insert("multilanguage_property_value").
-			Rows(goqu.Record{
-				"mlp_id":   id,
-				"language": val.Language(),
-				"text":     val.Text(),
-			}).
-			ToSQL()
-		if err != nil {
-			return err
-		}
-
-		_, err = tx.Exec(insertQuery, insertArgs...)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
+	return &InsertQueryPart{
+		TableName: "multilanguage_property",
+		Record: goqu.Record{
+			"id":       id,
+			"value_id": valueIDDbID,
+		},
+	}, nil
 }

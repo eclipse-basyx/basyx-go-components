@@ -28,7 +28,9 @@ package submodelelements
 
 import (
 	"database/sql"
+	"encoding/json"
 
+	"github.com/FriedJannik/aas-go-sdk/jsonization"
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
@@ -61,76 +63,6 @@ func NewPostgreSQLSubmodelElementListHandler(db *sql.DB) (*PostgreSQLSubmodelEle
 		return nil, err
 	}
 	return &PostgreSQLSubmodelElementListHandler{db: db, decorated: decoratedHandler}, nil
-}
-
-// Create persists a new SubmodelElementList submodel element to the database.
-// It first creates the base SubmodelElement data using the decorated handler,
-// then adds SubmodelElementList-specific data including order relevance, semantic ID,
-// type value, and value type for list elements.
-//
-// Parameters:
-//   - tx: Database transaction to use for the operation
-//   - submodelID: ID of the parent submodel
-//   - submodelElement: The SubmodelElementList to create (must be of type *gen.SubmodelElementList)
-//
-// Returns:
-//   - int: The database ID of the created list element
-//   - error: Error if the element is not a SubmodelElementList or if database operations fail
-func (p PostgreSQLSubmodelElementListHandler) Create(tx *sql.Tx, submodelID string, submodelElement types.ISubmodelElement) (int, error) {
-	smeList, ok := submodelElement.(*types.SubmodelElementList)
-	if !ok {
-		return 0, common.NewErrBadRequest("submodelElement is not of type SubmodelElementList")
-	}
-
-	// First, perform base SubmodelElement operations within the transaction
-	id, err := p.decorated.Create(tx, submodelID, submodelElement)
-	if err != nil {
-		return 0, err
-	}
-
-	// SubmodelElementList-specific database insertion
-	err = insertSubmodelElementList(smeList, tx, id)
-	if err != nil {
-		return 0, err
-	}
-
-	return id, nil
-}
-
-// CreateNested persists a new nested SubmodelElementList submodel element to the database.
-// It creates the SubmodelElementList as a child element of another SubmodelElement with
-// a specific position and idShortPath for hierarchical organization.
-//
-// Parameters:
-//   - tx: Database transaction to use for the operation
-//   - submodelID: ID of the parent submodel
-//   - parentID: Database ID of the parent SubmodelElement
-//   - idShortPath: Path identifier for the nested element
-//   - submodelElement: The SubmodelElementList to create (must be of type *gen.SubmodelElementList)
-//   - pos: Position of the element within its parent
-//
-// Returns:
-//   - int: The database ID of the created nested list element
-//   - error: Error if the element is not a SubmodelElementList or if database operations fail
-func (p PostgreSQLSubmodelElementListHandler) CreateNested(tx *sql.Tx, submodelID string, parentID int, idShortPath string, submodelElement types.ISubmodelElement, pos int, rootSubmodelElementID int) (int, error) {
-	smeList, ok := submodelElement.(*types.SubmodelElementList)
-	if !ok {
-		return 0, common.NewErrBadRequest("submodelElement is not of type SubmodelElementList")
-	}
-
-	// First, perform base SubmodelElement operations within the transaction
-	id, err := p.decorated.CreateWithPath(tx, submodelID, parentID, idShortPath, submodelElement, pos, rootSubmodelElementID)
-	if err != nil {
-		return 0, err
-	}
-
-	// SubmodelElementList-specific database insertion
-	err = insertSubmodelElementList(smeList, tx, id)
-	if err != nil {
-		return 0, err
-	}
-
-	return id, nil
 }
 
 // Update modifies an existing SubmodelElementList element identified by its idShort or path.
@@ -178,7 +110,7 @@ func (p PostgreSQLSubmodelElementListHandler) Update(submodelID string, idShortO
 	}
 
 	// Build update record for SubmodelElementList-specific fields
-	updateRecord, err := buildUpdateListRecordObject(smeList, isPut, localTx)
+	updateRecord, err := buildUpdateListRecordObject(smeList, isPut)
 	if err != nil {
 		return err
 	}
@@ -237,14 +169,38 @@ func (p PostgreSQLSubmodelElementListHandler) Delete(idShortOrPath string) error
 	return p.decorated.Delete(idShortOrPath)
 }
 
-func insertSubmodelElementList(smeList *types.SubmodelElementList, tx *sql.Tx, id int) error {
-	var semanticID sql.NullInt64
+// GetInsertQueryPart returns the type-specific insert query part for batch insertion of SubmodelElementList elements.
+// It returns the table name and record for inserting into the submodel_element_list table.
+// Note: This method does not handle semantic_id_list_element which requires reference insertion.
+//
+// Parameters:
+//   - tx: Active database transaction (needed for reference insertion)
+//   - id: The database ID of the base submodel_element record
+//   - element: The SubmodelElementList element to insert
+//
+// Returns:
+//   - *InsertQueryPart: The table name and record for submodel_element_list insert
+//   - error: An error if the element is not of type SubmodelElementList
+func (p PostgreSQLSubmodelElementListHandler) GetInsertQueryPart(_ *sql.Tx, id int, element types.ISubmodelElement) (*InsertQueryPart, error) {
+	smeList, ok := element.(*types.SubmodelElementList)
+	if !ok {
+		return nil, common.NewErrBadRequest("submodelElement is not of type SubmodelElementList")
+	}
+
+	var semanticID sql.NullString
 	if smeList.SemanticIDListElement() != nil && !isEmptyReference(smeList.SemanticIDListElement()) {
-		refID, err := insertReference(tx, smeList.SemanticIDListElement())
+		var jsonable map[string]any
+		jsonable, err := jsonization.ToJsonable(smeList.SemanticIDListElement())
 		if err != nil {
-			return err
+			return nil, err
 		}
-		semanticID = sql.NullInt64{Int64: int64(refID), Valid: true}
+		semanticIDListElementJSONString, err := json.Marshal(jsonable)
+		if err != nil {
+			return nil, err
+		}
+		semanticID = sql.NullString{String: string(semanticIDListElementJSONString), Valid: true}
+	} else {
+		semanticID = sql.NullString{Valid: true, String: "{}"}
 	}
 
 	var typeValue, valueType sql.NullInt64
@@ -253,41 +209,40 @@ func insertSubmodelElementList(smeList *types.SubmodelElementList, tx *sql.Tx, i
 		valueType = sql.NullInt64{Int64: int64(*smeList.ValueTypeListElement()), Valid: true}
 	}
 
-	dialect := goqu.Dialect("postgres")
-	insertQuery, insertArgs, err := dialect.Insert("submodel_element_list").
-		Rows(goqu.Record{
+	return &InsertQueryPart{
+		TableName: "submodel_element_list",
+		Record: goqu.Record{
 			"id":                       id,
 			"order_relevant":           smeList.OrderRelevant(),
 			"semantic_id_list_element": semanticID,
 			"type_value_list_element":  typeValue,
 			"value_type_list_element":  valueType,
-		}).
-		ToSQL()
-	if err != nil {
-		return err
-	}
-	_, err = tx.Exec(insertQuery, insertArgs...)
-	return err
+		},
+	}, nil
 }
 
-func buildUpdateListRecordObject(smeList types.ISubmodelElementList, isPut bool, tx *sql.Tx) (goqu.Record, error) {
+func buildUpdateListRecordObject(smeList types.ISubmodelElementList, isPut bool) (goqu.Record, error) {
 	updateRecord := goqu.Record{}
 
 	// OrderRelevant is always updated
 	updateRecord["order_relevant"] = smeList.OrderRelevant()
 
 	if isPut {
-		// PUT: Always update all fields
-		var semanticID sql.NullInt64
 		if smeList.SemanticIDListElement() != nil && !isEmptyReference(smeList.SemanticIDListElement()) {
-			refID, err := insertReference(tx, smeList.SemanticIDListElement())
+			var jsonable map[string]any
+			jsonable, err := jsonization.ToJsonable(smeList.SemanticIDListElement())
 			if err != nil {
 				return nil, err
 			}
-			semanticID = sql.NullInt64{Int64: int64(refID), Valid: true}
+			semanticIDListElementJSONString, err := json.Marshal(jsonable)
+			if err != nil {
+				return nil, err
+			}
+			semanticID := sql.NullString{String: string(semanticIDListElementJSONString), Valid: true}
+			updateRecord["semantic_id_list_element"] = semanticID
+		} else {
+			updateRecord["semantic_id_list_element"] = sql.NullString{Valid: true, String: "{}"}
 		}
-		updateRecord["semantic_id_list_element"] = semanticID
-
 		typeValue := sql.NullInt64{Int64: int64(smeList.TypeValueListElement()), Valid: true}
 		updateRecord["type_value_list_element"] = typeValue
 
@@ -300,11 +255,16 @@ func buildUpdateListRecordObject(smeList types.ISubmodelElementList, isPut bool,
 		// PATCH: Only update provided fields
 		if smeList.SemanticIDListElement() != nil {
 			if !isEmptyReference(smeList.SemanticIDListElement()) {
-				refID, err := insertReference(tx, smeList.SemanticIDListElement())
+				var jsonable map[string]any
+				jsonable, err := jsonization.ToJsonable(smeList.SemanticIDListElement())
 				if err != nil {
 					return nil, err
 				}
-				updateRecord["semantic_id_list_element"] = sql.NullInt64{Int64: int64(refID), Valid: true}
+				semanticIDListElementJSONString, err := json.Marshal(jsonable)
+				if err != nil {
+					return nil, err
+				}
+				updateRecord["semantic_id_list_element"] = sql.NullString{String: string(semanticIDListElementJSONString), Valid: true}
 			}
 		}
 

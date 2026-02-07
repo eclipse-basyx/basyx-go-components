@@ -1,0 +1,46 @@
+services:
+  db:
+    image: postgres:18
+    container_name: digitaltwinregistry_db
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin123
+      POSTGRES_DB: basyxTestDB
+    ports:
+      - "5432:5432"
+    command: ["postgres", "-c", "listen_addresses=*"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d basyxTestDB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  digitaltwinregistry:
+    container_name: digitaltwinregistry
+    build:
+      context: ../../../..
+      dockerfile: ./cmd/digitaltwinregistryservice/Dockerfile
+    environment:
+      - SERVER_PORT=5004
+      - POSTGRES_HOST=db
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=admin123
+      - POSTGRES_DBNAME=basyxTestDB
+      - POSTGRES_MAXOPENCONNECTIONS=500
+      - POSTGRES_MAXIDLECONNECTIONS=500
+      - POSTGRES_CONNMAXLIFETIMEMINUTES=5
+      - ABAC_ENABLED=true
+      - GENERAL_ENABLEIMPLICITCASTS=false
+      - GENERAL_ENABLEDESCRIPTORDEBUG=false
+      - ABAC_MODELPATH=/security_env/access-rules.json
+      - OIDC_TRUSTLISTPATH=/security_env/trustlist.json
+    ports:
+      - "5004:5004"
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./security_env:/security_env:ro
+    extra_hosts:
+      - "localhost:host-gateway"

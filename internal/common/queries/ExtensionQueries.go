@@ -208,6 +208,7 @@ func GetExtensionSubquery(dialect goqu.DialectWrapper, joinTable exp.IdentifierE
 			goqu.L("?::text", goqu.I("e.value_num")),
 			goqu.L("?::text", goqu.I("e.value_bool")),
 			goqu.L("?::text", goqu.I("e.value_time")),
+			goqu.L("?::text", goqu.I("e.value_date")),
 			goqu.L("?::text", goqu.I("e.value_datetime")),
 		),
 		goqu.V("semanticIdReferenceRows"), extensionSemanticIDSubquery,

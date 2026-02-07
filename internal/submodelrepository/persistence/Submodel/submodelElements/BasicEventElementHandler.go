@@ -69,75 +69,6 @@ func NewPostgreSQLBasicEventElementHandler(db *sql.DB) (*PostgreSQLBasicEventEle
 	return &PostgreSQLBasicEventElementHandler{db: db, decorated: decoratedHandler}, nil
 }
 
-// Create inserts a new BasicEventElement into the database as a top-level submodel element.
-// This method handles both the common submodel element properties and the specific event
-// properties such as observed references, message brokers, and timing intervals.
-//
-// Parameters:
-//   - tx: Active database transaction
-//   - submodelID: ID of the parent submodel
-//   - submodelElement: The BasicEventElement to create
-//
-// Returns:
-//   - int: Database ID of the created element
-//   - error: Error if creation fails or element is not of correct type
-func (p PostgreSQLBasicEventElementHandler) Create(tx *sql.Tx, submodelID string, submodelElement types.ISubmodelElement) (int, error) {
-	basicEvent, ok := submodelElement.(*types.BasicEventElement)
-	if !ok {
-		return 0, common.NewErrBadRequest("submodelElement is not of type BasicEventElement")
-	}
-
-	// First, perform base SubmodelElement operations within the transaction
-	id, err := p.decorated.Create(tx, submodelID, submodelElement)
-	if err != nil {
-		return 0, err
-	}
-
-	// BasicEventElement-specific database insertion
-	err = insertBasicEventElement(basicEvent, tx, id)
-	if err != nil {
-		return 0, err
-	}
-
-	return id, nil
-}
-
-// CreateNested inserts a new BasicEventElement as a nested element within a collection or list.
-// This method creates the element at a specific hierarchical path and position within its parent container.
-// It handles both the parent-child relationship and the specific basic event element data.
-//
-// Parameters:
-//   - tx: Active database transaction
-//   - submodelID: ID of the parent submodel
-//   - parentID: Database ID of the parent element
-//   - idShortPath: Hierarchical path where the element should be created
-//   - submodelElement: The BasicEventElement to create
-//   - pos: Position within the parent container
-//
-// Returns:
-//   - int: Database ID of the created nested element
-//   - error: Error if creation fails or element is not of correct type
-func (p PostgreSQLBasicEventElementHandler) CreateNested(tx *sql.Tx, submodelID string, parentID int, idShortPath string, submodelElement types.ISubmodelElement, pos int, rootSubmodelElementID int) (int, error) {
-	basicEvent, ok := submodelElement.(*types.BasicEventElement)
-	if !ok {
-		return 0, common.NewErrBadRequest("submodelElement is not of type BasicEventElement")
-	}
-
-	// Create the nested basic event element with the provided idShortPath using the decorated handler
-	id, err := p.decorated.CreateWithPath(tx, submodelID, parentID, idShortPath, submodelElement, pos, rootSubmodelElementID)
-	if err != nil {
-		return 0, err
-	}
-
-	// BasicEventElement-specific database insertion for nested element
-	err = insertBasicEventElement(basicEvent, tx, id)
-	if err != nil {
-		return 0, err
-	}
-
-	return id, nil
-}
-
 // Update modifies an existing BasicEventElement identified by its idShort or path.
 // This method handles both the common submodel element properties and the specific event
 // properties such as observed references, message brokers, and timing intervals.
@@ -370,16 +301,32 @@ func (p PostgreSQLBasicEventElementHandler) Delete(idShortOrPath string) error {
 	return p.decorated.Delete(idShortOrPath)
 }
 
-func insertBasicEventElement(basicEvent *types.BasicEventElement, tx *sql.Tx, id int) error {
+// GetInsertQueryPart returns the type-specific insert query part for batch insertion of BasicEventElement elements.
+// It returns the table name and record for inserting into the basic_event_element table.
+//
+// Parameters:
+//   - tx: Active database transaction (not used for BasicEventElement)
+//   - id: The database ID of the base submodel_element record
+//   - element: The BasicEventElement element to insert
+//
+// Returns:
+//   - *InsertQueryPart: The table name and record for basic_event_element insert
+//   - error: An error if the element is not of type BasicEventElement
+func (p PostgreSQLBasicEventElementHandler) GetInsertQueryPart(_ *sql.Tx, id int, element types.ISubmodelElement) (*InsertQueryPart, error) {
+	basicEvent, ok := element.(*types.BasicEventElement)
+	if !ok {
+		return nil, common.NewErrBadRequest("submodelElement is not of type BasicEventElement")
+	}
+
 	var observedRefJson sql.NullString
 	if !isEmptyReference(basicEvent.Observed()) {
 		jsonable, err := jsonization.ToJsonable(basicEvent.Observed())
 		if err != nil {
-			return common.NewErrBadRequest("SMREPO-IBEE-OBSJSONABLE")
+			return nil, common.NewErrBadRequest("SMREPO-GIQP-BEE-OBSJSONABLE")
 		}
 		observedBytes, err := json.Marshal(jsonable)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		observedRefJson = sql.NullString{String: string(observedBytes), Valid: true}
 	}
@@ -388,11 +335,11 @@ func insertBasicEventElement(basicEvent *types.BasicEventElement, tx *sql.Tx, id
 	if !isEmptyReference(basicEvent.MessageBroker()) {
 		jsonable, err := jsonization.ToJsonable(basicEvent.MessageBroker())
 		if err != nil {
-			return common.NewErrBadRequest("SMREPO-IBEE-MBJSONABLE")
+			return nil, common.NewErrBadRequest("SMREPO-GIQP-BEE-MBJSONABLE")
 		}
 		messageBrokerBytes, err := json.Marshal(jsonable)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		messageBrokerRefJson = sql.NullString{String: string(messageBrokerBytes), Valid: true}
 	}
@@ -418,9 +365,9 @@ func insertBasicEventElement(basicEvent *types.BasicEventElement, tx *sql.Tx, id
 		messageTopic = sql.NullString{String: *basicEvent.MessageTopic(), Valid: true}
 	}
 
-	dialect := goqu.Dialect("postgres")
-	insertQuery, insertArgs, err := dialect.Insert("basic_event_element").
-		Rows(goqu.Record{
+	return &InsertQueryPart{
+		TableName: "basic_event_element",
+		Record: goqu.Record{
 			"id":             id,
 			"observed":       observedRefJson,
 			"direction":      basicEvent.Direction(),
@@ -430,12 +377,6 @@ func insertBasicEventElement(basicEvent *types.BasicEventElement, tx *sql.Tx, id
 			"last_update":    lastUpdate,
 			"min_interval":   minInterval,
 			"max_interval":   maxInterval,
-		}).
-		ToSQL()
-	if err != nil {
-		return err
-	}
-
-	_, err = tx.Exec(insertQuery, insertArgs...)
-	return err
+		},
+	}, nil
 }

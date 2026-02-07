@@ -83,11 +83,12 @@ func BuildSubmodelElement(smeRow model.SubmodelElementRow, db *sql.DB) (types.IS
 	var refMutex sync.RWMutex
 	specificSME, err := getSubmodelElementObjectBasedOnModelType(smeRow, refBuilderMap, &refMutex)
 	if err != nil {
-		_, _ = fmt.Printf("[DEBUG] BuildSubmodelElement: Error building SME type, idShort=%s, modelType=%d, error: %v\n", smeRow.IDShort, smeRow.ModelType, err)
+		_, _ = fmt.Printf("[DEBUG] BuildSubmodelElement: Error building SME type, idShort=%s, modelType=%d, error: %v\n", smeRow.IDShort.String, smeRow.ModelType, err)
 		return nil, nil, err
 	}
-
-	specificSME.SetIDShort(&smeRow.IDShort)
+	if smeRow.IDShort.Valid && smeRow.IDShort.String != "" {
+		specificSME.SetIDShort(&smeRow.IDShort.String)
+	}
 	if smeRow.Category.Valid {
 		specificSME.SetCategory(&smeRow.Category.String)
 	}
@@ -150,8 +151,8 @@ func BuildSubmodelElement(smeRow model.SubmodelElementRow, db *sql.DB) (types.IS
 				if err != nil {
 					// Log the problematic JSON for debugging
 					jsonBytes, _ := json.Marshal(jsonable)
-					_, _ = fmt.Printf("[DEBUG] SME EmbeddedDataSpec: idShort=%s, index=%d, JSON: %s, Error: %v\n", smeRow.IDShort, i, string(jsonBytes), err)
-					return fmt.Errorf("error converting jsonable to EmbeddedDataSpecification (idShort=%s, index=%d, data: %s): %w", smeRow.IDShort, i, string(jsonBytes), err)
+					_, _ = fmt.Printf("[DEBUG] SME EmbeddedDataSpec: idShort=%s, index=%d, JSON: %s, Error: %v\n", smeRow.IDShort.String, i, string(jsonBytes), err)
+					return fmt.Errorf("error converting jsonable to EmbeddedDataSpecification (idShort=%s, index=%d, data: %s): %w", smeRow.IDShort.String, i, string(jsonBytes), err)
 				}
 				specs = append(specs, eds)
 			}
@@ -180,8 +181,8 @@ func BuildSubmodelElement(smeRow model.SubmodelElementRow, db *sql.DB) (types.IS
 				if err != nil {
 					// Log the problematic JSON for debugging
 					jsonBytes, _ := json.Marshal(jsonable)
-					_, _ = fmt.Printf("[DEBUG] SME SupplementalSemanticIDs: idShort=%s, index=%d, JSON: %s, Error: %v\n", smeRow.IDShort, i, string(jsonBytes), err)
-					return fmt.Errorf("error converting jsonable to Reference (idShort=%s, index=%d, data: %s): %w", smeRow.IDShort, i, string(jsonBytes), err)
+					_, _ = fmt.Printf("[DEBUG] SME SupplementalSemanticIDs: idShort=%s, index=%d, JSON: %s, Error: %v\n", smeRow.IDShort.String, i, string(jsonBytes), err)
+					return fmt.Errorf("error converting jsonable to Reference (idShort=%s, index=%d, data: %s): %w", smeRow.IDShort.String, i, string(jsonBytes), err)
 				}
 				supplementalSemanticIDs = append(supplementalSemanticIDs, *ref.(*types.Reference))
 			}
@@ -208,8 +209,8 @@ func BuildSubmodelElement(smeRow model.SubmodelElementRow, db *sql.DB) (types.IS
 				if err != nil {
 					// Log the problematic JSON for debugging
 					jsonBytes, _ := json.Marshal(jsonable)
-					_, _ = fmt.Printf("[DEBUG] SME Extensions: idShort=%s, index=%d, JSON: %s, Error: %v\n", smeRow.IDShort, i, string(jsonBytes), err)
-					return fmt.Errorf("error converting jsonable to Extension (idShort=%s, index=%d, data: %s): %w", smeRow.IDShort, i, string(jsonBytes), err)
+					_, _ = fmt.Printf("[DEBUG] SME Extensions: idShort=%s, index=%d, JSON: %s, Error: %v\n", smeRow.IDShort.String, i, string(jsonBytes), err)
+					return fmt.Errorf("error converting jsonable to Extension (idShort=%s, index=%d, data: %s): %w", smeRow.IDShort.String, i, string(jsonBytes), err)
 				}
 				extensions = append(extensions, ext)
 			}
@@ -232,7 +233,7 @@ func BuildSubmodelElement(smeRow model.SubmodelElementRow, db *sql.DB) (types.IS
 				return err
 			}
 			for _, qualifierRow := range qualifierRows {
-				_, err = builder.AddQualifier(qualifierRow.DbID, qualifierRow.Type, qualifierRow.ValueType, qualifierRow.Value, qualifierRow.Position, db)
+				_, err = builder.AddQualifier(qualifierRow.DbID, qualifierRow.Type, qualifierRow.ValueType, qualifierRow.Value, qualifierRow.Position, qualifierRow.Kind)
 				if err != nil {
 					return err
 				}
@@ -330,7 +331,7 @@ func getSubmodelElementObjectBasedOnModelType(smeRow model.SubmodelElementRow, r
 	case int64(types.ModelTypeAnnotatedRelationshipElement):
 		return buildAnnotatedRelationshipElement(smeRow)
 	case int64(types.ModelTypeMultiLanguageProperty):
-		mlProp, err := buildMultiLanguageProperty(smeRow)
+		mlProp, err := buildMultiLanguageProperty(smeRow, refBuilderMap, refMutex)
 		if err != nil {
 			return nil, err
 		}
@@ -662,7 +663,7 @@ func buildAnnotatedRelationshipElement(smeRow model.SubmodelElementRow) (types.I
 }
 
 // buildMultiLanguageProperty creates a new MultiLanguageProperty SubmodelElement.
-func buildMultiLanguageProperty(smeRow model.SubmodelElementRow) (types.ISubmodelElement, error) {
+func buildMultiLanguageProperty(smeRow model.SubmodelElementRow, refBuilderMap map[int64]*ReferenceBuilder, refMutex *sync.RWMutex) (types.ISubmodelElement, error) {
 	mlp := types.NewMultiLanguageProperty()
 
 	if smeRow.Value == nil {
@@ -696,19 +697,13 @@ func buildMultiLanguageProperty(smeRow model.SubmodelElementRow) (types.ISubmode
 		mlp.SetValue(textTypes)
 	}
 
-	// Handle ValueID reference if present
-	if valueRow.ValueID != nil {
-		var valueIDJsonable map[string]any
-		err = json.Unmarshal(*valueRow.ValueID, &valueIDJsonable)
-		if err != nil {
-			return nil, err
-		}
-		valueIDSDK, err := jsonization.ReferenceFromJsonable(valueIDJsonable)
-		if err != nil {
-			_, _ = fmt.Printf("[DEBUG] buildMultiLanguageProperty ValueID: JSON: %v, Error: %v\n", valueIDJsonable, err)
-			return nil, fmt.Errorf("error converting valueID jsonable to Reference: %w", err)
-		}
-		mlp.SetValueID(valueIDSDK)
+	// Handle ValueID reference if present (same as Property)
+	valueID, err := getSingleReference(valueRow.ValueID, valueRow.ValueIDReferred, refBuilderMap, refMutex)
+	if err != nil {
+		return nil, err
+	}
+	if valueID != nil {
+		mlp.SetValueID(valueID)
 	}
 
 	return mlp, nil
@@ -826,10 +821,13 @@ func buildReferenceElement(smeRow model.SubmodelElementRow) (types.ISubmodelElem
 		if err != nil {
 			return nil, err
 		}
-		refSDK, err = jsonization.ReferenceFromJsonable(refJsonable)
-		if err != nil {
-			_, _ = fmt.Printf("[DEBUG] buildReferenceElement: JSON: %v, Error: %v\n", refJsonable, err)
-			return nil, fmt.Errorf("error converting reference jsonable to Reference: %w", err)
+		// Skip if empty object {} - not a valid Reference
+		if len(refJsonable) > 0 {
+			refSDK, err = jsonization.ReferenceFromJsonable(refJsonable)
+			if err != nil {
+				_, _ = fmt.Printf("[DEBUG] buildReferenceElement: JSON: %v, Error: %v\n", refJsonable, err)
+				return nil, fmt.Errorf("error converting reference jsonable to Reference: %w", err)
+			}
 		}
 	}
 
@@ -897,15 +895,37 @@ func buildSubmodelElementList(smeRow model.SubmodelElementRow) (types.ISubmodelE
 		return nil, err
 	}
 
-	// Convert type value list element string to SDK enum
 	typeValueListElement := types.AASSubmodelElements(valueRow.TypeValueListElement)
 	smeList := types.NewSubmodelElementList(typeValueListElement)
-	if valueRow.ValueTypeListElement.Valid {
-		valueTypeListElement := types.DataTypeDefXSD(valueRow.ValueTypeListElement.Int64)
+
+	// SemanticIDListElement
+	if len(valueRow.SemanticIDListElement) != 0 {
+		var jsonable map[string]any
+		err = json.Unmarshal(valueRow.SemanticIDListElement, &jsonable)
+		if err != nil {
+			return nil, err
+		}
+		// Skip if empty object {} - not a valid Reference
+		if len(jsonable) > 0 {
+			semIDLe, err := jsonization.ReferenceFromJsonable(jsonable)
+			if err != nil {
+				_, _ = fmt.Printf("[DEBUG] buildSubmodelElementList SemanticIDListElement: JSON: %v, Error: %v\n", jsonable, err)
+				return nil, fmt.Errorf("error converting SemanticIDListElement jsonable to Reference: %w", err)
+			}
+			smeList.SetSemanticIDListElement(semIDLe)
+		}
+	}
+
+	// Convert type value list element string to SDK enum
+	if valueRow.ValueTypeListElement != nil {
+		valueTypeListElement := types.DataTypeDefXSD(*valueRow.ValueTypeListElement)
 		smeList.SetValueTypeListElement(&valueTypeListElement)
 	}
-	if valueRow.OrderRelevant {
-		smeList.SetOrderRelevant(&valueRow.OrderRelevant)
+
+	// OrderRelevant is already fetched in the main query
+	if valueRow.OrderRelevant != nil {
+		smeList.SetOrderRelevant(valueRow.OrderRelevant)
 	}
+
 	return smeList, nil
 }

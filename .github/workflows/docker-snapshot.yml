@@ -40,6 +40,8 @@ jobs:
             image: eclipsebasyx/aasregistry-go
           - name: discoveryservice
             image: eclipsebasyx/aasdiscovery-go
+          - name: digitaltwinregistryservice
+            image: eclipsebasyx/digitaltwinregistry-go
           - name: registryofinfrastructuresservice
             image: eclipsebasyx/registryofinfrastructures-go
           - name: submodelrepositoryservice

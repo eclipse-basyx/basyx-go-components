@@ -81,104 +81,6 @@ func NewPostgreSQLRelationshipElementHandler(db *sql.DB) (*PostgreSQLRelationshi
 	return &PostgreSQLRelationshipElementHandler{db: db, decorated: decoratedHandler}, nil
 }
 
-// Create persists a new root-level RelationshipElement to the database.
-//
-// This method creates a RelationshipElement at
-// the root level of a submodel. It delegates
-// base element creation to the decorated handler, then persists the relationship-specific
-// data including the first and second references that define the relationship.
-//
-// The method performs the following operations in sequence:
-//  1. Type assertion to ensure the element is a RelationshipElement
-//  2. Base element creation (idShort, category, model type, semantic ID)
-//  3. Reference persistence (first and second references with their keys)
-//  4. Insertion into relationship_element table
-//
-// All operations are performed within the provided transaction for atomicity.
-//
-// Parameters:
-//   - tx: Active transaction context for atomic operations
-//   - submodelID: ID of the parent submodel
-//   - submodelElement: The RelationshipElement to create (must be *gen.RelationshipElement)
-//
-// Returns:
-//   - int: Database ID of the newly created element
-//   - error: An error if type assertion fails, base creation fails, or reference insertion fails
-//
-// Example:
-//
-//	relElem := &gen.RelationshipElement{
-//	    IdShort: "dependsOn",
-//	    First:   &gen.Reference{...},
-//	    Second:  &gen.Reference{...},
-//	}
-//	id, err := handler.Create(tx, "submodel123", relElem)
-func (p PostgreSQLRelationshipElementHandler) Create(tx *sql.Tx, submodelID string, submodelElement types.ISubmodelElement) (int, error) {
-	relElem, ok := submodelElement.(*types.RelationshipElement)
-	if !ok {
-		return 0, common.NewErrBadRequest("submodelElement is not of type RelationshipElement")
-	}
-
-	// First, perform base SubmodelElement operations within the transaction
-	id, err := p.decorated.Create(tx, submodelID, submodelElement)
-	if err != nil {
-		return 0, err
-	}
-
-	// RelationshipElement-specific database insertion
-	err = insertRelationshipElement(relElem, tx, id)
-	if err != nil {
-		return 0, err
-	}
-
-	return id, nil
-}
-
-// CreateNested persists a nested RelationshipElement within a hierarchical structure.
-//
-// This method creates a RelationshipElement as a child of another element (typically within
-// a SubmodelElementCollection or SubmodelElementList). It manages parent-child relationships,
-// position ordering, and full path tracking in addition to relationship-specific data.
-//
-// The method is used when creating relationships within collections or lists where explicit
-// path and position management is required for proper hierarchy reconstruction.
-//
-// Parameters:
-//   - tx: Active transaction context for atomic operations
-//   - submodelID: ID of the parent submodel
-//   - parentID: Database ID of the parent element
-//   - idShortPath: Full path from root (e.g., "collection1.dependsOn" or "relationships[0]")
-//   - submodelElement: The RelationshipElement to create (must be *gen.RelationshipElement)
-//   - pos: Position index within parent for ordering
-//
-// Returns:
-//   - int: Database ID of the newly created nested element
-//   - error: An error if type assertion fails, creation fails, or reference insertion fails
-//
-// Example:
-//
-//	id, err := handler.CreateNested(tx, "submodel123", parentDbID, "relations.dependsOn", relElem, 0)
-func (p PostgreSQLRelationshipElementHandler) CreateNested(tx *sql.Tx, submodelID string, parentID int, idShortPath string, submodelElement types.ISubmodelElement, pos int, rootSubmodelElementID int) (int, error) {
-	relElem, ok := submodelElement.(*types.RelationshipElement)
-	if !ok {
-		return 0, common.NewErrBadRequest("submodelElement is not of type RelationshipElement")
-	}
-
-	// Create the nested relElem with the provided idShortPath using the decorated handler
-	id, err := p.decorated.CreateWithPath(tx, submodelID, parentID, idShortPath, submodelElement, pos, rootSubmodelElementID)
-	if err != nil {
-		return 0, err
-	}
-
-	// RelationshipElement-specific database insertion for nested element
-	err = insertRelationshipElement(relElem, tx, id)
-	if err != nil {
-		return 0, err
-	}
-
-	return id, nil
-}
-
 // Update updates an existing RelationshipElement identified by its idShort or path.
 // This method handles both the common submodel element properties and the specific
 // relationship element data including first and second references.
@@ -337,38 +239,34 @@ func (p PostgreSQLRelationshipElementHandler) Delete(idShortOrPath string) error
 	return p.decorated.Delete(idShortOrPath)
 }
 
-// insertRelationshipElement persists RelationshipElement-specific data to the database.
-//
-// This internal helper function handles the insertion of relationship-specific data into
-// the relationship_element table. It manages the first and second references that define
-// the directed relationship, creating full reference records with their keys if the
-// references are not empty.
-//
-// The function:
-//   - Checks if first and second references are non-empty
-//   - Inserts complete reference structures (type, keys with positions and values)
-//   - Links references to the relationship element via foreign keys
-//   - Handles NULL values for empty references
+// GetInsertQueryPart returns the type-specific insert query part for batch insertion of RelationshipElement elements.
+// It returns the table name and record for inserting into the relationship_element table.
 //
 // Parameters:
-//   - relElem: The RelationshipElement containing the references to persist
-//   - tx: Active transaction context for atomic operations
-//   - id: Database ID of the parent submodel element
+//   - tx: Active database transaction (not used for RelationshipElement)
+//   - id: The database ID of the base submodel_element record
+//   - element: The RelationshipElement element to insert
 //
 // Returns:
-//   - error: An error if reference insertion fails or the final relationship_element insert fails
-func insertRelationshipElement(relElem *types.RelationshipElement, tx *sql.Tx, id int) error {
+//   - *InsertQueryPart: The table name and record for relationship_element insert
+//   - error: An error if the element is not of type RelationshipElement
+func (p PostgreSQLRelationshipElementHandler) GetInsertQueryPart(_ *sql.Tx, id int, element types.ISubmodelElement) (*InsertQueryPart, error) {
+	relElem, ok := element.(*types.RelationshipElement)
+	if !ok {
+		return nil, common.NewErrBadRequest("submodelElement is not of type RelationshipElement")
+	}
+
 	var firstRef, secondRef string
 	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 
 	if !isEmptyReference(relElem.First()) {
 		jsonable, err := jsonization.ToJsonable(relElem.First())
 		if err != nil {
-			return common.NewErrBadRequest("SMREPO-INSRELEL-FIRSTJSON Failed to convert first reference to jsonable: " + err.Error())
+			return nil, common.NewErrBadRequest("SMREPO-GIQP-RELEL-FIRSTJSON Failed to convert first reference to jsonable: " + err.Error())
 		}
 		ref, err := json.Marshal(jsonable)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		firstRef = string(ref)
 	}
@@ -376,28 +274,23 @@ func insertRelationshipElement(relElem *types.RelationshipElement, tx *sql.Tx, i
 	if !isEmptyReference(relElem.Second()) {
 		jsonable, err := jsonization.ToJsonable(relElem.Second())
 		if err != nil {
-			return common.NewErrBadRequest("SMREPO-INSRELEL-SECONDJSON Failed to convert second reference to jsonable: " + err.Error())
+			return nil, common.NewErrBadRequest("SMREPO-GIQP-RELEL-SECONDJSON Failed to convert second reference to jsonable: " + err.Error())
 		}
 		ref, err := json.Marshal(jsonable)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		secondRef = string(ref)
 	}
 
-	dialect := goqu.Dialect("postgres")
-	insertQuery, insertArgs, err := dialect.Insert("relationship_element").
-		Rows(goqu.Record{
+	return &InsertQueryPart{
+		TableName: "relationship_element",
+		Record: goqu.Record{
 			"id":     id,
 			"first":  firstRef,
 			"second": secondRef,
-		}).
-		ToSQL()
-	if err != nil {
-		return err
-	}
-	_, err = tx.Exec(insertQuery, insertArgs...)
-	return err
+		},
+	}, nil
 }
 
 // insertReference creates a complete reference record with its keys in the database.

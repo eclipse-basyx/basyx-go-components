@@ -34,7 +34,7 @@ import (
 	persistence_utils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
 )
 
-func createSpecificAssetID(tx *sql.Tx, descriptorID int64, specificAssetIDs []types.ISpecificAssetID) error {
+func createSpecificAssetID(tx *sql.Tx, descriptorID int64, aasRef sql.NullInt64, specificAssetIDs []types.ISpecificAssetID) error {
 	if specificAssetIDs == nil {
 		return nil
 	}
@@ -61,6 +61,7 @@ func createSpecificAssetID(tx *sql.Tx, descriptorID int64, specificAssetIDs []ty
 					colName:               val.Name(),
 					colValue:              val.Value(),
 					colExternalSubjectRef: externalSubjectReferenceID,
+					colAASRef:             aasRef,
 				}).
 				Returning(tSpecificAssetID.Col(colID)).
 				ToSQL()

@@ -31,18 +31,20 @@
 package submodelelements
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
 	"reflect"
+	"strings"
 
 	"github.com/FriedJannik/aas-go-sdk/jsonization"
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	persistenceutils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
-	jsoniter "github.com/json-iterator/go"
 	_ "github.com/lib/pq" // PostgreSQL Treiber
+	"golang.org/x/sync/errgroup"
 )
 
 // PostgreSQLSMECrudHandler provides base CRUD operations for submodel elements in PostgreSQL.
@@ -75,6 +77,37 @@ func isEmptyReference(ref types.IReference) bool {
 	return reflect.DeepEqual(ref, types.Reference{})
 }
 
+// toIClassSlice converts a slice of any IClass-implementing type to []types.IClass.
+func toIClassSlice[T types.IClass](items []T) []types.IClass {
+	result := make([]types.IClass, len(items))
+	for i, item := range items {
+		result[i] = item
+	}
+	return result
+}
+
+// serializeIClassSliceToJSON converts a slice of IClass instances to a JSON array string.
+// Each element is first converted to a jsonable map via jsonization.ToJsonable,
+// then the resulting slice is marshalled to JSON.
+func serializeIClassSliceToJSON(items []types.IClass, errCode string) (string, error) {
+	if len(items) == 0 {
+		return "[]", nil
+	}
+	toJSON := make([]map[string]any, 0, len(items))
+	for _, item := range items {
+		jsonObj, err := jsonization.ToJsonable(item)
+		if err != nil {
+			return "", common.NewErrBadRequest("Failed to convert object to jsonable - no changes applied - " + errCode)
+		}
+		toJSON = append(toJSON, jsonObj)
+	}
+	resBytes, err := json.Marshal(toJSON)
+	if err != nil {
+		return "", err
+	}
+	return string(resBytes), nil
+}
+
 // NewPostgreSQLSMECrudHandler creates a new PostgreSQL submodel element CRUD handler.
 //
 // This constructor initializes a handler with a database connection that will be used
@@ -89,227 +122,6 @@ func isEmptyReference(ref types.IReference) bool {
 //   - error: Always nil in current implementation, kept for interface consistency
 func NewPostgreSQLSMECrudHandler(db *sql.DB) (*PostgreSQLSMECrudHandler, error) {
 	return &PostgreSQLSMECrudHandler{Db: db}, nil
-}
-
-// CreateWithPath performs base SubmodelElement creation with explicit path and position management.
-//
-// This method creates a new submodel element within an existing transaction context,
-// handling parent-child relationships, position ordering, and full path tracking. It's
-// used when creating elements within hierarchical structures like SubmodelElementCollection
-// or SubmodelElementList where explicit path and position control is required.
-//
-// The method:
-//   - Creates the semantic ID reference if provided
-//   - Validates that no element with the same path already exists
-//   - Inserts the element with specified parent, position, and path
-//   - Returns the database ID for use in type-specific operations
-//
-// Parameters:
-//   - tx: Active transaction context for atomic operations
-//   - submodelID: ID of the parent submodel
-//   - parentID: Database ID of the parent element (0 for root elements)
-//   - idShortPath: Full path from root (e.g., "collection1.property2" or "list[0]")
-//   - submodelElement: The submodel element to create
-//   - position: Position index within parent (used for ordering in lists/collections)
-//
-// Returns:
-//   - int: Database ID of the newly created element
-//   - error: An error if semantic ID creation fails, element already exists, or insertion fails
-//
-// Example:
-//
-//	id, err := handler.CreateWithPath(tx, "submodel123", parentDbID, "sensors.temperature", tempProp, 0)
-//
-//nolint:revive // cyclomatic-complexity is acceptable here due to the multiple steps involved in creation
-func (p *PostgreSQLSMECrudHandler) CreateWithPath(tx *sql.Tx, submodelID string, parentID int, idShortPath string, submodelElement types.ISubmodelElement, position int, rootSubmodelElementID int) (int, error) {
-	var referenceID sql.NullInt64
-	var err error
-	if submodelElement.SemanticID() != nil {
-		referenceID, err = persistenceutils.CreateReference(tx, submodelElement.SemanticID(), sql.NullInt64{}, sql.NullInt64{})
-		if err != nil {
-			return 0, err
-		}
-	}
-
-	descriptionID, err := persistenceutils.CreateLangStringTextTypes(tx, submodelElement.Description())
-	if err != nil {
-		_, _ = fmt.Println("SMREPO-CRWP-CRDESC " + err.Error())
-		return 0, common.NewInternalServerError("Failed to create Description - no changes applied - see console for details")
-	}
-
-	displayNameID, err := persistenceutils.CreateLangStringNameTypes(tx, submodelElement.DisplayName())
-	if err != nil {
-		_, _ = fmt.Println("SMREPO-CRWP-CRDISP " + err.Error())
-		return 0, common.NewInternalServerError("Failed to create DisplayName - no changes applied - see console for details")
-	}
-
-	var parentDBId sql.NullInt64
-	if parentID == 0 {
-		parentDBId = sql.NullInt64{}
-	} else {
-		parentDBId = sql.NullInt64{Int64: int64(parentID), Valid: true}
-	}
-
-	var rootDbID sql.NullInt64
-	if rootSubmodelElementID == 0 {
-		rootDbID = sql.NullInt64{}
-	} else {
-		rootDbID = sql.NullInt64{Int64: int64(rootSubmodelElementID), Valid: true}
-	}
-
-	edsJSONString := "[]"
-	eds := submodelElement.EmbeddedDataSpecifications()
-	if len(eds) > 0 {
-		var json = jsoniter.ConfigCompatibleWithStandardLibrary
-		var toJson []map[string]any
-		for _, ed := range eds {
-			jsonObj, err := jsonization.ToJsonable(ed)
-			if err != nil {
-				return 0, common.NewErrBadRequest("SMREPO-SMECRUD-CREATE-EDSJSON Failed to convert EmbeddedDataSpecification to jsonable: " + err.Error())
-			}
-			toJson = append(toJson, jsonObj)
-		}
-		edsBytes, err := json.Marshal(toJson)
-		if err != nil {
-			return 0, err
-		}
-		edsJSONString = string(edsBytes)
-	}
-
-	supplementalSemanticIDsJSONString := "[]"
-	supplementalSemanticIDs := submodelElement.SupplementalSemanticIDs()
-	if len(supplementalSemanticIDs) > 0 {
-		var toJson []map[string]any
-		for _, ref := range submodelElement.SupplementalSemanticIDs() {
-			jsonObj, err := jsonization.ToJsonable(ref)
-			if err != nil {
-				return 0, common.NewErrBadRequest("Failed to convert Reference to jsonable object - no changes applied")
-			}
-			toJson = append(toJson, jsonObj)
-		}
-		supplBytes, err := json.Marshal(toJson)
-		if err != nil {
-			return 0, err
-		}
-		supplementalSemanticIDsJSONString = string(supplBytes)
-	}
-
-	extensionsJSONString := "[]"
-	extension := submodelElement.Extensions()
-	if len(extension) > 0 {
-		var json = jsoniter.ConfigCompatibleWithStandardLibrary
-		var toJson []map[string]any
-		for _, ext := range extension {
-			jsonObj, err := jsonization.ToJsonable(ext)
-			if err != nil {
-				return 0, common.NewErrBadRequest("SMREPO-SMECRUD-CREATE-EXTJSON Failed to convert Extension to jsonable: " + err.Error())
-			}
-			toJson = append(toJson, jsonObj)
-		}
-		extensionsBytes, err := json.Marshal(toJson)
-		if err != nil {
-			return 0, err
-		}
-		extensionsJSONString = string(extensionsBytes)
-	}
-
-	var id int
-	err = tx.QueryRow(`	INSERT INTO
-	 					submodel_element(submodel_id, parent_sme_id, position, id_short, category, model_type, semantic_id, idshort_path, description_id, displayname_id, root_sme_id, embedded_data_specification, supplemental_semantic_ids, extensions)
-						VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING id`,
-		submodelID,
-		parentDBId,
-		position,
-		submodelElement.IDShort(),
-		submodelElement.Category(),
-		submodelElement.ModelType(),
-		referenceID, // This will be NULL if no semantic ID was provided
-		idShortPath, // Use the provided idShortPath instead of just GetIdShort()
-		descriptionID,
-		displayNameID,
-		rootDbID,
-		edsJSONString,
-		supplementalSemanticIDsJSONString,
-		extensionsJSONString,
-	).Scan(&id)
-	if err != nil {
-		return 0, err
-	}
-
-	// For root elements, set root_sme_id to their own ID
-	if rootSubmodelElementID == 0 {
-		dialect := goqu.Dialect("postgres")
-		updateQuery, updateArgs, err := dialect.Update("submodel_element").
-			Set(goqu.Record{"root_sme_id": id}).
-			Where(goqu.C("id").Eq(id)).
-			ToSQL()
-		if err != nil {
-			return 0, err
-		}
-		_, err = tx.Exec(updateQuery, updateArgs...)
-		if err != nil {
-			return 0, err
-		}
-	}
-
-	qualifiers := submodelElement.Qualifiers()
-	if len(qualifiers) > 0 {
-		for i, qualifier := range qualifiers {
-			qualifierID, err := persistenceutils.CreateQualifier(tx, qualifier, i)
-			if err != nil {
-				return 0, err
-			}
-
-			dialect := goqu.Dialect("postgres")
-			insertQuery, insertArgs, err := dialect.Insert("submodel_element_qualifier").
-				Rows(goqu.Record{
-					"sme_id":       id,
-					"qualifier_id": qualifierID,
-				}).
-				ToSQL()
-			if err != nil {
-				return 0, err
-			}
-			_, err = tx.Exec(insertQuery, insertArgs...)
-			if err != nil {
-				_, _ = fmt.Println("SMREPO-CRWP-INSQUAL " + err.Error())
-				return 0, common.NewInternalServerError("Failed to Create Qualifier for Submodel Element with ID '" + fmt.Sprintf("%d", id) + "'. See console for details.")
-			}
-		}
-	}
-
-	// println("Inserted SubmodelElement with idShort: " + submodelElement.GetIdShort())
-
-	return id, nil
-}
-
-// Create creates a root-level SubmodelElement within an existing transaction.
-//
-// This method creates a new submodel element at the root level (no parent) within
-// the specified submodel. It's used when adding top-level elements directly to a
-// submodel rather than within a collection or list.
-//
-// The method:
-//   - Creates the semantic ID reference if provided
-//   - Validates that no element with the same idShort already exists
-//   - Inserts the element as a root element (no parent, position 0)
-//   - Creates supplemental semantic IDs if provided
-//   - Returns the database ID for use in type-specific operations
-//
-// Parameters:
-//   - tx: Active transaction context for atomic operations
-//   - submodelID: ID of the parent submodel
-//   - submodelElement: The submodel element to create at root level
-//
-// Returns:
-//   - int: Database ID of the newly created element
-//   - error: An error if semantic ID creation fails, element already exists, or insertion fails
-//
-// Example:
-//
-//	id, err := handler.Create(tx, "submodel123", propertyElement)
-func (p *PostgreSQLSMECrudHandler) Create(tx *sql.Tx, submodelID string, submodelElement types.ISubmodelElement) (int, error) {
-	return p.CreateWithPath(tx, submodelID, 0, *submodelElement.IDShort(), submodelElement, 0, 0)
 }
 
 // Update updates an existing SubmodelElement identified by its idShort or path.
@@ -432,60 +244,34 @@ func (p *PostgreSQLSMECrudHandler) Update(submodelID string, idShortOrPath strin
 		return common.NewInternalServerError("Failed to update DisplayName - see console for details")
 	}
 
-	// Handle embedded data specifications
-	edsJSONString := "[]"
-	if len(submodelElement.EmbeddedDataSpecifications()) > 0 {
-		var json = jsoniter.ConfigCompatibleWithStandardLibrary
-		var toJson []map[string]any
-		for _, eds := range submodelElement.EmbeddedDataSpecifications() {
-			jsonObj, err := jsonization.ToJsonable(eds)
-			if err != nil {
-				return common.NewErrBadRequest("Failed to convert EmbeddedDataSpecification to jsonable object - no changes applied - SMREPO-SME-UPDATE-EDSJSONIZATION")
-			}
-			toJson = append(toJson, jsonObj)
-		}
-		edsBytes, err := json.Marshal(toJson)
-		if err != nil {
-			return err
-		}
-		edsJSONString = string(edsBytes)
-	}
+	// Serialize EDS, supplemental semantic IDs, and extensions in parallel
+	var edsJSONString, supplementalSemanticIDsJSONString, extensionsJSONString string
 
-	// Handle supplemental semantic IDs
-	supplementalSemanticIDsJSONString := "[]"
-	if len(submodelElement.SupplementalSemanticIDs()) > 0 {
-		var toJson []map[string]any
-		for _, ref := range submodelElement.SupplementalSemanticIDs() {
-			jsonObj, err := jsonization.ToJsonable(ref)
-			if err != nil {
-				return common.NewErrBadRequest("Failed to convert Reference to jsonable object - no changes applied - SMREPO-SME-UPDATE-SUPPLJSONIZATION")
-			}
-			toJson = append(toJson, jsonObj)
-		}
-		supplBytes, err := json.Marshal(toJson)
-		if err != nil {
-			return err
-		}
-		supplementalSemanticIDsJSONString = string(supplBytes)
-	}
+	g, _ := errgroup.WithContext(context.Background())
 
-	// Handle extensions
-	extensionsJSONString := "[]"
-	if len(submodelElement.Extensions()) > 0 {
-		var json = jsoniter.ConfigCompatibleWithStandardLibrary
-		var toJson []map[string]any
-		for _, ext := range submodelElement.Extensions() {
-			jsonObj, err := jsonization.ToJsonable(ext)
-			if err != nil {
-				return common.NewErrBadRequest("Failed to convert Extension to jsonable object - no changes applied - SMREPO-SME-UPDATE-EXTJSONIZATION")
-			}
-			toJson = append(toJson, jsonObj)
-		}
-		extensionsBytes, err := json.Marshal(toJson)
-		if err != nil {
-			return err
-		}
-		extensionsJSONString = string(extensionsBytes)
+	g.Go(func() error {
+		edsItems := toIClassSlice(submodelElement.EmbeddedDataSpecifications())
+		res, serErr := serializeIClassSliceToJSON(edsItems, "SMREPO-SME-UPDATE-EDSJSONIZATION")
+		edsJSONString = res
+		return serErr
+	})
+
+	g.Go(func() error {
+		supplItems := toIClassSlice(submodelElement.SupplementalSemanticIDs())
+		res, serErr := serializeIClassSliceToJSON(supplItems, "SMREPO-SME-UPDATE-SUPPLJSONIZATION")
+		supplementalSemanticIDsJSONString = res
+		return serErr
+	})
+
+	g.Go(func() error {
+		extItems := toIClassSlice(submodelElement.Extensions())
+		res, serErr := serializeIClassSliceToJSON(extItems, "SMREPO-SME-UPDATE-EXTJSONIZATION")
+		extensionsJSONString = res
+		return serErr
+	})
+
+	if err = g.Wait(); err != nil {
+		return err
 	}
 
 	// Update the main submodel_element record FIRST to release foreign key constraints
@@ -761,4 +547,168 @@ func (p *PostgreSQLSMECrudHandler) GetSubmodelElementType(idShortPath string) (*
 	}
 	modelTypeInstance := types.ModelType(modelType)
 	return &modelTypeInstance, nil
+}
+
+// UpdateIdShortPaths updates the idShort and idShortPath of a submodel element and all its descendants
+// when the element's idShort changes during a PUT operation.
+//
+// This method computes the new path by replacing the last segment of the old path with the new idShort,
+// then cascades the path change to all child elements. It uses three precise LIKE patterns
+// (exact match, dot-children, bracket-children) to avoid accidentally updating elements
+// whose idShort merely starts with the same prefix.
+//
+// Parameters:
+//   - tx: Active transaction for atomic operations
+//   - submodelID: ID of the parent submodel
+//   - oldPath: The current full idShortPath of the element being updated
+//   - newIDShort: The new idShort value from the PUT body
+//
+// Returns:
+//   - string: The new full idShortPath after the update
+//   - error: An error if a conflict is detected or the update fails
+func (p *PostgreSQLSMECrudHandler) UpdateIdShortPaths(tx *sql.Tx, submodelID string, oldPath string, newIDShort string) (string, error) {
+	if strings.HasSuffix(oldPath, "]") {
+		dialect := goqu.Dialect("postgres")
+		updateListItemQuery, updateListItemArgs, err := dialect.Update("submodel_element").
+			Set(goqu.Record{
+				"id_short": newIDShort,
+			}).
+			Where(
+				goqu.C("submodel_id").Eq(submodelID),
+				goqu.C("idshort_path").Eq(oldPath),
+			).
+			ToSQL()
+		if err != nil {
+			return "", common.NewInternalServerError("SMREPO-UPDPATH-LIST-TOSQL " + err.Error())
+		}
+
+		_, err = tx.Exec(updateListItemQuery, updateListItemArgs...)
+		if err != nil {
+			return "", common.NewInternalServerError("SMREPO-UPDPATH-LIST-EXEC " + err.Error())
+		}
+
+		return oldPath, nil
+	}
+
+	// Compute the new path by replacing the last segment of oldPath
+	newPath := computeNewPath(oldPath, newIDShort)
+
+	if newPath == oldPath {
+		return oldPath, nil
+	}
+
+	// Check for idShort conflict: does an element with the new path already exist?
+	dialect := goqu.Dialect("postgres")
+
+	conflictQuery, conflictArgs, err := dialect.From("submodel_element").
+		Select(goqu.COUNT("id")).
+		Where(
+			goqu.C("submodel_id").Eq(submodelID),
+			goqu.C("idshort_path").Eq(newPath),
+		).
+		ToSQL()
+	if err != nil {
+		return "", common.NewInternalServerError("SMREPO-UPDPATH-CONFLICT-TOSQL " + err.Error())
+	}
+
+	var count int
+	err = tx.QueryRow(conflictQuery, conflictArgs...).Scan(&count)
+	if err != nil {
+		return "", common.NewInternalServerError("SMREPO-UPDPATH-CONFLICT-EXEC " + err.Error())
+	}
+
+	if count > 0 {
+		return "", common.NewErrConflict("SMREPO-UPDPATH-CONFLICT SubmodelElement with idShortPath '" + newPath + "' already exists in submodel '" + submodelID + "'")
+	}
+
+	// Update the element itself: set both id_short and idshort_path
+	updateSelfQuery, updateSelfArgs, err := dialect.Update("submodel_element").
+		Set(goqu.Record{
+			"id_short":     newIDShort,
+			"idshort_path": newPath,
+		}).
+		Where(
+			goqu.C("submodel_id").Eq(submodelID),
+			goqu.C("idshort_path").Eq(oldPath),
+		).
+		ToSQL()
+	if err != nil {
+		return "", common.NewInternalServerError("SMREPO-UPDPATH-SELF-TOSQL " + err.Error())
+	}
+
+	_, err = tx.Exec(updateSelfQuery, updateSelfArgs...)
+	if err != nil {
+		return "", common.NewInternalServerError("SMREPO-UPDPATH-SELF-EXEC " + err.Error())
+	}
+
+	// Update children whose path starts with oldPath followed by "." (collection/entity children)
+	err = updateChildPaths(tx, dialect, submodelID, oldPath, newPath, ".")
+	if err != nil {
+		return "", err
+	}
+
+	// Update children whose path starts with oldPath followed by "[" (list children)
+	err = updateChildPaths(tx, dialect, submodelID, oldPath, newPath, "[")
+	if err != nil {
+		return "", err
+	}
+
+	return newPath, nil
+}
+
+// computeNewPath replaces the last segment of an idShortPath with a new idShort.
+//
+// Path patterns:
+//   - "propName"          → last segment is "propName" (top-level)
+//   - "parent.child"      → last segment is "child" (dot-separated)
+//   - "parent[0].child"   → last segment is "child" (dot-separated after bracket)
+//
+// Note: If the path ends with a bracket index (e.g., "list[2]"), the path is
+// position-based and the idShort replacement changes the part before the bracket suffix.
+func computeNewPath(oldPath string, newIDShort string) string {
+	// Find the last dot separator
+	lastDot := strings.LastIndex(oldPath, ".")
+	if lastDot >= 0 {
+		return oldPath[:lastDot+1] + newIDShort
+	}
+
+	// No dot found — this is a top-level element
+	return newIDShort
+}
+
+// updateChildPaths updates the idshort_path of child elements whose paths start with
+// the old prefix followed by the given separator ("." or "[").
+//
+// It uses PostgreSQL's OVERLAY function to replace the old prefix portion with the new prefix,
+// ensuring only the exact prefix is replaced without affecting similar-prefix siblings.
+func updateChildPaths(tx *sql.Tx, dialect goqu.DialectWrapper, submodelID string, oldPath string, newPath string, separator string) error {
+	likePattern := oldPath + separator + "%"
+	oldPrefixLen := len(oldPath)
+
+	// SET idshort_path = newPath || SUBSTRING(idshort_path FROM oldPrefixLen+1)
+	// This replaces the old prefix with the new prefix, preserving the rest of the path.
+	updateExpr := goqu.L(
+		"? || SUBSTRING(idshort_path FROM ?)",
+		newPath, oldPrefixLen+1,
+	)
+
+	updateQuery, updateArgs, err := dialect.Update("submodel_element").
+		Set(goqu.Record{
+			"idshort_path": updateExpr,
+		}).
+		Where(
+			goqu.C("submodel_id").Eq(submodelID),
+			goqu.C("idshort_path").Like(likePattern),
+		).
+		ToSQL()
+	if err != nil {
+		return common.NewInternalServerError("SMREPO-UPDPATH-CHILDREN-TOSQL " + err.Error())
+	}
+
+	_, err = tx.Exec(updateQuery, updateArgs...)
+	if err != nil {
+		return common.NewInternalServerError("SMREPO-UPDPATH-CHILDREN-EXEC " + err.Error())
+	}
+
+	return nil
 }

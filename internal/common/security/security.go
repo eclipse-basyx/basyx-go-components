@@ -41,6 +41,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
@@ -83,6 +84,17 @@ import (
 //  2. Authenticated requests are then evaluated by ABAC middleware for authorization
 //  3. Only requests that pass both checks are allowed to proceed to handlers
 func SetupSecurity(ctx context.Context, cfg *common.Config, r *api.Mux) error {
+	return SetupSecurityWithClaimsMiddleware(ctx, cfg, r)
+}
+
+// SetupSecurityWithClaimsMiddleware configures security and optionally injects
+// middleware between OIDC and ABAC (e.g., to enrich claims).
+func SetupSecurityWithClaimsMiddleware(
+	ctx context.Context,
+	cfg *common.Config,
+	r *api.Mux,
+	claimsMiddleware ...func(http.Handler) http.Handler,
+) error {
 	if !cfg.ABAC.Enabled {
 		return nil
 	}
@@ -95,9 +107,6 @@ func SetupSecurity(ctx context.Context, cfg *common.Config, r *api.Mux) error {
 	var trustlist []common.OIDCProviderConfig
 	if err := json.Unmarshal(trustlistData, &trustlist); err != nil {
 		return fmt.Errorf("parse OIDC trustlist: %w", err)
-	}
-	if len(trustlist) == 0 {
-		return fmt.Errorf("OIDC trustlist is empty")
 	}
 
 	oidcProviders := make([]OIDCProviderSettings, 0, len(trustlist))
@@ -123,7 +132,7 @@ func SetupSecurity(ctx context.Context, cfg *common.Config, r *api.Mux) error {
 		if err != nil {
 			return err
 		}
-		m, err := ParseAccessModel(data, r)
+		m, err := ParseAccessModel(data, r, cfg.Server.ContextPath)
 		if err != nil {
 			return err
 		}
@@ -131,11 +140,19 @@ func SetupSecurity(ctx context.Context, cfg *common.Config, r *api.Mux) error {
 	}
 
 	abacSettings := ABACSettings{
-		Enabled: cfg.ABAC.Enabled,
-		Model:   model,
+		Enabled:             cfg.ABAC.Enabled,
+		EnableImplicitCasts: cfg.General.EnableImplicitCasts,
+		Model:               model,
 	}
 
-	// ✅ Apply both middlewares to the router
+	// ✅ Apply middlewares to the router
+	if len(claimsMiddleware) > 0 {
+		chain := append([]func(http.Handler) http.Handler{oidc.Middleware}, claimsMiddleware...)
+		chain = append(chain, ABACMiddleware(abacSettings))
+		r.Use(chain...)
+		return nil
+	}
+
 	r.Use(
 		oidc.Middleware,
 		ABACMiddleware(abacSettings),

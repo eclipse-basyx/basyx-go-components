@@ -30,6 +30,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/doug-martin/goqu/v9"
 	// nolint:revive
@@ -91,6 +92,11 @@ func ReadEndpointsByDescriptorIDs(
 	descriptorIDs []int64,
 	joinOnMainTable string,
 ) (map[int64][]model.Endpoint, error) {
+	if debugEnabled(ctx) {
+		defer func(start time.Time) {
+			_, _ = fmt.Printf("ReadEndpointsByDescriptorIDs took %s\n", time.Since(start))
+		}(time.Now())
+	}
 	out := make(map[int64][]model.Endpoint, len(descriptorIDs))
 	if len(descriptorIDs) == 0 {
 		return out, nil
@@ -197,10 +203,6 @@ func ReadEndpointsByDescriptorIDs(
 		return nil, err
 	}
 	ds, err = auth.AddFilterQueryFromContext(ctx, ds, "$aasdesc#endpoints[]", collector)
-	if err != nil {
-		return nil, err
-	}
-	ds, err = auth.ApplyResolvedFieldPathCTEs(ds, collector, nil)
 	if err != nil {
 		return nil, err
 	}

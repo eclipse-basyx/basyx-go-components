@@ -31,14 +31,29 @@ import (
 	"database/sql"
 
 	"github.com/FriedJannik/aas-go-sdk/types"
+	"github.com/doug-martin/goqu/v9"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
 
+// InsertQueryPart represents the type-specific insert data for a submodel element.
+// It contains the target table name and the record to insert.
+type InsertQueryPart struct {
+	TableName string      // The name of the type-specific table (e.g., "property_element", "blob_element")
+	Record    goqu.Record // The record containing column-value pairs for the insert
+}
+
 // PostgreSQLSMECrudInterface defines the CRUD operations for Submodel Elements in a PostgreSQL database.
 type PostgreSQLSMECrudInterface interface {
-	Create(*sql.Tx, string, types.ISubmodelElement) (int, error)
-	CreateNested(*sql.Tx, string, int, string, types.ISubmodelElement, int, int) (int, error)
 	Update(string, string, types.ISubmodelElement, *sql.Tx, bool) error
 	UpdateValueOnly(string, string, gen.SubmodelElementValue) error
 	Delete(string) error
+	// GetInsertQueryPart returns the type-specific insert query part for batch insertion.
+	// Parameters:
+	//   - tx: Active database transaction (needed for creating references)
+	//   - id: The database ID of the base submodel_element record
+	//   - element: The submodel element to insert
+	// Returns:
+	//   - *InsertQueryPart: The table name and record for type-specific insert (nil if no type-specific table)
+	//   - error: An error if query part creation fails
+	GetInsertQueryPart(tx *sql.Tx, id int, element types.ISubmodelElement) (*InsertQueryPart, error)
 }

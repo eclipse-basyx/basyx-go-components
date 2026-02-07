@@ -86,116 +86,6 @@ func NewPostgreSQLReferenceElementHandler(db *sql.DB) (*PostgreSQLReferenceEleme
 	return &PostgreSQLReferenceElementHandler{db: db, decorated: decoratedHandler}, nil
 }
 
-// Create persists a new root-level ReferenceElement to the database within the provided transaction.
-// The operation is atomic and includes both base SubmodelElement attributes and ReferenceElement-specific
-// reference value with its keys.
-//
-// The method performs the following operations:
-//  1. Type assertion to ensure the element is a ReferenceElement
-//  2. Delegates base SubmodelElement creation to the decorated handler
-//  3. Persists the reference value (type and keys) or NULL if empty
-//  4. Maintains key ordering through position attributes
-//
-// Parameters:
-//   - tx: Active database transaction for atomic operations
-//   - submodelID: The ID of the parent submodel
-//   - submodelElement: The ReferenceElement to persist (must be *gen.ReferenceElement)
-//
-// Returns:
-//   - int: The database ID of the created ReferenceElement
-//   - error: Any error during type assertion or database operations
-//
-// Example:
-//
-//	handler, _ := NewPostgreSQLReferenceElementHandler(db)
-//	refElem := &gen.ReferenceElement{
-//	    IdShort: "ExampleReference",
-//	    Value: &gen.Reference{
-//	        Type: "ExternalReference",
-//	        Keys: []gen.Key{
-//	            {Type: "GlobalReference", Value: "https://example.com/resource"},
-//	        },
-//	    },
-//	}
-//	id, err := handler.Create(tx, "submodel123", refElem)
-func (p PostgreSQLReferenceElementHandler) Create(tx *sql.Tx, submodelID string, submodelElement types.ISubmodelElement) (int, error) {
-	refElem, ok := submodelElement.(*types.ReferenceElement)
-	if !ok {
-		return 0, common.NewErrBadRequest("submodelElement is not of type ReferenceElement")
-	}
-
-	// First, perform base SubmodelElement operations within the transaction
-	id, err := p.decorated.Create(tx, submodelID, submodelElement)
-	if err != nil {
-		return 0, err
-	}
-
-	// ReferenceElement-specific database insertion
-	err = insertReferenceElement(refElem, tx, id)
-	if err != nil {
-		return 0, err
-	}
-
-	return id, nil
-}
-
-// CreateNested persists a new nested ReferenceElement within a SubmodelElementCollection or SubmodelElementList.
-// This method supports the creation of ReferenceElements that are children of other submodel elements,
-// maintaining the hierarchical structure and path relationships.
-//
-// The method performs the following operations:
-//  1. Type assertion to ensure the element is a ReferenceElement
-//  2. Delegates nested element creation with path tracking to the decorated handler
-//  3. Persists the reference value (type and keys) specific to this element
-//  4. Maintains proper parent-child relationships and position ordering
-//
-// Parameters:
-//   - tx: Active database transaction for atomic operations
-//   - submodelID: The ID of the parent submodel
-//   - parentID: The database ID of the parent SubmodelElement (Collection or List)
-//   - idShortPath: The full path to this element (e.g., "Collection1.SubCollection.RefElement")
-//   - submodelElement: The ReferenceElement to persist (must be *gen.ReferenceElement)
-//   - pos: The position of this element within its parent (for ordering in Lists)
-//
-// Returns:
-//   - int: The database ID of the created nested ReferenceElement
-//   - error: Any error during type assertion or database operations
-//
-// Example:
-//
-//	handler, _ := NewPostgreSQLReferenceElementHandler(db)
-//	nestedRefElem := &gen.ReferenceElement{
-//	    IdShort: "NestedReference",
-//	    Value: &gen.Reference{
-//	        Type: "ModelReference",
-//	        Keys: []gen.Key{
-//	            {Type: "Submodel", Value: "SubmodelID"},
-//	            {Type: "Property", Value: "PropertyID"},
-//	        },
-//	    },
-//	}
-//	id, err := handler.CreateNested(tx, "submodel123", parentID, "Collection.NestedReference", nestedRefElem, 0)
-func (p PostgreSQLReferenceElementHandler) CreateNested(tx *sql.Tx, submodelID string, parentID int, idShortPath string, submodelElement types.ISubmodelElement, pos int, rootSubmodelElementID int) (int, error) {
-	refElem, ok := submodelElement.(*types.ReferenceElement)
-	if !ok {
-		return 0, common.NewErrBadRequest("submodelElement is not of type ReferenceElement")
-	}
-
-	// Create the nested refElem with the provided idShortPath using the decorated handler
-	id, err := p.decorated.CreateWithPath(tx, submodelID, parentID, idShortPath, submodelElement, pos, rootSubmodelElementID)
-	if err != nil {
-		return 0, err
-	}
-
-	// ReferenceElement-specific database insertion for nested element
-	err = insertReferenceElement(refElem, tx, id)
-	if err != nil {
-		return 0, err
-	}
-
-	return id, nil
-}
-
 // Update modifies an existing ReferenceElement identified by its idShort or full path.
 // This method handles both the common submodel element properties and the specific
 // reference element data including the reference value.
@@ -333,59 +223,46 @@ func (p PostgreSQLReferenceElementHandler) Delete(idShortOrPath string) error {
 	return p.decorated.Delete(idShortOrPath)
 }
 
-// insertReferenceElement is an internal helper function that persists the ReferenceElement-specific data
-// to the database. It handles both populated references and empty/null references.
-//
-// The function performs the following operations:
-//  1. Checks if the reference value is empty using isEmptyReference
-//  2. If empty, inserts a reference_element record with NULL value_ref
-//  3. If populated:
-//     a. Inserts the reference record with type
-//     b. Inserts all reference keys with their positions (maintaining order)
-//     c. Links the reference to the reference_element via value_ref
+// GetInsertQueryPart returns the type-specific insert query part for batch insertion of ReferenceElement elements.
+// It returns the table name and record for inserting into the reference_element table.
 //
 // Parameters:
-//   - refElem: The ReferenceElement containing the reference value to persist
-//   - tx: Active database transaction for atomic operations
-//   - id: The database ID of the SubmodelElement record
+//   - tx: Active database transaction (not used for ReferenceElement)
+//   - id: The database ID of the base submodel_element record
+//   - element: The ReferenceElement element to insert
 //
 // Returns:
-//   - error: Any error encountered during database operations
-//
-// Database operations:
-//   - INSERT INTO reference (type) - Creates reference record
-//   - INSERT INTO reference_key (reference_id, position, type, value) - Creates ordered keys
-//   - INSERT INTO reference_element (id, value_ref) - Links element to reference
-func insertReferenceElement(refElem *types.ReferenceElement, tx *sql.Tx, id int) error {
+//   - *InsertQueryPart: The table name and record for reference_element insert
+//   - error: An error if the element is not of type ReferenceElement
+func (p PostgreSQLReferenceElementHandler) GetInsertQueryPart(_ *sql.Tx, id int, element types.ISubmodelElement) (*InsertQueryPart, error) {
+	refElem, ok := element.(*types.ReferenceElement)
+	if !ok {
+		return nil, common.NewErrBadRequest("submodelElement is not of type ReferenceElement")
+	}
+
 	var referenceJSONString sql.NullString
 	var json = jsoniter.ConfigCompatibleWithStandardLibrary
 	if !isEmptyReference(refElem.Value()) {
 		jsonable, err := jsonization.ToJsonable(refElem.Value())
 		if err != nil {
-			return common.NewErrBadRequest("SMREPO-INSREFELEM-JSONABLE Failed to convert reference to jsonable: " + err.Error())
+			return nil, common.NewErrBadRequest("SMREPO-GIQP-REFELEM-JSONABLE Failed to convert reference to jsonable: " + err.Error())
 		}
 		bytes, err := json.Marshal(jsonable)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		referenceJSONString = sql.NullString{String: string(bytes), Valid: true}
 	} else {
 		referenceJSONString = sql.NullString{Valid: false}
 	}
 
-	// Insert reference_element
-	dialect := goqu.Dialect("postgres")
-	insertQuery, insertArgs, err := dialect.Insert("reference_element").
-		Rows(goqu.Record{
+	return &InsertQueryPart{
+		TableName: "reference_element",
+		Record: goqu.Record{
 			"id":    id,
 			"value": referenceJSONString,
-		}).
-		ToSQL()
-	if err != nil {
-		return err
-	}
-	_, err = tx.Exec(insertQuery, insertArgs...)
-	return err
+		},
+	}, nil
 }
 
 // marshalReferenceValueToJSON converts a ReferenceElementValue to a JSON string for database storage.

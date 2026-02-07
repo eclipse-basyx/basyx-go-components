@@ -30,24 +30,12 @@ package persistencepostgresql
 import (
 	"database/sql"
 	"fmt"
-	"strconv"
 
 	"github.com/FriedJannik/aas-go-sdk/jsonization"
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	jsoniter "github.com/json-iterator/go"
 )
-
-// ElementToProcess represents a submodel element to be processed during iterative creation.
-// This struct is used internally by the AddNestedSubmodelElementsIteratively method to manage
-// the stack-based processing of nested elements in collections and lists.
-type ElementToProcess struct {
-	element                   types.ISubmodelElement
-	parentID                  int
-	currentIDShortPath        string
-	isFromSubmodelElementList bool // Indicates if the current element is from a SubmodelElementList
-	position                  int  // Position/index within the parent collection or list
-}
 
 type result struct {
 	sm     []*types.Submodel
@@ -64,158 +52,6 @@ type smeResult struct {
 	id   string
 	smes []types.ISubmodelElement
 	err  error
-}
-
-func getElementsToProcess(topLevelElement types.ISubmodelElement, parentID int, startPath string) ([]ElementToProcess, error) {
-	stack := []ElementToProcess{}
-
-	switch topLevelElement.ModelType() {
-	case types.ModelTypeSubmodelElementCollection:
-		submodelElementCollection, ok := topLevelElement.(*types.SubmodelElementCollection)
-		if !ok {
-			return nil, common.NewInternalServerError("SubmodelElement with modelType 'SubmodelElementCollection' is not of type SubmodelElementCollection")
-		}
-		for index, nestedElement := range submodelElementCollection.Value() {
-			var currentPath string
-			if startPath == "" {
-				currentPath = *submodelElementCollection.IDShort()
-			} else {
-				currentPath = startPath
-			}
-			stack = append(stack, ElementToProcess{
-				element:                   nestedElement,
-				parentID:                  parentID,
-				currentIDShortPath:        currentPath,
-				isFromSubmodelElementList: false,
-				position:                  index,
-			})
-		}
-	case types.ModelTypeSubmodelElementList:
-		submodelElementList, ok := topLevelElement.(*types.SubmodelElementList)
-		if !ok {
-			return nil, common.NewInternalServerError("SubmodelElement with modelType 'SubmodelElementList' is not of type SubmodelElementList")
-		}
-		// Add nested elements to stack with index-based paths
-		for index, nestedElement := range submodelElementList.Value() {
-			var idShortPath string
-			if startPath == "" {
-				idShortPath = *submodelElementList.IDShort() + "[" + strconv.Itoa(index) + "]"
-			} else {
-				idShortPath = startPath + "[" + strconv.Itoa(index) + "]"
-			}
-			stack = append(stack, ElementToProcess{
-				element:                   nestedElement,
-				parentID:                  parentID,
-				currentIDShortPath:        idShortPath,
-				isFromSubmodelElementList: true,
-				position:                  index,
-			})
-		}
-	case types.ModelTypeAnnotatedRelationshipElement:
-		submodelElementCollection, ok := topLevelElement.(*types.AnnotatedRelationshipElement)
-		if !ok {
-			return nil, common.NewInternalServerError("AnnotatedRelationshipElement with modelType 'AnnotatedRelationshipElement' is not of type AnnotatedRelationshipElement")
-		}
-		for index, nestedElement := range submodelElementCollection.Annotations() {
-			var currentPath string
-			if startPath == "" {
-				currentPath = *submodelElementCollection.IDShort()
-			} else {
-				currentPath = startPath
-			}
-			stack = append(stack, ElementToProcess{
-				element:                   nestedElement,
-				parentID:                  parentID,
-				currentIDShortPath:        currentPath,
-				isFromSubmodelElementList: false,
-				position:                  index,
-			})
-		}
-	case types.ModelTypeEntity:
-		submodelElementCollection, ok := topLevelElement.(*types.Entity)
-		if !ok {
-			return nil, common.NewInternalServerError("Entity with modelType 'Entity' is not of type Entity")
-		}
-		for index, nestedElement := range submodelElementCollection.Statements() {
-			var currentPath string
-			if startPath == "" {
-				currentPath = *submodelElementCollection.IDShort()
-			} else {
-				currentPath = startPath
-			}
-			stack = append(stack, ElementToProcess{
-				element:                   nestedElement,
-				parentID:                  parentID,
-				currentIDShortPath:        currentPath,
-				isFromSubmodelElementList: false,
-				position:                  index,
-			})
-		}
-	}
-	return stack, nil
-}
-
-func buildCurrentIDShortPath(current ElementToProcess) string {
-	var idShortPath string
-	if current.currentIDShortPath == "" {
-		idShortPath = *current.element.IDShort()
-	} else {
-		// If element comes from a SubmodelElementList, use the path as-is (includes [index])
-		if current.isFromSubmodelElementList {
-			idShortPath = current.currentIDShortPath
-		} else {
-			// For SubmodelElementCollection, append element's idShort with dot notation
-			idShortPath = current.currentIDShortPath + "." + *current.element.IDShort()
-		}
-	}
-	return idShortPath
-}
-
-func addNestedElementToStackWithNormalPath(elem types.ISubmodelElement, i int, stack []ElementToProcess, newParentID int, idShortPath string) []ElementToProcess {
-	var nestedElement types.ISubmodelElement
-	switch elem.ModelType() {
-	case types.ModelTypeAnnotatedRelationshipElement:
-		annotatedRelElement, ok := elem.(*types.AnnotatedRelationshipElement)
-		if !ok {
-			return stack
-		}
-		nestedElement = annotatedRelElement.Annotations()[i]
-	case types.ModelTypeEntity:
-		entityElement, ok := elem.(*types.Entity)
-		if !ok {
-			return stack
-		}
-		nestedElement = entityElement.Statements()[i]
-	case types.ModelTypeSubmodelElementCollection:
-		submodelElementCollection, ok := elem.(*types.SubmodelElementCollection)
-		if !ok {
-			return stack
-		}
-		nestedElement = submodelElementCollection.Value()[i]
-	default:
-		return stack
-	}
-	stack = append(stack, ElementToProcess{
-		element:                   nestedElement,
-		parentID:                  newParentID,
-		currentIDShortPath:        idShortPath,
-		isFromSubmodelElementList: false, // Children of collection are not from list
-		position:                  i,
-	})
-	return stack
-}
-
-func addNestedElementToStackWithIndexPath(submodelElementList *types.SubmodelElementList, index int, idShortPath string, stack []ElementToProcess, newParentID int) []ElementToProcess {
-	nestedElement := submodelElementList.Value()[index]
-	nestedIDShortPath := idShortPath + "[" + strconv.Itoa(index) + "]"
-	stack = append(stack, ElementToProcess{
-		element:                   nestedElement,
-		parentID:                  newParentID,
-		currentIDShortPath:        nestedIDShortPath,
-		isFromSubmodelElementList: true,  // Children of list are from list
-		position:                  index, // For lists, position is the actual index
-	})
-	return stack
 }
 
 func getEDSJSONStringFromSubmodel(sm *types.Submodel) (string, error) {
@@ -300,42 +136,4 @@ func getSubmodelElementModelTypeByIDShortPathAndSubmodelID(db *sql.DB, submodelI
 		return nil, common.NewInternalServerError(fmt.Sprintf("Failed to get ModelType for SubmodelElement %s", idShortOrPath))
 	}
 	return &modelType, nil
-}
-
-func processByModelType(newParentID int, idShortPath string, current ElementToProcess, stack []ElementToProcess) ([]ElementToProcess, error) {
-	switch current.element.ModelType() {
-	case types.ModelTypeSubmodelElementCollection:
-		submodelElementCollection, ok := current.element.(*types.SubmodelElementCollection)
-		if !ok {
-			return nil, common.NewInternalServerError("SubmodelElement with modelType 'SubmodelElementCollection' is not of type SubmodelElementCollection")
-		}
-		for i := len(submodelElementCollection.Value()) - 1; i >= 0; i-- {
-			stack = addNestedElementToStackWithNormalPath(submodelElementCollection, i, stack, newParentID, idShortPath)
-		}
-	case types.ModelTypeSubmodelElementList:
-		submodelElementList, ok := current.element.(*types.SubmodelElementList)
-		if !ok {
-			return nil, common.NewInternalServerError("SubmodelElement with modelType 'SubmodelElementList' is not of type SubmodelElementList")
-		}
-		for index := len(submodelElementList.Value()) - 1; index >= 0; index-- {
-			stack = addNestedElementToStackWithIndexPath(submodelElementList, index, idShortPath, stack, newParentID)
-		}
-	case types.ModelTypeAnnotatedRelationshipElement:
-		annotatedRelElement, ok := current.element.(*types.AnnotatedRelationshipElement)
-		if !ok {
-			return nil, common.NewInternalServerError("SubmodelElement with modelType 'AnnotatedRelationshipElement' is not of type AnnotatedRelationshipElement")
-		}
-		for i := len(annotatedRelElement.Annotations()) - 1; i >= 0; i-- {
-			stack = addNestedElementToStackWithNormalPath(annotatedRelElement, i, stack, newParentID, idShortPath)
-		}
-	case types.ModelTypeEntity:
-		entityElement, ok := current.element.(*types.Entity)
-		if !ok {
-			return nil, common.NewInternalServerError("SubmodelElement with modelType 'Entity' is not of type Entity")
-		}
-		for i := len(entityElement.Statements()) - 1; i >= 0; i-- {
-			stack = addNestedElementToStackWithNormalPath(entityElement, i, stack, newParentID, idShortPath)
-		}
-	}
-	return stack, nil
 }

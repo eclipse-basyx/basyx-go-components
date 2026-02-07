@@ -214,6 +214,8 @@ type ValueListRow struct {
 type QualifierRow struct {
 	// DbID is the unique identifier of the qualifier in the database
 	DbID int64 `json:"dbId"`
+	// Kind is the kind of the qualifier (e.g., ConceptQualifier, ValueQualifier, TemplateQualifier)
+	Kind *int64 `json:"kind"`
 	// Type is the type/name of the qualifier
 	Type string `json:"type"`
 	// Position specifies the position of the qualifier
@@ -305,7 +307,7 @@ type SubmodelElementRow struct {
 	// RootID is the database ID of the root submodel element (nullable for root elements)
 	RootID sql.NullInt64 `json:"root_id"`
 	// IDShort is the short identifier for the submodel element
-	IDShort string `json:"id_short"`
+	IDShort sql.NullString `json:"id_short"`
 	// IDShortPath is the identifier path for the submodel element
 	IDShortPath string `json:"id_short_path"`
 	// DisplayNames contains localized names as JSON data
@@ -391,11 +393,11 @@ type BasicEventElementValueRow struct {
 // that applies to all elements within the list.
 type SubmodelElementListRow struct {
 	// OrderRelevant indicates whether the order of elements in the list is significant
-	OrderRelevant bool `json:"order_relevant"`
+	OrderRelevant *bool `json:"order_relevant"`
 	// TypeValueListElement specifies the required type for elements in the list
 	TypeValueListElement int64 `json:"type_value_list_element"`
 	// ValueTypeListElement specifies the required value type for elements in the list
-	ValueTypeListElement sql.NullInt64 `json:"value_type_list_element"`
+	ValueTypeListElement *int64 `json:"value_type_list_element"`
 	// SemanticIDListElement contains semantic ID reference data for list elements as JSON data
 	SemanticIDListElement json.RawMessage `json:"semantic_id_list_element"`
 	// SemanticIDListElementReferred contains referred semantic ID reference data for list elements as JSON data

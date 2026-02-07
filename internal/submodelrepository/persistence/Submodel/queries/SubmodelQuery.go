@@ -177,8 +177,11 @@ func applyAASQuery(aasQuery *grammar.QueryWrapper, query *goqu.SelectDataset) (*
 		return query, nil
 	}
 
+	// Simplify the logical expression (adds implicit casts if enabled)
+	simplified, _ := aasQuery.Query.Condition.SimplifyForBackendFilterNoResolver()
+
 	// Evaluate the logical expression to a SQL expression
-	expr, _, err := aasQuery.Query.Condition.EvaluateToExpression(nil)
+	expr, _, err := simplified.EvaluateToExpression(nil)
 	if err != nil {
 		return nil, fmt.Errorf("error evaluating query condition: %w", err)
 	}
