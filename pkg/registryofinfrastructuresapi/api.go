@@ -9,8 +9,8 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
 
-// AssetAdministrationShellRegistryOfInfrastructuresAPIAPIRouter defines the required methods for binding the api requests to a responses for the AssetAdministrationShellRegistryOfInfrastructuresAPIAPI
-// The AssetAdministrationShellRegistryOfInfrastructuresAPIAPIRouter implementation should parse necessary information from the http request,
+// RegistryOfInfrastructuresAPIAPIRouter defines the required methods for binding the api requests to a responses for the RegistryOfInfrastructuresAPIAPI
+// The RegistryOfInfrastructuresAPIAPIRouter implementation should parse necessary information from the http request,
 // pass the data to a RegistryOfInfrastructuresAPIAPIServicer to perform the required actions, then write the service results to the http response.
 type RegistryOfInfrastructuresAPIAPIRouter interface {
 	GetAllInfrastructureDescriptors(http.ResponseWriter, *http.Request)
@@ -27,7 +27,7 @@ type DescriptionAPIAPIRouter interface {
 	GetDescription(http.ResponseWriter, *http.Request)
 }
 
-// RegistryOfInfrastructuresAPIAPIServicer defines the api actions for the AssetAdministrationShellRegistryOfInfrastructuresAPIAPI service
+// RegistryOfInfrastructuresAPIAPIServicer defines the api actions for the RegistryOfInfrastructuresAPIAPI service
 // This interface intended to stay up to date with the openapi yaml used to generate it,
 // while the service implementation can be ignored with the .openapi-generator-ignore file
 // and updated with the logic required for the API.

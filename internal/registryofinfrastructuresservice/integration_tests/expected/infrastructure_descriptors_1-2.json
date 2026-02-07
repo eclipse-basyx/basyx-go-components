@@ -1,8 +1,8 @@
 {
-    "PagingMetadata": {
+    "pagingMetadata": {
         "cursor": "aHR0cHM6Ly9pZXNlLmZyYXVuaG9mZXIuZGUvcm9pL2Q0ZS10ZW5hbnQtMC1hYXMtZGlzY292ZXJ5"
     },
-    "Result": [
+    "result": [
         {
             "description": [
                 {

@@ -230,25 +230,33 @@
         "expectedStatus": 204
     },
     {
-        "context": "034 - Update Infrastructure Descriptor (Conflict - Nonexistent ID) - PUT /infrastructure-descriptors/{id}",
+        "context": "034 - Create Infrastructure Descriptor using PUT - PUT /infrastructure-descriptors/{id}",
+        "method": "PUT",
+        "endpoint": "http://127.0.0.1:5004/infrastructure-descriptors/aHR0cHM6Ly9leGFtcGxlLmNvbS9yb2kvZXhhbXBsZS1hYXMtZGlzY292ZXJ5LTM",
+        "data": "postBody/infrastructure_descriptor_7.json",
+        "shouldMatch": "postBody/infrastructure_descriptor_7.json",
+        "expectedStatus": 201
+    },
+    {
+        "context": "035 - Update Infrastructure Descriptor (Conflict - Nonexistent ID) - PUT /infrastructure-descriptors/{id}",
         "method": "PUT",
         "endpoint": "http://127.0.0.1:5004/infrastructure-descriptors/aHR0cHM6Ly9leGFtcGxlLmNvbS9yb3IvZXhhbXBsZS1hYXMtZGlzY292ZXJ5LW5vbmV4aXN0ZW50",
         "data": "postBody/infrastructure_descriptor_5.json",
         "expectedStatus": 400
     },
     {
-        "context": "035 - Update Infrastructure Descriptor (Conflict - Body ID Mismatch) - PUT /infrastructure-descriptors/{id}",
+        "context": "036 - Update Infrastructure Descriptor (Conflict - Body ID Mismatch) - PUT /infrastructure-descriptors/{id}",
         "method": "PUT",
         "endpoint": "http://127.0.0.1:5004/infrastructure-descriptors/aHR0cHM6Ly9leGFtcGxlLmNvbS9yb3IvZXhhbXBsZS1hYXMtZGlzY292ZXJ5",
         "data": "postBody/infrastructure_descriptor_6.json",
         "expectedStatus": 400
     },
     {
-        "context": "064 - Cleanup: Delete All AAS Descriptors - ACTION DELETE_ALL_INFRASTRUCTURE_DESCRIPTORS",
+        "context": "037 - Cleanup: Delete All AAS Descriptors - ACTION DELETE_ALL_INFRASTRUCTURE_DESCRIPTORS",
         "action": "DELETE_ALL_INFRASTRUCTURE_DESCRIPTORS"
     },
     {
-        "context": "037 - Verify that Cleanup has worked - GET /infrastructure-descriptors",
+        "context": "038 - Verify that Cleanup has worked - GET /infrastructure-descriptors",
         "method": "GET",
         "endpoint": "http://127.0.0.1:5004/infrastructure-descriptors",
         "shouldMatch": "expected/empty_paged_result.json",

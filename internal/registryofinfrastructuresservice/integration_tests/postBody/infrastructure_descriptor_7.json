@@ -2,13 +2,13 @@
     "description": [
         {
             "language": "en",
-            "text": ""
+            "text": "AAS Discovery"
         }
     ],
     "displayName": [
         {
             "language": "en",
-            "text": "D4E Tenant 0 Submodel Registry"
+            "text": "AAS Discovery 3"
         }
     ],
     "administration": {
@@ -19,21 +19,21 @@
             "keys": [
                 {
                     "type": "GlobalReference",
-                    "value": "https://iese.fraunhofer.de"
+                    "value": "https://example.com"
                 }
             ]
         }
     },
     "endpoints": [
         {
+            "interface": "AAS-DISCOVERY-3.0",
             "protocolInformation": {
-                "href": "https://demo.digital-twin.host/sm-registry",
+                "href": "https://example.com/aas-discovery",
                 "endpointProtocol": "HTTPS"
-            },
-            "interface": "SUBMODEL-REGISTRY-3.0"
+            }
         }
     ],
-    "idShort": "D4ETenant0SubmodelRegistry",
-    "id": "https://iese.fraunhofer.de/roi/d4e-tenant-0-submodel-registry",
-    "company": "Fraunhofer IESE"
+    "idShort": "ExampleAASDiscovery",
+    "id": "https://example.com/roi/example-aas-discovery-3",
+    "company": "ExampleCompany"
 }
