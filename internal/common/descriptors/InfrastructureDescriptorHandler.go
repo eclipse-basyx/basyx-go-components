@@ -1,3 +1,28 @@
+/*******************************************************************************
+* Copyright (C) 2026 the Eclipse BaSyx Authors and Fraunhofer IESE
+*
+* Permission is hereby granted, free of charge, to any person obtaining
+* a copy of this software and associated documentation files (the
+* "Software"), to deal in the Software without restriction, including
+* without limitation the rights to use, copy, modify, merge, publish,
+* distribute, sublicense, and/or sell copies of the Software, and to
+* permit persons to whom the Software is furnished to do so, subject to
+* the following conditions:
+*
+* The above copyright notice and this permission notice shall be
+* included in all copies or substantial portions of the Software.
+*
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+* NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+* LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+* OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+* WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*
+* SPDX-License-Identifier: MIT
+******************************************************************************/
+
 package descriptors
 
 import (
@@ -27,10 +52,26 @@ import (
 //
 // Returns an error when SQL building/execution fails or when writing any of the
 // dependent rows fails. Errors are wrapped into common errors where relevant.
-func InsertInfrastructureDescriptor(ctx context.Context, db *sql.DB, infrastructureDescriptor model.InfrastructureDescriptor) error {
-	return WithTx(ctx, db, func(tx *sql.Tx) error {
-		return InsertInfrastructureDescriptorTx(ctx, tx, infrastructureDescriptor)
-	})
+func InsertInfrastructureDescriptor(ctx context.Context, db *sql.DB, infrastructureDescriptor model.InfrastructureDescriptor) (model.InfrastructureDescriptor, error) {
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return model.InfrastructureDescriptor{}, common.NewInternalServerError("Failed to start postgres transaction. See console for information.")
+	}
+	defer func() {
+		if rec := recover(); rec != nil {
+			_ = tx.Rollback()
+		}
+	}()
+	if err = InsertInfrastructureDescriptorTx(ctx, tx, infrastructureDescriptor); err != nil {
+		_ = tx.Rollback()
+		return model.InfrastructureDescriptor{}, err
+	}
+	result, err := GetInfrastructureDescriptorByIDTx(ctx, tx, infrastructureDescriptor.Id)
+	if err != nil {
+		_ = tx.Rollback()
+		return model.InfrastructureDescriptor{}, err
+	}
+	return result, tx.Commit()
 }
 
 // InsertInfrastructureDescriptorTx performs the same insert as
@@ -40,7 +81,7 @@ func InsertInfrastructureDescriptor(ctx context.Context, db *sql.DB, infrastruct
 // The function inserts the base descriptor row first and then creates related
 // entities (display name/description/admin info/endpoints). If any step fails,
 // the error is returned and the caller is responsible for rolling back the transaction.
-func InsertInfrastructureDescriptorTx(_ context.Context, tx *sql.Tx, regdesc model.InfrastructureDescriptor) error {
+func InsertInfrastructureDescriptorTx(_ context.Context, tx *sql.Tx, infdesc model.InfrastructureDescriptor) error {
 	d := goqu.Dialect(dialect)
 
 	descTbl := goqu.T(tblDescriptor)
@@ -59,18 +100,18 @@ func InsertInfrastructureDescriptorTx(_ context.Context, tx *sql.Tx, regdesc mod
 
 	var displayNameID, descriptionID, administrationID sql.NullInt64
 
-	dnID, err := persistence_utils.CreateLangStringNameTypes(tx, regdesc.DisplayName)
+	dnID, err := persistence_utils.CreateLangStringNameTypes(tx, infdesc.DisplayName)
 	if err != nil {
 		return common.NewInternalServerError("Failed to create DisplayName - no changes applied - see console for details")
 	}
 	displayNameID = dnID
-	descID, err := persistence_utils.CreateLangStringTextTypes(tx, regdesc.Description)
+	descID, err := persistence_utils.CreateLangStringTextTypes(tx, infdesc.Description)
 	if err != nil {
 		return common.NewInternalServerError("Failed to create Description - no changes applied - see console for details")
 	}
 	descriptionID = descID
 
-	adminID, err := persistence_utils.CreateAdministrativeInformation(tx, regdesc.Administration)
+	adminID, err := persistence_utils.CreateAdministrativeInformation(tx, infdesc.Administration)
 	if err != nil {
 		return common.NewInternalServerError("Failed to create Administration - no changes applied - see console for details")
 	}
@@ -83,10 +124,10 @@ func InsertInfrastructureDescriptorTx(_ context.Context, tx *sql.Tx, regdesc mod
 			colDescriptionID: descriptionID,
 			colDisplayNameID: displayNameID,
 			colAdminInfoID:   administrationID,
-			colGlobalAssetID: regdesc.GlobalAssetId,
-			colIDShort:       regdesc.IdShort,
-			colRegDescID:     regdesc.Id,
-			colCompany:       regdesc.Company,
+			colGlobalAssetID: infdesc.GlobalAssetId,
+			colIDShort:       infdesc.IdShort,
+			colInfDescID:     infdesc.Id,
+			colCompany:       infdesc.Company,
 		}).
 		ToSQL()
 	if buildErr != nil {
@@ -96,7 +137,7 @@ func InsertInfrastructureDescriptorTx(_ context.Context, tx *sql.Tx, regdesc mod
 		return err
 	}
 
-	if err = CreateEndpoints(tx, descriptorID, regdesc.Endpoints); err != nil {
+	if err = CreateEndpoints(tx, descriptorID, infdesc.Endpoints); err != nil {
 		return common.NewInternalServerError("Failed to create Endpoints - no changes applied - see console for details")
 	}
 
@@ -104,31 +145,28 @@ func InsertInfrastructureDescriptorTx(_ context.Context, tx *sql.Tx, regdesc mod
 }
 
 // GetInfrastructureDescriptorByID returns a fully materialized
-// InfrastructureDescriptor by its Registry Id string.
-//
+// InfrastructureDescriptor by its Infrastructure Id string.
 // The function loads optional related entities (administration, display name,
 // description, and endpoints) concurrently to minimize latency. If the
-// Registry does not exist, a NotFound error is returned.
-func GetInfrastructureDescriptorByID(
-	ctx context.Context, db *sql.DB, infrastructureIdentifier string,
-) (model.InfrastructureDescriptor, error) {
+// Infrastructure does not exist, a NotFound error is returned.
+func GetInfrastructureDescriptorByID(ctx context.Context, db *sql.DB, infrastructureIdentifier string) (model.InfrastructureDescriptor, error) {
 	d := goqu.Dialect(dialect)
 
-	reg := goqu.T(tblInfrastructureDescriptor).As("reg")
+	inf := goqu.T(tblInfrastructureDescriptor).As("inf")
 
 	sqlStr, args, buildErr := d.
-		From(reg).
+		From(inf).
 		Select(
-			reg.Col(colDescriptorID),
-			reg.Col(colGlobalAssetID),
-			reg.Col(colIDShort),
-			reg.Col(colCompany),
-			reg.Col(colRegDescID),
-			reg.Col(colAdminInfoID),
-			reg.Col(colDisplayNameID),
-			reg.Col(colDescriptionID),
+			inf.Col(colDescriptorID),
+			inf.Col(colGlobalAssetID),
+			inf.Col(colIDShort),
+			inf.Col(colCompany),
+			inf.Col(colInfDescID),
+			inf.Col(colAdminInfoID),
+			inf.Col(colDisplayNameID),
+			inf.Col(colDescriptionID),
 		).
-		Where(reg.Col(colRegDescID).Eq(infrastructureIdentifier)).
+		Where(inf.Col(colInfDescID).Eq(infrastructureIdentifier)).
 		Limit(1).
 		ToSQL()
 	if buildErr != nil {
@@ -188,12 +226,109 @@ func GetInfrastructureDescriptorByID(
 	}, &description)
 
 	GoAssign(g, func() ([]model.Endpoint, error) {
-		return ReadEndpointsByDescriptorID(ctx, db, descID, "registry")
+		return ReadEndpointsByDescriptorID(ctx, db, descID, "infrastructure")
 	}, &endpoints)
 
 	if err := g.Wait(); err != nil {
 		return model.InfrastructureDescriptor{}, err
 	}
+
+	return model.InfrastructureDescriptor{
+		GlobalAssetId:  globalAssetID.String,
+		IdShort:        idShort.String,
+		Company:        company.String,
+		Id:             idStr,
+		Administration: adminInfo,
+		DisplayName:    displayName,
+		Description:    description,
+		Endpoints:      endpoints,
+	}, nil
+}
+
+// GetInfrastructureDescriptorByIDTx returns a fully materialized
+// InfrastructureDescriptor by its Infrastructure Id string using the provided
+// transaction. It avoids concurrent queries, which are unsafe on *sql.Tx.
+func GetInfrastructureDescriptorByIDTx(ctx context.Context, tx *sql.Tx, infrastructureIdentifier string) (model.InfrastructureDescriptor, error) {
+	d := goqu.Dialect(dialect)
+
+	inf := goqu.T(tblInfrastructureDescriptor).As("inf")
+
+	sqlStr, args, buildErr := d.
+		From(inf).
+		Select(
+			inf.Col(colDescriptorID),
+			inf.Col(colGlobalAssetID),
+			inf.Col(colIDShort),
+			inf.Col(colCompany),
+			inf.Col(colInfDescID),
+			inf.Col(colAdminInfoID),
+			inf.Col(colDisplayNameID),
+			inf.Col(colDescriptionID),
+		).
+		Where(inf.Col(colInfDescID).Eq(infrastructureIdentifier)).
+		Limit(1).
+		ToSQL()
+	if buildErr != nil {
+		return model.InfrastructureDescriptor{}, buildErr
+	}
+	var (
+		descID                          int64
+		globalAssetID, idShort, company sql.NullString
+		idStr                           string
+		adminInfoID                     sql.NullInt64
+		displayNameID                   sql.NullInt64
+		descriptionID                   sql.NullInt64
+	)
+
+	if err := tx.QueryRowContext(ctx, sqlStr, args...).Scan(
+		&descID,
+		&globalAssetID,
+		&idShort,
+		&company,
+		&idStr,
+		&adminInfoID,
+		&displayNameID,
+		&descriptionID,
+	); err != nil {
+		if err == sql.ErrNoRows {
+			return model.InfrastructureDescriptor{}, common.NewErrNotFound("Infrastructure Descriptor not found")
+		}
+		return model.InfrastructureDescriptor{}, err
+	}
+	var (
+		adminInfo   types.IAdministrativeInformation
+		displayName []types.ILangStringNameType
+		description []types.ILangStringTextType
+		endpoints   []model.Endpoint
+	)
+
+	if adminInfoID.Valid {
+		ai, err := ReadAdministrativeInformationByID(ctx, tx, tblInfrastructureDescriptor, adminInfoID)
+		if err != nil {
+			return model.InfrastructureDescriptor{}, err
+		}
+		adminInfo = ai
+	}
+	if displayNameID.Valid {
+		dn, err := GetLangStringNameTypesByIDs(tx, []int64{displayNameID.Int64})
+		if err != nil {
+			return model.InfrastructureDescriptor{}, err
+		}
+		displayName = dn[displayNameID.Int64]
+	}
+
+	if descriptionID.Valid {
+		desc, err := GetLangStringTextTypesByIDs(tx, []int64{descriptionID.Int64})
+		if err != nil {
+			return model.InfrastructureDescriptor{}, err
+		}
+		description = desc[descriptionID.Int64]
+	}
+	ep, err := ReadEndpointsByDescriptorID(ctx, tx, descID, "infrastructure")
+	if err != nil {
+		return model.InfrastructureDescriptor{}, err
+	}
+	endpoints = ep
 
 	return model.InfrastructureDescriptor{
 		GlobalAssetId:  globalAssetID.String,
@@ -222,12 +357,12 @@ func DeleteInfrastructureDescriptorByID(ctx context.Context, db *sql.DB, infrast
 // descriptor row. Dependent rows are removed via ON DELETE CASCADE.
 func DeleteInfrastructureDescriptorByIDTx(ctx context.Context, tx *sql.Tx, infrastructureIdentifier string) error {
 	d := goqu.Dialect("postgres")
-	reg := goqu.T(tblInfrastructureDescriptor).As("reg")
+	inf := goqu.T(tblInfrastructureDescriptor).As("inf")
 
 	sqlStr, args, buildErr := d.
-		From(reg).
-		Select(reg.Col(colDescriptorID)).
-		Where(reg.Col(colRegDescID).Eq(infrastructureIdentifier)).
+		From(inf).
+		Select(inf.Col(colDescriptorID)).
+		Where(inf.Col(colInfDescID).Eq(infrastructureIdentifier)).
 		Limit(1).
 		ToSQL()
 	if buildErr != nil {
@@ -256,51 +391,42 @@ func DeleteInfrastructureDescriptorByIDTx(ctx context.Context, tx *sql.Tx, infra
 }
 
 // ReplaceInfrastructureDescriptor atomically replaces the descriptor with the same
-// Registry Id: if a descriptor exists it is deleted (base descriptor row), then
+// Infrastructure Id: if a descriptor exists it is deleted (base descriptor row), then
 // the provided descriptor is inserted. Related rows are recreated from the input.
-// The returned boolean indicates whether a descriptor existed before the replace.
-func ReplaceInfrastructureDescriptor(ctx context.Context, db *sql.DB, infrastructureDescriptor model.InfrastructureDescriptor) (bool, error) {
-	existed := false
-	err := WithTx(ctx, db, func(tx *sql.Tx) error {
-		d := goqu.Dialect(dialect)
-		reg := goqu.T(tblInfrastructureDescriptor).As("reg")
+// The returned descriptor is the stored Infrastructure Descriptor after replacement.
+func ReplaceInfrastructureDescriptor(ctx context.Context, db *sql.DB, infrastructureDescriptor model.InfrastructureDescriptor) (model.InfrastructureDescriptor, error) {
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return model.InfrastructureDescriptor{}, common.NewInternalServerError("Failed to start postgres transaction. See console for information.")
+	}
+	defer func() {
+		if rec := recover(); rec != nil {
+			_ = tx.Rollback()
+		}
+	}()
 
-		sqlStr, args, buildErr := d.
-			From(reg).
-			Select(reg.Col(colDescriptorID)).
-			Where(reg.Col(colRegDescID).Eq(infrastructureDescriptor.Id)).
-			Limit(1).
-			ToSQL()
-		if buildErr != nil {
-			return buildErr
-		}
-		var descID int64
-		scanErr := tx.QueryRowContext(ctx, sqlStr, args...).Scan(&descID)
-		if scanErr != nil && !errors.Is(scanErr, sql.ErrNoRows) {
-			return scanErr
-		}
-		if scanErr == nil {
-			existed = true
-			delStr, delArgs, buildDelErr := d.
-				Delete(tblDescriptor).
-				Where(goqu.C(colID).Eq(descID)).
-				ToSQL()
-			if buildDelErr != nil {
-				return buildDelErr
-			}
-			if _, execErr := tx.Exec(delStr, delArgs...); execErr != nil {
-				return execErr
-			}
-		}
+	// delete existing descriptor
+	if err = DeleteInfrastructureDescriptorByIDTx(ctx, tx, infrastructureDescriptor.Id); err != nil {
+		_ = tx.Rollback()
+		return model.InfrastructureDescriptor{}, err
+	}
+	// insert new descriptor
+	if err = InsertInfrastructureDescriptorTx(ctx, tx, infrastructureDescriptor); err != nil {
+		_ = tx.Rollback()
+		return model.InfrastructureDescriptor{}, err
+	}
 
-		return InsertInfrastructureDescriptorTx(ctx, tx, infrastructureDescriptor)
-	})
-	return existed, err
+	result, err := GetInfrastructureDescriptorByIDTx(ctx, tx, infrastructureDescriptor.Id)
+	if err != nil {
+		_ = tx.Rollback()
+		return model.InfrastructureDescriptor{}, err
+	}
+	return result, tx.Commit()
 }
 
-// ListInfrastructureDescriptors lists Infrastructure descriptors with optional
-// filtering by company and endpoint interface. Results are ordered by Registry Id
-// ascending and support cursor‑based pagination where the cursor is the Registry Id
+// ListInfrastructureDescriptors lists Infrastructure Descriptors with optional
+// filtering by company and endpoint interface. Results are ordered by Infrastructure Id
+// ascending and support cursor‑based pagination where the cursor is the Infrastructure Id
 // of the first element to include (i.e. Id >= cursor).
 //
 // It returns the page of fully assembled descriptors and, when more results are
@@ -322,28 +448,28 @@ func ListInfrastructureDescriptors(
 	peekLimit := int(limit) + 1
 
 	d := goqu.Dialect(dialect)
-	reg := goqu.T(tblInfrastructureDescriptor).As("reg")
+	inf := goqu.T(tblInfrastructureDescriptor).As("inf")
 	aasdescendp := goqu.T(tblAASDescriptorEndpoint).As("aasdescendp")
 
 	ds := d.
-		From(reg).
+		From(inf).
 		Select(
-			reg.Col(colDescriptorID),
-			reg.Col(colGlobalAssetID),
-			reg.Col(colIDShort),
-			reg.Col(colCompany),
-			reg.Col(colRegDescID),
-			reg.Col(colAdminInfoID),
-			reg.Col(colDisplayNameID),
-			reg.Col(colDescriptionID),
+			inf.Col(colDescriptorID),
+			inf.Col(colGlobalAssetID),
+			inf.Col(colIDShort),
+			inf.Col(colCompany),
+			inf.Col(colInfDescID),
+			inf.Col(colAdminInfoID),
+			inf.Col(colDisplayNameID),
+			inf.Col(colDescriptionID),
 		)
 
 	if cursor != "" {
-		ds = ds.Where(reg.Col(colRegDescID).Gte(cursor))
+		ds = ds.Where(inf.Col(colInfDescID).Gte(cursor))
 	}
 
 	if company != "" {
-		ds = ds.Where(reg.Col(colCompany).Eq(company))
+		ds = ds.Where(inf.Col(colCompany).Eq(company))
 	}
 
 	if endpointInterface != "" {
@@ -351,7 +477,7 @@ func ListInfrastructureDescriptors(
 			LeftJoin(
 				aasdescendp,
 				goqu.On(
-					reg.Col(colDescriptorID).Eq(aasdescendp.Col(colDescriptorID)),
+					inf.Col(colDescriptorID).Eq(aasdescendp.Col(colDescriptorID)),
 				),
 			).
 			Where(aasdescendp.Col(colInterface).Eq(endpointInterface))
@@ -362,17 +488,17 @@ func ListInfrastructureDescriptors(
 	}
 
 	ds = ds.
-		Order(reg.Col(colRegDescID).Asc()).
+		Order(inf.Col(colInfDescID).Asc()).
 		Limit(uint(peekLimit))
 
 	sqlStr, args, buildErr := ds.ToSQL()
 	if buildErr != nil {
-		return nil, "", common.NewInternalServerError("Failed to build Infrastructure descriptor query. See server logs for details.")
+		return nil, "", common.NewInternalServerError("Failed to build Infrastructure Descriptor query. See server logs for details.")
 	}
 
 	rows, err := db.QueryContext(ctx, sqlStr, args...)
 	if err != nil {
-		return nil, "", common.NewInternalServerError("Failed to query Infrastructure descriptors. See server logs for details.")
+		return nil, "", common.NewInternalServerError("Failed to query Infrastructure Descriptors. See server logs for details.")
 	}
 	defer func() {
 		_ = rows.Close()
@@ -391,12 +517,12 @@ func ListInfrastructureDescriptors(
 			&r.DisplayNameID,
 			&r.DescriptionID,
 		); err != nil {
-			return nil, "", common.NewInternalServerError("Failed to scan RegInfrastructureistry descriptor row. See server logs for details.")
+			return nil, "", common.NewInternalServerError("Failed to scan Infrastructure Descriptor row. See server logs for details.")
 		}
 		descRows = append(descRows, r)
 	}
 	if rows.Err() != nil {
-		return nil, "", common.NewInternalServerError("Failed to iterate Infrastructure descriptors. See server logs for details.")
+		return nil, "", common.NewInternalServerError("Failed to iterate Infrastructure Descriptors. See server logs for details.")
 	}
 
 	var nextCursor string
@@ -454,37 +580,29 @@ func ListInfrastructureDescriptors(
 	descByID := map[int64][]types.ILangStringTextType{}
 	endpointsByDesc := map[int64][]model.Endpoint{}
 
-	g, gctx := errgroup.WithContext(ctx)
-
 	if len(adminInfoIDs) > 0 {
-		ids := append([]int64(nil), adminInfoIDs...)
-		GoAssign(g, func() (map[int64]types.IAdministrativeInformation, error) {
-			return ReadAdministrativeInformationByIDs(gctx, db, tblInfrastructureDescriptor, ids)
-		}, &admByID)
+		admByID, err = ReadAdministrativeInformationByIDs(ctx, db, tblInfrastructureDescriptor, adminInfoIDs)
+		if err != nil {
+			return nil, "", err
+		}
 	}
 	if len(displayNameIDs) > 0 {
-		ids := append([]int64(nil), displayNameIDs...)
-		GoAssign(g, func() (map[int64][]types.ILangStringNameType, error) {
-			return GetLangStringNameTypesByIDs(db, ids)
-		}, &dnByID)
+		dnByID, err = GetLangStringNameTypesByIDs(db, displayNameIDs)
+		if err != nil {
+			return nil, "", err
+		}
 	}
-
 	if len(descriptionIDs) > 0 {
-		ids := append([]int64(nil), descriptionIDs...)
-		GoAssign(g, func() (map[int64][]types.ILangStringTextType, error) {
-			return GetLangStringTextTypesByIDs(db, ids)
-		}, &descByID)
+		descByID, err = GetLangStringTextTypesByIDs(db, descriptionIDs)
+		if err != nil {
+			return nil, "", err
+		}
 	}
-
 	if len(descIDs) > 0 {
-		ids := append([]int64(nil), descIDs...)
-		GoAssign(g, func() (map[int64][]model.Endpoint, error) {
-			return ReadEndpointsByDescriptorIDs(gctx, db, ids, "registry")
-		}, &endpointsByDesc)
-	}
-
-	if err := g.Wait(); err != nil {
-		return nil, "", err
+		endpointsByDesc, err = ReadEndpointsByDescriptorIDs(ctx, db, descIDs, "infrastructure")
+		if err != nil {
+			return nil, "", err
+		}
 	}
 
 	out := make([]model.InfrastructureDescriptor, 0, len(descRows))
@@ -520,4 +638,26 @@ func ListInfrastructureDescriptors(
 	}
 
 	return out, nextCursor, nil
+}
+
+// ExistsInfrastructureByID performs a lightweight existence check for an Infrastructure by its Id
+// string. It returns true when a descriptor exists, false when it does not.
+func ExistsInfrastructureByID(ctx context.Context, db *sql.DB, infrastructureIdentifier string) (bool, error) {
+	d := goqu.Dialect(dialect)
+	inf := goqu.T(tblInfrastructureDescriptor).As("inf")
+
+	ds := d.From(inf).Select(goqu.L("1")).Where(inf.Col(colInfDescID).Eq(infrastructureIdentifier)).Limit(1)
+	sqlStr, args, err := ds.ToSQL()
+	if err != nil {
+		return false, err
+	}
+
+	var one int
+	if scanErr := db.QueryRowContext(ctx, sqlStr, args...).Scan(&one); scanErr != nil {
+		if errors.Is(scanErr, sql.ErrNoRows) {
+			return false, nil
+		}
+		return false, scanErr
+	}
+	return true, nil
 }

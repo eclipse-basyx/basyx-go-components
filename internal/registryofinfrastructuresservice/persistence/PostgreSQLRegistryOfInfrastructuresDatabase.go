@@ -83,27 +83,27 @@ func NewPostgreSQLRegistryOfInfrastructuresBackend(dsn string, _ int32 /* maxOpe
 // and all related nested entities into the database.
 func (p *PostgreSQLRegistryOfInfrastructuresDatabase) InsertInfrastructureDescriptor(
 	ctx context.Context,
-	aasd model.InfrastructureDescriptor,
-) error {
-	return descriptors.InsertInfrastructureDescriptor(ctx, p.db, aasd)
+	infrastructureDescriptor model.InfrastructureDescriptor,
+) (model.InfrastructureDescriptor, error) {
+	return descriptors.InsertInfrastructureDescriptor(ctx, p.db, infrastructureDescriptor)
 }
 
 // GetInfrastructureDescriptorByID returns the infrastructure descriptor
 // identified by the given infrastructure descriptor ID.
 func (p *PostgreSQLRegistryOfInfrastructuresDatabase) GetInfrastructureDescriptorByID(
 	ctx context.Context,
-	registryIdentifier string,
+	infrastructureIdentifier string,
 ) (model.InfrastructureDescriptor, error) {
-	return descriptors.GetInfrastructureDescriptorByID(ctx, p.db, registryIdentifier)
+	return descriptors.GetInfrastructureDescriptorByID(ctx, p.db, infrastructureIdentifier)
 }
 
 // DeleteInfrastructureDescriptorByID deletes the infrastructure descriptor
 // identified by the given ID.
 func (p *PostgreSQLRegistryOfInfrastructuresDatabase) DeleteInfrastructureDescriptorByID(
 	ctx context.Context,
-	infrastructureDescriptor string,
+	infrastructureIdentifier string,
 ) error {
-	return descriptors.DeleteInfrastructureDescriptorByID(ctx, p.db, infrastructureDescriptor)
+	return descriptors.DeleteInfrastructureDescriptorByID(ctx, p.db, infrastructureIdentifier)
 }
 
 // ReplaceInfrastructureDescriptor replaces an existing infrastructure descriptor
@@ -111,7 +111,7 @@ func (p *PostgreSQLRegistryOfInfrastructuresDatabase) DeleteInfrastructureDescri
 func (p *PostgreSQLRegistryOfInfrastructuresDatabase) ReplaceInfrastructureDescriptor(
 	ctx context.Context,
 	infrastructureDescriptor model.InfrastructureDescriptor,
-) (bool, error) {
+) (model.InfrastructureDescriptor, error) {
 	return descriptors.ReplaceInfrastructureDescriptor(ctx, p.db, infrastructureDescriptor)
 }
 
@@ -125,4 +125,12 @@ func (p *PostgreSQLRegistryOfInfrastructuresDatabase) ListInfrastructureDescript
 	endpointInterface string,
 ) ([]model.InfrastructureDescriptor, string, error) {
 	return descriptors.ListInfrastructureDescriptors(ctx, p.db, limit, cursor, company, endpointInterface)
+}
+
+// ExistsInfrastructureByID reports whether an Infrastructure with the given ID exists.
+func (p *PostgreSQLRegistryOfInfrastructuresDatabase) ExistsInfrastructureByID(
+	ctx context.Context,
+	infrastructureIdentifier string,
+) (bool, error) {
+	return descriptors.ExistsInfrastructureByID(ctx, p.db, infrastructureIdentifier)
 }

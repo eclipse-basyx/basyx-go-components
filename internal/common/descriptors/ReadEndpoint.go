@@ -129,7 +129,7 @@ func ReadEndpointsByDescriptorIDs(
 				submodelDescriptorEndpointAlias,
 				goqu.On(submodelDescriptorEndpointAlias.Col(colDescriptorID).Eq(submodelDescriptorAlias.Col(colDescriptorID))),
 			)
-	case "registry":
+	case "infrastructure":
 		joinOn = infrastructureDescriptorEndpointAlias
 		ds = ds.InnerJoin(
 			tInfrastructureDescriptor,

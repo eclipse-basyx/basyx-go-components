@@ -89,7 +89,7 @@ const (
 	colGlobalAssetID           = "global_asset_id"
 	colIDShort                 = "id_short"
 	colAASID                   = "id"
-	colRegDescID               = "id"
+	colInfDescID               = "id"
 	colHref                    = "href"
 	colEndpointProtocol        = "endpoint_protocol"
 	colSubProtocol             = "sub_protocol"
