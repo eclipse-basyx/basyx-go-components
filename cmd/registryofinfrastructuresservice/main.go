@@ -3,6 +3,7 @@ package main
 
 import (
 	"context"
+	"embed"
 	"flag"
 	"fmt"
 	"log"
@@ -16,6 +17,9 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/pkg/registryofinfrastructuresapi"
 	"github.com/go-chi/chi/v5"
 )
+
+//go:embed openapi.yaml
+var openapiSpec embed.FS
 
 func runServer(ctx context.Context, configPath string, databaseSchema string) error {
 	log.Default().Println("Loading Registry of Infrastructures Service...")
@@ -33,6 +37,11 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 
 	// --- Health Endpoint (public) ---
 	common.AddHealthEndpoint(r, cfg)
+
+	// Add Swagger UI
+	if err := common.AddSwaggerUIFromFS(r, openapiSpec, "openapi.yaml", "Registry of Infrastructures Service API", "/swagger", "/api-docs/openapi.yaml", cfg); err != nil {
+		log.Printf("Warning: failed to load OpenAPI spec for Swagger UI: %v", err)
+	}
 
 	log.Printf("🗄️  Connecting to Postgres with DSN: postgres://%s:****@%s:%d/%s?sslmode=disable",
 		cfg.Postgres.User, cfg.Postgres.Host, cfg.Postgres.Port, cfg.Postgres.DBName)
@@ -56,7 +65,7 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	// === Protected API Subrouter ===
 	apiRouter := chi.NewRouter()
 
-	// Register all registry of infrastructures routes
+	// Register all Registry of Infrastructures routes
 	for _, rt := range rorCtrl.Routes() {
 		apiRouter.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
 	}

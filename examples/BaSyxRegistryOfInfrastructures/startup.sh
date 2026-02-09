@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Wait for the registry of infrastructures to be healthy
+# Wait for the Registry of Infrastructures to be healthy
 echo "Waiting for Registry of Infrastructures to be ready..."
 max_attempts=30
 attempt=0
@@ -36,7 +36,7 @@ curl --location --request POST 'http://localhost:5080/infrastructure-descriptors
             "text": "AAS Registry of the AAS Dataspace for Everybody Tenant 0"
         }
     ],
-    "displayname": [
+    "displayName": [
         {
             "language": "en",
             "text": "D4E Tenant 0 AAS Registry"
@@ -80,7 +80,7 @@ curl --location --request POST 'http://localhost:5080/infrastructure-descriptors
             "text": "AAS Discovery Service for D4E Tenant 0"
         }
     ],
-    "displayname": [
+    "displayName": [
         {
             "language": "en",
             "text": "D4E Tenant 0 AAS Discovery"
@@ -124,7 +124,7 @@ curl --location --request POST 'http://localhost:5080/infrastructure-descriptors
             "text": "Submodel Registry for D4E Tenant 0"
         }
     ],
-    "displayname": [
+    "displayName": [
         {
             "language": "en",
             "text": "D4E Tenant 0 Submodel Registry"
@@ -168,7 +168,7 @@ curl --location --request POST 'http://localhost:5080/infrastructure-descriptors
             "text": "AAS Environment Shells Repository for D4E Tenant 0"
         }
     ],
-    "displayname": [
+    "displayName": [
         {
             "language": "en",
             "text": "D4E Tenant 0 AAS Shells"
@@ -212,7 +212,7 @@ curl --location --request POST 'http://localhost:5080/infrastructure-descriptors
             "text": "AAS Environment Submodels Repository for D4E Tenant 0"
         }
     ],
-    "displayname": [
+    "displayName": [
         {
             "language": "en",
             "text": "D4E Tenant 0 Submodels"
@@ -256,7 +256,7 @@ curl --location --request POST 'http://localhost:5080/infrastructure-descriptors
             "text": "AAS Environment Concept Descriptions Repository for D4E Tenant 0"
         }
     ],
-    "displayname": [
+    "displayName": [
         {
             "language": "en",
             "text": "D4E Tenant 0 Concept Descriptions"
