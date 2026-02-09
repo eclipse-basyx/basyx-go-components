@@ -25,7 +25,7 @@ sleep 2
 
 echo "Pre-filling Registry of Infrastructures with sample data..."
 
-# Add AAS Infrastructure descriptor
+# Add Infrastructure descriptor
 echo "Adding AAS Registry..."
 curl --location --request POST 'http://localhost:5080/infrastructure-descriptors' \
 --header 'Content-Type: application/json' \
