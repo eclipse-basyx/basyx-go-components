@@ -41,8 +41,6 @@ const (
 	tblDescriptor                     = "descriptor"
 	tblAASDescriptor                  = "aas_descriptor"
 	tblAASDescriptorEndpoint          = "aas_descriptor_endpoint"
-	tblSecurityAttributes             = "security_attributes"
-	tblEndpointProtocolVersion        = "endpoint_protocol_version"
 	tblAASIdentifier                  = "aas_identifier"
 	tblSpecificAssetID                = "specific_asset_id"
 	tblSpecificAssetIDSuppSemantic    = "specific_asset_id_supplemental_semantic_id"
@@ -99,11 +97,8 @@ const (
 	colSubProtocolBodyEncoding = "sub_protocol_body_encoding"
 	colInterface               = "interface"
 
-	colEndpointID              = "endpoint_id"
-	colSecurityType            = "security_type"
-	colSecurityKey             = "security_key"
-	colSecurityValue           = "security_value"
 	colEndpointProtocolVersion = "endpoint_protocol_version"
+	colSecurityAttributes      = "security_attributes"
 
 	colSemanticID              = "semantic_id"
 	colSupplementalSemanticIDs = "supplemental_semantic_ids"

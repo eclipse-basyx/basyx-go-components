@@ -1,0 +1,429 @@
+{
+  "pagingMetadata": {},
+  "result": [
+    {
+      "id": "urn:example:sm:002",
+      "endpoints": [
+        {
+          "interface": "AAS-3.0",
+          "protocolInformation": {
+            "href": "https://demo3.digital-twin.host/submodels/dXJuOmV4YW1wbGU6c206MDAy/updated",
+            "endpointProtocol": "https"
+          }
+        }
+      ],
+      "extensions": [
+        {
+          "name": "tag",
+          "valueType": "xs:string",
+          "value": "v2-updated"
+        }
+      ]
+    },
+    {
+      "id": "urn:example:sm:003",
+      "idShort": "SubmodelDescriptor003",
+      "administration": {
+        "version": "1",
+        "revision": "0",
+        "templateId": "https://example.com/templates/submodel/003",
+        "creator": {
+          "type": "ExternalReference",
+          "keys": [
+            {
+              "type": "GlobalReference",
+              "value": "Creator-Primary"
+            },
+            {
+              "type": "GlobalReference",
+              "value": "Creator-Secondary"
+            }
+          ],
+          "referredSemanticId": {
+            "type": "ExternalReference",
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "https://example.com/referred/creator/level1"
+              }
+            ],
+            "referredSemanticId": {
+              "type": "ExternalReference",
+              "keys": [
+                {
+                  "type": "GlobalReference",
+                  "value": "https://example.com/referred/creator/level2"
+                }
+              ]
+            }
+          }
+        },
+        "embeddedDataSpecifications": [
+          {
+            "dataSpecification": {
+              "type": "ExternalReference",
+              "keys": [
+                {
+                  "type": "GlobalReference",
+                  "value": "http://admin-shell.io/DataSpecificationTemplates/DataSpecificationIEC61360/2/0"
+                }
+              ],
+              "referredSemanticId": {
+                "type": "ExternalReference",
+                "keys": [
+                  {
+                    "type": "GlobalReference",
+                    "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental2"
+                  }
+                ],
+                "referredSemanticId": {
+                  "type": "ExternalReference",
+                  "keys": [
+                    {
+                      "type": "GlobalReference",
+                      "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental3"
+                    }
+                  ]
+                }
+              }
+            },
+            "dataSpecificationContent": {
+              "modelType": "DataSpecificationIec61360",
+              "preferredName": [
+                {
+                  "language": "en",
+                  "text": "IEC 61360-2 Data Specification"
+                }
+              ],
+              "shortName": [
+                {
+                  "language": "en",
+                  "text": "IEC 61360-2"
+                }
+              ],
+              "unit": "Kiloohm",
+              "unitId": {
+                "type": "ExternalReference",
+                "keys": [
+                  {
+                    "type": "GlobalReference",
+                    "value": "http://www.iec.ch/TC13JWG1/GA/GA13/GA13_1036"
+                  }
+                ],
+                "referredSemanticId": {
+                  "type": "ExternalReference",
+                  "keys": [
+                    {
+                      "type": "GlobalReference",
+                      "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental2"
+                    }
+                  ],
+                  "referredSemanticId": {
+                    "type": "ExternalReference",
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental3"
+                      }
+                    ]
+                  }
+                }
+              },
+              "sourceOfDefinition": "IEC 61360-2",
+              "symbol": "kOhm",
+              "dataType": "REAL_COUNT",
+              "definition": [
+                {
+                  "language": "en",
+                  "text": "Data Specification according to IEC 61360-2"
+                }
+              ],
+              "valueFormat": "##.##",
+              "valueList": {
+                "valueReferencePairs": [
+                  {
+                    "value": "100",
+                    "valueId": {
+                      "type": "ExternalReference",
+                      "keys": [
+                        {
+                          "type": "GlobalReference",
+                          "value": "100"
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "value": "250",
+                    "valueId": {
+                      "type": "ExternalReference",
+                      "keys": [
+                        {
+                          "type": "GlobalReference",
+                          "value": "250"
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "description": [
+        {
+          "language": "en",
+          "text": "Fully populated Submodel Descriptor for integration testing."
+        },
+        {
+          "language": "de",
+          "text": "Vollstaendig ausgefuellter Submodel Descriptor fuer Integrationstests."
+        }
+      ],
+      "displayName": [
+        {
+          "language": "en",
+          "text": "Submodel Descriptor 003"
+        },
+        {
+          "language": "de",
+          "text": "Submodel Descriptor 003"
+        }
+      ],
+      "semanticId": {
+        "type": "ExternalReference",
+        "keys": [
+          {
+            "type": "GlobalReference",
+            "value": "https://example.com/semantic/submodel/003"
+          }
+        ],
+        "referredSemanticId": {
+          "type": "ExternalReference",
+          "keys": [
+            {
+              "type": "GlobalReference",
+              "value": "https://example.com/semantic/submodel/003/referred"
+            }
+          ],
+          "referredSemanticId": {
+            "type": "ExternalReference",
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "https://example.com/semantic/submodel/003/referred/deeper"
+              }
+            ]
+          }
+        }
+      },
+      "supplementalSemanticIds": [
+        {
+          "type": "ExternalReference",
+          "keys": [
+            {
+              "type": "GlobalReference",
+              "value": "https://example.com/semantic/submodel/003/supplemental/1"
+            }
+          ]
+        },
+        {
+          "type": "ExternalReference",
+          "keys": [
+            {
+              "type": "GlobalReference",
+              "value": "https://example.com/semantic/submodel/003/supplemental/2"
+            }
+          ],
+          "referredSemanticId": {
+            "type": "ExternalReference",
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "https://example.com/semantic/submodel/003/supplemental/referred"
+              }
+            ]
+          }
+        }
+      ],
+      "endpoints": [
+        {
+          "interface": "AAS-3.0",
+          "protocolInformation": {
+            "href": "https://demo3.digital-twin.host/submodels/dXJuOmV4YW1wbGU6c206MDAz",
+            "endpointProtocol": "https",
+            "endpointProtocolVersion": [
+              "1.1",
+              "1.2"
+            ],
+            "subprotocol": "rest",
+            "subprotocolBody": "{\"accept\":\"application/json\",\"timeout\":30}",
+            "subprotocolBodyEncoding": "UTF-8",
+            "securityAttributes": [
+              {
+                "type": "NONE",
+                "key": "Authorization",
+                "value": "Bearer example-token"
+              },
+              {
+                "type": "NONE",
+                "key": "scope",
+                "value": "sm:read sm:write"
+              }
+            ]
+          }
+        },
+        {
+          "interface": "AAS-3.0",
+          "protocolInformation": {
+            "href": "wss://demo3.digital-twin.host/submodels/stream/urn:example:sm:003",
+            "endpointProtocol": "wss",
+            "endpointProtocolVersion": [
+              "13"
+            ],
+            "subprotocol": "websocket",
+            "subprotocolBody": "{\"channel\":\"updates\",\"format\":\"json\"}",
+            "subprotocolBodyEncoding": "UTF-8",
+            "securityAttributes": [
+              {
+                "type": "NONE",
+                "key": "X-Api-Key",
+                "value": "example-key"
+              }
+            ]
+          }
+        }
+      ],
+      "extensions": [
+        {
+          "semanticId": {
+            "type": "ExternalReference",
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "http://acplt.org/Extension/ExampleExtension"
+              }
+            ],
+            "referredSemanticId": {
+              "type": "ExternalReference",
+              "keys": [
+                {
+                  "type": "GlobalReference",
+                  "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental2"
+                }
+              ],
+              "referredSemanticId": {
+                "type": "ExternalReference",
+                "keys": [
+                  {
+                    "type": "GlobalReference",
+                    "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental3"
+                  }
+                ]
+              }
+            }
+          },
+          "supplementalSemanticIds": [
+            {
+              "type": "ExternalReference",
+              "keys": [
+                {
+                  "type": "GlobalReference",
+                  "value": "something_random_e14ad770"
+                }
+              ],
+              "referredSemanticId": {
+                "type": "ExternalReference",
+                "keys": [
+                  {
+                    "type": "GlobalReference",
+                    "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental2"
+                  }
+                ],
+                "referredSemanticId": {
+                  "type": "ExternalReference",
+                  "keys": [
+                    {
+                      "type": "GlobalReference",
+                      "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental3"
+                    }
+                  ]
+                }
+              }
+            }
+          ],
+          "name": "http://acplt.org/Extension/ExampleExtension",
+          "valueType": "xs:string",
+          "value": "Example Extension Value",
+          "refersTo": [
+            {
+              "type": "ExternalReference",
+              "keys": [
+                {
+                  "type": "GlobalReference",
+                  "value": "0173-1#02-AAO677#002"
+                }
+              ],
+              "referredSemanticId": {
+                "type": "ExternalReference",
+                "keys": [
+                  {
+                    "type": "GlobalReference",
+                    "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental2"
+                  }
+                ],
+                "referredSemanticId": {
+                  "type": "ExternalReference",
+                  "keys": [
+                    {
+                      "type": "GlobalReference",
+                      "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental3"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "semanticId": {
+            "type": "ExternalReference",
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "http://acplt.org/Extension/ExampleExtension2"
+              }
+            ]
+          },
+          "supplementalSemanticIds": [
+            {
+              "type": "ExternalReference",
+              "keys": [
+                {
+                  "type": "GlobalReference",
+                  "value": "something_random_bd061acd"
+                }
+              ]
+            }
+          ],
+          "name": "http://acplt.org/Extension/ExampleExtension2",
+          "valueType": "xs:string",
+          "value": "Example Extension Value 2",
+          "refersTo": [
+            {
+              "type": "ExternalReference",
+              "keys": [
+                {
+                  "type": "GlobalReference",
+                  "value": "0173-1#02-AAO677#003"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+
+  ]
+}

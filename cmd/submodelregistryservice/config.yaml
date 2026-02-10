@@ -1,0 +1,26 @@
+server:
+  port: 5004
+  contextPath: ""
+  host: 0.0.0.0
+
+postgres:
+  host: localhost
+  port: 5432
+  user: admin
+  password: admin123
+  dbname: basyxTestDB
+  maxOpenConnections: 500
+  maxIdleConnections: 500
+  connMaxLifetimeMinutes: 5
+
+oidc:
+  trustlistPath: "config/trustlist.json"
+
+
+abac:
+  enabled: false
+  modelPath: "config/access_rules/access-rules.json"
+
+general:
+  enableImplicitCasts: true
+  enableDescriptorDebug: false

@@ -402,25 +402,12 @@ CREATE TABLE IF NOT EXISTS aas_descriptor_endpoint (
   position     INTEGER NOT NULL,                -- <- Array-Index
   href VARCHAR(2048) NOT NULL,
   endpoint_protocol VARCHAR(128),
+  endpoint_protocol_version JSONB DEFAULT '[]',
   sub_protocol VARCHAR(128),
   sub_protocol_body VARCHAR(2048),
   sub_protocol_body_encoding VARCHAR(128),
+  security_attributes JSONB DEFAULT '[]',
   interface VARCHAR(128) NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS security_attributes (
-  id BIGSERIAL NOT NULL PRIMARY KEY,
-  endpoint_id BIGINT NOT NULL REFERENCES aas_descriptor_endpoint(id) ON DELETE CASCADE,
-  security_type security_type NOT NULL,
-  security_key TEXT NOT NULL,
-  security_value TEXT NOT NULL
-);
-
-
-CREATE TABLE IF NOT EXISTS endpoint_protocol_version (
-  id BIGSERIAL PRIMARY KEY,
-  endpoint_id BIGINT NOT NULL REFERENCES aas_descriptor_endpoint(id) ON DELETE CASCADE,
-  endpoint_protocol_version VARCHAR(128) NOT NULL
 );
 
 
@@ -616,14 +603,6 @@ CREATE INDEX IF NOT EXISTS ix_aas_endpoint_sp_body_trgm    ON aas_descriptor_end
 CREATE INDEX IF NOT EXISTS ix_aas_endpoint_descriptor_position ON aas_descriptor_endpoint(descriptor_id, position);
 CREATE INDEX IF NOT EXISTS ix_aas_endpoint_position ON aas_descriptor_endpoint(position);
 
--- security_attributes
-CREATE INDEX IF NOT EXISTS ix_secattr_endpoint_id          ON security_attributes(endpoint_id);
-CREATE INDEX IF NOT EXISTS ix_secattr_type                 ON security_attributes(security_type);
-CREATE INDEX IF NOT EXISTS ix_secattr_key                  ON security_attributes(security_key);
-
--- endpoint_protocol_version
-CREATE INDEX IF NOT EXISTS ix_epv_endpoint_id              ON endpoint_protocol_version(endpoint_id);
-CREATE INDEX IF NOT EXISTS ix_epv_version                  ON endpoint_protocol_version(endpoint_protocol_version);
 
 -- ==========================================
 -- AAS descriptor & submodel descriptors
@@ -654,6 +633,7 @@ CREATE INDEX IF NOT EXISTS ix_smd_created_at               ON submodel_descripto
 CREATE INDEX IF NOT EXISTS ix_smd_id_short                 ON submodel_descriptor(id_short);
 -- unique(id) already present; add trigram for partial/fuzzy
 CREATE INDEX IF NOT EXISTS ix_smd_id_trgm                  ON submodel_descriptor USING GIN (id gin_trgm_ops);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_smd_id_null_aas       ON submodel_descriptor(id) WHERE aas_descriptor_id IS NULL;
 CREATE INDEX IF NOT EXISTS ix_smd_aas_descriptor_position  ON submodel_descriptor(aas_descriptor_id, position);
 CREATE INDEX IF NOT EXISTS ix_smd_position                  ON submodel_descriptor(position);
 CREATE INDEX IF NOT EXISTS ix_specific_asset_id_position   ON specific_asset_id(descriptor_id, position);
