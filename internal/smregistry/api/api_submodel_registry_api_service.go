@@ -33,7 +33,7 @@
  * API version: V3.1.1_SSP-001
  * Contact: info@idtwin.org
  */
-package openapi
+package smregistryapi
 
 import (
 	"context"

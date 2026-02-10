@@ -24,8 +24,8 @@
 ******************************************************************************/
 // Author: Martin Stemmer ( Fraunhofer IESE )
 
-// Package openapi implements Submodel Registry Service API helpers.
-package openapi
+// Package smregistryapi implements Submodel Registry Service
+package smregistryapi
 
 import (
 	"log"

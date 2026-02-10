@@ -135,6 +135,34 @@ func makeRequest(config TestConfig, stepNumber int) (string, error) {
 	return string(body), nil
 }
 
+func waitForServiceReady(endpoint string, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	client := &http.Client{Timeout: 2 * time.Second}
+	backoff := 500 * time.Millisecond
+
+	for {
+		if time.Now().After(deadline) {
+			return fmt.Errorf("SMREGISTRY-IT-WAITREADY-TIMEOUT: service not ready at %s", endpoint)
+		}
+
+		resp, err := client.Get(endpoint)
+		if err == nil {
+			_ = resp.Body.Close()
+			if resp.StatusCode == http.StatusOK {
+				return nil
+			}
+		}
+
+		time.Sleep(backoff)
+		if backoff < 5*time.Second {
+			backoff *= 2
+			if backoff > 5*time.Second {
+				backoff = 5 * time.Second
+			}
+		}
+	}
+}
+
 // IntegrationTest runs the integration tests based on the config file
 func TestIntegration(t *testing.T) {
 	// Load test configuration
@@ -146,9 +174,6 @@ func TestIntegration(t *testing.T) {
 	if err := os.Mkdir("logs", 0755); err != nil && !os.IsExist(err) {
 		t.Fatalf("Failed to create logs directory: %v", err)
 	}
-
-	// Wait for services to be ready (adjust as needed)
-	time.Sleep(15 * time.Second) // Wait for Docker Compose services
 
 	for i, config := range configs {
 		name := fmt.Sprintf("Step_%d_%s_%s", i+1, config.Method, config.Endpoint)
@@ -268,6 +293,12 @@ func TestMain(m *testing.M) {
 	}
 
 	_, _ = fmt.Println("Database initialized successfully.")
+
+	if err := waitForServiceReady("http://127.0.0.1:6005/health", 2*time.Minute); err != nil {
+		_, _ = fmt.Printf("Service not ready: %v\n", err)
+		_ = exec.Command(executable, "compose", "-f", "docker_compose/docker_compose.yml", "down").Run()
+		os.Exit(1)
+	}
 
 	// Run tests
 	code := m.Run()
