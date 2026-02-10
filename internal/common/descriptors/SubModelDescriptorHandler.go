@@ -74,7 +74,6 @@ func ListSubmodelDescriptorsForAAS(
 	if limit <= 0 {
 		limit = 10000000
 	}
-	peekLimit := int(limit) + 1
 
 	d := goqu.Dialect(dialect)
 	aas := goqu.T(tblAASDescriptor).As("aas")
@@ -121,20 +120,9 @@ func ListSubmodelDescriptorsForAAS(
 		list = list[lo:]
 	}
 
-	var nextCursor string
-	switch {
-	case len(list) > peekLimit:
-		nextCursor = list[peekLimit-1].Id
-		list = list[:peekLimit-1]
-
-	case len(list) == peekLimit:
-		nextCursor = list[limit].Id
-		list = list[:limit]
-
-	case len(list) > int(limit):
-		nextCursor = list[limit].Id
-		list = list[:limit]
-	}
+	list, nextCursor := applyCursorLimit(list, limit, func(r model.SubmodelDescriptor) string {
+		return r.Id
+	})
 
 	return list, nextCursor, nil
 }
@@ -417,7 +405,6 @@ func ListSubmodelDescriptors(
 	if limit <= 0 {
 		limit = 10000000
 	}
-	peekLimit := int(limit) + 1
 
 	descIDs, err := listSubmodelDescriptorIDsWithoutAAS(ctx, db)
 	if err != nil {
@@ -454,20 +441,9 @@ func ListSubmodelDescriptors(
 		list = list[lo:]
 	}
 
-	var nextCursor string
-	switch {
-	case len(list) > peekLimit:
-		nextCursor = list[peekLimit-1].Id
-		list = list[:peekLimit-1]
-
-	case len(list) == peekLimit:
-		nextCursor = list[limit].Id
-		list = list[:limit]
-
-	case len(list) > int(limit):
-		nextCursor = list[limit].Id
-		list = list[:limit]
-	}
+	list, nextCursor := applyCursorLimit(list, limit, func(r model.SubmodelDescriptor) string {
+		return r.Id
+	})
 
 	return list, nextCursor, nil
 }

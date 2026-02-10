@@ -525,11 +525,9 @@ func listAssetAdministrationShellDescriptors(
 		return nil, "", common.NewInternalServerError("Failed to iterate AAS descriptors. See server logs for details.")
 	}
 
-	var nextCursor string
-	if len(descRows) > int(limit) {
-		nextCursor = descRows[limit].IDStr
-		descRows = descRows[:limit]
-	}
+	descRows, nextCursor := applyCursorLimit(descRows, limit, func(r model.AssetAdministrationShellDescriptorRow) string {
+		return r.IDStr
+	})
 
 	if len(descRows) == 0 {
 		return []model.AssetAdministrationShellDescriptor{}, nextCursor, nil
