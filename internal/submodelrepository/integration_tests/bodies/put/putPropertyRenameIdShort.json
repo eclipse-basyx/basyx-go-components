@@ -1,0 +1,26 @@
+{
+    "category": "CONSTANT",
+    "description": [
+        {
+            "language": "en-us",
+            "text": "New Test Property"
+        },
+        {
+            "language": "de",
+            "text": "Neue Test Eigenschaft"
+        }
+    ],
+    "idShort": "RenamedTestProperty",
+    "modelType": "Property",
+    "semanticId": {
+        "keys": [
+            {
+                "type": "GlobalReference",
+                "value": "http://acplt.org/Properties/NewTestProperty"
+            }
+        ],
+        "type": "ExternalReference"
+    },
+    "value": "testValue",
+    "valueType": "xs:string"
+}

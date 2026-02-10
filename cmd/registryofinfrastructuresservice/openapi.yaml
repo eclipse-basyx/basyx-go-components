@@ -1,0 +1,484 @@
+openapi: 3.0.3
+info:
+  title: BaSyx Registry of Infrastructures API
+  description: Registry of Infrastructures (RoI) API for registering and discovering infrastructure components.
+  contact:
+    name: BaSyx Developers
+    email: basyx-dev@eclipse.org
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+  version: V1
+servers:
+  - url: 'https://example.com/'
+paths:
+  /infrastructure-descriptors:
+    get:
+      tags: [Registry of Infrastructures API]
+      summary: Returns all Infrastructure Descriptors
+      operationId: GetAllInfrastructureDescriptors
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Company'
+        - $ref: '#/components/parameters/EndpointInterface'
+      responses:
+        '200':
+          description: Paged list of Infrastructure Descriptors
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedInfrastructureDescriptors'
+              examples:
+                infrastructureDescriptor:
+                  $ref: '#/components/examples/InfrastructureDescriptor'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+        'default':
+          $ref: '#/components/responses/DefaultError'
+
+    post:
+      tags: [Registry of Infrastructures API]
+      summary: Creates a new Infrastructure Descriptor
+      operationId: PostInfrastructureDescriptor
+      requestBody:
+        description: Infrastructure Descriptor object
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InfrastructureDescriptor'
+            examples:
+              infrastructureDescriptor:
+                $ref: '#/components/examples/InfrastructureDescriptorSingle'
+      responses:
+        '201':
+          description: Infrastructure Descriptor created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InfrastructureDescriptor'
+              examples:
+                infrastructureDescriptor:
+                  $ref: '#/components/examples/InfrastructureDescriptorSingle'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+        'default':
+          $ref: '#/components/responses/DefaultError'
+
+  /infrastructure-descriptors/{infrastructureIdentifier}:
+    parameters:
+      - $ref: '#/components/parameters/InfrastructureIdentifier'
+    get:
+      tags: [Registry of Infrastructures API]
+      summary: Returns a specific Infrastructure Descriptor
+      operationId: GetInfrastructureDescriptorById
+      responses:
+        '200':
+          description: Infrastructure Descriptor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InfrastructureDescriptor'
+              examples:
+                infrastructureDescriptor:
+                  $ref: '#/components/examples/InfrastructureDescriptorSingle'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+        'default':
+          $ref: '#/components/responses/DefaultError'
+
+    put:
+      tags: [Registry of Infrastructures API]
+      summary: Creates or updates an existing Infrastructure Descriptor
+      operationId: PutInfrastructureDescriptorById
+      requestBody:
+        description: Infrastructure Descriptor object
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InfrastructureDescriptor'
+            examples:
+                infrastructureDescriptor:
+                  $ref: '#/components/examples/InfrastructureDescriptorSingle'
+      responses:
+        '201':
+          description: Infrastructure Descriptor created successfully (descriptor did not exist)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InfrastructureDescriptor'
+              examples:
+                infrastructureDescriptor:
+                  $ref: '#/components/examples/InfrastructureDescriptorSingle'
+        '204':
+          description: Infrastructure Descriptor updated successfully (descriptor existed)
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+        'default':
+          $ref: '#/components/responses/DefaultError'
+
+    delete:
+      tags: [Registry of Infrastructures API]
+      summary: Deletes an Infrastructure Descriptor
+      operationId: DeleteInfrastructureDescriptorById
+      responses:
+        '204':
+          description: Infrastructure Descriptor deleted successfully
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+        'default':
+          $ref: '#/components/responses/DefaultError'
+
+  /description:
+    get:
+      tags: [Description API]
+      summary: Returns the self-describing information of a network resource (ServiceDescription)
+      operationId: GetDescription
+      responses:
+        '200':
+          description: Service description
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceDescription'
+              examples:
+                descriptionResponse:
+                  $ref: '#/components/examples/DescriptionResponse'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+        'default':
+          $ref: '#/components/responses/DefaultError'
+
+components:
+  parameters:
+    Limit:
+      name: limit
+      in: query
+      required: false
+      description: The maximum number of elements in the response array
+      schema:
+        type: integer
+        minimum: 1
+
+    Cursor:
+      name: cursor
+      in: query
+      required: false
+      description: A server-generated identifier retrieved from pagingMetadata that specifies from which position the result listing should continue
+      schema:
+        type: string
+
+    Company:
+      name: company
+      in: query
+      required: false
+      description: Filter by company
+      schema:
+        type: string
+
+    EndpointInterface:
+      name: endpointInterface
+      in: query
+      required: false
+      description: Filter by endpoint interface
+      schema:
+        type: string
+
+    InfrastructureIdentifier:
+      name: infrastructureIdentifier
+      in: path
+      required: true
+      description: Infrastructure identifier (base64url-encoded)
+      schema:
+        type: string
+
+  responses:
+    BadRequest:
+      description: Bad Request, e.g. the request parameters of the format of the request body is wrong.
+      content:
+        application/json:
+          examples:
+            errorResponse:
+              $ref: "#/components/examples/ErrorResponse"
+          schema:
+              $ref: "#/components/schemas/Result"
+
+    NotFound:
+      description: Not Found
+      content:
+        application/json:
+          examples:
+            errorResponse:
+              $ref: "#/components/examples/ErrorResponse"
+
+    Conflict:
+      description: Conflict
+      content:
+        application/json:
+          examples:
+            errorResponse:
+              $ref: "#/components/examples/ErrorResponse"
+
+    InternalServerError:
+      description: Internal Server Error
+      content:
+        application/json:
+          examples:
+            errorResponse:
+              $ref: "#/components/examples/ErrorResponse"
+
+    DefaultError:
+      description: Default error handling for unmentioned status codes
+      content:
+        application/json:
+          examples:
+            errorResponse:
+              $ref: "#/components/examples/ErrorResponse"
+
+  schemas:
+    ServiceDescription:
+      type: object
+      description: "The Description object enables servers to present their capabilities to the clients, in particular which profiles they implement. At least one defined profile is required. Additional, proprietary attributes might be included. Nevertheless, the server must not expect that a regular client understands them."
+      additionalProperties: false
+      properties:
+        profiles:
+          type: array
+          minItems: 1
+          items:
+            type: string
+            example: "TODO"
+      example:
+        profiles:
+          - TODO
+
+    PagedInfrastructureDescriptors:
+      type: object
+      additionalProperties: false
+      properties:
+        pagingMetadata:
+          $ref: "#/components/schemas/PagingMetadata"
+        result:
+          type: array
+          items:
+            $ref: "#/components/schemas/InfrastructureDescriptor"
+      required: [pagingMetadata, result]
+
+    PagingMetadata:
+      type: object
+      additionalProperties: false
+      properties:
+        cursor:
+          type: string
+          description: Cursor to request the next page (base64url-encoded)
+
+    InfrastructureDescriptor:
+      type: object
+      additionalProperties: false
+      properties:
+        idShort:
+          type: string
+        id:
+          type: string
+        company:
+          type: string
+        description:
+          type: array
+          items:
+            $ref: "#/components/schemas/LangStringTextType"
+        displayName:
+          type: array
+          items:
+            $ref: "#/components/schemas/LangStringTextType"
+        administration:
+          $ref: "#/components/schemas/AdministrativeInformation"
+        endpoints:
+          type: array
+          items:
+            $ref: "#/components/schemas/Endpoint"
+      required: [id, endpoints]
+
+    LangStringTextType:
+      type: object
+      additionalProperties: false
+      properties:
+        language:
+          type: string
+        text:
+          type: string
+      required: [language, text]
+
+    Endpoint:
+      type: object
+      additionalProperties: false
+      properties:
+        protocolInformation:
+          $ref: "#/components/schemas/ProtocolInformation"
+        interface:
+          type: string
+      required: [protocolInformation, interface]
+
+    ProtocolInformation:
+      type: object
+      additionalProperties: false
+      properties:
+        href:
+          type: string
+        endpointProtocol:
+          type: string
+      required: [href, endpointProtocol]
+
+    AdministrativeInformation:
+      type: object
+      additionalProperties: false
+      properties:
+        version:
+          type: string
+        revision:
+          type: string
+        creator:
+          $ref: "#/components/schemas/Reference"
+
+    Reference:
+      type: array
+      additionalProperties: false
+      properties:
+        type:
+          type: string
+        keys:
+          type: array
+          items:
+            $ref: "#/components/schemas/Key"
+      required: [type, keys]
+
+    Key:
+      type: object
+      additionalProperties: false
+      properties:
+        type:
+          type: string
+        value:
+          type: string
+      required: [type, value]
+
+    Result:
+      type: object
+      additionalProperties: false
+      properties:
+        messages:
+          type: array
+          items: 
+            $ref: "#/components/schemas/Message"
+    
+    Message:
+      type: object
+      properties:
+        code:
+          type: string
+          maxLength: 32
+          minLength: 1
+        correlationId:
+          type: string
+          maxLength: 128
+          minLength: 1
+        messageType:
+          enum:
+            0: Undefined
+            1: info
+            2: Warning
+            3: Error
+            4: Exception
+          type: string
+        text:
+          type: string
+        timestamp:
+          type: string
+          pattern: ^-?(([1-9][0-9][0-9][0-9]+)|(0[0-9][0-9][0-9]))-((0[1-9])|(1[0-2]))-((0[1-9])|([12][0-9])|(3[01]))T(((([01][0-9])|(2[0-3])):[0-5][0-9]:([0-5][0-9])(\\.[0-9]+)?)|24:00:00(\\.0+)?)(Z|\\+00:00|-00:00)$
+
+  examples:
+    InfrastructureDescriptor:
+      value:
+        pagingMetadata:
+          cursor: "aHR0cHM6Ly9leGFtcGxlLmNvbS9yb2kvZXhhbXBsZS1hYXMtZGlzY292ZXJ5"
+        result:
+          - administration:
+              creator:
+                keys:
+                  - type: "GlobalReference"
+                    value: "https://example.com"
+                type: "ExternalReference"
+              revision: "0"
+              version: "1"
+            company: "ExampleCompany"
+            description:
+              - language: "en"
+                text: "Example AAS Registry"
+            displayName:
+              - language: "en"
+                text: "AAS Registry 1"
+            endpoints:
+              - interface: "AAS-REGISTRY-3.0"
+                protocolInformation:
+                    href: "https://example.com/aas-registry"
+                    endpointProtocol: "HTTPS"
+            id: "https://example.com/roi/example-aas-registry"
+            idShort: "AASRegistry"
+
+    InfrastructureDescriptorSingle:
+      value:
+        administration:
+          creator:
+            keys:
+              - type: "GlobalReference"
+                value: "https://example.com"
+            type: "ExternalReference"
+          revision: "0"
+          version: "1"
+        company: "ExampleCompany"
+        description:
+          - language: "en"
+            text: "Example AAS Registry"
+        displayName:
+          - language: "en"
+            text: "AAS Registry 1"
+        endpoints:
+          - interface: "AAS-REGISTRY-3.0"
+            protocolInformation:
+                href: "https://example.com/aas-registry"
+                endpointProtocol: "HTTPS"
+        id: "https://example.com/roi/example-aas-registry"
+        idShort: "AASRegistry"
+
+    DescriptionResponse:
+      value:
+        profiles:
+          - "TODO"
+
+    ErrorResponse:
+      type: object
+      value:
+        messages:
+          - code: "string"
+            correlationId: "string"
+            messageType: "Undefined"
+            text: "string"
+            timestamp: "1970-01-01T00:00:00.000Z"

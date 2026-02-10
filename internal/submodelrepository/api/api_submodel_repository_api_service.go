@@ -1010,6 +1010,9 @@ func (s *SubmodelRepositoryAPIAPIService) PutSubmodelElementByPathSubmodelRepo(_
 		if common.IsErrNotFound(err) {
 			return gen.Response(http.StatusNotFound, gen.Result{Messages: []gen.Message{{Text: err.Error()}}}), nil
 		}
+		if common.IsErrConflict(err) {
+			return gen.Response(http.StatusConflict, gen.Result{Messages: []gen.Message{{Text: err.Error()}}}), nil
+		}
 		return gen.Response(http.StatusInternalServerError, gen.Result{Messages: []gen.Message{{Text: err.Error()}}}), nil
 	}
 
