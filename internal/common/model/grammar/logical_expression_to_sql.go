@@ -476,15 +476,6 @@ func NewResolvedFieldPathCollectorWithConfig(config *JoinPlanConfig) *ResolvedFi
 	return &ResolvedFieldPathCollector{joinConfig: config}
 }
 
-func buildInlineNotExistsExpression(resolved []ResolvedFieldPath, predicate exp.Expression, collector *ResolvedFieldPathCollector) (exp.Expression, error) {
-	negated := goqu.L("NOT (?)", predicate)
-	existsExpr, err := buildInlineExistsExpression(resolved, negated, collector)
-	if err != nil {
-		return nil, err
-	}
-	return goqu.L("NOT (?)", existsExpr), nil
-}
-
 func buildInlineExistsExpression(resolved []ResolvedFieldPath, predicate exp.Expression, collector *ResolvedFieldPathCollector) (exp.Expression, error) {
 	cfg := defaultJoinPlanConfig()
 	if collector != nil {
@@ -1287,11 +1278,11 @@ func (le *LogicalExpression) EvaluateToExpression(collector *ResolvedFieldPathCo
 			return nil, nil, err
 		}
 		if collector != nil && resolvedNeedsCTE(resolved) {
-			notExistsExpr, err := buildInlineNotExistsExpression(resolved, expr, collector)
+			existsExpr, err := buildInlineExistsExpression(resolved, expr, collector)
 			if err != nil {
 				return nil, nil, err
 			}
-			return notExistsExpr, resolved, nil
+			return existsExpr, resolved, nil
 		}
 		if collector != nil {
 			return expr, resolved, nil
