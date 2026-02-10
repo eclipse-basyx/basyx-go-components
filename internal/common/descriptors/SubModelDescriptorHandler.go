@@ -612,8 +612,14 @@ func listSubmodelDescriptorIDsWithoutAAS(
 	if cursor != "" {
 		ds = ds.Where(smd.Col(colAASID).Gte(cursor))
 	}
-
+	if limit <= 0 {
+		return nil, "", common.NewErrBadRequest("Limit must be greater than 0")
+	}
 	peekLimit := int(limit) + 1
+
+	if peekLimit <= 1 {
+		return nil, "", common.NewErrBadRequest("Limit must be greater than 0")
+	}
 	ds = ds.Order(smd.Col(colAASID).Asc()).Limit(uint(peekLimit))
 
 	sqlStr, args, buildErr := ds.ToSQL()

@@ -15,7 +15,6 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"mime/multipart"
 	"net/http"
 	"net/url"
 	"os"
@@ -110,75 +109,6 @@ func EncodeJSONResponse(i interface{}, status *int, w http.ResponseWriter) error
 	}
 
 	return nil
-}
-
-// ReadFormFileToTempFile reads file data from a request form and writes it to a temporary file
-func ReadFormFileToTempFile(r *http.Request, key string) (*os.File, error) {
-	_, fileHeader, err := r.FormFile(key)
-	if err != nil {
-		return nil, err
-	}
-
-	return readFileHeaderToTempFile(fileHeader)
-}
-
-// ReadFormFilesToTempFiles reads files array data from a request form and writes it to a temporary files
-func ReadFormFilesToTempFiles(r *http.Request, key string) ([]*os.File, error) {
-	if err := r.ParseMultipartForm(32 << 20); err != nil {
-		return nil, err
-	}
-
-	files := make([]*os.File, 0, len(r.MultipartForm.File[key]))
-
-	for _, fileHeader := range r.MultipartForm.File[key] {
-		file, err := readFileHeaderToTempFile(fileHeader)
-		if err != nil {
-			return nil, err
-		}
-
-		files = append(files, file)
-	}
-
-	return files, nil
-}
-
-// readFileHeaderToTempFile reads multipart.FileHeader and writes it to a temporary file
-func readFileHeaderToTempFile(fileHeader *multipart.FileHeader) (*os.File, error) {
-	formFile, err := fileHeader.Open()
-	if err != nil {
-		return nil, err
-	}
-
-	defer formFile.Close()
-
-	// Use .* as suffix, because the asterisk is a placeholder for the random value,
-	// and the period allows consumers of this file to remove the suffix to obtain the original file name
-	file, err := os.CreateTemp("", fileHeader.Filename+".*")
-	if err != nil {
-		return nil, err
-	}
-
-	defer file.Close()
-
-	_, err = io.Copy(file, formFile)
-	if err != nil {
-		return nil, err
-	}
-
-	return file, nil
-}
-
-func parseTimes(param string) ([]time.Time, error) {
-	splits := strings.Split(param, ",")
-	times := make([]time.Time, 0, len(splits))
-	for _, v := range splits {
-		t, err := parseTime(v)
-		if err != nil {
-			return nil, err
-		}
-		times = append(times, t)
-	}
-	return times, nil
 }
 
 // parseTime will parses a string parameter into a time.Time using the RFC3339 format
