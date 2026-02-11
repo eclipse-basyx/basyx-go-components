@@ -150,9 +150,9 @@ For a simplified expression tree, normalization follows the semantics below:
 
 $$
 \begin{aligned}
-  	ext{AND}([E_1,\dots,E_n]) &= E_1 \land \cdots \land E_n \\
-  	ext{OR}([E_1,\dots,E_n]) &= E_1 \lor \cdots \lor E_n \\
-  	ext{NOT}(E) &= \lnot E
+          AND([E_1,\dots,E_n]) &= E_1 \land \cdots \land E_n \\
+          OR([E_1,\dots,E_n]) &= E_1 \lor \cdots \lor E_n \\
+          NOT(E) &= \lnot E
 \end{aligned}
 $$
 
@@ -160,19 +160,43 @@ Short-circuit behavior during simplification:
 
 $$
 \begin{aligned}
-  	ext{AND}([\text{false}, \dots]) &= \text{false} \\
-  	ext{AND}([\text{true}, E]) &= E \\
-  	ext{OR}([\text{true}, \dots]) &= \text{true} \\
-  	ext{OR}([\text{false}, E]) &= E
+          AND([\text{false}, \dots]) &= \text{false} \\
+          AND([\text{true}, E]) &= E \\
+          OR([\text{true}, \dots]) &= \text{true} \\
+          OR([\text{false}, E]) &= E
 \end{aligned}
 $$
+
+Example (short-circuit):
+
+```json
+{ "$and": [ { "$boolean": false }, { "$eq": [ { "$field": "$aasdesc#id" }, { "$strVal": "x" } ] } ] }
+```
+
+Simplifies to:
+
+```json
+{ "$boolean": false }
+```
+
+Example (short-circuit OR):
+
+```json
+{ "$or": [ { "$boolean": true }, { "$eq": [ { "$field": "$aasdesc#id" }, { "$strVal": "x" } ] } ] }
+```
+
+Simplifies to:
+
+```json
+{ "$boolean": true }
+```
 
 ### Implicit casts in comparisons
 
 When implicit casts are enabled, comparisons are normalized to compare like types:
 
 $$
-  	ext{op}(\text{field}, \text{literal}_T) \Rightarrow \text{op}(\text{cast}(\text{field}, T), \text{literal}_T)
+            op(\text{field}, \text{literal}_T) \Rightarrow op(\text{cast}(\text{field}, T), \text{literal}_T)
 $$
 
 Example:
@@ -197,7 +221,7 @@ This is controlled by `SimplifyOptions.EnableImplicitCasts` in
 Attribute references are resolved to concrete scalars via a resolver function:
 
 $$
-  	ext{resolve}(\$\text{attribute}(k)) \rightarrow v \quad \text{or} \quad \varnothing
+          resolve(\$\text{attribute}(k)) \rightarrow v \quad \text{or} \quad \varnothing
 $$
 
 Example (attribute in expression):
@@ -210,6 +234,12 @@ If claims contain role=admin, this becomes:
 
 ```json
 { "$eq": [ { "$strVal": "admin" }, { "$strVal": "admin" } ] }
+```
+
+Which simplifies to:
+
+```json
+{ "$boolean": true }
 ```
 
 If $v$ is available, the attribute node is replaced with the literal $v$ during
@@ -249,6 +279,17 @@ $$
 F_{\text{combined}} = F_A \lor F_B
 $$
 
+Example (combined logical expression):
+
+```json
+{
+  "$or": [
+    { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "admin" } ] },
+    { "$ge": [ { "$field": "$aasdesc#createdAt" }, { "$dateTimeVal": "2024-01-01T00:00:00Z" } ] }
+  ]
+}
+```
+
 ### Rule-local filter aggregation
 
 Within a single rule, multiple filter conditions targeting the same fragment are
@@ -265,6 +306,17 @@ Example (same fragment twice):
 $$
 F_{r,k} = F_r \land (k.name = \text{"customerPartId"}) \land (k.value = \text{"X"})
 $$
+
+Example (filter list targeting the same fragment):
+
+```json
+{
+  "$filters": [
+    { "$fragment": "$aasdesc#specificAssetIds[]", "$condition": { "$eq": [ { "$field": "$aasdesc#specificAssetIds[].name" }, { "$strVal": "customerPartId" } ] } },
+    { "$fragment": "$aasdesc#specificAssetIds[]", "$condition": { "$eq": [ { "$field": "$aasdesc#specificAssetIds[].value" }, { "$strVal": "X" } ] } }
+  ]
+}
+```
 
 ### QueryFilter merging with user queries
 
@@ -287,6 +339,17 @@ $$
 F' = (role = admin) \land (createdAt \ge 2024-01-01)
 $$
 
+Example (merged logical expression):
+
+```json
+{
+  "$and": [
+    { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "admin" } ] },
+    { "$ge": [ { "$field": "$aasdesc#createdAt" }, { "$dateTimeVal": "2024-01-01T00:00:00Z" } ] }
+  ]
+}
+```
+
 ## Fragment filters and guards
 
 - Fragment filters apply conditions to a specific array fragment (for example, $aasdesc#specificAssetIds[]).
@@ -295,6 +358,21 @@ $$
 $$
 \text{combined} = \text{mainExpr} \lor \bigvee_i \lnot(\text{fragmentExpr}_i)
 $$
+
+Example (fragment guard with index):
+
+```json
+{
+  "mainExpr": { "$eq": [ { "$field": "$aasdesc#idShort" }, { "$strVal": "motor-1" } ] },
+  "fragment": "$aasdesc#specificAssetIds[2]"
+}
+```
+
+Conceptual combined guard:
+
+```text
+mainExpr OR NOT(fragment(position = 2))
+```
 
 - This guard behavior is implemented in EvaluateToExpressionWithNegatedFragments.
 
