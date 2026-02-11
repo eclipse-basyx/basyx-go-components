@@ -2,6 +2,33 @@
 
 This document explains how logical expressions are simplified and converted into SQL. It focuses on the internal pipeline: expression trees, implicit casts, field identifiers, fragment identifiers, and filter mapping.
 
+## Quick mental model (no background required)
+
+- A query is a tree of logical operators (AND/OR/NOT) and comparisons (EQ/GT/etc).
+- If a value is known up front (for example, a claim or a time constant), it can be simplified before SQL.
+- Everything that still depends on data in the database becomes SQL.
+- Fragment filters are special: they apply only to a subset of array items, so they must be guarded.
+
+Full logical expression example (from access rules):
+
+```json
+{
+  "$and": [
+    { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "admin" } ] },
+    { "$ge": [ { "$field": "$aasdesc#createdAt" }, { "$dateTimeVal": "2024-01-01T00:00:00Z" } ] }
+  ]
+}
+```
+
+## Glossary
+
+- LogicalExpression: the parsed tree for $and, $or, $eq, $gt, etc.
+- Attribute: a value resolved at request time (for example, a claim or time).
+- Field identifier: a path like $aasdesc#specificAssetIds[].value that points to data in the DB model.
+- Fragment identifier: a field identifier that ends in an array segment, used to scope filters (for example, $aasdesc#endpoints[]).
+- Binding: a concrete array index constraint derived from a fragment (for example, position = 2).
+- Simplify: reduce what can be decided before SQL is built.
+
 ## High-level architecture
 
 ```mermaid
@@ -85,6 +112,16 @@ Key functions:
 - ResolveFragmentFieldToSQL in [internal/common/model/grammar/fieldidentifier_processing.go](internal/common/model/grammar/fieldidentifier_processing.go)
 - ResolveAASQLFieldToSQLColumn in [internal/common/model/grammar/field_column_mapping.go](internal/common/model/grammar/field_column_mapping.go)
 
+Beginner notes:
+- Think of a field identifier as a path inside a JSON-like object, but mapped to SQL columns.
+- The part before # is the root type ($aasdesc, $smdesc, $sm, $sme, $bd).
+- The part after # is a dotted path with optional array selectors.
+
+Example mappings:
+- $aasdesc#idShort -> aas_descriptor.id_short
+- $aasdesc#specificAssetIds[].value -> specific_asset_id.value with no index binding
+- $aasdesc#specificAssetIds[2].value -> specific_asset_id.value with position = 2
+
 ### 5) Build SQL expressions
 
 - The simplified expression is converted to a goqu expression tree.
@@ -113,9 +150,9 @@ For a simplified expression tree, normalization follows the semantics below:
 
 $$
 \begin{aligned}
-	ext{AND}([E_1,\dots,E_n]) &= E_1 \land \cdots \land E_n \\
-	ext{OR}([E_1,\dots,E_n]) &= E_1 \lor \cdots \lor E_n \\
-	ext{NOT}(E) &= \lnot E
+  	ext{AND}([E_1,\dots,E_n]) &= E_1 \land \cdots \land E_n \\
+  	ext{OR}([E_1,\dots,E_n]) &= E_1 \lor \cdots \lor E_n \\
+  	ext{NOT}(E) &= \lnot E
 \end{aligned}
 $$
 
@@ -123,10 +160,10 @@ Short-circuit behavior during simplification:
 
 $$
 \begin{aligned}
-	ext{AND}([\text{false}, \dots]) &= \text{false} \\
-	ext{AND}([\text{true}, E]) &= E \\
-	ext{OR}([\text{true}, \dots]) &= \text{true} \\
-	ext{OR}([\text{false}, E]) &= E
+  	ext{AND}([\text{false}, \dots]) &= \text{false} \\
+  	ext{AND}([\text{true}, E]) &= E \\
+  	ext{OR}([\text{true}, \dots]) &= \text{true} \\
+  	ext{OR}([\text{false}, E]) &= E
 \end{aligned}
 $$
 
@@ -135,8 +172,22 @@ $$
 When implicit casts are enabled, comparisons are normalized to compare like types:
 
 $$
-	ext{op}(\text{field}, \text{literal}_T) \Rightarrow \text{op}(\text{cast}(\text{field}, T), \text{literal}_T)
+  	ext{op}(\text{field}, \text{literal}_T) \Rightarrow \text{op}(\text{cast}(\text{field}, T), \text{literal}_T)
 $$
+
+Example:
+
+```json
+{ "$gt": [ { "$field": "$sme#value" }, { "$numVal": 10 } ] }
+```
+
+Normalized form (conceptual):
+
+```json
+{ "$gt": [{"$numCast": { "$field": "$sme#value" }}, { "$numVal": 10 } ] }
+```
+
+If the field is stored as text, an implicit cast converts it to numeric before the comparison.
 
 This is controlled by `SimplifyOptions.EnableImplicitCasts` in
 [internal/common/model/grammar/logical_expression_simplify_backend.go](internal/common/model/grammar/logical_expression_simplify_backend.go).
@@ -146,8 +197,20 @@ This is controlled by `SimplifyOptions.EnableImplicitCasts` in
 Attribute references are resolved to concrete scalars via a resolver function:
 
 $$
-	ext{resolve}(\$\text{attribute}(k)) \rightarrow v \quad \text{or} \quad \varnothing
+  	ext{resolve}(\$\text{attribute}(k)) \rightarrow v \quad \text{or} \quad \varnothing
 $$
+
+Example (attribute in expression):
+
+```json
+{ "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "admin" } ] }
+```
+
+If claims contain role=admin, this becomes:
+
+```json
+{ "$eq": [ { "$strVal": "admin" }, { "$strVal": "admin" } ] }
+```
 
 If $v$ is available, the attribute node is replaced with the literal $v$ during
 simplification; otherwise it remains unresolved and the expression is undecidable.
@@ -174,6 +237,18 @@ $$
 
 This logic is implemented in [internal/common/security/abac_engine.go](internal/common/security/abac_engine.go).
 
+Example with two rules:
+
+Rule A: $F_A = (role = admin)$
+
+Rule B: $F_B = (createdAt \ge 2024-01-01)$
+
+Combined:
+
+$$
+F_{\text{combined}} = F_A \lor F_B
+$$
+
 ### Rule-local filter aggregation
 
 Within a single rule, multiple filter conditions targeting the same fragment are
@@ -184,6 +259,12 @@ F_{r,k} = F_r \land C_{r,k,1} \land \cdots \land C_{r,k,m}
 $$
 
 When multiple fragments are present, each fragment gets its own $F_{r,k}$.
+
+Example (same fragment twice):
+
+$$
+F_{r,k} = F_r \land (k.name = \text{"customerPartId"}) \land (k.value = \text{"X"})
+$$
 
 ### QueryFilter merging with user queries
 
@@ -199,6 +280,12 @@ F'_{k} = F_{k} \land Q_{k}
 $$
 
 This logic is implemented in [internal/common/security/authorize.go](internal/common/security/authorize.go).
+
+Example (merge):
+
+$$
+F' = (role = admin) \land (createdAt \ge 2024-01-01)
+$$
 
 ## Fragment filters and guards
 
@@ -230,11 +317,39 @@ Implementation reference:
 - EvaluateToExpressionWithNegatedFragments in [internal/common/model/grammar/logical_expression_to_sql.go](internal/common/model/grammar/logical_expression_to_sql.go)
 - ResolveFragmentFieldToSQL in [internal/common/model/grammar/fieldidentifier_processing.go](internal/common/model/grammar/fieldidentifier_processing.go)
 
+Beginner notes:
+- A fragment identifies an array position, not a single scalar value.
+- The guard makes sure a filter only applies to the intended array element.
+
 ## Common pitfalls
 
 - Invalid field identifiers are rejected during parsing or resolution.
 - Field-to-field comparisons are not supported in SQL conversion.
 - If an expression is undecidable, the SQL still includes backend-resolved predicates.
+
+## Example (end-to-end without endpoint context)
+
+Query condition:
+
+```json
+{
+  "$and": [
+    { "$eq": [ { "$field": "$aasdesc#idShort" }, { "$strVal": "motor-1" } ] },
+    { "$gt": [ { "$field": "$aasdesc#createdAt" }, { "$dateTimeVal": "2024-01-01T00:00:00Z" } ] }
+  ]
+}
+```
+
+What happens:
+- Parse into a LogicalExpression tree.
+- Simplify: no attributes here, so it stays undecided and unchanged.
+- Resolve fields to columns.
+- Build SQL: AND of two comparisons on those columns.
+
+If you add a fragment filter (example fragment: $aasdesc#specificAssetIds[2]):
+- Resolve fragment to bindings (position = 2).
+- Build fragmentExpr from bindings.
+- Final WHERE becomes: mainExpr OR NOT(fragmentExpr).
 
 ## Related tests
 
