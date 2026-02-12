@@ -28,7 +28,6 @@ package descriptors
 
 import (
 	"database/sql"
-	"fmt"
 
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
@@ -45,35 +44,27 @@ func createSubModelDescriptors(tx *sql.Tx, aasDescriptorID sql.NullInt64, submod
 		d := goqu.Dialect(dialect)
 		for i, val := range submodelDescriptors {
 			var (
-				semanticID       sql.NullInt64
-				displayNameID    sql.NullInt64
-				descriptionID    sql.NullInt64
-				administrationID sql.NullInt64
-				err              error
+				semanticID sql.NullInt64
+				err        error
 			)
-
-			displayNameID, err = persistence_utils.CreateLangStringNameTypes(tx, val.DisplayName)
-			if err != nil {
-				_, _ = fmt.Println(err)
-				return common.NewInternalServerError("Failed to create DisplayName - no changes applied - see console for details")
-			}
-
-			descriptionID, err = persistence_utils.CreateLangStringTextTypes(tx, val.Description)
-			if err != nil {
-				_, _ = fmt.Println(err)
-				return common.NewInternalServerError("Failed to create Description - no changes applied - see console for details")
-			}
-
-			administrationID, err = persistence_utils.CreateAdministrativeInformation(tx, val.Administration)
-			if err != nil {
-				_, _ = fmt.Println(err)
-				return common.NewInternalServerError("Failed to create Administration - no changes applied - see console for details")
-			}
 
 			var a sql.NullInt64
 			semanticID, err = persistence_utils.CreateReference(tx, val.SemanticId, a, a)
 			if err != nil {
 				return err
+			}
+
+			descriptionPayload, err := buildLangStringTextPayload(val.Description)
+			if err != nil {
+				return common.NewInternalServerError("SMDESC-INSERT-DESCRIPTIONPAYLOAD")
+			}
+			displayNamePayload, err := buildLangStringNamePayload(val.DisplayName)
+			if err != nil {
+				return common.NewInternalServerError("SMDESC-INSERT-DISPLAYNAMEPAYLOAD")
+			}
+			administrationPayload, err := buildAdministrativeInfoPayload(val.Administration)
+			if err != nil {
+				return common.NewInternalServerError("SMDESC-INSERT-ADMINPAYLOAD")
 			}
 
 			sqlStr, args, err := d.
@@ -94,12 +85,25 @@ func createSubModelDescriptors(tx *sql.Tx, aasDescriptorID sql.NullInt64, submod
 					colDescriptorID:    submodelDescriptorID,
 					colPosition:        i,
 					colAASDescriptorID: aasDescriptorID,
-					colDescriptionID:   descriptionID,
-					colDisplayNameID:   displayNameID,
-					colAdminInfoID:     administrationID,
 					colIDShort:         val.IdShort,
 					colAASID:           val.Id,
 					colSemanticID:      semanticID,
+				}).
+				ToSQL()
+			if err != nil {
+				return err
+			}
+			if _, err = tx.Exec(sqlStr, args...); err != nil {
+				return err
+			}
+
+			sqlStr, args, err = d.
+				Insert(tblDescriptorPayload).
+				Rows(goqu.Record{
+					colDescriptorID:              submodelDescriptorID,
+					colDescriptionPayload:        goqu.L("?::jsonb", string(descriptionPayload)),
+					colDisplayNamePayload:        goqu.L("?::jsonb", string(displayNamePayload)),
+					colAdministrativeInfoPayload: goqu.L("?::jsonb", string(administrationPayload)),
 				}).
 				ToSQL()
 			if err != nil {

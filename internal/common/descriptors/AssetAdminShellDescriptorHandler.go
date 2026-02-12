@@ -56,7 +56,6 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
-	persistence_utils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -121,32 +120,39 @@ func InsertAdministrationShellDescriptorTx(ctx context.Context, tx *sql.Tx, aasd
 		return err
 	}
 
-	var displayNameID, descriptionID, administrationID sql.NullInt64
+	descriptionPayload, err := buildLangStringTextPayload(aasd.Description)
+	if err != nil {
+		return common.NewInternalServerError("AASDESC-INSERT-DESCRIPTIONPAYLOAD")
+	}
+	displayNamePayload, err := buildLangStringNamePayload(aasd.DisplayName)
+	if err != nil {
+		return common.NewInternalServerError("AASDESC-INSERT-DISPLAYNAMEPAYLOAD")
+	}
+	administrationPayload, err := buildAdministrativeInfoPayload(aasd.Administration)
+	if err != nil {
+		return common.NewInternalServerError("AASDESC-INSERT-ADMINPAYLOAD")
+	}
 
-	dnID, err := persistence_utils.CreateLangStringNameTypes(tx, aasd.DisplayName)
-	if err != nil {
-		return common.NewInternalServerError("Failed to create DisplayName - no changes applied - see console for details")
+	sqlStr, args, buildErr = d.
+		Insert(tblDescriptorPayload).
+		Rows(goqu.Record{
+			colDescriptorID:              descriptorID,
+			colDescriptionPayload:        goqu.L("?::jsonb", string(descriptionPayload)),
+			colDisplayNamePayload:        goqu.L("?::jsonb", string(displayNamePayload)),
+			colAdministrativeInfoPayload: goqu.L("?::jsonb", string(administrationPayload)),
+		}).
+		ToSQL()
+	if buildErr != nil {
+		return buildErr
 	}
-	displayNameID = dnID
-	descID, err := persistence_utils.CreateLangStringTextTypes(tx, aasd.Description)
-	if err != nil {
-		return common.NewInternalServerError("Failed to create Description - no changes applied - see console for details")
+	if _, err = tx.Exec(sqlStr, args...); err != nil {
+		return err
 	}
-	descriptionID = descID
-
-	adminID, err := persistence_utils.CreateAdministrativeInformation(tx, aasd.Administration)
-	if err != nil {
-		return common.NewInternalServerError("Failed to create Administration - no changes applied - see console for details")
-	}
-	administrationID = adminID
 
 	sqlStr, args, buildErr = d.
 		Insert(tblAASDescriptor).
 		Rows(goqu.Record{
 			colDescriptorID:  descriptorID,
-			colDescriptionID: descriptionID,
-			colDisplayNameID: displayNameID,
-			colAdminInfoID:   administrationID,
 			colAssetKind:     aasd.AssetKind,
 			colAssetType:     aasd.AssetType,
 			colGlobalAssetID: aasd.GlobalAssetId,
@@ -362,15 +368,15 @@ func buildListAssetAdministrationShellDescriptorsQuery(
 			Exp: tAASDescriptor.Col(colAASID),
 		},
 		{
-			Exp:      tAASDescriptor.Col(colAdminInfoID),
+			Exp:      tDescriptorPayload.Col(colAdministrativeInfoPayload),
 			Fragment: fragPtr("$aasdesc#administration"),
 		},
 		{
-			Exp:      tAASDescriptor.Col(colDisplayNameID),
+			Exp:      tDescriptorPayload.Col(colDisplayNamePayload),
 			Fragment: fragPtr("$aasdesc#displayName"),
 		},
 		{
-			Exp:      tAASDescriptor.Col(colDescriptionID),
+			Exp:      tDescriptorPayload.Col(colDescriptionPayload),
 			Fragment: fragPtr("$aasdesc#description"),
 		},
 	}
@@ -388,6 +394,10 @@ func buildListAssetAdministrationShellDescriptorsQuery(
 		InnerJoin(
 			tAASDescriptor,
 			goqu.On(tAASDescriptor.Col(colDescriptorID).Eq(tDescriptor.Col(colID))),
+		).
+		LeftJoin(
+			tDescriptorPayload,
+			goqu.On(tDescriptorPayload.Col(colDescriptorID).Eq(tDescriptor.Col(colID))),
 		).
 		Select(
 			expressions[0],
@@ -513,9 +523,9 @@ func listAssetAdministrationShellDescriptors(
 			&r.GlobalAssetID,
 			&r.IDShort,
 			&r.IDStr,
-			&r.AdminInfoID,
-			&r.DisplayNameID,
-			&r.DescriptionID,
+			&r.AdministrativeInfoPayload,
+			&r.DisplayNamePayload,
+			&r.DescriptionPayload,
 		); err != nil {
 			return nil, "", common.NewInternalServerError("Failed to scan AAS descriptor row. See server logs for details.")
 		}
@@ -534,48 +544,16 @@ func listAssetAdministrationShellDescriptors(
 	}
 
 	descIDs := make([]int64, 0, len(descRows))
-	adminInfoIDs := make([]int64, 0, len(descRows))
-	displayNameIDs := make([]int64, 0, len(descRows))
-	descriptionIDs := make([]int64, 0, len(descRows))
 
 	seenDesc := make(map[int64]struct{}, len(descRows))
-	seenAI := map[int64]struct{}{}
-	seenDN := map[int64]struct{}{}
-	seenDE := map[int64]struct{}{}
 
 	for _, r := range descRows {
 		if _, ok := seenDesc[r.DescID]; !ok {
 			seenDesc[r.DescID] = struct{}{}
 			descIDs = append(descIDs, r.DescID)
 		}
-
-		if r.AdminInfoID.Valid {
-			id := r.AdminInfoID.Int64
-			if _, ok := seenAI[id]; !ok {
-				seenAI[id] = struct{}{}
-				adminInfoIDs = append(adminInfoIDs, id)
-			}
-		}
-		if r.DisplayNameID.Valid {
-			id := r.DisplayNameID.Int64
-			if _, ok := seenDN[id]; !ok {
-				seenDN[id] = struct{}{}
-				displayNameIDs = append(displayNameIDs, id)
-			}
-		}
-
-		if r.DescriptionID.Valid {
-			id := r.DescriptionID.Int64
-			if _, ok := seenDE[id]; !ok {
-				seenDE[id] = struct{}{}
-				descriptionIDs = append(descriptionIDs, id)
-			}
-		}
 	}
 
-	admByID := map[int64]types.IAdministrativeInformation{}
-	dnByID := map[int64][]types.ILangStringNameType{}
-	descByID := map[int64][]types.ILangStringTextType{}
 	endpointsByDesc := map[int64][]model.Endpoint{}
 	specificByDesc := map[int64][]types.ISpecificAssetID{}
 	extByDesc := map[int64][]types.Extension{}
@@ -583,26 +561,6 @@ func listAssetAdministrationShellDescriptors(
 
 	if allowParallel {
 		g, gctx := errgroup.WithContext(ctx)
-
-		if len(adminInfoIDs) > 0 {
-			ids := append([]int64(nil), adminInfoIDs...)
-			GoAssign(g, func() (map[int64]types.IAdministrativeInformation, error) {
-				return ReadAdministrativeInformationByIDs(gctx, db, tblAASDescriptor, ids)
-			}, &admByID)
-		}
-		if len(displayNameIDs) > 0 {
-			ids := append([]int64(nil), displayNameIDs...)
-			GoAssign(g, func() (map[int64][]types.ILangStringNameType, error) {
-				return GetLangStringNameTypesByIDs(db, ids)
-			}, &dnByID)
-		}
-
-		if len(descriptionIDs) > 0 {
-			ids := append([]int64(nil), descriptionIDs...)
-			GoAssign(g, func() (map[int64][]types.ILangStringTextType, error) {
-				return GetLangStringTextTypesByIDs(db, ids)
-			}, &descByID)
-		}
 
 		if len(descIDs) > 0 {
 			ids := append([]int64(nil), descIDs...)
@@ -625,24 +583,6 @@ func listAssetAdministrationShellDescriptors(
 		}
 	} else {
 		var err error
-		if len(adminInfoIDs) > 0 {
-			admByID, err = ReadAdministrativeInformationByIDs(ctx, db, tblAASDescriptor, adminInfoIDs)
-			if err != nil {
-				return nil, "", err
-			}
-		}
-		if len(displayNameIDs) > 0 {
-			dnByID, err = GetLangStringNameTypesByIDs(db, displayNameIDs)
-			if err != nil {
-				return nil, "", err
-			}
-		}
-		if len(descriptionIDs) > 0 {
-			descByID, err = GetLangStringTextTypesByIDs(db, descriptionIDs)
-			if err != nil {
-				return nil, "", err
-			}
-		}
 		if len(descIDs) > 0 {
 			endpointsByDesc, err = ReadEndpointsByDescriptorIDs(ctx, db, descIDs, "aas")
 			if err != nil {
@@ -671,22 +611,17 @@ func listAssetAdministrationShellDescriptors(
 			ak = &localAk
 		}
 
-		var adminInfo types.IAdministrativeInformation
-		if r.AdminInfoID.Valid {
-			if v, ok := admByID[r.AdminInfoID.Int64]; ok {
-				tmp := v
-				adminInfo = tmp
-			}
+		adminInfo, err := parseAdministrativeInfoPayload(r.AdministrativeInfoPayload)
+		if err != nil {
+			return nil, "", common.NewInternalServerError("AASDESC-LIST-ADMINPAYLOAD")
 		}
-
-		var displayName []types.ILangStringNameType
-		if r.DisplayNameID.Valid {
-			displayName = dnByID[r.DisplayNameID.Int64]
+		displayName, err := parseLangStringNamePayload(r.DisplayNamePayload)
+		if err != nil {
+			return nil, "", common.NewInternalServerError("AASDESC-LIST-DISPLAYNAMEPAYLOAD")
 		}
-
-		var description []types.ILangStringTextType
-		if r.DescriptionID.Valid {
-			description = descByID[r.DescriptionID.Int64]
+		description, err := parseLangStringTextPayload(r.DescriptionPayload)
+		if err != nil {
+			return nil, "", common.NewInternalServerError("AASDESC-LIST-DESCRIPTIONPAYLOAD")
 		}
 
 		out = append(out, model.AssetAdministrationShellDescriptor{

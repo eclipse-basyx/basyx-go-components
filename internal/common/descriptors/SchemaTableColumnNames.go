@@ -46,6 +46,7 @@ const (
 	tblSpecificAssetIDSuppSemantic    = "specific_asset_id_supplemental_semantic_id"
 	tblSubmodelDescriptor             = "submodel_descriptor"
 	tblSubmodelDescriptorSuppSemantic = "submodel_descriptor_supplemental_semantic_id"
+	tblDescriptorPayload              = "descriptor_payload"
 	tblExtension                      = "extension"
 	tblDescriptorExtension            = "descriptor_extension"
 	tblExtensionSuppSemantic          = "extension_supplemental_semantic_id"
@@ -76,26 +77,29 @@ const (
 // names makes SQL generation more robust to refactors and reduces stringly‑typed
 // errors in the query code.
 const (
-	colPosition                = "position" // this column is needed for the Query Language
-	colID                      = "id"
-	colDescriptorID            = "descriptor_id"
-	colAASDescriptorID         = "aas_descriptor_id"
-	colDescriptionID           = "description_id"
-	colDisplayNameID           = "displayname_id"
-	colAdminInfoID             = "administrative_information_id"
-	colAssetKind               = "asset_kind"
-	colAssetType               = "asset_type"
-	colGlobalAssetID           = "global_asset_id"
-	colIDShort                 = "id_short"
-	colCreatedAt               = "created_at"
-	colAASID                   = "id"
-	colInfDescID               = "id"
-	colHref                    = "href"
-	colEndpointProtocol        = "endpoint_protocol"
-	colSubProtocol             = "sub_protocol"
-	colSubProtocolBody         = "sub_protocol_body"
-	colSubProtocolBodyEncoding = "sub_protocol_body_encoding"
-	colInterface               = "interface"
+	colPosition                  = "position" // this column is needed for the Query Language
+	colID                        = "id"
+	colDescriptorID              = "descriptor_id"
+	colAASDescriptorID           = "aas_descriptor_id"
+	colDescriptionID             = "description_id"
+	colDisplayNameID             = "displayname_id"
+	colAdminInfoID               = "administrative_information_id"
+	colDescriptionPayload        = "description_payload"
+	colDisplayNamePayload        = "displayname_payload"
+	colAdministrativeInfoPayload = "administrative_information_payload"
+	colAssetKind                 = "asset_kind"
+	colAssetType                 = "asset_type"
+	colGlobalAssetID             = "global_asset_id"
+	colIDShort                   = "id_short"
+	colCreatedAt                 = "created_at"
+	colAASID                     = "id"
+	colInfDescID                 = "id"
+	colHref                      = "href"
+	colEndpointProtocol          = "endpoint_protocol"
+	colSubProtocol               = "sub_protocol"
+	colSubProtocolBody           = "sub_protocol_body"
+	colSubProtocolBodyEncoding   = "sub_protocol_body_encoding"
+	colInterface                 = "interface"
 
 	colEndpointProtocolVersion = "endpoint_protocol_version"
 	colSecurityAttributes      = "security_attributes"
@@ -141,5 +145,6 @@ var (
 	tAASDescriptor            = goqu.T(tblAASDescriptor)
 	tAASDescriptorEndpoint    = goqu.T(tblAASDescriptorEndpoint)
 	tSpecificAssetID          = goqu.T(tblSpecificAssetID)
+	tDescriptorPayload        = goqu.T(tblDescriptorPayload)
 	tInfrastructureDescriptor = goqu.T(tblInfrastructureDescriptor)
 )

@@ -414,9 +414,6 @@ CREATE TABLE IF NOT EXISTS aas_descriptor_endpoint (
 CREATE TABLE IF NOT EXISTS aas_descriptor (
   descriptor_id BIGINT PRIMARY KEY REFERENCES descriptor(id) ON DELETE CASCADE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  description_id BIGINT REFERENCES lang_string_text_type_reference(id) ON DELETE SET NULL,
-  displayname_id BIGINT REFERENCES lang_string_name_type_reference(id) ON DELETE SET NULL,
-  administrative_information_id BIGINT REFERENCES administrative_information(id) ON DELETE CASCADE,
   asset_kind int,
   asset_type VARCHAR(2048),
   global_asset_id VARCHAR(2048),
@@ -429,12 +426,16 @@ CREATE TABLE IF NOT EXISTS submodel_descriptor (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   position     INTEGER NOT NULL,                -- <- Array-Index
   aas_descriptor_id BIGINT REFERENCES aas_descriptor(descriptor_id) ON DELETE CASCADE,
-  description_id BIGINT REFERENCES lang_string_text_type_reference(id) ON DELETE SET NULL,
-  displayname_id BIGINT REFERENCES lang_string_name_type_reference(id) ON DELETE SET NULL,
-  administrative_information_id BIGINT REFERENCES administrative_information(id) ON DELETE CASCADE,
   id_short VARCHAR(128),
   id VARCHAR(2048) NOT NULL, -- not unique because it can have duplicates over different aas descriptor.
   semantic_id BIGINT REFERENCES reference(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS descriptor_payload (
+  descriptor_id BIGINT PRIMARY KEY REFERENCES descriptor(id) ON DELETE CASCADE,
+  description_payload JSONB NOT NULL,
+  displayname_payload JSONB NOT NULL,
+  administrative_information_payload JSONB NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS submodel_descriptor_supplemental_semantic_id (
@@ -450,9 +451,6 @@ CREATE TABLE IF NOT EXISTS submodel_embedded_data_specification (
 
 CREATE TABLE IF NOT EXISTS infrastructure_descriptor (
   descriptor_id BIGINT PRIMARY KEY REFERENCES descriptor(id) ON DELETE CASCADE,
-  description_id BIGINT REFERENCES lang_string_text_type_reference(id),
-  displayname_id BIGINT REFERENCES lang_string_name_type_reference(id),
-  administrative_information_id BIGINT REFERENCES administrative_information(id),
   global_asset_id VARCHAR(2048),
   id_short VARCHAR(128),
   id VARCHAR(2048) NOT NULL UNIQUE,
@@ -608,9 +606,6 @@ CREATE INDEX IF NOT EXISTS ix_aas_endpoint_position ON aas_descriptor_endpoint(p
 -- AAS descriptor & submodel descriptors
 -- ==========================================
 -- aas_descriptor: unique(id) already exists; add common filters
-CREATE INDEX IF NOT EXISTS ix_aasd_admininfo_id            ON aas_descriptor(administrative_information_id);
-CREATE INDEX IF NOT EXISTS ix_aasd_displayname_id          ON aas_descriptor(displayname_id);
-CREATE INDEX IF NOT EXISTS ix_aasd_description_id          ON aas_descriptor(description_id);
 CREATE INDEX IF NOT EXISTS ix_aasd_created_at              ON aas_descriptor(created_at);
 
 CREATE INDEX IF NOT EXISTS ix_aasd_id_short                ON aas_descriptor(id_short);
@@ -625,10 +620,7 @@ CREATE INDEX IF NOT EXISTS ix_aasd_asset_kind_type         ON aas_descriptor(ass
 
 -- submodel_descriptor
 CREATE INDEX IF NOT EXISTS ix_smd_aas_descriptor_id        ON submodel_descriptor(aas_descriptor_id);
-CREATE INDEX IF NOT EXISTS ix_smd_admininfo_id             ON submodel_descriptor(administrative_information_id);
 CREATE INDEX IF NOT EXISTS ix_smd_semantic_id              ON submodel_descriptor(semantic_id);
-CREATE INDEX IF NOT EXISTS ix_smd_displayname_id           ON submodel_descriptor(displayname_id);
-CREATE INDEX IF NOT EXISTS ix_smd_description_id           ON submodel_descriptor(description_id);
 CREATE INDEX IF NOT EXISTS ix_smd_created_at               ON submodel_descriptor(created_at);
 CREATE INDEX IF NOT EXISTS ix_smd_id_short                 ON submodel_descriptor(id_short);
 -- unique(id) already present; add trigram for partial/fuzzy
@@ -647,9 +639,6 @@ CREATE INDEX IF NOT EXISTS ix_smdss_pair                   ON submodel_descripto
 -- Infrastructure descriptor
 -- ==========================================
 -- infrastructure_descriptor: unique(id) already exists; add common filters
-CREATE INDEX IF NOT EXISTS ix_regd_admininfo_id            ON infrastructure_descriptor(administrative_information_id);
-CREATE INDEX IF NOT EXISTS ix_regd_displayname_id          ON infrastructure_descriptor(displayname_id);
-CREATE INDEX IF NOT EXISTS ix_regd_description_id          ON infrastructure_descriptor(description_id);
 
 CREATE INDEX IF NOT EXISTS ix_regd_id_short                ON infrastructure_descriptor(id_short);
 CREATE INDEX IF NOT EXISTS ix_regd_global_asset_id         ON infrastructure_descriptor(global_asset_id);
@@ -657,47 +646,3 @@ CREATE INDEX IF NOT EXISTS ix_regd_company                 ON infrastructure_des
 -- Useful for partial and fuzzy searches on long IDs/GRIDs
 CREATE INDEX IF NOT EXISTS ix_regd_id_trgm                 ON infrastructure_descriptor USING GIN (id gin_trgm_ops);
 CREATE INDEX IF NOT EXISTS ix_regd_global_asset_id_trgm    ON infrastructure_descriptor USING GIN (global_asset_id gin_trgm_ops);
-
--- ==========================================
--- Trigger functions for cascading deletion
--- ==========================================
--- Trigger function to clean up orphaned records when a infrastructure_descriptor is deleted
-CREATE OR REPLACE FUNCTION cleanup_infrastructure_descriptor()
-RETURNS TRIGGER AS $$
-DECLARE
-    v_creator BIGINT;
-BEGIN
-    -- Delete the administrative_information record if it exists
-    IF OLD.administrative_information_id IS NOT NULL THEN
-        -- Get the creator reference ID before deleting the administrative_information
-        SELECT creator INTO v_creator FROM administrative_information WHERE id = OLD.administrative_information_id;
-        
-        -- Delete the administrative_information record
-        DELETE FROM administrative_information WHERE id = OLD.administrative_information_id;
-        
-        -- Delete the creator reference if it exists and is orphaned
-        IF v_creator IS NOT NULL THEN
-            DELETE FROM reference WHERE id = v_creator;
-        END IF;
-    END IF;
-    
-    -- Delete the description_id lang_string_text_type_reference if it exists
-    IF OLD.description_id IS NOT NULL THEN
-        DELETE FROM lang_string_text_type_reference WHERE id = OLD.description_id;
-    END IF;
-    
-    -- Delete the displayname_id lang_string_name_type_reference if it exists
-    IF OLD.displayname_id IS NOT NULL THEN
-        DELETE FROM lang_string_name_type_reference WHERE id = OLD.displayname_id;
-    END IF;
-    
-    RETURN OLD;
-END;
-$$ LANGUAGE plpgsql;
-
--- Create trigger to execute cleanup function after infrastructure_descriptor deletion
-DROP TRIGGER IF EXISTS trigger_cleanup_infrastructure_descriptor ON infrastructure_descriptor;
-CREATE TRIGGER trigger_cleanup_infrastructure_descriptor
-    AFTER DELETE ON infrastructure_descriptor
-    FOR EACH ROW
-    EXECUTE FUNCTION cleanup_infrastructure_descriptor();
