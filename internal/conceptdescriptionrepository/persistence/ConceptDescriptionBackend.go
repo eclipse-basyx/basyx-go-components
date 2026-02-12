@@ -33,6 +33,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/FriedJannik/aas-go-sdk/jsonization"
@@ -140,10 +141,19 @@ func (b *ConceptDescriptionBackend) CreateConceptDescription(cd types.IConceptDe
 }
 
 // GetConceptDescriptions retrieves a paginated list of concept descriptions with optional filters.
-func (b *ConceptDescriptionBackend) GetConceptDescriptions(idShort *string, isCaseOf *string, dataSpecificationRef *string, limit int, cursor *string) ([]types.IConceptDescription, error) {
-	var conceptDescriptions []types.IConceptDescription
+func (b *ConceptDescriptionBackend) GetConceptDescriptions(idShort *string, _ /* isCaseOf */ *string, _ /* dataSpecificationRef */ *string, limit uint, cursor *string) ([]types.IConceptDescription, string, error) {
+	if limit == 0 {
+		limit = 100
+	}
 
-	query := goqu.From("concept_description").Select(goqu.C("id"), goqu.C("id_short"), goqu.C("data"))
+	peekLimit := limit + 1
+	var conceptDescriptions []types.IConceptDescription
+	nextCursor := ""
+
+	query := goqu.From("concept_description").
+		Select(goqu.C("id"), goqu.C("id_short"), goqu.C("data")).
+		Order(goqu.I("id").Asc()).
+		Limit(peekLimit)
 
 	// if idShort != nil {
 	// 	query = query.Where(goqu.Ex{"id_short": *idShort})
@@ -155,46 +165,63 @@ func (b *ConceptDescriptionBackend) GetConceptDescriptions(idShort *string, isCa
 	// 	query = query.Where(goqu.Ex{"data->>'dataSpecificationRef'": *dataSpecificationRef})
 	// }
 
-	if limit > 0 {
-		query = query.Limit(uint(limit))
+	if idShort != nil && strings.TrimSpace(*idShort) != "" {
+		query = query.Where(goqu.Ex{"id_short": strings.TrimSpace(*idShort)})
+	}
+
+	if cursor != nil && strings.TrimSpace(*cursor) != "" {
+		query = query.Where(goqu.C("id").Gte(strings.TrimSpace(*cursor)))
 	}
 
 	sqlQuery, args, err := query.ToSQL()
 	if err != nil {
+		return nil, "", fmt.Errorf("CDREPO-GCDS-BUILDSQL failed to build SQL query: %w", err)
 	}
 
 	rows, err := b.db.Query(sqlQuery, args...)
 	if err != nil {
-		return nil, fmt.Errorf("failed to execute SQL query: %w", err)
+		return nil, "", fmt.Errorf("CDREPO-GCDS-EXECQUERY failed to execute SQL query: %w", err)
 	}
-	defer rows.Close()
+	defer func() {
+		if closeErr := rows.Close(); closeErr != nil {
+			_, _ = fmt.Printf("CDREPO-GCDS-CLOSEROWS failed to close rows: %v\n", closeErr)
+		}
+	}()
+
+	readCount := uint(0)
 
 	for rows.Next() {
 		var id string
 		var idShort string
 		var data string
 		if err := rows.Scan(&id, &idShort, &data); err != nil {
-			return nil, fmt.Errorf("failed to scan row: %w", err)
+			return nil, "", fmt.Errorf("CDREPO-GCDS-SCANROW failed to scan row: %w", err)
+		}
+
+		if readCount == limit {
+			nextCursor = id
+			break
 		}
 
 		var jsonable map[string]any
 		if err := json.Unmarshal([]byte(data), &jsonable); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal JSON data: %w", err)
+			return nil, "", fmt.Errorf("CDREPO-GCDS-UNMARSHAL failed to unmarshal JSON data: %w", err)
 		}
 
 		cd, err := jsonization.ConceptDescriptionFromJsonable(jsonable)
 		if err != nil {
-			return nil, fmt.Errorf("failed to convert jsonable to concept description: %w", err)
+			return nil, "", fmt.Errorf("CDREPO-GCDS-FROMJSON failed to convert jsonable to concept description: %w", err)
 		}
 
 		conceptDescriptions = append(conceptDescriptions, cd)
+		readCount++
 	}
 
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("error iterating over rows: %w", err)
+		return nil, "", fmt.Errorf("CDREPO-GCDS-ROWSERR error iterating over rows: %w", err)
 	}
 
-	return conceptDescriptions, nil
+	return conceptDescriptions, nextCursor, nil
 }
 
 // GetConceptDescriptionByID retrieves a concept description by its identifier.
@@ -232,7 +259,7 @@ func (b *ConceptDescriptionBackend) GetConceptDescriptionByID(id string) (types.
 		return nil, fmt.Errorf("failed to convert jsonable to concept description: %w", err)
 	}
 
-	return cd.(types.IConceptDescription), nil
+	return cd, nil
 }
 
 // PutConceptDescription updates or replaces the concept description with the given identifier.
@@ -279,7 +306,11 @@ func doesConceptDescriptionExist(db *sql.DB, id string) (bool, error) {
 	if err != nil {
 		return false, fmt.Errorf("CDREPO-CDEXIST-EXEC failed to execute SQL query: %w", err)
 	}
-	defer rows.Close()
+	defer func() {
+		if closeErr := rows.Close(); closeErr != nil {
+			_, _ = fmt.Printf("CDREPO-CDEXIST-CLOSEROWS failed to close rows: %v\n", closeErr)
+		}
+	}()
 
 	return rows.Next(), nil
 }

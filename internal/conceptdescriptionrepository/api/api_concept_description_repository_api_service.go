@@ -32,11 +32,14 @@
  * Contact: info@idtwin.org
  */
 
+// Package api provides the Concept Description Repository API service implementation.
 package api
 
 import (
 	"context"
 	"net/http"
+	"strconv"
+	"strings"
 
 	"github.com/FriedJannik/aas-go-sdk/jsonization"
 	"github.com/FriedJannik/aas-go-sdk/types"
@@ -54,6 +57,23 @@ type ConceptDescriptionRepositoryAPIAPIService struct {
 
 const componentName = "CDREPO"
 
+func pagedResponse[T any](results T, nextCursor string) model.ImplResponse {
+	pm := model.PagedResultPagingMetadata{}
+	if nextCursor != "" {
+		pm.Cursor = common.EncodeString(nextCursor)
+	}
+
+	res := struct {
+		PagingMetadata model.PagedResultPagingMetadata `json:"paging_metadata"`
+		Result         T                               `json:"result"`
+	}{
+		PagingMetadata: pm,
+		Result:         results,
+	}
+
+	return model.Response(http.StatusOK, res)
+}
+
 // NewConceptDescriptionRepositoryAPIAPIService creates a default api service
 func NewConceptDescriptionRepositoryAPIAPIService(database *persistence.ConceptDescriptionBackend) *ConceptDescriptionRepositoryAPIAPIService {
 	return &ConceptDescriptionRepositoryAPIAPIService{
@@ -62,8 +82,28 @@ func NewConceptDescriptionRepositoryAPIAPIService(database *persistence.ConceptD
 }
 
 // GetAllConceptDescriptions - Returns all Concept Descriptions
-func (s *ConceptDescriptionRepositoryAPIAPIService) GetAllConceptDescriptions(ctx context.Context, idShort string, isCaseOf string, dataSpecificationRef string, limit int32, cursor string) (model.ImplResponse, error) {
-	cds, err := s.d.GetConceptDescriptions(&idShort, &isCaseOf, &dataSpecificationRef, int(limit), &cursor)
+func (s *ConceptDescriptionRepositoryAPIAPIService) GetAllConceptDescriptions(_ context.Context, idShort string, isCaseOf string, dataSpecificationRef string, limit int32, cursor string) (model.ImplResponse, error) {
+	decodedCursor := strings.TrimSpace(cursor)
+	if decodedCursor != "" {
+		var decodeErr error
+		decodedCursor, decodeErr = common.DecodeString(decodedCursor)
+		if decodeErr != nil {
+			return common.NewErrorResponse(decodeErr, http.StatusBadRequest, componentName, "GetAllConceptDescriptions", "BadCursor"), nil
+		}
+	}
+
+	if limit < 0 {
+		err := common.NewErrBadRequest("limit must be non-negative")
+		return common.NewErrorResponse(err, http.StatusBadRequest, componentName, "GetAllConceptDescriptions", "BadLimit"), nil
+	}
+
+	uintLimit64, convErr := strconv.ParseUint(strconv.FormatInt(int64(limit), 10), 10, 64)
+	if convErr != nil {
+		err := common.NewErrBadRequest("invalid limit")
+		return common.NewErrorResponse(err, http.StatusBadRequest, componentName, "GetAllConceptDescriptions", "BadLimit"), nil
+	}
+	uintLimit := uint(uintLimit64)
+	cds, nextCursor, err := s.d.GetConceptDescriptions(&idShort, &isCaseOf, &dataSpecificationRef, uintLimit, &decodedCursor)
 	if err != nil {
 		switch {
 		case common.IsErrBadRequest(err):
@@ -84,11 +124,11 @@ func (s *ConceptDescriptionRepositoryAPIAPIService) GetAllConceptDescriptions(ct
 		jsonable = append(jsonable, jsonObj)
 	}
 
-	return model.Response(http.StatusOK, jsonable), nil
+	return pagedResponse(jsonable, nextCursor), nil
 }
 
 // PostConceptDescription - Creates a new Concept Description
-func (s *ConceptDescriptionRepositoryAPIAPIService) PostConceptDescription(ctx context.Context, conceptDescription types.IConceptDescription) (model.ImplResponse, error) {
+func (s *ConceptDescriptionRepositoryAPIAPIService) PostConceptDescription(_ context.Context, conceptDescription types.IConceptDescription) (model.ImplResponse, error) {
 	err := s.d.CreateConceptDescription(conceptDescription)
 	if err != nil {
 		switch {
@@ -112,7 +152,7 @@ func (s *ConceptDescriptionRepositoryAPIAPIService) PostConceptDescription(ctx c
 }
 
 // GetConceptDescriptionById - Returns a specific Concept Description
-func (s *ConceptDescriptionRepositoryAPIAPIService) GetConceptDescriptionById(ctx context.Context, cdIdentifier string) (model.ImplResponse, error) {
+func (s *ConceptDescriptionRepositoryAPIAPIService) GetConceptDescriptionById(_ context.Context, cdIdentifier string) (model.ImplResponse, error) {
 	decodedIdentifier, err := common.Decode(cdIdentifier)
 	if err != nil {
 		return common.NewErrorResponse(err, http.StatusBadRequest, componentName, "GetConceptDescriptionById", "URLDecode"), nil
@@ -141,7 +181,7 @@ func (s *ConceptDescriptionRepositoryAPIAPIService) GetConceptDescriptionById(ct
 }
 
 // PutConceptDescriptionById - Creates or updates an existing Concept Description
-func (s *ConceptDescriptionRepositoryAPIAPIService) PutConceptDescriptionById(ctx context.Context, cdIdentifier string, conceptDescription types.IConceptDescription) (model.ImplResponse, error) {
+func (s *ConceptDescriptionRepositoryAPIAPIService) PutConceptDescriptionById(_ context.Context, cdIdentifier string, conceptDescription types.IConceptDescription) (model.ImplResponse, error) {
 	decodedIdentifier, err := common.Decode(cdIdentifier)
 	if err != nil {
 		return common.NewErrorResponse(err, http.StatusBadRequest, componentName, "PutConceptDescriptionById", "URLDecode"), nil
@@ -167,7 +207,7 @@ func (s *ConceptDescriptionRepositoryAPIAPIService) PutConceptDescriptionById(ct
 }
 
 // DeleteConceptDescriptionById - Deletes a Concept Description
-func (s *ConceptDescriptionRepositoryAPIAPIService) DeleteConceptDescriptionById(ctx context.Context, cdIdentifier string) (model.ImplResponse, error) {
+func (s *ConceptDescriptionRepositoryAPIAPIService) DeleteConceptDescriptionById(_ context.Context, cdIdentifier string) (model.ImplResponse, error) {
 	decodedIdentifier, err := common.Decode(cdIdentifier)
 	if err != nil {
 		return common.NewErrorResponse(err, http.StatusBadRequest, componentName, "DeleteConceptDescriptionById", "URLDecode"), nil

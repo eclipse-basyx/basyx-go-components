@@ -9,7 +9,7 @@ postgres:
   port: 5432
   user: postgres
   password: snoopy2002
-  dbname: basyx
+  dbname: basyxCDRepo
   maxOpenConnections: 500
   maxIdleConnections: 500
   connMaxLifetimeMinutes: 5

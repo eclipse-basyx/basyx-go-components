@@ -1,0 +1,12 @@
+{
+  "paging_metadata": {
+    "cursor": "dXJuOmV4YW1wbGU6Y2Q6Yjoy"
+  },
+  "result": [
+    {
+      "id": "urn:example:cd:a:1",
+      "idShort": "ConceptA",
+      "modelType": "ConceptDescription"
+    }
+  ]
+}

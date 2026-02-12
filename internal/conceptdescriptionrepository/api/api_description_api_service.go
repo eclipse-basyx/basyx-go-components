@@ -54,7 +54,7 @@ func NewDescriptionAPIAPIService() *DescriptionAPIAPIService {
 }
 
 // GetSelfDescription - Returns the self-describing information of a network resource (ServiceDescription)
-func (s *DescriptionAPIAPIService) GetSelfDescription(ctx context.Context) (model.ImplResponse, error) {
+func (s *DescriptionAPIAPIService) GetSelfDescription(_ context.Context) (model.ImplResponse, error) {
 	// TODO - update GetSelfDescription with the required logic for this service method.
 	// Add api_description_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
 
