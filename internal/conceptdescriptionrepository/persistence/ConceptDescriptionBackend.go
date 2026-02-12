@@ -141,7 +141,7 @@ func (b *ConceptDescriptionBackend) CreateConceptDescription(cd types.IConceptDe
 }
 
 // GetConceptDescriptions retrieves a paginated list of concept descriptions with optional filters.
-func (b *ConceptDescriptionBackend) GetConceptDescriptions(idShort *string, _ /* isCaseOf */ *string, _ /* dataSpecificationRef */ *string, limit uint, cursor *string) ([]types.IConceptDescription, string, error) {
+func (b *ConceptDescriptionBackend) GetConceptDescriptions(idShort *string, isCaseOf *string, dataSpecificationRef *string, limit uint, cursor *string) ([]types.IConceptDescription, string, error) {
 	if limit == 0 {
 		limit = 100
 	}
@@ -155,18 +155,16 @@ func (b *ConceptDescriptionBackend) GetConceptDescriptions(idShort *string, _ /*
 		Order(goqu.I("id").Asc()).
 		Limit(peekLimit)
 
-	// if idShort != nil {
-	// 	query = query.Where(goqu.Ex{"id_short": *idShort})
-	// }
-	// if isCaseOf != nil {
-	// 	query = query.Where(goqu.Ex{"data->>'isCaseOf'": *isCaseOf})
-	// }
-	// if dataSpecificationRef != nil {
-	// 	query = query.Where(goqu.Ex{"data->>'dataSpecificationRef'": *dataSpecificationRef})
-	// }
-
 	if idShort != nil && strings.TrimSpace(*idShort) != "" {
 		query = query.Where(goqu.Ex{"id_short": strings.TrimSpace(*idShort)})
+	}
+
+	if isCaseOf != nil && strings.TrimSpace(*isCaseOf) != "" {
+		query = query.Where(goqu.Ex{"data->>'isCaseOf'": strings.TrimSpace(*isCaseOf)})
+	}
+
+	if dataSpecificationRef != nil && strings.TrimSpace(*dataSpecificationRef) != "" {
+		query = query.Where(goqu.Ex{"data->>'dataSpecificationRef'": strings.TrimSpace(*dataSpecificationRef)})
 	}
 
 	if cursor != nil && strings.TrimSpace(*cursor) != "" {

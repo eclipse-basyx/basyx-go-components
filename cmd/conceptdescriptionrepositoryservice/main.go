@@ -85,11 +85,11 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	}
 
 	// ==== Description Service ====
-	// descSvc := openapi.NewDescriptionAPIAPIService()
-	// descCtrl := openapi.NewDescriptionAPIAPIController(descSvc)
-	// for _, rt := range descCtrl.Routes() {
-	// 	r.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
-	// }
+	descSvc := api.NewDescriptionAPIAPIService()
+	descCtrl := openapi.NewDescriptionAPIAPIController(descSvc)
+	for _, rt := range descCtrl.Routes() {
+		r.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
+	}
 
 	// Start the server
 	addr := "0.0.0.0:" + fmt.Sprintf("%d", config.Server.Port)
