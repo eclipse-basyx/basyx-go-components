@@ -315,7 +315,7 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-          
+
       - name: Get dependencies
         run: go mod download
 
