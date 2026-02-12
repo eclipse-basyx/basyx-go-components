@@ -29,6 +29,8 @@
 
 ## Post-Task Steps:
 - Run linter and formatter on the modified files to ensure code quality and consistency.
+- Also fix linting errors of unrelated files if you encounter them while running the linter.
+- Do a Self-Code Review to ensure that the changes meet the task requirements and adhere to coding standards. (CC, DRY)
 
 ## Run Integration Tests
 - go test -v ./internal/submodelrepository/integration_tests 

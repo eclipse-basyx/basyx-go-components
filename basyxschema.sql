@@ -458,6 +458,13 @@ CREATE TABLE IF NOT EXISTS infrastructure_descriptor (
   id VARCHAR(2048) NOT NULL UNIQUE,
   company VARCHAR(2048)
 );
+
+CREATE TABLE IF NOT EXISTS concept_description (
+  id TEXT PRIMARY KEY,
+  id_short TEXT,
+  data JSONB
+);
+
 -- ------------------------------------------
 -- Indexes
 -- ------------------------------------------
