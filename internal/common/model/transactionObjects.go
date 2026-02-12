@@ -579,12 +579,12 @@ type SubmodelDescriptorRow struct {
 // such as registry administrative information, display names, and
 // descriptions.
 type InfrastructureDescriptorRow struct {
-	DescID        int64
-	GlobalAssetID sql.NullString
-	IDShort       sql.NullString
-	Company       sql.NullString
-	IDStr         string
-	AdminInfoID   sql.NullInt64
-	DisplayNameID sql.NullInt64
-	DescriptionID sql.NullInt64
+	DescID                    int64
+	GlobalAssetID             sql.NullString
+	IDShort                   sql.NullString
+	Company                   sql.NullString
+	IDStr                     string
+	AdministrativeInfoPayload json.RawMessage
+	DisplayNamePayload        json.RawMessage
+	DescriptionPayload        json.RawMessage
 }
