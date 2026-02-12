@@ -413,15 +413,7 @@ func buildListAssetAdministrationShellDescriptorsQuery(
 			expressions[7],
 			expressions[8],
 		)
-	if auth.NeedsGroupBy(ctx, mapper) {
-		ds = ds.GroupBy(
-			tAASDescriptor.Col(colDescriptorID),
-			tAASDescriptor.Col(colAssetKind),
-			adminPayload,
-			displayNamePayload,
-			descriptionPayload,
-		)
-	}
+
 	ds, err = auth.AddFormulaQueryFromContext(ctx, ds, collector)
 	if err != nil {
 		return nil, err

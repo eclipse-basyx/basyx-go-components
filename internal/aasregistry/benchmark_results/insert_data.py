@@ -5,9 +5,9 @@ import json
 
 # --- Config ---
 URL = "http://localhost:5004/shell-descriptors"
-JSON_FILE = "bodies/testbench.json"  # path to your file
+JSON_FILE = "bodies/data.json"  # path to your file
 INSERT_COUNT = 30000  # Change number if you want more inserts
-INSERT_LIST_ONCE = True  # If JSON file is a list, insert each element once
+INSERT_LIST_ONCE = False  # If JSON file is a list, insert each element once
 
 # --- Load JSON file ---
 with open(JSON_FILE, "r", encoding="utf-8") as f:

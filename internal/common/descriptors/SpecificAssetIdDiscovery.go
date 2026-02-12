@@ -128,11 +128,6 @@ func ReadSpecificAssetIDsByAASRef(
 			tSpecificAssetID.Col(colPosition).Asc(),
 			tSpecificAssetID.Col(colID).Asc(),
 		)
-	if auth.NeedsGroupBy(ctx, bdExpMapper) {
-		ds = ds.GroupBy(
-			expressions[0], // id
-		)
-	}
 
 	ds, err = auth.AddFormulaQueryFromContext(ctx, ds, collector)
 	if err != nil {

@@ -83,24 +83,6 @@ func extractExpressions(mappers []ExpressionIdentifiableMapper) []exp.Expression
 	return expressions
 }
 
-// NeedsGroupBy returns true when the query filter requires aggregated projections.
-// This happens when at least one fragment-mapped column has an active filter.
-func NeedsGroupBy(ctx context.Context, expressionMappers []ExpressionIdentifiableMapper) bool {
-	p := GetQueryFilter(ctx)
-	if p == nil {
-		return false
-	}
-	for _, expMapper := range expressionMappers {
-		if expMapper.Fragment == nil {
-			continue
-		}
-		if len(p.FilterExpressionEntriesFor(*expMapper.Fragment)) != 0 {
-			return true
-		}
-	}
-	return false
-}
-
 // GetColumnSelectStatement builds the list of SELECT expressions while honoring
 // fragment filters stored in the context. Filterable expressions are wrapped
 // in CASE/MAX projections so their values are only exposed when the other
@@ -136,7 +118,7 @@ func GetColumnSelectStatement(ctx context.Context, expressionMappers []Expressio
 				if len(wcs) > 1 {
 					combined = goqu.And(wcs...)
 				}
-				result = append(result, goqu.MAX(caseWhenColumn(combined, expMapper.Exp)))
+				result = append(result, caseWhenColumn(combined, expMapper.Exp))
 			} else {
 				result = append(result, expMapper.Exp)
 			}
