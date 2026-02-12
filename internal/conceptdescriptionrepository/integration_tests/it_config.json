@@ -89,5 +89,40 @@
         "endpoint": "http://localhost:6004/concept-descriptions",
         "expectedStatus": 200,
         "shouldMatch": "expected/GetAllConceptDescriptionsEmpty.json"
+    },
+    {
+        "context": "014 - Create Concept Description Full",
+        "method": "POST",
+        "endpoint": "http://localhost:6004/concept-descriptions",
+        "expectedStatus": 201,
+        "data": "bodies/ConceptDescriptionFull.json",
+        "shouldMatch": "bodies/ConceptDescriptionFull.json"
+    },
+    {
+        "context": "015 - Get Concept Descriptions by idShort",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/concept-descriptions?idShort=Temperature",
+        "expectedStatus": 200,
+        "shouldMatch": "expected/GetAllConceptDescriptionsFilteredFull.json"
+    },
+    {
+        "context": "016 - Get Concept Descriptions by isCaseOf",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/concept-descriptions?isCaseOf=0173-1%2302-AAO677%23002",
+        "expectedStatus": 200,
+        "shouldMatch": "expected/GetAllConceptDescriptionsFilteredFull.json"
+    },
+    {
+        "context": "017 - Get Concept Descriptions by dataSpecificationRef",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/concept-descriptions?dataSpecificationRef=https%3A%2F%2Fadmin-shell.io%2Faas%2F3%2F0%2FDataSpecificationIEC61360",
+        "expectedStatus": 200,
+        "shouldMatch": "expected/GetAllConceptDescriptionsFilteredFull.json"
+    },
+    {
+        "context": "018 - Delete Concept Description Full",
+        "method": "DELETE",
+        "endpoint": "http://localhost:6004/concept-descriptions/dXJuOmV4YW1wbGU6Y29uY2VwdC1kZXNjcmlwdGlvbjp0ZW1wZXJhdHVyZTox",
+        "expectedStatus": 204
     }
 ]

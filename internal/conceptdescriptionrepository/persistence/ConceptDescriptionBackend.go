@@ -160,11 +160,21 @@ func (b *ConceptDescriptionBackend) GetConceptDescriptions(idShort *string, isCa
 	}
 
 	if isCaseOf != nil && strings.TrimSpace(*isCaseOf) != "" {
-		query = query.Where(goqu.Ex{"data->>'isCaseOf'": strings.TrimSpace(*isCaseOf)})
+		query = query.Where(goqu.L(`EXISTS (
+			SELECT 1
+			FROM jsonb_array_elements(COALESCE(data->'isCaseOf', '[]'::jsonb)) AS is_case_of,
+				 jsonb_array_elements(COALESCE(is_case_of->'keys', '[]'::jsonb)) AS key_item
+			WHERE key_item->>'value' = ?
+		)`, strings.TrimSpace(*isCaseOf)))
 	}
 
 	if dataSpecificationRef != nil && strings.TrimSpace(*dataSpecificationRef) != "" {
-		query = query.Where(goqu.Ex{"data->>'dataSpecificationRef'": strings.TrimSpace(*dataSpecificationRef)})
+		query = query.Where(goqu.L(`EXISTS (
+			SELECT 1
+			FROM jsonb_array_elements(COALESCE(data->'embeddedDataSpecifications', '[]'::jsonb)) AS eds,
+				 jsonb_array_elements(COALESCE(eds->'dataSpecification'->'keys', '[]'::jsonb)) AS key_item
+			WHERE key_item->>'value' = ?
+		)`, strings.TrimSpace(*dataSpecificationRef)))
 	}
 
 	if cursor != nil && strings.TrimSpace(*cursor) != "" {
