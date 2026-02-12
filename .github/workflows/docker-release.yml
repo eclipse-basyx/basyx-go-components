@@ -33,10 +33,12 @@ jobs:
             image: eclipsebasyx/aasdiscovery-go
           - name: digitaltwinregistryservice
             image: eclipsebasyx/digitaltwinregistry-go
-          - name: registryofregistriesservice
-            image: eclipsebasyx/registryofregistries-go
+          - name: registryofinfrastructuresservice
+            image: eclipsebasyx/registryofinfrastructures-go
           - name: submodelrepositoryservice
             image: eclipsebasyx/submodelrepository-go
+          - name: submodelregistryservice
+            image: eclipsebasyx/submodelregistry-go
     
     steps:
       - name: Checkout code

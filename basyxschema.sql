@@ -402,25 +402,12 @@ CREATE TABLE IF NOT EXISTS aas_descriptor_endpoint (
   position     INTEGER NOT NULL,                -- <- Array-Index
   href VARCHAR(2048) NOT NULL,
   endpoint_protocol VARCHAR(128),
+  endpoint_protocol_version JSONB DEFAULT '[]',
   sub_protocol VARCHAR(128),
   sub_protocol_body VARCHAR(2048),
   sub_protocol_body_encoding VARCHAR(128),
+  security_attributes JSONB DEFAULT '[]',
   interface VARCHAR(128) NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS security_attributes (
-  id BIGSERIAL NOT NULL PRIMARY KEY,
-  endpoint_id BIGINT NOT NULL REFERENCES aas_descriptor_endpoint(id) ON DELETE CASCADE,
-  security_type security_type NOT NULL,
-  security_key TEXT NOT NULL,
-  security_value TEXT NOT NULL
-);
-
-
-CREATE TABLE IF NOT EXISTS endpoint_protocol_version (
-  id BIGSERIAL PRIMARY KEY,
-  endpoint_id BIGINT NOT NULL REFERENCES aas_descriptor_endpoint(id) ON DELETE CASCADE,
-  endpoint_protocol_version VARCHAR(128) NOT NULL
 );
 
 
@@ -461,12 +448,11 @@ CREATE TABLE IF NOT EXISTS submodel_embedded_data_specification (
   embedded_data_specification_id BIGSERIAL REFERENCES data_specification(id) ON DELETE CASCADE
 );
 
-CREATE TABLE IF NOT EXISTS registry_descriptor (
+CREATE TABLE IF NOT EXISTS infrastructure_descriptor (
   descriptor_id BIGINT PRIMARY KEY REFERENCES descriptor(id) ON DELETE CASCADE,
   description_id BIGINT REFERENCES lang_string_text_type_reference(id),
   displayname_id BIGINT REFERENCES lang_string_name_type_reference(id),
   administrative_information_id BIGINT REFERENCES administrative_information(id),
-  registry_type VARCHAR(2048),
   global_asset_id VARCHAR(2048),
   id_short VARCHAR(128),
   id VARCHAR(2048) NOT NULL UNIQUE,
@@ -624,14 +610,6 @@ CREATE INDEX IF NOT EXISTS ix_aas_endpoint_sp_body_trgm    ON aas_descriptor_end
 CREATE INDEX IF NOT EXISTS ix_aas_endpoint_descriptor_position ON aas_descriptor_endpoint(descriptor_id, position);
 CREATE INDEX IF NOT EXISTS ix_aas_endpoint_position ON aas_descriptor_endpoint(position);
 
--- security_attributes
-CREATE INDEX IF NOT EXISTS ix_secattr_endpoint_id          ON security_attributes(endpoint_id);
-CREATE INDEX IF NOT EXISTS ix_secattr_type                 ON security_attributes(security_type);
-CREATE INDEX IF NOT EXISTS ix_secattr_key                  ON security_attributes(security_key);
-
--- endpoint_protocol_version
-CREATE INDEX IF NOT EXISTS ix_epv_endpoint_id              ON endpoint_protocol_version(endpoint_id);
-CREATE INDEX IF NOT EXISTS ix_epv_version                  ON endpoint_protocol_version(endpoint_protocol_version);
 
 -- ==========================================
 -- AAS descriptor & submodel descriptors
@@ -662,6 +640,7 @@ CREATE INDEX IF NOT EXISTS ix_smd_created_at               ON submodel_descripto
 CREATE INDEX IF NOT EXISTS ix_smd_id_short                 ON submodel_descriptor(id_short);
 -- unique(id) already present; add trigram for partial/fuzzy
 CREATE INDEX IF NOT EXISTS ix_smd_id_trgm                  ON submodel_descriptor USING GIN (id gin_trgm_ops);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_smd_id_null_aas       ON submodel_descriptor(id) WHERE aas_descriptor_id IS NULL;
 CREATE INDEX IF NOT EXISTS ix_smd_aas_descriptor_position  ON submodel_descriptor(aas_descriptor_id, position);
 CREATE INDEX IF NOT EXISTS ix_smd_position                  ON submodel_descriptor(position);
 CREATE INDEX IF NOT EXISTS ix_specific_asset_id_position   ON specific_asset_id(descriptor_id, position);
@@ -672,26 +651,25 @@ CREATE INDEX IF NOT EXISTS ix_smdss_reference_id           ON submodel_descripto
 CREATE INDEX IF NOT EXISTS ix_smdss_pair                   ON submodel_descriptor_supplemental_semantic_id(descriptor_id, reference_id);
 
 -- ==========================================
--- Registry descriptor
+-- Infrastructure descriptor
 -- ==========================================
--- registry_descriptor: unique(id) already exists; add common filters
-CREATE INDEX IF NOT EXISTS ix_regd_admininfo_id            ON registry_descriptor(administrative_information_id);
-CREATE INDEX IF NOT EXISTS ix_regd_displayname_id          ON registry_descriptor(displayname_id);
-CREATE INDEX IF NOT EXISTS ix_regd_description_id          ON registry_descriptor(description_id);
+-- infrastructure_descriptor: unique(id) already exists; add common filters
+CREATE INDEX IF NOT EXISTS ix_regd_admininfo_id            ON infrastructure_descriptor(administrative_information_id);
+CREATE INDEX IF NOT EXISTS ix_regd_displayname_id          ON infrastructure_descriptor(displayname_id);
+CREATE INDEX IF NOT EXISTS ix_regd_description_id          ON infrastructure_descriptor(description_id);
 
-CREATE INDEX IF NOT EXISTS ix_regd_id_short                ON registry_descriptor(id_short);
-CREATE INDEX IF NOT EXISTS ix_regd_global_asset_id         ON registry_descriptor(global_asset_id);
-CREATE INDEX IF NOT EXISTS ix_regd_registry_type           ON registry_descriptor(registry_type);
-CREATE INDEX IF NOT EXISTS ix_regd_company                 ON registry_descriptor(company);
+CREATE INDEX IF NOT EXISTS ix_regd_id_short                ON infrastructure_descriptor(id_short);
+CREATE INDEX IF NOT EXISTS ix_regd_global_asset_id         ON infrastructure_descriptor(global_asset_id);
+CREATE INDEX IF NOT EXISTS ix_regd_company                 ON infrastructure_descriptor(company);
 -- Useful for partial and fuzzy searches on long IDs/GRIDs
-CREATE INDEX IF NOT EXISTS ix_regd_id_trgm                 ON registry_descriptor USING GIN (id gin_trgm_ops);
-CREATE INDEX IF NOT EXISTS ix_regd_global_asset_id_trgm    ON registry_descriptor USING GIN (global_asset_id gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS ix_regd_id_trgm                 ON infrastructure_descriptor USING GIN (id gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS ix_regd_global_asset_id_trgm    ON infrastructure_descriptor USING GIN (global_asset_id gin_trgm_ops);
 
 -- ==========================================
 -- Trigger functions for cascading deletion
 -- ==========================================
--- Trigger function to clean up orphaned records when a registry_descriptor is deleted
-CREATE OR REPLACE FUNCTION cleanup_registry_descriptor()
+-- Trigger function to clean up orphaned records when a infrastructure_descriptor is deleted
+CREATE OR REPLACE FUNCTION cleanup_infrastructure_descriptor()
 RETURNS TRIGGER AS $$
 DECLARE
     v_creator BIGINT;
@@ -724,9 +702,9 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Create trigger to execute cleanup function after registry_descriptor deletion
-DROP TRIGGER IF EXISTS trigger_cleanup_registry_descriptor ON registry_descriptor;
-CREATE TRIGGER trigger_cleanup_registry_descriptor
-    AFTER DELETE ON registry_descriptor
+-- Create trigger to execute cleanup function after infrastructure_descriptor deletion
+DROP TRIGGER IF EXISTS trigger_cleanup_infrastructure_descriptor ON infrastructure_descriptor;
+CREATE TRIGGER trigger_cleanup_infrastructure_descriptor
+    AFTER DELETE ON infrastructure_descriptor
     FOR EACH ROW
-    EXECUTE FUNCTION cleanup_registry_descriptor();
+    EXECUTE FUNCTION cleanup_infrastructure_descriptor();

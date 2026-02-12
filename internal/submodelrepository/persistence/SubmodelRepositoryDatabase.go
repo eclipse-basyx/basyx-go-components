@@ -1251,8 +1251,20 @@ func (p *PostgreSQLSubmodelDatabase) UpdateSubmodelElement(submodelID string, id
 		return err
 	}
 
+	// If the idShort changed during a PUT, update the idShortPath of this element and all descendants
+	effectivePath := idShortPath
+	if isPut && submodelElement.IDShort() != nil {
+		smeHandler := submodelelements.PostgreSQLSMECrudHandler{Db: p.db}
+		newPath, pathErr := smeHandler.UpdateIdShortPaths(tx, submodelID, idShortPath, *submodelElement.IDShort())
+		if pathErr != nil {
+			err = pathErr
+			return err
+		}
+		effectivePath = newPath
+	}
+
 	if isPut {
-		err = handleNestedElementsAfterPut(p, idShortPath, *modelType, tx, submodelID, submodelElement)
+		err = handleNestedElementsAfterPut(p, effectivePath, *modelType, tx, submodelID, submodelElement)
 		if err != nil {
 			return err
 		}

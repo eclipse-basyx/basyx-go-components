@@ -41,8 +41,6 @@ const (
 	tblDescriptor                     = "descriptor"
 	tblAASDescriptor                  = "aas_descriptor"
 	tblAASDescriptorEndpoint          = "aas_descriptor_endpoint"
-	tblSecurityAttributes             = "security_attributes"
-	tblEndpointProtocolVersion        = "endpoint_protocol_version"
 	tblAASIdentifier                  = "aas_identifier"
 	tblSpecificAssetID                = "specific_asset_id"
 	tblSpecificAssetIDSuppSemantic    = "specific_asset_id_supplemental_semantic_id"
@@ -56,7 +54,7 @@ const (
 	tblLangStringNameType             = "lang_string_name_type"
 	tblReference                      = "reference"
 	tblReferenceKey                   = "reference_key"
-	tblRegistryDescriptor             = "registry_descriptor"
+	tblInfrastructureDescriptor       = "infrastructure_descriptor"
 )
 
 // Common table aliases used across descriptor queries. Keeping them here avoids
@@ -70,8 +68,8 @@ const (
 	aliasSubmodelDescriptorEndpoint               = "submodel_descriptor_endpoint"
 	aliasSubmodelDescriptorSemanticIDReference    = "aasdesc_submodel_descriptor_semantic_id_reference"
 	aliasSubmodelDescriptorSemanticIDReferenceKey = "aasdesc_submodel_descriptor_semantic_id_reference_key"
-	aliasRegistryDescriptor                       = tblRegistryDescriptor
-	aliasRegistryDescriptorEndpoint               = "registry_descriptor_endpoint"
+	aliasInfrastructureDescriptor                 = tblInfrastructureDescriptor
+	aliasInfrastructureDescriptorEndpoint         = "infrastructure_descriptor_endpoint"
 )
 
 // Columns holds the column names used by descriptor queries. Centralizing the
@@ -91,7 +89,7 @@ const (
 	colIDShort                 = "id_short"
 	colCreatedAt               = "created_at"
 	colAASID                   = "id"
-	colRegDescID               = "id"
+	colInfDescID               = "id"
 	colHref                    = "href"
 	colEndpointProtocol        = "endpoint_protocol"
 	colSubProtocol             = "sub_protocol"
@@ -99,11 +97,8 @@ const (
 	colSubProtocolBodyEncoding = "sub_protocol_body_encoding"
 	colInterface               = "interface"
 
-	colEndpointID              = "endpoint_id"
-	colSecurityType            = "security_type"
-	colSecurityKey             = "security_key"
-	colSecurityValue           = "security_value"
 	colEndpointProtocolVersion = "endpoint_protocol_version"
+	colSecurityAttributes      = "security_attributes"
 
 	colSemanticID              = "semantic_id"
 	colSupplementalSemanticIDs = "supplemental_semantic_ids"
@@ -125,8 +120,7 @@ const (
 
 	colExtensionID = "extension_id"
 
-	colRegistryType = "registry_type"
-	colCompany      = "company"
+	colCompany = "company"
 
 	// Generic/common column names used in descriptor queries
 	colType            = "type"
@@ -143,9 +137,9 @@ const (
 // Goqu table helpers (convenience for Returning/Col) to avoid repetitively
 // constructing the table builders in call sites.
 var (
-	tDescriptor            = goqu.T(tblDescriptor)
-	tAASDescriptor         = goqu.T(tblAASDescriptor)
-	tAASDescriptorEndpoint = goqu.T(tblAASDescriptorEndpoint)
-	tSpecificAssetID       = goqu.T(tblSpecificAssetID)
-	tRegistryDescriptor    = goqu.T(tblRegistryDescriptor)
+	tDescriptor               = goqu.T(tblDescriptor)
+	tAASDescriptor            = goqu.T(tblAASDescriptor)
+	tAASDescriptorEndpoint    = goqu.T(tblAASDescriptorEndpoint)
+	tSpecificAssetID          = goqu.T(tblSpecificAssetID)
+	tInfrastructureDescriptor = goqu.T(tblInfrastructureDescriptor)
 )

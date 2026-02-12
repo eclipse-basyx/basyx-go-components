@@ -28,59 +28,38 @@ package descriptors
 
 import (
 	"database/sql"
+	"encoding/json"
 
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
 
-func createEndpointAttributes(tx *sql.Tx, endpointID int64, securityAttributes []model.ProtocolInformationSecurityAttributes) error {
-	if len(securityAttributes) == 0 {
-		return nil
+func marshalProtocolVersions(versions []string) (string, error) {
+	if versions == nil {
+		versions = []string{}
 	}
-	d := goqu.Dialect(dialect)
-	rows := make([]goqu.Record, 0, len(securityAttributes))
-	for _, val := range securityAttributes {
-		rows = append(rows, goqu.Record{
-			colEndpointID:    endpointID,
-			colSecurityType:  val.Type,
-			colSecurityKey:   val.Key,
-			colSecurityValue: val.Value,
-		})
-	}
-	sqlStr, args, err := d.Insert(tblSecurityAttributes).Rows(rows).ToSQL()
+	encoded, err := json.Marshal(versions)
 	if err != nil {
-		return err
+		return "", err
 	}
-	_, err = tx.Exec(sqlStr, args...)
-	return err
+	return string(encoded), nil
 }
 
-func createEndpointProtocolVersion(tx *sql.Tx, endpointID int64, endpointProtocolVersion []string) error {
-	if len(endpointProtocolVersion) == 0 {
-		return nil
+func marshalSecurityAttributes(attrs []model.ProtocolInformationSecurityAttributes) (string, error) {
+	if attrs == nil {
+		attrs = []model.ProtocolInformationSecurityAttributes{}
 	}
-	d := goqu.Dialect(dialect)
-	rows := make([]goqu.Record, 0, len(endpointProtocolVersion))
-	for _, val := range endpointProtocolVersion {
-		rows = append(rows, goqu.Record{
-			colEndpointID:              endpointID,
-			colEndpointProtocolVersion: val,
-		})
-	}
-	sqlStr, args, err := d.Insert(tblEndpointProtocolVersion).Rows(rows).ToSQL()
+	encoded, err := json.Marshal(attrs)
 	if err != nil {
-		return err
+		return "", err
 	}
-	_, err = tx.Exec(sqlStr, args...)
-	return err
+	return string(encoded), nil
 }
 
 // CreateEndpoints inserts a list of endpoints for a descriptor into the
-// database within the provided transaction. For each endpoint the base
-// endpoint row is inserted into the `tblAASDescriptorEndpoint` table and the
-// generated row id is used to insert related rows:
-//   - protocol version(s) via `createEndpointProtocolVersion`
-//   - security attributes via `createEndpointAttributes`
+// database within the provided transaction. Each endpoint is stored in
+// `tblAASDescriptorEndpoint` with protocol versions and security attributes
+// persisted as JSONB columns.
 //
 // The function is safe to call with a nil slice (no-op) and returns any
 // SQL/DB error encountered. The caller is responsible for managing the
@@ -101,6 +80,14 @@ func CreateEndpoints(tx *sql.Tx, descriptorID int64, endpoints []model.Endpoint)
 	if len(endpoints) > 0 {
 		d := goqu.Dialect(dialect)
 		for i, val := range endpoints {
+			versionsJSON, err := marshalProtocolVersions(val.ProtocolInformation.EndpointProtocolVersion)
+			if err != nil {
+				return err
+			}
+			securityAttrsJSON, err := marshalSecurityAttributes(val.ProtocolInformation.SecurityAttributes)
+			if err != nil {
+				return err
+			}
 			sqlStr, args, err := d.
 				Insert(tblAASDescriptorEndpoint).
 				Rows(goqu.Record{
@@ -108,9 +95,11 @@ func CreateEndpoints(tx *sql.Tx, descriptorID int64, endpoints []model.Endpoint)
 					colPosition:                i,
 					colHref:                    val.ProtocolInformation.Href,
 					colEndpointProtocol:        val.ProtocolInformation.EndpointProtocol,
+					colEndpointProtocolVersion: goqu.L("?::jsonb", versionsJSON),
 					colSubProtocol:             val.ProtocolInformation.Subprotocol,
 					colSubProtocolBody:         val.ProtocolInformation.SubprotocolBody,
 					colSubProtocolBodyEncoding: val.ProtocolInformation.SubprotocolBodyEncoding,
+					colSecurityAttributes:      goqu.L("?::jsonb", securityAttrsJSON),
 					colInterface:               val.Interface,
 				}).
 				Returning(tAASDescriptorEndpoint.Col(colID)).
@@ -120,12 +109,6 @@ func CreateEndpoints(tx *sql.Tx, descriptorID int64, endpoints []model.Endpoint)
 			}
 			var id int64
 			if err = tx.QueryRow(sqlStr, args...).Scan(&id); err != nil {
-				return err
-			}
-			if err = createEndpointProtocolVersion(tx, id, val.ProtocolInformation.EndpointProtocolVersion); err != nil {
-				return err
-			}
-			if err = createEndpointAttributes(tx, id, val.ProtocolInformation.SecurityAttributes); err != nil {
 				return err
 			}
 		}

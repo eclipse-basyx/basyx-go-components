@@ -182,7 +182,7 @@ func InsertAdministrationShellDescriptorTx(ctx context.Context, tx *sql.Tx, aasd
 		return err
 	}
 
-	return createSubModelDescriptors(tx, descriptorID, aasd.SubmodelDescriptors)
+	return createSubModelDescriptors(tx, sql.NullInt64{Int64: descriptorID, Valid: true}, aasd.SubmodelDescriptors)
 }
 
 // GetAssetAdministrationShellDescriptorByID returns a fully materialized
@@ -525,11 +525,9 @@ func listAssetAdministrationShellDescriptors(
 		return nil, "", common.NewInternalServerError("Failed to iterate AAS descriptors. See server logs for details.")
 	}
 
-	var nextCursor string
-	if len(descRows) > int(limit) {
-		nextCursor = descRows[limit].IDStr
-		descRows = descRows[:limit]
-	}
+	descRows, nextCursor := applyCursorLimit(descRows, limit, func(r model.AssetAdministrationShellDescriptorRow) string {
+		return r.IDStr
+	})
 
 	if len(descRows) == 0 {
 		return []model.AssetAdministrationShellDescriptor{}, nextCursor, nil

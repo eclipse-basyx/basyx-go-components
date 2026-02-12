@@ -28,14 +28,14 @@
             ]
         },
         {
-            "name": "Launch RegistryOfRegistries Service",
+            "name": "Launch RegistryOfInfrastructures Service",
             "type": "go",
             "request": "launch",
             "mode": "debug",
-            "program": "${workspaceFolder}/cmd/registryofregistriesservice/main.go",
+            "program": "${workspaceFolder}/cmd/registryofinfrastructuresservice/main.go",
             "args": [
                 "-config",
-                "${workspaceFolder}/cmd/registryofregistriesservice/config.yaml",
+                "${workspaceFolder}/cmd/registryofinfrastructuresservice/config.yaml",
                 "-databaseSchema",
                 "${workspaceFolder}/basyxschema.sql"
             ]
@@ -62,6 +62,19 @@
             "args": [
                 "-config",
                 "${workspaceFolder}/cmd/aasregistryservice/config.yaml",
+                "-databaseSchema",
+                "${workspaceFolder}/basyxschema.sql"
+            ]
+        },
+        {
+            "name": "Launch SM Registry Service",
+            "type": "go",
+            "request": "launch",
+            "mode": "debug",
+            "program": "${workspaceFolder}/cmd/submodelregistryservice/main.go",
+            "args": [
+                "-config",
+                "${workspaceFolder}/cmd/submodelregistryservice/config.yaml",
                 "-databaseSchema",
                 "${workspaceFolder}/basyxschema.sql"
             ]
