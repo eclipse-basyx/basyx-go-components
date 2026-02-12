@@ -353,40 +353,6 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 
-	// // Create DB Connection here
-	// sqlQuery, err := sql.Open("postgres", "postgres://admin:admin123@127.0.0.1:6432/basyxTestDB?sslmode=disable")
-
-	// if err != nil {
-	// 	_, _ = fmt.Printf("Failed to connect to database: %v\n", err)
-	// 	os.Exit(1)
-	// }
-
-	// // wait for 5sec to ensure that the DB is ready
-	// time.Sleep(5 * time.Second)
-
-	// dir, osErr := os.Getwd()
-
-	// if osErr != nil {
-	// 	_, _ = fmt.Printf("Failed to get working directory: %v\n", osErr)
-	// 	os.Exit(1)
-	// }
-
-	// queryString, fileError := os.ReadFile(dir + "/sql/demoSubmodel.sql")
-
-	// if fileError != nil {
-	// 	_, _ = fmt.Printf("Failed to read SQL file: %v\n", fileError)
-	// 	os.Exit(1)
-	// }
-
-	// _, err = sqlQuery.Exec(string(queryString))
-
-	// if err != nil {
-	// 	_, _ = fmt.Printf("Failed to execute SQL script: %v\n", err)
-	// 	os.Exit(1)
-	// }
-
-	// _, _ = fmt.Println("Database initialized successfully.")
-
 	// Run tests
 	code := m.Run()
 
