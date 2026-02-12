@@ -156,17 +156,18 @@ func ReadSubmodelDescriptorsByDescriptorIDs(
 				goqu.L("? = ANY(?::bigint[])", submodelDescriptorAlias.Col(colDescriptorID), arr),
 				submodelDescriptorAlias.Col(colAASDescriptorID).IsNull(),
 			),
-		).
-		GroupBy(
-			expressions[0],
-			expressions[1],
-			expressions[2],
-			expressions[3],
-			expressions[4],
-			expressions[5],
-			expressions[6],
-			expressions[7],
 		)
+	if auth.NeedsGroupBy(ctx, mapper) {
+		ds = ds.GroupBy(
+			submodelDescriptorAlias.Col(colDescriptorID),
+			submodelDescriptorAlias.Col(colIDShort),
+			submodelDescriptorAlias.Col(colAASID),
+			submodelDescriptorAlias.Col(colSemanticID),
+			payloadAlias.Col(colAdministrativeInfoPayload),
+			payloadAlias.Col(colDescriptionPayload),
+			payloadAlias.Col(colDisplayNamePayload),
+		)
+	}
 
 	ds = ds.Order(
 		submodelDescriptorAlias.Col(colPosition).Asc(),
@@ -358,17 +359,19 @@ func ReadSubmodelDescriptorsByAASDescriptorIDs(
 			expressions[6],
 			expressions[7],
 		).
-		Where(goqu.L("? = ANY(?::bigint[])", submodelDescriptorAlias.Col(colAASDescriptorID), arr)).
-		GroupBy(
-			expressions[0],
-			expressions[1],
-			expressions[2],
-			expressions[3],
-			expressions[4],
-			expressions[5],
-			expressions[6],
-			expressions[7],
+		Where(goqu.L("? = ANY(?::bigint[])", submodelDescriptorAlias.Col(colAASDescriptorID), arr))
+	if auth.NeedsGroupBy(ctx, mapper) {
+		ds = ds.GroupBy(
+			submodelDescriptorAlias.Col(colAASDescriptorID),
+			submodelDescriptorAlias.Col(colDescriptorID),
+			submodelDescriptorAlias.Col(colIDShort),
+			submodelDescriptorAlias.Col(colAASID),
+			submodelDescriptorAlias.Col(colSemanticID),
+			payloadAlias.Col(colAdministrativeInfoPayload),
+			payloadAlias.Col(colDescriptionPayload),
+			payloadAlias.Col(colDisplayNamePayload),
 		)
+	}
 	ds = ds.Order(
 		submodelDescriptorAlias.Col(colPosition).Asc(),
 	)

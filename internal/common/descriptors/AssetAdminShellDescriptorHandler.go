@@ -344,6 +344,9 @@ func buildListAssetAdministrationShellDescriptorsQuery(
 	identifiable string,
 ) (*goqu.SelectDataset, error) {
 	d := goqu.Dialect(dialect)
+	adminPayload := goqu.L("?::text", tDescriptorPayload.Col(colAdministrativeInfoPayload))
+	displayNamePayload := goqu.L("?::text", tDescriptorPayload.Col(colDisplayNamePayload))
+	descriptionPayload := goqu.L("?::text", tDescriptorPayload.Col(colDescriptionPayload))
 	var mapper = []auth.ExpressionIdentifiableMapper{
 		{
 			Exp: tAASDescriptor.Col(colDescriptorID),
@@ -368,15 +371,15 @@ func buildListAssetAdministrationShellDescriptorsQuery(
 			Exp: tAASDescriptor.Col(colAASID),
 		},
 		{
-			Exp:      tDescriptorPayload.Col(colAdministrativeInfoPayload),
+			Exp:      adminPayload,
 			Fragment: fragPtr("$aasdesc#administration"),
 		},
 		{
-			Exp:      tDescriptorPayload.Col(colDisplayNamePayload),
+			Exp:      displayNamePayload,
 			Fragment: fragPtr("$aasdesc#displayName"),
 		},
 		{
-			Exp:      tDescriptorPayload.Col(colDescriptionPayload),
+			Exp:      descriptionPayload,
 			Fragment: fragPtr("$aasdesc#description"),
 		},
 	}
@@ -412,7 +415,11 @@ func buildListAssetAdministrationShellDescriptorsQuery(
 		)
 	if auth.NeedsGroupBy(ctx, mapper) {
 		ds = ds.GroupBy(
-			expressions[0], // descriptor_id
+			tAASDescriptor.Col(colDescriptorID),
+			tAASDescriptor.Col(colAssetKind),
+			adminPayload,
+			displayNamePayload,
+			descriptionPayload,
 		)
 	}
 	ds, err = auth.AddFormulaQueryFromContext(ctx, ds, collector)
@@ -516,6 +523,9 @@ func listAssetAdministrationShellDescriptors(
 	descRows := make([]model.AssetAdministrationShellDescriptorRow, 0, peekLimit)
 	for rows.Next() {
 		var r model.AssetAdministrationShellDescriptorRow
+		var adminPayloadText sql.NullString
+		var displayNamePayloadText sql.NullString
+		var descriptionPayloadText sql.NullString
 		if err := rows.Scan(
 			&r.DescID,
 			&r.AssetKind,
@@ -523,11 +533,20 @@ func listAssetAdministrationShellDescriptors(
 			&r.GlobalAssetID,
 			&r.IDShort,
 			&r.IDStr,
-			&r.AdministrativeInfoPayload,
-			&r.DisplayNamePayload,
-			&r.DescriptionPayload,
+			&adminPayloadText,
+			&displayNamePayloadText,
+			&descriptionPayloadText,
 		); err != nil {
 			return nil, "", common.NewInternalServerError("Failed to scan AAS descriptor row. See server logs for details.")
+		}
+		if adminPayloadText.Valid {
+			r.AdministrativeInfoPayload = []byte(adminPayloadText.String)
+		}
+		if displayNamePayloadText.Valid {
+			r.DisplayNamePayload = []byte(displayNamePayloadText.String)
+		}
+		if descriptionPayloadText.Valid {
+			r.DescriptionPayload = []byte(descriptionPayloadText.String)
 		}
 		descRows = append(descRows, r)
 	}
