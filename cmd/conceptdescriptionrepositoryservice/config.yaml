@@ -8,14 +8,11 @@ postgres:
   host: localhost
   port: 5432
   user: postgres
-  password: snoopy2002
-  dbname: basyxCDRepo
+  password: postgres
+  dbname: basyx
   maxOpenConnections: 500
   maxIdleConnections: 500
   connMaxLifetimeMinutes: 5
-
-# jws:
-#   privateKeyPath: "./rsa-key.pem"
 
 # swagger:
 #   contactName: "Eclipse BaSyx"
