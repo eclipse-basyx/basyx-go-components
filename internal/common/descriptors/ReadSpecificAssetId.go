@@ -227,7 +227,10 @@ func ReadSpecificAssetIDsByDescriptorIDs(
 
 	for descID, rowsForDesc := range perDesc {
 		for _, r := range rowsForDesc {
-			extRef := extRefBySpecific[r.specificID]
+			var extRef types.IReference
+			if r.externalSubjectRefID.Valid {
+				extRef = extRefBySpecific[r.specificID]
+			}
 			semRef, err := parseReferencePayload(r.semanticPayload)
 			if err != nil {
 				return nil, err

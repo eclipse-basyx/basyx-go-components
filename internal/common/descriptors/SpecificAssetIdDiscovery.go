@@ -45,18 +45,18 @@ var bdExpMapper = []auth.ExpressionIdentifiableMapper{
 	},
 	{
 		Exp:      tSpecificAssetID.Col(colName),
-		Fragment: fragPtr("$bd#specificAssetIds[].name"),
+		Fragment: fragPtr("$aasdesc#specificAssetIds[].name"),
 	},
 	{
 		Exp:      tSpecificAssetID.Col(colValue),
-		Fragment: fragPtr("$bd#specificAssetIds[].value"),
+		Fragment: fragPtr("$aasdesc#specificAssetIds[].value"),
 	},
 	{
 		Exp: goqu.I("specific_asset_id_payload.semantic_id_payload"),
 	},
 	{
 		Exp:      goqu.I(aliasExternalSubjectReference + "." + colID),
-		Fragment: fragPtr("$bd#specificAssetIds[].externalSubjectId"),
+		Fragment: fragPtr("$aasdesc#specificAssetIds[].externalSubjectId"),
 	},
 }
 
@@ -203,7 +203,10 @@ func ReadSpecificAssetIDsByAASRef(
 
 	out := make([]types.ISpecificAssetID, 0, len(perRef))
 	for _, r := range perRef {
-		extRef := extRefBySpecific[r.specificID]
+		var extRef types.IReference
+		if r.externalSubjectRefID.Valid {
+			extRef = extRefBySpecific[r.specificID]
+		}
 		semRef, err := parseReferencePayload(r.semanticPayload)
 		if err != nil {
 			return nil, err
