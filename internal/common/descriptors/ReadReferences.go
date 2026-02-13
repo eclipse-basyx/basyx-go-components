@@ -38,6 +38,8 @@ import (
 	"github.com/lib/pq"
 )
 
+// ReadSubmodelDescriptorSemanticReferencesByDescriptorIDs loads semantic
+// references for submodel descriptors keyed by descriptor ID.
 func ReadSubmodelDescriptorSemanticReferencesByDescriptorIDs(
 	ctx context.Context,
 	db DBQueryer,
@@ -73,6 +75,8 @@ func ReadSubmodelDescriptorSemanticReferencesByDescriptorIDs(
 	return out, nil
 }
 
+// ReadSpecificAssetExternalSubjectReferencesBySpecificAssetIDs loads external
+// subject references for specific asset IDs keyed by specific asset ID.
 func ReadSpecificAssetExternalSubjectReferencesBySpecificAssetIDs(
 	ctx context.Context,
 	db DBQueryer,
@@ -108,6 +112,9 @@ func ReadSpecificAssetExternalSubjectReferencesBySpecificAssetIDs(
 	return out, nil
 }
 
+// ReadSpecificAssetSupplementalSemanticReferencesBySpecificAssetIDs loads
+// supplemental semantic references for specific asset IDs keyed by specific
+// asset ID.
 func ReadSpecificAssetSupplementalSemanticReferencesBySpecificAssetIDs(
 	ctx context.Context,
 	db DBQueryer,
@@ -456,6 +463,8 @@ func readEntityReferences1ToMany(
 	return out, nil
 }
 
+// GetReferencesByIDsBatch loads full references (including keys and nested
+// referred semantic references) keyed by reference ID.
 func GetReferencesByIDsBatch(db DBQueryer, ids []int64) (map[int64]types.IReference, error) {
 	if len(ids) == 0 {
 		return map[int64]types.IReference{}, nil

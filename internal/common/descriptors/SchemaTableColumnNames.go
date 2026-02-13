@@ -117,16 +117,6 @@ const (
 	colSpecificAssetID   = "specific_asset_id"
 	colReferenceID       = "reference_id"
 
-	colValueType     = "value_type"
-	colValueText     = "value_text"
-	colValueNum      = "value_num"
-	colValueBool     = "value_bool"
-	colValueTime     = "value_time"
-	colValueDate     = "value_date"
-	colValueDatetime = "value_datetime"
-
-	colExtensionID = "extension_id"
-
 	colCompany = "company"
 
 	// Generic/common column names used in descriptor queries
