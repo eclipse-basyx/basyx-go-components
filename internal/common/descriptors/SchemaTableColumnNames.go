@@ -43,7 +43,8 @@ const (
 	tblAASDescriptorEndpoint          = "aas_descriptor_endpoint"
 	tblAASIdentifier                  = "aas_identifier"
 	tblSpecificAssetID                = "specific_asset_id"
-	tblSpecificAssetIDSuppSemantic    = "specific_asset_id_supplemental_semantic_id"
+	tblSpecificAssetIDPayload         = "specific_asset_id_payload"
+	tblSpecificAssetIDSuppSemantic    = "specific_asset_id_supplemental_semantic_id_reference"
 	tblSubmodelDescriptor             = "submodel_descriptor"
 	tblSubmodelDescriptorSuppSemantic = "submodel_descriptor_supplemental_semantic_id"
 	tblDescriptorPayload              = "descriptor_payload"
@@ -87,6 +88,7 @@ const (
 	colDescriptionPayload        = "description_payload"
 	colDisplayNamePayload        = "displayname_payload"
 	colAdministrativeInfoPayload = "administrative_information_payload"
+	colExtensionsPayload         = "extensions_payload"
 	colAssetKind                 = "asset_kind"
 	colAssetType                 = "asset_type"
 	colGlobalAssetID             = "global_asset_id"
@@ -112,6 +114,7 @@ const (
 	colAASRef                  = "aasref"
 
 	colSpecificAssetIDID = "specific_asset_id_id"
+	colSpecificAssetID   = "specific_asset_id"
 	colReferenceID       = "reference_id"
 
 	colValueType     = "value_type"

@@ -140,3 +140,92 @@ func parseAdministrativeInfoPayload(payload json.RawMessage) (types.IAdministrat
 	}
 	return admin, nil
 }
+
+func buildReferencePayload(value types.IReference) (json.RawMessage, error) {
+	if value == nil {
+		return json.RawMessage("{}"), nil
+	}
+
+	jsonable, err := jsonization.ToJsonable(value)
+	if err != nil {
+		return nil, fmt.Errorf("build Reference payload: %w", err)
+	}
+
+	payload, err := json.Marshal(jsonable)
+	if err != nil {
+		return nil, fmt.Errorf("marshal Reference payload: %w", err)
+	}
+	return payload, nil
+}
+
+func parseReferencePayload(payload json.RawMessage) (types.IReference, error) {
+	payload = bytes.TrimSpace(payload)
+	if len(payload) == 0 || bytes.Equal(payload, []byte("null")) || bytes.Equal(payload, []byte("{}")) || bytes.Equal(payload, []byte("[]")) {
+		return nil, nil
+	}
+
+	var item map[string]any
+	if err := json.Unmarshal(payload, &item); err != nil {
+		return nil, fmt.Errorf("unmarshal Reference payload: %w", err)
+	}
+	if len(item) == 0 {
+		return nil, nil
+	}
+
+	ref, err := jsonization.ReferenceFromJsonable(item)
+	if err != nil {
+		return nil, fmt.Errorf("parse Reference payload: %w", err)
+	}
+	return ref, nil
+}
+
+func buildExtensionsPayload(values []types.Extension) (json.RawMessage, error) {
+	if len(values) == 0 {
+		return json.RawMessage("[]"), nil
+	}
+
+	out := make([]map[string]any, 0, len(values))
+	for i := range values {
+		jsonable, err := jsonization.ToJsonable(&values[i])
+		if err != nil {
+			return nil, fmt.Errorf("build Extension payload: %w", err)
+		}
+		out = append(out, jsonable)
+	}
+
+	payload, err := json.Marshal(out)
+	if err != nil {
+		return nil, fmt.Errorf("marshal Extension payload: %w", err)
+	}
+	return payload, nil
+}
+
+func parseExtensionsPayload(payload json.RawMessage) ([]types.Extension, error) {
+	payload = bytes.TrimSpace(payload)
+	if len(payload) == 0 || bytes.Equal(payload, []byte("null")) || bytes.Equal(payload, []byte("[]")) {
+		return nil, nil
+	}
+
+	var items []map[string]any
+	if err := json.Unmarshal(payload, &items); err != nil {
+		return nil, fmt.Errorf("unmarshal Extension payload: %w", err)
+	}
+	if len(items) == 0 {
+		return nil, nil
+	}
+
+	out := make([]types.Extension, 0, len(items))
+	for _, item := range items {
+		extension, err := jsonization.ExtensionFromJsonable(item)
+		if err != nil {
+			return nil, fmt.Errorf("parse Extension payload item: %w", err)
+		}
+		convExt, ok := extension.(*types.Extension)
+		if !ok || convExt == nil {
+			return nil, fmt.Errorf("parse Extension payload item: unexpected extension type")
+		}
+		out = append(out, *convExt)
+	}
+
+	return out, nil
+}

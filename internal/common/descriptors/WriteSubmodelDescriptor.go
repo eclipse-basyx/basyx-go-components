@@ -41,17 +41,22 @@ func createSubModelDescriptors(tx *sql.Tx, aasDescriptorID sql.NullInt64, submod
 		return nil
 	}
 	if len(submodelDescriptors) > 0 {
-		d := goqu.Dialect(dialect)
-		for i, val := range submodelDescriptors {
-			var (
-				semanticID sql.NullInt64
-				err        error
-			)
-
-			var a sql.NullInt64
-			semanticID, err = persistence_utils.CreateReference(tx, val.SemanticId, a, a)
+		startPosition := 0
+		useAppendPosition := aasDescriptorID.Valid && len(submodelDescriptors) == 1
+		if useAppendPosition {
+			nextPosition, err := getNextSubmodelDescriptorPosition(tx, aasDescriptorID.Int64)
 			if err != nil {
 				return err
+			}
+			startPosition = nextPosition
+		}
+
+		d := goqu.Dialect(dialect)
+		for i, val := range submodelDescriptors {
+			var err error
+			position := i
+			if useAppendPosition {
+				position = startPosition + i
 			}
 
 			descriptionPayload, err := buildLangStringTextPayload(val.Description)
@@ -65,6 +70,10 @@ func createSubModelDescriptors(tx *sql.Tx, aasDescriptorID sql.NullInt64, submod
 			administrationPayload, err := buildAdministrativeInfoPayload(val.Administration)
 			if err != nil {
 				return common.NewInternalServerError("SMDESC-INSERT-ADMINPAYLOAD")
+			}
+			extensionsPayload, err := buildExtensionsPayload(val.Extensions)
+			if err != nil {
+				return common.NewInternalServerError("SMDESC-INSERT-EXTENSIONPAYLOAD")
 			}
 
 			sqlStr, args, err := d.
@@ -83,17 +92,26 @@ func createSubModelDescriptors(tx *sql.Tx, aasDescriptorID sql.NullInt64, submod
 				Insert(tblSubmodelDescriptor).
 				Rows(goqu.Record{
 					colDescriptorID:    submodelDescriptorID,
-					colPosition:        i,
+					colPosition:        position,
 					colAASDescriptorID: aasDescriptorID,
 					colIDShort:         val.IdShort,
 					colAASID:           val.Id,
-					colSemanticID:      semanticID,
 				}).
 				ToSQL()
 			if err != nil {
 				return err
 			}
 			if _, err = tx.Exec(sqlStr, args...); err != nil {
+				return err
+			}
+
+			if err = createContextReference(
+				tx,
+				submodelDescriptorID,
+				val.SemanticId,
+				"submodel_descriptor_semantic_id_reference",
+				"submodel_descriptor_semantic_id_reference_key",
+			); err != nil {
 				return err
 			}
 
@@ -104,6 +122,7 @@ func createSubModelDescriptors(tx *sql.Tx, aasDescriptorID sql.NullInt64, submod
 					colDescriptionPayload:        goqu.L("?::jsonb", string(descriptionPayload)),
 					colDisplayNamePayload:        goqu.L("?::jsonb", string(displayNamePayload)),
 					colAdministrativeInfoPayload: goqu.L("?::jsonb", string(administrationPayload)),
+					colExtensionsPayload:         goqu.L("?::jsonb", string(extensionsPayload)),
 				}).
 				ToSQL()
 			if err != nil {
@@ -117,10 +136,6 @@ func createSubModelDescriptors(tx *sql.Tx, aasDescriptorID sql.NullInt64, submod
 				return err
 			}
 
-			if err = createExtensions(tx, submodelDescriptorID, val.Extensions); err != nil {
-				return err
-			}
-
 			if len(val.Endpoints) == 0 {
 				return common.NewErrBadRequest("Submodel Descriptor needs at least 1 Endpoint.")
 			}
@@ -130,6 +145,18 @@ func createSubModelDescriptors(tx *sql.Tx, aasDescriptorID sql.NullInt64, submod
 		}
 	}
 	return nil
+}
+
+func getNextSubmodelDescriptorPosition(tx *sql.Tx, aasDescriptorID int64) (int, error) {
+	var nextPos int
+	err := tx.QueryRow(
+		`SELECT COALESCE(MAX(position), -1) + 1 FROM submodel_descriptor WHERE aas_descriptor_id = $1`,
+		aasDescriptorID,
+	).Scan(&nextPos)
+	if err != nil {
+		return 0, err
+	}
+	return nextPos, nil
 }
 
 func createsubModelDescriptorSupplementalSemantic(tx *sql.Tx, subModelDescriptorID int64, references []types.IReference) error {

@@ -38,27 +38,424 @@ import (
 	"github.com/lib/pq"
 )
 
-// GetReferencesByIDsBatch loads full Reference trees for a set of root reference
-// IDs in one round of batched queries.
-//
-// It performs three steps:
-//  1. Load all requested root references and any keys attached to them.
-//  2. Load all descendant references for those roots (children, grandchildren,
-//     …) together with their keys.
-//  3. Link the flat rows into nested structures via builder.BuildNestedStructure.
-//
-// The function returns a map keyed by root reference ID to the fully hydrated
-// *model.Reference. Missing or unknown IDs are simply absent from the result
-// map. If ids is empty, an empty map is returned.
-//
-// The query uses LEFT JOINs so roots without keys are still returned. Within a
-// root, duplicates from the SQL result are de-duplicated when constructing the
-// tree; multiple keys for the same node are accumulated.
-//
-// Errors are returned for SQL statement construction failures, query/scan
-// errors, or if the builder returns an error while attaching keys.
-//
-// Note: the function prints the elapsed time to stdout for basic diagnostics.
+func ReadSubmodelDescriptorSemanticReferencesByDescriptorIDs(
+	ctx context.Context,
+	db DBQueryer,
+	descriptorIDs []int64,
+) (map[int64]types.IReference, error) {
+	out := make(map[int64]types.IReference, len(descriptorIDs))
+	if len(descriptorIDs) == 0 {
+		return out, nil
+	}
+
+	rows, err := queryReferenceRowsByOwnerIDs(
+		ctx,
+		db,
+		descriptorIDs,
+		"submodel_descriptor",
+		"descriptor_id",
+		"submodel_descriptor_semantic_id_reference",
+		"submodel_descriptor_semantic_id_reference_key",
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, id := range descriptorIDs {
+		if _, ok := out[id]; !ok {
+			out[id] = nil
+		}
+	}
+	for ownerID, ref := range rows {
+		out[ownerID] = ref
+	}
+
+	return out, nil
+}
+
+func ReadSpecificAssetExternalSubjectReferencesBySpecificAssetIDs(
+	ctx context.Context,
+	db DBQueryer,
+	specificAssetIDs []int64,
+) (map[int64]types.IReference, error) {
+	out := make(map[int64]types.IReference, len(specificAssetIDs))
+	if len(specificAssetIDs) == 0 {
+		return out, nil
+	}
+
+	rows, err := queryReferenceRowsByOwnerIDs(
+		ctx,
+		db,
+		specificAssetIDs,
+		"specific_asset_id",
+		"id",
+		"specific_asset_id_external_subject_id_reference",
+		"specific_asset_id_external_subject_id_reference_key",
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, id := range specificAssetIDs {
+		if _, ok := out[id]; !ok {
+			out[id] = nil
+		}
+	}
+	for ownerID, ref := range rows {
+		out[ownerID] = ref
+	}
+
+	return out, nil
+}
+
+func ReadSpecificAssetSupplementalSemanticReferencesBySpecificAssetIDs(
+	ctx context.Context,
+	db DBQueryer,
+	specificAssetIDs []int64,
+) (map[int64][]types.IReference, error) {
+	out := make(map[int64][]types.IReference, len(specificAssetIDs))
+	if len(specificAssetIDs) == 0 {
+		return out, nil
+	}
+
+	for _, id := range specificAssetIDs {
+		out[id] = nil
+	}
+
+	d := goqu.Dialect(dialect)
+	arr := pq.Array(specificAssetIDs)
+
+	rt := goqu.T(tblSpecificAssetIDSuppSemantic).As("rt")
+	rkt := goqu.T(tblSpecificAssetIDSuppSemantic + "_key").As("rkt")
+	rpt := goqu.T(tblSpecificAssetIDSuppSemantic + "_payload").As("rpt")
+
+	ds := d.From(rt).
+		LeftJoin(rpt, goqu.On(rpt.Col(colReferenceID).Eq(rt.Col(colID)))).
+		LeftJoin(rkt, goqu.On(rkt.Col(colReferenceID).Eq(rt.Col(colID)))).
+		Select(
+			rt.Col(colSpecificAssetIDID).As("owner_id"),
+			rt.Col(colID).As("ref_id"),
+			rt.Col(colType).As("ref_type"),
+			rkt.Col(colID).As("key_id"),
+			rkt.Col(colType).As("key_type"),
+			rkt.Col(colValue).As("key_value"),
+			rpt.Col("parent_reference_payload").As("parent_reference_payload"),
+		).
+		Where(goqu.L("? = ANY(?::bigint[])", rt.Col(colSpecificAssetIDID), arr)).
+		Order(
+			rt.Col(colSpecificAssetIDID).Asc(),
+			rt.Col(colID).Asc(),
+			rkt.Col(colPosition).Asc(),
+			rkt.Col(colID).Asc(),
+		)
+
+	sqlStr, args, err := ds.ToSQL()
+	if err != nil {
+		return nil, fmt.Errorf("REFREAD-SUPPSPEC-BUILDQUERY: %w", err)
+	}
+
+	rows, err := db.QueryContext(ctx, sqlStr, args...)
+	if err != nil {
+		return nil, fmt.Errorf("REFREAD-SUPPSPEC-QUERYDB: %w", err)
+	}
+	defer func() {
+		_ = rows.Close()
+	}()
+
+	type suppContextReferenceRow struct {
+		ownerID                sql.NullInt64
+		referenceID            sql.NullInt64
+		refType                sql.NullInt64
+		keyID                  sql.NullInt64
+		keyType                sql.NullInt64
+		keyVal                 sql.NullString
+		parentReferencePayload []byte
+	}
+
+	refBuilders := map[int64]*builder.ReferenceBuilder{}
+	refByID := map[int64]types.IReference{}
+	refIDsByOwner := map[int64][]int64{}
+	seenRefByOwner := map[int64]map[int64]struct{}{}
+
+	for rows.Next() {
+		var row suppContextReferenceRow
+		if err := rows.Scan(
+			&row.ownerID,
+			&row.referenceID,
+			&row.refType,
+			&row.keyID,
+			&row.keyType,
+			&row.keyVal,
+			&row.parentReferencePayload,
+		); err != nil {
+			return nil, fmt.Errorf("REFREAD-SUPPSPEC-SCANROW: %w", err)
+		}
+
+		if !row.ownerID.Valid || !row.referenceID.Valid || !row.refType.Valid {
+			continue
+		}
+		ownerID := row.ownerID.Int64
+		referenceID := row.referenceID.Int64
+
+		if _, ok := refBuilders[referenceID]; !ok {
+			ref, rb := builder.NewReferenceBuilder(types.ReferenceTypes(row.refType.Int64), referenceID)
+			parentReference, err := parseReferencePayload(row.parentReferencePayload)
+			if err != nil {
+				return nil, fmt.Errorf("REFREAD-SUPPSPEC-PARSEPARENTPAYLOAD: %w", err)
+			}
+			ref.SetReferredSemanticID(parentReference)
+			refBuilders[referenceID] = rb
+			refByID[referenceID] = ref
+		}
+
+		if _, ok := seenRefByOwner[ownerID]; !ok {
+			seenRefByOwner[ownerID] = map[int64]struct{}{}
+		}
+		if _, ok := seenRefByOwner[ownerID][referenceID]; !ok {
+			seenRefByOwner[ownerID][referenceID] = struct{}{}
+			refIDsByOwner[ownerID] = append(refIDsByOwner[ownerID], referenceID)
+		}
+
+		if row.keyID.Valid && row.keyType.Valid && row.keyVal.Valid {
+			refBuilders[referenceID].CreateKey(
+				row.keyID.Int64,
+				types.KeyTypes(row.keyType.Int64),
+				row.keyVal.String,
+			)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("REFREAD-SUPPSPEC-ITERATEROWS: %w", err)
+	}
+
+	for _, b := range refBuilders {
+		b.BuildNestedStructure()
+	}
+
+	for ownerID, referenceIDs := range refIDsByOwner {
+		refs := make([]types.IReference, 0, len(referenceIDs))
+		for _, referenceID := range referenceIDs {
+			if ref, ok := refByID[referenceID]; ok {
+				refs = append(refs, ref)
+			}
+		}
+		out[ownerID] = refs
+	}
+
+	return out, nil
+}
+
+type contextReferenceRow struct {
+	ownerID                int64
+	refType                sql.NullInt64
+	keyID                  sql.NullInt64
+	keyType                sql.NullInt64
+	keyVal                 sql.NullString
+	parentReferencePayload []byte
+}
+
+func queryReferenceRowsByOwnerIDs(
+	ctx context.Context,
+	db DBQueryer,
+	ownerIDs []int64,
+	ownerTable string,
+	ownerIDColumn string,
+	referenceTable string,
+	referenceKeyTable string,
+) (map[int64]types.IReference, error) {
+	if len(ownerIDs) == 0 {
+		return map[int64]types.IReference{}, nil
+	}
+
+	d := goqu.Dialect(dialect)
+	arr := pq.Array(ownerIDs)
+
+	ot := goqu.T(ownerTable).As("ot")
+	rt := goqu.T(referenceTable).As("rt")
+	rkt := goqu.T(referenceKeyTable).As("rkt")
+	rpt := goqu.T(referenceTable + "_payload").As("rpt")
+
+	ds := d.From(ot).
+		LeftJoin(rt, goqu.On(rt.Col(colID).Eq(ot.Col(ownerIDColumn)))).
+		LeftJoin(rpt, goqu.On(rpt.Col(colReferenceID).Eq(rt.Col(colID)))).
+		LeftJoin(rkt, goqu.On(rkt.Col(colReferenceID).Eq(rt.Col(colID)))).
+		Select(
+			ot.Col(ownerIDColumn).As("owner_id"),
+			rt.Col(colType).As("ref_type"),
+			rkt.Col(colID).As("key_id"),
+			rkt.Col(colType).As("key_type"),
+			rkt.Col(colValue).As("key_value"),
+			rpt.Col("parent_reference_payload").As("parent_reference_payload"),
+		).
+		Where(goqu.L(fmt.Sprintf("ot.%s = ANY(?::bigint[])", ownerIDColumn), arr)).
+		Order(
+			ot.Col(ownerIDColumn).Asc(),
+			rkt.Col(colPosition).Asc(),
+			rkt.Col(colID).Asc(),
+		)
+
+	sqlStr, args, err := ds.ToSQL()
+	if err != nil {
+		return nil, fmt.Errorf("REFREAD-BUILDQUERY: %w", err)
+	}
+
+	rows, err := db.QueryContext(ctx, sqlStr, args...)
+	if err != nil {
+		return nil, fmt.Errorf("REFREAD-QUERYDB: %w", err)
+	}
+	defer func() {
+		_ = rows.Close()
+	}()
+
+	builders := make(map[int64]*builder.ReferenceBuilder, len(ownerIDs))
+	refs := make(map[int64]types.IReference, len(ownerIDs))
+
+	for rows.Next() {
+		var row contextReferenceRow
+		if err := rows.Scan(
+			&row.ownerID,
+			&row.refType,
+			&row.keyID,
+			&row.keyType,
+			&row.keyVal,
+			&row.parentReferencePayload,
+		); err != nil {
+			return nil, fmt.Errorf("REFREAD-SCANROW: %w", err)
+		}
+
+		if !row.refType.Valid {
+			continue
+		}
+
+		b, ok := builders[row.ownerID]
+		if !ok {
+			ref, rb := builder.NewReferenceBuilder(types.ReferenceTypes(row.refType.Int64), row.ownerID)
+			parentReference, err := parseReferencePayload(row.parentReferencePayload)
+			if err != nil {
+				return nil, fmt.Errorf("REFREAD-PARSEPARENTPAYLOAD: %w", err)
+			}
+			ref.SetReferredSemanticID(parentReference)
+			refs[row.ownerID] = ref
+			builders[row.ownerID] = rb
+			b = rb
+		}
+
+		if row.keyID.Valid && row.keyType.Valid && row.keyVal.Valid {
+			b.CreateKey(row.keyID.Int64, types.KeyTypes(row.keyType.Int64), row.keyVal.String)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("REFREAD-ITERATEROWS: %w", err)
+	}
+
+	for _, b := range builders {
+		b.BuildNestedStructure()
+	}
+
+	return refs, nil
+}
+
+// readEntityReferences1ToMany loads references for a batch of entity IDs
+// via a link table (entityFKCol -> referenceFKCol), hydrating full Reference trees.
+func readEntityReferences1ToMany(
+	ctx context.Context,
+	db DBQueryer,
+	entityIDs []int64,
+	relationTable string,
+	entityFKCol string,
+	referenceFKCol string,
+) (map[int64][]types.IReference, error) {
+	out := make(map[int64][]types.IReference, len(entityIDs))
+	if len(entityIDs) == 0 {
+		return out, nil
+	}
+	ids := entityIDs
+
+	d := goqu.Dialect(dialect)
+	lt := goqu.T(relationTable)
+
+	arr := pq.Array(ids)
+	ds := d.From(lt).
+		Select(
+			lt.Col(entityFKCol),
+			lt.Col(referenceFKCol),
+		).
+		Where(goqu.L(fmt.Sprintf("%s = ANY(?::bigint[])", entityFKCol), arr)).
+		Order(lt.Col(entityFKCol).Asc(), lt.Col(referenceFKCol).Asc())
+
+	sqlStr, args, err := ds.ToSQL()
+	if err != nil {
+		return nil, fmt.Errorf("build link query: %w", err)
+	}
+
+	rows, err := db.QueryContext(ctx, sqlStr, args...)
+	if err != nil {
+		return nil, fmt.Errorf("query links: %w", err)
+	}
+	defer func() {
+		_ = rows.Close()
+	}()
+
+	perEntityRefIDs := make(map[int64][]int64, len(ids))
+	allRefIDs := make([]int64, 0, 256)
+
+	for rows.Next() {
+		var eID int64
+		var rID sql.NullInt64
+		if err := rows.Scan(&eID, &rID); err != nil {
+			return nil, fmt.Errorf("scan link: %w", err)
+		}
+		if rID.Valid {
+			perEntityRefIDs[eID] = append(perEntityRefIDs[eID], rID.Int64)
+			allRefIDs = append(allRefIDs, rID.Int64)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate links: %w", err)
+	}
+
+	for _, id := range ids {
+		if _, ok := perEntityRefIDs[id]; !ok {
+			perEntityRefIDs[id] = nil
+		}
+	}
+
+	if len(allRefIDs) == 0 {
+		for k := range perEntityRefIDs {
+			out[k] = nil
+		}
+		return out, nil
+	}
+
+	uniqRefIDs := allRefIDs
+
+	refByID, err := GetReferencesByIDsBatch(db, uniqRefIDs)
+	if err != nil {
+		return nil, fmt.Errorf("GetReferencesByIdsBatch: %w", err)
+	}
+
+	for eID, refIDs := range perEntityRefIDs {
+		if len(refIDs) == 0 {
+			out[eID] = nil
+			continue
+		}
+		seen := make(map[int64]struct{}, len(refIDs))
+		list := make([]types.IReference, 0, len(refIDs))
+		for _, rid := range refIDs {
+			if _, ok := seen[rid]; ok {
+				continue
+			}
+			seen[rid] = struct{}{}
+			if r := refByID[rid]; r != nil {
+				list = append(list, r)
+			}
+		}
+		out[eID] = list
+	}
+
+	return out, nil
+}
+
 func GetReferencesByIDsBatch(db DBQueryer, ids []int64) (map[int64]types.IReference, error) {
 	if len(ids) == 0 {
 		return map[int64]types.IReference{}, nil
@@ -67,7 +464,6 @@ func GetReferencesByIDsBatch(db DBQueryer, ids []int64) (map[int64]types.IRefere
 	d := goqu.Dialect(dialect)
 	arr := pq.Array(ids)
 
-	// --- 1) Load roots and their keys (LEFT JOIN to include roots without keys) ---
 	r := goqu.T(tblReference).As("r")
 	rk := goqu.T(tblReferenceKey).As("rk")
 
@@ -155,7 +551,6 @@ func GetReferencesByIDsBatch(db DBQueryer, ids []int64) (map[int64]types.IRefere
 	return refs, nil
 }
 
-// processDescendantRows processes the descendant rows and builds the reference tree
 func processDescendantRows(descRows *sql.Rows, builders map[int64]*builder.ReferenceBuilder) error {
 	type descRow struct {
 		id        int64
@@ -258,105 +653,4 @@ func getQDesc(d goqu.DialectWrapper, ref exp.AliasedExpression, rk exp.AliasedEx
 			ref.Col(colID).Asc(),
 		)
 	return qDesc
-}
-
-// readEntityReferences1ToMany loads references for a batch of entity IDs
-// via a link table (entityFKCol -> referenceFKCol), hydrating full Reference trees.
-func readEntityReferences1ToMany(
-	ctx context.Context,
-	db DBQueryer,
-	entityIDs []int64,
-	relationTable string,
-	entityFKCol string,
-	referenceFKCol string,
-) (map[int64][]types.IReference, error) {
-	out := make(map[int64][]types.IReference, len(entityIDs))
-	if len(entityIDs) == 0 {
-		return out, nil
-	}
-	ids := entityIDs
-
-	d := goqu.Dialect(dialect)
-	lt := goqu.T(relationTable)
-
-	arr := pq.Array(ids)
-	ds := d.From(lt).
-		Select(
-			lt.Col(entityFKCol),
-			lt.Col(referenceFKCol),
-		).
-		Where(goqu.L(fmt.Sprintf("%s = ANY(?::bigint[])", entityFKCol), arr)).
-		Order(lt.Col(entityFKCol).Asc(), lt.Col(referenceFKCol).Asc())
-
-	sqlStr, args, err := ds.ToSQL()
-	if err != nil {
-		return nil, fmt.Errorf("build link query: %w", err)
-	}
-
-	rows, err := db.QueryContext(ctx, sqlStr, args...)
-	if err != nil {
-		return nil, fmt.Errorf("query links: %w", err)
-	}
-	defer func() {
-		_ = rows.Close()
-	}()
-
-	perEntityRefIDs := make(map[int64][]int64, len(ids))
-	allRefIDs := make([]int64, 0, 256)
-
-	for rows.Next() {
-		var eID int64
-		var rID sql.NullInt64
-		if err := rows.Scan(&eID, &rID); err != nil {
-			return nil, fmt.Errorf("scan link: %w", err)
-		}
-		if rID.Valid {
-			perEntityRefIDs[eID] = append(perEntityRefIDs[eID], rID.Int64)
-			allRefIDs = append(allRefIDs, rID.Int64)
-		}
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate links: %w", err)
-	}
-
-	for _, id := range ids {
-		if _, ok := perEntityRefIDs[id]; !ok {
-			perEntityRefIDs[id] = nil
-		}
-	}
-
-	if len(allRefIDs) == 0 {
-		for k := range perEntityRefIDs {
-			out[k] = nil
-		}
-		return out, nil
-	}
-
-	uniqRefIDs := allRefIDs
-
-	refByID, err := GetReferencesByIDsBatch(db, uniqRefIDs)
-	if err != nil {
-		return nil, fmt.Errorf("GetReferencesByIdsBatch: %w", err)
-	}
-
-	for eID, refIDs := range perEntityRefIDs {
-		if len(refIDs) == 0 {
-			out[eID] = nil
-			continue
-		}
-		seen := make(map[int64]struct{}, len(refIDs))
-		list := make([]types.IReference, 0, len(refIDs))
-		for _, rid := range refIDs {
-			if _, ok := seen[rid]; ok {
-				continue
-			}
-			seen[rid] = struct{}{}
-			if r := refByID[rid]; r != nil {
-				list = append(list, r)
-			}
-		}
-		out[eID] = list
-	}
-
-	return out, nil
 }

@@ -31,37 +31,21 @@ import (
 
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
-	persistence_utils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
 )
 
 func createExtensions(tx *sql.Tx, descriptorID int64, extensions []types.Extension) error {
-	if extensions == nil {
-		return nil
+	payload, err := buildExtensionsPayload(extensions)
+	if err != nil {
+		return err
 	}
-	if len(extensions) > 0 {
-		for id, val := range extensions {
-			a, err := persistence_utils.CreateExtension(tx, val, id)
 
-			if err != nil {
-				return err
-			}
-
-			if err = createDescriptorExtensionLink(tx, descriptorID, a.Int64); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
-}
-
-func createDescriptorExtensionLink(tx *sql.Tx, descriptorID int64, extensionID int64) error {
 	d := goqu.Dialect(dialect)
 	sqlStr, args, err := d.
-		Insert(tblDescriptorExtension).
-		Rows(goqu.Record{
-			colDescriptorID: descriptorID,
-			colExtensionID:  extensionID,
+		Update(tblDescriptorPayload).
+		Set(goqu.Record{
+			colExtensionsPayload: goqu.L("?::jsonb", string(payload)),
 		}).
+		Where(goqu.Ex{colDescriptorID: descriptorID}).
 		ToSQL()
 	if err != nil {
 		return err

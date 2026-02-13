@@ -37,7 +37,6 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
-	persistence_utils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
 )
 
 var bdExpMapper = []auth.ExpressionIdentifiableMapper{
@@ -53,10 +52,10 @@ var bdExpMapper = []auth.ExpressionIdentifiableMapper{
 		Fragment: fragPtr("$bd#specificAssetIds[].value"),
 	},
 	{
-		Exp: tSpecificAssetID.Col(colSemanticID),
+		Exp: goqu.I("specific_asset_id_payload.semantic_id_payload"),
 	},
 	{
-		Exp:      tSpecificAssetID.Col(colExternalSubjectRef),
+		Exp:      goqu.I(aliasExternalSubjectReference + "." + colID),
 		Fragment: fragPtr("$bd#specificAssetIds[].externalSubjectId"),
 	},
 }
@@ -102,6 +101,8 @@ func ReadSpecificAssetIDsByAASRef(
 
 	d := goqu.Dialect(dialect)
 	tAASIdentifier := goqu.T(tblAASIdentifier)
+	externalSubjectReferenceAlias := goqu.T("specific_asset_id_external_subject_id_reference").As(aliasExternalSubjectReference)
+	specificAssetIDPayloadAlias := goqu.T(tblSpecificAssetIDPayload).As("specific_asset_id_payload")
 	collector, err := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootBD)
 	if err != nil {
 		return nil, err
@@ -115,6 +116,14 @@ func ReadSpecificAssetIDsByAASRef(
 		InnerJoin(
 			tAASIdentifier,
 			goqu.On(tSpecificAssetID.Col(colAASRef).Eq(tAASIdentifier.Col(colID))),
+		).
+		LeftJoin(
+			externalSubjectReferenceAlias,
+			goqu.On(externalSubjectReferenceAlias.Col(colID).Eq(tSpecificAssetID.Col(colID))),
+		).
+		LeftJoin(
+			specificAssetIDPayloadAlias,
+			goqu.On(specificAssetIDPayloadAlias.Col(colSpecificAssetID).Eq(tSpecificAssetID.Col(colID))),
 		).
 		Select(
 			expressions[0],
@@ -153,14 +162,12 @@ func ReadSpecificAssetIDsByAASRef(
 	type rowData struct {
 		specificID           int64
 		name, value          sql.NullString
-		semanticRefID        sql.NullInt64
+		semanticPayload      []byte
 		externalSubjectRefID sql.NullInt64
 	}
 
 	perRef := make([]rowData, 0, 32)
 	allSpecificIDs := make([]int64, 0, 32)
-	semRefIDs := make([]int64, 0, 16)
-	extRefIDs := make([]int64, 0, 16)
 
 	for rows.Next() {
 		var r rowData
@@ -168,19 +175,13 @@ func ReadSpecificAssetIDsByAASRef(
 			&r.specificID,
 			&r.name,
 			&r.value,
-			&r.semanticRefID,
+			&r.semanticPayload,
 			&r.externalSubjectRefID,
 		); err != nil {
 			return nil, err
 		}
 		perRef = append(perRef, r)
 		allSpecificIDs = append(allSpecificIDs, r.specificID)
-		if r.semanticRefID.Valid {
-			semRefIDs = append(semRefIDs, r.semanticRefID.Int64)
-		}
-		if r.externalSubjectRefID.Valid {
-			extRefIDs = append(extRefIDs, r.externalSubjectRefID.Int64)
-		}
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -195,24 +196,17 @@ func ReadSpecificAssetIDsByAASRef(
 		return nil, err
 	}
 
-	allRefIDs := append(append([]int64{}, semRefIDs...), extRefIDs...)
-	refByID := make(map[int64]types.IReference)
-	if len(allRefIDs) > 0 {
-		refByID, err = GetReferencesByIDsBatch(db, allRefIDs)
-		if err != nil {
-			return nil, err
-		}
+	extRefBySpecific, err := ReadSpecificAssetExternalSubjectReferencesBySpecificAssetIDs(ctx, db, allSpecificIDs)
+	if err != nil {
+		return nil, err
 	}
 
 	out := make([]types.ISpecificAssetID, 0, len(perRef))
 	for _, r := range perRef {
-		var semRef types.IReference
-		if r.semanticRefID.Valid {
-			semRef = refByID[r.semanticRefID.Int64]
-		}
-		var extRef types.IReference
-		if r.externalSubjectRefID.Valid {
-			extRef = refByID[r.externalSubjectRefID.Int64]
+		extRef := extRefBySpecific[r.specificID]
+		semRef, err := parseReferencePayload(r.semanticPayload)
+		if err != nil {
+			return nil, err
 		}
 
 		said := types.NewSpecificAssetID(nvl(r.name), nvl(r.value))
@@ -248,27 +242,16 @@ func ReplaceSpecificAssetIDsByAASIdentifier(
 
 		d := goqu.Dialect(dialect)
 		for i, val := range specificAssetIDs {
-			var a sql.NullInt64
-
-			externalSubjectReferenceID, err := persistence_utils.CreateReference(tx, val.ExternalSubjectID(), a, a)
-			if err != nil {
-				return err
-			}
-			semanticID, err := persistence_utils.CreateReference(tx, val.SemanticID(), a, a)
-			if err != nil {
-				return err
-			}
+			var err error
 
 			sqlStr, args, err := d.
 				Insert(tblSpecificAssetID).
 				Rows(goqu.Record{
-					colDescriptorID:       nil,
-					colPosition:           i,
-					colSemanticID:         semanticID,
-					colName:               val.Name(),
-					colValue:              val.Value(),
-					colExternalSubjectRef: externalSubjectReferenceID,
-					colAASRef:             aasRef,
+					colDescriptorID: nil,
+					colPosition:     i,
+					colName:         val.Name(),
+					colValue:        val.Value(),
+					colAASRef:       aasRef,
 				}).
 				Returning(tSpecificAssetID.Col(colID)).
 				ToSQL()
@@ -277,6 +260,20 @@ func ReplaceSpecificAssetIDsByAASIdentifier(
 			}
 			var id int64
 			if err = tx.QueryRowContext(ctx, sqlStr, args...).Scan(&id); err != nil {
+				return err
+			}
+
+			if err = createContextReference(
+				tx,
+				id,
+				val.ExternalSubjectID(),
+				"specific_asset_id_external_subject_id_reference",
+				"specific_asset_id_external_subject_id_reference_key",
+			); err != nil {
+				return err
+			}
+
+			if err = createSpecificAssetIDPayload(tx, id, val.SemanticID()); err != nil {
 				return err
 			}
 

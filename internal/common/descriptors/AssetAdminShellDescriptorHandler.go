@@ -132,6 +132,10 @@ func InsertAdministrationShellDescriptorTx(ctx context.Context, tx *sql.Tx, aasd
 	if err != nil {
 		return common.NewInternalServerError("AASDESC-INSERT-ADMINPAYLOAD")
 	}
+	extensionsPayload, err := buildExtensionsPayload(aasd.Extensions)
+	if err != nil {
+		return common.NewInternalServerError("AASDESC-INSERT-EXTENSIONPAYLOAD")
+	}
 
 	sqlStr, args, buildErr = d.
 		Insert(tblDescriptorPayload).
@@ -140,6 +144,7 @@ func InsertAdministrationShellDescriptorTx(ctx context.Context, tx *sql.Tx, aasd
 			colDescriptionPayload:        goqu.L("?::jsonb", string(descriptionPayload)),
 			colDisplayNamePayload:        goqu.L("?::jsonb", string(displayNamePayload)),
 			colAdministrativeInfoPayload: goqu.L("?::jsonb", string(administrationPayload)),
+			colExtensionsPayload:         goqu.L("?::jsonb", string(extensionsPayload)),
 		}).
 		ToSQL()
 	if buildErr != nil {
@@ -181,10 +186,6 @@ func InsertAdministrationShellDescriptorTx(ctx context.Context, tx *sql.Tx, aasd
 	}
 
 	if err = createSpecificAssetID(tx, descriptorID, aasRef, aasd.SpecificAssetIds); err != nil {
-		return err
-	}
-
-	if err = createExtensions(tx, descriptorID, aasd.Extensions); err != nil {
 		return err
 	}
 
