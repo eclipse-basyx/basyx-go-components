@@ -1,0 +1,270 @@
+{
+  "paging_metadata": {},
+  "result": [
+    {
+      "id": "urn:example:concept-description:temperature:1",
+      "idShort": "Temperature",
+      "category": "PROPERTY",
+      "displayName": [
+        {
+          "language": "en",
+          "text": "Temperature"
+        },
+        {
+          "language": "de",
+          "text": "Temperatur"
+        }
+      ],
+      "description": [
+        {
+          "language": "en",
+          "text": "Ambient temperature of the device in degrees Celsius."
+        },
+        {
+          "language": "de",
+          "text": "Umgebungstemperatur des Geräts in Grad Celsius."
+        }
+      ],
+      "modelType": "ConceptDescription",
+      "administration": {
+        "version": "1",
+        "revision": "0",
+        "templateId": "urn:example:template:concept-description:temperature",
+        "creator": {
+          "type": "ExternalReference",
+          "keys": [
+            {
+              "type": "GlobalReference",
+              "value": "https://example.org/creator/manufacturer"
+            }
+          ],
+          "referredSemanticId": {
+            "type": "ExternalReference",
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "https://example.org/semantic/creator"
+              }
+            ]
+          }
+        },
+        "embeddedDataSpecifications": [
+          {
+            "dataSpecification": {
+              "type": "ExternalReference",
+              "keys": [
+                {
+                  "type": "GlobalReference",
+                  "value": "https://admin-shell.io/aas/3/0/DataSpecificationIEC61360"
+                }
+              ]
+            },
+            "dataSpecificationContent": {
+              "modelType": "DataSpecificationIec61360",
+              "preferredName": [
+                {
+                  "language": "en",
+                  "text": "Temperature"
+                },
+                {
+                  "language": "de",
+                  "text": "Temperatur"
+                }
+              ],
+              "shortName": [
+                {
+                  "language": "en",
+                  "text": "Temp"
+                }
+              ],
+              "unit": "degree Celsius",
+              "unitId": {
+                "type": "ExternalReference",
+                "keys": [
+                  {
+                    "type": "GlobalReference",
+                    "value": "https://qudt.org/vocab/unit/DEG_C"
+                  }
+                ]
+              },
+              "sourceOfDefinition": "IDTA demo source",
+              "symbol": "°C",
+              "dataType": "REAL_MEASURE",
+              "definition": [
+                {
+                  "language": "en",
+                  "text": "Ambient temperature measured at the device boundary."
+                }
+              ],
+              "valueFormat": "float",
+              "valueList": {
+                "valueReferencePairs": [
+                  {
+                    "value": "0",
+                    "valueId": {
+                      "type": "ExternalReference",
+                      "keys": [
+                        {
+                          "type": "GlobalReference",
+                          "value": "https://example.org/value/zero"
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "value": "100",
+                    "valueId": {
+                      "type": "ExternalReference",
+                      "keys": [
+                        {
+                          "type": "GlobalReference",
+                          "value": "https://example.org/value/hundred"
+                        }
+                      ]
+                    }
+                  }
+                ]
+              },
+              "value": "23.5",
+              "levelType": {
+                "min": true,
+                "nom": true,
+                "typ": true,
+                "max": true
+              }
+            }
+          }
+        ]
+      },
+      "extensions": [
+        {
+          "name": "demoExtension",
+          "valueType": "xs:string",
+          "value": "demoValue",
+          "semanticId": {
+            "type": "ExternalReference",
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "https://example.org/semantic/extension"
+              }
+            ]
+          },
+          "supplementalSemanticIds": [
+            {
+              "type": "ExternalReference",
+              "keys": [
+                {
+                  "type": "GlobalReference",
+                  "value": "https://example.org/semantic/extension/supplemental"
+                }
+              ]
+            }
+          ],
+          "refersTo": [
+            {
+              "type": "ExternalReference",
+              "keys": [
+                {
+                  "type": "GlobalReference",
+                  "value": "https://example.org/referable/temperature"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "embeddedDataSpecifications": [
+        {
+          "dataSpecification": {
+            "type": "ExternalReference",
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "https://admin-shell.io/aas/3/0/DataSpecificationIEC61360"
+              }
+            ]
+          },
+          "dataSpecificationContent": {
+            "modelType": "DataSpecificationIec61360",
+            "preferredName": [
+              {
+                "language": "en",
+                "text": "Temperature"
+              }
+            ],
+            "shortName": [
+              {
+                "language": "en",
+                "text": "Temp"
+              }
+            ],
+            "unit": "degree Celsius",
+            "unitId": {
+              "type": "ExternalReference",
+              "keys": [
+                {
+                  "type": "GlobalReference",
+                  "value": "https://qudt.org/vocab/unit/DEG_C"
+                }
+              ]
+            },
+            "sourceOfDefinition": "IDTA demo source",
+            "symbol": "°C",
+            "dataType": "REAL_MEASURE",
+            "definition": [
+              {
+                "language": "en",
+                "text": "Ambient temperature measured at the device boundary."
+              }
+            ],
+            "valueFormat": "float",
+            "valueList": {
+              "valueReferencePairs": [
+                {
+                  "value": "0",
+                  "valueId": {
+                    "type": "ExternalReference",
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "https://example.org/value/zero"
+                      }
+                    ]
+                  }
+                }
+              ]
+            },
+            "value": "23.5",
+            "levelType": {
+              "min": true,
+              "nom": true,
+              "typ": true,
+              "max": true
+            }
+          }
+        }
+      ],
+      "isCaseOf": [
+        {
+          "type": "ExternalReference",
+          "keys": [
+            {
+              "type": "GlobalReference",
+              "value": "0173-1#02-AAO677#002"
+            }
+          ],
+          "referredSemanticId": {
+            "type": "ExternalReference",
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "https://example.org/semantic/temperature"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

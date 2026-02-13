@@ -1,0 +1,10 @@
+{
+  "paging_metadata": {},
+  "result": [
+    {
+      "id": "urn:example:cd:b:2",
+      "idShort": "ConceptBUpdated",
+      "modelType": "ConceptDescription"
+    }
+  ]
+}

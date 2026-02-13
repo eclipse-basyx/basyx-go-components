@@ -1,0 +1,1322 @@
+openapi: 3.0.3
+info:
+  title: DotAAS Part 2 | HTTP/REST | Concept Description Repository Service Specification
+  description: "The ConceptDescription Repository Service Specification as part of [Specification of the Asset Administration Shell: Part 2](https://industrialdigitaltwin.org/en/content-hub/aasspecifications).  \nCopyright: Industrial Digital Twin Association (IDTA) March 2023"
+  termsOfService: https://github.com/admin-shell-io/aas-specs-metamodel
+  contact:
+    name: Industrial Digital Twin Association (IDTA)
+    email: info@idtwin.org
+  license:
+    name: CC BY 4.0
+    url: https://creativecommons.org/licenses/by/4.0/
+  version: V3.1.1_SSP-001
+  x-profile-identifier: https://admin-shell.io/aas/API/3/1/ConceptDescriptionRepositoryServiceSpecification/SSP-001
+servers:
+- url: https://admin-shell.io/api/v3/
+- url: https://example.com/
+paths:
+  /concept-descriptions:
+    get:
+      tags:
+      - Concept Description Repository API
+      summary: Returns all Concept Descriptions
+      operationId: GetAllConceptDescriptions
+      parameters:
+      - name: idShort
+        in: query
+        description: The Concept Description’s IdShort
+        required: false
+        style: form
+        explode: true
+        schema:
+          type: string
+      - name: isCaseOf
+        in: query
+        description: IsCaseOf reference (UTF8-BASE64-URL-encoded)
+        required: false
+        style: form
+        explode: true
+        schema:
+          type: string
+      - name: dataSpecificationRef
+        in: query
+        description: DataSpecification reference (UTF8-BASE64-URL-encoded)
+        required: false
+        style: form
+        explode: true
+        schema:
+          type: string
+      - name: limit
+        in: query
+        description: The maximum number of elements in the response array
+        required: false
+        schema:
+          minimum: 1
+          type: integer
+      - name: cursor
+        in: query
+        description: A server-generated identifier retrieved from pagingMetadata that specifies from which position the result listing should continue
+        required: false
+        schema:
+          type: string
+      responses:
+        "200":
+          description: Requested Concept Descriptions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GetConceptDescriptionsResult"
+        "400":
+          $ref: "#/components/responses/bad-request"
+        "403":
+          $ref: "#/components/responses/forbidden"
+        "500":
+          $ref: "#/components/responses/internal-server-error"
+        default:
+          $ref: "#/components/responses/default"
+      x-semanticIds:
+      - https://admin-shell.io/aas/API/GetAllConceptDescriptions/3/1
+      - https://admin-shell.io/aas/API/GetAllConceptDescriptionsByIdShort/3/1
+      - https://admin-shell.io/aas/API/GetAllConceptDescriptionsByIsCaseOf/3/1
+      - https://admin-shell.io/aas/API/GetAllConceptDescriptionsByDataSpecificationReference/3/1
+    post:
+      tags:
+      - Concept Description Repository API
+      summary: Creates a new Concept Description
+      operationId: PostConceptDescription
+      requestBody:
+        description: Concept Description object
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConceptDescription"
+        required: true
+      responses:
+        "201":
+          description: Concept Description created successfully
+          headers:
+            Location:
+              description: URL of the newly created resource
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConceptDescription"
+        "400":
+          $ref: "#/components/responses/bad-request"
+        "403":
+          $ref: "#/components/responses/forbidden"
+        "409":
+          $ref: "#/components/responses/conflict"
+        "500":
+          $ref: "#/components/responses/internal-server-error"
+        default:
+          $ref: "#/components/responses/default"
+      x-semanticIds:
+      - https://admin-shell.io/aas/API/PostConceptDescription/3/1
+  /concept-descriptions/{cdIdentifier}:
+    get:
+      tags:
+      - Concept Description Repository API
+      summary: Returns a specific Concept Description
+      operationId: GetConceptDescriptionById
+      parameters:
+      - name: cdIdentifier
+        in: path
+        description: The Concept Description’s unique id (UTF8-BASE64-URL-encoded)
+        required: true
+        style: simple
+        explode: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: Requested Concept Description
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConceptDescription"
+        "400":
+          $ref: "#/components/responses/bad-request"
+        "403":
+          $ref: "#/components/responses/forbidden"
+        "404":
+          $ref: "#/components/responses/not-found"
+        "500":
+          $ref: "#/components/responses/internal-server-error"
+        default:
+          $ref: "#/components/responses/default"
+      x-semanticIds:
+      - https://admin-shell.io/aas/API/GetConceptDescriptionById/3/1
+    put:
+      tags:
+      - Concept Description Repository API
+      summary: Creates or updates an existing Concept Description
+      operationId: PutConceptDescriptionById
+      parameters:
+      - name: cdIdentifier
+        in: path
+        description: The Concept Description’s unique id (UTF8-BASE64-URL-encoded)
+        required: true
+        style: simple
+        explode: false
+        schema:
+          type: string
+      requestBody:
+        description: Concept Description object
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConceptDescription"
+        required: true
+      responses:
+        "201":
+          description: Concept Description created successfully
+          headers:
+            Location:
+              description: URL of the newly created resource
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConceptDescription"
+        "204":
+          description: Concept Description updated successfully
+        "400":
+          $ref: "#/components/responses/bad-request"
+        "403":
+          $ref: "#/components/responses/forbidden"
+        "500":
+          $ref: "#/components/responses/internal-server-error"
+        default:
+          $ref: "#/components/responses/default"
+      x-semanticIds:
+      - https://admin-shell.io/aas/API/PutConceptDescriptionById/3/1
+    delete:
+      tags:
+      - Concept Description Repository API
+      summary: Deletes a Concept Description
+      operationId: DeleteConceptDescriptionById
+      parameters:
+      - name: cdIdentifier
+        in: path
+        description: The Concept Description’s unique id (UTF8-BASE64-URL-encoded)
+        required: true
+        style: simple
+        explode: false
+        schema:
+          type: string
+      responses:
+        "204":
+          description: Concept Description deleted successfully
+        "400":
+          $ref: "#/components/responses/bad-request"
+        "403":
+          $ref: "#/components/responses/forbidden"
+        "404":
+          $ref: "#/components/responses/not-found"
+        "500":
+          $ref: "#/components/responses/internal-server-error"
+        default:
+          $ref: "#/components/responses/default"
+      x-semanticIds:
+      - https://admin-shell.io/aas/API/DeleteConceptDescriptionById/3/1
+  /serialization:
+    get:
+      tags:
+      - Serialization API
+      summary: Returns an appropriate serialization based on the specified format (see SerializationFormat)
+      operationId: GenerateSerializationByIds
+      parameters:
+      - name: aasIds
+        in: query
+        description: The Asset Administration Shells' unique ids (UTF8-BASE64-URL-encoded)
+        required: false
+        style: form
+        explode: true
+        schema:
+          type: array
+          items:
+            type: string
+      - name: submodelIds
+        in: query
+        description: The Submodels' unique ids (UTF8-BASE64-URL-encoded)
+        required: false
+        style: form
+        explode: true
+        schema:
+          type: array
+          items:
+            type: string
+      - name: includeConceptDescriptions
+        in: query
+        description: Include Concept Descriptions?
+        required: false
+        style: form
+        explode: true
+        schema:
+          type: boolean
+          default: true
+      responses:
+        "200":
+          description: Requested serialization based on SerializationFormat
+          content:
+            application/asset-administration-shell-package+xml:
+              schema:
+                type: string
+                description: AASX package
+                format: binary
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Environment"
+            application/xml:
+              schema:
+                $ref: "#/components/schemas/Environment"
+        "400":
+          $ref: "#/components/responses/bad-request"
+        "403":
+          $ref: "#/components/responses/forbidden"
+        "500":
+          $ref: "#/components/responses/internal-server-error"
+        default:
+          $ref: "#/components/responses/default"
+      x-semanticIds:
+      - https://admin-shell.io/aas/API/GenerateSerializationByIds/3/1
+  /description:
+    get:
+      tags:
+      - Description API
+      summary: Returns the self-describing information of a network resource (ServiceDescription)
+      operationId: GetSelfDescription
+      responses:
+        "200":
+          description: Requested Description
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServiceDescription"
+        "403":
+          $ref: "#/components/responses/forbidden"
+      x-semanticIds:
+      - https://admin-shell.io/aas/API/GetSelfDescription/3/1
+components:
+  schemas:
+    GetConceptDescriptionsResult:
+      allOf:
+      - $ref: "#/components/schemas/PagedResult"
+      - type: object
+        properties:
+          result:
+            type: array
+            items:
+              $ref: "#/components/schemas/ConceptDescription"
+    PagedResult:
+      required:
+      - paging_metadata
+      type: object
+      properties:
+        paging_metadata:
+          $ref: "#/components/schemas/PagedResult_paging_metadata"
+    ConceptDescription:
+      allOf:
+      - $ref: "#/components/schemas/Identifiable"
+      - $ref: "#/components/schemas/HasDataSpecification"
+      - properties:
+          isCaseOf:
+            minItems: 1
+            type: array
+            items:
+              $ref: "#/components/schemas/Reference"
+          modelType:
+            pattern: ^ConceptDescription$
+    Identifiable:
+      allOf:
+      - $ref: "#/components/schemas/Referable"
+      - required:
+        - id
+        properties:
+          administration:
+            $ref: "#/components/schemas/AdministrativeInformation"
+          id:
+            maxLength: 2048
+            minLength: 1
+            pattern: "^([\\x09\\x0a\\x0d\\x20-\\ud7ff\\ue000-\\ufffd]|\\ud800[\\udc00-\\udfff]|[\\ud801-\\udbfe][\\udc00-\\udfff]|\\udbff[\\udc00-\\udfff])*$"
+            type: string
+    Referable:
+      allOf:
+      - $ref: "#/components/schemas/HasExtensions"
+      - required:
+        - modelType
+        properties:
+          category:
+            maxLength: 128
+            minLength: 1
+            pattern: "^([\\x09\\x0a\\x0d\\x20-\\ud7ff\\ue000-\\ufffd]|\\ud800[\\udc00-\\udfff]|[\\ud801-\\udbfe][\\udc00-\\udfff]|\\udbff[\\udc00-\\udfff])*$"
+            type: string
+          idShort:
+            type: string
+            allOf:
+            - maxLength: 128
+              minLength: 1
+            - pattern: "^[a-zA-Z][a-zA-Z0-9_-]*[a-zA-Z0-9_]+$"
+          displayName:
+            minItems: 1
+            type: array
+            items:
+              $ref: "#/components/schemas/LangStringNameType"
+          description:
+            minItems: 1
+            type: array
+            items:
+              $ref: "#/components/schemas/LangStringTextType"
+          modelType:
+            $ref: "#/components/schemas/ModelType"
+    HasExtensions:
+      type: object
+      properties:
+        extensions:
+          minItems: 1
+          type: array
+          items:
+            $ref: "#/components/schemas/Extension"
+    Extension:
+      allOf:
+      - $ref: "#/components/schemas/HasSemantics"
+      - required:
+        - name
+        properties:
+          name:
+            maxLength: 128
+            minLength: 1
+            pattern: "^([\\x09\\x0a\\x0d\\x20-\\ud7ff\\ue000-\\ufffd]|\\ud800[\\udc00-\\udfff]|[\\ud801-\\udbfe][\\udc00-\\udfff]|\\udbff[\\udc00-\\udfff])*$"
+            type: string
+          valueType:
+            $ref: "#/components/schemas/DataTypeDefXsd"
+          value:
+            pattern: "^([\\x09\\x0a\\x0d\\x20-\\ud7ff\\ue000-\\ufffd]|\\ud800[\\udc00-\\udfff]|[\\ud801-\\udbfe][\\udc00-\\udfff]|\\udbff[\\udc00-\\udfff])*$"
+            type: string
+          refersTo:
+            minItems: 1
+            type: array
+            items:
+              $ref: "#/components/schemas/Reference"
+    HasSemantics:
+      type: object
+      properties:
+        semanticId:
+          $ref: "#/components/schemas/Reference"
+        supplementalSemanticIds:
+          minItems: 1
+          type: array
+          items:
+            $ref: "#/components/schemas/Reference"
+    Reference:
+      allOf:
+      - $ref: "#/components/schemas/ReferenceParent"
+      - properties:
+          referredSemanticId:
+            $ref: "#/components/schemas/ReferenceParent"
+    ReferenceParent:
+      required:
+      - keys
+      - type
+      type: object
+      properties:
+        type:
+          $ref: "#/components/schemas/ReferenceTypes"
+        keys:
+          minItems: 1
+          type: array
+          items:
+            $ref: "#/components/schemas/Key"
+    ReferenceTypes:
+      type: string
+      enum:
+      - ExternalReference
+      - ModelReference
+    Key:
+      required:
+      - type
+      - value
+      type: object
+      properties:
+        type:
+          $ref: "#/components/schemas/KeyTypes"
+        value:
+          maxLength: 2048
+          minLength: 1
+          pattern: "^([\\x09\\x0a\\x0d\\x20-\\ud7ff\\ue000-\\ufffd]|\\ud800[\\udc00-\\udfff]|[\\ud801-\\udbfe][\\udc00-\\udfff]|\\udbff[\\udc00-\\udfff])*$"
+          type: string
+    KeyTypes:
+      type: string
+      enum:
+      - AnnotatedRelationshipElement
+      - AssetAdministrationShell
+      - BasicEventElement
+      - Blob
+      - Capability
+      - ConceptDescription
+      - DataElement
+      - Entity
+      - EventElement
+      - File
+      - FragmentReference
+      - GlobalReference
+      - Identifiable
+      - MultiLanguageProperty
+      - Operation
+      - Property
+      - Range
+      - Referable
+      - ReferenceElement
+      - RelationshipElement
+      - Submodel
+      - SubmodelElement
+      - SubmodelElementCollection
+      - SubmodelElementList
+    DataTypeDefXsd:
+      type: string
+      enum:
+      - xs:anyURI
+      - xs:base64Binary
+      - xs:boolean
+      - xs:byte
+      - xs:date
+      - xs:dateTime
+      - xs:decimal
+      - xs:double
+      - xs:duration
+      - xs:float
+      - xs:gDay
+      - xs:gMonth
+      - xs:gMonthDay
+      - xs:gYear
+      - xs:gYearMonth
+      - xs:hexBinary
+      - xs:int
+      - xs:integer
+      - xs:long
+      - xs:negativeInteger
+      - xs:nonNegativeInteger
+      - xs:nonPositiveInteger
+      - xs:positiveInteger
+      - xs:short
+      - xs:string
+      - xs:time
+      - xs:unsignedByte
+      - xs:unsignedInt
+      - xs:unsignedLong
+      - xs:unsignedShort
+    LangStringNameType:
+      allOf:
+      - $ref: "#/components/schemas/AbstractLangString"
+      - properties:
+          text:
+            maxLength: 128
+    AbstractLangString:
+      required:
+      - language
+      - text
+      type: object
+      properties:
+        language:
+          pattern: "^(([a-zA-Z]{2,3}(-[a-zA-Z]{3}(-[a-zA-Z]{3}){0,2})?|[a-zA-Z]{4}|[a-zA-Z]{5,8})(-[a-zA-Z]{4})?(-([a-zA-Z]{2}|[0-9]{3}))?(-(([a-zA-Z0-9]){5,8}|[0-9]([a-zA-Z0-9]){3}))*(-[0-9A-WY-Za-wy-z](-([a-zA-Z0-9]){2,8})+)*(-[xX](-([a-zA-Z0-9]){1,8})+)?|[xX](-([a-zA-Z0-9]){1,8})+|((en-GB-oed|i-ami|i-bnn|i-default|i-enochian|i-hak|i-klingon|i-lux|i-mingo|i-navajo|i-pwn|i-tao|i-tay|i-tsu|sgn-BE-FR|sgn-BE-NL|sgn-CH-DE)|(art-lojban|cel-gaulish|no-bok|no-nyn|zh-guoyu|zh-hakka|zh-min|zh-min-nan|zh-xiang)))$"
+          type: string
+        text:
+          minLength: 1
+          pattern: "^([\\x09\\x0a\\x0d\\x20-\\ud7ff\\ue000-\\ufffd]|\\ud800[\\udc00-\\udfff]|[\\ud801-\\udbfe][\\udc00-\\udfff]|\\udbff[\\udc00-\\udfff])*$"
+          type: string
+    LangStringTextType:
+      allOf:
+      - $ref: "#/components/schemas/AbstractLangString"
+      - properties:
+          text:
+            maxLength: 1023
+    ModelType:
+      type: string
+      enum:
+      - AnnotatedRelationshipElement
+      - AssetAdministrationShell
+      - BasicEventElement
+      - Blob
+      - Capability
+      - ConceptDescription
+      - DataSpecificationIec61360
+      - Entity
+      - File
+      - MultiLanguageProperty
+      - Operation
+      - Property
+      - Range
+      - ReferenceElement
+      - RelationshipElement
+      - Submodel
+      - SubmodelElementCollection
+      - SubmodelElementList
+    AdministrativeInformation:
+      allOf:
+      - $ref: "#/components/schemas/HasDataSpecification"
+      - properties:
+          version:
+            type: string
+            allOf:
+            - maxLength: 4
+              minLength: 1
+            - pattern: "^([\\x09\\x0a\\x0d\\x20-\\ud7ff\\ue000-\\ufffd]|\\ud800[\\udc00-\\udfff]|[\\ud801-\\udbfe][\\udc00-\\udfff]|\\udbff[\\udc00-\\udfff])*$"
+            - pattern: "^(0|[1-9][0-9]*)$"
+          revision:
+            type: string
+            allOf:
+            - maxLength: 4
+              minLength: 1
+            - pattern: "^([\\x09\\x0a\\x0d\\x20-\\ud7ff\\ue000-\\ufffd]|\\ud800[\\udc00-\\udfff]|[\\ud801-\\udbfe][\\udc00-\\udfff]|\\udbff[\\udc00-\\udfff])*$"
+            - pattern: "^(0|[1-9][0-9]*)$"
+          creator:
+            $ref: "#/components/schemas/Reference"
+          templateId:
+            maxLength: 2048
+            minLength: 1
+            pattern: "^([\\x09\\x0a\\x0d\\x20-\\ud7ff\\ue000-\\ufffd]|\\ud800[\\udc00-\\udfff]|[\\ud801-\\udbfe][\\udc00-\\udfff]|\\udbff[\\udc00-\\udfff])*$"
+            type: string
+    HasDataSpecification:
+      type: object
+      properties:
+        embeddedDataSpecifications:
+          minItems: 1
+          type: array
+          items:
+            $ref: "#/components/schemas/EmbeddedDataSpecification"
+    EmbeddedDataSpecification:
+      required:
+      - dataSpecification
+      - dataSpecificationContent
+      type: object
+      properties:
+        dataSpecificationContent:
+          $ref: "#/components/schemas/DataSpecificationContent_choice"
+        dataSpecification:
+          $ref: "#/components/schemas/Reference"
+    DataSpecificationContent_choice:
+      oneOf:
+      - $ref: "#/components/schemas/DataSpecificationIec61360"
+    DataSpecificationIec61360:
+      allOf:
+      - $ref: "#/components/schemas/DataSpecificationContent"
+      - required:
+        - preferredName
+        properties:
+          preferredName:
+            minItems: 1
+            type: array
+            items:
+              $ref: "#/components/schemas/LangStringPreferredNameTypeIec61360"
+          shortName:
+            minItems: 1
+            type: array
+            items:
+              $ref: "#/components/schemas/LangStringShortNameTypeIec61360"
+          unit:
+            minLength: 1
+            pattern: "^([\\x09\\x0a\\x0d\\x20-\\ud7ff\\ue000-\\ufffd]|\\ud800[\\udc00-\\udfff]|[\\ud801-\\udbfe][\\udc00-\\udfff]|\\udbff[\\udc00-\\udfff])*$"
+            type: string
+          unitId:
+            $ref: "#/components/schemas/Reference"
+          sourceOfDefinition:
+            minLength: 1
+            pattern: "^([\\x09\\x0a\\x0d\\x20-\\ud7ff\\ue000-\\ufffd]|\\ud800[\\udc00-\\udfff]|[\\ud801-\\udbfe][\\udc00-\\udfff]|\\udbff[\\udc00-\\udfff])*$"
+            type: string
+          symbol:
+            minLength: 1
+            pattern: "^([\\x09\\x0a\\x0d\\x20-\\ud7ff\\ue000-\\ufffd]|\\ud800[\\udc00-\\udfff]|[\\ud801-\\udbfe][\\udc00-\\udfff]|\\udbff[\\udc00-\\udfff])*$"
+            type: string
+          dataType:
+            $ref: "#/components/schemas/DataTypeIec61360"
+          definition:
+            minItems: 1
+            type: array
+            items:
+              $ref: "#/components/schemas/LangStringDefinitionTypeIec61360"
+          valueFormat:
+            minLength: 1
+            pattern: "^([\\x09\\x0a\\x0d\\x20-\\ud7ff\\ue000-\\ufffd]|\\ud800[\\udc00-\\udfff]|[\\ud801-\\udbfe][\\udc00-\\udfff]|\\udbff[\\udc00-\\udfff])*$"
+            type: string
+          valueList:
+            $ref: "#/components/schemas/ValueList"
+          value:
+            maxLength: 2048
+            minLength: 1
+            pattern: "^([\\x09\\x0a\\x0d\\x20-\\ud7ff\\ue000-\\ufffd]|\\ud800[\\udc00-\\udfff]|[\\ud801-\\udbfe][\\udc00-\\udfff]|\\udbff[\\udc00-\\udfff])*$"
+            type: string
+          levelType:
+            $ref: "#/components/schemas/LevelType"
+          modelType:
+            pattern: ^DataSpecificationIec61360$
+    DataSpecificationContent:
+      required:
+      - modelType
+      type: object
+      properties:
+        modelType:
+          $ref: "#/components/schemas/ModelType"
+    LangStringPreferredNameTypeIec61360:
+      allOf:
+      - $ref: "#/components/schemas/AbstractLangString"
+      - properties:
+          text:
+            maxLength: 255
+    LangStringShortNameTypeIec61360:
+      allOf:
+      - $ref: "#/components/schemas/AbstractLangString"
+      - properties:
+          text:
+            maxLength: 18
+    DataTypeIec61360:
+      type: string
+      enum:
+      - BLOB
+      - BOOLEAN
+      - DATE
+      - FILE
+      - HTML
+      - INTEGER_COUNT
+      - INTEGER_CURRENCY
+      - INTEGER_MEASURE
+      - IRDI
+      - IRI
+      - RATIONAL
+      - RATIONAL_MEASURE
+      - REAL_COUNT
+      - REAL_CURRENCY
+      - REAL_MEASURE
+      - STRING
+      - STRING_TRANSLATABLE
+      - TIME
+      - TIMESTAMP
+    LangStringDefinitionTypeIec61360:
+      allOf:
+      - $ref: "#/components/schemas/AbstractLangString"
+      - properties:
+          text:
+            maxLength: 1023
+    ValueList:
+      required:
+      - valueReferencePairs
+      type: object
+      properties:
+        valueReferencePairs:
+          minItems: 1
+          type: array
+          items:
+            $ref: "#/components/schemas/ValueReferencePair"
+    ValueReferencePair:
+      required:
+      - value
+      type: object
+      properties:
+        value:
+          maxLength: 2048
+          minLength: 1
+          pattern: "^([\\x09\\x0a\\x0d\\x20-\\ud7ff\\ue000-\\ufffd]|\\ud800[\\udc00-\\udfff]|[\\ud801-\\udbfe][\\udc00-\\udfff]|\\udbff[\\udc00-\\udfff])*$"
+          type: string
+        valueId:
+          $ref: "#/components/schemas/Reference"
+    LevelType:
+      required:
+      - max
+      - min
+      - nom
+      - typ
+      type: object
+      properties:
+        min:
+          type: boolean
+        nom:
+          type: boolean
+        typ:
+          type: boolean
+        max:
+          type: boolean
+    Result:
+      type: object
+      properties:
+        messages:
+          type: array
+          items:
+            $ref: "#/components/schemas/Message"
+    Message:
+      type: object
+      properties:
+        code:
+          maxLength: 32
+          minLength: 1
+          type: string
+        correlationId:
+          maxLength: 128
+          minLength: 1
+          type: string
+        messageType:
+          type: string
+          enum:
+          - Undefined
+          - Info
+          - Warning
+          - Error
+          - Exception
+        text:
+          type: string
+        timestamp:
+          pattern: "^-?(([1-9][0-9][0-9][0-9]+)|(0[0-9][0-9][0-9]))-((0[1-9])|(1[0-2]))-((0[1-9])|([12][0-9])|(3[01]))T(((([01][0-9])|(2[0-3])):[0-5][0-9]:([0-5][0-9])(\\.[0-9]+)?)|24:00:00(\\.0+)?)(Z|\\+00:00|-00:00)$"
+          type: string
+    Environment:
+      type: object
+      properties:
+        assetAdministrationShells:
+          minItems: 1
+          type: array
+          items:
+            $ref: "#/components/schemas/AssetAdministrationShell"
+        submodels:
+          minItems: 1
+          type: array
+          items:
+            $ref: "#/components/schemas/Submodel"
+        conceptDescriptions:
+          minItems: 1
+          type: array
+          items:
+            $ref: "#/components/schemas/ConceptDescription"
+    AssetAdministrationShell:
+      allOf:
+      - $ref: "#/components/schemas/Identifiable"
+      - $ref: "#/components/schemas/HasDataSpecification"
+      - required:
+        - assetInformation
+        properties:
+          derivedFrom:
+            $ref: "#/components/schemas/Reference"
+          assetInformation:
+            $ref: "#/components/schemas/AssetInformation"
+          submodels:
+            minItems: 1
+            type: array
+            items:
+              $ref: "#/components/schemas/Reference"
+          modelType:
+            pattern: ^AssetAdministrationShell$
+    AssetInformation:
+      required:
+      - assetKind
+      type: object
+      properties:
+        assetKind:
+          $ref: "#/components/schemas/AssetKind"
+        globalAssetId:
+          maxLength: 2048
+          minLength: 1
+          pattern: "^([\\x09\\x0a\\x0d\\x20-\\ud7ff\\ue000-\\ufffd]|\\ud800[\\udc00-\\udfff]|[\\ud801-\\udbfe][\\udc00-\\udfff]|\\udbff[\\udc00-\\udfff])*$"
+          type: string
+        specificAssetIds:
+          minItems: 1
+          type: array
+          items:
+            $ref: "#/components/schemas/SpecificAssetId"
+        assetType:
+          maxLength: 2048
+          minLength: 1
+          pattern: "^([\\x09\\x0a\\x0d\\x20-\\ud7ff\\ue000-\\ufffd]|\\ud800[\\udc00-\\udfff]|[\\ud801-\\udbfe][\\udc00-\\udfff]|\\udbff[\\udc00-\\udfff])*$"
+          type: string
+        defaultThumbnail:
+          $ref: "#/components/schemas/Resource"
+    AssetKind:
+      type: string
+      enum:
+      - Instance
+      - NotApplicable
+      - Role
+      - Type
+    SpecificAssetId:
+      allOf:
+      - $ref: "#/components/schemas/HasSemantics"
+      - required:
+        - name
+        - value
+        properties:
+          name:
+            maxLength: 64
+            minLength: 1
+            pattern: "^([\\x09\\x0a\\x0d\\x20-\\ud7ff\\ue000-\\ufffd]|\\ud800[\\udc00-\\udfff]|[\\ud801-\\udbfe][\\udc00-\\udfff]|\\udbff[\\udc00-\\udfff])*$"
+            type: string
+          value:
+            maxLength: 2048
+            minLength: 1
+            pattern: "^([\\x09\\x0a\\x0d\\x20-\\ud7ff\\ue000-\\ufffd]|\\ud800[\\udc00-\\udfff]|[\\ud801-\\udbfe][\\udc00-\\udfff]|\\udbff[\\udc00-\\udfff])*$"
+            type: string
+          externalSubjectId:
+            $ref: "#/components/schemas/Reference"
+    Resource:
+      required:
+      - path
+      type: object
+      properties:
+        path:
+          type: string
+          allOf:
+          - maxLength: 2048
+            minLength: 1
+          - pattern: "^([a-zA-Z][a-zA-Z0-9+\\-.]*:((//((((([a-zA-Z0-9]|[-_.!~*'()])|%([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])|[;:&=+$,])*@)?((([a-zA-Z0-9]|[a-zA-Z0-9]([a-zA-Z0-9]|-)*[a-zA-Z0-9])\\.)*([a-zA-Z]|[a-zA-Z]([a-zA-Z0-9]|-)*[a-zA-Z0-9])(\\.)?|[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+)(:[0-9]*)?)?|(([a-zA-Z0-9]|[-_.!~*'()])|%([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])|[$,;:@&=+])+)(/((([a-zA-Z0-9]|[-_.!~*'()])|%([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])|[:@&=+$,]))*(;((([a-zA-Z0-9]|[-_.!~*'()])|%([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])|[:@&=+$,]))*)*(/((([a-zA-Z0-9]|[-_.!~*'()])|%([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])|[:@&=+$,]))*(;((([a-zA-Z0-9]|[-_.!~*'()])|%([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])|[:@&=+$,]))*)*)*)?|/((([a-zA-Z0-9]|[-_.!~*'()])|%([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])|[:@&=+$,]))*(;((([a-zA-Z0-9]|[-_.!~*'()])|%([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])|[:@&=+$,]))*)*(/((([a-zA-Z0-9]|[-_.!~*'()])|%([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])|[:@&=+$,]))*(;((([a-zA-Z0-9]|[-_.!~*'()])|%([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])|[:@&=+$,]))*)*)*)(\\?(([;/?:@&=+$,]|([a-zA-Z0-9]|[-_.!~*'()])|%([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])))*)?|(([a-zA-Z0-9]|[-_.!~*'()])|%([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])|[;?:@&=+$,])(([;/?:@&=+$,]|([a-zA-Z0-9]|[-_.!~*'()])|%([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])))*)|(//((((([a-zA-Z0-9]|[-_.!~*'()])|%([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])|[;:&=+$,])*@)?((([a-zA-Z0-9]|[a-zA-Z0-9]([a-zA-Z0-9]|-)*[a-zA-Z0-9])\\.)*([a-zA-Z]|[a-zA-Z]([a-zA-Z0-9]|-)*[a-zA-Z0-9])(\\.)?|[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+)(:[0-9]*)?)?|(([a-zA-Z0-9]|[-_.!~*'()])|%([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])|[$,;:@&=+])+)(/((([a-zA-Z0-9]|[-_.!~*'()])|%([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])|[:@&=+$,]))*(;((([a-zA-Z0-9]|[-_.!~*'()])|%([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])|[:@&=+$,]))*)*(/((([a-zA-Z0-9]|[-_.!~*'()])|%([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])|[:@&=+$,]))*(;((([a-zA-Z0-9]|[-_.!~*'()])|%([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])|[:@&=+$,]))*)*)*)?|/((([a-zA-Z0-9]|[-_.!~*'()])|%([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])|[:@&=+$,]))*(;((([a-zA-Z0-9]|[-_.!~*'()])|%([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])|[:@&=+$,]))*)*(/((([a-zA-Z0-9]|[-_.!~*'()])|%([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])|[:@&=+$,]))*(;((([a-zA-Z0-9]|[-_.!~*'()])|%([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])|[:@&=+$,]))*)*)*|(([a-zA-Z0-9]|[-_.!~*'()])|%([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])|[;@&=+$,])+(/((([a-zA-Z0-9]|[-_.!~*'()])|%([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])|[:@&=+$,]))*(;((([a-zA-Z0-9]|[-_.!~*'()])|%([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])|[:@&=+$,]))*)*(/((([a-zA-Z0-9]|[-_.!~*'()])|%([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])|[:@&=+$,]))*(;((([a-zA-Z0-9]|[-_.!~*'()])|%([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])|[:@&=+$,]))*)*)*)?)(\\?(([;/?:@&=+$,]|([a-zA-Z0-9]|[-_.!~*'()])|%([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])))*)?)?(#(([;/?:@&=+$,]|([a-zA-Z0-9]|[-_.!~*'()])|%([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])))*)?$"
+        contentType:
+          type: string
+          allOf:
+          - maxLength: 128
+            minLength: 1
+          - pattern: "^([!#$%&'*+\\-.^_`|~0-9a-zA-Z])+/([!#$%&'*+\\-.^_`|~0-9a-zA-Z])+([ \\t]*;[ \\t]*([!#$%&'*+\\-.^_`|~0-9a-zA-Z])+=(([!#$%&'*+\\-.^_`|~0-9a-zA-Z])+|\"(([\\t !#-\\[\\]-~]|[\\x80-\\xff])|\\\\([\\t !-~]|[\\x80-\\xff]))*\"))*$"
+    Submodel:
+      allOf:
+      - $ref: "#/components/schemas/Identifiable"
+      - $ref: "#/components/schemas/HasKind"
+      - $ref: "#/components/schemas/HasSemantics"
+      - $ref: "#/components/schemas/Qualifiable"
+      - $ref: "#/components/schemas/HasDataSpecification"
+      - properties:
+          submodelElements:
+            minItems: 1
+            type: array
+            items:
+              $ref: "#/components/schemas/SubmodelElement_choice"
+          modelType:
+            pattern: ^Submodel$
+    HasKind:
+      type: object
+      properties:
+        kind:
+          $ref: "#/components/schemas/ModellingKind"
+    ModellingKind:
+      type: string
+      enum:
+      - Instance
+      - Template
+    Qualifiable:
+      required:
+      - modelType
+      type: object
+      properties:
+        qualifiers:
+          minItems: 1
+          type: array
+          items:
+            $ref: "#/components/schemas/Qualifier"
+        modelType:
+          $ref: "#/components/schemas/ModelType"
+    Qualifier:
+      allOf:
+      - $ref: "#/components/schemas/HasSemantics"
+      - required:
+        - type
+        - valueType
+        properties:
+          kind:
+            $ref: "#/components/schemas/QualifierKind"
+          type:
+            maxLength: 128
+            minLength: 1
+            pattern: "^([\\x09\\x0a\\x0d\\x20-\\ud7ff\\ue000-\\ufffd]|\\ud800[\\udc00-\\udfff]|[\\ud801-\\udbfe][\\udc00-\\udfff]|\\udbff[\\udc00-\\udfff])*$"
+            type: string
+          valueType:
+            $ref: "#/components/schemas/DataTypeDefXsd"
+          value:
+            pattern: "^([\\x09\\x0a\\x0d\\x20-\\ud7ff\\ue000-\\ufffd]|\\ud800[\\udc00-\\udfff]|[\\ud801-\\udbfe][\\udc00-\\udfff]|\\udbff[\\udc00-\\udfff])*$"
+            type: string
+          valueId:
+            $ref: "#/components/schemas/Reference"
+    QualifierKind:
+      type: string
+      enum:
+      - ConceptQualifier
+      - TemplateQualifier
+      - ValueQualifier
+    SubmodelElement_choice:
+      oneOf:
+      - $ref: "#/components/schemas/RelationshipElement"
+      - $ref: "#/components/schemas/AnnotatedRelationshipElement"
+      - $ref: "#/components/schemas/BasicEventElement"
+      - $ref: "#/components/schemas/Blob"
+      - $ref: "#/components/schemas/Capability"
+      - $ref: "#/components/schemas/Entity"
+      - $ref: "#/components/schemas/File"
+      - $ref: "#/components/schemas/MultiLanguageProperty"
+      - $ref: "#/components/schemas/Operation"
+      - $ref: "#/components/schemas/Property"
+      - $ref: "#/components/schemas/Range"
+      - $ref: "#/components/schemas/ReferenceElement"
+      - $ref: "#/components/schemas/SubmodelElementCollection"
+      - $ref: "#/components/schemas/SubmodelElementList"
+    RelationshipElement:
+      allOf:
+      - $ref: "#/components/schemas/RelationshipElement_abstract"
+      - properties:
+          modelType:
+            pattern: ^RelationshipElement$
+    RelationshipElement_abstract:
+      allOf:
+      - $ref: "#/components/schemas/SubmodelElement"
+      - properties:
+          first:
+            $ref: "#/components/schemas/Reference"
+          second:
+            $ref: "#/components/schemas/Reference"
+    SubmodelElement:
+      allOf:
+      - $ref: "#/components/schemas/Referable"
+      - $ref: "#/components/schemas/HasSemantics"
+      - $ref: "#/components/schemas/Qualifiable"
+      - $ref: "#/components/schemas/HasDataSpecification"
+    AnnotatedRelationshipElement:
+      allOf:
+      - $ref: "#/components/schemas/RelationshipElement_abstract"
+      - properties:
+          annotations:
+            minItems: 1
+            type: array
+            items:
+              $ref: "#/components/schemas/DataElement_choice"
+          modelType:
+            pattern: ^AnnotatedRelationshipElement$
+    DataElement_choice:
+      oneOf:
+      - $ref: "#/components/schemas/Blob"
+      - $ref: "#/components/schemas/File"
+      - $ref: "#/components/schemas/MultiLanguageProperty"
+      - $ref: "#/components/schemas/Property"
+      - $ref: "#/components/schemas/Range"
+      - $ref: "#/components/schemas/ReferenceElement"
+    Blob:
+      allOf:
+      - $ref: "#/components/schemas/DataElement"
+      - properties:
+          value:
+            type: string
+            format: byte
+          contentType:
+            type: string
+            allOf:
+            - maxLength: 128
+              minLength: 1
+            - pattern: "^([!#$%&'*+\\-.^_`|~0-9a-zA-Z])+/([!#$%&'*+\\-.^_`|~0-9a-zA-Z])+([ \\t]*;[ \\t]*([!#$%&'*+\\-.^_`|~0-9a-zA-Z])+=(([!#$%&'*+\\-.^_`|~0-9a-zA-Z])+|\"(([\\t !#-\\[\\]-~]|[\\x80-\\xff])|\\\\([\\t !-~]|[\\x80-\\xff]))*\"))*$"
+          modelType:
+            pattern: ^Blob$
+    DataElement:
+      allOf:
+      - $ref: "#/components/schemas/Referable"
+      - $ref: "#/components/schemas/HasSemantics"
+      - $ref: "#/components/schemas/Qualifiable"
+      - $ref: "#/components/schemas/HasDataSpecification"
+    File:
+      allOf:
+      - $ref: "#/components/schemas/DataElement"
+      - properties:
+          value:
+            type: string
+            allOf:
+            - maxLength: 2048
+              minLength: 1
+            - pattern: "^([a-zA-Z][a-zA-Z0-9+\\-.]*:((//((((([a-zA-Z0-9]|[-_.!~*'()])|%([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])|[;:&=+$,])*@)?((([a-zA-Z0-9]|[a-zA-Z0-9]([a-zA-Z0-9]|-)*[a-zA-Z0-9])\\.)*([a-zA-Z]|[a-zA-Z]([a-zA-Z0-9]|-)*[a-zA-Z0-9])(\\.)?|[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+)(:[0-9]*)?)?|(([a-zA-Z0-9]|[-_.!~*'()])|%([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])|[$,;:@&=+])+)(/((([a-zA-Z0-9]|[-_.!~*'()])|%([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])|[:@&=+$,]))*(;((([a-zA-Z0-9]|[-_.!~*'()])|%([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])|[:@&=+$,]))*)*(/((([a-zA-Z0-9]|[-_.!~*'()])|%([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])|[:@&=+$,]))*(;((([a-zA-Z0-9]|[-_.!~*'()])|%([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])|[:@&=+$,]))*)*)*)?|/((([a-zA-Z0-9]|[-_.!~*'()])|%([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])|[:@&=+$,]))*(;((([a-zA-Z0-9]|[-_.!~*'()])|%([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])|[:@&=+$,]))*)*(/((([a-zA-Z0-9]|[-_.!~*'()])|%([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])|[:@&=+$,]))*(;((([a-zA-Z0-9]|[-_.!~*'()])|%([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])|[:@&=+$,]))*)*)*)(\\?(([;/?:@&=+$,]|([a-zA-Z0-9]|[-_.!~*'()])|%([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])))*)?|(([a-zA-Z0-9]|[-_.!~*'()])|%([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])|[;?:@&=+$,])(([;/?:@&=+$,]|([a-zA-Z0-9]|[-_.!~*'()])|%([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])))*)|(//((((([a-zA-Z0-9]|[-_.!~*'()])|%([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])|[;:&=+$,])*@)?((([a-zA-Z0-9]|[a-zA-Z0-9]([a-zA-Z0-9]|-)*[a-zA-Z0-9])\\.)*([a-zA-Z]|[a-zA-Z]([a-zA-Z0-9]|-)*[a-zA-Z0-9])(\\.)?|[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+)(:[0-9]*)?)?|(([a-zA-Z0-9]|[-_.!~*'()])|%([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])|[$,;:@&=+])+)(/((([a-zA-Z0-9]|[-_.!~*'()])|%([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])|[:@&=+$,]))*(;((([a-zA-Z0-9]|[-_.!~*'()])|%([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])|[:@&=+$,]))*)*(/((([a-zA-Z0-9]|[-_.!~*'()])|%([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])|[:@&=+$,]))*(;((([a-zA-Z0-9]|[-_.!~*'()])|%([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])|[:@&=+$,]))*)*)*)?|/((([a-zA-Z0-9]|[-_.!~*'()])|%([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])|[:@&=+$,]))*(;((([a-zA-Z0-9]|[-_.!~*'()])|%([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])|[:@&=+$,]))*)*(/((([a-zA-Z0-9]|[-_.!~*'()])|%([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])|[:@&=+$,]))*(;((([a-zA-Z0-9]|[-_.!~*'()])|%([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])|[:@&=+$,]))*)*)*|(([a-zA-Z0-9]|[-_.!~*'()])|%([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])|[;@&=+$,])+(/((([a-zA-Z0-9]|[-_.!~*'()])|%([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])|[:@&=+$,]))*(;((([a-zA-Z0-9]|[-_.!~*'()])|%([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])|[:@&=+$,]))*)*(/((([a-zA-Z0-9]|[-_.!~*'()])|%([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])|[:@&=+$,]))*(;((([a-zA-Z0-9]|[-_.!~*'()])|%([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])|[:@&=+$,]))*)*)*)?)(\\?(([;/?:@&=+$,]|([a-zA-Z0-9]|[-_.!~*'()])|%([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])))*)?)?(#(([;/?:@&=+$,]|([a-zA-Z0-9]|[-_.!~*'()])|%([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])([0-9]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF]|[aA]|[bB]|[cC]|[dD]|[eE]|[fF])))*)?$"
+          contentType:
+            type: string
+            allOf:
+            - maxLength: 128
+              minLength: 1
+            - pattern: "^([!#$%&'*+\\-.^_`|~0-9a-zA-Z])+/([!#$%&'*+\\-.^_`|~0-9a-zA-Z])+([ \\t]*;[ \\t]*([!#$%&'*+\\-.^_`|~0-9a-zA-Z])+=(([!#$%&'*+\\-.^_`|~0-9a-zA-Z])+|\"(([\\t !#-\\[\\]-~]|[\\x80-\\xff])|\\\\([\\t !-~]|[\\x80-\\xff]))*\"))*$"
+          modelType:
+            pattern: ^File$
+    MultiLanguageProperty:
+      allOf:
+      - $ref: "#/components/schemas/DataElement"
+      - properties:
+          value:
+            minItems: 1
+            type: array
+            items:
+              $ref: "#/components/schemas/LangStringTextType"
+          valueId:
+            $ref: "#/components/schemas/Reference"
+          modelType:
+            pattern: ^MultiLanguageProperty$
+    Property:
+      allOf:
+      - $ref: "#/components/schemas/DataElement"
+      - required:
+        - valueType
+        properties:
+          valueType:
+            $ref: "#/components/schemas/DataTypeDefXsd"
+          value:
+            pattern: "^([\\x09\\x0a\\x0d\\x20-\\ud7ff\\ue000-\\ufffd]|\\ud800[\\udc00-\\udfff]|[\\ud801-\\udbfe][\\udc00-\\udfff]|\\udbff[\\udc00-\\udfff])*$"
+            type: string
+          valueId:
+            $ref: "#/components/schemas/Reference"
+          modelType:
+            pattern: ^Property$
+    Range:
+      allOf:
+      - $ref: "#/components/schemas/DataElement"
+      - required:
+        - valueType
+        properties:
+          valueType:
+            $ref: "#/components/schemas/DataTypeDefXsd"
+          min:
+            pattern: "^([\\x09\\x0a\\x0d\\x20-\\ud7ff\\ue000-\\ufffd]|\\ud800[\\udc00-\\udfff]|[\\ud801-\\udbfe][\\udc00-\\udfff]|\\udbff[\\udc00-\\udfff])*$"
+            type: string
+          max:
+            pattern: "^([\\x09\\x0a\\x0d\\x20-\\ud7ff\\ue000-\\ufffd]|\\ud800[\\udc00-\\udfff]|[\\ud801-\\udbfe][\\udc00-\\udfff]|\\udbff[\\udc00-\\udfff])*$"
+            type: string
+          modelType:
+            pattern: ^Range$
+    ReferenceElement:
+      allOf:
+      - $ref: "#/components/schemas/DataElement"
+      - properties:
+          value:
+            $ref: "#/components/schemas/Reference"
+          modelType:
+            pattern: ^ReferenceElement$
+    BasicEventElement:
+      allOf:
+      - $ref: "#/components/schemas/EventElement"
+      - required:
+        - direction
+        - observed
+        - state
+        properties:
+          observed:
+            $ref: "#/components/schemas/Reference"
+          direction:
+            $ref: "#/components/schemas/Direction"
+          state:
+            $ref: "#/components/schemas/StateOfEvent"
+          messageTopic:
+            maxLength: 255
+            minLength: 1
+            pattern: "^([\\x09\\x0a\\x0d\\x20-\\ud7ff\\ue000-\\ufffd]|\\ud800[\\udc00-\\udfff]|[\\ud801-\\udbfe][\\udc00-\\udfff]|\\udbff[\\udc00-\\udfff])*$"
+            type: string
+          messageBroker:
+            $ref: "#/components/schemas/Reference"
+          lastUpdate:
+            pattern: "^-?(([1-9][0-9][0-9][0-9]+)|(0[0-9][0-9][0-9]))-((0[1-9])|(1[0-2]))-((0[1-9])|([12][0-9])|(3[01]))T(((([01][0-9])|(2[0-3])):[0-5][0-9]:([0-5][0-9])(\\.[0-9]+)?)|24:00:00(\\.0+)?)(Z|\\+00:00|-00:00)$"
+            type: string
+          minInterval:
+            pattern: "^-?P((([0-9]+Y([0-9]+M)?([0-9]+D)?|([0-9]+M)([0-9]+D)?|([0-9]+D))(T(([0-9]+H)([0-9]+M)?([0-9]+(\\.[0-9]+)?S)?|([0-9]+M)([0-9]+(\\.[0-9]+)?S)?|([0-9]+(\\.[0-9]+)?S)))?)|(T(([0-9]+H)([0-9]+M)?([0-9]+(\\.[0-9]+)?S)?|([0-9]+M)([0-9]+(\\.[0-9]+)?S)?|([0-9]+(\\.[0-9]+)?S))))$"
+            type: string
+          maxInterval:
+            pattern: "^-?P((([0-9]+Y([0-9]+M)?([0-9]+D)?|([0-9]+M)([0-9]+D)?|([0-9]+D))(T(([0-9]+H)([0-9]+M)?([0-9]+(\\.[0-9]+)?S)?|([0-9]+M)([0-9]+(\\.[0-9]+)?S)?|([0-9]+(\\.[0-9]+)?S)))?)|(T(([0-9]+H)([0-9]+M)?([0-9]+(\\.[0-9]+)?S)?|([0-9]+M)([0-9]+(\\.[0-9]+)?S)?|([0-9]+(\\.[0-9]+)?S))))$"
+            type: string
+          modelType:
+            pattern: ^BasicEventElement$
+    EventElement:
+      allOf:
+      - $ref: "#/components/schemas/Referable"
+      - $ref: "#/components/schemas/HasSemantics"
+      - $ref: "#/components/schemas/Qualifiable"
+      - $ref: "#/components/schemas/HasDataSpecification"
+    Direction:
+      type: string
+      enum:
+      - input
+      - output
+    StateOfEvent:
+      type: string
+      enum:
+      - "off"
+      - "on"
+    Capability:
+      allOf:
+      - $ref: "#/components/schemas/SubmodelElement"
+      - properties:
+          modelType:
+            pattern: ^Capability$
+    Entity:
+      allOf:
+      - $ref: "#/components/schemas/SubmodelElement"
+      - properties:
+          statements:
+            minItems: 1
+            type: array
+            items:
+              $ref: "#/components/schemas/SubmodelElement_choice"
+          entityType:
+            $ref: "#/components/schemas/EntityType"
+          globalAssetId:
+            maxLength: 2048
+            minLength: 1
+            pattern: "^([\\x09\\x0a\\x0d\\x20-\\ud7ff\\ue000-\\ufffd]|\\ud800[\\udc00-\\udfff]|[\\ud801-\\udbfe][\\udc00-\\udfff]|\\udbff[\\udc00-\\udfff])*$"
+            type: string
+          specificAssetIds:
+            minItems: 1
+            type: array
+            items:
+              $ref: "#/components/schemas/SpecificAssetId"
+          modelType:
+            pattern: ^Entity$
+    EntityType:
+      type: string
+      enum:
+      - CoManagedEntity
+      - SelfManagedEntity
+    Operation:
+      allOf:
+      - $ref: "#/components/schemas/SubmodelElement"
+      - properties:
+          inputVariables:
+            minItems: 1
+            type: array
+            items:
+              $ref: "#/components/schemas/OperationVariable"
+          outputVariables:
+            minItems: 1
+            type: array
+            items:
+              $ref: "#/components/schemas/OperationVariable"
+          inoutputVariables:
+            minItems: 1
+            type: array
+            items:
+              $ref: "#/components/schemas/OperationVariable"
+          modelType:
+            pattern: ^Operation$
+    OperationVariable:
+      required:
+      - value
+      type: object
+      properties:
+        value:
+          $ref: "#/components/schemas/SubmodelElement_choice"
+    SubmodelElementCollection:
+      allOf:
+      - $ref: "#/components/schemas/SubmodelElement"
+      - properties:
+          value:
+            minItems: 1
+            type: array
+            items:
+              $ref: "#/components/schemas/SubmodelElement_choice"
+          modelType:
+            pattern: ^SubmodelElementCollection$
+    SubmodelElementList:
+      allOf:
+      - $ref: "#/components/schemas/SubmodelElement"
+      - required:
+        - typeValueListElement
+        properties:
+          orderRelevant:
+            type: boolean
+          semanticIdListElement:
+            $ref: "#/components/schemas/Reference"
+          typeValueListElement:
+            $ref: "#/components/schemas/AasSubmodelElements"
+          valueTypeListElement:
+            $ref: "#/components/schemas/DataTypeDefXsd"
+          value:
+            minItems: 1
+            type: array
+            items:
+              $ref: "#/components/schemas/SubmodelElement_choice"
+          modelType:
+            pattern: ^SubmodelElementList$
+    AasSubmodelElements:
+      type: string
+      enum:
+      - AnnotatedRelationshipElement
+      - BasicEventElement
+      - Blob
+      - Capability
+      - DataElement
+      - Entity
+      - EventElement
+      - File
+      - MultiLanguageProperty
+      - Operation
+      - Property
+      - Range
+      - ReferenceElement
+      - RelationshipElement
+      - SubmodelElement
+      - SubmodelElementCollection
+      - SubmodelElementList
+    ServiceDescription:
+      type: object
+      properties:
+        profiles:
+          minItems: 1
+          type: array
+          items:
+            type: string
+            example: "[\"https://admin-shell.io/aas/API/3/1/AssetAdministrationShellServiceSpecification/SSP-001\",\"https://admin-shell.io/aas/API/3/1/AssetAdministrationShellServiceSpecification/SSP-001\",\"https://admin-shell.io/aas/API/3/1/AssetAdministrationShellServiceSpecification/SSP-002\",\"https://admin-shell.io/aas/API/3/1/AssetAdministrationShellServiceSpecification/SSP-002\",\"https://admin-shell.io/aas/API/3/1/SubmodelServiceSpecification/SSP-001\",\"https://admin-shell.io/aas/API/3/1/SubmodelServiceSpecification/SSP-001\",\"https://admin-shell.io/aas/API/3/1/SubmodelServiceSpecification/SSP-002\",\"https://admin-shell.io/aas/API/3/1/SubmodelServiceSpecification/SSP-002\",\"https://admin-shell.io/aas/API/3/1/SubmodelServiceSpecification/SSP-003\",\"https://admin-shell.io/aas/API/3/1/SubmodelServiceSpecification/SSP-003\",\"https://admin-shell.io/aas/API/3/1/AasxFileServerServiceSpecification/SSP-001\",\"https://admin-shell.io/aas/API/3/1/AasxFileServerServiceSpecification/SSP-001\",\"https://admin-shell.io/aas/API/3/1/AssetAdministrationShellRegistryServiceSpecification/SSP-001\",\"https://admin-shell.io/aas/API/3/1/AssetAdministrationShellRegistryServiceSpecification/SSP-001\",\"https://admin-shell.io/aas/API/3/1/AssetAdministrationShellRegistryServiceSpecification/SSP-002\",\"https://admin-shell.io/aas/API/3/1/AssetAdministrationShellRegistryServiceSpecification/SSP-002\",\"https://admin-shell.io/aas/API/3/1/AssetAdministrationShellRegistryServiceSpecification/SSP-003\",\"https://admin-shell.io/aas/API/3/1/AssetAdministrationShellRegistryServiceSpecification/SSP-004\",\"https://admin-shell.io/aas/API/3/1/AssetAdministrationShellRegistryServiceSpecification/SSP-005\",\"https://admin-shell.io/aas/API/3/1/SubmodelRegistryServiceSpecification/SSP-001\",\"https://admin-shell.io/aas/API/3/1/SubmodelRegistryServiceSpecification/SSP-001\",\"https://admin-shell.io/aas/API/3/1/SubmodelRegistryServiceSpecification/SSP-002\",\"https://admin-shell.io/aas/API/3/1/SubmodelRegistryServiceSpecification/SSP-002\",\"https://admin-shell.io/aas/API/3/1/SubmodelRegistryServiceSpecification/SSP-003\",\"https://admin-shell.io/aas/API/3/1/SubmodelRegistryServiceSpecification/SSP-004\",\"https://admin-shell.io/aas/API/3/1/DiscoveryServiceSpecification/SSP-001\",\"https://admin-shell.io/aas/API/3/1/DiscoveryServiceSpecification/SSP-001\",\"https://admin-shell.io/aas/API/3/1/DiscoveryServiceSpecification/SSP-002\",\"https://admin-shell.io/aas/API/3/1/AssetAdministrationShellRepositoryServiceSpecification/SSP-001\",\"https://admin-shell.io/aas/API/3/1/AssetAdministrationShellRepositoryServiceSpecification/SSP-001\",\"https://admin-shell.io/aas/API/3/1/AssetAdministrationShellRepositoryServiceSpecification/SSP-002\",\"https://admin-shell.io/aas/API/3/1/AssetAdministrationShellRepositoryServiceSpecification/SSP-002\",\"https://admin-shell.io/aas/API/3/1/AssetAdministrationShellRepositoryServiceSpecification/SSP-003\",\"https://admin-shell.io/aas/API/3/1/SubmodelRepositoryServiceSpecification/SSP-001\",\"https://admin-shell.io/aas/API/3/1/SubmodelRepositoryServiceSpecification/SSP-001\",\"https://admin-shell.io/aas/API/3/1/SubmodelRepositoryServiceSpecification/SSP-002\",\"https://admin-shell.io/aas/API/3/1/SubmodelRepositoryServiceSpecification/SSP-002\",\"https://admin-shell.io/aas/API/3/1/SubmodelRepositoryServiceSpecification/SSP-003\",\"https://admin-shell.io/aas/API/3/1/SubmodelRepositoryServiceSpecification/SSP-003\",\"https://admin-shell.io/aas/API/3/1/SubmodelRepositoryServiceSpecification/SSP-004\",\"https://admin-shell.io/aas/API/3/1/SubmodelRepositoryServiceSpecification/SSP-004\",\"https://admin-shell.io/aas/API/3/1/SubmodelRepositoryServiceSpecification/SSP-005\",\"https://admin-shell.io/aas/API/3/1/ConceptDescriptionRepositoryServiceSpecification/SSP-001\",\"https://admin-shell.io/aas/API/3/1/ConceptDescriptionRepositoryServiceSpecification/SSP-001\",\"https://admin-shell.io/aas/API/3/1/ConceptDescriptionRepositoryServiceSpecification/SSP-002\"]"
+      description: "The Description object enables servers to present their capabilities to the clients, in particular which profiles they implement. At least one defined profile is required. Additional, proprietary attributes might be included. Nevertheless, the server must not expect that a regular client understands them."
+      example: |-
+        {
+          "profiles": [
+            "https://admin-shell.io/aas/API/3/1/AssetAdministrationShellRegistryServiceSpecification/SSP-002",
+            "https://admin-shell.io/aas/API/3/1/SubmodelRegistryServiceSpecification/SSP-002"
+          ]
+        }
+    PagedResult_paging_metadata:
+      type: object
+      properties:
+        cursor:
+          type: string
+          example: wJlCDLIl6KTWypN7T6vc6nWEmEYe99Hjf1XY1xmqV-M=#
+  responses:
+    bad-request:
+      description: "Bad Request, e.g. the request parameters of the format of the request body is wrong."
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Result"
+    forbidden:
+      description: Forbidden
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Result"
+    internal-server-error:
+      description: Internal Server Error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Result"
+    default:
+      description: Default error handling for unmentioned status codes
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Result"
+    conflict:
+      description: "Conflict, a resource which shall be created exists already. Might be thrown if an object with the same id (for Identifiables) or idShort (for Referables within the same Container Element or Submodel) is contained in a POST request."
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Result"
+    not-found:
+      description: Not Found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Result"
+  parameters:
+    Limit:
+      name: limit
+      in: query
+      description: The maximum number of elements in the response array
+      required: false
+      schema:
+        minimum: 1
+        type: integer
+    Cursor:
+      name: cursor
+      in: query
+      description: A server-generated identifier retrieved from pagingMetadata that specifies from which position the result listing should continue
+      required: false
+      schema:
+        type: string

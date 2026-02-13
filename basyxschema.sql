@@ -348,6 +348,12 @@ CREATE TABLE IF NOT EXISTS infrastructure_descriptor (
   company VARCHAR(2048)
 );
 
+CREATE TABLE IF NOT EXISTS concept_description (
+  id TEXT PRIMARY KEY,
+  id_short TEXT,
+  data JSONB
+);
+
 /*
  Auto-generated file. Do not edit manually.
  Naming pattern: <context>_reference and <context>_reference_key.
