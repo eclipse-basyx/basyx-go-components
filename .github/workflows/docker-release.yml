@@ -39,6 +39,8 @@ jobs:
             image: eclipsebasyx/submodelrepository-go
           - name: submodelregistryservice
             image: eclipsebasyx/submodelregistry-go
+          - name: conceptdescriptionrepositoryservice
+            image: eclipsebasyx/conceptdescriptionrepository-go
     
     steps:
       - name: Checkout code
