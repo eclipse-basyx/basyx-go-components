@@ -546,15 +546,15 @@ type BlobElementValueRow struct {
 // related records such as administrative information, display names, and
 // descriptions.
 type AssetAdministrationShellDescriptorRow struct {
-	DescID        int64
-	AssetKind     sql.NullInt64
-	AssetType     sql.NullString
-	GlobalAssetID sql.NullString
-	IDShort       sql.NullString
-	IDStr         string
-	AdminInfoID   sql.NullInt64
-	DisplayNameID sql.NullInt64
-	DescriptionID sql.NullInt64
+	DescID                    int64
+	AssetKind                 sql.NullInt64
+	AssetType                 sql.NullString
+	GlobalAssetID             sql.NullString
+	IDShort                   sql.NullString
+	IDStr                     string
+	AdministrativeInfoPayload json.RawMessage
+	DisplayNamePayload        json.RawMessage
+	DescriptionPayload        json.RawMessage
 }
 
 // SubmodelDescriptorRow represents a single SQL result row for a Submodel
@@ -563,14 +563,14 @@ type AssetAdministrationShellDescriptorRow struct {
 // optional columns and foreign-key references such as semantic reference
 // and administrative information.
 type SubmodelDescriptorRow struct {
-	AasDescID     int64
-	SmdDescID     int64
-	IDShort       sql.NullString
-	ID            sql.NullString
-	SemanticRefID sql.NullInt64
-	AdminInfoID   sql.NullInt64
-	DescriptionID sql.NullInt64
-	DisplayNameID sql.NullInt64
+	AasDescID                 int64
+	SmdDescID                 int64
+	IDShort                   sql.NullString
+	ID                        sql.NullString
+	SemanticRefID             sql.NullInt64
+	AdministrativeInfoPayload json.RawMessage
+	DescriptionPayload        json.RawMessage
+	DisplayNamePayload        json.RawMessage
 }
 
 // InfrastructureDescriptorRow represents a single SQL result row for a
@@ -579,12 +579,12 @@ type SubmodelDescriptorRow struct {
 // such as registry administrative information, display names, and
 // descriptions.
 type InfrastructureDescriptorRow struct {
-	DescID        int64
-	GlobalAssetID sql.NullString
-	IDShort       sql.NullString
-	Company       sql.NullString
-	IDStr         string
-	AdminInfoID   sql.NullInt64
-	DisplayNameID sql.NullInt64
-	DescriptionID sql.NullInt64
+	DescID                    int64
+	GlobalAssetID             sql.NullString
+	IDShort                   sql.NullString
+	Company                   sql.NullString
+	IDStr                     string
+	AdministrativeInfoPayload json.RawMessage
+	DisplayNamePayload        json.RawMessage
+	DescriptionPayload        json.RawMessage
 }

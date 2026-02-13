@@ -5,7 +5,7 @@ server:
 
 postgres:
   host: localhost
-  port: 5432
+  port: 6432
   user: admin
   password: admin123
   dbname: basyxTestDB
@@ -18,9 +18,9 @@ oidc:
 
 
 abac:
-  enabled: false
+  enabled: true
   modelPath: "config/access_rules/access-rules.json"
 
 general:
   enableImplicitCasts: true
-  enableDescriptorDebug: false
+  enableDescriptorDebug: true

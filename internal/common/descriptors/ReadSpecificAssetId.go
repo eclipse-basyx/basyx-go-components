@@ -43,7 +43,7 @@ type rowData struct {
 	descID               int64
 	specificID           int64
 	name, value          sql.NullString
-	semanticRefID        sql.NullInt64
+	semanticPayload      []byte
 	externalSubjectRefID sql.NullInt64
 }
 
@@ -63,10 +63,10 @@ var expMapper = []auth.ExpressionIdentifiableMapper{
 		Fragment: fragPtr("$aasdesc#specificAssetIds[].value"),
 	},
 	{
-		Exp: tSpecificAssetID.Col(colSemanticID),
+		Exp: goqu.I("specific_asset_id_payload.semantic_id_payload"),
 	},
 	{
-		Exp:      tSpecificAssetID.Col(colExternalSubjectRef),
+		Exp:      goqu.I(aliasExternalSubjectReference + "." + colID),
 		Fragment: fragPtr("$aasdesc#specificAssetIds[].externalSubjectId"),
 	},
 }
@@ -124,6 +124,8 @@ func ReadSpecificAssetIDsByDescriptorIDs(
 	}
 
 	d := goqu.Dialect(dialect)
+	externalSubjectReferenceAlias := goqu.T("specific_asset_id_external_subject_id_reference").As(aliasExternalSubjectReference)
+	specificAssetIDPayloadAlias := goqu.T(tblSpecificAssetIDPayload).As("specific_asset_id_payload")
 
 	arr := pq.Array(descriptorIDs)
 
@@ -143,6 +145,14 @@ func ReadSpecificAssetIDsByDescriptorIDs(
 		LeftJoin(
 			specificAssetIDAlias,
 			goqu.On(specificAssetIDAlias.Col(colDescriptorID).Eq(tDescriptor.Col(colID))),
+		).
+		LeftJoin(
+			externalSubjectReferenceAlias,
+			goqu.On(externalSubjectReferenceAlias.Col(colID).Eq(specificAssetIDAlias.Col(colID))),
+		).
+		LeftJoin(
+			specificAssetIDPayloadAlias,
+			goqu.On(specificAssetIDPayloadAlias.Col(colSpecificAssetID).Eq(specificAssetIDAlias.Col(colID))),
 		).Select(
 		expressions[0],
 		expressions[1],
@@ -152,12 +162,7 @@ func ReadSpecificAssetIDsByDescriptorIDs(
 		expressions[5],
 	).
 		Where(goqu.L(fmt.Sprintf("%s.%s = ANY(?::bigint[])", aliasSpecificAssetID, colDescriptorID), arr))
-	if auth.NeedsGroupBy(ctx, expMapper) {
-		base = base.GroupBy(
-			expressions[0], // descriptor_id
-			expressions[1], // id
-		)
-	}
+
 	base = base.
 		Order(
 			tSpecificAssetID.Col(colPosition).Asc(),
@@ -186,8 +191,6 @@ func ReadSpecificAssetIDsByDescriptorIDs(
 
 	perDesc := make(map[int64][]rowData, len(descriptorIDs))
 	allSpecificIDs := make([]int64, 0, 256)
-	semRefIDs := make([]int64, 0, 128)
-	extRefIDs := make([]int64, 0, 128)
 
 	for rows.Next() {
 		var r rowData
@@ -196,19 +199,13 @@ func ReadSpecificAssetIDsByDescriptorIDs(
 			&r.specificID,
 			&r.name,
 			&r.value,
-			&r.semanticRefID,
+			&r.semanticPayload,
 			&r.externalSubjectRefID,
 		); err != nil {
 			return nil, err
 		}
 		perDesc[r.descID] = append(perDesc[r.descID], r)
 		allSpecificIDs = append(allSpecificIDs, r.specificID)
-		if r.semanticRefID.Valid {
-			semRefIDs = append(semRefIDs, r.semanticRefID.Int64)
-		}
-		if r.externalSubjectRefID.Valid {
-			extRefIDs = append(extRefIDs, r.externalSubjectRefID.Int64)
-		}
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -218,32 +215,25 @@ func ReadSpecificAssetIDsByDescriptorIDs(
 		return out, nil
 	}
 
-	uniqSem := semRefIDs
-	uniqExt := extRefIDs
-
 	suppBySpecific, err := readSpecificAssetIDSupplementalSemanticBySpecificIDs(ctx, db, allSpecificIDs)
 	if err != nil {
 		return nil, err
 	}
 
-	allRefIDs := append(append([]int64{}, uniqSem...), uniqExt...)
-	refByID := make(map[int64]types.IReference)
-	if len(allRefIDs) > 0 {
-		refByID, err = GetReferencesByIDsBatch(db, allRefIDs)
-		if err != nil {
-			return nil, err
-		}
+	extRefBySpecific, err := ReadSpecificAssetExternalSubjectReferencesBySpecificAssetIDs(ctx, db, allSpecificIDs)
+	if err != nil {
+		return nil, err
 	}
 
 	for descID, rowsForDesc := range perDesc {
 		for _, r := range rowsForDesc {
-			var semRef types.IReference
-			if r.semanticRefID.Valid {
-				semRef = refByID[r.semanticRefID.Int64]
-			}
 			var extRef types.IReference
 			if r.externalSubjectRefID.Valid {
-				extRef = refByID[r.externalSubjectRefID.Int64]
+				extRef = extRefBySpecific[r.specificID]
+			}
+			semRef, err := parseReferencePayload(r.semanticPayload)
+			if err != nil {
+				return nil, err
 			}
 
 			// out[descID] = append(out[descID], model.SpecificAssetID{
@@ -279,21 +269,12 @@ func readSpecificAssetIDSupplementalSemanticBySpecificIDs(
 	if len(specificAssetIDs) == 0 {
 		return out, nil
 	}
-	uniqSpecific := specificAssetIDs
-
-	m, err := readEntityReferences1ToMany(
-		ctx,
-		db,
-		specificAssetIDs,
-		tblSpecificAssetIDSuppSemantic,
-		colSpecificAssetIDID,
-		colReferenceID,
-	)
+	m, err := ReadSpecificAssetSupplementalSemanticReferencesBySpecificAssetIDs(ctx, db, specificAssetIDs)
 	if err != nil {
 		return nil, err
 	}
 
-	for _, id := range uniqSpecific {
+	for _, id := range specificAssetIDs {
 		out[id] = m[id]
 	}
 	return out, nil

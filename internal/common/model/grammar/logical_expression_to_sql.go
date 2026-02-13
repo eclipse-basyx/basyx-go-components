@@ -174,8 +174,8 @@ func joinPlanConfigForSM() JoinPlanConfig {
 				Deps:  []string{"s"},
 				Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
 					return ds.LeftJoin(
-						goqu.T("reference").As("semantic_id_reference"),
-						goqu.On(goqu.I("semantic_id_reference.id").Eq(goqu.I("s.semantic_id"))),
+						goqu.T("submodel_semantic_id_reference").As("semantic_id_reference"),
+						goqu.On(goqu.I("semantic_id_reference.id").Eq(goqu.I("s.id"))),
 					)
 				},
 			},
@@ -184,7 +184,7 @@ func joinPlanConfigForSM() JoinPlanConfig {
 				Deps:  []string{"semantic_id_reference"},
 				Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
 					return ds.LeftJoin(
-						goqu.T("reference_key").As("semantic_id_reference_key"),
+						goqu.T("submodel_semantic_id_reference_key").As("semantic_id_reference_key"),
 						goqu.On(goqu.I("semantic_id_reference_key.reference_id").Eq(goqu.I("semantic_id_reference.id"))),
 					)
 				},
@@ -234,8 +234,8 @@ func joinPlanConfigForSM() JoinPlanConfig {
 				Deps:  []string{"submodel_element"},
 				Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
 					return ds.LeftJoin(
-						goqu.T("reference").As("sme_semantic_id_reference"),
-						goqu.On(goqu.I("sme_semantic_id_reference.id").Eq(goqu.I("submodel_element.semantic_id"))),
+						goqu.T("submodel_element_semantic_id_reference").As("sme_semantic_id_reference"),
+						goqu.On(goqu.I("sme_semantic_id_reference.id").Eq(goqu.I("submodel_element.id"))),
 					)
 				},
 			},
@@ -244,7 +244,7 @@ func joinPlanConfigForSM() JoinPlanConfig {
 				Deps:  []string{"sme_semantic_id_reference"},
 				Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
 					return ds.LeftJoin(
-						goqu.T("reference_key").As("sme_semantic_id_reference_key"),
+						goqu.T("submodel_element_semantic_id_reference_key").As("sme_semantic_id_reference_key"),
 						goqu.On(goqu.I("sme_semantic_id_reference_key.reference_id").Eq(goqu.I("sme_semantic_id_reference.id"))),
 					)
 				},
@@ -255,9 +255,9 @@ func joinPlanConfigForSM() JoinPlanConfig {
 			case "s":
 				return "submodel", true
 			case "semantic_id_reference":
-				return "reference", true
+				return "submodel_semantic_id_reference", true
 			case "semantic_id_reference_key":
-				return "reference_key", true
+				return "submodel_semantic_id_reference_key", true
 			case "submodel_element":
 				return "submodel_element", true
 			case "property_element":
@@ -267,9 +267,9 @@ func joinPlanConfigForSM() JoinPlanConfig {
 			case "multilanguage_property_value":
 				return "multilanguage_property_value", true
 			case "sme_semantic_id_reference":
-				return "reference", true
+				return "submodel_element_semantic_id_reference", true
 			case "sme_semantic_id_reference_key":
-				return "reference_key", true
+				return "submodel_element_semantic_id_reference_key", true
 			default:
 				return "", false
 			}
@@ -350,8 +350,8 @@ func joinPlanConfigForSME() JoinPlanConfig {
 				Deps:  []string{"submodel_element"},
 				Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
 					return ds.Join(
-						goqu.T("reference").As("semantic_id_reference"),
-						goqu.On(goqu.I("semantic_id_reference.id").Eq(goqu.I("submodel_element.semantic_id"))),
+						goqu.T("submodel_element_semantic_id_reference").As("semantic_id_reference"),
+						goqu.On(goqu.I("semantic_id_reference.id").Eq(goqu.I("submodel_element.id"))),
 					)
 				},
 			},
@@ -360,7 +360,7 @@ func joinPlanConfigForSME() JoinPlanConfig {
 				Deps:  []string{"semantic_id_reference"},
 				Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
 					return ds.Join(
-						goqu.T("reference_key").As("semantic_id_reference_key"),
+						goqu.T("submodel_element_semantic_id_reference_key").As("semantic_id_reference_key"),
 						goqu.On(goqu.I("semantic_id_reference_key.reference_id").Eq(goqu.I("semantic_id_reference.id"))),
 					)
 				},
@@ -373,9 +373,9 @@ func joinPlanConfigForSME() JoinPlanConfig {
 			case "property_element":
 				return "property_element", true
 			case "semantic_id_reference":
-				return "reference", true
+				return "submodel_element_semantic_id_reference", true
 			case "semantic_id_reference_key":
-				return "reference_key", true
+				return "submodel_element_semantic_id_reference_key", true
 			default:
 				return "", false
 			}
@@ -428,8 +428,8 @@ func joinPlanConfigForBD() JoinPlanConfig {
 				Deps:  []string{"specific_asset_id"},
 				Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
 					return ds.Join(
-						goqu.T("reference").As("external_subject_reference"),
-						goqu.On(goqu.I("external_subject_reference.id").Eq(goqu.I("specific_asset_id.external_subject_ref"))),
+						goqu.T("specific_asset_id_external_subject_id_reference").As("external_subject_reference"),
+						goqu.On(goqu.I("external_subject_reference.id").Eq(goqu.I("specific_asset_id.id"))),
 					)
 				},
 			},
@@ -438,7 +438,7 @@ func joinPlanConfigForBD() JoinPlanConfig {
 				Deps:  []string{"external_subject_reference"},
 				Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
 					return ds.Join(
-						goqu.T("reference_key").As("external_subject_reference_key"),
+						goqu.T("specific_asset_id_external_subject_id_reference_key").As("external_subject_reference_key"),
 						goqu.On(goqu.I("external_subject_reference_key.reference_id").Eq(goqu.I("external_subject_reference.id"))),
 					)
 				},
@@ -908,9 +908,9 @@ func existsTableForAlias(alias string) (string, bool) {
 	case "specific_asset_id":
 		return "specific_asset_id", true
 	case "external_subject_reference":
-		return "reference", true
+		return "specific_asset_id_external_subject_id_reference", true
 	case "external_subject_reference_key":
-		return "reference_key", true
+		return "specific_asset_id_external_subject_id_reference_key", true
 	case "aas_descriptor_endpoint":
 		return "aas_descriptor_endpoint", true
 	case "submodel_descriptor":
@@ -918,9 +918,9 @@ func existsTableForAlias(alias string) (string, bool) {
 	case "submodel_descriptor_endpoint":
 		return "aas_descriptor_endpoint", true
 	case "aasdesc_submodel_descriptor_semantic_id_reference":
-		return "reference", true
+		return "submodel_descriptor_semantic_id_reference", true
 	case "aasdesc_submodel_descriptor_semantic_id_reference_key":
-		return "reference_key", true
+		return "submodel_descriptor_semantic_id_reference_key", true
 	default:
 		return "", false
 	}
@@ -979,8 +979,8 @@ func existsJoinRulesForAASDescriptors() map[string]existsJoinRule {
 			Deps:  []string{"specific_asset_id"},
 			Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
 				return ds.Join(
-					goqu.T("reference").As("external_subject_reference"),
-					goqu.On(goqu.I("external_subject_reference.id").Eq(goqu.I("specific_asset_id.external_subject_ref"))),
+					goqu.T("specific_asset_id_external_subject_id_reference").As("external_subject_reference"),
+					goqu.On(goqu.I("external_subject_reference.id").Eq(goqu.I("specific_asset_id.id"))),
 				)
 			},
 		},
@@ -989,7 +989,7 @@ func existsJoinRulesForAASDescriptors() map[string]existsJoinRule {
 			Deps:  []string{"external_subject_reference"},
 			Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
 				return ds.Join(
-					goqu.T("reference_key").As("external_subject_reference_key"),
+					goqu.T("specific_asset_id_external_subject_id_reference_key").As("external_subject_reference_key"),
 					goqu.On(goqu.I("external_subject_reference_key.reference_id").Eq(goqu.I("external_subject_reference.id"))),
 				)
 			},
@@ -1009,8 +1009,8 @@ func existsJoinRulesForAASDescriptors() map[string]existsJoinRule {
 			Deps:  []string{"submodel_descriptor"},
 			Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
 				return ds.Join(
-					goqu.T("reference").As("aasdesc_submodel_descriptor_semantic_id_reference"),
-					goqu.On(goqu.I("aasdesc_submodel_descriptor_semantic_id_reference.id").Eq(goqu.I("submodel_descriptor.semantic_id"))),
+					goqu.T("submodel_descriptor_semantic_id_reference").As("aasdesc_submodel_descriptor_semantic_id_reference"),
+					goqu.On(goqu.I("aasdesc_submodel_descriptor_semantic_id_reference.id").Eq(goqu.I("submodel_descriptor.descriptor_id"))),
 				)
 			},
 		},
@@ -1019,7 +1019,7 @@ func existsJoinRulesForAASDescriptors() map[string]existsJoinRule {
 			Deps:  []string{"aasdesc_submodel_descriptor_semantic_id_reference"},
 			Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
 				return ds.Join(
-					goqu.T("reference_key").As("aasdesc_submodel_descriptor_semantic_id_reference_key"),
+					goqu.T("submodel_descriptor_semantic_id_reference_key").As("aasdesc_submodel_descriptor_semantic_id_reference_key"),
 					goqu.On(goqu.I("aasdesc_submodel_descriptor_semantic_id_reference_key.reference_id").Eq(goqu.I("aasdesc_submodel_descriptor_semantic_id_reference.id"))),
 				)
 			},

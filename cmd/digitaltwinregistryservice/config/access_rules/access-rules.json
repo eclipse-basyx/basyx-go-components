@@ -21,6 +21,53 @@
     "DEFFORMULAS": [
       { "name": "always_true", "formula": { "$boolean": true } },
       { "name": "always_false", "formula": { "$boolean": false } },
+      { "name": "enforce_publicreadable_write_rule", "formula":
+        {
+          "$or": 
+          [
+            {
+              "$match": 
+              [
+                {
+                  "$eq": [
+                    { "$field": "$aasdesc#specificAssetIds[].name" },
+                    { "$strVal": "assetLifecyclePhase" }
+                  ]
+                },
+                {
+                  "$eq": [
+                    { "$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value" },
+                    { "$strVal": "PUBLIC_READABLE" }
+                  ]
+                }
+              ]
+            },
+            {
+              "$match": 
+              [
+                {
+                  "$eq": [
+                    { "$field": "$aasdesc#specificAssetIds[].name" },
+                    { "$strVal": "manufacturerPartId" }
+                  ]
+                },
+                {
+                  "$eq": [
+                    { "$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value" },
+                    { "$strVal": "PUBLIC_READABLE" }
+                  ]
+                }
+              ]
+            },
+            {
+              "$ne": [
+                { "$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value" },
+                { "$strVal": "PUBLIC_READABLE" }
+              ]
+            }
+          ]
+        }
+      },
       { "name": "logic", "formula":
        { "$or": [
           { "$eq": [ { "$attribute": { "CLAIM": "Edc-Bpn" } }, { "$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value" } ] },
@@ -39,7 +86,31 @@
         "FILTERLIST": 
         [
           {
+            "FRAGMENT": "$aasdesc#administration",
+            "USEFORMULA": "bpn_match"
+          },
+          {
+            "FRAGMENT": "$aasdesc#displayName",
+            "USEFORMULA": "bpn_match"
+          },
+          {
+            "FRAGMENT": "$aasdesc#description",
+            "USEFORMULA": "bpn_match"
+          },
+          {
+            "FRAGMENT": "$aasdesc#assetKind",
+            "USEFORMULA": "bpn_match"
+          },
+          {
+            "FRAGMENT": "$aasdesc#assetType",
+            "USEFORMULA": "bpn_match"
+          },
+          {
             "FRAGMENT": "$aasdesc#globalAssetId",
+            "USEFORMULA": "bpn_match"
+          },
+          {
+            "FRAGMENT": "$aasdesc#idShort",
             "USEFORMULA": "bpn_match"
           }
         ] 

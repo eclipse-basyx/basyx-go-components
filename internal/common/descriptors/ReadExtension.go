@@ -29,7 +29,6 @@ package descriptors
 import (
 	"context"
 	"database/sql"
-	"fmt"
 
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
@@ -94,46 +93,20 @@ func ReadExtensionsByDescriptorIDs(
 	}
 
 	d := goqu.Dialect(dialect)
-	de := goqu.T(tblDescriptorExtension).As("de")
-	e := goqu.T(tblExtension).As("e")
+	dp := goqu.T(tblDescriptorPayload).As("dp")
 
-	// Pull all extensions for all descriptors in one go
 	arr := pq.Array(descriptorIDs)
 	sqlStr, args, err := d.
-		From(de).
-		InnerJoin(e, goqu.On(de.Col(colExtensionID).Eq(e.Col(colID)))).
+		From(dp).
 		Select(
-			de.Col(colDescriptorID), // 0
-			e.Col(colID),            // 1
-			e.Col(colSemanticID),    // 2
-			e.Col(colName),          // 3
-			e.Col(colValueType),     // 4
-			e.Col(colValueText),     // 5
-			e.Col(colValueNum),      // 6
-			e.Col(colValueBool),     // 7
-			e.Col(colValueTime),     // 8
-			e.Col(colValueDate),     // 9
-			e.Col(colValueDatetime), // 10
+			dp.Col(colDescriptorID),
+			dp.Col(colExtensionsPayload),
 		).
-		Where(goqu.L("de.descriptor_id = ANY(?::bigint[])", arr)).
-		Order(de.Col(colDescriptorID).Asc(), e.Col(colID).Asc()).
+		Where(goqu.L("dp.descriptor_id = ANY(?::bigint[])", arr)).
+		Order(dp.Col(colDescriptorID).Asc()).
 		ToSQL()
 	if err != nil {
 		return nil, err
-	}
-
-	type row struct {
-		descID   int64
-		extID    int64
-		semRefID sql.NullInt64
-		name     sql.NullString
-		vType    sql.NullInt64
-		vText    sql.NullString
-		vNum     sql.NullString
-		vBool    sql.NullString
-		vTime    sql.NullString
-		vDate    sql.NullString
-		vDT      sql.NullString
 	}
 
 	rows, err := db.QueryContext(ctx, sqlStr, args...)
@@ -144,120 +117,25 @@ func ReadExtensionsByDescriptorIDs(
 		_ = rows.Close()
 	}()
 
-	perDesc := make(map[int64][]row, len(descriptorIDs))
-	allExtIDs := make([]int64, 0, 256)
-	semRefIDs := make([]int64, 0, 128)
-
 	for rows.Next() {
-		var r row
-		if err := rows.Scan(
-			&r.descID,
-			&r.extID,
-			&r.semRefID,
-			&r.name,
-			&r.vType,
-			&r.vText,
-			&r.vNum,
-			&r.vBool,
-			&r.vTime,
-			&r.vDate,
-			&r.vDT,
-		); err != nil {
+		var descriptorID int64
+		var extensionsPayload []byte
+		if err := rows.Scan(&descriptorID, &extensionsPayload); err != nil {
 			return nil, err
 		}
-		perDesc[r.descID] = append(perDesc[r.descID], r)
-		allExtIDs = append(allExtIDs, r.extID)
-		if r.semRefID.Valid {
-			semRefIDs = append(semRefIDs, r.semRefID.Int64)
+		extensions, err := parseExtensionsPayload(extensionsPayload)
+		if err != nil {
+			return nil, err
 		}
+		out[descriptorID] = extensions
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
 
-	if len(allExtIDs) == 0 {
-		return out, nil
-	}
-
-	uniqExtIDs := allExtIDs
-	uniqSemRefIDs := semRefIDs
-
-	suppByExt, err := readEntityReferences1ToMany(
-		ctx, db, uniqExtIDs,
-		tblExtensionSuppSemantic, colExtensionID, colReferenceID,
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	refersByExt, err := readEntityReferences1ToMany(
-		ctx, db, uniqExtIDs,
-		tblExtensionRefersTo, colExtensionID, colReferenceID,
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	semRefByID := make(map[int64]types.IReference)
-	if len(uniqSemRefIDs) > 0 {
-		var err error
-		semRefByID, err = GetReferencesByIDsBatch(db, uniqSemRefIDs)
-		if err != nil {
-			return nil, fmt.Errorf("GetReferencesByIdsBatch (semantic refs): %w", err)
-		}
-	}
-
-	for descID, rowsForDesc := range perDesc {
-		for _, r := range rowsForDesc {
-			var semanticRef types.IReference
-			if r.semRefID.Valid {
-				semanticRef = semRefByID[r.semRefID.Int64]
-			}
-
-			val := ""
-			switch types.DataTypeDefXSD(r.vType.Int64) {
-			case types.DataTypeDefXSDString, types.DataTypeDefXSDAnyURI, types.DataTypeDefXSDBase64Binary, types.DataTypeDefXSDHexBinary:
-				val = r.vText.String
-			case types.DataTypeDefXSDInt, types.DataTypeDefXSDInteger, types.DataTypeDefXSDLong, types.DataTypeDefXSDShort, types.DataTypeDefXSDByte,
-				types.DataTypeDefXSDUnsignedInt, types.DataTypeDefXSDUnsignedLong, types.DataTypeDefXSDUnsignedShort, types.DataTypeDefXSDUnsignedByte,
-				types.DataTypeDefXSDPositiveInteger, types.DataTypeDefXSDNegativeInteger, types.DataTypeDefXSDNonNegativeInteger, types.DataTypeDefXSDNonPositiveInteger,
-				types.DataTypeDefXSDDecimal, types.DataTypeDefXSDDouble, types.DataTypeDefXSDFloat:
-				val = r.vNum.String
-			case types.DataTypeDefXSDBoolean:
-				val = r.vBool.String
-			case types.DataTypeDefXSDTime:
-				val = r.vTime.String
-			case types.DataTypeDefXSDDate:
-				val = r.vDate.String
-			case types.DataTypeDefXSDDateTime, types.DataTypeDefXSDDuration, types.DataTypeDefXSDGDay, types.DataTypeDefXSDGMonth,
-				types.DataTypeDefXSDGMonthDay, types.DataTypeDefXSDGYear, types.DataTypeDefXSDGYearMonth:
-				val = r.vDT.String
-			default:
-				if r.vText.Valid {
-					val = r.vText.String
-				}
-			}
-
-			suppRefs := suppByExt[r.extID]
-			referRefs := refersByExt[r.extID]
-
-			ext := types.NewExtension(r.name.String)
-			if semanticRef != nil {
-				ext.SetSemanticID(semanticRef)
-			}
-
-			if r.vType.Valid {
-				valueType := types.DataTypeDefXSD(r.vType.Int64)
-				ext.SetValueType(&valueType)
-			}
-			ext.SetValue(&val)
-			if len(suppRefs) > 0 {
-				ext.SetSupplementalSemanticIDs(suppRefs)
-			}
-			if len(referRefs) > 0 {
-				ext.SetRefersTo(referRefs)
-			}
-			out[descID] = append(out[descID], *ext)
+	for _, descriptorID := range descriptorIDs {
+		if _, ok := out[descriptorID]; !ok {
+			out[descriptorID] = nil
 		}
 	}
 
