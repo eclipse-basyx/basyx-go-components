@@ -1,3 +1,4 @@
+// Package main provides a tiny static health probe used in distroless container images.
 package main
 
 import (
@@ -29,7 +30,7 @@ type probeOptions struct {
 func main() {
 	options, err := parseOptions(os.Args)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err.Error())
+		_, _ = fmt.Fprintln(os.Stderr, err.Error())
 		os.Exit(1)
 	}
 
@@ -38,12 +39,12 @@ func main() {
 	}
 
 	if options.debug {
-		fmt.Fprintf(os.Stderr, "healthprobe url=%s timeout=%s\n", options.url, options.timeout)
+		_, _ = fmt.Fprintf(os.Stderr, "healthprobe url=%s timeout=%s\n", options.url, options.timeout)
 	}
 
 	if err := runProbe(options); err != nil {
 		if !options.quiet {
-			fmt.Fprintln(os.Stderr, err.Error())
+			_, _ = fmt.Fprintln(os.Stderr, err.Error())
 		}
 		os.Exit(1)
 	}
@@ -130,7 +131,9 @@ func runProbe(options probeOptions) error {
 	if err != nil {
 		return fmt.Errorf("HEALTHPROBE-RUN-REQUESTFAILED: %w", err)
 	}
-	defer response.Body.Close()
+	defer func() {
+		_ = response.Body.Close()
+	}()
 
 	if response.StatusCode >= http.StatusBadRequest {
 		return fmt.Errorf("HEALTHPROBE-RUN-UNHEALTHYSTATUS: %d", response.StatusCode)
@@ -153,7 +156,9 @@ func runProbe(options probeOptions) error {
 	if err != nil {
 		return fmt.Errorf("HEALTHPROBE-RUN-CREATEOUTPUTFAILED: %w", err)
 	}
-	defer file.Close()
+	defer func() {
+		_ = file.Close()
+	}()
 
 	_, err = io.Copy(file, response.Body)
 	if err != nil {
