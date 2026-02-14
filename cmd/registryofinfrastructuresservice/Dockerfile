@@ -24,36 +24,28 @@ RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo \
     -ldflags "-X main.Version=${VERSION} -X main.BuildTime=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
     -o registryofinfrastructuresservice ./cmd/registryofinfrastructuresservice
 
-# Stage 2: Minimal runtime image
-FROM alpine
+# Stage 2: Distroless runtime image
+FROM gcr.io/distroless/base-debian12:nonroot
 
-RUN apk --no-cache add ca-certificates wget
-WORKDIR /root/
+WORKDIR /app
 
-# Copy binary
-COPY --from=builder /app/registryofinfrastructuresservice .
-
-# Create a directory for configuration
-RUN mkdir -p /config
-
-# Copy default configuration
+# Copy runtime artifacts
+COPY --from=builder /app/registryofinfrastructuresservice /app/registryofinfrastructuresservice
 COPY --from=builder /app/cmd/registryofinfrastructuresservice/config.yaml /config/config.yaml
-COPY --from=builder /app/basyxschema.sql /root/basyxschema.sql
+COPY --from=builder /app/basyxschema.sql /app/basyxschema.sql
+COPY --from=builder /bin/busybox /bin/busybox
+COPY --from=builder --chmod=0755 /app/cmd/wget-compat.sh /bin/wget
 
 # Default port (can be overridden by environment)
 ENV SERVER_PORT=5004
-
-# Create a healthcheck
-COPY --from=builder /app/cmd/registryofinfrastructuresservice/healthcheck.sh /root/healthcheck.sh
-RUN chmod +x /root/healthcheck.sh
 
 # Expose the service port (this is just documentation, the actual port is determined by the environment)
 EXPOSE ${SERVER_PORT}
 
 # Command to run the application
 # Use environment variables or mount a custom config file to /config/config.yaml
-CMD ["./registryofinfrastructuresservice", "-config", "/config/config.yaml", "-databaseSchema", "basyxschema.sql"]
+CMD ["/app/registryofinfrastructuresservice", "-config", "/config/config.yaml", "-databaseSchema", "/app/basyxschema.sql"]
 
-# Health check (if script exists and your service serves /health)
+# Health check using BusyBox for distroless compatibility
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD /root/healthcheck.sh
+    CMD ["/bin/busybox", "sh", "-c", "PORT=${SERVER_PORT:-5004}; CONTEXT_PATH=${SERVER_CONTEXTPATH:-}; if [ -z \"$CONTEXT_PATH\" ]; then HEALTH_URL=\"http://127.0.0.1:${PORT}/health\"; else HEALTH_URL=\"http://127.0.0.1:${PORT}${CONTEXT_PATH}/health\"; fi; /bin/busybox wget --spider -q \"$HEALTH_URL\""]
