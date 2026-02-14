@@ -28,7 +28,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo \
     -o healthprobe ./internal/healthprobe
 
 # Stage 2: Distroless runtime image
-FROM gcr.io/distroless/base-debian12:nonroot
+FROM gcr.io/distroless/static:nonroot
 
 WORKDIR /app
 
