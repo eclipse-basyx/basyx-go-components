@@ -43,6 +43,7 @@ jobs:
       - name: Build image with Podman
         run: |
           podman build \
+            --format docker \
             -t ${IMAGE_NAME}:podman-smoke \
             -f ./cmd/${SERVICE_NAME}/Dockerfile \
             .
@@ -94,6 +95,11 @@ jobs:
             -e POSTGRES_CONNMAXLIFETIMEMINUTES=5 \
             -e ABAC_ENABLED=false \
             ${IMAGE_NAME}:podman-smoke
+
+          echo "--- image healthcheck metadata ---"
+          podman inspect ${IMAGE_NAME}:podman-smoke --format '{{json .Config.Healthcheck}}' || true
+          echo "--- container healthcheck metadata ---"
+          podman inspect service-smoke --format '{{json .Config.Healthcheck}}' || true
 
           for i in $(seq 1 45); do
             if podman healthcheck run service-smoke >/dev/null 2>&1; then
