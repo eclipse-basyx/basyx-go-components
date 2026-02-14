@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - 'cmd/**'
+      - 'internal/healthprobe/**'
       - 'internal/**'
       - 'pkg/**'
       - 'go.mod'

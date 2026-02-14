@@ -4,7 +4,7 @@ on:
   pull_request:
     paths:
       - 'cmd/**'
-      - 'cmd/wget-compat.sh'
+      - 'internal/healthprobe/**'
       - 'basyxschema.sql'
       - 'go.mod'
       - 'go.sum'
@@ -13,7 +13,7 @@ on:
     branches: [main]
     paths:
       - 'cmd/**'
-      - 'cmd/wget-compat.sh'
+      - 'internal/healthprobe/**'
       - 'basyxschema.sql'
       - 'go.mod'
       - 'go.sum'
@@ -105,7 +105,7 @@ jobs:
               echo "--- podman inspect health state ---"
               podman inspect service-smoke --format '{{json .State.Health}}' || true
               echo "--- manual image healthcheck command output ---"
-              podman exec service-smoke /bin/busybox sh -c 'PORT=${SERVER_PORT:-8080}; CONTEXT_PATH=${SERVER_CONTEXTPATH:-}; if [ -z "$CONTEXT_PATH" ]; then HEALTH_URL="http://127.0.0.1:${PORT}/health"; else HEALTH_URL="http://127.0.0.1:${PORT}${CONTEXT_PATH}/health"; fi; echo "HEALTH_URL=$HEALTH_URL"; /bin/busybox wget -S -O - "$HEALTH_URL" >/dev/null' || true
+              podman exec service-smoke /bin/healthprobe --debug || true
               echo "--- compose-style wget command output ---"
               podman exec service-smoke /bin/wget --quiet --tries=1 --output-document=- http://127.0.0.1:${SERVICE_PORT}/health >/dev/null || true
               podman logs service-smoke || true
