@@ -61,8 +61,10 @@ func parseOptions(args []string) (probeOptions, error) {
 		options.quiet = true
 	}
 
-	for index := 1; index < len(args); index++ {
-		argument := args[index]
+	remainingArgs := args[1:]
+	for len(remainingArgs) > 0 {
+		argument := remainingArgs[0]
+		remainingArgs = remainingArgs[1:]
 
 		switch {
 		case argument == "--quiet" || argument == "-q":
@@ -72,30 +74,30 @@ func parseOptions(args []string) (probeOptions, error) {
 		case argument == "--debug":
 			options.debug = true
 		case argument == "--tries":
-			index++
-			if index >= len(args) {
+			if len(remainingArgs) == 0 {
 				return options, errors.New("HEALTHPROBE-PARSE-MISSINGTRIES")
 			}
+			remainingArgs = remainingArgs[1:]
 		case strings.HasPrefix(argument, "--tries="):
 			continue
 		case argument == "--output-document" || argument == "-O":
-			index++
-			if index >= len(args) {
+			if len(remainingArgs) == 0 {
 				return options, errors.New("HEALTHPROBE-PARSE-MISSINGOUTPUT")
 			}
-			options.output = args[index]
+			options.output = remainingArgs[0]
+			remainingArgs = remainingArgs[1:]
 		case strings.HasPrefix(argument, "--output-document="):
 			options.output = strings.TrimPrefix(argument, "--output-document=")
 		case argument == "--timeout":
-			index++
-			if index >= len(args) {
+			if len(remainingArgs) == 0 {
 				return options, errors.New("HEALTHPROBE-PARSE-MISSINGTIMEOUT")
 			}
-			timeoutSeconds, err := strconv.Atoi(args[index])
+			timeoutSeconds, err := strconv.Atoi(remainingArgs[0])
 			if err != nil || timeoutSeconds <= 0 {
 				return options, errors.New("HEALTHPROBE-PARSE-INVALIDTIMEOUT")
 			}
 			options.timeout = time.Duration(timeoutSeconds) * time.Second
+			remainingArgs = remainingArgs[1:]
 		case strings.HasPrefix(argument, "-"):
 			continue
 		default:

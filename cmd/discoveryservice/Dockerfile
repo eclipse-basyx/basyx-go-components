@@ -44,6 +44,6 @@ EXPOSE ${SERVER_PORT}
 # Start service with config
 CMD ["/app/discoveryservice", "-config", "/config/config.yaml", "-databaseSchema", "/app/basyxschema.sql"]
 
-# Health check using BusyBox for distroless compatibility
+# Health check runs via healthprobe
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD ["/bin/healthprobe"]

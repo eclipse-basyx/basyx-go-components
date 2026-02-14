@@ -51,6 +51,6 @@ EXPOSE ${SERVER_PORT}
 # Use environment variables or mount a custom config file to /config/config.yaml
 CMD ["/app/submodelrepositoryservice", "-config", "/config/config.yaml", "-databaseSchema", "/app/basyxschema.sql"]
 
-# Health check using BusyBox for distroless compatibility
+# Health check runs via healthprobe
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD ["/bin/healthprobe"]
