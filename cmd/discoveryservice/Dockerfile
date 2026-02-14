@@ -33,9 +33,11 @@ COPY --from=builder /app/cmd/discoveryservice/config.yaml /config/config.yaml
 COPY --from=builder /app/basyxschema.sql /app/basyxschema.sql
 COPY --from=builder /app/healthprobe /bin/healthprobe
 COPY --from=builder /app/healthprobe /bin/wget
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 
 # Default port (override via env in compose)
 ENV SERVER_PORT=5004
+ENV SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
 
 EXPOSE ${SERVER_PORT}
 

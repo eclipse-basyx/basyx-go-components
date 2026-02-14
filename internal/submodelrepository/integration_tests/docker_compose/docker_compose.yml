@@ -29,10 +29,10 @@ services:
       - POSTGRES_MAXOPENCONNECTIONS=500
       - POSTGRES_MAXIDLECONNECTIONS=500
       - POSTGRES_CONNMAXLIFETIMEMINUTES=5
-      - JWS_PRIVATEKEYPATH=/root/rsa-key.pem
+      - JWS_PRIVATEKEYPATH=/app/rsa-key.pem
       - SERVER_STRICTVERIFICATION=false
     volumes:
-      - ./rsa-key.pem:/root/rsa-key.pem:ro
+      - ./rsa-key.pem:/app/rsa-key.pem:ro
     ports:
       - "6004:5004"
     depends_on:
