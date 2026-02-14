@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - 'cmd/**'
+      - 'internal/healthprobe/**'
       - 'internal/**'
       - 'pkg/**'
       - 'go.mod'
@@ -33,6 +34,10 @@ jobs:
     needs: guard
     if: ${{ needs.guard.outputs.should-run == 'true' }}
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
     strategy:
       matrix:
         service:
@@ -84,6 +89,7 @@ jobs:
         with:
           context: .
           file: ./cmd/${{ matrix.service.name }}/Dockerfile
+          pull: true
           push: true
           tags: |
             ${{ matrix.service.image }}:SNAPSHOT
@@ -93,6 +99,8 @@ jobs:
           cache-from: type=registry,ref=${{ matrix.service.image }}:buildcache
           cache-to: type=registry,ref=${{ matrix.service.image }}:buildcache,mode=max
           platforms: linux/amd64,linux/arm64,linux/arm/v7
+          provenance: mode=max
+          sbom: true
 
       - name: Image digest
         run: echo "Built and pushed ${{ matrix.service.image }}:SNAPSHOT"

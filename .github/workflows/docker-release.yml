@@ -24,6 +24,10 @@ jobs:
     needs: guard
     if: ${{ needs.guard.outputs.should-run == 'true' }}
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
     strategy:
       matrix:
         service:
@@ -101,6 +105,7 @@ jobs:
         with:
           context: .
           file: ./cmd/${{ matrix.service.name }}/Dockerfile
+          pull: true
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           build-args: |
@@ -108,6 +113,8 @@ jobs:
           cache-from: type=registry,ref=${{ matrix.service.image }}:buildcache
           cache-to: type=registry,ref=${{ matrix.service.image }}:buildcache,mode=max
           platforms: linux/amd64,linux/arm64,linux/arm/v7
+          provenance: mode=max
+          sbom: true
           labels: |
             org.opencontainers.image.title=${{ matrix.service.name }}
             org.opencontainers.image.description=Eclipse BaSyx ${{ matrix.service.name }}

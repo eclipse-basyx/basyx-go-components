@@ -16,21 +16,6 @@ on:
       - '.github/workflows/go-tests.yml'
 
 jobs:
-  # unit-tests:
-  #   name: Run Unit Tests
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - name: Check out code
-  #       uses: actions/checkout@v6
-  #     - name: Set up Go
-  #       uses: actions/setup-go@v6
-  #       with:
-  #         go-version: '1.25'
-  #     - name: Get dependencies
-  #       run: go mod download
-  #     - name: Run unit tests
-  #       run: go test ./... -v -tags=unit
-
   discovery-service-security-tests:
     name: Discovery Service Security Tests
     runs-on: ubuntu-latest
