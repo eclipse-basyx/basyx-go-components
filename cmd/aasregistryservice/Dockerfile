@@ -48,4 +48,4 @@ CMD ["/app/aasregistryservice", "-config", "/config/config.yaml", "-databaseSche
 
 # Health check using BusyBox for distroless compatibility
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD ["/bin/busybox", "sh", "-c", "PORT=${SERVER_PORT:-5000}; CONTEXT_PATH=${SERVER_CONTEXTPATH:-}; if [ -z \"$CONTEXT_PATH\" ]; then HEALTH_URL=\"http://127.0.0.1:${PORT}/health\"; else HEALTH_URL=\"http://127.0.0.1:${PORT}${CONTEXT_PATH}/health\"; fi; /bin/busybox wget --spider -q \"$HEALTH_URL\""]
+    CMD ["/bin/busybox", "sh", "-c", "PORT=${SERVER_PORT:-5000}; CONTEXT_PATH=${SERVER_CONTEXTPATH:-}; if [ -z \"$CONTEXT_PATH\" ]; then HEALTH_URL=\"http://127.0.0.1:${PORT}/health\"; else HEALTH_URL=\"http://127.0.0.1:${PORT}${CONTEXT_PATH}/health\"; fi; /bin/busybox wget -q -O - \"$HEALTH_URL\" >/dev/null"]
