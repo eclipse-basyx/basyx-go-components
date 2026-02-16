@@ -331,10 +331,6 @@ CREATE TABLE IF NOT EXISTS descriptor_payload (
   extensions_payload JSONB DEFAULT '[]'
 );
 
-ALTER TABLE IF EXISTS descriptor_payload
-  ADD COLUMN IF NOT EXISTS extensions_payload JSONB DEFAULT '[]';
-
-
 CREATE TABLE IF NOT EXISTS infrastructure_descriptor (
   descriptor_id BIGINT PRIMARY KEY REFERENCES descriptor(id) ON DELETE CASCADE,
   global_asset_id VARCHAR(2048),
@@ -473,8 +469,10 @@ CREATE TABLE IF NOT EXISTS specific_asset_id_supplemental_semantic_id_reference_
 -- =========================================================
 -- 6) submodel_descriptor_supplemental_semantic_id -> submodel_descriptor.descriptor_id
 -- =========================================================
+
 CREATE TABLE IF NOT EXISTS submodel_descriptor_supplemental_semantic_id_reference (
-  id   BIGINT PRIMARY KEY REFERENCES submodel_descriptor(descriptor_id) ON DELETE CASCADE,
+  id BIGSERIAL PRIMARY KEY,
+  descriptor_id BIGINT NOT NULL REFERENCES submodel_descriptor(descriptor_id) ON DELETE CASCADE,
   type int NOT NULL
 );
 

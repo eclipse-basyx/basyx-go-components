@@ -260,7 +260,8 @@ func DeleteAssetAdministrationShellDescriptorByID(ctx context.Context, db *sql.D
 
 // DeleteAssetAdministrationShellDescriptorByIDTx deletes using the provided
 // transaction. It resolves the internal descriptor id and removes the base
-// descriptor row. Dependent rows are removed via ON DELETE CASCADE.
+// descriptor row plus descriptor rows of linked submodel descriptors.
+// Dependent rows are removed via ON DELETE CASCADE.
 func deleteAssetAdministrationShellDescriptorByIDTx(ctx context.Context, tx *sql.Tx, aasIdentifier string) error {
 	d := goqu.Dialect(dialect)
 	aas := goqu.T(tblAASDescriptor).As("aas")
@@ -283,9 +284,18 @@ func deleteAssetAdministrationShellDescriptorByIDTx(ctx context.Context, tx *sql
 		return scanErr
 	}
 
+	childDescriptorIDs := d.
+		From(tblSubmodelDescriptor).
+		Select(colDescriptorID).
+		Where(goqu.C(colAASDescriptorID).Eq(descID))
 	delStr, delArgs, buildDelErr := d.
 		Delete(tblDescriptor).
-		Where(goqu.C(colID).Eq(descID)).
+		Where(
+			goqu.Or(
+				goqu.C(colID).Eq(descID),
+				goqu.C(colID).In(childDescriptorIDs),
+			),
+		).
 		ToSQL()
 	if buildDelErr != nil {
 		return buildDelErr
