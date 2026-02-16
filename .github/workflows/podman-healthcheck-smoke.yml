@@ -1,0 +1,124 @@
+name: Podman Healthcheck Smoke
+
+on:
+  pull_request:
+    paths:
+      - 'cmd/**'
+      - 'internal/healthprobe/**'
+      - 'basyxschema.sql'
+      - 'go.mod'
+      - 'go.sum'
+      - '.github/workflows/podman-healthcheck-smoke.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'cmd/**'
+      - 'internal/healthprobe/**'
+      - 'basyxschema.sql'
+      - 'go.mod'
+      - 'go.sum'
+      - '.github/workflows/podman-healthcheck-smoke.yml'
+
+jobs:
+  podman-smoke:
+    name: Podman healthcheck smoke (representative service)
+    runs-on: ubuntu-latest
+    env:
+      SERVICE_NAME: aasregistryservice
+      IMAGE_NAME: aasregistry-go
+      SERVICE_PORT: 8080
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Ensure Podman is available
+        run: |
+          if ! command -v podman >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y podman
+          fi
+          podman --version
+
+      - name: Build image with Podman
+        run: |
+          podman build \
+            --format docker \
+            -t ${IMAGE_NAME}:podman-smoke \
+            -f ./cmd/${SERVICE_NAME}/Dockerfile \
+            .
+
+      - name: Run DB + service and verify healthchecks
+        run: |
+          set -euo pipefail
+
+          cleanup() {
+            podman rm -f service-smoke postgres-smoke >/dev/null 2>&1 || true
+            podman network rm basyx-smoke >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+
+          podman network create basyx-smoke
+
+          podman run -d --name postgres-smoke --network basyx-smoke \
+            -e POSTGRES_USER=admin \
+            -e POSTGRES_PASSWORD=admin123 \
+            -e POSTGRES_DB=basyxTestDB \
+            postgres:18
+
+          for i in $(seq 1 30); do
+            if podman exec postgres-smoke pg_isready -U admin -d basyxTestDB >/dev/null 2>&1; then
+              echo "Postgres is ready"
+              break
+            fi
+            if [ "$i" -eq 30 ]; then
+              echo "Postgres did not become ready in time"
+              podman logs postgres-smoke || true
+              exit 1
+            fi
+            sleep 2
+          done
+
+          podman run -d --name service-smoke --network basyx-smoke \
+            -e SERVER_PORT=${SERVICE_PORT} \
+            -e CORS_ALLOWEDORIGINS='*' \
+            -e CORS_ALLOWEDHEADERS='*' \
+            -e CORS_ALLOWEDCREDENTIALS=true \
+            -e CORS_ALLOWEDMETHODS='GET,POST,PUT,PATCH,DELETE,OPTIONS' \
+            -e POSTGRES_HOST=postgres-smoke \
+            -e POSTGRES_PORT=5432 \
+            -e POSTGRES_USER=admin \
+            -e POSTGRES_PASSWORD=admin123 \
+            -e POSTGRES_DBNAME=basyxTestDB \
+            -e POSTGRES_MAXOPENCONNECTIONS=50 \
+            -e POSTGRES_MAXIDLECONNECTIONS=50 \
+            -e POSTGRES_CONNMAXLIFETIMEMINUTES=5 \
+            -e ABAC_ENABLED=false \
+            ${IMAGE_NAME}:podman-smoke
+
+          echo "--- image healthcheck metadata ---"
+          podman inspect ${IMAGE_NAME}:podman-smoke --format '{{json .Config.Healthcheck}}' || true
+          echo "--- container healthcheck metadata ---"
+          podman inspect service-smoke --format '{{json .Config.Healthcheck}}' || true
+
+          for i in $(seq 1 45); do
+            if podman healthcheck run service-smoke >/dev/null 2>&1; then
+              echo "Image healthcheck passed under Podman"
+              break
+            fi
+            if [ "$i" -eq 45 ]; then
+              echo "Image healthcheck did not pass in time"
+              echo "--- podman inspect health state ---"
+              podman inspect service-smoke --format '{{json .State.Health}}' || true
+              echo "--- manual image healthcheck command output ---"
+              podman exec service-smoke /bin/healthprobe --debug || true
+              echo "--- compose-style wget command output ---"
+              podman exec service-smoke /bin/wget --quiet --tries=1 --output-document=- http://127.0.0.1:${SERVICE_PORT}/health >/dev/null || true
+              podman logs service-smoke || true
+              exit 1
+            fi
+            sleep 2
+          done
+
+          podman exec service-smoke /bin/wget --quiet --tries=1 --output-document=- http://127.0.0.1:${SERVICE_PORT}/health >/dev/null
+          echo "Compose-style wget healthcheck command works under Podman"
