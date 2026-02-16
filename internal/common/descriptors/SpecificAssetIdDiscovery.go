@@ -239,52 +239,12 @@ func ReplaceSpecificAssetIDsByAASIdentifier(
 		if _, err := tx.ExecContext(ctx, `DELETE FROM specific_asset_id WHERE aasRef = $1`, aasRef); err != nil {
 			return err
 		}
-		if len(specificAssetIDs) == 0 {
-			return nil
-		}
-
-		d := goqu.Dialect(dialect)
-		for i, val := range specificAssetIDs {
-			var err error
-
-			sqlStr, args, err := d.
-				Insert(tblSpecificAssetID).
-				Rows(goqu.Record{
-					colDescriptorID: nil,
-					colPosition:     i,
-					colName:         val.Name(),
-					colValue:        val.Value(),
-					colAASRef:       aasRef,
-				}).
-				Returning(tSpecificAssetID.Col(colID)).
-				ToSQL()
-			if err != nil {
-				return err
-			}
-			var id int64
-			if err = tx.QueryRowContext(ctx, sqlStr, args...).Scan(&id); err != nil {
-				return err
-			}
-
-			if err = createContextReference(
-				tx,
-				id,
-				val.ExternalSubjectID(),
-				"specific_asset_id_external_subject_id_reference",
-				"specific_asset_id_external_subject_id_reference_key",
-			); err != nil {
-				return err
-			}
-
-			if err = createSpecificAssetIDPayload(tx, id, val.SemanticID()); err != nil {
-				return err
-			}
-
-			if err = createSpecificAssetIDSupplementalSemantic(tx, id, val.SupplementalSemanticIDs()); err != nil {
-				return err
-			}
-		}
-		return nil
+		return insertSpecificAssetIDs(
+			tx,
+			sql.NullInt64{},
+			sql.NullInt64{Int64: aasRef, Valid: true},
+			specificAssetIDs,
+		)
 	})
 }
 

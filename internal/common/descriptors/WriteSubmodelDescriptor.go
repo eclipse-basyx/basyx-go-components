@@ -33,7 +33,6 @@ import (
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
-	persistence_utils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
 )
 
 func createSubModelDescriptors(tx *sql.Tx, aasDescriptorID sql.NullInt64, submodelDescriptors []model.SubmodelDescriptor) error {
@@ -160,26 +159,11 @@ func getNextSubmodelDescriptorPosition(tx *sql.Tx, aasDescriptorID int64) (int, 
 }
 
 func createsubModelDescriptorSupplementalSemantic(tx *sql.Tx, subModelDescriptorID int64, references []types.IReference) error {
-	if len(references) == 0 {
-		return nil
-	}
-	d := goqu.Dialect(dialect)
-	rows := make([]goqu.Record, 0, len(references))
-	for i := range references {
-		var a sql.NullInt64
-		referenceID, err := persistence_utils.CreateReference(tx, references[i], a, a)
-		if err != nil {
-			return err
-		}
-		rows = append(rows, goqu.Record{
-			colDescriptorID: subModelDescriptorID,
-			colReferenceID:  referenceID,
-		})
-	}
-	sqlStr, args, err := d.Insert(tblSubmodelDescriptorSuppSemantic).Rows(rows).ToSQL()
-	if err != nil {
-		return err
-	}
-	_, err = tx.Exec(sqlStr, args...)
-	return err
+	return createContextReferences1ToMany(
+		tx,
+		subModelDescriptorID,
+		references,
+		tblSubmodelDescriptorSuppSemantic,
+		colDescriptorID,
+	)
 }

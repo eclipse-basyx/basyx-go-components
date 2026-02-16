@@ -46,7 +46,7 @@ const (
 	tblSpecificAssetIDPayload         = "specific_asset_id_payload"
 	tblSpecificAssetIDSuppSemantic    = "specific_asset_id_supplemental_semantic_id_reference"
 	tblSubmodelDescriptor             = "submodel_descriptor"
-	tblSubmodelDescriptorSuppSemantic = "submodel_descriptor_supplemental_semantic_id"
+	tblSubmodelDescriptorSuppSemantic = "submodel_descriptor_supplemental_semantic_id_reference"
 	tblDescriptorPayload              = "descriptor_payload"
 	tblExtension                      = "extension"
 	tblDescriptorExtension            = "descriptor_extension"
@@ -123,12 +123,6 @@ const (
 	colType            = "type"
 	colParentReference = "parentreference"
 	colRootReference   = "rootreference"
-
-	// Language string tables columns
-	colLangStringTextTypeReferenceID = "lang_string_text_type_reference_id"
-	colLangStringNameTypeReferenceID = "lang_string_name_type_reference_id"
-	colText                          = "text"
-	colLanguage                      = "language"
 )
 
 // Goqu table helpers (convenience for Returning/Col) to avoid repetitively

@@ -34,6 +34,20 @@ import (
 )
 
 func createSpecificAssetID(tx *sql.Tx, descriptorID int64, aasRef sql.NullInt64, specificAssetIDs []types.ISpecificAssetID) error {
+	return insertSpecificAssetIDs(
+		tx,
+		sql.NullInt64{Int64: descriptorID, Valid: true},
+		aasRef,
+		specificAssetIDs,
+	)
+}
+
+func insertSpecificAssetIDs(
+	tx *sql.Tx,
+	descriptorID sql.NullInt64,
+	aasRef sql.NullInt64,
+	specificAssetIDs []types.ISpecificAssetID,
+) error {
 	if specificAssetIDs == nil {
 		return nil
 	}
@@ -102,67 +116,11 @@ func createSpecificAssetIDPayload(tx *sql.Tx, specificAssetID int64, semanticID 
 }
 
 func createSpecificAssetIDSupplementalSemantic(tx *sql.Tx, specificAssetID int64, references []types.IReference) error {
-	if len(references) == 0 {
-		return nil
-	}
-	d := goqu.Dialect(dialect)
-	referenceTable := tblSpecificAssetIDSuppSemantic
-	referenceKeyTable := referenceTable + "_key"
-	payloadTable := referenceTable + "_payload"
-
-	for _, reference := range references {
-		if reference == nil {
-			continue
-		}
-
-		sqlStr, args, err := d.Insert(referenceTable).Rows(goqu.Record{
-			colSpecificAssetIDID: specificAssetID,
-			colType:              reference.Type(),
-		}).Returning(goqu.C(colID)).ToSQL()
-		if err != nil {
-			return err
-		}
-
-		var referenceID int64
-		if err = tx.QueryRow(sqlStr, args...).Scan(&referenceID); err != nil {
-			return err
-		}
-
-		parentReferencePayload, err := buildReferencePayload(reference.ReferredSemanticID())
-		if err != nil {
-			return err
-		}
-		sqlStr, args, err = d.Insert(payloadTable).Rows(goqu.Record{
-			colReferenceID:             referenceID,
-			"parent_reference_payload": goqu.L("?::jsonb", string(parentReferencePayload)),
-		}).ToSQL()
-		if err != nil {
-			return err
-		}
-		if _, err = tx.Exec(sqlStr, args...); err != nil {
-			return err
-		}
-
-		keys := reference.Keys()
-		if len(keys) == 0 {
-			continue
-		}
-		rows := make([]goqu.Record, 0, len(keys))
-		for i, key := range keys {
-			rows = append(rows, goqu.Record{
-				colReferenceID: referenceID,
-				colPosition:    i,
-				colType:        key.Type(),
-				colValue:       key.Value(),
-			})
-		}
-		sqlStr, args, err = d.Insert(referenceKeyTable).Rows(rows).ToSQL()
-		if err != nil {
-			return err
-		}
-		if _, err = tx.Exec(sqlStr, args...); err != nil {
-			return err
-		}
-	}
-	return nil
+	return createContextReferences1ToMany(
+		tx,
+		specificAssetID,
+		references,
+		tblSpecificAssetIDSuppSemantic,
+		colSpecificAssetIDID,
+	)
 }

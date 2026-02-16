@@ -334,11 +334,6 @@ CREATE TABLE IF NOT EXISTS descriptor_payload (
 ALTER TABLE IF EXISTS descriptor_payload
   ADD COLUMN IF NOT EXISTS extensions_payload JSONB DEFAULT '[]';
 
-CREATE TABLE IF NOT EXISTS submodel_descriptor_supplemental_semantic_id (
-  id BIGSERIAL PRIMARY KEY,
-  descriptor_id BIGINT NOT NULL REFERENCES submodel_descriptor(descriptor_id) ON DELETE CASCADE,
-  reference_id BIGINT NOT NULL
-);
 
 CREATE TABLE IF NOT EXISTS infrastructure_descriptor (
   descriptor_id BIGINT PRIMARY KEY REFERENCES descriptor(id) ON DELETE CASCADE,
@@ -475,6 +470,29 @@ CREATE TABLE IF NOT EXISTS specific_asset_id_supplemental_semantic_id_reference_
   parent_reference_payload JSONB NOT NULL
 );
 
+-- =========================================================
+-- 6) submodel_descriptor_supplemental_semantic_id -> submodel_descriptor.descriptor_id
+-- =========================================================
+CREATE TABLE IF NOT EXISTS submodel_descriptor_supplemental_semantic_id_reference (
+  id   BIGINT PRIMARY KEY REFERENCES submodel_descriptor(descriptor_id) ON DELETE CASCADE,
+  type int NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS submodel_descriptor_supplemental_semantic_id_reference_key (
+  id           BIGSERIAL PRIMARY KEY,
+  reference_id BIGINT NOT NULL REFERENCES submodel_descriptor_supplemental_semantic_id_reference(id) ON DELETE CASCADE,
+  position     INTEGER NOT NULL,
+  type         int NOT NULL,
+  value        TEXT NOT NULL,
+  UNIQUE(reference_id, position)
+);
+
+CREATE TABLE IF NOT EXISTS submodel_descriptor_supplemental_semantic_id_reference_payload (
+  id           BIGSERIAL PRIMARY KEY,
+  reference_id BIGINT NOT NULL REFERENCES submodel_descriptor_supplemental_semantic_id_reference(id) ON DELETE CASCADE,
+  parent_reference_payload JSONB NOT NULL
+);
+
 -- ------------------------------------------
 -- Indexes
 -- ------------------------------------------
@@ -570,6 +588,12 @@ CREATE INDEX IF NOT EXISTS ix_submodel_descriptor_semantic_id_refkey_refid ON su
 CREATE INDEX IF NOT EXISTS ix_submodel_descriptor_semantic_id_refkey_refval ON submodel_descriptor_semantic_id_reference_key(reference_id, value);
 CREATE INDEX IF NOT EXISTS ix_submodel_descriptor_semantic_id_refkey_type_val ON submodel_descriptor_semantic_id_reference_key(type, value);
 CREATE INDEX IF NOT EXISTS ix_submodel_descriptor_semantic_id_refkey_val_trgm ON submodel_descriptor_semantic_id_reference_key USING GIN (value gin_trgm_ops);
+
+CREATE INDEX IF NOT EXISTS ix_smdesc_supp_sem_owner_id ON submodel_descriptor_supplemental_semantic_id_reference(descriptor_id);
+CREATE INDEX IF NOT EXISTS ix_smdesc_supp_sem_refkey_refid ON submodel_descriptor_supplemental_semantic_id_reference_key(reference_id);
+CREATE INDEX IF NOT EXISTS ix_smdesc_supp_sem_refkey_refval ON submodel_descriptor_supplemental_semantic_id_reference_key(reference_id, value);
+CREATE INDEX IF NOT EXISTS ix_smdesc_supp_sem_refkey_type_val ON submodel_descriptor_supplemental_semantic_id_reference_key(type, value);
+CREATE INDEX IF NOT EXISTS ix_smdesc_supp_sem_refkey_val_trgm ON submodel_descriptor_supplemental_semantic_id_reference_key USING GIN (value gin_trgm_ops);
 
 CREATE INDEX IF NOT EXISTS ix_specasset_external_subject_id_ref_type ON specific_asset_id_external_subject_id_reference(type);
 CREATE INDEX IF NOT EXISTS ix_specasset_external_subject_id_refkey_refid ON specific_asset_id_external_subject_id_reference_key(reference_id);

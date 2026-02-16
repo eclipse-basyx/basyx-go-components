@@ -496,12 +496,7 @@ func loadSubmodelDescriptorLookupsParallel(
 		}, &lookups.semRefBySmdDesc)
 
 		GoAssign(g, func() (map[int64][]types.IReference, error) {
-			return readEntityReferences1ToMany(
-				gctx, db, ids,
-				tblSubmodelDescriptorSuppSemantic,
-				colDescriptorID,
-				colReferenceID,
-			)
+			return ReadSubmodelDescriptorSupplementalSemanticReferencesByDescriptorIDs(gctx, db, ids)
 		}, &lookups.suppBySmdDesc)
 
 		GoAssign(g, func() (map[int64][]model.Endpoint, error) {
@@ -532,12 +527,7 @@ func loadSubmodelDescriptorLookupsSerial(
 		if err != nil {
 			return submodelDescriptorLookups{}, err
 		}
-		lookups.suppBySmdDesc, err = readEntityReferences1ToMany(
-			ctx, db, smdDescIDs,
-			tblSubmodelDescriptorSuppSemantic,
-			colDescriptorID,
-			colReferenceID,
-		)
+		lookups.suppBySmdDesc, err = ReadSubmodelDescriptorSupplementalSemanticReferencesByDescriptorIDs(ctx, db, smdDescIDs)
 		if err != nil {
 			return submodelDescriptorLookups{}, err
 		}

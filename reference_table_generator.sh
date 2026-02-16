@@ -16,6 +16,7 @@ contexts=(
 "submodel_descriptor_semantic_id|submodel_descriptor|descriptor_id|true"
 "specific_asset_id_external_subject_id|specific_asset_id|id|true"
 "specific_asset_id_supplemental_semantic_id|specific_asset_id|id|true"
+"submodel_descriptor_supplemental_semantic_id|submodel_descriptor|descriptor_id|true"
 )
 
 [[ ${#contexts[@]} -gt 0 ]] || fail "SMREPO-GENREF-EMPTYCONTEXTS" "No contexts configured"
