@@ -19,36 +19,31 @@ RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo \
     -ldflags "-X main.Version=${VERSION} -X main.BuildTime=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
     -o discoveryservice ./cmd/discoveryservice
 
-# Stage 2: Minimal runtime image
-FROM alpine
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo \
+    -o healthprobe ./internal/healthprobe
 
-RUN apk --no-cache --no-scripts add ca-certificates wget
-WORKDIR /root/
+# Stage 2: Distroless runtime image
+FROM gcr.io/distroless/static:nonroot
 
-# Copy binary
-COPY --from=builder /app/discoveryservice /root/discoveryservice
+WORKDIR /app
 
-# Create configuration directory
-RUN mkdir -p /config
-
-# Copy default config and SQL schema for discovery service
+# Copy runtime artifacts
+COPY --from=builder /app/discoveryservice /app/discoveryservice
 COPY --from=builder /app/cmd/discoveryservice/config.yaml /config/config.yaml
-COPY --from=builder /app/basyxschema.sql /root/basyxschema.sql
-
-# Optional healthcheck script for /health
-# If you have one in the discoveryservice folder, copy it; otherwise you can omit.
-COPY --from=builder /app/cmd/discoveryservice/healthcheck.sh /root/healthcheck.sh
-RUN chmod +x /root/healthcheck.sh || true
+COPY --from=builder /app/basyxschema.sql /app/basyxschema.sql
+COPY --from=builder /app/healthprobe /bin/healthprobe
+COPY --from=builder /app/healthprobe /bin/wget
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 
 # Default port (override via env in compose)
 ENV SERVER_PORT=5004
+ENV SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
 
-# NOTE: EXPOSE doesn't accept env vars at runtime; this is just documentation.
-EXPOSE 5004
+EXPOSE ${SERVER_PORT}
 
 # Start service with config
-CMD ["/root/discoveryservice", "-config", "/config/config.yaml", "-databaseSchema", "basyxschema.sql"]
+CMD ["/app/discoveryservice", "-config", "/config/config.yaml", "-databaseSchema", "/app/basyxschema.sql"]
 
-# Health check (if script exists and your service serves /health)
+# Health check runs via healthprobe
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD /root/healthcheck.sh || wget -qO- http://127.0.0.1:${SERVER_PORT}/health || exit 1
+    CMD ["/bin/healthprobe"]

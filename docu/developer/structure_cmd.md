@@ -7,7 +7,7 @@ Contains the main entry points for each microservice in the BaSyx Go Components 
 - `main.go`: Service startup and configuration
 - `config.yaml`: Service-specific configuration
 - `Dockerfile`: Containerization instructions
-- `healthcheck.sh`: Health check scripts for Docker
+- `HEALTHCHECK` in Dockerfile: Container health checks
 - `resources/`, `config/`: Additional service resources
 
 ## Example: submodelrepositoryservice
