@@ -99,7 +99,12 @@ func (p PostgreSQLBasicEventElementHandler) Update(submodelID string, idShortOrP
 		return err
 	}
 
-	elementID, err := p.decorated.GetDatabaseID(submodelID, idShortOrPath)
+	smDbID, err := persistenceutils.GetSubmodelDatabaseID(localTx, submodelID)
+	if err != nil {
+		_, _ = fmt.Println(err)
+		return common.NewInternalServerError("Failed to execute PostgreSQL Query - no changes applied - see console for details.")
+	}
+	elementID, err := p.decorated.GetDatabaseID(smDbID, idShortOrPath)
 	if err != nil {
 		return err
 	}
@@ -242,6 +247,13 @@ func (p PostgreSQLBasicEventElementHandler) UpdateValueOnly(submodelID string, i
 	}()
 
 	dialect := goqu.Dialect("postgres")
+	smDbID, err := persistenceutils.GetSubmodelDatabaseID(tx, submodelID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return common.NewErrNotFound("submodel not found")
+		}
+		return err
+	}
 
 	var newObservedJson sql.NullString
 	observedBytes, err := json.Marshal(basicEventValue.Observed)
@@ -256,7 +268,7 @@ func (p PostgreSQLBasicEventElementHandler) UpdateValueOnly(submodelID string, i
 		Select("id").
 		Where(
 			goqu.C("idshort_path").Eq(idShortOrPath),
-			goqu.C("submodel_id").Eq(submodelID),
+			goqu.C("submodel_id").Eq(smDbID),
 		).
 		ToSQL()
 	if err != nil {

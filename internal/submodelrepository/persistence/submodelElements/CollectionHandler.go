@@ -121,7 +121,7 @@ func (p PostgreSQLSubmodelElementCollectionHandler) Update(submodelID string, id
 // Returns:
 //   - error: An error if the update operation fails
 func (p PostgreSQLSubmodelElementCollectionHandler) UpdateValueOnly(submodelID string, idShortOrPath string, valueOnly gen.SubmodelElementValue) error {
-	elems, err := persistenceutils.BuildElementsToProcessStackValueOnly(p.db, submodelID, idShortOrPath, valueOnly)
+	elems, err := buildElementsToProcessStackValueOnly(p.db, submodelID, idShortOrPath, valueOnly)
 	if err != nil {
 		return err
 	}

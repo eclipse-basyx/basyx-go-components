@@ -29,6 +29,7 @@ package submodelelements
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 
 	"github.com/FriedJannik/aas-go-sdk/jsonization"
 	"github.com/FriedJannik/aas-go-sdk/types"
@@ -104,7 +105,12 @@ func (p PostgreSQLSubmodelElementListHandler) Update(submodelID string, idShortO
 		return err
 	}
 
-	elementID, err := p.decorated.GetDatabaseID(submodelID, idShortOrPath)
+	smDbID, err := persistenceutils.GetSubmodelDatabaseID(localTx, submodelID)
+	if err != nil {
+		_, _ = fmt.Println(err)
+		return common.NewInternalServerError("Failed to execute PostgreSQL Query - no changes applied - see console for details.")
+	}
+	elementID, err := p.decorated.GetDatabaseID(smDbID, idShortOrPath)
 	if err != nil {
 		return err
 	}
@@ -145,7 +151,7 @@ func (p PostgreSQLSubmodelElementListHandler) Update(submodelID string, idShortO
 // Returns:
 //   - error: An error if the update operation fails
 func (p PostgreSQLSubmodelElementListHandler) UpdateValueOnly(submodelID string, idShortOrPath string, valueOnly gen.SubmodelElementValue) error {
-	elems, err := persistenceutils.BuildElementsToProcessStackValueOnly(p.db, submodelID, idShortOrPath, valueOnly)
+	elems, err := buildElementsToProcessStackValueOnly(p.db, submodelID, idShortOrPath, valueOnly)
 	if err != nil {
 		return err
 	}

@@ -2,7 +2,7 @@ server:
   port: 5004
   contextPath: ""
   host: 0.0.0.0
-  strictVerification: true  # Set to false to disable strict AAS metamodel verification
+  strictVerification: false  # Set to false to disable strict AAS metamodel verification
 
 postgres:
   host: localhost

@@ -32,6 +32,7 @@ package submodelelements
 
 import (
 	"database/sql"
+	"fmt"
 
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
@@ -97,7 +98,12 @@ func (p PostgreSQLRangeHandler) Update(submodelID string, idShortOrPath string, 
 		return err
 	}
 
-	elementID, err := p.decorated.GetDatabaseID(submodelID, idShortOrPath)
+	smDbID, err := persistenceutils.GetSubmodelDatabaseID(localTx, submodelID)
+	if err != nil {
+		_, _ = fmt.Println(err)
+		return common.NewInternalServerError("Failed to execute PostgreSQL Query - no changes applied - see console for details.")
+	}
+	elementID, err := p.decorated.GetDatabaseID(smDbID, idShortOrPath)
 	if err != nil {
 		return err
 	}
@@ -152,6 +158,13 @@ func (p PostgreSQLRangeHandler) UpdateValueOnly(submodelID string, idShortOrPath
 	}()
 
 	dialect := goqu.Dialect("postgres")
+	smDbID, err := persistenceutils.GetSubmodelDatabaseID(tx, submodelID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return common.NewErrNotFound("submodel not found")
+		}
+		return err
+	}
 
 	// Get Value Type to determine which columns to update
 	selectQuery, selectArgs, err := dialect.From(goqu.T("submodel_element").As("sme")).
@@ -161,7 +174,7 @@ func (p PostgreSQLRangeHandler) UpdateValueOnly(submodelID string, idShortOrPath
 		).
 		Select(goqu.I("re.value_type")).
 		Where(
-			goqu.I("sme.submodel_id").Eq(submodelID),
+			goqu.I("sme.submodel_id").Eq(smDbID),
 			goqu.I("sme.idshort_path").Eq(idShortOrPath),
 		).
 		ToSQL()
@@ -183,7 +196,7 @@ func (p PostgreSQLRangeHandler) UpdateValueOnly(submodelID string, idShortOrPath
 	idQuery, args, err := dialect.From("submodel_element").
 		Select("id").
 		Where(
-			goqu.C("submodel_id").Eq(submodelID),
+			goqu.C("submodel_id").Eq(smDbID),
 			goqu.C("idshort_path").Eq(idShortOrPath),
 		).ToSQL()
 	if err != nil {
@@ -265,7 +278,7 @@ func (p PostgreSQLRangeHandler) GetInsertQueryPart(_ *sql.Tx, id int, element ty
 	if rangeElem.Max() != nil {
 		maxVal = *rangeElem.Max()
 	}
-	typedValue := persistenceutils.MapRangeValueByType(rangeElem.ValueType(), minVal, maxVal)
+	typedValue := MapRangeValueByType(rangeElem.ValueType(), minVal, maxVal)
 
 	return &InsertQueryPart{
 		TableName: "range_element",
@@ -289,7 +302,7 @@ func (p PostgreSQLRangeHandler) GetInsertQueryPart(_ *sql.Tx, id int, element ty
 // getRangeColumnNames returns the appropriate column names for min and max values
 // based on the XML Schema datatype of the Range element.
 func getRangeColumnNames(valueType types.DataTypeDefXSD) (minCol, maxCol string) {
-	return persistenceutils.GetRangeColumnNames(valueType)
+	return GetRangeColumnNames(valueType)
 }
 
 func buildUpdateRangeRecordObject(rangeElem *types.Range, isPut bool) goqu.Record {
@@ -305,7 +318,7 @@ func buildUpdateRangeRecordObject(rangeElem *types.Range, isPut bool) goqu.Recor
 			// For PUT, both min and max must be provided
 			panic("Both 'Min' and 'Max' values must be provided for Range element in PUT operation")
 		}
-		typedValue := persistenceutils.MapRangeValueByType(rangeElem.ValueType(), *rangeElem.Min(), *rangeElem.Max())
+		typedValue := MapRangeValueByType(rangeElem.ValueType(), *rangeElem.Min(), *rangeElem.Max())
 		updateRecord["min_text"] = typedValue.MinText
 		updateRecord["max_text"] = typedValue.MaxText
 		updateRecord["min_num"] = typedValue.MinNumeric
@@ -326,7 +339,7 @@ func buildUpdateRangeRecordObject(rangeElem *types.Range, isPut bool) goqu.Recor
 		if rangeElem.Max() != nil {
 			maxVal = *rangeElem.Max()
 		}
-		typedValue := persistenceutils.MapRangeValueByType(rangeElem.ValueType(), minVal, maxVal)
+		typedValue := MapRangeValueByType(rangeElem.ValueType(), minVal, maxVal)
 		if minVal != "" {
 			updateRecord["min_text"] = typedValue.MinText
 			updateRecord["min_num"] = typedValue.MinNumeric

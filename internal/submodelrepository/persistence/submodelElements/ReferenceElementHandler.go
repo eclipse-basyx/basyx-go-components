@@ -36,6 +36,7 @@ package submodelelements
 
 import (
 	"database/sql"
+	"fmt"
 
 	"github.com/FriedJannik/aas-go-sdk/jsonization"
 	"github.com/FriedJannik/aas-go-sdk/types"
@@ -116,7 +117,12 @@ func (p PostgreSQLReferenceElementHandler) Update(submodelID string, idShortOrPa
 		return err
 	}
 
-	elementID, err := p.decorated.GetDatabaseID(submodelID, idShortOrPath)
+	smDbID, err := persistenceutils.GetSubmodelDatabaseID(localTx, submodelID)
+	if err != nil {
+		_, _ = fmt.Println(err)
+		return common.NewInternalServerError("Failed to execute PostgreSQL Query - no changes applied - see console for details.")
+	}
+	elementID, err := p.decorated.GetDatabaseID(smDbID, idShortOrPath)
 	if err != nil {
 		return err
 	}
@@ -188,6 +194,13 @@ func (p PostgreSQLReferenceElementHandler) UpdateValueOnly(submodelID string, id
 	if err != nil {
 		return err
 	}
+	smDbID, err := persistenceutils.GetSubmodelDatabaseIDFromDB(p.db, submodelID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return common.NewErrNotFound("submodel not found")
+		}
+		return err
+	}
 
 	// Build and execute update query using GoQu
 	query, args, err := goqu.Update("reference_element").
@@ -198,7 +211,7 @@ func (p PostgreSQLReferenceElementHandler) UpdateValueOnly(submodelID string, id
 			goqu.From("submodel_element").
 				Select("id").
 				Where(goqu.Ex{
-					"submodel_id":  submodelID,
+					"submodel_id":  smDbID,
 					"idshort_path": idShortOrPath,
 				}),
 		)).

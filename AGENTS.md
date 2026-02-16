@@ -13,6 +13,8 @@
   - Use Error Codes for all Errors (COMPONENTNAME-FUNCTION-CURRENTSTEP) e.g.: SMREPO-UPDPROP-EXECDBQUERY
 - Code Readability: Ensure the code is easy to read and understand, with proper indentation and spacing
 - Ensure that the Cognitive Complexity of functions does not exceed 15. Refactor complex functions into smaller, manageable pieces.
+- MANDATORY: Use GOQU for SQL Queries in go. No Plain Text.
+- Try to implement scalable and performant code - no prototyping.
 
 ## Pre-Task Steps:
 1. Check if you understood the task requirements.
@@ -26,6 +28,12 @@
 5. Run Tests and Ensure All Pass
 6. Perform Code Review and Refactoring
 7. Perform Post-Task Steps
+
+## General Notes:
+- Use basyxschema.sql for reference when modifying database-related code.
+- Ensure that any changes to the database schema are reflected in the basyxschema.sql file.
+- When modifying code, consider the impact on related modules and ensure that changes are consistent across the codebase.
+- Always run integration tests after making changes to ensure that the modifications do not break existing functionality.
 
 ## Post-Task Steps:
 - Run linter and formatter on the modified files to ensure code quality and consistency.

@@ -95,6 +95,14 @@ func (p PostgreSQLFileHandler) Update(submodelID string, idShortOrPath string, s
 		return err
 	}
 
+	submodelDatabaseID, err := persistenceutils.GetSubmodelDatabaseID(localTx, submodelID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return common.NewErrNotFound("submodel not found")
+		}
+		return fmt.Errorf("failed to get submodel database ID: %w", err)
+	}
+
 	dialect := goqu.Dialect("postgres")
 
 	// Get the current file element ID and value
@@ -107,7 +115,7 @@ func (p PostgreSQLFileHandler) Update(submodelID string, idShortOrPath string, s
 		).
 		Select("submodel_element.id", "file_element.value").
 		Where(goqu.C("idshort_path").Eq(idShortOrPath)).
-		Where(goqu.C("submodel_id").Eq(submodelID)).
+		Where(goqu.C("submodel_id").Eq(submodelDatabaseID)).
 		ToSQL()
 	if err != nil {
 		return fmt.Errorf("failed to build query: %w", err)
@@ -201,6 +209,16 @@ func (p PostgreSQLFileHandler) UpdateValueOnly(submodelID string, idShortOrPath 
 	if err != nil {
 		return common.NewInternalServerError(fmt.Sprintf("failed to begin transaction: %s", err))
 	}
+
+	submodelDatabaseID, err := persistenceutils.GetSubmodelDatabaseID(tx, submodelID)
+	if err != nil {
+		_ = tx.Rollback()
+		if err == sql.ErrNoRows {
+			return common.NewErrNotFound("submodel not found")
+		}
+		return fmt.Errorf("failed to get submodel database ID: %w", err)
+	}
+
 	dialect := goqu.Dialect("postgres")
 
 	var elementID int
@@ -212,7 +230,7 @@ func (p PostgreSQLFileHandler) UpdateValueOnly(submodelID string, idShortOrPath 
 		Select("submodel_element.id").
 		Where(
 			goqu.C("idshort_path").Eq(idShortOrPath),
-			goqu.C("submodel_id").Eq(submodelID),
+			goqu.C("submodel_id").Eq(submodelDatabaseID),
 		).
 		ToSQL()
 	if err != nil {
@@ -376,11 +394,19 @@ func (p PostgreSQLFileHandler) UploadFileAttachment(submodelID string, idShortPa
 		}
 	}()
 
+	submodelDatabaseID, err := persistenceutils.GetSubmodelDatabaseID(tx, submodelID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return common.NewErrNotFound("submodel not found")
+		}
+		return fmt.Errorf("failed to get submodel database ID: %w", err)
+	}
+
 	// Get the submodel element ID
 	var submodelElementID int64
 	query, args, err := dialect.From("submodel_element").
 		Select("id").
-		Where(goqu.C("submodel_id").Eq(submodelID), goqu.C("idshort_path").Eq(idShortPath)).
+		Where(goqu.C("submodel_id").Eq(submodelDatabaseID), goqu.C("idshort_path").Eq(idShortPath)).
 		ToSQL()
 	if err != nil {
 		return fmt.Errorf("failed to build query: %w", err)
@@ -541,6 +567,14 @@ func (p PostgreSQLFileHandler) DownloadFileAttachment(submodelID string, idShort
 		}
 	}()
 
+	submodelDatabaseID, err := persistenceutils.GetSubmodelDatabaseID(tx, submodelID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, "", "", common.NewErrNotFound("submodel not found")
+		}
+		return nil, "", "", fmt.Errorf("failed to get submodel database ID: %w", err)
+	}
+
 	query, args, err := dialect.From("submodel_element").
 		InnerJoin(
 			goqu.T("file_element"),
@@ -548,7 +582,7 @@ func (p PostgreSQLFileHandler) DownloadFileAttachment(submodelID string, idShort
 		).
 		Select("submodel_element.id", "file_element.content_type", "file_element.file_name").
 		Where(
-			goqu.C("submodel_id").Eq(submodelID),
+			goqu.C("submodel_id").Eq(submodelDatabaseID),
 			goqu.C("idshort_path").Eq(idShortPath),
 		).
 		ToSQL()
@@ -629,19 +663,6 @@ func (p PostgreSQLFileHandler) DownloadFileAttachment(submodelID string, idShort
 func (p PostgreSQLFileHandler) DeleteFileAttachment(submodelID string, idShortPath string) error {
 	dialect := goqu.Dialect("postgres")
 
-	// Get the submodel element ID
-	var submodelElementID int64
-	query, args, err := dialect.From("submodel_element").
-		Select("id").
-		Where(
-			goqu.C("submodel_id").Eq(submodelID),
-			goqu.C("idshort_path").Eq(idShortPath),
-		).
-		ToSQL()
-	if err != nil {
-		return fmt.Errorf("failed to build query: %w", err)
-	}
-
 	tx, err := p.db.Begin()
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
@@ -653,6 +674,27 @@ func (p PostgreSQLFileHandler) DeleteFileAttachment(submodelID string, idShortPa
 			_ = tx.Commit()
 		}
 	}()
+
+	submodelDatabaseID, err := persistenceutils.GetSubmodelDatabaseID(tx, submodelID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return common.NewErrNotFound("submodel not found")
+		}
+		return fmt.Errorf("failed to get submodel database ID: %w", err)
+	}
+
+	// Get the submodel element ID
+	var submodelElementID int64
+	query, args, err := dialect.From("submodel_element").
+		Select("id").
+		Where(
+			goqu.C("submodel_id").Eq(submodelDatabaseID),
+			goqu.C("idshort_path").Eq(idShortPath),
+		).
+		ToSQL()
+	if err != nil {
+		return fmt.Errorf("failed to build query: %w", err)
+	}
 
 	err = tx.QueryRow(query, args...).Scan(&submodelElementID)
 	if err != nil {

@@ -31,6 +31,7 @@ package submodelelements
 
 import (
 	"database/sql"
+	"fmt"
 
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
@@ -97,7 +98,12 @@ func (p PostgreSQLBlobHandler) Update(submodelID string, idShortOrPath string, s
 		return smrepoerrors.ErrBlobTooLarge
 	}
 
-	elementID, err := p.decorated.GetDatabaseID(submodelID, idShortOrPath)
+	smDbID, err := persistenceutils.GetSubmodelDatabaseID(localTx, submodelID)
+	if err != nil {
+		_, _ = fmt.Println(err)
+		return common.NewInternalServerError("Failed to execute PostgreSQL Query - no changes applied - see console for details.")
+	}
+	elementID, err := p.decorated.GetDatabaseID(smDbID, idShortOrPath)
 	if err != nil {
 		return err
 	}
@@ -109,7 +115,7 @@ func (p PostgreSQLBlobHandler) Update(submodelID string, idShortOrPath string, s
 	// For PATCH: only update fields that are provided (not empty)
 	updateRecord := buildUpdateBlobRecordObject(isPut, blob)
 
-	if persistenceutils.AnyFieldsToUpdate(updateRecord) {
+	if anyFieldsToUpdate(updateRecord) {
 		updateQuery, updateArgs, err := dialect.Update("blob_element").
 			Set(updateRecord).
 			Where(goqu.C("id").Eq(elementID)).
@@ -177,6 +183,13 @@ func (p PostgreSQLBlobHandler) UpdateValueOnly(submodelID string, idShortOrPath 
 
 	// Update only the blob-specific fields in the database
 	dialect := goqu.Dialect("postgres")
+	smDbID, err := persistenceutils.GetSubmodelDatabaseID(tx, submodelID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return common.NewErrNotFound("submodel not found")
+		}
+		return err
+	}
 
 	var elementID int
 	query, args, err := dialect.From("submodel_element").
@@ -187,7 +200,7 @@ func (p PostgreSQLBlobHandler) UpdateValueOnly(submodelID string, idShortOrPath 
 		Select("submodel_element.id").
 		Where(
 			goqu.C("idshort_path").Eq(idShortOrPath),
-			goqu.C("submodel_id").Eq(submodelID),
+			goqu.C("submodel_id").Eq(smDbID),
 		).
 		ToSQL()
 	if err != nil {

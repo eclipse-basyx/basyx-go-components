@@ -28,6 +28,7 @@ package submodelelements
 
 import (
 	"database/sql"
+	"fmt"
 
 	"github.com/FriedJannik/aas-go-sdk/jsonization"
 	"github.com/FriedJannik/aas-go-sdk/types"
@@ -104,7 +105,12 @@ func (p PostgreSQLEntityHandler) Update(submodelID string, idShortOrPath string,
 		return err
 	}
 
-	elementID, err := p.decorated.GetDatabaseID(submodelID, idShortOrPath)
+	smDbID, err := persistenceutils.GetSubmodelDatabaseID(localTx, submodelID)
+	if err != nil {
+		_, _ = fmt.Println(err)
+		return common.NewInternalServerError("Failed to execute PostgreSQL Query - no changes applied - see console for details.")
+	}
+	elementID, err := p.decorated.GetDatabaseID(smDbID, idShortOrPath)
 	if err != nil {
 		return err
 	}
@@ -118,7 +124,7 @@ func (p PostgreSQLEntityHandler) Update(submodelID string, idShortOrPath string,
 	dialect := goqu.Dialect("postgres")
 
 	// Execute update if there are fields to update
-	if persistenceutils.AnyFieldsToUpdate(updateRecord) {
+	if anyFieldsToUpdate(updateRecord) {
 		updateQuery, updateArgs, err := dialect.Update("entity_element").
 			Set(updateRecord).
 			Where(goqu.C("id").Eq(elementID)).
@@ -159,7 +165,7 @@ func (p PostgreSQLEntityHandler) UpdateValueOnly(submodelID string, idShortOrPat
 	if !ok {
 		return common.NewErrBadRequest("valueOnly is not of type EntityValue")
 	}
-	elems, err := persistenceutils.BuildElementsToProcessStackValueOnly(p.db, submodelID, idShortOrPath, valueOnly)
+	elems, err := buildElementsToProcessStackValueOnly(p.db, submodelID, idShortOrPath, valueOnly)
 	if err != nil {
 		return err
 	}
@@ -169,6 +175,13 @@ func (p PostgreSQLEntityHandler) UpdateValueOnly(submodelID string, idShortOrPat
 	}
 
 	dialect := goqu.Dialect("postgres")
+	smDbID, err := persistenceutils.GetSubmodelDatabaseID(tx, submodelID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return common.NewErrNotFound("submodel not found")
+		}
+		return err
+	}
 
 	var elementID int
 	query, args, err := dialect.From("submodel_element").
@@ -179,7 +192,7 @@ func (p PostgreSQLEntityHandler) UpdateValueOnly(submodelID string, idShortOrPat
 		Select("submodel_element.id").
 		Where(
 			goqu.C("idshort_path").Eq(idShortOrPath),
-			goqu.C("submodel_id").Eq(submodelID),
+			goqu.C("submodel_id").Eq(smDbID),
 		).
 		ToSQL()
 	if err != nil {

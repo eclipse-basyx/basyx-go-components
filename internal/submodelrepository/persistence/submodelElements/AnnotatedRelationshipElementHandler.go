@@ -31,6 +31,7 @@ package submodelelements
 
 import (
 	"database/sql"
+	"fmt"
 
 	"github.com/FriedJannik/aas-go-sdk/jsonization"
 	"github.com/FriedJannik/aas-go-sdk/types"
@@ -97,7 +98,12 @@ func (p PostgreSQLAnnotatedRelationshipElementHandler) Update(submodelID string,
 		return err
 	}
 
-	elementID, err := p.decorated.GetDatabaseID(submodelID, idShortOrPath)
+	smDbID, err := persistenceutils.GetSubmodelDatabaseID(localTx, submodelID)
+	if err != nil {
+		_, _ = fmt.Println(err)
+		return common.NewInternalServerError("Failed to execute PostgreSQL Query - no changes applied - see console for details.")
+	}
+	elementID, err := p.decorated.GetDatabaseID(smDbID, idShortOrPath)
 	if err != nil {
 		return err
 	}
@@ -167,7 +173,7 @@ func (p PostgreSQLAnnotatedRelationshipElementHandler) UpdateValueOnly(submodelI
 		}
 	}()
 
-	elems, err := persistenceutils.BuildElementsToProcessStackValueOnly(p.db, submodelID, idShortOrPath, valueOnly)
+	elems, err := buildElementsToProcessStackValueOnly(p.db, submodelID, idShortOrPath, valueOnly)
 	if err != nil {
 		return err
 	}
@@ -175,6 +181,13 @@ func (p PostgreSQLAnnotatedRelationshipElementHandler) UpdateValueOnly(submodelI
 	// Update 'first' and 'second' references for AnnotatedRelationshipElement
 	if areValue, ok := valueOnly.(gen.AnnotatedRelationshipElementValue); ok {
 		dialect := goqu.Dialect("postgres")
+		smDbID, err := persistenceutils.GetSubmodelDatabaseID(tx, submodelID)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				return common.NewErrNotFound("submodel not found")
+			}
+			return err
+		}
 
 		// Get the element ID from the database using goqu
 		var elementID int
@@ -182,7 +195,7 @@ func (p PostgreSQLAnnotatedRelationshipElementHandler) UpdateValueOnly(submodelI
 			Select("id").
 			Where(goqu.Ex{
 				"idshort_path": idShortOrPath,
-				"submodel_id":  submodelID,
+				"submodel_id":  smDbID,
 			}).ToSQL()
 		if err != nil {
 			return err

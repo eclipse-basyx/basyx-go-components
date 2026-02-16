@@ -110,8 +110,12 @@ func (p PostgreSQLRelationshipElementHandler) Update(submodelID string, idShortO
 	if err != nil {
 		return err
 	}
-
-	elementID, err := p.decorated.GetDatabaseID(submodelID, idShortOrPath)
+	smDbID, err := persistenceutils.GetSubmodelDatabaseID(localTx, submodelID)
+	if err != nil {
+		_, _ = fmt.Println(err)
+		return common.NewInternalServerError("Failed to execute PostgreSQL Query - no changes applied - see console for details.")
+	}
+	elementID, err := p.decorated.GetDatabaseID(smDbID, idShortOrPath)
 	if err != nil {
 		return err
 	}
@@ -126,7 +130,7 @@ func (p PostgreSQLRelationshipElementHandler) Update(submodelID string, idShortO
 	}
 
 	// Only execute update if there are fields to update
-	if persistenceutils.AnyFieldsToUpdate(updateRecord) {
+	if anyFieldsToUpdate(updateRecord) {
 		updateQuery, updateArgs, err := dialect.Update("relationship_element").
 			Set(updateRecord).
 			Where(goqu.C("id").Eq(elementID)).
@@ -176,6 +180,13 @@ func (p PostgreSQLRelationshipElementHandler) UpdateValueOnly(submodelID string,
 
 	dialect := goqu.Dialect("postgres")
 	json := jsoniter.ConfigCompatibleWithStandardLibrary
+	smDbID, err := persistenceutils.GetSubmodelDatabaseID(tx, submodelID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return common.NewErrNotFound("submodel not found")
+		}
+		return err
+	}
 
 	// Build update record with only the fields that are set
 	updateRecord := goqu.Record{}
@@ -208,7 +219,7 @@ func (p PostgreSQLRelationshipElementHandler) UpdateValueOnly(submodelID string,
 			dialect.From("submodel_element").
 				Select("id").
 				Where(goqu.Ex{
-					"submodel_id":  submodelID,
+					"submodel_id":  smDbID,
 					"idshort_path": idShortOrPath,
 				}),
 		)).

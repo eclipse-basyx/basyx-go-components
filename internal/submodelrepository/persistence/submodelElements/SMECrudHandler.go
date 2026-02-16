@@ -31,11 +31,11 @@
 package submodelelements
 
 import (
-	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
 	"reflect"
+	"strconv"
 	"strings"
 
 	"github.com/FriedJannik/aas-go-sdk/jsonization"
@@ -44,7 +44,6 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	persistenceutils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
 	_ "github.com/lib/pq" // PostgreSQL Treiber
-	"golang.org/x/sync/errgroup"
 )
 
 // PostgreSQLSMECrudHandler provides base CRUD operations for submodel elements in PostgreSQL.
@@ -190,21 +189,20 @@ func (p *PostgreSQLSMECrudHandler) Update(submodelID string, idShortOrPath strin
 	}
 
 	dialect := goqu.Dialect("postgres")
+	submodelDatabaseID, err := persistenceutils.GetSubmodelDatabaseID(localTx, submodelID)
+	if err != nil {
+		_, _ = fmt.Println("SMREPO-SMEUPD-GETSMDATABASEID " + err.Error())
+		return common.NewInternalServerError("Failed to resolve Submodel database id - see console for details")
+	}
 
 	// First, get the existing element ID and verify it exists in the correct submodel
 	var existingID int
-	var oldSemanticID, oldDescriptionID, oldDisplayNameID sql.NullInt64
 
 	selectQuery := dialect.From(goqu.T("submodel_element")).
-		Select(
-			goqu.C("id"),
-			goqu.C("semantic_id"),
-			goqu.C("description_id"),
-			goqu.C("displayname_id"),
-		).
+		Select(goqu.C("id")).
 		Where(
 			goqu.C("idshort_path").Eq(idShortOrPath),
-			goqu.C("submodel_id").Eq(submodelID),
+			goqu.C("submodel_id").Eq(submodelDatabaseID),
 		)
 
 	selectSQL, selectArgs, err := selectQuery.ToSQL()
@@ -212,7 +210,7 @@ func (p *PostgreSQLSMECrudHandler) Update(submodelID string, idShortOrPath strin
 		return err
 	}
 
-	err = localTx.QueryRow(selectSQL, selectArgs...).Scan(&existingID, &oldSemanticID, &oldDescriptionID, &oldDisplayNameID)
+	err = localTx.QueryRow(selectSQL, selectArgs...).Scan(&existingID)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return common.NewErrNotFound("SubmodelElement with path '" + idShortOrPath + "' not found in submodel '" + submodelID + "'")
@@ -220,70 +218,10 @@ func (p *PostgreSQLSMECrudHandler) Update(submodelID string, idShortOrPath strin
 		return err
 	}
 
-	// Handle semantic ID update
-	var newSemanticID sql.NullInt64
-	semanticID := submodelElement.SemanticID()
-	if semanticID != nil {
-		newSemanticID, err = persistenceutils.CreateReference(localTx, semanticID, sql.NullInt64{}, sql.NullInt64{})
-		if err != nil {
-			return err
-		}
-	}
-
-	// Handle description update
-	newDescriptionID, err := persistenceutils.CreateLangStringTextTypes(localTx, submodelElement.Description())
-	if err != nil {
-		_, _ = fmt.Println("SMREPO-UPD-CRDESC " + err.Error())
-		return common.NewInternalServerError("Failed to update Description - see console for details")
-	}
-
-	// Handle display name update
-	newDisplayNameID, err := persistenceutils.CreateLangStringNameTypes(localTx, submodelElement.DisplayName())
-	if err != nil {
-		_, _ = fmt.Println("SMREPO-UPD-CRDISP " + err.Error())
-		return common.NewInternalServerError("Failed to update DisplayName - see console for details")
-	}
-
-	// Serialize EDS, supplemental semantic IDs, and extensions in parallel
-	var edsJSONString, supplementalSemanticIDsJSONString, extensionsJSONString string
-
-	g, _ := errgroup.WithContext(context.Background())
-
-	g.Go(func() error {
-		edsItems := toIClassSlice(submodelElement.EmbeddedDataSpecifications())
-		res, serErr := serializeIClassSliceToJSON(edsItems, "SMREPO-SME-UPDATE-EDSJSONIZATION")
-		edsJSONString = res
-		return serErr
-	})
-
-	g.Go(func() error {
-		supplItems := toIClassSlice(submodelElement.SupplementalSemanticIDs())
-		res, serErr := serializeIClassSliceToJSON(supplItems, "SMREPO-SME-UPDATE-SUPPLJSONIZATION")
-		supplementalSemanticIDsJSONString = res
-		return serErr
-	})
-
-	g.Go(func() error {
-		extItems := toIClassSlice(submodelElement.Extensions())
-		res, serErr := serializeIClassSliceToJSON(extItems, "SMREPO-SME-UPDATE-EXTJSONIZATION")
-		extensionsJSONString = res
-		return serErr
-	})
-
-	if err = g.Wait(); err != nil {
-		return err
-	}
-
-	// Update the main submodel_element record FIRST to release foreign key constraints
+	// Update the base submodel_element row
 	updateQuery := dialect.Update(goqu.T("submodel_element")).
 		Set(goqu.Record{
-			"category":                    submodelElement.Category(),
-			"semantic_id":                 newSemanticID,
-			"description_id":              newDescriptionID,
-			"displayname_id":              newDisplayNameID,
-			"embedded_data_specification": edsJSONString,
-			"supplemental_semantic_ids":   supplementalSemanticIDsJSONString,
-			"extensions":                  extensionsJSONString,
+			"category": submodelElement.Category(),
 		}).
 		Where(goqu.C("id").Eq(existingID))
 
@@ -297,106 +235,98 @@ func (p *PostgreSQLSMECrudHandler) Update(submodelID string, idShortOrPath strin
 		return err
 	}
 
-	// NOW delete old references after the foreign keys have been updated
-	if oldSemanticID.Valid {
-		err = persistenceutils.DeleteReference(localTx, int(oldSemanticID.Int64))
-		if err != nil {
-			_, _ = fmt.Println("SMREPO-UPD-DELSEMID " + err.Error())
-			return common.NewInternalServerError("Failed to delete old semantic ID - see console for details")
-		}
+	// Ensure payload row exists
+	ensurePayloadQuery, ensurePayloadArgs, err := dialect.Insert("submodel_element_payload").
+		Rows(goqu.Record{"submodel_element_id": existingID}).
+		OnConflict(goqu.DoNothing()).
+		ToSQL()
+	if err != nil {
+		return err
 	}
-
-	if oldDescriptionID.Valid {
-		err = persistenceutils.DeleteLangStringTextTypes(localTx, int(oldDescriptionID.Int64))
-		if err != nil {
-			_, _ = fmt.Println("SMREPO-UPD-DELDESC " + err.Error())
-			return common.NewInternalServerError("Failed to delete old description - see console for details")
-		}
-	}
-
-	if oldDisplayNameID.Valid {
-		err = persistenceutils.DeleteLangStringNameTypes(localTx, int(oldDisplayNameID.Int64))
-		if err != nil {
-			_, _ = fmt.Println("SMREPO-UPD-DELDISP " + err.Error())
-			return common.NewInternalServerError("Failed to delete old display name - see console for details")
-		}
-	}
-
-	// Handle qualifiers update - first retrieve old qualifier IDs, then delete them properly
-	selectQualifiersQuery := dialect.From(goqu.T("submodel_element_qualifier")).
-		Select(goqu.C("qualifier_id")).
-		Where(goqu.C("sme_id").Eq(existingID))
-
-	selectQualifiersSQL, selectQualifiersArgs, err := selectQualifiersQuery.ToSQL()
+	_, err = localTx.Exec(ensurePayloadQuery, ensurePayloadArgs...)
 	if err != nil {
 		return err
 	}
 
-	rows, err := localTx.Query(selectQualifiersSQL, selectQualifiersArgs...)
-	if err != nil {
-		_, _ = fmt.Println("SMREPO-UPD-SELQUAL " + err.Error())
-		return common.NewInternalServerError("Failed to retrieve old qualifiers - see console for details")
+	payloadUpdateRecord := goqu.Record{}
+	if isPut || submodelElement.Description() != nil {
+		descriptionJSONString, serErr := serializeIClassSliceToJSON(toIClassSlice(submodelElement.Description()), "SMREPO-SME-UPDATE-DESCJSONIZATION")
+		if serErr != nil {
+			return serErr
+		}
+		payloadUpdateRecord["description_payload"] = goqu.L("?::jsonb", descriptionJSONString)
+	}
+	if isPut || submodelElement.DisplayName() != nil {
+		displayNameJSONString, serErr := serializeIClassSliceToJSON(toIClassSlice(submodelElement.DisplayName()), "SMREPO-SME-UPDATE-DISPNAMEJSONIZATION")
+		if serErr != nil {
+			return serErr
+		}
+		payloadUpdateRecord["displayname_payload"] = goqu.L("?::jsonb", displayNameJSONString)
+	}
+	if isPut {
+		payloadUpdateRecord["administrative_information_payload"] = goqu.L("?::jsonb", "[]")
+	}
+	if isPut || submodelElement.EmbeddedDataSpecifications() != nil {
+		edsJSONString, serErr := serializeIClassSliceToJSON(toIClassSlice(submodelElement.EmbeddedDataSpecifications()), "SMREPO-SME-UPDATE-EDSJSONIZATION")
+		if serErr != nil {
+			return serErr
+		}
+		payloadUpdateRecord["embedded_data_specification_payload"] = goqu.L("?::jsonb", edsJSONString)
+	}
+	if isPut || submodelElement.SupplementalSemanticIDs() != nil {
+		supplementalSemanticIDsJSONString, serErr := serializeIClassSliceToJSON(toIClassSlice(submodelElement.SupplementalSemanticIDs()), "SMREPO-SME-UPDATE-SUPPLJSONIZATION")
+		if serErr != nil {
+			return serErr
+		}
+		payloadUpdateRecord["supplemental_semantic_ids_payload"] = goqu.L("?::jsonb", supplementalSemanticIDsJSONString)
+	}
+	if isPut || submodelElement.Extensions() != nil {
+		extensionsJSONString, serErr := serializeIClassSliceToJSON(toIClassSlice(submodelElement.Extensions()), "SMREPO-SME-UPDATE-EXTJSONIZATION")
+		if serErr != nil {
+			return serErr
+		}
+		payloadUpdateRecord["extensions_payload"] = goqu.L("?::jsonb", extensionsJSONString)
+	}
+	if isPut || submodelElement.Qualifiers() != nil {
+		qualifiersJSONString, serErr := serializeIClassSliceToJSON(toIClassSlice(submodelElement.Qualifiers()), "SMREPO-SME-UPDATE-QUALJSONIZATION")
+		if serErr != nil {
+			return serErr
+		}
+		payloadUpdateRecord["qualifiers_payload"] = goqu.L("?::jsonb", qualifiersJSONString)
 	}
 
-	var oldQualifierIDs []int
-	for rows.Next() {
-		var qualifierID int
-		if err := rows.Scan(&qualifierID); err != nil {
-			_ = rows.Close()
+	if len(payloadUpdateRecord) > 0 {
+		payloadUpdateQuery, payloadUpdateArgs, payloadUpdateErr := dialect.Update("submodel_element_payload").
+			Set(payloadUpdateRecord).
+			Where(goqu.C("submodel_element_id").Eq(existingID)).
+			ToSQL()
+		if payloadUpdateErr != nil {
+			return payloadUpdateErr
+		}
+		_, err = localTx.Exec(payloadUpdateQuery, payloadUpdateArgs...)
+		if err != nil {
 			return err
 		}
-		oldQualifierIDs = append(oldQualifierIDs, qualifierID)
-	}
-	_ = rows.Close()
-	if err := rows.Err(); err != nil {
-		return err
 	}
 
-	// Delete junction table entries
-	deleteQualifiersQuery := dialect.Delete(goqu.T("submodel_element_qualifier")).
-		Where(goqu.C("sme_id").Eq(existingID))
-
-	deleteSQL, deleteArgs, err := deleteQualifiersQuery.ToSQL()
-	if err != nil {
-		return err
-	}
-
-	_, err = localTx.Exec(deleteSQL, deleteArgs...)
-	if err != nil {
-		_, _ = fmt.Println("SMREPO-UPD-DELQUALASSOC " + err.Error())
-		return common.NewInternalServerError("Failed to delete old qualifier associations - see console for details")
-	}
-
-	// Delete the actual qualifier records and their associated data
-	for _, qualifierID := range oldQualifierIDs {
-		if err := persistenceutils.DeleteQualifier(localTx, qualifierID); err != nil {
-			_, _ = fmt.Println("SMREPO-UPD-DELQUAL " + err.Error())
-			return common.NewInternalServerError("Failed to delete old qualifier - see console for details")
-		}
-	}
-
-	// Create new qualifiers
-	qualifiers := submodelElement.Qualifiers()
-	if len(qualifiers) > 0 {
-		for i, qualifier := range qualifiers {
-			qualifierID, err := persistenceutils.CreateQualifier(localTx, qualifier, i)
+	semanticID := submodelElement.SemanticID()
+	if isPut || semanticID != nil {
+		if semanticID != nil && !isEmptyReference(semanticID) {
+			_, err = CreateContextReferenceByOwnerID(localTx, int64(existingID), "submodel_element_semantic_id", semanticID)
+			if err != nil {
+				_, _ = fmt.Println("SMREPO-SMEUPD-CRSEMREF " + err.Error())
+				return common.NewInternalServerError("Failed to update SemanticID - see console for details")
+			}
+		} else {
+			deleteSemanticRefQuery, deleteSemanticRefArgs, deleteSemanticRefErr := dialect.Delete("submodel_element_semantic_id_reference").
+				Where(goqu.C("id").Eq(existingID)).
+				ToSQL()
+			if deleteSemanticRefErr != nil {
+				return deleteSemanticRefErr
+			}
+			_, err = localTx.Exec(deleteSemanticRefQuery, deleteSemanticRefArgs...)
 			if err != nil {
 				return err
-			}
-
-			insertQualifierQuery := dialect.Insert(goqu.T("submodel_element_qualifier")).
-				Cols("sme_id", "qualifier_id").
-				Vals(goqu.Vals{existingID, qualifierID})
-
-			insertSQL, insertArgs, err := insertQualifierQuery.ToSQL()
-			if err != nil {
-				return err
-			}
-
-			_, err = localTx.Exec(insertSQL, insertArgs...)
-			if err != nil {
-				_, _ = fmt.Println("SMREPO-UPD-CRQUAL " + err.Error())
-				return common.NewInternalServerError("Failed to create qualifier for Submodel Element with ID Short'" + idShortOrPath + "'. See console for details.")
 			}
 		}
 	}
@@ -446,7 +376,7 @@ func (p *PostgreSQLSMECrudHandler) Delete(idShortOrPath string) error {
 // Example:
 //
 //	dbID, err := handler.GetDatabaseID("sensors.temperature")
-func (p *PostgreSQLSMECrudHandler) GetDatabaseID(submodelID string, idShortPath string) (int, error) {
+func (p *PostgreSQLSMECrudHandler) GetDatabaseID(submodelID int, idShortPath string) (int, error) {
 	dialect := goqu.Dialect("postgres")
 	selectQuery, selectArgs, err := dialect.From("submodel_element").
 		Select("id").
@@ -463,7 +393,7 @@ func (p *PostgreSQLSMECrudHandler) GetDatabaseID(submodelID string, idShortPath 
 	err = p.Db.QueryRow(selectQuery, selectArgs...).Scan(&id)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return 0, common.NewErrNotFound("SubmodelElement with path '" + idShortPath + "' not found in submodel '" + submodelID + "'")
+			return 0, common.NewErrNotFound("SubmodelElement with path '" + idShortPath + "' not found in submodel '" + strconv.Itoa(submodelID) + "'")
 		}
 		return 0, err
 	}
@@ -567,6 +497,14 @@ func (p *PostgreSQLSMECrudHandler) GetSubmodelElementType(idShortPath string) (*
 //   - string: The new full idShortPath after the update
 //   - error: An error if a conflict is detected or the update fails
 func (p *PostgreSQLSMECrudHandler) UpdateIdShortPaths(tx *sql.Tx, submodelID string, oldPath string, newIDShort string) (string, error) {
+	submodelDatabaseID, err := persistenceutils.GetSubmodelDatabaseID(tx, submodelID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return "", common.NewErrNotFound("SMREPO-UPDPATH-SMNOTFOUND Submodel with ID '" + submodelID + "' not found")
+		}
+		return "", common.NewInternalServerError("SMREPO-UPDPATH-GETSMDATABASEID " + err.Error())
+	}
+
 	if strings.HasSuffix(oldPath, "]") {
 		dialect := goqu.Dialect("postgres")
 		updateListItemQuery, updateListItemArgs, err := dialect.Update("submodel_element").
@@ -574,7 +512,7 @@ func (p *PostgreSQLSMECrudHandler) UpdateIdShortPaths(tx *sql.Tx, submodelID str
 				"id_short": newIDShort,
 			}).
 			Where(
-				goqu.C("submodel_id").Eq(submodelID),
+				goqu.C("submodel_id").Eq(submodelDatabaseID),
 				goqu.C("idshort_path").Eq(oldPath),
 			).
 			ToSQL()
@@ -603,7 +541,7 @@ func (p *PostgreSQLSMECrudHandler) UpdateIdShortPaths(tx *sql.Tx, submodelID str
 	conflictQuery, conflictArgs, err := dialect.From("submodel_element").
 		Select(goqu.COUNT("id")).
 		Where(
-			goqu.C("submodel_id").Eq(submodelID),
+			goqu.C("submodel_id").Eq(submodelDatabaseID),
 			goqu.C("idshort_path").Eq(newPath),
 		).
 		ToSQL()
@@ -628,7 +566,7 @@ func (p *PostgreSQLSMECrudHandler) UpdateIdShortPaths(tx *sql.Tx, submodelID str
 			"idshort_path": newPath,
 		}).
 		Where(
-			goqu.C("submodel_id").Eq(submodelID),
+			goqu.C("submodel_id").Eq(submodelDatabaseID),
 			goqu.C("idshort_path").Eq(oldPath),
 		).
 		ToSQL()
@@ -642,13 +580,13 @@ func (p *PostgreSQLSMECrudHandler) UpdateIdShortPaths(tx *sql.Tx, submodelID str
 	}
 
 	// Update children whose path starts with oldPath followed by "." (collection/entity children)
-	err = updateChildPaths(tx, dialect, submodelID, oldPath, newPath, ".")
+	err = updateChildPaths(tx, dialect, submodelDatabaseID, oldPath, newPath, ".")
 	if err != nil {
 		return "", err
 	}
 
 	// Update children whose path starts with oldPath followed by "[" (list children)
-	err = updateChildPaths(tx, dialect, submodelID, oldPath, newPath, "[")
+	err = updateChildPaths(tx, dialect, submodelDatabaseID, oldPath, newPath, "[")
 	if err != nil {
 		return "", err
 	}
@@ -681,7 +619,7 @@ func computeNewPath(oldPath string, newIDShort string) string {
 //
 // It uses PostgreSQL's OVERLAY function to replace the old prefix portion with the new prefix,
 // ensuring only the exact prefix is replaced without affecting similar-prefix siblings.
-func updateChildPaths(tx *sql.Tx, dialect goqu.DialectWrapper, submodelID string, oldPath string, newPath string, separator string) error {
+func updateChildPaths(tx *sql.Tx, dialect goqu.DialectWrapper, submodelDatabaseID int, oldPath string, newPath string, separator string) error {
 	likePattern := oldPath + separator + "%"
 	oldPrefixLen := len(oldPath)
 
@@ -697,7 +635,7 @@ func updateChildPaths(tx *sql.Tx, dialect goqu.DialectWrapper, submodelID string
 			"idshort_path": updateExpr,
 		}).
 		Where(
-			goqu.C("submodel_id").Eq(submodelID),
+			goqu.C("submodel_id").Eq(submodelDatabaseID),
 			goqu.C("idshort_path").Like(likePattern),
 		).
 		ToSQL()

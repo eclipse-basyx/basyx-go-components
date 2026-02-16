@@ -101,41 +101,17 @@ func (p PostgreSQLMultiLanguagePropertyHandler) Update(submodelID string, idShor
 
 	dialect := goqu.Dialect("postgres")
 
-	elementID, err := p.decorated.GetDatabaseID(submodelID, idShortOrPath)
+	smDbID, err := persistenceutils.GetSubmodelDatabaseID(localTx, submodelID)
+	if err != nil {
+		_, _ = fmt.Println(err)
+		return common.NewInternalServerError("Failed to execute PostgreSQL Query - no changes applied - see console for details.")
+	}
+	elementID, err := p.decorated.GetDatabaseID(smDbID, idShortOrPath)
 	if err != nil {
 		return err
 	}
 
-	// Handle optional valueId field
-	// For PUT: always update (even if nil, which clears the field)
-	// For PATCH: only update if provided (not nil)
-	if isPut || mlp.ValueID() != nil {
-		var valueIdRef sql.NullInt64
-		if mlp.ValueID() != nil && !isEmptyReference(mlp.ValueID()) {
-			// Insert the reference and get the ID
-			refID, err := insertReference(localTx, mlp.ValueID())
-			if err != nil {
-				return err
-			}
-			valueIdRef = sql.NullInt64{Int64: int64(refID), Valid: true}
-		}
-
-		// Update multilanguage_property table with valueId
-		updateQuery, updateArgs, err := dialect.Update("multilanguage_property").
-			Set(goqu.Record{
-				"value_id": valueIdRef,
-			}).
-			Where(goqu.C("id").Eq(elementID)).
-			ToSQL()
-		if err != nil {
-			return err
-		}
-
-		_, err = localTx.Exec(updateQuery, updateArgs...)
-		if err != nil {
-			return err
-		}
-	}
+	_ = mlp
 
 	// Handle Value field - delete existing values and insert new ones
 	// For PUT: always replace (delete all and insert new)
@@ -175,6 +151,30 @@ func (p PostgreSQLMultiLanguagePropertyHandler) Update(submodelID string, idShor
 		}
 	}
 
+	if isPut || mlp.ValueID() != nil {
+		valueIDPayload := "[]"
+		if mlp.ValueID() != nil && !isEmptyReference(mlp.ValueID()) {
+			valueIDJSONString, serErr := serializeIClassSliceToJSON([]types.IClass{mlp.ValueID()}, "SMREPO-MLP-UPDATE-VALREFJSONIZATION")
+			if serErr != nil {
+				return serErr
+			}
+			valueIDPayload = valueIDJSONString
+		}
+
+		updateMLPQuery, updateMLPArgs, updateMLPErr := dialect.Update("multilanguage_property").
+			Set(goqu.Record{"value_id_payload": goqu.L("?::jsonb", valueIDPayload)}).
+			Where(goqu.C("id").Eq(elementID)).
+			ToSQL()
+		if updateMLPErr != nil {
+			return updateMLPErr
+		}
+
+		_, err = localTx.Exec(updateMLPQuery, updateMLPArgs...)
+		if err != nil {
+			return err
+		}
+	}
+
 	return persistenceutils.CommitTransactionIfNeeded(tx, localTx)
 }
 
@@ -203,12 +203,19 @@ func (p PostgreSQLMultiLanguagePropertyHandler) UpdateValueOnly(submodelID strin
 	}
 
 	dialect := goqu.Dialect("postgres")
+	smDbID, err := persistenceutils.GetSubmodelDatabaseIDFromDB(p.db, submodelID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return common.NewErrNotFound("submodel not found")
+		}
+		return fmt.Errorf("failed to resolve submodel database ID: %w", err)
+	}
 
 	// Build subquery to get the submodel element ID
 	subquery := dialect.From("submodel_element").
 		Select("id").
 		Where(
-			goqu.C("submodel_id").Eq(submodelID),
+			goqu.C("submodel_id").Eq(smDbID),
 			goqu.C("idshort_path").Eq(idShortOrPath),
 		)
 
@@ -274,22 +281,26 @@ func (p PostgreSQLMultiLanguagePropertyHandler) Delete(idShortOrPath string) err
 // Returns:
 //   - *InsertQueryPart: The table name and record for multilanguage_property insert
 //   - error: An error if the element is not of type MultiLanguageProperty
-func (p PostgreSQLMultiLanguagePropertyHandler) GetInsertQueryPart(tx *sql.Tx, id int, element types.ISubmodelElement) (*InsertQueryPart, error) {
+func (p PostgreSQLMultiLanguagePropertyHandler) GetInsertQueryPart(_ *sql.Tx, id int, element types.ISubmodelElement) (*InsertQueryPart, error) {
 	mlp, ok := element.(*types.MultiLanguageProperty)
 	if !ok {
 		return nil, common.NewErrBadRequest("submodelElement is not of type MultiLanguageProperty")
 	}
 
-	valueIDDbID, err := persistenceutils.CreateReference(tx, mlp.ValueID(), sql.NullInt64{}, sql.NullInt64{})
-	if err != nil {
-		return nil, common.NewInternalServerError("Failed to create ValueID reference: " + err.Error())
+	valueIDPayload := "[]"
+	if mlp.ValueID() != nil && !isEmptyReference(mlp.ValueID()) {
+		valueIDJSONString, err := serializeIClassSliceToJSON([]types.IClass{mlp.ValueID()}, "SMREPO-MLP-INSERT-VALREFJSONIZATION")
+		if err != nil {
+			return nil, err
+		}
+		valueIDPayload = valueIDJSONString
 	}
 
 	return &InsertQueryPart{
 		TableName: "multilanguage_property",
 		Record: goqu.Record{
-			"id":       id,
-			"value_id": valueIDDbID,
+			"id":               id,
+			"value_id_payload": goqu.L("?::jsonb", valueIDPayload),
 		},
 	}, nil
 }

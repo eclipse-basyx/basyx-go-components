@@ -101,6 +101,13 @@ func (p PostgreSQLOperationHandler) Update(submodelID string, idShortOrPath stri
 	}
 
 	json := jsoniter.ConfigCompatibleWithStandardLibrary
+	smDbID, err := persistenceutils.GetSubmodelDatabaseID(localTx, submodelID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return common.NewErrNotFound("submodel not found")
+		}
+		return err
+	}
 
 	// Build update record based on isPut flag
 	// For PUT: always update all fields (even if nil/empty, which clears them)
@@ -112,7 +119,7 @@ func (p PostgreSQLOperationHandler) Update(submodelID string, idShortOrPath stri
 	}
 
 	// Only execute update if there are fields to update
-	if persistenceutils.AnyFieldsToUpdate(updateRecord) {
+	if anyFieldsToUpdate(updateRecord) {
 		dialect := goqu.Dialect("postgres")
 		updateQuery, updateArgs, err := dialect.Update("operation_element").
 			Set(updateRecord).
@@ -121,7 +128,7 @@ func (p PostgreSQLOperationHandler) Update(submodelID string, idShortOrPath stri
 					Select("id").
 					Where(goqu.Ex{
 						"idshort_path": idShortOrPath,
-						"submodel_id":  submodelID,
+						"submodel_id":  smDbID,
 					}),
 			)).
 			ToSQL()
