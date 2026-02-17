@@ -85,8 +85,7 @@ CREATE TABLE IF NOT EXISTS submodel (
   submodel_identifier varchar(2048) UNIQUE NOT NULL,              -- Identifiable.id
   id_short    varchar(128),
   category    varchar(128),
-  kind        int,
-  model_type  int NOT NULL DEFAULT 7
+  kind        int
 );
 
 CREATE TABLE IF NOT EXISTS submodel_payload (
