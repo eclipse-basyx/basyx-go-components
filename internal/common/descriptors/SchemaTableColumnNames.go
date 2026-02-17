@@ -43,9 +43,11 @@ const (
 	tblAASDescriptorEndpoint          = "aas_descriptor_endpoint"
 	tblAASIdentifier                  = "aas_identifier"
 	tblSpecificAssetID                = "specific_asset_id"
-	tblSpecificAssetIDSuppSemantic    = "specific_asset_id_supplemental_semantic_id"
+	tblSpecificAssetIDPayload         = "specific_asset_id_payload"
+	tblSpecificAssetIDSuppSemantic    = "specific_asset_id_supplemental_semantic_id_reference"
 	tblSubmodelDescriptor             = "submodel_descriptor"
-	tblSubmodelDescriptorSuppSemantic = "submodel_descriptor_supplemental_semantic_id"
+	tblSubmodelDescriptorSuppSemantic = "submodel_descriptor_supplemental_semantic_id_reference"
+	tblDescriptorPayload              = "descriptor_payload"
 	tblExtension                      = "extension"
 	tblDescriptorExtension            = "descriptor_extension"
 	tblExtensionSuppSemantic          = "extension_supplemental_semantic_id"
@@ -76,26 +78,30 @@ const (
 // names makes SQL generation more robust to refactors and reduces stringly‑typed
 // errors in the query code.
 const (
-	colPosition                = "position" // this column is needed for the Query Language
-	colID                      = "id"
-	colDescriptorID            = "descriptor_id"
-	colAASDescriptorID         = "aas_descriptor_id"
-	colDescriptionID           = "description_id"
-	colDisplayNameID           = "displayname_id"
-	colAdminInfoID             = "administrative_information_id"
-	colAssetKind               = "asset_kind"
-	colAssetType               = "asset_type"
-	colGlobalAssetID           = "global_asset_id"
-	colIDShort                 = "id_short"
-	colCreatedAt               = "created_at"
-	colAASID                   = "id"
-	colInfDescID               = "id"
-	colHref                    = "href"
-	colEndpointProtocol        = "endpoint_protocol"
-	colSubProtocol             = "sub_protocol"
-	colSubProtocolBody         = "sub_protocol_body"
-	colSubProtocolBodyEncoding = "sub_protocol_body_encoding"
-	colInterface               = "interface"
+	colPosition                  = "position" // this column is needed for the Query Language
+	colID                        = "id"
+	colDescriptorID              = "descriptor_id"
+	colAASDescriptorID           = "aas_descriptor_id"
+	colDescriptionID             = "description_id"
+	colDisplayNameID             = "displayname_id"
+	colAdminInfoID               = "administrative_information_id"
+	colDescriptionPayload        = "description_payload"
+	colDisplayNamePayload        = "displayname_payload"
+	colAdministrativeInfoPayload = "administrative_information_payload"
+	colExtensionsPayload         = "extensions_payload"
+	colAssetKind                 = "asset_kind"
+	colAssetType                 = "asset_type"
+	colGlobalAssetID             = "global_asset_id"
+	colIDShort                   = "id_short"
+	colCreatedAt                 = "created_at"
+	colAASID                     = "id"
+	colInfDescID                 = "id"
+	colHref                      = "href"
+	colEndpointProtocol          = "endpoint_protocol"
+	colSubProtocol               = "sub_protocol"
+	colSubProtocolBody           = "sub_protocol_body"
+	colSubProtocolBodyEncoding   = "sub_protocol_body_encoding"
+	colInterface                 = "interface"
 
 	colEndpointProtocolVersion = "endpoint_protocol_version"
 	colSecurityAttributes      = "security_attributes"
@@ -108,17 +114,8 @@ const (
 	colAASRef                  = "aasref"
 
 	colSpecificAssetIDID = "specific_asset_id_id"
+	colSpecificAssetID   = "specific_asset_id"
 	colReferenceID       = "reference_id"
-
-	colValueType     = "value_type"
-	colValueText     = "value_text"
-	colValueNum      = "value_num"
-	colValueBool     = "value_bool"
-	colValueTime     = "value_time"
-	colValueDate     = "value_date"
-	colValueDatetime = "value_datetime"
-
-	colExtensionID = "extension_id"
 
 	colCompany = "company"
 
@@ -126,12 +123,6 @@ const (
 	colType            = "type"
 	colParentReference = "parentreference"
 	colRootReference   = "rootreference"
-
-	// Language string tables columns
-	colLangStringTextTypeReferenceID = "lang_string_text_type_reference_id"
-	colLangStringNameTypeReferenceID = "lang_string_name_type_reference_id"
-	colText                          = "text"
-	colLanguage                      = "language"
 )
 
 // Goqu table helpers (convenience for Returning/Col) to avoid repetitively
@@ -141,5 +132,6 @@ var (
 	tAASDescriptor            = goqu.T(tblAASDescriptor)
 	tAASDescriptorEndpoint    = goqu.T(tblAASDescriptorEndpoint)
 	tSpecificAssetID          = goqu.T(tblSpecificAssetID)
+	tDescriptorPayload        = goqu.T(tblDescriptorPayload)
 	tInfrastructureDescriptor = goqu.T(tblInfrastructureDescriptor)
 )

@@ -76,7 +76,9 @@ CREATE TABLE IF NOT EXISTS asset_information (
   asset_type varchar(2048),
   default_thumbnail JSONB DEFAULT '[]',
   model_type int NOT NULL DEFAULT 4 
-);
+); -- specific_asset_id in specific_asset_id
+-- 
+-- ------------------------------------------
 
 CREATE TABLE IF NOT EXISTS submodel (
   id          BIGSERIAL PRIMARY KEY, 
@@ -87,19 +89,14 @@ CREATE TABLE IF NOT EXISTS submodel (
   model_type  int NOT NULL DEFAULT 7
 );
 
-ALTER TABLE submodel
-  ADD COLUMN IF NOT EXISTS model_type int NOT NULL DEFAULT 7;
-
 CREATE TABLE IF NOT EXISTS submodel_payload (
   submodel_id BIGINT PRIMARY KEY REFERENCES submodel(id) ON DELETE CASCADE,
-  description_payload JSONB DEFAULT NULL,
-  displayname_payload JSONB DEFAULT NULL,
-  administrative_information_payload JSONB DEFAULT NULL,
-  administrative_information_updated_at TIMESTAMPTZ,
-  embedded_data_specification_payload JSONB DEFAULT NULL,
-  supplemental_semantic_ids_payload JSONB DEFAULT NULL,
-  extensions_payload JSONB DEFAULT NULL,
-  qualifiers_payload JSONB DEFAULT NULL
+  description_payload JSONB DEFAULT '[]',
+  displayname_payload JSONB DEFAULT '[]',
+  administrative_information_payload JSONB DEFAULT '[]',
+  embedded_data_specification_payload JSONB DEFAULT '[]',
+  supplemental_semantic_ids_payload JSONB DEFAULT '[]',
+  extensions_payload JSONB DEFAULT '[]'
 );
 
 CREATE TABLE IF NOT EXISTS submodel_element (
@@ -123,8 +120,7 @@ CREATE TABLE IF NOT EXISTS submodel_element_payload (
   administrative_information_payload JSONB DEFAULT '[]',
   embedded_data_specification_payload JSONB DEFAULT '[]',
   supplemental_semantic_ids_payload JSONB DEFAULT '[]',
-  extensions_payload JSONB DEFAULT '[]',
-  qualifiers_payload JSONB DEFAULT '[]'
+  extensions_payload JSONB DEFAULT '[]'
 );
 
 CREATE TABLE IF NOT EXISTS property_element (
@@ -236,6 +232,37 @@ CREATE TABLE IF NOT EXISTS basic_event_element (
 CREATE TABLE IF NOT EXISTS capability_element (
   id BIGINT PRIMARY KEY REFERENCES submodel_element(id) ON DELETE CASCADE
 );
+CREATE TABLE IF NOT EXISTS qualifier (
+  id                BIGSERIAL PRIMARY KEY,
+  position          INTEGER NOT NULL,
+  kind              int,
+  type              TEXT NOT NULL,
+  value_type        int NOT NULL,
+  value_text        TEXT,
+  value_num         NUMERIC,
+  value_bool        BOOLEAN,
+  value_time        TIME,
+  value_date        DATE,
+  value_datetime    TIMESTAMPTZ
+);
+CREATE TABLE IF NOT EXISTS qualifier_payload (
+  qualifier_id BIGINT PRIMARY KEY REFERENCES qualifier(id) ON DELETE CASCADE,
+  value_id_payload JSONB DEFAULT '[]',
+  semantic_id_payload JSONB DEFAULT '[]',
+  supplemental_semantic_ids_payload JSONB DEFAULT '[]'
+);
+
+
+CREATE TABLE IF NOT EXISTS submodel_element_qualifier (
+  sme_id      BIGINT NOT NULL REFERENCES submodel_element(id) ON DELETE CASCADE,
+  qualifier_id BIGINT NOT NULL REFERENCES qualifier(id) ON DELETE CASCADE,
+  PRIMARY KEY (sme_id, qualifier_id)
+);
+CREATE TABLE IF NOT EXISTS submodel_qualifier (
+  id BIGSERIAL PRIMARY KEY,
+  submodel_id  BIGINT NOT NULL REFERENCES submodel(id) ON DELETE CASCADE,
+  qualifier_id BIGINT NOT NULL REFERENCES qualifier(id) ON DELETE CASCADE
+);
 
 CREATE TABLE IF NOT EXISTS descriptor (
   id BIGSERIAL PRIMARY KEY
@@ -300,7 +327,8 @@ CREATE TABLE IF NOT EXISTS descriptor_payload (
   descriptor_id BIGINT PRIMARY KEY REFERENCES descriptor(id) ON DELETE CASCADE,
   description_payload JSONB NOT NULL,
   displayname_payload JSONB NOT NULL,
-  administrative_information_payload JSONB NOT NULL
+  administrative_information_payload JSONB NOT NULL,
+  extensions_payload JSONB DEFAULT '[]'
 );
 
 CREATE TABLE IF NOT EXISTS infrastructure_descriptor (
@@ -309,6 +337,12 @@ CREATE TABLE IF NOT EXISTS infrastructure_descriptor (
   id_short VARCHAR(128),
   id VARCHAR(2048) NOT NULL UNIQUE,
   company VARCHAR(2048)
+);
+
+CREATE TABLE IF NOT EXISTS concept_description (
+  id TEXT PRIMARY KEY,
+  id_short TEXT,
+  data JSONB
 );
 
 /*
@@ -412,7 +446,8 @@ CREATE TABLE IF NOT EXISTS specific_asset_id_external_subject_id_reference_paylo
 -- 5) specific_asset_id_supplemental_semantic_id -> specific_asset_id.id
 -- =========================================================
 CREATE TABLE IF NOT EXISTS specific_asset_id_supplemental_semantic_id_reference (
-  id   BIGINT PRIMARY KEY REFERENCES specific_asset_id(id) ON DELETE CASCADE,
+  id BIGSERIAL PRIMARY KEY,
+  specific_asset_id_id BIGINT NOT NULL REFERENCES specific_asset_id(id) ON DELETE CASCADE,
   type int NOT NULL
 );
 
@@ -431,6 +466,31 @@ CREATE TABLE IF NOT EXISTS specific_asset_id_supplemental_semantic_id_reference_
   parent_reference_payload JSONB NOT NULL
 );
 
+-- =========================================================
+-- 6) submodel_descriptor_supplemental_semantic_id -> submodel_descriptor.descriptor_id
+-- =========================================================
+
+CREATE TABLE IF NOT EXISTS submodel_descriptor_supplemental_semantic_id_reference (
+  id BIGSERIAL PRIMARY KEY,
+  descriptor_id BIGINT NOT NULL REFERENCES submodel_descriptor(descriptor_id) ON DELETE CASCADE,
+  type int NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS submodel_descriptor_supplemental_semantic_id_reference_key (
+  id           BIGSERIAL PRIMARY KEY,
+  reference_id BIGINT NOT NULL REFERENCES submodel_descriptor_supplemental_semantic_id_reference(id) ON DELETE CASCADE,
+  position     INTEGER NOT NULL,
+  type         int NOT NULL,
+  value        TEXT NOT NULL,
+  UNIQUE(reference_id, position)
+);
+
+CREATE TABLE IF NOT EXISTS submodel_descriptor_supplemental_semantic_id_reference_payload (
+  id           BIGSERIAL PRIMARY KEY,
+  reference_id BIGINT NOT NULL REFERENCES submodel_descriptor_supplemental_semantic_id_reference(id) ON DELETE CASCADE,
+  parent_reference_payload JSONB NOT NULL
+);
+
 -- ------------------------------------------
 -- Indexes
 -- ------------------------------------------
@@ -443,7 +503,6 @@ CREATE INDEX IF NOT EXISTS ix_sme_sub_path   ON submodel_element(submodel_id, id
 CREATE INDEX IF NOT EXISTS ix_sme_parent_pos ON submodel_element(parent_sme_id, position);
 CREATE INDEX IF NOT EXISTS ix_sme_sub_type   ON submodel_element(submodel_id, model_type);
 CREATE INDEX IF NOT EXISTS ix_sme_sub_parent ON submodel_element(submodel_id, parent_sme_id);
-CREATE INDEX IF NOT EXISTS ix_sme_sub_root   ON submodel_element(submodel_id, root_sme_id);
 CREATE INDEX IF NOT EXISTS ix_sme_sub_depth  ON submodel_element(submodel_id, depth);
 CREATE INDEX IF NOT EXISTS ix_sme_roots_order
   ON submodel_element (submodel_id,
@@ -457,6 +516,12 @@ CREATE INDEX IF NOT EXISTS ix_mlp_lang      ON multilanguage_property_value(mlp_
 CREATE INDEX IF NOT EXISTS ix_mlp_text_trgm ON multilanguage_property_value USING GIN (text gin_trgm_ops);
 CREATE INDEX IF NOT EXISTS ix_file_value_trgm ON file_element USING GIN (value gin_trgm_ops);
 CREATE INDEX IF NOT EXISTS ix_bee_lastupd ON basic_event_element(last_update);
+
+CREATE INDEX IF NOT EXISTS ix_qual_type     ON qualifier(type);
+CREATE INDEX IF NOT EXISTS ix_qual_position ON qualifier(position);
+CREATE INDEX IF NOT EXISTS ix_smeq_qualifier_id ON submodel_element_qualifier(qualifier_id);
+CREATE INDEX IF NOT EXISTS ix_smq_submodel_id   ON submodel_qualifier(submodel_id);
+CREATE INDEX IF NOT EXISTS ix_smq_qualifier_id  ON submodel_qualifier(qualifier_id);
 
 CREATE UNIQUE INDEX IF NOT EXISTS ix_aas_identifier_aasid ON aas_identifier(aasId);
 CREATE INDEX IF NOT EXISTS ix_aas_identifier_created_at ON aas_identifier(created_at);
@@ -515,7 +580,6 @@ CREATE INDEX IF NOT EXISTS ix_submodel_element_semantic_id_refkey_refid ON submo
 CREATE INDEX IF NOT EXISTS ix_submodel_element_semantic_id_refkey_refval ON submodel_element_semantic_id_reference_key(reference_id, value);
 CREATE INDEX IF NOT EXISTS ix_submodel_element_semantic_id_refkey_type_val ON submodel_element_semantic_id_reference_key(type, value);
 CREATE INDEX IF NOT EXISTS ix_submodel_element_semantic_id_refkey_val_trgm ON submodel_element_semantic_id_reference_key USING GIN (value gin_trgm_ops);
-CREATE UNIQUE INDEX IF NOT EXISTS ux_submodel_element_semantic_id_ref_payload_refid ON submodel_element_semantic_id_reference_payload(reference_id);
 
 CREATE INDEX IF NOT EXISTS ix_submodel_descriptor_semantic_id_ref_type ON submodel_descriptor_semantic_id_reference(type);
 CREATE INDEX IF NOT EXISTS ix_submodel_descriptor_semantic_id_refkey_refid ON submodel_descriptor_semantic_id_reference_key(reference_id);
@@ -523,8 +587,20 @@ CREATE INDEX IF NOT EXISTS ix_submodel_descriptor_semantic_id_refkey_refval ON s
 CREATE INDEX IF NOT EXISTS ix_submodel_descriptor_semantic_id_refkey_type_val ON submodel_descriptor_semantic_id_reference_key(type, value);
 CREATE INDEX IF NOT EXISTS ix_submodel_descriptor_semantic_id_refkey_val_trgm ON submodel_descriptor_semantic_id_reference_key USING GIN (value gin_trgm_ops);
 
+CREATE INDEX IF NOT EXISTS ix_smdesc_supp_sem_owner_id ON submodel_descriptor_supplemental_semantic_id_reference(descriptor_id);
+CREATE INDEX IF NOT EXISTS ix_smdesc_supp_sem_refkey_refid ON submodel_descriptor_supplemental_semantic_id_reference_key(reference_id);
+CREATE INDEX IF NOT EXISTS ix_smdesc_supp_sem_refkey_refval ON submodel_descriptor_supplemental_semantic_id_reference_key(reference_id, value);
+CREATE INDEX IF NOT EXISTS ix_smdesc_supp_sem_refkey_type_val ON submodel_descriptor_supplemental_semantic_id_reference_key(type, value);
+CREATE INDEX IF NOT EXISTS ix_smdesc_supp_sem_refkey_val_trgm ON submodel_descriptor_supplemental_semantic_id_reference_key USING GIN (value gin_trgm_ops);
+
 CREATE INDEX IF NOT EXISTS ix_specasset_external_subject_id_ref_type ON specific_asset_id_external_subject_id_reference(type);
 CREATE INDEX IF NOT EXISTS ix_specasset_external_subject_id_refkey_refid ON specific_asset_id_external_subject_id_reference_key(reference_id);
 CREATE INDEX IF NOT EXISTS ix_specasset_external_subject_id_refkey_refval ON specific_asset_id_external_subject_id_reference_key(reference_id, value);
 CREATE INDEX IF NOT EXISTS ix_specasset_external_subject_id_refkey_type_val ON specific_asset_id_external_subject_id_reference_key(type, value);
 CREATE INDEX IF NOT EXISTS ix_specasset_external_subject_id_refkey_val_trgm ON specific_asset_id_external_subject_id_reference_key USING GIN (value gin_trgm_ops);
+
+CREATE INDEX IF NOT EXISTS ix_specasset_supp_semantic_owner_id ON specific_asset_id_supplemental_semantic_id_reference(specific_asset_id_id);
+CREATE INDEX IF NOT EXISTS ix_specasset_supp_semantic_refkey_refid ON specific_asset_id_supplemental_semantic_id_reference_key(reference_id);
+CREATE INDEX IF NOT EXISTS ix_specasset_supp_semantic_refkey_refval ON specific_asset_id_supplemental_semantic_id_reference_key(reference_id, value);
+CREATE INDEX IF NOT EXISTS ix_specasset_supp_semantic_refkey_type_val ON specific_asset_id_supplemental_semantic_id_reference_key(type, value);
+CREATE INDEX IF NOT EXISTS ix_specasset_supp_semantic_refkey_val_trgm ON specific_asset_id_supplemental_semantic_id_reference_key USING GIN (value gin_trgm_ops);

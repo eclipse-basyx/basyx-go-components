@@ -130,10 +130,10 @@ func TestHandleComparison_BuildsExistsForSpecificAssetExternalSubjectKeyValue(t 
 	if !strings.Contains(sql, "EXISTS") {
 		t.Fatalf("expected EXISTS in SQL, got: %s", sql)
 	}
-	if !strings.Contains(sql, "JOIN \"reference\" AS \"external_subject_reference\"") {
+	if !strings.Contains(sql, "JOIN \"specific_asset_id_external_subject_id_reference\" AS \"external_subject_reference\"") {
 		t.Fatalf("expected join to external_subject_reference in SQL, got: %s", sql)
 	}
-	if !strings.Contains(sql, "JOIN \"reference_key\" AS \"external_subject_reference_key\"") {
+	if !strings.Contains(sql, "JOIN \"specific_asset_id_external_subject_id_reference_key\" AS \"external_subject_reference_key\"") {
 		t.Fatalf("expected join to external_subject_reference_key in SQL, got: %s", sql)
 	}
 
@@ -192,10 +192,10 @@ func TestHandleComparison_BuildsExistsForSpecificAssetExternalSubjectKeyValue_Wi
 	if !strings.Contains(sql, "EXISTS") {
 		t.Fatalf("expected EXISTS in SQL, got: %s", sql)
 	}
-	if !strings.Contains(sql, "JOIN \"reference\" AS \"external_subject_reference\"") {
+	if !strings.Contains(sql, "JOIN \"specific_asset_id_external_subject_id_reference\" AS \"external_subject_reference\"") {
 		t.Fatalf("expected join to external_subject_reference in SQL, got: %s", sql)
 	}
-	if !strings.Contains(sql, "JOIN \"reference_key\" AS \"external_subject_reference_key\"") {
+	if !strings.Contains(sql, "JOIN \"specific_asset_id_external_subject_id_reference_key\" AS \"external_subject_reference_key\"") {
 		t.Fatalf("expected join to external_subject_reference_key in SQL, got: %s", sql)
 	}
 

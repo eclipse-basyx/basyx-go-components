@@ -3,6 +3,7 @@ package main
 
 import (
 	"bytes"
+	"database/sql"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -218,35 +219,35 @@ func TestIntegration(t *testing.T) {
 
 	// Only after config-driven cleanup and empty check, verify DB is empty
 	// wait for code to be merged
-	/*
-	   t.Run("Check_DB_Empty", func(t *testing.T) {
-	       db, err := sql.Open("postgres", "host=127.0.0.1 port=5432 user=admin password=admin123 dbname=basyxTestDB sslmode=disable")
-	       require.NoError(t, err)
-	       defer func() { _ = db.Close() }()
-	       require.NoError(t, db.Ping())
 
-	       rows, err := db.Query("SELECT tablename FROM pg_tables WHERE schemaname = 'public'")
-	       require.NoError(t, err)
-	       defer func() { _ = rows.Close() }()
+	t.Run("Check_DB_Empty", func(t *testing.T) {
+		db, err := sql.Open("postgres", "host=127.0.0.1 port=6432 user=admin password=admin123 dbname=basyxTestDB sslmode=disable")
+		require.NoError(t, err)
+		defer func() { _ = db.Close() }()
+		require.NoError(t, db.Ping())
 
-	       nonEmpty := []string{}
-	       for rows.Next() {
-	           var table string
-	           require.NoError(t, rows.Scan(&table))
+		rows, err := db.Query("SELECT tablename FROM pg_tables WHERE schemaname = 'public'")
+		require.NoError(t, err)
+		defer func() { _ = rows.Close() }()
 
-	           var cnt int
-	           q := fmt.Sprintf("SELECT COUNT(*) FROM \"%s\"", table)
-	           err = db.QueryRow(q).Scan(&cnt)
-	           require.NoError(t, err)
-	           if cnt != 0 {
-	               nonEmpty = append(nonEmpty, fmt.Sprintf("%s:%d", table, cnt))
-	           }
-	       }
-	       require.NoError(t, rows.Err())
+		nonEmpty := []string{}
+		for rows.Next() {
+			var table string
+			require.NoError(t, rows.Scan(&table))
 
-	       assert.Empty(t, nonEmpty, "Expected all tables empty, but found rows in: %v", nonEmpty)
-	   })
-	*/
+			var cnt int
+			q := fmt.Sprintf("SELECT COUNT(*) FROM \"%s\"", table)
+			err = db.QueryRow(q).Scan(&cnt)
+			require.NoError(t, err)
+			if cnt != 0 {
+				nonEmpty = append(nonEmpty, fmt.Sprintf("%s:%d", table, cnt))
+			}
+		}
+		require.NoError(t, rows.Err())
+
+		assert.Empty(t, nonEmpty, "Expected all tables empty, but found rows in: %v", nonEmpty)
+	})
+
 }
 
 // TestMain handles setup and teardown

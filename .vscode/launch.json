@@ -50,7 +50,7 @@
                 "-config",
                 "${workspaceFolder}/cmd/submodelrepositoryservice/config.yaml",
                 "-databaseSchema",
-                "${workspaceFolder}/basyxschema.sql"
+                "${workspaceFolder}/old_schema.sql"
             ]
         },
         {
