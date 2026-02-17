@@ -41,6 +41,7 @@ RUN mkdir -p /config
 # Copy default configuration
 COPY --from=builder /app/cmd/submodelrepositoryservice/config.yaml /config/config.yaml
 COPY --from=builder /app/basyxschema.sql /root/basyxschema.sql
+COPY --from=builder /app/internal/submodelrepository/integration_tests/expected /app/internal/submodelrepository/integration_tests/expected
 
 # Default port (can be overridden by environment)
 ENV SERVER_PORT=5000

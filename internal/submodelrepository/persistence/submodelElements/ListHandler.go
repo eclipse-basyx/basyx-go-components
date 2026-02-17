@@ -137,6 +137,27 @@ func (p PostgreSQLSubmodelElementListHandler) Update(submodelID string, idShortO
 		return err
 	}
 
+	if isPut || smeList.Value() != nil {
+		if len(smeList.Value()) > 0 {
+			_, insertErr := InsertSubmodelElements(
+				p.db,
+				submodelID,
+				smeList.Value(),
+				localTx,
+				&BatchInsertContext{
+					ParentID:      elementID,
+					ParentPath:    idShortOrPath,
+					RootSmeID:     elementID,
+					IsFromList:    true,
+					StartPosition: 0,
+				},
+			)
+			if insertErr != nil {
+				return common.NewInternalServerError("SMREPO-UPDSMELIST-INSCHILDREN " + insertErr.Error())
+			}
+		}
+	}
+
 	return persistenceutils.CommitTransactionIfNeeded(tx, localTx)
 }
 

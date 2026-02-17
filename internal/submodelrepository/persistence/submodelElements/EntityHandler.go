@@ -93,14 +93,14 @@ func (p PostgreSQLEntityHandler) Update(submodelID string, idShortOrPath string,
 	defer cu(&err)
 	// For PUT operations or when Statements are provided, delete all children
 	if isPut || entity.Statements() != nil {
-		err = DeleteAllChildren(p.db, submodelID, idShortOrPath, tx)
+		err = DeleteAllChildren(p.db, submodelID, idShortOrPath, localTx)
 		if err != nil {
 			return err
 		}
 	}
 
 	// Update base submodel element properties
-	err = p.decorated.Update(submodelID, idShortOrPath, submodelElement, tx, isPut)
+	err = p.decorated.Update(submodelID, idShortOrPath, submodelElement, localTx, isPut)
 	if err != nil {
 		return err
 	}
@@ -139,7 +139,60 @@ func (p PostgreSQLEntityHandler) Update(submodelID string, idShortOrPath string,
 		}
 	}
 
+	// Recreate statement children when they are part of the request body.
+	// For PUT this recreates the full children set after replacement,
+	// for PATCH this replaces statements only when provided.
+	if entity.Statements() != nil {
+		insertedStatementIDs, insertErr := InsertSubmodelElements(
+			p.db,
+			submodelID,
+			entity.Statements(),
+			localTx,
+			&BatchInsertContext{
+				ParentID:      elementID,
+				ParentPath:    idShortOrPath,
+				RootSmeID:     elementID,
+				IsFromList:    false,
+				StartPosition: 0,
+			},
+		)
+		if insertErr != nil {
+			return common.NewInternalServerError("SMREPO-UPDENTITY-INSSTATEMENTS " + insertErr.Error())
+		}
+
+		err = ensureEntityStatementParentLinks(localTx, elementID, insertedStatementIDs)
+		if err != nil {
+			return err
+		}
+	}
+
 	return persistenceutils.CommitTransactionIfNeeded(tx, localTx)
+}
+
+func ensureEntityStatementParentLinks(tx *sql.Tx, entityElementID int, insertedStatementIDs []int) error {
+	if len(insertedStatementIDs) == 0 {
+		return nil
+	}
+
+	dialect := goqu.Dialect("postgres")
+
+	updateQuery, updateArgs, err := dialect.Update("submodel_element").
+		Set(goqu.Record{
+			"parent_sme_id": entityElementID,
+			"root_sme_id":   entityElementID,
+		}).
+		Where(goqu.C("id").In(insertedStatementIDs)).
+		ToSQL()
+	if err != nil {
+		return common.NewInternalServerError("SMREPO-UPDENTITY-FIXCHILDPARENT-BUILDQ " + err.Error())
+	}
+
+	_, err = tx.Exec(updateQuery, updateArgs...)
+	if err != nil {
+		return common.NewInternalServerError("SMREPO-UPDENTITY-FIXCHILDPARENT-EXECQ " + err.Error())
+	}
+
+	return nil
 }
 
 // UpdateValueOnly updates only the value of an existing Entity submodel element identified by its idShort or path.

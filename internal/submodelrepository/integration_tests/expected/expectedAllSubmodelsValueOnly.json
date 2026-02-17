@@ -158,12 +158,6 @@
         },
         {
             "DemoFile": {
-                "contentType": "",
-                "value": ""
-            }
-        },
-        {
-            "DemoFile": {
                 "contentType": "image/png",
                 "value": "http://example.com/placeholder.png"
             }

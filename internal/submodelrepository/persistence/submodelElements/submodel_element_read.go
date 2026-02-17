@@ -427,7 +427,55 @@ func buildSubmodelElementTreeFromRows(db *sql.DB, parsedRows []loadedSMERow, sub
 		return rootNodes[i].path < rootNodes[j].path
 	})
 
+	attachEntityChildrenByPathFallback(rootNodes)
+
 	return rootNodes[0].element, nil
+}
+
+func attachEntityChildrenByPathFallback(rootNodes []*loadedSMENode) {
+	if len(rootNodes) <= 1 {
+		return
+	}
+
+	root := rootNodes[0]
+	if root.element.ModelType() != types.ModelTypeEntity {
+		return
+	}
+
+	orphanStatements := make([]*loadedSMENode, 0, len(rootNodes)-1)
+	for i := 1; i < len(rootNodes); i++ {
+		candidate := rootNodes[i]
+		if isDirectEntityStatementPath(root.path, candidate.path) {
+			orphanStatements = append(orphanStatements, candidate)
+		}
+	}
+
+	if len(orphanStatements) == 0 {
+		return
+	}
+
+	sort.SliceStable(orphanStatements, func(i int, j int) bool {
+		if orphanStatements[i].position == orphanStatements[j].position {
+			return orphanStatements[i].path < orphanStatements[j].path
+		}
+		return orphanStatements[i].position < orphanStatements[j].position
+	})
+
+	setEntityChildren(root.element, orphanStatements)
+}
+
+func isDirectEntityStatementPath(entityPath string, candidatePath string) bool {
+	if strings.HasPrefix(candidatePath, entityPath+".") {
+		suffix := strings.TrimPrefix(candidatePath, entityPath+".")
+		return suffix != "" && !strings.Contains(suffix, ".") && !strings.Contains(suffix, "[")
+	}
+
+	if strings.HasPrefix(candidatePath, entityPath+"[") {
+		suffix := strings.TrimPrefix(candidatePath, entityPath)
+		return strings.Count(suffix, "[") == 1 && !strings.Contains(suffix, ".")
+	}
+
+	return false
 }
 
 func buildSubmodelElementForestFromRows(db *sql.DB, parsedRows []loadedSMERow) (map[int64]types.ISubmodelElement, error) {

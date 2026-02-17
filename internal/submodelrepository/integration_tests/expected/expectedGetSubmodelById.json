@@ -36,7 +36,8 @@
                       "value": [
                         {
                           "idShort": "6",
-                          "modelType": "SubmodelElementList",      "typeValueListElement": "Property",
+                          "modelType": "SubmodelElementList",
+                          "typeValueListElement": "Property",
                           "value": [
                             {
                               "idShort": "2",
@@ -483,12 +484,12 @@
               },
               "value": [
                 {
-                  "language": "de",
-                  "text": "Beispielswert für ein MultiLanguageProperty-Element"
-                },
-                {
                   "language": "en-us",
                   "text": "Example value of a MultiLanguageProperty element"
+                },
+                {
+                  "language": "de",
+                  "text": "Beispielswert für ein MultiLanguageProperty-Element"
                 }
               ]
             },

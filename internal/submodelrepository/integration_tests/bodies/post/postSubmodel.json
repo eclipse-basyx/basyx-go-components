@@ -1,0 +1,17 @@
+{
+    "category": "DemoCategory",
+    "id": "http://iese.fraunhofer.de/id/sm/DemoSubmodel",
+    "idShort": "DemoSubmodel",
+    "kind": "Instance",
+    "modelType": "Submodel",
+    "semanticId": {
+        "keys": [
+            {
+                "type": "Submodel",
+                "value": "http://example.com/keys/123"
+            }
+        ],
+        "type": "ModelReference"
+    },
+    "submodelElements": []
+}

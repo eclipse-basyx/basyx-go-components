@@ -275,6 +275,24 @@ func buildSubmodelSemanticIDReferenceKeysQuery(dialect *goqu.DialectWrapper, sub
 	return dialect.Insert("submodel_semantic_id_reference_key").Rows(keyRows).ToSQL()
 }
 
+func buildSubmodelSemanticIDReferencePayloadQuery(dialect *goqu.DialectWrapper, submodelDBID int64, semanticID types.IReference) (string, []any, error) {
+	semanticIDJsonable, err := jsonization.ToJsonable(semanticID)
+	if err != nil {
+		return "", nil, err
+	}
+
+	jsonAPI := jsoniter.ConfigCompatibleWithStandardLibrary
+	semanticIDJSONBytes, err := jsonAPI.Marshal(semanticIDJsonable)
+	if err != nil {
+		return "", nil, err
+	}
+
+	return dialect.Insert("submodel_semantic_id_reference_payload").Rows(goqu.Record{
+		"reference_id":             submodelDBID,
+		"parent_reference_payload": goqu.L("?::jsonb", string(semanticIDJSONBytes)),
+	}).ToSQL()
+}
+
 func buildSelectSubmodelQueryWithPayloadByIdentifier(dialect *goqu.DialectWrapper, submodelIdentifier *string, limit *int32, cursor *string) (string, []any, error) {
 	semanticIDSelectExpression := buildSubmodelSemanticIDSelectExpression(dialect)
 
@@ -327,6 +345,12 @@ func buildSubmodelSemanticIDSelectExpression(dialect *goqu.DialectWrapper) exp.A
 	referenceTypeSelectExpression := buildReferenceTypeStringSelectExpression(goqu.I("ssr.type"))
 	keyTypeSelectExpression := buildKeyTypeStringSelectExpression(goqu.I("ssrk.type"))
 
+	semanticIDPayloadSelectDS := dialect.
+		From(goqu.T("submodel_semantic_id_reference_payload").As("ssrp")).
+		Select(goqu.I("ssrp.parent_reference_payload")).
+		Where(goqu.I("ssrp.reference_id").Eq(goqu.I("submodel.id"))).
+		Limit(1)
+
 	orderedKeyValuesSelectDS := dialect.
 		From(goqu.T("submodel_semantic_id_reference_key").As("ssrk")).
 		Select(
@@ -364,7 +388,7 @@ func buildSubmodelSemanticIDSelectExpression(dialect *goqu.DialectWrapper) exp.A
 		Where(goqu.I("ssr.id").Eq(goqu.I("submodel.id"))).
 		Limit(1)
 
-	return goqu.COALESCE(semanticIDSelectDS, goqu.L("'{}'::jsonb")).As("semantic_id_payload")
+	return goqu.COALESCE(semanticIDPayloadSelectDS, semanticIDSelectDS, goqu.L("'{}'::jsonb")).As("semantic_id_payload")
 }
 
 func buildReferenceTypeStringSelectExpression(typeColumn exp.Expression) exp.CaseExpression {

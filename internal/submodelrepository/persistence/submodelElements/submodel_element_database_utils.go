@@ -34,6 +34,7 @@ import (
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	jsoniter "github.com/json-iterator/go"
+	"github.com/lib/pq"
 )
 
 // BatchInsertContext provides context for batch inserting submodel elements.
@@ -55,6 +56,7 @@ type flattenedInsertNode struct {
 	idShort       string
 	idShortPath   string
 	parentIndex   int
+	parentDBID    int
 	depth         int
 	rootDBID      int
 	rootNodeIndex int
@@ -64,6 +66,7 @@ type flattenedInsertNode struct {
 type pendingInsertNode struct {
 	element       types.ISubmodelElement
 	parentIndex   int
+	parentDBID    int
 	depth         int
 	position      int
 	parentPath    string
@@ -92,6 +95,7 @@ func flattenSubmodelElementsForInsert(db *sql.DB, elements []types.ISubmodelElem
 		pending = append(pending, pendingInsertNode{
 			element:       element,
 			parentIndex:   -1,
+			parentDBID:    ctx.ParentID,
 			depth:         0,
 			position:      ctx.StartPosition + i,
 			parentPath:    ctx.ParentPath,
@@ -125,6 +129,7 @@ func flattenSubmodelElementsForInsert(db *sql.DB, elements []types.ISubmodelElem
 			idShort:       idShort,
 			idShortPath:   idShortPath,
 			parentIndex:   item.parentIndex,
+			parentDBID:    item.parentDBID,
 			depth:         item.depth,
 			rootDBID:      item.rootDBID,
 			rootNodeIndex: item.rootNodeIndex,
@@ -151,6 +156,7 @@ func flattenSubmodelElementsForInsert(db *sql.DB, elements []types.ISubmodelElem
 			pending = append(pending, pendingInsertNode{
 				element:       child,
 				parentIndex:   currentIndex,
+				parentDBID:    0,
 				depth:         item.depth + 1,
 				position:      childPosition,
 				parentPath:    idShortPath,
@@ -244,6 +250,8 @@ func updateHierarchyReferencesChunked(tx *sql.Tx, dialect goqu.DialectWrapper, n
 					return common.NewInternalServerError("SMREPO-INSSME-UPDHIER-MISSINGPARENT Parent SME ID missing for path " + node.idShortPath)
 				}
 				parentID = resolvedParentID
+			} else if node.parentDBID > 0 {
+				parentID = node.parentDBID
 			} else {
 				parentID = nil
 			}
@@ -289,6 +297,9 @@ func updateHierarchyReferencesChunked(tx *sql.Tx, dialect goqu.DialectWrapper, n
 		}
 
 		if _, execErr := tx.Exec(updateQuery, updateArgs...); execErr != nil {
+			if mappedErr := mapConflictInsertError(execErr); mappedErr != nil {
+				return mappedErr
+			}
 			return common.NewInternalServerError("SMREPO-INSSME-UPDHIER-EXECQ " + execErr.Error())
 		}
 	}
@@ -536,6 +547,9 @@ func insertRecordsReturningIDsChunked(tx *sql.Tx, dialect goqu.DialectWrapper, t
 
 		resultRows, execErr := tx.Query(sqlQuery, args...)
 		if execErr != nil {
+			if mappedErr := mapConflictInsertError(execErr); mappedErr != nil {
+				return nil, mappedErr
+			}
 			return nil, execErr
 		}
 
@@ -601,8 +615,28 @@ func executeRecordInsertChunked(tx *sql.Tx, dialect goqu.DialectWrapper, tableNa
 			return common.NewInternalServerError(errCode + "-BUILDQ " + buildErr.Error())
 		}
 		if _, execErr := tx.Exec(sqlQuery, args...); execErr != nil {
+			if mappedErr := mapConflictInsertError(execErr); mappedErr != nil {
+				return mappedErr
+			}
 			return common.NewInternalServerError(errCode + "-EXECQ " + execErr.Error())
 		}
+	}
+
+	return nil
+}
+
+func mapConflictInsertError(err error) error {
+	if err == nil {
+		return nil
+	}
+
+	pqErr, ok := err.(*pq.Error)
+	if !ok {
+		return nil
+	}
+
+	if pqErr.Code == "23505" {
+		return common.NewErrConflict("SMREPO-INSSME-CONFLICT Duplicate submodel element")
 	}
 
 	return nil

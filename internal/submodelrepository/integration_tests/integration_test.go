@@ -3,7 +3,6 @@ package main
 
 import (
 	"bytes"
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -304,7 +303,7 @@ func TestIntegration(t *testing.T) {
 // TestFileAttachmentOperations tests file upload, download, and deletion for File SME
 func TestFileAttachmentOperations(t *testing.T) {
 	baseURL := "http://localhost:6004"
-	submodelID := "aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9Pbmx5RmlsZVN1Ym1vZGVs" // base64 encoded: http://iese.fraunhofer.de/id/sm/OnlyFileSubmodel
+	submodelID := "aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9Pbmx5RmlsZVN1Ym1vZGVsX1Rlc3Q" // base64 encoded: http://iese.fraunhofer.de/id/sm/OnlyFileSubmodel_Test
 	testFilePath := "testFiles/marcus.gif"
 
 	// Read the test file content for later comparison
@@ -427,38 +426,6 @@ func TestMain(m *testing.M) {
 	_, _ = fmt.Println("Waiting for service to be healthy...")
 	if !waitForHealthCheck() {
 		_, _ = fmt.Println("Health check failed, exiting")
-		os.Exit(1)
-	}
-
-	// Create DB Connection here
-	sqlQuery, err := sql.Open("postgres", "postgres://admin:admin123@127.0.0.1:6432/basyxTestDB?sslmode=disable")
-
-	if err != nil {
-		_, _ = fmt.Printf("Failed to connect to database: %v\n", err)
-		os.Exit(1)
-	}
-
-	// wait for 5sec to ensure that the DB is ready
-	time.Sleep(5 * time.Second)
-
-	dir, osErr := os.Getwd()
-
-	if osErr != nil {
-		_, _ = fmt.Printf("Failed to get working directory: %v\n", osErr)
-		os.Exit(1)
-	}
-
-	queryString, fileError := os.ReadFile(dir + "/sql/demoSubmodel.sql")
-
-	if fileError != nil {
-		_, _ = fmt.Printf("Failed to read SQL file: %v\n", fileError)
-		os.Exit(1)
-	}
-
-	_, err = sqlQuery.Exec(string(queryString))
-
-	if err != nil {
-		_, _ = fmt.Printf("Failed to execute SQL script: %v\n", err)
 		os.Exit(1)
 	}
 

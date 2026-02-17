@@ -7,6 +7,14 @@
         "expectedStatus": 200
     },
     {
+        "context": "Post Submodel",
+        "method": "POST",
+        "endpoint": "http://localhost:6004/submodels",
+        "data": "bodies/post/postSubmodel.json",
+        "shouldMatch": "bodies/post/postSubmodel.json",
+        "expectedStatus": 201
+    },
+    {
         "context": "Create Top Level Property",
         "method": "POST",
         "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements",

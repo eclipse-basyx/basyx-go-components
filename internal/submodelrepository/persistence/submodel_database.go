@@ -30,16 +30,22 @@ package persistence
 import (
 	"crypto/rsa"
 	"database/sql"
+	"encoding/json"
+	"errors"
 	"fmt"
+	"os"
 	"time"
 
+	"github.com/FriedJannik/aas-go-sdk/jsonization"
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/FriedJannik/aas-go-sdk/verification"
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	submodelelements "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/submodelElements"
+	persistenceutils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
 	"golang.org/x/sync/errgroup"
+	jose "gopkg.in/go-jose/go-jose.v2"
 
 	_ "github.com/lib/pq"
 )
@@ -47,11 +53,12 @@ import (
 // SubmodelDatabase is the implementation of the SubmodelRepositoryDatabase interface using PostgreSQL as the underlying database.
 type SubmodelDatabase struct {
 	db                 *sql.DB
+	privateKey         *rsa.PrivateKey
 	strictVerification bool
 }
 
 // NewSubmodelDatabase creates a new instance of SubmodelDatabase with the provided database connection.
-func NewSubmodelDatabase(dsn string, maxOpenConnections int, maxIdleConnections int, connMaxLifetimeMinutes int, databaseSchema string, _ *rsa.PrivateKey, strictVerification bool) (*SubmodelDatabase, error) {
+func NewSubmodelDatabase(dsn string, maxOpenConnections int, maxIdleConnections int, connMaxLifetimeMinutes int, databaseSchema string, privateKey *rsa.PrivateKey, strictVerification bool) (*SubmodelDatabase, error) {
 	db, err := common.InitializeDatabase(dsn, databaseSchema)
 	if err != nil {
 		return nil, err
@@ -69,8 +76,54 @@ func NewSubmodelDatabase(dsn string, maxOpenConnections int, maxIdleConnections 
 
 	return &SubmodelDatabase{
 		db:                 db,
+		privateKey:         privateKey,
 		strictVerification: strictVerification,
 	}, nil
+}
+
+// GetSignedSubmodel retrieves and signs a submodel (or its value-only representation) as JWS compact serialization.
+func (s *SubmodelDatabase) GetSignedSubmodel(submodelID string, valueOnly bool) (string, error) {
+	if s.privateKey == nil {
+		return "", errors.New("JWS signing not configured: private key not loaded")
+	}
+
+	submodel, err := s.GetSubmodelByID(submodelID)
+	if err != nil {
+		return "", err
+	}
+
+	var payload []byte
+	if valueOnly {
+		valueOnlySubmodel, conversionErr := gen.SubmodelToValueOnly(submodel)
+		if conversionErr != nil {
+			return "", conversionErr
+		}
+		payload, err = json.Marshal(valueOnlySubmodel)
+		if err != nil {
+			return "", err
+		}
+	} else {
+		jsonSubmodel, convertErr := jsonization.ToJsonable(submodel)
+		if convertErr != nil {
+			return "", convertErr
+		}
+		payload, err = json.Marshal(jsonSubmodel)
+		if err != nil {
+			return "", err
+		}
+	}
+
+	signer, err := jose.NewSigner(jose.SigningKey{Algorithm: jose.RS256, Key: s.privateKey}, nil)
+	if err != nil {
+		return "", err
+	}
+
+	jws, err := signer.Sign(payload)
+	if err != nil {
+		return "", err
+	}
+
+	return jws.CompactSerialize()
 }
 
 // GetSubmodelByID retrieves a submodel by its identifier from the database.
@@ -182,9 +235,13 @@ func (s *SubmodelDatabase) GetSubmodels(limit int32, cursor string, submodelIden
 		var submodel types.ISubmodel
 		submodel = types.NewSubmodel(identifier.String)
 		submodel.SetIDShort(&idShort.String)
-		submodel.SetCategory(&category.String)
-		modellingKind := types.ModellingKind(kind.Int64)
-		submodel.SetKind(&modellingKind)
+		if category.Valid {
+			submodel.SetCategory(&category.String)
+		}
+		if kind.Valid {
+			modellingKind := types.ModellingKind(kind.Int64)
+			submodel.SetKind(&modellingKind)
+		}
 
 		submodel, err = jsonPayloadToInstance(descriptionJsonString, displayNameJsonString, administrativeInformationJsonString, embeddedDataSpecificationJsonString, supplementalSemanticIDsJsonString, extensionsJsonString, qualifiersJsonString, submodel)
 		if err != nil {
@@ -213,31 +270,30 @@ func (s *SubmodelDatabase) GetSubmodels(limit int32, cursor string, submodelIden
 
 // CreateSubmodel creates a new submodel in the database with the provided submodel data.
 func (s *SubmodelDatabase) CreateSubmodel(submodel types.ISubmodel) error {
-	if s.strictVerification {
-		errors := make([]verification.VerificationError, 0)
-
-		verification.VerifySubmodel(submodel, func(ve *verification.VerificationError) bool {
-			errors = append(errors, *ve)
-			return false
-		})
-
-		if len(errors) > 0 {
-			stringOfAllErrors := ""
-
-			for _, err := range errors {
-				stringOfAllErrors += fmt.Sprintf("%s ", err.Error())
-			}
-
-			return common.NewErrBadRequest("SMREPO-NEWSM-VERIFY " + stringOfAllErrors)
-		}
+	if err := s.verifySubmodel(submodel, "SMREPO-NEWSM-VERIFY"); err != nil {
+		return err
 	}
 
 	tx, cu, err := common.StartTransaction(s.db)
 	if err != nil {
-		return err
+		return common.NewInternalServerError("SMREPO-NEWSM-STARTTX " + err.Error())
 	}
 	defer cu(&err)
 
+	err = s.createSubmodelInTransaction(tx, submodel)
+	if err != nil {
+		return err
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		return common.NewInternalServerError("SMREPO-NEWSM-CREATE-COMMIT " + err.Error())
+	}
+
+	return nil
+}
+
+func (s *SubmodelDatabase) createSubmodelInTransaction(tx *sql.Tx, submodel types.ISubmodel) error {
 	dialect := goqu.Dialect("postgres")
 
 	ids, args, err := buildSubmodelQuery(&dialect, submodel)
@@ -295,6 +351,15 @@ func (s *SubmodelDatabase) CreateSubmodel(submodel types.ISubmodel) error {
 				return common.NewInternalServerError("SMREPO-NEWSM-CREATE-EXECSEMIDKEYSQL " + err.Error())
 			}
 		}
+
+		ids, args, err = buildSubmodelSemanticIDReferencePayloadQuery(&dialect, submodelDBID, semanticID)
+		if err != nil {
+			return common.NewInternalServerError("SMREPO-NEWSM-CREATE-SEMIDPAYLOADSQL " + err.Error())
+		}
+
+		if _, err := tx.Exec(ids, args...); err != nil {
+			return common.NewInternalServerError("SMREPO-NEWSM-CREATE-EXECSEMIDPAYLOADSQL " + err.Error())
+		}
 	}
 
 	if len(submodel.SubmodelElements()) > 0 {
@@ -304,12 +369,31 @@ func (s *SubmodelDatabase) CreateSubmodel(submodel types.ISubmodel) error {
 		}
 	}
 
-	err = tx.Commit()
-	if err != nil {
-		return common.NewInternalServerError("SMREPO-NEWSM-CREATE-COMMIT " + err.Error())
+	return nil
+}
+
+func (s *SubmodelDatabase) verifySubmodel(submodel types.ISubmodel, errorPrefix string) error {
+	if !s.strictVerification {
+		return nil
 	}
 
-	return nil
+	errors := make([]verification.VerificationError, 0)
+
+	verification.VerifySubmodel(submodel, func(ve *verification.VerificationError) bool {
+		errors = append(errors, *ve)
+		return false
+	})
+
+	if len(errors) == 0 {
+		return nil
+	}
+
+	stringOfAllErrors := ""
+	for _, err := range errors {
+		stringOfAllErrors += fmt.Sprintf("%s ", err.Error())
+	}
+
+	return common.NewErrBadRequest(errorPrefix + " " + stringOfAllErrors)
 }
 
 // GetSubmodelElement retrieves a submodel element (including nested children) by idShort path.
@@ -320,6 +404,206 @@ func (s *SubmodelDatabase) GetSubmodelElement(submodelID string, idShortOrPath s
 // GetSubmodelElements retrieves top-level submodel elements for a submodel and reconstructs each subtree.
 func (s *SubmodelDatabase) GetSubmodelElements(submodelID string, limit *int, cursor string, _ bool) ([]types.ISubmodelElement, string, error) {
 	return submodelelements.GetSubmodelElementsBySubmodelID(s.db, submodelID, limit, cursor)
+}
+
+// AddSubmodelElement adds a top-level submodel element to a submodel.
+func (s *SubmodelDatabase) AddSubmodelElement(submodelID string, submodelElement types.ISubmodelElement) error {
+	tx, cleanup, err := common.StartTransaction(s.db)
+	if err != nil {
+		return err
+	}
+	defer cleanup(&err)
+
+	submodelDatabaseID, err := persistenceutils.GetSubmodelDatabaseID(tx, submodelID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return common.NewErrNotFound("SMREPO-ADDSME-SMNOTFOUND Submodel with ID '" + submodelID + "' not found")
+		}
+		return err
+	}
+
+	dialect := goqu.Dialect("postgres")
+	selectQuery, selectArgs, err := dialect.From("submodel_element").
+		Select(goqu.MAX("position")).
+		Where(
+			goqu.C("submodel_id").Eq(submodelDatabaseID),
+			goqu.C("parent_sme_id").IsNull(),
+		).
+		ToSQL()
+	if err != nil {
+		return err
+	}
+
+	var maxPosition sql.NullInt64
+	err = tx.QueryRow(selectQuery, selectArgs...).Scan(&maxPosition)
+	if err != nil {
+		return err
+	}
+
+	startPosition := 0
+	if maxPosition.Valid {
+		startPosition = int(maxPosition.Int64) + 1
+	}
+
+	if isSiblingIDShortCollision(tx, submodelDatabaseID, nil, submodelElement) {
+		return common.NewErrConflict("SMREPO-ADDSME-COLLISION Duplicate submodel element idShort")
+	}
+
+	_, err = submodelelements.InsertSubmodelElements(
+		s.db,
+		submodelID,
+		[]types.ISubmodelElement{submodelElement},
+		tx,
+		&submodelelements.BatchInsertContext{
+			StartPosition: startPosition,
+		},
+	)
+	if err != nil {
+		return err
+	}
+
+	err = tx.Commit()
+	return err
+}
+
+// AddSubmodelElementWithPath adds a submodel element under an existing container path.
+func (s *SubmodelDatabase) AddSubmodelElementWithPath(submodelID string, parentPath string, submodelElement types.ISubmodelElement) error {
+	tx, cleanup, err := common.StartTransaction(s.db)
+	if err != nil {
+		return err
+	}
+	defer cleanup(&err)
+
+	submodelDatabaseID, err := persistenceutils.GetSubmodelDatabaseID(tx, submodelID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return common.NewErrNotFound("SMREPO-ADDSMEBYPATH-SMNOTFOUND Submodel with ID '" + submodelID + "' not found")
+		}
+		return err
+	}
+
+	baseCrudHandler, err := submodelelements.NewPostgreSQLSMECrudHandler(s.db)
+	if err != nil {
+		return err
+	}
+
+	parentElementID, err := baseCrudHandler.GetDatabaseID(submodelDatabaseID, parentPath)
+	if err != nil {
+		return err
+	}
+
+	parentElement, err := submodelelements.GetSubmodelElementByIDShortOrPath(s.db, submodelID, parentPath)
+	if err != nil {
+		return err
+	}
+
+	isFromList := false
+	switch parentElement.ModelType() {
+	case types.ModelTypeSubmodelElementCollection, types.ModelTypeEntity, types.ModelTypeAnnotatedRelationshipElement:
+		isFromList = false
+	case types.ModelTypeSubmodelElementList:
+		isFromList = true
+	default:
+		return common.NewErrBadRequest("SMREPO-ADDSMEBYPATH-BADPARENT Parent element does not support child elements")
+	}
+
+	nextPosition, err := baseCrudHandler.GetNextPosition(parentElementID)
+	if err != nil {
+		return err
+	}
+
+	if isSiblingIDShortCollision(tx, submodelDatabaseID, &parentElementID, submodelElement) {
+		return common.NewErrConflict("SMREPO-ADDSMEBYPATH-COLLISION Duplicate submodel element idShort")
+	}
+
+	_, err = submodelelements.InsertSubmodelElements(
+		s.db,
+		submodelID,
+		[]types.ISubmodelElement{submodelElement},
+		tx,
+		&submodelelements.BatchInsertContext{
+			ParentID:      parentElementID,
+			ParentPath:    parentPath,
+			RootSmeID:     0,
+			IsFromList:    isFromList,
+			StartPosition: nextPosition,
+		},
+	)
+
+	if err != nil {
+		return err
+	}
+
+	return tx.Commit()
+}
+
+func isSiblingIDShortCollision(tx *sql.Tx, submodelDatabaseID int, parentElementID *int, submodelElement types.ISubmodelElement) bool {
+	idShortPtr := submodelElement.IDShort()
+	if idShortPtr == nil || *idShortPtr == "" {
+		return false
+	}
+
+	dialect := goqu.Dialect("postgres")
+	query := dialect.From("submodel_element").
+		Select(goqu.COUNT("*"))
+
+	whereExpressions := []goqu.Expression{
+		goqu.C("submodel_id").Eq(submodelDatabaseID),
+		goqu.C("id_short").Eq(*idShortPtr),
+	}
+
+	if parentElementID == nil {
+		whereExpressions = append(whereExpressions, goqu.C("parent_sme_id").IsNull())
+	} else {
+		whereExpressions = append(whereExpressions, goqu.C("parent_sme_id").Eq(*parentElementID))
+	}
+
+	sqlQuery, args, err := query.Where(whereExpressions...).ToSQL()
+	if err != nil {
+		return false
+	}
+
+	var count int
+	if err = tx.QueryRow(sqlQuery, args...).Scan(&count); err != nil {
+		return false
+	}
+
+	return count > 0
+}
+
+// DeleteSubmodelElementByPath deletes a submodel element by idShort path.
+func (s *SubmodelDatabase) DeleteSubmodelElementByPath(submodelID string, idShortPath string) error {
+	tx, cleanup, err := common.StartTransaction(s.db)
+	if err != nil {
+		return err
+	}
+	defer cleanup(&err)
+
+	err = submodelelements.DeleteSubmodelElementByPath(tx, submodelID, idShortPath)
+	if err != nil {
+		return err
+	}
+
+	return tx.Commit()
+}
+
+// UpdateSubmodelElement updates a submodel element by path.
+func (s *SubmodelDatabase) UpdateSubmodelElement(submodelID string, idShortOrPath string, submodelElement types.ISubmodelElement, isPut bool) error {
+	modelType, err := submodelelements.GetModelTypeByIdShortPathAndSubmodelID(s.db, submodelID, idShortOrPath)
+	if err != nil {
+		return err
+	}
+
+	if modelType == nil {
+		return common.NewErrNotFound("SMREPO-UPDSME-NOTFOUND Submodel-Element ID-Short: " + idShortOrPath)
+	}
+
+	handler, err := submodelelements.GetSMEHandlerByModelType(*modelType, s.db)
+	if err != nil {
+		return err
+	}
+
+	return handler.Update(submodelID, idShortOrPath, submodelElement, nil, isPut)
 }
 
 // UpdateSubmodelElementValueOnly updates a submodel element using value-only representation.
@@ -352,17 +636,232 @@ func (s *SubmodelDatabase) UpdateSubmodelValueOnly(submodelID string, valueOnly 
 	return nil
 }
 
+// UploadFileAttachment uploads attachment content for a File submodel element.
+func (s *SubmodelDatabase) UploadFileAttachment(submodelID string, idShortPath string, file *os.File, fileName string) error {
+	fileHandler, err := submodelelements.NewPostgreSQLFileHandler(s.db)
+	if err != nil {
+		return err
+	}
+
+	return fileHandler.UploadFileAttachment(submodelID, idShortPath, file, fileName)
+}
+
+// DownloadFileAttachment downloads attachment content for a File submodel element.
+func (s *SubmodelDatabase) DownloadFileAttachment(submodelID string, idShortPath string) ([]byte, string, string, error) {
+	fileHandler, err := submodelelements.NewPostgreSQLFileHandler(s.db)
+	if err != nil {
+		return nil, "", "", err
+	}
+
+	return fileHandler.DownloadFileAttachment(submodelID, idShortPath)
+}
+
+// DeleteFileAttachment deletes attachment content of a File submodel element.
+func (s *SubmodelDatabase) DeleteFileAttachment(submodelID string, idShortPath string) error {
+	fileHandler, err := submodelelements.NewPostgreSQLFileHandler(s.db)
+	if err != nil {
+		return err
+	}
+
+	return fileHandler.DeleteFileAttachment(submodelID, idShortPath)
+}
+
 // PatchSubmodel updates an existing submodel in the database with the provided submodel data.
-func (s *SubmodelDatabase) PatchSubmodel(_ types.ISubmodel) error {
+func (s *SubmodelDatabase) PatchSubmodel(submodelID string, submodel types.ISubmodel) error {
+	if submodelID != submodel.ID() {
+		return common.NewErrBadRequest("SMREPO-PATCHSM-IDMISMATCH Submodel ID in path and body do not match")
+	}
+
+	if err := s.verifySubmodel(submodel, "SMREPO-PATCHSM-VERIFY"); err != nil {
+		return err
+	}
+
+	tx, cleanup, err := common.StartTransaction(s.db)
+	if err != nil {
+		return common.NewInternalServerError("SMREPO-PATCHSM-STARTTX " + err.Error())
+	}
+	defer cleanup(&err)
+
+	_, err = s.replaceSubmodelInTransaction(tx, submodelID, submodel, true)
+	if err != nil {
+		return err
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		return common.NewInternalServerError("SMREPO-PATCHSM-COMMIT " + err.Error())
+	}
+
 	return nil
 }
 
 // PutSubmodel creates or replaces a submodel in the database with the provided submodel data.
-func (s *SubmodelDatabase) PutSubmodel(_ string) error {
-	return nil
+func (s *SubmodelDatabase) PutSubmodel(submodelID string, submodel types.ISubmodel) (bool, error) {
+	if submodelID != submodel.ID() {
+		return false, common.NewErrBadRequest("SMREPO-PUTSM-IDMISMATCH Submodel ID in path and body do not match")
+	}
+
+	if err := s.verifySubmodel(submodel, "SMREPO-PUTSM-VERIFY"); err != nil {
+		return false, err
+	}
+
+	tx, cleanup, err := common.StartTransaction(s.db)
+	if err != nil {
+		return false, common.NewInternalServerError("SMREPO-PUTSM-STARTTX " + err.Error())
+	}
+	defer cleanup(&err)
+
+	isUpdate, err := s.replaceSubmodelInTransaction(tx, submodelID, submodel, false)
+	if err != nil {
+		return false, err
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		return false, common.NewInternalServerError("SMREPO-PUTSM-COMMIT " + err.Error())
+	}
+
+	return isUpdate, nil
 }
 
 // DeleteSubmodel deletes a submodel by its identifier from the database.
-func (s *SubmodelDatabase) DeleteSubmodel(_ string) error {
+func (s *SubmodelDatabase) DeleteSubmodel(submodelID string) error {
+	tx, cleanup, err := common.StartTransaction(s.db)
+	if err != nil {
+		return common.NewInternalServerError("SMREPO-DELSM-STARTTX " + err.Error())
+	}
+	defer cleanup(&err)
+
+	submodelDatabaseID, err := persistenceutils.GetSubmodelDatabaseID(tx, submodelID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return common.NewErrNotFound("SMREPO-DELSM-NOTFOUND Submodel with ID '" + submodelID + "' not found")
+		}
+		return common.NewInternalServerError("SMREPO-DELSM-GETSMDATABASEID " + err.Error())
+	}
+
+	err = cleanupSubmodelLargeObjects(tx, int64(submodelDatabaseID))
+	if err != nil {
+		return err
+	}
+
+	err = deleteSubmodelByDatabaseID(tx, int64(submodelDatabaseID))
+	if err != nil {
+		return err
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		return common.NewInternalServerError("SMREPO-DELSM-COMMIT " + err.Error())
+	}
+
+	return nil
+}
+
+func (s *SubmodelDatabase) replaceSubmodelInTransaction(tx *sql.Tx, submodelID string, submodel types.ISubmodel, requireExisting bool) (bool, error) {
+	submodelDatabaseID, err := persistenceutils.GetSubmodelDatabaseID(tx, submodelID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			if requireExisting {
+				return false, common.NewErrNotFound("SMREPO-UPDSM-NOTFOUND Submodel with ID '" + submodelID + "' not found")
+			}
+
+			if createErr := s.createSubmodelInTransaction(tx, submodel); createErr != nil {
+				return false, createErr
+			}
+			return false, nil
+		}
+
+		return false, common.NewInternalServerError("SMREPO-UPDSM-GETSMDATABASEID " + err.Error())
+	}
+
+	err = cleanupSubmodelLargeObjects(tx, int64(submodelDatabaseID))
+	if err != nil {
+		return false, err
+	}
+
+	err = deleteSubmodelByDatabaseID(tx, int64(submodelDatabaseID))
+	if err != nil {
+		return false, err
+	}
+
+	err = s.createSubmodelInTransaction(tx, submodel)
+	if err != nil {
+		return false, err
+	}
+
+	return true, nil
+}
+
+func cleanupSubmodelLargeObjects(tx *sql.Tx, submodelDatabaseID int64) error {
+	dialect := goqu.Dialect("postgres")
+
+	selectOIDQuery, selectOIDArgs, err := dialect.From(goqu.T("submodel_element").As("sme")).
+		Join(goqu.T("file_data").As("fd"), goqu.On(goqu.I("fd.id").Eq(goqu.I("sme.id")))).
+		Select(goqu.I("fd.file_oid")).
+		Where(
+			goqu.I("sme.submodel_id").Eq(submodelDatabaseID),
+			goqu.I("fd.file_oid").IsNotNull(),
+		).
+		ToSQL()
+	if err != nil {
+		return common.NewInternalServerError("SMREPO-DELSM-LISTFILEOIDS " + err.Error())
+	}
+
+	rows, err := tx.Query(selectOIDQuery, selectOIDArgs...)
+	if err != nil {
+		return common.NewInternalServerError("SMREPO-DELSM-LISTFILEOIDS " + err.Error())
+	}
+	defer func() {
+		_ = rows.Close()
+	}()
+
+	for rows.Next() {
+		var oid sql.NullInt64
+		if err := rows.Scan(&oid); err != nil {
+			return common.NewInternalServerError("SMREPO-DELSM-SCANFILEOID " + err.Error())
+		}
+
+		if !oid.Valid {
+			continue
+		}
+
+		unlinkQuery, unlinkArgs, unlinkErr := dialect.Select(goqu.Func("lo_unlink", oid.Int64)).ToSQL()
+		if unlinkErr != nil {
+			return common.NewInternalServerError("SMREPO-DELSM-BUILDUNLINKQUERY " + unlinkErr.Error())
+		}
+
+		if _, unlinkExecErr := tx.Exec(unlinkQuery, unlinkArgs...); unlinkExecErr != nil {
+			return common.NewInternalServerError("SMREPO-DELSM-UNLINKLO " + unlinkExecErr.Error())
+		}
+	}
+
+	if err := rows.Err(); err != nil {
+		return common.NewInternalServerError("SMREPO-DELSM-LISTFILEOIDSROWS " + err.Error())
+	}
+
+	return nil
+}
+
+func deleteSubmodelByDatabaseID(tx *sql.Tx, submodelDatabaseID int64) error {
+	dialect := goqu.Dialect("postgres")
+	deleteSubmodelQuery, deleteSubmodelArgs, err := dialect.Delete("submodel").Where(goqu.I("id").Eq(submodelDatabaseID)).ToSQL()
+	if err != nil {
+		return common.NewInternalServerError("SMREPO-DELSM-BUILDDELETESM " + err.Error())
+	}
+
+	deleteResult, err := tx.Exec(deleteSubmodelQuery, deleteSubmodelArgs...)
+	if err != nil {
+		return common.NewInternalServerError("SMREPO-DELSM-DELETESM " + err.Error())
+	}
+
+	rowsAffected, err := deleteResult.RowsAffected()
+	if err != nil {
+		return common.NewInternalServerError("SMREPO-DELSM-ROWSAFFECTED " + err.Error())
+	}
+	if rowsAffected == 0 {
+		return common.NewErrNotFound("SMREPO-DELSM-NOTFOUND Submodel not found")
+	}
+
 	return nil
 }

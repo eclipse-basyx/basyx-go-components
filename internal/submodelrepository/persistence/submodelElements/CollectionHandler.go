@@ -80,7 +80,7 @@ func NewPostgreSQLSubmodelElementCollectionHandler(db *sql.DB) (*PostgreSQLSubmo
 // Returns:
 //   - error: Error if update fails or element is not of correct type
 func (p PostgreSQLSubmodelElementCollectionHandler) Update(submodelID string, idShortOrPath string, submodelElement types.ISubmodelElement, tx *sql.Tx, isPut bool) error {
-	_, ok := submodelElement.(*types.SubmodelElementCollection)
+	collection, ok := submodelElement.(*types.SubmodelElementCollection)
 	if !ok {
 		return common.NewErrBadRequest("submodelElement is not of type SubmodelElementCollection")
 	}
@@ -102,9 +102,40 @@ func (p PostgreSQLSubmodelElementCollectionHandler) Update(submodelID string, id
 	// PATCH operations preserve existing children, so no deletion needed - TODO
 
 	// Update base submodel element properties
-	err = p.decorated.Update(submodelID, idShortOrPath, submodelElement, tx, isPut)
+	err = p.decorated.Update(submodelID, idShortOrPath, submodelElement, localTx, isPut)
 	if err != nil {
 		return err
+	}
+
+	smDbID, err := persistenceutils.GetSubmodelDatabaseID(localTx, submodelID)
+	if err != nil {
+		return common.NewInternalServerError("SMREPO-UPDSMECOL-GETSMDATABASEID " + err.Error())
+	}
+
+	elementID, err := p.decorated.GetDatabaseID(smDbID, idShortOrPath)
+	if err != nil {
+		return err
+	}
+
+	if isPut || collection.Value() != nil {
+		if len(collection.Value()) > 0 {
+			_, insertErr := InsertSubmodelElements(
+				p.db,
+				submodelID,
+				collection.Value(),
+				localTx,
+				&BatchInsertContext{
+					ParentID:      elementID,
+					ParentPath:    idShortOrPath,
+					RootSmeID:     elementID,
+					IsFromList:    false,
+					StartPosition: 0,
+				},
+			)
+			if insertErr != nil {
+				return common.NewInternalServerError("SMREPO-UPDSMECOL-INSCHILDREN " + insertErr.Error())
+			}
+		}
 	}
 
 	return persistenceutils.CommitTransactionIfNeeded(tx, localTx)

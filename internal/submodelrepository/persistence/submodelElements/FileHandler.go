@@ -362,8 +362,6 @@ func (p PostgreSQLFileHandler) UploadFileAttachment(submodelID string, idShortPa
 	}
 	defer func() {
 		_ = reopenedFile.Close()
-		// Clean up the temporary file
-		_ = os.Remove(filePath)
 	}()
 
 	// Detect content type from file content

@@ -36,7 +36,6 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	jsoniter "github.com/json-iterator/go"
-	"github.com/lib/pq"
 )
 
 // ValueOnlyElementsToProcess represents a SubmodelElementValue along with its ID short path.
@@ -252,104 +251,85 @@ func CreateContextReferenceByOwnerID(tx *sql.Tx, ownerID int64, tableBaseName st
 
 	dialect := goqu.Dialect("postgres")
 
-	ownerRow := dialect.
-		Select(goqu.L("?::bigint", ownerID).As("id"))
-
-	insRef := dialect.
+	upsertReferenceQuery, upsertReferenceArgs, err := dialect.
 		Insert(referenceTable).
-		Cols("id", "type").
-		FromQuery(
-			dialect.
-				From(goqu.T("owner_row")).
-				Select(
-					goqu.I("id"),
-					goqu.L("?::int", int(reference.Type())),
-				),
-		).
+		Rows(goqu.Record{
+			"id":   ownerID,
+			"type": int(reference.Type()),
+		}).
 		OnConflict(
 			goqu.DoUpdate("id", goqu.Record{
 				"type": goqu.L("EXCLUDED.type"),
 			}),
 		).
-		Returning(goqu.I("id"))
-
-	delPayload := dialect.
-		Delete(referencePayloadTable).
-		Where(
-			goqu.I("reference_id").In(
-				dialect.From(goqu.T("ins_ref")).Select(goqu.I("id")),
-			),
-		)
-
-	delKeys := dialect.
-		Delete(referenceKeyTable).
-		Where(
-			goqu.I("reference_id").In(
-				dialect.From(goqu.T("ins_ref")).Select(goqu.I("id")),
-			),
-		)
-
-	insPayload := dialect.
-		Insert(referencePayloadTable).
-		Cols("reference_id", "parent_reference_payload").
-		FromQuery(
-			dialect.
-				From(goqu.T("ins_ref")).
-				Select(
-					goqu.I("id"),
-					goqu.L("?::jsonb", parentReferencePayload.String),
-				),
-		)
-
-	insKeys := dialect.
-		Insert(referenceKeyTable).
-		Cols("reference_id", "position", "type", "value").
-		FromQuery(
-			dialect.
-				From(
-					goqu.T("ins_ref").As("r"),
-					goqu.L(
-						"unnest(?::int[], ?::int[], ?::text[]) AS k(position, type, value)",
-						pq.Array(positions),
-						pq.Array(keyTypes),
-						pq.Array(keyValues),
-					),
-				).
-				Select(
-					goqu.I("r.id"),
-					goqu.I("k.position"),
-					goqu.I("k.type"),
-					goqu.I("k.value"),
-				),
-		).
-		OnConflict(
-			goqu.DoUpdate("reference_id, position", goqu.Record{
-				"type":  goqu.L("EXCLUDED.type"),
-				"value": goqu.L("EXCLUDED.value"),
-			}),
-		)
-
-	query, args, err := dialect.
-		From(goqu.T("ins_ref")).
-		With("owner_row", ownerRow).
-		With("ins_ref", insRef).
-		With("del_payload", delPayload).
-		With("del_keys", delKeys).
-		With("ins_payload", insPayload).
-		With("ins_keys", insKeys).
-		Select(goqu.I("id")).
 		ToSQL()
 	if err != nil {
-		return sql.NullInt64{Valid: false}, common.NewInternalServerError("SMREPO-CRCTXREF-BUILDQUERY " + err.Error())
+		return sql.NullInt64{Valid: false}, common.NewInternalServerError("SMREPO-CRCTXREF-BUILDUPSERTREF " + err.Error())
+	}
+	if _, execErr := tx.Exec(upsertReferenceQuery, upsertReferenceArgs...); execErr != nil {
+		return sql.NullInt64{Valid: false}, common.NewInternalServerError("SMREPO-CRCTXREF-EXECUPSERTREF " + execErr.Error())
 	}
 
-	var referenceID int64
-	err = tx.QueryRow(query, args...).Scan(&referenceID)
+	deletePayloadQuery, deletePayloadArgs, err := dialect.
+		Delete(referencePayloadTable).
+		Where(goqu.C("reference_id").Eq(ownerID)).
+		ToSQL()
 	if err != nil {
-		return sql.NullInt64{Valid: false}, common.NewInternalServerError("SMREPO-CRCTXREF-EXECQUERY " + err.Error())
+		return sql.NullInt64{Valid: false}, common.NewInternalServerError("SMREPO-CRCTXREF-BUILDDELPAYLOAD " + err.Error())
+	}
+	if _, execErr := tx.Exec(deletePayloadQuery, deletePayloadArgs...); execErr != nil {
+		return sql.NullInt64{Valid: false}, common.NewInternalServerError("SMREPO-CRCTXREF-EXECDELPAYLOAD " + execErr.Error())
 	}
 
-	return sql.NullInt64{Int64: referenceID, Valid: true}, nil
+	deleteKeysQuery, deleteKeysArgs, err := dialect.
+		Delete(referenceKeyTable).
+		Where(goqu.C("reference_id").Eq(ownerID)).
+		ToSQL()
+	if err != nil {
+		return sql.NullInt64{Valid: false}, common.NewInternalServerError("SMREPO-CRCTXREF-BUILDDELKEYS " + err.Error())
+	}
+	if _, execErr := tx.Exec(deleteKeysQuery, deleteKeysArgs...); execErr != nil {
+		return sql.NullInt64{Valid: false}, common.NewInternalServerError("SMREPO-CRCTXREF-EXECDELKEYS " + execErr.Error())
+	}
+
+	insertPayloadQuery, insertPayloadArgs, err := dialect.
+		Insert(referencePayloadTable).
+		Rows(goqu.Record{
+			"reference_id":             ownerID,
+			"parent_reference_payload": goqu.L("?::jsonb", parentReferencePayload.String),
+		}).
+		ToSQL()
+	if err != nil {
+		return sql.NullInt64{Valid: false}, common.NewInternalServerError("SMREPO-CRCTXREF-BUILDINSPAYLOAD " + err.Error())
+	}
+	if _, execErr := tx.Exec(insertPayloadQuery, insertPayloadArgs...); execErr != nil {
+		return sql.NullInt64{Valid: false}, common.NewInternalServerError("SMREPO-CRCTXREF-EXECINSPAYLOAD " + execErr.Error())
+	}
+
+	if len(keys) > 0 {
+		keyRows := make([]goqu.Record, 0, len(keys))
+		for i := range keys {
+			keyRows = append(keyRows, goqu.Record{
+				"reference_id": ownerID,
+				"position":     positions[i],
+				"type":         keyTypes[i],
+				"value":        keyValues[i],
+			})
+		}
+
+		insertKeysQuery, insertKeysArgs, buildKeysErr := dialect.
+			Insert(referenceKeyTable).
+			Rows(keyRows).
+			ToSQL()
+		if buildKeysErr != nil {
+			return sql.NullInt64{Valid: false}, common.NewInternalServerError("SMREPO-CRCTXREF-BUILDINSKEYS " + buildKeysErr.Error())
+		}
+		if _, execKeysErr := tx.Exec(insertKeysQuery, insertKeysArgs...); execKeysErr != nil {
+			return sql.NullInt64{Valid: false}, common.NewInternalServerError("SMREPO-CRCTXREF-EXECINSKEYS " + execKeysErr.Error())
+		}
+	}
+
+	return sql.NullInt64{Int64: ownerID, Valid: true}, nil
 }
 
 func getReferenceAsJSON(ref types.IReference) (sql.NullString, error) {
