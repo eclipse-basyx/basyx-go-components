@@ -31,8 +31,10 @@ import (
 	"strconv"
 
 	"github.com/FriedJannik/aas-go-sdk/jsonization"
+	aas_stringification "github.com/FriedJannik/aas-go-sdk/stringification"
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
+	"github.com/doug-martin/goqu/v9/exp"
 	submodel_repository_utils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -248,7 +250,34 @@ func buildSubmodelPayloadQuery(dialect *goqu.DialectWrapper, submodelDBID int64,
 	}).ToSQL()
 }
 
+func buildSubmodelSemanticIDReferenceQuery(dialect *goqu.DialectWrapper, submodelDBID int64, semanticID types.IReference) (string, []any, error) {
+	return dialect.Insert("submodel_semantic_id_reference").Rows(goqu.Record{
+		"id":   submodelDBID,
+		"type": int(semanticID.Type()),
+	}).ToSQL()
+}
+
+func buildSubmodelSemanticIDReferenceKeysQuery(dialect *goqu.DialectWrapper, submodelDBID int64, semanticID types.IReference) (string, []any, error) {
+	keyRows := make([]goqu.Record, 0, len(semanticID.Keys()))
+	for position, key := range semanticID.Keys() {
+		keyRows = append(keyRows, goqu.Record{
+			"reference_id": submodelDBID,
+			"position":     position,
+			"type":         int(key.Type()),
+			"value":        key.Value(),
+		})
+	}
+
+	if len(keyRows) == 0 {
+		return "", nil, nil
+	}
+
+	return dialect.Insert("submodel_semantic_id_reference_key").Rows(keyRows).ToSQL()
+}
+
 func buildSelectSubmodelQueryWithPayloadByIdentifier(dialect *goqu.DialectWrapper, submodelIdentifier *string, limit *int32, cursor *string) (string, []any, error) {
+	semanticIDSelectExpression := buildSubmodelSemanticIDSelectExpression(dialect)
+
 	selectDS := dialect.From("submodel").
 		Join(goqu.T("submodel_payload"), goqu.On(goqu.Ex{"submodel.id": goqu.I("submodel_payload.submodel_id")})).
 		Select(
@@ -263,6 +292,7 @@ func buildSelectSubmodelQueryWithPayloadByIdentifier(dialect *goqu.DialectWrappe
 			goqu.I("submodel_payload.supplemental_semantic_ids_payload"),
 			goqu.I("submodel_payload.extensions_payload"),
 			goqu.I("submodel_payload.qualifiers_payload"),
+			semanticIDSelectExpression,
 		).
 		Order(goqu.I("submodel.submodel_identifier").Asc())
 
@@ -291,4 +321,72 @@ func buildSelectSubmodelQueryWithPayloadByIdentifier(dialect *goqu.DialectWrappe
 	}
 
 	return selectDS.ToSQL()
+}
+
+func buildSubmodelSemanticIDSelectExpression(dialect *goqu.DialectWrapper) exp.AliasedExpression {
+	referenceTypeSelectExpression := buildReferenceTypeStringSelectExpression(goqu.I("ssr.type"))
+	keyTypeSelectExpression := buildKeyTypeStringSelectExpression(goqu.I("ssrk.type"))
+
+	orderedKeyValuesSelectDS := dialect.
+		From(goqu.T("submodel_semantic_id_reference_key").As("ssrk")).
+		Select(
+			keyTypeSelectExpression.As("type"),
+			goqu.I("ssrk.value").As("value"),
+		).
+		Where(goqu.I("ssrk.reference_id").Eq(goqu.I("ssr.id"))).
+		Order(goqu.I("ssrk.position").Asc())
+
+	aggregatedKeyValuesSelectDS := dialect.
+		From(orderedKeyValuesSelectDS.As("ordered_key_values")).
+		Select(
+			goqu.COALESCE(
+				goqu.Func(
+					"jsonb_agg",
+					goqu.Func(
+						"jsonb_build_object",
+						goqu.V("type"), goqu.I("ordered_key_values.type"),
+						goqu.V("value"), goqu.I("ordered_key_values.value"),
+					),
+				),
+				goqu.L("'[]'::jsonb"),
+			),
+		)
+
+	semanticIDSelectDS := dialect.
+		From(goqu.T("submodel_semantic_id_reference").As("ssr")).
+		Select(
+			goqu.Func(
+				"jsonb_build_object",
+				goqu.V("type"), referenceTypeSelectExpression,
+				goqu.V("keys"), aggregatedKeyValuesSelectDS,
+			),
+		).
+		Where(goqu.I("ssr.id").Eq(goqu.I("submodel.id"))).
+		Limit(1)
+
+	return goqu.COALESCE(semanticIDSelectDS, goqu.L("'{}'::jsonb")).As("semantic_id_payload")
+}
+
+func buildReferenceTypeStringSelectExpression(typeColumn exp.Expression) exp.CaseExpression {
+	caseExpression := goqu.Case().
+		Value(typeColumn)
+
+	for _, referenceType := range types.LiteralsOfReferenceTypes {
+		caseExpression = caseExpression.
+			When(int(referenceType), aas_stringification.MustReferenceTypesToString(referenceType))
+	}
+
+	return caseExpression.Else(nil)
+}
+
+func buildKeyTypeStringSelectExpression(typeColumn exp.Expression) exp.CaseExpression {
+	caseExpression := goqu.Case().
+		Value(typeColumn)
+
+	for _, keyType := range types.LiteralsOfKeyTypes {
+		caseExpression = caseExpression.
+			When(int(keyType), aas_stringification.MustKeyTypesToString(keyType))
+	}
+
+	return caseExpression.Else(nil)
 }

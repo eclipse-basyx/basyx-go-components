@@ -16,6 +16,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -42,6 +43,99 @@ func NewSubmodelRepositoryAPIAPIService(databaseBackend persistencepostgresql.Su
 	return &SubmodelRepositoryAPIAPIService{
 		submodelBackend: databaseBackend,
 	}
+}
+
+func submodelValueToAnyMap(value gen.SubmodelValue) map[string]any {
+	result := make(map[string]any, len(value))
+	for key, val := range value {
+		result[key] = val
+	}
+	return result
+}
+
+func decodeBase64RawStd(value string) (string, error) {
+	if value == "" {
+		return "", nil
+	}
+
+	decodedBytes, err := base64.RawStdEncoding.DecodeString(value)
+	if err != nil {
+		return "", err
+	}
+
+	return string(decodedBytes), nil
+}
+
+func encodeBase64RawStd(value string) string {
+	if value == "" {
+		return ""
+	}
+
+	return base64.RawStdEncoding.EncodeToString([]byte(value))
+}
+
+func buildLimitPtr(limit int32) *int {
+	if limit <= 0 {
+		return nil
+	}
+
+	parsedLimit := int(limit)
+	return &parsedLimit
+}
+
+func toSubmodelElementMetadata(element types.ISubmodelElement) (gen.SubmodelElementMetadata, error) {
+	jsonElement, err := jsonization.ToJsonable(element)
+	if err != nil {
+		return gen.SubmodelElementMetadata{}, err
+	}
+
+	payload, err := json.Marshal(jsonElement)
+	if err != nil {
+		return gen.SubmodelElementMetadata{}, err
+	}
+
+	metadata := gen.SubmodelElementMetadata{}
+	if err := json.Unmarshal(payload, &metadata); err != nil {
+		return gen.SubmodelElementMetadata{}, err
+	}
+
+	return metadata, nil
+}
+
+func getModelTypeLiteral(element types.ISubmodelElement) string {
+	jsonElement, err := jsonization.ToJsonable(element)
+	if err != nil {
+		return ""
+	}
+
+	modelType, ok := jsonElement["modelType"].(string)
+	if !ok {
+		return ""
+	}
+
+	return modelType
+}
+
+func buildModelReference(submodelID string, keyType string, keyValue string) (types.IReference, error) {
+	if submodelID == "" || keyType == "" || keyValue == "" {
+		return nil, common.NewErrBadRequest("SMREPO-BUILDREF-INVALIDPARAMS Invalid reference parameters")
+	}
+
+	jsonableReference := map[string]any{
+		"type": "ModelReference",
+		"keys": []map[string]any{
+			{
+				"type":  "Submodel",
+				"value": submodelID,
+			},
+			{
+				"type":  keyType,
+				"value": keyValue,
+			},
+		},
+	}
+
+	return jsonization.ReferenceFromJsonable(jsonableReference)
 }
 
 // GetAllSubmodels retrieves all submodels from the repository with optional filtering and pagination.
@@ -366,33 +460,47 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsMetadata(
 //
 //nolint:revive
 func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsValueOnly(ctx context.Context, semanticID string, idShort string, limit int32, cursor string, level string, extent string) (gen.ImplResponse, error) {
-	// sms, nextCursor, err := s.submodelBackend.GetAllSubmodels(limit, cursor, idShort, true)
-	// if err != nil {
-	// 	return gen.Response(500, nil), err
-	// }
+	_ = ctx
+	_ = semanticID
+	_ = level
+	_ = extent
 
-	// // Convert each submodel to its Value-Only representation
-	// valueOnlyResults := make([]map[string]any, 0, len(sms))
-	// for _, sm := range sms {
-	// 	valueOnly, err := gen.SubmodelToValueOnly(sm)
-	// 	if err != nil {
-	// 		return gen.Response(500, nil), err
-	// 	}
-	// 	// Convert SubmodelValue (map[string]SubmodelElementValue) to map[string]any
-	// 	resultMap := make(map[string]any)
-	// 	for key, val := range valueOnly {
-	// 		resultMap[key] = val
-	// 	}
-	// 	valueOnlyResults = append(valueOnlyResults, resultMap)
-	// }
+	decodedCursor := ""
+	if cursor != "" {
+		decodedCursorBytes, decodeErr := base64.RawStdEncoding.DecodeString(cursor)
+		if decodeErr != nil {
+			return gen.Response(http.StatusBadRequest, nil), decodeErr
+		}
+		decodedCursor = string(decodedCursorBytes)
+	}
 
-	// res := gen.GetSubmodelsValueResult{
-	// 	PagingMetadata: gen.PagedResultPagingMetadata{
-	// 		Cursor: nextCursor,
-	// 	},
-	// 	Result: valueOnlyResults,
-	// }
-	return gen.Response(200, nil), nil
+	sms, nextCursor, err := s.submodelBackend.GetSubmodels(limit, decodedCursor, idShort)
+	if err != nil {
+		return gen.Response(http.StatusInternalServerError, nil), err
+	}
+
+	valueOnlyResults := make([]map[string]any, 0, len(sms))
+	for _, sm := range sms {
+		valueOnly, convErr := gen.SubmodelToValueOnly(sm)
+		if convErr != nil {
+			return gen.Response(http.StatusInternalServerError, nil), convErr
+		}
+		valueOnlyResults = append(valueOnlyResults, submodelValueToAnyMap(valueOnly))
+	}
+
+	encodedNextCursor := ""
+	if nextCursor != "" {
+		encodedNextCursor = base64.RawStdEncoding.EncodeToString([]byte(nextCursor))
+	}
+
+	res := gen.GetSubmodelsValueResult{
+		PagingMetadata: gen.PagedResultPagingMetadata{
+			Cursor: encodedNextCursor,
+		},
+		Result: valueOnlyResults,
+	}
+
+	return gen.Response(http.StatusOK, res), nil
 }
 
 // GetAllSubmodelsReference - Returns the References for all Submodels
@@ -597,51 +705,54 @@ func (s *SubmodelRepositoryAPIAPIService) PatchSubmodelByIDMetadata(ctx context.
 //
 //nolint:revive
 func (s *SubmodelRepositoryAPIAPIService) GetSubmodelByIDValueOnly(ctx context.Context, submodelIdentifier string, level string, extent string) (gen.ImplResponse, error) {
-	// decodedSubmodelIdentifier, decodeErr := base64.RawStdEncoding.DecodeString(submodelIdentifier)
-	// if decodeErr != nil {
-	// 	return gen.Response(http.StatusBadRequest, nil), decodeErr
-	// }
+	_ = ctx
+	_ = level
+	_ = extent
 
-	// sm, err := s.submodelBackend.GetSubmodel(string(decodedSubmodelIdentifier), true)
-	// if err != nil {
-	// 	if errors.Is(err, sql.ErrNoRows) {
-	// 		return gen.Response(404, nil), nil
-	// 	}
-	// 	if common.IsErrNotFound(err) {
-	// 		return gen.Response(404, nil), err
-	// 	}
-	// 	return gen.Response(500, nil), err
-	// }
+	decodedSubmodelIdentifier, decodeErr := base64.RawStdEncoding.DecodeString(submodelIdentifier)
+	if decodeErr != nil {
+		return gen.Response(http.StatusBadRequest, nil), decodeErr
+	}
 
-	// // Convert to Value-Only representation
-	// valueOnly, err := gen.SubmodelToValueOnly(&sm)
-	// if err != nil {
-	// 	return gen.Response(500, nil), err
-	// }
+	sm, err := s.submodelBackend.GetSubmodelByID(string(decodedSubmodelIdentifier))
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) || common.IsErrNotFound(err) {
+			return gen.Response(http.StatusNotFound, nil), nil
+		}
+		return gen.Response(http.StatusInternalServerError, nil), err
+	}
 
-	return gen.Response(200, nil), nil
+	valueOnly, convErr := gen.SubmodelToValueOnly(sm)
+	if convErr != nil {
+		return gen.Response(http.StatusInternalServerError, nil), convErr
+	}
+
+	return gen.Response(http.StatusOK, valueOnly), nil
 }
 
 // PatchSubmodelByIDValueOnly - Updates the values of an existing Submodel
 //
 //nolint:revive
 func (s *SubmodelRepositoryAPIAPIService) PatchSubmodelByIDValueOnly(ctx context.Context, submodelIdentifier string, body gen.SubmodelValue, level string) (gen.ImplResponse, error) {
-	// decodedIdentifier, err := base64.RawStdEncoding.DecodeString(submodelIdentifier)
-	// if err != nil {
-	// 	return common.NewErrorResponse(err, http.StatusBadRequest, "SMRepo", "PatchSubmodelByIDValueOnly", "Malformed Submodel Identifier"), nil
-	// }
+	_ = ctx
+	_ = level
 
-	// err = s.submodelBackend.UpdateSubmodelValueOnly(string(decodedIdentifier), body)
-	// if err != nil {
-	// 	if common.IsErrBadRequest(err) {
-	// 		return common.NewErrorResponse(err, http.StatusBadRequest, "SMRepo", "PatchSubmodelByIDValueOnly", "Bad Request while Updating Submodel Value"), nil
-	// 	}
-	// 	if common.IsErrNotFound(err) {
-	// 		return common.NewErrorResponse(err, http.StatusNotFound, "SMRepo", "PatchSubmodelByIDValueOnly", fmt.Sprintf("Submodel with id %s or SubmodelElement in request body was not found", decodedIdentifier)), nil
-	// 	}
-	// 	_, _ = fmt.Println(err)
-	// 	return common.NewErrorResponse(err, http.StatusInternalServerError, "SMRepo", "PatchSubmodelByIDValueOnly", "Unknown Error - check console for details"), nil
-	// }
+	decodedIdentifier, err := base64.RawStdEncoding.DecodeString(submodelIdentifier)
+	if err != nil {
+		return common.NewErrorResponse(err, http.StatusBadRequest, "SMRepo", "PatchSubmodelByIDValueOnly", "Malformed Submodel Identifier"), nil
+	}
+
+	err = s.submodelBackend.UpdateSubmodelValueOnly(string(decodedIdentifier), body)
+	if err != nil {
+		if common.IsErrBadRequest(err) {
+			return common.NewErrorResponse(err, http.StatusBadRequest, "SMRepo", "PatchSubmodelByIDValueOnly", "Bad Request while Updating Submodel Value"), nil
+		}
+		if common.IsErrNotFound(err) {
+			return common.NewErrorResponse(err, http.StatusNotFound, "SMRepo", "PatchSubmodelByIDValueOnly", fmt.Sprintf("Submodel with id %s or SubmodelElement in request body was not found", decodedIdentifier)), nil
+		}
+		_, _ = fmt.Println(err)
+		return common.NewErrorResponse(err, http.StatusInternalServerError, "SMRepo", "PatchSubmodelByIDValueOnly", "Unknown Error - check console for details"), nil
+	}
 	return gen.Response(http.StatusNoContent, nil), nil
 }
 
@@ -719,54 +830,57 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelByIDPath(ctx context.Contex
 //   - gen.ImplResponse: Response containing submodel elements
 //   - error: Error if the operation fails
 func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelElements(_ /*ctx*/ context.Context, submodelIdentifier string, limit int32, cursor string, _ /*level*/ string, _ /*extent*/ string) (gen.ImplResponse, error) {
-	// // TODO: Authorization logic to be implemented
-	// // return gen.Response(401, Result{}), nil
-	// // return gen.Response(403, Result{}), nil
+	decodedSubmodelIdentifier, decodeErr := base64.RawStdEncoding.DecodeString(submodelIdentifier)
+	if decodeErr != nil {
+		return gen.Response(http.StatusBadRequest, nil), decodeErr
+	}
 
-	// decodedSubmodelIdentifier, decodeErr := base64.RawStdEncoding.DecodeString(submodelIdentifier)
-	// if decodeErr != nil {
-	// 	return gen.Response(http.StatusBadRequest, nil), decodeErr
-	// }
+	decodedCursor := ""
+	if cursor != "" {
+		decodedCursorBytes, err := base64.RawStdEncoding.DecodeString(cursor)
+		if err != nil {
+			return gen.Response(http.StatusBadRequest, nil), err
+		}
+		decodedCursor = string(decodedCursorBytes)
+	}
 
-	// sme, cursor, err := s.submodelBackend.GetSubmodelElements(string(decodedSubmodelIdentifier), int(limit), cursor, false)
+	var limitPtr *int
+	if limit > 0 {
+		parsedLimit := int(limit)
+		limitPtr = &parsedLimit
+	}
 
-	// var converted []map[string]any
+	elements, nextCursor, err := s.submodelBackend.GetSubmodelElements(string(decodedSubmodelIdentifier), limitPtr, decodedCursor, false)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) || common.IsErrNotFound(err) {
+			return gen.Response(http.StatusNotFound, nil), nil
+		}
+		if common.IsErrBadRequest(err) {
+			return gen.Response(http.StatusBadRequest, nil), err
+		}
+		return gen.Response(http.StatusInternalServerError, nil), err
+	}
 
-	// for _, element := range sme {
-	// 	jsonSubmodelElement, err := jsonization.ToJsonable(element)
-	// 	if err != nil {
-	// 		return gen.Response(500, nil), err
-	// 	}
-	// 	converted = append(converted, jsonSubmodelElement)
-	// }
+	converted := make([]map[string]any, 0, len(elements))
+	for _, element := range elements {
+		jsonSubmodelElement, convErr := jsonization.ToJsonable(element)
+		if convErr != nil {
+			return gen.Response(http.StatusInternalServerError, nil), convErr
+		}
+		converted = append(converted, jsonSubmodelElement)
+	}
 
-	// if err != nil {
-	// 	if common.IsErrNotFound(err) {
-	// 		timestamp := common.GetCurrentTimestamp()
-	// 		return gen.Response(http.StatusNotFound, []common.ErrorHandler{*common.NewErrorHandler("Error", err, "404", "SMREPO-GetAllSubmodelElements-404-NotFound", string(timestamp))}), nil
-	// 	}
-	// 	if common.IsErrBadRequest(err) {
-	// 		timestamp := common.GetCurrentTimestamp()
-	// 		return gen.Response(http.StatusBadRequest, []common.ErrorHandler{*common.NewErrorHandler("Error", err, "400", "SMREPO-GetAllSubmodelElements-400-BadRequest", string(timestamp))}), nil
-	// 	}
-	// 	if common.IsInternalServerError(err) {
-	// 		timestamp := common.GetCurrentTimestamp()
-	// 		return gen.Response(http.StatusInternalServerError, []common.ErrorHandler{*common.NewErrorHandler("Error", err, "500", "SMREPO-GetAllSubmodelElements-500-InternalServerError", string(timestamp))}), nil
-	// 	}
-	// 	if common.IsErrBadRequest(err) {
-	// 		timestamp := common.GetCurrentTimestamp()
-	// 		return gen.Response(http.StatusBadRequest, []common.ErrorHandler{*common.NewErrorHandler("Error", err, "400", "SMREPO-GetAllSubmodelElements-400-BadRequest", string(timestamp))}), nil
-	// 	}
-	// 	return gen.Response(http.StatusInternalServerError, nil), err
-	// }
-	// res := gen.GetSubmodelElementsResult{
-	// 	PagingMetadata: gen.PagedResultPagingMetadata{
-	// 		Cursor: cursor,
-	// 	},
-	// 	Result: converted,
-	// }
+	encodedNextCursor := ""
+	if nextCursor != "" {
+		encodedNextCursor = base64.RawStdEncoding.EncodeToString([]byte(nextCursor))
+	}
 
-	return gen.Response(http.StatusOK, nil), nil
+	res := gen.GetSubmodelElementsResult{
+		PagingMetadata: gen.PagedResultPagingMetadata{Cursor: encodedNextCursor},
+		Result:         converted,
+	}
+
+	return gen.Response(http.StatusOK, res), nil
 }
 
 // PostSubmodelElementSubmodelRepo creates a new submodel element within a specified submodel.
@@ -817,199 +931,255 @@ func (s *SubmodelRepositoryAPIAPIService) PostSubmodelElementSubmodelRepo(_ /*ct
 //
 //nolint:revive
 func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelElementsMetadataSubmodelRepo(ctx context.Context, submodelIdentifier string, limit int32, cursor string) (gen.ImplResponse, error) {
-	// TODO - update GetAllSubmodelElementsMetadataSubmodelRepo with the required logic for this service method.
-	// Add api_submodel_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
+	_ = ctx
 
-	// TODO: Uncomment the next line to return response Response(200, GetSubmodelElementsMetadataResult{}) or use other options such as http.Ok ...
-	// return gen.Response(200, GetSubmodelElementsMetadataResult{}), nil
+	decodedSubmodelIdentifier, decodeErr := decodeBase64RawStd(submodelIdentifier)
+	if decodeErr != nil {
+		return gen.Response(http.StatusBadRequest, nil), decodeErr
+	}
 
-	// TODO: Uncomment the next line to return response Response(400, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(400, Result{}), nil
+	decodedCursor, cursorDecodeErr := decodeBase64RawStd(cursor)
+	if cursorDecodeErr != nil {
+		return gen.Response(http.StatusBadRequest, nil), cursorDecodeErr
+	}
 
-	// TODO: Uncomment the next line to return response Response(401, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(401, Result{}), nil
+	elements, nextCursor, err := s.submodelBackend.GetSubmodelElements(decodedSubmodelIdentifier, buildLimitPtr(limit), decodedCursor, false)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) || common.IsErrNotFound(err) {
+			return gen.Response(http.StatusNotFound, nil), nil
+		}
+		if common.IsErrBadRequest(err) {
+			return gen.Response(http.StatusBadRequest, nil), err
+		}
+		return gen.Response(http.StatusInternalServerError, nil), err
+	}
 
-	// TODO: Uncomment the next line to return response Response(403, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(403, Result{}), nil
+	metadataResult := make([]gen.SubmodelElementMetadata, 0, len(elements))
+	for _, element := range elements {
+		metadata, conversionErr := toSubmodelElementMetadata(element)
+		if conversionErr != nil {
+			return gen.Response(http.StatusInternalServerError, nil), conversionErr
+		}
+		metadataResult = append(metadataResult, metadata)
+	}
 
-	// TODO: Uncomment the next line to return response Response(404, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(404, Result{}), nil
+	res := gen.GetSubmodelElementsMetadataResult{
+		PagingMetadata: gen.PagedResultPagingMetadata{Cursor: encodeBase64RawStd(nextCursor)},
+		Result:         metadataResult,
+	}
 
-	// TODO: Uncomment the next line to return response Response(500, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(500, Result{}), nil
-
-	// TODO: Uncomment the next line to return response Response(0, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(0, Result{}), nil
-
-	return gen.Response(http.StatusNotImplemented, nil), errors.New("GetAllSubmodelElementsMetadataSubmodelRepo method not implemented")
+	return gen.Response(http.StatusOK, res), nil
 }
 
 // GetAllSubmodelElementsValueOnlySubmodelRepo - Returns all submodel elements including their hierarchy in the ValueOnly representation
 //
 //nolint:revive
 func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelElementsValueOnlySubmodelRepo(ctx context.Context, submodelIdentifier string, limit int32, cursor string, level string, extent string) (gen.ImplResponse, error) {
-	// decodedSubmodelIdentifier, decodeErr := base64.RawStdEncoding.DecodeString(submodelIdentifier)
-	// if decodeErr != nil {
-	// 	return gen.Response(http.StatusBadRequest, nil), decodeErr
-	// }
+	_ = ctx
+	_ = level
+	_ = extent
 
-	// sm, err := s.submodelBackend.GetSubmodel(string(decodedSubmodelIdentifier), true)
-	// if err != nil {
-	// 	if errors.Is(err, sql.ErrNoRows) {
-	// 		return gen.Response(404, nil), nil
-	// 	}
-	// 	if common.IsErrNotFound(err) {
-	// 		return gen.Response(404, nil), err
-	// 	}
-	// 	return gen.Response(500, nil), err
-	// }
+	decodedSubmodelIdentifier, decodeErr := base64.RawStdEncoding.DecodeString(submodelIdentifier)
+	if decodeErr != nil {
+		return gen.Response(http.StatusBadRequest, nil), decodeErr
+	}
 
-	// // Convert all submodel elements to Value-Only representation
-	// // Each element must be wrapped with its idShort as the key
-	// valueOnlyResults := make([]gen.SubmodelElementValue, 0, len(sm.SubmodelElements()))
-	// for _, element := range sm.SubmodelElements() {
-	// 	valueOnly, err := gen.SubmodelElementToValueOnly(element)
-	// 	if err != nil {
-	// 		return gen.Response(500, nil), err
-	// 	}
-	// 	if valueOnly != nil {
-	// 		// Wrap each element value in a map with idShort as key
-	// 		idShort := element.IDShort()
-	// 		if idShort != nil && *idShort != "" {
-	// 			wrapped := make(gen.SubmodelElementCollectionValue)
-	// 			wrapped[*idShort] = valueOnly
-	// 			valueOnlyResults = append(valueOnlyResults, wrapped)
-	// 		}
-	// 	}
-	// }
+	decodedCursor := ""
+	if cursor != "" {
+		decodedCursorBytes, err := base64.RawStdEncoding.DecodeString(cursor)
+		if err != nil {
+			return gen.Response(http.StatusBadRequest, nil), err
+		}
+		decodedCursor = string(decodedCursorBytes)
+	}
 
-	// res := gen.GetSubmodelElementsValueResult{
-	// 	PagingMetadata: gen.PagedResultPagingMetadata{
-	// 		Cursor: "",
-	// 	},
-	// 	Result: valueOnlyResults,
-	// }
-	return gen.Response(200, nil), nil
+	var limitPtr *int
+	if limit > 0 {
+		parsedLimit := int(limit)
+		limitPtr = &parsedLimit
+	}
+
+	elements, nextCursor, err := s.submodelBackend.GetSubmodelElements(string(decodedSubmodelIdentifier), limitPtr, decodedCursor, true)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) || common.IsErrNotFound(err) {
+			return gen.Response(http.StatusNotFound, nil), nil
+		}
+		if common.IsErrBadRequest(err) {
+			return gen.Response(http.StatusBadRequest, nil), err
+		}
+		return gen.Response(http.StatusInternalServerError, nil), err
+	}
+
+	valueOnlyResults := make([]gen.SubmodelElementValue, 0, len(elements))
+	for _, element := range elements {
+		valueOnly, convErr := gen.SubmodelElementToValueOnly(element)
+		if convErr != nil {
+			return gen.Response(http.StatusInternalServerError, nil), convErr
+		}
+		if valueOnly == nil {
+			continue
+		}
+
+		idShort := element.IDShort()
+		if idShort == nil || *idShort == "" {
+			continue
+		}
+
+		wrapped := make(gen.SubmodelElementCollectionValue)
+		wrapped[*idShort] = valueOnly
+		valueOnlyResults = append(valueOnlyResults, wrapped)
+	}
+
+	encodedNextCursor := ""
+	if nextCursor != "" {
+		encodedNextCursor = base64.RawStdEncoding.EncodeToString([]byte(nextCursor))
+	}
+
+	res := gen.GetSubmodelElementsValueResult{
+		PagingMetadata: gen.PagedResultPagingMetadata{Cursor: encodedNextCursor},
+		Result:         valueOnlyResults,
+	}
+
+	return gen.Response(http.StatusOK, res), nil
 }
 
 // GetAllSubmodelElementsReferenceSubmodelRepo - Returns the References of all submodel elements
 //
 //nolint:revive
 func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelElementsReferenceSubmodelRepo(ctx context.Context, submodelIdentifier string, limit int32, cursor string, level string) (gen.ImplResponse, error) {
-	// TODO - update GetAllSubmodelElementsReferenceSubmodelRepo with the required logic for this service method.
-	// Add api_submodel_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
+	_ = ctx
+	_ = level
 
-	// TODO: Uncomment the next line to return response Response(200, GetReferencesResult{}) or use other options such as http.Ok ...
-	// return gen.Response(200, GetReferencesResult{}), nil
+	decodedSubmodelIdentifier, decodeErr := decodeBase64RawStd(submodelIdentifier)
+	if decodeErr != nil {
+		return gen.Response(http.StatusBadRequest, nil), decodeErr
+	}
 
-	// TODO: Uncomment the next line to return response Response(400, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(400, Result{}), nil
+	decodedCursor, cursorDecodeErr := decodeBase64RawStd(cursor)
+	if cursorDecodeErr != nil {
+		return gen.Response(http.StatusBadRequest, nil), cursorDecodeErr
+	}
 
-	// TODO: Uncomment the next line to return response Response(401, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(401, Result{}), nil
+	elements, nextCursor, err := s.submodelBackend.GetSubmodelElements(decodedSubmodelIdentifier, buildLimitPtr(limit), decodedCursor, false)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) || common.IsErrNotFound(err) {
+			return gen.Response(http.StatusNotFound, nil), nil
+		}
+		if common.IsErrBadRequest(err) {
+			return gen.Response(http.StatusBadRequest, nil), err
+		}
+		return gen.Response(http.StatusInternalServerError, nil), err
+	}
 
-	// TODO: Uncomment the next line to return response Response(403, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(403, Result{}), nil
+	references := make([]types.IReference, 0, len(elements))
+	for _, element := range elements {
+		idShort := element.IDShort()
+		if idShort == nil || *idShort == "" {
+			continue
+		}
 
-	// TODO: Uncomment the next line to return response Response(404, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(404, Result{}), nil
+		modelTypeLiteral := getModelTypeLiteral(element)
+		if modelTypeLiteral == "" {
+			return gen.Response(http.StatusInternalServerError, nil), common.NewInternalServerError("SMREPO-GETALLSMEREF-MODELTYPE Empty modelType for submodel element")
+		}
 
-	// TODO: Uncomment the next line to return response Response(500, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(500, Result{}), nil
+		reference, referenceErr := buildModelReference(decodedSubmodelIdentifier, modelTypeLiteral, *idShort)
+		if referenceErr != nil {
+			return gen.Response(http.StatusInternalServerError, nil), referenceErr
+		}
 
-	// TODO: Uncomment the next line to return response Response(0, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(0, Result{}), nil
+		references = append(references, reference)
+	}
 
-	return gen.Response(http.StatusNotImplemented, nil), errors.New("GetAllSubmodelElementsReferenceSubmodelRepo method not implemented")
+	res := gen.GetReferencesResult{
+		PagingMetadata: gen.PagedResultPagingMetadata{Cursor: encodeBase64RawStd(nextCursor)},
+		Result:         references,
+	}
+
+	return gen.Response(http.StatusOK, res), nil
 }
 
 // GetAllSubmodelElementsPathSubmodelRepo - Returns all submodel elements including their hierarchy in the Path notation
 //
 //nolint:revive
 func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelElementsPathSubmodelRepo(ctx context.Context, submodelIdentifier string, limit int32, cursor string, level string) (gen.ImplResponse, error) {
-	// TODO - update GetAllSubmodelElementsPathSubmodelRepo with the required logic for this service method.
-	// Add api_submodel_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
+	_ = ctx
+	_ = level
 
-	// TODO: Uncomment the next line to return response Response(200, GetPathItemsResult{}) or use other options such as http.Ok ...
-	// return gen.Response(200, GetPathItemsResult{}), nil
+	decodedSubmodelIdentifier, decodeErr := decodeBase64RawStd(submodelIdentifier)
+	if decodeErr != nil {
+		return gen.Response(http.StatusBadRequest, nil), decodeErr
+	}
 
-	// TODO: Uncomment the next line to return response Response(400, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(400, Result{}), nil
+	decodedCursor, cursorDecodeErr := decodeBase64RawStd(cursor)
+	if cursorDecodeErr != nil {
+		return gen.Response(http.StatusBadRequest, nil), cursorDecodeErr
+	}
 
-	// TODO: Uncomment the next line to return response Response(401, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(401, Result{}), nil
+	elements, nextCursor, err := s.submodelBackend.GetSubmodelElements(decodedSubmodelIdentifier, buildLimitPtr(limit), decodedCursor, false)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) || common.IsErrNotFound(err) {
+			return gen.Response(http.StatusNotFound, nil), nil
+		}
+		if common.IsErrBadRequest(err) {
+			return gen.Response(http.StatusBadRequest, nil), err
+		}
+		return gen.Response(http.StatusInternalServerError, nil), err
+	}
 
-	// TODO: Uncomment the next line to return response Response(403, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(403, Result{}), nil
+	paths := make([]string, 0, len(elements))
+	for _, element := range elements {
+		idShort := element.IDShort()
+		if idShort == nil || *idShort == "" {
+			continue
+		}
+		paths = append(paths, *idShort)
+	}
 
-	// TODO: Uncomment the next line to return response Response(500, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(500, Result{}), nil
+	res := gen.GetPathItemsResult{
+		PagingMetadata: gen.PagedResultPagingMetadata{Cursor: encodeBase64RawStd(nextCursor)},
+		Result:         paths,
+	}
 
-	// TODO: Uncomment the next line to return response Response(0, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(0, Result{}), nil
-
-	return gen.Response(http.StatusNotImplemented, nil), errors.New("GetAllSubmodelElementsPathSubmodelRepo method not implemented")
+	return gen.Response(http.StatusOK, res), nil
 }
 
 // GetSubmodelElementByPathSubmodelRepo - Returns a specific submodel element from the Submodel at a specified path
 //
 //nolint:revive
 func (s *SubmodelRepositoryAPIAPIService) GetSubmodelElementByPathSubmodelRepo(ctx context.Context, submodelIdentifier string, idShortPath string, level string, extent string) (gen.ImplResponse, error) {
-	// TODO - update GetSubmodelElementByPathSubmodelRepo with the required logic for this service method.
-	// Add api_submodel_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
+	_ = ctx
+	_ = level
+	_ = extent
 
-	// TODO: Uncomment the next line to return response Response(200, SubmodelElement{}) or use other options such as http.Ok ...
-	// return gen.Response(200, SubmodelElement{}), nil
+	decodedSubmodelIdentifier, decodeErr := decodeBase64RawStd(submodelIdentifier)
+	if decodeErr != nil {
+		return gen.Response(http.StatusBadRequest, nil), decodeErr
+	}
 
-	// TODO: Uncomment the next line to return response Response(400, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(400, Result{}), nil
+	element, err := s.submodelBackend.GetSubmodelElement(decodedSubmodelIdentifier, idShortPath, false)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) || common.IsErrNotFound(err) {
+			return common.NewErrorResponse(
+				err,
+				http.StatusNotFound,
+				"SMREPO",
+				"GetSubmodelElementByPathSubmodelRepo",
+				"NotFoundGSME",
+			), err
+		}
+		if common.IsErrBadRequest(err) {
+			return gen.Response(http.StatusBadRequest, nil), err
+		}
+		return gen.Response(http.StatusInternalServerError, nil), err
+	}
 
-	// TODO: Uncomment the next line to return response Response(401, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(401, Result{}), nil
+	converted, convErr := jsonization.ToJsonable(element)
+	if convErr != nil {
+		return gen.Response(http.StatusInternalServerError, nil), convErr
+	}
 
-	// TODO: Uncomment the next line to return response Response(403, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(403, Result{}), nil
-
-	// TODO: Uncomment the next line to return response Response(404, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(404, Result{}), nil
-
-	// TODO: Uncomment the next line to return response Response(500, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(500, Result{}), nil
-
-	// TODO: Uncomment the next line to return response Response(0, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(0, Result{}), nil
-
-	// decodedSubmodelIdentifier, decodeErr := base64.RawStdEncoding.DecodeString(submodelIdentifier)
-	// if decodeErr != nil {
-	// 	return gen.Response(http.StatusBadRequest, nil), decodeErr
-	// }
-
-	// sme, err := s.submodelBackend.GetSubmodelElement(string(decodedSubmodelIdentifier), idShortPath, false)
-
-	// if err != nil {
-	// 	if common.IsErrNotFound(err) {
-	// 		timestamp := common.GetCurrentTimestamp()
-	// 		return gen.Response(http.StatusNotFound, []common.ErrorHandler{*common.NewErrorHandler("Error", err, "404", "SMREPO-GetSubmodelElementByPathSubmodelRepo-404-NotFound", string(timestamp))}), nil
-	// 	}
-	// 	if common.IsErrBadRequest(err) {
-	// 		timestamp := common.GetCurrentTimestamp()
-	// 		return gen.Response(http.StatusBadRequest, []common.ErrorHandler{*common.NewErrorHandler("Error", err, "400", "SMREPO-GetSubmodelElementByPathSubmodelRepo-400-BadRequest", string(timestamp))}), nil
-	// 	}
-	// 	if common.IsInternalServerError(err) {
-	// 		timestamp := common.GetCurrentTimestamp()
-	// 		return gen.Response(http.StatusInternalServerError, []common.ErrorHandler{*common.NewErrorHandler("Error", err, "500", "SMREPO-GetSubmodelElementByPathSubmodelRepo-500-InternalServerError", string(timestamp))}), nil
-	// 	}
-	// 	if common.IsErrBadRequest(err) {
-	// 		timestamp := common.GetCurrentTimestamp()
-	// 		return gen.Response(http.StatusBadRequest, []common.ErrorHandler{*common.NewErrorHandler("Error", err, "400", "SMREPO-GetSubmodelElementByPathSubmodelRepo-400-BadRequest", string(timestamp))}), nil
-	// 	}
-	// 	return gen.Response(http.StatusInternalServerError, nil), err
-	// }
-	// converted, convErr := jsonization.ToJsonable(sme)
-	// if convErr != nil {
-	// 	return gen.Response(http.StatusInternalServerError, nil), convErr
-	// }
-	return gen.Response(http.StatusOK, nil), nil
+	return gen.Response(http.StatusOK, converted), nil
 }
 
 // PutSubmodelElementByPathSubmodelRepo updates an existing submodel element at a specified path within submodel elements hierarchy.
@@ -1174,31 +1344,30 @@ func (s *SubmodelRepositoryAPIAPIService) PatchSubmodelElementByPathSubmodelRepo
 //
 //nolint:revive
 func (s *SubmodelRepositoryAPIAPIService) GetSubmodelElementByPathMetadataSubmodelRepo(ctx context.Context, submodelIdentifier string, idShortPath string) (gen.ImplResponse, error) {
-	// TODO - update GetSubmodelElementByPathMetadataSubmodelRepo with the required logic for this service method.
-	// Add api_submodel_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
+	_ = ctx
 
-	// TODO: Uncomment the next line to return response Response(200, SubmodelElementMetadata{}) or use other options such as http.Ok ...
-	// return gen.Response(200, SubmodelElementMetadata{}), nil
+	decodedSubmodelIdentifier, decodeErr := decodeBase64RawStd(submodelIdentifier)
+	if decodeErr != nil {
+		return gen.Response(http.StatusBadRequest, nil), decodeErr
+	}
 
-	// TODO: Uncomment the next line to return response Response(400, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(400, Result{}), nil
+	element, err := s.submodelBackend.GetSubmodelElement(decodedSubmodelIdentifier, idShortPath, false)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) || common.IsErrNotFound(err) {
+			return gen.Response(http.StatusNotFound, nil), nil
+		}
+		if common.IsErrBadRequest(err) {
+			return gen.Response(http.StatusBadRequest, nil), err
+		}
+		return gen.Response(http.StatusInternalServerError, nil), err
+	}
 
-	// TODO: Uncomment the next line to return response Response(401, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(401, Result{}), nil
+	metadata, conversionErr := toSubmodelElementMetadata(element)
+	if conversionErr != nil {
+		return gen.Response(http.StatusInternalServerError, nil), conversionErr
+	}
 
-	// TODO: Uncomment the next line to return response Response(403, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(403, Result{}), nil
-
-	// TODO: Uncomment the next line to return response Response(404, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(404, Result{}), nil
-
-	// TODO: Uncomment the next line to return response Response(500, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(500, Result{}), nil
-
-	// TODO: Uncomment the next line to return response Response(0, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(0, Result{}), nil
-
-	return gen.Response(http.StatusNotImplemented, nil), errors.New("GetSubmodelElementByPathMetadataSubmodelRepo method not implemented")
+	return gen.Response(http.StatusOK, metadata), nil
 }
 
 // PatchSubmodelElementByPathMetadataSubmodelRepo - Updates the metadata attributes an existing SubmodelElement
@@ -1236,53 +1405,60 @@ func (s *SubmodelRepositoryAPIAPIService) PatchSubmodelElementByPathMetadataSubm
 //
 //nolint:revive
 func (s *SubmodelRepositoryAPIAPIService) GetSubmodelElementByPathValueOnlySubmodelRepo(ctx context.Context, submodelIdentifier string, idShortPath string, level string, extent string) (gen.ImplResponse, error) {
-	// decodedSubmodelIdentifier, decodeErr := base64.RawStdEncoding.DecodeString(submodelIdentifier)
-	// if decodeErr != nil {
-	// 	return gen.Response(http.StatusBadRequest, nil), decodeErr
-	// }
+	_ = ctx
+	_ = level
+	_ = extent
 
-	// // Get the submodel element by path
-	// element, err := s.submodelBackend.GetSubmodelElement(string(decodedSubmodelIdentifier), idShortPath, true)
-	// if err != nil {
-	// 	if errors.Is(err, sql.ErrNoRows) {
-	// 		return gen.Response(404, nil), nil
-	// 	}
-	// 	if common.IsErrNotFound(err) {
-	// 		return gen.Response(404, nil), err
-	// 	}
-	// 	return gen.Response(500, nil), err
-	// }
+	decodedSubmodelIdentifier, decodeErr := base64.RawStdEncoding.DecodeString(submodelIdentifier)
+	if decodeErr != nil {
+		return gen.Response(http.StatusBadRequest, nil), decodeErr
+	}
 
-	// // Convert to Value-Only representation
-	// valueOnly, err := gen.SubmodelElementToValueOnly(element)
-	// if err != nil {
-	// 	return gen.Response(500, nil), err
-	// }
+	element, err := s.submodelBackend.GetSubmodelElement(string(decodedSubmodelIdentifier), idShortPath, true)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) || common.IsErrNotFound(err) {
+			return gen.Response(http.StatusNotFound, nil), nil
+		}
+		if common.IsErrBadRequest(err) {
+			return gen.Response(http.StatusBadRequest, nil), err
+		}
+		return gen.Response(http.StatusInternalServerError, nil), err
+	}
 
-	// if valueOnly == nil {
-	// 	return gen.Response(404, nil), errors.New("element cannot be serialized in value-only format")
-	// }
+	valueOnly, convErr := gen.SubmodelElementToValueOnly(element)
+	if convErr != nil {
+		return gen.Response(http.StatusInternalServerError, nil), convErr
+	}
 
-	return gen.Response(200, nil), nil
+	if valueOnly == nil {
+		return gen.Response(http.StatusNotFound, nil), errors.New("element cannot be serialized in value-only format")
+	}
+
+	return gen.Response(http.StatusOK, valueOnly), nil
 }
 
 // PatchSubmodelElementByPathValueOnlySubmodelRepo - Updates the value of an existing SubmodelElement
 //
 //nolint:revive
 func (s *SubmodelRepositoryAPIAPIService) PatchSubmodelElementByPathValueOnlySubmodelRepo(ctx context.Context, submodelIdentifier string, idShortPath string, submodelElementValue gen.SubmodelElementValue, level string) (gen.ImplResponse, error) {
-	// decodedIdentifier, decodeErr := base64.RawStdEncoding.DecodeString(submodelIdentifier)
-	// if decodeErr != nil {
-	// 	return gen.Response(http.StatusBadRequest, nil), decodeErr
-	// }
+	_ = ctx
+	_ = level
 
-	// // Update the submodel element value using the backend
-	// err := s.submodelBackend.UpdateSubmodelElementValueOnly(string(decodedIdentifier), idShortPath, submodelElementValue)
-	// if err != nil {
-	// 	if common.IsErrNotFound(err) {
-	// 		return gen.Response(http.StatusNotFound, gen.Result{Messages: []gen.Message{{Text: err.Error()}}}), nil
-	// 	}
-	// 	return gen.Response(http.StatusInternalServerError, gen.Result{Messages: []gen.Message{{Text: err.Error()}}}), nil
-	// }
+	decodedIdentifier, decodeErr := base64.RawStdEncoding.DecodeString(submodelIdentifier)
+	if decodeErr != nil {
+		return gen.Response(http.StatusBadRequest, nil), decodeErr
+	}
+
+	err := s.submodelBackend.UpdateSubmodelElementValueOnly(string(decodedIdentifier), idShortPath, submodelElementValue)
+	if err != nil {
+		if common.IsErrBadRequest(err) {
+			return gen.Response(http.StatusBadRequest, gen.Result{Messages: []gen.Message{{Text: err.Error()}}}), nil
+		}
+		if common.IsErrNotFound(err) {
+			return gen.Response(http.StatusNotFound, gen.Result{Messages: []gen.Message{{Text: err.Error()}}}), nil
+		}
+		return gen.Response(http.StatusInternalServerError, gen.Result{Messages: []gen.Message{{Text: err.Error()}}}), nil
+	}
 
 	return gen.Response(http.StatusNoContent, nil), nil
 }
@@ -1291,62 +1467,61 @@ func (s *SubmodelRepositoryAPIAPIService) PatchSubmodelElementByPathValueOnlySub
 //
 //nolint:revive
 func (s *SubmodelRepositoryAPIAPIService) GetSubmodelElementByPathReferenceSubmodelRepo(ctx context.Context, submodelIdentifier string, idShortPath string) (gen.ImplResponse, error) {
-	// TODO - update GetSubmodelElementByPathReferenceSubmodelRepo with the required logic for this service method.
-	// Add api_submodel_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
+	_ = ctx
 
-	// TODO: Uncomment the next line to return response Response(200, Reference{}) or use other options such as http.Ok ...
-	// return gen.Response(200, Reference{}), nil
+	decodedSubmodelIdentifier, decodeErr := decodeBase64RawStd(submodelIdentifier)
+	if decodeErr != nil {
+		return gen.Response(http.StatusBadRequest, nil), decodeErr
+	}
 
-	// TODO: Uncomment the next line to return response Response(400, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(400, Result{}), nil
+	element, err := s.submodelBackend.GetSubmodelElement(decodedSubmodelIdentifier, idShortPath, false)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) || common.IsErrNotFound(err) {
+			return gen.Response(http.StatusNotFound, nil), nil
+		}
+		if common.IsErrBadRequest(err) {
+			return gen.Response(http.StatusBadRequest, nil), err
+		}
+		return gen.Response(http.StatusInternalServerError, nil), err
+	}
 
-	// TODO: Uncomment the next line to return response Response(401, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(401, Result{}), nil
+	modelTypeLiteral := getModelTypeLiteral(element)
+	if modelTypeLiteral == "" {
+		return gen.Response(http.StatusInternalServerError, nil), common.NewInternalServerError("SMREPO-GETSMEREF-MODELTYPE Empty modelType for submodel element")
+	}
 
-	// TODO: Uncomment the next line to return response Response(403, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(403, Result{}), nil
+	reference, referenceErr := buildModelReference(decodedSubmodelIdentifier, modelTypeLiteral, idShortPath)
+	if referenceErr != nil {
+		return gen.Response(http.StatusInternalServerError, nil), referenceErr
+	}
 
-	// TODO: Uncomment the next line to return response Response(404, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(404, Result{}), nil
-
-	// TODO: Uncomment the next line to return response Response(500, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(500, Result{}), nil
-
-	// TODO: Uncomment the next line to return response Response(0, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(0, Result{}), nil
-
-	return gen.Response(http.StatusNotImplemented, nil), errors.New("GetSubmodelElementByPathReferenceSubmodelRepo method not implemented")
+	return gen.Response(http.StatusOK, reference), nil
 }
 
 // GetSubmodelElementByPathPathSubmodelRepo - Returns a specific submodel element from the Submodel at a specified path in the Path notation
 //
 //nolint:revive
 func (s *SubmodelRepositoryAPIAPIService) GetSubmodelElementByPathPathSubmodelRepo(ctx context.Context, submodelIdentifier string, idShortPath string, level string) (gen.ImplResponse, error) {
-	// TODO - update GetSubmodelElementByPathPathSubmodelRepo with the required logic for this service method.
-	// Add api_submodel_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
+	_ = ctx
+	_ = level
 
-	// TODO: Uncomment the next line to return response Response(200, []string{}) or use other options such as http.Ok ...
-	// return gen.Response(200, []string{}), nil
+	decodedSubmodelIdentifier, decodeErr := decodeBase64RawStd(submodelIdentifier)
+	if decodeErr != nil {
+		return gen.Response(http.StatusBadRequest, nil), decodeErr
+	}
 
-	// TODO: Uncomment the next line to return response Response(400, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(400, Result{}), nil
+	_, err := s.submodelBackend.GetSubmodelElement(decodedSubmodelIdentifier, idShortPath, false)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) || common.IsErrNotFound(err) {
+			return gen.Response(http.StatusNotFound, nil), nil
+		}
+		if common.IsErrBadRequest(err) {
+			return gen.Response(http.StatusBadRequest, nil), err
+		}
+		return gen.Response(http.StatusInternalServerError, nil), err
+	}
 
-	// TODO: Uncomment the next line to return response Response(401, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(401, Result{}), nil
-
-	// TODO: Uncomment the next line to return response Response(403, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(403, Result{}), nil
-
-	// TODO: Uncomment the next line to return response Response(404, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(404, Result{}), nil
-
-	// TODO: Uncomment the next line to return response Response(500, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(500, Result{}), nil
-
-	// TODO: Uncomment the next line to return response Response(0, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(0, Result{}), nil
-
-	return gen.Response(http.StatusNotImplemented, nil), errors.New("GetSubmodelElementByPathPathSubmodelRepo method not implemented")
+	return gen.Response(http.StatusOK, []string{idShortPath}), nil
 }
 
 // GetFileByPathSubmodelRepo - Downloads file content from a specific submodel element from the Submodel at a specified path

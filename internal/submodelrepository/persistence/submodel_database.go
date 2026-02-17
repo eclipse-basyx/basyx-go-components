@@ -37,7 +37,9 @@ import (
 	"github.com/FriedJannik/aas-go-sdk/verification"
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	submodelelements "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/submodelElements"
+	"golang.org/x/sync/errgroup"
 
 	_ "github.com/lib/pq"
 )
@@ -73,16 +75,45 @@ func NewSubmodelDatabase(dsn string, maxOpenConnections int, maxIdleConnections 
 
 // GetSubmodelByID retrieves a submodel by its identifier from the database.
 func (s *SubmodelDatabase) GetSubmodelByID(submodelIdentifier string) (types.ISubmodel, error) {
-	submodels, _, err := s.GetSubmodels(0, "", submodelIdentifier)
+	eg := errgroup.Group{}
+	var submodels []types.ISubmodel
+	eg.Go(func() error {
+		var err error
+		submodels, _, err = s.GetSubmodels(0, "", submodelIdentifier)
+		if err != nil {
+			return err
+		}
+		if len(submodels) == 0 {
+			return common.NewErrNotFound(submodelIdentifier)
+		}
+		if len(submodels) > 1 {
+			return fmt.Errorf("multiple submodels found with identifier '%s'", submodelIdentifier)
+		}
+		return nil
+	})
+	submodelElements := make([]types.ISubmodelElement, 0)
+	eg.Go(func() error {
+		smes, _, err := s.GetSubmodelElements(submodelIdentifier, nil, "", false)
+		if err != nil {
+			return err
+		}
+		submodelElements = smes
+		return nil
+	})
+
+	err := eg.Wait()
 	if err != nil {
 		return nil, err
 	}
 	if len(submodels) == 0 {
 		return nil, common.NewErrNotFound(submodelIdentifier)
 	}
-	if len(submodels) > 1 {
-		return nil, fmt.Errorf("multiple submodels found with identifier '%s'", submodelIdentifier)
+	if submodels[0] == nil {
+		return nil, common.NewInternalServerError("SMREPO-GETSMBYID-NILSUBMODEL Loaded submodel is nil")
 	}
+
+	submodels[0].SetSubmodelElements(submodelElements)
+
 	return submodels[0], nil
 }
 
@@ -93,6 +124,10 @@ func (s *SubmodelDatabase) GetSubmodels(limit int32, cursor string, submodelIden
 	var limitFilter *int32
 	if limit > 0 {
 		limitFilter = &limit
+	}
+
+	if limit == 0 {
+		limit = 100
 	}
 
 	var cursorFilter *string
@@ -110,7 +145,7 @@ func (s *SubmodelDatabase) GetSubmodels(limit int32, cursor string, submodelIden
 		return nil, "", err
 	}
 
-	var identifier, idShort, category, descriptionJsonString, displayNameJsonString, administrativeInformationJsonString, embeddedDataSpecificationJsonString, supplementalSemanticIDsJsonString, extensionsJsonString, qualifiersJsonString sql.NullString
+	var identifier, idShort, category, descriptionJsonString, displayNameJsonString, administrativeInformationJsonString, embeddedDataSpecificationJsonString, supplementalSemanticIDsJsonString, extensionsJsonString, qualifiersJsonString, semanticIDJSONString sql.NullString
 	var kind sql.NullInt64
 
 	rows, err := s.db.Query(query, args...)
@@ -135,7 +170,7 @@ func (s *SubmodelDatabase) GetSubmodels(limit int32, cursor string, submodelIden
 	submodels := make([]types.ISubmodel, 0)
 	nextCursor := ""
 	for rows.Next() {
-		if err := rows.Scan(&identifier, &idShort, &category, &kind, &descriptionJsonString, &displayNameJsonString, &administrativeInformationJsonString, &embeddedDataSpecificationJsonString, &supplementalSemanticIDsJsonString, &extensionsJsonString, &qualifiersJsonString); err != nil {
+		if err := rows.Scan(&identifier, &idShort, &category, &kind, &descriptionJsonString, &displayNameJsonString, &administrativeInformationJsonString, &embeddedDataSpecificationJsonString, &supplementalSemanticIDsJsonString, &extensionsJsonString, &qualifiersJsonString, &semanticIDJSONString); err != nil {
 			return nil, "", err
 		}
 
@@ -155,6 +190,17 @@ func (s *SubmodelDatabase) GetSubmodels(limit int32, cursor string, submodelIden
 		if err != nil {
 			return nil, "", err
 		}
+
+		if semanticIDJSONString.Valid {
+			semanticID, parseSemanticErr := common.ParseReferenceJSON([]byte(semanticIDJSONString.String))
+			if parseSemanticErr != nil {
+				return nil, "", parseSemanticErr
+			}
+			if semanticID != nil {
+				submodel.SetSemanticID(semanticID)
+			}
+		}
+
 		submodels = append(submodels, submodel)
 	}
 
@@ -228,6 +274,29 @@ func (s *SubmodelDatabase) CreateSubmodel(submodel types.ISubmodel) error {
 		return common.NewInternalServerError("SMREPO-NEWSM-CREATE-EXECPAYLOADSQL " + err.Error())
 	}
 
+	semanticID := submodel.SemanticID()
+	if semanticID != nil {
+		ids, args, err = buildSubmodelSemanticIDReferenceQuery(&dialect, submodelDBID, semanticID)
+		if err != nil {
+			return common.NewInternalServerError("SMREPO-NEWSM-CREATE-SEMIDREFSQL " + err.Error())
+		}
+
+		if _, err := tx.Exec(ids, args...); err != nil {
+			return common.NewInternalServerError("SMREPO-NEWSM-CREATE-EXECSEMIDREFSQL " + err.Error())
+		}
+
+		ids, args, err = buildSubmodelSemanticIDReferenceKeysQuery(&dialect, submodelDBID, semanticID)
+		if err != nil {
+			return common.NewInternalServerError("SMREPO-NEWSM-CREATE-SEMIDKEYSQL " + err.Error())
+		}
+
+		if ids != "" {
+			if _, err := tx.Exec(ids, args...); err != nil {
+				return common.NewInternalServerError("SMREPO-NEWSM-CREATE-EXECSEMIDKEYSQL " + err.Error())
+			}
+		}
+	}
+
 	if len(submodel.SubmodelElements()) > 0 {
 		_, err = submodelelements.InsertSubmodelElements(s.db, submodel.ID(), submodel.SubmodelElements(), tx, nil)
 		if err != nil {
@@ -238,6 +307,46 @@ func (s *SubmodelDatabase) CreateSubmodel(submodel types.ISubmodel) error {
 	err = tx.Commit()
 	if err != nil {
 		return common.NewInternalServerError("SMREPO-NEWSM-CREATE-COMMIT " + err.Error())
+	}
+
+	return nil
+}
+
+// GetSubmodelElement retrieves a submodel element (including nested children) by idShort path.
+func (s *SubmodelDatabase) GetSubmodelElement(submodelID string, idShortOrPath string, _ bool) (types.ISubmodelElement, error) {
+	return submodelelements.GetSubmodelElementByIDShortOrPath(s.db, submodelID, idShortOrPath)
+}
+
+// GetSubmodelElements retrieves top-level submodel elements for a submodel and reconstructs each subtree.
+func (s *SubmodelDatabase) GetSubmodelElements(submodelID string, limit *int, cursor string, _ bool) ([]types.ISubmodelElement, string, error) {
+	return submodelelements.GetSubmodelElementsBySubmodelID(s.db, submodelID, limit, cursor)
+}
+
+// UpdateSubmodelElementValueOnly updates a submodel element using value-only representation.
+func (s *SubmodelDatabase) UpdateSubmodelElementValueOnly(submodelID string, idShortOrPath string, valueOnly gen.SubmodelElementValue) error {
+	modelType, err := submodelelements.GetModelTypeByIdShortPathAndSubmodelID(s.db, submodelID, idShortOrPath)
+	if err != nil {
+		return err
+	}
+
+	if modelType == nil {
+		return common.NewErrNotFound("SMREPO-UPDSMEVALONLY-NOTFOUND Submodel-Element ID-Short: " + idShortOrPath)
+	}
+
+	handler, err := submodelelements.GetSMEHandlerByModelType(*modelType, s.db)
+	if err != nil {
+		return err
+	}
+
+	return handler.UpdateValueOnly(submodelID, idShortOrPath, valueOnly)
+}
+
+// UpdateSubmodelValueOnly updates all included top-level submodel elements using value-only representation.
+func (s *SubmodelDatabase) UpdateSubmodelValueOnly(submodelID string, valueOnly gen.SubmodelValue) error {
+	for idShort, elementValue := range valueOnly {
+		if err := s.UpdateSubmodelElementValueOnly(submodelID, idShort, elementValue); err != nil {
+			return err
+		}
 	}
 
 	return nil

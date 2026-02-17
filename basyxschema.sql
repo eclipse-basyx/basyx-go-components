@@ -83,8 +83,12 @@ CREATE TABLE IF NOT EXISTS submodel (
   submodel_identifier varchar(2048) UNIQUE NOT NULL,              -- Identifiable.id
   id_short    varchar(128),
   category    varchar(128),
-  kind        int
+  kind        int,
+  model_type  int NOT NULL DEFAULT 7
 );
+
+ALTER TABLE submodel
+  ADD COLUMN IF NOT EXISTS model_type int NOT NULL DEFAULT 7;
 
 CREATE TABLE IF NOT EXISTS submodel_payload (
   submodel_id BIGINT PRIMARY KEY REFERENCES submodel(id) ON DELETE CASCADE,
@@ -439,6 +443,7 @@ CREATE INDEX IF NOT EXISTS ix_sme_sub_path   ON submodel_element(submodel_id, id
 CREATE INDEX IF NOT EXISTS ix_sme_parent_pos ON submodel_element(parent_sme_id, position);
 CREATE INDEX IF NOT EXISTS ix_sme_sub_type   ON submodel_element(submodel_id, model_type);
 CREATE INDEX IF NOT EXISTS ix_sme_sub_parent ON submodel_element(submodel_id, parent_sme_id);
+CREATE INDEX IF NOT EXISTS ix_sme_sub_root   ON submodel_element(submodel_id, root_sme_id);
 CREATE INDEX IF NOT EXISTS ix_sme_sub_depth  ON submodel_element(submodel_id, depth);
 CREATE INDEX IF NOT EXISTS ix_sme_roots_order
   ON submodel_element (submodel_id,
@@ -510,6 +515,7 @@ CREATE INDEX IF NOT EXISTS ix_submodel_element_semantic_id_refkey_refid ON submo
 CREATE INDEX IF NOT EXISTS ix_submodel_element_semantic_id_refkey_refval ON submodel_element_semantic_id_reference_key(reference_id, value);
 CREATE INDEX IF NOT EXISTS ix_submodel_element_semantic_id_refkey_type_val ON submodel_element_semantic_id_reference_key(type, value);
 CREATE INDEX IF NOT EXISTS ix_submodel_element_semantic_id_refkey_val_trgm ON submodel_element_semantic_id_reference_key USING GIN (value gin_trgm_ops);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_submodel_element_semantic_id_ref_payload_refid ON submodel_element_semantic_id_reference_payload(reference_id);
 
 CREATE INDEX IF NOT EXISTS ix_submodel_descriptor_semantic_id_ref_type ON submodel_descriptor_semantic_id_reference(type);
 CREATE INDEX IF NOT EXISTS ix_submodel_descriptor_semantic_id_refkey_refid ON submodel_descriptor_semantic_id_reference_key(reference_id);
