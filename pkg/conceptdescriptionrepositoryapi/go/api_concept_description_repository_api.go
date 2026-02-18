@@ -57,72 +57,22 @@ func NewConceptDescriptionRepositoryAPIAPIController(s ConceptDescriptionReposit
 // Routes returns all the api routes for the ConceptDescriptionRepositoryAPIAPIController
 func (c *ConceptDescriptionRepositoryAPIAPIController) Routes() model.Routes {
 	return model.Routes{
-		"GetAllConceptDescriptions": model.Route{
-			"GetAllConceptDescriptions",
-			strings.ToUpper("Get"),
-			c.contextPath + "/concept-descriptions",
-			c.GetAllConceptDescriptions,
-		},
-		"PostConceptDescription": model.Route{
-			"PostConceptDescription",
-			strings.ToUpper("Post"),
-			c.contextPath + "/concept-descriptions",
-			c.PostConceptDescription,
-		},
-		"GetConceptDescriptionById": model.Route{
-			"GetConceptDescriptionById",
-			strings.ToUpper("Get"),
-			c.contextPath + "/concept-descriptions/{cdIdentifier}",
-			c.GetConceptDescriptionById,
-		},
-		"PutConceptDescriptionById": model.Route{
-			"PutConceptDescriptionById",
-			strings.ToUpper("Put"),
-			c.contextPath + "/concept-descriptions/{cdIdentifier}",
-			c.PutConceptDescriptionById,
-		},
-		"DeleteConceptDescriptionById": model.Route{
-			"DeleteConceptDescriptionById",
-			strings.ToUpper("Delete"),
-			c.contextPath + "/concept-descriptions/{cdIdentifier}",
-			c.DeleteConceptDescriptionById,
-		},
+		"GetAllConceptDescriptions":    model.Route{Name: "GetAllConceptDescriptions", Method: strings.ToUpper("Get"), Pattern: c.contextPath + "/concept-descriptions", HandlerFunc: c.GetAllConceptDescriptions},
+		"PostConceptDescription":       model.Route{Name: "PostConceptDescription", Method: strings.ToUpper("Post"), Pattern: c.contextPath + "/concept-descriptions", HandlerFunc: c.PostConceptDescription},
+		"GetConceptDescriptionById":    model.Route{Name: "GetConceptDescriptionById", Method: strings.ToUpper("Get"), Pattern: c.contextPath + "/concept-descriptions/{cdIdentifier}", HandlerFunc: c.GetConceptDescriptionById},
+		"PutConceptDescriptionById":    model.Route{Name: "PutConceptDescriptionById", Method: strings.ToUpper("Put"), Pattern: c.contextPath + "/concept-descriptions/{cdIdentifier}", HandlerFunc: c.PutConceptDescriptionById},
+		"DeleteConceptDescriptionById": model.Route{Name: "DeleteConceptDescriptionById", Method: strings.ToUpper("Delete"), Pattern: c.contextPath + "/concept-descriptions/{cdIdentifier}", HandlerFunc: c.DeleteConceptDescriptionById},
 	}
 }
 
 // OrderedRoutes returns all the api routes in a deterministic order for the ConceptDescriptionRepositoryAPIAPIController
 func (c *ConceptDescriptionRepositoryAPIAPIController) OrderedRoutes() []model.Route {
 	return []model.Route{
-		model.Route{
-			"GetAllConceptDescriptions",
-			strings.ToUpper("Get"),
-			c.contextPath + "/concept-descriptions",
-			c.GetAllConceptDescriptions,
-		},
-		model.Route{
-			"PostConceptDescription",
-			strings.ToUpper("Post"),
-			c.contextPath + "/concept-descriptions",
-			c.PostConceptDescription,
-		},
-		model.Route{
-			"GetConceptDescriptionById",
-			strings.ToUpper("Get"),
-			c.contextPath + "/concept-descriptions/{cdIdentifier}",
-			c.GetConceptDescriptionById,
-		},
-		model.Route{
-			"PutConceptDescriptionById",
-			strings.ToUpper("Put"),
-			c.contextPath + "/concept-descriptions/{cdIdentifier}",
-			c.PutConceptDescriptionById,
-		},
-		model.Route{
-			"DeleteConceptDescriptionById",
-			strings.ToUpper("Delete"),
-			c.contextPath + "/concept-descriptions/{cdIdentifier}",
-			c.DeleteConceptDescriptionById,
-		},
+		model.Route{Name: "GetAllConceptDescriptions", Method: strings.ToUpper("Get"), Pattern: c.contextPath + "/concept-descriptions", HandlerFunc: c.GetAllConceptDescriptions},
+		model.Route{Name: "PostConceptDescription", Method: strings.ToUpper("Post"), Pattern: c.contextPath + "/concept-descriptions", HandlerFunc: c.PostConceptDescription},
+		model.Route{Name: "GetConceptDescriptionById", Method: strings.ToUpper("Get"), Pattern: c.contextPath + "/concept-descriptions/{cdIdentifier}", HandlerFunc: c.GetConceptDescriptionById},
+		model.Route{Name: "PutConceptDescriptionById", Method: strings.ToUpper("Put"), Pattern: c.contextPath + "/concept-descriptions/{cdIdentifier}", HandlerFunc: c.PutConceptDescriptionById},
+		model.Route{Name: "DeleteConceptDescriptionById", Method: strings.ToUpper("Delete"), Pattern: c.contextPath + "/concept-descriptions/{cdIdentifier}", HandlerFunc: c.DeleteConceptDescriptionById},
 	}
 }
 
@@ -219,7 +169,7 @@ func (c *ConceptDescriptionRepositoryAPIAPIController) PostConceptDescription(w 
 func (c *ConceptDescriptionRepositoryAPIAPIController) GetConceptDescriptionById(w http.ResponseWriter, r *http.Request) {
 	cdIdentifierParam := chi.URLParam(r, "cdIdentifier")
 	if cdIdentifierParam == "" {
-		c.errorHandler(w, r, &model.RequiredError{"cdIdentifier"}, nil)
+		c.errorHandler(w, r, &model.RequiredError{Field: "cdIdentifier"}, nil)
 		return
 	}
 	result, err := c.service.GetConceptDescriptionById(r.Context(), cdIdentifierParam)
@@ -236,7 +186,7 @@ func (c *ConceptDescriptionRepositoryAPIAPIController) GetConceptDescriptionById
 func (c *ConceptDescriptionRepositoryAPIAPIController) PutConceptDescriptionById(w http.ResponseWriter, r *http.Request) {
 	cdIdentifierParam := chi.URLParam(r, "cdIdentifier")
 	if cdIdentifierParam == "" {
-		c.errorHandler(w, r, &model.RequiredError{"cdIdentifier"}, nil)
+		c.errorHandler(w, r, &model.RequiredError{Field: "cdIdentifier"}, nil)
 		return
 	}
 	// Read and unmarshal JSON to interface{} first
@@ -270,7 +220,7 @@ func (c *ConceptDescriptionRepositoryAPIAPIController) PutConceptDescriptionById
 func (c *ConceptDescriptionRepositoryAPIAPIController) DeleteConceptDescriptionById(w http.ResponseWriter, r *http.Request) {
 	cdIdentifierParam := chi.URLParam(r, "cdIdentifier")
 	if cdIdentifierParam == "" {
-		c.errorHandler(w, r, &model.RequiredError{"cdIdentifier"}, nil)
+		c.errorHandler(w, r, &model.RequiredError{Field: "cdIdentifier"}, nil)
 		return
 	}
 	result, err := c.service.DeleteConceptDescriptionById(r.Context(), cdIdentifierParam)

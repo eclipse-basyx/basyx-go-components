@@ -66,17 +66,19 @@ func TestMain(m *testing.M) {
 	}
 
 	//nolint:all
-	ctxUp, _ := context.WithTimeout(context.Background(), 10*time.Minute)
+	ctxUp, cancelUp := context.WithTimeout(context.Background(), 10*time.Minute)
 	if err := testenv.RunCompose(ctxUp, composeEngine, upArgs...); err != nil {
 		_, _ = fmt.Println("failed to start compose:", err)
 		composeAvailable = false
 	}
+	cancelUp()
 
 	code := m.Run()
 
 	//nolint:all
-	ctxDown, _ := context.WithTimeout(context.Background(), 10*time.Minute)
+	ctxDown, cancelDown := context.WithTimeout(context.Background(), 10*time.Minute)
 	_ = testenv.RunCompose(ctxDown, composeEngine, append(composeArgsBase, "-f", ComposeFilePath, "down")...)
+	cancelDown()
 
 	os.Exit(code)
 }
