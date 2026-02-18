@@ -106,8 +106,8 @@ func TestLogicalExpression_SME_WithCollector_MultiConditions(t *testing.T) {
 	if !strings.Contains(sql, "submodel_element__exists\".\"idshort_path\"") {
 		t.Fatalf("expected idshort_path binding in EXISTS SQL, got: %s", sql)
 	}
-	if !strings.Contains(sql, "property_element__exists\".\"value_type\"") {
-		t.Fatalf("expected property_element.value_type in EXISTS SQL, got: %s", sql)
+	if !strings.Contains(sql, "CASE WHEN property_element.value_bool IS NOT NULL") {
+		t.Fatalf("expected CASE-based valueType expression in EXISTS SQL, got: %s", sql)
 	}
 	if !strings.Contains(sql, "'temperature'") {
 		t.Fatalf("expected SQL to contain %q, got: %s", "'temperature'", sql)

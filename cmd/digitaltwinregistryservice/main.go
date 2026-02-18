@@ -89,7 +89,8 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 
 	registryDatabase, err := registrydb.NewPostgreSQLAASRegistryDatabase(
 		dsn,
-		cfg.Postgres.MaxOpenConnections,
+		//nolint:gosec // configured value is bounded by deployment configuration
+		int32(cfg.Postgres.MaxOpenConnections),
 		cfg.Postgres.MaxIdleConnections,
 		cfg.Postgres.ConnMaxLifetimeMinutes,
 		cfg.Server.CacheEnabled,
@@ -102,7 +103,8 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 
 	discoveryDatabase, err := discoverydb.NewPostgreSQLDiscoveryBackend(
 		dsn,
-		cfg.Postgres.MaxOpenConnections,
+		//nolint:gosec // configured value is bounded by deployment configuration
+		int32(cfg.Postgres.MaxOpenConnections),
 		cfg.Postgres.MaxIdleConnections,
 		cfg.Postgres.ConnMaxLifetimeMinutes,
 		databaseSchema,

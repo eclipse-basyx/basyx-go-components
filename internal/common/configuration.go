@@ -177,7 +177,7 @@ type PostgresConfig struct {
 	User                   string `mapstructure:"user" yaml:"user"`                                     // Database username
 	Password               string `mapstructure:"password" yaml:"password"`                             // Database password
 	DBName                 string `mapstructure:"dbname" yaml:"dbname"`                                 // Database name
-	MaxOpenConnections     int32  `mapstructure:"maxOpenConnections" yaml:"maxOpenConnections"`         // Maximum open connections
+	MaxOpenConnections     int    `mapstructure:"maxOpenConnections" yaml:"maxOpenConnections"`         // Maximum open connections
 	MaxIdleConnections     int    `mapstructure:"maxIdleConnections" yaml:"maxIdleConnections"`         // Maximum idle connections
 	ConnMaxLifetimeMinutes int    `mapstructure:"connMaxLifetimeMinutes" yaml:"connMaxLifetimeMinutes"` // Connection lifetime in minutes
 }

@@ -31,37 +31,39 @@ import (
 
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
-	persistence_utils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
 )
 
 func createSpecificAssetID(tx *sql.Tx, descriptorID int64, aasRef sql.NullInt64, specificAssetIDs []types.ISpecificAssetID) error {
+	return insertSpecificAssetIDs(
+		tx,
+		sql.NullInt64{Int64: descriptorID, Valid: true},
+		aasRef,
+		specificAssetIDs,
+	)
+}
+
+func insertSpecificAssetIDs(
+	tx *sql.Tx,
+	descriptorID sql.NullInt64,
+	aasRef sql.NullInt64,
+	specificAssetIDs []types.ISpecificAssetID,
+) error {
 	if specificAssetIDs == nil {
 		return nil
 	}
 	if len(specificAssetIDs) > 0 {
 		d := goqu.Dialect(dialect)
 		for i, val := range specificAssetIDs {
-			var a sql.NullInt64
-
-			externalSubjectReferenceID, err := persistence_utils.CreateReference(tx, val.ExternalSubjectID(), a, a)
-			if err != nil {
-				return err
-			}
-			semanticID, err := persistence_utils.CreateReference(tx, val.SemanticID(), a, a)
-			if err != nil {
-				return err
-			}
+			var err error
 
 			sqlStr, args, err := d.
 				Insert(tblSpecificAssetID).
 				Rows(goqu.Record{
-					colDescriptorID:       descriptorID,
-					colPosition:           i,
-					colSemanticID:         semanticID,
-					colName:               val.Name(),
-					colValue:              val.Value(),
-					colExternalSubjectRef: externalSubjectReferenceID,
-					colAASRef:             aasRef,
+					colDescriptorID: descriptorID,
+					colPosition:     i,
+					colName:         val.Name(),
+					colValue:        val.Value(),
+					colAASRef:       aasRef,
 				}).
 				Returning(tSpecificAssetID.Col(colID)).
 				ToSQL()
@@ -73,6 +75,20 @@ func createSpecificAssetID(tx *sql.Tx, descriptorID int64, aasRef sql.NullInt64,
 				return err
 			}
 
+			if err = createContextReference(
+				tx,
+				id,
+				val.ExternalSubjectID(),
+				"specific_asset_id_external_subject_id_reference",
+				"specific_asset_id_external_subject_id_reference_key",
+			); err != nil {
+				return err
+			}
+
+			if err = createSpecificAssetIDPayload(tx, id, val.SemanticID()); err != nil {
+				return err
+			}
+
 			if err = createSpecificAssetIDSupplementalSemantic(tx, id, val.SupplementalSemanticIDs()); err != nil {
 				return err
 			}
@@ -81,27 +97,30 @@ func createSpecificAssetID(tx *sql.Tx, descriptorID int64, aasRef sql.NullInt64,
 	return nil
 }
 
-func createSpecificAssetIDSupplementalSemantic(tx *sql.Tx, specificAssetID int64, references []types.IReference) error {
-	if len(references) == 0 {
-		return nil
-	}
+func createSpecificAssetIDPayload(tx *sql.Tx, specificAssetID int64, semanticID types.IReference) error {
 	d := goqu.Dialect(dialect)
-	rows := make([]goqu.Record, 0, len(references))
-	for i := range references {
-		var a sql.NullInt64
-		referenceID, err := persistence_utils.CreateReference(tx, references[i], a, a)
-		if err != nil {
-			return err
-		}
-		rows = append(rows, goqu.Record{
-			colSpecificAssetIDID: specificAssetID,
-			colReferenceID:       referenceID,
-		})
+	semanticPayload, err := buildReferencePayload(semanticID)
+	if err != nil {
+		return err
 	}
-	sqlStr, args, err := d.Insert(tblSpecificAssetIDSuppSemantic).Rows(rows).ToSQL()
+
+	sqlStr, args, err := d.Insert(tblSpecificAssetIDPayload).Rows(goqu.Record{
+		colSpecificAssetID:    specificAssetID,
+		"semantic_id_payload": goqu.L("?::jsonb", string(semanticPayload)),
+	}).ToSQL()
 	if err != nil {
 		return err
 	}
 	_, err = tx.Exec(sqlStr, args...)
 	return err
+}
+
+func createSpecificAssetIDSupplementalSemantic(tx *sql.Tx, specificAssetID int64, references []types.IReference) error {
+	return createContextReferences1ToMany(
+		tx,
+		specificAssetID,
+		references,
+		tblSpecificAssetIDSuppSemantic,
+		colSpecificAssetIDID,
+	)
 }

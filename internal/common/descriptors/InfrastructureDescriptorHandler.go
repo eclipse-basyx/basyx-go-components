@@ -30,12 +30,9 @@ import (
 	"database/sql"
 	"errors"
 
-	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
-	persistence_utils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
-	"golang.org/x/sync/errgroup"
 )
 
 // InsertInfrastructureDescriptor creates a new InfrastructureDescriptor
@@ -98,32 +95,39 @@ func InsertInfrastructureDescriptorTx(_ context.Context, tx *sql.Tx, infdesc mod
 		return err
 	}
 
-	var displayNameID, descriptionID, administrationID sql.NullInt64
+	descriptionPayload, err := buildLangStringTextPayload(infdesc.Description)
+	if err != nil {
+		return common.NewInternalServerError("INFDESC-INSERT-DESCRIPTIONPAYLOAD")
+	}
+	displayNamePayload, err := buildLangStringNamePayload(infdesc.DisplayName)
+	if err != nil {
+		return common.NewInternalServerError("INFDESC-INSERT-DISPLAYNAMEPAYLOAD")
+	}
+	administrationPayload, err := buildAdministrativeInfoPayload(infdesc.Administration)
+	if err != nil {
+		return common.NewInternalServerError("INFDESC-INSERT-ADMINPAYLOAD")
+	}
 
-	dnID, err := persistence_utils.CreateLangStringNameTypes(tx, infdesc.DisplayName)
-	if err != nil {
-		return common.NewInternalServerError("Failed to create DisplayName - no changes applied - see console for details")
+	sqlStr, args, buildErr = d.
+		Insert(tblDescriptorPayload).
+		Rows(goqu.Record{
+			colDescriptorID:              descriptorID,
+			colDescriptionPayload:        goqu.L("?::jsonb", string(descriptionPayload)),
+			colDisplayNamePayload:        goqu.L("?::jsonb", string(displayNamePayload)),
+			colAdministrativeInfoPayload: goqu.L("?::jsonb", string(administrationPayload)),
+		}).
+		ToSQL()
+	if buildErr != nil {
+		return buildErr
 	}
-	displayNameID = dnID
-	descID, err := persistence_utils.CreateLangStringTextTypes(tx, infdesc.Description)
-	if err != nil {
-		return common.NewInternalServerError("Failed to create Description - no changes applied - see console for details")
+	if _, err = tx.Exec(sqlStr, args...); err != nil {
+		return err
 	}
-	descriptionID = descID
-
-	adminID, err := persistence_utils.CreateAdministrativeInformation(tx, infdesc.Administration)
-	if err != nil {
-		return common.NewInternalServerError("Failed to create Administration - no changes applied - see console for details")
-	}
-	administrationID = adminID
 
 	sqlStr, args, buildErr = d.
 		Insert(tblInfrastructureDescriptor).
 		Rows(goqu.Record{
 			colDescriptorID:  descriptorID,
-			colDescriptionID: descriptionID,
-			colDisplayNameID: displayNameID,
-			colAdminInfoID:   administrationID,
 			colGlobalAssetID: infdesc.GlobalAssetId,
 			colIDShort:       infdesc.IdShort,
 			colInfDescID:     infdesc.Id,
@@ -153,18 +157,23 @@ func GetInfrastructureDescriptorByID(ctx context.Context, db *sql.DB, infrastruc
 	d := goqu.Dialect(dialect)
 
 	inf := goqu.T(tblInfrastructureDescriptor).As("inf")
+	payload := tDescriptorPayload.As("inf_payload")
 
 	sqlStr, args, buildErr := d.
 		From(inf).
+		LeftJoin(
+			payload,
+			goqu.On(payload.Col(colDescriptorID).Eq(inf.Col(colDescriptorID))),
+		).
 		Select(
 			inf.Col(colDescriptorID),
 			inf.Col(colGlobalAssetID),
 			inf.Col(colIDShort),
 			inf.Col(colCompany),
 			inf.Col(colInfDescID),
-			inf.Col(colAdminInfoID),
-			inf.Col(colDisplayNameID),
-			inf.Col(colDescriptionID),
+			payload.Col(colAdministrativeInfoPayload),
+			payload.Col(colDisplayNamePayload),
+			payload.Col(colDescriptionPayload),
 		).
 		Where(inf.Col(colInfDescID).Eq(infrastructureIdentifier)).
 		Limit(1).
@@ -177,9 +186,9 @@ func GetInfrastructureDescriptorByID(ctx context.Context, db *sql.DB, infrastruc
 		descID                          int64
 		globalAssetID, idShort, company sql.NullString
 		idStr                           string
-		adminInfoID                     sql.NullInt64
-		displayNameID                   sql.NullInt64
-		descriptionID                   sql.NullInt64
+		administrativeInfoPayload       []byte
+		displayNamePayload              []byte
+		descriptionPayload              []byte
 	)
 
 	if err := db.QueryRowContext(ctx, sqlStr, args...).Scan(
@@ -188,9 +197,9 @@ func GetInfrastructureDescriptorByID(ctx context.Context, db *sql.DB, infrastruc
 		&idShort,
 		&company,
 		&idStr,
-		&adminInfoID,
-		&displayNameID,
-		&descriptionID,
+		&administrativeInfoPayload,
+		&displayNamePayload,
+		&descriptionPayload,
 	); err != nil {
 		if err == sql.ErrNoRows {
 			return model.InfrastructureDescriptor{}, common.NewErrNotFound("Infrastructure Descriptor not found")
@@ -198,38 +207,20 @@ func GetInfrastructureDescriptorByID(ctx context.Context, db *sql.DB, infrastruc
 		return model.InfrastructureDescriptor{}, err
 	}
 
-	g, ctx := errgroup.WithContext(ctx)
-
-	var (
-		adminInfo   types.IAdministrativeInformation
-		displayName []types.ILangStringNameType
-		description []types.ILangStringTextType
-		endpoints   []model.Endpoint
-	)
-
-	g.Go(func() error {
-		if adminInfoID.Valid {
-			ai, err := ReadAdministrativeInformationByID(ctx, db, tblInfrastructureDescriptor, adminInfoID)
-			if err != nil {
-				return err
-			}
-			adminInfo = ai
-		}
-		return nil
-	})
-	GoAssign(g, func() ([]types.ILangStringNameType, error) {
-		return persistence_utils.GetLangStringNameTypes(db, displayNameID)
-	}, &displayName)
-
-	GoAssign(g, func() ([]types.ILangStringTextType, error) {
-		return persistence_utils.GetLangStringTextTypes(db, descriptionID)
-	}, &description)
-
-	GoAssign(g, func() ([]model.Endpoint, error) {
-		return ReadEndpointsByDescriptorID(ctx, db, descID, "infrastructure")
-	}, &endpoints)
-
-	if err := g.Wait(); err != nil {
+	adminInfo, err := parseAdministrativeInfoPayload(administrativeInfoPayload)
+	if err != nil {
+		return model.InfrastructureDescriptor{}, common.NewInternalServerError("INFDESC-READ-ADMINPAYLOAD")
+	}
+	displayName, err := parseLangStringNamePayload(displayNamePayload)
+	if err != nil {
+		return model.InfrastructureDescriptor{}, common.NewInternalServerError("INFDESC-READ-DISPLAYNAMEPAYLOAD")
+	}
+	description, err := parseLangStringTextPayload(descriptionPayload)
+	if err != nil {
+		return model.InfrastructureDescriptor{}, common.NewInternalServerError("INFDESC-READ-DESCRIPTIONPAYLOAD")
+	}
+	endpoints, err := ReadEndpointsByDescriptorID(ctx, db, descID, "infrastructure")
+	if err != nil {
 		return model.InfrastructureDescriptor{}, err
 	}
 
@@ -252,18 +243,23 @@ func GetInfrastructureDescriptorByIDTx(ctx context.Context, tx *sql.Tx, infrastr
 	d := goqu.Dialect(dialect)
 
 	inf := goqu.T(tblInfrastructureDescriptor).As("inf")
+	payload := tDescriptorPayload.As("inf_payload")
 
 	sqlStr, args, buildErr := d.
 		From(inf).
+		LeftJoin(
+			payload,
+			goqu.On(payload.Col(colDescriptorID).Eq(inf.Col(colDescriptorID))),
+		).
 		Select(
 			inf.Col(colDescriptorID),
 			inf.Col(colGlobalAssetID),
 			inf.Col(colIDShort),
 			inf.Col(colCompany),
 			inf.Col(colInfDescID),
-			inf.Col(colAdminInfoID),
-			inf.Col(colDisplayNameID),
-			inf.Col(colDescriptionID),
+			payload.Col(colAdministrativeInfoPayload),
+			payload.Col(colDisplayNamePayload),
+			payload.Col(colDescriptionPayload),
 		).
 		Where(inf.Col(colInfDescID).Eq(infrastructureIdentifier)).
 		Limit(1).
@@ -275,9 +271,9 @@ func GetInfrastructureDescriptorByIDTx(ctx context.Context, tx *sql.Tx, infrastr
 		descID                          int64
 		globalAssetID, idShort, company sql.NullString
 		idStr                           string
-		adminInfoID                     sql.NullInt64
-		displayNameID                   sql.NullInt64
-		descriptionID                   sql.NullInt64
+		administrativeInfoPayload       []byte
+		displayNamePayload              []byte
+		descriptionPayload              []byte
 	)
 
 	if err := tx.QueryRowContext(ctx, sqlStr, args...).Scan(
@@ -286,49 +282,31 @@ func GetInfrastructureDescriptorByIDTx(ctx context.Context, tx *sql.Tx, infrastr
 		&idShort,
 		&company,
 		&idStr,
-		&adminInfoID,
-		&displayNameID,
-		&descriptionID,
+		&administrativeInfoPayload,
+		&displayNamePayload,
+		&descriptionPayload,
 	); err != nil {
 		if err == sql.ErrNoRows {
 			return model.InfrastructureDescriptor{}, common.NewErrNotFound("Infrastructure Descriptor not found")
 		}
 		return model.InfrastructureDescriptor{}, err
 	}
-	var (
-		adminInfo   types.IAdministrativeInformation
-		displayName []types.ILangStringNameType
-		description []types.ILangStringTextType
-		endpoints   []model.Endpoint
-	)
-
-	if adminInfoID.Valid {
-		ai, err := ReadAdministrativeInformationByID(ctx, tx, tblInfrastructureDescriptor, adminInfoID)
-		if err != nil {
-			return model.InfrastructureDescriptor{}, err
-		}
-		adminInfo = ai
+	adminInfo, err := parseAdministrativeInfoPayload(administrativeInfoPayload)
+	if err != nil {
+		return model.InfrastructureDescriptor{}, common.NewInternalServerError("INFDESC-READ-ADMINPAYLOAD")
 	}
-	if displayNameID.Valid {
-		dn, err := GetLangStringNameTypesByIDs(tx, []int64{displayNameID.Int64})
-		if err != nil {
-			return model.InfrastructureDescriptor{}, err
-		}
-		displayName = dn[displayNameID.Int64]
+	displayName, err := parseLangStringNamePayload(displayNamePayload)
+	if err != nil {
+		return model.InfrastructureDescriptor{}, common.NewInternalServerError("INFDESC-READ-DISPLAYNAMEPAYLOAD")
 	}
-
-	if descriptionID.Valid {
-		desc, err := GetLangStringTextTypesByIDs(tx, []int64{descriptionID.Int64})
-		if err != nil {
-			return model.InfrastructureDescriptor{}, err
-		}
-		description = desc[descriptionID.Int64]
+	description, err := parseLangStringTextPayload(descriptionPayload)
+	if err != nil {
+		return model.InfrastructureDescriptor{}, common.NewInternalServerError("INFDESC-READ-DESCRIPTIONPAYLOAD")
 	}
-	ep, err := ReadEndpointsByDescriptorID(ctx, tx, descID, "infrastructure")
+	endpoints, err := ReadEndpointsByDescriptorID(ctx, tx, descID, "infrastructure")
 	if err != nil {
 		return model.InfrastructureDescriptor{}, err
 	}
-	endpoints = ep
 
 	return model.InfrastructureDescriptor{
 		GlobalAssetId:  globalAssetID.String,
@@ -449,19 +427,24 @@ func ListInfrastructureDescriptors(
 
 	d := goqu.Dialect(dialect)
 	inf := goqu.T(tblInfrastructureDescriptor).As("inf")
+	payload := tDescriptorPayload.As("inf_payload")
 	aasdescendp := goqu.T(tblAASDescriptorEndpoint).As("aasdescendp")
 
 	ds := d.
 		From(inf).
+		LeftJoin(
+			payload,
+			goqu.On(payload.Col(colDescriptorID).Eq(inf.Col(colDescriptorID))),
+		).
 		Select(
 			inf.Col(colDescriptorID),
 			inf.Col(colGlobalAssetID),
 			inf.Col(colIDShort),
 			inf.Col(colCompany),
 			inf.Col(colInfDescID),
-			inf.Col(colAdminInfoID),
-			inf.Col(colDisplayNameID),
-			inf.Col(colDescriptionID),
+			payload.Col(colAdministrativeInfoPayload),
+			payload.Col(colDisplayNamePayload),
+			payload.Col(colDescriptionPayload),
 		)
 
 	if cursor != "" {
@@ -513,9 +496,9 @@ func ListInfrastructureDescriptors(
 			&r.IDShort,
 			&r.Company,
 			&r.IDStr,
-			&r.AdminInfoID,
-			&r.DisplayNameID,
-			&r.DescriptionID,
+			&r.AdministrativeInfoPayload,
+			&r.DisplayNamePayload,
+			&r.DescriptionPayload,
 		); err != nil {
 			return nil, "", common.NewInternalServerError("Failed to scan Infrastructure Descriptor row. See server logs for details.")
 		}
@@ -536,68 +519,16 @@ func ListInfrastructureDescriptors(
 	}
 
 	descIDs := make([]int64, 0, len(descRows))
-	adminInfoIDs := make([]int64, 0, len(descRows))
-	displayNameIDs := make([]int64, 0, len(descRows))
-	descriptionIDs := make([]int64, 0, len(descRows))
 
 	seenDesc := make(map[int64]struct{}, len(descRows))
-	seenAI := map[int64]struct{}{}
-	seenDN := map[int64]struct{}{}
-	seenDE := map[int64]struct{}{}
 
 	for _, r := range descRows {
 		if _, ok := seenDesc[r.DescID]; !ok {
 			seenDesc[r.DescID] = struct{}{}
 			descIDs = append(descIDs, r.DescID)
 		}
-
-		if r.AdminInfoID.Valid {
-			id := r.AdminInfoID.Int64
-			if _, ok := seenAI[id]; !ok {
-				seenAI[id] = struct{}{}
-				adminInfoIDs = append(adminInfoIDs, id)
-			}
-		}
-		if r.DisplayNameID.Valid {
-			id := r.DisplayNameID.Int64
-			if _, ok := seenDN[id]; !ok {
-				seenDN[id] = struct{}{}
-				displayNameIDs = append(displayNameIDs, id)
-			}
-		}
-
-		if r.DescriptionID.Valid {
-			id := r.DescriptionID.Int64
-			if _, ok := seenDE[id]; !ok {
-				seenDE[id] = struct{}{}
-				descriptionIDs = append(descriptionIDs, id)
-			}
-		}
 	}
-
-	admByID := map[int64]types.IAdministrativeInformation{}
-	dnByID := map[int64][]types.ILangStringNameType{}
-	descByID := map[int64][]types.ILangStringTextType{}
 	endpointsByDesc := map[int64][]model.Endpoint{}
-
-	if len(adminInfoIDs) > 0 {
-		admByID, err = ReadAdministrativeInformationByIDs(ctx, db, tblInfrastructureDescriptor, adminInfoIDs)
-		if err != nil {
-			return nil, "", err
-		}
-	}
-	if len(displayNameIDs) > 0 {
-		dnByID, err = GetLangStringNameTypesByIDs(db, displayNameIDs)
-		if err != nil {
-			return nil, "", err
-		}
-	}
-	if len(descriptionIDs) > 0 {
-		descByID, err = GetLangStringTextTypesByIDs(db, descriptionIDs)
-		if err != nil {
-			return nil, "", err
-		}
-	}
 	if len(descIDs) > 0 {
 		endpointsByDesc, err = ReadEndpointsByDescriptorIDs(ctx, db, descIDs, "infrastructure")
 		if err != nil {
@@ -607,22 +538,17 @@ func ListInfrastructureDescriptors(
 
 	out := make([]model.InfrastructureDescriptor, 0, len(descRows))
 	for _, r := range descRows {
-		var adminInfo types.IAdministrativeInformation
-		if r.AdminInfoID.Valid {
-			if v, ok := admByID[r.AdminInfoID.Int64]; ok {
-				tmp := v
-				adminInfo = tmp
-			}
+		adminInfo, err := parseAdministrativeInfoPayload(r.AdministrativeInfoPayload)
+		if err != nil {
+			return nil, "", common.NewInternalServerError("INFDESC-LIST-ADMINPAYLOAD")
 		}
-
-		var displayName []types.ILangStringNameType
-		if r.DisplayNameID.Valid {
-			displayName = dnByID[r.DisplayNameID.Int64]
+		displayName, err := parseLangStringNamePayload(r.DisplayNamePayload)
+		if err != nil {
+			return nil, "", common.NewInternalServerError("INFDESC-LIST-DISPLAYNAMEPAYLOAD")
 		}
-
-		var description []types.ILangStringTextType
-		if r.DescriptionID.Valid {
-			description = descByID[r.DescriptionID.Int64]
+		description, err := parseLangStringTextPayload(r.DescriptionPayload)
+		if err != nil {
+			return nil, "", common.NewInternalServerError("INFDESC-LIST-DESCRIPTIONPAYLOAD")
 		}
 
 		out = append(out, model.InfrastructureDescriptor{

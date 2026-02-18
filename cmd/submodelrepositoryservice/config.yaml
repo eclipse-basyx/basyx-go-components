@@ -8,7 +8,7 @@ postgres:
   host: localhost
   port: 5432
   user: postgres
-  password: snoopy2002
+  password: postgres
   # dbname: basyxGoBenchmarkTest
   dbname: basyx
   maxOpenConnections: 500

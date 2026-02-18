@@ -38,11 +38,9 @@ COPY --from=builder /app/cmd/aasregistryservice/config.yaml /config/config.yaml
 COPY --from=builder /app/basyxschema.sql /app/basyxschema.sql
 COPY --from=builder /app/healthprobe /bin/healthprobe
 COPY --from=builder /app/healthprobe /bin/wget
-COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 
 # Default port (can be overridden by environment)
 ENV SERVER_PORT=5000
-ENV SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
 
 # Expose the service port (this is just documentation, the actual port is determined by the environment)
 EXPOSE ${SERVER_PORT}

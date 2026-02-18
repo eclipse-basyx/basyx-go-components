@@ -269,13 +269,17 @@ func ParseLangStringNameType(displayNames json.RawMessage) ([]types.ILangStringN
 	}()
 
 	for _, item := range temp {
-		if _, ok := item["id"]; ok {
-			delete(item, "id")
-			var name types.LangStringNameType
-			name.SetLanguage(item["language"].(string))
-			name.SetText(item["text"].(string))
-			names = append(names, &name)
+		delete(item, "id")
+		language, hasLanguage := item["language"].(string)
+		text, hasText := item["text"].(string)
+		if !hasLanguage || !hasText {
+			continue
 		}
+
+		var name types.LangStringNameType
+		name.SetLanguage(language)
+		name.SetText(text)
+		names = append(names, &name)
 	}
 
 	return names, nil
@@ -322,13 +326,17 @@ func ParseLangStringTextType(descriptions json.RawMessage) ([]types.ILangStringT
 	}()
 
 	for _, item := range temp {
-		if _, ok := item["id"]; ok {
-			delete(item, "id")
-			var text types.LangStringTextType
-			text.SetLanguage(item["language"].(string))
-			text.SetText(item["text"].(string))
-			texts = append(texts, &text)
+		delete(item, "id")
+		language, hasLanguage := item["language"].(string)
+		text, hasText := item["text"].(string)
+		if !hasLanguage || !hasText {
+			continue
 		}
+
+		var textEntry types.LangStringTextType
+		textEntry.SetLanguage(language)
+		textEntry.SetText(text)
+		texts = append(texts, &textEntry)
 	}
 
 	return texts, nil

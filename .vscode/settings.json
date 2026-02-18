@@ -4,7 +4,7 @@
             {
                 "name": "$(tools) Run GoLang CI Lint",
                 "color": "white",
-                "command": ". ./lint.sh"
+                "command": ". ./scripts/lint.sh"
             },
             {
                 "name": "$(trash) Clean Testcache",

@@ -16,12 +16,6 @@
         ],
         "type": "ModelReference"
       }
-    },
-    {
-      "id": "http://iese.fraunhofer.de/id/sm/OnlyFileSubmodel",
-      "idShort": "OnlyFileSubmodel",
-      "kind": "Instance",
-      "modelType": "Submodel"
     }
   ]
 }

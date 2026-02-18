@@ -21,12 +21,12 @@
                     "modelType": "MultiLanguageProperty",
                     "value": [
                         {
-                            "language": "de",
-                            "text": "Industriesensor"
-                        },
-                        {
                             "language": "en",
                             "text": "Industrial Sensor"
+                        },
+                        {
+                            "language": "de",
+                            "text": "Industriesensor"
                         },
                         {
                             "language": "fr",

@@ -359,7 +359,7 @@ func getSubmodelElementObjectBasedOnModelType(smeRow model.SubmodelElementRow, r
 		}
 		return rng, nil
 	case int64(types.ModelTypeBasicEventElement):
-		eventElem, err := buildBasicEventElement(smeRow)
+		eventElem, err := buildBasicEventElement(smeRow, refBuilderMap, refMutex)
 		if err != nil {
 			return nil, err
 		}
@@ -417,7 +417,7 @@ func buildProperty(smeRow model.SubmodelElementRow, refBuilderMap map[int64]*Ref
 
 // buildBasicEventElement constructs a BasicEventElement SubmodelElement from the database row,
 // parsing the event details and building references for observed and message broker.
-func buildBasicEventElement(smeRow model.SubmodelElementRow) (types.ISubmodelElement, error) {
+func buildBasicEventElement(smeRow model.SubmodelElementRow, refBuilderMap map[int64]*ReferenceBuilder, refMutex *sync.RWMutex) (types.ISubmodelElement, error) {
 	var valueRow model.BasicEventElementValueRow
 	if smeRow.Value == nil {
 		return nil, fmt.Errorf("smeRow.Value is nil")
@@ -426,29 +426,20 @@ func buildBasicEventElement(smeRow model.SubmodelElementRow) (types.ISubmodelEle
 	if err != nil {
 		return nil, err
 	}
-	var observedRefsJson, messageBrokerRefsJson map[string]any
-	err = json.Unmarshal([]byte(valueRow.Observed), &observedRefsJson)
+
+	observedRefs, err := getSingleReference(&valueRow.Observed, nil, refBuilderMap, refMutex)
 	if err != nil {
 		return nil, err
 	}
-	if valueRow.MessageBroker.Valid {
-		err = json.Unmarshal([]byte(valueRow.MessageBroker.String), &messageBrokerRefsJson)
-		if err != nil {
-			return nil, err
-		}
+	if observedRefs == nil {
+		return nil, fmt.Errorf("observed reference in BasicEventElement is nil")
 	}
 
-	var observedRefs, messageBrokerRefs types.IReference
-	observedRefs, err = jsonization.ReferenceFromJsonable(observedRefsJson)
-	if err != nil {
-		_, _ = fmt.Printf("[DEBUG] buildBasicEventElement Observed: JSON: %v, Error: %v\n", observedRefsJson, err)
-		return nil, err
-	}
-
+	var messageBrokerRefs types.IReference
 	if valueRow.MessageBroker.Valid {
-		messageBrokerRefs, err = jsonization.ReferenceFromJsonable(messageBrokerRefsJson)
+		messageBrokerRaw := json.RawMessage(valueRow.MessageBroker.String)
+		messageBrokerRefs, err = getSingleReference(&messageBrokerRaw, nil, refBuilderMap, refMutex)
 		if err != nil {
-			_, _ = fmt.Printf("[DEBUG] buildBasicEventElement MessageBroker: JSON: %v, Error: %v\n", messageBrokerRefsJson, err)
 			return nil, err
 		}
 	}
@@ -556,23 +547,61 @@ func buildOperation(smeRow model.SubmodelElementRow) (types.ISubmodelElement, er
 // getSingleReference parses a single reference from JSON data and builds it using the reference builders.
 // Returns the first reference if available, or nil.
 func getSingleReference(reference *json.RawMessage, referredReference *json.RawMessage, refBuilderMap map[int64]*ReferenceBuilder, refMutex *sync.RWMutex) (types.IReference, error) {
-	var refs []types.IReference
-	if reference != nil {
-		parsedRefs, err := ParseReferences(*reference, refBuilderMap, refMutex)
+	if reference == nil {
+		return nil, nil
+	}
+
+	var referenceArrayPayload []map[string]any
+	if unmarshalErr := json.Unmarshal(*reference, &referenceArrayPayload); unmarshalErr == nil {
+		if len(referenceArrayPayload) == 0 {
+			return nil, nil
+		}
+
+		_, isLegacyRowPayload := referenceArrayPayload[0]["reference_id"]
+		if !isLegacyRowPayload {
+			normalizedPayload := normalizeReferenceJsonable(referenceArrayPayload[0])
+			fallbackRef, parseErr := jsonization.ReferenceFromJsonable(normalizedPayload)
+			if parseErr != nil {
+				return nil, parseErr
+			}
+			return fallbackRef, nil
+		}
+	}
+
+	parsedRefs, err := ParseReferences(*reference, refBuilderMap, refMutex)
+	if err == nil {
+		if referredReference != nil {
+			if referredErr := ParseReferredReferences(*referredReference, refBuilderMap, refMutex); referredErr != nil {
+				return nil, referredErr
+			}
+		}
+		if len(parsedRefs) > 0 {
+			return parsedRefs[0], nil
+		}
+		return nil, nil
+	}
+
+	var referencePayload map[string]any
+	if unmarshalErr := json.Unmarshal(*reference, &referencePayload); unmarshalErr != nil {
 		if err != nil {
 			return nil, err
 		}
-		refs = append(refs, parsedRefs...)
-		if referredReference != nil {
-			if err = ParseReferredReferences(*referredReference, refBuilderMap, refMutex); err != nil {
-				return nil, err
-			}
+		return nil, unmarshalErr
+	}
+	if len(referencePayload) == 0 {
+		if err != nil {
+			return nil, err
 		}
+		return nil, nil
 	}
-	if len(refs) > 0 {
-		return refs[0], nil
+
+	normalizedPayload := normalizeReferenceJsonable(referencePayload)
+	fallbackRef, parseErr := jsonization.ReferenceFromJsonable(normalizedPayload)
+	if parseErr != nil {
+		return nil, parseErr
 	}
-	return nil, nil
+
+	return fallbackRef, nil
 }
 
 // buildEntity constructs an Entity SubmodelElement from the database row,
@@ -633,14 +662,14 @@ func buildAnnotatedRelationshipElement(smeRow model.SubmodelElementRow) (types.I
 	if valueRow.First == nil {
 		return nil, fmt.Errorf("first reference in RelationshipElement is nil")
 	}
-	err = json.Unmarshal(valueRow.First, &firstJsonable)
+	firstJsonable, err = parseReferenceJsonable(valueRow.First)
 	if err != nil {
 		return nil, err
 	}
 	if valueRow.Second == nil {
 		return nil, fmt.Errorf("second reference in RelationshipElement is nil")
 	}
-	err = json.Unmarshal(valueRow.Second, &secondJsonable)
+	secondJsonable, err = parseReferenceJsonable(valueRow.Second)
 	if err != nil {
 		return nil, err
 	}
@@ -816,8 +845,8 @@ func buildReferenceElement(smeRow model.SubmodelElementRow) (types.ISubmodelElem
 
 	var refSDK types.IReference
 	if valueRow.Value != nil {
-		var refJsonable map[string]any
-		err = json.Unmarshal(valueRow.Value, &refJsonable)
+		refJsonable, parseErr := parseReferenceJsonable(valueRow.Value)
+		err = parseErr
 		if err != nil {
 			return nil, err
 		}
@@ -854,14 +883,14 @@ func buildRelationshipElement(smeRow model.SubmodelElementRow) (types.ISubmodelE
 	if valueRow.First == nil {
 		return nil, fmt.Errorf("first reference in RelationshipElement is nil")
 	}
-	err = json.Unmarshal(valueRow.First, &firstJsonable)
+	firstJsonable, err = parseReferenceJsonable(valueRow.First)
 	if err != nil {
 		return nil, err
 	}
 	if valueRow.Second == nil {
 		return nil, fmt.Errorf("second reference in RelationshipElement is nil")
 	}
-	err = json.Unmarshal(valueRow.Second, &secondJsonable)
+	secondJsonable, err = parseReferenceJsonable(valueRow.Second)
 	if err != nil {
 		return nil, err
 	}
@@ -900,8 +929,8 @@ func buildSubmodelElementList(smeRow model.SubmodelElementRow) (types.ISubmodelE
 
 	// SemanticIDListElement
 	if len(valueRow.SemanticIDListElement) != 0 {
-		var jsonable map[string]any
-		err = json.Unmarshal(valueRow.SemanticIDListElement, &jsonable)
+		jsonable, parseErr := parseReferenceJsonable(valueRow.SemanticIDListElement)
+		err = parseErr
 		if err != nil {
 			return nil, err
 		}
@@ -928,4 +957,78 @@ func buildSubmodelElementList(smeRow model.SubmodelElementRow) (types.ISubmodelE
 	}
 
 	return smeList, nil
+}
+
+func parseReferenceJsonable(raw []byte) (map[string]any, error) {
+	if len(raw) == 0 {
+		return nil, nil
+	}
+
+	var objectPayload map[string]any
+	if err := json.Unmarshal(raw, &objectPayload); err == nil {
+		return normalizeReferenceJsonable(objectPayload), nil
+	}
+
+	var arrayPayload []map[string]any
+	if err := json.Unmarshal(raw, &arrayPayload); err != nil {
+		return nil, err
+	}
+	if len(arrayPayload) == 0 {
+		return nil, nil
+	}
+
+	return normalizeReferenceJsonable(arrayPayload[0]), nil
+}
+
+func normalizeReferenceJsonable(payload map[string]any) map[string]any {
+	if payload == nil {
+		return nil
+	}
+
+	for key, value := range payload {
+		normalizedKey := strings.ToLower(key)
+		if normalizedKey == "referredsemanticid" {
+			switch typedValue := value.(type) {
+			case []any:
+				if len(typedValue) == 0 {
+					payload[key] = nil
+					continue
+				}
+				payload[key] = normalizeReferenceValue(typedValue[0])
+				continue
+			case []map[string]any:
+				if len(typedValue) == 0 {
+					payload[key] = nil
+					continue
+				}
+				payload[key] = normalizeReferenceJsonable(typedValue[0])
+				continue
+			}
+		}
+
+		payload[key] = normalizeReferenceValue(value)
+	}
+
+	return payload
+}
+
+func normalizeReferenceValue(value any) any {
+	switch typedValue := value.(type) {
+	case map[string]any:
+		return normalizeReferenceJsonable(typedValue)
+	case []map[string]any:
+		normalized := make([]any, 0, len(typedValue))
+		for _, item := range typedValue {
+			normalized = append(normalized, normalizeReferenceJsonable(item))
+		}
+		return normalized
+	case []any:
+		normalized := make([]any, 0, len(typedValue))
+		for _, item := range typedValue {
+			normalized = append(normalized, normalizeReferenceValue(item))
+		}
+		return normalized
+	default:
+		return value
+	}
 }
