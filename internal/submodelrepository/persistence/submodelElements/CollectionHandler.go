@@ -117,6 +117,11 @@ func (p PostgreSQLSubmodelElementCollectionHandler) Update(submodelID string, id
 		return err
 	}
 
+	rootSmeID, err := p.decorated.GetRootSmeIDByElementID(elementID)
+	if err != nil {
+		return err
+	}
+
 	if isPut || collection.Value() != nil {
 		if len(collection.Value()) > 0 {
 			_, insertErr := InsertSubmodelElements(
@@ -127,7 +132,7 @@ func (p PostgreSQLSubmodelElementCollectionHandler) Update(submodelID string, id
 				&BatchInsertContext{
 					ParentID:      elementID,
 					ParentPath:    idShortOrPath,
-					RootSmeID:     elementID,
+					RootSmeID:     rootSmeID,
 					IsFromList:    false,
 					StartPosition: 0,
 				},

@@ -35,23 +35,19 @@ WORKDIR /app
 # Copy runtime artifacts
 COPY --from=builder /app/submodelrepositoryservice /app/submodelrepositoryservice
 COPY --from=builder /app/cmd/submodelrepositoryservice/config.yaml /config/config.yaml
-COPY --from=builder /app/basyxschema.sql /root/basyxschema.sql
-COPY --from=builder /app/internal/submodelrepository/integration_tests/expected /app/internal/submodelrepository/integration_tests/expected
-COPY --from=builder /app/old_schema.sql /app/old_schema.sql
+COPY --from=builder /app/basyxschema.sql /app/basyxschema.sql
 COPY --from=builder /app/healthprobe /bin/healthprobe
 COPY --from=builder /app/healthprobe /bin/wget
-COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 
 # Default port (can be overridden by environment)
 ENV SERVER_PORT=5000
-ENV SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
 
 # Expose the service port (this is just documentation, the actual port is determined by the environment)
 EXPOSE ${SERVER_PORT}
 
 # Command to run the application
 # Use environment variables or mount a custom config file to /config/config.yaml
-CMD ["/app/submodelrepositoryservice", "-config", "/config/config.yaml", "-databaseSchema", "/app/old_schema.sql"]
+CMD ["/app/submodelrepositoryservice", "-config", "/config/config.yaml", "-databaseSchema", "/app/basyxschema.sql"]
 
 # Health check runs via healthprobe
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \

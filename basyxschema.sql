@@ -90,12 +90,13 @@ CREATE TABLE IF NOT EXISTS submodel (
 
 CREATE TABLE IF NOT EXISTS submodel_payload (
   submodel_id BIGINT PRIMARY KEY REFERENCES submodel(id) ON DELETE CASCADE,
-  description_payload JSONB DEFAULT '[]',
-  displayname_payload JSONB DEFAULT '[]',
-  administrative_information_payload JSONB DEFAULT '[]',
-  embedded_data_specification_payload JSONB DEFAULT '[]',
-  supplemental_semantic_ids_payload JSONB DEFAULT '[]',
-  extensions_payload JSONB DEFAULT '[]'
+  description_payload JSONB,
+  displayname_payload JSONB,
+  administrative_information_payload JSONB,
+  embedded_data_specification_payload JSONB,
+  supplemental_semantic_ids_payload JSONB,
+  extensions_payload JSONB,
+  qualifiers_payload JSONB
 );
 
 CREATE TABLE IF NOT EXISTS submodel_element (
@@ -119,7 +120,8 @@ CREATE TABLE IF NOT EXISTS submodel_element_payload (
   administrative_information_payload JSONB DEFAULT '[]',
   embedded_data_specification_payload JSONB DEFAULT '[]',
   supplemental_semantic_ids_payload JSONB DEFAULT '[]',
-  extensions_payload JSONB DEFAULT '[]'
+  extensions_payload JSONB DEFAULT '[]',
+  qualifiers_payload JSONB
 );
 
 CREATE TABLE IF NOT EXISTS property_element (

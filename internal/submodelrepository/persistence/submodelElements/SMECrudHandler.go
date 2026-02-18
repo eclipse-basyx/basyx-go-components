@@ -400,6 +400,30 @@ func (p *PostgreSQLSMECrudHandler) GetDatabaseID(submodelID int, idShortPath str
 	return id, nil
 }
 
+// GetRootSmeIDByElementID resolves the top-level root element ID for a submodel element.
+// If root_sme_id is NULL, the element is itself a root and its own ID is returned.
+func (p *PostgreSQLSMECrudHandler) GetRootSmeIDByElementID(elementID int) (int, error) {
+	dialect := goqu.Dialect("postgres")
+	selectQuery, selectArgs, err := dialect.From("submodel_element").
+		Select(goqu.COALESCE(goqu.C("root_sme_id"), goqu.C("id"))).
+		Where(goqu.C("id").Eq(elementID)).
+		ToSQL()
+	if err != nil {
+		return 0, err
+	}
+
+	var rootID int
+	err = p.Db.QueryRow(selectQuery, selectArgs...).Scan(&rootID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return 0, common.NewErrNotFound("SubmodelElement with ID '" + strconv.Itoa(elementID) + "' not found")
+		}
+		return 0, err
+	}
+
+	return rootID, nil
+}
+
 // GetNextPosition determines the next available position index for a child element.
 //
 // This method calculates the next position value to use when adding a new child

@@ -492,6 +492,11 @@ func (s *SubmodelDatabase) AddSubmodelElementWithPath(submodelID string, parentP
 		return err
 	}
 
+	rootSmeID, err := baseCrudHandler.GetRootSmeIDByElementID(parentElementID)
+	if err != nil {
+		return err
+	}
+
 	parentElement, err := submodelelements.GetSubmodelElementByIDShortOrPath(s.db, submodelID, parentPath)
 	if err != nil {
 		return err
@@ -524,7 +529,7 @@ func (s *SubmodelDatabase) AddSubmodelElementWithPath(submodelID string, parentP
 		&submodelelements.BatchInsertContext{
 			ParentID:      parentElementID,
 			ParentPath:    parentPath,
-			RootSmeID:     0,
+			RootSmeID:     rootSmeID,
 			IsFromList:    isFromList,
 			StartPosition: nextPosition,
 		},

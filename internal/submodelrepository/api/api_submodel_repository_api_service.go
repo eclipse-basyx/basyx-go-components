@@ -21,8 +21,6 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"path/filepath"
-	"runtime"
 	"strings"
 
 	"github.com/FriedJannik/aas-go-sdk/jsonization"
@@ -139,34 +137,6 @@ func buildModelReference(submodelID string, keyType string, keyValue string) (ty
 	}
 
 	return jsonization.ReferenceFromJsonable(jsonableReference)
-}
-
-func loadSignedFixture(path string) (string, error) {
-	tryPaths := []string{path, "/app/" + path}
-
-	if _, currentFile, _, ok := runtime.Caller(0); ok {
-		apiDir := filepath.Dir(currentFile)
-		tryPaths = append(tryPaths,
-			filepath.Join(apiDir, "..", "..", "..", path),
-			filepath.Join(apiDir, "..", path),
-		)
-	}
-
-	for _, p := range tryPaths {
-		content, err := os.ReadFile(p)
-		if err != nil {
-			continue
-		}
-
-		var signedString string
-		if unmarshalErr := json.Unmarshal(content, &signedString); unmarshalErr == nil {
-			return signedString, nil
-		}
-
-		return strings.TrimSpace(string(content)), nil
-	}
-
-	return "", os.ErrNotExist
 }
 
 // GetAllSubmodels retrieves all submodels from the repository with optional filtering and pagination.
@@ -286,12 +256,6 @@ func (s *SubmodelRepositoryAPIAPIService) GetSignedSubmodelByID(
 		return gen.Response(http.StatusBadRequest, nil), decodeErr
 	}
 
-	if strings.Contains(decodedSubmodelIdentifier, "/id/sm/DemoSubmodel") {
-		if signedFixture, fixtureErr := loadSignedFixture("internal/submodelrepository/integration_tests/expected/expectedSignedSubmodel.json"); fixtureErr == nil {
-			return gen.Response(http.StatusOK, signedFixture), nil
-		}
-	}
-
 	jwsString, err := s.submodelBackend.GetSignedSubmodel(decodedSubmodelIdentifier, false)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) || common.IsErrNotFound(err) {
@@ -316,12 +280,6 @@ func (s *SubmodelRepositoryAPIAPIService) GetSignedSubmodelByIDValueOnly(
 	decodedSubmodelIdentifier, decodeErr := decodeBase64RawStd(id)
 	if decodeErr != nil {
 		return gen.Response(http.StatusBadRequest, nil), decodeErr
-	}
-
-	if strings.Contains(decodedSubmodelIdentifier, "/id/sm/DemoSubmodel") {
-		if signedFixture, fixtureErr := loadSignedFixture("internal/submodelrepository/integration_tests/expected/expectedSignedSubmodelValueOnly.json"); fixtureErr == nil {
-			return gen.Response(http.StatusOK, signedFixture), nil
-		}
 	}
 
 	jwsString, err := s.submodelBackend.GetSignedSubmodel(decodedSubmodelIdentifier, true)

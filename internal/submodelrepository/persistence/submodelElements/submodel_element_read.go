@@ -310,7 +310,7 @@ func readSubmodelElementRowsByRootIDs(db *sql.DB, submodelDatabaseID int64, root
 				goqu.I("sme.root_sme_id").In(rootIDs),
 			),
 		).
-		Order(goqu.I("sme.idshort_path").Asc(), goqu.I("sme.position").Asc())
+		Order(goqu.I("sme.id").Asc(), goqu.I("sme.idshort_path").Asc(), goqu.I("sme.position").Asc())
 
 	sqlQuery, args, toSQLErr := query.ToSQL()
 	if toSQLErr != nil {

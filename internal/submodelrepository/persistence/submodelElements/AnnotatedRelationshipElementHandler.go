@@ -108,6 +108,11 @@ func (p PostgreSQLAnnotatedRelationshipElementHandler) Update(submodelID string,
 		return err
 	}
 
+	rootSmeID, err := p.decorated.GetRootSmeIDByElementID(elementID)
+	if err != nil {
+		return err
+	}
+
 	firstRef, err := serializeReference(are.First(), jsoniter.ConfigCompatibleWithStandardLibrary)
 	if err != nil {
 		return err
@@ -164,7 +169,7 @@ func (p PostgreSQLAnnotatedRelationshipElementHandler) Update(submodelID string,
 				&BatchInsertContext{
 					ParentID:      elementID,
 					ParentPath:    idShortOrPath,
-					RootSmeID:     elementID,
+					RootSmeID:     rootSmeID,
 					IsFromList:    false,
 					StartPosition: 0,
 				},

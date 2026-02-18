@@ -115,6 +115,11 @@ func (p PostgreSQLEntityHandler) Update(submodelID string, idShortOrPath string,
 		return err
 	}
 
+	rootSmeID, err := p.decorated.GetRootSmeIDByElementID(elementID)
+	if err != nil {
+		return err
+	}
+
 	// Build update record for Entity-specific fields
 	updateRecord, err := buildUpdateEntityRecordObject(isPut, entity)
 	if err != nil {
@@ -151,7 +156,7 @@ func (p PostgreSQLEntityHandler) Update(submodelID string, idShortOrPath string,
 			&BatchInsertContext{
 				ParentID:      elementID,
 				ParentPath:    idShortOrPath,
-				RootSmeID:     elementID,
+				RootSmeID:     rootSmeID,
 				IsFromList:    false,
 				StartPosition: 0,
 			},
@@ -160,7 +165,7 @@ func (p PostgreSQLEntityHandler) Update(submodelID string, idShortOrPath string,
 			return common.NewInternalServerError("SMREPO-UPDENTITY-INSSTATEMENTS " + insertErr.Error())
 		}
 
-		err = ensureEntityStatementParentLinks(localTx, elementID, insertedStatementIDs)
+		err = ensureEntityStatementParentLinks(localTx, elementID, rootSmeID, insertedStatementIDs)
 		if err != nil {
 			return err
 		}
@@ -169,7 +174,7 @@ func (p PostgreSQLEntityHandler) Update(submodelID string, idShortOrPath string,
 	return persistenceutils.CommitTransactionIfNeeded(tx, localTx)
 }
 
-func ensureEntityStatementParentLinks(tx *sql.Tx, entityElementID int, insertedStatementIDs []int) error {
+func ensureEntityStatementParentLinks(tx *sql.Tx, entityElementID int, rootSmeID int, insertedStatementIDs []int) error {
 	if len(insertedStatementIDs) == 0 {
 		return nil
 	}
@@ -179,7 +184,7 @@ func ensureEntityStatementParentLinks(tx *sql.Tx, entityElementID int, insertedS
 	updateQuery, updateArgs, err := dialect.Update("submodel_element").
 		Set(goqu.Record{
 			"parent_sme_id": entityElementID,
-			"root_sme_id":   entityElementID,
+			"root_sme_id":   rootSmeID,
 		}).
 		Where(goqu.C("id").In(insertedStatementIDs)).
 		ToSQL()

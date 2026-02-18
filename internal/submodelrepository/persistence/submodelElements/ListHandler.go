@@ -115,6 +115,11 @@ func (p PostgreSQLSubmodelElementListHandler) Update(submodelID string, idShortO
 		return err
 	}
 
+	rootSmeID, err := p.decorated.GetRootSmeIDByElementID(elementID)
+	if err != nil {
+		return err
+	}
+
 	// Build update record for SubmodelElementList-specific fields
 	updateRecord, err := buildUpdateListRecordObject(smeList, isPut)
 	if err != nil {
@@ -147,7 +152,7 @@ func (p PostgreSQLSubmodelElementListHandler) Update(submodelID string, idShortO
 				&BatchInsertContext{
 					ParentID:      elementID,
 					ParentPath:    idShortOrPath,
-					RootSmeID:     elementID,
+					RootSmeID:     rootSmeID,
 					IsFromList:    true,
 					StartPosition: 0,
 				},
