@@ -18,9 +18,9 @@ oidc:
 
 
 abac:
-  enabled: true
+  enabled: false
   modelPath: "config/access_rules/access-rules.json"
 
 general:
   enableImplicitCasts: true
-  enableDescriptorDebug: true
+  enableDescriptorDebug: false

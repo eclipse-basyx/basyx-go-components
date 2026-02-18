@@ -4,7 +4,7 @@
         {
             "label": "Run Linter",
             "type": "shell",
-            "command": ". ./lint.sh",
+            "command": ". ./scripts/lint.sh",
             "group": {
                 "kind": "build",
                 "isDefault": false
