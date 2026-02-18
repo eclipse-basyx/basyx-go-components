@@ -58,6 +58,26 @@ jobs:
           cd internal/submodelrepository/integration_tests
           go test -v .
 
+  submodel-repository-unit-tests:
+    name: Submodel Repository Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Get dependencies
+        run: go mod download
+
+      - name: Run submodel repository unit tests
+        run: |
+          go test -v ./internal/submodelrepository/persistence
+
   discovery-service-integration-tests:
     name: Discovery Service Integration Tests
     runs-on: ubuntu-latest

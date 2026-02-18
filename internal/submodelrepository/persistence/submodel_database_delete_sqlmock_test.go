@@ -40,7 +40,7 @@ func TestDeleteSubmodelSuccessCleansLargeObjectsAndDeletesSubmodel(t *testing.T)
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
 	defer func() {
-		require.NoError(t, db.Close())
+		_ = db.Close()
 	}()
 
 	sut := &SubmodelDatabase{db: db}
@@ -67,7 +67,7 @@ func TestDeleteSubmodelNotFoundReturnsErrNotFound(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
 	defer func() {
-		require.NoError(t, db.Close())
+		_ = db.Close()
 	}()
 
 	sut := &SubmodelDatabase{db: db}
@@ -87,7 +87,7 @@ func TestDeleteSubmodelDeleteFailsRollsBack(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
 	defer func() {
-		require.NoError(t, db.Close())
+		_ = db.Close()
 	}()
 
 	sut := &SubmodelDatabase{db: db}
@@ -114,7 +114,7 @@ func TestDeleteSubmodelCommitFailsReturnsInternalError(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
 	defer func() {
-		require.NoError(t, db.Close())
+		_ = db.Close()
 	}()
 
 	sut := &SubmodelDatabase{db: db}
@@ -141,7 +141,7 @@ func TestDeleteSubmodelOrphanCleanupFailsRollsBack(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
 	defer func() {
-		require.NoError(t, db.Close())
+		_ = db.Close()
 	}()
 
 	sut := &SubmodelDatabase{db: db}

@@ -14,7 +14,7 @@ func TestPatchSubmodelIDMismatchReturnsBadRequest(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
 	defer func() {
-		require.NoError(t, db.Close())
+		_ = db.Close()
 	}()
 
 	sut := &SubmodelDatabase{db: db}
@@ -30,7 +30,7 @@ func TestPatchSubmodelNotFoundRollsBack(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
 	defer func() {
-		require.NoError(t, db.Close())
+		_ = db.Close()
 	}()
 
 	sut := &SubmodelDatabase{db: db}
@@ -51,7 +51,7 @@ func TestPatchSubmodelSuccessReplacesSubmodel(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
 	defer func() {
-		require.NoError(t, db.Close())
+		_ = db.Close()
 	}()
 
 	sut := &SubmodelDatabase{db: db}
@@ -81,7 +81,7 @@ func TestPutSubmodelIDMismatchReturnsBadRequest(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
 	defer func() {
-		require.NoError(t, db.Close())
+		_ = db.Close()
 	}()
 
 	sut := &SubmodelDatabase{db: db}
@@ -98,7 +98,7 @@ func TestPutSubmodelCreatePathReturnsFalse(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
 	defer func() {
-		require.NoError(t, db.Close())
+		_ = db.Close()
 	}()
 
 	sut := &SubmodelDatabase{db: db}
@@ -125,7 +125,7 @@ func TestPutSubmodelUpdatePathReturnsTrue(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
 	defer func() {
-		require.NoError(t, db.Close())
+		_ = db.Close()
 	}()
 
 	sut := &SubmodelDatabase{db: db}

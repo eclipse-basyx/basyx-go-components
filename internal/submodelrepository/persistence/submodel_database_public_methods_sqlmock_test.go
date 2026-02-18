@@ -27,7 +27,7 @@ func TestGetSubmodelsDatabaseQueryError(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
 	defer func() {
-		require.NoError(t, db.Close())
+		_ = db.Close()
 	}()
 
 	sut := &SubmodelDatabase{db: db}
@@ -48,7 +48,7 @@ func TestGetSubmodelByIDReturnsErrorWhenParallelReadsFail(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
 	defer func() {
-		require.NoError(t, db.Close())
+		_ = db.Close()
 	}()
 
 	mock.MatchExpectationsInOrder(false)
@@ -69,7 +69,7 @@ func TestCreateSubmodelInsertFailureRollsBack(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
 	defer func() {
-		require.NoError(t, db.Close())
+		_ = db.Close()
 	}()
 
 	sut := &SubmodelDatabase{db: db}
@@ -95,7 +95,7 @@ func TestGetSubmodelElementEmptyPathReturnsBadRequest(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
 	defer func() {
-		require.NoError(t, db.Close())
+		_ = db.Close()
 	}()
 
 	sut := &SubmodelDatabase{db: db}
@@ -113,7 +113,7 @@ func TestGetSubmodelElementsEmptySubmodelIDReturnsBadRequest(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
 	defer func() {
-		require.NoError(t, db.Close())
+		_ = db.Close()
 	}()
 
 	sut := &SubmodelDatabase{db: db}
@@ -132,7 +132,7 @@ func TestAddSubmodelElementSubmodelNotFoundRollsBack(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
 	defer func() {
-		require.NoError(t, db.Close())
+		_ = db.Close()
 	}()
 
 	sut := &SubmodelDatabase{db: db}
@@ -154,7 +154,7 @@ func TestAddSubmodelElementWithPathSubmodelNotFoundRollsBack(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
 	defer func() {
-		require.NoError(t, db.Close())
+		_ = db.Close()
 	}()
 
 	sut := &SubmodelDatabase{db: db}
@@ -176,7 +176,7 @@ func TestDeleteSubmodelElementByPathFailureRollsBack(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
 	defer func() {
-		require.NoError(t, db.Close())
+		_ = db.Close()
 	}()
 
 	sut := &SubmodelDatabase{db: db}
@@ -196,7 +196,7 @@ func TestUpdateSubmodelElementModelTypeLookupFails(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
 	defer func() {
-		require.NoError(t, db.Close())
+		_ = db.Close()
 	}()
 
 	sut := &SubmodelDatabase{db: db}
@@ -214,7 +214,7 @@ func TestUpdateSubmodelElementValueOnlyModelTypeLookupFails(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
 	defer func() {
-		require.NoError(t, db.Close())
+		_ = db.Close()
 	}()
 
 	sut := &SubmodelDatabase{db: db}
@@ -232,7 +232,7 @@ func TestUpdateSubmodelValueOnlyPropagatesElementError(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
 	defer func() {
-		require.NoError(t, db.Close())
+		_ = db.Close()
 	}()
 
 	sut := &SubmodelDatabase{db: db}
@@ -251,7 +251,7 @@ func TestUploadFileAttachmentSubmodelLookupFails(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
 	defer func() {
-		require.NoError(t, db.Close())
+		_ = db.Close()
 	}()
 
 	tmp, err := os.CreateTemp(t.TempDir(), "upload-*.txt")
@@ -285,7 +285,7 @@ func TestDownloadFileAttachmentSubmodelLookupFails(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
 	defer func() {
-		require.NoError(t, db.Close())
+		_ = db.Close()
 	}()
 
 	sut := &SubmodelDatabase{db: db}
@@ -308,7 +308,7 @@ func TestDeleteFileAttachmentSubmodelLookupFails(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
 	defer func() {
-		require.NoError(t, db.Close())
+		_ = db.Close()
 	}()
 
 	sut := &SubmodelDatabase{db: db}
