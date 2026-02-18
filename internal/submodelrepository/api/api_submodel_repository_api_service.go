@@ -30,6 +30,7 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	persistencepostgresql "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence"
 	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/submodelrepositoryapi/go"
+	"golang.org/x/sync/errgroup"
 )
 
 // SubmodelRepositoryAPIAPIService is a service that implements the logic for the SubmodelRepositoryAPIAPIServicer
@@ -155,7 +156,7 @@ func buildModelReference(submodelID string, keyType string, keyValue string) (ty
 //   - gen.ImplResponse: Response containing paginated submodel results
 //   - error: Error if the operation fails
 func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodels(
-	_ /*ctx*/ context.Context,
+	ctx context.Context,
 	_ /*semanticID*/ string,
 	idShort string,
 	limit int32,
@@ -173,7 +174,35 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodels(
 	}
 
 	sms, nextCursor, err := s.submodelBackend.GetSubmodels(limit, decodedCursor, idShort)
-	var converted []map[string]any
+	if err != nil {
+		return gen.Response(500, nil), err
+	}
+
+	eg, _ := errgroup.WithContext(ctx)
+	eg.SetLimit(8)
+
+	for index := range sms {
+		sm := sms[index]
+
+		eg.Go(func() error {
+			submodelElements, _, elementsErr := s.submodelBackend.GetSubmodelElements(sm.ID(), nil, "", false)
+			if elementsErr != nil {
+				return elementsErr
+			}
+
+			sm.SetSubmodelElements(submodelElements)
+			return nil
+		})
+	}
+
+	if waitErr := eg.Wait(); waitErr != nil {
+		if common.IsErrNotFound(waitErr) || errors.Is(waitErr, sql.ErrNoRows) {
+			return gen.Response(http.StatusNotFound, nil), nil
+		}
+		return gen.Response(http.StatusInternalServerError, nil), waitErr
+	}
+
+	converted := make([]map[string]any, 0, len(sms))
 
 	for _, sm := range sms {
 		jsonSubmodel, err := jsonization.ToJsonable(sm)
@@ -181,10 +210,6 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodels(
 			return gen.Response(500, nil), err
 		}
 		converted = append(converted, jsonSubmodel)
-	}
-
-	if err != nil {
-		return gen.Response(500, nil), err
 	}
 
 	// using the openAPI provided response struct to include paging metadata
@@ -481,7 +506,6 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsMetadata(
 //
 //nolint:revive
 func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsValueOnly(ctx context.Context, semanticID string, idShort string, limit int32, cursor string, level string, extent string) (gen.ImplResponse, error) {
-	_ = ctx
 	_ = semanticID
 	_ = level
 	_ = extent
@@ -500,22 +524,38 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsValueOnly(ctx context.C
 		return gen.Response(http.StatusInternalServerError, nil), err
 	}
 
-	valueOnlyResults := make([]map[string]any, 0, len(sms))
-	for _, sm := range sms {
-		submodelElements, _, elementsErr := s.submodelBackend.GetSubmodelElements(sm.ID(), nil, "", false)
-		if elementsErr != nil {
-			if common.IsErrNotFound(elementsErr) || errors.Is(elementsErr, sql.ErrNoRows) {
-				return gen.Response(http.StatusNotFound, nil), nil
-			}
-			return gen.Response(http.StatusInternalServerError, nil), elementsErr
-		}
-		sm.SetSubmodelElements(submodelElements)
+	valueOnlyResults := make([]map[string]any, len(sms))
 
-		valueOnly, convErr := gen.SubmodelToValueOnly(sm)
-		if convErr != nil {
-			return gen.Response(http.StatusInternalServerError, nil), convErr
+	eg, _ := errgroup.WithContext(ctx)
+	eg.SetLimit(8)
+
+	for index := range sms {
+		index := index
+		sm := sms[index]
+
+		eg.Go(func() error {
+			submodelElements, _, elementsErr := s.submodelBackend.GetSubmodelElements(sm.ID(), nil, "", false)
+			if elementsErr != nil {
+				return elementsErr
+			}
+
+			sm.SetSubmodelElements(submodelElements)
+
+			valueOnly, convErr := gen.SubmodelToValueOnly(sm)
+			if convErr != nil {
+				return convErr
+			}
+
+			valueOnlyResults[index] = submodelValueToAnyMap(valueOnly)
+			return nil
+		})
+	}
+
+	if waitErr := eg.Wait(); waitErr != nil {
+		if common.IsErrNotFound(waitErr) || errors.Is(waitErr, sql.ErrNoRows) {
+			return gen.Response(http.StatusNotFound, nil), nil
 		}
-		valueOnlyResults = append(valueOnlyResults, submodelValueToAnyMap(valueOnly))
+		return gen.Response(http.StatusInternalServerError, nil), waitErr
 	}
 
 	encodedNextCursor := ""

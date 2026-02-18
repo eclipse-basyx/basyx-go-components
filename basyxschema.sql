@@ -504,6 +504,7 @@ CREATE INDEX IF NOT EXISTS ix_sme_sub_path   ON submodel_element(submodel_id, id
 CREATE INDEX IF NOT EXISTS ix_sme_parent_pos ON submodel_element(parent_sme_id, position);
 CREATE INDEX IF NOT EXISTS ix_sme_sub_type   ON submodel_element(submodel_id, model_type);
 CREATE INDEX IF NOT EXISTS ix_sme_sub_parent ON submodel_element(submodel_id, parent_sme_id);
+CREATE INDEX IF NOT EXISTS ix_sme_sub_root   ON submodel_element(submodel_id, root_sme_id);
 CREATE INDEX IF NOT EXISTS ix_sme_sub_depth  ON submodel_element(submodel_id, depth);
 CREATE INDEX IF NOT EXISTS ix_sme_roots_order
   ON submodel_element (submodel_id,
@@ -511,6 +512,9 @@ CREATE INDEX IF NOT EXISTS ix_sme_roots_order
                        position,
                        idshort_path,
                        id)
+  WHERE parent_sme_id IS NULL;
+CREATE INDEX IF NOT EXISTS ix_sme_roots_page
+  ON submodel_element(submodel_id, idshort_path, id)
   WHERE parent_sme_id IS NULL;
 
 CREATE INDEX IF NOT EXISTS ix_mlp_lang      ON multilanguage_property_value(mlp_id, language);
@@ -581,6 +585,7 @@ CREATE INDEX IF NOT EXISTS ix_submodel_element_semantic_id_refkey_refid ON submo
 CREATE INDEX IF NOT EXISTS ix_submodel_element_semantic_id_refkey_refval ON submodel_element_semantic_id_reference_key(reference_id, value);
 CREATE INDEX IF NOT EXISTS ix_submodel_element_semantic_id_refkey_type_val ON submodel_element_semantic_id_reference_key(type, value);
 CREATE INDEX IF NOT EXISTS ix_submodel_element_semantic_id_refkey_val_trgm ON submodel_element_semantic_id_reference_key USING GIN (value gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS ix_submodel_element_semantic_id_refpayload_refid ON submodel_element_semantic_id_reference_payload(reference_id);
 
 CREATE INDEX IF NOT EXISTS ix_submodel_descriptor_semantic_id_ref_type ON submodel_descriptor_semantic_id_reference(type);
 CREATE INDEX IF NOT EXISTS ix_submodel_descriptor_semantic_id_refkey_refid ON submodel_descriptor_semantic_id_reference_key(reference_id);

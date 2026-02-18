@@ -241,6 +241,10 @@ func readSubmodelElementRowsByPath(db *sql.DB, submodelDatabaseID int64, idShort
 			goqu.T("submodel_element_payload").As("sme_p"),
 			goqu.On(goqu.I("sme.id").Eq(goqu.I("sme_p.submodel_element_id"))),
 		).
+		LeftJoin(
+			goqu.T("submodel_element_semantic_id_reference_payload").As("sme_sem_payload"),
+			goqu.On(goqu.I("sme_sem_payload.reference_id").Eq(goqu.I("sme.id"))),
+		).
 		Select(
 			goqu.I("sme.id"),
 			goqu.I("sme.parent_sme_id"),
@@ -259,7 +263,7 @@ func readSubmodelElementRowsByPath(db *sql.DB, submodelDatabaseID int64, idShort
 			goqu.L("'[]'::jsonb"),
 			goqu.L("'[]'::jsonb"),
 			goqu.L("COALESCE(sme_p.qualifiers_payload, '[]'::jsonb)"),
-			goqu.L("COALESCE((SELECT parent_reference_payload FROM submodel_element_semantic_id_reference_payload WHERE reference_id = sme.id LIMIT 1), '{}'::jsonb)"),
+			goqu.L("COALESCE(sme_sem_payload.parent_reference_payload, '{}'::jsonb)"),
 		).
 		Where(
 			goqu.I("sme.submodel_id").Eq(submodelDatabaseID),
@@ -300,6 +304,10 @@ func readSubmodelElementRowsByRootIDs(db *sql.DB, submodelDatabaseID int64, root
 			goqu.T("submodel_element_payload").As("sme_p"),
 			goqu.On(goqu.I("sme.id").Eq(goqu.I("sme_p.submodel_element_id"))),
 		).
+		LeftJoin(
+			goqu.T("submodel_element_semantic_id_reference_payload").As("sme_sem_payload"),
+			goqu.On(goqu.I("sme_sem_payload.reference_id").Eq(goqu.I("sme.id"))),
+		).
 		Select(
 			goqu.I("sme.id"),
 			goqu.I("sme.parent_sme_id"),
@@ -318,14 +326,11 @@ func readSubmodelElementRowsByRootIDs(db *sql.DB, submodelDatabaseID int64, root
 			goqu.L("'[]'::jsonb"),
 			goqu.L("'[]'::jsonb"),
 			goqu.L("COALESCE(sme_p.qualifiers_payload, '[]'::jsonb)"),
-			goqu.L("COALESCE((SELECT parent_reference_payload FROM submodel_element_semantic_id_reference_payload WHERE reference_id = sme.id LIMIT 1), '{}'::jsonb)"),
+			goqu.L("COALESCE(sme_sem_payload.parent_reference_payload, '{}'::jsonb)"),
 		).
 		Where(
 			goqu.I("sme.submodel_id").Eq(submodelDatabaseID),
-			goqu.Or(
-				goqu.I("sme.id").In(rootIDs),
-				goqu.I("sme.root_sme_id").In(rootIDs),
-			),
+			goqu.COALESCE(goqu.I("sme.root_sme_id"), goqu.I("sme.id")).In(rootIDs),
 		).
 		Order(
 			rootOrderExpr.Asc(),
@@ -519,6 +524,9 @@ func buildLoadedSubmodelElementNodes(db *sql.DB, parsedRows []loadedSMERow, erro
 	nodes := make(map[int64]*loadedSMENode, len(parsedRows))
 	children := make(map[int64][]*loadedSMENode, len(parsedRows))
 	rootNodes := make([]*loadedSMENode, 0, 1)
+	elementsByID := make(map[int64]types.ISubmodelElement, len(parsedRows))
+	missingSemanticReferenceIDs := make([]int64, 0, len(parsedRows))
+	missingSemanticReferenceSet := make(map[int64]struct{}, len(parsedRows))
 
 	for _, item := range parsedRows {
 		if !item.row.DbID.Valid {
@@ -535,18 +543,9 @@ func buildLoadedSubmodelElementNodes(db *sql.DB, parsedRows []loadedSMERow, erro
 		} else if semanticID != nil {
 			element.SetSemanticID(semanticID)
 		} else {
-			fallbackSemanticID, fallbackErr := getReferenceFromKeyTables(
-				db,
-				"submodel_element_semantic_id_reference",
-				"submodel_element_semantic_id_reference_key",
-				item.row.DbID.Int64,
-				errorCodePrefix+"-SEMKEYS",
-			)
-			if fallbackErr != nil {
-				return nil, nil, nil, fallbackErr
-			}
-			if fallbackSemanticID != nil {
-				element.SetSemanticID(fallbackSemanticID)
+			if _, exists := missingSemanticReferenceSet[item.row.DbID.Int64]; !exists {
+				missingSemanticReferenceSet[item.row.DbID.Int64] = struct{}{}
+				missingSemanticReferenceIDs = append(missingSemanticReferenceIDs, item.row.DbID.Int64)
 			}
 		}
 
@@ -564,6 +563,28 @@ func buildLoadedSubmodelElementNodes(db *sql.DB, parsedRows []loadedSMERow, erro
 			element:  element,
 		}
 		nodes[n.id] = n
+		elementsByID[n.id] = element
+	}
+
+	if len(missingSemanticReferenceIDs) > 0 {
+		fallbackSemanticIDs, fallbackErr := getReferencesFromKeyTables(
+			db,
+			"submodel_element_semantic_id_reference",
+			"submodel_element_semantic_id_reference_key",
+			missingSemanticReferenceIDs,
+			errorCodePrefix+"-SEMKEYS",
+		)
+		if fallbackErr != nil {
+			return nil, nil, nil, fallbackErr
+		}
+
+		for referenceID, semanticID := range fallbackSemanticIDs {
+			element, exists := elementsByID[referenceID]
+			if !exists || semanticID == nil {
+				continue
+			}
+			element.SetSemanticID(semanticID)
+		}
 	}
 
 	for _, item := range parsedRows {
@@ -663,33 +684,51 @@ func setEntityChildren(parent types.ISubmodelElement, kids []*loadedSMENode) {
 	p.SetStatements(statements)
 }
 
-func getReferenceFromKeyTables(db *sql.DB, referenceTable string, referenceKeyTable string, referenceID int64, errorCodePrefix string) (types.IReference, error) {
+func getReferencesFromKeyTables(db *sql.DB, referenceTable string, referenceKeyTable string, referenceIDs []int64, errorCodePrefix string) (map[int64]types.IReference, error) {
+	if len(referenceIDs) == 0 {
+		return map[int64]types.IReference{}, nil
+	}
+
 	dialect := goqu.Dialect("postgres")
 
 	typeQuery, typeArgs, typeToSQLErr := dialect.
 		From(goqu.T(referenceTable)).
-		Select(goqu.I("type")).
-		Where(goqu.I("id").Eq(referenceID)).
-		Limit(1).
+		Select(goqu.I("id"), goqu.I("type")).
+		Where(goqu.I("id").In(referenceIDs)).
 		ToSQL()
 	if typeToSQLErr != nil {
-		return nil, common.NewInternalServerError(errorCodePrefix + "-READTYPE-BUILDQ " + typeToSQLErr.Error())
+		return nil, common.NewInternalServerError(errorCodePrefix + "-READTYPES-BUILDQ " + typeToSQLErr.Error())
 	}
 
-	var referenceTypeInt int64
-	err := db.QueryRow(typeQuery, typeArgs...).Scan(&referenceTypeInt)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, nil
+	typeRows, typeQueryErr := db.Query(typeQuery, typeArgs...)
+	if typeQueryErr != nil {
+		return nil, common.NewInternalServerError(errorCodePrefix + "-READTYPES-EXECQ " + typeQueryErr.Error())
+	}
+	defer func() { _ = typeRows.Close() }()
+
+	referenceTypes := make(map[int64]int64, len(referenceIDs))
+	for typeRows.Next() {
+		var referenceID int64
+		var referenceTypeInt int64
+		if scanErr := typeRows.Scan(&referenceID, &referenceTypeInt); scanErr != nil {
+			return nil, common.NewInternalServerError(errorCodePrefix + "-SCANTYPES " + scanErr.Error())
 		}
-		return nil, common.NewInternalServerError(errorCodePrefix + "-READTYPE-EXECQ " + err.Error())
+		referenceTypes[referenceID] = referenceTypeInt
+	}
+
+	if typeRowsErr := typeRows.Err(); typeRowsErr != nil {
+		return nil, common.NewInternalServerError(errorCodePrefix + "-ROWSTYPES " + typeRowsErr.Error())
+	}
+
+	if len(referenceTypes) == 0 {
+		return map[int64]types.IReference{}, nil
 	}
 
 	keysQuery, keyArgs, keysToSQLErr := dialect.
 		From(goqu.T(referenceKeyTable)).
-		Select(goqu.I("type"), goqu.I("value")).
-		Where(goqu.I("reference_id").Eq(referenceID)).
-		Order(goqu.I("position").Asc()).
+		Select(goqu.I("reference_id"), goqu.I("type"), goqu.I("value")).
+		Where(goqu.I("reference_id").In(referenceIDs)).
+		Order(goqu.I("reference_id").Asc(), goqu.I("position").Asc()).
 		ToSQL()
 	if keysToSQLErr != nil {
 		return nil, common.NewInternalServerError(errorCodePrefix + "-READKEYS-BUILDQ " + keysToSQLErr.Error())
@@ -701,11 +740,12 @@ func getReferenceFromKeyTables(db *sql.DB, referenceTable string, referenceKeyTa
 	}
 	defer func() { _ = rows.Close() }()
 
-	keys := make([]types.IKey, 0, 4)
+	keysByReferenceID := make(map[int64][]types.IKey, len(referenceTypes))
 	for rows.Next() {
+		var referenceID int64
 		var keyTypeInt int64
 		var keyValue string
-		if scanErr := rows.Scan(&keyTypeInt, &keyValue); scanErr != nil {
+		if scanErr := rows.Scan(&referenceID, &keyTypeInt, &keyValue); scanErr != nil {
 			return nil, common.NewInternalServerError(errorCodePrefix + "-SCANKEYS " + scanErr.Error())
 		}
 
@@ -713,23 +753,28 @@ func getReferenceFromKeyTables(db *sql.DB, referenceTable string, referenceKeyTa
 		keyType := types.KeyTypes(keyTypeInt)
 		key.SetType(keyType)
 		key.SetValue(keyValue)
-		keys = append(keys, &key)
+		keysByReferenceID[referenceID] = append(keysByReferenceID[referenceID], &key)
 	}
 
 	if rowsErr := rows.Err(); rowsErr != nil {
 		return nil, common.NewInternalServerError(errorCodePrefix + "-ROWSKEYS " + rowsErr.Error())
 	}
 
-	if len(keys) == 0 {
-		return nil, nil
+	result := make(map[int64]types.IReference, len(referenceTypes))
+	for referenceID, referenceTypeInt := range referenceTypes {
+		keys := keysByReferenceID[referenceID]
+		if len(keys) == 0 {
+			continue
+		}
+
+		reference := types.Reference{}
+		referenceType := types.ReferenceTypes(referenceTypeInt)
+		reference.SetType(referenceType)
+		reference.SetKeys(keys)
+		result[referenceID] = &reference
 	}
 
-	reference := types.Reference{}
-	referenceType := types.ReferenceTypes(referenceTypeInt)
-	reference.SetType(referenceType)
-	reference.SetKeys(keys)
-
-	return &reference, nil
+	return result, nil
 }
 
 func bytesToRawMessagePtr(data []byte) *json.RawMessage {
