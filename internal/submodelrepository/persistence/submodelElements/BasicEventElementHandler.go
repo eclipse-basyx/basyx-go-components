@@ -98,13 +98,14 @@ func (p PostgreSQLBasicEventElementHandler) Update(submodelID string, idShortOrP
 	if err != nil {
 		return err
 	}
+	effectivePath := resolveUpdatedPath(idShortOrPath, submodelElement, isPut)
 
 	smDbID, err := persistenceutils.GetSubmodelDatabaseID(localTx, submodelID)
 	if err != nil {
 		_, _ = fmt.Println(err)
 		return common.NewInternalServerError("Failed to execute PostgreSQL Query - no changes applied - see console for details.")
 	}
-	elementID, err := p.decorated.GetDatabaseID(smDbID, idShortOrPath)
+	elementID, err := p.decorated.GetDatabaseIDWithTx(localTx, smDbID, effectivePath)
 	if err != nil {
 		return err
 	}

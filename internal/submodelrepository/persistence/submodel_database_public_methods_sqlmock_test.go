@@ -26,7 +26,9 @@ func TestGetSubmodelsDatabaseQueryError(t *testing.T) {
 
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
-	defer db.Close()
+	defer func() {
+		require.NoError(t, db.Close())
+	}()
 
 	sut := &SubmodelDatabase{db: db}
 
@@ -45,7 +47,9 @@ func TestGetSubmodelByIDReturnsErrorWhenParallelReadsFail(t *testing.T) {
 
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
-	defer db.Close()
+	defer func() {
+		require.NoError(t, db.Close())
+	}()
 
 	mock.MatchExpectationsInOrder(false)
 
@@ -64,7 +68,9 @@ func TestCreateSubmodelInsertFailureRollsBack(t *testing.T) {
 
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
-	defer db.Close()
+	defer func() {
+		require.NoError(t, db.Close())
+	}()
 
 	sut := &SubmodelDatabase{db: db}
 	submodel := types.NewSubmodel("sm-create")
@@ -88,7 +94,9 @@ func TestGetSubmodelElementEmptyPathReturnsBadRequest(t *testing.T) {
 
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
-	defer db.Close()
+	defer func() {
+		require.NoError(t, db.Close())
+	}()
 
 	sut := &SubmodelDatabase{db: db}
 
@@ -104,7 +112,9 @@ func TestGetSubmodelElementsEmptySubmodelIDReturnsBadRequest(t *testing.T) {
 
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
-	defer db.Close()
+	defer func() {
+		require.NoError(t, db.Close())
+	}()
 
 	sut := &SubmodelDatabase{db: db}
 
@@ -121,7 +131,9 @@ func TestAddSubmodelElementSubmodelNotFoundRollsBack(t *testing.T) {
 
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
-	defer db.Close()
+	defer func() {
+		require.NoError(t, db.Close())
+	}()
 
 	sut := &SubmodelDatabase{db: db}
 	var elem types.ISubmodelElement
@@ -141,7 +153,9 @@ func TestAddSubmodelElementWithPathSubmodelNotFoundRollsBack(t *testing.T) {
 
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
-	defer db.Close()
+	defer func() {
+		require.NoError(t, db.Close())
+	}()
 
 	sut := &SubmodelDatabase{db: db}
 	var elem types.ISubmodelElement
@@ -161,7 +175,9 @@ func TestDeleteSubmodelElementByPathFailureRollsBack(t *testing.T) {
 
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
-	defer db.Close()
+	defer func() {
+		require.NoError(t, db.Close())
+	}()
 
 	sut := &SubmodelDatabase{db: db}
 
@@ -179,7 +195,9 @@ func TestUpdateSubmodelElementModelTypeLookupFails(t *testing.T) {
 
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
-	defer db.Close()
+	defer func() {
+		require.NoError(t, db.Close())
+	}()
 
 	sut := &SubmodelDatabase{db: db}
 
@@ -195,7 +213,9 @@ func TestUpdateSubmodelElementValueOnlyModelTypeLookupFails(t *testing.T) {
 
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
-	defer db.Close()
+	defer func() {
+		require.NoError(t, db.Close())
+	}()
 
 	sut := &SubmodelDatabase{db: db}
 
@@ -211,7 +231,9 @@ func TestUpdateSubmodelValueOnlyPropagatesElementError(t *testing.T) {
 
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
-	defer db.Close()
+	defer func() {
+		require.NoError(t, db.Close())
+	}()
 
 	sut := &SubmodelDatabase{db: db}
 
@@ -228,7 +250,9 @@ func TestUploadFileAttachmentSubmodelLookupFails(t *testing.T) {
 
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
-	defer db.Close()
+	defer func() {
+		require.NoError(t, db.Close())
+	}()
 
 	tmp, err := os.CreateTemp(t.TempDir(), "upload-*.txt")
 	require.NoError(t, err)
@@ -238,7 +262,9 @@ func TestUploadFileAttachmentSubmodelLookupFails(t *testing.T) {
 
 	uploadFile, err := os.Open(tmp.Name())
 	require.NoError(t, err)
-	defer uploadFile.Close()
+	defer func() {
+		require.NoError(t, uploadFile.Close())
+	}()
 
 	sut := &SubmodelDatabase{db: db}
 
@@ -258,7 +284,9 @@ func TestDownloadFileAttachmentSubmodelLookupFails(t *testing.T) {
 
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
-	defer db.Close()
+	defer func() {
+		require.NoError(t, db.Close())
+	}()
 
 	sut := &SubmodelDatabase{db: db}
 
@@ -279,7 +307,9 @@ func TestDeleteFileAttachmentSubmodelLookupFails(t *testing.T) {
 
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
-	defer db.Close()
+	defer func() {
+		require.NoError(t, db.Close())
+	}()
 
 	sut := &SubmodelDatabase{db: db}
 

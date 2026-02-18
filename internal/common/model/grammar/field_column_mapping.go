@@ -66,7 +66,7 @@ var terminalColumnMappings = map[string]terminalColumnMapping{
 
 	"id": {
 		ByContext: map[resolveContext]string{
-			ctxSM:                 "s.id",
+			ctxSM:                 "s.submodel_identifier",
 			ctxAASDesc:            "aas_descriptor.id",
 			ctxSMDesc:             "submodel_descriptor.id",
 			ctxSubmodelDescriptor: "submodel_descriptor.id",
@@ -159,7 +159,7 @@ var terminalColumnMappings = map[string]terminalColumnMapping{
 
 	"valueType": {
 		ByContext: map[resolveContext]string{
-			ctxSME: "property_element.value_type",
+			ctxSME: "(CASE WHEN property_element.value_bool IS NOT NULL THEN 'xs:boolean' WHEN property_element.value_time IS NOT NULL THEN 'xs:time' WHEN property_element.value_datetime IS NOT NULL THEN 'xs:dateTime' WHEN property_element.value_num IS NOT NULL THEN 'xs:double' ELSE 'xs:string' END)",
 		},
 	},
 

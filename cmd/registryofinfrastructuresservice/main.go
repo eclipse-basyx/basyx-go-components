@@ -46,7 +46,15 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	log.Printf("🗄️  Connecting to Postgres with DSN: postgres://%s:****@%s:%d/%s?sslmode=disable",
 		cfg.Postgres.User, cfg.Postgres.Host, cfg.Postgres.Port, cfg.Postgres.DBName)
 
-	rorDatabase, err := registryofinfrastructurespostgresql.NewPostgreSQLRegistryOfInfrastructuresBackend("postgres://"+cfg.Postgres.User+":"+cfg.Postgres.Password+"@"+cfg.Postgres.Host+":"+strconv.Itoa(cfg.Postgres.Port)+"/"+cfg.Postgres.DBName+"?sslmode=disable", cfg.Postgres.MaxOpenConnections, cfg.Postgres.MaxIdleConnections, cfg.Postgres.ConnMaxLifetimeMinutes, cfg.Server.CacheEnabled, databaseSchema)
+	rorDatabase, err := registryofinfrastructurespostgresql.NewPostgreSQLRegistryOfInfrastructuresBackend(
+		"postgres://"+cfg.Postgres.User+":"+cfg.Postgres.Password+"@"+cfg.Postgres.Host+":"+strconv.Itoa(cfg.Postgres.Port)+"/"+cfg.Postgres.DBName+"?sslmode=disable",
+		//nolint:gosec // configured value is bounded by deployment configuration
+		int32(cfg.Postgres.MaxOpenConnections),
+		cfg.Postgres.MaxIdleConnections,
+		cfg.Postgres.ConnMaxLifetimeMinutes,
+		cfg.Server.CacheEnabled,
+		databaseSchema,
+	)
 	if err != nil {
 		log.Printf("❌ DB connect failed: %v", err)
 		return err

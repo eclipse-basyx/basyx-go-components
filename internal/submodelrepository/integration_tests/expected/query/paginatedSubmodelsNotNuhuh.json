@@ -2185,18 +2185,6 @@
             ]
         },
         {
-            "id": "http://iese.fraunhofer.de/id/sm/OnlyFileSubmodel",
-            "idShort": "OnlyFileSubmodel",
-            "kind": "Instance",
-            "modelType": "Submodel",
-            "submodelElements": [
-                {
-                    "idShort": "DemoFile",
-                    "modelType": "File"
-                }
-            ]
-        },
-        {
             "administration": {
                 "revision": "1",
                 "version": "3"

@@ -197,9 +197,10 @@ func (p *PostgreSQLSMECrudHandler) Update(submodelID string, idShortOrPath strin
 
 	// First, get the existing element ID and verify it exists in the correct submodel
 	var existingID int
+	var existingIDShort sql.NullString
 
 	selectQuery := dialect.From(goqu.T("submodel_element")).
-		Select(goqu.C("id")).
+		Select(goqu.C("id"), goqu.C("id_short")).
 		Where(
 			goqu.C("idshort_path").Eq(idShortOrPath),
 			goqu.C("submodel_id").Eq(submodelDatabaseID),
@@ -210,12 +211,22 @@ func (p *PostgreSQLSMECrudHandler) Update(submodelID string, idShortOrPath strin
 		return err
 	}
 
-	err = localTx.QueryRow(selectSQL, selectArgs...).Scan(&existingID)
+	err = localTx.QueryRow(selectSQL, selectArgs...).Scan(&existingID, &existingIDShort)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return common.NewErrNotFound("SubmodelElement with path '" + idShortOrPath + "' not found in submodel '" + submodelID + "'")
 		}
 		return err
+	}
+
+	if isPut && submodelElement.IDShort() != nil {
+		newIDShort := strings.TrimSpace(*submodelElement.IDShort())
+		if newIDShort != "" && (!existingIDShort.Valid || existingIDShort.String != newIDShort) {
+			_, updatePathErr := p.UpdateIdShortPaths(localTx, submodelID, idShortOrPath, newIDShort)
+			if updatePathErr != nil {
+				return updatePathErr
+			}
+		}
 	}
 
 	// Update the base submodel_element row
@@ -377,6 +388,14 @@ func (p *PostgreSQLSMECrudHandler) Delete(idShortOrPath string) error {
 //
 //	dbID, err := handler.GetDatabaseID("sensors.temperature")
 func (p *PostgreSQLSMECrudHandler) GetDatabaseID(submodelID int, idShortPath string) (int, error) {
+	return p.GetDatabaseIDWithTx(nil, submodelID, idShortPath)
+}
+
+// GetDatabaseIDWithTx retrieves the database primary key ID for an element by its path,
+// optionally using the provided transaction for consistent reads within a larger operation.
+//
+// If tx is nil, the handler's default database connection is used.
+func (p *PostgreSQLSMECrudHandler) GetDatabaseIDWithTx(tx *sql.Tx, submodelID int, idShortPath string) (int, error) {
 	dialect := goqu.Dialect("postgres")
 	selectQuery, selectArgs, err := dialect.From("submodel_element").
 		Select("id").
@@ -390,7 +409,11 @@ func (p *PostgreSQLSMECrudHandler) GetDatabaseID(submodelID int, idShortPath str
 	}
 
 	var id int
-	err = p.Db.QueryRow(selectQuery, selectArgs...).Scan(&id)
+	if tx != nil {
+		err = tx.QueryRow(selectQuery, selectArgs...).Scan(&id)
+	} else {
+		err = p.Db.QueryRow(selectQuery, selectArgs...).Scan(&id)
+	}
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return 0, common.NewErrNotFound("SubmodelElement with path '" + idShortPath + "' not found in submodel '" + strconv.Itoa(submodelID) + "'")
@@ -636,6 +659,23 @@ func computeNewPath(oldPath string, newIDShort string) string {
 
 	// No dot found — this is a top-level element
 	return newIDShort
+}
+
+func resolveUpdatedPath(idShortOrPath string, submodelElement types.ISubmodelElement, isPut bool) string {
+	if !isPut || submodelElement == nil || submodelElement.IDShort() == nil {
+		return idShortOrPath
+	}
+
+	if strings.HasSuffix(idShortOrPath, "]") {
+		return idShortOrPath
+	}
+
+	newIDShort := strings.TrimSpace(*submodelElement.IDShort())
+	if newIDShort == "" {
+		return idShortOrPath
+	}
+
+	return computeNewPath(idShortOrPath, newIDShort)
 }
 
 // updateChildPaths updates the idshort_path of child elements whose paths start with

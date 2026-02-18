@@ -36,6 +36,8 @@ var (
 	jsonP = jsoniter.ConfigCompatibleWithStandardLibrary
 )
 
+// ParseReferenceJSON parses a JSON payload into a single `types.IReference`.
+// It accepts either one reference object or an array and returns the first element.
 func ParseReferenceJSON(rawPayload []byte) (types.IReference, error) {
 	if len(rawPayload) == 0 {
 		return nil, nil
@@ -74,6 +76,7 @@ func ParseReferenceJSON(rawPayload []byte) (types.IReference, error) {
 	}
 }
 
+// ParseReferencesJSONArray parses a JSON array payload into `[]types.IReference`.
 func ParseReferencesJSONArray(rawPayload []byte) ([]types.IReference, error) {
 	if len(rawPayload) == 0 {
 		return nil, nil
@@ -96,6 +99,7 @@ func ParseReferencesJSONArray(rawPayload []byte) ([]types.IReference, error) {
 	return refs, nil
 }
 
+// ParseLangStringTextTypesJSON parses localized text entries into `[]types.ILangStringTextType`.
 func ParseLangStringTextTypesJSON(rawPayload []byte) ([]types.ILangStringTextType, error) {
 	if len(rawPayload) == 0 {
 		return nil, nil
@@ -118,6 +122,7 @@ func ParseLangStringTextTypesJSON(rawPayload []byte) ([]types.ILangStringTextTyp
 	return values, nil
 }
 
+// ParseLangStringNameTypesJSON parses localized name entries into `[]types.ILangStringNameType`.
 func ParseLangStringNameTypesJSON(rawPayload []byte) ([]types.ILangStringNameType, error) {
 	if len(rawPayload) == 0 {
 		return nil, nil
@@ -140,6 +145,7 @@ func ParseLangStringNameTypesJSON(rawPayload []byte) ([]types.ILangStringNameTyp
 	return values, nil
 }
 
+// ParseAdministrationJSON parses administrative information payload and returns the first entry.
 func ParseAdministrationJSON(rawPayload []byte) (types.IAdministrativeInformation, error) {
 	if len(rawPayload) == 0 {
 		return nil, nil
@@ -160,6 +166,7 @@ func ParseAdministrationJSON(rawPayload []byte) (types.IAdministrativeInformatio
 	return admin, nil
 }
 
+// ParseEmbeddedDataSpecificationsJSON parses embedded data specifications payload.
 func ParseEmbeddedDataSpecificationsJSON(rawPayload []byte) ([]types.IEmbeddedDataSpecification, error) {
 	if len(rawPayload) == 0 {
 		return nil, nil
@@ -182,6 +189,7 @@ func ParseEmbeddedDataSpecificationsJSON(rawPayload []byte) ([]types.IEmbeddedDa
 	return values, nil
 }
 
+// ParseExtensionsJSON parses extension payload into `[]types.IExtension`.
 func ParseExtensionsJSON(rawPayload []byte) ([]types.IExtension, error) {
 	if len(rawPayload) == 0 {
 		return nil, nil
@@ -204,6 +212,7 @@ func ParseExtensionsJSON(rawPayload []byte) ([]types.IExtension, error) {
 	return values, nil
 }
 
+// ParseQualifiersJSON parses qualifier payload into `[]types.IQualifier`.
 func ParseQualifiersJSON(rawPayload []byte) ([]types.IQualifier, error) {
 	if len(rawPayload) == 0 {
 		return nil, nil

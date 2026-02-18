@@ -404,50 +404,77 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsMetadata(
 	idShort string,
 	limit int32,
 	cursor string) (gen.ImplResponse, error) {
-	// sms, nextCursor, err := s.submodelBackend.GetAllSubmodelsMetadata(limit, cursor, idShort, semanticID)
-	// if err != nil {
-	// 	return gen.Response(500, nil), err
-	// }
-	// var converted []map[string]any
+	decodedCursor := ""
+	if cursor != "" {
+		decodedCursorBytes, decodeErr := base64.RawStdEncoding.DecodeString(cursor)
+		if decodeErr != nil {
+			return gen.Response(http.StatusBadRequest, nil), decodeErr
+		}
+		decodedCursor = string(decodedCursorBytes)
+	}
 
-	// for _, sm := range sms {
-	// 	jsonSubmodel, err := jsonization.ToJsonable(&sm)
-	// 	if err != nil {
-	// 		return gen.Response(500, nil), err
-	// 	}
-	// 	converted = append(converted, jsonSubmodel)
-	// }
-	// // using the openAPI provided response struct to include paging metadata
-	// res := gen.GetSubmodelsMetadataResult{
-	// 	PagingMetadata: gen.PagedResultPagingMetadata{
-	// 		Cursor: nextCursor,
-	// 	},
-	// 	Result: converted,
-	// }
-	return gen.Response(200, nil), nil
+	submodels, nextCursor, err := s.submodelBackend.GetSubmodels(limit, decodedCursor, "")
+	if err != nil {
+		return gen.Response(http.StatusInternalServerError, nil), err
+	}
 
-	// TODO - update GetAllSubmodelsMetadata with the required logic for this service method.
-	// Add api_submodel_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
+	idShortFilter := strings.ToLower(strings.TrimSpace(idShort))
+	semanticIDFilter := strings.ToLower(strings.TrimSpace(semanticID))
 
-	// TODO: Uncomment the next line to return response Response(200, GetSubmodelsMetadataResult{}) or use other options such as http.Ok ...
-	// return gen.Response(200, GetSubmodelsMetadataResult{}), nil
+	converted := make([]map[string]any, 0, len(submodels))
+	for _, sm := range submodels {
+		if sm == nil {
+			continue
+		}
 
-	// TODO: Uncomment the next line to return response Response(400, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(400, Result{}), nil
+		if idShortFilter != "" {
+			currentIDShort := ""
+			if sm.IDShort() != nil {
+				currentIDShort = strings.ToLower(*sm.IDShort())
+			}
+			if !strings.Contains(currentIDShort, idShortFilter) {
+				continue
+			}
+		}
 
-	// TODO: Uncomment the next line to return response Response(401, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(401, Result{}), nil
+		if semanticIDFilter != "" {
+			semanticRef := sm.SemanticID()
+			if semanticRef == nil {
+				continue
+			}
 
-	// TODO: Uncomment the next line to return response Response(403, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(403, Result{}), nil
+			matchesSemanticID := false
+			for _, key := range semanticRef.Keys() {
+				if strings.Contains(strings.ToLower(key.Value()), semanticIDFilter) {
+					matchesSemanticID = true
+					break
+				}
+			}
 
-	// TODO: Uncomment the next line to return response Response(500, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(500, Result{}), nil
+			if !matchesSemanticID {
+				continue
+			}
+		}
 
-	// TODO: Uncomment the next line to return response Response(0, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(0, Result{}), nil
+		jsonSubmodel, convertErr := jsonization.ToJsonable(sm)
+		if convertErr != nil {
+			return gen.Response(http.StatusInternalServerError, nil), convertErr
+		}
+		delete(jsonSubmodel, "submodelElements")
+		converted = append(converted, jsonSubmodel)
+	}
 
-	// return gen.Response(http.StatusNotImplemented, nil), errors.New("GetAllSubmodelsMetadata method not implemented")
+	encodedCursor := ""
+	if nextCursor != "" {
+		encodedCursor = base64.RawStdEncoding.EncodeToString([]byte(nextCursor))
+	}
+
+	result := gen.GetSubmodelsMetadataResult{
+		PagingMetadata: gen.PagedResultPagingMetadata{Cursor: encodedCursor},
+		Result:         converted,
+	}
+
+	return gen.Response(http.StatusOK, result), nil
 }
 
 // GetAllSubmodelsValueOnly - Returns all Submodels in their ValueOnly representation
@@ -1825,8 +1852,6 @@ func (s *SubmodelRepositoryAPIAPIService) GetOperationAsyncResultValueOnly(ctx c
 	return gen.Response(http.StatusNotImplemented, nil), errors.New("GetOperationAsyncResultValueOnly method not implemented")
 }
 
-const smRepoComponentName = "SubmodelRepository"
-
 // QuerySubmodels returns all Submodels that match the input query.
 // It supports filtering based on the query language and provides pagination through cursor-based navigation.
 //
@@ -1845,44 +1870,41 @@ func (s *SubmodelRepositoryAPIAPIService) QuerySubmodels(
 	cursor string,
 	query grammar.Query,
 ) (gen.ImplResponse, error) {
-	// // Convert the grammar.Query to a QueryWrapper for the backend
-	// queryWrapper := &grammar.QueryWrapper{
-	// 	Query: query,
-	// }
+	queryWrapper := &grammar.QueryWrapper{
+		Query: query,
+	}
 
-	// sms, nextCursor, err := s.submodelBackend.QuerySubmodels(limit, cursor, queryWrapper, false)
-	// if err != nil {
-	// 	log.Printf("🧩 [%s] Error in QuerySubmodels: query failed (limit=%d cursor=%q): %v", smRepoComponentName, limit, cursor, err)
-	// 	switch {
-	// 	case common.IsErrBadRequest(err):
-	// 		return common.NewErrorResponse(
-	// 			err, http.StatusBadRequest, smRepoComponentName, "QuerySubmodels", "BadRequest",
-	// 		), nil
-	// 	default:
-	// 		return common.NewErrorResponse(
-	// 			err, http.StatusInternalServerError, smRepoComponentName, "QuerySubmodels", "InternalServerError",
-	// 		), err
-	// 	}
-	// }
+	sms, nextCursor, err := s.submodelBackend.QuerySubmodels(limit, cursor, queryWrapper, false)
+	if err != nil {
+		switch {
+		case common.IsErrBadRequest(err):
+			return common.NewErrorResponse(
+				err, http.StatusBadRequest, "SMREPO", "QuerySubmodels", "BadRequest",
+			), nil
+		default:
+			return common.NewErrorResponse(
+				err, http.StatusInternalServerError, "SMREPO", "QuerySubmodels", "InternalServerError",
+			), err
+		}
+	}
 
-	// var converted []map[string]any
-	// for _, sm := range sms {
-	// 	jsonable, err := jsonization.ToJsonable(sm)
-	// 	if err != nil {
-	// 		log.Printf("🧩 [%s] Error in QuerySubmodels: failed to convert submodel to jsonable: %v", smRepoComponentName, err)
-	// 		return common.NewErrorResponse(
-	// 			err, http.StatusInternalServerError, smRepoComponentName, "QuerySubmodels", "InternalServerError",
-	// 		), err
-	// 	}
-	// 	converted = append(converted, jsonable)
-	// }
+	converted := make([]map[string]any, 0, len(sms))
+	for _, sm := range sms {
+		jsonable, convertErr := jsonization.ToJsonable(sm)
+		if convertErr != nil {
+			return common.NewErrorResponse(
+				convertErr, http.StatusInternalServerError, "SMREPO", "QuerySubmodels", "InternalServerError",
+			), convertErr
+		}
+		converted = append(converted, jsonable)
+	}
 
-	// // using the openAPI provided response struct to include paging metadata
-	// res := gen.GetSubmodelsResult{
-	// 	PagingMetadata: gen.PagedResultPagingMetadata{
-	// 		Cursor: nextCursor,
-	// 	},
-	// 	Result: converted,
-	// }
-	return gen.Response(http.StatusOK, nil), nil
+	res := gen.GetSubmodelsResult{
+		PagingMetadata: gen.PagedResultPagingMetadata{
+			Cursor: nextCursor,
+		},
+		Result: converted,
+	}
+
+	return gen.Response(http.StatusOK, res), nil
 }

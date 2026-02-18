@@ -13,7 +13,9 @@ import (
 func TestPatchSubmodelIDMismatchReturnsBadRequest(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
-	defer db.Close()
+	defer func() {
+		require.NoError(t, db.Close())
+	}()
 
 	sut := &SubmodelDatabase{db: db}
 	submodel := types.NewSubmodel("sm-body")
@@ -27,7 +29,9 @@ func TestPatchSubmodelIDMismatchReturnsBadRequest(t *testing.T) {
 func TestPatchSubmodelNotFoundRollsBack(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
-	defer db.Close()
+	defer func() {
+		require.NoError(t, db.Close())
+	}()
 
 	sut := &SubmodelDatabase{db: db}
 	submodel := types.NewSubmodel("sm-missing")
@@ -46,7 +50,9 @@ func TestPatchSubmodelNotFoundRollsBack(t *testing.T) {
 func TestPatchSubmodelSuccessReplacesSubmodel(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
-	defer db.Close()
+	defer func() {
+		require.NoError(t, db.Close())
+	}()
 
 	sut := &SubmodelDatabase{db: db}
 	submodel := types.NewSubmodel("sm-1")
@@ -74,7 +80,9 @@ func TestPatchSubmodelSuccessReplacesSubmodel(t *testing.T) {
 func TestPutSubmodelIDMismatchReturnsBadRequest(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
-	defer db.Close()
+	defer func() {
+		require.NoError(t, db.Close())
+	}()
 
 	sut := &SubmodelDatabase{db: db}
 	submodel := types.NewSubmodel("sm-body")
@@ -89,7 +97,9 @@ func TestPutSubmodelIDMismatchReturnsBadRequest(t *testing.T) {
 func TestPutSubmodelCreatePathReturnsFalse(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
-	defer db.Close()
+	defer func() {
+		require.NoError(t, db.Close())
+	}()
 
 	sut := &SubmodelDatabase{db: db}
 	submodel := types.NewSubmodel("sm-new")
@@ -114,7 +124,9 @@ func TestPutSubmodelCreatePathReturnsFalse(t *testing.T) {
 func TestPutSubmodelUpdatePathReturnsTrue(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
-	defer db.Close()
+	defer func() {
+		require.NoError(t, db.Close())
+	}()
 
 	sut := &SubmodelDatabase{db: db}
 	submodel := types.NewSubmodel("sm-existing")

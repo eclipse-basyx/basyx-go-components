@@ -61,18 +61,14 @@ func GetSubmodelElementsBySubmodelID(db *sql.DB, submodelID string, limit *int, 
 		return nil, "", common.NewErrBadRequest("SMREPO-GETSMES-EMPTYSMID Submodel id must not be empty")
 	}
 	if limit != nil {
-		if *limit < 0 {
-			return nil, "", common.NewErrBadRequest("SMREPO-GETSMES-BADLIMIT limit must be >= 0")
+		if *limit < -1 {
+			return nil, "", common.NewErrBadRequest("SMREPO-GETSMES-BADLIMIT limit must be >= -1")
 		}
 	}
 	if limit == nil {
 		limit = new(int)
 		*limit = 100
 	}
-	if *limit < -1 {
-		return nil, "", common.NewErrBadRequest("SMREPO-GETSMES-BADLIMIT limit must be >= -1")
-	}
-
 	submodelDatabaseID, submodelIDErr := persistenceutils.GetSubmodelDatabaseIDFromDB(db, submodelID)
 	if submodelIDErr != nil {
 		if errors.Is(submodelIDErr, sql.ErrNoRows) {
@@ -130,12 +126,16 @@ func getRootElementPage(db *sql.DB, submodelDatabaseID int64, limit *int, cursor
 
 	query := dialect.
 		From(goqu.T("submodel_element").As("sme")).
-		Select(goqu.I("sme.id"), goqu.I("sme.idshort_path")).
+		Select(
+			goqu.I("sme.id"),
+			goqu.I("sme.idshort_path"),
+		).
 		Where(
 			goqu.I("sme.submodel_id").Eq(submodelDatabaseID),
 			goqu.I("sme.parent_sme_id").IsNull(),
-		).
-		Order(goqu.I("sme.idshort_path").Asc(), goqu.I("sme.id").Asc())
+		)
+
+	query = query.Order(goqu.I("sme.idshort_path").Asc(), goqu.I("sme.id").Asc())
 
 	if cursor != "" {
 		cursorPath, cursorID, hasCursorID := parseRootCursor(cursor)
@@ -155,6 +155,7 @@ func getRootElementPage(db *sql.DB, submodelDatabaseID int64, limit *int, cursor
 	}
 
 	if limit != nil && *limit > 0 {
+		//nolint:gosec // limit is validated to be > 0 before conversion
 		query = query.Limit(uint(*limit + 1))
 	}
 
@@ -190,6 +191,15 @@ func getRootElementPage(db *sql.DB, submodelDatabaseID int64, limit *int, cursor
 		paths = paths[:*limit]
 		lastPath := paths[len(paths)-1]
 		nextCursor = formatRootCursor(lastPath.path, lastPath.id)
+	}
+
+	if limit != nil && *limit == -1 && cursor == "" {
+		sort.SliceStable(paths, func(i, j int) bool {
+			if paths[i].path == paths[j].path {
+				return paths[i].id < paths[j].id
+			}
+			return paths[i].path < paths[j].path
+		})
 	}
 
 	return paths, nextCursor, nil
@@ -276,6 +286,13 @@ func readSubmodelElementRowsByRootIDs(db *sql.DB, submodelDatabaseID int64, root
 
 	dialect := goqu.Dialect("postgres")
 
+	rootOrderExpr := goqu.Case().
+		Value(goqu.L("COALESCE(sme.root_sme_id, sme.id)"))
+	for index, rootID := range rootIDs {
+		rootOrderExpr = rootOrderExpr.When(rootID, index)
+	}
+	rootOrderExpr = rootOrderExpr.Else(len(rootIDs))
+
 	valueExpr := getSMEValueExpressionForRead(dialect)
 	query := dialect.
 		From(goqu.T("submodel_element").As("sme")).
@@ -310,7 +327,12 @@ func readSubmodelElementRowsByRootIDs(db *sql.DB, submodelDatabaseID int64, root
 				goqu.I("sme.root_sme_id").In(rootIDs),
 			),
 		).
-		Order(goqu.I("sme.id").Asc(), goqu.I("sme.idshort_path").Asc(), goqu.I("sme.position").Asc())
+		Order(
+			rootOrderExpr.Asc(),
+			goqu.COALESCE(goqu.I("sme.position"), 0).Asc(),
+			goqu.I("sme.idshort_path").Asc(),
+			goqu.I("sme.id").Asc(),
+		)
 
 	sqlQuery, args, toSQLErr := query.ToSQL()
 	if toSQLErr != nil {
@@ -321,7 +343,6 @@ func readSubmodelElementRowsByRootIDs(db *sql.DB, submodelDatabaseID int64, root
 }
 
 func executeLoadedSMERowQuery(db *sql.DB, sqlQuery string, args []interface{}, errorCodePrefix string) ([]loadedSMERow, error) {
-
 	rows, queryErr := db.Query(sqlQuery, args...)
 	if queryErr != nil {
 		return nil, common.NewInternalServerError(errorCodePrefix + "-EXECQ " + queryErr.Error())
@@ -545,7 +566,16 @@ func buildLoadedSubmodelElementNodes(db *sql.DB, parsedRows []loadedSMERow, erro
 		nodes[n.id] = n
 	}
 
-	for _, n := range nodes {
+	for _, item := range parsedRows {
+		if !item.row.DbID.Valid {
+			continue
+		}
+
+		n, exists := nodes[item.row.DbID.Int64]
+		if !exists {
+			continue
+		}
+
 		if n.parentID.Valid {
 			if _, exists := nodes[n.parentID.Int64]; exists {
 				children[n.parentID.Int64] = append(children[n.parentID.Int64], n)
@@ -566,6 +596,9 @@ func attachLoadedSubmodelElementChildren(children map[int64][]*loadedSMENode, no
 		}
 
 		sort.SliceStable(kids, func(i int, j int) bool {
+			if kids[i].position == kids[j].position {
+				return kids[i].path < kids[j].path
+			}
 			return kids[i].position < kids[j].position
 		})
 

@@ -73,7 +73,14 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	// Instantiate generated services & controllers
 	// ==== Concept Description Repository Service ====
 
-	cdDatabase, err := persistence.NewConceptDescriptionBackend("postgres://"+config.Postgres.User+":"+config.Postgres.Password+"@"+config.Postgres.Host+":"+strconv.Itoa(config.Postgres.Port)+"/"+config.Postgres.DBName+"?sslmode=disable", config.Postgres.MaxOpenConnections, config.Postgres.MaxIdleConnections, config.Postgres.ConnMaxLifetimeMinutes, databaseSchema)
+	cdDatabase, err := persistence.NewConceptDescriptionBackend(
+		"postgres://"+config.Postgres.User+":"+config.Postgres.Password+"@"+config.Postgres.Host+":"+strconv.Itoa(config.Postgres.Port)+"/"+config.Postgres.DBName+"?sslmode=disable",
+		//nolint:gosec // configured value is bounded by deployment configuration
+		int32(config.Postgres.MaxOpenConnections),
+		config.Postgres.MaxIdleConnections,
+		config.Postgres.ConnMaxLifetimeMinutes,
+		databaseSchema,
+	)
 	if err != nil {
 		return err
 	}

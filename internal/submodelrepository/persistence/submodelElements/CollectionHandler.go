@@ -106,13 +106,14 @@ func (p PostgreSQLSubmodelElementCollectionHandler) Update(submodelID string, id
 	if err != nil {
 		return err
 	}
+	effectivePath := resolveUpdatedPath(idShortOrPath, submodelElement, isPut)
 
 	smDbID, err := persistenceutils.GetSubmodelDatabaseID(localTx, submodelID)
 	if err != nil {
 		return common.NewInternalServerError("SMREPO-UPDSMECOL-GETSMDATABASEID " + err.Error())
 	}
 
-	elementID, err := p.decorated.GetDatabaseID(smDbID, idShortOrPath)
+	elementID, err := p.decorated.GetDatabaseIDWithTx(localTx, smDbID, effectivePath)
 	if err != nil {
 		return err
 	}
@@ -131,7 +132,7 @@ func (p PostgreSQLSubmodelElementCollectionHandler) Update(submodelID string, id
 				localTx,
 				&BatchInsertContext{
 					ParentID:      elementID,
-					ParentPath:    idShortOrPath,
+					ParentPath:    effectivePath,
 					RootSmeID:     rootSmeID,
 					IsFromList:    false,
 					StartPosition: 0,

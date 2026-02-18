@@ -269,9 +269,7 @@ func ParseLangStringNameType(displayNames json.RawMessage) ([]types.ILangStringN
 	}()
 
 	for _, item := range temp {
-		if _, ok := item["id"]; ok {
-			delete(item, "id")
-		}
+		delete(item, "id")
 		language, hasLanguage := item["language"].(string)
 		text, hasText := item["text"].(string)
 		if !hasLanguage || !hasText {
@@ -328,9 +326,7 @@ func ParseLangStringTextType(descriptions json.RawMessage) ([]types.ILangStringT
 	}()
 
 	for _, item := range temp {
-		if _, ok := item["id"]; ok {
-			delete(item, "id")
-		}
+		delete(item, "id")
 		language, hasLanguage := item["language"].(string)
 		text, hasText := item["text"].(string)
 		if !hasLanguage || !hasText {

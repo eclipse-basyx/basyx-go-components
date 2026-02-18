@@ -490,7 +490,7 @@ func InsertSubmodelElements(db *sql.DB, submodelID string, elements []types.ISub
 		return nil, err
 	}
 
-	insertBaseErr := insertBaseNodesDepthWise(localTx, dialect, int64(submodelDatabaseID), nodes, jsonLib)
+	insertBaseErr := insertBaseNodesDepthWise(localTx, dialect, int64(submodelDatabaseID), nodes)
 	if insertBaseErr != nil {
 		err = insertBaseErr
 		return nil, err

@@ -185,7 +185,7 @@ func buildIDShortPath(parentPath string, isFromList bool, position int, idShort 
 	return parentPath + "." + idShort
 }
 
-func insertBaseNodesDepthWise(tx *sql.Tx, dialect goqu.DialectWrapper, submodelDatabaseID int64, nodes []*flattenedInsertNode, jsonLib jsoniter.API) error {
+func insertBaseNodesDepthWise(tx *sql.Tx, dialect goqu.DialectWrapper, submodelDatabaseID int64, nodes []*flattenedInsertNode) error {
 	if len(nodes) == 0 {
 		return nil
 	}
@@ -201,7 +201,7 @@ func insertBaseNodesDepthWise(tx *sql.Tx, dialect goqu.DialectWrapper, submodelD
 			ParentID:    0,
 			RootSmeID:   node.rootDBID,
 		}
-		record, recordErr := buildBaseSubmodelElementRecord(params, jsonLib)
+		record, recordErr := buildBaseSubmodelElementRecord(params)
 		if recordErr != nil {
 			return recordErr
 		}
@@ -244,15 +244,16 @@ func updateHierarchyReferencesChunked(tx *sql.Tx, dialect goqu.DialectWrapper, n
 			node := chunk[idx]
 
 			var parentID interface{}
-			if node.parentIndex >= 0 {
+			switch {
+			case node.parentIndex >= 0:
 				resolvedParentID := nodes[node.parentIndex].dbID
 				if resolvedParentID == 0 {
 					return common.NewInternalServerError("SMREPO-INSSME-UPDHIER-MISSINGPARENT Parent SME ID missing for path " + node.idShortPath)
 				}
 				parentID = resolvedParentID
-			} else if node.parentDBID > 0 {
+			case node.parentDBID > 0:
 				parentID = node.parentDBID
-			} else {
+			default:
 				parentID = nil
 			}
 
@@ -682,7 +683,7 @@ type baseRecordParams struct {
 }
 
 // buildBaseSubmodelElementRecord builds the base submodel_element record using pre-computed reference IDs.
-func buildBaseSubmodelElementRecord(params baseRecordParams, jsonLib jsoniter.API) (goqu.Record, error) {
+func buildBaseSubmodelElementRecord(params baseRecordParams) (goqu.Record, error) {
 	// Build parent_sme_id (NULL for top-level elements)
 	var parentDBId sql.NullInt64
 	if params.ParentID == 0 {

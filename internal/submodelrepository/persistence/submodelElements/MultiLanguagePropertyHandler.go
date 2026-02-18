@@ -98,6 +98,7 @@ func (p PostgreSQLMultiLanguagePropertyHandler) Update(submodelID string, idShor
 	if err != nil {
 		return err
 	}
+	effectivePath := resolveUpdatedPath(idShortOrPath, submodelElement, isPut)
 
 	dialect := goqu.Dialect("postgres")
 
@@ -106,7 +107,7 @@ func (p PostgreSQLMultiLanguagePropertyHandler) Update(submodelID string, idShor
 		_, _ = fmt.Println(err)
 		return common.NewInternalServerError("Failed to execute PostgreSQL Query - no changes applied - see console for details.")
 	}
-	elementID, err := p.decorated.GetDatabaseID(smDbID, idShortOrPath)
+	elementID, err := p.decorated.GetDatabaseIDWithTx(localTx, smDbID, effectivePath)
 	if err != nil {
 		return err
 	}

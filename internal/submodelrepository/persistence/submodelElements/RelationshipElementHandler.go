@@ -110,12 +110,13 @@ func (p PostgreSQLRelationshipElementHandler) Update(submodelID string, idShortO
 	if err != nil {
 		return err
 	}
+	effectivePath := resolveUpdatedPath(idShortOrPath, submodelElement, isPut)
 	smDbID, err := persistenceutils.GetSubmodelDatabaseID(localTx, submodelID)
 	if err != nil {
 		_, _ = fmt.Println(err)
 		return common.NewInternalServerError("Failed to execute PostgreSQL Query - no changes applied - see console for details.")
 	}
-	elementID, err := p.decorated.GetDatabaseID(smDbID, idShortOrPath)
+	elementID, err := p.decorated.GetDatabaseIDWithTx(localTx, smDbID, effectivePath)
 	if err != nil {
 		return err
 	}
@@ -302,67 +303,6 @@ func (p PostgreSQLRelationshipElementHandler) GetInsertQueryPart(_ *sql.Tx, id i
 			"second": secondRef,
 		},
 	}, nil
-}
-
-// insertReference creates a complete reference record with its keys in the database.
-//
-// This utility function persists a reference structure to the database, including the
-// reference type and all associated keys with their positions, types, and values. The
-// function ensures proper ordering of keys through position tracking.
-//
-// The function performs:
-//   - Insertion of the reference record with its type
-//   - Iteration through all keys in the reference
-//   - Insertion of each key with its position (index), type, and value
-//   - Proper ordering preservation via position field
-//
-// Parameters:
-//   - tx: Active transaction context for atomic operations
-//   - ref: The Reference object containing type and keys to persist
-//
-// Returns:
-//   - int: Database ID of the newly created reference
-//   - error: An error if reference or key insertion fails
-//
-// Note: This function is used for both first and second references in relationship elements,
-// as well as any other reference structures that need full persistence with keys.
-func insertReference(tx *sql.Tx, ref types.IReference) (int, error) {
-	dialect := goqu.Dialect("postgres")
-
-	// Insert reference and get ID
-	insertQuery, insertArgs, err := dialect.Insert("reference").
-		Rows(goqu.Record{"type": ref.Type()}).
-		Returning("id").
-		ToSQL()
-	if err != nil {
-		return 0, err
-	}
-
-	var refID int
-	err = tx.QueryRow(insertQuery, insertArgs...).Scan(&refID)
-	if err != nil {
-		return 0, err
-	}
-
-	// Insert keys
-	for i, key := range ref.Keys() {
-		insertKeyQuery, insertKeyArgs, err := dialect.Insert("reference_key").
-			Rows(goqu.Record{
-				"reference_id": refID,
-				"position":     i,
-				"type":         key.Type(),
-				"value":        key.Value(),
-			}).
-			ToSQL()
-		if err != nil {
-			return 0, err
-		}
-		_, err = tx.Exec(insertKeyQuery, insertKeyArgs...)
-		if err != nil {
-			return 0, err
-		}
-	}
-	return refID, nil
 }
 
 func buildUpdateRelationshipElementRecordObject(isPut bool, relElem types.IRelationshipElement, json jsoniter.API) (goqu.Record, error) {
