@@ -308,7 +308,7 @@ var fieldIdentifierProcessingCases = []fidTestCase{
 		Name:       "sme_valueType_scalar",
 		Kind:       "scalar",
 		Input:      `$sme.MyList[2].temp#valueType`,
-		WantScalar: &expectedScalar{Column: "property_element.value_type", Bindings: []expectedBinding{{Alias: "submodel_element.idshort_path", Index: sidx("MyList[2].temp")}}},
+		WantScalar: &expectedScalar{Column: "(CASE WHEN property_element.value_bool IS NOT NULL THEN 'xs:boolean' WHEN property_element.value_time IS NOT NULL THEN 'xs:time' WHEN property_element.value_datetime IS NOT NULL THEN 'xs:dateTime' WHEN property_element.value_num IS NOT NULL THEN 'xs:double' ELSE 'xs:string' END)", Bindings: []expectedBinding{{Alias: "submodel_element.idshort_path", Index: sidx("MyList[2].temp")}}},
 	},
 	{
 		Name:       "sme_semanticId_keys_type_indexed_scalar",

@@ -30,7 +30,7 @@ func SubmodelToValueOnly(s types.ISubmodel) (SubmodelValue, error) {
 
 		valueOnly, err := SubmodelElementToValueOnly(element)
 		if err != nil {
-			return nil, fmt.Errorf("failed to convert element '%s': %w", idShort, err)
+			return nil, fmt.Errorf("failed to convert element '%s': %w", *idShort, err)
 		}
 
 		if valueOnly != nil {
@@ -260,7 +260,7 @@ func EntityToValueOnly(e *types.Entity) (EntityValue, error) {
 
 			valueOnly, err := SubmodelElementToValueOnly(statement)
 			if err != nil {
-				return result, fmt.Errorf("failed to convert statement '%s': %w", idShort, err)
+				return result, fmt.Errorf("failed to convert statement '%s': %w", *idShort, err)
 			}
 
 			if valueOnly != nil {
@@ -299,7 +299,7 @@ func SubmodelElementCollectionToValueOnly(sec *types.SubmodelElementCollection) 
 
 		valueOnly, err := SubmodelElementToValueOnly(element)
 		if err != nil {
-			return nil, fmt.Errorf("failed to convert element '%s': %w", idShort, err)
+			return nil, fmt.Errorf("failed to convert element '%s': %w", *idShort, err)
 		}
 
 		if valueOnly != nil {
