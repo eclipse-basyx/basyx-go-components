@@ -30,7 +30,11 @@ func SubmodelToValueOnly(s types.ISubmodel) (SubmodelValue, error) {
 
 		valueOnly, err := SubmodelElementToValueOnly(element)
 		if err != nil {
-			return nil, fmt.Errorf("failed to convert element '%s': %w", *idShort, err)
+			elementID := "<unknown element>"
+			if idShort != nil {
+				elementID = *idShort
+			}
+			return nil, fmt.Errorf("failed to convert element '%s': %w", elementID, err)
 		}
 
 		if valueOnly != nil {
