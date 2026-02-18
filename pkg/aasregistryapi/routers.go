@@ -12,9 +12,9 @@
 package apis
 
 import (
-    "net/http"
+	"net/http"
 
-    "github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5"
 )
 
 // A Route defines the parameters for an api endpoint
@@ -36,14 +36,14 @@ type Router interface {
 
 // NewRouter creates a new router for any number of api routers
 func NewRouter(routers ...Router) chi.Router {
-    router := chi.NewRouter()
-    for _, api := range routers {
-        for _, route := range api.OrderedRoutes() {
-            var handler http.Handler = route.HandlerFunc
-            handler = Logger(handler, route.Name)
-            router.Method(route.Method, route.Pattern, handler)
-        }
-    }
+	router := chi.NewRouter()
+	for _, api := range routers {
+		for _, route := range api.OrderedRoutes() {
+			var handler http.Handler = route.HandlerFunc
+			handler = Logger(handler, route.Name)
+			router.Method(route.Method, route.Pattern, handler)
+		}
+	}
 
-    return router
+	return router
 }
