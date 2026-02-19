@@ -1,0 +1,6 @@
+{
+    "idShort": "ExampleProperty",
+    "modelType": "Property",
+    "valueType": "xs:string",
+    "value": "exampleValuePatched"
+}

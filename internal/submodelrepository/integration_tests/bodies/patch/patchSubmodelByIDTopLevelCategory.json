@@ -1,0 +1,7 @@
+{
+    "id": "http://iese.fraunhofer.de/id/sm/DemoSubmodel",
+    "idShort": "DemoSubmodel",
+    "modelType": "Submodel",
+    "kind": "Instance",
+    "category": "DemoCategoryPatchedHttpSemantics"
+}
