@@ -727,7 +727,14 @@ func (s *SubmodelRepositoryAPIAPIService) PatchSubmodelByID(ctx context.Context,
 		return newAPIErrorResponse(errors.New("submodel ID in path and body do not match"), http.StatusBadRequest, operation, "IdMismatch"), nil
 	}
 
-	existingSubmodel, getErr := s.submodelBackend.GetSubmodelByID(decodedIdentifier)
+	patchJSON, patchJSONErr := jsonization.ToJsonable(submodel)
+	if patchJSONErr != nil {
+		return newAPIErrorResponse(patchJSONErr, http.StatusBadRequest, operation, "InvalidSubmodelData"), nil
+	}
+
+	_, patchIncludesSubmodelElements := patchJSON["submodelElements"]
+
+	existingSubmodels, _, getErr := s.submodelBackend.GetSubmodels(1, "", decodedIdentifier)
 	if getErr != nil {
 		if common.IsErrNotFound(getErr) || errors.Is(getErr, sql.ErrNoRows) {
 			return newAPIErrorResponse(getErr, http.StatusNotFound, operation, "SubmodelNotFound"), nil
@@ -736,14 +743,19 @@ func (s *SubmodelRepositoryAPIAPIService) PatchSubmodelByID(ctx context.Context,
 		return newAPIErrorResponse(getErr, http.StatusInternalServerError, operation, "GetSubmodelByID"), getErr
 	}
 
+	if len(existingSubmodels) == 0 {
+		return newAPIErrorResponse(common.NewErrNotFound(decodedIdentifier), http.StatusNotFound, operation, "SubmodelNotFound"), nil
+	}
+
+	existingSubmodel := existingSubmodels[0]
+	if existingSubmodel == nil {
+		nilErr := common.NewInternalServerError("SMREPO-PATCHSM-EXISTINGNIL Existing submodel is nil")
+		return newAPIErrorResponse(nilErr, http.StatusInternalServerError, operation, "GetSubmodelByID"), nilErr
+	}
+
 	existingJSON, existingJSONErr := jsonization.ToJsonable(existingSubmodel)
 	if existingJSONErr != nil {
 		return newAPIErrorResponse(existingJSONErr, http.StatusInternalServerError, operation, "ToJsonableCurrentSubmodel"), existingJSONErr
-	}
-
-	patchJSON, patchJSONErr := jsonization.ToJsonable(submodel)
-	if patchJSONErr != nil {
-		return newAPIErrorResponse(patchJSONErr, http.StatusBadRequest, operation, "InvalidSubmodelData"), nil
 	}
 
 	patchJSON["id"] = decodedIdentifier
@@ -755,7 +767,12 @@ func (s *SubmodelRepositoryAPIAPIService) PatchSubmodelByID(ctx context.Context,
 		return newAPIErrorResponse(mergedErr, http.StatusBadRequest, operation, "InvalidPatchedSubmodel"), nil
 	}
 
-	err := s.submodelBackend.PatchSubmodel(decodedIdentifier, mergedSubmodel)
+	err := error(nil)
+	if patchIncludesSubmodelElements {
+		err = s.submodelBackend.PatchSubmodel(decodedIdentifier, mergedSubmodel)
+	} else {
+		err = s.submodelBackend.PatchSubmodelMetadata(decodedIdentifier, mergedSubmodel)
+	}
 	if err != nil {
 		if common.IsErrBadRequest(err) {
 			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil

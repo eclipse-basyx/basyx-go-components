@@ -820,6 +820,34 @@ func (s *SubmodelDatabase) PatchSubmodel(submodelID string, submodel types.ISubm
 	return nil
 }
 
+// PatchSubmodelMetadata updates a submodel without rewriting submodel elements.
+func (s *SubmodelDatabase) PatchSubmodelMetadata(submodelID string, submodel types.ISubmodel) error {
+	if submodelID != submodel.ID() {
+		return common.NewErrBadRequest("SMREPO-PATCHSMMETA-IDMISMATCH Submodel ID in path and body do not match")
+	}
+
+	if err := s.verifySubmodel(submodel, "SMREPO-PATCHSMMETA-VERIFY"); err != nil {
+		return err
+	}
+
+	tx, cleanup, err := common.StartTransaction(s.db)
+	if err != nil {
+		return common.NewInternalServerError("SMREPO-PATCHSMMETA-STARTTX " + err.Error())
+	}
+	defer cleanup(&err)
+
+	if err = s.patchSubmodelMetadataInTransaction(tx, submodelID, submodel); err != nil {
+		return err
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		return common.NewInternalServerError("SMREPO-PATCHSMMETA-COMMIT " + err.Error())
+	}
+
+	return nil
+}
+
 // PutSubmodel creates or replaces a submodel in the database with the provided submodel data.
 func (s *SubmodelDatabase) PutSubmodel(submodelID string, submodel types.ISubmodel) (bool, error) {
 	if submodelID != submodel.ID() {
@@ -986,6 +1014,122 @@ func deleteSubmodelByDatabaseID(tx *sql.Tx, submodelDatabaseID int64) error {
 	}
 	if rowsAffected == 0 {
 		return common.NewErrNotFound("SMREPO-DELSM-NOTFOUND Submodel not found")
+	}
+
+	return nil
+}
+
+func (s *SubmodelDatabase) patchSubmodelMetadataInTransaction(tx *sql.Tx, submodelID string, submodel types.ISubmodel) error {
+	submodelDatabaseID, err := persistenceutils.GetSubmodelDatabaseID(tx, submodelID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return common.NewErrNotFound("SMREPO-PATCHSMMETA-NOTFOUND Submodel with ID '" + submodelID + "' not found")
+		}
+
+		return common.NewInternalServerError("SMREPO-PATCHSMMETA-GETSMDATABASEID " + err.Error())
+	}
+
+	dialect := goqu.Dialect("postgres")
+
+	updateSubmodelQuery, updateSubmodelArgs, err := dialect.
+		Update("submodel").
+		Set(goqu.Record{
+			"id_short": submodel.IDShort(),
+			"category": submodel.Category(),
+			"kind":     submodel.Kind(),
+		}).
+		Where(goqu.I("id").Eq(submodelDatabaseID)).
+		ToSQL()
+	if err != nil {
+		return common.NewInternalServerError("SMREPO-PATCHSMMETA-BUILDUPDATESM " + err.Error())
+	}
+
+	if _, err = tx.Exec(updateSubmodelQuery, updateSubmodelArgs...); err != nil {
+		return common.NewInternalServerError("SMREPO-PATCHSMMETA-UPDATESM " + err.Error())
+	}
+
+	jsonizedPayload, err := jsonizeSubmodelPayload(submodel)
+	if err != nil {
+		return common.NewInternalServerError("SMREPO-PATCHSMMETA-JSON " + err.Error())
+	}
+
+	upsertPayloadQuery, upsertPayloadArgs, err := dialect.
+		Insert("submodel_payload").
+		Rows(goqu.Record{
+			"submodel_id":                         submodelDatabaseID,
+			"description_payload":                 jsonizedPayload.description,
+			"displayname_payload":                 jsonizedPayload.displayName,
+			"administrative_information_payload":  jsonizedPayload.administrativeInformation,
+			"embedded_data_specification_payload": jsonizedPayload.embeddedDataSpecification,
+			"supplemental_semantic_ids_payload":   jsonizedPayload.supplementalSemanticIDs,
+			"extensions_payload":                  jsonizedPayload.extensions,
+			"qualifiers_payload":                  jsonizedPayload.qualifiers,
+		}).
+		OnConflict(goqu.DoUpdate(
+			"submodel_id",
+			goqu.Record{
+				"description_payload":                 jsonizedPayload.description,
+				"displayname_payload":                 jsonizedPayload.displayName,
+				"administrative_information_payload":  jsonizedPayload.administrativeInformation,
+				"embedded_data_specification_payload": jsonizedPayload.embeddedDataSpecification,
+				"supplemental_semantic_ids_payload":   jsonizedPayload.supplementalSemanticIDs,
+				"extensions_payload":                  jsonizedPayload.extensions,
+				"qualifiers_payload":                  jsonizedPayload.qualifiers,
+			},
+		)).
+		ToSQL()
+	if err != nil {
+		return common.NewInternalServerError("SMREPO-PATCHSMMETA-BUILDUPSERTPAYLOAD " + err.Error())
+	}
+
+	if _, err = tx.Exec(upsertPayloadQuery, upsertPayloadArgs...); err != nil {
+		return common.NewInternalServerError("SMREPO-PATCHSMMETA-UPSERTPAYLOAD " + err.Error())
+	}
+
+	deleteSemanticIDQuery, deleteSemanticIDArgs, err := dialect.
+		Delete("submodel_semantic_id_reference").
+		Where(goqu.I("id").Eq(submodelDatabaseID)).
+		ToSQL()
+	if err != nil {
+		return common.NewInternalServerError("SMREPO-PATCHSMMETA-BUILDDELSEMID " + err.Error())
+	}
+
+	if _, err = tx.Exec(deleteSemanticIDQuery, deleteSemanticIDArgs...); err != nil {
+		return common.NewInternalServerError("SMREPO-PATCHSMMETA-DELSEMID " + err.Error())
+	}
+
+	semanticID := submodel.SemanticID()
+	if semanticID == nil {
+		return nil
+	}
+
+	insertSemanticIDQuery, insertSemanticIDArgs, err := buildSubmodelSemanticIDReferenceQuery(&dialect, int64(submodelDatabaseID), semanticID)
+	if err != nil {
+		return common.NewInternalServerError("SMREPO-PATCHSMMETA-BUILDSEMIDREF " + err.Error())
+	}
+
+	if _, err = tx.Exec(insertSemanticIDQuery, insertSemanticIDArgs...); err != nil {
+		return common.NewInternalServerError("SMREPO-PATCHSMMETA-INSERTSEMIDREF " + err.Error())
+	}
+
+	insertSemanticKeysQuery, insertSemanticKeysArgs, err := buildSubmodelSemanticIDReferenceKeysQuery(&dialect, int64(submodelDatabaseID), semanticID)
+	if err != nil {
+		return common.NewInternalServerError("SMREPO-PATCHSMMETA-BUILDSEMIDKEYS " + err.Error())
+	}
+
+	if insertSemanticKeysQuery != "" {
+		if _, err = tx.Exec(insertSemanticKeysQuery, insertSemanticKeysArgs...); err != nil {
+			return common.NewInternalServerError("SMREPO-PATCHSMMETA-INSERTSEMIDKEYS " + err.Error())
+		}
+	}
+
+	insertSemanticPayloadQuery, insertSemanticPayloadArgs, err := buildSubmodelSemanticIDReferencePayloadQuery(&dialect, int64(submodelDatabaseID), semanticID)
+	if err != nil {
+		return common.NewInternalServerError("SMREPO-PATCHSMMETA-BUILDSEMIDPAYLOAD " + err.Error())
+	}
+
+	if _, err = tx.Exec(insertSemanticPayloadQuery, insertSemanticPayloadArgs...); err != nil {
+		return common.NewInternalServerError("SMREPO-PATCHSMMETA-INSERTSEMIDPAYLOAD " + err.Error())
 	}
 
 	return nil
