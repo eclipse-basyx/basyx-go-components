@@ -55,7 +55,7 @@ The script fails fast (`set -euo pipefail`) and returns explicit error codes in 
 
 `ERROR [GENREF-<STEP>] <message>`
 
-This improves CI diagnosability for invalid context entries or missing configuration fields.
+This improves diagnosability for invalid context entries or missing configuration fields.
 
 ### Notes
 - The script is deterministic for the configured context list order.
