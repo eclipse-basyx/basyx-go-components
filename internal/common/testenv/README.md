@@ -24,6 +24,20 @@ func TestIntegration(t *testing.T) {
 }
 ```
 
+## Execution Order
+
+When a package defines both `TestMain` and tests like `TestIntegration`:
+
+1. `TestMain` is called first.
+2. Tests run only when `m.Run()` is called inside `TestMain`.
+3. After `m.Run()` returns, `TestMain` continues with teardown and returns the exit code.
+
+With `RunComposeTestMain(...)`, this means:
+
+1. Compose setup and health checks run first.
+2. `m.Run()` executes `TestIntegration` and other tests.
+3. Compose teardown runs after tests finish.
+
 ## `RunComposeTestMain`
 
 Runs compose `up`, optional readiness checks, tests, then compose `down`.
