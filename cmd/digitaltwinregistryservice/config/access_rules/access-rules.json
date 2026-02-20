@@ -7,125 +7,33 @@
     ],
 
     "DEFOBJECTS": [
-      { "name": "description", "objects": [ { "ROUTE": "/description" }, { "ROUTE": "/api/v3/description" } ] },
-      { "name": "assetlinks", "objects": [ { "ROUTE": "/lookup/shells" }, { "ROUTE": "/lookup/shellsByAssetLink" } ] },
-      { "name": "shells", "objects": [ { "ROUTE": "/lookup/shells/*" } ] },
-      { "name": "all_shell_descriptors", "objects": [ { "DESCRIPTOR": "$aasdesc(\"*\")" } ] }
+      { "name": "description", "objects": [ { "ROUTE": "/description" } ] },
+      { "name": "all_shell_descriptors", "objects": [ {"DESCRIPTOR": "$aasdesc(\"*\")"}] },
+      { "name": "submodel_descriptors", "objects": [ {"ROUTE": "/shell-descriptors/*/submodel-descriptors"}, {"ROUTE": "/shell-descriptors/*/submodel-descriptors/*"}] }
     ],
 
     "DEFACLS": [
       { "name": "read_anonymous", "acl": { "USEATTRIBUTES": "anonym_attr", "RIGHTS": ["READ"], "ACCESS": "ALLOW" } },
-      { "name": "write_anonymous", "acl": { "USEATTRIBUTES": "anonym_attr", "RIGHTS": ["CREATE"], "ACCESS": "ALLOW" } }
+      { "name": "all_admin", "acl": { "USEATTRIBUTES": "role_attr", "RIGHTS": ["CREATE"], "ACCESS": "ALLOW" } },
+      { "name": "user", "acl": { "USEATTRIBUTES": "role_attr", "RIGHTS": ["READ"], "ACCESS": "ALLOW" } }
     ],
 
     "DEFFORMULAS": [
       { "name": "always_true", "formula": { "$boolean": true } },
-      { "name": "always_false", "formula": { "$boolean": false } },
-      { "name": "enforce_publicreadable_write_rule", "formula":
-        {
-          "$or": 
-          [
-            {
-              "$match": 
-              [
-                {
-                  "$eq": [
-                    { "$field": "$aasdesc#specificAssetIds[].name" },
-                    { "$strVal": "assetLifecyclePhase" }
-                  ]
-                },
-                {
-                  "$eq": [
-                    { "$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value" },
-                    { "$strVal": "PUBLIC_READABLE" }
-                  ]
-                }
-              ]
-            },
-            {
-              "$match": 
-              [
-                {
-                  "$eq": [
-                    { "$field": "$aasdesc#specificAssetIds[].name" },
-                    { "$strVal": "manufacturerPartId" }
-                  ]
-                },
-                {
-                  "$eq": [
-                    { "$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value" },
-                    { "$strVal": "PUBLIC_READABLE" }
-                  ]
-                }
-              ]
-            },
-            {
-              "$ne": [
-                { "$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value" },
-                { "$strVal": "PUBLIC_READABLE" }
-              ]
-            }
-          ]
-        }
-      },
-      { "name": "logic", "formula":
-       { "$or": [
-          { "$eq": [ { "$attribute": { "CLAIM": "Edc-Bpn" } }, { "$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value" } ] },
-          { "$eq": [ { "$strVal": "PUBLIC_READABLE" }, { "$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value" } ] } 
-        ]
-       }
-      },
-      { "name": "bpn_match", 
-        "formula":
-          { "$eq": [ { "$attribute": { "CLAIM": "Edc-Bpn" } }, { "$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value" } ] }
-      }
+      { "name": "role_is_admin", "formula": { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "admin" } ] } }
     ],
 
     "rules": [
-      { "USEACL": "read_anonymous", "USEOBJECTS": ["all_shell_descriptors"], "USEFORMULA": "logic", 
-        "FILTERLIST": 
-        [
-          {
-            "FRAGMENT": "$aasdesc#administration",
-            "USEFORMULA": "bpn_match"
-          },
-          {
-            "FRAGMENT": "$aasdesc#displayName",
-            "USEFORMULA": "bpn_match"
-          },
-          {
-            "FRAGMENT": "$aasdesc#description",
-            "USEFORMULA": "bpn_match"
-          },
-          {
-            "FRAGMENT": "$aasdesc#assetKind",
-            "USEFORMULA": "bpn_match"
-          },
-          {
-            "FRAGMENT": "$aasdesc#assetType",
-            "USEFORMULA": "bpn_match"
-          },
-          {
-            "FRAGMENT": "$aasdesc#globalAssetId",
-            "USEFORMULA": "bpn_match"
-          },
-          {
-            "FRAGMENT": "$aasdesc#idShort",
-            "USEFORMULA": "bpn_match"
+      { "USEACL": "read_anonymous", "USEOBJECTS": ["all_shell_descriptors"], "USEFORMULA": "always_true",
+        "FILTER": 
+        { 
+          "FRAGMENT": "$aasdesc#specificAssetIds[].externalSubjectId.keys[]",
+          "CONDITION": { 
+            "$eq": [ {"$field": "$aasdesc#specificAssetIds[].externalSubjectId.keys[].value"}, {"$strVal": "v1"} ]
           }
-        ] 
+        }
       },
-      { "USEACL": "read_anonymous", "USEOBJECTS": ["shells"], "USEFORMULA": "logic", 
-        "FILTERLIST": 
-        [
-          {
-            "FRAGMENT": "$aasdesc#specificAssetIds[].externalSubjectId",
-            "USEFORMULA": "always_false"
-          }
-        ] 
-      },
-      { "USEACL": "read_anonymous", "USEOBJECTS": ["assetlinks"], "USEFORMULA": "logic"},
-      { "USEACL": "write_anonymous", "USEOBJECTS": ["all_shell_descriptors", "assetlinks", "shells"], "USEFORMULA": "always_true" }
+      { "USEACL": "all_admin", "USEOBJECTS": ["all_shell_descriptors"], "USEFORMULA": "role_is_admin" }
     ]
   }
 }

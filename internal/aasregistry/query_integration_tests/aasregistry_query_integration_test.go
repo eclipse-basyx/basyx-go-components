@@ -22,9 +22,10 @@
 *
 * SPDX-License-Identifier: MIT
 ******************************************************************************/
+// Author: Martin Stemmer ( Fraunhofer IESE )
 
 //nolint:all
-package bench
+package main
 
 import (
 	"net/http"
@@ -33,51 +34,22 @@ import (
 	"time"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/testenv"
-	"github.com/stretchr/testify/require"
 )
-
-const composeFilePath = "./docker_compose/docker_compose.yml"
-const discoveryBaseURL = "http://127.0.0.1:5004"
-const actionShellsByAssetLinkMissingBody = "CHECK_SHELLSBYASSETLINK_MISSING_BODY"
-const actionLookupShellsNilBody = "CHECK_LOOKUPSHELLS_NIL_BODY"
-
-func TestMain(m *testing.M) {
-	os.Exit(testenv.RunComposeTestMain(m, testenv.ComposeTestMainOptions{
-		ComposeFile:   composeFilePath,
-		HealthURL:     discoveryBaseURL + "/health",
-		HealthTimeout: 2 * time.Minute,
-	}))
-}
 
 func TestIntegration(t *testing.T) {
 	testenv.RunJSONSuite(t, testenv.JSONSuiteOptions{
-		ConfigPath: "it_config.json",
-		ShouldCompareResponse: testenv.CompareMethods(
-			http.MethodGet,
-			http.MethodPost,
+		DefaultExpectedStatus: http.StatusOK,
+		TokenProvider: testenv.NewPasswordGrantTokenProvider(
+			"http://localhost:8081/realms/basyx/protocol/openid-connect/token",
+			"basyx-ui",
+			10*time.Second,
 		),
-		ActionHandlers: map[string]testenv.JSONStepAction{
-			actionShellsByAssetLinkMissingBody: checkPostNilBodyExpectedStatus,
-			actionLookupShellsNilBody:          checkPostNilBodyExpectedStatus,
-		},
 	})
 }
 
-func checkPostNilBodyExpectedStatus(t *testing.T, _ *testenv.JSONSuiteRunner, step testenv.JSONSuiteStep, _ int) {
-	t.Helper()
-
-	expectedStatus := step.ExpectedStatus
-	if expectedStatus == 0 {
-		expectedStatus = http.StatusBadRequest
-	}
-
-	req, err := http.NewRequest(http.MethodPost, step.Endpoint, nil)
-	require.NoError(t, err)
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := testenv.HTTPClient().Do(req)
-	require.NoError(t, err)
-	defer func() { _ = resp.Body.Close() }()
-
-	require.Equal(t, expectedStatus, resp.StatusCode)
+func TestMain(m *testing.M) {
+	os.Exit(testenv.RunComposeTestMain(m, testenv.ComposeTestMainOptions{
+		ComposeFile: "docker_compose/docker_compose.yml",
+		HealthURL:   "http://localhost:6005/health",
+	}))
 }

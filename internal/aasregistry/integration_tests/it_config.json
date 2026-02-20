@@ -463,5 +463,9 @@
     "endpoint": "http://127.0.0.1:6004/shell-descriptors",
     "shouldMatch": "expected/empty_paged_result.json",
     "expectedStatus": 200
+  },
+  {
+    "context": "068 - Verify database is empty - ACTION CHECK_DB_IS_EMPTY",
+    "action": "CHECK_DB_IS_EMPTY"
   }
 ]

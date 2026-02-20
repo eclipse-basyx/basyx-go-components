@@ -1,0 +1,8 @@
+{
+  "assetLinks": [
+    {"name": 123, "value": true},
+    {"name": "ok"},
+    {"value": "ok"}
+  ],
+  "limit": 5
+}

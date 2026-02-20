@@ -34,6 +34,8 @@ import (
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/builder"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
+	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	"github.com/lib/pq"
 )
 
@@ -53,10 +55,25 @@ func ReadSubmodelDescriptorSemanticReferencesByDescriptorIDs(
 		ctx,
 		db,
 		descriptorIDs,
-		"submodel_descriptor",
-		"descriptor_id",
-		"submodel_descriptor_semantic_id_reference",
-		"submodel_descriptor_semantic_id_reference_key",
+		referenceQuerySpec{
+			ownerTable:        "submodel_descriptor",
+			ownerIDColumn:     "descriptor_id",
+			referenceTable:    "submodel_descriptor_semantic_id_reference",
+			referenceKeyTable: "submodel_descriptor_semantic_id_reference_key",
+			ownerAlias:        aliasSubmodelDescriptor,
+			referenceAlias:    aliasSubmodelDescriptorSemanticIDReference,
+			referenceKeyAlias: aliasSubmodelDescriptorSemanticIDReferenceKey,
+			filterSpecs: []referenceFilterSpec{
+				{
+					fragment:  "$aasdesc#submodelDescriptors[].semanticId.keys[]",
+					collector: nil,
+				},
+				{
+					fragment:  "$smdesc#semanticId.keys[]",
+					collector: nil,
+				},
+			},
+		},
 	)
 	if err != nil {
 		return nil, err
@@ -90,10 +107,25 @@ func ReadSpecificAssetExternalSubjectReferencesBySpecificAssetIDs(
 		ctx,
 		db,
 		specificAssetIDs,
-		"specific_asset_id",
-		"id",
-		"specific_asset_id_external_subject_id_reference",
-		"specific_asset_id_external_subject_id_reference_key",
+		referenceQuerySpec{
+			ownerTable:        "specific_asset_id",
+			ownerIDColumn:     "id",
+			referenceTable:    "specific_asset_id_external_subject_id_reference",
+			referenceKeyTable: "specific_asset_id_external_subject_id_reference_key",
+			ownerAlias:        aliasSpecificAssetID,
+			referenceAlias:    aliasExternalSubjectReference,
+			referenceKeyAlias: aliasExternalSubjectReferenceKey,
+			filterSpecs: []referenceFilterSpec{
+				{
+					fragment:  "$aasdesc#specificAssetIds[].externalSubjectId.keys[]",
+					collector: nil,
+				},
+				{
+					fragment:  "$bd#specificAssetIds[].externalSubjectId.keys[]",
+					collector: nil,
+				},
+			},
+		},
 	)
 	if err != nil {
 		return nil, err
@@ -156,14 +188,27 @@ type contextReferenceRow struct {
 	parentReferencePayload []byte
 }
 
+type referenceFilterSpec struct {
+	fragment  grammar.FragmentStringPattern
+	collector *grammar.ResolvedFieldPathCollector
+}
+
+type referenceQuerySpec struct {
+	ownerTable        string
+	ownerIDColumn     string
+	referenceTable    string
+	referenceKeyTable string
+	ownerAlias        string
+	referenceAlias    string
+	referenceKeyAlias string
+	filterSpecs       []referenceFilterSpec
+}
+
 func queryReferenceRowsByOwnerIDs(
 	ctx context.Context,
 	db DBQueryer,
 	ownerIDs []int64,
-	ownerTable string,
-	ownerIDColumn string,
-	referenceTable string,
-	referenceKeyTable string,
+	spec referenceQuerySpec,
 ) (map[int64]types.IReference, error) {
 	if len(ownerIDs) == 0 {
 		return map[int64]types.IReference{}, nil
@@ -172,29 +217,37 @@ func queryReferenceRowsByOwnerIDs(
 	d := goqu.Dialect(dialect)
 	arr := pq.Array(ownerIDs)
 
-	ot := goqu.T(ownerTable).As("ot")
-	rt := goqu.T(referenceTable).As("rt")
-	rkt := goqu.T(referenceKeyTable).As("rkt")
-	rpt := goqu.T(referenceTable + "_payload").As("rpt")
+	ot := goqu.T(spec.ownerTable).As(spec.ownerAlias)
+	rt := goqu.T(spec.referenceTable).As(spec.referenceAlias)
+	rkt := goqu.T(spec.referenceKeyTable).As(spec.referenceKeyAlias)
+	rpt := goqu.T(spec.referenceTable + "_payload").As("rpt")
 
 	ds := d.From(ot).
-		LeftJoin(rt, goqu.On(rt.Col(colID).Eq(ot.Col(ownerIDColumn)))).
+		LeftJoin(rt, goqu.On(rt.Col(colID).Eq(ot.Col(spec.ownerIDColumn)))).
 		LeftJoin(rpt, goqu.On(rpt.Col(colReferenceID).Eq(rt.Col(colID)))).
 		LeftJoin(rkt, goqu.On(rkt.Col(colReferenceID).Eq(rt.Col(colID)))).
 		Select(
-			ot.Col(ownerIDColumn).As("owner_id"),
+			ot.Col(spec.ownerIDColumn).As("owner_id"),
 			rt.Col(colType).As("ref_type"),
 			rkt.Col(colID).As("key_id"),
 			rkt.Col(colType).As("key_type"),
 			rkt.Col(colValue).As("key_value"),
 			rpt.Col("parent_reference_payload").As("parent_reference_payload"),
 		).
-		Where(goqu.L(fmt.Sprintf("ot.%s = ANY(?::bigint[])", ownerIDColumn), arr)).
+		Where(goqu.L(fmt.Sprintf("%s.%s = ANY(?::bigint[])", spec.ownerAlias, spec.ownerIDColumn), arr)).
 		Order(
-			ot.Col(ownerIDColumn).Asc(),
+			ot.Col(spec.ownerIDColumn).Asc(),
 			rkt.Col(colPosition).Asc(),
 			rkt.Col(colID).Asc(),
 		)
+
+	var err error
+	for _, filterSpec := range spec.filterSpecs {
+		ds, err = auth.AddFilterQueryFromContext(ctx, ds, filterSpec.fragment, filterSpec.collector)
+		if err != nil {
+			return nil, fmt.Errorf("REFREAD-ADDFILTER: %w", err)
+		}
+	}
 
 	sqlStr, args, err := ds.ToSQL()
 	if err != nil {
