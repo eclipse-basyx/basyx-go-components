@@ -1,3 +1,29 @@
+/*******************************************************************************
+* Copyright (C) 2026 the Eclipse BaSyx Authors and Fraunhofer IESE
+*
+* Permission is hereby granted, free of charge, to any person obtaining
+* a copy of this software and associated documentation files (the
+* "Software"), to deal in the Software without restriction, including
+* without limitation the rights to use, copy, modify, merge, publish,
+* distribute, sublicense, and/or sell copies of the Software, and to
+* permit persons to whom the Software is furnished to do so, subject to
+* the following conditions:
+*
+* The above copyright notice and this permission notice shall be
+* included in all copies or substantial portions of the Software.
+*
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+* NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+* LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+* OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+* WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*
+* SPDX-License-Identifier: MIT
+******************************************************************************/
+// Author: Jannik Fried (Fraunhofer IESE)
+
 package persistence
 
 import (
@@ -149,5 +175,59 @@ func TestPutSubmodelUpdatePathReturnsTrue(t *testing.T) {
 	isUpdate, err := sut.PutSubmodel("sm-existing", submodel)
 	require.NoError(t, err)
 	require.True(t, isUpdate)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestPatchSubmodelElementByPathNotFoundReturnsNotFound(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() {
+		_ = db.Close()
+	}()
+
+	sut := &SubmodelDatabase{db: db}
+	patchElement := types.NewCapability()
+
+	mock.ExpectQuery(`SELECT .*FROM .*submodel`).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(100))
+	mock.ExpectQuery(`SELECT .*model_type.*FROM .*submodel_element`).
+		WillReturnError(sql.ErrNoRows)
+
+	err = sut.UpdateSubmodelElement("sm-1", "does.not.exist", patchElement, false)
+	require.Error(t, err)
+	require.True(t, common.IsErrNotFound(err))
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestPatchSubmodelElementByPathSuccess(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() {
+		_ = db.Close()
+	}()
+
+	sut := &SubmodelDatabase{db: db}
+	patchElement := types.NewCapability()
+	patchedIDShort := "renamedButIgnoredForPatch"
+	patchElement.SetIDShort(&patchedIDShort)
+
+	mock.ExpectQuery(`SELECT .*FROM .*submodel`).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(100))
+	mock.ExpectQuery(`SELECT .*model_type.*FROM .*submodel_element`).
+		WillReturnRows(sqlmock.NewRows([]string{"model_type"}).AddRow(types.ModelTypeCapability))
+
+	mock.ExpectBegin()
+	mock.ExpectQuery(`SELECT .*FROM .*submodel`).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(100))
+	mock.ExpectQuery(`SELECT .*id.*,.*id_short.*FROM .*submodel_element`).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "id_short"}).AddRow(200, "oldIdShort"))
+	mock.ExpectExec(`UPDATE .*submodel_element`).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec(`INSERT INTO .*submodel_element_payload`).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
+
+	err = sut.UpdateSubmodelElement("sm-1", "oldIdShort", patchElement, false)
+	require.NoError(t, err)
 	require.NoError(t, mock.ExpectationsWereMet())
 }

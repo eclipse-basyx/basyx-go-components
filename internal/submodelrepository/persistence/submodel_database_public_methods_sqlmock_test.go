@@ -1,3 +1,29 @@
+/*******************************************************************************
+* Copyright (C) 2026 the Eclipse BaSyx Authors and Fraunhofer IESE
+*
+* Permission is hereby granted, free of charge, to any person obtaining
+* a copy of this software and associated documentation files (the
+* "Software"), to deal in the Software without restriction, including
+* without limitation the rights to use, copy, modify, merge, publish,
+* distribute, sublicense, and/or sell copies of the Software, and to
+* permit persons to whom the Software is furnished to do so, subject to
+* the following conditions:
+*
+* The above copyright notice and this permission notice shall be
+* included in all copies or substantial portions of the Software.
+*
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+* NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+* LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+* OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+* WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*
+* SPDX-License-Identifier: MIT
+******************************************************************************/
+// Author: Jannik Fried (Fraunhofer IESE)
+
 package persistence
 
 import (
@@ -10,6 +36,7 @@ import (
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	"github.com/stretchr/testify/require"
 )
 
@@ -259,7 +286,7 @@ func TestUploadFileAttachmentSubmodelLookupFails(t *testing.T) {
 	_, err = tmp.WriteString("payload")
 	require.NoError(t, err)
 	require.NoError(t, tmp.Close())
-
+	//nolint:gosec // test file creation
 	uploadFile, err := os.Open(tmp.Name())
 	require.NoError(t, err)
 	defer func() {
@@ -274,6 +301,7 @@ func TestUploadFileAttachmentSubmodelLookupFails(t *testing.T) {
 
 	err = sut.UploadFileAttachment("sm", "file", uploadFile, "file.txt")
 	require.Error(t, err)
+	//nolint:gosec // test file creation
 	_, statErr := os.Stat(tmp.Name())
 	require.NoError(t, statErr)
 	require.NoError(t, mock.ExpectationsWereMet())
@@ -319,5 +347,96 @@ func TestDeleteFileAttachmentSubmodelLookupFails(t *testing.T) {
 
 	err = sut.DeleteFileAttachment("sm", "file")
 	require.Error(t, err)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestQuerySubmodelsNilQueryWrapperReturnsBadRequest(t *testing.T) {
+	t.Parallel()
+
+	sut := &SubmodelDatabase{}
+
+	items, cursor, err := sut.QuerySubmodels(10, "", nil, false)
+	require.Error(t, err)
+	require.Nil(t, items)
+	require.Empty(t, cursor)
+	require.True(t, common.IsErrBadRequest(err))
+	require.Contains(t, err.Error(), "SMREPO-QUERYSMS-INVALIDQUERY")
+}
+
+func TestQuerySubmodelsMissingConditionReturnsBadRequest(t *testing.T) {
+	t.Parallel()
+
+	sut := &SubmodelDatabase{}
+	queryWrapper := &grammar.QueryWrapper{}
+
+	items, cursor, err := sut.QuerySubmodels(10, "", queryWrapper, false)
+	require.Error(t, err)
+	require.Nil(t, items)
+	require.Empty(t, cursor)
+	require.True(t, common.IsErrBadRequest(err))
+	require.Contains(t, err.Error(), "SMREPO-QUERYSMS-INVALIDQUERY")
+}
+
+func TestIsSiblingIDShortCollisionEmptyIDShortReturnsFalse(t *testing.T) {
+	t.Parallel()
+
+	element := types.NewProperty(types.DataTypeDefXSDString)
+
+	collision := isSiblingIDShortCollision(nil, 1, nil, element)
+	require.False(t, collision)
+}
+
+func TestIsSiblingIDShortCollisionTopLevelReturnsTrue(t *testing.T) {
+	t.Parallel()
+
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() {
+		_ = db.Close()
+	}()
+
+	mock.ExpectBegin()
+	tx, err := db.Begin()
+	require.NoError(t, err)
+
+	idShort := "duplicate"
+	element := types.NewProperty(types.DataTypeDefXSDString)
+	element.SetIDShort(&idShort)
+
+	mock.ExpectQuery(`SELECT COUNT\(\*\) FROM "submodel_element"`).
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(1))
+	mock.ExpectRollback()
+
+	collision := isSiblingIDShortCollision(tx, 42, nil, element)
+	require.True(t, collision)
+	require.NoError(t, tx.Rollback())
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestIsSiblingIDShortCollisionNestedReturnsFalse(t *testing.T) {
+	t.Parallel()
+
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() {
+		_ = db.Close()
+	}()
+
+	mock.ExpectBegin()
+	tx, err := db.Begin()
+	require.NoError(t, err)
+
+	idShort := "nested"
+	element := types.NewProperty(types.DataTypeDefXSDString)
+	element.SetIDShort(&idShort)
+
+	parentID := 99
+	mock.ExpectQuery(`SELECT COUNT\(\*\) FROM "submodel_element"`).
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
+	mock.ExpectRollback()
+
+	collision := isSiblingIDShortCollision(tx, 42, &parentID, element)
+	require.False(t, collision)
+	require.NoError(t, tx.Rollback())
 	require.NoError(t, mock.ExpectationsWereMet())
 }

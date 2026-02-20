@@ -21,6 +21,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
@@ -128,28 +129,24 @@ func EncodeJSONResponse(i interface{}, status *int, w http.ResponseWriter) error
 				return nil
 			}
 		case FileDownload:
-			wHeader.Set("Content-Type", r.ContentType)
-			if r.Filename != "" {
-				wHeader.Set("Content-Disposition", "attachment; filename="+r.Filename)
-			}
+			model.SetSafeDownloadHeaders(wHeader, r.Filename, r.ContentType)
 			if status != nil {
 				w.WriteHeader(*status)
 			} else {
 				w.WriteHeader(http.StatusOK)
 			}
+			// #nosec G705 -- writing binary attachment payload with Content-Disposition attachment and nosniff header
 			_, err := w.Write(r.Content)
 			return err
 		case *FileDownload:
 			if r != nil {
-				wHeader.Set("Content-Type", r.ContentType)
-				if r.Filename != "" {
-					wHeader.Set("Content-Disposition", "attachment; filename="+r.Filename)
-				}
+				model.SetSafeDownloadHeaders(wHeader, r.Filename, r.ContentType)
 				if status != nil {
 					w.WriteHeader(*status)
 				} else {
 					w.WriteHeader(http.StatusOK)
 				}
+				// #nosec G705 -- writing binary attachment payload with Content-Disposition attachment and nosniff header
 				_, err := w.Write(r.Content)
 				return err
 			}
@@ -162,13 +159,13 @@ func EncodeJSONResponse(i interface{}, status *int, w http.ResponseWriter) error
 		if err != nil {
 			return err
 		}
-		wHeader.Set("Content-Type", http.DetectContentType(data))
-		wHeader.Set("Content-Disposition", "attachment; filename="+f.Name())
+		model.SetSafeDownloadHeaders(wHeader, f.Name(), "application/octet-stream")
 		if status != nil {
 			w.WriteHeader(*status)
 		} else {
 			w.WriteHeader(http.StatusOK)
 		}
+		// #nosec G705 -- writing binary attachment payload with Content-Disposition attachment and nosniff header
 		_, err = w.Write(data)
 		return err
 	}

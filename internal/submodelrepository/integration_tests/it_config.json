@@ -435,6 +435,34 @@
         "expectedStatus": 200
     },
     {
+        "context": "PATCH SubmodelElement - Existing Property Partial Update",
+        "method": "PATCH",
+        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/ExampleSubmodelElementCollection.ExampleSubmodelElementListOrdered[0]",
+        "data": "bodies/patch/patchSubmodelElementPropertyPartial.json",
+        "expectedStatus": 204
+    },
+    {
+        "context": "PATCH SubmodelElement - Verify Property Partial Update",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/ExampleSubmodelElementCollection.ExampleSubmodelElementListOrdered[0]",
+        "shouldMatch": "expected/expectedSubmodelElementPropertyAfterPatch.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "PATCH SubmodelElement - Non Existing Element",
+        "method": "PATCH",
+        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/ThisElementDoesNotExist",
+        "data": "bodies/patch/patchSubmodelElementPropertyPartial.json",
+        "expectedStatus": 404
+    },
+    {
+        "context": "PATCH SubmodelElement - Malformed SubmodelIdentifier",
+        "method": "PATCH",
+        "endpoint": "http://localhost:6004/submodels/not-base64/submodel-elements/ExampleSubmodelElementCollection.ExampleSubmodelElementListOrdered[0]",
+        "data": "bodies/patch/patchSubmodelElementPropertyPartial.json",
+        "expectedStatus": 400
+    },
+    {
         "context": "PATCH Property ValueOnly - Update ProductModelName",
         "method": "PATCH",
         "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQUhlYXZ5U3VibW9kZWw/submodel-elements/ProductModelName/$value",
@@ -601,6 +629,41 @@
         "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/$value",
         "data": "bodies/patch/patchSubmodelValueOnlyNonExistingSME.json",
         "expectedStatus": 404
+    },
+    {
+        "context": "PATCH Submodel - Non Existing Submodel",
+        "method": "PATCH",
+        "endpoint": "http://localhost:6004/submodels/SmFubmlrU2F5c1RoaXNTdWJtb2RlbERvZXNudEV4aXN0c1NvTnVoVWhoaA",
+        "data": "bodies/patch/patchSubmodelByIDNotFound.json",
+        "expectedStatus": 404
+    },
+    {
+        "context": "PATCH Submodel - Malformed SubmodelIdentifier",
+        "method": "PATCH",
+        "endpoint": "http://localhost:6004/submodels/not-base64",
+        "data": "bodies/patch/patchSubmodelByIDTopLevelCategory.json",
+        "expectedStatus": 400
+    },
+    {
+        "context": "PATCH Submodel - Path and Body ID Mismatch",
+        "method": "PATCH",
+        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw",
+        "data": "bodies/patch/patchSubmodelByIDIdMismatch.json",
+        "expectedStatus": 400
+    },
+    {
+        "context": "PATCH Submodel - Existing Submodel Top-Level Partial Update",
+        "method": "PATCH",
+        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw",
+        "data": "bodies/patch/patchSubmodelByIDTopLevelCategory.json",
+        "expectedStatus": 204
+    },
+    {
+        "context": "PATCH Submodel - Verify SubmodelElements are preserved",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/$value",
+        "shouldMatch": "bodies/patch/patchSubmodelValueOnly.json",
+        "expectedStatus": 200
     },
     {
         "context": "PUT Submodel - Update existing Submodel",

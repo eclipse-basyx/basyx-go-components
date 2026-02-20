@@ -2187,7 +2187,7 @@ const componentName = "SubmodelRepository"
 func (c *SubmodelRepositoryAPIAPIController) QuerySubmodels(w http.ResponseWriter, r *http.Request) {
 	query, err := parseQuery(r.URL.RawQuery)
 	if err != nil {
-		log.Printf("🧩 [%s] Error in QuerySubmodels: parse query raw=%q: %v", componentName, r.URL.RawQuery, err)
+		log.Printf("🧩 [%s] Error in QuerySubmodels: parse query failed", componentName)
 		result := common.NewErrorResponse(
 			err,
 			http.StatusBadRequest,
@@ -2209,7 +2209,7 @@ func (c *SubmodelRepositoryAPIAPIController) QuerySubmodels(w http.ResponseWrite
 			WithMinimum[int32](1),
 		)
 		if err != nil {
-			log.Printf("🧩 [%s] Error in QuerySubmodels: parse limit=%q: %v", componentName, query.Get("limit"), err)
+			log.Printf("🧩 [%s] Error in QuerySubmodels: parse limit failed", componentName)
 			result := common.NewErrorResponse(
 				err,
 				http.StatusBadRequest,
@@ -2281,14 +2281,14 @@ func (c *SubmodelRepositoryAPIAPIController) QuerySubmodels(w http.ResponseWrite
 	result, err := c.service.QuerySubmodels(r.Context(), limitParam, cursorParam, queryParam)
 	// If an error occurred, encode the error with the status code
 	if err != nil {
-		log.Printf("🧩 [%s] Error in QuerySubmodels: service failure (limit=%d cursor=%q): %v", componentName, limitParam, cursorParam, err)
+		log.Printf("🧩 [%s] Error in QuerySubmodels: service failure", componentName)
 		c.errorHandler(w, r, err, &result)
 		return
 	}
 	// If no error, encode the body and the result code
 	err = EncodeJSONResponse(result.Body, &result.Code, w)
 	if err != nil {
-		log.Printf("🧩 [%s] Error in QuerySubmodels: encoding response (limit=%d cursor=%q): %v", componentName, limitParam, cursorParam, err)
+		log.Printf("🧩 [%s] Error in QuerySubmodels: encoding response failed", componentName)
 		c.errorHandler(w, r, err, nil)
 		return
 	}

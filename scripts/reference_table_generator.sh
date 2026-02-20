@@ -19,7 +19,7 @@ contexts=(
 "submodel_descriptor_supplemental_semantic_id|submodel_descriptor|descriptor_id|true"
 )
 
-[[ ${#contexts[@]} -gt 0 ]] || fail "SMREPO-GENREF-EMPTYCONTEXTS" "No contexts configured"
+[[ ${#contexts[@]} -gt 0 ]] || fail "GENREF-EMPTYCONTEXTS" "No contexts configured"
 
 cat > "$output_file" <<'SQL'
 /*
@@ -31,15 +31,15 @@ SQL
 i=0
 for entry in "${contexts[@]}"; do
   i=$((i + 1))
-  [[ -n "$entry" ]] || fail "SMREPO-GENREF-INVALIDCONTEXT" "Encountered empty context"
+  [[ -n "$entry" ]] || fail "GENREF-INVALIDCONTEXT" "Encountered empty context"
 
   IFS='|' read -r ctx ref_table ref_column with_payload <<< "$entry"
 
-  [[ -n "$ctx" ]] || fail "SMREPO-GENREF-MISSINGCTX" "Missing ctx in entry: $entry"
-  [[ -n "$ref_table" ]] || fail "SMREPO-GENREF-MISSINGREFTABLE" "Missing ref table in entry: $entry"
-  [[ -n "$ref_column" ]] || fail "SMREPO-GENREF-MISSINGREFCOLUMN" "Missing ref column in entry: $entry"
-  [[ -n "$with_payload" ]] || fail "SMREPO-GENREF-MISSINGPAYLOADFLAG" "Missing payload flag in entry: $entry"
-  [[ "$with_payload" == "true" || "$with_payload" == "false" ]] || fail "SMREPO-GENREF-INVALIDPAYLOADFLAG" "Invalid payload flag '$with_payload' in entry: $entry"
+  [[ -n "$ctx" ]] || fail "GENREF-MISSINGCTX" "Missing ctx in entry: $entry"
+  [[ -n "$ref_table" ]] || fail "GENREF-MISSINGREFTABLE" "Missing ref table in entry: $entry"
+  [[ -n "$ref_column" ]] || fail "GENREF-MISSINGREFCOLUMN" "Missing ref column in entry: $entry"
+  [[ -n "$with_payload" ]] || fail "GENREF-MISSINGPAYLOADFLAG" "Missing payload flag in entry: $entry"
+  [[ "$with_payload" == "true" || "$with_payload" == "false" ]] || fail "GENREF-INVALIDPAYLOADFLAG" "Invalid payload flag '$with_payload' in entry: $entry"
 
   cat >> "$output_file" <<SQL
 
