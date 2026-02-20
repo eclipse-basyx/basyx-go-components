@@ -628,9 +628,18 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsReference(ctx context.C
 		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSubmodelReferences"), err
 	}
 
+	var jsonReferences []map[string]any
+	for _, ref := range references {
+		jsonRef, err := jsonization.ToJsonable(ref)
+		if err != nil {
+			return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "ToJsonable"), err
+		}
+		jsonReferences = append(jsonReferences, jsonRef)
+	}
+
 	res := gen.GetReferencesResult{
 		PagingMetadata: gen.PagedResultPagingMetadata{Cursor: encodeBase64RawStd(nextCursor)},
-		Result:         references,
+		Result:         jsonReferences,
 	}
 
 	return gen.Response(http.StatusOK, res), nil
@@ -1222,9 +1231,18 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelElementsReferenceSubmode
 		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSubmodelElementReferences"), err
 	}
 
+	jsonableArray := make([]map[string]any, 0, len(references))
+	for _, ref := range references {
+		jsonRef, convErr := jsonization.ToJsonable(ref)
+		if convErr != nil {
+			return newAPIErrorResponse(convErr, http.StatusInternalServerError, operation, "ToJsonable"), convErr
+		}
+		jsonableArray = append(jsonableArray, jsonRef)
+	}
+
 	res := gen.GetReferencesResult{
 		PagingMetadata: gen.PagedResultPagingMetadata{Cursor: encodeBase64RawStd(nextCursor)},
-		Result:         references,
+		Result:         jsonableArray,
 	}
 
 	return gen.Response(http.StatusOK, res), nil
