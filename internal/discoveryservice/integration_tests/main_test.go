@@ -69,7 +69,7 @@ func TestMain(m *testing.M) {
 	ctxUp, cancelUp := context.WithTimeout(context.Background(), 10*time.Minute)
 	if err := testenv.RunCompose(ctxUp, composeEngine, upArgs...); err != nil {
 		_, _ = fmt.Println("failed to start compose:", err)
-		composeAvailable = false
+		os.Exit(1)
 	}
 	cancelUp()
 

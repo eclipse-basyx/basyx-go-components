@@ -73,7 +73,7 @@ func TestMain(m *testing.M) {
 	defer cancelUp()
 	if err := testenv.RunCompose(ctxUp, composeEngine, upArgs...); err != nil {
 		_, _ = fmt.Println("failed to start compose:", err)
-		composeAvailable = false
+		os.Exit(1)
 	}
 
 	code := m.Run()
