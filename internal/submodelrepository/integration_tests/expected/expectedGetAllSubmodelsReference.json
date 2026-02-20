@@ -1,0 +1,14 @@
+{
+    "paging_metadata": {},
+    "result": [
+        {
+            "type": "ModelReference",
+            "keys": [
+                {
+                    "type": "Submodel",
+                    "value": "http://iese.fraunhofer.de/id/sm/DemoSubmodel"
+                }
+            ]
+        }
+    ]
+}
