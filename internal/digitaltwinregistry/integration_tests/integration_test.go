@@ -25,10 +25,9 @@ func TestMain(m *testing.M) {
 	}
 
 	os.Exit(testenv.RunComposeTestMain(m, testenv.ComposeTestMainOptions{
-		ComposeFile:          ComposeFilePath,
-		UpArgs:               upArgs,
-		FailIfComposeMissing: true,
-		HealthURL:            BaseURL + "/health",
+		ComposeFile: ComposeFilePath,
+		UpArgs:      upArgs,
+		HealthURL:   BaseURL + "/health",
 	}))
 }
 

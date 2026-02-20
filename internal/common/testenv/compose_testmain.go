@@ -20,8 +20,6 @@ type ComposeTestMainOptions struct {
 	PreDownBeforeUp    bool
 	SkipDownAfterTests bool
 
-	FailIfComposeMissing bool
-
 	HealthURL     string
 	HealthTimeout time.Duration
 	WaitForReady  func() error
@@ -33,10 +31,7 @@ func RunComposeTestMain(m *testing.M, options ComposeTestMainOptions) int {
 	engine, baseArgs, err := FindCompose()
 	if err != nil {
 		fmt.Println("compose engine not found:", err)
-		if opts.FailIfComposeMissing {
-			return 1
-		}
-		return m.Run()
+		return 1
 	}
 
 	runWithLimit := func(timeout time.Duration, args ...string) error {

@@ -10,9 +10,8 @@ Shared helpers for integration tests:
 ```go
 func TestMain(m *testing.M) {
 	os.Exit(testenv.RunComposeTestMain(m, testenv.ComposeTestMainOptions{
-		ComposeFile:          "docker_compose/docker_compose.yml",
-		FailIfComposeMissing: true,
-		HealthURL:            "http://localhost:6004/health",
+		ComposeFile: "docker_compose/docker_compose.yml",
+		HealthURL:   "http://localhost:6004/health",
 	}))
 }
 
@@ -52,7 +51,6 @@ Compose engine is auto-detected via `FindCompose()` (`docker compose` first, the
 - `DownTimeout` default: `10m` (timeout for compose `down`)
 - `PreDownBeforeUp`: run `down` before `up`
 - `SkipDownAfterTests`: keep stack running after tests
-- `FailIfComposeMissing`: fail when neither docker nor podman exists
 - `HealthURL`: wait for HTTP 200 before running tests
 - `HealthTimeout`: timeout for `HealthURL` (default `2m` when set)
 - `WaitForReady`: optional custom readiness callback
