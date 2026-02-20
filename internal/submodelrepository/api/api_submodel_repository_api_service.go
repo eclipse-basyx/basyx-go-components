@@ -1661,7 +1661,15 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelElementByPathReferenceSubmo
 		return newAPIErrorResponse(referenceErr, http.StatusInternalServerError, operation, "BuildModelReference"), referenceErr
 	}
 
-	return gen.Response(http.StatusOK, reference), nil
+	var jsonableRef map[string]any
+	if reference != nil {
+		jsonableRef, err = jsonization.ToJsonable(reference)
+		if err != nil {
+			return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "ToJsonable"), err
+		}
+	}
+
+	return gen.Response(http.StatusOK, jsonableRef), nil
 }
 
 // GetSubmodelElementByPathPathSubmodelRepo - Returns a specific submodel element from the Submodel at a specified path in the Path notation
