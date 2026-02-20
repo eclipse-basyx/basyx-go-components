@@ -261,5 +261,9 @@
         "endpoint": "http://127.0.0.1:5004/infrastructure-descriptors",
         "shouldMatch": "expected/empty_paged_result.json",
         "expectedStatus": 200
+    },
+    {
+        "context": "039 - Verify database is empty - ACTION CHECK_DB_IS_EMPTY",
+        "action": "CHECK_DB_IS_EMPTY"
     }
 ]

@@ -41,6 +41,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"testing"
 	"time"
 
@@ -322,25 +323,69 @@ func RunCompose(ctx context.Context, base string, args ...string) error {
 // Fails the test if the service is not healthy within maxWait duration.
 func WaitHealthy(t testing.TB, url string, maxWait time.Duration) {
 	t.Helper()
+
+	if err := WaitHealthyURL(url, maxWait); err != nil {
+		t.Fatalf("%v", err)
+	}
+}
+
+// WaitHealthyURL polls the given URL until it returns HTTP 200 or the timeout is reached.
+// Returns a detailed timeout error containing the last received HTTP status or request error.
+func WaitHealthyURL(url string, maxWait time.Duration) error {
+	if maxWait <= 0 {
+		maxWait = 2 * time.Minute
+	}
+
 	deadline := time.Now().Add(maxWait)
 	backoff := time.Second
+	lastStatus := -1
+	var lastErr error
+
 	for {
 		resp, err := HTTPClient().Get(url)
-		if err == nil {
-			if resp.StatusCode == http.StatusOK {
-				_ = resp.Body.Close()
-				return
-			}
+		if err != nil {
+			lastStatus = -1
+			lastErr = err
+		} else {
+			lastStatus = resp.StatusCode
 			_ = resp.Body.Close()
+			lastErr = nil
+			if resp.StatusCode == http.StatusOK {
+				return nil
+			}
 		}
+
 		if time.Now().After(deadline) {
-			t.Fatalf("service not healthy at %s within %s", url, maxWait)
+			return healthTimeoutError(url, maxWait, lastStatus, lastErr)
 		}
+
 		time.Sleep(backoff)
 		if backoff < 5*time.Second {
 			backoff += 500 * time.Millisecond
 		}
 	}
+}
+
+func healthTimeoutError(url string, maxWait time.Duration, lastStatus int, lastErr error) error {
+	lastStatusText := "n/a"
+	if lastStatus >= 0 {
+		lastStatusText = strconv.Itoa(lastStatus)
+	}
+	if lastErr != nil {
+		return fmt.Errorf(
+			"TESTENV-WAITHEALTH-TIMEOUT: service not healthy at %s within %s (last_status=%s, last_error=%v)",
+			url,
+			maxWait,
+			lastStatusText,
+			lastErr,
+		)
+	}
+	return fmt.Errorf(
+		"TESTENV-WAITHEALTH-TIMEOUT: service not healthy at %s within %s (last_status=%s)",
+		url,
+		maxWait,
+		lastStatusText,
+	)
 }
 
 // BuildNameValuesMap converts a slice of SpecificAssetID into a map of name to sorted values.

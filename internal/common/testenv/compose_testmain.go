@@ -4,7 +4,6 @@ package testenv
 import (
 	"context"
 	"fmt"
-	"net/http"
 	"testing"
 	"time"
 )
@@ -14,6 +13,9 @@ type ComposeTestMainOptions struct {
 
 	UpArgs   []string
 	DownArgs []string
+
+	UpTimeout   time.Duration
+	DownTimeout time.Duration
 
 	PreDownBeforeUp    bool
 	SkipDownAfterTests bool
@@ -37,19 +39,16 @@ func RunComposeTestMain(m *testing.M, options ComposeTestMainOptions) int {
 		return m.Run()
 	}
 
-	run := func(args ...string) error {
-		cmdArgs := append([]string{}, baseArgs...)
-		cmdArgs = append(cmdArgs, "-f", opts.ComposeFile)
-		cmdArgs = append(cmdArgs, args...)
-		return RunCompose(context.Background(), engine, cmdArgs...)
+	runWithLimit := func(timeout time.Duration, args ...string) error {
+		return runWithTimeout(engine, baseArgs, opts.ComposeFile, timeout, args...)
 	}
 
 	if opts.PreDownBeforeUp {
-		_ = run(opts.DownArgs...)
+		_ = runWithLimit(opts.DownTimeout, opts.DownArgs...)
 	}
 
 	fmt.Println("Starting Docker Compose...")
-	if err := run(opts.UpArgs...); err != nil {
+	if err := runWithLimit(opts.UpTimeout, opts.UpArgs...); err != nil {
 		fmt.Printf("Failed to start Docker Compose: %v\n", err)
 		return 1
 	}
@@ -58,16 +57,16 @@ func RunComposeTestMain(m *testing.M, options ComposeTestMainOptions) int {
 		if err := opts.WaitForReady(); err != nil {
 			fmt.Printf("Service readiness check failed: %v\n", err)
 			if !opts.SkipDownAfterTests {
-				_ = run(opts.DownArgs...)
+				_ = runWithLimit(opts.DownTimeout, opts.DownArgs...)
 			}
 			return 1
 		}
 	}
 	if opts.HealthURL != "" {
-		if err := waitForHealthURL(opts.HealthURL, opts.HealthTimeout); err != nil {
+		if err := WaitHealthyURL(opts.HealthURL, opts.HealthTimeout); err != nil {
 			fmt.Printf("Health check failed: %v\n", err)
 			if !opts.SkipDownAfterTests {
-				_ = run(opts.DownArgs...)
+				_ = runWithLimit(opts.DownTimeout, opts.DownArgs...)
 			}
 			return 1
 		}
@@ -77,12 +76,28 @@ func RunComposeTestMain(m *testing.M, options ComposeTestMainOptions) int {
 
 	if !opts.SkipDownAfterTests {
 		fmt.Println("Stopping Docker Compose...")
-		if err := run(opts.DownArgs...); err != nil {
+		if err := runWithLimit(opts.DownTimeout, opts.DownArgs...); err != nil {
 			fmt.Printf("Failed to stop Docker Compose: %v\n", err)
 		}
 	}
 
 	return code
+}
+
+func runWithTimeout(engine string, baseArgs []string, composeFile string, timeout time.Duration, args ...string) error {
+	ctx := context.Background()
+	cancel := func() {}
+	if timeout > 0 {
+		ctxWithTimeout, cancelFn := context.WithTimeout(context.Background(), timeout)
+		ctx = ctxWithTimeout
+		cancel = cancelFn
+	}
+	defer cancel()
+
+	cmdArgs := append([]string{}, baseArgs...)
+	cmdArgs = append(cmdArgs, "-f", composeFile)
+	cmdArgs = append(cmdArgs, args...)
+	return RunCompose(ctx, engine, cmdArgs...)
 }
 
 func normalizeComposeTestMainOptions(options ComposeTestMainOptions) ComposeTestMainOptions {
@@ -95,34 +110,14 @@ func normalizeComposeTestMainOptions(options ComposeTestMainOptions) ComposeTest
 	if len(options.DownArgs) == 0 {
 		options.DownArgs = []string{"down"}
 	}
+	if options.UpTimeout <= 0 {
+		options.UpTimeout = 10 * time.Minute
+	}
+	if options.DownTimeout <= 0 {
+		options.DownTimeout = 10 * time.Minute
+	}
 	if options.HealthURL != "" && options.HealthTimeout <= 0 {
 		options.HealthTimeout = 2 * time.Minute
 	}
 	return options
-}
-
-func waitForHealthURL(url string, timeout time.Duration) error {
-	if timeout <= 0 {
-		timeout = 2 * time.Minute
-	}
-	deadline := time.Now().Add(timeout)
-	backoff := time.Second
-	client := HTTPClient()
-
-	for {
-		resp, err := client.Get(url)
-		if err == nil {
-			_ = resp.Body.Close()
-			if resp.StatusCode == http.StatusOK {
-				return nil
-			}
-		}
-		if time.Now().After(deadline) {
-			return fmt.Errorf("service not healthy at %s within %s", url, timeout)
-		}
-		time.Sleep(backoff)
-		if backoff < 5*time.Second {
-			backoff += 500 * time.Millisecond
-		}
-	}
 }

@@ -2,7 +2,6 @@
 package main
 
 import (
-	"database/sql"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -13,7 +12,6 @@ import (
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/testenv"
 	_ "github.com/lib/pq" // PostgreSQL Treiber
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -51,35 +49,11 @@ func TestIntegration(t *testing.T) {
 			"DELETE_ALL_AAS_DESCRIPTORS": func(t *testing.T, runner *testenv.JSONSuiteRunner, _ testenv.JSONSuiteStep, stepNumber int) {
 				deleteAllAASDescriptors(t, runner, stepNumber)
 			},
+			testenv.ActionCheckDBIsEmpty: testenv.NewCheckDBIsEmptyAction(testenv.CheckDBIsEmptyOptions{
+				Driver: "postgres",
+				DSN:    "host=127.0.0.1 port=6432 user=admin password=admin123 dbname=basyxTestDB sslmode=disable",
+			}),
 		},
-	})
-
-	t.Run("Check_DB_Empty", func(t *testing.T) {
-		db, err := sql.Open("postgres", "host=127.0.0.1 port=6432 user=admin password=admin123 dbname=basyxTestDB sslmode=disable")
-		require.NoError(t, err)
-		defer func() { _ = db.Close() }()
-		require.NoError(t, db.Ping())
-
-		rows, err := db.Query("SELECT tablename FROM pg_tables WHERE schemaname = 'public'")
-		require.NoError(t, err)
-		defer func() { _ = rows.Close() }()
-
-		nonEmpty := []string{}
-		for rows.Next() {
-			var table string
-			require.NoError(t, rows.Scan(&table))
-
-			var cnt int
-			q := fmt.Sprintf("SELECT COUNT(*) FROM \"%s\"", table)
-			err = db.QueryRow(q).Scan(&cnt)
-			require.NoError(t, err)
-			if cnt != 0 {
-				nonEmpty = append(nonEmpty, fmt.Sprintf("%s:%d", table, cnt))
-			}
-		}
-		require.NoError(t, rows.Err())
-
-		assert.Empty(t, nonEmpty, "Expected all tables empty, but found rows in: %v", nonEmpty)
 	})
 }
 

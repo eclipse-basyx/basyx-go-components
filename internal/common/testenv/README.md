@@ -34,12 +34,20 @@ Compose engine is auto-detected via `FindCompose()` (`docker compose` first, the
 - `ComposeFile` default: `docker_compose/docker_compose.yml`
 - `UpArgs` default: `["up", "-d", "--build"]`
 - `DownArgs` default: `["down"]`
+- `UpTimeout` default: `10m` (timeout for compose `up`)
+- `DownTimeout` default: `10m` (timeout for compose `down`)
 - `PreDownBeforeUp`: run `down` before `up`
 - `SkipDownAfterTests`: keep stack running after tests
 - `FailIfComposeMissing`: fail when neither docker nor podman exists
 - `HealthURL`: wait for HTTP 200 before running tests
 - `HealthTimeout`: timeout for `HealthURL` (default `2m` when set)
 - `WaitForReady`: optional custom readiness callback
+
+Health check behavior:
+
+- `RunComposeTestMain` uses `WaitHealthyURL(...)` for `HealthURL` checks.
+- Polling backoff starts at `1s` and increases to max `5s`.
+- Timeout errors include diagnostics like `last_status` and `last_error`.
 
 ## `RunJSONSuite`
 
@@ -69,6 +77,10 @@ Step fields (`JSONSuiteStep`):
 - `TokenProvider` for token-based steps
 - `EnableRequestLog` and `EnableRawDump`
 
+Built-in reusable action helpers:
+
+- `testenv.ActionCheckDBIsEmpty` with `testenv.NewCheckDBIsEmptyAction(...)`
+
 ### Example `RunJSONSuite` + `it_config.json`
 
 ```go
@@ -85,6 +97,10 @@ func TestIntegration(t *testing.T) {
 				}, stepNumber)
 				require.NoError(t, err)
 			},
+			testenv.ActionCheckDBIsEmpty: testenv.NewCheckDBIsEmptyAction(testenv.CheckDBIsEmptyOptions{
+				Driver: "postgres",
+				DSN:    "host=127.0.0.1 port=5432 user=admin password=admin123 dbname=basyxTestDB sslmode=disable",
+			}),
 		},
 	})
 }
@@ -108,6 +124,10 @@ func TestIntegration(t *testing.T) {
   {
     "context": "Cleanup",
     "action": "DELETE_ALL_ITEMS"
+  },
+  {
+    "context": "Verify DB Empty",
+    "action": "CHECK_DB_IS_EMPTY"
   }
 ]
 ```

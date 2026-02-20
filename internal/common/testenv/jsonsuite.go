@@ -3,6 +3,7 @@ package testenv
 
 import (
 	"bytes"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -18,6 +19,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 )
+
+const ActionCheckDBIsEmpty = "CHECK_DB_IS_EMPTY"
 
 type TokenCredentials struct {
 	User     string `json:"user"`
@@ -64,6 +67,13 @@ type JSONSuiteOptions struct {
 type JSONSuiteRunner struct {
 	options JSONSuiteOptions
 	client  *http.Client
+}
+
+type CheckDBIsEmptyOptions struct {
+	Driver         string
+	DSN            string
+	Schema         string
+	ExcludedTables []string
 }
 
 type PasswordGrantTokenProvider struct {
@@ -165,6 +175,35 @@ func DefaultJSONStepName(step JSONSuiteStep, stepNumber int) string {
 		return fmt.Sprintf("Step_%d_%s", stepNumber, step.Context)
 	}
 	return fmt.Sprintf("Step_%d_%s_%s", stepNumber, strings.ToUpper(step.Method), step.Endpoint)
+}
+
+func NewCheckDBIsEmptyAction(options CheckDBIsEmptyOptions) JSONStepAction {
+	driver := strings.TrimSpace(options.Driver)
+	if driver == "" {
+		driver = "postgres"
+	}
+
+	schema := strings.TrimSpace(options.Schema)
+	if schema == "" {
+		schema = "public"
+	}
+
+	excluded := make(map[string]struct{}, len(options.ExcludedTables))
+	for _, table := range options.ExcludedTables {
+		trimmed := strings.TrimSpace(table)
+		if trimmed == "" {
+			continue
+		}
+		excluded[trimmed] = struct{}{}
+	}
+
+	return func(t *testing.T, _ *JSONSuiteRunner, _ JSONSuiteStep, _ int) {
+		require.NotEmpty(t, strings.TrimSpace(options.DSN), "TESTENV-CHECKDB-MISSING-DSN")
+
+		nonEmpty, err := listNonEmptyTables(driver, options.DSN, schema, excluded)
+		require.NoError(t, err)
+		require.Emptyf(t, nonEmpty, "Expected all tables empty, but found rows in: %v", nonEmpty)
+	}
 }
 
 func RunJSONSuite(t *testing.T, options JSONSuiteOptions) {
@@ -426,4 +465,67 @@ func (r *JSONSuiteRunner) writeJSONMismatchLog(stepNumber int, expected string, 
 	b.WriteString(actual)
 	b.WriteString("\n")
 	_ = os.WriteFile(filepath.Join(r.options.LogsDir, fmt.Sprintf("STEP_%d.log", stepNumber)), []byte(b.String()), 0o644)
+}
+
+func listNonEmptyTables(driver string, dsn string, schema string, excluded map[string]struct{}) ([]string, error) {
+	db, err := sql.Open(driver, dsn)
+	if err != nil {
+		return nil, fmt.Errorf("TESTENV-CHECKDB-OPEN: %w", err)
+	}
+	defer func() { _ = db.Close() }()
+
+	if err = db.Ping(); err != nil {
+		return nil, fmt.Errorf("TESTENV-CHECKDB-PING: %w", err)
+	}
+
+	rows, err := db.Query("SELECT tablename FROM pg_tables WHERE schemaname = $1", schema)
+	if err != nil {
+		return nil, fmt.Errorf("TESTENV-CHECKDB-LISTTABLES: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	nonEmpty := []string{}
+	for rows.Next() {
+		var table string
+		if scanErr := rows.Scan(&table); scanErr != nil {
+			return nil, fmt.Errorf("TESTENV-CHECKDB-SCANTABLE: %w", scanErr)
+		}
+
+		if _, skip := excluded[table]; skip {
+			continue
+		}
+
+		count, countErr := countRowsInTable(db, schema, table)
+		if countErr != nil {
+			return nil, countErr
+		}
+		if count != 0 {
+			nonEmpty = append(nonEmpty, fmt.Sprintf("%s:%d", table, count))
+		}
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("TESTENV-CHECKDB-ITERATE: %w", err)
+	}
+
+	return nonEmpty, nil
+}
+
+func countRowsInTable(db *sql.DB, schema string, table string) (int, error) {
+	query := fmt.Sprintf(
+		"SELECT COUNT(*) FROM %s.%s",
+		quoteSQLIdentifier(schema),
+		quoteSQLIdentifier(table),
+	)
+
+	var count int
+	if err := db.QueryRow(query).Scan(&count); err != nil {
+		return 0, fmt.Errorf("TESTENV-CHECKDB-COUNTROWS: %w", err)
+	}
+
+	return count, nil
+}
+
+func quoteSQLIdentifier(identifier string) string {
+	return `"` + strings.ReplaceAll(identifier, `"`, `""`) + `"`
 }
