@@ -40,9 +40,6 @@ import (
 )
 
 func TestDiscovery_Suite_Sophisticated(t *testing.T) {
-	mustHaveCompose(t)
-	waitUntilHealthy(t)
-
 	rc := NewRequestClient()
 
 	aasA := "urn:aas:test:assembler-1"

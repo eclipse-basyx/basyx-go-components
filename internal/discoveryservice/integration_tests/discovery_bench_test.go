@@ -347,9 +347,6 @@ func (d *DiscoveryBench) DoOne(iter int) testenv.ComponentResult {
 // $env:LOG_DETAIL = "full" go test -bench BenchmarkDiscovery -run ^$ -benchtime=100x -benchmem
 
 func BenchmarkDiscovery(b *testing.B) {
-	mustHaveCompose(b)
-	waitUntilHealthy(b)
-
 	comp := NewDiscoveryBench(*seedFlag)
 	testenv.BenchmarkComponent(b, comp)
 }
