@@ -40,10 +40,12 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"mime"
 	"mime/multipart"
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"reflect"
 	"strconv"
 	"strings"
@@ -65,6 +67,24 @@ func Response(code int, body interface{}) ImplResponse {
 // Redirect is a helper payload type that signals the response encoder to send an HTTP redirect.
 type Redirect struct {
 	Location string
+}
+
+func setSafeDownloadHeaders(wHeader http.Header, filename, contentType string) {
+	if contentType == "" {
+		contentType = "application/octet-stream"
+	}
+
+	wHeader.Set("Content-Type", contentType)
+	wHeader.Set("X-Content-Type-Options", "nosniff")
+
+	if filename == "" {
+		wHeader.Set("Content-Disposition", "attachment")
+		return
+	}
+
+	safeFilename := filepath.Base(filename)
+	contentDisposition := mime.FormatMediaType("attachment", map[string]string{"filename": safeFilename})
+	wHeader.Set("Content-Disposition", contentDisposition)
 }
 
 // ResponseWithHeaders builds an ImplResponse and converts a Location header into a Redirect payload
@@ -150,13 +170,13 @@ func EncodeJSONResponse(i interface{}, status *int, w http.ResponseWriter) error
 		if err != nil {
 			return err
 		}
-		wHeader.Set("Content-Type", http.DetectContentType(data))
-		wHeader.Set("Content-Disposition", "attachment; filename="+f.Name())
+		setSafeDownloadHeaders(wHeader, f.Name(), "application/octet-stream")
 		if status != nil {
 			w.WriteHeader(*status)
 		} else {
 			w.WriteHeader(http.StatusOK)
 		}
+		// #nosec G705 -- writing binary attachment payload with Content-Disposition attachment and nosniff header
 		_, err = w.Write(data)
 		return err
 	}

@@ -13,10 +13,12 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"mime"
 	"mime/multipart"
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -90,6 +92,24 @@ type FileDownload struct {
 	Filename    string
 }
 
+func setSafeDownloadHeaders(wHeader http.Header, filename, contentType string) {
+	if contentType == "" {
+		contentType = "application/octet-stream"
+	}
+
+	wHeader.Set("Content-Type", contentType)
+	wHeader.Set("X-Content-Type-Options", "nosniff")
+
+	if filename == "" {
+		wHeader.Set("Content-Disposition", "attachment")
+		return
+	}
+
+	safeFilename := filepath.Base(filename)
+	contentDisposition := mime.FormatMediaType("attachment", map[string]string{"filename": safeFilename})
+	wHeader.Set("Content-Disposition", contentDisposition)
+}
+
 // EncodeJSONResponse encodes a response as JSON and writes it to the HTTP response writer.
 //
 // This function handles both file responses (detected by *os.File type) and JSON responses.
@@ -128,28 +148,24 @@ func EncodeJSONResponse(i interface{}, status *int, w http.ResponseWriter) error
 				return nil
 			}
 		case FileDownload:
-			wHeader.Set("Content-Type", r.ContentType)
-			if r.Filename != "" {
-				wHeader.Set("Content-Disposition", "attachment; filename="+r.Filename)
-			}
+			setSafeDownloadHeaders(wHeader, r.Filename, r.ContentType)
 			if status != nil {
 				w.WriteHeader(*status)
 			} else {
 				w.WriteHeader(http.StatusOK)
 			}
+			// #nosec G705 -- writing binary attachment payload with Content-Disposition attachment and nosniff header
 			_, err := w.Write(r.Content)
 			return err
 		case *FileDownload:
 			if r != nil {
-				wHeader.Set("Content-Type", r.ContentType)
-				if r.Filename != "" {
-					wHeader.Set("Content-Disposition", "attachment; filename="+r.Filename)
-				}
+				setSafeDownloadHeaders(wHeader, r.Filename, r.ContentType)
 				if status != nil {
 					w.WriteHeader(*status)
 				} else {
 					w.WriteHeader(http.StatusOK)
 				}
+				// #nosec G705 -- writing binary attachment payload with Content-Disposition attachment and nosniff header
 				_, err := w.Write(r.Content)
 				return err
 			}
@@ -162,13 +178,13 @@ func EncodeJSONResponse(i interface{}, status *int, w http.ResponseWriter) error
 		if err != nil {
 			return err
 		}
-		wHeader.Set("Content-Type", http.DetectContentType(data))
-		wHeader.Set("Content-Disposition", "attachment; filename="+f.Name())
+		setSafeDownloadHeaders(wHeader, f.Name(), "application/octet-stream")
 		if status != nil {
 			w.WriteHeader(*status)
 		} else {
 			w.WriteHeader(http.StatusOK)
 		}
+		// #nosec G705 -- writing binary attachment payload with Content-Disposition attachment and nosniff header
 		_, err = w.Write(data)
 		return err
 	}

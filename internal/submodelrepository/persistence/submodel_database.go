@@ -178,12 +178,13 @@ func (s *SubmodelDatabase) GetSubmodels(limit int32, cursor string, submodelIden
 	dialect := goqu.Dialect("postgres")
 
 	var limitFilter *int32
-	if limit > 0 {
-		limitFilter = &limit
-	}
 
 	if limit == 0 {
 		limit = 100
+	}
+
+	if limit > 0 {
+		limitFilter = &limit
 	}
 
 	var cursorFilter *string

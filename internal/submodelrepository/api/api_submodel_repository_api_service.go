@@ -1474,6 +1474,9 @@ func (s *SubmodelRepositoryAPIAPIService) PatchSubmodelElementByPathSubmodelRepo
 	}
 
 	mergedJSON := mergeJSONObjects(existingJSON, patchJSON)
+	if _, hasValuePatch := patchJSON["value"]; !hasValuePatch {
+		delete(mergedJSON, "value")
+	}
 
 	mergedElement, mergedErr := jsonization.SubmodelElementFromJsonable(mergedJSON)
 	if mergedErr != nil {

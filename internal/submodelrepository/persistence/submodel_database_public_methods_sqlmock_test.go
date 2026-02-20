@@ -286,7 +286,7 @@ func TestUploadFileAttachmentSubmodelLookupFails(t *testing.T) {
 	_, err = tmp.WriteString("payload")
 	require.NoError(t, err)
 	require.NoError(t, tmp.Close())
-
+	//nolint:gosec // test file creation
 	uploadFile, err := os.Open(tmp.Name())
 	require.NoError(t, err)
 	defer func() {
@@ -301,6 +301,7 @@ func TestUploadFileAttachmentSubmodelLookupFails(t *testing.T) {
 
 	err = sut.UploadFileAttachment("sm", "file", uploadFile, "file.txt")
 	require.Error(t, err)
+	//nolint:gosec // test file creation
 	_, statErr := os.Stat(tmp.Name())
 	require.NoError(t, statErr)
 	require.NoError(t, mock.ExpectationsWereMet())

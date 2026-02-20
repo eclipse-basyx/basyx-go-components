@@ -5,7 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -30,7 +32,7 @@ type probeOptions struct {
 func main() {
 	options, err := parseOptions(os.Args)
 	if err != nil {
-		_, _ = fmt.Fprintln(os.Stderr, err.Error())
+		_, _ = fmt.Fprintln(os.Stderr, "HEALTHPROBE-MAIN-PARSEFAILED")
 		os.Exit(1)
 	}
 
@@ -39,12 +41,12 @@ func main() {
 	}
 
 	if options.debug {
-		_, _ = fmt.Fprintf(os.Stderr, "healthprobe url=%s timeout=%s\n", options.url, options.timeout)
+		_, _ = fmt.Fprintln(os.Stderr, "HEALTHPROBE-MAIN-DEBUGENABLED")
 	}
 
 	if err := runProbe(options); err != nil {
 		if !options.quiet {
-			_, _ = fmt.Fprintln(os.Stderr, err.Error())
+			_, _ = fmt.Fprintln(os.Stderr, "HEALTHPROBE-MAIN-PROBEFAILED")
 		}
 		os.Exit(1)
 	}
@@ -129,7 +131,13 @@ func buildDefaultHealthURL() string {
 func runProbe(options probeOptions) error {
 	client := &http.Client{Timeout: options.timeout}
 
-	response, err := client.Get(options.url)
+	probeURL, err := parseAndValidateProbeURL(options.url)
+	if err != nil {
+		return err
+	}
+
+	// #nosec G704 -- URL is constrained to localhost/loopback via parseAndValidateProbeURL
+	response, err := client.Get(probeURL.String())
 	if err != nil {
 		return fmt.Errorf("HEALTHPROBE-RUN-REQUESTFAILED: %w", err)
 	}
@@ -154,7 +162,13 @@ func runProbe(options probeOptions) error {
 		return nil
 	}
 
-	file, err := os.Create(options.output)
+	outputPath, err := sanitizeOutputPath(options.output)
+	if err != nil {
+		return err
+	}
+
+	// #nosec G304 G703 -- output path is sanitized in sanitizeOutputPath to block traversal and absolute paths
+	file, err := os.OpenFile(outputPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o600)
 	if err != nil {
 		return fmt.Errorf("HEALTHPROBE-RUN-CREATEOUTPUTFAILED: %w", err)
 	}
@@ -168,4 +182,44 @@ func runProbe(options probeOptions) error {
 	}
 
 	return nil
+}
+
+func parseAndValidateProbeURL(rawURL string) (*url.URL, error) {
+	parsedURL, err := url.Parse(rawURL)
+	if err != nil {
+		return nil, errors.New("HEALTHPROBE-PARSE-INVALIDURL")
+	}
+
+	if parsedURL.Scheme != "http" && parsedURL.Scheme != "https" {
+		return nil, errors.New("HEALTHPROBE-PARSE-INVALIDSCHEME")
+	}
+
+	host := parsedURL.Hostname()
+	if host == "localhost" {
+		return parsedURL, nil
+	}
+
+	ip := net.ParseIP(host)
+	if ip == nil || !ip.IsLoopback() {
+		return nil, errors.New("HEALTHPROBE-PARSE-NONLOCALHOST")
+	}
+
+	return parsedURL, nil
+}
+
+func sanitizeOutputPath(path string) (string, error) {
+	cleanPath := filepath.Clean(path)
+	if cleanPath == "" || cleanPath == "." {
+		return "", errors.New("HEALTHPROBE-PARSE-INVALIDOUTPUTPATH")
+	}
+
+	if filepath.IsAbs(cleanPath) {
+		return "", errors.New("HEALTHPROBE-PARSE-ABSOLUTEOUTPUTPATH")
+	}
+
+	if cleanPath == ".." || strings.HasPrefix(cleanPath, "../") {
+		return "", errors.New("HEALTHPROBE-PARSE-TRAVERSALOUTPUTPATH")
+	}
+
+	return cleanPath, nil
 }

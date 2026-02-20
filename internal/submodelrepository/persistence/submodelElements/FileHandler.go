@@ -356,6 +356,7 @@ func (p PostgreSQLFileHandler) UploadFileAttachment(submodelID string, idShortPa
 	filePath := filepath.Clean(file.Name())
 
 	// Reopen the file since it might be closed by the OpenAPI framework
+	// #nosec G703 -- path comes from server-created temporary file and is normalized with filepath.Clean
 	reopenedFile, err := os.Open(filePath)
 	if err != nil {
 		return fmt.Errorf("failed to reopen file: %w", err)

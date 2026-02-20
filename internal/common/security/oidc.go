@@ -176,7 +176,7 @@ func (o *OIDC) Middleware(next http.Handler) http.Handler {
 
 		verifier, ok := o.verifiers[issuer]
 		if !ok {
-			log.Printf("❌ unknown token issuer: %s", issuer)
+			log.Printf("❌ unknown token issuer")
 			respondOIDCError(w)
 			return
 		}
@@ -206,7 +206,7 @@ func (o *OIDC) Middleware(next http.Handler) http.Handler {
 		}
 
 		if typ, _ := c.GetString("typ"); typ != "" && !strings.EqualFold(typ, "Bearer") {
-			log.Printf("❌ unexpected token typ: %q", typ)
+			log.Printf("❌ unexpected token typ")
 			respondOIDCError(w)
 			return
 		}
@@ -224,7 +224,7 @@ func (o *OIDC) Middleware(next http.Handler) http.Handler {
 		c["LOCALNOW"] = currTime.In(time.Local).Format(time.RFC3339)
 		c["UTCNOW"] = currTime.UTC().Format(time.RFC3339)
 
-		log.Printf("✅ Token verified successfully for subject: %v", c["sub"])
+		log.Printf("✅ Token verified successfully")
 		r = r.WithContext(context.WithValue(r.Context(), claimsKey, c))
 		next.ServeHTTP(w, r)
 	})

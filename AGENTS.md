@@ -33,7 +33,7 @@
 - Use basyxschema.sql for reference when modifying database-related code.
 - Ensure that any changes to the database schema are reflected in the basyxschema.sql file.
 - When modifying code, consider the impact on related modules and ensure that changes are consistent across the codebase.
-- Always run integration tests after making changes to ensure that the modifications do not break existing functionality.
+- Always run integration tests after making changes to ensure that the modifications do not break existing functionality. Important: Clean Testcache before running tests to avoid false positives/negatives.
 
 ## Post-Task Steps:
 - Run linter and formatter on the modified files to ensure code quality and consistency.
