@@ -272,6 +272,42 @@ func (s *SubmodelDatabase) GetSubmodels(limit int32, cursor string, submodelIden
 	return submodels, nextCursor, nil
 }
 
+// GetSubmodelReferences retrieves references for submodels with optional filtering and keyset pagination.
+func (s *SubmodelDatabase) GetSubmodelReferences(limit int32, cursor string, submodelIdentifier string) ([]types.IReference, string, error) {
+	submodels, nextCursor, err := s.GetSubmodels(limit, cursor, submodelIdentifier)
+	if err != nil {
+		return nil, "", err
+	}
+
+	references := make([]types.IReference, 0, len(submodels))
+	for _, submodel := range submodels {
+		if submodel == nil {
+			return nil, "", common.NewInternalServerError("SMREPO-GETSMREF-NILSUBMODEL loaded submodel is nil")
+		}
+
+		reference, referenceErr := buildSubmodelModelReference(submodel.ID())
+		if referenceErr != nil {
+			return nil, "", referenceErr
+		}
+
+		references = append(references, reference)
+	}
+
+	return references, nextCursor, nil
+}
+
+func buildSubmodelModelReference(submodelIdentifier string) (types.IReference, error) {
+	if submodelIdentifier == "" {
+		return nil, common.NewErrBadRequest("SMREPO-BUILDSMREF-INVALIDIDENTIFIER submodel identifier is required")
+	}
+
+	key := types.NewKey(types.KeyTypesSubmodel, submodelIdentifier)
+
+	reference := types.NewReference(types.ReferenceTypesModelReference, []types.IKey{key})
+
+	return reference, nil
+}
+
 // QuerySubmodels returns submodels that match the provided query and supports cursor-based pagination.
 func (s *SubmodelDatabase) QuerySubmodels(limit int32, cursor string, queryWrapper *grammar.QueryWrapper, _ bool) ([]types.ISubmodel, string, error) {
 	if queryWrapper == nil || queryWrapper.Query.Condition == nil {
@@ -525,6 +561,11 @@ func (s *SubmodelDatabase) GetSubmodelElement(submodelID string, idShortOrPath s
 // GetSubmodelElements retrieves top-level submodel elements for a submodel and reconstructs each subtree.
 func (s *SubmodelDatabase) GetSubmodelElements(submodelID string, limit *int, cursor string, _ bool) ([]types.ISubmodelElement, string, error) {
 	return submodelelements.GetSubmodelElementsBySubmodelID(s.db, submodelID, limit, cursor)
+}
+
+// GetSubmodelElementReferences retrieves references for top-level submodel elements of a submodel with optional pagination.
+func (s *SubmodelDatabase) GetSubmodelElementReferences(submodelID string, limit *int, cursor string) ([]types.IReference, string, error) {
+	return submodelelements.GetSubmodelElementReferencesBySubmodelID(s.db, submodelID, limit, cursor)
 }
 
 // AddSubmodelElement adds a top-level submodel element to a submodel.
