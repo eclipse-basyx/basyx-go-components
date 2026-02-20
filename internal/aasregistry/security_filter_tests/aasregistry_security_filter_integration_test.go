@@ -38,7 +38,6 @@ import (
 
 func TestIntegration(t *testing.T) {
 	testenv.RunJSONSuite(t, testenv.JSONSuiteOptions{
-		InitialDelay:          15 * time.Second,
 		DefaultExpectedStatus: http.StatusOK,
 		ShouldCompareResponse: testenv.CompareMethods(http.MethodGet),
 		TokenProvider: testenv.NewPasswordGrantTokenProvider(

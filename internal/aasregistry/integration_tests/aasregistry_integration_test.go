@@ -34,7 +34,6 @@ import (
 	"net/http"
 	"os"
 	"testing"
-	"time"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/testenv"
 	_ "github.com/lib/pq" // PostgreSQL Treiber
@@ -69,7 +68,6 @@ func deleteAllAASDescriptors(t *testing.T, runner *testenv.JSONSuiteRunner, step
 
 func TestIntegration(t *testing.T) {
 	testenv.RunJSONSuite(t, testenv.JSONSuiteOptions{
-		InitialDelay:          15 * time.Second,
 		ShouldCompareResponse: testenv.CompareMethods(http.MethodGet),
 		ActionHandlers: map[string]testenv.JSONStepAction{
 			"DELETE_ALL_AAS_DESCRIPTORS": func(t *testing.T, runner *testenv.JSONSuiteRunner, _ testenv.JSONSuiteStep, stepNumber int) {

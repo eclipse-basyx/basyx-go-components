@@ -81,7 +81,6 @@ Step fields (`JSONSuiteStep`):
 
 - `ConfigPath` default: `it_config.json`
 - `LogsDir` default: `logs`
-- `InitialDelay`
 - `RequestTimeout` default: `10s`
 - `DefaultExpectedStatus` (fallback is 200)
 - `ShouldCompareResponse`

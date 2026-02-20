@@ -33,7 +33,6 @@ import (
 	"net/http"
 	"os"
 	"testing"
-	"time"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/testenv"
 	"github.com/stretchr/testify/require"
@@ -94,7 +93,6 @@ func deleteAllDescriptors(t *testing.T, runner *testenv.JSONSuiteRunner, stepNum
 
 func TestIntegration(t *testing.T) {
 	testenv.RunJSONSuite(t, testenv.JSONSuiteOptions{
-		InitialDelay: 2 * time.Second,
 		ActionHandlers: map[string]testenv.JSONStepAction{
 			"DELETE_ALL_SHELL_DESCRIPTORS": func(t *testing.T, runner *testenv.JSONSuiteRunner, step testenv.JSONSuiteStep, stepNumber int) {
 				deleteAllDescriptors(t, runner, stepNumber, step.Headers)

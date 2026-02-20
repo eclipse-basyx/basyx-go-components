@@ -1,0 +1,417 @@
+[
+  {
+    "context": "001 - Search empty dataset",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:5004/lookup/shellsByAssetLink?limit=5",
+    "data": "postBody/search_empty_array.json",
+    "shouldMatch": "expected/empty_paged_result.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "002 - Create AAS A links set 1",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:5004/lookup/shells/dXJuOmFhczp0ZXN0OmFzc2VtYmxlci0x",
+    "data": "postBody/links_aasA_1.json",
+    "expectedStatus": 201
+  },
+  {
+    "context": "003 - Get AAS A links set 1",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:5004/lookup/shells/dXJuOmFhczp0ZXN0OmFzc2VtYmxlci0x",
+    "shouldMatch": "expected/lookup_aasA_1.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "004 - Replace AAS A links set 2",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:5004/lookup/shells/dXJuOmFhczp0ZXN0OmFzc2VtYmxlci0x",
+    "data": "postBody/links_aasA_2.json",
+    "expectedStatus": 201
+  },
+  {
+    "context": "005 - Get AAS A links set 2",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:5004/lookup/shells/dXJuOmFhczp0ZXN0OmFzc2VtYmxlci0x",
+    "shouldMatch": "expected/lookup_aasA_2.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "006 - Create AAS B",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:5004/lookup/shells/dXJuOmFhczp0ZXN0Om9pbC1yZWZpbmVyeQ",
+    "data": "postBody/links_aasB.json",
+    "expectedStatus": 201
+  },
+  {
+    "context": "007 - Create AAS C",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:5004/lookup/shells/dXJuOmFhczp0ZXN0OnJhaWwtc2lnbmFs",
+    "data": "postBody/links_aasC.json",
+    "expectedStatus": 201
+  },
+  {
+    "context": "008 - Get AAS B",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:5004/lookup/shells/dXJuOmFhczp0ZXN0Om9pbC1yZWZpbmVyeQ",
+    "shouldMatch": "expected/lookup_aasB.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "009 - Get AAS C",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:5004/lookup/shells/dXJuOmFhczp0ZXN0OnJhaWwtc2lnbmFs",
+    "shouldMatch": "expected/lookup_aasC.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "010 - Search by globalAssetId",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:5004/lookup/shellsByAssetLink?limit=10",
+    "data": "postBody/search_globalAssetId_green.json",
+    "shouldMatch": "expected/search_only_aasA.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "011 - Search by serialNumber",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:5004/lookup/shellsByAssetLink?limit=10",
+    "data": "postBody/search_serial_red.json",
+    "shouldMatch": "expected/search_only_aasA.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "012 - Search by plant",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:5004/lookup/shellsByAssetLink?limit=10",
+    "data": "postBody/search_plant_spidertron.json",
+    "shouldMatch": "expected/search_only_aasB.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "013 - Search by two pairs",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:5004/lookup/shellsByAssetLink?limit=10",
+    "data": "postBody/search_global_serial.json",
+    "shouldMatch": "expected/search_only_aasA.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "014 - Search no match",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:5004/lookup/shellsByAssetLink?limit=10",
+    "data": "postBody/search_serial_nonexistent.json",
+    "shouldMatch": "expected/empty_paged_result.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "015 - Delete AAS A",
+    "method": "DELETE",
+    "endpoint": "http://127.0.0.1:5004/lookup/shells/dXJuOmFhczp0ZXN0OmFzc2VtYmxlci0x",
+    "expectedStatus": 204
+  },
+  {
+    "context": "016 - Get deleted AAS A",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:5004/lookup/shells/dXJuOmFhczp0ZXN0OmFzc2VtYmxlci0x",
+    "expectedStatus": 404
+  },
+  {
+    "context": "017 - Search globalAssetId after delete",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:5004/lookup/shellsByAssetLink?limit=10",
+    "data": "postBody/search_globalAssetId_green.json",
+    "shouldMatch": "expected/empty_paged_result.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "018 - Create AAS D",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:5004/lookup/shells/dXJuOmFhczp0ZXN0OmNvcHBlci1wbGF0ZQ",
+    "data": "postBody/links_aasD.json",
+    "expectedStatus": 201
+  },
+  {
+    "context": "019 - Create AAS E",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:5004/lookup/shells/dXJuOmFhczp0ZXN0Omlyb24tZ2Vhcg",
+    "data": "postBody/links_aasE.json",
+    "expectedStatus": 201
+  },
+  {
+    "context": "020 - Search shared tag",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:5004/lookup/shellsByAssetLink?limit=10",
+    "data": "postBody/search_sharedTag_train_signal.json",
+    "shouldMatch": "expected/search_shared_aasD_aasE.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "021 - Search unique D",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:5004/lookup/shellsByAssetLink?limit=10",
+    "data": "postBody/search_uniqueD.json",
+    "shouldMatch": "expected/search_only_aasD.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "022 - Search unique E",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:5004/lookup/shellsByAssetLink?limit=10",
+    "data": "postBody/search_uniqueE.json",
+    "shouldMatch": "expected/search_only_aasE.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "023 - Search nonexistent pair",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:5004/lookup/shellsByAssetLink?limit=10",
+    "data": "postBody/search_nonexistent.json",
+    "shouldMatch": "expected/empty_paged_result.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "024 - Create AAS X links set 1",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:5004/lookup/shells/dXJuOmFhczp0ZXN0OmJsdWUtc2NpZW5jZQ",
+    "data": "postBody/links_aasX_1.json",
+    "expectedStatus": 201
+  },
+  {
+    "context": "025 - Get AAS X links set 1",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:5004/lookup/shells/dXJuOmFhczp0ZXN0OmJsdWUtc2NpZW5jZQ",
+    "shouldMatch": "expected/lookup_aasX_1.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "026 - Replace AAS X links set 2",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:5004/lookup/shells/dXJuOmFhczp0ZXN0OmJsdWUtc2NpZW5jZQ",
+    "data": "postBody/links_aasX_2.json",
+    "expectedStatus": 201
+  },
+  {
+    "context": "027 - Get AAS X links set 2",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:5004/lookup/shells/dXJuOmFhczp0ZXN0OmJsdWUtc2NpZW5jZQ",
+    "shouldMatch": "expected/lookup_aasX_2.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "028 - Delete AAS X",
+    "method": "DELETE",
+    "endpoint": "http://127.0.0.1:5004/lookup/shells/dXJuOmFhczp0ZXN0OmJsdWUtc2NpZW5jZQ",
+    "expectedStatus": 204
+  },
+  {
+    "context": "029 - Get deleted AAS X",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:5004/lookup/shells/dXJuOmFhczp0ZXN0OmJsdWUtc2NpZW5jZQ",
+    "expectedStatus": 404
+  },
+  {
+    "context": "030 - Delete AAS X again",
+    "method": "DELETE",
+    "endpoint": "http://127.0.0.1:5004/lookup/shells/dXJuOmFhczp0ZXN0OmJsdWUtc2NpZW5jZQ",
+    "expectedStatus": 404
+  },
+  {
+    "context": "031 - GET with non base64 AAS",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:5004/lookup/shells/urn:aas:not-encoded:crude-oil",
+    "expectedStatus": 400
+  },
+  {
+    "context": "032 - POST with non base64 AAS",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:5004/lookup/shells/urn:aas:not-encoded:crude-oil",
+    "data": "postBody/links_bad_raw_aas.json",
+    "expectedStatus": 400
+  },
+  {
+    "context": "033 - DELETE with non base64 AAS",
+    "method": "DELETE",
+    "endpoint": "http://127.0.0.1:5004/lookup/shells/urn:aas:not-encoded:crude-oil",
+    "expectedStatus": 400
+  },
+  {
+    "context": "034 - Create pagination AAS P1",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:5004/lookup/shells/dXJuOmFhczp0ZXN0OmNvcHBlcg",
+    "data": "postBody/links_page_shared.json",
+    "expectedStatus": 201
+  },
+  {
+    "context": "035 - Create pagination AAS P2",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:5004/lookup/shells/dXJuOmFhczp0ZXN0Omlyb24",
+    "data": "postBody/links_page_shared.json",
+    "expectedStatus": 201
+  },
+  {
+    "context": "036 - POST pagination page 1",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:5004/lookup/shellsByAssetLink?limit=1",
+    "data": "postBody/search_pagegroup.json",
+    "shouldMatch": "expected/search_page_1.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "037 - POST pagination page 2",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:5004/lookup/shellsByAssetLink?limit=1&cursor=dXJuOmFhczp0ZXN0Omlyb24",
+    "data": "postBody/search_pagegroup.json",
+    "shouldMatch": "expected/search_page_2.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "038 - Bad values in POST links",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:5004/lookup/shells/dXJuOmFhczp0ZXN0OmJhZC12YWx1ZXMtcG9zdA",
+    "data": "postBody/links_malformed_values.json",
+    "expectedStatus": 400
+  },
+  {
+    "context": "039 - Wrong shape object in POST links",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:5004/lookup/shells/dXJuOmFhczp0ZXN0Ondyb25nLXNoYXBlLXBvc3Q",
+    "data": "postBody/links_wrong_shape_object.json",
+    "expectedStatus": 400
+  },
+  {
+    "context": "040 - Wrong shape string in POST links",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:5004/lookup/shells/dXJuOmFhczp0ZXN0Ondyb25nLXNoYXBlLXBvc3Q",
+    "data": "postBody/links_wrong_shape_string.json",
+    "expectedStatus": 400
+  },
+  {
+    "context": "041 - Wrong shape null in POST links",
+    "action": "CHECK_LOOKUPSHELLS_NIL_BODY",
+    "endpoint": "http://127.0.0.1:5004/lookup/shells/dXJuOmFhczp0ZXN0Ondyb25nLXNoYXBlLXBvc3Q",
+    "expectedStatus": 400
+  },
+  {
+    "context": "042 - Search wrong shape assetLinks string",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:5004/lookup/shells/search",
+    "data": "postBody/search_wrong_shape_assetLinks_string.json",
+    "expectedStatus": 400
+  },
+  {
+    "context": "043 - Search wrong shape assetLinks items",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:5004/lookup/shells/search",
+    "data": "postBody/search_wrong_shape_assetLinks_items.json",
+    "expectedStatus": 400
+  },
+  {
+    "context": "044 - Search wrong shape root array",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:5004/lookup/shells/search",
+    "data": "postBody/search_wrong_shape_array.json",
+    "expectedStatus": 400
+  },
+  {
+    "context": "045 - Search wrong shape null",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:5004/lookup/shells/search",
+    "data": "postBody/search_wrong_shape_null.json",
+    "expectedStatus": 400
+  },
+  {
+    "context": "046 - POST plain string body",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:5004/lookup/shells/dXJuOmFhczp0ZXN0OmVuY29kZWQtYW5kLXN0cmluZw",
+    "data": "postBody/links_plain_string.json",
+    "expectedStatus": 400
+  },
+  {
+    "context": "047 - Search encoded values bad",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:5004/lookup/shells/search",
+    "data": "postBody/search_encoded_values_bad.json",
+    "expectedStatus": 400
+  },
+  {
+    "context": "048 - Wrong keys in POST links",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:5004/lookup/shells/dXJuOmFhczp0ZXN0Ondyb25nLWtleQ",
+    "data": "postBody/links_wrong_key.json",
+    "expectedStatus": 400
+  },
+  {
+    "context": "049 - Empty name or value in POST links",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:5004/lookup/shells/dXJuOmFhczp0ZXN0OmVtcHR5LWZpZWxkcw",
+    "data": "postBody/links_empty_fields.json",
+    "expectedStatus": 400
+  },
+  {
+    "context": "050 - Search negative limit",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:5004/lookup/shells/search",
+    "data": "postBody/search_negative_limit.json",
+    "expectedStatus": 400
+  },
+  {
+    "context": "051 - Missing body on shellsByAssetLink",
+    "action": "CHECK_SHELLSBYASSETLINK_MISSING_BODY",
+    "endpoint": "http://127.0.0.1:5004/lookup/shellsByAssetLink",
+    "expectedStatus": 400
+  },
+  {
+    "context": "052 - GET by assetIds single pair",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:5004/lookup/shells?limit=10&assetIds=eyJuYW1lIjoicGxhbnQiLCJ2YWx1ZSI6IlNQSURFUlRST04tWUFSRCJ9",
+    "shouldMatch": "expected/search_only_aasB.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "053 - GET by assetIds two pairs",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:5004/lookup/shells?limit=10&assetIds=eyJuYW1lIjoicGxhbnQiLCJ2YWx1ZSI6IlNQSURFUlRST04tWUFSRCJ9&assetIds=eyJuYW1lIjoic2VyaWFsTnVtYmVyIiwidmFsdWUiOiJTTi1lbmdpbmUtdW5pdCJ9",
+    "shouldMatch": "expected/search_only_aasB.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "054 - GET by assetIds two pairs repeated",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:5004/lookup/shells?limit=10&assetIds=eyJuYW1lIjoicGxhbnQiLCJ2YWx1ZSI6IlNQSURFUlRST04tWUFSRCJ9&assetIds=eyJuYW1lIjoic2VyaWFsTnVtYmVyIiwidmFsdWUiOiJTTi1lbmdpbmUtdW5pdCJ9",
+    "shouldMatch": "expected/search_only_aasB.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "055 - GET pagination page 1",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:5004/lookup/shells?limit=1&assetIds=eyJuYW1lIjoicGFnZUdyb3VwIiwidmFsdWUiOiJzY2llbmNlLXBhY2stMyJ9",
+    "shouldMatch": "expected/search_page_1.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "056 - GET pagination page 2",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:5004/lookup/shells?limit=1&assetIds=eyJuYW1lIjoicGFnZUdyb3VwIiwidmFsdWUiOiJzY2llbmNlLXBhY2stMyJ9&cursor=dXJuOmFhczp0ZXN0Omlyb24",
+    "shouldMatch": "expected/search_page_2.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "057 - GET bad cursor",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:5004/lookup/shells?limit=1&assetIds=eyJuYW1lIjoicGxhbnQiLCJ2YWx1ZSI6IlNQSURFUlRST04tWUFSRCJ9&cursor=not-base64!!!",
+    "expectedStatus": 400
+  },
+  {
+    "context": "058 - POST bad cursor",
+    "method": "POST",
+    "endpoint": "http://127.0.0.1:5004/lookup/shellsByAssetLink?limit=1&cursor=not-base64!!!",
+    "data": "postBody/search_bad_cursor_pair.json",
+    "expectedStatus": 400
+  },
+  {
+    "context": "059 - GET malformed assetIds",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:5004/lookup/shells?limit=10&assetIds=%25%25ZZ-invalid",
+    "expectedStatus": 400
+  }
+]

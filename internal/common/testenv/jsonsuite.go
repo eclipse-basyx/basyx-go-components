@@ -75,7 +75,6 @@ type JSONSuiteOptions struct {
 	ConfigPath string
 	LogsDir    string
 
-	InitialDelay          time.Duration
 	RequestTimeout        time.Duration
 	DefaultExpectedStatus int
 
@@ -242,10 +241,6 @@ func RunJSONSuite(t *testing.T, options JSONSuiteOptions) {
 	err = os.Mkdir(normalized.LogsDir, 0o755)
 	if err != nil && !os.IsExist(err) {
 		t.Fatalf("Failed to create logs directory: %v", err)
-	}
-
-	if normalized.InitialDelay > 0 {
-		time.Sleep(normalized.InitialDelay)
 	}
 
 	runner := &JSONSuiteRunner{

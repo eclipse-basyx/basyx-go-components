@@ -38,7 +38,6 @@ import (
 
 func TestIntegration(t *testing.T) {
 	testenv.RunJSONSuite(t, testenv.JSONSuiteOptions{
-		InitialDelay:          15 * time.Second,
 		DefaultExpectedStatus: http.StatusOK,
 		TokenProvider: testenv.NewPasswordGrantTokenProvider(
 			"http://localhost:8081/realms/basyx/protocol/openid-connect/token",
