@@ -69,7 +69,8 @@ type Redirect struct {
 	Location string
 }
 
-func setSafeDownloadHeaders(wHeader http.Header, filename, contentType string) {
+// SetSafeDownloadHeaders sets HTTP headers for safely downloading a file, including Content-Type and Content-Disposition.
+func SetSafeDownloadHeaders(wHeader http.Header, filename, contentType string) {
 	if contentType == "" {
 		contentType = "application/octet-stream"
 	}
@@ -170,7 +171,7 @@ func EncodeJSONResponse(i interface{}, status *int, w http.ResponseWriter) error
 		if err != nil {
 			return err
 		}
-		setSafeDownloadHeaders(wHeader, f.Name(), "application/octet-stream")
+		SetSafeDownloadHeaders(wHeader, f.Name(), "application/octet-stream")
 		if status != nil {
 			w.WriteHeader(*status)
 		} else {

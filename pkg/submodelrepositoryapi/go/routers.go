@@ -13,16 +13,15 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"mime"
 	"mime/multipart"
 	"net/http"
 	"net/url"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
@@ -92,24 +91,6 @@ type FileDownload struct {
 	Filename    string
 }
 
-func setSafeDownloadHeaders(wHeader http.Header, filename, contentType string) {
-	if contentType == "" {
-		contentType = "application/octet-stream"
-	}
-
-	wHeader.Set("Content-Type", contentType)
-	wHeader.Set("X-Content-Type-Options", "nosniff")
-
-	if filename == "" {
-		wHeader.Set("Content-Disposition", "attachment")
-		return
-	}
-
-	safeFilename := filepath.Base(filename)
-	contentDisposition := mime.FormatMediaType("attachment", map[string]string{"filename": safeFilename})
-	wHeader.Set("Content-Disposition", contentDisposition)
-}
-
 // EncodeJSONResponse encodes a response as JSON and writes it to the HTTP response writer.
 //
 // This function handles both file responses (detected by *os.File type) and JSON responses.
@@ -148,7 +129,7 @@ func EncodeJSONResponse(i interface{}, status *int, w http.ResponseWriter) error
 				return nil
 			}
 		case FileDownload:
-			setSafeDownloadHeaders(wHeader, r.Filename, r.ContentType)
+			model.SetSafeDownloadHeaders(wHeader, r.Filename, r.ContentType)
 			if status != nil {
 				w.WriteHeader(*status)
 			} else {
@@ -159,7 +140,7 @@ func EncodeJSONResponse(i interface{}, status *int, w http.ResponseWriter) error
 			return err
 		case *FileDownload:
 			if r != nil {
-				setSafeDownloadHeaders(wHeader, r.Filename, r.ContentType)
+				model.SetSafeDownloadHeaders(wHeader, r.Filename, r.ContentType)
 				if status != nil {
 					w.WriteHeader(*status)
 				} else {
@@ -178,7 +159,7 @@ func EncodeJSONResponse(i interface{}, status *int, w http.ResponseWriter) error
 		if err != nil {
 			return err
 		}
-		setSafeDownloadHeaders(wHeader, f.Name(), "application/octet-stream")
+		model.SetSafeDownloadHeaders(wHeader, f.Name(), "application/octet-stream")
 		if status != nil {
 			w.WriteHeader(*status)
 		} else {
