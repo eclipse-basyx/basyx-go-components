@@ -177,3 +177,57 @@ func TestPutSubmodelUpdatePathReturnsTrue(t *testing.T) {
 	require.True(t, isUpdate)
 	require.NoError(t, mock.ExpectationsWereMet())
 }
+
+func TestPatchSubmodelElementByPathNotFoundReturnsNotFound(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() {
+		_ = db.Close()
+	}()
+
+	sut := &SubmodelDatabase{db: db}
+	patchElement := types.NewCapability()
+
+	mock.ExpectQuery(`SELECT .*FROM .*submodel`).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(100))
+	mock.ExpectQuery(`SELECT .*model_type.*FROM .*submodel_element`).
+		WillReturnError(sql.ErrNoRows)
+
+	err = sut.UpdateSubmodelElement("sm-1", "does.not.exist", patchElement, false)
+	require.Error(t, err)
+	require.True(t, common.IsErrNotFound(err))
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestPatchSubmodelElementByPathSuccess(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() {
+		_ = db.Close()
+	}()
+
+	sut := &SubmodelDatabase{db: db}
+	patchElement := types.NewCapability()
+	patchedIDShort := "renamedButIgnoredForPatch"
+	patchElement.SetIDShort(&patchedIDShort)
+
+	mock.ExpectQuery(`SELECT .*FROM .*submodel`).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(100))
+	mock.ExpectQuery(`SELECT .*model_type.*FROM .*submodel_element`).
+		WillReturnRows(sqlmock.NewRows([]string{"model_type"}).AddRow(types.ModelTypeCapability))
+
+	mock.ExpectBegin()
+	mock.ExpectQuery(`SELECT .*FROM .*submodel`).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(100))
+	mock.ExpectQuery(`SELECT .*id.*,.*id_short.*FROM .*submodel_element`).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "id_short"}).AddRow(200, "oldIdShort"))
+	mock.ExpectExec(`UPDATE .*submodel_element`).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec(`INSERT INTO .*submodel_element_payload`).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
+
+	err = sut.UpdateSubmodelElement("sm-1", "oldIdShort", patchElement, false)
+	require.NoError(t, err)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
