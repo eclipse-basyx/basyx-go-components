@@ -64,7 +64,7 @@ func createContextReference(
 	}
 
 	sqlStr, args, err = d.Insert(payloadTable).Rows(goqu.Record{
-		common.ColReferenceID:             ownerID,
+		common.ColReferenceID:      ownerID,
 		"parent_reference_payload": goqu.L("?::jsonb", string(parentReferencePayload)),
 	}).ToSQL()
 	if err != nil {
@@ -118,8 +118,8 @@ func createContextReferences1ToMany(
 		}
 
 		sqlStr, args, err := d.Insert(referenceTable).Rows(goqu.Record{
-			ownerColumn: ownerID,
-			common.ColType:     reference.Type(),
+			ownerColumn:    ownerID,
+			common.ColType: reference.Type(),
 		}).Returning(goqu.C(common.ColID)).ToSQL()
 		if err != nil {
 			return err
@@ -135,7 +135,7 @@ func createContextReferences1ToMany(
 			return err
 		}
 		sqlStr, args, err = d.Insert(payloadTable).Rows(goqu.Record{
-			common.ColReferenceID:             referenceID,
+			common.ColReferenceID:      referenceID,
 			"parent_reference_payload": goqu.L("?::jsonb", string(parentReferencePayload)),
 		}).ToSQL()
 		if err != nil {

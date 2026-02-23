@@ -106,8 +106,8 @@ func createSpecificAssetIDPayload(tx *sql.Tx, specificAssetID int64, semanticID 
 	}
 
 	sqlStr, args, err := d.Insert(common.TblSpecificAssetIDPayload).Rows(goqu.Record{
-		common.ColSpecificAssetID:    specificAssetID,
-		"semantic_id_payload": goqu.L("?::jsonb", string(semanticPayload)),
+		common.ColSpecificAssetID: specificAssetID,
+		"semantic_id_payload":     goqu.L("?::jsonb", string(semanticPayload)),
 	}).ToSQL()
 	if err != nil {
 		return err
