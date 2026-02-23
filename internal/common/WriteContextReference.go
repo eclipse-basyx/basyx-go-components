@@ -36,6 +36,9 @@ import (
 	"github.com/doug-martin/goqu/v9"
 )
 
+// CreateContextReference stores a single context reference in the given tables
+// within the provided transaction, including its payload and ordered keys.
+// It returns nil when reference is nil or when the reference has no keys.
 func CreateContextReference(
 	tx *sql.Tx,
 	ownerID int64,
@@ -99,6 +102,10 @@ func CreateContextReference(
 	return err
 }
 
+// CreateContextReferences1ToMany stores multiple context references for one
+// owner in the given tables within the provided transaction, including each
+// reference payload and ordered keys.
+// It skips nil references and returns nil when the input slice is empty.
 func CreateContextReferences1ToMany(
 	tx *sql.Tx,
 	ownerID int64,

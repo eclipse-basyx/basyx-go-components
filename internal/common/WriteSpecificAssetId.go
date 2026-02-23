@@ -34,6 +34,8 @@ import (
 	"github.com/doug-martin/goqu/v9"
 )
 
+// CreateSpecificAssetIDDescriptor stores specific asset IDs for a descriptor
+// and links them to the optional AAS reference.
 func CreateSpecificAssetIDDescriptor(tx *sql.Tx, descriptorID int64, aasRef sql.NullInt64, specificAssetIDs []types.ISpecificAssetID) error {
 	return InsertSpecificAssetIDs(
 		tx,
@@ -44,6 +46,8 @@ func CreateSpecificAssetIDDescriptor(tx *sql.Tx, descriptorID int64, aasRef sql.
 	)
 }
 
+// CreateSpecificAssetIDForAssetInformation stores specific asset IDs for an
+// asset information record.
 func CreateSpecificAssetIDForAssetInformation(
 	tx *sql.Tx,
 	assetInformationID int64,
@@ -58,6 +62,9 @@ func CreateSpecificAssetIDForAssetInformation(
 	)
 }
 
+// InsertSpecificAssetIDs inserts specific asset IDs with either a descriptor
+// owner or an asset information owner, including related references and payload
+// records.
 func InsertSpecificAssetIDs(
 	tx *sql.Tx,
 	descriptorID sql.NullInt64,
@@ -66,7 +73,7 @@ func InsertSpecificAssetIDs(
 	specificAssetIDs []types.ISpecificAssetID,
 ) error {
 	if descriptorID.Valid && assetInformationID.Valid {
-		return fmt.Errorf("Insert into specific_asset_id: descriptor_id and asset_information_id must not both be set")
+		return fmt.Errorf("insert into specific_asset_id: descriptor_id and asset_information_id must not both be set")
 	}
 	if specificAssetIDs == nil {
 		return nil
@@ -118,6 +125,8 @@ func InsertSpecificAssetIDs(
 	return nil
 }
 
+// createSpecificAssetIDPayload stores the semantic ID payload for a specific
+// asset ID as JSONB.
 func createSpecificAssetIDPayload(tx *sql.Tx, specificAssetID int64, semanticID types.IReference) error {
 	d := goqu.Dialect(Dialect)
 	semanticPayload, err := buildReferencePayload(semanticID)
@@ -136,6 +145,8 @@ func createSpecificAssetIDPayload(tx *sql.Tx, specificAssetID int64, semanticID 
 	return err
 }
 
+// createSpecificAssetIDSupplementalSemantic stores supplemental semantic IDs
+// for a specific asset ID.
 func createSpecificAssetIDSupplementalSemantic(tx *sql.Tx, specificAssetID int64, references []types.IReference) error {
 	return CreateContextReferences1ToMany(
 		tx,
