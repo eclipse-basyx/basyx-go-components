@@ -51,8 +51,8 @@ CREATE TABLE IF NOT EXISTS level_type (
 -- AAS REPO
 -- ------------------------------------------
 CREATE TABLE IF NOT EXISTS aas (
-  aas_id BIGSERIAL PRIMARY KEY,
-  id varchar(2048) UNIQUE NOT NULL,
+  id BIGSERIAL PRIMARY KEY,
+  aas_id varchar(2048) UNIQUE NOT NULL,
   id_short varchar(128),
   category varchar(128),
   model_type int NOT NULL DEFAULT 3
@@ -60,21 +60,21 @@ CREATE TABLE IF NOT EXISTS aas (
 ); -- asset_information in asset_information
 
 CREATE TABLE IF NOT EXISTS aas_payload ( 
-  aas_payload_id BIGINT PRIMARY KEY REFERENCES aas(aas_id) ON DELETE CASCADE,
-  aas_administrative_information_payload JSONB DEFAULT '[]',
-  aas_display_name_payload JSONB DEFAULT '[]', 
-  aas_description_payload JSONB DEFAULT '[]',
-  aas_extension_payload JSONB DEFAULT '[]',
-  aas_embedded_data_specification_payload JSONB DEFAULT '[]',
-  aas_derived_from JSONB DEFAULT '[]'
+  aas_id BIGINT PRIMARY KEY REFERENCES aas(id) ON DELETE CASCADE,
+  description_payload JSONB,
+  displayname_payload JSONB,
+  administrative_information_payload JSONB,
+  embedded_data_specification_payload JSONB,
+  extensions_payload JSONB,
+  derived_from_payload JSONB
 ); 
 
 CREATE TABLE IF NOT EXISTS asset_information ( 
-  asset_information_id BIGINT PRIMARY KEY REFERENCES aas(aas_id) ON DELETE CASCADE,
+  asset_information_id BIGINT PRIMARY KEY REFERENCES aas(id) ON DELETE CASCADE,
   asset_kind int, 
   global_asset_id varchar(2048),
   asset_type varchar(2048),
-  default_thumbnail JSONB DEFAULT '[]',
+  default_thumbnail JSONB,
   model_type int NOT NULL DEFAULT 4 
 ); -- specific_asset_id in specific_asset_id
 -- 
@@ -279,9 +279,8 @@ CREATE TABLE IF NOT EXISTS specific_asset_id (
   id BIGSERIAL PRIMARY KEY,
   position     INTEGER NOT NULL,                -- <- Array-Index
   descriptor_id BIGINT REFERENCES descriptor(id) ON DELETE CASCADE,
-  asset_information_id BIGINT REFERENCES asset_information(asset_information_id) ON DELETE CASCADE,
   aasRef BIGINT REFERENCES aas_identifier(id) ON DELETE CASCADE,
-  aas BIGINT REFERENCES aas(aas_id) ON DELETE CASCADE, 
+  asset_information_id BIGINT REFERENCES asset_information(asset_information_id) ON DELETE CASCADE,
   name VARCHAR(64) NOT NULL,
   value VARCHAR(2048) NOT NULL
 );
@@ -535,7 +534,7 @@ CREATE INDEX IF NOT EXISTS ix_aas_identifier_created_at ON aas_identifier(create
 CREATE INDEX IF NOT EXISTS ix_specasset_descriptor_id_name ON specific_asset_id(descriptor_id, name);
 CREATE INDEX IF NOT EXISTS ix_specasset_descriptor_id_position ON specific_asset_id(descriptor_id, position);
 CREATE INDEX IF NOT EXISTS ix_specasset_aasref ON specific_asset_id(aasRef);
-CREATE INDEX IF NOT EXISTS ix_specasset_aas ON specific_asset_id(aas);
+CREATE INDEX IF NOT EXISTS ix_specasset_aas ON specific_asset_id(asset_information_id);
 CREATE INDEX IF NOT EXISTS ix_specasset_name_value_aasref ON specific_asset_id(name, value, aasRef);
 CREATE INDEX IF NOT EXISTS ix_specasset_descriptor_id ON specific_asset_id(descriptor_id);
 CREATE INDEX IF NOT EXISTS ix_specasset_name ON specific_asset_id(name);
