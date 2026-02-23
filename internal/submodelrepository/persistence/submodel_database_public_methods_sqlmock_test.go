@@ -472,7 +472,7 @@ func TestGetSubmodelReferencesReturnsModelReferencesWithSingleSubmodelKey(t *tes
 
 	mock.ExpectQuery(`SELECT .*FROM .*submodel`).WillReturnRows(rows)
 
-	references, cursor, err := sut.GetSubmodelReferences(1, "", "")
+	references, cursor, err := sut.GetSubmodelReferences(1, "", "", "")
 	require.NoError(t, err)
 	require.Len(t, references, 1)
 	require.Equal(t, "sm-2", cursor)
@@ -522,12 +522,63 @@ func TestGetSubmodelReferencesReturnsBadRequestForEmptySubmodelIdentifier(t *tes
 
 	mock.ExpectQuery(`SELECT .*FROM .*submodel`).WillReturnRows(rows)
 
-	references, cursor, err := sut.GetSubmodelReferences(10, "", "")
+	references, cursor, err := sut.GetSubmodelReferences(10, "", "", "")
 	require.Error(t, err)
 	require.Nil(t, references)
 	require.Empty(t, cursor)
 	require.True(t, common.IsErrBadRequest(err))
 	require.Contains(t, err.Error(), "SMREPO-BUILDSMREF-INVALIDIDENTIFIER")
+
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestGetSubmodelReferencesWithSemanticIDFilterReturnsMatchingReference(t *testing.T) {
+	t.Parallel()
+
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() {
+		_ = db.Close()
+	}()
+
+	sut := &SubmodelDatabase{db: db}
+
+	rows := sqlmock.NewRows([]string{
+		"submodel_identifier",
+		"id_short",
+		"category",
+		"kind",
+		"description",
+		"display_name",
+		"administrative_information",
+		"embedded_data_specification",
+		"supplemental_semantic_ids",
+		"extensions",
+		"qualifiers",
+		"semantic_id",
+	}).
+		AddRow("sm-filtered-1", "idShort-filtered-1", nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+
+	semanticID := "urn:semantic:id:test"
+	mock.ExpectQuery(`SELECT .*FROM .*submodel.*ssrk_filter.*` + semanticID).WillReturnRows(rows)
+
+	references, cursor, err := sut.GetSubmodelReferences(10, "", "", semanticID)
+	require.NoError(t, err)
+	require.Len(t, references, 1)
+	require.Empty(t, cursor)
+
+	jsonReference, convErr := jsonization.ToJsonable(references[0])
+	require.NoError(t, convErr)
+	require.Equal(t, "ModelReference", jsonReference["type"])
+
+	keysAny, ok := jsonReference["keys"].([]any)
+	require.True(t, ok)
+	require.Len(t, keysAny, 1)
+
+	key, ok := keysAny[0].(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "Submodel", key["type"])
+	require.Equal(t, "sm-filtered-1", key["value"])
 
 	require.NoError(t, mock.ExpectationsWereMet())
 }

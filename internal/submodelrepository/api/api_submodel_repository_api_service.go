@@ -611,7 +611,6 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsValueOnly(ctx context.C
 //nolint:revive
 func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsReference(ctx context.Context, semanticID string, idShort string, limit int32, cursor string, level string) (gen.ImplResponse, error) {
 	_ = ctx
-	_ = semanticID
 	_ = level
 	const operation = "GetAllSubmodelsReference"
 
@@ -620,7 +619,15 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsReference(ctx context.C
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "BadCursor"), nil
 	}
 
-	references, nextCursor, err := s.submodelBackend.GetSubmodelReferences(limit, decodedCursor, idShort)
+	decodedSemanticID := ""
+	if semanticID != "" {
+		decodedSemanticID, decodeErr = decodeBase64RawStd(semanticID)
+		if decodeErr != nil {
+			return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "BadSemanticID"), nil
+		}
+	}
+
+	references, nextCursor, err := s.submodelBackend.GetSubmodelReferences(limit, decodedCursor, idShort, decodedSemanticID)
 	if err != nil {
 		if common.IsErrBadRequest(err) {
 			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
