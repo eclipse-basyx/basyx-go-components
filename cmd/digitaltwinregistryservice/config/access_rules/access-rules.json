@@ -124,7 +124,7 @@
         [
           {
             "FRAGMENT": "$aasdesc#specificAssetIds[].externalSubjectId",
-            "USEFORMULA": "always_false"
+            "USEFORMULA": "bpn_match"
           }
         ] 
       },
