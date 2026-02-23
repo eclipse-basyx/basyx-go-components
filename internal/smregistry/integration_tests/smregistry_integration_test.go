@@ -22,62 +22,66 @@
 *
 * SPDX-License-Identifier: MIT
 ******************************************************************************/
+// Author: Martin Stemmer ( Fraunhofer IESE )
 
 //nolint:all
-package bench
+package main
 
 import (
+	"encoding/base64"
+	"encoding/json"
+	"fmt"
 	"net/http"
 	"os"
 	"testing"
 	"time"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/testenv"
+	_ "github.com/lib/pq" // PostgreSQL Treiber
 	"github.com/stretchr/testify/require"
 )
 
-const composeFilePath = "./docker_compose/docker_compose.yml"
-const discoveryBaseURL = "http://127.0.0.1:5004"
-const actionShellsByAssetLinkMissingBody = "CHECK_SHELLSBYASSETLINK_MISSING_BODY"
-const actionLookupShellsNilBody = "CHECK_LOOKUPSHELLS_NIL_BODY"
+func deleteAllSubmodelDescriptors(t *testing.T, runner *testenv.JSONSuiteRunner, stepNumber int) {
+	body, err := runner.RunStep(testenv.JSONSuiteStep{
+		Method:         http.MethodGet,
+		Endpoint:       "http://127.0.0.1:6005/submodel-descriptors",
+		ExpectedStatus: http.StatusOK,
+	}, stepNumber)
+	require.NoError(t, err)
 
-func TestMain(m *testing.M) {
-	os.Exit(testenv.RunComposeTestMain(m, testenv.ComposeTestMainOptions{
-		ComposeFile:   composeFilePath,
-		HealthURL:     discoveryBaseURL + "/health",
-		HealthTimeout: 2 * time.Minute,
-	}))
+	var list struct {
+		Result []struct {
+			ID string `json:"id"`
+		} `json:"result"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(body), &list))
+
+	for _, item := range list.Result {
+		enc := base64.RawURLEncoding.EncodeToString([]byte(item.ID))
+		_, err := runner.RunStep(testenv.JSONSuiteStep{
+			Method:         http.MethodDelete,
+			Endpoint:       fmt.Sprintf("http://127.0.0.1:6005/submodel-descriptors/%s", enc),
+			ExpectedStatus: http.StatusNoContent,
+		}, stepNumber)
+		require.NoError(t, err)
+	}
 }
 
 func TestIntegration(t *testing.T) {
 	testenv.RunJSONSuite(t, testenv.JSONSuiteOptions{
-		ConfigPath: "it_config.json",
-		ShouldCompareResponse: testenv.CompareMethods(
-			http.MethodGet,
-			http.MethodPost,
-		),
+		ShouldCompareResponse: testenv.CompareMethods(http.MethodGet),
 		ActionHandlers: map[string]testenv.JSONStepAction{
-			actionShellsByAssetLinkMissingBody: checkPostNilBodyExpectedStatus,
-			actionLookupShellsNilBody:          checkPostNilBodyExpectedStatus,
+			"DELETE_ALL_SUBMODEL_DESCRIPTORS": func(t *testing.T, runner *testenv.JSONSuiteRunner, _ testenv.JSONSuiteStep, stepNumber int) {
+				deleteAllSubmodelDescriptors(t, runner, stepNumber)
+			},
 		},
 	})
 }
 
-func checkPostNilBodyExpectedStatus(t *testing.T, _ *testenv.JSONSuiteRunner, step testenv.JSONSuiteStep, _ int) {
-	t.Helper()
-
-	expectedStatus := step.ExpectedStatus
-	if expectedStatus == 0 {
-		expectedStatus = http.StatusBadRequest
-	}
-
-	req, err := http.NewRequest(http.MethodPost, step.Endpoint, nil)
-	require.NoError(t, err)
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := testenv.HTTPClient().Do(req)
-	require.NoError(t, err)
-	defer func() { _ = resp.Body.Close() }()
-
-	require.Equal(t, expectedStatus, resp.StatusCode)
+func TestMain(m *testing.M) {
+	os.Exit(testenv.RunComposeTestMain(m, testenv.ComposeTestMainOptions{
+		ComposeFile:   "docker_compose/docker_compose.yml",
+		HealthURL:     "http://127.0.0.1:6005/health",
+		HealthTimeout: 2 * time.Minute,
+	}))
 }
