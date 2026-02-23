@@ -34,7 +34,6 @@ import (
 
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
-	"github.com/doug-martin/goqu/v9/exp"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
@@ -549,22 +548,6 @@ func ensureSubmodelDescriptorGroups(out map[int64][]model.SubmodelDescriptor, gr
 			out[id] = nil
 		}
 	}
-}
-
-func buildSubmodelDescriptorSelectExpressions(
-	ctx context.Context,
-	mapper []auth.ExpressionIdentifiableMapper,
-	root grammar.CollectorRoot,
-) ([]exp.Expression, *grammar.ResolvedFieldPathCollector, error) {
-	collector, err := grammar.NewResolvedFieldPathCollectorForRoot(root)
-	if err != nil {
-		return nil, nil, err
-	}
-	expressions, err := auth.GetColumnSelectStatement(ctx, mapper, collector)
-	if err != nil {
-		return nil, nil, err
-	}
-	return expressions, collector, nil
 }
 
 func addMapperFragmentFiltersFromContext(
