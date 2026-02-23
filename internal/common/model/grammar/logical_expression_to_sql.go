@@ -1029,6 +1029,13 @@ func existsJoinRulesForAASDescriptors() map[string]existsJoinRule {
 
 func existsJoinRulesForSMDesc() map[string]existsJoinRule {
 	rules := existsJoinRulesForAASDescriptors()
+	rules["submodel_descriptor"] = existsJoinRule{
+		Alias: "submodel_descriptor",
+		Deps:  nil,
+		Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
+			return ds
+		},
+	}
 	rules["aas_descriptor"] = existsJoinRule{
 		Alias: "aas_descriptor",
 		Deps:  []string{"submodel_descriptor"},
