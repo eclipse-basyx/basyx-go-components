@@ -89,6 +89,7 @@ const (
 	ColDisplayNamePayload        = "displayname_payload"
 	ColAdministrativeInfoPayload = "administrative_information_payload"
 	ColExtensionsPayload         = "extensions_payload"
+	ColAssetInformationID        = "asset_information_id"
 	ColAssetKind                 = "asset_kind"
 	ColAssetType                 = "asset_type"
 	ColGlobalAssetID             = "global_asset_id"

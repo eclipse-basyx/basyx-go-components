@@ -69,11 +69,11 @@ func ReadSpecificAssetIDsByAASIdentifier(
 ) ([]types.ISpecificAssetID, error) {
 	var aasRef int64
 	d := goqu.Dialect(common.Dialect)
-	aasIdentifierTable := goqu.T(common.TblAASIdentifier)
+	tAASIdentifier := goqu.T(common.TblAASIdentifier)
 	sqlStr, args, err := d.
-		From(aasIdentifierTable).
-		Select(aasIdentifierTable.Col(common.ColID)).
-		Where(aasIdentifierTable.Col("aasid").Eq(aasID)).
+		From(tAASIdentifier).
+		Select(tAASIdentifier.Col(common.ColID)).
+		Where(tAASIdentifier.Col("aasid").Eq(aasID)).
 		ToSQL()
 	if err != nil {
 		return nil, err
@@ -100,7 +100,7 @@ func ReadSpecificAssetIDsByAASRef(
 	}
 
 	d := goqu.Dialect(common.Dialect)
-	aasIdentifierTable := goqu.T(common.TblAASIdentifier)
+	tAASIdentifier := goqu.T(common.TblAASIdentifier)
 	externalSubjectReferenceAlias := goqu.T("specific_asset_id_external_subject_id_reference").As(common.AliasExternalSubjectReference)
 	specificAssetIDPayloadAlias := goqu.T(common.TblSpecificAssetIDPayload).As("specific_asset_id_payload")
 	collector, err := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootBD)
@@ -114,8 +114,8 @@ func ReadSpecificAssetIDsByAASRef(
 
 	ds := d.From(common.TSpecificAssetID).
 		InnerJoin(
-			aasIdentifierTable,
-			goqu.On(common.TSpecificAssetID.Col(common.ColAASRef).Eq(aasIdentifierTable.Col(common.ColID))),
+			tAASIdentifier,
+			goqu.On(common.TSpecificAssetID.Col(common.ColAASRef).Eq(tAASIdentifier.Col(common.ColID))),
 		).
 		LeftJoin(
 			externalSubjectReferenceAlias,
@@ -239,8 +239,9 @@ func ReplaceSpecificAssetIDsByAASIdentifier(
 		if _, err := tx.ExecContext(ctx, `DELETE FROM specific_asset_id WHERE aasRef = $1`, aasRef); err != nil {
 			return err
 		}
-		return insertSpecificAssetIDs(
+		return common.InsertSpecificAssetIDs(
 			tx,
+			sql.NullInt64{},
 			sql.NullInt64{},
 			sql.NullInt64{Int64: aasRef, Valid: true},
 			specificAssetIDs,
@@ -251,7 +252,7 @@ func ReplaceSpecificAssetIDsByAASIdentifier(
 func ensureAASIdentifierTx(ctx context.Context, tx *sql.Tx, aasID string) (int64, error) {
 	var aasRef int64
 	d := goqu.Dialect(common.Dialect)
-	aasIdentifierTable := goqu.T(common.TblAASIdentifier)
+	tAASIdentifier := goqu.T(common.TblAASIdentifier)
 	sqlStr, args, err := d.
 		Insert(common.TblAASIdentifier).
 		Rows(goqu.Record{"aasid": aasID}).
@@ -261,7 +262,7 @@ func ensureAASIdentifierTx(ctx context.Context, tx *sql.Tx, aasID string) (int64
 				goqu.Record{"aasid": goqu.I("excluded.aasid")},
 			),
 		).
-		Returning(aasIdentifierTable.Col(common.ColID)).
+		Returning(tAASIdentifier.Col(common.ColID)).
 		ToSQL()
 	if err != nil {
 		return 0, err

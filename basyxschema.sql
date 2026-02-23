@@ -279,6 +279,7 @@ CREATE TABLE IF NOT EXISTS specific_asset_id (
   id BIGSERIAL PRIMARY KEY,
   position     INTEGER NOT NULL,                -- <- Array-Index
   descriptor_id BIGINT REFERENCES descriptor(id) ON DELETE CASCADE,
+  asset_information_id BIGINT REFERENCES asset_information(asset_information_id) ON DELETE CASCADE,
   aasRef BIGINT REFERENCES aas_identifier(id) ON DELETE CASCADE,
   aas BIGINT REFERENCES aas(aas_id) ON DELETE CASCADE, 
   name VARCHAR(64) NOT NULL,

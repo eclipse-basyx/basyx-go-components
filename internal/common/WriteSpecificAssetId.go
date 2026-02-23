@@ -24,49 +24,69 @@
 ******************************************************************************/
 // Author: Martin Stemmer ( Fraunhofer IESE )
 
-package descriptors
+package common
 
 import (
 	"database/sql"
+	"fmt"
 
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
-	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 )
 
-func createSpecificAssetID(tx *sql.Tx, descriptorID int64, aasRef sql.NullInt64, specificAssetIDs []types.ISpecificAssetID) error {
-	return insertSpecificAssetIDs(
+func CreateSpecificAssetIDDescriptor(tx *sql.Tx, descriptorID int64, aasRef sql.NullInt64, specificAssetIDs []types.ISpecificAssetID) error {
+	return InsertSpecificAssetIDs(
 		tx,
 		sql.NullInt64{Int64: descriptorID, Valid: true},
+		sql.NullInt64{},
 		aasRef,
 		specificAssetIDs,
 	)
 }
 
-func insertSpecificAssetIDs(
+func CreateSpecificAssetIDForAssetInformation(
+	tx *sql.Tx,
+	assetInformationID int64,
+	specificAssetIDs []types.ISpecificAssetID,
+) error {
+	return InsertSpecificAssetIDs(
+		tx,
+		sql.NullInt64{},
+		sql.NullInt64{Int64: assetInformationID, Valid: true},
+		sql.NullInt64{},
+		specificAssetIDs,
+	)
+}
+
+func InsertSpecificAssetIDs(
 	tx *sql.Tx,
 	descriptorID sql.NullInt64,
+	assetInformationID sql.NullInt64,
 	aasRef sql.NullInt64,
 	specificAssetIDs []types.ISpecificAssetID,
 ) error {
+	if descriptorID.Valid && assetInformationID.Valid {
+		return fmt.Errorf("Insert into specific_asset_id: descriptor_id and asset_information_id must not both be set")
+	}
 	if specificAssetIDs == nil {
 		return nil
 	}
 	if len(specificAssetIDs) > 0 {
-		d := goqu.Dialect(common.Dialect)
+		d := goqu.Dialect(Dialect)
 		for i, val := range specificAssetIDs {
 			var err error
 
 			sqlStr, args, err := d.
-				Insert(common.TblSpecificAssetID).
+				Insert(TblSpecificAssetID).
 				Rows(goqu.Record{
-					common.ColDescriptorID: descriptorID,
-					common.ColPosition:     i,
-					common.ColName:         val.Name(),
-					common.ColValue:        val.Value(),
-					common.ColAASRef:       aasRef,
+					ColDescriptorID:       descriptorID,
+					ColAssetInformationID: assetInformationID,
+					ColPosition:           i,
+					ColName:               val.Name(),
+					ColValue:              val.Value(),
+					ColAASRef:             aasRef,
 				}).
-				Returning(common.TSpecificAssetID.Col(common.ColID)).
+				Returning(TSpecificAssetID.Col(ColID)).
 				ToSQL()
 			if err != nil {
 				return err
@@ -76,7 +96,7 @@ func insertSpecificAssetIDs(
 				return err
 			}
 
-			if err = createContextReference(
+			if err = CreateContextReference(
 				tx,
 				id,
 				val.ExternalSubjectID(),
@@ -99,15 +119,15 @@ func insertSpecificAssetIDs(
 }
 
 func createSpecificAssetIDPayload(tx *sql.Tx, specificAssetID int64, semanticID types.IReference) error {
-	d := goqu.Dialect(common.Dialect)
+	d := goqu.Dialect(Dialect)
 	semanticPayload, err := buildReferencePayload(semanticID)
 	if err != nil {
 		return err
 	}
 
-	sqlStr, args, err := d.Insert(common.TblSpecificAssetIDPayload).Rows(goqu.Record{
-		common.ColSpecificAssetID: specificAssetID,
-		"semantic_id_payload":     goqu.L("?::jsonb", string(semanticPayload)),
+	sqlStr, args, err := d.Insert(TblSpecificAssetIDPayload).Rows(goqu.Record{
+		ColSpecificAssetID:    specificAssetID,
+		"semantic_id_payload": goqu.L("?::jsonb", string(semanticPayload)),
 	}).ToSQL()
 	if err != nil {
 		return err
@@ -117,11 +137,11 @@ func createSpecificAssetIDPayload(tx *sql.Tx, specificAssetID int64, semanticID 
 }
 
 func createSpecificAssetIDSupplementalSemantic(tx *sql.Tx, specificAssetID int64, references []types.IReference) error {
-	return createContextReferences1ToMany(
+	return CreateContextReferences1ToMany(
 		tx,
 		specificAssetID,
 		references,
-		common.TblSpecificAssetIDSuppSemantic,
-		common.ColSpecificAssetIDID,
+		TblSpecificAssetIDSuppSemantic,
+		ColSpecificAssetIDID,
 	)
 }

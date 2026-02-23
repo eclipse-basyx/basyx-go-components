@@ -24,17 +24,19 @@
 ******************************************************************************/
 // Author: Martin Stemmer ( Fraunhofer IESE )
 
-package descriptors
+package common
 
 import (
 	"database/sql"
+	"encoding/json"
+	"fmt"
 
+	"github.com/FriedJannik/aas-go-sdk/jsonization"
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
-	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 )
 
-func createContextReference(
+func CreateContextReference(
 	tx *sql.Tx,
 	ownerID int64,
 	reference types.IReference,
@@ -45,10 +47,10 @@ func createContextReference(
 		return nil
 	}
 
-	d := goqu.Dialect(common.Dialect)
+	d := goqu.Dialect(Dialect)
 	sqlStr, args, err := d.Insert(referenceTable).Rows(goqu.Record{
-		common.ColID:   ownerID,
-		common.ColType: reference.Type(),
+		ColID:   ownerID,
+		ColType: reference.Type(),
 	}).ToSQL()
 	if err != nil {
 		return err
@@ -64,7 +66,7 @@ func createContextReference(
 	}
 
 	sqlStr, args, err = d.Insert(payloadTable).Rows(goqu.Record{
-		common.ColReferenceID:      ownerID,
+		ColReferenceID:             ownerID,
 		"parent_reference_payload": goqu.L("?::jsonb", string(parentReferencePayload)),
 	}).ToSQL()
 	if err != nil {
@@ -82,10 +84,10 @@ func createContextReference(
 	rows := make([]goqu.Record, 0, len(keys))
 	for i, key := range keys {
 		rows = append(rows, goqu.Record{
-			common.ColReferenceID: ownerID,
-			common.ColPosition:    i,
-			common.ColType:        key.Type(),
-			common.ColValue:       key.Value(),
+			ColReferenceID: ownerID,
+			ColPosition:    i,
+			ColType:        key.Type(),
+			ColValue:       key.Value(),
 		})
 	}
 
@@ -97,7 +99,7 @@ func createContextReference(
 	return err
 }
 
-func createContextReferences1ToMany(
+func CreateContextReferences1ToMany(
 	tx *sql.Tx,
 	ownerID int64,
 	references []types.IReference,
@@ -108,7 +110,7 @@ func createContextReferences1ToMany(
 		return nil
 	}
 
-	d := goqu.Dialect(common.Dialect)
+	d := goqu.Dialect(Dialect)
 	referenceKeyTable := referenceTable + "_key"
 	payloadTable := referenceTable + "_payload"
 
@@ -118,9 +120,9 @@ func createContextReferences1ToMany(
 		}
 
 		sqlStr, args, err := d.Insert(referenceTable).Rows(goqu.Record{
-			ownerColumn:    ownerID,
-			common.ColType: reference.Type(),
-		}).Returning(goqu.C(common.ColID)).ToSQL()
+			ownerColumn: ownerID,
+			ColType:     reference.Type(),
+		}).Returning(goqu.C(ColID)).ToSQL()
 		if err != nil {
 			return err
 		}
@@ -135,7 +137,7 @@ func createContextReferences1ToMany(
 			return err
 		}
 		sqlStr, args, err = d.Insert(payloadTable).Rows(goqu.Record{
-			common.ColReferenceID:      referenceID,
+			ColReferenceID:             referenceID,
 			"parent_reference_payload": goqu.L("?::jsonb", string(parentReferencePayload)),
 		}).ToSQL()
 		if err != nil {
@@ -153,10 +155,10 @@ func createContextReferences1ToMany(
 		rows := make([]goqu.Record, 0, len(keys))
 		for i, key := range keys {
 			rows = append(rows, goqu.Record{
-				common.ColReferenceID: referenceID,
-				common.ColPosition:    i,
-				common.ColType:        key.Type(),
-				common.ColValue:       key.Value(),
+				ColReferenceID: referenceID,
+				ColPosition:    i,
+				ColType:        key.Type(),
+				ColValue:       key.Value(),
 			})
 		}
 
@@ -169,4 +171,21 @@ func createContextReferences1ToMany(
 		}
 	}
 	return nil
+}
+
+func buildReferencePayload(value types.IReference) (json.RawMessage, error) {
+	if value == nil {
+		return json.RawMessage("{}"), nil
+	}
+
+	jsonable, err := jsonization.ToJsonable(value)
+	if err != nil {
+		return nil, fmt.Errorf("build Reference payload: %w", err)
+	}
+
+	payload, err := json.Marshal(jsonable)
+	if err != nil {
+		return nil, fmt.Errorf("marshal Reference payload: %w", err)
+	}
+	return payload, nil
 }
