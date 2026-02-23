@@ -1,7 +1,215 @@
 {
   "AllAccessPermissionRules": {
+    "DEFATTRIBUTES": [
+      { "name": "anonym_attr", "attributes": [ { "GLOBAL": "ANONYMOUS" } ] },
+      { "name": "role_attr", "attributes": [ { "CLAIM": "role" } ] },
+      { "name": "member_attr", "attributes": [ { "CLAIM": "role" }, { "CLAIM": "clear" } ] }
+    ],
+
+    "DEFOBJECTS": [
+      { "name": "health", "objects": [ { "ROUTE": "/health" } ] },
+      { "name": "god", "objects": [ { "ROUTE": "*" } ] },
+      {
+        "name": "allSubmodelDescriptors",
+        "objects": [
+          { "ROUTE": "/submodel-descriptors" },
+          { "ROUTE": "/submodel-descriptors/*" }
+        ]
+      },
+      {
+        "name": "allSubmodelDescriptorsObject",
+        "objects": [ { "DESCRIPTOR": "$smdesc(\"*\")" } ]
+      }
+    ],
+
+    "DEFACLS": [
+      {
+        "name": "disabled_god",
+        "acl": {
+          "USEATTRIBUTES": "anonym_attr",
+          "RIGHTS": ["CREATE", "READ", "UPDATE", "DELETE"],
+          "ACCESS": "DISABLED"
+        }
+      },
+      {
+        "name": "read_only_public",
+        "acl": {
+          "USEATTRIBUTES": "anonym_attr",
+          "RIGHTS": ["READ"],
+          "ACCESS": "ALLOW"
+        }
+      },
+      {
+        "name": "write_role",
+        "acl": {
+          "USEATTRIBUTES": "role_attr",
+          "RIGHTS": ["CREATE", "UPDATE", "DELETE"],
+          "ACCESS": "ALLOW"
+        }
+      },
+      {
+        "name": "read_role",
+        "acl": {
+          "USEATTRIBUTES": "role_attr",
+          "RIGHTS": ["READ"],
+          "ACCESS": "ALLOW"
+        }
+      },
+      {
+        "name": "write_member",
+        "acl": {
+          "USEATTRIBUTES": "member_attr",
+          "RIGHTS": ["CREATE", "UPDATE", "DELETE"],
+          "ACCESS": "ALLOW"
+        }
+      },
+      {
+        "name": "read_member",
+        "acl": {
+          "USEATTRIBUTES": "member_attr",
+          "RIGHTS": ["READ"],
+          "ACCESS": "ALLOW"
+        }
+      },
+      {
+        "name": "admin",
+        "acl": {
+          "USEATTRIBUTES": "member_attr",
+          "RIGHTS": ["CREATE", "READ", "UPDATE", "DELETE"],
+          "ACCESS": "ALLOW"
+        }
+      }
+    ],
+
+    "DEFFORMULAS": [
+      { "name": "always_true", "formula": { "$boolean": true } },
+      {
+        "name": "is_public_readable_sm",
+        "formula": {
+          "$eq": [
+            { "$field": "$smdesc#semanticId.keys[].value" },
+            { "$strVal": "PUBLIC_READABLE" }
+          ]
+        }
+      },
+      {
+        "name": "isRole=viewer&customerHref_sm",
+        "formula": {
+          "$and": [
+            {
+              "$eq": [
+                { "$attribute": { "CLAIM": "role" } },
+                { "$strVal": "viewer" }
+              ]
+            },
+            {
+              "$eq": [
+                { "$field": "$smdesc#endpoints[].protocolinformation.href" },
+                { "$strVal": "https://endpoint.example/customer" }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "name": "isMember&manufacturerHref_sm",
+        "formula": {
+          "$and": [
+            {
+              "$eq": [
+                { "$attribute": { "CLAIM": "role" } },
+                { "$strVal": "viewer" }
+              ]
+            },
+            {
+              "$ge": [
+                { "$numCast": { "$attribute": { "CLAIM": "clear" } } },
+                { "$numVal": 1 }
+              ]
+            },
+            {
+              "$eq": [
+                { "$field": "$smdesc#endpoints[].protocolinformation.href" },
+                { "$strVal": "https://endpoint.example/manufacturer" }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "name": "isRole=editor&X_sm",
+        "formula": {
+          "$and": [
+            {
+              "$eq": [
+                { "$attribute": { "CLAIM": "role" } },
+                { "$strVal": "editor" }
+              ]
+            },
+            {
+              "$eq": [
+                { "$field": "$smdesc#semanticId.keys[].value" },
+                { "$strVal": "WRITTEN_BY_X" }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "name": "isMember&Y_sm",
+        "formula": {
+          "$and": [
+            {
+              "$eq": [
+                { "$attribute": { "CLAIM": "role" } },
+                { "$strVal": "editor" }
+              ]
+            },
+            {
+              "$ge": [
+                { "$numCast": { "$attribute": { "CLAIM": "clear" } } },
+                { "$numVal": 1 }
+              ]
+            },
+            {
+              "$eq": [
+                { "$field": "$smdesc#semanticId.keys[].value" },
+                { "$strVal": "WRITTEN_BY_Y" }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "name": "isAdmin",
+        "formula": {
+          "$and": [
+            {
+              "$eq": [
+                { "$attribute": { "CLAIM": "role" } },
+                { "$strVal": "admin" }
+              ]
+            },
+            {
+              "$ge": [
+                { "$numCast": { "$attribute": { "CLAIM": "clear" } } },
+                { "$numVal": 10 }
+              ]
+            }
+          ]
+        }
+      }
+    ],
 
     "rules": [
+      { "USEACL": "disabled_god", "USEOBJECTS": ["god"], "USEFORMULA": "always_true" },
+      { "USEACL": "read_only_public", "USEOBJECTS": ["health"], "USEFORMULA": "always_true" },
+      { "USEACL": "admin", "USEOBJECTS": ["allSubmodelDescriptorsObject"], "USEFORMULA": "isAdmin" },
+      { "USEACL": "read_only_public", "USEOBJECTS": ["allSubmodelDescriptors"], "USEFORMULA": "is_public_readable_sm" },
+      { "USEACL": "read_role", "USEOBJECTS": ["allSubmodelDescriptors"], "USEFORMULA": "isRole=viewer&customerHref_sm" },
+      { "USEACL": "read_member", "USEOBJECTS": ["allSubmodelDescriptors"], "USEFORMULA": "isMember&manufacturerHref_sm" },
+      { "USEACL": "write_role", "USEOBJECTS": ["allSubmodelDescriptors"], "USEFORMULA": "isRole=editor&X_sm" },
+      { "USEACL": "write_member", "USEOBJECTS": ["allSubmodelDescriptors"], "USEFORMULA": "isMember&Y_sm" }
     ]
   }
 }
