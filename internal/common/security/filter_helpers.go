@@ -28,6 +28,10 @@ package auth
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
+	"sort"
+	"strings"
 
 	"github.com/doug-martin/goqu/v9"
 	"github.com/doug-martin/goqu/v9/exp"
@@ -73,6 +77,29 @@ type ExpressionIdentifiableMapper struct {
 	Fragment *grammar.FragmentStringPattern
 }
 
+// FragmentMaskFlagSpec describes a fragment whose effective mask condition
+// should be materialized as a boolean projection (flag column).
+type FragmentMaskFlagSpec struct {
+	Fragment grammar.FragmentStringPattern
+	Alias    string
+}
+
+// SharedFragmentMaskPlan contains reusable boolean flag projections and a
+// fragment-to-alias mapping for later outer-query CASE projections.
+type SharedFragmentMaskPlan struct {
+	Projections       []interface{}
+	aliasesByFragment map[grammar.FragmentStringPattern]string
+}
+
+// FlagAliasFor returns the flag alias assigned to the fragment.
+func (p *SharedFragmentMaskPlan) FlagAliasFor(fragment grammar.FragmentStringPattern) (string, bool) {
+	if p == nil {
+		return "", false
+	}
+	alias, ok := p.aliasesByFragment[fragment]
+	return alias, ok
+}
+
 func extractExpressions(mappers []ExpressionIdentifiableMapper) []exp.Expression {
 	expressions := make([]exp.Expression, 0, len(mappers))
 
@@ -81,6 +108,130 @@ func extractExpressions(mappers []ExpressionIdentifiableMapper) []exp.Expression
 	}
 
 	return expressions
+}
+
+// BuildSharedFragmentMaskPlan builds reusable boolean flag projections for the
+// provided fragments. Fragments with identical effective conditions (including
+// fragment guard bindings) share a single projected flag alias.
+func BuildSharedFragmentMaskPlan(
+	ctx context.Context,
+	collector *grammar.ResolvedFieldPathCollector,
+	specs []FragmentMaskFlagSpec,
+) (*SharedFragmentMaskPlan, error) {
+	plan := &SharedFragmentMaskPlan{
+		Projections:       make([]interface{}, 0, len(specs)),
+		aliasesByFragment: make(map[grammar.FragmentStringPattern]string, len(specs)),
+	}
+	signatureToAlias := make(map[string]string, len(specs))
+	usedAliases := make(map[string]struct{}, len(specs))
+
+	for _, spec := range specs {
+		signature, err := buildFragmentMaskSignature(ctx, spec.Fragment)
+		if err != nil {
+			return nil, err
+		}
+		if alias, ok := signatureToAlias[signature]; ok {
+			plan.aliasesByFragment[spec.Fragment] = alias
+			continue
+		}
+		if strings.TrimSpace(spec.Alias) == "" {
+			return nil, fmt.Errorf("mask flag alias for fragment %q must not be empty", spec.Fragment)
+		}
+		if _, exists := usedAliases[spec.Alias]; exists {
+			return nil, fmt.Errorf("duplicate mask flag alias %q", spec.Alias)
+		}
+
+		proj, err := BuildFragmentMaskFlagProjection(ctx, spec.Fragment, collector, spec.Alias)
+		if err != nil {
+			return nil, err
+		}
+		plan.Projections = append(plan.Projections, proj)
+		plan.aliasesByFragment[spec.Fragment] = spec.Alias
+		signatureToAlias[signature] = spec.Alias
+		usedAliases[spec.Alias] = struct{}{}
+	}
+
+	return plan, nil
+}
+
+// BuildFragmentMaskFlagProjection builds a boolean flag projection for one
+// fragment-specific mask condition.
+func BuildFragmentMaskFlagProjection(
+	ctx context.Context,
+	fragment grammar.FragmentStringPattern,
+	collector *grammar.ResolvedFieldPathCollector,
+	alias string,
+) (exp.Expression, error) {
+	maskCondition, hasMask, err := buildFragmentMaskCondition(ctx, fragment, collector)
+	if err != nil {
+		return nil, err
+	}
+	if !hasMask {
+		return goqu.V(true).As(alias), nil
+	}
+	return goqu.Case().When(maskCondition, true).Else(false).As(alias), nil
+}
+
+func buildFragmentMaskCondition(
+	ctx context.Context,
+	fragment grammar.FragmentStringPattern,
+	collector *grammar.ResolvedFieldPathCollector,
+) (exp.Expression, bool, error) {
+	p := GetQueryFilter(ctx)
+	if p == nil {
+		return nil, false, nil
+	}
+
+	filters := p.FilterExpressionEntriesFor(fragment)
+	if len(filters) == 0 {
+		return nil, false, nil
+	}
+
+	wcs := make([]exp.Expression, 0, len(filters))
+	for _, filter := range filters {
+		wc, _, err := filter.Expression.EvaluateToExpressionWithNegatedFragments(
+			collector,
+			[]grammar.FragmentStringPattern{grammar.FragmentStringPattern(filter.Fragment)},
+		)
+		if err != nil {
+			return nil, false, err
+		}
+		wcs = append(wcs, wc)
+	}
+	if len(wcs) == 1 {
+		return wcs[0], true, nil
+	}
+	return goqu.And(wcs...), true, nil
+}
+
+func buildFragmentMaskSignature(ctx context.Context, fragment grammar.FragmentStringPattern) (string, error) {
+	p := GetQueryFilter(ctx)
+	if p == nil {
+		return "no-query-filter", nil
+	}
+	filters := p.FilterExpressionEntriesFor(fragment)
+	if len(filters) == 0 {
+		return "no-fragment-filter", nil
+	}
+
+	parts := make([]string, 0, len(filters))
+	for _, filter := range filters {
+		exprJSON, err := json.Marshal(filter.Expression)
+		if err != nil {
+			return "", err
+		}
+		bindings, err := grammar.ResolveFragmentFieldToSQL((*grammar.FragmentStringPattern)(&filter.Fragment))
+		if err != nil {
+			return "", err
+		}
+		bindingsJSON, err := json.Marshal(bindings)
+		if err != nil {
+			return "", err
+		}
+		parts = append(parts, string(exprJSON)+"|"+string(bindingsJSON))
+	}
+	sort.Strings(parts)
+	return strings.Join(parts, "&&"), nil
 }
 
 // GetColumnSelectStatement builds the list of SELECT expressions while honoring
