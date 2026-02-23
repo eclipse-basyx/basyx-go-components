@@ -54,6 +54,13 @@ var mapMethodAndPatternToRightsData = []mapMethodAndPatternToRights{
 
 	{"POST", "/query/shell-descriptors", []grammar.RightsEnum{grammar.RightsEnumREAD}}, // query endpoint
 
+	// sm registry
+	{"GET", "/submodel-descriptors/{submodelIdentifier}", []grammar.RightsEnum{grammar.RightsEnumREAD}},
+	{"PUT", "/submodel-descriptors/{submodelIdentifier}", []grammar.RightsEnum{grammar.RightsEnumUPDATE}},
+	{"DELETE", "/submodel-descriptors/{submodelIdentifier}", []grammar.RightsEnum{grammar.RightsEnumDELETE}},
+	{"GET", "/submodel-descriptors", []grammar.RightsEnum{grammar.RightsEnumREAD}},
+	{"POST", "/submodel-descriptors", []grammar.RightsEnum{grammar.RightsEnumCREATE}},
+
 	// aas discovery
 	{"GET", "/lookup/shells", []grammar.RightsEnum{grammar.RightsEnumREAD}},
 	{"POST", "/lookup/shellsByAssetLink", []grammar.RightsEnum{grammar.RightsEnumREAD}}, // this is one of the reasons why we need this complex mapping
