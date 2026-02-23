@@ -112,6 +112,10 @@
           {
             "FRAGMENT": "$aasdesc#idShort",
             "USEFORMULA": "bpn_match"
+          },
+          {
+            "FRAGMENT": "$aasdesc#specificAssetIds[].externalSubjectId.keys[]",
+            "USEFORMULA": "bpn_match"
           }
         ] 
       },

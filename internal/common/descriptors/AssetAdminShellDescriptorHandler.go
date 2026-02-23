@@ -52,6 +52,7 @@ import (
 	"github.com/FriedJannik/aas-go-sdk/stringification"
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
+	"github.com/doug-martin/goqu/v9/exp"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
@@ -355,10 +356,7 @@ func buildListAssetAdministrationShellDescriptorsQuery(
 	identifiable string,
 ) (*goqu.SelectDataset, error) {
 	d := goqu.Dialect(dialect)
-	adminPayload := goqu.L("?::text", tDescriptorPayload.Col(colAdministrativeInfoPayload))
-	displayNamePayload := goqu.L("?::text", tDescriptorPayload.Col(colDisplayNamePayload))
-	descriptionPayload := goqu.L("?::text", tDescriptorPayload.Col(colDescriptionPayload))
-	var mapper = []auth.ExpressionIdentifiableMapper{
+	var baseMapper = []auth.ExpressionIdentifiableMapper{
 		{
 			Exp: tAASDescriptor.Col(colDescriptorID),
 		},
@@ -381,30 +379,43 @@ func buildListAssetAdministrationShellDescriptorsQuery(
 		{
 			Exp: tAASDescriptor.Col(colAASID),
 		},
-		{
-			Exp:      adminPayload,
-			Fragment: fragPtr("$aasdesc#administration"),
-		},
-		{
-			Exp:      displayNamePayload,
-			Fragment: fragPtr("$aasdesc#displayName"),
-		},
-		{
-			Exp:      descriptionPayload,
-			Fragment: fragPtr("$aasdesc#description"),
-		},
 	}
 
 	collector, err := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootAASDesc)
 	if err != nil {
 		return nil, err
 	}
-	expressions, err := auth.GetColumnSelectStatement(ctx, mapper, collector)
+	pageDS, err := buildListAASDescriptorPageQuery(ctx, peekLimit, cursor, assetKind, assetType, identifiable, collector)
+	if err != nil {
+		return nil, err
+	}
+	baseExpressions, err := auth.GetColumnSelectStatement(ctx, baseMapper, collector)
+	if err != nil {
+		return nil, err
+	}
+	adminMaskFlag, err := buildAASListMaskFlagProjection(ctx, "$aasdesc#administration", collector, "flag_admin")
+	if err != nil {
+		return nil, err
+	}
+	displayNameMaskFlag, err := buildAASListMaskFlagProjection(ctx, "$aasdesc#displayName", collector, "flag_displayname")
+	if err != nil {
+		return nil, err
+	}
+	descriptionMaskFlag, err := buildAASListMaskFlagProjection(ctx, "$aasdesc#description", collector, "flag_description")
 	if err != nil {
 		return nil, err
 	}
 
-	ds := d.From(tDescriptor).
+	const (
+		pageAlias = "aas_page"
+		dataAlias = "aas_list_data"
+	)
+
+	dataDS := d.From(pageDS.As(pageAlias)).
+		InnerJoin(
+			tDescriptor,
+			goqu.On(tDescriptor.Col(colID).Eq(goqu.I(pageAlias+".descriptor_id"))),
+		).
 		InnerJoin(
 			tAASDescriptor,
 			goqu.On(tAASDescriptor.Col(colDescriptorID).Eq(tDescriptor.Col(colID))),
@@ -414,17 +425,69 @@ func buildListAssetAdministrationShellDescriptorsQuery(
 			goqu.On(tDescriptorPayload.Col(colDescriptorID).Eq(tDescriptor.Col(colID))),
 		).
 		Select(
-			expressions[0],
-			expressions[1],
-			expressions[2],
-			expressions[3],
-			expressions[4],
-			expressions[5],
-			expressions[6],
-			expressions[7],
-			expressions[8],
+			goqu.L("?", baseExpressions[0]).As("c0"),
+			goqu.L("?", baseExpressions[1]).As("c1"),
+			goqu.L("?", baseExpressions[2]).As("c2"),
+			goqu.L("?", baseExpressions[3]).As("c3"),
+			goqu.L("?", baseExpressions[4]).As("c4"),
+			goqu.L("?", baseExpressions[5]).As("c5"),
+			goqu.L("?::text", tDescriptorPayload.Col(colAdministrativeInfoPayload)).As("raw_admin_payload"),
+			goqu.L("?::text", tDescriptorPayload.Col(colDisplayNamePayload)).As("raw_displayname_payload"),
+			goqu.L("?::text", tDescriptorPayload.Col(colDescriptionPayload)).As("raw_description_payload"),
+			adminMaskFlag,
+			displayNameMaskFlag,
+			descriptionMaskFlag,
+			tAASDescriptor.Col(colAASID).As("sort_aas_id"),
 		)
 
+	ds := d.From(dataDS.As(dataAlias)).
+		Select(
+			goqu.I(dataAlias+".c0"),
+			goqu.I(dataAlias+".c1"),
+			goqu.I(dataAlias+".c2"),
+			goqu.I(dataAlias+".c3"),
+			goqu.I(dataAlias+".c4"),
+			goqu.I(dataAlias+".c5"),
+			goqu.Case().
+				When(goqu.I(dataAlias+".flag_admin"), goqu.I(dataAlias+".raw_admin_payload")).
+				Else(nil),
+			goqu.Case().
+				When(goqu.I(dataAlias+".flag_displayname"), goqu.I(dataAlias+".raw_displayname_payload")).
+				Else(nil),
+			goqu.Case().
+				When(goqu.I(dataAlias+".flag_description"), goqu.I(dataAlias+".raw_description_payload")).
+				Else(nil),
+		).
+		Order(goqu.I(dataAlias + ".sort_aas_id").Asc())
+
+	return ds, nil
+}
+
+func buildListAASDescriptorPageQuery(
+	ctx context.Context,
+	peekLimit int32,
+	cursor string,
+	assetKind model.AssetKind,
+	assetType string,
+	identifiable string,
+	collector *grammar.ResolvedFieldPathCollector,
+) (*goqu.SelectDataset, error) {
+	if peekLimit < 0 {
+		return nil, common.NewErrBadRequest("Limit has to be higher than 0")
+	}
+
+	d := goqu.Dialect(dialect)
+	ds := d.From(tDescriptor).
+		InnerJoin(
+			tAASDescriptor,
+			goqu.On(tAASDescriptor.Col(colDescriptorID).Eq(tDescriptor.Col(colID))),
+		).
+		Select(
+			tDescriptor.Col(colID).As("descriptor_id"),
+			tAASDescriptor.Col(colAASID).As("sort_aas_id"),
+		)
+
+	var err error
 	ds, err = auth.AddFormulaQueryFromContext(ctx, ds, collector)
 	if err != nil {
 		return nil, err
@@ -451,13 +514,60 @@ func buildListAssetAdministrationShellDescriptorsQuery(
 		ds = ds.Where(tAASDescriptor.Col(colID).Eq(identifiable))
 	}
 
-	if peekLimit < 0 {
-		return nil, common.NewErrBadRequest("Limit has to be higher than 0")
-	}
 	ds = ds.
 		Order(tAASDescriptor.Col(colAASID).Asc()).
 		Limit(uint(peekLimit))
+
 	return ds, nil
+}
+
+func buildAASListMaskFlagProjection(
+	ctx context.Context,
+	fragment grammar.FragmentStringPattern,
+	collector *grammar.ResolvedFieldPathCollector,
+	alias string,
+) (exp.Expression, error) {
+	maskCondition, hasMask, err := buildAASListMaskCondition(ctx, fragment, collector)
+	if err != nil {
+		return nil, err
+	}
+	if !hasMask {
+		return goqu.V(true).As(alias), nil
+	}
+	return goqu.Case().When(maskCondition, true).Else(false).As(alias), nil
+}
+
+func buildAASListMaskCondition(
+	ctx context.Context,
+	fragment grammar.FragmentStringPattern,
+	collector *grammar.ResolvedFieldPathCollector,
+) (exp.Expression, bool, error) {
+	queryFilter := auth.GetQueryFilter(ctx)
+	if queryFilter == nil {
+		return nil, false, nil
+	}
+
+	entries := queryFilter.FilterExpressionEntriesFor(fragment)
+	if len(entries) == 0 {
+		return nil, false, nil
+	}
+
+	conditions := make([]exp.Expression, 0, len(entries))
+	for _, entry := range entries {
+		wc, _, err := entry.Expression.EvaluateToExpressionWithNegatedFragments(
+			collector,
+			[]grammar.FragmentStringPattern{grammar.FragmentStringPattern(entry.Fragment)},
+		)
+		if err != nil {
+			return nil, false, err
+		}
+		conditions = append(conditions, wc)
+	}
+
+	if len(conditions) == 1 {
+		return conditions[0], true, nil
+	}
+	return goqu.And(conditions...), true, nil
 }
 
 // ListAssetAdministrationShellDescriptors lists AAS descriptors with optional

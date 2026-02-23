@@ -160,6 +160,23 @@ func TestHandleComparison_BuildsExistsForSpecificAssetExternalSubjectKeyValue(t 
 	}
 }
 
+func TestLogicalExpression_ExistsSQL_DoesNotIncludeLimitOne(t *testing.T) {
+	expr := LogicalExpression{
+		Eq: ComparisonItems{
+			field("$aasdesc#specificAssetIds[].externalSubjectId.keys[].value"),
+			strVal("PUBLIC_READABLE"),
+		},
+	}
+
+	sql, _ := toPreparedSQLForDescriptor(t, expr)
+	if !strings.Contains(sql, "EXISTS") {
+		t.Fatalf("expected EXISTS in SQL, got: %s", sql)
+	}
+	if strings.Contains(sql, "LIMIT 1") {
+		t.Fatalf("did not expect LIMIT 1 inside EXISTS SQL, got: %s", sql)
+	}
+}
+
 func TestHandleComparison_BuildsExistsForSpecificAssetExternalSubjectKeyValue_WildcardsNoBindings(t *testing.T) {
 	field := ModelStringPattern("$aasdesc#specificAssetIds[].externalSubjectId.keys[].value")
 	lit := StandardString("WRITTEN_BY_X")
