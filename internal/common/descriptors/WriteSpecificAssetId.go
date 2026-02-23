@@ -31,6 +31,7 @@ import (
 
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 )
 
 func createSpecificAssetID(tx *sql.Tx, descriptorID int64, aasRef sql.NullInt64, specificAssetIDs []types.ISpecificAssetID) error {
@@ -52,20 +53,20 @@ func insertSpecificAssetIDs(
 		return nil
 	}
 	if len(specificAssetIDs) > 0 {
-		d := goqu.Dialect(dialect)
+		d := goqu.Dialect(common.Dialect)
 		for i, val := range specificAssetIDs {
 			var err error
 
 			sqlStr, args, err := d.
-				Insert(tblSpecificAssetID).
+				Insert(common.TblSpecificAssetID).
 				Rows(goqu.Record{
-					colDescriptorID: descriptorID,
-					colPosition:     i,
-					colName:         val.Name(),
-					colValue:        val.Value(),
-					colAASRef:       aasRef,
+					common.ColDescriptorID: descriptorID,
+					common.ColPosition:     i,
+					common.ColName:         val.Name(),
+					common.ColValue:        val.Value(),
+					common.ColAASRef:       aasRef,
 				}).
-				Returning(tSpecificAssetID.Col(colID)).
+				Returning(common.TSpecificAssetID.Col(common.ColID)).
 				ToSQL()
 			if err != nil {
 				return err
@@ -98,14 +99,14 @@ func insertSpecificAssetIDs(
 }
 
 func createSpecificAssetIDPayload(tx *sql.Tx, specificAssetID int64, semanticID types.IReference) error {
-	d := goqu.Dialect(dialect)
+	d := goqu.Dialect(common.Dialect)
 	semanticPayload, err := buildReferencePayload(semanticID)
 	if err != nil {
 		return err
 	}
 
-	sqlStr, args, err := d.Insert(tblSpecificAssetIDPayload).Rows(goqu.Record{
-		colSpecificAssetID:    specificAssetID,
+	sqlStr, args, err := d.Insert(common.TblSpecificAssetIDPayload).Rows(goqu.Record{
+		common.ColSpecificAssetID:    specificAssetID,
 		"semantic_id_payload": goqu.L("?::jsonb", string(semanticPayload)),
 	}).ToSQL()
 	if err != nil {
@@ -120,7 +121,7 @@ func createSpecificAssetIDSupplementalSemantic(tx *sql.Tx, specificAssetID int64
 		tx,
 		specificAssetID,
 		references,
-		tblSpecificAssetIDSuppSemantic,
-		colSpecificAssetIDID,
+		common.TblSpecificAssetIDSuppSemantic,
+		common.ColSpecificAssetIDID,
 	)
 }

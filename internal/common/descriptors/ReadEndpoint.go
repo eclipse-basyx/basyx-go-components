@@ -36,6 +36,7 @@ import (
 	// nolint:revive
 	_ "github.com/doug-martin/goqu/v9/dialect/postgres"
 	"github.com/doug-martin/goqu/v9/exp"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
@@ -102,59 +103,59 @@ func ReadEndpointsByDescriptorIDs(
 		return out, nil
 	}
 
-	d := goqu.Dialect(dialect)
+	d := goqu.Dialect(common.Dialect)
 	arr := pq.Array(descriptorIDs)
 
-	ds := d.From(tDescriptor)
+	ds := d.From(common.TDescriptor)
 	var joinOn exp.AliasedExpression
 	switch joinOnMainTable {
 	case "aas":
 		joinOn = aasDescriptorEndpointAlias
 		ds = ds.InnerJoin(
-			tAASDescriptor,
-			goqu.On(tAASDescriptor.Col(colDescriptorID).Eq(tDescriptor.Col(colID))),
+			common.TAASDescriptor,
+			goqu.On(common.TAASDescriptor.Col(common.ColDescriptorID).Eq(common.TDescriptor.Col(common.ColID))),
 		)
 		ds = ds.LeftJoin(
 			aasDescriptorEndpointAlias,
-			goqu.On(aasDescriptorEndpointAlias.Col(colDescriptorID).Eq(tDescriptor.Col(colID))),
+			goqu.On(aasDescriptorEndpointAlias.Col(common.ColDescriptorID).Eq(common.TDescriptor.Col(common.ColID))),
 		)
 	case "submodel":
 		joinOn = submodelDescriptorEndpointAlias
 		ds = ds.InnerJoin(
 			submodelDescriptorAlias,
-			goqu.On(submodelDescriptorAlias.Col(colDescriptorID).Eq(tDescriptor.Col(colID))),
+			goqu.On(submodelDescriptorAlias.Col(common.ColDescriptorID).Eq(common.TDescriptor.Col(common.ColID))),
 		).LeftJoin(
 			submodelDescriptorEndpointAlias,
-			goqu.On(submodelDescriptorEndpointAlias.Col(colDescriptorID).Eq(submodelDescriptorAlias.Col(colDescriptorID))),
+			goqu.On(submodelDescriptorEndpointAlias.Col(common.ColDescriptorID).Eq(submodelDescriptorAlias.Col(common.ColDescriptorID))),
 		)
 	case "infrastructure":
 		joinOn = infrastructureDescriptorEndpointAlias
 		ds = ds.InnerJoin(
-			tInfrastructureDescriptor,
-			goqu.On(tInfrastructureDescriptor.Col(colDescriptorID).Eq(tDescriptor.Col(colID))),
+			common.TInfrastructureDescriptor,
+			goqu.On(common.TInfrastructureDescriptor.Col(common.ColDescriptorID).Eq(common.TDescriptor.Col(common.ColID))),
 		)
 		ds = ds.LeftJoin(
 			infrastructureDescriptorEndpointAlias,
-			goqu.On(infrastructureDescriptorEndpointAlias.Col(colDescriptorID).Eq(infrastructureDescriptorAlias.Col(colDescriptorID))),
+			goqu.On(infrastructureDescriptorEndpointAlias.Col(common.ColDescriptorID).Eq(infrastructureDescriptorAlias.Col(common.ColDescriptorID))),
 		)
 	}
 
 	ds = ds.
-		Where(goqu.L("? = ANY(?::bigint[])", joinOn.Col(colDescriptorID), arr)).
+		Where(goqu.L("? = ANY(?::bigint[])", joinOn.Col(common.ColDescriptorID), arr)).
 		Select(
-			joinOn.Col(colDescriptorID),
-			joinOn.Col(colID),
-			goqu.Func("COALESCE", joinOn.Col(colHref), "").As(colHref),
-			goqu.Func("COALESCE", joinOn.Col(colEndpointProtocol), "").As(colEndpointProtocol),
-			goqu.Func("COALESCE", joinOn.Col(colSubProtocol), "").As(colSubProtocol),
-			goqu.Func("COALESCE", joinOn.Col(colSubProtocolBody), "").As(colSubProtocolBody),
-			goqu.Func("COALESCE", joinOn.Col(colSubProtocolBodyEncoding), "").As(colSubProtocolBodyEncoding),
-			goqu.Func("COALESCE", joinOn.Col(colInterface), "").As(colInterface),
-			goqu.Func("COALESCE", joinOn.Col(colEndpointProtocolVersion), goqu.L("'[]'::jsonb")).As("versions"),
-			goqu.Func("COALESCE", joinOn.Col(colSecurityAttributes), goqu.L("'[]'::jsonb")).As("sec_attrs"),
+			joinOn.Col(common.ColDescriptorID),
+			joinOn.Col(common.ColID),
+			goqu.Func("COALESCE", joinOn.Col(common.ColHref), "").As(common.ColHref),
+			goqu.Func("COALESCE", joinOn.Col(common.ColEndpointProtocol), "").As(common.ColEndpointProtocol),
+			goqu.Func("COALESCE", joinOn.Col(common.ColSubProtocol), "").As(common.ColSubProtocol),
+			goqu.Func("COALESCE", joinOn.Col(common.ColSubProtocolBody), "").As(common.ColSubProtocolBody),
+			goqu.Func("COALESCE", joinOn.Col(common.ColSubProtocolBodyEncoding), "").As(common.ColSubProtocolBodyEncoding),
+			goqu.Func("COALESCE", joinOn.Col(common.ColInterface), "").As(common.ColInterface),
+			goqu.Func("COALESCE", joinOn.Col(common.ColEndpointProtocolVersion), goqu.L("'[]'::jsonb")).As("versions"),
+			goqu.Func("COALESCE", joinOn.Col(common.ColSecurityAttributes), goqu.L("'[]'::jsonb")).As("sec_attrs"),
 		).
 		Order(
-			joinOn.Col(colPosition).Asc(),
+			joinOn.Col(common.ColPosition).Asc(),
 		).
 		Prepared(true)
 

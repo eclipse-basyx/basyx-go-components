@@ -31,6 +31,7 @@ import (
 	"encoding/json"
 
 	"github.com/doug-martin/goqu/v9"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
 
@@ -58,7 +59,7 @@ func marshalSecurityAttributes(attrs []model.ProtocolInformationSecurityAttribut
 
 // CreateEndpoints inserts a list of endpoints for a descriptor into the
 // database within the provided transaction. Each endpoint is stored in
-// `tblAASDescriptorEndpoint` with protocol versions and security attributes
+// `common.TblAASDescriptorEndpoint` with protocol versions and security attributes
 // persisted as JSONB columns.
 //
 // The function is safe to call with a nil slice (no-op) and returns any
@@ -69,7 +70,7 @@ func marshalSecurityAttributes(attrs []model.ProtocolInformationSecurityAttribut
 //   - tx: active SQL transaction used for all inserts
 //   - descriptorID: internal descriptor id to associate endpoints with
 //   - endpoints: slice of model.Endpoint to persist; the order in the slice
-//     is stored in the `colPosition` column
+//     is stored in the `common.ColPosition` column
 //
 // Returns:
 //   - error: non-nil if any insert or subsequent dependent write fails
@@ -78,7 +79,7 @@ func CreateEndpoints(tx *sql.Tx, descriptorID int64, endpoints []model.Endpoint)
 		return nil
 	}
 	if len(endpoints) > 0 {
-		d := goqu.Dialect(dialect)
+		d := goqu.Dialect(common.Dialect)
 		for i, val := range endpoints {
 			versionsJSON, err := marshalProtocolVersions(val.ProtocolInformation.EndpointProtocolVersion)
 			if err != nil {
@@ -89,20 +90,20 @@ func CreateEndpoints(tx *sql.Tx, descriptorID int64, endpoints []model.Endpoint)
 				return err
 			}
 			sqlStr, args, err := d.
-				Insert(tblAASDescriptorEndpoint).
+				Insert(common.TblAASDescriptorEndpoint).
 				Rows(goqu.Record{
-					colDescriptorID:            descriptorID,
-					colPosition:                i,
-					colHref:                    val.ProtocolInformation.Href,
-					colEndpointProtocol:        val.ProtocolInformation.EndpointProtocol,
-					colEndpointProtocolVersion: goqu.L("?::jsonb", versionsJSON),
-					colSubProtocol:             val.ProtocolInformation.Subprotocol,
-					colSubProtocolBody:         val.ProtocolInformation.SubprotocolBody,
-					colSubProtocolBodyEncoding: val.ProtocolInformation.SubprotocolBodyEncoding,
-					colSecurityAttributes:      goqu.L("?::jsonb", securityAttrsJSON),
-					colInterface:               val.Interface,
+					common.ColDescriptorID:            descriptorID,
+					common.ColPosition:                i,
+					common.ColHref:                    val.ProtocolInformation.Href,
+					common.ColEndpointProtocol:        val.ProtocolInformation.EndpointProtocol,
+					common.ColEndpointProtocolVersion: goqu.L("?::jsonb", versionsJSON),
+					common.ColSubProtocol:             val.ProtocolInformation.Subprotocol,
+					common.ColSubProtocolBody:         val.ProtocolInformation.SubprotocolBody,
+					common.ColSubProtocolBodyEncoding: val.ProtocolInformation.SubprotocolBodyEncoding,
+					common.ColSecurityAttributes:      goqu.L("?::jsonb", securityAttrsJSON),
+					common.ColInterface:               val.Interface,
 				}).
-				Returning(tAASDescriptorEndpoint.Col(colID)).
+				Returning(common.TAASDescriptorEndpoint.Col(common.ColID)).
 				ToSQL()
 			if err != nil {
 				return err

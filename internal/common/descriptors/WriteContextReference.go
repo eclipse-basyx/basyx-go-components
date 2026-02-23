@@ -31,6 +31,7 @@ import (
 
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 )
 
 func createContextReference(
@@ -44,10 +45,10 @@ func createContextReference(
 		return nil
 	}
 
-	d := goqu.Dialect(dialect)
+	d := goqu.Dialect(common.Dialect)
 	sqlStr, args, err := d.Insert(referenceTable).Rows(goqu.Record{
-		colID:   ownerID,
-		colType: reference.Type(),
+		common.ColID:   ownerID,
+		common.ColType: reference.Type(),
 	}).ToSQL()
 	if err != nil {
 		return err
@@ -63,7 +64,7 @@ func createContextReference(
 	}
 
 	sqlStr, args, err = d.Insert(payloadTable).Rows(goqu.Record{
-		colReferenceID:             ownerID,
+		common.ColReferenceID:             ownerID,
 		"parent_reference_payload": goqu.L("?::jsonb", string(parentReferencePayload)),
 	}).ToSQL()
 	if err != nil {
@@ -81,10 +82,10 @@ func createContextReference(
 	rows := make([]goqu.Record, 0, len(keys))
 	for i, key := range keys {
 		rows = append(rows, goqu.Record{
-			colReferenceID: ownerID,
-			colPosition:    i,
-			colType:        key.Type(),
-			colValue:       key.Value(),
+			common.ColReferenceID: ownerID,
+			common.ColPosition:    i,
+			common.ColType:        key.Type(),
+			common.ColValue:       key.Value(),
 		})
 	}
 
@@ -107,7 +108,7 @@ func createContextReferences1ToMany(
 		return nil
 	}
 
-	d := goqu.Dialect(dialect)
+	d := goqu.Dialect(common.Dialect)
 	referenceKeyTable := referenceTable + "_key"
 	payloadTable := referenceTable + "_payload"
 
@@ -118,8 +119,8 @@ func createContextReferences1ToMany(
 
 		sqlStr, args, err := d.Insert(referenceTable).Rows(goqu.Record{
 			ownerColumn: ownerID,
-			colType:     reference.Type(),
-		}).Returning(goqu.C(colID)).ToSQL()
+			common.ColType:     reference.Type(),
+		}).Returning(goqu.C(common.ColID)).ToSQL()
 		if err != nil {
 			return err
 		}
@@ -134,7 +135,7 @@ func createContextReferences1ToMany(
 			return err
 		}
 		sqlStr, args, err = d.Insert(payloadTable).Rows(goqu.Record{
-			colReferenceID:             referenceID,
+			common.ColReferenceID:             referenceID,
 			"parent_reference_payload": goqu.L("?::jsonb", string(parentReferencePayload)),
 		}).ToSQL()
 		if err != nil {
@@ -152,10 +153,10 @@ func createContextReferences1ToMany(
 		rows := make([]goqu.Record, 0, len(keys))
 		for i, key := range keys {
 			rows = append(rows, goqu.Record{
-				colReferenceID: referenceID,
-				colPosition:    i,
-				colType:        key.Type(),
-				colValue:       key.Value(),
+				common.ColReferenceID: referenceID,
+				common.ColPosition:    i,
+				common.ColType:        key.Type(),
+				common.ColValue:       key.Value(),
 			})
 		}
 

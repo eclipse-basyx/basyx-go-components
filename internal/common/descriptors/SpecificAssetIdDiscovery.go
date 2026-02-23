@@ -41,21 +41,21 @@ import (
 
 var bdExpMapper = []auth.ExpressionIdentifiableMapper{
 	{
-		Exp: tSpecificAssetID.Col(colID),
+		Exp: common.TSpecificAssetID.Col(common.ColID),
 	},
 	{
-		Exp:      tSpecificAssetID.Col(colName),
+		Exp:      common.TSpecificAssetID.Col(common.ColName),
 		Fragment: fragPtr("$aasdesc#specificAssetIds[].name"),
 	},
 	{
-		Exp:      tSpecificAssetID.Col(colValue),
+		Exp:      common.TSpecificAssetID.Col(common.ColValue),
 		Fragment: fragPtr("$aasdesc#specificAssetIds[].value"),
 	},
 	{
 		Exp: goqu.I("specific_asset_id_payload.semantic_id_payload"),
 	},
 	{
-		Exp:      goqu.I(aliasExternalSubjectReference + "." + colID),
+		Exp:      goqu.I(common.AliasExternalSubjectReference + "." + common.ColID),
 		Fragment: fragPtr("$aasdesc#specificAssetIds[].externalSubjectId"),
 	},
 }
@@ -68,12 +68,12 @@ func ReadSpecificAssetIDsByAASIdentifier(
 	aasID string,
 ) ([]types.ISpecificAssetID, error) {
 	var aasRef int64
-	d := goqu.Dialect(dialect)
-	tAASIdentifier := goqu.T(tblAASIdentifier)
+	d := goqu.Dialect(common.Dialect)
+	aasIdentifierTable := goqu.T(common.TblAASIdentifier)
 	sqlStr, args, err := d.
-		From(tAASIdentifier).
-		Select(tAASIdentifier.Col(colID)).
-		Where(tAASIdentifier.Col("aasid").Eq(aasID)).
+		From(aasIdentifierTable).
+		Select(aasIdentifierTable.Col(common.ColID)).
+		Where(aasIdentifierTable.Col("aasid").Eq(aasID)).
 		ToSQL()
 	if err != nil {
 		return nil, err
@@ -99,10 +99,10 @@ func ReadSpecificAssetIDsByAASRef(
 		}(time.Now())
 	}
 
-	d := goqu.Dialect(dialect)
-	tAASIdentifier := goqu.T(tblAASIdentifier)
-	externalSubjectReferenceAlias := goqu.T("specific_asset_id_external_subject_id_reference").As(aliasExternalSubjectReference)
-	specificAssetIDPayloadAlias := goqu.T(tblSpecificAssetIDPayload).As("specific_asset_id_payload")
+	d := goqu.Dialect(common.Dialect)
+	aasIdentifierTable := goqu.T(common.TblAASIdentifier)
+	externalSubjectReferenceAlias := goqu.T("specific_asset_id_external_subject_id_reference").As(common.AliasExternalSubjectReference)
+	specificAssetIDPayloadAlias := goqu.T(common.TblSpecificAssetIDPayload).As("specific_asset_id_payload")
 	collector, err := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootBD)
 	if err != nil {
 		return nil, err
@@ -112,18 +112,18 @@ func ReadSpecificAssetIDsByAASRef(
 		return nil, err
 	}
 
-	ds := d.From(tSpecificAssetID).
+	ds := d.From(common.TSpecificAssetID).
 		InnerJoin(
-			tAASIdentifier,
-			goqu.On(tSpecificAssetID.Col(colAASRef).Eq(tAASIdentifier.Col(colID))),
+			aasIdentifierTable,
+			goqu.On(common.TSpecificAssetID.Col(common.ColAASRef).Eq(aasIdentifierTable.Col(common.ColID))),
 		).
 		LeftJoin(
 			externalSubjectReferenceAlias,
-			goqu.On(externalSubjectReferenceAlias.Col(colID).Eq(tSpecificAssetID.Col(colID))),
+			goqu.On(externalSubjectReferenceAlias.Col(common.ColID).Eq(common.TSpecificAssetID.Col(common.ColID))),
 		).
 		LeftJoin(
 			specificAssetIDPayloadAlias,
-			goqu.On(specificAssetIDPayloadAlias.Col(colSpecificAssetID).Eq(tSpecificAssetID.Col(colID))),
+			goqu.On(specificAssetIDPayloadAlias.Col(common.ColSpecificAssetID).Eq(common.TSpecificAssetID.Col(common.ColID))),
 		).
 		Select(
 			expressions[0],
@@ -132,10 +132,10 @@ func ReadSpecificAssetIDsByAASRef(
 			expressions[3],
 			expressions[4],
 		).
-		Where(tSpecificAssetID.Col(colAASRef).Eq(aasRef)).
+		Where(common.TSpecificAssetID.Col(common.ColAASRef).Eq(aasRef)).
 		Order(
-			tSpecificAssetID.Col(colPosition).Asc(),
-			tSpecificAssetID.Col(colID).Asc(),
+			common.TSpecificAssetID.Col(common.ColPosition).Asc(),
+			common.TSpecificAssetID.Col(common.ColID).Asc(),
 		)
 
 	ds, err = auth.AddFormulaQueryFromContext(ctx, ds, collector)
@@ -250,10 +250,10 @@ func ReplaceSpecificAssetIDsByAASIdentifier(
 
 func ensureAASIdentifierTx(ctx context.Context, tx *sql.Tx, aasID string) (int64, error) {
 	var aasRef int64
-	d := goqu.Dialect(dialect)
-	tAASIdentifier := goqu.T(tblAASIdentifier)
+	d := goqu.Dialect(common.Dialect)
+	aasIdentifierTable := goqu.T(common.TblAASIdentifier)
 	sqlStr, args, err := d.
-		Insert(tblAASIdentifier).
+		Insert(common.TblAASIdentifier).
 		Rows(goqu.Record{"aasid": aasID}).
 		OnConflict(
 			goqu.DoUpdate(
@@ -261,7 +261,7 @@ func ensureAASIdentifierTx(ctx context.Context, tx *sql.Tx, aasID string) (int64
 				goqu.Record{"aasid": goqu.I("excluded.aasid")},
 			),
 		).
-		Returning(tAASIdentifier.Col(colID)).
+		Returning(aasIdentifierTable.Col(common.ColID)).
 		ToSQL()
 	if err != nil {
 		return 0, err

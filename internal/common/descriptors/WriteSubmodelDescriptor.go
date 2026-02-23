@@ -50,7 +50,7 @@ func createSubModelDescriptors(tx *sql.Tx, aasDescriptorID sql.NullInt64, submod
 			startPosition = nextPosition
 		}
 
-		d := goqu.Dialect(dialect)
+		d := goqu.Dialect(common.Dialect)
 		for i, val := range submodelDescriptors {
 			var err error
 			position := i
@@ -76,8 +76,8 @@ func createSubModelDescriptors(tx *sql.Tx, aasDescriptorID sql.NullInt64, submod
 			}
 
 			sqlStr, args, err := d.
-				Insert(tblDescriptor).
-				Returning(tDescriptor.Col(colID)).
+				Insert(common.TblDescriptor).
+				Returning(common.TDescriptor.Col(common.ColID)).
 				ToSQL()
 			if err != nil {
 				return err
@@ -88,13 +88,13 @@ func createSubModelDescriptors(tx *sql.Tx, aasDescriptorID sql.NullInt64, submod
 			}
 
 			sqlStr, args, err = d.
-				Insert(tblSubmodelDescriptor).
+				Insert(common.TblSubmodelDescriptor).
 				Rows(goqu.Record{
-					colDescriptorID:    submodelDescriptorID,
-					colPosition:        position,
-					colAASDescriptorID: aasDescriptorID,
-					colIDShort:         val.IdShort,
-					colAASID:           val.Id,
+					common.ColDescriptorID:    submodelDescriptorID,
+					common.ColPosition:        position,
+					common.ColAASDescriptorID: aasDescriptorID,
+					common.ColIDShort:         val.IdShort,
+					common.ColAASID:           val.Id,
 				}).
 				ToSQL()
 			if err != nil {
@@ -115,13 +115,13 @@ func createSubModelDescriptors(tx *sql.Tx, aasDescriptorID sql.NullInt64, submod
 			}
 
 			sqlStr, args, err = d.
-				Insert(tblDescriptorPayload).
+				Insert(common.TblDescriptorPayload).
 				Rows(goqu.Record{
-					colDescriptorID:              submodelDescriptorID,
-					colDescriptionPayload:        goqu.L("?::jsonb", string(descriptionPayload)),
-					colDisplayNamePayload:        goqu.L("?::jsonb", string(displayNamePayload)),
-					colAdministrativeInfoPayload: goqu.L("?::jsonb", string(administrationPayload)),
-					colExtensionsPayload:         goqu.L("?::jsonb", string(extensionsPayload)),
+					common.ColDescriptorID:              submodelDescriptorID,
+					common.ColDescriptionPayload:        goqu.L("?::jsonb", string(descriptionPayload)),
+					common.ColDisplayNamePayload:        goqu.L("?::jsonb", string(displayNamePayload)),
+					common.ColAdministrativeInfoPayload: goqu.L("?::jsonb", string(administrationPayload)),
+					common.ColExtensionsPayload:         goqu.L("?::jsonb", string(extensionsPayload)),
 				}).
 				ToSQL()
 			if err != nil {
@@ -163,7 +163,7 @@ func createsubModelDescriptorSupplementalSemantic(tx *sql.Tx, subModelDescriptor
 		tx,
 		subModelDescriptorID,
 		references,
-		tblSubmodelDescriptorSuppSemantic,
-		colDescriptorID,
+		common.TblSubmodelDescriptorSuppSemantic,
+		common.ColDescriptorID,
 	)
 }
