@@ -583,6 +583,103 @@ func TestGetSubmodelReferencesWithSemanticIDFilterReturnsMatchingReference(t *te
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestGetSubmodelReferenceReturnsModelReference(t *testing.T) {
+	t.Parallel()
+
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() {
+		_ = db.Close()
+	}()
+
+	sut := &SubmodelDatabase{db: db}
+
+	rows := sqlmock.NewRows([]string{
+		"submodel_identifier",
+		"id_short",
+		"category",
+		"kind",
+		"description",
+		"display_name",
+		"administrative_information",
+		"embedded_data_specification",
+		"supplemental_semantic_ids",
+		"extensions",
+		"qualifiers",
+		"semantic_id",
+	}).
+		AddRow("sm-single", "idShort-single", nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+
+	mock.ExpectQuery(`SELECT .*FROM .*submodel`).WillReturnRows(rows)
+
+	reference, err := sut.GetSubmodelReference("sm-single")
+	require.NoError(t, err)
+	require.NotNil(t, reference)
+
+	jsonReference, convErr := jsonization.ToJsonable(reference)
+	require.NoError(t, convErr)
+	require.Equal(t, "ModelReference", jsonReference["type"])
+
+	keysAny, ok := jsonReference["keys"].([]any)
+	require.True(t, ok)
+	require.Len(t, keysAny, 1)
+
+	key, ok := keysAny[0].(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "Submodel", key["type"])
+	require.Equal(t, "sm-single", key["value"])
+
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestGetSubmodelReferenceReturnsNotFoundWhenSubmodelMissing(t *testing.T) {
+	t.Parallel()
+
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() {
+		_ = db.Close()
+	}()
+
+	sut := &SubmodelDatabase{db: db}
+
+	rows := sqlmock.NewRows([]string{
+		"submodel_identifier",
+		"id_short",
+		"category",
+		"kind",
+		"description",
+		"display_name",
+		"administrative_information",
+		"embedded_data_specification",
+		"supplemental_semantic_ids",
+		"extensions",
+		"qualifiers",
+		"semantic_id",
+	})
+
+	mock.ExpectQuery(`SELECT .*FROM .*submodel`).WillReturnRows(rows)
+
+	reference, err := sut.GetSubmodelReference("missing-sm")
+	require.Error(t, err)
+	require.Nil(t, reference)
+	require.True(t, common.IsErrNotFound(err))
+
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestGetSubmodelReferenceReturnsBadRequestForEmptyIdentifier(t *testing.T) {
+	t.Parallel()
+
+	sut := &SubmodelDatabase{}
+
+	reference, err := sut.GetSubmodelReference("")
+	require.Error(t, err)
+	require.Nil(t, reference)
+	require.True(t, common.IsErrBadRequest(err))
+	require.Contains(t, err.Error(), "SMREPO-GETSMREFONE-EMPTYIDENTIFIER")
+}
+
 func TestGetSubmodelElementReferencesReturnsReferencesWithPaginationCursor(t *testing.T) {
 	t.Parallel()
 

@@ -202,6 +202,28 @@ func (s *SubmodelDatabase) GetSubmodelReferences(limit int32, cursor string, sub
 	return references, nextCursor, nil
 }
 
+// GetSubmodelReference retrieves the model reference for a single submodel.
+func (s *SubmodelDatabase) GetSubmodelReference(submodelIdentifier string) (types.IReference, error) {
+	if submodelIdentifier == "" {
+		return nil, common.NewErrBadRequest("SMREPO-GETSMREFONE-EMPTYIDENTIFIER submodel identifier is required")
+	}
+
+	submodels, _, err := s.GetSubmodels(1, "", submodelIdentifier)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(submodels) == 0 {
+		return nil, common.NewErrNotFound(submodelIdentifier)
+	}
+
+	if submodels[0] == nil {
+		return nil, common.NewInternalServerError("SMREPO-GETSMREFONE-NILSUBMODEL loaded submodel is nil")
+	}
+
+	return buildSubmodelModelReference(submodels[0].ID())
+}
+
 func buildSubmodelModelReference(submodelIdentifier string) (types.IReference, error) {
 	if submodelIdentifier == "" {
 		return nil, common.NewErrBadRequest("SMREPO-BUILDSMREF-INVALIDIDENTIFIER submodel identifier is required")
