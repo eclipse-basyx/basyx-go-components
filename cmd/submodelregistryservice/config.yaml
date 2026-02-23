@@ -18,7 +18,7 @@ oidc:
 
 
 abac:
-  enabled: false
+  enabled: true
   modelPath: "config/access_rules/access-rules.json"
 
 general:

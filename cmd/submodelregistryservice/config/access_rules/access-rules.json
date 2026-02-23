@@ -2,6 +2,15 @@
   "AllAccessPermissionRules": {
 
     "rules": [
+      {
+        "ACL": {
+          "ATTRIBUTES": [ { "GLOBAL": "ANONYMOUS" } ],
+          "RIGHTS": ["READ"], 
+          "ACCESS": "ALLOW" 
+        },
+        "OBJECTS": [ {"DESCRIPTOR": "$smdesc(\"*\")"} ],
+        "FORMULA": { "$boolean": true }
+      }
     ]
   }
 }
