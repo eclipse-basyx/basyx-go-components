@@ -34,6 +34,7 @@ import (
 
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
+	"github.com/doug-martin/goqu/v9/exp"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
@@ -127,11 +128,7 @@ func ReadSubmodelDescriptorsByDescriptorIDs(
 		},
 	}
 
-	collector, err := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootSMDesc)
-	if err != nil {
-		return nil, err
-	}
-	expressions, err := auth.GetColumnSelectStatement(ctx, mapper, collector)
+	expressions, collector, err := buildSubmodelDescriptorSelectExpressions(ctx, mapper, grammar.CollectorRootSMDesc)
 	if err != nil {
 		return nil, err
 	}
@@ -168,61 +165,16 @@ func ReadSubmodelDescriptorsByDescriptorIDs(
 		submodelDescriptorAlias.Col(colDescriptorID).Asc(),
 	)
 
-	seenFragments := map[grammar.FragmentStringPattern]struct{}{}
-	for _, m := range mapper {
-		if m.Fragment == nil {
-			continue
-		}
-		if _, ok := seenFragments[*m.Fragment]; ok {
-			continue
-		}
-		seenFragments[*m.Fragment] = struct{}{}
-		ds, err = auth.AddFilterQueryFromContext(ctx, ds, *m.Fragment, collector)
-		if err != nil {
-			return nil, err
-		}
+	ds, err = addMapperFragmentFiltersFromContext(ctx, ds, mapper, collector)
+	if err != nil {
+		return nil, err
 	}
 	ds, err = auth.AddFormulaQueryFromContext(ctx, ds, collector)
 	if err != nil {
 		return nil, err
 	}
-
-	sqlStr, args, err := ds.ToSQL()
+	perDesc, allSmdDescIDs, err := readSubmodelDescriptorRows(ctx, db, ds, len(uniqDesc), len(uniqDesc))
 	if err != nil {
-		return nil, err
-	}
-	if debugEnabled(ctx) {
-		_, _ = fmt.Println(sqlStr)
-	}
-	rows, err := db.QueryContext(ctx, sqlStr, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
-		_ = rows.Close()
-	}()
-
-	perDesc := make(map[int64][]model.SubmodelDescriptorRow, len(uniqDesc))
-	allSmdDescIDs := make([]int64, 0, len(uniqDesc))
-
-	for rows.Next() {
-		var r model.SubmodelDescriptorRow
-		if err := rows.Scan(
-			&r.AasDescID,
-			&r.SmdDescID,
-			&r.IDShort,
-			&r.ID,
-			&r.SemanticRefID,
-			&r.AdministrativeInfoPayload,
-			&r.DescriptionPayload,
-			&r.DisplayNamePayload,
-		); err != nil {
-			return nil, err
-		}
-		perDesc[r.AasDescID] = append(perDesc[r.AasDescID], r)
-		allSmdDescIDs = append(allSmdDescIDs, r.SmdDescID)
-	}
-	if err := rows.Err(); err != nil {
 		return nil, err
 	}
 
@@ -256,15 +208,12 @@ func ReadSubmodelDescriptorsByDescriptorIDs(
 //
 // Returns a map keyed by AAS descriptor id with the corresponding submodel
 // descriptors or an error if any query fails.
-//
-//nolint:revive // This method is already refactored and further changes would not improve readability.
 func ReadSubmodelDescriptorsByAASDescriptorIDs(
 	ctx context.Context,
 	db DBQueryer,
 	aasDescriptorIDs []int64,
 	isMain bool,
 ) (map[int64][]model.SubmodelDescriptor, error) {
-
 	if debugEnabled(ctx) {
 		defer func(start time.Time) {
 			_, _ = fmt.Printf("ReadSubmodelDescriptorsByAASDescriptorIDs took %s\n", time.Since(start))
@@ -318,11 +267,7 @@ func ReadSubmodelDescriptorsByAASDescriptorIDs(
 	} else {
 		root = grammar.CollectorRootAASDesc
 	}
-	collector, err := grammar.NewResolvedFieldPathCollectorForRoot(root)
-	if err != nil {
-		return nil, err
-	}
-	expressions, err := auth.GetColumnSelectStatement(ctx, mapper, collector)
+	expressions, collector, err := buildSubmodelDescriptorSelectExpressions(ctx, mapper, root)
 	if err != nil {
 		return nil, err
 	}
@@ -372,43 +317,8 @@ func ReadSubmodelDescriptorsByAASDescriptorIDs(
 		}
 	}
 
-	sqlStr, args, err := ds.ToSQL()
-
+	perAAS, allSmdDescIDs, err := readSubmodelDescriptorRows(ctx, db, ds, len(uniqAASDesc), 10000)
 	if err != nil {
-		return nil, err
-	}
-	if debugEnabled(ctx) {
-		_, _ = fmt.Println(sqlStr)
-	}
-	rows, err := db.QueryContext(ctx, sqlStr, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
-		_ = rows.Close()
-	}()
-
-	perAAS := make(map[int64][]model.SubmodelDescriptorRow, len(uniqAASDesc))
-	allSmdDescIDs := make([]int64, 0, 10000)
-
-	for rows.Next() {
-		var r model.SubmodelDescriptorRow
-		if err := rows.Scan(
-			&r.AasDescID,
-			&r.SmdDescID,
-			&r.IDShort,
-			&r.ID,
-			&r.SemanticRefID,
-			&r.AdministrativeInfoPayload,
-			&r.DescriptionPayload,
-			&r.DisplayNamePayload,
-		); err != nil {
-			return nil, err
-		}
-		perAAS[r.AasDescID] = append(perAAS[r.AasDescID], r)
-		allSmdDescIDs = append(allSmdDescIDs, r.SmdDescID)
-	}
-	if err := rows.Err(); err != nil {
 		return nil, err
 	}
 
@@ -590,4 +500,93 @@ func ensureSubmodelDescriptorGroups(out map[int64][]model.SubmodelDescriptor, gr
 			out[id] = nil
 		}
 	}
+}
+
+func buildSubmodelDescriptorSelectExpressions(
+	ctx context.Context,
+	mapper []auth.ExpressionIdentifiableMapper,
+	root grammar.CollectorRoot,
+) ([]exp.Expression, *grammar.ResolvedFieldPathCollector, error) {
+	collector, err := grammar.NewResolvedFieldPathCollectorForRoot(root)
+	if err != nil {
+		return nil, nil, err
+	}
+	expressions, err := auth.GetColumnSelectStatement(ctx, mapper, collector)
+	if err != nil {
+		return nil, nil, err
+	}
+	return expressions, collector, nil
+}
+
+func addMapperFragmentFiltersFromContext(
+	ctx context.Context,
+	ds *goqu.SelectDataset,
+	mapper []auth.ExpressionIdentifiableMapper,
+	collector *grammar.ResolvedFieldPathCollector,
+) (*goqu.SelectDataset, error) {
+	seenFragments := map[grammar.FragmentStringPattern]struct{}{}
+	var err error
+	for _, m := range mapper {
+		if m.Fragment == nil {
+			continue
+		}
+		if _, ok := seenFragments[*m.Fragment]; ok {
+			continue
+		}
+		seenFragments[*m.Fragment] = struct{}{}
+		ds, err = auth.AddFilterQueryFromContext(ctx, ds, *m.Fragment, collector)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return ds, nil
+}
+
+func readSubmodelDescriptorRows(
+	ctx context.Context,
+	db DBQueryer,
+	ds *goqu.SelectDataset,
+	perGroupCap int,
+	allSmdDescCap int,
+) (map[int64][]model.SubmodelDescriptorRow, []int64, error) {
+	sqlStr, args, err := ds.ToSQL()
+	if err != nil {
+		return nil, nil, err
+	}
+	if debugEnabled(ctx) {
+		_, _ = fmt.Println(sqlStr)
+	}
+	rows, err := db.QueryContext(ctx, sqlStr, args...)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer func() {
+		_ = rows.Close()
+	}()
+
+	perGroup := make(map[int64][]model.SubmodelDescriptorRow, perGroupCap)
+	allSmdDescIDs := make([]int64, 0, allSmdDescCap)
+
+	for rows.Next() {
+		var r model.SubmodelDescriptorRow
+		if err := rows.Scan(
+			&r.AasDescID,
+			&r.SmdDescID,
+			&r.IDShort,
+			&r.ID,
+			&r.SemanticRefID,
+			&r.AdministrativeInfoPayload,
+			&r.DescriptionPayload,
+			&r.DisplayNamePayload,
+		); err != nil {
+			return nil, nil, err
+		}
+		perGroup[r.AasDescID] = append(perGroup[r.AasDescID], r)
+		allSmdDescIDs = append(allSmdDescIDs, r.SmdDescID)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, nil, err
+	}
+
+	return perGroup, allSmdDescIDs, nil
 }

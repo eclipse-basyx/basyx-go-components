@@ -68,6 +68,18 @@ var descriptorRouteMappings = []descriptorRouteMapping{
 		filterField: "$aasdesc#id",
 		hasWildcard: true,
 	},
+	{
+		scope:       "$smdesc",
+		route:       "/submodel-descriptors",
+		filterField: "$smdesc#id",
+		hasWildcard: false,
+	},
+	{
+		scope:       "$smdesc",
+		route:       "/submodel-descriptors/%s",
+		filterField: "$smdesc#id",
+		hasWildcard: true,
+	},
 }
 
 // RouteWithFilter couples a concrete HTTP route pattern with an optional

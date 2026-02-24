@@ -85,7 +85,7 @@ func extractExpressions(mappers []ExpressionIdentifiableMapper) []exp.Expression
 
 // GetColumnSelectStatement builds the list of SELECT expressions while honoring
 // fragment filters stored in the context. Filterable expressions are wrapped
-// in CASE/MAX projections so their values are only exposed when the other
+// in CASE projections so their values are only exposed when the other
 // fragment filters succeed; otherwise the raw expressions are returned.
 func GetColumnSelectStatement(ctx context.Context, expressionMappers []ExpressionIdentifiableMapper, collector *grammar.ResolvedFieldPathCollector) ([]exp.Expression, error) {
 	defaultReturn := extractExpressions(expressionMappers)
