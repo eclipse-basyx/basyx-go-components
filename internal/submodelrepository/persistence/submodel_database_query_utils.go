@@ -103,6 +103,34 @@ func buildSubmodelSemanticIDReferencePayloadQuery(dialect *goqu.DialectWrapper, 
 }
 
 func buildSelectSubmodelQueryWithPayloadByIdentifier(dialect *goqu.DialectWrapper, submodelIdentifier *string, limit *int32, cursor *string) (string, []any, error) {
+	selectDS, err := selectSubmodelGoquQuery(dialect, submodelIdentifier, limit, cursor)
+	if err != nil {
+		return "", nil, err
+	}
+
+	return selectDS.ToSQL()
+}
+
+func buildSelectSubmodelQueryWithPayloadByIdentifierAndSemanticID(dialect *goqu.DialectWrapper, submodelIdentifier *string, semanticID *string, limit *int32, cursor *string) (string, []any, error) {
+	selectDS, err := selectSubmodelGoquQuery(dialect, submodelIdentifier, limit, cursor)
+	if err != nil {
+		return "", nil, err
+	}
+
+	if semanticID != nil {
+		semanticIDFilterDS := dialect.
+			From(goqu.T("submodel_semantic_id_reference_key").As("ssrk_filter")).
+			Select(goqu.V(1)).
+			Where(goqu.I("ssrk_filter.reference_id").Eq(goqu.I("submodel.id"))).
+			Where(goqu.I("ssrk_filter.value").Eq(*semanticID))
+
+		selectDS = selectDS.Where(goqu.Func("EXISTS", semanticIDFilterDS))
+	}
+
+	return selectDS.ToSQL()
+}
+
+func selectSubmodelGoquQuery(dialect *goqu.DialectWrapper, submodelIdentifier *string, limit *int32, cursor *string) (*goqu.SelectDataset, error) {
 	semanticIDSelectExpression := buildSubmodelSemanticIDSelectExpression(dialect)
 
 	selectDS := dialect.From("submodel").
@@ -125,7 +153,7 @@ func buildSelectSubmodelQueryWithPayloadByIdentifier(dialect *goqu.DialectWrappe
 
 	if submodelIdentifier != nil {
 		selectDS = selectDS.Where(goqu.Ex{"submodel.submodel_identifier": *submodelIdentifier}).Limit(1)
-		return selectDS.ToSQL()
+		return selectDS, nil
 	}
 
 	if cursor != nil && *cursor != "" {
@@ -142,12 +170,11 @@ func buildSelectSubmodelQueryWithPayloadByIdentifier(dialect *goqu.DialectWrappe
 		pageLimitPlusOneString := strconv.FormatInt(int64(*limit)+1, 10)
 		pageLimitPlusOne, err := strconv.ParseUint(pageLimitPlusOneString, 10, 64)
 		if err != nil {
-			return "", nil, err
+			return nil, err
 		}
 		selectDS = selectDS.Limit(uint(pageLimitPlusOne))
 	}
-
-	return selectDS.ToSQL()
+	return selectDS, nil
 }
 
 func buildSubmodelSemanticIDSelectExpression(dialect *goqu.DialectWrapper) exp.AliasedExpression {
