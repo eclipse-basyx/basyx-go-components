@@ -189,7 +189,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodels(
 		decodedCursor = string(decodedCursorBytes)
 	}
 
-	if level != "core" && level != "" && level != "deep" {
+	if !isLevelValid(level) {
 		return newAPIErrorResponse(errors.New("invalid level parameter"), http.StatusBadRequest, operation, "InvalidLevelParameter"), nil
 	}
 
@@ -272,7 +272,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelByID(
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
 	}
 
-	if level != "core" && level != "" && level != "deep" {
+	if !isLevelValid(level) {
 		return newAPIErrorResponse(errors.New("invalid level parameter"), http.StatusBadRequest, operation, "InvalidLevelParameter"), nil
 	}
 
@@ -525,7 +525,6 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsMetadata(
 //nolint:revive
 func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsValueOnly(ctx context.Context, semanticID string, idShort string, limit int32, cursor string, level string, extent string) (gen.ImplResponse, error) {
 	_ = semanticID
-	_ = level
 	_ = extent
 	const operation = "GetAllSubmodelsValueOnly"
 
@@ -538,6 +537,10 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsValueOnly(ctx context.C
 		decodedCursor = string(decodedCursorBytes)
 	}
 
+	if !isLevelValid(level) {
+		return newAPIErrorResponse(errors.New("invalid level parameter"), http.StatusBadRequest, operation, "InvalidLevelParameter"), nil
+	}
+
 	sms, nextCursor, err := s.submodelBackend.GetSubmodels(limit, decodedCursor, idShort)
 	if err != nil {
 		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSubmodels"), err
@@ -547,10 +550,6 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsValueOnly(ctx context.C
 
 	eg, _ := errgroup.WithContext(ctx)
 	eg.SetLimit(8)
-
-	if level != "core" && level != "" && level != "deep" {
-		return newAPIErrorResponse(errors.New("invalid level parameter"), http.StatusBadRequest, operation, "InvalidLevelParameter"), nil
-	}
 
 	for index := range sms {
 		index := index
@@ -871,7 +870,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelByIDValueOnly(ctx context.C
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
 	}
 
-	if level != "core" && level != "" && level != "deep" {
+	if !isLevelValid(level) {
 		return newAPIErrorResponse(errors.New("invalid level parameter"), http.StatusBadRequest, operation, "InvalidLevelParameter"), nil
 	}
 
@@ -1015,7 +1014,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelElements(_ /*ctx*/ conte
 		limitPtr = &parsedLimit
 	}
 
-	if level != "core" && level != "" && level != "deep" {
+	if !isLevelValid(level) {
 		return newAPIErrorResponse(errors.New("invalid level parameter"), http.StatusBadRequest, operation, "InvalidLevelParameter"), nil
 	}
 
@@ -1267,7 +1266,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelElementsPathSubmodelRepo
 		return newAPIErrorResponse(cursorDecodeErr, http.StatusBadRequest, operation, "BadCursor"), nil
 	}
 
-	if level != "core" && level != "" && level != "deep" {
+	if !isLevelValid(level) {
 		return newAPIErrorResponse(errors.New("invalid level parameter"), http.StatusBadRequest, operation, "InvalidLevelParameter"), nil
 	}
 
