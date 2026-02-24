@@ -107,6 +107,7 @@ func TestFragmentStringPattern_UnmarshalJSON_RejectsInvalid(t *testing.T) {
 		"$aas#",
 		"$sme",
 		"$sme#",
+		"$aasdesc#endpoints[].protocolinformation",
 	}
 
 	for _, in := range cases {

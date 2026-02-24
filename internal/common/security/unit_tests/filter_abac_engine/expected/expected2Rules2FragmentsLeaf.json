@@ -46,7 +46,7 @@
           }
         ]
       },
-      "$aasdesc#endpoints[].protocolinformation": {
+      "$aasdesc#endpoints[0]": {
         "$or": [
           {
             "$eq": [

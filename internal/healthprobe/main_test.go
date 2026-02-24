@@ -149,14 +149,16 @@ func TestRunProbeWritesFile(t *testing.T) {
 	}))
 	defer server.Close()
 
-	outputPath := filepath.Join(t.TempDir(), "health.json")
+	tmpDir := t.TempDir()
+	t.Chdir(tmpDir)
+	outputPath := "health.json"
 
 	err := runProbe(probeOptions{url: server.URL, output: outputPath, timeout: time.Second})
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
 
-	content, readErr := os.ReadFile(outputPath) // #nosec G304 -- outputPath is created via t.TempDir()
+	content, readErr := os.ReadFile(filepath.Join(tmpDir, outputPath)) // #nosec G304 -- path is created via t.TempDir()
 	if readErr != nil {
 		t.Fatalf("failed reading output file: %v", readErr)
 	}
