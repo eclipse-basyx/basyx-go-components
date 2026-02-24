@@ -217,19 +217,97 @@ func buildSubmodelElementReference(submodelID string, modelType types.ModelType,
 		return nil, common.NewInternalServerError("SMREPO-BUILDSMEREF-KEYTYPE Unknown key type for model type")
 	}
 
+	pathSegments, parsePathErr := parseReferencePathSegments(idShortPath)
+	if parsePathErr != nil {
+		return nil, parsePathErr
+	}
+
+	keys := make([]types.IKey, 0, len(pathSegments)+1)
+
 	firstKey := types.Key{}
 	firstKey.SetType(types.KeyTypesSubmodel)
 	firstKey.SetValue(submodelID)
+	keys = append(keys, &firstKey)
 
-	secondKey := types.Key{}
-	secondKey.SetType(modelTypeKeyType)
-	secondKey.SetValue(idShortPath)
+	for i, segment := range pathSegments {
+		key := types.Key{}
+		isLast := i == len(pathSegments)-1
+
+		switch {
+		case segment.isIndex:
+			key.SetType(types.KeyTypesSubmodelElementList)
+		case isLast:
+			key.SetType(modelTypeKeyType)
+		default:
+			key.SetType(types.KeyTypesSubmodelElementCollection)
+		}
+
+		key.SetValue(segment.value)
+		keys = append(keys, &key)
+	}
 
 	reference := types.Reference{}
 	reference.SetType(types.ReferenceTypesModelReference)
-	reference.SetKeys([]types.IKey{&firstKey, &secondKey})
+	reference.SetKeys(keys)
 
 	return &reference, nil
+}
+
+type referencePathSegment struct {
+	value   string
+	isIndex bool
+}
+
+func parseReferencePathSegments(idShortPath string) ([]referencePathSegment, error) {
+	segments := make([]referencePathSegment, 0, 4)
+	current := strings.Builder{}
+
+	flushCurrent := func() {
+		if current.Len() == 0 {
+			return
+		}
+		segments = append(segments, referencePathSegment{value: current.String()})
+		current.Reset()
+	}
+
+	for i := 0; i < len(idShortPath); i++ {
+		switch idShortPath[i] {
+		case '.':
+			flushCurrent()
+		case '[':
+			flushCurrent()
+			endIndex := strings.IndexByte(idShortPath[i+1:], ']')
+			if endIndex < 0 {
+				return nil, common.NewErrBadRequest("SMREPO-BUILDSMEREF-INVALIDPATH Invalid idShort path syntax")
+			}
+
+			start := i + 1
+			end := start + endIndex
+			indexValue := idShortPath[start:end]
+			if indexValue == "" {
+				return nil, common.NewErrBadRequest("SMREPO-BUILDSMEREF-INVALIDPATH Empty list index in idShort path")
+			}
+
+			segments = append(segments, referencePathSegment{value: indexValue, isIndex: true})
+			i = end
+		default:
+			current.WriteByte(idShortPath[i])
+		}
+	}
+
+	flushCurrent()
+
+	if len(segments) == 0 {
+		return nil, common.NewErrBadRequest("SMREPO-BUILDSMEREF-INVALIDPATH Invalid idShort path syntax")
+	}
+
+	for _, segment := range segments {
+		if !segment.isIndex && segment.value == "" {
+			return nil, common.NewErrBadRequest("SMREPO-BUILDSMEREF-INVALIDPATH Invalid idShort segment in path")
+		}
+	}
+
+	return segments, nil
 }
 
 type rootElementCursorRow struct {
