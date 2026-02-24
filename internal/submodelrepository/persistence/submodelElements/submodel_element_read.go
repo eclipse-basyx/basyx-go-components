@@ -291,7 +291,10 @@ func parseReferencePathSegments(idShortPath string) ([]referencePathSegment, err
 			segments = append(segments, referencePathSegment{value: indexValue, isIndex: true})
 			i = end
 		default:
-			current.WriteByte(idShortPath[i])
+			err := current.WriteByte(idShortPath[i])
+			if err != nil {
+				return nil, common.NewErrBadRequest("SMREPO-BUILDSMEREF-INVALIDPATH Invalid idShort path syntax")
+			}
 		}
 	}
 
