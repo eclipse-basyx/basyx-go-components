@@ -286,8 +286,3 @@ func nvl(ns sql.NullString) string {
 	}
 	return ""
 }
-
-func fragPtr(s string) *grammar.FragmentStringPattern {
-	frag := grammar.FragmentStringPattern(s)
-	return &frag
-}
