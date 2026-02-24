@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/FriedJannik/aas-go-sdk/stringification"
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
@@ -110,6 +111,206 @@ func GetSubmodelElementsBySubmodelID(db *sql.DB, submodelID string, limit *int, 
 	}
 
 	return result, nextCursor, nil
+}
+
+// GetSubmodelElementReferencesBySubmodelID retrieves references for top-level submodel elements of a submodel with optional pagination.
+func GetSubmodelElementReferencesBySubmodelID(db *sql.DB, submodelID string, limit *int, cursor string) ([]types.IReference, string, error) {
+	if submodelID == "" {
+		return nil, "", common.NewErrBadRequest("SMREPO-GETSMEREFS-EMPTYSMID Submodel id must not be empty")
+	}
+	if limit != nil {
+		if *limit < -1 {
+			return nil, "", common.NewErrBadRequest("SMREPO-GETSMEREFS-BADLIMIT limit must be >= -1")
+		}
+	}
+	if limit == nil {
+		limit = new(int)
+		*limit = 100
+	}
+
+	submodelDatabaseID, submodelIDErr := persistenceutils.GetSubmodelDatabaseIDFromDB(db, submodelID)
+	if submodelIDErr != nil {
+		if errors.Is(submodelIDErr, sql.ErrNoRows) {
+			return nil, "", common.NewErrNotFound(submodelID)
+		}
+		return nil, "", common.NewInternalServerError("SMREPO-GETSMEREFS-GETSMDATABASEID " + submodelIDErr.Error())
+	}
+
+	rootElements, nextCursor, rootPathErr := getRootElementPage(db, int64(submodelDatabaseID), limit, cursor)
+	if rootPathErr != nil {
+		return nil, "", rootPathErr
+	}
+	if len(rootElements) == 0 {
+		return []types.IReference{}, nextCursor, nil
+	}
+
+	rootIDs := make([]int64, 0, len(rootElements))
+	for _, rootElement := range rootElements {
+		rootIDs = append(rootIDs, rootElement.id)
+	}
+
+	dialect := goqu.Dialect("postgres")
+	modelTypesQuery, modelTypesArgs, modelTypesSQLErr := dialect.
+		From(goqu.T("submodel_element").As("sme")).
+		Select(
+			goqu.I("sme.id"),
+			goqu.I("sme.model_type"),
+		).
+		Where(
+			goqu.I("sme.submodel_id").Eq(submodelDatabaseID),
+			goqu.I("sme.id").In(rootIDs),
+		).
+		ToSQL()
+	if modelTypesSQLErr != nil {
+		return nil, "", common.NewInternalServerError("SMREPO-GETSMEREFS-BUILDMODELTYPESQ " + modelTypesSQLErr.Error())
+	}
+
+	rows, modelTypesQueryErr := db.Query(modelTypesQuery, modelTypesArgs...)
+	if modelTypesQueryErr != nil {
+		return nil, "", common.NewInternalServerError("SMREPO-GETSMEREFS-EXECMODELTYPESQ " + modelTypesQueryErr.Error())
+	}
+	defer func() { _ = rows.Close() }()
+
+	modelTypesByID := make(map[int64]types.ModelType, len(rootElements))
+	for rows.Next() {
+		var elementID int64
+		var modelTypeInt int64
+		if scanErr := rows.Scan(&elementID, &modelTypeInt); scanErr != nil {
+			return nil, "", common.NewInternalServerError("SMREPO-GETSMEREFS-SCANMODELTYPESQ " + scanErr.Error())
+		}
+		modelTypesByID[elementID] = types.ModelType(modelTypeInt)
+	}
+
+	if rowsErr := rows.Err(); rowsErr != nil {
+		return nil, "", common.NewInternalServerError("SMREPO-GETSMEREFS-ROWSERRMODELTYPESQ " + rowsErr.Error())
+	}
+
+	references := make([]types.IReference, 0, len(rootElements))
+	for _, rootElement := range rootElements {
+		modelType, modelTypeExists := modelTypesByID[rootElement.id]
+		if !modelTypeExists {
+			return nil, "", common.NewInternalServerError("SMREPO-GETSMEREFS-MISSINGMODELTYPE Missing model type for root element id")
+		}
+
+		reference, referenceErr := buildSubmodelElementReference(submodelID, modelType, rootElement.path)
+		if referenceErr != nil {
+			return nil, "", referenceErr
+		}
+
+		references = append(references, reference)
+	}
+
+	return references, nextCursor, nil
+}
+
+func buildSubmodelElementReference(submodelID string, modelType types.ModelType, idShortPath string) (types.IReference, error) {
+	if submodelID == "" || idShortPath == "" {
+		return nil, common.NewErrBadRequest("SMREPO-BUILDSMEREF-INVALIDPARAMS Invalid reference parameters")
+	}
+
+	modelTypeLiteral, ok := stringification.ModelTypeToString(modelType)
+	if !ok {
+		return nil, common.NewInternalServerError("SMREPO-BUILDSMEREF-MODELTYPE Unknown model type for reference")
+	}
+	modelTypeKeyType, ok := stringification.KeyTypesFromString(modelTypeLiteral)
+	if !ok {
+		return nil, common.NewInternalServerError("SMREPO-BUILDSMEREF-KEYTYPE Unknown key type for model type")
+	}
+
+	pathSegments, parsePathErr := parseReferencePathSegments(idShortPath)
+	if parsePathErr != nil {
+		return nil, parsePathErr
+	}
+
+	keys := make([]types.IKey, 0, len(pathSegments)+1)
+
+	firstKey := types.Key{}
+	firstKey.SetType(types.KeyTypesSubmodel)
+	firstKey.SetValue(submodelID)
+	keys = append(keys, &firstKey)
+
+	for i, segment := range pathSegments {
+		key := types.Key{}
+		isLast := i == len(pathSegments)-1
+
+		switch {
+		case segment.isIndex:
+			key.SetType(types.KeyTypesSubmodelElementList)
+		case isLast:
+			key.SetType(modelTypeKeyType)
+		default:
+			key.SetType(types.KeyTypesSubmodelElementCollection)
+		}
+
+		key.SetValue(segment.value)
+		keys = append(keys, &key)
+	}
+
+	reference := types.Reference{}
+	reference.SetType(types.ReferenceTypesModelReference)
+	reference.SetKeys(keys)
+
+	return &reference, nil
+}
+
+type referencePathSegment struct {
+	value   string
+	isIndex bool
+}
+
+func parseReferencePathSegments(idShortPath string) ([]referencePathSegment, error) {
+	segments := make([]referencePathSegment, 0, 4)
+	current := strings.Builder{}
+
+	flushCurrent := func() {
+		if current.Len() == 0 {
+			return
+		}
+		segments = append(segments, referencePathSegment{value: current.String()})
+		current.Reset()
+	}
+
+	for i := 0; i < len(idShortPath); i++ {
+		switch idShortPath[i] {
+		case '.':
+			flushCurrent()
+		case '[':
+			flushCurrent()
+			endIndex := strings.IndexByte(idShortPath[i+1:], ']')
+			if endIndex < 0 {
+				return nil, common.NewErrBadRequest("SMREPO-BUILDSMEREF-INVALIDPATH Invalid idShort path syntax")
+			}
+
+			start := i + 1
+			end := start + endIndex
+			indexValue := idShortPath[start:end]
+			if indexValue == "" {
+				return nil, common.NewErrBadRequest("SMREPO-BUILDSMEREF-INVALIDPATH Empty list index in idShort path")
+			}
+
+			segments = append(segments, referencePathSegment{value: indexValue, isIndex: true})
+			i = end
+		default:
+			err := current.WriteByte(idShortPath[i])
+			if err != nil {
+				return nil, common.NewErrBadRequest("SMREPO-BUILDSMEREF-INVALIDPATH Invalid idShort path syntax")
+			}
+		}
+	}
+
+	flushCurrent()
+
+	if len(segments) == 0 {
+		return nil, common.NewErrBadRequest("SMREPO-BUILDSMEREF-INVALIDPATH Invalid idShort path syntax")
+	}
+
+	for _, segment := range segments {
+		if !segment.isIndex && segment.value == "" {
+			return nil, common.NewErrBadRequest("SMREPO-BUILDSMEREF-INVALIDPATH Invalid idShort segment in path")
+		}
+	}
+
+	return segments, nil
 }
 
 type rootElementCursorRow struct {

@@ -34,6 +34,7 @@ import (
 
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	"github.com/lib/pq"
@@ -99,9 +100,9 @@ func ReadSpecificAssetIDsByDescriptorIDs(
 		return out, nil
 	}
 
-	d := goqu.Dialect(dialect)
-	externalSubjectReferenceAlias := goqu.T("specific_asset_id_external_subject_id_reference").As(aliasExternalSubjectReference)
-	specificAssetIDPayloadAlias := goqu.T(tblSpecificAssetIDPayload).As("specific_asset_id_payload")
+	d := goqu.Dialect(common.Dialect)
+	externalSubjectReferenceAlias := goqu.T("specific_asset_id_external_subject_id_reference").As(common.AliasExternalSubjectReference)
+	specificAssetIDPayloadAlias := goqu.T(common.TblSpecificAssetIDPayload).As("specific_asset_id_payload")
 
 	arr := pq.Array(descriptorIDs)
 
@@ -124,36 +125,36 @@ func ReadSpecificAssetIDsByDescriptorIDs(
 		return nil, err
 	}
 
-	inner := d.From(tDescriptor).
+	inner := d.From(common.TDescriptor).
 		InnerJoin(
-			tAASDescriptor,
-			goqu.On(tAASDescriptor.Col(colDescriptorID).Eq(tDescriptor.Col(colID))),
+			common.TAASDescriptor,
+			goqu.On(common.TAASDescriptor.Col(common.ColDescriptorID).Eq(common.TDescriptor.Col(common.ColID))),
 		).
 		LeftJoin(
 			specificAssetIDAlias,
-			goqu.On(specificAssetIDAlias.Col(colDescriptorID).Eq(tDescriptor.Col(colID))),
+			goqu.On(specificAssetIDAlias.Col(common.ColDescriptorID).Eq(common.TDescriptor.Col(common.ColID))),
 		).
 		LeftJoin(
 			externalSubjectReferenceAlias,
-			goqu.On(externalSubjectReferenceAlias.Col(colID).Eq(specificAssetIDAlias.Col(colID))),
+			goqu.On(externalSubjectReferenceAlias.Col(common.ColID).Eq(specificAssetIDAlias.Col(common.ColID))),
 		).
 		LeftJoin(
 			specificAssetIDPayloadAlias,
-			goqu.On(specificAssetIDPayloadAlias.Col(colSpecificAssetID).Eq(specificAssetIDAlias.Col(colID))),
+			goqu.On(specificAssetIDPayloadAlias.Col(common.ColSpecificAssetID).Eq(specificAssetIDAlias.Col(common.ColID))),
 		).Select(append([]interface{}{
-		tSpecificAssetID.Col(colDescriptorID).As("c0"),
-		tSpecificAssetID.Col(colID).As("c1"),
-		tSpecificAssetID.Col(colName).As("c2"),
-		tSpecificAssetID.Col(colValue).As("c3"),
+		common.TSpecificAssetID.Col(common.ColDescriptorID).As("c0"),
+		common.TSpecificAssetID.Col(common.ColID).As("c1"),
+		common.TSpecificAssetID.Col(common.ColName).As("c2"),
+		common.TSpecificAssetID.Col(common.ColValue).As("c3"),
 		goqu.I("specific_asset_id_payload.semantic_id_payload").As("c4"),
-		goqu.I(aliasExternalSubjectReference + "." + colID).As("c5"),
-		tSpecificAssetID.Col(colPosition).As("sort_specific_asset_position"),
+		goqu.I(common.AliasExternalSubjectReference + "." + common.ColID).As("c5"),
+		common.TSpecificAssetID.Col(common.ColPosition).As("sort_specific_asset_position"),
 	}, maskRuntime.Projections()...)...).
-		Where(goqu.L(fmt.Sprintf("%s.%s = ANY(?::bigint[])", aliasSpecificAssetID, colDescriptorID), arr))
+		Where(goqu.L(fmt.Sprintf("%s.%s = ANY(?::bigint[])", common.AliasSpecificAssetID, common.ColDescriptorID), arr))
 
 	inner = inner.
 		Order(
-			tSpecificAssetID.Col(colPosition).Asc(),
+			common.TSpecificAssetID.Col(common.ColPosition).Asc(),
 		)
 
 	inner, err = auth.AddFilterQueryFromContext(ctx, inner, "$aasdesc#specificAssetIds[]", collector)

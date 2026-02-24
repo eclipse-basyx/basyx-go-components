@@ -95,9 +95,9 @@ func ReadSubmodelDescriptorsByDescriptorIDs(
 	}
 	uniqDesc := descriptorIDs
 
-	d := goqu.Dialect(dialect)
-	payloadAlias := tDescriptorPayload.As("smd_payload")
-	semanticRefAlias := goqu.T("submodel_descriptor_semantic_id_reference").As(aliasSubmodelDescriptorSemanticIDReference)
+	d := goqu.Dialect(common.Dialect)
+	payloadAlias := common.TDescriptorPayload.As("smd_payload")
+	semanticRefAlias := goqu.T("submodel_descriptor_semantic_id_reference").As(common.AliasSubmodelDescriptorSemanticIDReference)
 	collector, err := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootSMDesc)
 	if err != nil {
 		return nil, err
@@ -120,34 +120,34 @@ func ReadSubmodelDescriptorsByDescriptorIDs(
 	inner := d.From(submodelDescriptorAlias).
 		LeftJoin(
 			semanticRefAlias,
-			goqu.On(semanticRefAlias.Col(colID).Eq(submodelDescriptorAlias.Col(colDescriptorID))),
+			goqu.On(semanticRefAlias.Col(common.ColID).Eq(submodelDescriptorAlias.Col(common.ColDescriptorID))),
 		).
 		LeftJoin(
 			payloadAlias,
-			goqu.On(payloadAlias.Col(colDescriptorID).Eq(submodelDescriptorAlias.Col(colDescriptorID))),
+			goqu.On(payloadAlias.Col(common.ColDescriptorID).Eq(submodelDescriptorAlias.Col(common.ColDescriptorID))),
 		).
 		Select(append([]interface{}{
-			submodelDescriptorAlias.Col(colDescriptorID).As("c0"),
-			submodelDescriptorAlias.Col(colDescriptorID).As("c1"),
-			submodelDescriptorAlias.Col(colIDShort).As("c2"),
-			submodelDescriptorAlias.Col(colAASID).As("c3"),
-			semanticRefAlias.Col(colID).As("c4"),
-			payloadAlias.Col(colAdministrativeInfoPayload).As("c5"),
-			payloadAlias.Col(colDescriptionPayload).As("c6"),
-			payloadAlias.Col(colDisplayNamePayload).As("c7"),
-			submodelDescriptorAlias.Col(colPosition).As("sort_smd_position"),
-			submodelDescriptorAlias.Col(colDescriptorID).As("sort_smd_descriptor_id"),
+			submodelDescriptorAlias.Col(common.ColDescriptorID).As("c0"),
+			submodelDescriptorAlias.Col(common.ColDescriptorID).As("c1"),
+			submodelDescriptorAlias.Col(common.ColIDShort).As("c2"),
+			submodelDescriptorAlias.Col(common.ColAASID).As("c3"),
+			semanticRefAlias.Col(common.ColID).As("c4"),
+			payloadAlias.Col(common.ColAdministrativeInfoPayload).As("c5"),
+			payloadAlias.Col(common.ColDescriptionPayload).As("c6"),
+			payloadAlias.Col(common.ColDisplayNamePayload).As("c7"),
+			submodelDescriptorAlias.Col(common.ColPosition).As("sort_smd_position"),
+			submodelDescriptorAlias.Col(common.ColDescriptorID).As("sort_smd_descriptor_id"),
 		}, maskRuntime.Projections()...)...).
 		Where(
 			goqu.And(
-				goqu.L("? = ANY(?::bigint[])", submodelDescriptorAlias.Col(colDescriptorID), arr),
-				submodelDescriptorAlias.Col(colAASDescriptorID).IsNull(),
+				goqu.L("? = ANY(?::bigint[])", submodelDescriptorAlias.Col(common.ColDescriptorID), arr),
+				submodelDescriptorAlias.Col(common.ColAASDescriptorID).IsNull(),
 			),
 		)
 
 	inner = inner.Order(
-		submodelDescriptorAlias.Col(colPosition).Asc(),
-		submodelDescriptorAlias.Col(colDescriptorID).Asc(),
+		submodelDescriptorAlias.Col(common.ColPosition).Asc(),
+		submodelDescriptorAlias.Col(common.ColDescriptorID).Asc(),
 	)
 
 	inner, err = maskRuntime.ApplyFilters(ctx, inner, collector)
@@ -232,9 +232,9 @@ func ReadSubmodelDescriptorsByAASDescriptorIDs(
 	}
 	uniqAASDesc := aasDescriptorIDs
 
-	d := goqu.Dialect(dialect)
-	payloadAlias := tDescriptorPayload.As("smd_payload")
-	semanticRefAlias := goqu.T("submodel_descriptor_semantic_id_reference").As(aliasSubmodelDescriptorSemanticIDReference)
+	d := goqu.Dialect(common.Dialect)
+	payloadAlias := common.TDescriptorPayload.As("smd_payload")
+	semanticRefAlias := goqu.T("submodel_descriptor_semantic_id_reference").As(common.AliasSubmodelDescriptorSemanticIDReference)
 	var root grammar.CollectorRoot
 	if isMain {
 		root = grammar.CollectorRootSMDesc
@@ -259,40 +259,40 @@ func ReadSubmodelDescriptorsByAASDescriptorIDs(
 		return nil, err
 	}
 	arr := pq.Array(uniqAASDesc)
-	inner := d.From(tDescriptor).
+	inner := d.From(common.TDescriptor).
 		InnerJoin(
-			tAASDescriptor,
-			goqu.On(tAASDescriptor.Col(colDescriptorID).Eq(tDescriptor.Col(colID))),
+			common.TAASDescriptor,
+			goqu.On(common.TAASDescriptor.Col(common.ColDescriptorID).Eq(common.TDescriptor.Col(common.ColID))),
 		).
 		LeftJoin(
 			submodelDescriptorAlias,
-			goqu.On(submodelDescriptorAlias.Col(colAASDescriptorID).Eq(tAASDescriptor.Col(colDescriptorID))),
+			goqu.On(submodelDescriptorAlias.Col(common.ColAASDescriptorID).Eq(common.TAASDescriptor.Col(common.ColDescriptorID))),
 		).
 		LeftJoin(
 			semanticRefAlias,
-			goqu.On(semanticRefAlias.Col(colID).Eq(submodelDescriptorAlias.Col(colDescriptorID))),
+			goqu.On(semanticRefAlias.Col(common.ColID).Eq(submodelDescriptorAlias.Col(common.ColDescriptorID))),
 		).
 		LeftJoin(
 			payloadAlias,
-			goqu.On(payloadAlias.Col(colDescriptorID).Eq(submodelDescriptorAlias.Col(colDescriptorID))),
+			goqu.On(payloadAlias.Col(common.ColDescriptorID).Eq(submodelDescriptorAlias.Col(common.ColDescriptorID))),
 		).
 		Select(append([]interface{}{
-			submodelDescriptorAlias.Col(colAASDescriptorID).As("c0"),
-			submodelDescriptorAlias.Col(colDescriptorID).As("c1"),
-			submodelDescriptorAlias.Col(colIDShort).As("c2"),
-			submodelDescriptorAlias.Col(colAASID).As("c3"),
-			semanticRefAlias.Col(colID).As("c4"),
-			payloadAlias.Col(colAdministrativeInfoPayload).As("c5"),
-			payloadAlias.Col(colDescriptionPayload).As("c6"),
-			payloadAlias.Col(colDisplayNamePayload).As("c7"),
-			submodelDescriptorAlias.Col(colPosition).As("sort_smd_position"),
-			submodelDescriptorAlias.Col(colDescriptorID).As("sort_smd_descriptor_id"),
+			submodelDescriptorAlias.Col(common.ColAASDescriptorID).As("c0"),
+			submodelDescriptorAlias.Col(common.ColDescriptorID).As("c1"),
+			submodelDescriptorAlias.Col(common.ColIDShort).As("c2"),
+			submodelDescriptorAlias.Col(common.ColAASID).As("c3"),
+			semanticRefAlias.Col(common.ColID).As("c4"),
+			payloadAlias.Col(common.ColAdministrativeInfoPayload).As("c5"),
+			payloadAlias.Col(common.ColDescriptionPayload).As("c6"),
+			payloadAlias.Col(common.ColDisplayNamePayload).As("c7"),
+			submodelDescriptorAlias.Col(common.ColPosition).As("sort_smd_position"),
+			submodelDescriptorAlias.Col(common.ColDescriptorID).As("sort_smd_descriptor_id"),
 		}, maskRuntime.Projections()...)...).
-		Where(goqu.L("? = ANY(?::bigint[])", submodelDescriptorAlias.Col(colAASDescriptorID), arr))
+		Where(goqu.L("? = ANY(?::bigint[])", submodelDescriptorAlias.Col(common.ColAASDescriptorID), arr))
 
 	inner = inner.Order(
-		submodelDescriptorAlias.Col(colPosition).Asc(),
-		submodelDescriptorAlias.Col(colDescriptorID).Asc(),
+		submodelDescriptorAlias.Col(common.ColPosition).Asc(),
+		submodelDescriptorAlias.Col(common.ColDescriptorID).Asc(),
 	)
 
 	inner, err = auth.AddFilterQueryFromContext(ctx, inner, "$aasdesc#submodelDescriptors[]", collector)
