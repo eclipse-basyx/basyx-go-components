@@ -57,7 +57,7 @@ func getSubmodelElementByIDShortOrPathWithSubmodelDBID(db *sql.DB, submodelID st
 
 // GetSubmodelElementsBySubmodelID loads top-level submodel elements and reconstructs
 // each complete subtree in original hierarchy.
-func GetSubmodelElementsBySubmodelID(db *sql.DB, submodelID string, limit *int, cursor string) ([]types.ISubmodelElement, string, error) {
+func GetSubmodelElementsBySubmodelID(db *sql.DB, submodelID string, limit *int, cursor string, level string) ([]types.ISubmodelElement, string, error) {
 	if submodelID == "" {
 		return nil, "", common.NewErrBadRequest("SMREPO-GETSMES-EMPTYSMID Submodel id must not be empty")
 	}
@@ -91,7 +91,8 @@ func GetSubmodelElementsBySubmodelID(db *sql.DB, submodelID string, limit *int, 
 		rootIDs = append(rootIDs, rootElement.id)
 	}
 
-	parsedRows, readRowsErr := readSubmodelElementRowsByRootIDs(db, int64(submodelDatabaseID), rootIDs)
+	includeChildren := level != "core"
+	parsedRows, readRowsErr := readSubmodelElementRowsByRootIDs(db, int64(submodelDatabaseID), rootIDs, includeChildren)
 	if readRowsErr != nil {
 		return nil, "", readRowsErr
 	}
@@ -291,10 +292,7 @@ func parseReferencePathSegments(idShortPath string) ([]referencePathSegment, err
 			segments = append(segments, referencePathSegment{value: indexValue, isIndex: true})
 			i = end
 		default:
-			err := current.WriteByte(idShortPath[i])
-			if err != nil {
-				return nil, common.NewErrBadRequest("SMREPO-BUILDSMEREF-INVALIDPATH Invalid idShort path syntax")
-			}
+			current.WriteByte(idShortPath[i])
 		}
 	}
 
@@ -484,7 +482,7 @@ func readSubmodelElementRowsByPath(db *sql.DB, submodelDatabaseID int64, idShort
 	return executeLoadedSMERowQuery(db, sqlQuery, args, "SMREPO-GETSMEBYPATH")
 }
 
-func readSubmodelElementRowsByRootIDs(db *sql.DB, submodelDatabaseID int64, rootIDs []int64) ([]loadedSMERow, error) {
+func readSubmodelElementRowsByRootIDs(db *sql.DB, submodelDatabaseID int64, rootIDs []int64, includeChildren bool) ([]loadedSMERow, error) {
 	if len(rootIDs) == 0 {
 		return []loadedSMERow{}, nil
 	}
@@ -497,6 +495,11 @@ func readSubmodelElementRowsByRootIDs(db *sql.DB, submodelDatabaseID int64, root
 		rootOrderExpr = rootOrderExpr.When(rootID, index)
 	}
 	rootOrderExpr = rootOrderExpr.Else(len(rootIDs))
+
+	rootFilter := goqu.I("sme.id").In(rootIDs)
+	if includeChildren {
+		rootFilter = goqu.COALESCE(goqu.I("sme.root_sme_id"), goqu.I("sme.id")).In(rootIDs)
+	}
 
 	valueExpr := getSMEValueExpressionForRead(dialect)
 	query := dialect.
@@ -531,7 +534,7 @@ func readSubmodelElementRowsByRootIDs(db *sql.DB, submodelDatabaseID int64, root
 		).
 		Where(
 			goqu.I("sme.submodel_id").Eq(submodelDatabaseID),
-			goqu.COALESCE(goqu.I("sme.root_sme_id"), goqu.I("sme.id")).In(rootIDs),
+			rootFilter,
 		).
 		Order(
 			rootOrderExpr.Asc(),

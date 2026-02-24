@@ -254,6 +254,20 @@
         "expectedStatus": 200
     },
     {
+        "context": "Get All SubmodelElements Deep - Entity Submodel",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlFbnRpdHlTdWJtb2RlbA/submodel-elements?level=deep",
+        "shouldMatch": "expected/expectedGetAllSubmodelElementsEntityDeep.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "Get All SubmodelElements Core - Entity Submodel",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlFbnRpdHlTdWJtb2RlbA/submodel-elements?level=core",
+        "shouldMatch": "expected/expectedGetAllSubmodelElementsEntityCore.json",
+        "expectedStatus": 200
+    },
+    {
         "context": "Get Submodel with Entity SubmodelElement - Get Statement",
         "method": "GET",
         "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlFbnRpdHlTdWJtb2RlbA/submodel-elements/DemoEntity.StatementProperty1",
