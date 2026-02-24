@@ -486,6 +486,11 @@ func (s *SubmodelDatabase) GetSubmodelElement(submodelID string, idShortOrPath s
 	return submodelelements.GetSubmodelElementByIDShortOrPath(s.db, submodelID, idShortOrPath)
 }
 
+// GetSubmodelElementWithLevel retrieves a submodel element by idShort path and applies level modifier.
+func (s *SubmodelDatabase) GetSubmodelElementWithLevel(submodelID string, idShortOrPath string, _ bool, level string) (types.ISubmodelElement, error) {
+	return submodelelements.GetSubmodelElementByIDShortOrPathWithLevel(s.db, submodelID, idShortOrPath, level)
+}
+
 // GetSubmodelElements retrieves top-level submodel elements for a submodel and reconstructs each subtree.
 func (s *SubmodelDatabase) GetSubmodelElements(submodelID string, limit *int, cursor string, _ bool, level string) ([]types.ISubmodelElement, string, error) {
 	return submodelelements.GetSubmodelElementsBySubmodelID(s.db, submodelID, limit, cursor, level)

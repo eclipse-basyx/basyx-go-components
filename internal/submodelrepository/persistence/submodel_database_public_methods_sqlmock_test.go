@@ -135,6 +135,74 @@ func TestGetSubmodelElementEmptyPathReturnsBadRequest(t *testing.T) {
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestGetSubmodelElementWithLevelInvalidLevelReturnsBadRequest(t *testing.T) {
+	t.Parallel()
+
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() {
+		_ = db.Close()
+	}()
+
+	sut := &SubmodelDatabase{db: db}
+
+	elem, err := sut.GetSubmodelElementWithLevel("sm", "root", false, "invalid")
+	require.Error(t, err)
+	require.Nil(t, elem)
+	require.True(t, common.IsErrBadRequest(err))
+	require.Contains(t, err.Error(), "SMREPO-GETSMEBYPATH-BADLEVEL")
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestGetSubmodelElementWithLevelCoreReturnsElementWithoutChildren(t *testing.T) {
+	t.Parallel()
+
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() {
+		_ = db.Close()
+	}()
+
+	sut := &SubmodelDatabase{db: db}
+
+	mock.ExpectQuery(`SELECT .*FROM "submodel"`).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
+
+	mock.ExpectQuery(`SELECT .*FROM "submodel_element" AS "sme".*"sme"\."idshort_path" =`).
+		WillReturnRows(sqlmock.NewRows(submodelElementReadColumns()).
+			AddRow(
+				10,
+				nil,
+				nil,
+				"RootCollection",
+				"RootCollection",
+				nil,
+				int64(types.ModelTypeSubmodelElementCollection),
+				0,
+				[]byte("[]"),
+				[]byte("[]"),
+				[]byte("[]"),
+				[]byte("[]"),
+				[]byte("[]"),
+				nil,
+				[]byte("[]"),
+				[]byte("[]"),
+				[]byte("[]"),
+				[]byte(`{"type":"ExternalReference","keys":[{"type":"GlobalReference","value":"urn:test:semantic"}]}`),
+			),
+		)
+
+	elem, err := sut.GetSubmodelElementWithLevel("sm-core", "RootCollection", false, "core")
+	require.NoError(t, err)
+	require.NotNil(t, elem)
+
+	collection, ok := elem.(types.ISubmodelElementCollection)
+	require.True(t, ok)
+	require.Empty(t, collection.Value())
+
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
 func TestGetSubmodelElementsEmptySubmodelIDReturnsBadRequest(t *testing.T) {
 	t.Parallel()
 
