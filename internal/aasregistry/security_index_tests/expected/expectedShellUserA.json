@@ -21,7 +21,7 @@
     ],
   "specificAssetIds": [
     {
-      "name": "",
+      "name": "irrelevantPartId",
       "value": "123"
     },
     {
