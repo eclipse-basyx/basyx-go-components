@@ -154,28 +154,6 @@ func getModelTypeLiteral(element types.ISubmodelElement) string {
 	return modelType
 }
 
-func buildModelReference(submodelID string, keyType string, keyValue string) (types.IReference, error) {
-	if submodelID == "" || keyType == "" || keyValue == "" {
-		return nil, common.NewErrBadRequest("SMREPO-BUILDREF-INVALIDPARAMS Invalid reference parameters")
-	}
-
-	jsonableReference := map[string]any{
-		"type": "ModelReference",
-		"keys": []any{
-			map[string]any{
-				"type":  "Submodel",
-				"value": submodelID,
-			},
-			map[string]any{
-				"type":  keyType,
-				"value": keyValue,
-			},
-		},
-	}
-
-	return jsonization.ReferenceFromJsonable(jsonableReference)
-}
-
 // GetAllSubmodels retrieves all submodels from the repository with optional filtering and pagination.
 // It supports filtering by idShort and provides pagination through cursor-based navigation.
 //
@@ -1662,7 +1640,37 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelElementByPathReferenceSubmo
 		return newAPIErrorResponse(internalErr, http.StatusInternalServerError, operation, "EmptyModelType"), internalErr
 	}
 
-	reference, referenceErr := buildModelReference(decodedSubmodelIdentifier, modelTypeLiteral, idShortPath)
+	keyTypes, keyValues, keyResolutionErr := resolveModelReferencePathKeys(
+		idShortPath,
+		modelTypeLiteral,
+		func(path string) (string, error) {
+			parentElement, parentErr := s.submodelBackend.GetSubmodelElement(decodedSubmodelIdentifier, path, false)
+			if parentErr != nil {
+				if common.IsErrBadRequest(parentErr) || common.IsErrNotFound(parentErr) {
+					return "", parentErr
+				}
+				return "", common.NewInternalServerError("SMREPO-BUILDREF-GETPARENT " + parentErr.Error())
+			}
+
+			parentModelType := getModelTypeLiteral(parentElement)
+			if parentModelType == "" {
+				return "", common.NewInternalServerError("SMREPO-BUILDREF-PARENTMODELTYPE Empty modelType for parent submodel element")
+			}
+
+			return parentModelType, nil
+		},
+	)
+	if keyResolutionErr != nil {
+		if common.IsErrBadRequest(keyResolutionErr) {
+			return newAPIErrorResponse(keyResolutionErr, http.StatusBadRequest, operation, "BadReferencePath"), nil
+		}
+		if common.IsErrNotFound(keyResolutionErr) {
+			return newAPIErrorResponse(keyResolutionErr, http.StatusNotFound, operation, "SubmodelElementNotFound"), nil
+		}
+		return newAPIErrorResponse(keyResolutionErr, http.StatusInternalServerError, operation, "ResolveReferenceKeys"), keyResolutionErr
+	}
+
+	reference, referenceErr := buildModelReference(decodedSubmodelIdentifier, keyTypes, keyValues)
 	if referenceErr != nil {
 		return newAPIErrorResponse(referenceErr, http.StatusInternalServerError, operation, "BuildModelReference"), referenceErr
 	}
