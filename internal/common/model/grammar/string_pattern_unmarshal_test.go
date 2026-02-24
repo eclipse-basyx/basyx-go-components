@@ -78,6 +78,9 @@ func TestFragmentStringPattern_UnmarshalJSON_AcceptsAASAndSMEFragments(t *testin
 		"$aas#submodels",
 		"$aas#assetInformation.specificAssetIds[0]",
 		"$aas#assetInformation.specificAssetIds[0].externalSubjectId.keys[3]",
+		"$aasdesc#description",
+		"$aasdesc#displayName",
+		"$aasdesc#administration",
 		"$sme#idShort",
 		"$sme#value",
 		"$sm#semanticId.keys[0]",
@@ -107,6 +110,7 @@ func TestFragmentStringPattern_UnmarshalJSON_RejectsInvalid(t *testing.T) {
 		"$aas#",
 		"$sme",
 		"$sme#",
+		"$aasdesc#endpoints[].protocolinformation",
 	}
 
 	for _, in := range cases {
