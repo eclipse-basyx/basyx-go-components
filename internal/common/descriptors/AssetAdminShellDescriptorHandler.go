@@ -363,51 +363,27 @@ func buildListAssetAdministrationShellDescriptorsQuery(
 	if err != nil {
 		return nil, err
 	}
-	maskPlan, err := auth.BuildSharedFragmentMaskPlan(ctx, collector, []auth.FragmentMaskFlagSpec{
-		{Fragment: "$aasdesc#assetKind", Alias: "flag_assetkind"},
-		{Fragment: "$aasdesc#assetType", Alias: "flag_assettype"},
-		{Fragment: "$aasdesc#globalAssetId", Alias: "flag_globalassetid"},
-		{Fragment: "$aasdesc#idShort", Alias: "flag_idshort"},
-		{Fragment: "$aasdesc#administration", Alias: "flag_admin"},
-		{Fragment: "$aasdesc#displayName", Alias: "flag_displayname"},
-		{Fragment: "$aasdesc#description", Alias: "flag_description"},
-	})
-	if err != nil {
-		return nil, err
-	}
-	flagAssetKind, ok := maskPlan.FlagAliasFor("$aasdesc#assetKind")
-	if !ok {
-		return nil, fmt.Errorf("missing shared mask alias for %q", "$aasdesc#assetKind")
-	}
-	flagAssetType, ok := maskPlan.FlagAliasFor("$aasdesc#assetType")
-	if !ok {
-		return nil, fmt.Errorf("missing shared mask alias for %q", "$aasdesc#assetType")
-	}
-	flagGlobalAssetID, ok := maskPlan.FlagAliasFor("$aasdesc#globalAssetId")
-	if !ok {
-		return nil, fmt.Errorf("missing shared mask alias for %q", "$aasdesc#globalAssetId")
-	}
-	flagIDShort, ok := maskPlan.FlagAliasFor("$aasdesc#idShort")
-	if !ok {
-		return nil, fmt.Errorf("missing shared mask alias for %q", "$aasdesc#idShort")
-	}
-	flagAdmin, ok := maskPlan.FlagAliasFor("$aasdesc#administration")
-	if !ok {
-		return nil, fmt.Errorf("missing shared mask alias for %q", "$aasdesc#administration")
-	}
-	flagDisplayName, ok := maskPlan.FlagAliasFor("$aasdesc#displayName")
-	if !ok {
-		return nil, fmt.Errorf("missing shared mask alias for %q", "$aasdesc#displayName")
-	}
-	flagDescription, ok := maskPlan.FlagAliasFor("$aasdesc#description")
-	if !ok {
-		return nil, fmt.Errorf("missing shared mask alias for %q", "$aasdesc#description")
-	}
-
 	const (
 		pageAlias = "aas_page"
 		dataAlias = "aas_list_data"
 	)
+	maskedColumns := []auth.MaskedInnerColumnSpec{
+		{Fragment: "$aasdesc#assetKind", FlagAlias: "flag_assetkind", RawAlias: "c1"},
+		{Fragment: "$aasdesc#assetType", FlagAlias: "flag_assettype", RawAlias: "c2"},
+		{Fragment: "$aasdesc#globalAssetId", FlagAlias: "flag_globalassetid", RawAlias: "c3"},
+		{Fragment: "$aasdesc#idShort", FlagAlias: "flag_idshort", RawAlias: "c4"},
+		{Fragment: "$aasdesc#administration", FlagAlias: "flag_admin", RawAlias: "raw_admin_payload"},
+		{Fragment: "$aasdesc#displayName", FlagAlias: "flag_displayname", RawAlias: "raw_displayname_payload"},
+		{Fragment: "$aasdesc#description", FlagAlias: "flag_description", RawAlias: "raw_description_payload"},
+	}
+	maskRuntime, err := auth.BuildSharedFragmentMaskRuntime(ctx, collector, maskedColumns)
+	if err != nil {
+		return nil, err
+	}
+	maskedExpressions, err := maskRuntime.MaskedInnerAliasExprs(dataAlias, maskedColumns)
+	if err != nil {
+		return nil, err
+	}
 
 	dataDS := d.From(pageDS.As(pageAlias)).
 		InnerJoin(
@@ -433,33 +409,19 @@ func buildListAssetAdministrationShellDescriptorsQuery(
 			goqu.L("?::text", tDescriptorPayload.Col(colDisplayNamePayload)).As("raw_displayname_payload"),
 			goqu.L("?::text", tDescriptorPayload.Col(colDescriptionPayload)).As("raw_description_payload"),
 			tAASDescriptor.Col(colAASID).As("sort_aas_id"),
-		}, maskPlan.Projections...)...)
+		}, maskRuntime.Projections()...)...)
 
 	ds := d.From(dataDS.As(dataAlias)).
 		Select(
 			goqu.I(dataAlias+".c0"),
-			goqu.Case().
-				When(goqu.I(dataAlias+"."+flagAssetKind), goqu.I(dataAlias+".c1")).
-				Else(nil),
-			goqu.Case().
-				When(goqu.I(dataAlias+"."+flagAssetType), goqu.I(dataAlias+".c2")).
-				Else(nil),
-			goqu.Case().
-				When(goqu.I(dataAlias+"."+flagGlobalAssetID), goqu.I(dataAlias+".c3")).
-				Else(nil),
-			goqu.Case().
-				When(goqu.I(dataAlias+"."+flagIDShort), goqu.I(dataAlias+".c4")).
-				Else(nil),
+			maskedExpressions[0],
+			maskedExpressions[1],
+			maskedExpressions[2],
+			maskedExpressions[3],
 			goqu.I(dataAlias+".c5"),
-			goqu.Case().
-				When(goqu.I(dataAlias+"."+flagAdmin), goqu.I(dataAlias+".raw_admin_payload")).
-				Else(nil),
-			goqu.Case().
-				When(goqu.I(dataAlias+"."+flagDisplayName), goqu.I(dataAlias+".raw_displayname_payload")).
-				Else(nil),
-			goqu.Case().
-				When(goqu.I(dataAlias+"."+flagDescription), goqu.I(dataAlias+".raw_description_payload")).
-				Else(nil),
+			maskedExpressions[4],
+			maskedExpressions[5],
+			maskedExpressions[6],
 		).
 		Order(goqu.I(dataAlias + ".sort_aas_id").Asc())
 

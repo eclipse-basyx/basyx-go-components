@@ -109,25 +109,19 @@ func ReadSpecificAssetIDsByDescriptorIDs(
 	if err != nil {
 		return nil, err
 	}
-	maskPlan, err := auth.BuildSharedFragmentMaskPlan(ctx, collector, []auth.FragmentMaskFlagSpec{
-		{Fragment: "$aasdesc#specificAssetIds[].name", Alias: "flag_said_name"},
-		{Fragment: "$aasdesc#specificAssetIds[].value", Alias: "flag_said_value"},
-		{Fragment: "$aasdesc#specificAssetIds[].externalSubjectId", Alias: "flag_said_external_subject"},
-	})
+	const dataAlias = "specific_asset_id_data"
+	maskedColumns := []auth.MaskedInnerColumnSpec{
+		{Fragment: "$aasdesc#specificAssetIds[].name", FlagAlias: "flag_said_name", RawAlias: "c2"},
+		{Fragment: "$aasdesc#specificAssetIds[].value", FlagAlias: "flag_said_value", RawAlias: "c3"},
+		{Fragment: "$aasdesc#specificAssetIds[].externalSubjectId", FlagAlias: "flag_said_external_subject", RawAlias: "c5"},
+	}
+	maskRuntime, err := auth.BuildSharedFragmentMaskRuntime(ctx, collector, maskedColumns)
 	if err != nil {
 		return nil, err
 	}
-	flagName, ok := maskPlan.FlagAliasFor("$aasdesc#specificAssetIds[].name")
-	if !ok {
-		return nil, fmt.Errorf("missing shared mask alias for %q", "$aasdesc#specificAssetIds[].name")
-	}
-	flagValue, ok := maskPlan.FlagAliasFor("$aasdesc#specificAssetIds[].value")
-	if !ok {
-		return nil, fmt.Errorf("missing shared mask alias for %q", "$aasdesc#specificAssetIds[].value")
-	}
-	flagExternalSubject, ok := maskPlan.FlagAliasFor("$aasdesc#specificAssetIds[].externalSubjectId")
-	if !ok {
-		return nil, fmt.Errorf("missing shared mask alias for %q", "$aasdesc#specificAssetIds[].externalSubjectId")
+	maskedExpressions, err := maskRuntime.MaskedInnerAliasExprs(dataAlias, maskedColumns)
+	if err != nil {
+		return nil, err
 	}
 
 	inner := d.From(tDescriptor).
@@ -154,7 +148,7 @@ func ReadSpecificAssetIDsByDescriptorIDs(
 		goqu.I("specific_asset_id_payload.semantic_id_payload").As("c4"),
 		goqu.I(aliasExternalSubjectReference + "." + colID).As("c5"),
 		tSpecificAssetID.Col(colPosition).As("sort_specific_asset_position"),
-	}, maskPlan.Projections...)...).
+	}, maskRuntime.Projections()...)...).
 		Where(goqu.L(fmt.Sprintf("%s.%s = ANY(?::bigint[])", aliasSpecificAssetID, colDescriptorID), arr))
 
 	inner = inner.
@@ -167,21 +161,14 @@ func ReadSpecificAssetIDsByDescriptorIDs(
 		return nil, err
 	}
 
-	const dataAlias = "specific_asset_id_data"
 	base := d.From(inner.As(dataAlias)).
 		Select(
 			goqu.I(dataAlias+".c0"),
 			goqu.I(dataAlias+".c1"),
-			goqu.Case().
-				When(goqu.I(dataAlias+"."+flagName), goqu.I(dataAlias+".c2")).
-				Else(nil),
-			goqu.Case().
-				When(goqu.I(dataAlias+"."+flagValue), goqu.I(dataAlias+".c3")).
-				Else(nil),
+			maskedExpressions[0],
+			maskedExpressions[1],
 			goqu.I(dataAlias+".c4"),
-			goqu.Case().
-				When(goqu.I(dataAlias+"."+flagExternalSubject), goqu.I(dataAlias+".c5")).
-				Else(nil),
+			maskedExpressions[2],
 		).
 		Order(goqu.I(dataAlias + ".sort_specific_asset_position").Asc())
 

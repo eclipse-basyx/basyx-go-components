@@ -39,25 +39,12 @@ import (
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 )
 
-var bdExpMapper = []auth.ExpressionIdentifiableMapper{
-	{
-		Exp: tSpecificAssetID.Col(colID),
-	},
-	{
-		Exp:      tSpecificAssetID.Col(colName),
-		Fragment: fragPtr("$aasdesc#specificAssetIds[].name"),
-	},
-	{
-		Exp:      tSpecificAssetID.Col(colValue),
-		Fragment: fragPtr("$aasdesc#specificAssetIds[].value"),
-	},
-	{
-		Exp: goqu.I("specific_asset_id_payload.semantic_id_payload"),
-	},
-	{
-		Exp:      goqu.I(aliasExternalSubjectReference + "." + colID),
-		Fragment: fragPtr("$aasdesc#specificAssetIds[].externalSubjectId"),
-	},
+var bdColumns = []auth.FilterColumnSpec{
+	auth.Column(tSpecificAssetID.Col(colID)),
+	auth.MaskedColumn(tSpecificAssetID.Col(colName), "$aasdesc#specificAssetIds[].name"),
+	auth.MaskedColumn(tSpecificAssetID.Col(colValue), "$aasdesc#specificAssetIds[].value"),
+	auth.Column(goqu.I("specific_asset_id_payload.semantic_id_payload")),
+	auth.MaskedColumn(goqu.I(aliasExternalSubjectReference+"."+colID), "$aasdesc#specificAssetIds[].externalSubjectId"),
 }
 
 // ReadSpecificAssetIDsByAASIdentifier returns SpecificAssetIDs linked via the
@@ -107,7 +94,7 @@ func ReadSpecificAssetIDsByAASRef(
 	if err != nil {
 		return nil, err
 	}
-	expressions, err := auth.GetColumnSelectStatement(ctx, bdExpMapper, collector)
+	expressions, err := auth.GetColumnSelectStatement(ctx, bdColumns, collector)
 	if err != nil {
 		return nil, err
 	}
