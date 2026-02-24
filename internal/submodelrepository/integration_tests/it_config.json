@@ -29,6 +29,20 @@
         "expectedStatus": 200
     },
     {
+        "context": "Get All Submodels Reference",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/$reference",
+        "shouldMatch": "expected/expectedGetAllSubmodelsReference.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "Get All Submodel Elements Reference",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/$reference",
+        "shouldMatch": "expected/expectedGetAllSubmodelElementsReference.json",
+        "expectedStatus": 200
+    },
+    {
         "context": "Pagination valid",
         "method": "GET",
         "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements",

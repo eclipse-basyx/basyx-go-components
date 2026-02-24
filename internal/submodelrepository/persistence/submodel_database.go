@@ -175,101 +175,65 @@ func (s *SubmodelDatabase) GetSubmodelByID(submodelIdentifier string) (types.ISu
 
 // GetSubmodels retrieves submodels with optional filtering by identifier and keyset pagination.
 func (s *SubmodelDatabase) GetSubmodels(limit int32, cursor string, submodelIdentifier string) ([]types.ISubmodel, string, error) {
-	dialect := goqu.Dialect("postgres")
+	return s.getSubmodelsWithOptionalSemanticIDFilter(limit, cursor, submodelIdentifier, "")
+}
 
-	var limitFilter *int32
-
-	if limit == 0 {
-		limit = 100
-	}
-
-	if limit > 0 {
-		limitFilter = &limit
-	}
-
-	var cursorFilter *string
-	if cursor != "" {
-		cursorFilter = &cursor
-	}
-
-	var submodelIdentifierFilter *string
-	if submodelIdentifier != "" {
-		submodelIdentifierFilter = &submodelIdentifier
-	}
-
-	query, args, err := buildSelectSubmodelQueryWithPayloadByIdentifier(&dialect, submodelIdentifierFilter, limitFilter, cursorFilter)
+// GetSubmodelReferences retrieves references for submodels with optional filtering and keyset pagination.
+func (s *SubmodelDatabase) GetSubmodelReferences(limit int32, cursor string, submodelIdentifier string, semanticID string) ([]types.IReference, string, error) {
+	submodels, nextCursor, err := s.getSubmodelsWithOptionalSemanticIDFilter(limit, cursor, submodelIdentifier, semanticID)
 	if err != nil {
 		return nil, "", err
 	}
 
-	var identifier, idShort, category, descriptionJsonString, displayNameJsonString, administrativeInformationJsonString, embeddedDataSpecificationJsonString, supplementalSemanticIDsJsonString, extensionsJsonString, qualifiersJsonString, semanticIDJSONString sql.NullString
-	var kind sql.NullInt64
+	references := make([]types.IReference, 0, len(submodels))
+	for _, submodel := range submodels {
+		if submodel == nil {
+			return nil, "", common.NewInternalServerError("SMREPO-GETSMREF-NILSUBMODEL loaded submodel is nil")
+		}
 
-	rows, err := s.db.Query(query, args...)
+		reference, referenceErr := buildSubmodelModelReference(submodel.ID())
+		if referenceErr != nil {
+			return nil, "", referenceErr
+		}
+
+		references = append(references, reference)
+	}
+
+	return references, nextCursor, nil
+}
+
+// GetSubmodelReference retrieves the model reference for a single submodel.
+func (s *SubmodelDatabase) GetSubmodelReference(submodelIdentifier string) (types.IReference, error) {
+	if submodelIdentifier == "" {
+		return nil, common.NewErrBadRequest("SMREPO-GETSMREFONE-EMPTYIDENTIFIER submodel identifier is required")
+	}
+
+	submodels, _, err := s.GetSubmodels(1, "", submodelIdentifier)
 	if err != nil {
-		if err == sql.ErrNoRows {
-			if submodelIdentifierFilter != nil {
-				return nil, "", common.NewErrNotFound(*submodelIdentifierFilter)
-			}
-			return nil, "", common.NewErrNotFound("submodel")
-		}
-		return nil, "", err
-	}
-	defer func() {
-		_ = rows.Close()
-	}()
-
-	pageLimit := 0
-	if limitFilter != nil {
-		pageLimit = int(*limitFilter)
+		return nil, err
 	}
 
-	submodels := make([]types.ISubmodel, 0)
-	nextCursor := ""
-	for rows.Next() {
-		if err := rows.Scan(&identifier, &idShort, &category, &kind, &descriptionJsonString, &displayNameJsonString, &administrativeInformationJsonString, &embeddedDataSpecificationJsonString, &supplementalSemanticIDsJsonString, &extensionsJsonString, &qualifiersJsonString, &semanticIDJSONString); err != nil {
-			return nil, "", err
-		}
-
-		if pageLimit > 0 && len(submodels) == pageLimit {
-			nextCursor = identifier.String
-			break
-		}
-
-		var submodel types.ISubmodel
-		submodel = types.NewSubmodel(identifier.String)
-		submodel.SetIDShort(&idShort.String)
-		if category.Valid {
-			submodel.SetCategory(&category.String)
-		}
-		if kind.Valid {
-			modellingKind := types.ModellingKind(kind.Int64)
-			submodel.SetKind(&modellingKind)
-		}
-
-		submodel, err = jsonPayloadToInstance(descriptionJsonString, displayNameJsonString, administrativeInformationJsonString, embeddedDataSpecificationJsonString, supplementalSemanticIDsJsonString, extensionsJsonString, qualifiersJsonString, submodel)
-		if err != nil {
-			return nil, "", err
-		}
-
-		if semanticIDJSONString.Valid {
-			semanticID, parseSemanticErr := common.ParseReferenceJSON([]byte(semanticIDJSONString.String))
-			if parseSemanticErr != nil {
-				return nil, "", parseSemanticErr
-			}
-			if semanticID != nil {
-				submodel.SetSemanticID(semanticID)
-			}
-		}
-
-		submodels = append(submodels, submodel)
+	if len(submodels) == 0 {
+		return nil, common.NewErrNotFound(submodelIdentifier)
 	}
 
-	if err := rows.Err(); err != nil {
-		return nil, "", err
+	if submodels[0] == nil {
+		return nil, common.NewInternalServerError("SMREPO-GETSMREFONE-NILSUBMODEL loaded submodel is nil")
 	}
 
-	return submodels, nextCursor, nil
+	return buildSubmodelModelReference(submodels[0].ID())
+}
+
+func buildSubmodelModelReference(submodelIdentifier string) (types.IReference, error) {
+	if submodelIdentifier == "" {
+		return nil, common.NewErrBadRequest("SMREPO-BUILDSMREF-INVALIDIDENTIFIER submodel identifier is required")
+	}
+
+	key := types.NewKey(types.KeyTypesSubmodel, submodelIdentifier)
+
+	reference := types.NewReference(types.ReferenceTypesModelReference, []types.IKey{key})
+
+	return reference, nil
 }
 
 // QuerySubmodels returns submodels that match the provided query and supports cursor-based pagination.
@@ -525,6 +489,11 @@ func (s *SubmodelDatabase) GetSubmodelElement(submodelID string, idShortOrPath s
 // GetSubmodelElements retrieves top-level submodel elements for a submodel and reconstructs each subtree.
 func (s *SubmodelDatabase) GetSubmodelElements(submodelID string, limit *int, cursor string, _ bool) ([]types.ISubmodelElement, string, error) {
 	return submodelelements.GetSubmodelElementsBySubmodelID(s.db, submodelID, limit, cursor)
+}
+
+// GetSubmodelElementReferences retrieves references for top-level submodel elements of a submodel with optional pagination.
+func (s *SubmodelDatabase) GetSubmodelElementReferences(submodelID string, limit *int, cursor string) ([]types.IReference, string, error) {
+	return submodelelements.GetSubmodelElementReferencesBySubmodelID(s.db, submodelID, limit, cursor)
 }
 
 // AddSubmodelElement adds a top-level submodel element to a submodel.
@@ -1134,4 +1103,113 @@ func (s *SubmodelDatabase) patchSubmodelMetadataInTransaction(tx *sql.Tx, submod
 	}
 
 	return nil
+}
+
+func (s *SubmodelDatabase) getSubmodelsWithOptionalSemanticIDFilter(limit int32, cursor string, submodelIdentifier string, semanticID string) ([]types.ISubmodel, string, error) {
+	dialect := goqu.Dialect("postgres")
+
+	var limitFilter *int32
+
+	if limit == 0 {
+		limit = 100
+	}
+
+	if limit > 0 {
+		limitFilter = &limit
+	}
+
+	var cursorFilter *string
+	if cursor != "" {
+		cursorFilter = &cursor
+	}
+
+	var submodelIdentifierFilter *string
+	if submodelIdentifier != "" {
+		submodelIdentifierFilter = &submodelIdentifier
+	}
+
+	var query string
+	var args []interface{}
+	var err error
+
+	if semanticID != "" {
+		query, args, err = buildSelectSubmodelQueryWithPayloadByIdentifierAndSemanticID(&dialect, submodelIdentifierFilter, &semanticID, limitFilter, cursorFilter)
+		if err != nil {
+			return nil, "", err
+		}
+	} else {
+		query, args, err = buildSelectSubmodelQueryWithPayloadByIdentifier(&dialect, submodelIdentifierFilter, limitFilter, cursorFilter)
+		if err != nil {
+			return nil, "", err
+		}
+	}
+
+	var identifier, idShort, category, descriptionJsonString, displayNameJsonString, administrativeInformationJsonString, embeddedDataSpecificationJsonString, supplementalSemanticIDsJsonString, extensionsJsonString, qualifiersJsonString, semanticIDJSONString sql.NullString
+	var kind sql.NullInt64
+
+	rows, err := s.db.Query(query, args...)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			if submodelIdentifierFilter != nil {
+				return nil, "", common.NewErrNotFound(*submodelIdentifierFilter)
+			}
+			return nil, "", common.NewErrNotFound("submodel")
+		}
+		return nil, "", err
+	}
+	defer func() {
+		_ = rows.Close()
+	}()
+
+	pageLimit := 0
+	if limitFilter != nil {
+		pageLimit = int(*limitFilter)
+	}
+
+	submodels := make([]types.ISubmodel, 0)
+	nextCursor := ""
+	for rows.Next() {
+		if err := rows.Scan(&identifier, &idShort, &category, &kind, &descriptionJsonString, &displayNameJsonString, &administrativeInformationJsonString, &embeddedDataSpecificationJsonString, &supplementalSemanticIDsJsonString, &extensionsJsonString, &qualifiersJsonString, &semanticIDJSONString); err != nil {
+			return nil, "", err
+		}
+
+		if pageLimit > 0 && len(submodels) == pageLimit {
+			nextCursor = identifier.String
+			break
+		}
+
+		var submodel types.ISubmodel
+		submodel = types.NewSubmodel(identifier.String)
+		submodel.SetIDShort(&idShort.String)
+		if category.Valid {
+			submodel.SetCategory(&category.String)
+		}
+		if kind.Valid {
+			modellingKind := types.ModellingKind(kind.Int64)
+			submodel.SetKind(&modellingKind)
+		}
+
+		submodel, err = jsonPayloadToInstance(descriptionJsonString, displayNameJsonString, administrativeInformationJsonString, embeddedDataSpecificationJsonString, supplementalSemanticIDsJsonString, extensionsJsonString, qualifiersJsonString, submodel)
+		if err != nil {
+			return nil, "", err
+		}
+
+		if semanticIDJSONString.Valid {
+			semanticID, parseSemanticErr := common.ParseReferenceJSON([]byte(semanticIDJSONString.String))
+			if parseSemanticErr != nil {
+				return nil, "", parseSemanticErr
+			}
+			if semanticID != nil {
+				submodel.SetSemanticID(semanticID)
+			}
+		}
+
+		submodels = append(submodels, submodel)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, "", err
+	}
+
+	return submodels, nextCursor, nil
 }

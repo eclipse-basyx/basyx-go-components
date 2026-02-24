@@ -34,13 +34,11 @@
 //nolint:all
 package model
 
-import "github.com/FriedJannik/aas-go-sdk/types"
-
 // GetReferencesResult type of GetReferencesResult
 type GetReferencesResult struct {
 	PagingMetadata PagedResultPagingMetadata `json:"paging_metadata"`
 
-	Result []types.IReference `json:"result,omitempty"`
+	Result []map[string]any `json:"result,omitempty"`
 }
 
 // AssertGetReferencesResultRequired checks if the required fields are not zero-ed

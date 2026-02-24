@@ -154,28 +154,6 @@ func getModelTypeLiteral(element types.ISubmodelElement) string {
 	return modelType
 }
 
-func buildModelReference(submodelID string, keyType string, keyValue string) (types.IReference, error) {
-	if submodelID == "" || keyType == "" || keyValue == "" {
-		return nil, common.NewErrBadRequest("SMREPO-BUILDREF-INVALIDPARAMS Invalid reference parameters")
-	}
-
-	jsonableReference := map[string]any{
-		"type": "ModelReference",
-		"keys": []map[string]any{
-			{
-				"type":  "Submodel",
-				"value": submodelID,
-			},
-			{
-				"type":  keyType,
-				"value": keyValue,
-			},
-		},
-	}
-
-	return jsonization.ReferenceFromJsonable(jsonableReference)
-}
-
 // GetAllSubmodels retrieves all submodels from the repository with optional filtering and pagination.
 // It supports filtering by idShort and provides pagination through cursor-based navigation.
 //
@@ -610,29 +588,46 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsValueOnly(ctx context.C
 //
 //nolint:revive
 func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsReference(ctx context.Context, semanticID string, idShort string, limit int32, cursor string, level string) (gen.ImplResponse, error) {
-	// TODO - update GetAllSubmodelsReference with the required logic for this service method.
-	// Add api_submodel_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
+	_ = ctx
+	_ = level
+	const operation = "GetAllSubmodelsReference"
 
-	// TODO: Uncomment the next line to return response Response(200, GetReferencesResult{}) or use other options such as http.Ok ...
-	// return gen.Response(200, GetReferencesResult{}), nil
+	decodedCursor, decodeErr := decodeBase64RawStd(cursor)
+	if decodeErr != nil {
+		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "BadCursor"), nil
+	}
 
-	// TODO: Uncomment the next line to return response Response(400, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(400, Result{}), nil
+	decodedSemanticID := ""
+	if semanticID != "" {
+		decodedSemanticID, decodeErr = decodeBase64RawStd(semanticID)
+		if decodeErr != nil {
+			return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "BadSemanticID"), nil
+		}
+	}
 
-	// TODO: Uncomment the next line to return response Response(401, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(401, Result{}), nil
+	references, nextCursor, err := s.submodelBackend.GetSubmodelReferences(limit, decodedCursor, idShort, decodedSemanticID)
+	if err != nil {
+		if common.IsErrBadRequest(err) {
+			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
+		}
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSubmodelReferences"), err
+	}
 
-	// TODO: Uncomment the next line to return response Response(403, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(403, Result{}), nil
+	var jsonReferences []map[string]any
+	for _, ref := range references {
+		jsonRef, err := jsonization.ToJsonable(ref)
+		if err != nil {
+			return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "ToJsonable"), err
+		}
+		jsonReferences = append(jsonReferences, jsonRef)
+	}
 
-	// TODO: Uncomment the next line to return response Response(500, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(500, Result{}), nil
+	res := gen.GetReferencesResult{
+		PagingMetadata: gen.PagedResultPagingMetadata{Cursor: encodeBase64RawStd(nextCursor)},
+		Result:         jsonReferences,
+	}
 
-	// TODO: Uncomment the next line to return response Response(0, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(0, Result{}), nil
-
-	notImplementedErr := errors.New("GetAllSubmodelsReference method not implemented")
-	return newAPIErrorResponse(notImplementedErr, http.StatusNotImplemented, "GetAllSubmodelsReference", "NotImplemented"), nil
+	return gen.Response(http.StatusOK, res), nil
 }
 
 // GetAllSubmodelsPath - Returns all Submodels in the Path notation
@@ -912,32 +907,31 @@ func (s *SubmodelRepositoryAPIAPIService) PatchSubmodelByIDValueOnly(ctx context
 //
 //nolint:revive
 func (s *SubmodelRepositoryAPIAPIService) GetSubmodelByIDReference(ctx context.Context, submodelIdentifier string) (gen.ImplResponse, error) {
-	// TODO - update GetSubmodelByIDReference with the required logic for this service method.
-	// Add api_submodel_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
+	_ = ctx
+	const operation = "GetSubmodelByIDReference"
 
-	// TODO: Uncomment the next line to return response Response(200, Reference{}) or use other options such as http.Ok ...
-	// return gen.Response(200, Reference{}), nil
+	decodedSubmodelIdentifier, decodeErr := decodeBase64RawStd(submodelIdentifier)
+	if decodeErr != nil {
+		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
+	}
 
-	// TODO: Uncomment the next line to return response Response(400, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(400, Result{}), nil
+	reference, err := s.submodelBackend.GetSubmodelReference(decodedSubmodelIdentifier)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) || common.IsErrNotFound(err) {
+			return newAPIErrorResponse(err, http.StatusNotFound, operation, "SubmodelNotFound"), nil
+		}
+		if common.IsErrBadRequest(err) {
+			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
+		}
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSubmodelReference"), err
+	}
 
-	// TODO: Uncomment the next line to return response Response(401, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(401, Result{}), nil
+	jsonableRef, convErr := jsonization.ToJsonable(reference)
+	if convErr != nil {
+		return newAPIErrorResponse(convErr, http.StatusInternalServerError, operation, "ToJsonable"), convErr
+	}
 
-	// TODO: Uncomment the next line to return response Response(403, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(403, Result{}), nil
-
-	// TODO: Uncomment the next line to return response Response(404, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(404, Result{}), nil
-
-	// TODO: Uncomment the next line to return response Response(500, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(500, Result{}), nil
-
-	// TODO: Uncomment the next line to return response Response(0, Result{}) or use other options such as http.Ok ...
-	// return gen.Response(0, Result{}), nil
-
-	notImplementedErr := errors.New("GetSubmodelByIDReference method not implemented")
-	return newAPIErrorResponse(notImplementedErr, http.StatusNotImplemented, "GetSubmodelByIDReference", "NotImplemented"), nil
+	return gen.Response(http.StatusOK, jsonableRef), nil
 }
 
 // GetSubmodelByIDPath - Returns a specific Submodel in the Path notation
@@ -1210,7 +1204,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelElementsReferenceSubmode
 		return newAPIErrorResponse(cursorDecodeErr, http.StatusBadRequest, operation, "BadCursor"), nil
 	}
 
-	elements, nextCursor, err := s.submodelBackend.GetSubmodelElements(decodedSubmodelIdentifier, buildLimitPtr(limit), decodedCursor, false)
+	references, nextCursor, err := s.submodelBackend.GetSubmodelElementReferences(decodedSubmodelIdentifier, buildLimitPtr(limit), decodedCursor)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) || common.IsErrNotFound(err) {
 			return newAPIErrorResponse(err, http.StatusNotFound, operation, "SubmodelNotFound"), nil
@@ -1218,33 +1212,21 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelElementsReferenceSubmode
 		if common.IsErrBadRequest(err) {
 			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
 		}
-		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSubmodelElements"), err
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSubmodelElementReferences"), err
 	}
 
-	references := make([]types.IReference, 0, len(elements))
-	for _, element := range elements {
-		idShort := element.IDShort()
-		if idShort == nil || *idShort == "" {
-			continue
+	jsonableArray := make([]map[string]any, 0, len(references))
+	for _, ref := range references {
+		jsonRef, convErr := jsonization.ToJsonable(ref)
+		if convErr != nil {
+			return newAPIErrorResponse(convErr, http.StatusInternalServerError, operation, "ToJsonable"), convErr
 		}
-
-		modelTypeLiteral := getModelTypeLiteral(element)
-		if modelTypeLiteral == "" {
-			internalErr := common.NewInternalServerError("SMREPO-GETALLSMEREF-MODELTYPE Empty modelType for submodel element")
-			return newAPIErrorResponse(internalErr, http.StatusInternalServerError, operation, "EmptyModelType"), internalErr
-		}
-
-		reference, referenceErr := buildModelReference(decodedSubmodelIdentifier, modelTypeLiteral, *idShort)
-		if referenceErr != nil {
-			return newAPIErrorResponse(referenceErr, http.StatusInternalServerError, operation, "BuildModelReference"), referenceErr
-		}
-
-		references = append(references, reference)
+		jsonableArray = append(jsonableArray, jsonRef)
 	}
 
 	res := gen.GetReferencesResult{
 		PagingMetadata: gen.PagedResultPagingMetadata{Cursor: encodeBase64RawStd(nextCursor)},
-		Result:         references,
+		Result:         jsonableArray,
 	}
 
 	return gen.Response(http.StatusOK, res), nil
@@ -1658,12 +1640,50 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelElementByPathReferenceSubmo
 		return newAPIErrorResponse(internalErr, http.StatusInternalServerError, operation, "EmptyModelType"), internalErr
 	}
 
-	reference, referenceErr := buildModelReference(decodedSubmodelIdentifier, modelTypeLiteral, idShortPath)
+	keyTypes, keyValues, keyResolutionErr := resolveModelReferencePathKeys(
+		idShortPath,
+		modelTypeLiteral,
+		func(path string) (string, error) {
+			parentElement, parentErr := s.submodelBackend.GetSubmodelElement(decodedSubmodelIdentifier, path, false)
+			if parentErr != nil {
+				if common.IsErrBadRequest(parentErr) || common.IsErrNotFound(parentErr) {
+					return "", parentErr
+				}
+				return "", common.NewInternalServerError("SMREPO-BUILDREF-GETPARENT " + parentErr.Error())
+			}
+
+			parentModelType := getModelTypeLiteral(parentElement)
+			if parentModelType == "" {
+				return "", common.NewInternalServerError("SMREPO-BUILDREF-PARENTMODELTYPE Empty modelType for parent submodel element")
+			}
+
+			return parentModelType, nil
+		},
+	)
+	if keyResolutionErr != nil {
+		if common.IsErrBadRequest(keyResolutionErr) {
+			return newAPIErrorResponse(keyResolutionErr, http.StatusBadRequest, operation, "BadReferencePath"), nil
+		}
+		if common.IsErrNotFound(keyResolutionErr) {
+			return newAPIErrorResponse(keyResolutionErr, http.StatusNotFound, operation, "SubmodelElementNotFound"), nil
+		}
+		return newAPIErrorResponse(keyResolutionErr, http.StatusInternalServerError, operation, "ResolveReferenceKeys"), keyResolutionErr
+	}
+
+	reference, referenceErr := buildModelReference(decodedSubmodelIdentifier, keyTypes, keyValues)
 	if referenceErr != nil {
 		return newAPIErrorResponse(referenceErr, http.StatusInternalServerError, operation, "BuildModelReference"), referenceErr
 	}
 
-	return gen.Response(http.StatusOK, reference), nil
+	var jsonableRef map[string]any
+	if reference != nil {
+		jsonableRef, err = jsonization.ToJsonable(reference)
+		if err != nil {
+			return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "ToJsonable"), err
+		}
+	}
+
+	return gen.Response(http.StatusOK, jsonableRef), nil
 }
 
 // GetSubmodelElementByPathPathSubmodelRepo - Returns a specific submodel element from the Submodel at a specified path in the Path notation
