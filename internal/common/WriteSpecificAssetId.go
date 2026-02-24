@@ -24,48 +24,76 @@
 ******************************************************************************/
 // Author: Martin Stemmer ( Fraunhofer IESE )
 
-package descriptors
+package common
 
 import (
 	"database/sql"
+	"fmt"
 
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
 )
 
-func createSpecificAssetID(tx *sql.Tx, descriptorID int64, aasRef sql.NullInt64, specificAssetIDs []types.ISpecificAssetID) error {
-	return insertSpecificAssetIDs(
+// CreateSpecificAssetIDDescriptor stores specific asset IDs for a descriptor
+// and links them to the optional AAS reference.
+func CreateSpecificAssetIDDescriptor(tx *sql.Tx, descriptorID int64, aasRef sql.NullInt64, specificAssetIDs []types.ISpecificAssetID) error {
+	return InsertSpecificAssetIDs(
 		tx,
 		sql.NullInt64{Int64: descriptorID, Valid: true},
+		sql.NullInt64{},
 		aasRef,
 		specificAssetIDs,
 	)
 }
 
-func insertSpecificAssetIDs(
+// CreateSpecificAssetIDForAssetInformation stores specific asset IDs for an
+// asset information record.
+func CreateSpecificAssetIDForAssetInformation(
+	tx *sql.Tx,
+	assetInformationID int64,
+	specificAssetIDs []types.ISpecificAssetID,
+) error {
+	return InsertSpecificAssetIDs(
+		tx,
+		sql.NullInt64{},
+		sql.NullInt64{Int64: assetInformationID, Valid: true},
+		sql.NullInt64{},
+		specificAssetIDs,
+	)
+}
+
+// InsertSpecificAssetIDs inserts specific asset IDs with either a descriptor
+// owner or an asset information owner, including related references and payload
+// records.
+func InsertSpecificAssetIDs(
 	tx *sql.Tx,
 	descriptorID sql.NullInt64,
+	assetInformationID sql.NullInt64,
 	aasRef sql.NullInt64,
 	specificAssetIDs []types.ISpecificAssetID,
 ) error {
+	if descriptorID.Valid && assetInformationID.Valid {
+		return fmt.Errorf("insert into specific_asset_id: descriptor_id and asset_information_id must not both be set")
+	}
 	if specificAssetIDs == nil {
 		return nil
 	}
 	if len(specificAssetIDs) > 0 {
-		d := goqu.Dialect(dialect)
+		d := goqu.Dialect(Dialect)
 		for i, val := range specificAssetIDs {
 			var err error
 
 			sqlStr, args, err := d.
-				Insert(tblSpecificAssetID).
+				Insert(TblSpecificAssetID).
 				Rows(goqu.Record{
-					colDescriptorID: descriptorID,
-					colPosition:     i,
-					colName:         val.Name(),
-					colValue:        val.Value(),
-					colAASRef:       aasRef,
+					ColDescriptorID:       descriptorID,
+					ColAssetInformationID: assetInformationID,
+					ColPosition:           i,
+					ColName:               val.Name(),
+					ColValue:              val.Value(),
+					ColAASRef:             aasRef,
 				}).
-				Returning(tSpecificAssetID.Col(colID)).
+				Returning(TSpecificAssetID.Col(ColID)).
 				ToSQL()
 			if err != nil {
 				return err
@@ -75,7 +103,7 @@ func insertSpecificAssetIDs(
 				return err
 			}
 
-			if err = createContextReference(
+			if err = CreateContextReference(
 				tx,
 				id,
 				val.ExternalSubjectID(),
@@ -97,15 +125,17 @@ func insertSpecificAssetIDs(
 	return nil
 }
 
+// createSpecificAssetIDPayload stores the semantic ID payload for a specific
+// asset ID as JSONB.
 func createSpecificAssetIDPayload(tx *sql.Tx, specificAssetID int64, semanticID types.IReference) error {
-	d := goqu.Dialect(dialect)
+	d := goqu.Dialect(Dialect)
 	semanticPayload, err := buildReferencePayload(semanticID)
 	if err != nil {
 		return err
 	}
 
-	sqlStr, args, err := d.Insert(tblSpecificAssetIDPayload).Rows(goqu.Record{
-		colSpecificAssetID:    specificAssetID,
+	sqlStr, args, err := d.Insert(TblSpecificAssetIDPayload).Rows(goqu.Record{
+		ColSpecificAssetID:    specificAssetID,
 		"semantic_id_payload": goqu.L("?::jsonb", string(semanticPayload)),
 	}).ToSQL()
 	if err != nil {
@@ -115,12 +145,14 @@ func createSpecificAssetIDPayload(tx *sql.Tx, specificAssetID int64, semanticID 
 	return err
 }
 
+// createSpecificAssetIDSupplementalSemantic stores supplemental semantic IDs
+// for a specific asset ID.
 func createSpecificAssetIDSupplementalSemantic(tx *sql.Tx, specificAssetID int64, references []types.IReference) error {
-	return createContextReferences1ToMany(
+	return CreateContextReferences1ToMany(
 		tx,
 		specificAssetID,
 		references,
-		tblSpecificAssetIDSuppSemantic,
-		colSpecificAssetIDID,
+		TblSpecificAssetIDSuppSemantic,
+		ColSpecificAssetIDID,
 	)
 }

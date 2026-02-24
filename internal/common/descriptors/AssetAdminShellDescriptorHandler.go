@@ -104,13 +104,13 @@ func InsertAssetAdministrationShellDescriptor(ctx context.Context, db *sql.DB, a
 // and submodel descriptors). If any step fails, the error is returned and the
 // caller is responsible for rolling back the transaction.
 func InsertAdministrationShellDescriptorTx(ctx context.Context, tx *sql.Tx, aasd model.AssetAdministrationShellDescriptor) error {
-	d := goqu.Dialect(dialect)
+	d := goqu.Dialect(common.Dialect)
 
-	descTbl := goqu.T(tblDescriptor)
+	descTbl := goqu.T(common.TblDescriptor)
 
 	sqlStr, args, buildErr := d.
-		Insert(tblDescriptor).
-		Returning(descTbl.Col(colID)).
+		Insert(common.TblDescriptor).
+		Returning(descTbl.Col(common.ColID)).
 		ToSQL()
 	if buildErr != nil {
 		return buildErr
@@ -138,13 +138,13 @@ func InsertAdministrationShellDescriptorTx(ctx context.Context, tx *sql.Tx, aasd
 	}
 
 	sqlStr, args, buildErr = d.
-		Insert(tblDescriptorPayload).
+		Insert(common.TblDescriptorPayload).
 		Rows(goqu.Record{
-			colDescriptorID:              descriptorID,
-			colDescriptionPayload:        goqu.L("?::jsonb", string(descriptionPayload)),
-			colDisplayNamePayload:        goqu.L("?::jsonb", string(displayNamePayload)),
-			colAdministrativeInfoPayload: goqu.L("?::jsonb", string(administrationPayload)),
-			colExtensionsPayload:         goqu.L("?::jsonb", string(extensionsPayload)),
+			common.ColDescriptorID:              descriptorID,
+			common.ColDescriptionPayload:        goqu.L("?::jsonb", string(descriptionPayload)),
+			common.ColDisplayNamePayload:        goqu.L("?::jsonb", string(displayNamePayload)),
+			common.ColAdministrativeInfoPayload: goqu.L("?::jsonb", string(administrationPayload)),
+			common.ColExtensionsPayload:         goqu.L("?::jsonb", string(extensionsPayload)),
 		}).
 		ToSQL()
 	if buildErr != nil {
@@ -155,14 +155,14 @@ func InsertAdministrationShellDescriptorTx(ctx context.Context, tx *sql.Tx, aasd
 	}
 
 	sqlStr, args, buildErr = d.
-		Insert(tblAASDescriptor).
+		Insert(common.TblAASDescriptor).
 		Rows(goqu.Record{
-			colDescriptorID:  descriptorID,
-			colAssetKind:     aasd.AssetKind,
-			colAssetType:     aasd.AssetType,
-			colGlobalAssetID: aasd.GlobalAssetId,
-			colIDShort:       aasd.IdShort,
-			colAASID:         aasd.Id,
+			common.ColDescriptorID:  descriptorID,
+			common.ColAssetKind:     aasd.AssetKind,
+			common.ColAssetType:     aasd.AssetType,
+			common.ColGlobalAssetID: aasd.GlobalAssetId,
+			common.ColIDShort:       aasd.IdShort,
+			common.ColAASID:         aasd.Id,
 		}).
 		ToSQL()
 	if buildErr != nil {
@@ -185,7 +185,7 @@ func InsertAdministrationShellDescriptorTx(ctx context.Context, tx *sql.Tx, aasd
 		aasRef = sql.NullInt64{Int64: ref, Valid: true}
 	}
 
-	if err = createSpecificAssetID(tx, descriptorID, aasRef, aasd.SpecificAssetIds); err != nil {
+	if err = common.CreateSpecificAssetIDDescriptor(tx, descriptorID, aasRef, aasd.SpecificAssetIds); err != nil {
 		return err
 	}
 
@@ -263,13 +263,13 @@ func DeleteAssetAdministrationShellDescriptorByID(ctx context.Context, db *sql.D
 // descriptor row plus descriptor rows of linked submodel descriptors.
 // Dependent rows are removed via ON DELETE CASCADE.
 func deleteAssetAdministrationShellDescriptorByIDTx(ctx context.Context, tx *sql.Tx, aasIdentifier string) error {
-	d := goqu.Dialect(dialect)
-	aas := goqu.T(tblAASDescriptor).As("aas")
+	d := goqu.Dialect(common.Dialect)
+	aas := goqu.T(common.TblAASDescriptor).As("aas")
 
 	sqlStr, args, buildErr := d.
 		From(aas).
-		Select(aas.Col(colDescriptorID)).
-		Where(aas.Col(colAASID).Eq(aasIdentifier)).
+		Select(aas.Col(common.ColDescriptorID)).
+		Where(aas.Col(common.ColAASID).Eq(aasIdentifier)).
 		Limit(1).
 		ToSQL()
 	if buildErr != nil {
@@ -285,15 +285,15 @@ func deleteAssetAdministrationShellDescriptorByIDTx(ctx context.Context, tx *sql
 	}
 
 	childDescriptorIDs := d.
-		From(tblSubmodelDescriptor).
-		Select(colDescriptorID).
-		Where(goqu.C(colAASDescriptorID).Eq(descID))
+		From(common.TblSubmodelDescriptor).
+		Select(common.ColDescriptorID).
+		Where(goqu.C(common.ColAASDescriptorID).Eq(descID))
 	delStr, delArgs, buildDelErr := d.
-		Delete(tblDescriptor).
+		Delete(common.TblDescriptor).
 		Where(
 			goqu.Or(
-				goqu.C(colID).Eq(descID),
-				goqu.C(colID).In(childDescriptorIDs),
+				goqu.C(common.ColID).Eq(descID),
+				goqu.C(common.ColID).In(childDescriptorIDs),
 			),
 		).
 		ToSQL()
@@ -354,32 +354,32 @@ func buildListAssetAdministrationShellDescriptorsQuery(
 	assetType string,
 	identifiable string,
 ) (*goqu.SelectDataset, error) {
-	d := goqu.Dialect(dialect)
-	adminPayload := goqu.L("?::text", tDescriptorPayload.Col(colAdministrativeInfoPayload))
-	displayNamePayload := goqu.L("?::text", tDescriptorPayload.Col(colDisplayNamePayload))
-	descriptionPayload := goqu.L("?::text", tDescriptorPayload.Col(colDescriptionPayload))
+	d := goqu.Dialect(common.Dialect)
+	adminPayload := goqu.L("?::text", common.TDescriptorPayload.Col(common.ColAdministrativeInfoPayload))
+	displayNamePayload := goqu.L("?::text", common.TDescriptorPayload.Col(common.ColDisplayNamePayload))
+	descriptionPayload := goqu.L("?::text", common.TDescriptorPayload.Col(common.ColDescriptionPayload))
 	var mapper = []auth.ExpressionIdentifiableMapper{
 		{
-			Exp: tAASDescriptor.Col(colDescriptorID),
+			Exp: common.TAASDescriptor.Col(common.ColDescriptorID),
 		},
 		{
-			Exp:      tAASDescriptor.Col(colAssetKind),
+			Exp:      common.TAASDescriptor.Col(common.ColAssetKind),
 			Fragment: fragPtr("$aasdesc#assetKind"),
 		},
 		{
-			Exp:      tAASDescriptor.Col(colAssetType),
+			Exp:      common.TAASDescriptor.Col(common.ColAssetType),
 			Fragment: fragPtr("$aasdesc#assetType"),
 		},
 		{
-			Exp:      tAASDescriptor.Col(colGlobalAssetID),
+			Exp:      common.TAASDescriptor.Col(common.ColGlobalAssetID),
 			Fragment: fragPtr("$aasdesc#globalAssetId"),
 		},
 		{
-			Exp:      tAASDescriptor.Col(colIDShort),
+			Exp:      common.TAASDescriptor.Col(common.ColIDShort),
 			Fragment: fragPtr("$aasdesc#idShort"),
 		},
 		{
-			Exp: tAASDescriptor.Col(colAASID),
+			Exp: common.TAASDescriptor.Col(common.ColAASID),
 		},
 		{
 			Exp:      adminPayload,
@@ -404,14 +404,14 @@ func buildListAssetAdministrationShellDescriptorsQuery(
 		return nil, err
 	}
 
-	ds := d.From(tDescriptor).
+	ds := d.From(common.TDescriptor).
 		InnerJoin(
-			tAASDescriptor,
-			goqu.On(tAASDescriptor.Col(colDescriptorID).Eq(tDescriptor.Col(colID))),
+			common.TAASDescriptor,
+			goqu.On(common.TAASDescriptor.Col(common.ColDescriptorID).Eq(common.TDescriptor.Col(common.ColID))),
 		).
 		LeftJoin(
-			tDescriptorPayload,
-			goqu.On(tDescriptorPayload.Col(colDescriptorID).Eq(tDescriptor.Col(colID))),
+			common.TDescriptorPayload,
+			goqu.On(common.TDescriptorPayload.Col(common.ColDescriptorID).Eq(common.TDescriptor.Col(common.ColID))),
 		).
 		Select(
 			expressions[0],
@@ -431,11 +431,11 @@ func buildListAssetAdministrationShellDescriptorsQuery(
 	}
 
 	if cursor != "" {
-		ds = ds.Where(tAASDescriptor.Col(colAASID).Gte(cursor))
+		ds = ds.Where(common.TAASDescriptor.Col(common.ColAASID).Gte(cursor))
 	}
 
 	if assetType != "" {
-		ds = ds.Where(tAASDescriptor.Col(colAssetType).Eq(assetType))
+		ds = ds.Where(common.TAASDescriptor.Col(common.ColAssetType).Eq(assetType))
 	}
 
 	if assetKind != "" {
@@ -444,18 +444,18 @@ func buildListAssetAdministrationShellDescriptorsQuery(
 		if !ok {
 			return nil, errors.New("Invalid asset kind: " + assetKindAsString)
 		}
-		ds = ds.Where(tAASDescriptor.Col(colAssetKind).Eq(convertedAssetKind))
+		ds = ds.Where(common.TAASDescriptor.Col(common.ColAssetKind).Eq(convertedAssetKind))
 	}
 
 	if identifiable != "" {
-		ds = ds.Where(tAASDescriptor.Col(colID).Eq(identifiable))
+		ds = ds.Where(common.TAASDescriptor.Col(common.ColID).Eq(identifiable))
 	}
 
 	if peekLimit < 0 {
 		return nil, common.NewErrBadRequest("Limit has to be higher than 0")
 	}
 	ds = ds.
-		Order(tAASDescriptor.Col(colAASID).Asc()).
+		Order(common.TAASDescriptor.Col(common.ColAASID).Asc()).
 		Limit(uint(peekLimit))
 	return ds, nil
 }
@@ -668,10 +668,10 @@ func listAssetAdministrationShellDescriptors(
 // ExistsAASByID performs a lightweight existence check for an AAS by its Id
 // string. It returns true when a descriptor exists, false when it does not.
 func ExistsAASByID(ctx context.Context, db *sql.DB, aasID string) (bool, error) {
-	d := goqu.Dialect(dialect)
-	aas := goqu.T(tblAASDescriptor).As("aas")
+	d := goqu.Dialect(common.Dialect)
+	aas := goqu.T(common.TblAASDescriptor).As("aas")
 
-	ds := d.From(aas).Select(goqu.L("1")).Where(aas.Col(colAASID).Eq(aasID)).Limit(1)
+	ds := d.From(aas).Select(goqu.L("1")).Where(aas.Col(common.ColAASID).Eq(aasID)).Limit(1)
 	sqlStr, args, err := ds.ToSQL()
 	if err != nil {
 		return false, err

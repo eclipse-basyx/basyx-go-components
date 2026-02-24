@@ -32,6 +32,7 @@ import (
 
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/lib/pq"
 )
 
@@ -92,18 +93,18 @@ func ReadExtensionsByDescriptorIDs(
 		return out, nil
 	}
 
-	d := goqu.Dialect(dialect)
-	dp := goqu.T(tblDescriptorPayload).As("dp")
+	d := goqu.Dialect(common.Dialect)
+	dp := goqu.T(common.TblDescriptorPayload).As("dp")
 
 	arr := pq.Array(descriptorIDs)
 	sqlStr, args, err := d.
 		From(dp).
 		Select(
-			dp.Col(colDescriptorID),
-			dp.Col(colExtensionsPayload),
+			dp.Col(common.ColDescriptorID),
+			dp.Col(common.ColExtensionsPayload),
 		).
 		Where(goqu.L("dp.descriptor_id = ANY(?::bigint[])", arr)).
-		Order(dp.Col(colDescriptorID).Asc()).
+		Order(dp.Col(common.ColDescriptorID).Asc()).
 		ToSQL()
 	if err != nil {
 		return nil, err

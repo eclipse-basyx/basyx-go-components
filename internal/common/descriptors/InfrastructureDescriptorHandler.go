@@ -79,13 +79,13 @@ func InsertInfrastructureDescriptor(ctx context.Context, db *sql.DB, infrastruct
 // entities (display name/description/admin info/endpoints). If any step fails,
 // the error is returned and the caller is responsible for rolling back the transaction.
 func InsertInfrastructureDescriptorTx(_ context.Context, tx *sql.Tx, infdesc model.InfrastructureDescriptor) error {
-	d := goqu.Dialect(dialect)
+	d := goqu.Dialect(common.Dialect)
 
-	descTbl := goqu.T(tblDescriptor)
+	descTbl := goqu.T(common.TblDescriptor)
 
 	sqlStr, args, buildErr := d.
-		Insert(tblDescriptor).
-		Returning(descTbl.Col(colID)).
+		Insert(common.TblDescriptor).
+		Returning(descTbl.Col(common.ColID)).
 		ToSQL()
 	if buildErr != nil {
 		return buildErr
@@ -109,12 +109,12 @@ func InsertInfrastructureDescriptorTx(_ context.Context, tx *sql.Tx, infdesc mod
 	}
 
 	sqlStr, args, buildErr = d.
-		Insert(tblDescriptorPayload).
+		Insert(common.TblDescriptorPayload).
 		Rows(goqu.Record{
-			colDescriptorID:              descriptorID,
-			colDescriptionPayload:        goqu.L("?::jsonb", string(descriptionPayload)),
-			colDisplayNamePayload:        goqu.L("?::jsonb", string(displayNamePayload)),
-			colAdministrativeInfoPayload: goqu.L("?::jsonb", string(administrationPayload)),
+			common.ColDescriptorID:              descriptorID,
+			common.ColDescriptionPayload:        goqu.L("?::jsonb", string(descriptionPayload)),
+			common.ColDisplayNamePayload:        goqu.L("?::jsonb", string(displayNamePayload)),
+			common.ColAdministrativeInfoPayload: goqu.L("?::jsonb", string(administrationPayload)),
 		}).
 		ToSQL()
 	if buildErr != nil {
@@ -125,13 +125,13 @@ func InsertInfrastructureDescriptorTx(_ context.Context, tx *sql.Tx, infdesc mod
 	}
 
 	sqlStr, args, buildErr = d.
-		Insert(tblInfrastructureDescriptor).
+		Insert(common.TblInfrastructureDescriptor).
 		Rows(goqu.Record{
-			colDescriptorID:  descriptorID,
-			colGlobalAssetID: infdesc.GlobalAssetId,
-			colIDShort:       infdesc.IdShort,
-			colInfDescID:     infdesc.Id,
-			colCompany:       infdesc.Company,
+			common.ColDescriptorID:  descriptorID,
+			common.ColGlobalAssetID: infdesc.GlobalAssetId,
+			common.ColIDShort:       infdesc.IdShort,
+			common.ColInfDescID:     infdesc.Id,
+			common.ColCompany:       infdesc.Company,
 		}).
 		ToSQL()
 	if buildErr != nil {
@@ -154,28 +154,28 @@ func InsertInfrastructureDescriptorTx(_ context.Context, tx *sql.Tx, infdesc mod
 // description, and endpoints) concurrently to minimize latency. If the
 // Infrastructure does not exist, a NotFound error is returned.
 func GetInfrastructureDescriptorByID(ctx context.Context, db *sql.DB, infrastructureIdentifier string) (model.InfrastructureDescriptor, error) {
-	d := goqu.Dialect(dialect)
+	d := goqu.Dialect(common.Dialect)
 
-	inf := goqu.T(tblInfrastructureDescriptor).As("inf")
-	payload := tDescriptorPayload.As("inf_payload")
+	inf := goqu.T(common.TblInfrastructureDescriptor).As("inf")
+	payload := common.TDescriptorPayload.As("inf_payload")
 
 	sqlStr, args, buildErr := d.
 		From(inf).
 		LeftJoin(
 			payload,
-			goqu.On(payload.Col(colDescriptorID).Eq(inf.Col(colDescriptorID))),
+			goqu.On(payload.Col(common.ColDescriptorID).Eq(inf.Col(common.ColDescriptorID))),
 		).
 		Select(
-			inf.Col(colDescriptorID),
-			inf.Col(colGlobalAssetID),
-			inf.Col(colIDShort),
-			inf.Col(colCompany),
-			inf.Col(colInfDescID),
-			payload.Col(colAdministrativeInfoPayload),
-			payload.Col(colDisplayNamePayload),
-			payload.Col(colDescriptionPayload),
+			inf.Col(common.ColDescriptorID),
+			inf.Col(common.ColGlobalAssetID),
+			inf.Col(common.ColIDShort),
+			inf.Col(common.ColCompany),
+			inf.Col(common.ColInfDescID),
+			payload.Col(common.ColAdministrativeInfoPayload),
+			payload.Col(common.ColDisplayNamePayload),
+			payload.Col(common.ColDescriptionPayload),
 		).
-		Where(inf.Col(colInfDescID).Eq(infrastructureIdentifier)).
+		Where(inf.Col(common.ColInfDescID).Eq(infrastructureIdentifier)).
 		Limit(1).
 		ToSQL()
 	if buildErr != nil {
@@ -240,28 +240,28 @@ func GetInfrastructureDescriptorByID(ctx context.Context, db *sql.DB, infrastruc
 // InfrastructureDescriptor by its Infrastructure Id string using the provided
 // transaction. It avoids concurrent queries, which are unsafe on *sql.Tx.
 func GetInfrastructureDescriptorByIDTx(ctx context.Context, tx *sql.Tx, infrastructureIdentifier string) (model.InfrastructureDescriptor, error) {
-	d := goqu.Dialect(dialect)
+	d := goqu.Dialect(common.Dialect)
 
-	inf := goqu.T(tblInfrastructureDescriptor).As("inf")
-	payload := tDescriptorPayload.As("inf_payload")
+	inf := goqu.T(common.TblInfrastructureDescriptor).As("inf")
+	payload := common.TDescriptorPayload.As("inf_payload")
 
 	sqlStr, args, buildErr := d.
 		From(inf).
 		LeftJoin(
 			payload,
-			goqu.On(payload.Col(colDescriptorID).Eq(inf.Col(colDescriptorID))),
+			goqu.On(payload.Col(common.ColDescriptorID).Eq(inf.Col(common.ColDescriptorID))),
 		).
 		Select(
-			inf.Col(colDescriptorID),
-			inf.Col(colGlobalAssetID),
-			inf.Col(colIDShort),
-			inf.Col(colCompany),
-			inf.Col(colInfDescID),
-			payload.Col(colAdministrativeInfoPayload),
-			payload.Col(colDisplayNamePayload),
-			payload.Col(colDescriptionPayload),
+			inf.Col(common.ColDescriptorID),
+			inf.Col(common.ColGlobalAssetID),
+			inf.Col(common.ColIDShort),
+			inf.Col(common.ColCompany),
+			inf.Col(common.ColInfDescID),
+			payload.Col(common.ColAdministrativeInfoPayload),
+			payload.Col(common.ColDisplayNamePayload),
+			payload.Col(common.ColDescriptionPayload),
 		).
-		Where(inf.Col(colInfDescID).Eq(infrastructureIdentifier)).
+		Where(inf.Col(common.ColInfDescID).Eq(infrastructureIdentifier)).
 		Limit(1).
 		ToSQL()
 	if buildErr != nil {
@@ -335,12 +335,12 @@ func DeleteInfrastructureDescriptorByID(ctx context.Context, db *sql.DB, infrast
 // descriptor row. Dependent rows are removed via ON DELETE CASCADE.
 func DeleteInfrastructureDescriptorByIDTx(ctx context.Context, tx *sql.Tx, infrastructureIdentifier string) error {
 	d := goqu.Dialect("postgres")
-	inf := goqu.T(tblInfrastructureDescriptor).As("inf")
+	inf := goqu.T(common.TblInfrastructureDescriptor).As("inf")
 
 	sqlStr, args, buildErr := d.
 		From(inf).
-		Select(inf.Col(colDescriptorID)).
-		Where(inf.Col(colInfDescID).Eq(infrastructureIdentifier)).
+		Select(inf.Col(common.ColDescriptorID)).
+		Where(inf.Col(common.ColInfDescID).Eq(infrastructureIdentifier)).
 		Limit(1).
 		ToSQL()
 	if buildErr != nil {
@@ -356,8 +356,8 @@ func DeleteInfrastructureDescriptorByIDTx(ctx context.Context, tx *sql.Tx, infra
 	}
 
 	delStr, delArgs, buildDelErr := d.
-		Delete(tblDescriptor).
-		Where(goqu.C(colID).Eq(descID)).
+		Delete(common.TblDescriptor).
+		Where(goqu.C(common.ColID).Eq(descID)).
 		ToSQL()
 	if buildDelErr != nil {
 		return buildDelErr
@@ -425,34 +425,34 @@ func ListInfrastructureDescriptors(
 	}
 	peekLimit := int(limit) + 1
 
-	d := goqu.Dialect(dialect)
-	inf := goqu.T(tblInfrastructureDescriptor).As("inf")
-	payload := tDescriptorPayload.As("inf_payload")
-	aasdescendp := goqu.T(tblAASDescriptorEndpoint).As("aasdescendp")
+	d := goqu.Dialect(common.Dialect)
+	inf := goqu.T(common.TblInfrastructureDescriptor).As("inf")
+	payload := common.TDescriptorPayload.As("inf_payload")
+	aasdescendp := goqu.T(common.TblAASDescriptorEndpoint).As("aasdescendp")
 
 	ds := d.
 		From(inf).
 		LeftJoin(
 			payload,
-			goqu.On(payload.Col(colDescriptorID).Eq(inf.Col(colDescriptorID))),
+			goqu.On(payload.Col(common.ColDescriptorID).Eq(inf.Col(common.ColDescriptorID))),
 		).
 		Select(
-			inf.Col(colDescriptorID),
-			inf.Col(colGlobalAssetID),
-			inf.Col(colIDShort),
-			inf.Col(colCompany),
-			inf.Col(colInfDescID),
-			payload.Col(colAdministrativeInfoPayload),
-			payload.Col(colDisplayNamePayload),
-			payload.Col(colDescriptionPayload),
+			inf.Col(common.ColDescriptorID),
+			inf.Col(common.ColGlobalAssetID),
+			inf.Col(common.ColIDShort),
+			inf.Col(common.ColCompany),
+			inf.Col(common.ColInfDescID),
+			payload.Col(common.ColAdministrativeInfoPayload),
+			payload.Col(common.ColDisplayNamePayload),
+			payload.Col(common.ColDescriptionPayload),
 		)
 
 	if cursor != "" {
-		ds = ds.Where(inf.Col(colInfDescID).Gte(cursor))
+		ds = ds.Where(inf.Col(common.ColInfDescID).Gte(cursor))
 	}
 
 	if company != "" {
-		ds = ds.Where(inf.Col(colCompany).Eq(company))
+		ds = ds.Where(inf.Col(common.ColCompany).Eq(company))
 	}
 
 	if endpointInterface != "" {
@@ -460,10 +460,10 @@ func ListInfrastructureDescriptors(
 			LeftJoin(
 				aasdescendp,
 				goqu.On(
-					inf.Col(colDescriptorID).Eq(aasdescendp.Col(colDescriptorID)),
+					inf.Col(common.ColDescriptorID).Eq(aasdescendp.Col(common.ColDescriptorID)),
 				),
 			).
-			Where(aasdescendp.Col(colInterface).Eq(endpointInterface))
+			Where(aasdescendp.Col(common.ColInterface).Eq(endpointInterface))
 	}
 
 	if peekLimit < 0 {
@@ -471,7 +471,7 @@ func ListInfrastructureDescriptors(
 	}
 
 	ds = ds.
-		Order(inf.Col(colInfDescID).Asc()).
+		Order(inf.Col(common.ColInfDescID).Asc()).
 		Limit(uint(peekLimit))
 
 	sqlStr, args, buildErr := ds.ToSQL()
@@ -569,10 +569,10 @@ func ListInfrastructureDescriptors(
 // ExistsInfrastructureByID performs a lightweight existence check for an Infrastructure by its Id
 // string. It returns true when a descriptor exists, false when it does not.
 func ExistsInfrastructureByID(ctx context.Context, db *sql.DB, infrastructureIdentifier string) (bool, error) {
-	d := goqu.Dialect(dialect)
-	inf := goqu.T(tblInfrastructureDescriptor).As("inf")
+	d := goqu.Dialect(common.Dialect)
+	inf := goqu.T(common.TblInfrastructureDescriptor).As("inf")
 
-	ds := d.From(inf).Select(goqu.L("1")).Where(inf.Col(colInfDescID).Eq(infrastructureIdentifier)).Limit(1)
+	ds := d.From(inf).Select(goqu.L("1")).Where(inf.Col(common.ColInfDescID).Eq(infrastructureIdentifier)).Limit(1)
 	sqlStr, args, err := ds.ToSQL()
 	if err != nil {
 		return false, err

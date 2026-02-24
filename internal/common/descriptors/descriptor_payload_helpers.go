@@ -141,23 +141,6 @@ func parseAdministrativeInfoPayload(payload json.RawMessage) (types.IAdministrat
 	return admin, nil
 }
 
-func buildReferencePayload(value types.IReference) (json.RawMessage, error) {
-	if value == nil {
-		return json.RawMessage("{}"), nil
-	}
-
-	jsonable, err := jsonization.ToJsonable(value)
-	if err != nil {
-		return nil, fmt.Errorf("build Reference payload: %w", err)
-	}
-
-	payload, err := json.Marshal(jsonable)
-	if err != nil {
-		return nil, fmt.Errorf("marshal Reference payload: %w", err)
-	}
-	return payload, nil
-}
-
 func parseReferencePayload(payload json.RawMessage) (types.IReference, error) {
 	payload = bytes.TrimSpace(payload)
 	if len(payload) == 0 || bytes.Equal(payload, []byte("null")) || bytes.Equal(payload, []byte("{}")) || bytes.Equal(payload, []byte("[]")) {
