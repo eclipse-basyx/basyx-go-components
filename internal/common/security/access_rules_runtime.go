@@ -156,7 +156,7 @@ func (r *accessRulesRuntime) RegisterRoutes(router *api.Mux) {
 func (r *accessRulesRuntime) handleListRules(w http.ResponseWriter, req *http.Request) {
 	records, err := r.repo.List(req.Context())
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "SEC-RULES-LIST-QUERYDB"})
+		writeRulesError(w, common.NewInternalServerError("Failed to list access permission rules."), http.StatusInternalServerError, "Rules", "ListQueryDB")
 		return
 	}
 	writeJSON(w, http.StatusOK, toAccessRuleResponses(records))
@@ -165,16 +165,16 @@ func (r *accessRulesRuntime) handleListRules(w http.ResponseWriter, req *http.Re
 func (r *accessRulesRuntime) handleGetRule(w http.ResponseWriter, req *http.Request) {
 	id, ok := parseRuleID(api.URLParam(req, "id"))
 	if !ok {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "SEC-RULES-GET-BADID"})
+		writeRulesError(w, common.NewErrBadRequest("Rule ID must be a positive integer."), http.StatusBadRequest, "Rules", "GetBadID")
 		return
 	}
 	record, found, err := r.repo.Get(req.Context(), id)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "SEC-RULES-GET-QUERYDB"})
+		writeRulesError(w, common.NewInternalServerError("Failed to load access permission rule."), http.StatusInternalServerError, "Rules", "GetQueryDB")
 		return
 	}
 	if !found {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "SEC-RULES-GET-NOTFOUND"})
+		writeRulesError(w, common.NewErrNotFound(fmt.Sprintf("Access permission rule %d", id)), http.StatusNotFound, "Rules", "GetNotFound")
 		return
 	}
 	writeJSON(w, http.StatusOK, toAccessRuleResponse(record))
@@ -183,21 +183,21 @@ func (r *accessRulesRuntime) handleGetRule(w http.ResponseWriter, req *http.Requ
 func (r *accessRulesRuntime) handleCreateRule(w http.ResponseWriter, req *http.Request) {
 	rule, err := decodeRuleRequest(req)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "SEC-RULES-CREATE-BADBODY"})
+		writeRulesError(w, common.NewErrBadRequest("Invalid access permission rule JSON body."), http.StatusBadRequest, "Rules", "CreateBadBody")
 		return
 	}
 	if err := validateDematerializedRule(rule, r.apiRouter, r.basePath); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "SEC-RULES-CREATE-INVALIDRULE"})
+		writeRulesError(w, common.NewErrBadRequest("Invalid access permission rule."), http.StatusBadRequest, "Rules", "CreateInvalidRule")
 		return
 	}
 
 	record, err := r.repo.Insert(req.Context(), rule)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "SEC-RULES-CREATE-INSERTDB"})
+		writeRulesError(w, common.NewInternalServerError("Failed to store access permission rule."), http.StatusInternalServerError, "Rules", "CreateInsertDB")
 		return
 	}
 	if err := r.ReloadModelFromDB(req.Context()); err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "SEC-RULES-CREATE-RELOADMODEL"})
+		writeRulesError(w, common.NewInternalServerError("Failed to reload access permission rules."), http.StatusInternalServerError, "Rules", "CreateReloadModel")
 		return
 	}
 	w.Header().Set("Location", fmt.Sprintf("/rules/%d", record.ID))
@@ -207,30 +207,30 @@ func (r *accessRulesRuntime) handleCreateRule(w http.ResponseWriter, req *http.R
 func (r *accessRulesRuntime) handlePutRule(w http.ResponseWriter, req *http.Request) {
 	id, ok := parseRuleID(api.URLParam(req, "id"))
 	if !ok {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "SEC-RULES-PUT-BADID"})
+		writeRulesError(w, common.NewErrBadRequest("Rule ID must be a positive integer."), http.StatusBadRequest, "Rules", "PutBadID")
 		return
 	}
 	rule, err := decodeRuleRequest(req)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "SEC-RULES-PUT-BADBODY"})
+		writeRulesError(w, common.NewErrBadRequest("Invalid access permission rule JSON body."), http.StatusBadRequest, "Rules", "PutBadBody")
 		return
 	}
 	if err := validateDematerializedRule(rule, r.apiRouter, r.basePath); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "SEC-RULES-PUT-INVALIDRULE"})
+		writeRulesError(w, common.NewErrBadRequest("Invalid access permission rule."), http.StatusBadRequest, "Rules", "PutInvalidRule")
 		return
 	}
 
 	record, replaced, err := r.repo.ReplaceByID(req.Context(), id, rule)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "SEC-RULES-PUT-UPDATEDB"})
+		writeRulesError(w, common.NewInternalServerError("Failed to update access permission rule."), http.StatusInternalServerError, "Rules", "PutUpdateDB")
 		return
 	}
 	if !replaced {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "SEC-RULES-PUT-NOTFOUND"})
+		writeRulesError(w, common.NewErrNotFound(fmt.Sprintf("Access permission rule %d", id)), http.StatusNotFound, "Rules", "PutNotFound")
 		return
 	}
 	if err := r.ReloadModelFromDB(req.Context()); err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "SEC-RULES-PUT-RELOADMODEL"})
+		writeRulesError(w, common.NewInternalServerError("Failed to reload access permission rules."), http.StatusInternalServerError, "Rules", "PutReloadModel")
 		return
 	}
 	writeJSON(w, http.StatusOK, toAccessRuleResponse(record))
@@ -239,20 +239,20 @@ func (r *accessRulesRuntime) handlePutRule(w http.ResponseWriter, req *http.Requ
 func (r *accessRulesRuntime) handleDeleteRule(w http.ResponseWriter, req *http.Request) {
 	id, ok := parseRuleID(api.URLParam(req, "id"))
 	if !ok {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "SEC-RULES-DELETE-BADID"})
+		writeRulesError(w, common.NewErrBadRequest("Rule ID must be a positive integer."), http.StatusBadRequest, "Rules", "DeleteBadID")
 		return
 	}
 	deleted, err := r.repo.Delete(req.Context(), id)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "SEC-RULES-DELETE-QUERYDB"})
+		writeRulesError(w, common.NewInternalServerError("Failed to delete access permission rule."), http.StatusInternalServerError, "Rules", "DeleteQueryDB")
 		return
 	}
 	if !deleted {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "SEC-RULES-DELETE-NOTFOUND"})
+		writeRulesError(w, common.NewErrNotFound(fmt.Sprintf("Access permission rule %d", id)), http.StatusNotFound, "Rules", "DeleteNotFound")
 		return
 	}
 	if err := r.ReloadModelFromDB(req.Context()); err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "SEC-RULES-DELETE-RELOADMODEL"})
+		writeRulesError(w, common.NewInternalServerError("Failed to reload access permission rules."), http.StatusInternalServerError, "Rules", "DeleteReloadModel")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -275,6 +275,11 @@ func decodeRuleRequest(req *http.Request) (grammar.AccessPermissionRule, error) 
 
 func writeJSON(w http.ResponseWriter, status int, payload any) {
 	_ = commonmodel.EncodeJSONResponse(payload, &status, w)
+}
+
+func writeRulesError(w http.ResponseWriter, err error, status int, function string, info string) {
+	resp := common.NewErrorResponse(err, status, "Security", function, info)
+	_ = commonmodel.EncodeJSONResponse(resp.Body, &resp.Code, w)
 }
 
 func validateDematerializedRule(rule grammar.AccessPermissionRule, apiRouter *api.Mux, basePath string) error {
