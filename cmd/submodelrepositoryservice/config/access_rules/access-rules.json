@@ -7,7 +7,8 @@
 
     "DEFOBJECTS": [
       { "name": "description", "objects": [ { "ROUTE": "/description" } ] },
-      { "name": "submodels", "objects": [ {"IDENTIFIABLE": "$sm(\"MarcusThisIsAOnlyAnnotatedRelationshipElementSubmodel\")"}] }
+      { "name": "all-submodels", "objects": [ {"IDENTIFIABLE": "$sm(\"*\")"}] },
+      { "name": "submodels", "objects": [ {"REFERABLE": "$sme(\"MarcusThisIsAOnlyAnnotatedRelationshipElementSubmodel\").DemoAnnotatedRelationshipElement"}] }
     ],
 
     "DEFACLS": [
@@ -22,7 +23,7 @@
 
     "rules": [
       { "USEACL": "read_anonymous", "USEOBJECTS": ["description", "submodels"], "USEFORMULA": "always_true" },
-      { "USEACL": "all_admin", "USEOBJECTS": ["submodels"], "USEFORMULA": "role_is_admin" }      
+      { "USEACL": "all_admin", "USEOBJECTS": ["all-submodels"], "USEFORMULA": "role_is_admin" }      
     ]
   }
 }

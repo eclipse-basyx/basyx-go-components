@@ -510,12 +510,22 @@ func (s *SubmodelDatabase) GetSubmodelElement(submodelID string, idShortOrPath s
 
 // GetSubmodelElements retrieves top-level submodel elements for a submodel and reconstructs each subtree.
 func (s *SubmodelDatabase) GetSubmodelElements(submodelID string, limit *int, cursor string, _ bool) ([]types.ISubmodelElement, string, error) {
-	return submodelelements.GetSubmodelElementsBySubmodelID(s.db, submodelID, limit, cursor)
+	return s.GetSubmodelElementsWithContext(context.Background(), submodelID, limit, cursor, false)
+}
+
+// GetSubmodelElementsWithContext retrieves submodel elements and applies optional ABAC formula filters from ctx.
+func (s *SubmodelDatabase) GetSubmodelElementsWithContext(ctx context.Context, submodelID string, limit *int, cursor string, _ bool) ([]types.ISubmodelElement, string, error) {
+	return submodelelements.GetSubmodelElementsBySubmodelID(ctx, s.db, submodelID, limit, cursor)
 }
 
 // GetSubmodelElementReferences retrieves references for top-level submodel elements of a submodel with optional pagination.
 func (s *SubmodelDatabase) GetSubmodelElementReferences(submodelID string, limit *int, cursor string) ([]types.IReference, string, error) {
-	return submodelelements.GetSubmodelElementReferencesBySubmodelID(s.db, submodelID, limit, cursor)
+	return s.GetSubmodelElementReferencesWithContext(context.Background(), submodelID, limit, cursor)
+}
+
+// GetSubmodelElementReferencesWithContext retrieves SME references and applies optional ABAC formula filters from ctx.
+func (s *SubmodelDatabase) GetSubmodelElementReferencesWithContext(ctx context.Context, submodelID string, limit *int, cursor string) ([]types.IReference, string, error) {
+	return submodelelements.GetSubmodelElementReferencesBySubmodelID(ctx, s.db, submodelID, limit, cursor)
 }
 
 // AddSubmodelElement adds a top-level submodel element to a submodel.

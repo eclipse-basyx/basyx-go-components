@@ -387,10 +387,10 @@ func joinPlanConfigForSME() JoinPlanConfig {
 			return nil, fmt.Errorf("unsupported SME base alias %q", base)
 		},
 		RootJoinKey: func() exp.IdentifierExpression {
-			return goqu.I("submodel_element.id")
+			return goqu.I("sme.id")
 		},
 		RootJoinKeyAlias: func() string {
-			return "submodel_element"
+			return "sme"
 		},
 		RootJoinKeyColumn: func() string {
 			return "id"

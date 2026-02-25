@@ -1,6 +1,7 @@
 package submodelelements
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -14,6 +15,8 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	builders "github.com/eclipse-basyx/basyx-go-components/internal/common/builder"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
+	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	persistenceutils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
 )
 
@@ -57,7 +60,7 @@ func getSubmodelElementByIDShortOrPathWithSubmodelDBID(db *sql.DB, submodelID st
 
 // GetSubmodelElementsBySubmodelID loads top-level submodel elements and reconstructs
 // each complete subtree in original hierarchy.
-func GetSubmodelElementsBySubmodelID(db *sql.DB, submodelID string, limit *int, cursor string) ([]types.ISubmodelElement, string, error) {
+func GetSubmodelElementsBySubmodelID(ctx context.Context, db *sql.DB, submodelID string, limit *int, cursor string) ([]types.ISubmodelElement, string, error) {
 	if submodelID == "" {
 		return nil, "", common.NewErrBadRequest("SMREPO-GETSMES-EMPTYSMID Submodel id must not be empty")
 	}
@@ -78,7 +81,7 @@ func GetSubmodelElementsBySubmodelID(db *sql.DB, submodelID string, limit *int, 
 		return nil, "", common.NewInternalServerError("SMREPO-GETSMES-GETSMDATABASEID " + submodelIDErr.Error())
 	}
 
-	rootElements, nextCursor, rootPathErr := getRootElementPage(db, int64(submodelDatabaseID), limit, cursor)
+	rootElements, nextCursor, rootPathErr := getRootElementPage(ctx, db, int64(submodelDatabaseID), limit, cursor)
 	if rootPathErr != nil {
 		return nil, "", rootPathErr
 	}
@@ -114,7 +117,7 @@ func GetSubmodelElementsBySubmodelID(db *sql.DB, submodelID string, limit *int, 
 }
 
 // GetSubmodelElementReferencesBySubmodelID retrieves references for top-level submodel elements of a submodel with optional pagination.
-func GetSubmodelElementReferencesBySubmodelID(db *sql.DB, submodelID string, limit *int, cursor string) ([]types.IReference, string, error) {
+func GetSubmodelElementReferencesBySubmodelID(ctx context.Context, db *sql.DB, submodelID string, limit *int, cursor string) ([]types.IReference, string, error) {
 	if submodelID == "" {
 		return nil, "", common.NewErrBadRequest("SMREPO-GETSMEREFS-EMPTYSMID Submodel id must not be empty")
 	}
@@ -136,7 +139,7 @@ func GetSubmodelElementReferencesBySubmodelID(db *sql.DB, submodelID string, lim
 		return nil, "", common.NewInternalServerError("SMREPO-GETSMEREFS-GETSMDATABASEID " + submodelIDErr.Error())
 	}
 
-	rootElements, nextCursor, rootPathErr := getRootElementPage(db, int64(submodelDatabaseID), limit, cursor)
+	rootElements, nextCursor, rootPathErr := getRootElementPage(ctx, db, int64(submodelDatabaseID), limit, cursor)
 	if rootPathErr != nil {
 		return nil, "", rootPathErr
 	}
@@ -318,7 +321,7 @@ type rootElementCursorRow struct {
 	path string
 }
 
-func getRootElementPage(db *sql.DB, submodelDatabaseID int64, limit *int, cursor string) ([]rootElementCursorRow, string, error) {
+func getRootElementPage(ctx context.Context, db *sql.DB, submodelDatabaseID int64, limit *int, cursor string) ([]rootElementCursorRow, string, error) {
 	if limit != nil && *limit == 0 {
 		return []rootElementCursorRow{}, "", nil
 	}
@@ -358,6 +361,15 @@ func getRootElementPage(db *sql.DB, submodelDatabaseID int64, limit *int, cursor
 	if limit != nil && *limit > 0 {
 		//nolint:gosec // limit is validated to be > 0 before conversion
 		query = query.Limit(uint(*limit + 1))
+	}
+
+	collector, collectorErr := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootSME)
+	if collectorErr != nil {
+		return nil, "", common.NewInternalServerError("SMREPO-GETROOTPATHS-BADCOLLECTOR " + collectorErr.Error())
+	}
+	query, addFormulaErr := auth.AddFormulaQueryFromContext(ctx, query, collector)
+	if addFormulaErr != nil {
+		return nil, "", common.NewInternalServerError("SMREPO-GETROOTPATHS-ABACFORMULA " + addFormulaErr.Error())
 	}
 
 	sqlQuery, args, toSQLErr := query.ToSQL()
