@@ -1,3 +1,4 @@
+// Package securitydocu provides embedded security-related documentation assets.
 package securitydocu
 
 import (
