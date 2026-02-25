@@ -89,7 +89,7 @@ func (s *SubmodelDatabase) GetSignedSubmodel(submodelID string, valueOnly bool) 
 		return "", errors.New("JWS signing not configured: private key not loaded")
 	}
 
-	submodel, err := s.GetSubmodelByID(submodelID)
+	submodel, err := s.GetSubmodelByID(submodelID, "deep")
 	if err != nil {
 		return "", err
 	}
@@ -129,7 +129,7 @@ func (s *SubmodelDatabase) GetSignedSubmodel(submodelID string, valueOnly bool) 
 }
 
 // GetSubmodelByID retrieves a submodel by its identifier from the database.
-func (s *SubmodelDatabase) GetSubmodelByID(submodelIdentifier string) (types.ISubmodel, error) {
+func (s *SubmodelDatabase) GetSubmodelByID(submodelIdentifier string, level string) (types.ISubmodel, error) {
 	eg := errgroup.Group{}
 	var submodels []types.ISubmodel
 	eg.Go(func() error {
@@ -149,7 +149,7 @@ func (s *SubmodelDatabase) GetSubmodelByID(submodelIdentifier string) (types.ISu
 	submodelElements := make([]types.ISubmodelElement, 0)
 	eg.Go(func() error {
 		unlimited := -1
-		smes, _, err := s.GetSubmodelElements(submodelIdentifier, &unlimited, "", false)
+		smes, _, err := s.GetSubmodelElements(submodelIdentifier, &unlimited, "", false, level)
 		if err != nil {
 			return err
 		}
@@ -343,7 +343,7 @@ func (s *SubmodelDatabase) QuerySubmodels(limit int32, cursor string, queryWrapp
 
 	result := make([]types.ISubmodel, 0, len(identifiers))
 	for _, identifier := range identifiers {
-		sm, getErr := s.GetSubmodelByID(identifier)
+		sm, getErr := s.GetSubmodelByID(identifier, "deep")
 		if getErr != nil {
 			return nil, "", getErr
 		}
@@ -486,9 +486,14 @@ func (s *SubmodelDatabase) GetSubmodelElement(submodelID string, idShortOrPath s
 	return submodelelements.GetSubmodelElementByIDShortOrPath(s.db, submodelID, idShortOrPath)
 }
 
+// GetSubmodelElementWithLevel retrieves a submodel element by idShort path and applies level modifier.
+func (s *SubmodelDatabase) GetSubmodelElementWithLevel(submodelID string, idShortOrPath string, _ bool, level string) (types.ISubmodelElement, error) {
+	return submodelelements.GetSubmodelElementByIDShortOrPathWithLevel(s.db, submodelID, idShortOrPath, level)
+}
+
 // GetSubmodelElements retrieves top-level submodel elements for a submodel and reconstructs each subtree.
-func (s *SubmodelDatabase) GetSubmodelElements(submodelID string, limit *int, cursor string, _ bool) ([]types.ISubmodelElement, string, error) {
-	return submodelelements.GetSubmodelElementsBySubmodelID(s.db, submodelID, limit, cursor)
+func (s *SubmodelDatabase) GetSubmodelElements(submodelID string, limit *int, cursor string, _ bool, level string) ([]types.ISubmodelElement, string, error) {
+	return submodelelements.GetSubmodelElementsBySubmodelID(s.db, submodelID, limit, cursor, level)
 }
 
 // GetSubmodelElementReferences retrieves references for top-level submodel elements of a submodel with optional pagination.

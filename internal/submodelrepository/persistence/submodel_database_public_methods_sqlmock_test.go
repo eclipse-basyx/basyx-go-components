@@ -85,7 +85,7 @@ func TestGetSubmodelByIDReturnsErrorWhenParallelReadsFail(t *testing.T) {
 
 	mock.ExpectQuery(`SELECT .*`).WillReturnError(errors.New("read failed"))
 
-	item, err := sut.GetSubmodelByID("")
+	item, err := sut.GetSubmodelByID("", "deep")
 	require.Error(t, err)
 	require.Nil(t, item)
 	require.NoError(t, mock.ExpectationsWereMet())
@@ -135,6 +135,74 @@ func TestGetSubmodelElementEmptyPathReturnsBadRequest(t *testing.T) {
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestGetSubmodelElementWithLevelInvalidLevelReturnsBadRequest(t *testing.T) {
+	t.Parallel()
+
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() {
+		_ = db.Close()
+	}()
+
+	sut := &SubmodelDatabase{db: db}
+
+	elem, err := sut.GetSubmodelElementWithLevel("sm", "root", false, "invalid")
+	require.Error(t, err)
+	require.Nil(t, elem)
+	require.True(t, common.IsErrBadRequest(err))
+	require.Contains(t, err.Error(), "SMREPO-GETSMEBYPATH-BADLEVEL")
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestGetSubmodelElementWithLevelCoreReturnsElementWithoutChildren(t *testing.T) {
+	t.Parallel()
+
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() {
+		_ = db.Close()
+	}()
+
+	sut := &SubmodelDatabase{db: db}
+
+	mock.ExpectQuery(`SELECT .*FROM "submodel"`).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
+
+	mock.ExpectQuery(`SELECT .*FROM "submodel_element" AS "sme".*"sme"\."idshort_path" =`).
+		WillReturnRows(sqlmock.NewRows(submodelElementReadColumns()).
+			AddRow(
+				10,
+				nil,
+				nil,
+				"RootCollection",
+				"RootCollection",
+				nil,
+				int64(types.ModelTypeSubmodelElementCollection),
+				0,
+				[]byte("[]"),
+				[]byte("[]"),
+				[]byte("[]"),
+				[]byte("[]"),
+				[]byte("[]"),
+				nil,
+				[]byte("[]"),
+				[]byte("[]"),
+				[]byte("[]"),
+				[]byte(`{"type":"ExternalReference","keys":[{"type":"GlobalReference","value":"urn:test:semantic"}]}`),
+			),
+		)
+
+	elem, err := sut.GetSubmodelElementWithLevel("sm-core", "RootCollection", false, "core")
+	require.NoError(t, err)
+	require.NotNil(t, elem)
+
+	collection, ok := elem.(types.ISubmodelElementCollection)
+	require.True(t, ok)
+	require.Empty(t, collection.Value())
+
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
 func TestGetSubmodelElementsEmptySubmodelIDReturnsBadRequest(t *testing.T) {
 	t.Parallel()
 
@@ -146,12 +214,162 @@ func TestGetSubmodelElementsEmptySubmodelIDReturnsBadRequest(t *testing.T) {
 
 	sut := &SubmodelDatabase{db: db}
 
-	elems, cursor, err := sut.GetSubmodelElements("", nil, "", false)
+	elems, cursor, err := sut.GetSubmodelElements("", nil, "", false, "")
 	require.Error(t, err)
 	require.Nil(t, elems)
 	require.Empty(t, cursor)
 	require.True(t, common.IsErrBadRequest(err))
 	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestGetSubmodelElementsCoreReturnsOnlyRootElements(t *testing.T) {
+	t.Parallel()
+
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() {
+		_ = db.Close()
+	}()
+
+	sut := &SubmodelDatabase{db: db}
+
+	mock.ExpectQuery(`SELECT .*FROM "submodel"`).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
+
+	mock.ExpectQuery(`SELECT .*FROM "submodel_element" AS "sme".*parent_sme_id.*IS NULL`).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "idshort_path"}).AddRow(10, "RootCollection"))
+
+	mock.ExpectQuery(`SELECT .*FROM "submodel_element" AS "sme".*"sme"\."id" IN`).
+		WillReturnRows(sqlmock.NewRows(submodelElementReadColumns()).
+			AddRow(
+				10,
+				nil,
+				nil,
+				"RootCollection",
+				"RootCollection",
+				nil,
+				int64(types.ModelTypeSubmodelElementCollection),
+				0,
+				[]byte("[]"),
+				[]byte("[]"),
+				[]byte("[]"),
+				[]byte("[]"),
+				[]byte("[]"),
+				nil,
+				[]byte("[]"),
+				[]byte("[]"),
+				[]byte("[]"),
+				[]byte(`{"type":"ExternalReference","keys":[{"type":"GlobalReference","value":"urn:test:semantic"}]}`),
+			),
+		)
+
+	elems, cursor, err := sut.GetSubmodelElements("sm-core", nil, "", false, "core")
+	require.NoError(t, err)
+	require.Empty(t, cursor)
+	require.Len(t, elems, 1)
+
+	collection, ok := elems[0].(types.ISubmodelElementCollection)
+	require.True(t, ok)
+	require.Empty(t, collection.Value())
+
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestGetSubmodelElementsDeepReturnsRootWithChildren(t *testing.T) {
+	t.Parallel()
+
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() {
+		_ = db.Close()
+	}()
+
+	sut := &SubmodelDatabase{db: db}
+
+	mock.ExpectQuery(`SELECT .*FROM "submodel"`).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
+
+	mock.ExpectQuery(`SELECT .*FROM "submodel_element" AS "sme".*parent_sme_id.*IS NULL`).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "idshort_path"}).AddRow(10, "RootCollection"))
+
+	mock.ExpectQuery(`SELECT .*FROM "submodel_element" AS "sme".*COALESCE\("sme"\."root_sme_id", "sme"\."id"\) IN`).
+		WillReturnRows(sqlmock.NewRows(submodelElementReadColumns()).
+			AddRow(
+				10,
+				nil,
+				nil,
+				"RootCollection",
+				"RootCollection",
+				nil,
+				int64(types.ModelTypeSubmodelElementCollection),
+				0,
+				[]byte("[]"),
+				[]byte("[]"),
+				[]byte("[]"),
+				[]byte("[]"),
+				[]byte("[]"),
+				nil,
+				[]byte("[]"),
+				[]byte("[]"),
+				[]byte("[]"),
+				[]byte(`{"type":"ExternalReference","keys":[{"type":"GlobalReference","value":"urn:test:semantic:root"}]}`),
+			).
+			AddRow(
+				11,
+				10,
+				10,
+				"ChildProperty",
+				"RootCollection.ChildProperty",
+				nil,
+				int64(types.ModelTypeProperty),
+				0,
+				[]byte("[]"),
+				[]byte("[]"),
+				[]byte("[]"),
+				[]byte("[]"),
+				[]byte("[]"),
+				nil,
+				[]byte("[]"),
+				[]byte("[]"),
+				[]byte("[]"),
+				[]byte(`{"type":"ExternalReference","keys":[{"type":"GlobalReference","value":"urn:test:semantic:child"}]}`),
+			),
+		)
+
+	elems, cursor, err := sut.GetSubmodelElements("sm-deep", nil, "", false, "deep")
+	require.NoError(t, err)
+	require.Empty(t, cursor)
+	require.Len(t, elems, 1)
+
+	collection, ok := elems[0].(types.ISubmodelElementCollection)
+	require.True(t, ok)
+	require.Len(t, collection.Value(), 1)
+	require.Equal(t, types.ModelTypeProperty, collection.Value()[0].ModelType())
+
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func submodelElementReadColumns() []string {
+	return []string{
+		"id",
+		"parent_sme_id",
+		"root_sme_id",
+		"id_short",
+		"idshort_path",
+		"category",
+		"model_type",
+		"position",
+		"embedded_data_specification_payload",
+		"supplemental_semantic_ids_payload",
+		"extensions_payload",
+		"displayname_payload",
+		"description_payload",
+		"value_payload",
+		"semantic_id_referred_payload",
+		"supplemental_semantic_ids_referred_payload",
+		"qualifiers_payload",
+		"parent_reference_payload",
+	}
 }
 
 func TestAddSubmodelElementSubmodelNotFoundRollsBack(t *testing.T) {

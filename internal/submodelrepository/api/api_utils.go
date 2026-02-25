@@ -174,3 +174,7 @@ func resolveModelReferencePathKeys(
 
 	return keyTypes, keyValues, nil
 }
+
+func isLevelValid(level string) bool {
+	return level == "core" || level == "" || level == "deep"
+}
