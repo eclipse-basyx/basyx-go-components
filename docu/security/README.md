@@ -118,6 +118,52 @@ sequenceDiagram
 - Access rules are loaded from the access model JSON.
   - Example rules: [cmd/aasregistryservice/config/access_rules/access-rules.json](cmd/aasregistryservice/config/access_rules/access-rules.json)
 
+## Rules management endpoint (`/rules`)
+
+The security implementation supports an optional CRUD management endpoint for dematerialized ABAC rules.
+
+Activation:
+- The whole security logic (OIDC, ABAC, rules DB runtime, `/rules`) is skipped when `abac.enabled=false`.
+- The `/rules` endpoint is registered automatically when `abac.enabled=true` (for components wired with the rules runtime).
+- Startup JSON->DB synchronization only runs when `abac.enabled=true` and `abac.syncJsonToDb=true`.
+
+How startup JSON->DB sync works:
+- The configured access model file (`abac.modelPath`) is read (e.g. `access-rules.json`).
+- Rules are dematerialized (references like `USEACL`, `USEOBJECTS`, `USEFORMULA` are expanded to inline rule content).
+- The component-specific rules table is wiped.
+- All dematerialized rules are inserted into the database.
+- The in-memory ABAC model is rebuilt from the rules stored in DB.
+
+Per-component rule tables:
+- AAS Registry: `aasregistry_access_rules`
+- Discovery Service: `discovery_access_rules`
+- Submodel Registry: `smregistry_access_rules`
+- Digital Twin Registry: `digitaltwinregistry_access_rules`
+- Rules are intentionally not shared across components.
+
+Endpoint protection and middleware:
+- `/rules` is mounted on the same protected API router as the component endpoints.
+- The same middleware chain applies before `/rules` handlers:
+  - OIDC middleware
+  - optional claims middleware (e.g. `Edc-Bpn` enrichment in Digital Twin Registry)
+  - ABAC middleware
+- `/rules` therefore also needs matching ABAC rules to be accessible.
+
+Supported endpoints:
+- `GET /rules`
+- `POST /rules`
+- `GET /rules/{id}`
+- `PUT /rules/{id}`
+- `DELETE /rules/{id}`
+
+Payloads:
+- Request body (`POST`, `PUT`): dematerialized `AccessPermissionRule`
+- Response body (`GET`, `POST`, `PUT`): `AccessPermissionRule` fields plus numeric `id`
+
+Notes:
+- The DB stores dematerialized rules as `jsonb`; rule IDs are database-generated (`BIGSERIAL`).
+- Changes made through `/rules` trigger an in-memory ABAC model reload (no service restart required).
+
 ## OIDC authentication
 
 - OIDC provider verification uses issuer + audience from the trustlist.
@@ -190,7 +236,11 @@ Example file:
 ## Operational checklist
 
 - Enable ABAC in config and set the access model path.
+- If DB-backed rule seeding is desired, enable `abac.syncJsonToDb` for startup synchronization.
 - Configure the trustlist with issuer, audience, and scopes.
 - Confirm route-to-rights mapping covers all endpoints used by the service.
+- Confirm route-to-rights mapping includes `/rules` if the management endpoint is enabled.
+- Confirm route-to-rights mapping includes `/rules` for services using the management endpoint.
 - Validate the access rules against the intended claims and objects.
-- Restart the service after updating rules (no hot reload).
+- If rules are managed via `/rules`, the model is reloaded automatically.
+- If rules are changed only in the JSON file and `abac.syncJsonToDb` is disabled, restart (or re-enable sync for startup seeding).

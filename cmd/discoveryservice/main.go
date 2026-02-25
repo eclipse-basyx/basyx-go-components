@@ -111,7 +111,9 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	apiRouter := chi.NewRouter()
 
 	// Apply OIDC + ABAC once for all discovery endpoints
-	if err := auth.SetupSecurity(ctx, cfg, apiRouter); err != nil {
+	if err := auth.SetupSecurityForComponent(ctx, cfg, apiRouter, auth.SecuritySetupOptions{
+		RulesTableName: "discovery_access_rules",
+	}); err != nil {
 		return err
 	}
 

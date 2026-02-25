@@ -128,7 +128,13 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	descriptionCtrl := openapi.NewDescriptionAPIAPIController(descriptionSvc)
 
 	apiRouter := chi.NewRouter()
-	if err := auth.SetupSecurityWithClaimsMiddleware(ctx, cfg, apiRouter, auth.EdcBpnHeaderMiddleware); err != nil {
+	if err := auth.SetupSecurityWithClaimsMiddlewareForComponent(
+		ctx,
+		cfg,
+		apiRouter,
+		auth.SecuritySetupOptions{RulesTableName: "digitaltwinregistry_access_rules"},
+		auth.EdcBpnHeaderMiddleware,
+	); err != nil {
 		return err
 	}
 

@@ -360,3 +360,8 @@ paths:
           $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/forbidden' 
         default:
           $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/default'
+
+  /rules:
+    $ref: './openapi_rules_management.yaml#/paths/~1rules'
+  /rules/{id}:
+    $ref: './openapi_rules_management.yaml#/paths/~1rules~1{id}'
