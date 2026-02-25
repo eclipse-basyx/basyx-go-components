@@ -56,10 +56,12 @@ type AccessModelStore struct {
 	model *AccessModel
 }
 
+// NewAccessModelStore creates a runtime-safe holder for the active ABAC access model.
 func NewAccessModelStore(model *AccessModel) *AccessModelStore {
 	return &AccessModelStore{model: model}
 }
 
+// Get returns the currently active access model.
 func (s *AccessModelStore) Get() *AccessModel {
 	if s == nil {
 		return nil
@@ -69,6 +71,7 @@ func (s *AccessModelStore) Get() *AccessModel {
 	return s.model
 }
 
+// Set replaces the currently active access model.
 func (s *AccessModelStore) Set(model *AccessModel) {
 	if s == nil {
 		return

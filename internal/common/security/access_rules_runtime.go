@@ -21,6 +21,7 @@ import (
 	api "github.com/go-chi/chi/v5"
 )
 
+// SecuritySetupOptions configures component-specific security runtime behavior.
 type SecuritySetupOptions struct {
 	RulesTableName string
 }
@@ -118,6 +119,7 @@ func (r *accessRulesRuntime) SyncFromModelFile(ctx context.Context, modelPath st
 	if strings.TrimSpace(modelPath) == "" {
 		return errors.New("SEC-RULES-SYNC-READMODELFILE: abac.modelPath is empty")
 	}
+	//nolint:gosec // modelPath is an explicit deployment configuration input for the ABAC rules file
 	data, err := os.ReadFile(modelPath)
 	if err != nil {
 		return fmt.Errorf("SEC-RULES-SYNC-READMODELFILE: %w", err)
