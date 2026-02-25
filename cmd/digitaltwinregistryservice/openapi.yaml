@@ -47,22 +47,6 @@ components:
         because it is not derived from the token.
       schema:
         type: string
-  schemas:
-    AccessPermissionRule:
-      type: object
-      additionalProperties: true
-      description: Dematerialized access permission rule payload.
-    AccessPermissionRuleWithId:
-      allOf:
-        - $ref: '#/components/schemas/AccessPermissionRule'
-        - type: object
-          required:
-            - id
-          properties:
-            id:
-              type: integer
-              format: int64
-              minimum: 1
 
 paths:
   /description:
@@ -84,142 +68,10 @@ paths:
           $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/default'
 
   /rules:
-    get:
-      tags:
-        - Security Rules API
-      summary: Returns all dematerialized access permission rules
-      operationId: GetAccessPermissionRules
-      parameters:
-        - $ref: '#/components/parameters/EdcBpnHeader'
-      responses:
-        '200':
-          description: Requested access permission rules
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/AccessPermissionRuleWithId'
-        '400':
-          $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/bad-request'
-        '403':
-          $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/forbidden'
-        '500':
-          $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/internal-server-error'
-        default:
-          $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/default'
-    post:
-      tags:
-        - Security Rules API
-      summary: Creates a dematerialized access permission rule
-      operationId: PostAccessPermissionRule
-      parameters:
-        - $ref: '#/components/parameters/EdcBpnHeader'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/AccessPermissionRule'
-      responses:
-        '201':
-          description: Access permission rule created successfully
-          headers:
-            Location:
-              description: URL of the newly created rule resource
-              schema:
-                type: string
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AccessPermissionRuleWithId'
-        '400':
-          $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/bad-request'
-        '403':
-          $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/forbidden'
-        '500':
-          $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/internal-server-error'
-        default:
-          $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/default'
+    $ref: './openapi_rules_management.yaml#/paths/~1rules'
 
   /rules/{id}:
-    parameters:
-      - $ref: '#/components/parameters/EdcBpnHeader'
-      - name: id
-        in: path
-        required: true
-        schema:
-          type: integer
-          format: int64
-          minimum: 1
-    get:
-      tags:
-        - Security Rules API
-      summary: Returns a dematerialized access permission rule
-      operationId: GetAccessPermissionRuleById
-      responses:
-        '200':
-          description: Requested access permission rule
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AccessPermissionRuleWithId'
-        '400':
-          $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/bad-request'
-        '403':
-          $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/forbidden'
-        '404':
-          $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/not-found'
-        '500':
-          $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/internal-server-error'
-        default:
-          $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/default'
-    put:
-      tags:
-        - Security Rules API
-      summary: Replaces a dematerialized access permission rule
-      operationId: PutAccessPermissionRuleById
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/AccessPermissionRule'
-      responses:
-        '200':
-          description: Access permission rule updated successfully
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AccessPermissionRuleWithId'
-        '400':
-          $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/bad-request'
-        '403':
-          $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/forbidden'
-        '404':
-          $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/not-found'
-        '500':
-          $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/internal-server-error'
-        default:
-          $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/default'
-    delete:
-      tags:
-        - Security Rules API
-      summary: Deletes a dematerialized access permission rule
-      operationId: DeleteAccessPermissionRuleById
-      responses:
-        '204':
-          description: Access permission rule deleted successfully
-        '400':
-          $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/bad-request'
-        '403':
-          $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/forbidden'
-        '404':
-          $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/not-found'
-        '500':
-          $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/internal-server-error'
-        default:
-          $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/default'
+    $ref: './openapi_rules_management.yaml#/paths/~1rules~1{id}'
 
   # ---- AAS Registry Service ----
   /shell-descriptors:

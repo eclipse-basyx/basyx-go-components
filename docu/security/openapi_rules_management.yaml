@@ -1,0 +1,275 @@
+openapi: 3.0.3
+
+paths:
+  /rules:
+    get:
+      tags:
+        - Security Rules API
+      summary: Returns all dematerialized access permission rules
+      operationId: GetAccessPermissionRules
+      responses:
+        '200':
+          description: Requested access permission rules
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AccessPermissionRuleWithId'
+        '400':
+          $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/bad-request'
+        '403':
+          $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/forbidden'
+        '500':
+          $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/internal-server-error'
+        default:
+          $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/default'
+    post:
+      tags:
+        - Security Rules API
+      summary: Creates a dematerialized access permission rule
+      operationId: PostAccessPermissionRule
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccessPermissionRule'
+      responses:
+        '201':
+          description: Access permission rule created successfully
+          headers:
+            Location:
+              description: URL of the newly created rule resource
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccessPermissionRuleWithId'
+        '400':
+          $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/bad-request'
+        '403':
+          $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/forbidden'
+        '500':
+          $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/internal-server-error'
+        default:
+          $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/default'
+
+  /rules/{id}:
+    parameters:
+      - $ref: '#/components/parameters/AccessPermissionRuleId'
+    get:
+      tags:
+        - Security Rules API
+      summary: Returns a dematerialized access permission rule
+      operationId: GetAccessPermissionRuleById
+      responses:
+        '200':
+          description: Requested access permission rule
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccessPermissionRuleWithId'
+        '400':
+          $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/bad-request'
+        '403':
+          $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/forbidden'
+        '404':
+          $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/not-found'
+        '500':
+          $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/internal-server-error'
+        default:
+          $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/default'
+    put:
+      tags:
+        - Security Rules API
+      summary: Replaces a dematerialized access permission rule
+      operationId: PutAccessPermissionRuleById
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccessPermissionRule'
+      responses:
+        '200':
+          description: Access permission rule updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccessPermissionRuleWithId'
+        '400':
+          $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/bad-request'
+        '403':
+          $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/forbidden'
+        '404':
+          $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/not-found'
+        '500':
+          $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/internal-server-error'
+        default:
+          $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/default'
+    delete:
+      tags:
+        - Security Rules API
+      summary: Deletes a dematerialized access permission rule
+      operationId: DeleteAccessPermissionRuleById
+      responses:
+        '204':
+          description: Access permission rule deleted successfully
+        '400':
+          $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/bad-request'
+        '403':
+          $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/forbidden'
+        '404':
+          $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/not-found'
+        '500':
+          $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/internal-server-error'
+        default:
+          $ref: 'https://api.swaggerhub.com/domains/Plattform_i40/Part2-API-Schemas/V3.1.1#/components/responses/default'
+
+components:
+  parameters:
+    AccessPermissionRuleId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+        minimum: 1
+
+  schemas:
+    AccessPermissionRuleWithId:
+      allOf:
+        - $ref: '#/components/schemas/AccessPermissionRule'
+        - type: object
+          required:
+            - id
+          properties:
+            id:
+              type: integer
+              format: int64
+              minimum: 1
+
+    AccessPermissionRule:
+      type: object
+      additionalProperties: false
+      required:
+        - ACL
+        - FORMULA
+      properties:
+        ACL:
+          $ref: '#/components/schemas/AccessPermissionRuleACL'
+        FORMULA:
+          $ref: '#/components/schemas/LogicalExpression'
+        OBJECTS:
+          type: array
+          items:
+            $ref: '#/components/schemas/AccessPermissionRuleObjectItem'
+        FILTER:
+          $ref: '#/components/schemas/AccessPermissionRuleFilter'
+        FILTERLIST:
+          type: array
+          items:
+            $ref: '#/components/schemas/AccessPermissionRuleFilter'
+      description: >
+        Materialized access permission rule. Reference-based fields (USEACL, USEFORMULA,
+        USEOBJECTS) are intentionally omitted.
+
+    AccessPermissionRuleACL:
+      type: object
+      additionalProperties: false
+      required:
+        - ACCESS
+        - RIGHTS
+      properties:
+        ACCESS:
+          type: string
+          enum: [ALLOW, DISABLED]
+        RIGHTS:
+          type: array
+          minItems: 1
+          items:
+            type: string
+            enum: [CREATE, READ, UPDATE, DELETE, EXECUTE, VIEW, ALL, TREE]
+        ATTRIBUTES:
+          type: array
+          items:
+            $ref: '#/components/schemas/AccessPermissionRuleAttributeItem'
+      description: Materialized ACL (USEATTRIBUTES is omitted).
+
+    AccessPermissionRuleAttributeItem:
+      oneOf:
+        - type: object
+          additionalProperties: false
+          required: [CLAIM]
+          properties:
+            CLAIM:
+              type: string
+        - type: object
+          additionalProperties: false
+          required: [GLOBAL]
+          properties:
+            GLOBAL:
+              type: string
+              enum: [LOCALNOW, UTCNOW, CLIENTNOW, ANONYMOUS]
+        - type: object
+          additionalProperties: false
+          required: [REFERENCE]
+          properties:
+            REFERENCE:
+              type: string
+
+    AccessPermissionRuleObjectItem:
+      oneOf:
+        - type: object
+          additionalProperties: false
+          required: [ROUTE]
+          properties:
+            ROUTE:
+              type: string
+        - type: object
+          additionalProperties: false
+          required: [IDENTIFIABLE]
+          properties:
+            IDENTIFIABLE:
+              type: string
+        - type: object
+          additionalProperties: false
+          required: [REFERABLE]
+          properties:
+            REFERABLE:
+              type: string
+        - type: object
+          additionalProperties: false
+          required: [FRAGMENT]
+          properties:
+            FRAGMENT:
+              type: string
+        - type: object
+          additionalProperties: false
+          required: [DESCRIPTOR]
+          properties:
+            DESCRIPTOR:
+              type: string
+
+    AccessPermissionRuleFilter:
+      type: object
+      additionalProperties: false
+      required:
+        - FRAGMENT
+        - CONDITION
+      properties:
+        FRAGMENT:
+          type: string
+        CONDITION:
+          $ref: '#/components/schemas/LogicalExpression'
+      description: Materialized filter (USEFORMULA is omitted).
+
+    LogicalExpression:
+      type: object
+      additionalProperties: true
+      description: >
+        AAS ABAC logical expression. This schema is intentionally permissive here because the
+        grammar supports many operators and nested operand shapes.
