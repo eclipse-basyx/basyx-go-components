@@ -30,6 +30,7 @@
 package grammar
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
@@ -122,4 +123,14 @@ func (a *AttributeItem) UnmarshalJSON(b []byte) error {
 		break
 	}
 	return nil
+}
+
+// MarshalJSON renders the schema form {"CLAIM":"role"} / {"GLOBAL":"ANONYMOUS"}.
+func (a AttributeItem) MarshalJSON() ([]byte, error) {
+	if _, ok := allowedAttrKeys[string(a.Kind)]; !ok {
+		return nil, fmt.Errorf("AttributeItem: invalid kind %q", a.Kind)
+	}
+	return json.Marshal(map[string]string{
+		string(a.Kind): a.Value,
+	})
 }

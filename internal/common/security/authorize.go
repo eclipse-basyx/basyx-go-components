@@ -31,6 +31,7 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"sync"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
@@ -46,6 +47,35 @@ type ABACSettings struct {
 	Enabled             bool
 	EnableImplicitCasts bool
 	Model               *AccessModel
+	ModelStore          *AccessModelStore
+}
+
+// AccessModelStore holds the active ABAC model and allows safe runtime reloads.
+type AccessModelStore struct {
+	mu    sync.RWMutex
+	model *AccessModel
+}
+
+func NewAccessModelStore(model *AccessModel) *AccessModelStore {
+	return &AccessModelStore{model: model}
+}
+
+func (s *AccessModelStore) Get() *AccessModel {
+	if s == nil {
+		return nil
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.model
+}
+
+func (s *AccessModelStore) Set(model *AccessModel) {
+	if s == nil {
+		return
+	}
+	s.mu.Lock()
+	s.model = model
+	s.mu.Unlock()
 }
 
 // Resource represents the target object of an authorization request.
@@ -87,10 +117,15 @@ func ABACMiddleware(settings ABACSettings) func(http.Handler) http.Handler {
 				return
 			}
 
-			if settings.Model != nil {
+			model := settings.Model
+			if settings.ModelStore != nil {
+				model = settings.ModelStore.Get()
+			}
+
+			if model != nil {
 				opts := grammar.DefaultSimplifyOptions()
 				opts.EnableImplicitCasts = settings.EnableImplicitCasts
-				ok, reason, qf := settings.Model.AuthorizeWithFilterWithOptions(EvalInput{
+				ok, reason, qf := model.AuthorizeWithFilterWithOptions(EvalInput{
 					Method: r.Method,
 					Path:   r.URL.Path,
 					Claims: claims,

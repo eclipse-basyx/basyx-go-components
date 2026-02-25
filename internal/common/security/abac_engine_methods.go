@@ -67,6 +67,13 @@ var mapMethodAndPatternToRightsData = []mapMethodAndPatternToRights{
 	{"GET", "/lookup/shells/{aasIdentifier}", []grammar.RightsEnum{grammar.RightsEnumREAD}},
 	{"POST", "/lookup/shells/{aasIdentifier}", []grammar.RightsEnum{grammar.RightsEnumCREATE}},
 	{"DELETE", "/lookup/shells/{aasIdentifier}", []grammar.RightsEnum{grammar.RightsEnumDELETE}},
+
+	// security rules management
+	{"GET", "/rules", []grammar.RightsEnum{grammar.RightsEnumREAD}},
+	{"POST", "/rules", []grammar.RightsEnum{grammar.RightsEnumCREATE}},
+	{"GET", "/rules/{id}", []grammar.RightsEnum{grammar.RightsEnumREAD}},
+	{"PUT", "/rules/{id}", []grammar.RightsEnum{grammar.RightsEnumUPDATE}},
+	{"DELETE", "/rules/{id}", []grammar.RightsEnum{grammar.RightsEnumDELETE}},
 }
 
 // mapMethodAndPathToRights maps an incoming HTTP method+path to required rights.
