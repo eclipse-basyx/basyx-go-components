@@ -34,7 +34,6 @@ import (
 
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
-	"github.com/doug-martin/goqu/v9/exp"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
@@ -99,42 +98,26 @@ func ReadSubmodelDescriptorsByDescriptorIDs(
 	d := goqu.Dialect(common.Dialect)
 	payloadAlias := common.TDescriptorPayload.As("smd_payload")
 	semanticRefAlias := goqu.T("submodel_descriptor_semantic_id_reference").As(common.AliasSubmodelDescriptorSemanticIDReference)
-	var mapper = []auth.ExpressionIdentifiableMapper{
-		{
-			Exp: submodelDescriptorAlias.Col(common.ColDescriptorID),
-		},
-		{
-			Exp: submodelDescriptorAlias.Col(common.ColDescriptorID),
-		},
-		{
-			Exp:      submodelDescriptorAlias.Col(common.ColIDShort),
-			Fragment: fragPtr("$smdesc#idShort"),
-		},
-		{
-			Exp: submodelDescriptorAlias.Col(common.ColAASID),
-		},
-		{
-			Exp:      semanticRefAlias.Col(common.ColID),
-			Fragment: fragPtr("$smdesc#semanticId"),
-		},
-		{
-			Exp: payloadAlias.Col(common.ColAdministrativeInfoPayload),
-		},
-		{
-			Exp: payloadAlias.Col(common.ColDescriptionPayload),
-		},
-		{
-			Exp: payloadAlias.Col(common.ColDisplayNamePayload),
-		},
+	collector, err := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootSMDesc)
+	if err != nil {
+		return nil, err
 	}
-
-	expressions, collector, err := buildSubmodelDescriptorSelectExpressions(ctx, mapper, grammar.CollectorRootSMDesc)
+	const dataAlias = "smd_by_desc_data"
+	maskedColumns := []auth.MaskedInnerColumnSpec{
+		{Fragment: "$smdesc#idShort", FlagAlias: "flag_smdesc_idshort", RawAlias: "c2"},
+		{Fragment: "$smdesc#semanticId", FlagAlias: "flag_smdesc_semanticid", RawAlias: "c4"},
+	}
+	maskRuntime, err := auth.BuildSharedFragmentMaskRuntime(ctx, collector, maskedColumns)
+	if err != nil {
+		return nil, err
+	}
+	maskedExpressions, err := maskRuntime.MaskedInnerAliasExprs(dataAlias, maskedColumns)
 	if err != nil {
 		return nil, err
 	}
 
 	arr := pq.Array(uniqDesc)
-	ds := d.From(submodelDescriptorAlias).
+	inner := d.From(submodelDescriptorAlias).
 		LeftJoin(
 			semanticRefAlias,
 			goqu.On(semanticRefAlias.Col(common.ColID).Eq(submodelDescriptorAlias.Col(common.ColDescriptorID))),
@@ -143,16 +126,18 @@ func ReadSubmodelDescriptorsByDescriptorIDs(
 			payloadAlias,
 			goqu.On(payloadAlias.Col(common.ColDescriptorID).Eq(submodelDescriptorAlias.Col(common.ColDescriptorID))),
 		).
-		Select(
-			expressions[0],
-			expressions[1],
-			expressions[2],
-			expressions[3],
-			expressions[4],
-			expressions[5],
-			expressions[6],
-			expressions[7],
-		).
+		Select(append([]interface{}{
+			submodelDescriptorAlias.Col(common.ColDescriptorID).As("c0"),
+			submodelDescriptorAlias.Col(common.ColDescriptorID).As("c1"),
+			submodelDescriptorAlias.Col(common.ColIDShort).As("c2"),
+			submodelDescriptorAlias.Col(common.ColAASID).As("c3"),
+			semanticRefAlias.Col(common.ColID).As("c4"),
+			payloadAlias.Col(common.ColAdministrativeInfoPayload).As("c5"),
+			payloadAlias.Col(common.ColDescriptionPayload).As("c6"),
+			payloadAlias.Col(common.ColDisplayNamePayload).As("c7"),
+			submodelDescriptorAlias.Col(common.ColPosition).As("sort_smd_position"),
+			submodelDescriptorAlias.Col(common.ColDescriptorID).As("sort_smd_descriptor_id"),
+		}, maskRuntime.Projections()...)...).
 		Where(
 			goqu.And(
 				goqu.L("? = ANY(?::bigint[])", submodelDescriptorAlias.Col(common.ColDescriptorID), arr),
@@ -160,19 +145,36 @@ func ReadSubmodelDescriptorsByDescriptorIDs(
 			),
 		)
 
-	ds = ds.Order(
+	inner = inner.Order(
 		submodelDescriptorAlias.Col(common.ColPosition).Asc(),
 		submodelDescriptorAlias.Col(common.ColDescriptorID).Asc(),
 	)
 
-	ds, err = addMapperFragmentFiltersFromContext(ctx, ds, mapper, collector)
+	inner, err = maskRuntime.ApplyFilters(ctx, inner, collector)
 	if err != nil {
 		return nil, err
 	}
-	ds, err = auth.AddFormulaQueryFromContext(ctx, ds, collector)
+	inner, err = auth.AddFormulaQueryFromContext(ctx, inner, collector)
 	if err != nil {
 		return nil, err
 	}
+
+	ds := d.From(inner.As(dataAlias)).
+		Select(
+			goqu.I(dataAlias+".c0"),
+			goqu.I(dataAlias+".c1"),
+			maskedExpressions[0],
+			goqu.I(dataAlias+".c3"),
+			maskedExpressions[1],
+			goqu.I(dataAlias+".c5"),
+			goqu.I(dataAlias+".c6"),
+			goqu.I(dataAlias+".c7"),
+		).
+		Order(
+			goqu.I(dataAlias+".sort_smd_position").Asc(),
+			goqu.I(dataAlias+".sort_smd_descriptor_id").Asc(),
+		)
+
 	perDesc, allSmdDescIDs, err := readSubmodelDescriptorRows(ctx, db, ds, len(uniqDesc), len(uniqDesc))
 	if err != nil {
 		return nil, err
@@ -233,46 +235,31 @@ func ReadSubmodelDescriptorsByAASDescriptorIDs(
 	d := goqu.Dialect(common.Dialect)
 	payloadAlias := common.TDescriptorPayload.As("smd_payload")
 	semanticRefAlias := goqu.T("submodel_descriptor_semantic_id_reference").As(common.AliasSubmodelDescriptorSemanticIDReference)
-	var mapper = []auth.ExpressionIdentifiableMapper{
-		{
-			Exp: submodelDescriptorAlias.Col(common.ColAASDescriptorID),
-		},
-		{
-			Exp: submodelDescriptorAlias.Col(common.ColDescriptorID),
-		},
-		{
-			Exp:      submodelDescriptorAlias.Col(common.ColIDShort),
-			Fragment: fragPtr("$aasdesc#submodelDescriptors[].idShort"),
-		},
-		{
-			Exp: submodelDescriptorAlias.Col(common.ColAASID),
-		},
-		{
-			Exp:      semanticRefAlias.Col(common.ColID),
-			Fragment: fragPtr("$aasdesc#submodelDescriptors[].semanticId"),
-		},
-		{
-			Exp: payloadAlias.Col(common.ColAdministrativeInfoPayload),
-		},
-		{
-			Exp: payloadAlias.Col(common.ColDescriptionPayload),
-		},
-		{
-			Exp: payloadAlias.Col(common.ColDisplayNamePayload),
-		},
-	}
 	var root grammar.CollectorRoot
 	if isMain {
 		root = grammar.CollectorRootSMDesc
 	} else {
 		root = grammar.CollectorRootAASDesc
 	}
-	expressions, collector, err := buildSubmodelDescriptorSelectExpressions(ctx, mapper, root)
+	collector, err := grammar.NewResolvedFieldPathCollectorForRoot(root)
+	if err != nil {
+		return nil, err
+	}
+	const dataAlias = "smd_by_aas_data"
+	maskedColumns := []auth.MaskedInnerColumnSpec{
+		{Fragment: "$aasdesc#submodelDescriptors[].idShort", FlagAlias: "flag_aas_smdesc_idshort", RawAlias: "c2"},
+		{Fragment: "$aasdesc#submodelDescriptors[].semanticId", FlagAlias: "flag_aas_smdesc_semanticid", RawAlias: "c4"},
+	}
+	maskRuntime, err := auth.BuildSharedFragmentMaskRuntime(ctx, collector, maskedColumns)
+	if err != nil {
+		return nil, err
+	}
+	maskedExpressions, err := maskRuntime.MaskedInnerAliasExprs(dataAlias, maskedColumns)
 	if err != nil {
 		return nil, err
 	}
 	arr := pq.Array(uniqAASDesc)
-	ds := d.From(common.TDescriptor).
+	inner := d.From(common.TDescriptor).
 		InnerJoin(
 			common.TAASDescriptor,
 			goqu.On(common.TAASDescriptor.Col(common.ColDescriptorID).Eq(common.TDescriptor.Col(common.ColID))),
@@ -289,33 +276,51 @@ func ReadSubmodelDescriptorsByAASDescriptorIDs(
 			payloadAlias,
 			goqu.On(payloadAlias.Col(common.ColDescriptorID).Eq(submodelDescriptorAlias.Col(common.ColDescriptorID))),
 		).
-		Select(
-			expressions[0],
-			expressions[1],
-			expressions[2],
-			expressions[3],
-			expressions[4],
-			expressions[5],
-			expressions[6],
-			expressions[7],
-		).
+		Select(append([]interface{}{
+			submodelDescriptorAlias.Col(common.ColAASDescriptorID).As("c0"),
+			submodelDescriptorAlias.Col(common.ColDescriptorID).As("c1"),
+			submodelDescriptorAlias.Col(common.ColIDShort).As("c2"),
+			submodelDescriptorAlias.Col(common.ColAASID).As("c3"),
+			semanticRefAlias.Col(common.ColID).As("c4"),
+			payloadAlias.Col(common.ColAdministrativeInfoPayload).As("c5"),
+			payloadAlias.Col(common.ColDescriptionPayload).As("c6"),
+			payloadAlias.Col(common.ColDisplayNamePayload).As("c7"),
+			submodelDescriptorAlias.Col(common.ColPosition).As("sort_smd_position"),
+			submodelDescriptorAlias.Col(common.ColDescriptorID).As("sort_smd_descriptor_id"),
+		}, maskRuntime.Projections()...)...).
 		Where(goqu.L("? = ANY(?::bigint[])", submodelDescriptorAlias.Col(common.ColAASDescriptorID), arr))
 
-	ds = ds.Order(
+	inner = inner.Order(
 		submodelDescriptorAlias.Col(common.ColPosition).Asc(),
 		submodelDescriptorAlias.Col(common.ColDescriptorID).Asc(),
 	)
 
-	ds, err = auth.AddFilterQueryFromContext(ctx, ds, "$aasdesc#submodelDescriptors[]", collector)
+	inner, err = auth.AddFilterQueryFromContext(ctx, inner, "$aasdesc#submodelDescriptors[]", collector)
 	if err != nil {
 		return nil, err
 	}
 	if isMain {
-		ds, err = auth.AddFormulaQueryFromContext(ctx, ds, collector)
+		inner, err = auth.AddFormulaQueryFromContext(ctx, inner, collector)
 		if err != nil {
 			return nil, err
 		}
 	}
+
+	ds := d.From(inner.As(dataAlias)).
+		Select(
+			goqu.I(dataAlias+".c0"),
+			goqu.I(dataAlias+".c1"),
+			maskedExpressions[0],
+			goqu.I(dataAlias+".c3"),
+			maskedExpressions[1],
+			goqu.I(dataAlias+".c5"),
+			goqu.I(dataAlias+".c6"),
+			goqu.I(dataAlias+".c7"),
+		).
+		Order(
+			goqu.I(dataAlias+".sort_smd_position").Asc(),
+			goqu.I(dataAlias+".sort_smd_descriptor_id").Asc(),
+		)
 
 	perAAS, allSmdDescIDs, err := readSubmodelDescriptorRows(ctx, db, ds, len(uniqAASDesc), 10000)
 	if err != nil {
@@ -500,46 +505,6 @@ func ensureSubmodelDescriptorGroups(out map[int64][]model.SubmodelDescriptor, gr
 			out[id] = nil
 		}
 	}
-}
-
-func buildSubmodelDescriptorSelectExpressions(
-	ctx context.Context,
-	mapper []auth.ExpressionIdentifiableMapper,
-	root grammar.CollectorRoot,
-) ([]exp.Expression, *grammar.ResolvedFieldPathCollector, error) {
-	collector, err := grammar.NewResolvedFieldPathCollectorForRoot(root)
-	if err != nil {
-		return nil, nil, err
-	}
-	expressions, err := auth.GetColumnSelectStatement(ctx, mapper, collector)
-	if err != nil {
-		return nil, nil, err
-	}
-	return expressions, collector, nil
-}
-
-func addMapperFragmentFiltersFromContext(
-	ctx context.Context,
-	ds *goqu.SelectDataset,
-	mapper []auth.ExpressionIdentifiableMapper,
-	collector *grammar.ResolvedFieldPathCollector,
-) (*goqu.SelectDataset, error) {
-	seenFragments := map[grammar.FragmentStringPattern]struct{}{}
-	var err error
-	for _, m := range mapper {
-		if m.Fragment == nil {
-			continue
-		}
-		if _, ok := seenFragments[*m.Fragment]; ok {
-			continue
-		}
-		seenFragments[*m.Fragment] = struct{}{}
-		ds, err = auth.AddFilterQueryFromContext(ctx, ds, *m.Fragment, collector)
-		if err != nil {
-			return nil, err
-		}
-	}
-	return ds, nil
 }
 
 func readSubmodelDescriptorRows(
