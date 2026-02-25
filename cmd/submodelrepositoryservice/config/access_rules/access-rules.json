@@ -7,7 +7,7 @@
 
     "DEFOBJECTS": [
       { "name": "description", "objects": [ { "ROUTE": "/description" } ] },
-      { "name": "submodels", "objects": [ {"ROUTE": "/submodels"}] }
+      { "name": "submodels", "objects": [ {"IDENTIFIABLE": "$sm(\"MarcusThisIsAOnlyAnnotatedRelationshipElementSubmodel\")"}] }
     ],
 
     "DEFACLS": [

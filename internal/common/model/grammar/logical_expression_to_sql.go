@@ -281,10 +281,10 @@ func joinPlanConfigForSM() JoinPlanConfig {
 			return nil, fmt.Errorf("unsupported SM base alias %q", base)
 		},
 		RootJoinKey: func() exp.IdentifierExpression {
-			return goqu.I("s.id")
+			return goqu.I("submodel.id")
 		},
 		RootJoinKeyAlias: func() string {
-			return "s"
+			return "submodel"
 		},
 		RootJoinKeyColumn: func() string {
 			return "id"
@@ -748,14 +748,36 @@ func leadingAlias(expr string) (string, bool) {
 	return expr[:idx], true
 }
 
+func resolveRequiredAliasToken(token string, config JoinPlanConfig) (string, bool) {
+	token = strings.TrimSpace(token)
+	if token == "" {
+		return "", false
+	}
+
+	if _, exists := config.Rules[token]; exists {
+		return token, true
+	}
+
+	if config.TableForAlias != nil {
+		for alias := range config.Rules {
+			table, ok := config.TableForAlias(alias)
+			if ok && table == token {
+				return alias, true
+			}
+		}
+	}
+
+	return "", false
+}
+
 func requiredAliasesFromResolvedWithConfig(resolved []ResolvedFieldPath, config JoinPlanConfig) (map[string]struct{}, error) {
 	req := map[string]struct{}{}
 	for _, r := range resolved {
 		if strings.TrimSpace(r.Column) != "" {
 			a, ok := leadingAlias(r.Column)
 			if ok {
-				if _, exists := config.Rules[a]; exists {
-					req[a] = struct{}{}
+				if resolvedAlias, found := resolveRequiredAliasToken(a, config); found {
+					req[resolvedAlias] = struct{}{}
 					continue
 				}
 			}
@@ -764,6 +786,14 @@ func requiredAliasesFromResolvedWithConfig(resolved []ResolvedFieldPath, config 
 				if strings.Contains(r.Column, alias+".") {
 					req[alias] = struct{}{}
 					found = true
+					break
+				}
+				if config.TableForAlias != nil {
+					if table, ok := config.TableForAlias(alias); ok && strings.Contains(r.Column, table+".") {
+						req[alias] = struct{}{}
+						found = true
+						break
+					}
 				}
 			}
 			if !found {

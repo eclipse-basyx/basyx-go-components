@@ -56,7 +56,7 @@ type terminalColumnMapping struct {
 var terminalColumnMappings = map[string]terminalColumnMapping{
 	"idShort": {
 		ByContext: map[resolveContext]string{
-			ctxSM:                 "s.id_short",
+			ctxSM:                 "submodel.id_short",
 			ctxSME:                "submodel_element.id_short",
 			ctxAASDesc:            "aas_descriptor.id_short",
 			ctxSMDesc:             "submodel_descriptor.id_short",
@@ -66,7 +66,7 @@ var terminalColumnMappings = map[string]terminalColumnMapping{
 
 	"id": {
 		ByContext: map[resolveContext]string{
-			ctxSM:                 "s.submodel_identifier",
+			ctxSM:                 "submodel.submodel_identifier",
 			ctxAASDesc:            "aas_descriptor.id",
 			ctxSMDesc:             "submodel_descriptor.id",
 			ctxSubmodelDescriptor: "submodel_descriptor.id",

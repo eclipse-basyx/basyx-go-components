@@ -28,6 +28,7 @@
 package persistence
 
 import (
+	"context"
 	"crypto/rsa"
 	"database/sql"
 	"encoding/json"
@@ -43,6 +44,7 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
+	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	"github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/config"
 	submodelelements "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/submodelElements"
 	persistenceutils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
@@ -175,12 +177,22 @@ func (s *SubmodelDatabase) GetSubmodelByID(submodelIdentifier string) (types.ISu
 
 // GetSubmodels retrieves submodels with optional filtering by identifier and keyset pagination.
 func (s *SubmodelDatabase) GetSubmodels(limit int32, cursor string, submodelIdentifier string) ([]types.ISubmodel, string, error) {
-	return s.getSubmodelsWithOptionalSemanticIDFilter(limit, cursor, submodelIdentifier, "")
+	return s.GetSubmodelsWithContext(context.Background(), limit, cursor, submodelIdentifier)
+}
+
+// GetSubmodelsWithContext retrieves submodels and applies optional ABAC formula filters from ctx.
+func (s *SubmodelDatabase) GetSubmodelsWithContext(ctx context.Context, limit int32, cursor string, submodelIdentifier string) ([]types.ISubmodel, string, error) {
+	return s.getSubmodelsWithOptionalSemanticIDFilter(ctx, limit, cursor, submodelIdentifier, "")
 }
 
 // GetSubmodelReferences retrieves references for submodels with optional filtering and keyset pagination.
 func (s *SubmodelDatabase) GetSubmodelReferences(limit int32, cursor string, submodelIdentifier string, semanticID string) ([]types.IReference, string, error) {
-	submodels, nextCursor, err := s.getSubmodelsWithOptionalSemanticIDFilter(limit, cursor, submodelIdentifier, semanticID)
+	return s.GetSubmodelReferencesWithContext(context.Background(), limit, cursor, submodelIdentifier, semanticID)
+}
+
+// GetSubmodelReferencesWithContext retrieves references and applies optional ABAC formula filters from ctx.
+func (s *SubmodelDatabase) GetSubmodelReferencesWithContext(ctx context.Context, limit int32, cursor string, submodelIdentifier string, semanticID string) ([]types.IReference, string, error) {
+	submodels, nextCursor, err := s.getSubmodelsWithOptionalSemanticIDFilter(ctx, limit, cursor, submodelIdentifier, semanticID)
 	if err != nil {
 		return nil, "", err
 	}
@@ -237,7 +249,12 @@ func buildSubmodelModelReference(submodelIdentifier string) (types.IReference, e
 }
 
 // QuerySubmodels returns submodels that match the provided query and supports cursor-based pagination.
-func (s *SubmodelDatabase) QuerySubmodels(limit int32, cursor string, queryWrapper *grammar.QueryWrapper, _ bool) ([]types.ISubmodel, string, error) {
+func (s *SubmodelDatabase) QuerySubmodels(limit int32, cursor string, queryWrapper *grammar.QueryWrapper, includeChildren bool) ([]types.ISubmodel, string, error) {
+	return s.QuerySubmodelsWithContext(context.Background(), limit, cursor, queryWrapper, includeChildren)
+}
+
+// QuerySubmodelsWithContext returns submodels and applies optional ABAC formula filters from ctx.
+func (s *SubmodelDatabase) QuerySubmodelsWithContext(ctx context.Context, limit int32, cursor string, queryWrapper *grammar.QueryWrapper, _ bool) ([]types.ISubmodel, string, error) {
 	if queryWrapper == nil || queryWrapper.Query.Condition == nil {
 		return nil, "", common.NewErrBadRequest("SMREPO-QUERYSMS-INVALIDQUERY query condition is required")
 	}
@@ -260,10 +277,10 @@ func (s *SubmodelDatabase) QuerySubmodels(limit int32, cursor string, queryWrapp
 
 	dialect := goqu.Dialect("postgres")
 	query := dialect.
-		From(goqu.T("submodel").As("s")).
+		From(goqu.T("submodel")).
 		LeftJoin(
 			goqu.T("submodel_semantic_id_reference").As("semantic_id_reference"),
-			goqu.On(goqu.I("semantic_id_reference.id").Eq(goqu.I("s.id"))),
+			goqu.On(goqu.I("semantic_id_reference.id").Eq(goqu.I("submodel.id"))),
 		).
 		LeftJoin(
 			goqu.T("submodel_semantic_id_reference_key").As("semantic_id_reference_key"),
@@ -271,7 +288,7 @@ func (s *SubmodelDatabase) QuerySubmodels(limit int32, cursor string, queryWrapp
 		).
 		LeftJoin(
 			goqu.T("submodel_element").As("submodel_element"),
-			goqu.On(goqu.I("submodel_element.submodel_id").Eq(goqu.I("s.id"))),
+			goqu.On(goqu.I("submodel_element.submodel_id").Eq(goqu.I("submodel.id"))),
 		).
 		LeftJoin(
 			goqu.T("property_element").As("property_element"),
@@ -293,17 +310,22 @@ func (s *SubmodelDatabase) QuerySubmodels(limit int32, cursor string, queryWrapp
 			goqu.T("submodel_element_semantic_id_reference_key").As("sme_semantic_id_reference_key"),
 			goqu.On(goqu.I("sme_semantic_id_reference_key.reference_id").Eq(goqu.I("sme_semantic_id_reference.id"))),
 		).
-		SelectDistinct(goqu.I("s.submodel_identifier")).
+		SelectDistinct(goqu.I("submodel.submodel_identifier")).
 		Where(whereExpr).
-		Order(goqu.I("s.submodel_identifier").Asc())
+		Order(goqu.I("submodel.submodel_identifier").Asc())
 
 	if cursor != "" {
-		query = query.Where(goqu.I("s.submodel_identifier").Gt(cursor))
+		query = query.Where(goqu.I("submodel.submodel_identifier").Gt(cursor))
 	}
 
 	if usePagination {
 		//nolint:gosec // pageLimit is validated to be > 0 and bounded by int32 input/default
 		query = query.Limit(uint(pageLimit + 1))
+	}
+
+	query, addFormulaErr := auth.AddFormulaQueryFromContext(ctx, query, collector)
+	if addFormulaErr != nil {
+		return nil, "", common.NewInternalServerError("SMREPO-QUERYSMS-ABACFORMULA " + addFormulaErr.Error())
 	}
 	query = query.Prepared(true)
 
@@ -1105,7 +1127,7 @@ func (s *SubmodelDatabase) patchSubmodelMetadataInTransaction(tx *sql.Tx, submod
 	return nil
 }
 
-func (s *SubmodelDatabase) getSubmodelsWithOptionalSemanticIDFilter(limit int32, cursor string, submodelIdentifier string, semanticID string) ([]types.ISubmodel, string, error) {
+func (s *SubmodelDatabase) getSubmodelsWithOptionalSemanticIDFilter(ctx context.Context, limit int32, cursor string, submodelIdentifier string, semanticID string) ([]types.ISubmodel, string, error) {
 	dialect := goqu.Dialect("postgres")
 
 	var limitFilter *int32
@@ -1128,20 +1150,29 @@ func (s *SubmodelDatabase) getSubmodelsWithOptionalSemanticIDFilter(limit int32,
 		submodelIdentifierFilter = &submodelIdentifier
 	}
 
-	var query string
-	var args []interface{}
-	var err error
-
+	selectDS, err := selectSubmodelGoquQuery(&dialect, submodelIdentifierFilter, limitFilter, cursorFilter)
+	if err != nil {
+		return nil, "", err
+	}
 	if semanticID != "" {
-		query, args, err = buildSelectSubmodelQueryWithPayloadByIdentifierAndSemanticID(&dialect, submodelIdentifierFilter, &semanticID, limitFilter, cursorFilter)
-		if err != nil {
-			return nil, "", err
-		}
-	} else {
-		query, args, err = buildSelectSubmodelQueryWithPayloadByIdentifier(&dialect, submodelIdentifierFilter, limitFilter, cursorFilter)
-		if err != nil {
-			return nil, "", err
-		}
+		semanticIDFilterDS := dialect.
+			From(goqu.T("submodel_semantic_id_reference_key").As("ssrk_filter")).
+			Select(goqu.V(1)).
+			Where(goqu.I("ssrk_filter.reference_id").Eq(goqu.I("submodel.id"))).
+			Where(goqu.I("ssrk_filter.value").Eq(semanticID))
+		selectDS = selectDS.Where(goqu.Func("EXISTS", semanticIDFilterDS))
+	}
+	collector, collectorErr := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootSM)
+	if collectorErr != nil {
+		return nil, "", common.NewInternalServerError("SMREPO-GETSMS-BADCOLLECTOR " + collectorErr.Error())
+	}
+	selectDS, err = auth.AddFormulaQueryFromContext(ctx, selectDS, collector)
+	if err != nil {
+		return nil, "", common.NewInternalServerError("SMREPO-GETSMS-ABACFORMULA " + err.Error())
+	}
+	query, args, err := selectDS.ToSQL()
+	if err != nil {
+		return nil, "", common.NewInternalServerError("SMREPO-GETSMS-BUILDSQL " + err.Error())
 	}
 
 	var identifier, idShort, category, descriptionJsonString, displayNameJsonString, administrativeInformationJsonString, embeddedDataSpecificationJsonString, supplementalSemanticIDsJsonString, extensionsJsonString, qualifiersJsonString, semanticIDJSONString sql.NullString

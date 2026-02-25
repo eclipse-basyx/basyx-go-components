@@ -189,7 +189,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodels(
 		decodedCursor = string(decodedCursorBytes)
 	}
 
-	sms, nextCursor, err := s.submodelBackend.GetSubmodels(limit, decodedCursor, idShort)
+	sms, nextCursor, err := s.submodelBackend.GetSubmodelsWithContext(ctx, limit, decodedCursor, idShort)
 	if err != nil {
 		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSubmodels"), err
 	}
@@ -432,7 +432,7 @@ func (s *SubmodelRepositoryAPIAPIService) PostSubmodel(
 //   - gen.ImplResponse: Response with submodel metadata (when implemented)
 //   - error: Currently returns "not implemented" error
 func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsMetadata(
-	_ /*ctx*/ context.Context,
+	ctx context.Context,
 	semanticID string,
 	idShort string,
 	limit int32,
@@ -448,7 +448,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsMetadata(
 		decodedCursor = string(decodedCursorBytes)
 	}
 
-	submodels, nextCursor, err := s.submodelBackend.GetSubmodels(limit, decodedCursor, "")
+	submodels, nextCursor, err := s.submodelBackend.GetSubmodelsWithContext(ctx, limit, decodedCursor, "")
 	if err != nil {
 		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSubmodels"), err
 	}
@@ -530,7 +530,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsValueOnly(ctx context.C
 		decodedCursor = string(decodedCursorBytes)
 	}
 
-	sms, nextCursor, err := s.submodelBackend.GetSubmodels(limit, decodedCursor, idShort)
+	sms, nextCursor, err := s.submodelBackend.GetSubmodelsWithContext(ctx, limit, decodedCursor, idShort)
 	if err != nil {
 		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetSubmodels"), err
 	}
@@ -605,7 +605,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsReference(ctx context.C
 		}
 	}
 
-	references, nextCursor, err := s.submodelBackend.GetSubmodelReferences(limit, decodedCursor, idShort, decodedSemanticID)
+	references, nextCursor, err := s.submodelBackend.GetSubmodelReferencesWithContext(ctx, limit, decodedCursor, idShort, decodedSemanticID)
 	if err != nil {
 		if common.IsErrBadRequest(err) {
 			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
@@ -729,7 +729,7 @@ func (s *SubmodelRepositoryAPIAPIService) PatchSubmodelByID(ctx context.Context,
 
 	_, patchIncludesSubmodelElements := patchJSON["submodelElements"]
 
-	existingSubmodels, _, getErr := s.submodelBackend.GetSubmodels(1, "", decodedIdentifier)
+	existingSubmodels, _, getErr := s.submodelBackend.GetSubmodelsWithContext(ctx, 1, "", decodedIdentifier)
 	if getErr != nil {
 		if common.IsErrNotFound(getErr) || errors.Is(getErr, sql.ErrNoRows) {
 			return newAPIErrorResponse(getErr, http.StatusNotFound, operation, "SubmodelNotFound"), nil
@@ -2081,7 +2081,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetOperationAsyncResultValueOnly(ctx c
 //   - gen.ImplResponse: Response containing paginated submodel results
 //   - error: Error if the operation fails
 func (s *SubmodelRepositoryAPIAPIService) QuerySubmodels(
-	_ context.Context,
+	ctx context.Context,
 	limit int32,
 	cursor string,
 	query grammar.Query,
@@ -2090,7 +2090,7 @@ func (s *SubmodelRepositoryAPIAPIService) QuerySubmodels(
 		Query: query,
 	}
 
-	sms, nextCursor, err := s.submodelBackend.QuerySubmodels(limit, cursor, queryWrapper, false)
+	sms, nextCursor, err := s.submodelBackend.QuerySubmodelsWithContext(ctx, limit, cursor, queryWrapper, false)
 	if err != nil {
 		switch {
 		case common.IsErrBadRequest(err):

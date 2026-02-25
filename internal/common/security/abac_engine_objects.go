@@ -43,6 +43,13 @@ type descriptorRouteMapping struct {
 	hasWildcard bool
 }
 
+type identifiableRouteMapping struct {
+	scope       string
+	route       string
+	filterField string
+	hasWildcard bool
+}
+
 var descriptorRouteMappings = []descriptorRouteMapping{
 	{
 		scope:       "$aasdesc",
@@ -78,6 +85,60 @@ var descriptorRouteMappings = []descriptorRouteMapping{
 		scope:       "$smdesc",
 		route:       "/submodel-descriptors/%s",
 		filterField: "$smdesc#id",
+		hasWildcard: true,
+	},
+}
+
+var identifiableRouteMappings = []identifiableRouteMapping{
+	// Submodel Repository collection/query endpoints use an additional filter
+	// on $sm#id when a concrete IDENTIFIABLE is provided.
+	{
+		scope:       "$sm",
+		route:       "/query/submodels",
+		filterField: "$sm#id",
+		hasWildcard: false,
+	},
+	{
+		scope:       "$sm",
+		route:       "/submodels",
+		filterField: "$sm#id",
+		hasWildcard: false,
+	},
+	{
+		scope:       "$sm",
+		route:       "/submodels/$metadata",
+		filterField: "$sm#id",
+		hasWildcard: false,
+	},
+	{
+		scope:       "$sm",
+		route:       "/submodels/$value",
+		filterField: "$sm#id",
+		hasWildcard: false,
+	},
+	{
+		scope:       "$sm",
+		route:       "/submodels/$reference",
+		filterField: "$sm#id",
+		hasWildcard: false,
+	},
+	{
+		scope:       "$sm",
+		route:       "/submodels/$path",
+		filterField: "$sm#id",
+		hasWildcard: false,
+	},
+	// Covers all concrete submodel endpoints under /submodels/{submodelIdentifier}/...
+	{
+		scope:       "$sm",
+		route:       "/submodels/%s",
+		filterField: "$sm#id",
+		hasWildcard: true,
+	},
+	{
+		scope:       "$sm",
+		route:       "/submodels/%s/**",
+		filterField: "$sm#id",
 		hasWildcard: true,
 	},
 }
@@ -136,6 +197,53 @@ func mapDescriptorValueToRoute(descriptorValue grammar.DescriptorValue, basePath
 	return routes
 }
 
+func mapIdentifiableValueToRoute(identifiableValue grammar.IdentifiableValue, basePath string) []RouteWithFilter {
+	var routes = []RouteWithFilter{}
+
+	for _, mapping := range identifiableRouteMappings {
+		if mapping.scope != identifiableValue.Scope {
+			continue
+		}
+
+		if identifiableValue.ID.IsAll {
+			if !mapping.hasWildcard {
+				routes = append(routes,
+					RouteWithFilter{route: joinBasePath(basePath, mapping.route)},
+				)
+				continue
+			}
+			routes = append(routes,
+				RouteWithFilter{route: joinBasePath(basePath, fmt.Sprintf(mapping.route, "*"))},
+			)
+			continue
+		}
+
+		rawID := identifiableValue.ID.ID
+		encodedID := common.EncodeString(rawID)
+
+		field := grammar.ModelStringPattern(mapping.filterField)
+		standardString := grammar.StandardString(rawID)
+
+		extraFilter := grammar.LogicalExpression{
+			Eq: grammar.ComparisonItems{
+				grammar.Value{Field: &field},
+				grammar.Value{StrVal: &standardString},
+			},
+		}
+
+		if !mapping.hasWildcard {
+			routes = append(routes,
+				RouteWithFilter{route: joinBasePath(basePath, mapping.route), le: &extraFilter},
+			)
+		}
+		routes = append(routes,
+			RouteWithFilter{route: joinBasePath(basePath, fmt.Sprintf(mapping.route, encodedID))},
+		)
+	}
+
+	return routes
+}
+
 // AccessWithLE represents the outcome of matching a request path against a
 // set of object definitions. If access is true, the optional LogicalExpression
 // can be used to further constrain the result set (e.g. as an additional
@@ -160,6 +268,20 @@ func matchRouteObjectsObjItem(objs []grammar.ObjectItem, reqPath string, basePat
 			desc := oi.Descriptor
 			if desc != nil {
 				for _, routeWithFilter := range mapDescriptorValueToRoute(*desc, basePath) {
+					if matchRouteANT(routeWithFilter.route, reqPath) {
+						if routeWithFilter.le == nil {
+							return AccessWithLE{access: true}
+						}
+
+						access = true
+						locialExpressions = append(locialExpressions, *routeWithFilter.le)
+					}
+				}
+			}
+		case grammar.Identifiable:
+			identifiable := oi.Identifiable
+			if identifiable != nil {
+				for _, routeWithFilter := range mapIdentifiableValueToRoute(*identifiable, basePath) {
 					if matchRouteANT(routeWithFilter.route, reqPath) {
 						if routeWithFilter.le == nil {
 							return AccessWithLE{access: true}

@@ -42,9 +42,9 @@ func buildSMSQL(t *testing.T, expr LogicalExpression) (string, []interface{}) {
 	}
 
 	d := goqu.Dialect("postgres")
-	ds := d.From(goqu.T("submodel").As("s")).Select(goqu.V(1)).Where(whereExpr)
+	ds := d.From(goqu.T("submodel")).Select(goqu.V(1)).Where(whereExpr)
 
-	sql, args, err := ds.Prepared(true).ToSQL()
+	sql, args, err := ds.ToSQL()
 	if err != nil {
 		t.Fatalf("ToSQL returned error: %v", err)
 	}
