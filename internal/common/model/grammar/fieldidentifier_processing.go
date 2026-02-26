@@ -283,7 +283,7 @@ var arraySegmentMappings = map[string]arraySegmentMapping{
 			},
 			"semanticId": {
 				ctxSM:                 {PositionAlias: "semantic_id_reference_key.position", NextContext: ctxSM},
-				ctxSME:                {PositionAlias: "semantic_id_reference_key.position", NextContext: ctxSME},
+				ctxSME:                {PositionAlias: "sme_semantic_id_reference_key.position", NextContext: ctxSME},
 				ctxSMDesc:             {PositionAlias: "aasdesc_submodel_descriptor_semantic_id_reference_key.position", NextContext: ctxSMDesc},
 				ctxSubmodelDescriptor: {PositionAlias: "aasdesc_submodel_descriptor_semantic_id_reference_key.position", NextContext: ctxSubmodelDescriptor},
 			},

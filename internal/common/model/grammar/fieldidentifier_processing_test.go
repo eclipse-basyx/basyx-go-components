@@ -296,7 +296,7 @@ var fieldIdentifierProcessingCases = []fidTestCase{
 		Name:         "sql_fragment_sme_semanticId_keys_indexed",
 		Kind:         "fragment",
 		Input:        `$sme.temperature#semanticId.keys[0]`,
-		WantFragment: &expectedFragment{Bindings: []expectedBinding{{Alias: "submodel_element.idshort_path", Index: sidx("temperature")}, {Alias: "semantic_id_reference_key.position", Index: idx(0)}}},
+		WantFragment: &expectedFragment{Bindings: []expectedBinding{{Alias: "submodel_element.idshort_path", Index: sidx("temperature")}, {Alias: "sme_semantic_id_reference_key.position", Index: idx(0)}}},
 	},
 	{
 		Name:       "sme_idShort_scalar",
@@ -314,7 +314,7 @@ var fieldIdentifierProcessingCases = []fidTestCase{
 		Name:       "sme_semanticId_keys_type_indexed_scalar",
 		Kind:       "scalar",
 		Input:      `$sme.some.path#semanticId.keys[3].type`,
-		WantScalar: &expectedScalar{Column: "sme_semantic_id_reference_key.type", Bindings: []expectedBinding{{Alias: "submodel_element.idshort_path", Index: sidx("some.path")}, {Alias: "semantic_id_reference_key.position", Index: idx(3)}}},
+		WantScalar: &expectedScalar{Column: "sme_semantic_id_reference_key.type", Bindings: []expectedBinding{{Alias: "submodel_element.idshort_path", Index: sidx("some.path")}, {Alias: "sme_semantic_id_reference_key.position", Index: idx(3)}}},
 	},
 	{
 		Name:         "sme_semanticId_keys_wildcard_fragment",
@@ -326,7 +326,7 @@ var fieldIdentifierProcessingCases = []fidTestCase{
 		Name:         "sme_semanticId_keys_indexed_fragment",
 		Kind:         "fragment",
 		Input:        `$sme.engine#semanticId.keys[1]`,
-		WantFragment: &expectedFragment{Bindings: []expectedBinding{{Alias: "submodel_element.idshort_path", Index: sidx("engine")}, {Alias: "semantic_id_reference_key.position", Index: idx(1)}}},
+		WantFragment: &expectedFragment{Bindings: []expectedBinding{{Alias: "submodel_element.idshort_path", Index: sidx("engine")}, {Alias: "sme_semantic_id_reference_key.position", Index: idx(1)}}},
 	},
 }
 

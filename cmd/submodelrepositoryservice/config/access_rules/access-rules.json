@@ -17,12 +17,12 @@
     ],
 
     "DEFFORMULAS": [
-      { "name": "always_true", "formula": { "$boolean": true } },
+      { "name": "always_true", "formula": { "$eq": [ { "$field": "$sme#semanticId.keys[].value" }, { "$strVal": "ababa" } ] } },
       { "name": "role_is_admin", "formula": { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "admin" } ] } }       
     ],
 
     "rules": [
-      { "USEACL": "read_anonymous", "USEOBJECTS": ["description", "submodels"], "USEFORMULA": "always_true" },
+      { "USEACL": "read_anonymous", "USEOBJECTS": ["description", "all-submodels"], "USEFORMULA": "always_true" },
       { "USEACL": "all_admin", "USEOBJECTS": ["all-submodels"], "USEFORMULA": "role_is_admin" }      
     ]
   }

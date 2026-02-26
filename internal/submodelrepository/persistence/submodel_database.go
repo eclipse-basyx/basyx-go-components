@@ -132,11 +132,16 @@ func (s *SubmodelDatabase) GetSignedSubmodel(submodelID string, valueOnly bool) 
 
 // GetSubmodelByID retrieves a submodel by its identifier from the database.
 func (s *SubmodelDatabase) GetSubmodelByID(submodelIdentifier string) (types.ISubmodel, error) {
+	return s.GetSubmodelByIDWithContext(context.Background(), submodelIdentifier)
+}
+
+// GetSubmodelByIDWithContext retrieves a submodel by identifier and applies optional ABAC formula filters from ctx.
+func (s *SubmodelDatabase) GetSubmodelByIDWithContext(ctx context.Context, submodelIdentifier string) (types.ISubmodel, error) {
 	eg := errgroup.Group{}
 	var submodels []types.ISubmodel
 	eg.Go(func() error {
 		var err error
-		submodels, _, err = s.GetSubmodels(0, "", submodelIdentifier)
+		submodels, _, err = s.GetSubmodelsWithContext(ctx, 0, "", submodelIdentifier)
 		if err != nil {
 			return err
 		}
@@ -151,7 +156,7 @@ func (s *SubmodelDatabase) GetSubmodelByID(submodelIdentifier string) (types.ISu
 	submodelElements := make([]types.ISubmodelElement, 0)
 	eg.Go(func() error {
 		unlimited := -1
-		smes, _, err := s.GetSubmodelElements(submodelIdentifier, &unlimited, "", false)
+		smes, _, err := s.GetSubmodelElementsWithContext(ctx, submodelIdentifier, &unlimited, "", false)
 		if err != nil {
 			return err
 		}
@@ -505,7 +510,12 @@ func (s *SubmodelDatabase) verifySubmodel(submodel types.ISubmodel, errorPrefix 
 
 // GetSubmodelElement retrieves a submodel element (including nested children) by idShort path.
 func (s *SubmodelDatabase) GetSubmodelElement(submodelID string, idShortOrPath string, _ bool) (types.ISubmodelElement, error) {
-	return submodelelements.GetSubmodelElementByIDShortOrPath(s.db, submodelID, idShortOrPath)
+	return s.GetSubmodelElementWithContext(context.Background(), submodelID, idShortOrPath, false)
+}
+
+// GetSubmodelElementWithContext retrieves a submodel element by path and applies optional ABAC formula filters from ctx.
+func (s *SubmodelDatabase) GetSubmodelElementWithContext(ctx context.Context, submodelID string, idShortOrPath string, _ bool) (types.ISubmodelElement, error) {
+	return submodelelements.GetSubmodelElementByIDShortOrPathWithContext(ctx, s.db, submodelID, idShortOrPath)
 }
 
 // GetSubmodelElements retrieves top-level submodel elements for a submodel and reconstructs each subtree.
