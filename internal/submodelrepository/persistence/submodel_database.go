@@ -156,7 +156,9 @@ func (s *SubmodelDatabase) GetSubmodelByIDWithContext(ctx context.Context, submo
 	submodelElements := make([]types.ISubmodelElement, 0)
 	eg.Go(func() error {
 		unlimited := -1
-		smes, _, err := s.GetSubmodelElementsWithContext(ctx, submodelIdentifier, &unlimited, "", false)
+		// Exact /submodels/{id} reads should use the ABAC formula only as a gate for
+		// returning the submodel, not to prune the returned SME tree.
+		smes, _, err := s.GetSubmodelElements(submodelIdentifier, &unlimited, "", false)
 		if err != nil {
 			return err
 		}

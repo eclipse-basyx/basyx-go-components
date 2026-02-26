@@ -201,7 +201,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodels(
 		sm := sms[index]
 
 		eg.Go(func() error {
-			submodelElements, _, elementsErr := s.submodelBackend.GetSubmodelElementsWithContext(ctx, sm.ID(), nil, "", false)
+			submodelElements, _, elementsErr := s.submodelBackend.GetSubmodelElements(sm.ID(), nil, "", false)
 			if elementsErr != nil {
 				return elementsErr
 			}
@@ -545,7 +545,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsValueOnly(ctx context.C
 		sm := sms[index]
 
 		eg.Go(func() error {
-			submodelElements, _, elementsErr := s.submodelBackend.GetSubmodelElementsWithContext(ctx, sm.ID(), nil, "", false)
+			submodelElements, _, elementsErr := s.submodelBackend.GetSubmodelElements(sm.ID(), nil, "", false)
 			if elementsErr != nil {
 				return elementsErr
 			}

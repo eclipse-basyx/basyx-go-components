@@ -17,7 +17,7 @@
     ],
 
     "DEFFORMULAS": [
-      { "name": "always_true", "formula": { "$eq": [ { "$field": "$sme#semanticId.keys[].value" }, { "$strVal": "ababa" } ] } },
+      { "name": "always_true", "formula": { "$eq": [ { "$field": "$sme.ExampleSubmodelElementCollection[0].ExampleRelationshipElement#semanticId.keys[].value" }, { "$strVal": "http://acplt.org/RelationshipElements/ExampleRelationshipElement" } ] } },
       { "name": "role_is_admin", "formula": { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "admin" } ] } }       
     ],
 
