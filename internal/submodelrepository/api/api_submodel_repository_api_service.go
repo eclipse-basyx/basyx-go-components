@@ -354,7 +354,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetSignedSubmodelByIDValueOnly(
 //   - gen.ImplResponse: Response indicating successful deletion
 //   - error: Error if the submodel is not found or deletion fails
 func (s *SubmodelRepositoryAPIAPIService) DeleteSubmodelByID(
-	_ /*ctx*/ context.Context,
+	ctx context.Context,
 	id string,
 ) (gen.ImplResponse, error) {
 	const operation = "DeleteSubmodelByID"
@@ -364,8 +364,11 @@ func (s *SubmodelRepositoryAPIAPIService) DeleteSubmodelByID(
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
 	}
 
-	err := s.submodelBackend.DeleteSubmodel(decodedSubmodelIdentifier)
+	err := s.submodelBackend.DeleteSubmodelWithContext(ctx, decodedSubmodelIdentifier)
 	if err != nil {
+		if common.IsErrDenied(err) {
+			return newAPIErrorResponse(err, http.StatusForbidden, operation, "Denied"), nil
+		}
 		if common.IsErrNotFound(err) || errors.Is(err, sql.ErrNoRows) {
 			return newAPIErrorResponse(err, http.StatusNotFound, operation, "SubmodelNotFound"), nil
 		}
@@ -389,14 +392,17 @@ func (s *SubmodelRepositoryAPIAPIService) DeleteSubmodelByID(
 //   - gen.ImplResponse: Response containing the created submodel (HTTP 201)
 //   - error: Error if the creation fails
 func (s *SubmodelRepositoryAPIAPIService) PostSubmodel(
-	_ /*ctx*/ context.Context,
+	ctx context.Context,
 	submodel types.ISubmodel,
 ) (gen.ImplResponse, error) {
 	const operation = "PostSubmodel"
 
-	err := s.submodelBackend.CreateSubmodel(submodel)
+	err := s.submodelBackend.CreateSubmodelWithContext(ctx, submodel)
 
 	if err != nil {
+		if common.IsErrDenied(err) {
+			return newAPIErrorResponse(err, http.StatusForbidden, operation, "Denied"), nil
+		}
 		if common.IsErrConflict(err) {
 			return newAPIErrorResponse(err, http.StatusConflict, operation, "IdConflict"), nil
 		}
@@ -663,7 +669,6 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelsPath(ctx context.Contex
 //
 //nolint:revive
 func (s *SubmodelRepositoryAPIAPIService) PutSubmodelByID(ctx context.Context, submodelIdentifier string, submodel types.ISubmodel) (gen.ImplResponse, error) {
-	_ = ctx
 	const operation = "PutSubmodelByID"
 
 	decodedIdentifier, decodeErr := decodeBase64RawStd(submodelIdentifier)
@@ -675,8 +680,11 @@ func (s *SubmodelRepositoryAPIAPIService) PutSubmodelByID(ctx context.Context, s
 		return newAPIErrorResponse(errors.New("submodel ID in path and body do not match"), http.StatusBadRequest, operation, "IdMismatch"), nil
 	}
 
-	isUpdate, err := s.submodelBackend.PutSubmodel(decodedIdentifier, submodel)
+	isUpdate, err := s.submodelBackend.PutSubmodelWithContext(ctx, decodedIdentifier, submodel)
 	if err != nil {
+		if common.IsErrDenied(err) {
+			return newAPIErrorResponse(err, http.StatusForbidden, operation, "Denied"), nil
+		}
 		if common.IsErrBadRequest(err) {
 			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
 		}
@@ -1043,7 +1051,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelElements(ctx context.Con
 // Returns:
 //   - gen.ImplResponse: Response containing the created submodel element (HTTP 201)
 //   - error: Error if the creation fails
-func (s *SubmodelRepositoryAPIAPIService) PostSubmodelElementSubmodelRepo(_ /*ctx*/ context.Context, submodelIdentifier string, submodelElement types.ISubmodelElement) (gen.ImplResponse, error) {
+func (s *SubmodelRepositoryAPIAPIService) PostSubmodelElementSubmodelRepo(ctx context.Context, submodelIdentifier string, submodelElement types.ISubmodelElement) (gen.ImplResponse, error) {
 	const operation = "PostSubmodelElementSubmodelRepo"
 
 	decodedSubmodelIdentifier, decodeErr := decodeBase64RawStd(submodelIdentifier)
@@ -1051,7 +1059,10 @@ func (s *SubmodelRepositoryAPIAPIService) PostSubmodelElementSubmodelRepo(_ /*ct
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
 	}
 
-	if err := s.submodelBackend.AddSubmodelElement(decodedSubmodelIdentifier, submodelElement); err != nil {
+	if err := s.submodelBackend.AddSubmodelElementWithContext(ctx, decodedSubmodelIdentifier, submodelElement); err != nil {
+		if common.IsErrDenied(err) {
+			return newAPIErrorResponse(err, http.StatusForbidden, operation, "Denied"), nil
+		}
 		if common.IsErrNotFound(err) || errors.Is(err, sql.ErrNoRows) {
 			return newAPIErrorResponse(err, http.StatusNotFound, operation, "SubmodelNotFound"), nil
 		}
@@ -1322,7 +1333,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelElementByPathSubmodelRepo(c
 // Returns:
 //   - gen.ImplResponse: Response indicating successful update (HTTP 204)
 //   - error: Error if the update fails
-func (s *SubmodelRepositoryAPIAPIService) PutSubmodelElementByPathSubmodelRepo(_ /*ctx*/ context.Context, submodelIdentifier string, idShortPath string, submodelElement types.ISubmodelElement, _ /*level*/ string) (gen.ImplResponse, error) {
+func (s *SubmodelRepositoryAPIAPIService) PutSubmodelElementByPathSubmodelRepo(ctx context.Context, submodelIdentifier string, idShortPath string, submodelElement types.ISubmodelElement, _ /*level*/ string) (gen.ImplResponse, error) {
 	const operation = "PutSubmodelElementByPathSubmodelRepo"
 
 	decodedSubmodelIdentifier, decodeErr := decodeBase64RawStd(submodelIdentifier)
@@ -1330,8 +1341,11 @@ func (s *SubmodelRepositoryAPIAPIService) PutSubmodelElementByPathSubmodelRepo(_
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
 	}
 
-	err := s.submodelBackend.UpdateSubmodelElement(decodedSubmodelIdentifier, idShortPath, submodelElement, true)
+	err := s.submodelBackend.UpdateSubmodelElementWithContext(ctx, decodedSubmodelIdentifier, idShortPath, submodelElement, true)
 	if err != nil {
+		if common.IsErrDenied(err) {
+			return newAPIErrorResponse(err, http.StatusForbidden, operation, "Denied"), nil
+		}
 		if common.IsErrNotFound(err) || errors.Is(err, sql.ErrNoRows) {
 			return newAPIErrorResponse(err, http.StatusNotFound, operation, "SubmodelElementNotFound"), nil
 		}
@@ -1395,7 +1409,7 @@ func (s *SubmodelRepositoryAPIAPIService) PostSubmodelElementByPathSubmodelRepo(
 // Returns:
 //   - gen.ImplResponse: Response indicating successful deletion (HTTP 204)
 //   - error: Error if the deletion fails
-func (s *SubmodelRepositoryAPIAPIService) DeleteSubmodelElementByPathSubmodelRepo(_ /*ctx*/ context.Context, submodelIdentifier string, idShortPath string) (gen.ImplResponse, error) {
+func (s *SubmodelRepositoryAPIAPIService) DeleteSubmodelElementByPathSubmodelRepo(ctx context.Context, submodelIdentifier string, idShortPath string) (gen.ImplResponse, error) {
 	const operation = "DeleteSubmodelElementByPathSubmodelRepo"
 
 	decodedSubmodelIdentifier, decodeErr := decodeBase64RawStd(submodelIdentifier)
@@ -1403,8 +1417,11 @@ func (s *SubmodelRepositoryAPIAPIService) DeleteSubmodelElementByPathSubmodelRep
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
 	}
 
-	err := s.submodelBackend.DeleteSubmodelElementByPath(decodedSubmodelIdentifier, idShortPath)
+	err := s.submodelBackend.DeleteSubmodelElementByPathWithContext(ctx, decodedSubmodelIdentifier, idShortPath)
 	if err != nil {
+		if common.IsErrDenied(err) {
+			return newAPIErrorResponse(err, http.StatusForbidden, operation, "Denied"), nil
+		}
 		if common.IsErrNotFound(err) || errors.Is(err, sql.ErrNoRows) {
 			return newAPIErrorResponse(err, http.StatusNotFound, operation, "SubmodelElementNotFound"), nil
 		}

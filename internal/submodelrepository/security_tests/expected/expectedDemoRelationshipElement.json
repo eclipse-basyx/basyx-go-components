@@ -1,0 +1,58 @@
+{
+  "category": "PARAMETER",
+  "description": [
+    {
+      "language": "en-us",
+      "text": "Example RelationshipElement object"
+    },
+    {
+      "language": "de",
+      "text": "Beispiel RelationshipElement Element"
+    }
+  ],
+  "first": {
+    "keys": [
+      {
+        "type": "Submodel",
+        "value": "https://acplt.org/Test_Submodel_Missing"
+      },
+      {
+        "type": "SubmodelElementList",
+        "value": "ExampleSubmodelElementListOrdered"
+      },
+      {
+        "type": "Property",
+        "value": "ExampleProperty"
+      }
+    ],
+    "type": "ModelReference"
+  },
+  "idShort": "ExampleRelationshipElement",
+  "modelType": "RelationshipElement",
+  "second": {
+    "keys": [
+      {
+        "type": "Submodel",
+        "value": "https://acplt.org/Test_Submodel_Missing"
+      },
+      {
+        "type": "SubmodelElementList",
+        "value": "ExampleSubmodelElementListOrdered"
+      },
+      {
+        "type": "MultiLanguageProperty",
+        "value": "ExampleMultiLanguageProperty"
+      }
+    ],
+    "type": "ModelReference"
+  },
+  "semanticId": {
+    "keys": [
+      {
+        "type": "GlobalReference",
+        "value": "http://acplt.org/RelationshipElements/ExampleRelationshipElement"
+      }
+    ],
+    "type": "ExternalReference"
+  }
+}

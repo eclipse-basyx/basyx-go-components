@@ -384,6 +384,11 @@ func (s *SubmodelDatabase) QuerySubmodelsWithContext(ctx context.Context, limit 
 
 // CreateSubmodel creates a new submodel in the database with the provided submodel data.
 func (s *SubmodelDatabase) CreateSubmodel(submodel types.ISubmodel) error {
+	return s.CreateSubmodelWithContext(context.Background(), submodel)
+}
+
+// CreateSubmodelWithContext creates a new submodel and performs an ABAC re-check before commit when ABAC is enabled.
+func (s *SubmodelDatabase) CreateSubmodelWithContext(ctx context.Context, submodel types.ISubmodel) (err error) {
 	if err := s.verifySubmodel(submodel, "SMREPO-NEWSM-VERIFY"); err != nil {
 		return err
 	}
@@ -397,6 +402,19 @@ func (s *SubmodelDatabase) CreateSubmodel(submodel types.ISubmodel) error {
 	err = s.createSubmodelInTransaction(tx, submodel)
 	if err != nil {
 		return err
+	}
+
+	if shouldEnforceABACWriteCheck(ctx) {
+		exists, visible, visErr := s.checkSubmodelVisibilityInTx(ctx, tx, submodel.ID())
+		if visErr != nil {
+			return visErr
+		}
+		if !exists {
+			return common.NewInternalServerError("SMREPO-NEWSM-ABACCHECKMISSING created submodel not found before commit")
+		}
+		if !visible {
+			return common.NewErrDenied("SMREPO-NEWSM-ABACDENIED Created submodel is not accessible under ABAC constraints")
+		}
 	}
 
 	err = tx.Commit()
@@ -510,6 +528,241 @@ func (s *SubmodelDatabase) verifySubmodel(submodel types.ISubmodel, errorPrefix 
 	return common.NewErrBadRequest(errorPrefix + " " + stringOfAllErrors)
 }
 
+func normalizeCtx(ctx context.Context) context.Context {
+	if ctx == nil {
+		return context.Background()
+	}
+	return ctx
+}
+
+func shouldEnforceABACWriteCheck(ctx context.Context) bool {
+	cfg, ok := common.ConfigFromContext(ctx)
+	if !ok || !cfg.ABAC.Enabled {
+		return false
+	}
+	queryFilter := auth.GetQueryFilter(ctx)
+	return queryFilter != nil && queryFilter.Formula != nil
+}
+
+func (s *SubmodelDatabase) checkSubmodelVisibilityInTx(ctx context.Context, tx *sql.Tx, submodelID string) (bool, bool, error) {
+	_, err := persistenceutils.GetSubmodelDatabaseID(tx, submodelID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return false, false, nil
+		}
+		return false, false, common.NewInternalServerError("SMREPO-ABACCHKSM-GETSMDATABASEID " + err.Error())
+	}
+
+	if !shouldEnforceABACWriteCheck(ctx) {
+		return true, true, nil
+	}
+
+	dialect := goqu.Dialect("postgres")
+	query := dialect.
+		From("submodel").
+		Select(goqu.C("id")).
+		Where(goqu.C("submodel_identifier").Eq(submodelID)).
+		Limit(1)
+
+	collector, collectorErr := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootSM)
+	if collectorErr != nil {
+		return false, false, common.NewInternalServerError("SMREPO-ABACCHKSM-BADCOLLECTOR " + collectorErr.Error())
+	}
+
+	query, addFormulaErr := auth.AddFormulaQueryFromContext(ctx, query, collector)
+	if addFormulaErr != nil {
+		return false, false, common.NewInternalServerError("SMREPO-ABACCHKSM-ADDFORMULA " + addFormulaErr.Error())
+	}
+
+	sqlQuery, args, toSQLErr := query.ToSQL()
+	if toSQLErr != nil {
+		return false, false, common.NewInternalServerError("SMREPO-ABACCHKSM-BUILDQ " + toSQLErr.Error())
+	}
+
+	var databaseID int64
+	scanErr := tx.QueryRowContext(normalizeCtx(ctx), sqlQuery, args...).Scan(&databaseID)
+	if scanErr == nil {
+		return true, true, nil
+	}
+	if errors.Is(scanErr, sql.ErrNoRows) {
+		return true, false, nil
+	}
+
+	return false, false, common.NewInternalServerError("SMREPO-ABACCHKSM-EXECQ " + scanErr.Error())
+}
+
+func (s *SubmodelDatabase) checkSubmodelElementVisibilityInTx(ctx context.Context, tx *sql.Tx, submodelID string, idShortPath string) (bool, bool, error) {
+	submodelDatabaseID, err := persistenceutils.GetSubmodelDatabaseID(tx, submodelID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return false, false, nil
+		}
+		return false, false, common.NewInternalServerError("SMREPO-ABACCHKSME-GETSMDATABASEID " + err.Error())
+	}
+
+	dialect := goqu.Dialect("postgres")
+	baseQuery := dialect.
+		From(goqu.T("submodel_element").As("sme")).
+		Select(goqu.I("sme.id")).
+		Where(
+			goqu.I("sme.submodel_id").Eq(submodelDatabaseID),
+			goqu.I("sme.idshort_path").Eq(idShortPath),
+		).
+		Limit(1)
+
+	existsSQL, existsArgs, existsToSQLErr := baseQuery.ToSQL()
+	if existsToSQLErr != nil {
+		return false, false, common.NewInternalServerError("SMREPO-ABACCHKSME-BUILDEXISTSQ " + existsToSQLErr.Error())
+	}
+
+	var elementID int64
+	existsErr := tx.QueryRowContext(normalizeCtx(ctx), existsSQL, existsArgs...).Scan(&elementID)
+	if existsErr != nil {
+		if errors.Is(existsErr, sql.ErrNoRows) {
+			return false, false, nil
+		}
+		return false, false, common.NewInternalServerError("SMREPO-ABACCHKSME-EXECEXISTSQ " + existsErr.Error())
+	}
+
+	if !shouldEnforceABACWriteCheck(ctx) {
+		return true, true, nil
+	}
+
+	collector, collectorErr := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootSME)
+	if collectorErr != nil {
+		return false, false, common.NewInternalServerError("SMREPO-ABACCHKSME-BADCOLLECTOR " + collectorErr.Error())
+	}
+
+	filteredQuery, addFormulaErr := auth.AddFormulaQueryFromContext(ctx, baseQuery, collector)
+	if addFormulaErr != nil {
+		return false, false, common.NewInternalServerError("SMREPO-ABACCHKSME-ADDFORMULA " + addFormulaErr.Error())
+	}
+
+	filteredSQL, filteredArgs, filteredToSQLErr := filteredQuery.ToSQL()
+	if filteredToSQLErr != nil {
+		return false, false, common.NewInternalServerError("SMREPO-ABACCHKSME-BUILDFILTERQ " + filteredToSQLErr.Error())
+	}
+
+	var visibleID int64
+	visibleErr := tx.QueryRowContext(normalizeCtx(ctx), filteredSQL, filteredArgs...).Scan(&visibleID)
+	if visibleErr == nil {
+		return true, true, nil
+	}
+	if errors.Is(visibleErr, sql.ErrNoRows) {
+		return true, false, nil
+	}
+
+	return false, false, common.NewInternalServerError("SMREPO-ABACCHKSME-EXECFILTERQ " + visibleErr.Error())
+}
+
+func (s *SubmodelDatabase) addTopLevelSubmodelElementInTransaction(tx *sql.Tx, submodelID string, submodelElement types.ISubmodelElement) (string, error) {
+	submodelDatabaseID, err := persistenceutils.GetSubmodelDatabaseID(tx, submodelID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return "", common.NewErrNotFound("SMREPO-ADDSME-SMNOTFOUND Submodel with ID '" + submodelID + "' not found")
+		}
+		return "", err
+	}
+
+	dialect := goqu.Dialect("postgres")
+	selectQuery, selectArgs, err := dialect.From("submodel_element").
+		Select(goqu.MAX("position")).
+		Where(
+			goqu.C("submodel_id").Eq(submodelDatabaseID),
+			goqu.C("parent_sme_id").IsNull(),
+		).
+		ToSQL()
+	if err != nil {
+		return "", err
+	}
+
+	var maxPosition sql.NullInt64
+	err = tx.QueryRow(selectQuery, selectArgs...).Scan(&maxPosition)
+	if err != nil {
+		return "", err
+	}
+
+	startPosition := 0
+	if maxPosition.Valid {
+		startPosition = int(maxPosition.Int64) + 1
+	}
+
+	if isSiblingIDShortCollision(tx, submodelDatabaseID, nil, submodelElement) {
+		return "", common.NewErrConflict("SMREPO-ADDSME-COLLISION Duplicate submodel element idShort")
+	}
+
+	_, err = submodelelements.InsertSubmodelElements(
+		s.db,
+		submodelID,
+		[]types.ISubmodelElement{submodelElement},
+		tx,
+		&submodelelements.BatchInsertContext{
+			StartPosition: startPosition,
+		},
+	)
+	if err != nil {
+		return "", err
+	}
+
+	idShort := submodelElement.IDShort()
+	if idShort == nil {
+		return "", nil
+	}
+
+	return *idShort, nil
+}
+
+func getSMEModelTypeByPathInTx(tx *sql.Tx, submodelID string, idShortOrPath string) (*types.ModelType, error) {
+	submodelDatabaseID, err := persistenceutils.GetSubmodelDatabaseID(tx, submodelID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, common.NewErrNotFound("SMREPO-GETMODELTYPE-SMNOTFOUND Submodel with ID '" + submodelID + "' not found")
+		}
+		return nil, err
+	}
+
+	dialect := goqu.Dialect("postgres")
+	query, args, err := dialect.From("submodel_element").
+		Select("model_type").
+		Where(
+			goqu.C("submodel_id").Eq(submodelDatabaseID),
+			goqu.C("idshort_path").Eq(idShortOrPath),
+		).
+		ToSQL()
+	if err != nil {
+		return nil, err
+	}
+
+	var modelType types.ModelType
+	err = tx.QueryRow(query, args...).Scan(&modelType)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, common.NewErrNotFound("SMREPO-GETMODELTYPE-NOTFOUND Submodel-Element ID-Short: " + idShortOrPath)
+		}
+		return nil, err
+	}
+
+	return &modelType, nil
+}
+
+func (s *SubmodelDatabase) updateSubmodelElementInTransaction(tx *sql.Tx, submodelID string, idShortOrPath string, submodelElement types.ISubmodelElement, isPut bool) error {
+	modelType, err := getSMEModelTypeByPathInTx(tx, submodelID, idShortOrPath)
+	if err != nil {
+		return err
+	}
+
+	if modelType == nil {
+		return common.NewErrNotFound("SMREPO-UPDSME-NOTFOUND Submodel-Element ID-Short: " + idShortOrPath)
+	}
+
+	handler, err := submodelelements.GetSMEHandlerByModelType(*modelType, s.db)
+	if err != nil {
+		return err
+	}
+
+	return handler.Update(submodelID, idShortOrPath, submodelElement, tx, isPut)
+}
+
 // GetSubmodelElement retrieves a submodel element (including nested children) by idShort path.
 func (s *SubmodelDatabase) GetSubmodelElement(submodelID string, idShortOrPath string, _ bool) (types.ISubmodelElement, error) {
 	return s.GetSubmodelElementWithContext(context.Background(), submodelID, idShortOrPath, false)
@@ -542,62 +795,36 @@ func (s *SubmodelDatabase) GetSubmodelElementReferencesWithContext(ctx context.C
 
 // AddSubmodelElement adds a top-level submodel element to a submodel.
 func (s *SubmodelDatabase) AddSubmodelElement(submodelID string, submodelElement types.ISubmodelElement) error {
+	return s.AddSubmodelElementWithContext(context.Background(), submodelID, submodelElement)
+}
+
+// AddSubmodelElementWithContext adds a top-level submodel element and performs an ABAC re-check before commit when ABAC is enabled.
+func (s *SubmodelDatabase) AddSubmodelElementWithContext(ctx context.Context, submodelID string, submodelElement types.ISubmodelElement) (err error) {
 	tx, cleanup, err := common.StartTransaction(s.db)
 	if err != nil {
 		return err
 	}
 	defer cleanup(&err)
 
-	submodelDatabaseID, err := persistenceutils.GetSubmodelDatabaseID(tx, submodelID)
+	insertedPath, err := s.addTopLevelSubmodelElementInTransaction(tx, submodelID, submodelElement)
 	if err != nil {
-		if err == sql.ErrNoRows {
-			return common.NewErrNotFound("SMREPO-ADDSME-SMNOTFOUND Submodel with ID '" + submodelID + "' not found")
+		return err
+	}
+
+	if shouldEnforceABACWriteCheck(ctx) && insertedPath != "" {
+		exists, visible, visErr := s.checkSubmodelElementVisibilityInTx(ctx, tx, submodelID, insertedPath)
+		if visErr != nil {
+			return visErr
 		}
-		return err
+		if !exists {
+			return common.NewInternalServerError("SMREPO-ADDSME-ABACCHECKMISSING created submodel element not found before commit")
+		}
+		if !visible {
+			return common.NewErrDenied("SMREPO-ADDSME-ABACDENIED Created submodel element is not accessible under ABAC constraints")
+		}
 	}
 
-	dialect := goqu.Dialect("postgres")
-	selectQuery, selectArgs, err := dialect.From("submodel_element").
-		Select(goqu.MAX("position")).
-		Where(
-			goqu.C("submodel_id").Eq(submodelDatabaseID),
-			goqu.C("parent_sme_id").IsNull(),
-		).
-		ToSQL()
-	if err != nil {
-		return err
-	}
-
-	var maxPosition sql.NullInt64
-	err = tx.QueryRow(selectQuery, selectArgs...).Scan(&maxPosition)
-	if err != nil {
-		return err
-	}
-
-	startPosition := 0
-	if maxPosition.Valid {
-		startPosition = int(maxPosition.Int64) + 1
-	}
-
-	if isSiblingIDShortCollision(tx, submodelDatabaseID, nil, submodelElement) {
-		return common.NewErrConflict("SMREPO-ADDSME-COLLISION Duplicate submodel element idShort")
-	}
-
-	_, err = submodelelements.InsertSubmodelElements(
-		s.db,
-		submodelID,
-		[]types.ISubmodelElement{submodelElement},
-		tx,
-		&submodelelements.BatchInsertContext{
-			StartPosition: startPosition,
-		},
-	)
-	if err != nil {
-		return err
-	}
-
-	err = tx.Commit()
-	return err
+	return tx.Commit()
 }
 
 // AddSubmodelElementWithPath adds a submodel element under an existing container path.
@@ -712,11 +939,29 @@ func isSiblingIDShortCollision(tx *sql.Tx, submodelDatabaseID int, parentElement
 
 // DeleteSubmodelElementByPath deletes a submodel element by idShort path.
 func (s *SubmodelDatabase) DeleteSubmodelElementByPath(submodelID string, idShortPath string) error {
+	return s.DeleteSubmodelElementByPathWithContext(context.Background(), submodelID, idShortPath)
+}
+
+// DeleteSubmodelElementByPathWithContext deletes a submodel element and checks ABAC access on the current element when ABAC is enabled.
+func (s *SubmodelDatabase) DeleteSubmodelElementByPathWithContext(ctx context.Context, submodelID string, idShortPath string) (err error) {
 	tx, cleanup, err := common.StartTransaction(s.db)
 	if err != nil {
 		return err
 	}
 	defer cleanup(&err)
+
+	if shouldEnforceABACWriteCheck(ctx) {
+		exists, visible, visErr := s.checkSubmodelElementVisibilityInTx(ctx, tx, submodelID, idShortPath)
+		if visErr != nil {
+			return visErr
+		}
+		if !exists {
+			return common.NewErrNotFound("SMREPO-DELSMEBPATH-NOTFOUND Submodel-Element ID-Short: " + idShortPath)
+		}
+		if !visible {
+			return common.NewErrDenied("SMREPO-DELSMEBPATH-ABACDENIED Deleting this submodel element is not allowed")
+		}
+	}
 
 	err = submodelelements.DeleteSubmodelElementByPath(tx, submodelID, idShortPath)
 	if err != nil {
@@ -743,6 +988,45 @@ func (s *SubmodelDatabase) UpdateSubmodelElement(submodelID string, idShortOrPat
 	}
 
 	return handler.Update(submodelID, idShortOrPath, submodelElement, nil, isPut)
+}
+
+// UpdateSubmodelElementWithContext updates a submodel element and checks ABAC access on old and new state when ABAC is enabled.
+func (s *SubmodelDatabase) UpdateSubmodelElementWithContext(ctx context.Context, submodelID string, idShortOrPath string, submodelElement types.ISubmodelElement, isPut bool) (err error) {
+	tx, cleanup, err := common.StartTransaction(s.db)
+	if err != nil {
+		return err
+	}
+	defer cleanup(&err)
+
+	if shouldEnforceABACWriteCheck(ctx) {
+		exists, visible, visErr := s.checkSubmodelElementVisibilityInTx(ctx, tx, submodelID, idShortOrPath)
+		if visErr != nil {
+			return visErr
+		}
+		if !exists {
+			return common.NewErrNotFound("SMREPO-UPDSME-NOTFOUND Submodel-Element ID-Short: " + idShortOrPath)
+		}
+		if !visible {
+			return common.NewErrDenied("SMREPO-UPDSME-ABACDENIED Existing submodel element is not accessible under ABAC constraints")
+		}
+	}
+
+	err = s.updateSubmodelElementInTransaction(tx, submodelID, idShortOrPath, submodelElement, isPut)
+	if err != nil {
+		return err
+	}
+
+	if shouldEnforceABACWriteCheck(ctx) {
+		exists, visible, visErr := s.checkSubmodelElementVisibilityInTx(ctx, tx, submodelID, idShortOrPath)
+		if visErr != nil {
+			return visErr
+		}
+		if !exists || !visible {
+			return common.NewErrDenied("SMREPO-UPDSME-ABACDENIED Updated submodel element is not accessible under ABAC constraints")
+		}
+	}
+
+	return tx.Commit()
 }
 
 // UpdateSubmodelElementValueOnly updates a submodel element using value-only representation.
@@ -864,6 +1148,11 @@ func (s *SubmodelDatabase) PatchSubmodelMetadata(submodelID string, submodel typ
 
 // PutSubmodel creates or replaces a submodel in the database with the provided submodel data.
 func (s *SubmodelDatabase) PutSubmodel(submodelID string, submodel types.ISubmodel) (bool, error) {
+	return s.PutSubmodelWithContext(context.Background(), submodelID, submodel)
+}
+
+// PutSubmodelWithContext creates or replaces a submodel and checks ABAC access on old/new state before commit when ABAC is enabled.
+func (s *SubmodelDatabase) PutSubmodelWithContext(ctx context.Context, submodelID string, submodel types.ISubmodel) (bool, error) {
 	if submodelID != submodel.ID() {
 		return false, common.NewErrBadRequest("SMREPO-PUTSM-IDMISMATCH Submodel ID in path and body do not match")
 	}
@@ -878,9 +1167,32 @@ func (s *SubmodelDatabase) PutSubmodel(submodelID string, submodel types.ISubmod
 	}
 	defer cleanup(&err)
 
+	if shouldEnforceABACWriteCheck(ctx) {
+		exists, visible, visErr := s.checkSubmodelVisibilityInTx(ctx, tx, submodelID)
+		if visErr != nil {
+			return false, visErr
+		}
+		if exists && !visible {
+			return false, common.NewErrDenied("SMREPO-PUTSM-ABACDENIED Existing submodel is not accessible under ABAC constraints")
+		}
+	}
+
 	isUpdate, err := s.replaceSubmodelInTransaction(tx, submodelID, submodel, false)
 	if err != nil {
 		return false, err
+	}
+
+	if shouldEnforceABACWriteCheck(ctx) {
+		exists, visible, visErr := s.checkSubmodelVisibilityInTx(ctx, tx, submodelID)
+		if visErr != nil {
+			return false, visErr
+		}
+		if !exists {
+			return false, common.NewInternalServerError("SMREPO-PUTSM-ABACCHECKMISSING written submodel not found before commit")
+		}
+		if !visible {
+			return false, common.NewErrDenied("SMREPO-PUTSM-ABACDENIED Written submodel is not accessible under ABAC constraints")
+		}
 	}
 
 	err = tx.Commit()
@@ -893,11 +1205,29 @@ func (s *SubmodelDatabase) PutSubmodel(submodelID string, submodel types.ISubmod
 
 // DeleteSubmodel deletes a submodel by its identifier from the database.
 func (s *SubmodelDatabase) DeleteSubmodel(submodelID string) error {
+	return s.DeleteSubmodelWithContext(context.Background(), submodelID)
+}
+
+// DeleteSubmodelWithContext deletes a submodel and checks ABAC access on the existing submodel before delete when ABAC is enabled.
+func (s *SubmodelDatabase) DeleteSubmodelWithContext(ctx context.Context, submodelID string) (err error) {
 	tx, cleanup, err := common.StartTransaction(s.db)
 	if err != nil {
 		return common.NewInternalServerError("SMREPO-DELSM-STARTTX " + err.Error())
 	}
 	defer cleanup(&err)
+
+	if shouldEnforceABACWriteCheck(ctx) {
+		exists, visible, visErr := s.checkSubmodelVisibilityInTx(ctx, tx, submodelID)
+		if visErr != nil {
+			return visErr
+		}
+		if !exists {
+			return common.NewErrNotFound("SMREPO-DELSM-NOTFOUND Submodel with ID '" + submodelID + "' not found")
+		}
+		if !visible {
+			return common.NewErrDenied("SMREPO-DELSM-ABACDENIED Deleting this submodel is not allowed")
+		}
+	}
 
 	submodelDatabaseID, err := persistenceutils.GetSubmodelDatabaseID(tx, submodelID)
 	if err != nil {

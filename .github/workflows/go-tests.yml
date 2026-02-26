@@ -348,3 +348,25 @@ jobs:
         run: |
           cd internal/smregistry/security_tests
           go test -v
+
+          
+  submodel-repository-security-tests:
+    name: Submodel Repository Security Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v6
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Get dependencies
+        run: go mod download
+
+      - name: Run submodel repository security tests
+        run: |
+          cd internal/submodelrepository/security_tests
+          go test -v
+          
