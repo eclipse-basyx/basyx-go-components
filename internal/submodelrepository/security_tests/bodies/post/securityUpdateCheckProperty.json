@@ -1,0 +1,6 @@
+{
+  "idShort": "SecurityUpdateCheckProperty",
+  "modelType": "Property",
+  "value": "ORIGINAL_UPDATE_B",
+  "valueType": "xs:string"
+}

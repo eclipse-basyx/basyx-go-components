@@ -29,10 +29,13 @@ package grammar
 import (
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/builder"
 )
+
+var smeIDShortPathArrayIndexPattern = regexp.MustCompile(`\[[^\]]*\]`)
 
 // ArrayIndexBinding represents a concrete index access on an array-like
 // segment of a field path that has been normalized into SQL.
@@ -283,7 +286,7 @@ var arraySegmentMappings = map[string]arraySegmentMapping{
 			},
 			"semanticId": {
 				ctxSM:                 {PositionAlias: "semantic_id_reference_key.position", NextContext: ctxSM},
-				ctxSME:                {PositionAlias: "semantic_id_reference_key.position", NextContext: ctxSME},
+				ctxSME:                {PositionAlias: "sme_semantic_id_reference_key.position", NextContext: ctxSME},
 				ctxSMDesc:             {PositionAlias: "aasdesc_submodel_descriptor_semantic_id_reference_key.position", NextContext: ctxSMDesc},
 				ctxSubmodelDescriptor: {PositionAlias: "aasdesc_submodel_descriptor_semantic_id_reference_key.position", NextContext: ctxSubmodelDescriptor},
 			},
@@ -320,6 +323,18 @@ func contextFromFieldPrefix(fieldStr string) resolveContext {
 }
 
 func smeIDShortPathFromField(fieldStr string) (string, bool) {
+	rawPath, ok := smeRawIDShortPathFromField(fieldStr)
+	if !ok {
+		return "", false
+	}
+	path := smeIDShortPathArrayIndexPattern.ReplaceAllString(rawPath, "")
+	if strings.TrimSpace(path) == "" {
+		return "", false
+	}
+	return path, true
+}
+
+func smeRawIDShortPathFromField(fieldStr string) (string, bool) {
 	parts := strings.SplitN(fieldStr, "#", 2)
 	if len(parts) != 2 {
 		return "", false
@@ -336,6 +351,32 @@ func smeIDShortPathFromField(fieldStr string) (string, bool) {
 	return path, true
 }
 
+func smePrefixIndexBindingsFromField(fieldStr string) []ArrayIndexBinding {
+	rawPath, ok := smeRawIDShortPathFromField(fieldStr)
+	if !ok {
+		return nil
+	}
+
+	// Reuse the existing tokenizer by fabricating a field prefix.
+	tokens := builder.TokenizeField("$sme#" + rawPath)
+	if len(tokens) == 0 {
+		return nil
+	}
+
+	// We only have the target SME row alias in the current SQL translation path.
+	// Therefore we can bind only the closest array index (target row position).
+	for i := len(tokens) - 1; i >= 0; i-- {
+		if at, ok := tokens[i].(builder.ArrayToken); ok && at.Index >= 0 {
+			return []ArrayIndexBinding{{
+				Alias: "submodel_element.position",
+				Index: NewArrayIndexPosition(at.Index),
+			}}
+		}
+	}
+
+	return nil
+}
+
 func resolveArrayBindings(fieldStr string, tokens []builder.Token) ([]ArrayIndexBinding, error) {
 	ctx := contextFromFieldPrefix(fieldStr)
 	if ctx == ctxUnknown {
@@ -348,6 +389,7 @@ func resolveArrayBindings(fieldStr string, tokens []builder.Token) ([]ArrayIndex
 		if idShortPath, ok := smeIDShortPathFromField(fieldStr); ok {
 			bindings = append(bindings, ArrayIndexBinding{Alias: "submodel_element.idshort_path", Index: NewArrayIndexString(idShortPath)})
 		}
+		bindings = append(bindings, smePrefixIndexBindingsFromField(fieldStr)...)
 	}
 	prevSimple := ""
 	for _, tok := range tokens {

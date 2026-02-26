@@ -36,11 +36,21 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 )
 
-type descriptorRouteMapping struct {
+type scopedFilteredRouteMapping struct {
 	scope       string
 	route       string
 	filterField string
 	hasWildcard bool
+}
+
+type descriptorRouteMapping = scopedFilteredRouteMapping
+type identifiableRouteMapping = scopedFilteredRouteMapping
+
+type referableRouteMapping struct {
+	scope       string
+	route       string
+	hasWildcard bool
+	useFilter   bool
 }
 
 var descriptorRouteMappings = []descriptorRouteMapping{
@@ -82,6 +92,107 @@ var descriptorRouteMappings = []descriptorRouteMapping{
 	},
 }
 
+var identifiableRouteMappings = []identifiableRouteMapping{
+	// Submodel Repository collection/query endpoints use an additional filter
+	// on $sm#id when a concrete IDENTIFIABLE is provided.
+	{
+		scope:       "$sm",
+		route:       "/query/submodels",
+		filterField: "$sm#id",
+		hasWildcard: false,
+	},
+	{
+		scope:       "$sm",
+		route:       "/submodels",
+		filterField: "$sm#id",
+		hasWildcard: false,
+	},
+	{
+		scope:       "$sm",
+		route:       "/submodels/$metadata",
+		filterField: "$sm#id",
+		hasWildcard: false,
+	},
+	{
+		scope:       "$sm",
+		route:       "/submodels/$value",
+		filterField: "$sm#id",
+		hasWildcard: false,
+	},
+	{
+		scope:       "$sm",
+		route:       "/submodels/$reference",
+		filterField: "$sm#id",
+		hasWildcard: false,
+	},
+	{
+		scope:       "$sm",
+		route:       "/submodels/$path",
+		filterField: "$sm#id",
+		hasWildcard: false,
+	},
+	// Covers all concrete submodel endpoints under /submodels/{submodelIdentifier}/...
+	{
+		scope:       "$sm",
+		route:       "/submodels/%s",
+		filterField: "$sm#id",
+		hasWildcard: true,
+	},
+	{
+		scope:       "$sm",
+		route:       "/submodels/%s/**",
+		filterField: "$sm#id",
+		hasWildcard: true,
+	},
+}
+
+var referableRouteMappings = []referableRouteMapping{
+	// Submodel element collection endpoints can be narrowed via an ABAC filter.
+	{
+		scope:       "$sme",
+		route:       "/submodels/%s/submodel-elements",
+		hasWildcard: true,
+		useFilter:   true,
+	},
+	{
+		scope:       "$sme",
+		route:       "/submodels/%s/submodel-elements/$metadata",
+		hasWildcard: true,
+		useFilter:   true,
+	},
+	{
+		scope:       "$sme",
+		route:       "/submodels/%s/submodel-elements/$value",
+		hasWildcard: true,
+		useFilter:   true,
+	},
+	{
+		scope:       "$sme",
+		route:       "/submodels/%s/submodel-elements/$reference",
+		hasWildcard: true,
+		useFilter:   true,
+	},
+	{
+		scope:       "$sme",
+		route:       "/submodels/%s/submodel-elements/$path",
+		hasWildcard: true,
+		useFilter:   true,
+	},
+	// Exact element route and all element sub-resources.
+	{
+		scope:       "$sme",
+		route:       "/submodels/%s/submodel-elements/%s",
+		hasWildcard: true,
+		useFilter:   false,
+	},
+	{
+		scope:       "$sme",
+		route:       "/submodels/%s/submodel-elements/%s/**",
+		hasWildcard: true,
+		useFilter:   false,
+	},
+}
+
 // RouteWithFilter couples a concrete HTTP route pattern with an optional
 // logical expression. When the route matches a request path, the expression
 // (if present) is AND-ed into the overall filter used by the backend.
@@ -91,49 +202,124 @@ type RouteWithFilter struct {
 }
 
 func mapDescriptorValueToRoute(descriptorValue grammar.DescriptorValue, basePath string) []RouteWithFilter {
+	return mapScopedIdentifierValueToRoute(
+		descriptorValue.Scope,
+		descriptorValue.ID,
+		basePath,
+		descriptorRouteMappings,
+	)
+}
+
+func mapIdentifiableValueToRoute(identifiableValue grammar.IdentifiableValue, basePath string) []RouteWithFilter {
+	return mapScopedIdentifierValueToRoute(
+		identifiableValue.Scope,
+		identifiableValue.ID,
+		basePath,
+		identifiableRouteMappings,
+	)
+}
+
+func mapReferableValueToRoute(referableValue grammar.ReferableValue, basePath string) []RouteWithFilter {
 	var routes = []RouteWithFilter{}
 
-	for _, mapping := range descriptorRouteMappings {
-		if mapping.scope != descriptorValue.Scope {
+	if referableValue.Scope != "$sme" {
+		return routes
+	}
+
+	idShortPath := strings.TrimSpace(referableValue.IDShortPath)
+	if idShortPath == "" {
+		return routes
+	}
+
+	lastPathSegment := idShortPath
+	if idx := strings.LastIndex(idShortPath, "."); idx >= 0 && idx+1 < len(idShortPath) {
+		lastPathSegment = idShortPath[idx+1:]
+	}
+
+	routeFilter := buildStringEqFilter("$sme."+idShortPath+"#idShort", lastPathSegment)
+
+	for _, mapping := range referableRouteMappings {
+		if mapping.scope != referableValue.Scope {
 			continue
 		}
 
-		if descriptorValue.ID.IsAll {
-			if !mapping.hasWildcard {
-				routes = append(routes,
-					RouteWithFilter{route: joinBasePath(basePath, mapping.route)},
-				)
-				continue
-			}
-			routes = append(routes,
-				RouteWithFilter{route: joinBasePath(basePath, fmt.Sprintf(mapping.route, "*"))},
-			)
+		smIDPart := "*"
+		if !referableValue.ID.IsAll {
+			smIDPart = common.EncodeString(referableValue.ID.ID)
+		}
+
+		route := mapping.route
+		if strings.Count(route, "%s") == 2 {
+			route = fmt.Sprintf(route, smIDPart, idShortPath)
+		} else {
+			route = fmt.Sprintf(route, smIDPart)
+		}
+
+		if mapping.useFilter {
+			routes = append(routes, RouteWithFilter{
+				route: joinBasePath(basePath, route),
+				le:    routeFilter,
+			})
 			continue
 		}
 
-		rawID := descriptorValue.ID.ID
+		routes = append(routes, RouteWithFilter{route: joinBasePath(basePath, route)})
+	}
+
+	return routes
+}
+
+func mapScopedIdentifierValueToRoute(scope string, identifier grammar.Identifier, basePath string, mappings []scopedFilteredRouteMapping) []RouteWithFilter {
+	routes := make([]RouteWithFilter, 0)
+	for _, mapping := range mappings {
+		if mapping.scope != scope {
+			continue
+		}
+
+		if identifier.IsAll {
+			routes = append(routes, buildWildcardRoute(basePath, mapping))
+			continue
+		}
+
+		rawID := identifier.ID
 		encodedID := common.EncodeString(rawID)
-
-		field := grammar.ModelStringPattern(mapping.filterField)
-		standardString := grammar.StandardString(rawID)
-
-		extraFilter := grammar.LogicalExpression{
-			Eq: grammar.ComparisonItems{
-				grammar.Value{Field: &field},
-				grammar.Value{StrVal: &standardString},
-			},
-		}
+		extraFilter := buildStringEqFilter(mapping.filterField, rawID)
 
 		if !mapping.hasWildcard {
-			routes = append(routes,
-				RouteWithFilter{route: joinBasePath(basePath, mapping.route), le: &extraFilter},
-			)
+			routes = append(routes, RouteWithFilter{
+				route: joinBasePath(basePath, mapping.route),
+				le:    extraFilter,
+			})
 		}
-		routes = append(routes,
-			RouteWithFilter{route: joinBasePath(basePath, fmt.Sprintf(mapping.route, encodedID))},
-		)
+
+		routes = append(routes, RouteWithFilter{
+			route: joinBasePath(basePath, fmt.Sprintf(mapping.route, encodedID)),
+		})
 	}
+
 	return routes
+}
+
+func buildWildcardRoute(basePath string, mapping scopedFilteredRouteMapping) RouteWithFilter {
+	if !mapping.hasWildcard {
+		return RouteWithFilter{route: joinBasePath(basePath, mapping.route)}
+	}
+
+	return RouteWithFilter{
+		route: joinBasePath(basePath, fmt.Sprintf(mapping.route, "*")),
+	}
+}
+
+func buildStringEqFilter(fieldPath string, value string) *grammar.LogicalExpression {
+	field := grammar.ModelStringPattern(fieldPath)
+	standardString := grammar.StandardString(value)
+	expr := grammar.LogicalExpression{
+		Eq: grammar.ComparisonItems{
+			grammar.Value{Field: &field},
+			grammar.Value{StrVal: &standardString},
+		},
+	}
+	return &expr
 }
 
 // AccessWithLE represents the outcome of matching a request path against a
@@ -148,7 +334,7 @@ type AccessWithLE struct {
 // matchRouteObjectsObjItem returns true if any ROUTE object matches the request
 // path. Supports exact match, prefix match using "/*", and global wildcards.
 func matchRouteObjectsObjItem(objs []grammar.ObjectItem, reqPath string, basePath string) AccessWithLE {
-	var locialExpressions []grammar.LogicalExpression
+	var logicalExpressions []grammar.LogicalExpression
 	access := false
 	for _, oi := range objs {
 		switch oi.Kind {
@@ -159,27 +345,51 @@ func matchRouteObjectsObjItem(objs []grammar.ObjectItem, reqPath string, basePat
 		case grammar.Descriptor:
 			desc := oi.Descriptor
 			if desc != nil {
-				for _, routeWithFilter := range mapDescriptorValueToRoute(*desc, basePath) {
-					if matchRouteANT(routeWithFilter.route, reqPath) {
-						if routeWithFilter.le == nil {
-							return AccessWithLE{access: true}
-						}
-
-						access = true
-						locialExpressions = append(locialExpressions, *routeWithFilter.le)
-					}
+				if appendMatchedMappedRoutes(mapDescriptorValueToRoute(*desc, basePath), reqPath, &access, &logicalExpressions) {
+					return AccessWithLE{access: true}
+				}
+			}
+		case grammar.Identifiable:
+			identifiable := oi.Identifiable
+			if identifiable != nil {
+				if appendMatchedMappedRoutes(mapIdentifiableValueToRoute(*identifiable, basePath), reqPath, &access, &logicalExpressions) {
+					return AccessWithLE{access: true}
+				}
+			}
+		case grammar.Referable:
+			referable := oi.Referable
+			if referable != nil {
+				if appendMatchedMappedRoutes(mapReferableValueToRoute(*referable, basePath), reqPath, &access, &logicalExpressions) {
+					return AccessWithLE{access: true}
 				}
 			}
 		}
 	}
 
 	var objectLogicalExpression *grammar.LogicalExpression
-	if len(locialExpressions) > 0 {
+	if len(logicalExpressions) > 0 {
 		objectLogicalExpression = &grammar.LogicalExpression{
-			Or: locialExpressions,
+			Or: logicalExpressions,
 		}
 	}
 	return AccessWithLE{access: access, le: objectLogicalExpression}
+}
+
+func appendMatchedMappedRoutes(routes []RouteWithFilter, reqPath string, access *bool, logicalExpressions *[]grammar.LogicalExpression) bool {
+	for _, routeWithFilter := range routes {
+		if !matchRouteANT(routeWithFilter.route, reqPath) {
+			continue
+		}
+
+		if routeWithFilter.le == nil {
+			return true
+		}
+
+		*access = true
+		*logicalExpressions = append(*logicalExpressions, *routeWithFilter.le)
+	}
+
+	return false
 }
 
 // --- HELPER ---

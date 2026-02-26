@@ -1,0 +1,45 @@
+{
+  "category": "VARIABLE",
+  "idShort": "InstanceId",
+  "modelType": "Property",
+  "semanticId": {
+    "keys": [
+      {
+        "type": "GlobalReference",
+        "value": "http://opcfoundation.org/UA/DI/1.1/DeviceType/Serialnumber"
+      }
+    ],
+    "type": "ExternalReference"
+  },
+  "supplementalSemanticIds": [
+    {
+      "keys": [
+        {
+          "type": "GlobalReference",
+          "value": "something_random_e14ad770"
+        }
+      ],
+      "type": "ExternalReference"
+    },
+    {
+      "keys": [
+        {
+          "type": "GlobalReference",
+          "value": "something_random_bd061acd"
+        }
+      ],
+      "type": "ExternalReference"
+    }
+  ],
+  "value": "SECURITY_UPDATED_Y",
+  "valueId": {
+    "keys": [
+      {
+        "type": "GlobalReference",
+        "value": "SECURITY_UPDATED_Y"
+      }
+    ],
+    "type": "ExternalReference"
+  },
+  "valueType": "xs:string"
+}

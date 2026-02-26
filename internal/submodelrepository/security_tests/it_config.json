@@ -1,0 +1,310 @@
+[
+  {
+    "context": "Anonymous list denied",
+    "token": null,
+    "method": "GET",
+    "endpoint": "http://localhost:6004/submodels",
+    "expectedStatus": 403
+  },
+  {
+    "context": "POST annotated submodel - admin",
+    "token": { "user": "admin", "password": "pwd" },
+    "method": "POST",
+    "endpoint": "http://localhost:6004/submodels",
+    "data": "../integration_tests/bodies/post/postSubmodelWithAnnotatedRelationshipElement.json",
+    "shouldMatch": "../integration_tests/bodies/post/postSubmodelWithAnnotatedRelationshipElement.json",
+    "expectedStatus": 201
+  },
+  {
+    "context": "POST relationship submodel - admin",
+    "token": { "user": "admin", "password": "pwd" },
+    "method": "POST",
+    "endpoint": "http://localhost:6004/submodels",
+    "data": "../integration_tests/bodies/post/postSubmodelWithRelationshipElement.json",
+    "shouldMatch": "../integration_tests/bodies/post/postSubmodelWithRelationshipElement.json",
+    "expectedStatus": 201
+  },
+  {
+    "context": "GET annotated submodel - userx denied (referable-only user)",
+    "token": { "user": "userx", "password": "pwd" },
+    "method": "GET",
+    "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlBbm5vdGF0ZWRSZWxhdGlvbnNoaXBFbGVtZW50U3VibW9kZWw",
+    "expectedStatus": 403
+  },
+  {
+    "context": "GET annotated submodel elements - userx allowed (referable-only user)",
+    "token": { "user": "userx", "password": "pwd" },
+    "method": "GET",
+    "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlBbm5vdGF0ZWRSZWxhdGlvbnNoaXBFbGVtZW50U3VibW9kZWw/submodel-elements",
+    "shouldMatch": "expected/expectedAnnotatedSubmodelElements.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "GET exact annotated SME - userx allowed (referable-only user)",
+    "token": { "user": "userx", "password": "pwd" },
+    "method": "GET",
+    "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlBbm5vdGF0ZWRSZWxhdGlvbnNoaXBFbGVtZW50U3VibW9kZWw/submodel-elements/DemoAnnotatedRelationshipElement",
+    "shouldMatch": "expected/expectedAnnotatedRelationshipElement.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "GET annotation child - userx denied (referable-only does not grant child here)",
+    "token": { "user": "userx", "password": "pwd" },
+    "method": "GET",
+    "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlBbm5vdGF0ZWRSZWxhdGlvbnNoaXBFbGVtZW50U3VibW9kZWw/submodel-elements/DemoAnnotatedRelationshipElement.AnnotationProperty1",
+    "expectedStatus": 403
+  },
+  {
+    "context": "GET relationship submodel - userx denied (referable-only user)",
+    "token": { "user": "userx", "password": "pwd" },
+    "method": "GET",
+    "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlSZWxhdGlvbnNoaXBFbGVtZW50U3VibW9kZWw",
+    "expectedStatus": 403
+  },
+  {
+    "context": "GET exact relationship SME - userx allowed (referable-only user)",
+    "token": { "user": "userx", "password": "pwd" },
+    "method": "GET",
+    "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlSZWxhdGlvbnNoaXBFbGVtZW50U3VibW9kZWw/submodel-elements/DemoRelationshipElement",
+    "shouldMatch": "expected/expectedRelationshipElement.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "POST demo submodel shell - admin",
+    "token": { "user": "admin", "password": "pwd" },
+    "method": "POST",
+    "endpoint": "http://localhost:6004/submodels",
+    "data": "../integration_tests/bodies/post/postSubmodel.json",
+    "expectedStatus": 201
+  },
+  {
+    "context": "POST demo collection-heavy SME root - admin",
+    "token": { "user": "admin", "password": "pwd" },
+    "method": "POST",
+    "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements",
+    "data": "../integration_tests/bodies/post/postFullSME.json",
+    "expectedStatus": 201
+  },
+  {
+    "context": "GET /submodels - userx allowed via $sme# existential",
+    "token": { "user": "userx", "password": "pwd" },
+    "method": "GET",
+    "endpoint": "http://localhost:6004/submodels",
+    "expectedStatus": 200
+  },
+  {
+    "context": "GET demo submodel - userx allowed via $sme# existential",
+    "token": { "user": "userx", "password": "pwd" },
+    "method": "GET",
+    "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw",
+    "expectedStatus": 200
+  },
+  {
+    "context": "GET demo submodel elements - userx allowed via $sme# existential",
+    "token": { "user": "userx", "password": "pwd" },
+    "method": "GET",
+    "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements",
+    "expectedStatus": 200
+  },
+  {
+    "context": "GET nested relationship SME - userx allowed via no-index idShortPath field",
+    "token": { "user": "userx", "password": "pwd" },
+    "method": "GET",
+    "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/ExampleSubmodelElementCollection.ExampleRelationshipElement",
+    "shouldMatch": "expected/expectedDemoRelationshipElement.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "GET nested annotated SME - userx denied via false $sme# formula",
+    "token": { "user": "userx", "password": "pwd" },
+    "method": "GET",
+    "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/ExampleSubmodelElementCollection.ExampleAnnotatedRelationshipElement",
+    "expectedStatus": 404
+  },
+  {
+    "context": "GET list item [0] - userx denied (no indexed-path grant rule)",
+    "token": { "user": "userx", "password": "pwd" },
+    "method": "GET",
+    "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/ExampleSubmodelElementCollection.ExampleSubmodelElementListOrdered[0]",
+    "expectedStatus": 403
+  },
+  {
+    "context": "GET nested relationship SME - usery allowed via indexed idShortPath field",
+    "token": { "user": "usery", "password": "pwd" },
+    "method": "GET",
+    "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/ExampleSubmodelElementCollection.ExampleRelationshipElement",
+    "shouldMatch": "expected/expectedDemoRelationshipElement.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "GET list item [0] - usery allowed via $sme# valueType existential",
+    "token": { "user": "usery", "password": "pwd" },
+    "method": "GET",
+    "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/ExampleSubmodelElementCollection.ExampleSubmodelElementListOrdered[0]",
+    "shouldMatch": "expected/expectedDemoListItem0.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "GET /submodels - usera formula filtered",
+    "token": { "user": "usera", "password": "pwd" },
+    "method": "GET",
+    "endpoint": "http://localhost:6004/submodels",
+    "shouldMatch": "expected/expectedSubmodelsUserA.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "GET annotated submodel - usera formula filtered",
+    "token": { "user": "usera", "password": "pwd" },
+    "method": "GET",
+    "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlBbm5vdGF0ZWRSZWxhdGlvbnNoaXBFbGVtZW50U3VibW9kZWw",
+    "shouldMatch": "../integration_tests/bodies/post/postSubmodelWithAnnotatedRelationshipElement.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "GET relationship submodel - usera filtered out",
+    "token": { "user": "usera", "password": "pwd" },
+    "method": "GET",
+    "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlSZWxhdGlvbnNoaXBFbGVtZW50U3VibW9kZWw",
+    "expectedStatus": 404
+  },
+  {
+    "context": "GET annotated submodel elements - usera formula filtered",
+    "token": { "user": "usera", "password": "pwd" },
+    "method": "GET",
+    "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlBbm5vdGF0ZWRSZWxhdGlvbnNoaXBFbGVtZW50U3VibW9kZWw/submodel-elements",
+    "shouldMatch": "expected/expectedAnnotatedSubmodelElements.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "GET exact annotated SME - usera formula filtered",
+    "token": { "user": "usera", "password": "pwd" },
+    "method": "GET",
+    "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlBbm5vdGF0ZWRSZWxhdGlvbnNoaXBFbGVtZW50U3VibW9kZWw/submodel-elements/DemoAnnotatedRelationshipElement",
+    "shouldMatch": "expected/expectedAnnotatedRelationshipElement.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "GET relationship submodel elements - usera filtered out",
+    "token": { "user": "usera", "password": "pwd" },
+    "method": "GET",
+    "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlSZWxhdGlvbnNoaXBFbGVtZW50U3VibW9kZWw/submodel-elements",
+    "shouldMatch": "expected/expectedEmptySubmodelElements.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "GET /submodels - userb object filtered (IDENTIFIABLE OR)",
+    "token": { "user": "userb", "password": "pwd" },
+    "method": "GET",
+    "endpoint": "http://localhost:6004/submodels",
+    "expectedStatus": 200
+  },
+  {
+    "context": "GET annotated submodel - userb object access",
+    "token": { "user": "userb", "password": "pwd" },
+    "method": "GET",
+    "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlBbm5vdGF0ZWRSZWxhdGlvbnNoaXBFbGVtZW50U3VibW9kZWw",
+    "shouldMatch": "../integration_tests/bodies/post/postSubmodelWithAnnotatedRelationshipElement.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "GET relationship submodel - userb object access",
+    "token": { "user": "userb", "password": "pwd" },
+    "method": "GET",
+    "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlSZWxhdGlvbnNoaXBFbGVtZW50U3VibW9kZWw",
+    "shouldMatch": "../integration_tests/bodies/post/postSubmodelWithRelationshipElement.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "GET relationship submodel elements - userb REFERABLE object access",
+    "token": { "user": "userb", "password": "pwd" },
+    "method": "GET",
+    "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlSZWxhdGlvbnNoaXBFbGVtZW50U3VibW9kZWw/submodel-elements",
+    "shouldMatch": "expected/expectedRelationshipSubmodelElements.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "GET exact relationship SME - userb REFERABLE object access",
+    "token": { "user": "userb", "password": "pwd" },
+    "method": "GET",
+    "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlSZWxhdGlvbnNoaXBFbGVtZW50U3VibW9kZWw/submodel-elements/DemoRelationshipElement",
+    "shouldMatch": "expected/expectedRelationshipElement.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "POST submodel - userx allowed only for matching body condition",
+    "token": { "user": "userx", "password": "pwd" },
+    "method": "POST",
+    "endpoint": "http://localhost:6004/submodels",
+    "data": "bodies/post/writeAllowedSubmodel.json",
+    "expectedStatus": 201
+  },
+  {
+    "context": "POST submodel - userx denied for non-matching body condition",
+    "token": { "user": "userx", "password": "pwd" },
+    "method": "POST",
+    "endpoint": "http://localhost:6004/submodels",
+    "data": "bodies/post/writeDeniedSubmodel.json",
+    "expectedStatus": 403
+  },
+  {
+    "context": "POST SME - userx allowed only for matching body condition",
+    "token": { "user": "userx", "password": "pwd" },
+    "method": "POST",
+    "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements",
+    "data": "bodies/post/writeAllowedProperty.json",
+    "expectedStatus": 201
+  },
+  {
+    "context": "POST SME - userx denied for non-matching body condition",
+    "token": { "user": "userx", "password": "pwd" },
+    "method": "POST",
+    "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements",
+    "data": "bodies/post/writeDeniedProperty.json",
+    "expectedStatus": 403
+  },
+  {
+    "context": "POST SME seed for PUT old/new check - admin",
+    "token": { "user": "admin", "password": "pwd" },
+    "method": "POST",
+    "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements",
+    "data": "bodies/post/securityUpdateCheckProperty.json",
+    "expectedStatus": 201
+  },
+  {
+    "context": "PUT SME - userx denied if new data would violate formula (needs old+new check)",
+    "token": { "user": "userx", "password": "pwd" },
+    "method": "PUT",
+    "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/SecurityAllowedProperty",
+    "data": "bodies/put/putSecurityAllowedPropertyUpdate.json",
+    "expectedStatus": 403
+  },
+  {
+    "context": "PUT SME - usery denied if old data would violate formula (needs old+new check)",
+    "token": { "user": "usery", "password": "pwd" },
+    "method": "PUT",
+    "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/SecurityUpdateCheckProperty",
+    "data": "bodies/put/putSecurityUpdateCheckPropertyUpdate.json",
+    "expectedStatus": 403
+  },
+  {
+    "context": "DELETE submodel - userx denied (referable-only delete should not allow submodel delete)",
+    "token": { "user": "userx", "password": "pwd" },
+    "method": "DELETE",
+    "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlSZWxhdGlvbnNoaXBFbGVtZW50U3VibW9kZWw",
+    "expectedStatus": 403
+  },
+  {
+    "context": "DELETE annotated SME - userx denied (no delete access on this referable)",
+    "token": { "user": "userx", "password": "pwd" },
+    "method": "DELETE",
+    "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlBbm5vdGF0ZWRSZWxhdGlvbnNoaXBFbGVtZW50U3VibW9kZWw/submodel-elements/DemoAnnotatedRelationshipElement",
+    "expectedStatus": 403
+  },
+  {
+    "context": "DELETE relationship SME - userx allowed when target referable is allowed",
+    "token": { "user": "userx", "password": "pwd" },
+    "method": "DELETE",
+    "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlSZWxhdGlvbnNoaXBFbGVtZW50U3VibW9kZWw/submodel-elements/DemoRelationshipElement",
+    "expectedStatus": 204
+  }
+]

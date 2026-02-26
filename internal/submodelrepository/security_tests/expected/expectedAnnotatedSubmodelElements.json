@@ -1,0 +1,35 @@
+{
+  "paging_metadata": {},
+  "result": [
+    {
+      "modelType": "AnnotatedRelationshipElement",
+      "idShort": "DemoAnnotatedRelationshipElement",
+      "first": {
+        "type": "ModelReference",
+        "keys": [
+          {
+            "type": "Submodel",
+            "value": "urn:uuid:123e4567-e89b-12d3-a456-426614174000"
+          }
+        ]
+      },
+      "second": {
+        "type": "ModelReference",
+        "keys": [
+          {
+            "type": "Submodel",
+            "value": "urn:uuid:123e4567-e89b-12d3-a456-426614174001"
+          }
+        ]
+      },
+      "annotations": [
+        {
+          "modelType": "Property",
+          "idShort": "AnnotationProperty1",
+          "valueType": "xs:string",
+          "value": "AnnotationValue1"
+        }
+      ]
+    }
+  ]
+}

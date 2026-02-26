@@ -16,6 +16,7 @@ import (
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/jws"
+	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	"github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/api"
 	persistencepostgresql "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence"
 	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/submodelrepositoryapi/go"
@@ -35,6 +36,9 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 
 	// Create Chi router
 	r := chi.NewRouter()
+
+	// Make configuration available in request contexts.
+	r.Use(common.ConfigMiddleware(config))
 
 	// Enable CORS
 	common.AddCors(r, config)
@@ -68,20 +72,33 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 
 	smSvc := api.NewSubmodelRepositoryAPIAPIService(*smDatabase)
 	smCtrl := openapi.NewSubmodelRepositoryAPIAPIController(smSvc, config.Server.ContextPath, config.Server.StrictVerification)
-	for _, rt := range smCtrl.Routes() {
-		r.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
-	}
 
 	// ==== Description Service ====
 	descSvc := openapi.NewDescriptionAPIAPIService()
 	descCtrl := openapi.NewDescriptionAPIAPIController(descSvc)
-	for _, rt := range descCtrl.Routes() {
-		r.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
+	base := common.NormalizeBasePath(config.Server.ContextPath)
+
+	// === Protected API Subrouter ===
+	apiRouter := chi.NewRouter()
+
+	// Apply OIDC + ABAC once for all repository endpoints
+	if err := auth.SetupSecurity(ctx, config, apiRouter); err != nil {
+		return err
 	}
+
+	for _, rt := range smCtrl.Routes() {
+		apiRouter.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
+	}
+	for _, rt := range descCtrl.Routes() {
+		apiRouter.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
+	}
+
+	// Mount protected API under base path
+	r.Mount(base, apiRouter)
 
 	// Start the server
 	addr := "0.0.0.0:" + fmt.Sprintf("%d", config.Server.Port)
-	log.Printf("▶️  Submodel Repository listening on %s\n", addr)
+	log.Printf("▶️  Submodel Repository listening on %s (contextPath=%q)\n", addr, config.Server.ContextPath)
 	// Start server in a goroutine
 	go func() {
 		//nolint:gosec // implementing this fix would cause errors.

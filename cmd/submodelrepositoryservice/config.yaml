@@ -15,6 +15,14 @@ postgres:
   maxIdleConnections: 500
   connMaxLifetimeMinutes: 5
 
+oidc:
+  trustlistPath: "config/trustlist.json"
+
+
+abac:
+  enabled: true
+  modelPath: "config/access_rules/access-rules.json"
+
 # jws:
 #   privateKeyPath: "./rsa-key.pem"
 
