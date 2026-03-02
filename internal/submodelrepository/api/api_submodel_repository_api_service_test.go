@@ -1,8 +1,11 @@
 package api
 
 import (
+	"context"
+	"encoding/base64"
 	"testing"
 
+	persistencepostgresql "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence"
 	"github.com/stretchr/testify/require"
 )
 
@@ -62,4 +65,15 @@ func TestResolveModelReferencePathKeysBuildsListIndexSegment(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, []string{"SubmodelElementCollection", "SubmodelElementCollection", "SubmodelElementList"}, keyTypes)
 	require.Equal(t, []string{"test", "test", "0"}, keyValues)
+}
+
+func TestGetSubmodelElementByPathSubmodelRepoRejectsInvalidLevel(t *testing.T) {
+	t.Parallel()
+
+	sut := NewSubmodelRepositoryAPIAPIService(persistencepostgresql.SubmodelDatabase{})
+	encodedSubmodelID := base64.RawStdEncoding.EncodeToString([]byte("sm-1"))
+
+	response, err := sut.GetSubmodelElementByPathSubmodelRepo(context.Background(), encodedSubmodelID, "a.b", "invalid-level", "")
+	require.NoError(t, err)
+	require.Equal(t, 400, response.Code)
 }

@@ -254,6 +254,20 @@
         "expectedStatus": 200
     },
     {
+        "context": "Get All SubmodelElements Deep - Entity Submodel",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlFbnRpdHlTdWJtb2RlbA/submodel-elements?level=deep",
+        "shouldMatch": "expected/expectedGetAllSubmodelElementsEntityDeep.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "Get All SubmodelElements Core - Entity Submodel",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlFbnRpdHlTdWJtb2RlbA/submodel-elements?level=core",
+        "shouldMatch": "expected/expectedGetAllSubmodelElementsEntityCore.json",
+        "expectedStatus": 200
+    },
+    {
         "context": "Get Submodel with Entity SubmodelElement - Get Statement",
         "method": "GET",
         "endpoint": "http://localhost:6004/submodels/TWFyY3VzVGhpc0lzQU9ubHlFbnRpdHlTdWJtb2RlbA/submodel-elements/DemoEntity.StatementProperty1",
@@ -1170,6 +1184,13 @@
         "expectedStatus": 200
     },
     {
+        "context": "GET - Verify List with level core returns one level",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.List?level=core",
+        "shouldMatch": "expected/expectedGetTestContainerListLevelCoreOneLevel.json",
+        "expectedStatus": 200
+    },
+    {
         "context": "POST - Property in Entity",
         "method": "POST",
         "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.Entity",
@@ -1184,6 +1205,13 @@
         "expectedStatus": 200
     },
     {
+        "context": "GET - Verify Entity with level core returns one level",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.Entity?level=core",
+        "shouldMatch": "expected/expectedGetTestContainerEntityLevelCoreOneLevel.json",
+        "expectedStatus": 200
+    },
+    {
         "context": "POST - Property in AnnotatedRelationship",
         "method": "POST",
         "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.AnnotatedRelationship",
@@ -1195,6 +1223,20 @@
         "method": "GET",
         "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.AnnotatedRelationship.NestedPropertyAnnotation",
         "shouldMatch": "bodies/post/nested/postPropertyInAnnotatedRelationship.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "GET - Verify AnnotatedRelationship with level core returns one level",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer.AnnotatedRelationship?level=core",
+        "shouldMatch": "expected/expectedGetTestContainerAnnotatedRelationshipLevelCoreOneLevel.json",
+        "expectedStatus": 200
+    },
+    {
+        "context": "GET - Verify TestContainer with level core returns one level",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/TestContainer?level=core",
+        "shouldMatch": "expected/expectedGetTestContainerLevelCoreOneLevel.json",
         "expectedStatus": 200
     },
     {

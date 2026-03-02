@@ -1,0 +1,45 @@
+{
+    "idShort": "TestContainer",
+    "modelType": "SubmodelElementCollection",
+    "value": [
+        {
+            "idShort": "List",
+            "modelType": "SubmodelElementList",
+            "orderRelevant": true,
+            "typeValueListElement": "SubmodelElement"
+        },
+        {
+            "idShort": "Entity",
+            "modelType": "Entity",
+            "entityType": "CoManagedEntity"
+        },
+        {
+            "idShort": "AnnotatedRelationship",
+            "modelType": "AnnotatedRelationshipElement",
+            "first": {
+                "keys": [
+                    {
+                        "type": "Submodel",
+                        "value": "https://acplt.org/Test_Submodel"
+                    }
+                ],
+                "type": "ModelReference"
+            },
+            "second": {
+                "keys": [
+                    {
+                        "type": "Submodel",
+                        "value": "https://acplt.org/Test_Submodel2"
+                    }
+                ],
+                "type": "ModelReference"
+            }
+        },
+        {
+            "idShort": "NestedProperty",
+            "modelType": "Property",
+            "value": "nestedInCollection",
+            "valueType": "xs:string"
+        }
+    ]
+}
