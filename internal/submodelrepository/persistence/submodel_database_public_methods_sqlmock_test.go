@@ -85,7 +85,7 @@ func TestGetSubmodelByIDReturnsErrorWhenParallelReadsFail(t *testing.T) {
 
 	mock.ExpectQuery(`SELECT .*`).WillReturnError(errors.New("read failed"))
 
-	item, err := sut.GetSubmodelByID("", "deep")
+	item, err := sut.GetSubmodelByID("", "")
 	require.Error(t, err)
 	require.Nil(t, item)
 	require.NoError(t, mock.ExpectationsWereMet())
