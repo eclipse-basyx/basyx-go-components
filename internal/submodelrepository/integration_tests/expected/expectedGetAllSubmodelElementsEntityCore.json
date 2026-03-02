@@ -15,6 +15,14 @@
                     "name": "CustomKey2",
                     "value": "CustomValue2"
                 }
+            ],
+            "statements": [
+                {
+                    "idShort": "StatementProperty1",
+                    "modelType": "Property",
+                    "value": "StatementValue1",
+                    "valueType": "xs:string"
+                }
             ]
         }
     ]
