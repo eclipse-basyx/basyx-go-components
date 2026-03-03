@@ -59,7 +59,7 @@ func AddFilterQueryFromContext(
 }
 
 // AddFilterQueriesFromContext appends WHERE clauses for multiple fragments
-// while skipping duplicate fragment entries.
+// while skipping duplicate fragment entries and equivalent mask signatures.
 func AddFilterQueriesFromContext(
 	ctx context.Context,
 	ds *goqu.SelectDataset,
@@ -67,12 +67,22 @@ func AddFilterQueriesFromContext(
 	collector *grammar.ResolvedFieldPathCollector,
 ) (*goqu.SelectDataset, error) {
 	seenFragments := make(map[grammar.FragmentStringPattern]struct{}, len(fragments))
-	var err error
+	seenSignatures := make(map[string]struct{}, len(fragments))
 	for _, fragment := range fragments {
 		if _, ok := seenFragments[fragment]; ok {
 			continue
 		}
 		seenFragments[fragment] = struct{}{}
+
+		signature, err := buildFragmentMaskSignature(ctx, fragment)
+		if err != nil {
+			return nil, err
+		}
+		if _, ok := seenSignatures[signature]; ok {
+			continue
+		}
+		seenSignatures[signature] = struct{}{}
+
 		ds, err = AddFilterQueryFromContext(ctx, ds, fragment, collector)
 		if err != nil {
 			return nil, err
