@@ -438,7 +438,7 @@ func buildListAASDescriptorPageQuery(
 	collector *grammar.ResolvedFieldPathCollector,
 ) (*goqu.SelectDataset, error) {
 	if peekLimit < 0 {
-		return nil, common.NewErrBadRequest("Limit has to be higher than 0")
+		return nil, common.NewErrBadRequest("Limit must not be negative")
 	}
 
 	d := goqu.Dialect(common.Dialect)
