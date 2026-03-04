@@ -27,6 +27,7 @@
 package grammar
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -42,10 +43,10 @@ func buildSMESQL(t *testing.T, expr LogicalExpression) (string, []interface{}) {
 	}
 
 	d := goqu.Dialect("postgres")
-	ds := d.From(goqu.T("submodel_element").As("submodel_element")).
+	ds := d.From(goqu.T("submodel_element").As("sme")).
 		LeftJoin(
 			goqu.T("property_element").As("property_element"),
-			goqu.On(goqu.I("property_element.id").Eq(goqu.I("submodel_element.id"))),
+			goqu.On(goqu.I("property_element.id").Eq(goqu.I("sme.id"))),
 		).
 		Select(goqu.V(1)).
 		Where(whereExpr)
@@ -57,6 +58,30 @@ func buildSMESQL(t *testing.T, expr LogicalExpression) (string, []interface{}) {
 	return sql, args
 }
 
+func argsString(args []interface{}) string {
+	return fmt.Sprint(args)
+}
+
+func argsContainInt(args []interface{}, want int) bool {
+	for _, arg := range args {
+		switch v := arg.(type) {
+		case int:
+			if v == want {
+				return true
+			}
+		case int32:
+			if int(v) == want {
+				return true
+			}
+		case int64:
+			if int(v) == want {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func TestLogicalExpression_SME_WithCollector_BuildsCTE(t *testing.T) {
 	expr := LogicalExpression{
 		Eq: ComparisonItems{
@@ -65,20 +90,20 @@ func TestLogicalExpression_SME_WithCollector_BuildsCTE(t *testing.T) {
 		},
 	}
 
-	sql, _ := buildSMESQL(t, expr)
+	sql, args := buildSMESQL(t, expr)
 	t.Logf("SQL: %s", sql)
 
-	if !strings.Contains(sql, "submodel_element__exists\".\"idshort_path\"") {
+	if !strings.Contains(sql, "\"submodel_element\".\"idshort_path\" = ?") {
 		t.Fatalf("expected idshort_path binding in EXISTS SQL, got: %s", sql)
 	}
 	if !strings.Contains(sql, "property_element") {
 		t.Fatalf("expected property_element in SQL, got: %s", sql)
 	}
-	if !strings.Contains(sql, "'temperature'") {
-		t.Fatalf("expected SQL to contain %q, got: %s", "'temperature'", sql)
+	if !strings.Contains(argsString(args), "temperature") {
+		t.Fatalf("expected args to contain %q, got: %v", "temperature", args)
 	}
-	if !strings.Contains(sql, "'100'") {
-		t.Fatalf("expected SQL to contain %q, got: %s", "'100'", sql)
+	if !strings.Contains(argsString(args), "100") {
+		t.Fatalf("expected args to contain %q, got: %v", "100", args)
 	}
 }
 
@@ -100,23 +125,24 @@ func TestLogicalExpression_SME_WithCollector_MultiConditions(t *testing.T) {
 		},
 	}
 
-	sql, _ := buildSMESQL(t, expr)
+	sql, args := buildSMESQL(t, expr)
 	t.Logf("SQL: %s", sql)
 
-	if !strings.Contains(sql, "submodel_element__exists\".\"idshort_path\"") {
+	if !strings.Contains(sql, "\"submodel_element\".\"idshort_path\" = ?") {
 		t.Fatalf("expected idshort_path binding in EXISTS SQL, got: %s", sql)
 	}
 	if !strings.Contains(sql, "CASE WHEN property_element.value_bool IS NOT NULL") {
 		t.Fatalf("expected CASE-based valueType expression in EXISTS SQL, got: %s", sql)
 	}
-	if !strings.Contains(sql, "'temperature'") {
-		t.Fatalf("expected SQL to contain %q, got: %s", "'temperature'", sql)
+	argsText := argsString(args)
+	if !strings.Contains(argsText, "temperature") {
+		t.Fatalf("expected args to contain %q, got: %v", "temperature", args)
 	}
-	if !strings.Contains(sql, "'100'") {
-		t.Fatalf("expected SQL to contain %q, got: %s", "'100'", sql)
+	if !strings.Contains(argsText, "100") {
+		t.Fatalf("expected args to contain %q, got: %v", "100", args)
 	}
-	if !strings.Contains(sql, "'string'") {
-		t.Fatalf("expected SQL to contain %q, got: %s", "'string'", sql)
+	if !strings.Contains(argsText, "string") {
+		t.Fatalf("expected args to contain %q, got: %v", "string", args)
 	}
 }
 
@@ -148,21 +174,22 @@ func TestLogicalExpression_SME_NestedOrAnd(t *testing.T) {
 		},
 	}
 
-	sql, _ := buildSMESQL(t, expr)
+	sql, args := buildSMESQL(t, expr)
 	if !strings.Contains(sql, " OR ") {
 		t.Fatalf("expected OR in SQL, got: %s", sql)
 	}
-	if !strings.Contains(sql, "'temperature'") {
-		t.Fatalf("expected SQL to contain %q, got: %s", "'temperature'", sql)
+	argsText := argsString(args)
+	if !strings.Contains(argsText, "temperature") {
+		t.Fatalf("expected args to contain %q, got: %v", "temperature", args)
 	}
-	if !strings.Contains(sql, "'100'") {
-		t.Fatalf("expected SQL to contain %q, got: %s", "'100'", sql)
+	if !strings.Contains(argsText, "100") {
+		t.Fatalf("expected args to contain %q, got: %v", "100", args)
 	}
-	if !strings.Contains(sql, "'string'") {
-		t.Fatalf("expected SQL to contain %q, got: %s", "'string'", sql)
+	if !strings.Contains(argsText, "string") {
+		t.Fatalf("expected args to contain %q, got: %v", "string", args)
 	}
-	if !strings.Contains(sql, "'block'") {
-		t.Fatalf("expected SQL to contain %q, got: %s", "'block'", sql)
+	if !strings.Contains(argsText, "block") {
+		t.Fatalf("expected args to contain %q, got: %v", "block", args)
 	}
 }
 
@@ -184,18 +211,19 @@ func TestLogicalExpression_SME_WithCasts(t *testing.T) {
 		},
 	}
 
-	sql, _ := buildSMESQL(t, expr)
+	sql, args := buildSMESQL(t, expr)
 	if !strings.Contains(sql, "::double precision") {
 		t.Fatalf("expected double precision cast in SQL, got: %s", sql)
 	}
 	if !strings.Contains(sql, "::time") {
 		t.Fatalf("expected time cast in SQL, got: %s", sql)
 	}
-	if !strings.Contains(sql, " 10") {
-		t.Fatalf("expected SQL to contain %q, got: %s", " 10", sql)
+	argsText := argsString(args)
+	if !strings.Contains(argsText, "10") {
+		t.Fatalf("expected args to contain %q, got: %v", "10", args)
 	}
-	if !strings.Contains(sql, "'12:00'") {
-		t.Fatalf("expected SQL to contain %q, got: %s", "'12:00'", sql)
+	if !strings.Contains(argsText, "12:00") {
+		t.Fatalf("expected args to contain %q, got: %v", "12:00", args)
 	}
 }
 
@@ -207,15 +235,19 @@ func TestLogicalExpression_SME_SemanticID(t *testing.T) {
 		},
 	}
 
-	sql, _ := buildSMESQL(t, expr)
+	sql, args := buildSMESQL(t, expr)
 	if !strings.Contains(sql, "semantic_id_reference_key") {
 		t.Fatalf("expected semantic_id_reference_key in SQL, got: %s", sql)
 	}
-	if !strings.Contains(sql, "'urn:sm'") {
-		t.Fatalf("expected SQL to contain %q, got: %s", "'urn:sm'", sql)
+	argsText := argsString(args)
+	if !strings.Contains(argsText, "urn:sm") {
+		t.Fatalf("expected args to contain %q, got: %v", "urn:sm", args)
 	}
-	if !strings.Contains(sql, "position\" = 0") {
-		t.Fatalf("expected SQL to contain position binding 0, got: %s", sql)
+	if !strings.Contains(sql, "\"position\" = ?") {
+		t.Fatalf("expected SQL to contain position placeholder, got: %s", sql)
+	}
+	if !argsContainInt(args, 0) {
+		t.Fatalf("expected args to include position 0, got: %v", args)
 	}
 }
 
@@ -229,12 +261,12 @@ func TestLogicalExpression_SME_NotRegex(t *testing.T) {
 		},
 	}
 
-	sql, _ := buildSMESQL(t, expr)
+	sql, args := buildSMESQL(t, expr)
 	if !strings.Contains(sql, "NOT") {
 		t.Fatalf("expected NOT in SQL, got: %s", sql)
 	}
-	if !strings.Contains(sql, "'^foo.*'") {
-		t.Fatalf("expected SQL to contain %q, got: %s", "'^foo.*'", sql)
+	if !strings.Contains(argsString(args), "^foo.*") {
+		t.Fatalf("expected args to contain %q, got: %v", "^foo.*", args)
 	}
 }
 
@@ -256,21 +288,22 @@ func TestLogicalExpression_SME_MultipleIdShortPaths(t *testing.T) {
 		},
 	}
 
-	sql, _ := buildSMESQL(t, expr)
-	if !strings.Contains(sql, "submodel_element__exists\".\"idshort_path\"") {
+	sql, args := buildSMESQL(t, expr)
+	if !strings.Contains(sql, "\"submodel_element\".\"idshort_path\" = ?") {
 		t.Fatalf("expected idshort_path binding in EXISTS SQL, got: %s", sql)
 	}
-	if !strings.Contains(sql, "'motor.speed'") {
-		t.Fatalf("expected SQL to contain %q, got: %s", "'motor.speed'", sql)
+	argsText := argsString(args)
+	if !strings.Contains(argsText, "motor.speed") {
+		t.Fatalf("expected args to contain %q, got: %v", "motor.speed", args)
 	}
-	if !strings.Contains(sql, "'motor.temperature'") {
-		t.Fatalf("expected SQL to contain %q, got: %s", "'motor.temperature'", sql)
+	if !strings.Contains(argsText, "motor.temperature") {
+		t.Fatalf("expected args to contain %q, got: %v", "motor.temperature", args)
 	}
-	if !strings.Contains(sql, "'900'") {
-		t.Fatalf("expected SQL to contain %q, got: %s", "'900'", sql)
+	if !strings.Contains(argsText, "900") {
+		t.Fatalf("expected args to contain %q, got: %v", "900", args)
 	}
-	if !strings.Contains(sql, "'55'") {
-		t.Fatalf("expected SQL to contain %q, got: %s", "'55'", sql)
+	if !strings.Contains(argsText, "55") {
+		t.Fatalf("expected args to contain %q, got: %v", "55", args)
 	}
 }
 
