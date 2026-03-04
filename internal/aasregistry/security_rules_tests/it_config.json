@@ -1,0 +1,121 @@
+[
+  {
+    "context": "Health endpoint - anonymous allowed",
+    "token": null,
+    "method": "GET",
+    "endpoint": "http://localhost:6014/api/v3/health",
+    "shouldMatch": "expected/expectedHealthEndpoint.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "GET rules - anonymous - denied",
+    "token": null,
+    "method": "GET",
+    "endpoint": "http://localhost:6014/api/v3/rules",
+    "expectedStatus": 403
+  },
+  {
+    "context": "GET rules - viewer - allowed",
+    "token": { "user": "usera", "password": "pwd" },
+    "method": "GET",
+    "endpoint": "http://localhost:6014/api/v3/rules",
+    "expectedStatus": 200
+  },
+  {
+    "context": "POST rule - viewer - denied",
+    "token": { "user": "usera", "password": "pwd" },
+    "method": "POST",
+    "endpoint": "http://localhost:6014/api/v3/rules",
+    "data": "postBody/rule_viewer_description_read.json",
+    "expectedStatus": 403
+  },
+  {
+    "context": "POST rule - admin - context path location",
+    "action": "POST_RULE_EXPECT_CONTEXT_LOCATION",
+    "token": { "user": "admin", "password": "pwd" },
+    "method": "POST",
+    "endpoint": "http://localhost:6014/api/v3/rules",
+    "data": "postBody/rule_viewer_description_read.json",
+    "shouldMatch": "expected/rule_viewer_description_read_response.json",
+    "expectedStatus": 201
+  },
+  {
+    "context": "GET rule 7 - viewer - allowed",
+    "token": { "user": "usera", "password": "pwd" },
+    "method": "GET",
+    "endpoint": "http://localhost:6014/api/v3/rules/7",
+    "shouldMatch": "expected/rule_viewer_description_read_response.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "PUT rule 7 - viewer - denied",
+    "token": { "user": "usera", "password": "pwd" },
+    "method": "PUT",
+    "endpoint": "http://localhost:6014/api/v3/rules/7",
+    "data": "postBody/rule_admin_description_read.json",
+    "expectedStatus": 403
+  },
+  {
+    "context": "PUT rule 7 - admin - allowed",
+    "token": { "user": "admin", "password": "pwd" },
+    "method": "PUT",
+    "endpoint": "http://localhost:6014/api/v3/rules/7",
+    "data": "postBody/rule_admin_description_read.json",
+    "shouldMatch": "expected/rule_admin_description_read_response.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "GET rule 7 after PUT - admin - allowed",
+    "token": { "user": "admin", "password": "pwd" },
+    "method": "GET",
+    "endpoint": "http://localhost:6014/api/v3/rules/7",
+    "shouldMatch": "expected/rule_admin_description_read_response.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "DELETE rule 7 - viewer - denied",
+    "token": { "user": "usera", "password": "pwd" },
+    "method": "DELETE",
+    "endpoint": "http://localhost:6014/api/v3/rules/7",
+    "expectedStatus": 403
+  },
+  {
+    "context": "DELETE rule 7 - admin - allowed",
+    "token": { "user": "admin", "password": "pwd" },
+    "method": "DELETE",
+    "endpoint": "http://localhost:6014/api/v3/rules/7",
+    "expectedStatus": 204
+  },
+  {
+    "context": "GET rule 7 after delete - admin - not found",
+    "token": { "user": "admin", "password": "pwd" },
+    "method": "GET",
+    "endpoint": "http://localhost:6014/api/v3/rules/7",
+    "expectedStatus": 404
+  },
+  {
+    "context": "POST descriptor A - viewer - denied",
+    "token": { "user": "usera", "password": "pwd" },
+    "method": "POST",
+    "endpoint": "http://localhost:6014/api/v3/shell-descriptors",
+    "data": "postBody/simple_aas_A.json",
+    "expectedStatus": 403
+  },
+  {
+    "context": "POST descriptor A - admin - allowed",
+    "token": { "user": "admin", "password": "pwd" },
+    "method": "POST",
+    "endpoint": "http://localhost:6014/api/v3/shell-descriptors",
+    "data": "postBody/simple_aas_A.json",
+    "shouldMatch": "postBody/simple_aas_A.json",
+    "expectedStatus": 201
+  },
+  {
+    "context": "GET descriptor A - viewer - allowed",
+    "token": { "user": "usera", "password": "pwd" },
+    "method": "GET",
+    "endpoint": "http://localhost:6014/api/v3/shell-descriptors/aHR0cHM6Ly9leGFtcGxlLm9yZy9B",
+    "shouldMatch": "postBody/simple_aas_A.json",
+    "expectedStatus": 200
+  }
+]
