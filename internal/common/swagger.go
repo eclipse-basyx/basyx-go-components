@@ -13,7 +13,6 @@ import (
 	"regexp"
 	"strings"
 
-	securitydocu "github.com/eclipse-basyx/basyx-go-components/docu/security"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -241,7 +240,6 @@ func AddSwaggerUIFromFS(r *chi.Mux, specFS embed.FS, specFile string, title stri
 	// Prepend context path to UI and spec paths
 	fullUIPath := contextPath + uiPath
 	fullSpecPath := contextPath + specPath
-	fullSharedRulesSpecPath := contextPath + path.Join(path.Dir(specPath), "openapi_rules_management.yaml")
 
 	// Base path for redirect (context path or "/" if no context path)
 	basePath := contextPath
@@ -270,14 +268,13 @@ func AddSwaggerUIFromFS(r *chi.Mux, specFS embed.FS, specFile string, title stri
 		Contact:     contact,
 	})
 
-	if sharedRulesSpec, sharedErr := securitydocu.OpenAPIRulesManagementYAML(); sharedErr == nil {
+	if sharedRulesSpec, sharedRulesErr := fs.ReadFile(specFS, "openapi_rules_management.yaml"); sharedRulesErr == nil {
+		fullSharedRulesSpecPath := contextPath + path.Join(path.Dir(specPath), "openapi_rules_management.yaml")
 		r.Get(fullSharedRulesSpecPath, func(w http.ResponseWriter, _ *http.Request) {
 			w.Header().Set("Content-Type", "application/yaml")
 			_, _ = w.Write(sharedRulesSpec)
 		})
 		log.Printf("📄 Shared OpenAPI rules spec available at %s", fullSharedRulesSpecPath)
-	} else {
-		log.Printf("Warning: failed to load shared OpenAPI rules spec: %v", sharedErr)
 	}
 
 	return nil
