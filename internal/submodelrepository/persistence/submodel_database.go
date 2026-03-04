@@ -45,7 +45,6 @@ import (
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
-	"github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/config"
 	submodelelements "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/submodelElements"
 	persistenceutils "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence/utils"
 	"golang.org/x/sync/errgroup"
@@ -260,126 +259,14 @@ func (s *SubmodelDatabase) QuerySubmodels(limit int32, cursor string, queryWrapp
 	return s.QuerySubmodelsWithContext(context.Background(), limit, cursor, queryWrapper, includeChildren)
 }
 
-// QuerySubmodelsWithContext returns submodels and applies optional ABAC formula filters from ctx.
+// QuerySubmodelsWithContext applies query conditions to the context and reuses the regular submodel listing logic.
 func (s *SubmodelDatabase) QuerySubmodelsWithContext(ctx context.Context, limit int32, cursor string, queryWrapper *grammar.QueryWrapper, _ bool) ([]types.ISubmodel, string, error) {
 	if queryWrapper == nil || queryWrapper.Query.Condition == nil {
 		return nil, "", common.NewErrBadRequest("SMREPO-QUERYSMS-INVALIDQUERY query condition is required")
 	}
 
-	collector, collectorErr := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootSM)
-	if collectorErr != nil {
-		return nil, "", common.NewErrBadRequest("SMREPO-QUERYSMS-BADCOLLECTOR " + collectorErr.Error())
-	}
-
-	whereExpr, _, evalErr := queryWrapper.Query.Condition.EvaluateToExpression(collector)
-	if evalErr != nil {
-		return nil, "", common.NewErrBadRequest("SMREPO-QUERYSMS-BADEXPR " + evalErr.Error())
-	}
-
-	pageLimit := int(limit)
-	if pageLimit <= 0 {
-		pageLimit = int(config.DefaultPageLimit)
-	}
-	usePagination := pageLimit > 0
-
-	dialect := goqu.Dialect("postgres")
-	query := dialect.
-		From(goqu.T("submodel")).
-		LeftJoin(
-			goqu.T("submodel_semantic_id_reference").As("semantic_id_reference"),
-			goqu.On(goqu.I("semantic_id_reference.id").Eq(goqu.I("submodel.id"))),
-		).
-		LeftJoin(
-			goqu.T("submodel_semantic_id_reference_key").As("semantic_id_reference_key"),
-			goqu.On(goqu.I("semantic_id_reference_key.reference_id").Eq(goqu.I("semantic_id_reference.id"))),
-		).
-		LeftJoin(
-			goqu.T("submodel_element").As("submodel_element"),
-			goqu.On(goqu.I("submodel_element.submodel_id").Eq(goqu.I("submodel.id"))),
-		).
-		LeftJoin(
-			goqu.T("property_element").As("property_element"),
-			goqu.On(goqu.I("property_element.id").Eq(goqu.I("submodel_element.id"))),
-		).
-		LeftJoin(
-			goqu.T("multilanguage_property").As("multilanguage_property"),
-			goqu.On(goqu.I("multilanguage_property.id").Eq(goqu.I("submodel_element.id"))),
-		).
-		LeftJoin(
-			goqu.T("multilanguage_property_value").As("multilanguage_property_value"),
-			goqu.On(goqu.I("multilanguage_property_value.mlp_id").Eq(goqu.I("multilanguage_property.id"))),
-		).
-		LeftJoin(
-			goqu.T("submodel_element_semantic_id_reference").As("sme_semantic_id_reference"),
-			goqu.On(goqu.I("sme_semantic_id_reference.id").Eq(goqu.I("submodel_element.id"))),
-		).
-		LeftJoin(
-			goqu.T("submodel_element_semantic_id_reference_key").As("sme_semantic_id_reference_key"),
-			goqu.On(goqu.I("sme_semantic_id_reference_key.reference_id").Eq(goqu.I("sme_semantic_id_reference.id"))),
-		).
-		SelectDistinct(goqu.I("submodel.submodel_identifier")).
-		Where(whereExpr).
-		Order(goqu.I("submodel.submodel_identifier").Asc())
-
-	if cursor != "" {
-		query = query.Where(goqu.I("submodel.submodel_identifier").Gt(cursor))
-	}
-
-	if usePagination {
-		//nolint:gosec // pageLimit is validated to be > 0 and bounded by int32 input/default
-		query = query.Limit(uint(pageLimit + 1))
-	}
-
-	query, addFormulaErr := auth.AddFormulaQueryFromContext(ctx, query, collector)
-	if addFormulaErr != nil {
-		return nil, "", common.NewInternalServerError("SMREPO-QUERYSMS-ABACFORMULA " + addFormulaErr.Error())
-	}
-	query = query.Prepared(true)
-
-	sqlQuery, args, toSQLErr := query.ToSQL()
-	if toSQLErr != nil {
-		return nil, "", common.NewInternalServerError("SMREPO-QUERYSMS-BUILDSQL " + toSQLErr.Error())
-	}
-
-	rows, queryErr := s.db.Query(sqlQuery, args...)
-	if queryErr != nil {
-		return nil, "", common.NewInternalServerError("SMREPO-QUERYSMS-EXECQ " + queryErr.Error())
-	}
-	defer func() { _ = rows.Close() }()
-
-	identifierCapacity := 64
-	if usePagination {
-		identifierCapacity = pageLimit + 1
-	}
-	identifiers := make([]string, 0, identifierCapacity)
-	for rows.Next() {
-		var identifier string
-		if scanErr := rows.Scan(&identifier); scanErr != nil {
-			return nil, "", common.NewInternalServerError("SMREPO-QUERYSMS-SCANID " + scanErr.Error())
-		}
-		identifiers = append(identifiers, identifier)
-	}
-
-	if rowsErr := rows.Err(); rowsErr != nil {
-		return nil, "", common.NewInternalServerError("SMREPO-QUERYSMS-ROWERR " + rowsErr.Error())
-	}
-
-	nextCursor := ""
-	if usePagination && len(identifiers) > pageLimit {
-		nextCursor = identifiers[pageLimit]
-		identifiers = identifiers[:pageLimit]
-	}
-
-	result := make([]types.ISubmodel, 0, len(identifiers))
-	for _, identifier := range identifiers {
-		sm, getErr := s.GetSubmodelByID(identifier)
-		if getErr != nil {
-			return nil, "", getErr
-		}
-		result = append(result, sm)
-	}
-
-	return result, nextCursor, nil
+	ctx = auth.MergeQueryFilter(ctx, queryWrapper.Query)
+	return s.GetSubmodelsWithContext(ctx, limit, cursor, "")
 }
 
 // CreateSubmodel creates a new submodel in the database with the provided submodel data.
@@ -1563,9 +1450,11 @@ func (s *SubmodelDatabase) getSubmodelsWithOptionalSemanticIDFilter(ctx context.
 
 		var submodel types.ISubmodel
 		submodel = types.NewSubmodel(identifier.String)
-		submodel.SetIDShort(&idShort.String)
+		idShortValue := idShort.String
+		submodel.SetIDShort(&idShortValue)
 		if category.Valid {
-			submodel.SetCategory(&category.String)
+			categoryValue := category.String
+			submodel.SetCategory(&categoryValue)
 		}
 		if kind.Valid {
 			modellingKind := types.ModellingKind(kind.Int64)

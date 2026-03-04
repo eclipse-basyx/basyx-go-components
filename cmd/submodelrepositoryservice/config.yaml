@@ -20,7 +20,7 @@ oidc:
 
 
 abac:
-  enabled: true
+  enabled: false
   modelPath: "config/access_rules/access-rules.json"
 
 # jws:

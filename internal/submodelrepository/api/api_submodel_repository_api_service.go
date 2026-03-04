@@ -28,6 +28,7 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
+	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	persistencepostgresql "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence"
 	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/submodelrepositoryapi/go"
 	"golang.org/x/sync/errgroup"
@@ -2096,11 +2097,9 @@ func (s *SubmodelRepositoryAPIAPIService) QuerySubmodels(
 	cursor string,
 	query grammar.Query,
 ) (gen.ImplResponse, error) {
-	queryWrapper := &grammar.QueryWrapper{
-		Query: query,
-	}
+	ctx = auth.MergeQueryFilter(ctx, query)
 
-	sms, nextCursor, err := s.submodelBackend.QuerySubmodelsWithContext(ctx, limit, cursor, queryWrapper, false)
+	sms, nextCursor, err := s.submodelBackend.GetSubmodelsWithContext(ctx, limit, cursor, "")
 	if err != nil {
 		switch {
 		case common.IsErrBadRequest(err):
@@ -2112,6 +2111,34 @@ func (s *SubmodelRepositoryAPIAPIService) QuerySubmodels(
 				err, http.StatusInternalServerError, "SMREPO", "QuerySubmodels", "InternalServerError",
 			), err
 		}
+	}
+
+	eg, _ := errgroup.WithContext(ctx)
+	eg.SetLimit(8)
+
+	for index := range sms {
+		sm := sms[index]
+
+		eg.Go(func() error {
+			submodelElements, _, elementsErr := s.submodelBackend.GetSubmodelElements(sm.ID(), nil, "", false)
+			if elementsErr != nil {
+				return elementsErr
+			}
+
+			sm.SetSubmodelElements(submodelElements)
+			return nil
+		})
+	}
+
+	if waitErr := eg.Wait(); waitErr != nil {
+		if common.IsErrNotFound(waitErr) || errors.Is(waitErr, sql.ErrNoRows) {
+			return common.NewErrorResponse(
+				waitErr, http.StatusNotFound, "SMREPO", "QuerySubmodels", "SubmodelNotFound",
+			), nil
+		}
+		return common.NewErrorResponse(
+			waitErr, http.StatusInternalServerError, "SMREPO", "QuerySubmodels", "GetSubmodelElements",
+		), waitErr
 	}
 
 	converted := make([]map[string]any, 0, len(sms))
