@@ -33,6 +33,49 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
 )
 
+func TestBuildRuleLocation(t *testing.T) {
+	tests := []struct {
+		name     string
+		basePath string
+		id       int64
+		want     string
+	}{
+		{
+			name:     "NoContextPath",
+			basePath: "",
+			id:       7,
+			want:     "/rules/7",
+		},
+		{
+			name:     "RootContextPath",
+			basePath: "/",
+			id:       11,
+			want:     "/rules/11",
+		},
+		{
+			name:     "ContextPathWithoutLeadingSlash",
+			basePath: "api/v3",
+			id:       42,
+			want:     "/api/v3/rules/42",
+		},
+		{
+			name:     "ContextPathWithTrailingSlash",
+			basePath: "/api/v3/",
+			id:       99,
+			want:     "/api/v3/rules/99",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := buildRuleLocation(tt.basePath, tt.id)
+			if got != tt.want {
+				t.Fatalf("buildRuleLocation(%q, %d) = %q, want %q", tt.basePath, tt.id, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestDematerializeRulesFromModelPayloadExpandsDefinitions(t *testing.T) {
 	payload := []byte(`{
 		"AllAccessPermissionRules": {

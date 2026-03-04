@@ -121,16 +121,21 @@ func openABACRulesDB(cfg *common.Config) (*sql.DB, error) {
 		cfg.Postgres.Port,
 		cfg.Postgres.DBName,
 	)
-	db, err := sql.Open("postgres", dsn)
+	db, err := common.InitializeDatabase(dsn, "")
 	if err != nil {
 		return nil, err
 	}
-	db.SetMaxOpenConns(10)
-	db.SetMaxIdleConns(10)
-	db.SetConnMaxLifetime(5 * time.Minute)
-	if err := db.Ping(); err != nil {
-		return nil, err
+
+	if cfg.Postgres.MaxOpenConnections > 0 {
+		db.SetMaxOpenConns(cfg.Postgres.MaxOpenConnections)
 	}
+	if cfg.Postgres.MaxIdleConnections > 0 {
+		db.SetMaxIdleConns(cfg.Postgres.MaxIdleConnections)
+	}
+	if cfg.Postgres.ConnMaxLifetimeMinutes > 0 {
+		db.SetConnMaxLifetime(time.Duration(cfg.Postgres.ConnMaxLifetimeMinutes) * time.Minute)
+	}
+
 	return db, nil
 }
 
@@ -228,7 +233,7 @@ func (r *accessRulesRuntime) handleCreateRule(w http.ResponseWriter, req *http.R
 		writeRulesError(w, common.NewInternalServerError("Failed to reload access permission rules."), http.StatusInternalServerError, "Rules", "CreateReloadModel")
 		return
 	}
-	w.Header().Set("Location", fmt.Sprintf("/rules/%d", record.ID))
+	w.Header().Set("Location", buildRuleLocation(r.basePath, record.ID))
 	writeJSON(w, http.StatusCreated, toAccessRuleResponse(record))
 }
 
@@ -313,6 +318,10 @@ func writeRulesError(w http.ResponseWriter, err error, status int, function stri
 func validateDematerializedRule(rule grammar.AccessPermissionRule, apiRouter *api.Mux, basePath string) error {
 	_, err := ParseDematerializedAccessRules([]grammar.AccessPermissionRule{rule}, apiRouter, basePath)
 	return err
+}
+
+func buildRuleLocation(basePath string, id int64) string {
+	return joinBasePath(basePath, fmt.Sprintf("/rules/%d", id))
 }
 
 func dematerializeRulesFromModelPayload(data []byte) ([]grammar.AccessPermissionRule, error) {
