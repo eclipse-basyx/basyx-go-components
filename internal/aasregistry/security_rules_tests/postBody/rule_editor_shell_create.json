@@ -1,0 +1,18 @@
+{
+  "ACL": {
+    "ACCESS": "ALLOW",
+    "RIGHTS": ["CREATE"],
+    "ATTRIBUTES": [
+      { "CLAIM": "role" }
+    ]
+  },
+  "FORMULA": {
+    "$eq": [
+      { "$attribute": { "CLAIM": "role" } },
+      { "$strVal": "editor" }
+    ]
+  },
+  "OBJECTS": [
+    { "ROUTE": "/shell-descriptors" }
+  ]
+}
