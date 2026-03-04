@@ -1,0 +1,5 @@
+{
+  "id": "urn:example:cd:editor:post-denied",
+  "idShort": "EditorDenied",
+  "modelType": "ConceptDescription"
+}
