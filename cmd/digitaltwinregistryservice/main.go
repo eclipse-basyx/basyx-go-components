@@ -48,7 +48,7 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-//go:embed openapi.yaml
+//go:embed openapi.yaml openapi_rules_management.yaml
 var openapiSpec embed.FS
 
 func runServer(ctx context.Context, configPath string, databaseSchema string) error {
@@ -128,7 +128,13 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	descriptionCtrl := openapi.NewDescriptionAPIAPIController(descriptionSvc)
 
 	apiRouter := chi.NewRouter()
-	if err := auth.SetupSecurityWithClaimsMiddleware(ctx, cfg, apiRouter, auth.EdcBpnHeaderMiddleware); err != nil {
+	if err := auth.SetupSecurityWithClaimsMiddlewareForComponent(
+		ctx,
+		cfg,
+		apiRouter,
+		auth.SecuritySetupOptions{RulesTableName: "digitaltwinregistry_access_rules"},
+		auth.EdcBpnHeaderMiddleware,
+	); err != nil {
 		return err
 	}
 

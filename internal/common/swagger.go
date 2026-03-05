@@ -9,6 +9,7 @@ import (
 	"io/fs"
 	"log"
 	"net/http"
+	"path"
 	"regexp"
 	"strings"
 
@@ -266,6 +267,15 @@ func AddSwaggerUIFromFS(r *chi.Mux, specFS embed.FS, specFile string, title stri
 		BasePath:    basePath,
 		Contact:     contact,
 	})
+
+	if sharedRulesSpec, sharedRulesErr := fs.ReadFile(specFS, "openapi_rules_management.yaml"); sharedRulesErr == nil {
+		fullSharedRulesSpecPath := contextPath + path.Join(path.Dir(specPath), "openapi_rules_management.yaml")
+		r.Get(fullSharedRulesSpecPath, func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/yaml")
+			_, _ = w.Write(sharedRulesSpec)
+		})
+		log.Printf("📄 Shared OpenAPI rules spec available at %s", fullSharedRulesSpecPath)
+	}
 
 	return nil
 }

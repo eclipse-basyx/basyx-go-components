@@ -62,6 +62,7 @@ var DefaultConfig = struct {
 	OIDCJWKSURL                 string
 	ABACEnabled                 bool
 	ABACModelPath               string
+	ABACRulesSyncJSONToDB       bool
 	GeneralImplicitCasts        bool
 	GeneralDescriptorDebug      bool
 	GeneralDiscoveryIntegration bool
@@ -82,6 +83,7 @@ var DefaultConfig = struct {
 	OIDCJWKSURL:                 "",
 	ABACEnabled:                 false,
 	ABACModelPath:               "config/access_rules/access-rules.json",
+	ABACRulesSyncJSONToDB:       false,
 	GeneralImplicitCasts:        true,
 	GeneralDescriptorDebug:      false,
 	GeneralDiscoveryIntegration: false,
@@ -211,8 +213,9 @@ type OIDCConfig struct {
 
 // ABACConfig contains Attribute-Based Access Control authorization settings.
 type ABACConfig struct {
-	Enabled   bool   `mapstructure:"enabled" json:"enabled"`     // Enable/disable ABAC
-	ModelPath string `mapstructure:"modelPath" json:"modelPath"` // Path to access control model
+	Enabled      bool   `mapstructure:"enabled" json:"enabled"`           // Enable/disable ABAC
+	ModelPath    string `mapstructure:"modelPath" json:"modelPath"`       // Path to access control model
+	SyncJSONToDB bool   `mapstructure:"syncJsonToDb" json:"syncJsonToDb"` // On startup, dematerialize JSON rules and replace DB rules
 }
 
 // LoadConfig loads the configuration from YAML files and environment variables.
@@ -312,6 +315,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("abac.enabled", false)
 	v.SetDefault("abac.enableDebugErrorResponses", false)
 	v.SetDefault("abac.modelPath", "config/access_rules/access-rules.json")
+	v.SetDefault("abac.syncJsonToDb", false)
 
 	// JWS defaults
 	v.SetDefault("jws.privateKeyPath", "")
@@ -396,6 +400,7 @@ func PrintConfiguration(cfg *Config) {
 	add("Enabled", cfg.ABAC.Enabled, DefaultConfig.ABACEnabled)
 	if cfg.ABAC.Enabled {
 		add("Model Path", cfg.ABAC.ModelPath, DefaultConfig.ABACModelPath)
+		add("Sync JSON To DB", cfg.ABAC.SyncJSONToDB, DefaultConfig.ABACRulesSyncJSONToDB)
 
 		lines = append(lines, "🔹 OIDC:")
 		add("Trustlist Path", cfg.OIDC.TrustlistPath, DefaultConfig.OIDCTrustlistPath)

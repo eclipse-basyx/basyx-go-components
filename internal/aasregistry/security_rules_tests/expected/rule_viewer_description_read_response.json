@@ -1,0 +1,19 @@
+{
+  "id": 7,
+  "ACL": {
+    "ACCESS": "ALLOW",
+    "RIGHTS": ["READ"],
+    "ATTRIBUTES": [
+      { "CLAIM": "role" }
+    ]
+  },
+  "FORMULA": {
+    "$eq": [
+      { "$attribute": { "CLAIM": "role" } },
+      { "$strVal": "viewer" }
+    ]
+  },
+  "OBJECTS": [
+    { "ROUTE": "/description" }
+  ]
+}

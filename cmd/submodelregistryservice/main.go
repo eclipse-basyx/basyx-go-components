@@ -44,7 +44,7 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-//go:embed openapi.yaml
+//go:embed openapi.yaml openapi_rules_management.yaml
 var openapiSpec embed.FS
 
 func runServer(ctx context.Context, configPath string, databaseSchema string) error {
@@ -107,7 +107,9 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	apiRouter := chi.NewRouter()
 
 	// Apply OIDC + ABAC once for all registry endpoints
-	if err := auth.SetupSecurity(ctx, cfg, apiRouter); err != nil {
+	if err := auth.SetupSecurityForComponent(ctx, cfg, apiRouter, auth.SecuritySetupOptions{
+		RulesTableName: "smregistry_access_rules",
+	}); err != nil {
 		return err
 	}
 

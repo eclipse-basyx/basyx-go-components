@@ -34,6 +34,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
@@ -274,6 +275,53 @@ func (o *ObjectItem) UnmarshalJSON(value []byte) error {
 	return errors.New("ObjectItem: unreachable")
 }
 
+// MarshalJSON renders the compact schema form, e.g. {"ROUTE":"/x"} or {"DESCRIPTOR":"$smdesc(\"*\")"}.
+func (o ObjectItem) MarshalJSON() ([]byte, error) {
+	var (
+		kind  string
+		value string
+		err   error
+	)
+	switch o.Kind {
+	case Route:
+		kind = string(Route)
+		if o.Route == nil {
+			return nil, errors.New("ObjectItem: ROUTE value is nil")
+		}
+		value = o.Route.Route
+	case Identifiable:
+		kind = string(Identifiable)
+		if o.Identifiable == nil {
+			return nil, errors.New("ObjectItem: IDENTIFIABLE value is nil")
+		}
+		value, err = formatIdentifiableValue(o.Identifiable.Scope, o.Identifiable.ID)
+	case Referable:
+		kind = string(Referable)
+		if o.Referable == nil {
+			return nil, errors.New("ObjectItem: REFERABLE value is nil")
+		}
+		value, err = formatReferableValue(o.Referable.Scope, o.Referable.ID, o.Referable.IDShortPath)
+	case Fragment:
+		kind = string(Fragment)
+		if o.Fragment == nil {
+			return nil, errors.New("ObjectItem: FRAGMENT value is nil")
+		}
+		value, err = formatFragmentValue(o.Fragment.Scope, o.Fragment.ID, o.Fragment.iDShortPath, o.Fragment.Fragments)
+	case Descriptor:
+		kind = string(Descriptor)
+		if o.Descriptor == nil {
+			return nil, errors.New("ObjectItem: DESCRIPTOR value is nil")
+		}
+		value, err = formatIdentifiableValue(o.Descriptor.Scope, o.Descriptor.ID)
+	default:
+		return nil, fmt.Errorf("ObjectItem: unsupported kind %q", o.Kind)
+	}
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(map[string]string{kind: value})
+}
+
 // --- helpers ---
 
 func isAllowedKind(k OBJECTTYPE) bool {
@@ -385,4 +433,38 @@ func parseDescriptor(s string) (*DescriptorValue, error) {
 		id.ID = m[2]
 	}
 	return &DescriptorValue{Scope: m[1], ID: id}, nil
+}
+
+func formatIdentifiableValue(scope string, id Identifier) (string, error) {
+	return fmt.Sprintf("%s(%s)", scope, quoteIdentifier(id)), nil
+}
+
+func formatReferableValue(scope string, id Identifier, path string) (string, error) {
+	if strings.TrimSpace(path) == "" {
+		return "", errors.New("ObjectItem: REFERABLE path is empty")
+	}
+	return fmt.Sprintf("%s(%s).%s", scope, quoteIdentifier(id), path), nil
+}
+
+func formatFragmentValue(scope string, id Identifier, path string, fragments []string) (string, error) {
+	if strings.TrimSpace(path) == "" {
+		return "", errors.New("ObjectItem: FRAGMENT path is empty")
+	}
+	if len(fragments) == 0 {
+		return "", errors.New("ObjectItem: FRAGMENT requires at least one fragment")
+	}
+	var b strings.Builder
+	b.WriteString(fmt.Sprintf("%s(%s).%s", scope, quoteIdentifier(id), path))
+	for _, frag := range fragments {
+		b.WriteByte(' ')
+		b.WriteString(strconv.Quote(frag))
+	}
+	return b.String(), nil
+}
+
+func quoteIdentifier(id Identifier) string {
+	if id.IsAll {
+		return strconv.Quote("*")
+	}
+	return strconv.Quote(id.ID)
 }

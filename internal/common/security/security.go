@@ -43,6 +43,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	api "github.com/go-chi/chi/v5"
@@ -84,7 +85,12 @@ import (
 //  2. Authenticated requests are then evaluated by ABAC middleware for authorization
 //  3. Only requests that pass both checks are allowed to proceed to handlers
 func SetupSecurity(ctx context.Context, cfg *common.Config, r *api.Mux) error {
-	return SetupSecurityWithClaimsMiddleware(ctx, cfg, r)
+	return setupSecurity(ctx, cfg, r, SecuritySetupOptions{})
+}
+
+// SetupSecurityForComponent configures security and a component-specific rules table.
+func SetupSecurityForComponent(ctx context.Context, cfg *common.Config, r *api.Mux, opts SecuritySetupOptions) error {
+	return setupSecurity(ctx, cfg, r, opts)
 }
 
 // SetupSecurityWithClaimsMiddleware configures security and optionally injects
@@ -93,6 +99,36 @@ func SetupSecurityWithClaimsMiddleware(
 	ctx context.Context,
 	cfg *common.Config,
 	r *api.Mux,
+	claimsMiddleware ...func(http.Handler) http.Handler,
+) error {
+	return setupSecurityWithClaimsMiddleware(ctx, cfg, r, SecuritySetupOptions{}, claimsMiddleware...)
+}
+
+// SetupSecurityWithClaimsMiddlewareForComponent configures security with a component-specific rules table.
+func SetupSecurityWithClaimsMiddlewareForComponent(
+	ctx context.Context,
+	cfg *common.Config,
+	r *api.Mux,
+	opts SecuritySetupOptions,
+	claimsMiddleware ...func(http.Handler) http.Handler,
+) error {
+	return setupSecurityWithClaimsMiddleware(ctx, cfg, r, opts, claimsMiddleware...)
+}
+
+func setupSecurity(
+	ctx context.Context,
+	cfg *common.Config,
+	r *api.Mux,
+	opts SecuritySetupOptions,
+) error {
+	return setupSecurityWithClaimsMiddleware(ctx, cfg, r, opts)
+}
+
+func setupSecurityWithClaimsMiddleware(
+	ctx context.Context,
+	cfg *common.Config,
+	r *api.Mux,
+	opts SecuritySetupOptions,
 	claimsMiddleware ...func(http.Handler) http.Handler,
 ) error {
 	if !cfg.ABAC.Enabled {
@@ -126,8 +162,19 @@ func SetupSecurityWithClaimsMiddleware(
 		return err
 	}
 
-	var model *AccessModel
-	if cfg.ABAC.ModelPath != "" {
+	var (
+		model        *AccessModel
+		modelStore   *AccessModelStore
+		rulesRuntime *accessRulesRuntime
+	)
+	if strings.TrimSpace(opts.RulesTableName) != "" {
+		rulesRuntime, err = newAccessRulesRuntime(ctx, cfg, r, opts)
+		if err != nil {
+			return err
+		}
+		modelStore = rulesRuntime.ModelStore()
+		model = modelStore.Get()
+	} else if cfg.ABAC.ModelPath != "" {
 		data, err := os.ReadFile(cfg.ABAC.ModelPath)
 		if err != nil {
 			return err
@@ -143,6 +190,7 @@ func SetupSecurityWithClaimsMiddleware(
 		Enabled:             cfg.ABAC.Enabled,
 		EnableImplicitCasts: cfg.General.EnableImplicitCasts,
 		Model:               model,
+		ModelStore:          modelStore,
 	}
 
 	// ✅ Apply middlewares to the router
@@ -150,6 +198,9 @@ func SetupSecurityWithClaimsMiddleware(
 		chain := append([]func(http.Handler) http.Handler{oidc.Middleware}, claimsMiddleware...)
 		chain = append(chain, ABACMiddleware(abacSettings))
 		r.Use(chain...)
+		if rulesRuntime != nil {
+			rulesRuntime.RegisterRoutes(r)
+		}
 		return nil
 	}
 
@@ -157,6 +208,9 @@ func SetupSecurityWithClaimsMiddleware(
 		oidc.Middleware,
 		ABACMiddleware(abacSettings),
 	)
+	if rulesRuntime != nil {
+		rulesRuntime.RegisterRoutes(r)
+	}
 
 	return nil
 }

@@ -63,6 +63,21 @@ func ParseAccessModel(b []byte, apiRouter *api.Mux, basePath string) (*AccessMod
 		return nil, fmt.Errorf("parse access model: %w", err)
 	}
 
+	return compileAccessModel(m, apiRouter, basePath)
+}
+
+// ParseDematerializedAccessRules compiles a runtime AccessModel from already
+// dematerialized rules (fully self-contained AccessPermissionRule entries).
+func ParseDematerializedAccessRules(rules []grammar.AccessPermissionRule, apiRouter *api.Mux, basePath string) (*AccessModel, error) {
+	model := grammar.AccessRuleModelSchemaJSON{
+		AllAccessPermissionRules: grammar.AccessRuleModelSchemaJSONAllAccessPermissionRules{
+			Rules: rules,
+		},
+	}
+	return compileAccessModel(model, apiRouter, basePath)
+}
+
+func compileAccessModel(m grammar.AccessRuleModelSchemaJSON, apiRouter *api.Mux, basePath string) (*AccessModel, error) {
 	rules, err := materializeRules(m.AllAccessPermissionRules)
 	if err != nil {
 		return nil, fmt.Errorf("parse access model: %w", err)
