@@ -118,23 +118,30 @@ var mapMethodAndPatternToRightsData = []mapMethodAndPatternToRights{
 }
 
 // mapMethodAndPathToRights maps an incoming HTTP method+path to required rights.
-// It returns ok=false when no mapping is found so callers can deny by default.
-func (m *AccessModel) mapMethodAndPathToRights(in EvalInput) ([]grammar.RightsEnum, bool) {
+// It returns:
+//   - mapped=false, routeFound=false when the route does not exist
+//   - mapped=false, routeFound=true when the route exists but has no rights mapping
+//   - mapped=true, routeFound=true with resolved rights when mapping exists
+func (m *AccessModel) mapMethodAndPathToRights(in EvalInput) ([]grammar.RightsEnum, bool, bool) {
+	matchPath := stripBasePath(m.basePath, in.Path)
+	pattern := m.apiRouter.Find(m.rctx, in.Method, matchPath)
+	if pattern == "" {
+		return nil, false, false
+	}
+
+	patternWithBase := joinBasePath(m.basePath, pattern)
 	for _, mapping := range mapMethodAndPatternToRightsData {
-		if mapping.Method == in.Method {
-			matchPath := stripBasePath(m.basePath, in.Path)
-			pattern := m.apiRouter.Find(m.rctx, in.Method, matchPath)
-			if pattern == "" {
-				continue
-			}
-			patternWithBase := joinBasePath(m.basePath, pattern)
-			mappingWithBase := joinBasePath(m.basePath, mapping.Pattern)
-			if mappingWithBase == patternWithBase {
-				return mapping.Rights, true
-			}
+		if mapping.Method != in.Method {
+			continue
+		}
+
+		mappingWithBase := joinBasePath(m.basePath, mapping.Pattern)
+		if mappingWithBase == patternWithBase {
+			return mapping.Rights, true, true
 		}
 	}
-	return nil, false
+
+	return nil, false, true
 }
 
 func rightsContainsAll(hay []grammar.RightsEnum, needles []grammar.RightsEnum) bool {
