@@ -28,6 +28,7 @@ package auth
 
 import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model/grammar"
+	api "github.com/go-chi/chi/v5"
 )
 
 type mapMethodAndPatternToRights struct {
@@ -124,7 +125,8 @@ var mapMethodAndPatternToRightsData = []mapMethodAndPatternToRights{
 //   - mapped=true, routeFound=true with resolved rights when mapping exists
 func (m *AccessModel) mapMethodAndPathToRights(in EvalInput) ([]grammar.RightsEnum, bool, bool) {
 	matchPath := stripBasePath(m.basePath, in.Path)
-	pattern := m.apiRouter.Find(m.rctx, in.Method, matchPath)
+	rctx := api.NewRouteContext()
+	pattern := m.apiRouter.Find(rctx, in.Method, matchPath)
 	if pattern == "" {
 		return nil, false, false
 	}

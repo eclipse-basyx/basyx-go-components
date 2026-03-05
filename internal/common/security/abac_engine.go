@@ -41,7 +41,6 @@ import (
 type AccessModel struct {
 	gen       grammar.AccessRuleModelSchemaJSON
 	apiRouter *api.Mux
-	rctx      *api.Context
 	rules     []materializedRule
 	basePath  string
 }
@@ -71,7 +70,6 @@ func ParseAccessModel(b []byte, apiRouter *api.Mux, basePath string) (*AccessMod
 	return &AccessModel{
 		gen:       m,
 		apiRouter: apiRouter,
-		rctx:      api.NewRouteContext(),
 		rules:     rules,
 		basePath:  basePath,
 	}, nil

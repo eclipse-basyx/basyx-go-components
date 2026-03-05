@@ -13,7 +13,6 @@ func TestABACMiddleware_UnknownRouteReturnsNotFound(t *testing.T) {
 	router := api.NewRouter()
 	model := &AccessModel{
 		apiRouter: router,
-		rctx:      api.NewRouteContext(),
 		basePath:  "",
 	}
 
@@ -41,7 +40,6 @@ func TestABACMiddleware_MethodNotAllowedReturnsMethodNotAllowed(t *testing.T) {
 	router := api.NewRouter()
 	model := &AccessModel{
 		apiRouter: router,
-		rctx:      api.NewRouteContext(),
 		basePath:  "",
 	}
 
@@ -69,7 +67,6 @@ func TestABACMiddleware_KnownMappedRouteWithoutMatchingRuleReturnsForbidden(t *t
 	router := api.NewRouter()
 	model := &AccessModel{
 		apiRouter: router,
-		rctx:      api.NewRouteContext(),
 		basePath:  "",
 	}
 
