@@ -30,6 +30,7 @@ func runServer(ctx context.Context, configPath string, _ string) error {
 	common.PrintConfiguration(config)
 
 	r := chi.NewRouter()
+	common.AddDefaultRouterErrorHandlers(r, "AASRepositoryService")
 	common.AddCors(r, config)
 	common.AddHealthEndpoint(r, config)
 

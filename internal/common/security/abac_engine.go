@@ -41,7 +41,6 @@ import (
 type AccessModel struct {
 	gen       grammar.AccessRuleModelSchemaJSON
 	apiRouter *api.Mux
-	rctx      *api.Context
 	rules     []materializedRule
 	basePath  string
 }
@@ -71,7 +70,6 @@ func ParseAccessModel(b []byte, apiRouter *api.Mux, basePath string) (*AccessMod
 	return &AccessModel{
 		gen:       m,
 		apiRouter: apiRouter,
-		rctx:      api.NewRouteContext(),
 		rules:     rules,
 		basePath:  basePath,
 	}, nil
@@ -111,6 +109,10 @@ const (
 	// DecisionNoMatch indicates that no matching rule or policy was found
 	// for the authorization check, resulting in a neutral or deny outcome.
 	DecisionNoMatch DecisionCode = "NO_MATCH"
+
+	// DecisionRouteNotFound indicates the requested method/path does not match
+	// any registered route and should be handled by the router (e.g., 404).
+	DecisionRouteNotFound DecisionCode = "ROUTE_NOT_FOUND"
 )
 
 // AuthorizeWithFilter evaluates the request against the model rules in order.
@@ -126,7 +128,10 @@ func (m *AccessModel) AuthorizeWithFilter(in EvalInput) (bool, DecisionCode, *Qu
 // AuthorizeWithFilterWithOptions behaves like AuthorizeWithFilter but allows callers
 // to control backend simplification behavior (e.g., implicit casts).
 func (m *AccessModel) AuthorizeWithFilterWithOptions(in EvalInput, opts grammar.SimplifyOptions) (bool, DecisionCode, *QueryFilter) {
-	rights, mapped := m.mapMethodAndPathToRights(in)
+	rights, mapped, routeFound := m.mapMethodAndPathToRights(in)
+	if !routeFound {
+		return false, DecisionRouteNotFound, nil
+	}
 	if !mapped {
 		return false, DecisionNoMatch, nil
 	}

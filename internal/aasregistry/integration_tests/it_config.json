@@ -467,5 +467,17 @@
   {
     "context": "068 - Verify database is empty - ACTION CHECK_DB_IS_EMPTY",
     "action": "CHECK_DB_IS_EMPTY"
+  },
+  {
+    "context": "069 - GET Non Existing Endpoint (404) - GET /does-not-exist",
+    "method": "GET",
+    "endpoint": "http://127.0.0.1:6004/does-not-exist",
+    "expectedStatus": 404
+  },
+  {
+    "context": "070 - PATCH Health Endpoint (405) - PATCH /health",
+    "method": "PATCH",
+    "endpoint": "http://127.0.0.1:6004/health",
+    "expectedStatus": 405
   }
 ]
