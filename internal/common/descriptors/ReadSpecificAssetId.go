@@ -48,30 +48,6 @@ type rowData struct {
 	externalSubjectRefID sql.NullInt64
 }
 
-var expMapper = []auth.ExpressionIdentifiableMapper{
-	{
-		Exp: common.TSpecificAssetID.Col(common.ColDescriptorID),
-	},
-	{
-		Exp: common.TSpecificAssetID.Col(common.ColID),
-	},
-	{
-		Exp:      common.TSpecificAssetID.Col(common.ColName),
-		Fragment: fragPtr("$aasdesc#specificAssetIds[].name"),
-	},
-	{
-		Exp:      common.TSpecificAssetID.Col(common.ColValue),
-		Fragment: fragPtr("$aasdesc#specificAssetIds[].value"),
-	},
-	{
-		Exp: goqu.I("specific_asset_id_payload.semantic_id_payload"),
-	},
-	{
-		Exp:      goqu.I(common.AliasExternalSubjectReference + "." + common.ColID),
-		Fragment: fragPtr("$aasdesc#specificAssetIds[].externalSubjectId"),
-	},
-}
-
 // ReadSpecificAssetIDsByDescriptorID returns all SpecificAssetIDs that belong to
 // a single AAS descriptor identified by its numeric descriptor ID.
 //
@@ -134,11 +110,22 @@ func ReadSpecificAssetIDsByDescriptorIDs(
 	if err != nil {
 		return nil, err
 	}
-	expressions, err := auth.GetColumnSelectStatement(ctx, expMapper, collector)
+	const dataAlias = "specific_asset_id_data"
+	maskedColumns := []auth.MaskedInnerColumnSpec{
+		{Fragment: "$aasdesc#specificAssetIds[].name", FlagAlias: "flag_said_name", RawAlias: "c2"},
+		{Fragment: "$aasdesc#specificAssetIds[].value", FlagAlias: "flag_said_value", RawAlias: "c3"},
+		{Fragment: "$aasdesc#specificAssetIds[].externalSubjectId", FlagAlias: "flag_said_external_subject", RawAlias: "c5"},
+	}
+	maskRuntime, err := auth.BuildSharedFragmentMaskRuntime(ctx, collector, maskedColumns)
 	if err != nil {
 		return nil, err
 	}
-	base := d.From(common.TDescriptor).
+	maskedExpressions, err := maskRuntime.MaskedInnerAliasExprs(dataAlias, maskedColumns)
+	if err != nil {
+		return nil, err
+	}
+
+	inner := d.From(common.TDescriptor).
 		InnerJoin(
 			common.TAASDescriptor,
 			goqu.On(common.TAASDescriptor.Col(common.ColDescriptorID).Eq(common.TDescriptor.Col(common.ColID))),
@@ -154,25 +141,37 @@ func ReadSpecificAssetIDsByDescriptorIDs(
 		LeftJoin(
 			specificAssetIDPayloadAlias,
 			goqu.On(specificAssetIDPayloadAlias.Col(common.ColSpecificAssetID).Eq(specificAssetIDAlias.Col(common.ColID))),
-		).Select(
-		expressions[0],
-		expressions[1],
-		expressions[2],
-		expressions[3],
-		expressions[4],
-		expressions[5],
-	).
+		).Select(append([]interface{}{
+		common.TSpecificAssetID.Col(common.ColDescriptorID).As("c0"),
+		common.TSpecificAssetID.Col(common.ColID).As("c1"),
+		common.TSpecificAssetID.Col(common.ColName).As("c2"),
+		common.TSpecificAssetID.Col(common.ColValue).As("c3"),
+		goqu.I("specific_asset_id_payload.semantic_id_payload").As("c4"),
+		goqu.I(common.AliasExternalSubjectReference + "." + common.ColID).As("c5"),
+		common.TSpecificAssetID.Col(common.ColPosition).As("sort_specific_asset_position"),
+	}, maskRuntime.Projections()...)...).
 		Where(goqu.L(fmt.Sprintf("%s.%s = ANY(?::bigint[])", common.AliasSpecificAssetID, common.ColDescriptorID), arr))
 
-	base = base.
+	inner = inner.
 		Order(
 			common.TSpecificAssetID.Col(common.ColPosition).Asc(),
 		)
 
-	base, err = auth.AddFilterQueryFromContext(ctx, base, "$aasdesc#specificAssetIds[]", collector)
+	inner, err = auth.AddFilterQueryFromContext(ctx, inner, "$aasdesc#specificAssetIds[]", collector)
 	if err != nil {
 		return nil, err
 	}
+
+	base := d.From(inner.As(dataAlias)).
+		Select(
+			goqu.I(dataAlias+".c0"),
+			goqu.I(dataAlias+".c1"),
+			maskedExpressions[0],
+			maskedExpressions[1],
+			goqu.I(dataAlias+".c4"),
+			maskedExpressions[2],
+		).
+		Order(goqu.I(dataAlias + ".sort_specific_asset_position").Asc())
 
 	sqlStr, args, err := base.ToSQL()
 	if err != nil {
@@ -286,9 +285,4 @@ func nvl(ns sql.NullString) string {
 		return ns.String
 	}
 	return ""
-}
-
-func fragPtr(s string) *grammar.FragmentStringPattern {
-	frag := grammar.FragmentStringPattern(s)
-	return &frag
 }

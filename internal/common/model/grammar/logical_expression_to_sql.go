@@ -600,7 +600,7 @@ func buildInlineExistsExpression(resolved []ResolvedFieldPath, predicate exp.Exp
 		correlation = goqu.And(correlation, whereExpr)
 	}
 
-	ds = ds.Where(correlation).Limit(1)
+	ds = ds.Where(correlation)
 	if aliasCollision && rootAlias != "" && rootColumn != "" {
 		sql, args, err := ds.ToSQL()
 		if err != nil {
