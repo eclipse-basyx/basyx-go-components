@@ -44,7 +44,7 @@ func normalizeComponentID(component string) string {
 
 	for _, r := range component {
 		if unicode.IsLetter(r) || unicode.IsNumber(r) {
-			b.WriteRune(unicode.ToUpper(r))
+			_, _ = b.WriteRune(unicode.ToUpper(r))
 		}
 	}
 
