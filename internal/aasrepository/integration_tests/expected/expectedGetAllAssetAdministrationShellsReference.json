@@ -1,0 +1,23 @@
+{
+    "paging_metadata": {},
+    "result": [
+        {
+            "keys": [
+                {
+                    "type": "AssetAdministrationShell",
+                    "value": "https://example.com/ids/aas/3494_2120_3062_6532"
+                }
+            ],
+            "type": "ModelReference"
+        },
+        {
+            "keys": [
+                {
+                    "type": "AssetAdministrationShell",
+                    "value": "https://example.com/ids/aas/7301_3150_9442_7849"
+                }
+            ],
+            "type": "ModelReference"
+        }
+    ]
+}

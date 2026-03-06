@@ -1,0 +1,34 @@
+{
+    "paging_metadata": {
+        "cursor": "aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzL2ZpbHRlcjQ"
+    },
+    "result": [
+        {
+            "assetInformation": {
+                "assetKind": "Instance",
+                "globalAssetId": "assetIdValueX"
+            },
+            "id": "https://example.com/ids/aas/filter1",
+            "idShort": "aasTestA",
+            "modelType": "AssetAdministrationShell"
+        },
+        {
+            "assetInformation": {
+                "assetKind": "Instance",
+                "globalAssetId": "assetIdValueY"
+            },
+            "id": "https://example.com/ids/aas/filter2",
+            "idShort": "aasTestB",
+            "modelType": "AssetAdministrationShell"
+        },
+        {
+            "assetInformation": {
+                "assetKind": "Instance",
+                "globalAssetId": "assetIdValueX"
+            },
+            "id": "https://example.com/ids/aas/filter3",
+            "idShort": "aasTestC",
+            "modelType": "AssetAdministrationShell"
+        }
+    ]
+}

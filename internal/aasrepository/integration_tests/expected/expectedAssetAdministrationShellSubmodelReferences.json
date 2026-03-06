@@ -1,0 +1,14 @@
+{
+  "paging_metadata": {},
+  "result": [
+    {
+      "type": "ModelReference",
+      "keys": [
+        {
+          "type": "Submodel",
+          "value": "https://example.com/ids/sm/4031_3120_3062_0255"
+        }
+      ]
+    }
+  ]
+}

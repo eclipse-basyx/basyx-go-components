@@ -1,0 +1,9 @@
+{
+    "keys": [
+        {
+            "type": "Submodel",
+            "value": "https://example.com/ids/sm/superpath_test"
+        }
+    ],
+    "type": "ModelReference"
+}

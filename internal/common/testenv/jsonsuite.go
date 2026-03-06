@@ -47,6 +47,7 @@ import (
 )
 
 const ActionCheckDBIsEmpty = "CHECK_DB_IS_EMPTY"
+const ActionAssertSubmodelAbsent = "ASSERT_SUBMODEL_ABSENT"
 
 type TokenCredentials struct {
 	User     string `json:"user"`
@@ -59,10 +60,16 @@ type JSONSuiteStep struct {
 	Endpoint       string            `json:"endpoint"`
 	Data           string            `json:"data,omitempty"`
 	ShouldMatch    string            `json:"shouldMatch,omitempty"`
+	ExpectedResponseHeaders map[string]string `json:"expectedResponseHeaders,omitempty"`
 	ExpectedStatus int               `json:"expectedStatus,omitempty"`
 	Action         string            `json:"action,omitempty"`
 	Headers        map[string]string `json:"headers,omitempty"`
 	Token          *TokenCredentials `json:"token,omitempty"`
+}
+
+type JSONStepResult struct {
+	Body    string
+	Headers http.Header
 }
 
 type JSONStepAction func(t *testing.T, runner *JSONSuiteRunner, step JSONSuiteStep, stepNumber int)
@@ -99,6 +106,11 @@ type CheckDBIsEmptyOptions struct {
 	DSN            string
 	Schema         string
 	ExcludedTables []string
+}
+
+type CheckSubmodelAbsentOptions struct {
+	Driver string
+	DSN    string
 }
 
 type PasswordGrantTokenProvider struct {
@@ -231,6 +243,29 @@ func NewCheckDBIsEmptyAction(options CheckDBIsEmptyOptions) JSONStepAction {
 	}
 }
 
+func NewCheckSubmodelAbsentAction(options CheckSubmodelAbsentOptions) JSONStepAction {
+	driver := strings.TrimSpace(options.Driver)
+	if driver == "" {
+		driver = "postgres"
+	}
+
+	return func(t *testing.T, _ *JSONSuiteRunner, step JSONSuiteStep, _ int) {
+		require.NotEmpty(t, strings.TrimSpace(options.DSN), "TESTENV-CHECKSMABSENT-MISSING-DSN")
+
+		identifier := strings.TrimSpace(step.Endpoint)
+		require.NotEmpty(t, identifier, "TESTENV-CHECKSMABSENT-MISSING-ID")
+
+		db, err := sql.Open(driver, options.DSN)
+		require.NoError(t, err)
+		defer func() { _ = db.Close() }()
+
+		var count int
+		err = db.QueryRow("SELECT COUNT(1) FROM submodel WHERE submodel_identifier = $1", identifier).Scan(&count)
+		require.NoError(t, err)
+		require.Equalf(t, 0, count, "Expected no submodel row for identifier '%s'", identifier)
+	}
+}
+
 func RunJSONSuite(t *testing.T, options JSONSuiteOptions) {
 	t.Helper()
 
@@ -270,22 +305,26 @@ func RunJSONSuite(t *testing.T, options JSONSuiteOptions) {
 			response, runErr := runner.RunStep(step, stepNumber)
 			require.NoError(t, runErr, "Request failed")
 
+			if len(step.ExpectedResponseHeaders) > 0 {
+				runner.compareResponseHeaders(t, step, stepNumber, response.Headers)
+			}
+
 			if normalized.ShouldCompareResponse(step) {
-				runner.compareJSONResponse(t, step, stepNumber, response)
+				runner.compareJSONResponse(t, step, stepNumber, response.Body)
 			}
 		})
 	}
 }
 
-func (r *JSONSuiteRunner) RunStep(step JSONSuiteStep, stepNumber int) (string, error) {
+func (r *JSONSuiteRunner) RunStep(step JSONSuiteStep, stepNumber int) (JSONStepResult, error) {
 	bodyBytes, err := loadStepBody(step)
 	if err != nil {
-		return "", err
+		return JSONStepResult{}, err
 	}
 
 	req, expectedStatus, err := r.buildRequest(step, bodyBytes)
 	if err != nil {
-		return "", err
+		return JSONStepResult{}, err
 	}
 
 	if r.options.EnableRequestLog {
@@ -295,21 +334,37 @@ func (r *JSONSuiteRunner) RunStep(step JSONSuiteStep, stepNumber int) (string, e
 	resp, err := r.client.Do(req)
 	if err != nil {
 		r.writeRequestError(stepNumber, err)
-		return "", err
+		return JSONStepResult{}, err
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return "", err
+		return JSONStepResult{}, err
 	}
 
 	if resp.StatusCode != expectedStatus {
 		r.writeStatusMismatchLog(stepNumber, req, expectedStatus, resp.StatusCode, respBody)
-		return "", fmt.Errorf("expected status %d but got %d", expectedStatus, resp.StatusCode)
+		return JSONStepResult{}, fmt.Errorf("expected status %d but got %d", expectedStatus, resp.StatusCode)
 	}
 
-	return string(respBody), nil
+	return JSONStepResult{
+		Body:    string(respBody),
+		Headers: resp.Header,
+	}, nil
+}
+
+func (r *JSONSuiteRunner) compareResponseHeaders(t *testing.T, step JSONSuiteStep, stepNumber int, headers http.Header) {
+	t.Helper()
+
+	for key, expectedValue := range step.ExpectedResponseHeaders {
+		actualValue := headers.Get(key)
+		if actualValue != expectedValue {
+			r.writeHeaderMismatchLog(stepNumber, key, expectedValue, actualValue)
+		}
+
+		require.Equalf(t, expectedValue, actualValue, "Response header mismatch for %s", key)
+	}
 }
 
 func (r *JSONSuiteRunner) buildRequest(step JSONSuiteStep, bodyBytes []byte) (*http.Request, int, error) {
@@ -485,6 +540,15 @@ func (r *JSONSuiteRunner) writeJSONMismatchLog(stepNumber int, expected string, 
 	b.WriteString("\nActual: ")
 	b.WriteString(actual)
 	b.WriteString("\n")
+	_ = os.WriteFile(filepath.Join(r.options.LogsDir, fmt.Sprintf("STEP_%d.log", stepNumber)), []byte(b.String()), 0o644)
+}
+
+func (r *JSONSuiteRunner) writeHeaderMismatchLog(stepNumber int, header string, expected string, actual string) {
+	var b strings.Builder
+	b.WriteString("Header mismatch:\n")
+	b.WriteString(fmt.Sprintf("Header: %s\n", header))
+	b.WriteString(fmt.Sprintf("Expected: %s\n", expected))
+	b.WriteString(fmt.Sprintf("Actual: %s\n", actual))
 	_ = os.WriteFile(filepath.Join(r.options.LogsDir, fmt.Sprintf("STEP_%d.log", stepNumber)), []byte(b.String()), 0o644)
 }
 

@@ -1,0 +1,6 @@
+{
+  "idShort": "submodelSuperpathTestUpdatePatch",
+  "modelType": "Submodel",
+  "id": "https://example.com/ids/sm/superpath_test",
+  "kind": "Instance"
+}
