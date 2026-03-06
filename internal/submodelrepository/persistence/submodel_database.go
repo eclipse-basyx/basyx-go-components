@@ -847,6 +847,24 @@ func (s *SubmodelDatabase) PutSubmodel(submodelID string, submodel types.ISubmod
 	return isUpdate, nil
 }
 
+// PutSubmodelInTransaction creates or replaces a submodel using an existing transaction.
+func (s *SubmodelDatabase) PutSubmodelInTransaction(tx *sql.Tx, submodelID string, submodel types.ISubmodel) (bool, error) {
+	if submodelID != submodel.ID() {
+		return false, common.NewErrBadRequest("SMREPO-PUTSMTX-IDMISMATCH Submodel ID in path and body do not match")
+	}
+
+	if err := s.verifySubmodel(submodel, "SMREPO-PUTSMTX-VERIFY"); err != nil {
+		return false, err
+	}
+
+	isUpdate, err := s.replaceSubmodelInTransaction(tx, submodelID, submodel, false)
+	if err != nil {
+		return false, err
+	}
+
+	return isUpdate, nil
+}
+
 // DeleteSubmodel deletes a submodel by its identifier from the database.
 func (s *SubmodelDatabase) DeleteSubmodel(submodelID string) error {
 	tx, cleanup, err := common.StartTransaction(s.db)
@@ -855,6 +873,21 @@ func (s *SubmodelDatabase) DeleteSubmodel(submodelID string) error {
 	}
 	defer cleanup(&err)
 
+	err = s.DeleteSubmodelInTransaction(tx, submodelID)
+	if err != nil {
+		return err
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		return common.NewInternalServerError("SMREPO-DELSM-COMMIT " + err.Error())
+	}
+
+	return nil
+}
+
+// DeleteSubmodelInTransaction deletes a submodel by its identifier using an existing transaction.
+func (s *SubmodelDatabase) DeleteSubmodelInTransaction(tx *sql.Tx, submodelID string) error {
 	submodelDatabaseID, err := persistenceutils.GetSubmodelDatabaseID(tx, submodelID)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -872,12 +905,6 @@ func (s *SubmodelDatabase) DeleteSubmodel(submodelID string) error {
 	if err != nil {
 		return err
 	}
-
-	err = tx.Commit()
-	if err != nil {
-		return common.NewInternalServerError("SMREPO-DELSM-COMMIT " + err.Error())
-	}
-
 	return nil
 }
 

@@ -12,72 +12,120 @@
 package openapi
 
 import (
-	"reflect"
+	"encoding/base64"
+	"net/http"
+	"net/url"
+	"strings"
 )
 
-// IsZeroValue checks if the val is the zero-ed value.
-func IsZeroValue(val interface{}) bool {
-	return val == nil || reflect.DeepEqual(val, reflect.Zero(reflect.TypeOf(val)).Interface())
+func encodeIdentifierForPath(identifier string) string {
+	if identifier == "" {
+		return ""
+	}
+
+	return base64.RawURLEncoding.EncodeToString([]byte(identifier))
 }
 
-// AssertRecurseInterfaceRequired recursively checks each struct in a slice against the callback.
-// This method traverse nested slices in a preorder fashion.
-func AssertRecurseInterfaceRequired[T any](obj interface{}, callback func(T) error) error {
-	return AssertRecurseValueRequired(reflect.ValueOf(obj), callback)
+func (c *AssetAdministrationShellRepositoryAPIAPIController) buildBaseLocation(r *http.Request) string {
+	host := requestHost(r)
+	if host == "" {
+		return ""
+	}
+
+	basePath := strings.TrimSuffix(c.contextPath, "/")
+
+	return requestScheme(r) + "://" + host + basePath
 }
 
-// AssertRecurseValueRequired checks each struct in the nested slice against the callback.
-// This method traverse nested slices in a preorder fashion. ErrTypeAssertionError is thrown if
-// the underlying struct does not match type T.
-func AssertRecurseValueRequired[T any](value reflect.Value, callback func(T) error) error {
-	switch value.Kind() {
-	// If it is a struct we check using callback
-	case reflect.Struct:
-		obj, ok := value.Interface().(T)
-		if !ok {
-			return ErrTypeAssertionError
-		}
+func parseForwardedHeaderValue(forwarded string, key string) string {
+	parts := strings.Split(forwarded, ",")
+	if len(parts) == 0 {
+		return ""
+	}
 
-		if err := callback(obj); err != nil {
-			return err
+	for _, token := range strings.Split(parts[0], ";") {
+		pair := strings.SplitN(strings.TrimSpace(token), "=", 2)
+		if len(pair) != 2 {
+			continue
 		}
-
-	// If it is a slice we continue recursion
-	case reflect.Slice:
-		for i := 0; i < value.Len(); i++ {
-			if err := AssertRecurseValueRequired(value.Index(i), callback); err != nil {
-				return err
-			}
+		if strings.EqualFold(strings.TrimSpace(pair[0]), key) {
+			return strings.Trim(strings.TrimSpace(pair[1]), "\"")
 		}
 	}
-	return nil
+
+	return ""
 }
 
-// helper functions added here as they are called in api_asset_administration_shell_repository_api.go file
+func firstForwardedValue(value string) string {
+	if value == "" {
+		return ""
+	}
 
-func AssertAssetAdministrationShellRequired(obj interface{}) error    { return nil }
-func AssertAssetAdministrationShellConstraints(obj interface{}) error { return nil }
-func AssertAssetInformationRequired(obj interface{}) error            { return nil }
-func AssertAssetInformationConstraints(obj interface{}) error         { return nil }
-func AssertReferenceRequired(obj interface{}) error                   { return nil }
-func AssertReferenceConstraints(obj interface{}) error                { return nil }
+	parts := strings.Split(value, ",")
+	if len(parts) == 0 {
+		return ""
+	}
 
-func AssertSubmodelRequired(obj interface{}) error           { return nil }
-func AssertSubmodelConstraints(obj interface{}) error        { return nil }
-func AssertSubmodelElementRequired(obj interface{}) error    { return nil }
-func AssertSubmodelElementConstraints(obj interface{}) error { return nil }
+	return strings.TrimSpace(parts[0])
+}
 
-func AssertSubmodelMetadataRequired(obj interface{}) error    { return nil }
-func AssertSubmodelMetadataConstraints(obj interface{}) error { return nil }
+func requestScheme(r *http.Request) string {
+	if forwardedProto := parseForwardedHeaderValue(r.Header.Get("Forwarded"), "proto"); forwardedProto != "" {
+		return forwardedProto
+	}
 
-func AssertSubmodelElementMetadataRequired(obj interface{}) error    { return nil }
-func AssertSubmodelElementMetadataConstraints(obj interface{}) error { return nil }
+	if xForwardedProto := firstForwardedValue(r.Header.Get("X-Forwarded-Proto")); xForwardedProto != "" {
+		return xForwardedProto
+	}
 
-func AssertSubmodelElementValueRequired(obj interface{}) error    { return nil }
-func AssertSubmodelElementValueConstraints(obj interface{}) error { return nil }
+	if r.TLS != nil {
+		return "https"
+	}
 
-func AssertOperationRequestRequired(obj interface{}) error    { return nil }
-func AssertOperationRequestConstraints(obj interface{}) error { return nil }
+	return "http"
+}
 
-func AssertOperationRequestValueOnlyRequired(obj interface{}) error    { return nil }
-func AssertOperationRequestValueOnlyConstraints(obj interface{}) error { return nil }
+func requestHost(r *http.Request) string {
+	if forwardedHost := parseForwardedHeaderValue(r.Header.Get("Forwarded"), "host"); forwardedHost != "" {
+		return forwardedHost
+	}
+
+	if xForwardedHost := firstForwardedValue(r.Header.Get("X-Forwarded-Host")); xForwardedHost != "" {
+		return xForwardedHost
+	}
+
+	return r.Host
+}
+
+func (c *AssetAdministrationShellRepositoryAPIAPIController) buildShellLocation(r *http.Request, shellID string) string {
+	baseLocation := c.buildBaseLocation(r)
+	if baseLocation == "" {
+		return ""
+	}
+	escapedShellID := url.PathEscape(shellID)
+
+	return baseLocation + "/shells/" + escapedShellID
+}
+
+func (c *AssetAdministrationShellRepositoryAPIAPIController) buildSubmodelReferencesLocation(r *http.Request, shellID string) string {
+	baseLocation := c.buildBaseLocation(r)
+	if baseLocation == "" {
+		return ""
+	}
+	escapedShellID := url.PathEscape(shellID)
+
+	return baseLocation + "/shells/" + escapedShellID + "/submodel-refs"
+}
+
+func (c *AssetAdministrationShellRepositoryAPIAPIController) buildSubmodelLocation(r *http.Request, shellID string, submodelID string) string {
+	baseLocation := c.buildBaseLocation(r)
+	if baseLocation == "" {
+		return ""
+	}
+	escapedShellID := url.PathEscape(shellID)
+	escapedSubmodelID := url.PathEscape(submodelID)
+
+	return baseLocation + "/shells/" + escapedShellID + "/submodels/" + escapedSubmodelID
+}
+
+ 

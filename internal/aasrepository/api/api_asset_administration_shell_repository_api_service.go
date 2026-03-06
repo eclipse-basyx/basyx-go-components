@@ -10,578 +10,612 @@
  */
 
 // package openapi
-package aasrepositoryapi
+package api
 
 import (
 	"context"
+	"database/sql"
+	"encoding/base64"
 	"errors"
+	"fmt"
 	"net/http"
 	"os"
 
+	"github.com/FriedJannik/aas-go-sdk/jsonization"
 	"github.com/FriedJannik/aas-go-sdk/types"
+	persistencepostgresql "github.com/eclipse-basyx/basyx-go-components/internal/aasrepository/persistence"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	submodelpersistencepostgresql "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence"
 )
 
 // AssetAdministrationShellRepositoryAPIAPIService is a service that implements the logic for the AssetAdministrationShellRepositoryAPIAPIServicer
 // This service should implement the business logic for every endpoint for the AssetAdministrationShellRepositoryAPIAPI API.
 // Include any external packages or services that will be required by this service.
 type AssetAdministrationShellRepositoryAPIAPIService struct {
+	assetAdministrationShellBackend         persistencepostgresql.AssetAdministrationShellDatabase
+	assetAdministrationShellSubmodelBackend submodelpersistencepostgresql.SubmodelDatabase
 }
 
+const componentName = "AASREPO"
+
 // NewAssetAdministrationShellRepositoryAPIAPIService creates a default api service
-func NewAssetAdministrationShellRepositoryAPIAPIService() *AssetAdministrationShellRepositoryAPIAPIService {
-	return &AssetAdministrationShellRepositoryAPIAPIService{}
+func NewAssetAdministrationShellRepositoryAPIAPIService(databaseBackendAssetAdministrationShell persistencepostgresql.AssetAdministrationShellDatabase, databaseBackendSubmodel submodelpersistencepostgresql.SubmodelDatabase) *AssetAdministrationShellRepositoryAPIAPIService {
+	return &AssetAdministrationShellRepositoryAPIAPIService{
+		assetAdministrationShellBackend:         databaseBackendAssetAdministrationShell,
+		assetAdministrationShellSubmodelBackend: databaseBackendSubmodel,
+	}
 }
 
 // GetAllAssetAdministrationShells - Returns all Asset Administration Shells
 func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllAssetAdministrationShells(ctx context.Context, assetIds []string, idShort string, limit int32, cursor string) (gen.ImplResponse, error) {
-	// TODO - update GetAllAssetAdministrationShells with the required logic for this service method.
-	// Add api_asset_administration_shell_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
+	_ = ctx
+	const operation = "GetAllAssetAdministrationShells"
 
-	// TODO: Uncomment the next line to return response gen.Response(200, GetAssetAdministrationShellsResult{}) or use other options such as http.Ok ...
-	// return types.Response(200, GetAssetAdministrationShellsResult{}), nil
+	decodedCursor, decodeErr := decodeBase64RawStd(cursor)
+	if decodeErr != nil {
+		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "BadCursor"), nil
+	}
 
-	// TODO: Uncomment the next line to return response gen.Response(400, Result{}) or use other options such as http.Ok ...
-	// return types.Response(400, Result{}), nil
+	aasList, nextCursor, err := s.assetAdministrationShellBackend.GetAssetAdministrationShells(limit, decodedCursor, idShort, assetIds)
+	if err != nil {
+		if common.IsErrBadRequest(err) {
+			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
+		}
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetAssetAdministrationShells"), err
+	}
 
-	// TODO: Uncomment the next line to return response gen.Response(401, Result{}) or use other options such as http.Ok ...
-	// return types.Response(401, Result{}), nil
-
-	// TODO: Uncomment the next line to return response gen.Response(403, Result{}) or use other options such as http.Ok ...
-	// return types.Response(403, Result{}), nil
-
-	// TODO: Uncomment the next line to return response gen.Response(500, Result{}) or use other options such as http.Ok ...
-	// return types.Response(500, Result{}), nil
-
-	// TODO: Uncomment the next line to return response gen.Response(0, Result{}) or use other options such as http.Ok ...
-	// return types.Response(0, Result{}), nil
-
-	return gen.Response(http.StatusNotImplemented, nil), errors.New("GetAllAssetAdministrationShells method not implemented")
+	return gen.Response(http.StatusOK, gen.GetAssetAdministrationShellsResult{
+		PagingMetadata: gen.PagedResultPagingMetadata{Cursor: base64.RawStdEncoding.EncodeToString([]byte(nextCursor))},
+		Result:         aasList,
+	}), nil
 }
 
 // PostAssetAdministrationShell - Creates a new Asset Administration Shell
-func (s *AssetAdministrationShellRepositoryAPIAPIService) PostAssetAdministrationShell(ctx context.Context, assetAdministrationShell types.IAssetAdministrationShell) (gen.ImplResponse, error) {
-	// TODO - update PostAssetAdministrationShell with the required logic for this service method.
-	// Add api_asset_administration_shell_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
+func (s *AssetAdministrationShellRepositoryAPIAPIService) PostAssetAdministrationShell(ctx context.Context, aas types.IAssetAdministrationShell) (gen.ImplResponse, error) {
+	const operation = "PostAssetAdministrationShell"
 
-	// TODO: Uncomment the next line to return response gen.Response(201, AssetAdministrationShell{}) or use other options such as http.Ok ...
-	// return types.Response(201, AssetAdministrationShell{}), nil
+	aasJsonable, err := jsonization.ToJsonable(aas)
+	if err != nil {
+		return newAPIErrorResponse(err, http.StatusBadRequest, operation, "InvalidAssetAdministrationShellData"), nil
+	}
 
-	// TODO: Uncomment the next line to return response gen.Response(400, Result{}) or use other options such as http.Ok ...
-	// return types.Response(400, Result{}), nil
+	err = s.assetAdministrationShellBackend.CreateAssetAdministrationShell(aas)
 
-	// TODO: Uncomment the next line to return response gen.Response(401, Result{}) or use other options such as http.Ok ...
-	// return types.Response(401, Result{}), nil
+	if err != nil {
+		if common.IsErrConflict(err) {
+			return newAPIErrorResponse(err, http.StatusConflict, operation, "IdConflict"), nil
+		}
 
-	// TODO: Uncomment the next line to return response gen.Response(403, Result{}) or use other options such as http.Ok ...
-	// return types.Response(403, Result{}), nil
+		if common.IsErrBadRequest(err) {
+			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "InvalidAssetAdministrationShellData"), nil
+		}
 
-	// TODO: Uncomment the next line to return response gen.Response(409, Result{}) or use other options such as http.Ok ...
-	// return types.Response(409, Result{}), nil
+		_, _ = fmt.Println("Error creating Asset Administration Shell: " + err.Error())
 
-	// TODO: Uncomment the next line to return response gen.Response(500, Result{}) or use other options such as http.Ok ...
-	// return types.Response(500, Result{}), nil
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "CreateAssetAdministrationShell"), err
+	}
 
-	// TODO: Uncomment the next line to return response gen.Response(0, Result{}) or use other options such as http.Ok ...
-	// return types.Response(0, Result{}), nil
-
-	return gen.Response(http.StatusNotImplemented, nil), errors.New("PostAssetAdministrationShell method not implemented")
+	return gen.Response(http.StatusCreated, aasJsonable), nil
 }
 
 // GetAllAssetAdministrationShellsReference - Returns References to all Asset Administration Shells
 func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllAssetAdministrationShellsReference(ctx context.Context, assetIds []string, idShort string, limit int32, cursor string) (gen.ImplResponse, error) {
-	// TODO - update GetAllAssetAdministrationShellsReference with the required logic for this service method.
-	// Add api_asset_administration_shell_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
+	_ = ctx
+	const operation = "GetAllAssetAdministrationShellsReference"
 
-	// TODO: Uncomment the next line to return response gen.Response(200, GetReferencesResult{}) or use other options such as http.Ok ...
-	// return types.Response(200, GetReferencesResult{}), nil
+	decodedCursor, decodeErr := decodeBase64RawStd(cursor)
+	if decodeErr != nil {
+		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "BadCursor"), nil
+	}
 
-	// TODO: Uncomment the next line to return response gen.Response(400, Result{}) or use other options such as http.Ok ...
-	// return types.Response(400, Result{}), nil
+	references, nextCursor, err := s.assetAdministrationShellBackend.GetAssetAdministrationShellReferences(limit, decodedCursor, idShort, assetIds)
+	if err != nil {
+		if common.IsErrBadRequest(err) {
+			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
+		}
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetAssetAdministrationShellReferences"), err
+	}
 
-	// TODO: Uncomment the next line to return response gen.Response(401, Result{}) or use other options such as http.Ok ...
-	// return types.Response(401, Result{}), nil
+	jsonReferences := make([]map[string]any, 0, len(references))
+	for _, reference := range references {
+		jsonReference, jsonErr := jsonization.ToJsonable(reference)
+		if jsonErr != nil {
+			return newAPIErrorResponse(jsonErr, http.StatusInternalServerError, operation, "ToJsonable"), jsonErr
+		}
+		jsonReferences = append(jsonReferences, jsonReference)
+	}
 
-	// TODO: Uncomment the next line to return response gen.Response(403, Result{}) or use other options such as http.Ok ...
-	// return types.Response(403, Result{}), nil
-
-	// TODO: Uncomment the next line to return response gen.Response(500, Result{}) or use other options such as http.Ok ...
-	// return types.Response(500, Result{}), nil
-
-	// TODO: Uncomment the next line to return response gen.Response(0, Result{}) or use other options such as http.Ok ...
-	// return types.Response(0, Result{}), nil
-
-	return gen.Response(http.StatusNotImplemented, nil), errors.New("GetAllAssetAdministrationShellsReference method not implemented")
+	return gen.Response(http.StatusOK, gen.GetReferencesResult{
+		PagingMetadata: gen.PagedResultPagingMetadata{Cursor: base64.RawStdEncoding.EncodeToString([]byte(nextCursor))},
+		Result:         jsonReferences,
+	}), nil
 }
 
 // GetAssetAdministrationShellById - Returns a specific Asset Administration Shell
 func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAssetAdministrationShellById(ctx context.Context, aasIdentifier string) (gen.ImplResponse, error) {
-	// TODO - update GetAssetAdministrationShellById with the required logic for this service method.
-	// Add api_asset_administration_shell_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
+	_ = ctx
+	const operation = "GetAssetAdministrationShellById"
 
-	// TODO: Uncomment the next line to return response gen.Response(200, AssetAdministrationShell{}) or use other options such as http.Ok ...
-	// return types.Response(200, AssetAdministrationShell{}), nil
+	decodedIdentifier, decodeErr := decodeBase64RawStd(aasIdentifier)
+	if decodeErr != nil {
+		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedAssetAdministrationShellIdentifier"), nil
+	}
 
-	// TODO: Uncomment the next line to return response gen.Response(400, Result{}) or use other options such as http.Ok ...
-	// return types.Response(400, Result{}), nil
+	aasMap, err := s.assetAdministrationShellBackend.GetAssetAdministrationShellByID(decodedIdentifier)
+	if err != nil {
+		if common.IsErrNotFound(err) || errors.Is(err, sql.ErrNoRows) {
+			return newAPIErrorResponse(err, http.StatusNotFound, operation, "AssetAdministrationShellNotFound"), nil
+		}
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetAssetAdministrationShellByID"), err
+	}
 
-	// TODO: Uncomment the next line to return response gen.Response(401, Result{}) or use other options such as http.Ok ...
-	// return types.Response(401, Result{}), nil
-
-	// TODO: Uncomment the next line to return response gen.Response(403, Result{}) or use other options such as http.Ok ...
-	// return types.Response(403, Result{}), nil
-
-	// TODO: Uncomment the next line to return response gen.Response(404, Result{}) or use other options such as http.Ok ...
-	// return types.Response(404, Result{}), nil
-
-	// TODO: Uncomment the next line to return response gen.Response(500, Result{}) or use other options such as http.Ok ...
-	// return types.Response(500, Result{}), nil
-
-	// TODO: Uncomment the next line to return response gen.Response(0, Result{}) or use other options such as http.Ok ...
-	// return types.Response(0, Result{}), nil
-
-	return gen.Response(http.StatusNotImplemented, nil), errors.New("GetAssetAdministrationShellById method not implemented")
+	return gen.Response(http.StatusOK, aasMap), nil
 }
 
 // PutAssetAdministrationShellById - Creates or updates an existing Asset Administration Shell
 func (s *AssetAdministrationShellRepositoryAPIAPIService) PutAssetAdministrationShellById(ctx context.Context, aasIdentifier string, assetAdministrationShell types.IAssetAdministrationShell) (gen.ImplResponse, error) {
-	// TODO - update PutAssetAdministrationShellById with the required logic for this service method.
-	// Add api_asset_administration_shell_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
+	_ = ctx
+	const operation = "PutAssetAdministrationShellById"
 
-	// TODO: Uncomment the next line to return response gen.Response(201, AssetAdministrationShell{}) or use other options such as http.Ok ...
-	// return types.Response(201, AssetAdministrationShell{}), nil
+	decodedIdentifier, decodeErr := decodeBase64RawStd(aasIdentifier)
+	if decodeErr != nil {
+		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedAssetAdministrationShellIdentifier"), nil
+	}
 
-	// TODO: Uncomment the next line to return response gen.Response(204, {}) or use other options such as http.Ok ...
-	// return types.Response(204, nil),nil
+	jsonableAAS, err := jsonization.ToJsonable(assetAdministrationShell)
+	if err != nil {
+		return newAPIErrorResponse(err, http.StatusBadRequest, operation, "InvalidAssetAdministrationShellData"), nil
+	}
 
-	// TODO: Uncomment the next line to return response gen.Response(400, Result{}) or use other options such as http.Ok ...
-	// return types.Response(400, Result{}), nil
+	jsonableAAS["id"] = decodedIdentifier
+	pathAdjustedAAS, parseErr := jsonization.AssetAdministrationShellFromJsonable(jsonableAAS)
+	if parseErr != nil {
+		return newAPIErrorResponse(parseErr, http.StatusBadRequest, operation, "InvalidAssetAdministrationShellData"), nil
+	}
 
-	// TODO: Uncomment the next line to return response gen.Response(401, Result{}) or use other options such as http.Ok ...
-	// return types.Response(401, Result{}), nil
+	isUpdate, putErr := s.assetAdministrationShellBackend.PutAssetAdministrationShellByID(decodedIdentifier, pathAdjustedAAS)
+	if putErr != nil {
+		if common.IsErrBadRequest(putErr) {
+			return newAPIErrorResponse(putErr, http.StatusBadRequest, operation, "BadRequest"), nil
+		}
+		if common.IsErrConflict(putErr) {
+			return newAPIErrorResponse(putErr, http.StatusConflict, operation, "Conflict"), nil
+		}
+		return newAPIErrorResponse(putErr, http.StatusInternalServerError, operation, "PutAssetAdministrationShellByID"), putErr
+	}
 
-	// TODO: Uncomment the next line to return response gen.Response(403, Result{}) or use other options such as http.Ok ...
-	// return types.Response(403, Result{}), nil
+	if isUpdate {
+		return gen.Response(http.StatusNoContent, nil), nil
+	}
 
-	// TODO: Uncomment the next line to return response gen.Response(500, Result{}) or use other options such as http.Ok ...
-	// return types.Response(500, Result{}), nil
-
-	// TODO: Uncomment the next line to return response gen.Response(0, Result{}) or use other options such as http.Ok ...
-	// return types.Response(0, Result{}), nil
-
-	return gen.Response(http.StatusNotImplemented, nil), errors.New("PutAssetAdministrationShellById method not implemented")
+	return gen.Response(http.StatusCreated, jsonableAAS), nil
 }
 
 // DeleteAssetAdministrationShellById - Deletes an Asset Administration Shell
 func (s *AssetAdministrationShellRepositoryAPIAPIService) DeleteAssetAdministrationShellById(ctx context.Context, aasIdentifier string) (gen.ImplResponse, error) {
-	// TODO - update DeleteAssetAdministrationShellById with the required logic for this service method.
-	// Add api_asset_administration_shell_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
+	_ = ctx
+	const operation = "DeleteAssetAdministrationShellById"
 
-	// TODO: Uncomment the next line to return response gen.Response(204, {}) or use other options such as http.Ok ...
-	// return types.Response(204, nil),nil
+	decodedIdentifier, decodeErr := decodeBase64RawStd(aasIdentifier)
+	if decodeErr != nil {
+		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedAssetAdministrationShellIdentifier"), nil
+	}
 
-	// TODO: Uncomment the next line to return response gen.Response(401, Result{}) or use other options such as http.Ok ...
-	// return types.Response(401, Result{}), nil
+	err := s.assetAdministrationShellBackend.DeleteAssetAdministrationShellByID(decodedIdentifier)
+	if err != nil {
+		if common.IsErrNotFound(err) || errors.Is(err, sql.ErrNoRows) {
+			return newAPIErrorResponse(err, http.StatusNotFound, operation, "AssetAdministrationShellNotFound"), nil
+		}
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "DeleteAssetAdministrationShellByID"), err
+	}
 
-	// TODO: Uncomment the next line to return response gen.Response(403, Result{}) or use other options such as http.Ok ...
-	// return types.Response(403, Result{}), nil
-
-	// TODO: Uncomment the next line to return response gen.Response(404, Result{}) or use other options such as http.Ok ...
-	// return types.Response(404, Result{}), nil
-
-	// TODO: Uncomment the next line to return response gen.Response(500, Result{}) or use other options such as http.Ok ...
-	// return types.Response(500, Result{}), nil
-
-	// TODO: Uncomment the next line to return response gen.Response(0, Result{}) or use other options such as http.Ok ...
-	// return types.Response(0, Result{}), nil
-
-	return gen.Response(http.StatusNotImplemented, nil), errors.New("DeleteAssetAdministrationShellById method not implemented")
+	return gen.Response(http.StatusNoContent, nil), nil
 }
 
 // GetAssetAdministrationShellByIdReferenceAasRepository - Returns a specific Asset Administration Shell as a Reference
 func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAssetAdministrationShellByIdReferenceAasRepository(ctx context.Context, aasIdentifier string) (gen.ImplResponse, error) {
-	// TODO - update GetAssetAdministrationShellByIdReferenceAasRepository with the required logic for this service method.
-	// Add api_asset_administration_shell_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
+	_ = ctx
+	const operation = "GetAssetAdministrationShellByIdReferenceAasRepository"
 
-	// TODO: Uncomment the next line to return response gen.Response(200, Reference{}) or use other options such as http.Ok ...
-	// return types.Response(200, Reference{}), nil
+	decodedIdentifier, decodeErr := decodeBase64RawStd(aasIdentifier)
+	if decodeErr != nil {
+		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedAssetAdministrationShellIdentifier"), nil
+	}
 
-	// TODO: Uncomment the next line to return response gen.Response(400, Result{}) or use other options such as http.Ok ...
-	// return types.Response(400, Result{}), nil
+	reference, err := s.assetAdministrationShellBackend.GetAssetAdministrationShellReferenceByID(decodedIdentifier)
+	if err != nil {
+		if common.IsErrNotFound(err) || errors.Is(err, sql.ErrNoRows) {
+			return newAPIErrorResponse(err, http.StatusNotFound, operation, "AssetAdministrationShellNotFound"), nil
+		}
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetAssetAdministrationShellReferenceByID"), err
+	}
 
-	// TODO: Uncomment the next line to return response gen.Response(401, Result{}) or use other options such as http.Ok ...
-	// return types.Response(401, Result{}), nil
+	jsonReference, jsonErr := jsonization.ToJsonable(reference)
+	if jsonErr != nil {
+		return newAPIErrorResponse(jsonErr, http.StatusInternalServerError, operation, "ToJsonable"), jsonErr
+	}
 
-	// TODO: Uncomment the next line to return response gen.Response(403, Result{}) or use other options such as http.Ok ...
-	// return types.Response(403, Result{}), nil
-
-	// TODO: Uncomment the next line to return response gen.Response(404, Result{}) or use other options such as http.Ok ...
-	// return types.Response(404, Result{}), nil
-
-	// TODO: Uncomment the next line to return response gen.Response(500, Result{}) or use other options such as http.Ok ...
-	// return types.Response(500, Result{}), nil
-
-	// TODO: Uncomment the next line to return response gen.Response(0, Result{}) or use other options such as http.Ok ...
-	// return types.Response(0, Result{}), nil
-
-	return gen.Response(http.StatusNotImplemented, nil), errors.New("GetAssetAdministrationShellByIdReferenceAasRepository method not implemented")
+	return gen.Response(http.StatusOK, jsonReference), nil
 }
 
 // GetAssetInformationAasRepository - Returns the Asset Information
 func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAssetInformationAasRepository(ctx context.Context, aasIdentifier string) (gen.ImplResponse, error) {
-	// TODO - update GetAssetInformationAasRepository with the required logic for this service method.
-	// Add api_asset_administration_shell_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
+	_ = ctx
+	const operation = "GetAssetInformationAasRepository"
 
-	// TODO: Uncomment the next line to return response gen.Response(200, AssetInformation{}) or use other options such as http.Ok ...
-	// return types.Response(200, AssetInformation{}), nil
+	decodedIdentifier, decodeErr := decodeBase64RawStd(aasIdentifier)
+	if decodeErr != nil {
+		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedAssetAdministrationShellIdentifier"), nil
+	}
 
-	// TODO: Uncomment the next line to return response gen.Response(400, Result{}) or use other options such as http.Ok ...
-	// return types.Response(400, Result{}), nil
+	assetInformation, err := s.assetAdministrationShellBackend.GetAssetInformationByAASID(decodedIdentifier)
+	if err != nil {
+		if common.IsErrNotFound(err) || errors.Is(err, sql.ErrNoRows) {
+			return newAPIErrorResponse(err, http.StatusNotFound, operation, "AssetAdministrationShellNotFound"), nil
+		}
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetAssetInformationByAASID"), err
+	}
 
-	// TODO: Uncomment the next line to return response gen.Response(401, Result{}) or use other options such as http.Ok ...
-	// return types.Response(401, Result{}), nil
-
-	// TODO: Uncomment the next line to return response gen.Response(403, Result{}) or use other options such as http.Ok ...
-	// return types.Response(403, Result{}), nil
-
-	// TODO: Uncomment the next line to return response gen.Response(404, Result{}) or use other options such as http.Ok ...
-	// return types.Response(404, Result{}), nil
-
-	// TODO: Uncomment the next line to return response gen.Response(500, Result{}) or use other options such as http.Ok ...
-	// return types.Response(500, Result{}), nil
-
-	// TODO: Uncomment the next line to return response gen.Response(0, Result{}) or use other options such as http.Ok ...
-	// return types.Response(0, Result{}), nil
-
-	return gen.Response(http.StatusNotImplemented, nil), errors.New("GetAssetInformationAasRepository method not implemented")
+	return gen.Response(http.StatusOK, assetInformation), nil
 }
 
 // PutAssetInformationAasRepository - Updates the Asset Information
 func (s *AssetAdministrationShellRepositoryAPIAPIService) PutAssetInformationAasRepository(ctx context.Context, aasIdentifier string, assetInformation types.IAssetInformation) (gen.ImplResponse, error) {
-	// TODO - update PutAssetInformationAasRepository with the required logic for this service method.
-	// Add api_asset_administration_shell_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
+	_ = ctx
+	const operation = "PutAssetInformationAasRepository"
 
-	// TODO: Uncomment the next line to return response gen.Response(204, {}) or use other options such as http.Ok ...
-	// return types.Response(204, nil),nil
+	decodedIdentifier, decodeErr := decodeBase64RawStd(aasIdentifier)
+	if decodeErr != nil {
+		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedAssetAdministrationShellIdentifier"), nil
+	}
 
-	// TODO: Uncomment the next line to return response gen.Response(400, Result{}) or use other options such as http.Ok ...
-	// return types.Response(400, Result{}), nil
+	err := s.assetAdministrationShellBackend.PutAssetInformationByAASID(decodedIdentifier, assetInformation)
+	if err != nil {
+		if common.IsErrNotFound(err) || errors.Is(err, sql.ErrNoRows) {
+			return newAPIErrorResponse(err, http.StatusNotFound, operation, "AssetAdministrationShellNotFound"), nil
+		}
+		if common.IsErrBadRequest(err) {
+			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
+		}
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "PutAssetInformationByAASID"), err
+	}
 
-	// TODO: Uncomment the next line to return response gen.Response(401, Result{}) or use other options such as http.Ok ...
-	// return types.Response(401, Result{}), nil
-
-	// TODO: Uncomment the next line to return response gen.Response(403, Result{}) or use other options such as http.Ok ...
-	// return types.Response(403, Result{}), nil
-
-	// TODO: Uncomment the next line to return response gen.Response(404, Result{}) or use other options such as http.Ok ...
-	// return types.Response(404, Result{}), nil
-
-	// TODO: Uncomment the next line to return response gen.Response(500, Result{}) or use other options such as http.Ok ...
-	// return types.Response(500, Result{}), nil
-
-	// TODO: Uncomment the next line to return response gen.Response(0, Result{}) or use other options such as http.Ok ...
-	// return types.Response(0, Result{}), nil
-
-	return gen.Response(http.StatusNotImplemented, nil), errors.New("PutAssetInformationAasRepository method not implemented")
+	return gen.Response(http.StatusNoContent, nil), nil
 }
 
 // GetThumbnailAasRepository -
 func (s *AssetAdministrationShellRepositoryAPIAPIService) GetThumbnailAasRepository(ctx context.Context, aasIdentifier string) (gen.ImplResponse, error) {
-	// TODO - update GetThumbnailAasRepository with the required logic for this service method.
-	// Add api_asset_administration_shell_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
-
-	// TODO: Uncomment the next line to return response gen.Response(200, *os.File{}) or use other options such as http.Ok ...
-	// return types.Response(200, *os.File{}), nil
-
-	// TODO: Uncomment the next line to return response gen.Response(400, Result{}) or use other options such as http.Ok ...
-	// return types.Response(400, Result{}), nil
-
-	// TODO: Uncomment the next line to return response gen.Response(401, Result{}) or use other options such as http.Ok ...
-	// return types.Response(401, Result{}), nil
-
-	// TODO: Uncomment the next line to return response gen.Response(403, Result{}) or use other options such as http.Ok ...
-	// return types.Response(403, Result{}), nil
-
-	// TODO: Uncomment the next line to return response gen.Response(404, Result{}) or use other options such as http.Ok ...
-	// return types.Response(404, Result{}), nil
-
-	// TODO: Uncomment the next line to return response gen.Response(500, Result{}) or use other options such as http.Ok ...
-	// return types.Response(500, Result{}), nil
-
-	// TODO: Uncomment the next line to return response gen.Response(0, Result{}) or use other options such as http.Ok ...
-	// return types.Response(0, Result{}), nil
-
 	return gen.Response(http.StatusNotImplemented, nil), errors.New("GetThumbnailAasRepository method not implemented")
 }
 
 // PutThumbnailAasRepository -
 func (s *AssetAdministrationShellRepositoryAPIAPIService) PutThumbnailAasRepository(ctx context.Context, aasIdentifier string, fileName string, file *os.File) (gen.ImplResponse, error) {
-	// TODO - update PutThumbnailAasRepository with the required logic for this service method.
-	// Add api_asset_administration_shell_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
-
-	// TODO: Uncomment the next line to return response gen.Response(204, {}) or use other options such as http.Ok ...
-	// return types.Response(204, nil),nil
-
-	// TODO: Uncomment the next line to return response gen.Response(400, Result{}) or use other options such as http.Ok ...
-	// return types.Response(400, Result{}), nil
-
-	// TODO: Uncomment the next line to return response gen.Response(401, Result{}) or use other options such as http.Ok ...
-	// return types.Response(401, Result{}), nil
-
-	// TODO: Uncomment the next line to return response gen.Response(403, Result{}) or use other options such as http.Ok ...
-	// return types.Response(403, Result{}), nil
-
-	// TODO: Uncomment the next line to return response gen.Response(404, Result{}) or use other options such as http.Ok ...
-	// return types.Response(404, Result{}), nil
-
-	// TODO: Uncomment the next line to return response gen.Response(500, Result{}) or use other options such as http.Ok ...
-	// return types.Response(500, Result{}), nil
-
-	// TODO: Uncomment the next line to return response gen.Response(0, Result{}) or use other options such as http.Ok ...
-	// return types.Response(0, Result{}), nil
-
 	return gen.Response(http.StatusNotImplemented, nil), errors.New("PutThumbnailAasRepository method not implemented")
 }
 
 // DeleteThumbnailAasRepository -
 func (s *AssetAdministrationShellRepositoryAPIAPIService) DeleteThumbnailAasRepository(ctx context.Context, aasIdentifier string) (gen.ImplResponse, error) {
-	// TODO - update DeleteThumbnailAasRepository with the required logic for this service method.
-	// Add api_asset_administration_shell_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
-
-	// TODO: Uncomment the next line to return response gen.Response(200, {}) or use other options such as http.Ok ...
-	// return types.Response(200, nil),nil
-
-	// TODO: Uncomment the next line to return response gen.Response(204, AssetAdministrationShell{}) or use other options such as http.Ok ...
-	// return types.Response(204, AssetAdministrationShell{}), nil
-
-	// TODO: Uncomment the next line to return response gen.Response(400, Result{}) or use other options such as http.Ok ...
-	// return types.Response(400, Result{}), nil
-
-	// TODO: Uncomment the next line to return response gen.Response(401, Result{}) or use other options such as http.Ok ...
-	// return types.Response(401, Result{}), nil
-
-	// TODO: Uncomment the next line to return response gen.Response(403, Result{}) or use other options such as http.Ok ...
-	// return types.Response(403, Result{}), nil
-
-	// TODO: Uncomment the next line to return response gen.Response(404, Result{}) or use other options such as http.Ok ...
-	// return types.Response(404, Result{}), nil
-
-	// TODO: Uncomment the next line to return response gen.Response(500, Result{}) or use other options such as http.Ok ...
-	// return types.Response(500, Result{}), nil
-
-	// TODO: Uncomment the next line to return response gen.Response(0, Result{}) or use other options such as http.Ok ...
-	// return types.Response(0, Result{}), nil
-
 	return gen.Response(http.StatusNotImplemented, nil), errors.New("DeleteThumbnailAasRepository method not implemented")
 }
 
 // GetAllSubmodelReferencesAasRepository - Returns all submodel references
 func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllSubmodelReferencesAasRepository(ctx context.Context, aasIdentifier string, limit int32, cursor string) (gen.ImplResponse, error) {
-	// TODO - update GetAllSubmodelReferencesAasRepository with the required logic for this service method.
-	// Add api_asset_administration_shell_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
+	_ = ctx
+	const operation = "GetAllSubmodelReferencesAasRepository"
 
-	// TODO: Uncomment the next line to return response gen.Response(200, GetReferencesResult{}) or use other options such as http.Ok ...
-	// return types.Response(200, GetReferencesResult{}), nil
+	decodedIdentifier, decodeErr := decodeBase64RawStd(aasIdentifier)
+	if decodeErr != nil {
+		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedAssetAdministrationShellIdentifier"), nil
+	}
 
-	// TODO: Uncomment the next line to return response gen.Response(400, Result{}) or use other options such as http.Ok ...
-	// return types.Response(400, Result{}), nil
+	decodedCursor, cursorDecodeErr := decodeBase64RawStd(cursor)
+	if cursorDecodeErr != nil {
+		return newAPIErrorResponse(cursorDecodeErr, http.StatusBadRequest, operation, "BadCursor"), nil
+	}
+	_ = limit
+	_ = decodedCursor
 
-	// TODO: Uncomment the next line to return response gen.Response(401, Result{}) or use other options such as http.Ok ...
-	// return types.Response(401, Result{}), nil
+	references, nextCursor, err := s.assetAdministrationShellBackend.GetAllSubmodelReferencesByAASID(decodedIdentifier, limit, decodedCursor)
+	if err != nil {
+		if common.IsErrNotFound(err) || errors.Is(err, sql.ErrNoRows) {
+			return newAPIErrorResponse(err, http.StatusNotFound, operation, "AssetAdministrationShellNotFound"), nil
+		}
+		if common.IsErrBadRequest(err) {
+			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
+		}
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetAllSubmodelReferencesByAASID"), err
+	}
 
-	// TODO: Uncomment the next line to return response gen.Response(403, Result{}) or use other options such as http.Ok ...
-	// return types.Response(403, Result{}), nil
+	jsonReferences := make([]map[string]any, 0, len(references))
+	for _, reference := range references {
+		jsonReference, jsonErr := jsonization.ToJsonable(reference)
+		if jsonErr != nil {
+			return newAPIErrorResponse(jsonErr, http.StatusInternalServerError, operation, "ToJsonable"), jsonErr
+		}
+		jsonReferences = append(jsonReferences, jsonReference)
+	}
 
-	// TODO: Uncomment the next line to return response gen.Response(404, Result{}) or use other options such as http.Ok ...
-	// return types.Response(404, Result{}), nil
-
-	// TODO: Uncomment the next line to return response gen.Response(500, Result{}) or use other options such as http.Ok ...
-	// return types.Response(500, Result{}), nil
-
-	// TODO: Uncomment the next line to return response gen.Response(0, Result{}) or use other options such as http.Ok ...
-	// return types.Response(0, Result{}), nil
-
-	return gen.Response(http.StatusNotImplemented, nil), errors.New("GetAllSubmodelReferencesAasRepository method not implemented")
+	return gen.Response(http.StatusOK, gen.GetReferencesResult{
+		PagingMetadata: gen.PagedResultPagingMetadata{Cursor: base64.RawStdEncoding.EncodeToString([]byte(nextCursor))},
+		Result:         jsonReferences,
+	}), nil
 }
 
 // PostSubmodelReferenceAasRepository - Creates a submodel reference at the Asset Administration Shell
 func (s *AssetAdministrationShellRepositoryAPIAPIService) PostSubmodelReferenceAasRepository(ctx context.Context, aasIdentifier string, reference types.IReference) (gen.ImplResponse, error) {
-	// TODO - update PostSubmodelReferenceAasRepository with the required logic for this service method.
-	// Add api_asset_administration_shell_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
+	const operation = "PostSubmodelReferenceAasRepository"
 
-	// TODO: Uncomment the next line to return response gen.Response(201, Reference{}) or use other options such as http.Ok ...
-	// return types.Response(201, Reference{}), nil
+	decodedAssetAdministrationShellIdentifier, decodeErr := decodeBase64RawStd(aasIdentifier)
+	if decodeErr != nil {
+		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedAssetAdministrationShellIdentifier"), nil
+	}
+	referenceJsonable, err := jsonization.ToJsonable(reference)
+	if err != nil {
+		return newAPIErrorResponse(err, http.StatusBadRequest, operation, "InvalidReferenceData"), nil
+	}
 
-	// TODO: Uncomment the next line to return response gen.Response(400, Result{}) or use other options such as http.Ok ...
-	// return types.Response(400, Result{}), nil
+	if err := s.assetAdministrationShellBackend.CreateSubmodelReferenceInAssetAdministrationShell(decodedAssetAdministrationShellIdentifier, reference); err != nil {
+		if common.IsErrNotFound(err) || errors.Is(err, sql.ErrNoRows) {
+			return newAPIErrorResponse(err, http.StatusNotFound, operation, "AssetAdministrationShellNotFound"), nil
+		}
+		if common.IsErrConflict(err) {
+			return newAPIErrorResponse(err, http.StatusConflict, operation, "Conflict"), nil
+		}
+		if common.IsErrBadRequest(err) {
+			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
+		}
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "CreateSubmodelReferenceInAssetAdministrationShell"), err
+	}
 
-	// TODO: Uncomment the next line to return response gen.Response(401, Result{}) or use other options such as http.Ok ...
-	// return types.Response(401, Result{}), nil
-
-	// TODO: Uncomment the next line to return response gen.Response(403, Result{}) or use other options such as http.Ok ...
-	// return types.Response(403, Result{}), nil
-
-	// TODO: Uncomment the next line to return response gen.Response(404, Result{}) or use other options such as http.Ok ...
-	// return types.Response(404, Result{}), nil
-
-	// TODO: Uncomment the next line to return response gen.Response(409, Result{}) or use other options such as http.Ok ...
-	// return types.Response(409, Result{}), nil
-
-	// TODO: Uncomment the next line to return response gen.Response(500, Result{}) or use other options such as http.Ok ...
-	// return types.Response(500, Result{}), nil
-
-	// TODO: Uncomment the next line to return response gen.Response(0, Result{}) or use other options such as http.Ok ...
-	// return types.Response(0, Result{}), nil
-
-	return gen.Response(http.StatusNotImplemented, nil), errors.New("PostSubmodelReferenceAasRepository method not implemented")
+	return gen.Response(http.StatusCreated, referenceJsonable), nil
 }
 
 // DeleteSubmodelReferenceAasRepository - Deletes the submodel reference from the Asset Administration Shell. Does not delete the submodel itself!
 func (s *AssetAdministrationShellRepositoryAPIAPIService) DeleteSubmodelReferenceAasRepository(ctx context.Context, aasIdentifier string, submodelIdentifier string) (gen.ImplResponse, error) {
-	// TODO - update DeleteSubmodelReferenceAasRepository with the required logic for this service method.
-	// Add api_asset_administration_shell_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
+	_ = ctx
+	const operation = "DeleteSubmodelReferenceAasRepository"
 
-	// TODO: Uncomment the next line to return response gen.Response(204, {}) or use other options such as http.Ok ...
-	// return types.Response(204, nil),nil
+	decodedAASIdentifier, decodeAASErr := decodeBase64RawStd(aasIdentifier)
+	if decodeAASErr != nil {
+		return newAPIErrorResponse(decodeAASErr, http.StatusBadRequest, operation, "MalformedAssetAdministrationShellIdentifier"), nil
+	}
 
-	// TODO: Uncomment the next line to return response gen.Response(400, Result{}) or use other options such as http.Ok ...
-	// return types.Response(400, Result{}), nil
+	decodedSubmodelIdentifier, decodeSubmodelErr := decodeBase64RawStd(submodelIdentifier)
+	if decodeSubmodelErr != nil {
+		return newAPIErrorResponse(decodeSubmodelErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
+	}
 
-	// TODO: Uncomment the next line to return response gen.Response(401, Result{}) or use other options such as http.Ok ...
-	// return types.Response(401, Result{}), nil
+	err := s.assetAdministrationShellBackend.DeleteSubmodelReferenceInAssetAdministrationShell(decodedAASIdentifier, decodedSubmodelIdentifier)
+	if err != nil {
+		if common.IsErrNotFound(err) || errors.Is(err, sql.ErrNoRows) {
+			return newAPIErrorResponse(err, http.StatusNotFound, operation, "SubmodelReferenceNotFound"), nil
+		}
+		if common.IsErrBadRequest(err) {
+			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
+		}
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "DeleteSubmodelReferenceInAssetAdministrationShell"), err
+	}
 
-	// TODO: Uncomment the next line to return response gen.Response(403, Result{}) or use other options such as http.Ok ...
-	// return types.Response(403, Result{}), nil
-
-	// TODO: Uncomment the next line to return response gen.Response(404, Result{}) or use other options such as http.Ok ...
-	// return types.Response(404, Result{}), nil
-
-	// TODO: Uncomment the next line to return response gen.Response(500, Result{}) or use other options such as http.Ok ...
-	// return types.Response(500, Result{}), nil
-
-	// TODO: Uncomment the next line to return response gen.Response(0, Result{}) or use other options such as http.Ok ...
-	// return types.Response(0, Result{}), nil
-
-	return gen.Response(http.StatusNotImplemented, nil), errors.New("DeleteSubmodelReferenceAasRepository method not implemented")
+	return gen.Response(http.StatusNoContent, nil), nil
 }
 
 // GetSubmodelByIdAasRepository - Returns the Submodel
 func (s *AssetAdministrationShellRepositoryAPIAPIService) GetSubmodelByIdAasRepository(ctx context.Context, aasIdentifier string, submodelIdentifier string, level string, extent string) (gen.ImplResponse, error) {
-	// TODO - update GetSubmodelByIdAasRepository with the required logic for this service method.
-	// Add api_asset_administration_shell_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
+	_ = ctx
+	const operation = "GetSubmodelByIdAasRepository"
 
-	// TODO: Uncomment the next line to return response gen.Response(200, Submodel{}) or use other options such as http.Ok ...
-	// return types.Response(200, Submodel{}), nil
+	normalizedLevel, levelErr := normalizeSubmodelLevel(level)
+	if levelErr != nil {
+		return newAPIErrorResponse(levelErr, http.StatusBadRequest, operation, "AASREPO-GETSUBMODEL-INVALIDLEVEL"), nil
+	}
 
-	// TODO: Uncomment the next line to return response gen.Response(400, Result{}) or use other options such as http.Ok ...
-	// return types.Response(400, Result{}), nil
+	normalizedExtent, extentErr := normalizeSubmodelExtent(extent)
+	if extentErr != nil {
+		return newAPIErrorResponse(extentErr, http.StatusBadRequest, operation, "AASREPO-GETSUBMODEL-INVALIDEXTENT"), nil
+	}
 
-	// TODO: Uncomment the next line to return response gen.Response(401, Result{}) or use other options such as http.Ok ...
-	// return types.Response(401, Result{}), nil
+	decodedAssetAdministrationShellIdentifier, decodeAASErr := decodeBase64RawStd(aasIdentifier)
+	if decodeAASErr != nil {
+		return newAPIErrorResponse(decodeAASErr, http.StatusBadRequest, operation, "AASREPO-GETSUBMODEL-DECODEAASID"), nil
+	}
 
-	// TODO: Uncomment the next line to return response gen.Response(403, Result{}) or use other options such as http.Ok ...
-	// return types.Response(403, Result{}), nil
+	decodedSubmodelIdentifier, decodeSubmodelErr := decodeBase64RawStd(submodelIdentifier)
+	if decodeSubmodelErr != nil {
+		return newAPIErrorResponse(decodeSubmodelErr, http.StatusBadRequest, operation, "AASREPO-GETSUBMODEL-DECODESMID"), nil
+	}
 
-	// TODO: Uncomment the next line to return response gen.Response(404, Result{}) or use other options such as http.Ok ...
-	// return types.Response(404, Result{}), nil
+	if err := s.assetAdministrationShellBackend.CheckIfSubmodelReferenceExistsInAssetAdministrationShell(decodedAssetAdministrationShellIdentifier, decodedSubmodelIdentifier); err != nil {
+		if common.IsErrNotFound(err) || errors.Is(err, sql.ErrNoRows) {
+			return newAPIErrorResponse(err, http.StatusNotFound, operation, "AASREPO-GETSUBMODEL-REFNOTFOUND"), nil
+		}
+		if common.IsErrBadRequest(err) {
+			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "AASREPO-GETSUBMODEL-CHECKREFBADREQUEST"), nil
+		}
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "AASREPO-GETSUBMODEL-CHECKREF"), err
+	}
 
-	// TODO: Uncomment the next line to return response gen.Response(500, Result{}) or use other options such as http.Ok ...
-	// return types.Response(500, Result{}), nil
+	submodel, err := s.assetAdministrationShellSubmodelBackend.GetSubmodelByID(decodedSubmodelIdentifier)
+	if err != nil {
+		if common.IsErrNotFound(err) || errors.Is(err, sql.ErrNoRows) {
+			return newAPIErrorResponse(err, http.StatusNotFound, operation, "AASREPO-GETSUBMODEL-SMNOTFOUND"), nil
+		}
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "AASREPO-GETSUBMODEL-GETSUBMODEL"), err
+	}
 
-	// TODO: Uncomment the next line to return response gen.Response(0, Result{}) or use other options such as http.Ok ...
-	// return types.Response(0, Result{}), nil
+	jsonSubmodel, jsonErr := jsonization.ToJsonable(submodel)
+	if jsonErr != nil {
+		return newAPIErrorResponse(jsonErr, http.StatusInternalServerError, operation, "AASREPO-GETSUBMODEL-TOJSON"), jsonErr
+	}
 
-	return gen.Response(http.StatusNotImplemented, nil), errors.New("GetSubmodelByIdAasRepository method not implemented")
+	applyLevelAndExtentToSubmodelJSON(jsonSubmodel, normalizedLevel, normalizedExtent)
+
+	return gen.Response(http.StatusOK, jsonSubmodel), nil
 }
 
 // PutSubmodelByIdAasRepository - Creates or updates the Submodel
 func (s *AssetAdministrationShellRepositoryAPIAPIService) PutSubmodelByIdAasRepository(ctx context.Context, aasIdentifier string, submodelIdentifier string, submodel types.ISubmodel) (gen.ImplResponse, error) {
-	// TODO - update PutSubmodelByIdAasRepository with the required logic for this service method.
-	// Add api_asset_administration_shell_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
+	const operation = "PutSubmodelByIdAasRepository"
 
-	// TODO: Uncomment the next line to return response gen.Response(201, Reference{}) or use other options such as http.Ok ...
-	// return types.Response(201, Reference{}), nil
+	decodedAssetAdministrationShellIdentifier, decodeErr := decodeBase64RawStd(aasIdentifier)
+	if decodeErr != nil {
+		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedAssetAdministrationShellIdentifier"), nil
+	}
 
-	// TODO: Uncomment the next line to return response gen.Response(204, {}) or use other options such as http.Ok ...
-	// return types.Response(204, nil),nil
+	decodedSubmodelIdentifier, decodeErrSubmodel := decodeBase64RawStd(submodelIdentifier)
+	if decodeErrSubmodel != nil {
+		return newAPIErrorResponse(decodeErrSubmodel, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
+	}
 
-	// TODO: Uncomment the next line to return response gen.Response(400, Result{}) or use other options such as http.Ok ...
-	// return types.Response(400, Result{}), nil
+	if decodedSubmodelIdentifier != submodel.ID() {
+		return newAPIErrorResponse(errors.New("Submodel ID in path and body do not match"), http.StatusBadRequest, operation, "IdMismatch"), nil
+	}
 
-	// TODO: Uncomment the next line to return response gen.Response(401, Result{}) or use other options such as http.Ok ...
-	// return types.Response(401, Result{}), nil
+	referenceCreated, err := s.assetAdministrationShellBackend.PutSubmodelAndEnsureReferenceAtomic(&s.assetAdministrationShellSubmodelBackend, decodedAssetAdministrationShellIdentifier, decodedSubmodelIdentifier, submodel)
+	if err != nil {
+		if common.IsErrNotFound(err) || errors.Is(err, sql.ErrNoRows) {
+			return newAPIErrorResponse(err, http.StatusNotFound, operation, "AssetAdministrationShellNotFound"), nil
+		}
+		if common.IsErrConflict(err) {
+			return newAPIErrorResponse(err, http.StatusConflict, operation, "Conflict"), nil
+		}
+		if common.IsErrBadRequest(err) {
+			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
+		}
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "PutSubmodelAndEnsureReferenceAtomic"), err
+	}
 
-	// TODO: Uncomment the next line to return response gen.Response(403, Result{}) or use other options such as http.Ok ...
-	// return types.Response(403, Result{}), nil
+	if !referenceCreated {
+		return gen.Response(http.StatusNoContent, nil), nil
+	}
 
-	// TODO: Uncomment the next line to return response gen.Response(404, Result{}) or use other options such as http.Ok ...
-	// return types.Response(404, Result{}), nil
+	key := types.NewKey(types.KeyTypesSubmodel, decodedSubmodelIdentifier)
+	reference := types.NewReference(types.ReferenceTypesModelReference, []types.IKey{key})
 
-	// TODO: Uncomment the next line to return response gen.Response(500, Result{}) or use other options such as http.Ok ...
-	// return types.Response(500, Result{}), nil
+	referenceJSON, jsonErr := jsonization.ToJsonable(reference)
+	if jsonErr != nil {
+		return newAPIErrorResponse(jsonErr, http.StatusBadRequest, operation, "InvalidReferenceData"), nil
+	}
 
-	// TODO: Uncomment the next line to return response gen.Response(0, Result{}) or use other options such as http.Ok ...
-	// return types.Response(0, Result{}), nil
-
-	return gen.Response(http.StatusNotImplemented, nil), errors.New("PutSubmodelByIdAasRepository method not implemented")
+	return gen.Response(http.StatusCreated, referenceJSON), nil
 }
 
 // DeleteSubmodelByIdAasRepository - Deletes the submodel from the Asset Administration Shell and the Repository.
 func (s *AssetAdministrationShellRepositoryAPIAPIService) DeleteSubmodelByIdAasRepository(ctx context.Context, aasIdentifier string, submodelIdentifier string) (gen.ImplResponse, error) {
-	// TODO - update DeleteSubmodelByIdAasRepository with the required logic for this service method.
-	// Add api_asset_administration_shell_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
+	_ = ctx
+	const operation = "DeleteSubmodelByIdAasRepository"
 
-	// TODO: Uncomment the next line to return response gen.Response(204, {}) or use other options such as http.Ok ...
-	// return types.Response(204, nil),nil
+	decodedAssetAdministrationShellIdentifier, decodeAASErr := decodeBase64RawStd(aasIdentifier)
+	if decodeAASErr != nil {
+		return newAPIErrorResponse(decodeAASErr, http.StatusBadRequest, operation, "AASREPO-DELSUBMODEL-DECODEAASID"), nil
+	}
 
-	// TODO: Uncomment the next line to return response gen.Response(400, Result{}) or use other options such as http.Ok ...
-	// return types.Response(400, Result{}), nil
+	decodedSubmodelIdentifier, decodeSubmodelErr := decodeBase64RawStd(submodelIdentifier)
+	if decodeSubmodelErr != nil {
+		return newAPIErrorResponse(decodeSubmodelErr, http.StatusBadRequest, operation, "AASREPO-DELSUBMODEL-DECODESMID"), nil
+	}
 
-	// TODO: Uncomment the next line to return response gen.Response(401, Result{}) or use other options such as http.Ok ...
-	// return types.Response(401, Result{}), nil
+	err := s.assetAdministrationShellBackend.DeleteSubmodelAndReferenceAtomic(&s.assetAdministrationShellSubmodelBackend, decodedAssetAdministrationShellIdentifier, decodedSubmodelIdentifier)
+	if err != nil {
+		if common.IsErrNotFound(err) || errors.Is(err, sql.ErrNoRows) {
+			return newAPIErrorResponse(err, http.StatusNotFound, operation, "AASREPO-DELSUBMODEL-NOTFOUND"), nil
+		}
+		if common.IsErrBadRequest(err) {
+			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "AASREPO-DELSUBMODEL-BADREQUEST"), nil
+		}
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "AASREPO-DELSUBMODEL-ATOMICDELETE"), err
+	}
 
-	// TODO: Uncomment the next line to return response gen.Response(403, Result{}) or use other options such as http.Ok ...
-	// return types.Response(403, Result{}), nil
-
-	// TODO: Uncomment the next line to return response gen.Response(404, Result{}) or use other options such as http.Ok ...
-	// return types.Response(404, Result{}), nil
-
-	// TODO: Uncomment the next line to return response gen.Response(500, Result{}) or use other options such as http.Ok ...
-	// return types.Response(500, Result{}), nil
-
-	// TODO: Uncomment the next line to return response gen.Response(0, Result{}) or use other options such as http.Ok ...
-	// return types.Response(0, Result{}), nil
-
-	return gen.Response(http.StatusNotImplemented, nil), errors.New("DeleteSubmodelByIdAasRepository method not implemented")
+	return gen.Response(http.StatusNoContent, nil), nil
 }
 
 // PatchSubmodelAasRepository - Updates the Submodel
 func (s *AssetAdministrationShellRepositoryAPIAPIService) PatchSubmodelAasRepository(ctx context.Context, aasIdentifier string, submodelIdentifier string, submodel types.ISubmodel, level string) (gen.ImplResponse, error) {
-	// TODO - update PatchSubmodelAasRepository with the required logic for this service method.
-	// Add api_asset_administration_shell_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
+	_ = ctx
+	_ = level
+	const operation = "PatchSubmodelAasRepository"
 
-	// TODO: Uncomment the next line to return response gen.Response(204, {}) or use other options such as http.Ok ...
-	// return types.Response(204, nil),nil
+	decodedAssetAdministrationShellIdentifier, decodeAASErr := decodeBase64RawStd(aasIdentifier)
+	if decodeAASErr != nil {
+		return newAPIErrorResponse(decodeAASErr, http.StatusBadRequest, operation, "AASREPO-PATCHSUBMODEL-DECODEAASID"), nil
+	}
 
-	// TODO: Uncomment the next line to return response gen.Response(400, Result{}) or use other options such as http.Ok ...
-	// return types.Response(400, Result{}), nil
+	decodedSubmodelIdentifier, decodeSubmodelErr := decodeBase64RawStd(submodelIdentifier)
+	if decodeSubmodelErr != nil {
+		return newAPIErrorResponse(decodeSubmodelErr, http.StatusBadRequest, operation, "AASREPO-PATCHSUBMODEL-DECODESMID"), nil
+	}
 
-	// TODO: Uncomment the next line to return response gen.Response(401, Result{}) or use other options such as http.Ok ...
-	// return types.Response(401, Result{}), nil
+	if submodel == nil {
+		return newAPIErrorResponse(errors.New("submodel payload is required"), http.StatusBadRequest, operation, "AASREPO-PATCHSUBMODEL-MISSINGPAYLOAD"), nil
+	}
 
-	// TODO: Uncomment the next line to return response gen.Response(403, Result{}) or use other options such as http.Ok ...
-	// return types.Response(403, Result{}), nil
+	if err := s.assetAdministrationShellBackend.CheckIfSubmodelReferenceExistsInAssetAdministrationShell(decodedAssetAdministrationShellIdentifier, decodedSubmodelIdentifier); err != nil {
+		if common.IsErrNotFound(err) || errors.Is(err, sql.ErrNoRows) {
+			return newAPIErrorResponse(err, http.StatusNotFound, operation, "AASREPO-PATCHSUBMODEL-REFNOTFOUND"), nil
+		}
+		if common.IsErrBadRequest(err) {
+			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "AASREPO-PATCHSUBMODEL-CHECKREFBADREQUEST"), nil
+		}
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "AASREPO-PATCHSUBMODEL-CHECKREF"), err
+	}
 
-	// TODO: Uncomment the next line to return response gen.Response(404, Result{}) or use other options such as http.Ok ...
-	// return types.Response(404, Result{}), nil
+	patchJSON, patchJSONErr := jsonization.ToJsonable(submodel)
+	if patchJSONErr != nil {
+		return newAPIErrorResponse(patchJSONErr, http.StatusBadRequest, operation, "AASREPO-PATCHSUBMODEL-INVALIDPAYLOAD"), nil
+	}
 
-	// TODO: Uncomment the next line to return response gen.Response(500, Result{}) or use other options such as http.Ok ...
-	// return types.Response(500, Result{}), nil
+	_, patchIncludesSubmodelElements := patchJSON["submodelElements"]
 
-	// TODO: Uncomment the next line to return response gen.Response(0, Result{}) or use other options such as http.Ok ...
-	// return types.Response(0, Result{}), nil
+	existingSubmodels, _, getErr := s.assetAdministrationShellSubmodelBackend.GetSubmodels(1, "", decodedSubmodelIdentifier)
+	if getErr != nil {
+		if common.IsErrNotFound(getErr) || errors.Is(getErr, sql.ErrNoRows) {
+			return newAPIErrorResponse(getErr, http.StatusNotFound, operation, "AASREPO-PATCHSUBMODEL-SMNOTFOUND"), nil
+		}
+		return newAPIErrorResponse(getErr, http.StatusInternalServerError, operation, "AASREPO-PATCHSUBMODEL-GETSUBMODEL"), getErr
+	}
 
-	return gen.Response(http.StatusNotImplemented, nil), errors.New("PatchSubmodelAasRepository method not implemented")
+	if len(existingSubmodels) == 0 {
+		notFoundErr := common.NewErrNotFound("AASREPO-PATCHSUBMODEL-SMNOTFOUND Submodel with ID '" + decodedSubmodelIdentifier + "' not found")
+		return newAPIErrorResponse(notFoundErr, http.StatusNotFound, operation, "AASREPO-PATCHSUBMODEL-SMNOTFOUND"), nil
+	}
+
+	existingSubmodel := existingSubmodels[0]
+	if existingSubmodel == nil {
+		nilErr := common.NewInternalServerError("AASREPO-PATCHSUBMODEL-EXISTINGNIL Existing submodel is nil")
+		return newAPIErrorResponse(nilErr, http.StatusInternalServerError, operation, "AASREPO-PATCHSUBMODEL-EXISTINGNIL"), nilErr
+	}
+
+	existingJSON, existingJSONErr := jsonization.ToJsonable(existingSubmodel)
+	if existingJSONErr != nil {
+		return newAPIErrorResponse(existingJSONErr, http.StatusInternalServerError, operation, "AASREPO-PATCHSUBMODEL-TOJSONCURRENT"), existingJSONErr
+	}
+
+	patchJSON["id"] = decodedSubmodelIdentifier
+	mergedJSON := mergeJSONObjects(existingJSON, patchJSON)
+
+	mergedSubmodel, mergedErr := jsonization.SubmodelFromJsonable(mergedJSON)
+	if mergedErr != nil {
+		return newAPIErrorResponse(mergedErr, http.StatusBadRequest, operation, "AASREPO-PATCHSUBMODEL-INVALIDMERGED"), nil
+	}
+
+	err := error(nil)
+	if patchIncludesSubmodelElements {
+		err = s.assetAdministrationShellSubmodelBackend.PatchSubmodel(decodedSubmodelIdentifier, mergedSubmodel)
+	} else {
+		err = s.assetAdministrationShellSubmodelBackend.PatchSubmodelMetadata(decodedSubmodelIdentifier, mergedSubmodel)
+	}
+	if err != nil {
+		if common.IsErrBadRequest(err) {
+			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "AASREPO-PATCHSUBMODEL-BADREQUEST"), nil
+		}
+		if common.IsErrNotFound(err) || errors.Is(err, sql.ErrNoRows) {
+			return newAPIErrorResponse(err, http.StatusNotFound, operation, "AASREPO-PATCHSUBMODEL-SMNOTFOUND"), nil
+		}
+
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "AASREPO-PATCHSUBMODEL-PATCH"), err
+	}
+
+	return gen.Response(http.StatusNoContent, nil), nil
 }
 
 // GetSubmodelByIdMetadataAasRepository - Returns the Submodel&#39;s metadata elements
@@ -789,34 +823,41 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllSubmodelElements
 
 // PostSubmodelElementAasRepository - Creates a new submodel element
 func (s *AssetAdministrationShellRepositoryAPIAPIService) PostSubmodelElementAasRepository(ctx context.Context, aasIdentifier string, submodelIdentifier string, submodelElement types.ISubmodelElement) (gen.ImplResponse, error) {
-	// TODO - update PostSubmodelElementAasRepository with the required logic for this service method.
-	// Add api_asset_administration_shell_repository_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
+	const operation = "PostSubmodelElementAasRepository"
 
-	// TODO: Uncomment the next line to return response gen.Response(201, SubmodelElement{}) or use other options such as http.Ok ...
-	// return types.Response(201, SubmodelElement{}), nil
+	fmt.Println(operation)
 
-	// TODO: Uncomment the next line to return response gen.Response(400, Result{}) or use other options such as http.Ok ...
-	// return types.Response(400, Result{}), nil
+	decodedAssetAdministrationShellIdentifier, decodeErr := decodeBase64RawStd(aasIdentifier)
+	if decodeErr != nil {
+		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedAssetAdministrationShellIdentifier"), nil
+	}
+	decodedSubmodelIdentifier, decodeErrSubmodel := decodeBase64RawStd(submodelIdentifier)
+	if decodeErrSubmodel != nil {
+		return newAPIErrorResponse(decodeErrSubmodel, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
+	}
+	submodelElementJsonable, err := jsonization.ToJsonable(submodelElement)
+	if err != nil {
+		return newAPIErrorResponse(err, http.StatusBadRequest, operation, "InvalidSubmodelElementData"), nil
+	}
 
-	// TODO: Uncomment the next line to return response gen.Response(401, Result{}) or use other options such as http.Ok ...
-	// return types.Response(401, Result{}), nil
+	if err := s.assetAdministrationShellBackend.CheckIfSubmodelReferenceExistsInAssetAdministrationShell(decodedAssetAdministrationShellIdentifier, decodedSubmodelIdentifier); err != nil {
+		return newAPIErrorResponse(err, http.StatusBadRequest, operation, "SubmodelNotReferencedInAssetAdministrationShell"), nil
+	}
 
-	// TODO: Uncomment the next line to return response gen.Response(403, Result{}) or use other options such as http.Ok ...
-	// return types.Response(403, Result{}), nil
+	if err := s.assetAdministrationShellSubmodelBackend.AddSubmodelElement(decodedSubmodelIdentifier, submodelElement); err != nil {
+		if common.IsErrNotFound(err) || errors.Is(err, sql.ErrNoRows) {
+			return newAPIErrorResponse(err, http.StatusNotFound, operation, "SubmodelNotFound"), nil
+		}
+		if common.IsErrConflict(err) {
+			return newAPIErrorResponse(err, http.StatusConflict, operation, "Conflict"), nil
+		}
+		if common.IsErrBadRequest(err) {
+			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
+		}
+		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "AddSubmodelElement"), err
+	}
 
-	// TODO: Uncomment the next line to return response gen.Response(404, Result{}) or use other options such as http.Ok ...
-	// return types.Response(404, Result{}), nil
-
-	// TODO: Uncomment the next line to return response gen.Response(409, Result{}) or use other options such as http.Ok ...
-	// return types.Response(409, Result{}), nil
-
-	// TODO: Uncomment the next line to return response gen.Response(500, Result{}) or use other options such as http.Ok ...
-	// return types.Response(500, Result{}), nil
-
-	// TODO: Uncomment the next line to return response gen.Response(0, Result{}) or use other options such as http.Ok ...
-	// return types.Response(0, Result{}), nil
-
-	return gen.Response(http.StatusNotImplemented, nil), errors.New("PostSubmodelElementAasRepository method not implemented")
+	return gen.Response(http.StatusCreated, submodelElementJsonable), nil
 }
 
 // GetAllSubmodelElementsMetadataAasRepository - Returns all submodel elements including their hierarchy
