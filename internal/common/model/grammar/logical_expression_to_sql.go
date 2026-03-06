@@ -88,6 +88,7 @@ const (
 	CollectorRootSMDesc  CollectorRoot = "smdesc"
 	CollectorRootSM      CollectorRoot = "sm"
 	CollectorRootSME     CollectorRoot = "sme"
+	CollectorRootCD      CollectorRoot = "cd"
 	CollectorRootBD      CollectorRoot = "bd"
 )
 
@@ -102,6 +103,8 @@ func ParseCollectorRoot(root string) (CollectorRoot, error) {
 		return CollectorRootSM, nil
 	case string(CollectorRootSME):
 		return CollectorRootSME, nil
+	case string(CollectorRootCD):
+		return CollectorRootCD, nil
 	case string(CollectorRootBD):
 		return CollectorRootBD, nil
 	default:
@@ -111,7 +114,7 @@ func ParseCollectorRoot(root string) (CollectorRoot, error) {
 
 func (r CollectorRoot) isValid() bool {
 	switch r {
-	case CollectorRootAASDesc, CollectorRootSMDesc, CollectorRootSM, CollectorRootSME, CollectorRootBD:
+	case CollectorRootAASDesc, CollectorRootSMDesc, CollectorRootSM, CollectorRootSME, CollectorRootCD, CollectorRootBD:
 		return true
 	default:
 		return false
@@ -139,6 +142,8 @@ func joinPlanConfigForRoot(root CollectorRoot) (JoinPlanConfig, error) {
 		return joinPlanConfigForSM(), nil
 	case CollectorRootSME:
 		return joinPlanConfigForSME(), nil
+	case CollectorRootCD:
+		return joinPlanConfigForCD(), nil
 	case CollectorRootBD:
 		return joinPlanConfigForBD(), nil
 	default:
@@ -433,6 +438,46 @@ func joinPlanConfigForSME() JoinPlanConfig {
 		},
 		Correlatable: func(alias string) bool {
 			return alias == "submodel_element"
+		},
+	}
+}
+
+func joinPlanConfigForCD() JoinPlanConfig {
+	return JoinPlanConfig{
+		PreferredBase: "concept_description",
+		BaseAliases:   []string{"concept_description"},
+		Rules: map[string]existsJoinRule{
+			"concept_description": {
+				Alias: "concept_description",
+				Deps:  nil,
+				Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
+					return ds
+				},
+			},
+		},
+		TableForAlias: func(alias string) (string, bool) {
+			if alias == "concept_description" {
+				return "concept_description", true
+			}
+			return "", false
+		},
+		GroupKeyForBase: func(base string) (exp.IdentifierExpression, error) {
+			if base == "concept_description" {
+				return goqu.I("concept_description.id"), nil
+			}
+			return nil, fmt.Errorf("unsupported CD base alias %q", base)
+		},
+		RootJoinKey: func() exp.IdentifierExpression {
+			return goqu.I("concept_description.id")
+		},
+		RootJoinKeyAlias: func() string {
+			return "concept_description"
+		},
+		RootJoinKeyColumn: func() string {
+			return "id"
+		},
+		Correlatable: func(alias string) bool {
+			return alias == "concept_description"
 		},
 	}
 }

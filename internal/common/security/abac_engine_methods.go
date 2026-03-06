@@ -62,6 +62,13 @@ var mapMethodAndPatternToRightsData = []mapMethodAndPatternToRights{
 	{"GET", "/submodel-descriptors", []grammar.RightsEnum{grammar.RightsEnumREAD}},
 	{"POST", "/submodel-descriptors", []grammar.RightsEnum{grammar.RightsEnumCREATE}},
 
+	// concept description repository
+	{"GET", "/concept-descriptions", []grammar.RightsEnum{grammar.RightsEnumREAD}},
+	{"POST", "/concept-descriptions", []grammar.RightsEnum{grammar.RightsEnumCREATE}},
+	{"GET", "/concept-descriptions/{cdIdentifier}", []grammar.RightsEnum{grammar.RightsEnumREAD}},
+	{"PUT", "/concept-descriptions/{cdIdentifier}", []grammar.RightsEnum{grammar.RightsEnumUPDATE}},
+	{"DELETE", "/concept-descriptions/{cdIdentifier}", []grammar.RightsEnum{grammar.RightsEnumDELETE}},
+
 	// sm repository
 	{"POST", "/query/submodels", []grammar.RightsEnum{grammar.RightsEnumREAD}}, // query endpoint
 	{"GET", "/submodels", []grammar.RightsEnum{grammar.RightsEnumREAD}},

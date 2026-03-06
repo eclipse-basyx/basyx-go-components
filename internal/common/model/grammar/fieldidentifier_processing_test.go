@@ -212,6 +212,18 @@ var fieldIdentifierProcessingCases = []fidTestCase{
 		WantScalar: &expectedScalar{Column: "semantic_id_reference.type", Bindings: []expectedBinding{}},
 	},
 	{
+		Name:       "cd_id_scalar",
+		Kind:       "scalar",
+		Input:      `$cd#id`,
+		WantScalar: &expectedScalar{Column: "concept_description.id", Bindings: []expectedBinding{}},
+	},
+	{
+		Name:       "cd_idShort_scalar",
+		Kind:       "scalar",
+		Input:      `$cd#idShort`,
+		WantScalar: &expectedScalar{Column: "concept_description.id_short", Bindings: []expectedBinding{}},
+	},
+	{
 		Name:         "aasdesc_endpoints_fragment_wildcard",
 		Kind:         "fragment",
 		Input:        `$aasdesc#endpoints[]`,
