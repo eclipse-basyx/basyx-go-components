@@ -77,6 +77,39 @@ CREATE TABLE IF NOT EXISTS asset_information (
   default_thumbnail JSONB,
   model_type int NOT NULL DEFAULT 4 
 ); -- specific_asset_id in specific_asset_id
+
+CREATE TABLE IF NOT EXISTS aas_submodel_reference (
+  id BIGSERIAL PRIMARY KEY,
+  aas_id BIGINT NOT NULL REFERENCES aas(id) ON DELETE CASCADE,
+  type int NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS aas_submodel_reference_key (
+  id           BIGSERIAL PRIMARY KEY,
+  reference_id BIGINT NOT NULL REFERENCES aas_submodel_reference(id) ON DELETE CASCADE,
+  position     INTEGER NOT NULL,
+  type         int NOT NULL,
+  value        TEXT NOT NULL,
+  UNIQUE(reference_id, position)
+);
+
+CREATE TABLE IF NOT EXISTS aas_submodel_reference_payload (
+  id           BIGSERIAL PRIMARY KEY,
+  reference_id BIGINT NOT NULL REFERENCES aas_submodel_reference(id) ON DELETE CASCADE,
+  parent_reference_payload JSONB NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS thumbnail_file_element ( -- todo
+  id           BIGINT PRIMARY KEY REFERENCES asset_information(asset_information_id) ON DELETE CASCADE,
+  content_type TEXT,
+  file_name    TEXT,
+  value        TEXT
+);
+
+CREATE TABLE IF NOT EXISTS thumbnail_file_data ( -- todo
+  id BIGINT PRIMARY KEY REFERENCES thumbnail_file_element(id) ON DELETE CASCADE,
+  file_oid oid
+);
 -- 
 -- ------------------------------------------
 
