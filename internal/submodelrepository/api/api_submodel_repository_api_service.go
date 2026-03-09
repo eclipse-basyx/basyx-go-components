@@ -870,7 +870,6 @@ func (s *SubmodelRepositoryAPIAPIService) PatchSubmodelByIDMetadata(ctx context.
 //
 //nolint:revive
 func (s *SubmodelRepositoryAPIAPIService) GetSubmodelByIDValueOnly(ctx context.Context, submodelIdentifier string, level string, extent string) (gen.ImplResponse, error) {
-	_ = ctx
 	_ = extent
 	const operation = "GetSubmodelByIDValueOnly"
 
@@ -1314,7 +1313,6 @@ func (s *SubmodelRepositoryAPIAPIService) GetAllSubmodelElementsPathSubmodelRepo
 //
 //nolint:revive
 func (s *SubmodelRepositoryAPIAPIService) GetSubmodelElementByPathSubmodelRepo(ctx context.Context, submodelIdentifier string, idShortPath string, level string, extent string) (gen.ImplResponse, error) {
-	_ = ctx
 	_ = extent
 	const operation = "GetSubmodelElementByPathSubmodelRepo"
 
@@ -1589,7 +1587,6 @@ func (s *SubmodelRepositoryAPIAPIService) PatchSubmodelElementByPathMetadataSubm
 //
 //nolint:revive
 func (s *SubmodelRepositoryAPIAPIService) GetSubmodelElementByPathValueOnlySubmodelRepo(ctx context.Context, submodelIdentifier string, idShortPath string, level string, extent string) (gen.ImplResponse, error) {
-	_ = level
 	_ = extent
 	const operation = "GetSubmodelElementByPathValueOnlySubmodelRepo"
 
@@ -1598,7 +1595,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelElementByPathValueOnlySubmo
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
 	}
 
-	element, err := s.submodelBackend.GetSubmodelElementWithContext(ctx, string(decodedSubmodelIdentifier), idShortPath, true, "")
+	element, err := s.submodelBackend.GetSubmodelElementWithContext(ctx, string(decodedSubmodelIdentifier), idShortPath, true, level)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) || common.IsErrNotFound(err) {
 			return newAPIErrorResponse(err, http.StatusNotFound, operation, "SubmodelElementNotFound"), nil
@@ -1727,7 +1724,6 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelElementByPathReferenceSubmo
 //
 //nolint:revive
 func (s *SubmodelRepositoryAPIAPIService) GetSubmodelElementByPathPathSubmodelRepo(ctx context.Context, submodelIdentifier string, idShortPath string, level string) (gen.ImplResponse, error) {
-	_ = level
 	const operation = "GetSubmodelElementByPathPathSubmodelRepo"
 
 	decodedSubmodelIdentifier, decodeErr := decodeBase64RawStd(submodelIdentifier)
@@ -1735,7 +1731,7 @@ func (s *SubmodelRepositoryAPIAPIService) GetSubmodelElementByPathPathSubmodelRe
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
 	}
 
-	_, err := s.submodelBackend.GetSubmodelElementWithContext(ctx, decodedSubmodelIdentifier, idShortPath, false, "")
+	_, err := s.submodelBackend.GetSubmodelElementWithContext(ctx, decodedSubmodelIdentifier, idShortPath, false, level)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) || common.IsErrNotFound(err) {
 			return newAPIErrorResponse(err, http.StatusNotFound, operation, "SubmodelElementNotFound"), nil
@@ -2121,9 +2117,9 @@ func (s *SubmodelRepositoryAPIAPIService) QuerySubmodels(
 	cursor string,
 	query grammar.Query,
 ) (gen.ImplResponse, error) {
-	ctx = auth.MergeQueryFilter(ctx, query)
+	querySelectionCtx := auth.MergeQueryFilter(ctx, query)
 
-	sms, nextCursor, err := s.submodelBackend.GetSubmodelsWithContext(ctx, limit, cursor, "")
+	sms, nextCursor, err := s.submodelBackend.GetSubmodelsWithContext(querySelectionCtx, limit, cursor, "")
 	if err != nil {
 		switch {
 		case common.IsErrBadRequest(err):
@@ -2144,7 +2140,7 @@ func (s *SubmodelRepositoryAPIAPIService) QuerySubmodels(
 		sm := sms[index]
 
 		eg.Go(func() error {
-			submodelElements, _, elementsErr := s.submodelBackend.GetSubmodelElements(sm.ID(), nil, "", false, "")
+			submodelElements, _, elementsErr := s.submodelBackend.GetSubmodelElementsWithContext(ctx, sm.ID(), nil, "", false, "")
 			if elementsErr != nil {
 				return elementsErr
 			}
