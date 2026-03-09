@@ -146,7 +146,7 @@ func GetSubmodelElementsBySubmodelID(ctx context.Context, db *sql.DB, submodelID
 		rootIDs = append(rootIDs, rootElement.id)
 	}
 
-	includeChildren := level == "deep"
+	includeChildren := level != "core"
 	isGetSubmodelElements := true
 	parsedRows, readRowsErr := readSubmodelElementRowsByRootIDs(db, int64(submodelDatabaseID), rootIDs, includeChildren, isGetSubmodelElements)
 	if readRowsErr != nil {
