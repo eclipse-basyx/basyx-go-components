@@ -29,7 +29,6 @@ package api
 import (
 	"encoding/base64"
 	"errors"
-	"fmt"
 	"net/http"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
@@ -48,8 +47,6 @@ func decodeBase64RawStd(value string) (string, error) {
 	if value == "" {
 		return "", nil
 	}
-
-	fmt.Println("String value " + value)
 
 	decodedBytes, err := base64.RawURLEncoding.DecodeString(value)
 	if err == nil {
