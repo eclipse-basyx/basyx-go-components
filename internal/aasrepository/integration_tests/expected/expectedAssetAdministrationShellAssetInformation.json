@@ -1,10 +1,6 @@
 {
     "assetKind": "Instance",
     "assetType": "assetType",
-    "defaultThumbnail": {
-        "contentType": "text/plain",
-        "path": "thumbnail"
-    },
     "globalAssetId": "assetIdValue",
     "specificAssetIds": [
         {

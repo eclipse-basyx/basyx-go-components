@@ -1,0 +1,25 @@
+{
+    "paging_metadata": {
+        "cursor": "NA"
+    },
+    "result": [
+        {
+            "keys": [
+                {
+                    "type": "Submodel",
+                    "value": "https://example.com/ids/sm/4031_3120_3062_0255"
+                }
+            ],
+            "type": "ModelReference"
+        },
+        {
+            "keys": [
+                {
+                    "type": "Submodel",
+                    "value": "https://example.com/ids/sm/3333_4444_5555_1111"
+                }
+            ],
+            "type": "ModelReference"
+        }
+    ]
+}

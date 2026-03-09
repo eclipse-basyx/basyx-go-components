@@ -169,16 +169,10 @@ func (s *AssetAdministrationShellDatabase) createAssetAdministrationShellInTrans
 	}
 
 	// asset information
-	jsonizedDefaultThumbnail, err := jsonizeResource(aas.AssetInformation().DefaultThumbnail())
-	if err != nil {
-		return common.NewInternalServerError("AASREPO-NEWAAS-CREATE-DEFAULTTHUMBNAILJSON " + err.Error())
-	}
-
 	ids, args, err = buildAssetInformationQuery(
 		&dialect,
 		aasDBID,
 		aas.AssetInformation(),
-		jsonizedDefaultThumbnail,
 	)
 	if err != nil {
 		return common.NewInternalServerError("AASREPO-NEWAAS-CREATE-BUILDASSETINFORMATIONSQL " + err.Error())
@@ -609,8 +603,7 @@ func (s *AssetAdministrationShellDatabase) PutAssetInformationByAASID(aasIdentif
 	var currentAssetKind sql.NullInt64
 	var currentGlobalAssetID sql.NullString
 	var currentAssetType sql.NullString
-	var currentDefaultThumbnail []byte
-	if currentErr := tx.QueryRow(currentSQL, currentArgs...).Scan(&currentAssetKind, &currentGlobalAssetID, &currentAssetType, &currentDefaultThumbnail); currentErr != nil {
+	if currentErr := tx.QueryRow(currentSQL, currentArgs...).Scan(&currentAssetKind, &currentGlobalAssetID, &currentAssetType); currentErr != nil {
 		if currentErr == sql.ErrNoRows {
 			return common.NewErrNotFound("AASREPO-PUTASSETINFO-ASSETINFONOTFOUND Asset Information for Asset Administration Shell with ID '" + aasIdentifier + "' not found")
 		}
@@ -632,22 +625,10 @@ func (s *AssetAdministrationShellDatabase) PutAssetInformationByAASID(aasIdentif
 		updatedAssetType = &currentAssetType.String
 	}
 
-	var thumbnailRecord any
-	if assetInformation.DefaultThumbnail() != nil {
-		jsonizedThumbnail, jsonErr := jsonizeResource(assetInformation.DefaultThumbnail())
-		if jsonErr != nil {
-			return common.NewInternalServerError("AASREPO-PUTASSETINFO-JSONTHUMBNAIL " + jsonErr.Error())
-		}
-		thumbnailRecord = jsonizedThumbnail
-	} else if len(currentDefaultThumbnail) > 0 {
-		thumbnailRecord = goqu.L("?::jsonb", string(currentDefaultThumbnail))
-	}
-
 	updateSQL, updateArgs, buildErr := buildUpdateAssetInformationQuery(&dialect, aasDBID, goqu.Record{
-		"asset_kind":        updatedAssetKind,
-		"global_asset_id":   updatedGlobalAssetID,
-		"asset_type":        updatedAssetType,
-		"default_thumbnail": thumbnailRecord,
+		"asset_kind":      updatedAssetKind,
+		"global_asset_id": updatedGlobalAssetID,
+		"asset_type":      updatedAssetType,
 	})
 	if buildErr != nil {
 		return common.NewInternalServerError("AASREPO-PUTASSETINFO-BUILDUPDATESQL " + buildErr.Error())
@@ -688,16 +669,31 @@ func (s *AssetAdministrationShellDatabase) PutAssetInformationByAASID(aasIdentif
 	return nil
 }
 
-func (s *AssetAdministrationShellDatabase) GetThumbnailByAASID(aasIdentifier string) (map[string]any, error) {
-	return nil, nil
+func (s *AssetAdministrationShellDatabase) GetThumbnailByAASID(aasIdentifier string) ([]byte, string, string, string, error) {
+	thumbnailHandler, err := NewPostgreSQLThumbnailFileHandler(s.db)
+	if err != nil {
+		return nil, "", "", "", common.NewInternalServerError("AASREPO-GETTHUMBNAIL-NEWHANDLER " + err.Error())
+	}
+
+	return thumbnailHandler.DownloadThumbnailByAASID(aasIdentifier)
 }
 
 func (s *AssetAdministrationShellDatabase) PutThumbnailByAASID(aasIdentifier string, fileName string, file *os.File) error {
-	return nil
+	thumbnailHandler, err := NewPostgreSQLThumbnailFileHandler(s.db)
+	if err != nil {
+		return common.NewInternalServerError("AASREPO-PUTTHUMBNAIL-NEWHANDLER " + err.Error())
+	}
+
+	return thumbnailHandler.UploadThumbnailByAASID(aasIdentifier, fileName, file)
 }
 
 func (s *AssetAdministrationShellDatabase) DeleteThumbnailByAASID(aasIdentifier string) error {
-	return nil
+	thumbnailHandler, err := NewPostgreSQLThumbnailFileHandler(s.db)
+	if err != nil {
+		return common.NewInternalServerError("AASREPO-DELTHUMBNAIL-NEWHANDLER " + err.Error())
+	}
+
+	return thumbnailHandler.DeleteThumbnailByAASID(aasIdentifier)
 }
 
 func (s *AssetAdministrationShellDatabase) GetAllSubmodelReferencesByAASID(aasIdentifier string, limit int32, cursor string) ([]types.IReference, string, error) {
@@ -883,7 +879,6 @@ func (s *AssetAdministrationShellDatabase) getAssetAdministrationShellMapByDBID(
 	var assetKind sql.NullInt64
 	var globalAssetID sql.NullString
 	var assetType sql.NullString
-	var defaultThumbnailPayload []byte
 
 	if queryErr := s.db.QueryRow(querySQL, queryArgs...).Scan(
 		&aasID,
@@ -898,7 +893,6 @@ func (s *AssetAdministrationShellDatabase) getAssetAdministrationShellMapByDBID(
 		&assetKind,
 		&globalAssetID,
 		&assetType,
-		&defaultThumbnailPayload,
 	); queryErr != nil {
 		if queryErr == sql.ErrNoRows {
 			return nil, common.NewErrNotFound("AASREPO-MAPAAS-AASNOTFOUND Asset Administration Shell not found")
@@ -948,16 +942,6 @@ func (s *AssetAdministrationShellDatabase) getAssetAdministrationShellMapByDBID(
 	}
 	if assetType.Valid && assetType.String != "" {
 		assetInfo["assetType"] = assetType.String
-	}
-
-	if len(defaultThumbnailPayload) > 0 {
-		var thumbnail map[string]any
-		if unmarshalErr := json.Unmarshal(defaultThumbnailPayload, &thumbnail); unmarshalErr != nil {
-			return nil, common.NewInternalServerError("AASREPO-MAPAAS-UNMARSHALTHUMBNAIL " + unmarshalErr.Error())
-		}
-		if len(thumbnail) > 0 {
-			assetInfo["defaultThumbnail"] = thumbnail
-		}
 	}
 
 	specificAssetIDs, specificErr := s.readSpecificAssetIDsByAssetInformationID(ctx, aasDBID)

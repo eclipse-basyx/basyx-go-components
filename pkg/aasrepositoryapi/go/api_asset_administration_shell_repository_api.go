@@ -574,19 +574,23 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) GetThumbnailAasRepo
 
 // PutThumbnailAasRepository -
 func (c *AssetAdministrationShellRepositoryAPIAPIController) PutThumbnailAasRepository(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseMultipartForm(32 << 20); err != nil {
+		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
+		return
+	}
+
 	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
 	if aasIdentifierParam == "" {
 		c.errorHandler(w, r, &RequiredError{"aasIdentifier"}, nil)
 		return
 	}
 
-	fileParam, err := ReadFormFileToTempFile(r, "file")
-	if err != nil {
-		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
+	fileNameParam := r.FormValue("fileName")
+	fileParam, fileErr := ReadFormFileToTempFile(r, "file")
+	if fileErr != nil {
+		c.errorHandler(w, r, &ParsingError{Param: "file", Err: fileErr}, nil)
 		return
 	}
-
-	fileNameParam := r.FormValue("fileName")
 
 	result, err := c.service.PutThumbnailAasRepository(r.Context(), aasIdentifierParam, fileNameParam, fileParam)
 	if err != nil {
@@ -710,170 +714,18 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) DeleteSubmodelRefer
 
 // GetSubmodelByIdAasRepository - Returns the Submodel
 func (c *AssetAdministrationShellRepositoryAPIAPIController) GetSubmodelByIdAasRepository(w http.ResponseWriter, r *http.Request) {
-	query, err := parseQuery(r.URL.RawQuery)
-	if err != nil {
-		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
-		return
-	}
-
-	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
-	if aasIdentifierParam == "" {
-		c.errorHandler(w, r, &RequiredError{"aasIdentifier"}, nil)
-		return
-	}
-
-	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
-	if submodelIdentifierParam == "" {
-		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
-		return
-	}
-
-	var levelParam string
-	if query.Has("level") {
-		levelParam = query.Get("level")
-	} else {
-		levelParam = "deep"
-	}
-
-	var extentParam string
-	if query.Has("extent") {
-		extentParam = query.Get("extent")
-	} else {
-		extentParam = "withoutBlobValue"
-	}
-
-	result, err := c.service.GetSubmodelByIdAasRepository(r.Context(), aasIdentifierParam, submodelIdentifierParam, levelParam, extentParam)
-	if err != nil {
-		c.errorHandler(w, r, err, &result)
-		return
-	}
-
-	_ = EncodeJSONResponse(result.Body, &result.Code, w)
 }
 
 // PutSubmodelByIdAasRepository - Creates or updates the Submodel
 func (c *AssetAdministrationShellRepositoryAPIAPIController) PutSubmodelByIdAasRepository(w http.ResponseWriter, r *http.Request) {
-	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
-	if aasIdentifierParam == "" {
-		c.errorHandler(w, r, &RequiredError{"aasIdentifier"}, nil)
-		return
-	}
-
-	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
-	if submodelIdentifierParam == "" {
-		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
-		return
-	}
-
-	// Read and unmarshal JSON to interface{} first
-	bodyBytes, err := io.ReadAll(r.Body)
-	if err != nil {
-		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
-		return
-	}
-	var jsonable interface{}
-	if err := json.Unmarshal(bodyBytes, &jsonable); err != nil {
-		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
-		return
-	}
-	submodelParam, err := aasjsonization.SubmodelFromJsonable(jsonable)
-	if err != nil {
-		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
-		return
-	}
-
-	result, err := c.service.PutSubmodelByIdAasRepository(r.Context(), aasIdentifierParam, submodelIdentifierParam, submodelParam)
-	// If an error occurred, encode the error with the status code
-	if err != nil {
-		c.errorHandler(w, r, err, &result)
-		return
-	}
-
-	if result.Code == http.StatusCreated {
-		location := c.buildSubmodelLocation(r, aasIdentifierParam, submodelIdentifierParam)
-		if location != "" {
-			w.Header().Set("Location", location)
-		}
-	}
-	// If no error, encode the body and the result code
-	_ = EncodeJSONResponse(result.Body, &result.Code, w)
 }
 
 // DeleteSubmodelByIdAasRepository - Deletes the submodel from the Asset Administration Shell and the Repository.
 func (c *AssetAdministrationShellRepositoryAPIAPIController) DeleteSubmodelByIdAasRepository(w http.ResponseWriter, r *http.Request) {
-	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
-	if aasIdentifierParam == "" {
-		c.errorHandler(w, r, &RequiredError{"aasIdentifier"}, nil)
-		return
-	}
-
-	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
-	if submodelIdentifierParam == "" {
-		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
-		return
-	}
-
-	result, err := c.service.DeleteSubmodelByIdAasRepository(r.Context(), aasIdentifierParam, submodelIdentifierParam)
-	if err != nil {
-		c.errorHandler(w, r, err, &result)
-		return
-	}
-
-	_ = EncodeJSONResponse(result.Body, &result.Code, w)
 }
 
 // PatchSubmodelAasRepository - Updates the Submodel
 func (c *AssetAdministrationShellRepositoryAPIAPIController) PatchSubmodelAasRepository(w http.ResponseWriter, r *http.Request) {
-	query, err := parseQuery(r.URL.RawQuery)
-	if err != nil {
-		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
-		return
-	}
-
-	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
-	if aasIdentifierParam == "" {
-		c.errorHandler(w, r, &RequiredError{"aasIdentifier"}, nil)
-		return
-	}
-
-	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
-	if submodelIdentifierParam == "" {
-		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
-		return
-	}
-
-	bodyBytes, err := io.ReadAll(r.Body)
-	if err != nil {
-		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
-		return
-	}
-
-	var jsonable interface{}
-	if err := json.Unmarshal(bodyBytes, &jsonable); err != nil {
-		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
-		return
-	}
-
-	submodelParam, err := aasjsonization.SubmodelFromJsonable(jsonable)
-	if err != nil {
-		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
-		return
-	}
-
-	var levelParam string
-	if query.Has("level") {
-		levelParam = query.Get("level")
-	} else {
-		levelParam = "core"
-	}
-
-	result, err := c.service.PatchSubmodelAasRepository(r.Context(), aasIdentifierParam, submodelIdentifierParam, submodelParam, levelParam)
-	if err != nil {
-		c.errorHandler(w, r, err, &result)
-		return
-	}
-
-	_ = EncodeJSONResponse(result.Body, &result.Code, w)
 }
 
 // GetSubmodelByIdMetadataAasRepository - Returns the Submodel's metadata elements
@@ -906,42 +758,6 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) GetAllSubmodelEleme
 
 // PostSubmodelElementAasRepository - Creates a new submodel element
 func (c *AssetAdministrationShellRepositoryAPIAPIController) PostSubmodelElementAasRepository(w http.ResponseWriter, r *http.Request) {
-	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
-	if aasIdentifierParam == "" {
-		c.errorHandler(w, r, &RequiredError{"aasIdentifier"}, nil)
-		return
-	}
-
-	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
-	if submodelIdentifierParam == "" {
-		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
-		return
-	}
-
-	// Read and unmarshal JSON to interface{} first
-	bodyBytes, err := io.ReadAll(r.Body)
-	if err != nil {
-		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
-		return
-	}
-	var jsonable interface{}
-	if err := json.Unmarshal(bodyBytes, &jsonable); err != nil {
-		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
-		return
-	}
-	submodelElementParam, err := aasjsonization.SubmodelElementFromJsonable(jsonable)
-	if err != nil {
-		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
-		return
-	}
-	result, err := c.service.PostSubmodelElementAasRepository(r.Context(), aasIdentifierParam, submodelIdentifierParam, submodelElementParam)
-	// If an error occurred, encode the error with the status code
-	if err != nil {
-		c.errorHandler(w, r, err, &result)
-		return
-	}
-	// If no error, encode the body and the result code
-	_ = EncodeJSONResponse(result.Body, &result.Code, w)
 }
 
 // GetAllSubmodelElementsMetadataAasRepository - Returns all submodel elements including their hierarchy

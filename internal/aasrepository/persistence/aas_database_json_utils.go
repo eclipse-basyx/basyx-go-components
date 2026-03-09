@@ -93,17 +93,3 @@ func jsonizeAssetAdministrationShellPayload(aas types.IAssetAdministrationShell)
 	return result, nil
 }
 
-func jsonizeResource(resource types.IResource) (*string, error) {
-	jsonAPI := jsoniter.ConfigCompatibleWithStandardLibrary
-	var err error
-	var result *string
-
-	if resource != nil {
-		result, err = aas_repository_utils.JsonStringFromJsonableObject(jsonAPI, resource)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	return result, nil
-}

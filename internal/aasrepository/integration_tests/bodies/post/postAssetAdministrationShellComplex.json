@@ -213,11 +213,7 @@
         }
       }
     ],
-    "assetType": "assetType",
-    "defaultThumbnail": {
-      "path": "thumbnail",
-      "contentType": "text/plain"
-    }
+    "assetType": "assetType"
   },
   "submodels": [
     {

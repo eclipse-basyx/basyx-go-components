@@ -52,13 +52,12 @@ func buildAssetAdministrationShellPayloadQuery(dialect *goqu.DialectWrapper, aas
 	}).ToSQL()
 }
 
-func buildAssetInformationQuery(dialect *goqu.DialectWrapper, aasDBID int64, asset_information types.IAssetInformation, default_thumbnail *string) (string, []any, error) {
+func buildAssetInformationQuery(dialect *goqu.DialectWrapper, aasDBID int64, asset_information types.IAssetInformation) (string, []any, error) {
 	return dialect.Insert("asset_information").Rows(goqu.Record{
 		"asset_information_id": aasDBID,
 		"asset_kind":           asset_information.AssetKind(),
 		"global_asset_id":      asset_information.GlobalAssetID(),
 		"asset_type":           asset_information.AssetType(),
-		"default_thumbnail":    default_thumbnail,
 	}).ToSQL()
 }
 
@@ -162,7 +161,7 @@ func buildDeleteAssetAdministrationShellByIdentifierQuery(dialect *goqu.DialectW
 
 func buildGetAssetInformationCurrentStateQuery(dialect *goqu.DialectWrapper, aasDBID int64) (string, []any, error) {
 	return dialect.From("asset_information").
-		Select("asset_kind", "global_asset_id", "asset_type", "default_thumbnail").
+		Select("asset_kind", "global_asset_id", "asset_type").
 		Where(goqu.I("asset_information_id").Eq(aasDBID)).
 		ToSQL()
 }
@@ -229,7 +228,6 @@ func buildGetAssetAdministrationShellMapByDBIDQuery(dialect *goqu.DialectWrapper
 			goqu.I("ai.asset_kind"),
 			goqu.I("ai.global_asset_id"),
 			goqu.I("ai.asset_type"),
-			goqu.I("ai.default_thumbnail"),
 		).
 		Where(goqu.I("a.id").Eq(aasDBID)).
 		ToSQL()

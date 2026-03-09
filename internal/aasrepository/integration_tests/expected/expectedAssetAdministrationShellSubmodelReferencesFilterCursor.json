@@ -1,0 +1,23 @@
+{
+    "paging_metadata": {},
+    "result": [
+        {
+            "keys": [
+                {
+                    "type": "Submodel",
+                    "value": "https://example.com/ids/sm/1111_7777_4444_8888"
+                }
+            ],
+            "type": "ModelReference"
+        },
+        {
+            "keys": [
+                {
+                    "type": "Submodel",
+                    "value": "https://example.com/ids/sm/9999_8888_4444_5555"
+                }
+            ],
+            "type": "ModelReference"
+        }
+    ]
+}
