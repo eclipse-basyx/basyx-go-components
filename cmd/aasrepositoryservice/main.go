@@ -18,7 +18,6 @@ import (
 	persistencepostgresql "github.com/eclipse-basyx/basyx-go-components/internal/aasrepository/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/jws"
-	submodelpersistencepostgresql "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence"
 	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/aasrepositoryapi/go"
 )
 
@@ -65,12 +64,8 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	if err != nil {
 		return err
 	}
-	submodelDatabase, err := submodelpersistencepostgresql.NewSubmodelDatabase("postgres://"+config.Postgres.User+":"+config.Postgres.Password+"@"+config.Postgres.Host+":"+strconv.Itoa(config.Postgres.Port)+"/"+config.Postgres.DBName+"?sslmode=disable", config.Postgres.MaxOpenConnections, config.Postgres.MaxIdleConnections, config.Postgres.ConnMaxLifetimeMinutes, databaseSchema, privateKey, config.Server.StrictVerification)
-	if err != nil {
-		return err
-	}
 
-	aasSvc := api.NewAssetAdministrationShellRepositoryAPIAPIService(*aasDatabase, *submodelDatabase)
+	aasSvc := api.NewAssetAdministrationShellRepositoryAPIAPIService(*aasDatabase)
 	aasCtrl := openapi.NewAssetAdministrationShellRepositoryAPIAPIController(aasSvc, config.Server.ContextPath, config.Server.StrictVerification)
 	for _, rt := range aasCtrl.Routes() {
 		r.Method(rt.Method, rt.Pattern, rt.HandlerFunc)

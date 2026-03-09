@@ -31,7 +31,6 @@ import (
 	"crypto/rsa"
 	"database/sql"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"strconv"
@@ -46,7 +45,6 @@ import (
 	persistenceutils "github.com/eclipse-basyx/basyx-go-components/internal/aasrepository/persistence/utils"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/descriptors"
-	submodelpersistencepostgresql "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence"
 	"github.com/lib/pq"
 )
 
@@ -339,47 +337,6 @@ func (s *AssetAdministrationShellDatabase) checkIfSubmodelReferenceExistsInAsset
 	}
 
 	return nil
-}
-
-// PutSubmodelAndEnsureReferenceAtomic stores a submodel and ensures its reference in a single transaction.
-func (s *AssetAdministrationShellDatabase) PutSubmodelAndEnsureReferenceAtomic(submodelDatabase *submodelpersistencepostgresql.SubmodelDatabase, aasIdentifier string, submodelIdentifier string, submodel types.ISubmodel) (bool, error) {
-	tx, cleanup, err := common.StartTransaction(s.db)
-	if err != nil {
-		return false, common.NewInternalServerError("AASREPO-PUTSMATOMIC-STARTTX " + err.Error())
-	}
-	defer cleanup(&err)
-
-	_, err = submodelDatabase.PutSubmodelInTransaction(tx, submodelIdentifier, submodel)
-	if err != nil {
-		return false, err
-	}
-
-	err = s.checkIfSubmodelReferenceExistsInAssetAdministrationShellInTransaction(tx, aasIdentifier, submodelIdentifier)
-	if err == nil {
-		err = tx.Commit()
-		if err != nil {
-			return false, common.NewInternalServerError("AASREPO-PUTSMATOMIC-COMMIT " + err.Error())
-		}
-		return false, nil
-	}
-	if !common.IsErrNotFound(err) && !errors.Is(err, sql.ErrNoRows) {
-		return false, err
-	}
-
-	key := types.NewKey(types.KeyTypesSubmodel, submodelIdentifier)
-	reference := types.NewReference(types.ReferenceTypesModelReference, []types.IKey{key})
-
-	err = s.createSubmodelReferenceInAssetAdministrationShellInTransaction(tx, aasIdentifier, reference)
-	if err != nil {
-		return false, err
-	}
-
-	err = tx.Commit()
-	if err != nil {
-		return false, common.NewInternalServerError("AASREPO-PUTSMATOMIC-COMMIT " + err.Error())
-	}
-
-	return true, nil
 }
 
 func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShells(limit int32, cursor string, idShort string, assetIDs []string) ([]map[string]any, string, error) {
@@ -794,32 +751,6 @@ func (s *AssetAdministrationShellDatabase) DeleteSubmodelReferenceInAssetAdminis
 	err = tx.Commit()
 	if err != nil {
 		return common.NewInternalServerError("AASREPO-DELSMREF-COMMIT " + err.Error())
-	}
-
-	return nil
-}
-
-// DeleteSubmodelAndReferenceAtomic deletes a referenced submodel and its reference in one transaction.
-func (s *AssetAdministrationShellDatabase) DeleteSubmodelAndReferenceAtomic(submodelDatabase *submodelpersistencepostgresql.SubmodelDatabase, aasIdentifier string, submodelIdentifier string) error {
-	tx, cleanup, err := common.StartTransaction(s.db)
-	if err != nil {
-		return common.NewInternalServerError("AASREPO-DELSMATOMIC-STARTTX " + err.Error())
-	}
-	defer cleanup(&err)
-
-	err = s.deleteSubmodelReferenceInAssetAdministrationShellInTransaction(tx, aasIdentifier, submodelIdentifier)
-	if err != nil {
-		return err
-	}
-
-	err = submodelDatabase.DeleteSubmodelInTransaction(tx, submodelIdentifier)
-	if err != nil {
-		return err
-	}
-
-	err = tx.Commit()
-	if err != nil {
-		return common.NewInternalServerError("AASREPO-DELSMATOMIC-COMMIT " + err.Error())
 	}
 
 	return nil

@@ -27,7 +27,6 @@ import (
 	persistencepostgresql "github.com/eclipse-basyx/basyx-go-components/internal/aasrepository/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	gen "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
-	submodelpersistencepostgresql "github.com/eclipse-basyx/basyx-go-components/internal/submodelrepository/persistence"
 	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/aasrepositoryapi/go"
 )
 
@@ -35,17 +34,15 @@ import (
 // This service should implement the business logic for every endpoint for the AssetAdministrationShellRepositoryAPIAPI API.
 // Include any external packages or services that will be required by this service.
 type AssetAdministrationShellRepositoryAPIAPIService struct {
-	assetAdministrationShellBackend         persistencepostgresql.AssetAdministrationShellDatabase
-	assetAdministrationShellSubmodelBackend submodelpersistencepostgresql.SubmodelDatabase
+	assetAdministrationShellBackend persistencepostgresql.AssetAdministrationShellDatabase
 }
 
 const componentName = "AASREPO"
 
 // NewAssetAdministrationShellRepositoryAPIAPIService creates a default api service
-func NewAssetAdministrationShellRepositoryAPIAPIService(databaseBackendAssetAdministrationShell persistencepostgresql.AssetAdministrationShellDatabase, databaseBackendSubmodel submodelpersistencepostgresql.SubmodelDatabase) *AssetAdministrationShellRepositoryAPIAPIService {
+func NewAssetAdministrationShellRepositoryAPIAPIService(databaseBackendAssetAdministrationShell persistencepostgresql.AssetAdministrationShellDatabase) *AssetAdministrationShellRepositoryAPIAPIService {
 	return &AssetAdministrationShellRepositoryAPIAPIService{
-		assetAdministrationShellBackend:         databaseBackendAssetAdministrationShell,
-		assetAdministrationShellSubmodelBackend: databaseBackendSubmodel,
+		assetAdministrationShellBackend: databaseBackendAssetAdministrationShell,
 	}
 }
 
