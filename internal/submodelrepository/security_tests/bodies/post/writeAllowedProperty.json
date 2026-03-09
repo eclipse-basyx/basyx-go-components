@@ -1,0 +1,6 @@
+{
+  "idShort": "SecurityAllowedProperty",
+  "modelType": "Property",
+  "value": "allowed-write",
+  "valueType": "xs:string"
+}

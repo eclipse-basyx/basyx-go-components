@@ -75,13 +75,13 @@ func ListSubmodelDescriptorsForAAS(
 		limit = 10000000
 	}
 
-	d := goqu.Dialect(dialect)
-	aas := goqu.T(tblAASDescriptor).As("aas")
+	d := goqu.Dialect(common.Dialect)
+	aas := goqu.T(common.TblAASDescriptor).As("aas")
 
 	ds := d.
 		From(aas).
-		Select(aas.Col(colDescriptorID)).
-		Where(aas.Col(colAASID).Eq(aasID)).
+		Select(aas.Col(common.ColDescriptorID)).
+		Where(aas.Col(common.ColAASID).Eq(aasID)).
 		Limit(1)
 
 	sqlStr, args, buildErr := ds.ToSQL()
@@ -170,13 +170,13 @@ func insertSubmodelDescriptorForAASTx(
 	submodel model.SubmodelDescriptor,
 ) (model.SubmodelDescriptor, error) {
 	// Lookup AAS descriptor id by AAS Id string
-	d := goqu.Dialect(dialect)
-	aas := goqu.T(tblAASDescriptor).As("aas")
+	d := goqu.Dialect(common.Dialect)
+	aas := goqu.T(common.TblAASDescriptor).As("aas")
 
 	ds := d.
 		From(aas).
-		Select(aas.Col(colDescriptorID)).
-		Where(aas.Col(colAASID).Eq(aasID)).
+		Select(aas.Col(common.ColDescriptorID)).
+		Where(aas.Col(common.ColAASID).Eq(aasID)).
 		Limit(1)
 
 	sqlStr, args, buildErr := ds.ToSQL()
@@ -323,18 +323,18 @@ func deleteSubmodelDescriptorForAASByIDTx(
 	aasID string,
 	submodelID string,
 ) error {
-	d := goqu.Dialect(dialect)
-	aas := goqu.T(tblAASDescriptor).As("aas")
-	smd := goqu.T(tblSubmodelDescriptor).As("smd")
+	d := goqu.Dialect(common.Dialect)
+	aas := goqu.T(common.TblAASDescriptor).As("aas")
+	smd := goqu.T(common.TblSubmodelDescriptor).As("smd")
 
 	ds := d.
 		From(smd).
-		InnerJoin(aas, goqu.On(smd.Col(colAASDescriptorID).Eq(aas.Col(colDescriptorID)))).
-		Select(smd.Col(colDescriptorID)).
+		InnerJoin(aas, goqu.On(smd.Col(common.ColAASDescriptorID).Eq(aas.Col(common.ColDescriptorID)))).
+		Select(smd.Col(common.ColDescriptorID)).
 		Where(
 			goqu.And(
-				aas.Col(colAASID).Eq(aasID),
-				smd.Col(colAASID).Eq(submodelID),
+				aas.Col(common.ColAASID).Eq(aasID),
+				smd.Col(common.ColAASID).Eq(submodelID),
 			),
 		).
 		Limit(1)
@@ -351,7 +351,7 @@ func deleteSubmodelDescriptorForAASByIDTx(
 		return common.NewInternalServerError("Failed to query submodel descriptor id. See server logs for details.")
 	}
 
-	delSQL, delArgs, delErr := d.Delete(tblDescriptor).Where(goqu.C(colID).Eq(descID)).ToSQL()
+	delSQL, delArgs, delErr := d.Delete(common.TblDescriptor).Where(goqu.C(common.ColID).Eq(descID)).ToSQL()
 	if delErr != nil {
 		return delErr
 	}
@@ -363,18 +363,18 @@ func deleteSubmodelDescriptorForAASByIDTx(
 // under a given AAS using an inner join and LIMIT 1. Returns true when present,
 // false when absent.
 func ExistsSubmodelForAAS(ctx context.Context, db *sql.DB, aasID, submodelID string) (bool, error) {
-	d := goqu.Dialect(dialect)
-	smd := goqu.T(tblSubmodelDescriptor).As("smd")
-	aas := goqu.T(tblAASDescriptor).As("aas")
+	d := goqu.Dialect(common.Dialect)
+	smd := goqu.T(common.TblSubmodelDescriptor).As("smd")
+	aas := goqu.T(common.TblAASDescriptor).As("aas")
 
 	ds := d.
 		From(smd).
-		InnerJoin(aas, goqu.On(smd.Col(colAASDescriptorID).Eq(aas.Col(colDescriptorID)))).
+		InnerJoin(aas, goqu.On(smd.Col(common.ColAASDescriptorID).Eq(aas.Col(common.ColDescriptorID)))).
 		Select(goqu.L("1")).
 		Where(
 			goqu.And(
-				aas.Col(colAASID).Eq(aasID),
-				smd.Col(colAASID).Eq(submodelID),
+				aas.Col(common.ColAASID).Eq(aasID),
+				smd.Col(common.ColAASID).Eq(submodelID),
 			),
 		).
 		Limit(1)
@@ -560,16 +560,16 @@ func DeleteSubmodelDescriptorByID(
 // ExistsSubmodelByID performs a lightweight existence check for a submodel
 // descriptor without an AAS association.
 func ExistsSubmodelByID(ctx context.Context, db *sql.DB, submodelID string) (bool, error) {
-	d := goqu.Dialect(dialect)
-	smd := goqu.T(tblSubmodelDescriptor).As("smd")
+	d := goqu.Dialect(common.Dialect)
+	smd := goqu.T(common.TblSubmodelDescriptor).As("smd")
 
 	ds := d.
 		From(smd).
 		Select(goqu.L("1")).
 		Where(
 			goqu.And(
-				smd.Col(colAASID).Eq(submodelID),
-				smd.Col(colAASDescriptorID).IsNull(),
+				smd.Col(common.ColAASID).Eq(submodelID),
+				smd.Col(common.ColAASDescriptorID).IsNull(),
 			),
 		).
 		Limit(1)
@@ -598,19 +598,19 @@ func listSubmodelDescriptorIDsWithoutAAS(
 	limit int32,
 	cursor string,
 ) ([]submodelDescriptorPageRow, string, error) {
-	d := goqu.Dialect(dialect)
-	smd := goqu.T(tblSubmodelDescriptor).As("smd")
+	d := goqu.Dialect(common.Dialect)
+	smd := goqu.T(common.TblSubmodelDescriptor).As("smd")
 
 	ds := d.
 		From(smd).
 		Select(
-			smd.Col(colDescriptorID),
-			smd.Col(colAASID),
+			smd.Col(common.ColDescriptorID),
+			smd.Col(common.ColAASID),
 		).
-		Where(smd.Col(colAASDescriptorID).IsNull())
+		Where(smd.Col(common.ColAASDescriptorID).IsNull())
 
 	if cursor != "" {
-		ds = ds.Where(smd.Col(colAASID).Gte(cursor))
+		ds = ds.Where(smd.Col(common.ColAASID).Gte(cursor))
 	}
 	if limit <= 0 {
 		return nil, "", common.NewErrBadRequest("Limit must be greater than 0")
@@ -620,7 +620,7 @@ func listSubmodelDescriptorIDsWithoutAAS(
 	if peekLimit <= 1 {
 		return nil, "", common.NewErrBadRequest("Limit must be greater than 0")
 	}
-	ds = ds.Order(smd.Col(colAASID).Asc()).Limit(uint(peekLimit))
+	ds = ds.Order(smd.Col(common.ColAASID).Asc()).Limit(uint(peekLimit))
 
 	sqlStr, args, buildErr := ds.ToSQL()
 	if buildErr != nil {
@@ -655,16 +655,16 @@ func listSubmodelDescriptorIDsWithoutAAS(
 }
 
 func lookupSubmodelDescriptorID(ctx context.Context, db DBQueryer, submodelID string) (int64, error) {
-	d := goqu.Dialect(dialect)
-	smd := goqu.T(tblSubmodelDescriptor).As("smd")
+	d := goqu.Dialect(common.Dialect)
+	smd := goqu.T(common.TblSubmodelDescriptor).As("smd")
 
 	ds := d.
 		From(smd).
-		Select(smd.Col(colDescriptorID)).
+		Select(smd.Col(common.ColDescriptorID)).
 		Where(
 			goqu.And(
-				smd.Col(colAASID).Eq(submodelID),
-				smd.Col(colAASDescriptorID).IsNull(),
+				smd.Col(common.ColAASID).Eq(submodelID),
+				smd.Col(common.ColAASDescriptorID).IsNull(),
 			),
 		).
 		Limit(1)
@@ -701,16 +701,16 @@ func deleteSubmodelDescriptorByIDTx(
 	tx *sql.Tx,
 	submodelID string,
 ) error {
-	d := goqu.Dialect(dialect)
-	smd := goqu.T(tblSubmodelDescriptor).As("smd")
+	d := goqu.Dialect(common.Dialect)
+	smd := goqu.T(common.TblSubmodelDescriptor).As("smd")
 
 	ds := d.
 		From(smd).
-		Select(smd.Col(colDescriptorID)).
+		Select(smd.Col(common.ColDescriptorID)).
 		Where(
 			goqu.And(
-				smd.Col(colAASID).Eq(submodelID),
-				smd.Col(colAASDescriptorID).IsNull(),
+				smd.Col(common.ColAASID).Eq(submodelID),
+				smd.Col(common.ColAASDescriptorID).IsNull(),
 			),
 		).
 		Limit(1)
@@ -727,7 +727,7 @@ func deleteSubmodelDescriptorByIDTx(
 		return common.NewInternalServerError("Failed to query submodel descriptor id. See server logs for details.")
 	}
 
-	delSQL, delArgs, delErr := d.Delete(tblDescriptor).Where(goqu.C(colID).Eq(descID)).ToSQL()
+	delSQL, delArgs, delErr := d.Delete(common.TblDescriptor).Where(goqu.C(common.ColID).Eq(descID)).ToSQL()
 	if delErr != nil {
 		return delErr
 	}

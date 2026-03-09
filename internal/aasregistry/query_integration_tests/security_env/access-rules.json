@@ -87,7 +87,7 @@
             }
           },
           {
-            "FRAGMENT": "$aasdesc#specificAssetIds[].name",
+            "FRAGMENT": "$aasdesc#specificAssetIds[].externalSubjectId",
             "CONDITION": {
               "$eq": [
                 { "$field": "$aasdesc#specificAssetIds[].name" },
@@ -102,7 +102,7 @@
         "USEOBJECTS": [ "all_shell_descriptors", "queries"  ],
         "USEFORMULA": "role_is_viewer_written_y",
         "FILTER": {
-          "FRAGMENT": "$aasdesc#specificAssetIds[].name",
+          "FRAGMENT": "$aasdesc#specificAssetIds[].externalSubjectId",
           "CONDITION": {
             "$eq": [
               { "$field": "$aasdesc#specificAssetIds[].name" },

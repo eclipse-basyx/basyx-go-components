@@ -26,7 +26,7 @@
       }
     },
     {
-      "$fragment": "$aasdesc#specificAssetIds[].name",
+      "$fragment": "$aasdesc#specificAssetIds[].externalSubjectId",
       "$condition": {
         "$eq": [
           { "$field": "$aasdesc#specificAssetIds[].name" },

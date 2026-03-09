@@ -66,7 +66,7 @@
             }
           },
           {
-            "FRAGMENT": "$aasdesc#specificAssetIds[0].name",
+            "FRAGMENT": "$aasdesc#specificAssetIds[0].externalSubjectId",
             "CONDITION": 
             {
               "$eq": [
@@ -80,7 +80,7 @@
             }
           },
           {
-            "FRAGMENT": "$aasdesc#specificAssetIds[1].name",
+            "FRAGMENT": "$aasdesc#specificAssetIds[1].externalSubjectId",
             "CONDITION": 
             {
               "$eq": [
@@ -99,7 +99,7 @@
       { "USEACL": "user", "USEOBJECTS": ["all_shell_descriptors"], "USEFORMULA": "role_is_viewer_written_x",
         "FILTERLIST": [
           {
-            "FRAGMENT": "$aasdesc#specificAssetIds[0].name",
+            "FRAGMENT": "$aasdesc#specificAssetIds[0].externalSubjectId",
             "CONDITION": 
             {
               "$eq": [
@@ -113,7 +113,7 @@
             }
           },
           {
-            "FRAGMENT": "$aasdesc#specificAssetIds[1].name",
+            "FRAGMENT": "$aasdesc#specificAssetIds[1].externalSubjectId",
             "CONDITION": 
             {
               "$eq": [

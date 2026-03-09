@@ -28,13 +28,14 @@ package descriptors
 
 import (
 	"github.com/doug-martin/goqu/v9"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 )
 
 var (
-	specificAssetIDAlias                  = goqu.T(tblSpecificAssetID).As(aliasSpecificAssetID)
-	aasDescriptorEndpointAlias            = goqu.T(tblAASDescriptorEndpoint).As(aliasAASDescriptorEndpoint)
-	submodelDescriptorAlias               = goqu.T(tblSubmodelDescriptor).As(aliasSubmodelDescriptor)
-	submodelDescriptorEndpointAlias       = goqu.T(tblAASDescriptorEndpoint).As(aliasSubmodelDescriptorEndpoint)
-	infrastructureDescriptorAlias         = goqu.T(tblInfrastructureDescriptor).As(aliasInfrastructureDescriptor)
-	infrastructureDescriptorEndpointAlias = goqu.T(tblAASDescriptorEndpoint).As(aliasInfrastructureDescriptorEndpoint)
+	specificAssetIDAlias                  = goqu.T(common.TblSpecificAssetID).As(common.AliasSpecificAssetID)
+	aasDescriptorEndpointAlias            = goqu.T(common.TblAASDescriptorEndpoint).As(common.AliasAASDescriptorEndpoint)
+	submodelDescriptorAlias               = goqu.T(common.TblSubmodelDescriptor).As(common.AliasSubmodelDescriptor)
+	submodelDescriptorEndpointAlias       = goqu.T(common.TblAASDescriptorEndpoint).As(common.AliasSubmodelDescriptorEndpoint)
+	infrastructureDescriptorAlias         = goqu.T(common.TblInfrastructureDescriptor).As(common.AliasInfrastructureDescriptor)
+	infrastructureDescriptorEndpointAlias = goqu.T(common.TblAASDescriptorEndpoint).As(common.AliasInfrastructureDescriptorEndpoint)
 )

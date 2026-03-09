@@ -21,25 +21,8 @@
     ],
   "specificAssetIds": [
     {
-      "name": "",
-      "value": "123",
-      "externalSubjectId": {
-        "type": "ExternalReference",
-        "keys": [
-          {
-            "type": "GlobalReference",
-            "value": "PUBLIC_READABLE"
-          },
-          {
-            "type": "GlobalReference",
-            "value": "WRITTEN_BY_X"
-          },
-          {
-            "type": "GlobalReference",
-            "value": "WRITTEN_BY_Y"
-          }
-        ]
-      }
+      "name": "irrelevantPartId",
+      "value": "123"
     },
     {
       "name": "Banane",

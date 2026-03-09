@@ -1,0 +1,33 @@
+{
+  "category": "CONSTANT",
+  "description": [
+    {
+      "language": "en-us",
+      "text": "Example Property object"
+    },
+    {
+      "language": "de",
+      "text": "Beispiel Property Element"
+    }
+  ],
+  "idShort": "ExampleProperty",
+  "modelType": "Property",
+  "qualifiers": [
+    {
+      "kind": "ConceptQualifier",
+      "type": "http://acplt.org/Qualifier/ExampleQualifier",
+      "valueType": "xs:string"
+    }
+  ],
+  "semanticId": {
+    "keys": [
+      {
+        "type": "GlobalReference",
+        "value": "http://acplt.org/Properties/ExampleProperty"
+      }
+    ],
+    "type": "ExternalReference"
+  },
+  "value": "exampleValue",
+  "valueType": "xs:string"
+}

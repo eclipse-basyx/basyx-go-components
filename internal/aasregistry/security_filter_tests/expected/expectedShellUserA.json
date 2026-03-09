@@ -74,21 +74,8 @@
         ],
       "specificAssetIds": [
         {
-          "name": "",
-          "value": "23749",
-          "externalSubjectId": {
-            "type": "ExternalReference",
-            "keys": [
-              {
-                "type": "GlobalReference",
-                "value": "WRITTEN_BY_X"
-              },
-              {
-                "type": "GlobalReference",
-                "value": "WRITTEN_BY_Y"
-              }
-            ]
-          }
+          "name": "lul",
+          "value": "23749"
         }
       ]
     }

@@ -63,7 +63,7 @@
             }
           },
           {
-            "FRAGMENT": "$aasdesc#endpoints[].protocolinformation",
+            "FRAGMENT": "$aasdesc#endpoints[0]",
             "CONDITION": 
             {
               "$eq": [

@@ -72,6 +72,7 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 
 	// === Protected API Subrouter ===
 	apiRouter := chi.NewRouter()
+	common.AddDefaultRouterErrorHandlers(apiRouter, "RegistryOfInfrastructuresService")
 
 	// Register all Registry of Infrastructures routes
 	for _, rt := range rorCtrl.Routes() {
