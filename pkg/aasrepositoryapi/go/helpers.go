@@ -127,5 +127,3 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) buildSubmodelLocati
 
 	return baseLocation + "/shells/" + escapedShellID + "/submodels/" + escapedSubmodelID
 }
-
- 

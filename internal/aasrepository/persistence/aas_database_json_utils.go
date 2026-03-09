@@ -92,4 +92,3 @@ func jsonizeAssetAdministrationShellPayload(aas types.IAssetAdministrationShell)
 
 	return result, nil
 }
-

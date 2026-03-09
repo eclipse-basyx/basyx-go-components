@@ -55,16 +55,16 @@ type TokenCredentials struct {
 }
 
 type JSONSuiteStep struct {
-	Context        string            `json:"context,omitempty"`
-	Method         string            `json:"method"`
-	Endpoint       string            `json:"endpoint"`
-	Data           string            `json:"data,omitempty"`
-	ShouldMatch    string            `json:"shouldMatch,omitempty"`
+	Context                 string            `json:"context,omitempty"`
+	Method                  string            `json:"method"`
+	Endpoint                string            `json:"endpoint"`
+	Data                    string            `json:"data,omitempty"`
+	ShouldMatch             string            `json:"shouldMatch,omitempty"`
 	ExpectedResponseHeaders map[string]string `json:"expectedResponseHeaders,omitempty"`
-	ExpectedStatus int               `json:"expectedStatus,omitempty"`
-	Action         string            `json:"action,omitempty"`
-	Headers        map[string]string `json:"headers,omitempty"`
-	Token          *TokenCredentials `json:"token,omitempty"`
+	ExpectedStatus          int               `json:"expectedStatus,omitempty"`
+	Action                  string            `json:"action,omitempty"`
+	Headers                 map[string]string `json:"headers,omitempty"`
+	Token                   *TokenCredentials `json:"token,omitempty"`
 }
 
 type JSONStepResult struct {
