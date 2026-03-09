@@ -7,6 +7,8 @@
  * Contact: info@idtwin.org
  */
 
+// Package openapi provides the generated HTTP controller and routing bindings
+// for the Asset Administration Shell Repository API.
 package openapi
 
 import (
@@ -713,149 +715,186 @@ func (c *AssetAdministrationShellRepositoryAPIAPIController) DeleteSubmodelRefer
 }
 
 // GetSubmodelByIdAasRepository - Returns the Submodel
+// nolint:revive
 func (c *AssetAdministrationShellRepositoryAPIAPIController) GetSubmodelByIdAasRepository(w http.ResponseWriter, r *http.Request) {
 }
 
 // PutSubmodelByIdAasRepository - Creates or updates the Submodel
+// nolint:revive
 func (c *AssetAdministrationShellRepositoryAPIAPIController) PutSubmodelByIdAasRepository(w http.ResponseWriter, r *http.Request) {
 }
 
 // DeleteSubmodelByIdAasRepository - Deletes the submodel from the Asset Administration Shell and the Repository.
+// nolint:revive
 func (c *AssetAdministrationShellRepositoryAPIAPIController) DeleteSubmodelByIdAasRepository(w http.ResponseWriter, r *http.Request) {
 }
 
 // PatchSubmodelAasRepository - Updates the Submodel
+// nolint:revive
 func (c *AssetAdministrationShellRepositoryAPIAPIController) PatchSubmodelAasRepository(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetSubmodelByIdMetadataAasRepository - Returns the Submodel's metadata elements
+// nolint:revive
 func (c *AssetAdministrationShellRepositoryAPIAPIController) GetSubmodelByIdMetadataAasRepository(w http.ResponseWriter, r *http.Request) {
 }
 
 // PatchSubmodelByIdMetadataAasRepository - Updates the metadata attributes of the Submodel
+// nolint:revive
 func (c *AssetAdministrationShellRepositoryAPIAPIController) PatchSubmodelByIdMetadataAasRepository(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetSubmodelByIdValueOnlyAasRepository - Returns the Submodel's ValueOnly representation
+// nolint:revive
 func (c *AssetAdministrationShellRepositoryAPIAPIController) GetSubmodelByIdValueOnlyAasRepository(w http.ResponseWriter, r *http.Request) {
 }
 
 // PatchSubmodelByIdValueOnlyAasRepository - Updates the values of the Submodel
+// nolint:revive
 func (c *AssetAdministrationShellRepositoryAPIAPIController) PatchSubmodelByIdValueOnlyAasRepository(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetSubmodelByIdReferenceAasRepository - Returns the Submodel as a Reference
+// nolint:revive
 func (c *AssetAdministrationShellRepositoryAPIAPIController) GetSubmodelByIdReferenceAasRepository(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetSubmodelByIdPathAasRepository - Returns the elements of this submodel in path notation.
+// nolint:revive
 func (c *AssetAdministrationShellRepositoryAPIAPIController) GetSubmodelByIdPathAasRepository(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetAllSubmodelElementsAasRepository - Returns all submodel elements including their hierarchy
+// nolint:revive
 func (c *AssetAdministrationShellRepositoryAPIAPIController) GetAllSubmodelElementsAasRepository(w http.ResponseWriter, r *http.Request) {
 }
 
 // PostSubmodelElementAasRepository - Creates a new submodel element
+// nolint:revive
 func (c *AssetAdministrationShellRepositoryAPIAPIController) PostSubmodelElementAasRepository(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetAllSubmodelElementsMetadataAasRepository - Returns all submodel elements including their hierarchy
+// nolint:revive
 func (c *AssetAdministrationShellRepositoryAPIAPIController) GetAllSubmodelElementsMetadataAasRepository(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetAllSubmodelElementsValueOnlyAasRepository - Returns all submodel elements including their hierarchy in the ValueOnly representation
+// nolint:revive
 func (c *AssetAdministrationShellRepositoryAPIAPIController) GetAllSubmodelElementsValueOnlyAasRepository(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetAllSubmodelElementsReferenceAasRepository - Returns all submodel elements as a list of References
+// nolint:revive
 func (c *AssetAdministrationShellRepositoryAPIAPIController) GetAllSubmodelElementsReferenceAasRepository(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetAllSubmodelElementsPathAasRepository - Returns all submodel elements including their hierarchy
+// nolint:revive
 func (c *AssetAdministrationShellRepositoryAPIAPIController) GetAllSubmodelElementsPathAasRepository(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetSubmodelElementByPathAasRepository - Returns a specific submodel element from the Submodel at a specified path
+// nolint:revive
 func (c *AssetAdministrationShellRepositoryAPIAPIController) GetSubmodelElementByPathAasRepository(w http.ResponseWriter, r *http.Request) {
 }
 
 // PutSubmodelElementByPathAasRepository - Creates or updates an existing submodel element at a specified path within submodel elements hierarchy
+// nolint:revive
 func (c *AssetAdministrationShellRepositoryAPIAPIController) PutSubmodelElementByPathAasRepository(w http.ResponseWriter, r *http.Request) {
 }
 
 // PostSubmodelElementByPathAasRepository - Creates a new submodel element at a specified path within submodel elements hierarchy
+// nolint:revive
 func (c *AssetAdministrationShellRepositoryAPIAPIController) PostSubmodelElementByPathAasRepository(w http.ResponseWriter, r *http.Request) {
 }
 
 // DeleteSubmodelElementByPathAasRepository - Deletes a submodel element at a specified path within the submodel elements hierarchy
+// nolint:revive
 func (c *AssetAdministrationShellRepositoryAPIAPIController) DeleteSubmodelElementByPathAasRepository(w http.ResponseWriter, r *http.Request) {
 }
 
 // PatchSubmodelElementValueByPathAasRepository - Updates an existing submodel element value at a specified path within submodel elements hierarchy
+// nolint:revive
 func (c *AssetAdministrationShellRepositoryAPIAPIController) PatchSubmodelElementValueByPathAasRepository(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetSubmodelElementByPathMetadataAasRepository - Returns the metadata attributes if a specific submodel element from the Submodel at a specified path
+// nolint:revive
 func (c *AssetAdministrationShellRepositoryAPIAPIController) GetSubmodelElementByPathMetadataAasRepository(w http.ResponseWriter, r *http.Request) {
 }
 
 // PatchSubmodelElementValueByPathMetadata - Updates the metadata attributes of an existing submodel element value at a specified path within submodel elements hierarchy
+// nolint:revive
 func (c *AssetAdministrationShellRepositoryAPIAPIController) PatchSubmodelElementValueByPathMetadata(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetSubmodelElementByPathValueOnlyAasRepository - Returns a specific submodel element from the Submodel at a specified path in the ValueOnly representation
+// nolint:revive
 func (c *AssetAdministrationShellRepositoryAPIAPIController) GetSubmodelElementByPathValueOnlyAasRepository(w http.ResponseWriter, r *http.Request) {
 }
 
 // PatchSubmodelElementValueByPathValueOnly - Updates the value of an existing submodel element value at a specified path within submodel elements hierarchy
+// nolint:revive
 func (c *AssetAdministrationShellRepositoryAPIAPIController) PatchSubmodelElementValueByPathValueOnly(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetSubmodelElementByPathReferenceAasRepository - Returns the Reference of a specific submodel element from the Submodel at a specified path
+// nolint:revive
 func (c *AssetAdministrationShellRepositoryAPIAPIController) GetSubmodelElementByPathReferenceAasRepository(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetSubmodelElementByPathPathAasRepository - Returns a specific submodel element from the Submodel at a specified path in the Path notation
+// nolint:revive
 func (c *AssetAdministrationShellRepositoryAPIAPIController) GetSubmodelElementByPathPathAasRepository(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetFileByPathAasRepository - Downloads file content from a specific submodel element from the Submodel at a specified path
+// nolint:revive
 func (c *AssetAdministrationShellRepositoryAPIAPIController) GetFileByPathAasRepository(w http.ResponseWriter, r *http.Request) {
 }
 
 // PutFileByPathAasRepository - Uploads file content to an existing submodel element at a specified path within submodel elements hierarchy
+// nolint:revive
 func (c *AssetAdministrationShellRepositoryAPIAPIController) PutFileByPathAasRepository(w http.ResponseWriter, r *http.Request) {
 }
 
 // DeleteFileByPathAasRepository - Deletes file content of an existing submodel element at a specified path within submodel elements hierarchy
+// nolint:revive
 func (c *AssetAdministrationShellRepositoryAPIAPIController) DeleteFileByPathAasRepository(w http.ResponseWriter, r *http.Request) {
 }
 
 // InvokeOperationAasRepository - Synchronously invokes an Operation at a specified path
+// nolint:revive
 func (c *AssetAdministrationShellRepositoryAPIAPIController) InvokeOperationAasRepository(w http.ResponseWriter, r *http.Request) {
 }
 
 // InvokeOperationValueOnlyAasRepository - Synchronously invokes an Operation at a specified path
+// nolint:revive
 func (c *AssetAdministrationShellRepositoryAPIAPIController) InvokeOperationValueOnlyAasRepository(w http.ResponseWriter, r *http.Request) {
 }
 
 // InvokeOperationAsyncAasRepository - Asynchronously invokes an Operation at a specified path
+// nolint:revive
 func (c *AssetAdministrationShellRepositoryAPIAPIController) InvokeOperationAsyncAasRepository(w http.ResponseWriter, r *http.Request) {
 }
 
 // InvokeOperationAsyncValueOnlyAasRepository - Asynchronously invokes an Operation at a specified path
+// nolint:revive
 func (c *AssetAdministrationShellRepositoryAPIAPIController) InvokeOperationAsyncValueOnlyAasRepository(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetOperationAsyncStatusAasRepository - Returns the Operation status of an asynchronous invoked Operation
+// nolint:revive
 func (c *AssetAdministrationShellRepositoryAPIAPIController) GetOperationAsyncStatusAasRepository(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetOperationAsyncResultAasRepository - Returns the Operation result of an asynchronous invoked Operation
+// nolint:revive
 func (c *AssetAdministrationShellRepositoryAPIAPIController) GetOperationAsyncResultAasRepository(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetOperationAsyncResultValueOnlyAasRepository - Returns the ValueOnly notation of the Operation result of an asynchronous invoked Operation
+// nolint:revive
 func (c *AssetAdministrationShellRepositoryAPIAPIController) GetOperationAsyncResultValueOnlyAasRepository(w http.ResponseWriter, r *http.Request) {
 }

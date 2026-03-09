@@ -140,6 +140,7 @@ func IsTransactionAlreadyInProgress(tx *sql.Tx) bool {
 	return tx != nil
 }
 
+// GetAssetAdministrationShellDatabaseID returns the internal database ID for a given AAS identifier.
 func GetAssetAdministrationShellDatabaseID(tx *sql.Tx, aasId string) (int64, error) {
 	var databaseID int64
 	sqlQuery, args, err := goqu.Select("id").From("aas").Where(goqu.I("aas_id").Eq(aasId)).ToSQL()

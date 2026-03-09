@@ -79,6 +79,7 @@ func NewAssetAdministrationShellDatabase(dsn string, maxOpenConnections int, max
 	}, nil
 }
 
+// verifyAssetAdministrationShell validates an AAS when strict verification is enabled.
 func (s *AssetAdministrationShellDatabase) verifyAssetAdministrationShell(aas types.IAssetAdministrationShell, errorPrefix string) error {
 	if !s.strictVerification {
 		return nil
@@ -103,6 +104,7 @@ func (s *AssetAdministrationShellDatabase) verifyAssetAdministrationShell(aas ty
 	return common.NewErrBadRequest(errorPrefix + " " + stringOfAllErrors)
 }
 
+// CreateAssetAdministrationShell persists a new AAS including all related payload and reference data.
 func (s *AssetAdministrationShellDatabase) CreateAssetAdministrationShell(aas types.IAssetAdministrationShell) error {
 	if err := s.verifyAssetAdministrationShell(aas, "AASREPO-NEWAAS-VERIFY"); err != nil {
 		return err
@@ -127,6 +129,7 @@ func (s *AssetAdministrationShellDatabase) CreateAssetAdministrationShell(aas ty
 	return nil
 }
 
+// createAssetAdministrationShellInTransaction creates an AAS and all dependent records within an existing transaction.
 func (s *AssetAdministrationShellDatabase) createAssetAdministrationShellInTransaction(tx *sql.Tx, aas types.IAssetAdministrationShell) error {
 	dialect := goqu.Dialect("postgres")
 
@@ -219,6 +222,7 @@ func (s *AssetAdministrationShellDatabase) createAssetAdministrationShellInTrans
 	return nil
 }
 
+// mapCreateAASInsertError maps database uniqueness violations to domain-specific conflict errors.
 func mapCreateAASInsertError(err error) error {
 	if err == nil {
 		return nil
@@ -236,6 +240,7 @@ func mapCreateAASInsertError(err error) error {
 	return nil
 }
 
+// CreateSubmodelReferenceInAssetAdministrationShell adds a submodel reference to the specified AAS.
 func (s *AssetAdministrationShellDatabase) CreateSubmodelReferenceInAssetAdministrationShell(aasIdentifier string, submodelRef types.IReference) error {
 	tx, cleanup, err := common.StartTransaction(s.db)
 	if err != nil {
@@ -255,6 +260,7 @@ func (s *AssetAdministrationShellDatabase) CreateSubmodelReferenceInAssetAdminis
 	return nil
 }
 
+// createSubmodelReferenceInAssetAdministrationShellInTransaction adds a submodel reference within an existing transaction.
 func (s *AssetAdministrationShellDatabase) createSubmodelReferenceInAssetAdministrationShellInTransaction(tx *sql.Tx, aasIdentifier string, submodelRef types.IReference) error {
 
 	// check if aas exists
@@ -290,6 +296,7 @@ func (s *AssetAdministrationShellDatabase) createSubmodelReferenceInAssetAdminis
 	return nil
 }
 
+// CheckIfSubmodelReferenceExistsInAssetAdministrationShell checks whether a submodel reference exists in the specified AAS.
 func (s *AssetAdministrationShellDatabase) CheckIfSubmodelReferenceExistsInAssetAdministrationShell(aasIdentifier string, submodelIdentifier string) error {
 	tx, cleanup, err := common.StartTransaction(s.db)
 	if err != nil {
@@ -310,6 +317,7 @@ func (s *AssetAdministrationShellDatabase) CheckIfSubmodelReferenceExistsInAsset
 	return nil
 }
 
+// checkIfSubmodelReferenceExistsInAssetAdministrationShellInTransaction performs the existence check within an existing transaction.
 func (s *AssetAdministrationShellDatabase) checkIfSubmodelReferenceExistsInAssetAdministrationShellInTransaction(tx *sql.Tx, aasIdentifier string, submodelIdentifier string) error {
 
 	aasDBID, err := persistenceutils.GetAssetAdministrationShellDatabaseID(tx, aasIdentifier)
@@ -339,7 +347,8 @@ func (s *AssetAdministrationShellDatabase) checkIfSubmodelReferenceExistsInAsset
 	return nil
 }
 
-func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShells(limit int32, cursor string, idShort string, assetIDs []string) ([]map[string]any, string, error) {
+// GetAssetAdministrationShells returns a paginated list of AAS representations and the next cursor.
+func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShells(limit int64, cursor string, idShort string, assetIDs []string) ([]map[string]any, string, error) {
 	dialect := goqu.Dialect("postgres")
 
 	if limit <= 0 {
@@ -372,7 +381,7 @@ func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShells(limit in
 	}
 
 	nextCursor := ""
-	if int32(len(aasIDs)) > limit {
+	if int64(len(aasIDs)) > limit {
 		nextID := aasIDs[len(aasIDs)-1]
 		aasIDs = aasIDs[:len(aasIDs)-1]
 
@@ -397,6 +406,7 @@ func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShells(limit in
 	return result, nextCursor, nil
 }
 
+// GetAssetAdministrationShellByID returns the JSON-like representation of an AAS by identifier.
 func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShellByID(aasIdentifier string) (map[string]any, error) {
 	dialect := goqu.Dialect("postgres")
 	sqlQuery, args, err := buildGetAssetAdministrationShellDBIDByIdentifierQuery(&dialect, aasIdentifier)
@@ -415,6 +425,7 @@ func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShellByID(aasId
 	return s.getAssetAdministrationShellMapByDBID(context.Background(), aasDBID)
 }
 
+// PutAssetAdministrationShellByID upserts an AAS by identifier and returns whether an existing entry was updated.
 func (s *AssetAdministrationShellDatabase) PutAssetAdministrationShellByID(aasIdentifier string, aas types.IAssetAdministrationShell) (bool, error) {
 	tx, cleanup, err := common.StartTransaction(s.db)
 	if err != nil {
@@ -461,6 +472,7 @@ func (s *AssetAdministrationShellDatabase) PutAssetAdministrationShellByID(aasId
 	return isUpdate, nil
 }
 
+// DeleteAssetAdministrationShellByID removes an AAS by identifier.
 func (s *AssetAdministrationShellDatabase) DeleteAssetAdministrationShellByID(aasIdentifier string) error {
 	tx, cleanup, err := common.StartTransaction(s.db)
 	if err != nil {
@@ -496,7 +508,8 @@ func (s *AssetAdministrationShellDatabase) DeleteAssetAdministrationShellByID(aa
 	return nil
 }
 
-func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShellReferences(limit int32, cursor string, idShort string, assetIDs []string) ([]types.IReference, string, error) {
+// GetAssetAdministrationShellReferences returns paginated model references for AAS entries.
+func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShellReferences(limit int64, cursor string, idShort string, assetIDs []string) ([]types.IReference, string, error) {
 	aasMaps, nextCursor, err := s.GetAssetAdministrationShells(limit, cursor, idShort, assetIDs)
 	if err != nil {
 		return nil, "", err
@@ -512,6 +525,7 @@ func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShellReferences
 	return references, nextCursor, nil
 }
 
+// GetAssetAdministrationShellReferenceByID returns the model reference for an AAS identifier.
 func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShellReferenceByID(aasIdentifier string) (types.IReference, error) {
 	_, err := s.GetAssetAdministrationShellByID(aasIdentifier)
 	if err != nil {
@@ -522,6 +536,7 @@ func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShellReferenceB
 	return types.NewReference(types.ReferenceTypesModelReference, []types.IKey{key}), nil
 }
 
+// GetAssetInformationByAASID returns the assetInformation section of an AAS by identifier.
 func (s *AssetAdministrationShellDatabase) GetAssetInformationByAASID(aasIdentifier string) (map[string]any, error) {
 	aasMap, err := s.GetAssetAdministrationShellByID(aasIdentifier)
 	if err != nil {
@@ -536,6 +551,7 @@ func (s *AssetAdministrationShellDatabase) GetAssetInformationByAASID(aasIdentif
 	return assetInformation, nil
 }
 
+// PutAssetInformationByAASID updates the assetInformation section of an existing AAS.
 func (s *AssetAdministrationShellDatabase) PutAssetInformationByAASID(aasIdentifier string, assetInformation types.IAssetInformation) error {
 	tx, cleanup, err := common.StartTransaction(s.db)
 	if err != nil {
@@ -626,6 +642,7 @@ func (s *AssetAdministrationShellDatabase) PutAssetInformationByAASID(aasIdentif
 	return nil
 }
 
+// GetThumbnailByAASID downloads the thumbnail for an AAS including metadata.
 func (s *AssetAdministrationShellDatabase) GetThumbnailByAASID(aasIdentifier string) ([]byte, string, string, string, error) {
 	thumbnailHandler, err := NewPostgreSQLThumbnailFileHandler(s.db)
 	if err != nil {
@@ -635,6 +652,7 @@ func (s *AssetAdministrationShellDatabase) GetThumbnailByAASID(aasIdentifier str
 	return thumbnailHandler.DownloadThumbnailByAASID(aasIdentifier)
 }
 
+// PutThumbnailByAASID uploads or replaces the thumbnail for an AAS.
 func (s *AssetAdministrationShellDatabase) PutThumbnailByAASID(aasIdentifier string, fileName string, file *os.File) error {
 	thumbnailHandler, err := NewPostgreSQLThumbnailFileHandler(s.db)
 	if err != nil {
@@ -644,6 +662,7 @@ func (s *AssetAdministrationShellDatabase) PutThumbnailByAASID(aasIdentifier str
 	return thumbnailHandler.UploadThumbnailByAASID(aasIdentifier, fileName, file)
 }
 
+// DeleteThumbnailByAASID removes the thumbnail associated with an AAS.
 func (s *AssetAdministrationShellDatabase) DeleteThumbnailByAASID(aasIdentifier string) error {
 	thumbnailHandler, err := NewPostgreSQLThumbnailFileHandler(s.db)
 	if err != nil {
@@ -653,7 +672,8 @@ func (s *AssetAdministrationShellDatabase) DeleteThumbnailByAASID(aasIdentifier 
 	return thumbnailHandler.DeleteThumbnailByAASID(aasIdentifier)
 }
 
-func (s *AssetAdministrationShellDatabase) GetAllSubmodelReferencesByAASID(aasIdentifier string, limit int32, cursor string) ([]types.IReference, string, error) {
+// GetAllSubmodelReferencesByAASID returns paginated submodel references for the specified AAS.
+func (s *AssetAdministrationShellDatabase) GetAllSubmodelReferencesByAASID(aasIdentifier string, limit int64, cursor string) ([]types.IReference, string, error) {
 	tx, cleanup, err := common.StartTransaction(s.db)
 	if err != nil {
 		return nil, "", common.NewInternalServerError("AASREPO-GETSMREFS-STARTTX " + err.Error())
@@ -722,7 +742,7 @@ func (s *AssetAdministrationShellDatabase) GetAllSubmodelReferencesByAASID(aasId
 	}
 
 	nextCursor := ""
-	if int32(len(referenceIDs)) > limit {
+	if int64(len(referenceIDs)) > limit {
 		nextCursor = strconv.FormatInt(referenceIDs[len(referenceIDs)-1], 10)
 		referenceIDs = referenceIDs[:len(referenceIDs)-1]
 		references = references[:len(references)-1]
@@ -736,6 +756,7 @@ func (s *AssetAdministrationShellDatabase) GetAllSubmodelReferencesByAASID(aasId
 	return references, nextCursor, nil
 }
 
+// DeleteSubmodelReferenceInAssetAdministrationShell removes a submodel reference from the specified AAS.
 func (s *AssetAdministrationShellDatabase) DeleteSubmodelReferenceInAssetAdministrationShell(aasIdentifier string, submodelIdentifier string) error {
 	tx, cleanup, err := common.StartTransaction(s.db)
 	if err != nil {
@@ -756,6 +777,7 @@ func (s *AssetAdministrationShellDatabase) DeleteSubmodelReferenceInAssetAdminis
 	return nil
 }
 
+// deleteSubmodelReferenceInAssetAdministrationShellInTransaction removes a submodel reference within an existing transaction.
 func (s *AssetAdministrationShellDatabase) deleteSubmodelReferenceInAssetAdministrationShellInTransaction(tx *sql.Tx, aasIdentifier string, submodelIdentifier string) error {
 	aasDBID, err := persistenceutils.GetAssetAdministrationShellDatabaseID(tx, aasIdentifier)
 	if err != nil {
@@ -791,6 +813,8 @@ func (s *AssetAdministrationShellDatabase) deleteSubmodelReferenceInAssetAdminis
 	return nil
 }
 
+// nolint:revive // cyclomatic complexity of 32
+// getAssetAdministrationShellMapByDBID loads an AAS and maps it to the API JSON representation.
 func (s *AssetAdministrationShellDatabase) getAssetAdministrationShellMapByDBID(ctx context.Context, aasDBID int64) (map[string]any, error) {
 	dialect := goqu.Dialect("postgres")
 	querySQL, queryArgs, buildErr := buildGetAssetAdministrationShellMapByDBIDQuery(&dialect, aasDBID)
@@ -930,6 +954,7 @@ func (s *AssetAdministrationShellDatabase) getAssetAdministrationShellMapByDBID(
 	return result, nil
 }
 
+// assignJSONPayload unmarshals a JSON payload and assigns it to the target map key when present.
 func assignJSONPayload(target map[string]any, key string, payload []byte) error {
 	if len(payload) == 0 {
 		return nil
@@ -944,6 +969,7 @@ func assignJSONPayload(target map[string]any, key string, payload []byte) error 
 	return nil
 }
 
+// readSpecificAssetIDsByAssetInformationID reads and enriches specificAssetIds for an assetInformation record.
 func (s *AssetAdministrationShellDatabase) readSpecificAssetIDsByAssetInformationID(ctx context.Context, assetInformationID int64) ([]types.ISpecificAssetID, error) {
 	dialect := goqu.Dialect("postgres")
 	querySQL, queryArgs, buildErr := buildReadSpecificAssetIDsByAssetInformationIDQuery(&dialect, assetInformationID)

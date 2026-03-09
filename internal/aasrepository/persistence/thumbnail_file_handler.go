@@ -155,6 +155,7 @@ func (h *PostgreSQLThumbnailFileHandler) DownloadThumbnailByAASID(aasIdentifier 
 }
 
 // UploadThumbnailByAASID uploads thumbnail content for an AAS and persists metadata.
+// nolint:revive // cyclomatic complexity of 33
 func (h *PostgreSQLThumbnailFileHandler) UploadThumbnailByAASID(aasIdentifier string, fileName string, file *os.File) error {
 	tx, cleanup, err := common.StartTransaction(h.db)
 	if err != nil {

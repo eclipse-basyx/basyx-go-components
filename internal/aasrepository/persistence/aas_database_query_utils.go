@@ -120,7 +120,7 @@ func buildCheckAssetAdministrationShellSubmodelReferenceExistsQuery(dialect *goq
 		ToSQL()
 }
 
-func buildGetAssetAdministrationShellsQuery(dialect *goqu.DialectWrapper, limit int32, cursor string, idShort string, assetIDs []string) (string, []any, error) {
+func buildGetAssetAdministrationShellsQuery(dialect *goqu.DialectWrapper, limit int64, cursor string, idShort string, assetIDs []string) (string, []any, error) {
 	ds := dialect.
 		From(goqu.T("aas").As("a")).
 		LeftJoin(goqu.T("asset_information").As("ai"), goqu.On(goqu.I("ai.asset_information_id").Eq(goqu.I("a.id")))).
@@ -177,7 +177,7 @@ func buildDeleteSpecificAssetIDsByAssetInformationIDQuery(dialect *goqu.DialectW
 	return dialect.Delete("specific_asset_id").Where(goqu.I("asset_information_id").Eq(aasDBID)).ToSQL()
 }
 
-func buildGetAllSubmodelReferencesByAASIDQuery(dialect *goqu.DialectWrapper, aasDBID int64, limit int32, cursorID int64) (string, []any, error) {
+func buildGetAllSubmodelReferencesByAASIDQuery(dialect *goqu.DialectWrapper, aasDBID int64, limit int64, cursorID int64) (string, []any, error) {
 	ds := dialect.
 		From(goqu.T("aas_submodel_reference").As("r")).
 		InnerJoin(goqu.T("aas_submodel_reference_payload").As("rp"), goqu.On(goqu.I("rp.reference_id").Eq(goqu.I("r.id")))).
