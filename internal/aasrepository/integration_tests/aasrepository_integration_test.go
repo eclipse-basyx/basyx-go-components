@@ -69,7 +69,7 @@ func deleteAllAAS(t *testing.T, runner *testenv.JSONSuiteRunner, stepNumber int)
 		}
 
 		for _, item := range list.Result {
-			encodedIdentifier := base64.RawStdEncoding.EncodeToString([]byte(item.ID))
+			encodedIdentifier := base64.RawURLEncoding.EncodeToString([]byte(item.ID))
 			_, err = runner.RunStep(testenv.JSONSuiteStep{
 				Method:         http.MethodDelete,
 				Endpoint:       fmt.Sprintf("http://127.0.0.1:6004/shells/%s", encodedIdentifier),
@@ -191,7 +191,7 @@ func TestIntegration(t *testing.T) {
 func TestThumbnailAttachmentOperations(t *testing.T) {
 	baseURL := "http://localhost:6004"
 	aasID := fmt.Sprintf("https://example.com/ids/aas/thumbnail_test_%d", time.Now().UnixNano())
-	aasIdentifier := base64.RawStdEncoding.EncodeToString([]byte(aasID))
+	aasIdentifier := base64.RawURLEncoding.EncodeToString([]byte(aasID))
 	thumbnailEndpoint := fmt.Sprintf("%s/shells/%s/asset-information/thumbnail", baseURL, aasIdentifier)
 	testFilePath := "testFiles/marcus.gif"
 

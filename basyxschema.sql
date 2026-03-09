@@ -94,7 +94,8 @@ CREATE TABLE IF NOT EXISTS aas_submodel_reference_key (
 CREATE TABLE IF NOT EXISTS aas_submodel_reference_payload (
   id           BIGSERIAL PRIMARY KEY,
   reference_id BIGINT NOT NULL REFERENCES aas_submodel_reference(id) ON DELETE CASCADE,
-  parent_reference_payload JSONB NOT NULL
+  parent_reference_payload JSONB NOT NULL,
+  UNIQUE(reference_id)
 );
 
 CREATE TABLE IF NOT EXISTS thumbnail_file_element (
