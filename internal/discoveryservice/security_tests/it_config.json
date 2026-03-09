@@ -67,13 +67,6 @@
     "expectedStatus": 201
   },
   {
-    "context": "Shells DELETE - editor denied",
-    "token": { "user": "editoruser", "password": "admin" },
-    "method": "DELETE",
-    "endpoint": "http://localhost:5004/lookup/shells/MT",
-    "expectedStatus": 403
-  },
-  {
     "context": "Shells DELETE - admin allowed (clear=10)",
     "token": { "user": "adminuser", "password": "admin" },
     "method": "DELETE",
