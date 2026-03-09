@@ -90,7 +90,7 @@ func (s *SubmodelDatabase) GetSignedSubmodel(submodelID string, valueOnly bool) 
 		return "", errors.New("JWS signing not configured: private key not loaded")
 	}
 
-	submodel, err := s.GetSubmodelByID(submodelID)
+	submodel, err := s.GetSubmodelByID(submodelID, "deep")
 	if err != nil {
 		return "", err
 	}
@@ -130,12 +130,12 @@ func (s *SubmodelDatabase) GetSignedSubmodel(submodelID string, valueOnly bool) 
 }
 
 // GetSubmodelByID retrieves a submodel by its identifier from the database.
-func (s *SubmodelDatabase) GetSubmodelByID(submodelIdentifier string) (types.ISubmodel, error) {
-	return s.GetSubmodelByIDWithContext(context.Background(), submodelIdentifier)
+func (s *SubmodelDatabase) GetSubmodelByID(submodelIdentifier string, level string) (types.ISubmodel, error) {
+	return s.GetSubmodelByIDWithContext(context.Background(), submodelIdentifier, level)
 }
 
 // GetSubmodelByIDWithContext retrieves a submodel by identifier and applies optional ABAC formula filters from ctx.
-func (s *SubmodelDatabase) GetSubmodelByIDWithContext(ctx context.Context, submodelIdentifier string) (types.ISubmodel, error) {
+func (s *SubmodelDatabase) GetSubmodelByIDWithContext(ctx context.Context, submodelIdentifier string, level string) (types.ISubmodel, error) {
 	eg := errgroup.Group{}
 	var submodels []types.ISubmodel
 	eg.Go(func() error {
@@ -157,7 +157,7 @@ func (s *SubmodelDatabase) GetSubmodelByIDWithContext(ctx context.Context, submo
 		unlimited := -1
 		// Exact /submodels/{id} reads should use the ABAC formula only as a gate for
 		// returning the submodel, not to prune the returned SME tree.
-		smes, _, err := s.GetSubmodelElements(submodelIdentifier, &unlimited, "", false)
+		smes, _, err := s.GetSubmodelElements(submodelIdentifier, &unlimited, "", false, level)
 		if err != nil {
 			return err
 		}
@@ -651,23 +651,23 @@ func (s *SubmodelDatabase) updateSubmodelElementInTransaction(tx *sql.Tx, submod
 }
 
 // GetSubmodelElement retrieves a submodel element (including nested children) by idShort path.
-func (s *SubmodelDatabase) GetSubmodelElement(submodelID string, idShortOrPath string, _ bool) (types.ISubmodelElement, error) {
-	return s.GetSubmodelElementWithContext(context.Background(), submodelID, idShortOrPath, false)
+func (s *SubmodelDatabase) GetSubmodelElement(submodelID string, idShortOrPath string, _ bool, level string) (types.ISubmodelElement, error) {
+	return s.GetSubmodelElementWithContext(context.Background(), submodelID, idShortOrPath, false, level)
 }
 
 // GetSubmodelElementWithContext retrieves a submodel element by path and applies optional ABAC formula filters from ctx.
-func (s *SubmodelDatabase) GetSubmodelElementWithContext(ctx context.Context, submodelID string, idShortOrPath string, _ bool) (types.ISubmodelElement, error) {
-	return submodelelements.GetSubmodelElementByIDShortOrPathWithContext(ctx, s.db, submodelID, idShortOrPath)
+func (s *SubmodelDatabase) GetSubmodelElementWithContext(ctx context.Context, submodelID string, idShortOrPath string, _ bool, level string) (types.ISubmodelElement, error) {
+	return submodelelements.GetSubmodelElementByIDShortOrPathWithContext(ctx, s.db, submodelID, idShortOrPath, level)
 }
 
 // GetSubmodelElements retrieves top-level submodel elements for a submodel and reconstructs each subtree.
-func (s *SubmodelDatabase) GetSubmodelElements(submodelID string, limit *int, cursor string, _ bool) ([]types.ISubmodelElement, string, error) {
-	return s.GetSubmodelElementsWithContext(context.Background(), submodelID, limit, cursor, false)
+func (s *SubmodelDatabase) GetSubmodelElements(submodelID string, limit *int, cursor string, _ bool, level string) ([]types.ISubmodelElement, string, error) {
+	return s.GetSubmodelElementsWithContext(context.Background(), submodelID, limit, cursor, false, level)
 }
 
 // GetSubmodelElementsWithContext retrieves submodel elements and applies optional ABAC formula filters from ctx.
-func (s *SubmodelDatabase) GetSubmodelElementsWithContext(ctx context.Context, submodelID string, limit *int, cursor string, _ bool) ([]types.ISubmodelElement, string, error) {
-	return submodelelements.GetSubmodelElementsBySubmodelID(ctx, s.db, submodelID, limit, cursor)
+func (s *SubmodelDatabase) GetSubmodelElementsWithContext(ctx context.Context, submodelID string, limit *int, cursor string, _ bool, level string) ([]types.ISubmodelElement, string, error) {
+	return submodelelements.GetSubmodelElementsBySubmodelID(ctx, s.db, submodelID, limit, cursor, level)
 }
 
 // GetSubmodelElementReferences retrieves references for top-level submodel elements of a submodel with optional pagination.
