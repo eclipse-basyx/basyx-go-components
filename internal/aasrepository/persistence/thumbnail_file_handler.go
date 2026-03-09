@@ -30,7 +30,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -175,17 +174,12 @@ func (h *PostgreSQLThumbnailFileHandler) UploadThumbnailByAASID(aasIdentifier st
 		return common.NewErrBadRequest("AASREPO-PUTTHUMBNAIL-MISSINGFILE file payload is required")
 	}
 
-	filePath := filepath.Clean(file.Name())
-	reopenedFile, openErr := os.Open(filePath)
-	if openErr != nil {
-		return common.NewInternalServerError("AASREPO-PUTTHUMBNAIL-OPENFILE " + openErr.Error())
+	if _, seekErr := file.Seek(0, 0); seekErr != nil {
+		return common.NewInternalServerError("AASREPO-PUTTHUMBNAIL-SEEKFILE " + seekErr.Error())
 	}
-	defer func() {
-		_ = reopenedFile.Close()
-	}()
 
 	contentTypeBuffer := make([]byte, 512)
-	readBytes, readErr := reopenedFile.Read(contentTypeBuffer)
+	readBytes, readErr := file.Read(contentTypeBuffer)
 	if readErr != nil && readErr != io.EOF {
 		return common.NewInternalServerError("AASREPO-PUTTHUMBNAIL-READCONTENTTYPE " + readErr.Error())
 	}
@@ -194,7 +188,7 @@ func (h *PostgreSQLThumbnailFileHandler) UploadThumbnailByAASID(aasIdentifier st
 		detectedContentType = http.DetectContentType(contentTypeBuffer[:readBytes])
 	}
 
-	if _, seekErr := reopenedFile.Seek(0, 0); seekErr != nil {
+	if _, seekErr := file.Seek(0, 0); seekErr != nil {
 		return common.NewInternalServerError("AASREPO-PUTTHUMBNAIL-SEEKFILE " + seekErr.Error())
 	}
 
@@ -232,7 +226,7 @@ func (h *PostgreSQLThumbnailFileHandler) UploadThumbnailByAASID(aasIdentifier st
 
 	buffer := make([]byte, 8192)
 	for {
-		readCount, chunkErr := reopenedFile.Read(buffer)
+		readCount, chunkErr := file.Read(buffer)
 		if readCount > 0 {
 			if _, writeErr := tx.Exec(`SELECT lowrite($1, $2)`, loFD, buffer[:readCount]); writeErr != nil {
 				_, _ = tx.Exec(`SELECT lo_close($1)`, loFD)

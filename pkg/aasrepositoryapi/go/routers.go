@@ -196,10 +196,14 @@ func readFileHeaderToTempFile(fileHeader *multipart.FileHeader) (*os.File, error
 		return nil, err
 	}
 
-	defer file.Close()
-
 	_, err = io.Copy(file, formFile)
 	if err != nil {
+		_ = file.Close()
+		return nil, err
+	}
+
+	if _, err = file.Seek(0, 0); err != nil {
+		_ = file.Close()
 		return nil, err
 	}
 
