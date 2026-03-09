@@ -65,7 +65,7 @@ var mapMethodAndPatternToRightsData = []mapMethodAndPatternToRights{
 	{"GET", "/concept-descriptions", []grammar.RightsEnum{grammar.RightsEnumREAD}},
 	{"POST", "/concept-descriptions", []grammar.RightsEnum{grammar.RightsEnumCREATE}},
 	{"GET", "/concept-descriptions/{cdIdentifier}", []grammar.RightsEnum{grammar.RightsEnumREAD}},
-	{"PUT", "/concept-descriptions/{cdIdentifier}", []grammar.RightsEnum{grammar.RightsEnumUPDATE}},
+	{"PUT", "/concept-descriptions/{cdIdentifier}", []grammar.RightsEnum{grammar.RightsEnumCREATE, grammar.RightsEnumDELETE}},
 	{"DELETE", "/concept-descriptions/{cdIdentifier}", []grammar.RightsEnum{grammar.RightsEnumDELETE}},
 
 	// sm repository
