@@ -1090,24 +1090,6 @@ func (s *SubmodelDatabase) PutSubmodelWithContext(ctx context.Context, submodelI
 	return isUpdate, nil
 }
 
-// PutSubmodelInTransaction creates or replaces a submodel using an existing transaction.
-func (s *SubmodelDatabase) PutSubmodelInTransaction(tx *sql.Tx, submodelID string, submodel types.ISubmodel) (bool, error) {
-	if submodelID != submodel.ID() {
-		return false, common.NewErrBadRequest("SMREPO-PUTSMTX-IDMISMATCH Submodel ID in path and body do not match")
-	}
-
-	if err := s.verifySubmodel(submodel, "SMREPO-PUTSMTX-VERIFY"); err != nil {
-		return false, err
-	}
-
-	isUpdate, err := s.replaceSubmodelInTransaction(tx, submodelID, submodel, false)
-	if err != nil {
-		return false, err
-	}
-
-	return isUpdate, nil
-}
-
 // DeleteSubmodel deletes a submodel by its identifier from the database.
 func (s *SubmodelDatabase) DeleteSubmodel(submodelID string) error {
 	return s.DeleteSubmodelWithContext(context.Background(), submodelID)
@@ -1151,6 +1133,12 @@ func (s *SubmodelDatabase) DeleteSubmodelWithContext(ctx context.Context, submod
 	if err != nil {
 		return err
 	}
+
+	err = tx.Commit()
+	if err != nil {
+		return common.NewInternalServerError("SMREPO-DELSM-COMMIT " + err.Error())
+	}
+
 	return nil
 }
 
