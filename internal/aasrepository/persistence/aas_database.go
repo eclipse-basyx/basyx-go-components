@@ -37,7 +37,6 @@ import (
 	"time"
 
 	"github.com/FriedJannik/aas-go-sdk/jsonization"
-	aasjsonization "github.com/FriedJannik/aas-go-sdk/jsonization"
 	"github.com/FriedJannik/aas-go-sdk/stringification"
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/FriedJannik/aas-go-sdk/verification"
@@ -262,7 +261,6 @@ func (s *AssetAdministrationShellDatabase) CreateSubmodelReferenceInAssetAdminis
 
 // createSubmodelReferenceInAssetAdministrationShellInTransaction adds a submodel reference within an existing transaction.
 func (s *AssetAdministrationShellDatabase) createSubmodelReferenceInAssetAdministrationShellInTransaction(tx *sql.Tx, aasIdentifier string, submodelRef types.IReference) error {
-
 	// check if aas exists
 	aasDBID, err := persistenceutils.GetAssetAdministrationShellDatabaseID(tx, aasIdentifier)
 	if err != nil {
@@ -275,6 +273,10 @@ func (s *AssetAdministrationShellDatabase) createSubmodelReferenceInAssetAdminis
 	dialect := goqu.Dialect("postgres")
 
 	ids, args, err := buildAssetAdministrationShellSubmodelReferenceQuery(&dialect, aasDBID, submodelRef)
+	if err != nil {
+		return common.NewInternalServerError("AASREPO-NEWSMREFINAAS-CREATE-BUILDSUBMODELREFSQL " + err.Error())
+	}
+
 	var aasSubmodelReferenceDBID int64
 
 	if err := tx.QueryRow(ids, args...).Scan(&aasSubmodelReferenceDBID); err != nil {
@@ -282,12 +284,18 @@ func (s *AssetAdministrationShellDatabase) createSubmodelReferenceInAssetAdminis
 	}
 
 	ids, args, err = buildAssetAdministrationShellSubmodelReferenceKeysQuery(&dialect, aasSubmodelReferenceDBID, submodelRef)
+	if err != nil {
+		return common.NewInternalServerError("AASREPO-NEWSMREFINAAS-CREATE-BUILDSUBMODELREFKEYSQL " + err.Error())
+	}
 
 	if _, err := tx.Exec(ids, args...); err != nil {
 		return common.NewInternalServerError("AASREPO-NEWSMREFINAAS-CREATE-EXECSUBMODELREFKEYSSQL " + err.Error())
 	}
 
 	ids, args, err = buildAssetAdministrationShellSubmodelReferencePayloadQuery(&dialect, aasSubmodelReferenceDBID, submodelRef)
+	if err != nil {
+		return common.NewInternalServerError("AASREPO-NEWSMREFINAAS-CREATE-BUILDSUBMODELREFPAYLOADQL " + err.Error())
+	}
 
 	if _, err := tx.Exec(ids, args...); err != nil {
 		return common.NewInternalServerError("AASREPO-NEWSMREFINAAS-CREATE-EXECSUBMODELREFPAYLOADSSQL ")
@@ -319,10 +327,7 @@ func (s *AssetAdministrationShellDatabase) CheckIfSubmodelReferenceExistsInAsset
 
 // checkIfSubmodelReferenceExistsInAssetAdministrationShellInTransaction performs the existence check within an existing transaction.
 func (s *AssetAdministrationShellDatabase) checkIfSubmodelReferenceExistsInAssetAdministrationShellInTransaction(tx *sql.Tx, aasIdentifier string, submodelIdentifier string) error {
-
 	aasDBID, err := persistenceutils.GetAssetAdministrationShellDatabaseID(tx, aasIdentifier)
-	fmt.Println(aasIdentifier)
-	fmt.Println(submodelIdentifier)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return common.NewErrNotFound("AASREPO-CHECKSMREFINAAS-AASNOTFOUND Asset Administration Shell with ID '" + aasIdentifier + "' not found")
@@ -348,7 +353,7 @@ func (s *AssetAdministrationShellDatabase) checkIfSubmodelReferenceExistsInAsset
 }
 
 // GetAssetAdministrationShells returns a paginated list of AAS representations and the next cursor.
-func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShells(limit int64, cursor string, idShort string, assetIDs []string) ([]map[string]any, string, error) {
+func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShells(limit int32, cursor string, idShort string, assetIDs []string) ([]map[string]any, string, error) {
 	dialect := goqu.Dialect("postgres")
 
 	if limit <= 0 {
@@ -381,7 +386,7 @@ func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShells(limit in
 	}
 
 	nextCursor := ""
-	if int64(len(aasIDs)) > limit {
+	if len(aasIDs) > int(limit) {
 		nextID := aasIDs[len(aasIDs)-1]
 		aasIDs = aasIDs[:len(aasIDs)-1]
 
@@ -442,11 +447,10 @@ func (s *AssetAdministrationShellDatabase) PutAssetAdministrationShellByID(aasId
 	var existingID int64
 	isUpdate := true
 	if scanErr := tx.QueryRow(selectSQL, selectArgs...).Scan(&existingID); scanErr != nil {
-		if scanErr == sql.ErrNoRows {
-			isUpdate = false
-		} else {
+		if scanErr != sql.ErrNoRows {
 			return false, common.NewInternalServerError("AASREPO-PUTAAS-EXECSELECT " + scanErr.Error())
 		}
+		isUpdate = false
 	}
 
 	if isUpdate {
@@ -509,7 +513,7 @@ func (s *AssetAdministrationShellDatabase) DeleteAssetAdministrationShellByID(aa
 }
 
 // GetAssetAdministrationShellReferences returns paginated model references for AAS entries.
-func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShellReferences(limit int64, cursor string, idShort string, assetIDs []string) ([]types.IReference, string, error) {
+func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShellReferences(limit int32, cursor string, idShort string, assetIDs []string) ([]types.IReference, string, error) {
 	aasMaps, nextCursor, err := s.GetAssetAdministrationShells(limit, cursor, idShort, assetIDs)
 	if err != nil {
 		return nil, "", err
@@ -673,7 +677,7 @@ func (s *AssetAdministrationShellDatabase) DeleteThumbnailByAASID(aasIdentifier 
 }
 
 // GetAllSubmodelReferencesByAASID returns paginated submodel references for the specified AAS.
-func (s *AssetAdministrationShellDatabase) GetAllSubmodelReferencesByAASID(aasIdentifier string, limit int64, cursor string) ([]types.IReference, string, error) {
+func (s *AssetAdministrationShellDatabase) GetAllSubmodelReferencesByAASID(aasIdentifier string, limit int32, cursor string) ([]types.IReference, string, error) {
 	tx, cleanup, err := common.StartTransaction(s.db)
 	if err != nil {
 		return nil, "", common.NewInternalServerError("AASREPO-GETSMREFS-STARTTX " + err.Error())
@@ -729,7 +733,7 @@ func (s *AssetAdministrationShellDatabase) GetAllSubmodelReferencesByAASID(aasId
 			return nil, "", common.NewInternalServerError("AASREPO-GETSMREFS-UNMARSHALPAYLOAD " + unmarshalErr.Error())
 		}
 
-		reference, refErr := aasjsonization.ReferenceFromJsonable(jsonable)
+		reference, refErr := jsonization.ReferenceFromJsonable(jsonable)
 		if refErr != nil {
 			return nil, "", common.NewInternalServerError("AASREPO-GETSMREFS-PARSEREFERENCE " + refErr.Error())
 		}
@@ -742,9 +746,9 @@ func (s *AssetAdministrationShellDatabase) GetAllSubmodelReferencesByAASID(aasId
 	}
 
 	nextCursor := ""
-	if int64(len(referenceIDs)) > limit {
+	if len(referenceIDs) > int(limit) {
 		nextCursor = strconv.FormatInt(referenceIDs[len(referenceIDs)-1], 10)
-		referenceIDs = referenceIDs[:len(referenceIDs)-1]
+		// referenceIDs = referenceIDs[:len(referenceIDs)-1]
 		references = references[:len(references)-1]
 	}
 
@@ -1029,7 +1033,7 @@ func (s *AssetAdministrationShellDatabase) readSpecificAssetIDsByAssetInformatio
 			if unmarshalErr := json.Unmarshal(row.semanticPayload, &jsonable); unmarshalErr != nil {
 				return nil, common.NewInternalServerError("AASREPO-READSPECIFIC-UNMARSHALSEMANTIC " + unmarshalErr.Error())
 			}
-			semanticReference, semanticErr := aasjsonization.ReferenceFromJsonable(jsonable)
+			semanticReference, semanticErr := jsonization.ReferenceFromJsonable(jsonable)
 			if semanticErr != nil {
 				return nil, common.NewInternalServerError("AASREPO-READSPECIFIC-PARSESEMANTIC " + semanticErr.Error())
 			}

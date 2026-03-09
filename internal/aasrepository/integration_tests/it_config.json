@@ -258,20 +258,20 @@
 		"expectedStatus": 400
 	},
 	{
-		"context": "010.1 - GET /shells/{aasIdentifier}/submodel-refs",
+		"context": "009.1 - GET /shells/{aasIdentifier}/submodel-refs",
 		"method": "GET",
 		"endpoint": "http://127.0.0.1:6004/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzLzM0OTRfMjEyMF8zMDYyXzY1MzI/submodel-refs",
 		"shouldMatch": "expected/expectedAssetAdministrationShellSubmodelReferences.json",
 		"expectedStatus": 200
 	},
 	{
-		"context": "010.2 - GET /shells/{aasIdentifier}/submodel-refs - conflict (not found)",
+		"context": "009.2 - GET /shells/{aasIdentifier}/submodel-refs - conflict (not found)",
 		"method": "GET",
 		"endpoint": "http://127.0.0.1:6004/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzLzM0OTRfMjEyMF8zMDYyXzY1MzJfbm90X2V4aXN0ZW50DQo/submodel-refs",
 		"expectedStatus": 404
 	},
 	{
-		"context": "010.3 - POST /shells/{aasIdentifier}/submodel-refs - create Submodel reference",
+		"context": "009.3 - POST /shells/{aasIdentifier}/submodel-refs - create Submodel reference",
 		"method": "POST",
 		"endpoint": "http://127.0.0.1:6004/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzLzM0OTRfMjEyMF8zMDYyXzY1MzI/submodel-refs",
 		"data": "bodies/post/postSubmodelReferenceMinimal.json",
@@ -281,7 +281,7 @@
 		"expectedStatus": 201
 	},
 	{
-		"context": "010.3 - POST /shells/{aasIdentifier}/submodel-refs - create Submodel reference for filter test",
+		"context": "009.4 - POST /shells/{aasIdentifier}/submodel-refs - create Submodel reference for filter test",
 		"method": "POST",
 		"endpoint": "http://127.0.0.1:6004/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzLzM0OTRfMjEyMF8zMDYyXzY1MzI/submodel-refs",
 		"data": "bodies/post/postSubmodelReferenceMinimal2.json",
@@ -291,7 +291,7 @@
 		"expectedStatus": 201
 	},
 	{
-		"context": "010.3 - POST /shells/{aasIdentifier}/submodel-refs - create Submodel reference for filter test",
+		"context": "009.5 - POST /shells/{aasIdentifier}/submodel-refs - create Submodel reference for filter test",
 		"method": "POST",
 		"endpoint": "http://127.0.0.1:6004/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzLzM0OTRfMjEyMF8zMDYyXzY1MzI/submodel-refs",
 		"data": "bodies/post/postSubmodelReferenceMinimal3.json",
@@ -301,34 +301,34 @@
 		"expectedStatus": 201
 	},
 	{
-		"context": "010.1 - GET /shells/{aasIdentifier}/submodel-refs - filter by limit",
+		"context": "009.6 - GET /shells/{aasIdentifier}/submodel-refs - filter by limit",
 		"method": "GET",
 		"endpoint": "http://127.0.0.1:6004/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzLzM0OTRfMjEyMF8zMDYyXzY1MzI/submodel-refs?limit=2",
 		"shouldMatch": "expected/expectedAssetAdministrationShellSubmodelReferencesFilterLimit.json",
 		"expectedStatus": 200
 	},
 	{
-		"context": "010.1 - GET /shells/{aasIdentifier}/submodel-refs - filter by cursor",
+		"context": "009.7 - GET /shells/{aasIdentifier}/submodel-refs - filter by cursor",
 		"method": "GET",
 		"endpoint": "http://127.0.0.1:6004/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzLzM0OTRfMjEyMF8zMDYyXzY1MzI/submodel-refs?cursor=NA",
 		"shouldMatch": "expected/expectedAssetAdministrationShellSubmodelReferencesFilterCursor.json",
 		"expectedStatus": 200
 	},
 	{
-		"context": "010.4 - POST /shells/{aasIdentifier}/submodel-refs - conflict (malformed)",
+		"context": "009.8 - POST /shells/{aasIdentifier}/submodel-refs - conflict (malformed)",
 		"method": "POST",
 		"endpoint": "http://127.0.0.1:6004/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzLzM0OTRfMjEyMF8zMDYyXzY1MzI/submodel-refs",
 		"data": "bodies/invalid/malformedJson.txt",
 		"expectedStatus": 400
 	},
 	{
-		"context": "011.1 - DELETE /shells/{aasIdentifier}/submodel-refs/{submodelIdentifier}",
+		"context": "010.1 - DELETE /shells/{aasIdentifier}/submodel-refs/{submodelIdentifier}",
 		"method": "DELETE",
 		"endpoint": "http://127.0.0.1:6004/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzLzM0OTRfMjEyMF8zMDYyXzY1MzI/submodel-refs/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvc20vNDAzMV8zMTIwXzMwNjJfMDI1NQ",
 		"expectedStatus": 204
 	},
 	{
-		"context": "011.2 - DELETE /shells/{aasIdentifier}/submodel-refs/{submodelIdentifier} - conflict (not found)",
+		"context": "010.2 - DELETE /shells/{aasIdentifier}/submodel-refs/{submodelIdentifier} - conflict (not found)",
 		"method": "DELETE",
 		"endpoint": "http://127.0.0.1:6004/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzLzM0OTRfMjEyMF8zMDYyXzY1MzI/submodel-refs/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzLzczMDFfMzE1MF85NDQyXzc4NDlfbm9uX2V4aXN0ZW50",
 		"expectedStatus": 404

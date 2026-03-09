@@ -26,11 +26,29 @@
 package persistence
 
 import (
+	"fmt"
+	"strconv"
+
 	"github.com/FriedJannik/aas-go-sdk/jsonization"
 	"github.com/FriedJannik/aas-go-sdk/types"
 	"github.com/doug-martin/goqu/v9"
 	jsoniter "github.com/json-iterator/go"
 )
+
+func buildPageLimitPlusOne(limit int32) (uint, error) {
+	pageLimitPlusOneString := strconv.FormatInt(int64(limit)+1, 10)
+	pageLimitPlusOne, err := strconv.ParseUint(pageLimitPlusOneString, 10, strconv.IntSize)
+	if err != nil {
+		return 0, fmt.Errorf("AASREPO-BUILDPAGELIMIT-PARSEUINT: %w", err)
+	}
+
+	maxUint := uint64(^uint(0))
+	if pageLimitPlusOne > maxUint {
+		return 0, fmt.Errorf("AASREPO-BUILDPAGELIMIT-CHECKMAXUINT: invalid limit %d", limit)
+	}
+
+	return uint(pageLimitPlusOne), nil
+}
 
 func buildAssetAdministrationShellQuery(dialect *goqu.DialectWrapper, aas types.IAssetAdministrationShell) (string, []any, error) {
 	return dialect.Insert("aas").Rows(goqu.Record{
@@ -120,13 +138,18 @@ func buildCheckAssetAdministrationShellSubmodelReferenceExistsQuery(dialect *goq
 		ToSQL()
 }
 
-func buildGetAssetAdministrationShellsQuery(dialect *goqu.DialectWrapper, limit int64, cursor string, idShort string, assetIDs []string) (string, []any, error) {
+func buildGetAssetAdministrationShellsQuery(dialect *goqu.DialectWrapper, limit int32, cursor string, idShort string, assetIDs []string) (string, []any, error) {
+	pageLimitPlusOne, err := buildPageLimitPlusOne(limit)
+	if err != nil {
+		return "", nil, err
+	}
+
 	ds := dialect.
 		From(goqu.T("aas").As("a")).
 		LeftJoin(goqu.T("asset_information").As("ai"), goqu.On(goqu.I("ai.asset_information_id").Eq(goqu.I("a.id")))).
 		Select(goqu.I("a.id")).
 		Order(goqu.I("a.aas_id").Asc()).
-		Limit(uint(limit + 1))
+		Limit(pageLimitPlusOne)
 
 	if cursor != "" {
 		ds = ds.Where(goqu.I("a.aas_id").Gte(cursor))
@@ -177,14 +200,19 @@ func buildDeleteSpecificAssetIDsByAssetInformationIDQuery(dialect *goqu.DialectW
 	return dialect.Delete("specific_asset_id").Where(goqu.I("asset_information_id").Eq(aasDBID)).ToSQL()
 }
 
-func buildGetAllSubmodelReferencesByAASIDQuery(dialect *goqu.DialectWrapper, aasDBID int64, limit int64, cursorID int64) (string, []any, error) {
+func buildGetAllSubmodelReferencesByAASIDQuery(dialect *goqu.DialectWrapper, aasDBID int64, limit int32, cursorID int64) (string, []any, error) {
+	pageLimitPlusOne, err := buildPageLimitPlusOne(limit)
+	if err != nil {
+		return "", nil, err
+	}
+
 	ds := dialect.
 		From(goqu.T("aas_submodel_reference").As("r")).
 		InnerJoin(goqu.T("aas_submodel_reference_payload").As("rp"), goqu.On(goqu.I("rp.reference_id").Eq(goqu.I("r.id")))).
 		Select(goqu.I("r.id"), goqu.I("rp.parent_reference_payload")).
 		Where(goqu.I("r.aas_id").Eq(aasDBID)).
 		Order(goqu.I("r.id").Asc()).
-		Limit(uint(limit + 1))
+		Limit(pageLimitPlusOne)
 
 	if cursorID > 0 {
 		ds = ds.Where(goqu.I("r.id").Gte(cursorID))
