@@ -58,6 +58,7 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 
 	// Create Chi router
 	r := chi.NewRouter()
+	common.AddDefaultRouterErrorHandlers(r, "ConceptDescriptionRepositoryService")
 
 	// Enable CORS
 	common.AddCors(r, config)

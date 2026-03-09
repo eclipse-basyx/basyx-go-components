@@ -1,0 +1,6 @@
+{
+  "idShort": "SecurityAllowedProperty",
+  "modelType": "Property",
+  "value": "SECURITY_UPDATED_X",
+  "valueType": "xs:string"
+}

@@ -36,8 +36,7 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 
 	// Create Chi router
 	r := chi.NewRouter()
-
-	// Enable CORS
+	common.AddDefaultRouterErrorHandlers(r, "AASRepositoryService")
 	common.AddCors(r, config)
 
 	// Add health endpoint

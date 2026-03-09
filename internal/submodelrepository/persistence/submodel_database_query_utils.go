@@ -102,34 +102,6 @@ func buildSubmodelSemanticIDReferencePayloadQuery(dialect *goqu.DialectWrapper, 
 	}).ToSQL()
 }
 
-func buildSelectSubmodelQueryWithPayloadByIdentifier(dialect *goqu.DialectWrapper, submodelIdentifier *string, limit *int32, cursor *string) (string, []any, error) {
-	selectDS, err := selectSubmodelGoquQuery(dialect, submodelIdentifier, limit, cursor)
-	if err != nil {
-		return "", nil, err
-	}
-
-	return selectDS.ToSQL()
-}
-
-func buildSelectSubmodelQueryWithPayloadByIdentifierAndSemanticID(dialect *goqu.DialectWrapper, submodelIdentifier *string, semanticID *string, limit *int32, cursor *string) (string, []any, error) {
-	selectDS, err := selectSubmodelGoquQuery(dialect, submodelIdentifier, limit, cursor)
-	if err != nil {
-		return "", nil, err
-	}
-
-	if semanticID != nil {
-		semanticIDFilterDS := dialect.
-			From(goqu.T("submodel_semantic_id_reference_key").As("ssrk_filter")).
-			Select(goqu.V(1)).
-			Where(goqu.I("ssrk_filter.reference_id").Eq(goqu.I("submodel.id"))).
-			Where(goqu.I("ssrk_filter.value").Eq(*semanticID))
-
-		selectDS = selectDS.Where(goqu.Func("EXISTS", semanticIDFilterDS))
-	}
-
-	return selectDS.ToSQL()
-}
-
 func selectSubmodelGoquQuery(dialect *goqu.DialectWrapper, submodelIdentifier *string, limit *int32, cursor *string) (*goqu.SelectDataset, error) {
 	semanticIDSelectExpression := buildSubmodelSemanticIDSelectExpression(dialect)
 

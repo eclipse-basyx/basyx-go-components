@@ -42,9 +42,9 @@ func buildSMSQL(t *testing.T, expr LogicalExpression) (string, []interface{}) {
 	}
 
 	d := goqu.Dialect("postgres")
-	ds := d.From(goqu.T("submodel").As("s")).Select(goqu.V(1)).Where(whereExpr)
+	ds := d.From(goqu.T("submodel")).Select(goqu.V(1)).Where(whereExpr)
 
-	sql, args, err := ds.Prepared(true).ToSQL()
+	sql, args, err := ds.ToSQL()
 	if err != nil {
 		t.Fatalf("ToSQL returned error: %v", err)
 	}
@@ -215,5 +215,56 @@ func TestLogicalExpression_SM_SemanticValueDifferentIndex(t *testing.T) {
 	}
 	if !strings.Contains(sql, "position\" = 2") {
 		t.Fatalf("expected SQL to contain position binding 2, got: %s", sql)
+	}
+}
+
+func TestLogicalExpression_SM_SMEPathSemanticValueUsesSMEExistsAndPathBinding(t *testing.T) {
+	expr := LogicalExpression{
+		Eq: ComparisonItems{
+			field("$sme.DemoAnnotatedRelationshipElement#semanticId.keys[].value"),
+			strVal("ababa"),
+		},
+	}
+
+	sql, _ := buildSMSQL(t, expr)
+
+	if !strings.Contains(sql, "EXISTS") {
+		t.Fatalf("expected EXISTS SQL for $sme path query, got: %s", sql)
+	}
+	if !strings.Contains(sql, "sme_semantic_id_reference_key") {
+		t.Fatalf("expected SME semantic-id key alias in SQL, got: %s", sql)
+	}
+	if !strings.Contains(sql, "idshort_path") {
+		t.Fatalf("expected idshort_path constraint for path-specific $sme field, got: %s", sql)
+	}
+	if !strings.Contains(sql, "'DemoAnnotatedRelationshipElement'") {
+		t.Fatalf("expected path literal in SQL, got: %s", sql)
+	}
+	if !strings.Contains(sql, "'ababa'") {
+		t.Fatalf("expected semantic-id value literal in SQL, got: %s", sql)
+	}
+}
+
+func TestLogicalExpression_SM_SMEAnyPathSemanticValueUsesExistentialMatch(t *testing.T) {
+	expr := LogicalExpression{
+		Eq: ComparisonItems{
+			field("$sme#semanticId.keys[].value"),
+			strVal("ababa"),
+		},
+	}
+
+	sql, _ := buildSMSQL(t, expr)
+
+	if !strings.Contains(sql, "EXISTS") {
+		t.Fatalf("expected EXISTS SQL for pathless $sme query, got: %s", sql)
+	}
+	if !strings.Contains(sql, "sme_semantic_id_reference_key") {
+		t.Fatalf("expected SME semantic-id key alias in SQL, got: %s", sql)
+	}
+	if strings.Contains(sql, "idshort_path") {
+		t.Fatalf("did not expect idshort_path constraint for pathless $sme field, got: %s", sql)
+	}
+	if !strings.Contains(sql, "'ababa'") {
+		t.Fatalf("expected semantic-id value literal in SQL, got: %s", sql)
 	}
 }

@@ -1,0 +1,29 @@
+{
+  "AllAccessPermissionRules": {
+    "DEFATTRIBUTES": [
+      { "name": "anonym_attr", "attributes": [ { "GLOBAL": "ANONYMOUS" } ] },
+      { "name": "role_attr", "attributes": [ { "CLAIM": "role" } ] }
+    ],
+
+    "DEFOBJECTS": [
+      { "name": "description", "objects": [ { "ROUTE": "/description" } ] },
+      { "name": "all-submodels", "objects": [ {"IDENTIFIABLE": "$sm(\"*\")"}] },
+      { "name": "submodels", "objects": [ {"REFERABLE": "$sme(\"MarcusThisIsAOnlyAnnotatedRelationshipElementSubmodel\").DemoAnnotatedRelationshipElement"}] }
+    ],
+
+    "DEFACLS": [
+      { "name": "read_anonymous", "acl": { "USEATTRIBUTES": "anonym_attr", "RIGHTS": ["READ"], "ACCESS": "ALLOW" } },
+      { "name": "all_admin", "acl": { "USEATTRIBUTES": "role_attr", "RIGHTS": ["ALL"], "ACCESS": "ALLOW" } }
+    ],
+
+    "DEFFORMULAS": [
+      { "name": "always_true", "formula": { "$eq": [ { "$field": "$sme#semanticId.keys[].value" }, { "$strVal": "http://acplt.org/RelationshipElements/ExampleRelationshipElement" } ] } },
+      { "name": "role_is_admin", "formula": { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "admin" } ] } }       
+    ],
+
+    "rules": [
+      { "USEACL": "read_anonymous", "USEOBJECTS": ["description", "all-submodels"], "USEFORMULA": "always_true" },
+      { "USEACL": "all_admin", "USEOBJECTS": ["all-submodels"], "USEFORMULA": "role_is_admin" }      
+    ]
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "id": "urn:smrepo:security:write:allowed",
+  "idShort": "SecurityWriteAllowedSubmodel",
+  "kind": "Instance",
+  "modelType": "Submodel",
+  "submodelElements": []
+}

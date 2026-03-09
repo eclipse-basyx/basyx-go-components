@@ -1,0 +1,13 @@
+{
+    "idShort": "Entity",
+    "modelType": "Entity",
+    "entityType": "CoManagedEntity",
+    "statements": [
+        {
+            "idShort": "NestedPropertyEntity",
+            "modelType": "Property",
+            "value": "nestedInEntity",
+            "valueType": "xs:string"
+        }
+    ]
+}

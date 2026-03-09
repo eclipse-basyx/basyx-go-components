@@ -1,0 +1,7 @@
+{
+  "id": "urn:smrepo:security:write:denied",
+  "idShort": "SecurityWriteDeniedSubmodel",
+  "kind": "Instance",
+  "modelType": "Submodel",
+  "submodelElements": []
+}

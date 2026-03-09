@@ -96,6 +96,11 @@ func ABACMiddleware(settings ABACSettings) func(http.Handler) http.Handler {
 					Claims: claims,
 				}, opts)
 				if !ok {
+					if reason == DecisionRouteNotFound {
+						next.ServeHTTP(w, r)
+						return
+					}
+
 					log.Printf("❌ ABAC(model): %s", reason)
 
 					resp := common.NewErrorResponse(errors.New("access denied"), http.StatusForbidden, "Middleware", "Rules", "Denied")
