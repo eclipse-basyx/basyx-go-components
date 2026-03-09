@@ -98,7 +98,7 @@ func buildAssetAdministrationShellSubmodelReferenceKeysQuery(dialect *goqu.Diale
 	}
 
 	if len(keyRows) == 0 {
-		return "", nil, nil
+		return "", nil, fmt.Errorf("reference must contain at least one key")
 	}
 
 	return dialect.Insert("aas_submodel_reference_key").Rows(keyRows).ToSQL()

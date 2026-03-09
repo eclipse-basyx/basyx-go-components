@@ -17,7 +17,6 @@ import (
 	"database/sql"
 	"encoding/base64"
 	"errors"
-	"fmt"
 	"net/http"
 	"os"
 	"strings"
@@ -65,7 +64,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllAssetAdministrat
 	}
 
 	return gen.Response(http.StatusOK, gen.GetAssetAdministrationShellsResult{
-		PagingMetadata: gen.PagedResultPagingMetadata{Cursor: base64.RawStdEncoding.EncodeToString([]byte(nextCursor))},
+		PagingMetadata: gen.PagedResultPagingMetadata{Cursor: base64.RawURLEncoding.EncodeToString([]byte(nextCursor))},
 		Result:         aasList,
 	}), nil
 }
@@ -89,8 +88,6 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) PostAssetAdministratio
 		if common.IsErrBadRequest(err) {
 			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "InvalidAssetAdministrationShellData"), nil
 		}
-
-		_, _ = fmt.Println("Error creating Asset Administration Shell: " + err.Error())
 
 		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "CreateAssetAdministrationShell"), err
 	}
@@ -126,7 +123,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllAssetAdministrat
 	}
 
 	return gen.Response(http.StatusOK, gen.GetReferencesResult{
-		PagingMetadata: gen.PagedResultPagingMetadata{Cursor: base64.RawStdEncoding.EncodeToString([]byte(nextCursor))},
+		PagingMetadata: gen.PagedResultPagingMetadata{Cursor: base64.RawURLEncoding.EncodeToString([]byte(nextCursor))},
 		Result:         jsonReferences,
 	}), nil
 }
@@ -377,8 +374,6 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllSubmodelReferenc
 	if cursorDecodeErr != nil {
 		return newAPIErrorResponse(cursorDecodeErr, http.StatusBadRequest, operation, "BadCursor"), nil
 	}
-	_ = limit
-	_ = decodedCursor
 
 	references, nextCursor, err := s.assetAdministrationShellBackend.GetAllSubmodelReferencesByAASID(decodedIdentifier, limit, decodedCursor)
 	if err != nil {
@@ -401,7 +396,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllSubmodelReferenc
 	}
 
 	return gen.Response(http.StatusOK, gen.GetReferencesResult{
-		PagingMetadata: gen.PagedResultPagingMetadata{Cursor: base64.RawStdEncoding.EncodeToString([]byte(nextCursor))},
+		PagingMetadata: gen.PagedResultPagingMetadata{Cursor: base64.RawURLEncoding.EncodeToString([]byte(nextCursor))},
 		Result:         jsonReferences,
 	}), nil
 }

@@ -197,7 +197,7 @@ func (s *AssetAdministrationShellDatabase) createAssetAdministrationShellInTrans
 
 		var aasSubmodelReferenceDBID int64
 		if err := tx.QueryRow(ids, args...).Scan(&aasSubmodelReferenceDBID); err != nil {
-			return common.NewInternalServerError(("AASREPO-NEWAAS-CREATE-EXECSUBMODELREFSQL"))
+			return common.NewInternalServerError("AASREPO-NEWAAS-CREATE-EXECSUBMODELREFSQL " + err.Error())
 		}
 
 		ids, args, err = buildAssetAdministrationShellSubmodelReferenceKeysQuery(&dialect, aasSubmodelReferenceDBID, submodelRef)
@@ -215,7 +215,7 @@ func (s *AssetAdministrationShellDatabase) createAssetAdministrationShellInTrans
 		}
 
 		if _, err := tx.Exec(ids, args...); err != nil {
-			return common.NewInternalServerError("AASREPO-NEWAAS-CREATE-EXECSUBMODELREFPAYLOADSSQL ")
+			return common.NewInternalServerError("AASREPO-NEWAAS-CREATE-EXECSUBMODELREFPAYLOADSSQL " + err.Error())
 		}
 	}
 	return nil
@@ -280,7 +280,7 @@ func (s *AssetAdministrationShellDatabase) createSubmodelReferenceInAssetAdminis
 	var aasSubmodelReferenceDBID int64
 
 	if err := tx.QueryRow(ids, args...).Scan(&aasSubmodelReferenceDBID); err != nil {
-		return common.NewInternalServerError(("AASREPO-NEWSMREFINAAS-CREATE-EXECSUBMODELREFSQL"))
+		return common.NewInternalServerError("AASREPO-NEWSMREFINAAS-CREATE-EXECSUBMODELREFSQL" + err.Error())
 	}
 
 	ids, args, err = buildAssetAdministrationShellSubmodelReferenceKeysQuery(&dialect, aasSubmodelReferenceDBID, submodelRef)
@@ -298,7 +298,7 @@ func (s *AssetAdministrationShellDatabase) createSubmodelReferenceInAssetAdminis
 	}
 
 	if _, err := tx.Exec(ids, args...); err != nil {
-		return common.NewInternalServerError("AASREPO-NEWSMREFINAAS-CREATE-EXECSUBMODELREFPAYLOADSSQL ")
+		return common.NewInternalServerError("AASREPO-NEWSMREFINAAS-CREATE-EXECSUBMODELREFPAYLOADSSQL " + err.Error())
 	}
 
 	return nil
