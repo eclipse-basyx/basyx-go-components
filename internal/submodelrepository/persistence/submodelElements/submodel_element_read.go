@@ -51,7 +51,7 @@ func GetSubmodelElementByIDShortOrPathWithContext(ctx context.Context, db *sql.D
 }
 
 func getSubmodelElementByIDShortOrPathWithSubmodelDBID(ctx context.Context, db *sql.DB, submodelID string, submodelDatabaseID int64, idShortOrPath string, level string) (types.ISubmodelElement, error) {
-	if formulaCheckErr := ensureSubmodelElementPathMatchesFormula(ctx, db, submodelID, submodelDatabaseID, idShortOrPath, level); formulaCheckErr != nil {
+	if formulaCheckErr := ensureSubmodelElementPathMatchesFormula(ctx, db, submodelID, submodelDatabaseID, idShortOrPath); formulaCheckErr != nil {
 		return nil, formulaCheckErr
 	}
 
@@ -73,7 +73,7 @@ func getSubmodelElementByIDShortOrPathWithSubmodelDBID(ctx context.Context, db *
 	return rootElement, nil
 }
 
-func ensureSubmodelElementPathMatchesFormula(ctx context.Context, db *sql.DB, submodelID string, submodelDatabaseID int64, idShortOrPath string, level string) error {
+func ensureSubmodelElementPathMatchesFormula(ctx context.Context, db *sql.DB, submodelID string, submodelDatabaseID int64, idShortOrPath string) error {
 	dialect := goqu.Dialect("postgres")
 	query := dialect.
 		From(goqu.T("submodel_element").As("sme")).
