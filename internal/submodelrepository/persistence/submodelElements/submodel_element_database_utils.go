@@ -450,11 +450,21 @@ func insertMultiLanguagePropertyValues(tx *sql.Tx, dialect goqu.DialectWrapper, 
 			continue
 		}
 
+		valueIDPayload := "[]"
+		if mlp.ValueID() != nil && !isEmptyReference(mlp.ValueID()) {
+			valueIDJSONString, serErr := serializeIClassSliceToJSON([]types.IClass{mlp.ValueID()}, "SMREPO-INSSME-MLP-VALREF")
+			if serErr != nil {
+				return serErr
+			}
+			valueIDPayload = valueIDJSONString
+		}
+
 		for _, val := range mlp.Value() {
 			mlpRows = append(mlpRows, goqu.Record{
-				"mlp_id":   node.dbID,
-				"language": val.Language(),
-				"text":     val.Text(),
+				"submodel_element_id": node.dbID,
+				"language":            val.Language(),
+				"text":                val.Text(),
+				"value_id_payload":    goqu.L("?::jsonb", valueIDPayload),
 			})
 		}
 	}
@@ -467,7 +477,7 @@ func insertMultiLanguagePropertyValues(tx *sql.Tx, dialect goqu.DialectWrapper, 
 		tx,
 		dialect,
 		"multilanguage_property_value",
-		[]string{"mlp_id", "language", "text"},
+		[]string{"submodel_element_id", "language", "text", "value_id_payload"},
 		mlpRows,
 		"SMREPO-INSSME-INSMLPVAL",
 	)

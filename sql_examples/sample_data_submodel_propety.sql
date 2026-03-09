@@ -27,8 +27,9 @@ SELECT
     prop.value_type as prop_value_type, 
     COALESCE(prop.value_text, prop.value_num::text, prop.value_bool::text, 
                 prop.value_time::text, prop.value_datetime::text) as prop_value,
-    -- MultiLanguageProperty data  
-    mlp.id as mlp_id,
+    -- MultiLanguageProperty data
+    mlpv.language as mlp_language,
+    mlpv.text as mlp_text,
     -- Blob data
     blob.content_type as blob_content_type, blob.value as blob_value,
     -- File data
@@ -41,7 +42,7 @@ SELECT
     sme_list.type_value_list_element, sme_list.value_type_list_element, sme_list.order_relevant
 FROM submodel_element sme
 LEFT JOIN property_element prop ON sme.id = prop.id
-LEFT JOIN multilanguage_property mlp ON sme.id = mlp.id
+LEFT JOIN multilanguage_property_value mlpv ON sme.id = mlpv.submodel_element_id
 LEFT JOIN blob_element blob ON sme.id = blob.id
 LEFT JOIN file_element file ON sme.id = file.id
 LEFT JOIN range_element range_elem ON sme.id = range_elem.id
