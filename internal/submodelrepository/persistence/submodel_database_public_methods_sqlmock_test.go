@@ -128,7 +128,7 @@ func TestGetSubmodelElementEmptyPathReturnsBadRequest(t *testing.T) {
 
 	sut := &SubmodelDatabase{db: db}
 
-	elem, err := sut.GetSubmodelElement("sm", "", false)
+	elem, err := sut.GetSubmodelElement("sm", "", false, "")
 	require.Error(t, err)
 	require.Nil(t, elem)
 	require.True(t, common.IsErrBadRequest(err))
@@ -146,7 +146,7 @@ func TestGetSubmodelElementWithLevelInvalidLevelReturnsBadRequest(t *testing.T) 
 
 	sut := &SubmodelDatabase{db: db}
 
-	elem, err := sut.GetSubmodelElementWithLevel("sm", "root", false, "invalid")
+	elem, err := sut.GetSubmodelElement("sm", "root", false, "invalid")
 	require.Error(t, err)
 	require.Nil(t, elem)
 	require.True(t, common.IsErrBadRequest(err))
@@ -192,7 +192,7 @@ func TestGetSubmodelElementWithLevelCoreReturnsElementWithoutChildren(t *testing
 			),
 		)
 
-	elem, err := sut.GetSubmodelElementWithLevel("sm-core", "RootCollection", false, "core")
+	elem, err := sut.GetSubmodelElement("sm-core", "RootCollection", false, "core")
 	require.NoError(t, err)
 	require.NotNil(t, elem)
 
