@@ -64,7 +64,7 @@ func getenv(k string) string {
 }
 
 func deleteAllDescriptors(t *testing.T, runner *testenv.JSONSuiteRunner, stepNumber int, headers map[string]string) {
-	body, err := runner.RunStep(testenv.JSONSuiteStep{
+	response, err := runner.RunStep(testenv.JSONSuiteStep{
 		Method:         http.MethodGet,
 		Endpoint:       BaseURL + "/shell-descriptors?limit=200",
 		ExpectedStatus: http.StatusOK,
@@ -77,7 +77,7 @@ func deleteAllDescriptors(t *testing.T, runner *testenv.JSONSuiteRunner, stepNum
 			ID string `json:"id"`
 		} `json:"result"`
 	}
-	require.NoError(t, json.Unmarshal([]byte(body), &list))
+	require.NoError(t, json.Unmarshal([]byte(response.Body), &list))
 
 	for _, item := range list.Result {
 		enc := base64.RawURLEncoding.EncodeToString([]byte(item.ID))
