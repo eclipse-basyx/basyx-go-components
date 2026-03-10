@@ -3,7 +3,6 @@ package main
 
 import (
 	"context"
-	"crypto/rsa"
 	"embed"
 	"flag"
 	"fmt"
@@ -17,7 +16,6 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/aasrepository/api"
 	persistencepostgresql "github.com/eclipse-basyx/basyx-go-components/internal/aasrepository/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
-	"github.com/eclipse-basyx/basyx-go-components/internal/common/jws"
 	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/aasrepositoryapi/go"
 )
 
@@ -49,18 +47,7 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 	// Instantiate generated services & controllers
 	// ==== Asset Administration Shell Repository Service ====
 
-	// Load JWS private key if configured
-	var privateKey *rsa.PrivateKey
-	if config.JWS.PrivateKeyPath != "" {
-		privateKey, err = jws.LoadPrivateKey(config.JWS.PrivateKeyPath)
-		if err != nil {
-			log.Printf("Warning: failed to load JWS private key: %v - /$signed Endpoints will be unavailable", err)
-		} else {
-			log.Println("JWS private key loaded successfully")
-		}
-	}
-
-	aasDatabase, err := persistencepostgresql.NewAssetAdministrationShellDatabase("postgres://"+config.Postgres.User+":"+config.Postgres.Password+"@"+config.Postgres.Host+":"+strconv.Itoa(config.Postgres.Port)+"/"+config.Postgres.DBName+"?sslmode=disable", config.Postgres.MaxOpenConnections, config.Postgres.MaxIdleConnections, config.Postgres.ConnMaxLifetimeMinutes, databaseSchema, privateKey, config.Server.StrictVerification)
+	aasDatabase, err := persistencepostgresql.NewAssetAdministrationShellDatabase("postgres://"+config.Postgres.User+":"+config.Postgres.Password+"@"+config.Postgres.Host+":"+strconv.Itoa(config.Postgres.Port)+"/"+config.Postgres.DBName+"?sslmode=disable", config.Postgres.MaxOpenConnections, config.Postgres.MaxIdleConnections, config.Postgres.ConnMaxLifetimeMinutes, databaseSchema, config.Server.StrictVerification)
 	if err != nil {
 		return err
 	}

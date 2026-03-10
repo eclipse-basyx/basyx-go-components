@@ -27,7 +27,7 @@ package persistence
 
 import (
 	"github.com/FriedJannik/aas-go-sdk/types"
-	aas_repository_utils "github.com/eclipse-basyx/basyx-go-components/internal/aasrepository/persistence/utils"
+	"github.com/eclipse-basyx/basyx-go-components/internal/common"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -46,14 +46,14 @@ func jsonizeAssetAdministrationShellPayload(aas types.IAssetAdministrationShell)
 	var err error
 
 	if aas.DisplayName() != nil && len(aas.DisplayName()) > 0 {
-		result.displayName, err = aas_repository_utils.JsonStringFromJsonableSlice(jsonAPI, aas.DisplayName())
+		result.displayName, err = common.JsonStringFromJsonableSlice(jsonAPI, aas.DisplayName())
 		if err != nil {
 			return nil, err
 		}
 	}
 
 	if aas.Description() != nil && len(aas.Description()) > 0 {
-		result.description, err = aas_repository_utils.JsonStringFromJsonableSlice(jsonAPI, aas.Description())
+		result.description, err = common.JsonStringFromJsonableSlice(jsonAPI, aas.Description())
 		if err != nil {
 			return nil, err
 		}
@@ -62,7 +62,7 @@ func jsonizeAssetAdministrationShellPayload(aas types.IAssetAdministrationShell)
 	if aas.Administration() != nil {
 		administration := aas.Administration()
 		if administration != nil {
-			result.administrativeInformation, err = aas_repository_utils.JsonStringFromJsonableObject(jsonAPI, administration)
+			result.administrativeInformation, err = common.JsonStringFromJsonableObject(jsonAPI, administration)
 			if err != nil {
 				return nil, err
 			}
@@ -70,21 +70,21 @@ func jsonizeAssetAdministrationShellPayload(aas types.IAssetAdministrationShell)
 	}
 
 	if aas.EmbeddedDataSpecifications() != nil && len(aas.EmbeddedDataSpecifications()) > 0 {
-		result.embeddedDataSpecification, err = aas_repository_utils.JsonStringFromJsonableSlice(jsonAPI, aas.EmbeddedDataSpecifications())
+		result.embeddedDataSpecification, err = common.JsonStringFromJsonableSlice(jsonAPI, aas.EmbeddedDataSpecifications())
 		if err != nil {
 			return nil, err
 		}
 	}
 
 	if aas.Extensions() != nil && len(aas.Extensions()) > 0 {
-		result.extensions, err = aas_repository_utils.JsonStringFromJsonableSlice(jsonAPI, aas.Extensions())
+		result.extensions, err = common.JsonStringFromJsonableSlice(jsonAPI, aas.Extensions())
 		if err != nil {
 			return nil, err
 		}
 	}
 
 	if aas.DerivedFrom() != nil {
-		result.derivedFrom, err = aas_repository_utils.JsonStringFromJsonableObject(jsonAPI, aas.DerivedFrom())
+		result.derivedFrom, err = common.JsonStringFromJsonableObject(jsonAPI, aas.DerivedFrom())
 		if err != nil {
 			return nil, err
 		}

@@ -139,17 +139,20 @@ func buildCheckAssetAdministrationShellSubmodelReferenceExistsQuery(dialect *goq
 }
 
 func buildGetAssetAdministrationShellsQuery(dialect *goqu.DialectWrapper, limit int32, cursor string, idShort string, assetIDs []string) (string, []any, error) {
-	pageLimitPlusOne, err := buildPageLimitPlusOne(limit)
-	if err != nil {
-		return "", nil, err
-	}
-
 	ds := dialect.
 		From(goqu.T("aas").As("a")).
 		LeftJoin(goqu.T("asset_information").As("ai"), goqu.On(goqu.I("ai.asset_information_id").Eq(goqu.I("a.id")))).
 		Select(goqu.I("a.id")).
-		Order(goqu.I("a.aas_id").Asc()).
-		Limit(pageLimitPlusOne)
+		Order(goqu.I("a.aas_id").Asc())
+
+	if limit > 0 {
+		pageLimitPlusOne, err := buildPageLimitPlusOne(limit)
+		if err != nil {
+			return "", nil, err
+		}
+
+		ds = ds.Limit(pageLimitPlusOne)
+	}
 
 	if cursor != "" {
 		ds = ds.Where(goqu.I("a.aas_id").Gte(cursor))
@@ -201,18 +204,21 @@ func buildDeleteSpecificAssetIDsByAssetInformationIDQuery(dialect *goqu.DialectW
 }
 
 func buildGetAllSubmodelReferencesByAASIDQuery(dialect *goqu.DialectWrapper, aasDBID int64, limit int32, cursorID int64) (string, []any, error) {
-	pageLimitPlusOne, err := buildPageLimitPlusOne(limit)
-	if err != nil {
-		return "", nil, err
-	}
-
 	ds := dialect.
 		From(goqu.T("aas_submodel_reference").As("r")).
 		InnerJoin(goqu.T("aas_submodel_reference_payload").As("rp"), goqu.On(goqu.I("rp.reference_id").Eq(goqu.I("r.id")))).
 		Select(goqu.I("r.id"), goqu.I("rp.parent_reference_payload")).
 		Where(goqu.I("r.aas_id").Eq(aasDBID)).
-		Order(goqu.I("r.id").Asc()).
-		Limit(pageLimitPlusOne)
+		Order(goqu.I("r.id").Asc())
+
+	if limit > 0 {
+		pageLimitPlusOne, err := buildPageLimitPlusOne(limit)
+		if err != nil {
+			return "", nil, err
+		}
+
+		ds = ds.Limit(pageLimitPlusOne)
+	}
 
 	if cursorID > 0 {
 		ds = ds.Where(goqu.I("r.id").Gte(cursorID))
@@ -261,6 +267,30 @@ func buildGetAssetAdministrationShellMapByDBIDQuery(dialect *goqu.DialectWrapper
 		ToSQL()
 }
 
+func buildGetAssetAdministrationShellMapsByDBIDsQuery(dialect *goqu.DialectWrapper, aasDBIDs []int64) (string, []any, error) {
+	return dialect.
+		From(goqu.T("aas").As("a")).
+		LeftJoin(goqu.T("aas_payload").As("ap"), goqu.On(goqu.I("ap.aas_id").Eq(goqu.I("a.id")))).
+		LeftJoin(goqu.T("asset_information").As("ai"), goqu.On(goqu.I("ai.asset_information_id").Eq(goqu.I("a.id")))).
+		Select(
+			goqu.I("a.id"),
+			goqu.I("a.aas_id"),
+			goqu.I("a.id_short"),
+			goqu.I("a.category"),
+			goqu.I("ap.displayname_payload"),
+			goqu.I("ap.description_payload"),
+			goqu.I("ap.administrative_information_payload"),
+			goqu.I("ap.embedded_data_specification_payload"),
+			goqu.I("ap.extensions_payload"),
+			goqu.I("ap.derived_from_payload"),
+			goqu.I("ai.asset_kind"),
+			goqu.I("ai.global_asset_id"),
+			goqu.I("ai.asset_type"),
+		).
+		Where(goqu.I("a.id").In(aasDBIDs)).
+		ToSQL()
+}
+
 func buildGetSubmodelReferencePayloadsByAASIDQuery(dialect *goqu.DialectWrapper, aasDBID int64) (string, []any, error) {
 	return dialect.
 		From(goqu.T("aas_submodel_reference").As("r")).
@@ -268,6 +298,16 @@ func buildGetSubmodelReferencePayloadsByAASIDQuery(dialect *goqu.DialectWrapper,
 		Select(goqu.I("rp.parent_reference_payload")).
 		Where(goqu.I("r.aas_id").Eq(aasDBID)).
 		Order(goqu.I("r.id").Asc()).
+		ToSQL()
+}
+
+func buildGetSubmodelReferencePayloadsByAASIDsQuery(dialect *goqu.DialectWrapper, aasDBIDs []int64) (string, []any, error) {
+	return dialect.
+		From(goqu.T("aas_submodel_reference").As("r")).
+		InnerJoin(goqu.T("aas_submodel_reference_payload").As("rp"), goqu.On(goqu.I("rp.reference_id").Eq(goqu.I("r.id")))).
+		Select(goqu.I("r.aas_id"), goqu.I("rp.parent_reference_payload")).
+		Where(goqu.I("r.aas_id").In(aasDBIDs)).
+		Order(goqu.I("r.aas_id").Asc(), goqu.I("r.id").Asc()).
 		ToSQL()
 }
 
@@ -283,5 +323,21 @@ func buildReadSpecificAssetIDsByAssetInformationIDQuery(dialect *goqu.DialectWra
 		).
 		Where(goqu.I("sid.asset_information_id").Eq(assetInformationID)).
 		Order(goqu.I("sid.position").Asc(), goqu.I("sid.id").Asc()).
+		ToSQL()
+}
+
+func buildReadSpecificAssetIDsByAssetInformationIDsQuery(dialect *goqu.DialectWrapper, assetInformationIDs []int64) (string, []any, error) {
+	return dialect.
+		From(goqu.T("specific_asset_id").As("sid")).
+		LeftJoin(goqu.T("specific_asset_id_payload").As("sp"), goqu.On(goqu.I("sp.specific_asset_id").Eq(goqu.I("sid.id")))).
+		Select(
+			goqu.I("sid.asset_information_id"),
+			goqu.I("sid.id"),
+			goqu.I("sid.name"),
+			goqu.I("sid.value"),
+			goqu.I("sp.semantic_id_payload"),
+		).
+		Where(goqu.I("sid.asset_information_id").In(assetInformationIDs)).
+		Order(goqu.I("sid.asset_information_id").Asc(), goqu.I("sid.position").Asc(), goqu.I("sid.id").Asc()).
 		ToSQL()
 }

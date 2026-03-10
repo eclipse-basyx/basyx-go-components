@@ -190,12 +190,12 @@
 	{
 		"context": "006.4 - PUT /shells/{aasIdentifier} - create new AAS",
 		"method": "PUT",
-		"endpoint": "http://127.0.0.1:6004/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzLzExMTFfMjIyMl8zMzMzXzQ0NDQ",
-		"data": "bodies/put/putAssetAdministrationShellUpdated.json",
+		"endpoint": "http://127.0.0.1:6004/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzLzAwMDBfMTExMV8wMDAwXzExMTE",
+		"data": "bodies/put/putAssetAdministrationShellCreated.json",
 		"expectedResponseHeaders": {
-			"Location": "http://127.0.0.1:6004/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzLzExMTFfMjIyMl8zMzMzXzQ0NDQ"
+			"Location": "http://127.0.0.1:6004/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzLzAwMDBfMTExMV8wMDAwXzExMTE"
 		},
-		"shouldMatch": "",
+		"shouldMatch": "bodies/put/putAssetAdministrationShellCreated.json",
 		"expectedStatus": 201
 	},
 	{

@@ -15,7 +15,6 @@ package api
 import (
 	"context"
 	"database/sql"
-	"encoding/base64"
 	"errors"
 	"net/http"
 	"os"
@@ -45,17 +44,25 @@ func NewAssetAdministrationShellRepositoryAPIAPIService(databaseBackendAssetAdmi
 	}
 }
 
+func newAPIErrorResponse(err error, status int, operation string, info string) gen.ImplResponse {
+	if err == nil {
+		err = errors.New(http.StatusText(status))
+	}
+
+	return common.NewErrorResponse(err, status, componentName, operation, info)
+}
+
 // GetAllAssetAdministrationShells - Returns all Asset Administration Shells
 func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllAssetAdministrationShells(ctx context.Context, assetIds []string, idShort string, limit int32, cursor string) (gen.ImplResponse, error) {
 	_ = ctx
 	const operation = "GetAllAssetAdministrationShells"
 
-	decodedCursor, decodeErr := decodeBase64RawStd(cursor)
+	decodedCursor, decodeErr := common.DecodeString(cursor)
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "BadCursor"), nil
 	}
 
-	aasList, nextCursor, err := s.assetAdministrationShellBackend.GetAssetAdministrationShells(limit, decodedCursor, idShort, assetIds)
+	aasList, nextCursor, err := s.assetAdministrationShellBackend.GetAssetAdministrationShells(ctx, limit, decodedCursor, idShort, assetIds)
 	if err != nil {
 		if common.IsErrBadRequest(err) {
 			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
@@ -64,7 +71,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllAssetAdministrat
 	}
 
 	return gen.Response(http.StatusOK, gen.GetAssetAdministrationShellsResult{
-		PagingMetadata: gen.PagedResultPagingMetadata{Cursor: base64.RawURLEncoding.EncodeToString([]byte(nextCursor))},
+		PagingMetadata: gen.PagedResultPagingMetadata{Cursor: common.EncodeString(nextCursor)},
 		Result:         aasList,
 	}), nil
 }
@@ -73,12 +80,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllAssetAdministrat
 func (s *AssetAdministrationShellRepositoryAPIAPIService) PostAssetAdministrationShell(ctx context.Context, aas types.IAssetAdministrationShell) (gen.ImplResponse, error) {
 	const operation = "PostAssetAdministrationShell"
 
-	aasJsonable, err := jsonization.ToJsonable(aas)
-	if err != nil {
-		return newAPIErrorResponse(err, http.StatusBadRequest, operation, "InvalidAssetAdministrationShellData"), nil
-	}
-
-	err = s.assetAdministrationShellBackend.CreateAssetAdministrationShell(aas)
+	err := s.assetAdministrationShellBackend.CreateAssetAdministrationShell(aas)
 
 	if err != nil {
 		if common.IsErrConflict(err) {
@@ -92,6 +94,11 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) PostAssetAdministratio
 		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "CreateAssetAdministrationShell"), err
 	}
 
+	aasJsonable, err := jsonization.ToJsonable(aas)
+	if err != nil {
+		return newAPIErrorResponse(err, http.StatusBadRequest, operation, "InvalidAssetAdministrationShellData"), nil
+	}
+
 	return gen.Response(http.StatusCreated, aasJsonable), nil
 }
 
@@ -100,7 +107,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllAssetAdministrat
 	_ = ctx
 	const operation = "GetAllAssetAdministrationShellsReference"
 
-	decodedCursor, decodeErr := decodeBase64RawStd(cursor)
+	decodedCursor, decodeErr := common.DecodeString(cursor)
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "BadCursor"), nil
 	}
@@ -123,7 +130,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllAssetAdministrat
 	}
 
 	return gen.Response(http.StatusOK, gen.GetReferencesResult{
-		PagingMetadata: gen.PagedResultPagingMetadata{Cursor: base64.RawURLEncoding.EncodeToString([]byte(nextCursor))},
+		PagingMetadata: gen.PagedResultPagingMetadata{Cursor: common.EncodeString(nextCursor)},
 		Result:         jsonReferences,
 	}), nil
 }
@@ -133,12 +140,12 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAssetAdministration
 	_ = ctx
 	const operation = "GetAssetAdministrationShellById"
 
-	decodedIdentifier, decodeErr := decodeBase64RawStd(aasIdentifier)
+	decodedIdentifier, decodeErr := common.DecodeString(aasIdentifier)
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedAssetAdministrationShellIdentifier"), nil
 	}
 
-	aasMap, err := s.assetAdministrationShellBackend.GetAssetAdministrationShellByID(decodedIdentifier)
+	aasMap, err := s.assetAdministrationShellBackend.GetAssetAdministrationShellByID(ctx, decodedIdentifier)
 	if err != nil {
 		if common.IsErrNotFound(err) || errors.Is(err, sql.ErrNoRows) {
 			return newAPIErrorResponse(err, http.StatusNotFound, operation, "AssetAdministrationShellNotFound"), nil
@@ -154,23 +161,12 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) PutAssetAdministration
 	_ = ctx
 	const operation = "PutAssetAdministrationShellById"
 
-	decodedIdentifier, decodeErr := decodeBase64RawStd(aasIdentifier)
+	decodedIdentifier, decodeErr := common.DecodeString(aasIdentifier)
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedAssetAdministrationShellIdentifier"), nil
 	}
 
-	jsonableAAS, err := jsonization.ToJsonable(assetAdministrationShell)
-	if err != nil {
-		return newAPIErrorResponse(err, http.StatusBadRequest, operation, "InvalidAssetAdministrationShellData"), nil
-	}
-
-	jsonableAAS["id"] = decodedIdentifier
-	pathAdjustedAAS, parseErr := jsonization.AssetAdministrationShellFromJsonable(jsonableAAS)
-	if parseErr != nil {
-		return newAPIErrorResponse(parseErr, http.StatusBadRequest, operation, "InvalidAssetAdministrationShellData"), nil
-	}
-
-	isUpdate, putErr := s.assetAdministrationShellBackend.PutAssetAdministrationShellByID(decodedIdentifier, pathAdjustedAAS)
+	isUpdate, putErr := s.assetAdministrationShellBackend.PutAssetAdministrationShellByID(decodedIdentifier, assetAdministrationShell)
 	if putErr != nil {
 		if common.IsErrBadRequest(putErr) {
 			return newAPIErrorResponse(putErr, http.StatusBadRequest, operation, "BadRequest"), nil
@@ -185,6 +181,11 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) PutAssetAdministration
 		return gen.Response(http.StatusNoContent, nil), nil
 	}
 
+	jsonableAAS, err := jsonization.ToJsonable(assetAdministrationShell)
+	if err != nil {
+		return newAPIErrorResponse(err, http.StatusBadRequest, operation, "InvalidAssetAdministrationShellData"), nil
+	}
+
 	return gen.Response(http.StatusCreated, jsonableAAS), nil
 }
 
@@ -193,7 +194,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) DeleteAssetAdministrat
 	_ = ctx
 	const operation = "DeleteAssetAdministrationShellById"
 
-	decodedIdentifier, decodeErr := decodeBase64RawStd(aasIdentifier)
+	decodedIdentifier, decodeErr := common.DecodeString(aasIdentifier)
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedAssetAdministrationShellIdentifier"), nil
 	}
@@ -214,7 +215,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAssetAdministration
 	_ = ctx
 	const operation = "GetAssetAdministrationShellByIdReferenceAasRepository"
 
-	decodedIdentifier, decodeErr := decodeBase64RawStd(aasIdentifier)
+	decodedIdentifier, decodeErr := common.DecodeString(aasIdentifier)
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedAssetAdministrationShellIdentifier"), nil
 	}
@@ -240,7 +241,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAssetInformationAas
 	_ = ctx
 	const operation = "GetAssetInformationAasRepository"
 
-	decodedIdentifier, decodeErr := decodeBase64RawStd(aasIdentifier)
+	decodedIdentifier, decodeErr := common.DecodeString(aasIdentifier)
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedAssetAdministrationShellIdentifier"), nil
 	}
@@ -261,7 +262,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) PutAssetInformationAas
 	_ = ctx
 	const operation = "PutAssetInformationAasRepository"
 
-	decodedIdentifier, decodeErr := decodeBase64RawStd(aasIdentifier)
+	decodedIdentifier, decodeErr := common.DecodeString(aasIdentifier)
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedAssetAdministrationShellIdentifier"), nil
 	}
@@ -285,7 +286,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetThumbnailAasReposit
 	_ = ctx
 	const operation = "GetThumbnailAasRepository"
 
-	decodedIdentifier, decodeErr := decodeBase64RawStd(aasIdentifier)
+	decodedIdentifier, decodeErr := common.DecodeString(aasIdentifier)
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedAssetAdministrationShellIdentifier"), nil
 	}
@@ -317,7 +318,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) PutThumbnailAasReposit
 	_ = ctx
 	const operation = "PutThumbnailAasRepository"
 
-	decodedIdentifier, decodeErr := decodeBase64RawStd(aasIdentifier)
+	decodedIdentifier, decodeErr := common.DecodeString(aasIdentifier)
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedAssetAdministrationShellIdentifier"), nil
 	}
@@ -341,7 +342,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) DeleteThumbnailAasRepo
 	_ = ctx
 	const operation = "DeleteThumbnailAasRepository"
 
-	decodedIdentifier, decodeErr := decodeBase64RawStd(aasIdentifier)
+	decodedIdentifier, decodeErr := common.DecodeString(aasIdentifier)
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedAssetAdministrationShellIdentifier"), nil
 	}
@@ -365,12 +366,12 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllSubmodelReferenc
 	_ = ctx
 	const operation = "GetAllSubmodelReferencesAasRepository"
 
-	decodedIdentifier, decodeErr := decodeBase64RawStd(aasIdentifier)
+	decodedIdentifier, decodeErr := common.DecodeString(aasIdentifier)
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedAssetAdministrationShellIdentifier"), nil
 	}
 
-	decodedCursor, cursorDecodeErr := decodeBase64RawStd(cursor)
+	decodedCursor, cursorDecodeErr := common.DecodeString(cursor)
 	if cursorDecodeErr != nil {
 		return newAPIErrorResponse(cursorDecodeErr, http.StatusBadRequest, operation, "BadCursor"), nil
 	}
@@ -396,7 +397,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllSubmodelReferenc
 	}
 
 	return gen.Response(http.StatusOK, gen.GetReferencesResult{
-		PagingMetadata: gen.PagedResultPagingMetadata{Cursor: base64.RawURLEncoding.EncodeToString([]byte(nextCursor))},
+		PagingMetadata: gen.PagedResultPagingMetadata{Cursor: common.EncodeString(nextCursor)},
 		Result:         jsonReferences,
 	}), nil
 }
@@ -405,13 +406,9 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllSubmodelReferenc
 func (s *AssetAdministrationShellRepositoryAPIAPIService) PostSubmodelReferenceAasRepository(ctx context.Context, aasIdentifier string, reference types.IReference) (gen.ImplResponse, error) {
 	const operation = "PostSubmodelReferenceAasRepository"
 
-	decodedAssetAdministrationShellIdentifier, decodeErr := decodeBase64RawStd(aasIdentifier)
+	decodedAssetAdministrationShellIdentifier, decodeErr := common.DecodeString(aasIdentifier)
 	if decodeErr != nil {
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedAssetAdministrationShellIdentifier"), nil
-	}
-	referenceJsonable, err := jsonization.ToJsonable(reference)
-	if err != nil {
-		return newAPIErrorResponse(err, http.StatusBadRequest, operation, "InvalidReferenceData"), nil
 	}
 
 	if err := s.assetAdministrationShellBackend.CreateSubmodelReferenceInAssetAdministrationShell(decodedAssetAdministrationShellIdentifier, reference); err != nil {
@@ -427,20 +424,25 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) PostSubmodelReferenceA
 		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "CreateSubmodelReferenceInAssetAdministrationShell"), err
 	}
 
+	referenceJsonable, err := jsonization.ToJsonable(reference)
+	if err != nil {
+		return newAPIErrorResponse(err, http.StatusBadRequest, operation, "InvalidReferenceData"), nil
+	}
+
 	return gen.Response(http.StatusCreated, referenceJsonable), nil
 }
 
-// DeleteSubmodelReferenceAasRepository - Deletes the submodel reference from the Asset Administration Shell. Does not delete the submodel itself!
+// DeleteSubmodelReferenceAasRepository - Deletes the submodel reference from the Asset Administration Shell. Does not delete the submodel itself.
 func (s *AssetAdministrationShellRepositoryAPIAPIService) DeleteSubmodelReferenceAasRepository(ctx context.Context, aasIdentifier string, submodelIdentifier string) (gen.ImplResponse, error) {
 	_ = ctx
 	const operation = "DeleteSubmodelReferenceAasRepository"
 
-	decodedAASIdentifier, decodeAASErr := decodeBase64RawStd(aasIdentifier)
+	decodedAASIdentifier, decodeAASErr := common.DecodeString(aasIdentifier)
 	if decodeAASErr != nil {
 		return newAPIErrorResponse(decodeAASErr, http.StatusBadRequest, operation, "MalformedAssetAdministrationShellIdentifier"), nil
 	}
 
-	decodedSubmodelIdentifier, decodeSubmodelErr := decodeBase64RawStd(submodelIdentifier)
+	decodedSubmodelIdentifier, decodeSubmodelErr := common.DecodeString(submodelIdentifier)
 	if decodeSubmodelErr != nil {
 		return newAPIErrorResponse(decodeSubmodelErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
 	}

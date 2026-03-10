@@ -55,7 +55,7 @@ type AssetAdministrationShellDatabase struct {
 }
 
 // NewAssetAdministrationShellDatabase creates a new instance of AssetAdministrationShellDatabase with the provided database connection.
-func NewAssetAdministrationShellDatabase(dsn string, maxOpenConnections int, maxIdleConnections int, connMaxLifetimeMinutes int, databaseSchema string, privateKey *rsa.PrivateKey, strictVerification bool) (*AssetAdministrationShellDatabase, error) {
+func NewAssetAdministrationShellDatabase(dsn string, maxOpenConnections int, maxIdleConnections int, connMaxLifetimeMinutes int, databaseSchema string, strictVerification bool) (*AssetAdministrationShellDatabase, error) {
 	db, err := common.InitializeDatabase(dsn, databaseSchema)
 	if err != nil {
 		return nil, err
@@ -73,7 +73,6 @@ func NewAssetAdministrationShellDatabase(dsn string, maxOpenConnections int, max
 
 	return &AssetAdministrationShellDatabase{
 		db:                 db,
-		privateKey:         privateKey,
 		strictVerification: strictVerification,
 	}, nil
 }
@@ -87,6 +86,56 @@ func (s *AssetAdministrationShellDatabase) verifyAssetAdministrationShell(aas ty
 	verificationErrors := make([]verification.VerificationError, 0)
 
 	verification.VerifyAssetAdministrationShell(aas, func(ve *verification.VerificationError) bool {
+		verificationErrors = append(verificationErrors, *ve)
+		return false
+	})
+
+	if len(verificationErrors) == 0 {
+		return nil
+	}
+
+	stringOfAllErrors := ""
+	for _, err := range verificationErrors {
+		stringOfAllErrors += fmt.Sprintf("%s ", err.Error())
+	}
+
+	return common.NewErrBadRequest(errorPrefix + " " + stringOfAllErrors)
+}
+
+// verifyAssetInformation validates an AssetInformation when strict verification is enabled.
+func (s *AssetAdministrationShellDatabase) verifyAssetInformation(asset_information types.IAssetInformation, errorPrefix string) error {
+	if !s.strictVerification {
+		return nil
+	}
+
+	verificationErrors := make([]verification.VerificationError, 0)
+
+	verification.VerifyAssetInformation(asset_information, func(ve *verification.VerificationError) bool {
+		verificationErrors = append(verificationErrors, *ve)
+		return false
+	})
+
+	if len(verificationErrors) == 0 {
+		return nil
+	}
+
+	stringOfAllErrors := ""
+	for _, err := range verificationErrors {
+		stringOfAllErrors += fmt.Sprintf("%s ", err.Error())
+	}
+
+	return common.NewErrBadRequest(errorPrefix + " " + stringOfAllErrors)
+}
+
+// verifyReference validates a Reference when strict verification is enabled.
+func (s *AssetAdministrationShellDatabase) verifyReference(reference types.IReference, errorPrefix string) error {
+	if !s.strictVerification {
+		return nil
+	}
+
+	verificationErrors := make([]verification.VerificationError, 0)
+
+	verification.VerifyReference(reference, func(ve *verification.VerificationError) bool {
 		verificationErrors = append(verificationErrors, *ve)
 		return false
 	})
@@ -241,6 +290,10 @@ func mapCreateAASInsertError(err error) error {
 
 // CreateSubmodelReferenceInAssetAdministrationShell adds a submodel reference to the specified AAS.
 func (s *AssetAdministrationShellDatabase) CreateSubmodelReferenceInAssetAdministrationShell(aasIdentifier string, submodelRef types.IReference) error {
+	if err := s.verifyReference(submodelRef, "AASREPO-NEWSMREFINAAS-VERIFY"); err != nil {
+		return err
+	}
+
 	tx, cleanup, err := common.StartTransaction(s.db)
 	if err != nil {
 		return err
@@ -353,11 +406,11 @@ func (s *AssetAdministrationShellDatabase) checkIfSubmodelReferenceExistsInAsset
 }
 
 // GetAssetAdministrationShells returns a paginated list of AAS representations and the next cursor.
-func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShells(limit int32, cursor string, idShort string, assetIDs []string) ([]map[string]any, string, error) {
+func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShells(ctx context.Context, limit int32, cursor string, idShort string, assetIDs []string) ([]map[string]any, string, error) {
 	dialect := goqu.Dialect("postgres")
 
-	if limit <= 0 {
-		limit = 100
+	if limit < 0 {
+		return nil, "", common.NewErrBadRequest("AASREPO-GETAASLIST-BADLIMIT Limit " + string(limit) + " too small")
 	}
 
 	sqlQuery, args, err := buildGetAssetAdministrationShellsQuery(&dialect, limit, cursor, idShort, assetIDs)
@@ -386,7 +439,7 @@ func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShells(limit in
 	}
 
 	nextCursor := ""
-	if len(aasIDs) > int(limit) {
+	if limit > 0 && len(aasIDs) > int(limit) {
 		nextID := aasIDs[len(aasIDs)-1]
 		aasIDs = aasIDs[:len(aasIDs)-1]
 
@@ -400,19 +453,18 @@ func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShells(limit in
 	}
 
 	result := make([]map[string]any, 0, len(aasIDs))
-	for _, dbID := range aasIDs {
-		aasMap, mapErr := s.getAssetAdministrationShellMapByDBID(context.Background(), dbID)
-		if mapErr != nil {
-			return nil, "", mapErr
+	if len(aasIDs) > 0 {
+		result, err = s.getAssetAdministrationShellMapsByDBIDs(ctx, aasIDs)
+		if err != nil {
+			return nil, "", err
 		}
-		result = append(result, aasMap)
 	}
 
 	return result, nextCursor, nil
 }
 
 // GetAssetAdministrationShellByID returns the JSON-like representation of an AAS by identifier.
-func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShellByID(aasIdentifier string) (map[string]any, error) {
+func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShellByID(ctx context.Context, aasIdentifier string) (map[string]any, error) {
 	dialect := goqu.Dialect("postgres")
 	sqlQuery, args, err := buildGetAssetAdministrationShellDBIDByIdentifierQuery(&dialect, aasIdentifier)
 	if err != nil {
@@ -427,11 +479,19 @@ func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShellByID(aasId
 		return nil, common.NewInternalServerError("AASREPO-GETAASBYID-EXECSQL " + queryErr.Error())
 	}
 
-	return s.getAssetAdministrationShellMapByDBID(context.Background(), aasDBID)
+	return s.getAssetAdministrationShellMapByDBID(ctx, aasDBID)
 }
 
 // PutAssetAdministrationShellByID upserts an AAS by identifier and returns whether an existing entry was updated.
 func (s *AssetAdministrationShellDatabase) PutAssetAdministrationShellByID(aasIdentifier string, aas types.IAssetAdministrationShell) (bool, error) {
+	if aasIdentifier != aas.ID() {
+		return false, common.NewErrBadRequest("AASREPO-PUTAAS-IDMISMATCH Asset Administration Shell ID in path and body do not match")
+	}
+
+	if err := s.verifyAssetAdministrationShell(aas, "AASREPO-PUTAAS-VERIFY"); err != nil {
+		return false, err
+	}
+
 	tx, cleanup, err := common.StartTransaction(s.db)
 	if err != nil {
 		return false, common.NewInternalServerError("AASREPO-PUTAAS-STARTTX " + err.Error())
@@ -514,7 +574,7 @@ func (s *AssetAdministrationShellDatabase) DeleteAssetAdministrationShellByID(aa
 
 // GetAssetAdministrationShellReferences returns paginated model references for AAS entries.
 func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShellReferences(limit int32, cursor string, idShort string, assetIDs []string) ([]types.IReference, string, error) {
-	aasMaps, nextCursor, err := s.GetAssetAdministrationShells(limit, cursor, idShort, assetIDs)
+	aasMaps, nextCursor, err := s.GetAssetAdministrationShells(context.Background(), limit, cursor, idShort, assetIDs)
 	if err != nil {
 		return nil, "", err
 	}
@@ -531,7 +591,7 @@ func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShellReferences
 
 // GetAssetAdministrationShellReferenceByID returns the model reference for an AAS identifier.
 func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShellReferenceByID(aasIdentifier string) (types.IReference, error) {
-	_, err := s.GetAssetAdministrationShellByID(aasIdentifier)
+	_, err := s.GetAssetAdministrationShellByID(context.Background(), aasIdentifier)
 	if err != nil {
 		return nil, err
 	}
@@ -542,7 +602,7 @@ func (s *AssetAdministrationShellDatabase) GetAssetAdministrationShellReferenceB
 
 // GetAssetInformationByAASID returns the assetInformation section of an AAS by identifier.
 func (s *AssetAdministrationShellDatabase) GetAssetInformationByAASID(aasIdentifier string) (map[string]any, error) {
-	aasMap, err := s.GetAssetAdministrationShellByID(aasIdentifier)
+	aasMap, err := s.GetAssetAdministrationShellByID(context.Background(), aasIdentifier)
 	if err != nil {
 		return nil, err
 	}
@@ -557,6 +617,10 @@ func (s *AssetAdministrationShellDatabase) GetAssetInformationByAASID(aasIdentif
 
 // PutAssetInformationByAASID updates the assetInformation section of an existing AAS.
 func (s *AssetAdministrationShellDatabase) PutAssetInformationByAASID(aasIdentifier string, assetInformation types.IAssetInformation) error {
+	if err := s.verifyAssetInformation(assetInformation, "AASREPO-PUTASSETINFORMATION-VERIFY"); err != nil {
+		return err
+	}
+
 	tx, cleanup, err := common.StartTransaction(s.db)
 	if err != nil {
 		return common.NewInternalServerError("AASREPO-PUTASSETINFO-STARTTX " + err.Error())
@@ -684,8 +748,8 @@ func (s *AssetAdministrationShellDatabase) GetAllSubmodelReferencesByAASID(aasId
 	}
 	defer cleanup(&err)
 
-	if limit <= 0 {
-		limit = 100
+	if limit < 0 {
+		return nil, "", common.NewErrBadRequest("AASREPO-GETSMREFS-BADLIMIT Limit " + string(limit) + " too small")
 	}
 
 	cursorID := int64(0)
@@ -746,9 +810,8 @@ func (s *AssetAdministrationShellDatabase) GetAllSubmodelReferencesByAASID(aasId
 	}
 
 	nextCursor := ""
-	if len(referenceIDs) > int(limit) {
+	if limit > 0 && len(referenceIDs) > int(limit) {
 		nextCursor = strconv.FormatInt(referenceIDs[len(referenceIDs)-1], 10)
-		// referenceIDs = referenceIDs[:len(referenceIDs)-1]
 		references = references[:len(references)-1]
 	}
 
@@ -958,6 +1021,198 @@ func (s *AssetAdministrationShellDatabase) getAssetAdministrationShellMapByDBID(
 	return result, nil
 }
 
+func (s *AssetAdministrationShellDatabase) getAssetAdministrationShellMapsByDBIDs(ctx context.Context, aasDBIDs []int64) ([]map[string]any, error) {
+	if len(aasDBIDs) == 0 {
+		return []map[string]any{}, nil
+	}
+
+	dialect := goqu.Dialect("postgres")
+	querySQL, queryArgs, buildErr := buildGetAssetAdministrationShellMapsByDBIDsQuery(&dialect, aasDBIDs)
+	if buildErr != nil {
+		return nil, common.NewInternalServerError("AASREPO-MAPAASBATCH-BUILDSQL " + buildErr.Error())
+	}
+
+	type coreAssetAdministrationShellRow struct {
+		aasID                 string
+		idShort               sql.NullString
+		category              sql.NullString
+		displayNamePayload    []byte
+		descriptionPayload    []byte
+		administrationPayload []byte
+		edsPayload            []byte
+		extensionsPayload     []byte
+		derivedFromPayload    []byte
+		assetKind             sql.NullInt64
+		globalAssetID         sql.NullString
+		assetType             sql.NullString
+	}
+
+	rows, queryErr := s.db.QueryContext(ctx, querySQL, queryArgs...)
+	if queryErr != nil {
+		return nil, common.NewInternalServerError("AASREPO-MAPAASBATCH-EXECSQL " + queryErr.Error())
+	}
+	defer func() {
+		_ = rows.Close()
+	}()
+
+	coreRows := make(map[int64]coreAssetAdministrationShellRow, len(aasDBIDs))
+	for rows.Next() {
+		var aasDBID int64
+		var row coreAssetAdministrationShellRow
+		if scanErr := rows.Scan(
+			&aasDBID,
+			&row.aasID,
+			&row.idShort,
+			&row.category,
+			&row.displayNamePayload,
+			&row.descriptionPayload,
+			&row.administrationPayload,
+			&row.edsPayload,
+			&row.extensionsPayload,
+			&row.derivedFromPayload,
+			&row.assetKind,
+			&row.globalAssetID,
+			&row.assetType,
+		); scanErr != nil {
+			return nil, common.NewInternalServerError("AASREPO-MAPAASBATCH-SCANROW " + scanErr.Error())
+		}
+		coreRows[aasDBID] = row
+	}
+	if rowsErr := rows.Err(); rowsErr != nil {
+		return nil, common.NewInternalServerError("AASREPO-MAPAASBATCH-ITERROWS " + rowsErr.Error())
+	}
+
+	submodelsByAASID, submodelErr := s.readSubmodelReferencePayloadsByAASDBIDs(ctx, aasDBIDs)
+	if submodelErr != nil {
+		return nil, submodelErr
+	}
+
+	specificAssetIDsByAASID, specificErr := s.readSpecificAssetIDsByAssetInformationIDs(ctx, aasDBIDs)
+	if specificErr != nil {
+		return nil, common.NewInternalServerError("AASREPO-MAPAASBATCH-READSPECIFICASSETIDS " + specificErr.Error())
+	}
+
+	result := make([]map[string]any, 0, len(aasDBIDs))
+	for _, aasDBID := range aasDBIDs {
+		row, ok := coreRows[aasDBID]
+		if !ok {
+			continue
+		}
+
+		aasMap := map[string]any{
+			"id":        row.aasID,
+			"modelType": "AssetAdministrationShell",
+		}
+
+		if row.idShort.Valid && row.idShort.String != "" {
+			aasMap["idShort"] = row.idShort.String
+		}
+		if row.category.Valid && row.category.String != "" {
+			aasMap["category"] = row.category.String
+		}
+
+		if assignErr := assignJSONPayload(aasMap, "displayName", row.displayNamePayload); assignErr != nil {
+			return nil, assignErr
+		}
+		if assignErr := assignJSONPayload(aasMap, "description", row.descriptionPayload); assignErr != nil {
+			return nil, assignErr
+		}
+		if assignErr := assignJSONPayload(aasMap, "administration", row.administrationPayload); assignErr != nil {
+			return nil, assignErr
+		}
+		if assignErr := assignJSONPayload(aasMap, "embeddedDataSpecifications", row.edsPayload); assignErr != nil {
+			return nil, assignErr
+		}
+		if assignErr := assignJSONPayload(aasMap, "extensions", row.extensionsPayload); assignErr != nil {
+			return nil, assignErr
+		}
+		if assignErr := assignJSONPayload(aasMap, "derivedFrom", row.derivedFromPayload); assignErr != nil {
+			return nil, assignErr
+		}
+
+		assetInfo := map[string]any{}
+		if row.assetKind.Valid {
+			assetKindString, ok := stringification.AssetKindToString(types.AssetKind(row.assetKind.Int64))
+			if ok {
+				assetInfo["assetKind"] = assetKindString
+			}
+		}
+		if row.globalAssetID.Valid && row.globalAssetID.String != "" {
+			assetInfo["globalAssetId"] = row.globalAssetID.String
+		}
+		if row.assetType.Valid && row.assetType.String != "" {
+			assetInfo["assetType"] = row.assetType.String
+		}
+
+		specificAssetIDs := specificAssetIDsByAASID[aasDBID]
+		if len(specificAssetIDs) > 0 {
+			jsonSpecific := make([]map[string]any, 0, len(specificAssetIDs))
+			for _, specificAssetID := range specificAssetIDs {
+				jsonableSpecific, jsonErr := jsonization.ToJsonable(specificAssetID)
+				if jsonErr != nil {
+					return nil, common.NewInternalServerError("AASREPO-MAPAASBATCH-JSONIZESPECIFICASSETID " + jsonErr.Error())
+				}
+				jsonSpecific = append(jsonSpecific, jsonableSpecific)
+			}
+			assetInfo["specificAssetIds"] = jsonSpecific
+		}
+
+		if len(assetInfo) > 0 {
+			aasMap["assetInformation"] = assetInfo
+		}
+
+		submodels := submodelsByAASID[aasDBID]
+		if len(submodels) > 0 {
+			aasMap["submodels"] = submodels
+		}
+
+		result = append(result, aasMap)
+	}
+
+	return result, nil
+}
+
+func (s *AssetAdministrationShellDatabase) readSubmodelReferencePayloadsByAASDBIDs(ctx context.Context, aasDBIDs []int64) (map[int64][]map[string]any, error) {
+	out := make(map[int64][]map[string]any, len(aasDBIDs))
+	if len(aasDBIDs) == 0 {
+		return out, nil
+	}
+
+	dialect := goqu.Dialect("postgres")
+	submodelSQL, submodelArgs, submodelBuildErr := buildGetSubmodelReferencePayloadsByAASIDsQuery(&dialect, aasDBIDs)
+	if submodelBuildErr != nil {
+		return nil, common.NewInternalServerError("AASREPO-READSMREFBATCH-BUILDSQL " + submodelBuildErr.Error())
+	}
+
+	rows, submodelQueryErr := s.db.QueryContext(ctx, submodelSQL, submodelArgs...)
+	if submodelQueryErr != nil {
+		return nil, common.NewInternalServerError("AASREPO-READSMREFBATCH-EXECSQL " + submodelQueryErr.Error())
+	}
+	defer func() {
+		_ = rows.Close()
+	}()
+
+	for rows.Next() {
+		var aasDBID int64
+		var payload []byte
+		if scanErr := rows.Scan(&aasDBID, &payload); scanErr != nil {
+			return nil, common.NewInternalServerError("AASREPO-READSMREFBATCH-SCANROW " + scanErr.Error())
+		}
+
+		var submodelReference map[string]any
+		if unmarshalErr := json.Unmarshal(payload, &submodelReference); unmarshalErr != nil {
+			return nil, common.NewInternalServerError("AASREPO-READSMREFBATCH-UNMARSHAL " + unmarshalErr.Error())
+		}
+
+		out[aasDBID] = append(out[aasDBID], submodelReference)
+	}
+	if rowsErr := rows.Err(); rowsErr != nil {
+		return nil, common.NewInternalServerError("AASREPO-READSMREFBATCH-ITERROWS " + rowsErr.Error())
+	}
+
+	return out, nil
+}
+
 // assignJSONPayload unmarshals a JSON payload and assigns it to the target map key when present.
 func assignJSONPayload(target map[string]any, key string, payload []byte) error {
 	if len(payload) == 0 {
@@ -1046,4 +1301,84 @@ func (s *AssetAdministrationShellDatabase) readSpecificAssetIDsByAssetInformatio
 	}
 
 	return result, nil
+}
+
+// readSpecificAssetIDsByAssetInformationIDs reads and enriches specificAssetIds in batch for multiple assetInformation records.
+func (s *AssetAdministrationShellDatabase) readSpecificAssetIDsByAssetInformationIDs(ctx context.Context, assetInformationIDs []int64) (map[int64][]types.ISpecificAssetID, error) {
+	out := make(map[int64][]types.ISpecificAssetID, len(assetInformationIDs))
+	if len(assetInformationIDs) == 0 {
+		return out, nil
+	}
+
+	dialect := goqu.Dialect("postgres")
+	querySQL, queryArgs, buildErr := buildReadSpecificAssetIDsByAssetInformationIDsQuery(&dialect, assetInformationIDs)
+	if buildErr != nil {
+		return nil, common.NewInternalServerError("AASREPO-READSPECIFICBATCH-BUILDSQL " + buildErr.Error())
+	}
+
+	rows, queryErr := s.db.QueryContext(ctx, querySQL, queryArgs...)
+	if queryErr != nil {
+		return nil, common.NewInternalServerError("AASREPO-READSPECIFICBATCH-EXECSQL " + queryErr.Error())
+	}
+	defer func() {
+		_ = rows.Close()
+	}()
+
+	type specificAssetRow struct {
+		assetInformationID int64
+		id                 int64
+		name               string
+		value              string
+		semanticPayload    []byte
+	}
+
+	rowData := make([]specificAssetRow, 0)
+	ids := make([]int64, 0)
+	for rows.Next() {
+		var row specificAssetRow
+		if scanErr := rows.Scan(&row.assetInformationID, &row.id, &row.name, &row.value, &row.semanticPayload); scanErr != nil {
+			return nil, common.NewInternalServerError("AASREPO-READSPECIFICBATCH-SCANROW " + scanErr.Error())
+		}
+		rowData = append(rowData, row)
+		ids = append(ids, row.id)
+	}
+	if rowsErr := rows.Err(); rowsErr != nil {
+		return nil, common.NewInternalServerError("AASREPO-READSPECIFICBATCH-ITERROWS " + rowsErr.Error())
+	}
+
+	if len(rowData) == 0 {
+		return out, nil
+	}
+
+	externalSubjectByID, extErr := descriptors.ReadSpecificAssetExternalSubjectReferencesBySpecificAssetIDs(ctx, s.db, ids)
+	if extErr != nil {
+		return nil, extErr
+	}
+
+	supplementalByID, suppErr := descriptors.ReadSpecificAssetSupplementalSemanticReferencesBySpecificAssetIDs(ctx, s.db, ids)
+	if suppErr != nil {
+		return nil, suppErr
+	}
+
+	for _, row := range rowData {
+		specificAssetID := types.NewSpecificAssetID(row.name, row.value)
+
+		if len(row.semanticPayload) > 0 {
+			var jsonable any
+			if unmarshalErr := json.Unmarshal(row.semanticPayload, &jsonable); unmarshalErr != nil {
+				return nil, common.NewInternalServerError("AASREPO-READSPECIFICBATCH-UNMARSHALSEMANTIC " + unmarshalErr.Error())
+			}
+			semanticReference, semanticErr := jsonization.ReferenceFromJsonable(jsonable)
+			if semanticErr != nil {
+				return nil, common.NewInternalServerError("AASREPO-READSPECIFICBATCH-PARSESEMANTIC " + semanticErr.Error())
+			}
+			specificAssetID.SetSemanticID(semanticReference)
+		}
+
+		specificAssetID.SetExternalSubjectID(externalSubjectByID[row.id])
+		specificAssetID.SetSupplementalSemanticIDs(supplementalByID[row.id])
+		out[row.assetInformationID] = append(out[row.assetInformationID], specificAssetID)
+	}
+
+	return out, nil
 }
