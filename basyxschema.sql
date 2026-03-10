@@ -143,7 +143,11 @@ CREATE TABLE IF NOT EXISTS multilanguage_property_value (
   id                  BIGSERIAL PRIMARY KEY,
   submodel_element_id BIGINT NOT NULL REFERENCES submodel_element(id) ON DELETE CASCADE,
   language            TEXT NOT NULL,
-  text                TEXT NOT NULL,
+  text                TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS multilanguage_property_payload (
+  submodel_element_id BIGINT PRIMARY KEY REFERENCES submodel_element(id) ON DELETE CASCADE,
   value_id_payload    JSONB DEFAULT '[]'
 );
 

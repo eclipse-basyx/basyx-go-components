@@ -122,7 +122,7 @@ func (p PostgreSQLMultiLanguagePropertyHandler) Update(submodelID string, idShor
 			valueIDPayload = valueIDJSONString
 		}
 	} else {
-		selectValueIDQuery, selectValueIDArgs, selectValueIDErr := dialect.From("multilanguage_property_value").
+		selectValueIDQuery, selectValueIDArgs, selectValueIDErr := dialect.From("multilanguage_property_payload").
 			Select("value_id_payload").
 			Where(goqu.C("submodel_element_id").Eq(elementID)).
 			Limit(1).
@@ -165,7 +165,6 @@ func (p PostgreSQLMultiLanguagePropertyHandler) Update(submodelID string, idShor
 						"submodel_element_id": elementID,
 						"language":            val.Language(),
 						"text":                val.Text(),
-						"value_id_payload":    goqu.L("?::jsonb", valueIDPayload),
 					}).
 					ToSQL()
 				if err != nil {
@@ -181,7 +180,7 @@ func (p PostgreSQLMultiLanguagePropertyHandler) Update(submodelID string, idShor
 	}
 
 	if isPut || mlp.ValueID() != nil {
-		updateMLPQuery, updateMLPArgs, updateMLPErr := dialect.Update("multilanguage_property_value").
+		updateMLPQuery, updateMLPArgs, updateMLPErr := dialect.Update("multilanguage_property_payload").
 			Set(goqu.Record{"value_id_payload": goqu.L("?::jsonb", valueIDPayload)}).
 			Where(goqu.C("submodel_element_id").Eq(elementID)).
 			ToSQL()
@@ -239,25 +238,6 @@ func (p PostgreSQLMultiLanguagePropertyHandler) UpdateValueOnly(submodelID strin
 			goqu.C("idshort_path").Eq(idShortOrPath),
 		)
 
-	valueIDPayload := "[]"
-	selectValueIDQuery, selectValueIDArgs, selectValueIDErr := dialect.From("multilanguage_property_value").
-		Select("value_id_payload").
-		Where(goqu.C("submodel_element_id").Eq(subquery)).
-		Limit(1).
-		ToSQL()
-	if selectValueIDErr != nil {
-		return fmt.Errorf("failed to build value id payload query: %w", selectValueIDErr)
-	}
-
-	var existingValueIDPayload []byte
-	selectValueIDErr = p.db.QueryRow(selectValueIDQuery, selectValueIDArgs...).Scan(&existingValueIDPayload)
-	if selectValueIDErr != nil && selectValueIDErr != sql.ErrNoRows {
-		return fmt.Errorf("failed to read existing value id payload: %w", selectValueIDErr)
-	}
-	if selectValueIDErr == nil && len(existingValueIDPayload) > 0 {
-		valueIDPayload = string(existingValueIDPayload)
-	}
-
 	// Delete existing values
 	deleteQuery, deleteArgs, err := dialect.Delete("multilanguage_property_value").
 		Where(goqu.C("submodel_element_id").Eq(subquery)).
@@ -279,7 +259,6 @@ func (p PostgreSQLMultiLanguagePropertyHandler) UpdateValueOnly(submodelID strin
 					"submodel_element_id": subquery,
 					"language":            lang,
 					"text":                text,
-					"value_id_payload":    goqu.L("?::jsonb", valueIDPayload),
 				}).
 				ToSQL()
 			if err != nil {
@@ -309,7 +288,7 @@ func (p PostgreSQLMultiLanguagePropertyHandler) Delete(idShortOrPath string) err
 }
 
 // GetInsertQueryPart returns nil because MultiLanguageProperty persistence is handled
-// entirely via multilanguage_property_value rows inserted in batch post-processing.
+// via batch post-processing for multilanguage_property_value and multilanguage_property_payload.
 //
 // Parameters:
 //   - tx: Active database transaction (needed for creating value references)

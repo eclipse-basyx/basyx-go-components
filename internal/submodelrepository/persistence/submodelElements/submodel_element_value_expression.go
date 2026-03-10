@@ -107,9 +107,9 @@ func getSMEValueExpressionForRead(dialect goqu.DialectWrapper) exp.CaseExpressio
 			goqu.I("sme.model_type").Eq(types.ModelTypeMultiLanguageProperty),
 			goqu.Func("jsonb_build_object",
 				goqu.V("value_id"), goqu.COALESCE(
-					dialect.From(goqu.T("multilanguage_property_value").As("mlpv_value_id")).
-						Select(goqu.I("mlpv_value_id.value_id_payload")).
-						Where(goqu.I("mlpv_value_id.submodel_element_id").Eq(goqu.I("sme.id"))).
+					dialect.From(goqu.T("multilanguage_property_payload").As("mlpp")).
+						Select(goqu.I("mlpp.value_id_payload")).
+						Where(goqu.I("mlpp.submodel_element_id").Eq(goqu.I("sme.id"))).
 						Limit(1),
 					goqu.L("'[]'::jsonb"),
 				),
