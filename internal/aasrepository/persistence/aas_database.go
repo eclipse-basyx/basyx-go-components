@@ -28,7 +28,6 @@ package persistence
 
 import (
 	"context"
-	"crypto/rsa"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -50,7 +49,6 @@ import (
 // AssetAdministrationShellDatabase is the implementation of the AssetAdministrationShellRepositoryDatabase interface using PostgreSQL as the underlying database.
 type AssetAdministrationShellDatabase struct {
 	db                 *sql.DB
-	privateKey         *rsa.PrivateKey
 	strictVerification bool
 }
 
@@ -1021,6 +1019,7 @@ func (s *AssetAdministrationShellDatabase) getAssetAdministrationShellMapByDBID(
 	return result, nil
 }
 
+// nolint:revive // cyclomatic complexity of 32
 func (s *AssetAdministrationShellDatabase) getAssetAdministrationShellMapsByDBIDs(ctx context.Context, aasDBIDs []int64) ([]map[string]any, error) {
 	if len(aasDBIDs) == 0 {
 		return []map[string]any{}, nil

@@ -86,7 +86,7 @@ func (p PostgreSQLEntityHandler) Update(submodelID string, idShortOrPath string,
 	}
 
 	var err error
-	cu, localTx, err := persistenceutils.StartTXIfNeeded(tx, err, p.db)
+	cu, localTx, err := common.StartTXIfNeeded(tx, err, p.db)
 	if err != nil {
 		return err
 	}
@@ -172,7 +172,7 @@ func (p PostgreSQLEntityHandler) Update(submodelID string, idShortOrPath string,
 		}
 	}
 
-	return persistenceutils.CommitTransactionIfNeeded(tx, localTx)
+	return common.CommitTransactionIfNeeded(tx, localTx)
 }
 
 func ensureEntityStatementParentLinks(tx *sql.Tx, entityElementID int, rootSmeID int, insertedStatementIDs []int) error {

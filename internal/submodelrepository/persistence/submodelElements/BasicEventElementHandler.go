@@ -89,7 +89,7 @@ func (p PostgreSQLBasicEventElementHandler) Update(submodelID string, idShortOrP
 	}
 
 	var err error
-	cu, localTx, err := persistenceutils.StartTXIfNeeded(tx, err, p.db)
+	cu, localTx, err := common.StartTXIfNeeded(tx, err, p.db)
 	if err != nil {
 		return err
 	}
@@ -143,7 +143,7 @@ func (p PostgreSQLBasicEventElementHandler) Update(submodelID string, idShortOrP
 		return err
 	}
 
-	return persistenceutils.CommitTransactionIfNeeded(tx, localTx)
+	return common.CommitTransactionIfNeeded(tx, localTx)
 }
 
 func buildUpdateBasicEventElementRecordObject(basicEvent *types.BasicEventElement, isPut bool) (goqu.Record, error) {
