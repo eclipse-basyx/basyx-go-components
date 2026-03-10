@@ -144,6 +144,18 @@ var identifiableRouteMappings = []identifiableRouteMapping{
 		filterField: "$sm#id",
 		hasWildcard: true,
 	},
+	{
+		scope:       "$cd",
+		route:       "/concept-descriptions",
+		filterField: "$cd#id",
+		hasWildcard: false,
+	},
+	{
+		scope:       "$cd",
+		route:       "/concept-descriptions/%s",
+		filterField: "$cd#id",
+		hasWildcard: true,
+	},
 }
 
 var referableRouteMappings = []referableRouteMapping{

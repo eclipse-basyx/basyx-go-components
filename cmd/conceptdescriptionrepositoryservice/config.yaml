@@ -14,6 +14,13 @@ postgres:
   maxIdleConnections: 500
   connMaxLifetimeMinutes: 5
 
+oidc:
+  trustlistPath: "config/trustlist.json"
+
+abac:
+  enabled: false
+  modelPath: "config/access_rules/access-rules.json"
+
 # swagger:
 #   contactName: "Eclipse BaSyx"
 #   contactEmail: "basyx-dev@eclipse.org"

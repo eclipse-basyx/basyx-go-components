@@ -230,6 +230,7 @@ const (
 	ctxSMDesc
 	ctxSM
 	ctxSME
+	ctxCD
 	ctxBD
 	ctxSpecificAssetID
 	ctxAASDescEndpoint
@@ -315,6 +316,8 @@ func contextFromFieldPrefix(fieldStr string) resolveContext {
 		return ctxSM
 	case "$sme":
 		return ctxSME
+	case "$cd":
+		return ctxCD
 	case "$bd":
 		return ctxBD
 	default:
@@ -381,7 +384,7 @@ func resolveArrayBindings(fieldStr string, tokens []builder.Token) ([]ArrayIndex
 	ctx := contextFromFieldPrefix(fieldStr)
 	if ctx == ctxUnknown {
 		// Keep error explicit: this is meant for registry queries today.
-		return nil, fmt.Errorf("unsupported field root (expected $aasdesc#, $smdesc#, $sm#, $sme...#, or $bd#): %q", fieldStr)
+		return nil, fmt.Errorf("unsupported field root (expected $aasdesc#, $smdesc#, $sm#, $sme...#, $cd#, or $bd#): %q", fieldStr)
 	}
 
 	var bindings []ArrayIndexBinding

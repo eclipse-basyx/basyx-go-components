@@ -82,7 +82,7 @@ func NewConceptDescriptionRepositoryAPIAPIService(database *persistence.ConceptD
 }
 
 // GetAllConceptDescriptions - Returns all Concept Descriptions
-func (s *ConceptDescriptionRepositoryAPIAPIService) GetAllConceptDescriptions(_ context.Context, idShort string, isCaseOf string, dataSpecificationRef string, limit int32, cursor string) (model.ImplResponse, error) {
+func (s *ConceptDescriptionRepositoryAPIAPIService) GetAllConceptDescriptions(ctx context.Context, idShort string, isCaseOf string, dataSpecificationRef string, limit int32, cursor string) (model.ImplResponse, error) {
 	decodedCursor := strings.TrimSpace(cursor)
 	if decodedCursor != "" {
 		var decodeErr error
@@ -103,7 +103,7 @@ func (s *ConceptDescriptionRepositoryAPIAPIService) GetAllConceptDescriptions(_ 
 		return common.NewErrorResponse(err, http.StatusBadRequest, componentName, "GetAllConceptDescriptions", "BadLimit"), nil
 	}
 	uintLimit := uint(uintLimit64)
-	cds, nextCursor, err := s.d.GetConceptDescriptions(&idShort, &isCaseOf, &dataSpecificationRef, uintLimit, &decodedCursor)
+	cds, nextCursor, err := s.d.GetConceptDescriptions(ctx, &idShort, &isCaseOf, &dataSpecificationRef, uintLimit, &decodedCursor)
 	if err != nil {
 		switch {
 		case common.IsErrBadRequest(err):
@@ -128,8 +128,8 @@ func (s *ConceptDescriptionRepositoryAPIAPIService) GetAllConceptDescriptions(_ 
 }
 
 // PostConceptDescription - Creates a new Concept Description
-func (s *ConceptDescriptionRepositoryAPIAPIService) PostConceptDescription(_ context.Context, conceptDescription types.IConceptDescription) (model.ImplResponse, error) {
-	err := s.d.CreateConceptDescription(conceptDescription)
+func (s *ConceptDescriptionRepositoryAPIAPIService) PostConceptDescription(ctx context.Context, conceptDescription types.IConceptDescription) (model.ImplResponse, error) {
+	err := s.d.CreateConceptDescription(ctx, conceptDescription)
 	if err != nil {
 		switch {
 		case common.IsErrBadRequest(err):
@@ -152,12 +152,12 @@ func (s *ConceptDescriptionRepositoryAPIAPIService) PostConceptDescription(_ con
 }
 
 // GetConceptDescriptionById - Returns a specific Concept Description
-func (s *ConceptDescriptionRepositoryAPIAPIService) GetConceptDescriptionById(_ context.Context, cdIdentifier string) (model.ImplResponse, error) {
+func (s *ConceptDescriptionRepositoryAPIAPIService) GetConceptDescriptionById(ctx context.Context, cdIdentifier string) (model.ImplResponse, error) {
 	decodedIdentifier, err := common.Decode(cdIdentifier)
 	if err != nil {
 		return common.NewErrorResponse(err, http.StatusBadRequest, componentName, "GetConceptDescriptionById", "URLDecode"), nil
 	}
-	cd, err := s.d.GetConceptDescriptionByID(string(decodedIdentifier))
+	cd, err := s.d.GetConceptDescriptionByID(ctx, string(decodedIdentifier))
 	if err != nil {
 		switch {
 		case common.IsErrBadRequest(err):
@@ -181,12 +181,12 @@ func (s *ConceptDescriptionRepositoryAPIAPIService) GetConceptDescriptionById(_ 
 }
 
 // PutConceptDescriptionById - Creates or updates an existing Concept Description
-func (s *ConceptDescriptionRepositoryAPIAPIService) PutConceptDescriptionById(_ context.Context, cdIdentifier string, conceptDescription types.IConceptDescription) (model.ImplResponse, error) {
+func (s *ConceptDescriptionRepositoryAPIAPIService) PutConceptDescriptionById(ctx context.Context, cdIdentifier string, conceptDescription types.IConceptDescription) (model.ImplResponse, error) {
 	decodedIdentifier, err := common.Decode(cdIdentifier)
 	if err != nil {
 		return common.NewErrorResponse(err, http.StatusBadRequest, componentName, "PutConceptDescriptionById", "URLDecode"), nil
 	}
-	err = s.d.PutConceptDescription(string(decodedIdentifier), conceptDescription)
+	err = s.d.PutConceptDescription(ctx, string(decodedIdentifier), conceptDescription)
 	if err != nil {
 		switch {
 		case common.IsErrBadRequest(err):
@@ -207,12 +207,12 @@ func (s *ConceptDescriptionRepositoryAPIAPIService) PutConceptDescriptionById(_ 
 }
 
 // DeleteConceptDescriptionById - Deletes a Concept Description
-func (s *ConceptDescriptionRepositoryAPIAPIService) DeleteConceptDescriptionById(_ context.Context, cdIdentifier string) (model.ImplResponse, error) {
+func (s *ConceptDescriptionRepositoryAPIAPIService) DeleteConceptDescriptionById(ctx context.Context, cdIdentifier string) (model.ImplResponse, error) {
 	decodedIdentifier, err := common.Decode(cdIdentifier)
 	if err != nil {
 		return common.NewErrorResponse(err, http.StatusBadRequest, componentName, "DeleteConceptDescriptionById", "URLDecode"), nil
 	}
-	err = s.d.DeleteConceptDescription(string(decodedIdentifier))
+	err = s.d.DeleteConceptDescription(ctx, string(decodedIdentifier))
 	if err != nil {
 		switch {
 		case common.IsErrBadRequest(err):
