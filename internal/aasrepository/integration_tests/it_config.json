@@ -7,6 +7,13 @@
 		"expectedStatus": 200
 	},
 	{
+		"context": "002.1 - GET /description",
+		"method": "GET",
+		"endpoint": "http://127.0.0.1:6004/description",
+		"shouldMatch": "expected/expectedDescriptionEndpoint.json",
+		"expectedStatus": 200
+	},
+	{
 		"context": "004.1 - GET /shells - empty",
 		"method": "GET",
 		"endpoint": "http://127.0.0.1:6004/shells",
