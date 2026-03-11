@@ -1,0 +1,23 @@
+{
+  "id": "https://example.com/ids/aas/noSemanticIdWithExternalSubject",
+  "idShort": "AASNoSemanticIdWithExternalSubject",
+  "assetInformation": {
+    "assetKind": "Instance",
+    "specificAssetIds": [
+      {
+        "name": "specific-with-external-subject-only",
+        "value": "value-with-external-subject-only",
+        "externalSubjectId": {
+          "type": "ExternalReference",
+          "keys": [
+            {
+              "type": "GlobalReference",
+              "value": "https://example.com/ids/externalSubjectId/noSemantic"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "modelType": "AssetAdministrationShell"
+}

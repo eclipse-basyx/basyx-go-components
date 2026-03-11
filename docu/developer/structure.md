@@ -10,10 +10,6 @@ This document explains the structure and purpose of each major component in the 
   - Contains service entry points (main.go), configuration files, and Dockerfiles for each microservice (e.g., `aasregistryservice`, `submodelrepositoryservice`).
   - Each service folder includes its own config and healthcheck scripts.
 
-- **api/**
-  - Houses OpenAPI specifications (`openapi.yaml`) for each service, defining REST endpoints and data contracts.
-  - Used for code generation and API documentation.
-
 - **internal/**
   - Core business logic, persistence, and integration tests.
   - Organized by domain (e.g., `aasregistry`, `submodelrepository`, `discoveryservice`).

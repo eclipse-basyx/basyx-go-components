@@ -1,0 +1,28 @@
+{
+  "id": "https://example.com/ids/aas/assetids_mixed_specific",
+  "idShort": "AASAssetIdsMixedSpecific",
+  "assetInformation": {
+    "assetKind": "Instance",
+    "globalAssetId": "assetId-global-mixed",
+    "specificAssetIds": [
+      {
+        "name": "specific-with-external-subject",
+        "value": "value-with-external-subject",
+        "externalSubjectId": {
+          "type": "ExternalReference",
+          "keys": [
+            {
+              "type": "GlobalReference",
+              "value": "https://example.com/ids/externalSubjectId/mixed"
+            }
+          ]
+        }
+      },
+      {
+        "name": "specific-without-external-subject",
+        "value": "value-without-external-subject"
+      }
+    ]
+  },
+  "modelType": "AssetAdministrationShell"
+}
