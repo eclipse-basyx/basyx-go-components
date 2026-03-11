@@ -1227,9 +1227,9 @@ func assignJSONPayload(target map[string]any, key string, payload []byte) error 
 	return nil
 }
 
-// parseSpecificAssetIDReferencePayload parses an optional specific asset ID
-// reference payload and reports whether parsing produced a reference.
-func parseSpecificAssetIDReferencePayload(payload []byte) (types.IReference, bool, error) {
+// parseSpecificAssetIDSemanticIDPayload parses an optional SpecificAssetID
+// semanticId payload and reports whether parsing produced a semanticId.
+func parseSpecificAssetIDSemanticIDPayload(payload []byte) (types.IReference, bool, error) {
 	if len(payload) == 0 {
 		return nil, false, nil
 	}
@@ -1276,17 +1276,17 @@ func (s *AssetAdministrationShellDatabase) readSpecificAssetIDsByAssetInformatio
 	}()
 
 	type specificAssetRow struct {
-		id               int64
-		name             string
-		value            string
-		referencePayload []byte
+		id                int64
+		name              string
+		value             string
+		semanticIDPayload []byte
 	}
 
 	rowData := make([]specificAssetRow, 0)
 	ids := make([]int64, 0)
 	for rows.Next() {
 		var row specificAssetRow
-		if scanErr := rows.Scan(&row.id, &row.name, &row.value, &row.referencePayload); scanErr != nil {
+		if scanErr := rows.Scan(&row.id, &row.name, &row.value, &row.semanticIDPayload); scanErr != nil {
 			return nil, common.NewInternalServerError("AASREPO-READSPECIFIC-SCANROW " + scanErr.Error())
 		}
 		rowData = append(rowData, row)
@@ -1314,7 +1314,7 @@ func (s *AssetAdministrationShellDatabase) readSpecificAssetIDsByAssetInformatio
 	for _, row := range rowData {
 		specificAssetID := types.NewSpecificAssetID(row.name, row.value)
 
-		semanticID, hasSemanticID, parseErr := parseSpecificAssetIDReferencePayload(row.referencePayload)
+		semanticID, hasSemanticID, parseErr := parseSpecificAssetIDSemanticIDPayload(row.semanticIDPayload)
 		if parseErr != nil {
 			return nil, common.NewInternalServerError("AASREPO-READSPECIFIC-PARSESEMANTIC " + parseErr.Error())
 		}
@@ -1356,14 +1356,14 @@ func (s *AssetAdministrationShellDatabase) readSpecificAssetIDsByAssetInformatio
 		id                 int64
 		name               string
 		value              string
-		referencePayload   []byte
+		semanticIDPayload  []byte
 	}
 
 	rowData := make([]specificAssetRow, 0)
 	ids := make([]int64, 0)
 	for rows.Next() {
 		var row specificAssetRow
-		if scanErr := rows.Scan(&row.assetInformationID, &row.id, &row.name, &row.value, &row.referencePayload); scanErr != nil {
+		if scanErr := rows.Scan(&row.assetInformationID, &row.id, &row.name, &row.value, &row.semanticIDPayload); scanErr != nil {
 			return nil, common.NewInternalServerError("AASREPO-READSPECIFICBATCH-SCANROW " + scanErr.Error())
 		}
 		rowData = append(rowData, row)
@@ -1390,7 +1390,7 @@ func (s *AssetAdministrationShellDatabase) readSpecificAssetIDsByAssetInformatio
 	for _, row := range rowData {
 		specificAssetID := types.NewSpecificAssetID(row.name, row.value)
 
-		semanticID, hasSemanticID, parseErr := parseSpecificAssetIDReferencePayload(row.referencePayload)
+		semanticID, hasSemanticID, parseErr := parseSpecificAssetIDSemanticIDPayload(row.semanticIDPayload)
 		if parseErr != nil {
 			return nil, common.NewInternalServerError("AASREPO-READSPECIFICBATCH-PARSESEMANTIC " + parseErr.Error())
 		}

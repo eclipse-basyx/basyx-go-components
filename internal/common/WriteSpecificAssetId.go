@@ -113,7 +113,7 @@ func InsertSpecificAssetIDs(
 				return err
 			}
 
-			if err = createSpecificAssetIDReferencePayload(tx, id, val.SemanticID()); err != nil {
+			if err = createSpecificAssetIDSemanticIDPayload(tx, id, val.SemanticID()); err != nil {
 				return err
 			}
 
@@ -125,20 +125,20 @@ func InsertSpecificAssetIDs(
 	return nil
 }
 
-// createSpecificAssetIDReferencePayload stores the optional specific asset ID
-// reference payload in semantic_id_payload.
-func createSpecificAssetIDReferencePayload(tx *sql.Tx, specificAssetID int64, reference types.IReference) error {
+// createSpecificAssetIDSemanticIDPayload stores the optional SpecificAssetID
+// semanticId payload in semantic_id_payload.
+func createSpecificAssetIDSemanticIDPayload(tx *sql.Tx, specificAssetID int64, semanticID types.IReference) error {
 	d := goqu.Dialect(Dialect)
 	insertRecord := goqu.Record{
 		ColSpecificAssetID: specificAssetID,
 	}
 
-	if reference != nil {
-		referencePayload, err := buildReferencePayload(reference)
+	if semanticID != nil {
+		semanticIDPayload, err := buildReferencePayload(semanticID)
 		if err != nil {
 			return err
 		}
-		insertRecord["semantic_id_payload"] = goqu.L("?::jsonb", string(referencePayload))
+		insertRecord["semantic_id_payload"] = goqu.L("?::jsonb", string(semanticIDPayload))
 	}
 
 	sqlStr, args, err := d.Insert(TblSpecificAssetIDPayload).Rows(insertRecord).ToSQL()
