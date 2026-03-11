@@ -899,6 +899,8 @@ func (s *AssetAdministrationShellDatabase) getAssetAdministrationShellMapByDBID(
 	var assetKind sql.NullInt64
 	var globalAssetID sql.NullString
 	var assetType sql.NullString
+	var thumbnailPath sql.NullString
+	var thumbnailContentType sql.NullString
 
 	if queryErr := s.db.QueryRow(querySQL, queryArgs...).Scan(
 		&aasID,
@@ -913,6 +915,8 @@ func (s *AssetAdministrationShellDatabase) getAssetAdministrationShellMapByDBID(
 		&assetKind,
 		&globalAssetID,
 		&assetType,
+		&thumbnailPath,
+		&thumbnailContentType,
 	); queryErr != nil {
 		if queryErr == sql.ErrNoRows {
 			return nil, common.NewErrNotFound("AASREPO-MAPAAS-AASNOTFOUND Asset Administration Shell not found")
@@ -962,6 +966,9 @@ func (s *AssetAdministrationShellDatabase) getAssetAdministrationShellMapByDBID(
 	}
 	if assetType.Valid && assetType.String != "" {
 		assetInfo["assetType"] = assetType.String
+	}
+	if thumbnailMap := buildThumbnailMap(thumbnailPath, thumbnailContentType); len(thumbnailMap) > 0 {
+		assetInfo["thumbnail"] = thumbnailMap
 	}
 
 	specificAssetIDs, specificErr := s.readSpecificAssetIDsByAssetInformationID(ctx, aasDBID)
@@ -1044,6 +1051,8 @@ func (s *AssetAdministrationShellDatabase) getAssetAdministrationShellMapsByDBID
 		assetKind             sql.NullInt64
 		globalAssetID         sql.NullString
 		assetType             sql.NullString
+		thumbnailPath         sql.NullString
+		thumbnailContentType  sql.NullString
 	}
 
 	rows, queryErr := s.db.QueryContext(ctx, querySQL, queryArgs...)
@@ -1072,6 +1081,8 @@ func (s *AssetAdministrationShellDatabase) getAssetAdministrationShellMapsByDBID
 			&row.assetKind,
 			&row.globalAssetID,
 			&row.assetType,
+			&row.thumbnailPath,
+			&row.thumbnailContentType,
 		); scanErr != nil {
 			return nil, common.NewInternalServerError("AASREPO-MAPAASBATCH-SCANROW " + scanErr.Error())
 		}
@@ -1141,6 +1152,9 @@ func (s *AssetAdministrationShellDatabase) getAssetAdministrationShellMapsByDBID
 		}
 		if row.assetType.Valid && row.assetType.String != "" {
 			assetInfo["assetType"] = row.assetType.String
+		}
+		if thumbnailMap := buildThumbnailMap(row.thumbnailPath, row.thumbnailContentType); len(thumbnailMap) > 0 {
+			assetInfo["thumbnail"] = thumbnailMap
 		}
 
 		specificAssetIDs := specificAssetIDsByAASID[aasDBID]
@@ -1225,6 +1239,19 @@ func assignJSONPayload(target map[string]any, key string, payload []byte) error 
 
 	target[key] = jsonValue
 	return nil
+}
+
+func buildThumbnailMap(path sql.NullString, contentType sql.NullString) map[string]any {
+	if !path.Valid || path.String == "" {
+		return nil
+	}
+
+	thumbnail := map[string]any{"path": path.String}
+	if contentType.Valid && contentType.String != "" {
+		thumbnail["contentType"] = contentType.String
+	}
+
+	return thumbnail
 }
 
 // parseSpecificAssetIDSemanticIDPayload parses an optional SpecificAssetID

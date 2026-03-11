@@ -249,6 +249,7 @@ func buildGetAssetAdministrationShellMapByDBIDQuery(dialect *goqu.DialectWrapper
 		From(goqu.T("aas").As("a")).
 		LeftJoin(goqu.T("aas_payload").As("ap"), goqu.On(goqu.I("ap.aas_id").Eq(goqu.I("a.id")))).
 		LeftJoin(goqu.T("asset_information").As("ai"), goqu.On(goqu.I("ai.asset_information_id").Eq(goqu.I("a.id")))).
+		LeftJoin(goqu.T("thumbnail_file_element").As("tfe"), goqu.On(goqu.I("tfe.id").Eq(goqu.I("a.id")))).
 		Select(
 			goqu.I("a.aas_id"),
 			goqu.I("a.id_short"),
@@ -262,6 +263,8 @@ func buildGetAssetAdministrationShellMapByDBIDQuery(dialect *goqu.DialectWrapper
 			goqu.I("ai.asset_kind"),
 			goqu.I("ai.global_asset_id"),
 			goqu.I("ai.asset_type"),
+			goqu.I("tfe.value"),
+			goqu.I("tfe.content_type"),
 		).
 		Where(goqu.I("a.id").Eq(aasDBID)).
 		ToSQL()
@@ -272,6 +275,7 @@ func buildGetAssetAdministrationShellMapsByDBIDsQuery(dialect *goqu.DialectWrapp
 		From(goqu.T("aas").As("a")).
 		LeftJoin(goqu.T("aas_payload").As("ap"), goqu.On(goqu.I("ap.aas_id").Eq(goqu.I("a.id")))).
 		LeftJoin(goqu.T("asset_information").As("ai"), goqu.On(goqu.I("ai.asset_information_id").Eq(goqu.I("a.id")))).
+		LeftJoin(goqu.T("thumbnail_file_element").As("tfe"), goqu.On(goqu.I("tfe.id").Eq(goqu.I("a.id")))).
 		Select(
 			goqu.I("a.id"),
 			goqu.I("a.aas_id"),
@@ -286,6 +290,8 @@ func buildGetAssetAdministrationShellMapsByDBIDsQuery(dialect *goqu.DialectWrapp
 			goqu.I("ai.asset_kind"),
 			goqu.I("ai.global_asset_id"),
 			goqu.I("ai.asset_type"),
+			goqu.I("tfe.value"),
+			goqu.I("tfe.content_type"),
 		).
 		Where(goqu.I("a.id").In(aasDBIDs)).
 		ToSQL()

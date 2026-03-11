@@ -28,6 +28,7 @@ package main
 
 import (
 	"bytes"
+	"database/sql"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -40,6 +41,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/doug-martin/goqu/v9"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/testenv"
 	_ "github.com/lib/pq" // PostgreSQL Treiber
 	"github.com/stretchr/testify/assert"
@@ -47,6 +49,17 @@ import (
 )
 
 const actionDeleteAllAAS = "DELETE_ALL_AAS"
+const defaultIntegrationTestDSN = "postgres://admin:admin123@127.0.0.1:6432/basyxTestDB?sslmode=disable"
+
+var integrationTestDSN = getIntegrationTestDSN()
+
+func getIntegrationTestDSN() string {
+	if dsn := os.Getenv("AASREPOSITORY_INTEGRATION_TEST_DSN"); dsn != "" {
+		return dsn
+	}
+
+	return defaultIntegrationTestDSN
+}
 
 func deleteAllAAS(t *testing.T, runner *testenv.JSONSuiteRunner, stepNumber int) {
 	for {
@@ -165,6 +178,103 @@ func downloadThumbnail(endpoint string) ([]byte, string, int, error) {
 	return body, resp.Header.Get("Content-Type"), resp.StatusCode, nil
 }
 
+func getJSONResponse(endpoint string) (map[string]any, int, error) {
+	req, err := http.NewRequest(http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to create request: %v", err)
+	}
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to send request: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, resp.StatusCode, fmt.Errorf("failed to read response: %v", err)
+	}
+
+	var payload map[string]any
+	if err = json.Unmarshal(body, &payload); err != nil {
+		return nil, resp.StatusCode, fmt.Errorf("failed to unmarshal response: %v", err)
+	}
+
+	return payload, resp.StatusCode, nil
+}
+
+func getThumbnailWithoutFollowingRedirect(endpoint string) (int, string, error) {
+	req, err := http.NewRequest(http.MethodGet, endpoint, nil)
+	if err != nil {
+		return 0, "", fmt.Errorf("failed to create request: %v", err)
+	}
+
+	client := &http.Client{
+		Timeout: 10 * time.Second,
+		CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return 0, "", fmt.Errorf("failed to send request: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	return resp.StatusCode, resp.Header.Get("Location"), nil
+}
+
+func setExternalThumbnailForAAS(aasID string, externalURL string) error {
+	db, err := sql.Open("postgres", integrationTestDSN)
+	if err != nil {
+		return fmt.Errorf("failed to open db connection: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+
+	dialect := goqu.Dialect("postgres")
+
+	selectAASDBIDSQL, selectAASDBIDArgs, selectAASDBIDBuildErr := dialect.
+		From(goqu.T("aas")).
+		Select(goqu.I("id")).
+		Where(goqu.I("aas_id").Eq(aasID)).
+		Limit(1).
+		ToSQL()
+	if selectAASDBIDBuildErr != nil {
+		return fmt.Errorf("failed to build aas id query: %v", selectAASDBIDBuildErr)
+	}
+
+	var aasDBID int64
+	if queryErr := db.QueryRow(selectAASDBIDSQL, selectAASDBIDArgs...).Scan(&aasDBID); queryErr != nil {
+		return fmt.Errorf("failed to query aas db id: %v", queryErr)
+	}
+
+	upsertThumbnailSQL, upsertThumbnailArgs, upsertThumbnailBuildErr := dialect.
+		Insert(goqu.T("thumbnail_file_element")).
+		Rows(goqu.Record{
+			"id":           aasDBID,
+			"content_type": "application/octet-stream",
+			"file_name":    "external-thumbnail",
+			"value":        externalURL,
+		}).
+		OnConflict(goqu.DoUpdate("id", goqu.Record{
+			"content_type": "application/octet-stream",
+			"file_name":    "external-thumbnail",
+			"value":        externalURL,
+		})).
+		ToSQL()
+	if upsertThumbnailBuildErr != nil {
+		return fmt.Errorf("failed to build thumbnail upsert query: %v", upsertThumbnailBuildErr)
+	}
+
+	if _, execErr := db.Exec(upsertThumbnailSQL, upsertThumbnailArgs...); execErr != nil {
+		return fmt.Errorf("failed to upsert thumbnail element: %v", execErr)
+	}
+
+	return nil
+}
+
 // IntegrationTest runs the integration tests based on the config file
 func TestIntegration(t *testing.T) {
 	testenv.RunJSONSuite(t, testenv.JSONSuiteOptions{
@@ -175,7 +285,7 @@ func TestIntegration(t *testing.T) {
 			},
 			testenv.ActionAssertSubmodelAbsent: testenv.NewCheckSubmodelAbsentAction(testenv.CheckSubmodelAbsentOptions{
 				Driver: "postgres",
-				DSN:    "postgres://admin:admin123@127.0.0.1:6432/basyxTestDB?sslmode=disable",
+				DSN:    integrationTestDSN,
 			}),
 		},
 		StepName: func(step testenv.JSONSuiteStep, stepNumber int) string {
@@ -219,7 +329,78 @@ func TestThumbnailAttachmentOperations(t *testing.T) {
 		t.Logf("Thumbnail content verified: %d bytes", len(content))
 	})
 
-	t.Run("3_Delete_Thumbnail", func(t *testing.T) {
+	t.Run("3_Get_AAS_By_ID_Includes_Thumbnail_In_AssetInformation", func(t *testing.T) {
+		aasEndpoint := fmt.Sprintf("%s/shells/%s", baseURL, aasIdentifier)
+		payload, getStatus, getErr := getJSONResponse(aasEndpoint)
+		require.NoError(t, getErr, "AAS retrieval failed")
+		assert.Equal(t, http.StatusOK, getStatus, "Expected 200 OK for AAS retrieval")
+
+		assetInformation, ok := payload["assetInformation"].(map[string]any)
+		require.True(t, ok, "assetInformation should be present")
+
+		thumbnail, ok := assetInformation["thumbnail"].(map[string]any)
+		require.True(t, ok, "assetInformation.thumbnail should be present")
+
+		thumbnailPath, ok := thumbnail["path"].(string)
+		require.True(t, ok, "thumbnail.path should be a string")
+		assert.NotEmpty(t, thumbnailPath, "thumbnail.path should not be empty")
+
+		thumbnailContentType, ok := thumbnail["contentType"].(string)
+		require.True(t, ok, "thumbnail.contentType should be a string")
+		assert.Equal(t, "image/gif", thumbnailContentType, "thumbnail.contentType should match uploaded file")
+	})
+
+	t.Run("4_Get_AAS_List_Includes_Thumbnail_In_AssetInformation", func(t *testing.T) {
+		listEndpoint := fmt.Sprintf("%s/shells", baseURL)
+		payload, getStatus, getErr := getJSONResponse(listEndpoint)
+		require.NoError(t, getErr, "AAS list retrieval failed")
+		assert.Equal(t, http.StatusOK, getStatus, "Expected 200 OK for AAS list retrieval")
+
+		result, ok := payload["result"].([]any)
+		require.True(t, ok, "result should be an array")
+
+		foundAAS := false
+		for _, entry := range result {
+			aasMap, ok := entry.(map[string]any)
+			if !ok {
+				continue
+			}
+			if aasMap["id"] != aasID {
+				continue
+			}
+
+			foundAAS = true
+			assetInformation, ok := aasMap["assetInformation"].(map[string]any)
+			require.True(t, ok, "assetInformation should be present in listed AAS")
+
+			thumbnail, ok := assetInformation["thumbnail"].(map[string]any)
+			require.True(t, ok, "assetInformation.thumbnail should be present in listed AAS")
+
+			thumbnailPath, ok := thumbnail["path"].(string)
+			require.True(t, ok, "thumbnail.path should be a string in listed AAS")
+			assert.NotEmpty(t, thumbnailPath, "thumbnail.path should not be empty in listed AAS")
+
+			thumbnailContentType, ok := thumbnail["contentType"].(string)
+			require.True(t, ok, "thumbnail.contentType should be a string in listed AAS")
+			assert.Equal(t, "image/gif", thumbnailContentType, "thumbnail.contentType should match uploaded file in listed AAS")
+			break
+		}
+
+		assert.True(t, foundAAS, "Expected uploaded AAS to be present in list response")
+	})
+
+	t.Run("5_Get_Thumbnail_Redirects_For_External_URL", func(t *testing.T) {
+		externalThumbnailURL := "https://example.com/assets/thumbs/thumbnail-external.gif"
+		setErr := setExternalThumbnailForAAS(aasID, externalThumbnailURL)
+		require.NoError(t, setErr, "Failed to set external thumbnail URL")
+
+		statusCode, locationHeader, requestErr := getThumbnailWithoutFollowingRedirect(thumbnailEndpoint)
+		require.NoError(t, requestErr, "GET thumbnail request failed")
+		assert.Equal(t, http.StatusFound, statusCode, "Expected 302 Found for external thumbnail URL")
+		assert.Equal(t, externalThumbnailURL, locationHeader, "Expected redirect Location header for external thumbnail URL")
+	})
+
+	t.Run("6_Delete_Thumbnail", func(t *testing.T) {
 		req, reqErr := http.NewRequest(http.MethodDelete, thumbnailEndpoint, nil)
 		require.NoError(t, reqErr, "Failed to create DELETE request")
 
@@ -231,13 +412,13 @@ func TestThumbnailAttachmentOperations(t *testing.T) {
 		assert.Equal(t, http.StatusNoContent, resp.StatusCode, "Expected 204 No Content for thumbnail deletion")
 	})
 
-	t.Run("4_Verify_Thumbnail_Deleted", func(t *testing.T) {
+	t.Run("7_Verify_Thumbnail_Deleted", func(t *testing.T) {
 		_, _, getStatus, getErr := downloadThumbnail(thumbnailEndpoint)
 		require.NoError(t, getErr, "Thumbnail download after delete should not fail at HTTP level")
 		assert.Equal(t, http.StatusNotFound, getStatus, "Expected 404 Not Found after thumbnail deletion")
 	})
 
-	t.Run("5_Upload_Thumbnail_For_NonExisting_AAS", func(t *testing.T) {
+	t.Run("8_Upload_Thumbnail_For_NonExisting_AAS", func(t *testing.T) {
 		nonExistingID := base64.RawStdEncoding.EncodeToString([]byte("https://example.com/ids/aas/non_existing_thumbnail_test"))
 		nonExistingEndpoint := fmt.Sprintf("%s/shells/%s/asset-information/thumbnail", baseURL, nonExistingID)
 
