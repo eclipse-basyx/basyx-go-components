@@ -1229,32 +1229,34 @@ func assignJSONPayload(target map[string]any, key string, payload []byte) error 
 
 // parseSpecificAssetIDReferencePayload parses an optional specific asset ID
 // reference payload and reports whether parsing produced a reference.
-func parseSpecificAssetIDReferencePayload(payload []byte, unmarshalErrorCode string, parseErrorCode string) (types.IReference, bool) {
+func parseSpecificAssetIDReferencePayload(payload []byte) (types.IReference, bool, error) {
 	if len(payload) == 0 {
-		return nil, false
+		return nil, false, nil
 	}
 
 	var jsonable any
 	if err := json.Unmarshal(payload, &jsonable); err != nil {
-		fmt.Fprintf(os.Stderr, "%s %v\n", unmarshalErrorCode, err)
-		return nil, false
+		return nil, false, err
 	}
 
 	if jsonable == nil {
-		return nil, false
+		return nil, false, nil
 	}
 
 	if jsonableMap, ok := jsonable.(map[string]any); ok && len(jsonableMap) == 0 {
-		return nil, false
+		return nil, false, nil
+	}
+
+	if jsonableSlice, ok := jsonable.([]any); ok && len(jsonableSlice) == 0 {
+		return nil, false, nil
 	}
 
 	parsedReference, err := jsonization.ReferenceFromJsonable(jsonable)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "%s %v\n", parseErrorCode, err)
-		return nil, false
+		return nil, false, err
 	}
 
-	return parsedReference, true
+	return parsedReference, true, nil
 }
 
 // readSpecificAssetIDsByAssetInformationID reads and enriches specificAssetIds for an assetInformation record.
@@ -1312,11 +1314,11 @@ func (s *AssetAdministrationShellDatabase) readSpecificAssetIDsByAssetInformatio
 	for _, row := range rowData {
 		specificAssetID := types.NewSpecificAssetID(row.name, row.value)
 
-		if semanticID, hasSemanticID := parseSpecificAssetIDReferencePayload(
-			row.referencePayload,
-			"AASREPO-READSPECIFIC-UNMARSHALSEMANTIC",
-			"AASREPO-READSPECIFIC-PARSESEMANTIC",
-		); hasSemanticID {
+		semanticID, hasSemanticID, parseErr := parseSpecificAssetIDReferencePayload(row.referencePayload)
+		if parseErr != nil {
+			return nil, common.NewInternalServerError("AASREPO-READSPECIFIC-PARSESEMANTIC " + parseErr.Error())
+		}
+		if hasSemanticID {
 			specificAssetID.SetSemanticID(semanticID)
 		}
 
@@ -1388,11 +1390,11 @@ func (s *AssetAdministrationShellDatabase) readSpecificAssetIDsByAssetInformatio
 	for _, row := range rowData {
 		specificAssetID := types.NewSpecificAssetID(row.name, row.value)
 
-		if semanticID, hasSemanticID := parseSpecificAssetIDReferencePayload(
-			row.referencePayload,
-			"AASREPO-READSPECIFICBATCH-UNMARSHALSEMANTIC",
-			"AASREPO-READSPECIFICBATCH-PARSESEMANTIC",
-		); hasSemanticID {
+		semanticID, hasSemanticID, parseErr := parseSpecificAssetIDReferencePayload(row.referencePayload)
+		if parseErr != nil {
+			return nil, common.NewInternalServerError("AASREPO-READSPECIFICBATCH-PARSESEMANTIC " + parseErr.Error())
+		}
+		if hasSemanticID {
 			specificAssetID.SetSemanticID(semanticID)
 		}
 

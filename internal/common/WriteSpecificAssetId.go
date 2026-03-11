@@ -139,8 +139,6 @@ func createSpecificAssetIDReferencePayload(tx *sql.Tx, specificAssetID int64, re
 			return err
 		}
 		insertRecord["semantic_id_payload"] = goqu.L("?::jsonb", string(referencePayload))
-	} else {
-		insertRecord["semantic_id_payload"] = nil
 	}
 
 	sqlStr, args, err := d.Insert(TblSpecificAssetIDPayload).Rows(insertRecord).ToSQL()

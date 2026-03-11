@@ -21,7 +21,37 @@
 		"expectedStatus": 200
 	},
 	{
-		"context": "004.1a - POST /shells - create AAS with specificAssetId without externalSubjectId",
+		"context": "004.1a - POST /shells - create AAS with globalAssetId only",
+		"method": "POST",
+		"endpoint": "http://127.0.0.1:6004/shells",
+		"data": "bodies/post/postAssetAdministrationShellAssetIdsGlobalOnly.json",
+		"shouldMatch": "bodies/post/postAssetAdministrationShellAssetIdsGlobalOnly.json",
+		"expectedStatus": 201
+	},
+	{
+		"context": "004.1b - GET /shells/{aasIdentifier} - globalAssetId only",
+		"method": "GET",
+		"endpoint": "http://127.0.0.1:6004/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzL2Fzc2V0aWRzX2dsb2JhbF9vbmx5",
+		"shouldMatch": "bodies/post/postAssetAdministrationShellAssetIdsGlobalOnly.json",
+		"expectedStatus": 200
+	},
+	{
+		"context": "004.1c - POST /shells - create AAS with globalAssetId and two specificAssetIds",
+		"method": "POST",
+		"endpoint": "http://127.0.0.1:6004/shells",
+		"data": "bodies/post/postAssetAdministrationShellAssetIdsMixedExternalSubjectId.json",
+		"shouldMatch": "bodies/post/postAssetAdministrationShellAssetIdsMixedExternalSubjectId.json",
+		"expectedStatus": 201
+	},
+	{
+		"context": "004.1d - GET /shells/{aasIdentifier} - mixed specificAssetIds with and without externalSubjectId",
+		"method": "GET",
+		"endpoint": "http://127.0.0.1:6004/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzL2Fzc2V0aWRzX21peGVkX3NwZWNpZmlj",
+		"shouldMatch": "bodies/post/postAssetAdministrationShellAssetIdsMixedExternalSubjectId.json",
+		"expectedStatus": 200
+	},
+	{
+		"context": "004.1e - POST /shells - create AAS with specificAssetId without externalSubjectId",
 		"method": "POST",
 		"endpoint": "http://127.0.0.1:6004/shells",
 		"data": "bodies/post/postAssetAdministrationShellSpecificAssetIdWithoutExternalSubjectId.json",
@@ -29,14 +59,14 @@
 		"expectedStatus": 201
 	},
 	{
-		"context": "004.1b - GET /shells/{aasIdentifier} - specificAssetId without externalSubjectId",
+		"context": "004.1f - GET /shells/{aasIdentifier} - specificAssetId without externalSubjectId",
 		"method": "GET",
 		"endpoint": "http://127.0.0.1:6004/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzLzMwMzlfMjM3N180MTIzXzgxMTU",
 		"shouldMatch": "bodies/post/postAssetAdministrationShellSpecificAssetIdWithoutExternalSubjectId.json",
 		"expectedStatus": 200
 	},
 	{
-		"context": "004.1c - GET /shells - no error for specificAssetId without externalSubjectId",
+		"context": "004.1g - GET /shells - no error for all assetIds scenarios",
 		"method": "GET",
 		"endpoint": "http://127.0.0.1:6004/shells",
 		"expectedStatus": 200
