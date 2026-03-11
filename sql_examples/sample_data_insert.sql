@@ -23,9 +23,7 @@ VALUES (1002, 'sm-42', NULL, 1, 'title', 'MultiLanguageProperty', 'sm_42.title')
  (5004, 'sm-42', 5003, 1, 'smc_two', 'SubmodelElementCollection', 'sm_42.smc_one.smc_two'),
  (5003, 'sm-42', NULL, 1, 'smc_one', 'SubmodelElementCollection', 'sm_42.smc_one');
 
-INSERT INTO multilanguage_property (id) VALUES (1002);
-
-INSERT INTO multilanguage_property_value (mlp_id, language, text)
+INSERT INTO multilanguage_property_value (submodel_element_id, language, text)
 VALUES 
   (1002, 'de', 'Temperaturanzeige'),
   (1002, 'en', 'Temperature Display');

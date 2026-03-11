@@ -171,15 +171,16 @@ CREATE TABLE IF NOT EXISTS property_element_payload (
   value_id_payload JSONB DEFAULT '[]'
 );
 
-CREATE TABLE IF NOT EXISTS multilanguage_property (
-  id        BIGINT PRIMARY KEY REFERENCES submodel_element(id) ON DELETE CASCADE,
-  value_id_payload JSONB DEFAULT '[]'
-);
 CREATE TABLE IF NOT EXISTS multilanguage_property_value (
-  id     BIGSERIAL PRIMARY KEY,
-  mlp_id BIGINT NOT NULL REFERENCES multilanguage_property(id) ON DELETE CASCADE,
-  language TEXT NOT NULL,
-  text     TEXT NOT NULL
+  id                  BIGSERIAL PRIMARY KEY,
+  submodel_element_id BIGINT NOT NULL REFERENCES submodel_element(id) ON DELETE CASCADE,
+  language            TEXT NOT NULL,
+  text                TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS multilanguage_property_payload (
+  submodel_element_id BIGINT PRIMARY KEY REFERENCES submodel_element(id) ON DELETE CASCADE,
+  value_id_payload    JSONB DEFAULT '[]'
 );
 
 CREATE TABLE IF NOT EXISTS blob_element (
@@ -556,7 +557,7 @@ CREATE INDEX IF NOT EXISTS ix_sme_roots_page
   ON submodel_element(submodel_id, idshort_path, id)
   WHERE parent_sme_id IS NULL;
 
-CREATE INDEX IF NOT EXISTS ix_mlp_lang      ON multilanguage_property_value(mlp_id, language);
+CREATE INDEX IF NOT EXISTS ix_mlp_lang      ON multilanguage_property_value(submodel_element_id, language);
 CREATE INDEX IF NOT EXISTS ix_mlp_text_trgm ON multilanguage_property_value USING GIN (text gin_trgm_ops);
 CREATE INDEX IF NOT EXISTS ix_file_value_trgm ON file_element USING GIN (value gin_trgm_ops);
 CREATE INDEX IF NOT EXISTS ix_bee_lastupd ON basic_event_element(last_update);
