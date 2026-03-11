@@ -1227,6 +1227,36 @@ func assignJSONPayload(target map[string]any, key string, payload []byte) error 
 	return nil
 }
 
+// parseSpecificAssetIDReferencePayload parses an optional specific asset ID
+// reference payload and reports whether parsing produced a reference.
+func parseSpecificAssetIDReferencePayload(payload []byte, unmarshalErrorCode string, parseErrorCode string) (types.IReference, bool) {
+	if len(payload) == 0 {
+		return nil, false
+	}
+
+	var jsonable any
+	if err := json.Unmarshal(payload, &jsonable); err != nil {
+		fmt.Fprintf(os.Stderr, "%s %v\n", unmarshalErrorCode, err)
+		return nil, false
+	}
+
+	if jsonable == nil {
+		return nil, false
+	}
+
+	if jsonableMap, ok := jsonable.(map[string]any); ok && len(jsonableMap) == 0 {
+		return nil, false
+	}
+
+	parsedReference, err := jsonization.ReferenceFromJsonable(jsonable)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%s %v\n", parseErrorCode, err)
+		return nil, false
+	}
+
+	return parsedReference, true
+}
+
 // readSpecificAssetIDsByAssetInformationID reads and enriches specificAssetIds for an assetInformation record.
 func (s *AssetAdministrationShellDatabase) readSpecificAssetIDsByAssetInformationID(ctx context.Context, assetInformationID int64) ([]types.ISpecificAssetID, error) {
 	dialect := goqu.Dialect("postgres")
@@ -1244,17 +1274,17 @@ func (s *AssetAdministrationShellDatabase) readSpecificAssetIDsByAssetInformatio
 	}()
 
 	type specificAssetRow struct {
-		id              int64
-		name            string
-		value           string
-		semanticPayload []byte
+		id               int64
+		name             string
+		value            string
+		referencePayload []byte
 	}
 
 	rowData := make([]specificAssetRow, 0)
 	ids := make([]int64, 0)
 	for rows.Next() {
 		var row specificAssetRow
-		if scanErr := rows.Scan(&row.id, &row.name, &row.value, &row.semanticPayload); scanErr != nil {
+		if scanErr := rows.Scan(&row.id, &row.name, &row.value, &row.referencePayload); scanErr != nil {
 			return nil, common.NewInternalServerError("AASREPO-READSPECIFIC-SCANROW " + scanErr.Error())
 		}
 		rowData = append(rowData, row)
@@ -1282,16 +1312,12 @@ func (s *AssetAdministrationShellDatabase) readSpecificAssetIDsByAssetInformatio
 	for _, row := range rowData {
 		specificAssetID := types.NewSpecificAssetID(row.name, row.value)
 
-		if len(row.semanticPayload) > 0 {
-			var jsonable any
-			if unmarshalErr := json.Unmarshal(row.semanticPayload, &jsonable); unmarshalErr != nil {
-				return nil, common.NewInternalServerError("AASREPO-READSPECIFIC-UNMARSHALSEMANTIC " + unmarshalErr.Error())
-			}
-			semanticReference, semanticErr := jsonization.ReferenceFromJsonable(jsonable)
-			if semanticErr != nil {
-				return nil, common.NewInternalServerError("AASREPO-READSPECIFIC-PARSESEMANTIC " + semanticErr.Error())
-			}
-			specificAssetID.SetSemanticID(semanticReference)
+		if semanticID, hasSemanticID := parseSpecificAssetIDReferencePayload(
+			row.referencePayload,
+			"AASREPO-READSPECIFIC-UNMARSHALSEMANTIC",
+			"AASREPO-READSPECIFIC-PARSESEMANTIC",
+		); hasSemanticID {
+			specificAssetID.SetSemanticID(semanticID)
 		}
 
 		specificAssetID.SetExternalSubjectID(externalSubjectByID[row.id])
@@ -1328,14 +1354,14 @@ func (s *AssetAdministrationShellDatabase) readSpecificAssetIDsByAssetInformatio
 		id                 int64
 		name               string
 		value              string
-		semanticPayload    []byte
+		referencePayload   []byte
 	}
 
 	rowData := make([]specificAssetRow, 0)
 	ids := make([]int64, 0)
 	for rows.Next() {
 		var row specificAssetRow
-		if scanErr := rows.Scan(&row.assetInformationID, &row.id, &row.name, &row.value, &row.semanticPayload); scanErr != nil {
+		if scanErr := rows.Scan(&row.assetInformationID, &row.id, &row.name, &row.value, &row.referencePayload); scanErr != nil {
 			return nil, common.NewInternalServerError("AASREPO-READSPECIFICBATCH-SCANROW " + scanErr.Error())
 		}
 		rowData = append(rowData, row)
@@ -1362,16 +1388,12 @@ func (s *AssetAdministrationShellDatabase) readSpecificAssetIDsByAssetInformatio
 	for _, row := range rowData {
 		specificAssetID := types.NewSpecificAssetID(row.name, row.value)
 
-		if len(row.semanticPayload) > 0 {
-			var jsonable any
-			if unmarshalErr := json.Unmarshal(row.semanticPayload, &jsonable); unmarshalErr != nil {
-				return nil, common.NewInternalServerError("AASREPO-READSPECIFICBATCH-UNMARSHALSEMANTIC " + unmarshalErr.Error())
-			}
-			semanticReference, semanticErr := jsonization.ReferenceFromJsonable(jsonable)
-			if semanticErr != nil {
-				return nil, common.NewInternalServerError("AASREPO-READSPECIFICBATCH-PARSESEMANTIC " + semanticErr.Error())
-			}
-			specificAssetID.SetSemanticID(semanticReference)
+		if semanticID, hasSemanticID := parseSpecificAssetIDReferencePayload(
+			row.referencePayload,
+			"AASREPO-READSPECIFICBATCH-UNMARSHALSEMANTIC",
+			"AASREPO-READSPECIFICBATCH-PARSESEMANTIC",
+		); hasSemanticID {
+			specificAssetID.SetSemanticID(semanticID)
 		}
 
 		specificAssetID.SetExternalSubjectID(externalSubjectByID[row.id])

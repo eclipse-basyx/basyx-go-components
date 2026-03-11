@@ -21,6 +21,31 @@
 		"expectedStatus": 200
 	},
 	{
+		"context": "004.1a - POST /shells - create AAS with specificAssetId without externalSubjectId",
+		"method": "POST",
+		"endpoint": "http://127.0.0.1:6004/shells",
+		"data": "bodies/post/postAssetAdministrationShellSpecificAssetIdWithoutExternalSubjectId.json",
+		"shouldMatch": "bodies/post/postAssetAdministrationShellSpecificAssetIdWithoutExternalSubjectId.json",
+		"expectedStatus": 201
+	},
+	{
+		"context": "004.1b - GET /shells/{aasIdentifier} - specificAssetId without externalSubjectId",
+		"method": "GET",
+		"endpoint": "http://127.0.0.1:6004/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzLzMwMzlfMjM3N180MTIzXzgxMTU",
+		"shouldMatch": "bodies/post/postAssetAdministrationShellSpecificAssetIdWithoutExternalSubjectId.json",
+		"expectedStatus": 200
+	},
+	{
+		"context": "004.1c - GET /shells - no error for specificAssetId without externalSubjectId",
+		"method": "GET",
+		"endpoint": "http://127.0.0.1:6004/shells",
+		"expectedStatus": 200
+	},
+	{
+		"context": "00A.1 - Cleanup: Delete All AAS - ACTION DELETE_ALL_AAS",
+		"action": "DELETE_ALL_AAS"
+	},
+	{
 		"context": "004.2 - POST /shells - create AAS for filter test",
 		"method": "POST",
 		"endpoint": "http://127.0.0.1:6004/shells",
