@@ -14,7 +14,6 @@ package api
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"net/http"
 	"os"
@@ -147,7 +146,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAssetAdministration
 
 	aasMap, err := s.assetAdministrationShellBackend.GetAssetAdministrationShellByID(ctx, decodedIdentifier)
 	if err != nil {
-		if common.IsErrNotFound(err) || errors.Is(err, sql.ErrNoRows) {
+		if common.IsErrNotFound(err) {
 			return newAPIErrorResponse(err, http.StatusNotFound, operation, "AssetAdministrationShellNotFound"), nil
 		}
 		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetAssetAdministrationShellByID"), err
@@ -201,7 +200,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) DeleteAssetAdministrat
 
 	err := s.assetAdministrationShellBackend.DeleteAssetAdministrationShellByID(decodedIdentifier)
 	if err != nil {
-		if common.IsErrNotFound(err) || errors.Is(err, sql.ErrNoRows) {
+		if common.IsErrNotFound(err) {
 			return newAPIErrorResponse(err, http.StatusNotFound, operation, "AssetAdministrationShellNotFound"), nil
 		}
 		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "DeleteAssetAdministrationShellByID"), err
@@ -222,7 +221,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAssetAdministration
 
 	reference, err := s.assetAdministrationShellBackend.GetAssetAdministrationShellReferenceByID(decodedIdentifier)
 	if err != nil {
-		if common.IsErrNotFound(err) || errors.Is(err, sql.ErrNoRows) {
+		if common.IsErrNotFound(err) {
 			return newAPIErrorResponse(err, http.StatusNotFound, operation, "AssetAdministrationShellNotFound"), nil
 		}
 		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetAssetAdministrationShellReferenceByID"), err
@@ -248,7 +247,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAssetInformationAas
 
 	assetInformation, err := s.assetAdministrationShellBackend.GetAssetInformationByAASID(decodedIdentifier)
 	if err != nil {
-		if common.IsErrNotFound(err) || errors.Is(err, sql.ErrNoRows) {
+		if common.IsErrNotFound(err) {
 			return newAPIErrorResponse(err, http.StatusNotFound, operation, "AssetAdministrationShellNotFound"), nil
 		}
 		return newAPIErrorResponse(err, http.StatusInternalServerError, operation, "GetAssetInformationByAASID"), err
@@ -269,7 +268,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) PutAssetInformationAas
 
 	err := s.assetAdministrationShellBackend.PutAssetInformationByAASID(decodedIdentifier, assetInformation)
 	if err != nil {
-		if common.IsErrNotFound(err) || errors.Is(err, sql.ErrNoRows) {
+		if common.IsErrNotFound(err) {
 			return newAPIErrorResponse(err, http.StatusNotFound, operation, "AssetAdministrationShellNotFound"), nil
 		}
 		if common.IsErrBadRequest(err) {
@@ -293,7 +292,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetThumbnailAasReposit
 
 	fileContent, contentType, fileName, thumbnailPath, err := s.assetAdministrationShellBackend.GetThumbnailByAASID(decodedIdentifier)
 	if err != nil {
-		if common.IsErrNotFound(err) || errors.Is(err, sql.ErrNoRows) {
+		if common.IsErrNotFound(err) {
 			return newAPIErrorResponse(err, http.StatusNotFound, operation, "ThumbnailNotFound"), nil
 		}
 		if common.IsErrBadRequest(err) {
@@ -325,7 +324,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) PutThumbnailAasReposit
 
 	err := s.assetAdministrationShellBackend.PutThumbnailByAASID(decodedIdentifier, fileName, file)
 	if err != nil {
-		if common.IsErrNotFound(err) || errors.Is(err, sql.ErrNoRows) {
+		if common.IsErrNotFound(err) {
 			return newAPIErrorResponse(err, http.StatusNotFound, operation, "AssetAdministrationShellNotFound"), nil
 		}
 		if common.IsErrBadRequest(err) {
@@ -349,7 +348,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) DeleteThumbnailAasRepo
 
 	err := s.assetAdministrationShellBackend.DeleteThumbnailByAASID(decodedIdentifier)
 	if err != nil {
-		if common.IsErrNotFound(err) || errors.Is(err, sql.ErrNoRows) {
+		if common.IsErrNotFound(err) {
 			return newAPIErrorResponse(err, http.StatusNotFound, operation, "ThumbnailNotFound"), nil
 		}
 		if common.IsErrBadRequest(err) {
@@ -378,7 +377,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllSubmodelReferenc
 
 	references, nextCursor, err := s.assetAdministrationShellBackend.GetAllSubmodelReferencesByAASID(decodedIdentifier, limit, decodedCursor)
 	if err != nil {
-		if common.IsErrNotFound(err) || errors.Is(err, sql.ErrNoRows) {
+		if common.IsErrNotFound(err) {
 			return newAPIErrorResponse(err, http.StatusNotFound, operation, "AssetAdministrationShellNotFound"), nil
 		}
 		if common.IsErrBadRequest(err) {
@@ -412,7 +411,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) PostSubmodelReferenceA
 	}
 
 	if err := s.assetAdministrationShellBackend.CreateSubmodelReferenceInAssetAdministrationShell(decodedAssetAdministrationShellIdentifier, reference); err != nil {
-		if common.IsErrNotFound(err) || errors.Is(err, sql.ErrNoRows) {
+		if common.IsErrNotFound(err) {
 			return newAPIErrorResponse(err, http.StatusNotFound, operation, "AssetAdministrationShellNotFound"), nil
 		}
 		if common.IsErrConflict(err) {
@@ -449,7 +448,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) DeleteSubmodelReferenc
 
 	err := s.assetAdministrationShellBackend.DeleteSubmodelReferenceInAssetAdministrationShell(decodedAASIdentifier, decodedSubmodelIdentifier)
 	if err != nil {
-		if common.IsErrNotFound(err) || errors.Is(err, sql.ErrNoRows) {
+		if common.IsErrNotFound(err) {
 			return newAPIErrorResponse(err, http.StatusNotFound, operation, "SubmodelReferenceNotFound"), nil
 		}
 		if common.IsErrBadRequest(err) {
