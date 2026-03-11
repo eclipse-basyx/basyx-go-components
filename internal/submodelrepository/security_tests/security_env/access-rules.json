@@ -42,6 +42,15 @@
       { "name": "demo_list_item_route", "objects": [
         { "ROUTE": "/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/ExampleSubmodelElementCollection.ExampleSubmodelElementListOrdered[0]" }
       ]},
+      { "name": "demo_multilanguage_property_route", "objects": [
+        { "ROUTE": "/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/ExampleSubmodelElementCollection.ExampleSubmodelElementListOrdered[1]" }
+      ]},
+      { "name": "demo_multilanguage_property_route_false", "objects": [
+        { "ROUTE": "/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/ExampleSubmodelElementCollection.ExampleSubmodelElementListOrdered[1]" }
+      ]},
+      { "name": "demo_property_without_language_route", "objects": [
+        { "ROUTE": "/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/ExampleSubmodelElementCollection.ExampleSubmodelElementListOrdered[0]" }
+      ]},
       { "name": "demo_security_allowed_property_route", "objects": [
         { "ROUTE": "/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/SecurityAllowedProperty" }
       ]},
@@ -116,6 +125,25 @@
           { "$eq": [ { "$field": "$sme#valueType" }, { "$strVal": "xs:string" } ] }
         ]
       }},
+      { "name": "editor_member_any_sme_language_de", "formula": {
+        "$and": [
+          { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "editor" } ] },
+          { "$ge": [ { "$numCast": { "$attribute": { "CLAIM": "clear" } } }, { "$numVal": 1 } ] },
+          { "$eq": [ { "$field": "$sme#language" }, { "$strVal": "de" } ] }
+        ]
+      }},
+      { "name": "editor_any_sme_language_fr", "formula": {
+        "$and": [
+          { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "editor" } ] },
+          { "$eq": [ { "$field": "$sme#language" }, { "$strVal": "fr" } ] }
+        ]
+      }},
+      { "name": "editor_any_property_language_de", "formula": {
+        "$and": [
+          { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "editor" } ] },
+          { "$eq": [ { "$field": "$sme#language" }, { "$strVal": "de" } ] }
+        ]
+      }},
       { "name": "editor_create_allowed_submodel", "formula": {
         "$and": [
           { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "editor" } ] },
@@ -158,6 +186,9 @@
 
       { "USEACL": "read_member", "USEOBJECTS": [ "demo_relationship_referable" ], "USEFORMULA": "editor_member_path_index_relationship_semanticid" },
       { "USEACL": "read_member", "USEOBJECTS": [ "demo_list_item_route" ], "USEFORMULA": "editor_member_any_sme_valuetype" },
+      { "USEACL": "read_member", "USEOBJECTS": [ "demo_multilanguage_property_route" ], "USEFORMULA": "editor_member_any_sme_language_de" },
+      { "USEACL": "read_role", "USEOBJECTS": [ "demo_multilanguage_property_route_false" ], "USEFORMULA": "editor_any_sme_language_fr" },
+      { "USEACL": "read_role", "USEOBJECTS": [ "demo_property_without_language_route" ], "USEFORMULA": "editor_any_property_language_de" },
 
       { "USEACL": "create_role", "USEOBJECTS": [ "demo_submodels_route" ], "USEFORMULA": "editor_create_allowed_submodel" },
       { "USEACL": "create_role", "USEOBJECTS": [ "demo_submodel_elements_route" ], "USEFORMULA": "editor_create_allowed_sme" },

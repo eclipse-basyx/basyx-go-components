@@ -514,6 +514,12 @@ func InsertSubmodelElements(db *sql.DB, submodelID string, elements []types.ISub
 		return nil, err
 	}
 
+	mlpPayloadErr := insertMultiLanguagePropertyPayloadRows(localTx, dialect, nodes)
+	if mlpPayloadErr != nil {
+		err = mlpPayloadErr
+		return nil, err
+	}
+
 	propertyPayloadErr := insertPropertyPayloadRows(localTx, dialect, nodes)
 	if propertyPayloadErr != nil {
 		err = propertyPayloadErr

@@ -165,7 +165,7 @@ func normalizeRoot(root string) string {
 func joinPlanConfigForSM() JoinPlanConfig {
 	return JoinPlanConfig{
 		PreferredBase: "s",
-		BaseAliases:   []string{"s", "semantic_id_reference", "semantic_id_reference_key", "submodel_element", "property_element", "multilanguage_property", "multilanguage_property_value", "sme_semantic_id_reference", "sme_semantic_id_reference_key"},
+		BaseAliases:   []string{"s", "semantic_id_reference", "semantic_id_reference_key", "submodel_element", "property_element", "multilanguage_property_value", "sme_semantic_id_reference", "sme_semantic_id_reference_key"},
 		Rules: map[string]existsJoinRule{
 			"s": {
 				Alias: "s",
@@ -214,23 +214,13 @@ func joinPlanConfigForSM() JoinPlanConfig {
 					)
 				},
 			},
-			"multilanguage_property": {
-				Alias: "multilanguage_property",
+			"multilanguage_property_value": {
+				Alias: "multilanguage_property_value",
 				Deps:  []string{"submodel_element"},
 				Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
 					return ds.LeftJoin(
-						goqu.T("multilanguage_property"),
-						goqu.On(goqu.I("multilanguage_property.id").Eq(goqu.I("submodel_element.id"))),
-					)
-				},
-			},
-			"multilanguage_property_value": {
-				Alias: "multilanguage_property_value",
-				Deps:  []string{"multilanguage_property"},
-				Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
-					return ds.LeftJoin(
 						goqu.T("multilanguage_property_value"),
-						goqu.On(goqu.I("multilanguage_property_value.mlp_id").Eq(goqu.I("multilanguage_property.id"))),
+						goqu.On(goqu.I("multilanguage_property_value.submodel_element_id").Eq(goqu.I("submodel_element.id"))),
 					)
 				},
 			},
@@ -267,8 +257,6 @@ func joinPlanConfigForSM() JoinPlanConfig {
 				return "submodel_element", true
 			case "property_element":
 				return "property_element", true
-			case "multilanguage_property":
-				return "multilanguage_property", true
 			case "multilanguage_property_value":
 				return "multilanguage_property_value", true
 			case "sme_semantic_id_reference":
@@ -331,7 +319,7 @@ func joinPlanConfigForSMDesc() JoinPlanConfig {
 func joinPlanConfigForSME() JoinPlanConfig {
 	return JoinPlanConfig{
 		PreferredBase: "submodel_element",
-		BaseAliases:   []string{"submodel_element", "submodel", "property_element", "semantic_id_reference", "semantic_id_reference_key", "sme_semantic_id_reference", "sme_semantic_id_reference_key"},
+		BaseAliases:   []string{"submodel_element", "submodel", "property_element", "multilanguage_property_value", "semantic_id_reference", "semantic_id_reference_key", "sme_semantic_id_reference", "sme_semantic_id_reference_key"},
 		Rules: map[string]existsJoinRule{
 			"submodel_element": {
 				Alias: "submodel_element",
@@ -357,6 +345,16 @@ func joinPlanConfigForSME() JoinPlanConfig {
 					return ds.Join(
 						goqu.T("property_element").As("property_element"),
 						goqu.On(goqu.I("property_element.id").Eq(goqu.I("submodel_element.id"))),
+					)
+				},
+			},
+			"multilanguage_property_value": {
+				Alias: "multilanguage_property_value",
+				Deps:  []string{"submodel_element"},
+				Apply: func(ds *goqu.SelectDataset) *goqu.SelectDataset {
+					return ds.Join(
+						goqu.T("multilanguage_property_value").As("multilanguage_property_value"),
+						goqu.On(goqu.I("multilanguage_property_value.submodel_element_id").Eq(goqu.I("submodel_element.id"))),
 					)
 				},
 			},
@@ -409,6 +407,8 @@ func joinPlanConfigForSME() JoinPlanConfig {
 				return "submodel", true
 			case "property_element":
 				return "property_element", true
+			case "multilanguage_property_value":
+				return "multilanguage_property_value", true
 			case "semantic_id_reference":
 				return "submodel_semantic_id_reference", true
 			case "semantic_id_reference_key":

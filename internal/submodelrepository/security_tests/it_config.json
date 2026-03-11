@@ -126,7 +126,7 @@
     "token": { "user": "userx", "password": "pwd" },
     "method": "GET",
     "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/ExampleSubmodelElementCollection.ExampleSubmodelElementListOrdered[0]",
-    "expectedStatus": 403
+    "expectedStatus": 404
   },
   {
     "context": "GET nested relationship SME - usery allowed via indexed idShortPath field",
@@ -143,6 +143,27 @@
     "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/ExampleSubmodelElementCollection.ExampleSubmodelElementListOrdered[0]",
     "shouldMatch": "expected/expectedDemoListItem0.json",
     "expectedStatus": 200
+  },
+  {
+    "context": "GET multilanguage property - usery allowed via $sme# language existential",
+    "token": { "user": "usery", "password": "pwd" },
+    "method": "GET",
+    "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/ExampleSubmodelElementCollection.ExampleSubmodelElementListOrdered[1]",
+    "expectedStatus": 200
+  },
+  {
+    "context": "GET multilanguage property - userx denied via $sme# language existential (false formula)",
+    "token": { "user": "userx", "password": "pwd" },
+    "method": "GET",
+    "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/ExampleSubmodelElementCollection.ExampleSubmodelElementListOrdered[1]",
+    "expectedStatus": 404
+  },
+  {
+    "context": "GET property without language - userx denied via $sme# language existential (missing language field)",
+    "token": { "user": "userx", "password": "pwd" },
+    "method": "GET",
+    "endpoint": "http://localhost:6004/submodels/aHR0cDovL2llc2UuZnJhdW5ob2Zlci5kZS9pZC9zbS9EZW1vU3VibW9kZWw/submodel-elements/ExampleSubmodelElementCollection.ExampleSubmodelElementListOrdered[0]",
+    "expectedStatus": 404
   },
   {
     "context": "GET /submodels - usera formula filtered",
