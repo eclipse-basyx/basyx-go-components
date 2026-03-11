@@ -49,7 +49,17 @@ import (
 )
 
 const actionDeleteAllAAS = "DELETE_ALL_AAS"
-const integrationTestDSN = "postgres://admin:admin123@127.0.0.1:6432/basyxTestDB?sslmode=disable"
+const defaultIntegrationTestDSN = "postgres://admin:admin123@127.0.0.1:6432/basyxTestDB?sslmode=disable"
+
+var integrationTestDSN = getIntegrationTestDSN()
+
+func getIntegrationTestDSN() string {
+	if dsn := os.Getenv("AASREPOSITORY_INTEGRATION_TEST_DSN"); dsn != "" {
+		return dsn
+	}
+
+	return defaultIntegrationTestDSN
+}
 
 func deleteAllAAS(t *testing.T, runner *testenv.JSONSuiteRunner, stepNumber int) {
 	for {
@@ -275,7 +285,7 @@ func TestIntegration(t *testing.T) {
 			},
 			testenv.ActionAssertSubmodelAbsent: testenv.NewCheckSubmodelAbsentAction(testenv.CheckSubmodelAbsentOptions{
 				Driver: "postgres",
-				DSN:    "postgres://admin:admin123@127.0.0.1:6432/basyxTestDB?sslmode=disable",
+				DSN:    integrationTestDSN,
 			}),
 		},
 		StepName: func(step testenv.JSONSuiteStep, stepNumber int) string {
