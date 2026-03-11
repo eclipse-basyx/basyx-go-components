@@ -51,7 +51,37 @@
 		"expectedStatus": 200
 	},
 	{
-		"context": "004.1e - POST /shells - create AAS with specificAssetId without externalSubjectId",
+		"context": "004.1e - POST /shells - create AAS with specificAssetId with semanticId",
+		"method": "POST",
+		"endpoint": "http://127.0.0.1:6004/shells",
+		"data": "bodies/post/postAssetAdministrationShellSpecificAssetIdWithSemanticId.json",
+		"shouldMatch": "bodies/post/postAssetAdministrationShellSpecificAssetIdWithSemanticId.json",
+		"expectedStatus": 201
+	},
+	{
+		"context": "004.1f - GET /shells/{aasIdentifier} - specificAssetId with semanticId",
+		"method": "GET",
+		"endpoint": "http://127.0.0.1:6004/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzL3dpdGhTZW1hbnRpY0lk",
+		"shouldMatch": "bodies/post/postAssetAdministrationShellSpecificAssetIdWithSemanticId.json",
+		"expectedStatus": 200
+	},
+	{
+		"context": "004.1g - POST /shells - create AAS with specificAssetId with supplementalSemanticIds",
+		"method": "POST",
+		"endpoint": "http://127.0.0.1:6004/shells",
+		"data": "bodies/post/postAssetAdministrationShellSpecificAssetIdWithSupplementalSemanticIds.json",
+		"shouldMatch": "bodies/post/postAssetAdministrationShellSpecificAssetIdWithSupplementalSemanticIds.json",
+		"expectedStatus": 201
+	},
+	{
+		"context": "004.1h - GET /shells/{aasIdentifier} - specificAssetId with supplementalSemanticIds",
+		"method": "GET",
+		"endpoint": "http://127.0.0.1:6004/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzL3dpdGhTdXBwbGVtZW50YWxTZW1hbnRpY0lkcw",
+		"shouldMatch": "bodies/post/postAssetAdministrationShellSpecificAssetIdWithSupplementalSemanticIds.json",
+		"expectedStatus": 200
+	},
+	{
+		"context": "004.1i - POST /shells - create AAS with specificAssetId without semanticId and without externalSubjectId",
 		"method": "POST",
 		"endpoint": "http://127.0.0.1:6004/shells",
 		"data": "bodies/post/postAssetAdministrationShellSpecificAssetIdWithoutExternalSubjectId.json",
@@ -59,14 +89,29 @@
 		"expectedStatus": 201
 	},
 	{
-		"context": "004.1f - GET /shells/{aasIdentifier} - specificAssetId without externalSubjectId",
+		"context": "004.1j - GET /shells/{aasIdentifier} - specificAssetId without semanticId and without externalSubjectId",
 		"method": "GET",
 		"endpoint": "http://127.0.0.1:6004/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzLzMwMzlfMjM3N180MTIzXzgxMTU",
 		"shouldMatch": "bodies/post/postAssetAdministrationShellSpecificAssetIdWithoutExternalSubjectId.json",
 		"expectedStatus": 200
 	},
 	{
-		"context": "004.1g - GET /shells - no error for all assetIds scenarios",
+		"context": "004.1k - POST /shells - create AAS with specificAssetId without semanticId and with externalSubjectId",
+		"method": "POST",
+		"endpoint": "http://127.0.0.1:6004/shells",
+		"data": "bodies/post/postAssetAdministrationShellSpecificAssetIdWithoutSemanticIdWithExternalSubjectId.json",
+		"shouldMatch": "bodies/post/postAssetAdministrationShellSpecificAssetIdWithoutSemanticIdWithExternalSubjectId.json",
+		"expectedStatus": 201
+	},
+	{
+		"context": "004.1l - GET /shells/{aasIdentifier} - specificAssetId without semanticId and with externalSubjectId",
+		"method": "GET",
+		"endpoint": "http://127.0.0.1:6004/shells/aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzL25vU2VtYW50aWNJZFdpdGhFeHRlcm5hbFN1YmplY3Q",
+		"shouldMatch": "bodies/post/postAssetAdministrationShellSpecificAssetIdWithoutSemanticIdWithExternalSubjectId.json",
+		"expectedStatus": 200
+	},
+	{
+		"context": "004.1m - GET /shells - no error for all assetIds scenarios",
 		"method": "GET",
 		"endpoint": "http://127.0.0.1:6004/shells",
 		"expectedStatus": 200

@@ -1,0 +1,34 @@
+{
+  "id": "https://example.com/ids/aas/withSupplementalSemanticIds",
+  "idShort": "AASWithSpecificAssetSupplementalSemanticIds",
+  "assetInformation": {
+    "assetKind": "Instance",
+    "specificAssetIds": [
+      {
+        "name": "specific-with-supplemental-semantic-ids",
+        "value": "value-with-supplemental-semantic-ids",
+        "supplementalSemanticIds": [
+          {
+            "type": "ExternalReference",
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "https://example.com/ids/supplementalSemanticId/one"
+              }
+            ]
+          },
+          {
+            "type": "ExternalReference",
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "https://example.com/ids/supplementalSemanticId/two"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "modelType": "AssetAdministrationShell"
+}
