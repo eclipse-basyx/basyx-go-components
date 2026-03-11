@@ -1,0 +1,16 @@
+{
+    "paging_metadata": {
+        "cursor": "aHR0cHM6Ly9leGFtcGxlLmNvbS9pZHMvYWFzLzczMDFfMzE1MF85NDQyXzc4NDk"
+    },
+    "result": [
+        {
+            "keys": [
+                {
+                    "type": "AssetAdministrationShell",
+                    "value": "https://example.com/ids/aas/3494_2120_3062_6532"
+                }
+            ],
+            "type": "ModelReference"
+        }
+    ]
+}

@@ -1,0 +1,14 @@
+{
+    "paging_metadata": {},
+    "result": [
+        {
+            "keys": [
+                {
+                    "type": "AssetAdministrationShell",
+                    "value": "https://example.com/ids/aas/7301_3150_9442_7849"
+                }
+            ],
+            "type": "ModelReference"
+        }
+    ]
+}

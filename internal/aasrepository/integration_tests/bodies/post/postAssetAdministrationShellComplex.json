@@ -1,0 +1,230 @@
+{
+  "extensions": [
+    {
+      "semanticId": {
+        "type": "ExternalReference",
+        "keys": [
+          {
+            "type": "GlobalReference",
+            "value": "https://admin-shell.io/SubmodelTemplates/smt-attribute-set/v1/0"
+          }
+        ]
+      },
+      "name": "smt-attrtibute-set",
+      "valueType": "xs:string",
+      "value": "{\r\n  \u0022SmeCardinality\u0022: \u0022One\u0022,\r\n  \u0022EitherOr\u0022: \u0022idEqClass\u0022,\r\n  \u0022InitialValue\u0022: \u00221\u0022,\r\n  \u0022DefaultValue\u0022: \u00220\u0022,\r\n  \u0022ExampleValue\u0022: \u002211\u0022,\r\n  \u0022AllowedRange\u0022: \u0022(0,20)\u0022,\r\n  \u0022AllowedIdShort\u0022: \u0022\u0022,\r\n  \u0022AllowedValue\u0022: \u0022\u0022,\r\n  \u0022RequiredLang\u0022: \u0022\u0022,\r\n  \u0022AccessMode\u0022: \u0022ReadWrite\u0022,\r\n  \u0022IsSubmodel\u0022: false\r\n}"
+    }
+  ],
+  "idShort": "testAAS",
+  "displayName": [
+    {
+      "language": "en",
+      "text": "Example AAS"
+    },
+    {
+      "language": "de",
+      "text": "Beispiel AAS"
+    }
+  ],
+  "description": [
+    {
+      "language": "en",
+      "text": "It\u0027s just an example AAS"
+    },
+    {
+      "language": "de",
+      "text": "Nur eine Beispiel-AAS"
+    }
+  ],
+  "administration": {
+    "version": "1",
+    "revision": "1",
+    "creator": {
+      "type": "ExternalReference",
+      "keys": [
+        {
+          "type": "GlobalReference",
+          "value": "https://example.com"
+        }
+      ]
+    },
+    "templateId": "https://example.com/ids/templateId"
+  },
+  "id": "https://example.com/ids/aas/3494_2120_3062_6532",
+  "embeddedDataSpecifications": [
+    {
+      "dataSpecification": {
+        "type": "ExternalReference",
+        "keys": [
+          {
+            "type": "GlobalReference",
+            "value": "https://example.com/ids/dataSpec"
+          }
+        ]
+      },
+      "dataSpecificationContent": {
+        "modelType": "DataSpecificationIec61360",
+        "preferredName": [
+          {
+            "language": "en",
+            "text": "IEC 61360-2 Data Specification"
+          }
+        ],
+        "shortName": [
+          {
+            "language": "en",
+            "text": "IEC 61360-2"
+          }
+        ],
+        "unit": "Kiloohm",
+        "unitId": {
+          "keys": [
+            {
+              "type": "GlobalReference",
+              "value": "http://www.iec.ch/TC13JWG1/GA/GA13/GA13_1036"
+            }
+          ],
+          "type": "ExternalReference",
+          "referredSemanticId": {
+            "type": "ExternalReference",
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental2"
+              }
+            ],
+            "referredSemanticId": {
+              "type": "ExternalReference",
+              "keys": [
+                {
+                  "type": "GlobalReference",
+                  "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental3"
+                }
+              ]
+            }
+          }
+        },
+        "sourceOfDefinition": "IEC 61360-2",
+        "symbol": "kOhm",
+        "dataType": "REAL_COUNT",
+        "definition": [
+          {
+            "language": "en",
+            "text": "Data Specification according to IEC 61360-2"
+          }
+        ],
+        "valueFormat": "##.##",
+        "valueList": {
+          "valueReferencePairs": [
+            {
+              "value": "100",
+              "valueId": {
+                "keys": [
+                  {
+                    "type": "GlobalReference",
+                    "value": "100"
+                  }
+                ],
+                "type": "ExternalReference",
+                "referredSemanticId": {
+                  "type": "ExternalReference",
+                  "keys": [
+                    {
+                      "type": "GlobalReference",
+                      "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental2"
+                    }
+                  ],
+                  "referredSemanticId": {
+                    "type": "ExternalReference",
+                    "keys": [
+                      {
+                        "type": "GlobalReference",
+                        "value": "http://acplt.org/SubmodelTemplates/AssetIdentificationSupplemental3"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "levelType": {
+          "min": true,
+          "nom": true,
+          "typ": true,
+          "max": true
+        }
+      }
+    }
+  ],
+  "derivedFrom": {
+    "type": "ModelReference",
+    "keys": [
+      {
+        "type": "AssetAdministrationShell",
+        "value": "https://example.com/ids/derivedFrom"
+      }
+    ]
+  },
+  "assetInformation": {
+    "assetKind": "Instance",
+    "globalAssetId": "assetIdValue",
+    "specificAssetIds": [
+      {
+        "semanticId": {
+          "type": "ExternalReference",
+          "keys": [
+            {
+              "type": "GlobalReference",
+              "value": "https://example.com/ids/semanticId"
+            }
+          ]
+        },
+        "supplementalSemanticIds": [
+          {
+            "type": "ExternalReference",
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "https://example.com/ids/supplementalSemanticId"
+              }
+            ],
+            "referredSemanticId": {
+              "type": "ExternalReference",
+              "keys": [
+                {
+                  "type": "GlobalReference",
+                  "value": "https://example.com/ids/referredSemanticId"
+                }
+              ]
+            }
+          }
+        ],
+        "name": "specificAssetIdName",
+        "value": "specificAssetIdValue",
+        "externalSubjectId": {
+          "type": "ExternalReference",
+          "keys": [
+            {
+              "type": "GlobalReference",
+              "value": "https://example.com/ids/externalSubjectId"
+            }
+          ]
+        }
+      }
+    ],
+    "assetType": "assetType"
+  },
+  "submodels": [
+    {
+      "type": "ModelReference",
+      "keys": [
+        {
+          "type": "Submodel",
+          "value": "https://example.com/ids/sm/4031_3120_3062_0255"
+        }
+      ]
+    }
+  ],
+  "modelType": "AssetAdministrationShell"
+}

@@ -1,0 +1,9 @@
+{
+    "keys": [
+        {
+            "type": "AssetAdministrationShell",
+            "value": "https://example.com/ids/aas/3494_2120_3062_6532"
+        }
+    ],
+    "type": "ModelReference"
+}

@@ -51,7 +51,7 @@ func (c *DescriptionAPIAPIController) Routes() Routes {
 	return Routes{
 		"GetSelfDescription": Route{
 			strings.ToUpper("Get"),
-			"/api/v3/description",
+			"/description",
 			c.GetSelfDescription,
 		},
 	}

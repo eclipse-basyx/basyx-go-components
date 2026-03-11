@@ -13,8 +13,6 @@ package openapi
 
 import (
 	"context"
-	"errors"
-	"net/http"
 
 	model "github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
@@ -32,17 +30,9 @@ func NewDescriptionAPIAPIService() *DescriptionAPIAPIService {
 
 // GetSelfDescription - Returns the self-describing information of a network resource (ServiceDescription)
 func (s *DescriptionAPIAPIService) GetSelfDescription(ctx context.Context) (model.ImplResponse, error) {
-	// TODO - update GetSelfDescription with the required logic for this service method.
-	// Add api_description_api_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
-
-	// TODO: Uncomment the next line to return response Response(200, ServiceDescription{}) or use other options such as http.Ok ...
-	// return Response(200, ServiceDescription{}), nil
-
-	// TODO: Uncomment the next line to return response Response(401, Result{}) or use other options such as http.Ok ...
-	// return Response(401, Result{}), nil
-
-	// TODO: Uncomment the next line to return response Response(403, Result{}) or use other options such as http.Ok ...
-	// return Response(403, Result{}), nil
-
-	return model.Response(http.StatusNotImplemented, nil), errors.New("GetSelfDescription method not implemented")
+	return model.Response(200, model.ServiceDescription{
+		Profiles: []string{
+			"https://admin-shell.io/aas/API/3/1/AssetAdministrationShellRepositoryServiceSpecification/SSP-001",
+		},
+	}), nil
 }

@@ -14,8 +14,6 @@ package openapi
 import (
 	"encoding/json"
 	"errors"
-	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -24,6 +22,10 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 )
 
 // A Route defines the parameters for an api endpoint
@@ -45,6 +47,18 @@ const errMsgRequiredMissing = "required parameter is missing"
 const errMsgMinValueConstraint = "provided parameter is not respecting minimum value constraint"
 const errMsgMaxValueConstraint = "provided parameter is not respecting maximum value constraint"
 
+// Redirect is a helper payload type that signals the response encoder to send an HTTP redirect.
+type Redirect struct {
+	Location string
+}
+
+// FileDownload is a helper payload type for file downloads with custom content type.
+type FileDownload struct {
+	Content     []byte
+	ContentType string
+	Filename    string
+}
+
 // NewRouter creates a new router for any number of api routers
 func NewRouter(routers ...Router) chi.Router {
 	router := chi.NewRouter()
@@ -63,14 +77,56 @@ func NewRouter(routers ...Router) chi.Router {
 func EncodeJSONResponse(i interface{}, status *int, w http.ResponseWriter) error {
 	wHeader := w.Header()
 
+	if i != nil {
+		switch r := i.(type) {
+		case Redirect:
+			wHeader.Set("Location", r.Location)
+			if status != nil {
+				w.WriteHeader(*status)
+			} else {
+				w.WriteHeader(http.StatusFound)
+			}
+			return nil
+		case *Redirect:
+			if r != nil {
+				wHeader.Set("Location", r.Location)
+				if status != nil {
+					w.WriteHeader(*status)
+				} else {
+					w.WriteHeader(http.StatusFound)
+				}
+				return nil
+			}
+		case FileDownload:
+			model.SetSafeDownloadHeaders(wHeader, r.Filename, r.ContentType)
+			if status != nil {
+				w.WriteHeader(*status)
+			} else {
+				w.WriteHeader(http.StatusOK)
+			}
+			_, err := w.Write(r.Content)
+			return err
+		case *FileDownload:
+			if r != nil {
+				model.SetSafeDownloadHeaders(wHeader, r.Filename, r.ContentType)
+				if status != nil {
+					w.WriteHeader(*status)
+				} else {
+					w.WriteHeader(http.StatusOK)
+				}
+				_, err := w.Write(r.Content)
+				return err
+			}
+		}
+	}
+
 	f, ok := i.(*os.File)
 	if ok {
 		data, err := io.ReadAll(f)
 		if err != nil {
 			return err
 		}
-		wHeader.Set("Content-Type", http.DetectContentType(data))
-		wHeader.Set("Content-Disposition", "attachment; filename="+f.Name())
+		model.SetSafeDownloadHeaders(wHeader, f.Name(), http.DetectContentType(data))
 		if status != nil {
 			w.WriteHeader(*status)
 		} else {
@@ -140,10 +196,14 @@ func readFileHeaderToTempFile(fileHeader *multipart.FileHeader) (*os.File, error
 		return nil, err
 	}
 
-	defer file.Close()
-
 	_, err = io.Copy(file, formFile)
 	if err != nil {
+		_ = file.Close()
+		return nil, err
+	}
+
+	if _, err = file.Seek(0, 0); err != nil {
+		_ = file.Close()
 		return nil, err
 	}
 
