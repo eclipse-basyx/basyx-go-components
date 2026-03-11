@@ -40,7 +40,7 @@ COPY --from=builder /app/healthprobe /bin/healthprobe
 COPY --from=builder /app/healthprobe /bin/wget
 
 # Default port (can be overridden by environment)
-ENV SERVER_PORT=5000
+ENV SERVER_PORT=5004
 
 # Expose the service port (this is just documentation, the actual port is determined by the environment)
 EXPOSE ${SERVER_PORT}
