@@ -89,7 +89,7 @@ func (p PostgreSQLPropertyHandler) Update(submodelID string, idShortOrPath strin
 	}
 
 	var err error
-	cu, localTx, err := persistenceutils.StartTXIfNeeded(tx, err, p.db)
+	cu, localTx, err := common.StartTXIfNeeded(tx, err, p.db)
 	if err != nil {
 		return err
 	}
@@ -171,7 +171,7 @@ func (p PostgreSQLPropertyHandler) Update(submodelID string, idShortOrPath strin
 		}
 	}
 
-	return persistenceutils.CommitTransactionIfNeeded(tx, localTx)
+	return common.CommitTransactionIfNeeded(tx, localTx)
 }
 
 // UpdateValueOnly updates only the value of an existing Property submodel element identified by its idShort or path.

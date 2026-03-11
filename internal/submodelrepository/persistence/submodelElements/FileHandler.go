@@ -85,7 +85,7 @@ func (p PostgreSQLFileHandler) Update(submodelID string, idShortOrPath string, s
 	}
 
 	var err error
-	cu, localTx, err := persistenceutils.StartTXIfNeeded(tx, err, p.db)
+	cu, localTx, err := common.StartTXIfNeeded(tx, err, p.db)
 	if err != nil {
 		return err
 	}
@@ -187,7 +187,7 @@ func (p PostgreSQLFileHandler) Update(submodelID string, idShortOrPath string, s
 		}
 	}
 
-	return persistenceutils.CommitTransactionIfNeeded(tx, localTx)
+	return common.CommitTransactionIfNeeded(tx, localTx)
 }
 
 // UpdateValueOnly updates only the value of an existing File submodel element identified by its idShort or path.
