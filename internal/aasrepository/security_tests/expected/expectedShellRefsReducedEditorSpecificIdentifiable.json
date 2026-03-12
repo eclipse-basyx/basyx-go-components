@@ -1,0 +1,14 @@
+{
+  "paging_metadata": {},
+  "result": [
+    {
+      "keys": [
+        {
+          "type": "AssetAdministrationShell",
+          "value": "urn:example:aas:viewer:allowed"
+        }
+      ],
+      "type": "ModelReference"
+    }
+  ]
+}

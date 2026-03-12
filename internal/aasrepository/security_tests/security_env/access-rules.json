@@ -8,7 +8,8 @@
     "DEFOBJECTS": [
       { "name": "description", "objects": [ { "ROUTE": "/description" } ] },
       { "name": "all_shell_routes", "objects": [ { "ROUTE": "/shells" }, { "ROUTE": "/shells/$reference" }, { "ROUTE": "/shells/*" } ] },
-      { "name": "all_shell_identifiable", "objects": [ { "IDENTIFIABLE": "$aas(\"*\")" } ] }
+      { "name": "all_shell_identifiable", "objects": [ { "IDENTIFIABLE": "$aas(\"*\")" } ] },
+      { "name": "viewer_allowed_specific_identifiable", "objects": [ { "IDENTIFIABLE": "$aas(\"urn:example:aas:viewer:allowed\")" } ] }
     ],
     "DEFACLS": [
       { "name": "read_anonymous", "acl": { "USEATTRIBUTES": "anonym_attr", "RIGHTS": ["READ"], "ACCESS": "ALLOW" } },
@@ -49,12 +50,19 @@
             { "$eq": [ { "$field": "$aas#assetInformation.assetType" }, { "$strVal": "editor-allowed" } ] }
           ]
         }
+      },
+      {
+        "name": "role_is_editor",
+        "formula": {
+          "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "editor" } ]
+        }
       }
     ],
     "rules": [
       { "USEACL": "read_anonymous", "USEOBJECTS": ["description"], "USEFORMULA": "always_true" },
       { "USEACL": "admin_all", "USEOBJECTS": ["all_shell_routes"], "USEFORMULA": "role_is_admin" },
       { "USEACL": "read_role", "USEOBJECTS": ["all_shell_identifiable"], "USEFORMULA": "viewer_visible_or_key" },
+      { "USEACL": "read_role", "USEOBJECTS": ["viewer_allowed_specific_identifiable"], "USEFORMULA": "role_is_editor" },
       { "USEACL": "write_role", "USEOBJECTS": ["all_shell_routes"], "USEFORMULA": "editor_editable_aas" }
     ]
   }

@@ -1,0 +1,14 @@
+{
+  "paging_metadata": {},
+  "result": [
+    {
+      "assetInformation": {
+        "assetKind": "Instance",
+        "assetType": "viewer-visible"
+      },
+      "id": "urn:example:aas:viewer:allowed",
+      "idShort": "ViewerAllowed",
+      "modelType": "AssetAdministrationShell"
+    }
+  ]
+}

@@ -31,6 +31,38 @@
     "expectedStatus": 201
   },
   {
+    "context": "GET /shells - admin full access",
+    "token": { "user": "admin", "password": "pwd" },
+    "method": "GET",
+    "endpoint": "http://localhost:6004/shells",
+    "shouldMatch": "expected/expectedShellsFullAdmin.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "GET /shells - editor reduced to specific IDENTIFIABLE object",
+    "token": { "user": "userx", "password": "pwd" },
+    "method": "GET",
+    "endpoint": "http://localhost:6004/shells",
+    "shouldMatch": "expected/expectedShellsReducedEditorSpecificIdentifiable.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "GET /shells/$reference - admin full access",
+    "token": { "user": "admin", "password": "pwd" },
+    "method": "GET",
+    "endpoint": "http://localhost:6004/shells/$reference",
+    "shouldMatch": "expected/expectedShellRefsFullAdmin.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "GET /shells/$reference - editor reduced to specific IDENTIFIABLE object",
+    "token": { "user": "userx", "password": "pwd" },
+    "method": "GET",
+    "endpoint": "http://localhost:6004/shells/$reference",
+    "shouldMatch": "expected/expectedShellRefsReducedEditorSpecificIdentifiable.json",
+    "expectedStatus": 200
+  },
+  {
     "context": "GET viewer-visible aas - viewer",
     "token": { "user": "usera", "password": "pwd" },
     "method": "GET",
@@ -50,6 +82,29 @@
     "method": "GET",
     "endpoint": "http://localhost:6004/shells/dXJuOmV4YW1wbGU6YWFzOnZpZXdlcjpoaWRkZW4",
     "expectedStatus": 404
+  },
+  {
+    "context": "GET viewer-hidden aas - admin full access",
+    "token": { "user": "admin", "password": "pwd" },
+    "method": "GET",
+    "endpoint": "http://localhost:6004/shells/dXJuOmV4YW1wbGU6YWFzOnZpZXdlcjpoaWRkZW4",
+    "shouldMatch": "bodies/post/viewerHidden.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "GET viewer-visible aas - editor allowed by specific IDENTIFIABLE object",
+    "token": { "user": "userx", "password": "pwd" },
+    "method": "GET",
+    "endpoint": "http://localhost:6004/shells/dXJuOmV4YW1wbGU6YWFzOnZpZXdlcjphbGxvd2Vk",
+    "shouldMatch": "bodies/post/viewerAllowed.json",
+    "expectedStatus": 200
+  },
+  {
+    "context": "GET viewer-by-key aas - editor denied outside specific IDENTIFIABLE object",
+    "token": { "user": "userx", "password": "pwd" },
+    "method": "GET",
+    "endpoint": "http://localhost:6004/shells/dXJuOmV4YW1wbGU6YWFzOnZpZXdlcjprZXk",
+    "expectedStatus": 403
   },
   {
     "context": "POST editor-allowed aas - editor",

@@ -1,0 +1,32 @@
+{
+  "paging_metadata": {},
+  "result": [
+    {
+      "keys": [
+        {
+          "type": "AssetAdministrationShell",
+          "value": "urn:example:aas:viewer:allowed"
+        }
+      ],
+      "type": "ModelReference"
+    },
+    {
+      "keys": [
+        {
+          "type": "AssetAdministrationShell",
+          "value": "urn:example:aas:viewer:hidden"
+        }
+      ],
+      "type": "ModelReference"
+    },
+    {
+      "keys": [
+        {
+          "type": "AssetAdministrationShell",
+          "value": "urn:example:aas:viewer:key"
+        }
+      ],
+      "type": "ModelReference"
+    }
+  ]
+}

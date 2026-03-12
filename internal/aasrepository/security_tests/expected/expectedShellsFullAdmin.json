@@ -1,0 +1,47 @@
+{
+  "paging_metadata": {},
+  "result": [
+    {
+      "assetInformation": {
+        "assetKind": "Instance",
+        "assetType": "viewer-visible"
+      },
+      "id": "urn:example:aas:viewer:allowed",
+      "idShort": "ViewerAllowed",
+      "modelType": "AssetAdministrationShell"
+    },
+    {
+      "assetInformation": {
+        "assetKind": "Instance",
+        "assetType": "viewer-hidden"
+      },
+      "id": "urn:example:aas:viewer:hidden",
+      "idShort": "ViewerHidden",
+      "modelType": "AssetAdministrationShell"
+    },
+    {
+      "assetInformation": {
+        "assetKind": "Instance",
+        "assetType": "viewer-hidden",
+        "specificAssetIds": [
+          {
+            "externalSubjectId": {
+              "keys": [
+                {
+                  "type": "GlobalReference",
+                  "value": "VIEWER_KEY"
+                }
+              ],
+              "type": "ExternalReference"
+            },
+            "name": "customerPartId",
+            "value": "cp-001"
+          }
+        ]
+      },
+      "id": "urn:example:aas:viewer:key",
+      "idShort": "ViewerViaKey",
+      "modelType": "AssetAdministrationShell"
+    }
+  ]
+}
