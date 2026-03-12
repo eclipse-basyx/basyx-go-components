@@ -15,9 +15,6 @@ postgres:
   maxIdleConnections: 500
   connMaxLifetimeMinutes: 5
 
-general:
-  enableImplicitCasts: false
-
 oidc:
   trustlistPath: "config/trustlist.json"
 
