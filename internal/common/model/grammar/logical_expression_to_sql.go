@@ -1888,16 +1888,26 @@ func normalizeSemanticShorthand(operand *Value) {
 	if inner == nil || inner.Field == nil {
 		return
 	}
+
 	field := string(*inner.Field)
-	// Already explicit -> nothing to do
-	if strings.Contains(field, ".keys[") {
+
+	parts := strings.SplitN(field, "#", 2)
+	if len(parts) != 2 {
 		return
 	}
-	if strings.HasSuffix(field, ".semanticId") || strings.HasSuffix(field, ".externalSubjectId") {
-		field += ".keys[0].value"
-		*inner.Field = ModelStringPattern(field)
+
+	prefix := parts[0]
+	suffix := parts[1]
+
+	// Already explicit -> nothing to do
+	if strings.Contains(suffix, ".keys[") {
+		return
 	}
 
+	if strings.HasSuffix(suffix, "semanticId") || strings.HasSuffix(suffix, "externalSubjectId") {
+		suffix += ".keys[0].value"
+		*inner.Field = ModelStringPattern(prefix + "#" + suffix)
+	}
 }
 
 func toSQLComponent(operand *Value, position string) (interface{}, error) {
