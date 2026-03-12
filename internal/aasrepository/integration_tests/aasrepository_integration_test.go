@@ -329,7 +329,7 @@ func TestThumbnailAttachmentOperations(t *testing.T) {
 		t.Logf("Thumbnail content verified: %d bytes", len(content))
 	})
 
-	t.Run("3_Get_AAS_By_ID_Includes_Thumbnail_In_AssetInformation", func(t *testing.T) {
+	t.Run("3_Get_AAS_By_ID_Includes_DefaultThumbnail_In_AssetInformation", func(t *testing.T) {
 		aasEndpoint := fmt.Sprintf("%s/shells/%s", baseURL, aasIdentifier)
 		payload, getStatus, getErr := getJSONResponse(aasEndpoint)
 		require.NoError(t, getErr, "AAS retrieval failed")
@@ -338,8 +338,8 @@ func TestThumbnailAttachmentOperations(t *testing.T) {
 		assetInformation, ok := payload["assetInformation"].(map[string]any)
 		require.True(t, ok, "assetInformation should be present")
 
-		thumbnail, ok := assetInformation["thumbnail"].(map[string]any)
-		require.True(t, ok, "assetInformation.thumbnail should be present")
+		thumbnail, ok := assetInformation["defaultThumbnail"].(map[string]any)
+		require.True(t, ok, "assetInformation.defaultThumbnail should be present")
 
 		thumbnailPath, ok := thumbnail["path"].(string)
 		require.True(t, ok, "thumbnail.path should be a string")
@@ -350,7 +350,7 @@ func TestThumbnailAttachmentOperations(t *testing.T) {
 		assert.Equal(t, "image/gif", thumbnailContentType, "thumbnail.contentType should match uploaded file")
 	})
 
-	t.Run("4_Get_AAS_List_Includes_Thumbnail_In_AssetInformation", func(t *testing.T) {
+	t.Run("4_Get_AAS_List_Includes_DefaultThumbnail_In_AssetInformation", func(t *testing.T) {
 		listEndpoint := fmt.Sprintf("%s/shells", baseURL)
 		payload, getStatus, getErr := getJSONResponse(listEndpoint)
 		require.NoError(t, getErr, "AAS list retrieval failed")
@@ -373,8 +373,8 @@ func TestThumbnailAttachmentOperations(t *testing.T) {
 			assetInformation, ok := aasMap["assetInformation"].(map[string]any)
 			require.True(t, ok, "assetInformation should be present in listed AAS")
 
-			thumbnail, ok := assetInformation["thumbnail"].(map[string]any)
-			require.True(t, ok, "assetInformation.thumbnail should be present in listed AAS")
+			thumbnail, ok := assetInformation["defaultThumbnail"].(map[string]any)
+			require.True(t, ok, "assetInformation.defaultThumbnail should be present in listed AAS")
 
 			thumbnailPath, ok := thumbnail["path"].(string)
 			require.True(t, ok, "thumbnail.path should be a string in listed AAS")
