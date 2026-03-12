@@ -269,6 +269,12 @@ var arraySegmentMappings = map[string]arraySegmentMapping{
 		},
 	},
 
+	"submodels": {
+		ByContext: map[resolveContext]arraySegmentContextMapping{
+			ctxAAS: {PositionAlias: "aas_submodel_reference.position", NextContext: ctxAAS},
+		},
+	},
+
 	"endpoints": {
 		ByContext: map[resolveContext]arraySegmentContextMapping{
 			ctxAASDesc:            {PositionAlias: "aas_descriptor_endpoint.position", NextContext: ctxAASDescEndpoint},
@@ -418,7 +424,7 @@ func resolveArrayBindings(fieldStr string, tokens []builder.Token) ([]ArrayIndex
 				bindings = append(bindings, ArrayIndexBinding{Alias: positionAlias, Index: NewArrayIndexPosition(t.Index)})
 			}
 			ctx = nextCtx
-			prevSimple = ""
+			prevSimple = t.Name
 
 		default:
 			return nil, fmt.Errorf("unsupported token type while resolving: %T", tok)

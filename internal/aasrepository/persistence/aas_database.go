@@ -304,8 +304,8 @@ func (s *AssetAdministrationShellDatabase) createAssetAdministrationShellInTrans
 	}
 
 	// submodel references
-	for _, submodelRef := range aas.Submodels() {
-		ids, args, err = buildAssetAdministrationShellSubmodelReferenceQuery(&dialect, aasDBID, submodelRef)
+	for position, submodelRef := range aas.Submodels() {
+		ids, args, err = buildAssetAdministrationShellSubmodelReferenceQuery(&dialect, aasDBID, position, submodelRef)
 		if err != nil {
 			return common.NewInternalServerError("AASREPO-NEWAAS-CREATE-BUILDSUBMODELREFSQL " + err.Error())
 		}
@@ -417,7 +417,7 @@ func (s *AssetAdministrationShellDatabase) createSubmodelReferenceInAssetAdminis
 
 	dialect := goqu.Dialect("postgres")
 
-	ids, args, err := buildAssetAdministrationShellSubmodelReferenceQuery(&dialect, aasDBID, submodelRef)
+	ids, args, err := buildAssetAdministrationShellSubmodelReferenceQuery(&dialect, aasDBID, 0, submodelRef)
 	if err != nil {
 		return common.NewInternalServerError("AASREPO-NEWSMREFINAAS-CREATE-BUILDSUBMODELREFSQL " + err.Error())
 	}

@@ -79,6 +79,7 @@ CREATE TABLE IF NOT EXISTS asset_information (
 CREATE TABLE IF NOT EXISTS aas_submodel_reference (
   id BIGSERIAL PRIMARY KEY,
   aas_id BIGINT NOT NULL REFERENCES aas(id) ON DELETE CASCADE,
+  position     INTEGER NOT NULL,
   type int NOT NULL
 );
 

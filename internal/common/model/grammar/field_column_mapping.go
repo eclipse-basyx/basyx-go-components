@@ -255,7 +255,7 @@ func ResolveAASQLFieldToSQLColumn(fieldStr string) (string, error) {
 			}
 
 			ctx = nextCtx
-			prevSimple = ""
+			prevSimple = t.Name
 
 		default:
 			return "", fmt.Errorf("unsupported token type while resolving: %T", tok)

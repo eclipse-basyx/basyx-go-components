@@ -17,6 +17,7 @@ func TestModelStringPattern_UnmarshalJSON_AcceptsAASAndSME(t *testing.T) {
 		"$aas#assetInformation.globalAssetId",
 		"$aas#assetInformation.specificAssetIds[0].name",
 		"$aas#assetInformation.specificAssetIds[2].externalSubjectId.keys[3].value",
+		"$aas#submodels[0].keys[0].value",
 		"$sm#idShort",
 		"$sm#semanticId.type",
 		"$sm#semanticId.keys[0].value",

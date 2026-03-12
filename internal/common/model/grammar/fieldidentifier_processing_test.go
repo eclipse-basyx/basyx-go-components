@@ -260,10 +260,31 @@ var fieldIdentifierProcessingCases = []fidTestCase{
 		WantScalar: &expectedScalar{Column: "aas_submodel_reference.type", Bindings: []expectedBinding{}},
 	},
 	{
+		Name:  "aas_submodels_type_indexed_scalar",
+		Kind:  "scalar",
+		Input: `$aas#submodels[0].type`,
+		WantScalar: &expectedScalar{
+			Column:   "aas_submodel_reference.type",
+			Bindings: []expectedBinding{{Alias: "aas_submodel_reference.position", Index: idx(0)}},
+		},
+	},
+	{
 		Name:       "aas_submodels_keys_value_indexed",
 		Kind:       "scalar",
 		Input:      `$aas#submodels.keys[1].value`,
 		WantScalar: &expectedScalar{Column: "aas_submodel_reference_key.value", Bindings: []expectedBinding{{Alias: "aas_submodel_reference_key.position", Index: idx(1)}}},
+	},
+	{
+		Name:  "aas_submodels_keys_value_double_indexed",
+		Kind:  "scalar",
+		Input: `$aas#submodels[0].keys[1].value`,
+		WantScalar: &expectedScalar{
+			Column: "aas_submodel_reference_key.value",
+			Bindings: []expectedBinding{
+				{Alias: "aas_submodel_reference.position", Index: idx(0)},
+				{Alias: "aas_submodel_reference_key.position", Index: idx(1)},
+			},
+		},
 	},
 	{
 		Name:         "aasdesc_endpoints_fragment_wildcard",

@@ -79,10 +79,11 @@ func buildAssetInformationQuery(dialect *goqu.DialectWrapper, aasDBID int64, ass
 	}).ToSQL()
 }
 
-func buildAssetAdministrationShellSubmodelReferenceQuery(dialect *goqu.DialectWrapper, aasDBID int64, submodelRef types.IReference) (string, []any, error) {
+func buildAssetAdministrationShellSubmodelReferenceQuery(dialect *goqu.DialectWrapper, aasDBID int64, position int, submodelRef types.IReference) (string, []any, error) {
 	return dialect.Insert("aas_submodel_reference").Rows(goqu.Record{
-		"aas_id": aasDBID,
-		"type":   int(submodelRef.Type()),
+		"aas_id":   aasDBID,
+		"position": position,
+		"type":     int(submodelRef.Type()),
 	}).Returning(goqu.I("id")).ToSQL()
 }
 
@@ -311,7 +312,7 @@ func buildGetSubmodelReferencePayloadsByAASIDQuery(dialect *goqu.DialectWrapper,
 		InnerJoin(goqu.T("aas_submodel_reference_payload").As("rp"), goqu.On(goqu.I("rp.reference_id").Eq(goqu.I("r.id")))).
 		Select(goqu.I("rp.parent_reference_payload")).
 		Where(goqu.I("r.aas_id").Eq(aasDBID)).
-		Order(goqu.I("r.id").Asc()).
+		Order(goqu.I("r.position").Asc(), goqu.I("r.id").Asc()).
 		ToSQL()
 }
 
@@ -321,7 +322,7 @@ func buildGetSubmodelReferencePayloadsByAASIDsQuery(dialect *goqu.DialectWrapper
 		InnerJoin(goqu.T("aas_submodel_reference_payload").As("rp"), goqu.On(goqu.I("rp.reference_id").Eq(goqu.I("r.id")))).
 		Select(goqu.I("r.aas_id"), goqu.I("rp.parent_reference_payload")).
 		Where(goqu.I("r.aas_id").In(aasDBIDs)).
-		Order(goqu.I("r.aas_id").Asc(), goqu.I("r.id").Asc()).
+		Order(goqu.I("r.aas_id").Asc(), goqu.I("r.position").Asc(), goqu.I("r.id").Asc()).
 		ToSQL()
 }
 
