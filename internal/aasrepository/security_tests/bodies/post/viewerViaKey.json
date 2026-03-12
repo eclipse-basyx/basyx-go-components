@@ -1,0 +1,24 @@
+{
+  "id": "urn:example:aas:viewer:key",
+  "idShort": "ViewerViaKey",
+  "modelType": "AssetAdministrationShell",
+  "assetInformation": {
+    "assetKind": "Instance",
+    "assetType": "viewer-hidden",
+    "specificAssetIds": [
+      {
+        "name": "customerPartId",
+        "value": "cp-001",
+        "externalSubjectId": {
+          "type": "ExternalReference",
+          "keys": [
+            {
+              "type": "GlobalReference",
+              "value": "VIEWER_KEY"
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

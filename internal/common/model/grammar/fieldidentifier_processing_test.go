@@ -224,6 +224,48 @@ var fieldIdentifierProcessingCases = []fidTestCase{
 		WantScalar: &expectedScalar{Column: "concept_description.id_short", Bindings: []expectedBinding{}},
 	},
 	{
+		Name:       "aas_idShort_scalar",
+		Kind:       "scalar",
+		Input:      `$aas#idShort`,
+		WantScalar: &expectedScalar{Column: "aas.id_short", Bindings: []expectedBinding{}},
+	},
+	{
+		Name:       "aas_id_scalar",
+		Kind:       "scalar",
+		Input:      `$aas#id`,
+		WantScalar: &expectedScalar{Column: "aas.aas_id", Bindings: []expectedBinding{}},
+	},
+	{
+		Name:       "aas_assetInformation_assetType_scalar",
+		Kind:       "scalar",
+		Input:      `$aas#assetInformation.assetType`,
+		WantScalar: &expectedScalar{Column: "asset_information.asset_type", Bindings: []expectedBinding{}},
+	},
+	{
+		Name:  "aas_specificAsset_externalSubject_keys_value_indexed",
+		Kind:  "scalar",
+		Input: `$aas#assetInformation.specificAssetIds[2].externalSubjectId.keys[5].value`,
+		WantScalar: &expectedScalar{
+			Column: "external_subject_reference_key.value",
+			Bindings: []expectedBinding{
+				{Alias: "specific_asset_id.position", Index: idx(2)},
+				{Alias: "external_subject_reference_key.position", Index: idx(5)},
+			},
+		},
+	},
+	{
+		Name:       "aas_submodels_type_scalar",
+		Kind:       "scalar",
+		Input:      `$aas#submodels.type`,
+		WantScalar: &expectedScalar{Column: "aas_submodel_reference.type", Bindings: []expectedBinding{}},
+	},
+	{
+		Name:       "aas_submodels_keys_value_indexed",
+		Kind:       "scalar",
+		Input:      `$aas#submodels.keys[1].value`,
+		WantScalar: &expectedScalar{Column: "aas_submodel_reference_key.value", Bindings: []expectedBinding{{Alias: "aas_submodel_reference_key.position", Index: idx(1)}}},
+	},
+	{
 		Name:         "aasdesc_endpoints_fragment_wildcard",
 		Kind:         "fragment",
 		Input:        `$aasdesc#endpoints[]`,
@@ -290,14 +332,24 @@ var fieldIdentifierProcessingCases = []fidTestCase{
 		WantFragment: &expectedFragment{Bindings: []expectedBinding{{Alias: "semantic_id_reference_key.position", Index: idx(0)}}},
 	},
 	{
+		Name:         "aas_specificAssetIds_fragment_indexed",
+		Kind:         "fragment",
+		Input:        `$aas#assetInformation.specificAssetIds[0]`,
+		WantFragment: &expectedFragment{Bindings: []expectedBinding{{Alias: "specific_asset_id.position", Index: idx(0)}}},
+	},
+	{
+		Name:         "aas_submodels_keys_fragment_indexed",
+		Kind:         "fragment",
+		Input:        `$aas#submodels.keys[2]`,
+		WantFragment: &expectedFragment{Bindings: []expectedBinding{{Alias: "aas_submodel_reference_key.position", Index: idx(2)}}},
+	},
+	{
 		Name:         "aasdesc_submodelDescriptor_endpoints_fragment_indexed_submodelWildcard",
 		Kind:         "fragment",
 		Input:        `$aasdesc#submodelDescriptors[].endpoints[2]`,
 		WantFragment: &expectedFragment{Bindings: []expectedBinding{{Alias: "submodel_descriptor_endpoint.position", Index: idx(2)}}},
 	},
 	{Name: "scalar_rejects_fragment", Kind: "scalar", Input: `$aasdesc#endpoints[0]`, ShouldFail: true, ErrorContains: "must not end in an array segment"},
-	{Name: "sql_scalar_rejects_aas_root", Kind: "scalar", Input: `$aas#idShort`, ShouldFail: true, ErrorContains: "unsupported field root"},
-	{Name: "sql_fragment_rejects_aas_root", Kind: "fragment", Input: `$aas#assetInformation.specificAssetIds[0]`, ShouldFail: true, ErrorContains: "unsupported field root"},
 	{
 		Name:       "sql_scalar_sme_value",
 		Kind:       "scalar",

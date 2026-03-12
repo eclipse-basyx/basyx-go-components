@@ -139,34 +139,43 @@ func buildCheckAssetAdministrationShellSubmodelReferenceExistsQuery(dialect *goq
 }
 
 func buildGetAssetAdministrationShellsQuery(dialect *goqu.DialectWrapper, limit int32, cursor string, idShort string, assetIDs []string) (string, []any, error) {
+	ds, err := buildGetAssetAdministrationShellsDataset(dialect, limit, cursor, idShort, assetIDs)
+	if err != nil {
+		return "", nil, err
+	}
+
+	return ds.ToSQL()
+}
+
+func buildGetAssetAdministrationShellsDataset(dialect *goqu.DialectWrapper, limit int32, cursor string, idShort string, assetIDs []string) (*goqu.SelectDataset, error) {
 	ds := dialect.
-		From(goqu.T("aas").As("a")).
-		LeftJoin(goqu.T("asset_information").As("ai"), goqu.On(goqu.I("ai.asset_information_id").Eq(goqu.I("a.id")))).
-		Select(goqu.I("a.id")).
-		Order(goqu.I("a.aas_id").Asc())
+		From(goqu.T("aas").As("aas")).
+		LeftJoin(goqu.T("asset_information").As("asset_information"), goqu.On(goqu.I("asset_information.asset_information_id").Eq(goqu.I("aas.id")))).
+		Select(goqu.I("aas.id")).
+		Order(goqu.I("aas.aas_id").Asc())
 
 	if limit > 0 {
 		pageLimitPlusOne, err := buildPageLimitPlusOne(limit)
 		if err != nil {
-			return "", nil, err
+			return nil, err
 		}
 
 		ds = ds.Limit(pageLimitPlusOne)
 	}
 
 	if cursor != "" {
-		ds = ds.Where(goqu.I("a.aas_id").Gte(cursor))
+		ds = ds.Where(goqu.I("aas.aas_id").Gte(cursor))
 	}
 
 	if idShort != "" {
-		ds = ds.Where(goqu.I("a.id_short").Eq(idShort))
+		ds = ds.Where(goqu.I("aas.id_short").Eq(idShort))
 	}
 
 	if len(assetIDs) > 0 {
-		ds = ds.Where(goqu.I("ai.global_asset_id").In(assetIDs))
+		ds = ds.Where(goqu.I("asset_information.global_asset_id").In(assetIDs))
 	}
 
-	return ds.ToSQL()
+	return ds, nil
 }
 
 func buildGetAssetAdministrationShellCursorByDBIDQuery(dialect *goqu.DialectWrapper, aasDBID int64) (string, []any, error) {
@@ -174,7 +183,15 @@ func buildGetAssetAdministrationShellCursorByDBIDQuery(dialect *goqu.DialectWrap
 }
 
 func buildGetAssetAdministrationShellDBIDByIdentifierQuery(dialect *goqu.DialectWrapper, aasIdentifier string) (string, []any, error) {
-	return dialect.From("aas").Select("id").Where(goqu.I("aas_id").Eq(aasIdentifier)).ToSQL()
+	ds := buildGetAssetAdministrationShellDBIDByIdentifierDataset(dialect, aasIdentifier)
+	return ds.ToSQL()
+}
+
+func buildGetAssetAdministrationShellDBIDByIdentifierDataset(dialect *goqu.DialectWrapper, aasIdentifier string) *goqu.SelectDataset {
+	return dialect.From(goqu.T("aas").As("aas")).
+		Select(goqu.I("aas.id")).
+		Where(goqu.I("aas.aas_id").Eq(aasIdentifier)).
+		Limit(1)
 }
 
 func buildDeleteAssetAdministrationShellByDBIDQuery(dialect *goqu.DialectWrapper, aasDBID int64) (string, []any, error) {

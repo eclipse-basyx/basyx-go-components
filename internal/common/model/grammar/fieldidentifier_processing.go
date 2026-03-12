@@ -226,12 +226,14 @@ type resolveContext int
 
 const (
 	ctxUnknown resolveContext = iota
+	ctxAAS
 	ctxAASDesc
 	ctxSMDesc
 	ctxSM
 	ctxSME
 	ctxCD
 	ctxBD
+	ctxAASSubmodelReference
 	ctxSpecificAssetID
 	ctxAASDescEndpoint
 	ctxSubmodelDescriptor
@@ -261,6 +263,7 @@ type arraySegmentMapping struct {
 var arraySegmentMappings = map[string]arraySegmentMapping{
 	"specificAssetIds": {
 		ByContext: map[resolveContext]arraySegmentContextMapping{
+			ctxAAS:     {PositionAlias: "specific_asset_id.position", NextContext: ctxSpecificAssetID},
 			ctxAASDesc: {PositionAlias: "specific_asset_id.position", NextContext: ctxSpecificAssetID},
 			ctxBD:      {PositionAlias: "specific_asset_id.position", NextContext: ctxSpecificAssetID},
 		},
@@ -282,6 +285,9 @@ var arraySegmentMappings = map[string]arraySegmentMapping{
 
 	"keys": {
 		ByParent: map[string]map[resolveContext]arraySegmentContextMapping{
+			"submodels": {
+				ctxAAS: {PositionAlias: "aas_submodel_reference_key.position", NextContext: ctxAASSubmodelReference},
+			},
 			"externalSubjectId": {
 				ctxSpecificAssetID: {PositionAlias: "external_subject_reference_key.position", NextContext: ctxSpecificAssetID},
 			},
@@ -308,6 +314,8 @@ func contextFromFieldPrefix(fieldStr string) resolveContext {
 		root = prefix[:idx]
 	}
 	switch root {
+	case "$aas":
+		return ctxAAS
 	case "$aasdesc":
 		return ctxAASDesc
 	case "$smdesc":
@@ -384,7 +392,7 @@ func resolveArrayBindings(fieldStr string, tokens []builder.Token) ([]ArrayIndex
 	ctx := contextFromFieldPrefix(fieldStr)
 	if ctx == ctxUnknown {
 		// Keep error explicit: this is meant for registry queries today.
-		return nil, fmt.Errorf("unsupported field root (expected $aasdesc#, $smdesc#, $sm#, $sme...#, $cd#, or $bd#): %q", fieldStr)
+		return nil, fmt.Errorf("unsupported field root (expected $aas#, $aasdesc#, $smdesc#, $sm#, $sme...#, $cd#, or $bd#): %q", fieldStr)
 	}
 
 	var bindings []ArrayIndexBinding

@@ -1,0 +1,61 @@
+{
+  "AllAccessPermissionRules": {
+    "DEFATTRIBUTES": [
+      { "name": "anonym_attr", "attributes": [ { "GLOBAL": "ANONYMOUS" } ] },
+      { "name": "role_attr", "attributes": [ { "CLAIM": "role" } ] },
+      { "name": "member_attr", "attributes": [ { "CLAIM": "role" }, { "CLAIM": "clear" } ] }
+    ],
+    "DEFOBJECTS": [
+      { "name": "description", "objects": [ { "ROUTE": "/description" } ] },
+      { "name": "all_shell_routes", "objects": [ { "ROUTE": "/shells" }, { "ROUTE": "/shells/$reference" }, { "ROUTE": "/shells/*" } ] },
+      { "name": "all_shell_identifiable", "objects": [ { "IDENTIFIABLE": "$aas(\"*\")" } ] }
+    ],
+    "DEFACLS": [
+      { "name": "read_anonymous", "acl": { "USEATTRIBUTES": "anonym_attr", "RIGHTS": ["READ"], "ACCESS": "ALLOW" } },
+      { "name": "read_role", "acl": { "USEATTRIBUTES": "role_attr", "RIGHTS": ["READ"], "ACCESS": "ALLOW" } },
+      { "name": "write_role", "acl": { "USEATTRIBUTES": "role_attr", "RIGHTS": ["CREATE", "UPDATE", "DELETE"], "ACCESS": "ALLOW" } },
+      { "name": "admin_all", "acl": { "USEATTRIBUTES": "member_attr", "RIGHTS": ["ALL"], "ACCESS": "ALLOW" } }
+    ],
+    "DEFFORMULAS": [
+      { "name": "always_true", "formula": { "$boolean": true } },
+      {
+        "name": "role_is_admin",
+        "formula": {
+          "$and": [
+            { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "admin" } ] },
+            { "$ge": [ { "$numCast": { "$attribute": { "CLAIM": "clear" } } }, { "$numVal": 10 } ] }
+          ]
+        }
+      },
+      {
+        "name": "viewer_visible_or_key",
+        "formula": {
+          "$and": [
+            { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "viewer" } ] },
+            {
+              "$or": [
+                { "$eq": [ { "$field": "$aas#assetInformation.assetType" }, { "$strVal": "viewer-visible" } ] },
+                { "$eq": [ { "$field": "$aas#assetInformation.specificAssetIds[].externalSubjectId.keys[].value" }, { "$strVal": "VIEWER_KEY" } ] }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "name": "editor_editable_aas",
+        "formula": {
+          "$and": [
+            { "$eq": [ { "$attribute": { "CLAIM": "role" } }, { "$strVal": "editor" } ] },
+            { "$eq": [ { "$field": "$aas#assetInformation.assetType" }, { "$strVal": "editor-allowed" } ] }
+          ]
+        }
+      }
+    ],
+    "rules": [
+      { "USEACL": "read_anonymous", "USEOBJECTS": ["description"], "USEFORMULA": "always_true" },
+      { "USEACL": "admin_all", "USEOBJECTS": ["all_shell_routes"], "USEFORMULA": "role_is_admin" },
+      { "USEACL": "read_role", "USEOBJECTS": ["all_shell_identifiable"], "USEFORMULA": "viewer_visible_or_key" },
+      { "USEACL": "write_role", "USEOBJECTS": ["all_shell_routes"], "USEFORMULA": "editor_editable_aas" }
+    ]
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "id": "urn:example:aas:viewer:allowed",
+  "idShort": "ViewerAllowed",
+  "modelType": "AssetAdministrationShell",
+  "assetInformation": {
+    "assetKind": "Instance",
+    "assetType": "viewer-visible"
+  }
+}

@@ -16,6 +16,7 @@ import (
 	"github.com/eclipse-basyx/basyx-go-components/internal/aasrepository/api"
 	persistencepostgresql "github.com/eclipse-basyx/basyx-go-components/internal/aasrepository/persistence"
 	"github.com/eclipse-basyx/basyx-go-components/internal/common"
+	auth "github.com/eclipse-basyx/basyx-go-components/internal/common/security"
 	openapi "github.com/eclipse-basyx/basyx-go-components/pkg/aasrepositoryapi/go"
 )
 
@@ -35,7 +36,7 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 
 	// Create Chi router
 	r := chi.NewRouter()
-	common.AddDefaultRouterErrorHandlers(r, "AASRepositoryService")
+	r.Use(common.ConfigMiddleware(config))
 	common.AddCors(r, config)
 
 	// Add health endpoint
@@ -56,16 +57,29 @@ func runServer(ctx context.Context, configPath string, databaseSchema string) er
 
 	aasSvc := api.NewAssetAdministrationShellRepositoryAPIAPIService(*aasDatabase)
 	aasCtrl := openapi.NewAssetAdministrationShellRepositoryAPIAPIController(aasSvc, config.Server.ContextPath, config.Server.StrictVerification)
-	for _, rt := range aasCtrl.Routes() {
-		r.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
-	}
 
 	// ==== Description Service ====
 	descSvc := openapi.NewDescriptionAPIAPIService()
 	descCtrl := openapi.NewDescriptionAPIAPIController(descSvc)
-	for _, rt := range descCtrl.Routes() {
-		r.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
+
+	base := common.NormalizeBasePath(config.Server.ContextPath)
+
+	// === Protected API Subrouter ===
+	apiRouter := chi.NewRouter()
+	common.AddDefaultRouterErrorHandlers(apiRouter, "AASRepositoryService")
+
+	if err := auth.SetupSecurity(ctx, config, apiRouter); err != nil {
+		return err
 	}
+
+	for _, rt := range aasCtrl.Routes() {
+		apiRouter.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
+	}
+	for _, rt := range descCtrl.Routes() {
+		apiRouter.Method(rt.Method, rt.Pattern, rt.HandlerFunc)
+	}
+
+	r.Mount(base, apiRouter)
 
 	// Start the server
 	addr := "0.0.0.0:" + fmt.Sprintf("%d", config.Server.Port)

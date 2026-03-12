@@ -117,6 +117,23 @@ var mapMethodAndPatternToRightsData = []mapMethodAndPatternToRights{
 	{"GET", "/submodels/{submodelIdentifier}/$signed", []grammar.RightsEnum{grammar.RightsEnumREAD}},
 	{"GET", "/submodels/{submodelIdentifier}/$value/$signed", []grammar.RightsEnum{grammar.RightsEnumREAD}},
 
+	// aas repository (implemented endpoints)
+	{"GET", "/shells", []grammar.RightsEnum{grammar.RightsEnumREAD}},
+	{"POST", "/shells", []grammar.RightsEnum{grammar.RightsEnumCREATE}},
+	{"GET", "/shells/$reference", []grammar.RightsEnum{grammar.RightsEnumREAD}},
+	{"GET", "/shells/{aasIdentifier}", []grammar.RightsEnum{grammar.RightsEnumREAD}},
+	{"PUT", "/shells/{aasIdentifier}", []grammar.RightsEnum{grammar.RightsEnumDELETE, grammar.RightsEnumCREATE}},
+	{"DELETE", "/shells/{aasIdentifier}", []grammar.RightsEnum{grammar.RightsEnumDELETE}},
+	{"GET", "/shells/{aasIdentifier}/$reference", []grammar.RightsEnum{grammar.RightsEnumREAD}},
+	{"GET", "/shells/{aasIdentifier}/asset-information", []grammar.RightsEnum{grammar.RightsEnumREAD}},
+	{"PUT", "/shells/{aasIdentifier}/asset-information", []grammar.RightsEnum{grammar.RightsEnumUPDATE}},
+	{"GET", "/shells/{aasIdentifier}/asset-information/thumbnail", []grammar.RightsEnum{grammar.RightsEnumREAD}},
+	{"PUT", "/shells/{aasIdentifier}/asset-information/thumbnail", []grammar.RightsEnum{grammar.RightsEnumDELETE, grammar.RightsEnumCREATE}},
+	{"DELETE", "/shells/{aasIdentifier}/asset-information/thumbnail", []grammar.RightsEnum{grammar.RightsEnumDELETE}},
+	{"GET", "/shells/{aasIdentifier}/submodel-refs", []grammar.RightsEnum{grammar.RightsEnumREAD}},
+	{"POST", "/shells/{aasIdentifier}/submodel-refs", []grammar.RightsEnum{grammar.RightsEnumCREATE}},
+	{"DELETE", "/shells/{aasIdentifier}/submodel-refs/{submodelIdentifier}", []grammar.RightsEnum{grammar.RightsEnumDELETE}},
+
 	// aas discovery
 	{"GET", "/lookup/shells", []grammar.RightsEnum{grammar.RightsEnumREAD}},
 	{"POST", "/lookup/shellsByAssetLink", []grammar.RightsEnum{grammar.RightsEnumREAD}}, // this is one of the reasons why we need this complex mapping

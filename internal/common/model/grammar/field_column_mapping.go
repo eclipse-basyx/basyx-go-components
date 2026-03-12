@@ -56,6 +56,7 @@ type terminalColumnMapping struct {
 var terminalColumnMappings = map[string]terminalColumnMapping{
 	"idShort": {
 		ByContext: map[resolveContext]string{
+			ctxAAS:                "aas.id_short",
 			ctxSM:                 "submodel.id_short",
 			ctxSME:                "submodel_element.id_short",
 			ctxCD:                 "concept_description.id_short",
@@ -67,6 +68,7 @@ var terminalColumnMappings = map[string]terminalColumnMapping{
 
 	"id": {
 		ByContext: map[resolveContext]string{
+			ctxAAS:                "aas.aas_id",
 			ctxSM:                 "submodel.submodel_identifier",
 			ctxCD:                 "concept_description.id",
 			ctxAASDesc:            "aas_descriptor.id",
@@ -86,18 +88,21 @@ var terminalColumnMappings = map[string]terminalColumnMapping{
 
 	"assetKind": {
 		ByContext: map[resolveContext]string{
+			ctxAAS:     "asset_information.asset_kind",
 			ctxAASDesc: "aas_descriptor.asset_kind",
 		},
 	},
 
 	"assetType": {
 		ByContext: map[resolveContext]string{
+			ctxAAS:     "asset_information.asset_type",
 			ctxAASDesc: "aas_descriptor.asset_type",
 		},
 	},
 
 	"globalAssetId": {
 		ByContext: map[resolveContext]string{
+			ctxAAS:     "asset_information.global_asset_id",
 			ctxAASDesc: "aas_descriptor.global_asset_id",
 		},
 	},
@@ -122,6 +127,9 @@ var terminalColumnMappings = map[string]terminalColumnMapping{
 		},
 		ByArrayParentSimple: map[string]map[string]map[resolveContext]string{
 			"keys": {
+				"submodels": {
+					ctxAASSubmodelReference: "aas_submodel_reference_key.value",
+				},
 				"semanticId": {
 					ctxSM:                 "semantic_id_reference_key.value",
 					ctxSME:                "sme_semantic_id_reference_key.value",
@@ -137,6 +145,12 @@ var terminalColumnMappings = map[string]terminalColumnMapping{
 
 	"type": {
 		ByParentSimple: map[string]map[resolveContext]string{
+			"externalSubjectId": {
+				ctxSpecificAssetID: "external_subject_reference.type",
+			},
+			"submodels": {
+				ctxAAS: "aas_submodel_reference.type",
+			},
 			"semanticId": {
 				ctxSM:                 "semantic_id_reference.type",
 				ctxSME:                "sme_semantic_id_reference.type",
@@ -146,6 +160,9 @@ var terminalColumnMappings = map[string]terminalColumnMapping{
 		},
 		ByArrayParentSimple: map[string]map[string]map[resolveContext]string{
 			"keys": {
+				"submodels": {
+					ctxAASSubmodelReference: "aas_submodel_reference_key.type",
+				},
 				"semanticId": {
 					ctxSM:                 "semantic_id_reference_key.type",
 					ctxSME:                "sme_semantic_id_reference_key.type",
@@ -195,7 +212,7 @@ var terminalColumnMappings = map[string]terminalColumnMapping{
 func ResolveAASQLFieldToSQLColumn(fieldStr string) (string, error) {
 	ctx := contextFromFieldPrefix(fieldStr)
 	if ctx == ctxUnknown {
-		return "", fmt.Errorf("unsupported field root (expected $aasdesc#, $smdesc#, $sm#, $sme...#, $cd#, or $bd#): %q", fieldStr)
+		return "", fmt.Errorf("unsupported field root (expected $aas#, $aasdesc#, $smdesc#, $sm#, $sme...#, $cd#, or $bd#): %q", fieldStr)
 	}
 
 	tokens := builder.TokenizeField(fieldStr)
