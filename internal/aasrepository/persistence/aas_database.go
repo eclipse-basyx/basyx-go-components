@@ -968,7 +968,7 @@ func (s *AssetAdministrationShellDatabase) getAssetAdministrationShellMapByDBID(
 		assetInfo["assetType"] = assetType.String
 	}
 	if thumbnailMap := buildThumbnailMap(thumbnailPath, thumbnailContentType); len(thumbnailMap) > 0 {
-		assetInfo["thumbnail"] = thumbnailMap
+		assetInfo["defaultThumbnail"] = thumbnailMap
 	}
 
 	specificAssetIDs, specificErr := s.readSpecificAssetIDsByAssetInformationID(ctx, aasDBID)
@@ -1154,7 +1154,7 @@ func (s *AssetAdministrationShellDatabase) getAssetAdministrationShellMapsByDBID
 			assetInfo["assetType"] = row.assetType.String
 		}
 		if thumbnailMap := buildThumbnailMap(row.thumbnailPath, row.thumbnailContentType); len(thumbnailMap) > 0 {
-			assetInfo["thumbnail"] = thumbnailMap
+			assetInfo["defaultThumbnail"] = thumbnailMap
 		}
 
 		specificAssetIDs := specificAssetIDsByAASID[aasDBID]
