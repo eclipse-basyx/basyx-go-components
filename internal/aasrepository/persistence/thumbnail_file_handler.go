@@ -162,6 +162,21 @@ func (h *PostgreSQLThumbnailFileHandler) UploadThumbnailByAASID(aasIdentifier st
 	}
 	defer cleanup(&err)
 
+	err = h.uploadThumbnailByAASIDInTransaction(tx, aasIdentifier, fileName, file)
+	if err != nil {
+		return err
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		return common.NewInternalServerError("AASREPO-PUTTHUMBNAIL-COMMIT " + err.Error())
+	}
+
+	return nil
+}
+
+// nolint:revive // cyclomatic complexity of 33
+func (h *PostgreSQLThumbnailFileHandler) uploadThumbnailByAASIDInTransaction(tx *sql.Tx, aasIdentifier string, fileName string, file *os.File) error {
 	aasDBID, err := persistenceutils.GetAssetAdministrationShellDatabaseID(tx, aasIdentifier)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -307,11 +322,6 @@ func (h *PostgreSQLThumbnailFileHandler) UploadThumbnailByAASID(aasIdentifier st
 		return common.NewInternalServerError("AASREPO-PUTTHUMBNAIL-EXECELEMENTSQL " + upsertElementErr.Error())
 	}
 
-	err = tx.Commit()
-	if err != nil {
-		return common.NewInternalServerError("AASREPO-PUTTHUMBNAIL-COMMIT " + err.Error())
-	}
-
 	return nil
 }
 
@@ -323,6 +333,20 @@ func (h *PostgreSQLThumbnailFileHandler) DeleteThumbnailByAASID(aasIdentifier st
 	}
 	defer cleanup(&err)
 
+	err = h.deleteThumbnailByAASIDInTransaction(tx, aasIdentifier)
+	if err != nil {
+		return err
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		return common.NewInternalServerError("AASREPO-DELTHUMBNAIL-COMMIT " + err.Error())
+	}
+
+	return nil
+}
+
+func (h *PostgreSQLThumbnailFileHandler) deleteThumbnailByAASIDInTransaction(tx *sql.Tx, aasIdentifier string) error {
 	aasDBID, err := persistenceutils.GetAssetAdministrationShellDatabaseID(tx, aasIdentifier)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -390,11 +414,6 @@ func (h *PostgreSQLThumbnailFileHandler) DeleteThumbnailByAASID(aasIdentifier st
 	}
 	if rowsAffected == 0 {
 		return common.NewErrNotFound("AASREPO-DELTHUMBNAIL-THUMBNAILNOTFOUND Thumbnail for Asset Administration Shell with ID '" + aasIdentifier + "' not found")
-	}
-
-	err = tx.Commit()
-	if err != nil {
-		return common.NewInternalServerError("AASREPO-DELTHUMBNAIL-COMMIT " + err.Error())
 	}
 
 	return nil

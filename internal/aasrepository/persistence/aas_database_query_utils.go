@@ -87,6 +87,14 @@ func buildAssetAdministrationShellSubmodelReferenceQuery(dialect *goqu.DialectWr
 	}).Returning(goqu.I("id")).ToSQL()
 }
 
+func buildGetNextAssetAdministrationShellSubmodelReferencePositionQuery(dialect *goqu.DialectWrapper, aasDBID int64) (string, []any, error) {
+	return dialect.
+		From("aas_submodel_reference").
+		Select(goqu.L("COALESCE(MAX(position), -1) + 1")).
+		Where(goqu.I("aas_id").Eq(aasDBID)).
+		ToSQL()
+}
+
 func buildAssetAdministrationShellSubmodelReferenceKeysQuery(dialect *goqu.DialectWrapper, aasSubmodelReferenceDBID int64, submodelRef types.IReference) (string, []any, error) {
 	keyRows := make([]goqu.Record, 0, len(submodelRef.Keys()))
 	for position, key := range submodelRef.Keys() {
