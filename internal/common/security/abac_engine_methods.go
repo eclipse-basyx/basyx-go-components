@@ -117,7 +117,7 @@ var mapMethodAndPatternToRightsData = []mapMethodAndPatternToRights{
 	{"GET", "/submodels/{submodelIdentifier}/$signed", []grammar.RightsEnum{grammar.RightsEnumREAD}},
 	{"GET", "/submodels/{submodelIdentifier}/$value/$signed", []grammar.RightsEnum{grammar.RightsEnumREAD}},
 
-	// aas repository (implemented endpoints)
+	// aas repository
 	{"GET", "/shells", []grammar.RightsEnum{grammar.RightsEnumREAD}},
 	{"POST", "/shells", []grammar.RightsEnum{grammar.RightsEnumCREATE}},
 	{"GET", "/shells/$reference", []grammar.RightsEnum{grammar.RightsEnumREAD}},
@@ -133,6 +133,7 @@ var mapMethodAndPatternToRightsData = []mapMethodAndPatternToRights{
 	{"GET", "/shells/{aasIdentifier}/submodel-refs", []grammar.RightsEnum{grammar.RightsEnumREAD}},
 	{"POST", "/shells/{aasIdentifier}/submodel-refs", []grammar.RightsEnum{grammar.RightsEnumCREATE}},
 	{"DELETE", "/shells/{aasIdentifier}/submodel-refs/{submodelIdentifier}", []grammar.RightsEnum{grammar.RightsEnumDELETE}},
+	// extend mapping for endpoints that are not yet implemented.
 
 	// aas discovery
 	{"GET", "/lookup/shells", []grammar.RightsEnum{grammar.RightsEnumREAD}},

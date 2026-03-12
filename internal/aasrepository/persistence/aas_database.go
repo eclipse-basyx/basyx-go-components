@@ -153,15 +153,6 @@ func (s *AssetAdministrationShellDatabase) verifyReference(reference types.IRefe
 	return common.NewErrBadRequest(errorPrefix + " " + stringOfAllErrors)
 }
 
-func shouldEnforceABACWriteCheck(ctx context.Context) bool {
-	cfg, ok := common.ConfigFromContext(ctx)
-	if !ok || !cfg.ABAC.Enabled {
-		return false
-	}
-	queryFilter := auth.GetQueryFilter(ctx)
-	return queryFilter != nil && queryFilter.Formula != nil
-}
-
 func buildAASCollector() (*grammar.ResolvedFieldPathCollector, error) {
 	collector, err := grammar.NewResolvedFieldPathCollectorForRoot(grammar.CollectorRootAAS)
 	if err != nil {
@@ -180,7 +171,7 @@ func (s *AssetAdministrationShellDatabase) checkAASVisibilityInTx(ctx context.Co
 		return false, false, common.NewInternalServerError("AASREPO-ABACCHKAAS-GETAASDBID " + err.Error())
 	}
 
-	if !shouldEnforceABACWriteCheck(ctx) {
+	if !auth.ShouldEnforceABACWriteCheck(ctx) {
 		return true, true, nil
 	}
 
@@ -231,7 +222,7 @@ func (s *AssetAdministrationShellDatabase) CreateAssetAdministrationShell(ctx co
 		return err
 	}
 
-	if shouldEnforceABACWriteCheck(ctx) {
+	if auth.ShouldEnforceABACWriteCheck(ctx) {
 		exists, visible, visErr := s.checkAASVisibilityInTx(ctx, tx, aas.ID())
 		if visErr != nil {
 			return visErr
@@ -375,7 +366,7 @@ func (s *AssetAdministrationShellDatabase) CreateSubmodelReferenceInAssetAdminis
 	}
 	defer cleanup(&err)
 
-	if shouldEnforceABACWriteCheck(ctx) {
+	if auth.ShouldEnforceABACWriteCheck(ctx) {
 		exists, visible, visErr := s.checkAASVisibilityInTx(ctx, tx, aasIdentifier)
 		if visErr != nil {
 			return visErr
@@ -393,7 +384,7 @@ func (s *AssetAdministrationShellDatabase) CreateSubmodelReferenceInAssetAdminis
 		return err
 	}
 
-	if shouldEnforceABACWriteCheck(ctx) {
+	if auth.ShouldEnforceABACWriteCheck(ctx) {
 		exists, visible, visErr := s.checkAASVisibilityInTx(ctx, tx, aasIdentifier)
 		if visErr != nil {
 			return visErr
@@ -641,7 +632,7 @@ func (s *AssetAdministrationShellDatabase) PutAssetAdministrationShellByID(ctx c
 		isUpdate = false
 	}
 
-	if shouldEnforceABACWriteCheck(ctx) && isUpdate {
+	if auth.ShouldEnforceABACWriteCheck(ctx) && isUpdate {
 		exists, visible, visErr := s.checkAASVisibilityInTx(ctx, tx, aasIdentifier)
 		if visErr != nil {
 			return false, visErr
@@ -669,7 +660,7 @@ func (s *AssetAdministrationShellDatabase) PutAssetAdministrationShellByID(ctx c
 		return false, err
 	}
 
-	if shouldEnforceABACWriteCheck(ctx) {
+	if auth.ShouldEnforceABACWriteCheck(ctx) {
 		exists, visible, visErr := s.checkAASVisibilityInTx(ctx, tx, aasIdentifier)
 		if visErr != nil {
 			return false, visErr
@@ -698,7 +689,7 @@ func (s *AssetAdministrationShellDatabase) DeleteAssetAdministrationShellByID(ct
 	}
 	defer cleanup(&err)
 
-	if shouldEnforceABACWriteCheck(ctx) {
+	if auth.ShouldEnforceABACWriteCheck(ctx) {
 		exists, visible, visErr := s.checkAASVisibilityInTx(ctx, tx, aasIdentifier)
 		if visErr != nil {
 			return visErr
@@ -783,6 +774,7 @@ func (s *AssetAdministrationShellDatabase) GetAssetInformationByAASID(ctx contex
 }
 
 // PutAssetInformationByAASID updates the assetInformation section and applies ABAC write checks.
+// nolint:revive // cyclomatic complexity (31) is acceptable due to the multiple steps and checks involved in this operation.
 func (s *AssetAdministrationShellDatabase) PutAssetInformationByAASID(ctx context.Context, aasIdentifier string, assetInformation types.IAssetInformation) error {
 	if err := s.verifyAssetInformation(assetInformation, "AASREPO-PUTASSETINFORMATION-VERIFY"); err != nil {
 		return err
@@ -794,7 +786,7 @@ func (s *AssetAdministrationShellDatabase) PutAssetInformationByAASID(ctx contex
 	}
 	defer cleanup(&err)
 
-	if shouldEnforceABACWriteCheck(ctx) {
+	if auth.ShouldEnforceABACWriteCheck(ctx) {
 		exists, visible, visErr := s.checkAASVisibilityInTx(ctx, tx, aasIdentifier)
 		if visErr != nil {
 			return visErr
@@ -882,7 +874,7 @@ func (s *AssetAdministrationShellDatabase) PutAssetInformationByAASID(ctx contex
 		}
 	}
 
-	if shouldEnforceABACWriteCheck(ctx) {
+	if auth.ShouldEnforceABACWriteCheck(ctx) {
 		exists, visible, visErr := s.checkAASVisibilityInTx(ctx, tx, aasIdentifier)
 		if visErr != nil {
 			return visErr
@@ -919,7 +911,7 @@ func (s *AssetAdministrationShellDatabase) GetThumbnailByAASID(ctx context.Conte
 
 // PutThumbnailByAASID uploads or replaces the thumbnail and checks ABAC visibility.
 func (s *AssetAdministrationShellDatabase) PutThumbnailByAASID(ctx context.Context, aasIdentifier string, fileName string, file *os.File) error {
-	if shouldEnforceABACWriteCheck(ctx) {
+	if auth.ShouldEnforceABACWriteCheck(ctx) {
 		tx, cleanup, err := common.StartTransaction(s.db)
 		if err != nil {
 			return common.NewInternalServerError("AASREPO-PUTTHUMBNAIL-STARTTX " + err.Error())
@@ -952,7 +944,7 @@ func (s *AssetAdministrationShellDatabase) PutThumbnailByAASID(ctx context.Conte
 
 // DeleteThumbnailByAASID removes the thumbnail and checks ABAC visibility.
 func (s *AssetAdministrationShellDatabase) DeleteThumbnailByAASID(ctx context.Context, aasIdentifier string) error {
-	if shouldEnforceABACWriteCheck(ctx) {
+	if auth.ShouldEnforceABACWriteCheck(ctx) {
 		tx, cleanup, err := common.StartTransaction(s.db)
 		if err != nil {
 			return common.NewInternalServerError("AASREPO-DELTHUMBNAIL-STARTTX " + err.Error())
@@ -1004,7 +996,7 @@ func (s *AssetAdministrationShellDatabase) GetAllSubmodelReferencesByAASID(ctx c
 		cursorID = parsedCursor
 	}
 
-	if shouldEnforceABACWriteCheck(ctx) {
+	if auth.ShouldEnforceABACWriteCheck(ctx) {
 		exists, visible, visErr := s.checkAASVisibilityInTx(ctx, tx, aasIdentifier)
 		if visErr != nil {
 			return nil, "", visErr
@@ -1087,7 +1079,7 @@ func (s *AssetAdministrationShellDatabase) DeleteSubmodelReferenceInAssetAdminis
 	}
 	defer cleanup(&err)
 
-	if shouldEnforceABACWriteCheck(ctx) {
+	if auth.ShouldEnforceABACWriteCheck(ctx) {
 		exists, visible, visErr := s.checkAASVisibilityInTx(ctx, tx, aasIdentifier)
 		if visErr != nil {
 			return visErr

@@ -138,15 +138,6 @@ func buildCheckAssetAdministrationShellSubmodelReferenceExistsQuery(dialect *goq
 		ToSQL()
 }
 
-func buildGetAssetAdministrationShellsQuery(dialect *goqu.DialectWrapper, limit int32, cursor string, idShort string, assetIDs []string) (string, []any, error) {
-	ds, err := buildGetAssetAdministrationShellsDataset(dialect, limit, cursor, idShort, assetIDs)
-	if err != nil {
-		return "", nil, err
-	}
-
-	return ds.ToSQL()
-}
-
 func buildGetAssetAdministrationShellsDataset(dialect *goqu.DialectWrapper, limit int32, cursor string, idShort string, assetIDs []string) (*goqu.SelectDataset, error) {
 	ds := dialect.
 		From(goqu.T("aas").As("aas")).
