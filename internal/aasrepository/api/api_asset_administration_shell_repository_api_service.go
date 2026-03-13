@@ -53,7 +53,7 @@ func newAPIErrorResponse(err error, status int, operation string, info string) g
 
 // GetAllAssetAdministrationShells - Returns all Asset Administration Shells
 func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllAssetAdministrationShells(ctx context.Context, assetIds []string, idShort string, limit int32, cursor string) (gen.ImplResponse, error) {
-	_ = ctx
+
 	const operation = "GetAllAssetAdministrationShells"
 
 	decodedCursor, decodeErr := common.DecodeString(cursor)
@@ -106,7 +106,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) PostAssetAdministratio
 
 // GetAllAssetAdministrationShellsReference - Returns References to all Asset Administration Shells
 func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllAssetAdministrationShellsReference(ctx context.Context, assetIds []string, idShort string, limit int32, cursor string) (gen.ImplResponse, error) {
-	_ = ctx
+
 	const operation = "GetAllAssetAdministrationShellsReference"
 
 	decodedCursor, decodeErr := common.DecodeString(cursor)
@@ -139,7 +139,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllAssetAdministrat
 
 // GetAssetAdministrationShellById - Returns a specific Asset Administration Shell
 func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAssetAdministrationShellById(ctx context.Context, aasIdentifier string) (gen.ImplResponse, error) {
-	_ = ctx
+
 	const operation = "GetAssetAdministrationShellById"
 
 	decodedIdentifier, decodeErr := common.DecodeString(aasIdentifier)
@@ -160,7 +160,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAssetAdministration
 
 // PutAssetAdministrationShellById - Creates or updates an existing Asset Administration Shell
 func (s *AssetAdministrationShellRepositoryAPIAPIService) PutAssetAdministrationShellById(ctx context.Context, aasIdentifier string, assetAdministrationShell types.IAssetAdministrationShell) (gen.ImplResponse, error) {
-	_ = ctx
+
 	const operation = "PutAssetAdministrationShellById"
 
 	decodedIdentifier, decodeErr := common.DecodeString(aasIdentifier)
@@ -196,7 +196,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) PutAssetAdministration
 
 // DeleteAssetAdministrationShellById - Deletes an Asset Administration Shell
 func (s *AssetAdministrationShellRepositoryAPIAPIService) DeleteAssetAdministrationShellById(ctx context.Context, aasIdentifier string) (gen.ImplResponse, error) {
-	_ = ctx
+
 	const operation = "DeleteAssetAdministrationShellById"
 
 	decodedIdentifier, decodeErr := common.DecodeString(aasIdentifier)
@@ -220,7 +220,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) DeleteAssetAdministrat
 
 // GetAssetAdministrationShellByIdReferenceAasRepository - Returns a specific Asset Administration Shell as a Reference
 func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAssetAdministrationShellByIdReferenceAasRepository(ctx context.Context, aasIdentifier string) (gen.ImplResponse, error) {
-	_ = ctx
+
 	const operation = "GetAssetAdministrationShellByIdReferenceAasRepository"
 
 	decodedIdentifier, decodeErr := common.DecodeString(aasIdentifier)
@@ -246,7 +246,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAssetAdministration
 
 // GetAssetInformationAasRepository - Returns the Asset Information
 func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAssetInformationAasRepository(ctx context.Context, aasIdentifier string) (gen.ImplResponse, error) {
-	_ = ctx
+
 	const operation = "GetAssetInformationAasRepository"
 
 	decodedIdentifier, decodeErr := common.DecodeString(aasIdentifier)
@@ -267,7 +267,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAssetInformationAas
 
 // PutAssetInformationAasRepository - Updates the Asset Information
 func (s *AssetAdministrationShellRepositoryAPIAPIService) PutAssetInformationAasRepository(ctx context.Context, aasIdentifier string, assetInformation types.IAssetInformation) (gen.ImplResponse, error) {
-	_ = ctx
+
 	const operation = "PutAssetInformationAasRepository"
 
 	decodedIdentifier, decodeErr := common.DecodeString(aasIdentifier)
@@ -294,7 +294,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) PutAssetInformationAas
 
 // GetThumbnailAasRepository -
 func (s *AssetAdministrationShellRepositoryAPIAPIService) GetThumbnailAasRepository(ctx context.Context, aasIdentifier string) (gen.ImplResponse, error) {
-	_ = ctx
+
 	const operation = "GetThumbnailAasRepository"
 
 	decodedIdentifier, decodeErr := common.DecodeString(aasIdentifier)
@@ -326,7 +326,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetThumbnailAasReposit
 
 // PutThumbnailAasRepository -
 func (s *AssetAdministrationShellRepositoryAPIAPIService) PutThumbnailAasRepository(ctx context.Context, aasIdentifier string, fileName string, file *os.File) (gen.ImplResponse, error) {
-	_ = ctx
+
 	const operation = "PutThumbnailAasRepository"
 
 	decodedIdentifier, decodeErr := common.DecodeString(aasIdentifier)
@@ -353,7 +353,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) PutThumbnailAasReposit
 
 // DeleteThumbnailAasRepository -
 func (s *AssetAdministrationShellRepositoryAPIAPIService) DeleteThumbnailAasRepository(ctx context.Context, aasIdentifier string) (gen.ImplResponse, error) {
-	_ = ctx
+
 	const operation = "DeleteThumbnailAasRepository"
 
 	decodedIdentifier, decodeErr := common.DecodeString(aasIdentifier)
@@ -380,7 +380,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) DeleteThumbnailAasRepo
 
 // GetAllSubmodelReferencesAasRepository - Returns all submodel references
 func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllSubmodelReferencesAasRepository(ctx context.Context, aasIdentifier string, limit int32, cursor string) (gen.ImplResponse, error) {
-	_ = ctx
+
 	const operation = "GetAllSubmodelReferencesAasRepository"
 
 	decodedIdentifier, decodeErr := common.DecodeString(aasIdentifier)
@@ -454,7 +454,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) PostSubmodelReferenceA
 
 // DeleteSubmodelReferenceAasRepository - Deletes the submodel reference from the Asset Administration Shell. Does not delete the submodel itself.
 func (s *AssetAdministrationShellRepositoryAPIAPIService) DeleteSubmodelReferenceAasRepository(ctx context.Context, aasIdentifier string, submodelIdentifier string) (gen.ImplResponse, error) {
-	_ = ctx
+
 	const operation = "DeleteSubmodelReferenceAasRepository"
 
 	decodedAASIdentifier, decodeAASErr := common.DecodeString(aasIdentifier)
