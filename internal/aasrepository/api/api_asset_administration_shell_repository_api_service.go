@@ -53,7 +53,7 @@ func newAPIErrorResponse(err error, status int, operation string, info string) g
 
 // GetAllAssetAdministrationShells - Returns all Asset Administration Shells
 func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllAssetAdministrationShells(ctx context.Context, assetIds []string, idShort string, limit int32, cursor string) (gen.ImplResponse, error) {
-	_ = ctx
+
 	const operation = "GetAllAssetAdministrationShells"
 
 	decodedCursor, decodeErr := common.DecodeString(cursor)
@@ -79,9 +79,12 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllAssetAdministrat
 func (s *AssetAdministrationShellRepositoryAPIAPIService) PostAssetAdministrationShell(ctx context.Context, aas types.IAssetAdministrationShell) (gen.ImplResponse, error) {
 	const operation = "PostAssetAdministrationShell"
 
-	err := s.assetAdministrationShellBackend.CreateAssetAdministrationShell(aas)
+	err := s.assetAdministrationShellBackend.CreateAssetAdministrationShell(ctx, aas)
 
 	if err != nil {
+		if common.IsErrDenied(err) {
+			return newAPIErrorResponse(err, http.StatusForbidden, operation, "Forbidden"), nil
+		}
 		if common.IsErrConflict(err) {
 			return newAPIErrorResponse(err, http.StatusConflict, operation, "IdConflict"), nil
 		}
@@ -103,7 +106,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) PostAssetAdministratio
 
 // GetAllAssetAdministrationShellsReference - Returns References to all Asset Administration Shells
 func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllAssetAdministrationShellsReference(ctx context.Context, assetIds []string, idShort string, limit int32, cursor string) (gen.ImplResponse, error) {
-	_ = ctx
+
 	const operation = "GetAllAssetAdministrationShellsReference"
 
 	decodedCursor, decodeErr := common.DecodeString(cursor)
@@ -111,7 +114,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllAssetAdministrat
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "BadCursor"), nil
 	}
 
-	references, nextCursor, err := s.assetAdministrationShellBackend.GetAssetAdministrationShellReferences(limit, decodedCursor, idShort, assetIds)
+	references, nextCursor, err := s.assetAdministrationShellBackend.GetAssetAdministrationShellReferences(ctx, limit, decodedCursor, idShort, assetIds)
 	if err != nil {
 		if common.IsErrBadRequest(err) {
 			return newAPIErrorResponse(err, http.StatusBadRequest, operation, "BadRequest"), nil
@@ -136,7 +139,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllAssetAdministrat
 
 // GetAssetAdministrationShellById - Returns a specific Asset Administration Shell
 func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAssetAdministrationShellById(ctx context.Context, aasIdentifier string) (gen.ImplResponse, error) {
-	_ = ctx
+
 	const operation = "GetAssetAdministrationShellById"
 
 	decodedIdentifier, decodeErr := common.DecodeString(aasIdentifier)
@@ -157,7 +160,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAssetAdministration
 
 // PutAssetAdministrationShellById - Creates or updates an existing Asset Administration Shell
 func (s *AssetAdministrationShellRepositoryAPIAPIService) PutAssetAdministrationShellById(ctx context.Context, aasIdentifier string, assetAdministrationShell types.IAssetAdministrationShell) (gen.ImplResponse, error) {
-	_ = ctx
+
 	const operation = "PutAssetAdministrationShellById"
 
 	decodedIdentifier, decodeErr := common.DecodeString(aasIdentifier)
@@ -165,8 +168,11 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) PutAssetAdministration
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedAssetAdministrationShellIdentifier"), nil
 	}
 
-	isUpdate, putErr := s.assetAdministrationShellBackend.PutAssetAdministrationShellByID(decodedIdentifier, assetAdministrationShell)
+	isUpdate, putErr := s.assetAdministrationShellBackend.PutAssetAdministrationShellByID(ctx, decodedIdentifier, assetAdministrationShell)
 	if putErr != nil {
+		if common.IsErrDenied(putErr) {
+			return newAPIErrorResponse(putErr, http.StatusForbidden, operation, "Forbidden"), nil
+		}
 		if common.IsErrBadRequest(putErr) {
 			return newAPIErrorResponse(putErr, http.StatusBadRequest, operation, "BadRequest"), nil
 		}
@@ -190,7 +196,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) PutAssetAdministration
 
 // DeleteAssetAdministrationShellById - Deletes an Asset Administration Shell
 func (s *AssetAdministrationShellRepositoryAPIAPIService) DeleteAssetAdministrationShellById(ctx context.Context, aasIdentifier string) (gen.ImplResponse, error) {
-	_ = ctx
+
 	const operation = "DeleteAssetAdministrationShellById"
 
 	decodedIdentifier, decodeErr := common.DecodeString(aasIdentifier)
@@ -198,8 +204,11 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) DeleteAssetAdministrat
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedAssetAdministrationShellIdentifier"), nil
 	}
 
-	err := s.assetAdministrationShellBackend.DeleteAssetAdministrationShellByID(decodedIdentifier)
+	err := s.assetAdministrationShellBackend.DeleteAssetAdministrationShellByID(ctx, decodedIdentifier)
 	if err != nil {
+		if common.IsErrDenied(err) {
+			return newAPIErrorResponse(err, http.StatusForbidden, operation, "Forbidden"), nil
+		}
 		if common.IsErrNotFound(err) {
 			return newAPIErrorResponse(err, http.StatusNotFound, operation, "AssetAdministrationShellNotFound"), nil
 		}
@@ -211,7 +220,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) DeleteAssetAdministrat
 
 // GetAssetAdministrationShellByIdReferenceAasRepository - Returns a specific Asset Administration Shell as a Reference
 func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAssetAdministrationShellByIdReferenceAasRepository(ctx context.Context, aasIdentifier string) (gen.ImplResponse, error) {
-	_ = ctx
+
 	const operation = "GetAssetAdministrationShellByIdReferenceAasRepository"
 
 	decodedIdentifier, decodeErr := common.DecodeString(aasIdentifier)
@@ -219,7 +228,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAssetAdministration
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedAssetAdministrationShellIdentifier"), nil
 	}
 
-	reference, err := s.assetAdministrationShellBackend.GetAssetAdministrationShellReferenceByID(decodedIdentifier)
+	reference, err := s.assetAdministrationShellBackend.GetAssetAdministrationShellReferenceByID(ctx, decodedIdentifier)
 	if err != nil {
 		if common.IsErrNotFound(err) {
 			return newAPIErrorResponse(err, http.StatusNotFound, operation, "AssetAdministrationShellNotFound"), nil
@@ -237,7 +246,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAssetAdministration
 
 // GetAssetInformationAasRepository - Returns the Asset Information
 func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAssetInformationAasRepository(ctx context.Context, aasIdentifier string) (gen.ImplResponse, error) {
-	_ = ctx
+
 	const operation = "GetAssetInformationAasRepository"
 
 	decodedIdentifier, decodeErr := common.DecodeString(aasIdentifier)
@@ -245,7 +254,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAssetInformationAas
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedAssetAdministrationShellIdentifier"), nil
 	}
 
-	assetInformation, err := s.assetAdministrationShellBackend.GetAssetInformationByAASID(decodedIdentifier)
+	assetInformation, err := s.assetAdministrationShellBackend.GetAssetInformationByAASID(ctx, decodedIdentifier)
 	if err != nil {
 		if common.IsErrNotFound(err) {
 			return newAPIErrorResponse(err, http.StatusNotFound, operation, "AssetAdministrationShellNotFound"), nil
@@ -258,7 +267,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAssetInformationAas
 
 // PutAssetInformationAasRepository - Updates the Asset Information
 func (s *AssetAdministrationShellRepositoryAPIAPIService) PutAssetInformationAasRepository(ctx context.Context, aasIdentifier string, assetInformation types.IAssetInformation) (gen.ImplResponse, error) {
-	_ = ctx
+
 	const operation = "PutAssetInformationAasRepository"
 
 	decodedIdentifier, decodeErr := common.DecodeString(aasIdentifier)
@@ -266,8 +275,11 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) PutAssetInformationAas
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedAssetAdministrationShellIdentifier"), nil
 	}
 
-	err := s.assetAdministrationShellBackend.PutAssetInformationByAASID(decodedIdentifier, assetInformation)
+	err := s.assetAdministrationShellBackend.PutAssetInformationByAASID(ctx, decodedIdentifier, assetInformation)
 	if err != nil {
+		if common.IsErrDenied(err) {
+			return newAPIErrorResponse(err, http.StatusForbidden, operation, "Forbidden"), nil
+		}
 		if common.IsErrNotFound(err) {
 			return newAPIErrorResponse(err, http.StatusNotFound, operation, "AssetAdministrationShellNotFound"), nil
 		}
@@ -282,7 +294,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) PutAssetInformationAas
 
 // GetThumbnailAasRepository -
 func (s *AssetAdministrationShellRepositoryAPIAPIService) GetThumbnailAasRepository(ctx context.Context, aasIdentifier string) (gen.ImplResponse, error) {
-	_ = ctx
+
 	const operation = "GetThumbnailAasRepository"
 
 	decodedIdentifier, decodeErr := common.DecodeString(aasIdentifier)
@@ -290,7 +302,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetThumbnailAasReposit
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedAssetAdministrationShellIdentifier"), nil
 	}
 
-	fileContent, contentType, fileName, thumbnailPath, err := s.assetAdministrationShellBackend.GetThumbnailByAASID(decodedIdentifier)
+	fileContent, contentType, fileName, thumbnailPath, err := s.assetAdministrationShellBackend.GetThumbnailByAASID(ctx, decodedIdentifier)
 	if err != nil {
 		if common.IsErrNotFound(err) {
 			return newAPIErrorResponse(err, http.StatusNotFound, operation, "ThumbnailNotFound"), nil
@@ -314,7 +326,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetThumbnailAasReposit
 
 // PutThumbnailAasRepository -
 func (s *AssetAdministrationShellRepositoryAPIAPIService) PutThumbnailAasRepository(ctx context.Context, aasIdentifier string, fileName string, file *os.File) (gen.ImplResponse, error) {
-	_ = ctx
+
 	const operation = "PutThumbnailAasRepository"
 
 	decodedIdentifier, decodeErr := common.DecodeString(aasIdentifier)
@@ -322,8 +334,11 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) PutThumbnailAasReposit
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedAssetAdministrationShellIdentifier"), nil
 	}
 
-	err := s.assetAdministrationShellBackend.PutThumbnailByAASID(decodedIdentifier, fileName, file)
+	err := s.assetAdministrationShellBackend.PutThumbnailByAASID(ctx, decodedIdentifier, fileName, file)
 	if err != nil {
+		if common.IsErrDenied(err) {
+			return newAPIErrorResponse(err, http.StatusForbidden, operation, "Forbidden"), nil
+		}
 		if common.IsErrNotFound(err) {
 			return newAPIErrorResponse(err, http.StatusNotFound, operation, "AssetAdministrationShellNotFound"), nil
 		}
@@ -338,7 +353,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) PutThumbnailAasReposit
 
 // DeleteThumbnailAasRepository -
 func (s *AssetAdministrationShellRepositoryAPIAPIService) DeleteThumbnailAasRepository(ctx context.Context, aasIdentifier string) (gen.ImplResponse, error) {
-	_ = ctx
+
 	const operation = "DeleteThumbnailAasRepository"
 
 	decodedIdentifier, decodeErr := common.DecodeString(aasIdentifier)
@@ -346,8 +361,11 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) DeleteThumbnailAasRepo
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedAssetAdministrationShellIdentifier"), nil
 	}
 
-	err := s.assetAdministrationShellBackend.DeleteThumbnailByAASID(decodedIdentifier)
+	err := s.assetAdministrationShellBackend.DeleteThumbnailByAASID(ctx, decodedIdentifier)
 	if err != nil {
+		if common.IsErrDenied(err) {
+			return newAPIErrorResponse(err, http.StatusForbidden, operation, "Forbidden"), nil
+		}
 		if common.IsErrNotFound(err) {
 			return newAPIErrorResponse(err, http.StatusNotFound, operation, "ThumbnailNotFound"), nil
 		}
@@ -362,7 +380,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) DeleteThumbnailAasRepo
 
 // GetAllSubmodelReferencesAasRepository - Returns all submodel references
 func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllSubmodelReferencesAasRepository(ctx context.Context, aasIdentifier string, limit int32, cursor string) (gen.ImplResponse, error) {
-	_ = ctx
+
 	const operation = "GetAllSubmodelReferencesAasRepository"
 
 	decodedIdentifier, decodeErr := common.DecodeString(aasIdentifier)
@@ -375,7 +393,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) GetAllSubmodelReferenc
 		return newAPIErrorResponse(cursorDecodeErr, http.StatusBadRequest, operation, "BadCursor"), nil
 	}
 
-	references, nextCursor, err := s.assetAdministrationShellBackend.GetAllSubmodelReferencesByAASID(decodedIdentifier, limit, decodedCursor)
+	references, nextCursor, err := s.assetAdministrationShellBackend.GetAllSubmodelReferencesByAASID(ctx, decodedIdentifier, limit, decodedCursor)
 	if err != nil {
 		if common.IsErrNotFound(err) {
 			return newAPIErrorResponse(err, http.StatusNotFound, operation, "AssetAdministrationShellNotFound"), nil
@@ -410,7 +428,10 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) PostSubmodelReferenceA
 		return newAPIErrorResponse(decodeErr, http.StatusBadRequest, operation, "MalformedAssetAdministrationShellIdentifier"), nil
 	}
 
-	if err := s.assetAdministrationShellBackend.CreateSubmodelReferenceInAssetAdministrationShell(decodedAssetAdministrationShellIdentifier, reference); err != nil {
+	if err := s.assetAdministrationShellBackend.CreateSubmodelReferenceInAssetAdministrationShell(ctx, decodedAssetAdministrationShellIdentifier, reference); err != nil {
+		if common.IsErrDenied(err) {
+			return newAPIErrorResponse(err, http.StatusForbidden, operation, "Forbidden"), nil
+		}
 		if common.IsErrNotFound(err) {
 			return newAPIErrorResponse(err, http.StatusNotFound, operation, "AssetAdministrationShellNotFound"), nil
 		}
@@ -433,7 +454,7 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) PostSubmodelReferenceA
 
 // DeleteSubmodelReferenceAasRepository - Deletes the submodel reference from the Asset Administration Shell. Does not delete the submodel itself.
 func (s *AssetAdministrationShellRepositoryAPIAPIService) DeleteSubmodelReferenceAasRepository(ctx context.Context, aasIdentifier string, submodelIdentifier string) (gen.ImplResponse, error) {
-	_ = ctx
+
 	const operation = "DeleteSubmodelReferenceAasRepository"
 
 	decodedAASIdentifier, decodeAASErr := common.DecodeString(aasIdentifier)
@@ -446,8 +467,11 @@ func (s *AssetAdministrationShellRepositoryAPIAPIService) DeleteSubmodelReferenc
 		return newAPIErrorResponse(decodeSubmodelErr, http.StatusBadRequest, operation, "MalformedSubmodelIdentifier"), nil
 	}
 
-	err := s.assetAdministrationShellBackend.DeleteSubmodelReferenceInAssetAdministrationShell(decodedAASIdentifier, decodedSubmodelIdentifier)
+	err := s.assetAdministrationShellBackend.DeleteSubmodelReferenceInAssetAdministrationShell(ctx, decodedAASIdentifier, decodedSubmodelIdentifier)
 	if err != nil {
+		if common.IsErrDenied(err) {
+			return newAPIErrorResponse(err, http.StatusForbidden, operation, "Forbidden"), nil
+		}
 		if common.IsErrNotFound(err) {
 			return newAPIErrorResponse(err, http.StatusNotFound, operation, "SubmodelReferenceNotFound"), nil
 		}

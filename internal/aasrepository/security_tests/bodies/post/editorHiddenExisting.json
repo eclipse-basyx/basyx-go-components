@@ -1,0 +1,9 @@
+{
+  "id": "urn:example:aas:editor:hidden-existing",
+  "idShort": "EditorHiddenExisting",
+  "modelType": "AssetAdministrationShell",
+  "assetInformation": {
+    "assetKind": "Instance",
+    "assetType": "editor-hidden"
+  }
+}

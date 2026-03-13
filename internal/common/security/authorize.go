@@ -142,6 +142,21 @@ func GetQueryFilter(ctx context.Context) *QueryFilter {
 	return nil
 }
 
+// ShouldEnforceABACWriteCheck determines if ABAC write checks should be enforced
+// based on the presence of a QueryFilter with a non-nil Formula in the context.
+//
+// This function can be used by components that need to decide whether to apply
+// additional ABAC checks for write operations. If it returns true, the component
+// should enforce ABAC write restrictions according to the provided QueryFilter.
+func ShouldEnforceABACWriteCheck(ctx context.Context) bool {
+	cfg, ok := common.ConfigFromContext(ctx)
+	if !ok || !cfg.ABAC.Enabled {
+		return false
+	}
+	queryFilter := GetQueryFilter(ctx)
+	return queryFilter != nil && queryFilter.Formula != nil
+}
+
 // MergeQueryFilter combines an existing QueryFilter with a user query.
 // It guards nils and merges conditions and filter fragments using logical AND.
 func MergeQueryFilter(ctx context.Context, query grammar.Query) context.Context {
