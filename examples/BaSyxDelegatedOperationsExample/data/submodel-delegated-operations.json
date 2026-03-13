@@ -1,0 +1,86 @@
+{
+  "modelType": "Submodel",
+  "id": "https://example.com/ids/sm/delegated-operations",
+  "idShort": "DelegatedOperationsSubmodel",
+  "kind": "Instance",
+  "submodelElements": [
+    {
+      "modelType": "Operation",
+      "idShort": "AddNumbersSync",
+      "qualifiers": [
+        {
+          "type": "invocationDelegation",
+          "valueType": "xs:string",
+          "value": "http://delegated-operation-service:8080/delegate/add/sync"
+        }
+      ],
+      "inputVariables": [
+        {
+          "value": {
+            "modelType": "Property",
+            "idShort": "numberA",
+            "valueType": "xs:int",
+            "value": "0"
+          }
+        },
+        {
+          "value": {
+            "modelType": "Property",
+            "idShort": "numberB",
+            "valueType": "xs:int",
+            "value": "0"
+          }
+        }
+      ],
+      "outputVariables": [
+        {
+          "value": {
+            "modelType": "Property",
+            "idShort": "sum",
+            "valueType": "xs:int",
+            "value": "0"
+          }
+        }
+      ]
+    },
+    {
+      "modelType": "Operation",
+      "idShort": "AddNumbersAsync",
+      "qualifiers": [
+        {
+          "type": "invocationDelegation",
+          "valueType": "xs:string",
+          "value": "http://delegated-operation-service:8080/delegate/add/async"
+        }
+      ],
+      "inputVariables": [
+        {
+          "value": {
+            "modelType": "Property",
+            "idShort": "numberA",
+            "valueType": "xs:int",
+            "value": "0"
+          }
+        },
+        {
+          "value": {
+            "modelType": "Property",
+            "idShort": "numberB",
+            "valueType": "xs:int",
+            "value": "0"
+          }
+        }
+      ],
+      "outputVariables": [
+        {
+          "value": {
+            "modelType": "Property",
+            "idShort": "sum",
+            "valueType": "xs:int",
+            "value": "0"
+          }
+        }
+      ]
+    }
+  ]
+}

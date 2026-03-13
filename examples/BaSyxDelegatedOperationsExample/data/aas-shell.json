@@ -1,0 +1,20 @@
+{
+  "idShort": "DelegatedOperationsAAS",
+  "id": "https://example.com/ids/aas/delegated-operations-example",
+  "assetInformation": {
+    "assetKind": "Instance",
+    "globalAssetId": "https://example.com/assets/delegated-operations-demo"
+  },
+  "submodels": [
+    {
+      "type": "ModelReference",
+      "keys": [
+        {
+          "type": "Submodel",
+          "value": "https://example.com/ids/sm/delegated-operations"
+        }
+      ]
+    }
+  ],
+  "modelType": "AssetAdministrationShell"
+}

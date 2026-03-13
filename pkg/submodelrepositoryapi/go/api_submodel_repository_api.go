@@ -1956,7 +1956,8 @@ func (c *SubmodelRepositoryAPIAPIController) InvokeOperationSubmodelRepo(w http.
 		var param = false
 		asyncParam = param
 	}
-	result, err := c.service.InvokeOperationSubmodelRepo(r.Context(), submodelIdentifierParam, idShortPathParam, operationRequestParam, asyncParam)
+	requestContext := common.WithAuthorizationHeader(r.Context(), r.Header.Get("Authorization"))
+	result, err := c.service.InvokeOperationSubmodelRepo(requestContext, submodelIdentifierParam, idShortPathParam, operationRequestParam, asyncParam)
 	// If an error occurred, encode the error with the status code
 	if err != nil {
 		c.errorHandler(w, r, err, &result)
@@ -1971,11 +1972,6 @@ func (c *SubmodelRepositoryAPIAPIController) InvokeOperationValueOnly(w http.Res
 	query, err := parseQuery(r.URL.RawQuery)
 	if err != nil {
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
-		return
-	}
-	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
-	if aasIdentifierParam == "" {
-		c.errorHandler(w, r, &RequiredError{"aasIdentifier"}, nil)
 		return
 	}
 	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
@@ -2019,7 +2015,8 @@ func (c *SubmodelRepositoryAPIAPIController) InvokeOperationValueOnly(w http.Res
 		var param = false
 		asyncParam = param
 	}
-	result, err := c.service.InvokeOperationValueOnly(r.Context(), aasIdentifierParam, submodelIdentifierParam, idShortPathParam, operationRequestValueOnlyParam, asyncParam)
+	requestContext := common.WithAuthorizationHeader(r.Context(), r.Header.Get("Authorization"))
+	result, err := c.service.InvokeOperationValueOnly(requestContext, "", submodelIdentifierParam, idShortPathParam, operationRequestValueOnlyParam, asyncParam)
 	// If an error occurred, encode the error with the status code
 	if err != nil {
 		c.errorHandler(w, r, err, &result)
@@ -2048,7 +2045,8 @@ func (c *SubmodelRepositoryAPIAPIController) InvokeOperationAsync(w http.Respons
 		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
 		return
 	}
-	result, err := c.service.InvokeOperationAsync(r.Context(), submodelIdentifierParam, idShortPathParam, operationRequestParam)
+	requestContext := common.WithAuthorizationHeader(r.Context(), r.Header.Get("Authorization"))
+	result, err := c.service.InvokeOperationAsync(requestContext, submodelIdentifierParam, idShortPathParam, operationRequestParam)
 	// If an error occurred, encode the error with the status code
 	if err != nil {
 		c.errorHandler(w, r, err, &result)
@@ -2060,11 +2058,6 @@ func (c *SubmodelRepositoryAPIAPIController) InvokeOperationAsync(w http.Respons
 
 // InvokeOperationAsyncValueOnly - Asynchronously invokes an Operation at a specified path
 func (c *SubmodelRepositoryAPIAPIController) InvokeOperationAsyncValueOnly(w http.ResponseWriter, r *http.Request) {
-	aasIdentifierParam := chi.URLParam(r, "aasIdentifier")
-	if aasIdentifierParam == "" {
-		c.errorHandler(w, r, &RequiredError{"aasIdentifier"}, nil)
-		return
-	}
 	submodelIdentifierParam := chi.URLParam(r, "submodelIdentifier")
 	if submodelIdentifierParam == "" {
 		c.errorHandler(w, r, &RequiredError{"submodelIdentifier"}, nil)
@@ -2090,7 +2083,8 @@ func (c *SubmodelRepositoryAPIAPIController) InvokeOperationAsyncValueOnly(w htt
 		c.errorHandler(w, r, err, nil)
 		return
 	}
-	result, err := c.service.InvokeOperationAsyncValueOnly(r.Context(), aasIdentifierParam, submodelIdentifierParam, idShortPathParam, operationRequestValueOnlyParam)
+	requestContext := common.WithAuthorizationHeader(r.Context(), r.Header.Get("Authorization"))
+	result, err := c.service.InvokeOperationAsyncValueOnly(requestContext, "", submodelIdentifierParam, idShortPathParam, operationRequestValueOnlyParam)
 	// If an error occurred, encode the error with the status code
 	if err != nil {
 		c.errorHandler(w, r, err, &result)
