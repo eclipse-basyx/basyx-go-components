@@ -1,11 +1,13 @@
 {
   "AllAccessPermissionRules": {
     "DEFATTRIBUTES": [
+      { "name": "anonym_attr", "attributes": [ { "GLOBAL": "ANONYMOUS" } ] },
       { "name": "role_attr", "attributes": [ { "CLAIM": "role" } ] },
       { "name": "member_attr", "attributes": [ { "CLAIM": "role" }, { "CLAIM": "clear" } ] }
     ],
 
     "DEFOBJECTS": [
+      { "name": "description", "objects": [ { "ROUTE": "/description" } ] },
       { "name": "all_submodel_read_routes", "objects": [
         { "ROUTE": "/submodels" },
         { "ROUTE": "/submodels/*" },
@@ -60,6 +62,7 @@
     ],
 
     "DEFACLS": [
+      { "name": "read_only_public", "acl": { "USEATTRIBUTES": "anonym_attr", "RIGHTS": ["READ"], "ACCESS": "ALLOW" } },
       { "name": "read_role", "acl": { "USEATTRIBUTES": "role_attr", "RIGHTS": ["READ"], "ACCESS": "ALLOW" } },
       { "name": "read_member", "acl": { "USEATTRIBUTES": "member_attr", "RIGHTS": ["READ"], "ACCESS": "ALLOW" } },
       { "name": "create_role", "acl": { "USEATTRIBUTES": "role_attr", "RIGHTS": ["CREATE"], "ACCESS": "ALLOW" } },
@@ -173,6 +176,7 @@
 
     "rules": [
       { "USEACL": "admin_all", "OBJECTS": [ { "ROUTE": "*" } ], "USEFORMULA": "is_admin" },
+      { "USEACL": "read_only_public", "USEOBJECTS": [ "description" ], "USEFORMULA": "always_true" },
 
       { "USEACL": "read_role", "USEOBJECTS": [ "all_submodel_read_routes" ], "USEFORMULA": "viewer_formula_annotated_only" },
 

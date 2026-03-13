@@ -1,5 +1,12 @@
 [
   {
+    "context": "Anonymous description allowed",
+    "token": null,
+    "method": "GET",
+    "endpoint": "http://localhost:6004/description",
+    "expectedStatus": 200
+  },
+  {
     "context": "Anonymous list denied",
     "token": null,
     "method": "GET",

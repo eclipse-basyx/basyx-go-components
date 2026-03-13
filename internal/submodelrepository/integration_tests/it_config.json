@@ -7,6 +7,12 @@
         "expectedStatus": 200
     },
     {
+        "context": "Description endpoint",
+        "method": "GET",
+        "endpoint": "http://localhost:6004/description",
+        "expectedStatus": 200
+    },
+    {
         "context": "Post Submodel",
         "method": "POST",
         "endpoint": "http://localhost:6004/submodels",

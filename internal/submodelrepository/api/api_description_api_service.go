@@ -3,14 +3,15 @@
  *
  * The entire Submodel Repository Service Specification as part of the [Specification of the Asset Administration Shell: Part 2](http://industrialdigitaltwin.org/en/content-hub).   Publisher: Industrial Digital Twin Association (IDTA) 2023
  *
- * API version: V3.0.3_SSP-001
+ * API version: V3.1.1_SSP-001
  * Contact: info@idtwin.org
  */
 
-package openapi
+package api
 
 import (
 	"context"
+	"net/http"
 
 	"github.com/eclipse-basyx/basyx-go-components/internal/common/model"
 )
@@ -28,9 +29,12 @@ func NewDescriptionAPIAPIService() *DescriptionAPIAPIService {
 
 // GetSelfDescription - Returns the self-describing information of a network resource (ServiceDescription)
 func (s *DescriptionAPIAPIService) GetSelfDescription(_ context.Context) (model.ImplResponse, error) {
-	return model.Response(200, model.ServiceDescription{
+	sd := model.ServiceDescription{
 		Profiles: []string{
 			"https://admin-shell.io/aas/API/3/1/SubmodelRepositoryServiceSpecification/SSP-001",
+			"https://basyx.org/aas/go-server/API/SubmodelRepositoryService/1.0",
 		},
-	}), nil
+	}
+
+	return model.Response(http.StatusOK, sd), nil
 }

@@ -24,7 +24,7 @@ import (
 // The DescriptionAPIAPIRouter implementation should parse necessary information from the http request,
 // pass the data to a DescriptionAPIAPIServicer to perform the required actions, then write the service results to the http response.
 type DescriptionAPIAPIRouter interface {
-	GetDescription(http.ResponseWriter, *http.Request)
+	GetSelfDescription(http.ResponseWriter, *http.Request)
 }
 
 // SerializationAPIAPIRouter defines the required methods for binding the api requests to a responses for the SerializationAPIAPI
@@ -89,7 +89,7 @@ type SubmodelRepositoryAPIAPIRouter interface {
 // while the service implementation can be ignored with the .openapi-generator-ignore file
 // and updated with the logic required for the API.
 type DescriptionAPIAPIServicer interface {
-	GetDescription(context.Context) (model.ImplResponse, error)
+	GetSelfDescription(context.Context) (model.ImplResponse, error)
 }
 
 // SerializationAPIAPIServicer defines the api actions for the SerializationAPIAPI service
