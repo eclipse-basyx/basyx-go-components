@@ -442,6 +442,46 @@ func maybeCleanupDelegatedAsyncRecordsLocked(now time.Time) {
 	delegatedOperationAsyncState.lastCleanupAt = now
 }
 
+// isTrustedDelegationHost determines whether the given delegation target is allowed to be called.
+// If the SMREPO_DELEGATION_TRUSTED_HOSTS environment variable is unset or empty, all hosts are treated as trusted
+// to preserve existing behavior. When set, it should contain a comma-separated list of hosts or host:port entries
+// that are allowed as delegation targets.
+func isTrustedDelegationHost(u *url.URL) bool {
+	allowlist := os.Getenv("SMREPO_DELEGATION_TRUSTED_HOSTS")
+	if strings.TrimSpace(allowlist) == "" {
+		// No allowlist configured: preserve current behavior (all hosts allowed).
+		return true
+	}
+
+	host := strings.TrimSpace(u.Host)
+	hostname := strings.TrimSpace(u.Hostname())
+
+	for _, entry := range strings.Split(allowlist, ",") {
+		entry = strings.TrimSpace(entry)
+		if entry == "" {
+			continue
+		}
+
+		// Direct match against host (which may include port).
+		if strings.EqualFold(entry, host) {
+			return true
+		}
+
+		// Normalize entry to a hostname (strip port if present) and compare.
+		if eHost, _, err := net.SplitHostPort(entry); err == nil {
+			if strings.EqualFold(eHost, hostname) {
+				return true
+			}
+		} else {
+			if strings.EqualFold(entry, hostname) {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
 func doDelegatedOperationCall(ctx context.Context, delegationURL string, payload []types.IOperationVariable, timeout time.Duration) (int, any, error) {
 	parsedDelegationURL, parseErr := url.Parse(delegationURL)
 	if parseErr != nil {
@@ -452,6 +492,9 @@ func doDelegatedOperationCall(ctx context.Context, delegationURL string, payload
 	}
 	if strings.TrimSpace(parsedDelegationURL.Host) == "" {
 		return 0, nil, errors.New("SMREPO-DOOPDELG-MISSINGHOST delegation URL host is missing")
+	}
+	if !isTrustedDelegationHost(parsedDelegationURL) {
+		return 0, nil, fmt.Errorf("SMREPO-DOOPDELG-UNTRUSTEDHOST delegation URL host %q is not in SMREPO_DELEGATION_TRUSTED_HOSTS allowlist", parsedDelegationURL.Host)
 	}
 
 	requestBody, marshalErr := serializeDelegatedOperationPayload(payload)
