@@ -255,6 +255,24 @@ func buildDelegatedOperationInput(operationRequest gen.OperationRequest) []types
 	return delegatedInput
 }
 
+func serializeDelegatedOperationPayload(payload []types.IOperationVariable) ([]byte, error) {
+	jsonablePayload := make([]any, 0, len(payload))
+	for index, operationVariable := range payload {
+		jsonableValue, err := jsonization.ToJsonable(operationVariable)
+		if err != nil {
+			return nil, fmt.Errorf("SMREPO-SERDEL-TOJSONABLE-%d %w", index, err)
+		}
+		jsonablePayload = append(jsonablePayload, jsonableValue)
+	}
+
+	requestBody, err := json.Marshal(jsonablePayload)
+	if err != nil {
+		return nil, fmt.Errorf("SMREPO-SERDEL-MARSHAL %w", err)
+	}
+
+	return requestBody, nil
+}
+
 func toDelegatedOperationResultPayload(outputArguments []types.IOperationVariable) map[string]any {
 	return map[string]any{
 		"executionState":    "Completed",
@@ -276,7 +294,7 @@ func doDelegatedOperationCall(ctx context.Context, delegationURL string, payload
 		return 0, nil, errors.New("SMREPO-DOOPDELG-MISSINGHOST delegation URL host is missing")
 	}
 
-	requestBody, marshalErr := json.Marshal(payload)
+	requestBody, marshalErr := serializeDelegatedOperationPayload(payload)
 	if marshalErr != nil {
 		return 0, nil, fmt.Errorf("SMREPO-DOOPDELG-MARSHALREQ %w", marshalErr)
 	}
@@ -2207,8 +2225,15 @@ func (s *SubmodelRepositoryAPIAPIService) InvokeOperationAsync(ctx context.Conte
 		State:              "Running",
 	})
 
-	go func(parentCtx context.Context) {
-		statusCode, delegatedBody, delegateErr := doDelegatedOperationCall(parentCtx, delegationURL, buildDelegatedOperationInput(operationRequest), timeout)
+	authorizationHeader := common.AuthorizationHeaderFromContext(ctx)
+
+	go func() {
+		delegationCtx := context.Background()
+		if strings.TrimSpace(authorizationHeader) != "" {
+			delegationCtx = common.WithAuthorizationHeader(delegationCtx, authorizationHeader)
+		}
+
+		statusCode, delegatedBody, delegateErr := doDelegatedOperationCall(delegationCtx, delegationURL, buildDelegatedOperationInput(operationRequest), timeout)
 		if delegateErr != nil {
 			updateDelegatedAsyncRecord(handleID, func(record delegatedOperationAsyncRecord) delegatedOperationAsyncRecord {
 				record.State = "Failed"
@@ -2242,7 +2267,7 @@ func (s *SubmodelRepositoryAPIAPIService) InvokeOperationAsync(ctx context.Conte
 			record.ErrorBody = nil
 			return record
 		})
-	}(ctx)
+	}()
 
 	return gen.Response(http.StatusAccepted, map[string]any{"handleId": handleID}), nil
 }
