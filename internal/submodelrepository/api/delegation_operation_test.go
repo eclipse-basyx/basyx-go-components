@@ -210,6 +210,7 @@ func TestDelegationOperation(t *testing.T) {
 		if requestErr != nil {
 			return
 		}
+		//nolint:all
 		response, responseErr := (&http.Client{Timeout: 10 * time.Second}).Do(request)
 		if responseErr == nil {
 			_ = response.Body.Close()
@@ -227,6 +228,7 @@ func TestDelegationOperation(t *testing.T) {
 	require.NoError(t, err)
 	invokeRequest.Header.Set("Content-Type", "application/json")
 
+	//nolint:all
 	invokeResponse, err := (&http.Client{Timeout: 15 * time.Second}).Do(invokeRequest)
 	require.NoError(t, err)
 	defer func() { _ = invokeResponse.Body.Close() }()
